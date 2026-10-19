@@ -553,6 +553,21 @@ export class CombatFxManager {
       meta?.colorHex ?? PALETTE.SOLAR_GOLD,
     );
 
+    // Count nearby active large popups to stagger vertical height and prevent overlap
+    let nearbyCount = 0;
+    for (let i = 0; i < this.damagePool.length; i++) {
+      const existing = this.damagePool[i]!;
+      if (
+        existing.active &&
+        existing.baseScale >= 1.1 &&
+        Math.abs(existing.x - params.x) < 110 &&
+        Math.abs(existing.y - (params.y - 48)) < 64
+      ) {
+        nearbyCount += 1;
+      }
+    }
+    const yStagger = nearbyCount * 22;
+
     const rxSlot = this.acquireDamageSlot();
     if (rxSlot) {
       this.totalDamagePopupsSpawned += 1;
@@ -560,7 +575,7 @@ export class CombatFxManager {
       rxSlot.age = 0;
       rxSlot.ttl = 1.05;
       rxSlot.x = params.x;
-      rxSlot.y = params.y - 40;
+      rxSlot.y = params.y - 40 - yStagger;
       rxSlot.vx = 0;
       rxSlot.vy = -68;
       rxSlot.baseScale = 1.18;
@@ -583,7 +598,7 @@ export class CombatFxManager {
         comboSlot.age = 0;
         comboSlot.ttl = 1.25;
         comboSlot.x = params.x;
-        comboSlot.y = params.y - 64;
+        comboSlot.y = params.y - 64 - yStagger;
         comboSlot.vx = 0;
         comboSlot.vy = -74;
         comboSlot.baseScale = 1.26;

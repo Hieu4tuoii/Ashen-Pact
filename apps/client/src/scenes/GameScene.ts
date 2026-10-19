@@ -812,11 +812,11 @@ export class GameScene extends Phaser.Scene {
 
     this.statsLineText = this.add.text(
       432,
-      16,
+      16.5,
       `DPS: 0.0 · Đợt 1 | ${VIETNAMESE_VERIFICATION_STRING}`,
       {
         fontFamily: '"Be Vietnam Pro", sans-serif',
-        fontSize: '9.5px',
+        fontSize: '9px',
         fontStyle: '700',
         color: PALETTE.SOLAR_GOLD,
         stroke: PALETTE.INK_DARK,
@@ -3328,7 +3328,7 @@ export class GameScene extends Phaser.Scene {
             : (60 * Math.PI) / 180;
           const startA = pl.aimAngle - halfArc;
           const endA = pl.aimAngle + halfArc;
-          const r = 38;
+          const r = sim.activeBuffIds.includes('vanguard_fortress') ? 32 : 38;
 
           g.lineStyle(7, hexToNum(PALETTE.INK_DARK), 0.85);
           g.beginPath();
@@ -3839,15 +3839,28 @@ export class GameScene extends Phaser.Scene {
             ? 'Sẵn'
             : `${p.skillCooldownTimer.toFixed(1)}s`;
 
+      const shortElemVi: Record<string, string> = {
+        burn: 'Lửa',
+        chill: 'Băng',
+        shock: 'Sét',
+        poison: 'Độc',
+        none: 'Vật Lý',
+      };
+      const nextElem =
+        p.activeImbueElement === 'burn'
+          ? 'chill'
+          : p.activeImbueElement === 'chill'
+            ? 'shock'
+            : 'burn';
       const cycleTag =
         p.characterId === 'elementalist'
-          ? ` · Chu Kỳ: ${ELEMENT_LABELS_VI[p.activeImbueElement]}`
+          ? ` · Chu Kỳ: ${shortElemVi[p.activeImbueElement] ?? 'Lửa'}→${shortElemVi[nextElem]}`
           : '';
       const comboTag = sim.teamComboCount > 0 ? ` · Combo Đội: ${sim.teamComboCount}` : '';
 
       const nextStats = sim.inHub
         ? `Doanh Trại (${sim.getActivePlayerCount()}P) · [E] Chọn NV · [V] Sẵn Sàng · [Z] Ping · [X] Bỏ VK | ${VIETNAMESE_VERIFICATION_STRING}`
-        : `Tầng ${sim.currentFloor}/2 (${roomLabel}) · DPS: ${dps.toFixed(1)} · Xu: ${p.gold} · Đợt ${sim.waveNumber} · Dash: ${dashReady} · Kỹ Năng: ${skillReady}${cycleTag}${comboTag}`;
+        : `Tầng ${sim.currentFloor}/2 (${roomLabel}) · DPS ${dps.toFixed(1)} · Xu ${p.gold} · Đợt ${sim.waveNumber} · Dash ${dashReady} · KN ${skillReady}${cycleTag}${comboTag}`;
       if (nextStats !== this.lastHudStatsText) {
         this.lastHudStatsText = nextStats;
         this.statsLineText.setText(nextStats);
@@ -4322,9 +4335,9 @@ export class GameScene extends Phaser.Scene {
 
     const textRes = TextureBaker.getBakeScale();
     const px = 14;
-    const py = 308;
-    const pw = 556;
-    const ph = 168;
+    const py = 302;
+    const pw = 542;
+    const ph = 158;
 
     const bg = this.add.graphics();
     bg.fillStyle(hexToNum(PALETTE.INK_DEEP), 0.99);
@@ -4336,11 +4349,11 @@ export class GameScene extends Phaser.Scene {
     const statusBadge = isEquipped ? '✓ ĐANG CHỌN' : 'Nhấn [E] Chọn';
     const header = this.add.text(
       px + 12,
-      py + 8,
+      py + 7,
       `${cDef.nameVi.toUpperCase()} — ${cDef.titleVi}`,
       {
         fontFamily: '"Be Vietnam Pro", sans-serif',
-        fontSize: '10px',
+        fontSize: '9.8px',
         fontStyle: '800',
         color: isEquipped ? PALETTE.LIME_GLOW : PALETTE.SOLAR_GOLD,
         stroke: PALETTE.INK_DARK,
@@ -4352,11 +4365,11 @@ export class GameScene extends Phaser.Scene {
     const statsBadge = this.add
       .text(
         px + pw - 12,
-        py + 8.5,
+        py + 7.5,
         `[${statusBadge}] · HP ${cDef.hp} · Giáp ${cDef.armor} · NL ${cDef.energy} · Tốc ${cDef.moveSpeed}`,
         {
           fontFamily: '"Be Vietnam Pro", sans-serif',
-          fontSize: '8.8px',
+          fontSize: '8.6px',
           fontStyle: '700',
           color: PALETTE.CYAN_FROST,
           stroke: PALETTE.INK_DARK,
@@ -4375,14 +4388,14 @@ export class GameScene extends Phaser.Scene {
       `• Synergy Co-op: ${cDef.skill.synergyVi}`,
     ].join('\n');
 
-    const body = this.add.text(px + 12, py + 28, bodyLines, {
+    const body = this.add.text(px + 12, py + 25, bodyLines, {
       fontFamily: '"Be Vietnam Pro", sans-serif',
-      fontSize: '9px',
+      fontSize: '8.7px',
       fontStyle: '600',
       color: PALETTE.BONE_WHITE,
       stroke: PALETTE.INK_DARK,
       strokeThickness: 2,
-      lineSpacing: 3,
+      lineSpacing: 2.2,
       wordWrap: { width: pw - 24 },
       resolution: textRes,
     });

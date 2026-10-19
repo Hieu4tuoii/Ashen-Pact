@@ -47,7 +47,7 @@
 | ID | Tên vũ khí | Độ hiếm | Loại | Sát thương | Tốc bắn (phát/s) | Năng lượng | Tốc đạn (u/s) | Độ tản (°) | Crit | Nguyên tố / Đặc biệt |
 |---|---|---|---|---:|---:|---:|---:|---:|---:|---|
 | `knight_sword` | Kiếm Hiệp Sĩ | Trắng | Cận chiến | 14 | 2.2 | 0 | — (Tầm 44) | 110° | 10% | Chém tan đạn thường |
-| `hunter_crossbow` | Nỏ Săn | Trắng | Cung/Nỏ | 16 | 1.8 | 0 | 560 | 1.5° | 18% | Xuyên 1 mục tiêu khi chí mạng |
+| `hunter_crossbow` | Nỏ Săn | Trắng | Cung/Nỏ | 18 | 1.9 | 0 | 560 | 1.5° | 18% | Xuyên 1 mục tiêu khi chí mạng |
 | `apprentice_staff` | Trượng Tập Sự | Trắng | Trượng | 11 | 2.4 | 0 | 440 | 3.0° | 8% | Áp nguyên tố hiện tại của Lam Hỏa |
 | `thorn_staff` | Trượng Gai | Trắng | Trượng | 9 | 2.6 | 0 | 460 | 4.0° | 5% | 35% gây Độc nhẹ (3 DMG/s × 3s) |
 | `rivet_gun` | Súng Đinh Tán | Trắng | Súng lục | 10 | 3.0 | 0 | 500 | 3.5° | 10% | Đẩy lùi nhẹ |
@@ -78,11 +78,11 @@
 
 | Mã phản ứng | Tên Tiếng Việt | Công thức kết hợp | Hiệu ứng & Sát thương chuẩn |
 |---|---|---|---|
-| `vaporize` | **HƠI NƯỚC** | `Lửa` + `Băng` | Nổ hơi nước gây `×2.0` sát thương đòn kích hoạt + tạo mù hơi nước `3.0s` (quái bắn lệch góc `~30°`). |
+| `vaporize` | **HƠI NƯỚC** | `Lửa` + `Băng` | Nổ hơi nước gây `×2.0` sát thương đòn kích hoạt + tạo mây hơi nước (`75u`) làm mù quái `3.0s` (bắn lệch góc `~30°`). |
 | `shatter` | **VỠ BĂNG** | `Đóng Băng` + `Đòn Nặng/Chí Mạng` | Phá băng gây `×3.0` sát thương chí mạng + văng mảnh băng AoE (`85u`) gây `110%` sát thương Băng. |
 | `superconduct` | **SIÊU DẪN** | `Sét` + `Băng` | Phá toàn bộ Khiên Chắn của mục tiêu và giảm `30%` phòng thủ (nhận `+30%` sát thương từ mọi nguồn) trong `6.0s`. |
 | `toxic_blast` | **NỔ ĐỘC** | `Lửa` + `Độc` | Kích nổ mây độc AoE (`115u`), gây sát thương Lửa diện rộng và phát tán `5.0s` Độc cho mọi quái xung quanh. |
-| `paralysis` | **TÊ LIỆT** | `Sét` + `Độc` | Xung điện thần kinh làm choáng cứng (`Stun`) mục tiêu trong `1.2s` + sát thương Sét cộng thêm. |
+| `paralysis` | **TÊ LIỆT** | `Sét` + `Độc` | Xung điện thần kinh làm choáng cứng (`Stun`) mục tiêu trong `1.0s` + sát thương Sét cộng thêm. |
 | `overload` | **QUÁ TẢI** | `Lửa` + `Sét` | Nổ xung kích điện-nhiệt AoE (`110u`), phá Khiên Chắn và hất văng mạnh (`Knockback 280`) mọi quái trong vùng. |
 
 - **Đồng Đội Combo (`Team Combo`):** Khi Người chơi A áp nguyên tố nền (`primerPlayerId`) và Người chơi B (`triggerPlayerId !== primerPlayerId`) kích nổ bất kỳ phản ứng nào trong 6 phản ứng trên, cả A và B lập tức được hồi **+15 Năng lượng**, tăng bộ đếm `Đồng Đội Combo` của tổ đội và phát hiệu ứng chữ nổi + âm thanh riêng.
@@ -91,13 +91,14 @@
 
 ## 7. Kết Quả Kiểm Chứng Tự Động (Headless Balance Harness — Phase 5)
 
-Báo cáo chi tiết được sinh tự động tại [`docs/balance-report.md`](./balance-report.md) qua lệnh `pnpm balance` (`tools/balance-harness.ts`, chạy **218 lượt mô phỏng** ở tốc độ cao trên `WorldSim` 60Hz):
+Báo cáo chi tiết được sinh tự động tại [`docs/balance-report.md`](./balance-report.md) qua lệnh `pnpm balance` (`tools/balance-harness.ts`, chạy **283 lượt mô phỏng** ở tốc độ cao trên `WorldSim` 60Hz):
 
-- **TTK Quái thường (Vũ khí khởi đầu):** Trung bình **0.89s** (`0.60s – 1.12s`) — **✅ ĐẠT** (`0.5s – 1.5s`).
-- **Thời lượng 1 Phòng chiến đấu (1–4P):** Trung bình **45.1s** (`1P: 40.2s`, `2P: 43.2s`, `3P: 46.5s`, `4P: 50.5s`) — **✅ ĐẠT** (`30s – 60s`).
-- **Thời lượng hạ Boss Biome 1 (1P vs 4P):** `1P: 108.4s`, `2P: 113.3s`, `3P: 113.5s`, `4P: 109.6s` (Lệch 1P vs 4P: **±1.1%**) — **✅ ĐẠT** (`90s – 150s`, lệch `≤ ±20%`).
-- **Số đòn chịu được trước khi gục:** **6.2 – 9.8 đòn** — **✅ ĐẠT** (`6 – 10 đòn`).
-- **Độ lệch DPS Solo 3 NV sát thương (`ranger`, `elementalist`, `engineer`):** **±5.1%** (`71.3`, `71.6`, `66.1 DPS`) & **5/5 Nhân vật Solo thắng Boss Biome 1 (100%)** — **✅ ĐẠT** (`≤ ±15%`).
-- **Uptime Kỹ năng chủ động trong giao tranh:** Trung bình **53.1%** (`44.6% – 58.0%`) — **✅ ĐẠT** (`40% – 60%`).
+- **TTK Quái thường (Vũ khí khởi đầu):** Trung bình **0.89s** (`0.59s – 1.12s`) — **✅ ĐẠT** (`0.5s – 1.5s`).
+- **Thời lượng 1 Phòng chiến đấu (1–4P):** Trung bình **47.0s** (`1P: 42.6s`, `2P: 46.7s`, `3P: 48.3s`, `4P: 50.2s`) — **✅ ĐẠT** (`30s – 60s`).
+- **Thời lượng hạ Boss Biome 1 (1P vs 4P):** `1P: 101.3s`, `2P: 121.1s`, `3P: 97.1s`, `4P: 111.6s` (Lệch 1P vs 4P: **±10.2%**) — **✅ ĐẠT** (`90s – 150s`, lệch `≤ ±20%`).
+- **Số đòn chịu được trước khi gục (WorldSim):** **6 – 10 đòn** (`6, 7, 9, 9, 10 đòn`) — **✅ ĐẠT** (`6 – 10 đòn`).
+- **Độ lệch DPS Solo 3 NV sát thương (`ranger`, `elementalist`, `engineer`):** **±10.6%** (`75.1`, `80.7`, `66.1 DPS`) & **5/5 Nhân vật Solo thắng Boss Biome 1 (100%)** — **✅ ĐẠT** (`≤ ±15%`).
+- **Uptime Kỹ năng chủ động trong giao tranh:** Trung bình **52.9%** (`44.4% – 57.8%`) — **✅ ĐẠT** (`40% – 60%`).
 - **Độ khó tăng giữa các Biome (Biome 1 → 2 → 3):** **+25%** mỗi Biome — **✅ ĐẠT**.
+
 

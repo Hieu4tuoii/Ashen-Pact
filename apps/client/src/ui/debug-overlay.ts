@@ -241,7 +241,7 @@ export class DebugOverlay {
   private readonly textObj: Phaser.GameObjects.Text;
   private readonly frameDeltaSamples: number[] = [];
   private warmupFrames = 0;
-  private f1Key?: Phaser.Input.Keyboard.Key;
+  private onKeyDown?: (ev: KeyboardEvent) => void;
 
   constructor(scene: Phaser.Scene, startVisible = false) {
     this.scene = scene;
@@ -268,13 +268,16 @@ export class DebugOverlay {
     this.container.add([this.bg, this.textObj]);
     this.container.setVisible(state.overlayVisible);
 
-    if (scene.input.keyboard) {
-      this.f1Key = scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.F1, true);
-      this.f1Key.on('down', () => {
-        if (!this.scene.scene.isActive()) return;
-        state.overlayVisible = !state.overlayVisible;
-        this.container.setVisible(state.overlayVisible);
-      });
+    if (typeof window !== 'undefined') {
+      this.onKeyDown = (ev: KeyboardEvent) => {
+        if (ev.key === 'F1' || ev.code === 'F1') {
+          ev.preventDefault();
+          if (!this.scene.scene.isActive()) return;
+          state.overlayVisible = !state.overlayVisible;
+          this.container.setVisible(state.overlayVisible);
+        }
+      };
+      window.addEventListener('keydown', this.onKeyDown);
     }
 
     scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
@@ -293,10 +296,9 @@ export class DebugOverlay {
   }
 
   public destroy(): void {
-    if (this.f1Key) {
-      this.f1Key.removeAllListeners();
-      this.scene.input.keyboard?.removeKey(this.f1Key, true);
-      this.f1Key = undefined;
+    if (this.onKeyDown && typeof window !== 'undefined') {
+      window.removeEventListener('keydown', this.onKeyDown);
+      this.onKeyDown = undefined;
     }
   }
 

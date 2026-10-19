@@ -100,9 +100,28 @@ describe('Phase 5 — 5 Playable Characters, Skills, 10 Upgrades & Co-op Synergi
     sim.step(SIM_STEP_SEC);
     expect(p1.x).toBeGreaterThan(prevX + 40);
     expect(target.hp).toBeLessThan(200);
+    expect(target.aiState).toBe('stunned');
+    expect(target.stateTimer).toBeCloseTo(1.2, 1);
+
+    // Verify 200u Ruby Sword Wave during active Shield Wall hits an enemy at 160u away
+    p1.skillActiveTimer = 3.5;
+    p1.fireCooldownTimer = 0;
+    const rangedTarget = sim.spawnEnemy('goblin_shooter', p1.x + 160, p1.y, true);
+    rangedTarget.hp = 100;
+    rangedTarget.maxHp = 100;
+    sim.setPlayerInput({
+      seq: 4,
+      tick: 11,
+      moveX: 0,
+      moveY: 0,
+      aimAngle: 0,
+      buttons: INPUT_BUTTON.FIRE,
+    });
+    sim.step(SIM_STEP_SEC);
+    expect(rangedTarget.hp).toBeLessThan(100);
   });
 
-  it('verifies Ranger distance passive (+up to 30% dmg), Predator Arrow backflip + Mark (+25% dmg, bonus energy orb), Arrow Volley & Prey Chain', () => {
+  it('verifies Ranger distance passive (+up to 30% dmg without double-application), Predator Arrow backflip + Mark (+25% dmg, bonus energy orb), Arrow Volley & Prey Chain', () => {
     const sim = new WorldSim({
       seed: 5002,
       spawnInitialWave: false,
@@ -117,10 +136,10 @@ describe('Phase 5 — 5 Playable Characters, Skills, 10 Upgrades & Co-op Synergi
     p1.y = 300;
     p1.aimAngle = 0;
 
-    // Distance passive check: close enemy vs far enemy
-    const nearEnemy = sim.spawnEnemy('wild_boar', 320, 300, true);
+    // Distance passive check: close enemy vs far enemy (max +30% bonus, never double-applied)
+    const nearEnemy = sim.spawnEnemy('wild_boar', 310, 300, true);
     nearEnemy.hp = 200;
-    const farEnemy = sim.spawnEnemy('wild_boar', 620, 300, true);
+    const farEnemy = sim.spawnEnemy('wild_boar', 640, 300, true);
     farEnemy.hp = 200;
 
     sim.applyDamageToEnemy(nearEnemy, 20, false, 'none', 0, 0, false, p1.id);
@@ -128,6 +147,7 @@ describe('Phase 5 — 5 Playable Characters, Skills, 10 Upgrades & Co-op Synergi
     const nearLoss = 200 - nearEnemy.hp;
     const farLoss = 200 - farEnemy.hp;
     expect(farLoss).toBeGreaterThan(nearLoss);
+    expect(farLoss).toBeLessThanOrEqual(26); // 20 * 1.30 = 26 max
 
     // Clear test enemies before testing Arrow Volley + Prey Chain
     sim.enemies.length = 0;
@@ -219,7 +239,7 @@ describe('Phase 5 — 5 Playable Characters, Skills, 10 Upgrades & Co-op Synergi
     expect(sim.runStats.elementalReactions).toBeGreaterThan(0);
   });
 
-  it('verifies Druid Sacred Tree instant downed ally revive, root aura, Poison Roots & Sacred Grove (2 trees), and Life Seed drop', () => {
+  it('verifies Druid Sacred Tree instant downed ally revive, root aura, Poison Roots & Sacred Grove (2 trees), and Life Seed flying to lowest-HP ally', () => {
     const sim = new WorldSim({
       seed: 5004,
       spawnInitialWave: false,
@@ -265,10 +285,19 @@ describe('Phase 5 — 5 Playable Characters, Skills, 10 Upgrades & Co-op Synergi
     expect(p2.hp).toBeGreaterThanOrEqual(2);
     expect(enemy.rootedTimer).toBeGreaterThan(0);
 
-    // Killing an Elite while Druid is on the team guarantees a Life Seed pickup
-    const elite = sim.spawnEnemy('goblin_shooter', 450, 300, true, 'fast');
+    // Killing an Elite while Druid is on the team guarantees a Life Seed pickup that tracks the lowest-HP ally (p2)
+    p1.hp = p1.maxHp; // Full HP
+    p2.hp = 2; // Injured ally
+    p2.x = 460;
+    p2.y = 300;
+    const elite = sim.spawnEnemy('goblin_shooter', 420, 300, true, 'fast');
     sim.applyDamageToEnemy(elite, 999, true, 'none', 0, 0, true, p1.id);
     expect(sim.pickups.some((pk) => pk.kind === 'life_seed')).toBe(true);
+
+    for (let i = 0; i < 20; i++) {
+      sim.step(SIM_STEP_SEC);
+    }
+    expect(p2.hp).toBeGreaterThan(2);
   });
 
   it('verifies Engineer Twin Turrets, Self-Destruct, Ancient Mechanism repair, and Ally Shot -> EMP Blast synergy', () => {
@@ -373,10 +402,102 @@ describe('Phase 5 — 5 Playable Characters, Skills, 10 Upgrades & Co-op Synergi
     expect(enemy.aiState).toBe('stunned');
     expect(sim.projectiles.some((b) => b.team === 'enemy')).toBe(false);
   });
+
+  it('verifies 5-character simultaneous synergy chain (Turret + Dual Elemental Zone + Vanguard Shield + Ranger Mark + Druid Poison Roots)', () => {
+    const sim = new WorldSim({
+      seed: 5009,
+      spawnInitialWave: false,
+      includeTrainingDummy: false,
+      includeProps: false,
+      autoRespawnWaves: false,
+    });
+
+    const pEng = sim.player;
+    sim.selectCharacter(pEng.id, 'engineer');
+    const pElem = sim.addCoopPlayer(2, 'elementalist', 'Lam Hỏa P2', 2);
+    const pVan = sim.addCoopPlayer(3, 'vanguard', 'Thiết Vệ P3', 3);
+    const pDruid = sim.addCoopPlayer(4, 'druid', 'Mộc Linh P4', 4);
+
+    pEng.energy = 80;
+    pElem.energy = 80;
+    pDruid.energy = 80;
+
+    // Vanguard stands between the Turret (x=400) and the Enemy (x=540) with Shield Wall active
+    pVan.x = 460;
+    pVan.y = 300;
+    pVan.aimAngle = 0;
+    pVan.skillActiveTimer = 3.5;
+
+    // Elementalist Dual-Element Zone sits along the line of fire (x=490)
+    sim.skillZones.push({
+      id: 9100,
+      ownerPlayerId: pElem.id,
+      x: 490,
+      y: 300,
+      radius: 68,
+      ttlSec: 4.5,
+      maxTtlSec: 5.0,
+      tickTimer: 5.0,
+      element: 'burn',
+      secondaryElement: 'chill',
+      vortex: true,
+    });
+
+    // Target 1 & 2 are Marked by Ranger and Poison-Rooted by Druid
+    const target1 = sim.spawnEnemy('wild_boar', 540, 300, true);
+    target1.hp = 600;
+    target1.maxHp = 600;
+    target1.markedTimer = 5.0;
+    target1.rootedTimer = 3.0;
+    target1.poisonTimer = 4.0;
+    target1.poisonStacks = 2;
+    target1.lastElementOwnerId = pDruid.id;
+    target1.lastElementApplied = 'poison';
+
+    const target2 = sim.spawnEnemy('goblin_shaman', 575, 300, true);
+    target2.hp = 600;
+    target2.maxHp = 600;
+
+    const target3 = sim.spawnEnemy('goblin_shooter', 605, 300, true);
+    target3.hp = 600;
+    target3.maxHp = 600;
+
+    // Engineer Tesla Turret fires along the line -> passes through Vanguard Shield (+30% dmg, +1 chain target -> hits 3 enemies!) and Elementalist Dual Zone (+15% dmg, imbues burn+chill)
+    sim.summons.push({
+      id: 9101,
+      ownerPlayerId: pEng.id,
+      kind: 'tesla_turret',
+      nameVi: 'Trụ Tesla',
+      x: 400,
+      y: 300,
+      radius: 15,
+      auraRadius: 195,
+      hp: 45,
+      maxHp: 45,
+      ttlSec: 9.0,
+      maxTtlSec: 10.0,
+      tickTimer: 0.01,
+      healsRemaining: 0,
+      charge: 0,
+      poisonRoots: false,
+      selfDestruct: false,
+      rootedEnemyIds: [],
+    });
+
+    sim.step(SIM_STEP_SEC);
+
+    // Verify all 3 targets were hit (2 base + 1 from Vanguard Shield amplification) and Team Combos triggered!
+    expect(target1.hp).toBeLessThan(600);
+    expect(target2.hp).toBeLessThan(600);
+    expect(target3.hp).toBeLessThan(600);
+    expect(sim.runStats.elementalReactions).toBeGreaterThanOrEqual(2);
+    expect(sim.teamComboCount).toBeGreaterThanOrEqual(1);
+    expect(pEng.energy).toBeGreaterThan(80);
+  });
 });
 
 describe('Phase 5 — All 6 Elemental Reactions & Co-op Team Combo (+15 Energy)', () => {
-  it('triggers all 6 elemental reactions (vaporize, shatter, superconduct, toxic_blast, paralysis, overload) and awards +15 Energy to both players on Team Combo', () => {
+  it('triggers all 6 elemental reactions (vaporize, shatter, superconduct, toxic_blast, paralysis, overload) cleanly without manual timer hacks and awards +15 Energy to both players on Team Combo', () => {
     const sim = new WorldSim({
       seed: 5010,
       spawnInitialWave: false,
@@ -399,10 +520,11 @@ describe('Phase 5 — All 6 Elemental Reactions & Co-op Team Combo (+15 Energy)'
     neighbor.hp = 500;
     neighbor.maxHp = 500;
 
-    // 1. Vaporize (Hơi Nước: P1 Burn + P2 Chill) -> Team Combo #1!
+    // 1. Vaporize (Hơi Nước: P1 Burn + P2 Chill) -> Team Combo #1 + 75u Steam Cloud AoE blind!
     sim.applyDamageToEnemy(target, 15, false, 'burn', 0, 0, false, p1.id);
     sim.applyDamageToEnemy(target, 15, false, 'chill', 0, 0, false, p2.id);
     expect(target.steamBlindTimer).toBeGreaterThan(2.0);
+    expect(neighbor.steamBlindTimer).toBeGreaterThan(2.0);
     expect(sim.teamComboCount).toBe(1);
     expect(p1.energy).toBe(65); // +15 Energy!
     expect(p2.energy).toBe(75); // +15 Energy!
@@ -415,34 +537,38 @@ describe('Phase 5 — All 6 Elemental Reactions & Co-op Team Combo (+15 Energy)'
     sim.applyDamageToEnemy(target, 20, true, 'none', 0, 0, true, p1.id);
     expect(sim.teamComboCount).toBe(2);
 
-    // 3. Superconduct (Siêu Dẫn: P1 Chill + P2 Shock) -> Team Combo #3!
+    // 3. Superconduct (Siêu Dẫn: P1 Chill + P2 Shock) -> Team Combo #3 + shreds shieldArmor to 0 and consumes Chill/Shock!
     sim.applyDamageToEnemy(target, 10, false, 'chill', 0, 0, false, p1.id);
     sim.applyDamageToEnemy(target, 10, false, 'shock', 0, 0, false, p2.id);
     expect(target.superconductTimer).toBeGreaterThan(5.0);
+    expect(target.shieldArmor).toBe(0);
+    expect(target.chillTimer).toBe(0);
+    expect(target.shockTimer).toBe(0);
     expect(sim.teamComboCount).toBe(3);
 
     // 4. Toxic Blast (Nổ Độc: P1 Poison + P2 Burn) -> Team Combo #4 + spreads Poison to neighbor!
-    target.chillTimer = 0;
-    target.shockTimer = 0;
     sim.applyDamageToEnemy(target, 12, false, 'poison', 0, 0, false, p1.id);
     sim.applyDamageToEnemy(target, 12, false, 'burn', 0, 0, false, p2.id);
     expect(neighbor.poisonTimer).toBeGreaterThan(0);
+    expect(target.poisonTimer).toBe(0);
+    expect(target.burnTimer).toBe(0);
     expect(sim.teamComboCount).toBe(4);
 
-    // 5. Paralysis (Tê Liệt: P2 Poison + P1 Shock) -> Team Combo #5 + stuns target!
-    target.burnTimer = 0;
-    target.shockTimer = 0;
+    // 5. Paralysis (Tê Liệt: P2 Poison + P1 Shock) -> Team Combo #5 + stuns target for 1.0s and consumes Poison/Shock!
     target.aiState = 'telegraph';
     sim.applyDamageToEnemy(target, 12, false, 'poison', 0, 0, false, p2.id);
     sim.applyDamageToEnemy(target, 12, false, 'shock', 0, 0, false, p1.id);
     expect(target.aiState).toBe('stunned');
+    expect(target.stateTimer).toBeCloseTo(1.0, 2);
+    expect(target.poisonTimer).toBe(0);
+    expect(target.shockTimer).toBe(0);
     expect(sim.teamComboCount).toBe(5);
 
     // 6. Overload (Quá Tải: P1 Burn + P2 Shock) -> Team Combo #6 + breaks shield & knocks back neighbor!
-    target.poisonTimer = 0;
-    target.shockTimer = 0;
+    target.shieldArmor = 50;
     sim.applyDamageToEnemy(target, 12, false, 'burn', 0, 0, false, p1.id);
     sim.applyDamageToEnemy(target, 12, false, 'shock', 0, 0, false, p2.id);
+    expect(target.shieldArmor).toBe(0);
     expect(sim.teamComboCount).toBe(6);
     expect(sim.runStats.elementalReactions).toBe(6);
   });
@@ -462,6 +588,9 @@ describe('Phase 5 — All 6 Elemental Reactions & Co-op Team Combo (+15 Energy)'
     expect(report.maxHitsSurvived).toBeLessThanOrEqual(10);
     expect(report.dps3CharSpreadPct).toBeLessThanOrEqual(15);
     expect(report.all5SoloBossWin).toBe(true);
+    expect(report.weaponMatrix.length).toBe(5);
+    expect(report.coopSynergyRows.every((c) => c.won && c.teamCombos > 0)).toBe(true);
     expect(report.allTargetsPassed).toBe(true);
   }, 20000);
 });
+

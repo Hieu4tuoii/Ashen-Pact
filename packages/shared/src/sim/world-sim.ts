@@ -425,6 +425,9 @@ export interface SimProjectileState {
   element: ElementType;
   amplifiedByShield: boolean;
   imbuedByZone?: boolean;
+  imbuedElement?: ElementType;
+  imbuedSecondaryElement?: ElementType;
+  imbuedOwnerId?: number;
   hitEntityIds: number[];
 }
 
@@ -3857,6 +3860,14 @@ export class WorldSim {
 
     if (p.skillCooldownTimer > 0) return;
     p.skillCooldownTimer = skillDef.cooldownSec;
+    p.skillActiveTimer =
+      p.characterId === 'ranger'
+        ? 3.8
+        : p.characterId === 'elementalist'
+          ? 4.2
+          : p.characterId === 'druid'
+            ? 6.0
+            : 5.2;
     this.events.push({
       kind: 'skill_cast',
       playerId: p.id,
@@ -4298,7 +4309,62 @@ export class WorldSim {
 
             if (target) {
               const ang = Math.atan2(target.y - s.y, target.x - s.x);
-              const zapDmg = s.kind === 'ancient_turret' ? 12 : 11;
+              let zapDmg = s.kind === 'ancient_turret' ? 12 : 11;
+              let extraChainTargets = 0;
+
+              // Helper to compute distance from point (px, py) to segment (s.x, s.y) -> (target.x, target.y)
+              const segDx = target.x - s.x;
+              const segDy = target.y - s.y;
+              const segLenSq = segDx * segDx + segDy * segDy;
+              const distToZapLine = (px: number, py: number): number => {
+                const t =
+                  segLenSq > 0
+                    ? clamp(((px - s.x) * segDx + (py - s.y) * segDy) / segLenSq, 0, 1)
+                    : 0;
+                return distance(px, py, s.x + t * segDx, s.y + t * segDy);
+              };
+
+              // Synergy 1: Turret firing through an active Vanguard Shield Wall gets +30% damage & +1 chain target
+              const allPlayers = this.getAllPlayers();
+              for (let pIdx = 0; pIdx < allPlayers.length; pIdx++) {
+                const pl = allPlayers[pIdx]!;
+                if (
+                  pl.lifeState !== 'alive' ||
+                  pl.characterId !== 'vanguard' ||
+                  pl.skillActiveTimer <= 0
+                ) {
+                  continue;
+                }
+                if (distToZapLine(pl.x, pl.y) <= 44) {
+                  const halfShieldArc = this.activeBuffIds.includes('vanguard_fortress')
+                    ? Math.PI
+                    : (65 * Math.PI) / 180;
+                  if (Math.abs(angleDiff(ang, pl.aimAngle)) <= halfShieldArc) {
+                    zapDmg = Math.round(zapDmg * 1.3);
+                    extraChainTargets = 1;
+                    break;
+                  }
+                }
+              }
+
+              // Synergy 2: Turret firing through an Elementalist Skill Zone gets +15% damage & imbues zone element(s)
+              for (let zIdx = 0; zIdx < this.skillZones.length; zIdx++) {
+                const z = this.skillZones[zIdx]!;
+                if (z.ttlSec <= 0) continue;
+                if (distToZapLine(z.x, z.y) <= z.radius) {
+                  zapDmg = Math.round(zapDmg * 1.15);
+                  this.applyElementStatusToEnemy(target, z.element, zapDmg, z.ownerPlayerId);
+                  if (z.secondaryElement && z.secondaryElement !== 'none') {
+                    this.applyElementStatusToEnemy(
+                      target,
+                      z.secondaryElement,
+                      zapDmg,
+                      z.ownerPlayerId,
+                    );
+                  }
+                }
+              }
+
               this.events.push({
                 kind: 'chain_lightning',
                 fromX: s.x,
@@ -4316,6 +4382,41 @@ export class WorldSim {
                 false,
                 s.ownerPlayerId,
               );
+
+              if (extraChainTargets > 0) {
+                for (let cIdx = 0; cIdx < this.enemies.length; cIdx++) {
+                  const other = this.enemies[cIdx]!;
+                  if (
+                    other.id === target.id ||
+                    other.hp <= 0 ||
+                    other.aiState === 'spawning' ||
+                    other.bossBurrowed
+                  ) {
+                    continue;
+                  }
+                  if (distance(target.x, target.y, other.x, other.y) <= 135) {
+                    this.events.push({
+                      kind: 'chain_lightning',
+                      fromX: target.x,
+                      fromY: target.y,
+                      toX: other.x,
+                      toY: other.y,
+                    });
+                    this.applyDamageToEnemy(
+                      other,
+                      Math.max(4, Math.round(zapDmg * 0.75)),
+                      false,
+                      'shock',
+                      ang,
+                      35,
+                      false,
+                      s.ownerPlayerId,
+                      true,
+                    );
+                    break;
+                  }
+                }
+              }
             }
           }
         }
@@ -4809,6 +4910,13 @@ export class WorldSim {
       if (e.hp <= 0 || e.aiState === 'spawning') continue;
       if (isCircleInCone(p.x, p.y, p.aimAngle, halfArc, range, e)) {
         const angleToEnemy = Math.atan2(e.y - p.y, e.x - p.x);
+        if (hasChargeUpgrade) {
+          e.aiState = 'stunned';
+          e.stateTimer = Math.max(e.stateTimer, 1.2);
+          e.vx = 0;
+          e.vy = 0;
+          e.bossBurrowed = false;
+        }
         this.applyDamageToEnemy(
           e,
           shockwaveDamage,
@@ -4911,6 +5019,11 @@ export class WorldSim {
 
       // Hit enemies in melee cone
       const baseCrit = CHARACTERS[p.characterId]?.baseCritChance ?? 0.05;
+      const critChance = clamp(
+        baseCrit + w.critChance + (hasEaglePrecision ? 0.18 : 0),
+        0,
+        1,
+      );
       let hitAny = false;
       let anyCrit = false;
       const meleeEnemyCount = this.enemies.length;
@@ -4918,17 +5031,75 @@ export class WorldSim {
         const e = this.enemies[i]!;
         if (e.hp <= 0 || e.aiState === 'spawning') continue;
         if (isCircleInCone(p.x, p.y, p.aimAngle, halfArc, MELEE_RANGE, e)) {
-          const critChance = clamp(
-            baseCrit + w.critChance + (hasEaglePrecision ? 0.18 : 0),
-            0,
-            1,
-          );
           const isCrit = this.rng.chance(critChance);
           const dmg = isCrit ? Math.round(baseMeleeDmg * 1.5) : baseMeleeDmg;
           const hitAngle = Math.atan2(e.y - p.y, e.x - p.x);
           this.applyDamageToEnemy(e, dmg, isCrit, shotElement, hitAngle, w.knockback, true, p.id);
           hitAny = true;
           if (isCrit) anyCrit = true;
+        }
+      }
+
+      // Vanguard Shield Wall Synergy: Melee swings while Tường Khiên Hồng Ngọc is active launch a 200u Ruby Sword Wave!
+      const isVanguardSwordWave = p.characterId === 'vanguard' && p.skillActiveTimer > 0;
+      if (isVanguardSwordWave) {
+        const waveHalfArc = (32 * Math.PI) / 180;
+        const waveRange = 200;
+        let waveElement: ElementType = shotElement;
+        let waveSecondaryElement: ElementType = 'none';
+        let waveImbueOwnerId = p.id;
+        let waveDmgMult = 1.15;
+
+        // If the 200u Ruby Sword Wave passes through an Elementalist Skill Zone, imbue +15% damage & element!
+        for (let zIdx = 0; zIdx < this.skillZones.length; zIdx++) {
+          const z = this.skillZones[zIdx]!;
+          if (z.ttlSec <= 0) continue;
+          if (isCircleInCone(p.x, p.y, p.aimAngle, waveHalfArc, waveRange, z)) {
+            waveDmgMult *= 1.15;
+            waveImbueOwnerId = z.ownerPlayerId;
+            if (waveElement === 'none') {
+              waveElement = z.element;
+              if (z.secondaryElement && z.secondaryElement !== 'none') {
+                waveSecondaryElement = z.secondaryElement;
+              }
+            } else {
+              waveSecondaryElement = z.element;
+            }
+            break;
+          }
+        }
+
+        const waveEnemyCount = this.enemies.length;
+        for (let i = 0; i < waveEnemyCount; i++) {
+          const e = this.enemies[i]!;
+          if (e.hp <= 0 || e.aiState === 'spawning') continue;
+          // Enemies already hit in the inner MELEE_RANGE cone don't take double damage, only enemies in (MELEE_RANGE..200u]
+          if (
+            !isCircleInCone(p.x, p.y, p.aimAngle, halfArc, MELEE_RANGE, e) &&
+            isCircleInCone(p.x, p.y, p.aimAngle, waveHalfArc, waveRange, e)
+          ) {
+            const isCrit = this.rng.chance(critChance);
+            const rawWaveDmg = Math.round(baseMeleeDmg * waveDmgMult);
+            const dmg = isCrit ? Math.round(rawWaveDmg * 1.5) : rawWaveDmg;
+            const hitAngle = Math.atan2(e.y - p.y, e.x - p.x);
+            if (waveSecondaryElement !== 'none') {
+              this.applyElementStatusToEnemy(e, waveSecondaryElement, dmg, waveImbueOwnerId);
+            }
+            const effectiveAttackerId =
+              waveImbueOwnerId !== p.id && e.lastElementOwnerId === p.id ? waveImbueOwnerId : p.id;
+            this.applyDamageToEnemy(
+              e,
+              dmg,
+              isCrit,
+              waveElement,
+              hitAngle,
+              w.knockback * 0.85,
+              true,
+              effectiveAttackerId,
+            );
+            hitAny = true;
+            if (isCrit) anyCrit = true;
+          }
         }
       }
 
@@ -4940,7 +5111,7 @@ export class WorldSim {
         y: p.y,
         angle: p.aimAngle,
         arcRad,
-        range: MELEE_RANGE,
+        range: isVanguardSwordWave ? 200 : MELEE_RANGE,
         bulletsDestroyed,
       });
 
@@ -5400,6 +5571,7 @@ export class WorldSim {
     enemy: SimEnemyState,
     amount: number,
     element: ElementType,
+    emitEvent = true,
   ): void {
     if (enemy.hp <= 0) return;
     if (this.stressTestActive && enemy.hp <= amount + 20) {
@@ -5411,7 +5583,7 @@ export class WorldSim {
     this.runStats.damageDealt += amount;
     this.checkBossPhaseTransitions(enemy);
 
-    if (!this.stressTestActive) {
+    if (emitEvent && !this.stressTestActive) {
       this.events.push({
         kind: 'damage_dealt',
         targetId: enemy.id,
@@ -6423,8 +6595,18 @@ export class WorldSim {
             if (z.ttlSec <= 0 || b.hitEntityIds.includes(z.id)) continue;
             if (distance(b.x, b.y, z.x, z.y) <= z.radius) {
               b.hitEntityIds.push(z.id);
+              b.imbuedByZone = true;
+              b.imbuedOwnerId = z.ownerPlayerId;
               if (b.element === 'none') {
                 b.element = z.element;
+                if (z.secondaryElement && z.secondaryElement !== 'none') {
+                  b.imbuedSecondaryElement = z.secondaryElement;
+                }
+              } else {
+                b.imbuedElement = z.element;
+                if (z.secondaryElement && z.secondaryElement !== 'none') {
+                  b.imbuedSecondaryElement = z.secondaryElement;
+                }
               }
               b.damage = Math.round(b.damage * 1.15);
             }
@@ -6476,24 +6658,39 @@ export class WorldSim {
               }
             }
 
-            // Ranger Passive (Mắt Ưng): ranged damage scales up with distance to target (up to +25%)
-            let hitDamage = b.damage;
-            const shooter = allPlayers.find((p) => p.id === b.ownerId);
-            if (shooter && shooter.characterId === 'ranger') {
-              const distFromShooter = distance(shooter.x, shooter.y, enemy.x, enemy.y);
-              const distBonus = clamp((distFromShooter - 70) / 300, 0, 0.25);
-              hitDamage = Math.round(hitDamage * (1 + distBonus));
+            if (b.imbuedByZone) {
+              const zoneOwnerId = b.imbuedOwnerId ?? b.ownerId;
+              if (b.imbuedElement && b.imbuedElement !== 'none') {
+                this.applyElementStatusToEnemy(enemy, b.imbuedElement, b.damage, zoneOwnerId);
+              }
+              if (b.imbuedSecondaryElement && b.imbuedSecondaryElement !== 'none') {
+                this.applyElementStatusToEnemy(
+                  enemy,
+                  b.imbuedSecondaryElement,
+                  b.damage,
+                  zoneOwnerId,
+                );
+              }
             }
+
+            const effectiveAttackerId =
+              b.imbuedByZone &&
+              b.imbuedOwnerId &&
+              !b.imbuedElement &&
+              enemy.lastElementOwnerId === b.ownerId &&
+              b.imbuedOwnerId !== b.ownerId
+                ? b.imbuedOwnerId
+                : b.ownerId;
 
             this.applyDamageToEnemy(
               enemy,
-              hitDamage,
+              b.damage,
               b.isCrit,
               b.element,
               b.angle,
               b.knockback,
-              b.weaponId === 'predator_arrow',
-              b.ownerId,
+              b.weaponId === 'predator_arrow' || b.weaponId === 'ruby_sword_wave',
+              effectiveAttackerId,
             );
 
             if (!this.stressTestActive || stressImpactEventsThisTick < 4) {
@@ -6530,17 +6727,16 @@ export class WorldSim {
       } else {
         // 4. Enemy projectile vs Vanguard Shield, Druid Sacred Tree, or any alive Player
         let blockedByAnyShield = false;
+        const hasFortress = this.activeBuffIds.includes('vanguard_fortress');
         for (let pIdx = 0; pIdx < allPlayers.length; pIdx++) {
           const pl = allPlayers[pIdx]!;
           if (pl.lifeState !== 'alive') continue;
           if (pl.characterId === 'vanguard' && pl.skillActiveTimer > 0) {
-            const shieldRadius = 38;
+            const shieldRadius = hasFortress ? 32 : 38;
             const dToPlayer = distance(b.x, b.y, pl.x, pl.y);
             if (dToPlayer <= shieldRadius + b.radius && dToPlayer >= pl.radius * 0.5) {
               const angleFromPlayer = Math.atan2(b.y - pl.y, b.x - pl.x);
-              const halfShieldArc = this.activeBuffIds.includes('vanguard_fortress')
-                ? Math.PI
-                : (60 * Math.PI) / 180;
+              const halfShieldArc = hasFortress ? Math.PI : (60 * Math.PI) / 180;
               if (Math.abs(angleDiff(angleFromPlayer, pl.aimAngle)) <= halfShieldArc) {
                 b.ttlSec = 0;
                 pl.shieldStoredBullets += 1;
@@ -6895,6 +7091,8 @@ export class WorldSim {
       enemy.frozenTimer = 0;
       enemy.chillTimer = 0;
       enemy.chillStacks = 0;
+      enemy.lastElementOwnerId = 0;
+      enemy.lastElementApplied = 'none';
       if (!this.stressTestActive) {
         this.events.push({
           kind: 'status_applied',
@@ -7189,7 +7387,7 @@ export class WorldSim {
       const primerId = enemy.lastElementOwnerId || attackerPlayerId;
 
       // Check 6 Elemental Reactions before applying the new status
-      // 1. Vaporize (Hơi Nước): Burn + Chill/Frozen -> x2 burst damage + 3s Steam Blindness
+      // 1. Vaporize (Hơi Nước): Burn + Chill/Frozen -> x2 burst damage + 3s Steam Blindness cloud
       if (
         (element === 'chill' && enemy.burnTimer > 0) ||
         (element === 'burn' && (enemy.chillTimer > 0 || enemy.frozenTimer > 0))
@@ -7199,25 +7397,37 @@ export class WorldSim {
         enemy.chillStacks = 0;
         enemy.frozenTimer = 0;
         enemy.steamBlindTimer = 3.0;
+        for (let i = 0; i < this.enemies.length; i++) {
+          const other = this.enemies[i]!;
+          if (other.id === enemy.id || other.hp <= 0 || other.aiState === 'spawning') continue;
+          if (distance(enemy.x, enemy.y, other.x, other.y) <= 75) {
+            other.steamBlindTimer = Math.max(other.steamBlindTimer, 3.0);
+          }
+        }
         const vaporizeDmg = Math.max(12, Math.round(hitDamage * 1.4));
         this.triggerElementalReaction(enemy, 'vaporize', vaporizeDmg, primerId, attackerPlayerId);
-        this.applyDotDamageToEnemy(enemy, vaporizeDmg, 'burn');
+        this.applyDotDamageToEnemy(enemy, vaporizeDmg, 'burn', false);
         enemy.lastElementOwnerId = 0;
         enemy.lastElementApplied = 'none';
         return;
       }
 
-      // 2. Superconduct (Siêu Dẫn): Chill/Frozen + Shock -> -30% defense (+30% damage taken) for 6s
+      // 2. Superconduct (Siêu Dẫn): Chill/Frozen + Shock -> Armor shred + -30% defense (+30% damage taken) for 6s
       if (
         (element === 'shock' && (enemy.chillTimer > 0 || enemy.frozenTimer > 0)) ||
         (element === 'chill' && enemy.shockTimer > 0)
       ) {
+        enemy.chillTimer = 0;
+        enemy.chillStacks = 0;
+        enemy.frozenTimer = 0;
+        enemy.shockTimer = 0;
+        enemy.shieldArmor = 0;
         enemy.superconductTimer = 6.0;
         const scDmg = Math.max(8, Math.round(hitDamage * 0.75));
         this.triggerElementalReaction(enemy, 'superconduct', scDmg, primerId, attackerPlayerId);
-        this.applyDotDamageToEnemy(enemy, scDmg, 'shock');
-        enemy.lastElementOwnerId = attackerPlayerId;
-        enemy.lastElementApplied = element;
+        this.applyDotDamageToEnemy(enemy, scDmg, 'shock', false);
+        enemy.lastElementOwnerId = 0;
+        enemy.lastElementApplied = 'none';
         return;
       }
 
@@ -7232,7 +7442,7 @@ export class WorldSim {
         enemy.poisonStacks = 0;
         enemy.burnTimer = 0;
         this.triggerElementalReaction(enemy, 'toxic_blast', blastDmg, primerId, attackerPlayerId);
-        this.applyDotDamageToEnemy(enemy, blastDmg, 'poison');
+        this.applyDotDamageToEnemy(enemy, blastDmg, 'poison', false);
         for (let i = 0; i < this.enemies.length; i++) {
           const other = this.enemies[i]!;
           if (other.id === enemy.id || other.hp <= 0 || other.aiState === 'spawning') continue;
@@ -7248,21 +7458,24 @@ export class WorldSim {
         return;
       }
 
-      // 4. Paralysis (Tê Liệt): Poison + Shock -> Stun 0.8s + interrupt Elite/Boss telegraph
+      // 4. Paralysis (Tê Liệt): Poison + Shock -> Stun 1.0s + interrupt Elite/Boss telegraph
       if (
         (element === 'shock' && enemy.poisonTimer > 0) ||
         (element === 'poison' && enemy.shockTimer > 0)
       ) {
+        enemy.poisonTimer = 0;
+        enemy.poisonStacks = 0;
+        enemy.shockTimer = 0;
         enemy.aiState = 'stunned';
-        enemy.stateTimer = Math.max(enemy.stateTimer, 0.8);
+        enemy.stateTimer = Math.max(enemy.stateTimer, 1.0);
         enemy.vx = 0;
         enemy.vy = 0;
         enemy.bossBurrowed = false;
         const paraDmg = Math.max(8, Math.round(hitDamage * 0.7));
         this.triggerElementalReaction(enemy, 'paralysis', paraDmg, primerId, attackerPlayerId);
-        this.applyDotDamageToEnemy(enemy, paraDmg, 'shock');
-        enemy.lastElementOwnerId = attackerPlayerId;
-        enemy.lastElementApplied = element;
+        this.applyDotDamageToEnemy(enemy, paraDmg, 'shock', false);
+        enemy.lastElementOwnerId = 0;
+        enemy.lastElementApplied = 'none';
         return;
       }
 
@@ -7276,7 +7489,7 @@ export class WorldSim {
         const overloadDmg = Math.max(14, Math.round(hitDamage * 1.35));
         this.triggerElementalReaction(enemy, 'overload', overloadDmg, primerId, attackerPlayerId);
         enemy.shieldArmor = Math.max(0, enemy.shieldArmor - 18);
-        this.applyDotDamageToEnemy(enemy, overloadDmg, 'burn');
+        this.applyDotDamageToEnemy(enemy, overloadDmg, 'burn', false);
         for (let i = 0; i < this.enemies.length; i++) {
           const other = this.enemies[i]!;
           if (other.id === enemy.id || other.hp <= 0 || other.aiState === 'spawning') continue;
@@ -7488,23 +7701,27 @@ export class WorldSim {
       pk.ttlSec -= dtSec;
       if (pk.ttlSec <= 0) continue;
 
+      const magnetRange = pk.kind === 'life_seed' ? 180 : 130;
       let closestPlayer: SimPlayerState | null = null;
       let closestDist = Infinity;
+      let bestScore = Infinity;
       for (let pIdx = 0; pIdx < allPlayers.length; pIdx++) {
         const pl = allPlayers[pIdx]!;
         if (pl.lifeState !== 'alive') continue;
         if (pk.ownerPlayerId !== undefined && pk.ownerPlayerId !== pl.id) continue;
         const d = distance(pl.x, pl.y, pk.x, pk.y);
-        // Life Seeds prioritize injured allies within 180u
-        const effectiveDist =
-          pk.kind === 'life_seed' && pl.hp < pl.maxHp ? d * 0.55 : d;
-        if (effectiveDist < closestDist) {
+        // Life Seeds prioritize the lowest-HP injured ally within magnetRange (180u)
+        const score =
+          pk.kind === 'life_seed' && d < magnetRange
+            ? (pl.hp < pl.maxHp ? pl.hp * 1000 : 100000) + d
+            : 200000 + d;
+        if (score < bestScore) {
+          bestScore = score;
           closestDist = d;
           closestPlayer = pl;
         }
       }
 
-      const magnetRange = pk.kind === 'life_seed' ? 180 : 130;
       if (closestPlayer && closestDist < magnetRange && closestDist > 0.01) {
         const dx = closestPlayer.x - pk.x;
         const dy = closestPlayer.y - pk.y;
@@ -7581,6 +7798,10 @@ export class WorldSim {
       pooled.ttlSec = init.ttlSec;
       pooled.element = init.element;
       pooled.amplifiedByShield = init.amplifiedByShield;
+      pooled.imbuedByZone = init.imbuedByZone;
+      pooled.imbuedElement = init.imbuedElement;
+      pooled.imbuedSecondaryElement = init.imbuedSecondaryElement;
+      pooled.imbuedOwnerId = init.imbuedOwnerId;
       pooled.hitEntityIds.length = 0;
       return pooled;
     }

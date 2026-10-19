@@ -520,7 +520,7 @@ export class ArtGalleryScene extends Phaser.Scene {
           const variant = (tx + ty + idx) % 4;
           const spr = this.add.sprite(
             cx + 25 + tx * 32 + 16,
-            cy + 56 + ty * 32 + 16,
+            cy + 62 + ty * 32 + 16,
             TextureBaker.getBiomeTileTextureKey(this.currentBiome, variant),
           );
           spr.setScale(invBake);
@@ -529,7 +529,7 @@ export class ArtGalleryScene extends Phaser.Scene {
         }
       }
 
-      const rig1x = new CutoutRig(this, cx + 52, cy + 114, rigDef, {
+      const rig1x = new CutoutRig(this, cx + 46, cy + 124, rigDef, {
         playerSlot: this.currentSlot,
         displayScale: 1.0,
       });
@@ -539,9 +539,9 @@ export class ArtGalleryScene extends Phaser.Scene {
       this.playerRigs.push(rig1x);
       parent.add(rig1x.container);
 
-      const rigZoom = new CutoutRig(this, cx + 122, cy + 118, rigDef, {
+      const rigZoom = new CutoutRig(this, cx + 112, cy + 128, rigDef, {
         playerSlot: this.currentSlot,
-        displayScale: 1.72,
+        displayScale: 1.5,
         initialPhaseOffset: idx * 0.2,
       });
       rigZoom.setAnimState(this.currentAnim);
@@ -589,14 +589,14 @@ export class ArtGalleryScene extends Phaser.Scene {
         `• Synergy: ${cDef.skill.synergyVi}`,
       ].join('\n');
 
-      const tDesc = this.add.text(cx + 8, cy + 160, descLines, {
+      const tDesc = this.add.text(cx + 8, cy + 165, descLines, {
         fontFamily: '"Be Vietnam Pro", sans-serif',
         fontSize: '7.8px',
         fontStyle: '600',
         color: PALETTE.BONE_WHITE,
         stroke: PALETTE.INK_DARK,
         strokeThickness: 2,
-        lineSpacing: 1.8,
+        lineSpacing: 1.7,
         wordWrap: { width: cardW - 16 },
         resolution: textRes,
       });

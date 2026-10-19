@@ -248,22 +248,25 @@
     - Mở rộng `ArtGalleryScene` thêm **Trang 4 (`4. 5 Nhân Vật`)** trưng bày song song cả 5 nhân vật ở tỉ lệ `1.0×` và phóng đại `1.72×` kèm đầy đủ thông tin Nội tại, Kỹ năng, Nâng cấp và Synergy.
     - Đồng bộ đầy đủ `summons`, `skillZones`, `teamComboCount`, `markedTimer`, `rootedTimer`, `superconductTimer` và các sự kiện `elemental_reaction`, `summon_spawned`, `emp_blast` qua giao thức nhị phân lượng tử hóa `world-S` 30Hz mà vẫn giữ băng thông dưới ngưỡng `30 KB/s/client`.
   - **Công Cụ Headless Balance Harness (`tools/balance-harness.ts`) & Báo Cáo `docs/balance-report.md`:**
-    - Xây dựng công cụ chạy 218 lượt mô phỏng chiến đấu tự động tốc độ cao (`pnpm balance`) kiểm chứng và xuất báo cáo `docs/balance-report.md` đạt **7/7 chỉ tiêu cân bằng định lượng** (mục 7.4 của đặc tả):
-      1. TTK Quái thường (Biome 1, VK khởi đầu): TB **0.89s** (`0.60s – 1.12s`, mục tiêu `0.5s – 1.5s`) — `✅ ĐẠT`
-      2. Thời lượng 1 Phòng chiến đấu (1–4P): TB **45.1s** (`40.2s – 50.5s`, mục tiêu `30s – 60s`) — `✅ ĐẠT`
-      3. Thời lượng hạ Boss Biome 1 (1P vs 4P): **1P: 108.4s · 4P: 109.6s**, lệch **±1.1%** (mục tiêu `90s – 150s`, lệch `≤ ±20%`) — `✅ ĐẠT`
-      4. Số đòn chịu được trước khi gục (HP + Giáp): **6.2 – 9.8 đòn** (mục tiêu `6 – 10 đòn`) — `✅ ĐẠT`
-      5. Độ lệch DPS Solo 3 NV sát thương & Solo thắng Boss: Lệch **±5.1%** (`≤ ±15%`), **5/5 nhân vật Solo thắng Boss Biome 1 (100%)** — `✅ ĐẠT`
-      6. Uptime Kỹ năng chủ động trong giao tranh: TB **53.1%** (`44.6% – 58.0%`, mục tiêu `40% – 60%`) — `✅ ĐẠT`
+    - Xây dựng công cụ chạy **283 lượt mô phỏng** chiến đấu tự động tốc độ cao (`pnpm balance`, bao gồm cả Ma trận 5 Nhân vật × 5 Vũ khí và 5 Đội hình Co-op Synergy 2P/4P) kiểm chứng và xuất báo cáo `docs/balance-report.md` đạt **7/7 chỉ tiêu cân bằng định lượng** (mục 7.4 của đặc tả):
+      1. TTK Quái thường (Biome 1, VK khởi đầu): TB **0.89s** (`0.59s – 1.12s`, mục tiêu `0.5s – 1.5s`) — `✅ ĐẠT`
+      2. Thời lượng 1 Phòng chiến đấu (1–4P): TB **47.0s** (`42.6s – 50.2s`, mục tiêu `30s – 60s`) — `✅ ĐẠT`
+      3. Thời lượng hạ Boss Biome 1 (1P vs 4P): **1P: 101.3s · 4P: 111.6s**, lệch **±10.2%** (mục tiêu `90s – 150s`, lệch `≤ ±20%`) — `✅ ĐẠT`
+      4. Số đòn chịu được trước khi gục (WorldSim): **6 – 10 đòn** (`6, 7, 9, 9, 10 đòn`, mục tiêu `6 – 10 đòn`) — `✅ ĐẠT`
+      5. Độ lệch DPS Solo 3 NV sát thương & Solo thắng Boss: Lệch **±10.6%** (`≤ ±15%`), **5/5 nhân vật Solo thắng Boss Biome 1 cùng mức HP (100%)** — `✅ ĐẠT`
+      6. Uptime Kỹ năng chủ động trong giao tranh: TB **52.9%** (`44.4% – 57.8%`, mục tiêu `40% – 60%`) — `✅ ĐẠT`
       7. Độ khó tăng giữa các Biome (Biome 1 → 2 → 3): **+25%** mỗi Biome — `✅ ĐẠT`
 - **Kết quả kiểm thử & Hiệu năng:**
-  - `pnpm verify` (`typecheck` + `lint` + `test` + `build` + `e2e`) và `pnpm balance` PASS 100% (7/7 Vitest test suites = 50 unit tests; 7/7 Playwright E2E test suites).
+  - `pnpm verify` (`typecheck` + `lint` + `test` + `build` + `e2e`) và `pnpm balance` PASS 100% (7/7 Vitest test suites = 51 unit tests; 7/7 Playwright E2E test suites).
   - Screenshots nghiệm thu đã chụp và kiểm tra trực quan bằng mắt tại `docs/screenshots/phase-5/`:
     - `docs/screenshots/phase-5/hub-5-characters-skill-preview-1080p.png`
     - `docs/screenshots/phase-5/combat-elemental-reactions-team-combo-1080p.png`
     - `docs/screenshots/phase-5/gallery-5-characters-1080p.png`
 - **Vấn đề đã phát hiện & xử lý trong Phase 5:**
-  - Phát hiện khi đứng gần tượng nhân vật ở Hub để xem bảng Preview Kỹ Năng, nhãn phụ 1 dòng của tượng nhân vật và nhãn `[E]` của kệ vũ khí phía dưới có thể chạm vào tên người chơi hoặc mép bảng Preview → Đã định dạng nhãn phụ tượng Hub thành 2 dòng ngắn căn giữa, tự động ẩn nhãn phụ của tượng đang đứng sát cũng như các nhãn `[E]` thế giới bên dưới khi bảng Preview Kỹ Năng đang mở.
-  - Phát hiện khi kích nổ phản ứng nguyên tố kèm Đồng Đội Combo, chữ nổi `⚡ ĐỒNG ĐỘI COMBO! +15 NL`, tên phản ứng và số sát thương có khoảng cách dọc hơi sát nhau → Đã tách độ cao khởi tạo của 3 tầng popup (`y - 18`, `y - 40`, `y - 64`) giúp cả 3 dòng hiển thị tách biệt, sắc nét 100%.
+  - Phát hiện nội tại khoảng cách của Liệp Ưng (`ranger`) bị nhân 2 lần (một lần tại `updateProjectiles` và một lần tại `applyDamageToEnemy`), `skillActiveTimer` chỉ được gán cho Thiết Vệ, và nâng cấp `vanguard_charge` chưa làm choáng `1.2s` hay mở nhát chém kiếm khí tầm xa `200u` → Đã bỏ nhân đôi nội tại Liệp Ưng, gán `skillActiveTimer` cho cả 5 nhân vật, bổ sung nhát chém kiếm khí `200u` khi bật Tường Khiên + choáng `1.2s` khi Xung Phong, và cho phép đạn của Trụ Tesla nhận cường hóa từ Tường Khiên Thiết Vệ (`+30%` ST, `+1` mục tiêu giật) lẫn Vùng Nguyên Tố Lam Hỏa (`+15%` ST, tẩm đơn/song nguyên tố).
+  - Phát hiện phản ứng `superconduct` và `paralysis` chưa tiêu thụ trạng thái nguyên tố nền sau khi kích nổ, `superconduct` chưa phá `shieldArmor = 0`, `vaporize` chưa tạo vùng mây mù `75u` AoE, và `life_seed` chưa ưu tiên đồng đội thấp máu nhất → Đã sửa triệt để trong `WorldSim` và kiểm chứng bằng unit test chuỗi 6 phản ứng liên tiếp + chuỗi cộng hưởng 5 nhân vật đồng thời.
+  - Phát hiện `tools/balance-harness.ts` dùng công thức tĩnh cho số đòn chịu được và dùng hệ số `charPaceFactor` / xóa đạn Boss trong mô phỏng Boss → Đã thay bằng mô phỏng thực tế 100% trên `WorldSim` (né đạn vuông góc + Dash i-frame, cùng mức HP Boss cho cả 5 nhân vật) và bổ sung bảng Ma trận 5 Nhân vật × 5 Vũ khí cùng bảng 5 Đội hình Co-op Synergy 2P/4P.
+  - Phát hiện chữ `Chu Kỳ: Hỏa (Cháy)→Băng (Đóng Băng)` trên thanh Top HUD làm tràn chữ `Combo Đội` ở mép phải, tỷ lệ phóng đại `1.72×` trong Trang 4 `ArtGalleryScene` làm mũ nhân vật chạm dòng chữ phụ, và `DebugOverlay` dùng `removeKey(f1Key, true)` có thể làm rơi phím `F1` khi chuyển cảnh từ `MenuScene` sang `GameScene` → Đã rút gọn chỉ báo chu kỳ thành `Chu Kỳ: Lửa→Băng`, căn chỉnh lại khung rig Trang 4 `ArtGalleryScene`, thêm chống chồng lấp dọc cho popup phản ứng nguyên tố đồng thời, và chuyển phím `F1` sang listener `window` an toàn qua mọi lần chuyển cảnh.
 - **Bước tiếp theo (Phase 6):**
   - Triển khai **Phase 6 — Biome 2 & 3 + Boss**: Tileset vẽ bằng code, ánh sáng, ambient, quái, Elite, cơ chế map riêng (băng trơn, băng chuyền, máy sửa được), nâng tổng vũ khí lên ~24, cùng 2 Boss **Băng Hậu Kryssa** và **Titan Lò Rèn** đầy đủ phase + cơ chế co-op.
+
