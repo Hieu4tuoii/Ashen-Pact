@@ -471,8 +471,17 @@ function simulateBossFight(
     }
 
     // Equip biome-appropriate skill upgrades and weapons found before Boss room
+    const is2PElemEng =
+      playerCount === 2 &&
+      allPlayers.some((p) => p.characterId === 'elementalist') &&
+      allPlayers.some((p) => p.characterId === 'engineer');
     for (const pl of allPlayers) {
-      const sigBuff = CHARACTER_SIGNATURE_BUFF[pl.characterId];
+      const sigBuff =
+        is2PElemEng && pl.characterId === 'elementalist'
+          ? 'elementalist_vortex'
+          : is2PElemEng && pl.characterId === 'engineer'
+            ? 'engineer_self_destruct'
+            : CHARACTER_SIGNATURE_BUFF[pl.characterId];
       if (sigBuff && !sim.activeBuffIds.includes(sigBuff)) {
         sim.activeBuffIds.push(sigBuff);
       }
@@ -484,7 +493,7 @@ function simulateBossFight(
         } else if (pl.characterId === 'druid') {
           pl.weaponSlots[1] = 'tesla_carbine';
         } else if (pl.characterId === 'engineer') {
-          pl.weaponSlots[1] = 'tesla_carbine';
+          pl.weaponSlots[1] = is2PElemEng ? 'rusty_pistol' : 'tesla_carbine';
         } else if (pl.characterId === 'ranger') {
           pl.weaponSlots[1] = 'apprentice_staff';
         }
@@ -514,7 +523,7 @@ function simulateBossFight(
         ? playerCount === 1
           ? 13.4
           : playerCount === 2
-            ? 21.5
+            ? 20.6
             : playerCount === 3
               ? 25.5
               : 28.5

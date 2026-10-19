@@ -31,6 +31,9 @@ export class PreloadScene extends Phaser.Scene {
       const hubParam = params.get('hub');
       const galleryParam = params.get('gallery');
 
+      const locPort = window.location.port;
+      const isHostServerPort = Boolean(locPort && locPort !== '5173' && locPort !== '4173');
+
       if (requestedScene === 'gallery' || requestedScene === 'artgallery' || galleryParam === '1') {
         this.scene.start('ArtGalleryScene');
       } else if (requestedScene === 'menu') {
@@ -39,7 +42,7 @@ export class PreloadScene extends Phaser.Scene {
         coopParam === 'host' ||
         coopParam === 'join' ||
         joinRoomId ||
-        window.location.port === '2567'
+        isHostServerPort
       ) {
         this.scene.start('GameScene', {
           coopMode: coopParam === 'host' ? 'host' : 'join',

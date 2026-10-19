@@ -89,7 +89,9 @@ export class MenuScene extends Phaser.Scene {
     }
     const host =
       typeof window !== 'undefined' ? window.location.hostname || '127.0.0.1' : '127.0.0.1';
-    this.serverHostPort = `${host}:2567`;
+    const locPort = typeof window !== 'undefined' ? window.location.port : '';
+    const defaultPort = locPort && locPort !== '5173' && locPort !== '4173' ? locPort : '2567';
+    this.serverHostPort = `${host}:${defaultPort}`;
   }
 
   public create(): void {

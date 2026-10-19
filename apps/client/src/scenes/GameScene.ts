@@ -906,9 +906,9 @@ export class GameScene extends Phaser.Scene {
     this.hudContainer.add(this.statusText);
 
     this.elementBtnText = this.add
-      .text(504, 42, '[R] Ng.Tố: Vật Lý', {
+      .text(490, 42, '[R] Ng.Tố: Vật Lý', {
         fontFamily: '"Be Vietnam Pro", sans-serif',
-        fontSize: '11px',
+        fontSize: '10.5px',
         fontStyle: '700',
         color: PALETTE.LIME_GLOW,
         stroke: PALETTE.INK_DARK,
@@ -924,9 +924,9 @@ export class GameScene extends Phaser.Scene {
     this.hudContainer.add(this.elementBtnText);
 
     this.qualityBtnText = this.add
-      .text(648, 42, '[G] Đồ Họa: CAO', {
+      .text(658, 42, '[G] Đồ Họa: CAO', {
         fontFamily: '"Be Vietnam Pro", sans-serif',
-        fontSize: '11px',
+        fontSize: '10.5px',
         fontStyle: '700',
         color: PALETTE.VOLT_YELLOW,
         stroke: PALETTE.INK_DARK,
@@ -941,9 +941,9 @@ export class GameScene extends Phaser.Scene {
     this.hudContainer.add(this.qualityBtnText);
 
     const galleryBtn = this.add
-      .text(764, 42, '[Art Gallery]', {
+      .text(772, 42, '[Art Gallery]', {
         fontFamily: '"Be Vietnam Pro", sans-serif',
-        fontSize: '11.5px',
+        fontSize: '11px',
         fontStyle: '700',
         color: PALETTE.SOLAR_GOLD,
         stroke: PALETTE.INK_DARK,
@@ -1658,7 +1658,9 @@ export class GameScene extends Phaser.Scene {
       return `ws://${this.serverUrl}`;
     }
     const wsHost = window.location.hostname || 'localhost';
-    return `ws://${wsHost}:2567`;
+    const locPort = window.location.port;
+    const wsPort = locPort && locPort !== '5173' && locPort !== '4173' ? locPort : '2567';
+    return `ws://${wsHost}:${wsPort}`;
   }
 
   private async fetchHostLanInfo(): Promise<void> {
@@ -5253,13 +5255,14 @@ export class GameScene extends Phaser.Scene {
         const charDef = CHARACTERS[pl.characterId] ?? CHARACTERS.vanguard;
         const charName = i18n.charName(pl.characterId, charDef.nameVi);
         const rdyStr = pl.ready ? i18n.t('ui.hud.readyShort') : i18n.t('ui.hud.selectingChar');
+        const hasKickBtn = sim.player.slot === 1 && pl.slot !== 1;
         const rowTxt = this.add.text(
-          px + 16,
-          rowY + 5,
+          px + 15,
+          rowY + 5.5,
           `P${pl.slot} · ${pl.displayName} (${charName}) — ${rdyStr}`,
           {
             fontFamily: '"Be Vietnam Pro", sans-serif',
-            fontSize: '9.2px',
+            fontSize: hasKickBtn ? '8.2px' : '9px',
             fontStyle: '700',
             color: pl.ready ? PALETTE.LIME_GLOW : slotColor,
             stroke: PALETTE.INK_DARK,
@@ -5269,7 +5272,7 @@ export class GameScene extends Phaser.Scene {
         );
         this.invitePanelContainer.add(rowTxt);
 
-        if (sim.player.slot === 1 && pl.slot !== 1) {
+        if (hasKickBtn) {
           makePanelBtn(
             px + pw - 56,
             rowY + 3,

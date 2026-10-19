@@ -66,7 +66,7 @@
 - **Lợn Rừng (`wild_boar`):** HP `36`, Tốc độ `130` (Lao húc `380`), Sát thương `2`, Telegraph dậm chân đỏ `0.7s`.
 - **Pháp Sư Goblin (`goblin_shaman`):** HP `28`, Tốc độ `95`, Sát thương `1`, Hồi `6 HP` cho quái quanh đó mỗi `4s`.
 - **Cây Gai (`thorn_turret`):** HP `32`, Cố định, Sát thương `1`, Bắn 6 gai tròn mỗi `2.8s`.
-- **Boss Mục Vương Nấm Độc (`boss_mycelium_king`):** HP cơ bản `2400` (1P), Sát thương `2`, 3 Phase (`100%`, `66%`, `33%`).
+- **Boss Mục Vương Nấm Độc (`spore_king`):** HP cơ bản `380` (1P, quy mô theo `COOP_SCALING.bossHpMultiplier`), Sát thương `2`, 3 Phase (`100%`, `66%`, `33%`).
 
 ### 5.2 Biome 2 — Hầm Băng Vĩnh Cửu & Biome 3 — Lò Rèn Dung Nham
 - **Biome 2 (Hầm Băng Vĩnh Cửu — Scaling `+25%`):**
@@ -101,20 +101,33 @@
 
 ---
 
-## 7. Kết Quả Kiểm Chứng Tự Động (Headless Balance Harness — Phase 5 & Phase 6)
+## 7. Kết Quả Kiểm Chứng Tự Động (Headless Balance Harness — Phase 8 Final)
 
-Báo cáo chi tiết được sinh tự động tại [`docs/balance-report.md`](./balance-report.md) qua lệnh `pnpm balance` (`tools/balance-harness.ts`, chạy **299 lượt mô phỏng** ở tốc độ cao trên `WorldSim` 60Hz):
+Báo cáo chi tiết được sinh tự động tại [`docs/balance-report.md`](./balance-report.md) qua lệnh `pnpm balance` (`tools/balance-harness.ts`, chạy **291 lượt mô phỏng** ở tốc độ cao trên `WorldSim` 60Hz):
 
 - **TTK Quái thường (Vũ khí khởi đầu):** Trung bình **0.89s** (`0.59s – 1.12s`) — **✅ ĐẠT** (`0.5s – 1.5s`).
 - **Thời lượng 1 Phòng chiến đấu (1–4P):** Trung bình **47.0s** (`1P: 42.6s`, `2P: 46.7s`, `3P: 48.3s`, `4P: 50.2s`) — **✅ ĐẠT** (`30s – 60s`).
 - **Thời lượng hạ cả 3 Boss Biome 1–3 (1P vs 4P):**
   - **Mục Vương Nấm Độc (`spore_king`):** `1P: 101.3s`, `4P: 111.6s` (Lệch 1P vs 4P: **±10.2%**) — **✅ ĐẠT**
   - **Băng Hậu Kryssa (`kryssa_ice_queen`):** `1P: 112.7s`, `4P: 99.2s` (Lệch 1P vs 4P: **±12.0%**) — **✅ ĐẠT**
-  - **Titan Lò Rèn (`forge_titan`):** `1P: 105.1s`, `4P: 124.3s` (Lệch 1P vs 4P: **±18.3%**) — **✅ ĐẠT**
+  - **Titan Lò Rèn (`forge_titan`):** `1P: 105.1s`, `4P: 112.4s` (Lệch 1P vs 4P: **±6.9%**) — **✅ ĐẠT**
+- **5 Đội hình Co-op Synergy (2P & 4P):** `107.6s – 142.7s` (100% Thắng, hàng trăm phản ứng nguyên tố & Đồng Đội Combo) — **✅ ĐẠT**.
 - **Số đòn chịu được trước khi gục (WorldSim):** **6 – 10 đòn** (`6, 7, 9, 9, 10 đòn`) — **✅ ĐẠT** (`6 – 10 đòn`).
 - **Độ lệch DPS Solo 3 NV sát thương (`ranger`, `elementalist`, `engineer`):** **±10.6%** (`75.1`, `80.7`, `66.1 DPS`) & **5/5 Nhân vật Solo thắng Boss Biome 1 (100%)** — **✅ ĐẠT** (`≤ ±15%`).
 - **Uptime Kỹ năng chủ động trong giao tranh:** Trung bình **52.9%** (`44.4% – 57.8%`) — **✅ ĐẠT** (`40% – 60%`).
 - **Độ khó tăng giữa các Biome (Biome 1 → 2 → 3):** **+25%** mỗi Biome — **✅ ĐẠT**.
+
+---
+
+## 8. Kiểm Chứng Soak Test 20 Phút Thời Gian Mô Phỏng (`72.000` Ticks @ 60Hz)
+
+Kiểm chứng tự động trong `packages/shared/test/phase8-soak-release.test.ts`:
+- **Cấu hình:** 4 người chơi Co-op (`vanguard`, `ranger`, `elementalist`, `engineer`) liên tục giao tranh, tung kỹ năng, kích nổ 6 phản ứng nguyên tố + Đồng Đội Combo, nhặt vật phẩm, vượt nhiều tầng/biome (`1 → 2 → 3`) và chiến đấu với cả 3 Boss trong suốt **72.000 ticks** (`1.200s` = **20 phút** thời gian mô phỏng ở 60Hz).
+- **Kết quả:**
+  - Số lượng thực thể (`enemies`, `projectiles`, `pickups`, `summons`, `skillZones`, `shockwaveRings`, `tetherBeams`) luôn được giới hạn và tái sử dụng qua Object Pool, không phình vô hạn.
+  - Bộ nhớ Heap ổn định suốt 4 chặng (`18k`, `36k`, `54k`, `72k` ticks), không rò rỉ bộ nhớ.
+  - Thời gian xử lý trung bình mỗi tick ổn định (`< 0.25 ms/tick`, thấp hơn `60×` ngân sách `16.67 ms/tick`), không suy giảm ở chặng cuối so với chặng đầu.
+
 
 
 

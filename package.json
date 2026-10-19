@@ -13,6 +13,7 @@
     "format": "prettier --write \"packages/*/src/**/*.ts\" \"apps/*/src/**/*.ts\" \"tests/**/*.ts\"",
     "test": "vitest run",
     "balance": "pnpm --filter @ashen-pact/server exec tsx ../../tools/balance-harness.ts",
+    "package:release": "pnpm --filter @ashen-pact/server exec tsx ../../tools/package-release.ts",
     "e2e": "playwright test",
     "verify": "pnpm typecheck && pnpm lint && pnpm test && pnpm build && pnpm e2e"
   },

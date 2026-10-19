@@ -1265,12 +1265,64 @@ export class WorldSim {
 
   public removeCoopPlayer(playerId: number): boolean {
     const idx = this.simulatedPlayers.findIndex((p) => p.id === playerId);
-    if (idx >= 0) {
-      this.simulatedPlayers.splice(idx, 1);
-      this.coopPlayerInputs.delete(playerId);
-      return true;
+    if (idx < 0) {
+      return false;
     }
-    return false;
+
+    const departing = this.simulatedPlayers[idx]!;
+    this.simulatedPlayers.splice(idx, 1);
+    this.coopPlayerInputs.delete(playerId);
+
+    // Clear any in-progress revive by the departing player
+    for (const pl of this.getAllPlayers()) {
+      if (pl.reviverPlayerId === playerId) {
+        pl.reviverPlayerId = null;
+        pl.reviveProgress = 0;
+      }
+    }
+
+    // Remove any orphaned Ice Prison that was trapping the departing player
+    if (departing.icePrisonId) {
+      for (let i = this.enemies.length - 1; i >= 0; i--) {
+        const e = this.enemies[i]!;
+        if (e.defId === 'ice_prison' && e.id === departing.icePrisonId) {
+          this.enemies.splice(i, 1);
+        }
+      }
+    }
+
+    // Remove summons and skill zones owned by the departing player
+    for (let i = this.summons.length - 1; i >= 0; i--) {
+      if (this.summons[i]!.ownerPlayerId === playerId) {
+        this.summons.splice(i, 1);
+      }
+    }
+    for (let i = this.skillZones.length - 1; i >= 0; i--) {
+      if (this.skillZones[i]!.ownerPlayerId === playerId) {
+        this.skillZones.splice(i, 1);
+      }
+    }
+
+    // If the last alive teammate leaves during an active dungeon run while remaining players are downed/ghost
+    if (!this.inHub && this.runState === 'playing') {
+      const remaining = this.getAllPlayers();
+      const anyAlive = remaining.some((p) => p.lifeState === 'alive' && p.hp > 0);
+      if (!anyAlive) {
+        this.runState = 'defeat';
+        for (const p of remaining) {
+          p.lifeState = 'ghost';
+          p.downedTimer = 0;
+          this.events.push({
+            kind: 'player_ghost',
+            playerId: p.id,
+            x: p.x,
+            y: p.y,
+          });
+        }
+      }
+    }
+
+    return true;
   }
 
   public setCoopPlayerInput(playerId: number, input: PlayerInputPacket): void {
@@ -2681,8 +2733,17 @@ export class WorldSim {
 
     const waveDef = room.waves[room.wavesSpawned - 1];
     if (waveDef && waveDef.enemies.length > 0) {
-      for (let i = 0; i < waveDef.enemies.length; i++) {
-        const entry = waveDef.enemies[i]!;
+      const currentPCount = this.getActivePlayerCount();
+      const basePCount = this.dungeon.playerCount ?? currentPCount;
+      const ratio =
+        COOP_SCALING[currentPCount].waveCountMultiplier /
+        Math.max(1, COOP_SCALING[basePCount].waveCountMultiplier);
+      const effectiveCount =
+        currentPCount === basePCount
+          ? waveDef.enemies.length
+          : Math.max(2, Math.round(waveDef.enemies.length * ratio));
+      for (let i = 0; i < effectiveCount; i++) {
+        const entry = waveDef.enemies[i % waveDef.enemies.length]!;
         const [ox, oy] = offsets[i % offsets.length]!;
         const eliteMod: EliteModifier | null = entry.isElite
           ? (entry.eliteModifier ?? ELITE_MODIFIERS[(room.id + i) % ELITE_MODIFIERS.length]!)
@@ -10077,6 +10138,12 @@ export class WorldSim {
   }
 
   private acquirePickup(init: Omit<SimPickupState, 'prevX' | 'prevY'>): SimPickupState {
+    if (this.pickups.length >= 160) {
+      const oldest = this.pickups.shift();
+      if (oldest) {
+        this.pickupPool.push(oldest);
+      }
+    }
     const pooled = this.pickupPool.pop();
     if (pooled) {
       pooled.id = init.id;

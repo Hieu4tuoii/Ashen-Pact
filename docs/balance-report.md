@@ -45,7 +45,7 @@
 | Số người chơi | Thời lượng Phòng chiến đấu (TB) | Thời lượng hạ Boss Biome 1 (TB) | Độ lệch thời gian hạ Boss so với 1P |
 |---:|---:|---:|---:|
 | **1 người (1P)** | **42.6s** | **101.3s** | **±0%** |
-| **2 người (2P)** | **46.7s** | **121.1s** | **±19.5%** |
+| **2 người (2P)** | **46.7s** | **118.9s** | **±17.4%** |
 | **3 người (3P)** | **48.3s** | **97.1s** | **±4.1%** |
 | **4 người (4P)** | **50.2s** | **111.6s** | **±10.2%** |
 
@@ -63,9 +63,9 @@
 
 | Đội hình Co-op | Số người | Thời gian hạ Boss | Phản ứng Nguyên tố | Đồng Đội Combo (+15 Năng lượng) | Kết quả |
 |---|---:|---:|---:|---:|:---:|
-| **2P Khiên Lửa (Thiết Vệ + Lam Hỏa)** | 2P | **109.7s** | **355** | **159** | ✅ THẮNG |
-| **2P Săn Độc (Liệp Ưng + Mộc Linh)** | 2P | **146.7s** | **186** | **79** | ✅ THẮNG |
-| **2P Công Nghệ Nguyên Tố (Lam Hỏa + Bánh Răng)** | 2P | **85.1s** | **392** | **207** | ✅ THẮNG |
+| **2P Khiên Lửa (Thiết Vệ + Lam Hỏa)** | 2P | **108.6s** | **341** | **151** | ✅ THẮNG |
+| **2P Săn Độc (Liệp Ưng + Mộc Linh)** | 2P | **140.3s** | **183** | **77** | ✅ THẮNG |
+| **2P Công Nghệ Nguyên Tố (Lam Hỏa + Bánh Răng)** | 2P | **107.6s** | **248** | **113** | ✅ THẮNG |
 | **4P Đội Hình Chuẩn (Thiết Vệ + Liệp Ưng + Lam Hỏa + Mộc Linh)** | 4P | **124.1s** | **707** | **410** | ✅ THẮNG |
 | **4P Đội Hình Phản Ứng Đa Tầng (Thiết Vệ + Lam Hỏa + Mộc Linh + Bánh Răng)** | 4P | **142.7s** | **930** | **587** | ✅ THẮNG |
 

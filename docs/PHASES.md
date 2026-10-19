@@ -84,8 +84,9 @@
 
 ---
 
-## Phase 8 — Cân Bằng Cuối, Hiệu Năng, QA & Bản Phát Hành
-- [ ] Chạy lại harness + điều chỉnh; soak test 20 phút; kiểm tra Chrome/Edge/Firefox.
-- [ ] Bug bash theo checklist.
-- [ ] Build production + đóng gói Host app cho Windows (`AshenPact-Host.exe` + `start-host.bat`), thư mục release zip sạch.
-- [ ] `README.md` tiếng Việt + hướng dẫn Windows Firewall + AP Isolation, `CREDITS.md` đầy đủ, `docs/RELEASE_NOTES.md`, `git tag v0.1.0`.
+## Phase 8 — Cân Bằng Cuối, Hiệu Năng, QA & Bản Phát Hành (Hoàn thành ✅)
+- [x] Chạy lại harness + điều chỉnh; soak test 20 phút; kiểm tra Chrome/Edge/Firefox.
+- [x] Bug bash theo checklist (`docs/QA_CHECKLIST.md`).
+- [x] Build production + đóng gói Host app cho Windows (`AshenPact-Host.exe` + `start-host.bat` + `allow-firewall-port-2567.bat`), thư mục release zip sạch (`release/AshenPact-v0.1.0-win-x64.zip`).
+- [x] `README.md` tiếng Việt + hướng dẫn Windows Firewall + AP Isolation, `CREDITS.md` đầy đủ, `docs/RELEASE_NOTES.md`, `git tag phase-8` & `git tag v0.1.0`.
+

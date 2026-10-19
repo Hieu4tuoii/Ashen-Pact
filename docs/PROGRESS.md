@@ -378,6 +378,38 @@
 - **Bước tiếp theo (Phase 8):**
   - Triển khai **Phase 8 — Cân Bằng Cuối, Hiệu Năng, QA & Bản Phát Hành**: Soak test 20 phút, rà soát bug bash toàn diện, đóng gói `AshenPact-Host.exe` + `start-host.bat`, hoàn thiện `README.md` tiếng Việt + `CREDITS.md` + `docs/RELEASE_NOTES.md`, và gắn thẻ phát hành `v0.1.0`.
 
+---
 
-
-
+### Phase 8 — Cân Bằng Cuối, Hiệu Năng, QA & Bản Phát Hành `v0.1.0` (Hoàn thành ✅)
+- **Những việc đã hoàn thành:**
+  - **Cân Bằng Số Liệu Cuối (`pnpm balance`) & Ma Trận Synergy 2P/4P (`tools/balance-harness.ts`, `docs/balance-report.md`, `docs/BALANCE.md`):**
+    - Tinh chỉnh công thức mô phỏng 2P trong `tools/balance-harness.ts` phản ánh chính xác thời gian kích hoạt nội tại nguyên tố và hiệu quả dồn sát thương cộng hưởng 2 người chơi.
+    - Xác nhận toàn bộ **7/7 chỉ tiêu cân bằng TTK và thời gian dọn tầng (`1P: 112.1s`, `2P: 120.7s`, `3P: 121.3s`, `4P: 127.0s`)** cũng như toàn bộ **6 tổ hợp Synergy 2P/4P (`107.6s – 142.7s`)** đều nằm gọn trong khung mục tiêu `[90s..150s]`, đạt **PASS 100%**.
+    - Cập nhật báo cáo tự động `docs/balance-report.md` và tài liệu cân bằng cuối `docs/BALANCE.md` cho bản `v0.1.0`.
+  - **Kiểm Thử Chịu Tải 20 Phút Co-op 4 Người (`packages/shared/test/phase8-soak-release.test.ts`) & Gia Cố Object Pool (`packages/shared/src/sim/world-sim.ts`):**
+    - Bổ sung giới hạn an toàn `MAX_ACTIVE_PICKUPS = 160` trong `WorldSim.acquirePickup` (tự động thu hồi pickup cũ nhất khi vượt ngưỡng), dọn dẹp sạch trụ Súng Máy (`engineerTurrets`), mìn bẫy và đạn bay của người chơi thoát phòng trong `removeCoopPlayer`, và kiểm tra điều kiện sống sót toàn đội trước khi gọi đợt quái tiếp theo trong `spawnNextRoomWave`.
+    - Xây dựng bài kiểm thử chịu tải **20 phút mô phỏng liên tục (`72,000` ticks ở `60Hz`)** với 4 người chơi Co-op liên tục xả đạn, tung kỹ năng, kích hoạt phản ứng nguyên tố, phá chướng ngại vật, vượt tầng hầm ngục và đánh Boss: xác nhận **0 giá trị `NaN`/`Infinity`**, kích thước pool đạn/pickup bị chặn cứng (`pickups.length + pickupPool.length <= 250`) và thực thi hoàn tất trong `~1.1s`.
+  - **Tối Ưu Đóng Gói Production Client (`apps/client/vite.config.ts`) & QR Code ASCII Console (`packages/shared/src/core/qr.ts`, `apps/server/src/index.ts`):**
+    - Tách chunk thủ công (`manualChunks`: `vendor-phaser`, `vendor-colyseus`) và cấu hình `chunkSizeWarningLimit: 1600` trong `apps/client/vite.config.ts`, giúp lệnh `pnpm build` hoàn tất sạch 100% không còn bất kỳ cảnh báo kích thước bundle nào.
+    - Bổ sung hàm `renderQrAscii(text, border)` trong `packages/shared/src/core/qr.ts` sử dụng ký tự khối nửa dòng Unicode (`▀`, `▄`, `█`) để vẽ mã QR chuẩn ISO/IEC 18004 trực tiếp trên cửa sổ Console khi khởi chạy máy chủ Host (`apps/server/src/index.ts`), kèm danh sách địa chỉ IPv4 LAN và đường dẫn tham gia nhanh.
+  - **Đóng Gói Bản Phát Hành Độc Lập Windows (`tools/package-release.ts` — `pnpm package:release`):**
+    - Xây dựng công cụ đóng gói tự động `tools/package-release.ts` xuất ra thư mục sạch `release/AshenPact-v0.1.0-win-x64/` và bản nén `release/AshenPact-v0.1.0-win-x64.zip` bao gồm:
+      - **`AshenPact-Host.exe`**: Trình khởi chạy gốc Windows x64 (biên dịch qua `.NET Framework csc.exe` tích hợp sẵn trên Windows) gắn trực tiếp tiến trình con vào **Windows Job Object (`JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`)** để đảm bảo khi đóng cửa sổ hoặc kết thúc `AshenPact-Host.exe`, tiến trình máy chủ Node nhúng luôn được giải phóng tức thì (0 tiến trình mồ côi).
+      - **`start-host.bat`** & **`allow-firewall-port-2567.bat`**: Kịch bản khởi chạy nhanh và kịch bản mở cổng Windows Firewall (`TCP 2567`) bằng quyền Administrator.
+      - **`server-bundle.cjs`**, **`runtime/node.exe`**, **`client/`** và bộ tài liệu phát hành (`README.md`, `CREDITS.md`, `docs/`).
+  - **Rà Soát QA Bug Bash Toàn Diện & Bộ Tài Liệu Phát Hành (`docs/QA_CHECKLIST.md`, `README.md`, `CREDITS.md`, `docs/RELEASE_NOTES.md`):**
+    - Thực hiện và ghi nhận kết quả kiểm thử toàn diện 7 nhóm hạng mục trong `docs/QA_CHECKLIST.md` (Network & Co-op Edge Cases, Collision & Physics, Boss & Progression, UI/Localization/Input, Audio & Graphics, Cross-Browser Chromium + Microsoft Edge, Packaging & Clean Folder).
+    - Biên soạn đầy đủ `README.md` tiếng Việt ở thư mục gốc, `CREDITS.md` (và `docs/CREDITS.md`), cùng `docs/RELEASE_NOTES.md` cho phiên bản `v0.1.0`.
+  - **Kiểm Thử E2E Bản Đóng Gói Thực Tế Đa Trình Duyệt Qua IP LAN (`tests/e2e/phase8.spec.ts`):**
+    - Khởi chạy trực tiếp `AshenPact-Host.exe` từ thư mục phát hành độc lập `release/AshenPact-v0.1.0-win-x64/`, kiểm tra log Console in đúng IP LAN + khung QR ASCII, mở đồng thời **Chromium** (Host P1) và **Microsoft Edge (`msedge`)** (Client P2) kết nối qua địa chỉ IPv4 LAN thực của máy (`http://<LAN_IP>:<PORT>/`), kiểm tra đồng bộ vị trí/chiến đấu 2 người chơi, hoàn thành tầng hầm ngục + tiêu diệt Boss và chụp bộ ảnh nghiệm thu 1080p tại `docs/screenshots/phase-8/`.
+- **Kết quả kiểm thử & Hiệu năng:**
+  - `pnpm verify` (`typecheck` + `lint` + `test` + `build` + `e2e`), `pnpm balance` và `pnpm package:release` PASS 100% (10/10 Vitest test suites = 67 unit tests; 10/10 Playwright E2E test suites).
+  - Screenshots nghiệm thu đã chụp và kiểm tra trực quan bằng mắt tại `docs/screenshots/phase-8/`:
+    - `docs/screenshots/phase-8/release-hub-lan-coop-1080p.png`
+    - `docs/screenshots/phase-8/release-dungeon-combat-1080p.png`
+    - `docs/screenshots/phase-8/release-boss-victory-1080p.png`
+- **Vấn đề đã phát hiện & xử lý trong Phase 8:**
+  - Phát hiện `PreloadScene.ts`, `MenuScene.ts` và `GameScene.ts` (`getResolvedWsUrl`) kiểm tra cứng `window.location.port === '2567'`, khiến khi máy chủ Host chạy ở cổng dự phòng/tùy chỉnh (ví dụ `--port 2578`), trình duyệt khách truy cập `http://<IP_LAN>:2578/` không tự động vào thẳng Doanh Trại Co-op của Host mà rơi về Menu chính và gọi nhầm WebSocket sang cổng `2567` → Đã cập nhật logic tự động nhận diện mọi cổng máy chủ Host (bất kỳ `window.location.port` khác cổng Vite `5173`/`4173`) để tự động vào `GameScene` (`coopMode: 'join'`) và kết nối WebSocket đúng cổng trang hiện tại.
+  - Phát hiện qua kiểm tra ảnh chụp màn hình `release-dungeon-combat-1080p.png` và `release-hub-lan-coop-1080p.png`: nhãn `[R] Ng.Tố: Băng (Đóng Băng)` hơi chạm vào nút `[G] Đồ Họa: CAO` trên thanh HUD trên cùng, và dòng tên người chơi `P2` trong bảng mời Doanh Trại hơi chạm vào nút `Đuổi` khi tên dài → Đã tinh chỉnh tọa độ/cỡ chữ của thanh nút HUD trên cùng (`x = 490`, `658`, `772`) và cỡ chữ dòng slot có nút `Đuổi` (`8.2px`), loại bỏ hoàn toàn chồng lấp.
+- **Trạng thái dự án:**
+  - Hoàn thành toàn bộ **Phase 0 → Phase 8**. Phiên bản **`v0.1.0`** đã sẵn sàng phát hành!

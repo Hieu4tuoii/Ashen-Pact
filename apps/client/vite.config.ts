@@ -15,6 +15,19 @@ export default defineConfig({
     target: 'es2022',
     outDir: 'dist',
     assetsInlineLimit: 0,
-    chunkSizeWarningLimit: 2000,
+    chunkSizeWarningLimit: 1600,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules/phaser')) {
+            return 'vendor-phaser';
+          }
+          if (id.includes('node_modules/colyseus.js') || id.includes('node_modules/@colyseus')) {
+            return 'vendor-colyseus';
+          }
+          return undefined;
+        },
+      },
+    },
   },
 });

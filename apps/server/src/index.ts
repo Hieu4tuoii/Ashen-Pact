@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { renderQrAscii } from '@ashen-pact/shared';
 import { Server } from '@colyseus/core';
 import { WebSocketTransport } from '@colyseus/ws-transport';
 import cors from 'cors';
@@ -11,8 +12,35 @@ import { CoopRoom } from './rooms/CoopRoom.js';
 import { HelloRoom } from './rooms/HelloRoom.js';
 import { getLanIPv4Addresses } from './utils/network.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+function getServerDir(): string {
+  try {
+    if (typeof import.meta?.url === 'string' && import.meta.url.length > 0) {
+      return path.dirname(fileURLToPath(import.meta.url));
+    }
+  } catch {
+    // Fallback when bundled as CommonJS for standalone Windows release
+  }
+  return typeof __dirname === 'string' ? __dirname : process.cwd();
+}
+
+const SERVER_DIR = getServerDir();
+
+function resolveClientDistPath(): string | null {
+  const candidates = [
+    process.env.ASHEN_PACT_CLIENT_DIST,
+    path.resolve(SERVER_DIR, './client'),
+    path.resolve(process.cwd(), './client'),
+    path.resolve(SERVER_DIR, '../../client/dist'),
+    path.resolve(process.cwd(), 'apps/client/dist'),
+  ].filter((p): p is string => typeof p === 'string' && p.length > 0);
+
+  for (const candidate of candidates) {
+    if (fs.existsSync(path.join(candidate, 'index.html'))) {
+      return candidate;
+    }
+  }
+  return null;
+}
 
 function parseCliPort(): number | null {
   const args = process.argv.slice(2);
@@ -59,6 +87,7 @@ export async function startServer(initialPort = DEFAULT_PORT): Promise<{
     res.json({
       status: 'ok',
       game: 'Ashen Pact',
+      version: '0.1.0',
       port: activePort,
       lanAddresses: getLanIPv4Addresses(),
     });
@@ -77,6 +106,7 @@ export async function startServer(initialPort = DEFAULT_PORT): Promise<{
       lanAddresses[0]?.address ??
       '127.0.0.1';
     res.json({
+      version: '0.1.0',
       port: activePort,
       localUrl: `http://localhost:${activePort}`,
       primaryLanIp,
@@ -86,8 +116,8 @@ export async function startServer(initialPort = DEFAULT_PORT): Promise<{
   });
 
   // Serve built static client when available
-  const clientDistPath = path.resolve(__dirname, '../../client/dist');
-  if (fs.existsSync(clientDistPath)) {
+  const clientDistPath = resolveClientDistPath();
+  if (clientDistPath) {
     app.use(express.static(clientDistPath));
   }
 
@@ -127,14 +157,29 @@ export async function startServer(initialPort = DEFAULT_PORT): Promise<{
   }
 
   const lanList = getLanIPv4Addresses();
-  console.log('==========================================================');
+  const primaryLanIp =
+    lanList.find((info) => info.preferred)?.address ?? lanList[0]?.address ?? '127.0.0.1';
+  const primaryInviteUrl = `http://${primaryLanIp}:${activePort}`;
+
+  console.log('==================================================================');
+  console.log('  ASHEN PACT v0.1.0 — MÁY CHỦ CO-OP LAN ĐÃ KHỞI ĐỘNG THÀNH CÔNG');
+  console.log('==================================================================');
   console.log(`[AshenPact Server] Listening on http://localhost:${activePort}`);
+  console.log(`[Máy Chủ / Host]   http://localhost:${activePort}/?coop=host`);
   for (const lan of lanList) {
     console.log(
-      `[AshenPact LAN] ${lan.interfaceName}: http://${lan.address}:${activePort}${lan.preferred ? ' (Ưu tiên LAN)' : ''}`,
+      `[AshenPact LAN]    ${lan.interfaceName}: http://${lan.address}:${activePort}${lan.preferred ? ' (Ưu tiên LAN)' : ''}`,
     );
   }
-  console.log('==========================================================');
+  console.log('------------------------------------------------------------------');
+  console.log(`  MỜI BẠN BÈ CÙNG WI-FI / LAN (Quét mã QR hoặc mở link):`);
+  console.log(`  👉 ${primaryInviteUrl}`);
+  console.log('');
+  console.log(renderQrAscii(primaryInviteUrl, 2));
+  console.log('');
+  console.log('  Lưu ý: Nếu bạn bè không vào được, hãy chạy allow-firewall-port-2567.bat');
+  console.log('  (Run as Administrator) để mở cổng 2567 trên Windows Firewall.');
+  console.log('==================================================================');
 
   if (process.argv.includes('--host')) {
     openBrowserUrl(`http://localhost:${activePort}/?coop=host`);
@@ -149,3 +194,4 @@ if (process.env.ASHEN_PACT_NO_AUTOSTART !== '1') {
     process.exit(1);
   });
 }
+

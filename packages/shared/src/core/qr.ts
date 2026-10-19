@@ -244,3 +244,43 @@ export function generateQrMatrix(text: string): boolean[][] {
 
   return modules;
 }
+
+/**
+ * Renders a QR Code matrix as compact console ASCII/Unicode half-block art (`█`, `▀`, `▄`, ` `)
+ * so players can scan the LAN invite link directly from the Host console window.
+ */
+export function renderQrAscii(text: string, border = 2): string {
+  const matrix = generateQrMatrix(text);
+  const size = matrix.length;
+  const totalSize = size + border * 2;
+
+  const isLightModule = (r: number, c: number): boolean => {
+    const mr = r - border;
+    const mc = c - border;
+    if (mr < 0 || mr >= size || mc < 0 || mc >= size) {
+      return true; // Quiet zone is light
+    }
+    return !matrix[mr]![mc];
+  };
+
+  const lines: string[] = [];
+  for (let r = 0; r < totalSize; r += 2) {
+    let rowStr = '  ';
+    for (let c = 0; c < totalSize; c++) {
+      const topLight = isLightModule(r, c);
+      const bottomLight = r + 1 < totalSize ? isLightModule(r + 1, c) : false;
+      if (topLight && bottomLight) {
+        rowStr += '█';
+      } else if (topLight && !bottomLight) {
+        rowStr += '▀';
+      } else if (!topLight && bottomLight) {
+        rowStr += '▄';
+      } else {
+        rowStr += ' ';
+      }
+    }
+    lines.push(rowStr);
+  }
+  return lines.join('\n');
+}
+
