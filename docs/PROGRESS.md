@@ -5,7 +5,7 @@
 ### 1.1 Lộ trình 9 Phase (Phase 0 → Phase 8)
 1. **Phase 0 — Nền móng & Thiết kế (ĐÃ HOÀN THÀNH ✅):** Thiết lập monorepo `pnpm` (`apps/client`, `apps/server`, `packages/shared`), TS strict, ESLint, Prettier, Vitest, Playwright, bộ tài liệu sống `docs/`, thư viện vẽ procedural vector (`palette`, `primitives`, `outlined()`, `TextureBaker` theo DPR, `CutoutRig`), nhân vật mẫu **Thiết Vệ** + quái mẫu **Goblin Xạ Thủ**, scene `ArtGallery`, khung Phaser scenes + Colyseus hello room + `window.__GAME_DEBUG__`.
 2. **Phase 1 — Core Gameplay & Game Feel (ĐÃ HOÀN THÀNH ✅):** Vòng lặp simulation 60Hz trong `packages/shared` + `LocalTransport`, di chuyển gia tốc, dash i-frame, camera lookahead, 4 vũ khí mẫu, 3 quái mẫu + AI/telegraph, spatial hash, hit-stop, screen shake, damage popup, ZzFX.
-3. **Phase 2 — Pipeline Hình ảnh & Tương tác Map:** Tilemap procedural + autotile, lightmap động + bloom/vignette, particle/decal pool, đồ vỡ/thùng nổ, bề mặt tương tác nguyên tố, stress test 60 FPS (4P + 80 quái + 600 đạn).
+3. **Phase 2 — Pipeline Hình ảnh & Tương tác Map (ĐÃ HOÀN THÀNH ✅):** Tilemap procedural + autotile, lightmap động + bloom/vignette, particle/decal pool, đồ vỡ/thùng nổ, bề mặt tương tác nguyên tố, stress test 60 FPS (4P + 80 quái + 600 đạn).
 4. **Phase 3 — Dungeon, Vòng lặp lượt chơi & Biome 1 hoàn chỉnh:** Sinh tầng procedural có kiểm chứng liên thông, minimap + fog of war, 12 vũ khí, rương/thương nhân/tượng thần/phòng bí mật, toàn bộ quái + Elite Biome 1, Boss **Mục Vương Nấm Độc** 3 phase.
 5. **Phase 4 — Co-op LAN:** Server authoritative Colyseus phục vụ tĩnh + WebSocket cùng cổng `2567`, LAN IP + QR code, `NetworkTransport`, client prediction + reconciliation, adaptive interpolation, deterministic bullet spawn, mô phỏng mạng Wi-Fi kém, E2E 4 client qua IP LAN thực.
 6. **Phase 5 — 5 Nhân vật, Hệ Nguyên tố & Synergy:** Hoàn thiện Thiết Vệ, Liệp Ưng, Lam Hỏa, Mộc Linh, Bánh Răng kèm nâng cấp skill, 6 phản ứng nguyên tố + Team Combo, công cụ Balance Harness headless xuất `docs/balance-report.md`.
@@ -83,6 +83,36 @@
   - Phát hiện `setTintFill(0xfde047)` khi quái gồng chiêu (`telegraph`) xóa mất toàn bộ viền tối `#141019` `2.5u` cùng chi tiết mắt/vũ khí thành mảng vàng phẳng, và bắn `scrap_shotgun` (5 viên/phát) phát trùng 5 lần SFX/trauma cùng 5 số sát thương chồng khít lên nhau → Đã đổi cảnh báo `telegraph` sang `setTint` nhân màu cam-vàng (`#ff9e64`) giữ nguyên viền tối, giới hạn `hitFlash` ở thân/đầu, gộp SFX/trauma/hit-stop theo từng nhịp bắn và rải đều vị trí các số sát thương liên tiếp theo hình rẻ quạt.
   - Phát hiện khi trượt dọc khe nối giữa 2 ô tường/trụ liền kề, thứ tự duyệt ô có thể đẩy ngang vào góc nội bộ của ô liền kề → Đã tách `ArenaMap.resolveCircleCollision` thành 2 pha (ưu tiên mặt phẳng chính diện trước góc ngoài) với `scratchBox` tái sử dụng không cấp phát bộ nhớ.
   - Phát hiện thiếu gọi `.setTexture(key)` cho các sprite đạn, vật phẩm rơi và hạt `CombatFxManager` khi `TextureBaker.bakeAll` tạo lại texture lúc đổi độ phân giải (`1080p` ↔ `1440p`), cùng việc `.filter()` mảng trên đường nóng `WorldSim` → Đã bổ sung Object Pool cho đạn/pickup/sprite, nén mảng tại chỗ (`in-place compaction`), gắn lại texture khi resize và bổ sung test E2E resize trực tiếp trong lúc bắn đạn.
-- **Bước tiếp theo (Phase 2):**
-  - Triển khai **Phase 2 — Pipeline Hình Ảnh & Tương Tác Map**: Tilemap procedural có chiều sâu + autotile, hệ ánh sáng động (lightmap `RenderTexture` + `ADD` blend + bloom + vignette), hệ particle/decal bền (pool), đồ vỡ được & thùng nổ, 6 loại bề mặt tương tác nguyên tố (Cháy/Lạnh/Sét/Độc), cài đặt chất lượng đồ họa + auto quality, và bài stress test giữ ≥ 60 FPS ở 1080p High.
+
+---
+
+### Phase 2 — Pipeline Hình Ảnh & Tương Tác Map (Hoàn thành ✅)
+- **Những việc đã hoàn thành:**
+  - **Procedural Tilemap, Autotiling, Bóng Đổ Tường (AO) & Tường Bí Mật (`packages/shared`, `apps/client`):**
+    - Mở rộng `ArenaMap` với 8 biến thể gạch sàn theo seed (`tileVariants[0..7]`), bitmask autotile 4 hướng Bắc–Đông–Nam–Tây (`getAutotileMask` `0..15`), bitmask bóng đổ hướng Tây-Bắc (`getWallAmbientOcclusionMask` `0..7`), và ô tường nứt bí mật `'cracked_wall'` (`destroyCrackedWall`).
+    - Mở rộng `TextureBaker` bake toàn bộ 8 biến thể sàn Biome 1, 16 biến thể tường & 16 biến thể trụ autotile có mặt vách đá 3D hướng Nam (`7u`), 7 lớp phủ bóng đổ AO mềm, và ghép lên `arena_ground_composite` để chỉ tốn 1 draw call cho toàn bộ nền/tường/bề mặt tĩnh và chỉ vẽ lại đúng các ô thay đổi khi `mapRevision` tăng.
+  - **Hệ Ánh Sáng Động & Post-FX Shader (`apps/client/src/fx/lighting-pipeline.ts`):**
+    - Xây dựng `LightingPipeline` với lightmap `RenderTexture` chế độ hòa trộn `MULTIPLY` (màu ambient theo từng biome) + cọ sáng radial cộng hưởng cho người chơi, đồng đội P2–P4, đuốc lửa lập lòe (`torch_brazier`), nấm phát quang (`glow_mushroom`), thùng thuốc nổ, bề mặt cháy/điện/dung nham/đầm độc, đạn bay và tia chớp nổ.
+    - Xây dựng `BiomePostFxPipeline` (WebGL fragment shader) hỗ trợ Bloom 4-tap phát sáng, Vignette, nhịp đập viền đỏ khi máu thấp (`Low-HP Heartbeat`), Chromatic Aberration khi chấn động mạnh và cân chỉnh màu sắc theo biome (`Color Grading`).
+  - **6 Bề Mặt Tương Tác, 4 Trạng Thái Nguyên Tố & Đồ Vật Vỡ / Thùng Nổ Dây Chuyền:**
+    - 6 bề mặt tương tác trong `ArenaMap`: `water` (dập lửa, dẫn điện lan flood-fill `electrifyWaterAt`, đóng băng `freezeSurfaceInRadius`), `oil` (làm chậm 15%, bắt lửa `burning_oil` lan sang cỏ/dầu lân cận và cháy tàn thành `ash`), `grass` (rung lá khi đi qua, bắt lửa `burning_grass`), `poison_swamp` (làm chậm + tích độc), `lava` (gây cháy tức thì + phát sáng cam), `ice` (giảm ma sát gây trượt quán tính, tan thành nước khi gặp lửa).
+    - 4 trạng thái nguyên tố trong `WorldSim`: **Cháy (`burn`)** gây DoT mỗi `0.5s` và mồi lửa dầu/cỏ; **Lạnh (`chill`)** làm chậm `30%`, tích đủ `3` cộng dồn chuyển thành **Đóng Băng (`frozen`)** bất động `1.5s`, và khi trúng đòn nặng/chí mạng kích hoạt **Vỡ Băng (`shatter`)** gây **sát thương ×3**; **Sét (`shock`)** giật dây chuyền tối đa 2 mục tiêu trong `115u` và truyền điện toàn bộ vùng nước nối liền; **Độc (`poison`)** cộng dồn tối đa 3 tầng DoT và **chặn hồi máu**.
+    - Đồ vật vỡ được (`wooden_crate`, `clay_vase` rơi vàng/năng lượng) và thùng thuốc nổ (`explosive_barrel`) kích nổ dây chuyền (`fuseTimer`), mồi lửa dầu/cỏ và phá vỡ tường nứt bí mật `'cracked_wall'`.
+  - **Hệ Particle/Decal Bền, Afterimage Dash, Ambient & Cài Đặt Chất Lượng Đồ Họa:**
+    - Mở rộng `CombatFxManager`: ring-buffer 120 vệt decal bền trên sàn (`fx_decal_scorch`, `fx_decal_splatter`, `fx_decal_frost`), pool bóng mờ `afterimage` khi Dash, hạt lá rừng rơi & sương mù trôi nổi (`ambientPool`), mảnh gỗ/gốm/băng vỡ và tia sét gấp khúc (`lightningGraphics`).
+    - Xây dựng `GraphicsSettingsManager` (`high` / `medium` / `low` lưu `localStorage` + `autoQuality` tự động hạ cấu hình khi FPS tụt kéo dài).
+- **Kết quả kiểm thử & Hiệu năng:**
+  - `pnpm verify` (`typecheck` + `lint` + `test` + `build` + `e2e`) PASS 100% (4/4 Vitest test suites = 25 unit tests; 4/4 Playwright E2E test suites).
+  - Stress Test (4 người chơi giả lập P1–P4 + 80 quái + 612–625 đạn + 227 particle + 10 decal ở 1080p High): đạt **60.0–60.1 FPS** (`16.65 ms` frame time, `sim.step()` chỉ `~0.6 ms`), không rò rỉ bộ nhớ.
+  - Console trình duyệt: **0 errors, 0 warnings**.
+  - Screenshots đã chụp và kiểm tra trực quan bằng mắt tại `docs/screenshots/phase-2/`:
+    - `docs/screenshots/phase-2/dynamic-lighting-and-surfaces-1080p.png`
+    - `docs/screenshots/phase-2/elemental-reactions-and-barrels-1080p.png`
+    - `docs/screenshots/phase-2/graphics-quality-and-debug-1080p.png`
+    - `docs/screenshots/phase-2/stress-test-4p-80e-600b-1080p.png`
+- **Vấn đề đã phát hiện & xử lý trong Phase 2:**
+  - Phát hiện trong kịch bản Stress Test 625 viên đạn nguyên tố bay qua hồ nước/băng mỗi frame làm `mapRevision` tăng liên tục, khiến `GameScene.syncArenaTilesWithMapRevision()` gọi `arenaGroundTex.refresh()` (`gl.texImage2D` trên canvas `2304×1408` = 13 MB) mỗi frame cùng chi phí lấy mẫu texture `5x` trên trình kết xuất phần mềm SwiftShader → Đã khóa biến đổi bề mặt liên tục trong chế độ Stress Test, ghép toàn bộ 792 ô nền/tường thành 1 texture `arena_ground_composite`, và dùng texture `2x` chuẩn 1080p (`rig_full_*` và `proj_stress_orb` không xoay trục) cho chế độ đàn đông, đưa FPS Stress Test trong Chromium headless từ `19.5 FPS` lên **60.1 FPS**.
+  - Phát hiện nhãn `[R] Ng.Tố: Hỏa (Cháy)` chạm sát nút `[G] Đồ Họa: CAO` trên thanh HUD trên cùng và `DebugOverlay` cập nhật chậm 10 frame sau khi bấm `G` → Đã căn chỉnh lại tọa độ các nút trên thanh HUD và làm mới tức thì `DebugOverlay` ngay khi `graphicsQuality` thay đổi.
+- **Bước tiếp theo (Phase 3):**
+  - Triển khai **Phase 3 — Dungeon, Vòng Lặp Lượt Chơi & Biome 1 Hoàn Chỉnh (Vertical Slice Solo)**: Sinh tầng procedural theo seed có kiểm chứng liên thông, các loại phòng (khởi đầu, chiến đấu, kho báu, thương nhân, tượng thần, bí mật, boss), minimap + fog of war, ~12 vũ khí, toàn bộ quái + Elite Biome 1, và Boss **Mục Vương Nấm Độc** đủ 3 phase.
 

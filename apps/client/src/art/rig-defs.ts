@@ -1882,6 +1882,143 @@ export const WEAPON_VECTOR_DEFS: Record<string, WeaponVectorDef> = {
       },
     ],
   },
+  frost_scepter: {
+    id: 'frost_scepter',
+    width: 42,
+    height: 22,
+    originX: 0.24,
+    originY: 0.5,
+    shapes: [
+      {
+        kind: 'roundedRect',
+        x: -10,
+        y: -2.2,
+        w: 24,
+        h: 4.4,
+        r: 2,
+        style: {
+          fill: PALETTE.COBALT_SHADE,
+          shade: PALETTE.SLATE_DARK,
+          highlight: PALETTE.AZURE_CORE,
+        },
+      },
+      {
+        kind: 'polygon',
+        points: [
+          { x: 11, y: -7 },
+          { x: 24, y: 0 },
+          { x: 11, y: 7 },
+          { x: 14, y: 0 },
+        ],
+        style: {
+          fill: PALETTE.CYAN_FROST,
+          shade: PALETTE.AZURE_CORE,
+          highlight: PALETTE.BONE_WHITE,
+        },
+      },
+    ],
+  },
+  tesla_carbine: {
+    id: 'tesla_carbine',
+    width: 40,
+    height: 22,
+    originX: 0.28,
+    originY: 0.5,
+    shapes: [
+      {
+        kind: 'roundedRect',
+        x: -7,
+        y: -5,
+        w: 22,
+        h: 8,
+        r: 2.5,
+        style: {
+          fill: PALETTE.STEEL_DARK,
+          shade: PALETTE.SLATE_DARK,
+          highlight: PALETTE.STEEL_LIGHT,
+        },
+      },
+      {
+        kind: 'roundedRect',
+        x: 13,
+        y: -4,
+        w: 9,
+        h: 6,
+        r: 2,
+        style: {
+          fill: PALETTE.SOLAR_GOLD,
+          shade: PALETTE.BRASS_CORE,
+          highlight: PALETTE.VOLT_YELLOW,
+        },
+      },
+    ],
+  },
+  apprentice_staff: {
+    id: 'apprentice_staff',
+    width: 42,
+    height: 22,
+    originX: 0.24,
+    originY: 0.5,
+    shapes: [
+      {
+        kind: 'roundedRect',
+        x: -10,
+        y: -2.2,
+        w: 25,
+        h: 4.4,
+        r: 2,
+        style: {
+          fill: PALETTE.LEATHER_MID,
+          shade: PALETTE.LEATHER_DARK,
+          highlight: PALETTE.LEATHER_LIGHT,
+        },
+      },
+      {
+        kind: 'circle',
+        cx: 17,
+        cy: 0,
+        r: 5.5,
+        style: {
+          fill: PALETTE.FLAME_ORANGE,
+          shade: PALETTE.RUBY_CORE,
+          highlight: PALETTE.SOLAR_GOLD,
+        },
+      },
+    ],
+  },
+  thorn_staff: {
+    id: 'thorn_staff',
+    width: 42,
+    height: 22,
+    originX: 0.24,
+    originY: 0.5,
+    shapes: [
+      {
+        kind: 'roundedRect',
+        x: -10,
+        y: -2.2,
+        w: 25,
+        h: 4.4,
+        r: 2,
+        style: {
+          fill: PALETTE.FOREST_SHADE,
+          shade: PALETTE.MOSS_DARK,
+          highlight: PALETTE.GOBLIN_GREEN,
+        },
+      },
+      {
+        kind: 'circle',
+        cx: 17,
+        cy: 0,
+        r: 5.5,
+        style: {
+          fill: PALETTE.TOXIC_PURPLE,
+          shade: PALETTE.SLATE_DARK,
+          highlight: PALETTE.LIME_GLOW,
+        },
+      },
+    ],
+  },
 };
 
 export const RIG_DEFS_BY_ID: Record<string, EntityRigDef> = {

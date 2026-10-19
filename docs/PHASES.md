@@ -36,12 +36,12 @@
 
 ---
 
-## Phase 2 — Pipeline Hình Ảnh & Tương Tác Map
-- [ ] Tilemap vẽ bằng code (bake tile + biến thể theo seed) + autotile, tường có chiều sâu/bóng; hệ ánh sáng lightmap + bloom + vignette + color grading.
-- [ ] Hệ particle (pool), decal bền, bóng đổ, ambient (lá/sương), afterimage dash.
-- [ ] Đồ vỡ được, thùng nổ, bề mặt nước/dầu/cỏ/đầm độc/dung nham/băng, trạng thái nguyên tố cơ bản (Cháy/Lạnh/Sét/Độc) + tương tác bề mặt.
-- [ ] Cài đặt chất lượng đồ họa + auto quality.
-- [ ] **DoD riêng Phase 2:** Stress test (4 người chơi giả lập + 80 quái + 600 đạn + particle) giữ ≥ 60 FPS ở 1080p High, không rò rỉ bộ nhớ (3 phút); screenshot ánh sáng động.
+## Phase 2 — Pipeline Hình Ảnh & Tương Tác Map (Hoàn thành ✅)
+- [x] Tilemap vẽ bằng code (bake tile + biến thể theo seed) + autotile, tường có chiều sâu/bóng; hệ ánh sáng lightmap + bloom + vignette + color grading.
+- [x] Hệ particle (pool), decal bền, bóng đổ, ambient (lá/sương), afterimage dash.
+- [x] Đồ vỡ được, thùng nổ, bề mặt nước/dầu/cỏ/đầm độc/dung nham/băng, trạng thái nguyên tố cơ bản (Cháy/Lạnh/Sét/Độc) + tương tác bề mặt.
+- [x] Cài đặt chất lượng đồ họa + auto quality.
+- [x] **DoD riêng Phase 2:** Stress test (4 người chơi giả lập + 80 quái + 600 đạn + particle) giữ ≥ 60 FPS ở 1080p High, không rò rỉ bộ nhớ (3 phút); screenshot ánh sáng động.
 
 ---
 

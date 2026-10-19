@@ -16,7 +16,12 @@ export type SfxId =
   | 'skill_cast'
   | 'shield_shockwave'
   | 'weapon_swap'
-  | 'pickup';
+  | 'pickup'
+  | 'prop_break'
+  | 'freeze'
+  | 'shatter'
+  | 'chain_lightning'
+  | 'surface_ignite';
 
 interface ZzfxPreset {
   volume: number;
@@ -172,6 +177,51 @@ const SFX_PRESETS: Record<SfxId, ZzfxPreset> = {
     decaySec: 0.09,
     noise: 0.0,
     wave: 'sine',
+  },
+  prop_break: {
+    volume: 0.26,
+    freq: 190,
+    slide: -110,
+    attackSec: 0.003,
+    decaySec: 0.14,
+    noise: 0.55,
+    wave: 'square',
+  },
+  freeze: {
+    volume: 0.25,
+    freq: 860,
+    slide: 340,
+    attackSec: 0.005,
+    decaySec: 0.16,
+    noise: 0.12,
+    wave: 'triangle',
+  },
+  shatter: {
+    volume: 0.34,
+    freq: 920,
+    slide: -420,
+    attackSec: 0.002,
+    decaySec: 0.22,
+    noise: 0.55,
+    wave: 'sawtooth',
+  },
+  chain_lightning: {
+    volume: 0.28,
+    freq: 680,
+    slide: -280,
+    attackSec: 0.002,
+    decaySec: 0.14,
+    noise: 0.45,
+    wave: 'sawtooth',
+  },
+  surface_ignite: {
+    volume: 0.24,
+    freq: 220,
+    slide: 120,
+    attackSec: 0.008,
+    decaySec: 0.22,
+    noise: 0.72,
+    wave: 'sawtooth',
   },
 };
 

@@ -23,6 +23,7 @@ export interface ITransport {
   getSim(): WorldSim;
   getInterpolationAlpha(): number;
   getInterpolatedPlayerPos(): InterpolatedEntityPos;
+  getInterpolatedSimPlayerPos(player: SimPlayerState): InterpolatedEntityPos;
   getInterpolatedEnemyPos(enemy: SimEnemyState): InterpolatedEntityPos;
   getInterpolatedProjectilePos(proj: SimProjectileState): InterpolatedEntityPos;
   getInterpolatedPickupPos(pickup: SimPickupState): InterpolatedEntityPos;
@@ -101,6 +102,13 @@ export class LocalTransport implements ITransport {
     return {
       x: lerp(p.prevX, p.x, this.alpha),
       y: lerp(p.prevY, p.y, this.alpha),
+    };
+  }
+
+  public getInterpolatedSimPlayerPos(player: SimPlayerState): InterpolatedEntityPos {
+    return {
+      x: lerp(player.prevX, player.x, this.alpha),
+      y: lerp(player.prevY, player.y, this.alpha),
     };
   }
 

@@ -3,13 +3,17 @@ import { Client as ColyseusClient, type Room as ColyseusRoom } from 'colyseus.js
 import {
   CHARACTERS,
   clamp,
+  type ElementType,
   ENEMY_SPAWN_WARMUP_SEC,
   INPUT_BUTTON,
   LocalTransport,
   PHASE1_SAMPLE_WEAPONS,
+  type PropKind,
   type SimEnemyState,
   type SimEvent,
+  type SurfaceKind,
   TILE_SIZE,
+  type TileKind,
   VIETNAMESE_VERIFICATION_STRING,
   WEAPONS,
   WORLD_VIEW_HEIGHT,
@@ -22,11 +26,15 @@ import { RIG_DEFS_BY_ID, VANGUARD_RIG_DEF } from '../art/rig-defs.js';
 import { TextureBaker } from '../art/texture-baker.js';
 import { zzfx } from '../audio/zzfx.js';
 import { CombatFxManager } from '../fx/combat-fx.js';
+import { LightingPipeline } from '../fx/lighting-pipeline.js';
 import { DebugOverlay, initGlobalDebugState } from '../ui/debug-overlay.js';
+import { type GraphicsQualityTier, graphicsSettings } from '../ui/graphics-settings.js';
 
 declare global {
   interface Window {
     __GAME_TRANSPORT__?: LocalTransport;
+    __GAME_STRESS_TEST__?: (active: boolean) => void;
+    __GAME_SET_QUALITY__?: (quality: GraphicsQualityTier) => void;
   }
 }
 
@@ -37,26 +45,74 @@ declare global {
  */
 const RIG_FOOT_OFFSET_Y = 12;
 
+const ELEMENT_LABELS_VI: Record<ElementType, string> = {
+  none: 'Vật Lý',
+  burn: 'Hỏa (Cháy)',
+  chill: 'Băng (Đóng Băng)',
+  shock: 'Lôi (Giật Điện)',
+  poison: 'Độc (Trúng Độc)',
+};
+
+interface ArenaTileVisual {
+  tx: number;
+  ty: number;
+  kind: TileKind;
+  variant: number;
+  autotileMask: number;
+  aoMask: number;
+  surface: SurfaceKind;
+}
+
+interface PropVisual {
+  sprite: Phaser.GameObjects.Sprite;
+  shadow: Phaser.GameObjects.Sprite;
+  kind: PropKind;
+  lastHp: number;
+  flashTimer: number;
+  isFlashed: boolean;
+}
+
 export class GameScene extends Phaser.Scene {
   private transport!: LocalTransport;
   private fx!: CombatFxManager;
+  private lighting!: LightingPipeline;
   private playerRig?: CutoutRig;
+  private simPlayerRigs = new Map<number, CutoutRig>();
   private enemyRigs = new Map<number, CutoutRig>();
-  private projectileSprites = new Map<number, { sprite: Phaser.GameObjects.Sprite; textureKey: string }>();
-  private pickupSprites = new Map<number, { sprite: Phaser.GameObjects.Sprite; textureKey: string }>();
+  private propVisuals = new Map<number, PropVisual>();
+  private projectileSprites = new Map<
+    number,
+    { sprite: Phaser.GameObjects.Sprite; textureKey: string }
+  >();
+  private pickupSprites = new Map<
+    number,
+    { sprite: Phaser.GameObjects.Sprite; textureKey: string }
+  >();
   private projectileSpritePool: { sprite: Phaser.GameObjects.Sprite; textureKey: string }[] = [];
   private pickupSpritePool: { sprite: Phaser.GameObjects.Sprite; textureKey: string }[] = [];
 
   private readonly activeEnemyIds = new Set<number>();
+  private readonly activeSimPlayerIds = new Set<number>();
+  private readonly activePropIds = new Set<number>();
   private readonly activeProjIds = new Set<number>();
   private readonly activePickupIds = new Set<number>();
 
-  private mapTileSprites: {
-    sprite: Phaser.GameObjects.Sprite;
-    kind: 'floor' | 'wall' | 'pillar';
-    variant: number;
-  }[] = [];
+  private mapTileVisuals: ArenaTileVisual[] = [];
+  private arenaGroundTex?: Phaser.Textures.CanvasTexture;
+  private arenaGroundSprite?: Phaser.GameObjects.Image;
+  private readonly tileCompositeScale = 2;
+  private lastMapRevision = -1;
+  private dashAfterimageTimer = 0;
   private textObjects: Phaser.GameObjects.Text[] = [];
+
+  // Cached HUD state to avoid redundant per-frame Canvas2D text uploads
+  private lastHudHp = -1;
+  private lastHudArmor = -1;
+  private lastHudEnergy = -1;
+  private lastHudSlot = -1;
+  private lastHudElement = '';
+  private lastHudQuality = '';
+  private lastHudStatsText = '';
 
   private telegraphGraphics!: Phaser.GameObjects.Graphics;
   private hitboxGraphics!: Phaser.GameObjects.Graphics;
@@ -70,6 +126,8 @@ export class GameScene extends Phaser.Scene {
   private energyLabelText!: Phaser.GameObjects.Text;
   private statsLineText!: Phaser.GameObjects.Text;
   private statusText?: Phaser.GameObjects.Text;
+  private qualityBtnText?: Phaser.GameObjects.Text;
+  private elementBtnText?: Phaser.GameObjects.Text;
   private weaponSlotBgs: Phaser.GameObjects.Graphics[] = [];
   private weaponIconSprites: Phaser.GameObjects.Sprite[] = [];
 
@@ -98,6 +156,8 @@ export class GameScene extends Phaser.Scene {
     SHIFT: Phaser.Input.Keyboard.Key;
     Q: Phaser.Input.Keyboard.Key;
     E: Phaser.Input.Keyboard.Key;
+    R: Phaser.Input.Keyboard.Key;
+    G: Phaser.Input.Keyboard.Key;
     ONE: Phaser.Input.Keyboard.Key;
     TWO: Phaser.Input.Keyboard.Key;
     THREE: Phaser.Input.Keyboard.Key;
@@ -106,6 +166,8 @@ export class GameScene extends Phaser.Scene {
     F3: Phaser.Input.Keyboard.Key;
     F4: Phaser.Input.Keyboard.Key;
     F5: Phaser.Input.Keyboard.Key;
+    F6: Phaser.Input.Keyboard.Key;
+    F7: Phaser.Input.Keyboard.Key;
   };
 
   constructor() {
@@ -116,27 +178,50 @@ export class GameScene extends Phaser.Scene {
     const debug = initGlobalDebugState();
     debug.scene = 'GameScene';
 
+    this.simPlayerRigs.clear();
     this.enemyRigs.clear();
+    this.propVisuals.clear();
     this.projectileSprites.clear();
     this.pickupSprites.clear();
     this.projectileSpritePool = [];
     this.pickupSpritePool = [];
-    this.mapTileSprites = [];
+    this.mapTileVisuals = [];
+    this.lastMapRevision = -1;
+    this.dashAfterimageTimer = 0;
     this.textObjects = [];
     this.weaponSlotBgs = [];
     this.weaponIconSprites = [];
     this.lastShakeX = 0;
     this.lastShakeY = 0;
+    this.lastHudHp = -1;
+    this.lastHudArmor = -1;
+    this.lastHudEnergy = -1;
+    this.lastHudSlot = -1;
+    this.lastHudElement = '';
+    this.lastHudQuality = '';
+    this.lastHudStatsText = '';
 
     // 1. Initialize LocalTransport + Authoritative 60Hz WorldSim
     this.transport = new LocalTransport({
       seed: debug.seed,
-      mapConfig: { cols: 36, rows: 22, includePillars: true },
+      mapConfig: {
+        cols: 36,
+        rows: 22,
+        includePillars: true,
+        seed: debug.seed,
+      },
       spawnInitialWave: true,
       includeTrainingDummy: true,
+      includeProps: true,
       autoRespawnWaves: true,
     });
     window.__GAME_TRANSPORT__ = this.transport;
+    window.__GAME_STRESS_TEST__ = (active: boolean) => {
+      this.setStressTestMode(active);
+    };
+    window.__GAME_SET_QUALITY__ = (quality: GraphicsQualityTier) => {
+      graphicsSettings.setQuality(quality);
+    };
 
     const sim = this.transport.getSim();
     this.camFocusX = sim.player.x;
@@ -169,7 +254,10 @@ export class GameScene extends Phaser.Scene {
       this.input.off('wheel', onWheel);
       this.input.off('pointerdown', unlockAudio);
       this.input.keyboard?.off('keydown', unlockAudio);
+      this.lighting?.destroy();
       delete window.__GAME_TRANSPORT__;
+      delete window.__GAME_STRESS_TEST__;
+      delete window.__GAME_SET_QUALITY__;
       if (this.room) {
         const activeRoom = this.room;
         this.room = undefined;
@@ -177,7 +265,7 @@ export class GameScene extends Phaser.Scene {
       }
     });
 
-    // 2. Build Arena Tilemap (Floor, Outer Walls, Interior Tactical Pillars)
+    // 2. Build Arena Tilemap (8 Floor Variants, Autotiled Walls/Pillars, Cracked Walls, AO Shadows, 6 Interactive Surfaces)
     this.buildArenaTiles();
 
     // 3. Telegraph & Hitbox Overlay Graphics
@@ -201,58 +289,198 @@ export class GameScene extends Phaser.Scene {
     this.playerRig.container.setDepth(30);
     this.playerRig.setEquippedWeapon(sim.getActiveWeaponId());
 
-    // 5. Pooled Combat FX Manager (Particles, Slashes, Damage Numbers, Hit-Stop, Screen Shake)
+    // 5. Sync initial destructible & light-emitting props
+    this.syncProps(0);
+
+    // 6. Pooled Combat FX Manager (Particles, Persistent Decals, Dash Afterimages, Ambient Leaves/Mist, Chain Lightning)
     this.fx = new CombatFxManager(this);
 
-    // 6. Custom Procedural Crosshair
+    // 7. Dynamic Lighting Pipeline + WebGL PostFX Shader
+    this.lighting = new LightingPipeline(this);
+
+    // 8. Custom Procedural Crosshair
     const invBake = 1 / TextureBaker.getBakeScale();
     this.crosshairSprite = this.add.sprite(sim.player.x + 64, sim.player.y, 'ui_crosshair');
     this.crosshairSprite.setScale(invBake);
     this.crosshairSprite.setDepth(950);
 
-    // 7. Camera-Pinned Vector HUD
+    // 9. Camera-Pinned Vector HUD
     this.buildVectorHud();
 
-    // 8. Keyboard & Debug Bindings
+    // 10. Keyboard & Debug Bindings
     this.setupKeyboardBindings();
 
     this.debugOverlay = new DebugOverlay(this, false);
     void this.connectHelloRoom();
   }
 
+  private setStressTestMode(active: boolean): void {
+    const sim = this.transport.getSim();
+    sim.configureStressTest(active);
+    for (const rig of this.enemyRigs.values()) {
+      rig.destroy();
+    }
+    this.enemyRigs.clear();
+    this.debugOverlay?.resetSamples();
+  }
+
+  private drawSourceKeyToCtx(
+    ctx: CanvasRenderingContext2D,
+    key: string,
+    dx: number,
+    dy: number,
+    cellPx: number,
+  ): void {
+    if (!this.textures.exists(key)) return;
+    const tex = this.textures.get(key);
+    const src = tex.getSourceImage() as CanvasImageSource | undefined;
+    if (src) {
+      ctx.drawImage(src, dx, dy, cellPx, cellPx);
+    }
+  }
+
+  private renderTileCellToComposite(tile: ArenaTileVisual): void {
+    const groundCtx = this.arenaGroundTex?.getContext();
+    if (!groundCtx) return;
+
+    const cellPx = TILE_SIZE * this.tileCompositeScale;
+    const dx = tile.tx * cellPx;
+    const dy = tile.ty * cellPx;
+
+    groundCtx.clearRect(dx, dy, cellPx, cellPx);
+    this.drawSourceKeyToCtx(
+      groundCtx,
+      TextureBaker.getBiomeTileTextureKey(1, tile.variant),
+      dx,
+      dy,
+      cellPx,
+    );
+
+    if (tile.kind === 'floor') {
+      if (tile.surface !== 'none') {
+        this.drawSourceKeyToCtx(
+          groundCtx,
+          TextureBaker.getSurfaceTextureKey(tile.surface),
+          dx,
+          dy,
+          cellPx,
+        );
+      }
+      if (tile.aoMask > 0) {
+        this.drawSourceKeyToCtx(
+          groundCtx,
+          TextureBaker.getWallAoTextureKey(tile.aoMask),
+          dx,
+          dy,
+          cellPx,
+        );
+      }
+    } else {
+      this.drawSourceKeyToCtx(
+        groundCtx,
+        this.getStructureTextureKey(tile.kind, tile.autotileMask),
+        dx,
+        dy,
+        cellPx,
+      );
+    }
+  }
+
+  private rebuildAllTileCellsToComposite(): void {
+    if (!this.arenaGroundTex) return;
+    for (let i = 0; i < this.mapTileVisuals.length; i++) {
+      this.renderTileCellToComposite(this.mapTileVisuals[i]!);
+    }
+    this.arenaGroundTex.refresh();
+  }
+
   private buildArenaTiles(): void {
     const sim = this.transport.getSim();
     const map = sim.map;
-    const invBake = 1 / TextureBaker.getBakeScale();
 
-    // Deep backdrop outside map bounds
-    const bg = this.add.graphics();
-    bg.fillStyle(hexToNum(PALETTE.INK_DEEP), 1);
-    bg.fillRect(-600, -400, map.width + 1200, map.height + 800);
-    bg.setDepth(0);
+    this.cameras.main.setBackgroundColor(PALETTE.INK_DEEP);
+
+    const compW = map.width * this.tileCompositeScale;
+    const compH = map.height * this.tileCompositeScale;
+
+    if (this.textures.exists('arena_ground_composite')) {
+      this.textures.remove('arena_ground_composite');
+    }
+
+    this.arenaGroundTex =
+      this.textures.createCanvas('arena_ground_composite', compW, compH) ?? undefined;
 
     for (let ty = 0; ty < map.rows; ty++) {
       for (let tx = 0; tx < map.cols; tx++) {
-        const kind = map.getTile(tx, ty);
-        const variant = (tx * 3 + ty * 5) % 4;
-        const worldX = tx * TILE_SIZE + TILE_SIZE / 2;
-        const worldY = ty * TILE_SIZE + TILE_SIZE / 2;
-
-        let texKey = TextureBaker.getBiomeTileTextureKey(1, variant);
-        let depth = 2;
-        if (kind === 'wall') {
-          texKey = TextureBaker.getWallTileTextureKey(1);
-          depth = 12;
-        } else if (kind === 'pillar') {
-          texKey = TextureBaker.getPillarTileTextureKey(1);
-          depth = 24;
-        }
-
-        const sprite = this.add.sprite(worldX, worldY, texKey);
-        sprite.setScale(invBake);
-        sprite.setDepth(depth);
-        this.mapTileSprites.push({ sprite, kind, variant });
+        const tile: ArenaTileVisual = {
+          tx,
+          ty,
+          kind: map.getTile(tx, ty),
+          variant: map.getTileVariant(tx, ty),
+          autotileMask: map.getAutotileMask(tx, ty),
+          aoMask: map.getWallAmbientOcclusionMask(tx, ty),
+          surface: map.getSurface(tx, ty),
+        };
+        this.mapTileVisuals.push(tile);
       }
+    }
+
+    this.rebuildAllTileCellsToComposite();
+
+    this.arenaGroundSprite = this.add.image(
+      map.width / 2,
+      map.height / 2,
+      'arena_ground_composite',
+    );
+    this.arenaGroundSprite.setScale(1 / this.tileCompositeScale);
+    this.arenaGroundSprite.setDepth(2);
+
+    this.lastMapRevision = map.mapRevision;
+  }
+
+  private getStructureTextureKey(kind: TileKind, autotileMask: number): string {
+    if (kind === 'pillar') {
+      return TextureBaker.getPillarTileTextureKey(1, autotileMask);
+    }
+    if (kind === 'cracked_wall') {
+      return TextureBaker.getCrackedWallTextureKey(1);
+    }
+    return TextureBaker.getWallTileTextureKey(1, autotileMask);
+  }
+
+  private syncArenaTilesWithMapRevision(): void {
+    const sim = this.transport.getSim();
+    if (sim.stressTestActive) return;
+    const map = sim.map;
+    if (map.mapRevision === this.lastMapRevision) return;
+    this.lastMapRevision = map.mapRevision;
+
+    let groundDirty = false;
+
+    for (let i = 0; i < this.mapTileVisuals.length; i++) {
+      const tile = this.mapTileVisuals[i]!;
+      const newKind = map.getTile(tile.tx, tile.ty);
+      const newMask = map.getAutotileMask(tile.tx, tile.ty);
+      const newAo = map.getWallAmbientOcclusionMask(tile.tx, tile.ty);
+      const newSurface = map.getSurface(tile.tx, tile.ty);
+
+      if (
+        newKind !== tile.kind ||
+        newMask !== tile.autotileMask ||
+        newAo !== tile.aoMask ||
+        newSurface !== tile.surface
+      ) {
+        groundDirty = true;
+        tile.kind = newKind;
+        tile.autotileMask = newMask;
+        tile.aoMask = newAo;
+        tile.surface = newSurface;
+        this.renderTileCellToComposite(tile);
+      }
+    }
+
+    if (groundDirty) {
+      this.arenaGroundTex?.refresh();
     }
   }
 
@@ -313,10 +541,10 @@ export class GameScene extends Phaser.Scene {
     this.statusText = this.add.text(
       24,
       44,
-      'WASD: Chạy · Chuột Trái: Bắn · Shift: Dash (i-frame) · Space/Chuột Phải: Khiên Hồng Ngọc · Q/1-4: Vũ khí · [F1-F5]: Debug',
+      'WASD: Chạy · Chuột: Bắn/Khiên · Shift: Dash · R: Ng.Tố · G: Đồ Họa · F1-F7: Debug',
       {
         fontFamily: '"Be Vietnam Pro", sans-serif',
-        fontSize: '11px',
+        fontSize: '10.5px',
         fontStyle: '600',
         color: PALETTE.CYAN_FROST,
         resolution: textRes,
@@ -325,10 +553,45 @@ export class GameScene extends Phaser.Scene {
     this.textObjects.push(this.statusText);
     this.hudContainer.add(this.statusText);
 
-    const galleryBtn = this.add
-      .text(742, 42, '[Xem Art Gallery]', {
+    this.elementBtnText = this.add
+      .text(504, 42, '[R] Ng.Tố: Vật Lý', {
         fontFamily: '"Be Vietnam Pro", sans-serif',
-        fontSize: '12px',
+        fontSize: '11px',
+        fontStyle: '700',
+        color: PALETTE.LIME_GLOW,
+        stroke: PALETTE.INK_DARK,
+        strokeThickness: 3,
+        resolution: textRes,
+      })
+      .setInteractive({ useHandCursor: true });
+    this.elementBtnText.on('pointerdown', () => {
+      this.transport.getSim().cycleImbueElement();
+      zzfx.play('weapon_swap');
+    });
+    this.textObjects.push(this.elementBtnText);
+    this.hudContainer.add(this.elementBtnText);
+
+    this.qualityBtnText = this.add
+      .text(648, 42, '[G] Đồ Họa: CAO', {
+        fontFamily: '"Be Vietnam Pro", sans-serif',
+        fontSize: '11px',
+        fontStyle: '700',
+        color: PALETTE.VOLT_YELLOW,
+        stroke: PALETTE.INK_DARK,
+        strokeThickness: 3,
+        resolution: textRes,
+      })
+      .setInteractive({ useHandCursor: true });
+    this.qualityBtnText.on('pointerdown', () => {
+      graphicsSettings.cycleQuality();
+    });
+    this.textObjects.push(this.qualityBtnText);
+    this.hudContainer.add(this.qualityBtnText);
+
+    const galleryBtn = this.add
+      .text(764, 42, '[Art Gallery]', {
+        fontFamily: '"Be Vietnam Pro", sans-serif',
+        fontSize: '11.5px',
         fontStyle: '700',
         color: PALETTE.SOLAR_GOLD,
         stroke: PALETTE.INK_DARK,
@@ -343,7 +606,7 @@ export class GameScene extends Phaser.Scene {
     const menuBtn = this.add
       .text(868, 42, '[Về Menu]', {
         fontFamily: '"Be Vietnam Pro", sans-serif',
-        fontSize: '12px',
+        fontSize: '11.5px',
         fontStyle: '700',
         color: PALETTE.CYAN_FROST,
         stroke: PALETTE.INK_DARK,
@@ -427,6 +690,8 @@ export class GameScene extends Phaser.Scene {
       SHIFT: kb.addKey(Phaser.Input.Keyboard.KeyCodes.SHIFT),
       Q: kb.addKey(Phaser.Input.Keyboard.KeyCodes.Q),
       E: kb.addKey(Phaser.Input.Keyboard.KeyCodes.E),
+      R: kb.addKey(Phaser.Input.Keyboard.KeyCodes.R),
+      G: kb.addKey(Phaser.Input.Keyboard.KeyCodes.G),
       ONE: kb.addKey(Phaser.Input.Keyboard.KeyCodes.ONE),
       TWO: kb.addKey(Phaser.Input.Keyboard.KeyCodes.TWO),
       THREE: kb.addKey(Phaser.Input.Keyboard.KeyCodes.THREE),
@@ -435,6 +700,8 @@ export class GameScene extends Phaser.Scene {
       F3: kb.addKey(Phaser.Input.Keyboard.KeyCodes.F3),
       F4: kb.addKey(Phaser.Input.Keyboard.KeyCodes.F4),
       F5: kb.addKey(Phaser.Input.Keyboard.KeyCodes.F5),
+      F6: kb.addKey(Phaser.Input.Keyboard.KeyCodes.F6),
+      F7: kb.addKey(Phaser.Input.Keyboard.KeyCodes.F7),
     };
 
     this.keys.SHIFT.on('down', () => {
@@ -457,6 +724,19 @@ export class GameScene extends Phaser.Scene {
     });
     this.keys.FOUR.on('down', () => {
       this.queuedWeaponSlot = 3;
+    });
+
+    // R or F6: Cycle Elemental Imbue (None -> Burn -> Chill -> Shock -> Poison)
+    const cycleElement = () => {
+      this.transport.getSim().cycleImbueElement();
+      zzfx.play('weapon_swap');
+    };
+    this.keys.R.on('down', cycleElement);
+    this.keys.F6.on('down', cycleElement);
+
+    // G: Cycle Graphics Quality Preset (High -> Medium -> Low -> High)
+    this.keys.G.on('down', () => {
+      graphicsSettings.cycleQuality();
     });
 
     // F2: Toggle God Mode
@@ -489,6 +769,12 @@ export class GameScene extends Phaser.Scene {
           e.hp = 0;
         }
       }
+    });
+
+    // F7: Toggle Phase 2 Stress Test (4 players + 80 enemies + 600+ projectiles)
+    this.keys.F7.on('down', () => {
+      const sim = this.transport.getSim();
+      this.setStressTestMode(!sim.stressTestActive);
     });
   }
 
@@ -545,18 +831,18 @@ export class GameScene extends Phaser.Scene {
     if (newScale !== prevScale) {
       const invBake = 1 / newScale;
       this.playerRig?.refreshBakedTextures();
+      for (const rig of this.simPlayerRigs.values()) {
+        rig.refreshBakedTextures();
+      }
       for (const rig of this.enemyRigs.values()) {
         rig.refreshBakedTextures();
       }
-      for (const item of this.mapTileSprites) {
-        if (item.kind === 'wall') {
-          item.sprite.setTexture(TextureBaker.getWallTileTextureKey(1));
-        } else if (item.kind === 'pillar') {
-          item.sprite.setTexture(TextureBaker.getPillarTileTextureKey(1));
-        } else {
-          item.sprite.setTexture(TextureBaker.getBiomeTileTextureKey(1, item.variant));
-        }
-        item.sprite.setScale(invBake);
+      this.rebuildAllTileCellsToComposite();
+      for (const pv of this.propVisuals.values()) {
+        pv.sprite.setTexture(TextureBaker.getPropTextureKey(pv.kind));
+        pv.sprite.setScale(invBake);
+        pv.shadow.setTexture('prop_shadow');
+        pv.shadow.setScale(invBake);
       }
       for (const item of this.projectileSprites.values()) {
         item.sprite.setTexture(item.textureKey);
@@ -587,6 +873,7 @@ export class GameScene extends Phaser.Scene {
         txt.setResolution(newScale);
       }
       this.fx?.refreshResolution(newScale, prevScale);
+      this.lighting?.refreshResolution();
       this.debugOverlay?.refreshResolution(newScale);
     }
 
@@ -660,35 +947,54 @@ export class GameScene extends Phaser.Scene {
     });
 
     // 2. Hit-Stop check & Fixed 60Hz Simulation Step via LocalTransport
-    const { simDeltaMs } = this.fx.consumeHitStopDelta(rawDeltaMs);
+    const { simDeltaMs } = this.fx.consumeHitStopDelta(Math.min(rawDeltaMs, 50));
     if (simDeltaMs > 0) {
-      this.transport.step(simDeltaMs);
+      const effectiveDelta = sim.stressTestActive ? Math.min(simDeltaMs, 16.6667) : simDeltaMs;
+      this.transport.step(effectiveDelta);
     }
 
-    // 3. Process Sim Events (SFX, Sparks, Damage Numbers, Hit-Stop, Screen Shake)
+    // 3. Sync dynamic map changes (cracked walls destroyed, surface ignitions/electrifications/freezes)
+    this.syncArenaTilesWithMapRevision();
+
+    // 4. Process Sim Events (SFX, Sparks, Damage Numbers, Decals, Chain Lightning, Hit-Stop, Screen Shake)
     this.processSimEvents(this.transport.consumeEvents());
 
-    // 4. Render Interpolated Player & CutoutRig Animation
+    // 5. Render Interpolated Player & CutoutRig Animation + Dash Afterimage Ghosts
     const playerPos = this.transport.getInterpolatedPlayerPos();
     if (this.playerRig) {
       this.playerRig.container.setPosition(playerPos.x, playerPos.y + RIG_FOOT_OFFSET_Y);
       this.playerRig.setAimAngle(aimAngle);
       this.playerRig.setEquippedWeapon(sim.getActiveWeaponId());
       this.playerRig.setDashActive(sim.player.dashTimer > 0);
+      this.playerRig.setElementalStatusTint(this.resolvePlayerStatusTint());
 
       const isMoving = Math.hypot(sim.player.vx, sim.player.vy) > 12;
       this.playerRig.setAnimState(isMoving ? 'run' : 'idle');
       this.playerRig.update(dtSec);
+
+      if (sim.player.dashTimer > 0) {
+        this.dashAfterimageTimer -= dtSec;
+        if (this.dashAfterimageTimer <= 0) {
+          this.dashAfterimageTimer = 0.038;
+          this.fx.spawnDashAfterimage(
+            playerPos.x,
+            playerPos.y + RIG_FOOT_OFFSET_Y,
+            this.playerRig.getFacingSign(),
+          );
+        }
+      } else {
+        this.dashAfterimageTimer = 0;
+      }
     }
 
-    // 5. Sync & Interpolate Enemy CutoutRigs
+    // 6. Sync Simulated Co-op Players (P2-P4), Enemies, Props, Projectiles & Pickups
+    this.syncSimulatedPlayers(dtSec);
     this.syncEnemyRigs(dtSec);
-
-    // 6. Sync & Interpolate Projectiles & Pickups
+    this.syncProps(dtSec);
     this.syncProjectilesAndPickups();
 
-    // 7. Update Pooled Particles & Floating Damage Numbers
-    this.fx.update(dtSec);
+    // 7. Update Pooled Particles, Ambient Leaves/Mist, Afterimages & Floating Damage Numbers
+    this.fx.update(dtSec, this.cameras.main.worldView);
 
     // 8. Smooth Camera Follow + Cursor Lookahead (22%) + Trauma Screen Shake
     this.updateCameraWithLookaheadAndShake(
@@ -699,7 +1005,23 @@ export class GameScene extends Phaser.Scene {
       dtSec,
     );
 
-    // 9. Update Procedural Crosshair at Mouse World Position
+    // 9. Update Dynamic Lighting RenderTexture + WebGL PostFX Shader
+    this.lighting.update({
+      dtSec,
+      playerPos,
+      player: sim.player,
+      simulatedPlayers: sim.simulatedPlayers.map((sp) => ({
+        pos: this.transport.getInterpolatedSimPlayerPos(sp),
+        state: sp,
+      })),
+      enemies: sim.enemies,
+      projectiles: sim.projectiles,
+      props: sim.props,
+      map: sim.map,
+      trauma: this.fx.getTrauma(),
+    });
+
+    // 10. Update Procedural Crosshair at Mouse World Position
     const updatedWorldPt = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
     const invBake = 1 / TextureBaker.getBakeScale();
     if (this.crosshairPulse > 0) {
@@ -708,21 +1030,42 @@ export class GameScene extends Phaser.Scene {
     this.crosshairSprite.setPosition(updatedWorldPt.x, updatedWorldPt.y);
     this.crosshairSprite.setScale(invBake * (1 + this.crosshairPulse * 0.35));
 
-    // 10. Draw Telegraphs, Spawn Circles, Shield Wall & Optional F4 Hitboxes
+    // 11. Draw Telegraphs, Spawn Circles, Elemental Badges, Shield Wall & Optional F4 Hitboxes
     this.renderTelegraphsAndShield(playerPos.x, playerPos.y);
     this.renderHitboxesIfEnabled();
 
-    // 11. Update Camera-Pinned Vector HUD & Debug Telemetry
+    // 12. Update Camera-Pinned Vector HUD & Debug Telemetry
     this.updateVectorHud();
     this.updateDebugState(playerPos.x, playerPos.y);
+  }
+
+  private resolvePlayerStatusTint(): number | null {
+    const p = this.transport.getSim().player;
+    if (p.burnTimer > 0) return 0xfb923c;
+    if (p.chillTimer > 0) return 0x38bdf8;
+    if (p.poisonTimer > 0) return 0xc084fc;
+    return null;
+  }
+
+  private resolveEnemyStatusTint(e: SimEnemyState): number | null {
+    if (e.frozenTimer > 0) return 0x7dd3fc;
+    if (e.shockTimer > 0) return 0xfde047;
+    if (e.burnTimer > 0) return 0xfb923c;
+    if (e.chillStacks > 0) return 0x38bdf8;
+    if (e.poisonStacks > 0) return 0xc084fc;
+    return null;
   }
 
   private processSimEvents(events: SimEvent[]): void {
     if (events.length === 0) return;
 
+    const sim = this.transport.getSim();
+    const isStress = sim.stressTestActive;
+    const allowStressSfx = !isStress || sim.tick % 8 === 0;
     let playerShotFxTriggered = false;
     let enemyShotSfxTriggered = false;
     let enemyHitCountThisStep = 0;
+    let statusFxCountThisStep = 0;
     let enemyHitCritThisStep = false;
     let enemyHitSfxX = this.camFocusX;
     let maxHitStopMs = 0;
@@ -736,22 +1079,36 @@ export class GameScene extends Phaser.Scene {
             if (!playerShotFxTriggered) {
               playerShotFxTriggered = true;
               const isShotgun = ev.weaponId === 'scrap_shotgun';
-              this.fx.spawnMuzzleFlashAndCasing(ev.x, ev.y, ev.angle, isShotgun);
+              if (!isStress || sim.tick % 3 === 0) {
+                this.fx.spawnMuzzleFlashAndCasing(ev.x, ev.y, ev.angle, isShotgun);
+              }
+              if (!isStress) {
+                this.lighting.spawnTransientLight(
+                  ev.x,
+                  ev.y,
+                  82,
+                  PALETTE.SOLAR_GOLD,
+                  0.72,
+                  0.08,
+                );
+              }
               this.crosshairPulse = isShotgun ? 0.9 : 0.45;
               this.playerRig?.triggerRecoil(isShotgun ? 6.5 : 4.2);
 
-              if (ev.weaponId === 'scrap_shotgun') {
-                zzfx.play('shoot_shotgun', ev.x, this.camFocusX);
-                this.fx.addTrauma(0.18);
-              } else if (ev.weaponId === 'gale_smg') {
-                zzfx.play('shoot_smg', ev.x, this.camFocusX);
-                this.fx.addTrauma(0.06);
-              } else {
-                zzfx.play('shoot_pistol', ev.x, this.camFocusX);
-                this.fx.addTrauma(0.1);
+              if (allowStressSfx) {
+                if (ev.weaponId === 'scrap_shotgun') {
+                  zzfx.play('shoot_shotgun', ev.x, this.camFocusX);
+                  this.fx.addTrauma(0.18);
+                } else if (ev.weaponId === 'gale_smg') {
+                  zzfx.play('shoot_smg', ev.x, this.camFocusX);
+                  this.fx.addTrauma(0.06);
+                } else {
+                  zzfx.play('shoot_pistol', ev.x, this.camFocusX);
+                  this.fx.addTrauma(0.1);
+                }
               }
             }
-          } else if (!enemyShotSfxTriggered) {
+          } else if (!enemyShotSfxTriggered && allowStressSfx) {
             enemyShotSfxTriggered = true;
             zzfx.play('shoot_pistol', ev.x, this.camFocusX);
           }
@@ -760,6 +1117,7 @@ export class GameScene extends Phaser.Scene {
         case 'melee_swing': {
           this.playerRig?.triggerMeleeSwing();
           this.fx.spawnMeleeSlash(ev.x, ev.y, ev.angle);
+          this.lighting.spawnTransientLight(ev.x, ev.y, 92, PALETTE.CYAN_FROST, 0.65, 0.12);
           this.crosshairPulse = 0.6;
           zzfx.play('swing_sword', ev.x, this.camFocusX);
           if (ev.bulletsDestroyed > 0) {
@@ -768,26 +1126,36 @@ export class GameScene extends Phaser.Scene {
           break;
         }
         case 'damage_dealt': {
-          this.fx.spawnDamagePopup({
-            x: ev.x,
-            y: ev.y,
-            amount: ev.amount,
-            isCrit: ev.isCrit,
-            targetKind: ev.targetKind,
-            hitArmor: ev.hitArmor,
-          });
+          if (!isStress || (enemyHitCountThisStep === 0 && sim.tick % 10 === 0)) {
+            this.fx.spawnDamagePopup({
+              x: ev.x,
+              y: ev.y,
+              amount: ev.amount,
+              isCrit: ev.isCrit,
+              targetKind: ev.targetKind,
+              hitArmor: ev.hitArmor,
+              element: ev.element,
+            });
+          }
           const hitAngle = Math.atan2(ev.knockbackY, ev.knockbackX);
-          const sparkCount = enemyHitCountThisStep === 0 ? (ev.isCrit ? 10 : 6) : 3;
-          this.fx.spawnHitSparks(ev.x, ev.y, hitAngle, {
-            isCrit: ev.isCrit,
-            count: sparkCount,
-          });
+          const sparkCount = enemyHitCountThisStep === 0 ? (ev.isCrit ? 8 : 5) : 2;
+          if (!isStress || enemyHitCountThisStep < 2) {
+            this.fx.spawnHitSparks(ev.x, ev.y, hitAngle, {
+              isCrit: ev.isCrit,
+              element: ev.element,
+              count: sparkCount,
+            });
+          }
 
           if (ev.targetKind === 'enemy') {
-            const rig = this.enemyRigs.get(ev.targetId);
-            rig?.triggerHitFlash(0.12);
+            if (!isStress || enemyHitCountThisStep < 2) {
+              const rig = this.enemyRigs.get(ev.targetId);
+              rig?.triggerHitFlash(0.12);
+            }
             enemyHitCountThisStep += 1;
-            if (ev.isCrit) enemyHitCritThisStep = true;
+            if (ev.isCrit) {
+              enemyHitCritThisStep = true;
+            }
             enemyHitSfxX = ev.x;
           } else {
             this.playerRig?.triggerHitFlash(0.16);
@@ -796,42 +1164,142 @@ export class GameScene extends Phaser.Scene {
           break;
         }
         case 'projectile_impact': {
-          this.fx.spawnHitSparks(ev.x, ev.y, ev.angle, {
-            isCrit: ev.isCrit,
-            hitWall: ev.hitWall,
-            blockedByShield: ev.blockedByShield || ev.destroyedByMelee,
-            count: ev.hitWall ? 4 : 4,
-          });
-          if (ev.blockedByShield || ev.destroyedByMelee) {
+          if (!isStress || i < 4) {
+            this.fx.spawnHitSparks(ev.x, ev.y, ev.angle, {
+              isCrit: ev.isCrit,
+              hitWall: ev.hitWall,
+              blockedByShield: ev.blockedByShield || ev.destroyedByMelee,
+              element: ev.element,
+              count: 4,
+            });
+          }
+          if ((ev.blockedByShield || ev.destroyedByMelee) && allowStressSfx) {
             zzfx.play('bullet_deflect', ev.x, this.camFocusX);
           }
           break;
         }
         case 'entity_killed': {
-          this.fx.spawnEnemyDeathBurst(ev.defId, ev.x, ev.y);
-          zzfx.play('kill_enemy', ev.x, this.camFocusX);
+          if (!isStress || statusFxCountThisStep < 1) {
+            statusFxCountThisStep += 1;
+            this.fx.spawnEnemyDeathBurst(ev.defId, ev.x, ev.y);
+            if (allowStressSfx) {
+              zzfx.play('kill_enemy', ev.x, this.camFocusX);
+            }
+          }
           break;
         }
         case 'dash_started': {
           this.fx.spawnDashDust(ev.x, ev.y + RIG_FOOT_OFFSET_Y);
+          if (this.playerRig) {
+            this.fx.spawnDashAfterimage(
+              ev.x,
+              ev.y + RIG_FOOT_OFFSET_Y,
+              this.playerRig.getFacingSign(),
+            );
+          }
           zzfx.play('dash', ev.x, this.camFocusX);
           break;
         }
         case 'enemy_telegraph': {
-          zzfx.play('telegraph', ev.x, this.camFocusX);
+          if (allowStressSfx) {
+            zzfx.play('telegraph', ev.x, this.camFocusX);
+          }
           break;
         }
         case 'explosion': {
-          this.fx.spawnExplosionBurst(ev.x, ev.y, ev.radius, PALETTE.TOXIC_PURPLE);
-          zzfx.play('explosion', ev.x, this.camFocusX);
+          const isBarrel = ev.sourceDefId === 'explosive_barrel';
+          const colorHex = isBarrel ? PALETTE.FLAME_ORANGE : PALETTE.TOXIC_PURPLE;
+          this.fx.spawnExplosionBurst(ev.x, ev.y, ev.radius, colorHex);
+          this.lighting.spawnTransientLight(
+            ev.x,
+            ev.y,
+            ev.radius * 2.2,
+            colorHex,
+            1.0,
+            0.38,
+          );
+          if (allowStressSfx) {
+            zzfx.play('explosion', ev.x, this.camFocusX);
+          }
+          break;
+        }
+        case 'prop_destroyed': {
+          this.fx.spawnPropBreakBurst(ev.propKind, ev.x, ev.y);
+          if (ev.propKind !== 'explosive_barrel' && allowStressSfx) {
+            zzfx.play('prop_break', ev.x, this.camFocusX);
+          }
+          break;
+        }
+        case 'cracked_wall_broken': {
+          this.fx.spawnPropBreakBurst('clay_vase', ev.x, ev.y);
+          this.lighting.spawnTransientLight(ev.x, ev.y, 120, PALETTE.CYAN_FROST, 0.85, 0.4);
+          zzfx.play('prop_break', ev.x, this.camFocusX);
+          break;
+        }
+        case 'status_applied': {
+          if (!isStress || (statusFxCountThisStep < 1 && sim.tick % 4 === 0)) {
+            statusFxCountThisStep += 1;
+            this.fx.spawnStatusBurst(ev.status, ev.x, ev.y);
+            if (!isStress) {
+              if (ev.status === 'frozen') {
+                this.lighting.spawnTransientLight(ev.x, ev.y, 96, PALETTE.CYAN_FROST, 0.9, 0.28);
+                zzfx.play('freeze', ev.x, this.camFocusX);
+              } else if (ev.status === 'shatter') {
+                this.lighting.spawnTransientLight(ev.x, ev.y, 124, PALETTE.CYAN_FROST, 1.0, 0.34);
+                zzfx.play('shatter', ev.x, this.camFocusX);
+              } else if (ev.status === 'burn') {
+                this.lighting.spawnTransientLight(ev.x, ev.y, 84, PALETTE.FLAME_ORANGE, 0.78, 0.2);
+              } else if (ev.status === 'shock') {
+                this.lighting.spawnTransientLight(ev.x, ev.y, 96, PALETTE.VOLT_YELLOW, 0.88, 0.22);
+              }
+            }
+          }
+          break;
+        }
+        case 'chain_lightning': {
+          if (!isStress || (statusFxCountThisStep < 1 && sim.tick % 6 === 0)) {
+            statusFxCountThisStep += 1;
+            this.fx.spawnChainLightningArc(ev.fromX, ev.fromY, ev.toX, ev.toY);
+            if (!isStress) {
+              this.lighting.spawnTransientLight(
+                (ev.fromX + ev.toX) * 0.5,
+                (ev.fromY + ev.toY) * 0.5,
+                110,
+                PALETTE.CYAN_FROST,
+                0.92,
+                0.22,
+              );
+              zzfx.play('chain_lightning', ev.toX, this.camFocusX);
+            }
+          }
+          break;
+        }
+        case 'surface_triggered': {
+          if (allowStressSfx) {
+            if (ev.surface === 'burning_oil' || ev.surface === 'burning_grass') {
+              zzfx.play('surface_ignite', ev.x, this.camFocusX);
+            } else if (ev.surface === 'electrified_water') {
+              zzfx.play('chain_lightning', ev.x, this.camFocusX);
+            } else if (ev.surface === 'ice') {
+              zzfx.play('freeze', ev.x, this.camFocusX);
+            }
+          }
+          break;
+        }
+        case 'grass_rustle': {
+          if (!isStress) {
+            this.fx.spawnGrassRustle(ev.x, ev.y);
+          }
           break;
         }
         case 'skill_cast': {
+          this.lighting.spawnTransientLight(ev.x, ev.y, 115, PALETTE.CRIMSON_BRIGHT, 0.88, 0.26);
           zzfx.play('skill_cast', ev.x, this.camFocusX);
           break;
         }
         case 'shield_shockwave': {
           this.fx.spawnExplosionBurst(ev.x, ev.y, 90, PALETTE.CRIMSON_BRIGHT);
+          this.lighting.spawnTransientLight(ev.x, ev.y, 150, PALETTE.CRIMSON_BRIGHT, 0.95, 0.32);
           zzfx.play('shield_shockwave', ev.x, this.camFocusX);
           break;
         }
@@ -840,7 +1308,9 @@ export class GameScene extends Phaser.Scene {
           break;
         }
         case 'pickup_collected': {
-          zzfx.play('pickup', ev.x, this.camFocusX);
+          if (allowStressSfx) {
+            zzfx.play('pickup', ev.x, this.camFocusX);
+          }
           break;
         }
         case 'hit_stop': {
@@ -851,18 +1321,61 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    if (enemyHitCountThisStep > 0) {
+    if (enemyHitCountThisStep > 0 && allowStressSfx) {
       zzfx.play(enemyHitCritThisStep ? 'crit_hit' : 'hit_enemy', enemyHitSfxX, this.camFocusX);
     }
-    if (maxHitStopMs > 0) {
+    if (maxHitStopMs > 0 && !isStress) {
       this.fx.triggerHitStop(maxHitStopMs);
       this.fx.addTrauma(maxHitStopTrauma);
+    }
+  }
+
+  private syncSimulatedPlayers(dtSec: number): void {
+    const sim = this.transport.getSim();
+    this.activeSimPlayerIds.clear();
+
+    for (let i = 0; i < sim.simulatedPlayers.length; i++) {
+      const sp = sim.simulatedPlayers[i]!;
+      this.activeSimPlayerIds.add(sp.id);
+
+      let rig = this.simPlayerRigs.get(sp.id);
+      if (!rig) {
+        rig = new CutoutRig(this, sp.x, sp.y + RIG_FOOT_OFFSET_Y, VANGUARD_RIG_DEF, {
+          playerSlot: sp.slot,
+          displayScale: 1,
+          initialPhaseOffset: sp.slot * 0.3,
+        });
+        rig.container.setDepth(29);
+        this.simPlayerRigs.set(sp.id, rig);
+      }
+
+      const pos = this.transport.getInterpolatedSimPlayerPos(sp);
+      rig.container.setPosition(pos.x, pos.y + RIG_FOOT_OFFSET_Y);
+      rig.setAimAngle(sp.aimAngle);
+      const spWeaponId = sp.weaponSlots[sp.activeWeaponSlot] ?? 'rusty_pistol';
+      rig.setEquippedWeapon(spWeaponId);
+      rig.setAnimState('run');
+      rig.update(dtSec);
+    }
+
+    for (const [id, rig] of this.simPlayerRigs.entries()) {
+      if (!this.activeSimPlayerIds.has(id)) {
+        rig.destroy();
+        this.simPlayerRigs.delete(id);
+      }
     }
   }
 
   private syncEnemyRigs(dtSec: number): void {
     const sim = this.transport.getSim();
     this.activeEnemyIds.clear();
+    const useFastComposite = sim.stressTestActive || sim.enemies.length > 24;
+    const view = this.cameras.main.worldView;
+    const hasView = view && view.width > 0;
+    const viewLeft = hasView ? view.x - 48 : -9999;
+    const viewRight = hasView ? view.x + view.width + 48 : 9999;
+    const viewTop = hasView ? view.y - 48 : -9999;
+    const viewBottom = hasView ? view.y + view.height + 48 : 9999;
 
     for (let i = 0; i < sim.enemies.length; i++) {
       const e = sim.enemies[i]!;
@@ -875,14 +1388,21 @@ export class GameScene extends Phaser.Scene {
         rig = new CutoutRig(this, e.x, e.y + RIG_FOOT_OFFSET_Y, rigDef, {
           displayScale: 1,
           initialPhaseOffset: (e.id % 7) * 0.25,
+          fastComposite: useFastComposite,
         });
         rig.container.setDepth(28);
         this.enemyRigs.set(e.id, rig);
       }
 
       const pos = this.transport.getInterpolatedEnemyPos(e);
+      const inView =
+        pos.x >= viewLeft && pos.x <= viewRight && pos.y >= viewTop && pos.y <= viewBottom;
+      rig.container.setVisible(inView);
+      if (!inView) continue;
+
       rig.container.setPosition(pos.x, pos.y + RIG_FOOT_OFFSET_Y);
       rig.setAimAngle(e.aimAngle);
+      rig.setElementalStatusTint(this.resolveEnemyStatusTint(e));
 
       if (e.aiState === 'spawning') {
         const spawnProgress = 1 - clamp(e.stateTimer / ENEMY_SPAWN_WARMUP_SEC, 0, 1);
@@ -898,9 +1418,11 @@ export class GameScene extends Phaser.Scene {
         rig.setTelegraphProgress(0);
       }
 
-      const moving = Math.hypot(e.vx, e.vy) > 10;
+      const moving = e.frozenTimer <= 0 && Math.hypot(e.vx, e.vy) > 10;
       rig.setAnimState(moving ? 'run' : 'idle');
-      rig.update(dtSec);
+      if (!sim.stressTestActive || (i + sim.tick) % 2 === 0) {
+        rig.update(sim.stressTestActive ? dtSec * 2 : dtSec);
+      }
     }
 
     for (const [id, rig] of this.enemyRigs.entries()) {
@@ -911,22 +1433,112 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  private syncProps(dtSec: number): void {
+    const sim = this.transport.getSim();
+    const invBake = 1 / TextureBaker.getBakeScale();
+    this.activePropIds.clear();
+
+    for (let i = 0; i < sim.props.length; i++) {
+      const prop = sim.props[i]!;
+      if (prop.hp <= 0) continue;
+      this.activePropIds.add(prop.id);
+
+      let pv = this.propVisuals.get(prop.id);
+      if (!pv) {
+        const shadow = this.add.sprite(prop.x, prop.y + 9, 'prop_shadow');
+        shadow.setScale(invBake);
+        shadow.setDepth(18);
+
+        const sprite = this.add.sprite(
+          prop.x,
+          prop.y,
+          TextureBaker.getPropTextureKey(prop.kind),
+        );
+        sprite.setScale(invBake);
+        sprite.setDepth(22);
+
+        pv = {
+          sprite,
+          shadow,
+          kind: prop.kind,
+          lastHp: prop.hp,
+          flashTimer: 0,
+          isFlashed: false,
+        };
+        this.propVisuals.set(prop.id, pv);
+      }
+
+      if (prop.hp < pv.lastHp || prop.hitFlashTimer > 0) {
+        pv.lastHp = prop.hp;
+        pv.flashTimer = Math.max(pv.flashTimer, 0.09);
+      }
+
+      if (pv.flashTimer > 0) {
+        pv.flashTimer = Math.max(0, pv.flashTimer - dtSec);
+        if (!pv.isFlashed) {
+          pv.sprite.setTintFill(0xf4f1ea);
+          pv.isFlashed = true;
+        }
+      } else if (pv.isFlashed) {
+        pv.sprite.clearTint();
+        pv.isFlashed = false;
+      }
+    }
+
+    for (const [id, pv] of this.propVisuals.entries()) {
+      if (!this.activePropIds.has(id)) {
+        pv.sprite.destroy();
+        pv.shadow.destroy();
+        this.propVisuals.delete(id);
+      }
+    }
+  }
+
   private syncProjectilesAndPickups(): void {
     const sim = this.transport.getSim();
     const invBake = 1 / TextureBaker.getBakeScale();
+    const stressInvBake = 1 / Math.min(2, TextureBaker.getBakeScale());
+    const view = this.cameras.main.worldView;
+    const hasView = view && view.width > 0;
+    const viewLeft = hasView ? view.x - 24 : -9999;
+    const viewRight = hasView ? view.x + view.width + 24 : 9999;
+    const viewTop = hasView ? view.y - 24 : -9999;
+    const viewBottom = hasView ? view.y + view.height + 24 : 9999;
 
     // 1. Projectiles (object-pooled Sprites)
+    const isStress = sim.stressTestActive;
+    const projScale = isStress ? stressInvBake : invBake;
     this.activeProjIds.clear();
     for (let i = 0; i < sim.projectiles.length; i++) {
       const b = sim.projectiles[i]!;
       this.activeProjIds.add(b.id);
 
+      let tex = 'proj_player_bolt';
+      let tint = 0xffffff;
+      if (isStress) {
+        tex = 'proj_stress_orb';
+        if (b.team === 'enemy') tint = 0xfb7185;
+        else if (b.element === 'burn') tint = 0xfb923c;
+        else if (b.element === 'chill') tint = 0x38bdf8;
+        else if (b.element === 'shock') tint = 0xfde047;
+        else if (b.element === 'poison') tint = 0x4ade80;
+        else if (b.weaponId === 'scrap_shotgun') tint = 0xfacc15;
+      } else if (b.team === 'enemy') {
+        tex = 'proj_enemy_orb';
+      } else if (b.element === 'burn') {
+        tex = 'proj_player_burn';
+      } else if (b.element === 'chill') {
+        tex = 'proj_player_chill';
+      } else if (b.element === 'shock') {
+        tex = 'proj_player_shock';
+      } else if (b.element === 'poison') {
+        tex = 'proj_player_poison';
+      } else if (b.weaponId === 'scrap_shotgun') {
+        tex = 'proj_player_pellet';
+      }
+
       let entry = this.projectileSprites.get(b.id);
       if (!entry) {
-        let tex = 'proj_player_bolt';
-        if (b.team === 'enemy') tex = 'proj_enemy_orb';
-        else if (b.weaponId === 'scrap_shotgun') tex = 'proj_player_pellet';
-
         const pooled = this.projectileSpritePool.pop();
         if (pooled) {
           entry = pooled;
@@ -934,20 +1546,33 @@ export class GameScene extends Phaser.Scene {
             entry.textureKey = tex;
             entry.sprite.setTexture(tex);
           }
-          entry.sprite.setVisible(true);
           entry.sprite.setActive(true);
         } else {
           const sprite = this.add.sprite(b.x, b.y, tex);
+          sprite.setDepth(42);
           entry = { sprite, textureKey: tex };
         }
-        entry.sprite.setScale(invBake);
-        entry.sprite.setDepth(b.team === 'enemy' ? 50 : 42);
+        entry.sprite.setScale(projScale);
         this.projectileSprites.set(b.id, entry);
+      } else if (entry.textureKey !== tex) {
+        entry.textureKey = tex;
+        entry.sprite.setTexture(tex);
+        entry.sprite.setScale(projScale);
       }
 
       const pos = this.transport.getInterpolatedProjectilePos(b);
-      entry.sprite.setPosition(pos.x, pos.y);
-      entry.sprite.setRotation(b.angle);
+      const inView =
+        pos.x >= viewLeft && pos.x <= viewRight && pos.y >= viewTop && pos.y <= viewBottom;
+      entry.sprite.setVisible(inView);
+      if (inView) {
+        if (tint === 0xffffff) {
+          entry.sprite.clearTint();
+        } else {
+          entry.sprite.setTint(tint);
+        }
+        entry.sprite.setPosition(pos.x, pos.y);
+        entry.sprite.setRotation(isStress ? 0 : b.angle);
+      }
     }
 
     for (const [id, entry] of this.projectileSprites.entries()) {
@@ -979,10 +1604,10 @@ export class GameScene extends Phaser.Scene {
           entry.sprite.setActive(true);
         } else {
           const sprite = this.add.sprite(pk.x, pk.y, tex);
+          sprite.setDepth(25);
           entry = { sprite, textureKey: tex };
         }
         entry.sprite.setScale(invBake);
-        entry.sprite.setDepth(25);
         this.pickupSprites.set(pk.id, entry);
       }
 
@@ -1046,6 +1671,13 @@ export class GameScene extends Phaser.Scene {
 
     const sim = this.transport.getSim();
     const p = sim.player;
+    const isStress = sim.stressTestActive;
+    const view = this.cameras.main.worldView;
+    const hasView = view && view.width > 0;
+    const viewLeft = hasView ? view.x - 48 : -9999;
+    const viewRight = hasView ? view.x + view.width + 48 : 9999;
+    const viewTop = hasView ? view.y - 48 : -9999;
+    const viewBottom = hasView ? view.y + view.height + 48 : 9999;
 
     // 1. Thiết Vệ Active Skill: "Tường Khiên Hồng Ngọc" (120 deg arc shield in front of player)
     if (p.skillActiveTimer > 0) {
@@ -1070,11 +1702,16 @@ export class GameScene extends Phaser.Scene {
       g.strokePath();
     }
 
-    // 2. Enemy Spawn Circles, Attack Telegraphs & Mini HP Bars
+    // 2. Enemy Spawn Circles, Attack Telegraphs, Elemental Rings & Mini HP Bars
+    let hpBarsDrawn = 0;
+    let telegraphsDrawn = 0;
     for (let i = 0; i < sim.enemies.length; i++) {
       const e = sim.enemies[i]!;
       if (e.hp <= 0) continue;
       const pos = this.transport.getInterpolatedEnemyPos(e);
+      if (pos.x < viewLeft || pos.x > viewRight || pos.y < viewTop || pos.y > viewBottom) {
+        continue;
+      }
 
       // 0.8s Magic Summoning Circle on Floor
       if (e.aiState === 'spawning') {
@@ -1087,13 +1724,21 @@ export class GameScene extends Phaser.Scene {
         continue;
       }
 
+      // Frozen encasement crystal ring
+      if (e.frozenTimer > 0 && (!isStress || telegraphsDrawn < 6)) {
+        g.fillStyle(hexToNum(PALETTE.CYAN_FROST), 0.28);
+        g.fillCircle(pos.x, pos.y, e.radius + 5);
+        g.lineStyle(2.2, hexToNum(PALETTE.BONE_WHITE), 0.9);
+        g.strokeCircle(pos.x, pos.y, e.radius + 5);
+      }
+
       // Enemy Attack Telegraphs (Section 3.7: high readability red warning before damage)
-      if (e.aiState === 'telegraph') {
+      if (e.aiState === 'telegraph' && (!isStress || telegraphsDrawn < 4)) {
+        telegraphsDrawn += 1;
         const progress =
           e.telegraphDurationSec > 0 ? 1 - clamp(e.stateTimer / e.telegraphDurationSec, 0, 1) : 1;
 
         if (e.defId === 'goblin_shooter') {
-          // 3-way laser sight telegraph lines (-15, 0, +15 deg)
           const spreadRad = (15 * Math.PI) / 180;
           for (const mult of [-1, 0, 1]) {
             const ang = e.telegraphAngle + mult * spreadRad;
@@ -1107,7 +1752,6 @@ export class GameScene extends Phaser.Scene {
             g.strokePath();
           }
         } else if (e.defId === 'wild_boar') {
-          // Rectangular red charge corridor box along locked charge angle
           const len = e.telegraphLength || 220;
           const halfW = e.radius;
           const cos = Math.cos(e.telegraphAngle);
@@ -1132,7 +1776,6 @@ export class GameScene extends Phaser.Scene {
           g.lineStyle(2, hexToNum(PALETTE.CRIMSON_BRIGHT), 0.85);
           g.strokePath();
         } else if (e.defId === 'spore_bomber') {
-          // Expanding crimson AoE blast circle (R = 68u)
           const r = e.telegraphRadius || 68;
           g.fillStyle(hexToNum(PALETTE.CRIMSON_BRIGHT), 0.16 + progress * 0.24);
           g.fillCircle(pos.x, pos.y, r * (0.35 + progress * 0.65));
@@ -1141,14 +1784,21 @@ export class GameScene extends Phaser.Scene {
         }
       }
 
-      // Floating HP bar above non-dummy enemies
-      if (!e.isDummy && e.hp < e.maxHp) {
-        this.drawEnemyHealthBar(g, pos.x, pos.y - 30, e);
+      // Floating HP bar above non-dummy enemies or enemies with active elemental status
+      const hasStatus =
+        e.burnTimer > 0 ||
+        e.chillStacks > 0 ||
+        e.frozenTimer > 0 ||
+        e.poisonStacks > 0 ||
+        e.shockTimer > 0;
+      if (((!e.isDummy && e.hp < e.maxHp) || hasStatus) && (!isStress || hpBarsDrawn < 8)) {
+        this.drawEnemyHealthAndStatusBar(g, pos.x, pos.y - 30, e);
+        hpBarsDrawn += 1;
       }
     }
   }
 
-  private drawEnemyHealthBar(
+  private drawEnemyHealthAndStatusBar(
     g: Phaser.GameObjects.Graphics,
     x: number,
     y: number,
@@ -1161,8 +1811,31 @@ export class GameScene extends Phaser.Scene {
     g.fillStyle(hexToNum(PALETTE.INK_DARK), 0.9);
     g.fillRoundedRect(x - w / 2 - 1, y - 1, w + 2, h + 2, 2);
 
-    g.fillStyle(hexToNum(PALETTE.CRIMSON_BRIGHT), 1);
+    g.fillStyle(hexToNum(e.frozenTimer > 0 ? PALETTE.CYAN_FROST : PALETTE.CRIMSON_BRIGHT), 1);
     g.fillRoundedRect(x - w / 2, y, Math.max(2, w * ratio), h, 1.5);
+
+    // Elemental status pips above HP bar
+    let pipX = x - 10;
+    const pipY = y - 5;
+    if (e.burnTimer > 0) {
+      g.fillStyle(hexToNum(PALETTE.FLAME_ORANGE), 1);
+      g.fillCircle(pipX, pipY, 2.5);
+      pipX += 6;
+    }
+    if (e.frozenTimer > 0 || e.chillStacks > 0) {
+      g.fillStyle(hexToNum(PALETTE.CYAN_FROST), 1);
+      g.fillCircle(pipX, pipY, e.frozenTimer > 0 ? 3.2 : 2.5);
+      pipX += 6;
+    }
+    if (e.shockTimer > 0) {
+      g.fillStyle(hexToNum(PALETTE.VOLT_YELLOW), 1);
+      g.fillCircle(pipX, pipY, 2.5);
+      pipX += 6;
+    }
+    if (e.poisonStacks > 0) {
+      g.fillStyle(hexToNum(PALETTE.TOXIC_PURPLE), 1);
+      g.fillCircle(pipX, pipY, 2.5);
+    }
   }
 
   private renderHitboxesIfEnabled(): void {
@@ -1199,11 +1872,21 @@ export class GameScene extends Phaser.Scene {
     g.lineStyle(2, 0x4ade80, 0.95);
     g.strokeCircle(pPos.x, pPos.y, sim.player.radius);
 
+    // Props collision circles
+    g.lineStyle(1.8, 0xf97316, 0.9);
+    for (const prop of sim.props) {
+      if (prop.hp > 0) {
+        g.strokeCircle(prop.x, prop.y, prop.radius);
+      }
+    }
+
     // Enemy collision circles
     g.lineStyle(2, 0xfb7185, 0.95);
     for (const e of sim.enemies) {
-      const ePos = this.transport.getInterpolatedEnemyPos(e);
-      g.strokeCircle(ePos.x, ePos.y, e.radius);
+      if (e.hp > 0) {
+        const ePos = this.transport.getInterpolatedEnemyPos(e);
+        g.strokeCircle(ePos.x, ePos.y, e.radius);
+      }
     }
 
     // Projectile collision circles
@@ -1217,71 +1900,101 @@ export class GameScene extends Phaser.Scene {
   private updateVectorHud(): void {
     const sim = this.transport.getSim();
     const p = sim.player;
-    const g = this.hudBarsGraphics;
-    g.clear();
 
-    const drawStatBar = (
-      x: number,
-      y: number,
-      w: number,
-      h: number,
-      ratio: number,
-      fillHex: string,
-    ) => {
-      g.fillStyle(hexToNum(PALETTE.INK_DEEP), 0.95);
-      g.lineStyle(2, hexToNum(PALETTE.INK_DARK), 1);
-      g.fillRoundedRect(x, y, w, h, 5);
-      if (ratio > 0) {
-        g.fillStyle(hexToNum(fillHex), 1);
-        g.fillRoundedRect(x + 2, y + 2, Math.max(4, (w - 4) * clamp(ratio, 0, 1)), h - 4, 3.5);
+    if (
+      p.hp !== this.lastHudHp ||
+      p.armor !== this.lastHudArmor ||
+      p.energy !== this.lastHudEnergy
+    ) {
+      this.lastHudHp = p.hp;
+      this.lastHudArmor = p.armor;
+      this.lastHudEnergy = p.energy;
+
+      const g = this.hudBarsGraphics;
+      g.clear();
+
+      const drawStatBar = (
+        x: number,
+        y: number,
+        w: number,
+        h: number,
+        ratio: number,
+        fillHex: string,
+      ) => {
+        g.fillStyle(hexToNum(PALETTE.INK_DEEP), 0.95);
+        g.lineStyle(2, hexToNum(PALETTE.INK_DARK), 1);
+        g.fillRoundedRect(x, y, w, h, 5);
+        if (ratio > 0) {
+          g.fillStyle(hexToNum(fillHex), 1);
+          g.fillRoundedRect(x + 2, y + 2, Math.max(4, (w - 4) * clamp(ratio, 0, 1)), h - 4, 3.5);
+        }
+        g.strokeRoundedRect(x, y, w, h, 5);
+      };
+
+      // HP, Armor, Energy bars
+      drawStatBar(22, 13, 124, 20, p.hp / p.maxHp, PALETTE.RUBY_CORE);
+      drawStatBar(156, 13, 124, 20, p.armor / p.maxArmor, PALETTE.STEEL_LIGHT);
+      drawStatBar(290, 13, 136, 20, p.energy / p.maxEnergy, PALETTE.AZURE_CORE);
+
+      this.hpLabelText.setText(`${CHARACTERS.vanguard.nameVi} · HP ${p.hp}/${p.maxHp}`);
+      this.armorLabelText.setText(`GIÁP ${p.armor}/${p.maxArmor}`);
+      this.energyLabelText.setText(`NL ${p.energy}/${p.maxEnergy}`);
+    }
+
+    if (sim.tick % 12 === 0 || !this.lastHudStatsText) {
+      const dps = sim.getRollingDps();
+      const dashReady = p.dashCooldownTimer <= 0 ? 'Sẵn' : `${p.dashCooldownTimer.toFixed(1)}s`;
+      const skillReady =
+        p.skillActiveTimer > 0
+          ? `Bật (${p.skillActiveTimer.toFixed(1)}s)`
+          : p.skillCooldownTimer <= 0
+            ? 'Sẵn'
+            : `${p.skillCooldownTimer.toFixed(1)}s`;
+
+      const nextStats = `DPS: ${dps.toFixed(1)} · Xu: ${p.gold} · Đợt ${sim.waveNumber} · Dash: ${dashReady} · Khiên: ${skillReady} | ${VIETNAMESE_VERIFICATION_STRING}`;
+      if (nextStats !== this.lastHudStatsText) {
+        this.lastHudStatsText = nextStats;
+        this.statsLineText.setText(nextStats);
       }
-      g.strokeRoundedRect(x, y, w, h, 5);
-    };
+    }
 
-    // HP, Armor, Energy bars
-    drawStatBar(22, 13, 124, 20, p.hp / p.maxHp, PALETTE.RUBY_CORE);
-    drawStatBar(156, 13, 124, 20, p.armor / p.maxArmor, PALETTE.STEEL_LIGHT);
-    drawStatBar(290, 13, 136, 20, p.energy / p.maxEnergy, PALETTE.AZURE_CORE);
+    if (this.elementBtnText && p.activeImbueElement !== this.lastHudElement) {
+      this.lastHudElement = p.activeImbueElement;
+      this.elementBtnText.setText(`[R] Ng.Tố: ${ELEMENT_LABELS_VI[p.activeImbueElement]}`);
+    }
 
-    this.hpLabelText.setText(`${CHARACTERS.vanguard.nameVi} · HP ${p.hp}/${p.maxHp}`);
-    this.armorLabelText.setText(`GIÁP ${p.armor}/${p.maxArmor}`);
-    this.energyLabelText.setText(`NL ${p.energy}/${p.maxEnergy}`);
+    const q = graphicsSettings.getState().quality;
+    if (this.qualityBtnText && q !== this.lastHudQuality) {
+      this.lastHudQuality = q;
+      const qVi = q === 'high' ? 'CAO' : q === 'medium' ? 'TB' : 'THẤP';
+      this.qualityBtnText.setText(`[G] Đồ Họa: ${qVi}`);
+    }
 
-    const dps = sim.getRollingDps();
-    const dashReady = p.dashCooldownTimer <= 0 ? 'Sẵn' : `${p.dashCooldownTimer.toFixed(1)}s`;
-    const skillReady =
-      p.skillActiveTimer > 0
-        ? `Bật (${p.skillActiveTimer.toFixed(1)}s)`
-        : p.skillCooldownTimer <= 0
-          ? 'Sẵn'
-          : `${p.skillCooldownTimer.toFixed(1)}s`;
+    // Highlight active weapon slot on bottom bar only when slot changes
+    if (p.activeWeaponSlot !== this.lastHudSlot) {
+      this.lastHudSlot = p.activeWeaponSlot;
+      const slotW = 166;
+      const slotH = 44;
+      const startX = 148;
+      const barY = 486;
 
-    this.statsLineText.setText(
-      `DPS: ${dps.toFixed(1)} · Xu: ${p.gold} · Đợt ${sim.waveNumber} · Dash: ${dashReady} · Khiên: ${skillReady} | ${VIETNAMESE_VERIFICATION_STRING}`,
-    );
-
-    // Highlight active weapon slot on bottom bar
-    const slotW = 166;
-    const slotH = 44;
-    const startX = 148;
-    const barY = 486;
-
-    this.weaponSlotBgs.forEach((slotBg, idx) => {
-      const isSelected = idx === p.activeWeaponSlot;
-      const sx = startX + idx * (slotW + 8);
-      slotBg.clear();
-      slotBg.fillStyle(
-        hexToNum(isSelected ? PALETTE.SLATE_MID : PALETTE.SLATE_DARK),
-        isSelected ? 0.96 : 0.86,
-      );
-      slotBg.lineStyle(
-        isSelected ? 2.5 : 2,
-        hexToNum(isSelected ? PALETTE.SOLAR_GOLD : PALETTE.INK_DARK),
-        1,
-      );
-      slotBg.fillRoundedRect(sx, barY, slotW, slotH, 8);
-      slotBg.strokeRoundedRect(sx, barY, slotW, slotH, 8);
-    });
+      this.weaponSlotBgs.forEach((slotBg, idx) => {
+        const isSelected = idx === p.activeWeaponSlot;
+        const sx = startX + idx * (slotW + 8);
+        slotBg.clear();
+        slotBg.fillStyle(
+          hexToNum(isSelected ? PALETTE.SLATE_MID : PALETTE.SLATE_DARK),
+          isSelected ? 0.96 : 0.86,
+        );
+        slotBg.lineStyle(
+          isSelected ? 2.5 : 2,
+          hexToNum(isSelected ? PALETTE.SOLAR_GOLD : PALETTE.INK_DARK),
+          1,
+        );
+        slotBg.fillRoundedRect(sx, barY, slotW, slotH, 8);
+        slotBg.strokeRoundedRect(sx, barY, slotW, slotH, 8);
+      });
+    }
   }
 
   private updateDebugState(playerRenderX: number, playerRenderY: number): void {
@@ -1314,8 +2027,22 @@ export class GameScene extends Phaser.Scene {
     debug.cameraCenterY = Math.round(this.cameras.main.midPoint.y * 100) / 100;
     debug.animState = this.playerRig?.getAnimState() ?? 'idle';
 
+    // Phase 2 telemetry
+    debug.activeLightCount = this.lighting.getActiveLightCount();
+    debug.decalCount = this.fx.getActiveDecalCount();
+    debug.particleCount = this.fx.getActiveParticleCount();
+    debug.afterimageCount = this.fx.getActiveAfterimageCount();
+    debug.ambientParticleCount = this.fx.getActiveAmbientCount();
+    debug.propCount = this.propVisuals.size;
+    debug.destructiblePropCount = sim.props.filter((pr) => pr.destructible && pr.hp > 0).length;
+    debug.activeImbueElement = p.activeImbueElement;
+    debug.stressTestActive = sim.stressTestActive;
+
+    const activeEnemyCount = this.activeEnemyIds.size;
+    const totalEntities = 1 + sim.simulatedPlayers.length + activeEnemyCount;
+
     this.debugOverlay?.update({
-      entityCount: 1 + sim.enemies.length,
+      entityCount: totalEntities,
       bulletCount: sim.projectiles.length,
       tick: sim.tick,
     });

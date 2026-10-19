@@ -60,7 +60,6 @@ export class SpatialHashGrid<T extends SpatialEntity> {
    */
   public queryCircle(x: number, y: number, radius: number, out: T[] = []): T[] {
     out.length = 0;
-    this.seenIds.clear();
 
     const r = Math.max(0, radius);
     const minCx = Math.floor((x - r) * this.invCellSize);
@@ -68,6 +67,20 @@ export class SpatialHashGrid<T extends SpatialEntity> {
     const minCy = Math.floor((y - r) * this.invCellSize);
     const maxCy = Math.floor((y + r) * this.invCellSize);
 
+    if (minCx === maxCx && minCy === maxCy) {
+      const bucket = this.buckets.get(this.hashCoords(minCx, minCy));
+      if (!bucket || bucket.length === 0) return out;
+      for (let i = 0; i < bucket.length; i++) {
+        const item = bucket[i]!;
+        const sumR = r + item.radius;
+        if (distanceSq(x, y, item.x, item.y) <= sumR * sumR) {
+          out.push(item);
+        }
+      }
+      return out;
+    }
+
+    this.seenIds.clear();
     for (let cy = minCy; cy <= maxCy; cy++) {
       for (let cx = minCx; cx <= maxCx; cx++) {
         const bucket = this.buckets.get(this.hashCoords(cx, cy));

@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { VIETNAMESE_VERIFICATION_STRING } from '@ashen-pact/shared';
 import { PALETTE } from '../art/palette.js';
 import { TextureBaker } from '../art/texture-baker.js';
+import { type GraphicsQualityTier, graphicsSettings } from './graphics-settings.js';
 
 export interface GameDebugState {
   fps: number;
@@ -47,6 +48,20 @@ export interface GameDebugState {
   rollingDps: number;
   cameraCenterX: number;
   cameraCenterY: number;
+  // Phase 2 Graphics, Lighting & Map Interactions telemetry
+  graphicsQuality: GraphicsQualityTier;
+  autoQuality: boolean;
+  autoDowngradeCount: number;
+  activeLightCount: number;
+  decalCount: number;
+  particleCount: number;
+  afterimageCount: number;
+  ambientParticleCount: number;
+  propCount: number;
+  destructiblePropCount: number;
+  activeImbueElement: string;
+  stressTestActive: boolean;
+  heapUsedMb: number;
   errors: string[];
   warnings: string[];
 }
@@ -62,6 +77,7 @@ export function initGlobalDebugState(): GameDebugState {
     return window.__GAME_DEBUG__;
   }
 
+  const gState = graphicsSettings.getState();
   const state: GameDebugState = {
     fps: 60,
     frameTimeMs: 16.67,
@@ -105,6 +121,19 @@ export function initGlobalDebugState(): GameDebugState {
     rollingDps: 0,
     cameraCenterX: 480,
     cameraCenterY: 270,
+    graphicsQuality: gState.quality,
+    autoQuality: gState.autoQuality,
+    autoDowngradeCount: graphicsSettings.autoDowngradeCount,
+    activeLightCount: 0,
+    decalCount: 0,
+    particleCount: 0,
+    afterimageCount: 0,
+    ambientParticleCount: 0,
+    propCount: 0,
+    destructiblePropCount: 0,
+    activeImbueElement: 'none',
+    stressTestActive: false,
+    heapUsedMb: 0,
     errors: [],
     warnings: [],
   };
@@ -158,15 +187,15 @@ export class DebugOverlay {
     this.bg = scene.add.graphics();
     this.bg.fillStyle(0x0b090e, 0.92);
     this.bg.lineStyle(2, 0x38bdf8, 0.95);
-    this.bg.fillRoundedRect(0, 0, 326, 172, 8);
-    this.bg.strokeRoundedRect(0, 0, 326, 172, 8);
+    this.bg.fillRoundedRect(0, 0, 358, 206, 8);
+    this.bg.strokeRoundedRect(0, 0, 358, 206, 8);
 
     this.textObj = scene.add.text(12, 10, '', {
       fontFamily: '"Be Vietnam Pro", monospace',
       fontSize: '11px',
       color: PALETTE.BONE_WHITE,
       lineSpacing: 4,
-      resolution: TextureBaker.getBakeScale(),
+      resolution: Math.min(2, TextureBaker.getBakeScale()),
     });
 
     this.container.add([this.bg, this.textObj]);
@@ -186,7 +215,13 @@ export class DebugOverlay {
   }
 
   public refreshResolution(bakeScale: number): void {
-    this.textObj.setResolution(bakeScale);
+    this.textObj.setResolution(Math.min(2, bakeScale));
+    this.warmupFrames = 0;
+  }
+
+  public resetSamples(): void {
+    this.frameDeltaSamples.length = 0;
+    this.warmupFrames = 0;
   }
 
   public destroy(): void {
@@ -223,6 +258,22 @@ export class DebugOverlay {
     const computedFps = Math.min(144, 1000 / Math.max(1, avgDelta));
     state.fps = Math.round(computedFps * 10) / 10;
     state.frameTimeMs = Math.round(avgDelta * 100) / 100;
+
+    if (this.warmupFrames > 15) {
+      graphicsSettings.updateAutoQualityMonitor(state.fps, rawDelta / 1000);
+    }
+    const gState = graphicsSettings.getState();
+    state.graphicsQuality = gState.quality;
+    state.autoQuality = gState.autoQuality;
+    state.autoDowngradeCount = graphicsSettings.autoDowngradeCount;
+
+    const perfMem = (
+      performance as Performance & { memory?: { usedJSHeapSize?: number } }
+    ).memory;
+    if (perfMem && typeof perfMem.usedJSHeapSize === 'number') {
+      state.heapUsedMb = Math.round((perfMem.usedJSHeapSize / (1024 * 1024)) * 100) / 100;
+    }
+
     state.entityCount = params.entityCount;
     state.bulletCount = params.bulletCount;
     state.tick = params.tick;
@@ -246,18 +297,25 @@ export class DebugOverlay {
       if (view && view.width > 0) {
         this.container.setPosition(view.x + 16, view.y + 76);
       }
-      this.textObj.setText(
-        [
-          `[F1] DEBUG OVERLAY — ${state.scene}`,
-          `FPS: ${state.fps.toFixed(1)} (${state.frameTimeMs.toFixed(2)} ms) | DPS: ${state.rollingDps.toFixed(1)}`,
-          `Entities: ${state.entityCount} | Bullets: ${state.bulletCount}`,
-          `Draw Calls (est): ${state.drawCalls} | Bake: ${state.bakeScale}x (DPR ${state.dpr.toFixed(2)})`,
-          `Sim Tick: ${state.tick} | Seed: 0x${state.seed.toString(16)}`,
-          `Weapon: ${state.activeWeaponId} | God[F2]: ${state.godMode ? 'ON' : 'OFF'} | Hitbox[F4]: ${state.showHitboxes ? 'ON' : 'OFF'}`,
-          `LAN Server: ${state.serverConnected ? `Online (${state.pingMs} ms)` : 'Local Sim'}`,
-          `Errors: ${state.errors.length} | Warnings: ${state.warnings.length}`,
-        ].join('\n'),
-      );
+      if (
+        this.warmupFrames % 6 === 1 ||
+        this.textObj.text.length === 0 ||
+        !this.textObj.text.includes(`Quality[G]: ${state.graphicsQuality.toUpperCase()}`)
+      ) {
+        this.textObj.setText(
+          [
+            `[F1] DEBUG OVERLAY — ${state.scene}`,
+            `FPS: ${state.fps.toFixed(1)} (${state.frameTimeMs.toFixed(2)} ms) | DPS: ${state.rollingDps.toFixed(1)}`,
+            `Entities: ${state.entityCount} | Bullets: ${state.bulletCount} | Props: ${state.propCount}`,
+            `Quality[G]: ${state.graphicsQuality.toUpperCase()} (Auto:${state.autoQuality ? 'ON' : 'OFF'}) | Lights: ${state.activeLightCount}`,
+            `Particles: ${state.particleCount} | Decals: ${state.decalCount} | Heap: ${state.heapUsedMb.toFixed(1)} MB`,
+            `Draw Calls: ${state.drawCalls} | Bake: ${state.bakeScale}x (DPR ${state.dpr.toFixed(2)})`,
+            `Weapon: ${state.activeWeaponId} (${state.activeImbueElement}) | Stress[F7]: ${state.stressTestActive ? 'ON' : 'OFF'}`,
+            `God[F2]: ${state.godMode ? 'ON' : 'OFF'} | Hitbox[F4]: ${state.showHitboxes ? 'ON' : 'OFF'} | Tick: ${state.tick}`,
+            `Errors: ${state.errors.length} | Warnings: ${state.warnings.length}`,
+          ].join('\n'),
+        );
+      }
     }
   }
 }

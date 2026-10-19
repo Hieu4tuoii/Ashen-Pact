@@ -14,6 +14,7 @@ export interface CutoutRigOptions {
   playerSlot?: 1 | 2 | 3 | 4 | null;
   displayScale?: number;
   initialPhaseOffset?: number;
+  fastComposite?: boolean;
 }
 
 /**
@@ -29,7 +30,9 @@ export class CutoutRig {
   private readonly partSprites = new Map<RigPartId, Phaser.GameObjects.Sprite>();
   private readonly partDefs = new Map<RigPartId, RigPartDef>();
   private shadowSprite: Phaser.GameObjects.Sprite;
+  private compositeSprite: Phaser.GameObjects.Sprite | null = null;
   private playerRingSprite: Phaser.GameObjects.Sprite | null = null;
+  private fastComposite = false;
 
   private animState: RigAnimState = 'idle';
   private animTime = 0;
@@ -49,6 +52,8 @@ export class CutoutRig {
   private isDashing = false;
   private telegraphProgress = 0; // 0 = none, (0..1] = active telegraph progress
   private spawnProgress = 1; // 1 = fully spawned
+  private elementalStatusTint: number | null = null;
+  private isStatusTinted = false;
 
   constructor(
     scene: Phaser.Scene,
@@ -62,6 +67,7 @@ export class CutoutRig {
     this.displayScale = options.displayScale ?? 1;
     this.playerSlot = options.playerSlot ?? null;
     this.animTime = options.initialPhaseOffset ?? 0;
+    this.fastComposite = options.fastComposite ?? false;
 
     this.container = scene.add.container(x, y);
     this.bodyContainer = scene.add.container(0, 0);
@@ -82,24 +88,42 @@ export class CutoutRig {
     // 2. Elliptical Ground Shadow
     this.shadowSprite = scene.add.sprite(0, 0, TextureBaker.getShadowTextureKey(def.id));
     this.shadowSprite.setScale(invBake);
-    this.container.add(this.shadowSprite);
-
-    // 3. Sorted Cutout Parts
-    const sortedParts = [...def.parts].sort((a, b) => a.zIndex - b.zIndex);
-    for (const part of sortedParts) {
-      const sprite = scene.add.sprite(
-        part.offsetX,
-        part.offsetY,
-        TextureBaker.getPartTextureKey(def.id, part.id),
-      );
-      sprite.setOrigin(part.originX, part.originY);
-      sprite.setScale(invBake);
-      this.bodyContainer.add(sprite);
-      this.partSprites.set(part.id, sprite);
-      this.partDefs.set(part.id, part);
+    if (!this.fastComposite) {
+      this.container.add(this.shadowSprite);
+    } else {
+      this.shadowSprite.setVisible(false);
+      this.shadowSprite.setActive(false);
     }
 
-    this.container.add(this.bodyContainer);
+    // 3. Sorted Cutout Parts (or single pre-baked composite sprite in fastComposite swarm mode)
+    if (this.fastComposite) {
+      const compInvBake = 1 / Math.min(2, TextureBaker.getBakeScale());
+      this.compositeSprite = scene.add.sprite(
+        0,
+        0,
+        TextureBaker.getFullRigTextureKey(def.id),
+      );
+      this.compositeSprite.setOrigin(0.5, 0.78);
+      this.compositeSprite.setScale(compInvBake);
+      this.container.add(this.compositeSprite);
+      this.bodyContainer.setVisible(false);
+    } else {
+      const sortedParts = [...def.parts].sort((a, b) => a.zIndex - b.zIndex);
+      for (const part of sortedParts) {
+        const sprite = scene.add.sprite(
+          part.offsetX,
+          part.offsetY,
+          TextureBaker.getPartTextureKey(def.id, part.id),
+        );
+        sprite.setOrigin(part.originX, part.originY);
+        sprite.setScale(invBake);
+        this.bodyContainer.add(sprite);
+        this.partSprites.set(part.id, sprite);
+        this.partDefs.set(part.id, part);
+      }
+      this.container.add(this.bodyContainer);
+    }
+
     this.container.setScale(this.displayScale);
   }
 
@@ -181,13 +205,26 @@ export class CutoutRig {
     }
   }
 
+  public getFacingSign(): number {
+    return this.facingSign;
+  }
+
+  public setElementalStatusTint(color: number | null): void {
+    this.elementalStatusTint = color;
+  }
+
   public refreshBakedTextures(): void {
     const invBake = 1 / TextureBaker.getBakeScale();
+    const compInvBake = 1 / Math.min(2, TextureBaker.getBakeScale());
     this.shadowSprite.setTexture(TextureBaker.getShadowTextureKey(this.def.id));
     this.shadowSprite.setScale(invBake);
     if (this.playerRingSprite && this.playerSlot) {
       this.playerRingSprite.setTexture(TextureBaker.getPlayerRingTextureKey(this.playerSlot));
       this.playerRingSprite.setScale(invBake);
+    }
+    if (this.compositeSprite) {
+      this.compositeSprite.setTexture(TextureBaker.getFullRigTextureKey(this.def.id));
+      this.compositeSprite.setScale(compInvBake);
     }
     for (const [partId, sprite] of this.partSprites.entries()) {
       if (partId === 'weapon' && this.equippedWeaponId) {
@@ -214,7 +251,7 @@ export class CutoutRig {
     if (this.meleeSwingTimer > 0) this.meleeSwingTimer = Math.max(0, this.meleeSwingTimer - dtSec);
     if (this.hitFlashTimer > 0) this.hitFlashTimer = Math.max(0, this.hitFlashTimer - dtSec);
 
-    // Hit flash or telegraph flash tint
+    // Hit flash, telegraph flash, or elemental status tint
     const shouldFlashWhite = this.hitFlashTimer > 0;
     const shouldFlashTelegraph =
       !shouldFlashWhite &&
@@ -224,32 +261,21 @@ export class CutoutRig {
     if (shouldFlashWhite) {
       this.applyHitFlashTint();
       this.isHitFlashing = true;
+      this.isStatusTinted = false;
     } else if (shouldFlashTelegraph) {
       // Multiplicative tint preserves #141019 dark outlines while pulsing warm warning color
       this.applyMultiplicativeTint(0xff9e64);
       this.isHitFlashing = true;
-    } else if (this.isHitFlashing) {
+      this.isStatusTinted = false;
+    } else if (this.elementalStatusTint !== null) {
+      this.applyMultiplicativeTint(this.elementalStatusTint);
+      this.isHitFlashing = false;
+      this.isStatusTinted = true;
+    } else if (this.isHitFlashing || this.isStatusTinted) {
       this.clearPartTints();
       this.isHitFlashing = false;
+      this.isStatusTinted = false;
     }
-
-    const torso = this.partSprites.get('torso');
-    const head = this.partSprites.get('head');
-    const legL = this.partSprites.get('legLeft');
-    const legR = this.partSprites.get('legRight');
-    const armL = this.partSprites.get('armLeft');
-    const armR = this.partSprites.get('armRight');
-    const back = this.partSprites.get('backAccessory');
-    const weapon = this.partSprites.get('weapon');
-
-    const torsoDef = this.partDefs.get('torso');
-    const headDef = this.partDefs.get('head');
-    const legLDef = this.partDefs.get('legLeft');
-    const legRDef = this.partDefs.get('legRight');
-    const armLDef = this.partDefs.get('armLeft');
-    const armRDef = this.partDefs.get('armRight');
-    const backDef = this.partDefs.get('backAccessory');
-    const weaponDef = this.partDefs.get('weapon');
 
     // Spawn scale & hit punch scale
     const spawnScale = this.spawnProgress < 1 ? easeOutBack(this.spawnProgress) : 1;
@@ -271,10 +297,45 @@ export class CutoutRig {
       }
     }
 
+    if (this.fastComposite && this.compositeSprite) {
+      const compInvBake = 1 / Math.min(2, TextureBaker.getBakeScale());
+      this.compositeSprite.scaleX =
+        compInvBake * this.facingSign * spawnScale * hitPunch * dashStretchX * telegraphScaleX;
+      this.compositeSprite.scaleY =
+        compInvBake * spawnScale * hitPunch * dashSquashY * telegraphScaleY;
+      this.compositeSprite.alpha = this.spawnProgress < 1 ? 0.35 + this.spawnProgress * 0.65 : 1;
+      if (this.animState === 'idle') {
+        const s = Math.sin(this.animTime * ((Math.PI * 2) / 1.6));
+        this.compositeSprite.y = s * 1.1;
+      } else {
+        const phase = this.animTime * ((Math.PI * 2) / 0.38);
+        this.compositeSprite.y = -Math.abs(Math.sin(phase)) * 3.0;
+      }
+      return;
+    }
+
     this.bodyContainer.scaleX =
       this.facingSign * spawnScale * hitPunch * dashStretchX * telegraphScaleX;
     this.bodyContainer.scaleY = spawnScale * hitPunch * dashSquashY * telegraphScaleY;
     this.bodyContainer.alpha = this.spawnProgress < 1 ? 0.35 + this.spawnProgress * 0.65 : 1;
+
+    const torso = this.partSprites.get('torso');
+    const head = this.partSprites.get('head');
+    const legL = this.partSprites.get('legLeft');
+    const legR = this.partSprites.get('legRight');
+    const armL = this.partSprites.get('armLeft');
+    const armR = this.partSprites.get('armRight');
+    const back = this.partSprites.get('backAccessory');
+    const weapon = this.partSprites.get('weapon');
+
+    const torsoDef = this.partDefs.get('torso');
+    const headDef = this.partDefs.get('head');
+    const legLDef = this.partDefs.get('legLeft');
+    const legRDef = this.partDefs.get('legRight');
+    const armLDef = this.partDefs.get('armLeft');
+    const armRDef = this.partDefs.get('armRight');
+    const backDef = this.partDefs.get('backAccessory');
+    const weaponDef = this.partDefs.get('weapon');
 
     // Normalize local aim angle relative to facing direction
     const localAim =
@@ -415,6 +476,9 @@ export class CutoutRig {
   }
 
   private applyHitFlashTint(): void {
+    if (this.compositeSprite) {
+      this.compositeSprite.setTintFill(0xf4f1ea);
+    }
     for (const [partId, sprite] of this.partSprites.entries()) {
       if (partId === 'torso' || partId === 'head') {
         sprite.setTintFill(0xf4f1ea);
@@ -425,18 +489,28 @@ export class CutoutRig {
   }
 
   private applyMultiplicativeTint(color: number): void {
+    if (this.compositeSprite) {
+      this.compositeSprite.setTint(color);
+    }
     for (const sprite of this.partSprites.values()) {
       sprite.setTint(color);
     }
   }
 
   private clearPartTints(): void {
+    if (this.compositeSprite) {
+      this.compositeSprite.clearTint();
+    }
     for (const sprite of this.partSprites.values()) {
       sprite.clearTint();
     }
   }
 
   public destroy(): void {
+    if (this.fastComposite) {
+      this.shadowSprite.destroy();
+      this.bodyContainer.destroy(true);
+    }
     this.container.destroy(true);
   }
 }
