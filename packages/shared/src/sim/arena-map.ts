@@ -1,4 +1,5 @@
 import { SeededRandom } from '../core/prng.js';
+import type { RoomType } from '../data/types.js';
 import { TILE_SIZE } from '../protocol/messages.js';
 import { type AABB, clamp, resolveCircleVsAABB } from '../math/vec2.js';
 
@@ -72,6 +73,124 @@ export class ArenaMap {
 
     this.buildLayout(config.includePillars ?? true, config.includeSurfaces ?? true);
   }
+
+  public configureRoomLayout(
+    roomType: RoomType,
+    roomSeed: number,
+    secretWallBroken = false,
+  ): void {
+    const count = this.cols * this.rows;
+    const rng = new SeededRandom(roomSeed).fork(`room_${roomType}`);
+    for (let i = 0; i < count; i++) {
+      this.tiles[i] = 'floor';
+      this.surfaces[i] = 'none';
+      this.baseSurfaces[i] = 'none';
+      this.surfaceTimers[i] = 0;
+      this.tileVariants[i] = rng.nextInt(0, 7);
+    }
+
+    if (roomType === 'start') {
+      this.buildLayout(true, true);
+      if (secretWallBroken && this.cols >= 24) {
+        this.setTile(Math.floor(this.cols / 2), 0, 'floor');
+        this.rebuildSolidBoxes();
+      }
+      this.mapRevision += 1;
+      return;
+    }
+
+    // Border walls
+    for (let ty = 0; ty < this.rows; ty++) {
+      for (let tx = 0; tx < this.cols; tx++) {
+        if (tx === 0 || ty === 0 || tx === this.cols - 1 || ty === this.rows - 1) {
+          this.tiles[ty * this.cols + tx] = 'wall';
+        }
+      }
+    }
+
+    const placePillar2x2 = (px: number, py: number) => {
+      for (let dy = 0; dy < 2; dy++) {
+        for (let dx = 0; dx < 2; dx++) {
+          if (px + dx > 0 && px + dx < this.cols - 1 && py + dy > 0 && py + dy < this.rows - 1) {
+            this.tiles[(py + dy) * this.cols + (px + dx)] = 'pillar';
+          }
+        }
+      }
+    };
+
+    if (roomType === 'combat') {
+      const layoutStyle = roomSeed % 3;
+      if (layoutStyle === 0) {
+        placePillar2x2(9, 5);
+        placePillar2x2(25, 5);
+        placePillar2x2(9, 15);
+        placePillar2x2(25, 15);
+      } else if (layoutStyle === 1) {
+        placePillar2x2(12, 6);
+        placePillar2x2(22, 6);
+        placePillar2x2(12, 14);
+        placePillar2x2(22, 14);
+      } else {
+        placePillar2x2(10, 6);
+        placePillar2x2(24, 6);
+        placePillar2x2(10, 14);
+        placePillar2x2(24, 14);
+      }
+      // Biome 1 tactical surfaces (water, grass, poison_swamp, oil)
+      this.fillSurfaceRect(13, 3, 4, 3, 'water');
+      this.fillSurfaceRect(19, 3, 4, 3, 'grass');
+      this.fillSurfaceRect(13, 16, 4, 3, 'poison_swamp');
+      this.fillSurfaceRect(19, 16, 4, 3, 'oil');
+    } else if (roomType === 'boss') {
+      // Wide open Boss Arena with 4 corner cover pillars and moss/water patches
+      placePillar2x2(7, 4);
+      placePillar2x2(27, 4);
+      placePillar2x2(7, 16);
+      placePillar2x2(27, 16);
+      this.fillSurfaceRect(10, 4, 3, 2, 'grass');
+      this.fillSurfaceRect(23, 4, 3, 2, 'grass');
+      this.fillSurfaceRect(10, 16, 3, 2, 'water');
+      this.fillSurfaceRect(23, 16, 3, 2, 'poison_swamp');
+    } else {
+      // Sanctuary rooms: treasure, merchant, shrine, secret, portal
+      placePillar2x2(7, 4);
+      placePillar2x2(27, 4);
+      placePillar2x2(7, 16);
+      placePillar2x2(27, 16);
+      if (roomType === 'shrine' || roomType === 'portal') {
+        this.fillSurfaceRect(12, 5, 3, 3, 'water');
+        this.fillSurfaceRect(21, 5, 3, 3, 'water');
+        this.fillSurfaceRect(12, 14, 3, 3, 'grass');
+        this.fillSurfaceRect(21, 14, 3, 3, 'grass');
+      } else if (roomType === 'secret') {
+        this.fillSurfaceRect(11, 5, 3, 3, 'grass');
+        this.fillSurfaceRect(22, 5, 3, 3, 'grass');
+      } else {
+        this.fillSurfaceRect(10, 5, 3, 2, 'grass');
+        this.fillSurfaceRect(23, 5, 3, 2, 'grass');
+      }
+    }
+
+    this.rebuildSolidBoxes();
+    this.mapRevision += 1;
+  }
+
+  /**
+   * Boss Phase 3 ("Mây Độc Thu Hẹp Mép Phòng"): floods the outer 2-tile ring of the Boss Arena
+   * with creeping toxic swamp mist, shrinking the safe combat zone in the center.
+   */
+  public applyBossPhase3ToxicBorder(): void {
+    for (let ty = 1; ty < this.rows - 1; ty++) {
+      for (let tx = 1; tx < this.cols - 1; tx++) {
+        const isOuterRing =
+          tx <= 3 || tx >= this.cols - 4 || ty <= 2 || ty >= this.rows - 3;
+        if (isOuterRing && !this.isSolidTile(tx, ty)) {
+          this.setSurface(tx, ty, 'poison_swamp', 0, true);
+        }
+      }
+    }
+  }
+
 
   private buildLayout(includePillars: boolean, includeSurfaces: boolean): void {
     for (let ty = 0; ty < this.rows; ty++) {
@@ -474,6 +593,22 @@ export class ArenaMap {
   }
 
   private readonly scratchBox: AABB = { minX: 0, minY: 0, maxX: 0, maxY: 0 };
+  private readonly circleResOut = {
+    x: 0,
+    y: 0,
+    collided: false,
+    normalX: 0,
+    normalY: 0,
+  };
+  private readonly wallHitOut = {
+    hit: false,
+    normalX: 0,
+    normalY: 0,
+    resolvedX: 0,
+    resolvedY: 0,
+    hitTx: -1,
+    hitTy: -1,
+  };
 
   /**
    * Resolves circle vs nearby solid tile-AABBs so entities slide smoothly along walls and pillars
@@ -541,7 +676,13 @@ export class ArenaMap {
       }
     }
 
-    return { x: currX, y: currY, collided, normalX, normalY };
+    const out = this.circleResOut;
+    out.x = currX;
+    out.y = currY;
+    out.collided = collided;
+    out.normalX = normalX;
+    out.normalY = normalY;
+    return out;
   }
 
   /**
@@ -560,6 +701,7 @@ export class ArenaMap {
     hitTx: number;
     hitTy: number;
   } {
+    const out = this.wallHitOut;
     const minTx = Math.max(0, Math.floor((x - radius) / TILE_SIZE));
     const maxTx = Math.min(this.cols - 1, Math.floor((x + radius) / TILE_SIZE));
     const minTy = Math.max(0, Math.floor((y - radius) / TILE_SIZE));
@@ -575,15 +717,14 @@ export class ArenaMap {
 
         const res = resolveCircleVsAABB(x, y, radius, this.scratchBox);
         if (res.collided) {
-          return {
-            hit: true,
-            normalX: res.normalX,
-            normalY: res.normalY,
-            resolvedX: res.x,
-            resolvedY: res.y,
-            hitTx: tx,
-            hitTy: ty,
-          };
+          out.hit = true;
+          out.normalX = res.normalX;
+          out.normalY = res.normalY;
+          out.resolvedX = res.x;
+          out.resolvedY = res.y;
+          out.hitTx = tx;
+          out.hitTy = ty;
+          return out;
         }
       }
     }
@@ -612,26 +753,24 @@ export class ArenaMap {
         ny = -1;
         hitTy = this.rows - 1;
       }
-      return {
-        hit: true,
-        normalX: nx,
-        normalY: ny,
-        resolvedX: clamp(x, radius, this.width - radius),
-        resolvedY: clamp(y, radius, this.height - radius),
-        hitTx,
-        hitTy,
-      };
+      out.hit = true;
+      out.normalX = nx;
+      out.normalY = ny;
+      out.resolvedX = clamp(x, radius, this.width - radius);
+      out.resolvedY = clamp(y, radius, this.height - radius);
+      out.hitTx = hitTx;
+      out.hitTy = hitTy;
+      return out;
     }
 
-    return {
-      hit: false,
-      normalX: 0,
-      normalY: 0,
-      resolvedX: x,
-      resolvedY: y,
-      hitTx: -1,
-      hitTy: -1,
-    };
+    out.hit = false;
+    out.normalX = 0;
+    out.normalY = 0;
+    out.resolvedX = x;
+    out.resolvedY = y;
+    out.hitTx = -1;
+    out.hitTy = -1;
+    return out;
   }
 }
 

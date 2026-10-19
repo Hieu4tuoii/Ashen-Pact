@@ -29,6 +29,7 @@ import {
  */
 export class TextureBaker {
   private static currentBakeScale = 0;
+  private static fullBakeScale = 0;
 
   public static computeBakeScale(cameraZoom = 1.5): number {
     const dpr = typeof window !== 'undefined' ? Math.min(window.devicePixelRatio || 1, 2.5) : 1;
@@ -88,19 +89,52 @@ export class TextureBaker {
     return `weapon_vec_${weaponId}`;
   }
 
+  public static getChestTextureKey(rarity: string, opened: boolean): string {
+    return `chest_${opened ? 'open' : 'closed'}_${rarity}`;
+  }
+
+  public static bakeGalleryPage1(scene: Phaser.Scene, cameraZoom = 1.5): number {
+    const targetScale = this.computeBakeScale(cameraZoom);
+    if (this.currentBakeScale === targetScale && scene.textures.exists('player_ring_1')) {
+      return this.currentBakeScale;
+    }
+    this.currentBakeScale = targetScale;
+
+    for (const rig of ALL_SAMPLE_RIGS) {
+      if (rig.id === 'vanguard' || rig.id === 'goblin_shooter') {
+        this.bakeRig(scene, rig, targetScale);
+      }
+    }
+    const swordDef = WEAPON_VECTOR_DEFS.knight_sword;
+    if (swordDef) this.bakeWeapon(scene, swordDef, targetScale);
+
+    for (const slot of [1, 2, 3, 4] as const) {
+      this.bakePlayerRing(scene, slot, targetScale);
+    }
+    for (const biome of [1, 2, 3] as const) {
+      for (let v = 0; v < 4; v++) {
+        this.bakeBiomeTile(scene, biome, v, targetScale);
+      }
+    }
+    return targetScale;
+  }
+
   public static bakeAll(scene: Phaser.Scene, cameraZoom = 1.5, force = false): number {
     const targetScale = this.computeBakeScale(cameraZoom);
     if (
       !force &&
-      this.currentBakeScale === targetScale &&
+      this.fullBakeScale === targetScale &&
       scene.textures.exists('player_ring_1') &&
       scene.textures.exists('ui_crosshair') &&
-      scene.textures.exists('fx_light_radial')
+      scene.textures.exists('fx_light_radial') &&
+      scene.textures.exists('chest_closed_legendary')
     ) {
+      this.currentBakeScale = targetScale;
       return this.currentBakeScale;
     }
 
     this.currentBakeScale = targetScale;
+    this.fullBakeScale = targetScale;
 
     for (const rig of ALL_SAMPLE_RIGS) {
       this.bakeRig(scene, rig, targetScale);
@@ -161,8 +195,8 @@ export class TextureBaker {
   ): void {
     const key = this.getFullRigTextureKey(rig.id);
     const compScale = Math.min(2, scale);
-    const worldW = 68;
-    const worldH = 64;
+    const worldW = Math.max(68, rig.worldWidth + 28);
+    const worldH = Math.max(64, rig.worldHeight + 28);
     const canvas = document.createElement('canvas');
     canvas.width = Math.ceil(worldW * compScale);
     canvas.height = Math.ceil(worldH * compScale);
@@ -1450,6 +1484,257 @@ export class TextureBaker {
           c.closePath();
         },
         { cx: 6, cy: 4, rx: 5.2, ry: 5.2 },
+      );
+    });
+
+    // 6. Phase 3 Treasure Chests (5 Rarities, Closed & Open)
+    const chestRarities: readonly [string, PaletteHex, PaletteHex, PaletteHex][] = [
+      ['common', PALETTE.STEEL_LIGHT, PALETTE.STEEL_DARK, PALETTE.BONE_WHITE],
+      ['uncommon', PALETTE.GOBLIN_GREEN, PALETTE.FOREST_SHADE, PALETTE.LIME_GLOW],
+      ['rare', PALETTE.AZURE_CORE, PALETTE.COBALT_SHADE, PALETTE.CYAN_FROST],
+      ['epic', PALETTE.ELECTRIC_VIOLET, PALETTE.TOXIC_PURPLE, PALETTE.ICE_WHITE],
+      ['legendary', PALETTE.SOLAR_GOLD, PALETTE.BRASS_CORE, PALETTE.VOLT_YELLOW],
+    ];
+    for (const [rarity, trimFill, trimShade, gemColor] of chestRarities) {
+      this.bakeCustomCanvas(scene, `chest_closed_${rarity}`, 42, 36, scale, (ctx) => {
+        outlined(
+          ctx,
+          {
+            fill: PALETTE.LEATHER_MID,
+            shade: PALETTE.LEATHER_DARK,
+            highlight: PALETTE.LEATHER_LIGHT,
+            outlineWidth: 2.5,
+          },
+          (c) => traceRoundedRect(c, -15, -11, 30, 22, 5),
+          { cx: 0, cy: 0, rx: 15, ry: 11 },
+        );
+        outlined(
+          ctx,
+          {
+            fill: trimFill,
+            shade: trimShade,
+            highlight: gemColor,
+            outlineWidth: 1.8,
+          },
+          (c) => traceRoundedRect(c, -15, -3, 30, 5, 2),
+          { cx: 0, cy: -0.5, rx: 15, ry: 2.5 },
+        );
+        outlined(
+          ctx,
+          {
+            fill: gemColor,
+            shade: trimFill,
+            highlight: PALETTE.BONE_WHITE,
+            outlineWidth: 1.8,
+          },
+          (c) => traceRoundedRect(c, -4, -5, 8, 9, 2.5),
+          { cx: 0, cy: -0.5, rx: 4, ry: 4.5 },
+        );
+      });
+
+      this.bakeCustomCanvas(scene, `chest_open_${rarity}`, 42, 38, scale, (ctx) => {
+        outlined(
+          ctx,
+          {
+            fill: PALETTE.LEATHER_DARK,
+            shade: PALETTE.INK_DARK,
+            highlight: PALETTE.LEATHER_MID,
+            outlineWidth: 2.5,
+          },
+          (c) => traceRoundedRect(c, -15, -13, 30, 12, 4),
+          { cx: 0, cy: -7, rx: 15, ry: 6 },
+        );
+        outlined(
+          ctx,
+          {
+            fill: PALETTE.LEATHER_MID,
+            shade: PALETTE.LEATHER_DARK,
+            highlight: trimFill,
+            outlineWidth: 2.5,
+          },
+          (c) => traceRoundedRect(c, -15, -2, 30, 14, 4),
+          { cx: 0, cy: 5, rx: 15, ry: 7 },
+        );
+        outlined(
+          ctx,
+          {
+            fill: gemColor,
+            highlight: PALETTE.BONE_WHITE,
+            outlineWidth: 1.6,
+          },
+          (c) => {
+            c.beginPath();
+            c.ellipse(0, -2, 9, 4, 0, 0, Math.PI * 2);
+            c.closePath();
+          },
+          { cx: 0, cy: -2, rx: 9, ry: 4 },
+        );
+      });
+    }
+
+    // 7. Ancient Shrine Statue (Tượng Thần Cổ Đại)
+    this.bakeCustomCanvas(scene, 'prop_shrine_statue', 52, 60, scale, (ctx) => {
+      outlined(
+        ctx,
+        {
+          fill: PALETTE.SLATE_MID,
+          shade: PALETTE.SLATE_DARK,
+          highlight: PALETTE.WARM_STONE,
+          outlineWidth: 2.5,
+        },
+        (c) => traceRoundedRect(c, -18, 8, 36, 14, 4),
+        { cx: 0, cy: 15, rx: 18, ry: 7 },
+      );
+      outlined(
+        ctx,
+        {
+          fill: PALETTE.WARM_STONE,
+          shade: PALETTE.ASH_GRAY,
+          highlight: PALETTE.BONE_WHITE,
+          outlineWidth: 2.5,
+        },
+        (c) =>
+          tracePolygon(c, [
+            { x: -12, y: 10 },
+            { x: -15, y: -8 },
+            { x: 0, y: -24 },
+            { x: 15, y: -8 },
+            { x: 12, y: 10 },
+          ]),
+        { cx: 0, cy: -7, rx: 15, ry: 17 },
+      );
+      outlined(
+        ctx,
+        {
+          fill: PALETTE.CRIMSON_BRIGHT,
+          shade: PALETTE.RUBY_CORE,
+          highlight: PALETTE.SOLAR_GOLD,
+          outlineWidth: 1.8,
+        },
+        (c) =>
+          tracePolygon(c, [
+            { x: 0, y: -13 },
+            { x: 6, y: -4 },
+            { x: 0, y: 5 },
+            { x: -6, y: -4 },
+          ]),
+        { cx: 0, cy: -4, rx: 6, ry: 9 },
+      );
+    });
+
+    // 8. Dungeon Doors (Open & Locked) and Floor Portal
+    this.bakeCustomCanvas(scene, 'door_open', 48, 48, scale, (ctx) => {
+      outlined(
+        ctx,
+        {
+          fill: PALETTE.FOREST_SHADE,
+          shade: PALETTE.MOSS_DARK,
+          highlight: PALETTE.LIME_GLOW,
+          outlineWidth: 2.5,
+        },
+        (c) => traceRoundedRect(c, -18, -14, 36, 28, 7),
+        { cx: 0, cy: 0, rx: 18, ry: 14 },
+      );
+      outlined(
+        ctx,
+        {
+          fill: PALETTE.LIME_GLOW,
+          shade: PALETTE.GOBLIN_GREEN,
+          highlight: PALETTE.MINT_LIGHT,
+          outlineWidth: 1.6,
+        },
+        (c) => {
+          c.beginPath();
+          c.arc(0, 0, 6, 0, Math.PI * 2);
+          c.closePath();
+        },
+        { cx: 0, cy: 0, rx: 6, ry: 6 },
+      );
+    });
+
+    this.bakeCustomCanvas(scene, 'door_locked', 48, 48, scale, (ctx) => {
+      outlined(
+        ctx,
+        {
+          fill: PALETTE.SLATE_DARK,
+          shade: PALETTE.INK_DARK,
+          highlight: PALETTE.STEEL_DARK,
+          outlineWidth: 2.5,
+        },
+        (c) => traceRoundedRect(c, -18, -14, 36, 28, 7),
+        { cx: 0, cy: 0, rx: 18, ry: 14 },
+      );
+      outlined(
+        ctx,
+        {
+          fill: PALETTE.RUBY_CORE,
+          shade: PALETTE.RUBY_DARK,
+          highlight: PALETTE.CRIMSON_BRIGHT,
+          outlineWidth: 1.8,
+        },
+        (c) => traceRoundedRect(c, -12, -3, 24, 6, 2),
+        { cx: 0, cy: 0, rx: 12, ry: 3 },
+      );
+    });
+
+    this.bakeCustomCanvas(scene, 'portal_active', 64, 64, scale, (ctx) => {
+      outlined(
+        ctx,
+        {
+          fill: PALETTE.ELECTRIC_VIOLET,
+          shade: PALETTE.TOXIC_PURPLE,
+          highlight: PALETTE.CYAN_FROST,
+          outlineWidth: 2.8,
+        },
+        (c) => {
+          c.beginPath();
+          c.arc(0, 0, 22, 0, Math.PI * 2);
+          c.closePath();
+        },
+        { cx: 0, cy: 0, rx: 22, ry: 22 },
+      );
+      outlined(
+        ctx,
+        {
+          fill: PALETTE.CYAN_FROST,
+          shade: PALETTE.AZURE_CORE,
+          highlight: PALETTE.ICE_WHITE,
+          outlineWidth: 2.0,
+        },
+        (c) => {
+          c.beginPath();
+          c.arc(0, 0, 12, 0, Math.PI * 2);
+          c.closePath();
+        },
+        { cx: 0, cy: 0, rx: 12, ry: 12 },
+      );
+    });
+
+    this.bakeCustomCanvas(scene, 'item_health_potion', 28, 28, scale, (ctx) => {
+      outlined(
+        ctx,
+        {
+          fill: PALETTE.CRIMSON_BRIGHT,
+          shade: PALETTE.RUBY_CORE,
+          highlight: PALETTE.BONE_WHITE,
+          outlineWidth: 2.2,
+        },
+        (c) => {
+          c.beginPath();
+          c.arc(0, 2, 7.5, 0, Math.PI * 2);
+          c.closePath();
+        },
+        { cx: 0, cy: 2, rx: 7.5, ry: 7.5 },
+      );
+      outlined(
+        ctx,
+        {
+          fill: PALETTE.SOLAR_GOLD,
+          shade: PALETTE.BRASS_CORE,
+          outlineWidth: 1.6,
+        },
+        (c) => traceRoundedRect(c, -3.5, -9, 7, 5, 1.5),
+        { cx: 0, cy: -6.5, rx: 3.5, ry: 2.5 },
       );
     });
   }

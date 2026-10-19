@@ -1712,6 +1712,1566 @@ export const TRAINING_DUMMY_RIG_DEF: EntityRigDef = {
   ],
 };
 
+/**
+ * Biome 1 Enemy: Slime Xanh Tách Đôi (Green Slime)
+ * Translucent-style cel-shaded gelatinous cube/dome with inner toxic nucleus & bouncing tendrils.
+ */
+export const GREEN_SLIME_RIG_DEF: EntityRigDef = {
+  id: 'green_slime',
+  nameVi: 'Slime Xanh Tách Đôi (Green Slime)',
+  roleVi: 'Quái Tách Đôi · Biome 1',
+  worldWidth: 34,
+  worldHeight: 34,
+  shadowRx: 14,
+  shadowRy: 6,
+  parts: [
+    {
+      id: 'backAccessory',
+      width: 28,
+      height: 22,
+      offsetX: 0,
+      offsetY: -12,
+      originX: 0.5,
+      originY: 0.5,
+      zIndex: 10,
+      shapes: [
+        {
+          kind: 'ellipse',
+          cx: 0,
+          cy: 2,
+          rx: 12,
+          ry: 8,
+          style: {
+            fill: PALETTE.FOREST_SHADE,
+            shade: PALETTE.MOSS_DARK,
+            highlight: PALETTE.GOBLIN_GREEN,
+          },
+        },
+      ],
+    },
+    {
+      id: 'legLeft',
+      width: 14,
+      height: 12,
+      offsetX: -6,
+      offsetY: -4,
+      originX: 0.5,
+      originY: 0.5,
+      zIndex: 20,
+      shapes: [
+        {
+          kind: 'ellipse',
+          cx: 0,
+          cy: 0,
+          rx: 5,
+          ry: 3.5,
+          style: {
+            fill: PALETTE.GOBLIN_GREEN,
+            shade: PALETTE.FOREST_SHADE,
+            highlight: PALETTE.LIME_GLOW,
+          },
+        },
+      ],
+    },
+    {
+      id: 'legRight',
+      width: 14,
+      height: 12,
+      offsetX: 6,
+      offsetY: -4,
+      originX: 0.5,
+      originY: 0.5,
+      zIndex: 21,
+      shapes: [
+        {
+          kind: 'ellipse',
+          cx: 0,
+          cy: 0,
+          rx: 5,
+          ry: 3.5,
+          style: {
+            fill: PALETTE.GOBLIN_GREEN,
+            shade: PALETTE.FOREST_SHADE,
+            highlight: PALETTE.LIME_GLOW,
+          },
+        },
+      ],
+    },
+    {
+      id: 'torso',
+      width: 32,
+      height: 28,
+      offsetX: 0,
+      offsetY: -13,
+      originX: 0.5,
+      originY: 0.55,
+      zIndex: 30,
+      shapes: [
+        {
+          kind: 'roundedRect',
+          x: -13,
+          y: -10,
+          w: 26,
+          h: 20,
+          r: 9,
+          style: {
+            fill: PALETTE.GOBLIN_GREEN,
+            shade: PALETTE.FOREST_SHADE,
+            highlight: PALETTE.LIME_GLOW,
+          },
+        },
+        // Inner mitotic nucleus (twin cores ready to split)
+        {
+          kind: 'circle',
+          cx: -4,
+          cy: -1,
+          r: 4.2,
+          style: {
+            fill: PALETTE.LIME_GLOW,
+            shade: PALETTE.GOBLIN_GREEN,
+            highlight: PALETTE.MINT_LIGHT,
+            outlineWidth: INNER_OUTLINE_WIDTH,
+          },
+        },
+        {
+          kind: 'circle',
+          cx: 4,
+          cy: 1,
+          r: 3.8,
+          style: {
+            fill: PALETTE.LIME_GLOW,
+            shade: PALETTE.GOBLIN_GREEN,
+            highlight: PALETTE.MINT_LIGHT,
+            outlineWidth: INNER_OUTLINE_WIDTH,
+          },
+        },
+      ],
+    },
+    {
+      id: 'armLeft',
+      width: 14,
+      height: 14,
+      offsetX: -12,
+      offsetY: -12,
+      originX: 0.5,
+      originY: 0.5,
+      zIndex: 35,
+      shapes: [
+        {
+          kind: 'circle',
+          cx: 0,
+          cy: 0,
+          r: 4.2,
+          style: {
+            fill: PALETTE.LIME_GLOW,
+            shade: PALETTE.GOBLIN_GREEN,
+            highlight: PALETTE.MINT_LIGHT,
+          },
+        },
+      ],
+    },
+    {
+      id: 'head',
+      width: 30,
+      height: 26,
+      offsetX: 0,
+      offsetY: -22,
+      originX: 0.5,
+      originY: 0.65,
+      zIndex: 40,
+      shapes: [
+        {
+          kind: 'ellipse',
+          cx: 0,
+          cy: 0,
+          rx: 11.5,
+          ry: 9,
+          style: {
+            fill: PALETTE.LIME_GLOW,
+            shade: PALETTE.GOBLIN_GREEN,
+            highlight: PALETTE.MINT_LIGHT,
+          },
+        },
+        {
+          kind: 'circle',
+          cx: -4.2,
+          cy: 0.5,
+          r: 2.3,
+          style: {
+            fill: PALETTE.INK_DARK,
+            highlight: PALETTE.BONE_WHITE,
+            outlineWidth: INNER_OUTLINE_WIDTH,
+          },
+        },
+        {
+          kind: 'circle',
+          cx: 4.2,
+          cy: 0.5,
+          r: 2.3,
+          style: {
+            fill: PALETTE.INK_DARK,
+            highlight: PALETTE.BONE_WHITE,
+            outlineWidth: INNER_OUTLINE_WIDTH,
+          },
+        },
+      ],
+    },
+    {
+      id: 'weapon',
+      width: 14,
+      height: 14,
+      offsetX: 9,
+      offsetY: -12,
+      originX: 0.5,
+      originY: 0.5,
+      zIndex: 45,
+      shapes: [
+        {
+          kind: 'circle',
+          cx: 0,
+          cy: 0,
+          r: 3.5,
+          style: {
+            fill: PALETTE.MINT_LIGHT,
+            shade: PALETTE.LIME_GLOW,
+          },
+        },
+      ],
+    },
+    {
+      id: 'armRight',
+      width: 14,
+      height: 14,
+      offsetX: 12,
+      offsetY: -12,
+      originX: 0.5,
+      originY: 0.5,
+      zIndex: 50,
+      shapes: [
+        {
+          kind: 'circle',
+          cx: 0,
+          cy: 0,
+          r: 4.2,
+          style: {
+            fill: PALETTE.LIME_GLOW,
+            shade: PALETTE.GOBLIN_GREEN,
+            highlight: PALETTE.MINT_LIGHT,
+          },
+        },
+      ],
+    },
+  ],
+};
+
+/**
+ * Biome 1 Split Offspring: Slime Nhỏ (Mini Slime)
+ */
+export const MINI_SLIME_RIG_DEF: EntityRigDef = {
+  id: 'mini_slime',
+  nameVi: 'Slime Nhỏ (Mini Slime)',
+  roleVi: 'Quái Tách Đôi Nhỏ · Biome 1',
+  worldWidth: 24,
+  worldHeight: 24,
+  shadowRx: 9.5,
+  shadowRy: 4.5,
+  parts: [
+    {
+      id: 'backAccessory',
+      width: 18,
+      height: 14,
+      offsetX: 0,
+      offsetY: -8,
+      originX: 0.5,
+      originY: 0.5,
+      zIndex: 10,
+      shapes: [
+        {
+          kind: 'ellipse',
+          cx: 0,
+          cy: 1,
+          rx: 7.5,
+          ry: 5,
+          style: {
+            fill: PALETTE.FOREST_SHADE,
+            shade: PALETTE.MOSS_DARK,
+          },
+        },
+      ],
+    },
+    {
+      id: 'legLeft',
+      width: 10,
+      height: 10,
+      offsetX: -4,
+      offsetY: -3,
+      originX: 0.5,
+      originY: 0.5,
+      zIndex: 20,
+      shapes: [
+        {
+          kind: 'circle',
+          cx: 0,
+          cy: 0,
+          r: 3,
+          style: {
+            fill: PALETTE.GOBLIN_GREEN,
+            shade: PALETTE.FOREST_SHADE,
+          },
+        },
+      ],
+    },
+    {
+      id: 'legRight',
+      width: 10,
+      height: 10,
+      offsetX: 4,
+      offsetY: -3,
+      originX: 0.5,
+      originY: 0.5,
+      zIndex: 21,
+      shapes: [
+        {
+          kind: 'circle',
+          cx: 0,
+          cy: 0,
+          r: 3,
+          style: {
+            fill: PALETTE.GOBLIN_GREEN,
+            shade: PALETTE.FOREST_SHADE,
+          },
+        },
+      ],
+    },
+    {
+      id: 'torso',
+      width: 22,
+      height: 20,
+      offsetX: 0,
+      offsetY: -9,
+      originX: 0.5,
+      originY: 0.5,
+      zIndex: 30,
+      shapes: [
+        {
+          kind: 'roundedRect',
+          x: -8.5,
+          y: -7,
+          w: 17,
+          h: 14,
+          r: 6.5,
+          style: {
+            fill: PALETTE.LIME_GLOW,
+            shade: PALETTE.GOBLIN_GREEN,
+            highlight: PALETTE.MINT_LIGHT,
+          },
+        },
+      ],
+    },
+    {
+      id: 'armLeft',
+      width: 10,
+      height: 10,
+      offsetX: -8,
+      offsetY: -8,
+      originX: 0.5,
+      originY: 0.5,
+      zIndex: 35,
+      shapes: [
+        {
+          kind: 'circle',
+          cx: 0,
+          cy: 0,
+          r: 2.8,
+          style: {
+            fill: PALETTE.MINT_LIGHT,
+            shade: PALETTE.LIME_GLOW,
+          },
+        },
+      ],
+    },
+    {
+      id: 'head',
+      width: 20,
+      height: 18,
+      offsetX: 0,
+      offsetY: -14,
+      originX: 0.5,
+      originY: 0.6,
+      zIndex: 40,
+      shapes: [
+        {
+          kind: 'ellipse',
+          cx: 0,
+          cy: 0,
+          rx: 7.5,
+          ry: 6,
+          style: {
+            fill: PALETTE.MINT_LIGHT,
+            shade: PALETTE.LIME_GLOW,
+            highlight: PALETTE.BONE_WHITE,
+          },
+        },
+        {
+          kind: 'circle',
+          cx: -2.8,
+          cy: 0.5,
+          r: 1.7,
+          style: {
+            fill: PALETTE.INK_DARK,
+            outlineWidth: 0,
+          },
+        },
+        {
+          kind: 'circle',
+          cx: 2.8,
+          cy: 0.5,
+          r: 1.7,
+          style: {
+            fill: PALETTE.INK_DARK,
+            outlineWidth: 0,
+          },
+        },
+      ],
+    },
+    {
+      id: 'weapon',
+      width: 10,
+      height: 10,
+      offsetX: 6,
+      offsetY: -8,
+      originX: 0.5,
+      originY: 0.5,
+      zIndex: 45,
+      shapes: [
+        {
+          kind: 'circle',
+          cx: 0,
+          cy: 0,
+          r: 2.4,
+          style: {
+            fill: PALETTE.LIME_GLOW,
+            shade: PALETTE.GOBLIN_GREEN,
+          },
+        },
+      ],
+    },
+    {
+      id: 'armRight',
+      width: 10,
+      height: 10,
+      offsetX: 8,
+      offsetY: -8,
+      originX: 0.5,
+      originY: 0.5,
+      zIndex: 50,
+      shapes: [
+        {
+          kind: 'circle',
+          cx: 0,
+          cy: 0,
+          r: 2.8,
+          style: {
+            fill: PALETTE.MINT_LIGHT,
+            shade: PALETTE.LIME_GLOW,
+          },
+        },
+      ],
+    },
+  ],
+};
+
+/**
+ * Biome 1 Support Enemy: Pháp Sư Goblin (Goblin Shaman)
+ * Bone skull mask, violet-moss ritual cloak, and glowing emerald totem staff.
+ */
+export const GOBLIN_SHAMAN_RIG_DEF: EntityRigDef = {
+  id: 'goblin_shaman',
+  nameVi: 'Pháp Sư Goblin (Goblin Shaman)',
+  roleVi: 'Hỗ Trợ Hồi Máu · Biome 1',
+  worldWidth: 34,
+  worldHeight: 40,
+  shadowRx: 13,
+  shadowRy: 5.8,
+  parts: [
+    {
+      id: 'backAccessory',
+      width: 30,
+      height: 28,
+      offsetX: -2,
+      offsetY: -15,
+      originX: 0.5,
+      originY: 0.3,
+      zIndex: 10,
+      shapes: [
+        {
+          kind: 'polygon',
+          points: [
+            { x: -9, y: -9 },
+            { x: 9, y: -9 },
+            { x: 12, y: 11 },
+            { x: 0, y: 13 },
+            { x: -12, y: 11 },
+          ],
+          style: {
+            fill: PALETTE.TOXIC_PURPLE,
+            shade: PALETTE.SLATE_DARK,
+            highlight: PALETTE.ELECTRIC_VIOLET,
+          },
+        },
+      ],
+    },
+    {
+      id: 'legLeft',
+      width: 14,
+      height: 14,
+      offsetX: -4.5,
+      offsetY: -4.5,
+      originX: 0.5,
+      originY: 0.25,
+      zIndex: 20,
+      shapes: [
+        {
+          kind: 'roundedRect',
+          x: -4,
+          y: -2.5,
+          w: 8,
+          h: 9,
+          r: 3.5,
+          style: {
+            fill: PALETTE.SLATE_DARK,
+            highlight: PALETTE.SLATE_MID,
+          },
+        },
+      ],
+    },
+    {
+      id: 'legRight',
+      width: 14,
+      height: 14,
+      offsetX: 4.5,
+      offsetY: -4.5,
+      originX: 0.5,
+      originY: 0.25,
+      zIndex: 21,
+      shapes: [
+        {
+          kind: 'roundedRect',
+          x: -4,
+          y: -2.5,
+          w: 8,
+          h: 9,
+          r: 3.5,
+          style: {
+            fill: PALETTE.SLATE_MID,
+            shade: PALETTE.SLATE_DARK,
+          },
+        },
+      ],
+    },
+    {
+      id: 'torso',
+      width: 28,
+      height: 22,
+      offsetX: 0,
+      offsetY: -13,
+      originX: 0.5,
+      originY: 0.55,
+      zIndex: 30,
+      shapes: [
+        {
+          kind: 'roundedRect',
+          x: -10,
+          y: -8,
+          w: 20,
+          h: 16,
+          r: 5.5,
+          style: {
+            fill: PALETTE.FOREST_SHADE,
+            shade: PALETTE.MOSS_DARK,
+            highlight: PALETTE.GOBLIN_GREEN,
+          },
+        },
+        {
+          kind: 'circle',
+          cx: 0,
+          cy: -1,
+          r: 3.6,
+          style: {
+            fill: PALETTE.LIME_GLOW,
+            shade: PALETTE.GOBLIN_GREEN,
+            highlight: PALETTE.MINT_LIGHT,
+            outlineWidth: INNER_OUTLINE_WIDTH,
+          },
+        },
+      ],
+    },
+    {
+      id: 'armLeft',
+      width: 14,
+      height: 14,
+      offsetX: -10.5,
+      offsetY: -13,
+      originX: 0.5,
+      originY: 0.5,
+      zIndex: 35,
+      shapes: [
+        {
+          kind: 'circle',
+          cx: 0,
+          cy: 0,
+          r: 4.2,
+          style: {
+            fill: PALETTE.GOBLIN_GREEN,
+            shade: PALETTE.FOREST_SHADE,
+            highlight: PALETTE.LIME_GLOW,
+          },
+        },
+      ],
+    },
+    {
+      id: 'head',
+      width: 34,
+      height: 32,
+      offsetX: 0,
+      offsetY: -28,
+      originX: 0.5,
+      originY: 0.65,
+      zIndex: 40,
+      shapes: [
+        // Goblin ears
+        {
+          kind: 'polygon',
+          points: [
+            { x: -9, y: -2 },
+            { x: -16, y: -6 },
+            { x: -11, y: 4 },
+          ],
+          style: {
+            fill: PALETTE.GOBLIN_GREEN,
+            shade: PALETTE.FOREST_SHADE,
+          },
+        },
+        {
+          kind: 'polygon',
+          points: [
+            { x: 9, y: -2 },
+            { x: 16, y: -6 },
+            { x: 11, y: 4 },
+          ],
+          style: {
+            fill: PALETTE.GOBLIN_GREEN,
+            shade: PALETTE.FOREST_SHADE,
+          },
+        },
+        // Bone ritual skull mask
+        {
+          kind: 'roundedRect',
+          x: -10.5,
+          y: -10,
+          w: 21,
+          h: 17,
+          r: 7,
+          style: {
+            fill: PALETTE.BONE_WHITE,
+            shade: PALETTE.WARM_STONE,
+            highlight: PALETTE.ICE_WHITE,
+          },
+        },
+        // Glowing purple/lime shaman eyes
+        {
+          kind: 'circle',
+          cx: -4,
+          cy: -1,
+          r: 2.4,
+          style: {
+            fill: PALETTE.LIME_GLOW,
+            highlight: PALETTE.MINT_LIGHT,
+            outlineWidth: INNER_OUTLINE_WIDTH,
+          },
+        },
+        {
+          kind: 'circle',
+          cx: 4,
+          cy: -1,
+          r: 2.4,
+          style: {
+            fill: PALETTE.LIME_GLOW,
+            highlight: PALETTE.MINT_LIGHT,
+            outlineWidth: INNER_OUTLINE_WIDTH,
+          },
+        },
+      ],
+    },
+    {
+      id: 'weapon',
+      width: 38,
+      height: 20,
+      offsetX: 10,
+      offsetY: -14,
+      originX: 0.25,
+      originY: 0.5,
+      zIndex: 45,
+      shapes: [
+        {
+          kind: 'roundedRect',
+          x: -8,
+          y: -2,
+          w: 22,
+          h: 4,
+          r: 2,
+          style: {
+            fill: PALETTE.LEATHER_MID,
+            shade: PALETTE.LEATHER_DARK,
+            highlight: PALETTE.LEATHER_LIGHT,
+          },
+        },
+        {
+          kind: 'circle',
+          cx: 16,
+          cy: 0,
+          r: 5.5,
+          style: {
+            fill: PALETTE.LIME_GLOW,
+            shade: PALETTE.GOBLIN_GREEN,
+            highlight: PALETTE.MINT_LIGHT,
+          },
+        },
+      ],
+    },
+    {
+      id: 'armRight',
+      width: 14,
+      height: 14,
+      offsetX: 10,
+      offsetY: -13,
+      originX: 0.5,
+      originY: 0.5,
+      zIndex: 50,
+      shapes: [
+        {
+          kind: 'circle',
+          cx: 0,
+          cy: 0,
+          r: 4.2,
+          style: {
+            fill: PALETTE.GOBLIN_GREEN,
+            shade: PALETTE.FOREST_SHADE,
+          },
+        },
+      ],
+    },
+  ],
+};
+
+/**
+ * Biome 1 Stationary Turret: Cối Xay Gai Độc (Thorn Turret)
+ * Rooted carnivorous briar blossom firing 6 radial thorns.
+ */
+export const THORN_TURRET_RIG_DEF: EntityRigDef = {
+  id: 'thorn_turret',
+  nameVi: 'Cối Xay Gai Độc (Thorn Turret)',
+  roleVi: 'Ụ Gai Bắn 6 Hướng · Biome 1',
+  worldWidth: 36,
+  worldHeight: 36,
+  shadowRx: 15,
+  shadowRy: 7,
+  parts: [
+    {
+      id: 'backAccessory',
+      width: 34,
+      height: 24,
+      offsetX: 0,
+      offsetY: -8,
+      originX: 0.5,
+      originY: 0.5,
+      zIndex: 10,
+      shapes: [
+        {
+          kind: 'polygon',
+          points: [
+            { x: -14, y: 0 },
+            { x: -7, y: -9 },
+            { x: 7, y: -9 },
+            { x: 14, y: 0 },
+            { x: 8, y: 9 },
+            { x: -8, y: 9 },
+          ],
+          style: {
+            fill: PALETTE.MOSS_DARK,
+            shade: PALETTE.INK_DARK,
+            highlight: PALETTE.FOREST_SHADE,
+          },
+        },
+      ],
+    },
+    {
+      id: 'legLeft',
+      width: 14,
+      height: 12,
+      offsetX: -9,
+      offsetY: -4,
+      originX: 0.5,
+      originY: 0.5,
+      zIndex: 20,
+      shapes: [
+        {
+          kind: 'polygon',
+          points: [
+            { x: -6, y: 2 },
+            { x: 0, y: -4 },
+            { x: 5, y: 2 },
+          ],
+          style: {
+            fill: PALETTE.FOREST_SHADE,
+            shade: PALETTE.MOSS_DARK,
+            highlight: PALETTE.GOBLIN_GREEN,
+          },
+        },
+      ],
+    },
+    {
+      id: 'legRight',
+      width: 14,
+      height: 12,
+      offsetX: 9,
+      offsetY: -4,
+      originX: 0.5,
+      originY: 0.5,
+      zIndex: 21,
+      shapes: [
+        {
+          kind: 'polygon',
+          points: [
+            { x: -5, y: 2 },
+            { x: 0, y: -4 },
+            { x: 6, y: 2 },
+          ],
+          style: {
+            fill: PALETTE.FOREST_SHADE,
+            shade: PALETTE.MOSS_DARK,
+            highlight: PALETTE.GOBLIN_GREEN,
+          },
+        },
+      ],
+    },
+    {
+      id: 'torso',
+      width: 30,
+      height: 26,
+      offsetX: 0,
+      offsetY: -13,
+      originX: 0.5,
+      originY: 0.5,
+      zIndex: 30,
+      shapes: [
+        {
+          kind: 'circle',
+          cx: 0,
+          cy: 0,
+          r: 11,
+          style: {
+            fill: PALETTE.FOREST_SHADE,
+            shade: PALETTE.MOSS_DARK,
+            highlight: PALETTE.GOBLIN_GREEN,
+          },
+        },
+      ],
+    },
+    {
+      id: 'armLeft',
+      width: 16,
+      height: 16,
+      offsetX: -12,
+      offsetY: -14,
+      originX: 0.5,
+      originY: 0.5,
+      zIndex: 35,
+      shapes: [
+        {
+          kind: 'polygon',
+          points: [
+            { x: 4, y: -4 },
+            { x: -7, y: 0 },
+            { x: 4, y: 4 },
+          ],
+          style: {
+            fill: PALETTE.BONE_WHITE,
+            shade: PALETTE.WARM_STONE,
+          },
+        },
+      ],
+    },
+    {
+      id: 'head',
+      width: 32,
+      height: 32,
+      offsetX: 0,
+      offsetY: -20,
+      originX: 0.5,
+      originY: 0.5,
+      zIndex: 40,
+      shapes: [
+        {
+          kind: 'circle',
+          cx: 0,
+          cy: 0,
+          r: 10.5,
+          style: {
+            fill: PALETTE.TOXIC_PURPLE,
+            shade: PALETTE.RUBY_DARK,
+            highlight: PALETTE.ELECTRIC_VIOLET,
+          },
+        },
+        {
+          kind: 'circle',
+          cx: 0,
+          cy: 0,
+          r: 5.2,
+          style: {
+            fill: PALETTE.LIME_GLOW,
+            shade: PALETTE.GOBLIN_GREEN,
+            highlight: PALETTE.SOLAR_GOLD,
+            outlineWidth: INNER_OUTLINE_WIDTH,
+          },
+        },
+      ],
+    },
+    {
+      id: 'weapon',
+      width: 24,
+      height: 16,
+      offsetX: 9,
+      offsetY: -16,
+      originX: 0.3,
+      originY: 0.5,
+      zIndex: 45,
+      shapes: [
+        {
+          kind: 'polygon',
+          points: [
+            { x: -3, y: -4 },
+            { x: 11, y: 0 },
+            { x: -3, y: 4 },
+          ],
+          style: {
+            fill: PALETTE.LIME_GLOW,
+            shade: PALETTE.GOBLIN_GREEN,
+            highlight: PALETTE.BONE_WHITE,
+          },
+        },
+      ],
+    },
+    {
+      id: 'armRight',
+      width: 16,
+      height: 16,
+      offsetX: 12,
+      offsetY: -14,
+      originX: 0.5,
+      originY: 0.5,
+      zIndex: 50,
+      shapes: [
+        {
+          kind: 'polygon',
+          points: [
+            { x: -4, y: -4 },
+            { x: 7, y: 0 },
+            { x: -4, y: 4 },
+          ],
+          style: {
+            fill: PALETTE.BONE_WHITE,
+            shade: PALETTE.WARM_STONE,
+          },
+        },
+      ],
+    },
+  ],
+};
+
+/**
+ * Biome 1 Boss: Mục Vương Nấm Độc (Spore King)
+ * Massive 64x68 Boss rig with 3.5u #0B090E (PALETTE.INK_DEEP) outer outline per ART_GUIDE.md,
+ * bioluminescent toxic-purple & crimson mushroom crown, root mantle, and Spore Scepter.
+ */
+const BOSS_OUTLINE_WIDTH = 3.5;
+
+export const SPORE_KING_RIG_DEF: EntityRigDef = {
+  id: 'spore_king',
+  nameVi: 'Mục Vương Nấm Độc (Spore King)',
+  roleVi: 'Trùm Cuối Biome 1 · Rừng Cổ Mục Nát',
+  worldWidth: 64,
+  worldHeight: 68,
+  shadowRx: 26,
+  shadowRy: 11,
+  parts: [
+    {
+      id: 'backAccessory',
+      width: 56,
+      height: 44,
+      offsetX: 0,
+      offsetY: -22,
+      originX: 0.5,
+      originY: 0.4,
+      zIndex: 10,
+      shapes: [
+        {
+          kind: 'polygon',
+          points: [
+            { x: -20, y: -14 },
+            { x: 20, y: -14 },
+            { x: 25, y: 16 },
+            { x: 0, y: 20 },
+            { x: -25, y: 16 },
+          ],
+          style: {
+            fill: PALETTE.MOSS_DARK,
+            shade: PALETTE.INK_DARK,
+            highlight: PALETTE.FOREST_SHADE,
+            outlineColor: PALETTE.INK_DEEP,
+            outlineWidth: BOSS_OUTLINE_WIDTH,
+          },
+        },
+      ],
+    },
+    {
+      id: 'legLeft',
+      width: 22,
+      height: 20,
+      offsetX: -10,
+      offsetY: -6,
+      originX: 0.5,
+      originY: 0.3,
+      zIndex: 20,
+      shapes: [
+        {
+          kind: 'roundedRect',
+          x: -7,
+          y: -5,
+          w: 14,
+          h: 13,
+          r: 5,
+          style: {
+            fill: PALETTE.FOREST_SHADE,
+            shade: PALETTE.MOSS_DARK,
+            highlight: PALETTE.GOBLIN_GREEN,
+            outlineColor: PALETTE.INK_DEEP,
+            outlineWidth: BOSS_OUTLINE_WIDTH,
+          },
+        },
+      ],
+    },
+    {
+      id: 'legRight',
+      width: 22,
+      height: 20,
+      offsetX: 10,
+      offsetY: -6,
+      originX: 0.5,
+      originY: 0.3,
+      zIndex: 21,
+      shapes: [
+        {
+          kind: 'roundedRect',
+          x: -7,
+          y: -5,
+          w: 14,
+          h: 13,
+          r: 5,
+          style: {
+            fill: PALETTE.GOBLIN_GREEN,
+            shade: PALETTE.FOREST_SHADE,
+            highlight: PALETTE.LIME_GLOW,
+            outlineColor: PALETTE.INK_DEEP,
+            outlineWidth: BOSS_OUTLINE_WIDTH,
+          },
+        },
+      ],
+    },
+    {
+      id: 'torso',
+      width: 52,
+      height: 40,
+      offsetX: 0,
+      offsetY: -20,
+      originX: 0.5,
+      originY: 0.55,
+      zIndex: 30,
+      shapes: [
+        {
+          kind: 'roundedRect',
+          x: -20,
+          y: -15,
+          w: 40,
+          h: 30,
+          r: 11,
+          style: {
+            fill: PALETTE.FOREST_SHADE,
+            shade: PALETTE.MOSS_DARK,
+            highlight: PALETTE.GOBLIN_GREEN,
+            outlineColor: PALETTE.INK_DEEP,
+            outlineWidth: BOSS_OUTLINE_WIDTH,
+          },
+        },
+        // Glowing toxic heart core on chest
+        {
+          kind: 'polygon',
+          points: [
+            { x: 0, y: -9 },
+            { x: 8, y: 0 },
+            { x: 0, y: 9 },
+            { x: -8, y: 0 },
+          ],
+          style: {
+            fill: PALETTE.LIME_GLOW,
+            shade: PALETTE.GOBLIN_GREEN,
+            highlight: PALETTE.MINT_LIGHT,
+            outlineColor: PALETTE.INK_DEEP,
+            outlineWidth: INNER_OUTLINE_WIDTH,
+          },
+        },
+      ],
+    },
+    {
+      id: 'armLeft',
+      width: 24,
+      height: 24,
+      offsetX: -21,
+      offsetY: -20,
+      originX: 0.5,
+      originY: 0.5,
+      zIndex: 35,
+      shapes: [
+        {
+          kind: 'circle',
+          cx: 0,
+          cy: 0,
+          r: 8,
+          style: {
+            fill: PALETTE.TOXIC_PURPLE,
+            shade: PALETTE.SLATE_DARK,
+            highlight: PALETTE.ELECTRIC_VIOLET,
+            outlineColor: PALETTE.INK_DEEP,
+            outlineWidth: BOSS_OUTLINE_WIDTH,
+          },
+        },
+      ],
+    },
+    {
+      id: 'head',
+      width: 60,
+      height: 48,
+      offsetX: 0,
+      offsetY: -40,
+      originX: 0.5,
+      originY: 0.65,
+      zIndex: 40,
+      shapes: [
+        // Royal Spore Cap Dome
+        {
+          kind: 'polygon',
+          points: [
+            { x: -26, y: 4 },
+            { x: -20, y: -12 },
+            { x: 0, y: -19 },
+            { x: 20, y: -12 },
+            { x: 26, y: 4 },
+            { x: 14, y: 9 },
+            { x: -14, y: 9 },
+          ],
+          style: {
+            fill: PALETTE.TOXIC_PURPLE,
+            shade: PALETTE.RUBY_DARK,
+            highlight: PALETTE.ELECTRIC_VIOLET,
+            outlineColor: PALETTE.INK_DEEP,
+            outlineWidth: BOSS_OUTLINE_WIDTH,
+          },
+        },
+        // Golden King Crown atop the Mushroom Cap
+        {
+          kind: 'polygon',
+          points: [
+            { x: -11, y: -14 },
+            { x: -8, y: -22 },
+            { x: -3, y: -17 },
+            { x: 0, y: -24 },
+            { x: 3, y: -17 },
+            { x: 8, y: -22 },
+            { x: 11, y: -14 },
+          ],
+          style: {
+            fill: PALETTE.SOLAR_GOLD,
+            shade: PALETTE.BRASS_CORE,
+            highlight: PALETTE.VOLT_YELLOW,
+            outlineColor: PALETTE.INK_DEEP,
+            outlineWidth: 2.5,
+          },
+        },
+        // Glowing Spore pustules on cap
+        {
+          kind: 'circle',
+          cx: -13,
+          cy: -4,
+          r: 3.8,
+          style: {
+            fill: PALETTE.LIME_GLOW,
+            highlight: PALETTE.MINT_LIGHT,
+            outlineColor: PALETTE.INK_DEEP,
+            outlineWidth: INNER_OUTLINE_WIDTH,
+          },
+        },
+        {
+          kind: 'circle',
+          cx: 13,
+          cy: -4,
+          r: 3.8,
+          style: {
+            fill: PALETTE.LIME_GLOW,
+            highlight: PALETTE.MINT_LIGHT,
+            outlineColor: PALETTE.INK_DEEP,
+            outlineWidth: INNER_OUTLINE_WIDTH,
+          },
+        },
+        // Fierce glowing eyes beneath cap shadow
+        {
+          kind: 'circle',
+          cx: -6.5,
+          cy: 5,
+          r: 3.0,
+          style: {
+            fill: PALETTE.VOLT_YELLOW,
+            highlight: PALETTE.BONE_WHITE,
+            outlineColor: PALETTE.INK_DEEP,
+            outlineWidth: INNER_OUTLINE_WIDTH,
+          },
+        },
+        {
+          kind: 'circle',
+          cx: 6.5,
+          cy: 5,
+          r: 3.0,
+          style: {
+            fill: PALETTE.VOLT_YELLOW,
+            highlight: PALETTE.BONE_WHITE,
+            outlineColor: PALETTE.INK_DEEP,
+            outlineWidth: INNER_OUTLINE_WIDTH,
+          },
+        },
+      ],
+    },
+    {
+      id: 'weapon',
+      width: 48,
+      height: 28,
+      offsetX: 18,
+      offsetY: -20,
+      originX: 0.25,
+      originY: 0.5,
+      zIndex: 45,
+      shapes: [
+        {
+          kind: 'roundedRect',
+          x: -10,
+          y: -3,
+          w: 28,
+          h: 6,
+          r: 2.5,
+          style: {
+            fill: PALETTE.LEATHER_DARK,
+            shade: PALETTE.INK_DARK,
+            highlight: PALETTE.LEATHER_MID,
+            outlineColor: PALETTE.INK_DEEP,
+            outlineWidth: 2.5,
+          },
+        },
+        {
+          kind: 'circle',
+          cx: 21,
+          cy: 0,
+          r: 7.5,
+          style: {
+            fill: PALETTE.LIME_GLOW,
+            shade: PALETTE.TOXIC_PURPLE,
+            highlight: PALETTE.MINT_LIGHT,
+            outlineColor: PALETTE.INK_DEEP,
+            outlineWidth: 2.5,
+          },
+        },
+      ],
+    },
+    {
+      id: 'armRight',
+      width: 24,
+      height: 24,
+      offsetX: 21,
+      offsetY: -20,
+      originX: 0.5,
+      originY: 0.5,
+      zIndex: 50,
+      shapes: [
+        {
+          kind: 'circle',
+          cx: 0,
+          cy: 0,
+          r: 8,
+          style: {
+            fill: PALETTE.TOXIC_PURPLE,
+            shade: PALETTE.SLATE_DARK,
+            highlight: PALETTE.ELECTRIC_VIOLET,
+            outlineColor: PALETTE.INK_DEEP,
+            outlineWidth: BOSS_OUTLINE_WIDTH,
+          },
+        },
+      ],
+    },
+  ],
+};
+
+/**
+ * Sanctuary NPC: Thương Nhân Hắc Ám (Merchant)
+ */
+export const MERCHANT_RIG_DEF: EntityRigDef = {
+  id: 'merchant',
+  nameVi: 'Thương Nhân Hắc Ám (Merchant)',
+  roleVi: 'Thương Nhân Cổ Ngữ · Khu Nghỉ Ngơi',
+  worldWidth: 36,
+  worldHeight: 42,
+  shadowRx: 15,
+  shadowRy: 6.5,
+  parts: [
+    {
+      id: 'backAccessory',
+      width: 32,
+      height: 28,
+      offsetX: -4,
+      offsetY: -18,
+      originX: 0.5,
+      originY: 0.5,
+      zIndex: 10,
+      shapes: [
+        // Giant treasure pack on back
+        {
+          kind: 'roundedRect',
+          x: -12,
+          y: -11,
+          w: 24,
+          h: 22,
+          r: 6,
+          style: {
+            fill: PALETTE.LEATHER_MID,
+            shade: PALETTE.LEATHER_DARK,
+            highlight: PALETTE.SOLAR_GOLD,
+          },
+        },
+      ],
+    },
+    {
+      id: 'legLeft',
+      width: 14,
+      height: 14,
+      offsetX: -5,
+      offsetY: -5,
+      originX: 0.5,
+      originY: 0.25,
+      zIndex: 20,
+      shapes: [
+        {
+          kind: 'roundedRect',
+          x: -4,
+          y: -3,
+          w: 8,
+          h: 9,
+          r: 3,
+          style: {
+            fill: PALETTE.SLATE_DARK,
+            highlight: PALETTE.SLATE_MID,
+          },
+        },
+      ],
+    },
+    {
+      id: 'legRight',
+      width: 14,
+      height: 14,
+      offsetX: 5,
+      offsetY: -5,
+      originX: 0.5,
+      originY: 0.25,
+      zIndex: 21,
+      shapes: [
+        {
+          kind: 'roundedRect',
+          x: -4,
+          y: -3,
+          w: 8,
+          h: 9,
+          r: 3,
+          style: {
+            fill: PALETTE.SLATE_DARK,
+            highlight: PALETTE.SLATE_MID,
+          },
+        },
+      ],
+    },
+    {
+      id: 'torso',
+      width: 30,
+      height: 24,
+      offsetX: 0,
+      offsetY: -14,
+      originX: 0.5,
+      originY: 0.55,
+      zIndex: 30,
+      shapes: [
+        {
+          kind: 'roundedRect',
+          x: -11,
+          y: -9,
+          w: 22,
+          h: 18,
+          r: 6,
+          style: {
+            fill: PALETTE.SLATE_MID,
+            shade: PALETTE.SLATE_DARK,
+            highlight: PALETTE.ELECTRIC_VIOLET,
+          },
+        },
+        {
+          kind: 'circle',
+          cx: 0,
+          cy: 0,
+          r: 3.5,
+          style: {
+            fill: PALETTE.SOLAR_GOLD,
+            shade: PALETTE.BRASS_CORE,
+            highlight: PALETTE.VOLT_YELLOW,
+            outlineWidth: INNER_OUTLINE_WIDTH,
+          },
+        },
+      ],
+    },
+    {
+      id: 'armLeft',
+      width: 14,
+      height: 14,
+      offsetX: -11,
+      offsetY: -14,
+      originX: 0.5,
+      originY: 0.5,
+      zIndex: 35,
+      shapes: [
+        {
+          kind: 'circle',
+          cx: 0,
+          cy: 0,
+          r: 4.2,
+          style: {
+            fill: PALETTE.SLATE_MID,
+            shade: PALETTE.SLATE_DARK,
+          },
+        },
+      ],
+    },
+    {
+      id: 'head',
+      width: 32,
+      height: 32,
+      offsetX: 0,
+      offsetY: -28,
+      originX: 0.5,
+      originY: 0.65,
+      zIndex: 40,
+      shapes: [
+        {
+          kind: 'polygon',
+          points: [
+            { x: -12, y: 7 },
+            { x: -10, y: -9 },
+            { x: 0, y: -14 },
+            { x: 10, y: -9 },
+            { x: 12, y: 7 },
+          ],
+          style: {
+            fill: PALETTE.SLATE_MID,
+            shade: PALETTE.SLATE_DARK,
+            highlight: PALETTE.ELECTRIC_VIOLET,
+          },
+        },
+        {
+          kind: 'circle',
+          cx: -3.5,
+          cy: 0,
+          r: 2.2,
+          style: {
+            fill: PALETTE.SOLAR_GOLD,
+            highlight: PALETTE.BONE_WHITE,
+            outlineWidth: 0,
+          },
+        },
+        {
+          kind: 'circle',
+          cx: 3.5,
+          cy: 0,
+          r: 2.2,
+          style: {
+            fill: PALETTE.SOLAR_GOLD,
+            highlight: PALETTE.BONE_WHITE,
+            outlineWidth: 0,
+          },
+        },
+      ],
+    },
+    {
+      id: 'weapon',
+      width: 20,
+      height: 22,
+      offsetX: 11,
+      offsetY: -13,
+      originX: 0.5,
+      originY: 0.5,
+      zIndex: 45,
+      shapes: [
+        // Golden merchant lantern
+        {
+          kind: 'roundedRect',
+          x: -4.5,
+          y: -5,
+          w: 9,
+          h: 11,
+          r: 2.5,
+          style: {
+            fill: PALETTE.SOLAR_GOLD,
+            shade: PALETTE.BRASS_CORE,
+            highlight: PALETTE.BONE_WHITE,
+          },
+        },
+      ],
+    },
+    {
+      id: 'armRight',
+      width: 14,
+      height: 14,
+      offsetX: 11,
+      offsetY: -14,
+      originX: 0.5,
+      originY: 0.5,
+      zIndex: 50,
+      shapes: [
+        {
+          kind: 'circle',
+          cx: 0,
+          cy: 0,
+          r: 4.2,
+          style: {
+            fill: PALETTE.SLATE_MID,
+            shade: PALETTE.SLATE_DARK,
+          },
+        },
+      ],
+    },
+  ],
+};
+
 export interface WeaponVectorDef {
   id: string;
   width: number;
@@ -1737,7 +3297,6 @@ export const WEAPON_VECTOR_DEFS: Record<string, WeaponVectorDef> = {
     originX: 0.28,
     originY: 0.5,
     shapes: [
-      // Leather grip
       {
         kind: 'roundedRect',
         x: -6,
@@ -1751,7 +3310,6 @@ export const WEAPON_VECTOR_DEFS: Record<string, WeaponVectorDef> = {
           highlight: PALETTE.LEATHER_LIGHT,
         },
       },
-      // Heavy steel barrel
       {
         kind: 'roundedRect',
         x: -5,
@@ -1765,7 +3323,6 @@ export const WEAPON_VECTOR_DEFS: Record<string, WeaponVectorDef> = {
           highlight: PALETTE.SILVER_BRIGHT,
         },
       },
-      // Brass muzzle ring
       {
         kind: 'roundedRect',
         x: 12,
@@ -1780,6 +3337,42 @@ export const WEAPON_VECTOR_DEFS: Record<string, WeaponVectorDef> = {
       },
     ],
   },
+  hunter_crossbow: {
+    id: 'hunter_crossbow',
+    width: 40,
+    height: 26,
+    originX: 0.28,
+    originY: 0.5,
+    shapes: [
+      {
+        kind: 'roundedRect',
+        x: -8,
+        y: -3,
+        w: 22,
+        h: 6,
+        r: 2,
+        style: {
+          fill: PALETTE.LEATHER_MID,
+          shade: PALETTE.LEATHER_DARK,
+          highlight: PALETTE.LEATHER_LIGHT,
+        },
+      },
+      {
+        kind: 'polygon',
+        points: [
+          { x: 8, y: -11 },
+          { x: 16, y: 0 },
+          { x: 8, y: 11 },
+          { x: 12, y: 0 },
+        ],
+        style: {
+          fill: PALETTE.STEEL_LIGHT,
+          shade: PALETTE.STEEL_DARK,
+          highlight: PALETTE.SILVER_BRIGHT,
+        },
+      },
+    ],
+  },
   scrap_shotgun: {
     id: 'scrap_shotgun',
     width: 42,
@@ -1787,7 +3380,6 @@ export const WEAPON_VECTOR_DEFS: Record<string, WeaponVectorDef> = {
     originX: 0.26,
     originY: 0.5,
     shapes: [
-      // Wooden stock
       {
         kind: 'polygon',
         points: [
@@ -1802,7 +3394,6 @@ export const WEAPON_VECTOR_DEFS: Record<string, WeaponVectorDef> = {
           highlight: PALETTE.LEATHER_LIGHT,
         },
       },
-      // Wide double barrel
       {
         kind: 'roundedRect',
         x: -2,
@@ -1816,7 +3407,6 @@ export const WEAPON_VECTOR_DEFS: Record<string, WeaponVectorDef> = {
           highlight: PALETTE.STEEL_LIGHT,
         },
       },
-      // Flared crimson/brass blunderbuss muzzle
       {
         kind: 'polygon',
         points: [
@@ -1840,7 +3430,6 @@ export const WEAPON_VECTOR_DEFS: Record<string, WeaponVectorDef> = {
     originX: 0.28,
     originY: 0.5,
     shapes: [
-      // Forward magazine
       {
         kind: 'roundedRect',
         x: 4,
@@ -1853,7 +3442,6 @@ export const WEAPON_VECTOR_DEFS: Record<string, WeaponVectorDef> = {
           shade: PALETTE.SLATE_DARK,
         },
       },
-      // Compact SMG receiver
       {
         kind: 'roundedRect',
         x: -6,
@@ -1867,7 +3455,6 @@ export const WEAPON_VECTOR_DEFS: Record<string, WeaponVectorDef> = {
           highlight: PALETTE.LIME_GLOW,
         },
       },
-      // Rapid barrel tip
       {
         kind: 'roundedRect',
         x: 15,
@@ -1878,6 +3465,41 @@ export const WEAPON_VECTOR_DEFS: Record<string, WeaponVectorDef> = {
         style: {
           fill: PALETTE.SILVER_BRIGHT,
           shade: PALETTE.STEEL_LIGHT,
+        },
+      },
+    ],
+  },
+  rivet_gun: {
+    id: 'rivet_gun',
+    width: 38,
+    height: 22,
+    originX: 0.28,
+    originY: 0.5,
+    shapes: [
+      {
+        kind: 'roundedRect',
+        x: -7,
+        y: -5.5,
+        w: 22,
+        h: 10,
+        r: 3,
+        style: {
+          fill: PALETTE.BRASS_CORE,
+          shade: PALETTE.BRONZE_SHADE,
+          highlight: PALETTE.SOLAR_GOLD,
+        },
+      },
+      {
+        kind: 'roundedRect',
+        x: 13,
+        y: -3.5,
+        w: 8,
+        h: 6,
+        r: 2,
+        style: {
+          fill: PALETTE.STEEL_LIGHT,
+          shade: PALETTE.STEEL_DARK,
+          highlight: PALETTE.SILVER_BRIGHT,
         },
       },
     ],
@@ -2019,6 +3641,147 @@ export const WEAPON_VECTOR_DEFS: Record<string, WeaponVectorDef> = {
       },
     ],
   },
+  venom_smg: {
+    id: 'venom_smg',
+    width: 40,
+    height: 22,
+    originX: 0.28,
+    originY: 0.5,
+    shapes: [
+      {
+        kind: 'roundedRect',
+        x: -7,
+        y: -5,
+        w: 23,
+        h: 8.5,
+        r: 3,
+        style: {
+          fill: PALETTE.TOXIC_PURPLE,
+          shade: PALETTE.SLATE_DARK,
+          highlight: PALETTE.ELECTRIC_VIOLET,
+        },
+      },
+      {
+        kind: 'roundedRect',
+        x: 14,
+        y: -3.5,
+        w: 8,
+        h: 5.5,
+        r: 2,
+        style: {
+          fill: PALETTE.LIME_GLOW,
+          shade: PALETTE.GOBLIN_GREEN,
+          highlight: PALETTE.MINT_LIGHT,
+        },
+      },
+    ],
+  },
+  dragon_breath_shotgun: {
+    id: 'dragon_breath_shotgun',
+    width: 44,
+    height: 24,
+    originX: 0.26,
+    originY: 0.5,
+    shapes: [
+      {
+        kind: 'roundedRect',
+        x: -9,
+        y: -5.5,
+        w: 25,
+        h: 10,
+        r: 3,
+        style: {
+          fill: PALETTE.RUBY_CORE,
+          shade: PALETTE.RUBY_DARK,
+          highlight: PALETTE.CRIMSON_BRIGHT,
+        },
+      },
+      {
+        kind: 'polygon',
+        points: [
+          { x: 15, y: -7 },
+          { x: 25, y: -9 },
+          { x: 25, y: 9 },
+          { x: 15, y: 7 },
+        ],
+        style: {
+          fill: PALETTE.FLAME_ORANGE,
+          shade: PALETTE.MAGMA_RED,
+          highlight: PALETTE.SOLAR_GOLD,
+        },
+      },
+    ],
+  },
+  emerald_cleaver: {
+    id: 'emerald_cleaver',
+    width: 48,
+    height: 24,
+    originX: 0.22,
+    originY: 0.5,
+    shapes: [
+      {
+        kind: 'polygon',
+        points: [
+          { x: -3, y: -5.5 },
+          { x: 24, y: -7.5 },
+          { x: 31, y: 0 },
+          { x: 22, y: 6.5 },
+          { x: -3, y: 4.5 },
+        ],
+        style: {
+          fill: PALETTE.LIME_GLOW,
+          shade: PALETTE.GOBLIN_GREEN,
+          highlight: PALETTE.MINT_LIGHT,
+        },
+      },
+      {
+        kind: 'roundedRect',
+        x: -7,
+        y: -7,
+        w: 5,
+        h: 14,
+        r: 2,
+        style: {
+          fill: PALETTE.SOLAR_GOLD,
+          shade: PALETTE.BRASS_CORE,
+          highlight: PALETTE.VOLT_YELLOW,
+        },
+      },
+    ],
+  },
+  solar_archon_staff: {
+    id: 'solar_archon_staff',
+    width: 46,
+    height: 24,
+    originX: 0.24,
+    originY: 0.5,
+    shapes: [
+      {
+        kind: 'roundedRect',
+        x: -11,
+        y: -2.4,
+        w: 27,
+        h: 4.8,
+        r: 2,
+        style: {
+          fill: PALETTE.SOLAR_GOLD,
+          shade: PALETTE.BRASS_CORE,
+          highlight: PALETTE.VOLT_YELLOW,
+        },
+      },
+      {
+        kind: 'circle',
+        cx: 19,
+        cy: 0,
+        r: 6.5,
+        style: {
+          fill: PALETTE.FLAME_ORANGE,
+          shade: PALETTE.RUBY_CORE,
+          highlight: PALETTE.BONE_WHITE,
+        },
+      },
+    ],
+  },
 };
 
 export const RIG_DEFS_BY_ID: Record<string, EntityRigDef> = {
@@ -2026,6 +3789,12 @@ export const RIG_DEFS_BY_ID: Record<string, EntityRigDef> = {
   goblin_shooter: GOBLIN_SHOOTER_RIG_DEF,
   wild_boar: WILD_BOAR_RIG_DEF,
   spore_bomber: SPORE_BOMBER_RIG_DEF,
+  green_slime: GREEN_SLIME_RIG_DEF,
+  mini_slime: MINI_SLIME_RIG_DEF,
+  goblin_shaman: GOBLIN_SHAMAN_RIG_DEF,
+  thorn_turret: THORN_TURRET_RIG_DEF,
+  spore_king: SPORE_KING_RIG_DEF,
+  merchant: MERCHANT_RIG_DEF,
   training_dummy: TRAINING_DUMMY_RIG_DEF,
 };
 
@@ -2034,6 +3803,13 @@ export const ALL_SAMPLE_RIGS: readonly EntityRigDef[] = [
   GOBLIN_SHOOTER_RIG_DEF,
   WILD_BOAR_RIG_DEF,
   SPORE_BOMBER_RIG_DEF,
+  GREEN_SLIME_RIG_DEF,
+  MINI_SLIME_RIG_DEF,
+  GOBLIN_SHAMAN_RIG_DEF,
+  THORN_TURRET_RIG_DEF,
+  SPORE_KING_RIG_DEF,
+  MERCHANT_RIG_DEF,
   TRAINING_DUMMY_RIG_DEF,
 ];
+
 

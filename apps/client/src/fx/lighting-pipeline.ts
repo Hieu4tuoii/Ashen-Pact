@@ -38,7 +38,8 @@ void main() {
   // 1. Subtle Chromatic Aberration on heavy hit / trauma (single lookup fast path when chroma == 0)
   vec3 color;
   if (uChromaAmount > 0.001) {
-    vec2 caOffset = centered * uChromaAmount * 0.012;
+    float edgeMask = smoothstep(0.24, 0.62, dist);
+    vec2 caOffset = centered * uChromaAmount * edgeMask * 0.0025;
     float r = texture2D(uMainSampler, clamp(uv + caOffset, 0.0, 1.0)).r;
     float g = texture2D(uMainSampler, uv).g;
     float b = texture2D(uMainSampler, clamp(uv - caOffset, 0.0, 1.0)).b;
@@ -305,7 +306,11 @@ export class LightingPipeline {
       }
     }
 
-    // 2. Render Dynamic Lightmap into RenderTexture
+    // 2. Render Dynamic Lightmap into RenderTexture (amortized every 2nd frame during 600+ bullet swarm)
+    if (isHeavySwarm && (this.frameCounter & 1) === 1 && this.activeLightCount >= 30) {
+      return;
+    }
+
     const ambientColor = BIOME_AMBIENT_COLORS[this.biome];
     const lmScale = this.currentLightmapScale;
     const maxLights = budget.tier === 'high' ? 48 : budget.tier === 'medium' ? 28 : 12;

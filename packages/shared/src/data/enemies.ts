@@ -1,4 +1,4 @@
-import type { EnemyStatsDef } from './types.js';
+import type { BuffDef, EliteModifier, EnemyStatsDef } from './types.js';
 
 export const ENEMIES: Record<string, EnemyStatsDef> = {
   goblin_shooter: {
@@ -26,6 +26,19 @@ export const ENEMIES: Record<string, EnemyStatsDef> = {
     radius: 14,
     telegraphSec: 0.4,
     attackCooldownSec: 1.4,
+  },
+  mini_slime: {
+    id: 'mini_slime',
+    nameVi: 'Slime Con',
+    nameEn: 'Mini Slime',
+    biome: 1,
+    role: 'splitter',
+    hp: 10,
+    moveSpeed: 135,
+    damage: 1,
+    radius: 10,
+    telegraphSec: 0.35,
+    attackCooldownSec: 1.5,
   },
   spore_bomber: {
     id: 'spore_bomber',
@@ -79,4 +92,117 @@ export const ENEMIES: Record<string, EnemyStatsDef> = {
     telegraphSec: 0.55,
     attackCooldownSec: 2.8,
   },
+  spore_king: {
+    id: 'spore_king',
+    nameVi: 'Mục Vương Nấm Độc',
+    nameEn: 'Spore King',
+    subtitleVi: 'Chúa Tể Rừng Cổ Mục Nát',
+    biome: 1,
+    role: 'boss',
+    hp: 420,
+    moveSpeed: 92,
+    damage: 2,
+    radius: 34,
+    telegraphSec: 0.75,
+    attackCooldownSec: 2.1,
+    isBoss: true,
+  },
 };
+
+export const BIOME1_COMBAT_ENEMIES = [
+  'goblin_shooter',
+  'green_slime',
+  'spore_bomber',
+  'wild_boar',
+  'goblin_shaman',
+  'thorn_turret',
+] as const;
+
+export type Biome1EnemyId = (typeof BIOME1_COMBAT_ENEMIES)[number] | 'mini_slime' | 'spore_king';
+
+export const ELITE_MODIFIERS: readonly EliteModifier[] = [
+  'fast',
+  'shield',
+  'explosive_death',
+  'regen',
+] as const;
+
+export const ELITE_MODIFIER_LABELS_VI: Record<EliteModifier, string> = {
+  fast: 'Tinh Anh · Cuồng Tốc',
+  shield: 'Tinh Anh · Khiên Chắn',
+  explosive_death: 'Tinh Anh · Nổ Tử Vong',
+  regen: 'Tinh Anh · Tự Tái Tạo',
+};
+
+export const FLOOR_BUFFS: Record<string, BuffDef> = {
+  vitality_surge: {
+    id: 'vitality_surge',
+    nameVi: 'Trái Tim Cổ Thụ',
+    nameEn: 'Ancient Heart',
+    descriptionVi: '+3 HP tối đa và hồi phục toàn bộ HP ngay lập tức.',
+    category: 'general',
+    accentColor: '#E84545',
+  },
+  iron_bastion: {
+    id: 'iron_bastion',
+    nameVi: 'Giáp Thép Nguyên Bản',
+    nameEn: 'Primeval Steel Armor',
+    descriptionVi: '+2 Giáp tối đa và giảm 0.5s thời gian chờ hồi Giáp.',
+    category: 'general',
+    accentColor: '#8B97B5',
+  },
+  arcane_wellspring: {
+    id: 'arcane_wellspring',
+    nameVi: 'Suối Nguồn Năng Lượng',
+    nameEn: 'Arcane Wellspring',
+    descriptionVi: '+60 Năng lượng tối đa và tăng 50% tốc độ tự hồi Năng lượng.',
+    category: 'general',
+    accentColor: '#3B82F6',
+  },
+  eagle_precision: {
+    id: 'eagle_precision',
+    nameVi: 'Nhãn Quan Sắc Bén',
+    nameEn: 'Razor Sight',
+    descriptionVi: '+18% Tỉ lệ chí mạng và +20% Sát thương vũ khí.',
+    category: 'general',
+    accentColor: '#FACC15',
+  },
+  gale_reflex: {
+    id: 'gale_reflex',
+    nameVi: 'Cuồng Phong Trợ Lực',
+    nameEn: 'Gale Reflex',
+    descriptionVi: '+20% Tốc độ di chuyển và +22% Tốc độ bắn.',
+    category: 'general',
+    accentColor: '#22D3EE',
+  },
+  ricochet_mastery: {
+    id: 'ricochet_mastery',
+    nameVi: 'Đạn Đạo Nảy Tường',
+    nameEn: 'Ricochet Mastery',
+    descriptionVi: 'Mọi đạn tầm xa được +1 lần nảy tường và +1 xuyên thấu.',
+    category: 'general',
+    accentColor: '#A855F7',
+  },
+  vanguard_fortress: {
+    id: 'vanguard_fortress',
+    nameVi: 'Nâng Cấp: Pháo Đài 360°',
+    nameEn: 'Fortress 360',
+    descriptionVi: 'Tường Khiên Hồng Ngọc bao bọc toàn diện 360° quanh Thiết Vệ và tăng sát thương phản kích.',
+    category: 'skill_upgrade',
+    characterId: 'vanguard',
+    accentColor: '#F97316',
+  },
+  vanguard_charge: {
+    id: 'vanguard_charge',
+    nameVi: 'Nâng Cấp: Xung Phong Khiên',
+    nameEn: 'Shield Charge',
+    descriptionVi: 'Tái kích hoạt Tường Khiên sẽ lao mạnh về phía trước, hất văng và gây sát thương lớn cho quái.',
+    category: 'skill_upgrade',
+    characterId: 'vanguard',
+    accentColor: '#84CC16',
+  },
+};
+
+export const FLOOR_BUFF_LIST: readonly BuffDef[] = Object.values(FLOOR_BUFFS);
+
+

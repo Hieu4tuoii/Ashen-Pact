@@ -1,8 +1,23 @@
 import { SeededRandom } from '../core/prng.js';
 import { CHARACTERS } from '../data/characters.js';
-import { ENEMIES } from '../data/enemies.js';
-import type { CharacterId, ElementType } from '../data/types.js';
-import { WEAPONS } from '../data/weapons.js';
+import {
+  BIOME1_COMBAT_ENEMIES,
+  ELITE_MODIFIERS,
+  ELITE_MODIFIER_LABELS_VI,
+  ENEMIES,
+  FLOOR_BUFFS,
+  FLOOR_BUFF_LIST,
+} from '../data/enemies.js';
+import type {
+  BuffId,
+  CardinalDir,
+  CharacterId,
+  EliteModifier,
+  ElementType,
+  RoomType,
+  WeaponRarity,
+} from '../data/types.js';
+import { PHASE3_WEAPON_IDS, WEAPONS } from '../data/weapons.js';
 import { SpatialHashGrid } from '../math/spatial-hash.js';
 import {
   angleDiff,
@@ -15,6 +30,12 @@ import {
 } from '../math/vec2.js';
 import { INPUT_BUTTON, type PlayerInputPacket, TILE_SIZE } from '../protocol/messages.js';
 import { ArenaMap, type ArenaMapConfig, type SurfaceKind } from './arena-map.js';
+import {
+  type DungeonFloorGraph,
+  type DungeonRoomNode,
+  OPPOSITE_DIR,
+  generateDungeonFloor,
+} from './dungeon-gen.js';
 
 export const PHASE1_SAMPLE_WEAPONS = [
   'knight_sword',
@@ -32,6 +53,17 @@ export const PHASE1_SAMPLE_ENEMIES = [
 ] as const;
 
 export type Phase1EnemyId = (typeof PHASE1_SAMPLE_ENEMIES)[number];
+
+export const BIOME1_ENEMY_IDS = [
+  'goblin_shooter',
+  'wild_boar',
+  'spore_bomber',
+  'green_slime',
+  'mini_slime',
+  'goblin_shaman',
+  'thorn_turret',
+  'spore_king',
+] as const;
 
 export const ELEMENT_CYCLE_ORDER: readonly ElementType[] = [
   'none',
@@ -52,6 +84,8 @@ export const BARREL_EXPLOSION_RADIUS = 88;
 export const BOAR_CHARGE_SPEED = 380;
 export const BOAR_CHARGE_DURATION_SEC = 0.55;
 export const MELEE_RANGE = 50;
+export const BOSS_ERUPT_RADIUS = 84;
+export const SHAMAN_HEAL_RADIUS = 220;
 
 export type EnemyAIState =
   | 'spawning'
@@ -84,6 +118,67 @@ export interface SimPropState {
   lightColorHex: string;
   hitFlashTimer: number;
   fuseTimer: number;
+}
+
+export interface SimDoorState {
+  dir: CardinalDir;
+  targetRoomId: number;
+  targetRoomType: RoomType;
+  x: number;
+  y: number;
+  radius: number;
+  locked: boolean;
+  isSecretPassage: boolean;
+}
+
+export interface SimChestState {
+  id: number;
+  x: number;
+  y: number;
+  radius: number;
+  rarity: WeaponRarity;
+  opened: boolean;
+  droppedWeaponId: string;
+}
+
+export interface SimWorldItemState {
+  id: number;
+  kind: 'weapon' | 'health_potion' | 'armor_upgrade';
+  weaponId?: string;
+  rarity: WeaponRarity;
+  nameVi: string;
+  costGold: number;
+  healAmount: number;
+  x: number;
+  y: number;
+  radius: number;
+  pickedUp: boolean;
+  offerId?: string;
+}
+
+export interface SimNpcState {
+  id: number;
+  kind: 'merchant' | 'shrine';
+  nameVi: string;
+  dialogueVi: string;
+  x: number;
+  y: number;
+  radius: number;
+  interacted: boolean;
+  costHp: number;
+  costGold?: number;
+}
+
+export interface RunSummaryStats {
+  kills: number;
+  elitesKilled: number;
+  bossesKilled: number;
+  damageDealt: number;
+  goldEarned: number;
+  roomsCleared: number;
+  chestsOpened: number;
+  floorReached: number;
+  ticksElapsed: number;
 }
 
 export interface SimPlayerState {
@@ -180,6 +275,18 @@ export interface SimEnemyState {
   shockTimer: number;
   surfaceTickTimer: number;
   grassRustleCooldown: number;
+  // Phase 3 Elite & Boss states
+  isElite: boolean;
+  eliteModifier: EliteModifier | null;
+  shieldArmor: number;
+  maxShieldArmor: number;
+  regenAccum: number;
+  isBoss: boolean;
+  bossPhase: 1 | 2 | 3;
+  bossBurrowed: boolean;
+  bossTargetX: number;
+  bossTargetY: number;
+  bossAttackCycle: number;
 }
 
 export interface SimProjectileState {
@@ -370,6 +477,68 @@ export type SimEvent =
       kind: 'grass_rustle';
       x: number;
       y: number;
+    }
+  | {
+      kind: 'shaman_heal';
+      shamanId: number;
+      x: number;
+      y: number;
+      radius: number;
+      healedCount: number;
+    }
+  | {
+      kind: 'boss_spawned';
+      enemyId: number;
+      nameVi: string;
+    }
+  | {
+      kind: 'boss_phase_changed';
+      enemyId: number;
+      phase: 1 | 2 | 3;
+      x: number;
+      y: number;
+    }
+  | {
+      kind: 'room_entered';
+      roomId: number;
+      roomType: RoomType;
+      floorNumber: number;
+    }
+  | {
+      kind: 'room_cleared';
+      roomId: number;
+      roomType: RoomType;
+    }
+  | {
+      kind: 'chest_opened';
+      chestId: number;
+      rarity: WeaponRarity;
+      weaponId: string;
+      x: number;
+      y: number;
+    }
+  | {
+      kind: 'item_purchased';
+      itemId: number;
+      nameVi: string;
+      costGold: number;
+      x: number;
+      y: number;
+    }
+  | {
+      kind: 'shrine_blessing';
+      x: number;
+      y: number;
+      rewardTextVi: string;
+    }
+  | {
+      kind: 'portal_entered';
+      floorNumber: number;
+    }
+  | {
+      kind: 'buff_selected';
+      buffId: BuffId;
+      nameVi: string;
     };
 
 export interface WorldSimOptions {
@@ -395,12 +564,41 @@ export class WorldSim {
   public tick = 0;
   public waveNumber = 0;
   public stressTestActive = false;
+  public botAutoPlayActive = false;
   public player: SimPlayerState;
   public simulatedPlayers: SimPlayerState[] = [];
   public enemies: SimEnemyState[] = [];
   public projectiles: SimProjectileState[] = [];
   public pickups: SimPickupState[] = [];
   public props: SimPropState[] = [];
+
+  // Phase 3 Dungeon, Rooms, Chests, Shop, Shrine, Buffs & Run Loop
+  public readonly baseSeed: string | number;
+  public currentFloor = 1;
+  public dungeon: DungeonFloorGraph;
+  public currentRoomId = 0;
+  public secretWallBroken = false;
+  public doors: SimDoorState[] = [];
+  public chests: SimChestState[] = [];
+  public worldItems: SimWorldItemState[] = [];
+  public npcEntities: SimNpcState[] = [];
+  public portalActive = false;
+  public portalX = 0;
+  public portalY = 0;
+  public runState: 'playing' | 'buff_choice' | 'victory' | 'defeat' = 'playing';
+  public activeBuffIds: BuffId[] = [];
+  public pendingBuffChoices: BuffId[] = [];
+  public runStats: RunSummaryStats = {
+    kills: 0,
+    elitesKilled: 0,
+    bossesKilled: 0,
+    damageDealt: 0,
+    goldEarned: 0,
+    roomsCleared: 1,
+    chestsOpened: 0,
+    floorReached: 1,
+    ticksElapsed: 0,
+  };
 
   private nextEntityId = 100;
   private eventsBufferA: SimEvent[] = [];
@@ -423,6 +621,7 @@ export class WorldSim {
   private readonly autoRespawnWaves: boolean;
   private readonly autoRevivePlayer: boolean;
   private waveRespawnTimer = 0;
+  private doorTransitionCooldown = 0;
   private energyRegenAccum = 0;
   private readonly queryEnemyScratch: SimEnemyState[] = [];
   private readonly queryBulletScratch: SimProjectileState[] = [];
@@ -430,9 +629,13 @@ export class WorldSim {
   private readonly pickupPool: SimPickupState[] = [];
   private readonly damageHistory: { tick: number; amount: number }[] = [];
   private readonly damageHistoryPool: { tick: number; amount: number }[] = [];
+  private readonly roomItemsByRoomId = new Map<number, SimWorldItemState[]>();
+  private readonly roomChestsByRoomId = new Map<number, SimChestState[]>();
+  private readonly initializedRoomIds = new Set<number>([0]);
 
   constructor(options: WorldSimOptions = {}) {
     const seedVal = options.seed ?? 0x1337c0de;
+    this.baseSeed = seedVal;
     this.rng = new SeededRandom(seedVal);
     const spawnWave = options.spawnInitialWave ?? true;
     this.map = new ArenaMap({
@@ -442,6 +645,9 @@ export class WorldSim {
     });
     this.autoRespawnWaves = options.autoRespawnWaves ?? true;
     this.autoRevivePlayer = options.autoRevivePlayer ?? true;
+
+    this.dungeon = generateDungeonFloor(seedVal, 1, 1);
+    this.currentRoomId = this.dungeon.startRoomId;
 
     const startX = this.map.width * 0.35;
     const startY = this.map.height * 0.5;
@@ -458,6 +664,8 @@ export class WorldSim {
     if (spawnWave) {
       this.spawnSampleWave();
     }
+
+    this.rebuildCurrentRoomDoors();
   }
 
   private get events(): SimEvent[] {
@@ -804,21 +1012,45 @@ export class WorldSim {
       shockTimer: 0,
       surfaceTickTimer: 0,
       grassRustleCooldown: 0,
+      isElite: false,
+      eliteModifier: null,
+      shieldArmor: 0,
+      maxShieldArmor: 0,
+      regenAccum: 0,
+      isBoss: false,
+      bossPhase: 1,
+      bossBurrowed: false,
+      bossTargetX: resolved.x,
+      bossTargetY: resolved.y,
+      bossAttackCycle: 0,
     };
     this.enemies.push(dummy);
     return dummy;
   }
 
   public spawnEnemy(
-    defId: Phase1EnemyId,
+    defId: string,
     x?: number,
     y?: number,
     skipSpawnWarmup = false,
+    eliteModifier: EliteModifier | null = null,
   ): SimEnemyState {
     const def = ENEMIES[defId];
     if (!def) {
       throw new Error(`Unknown enemy defId: ${defId}`);
     }
+
+    const isElite = eliteModifier !== null && !def.isBoss;
+    const radius = isElite ? Math.round(def.radius * 1.25) : def.radius;
+    const baseHp = isElite ? Math.round(def.hp * 2.2) : def.hp;
+    const moveSpeed =
+      isElite && eliteModifier === 'fast' ? Math.round(def.moveSpeed * 1.38) : def.moveSpeed;
+    const damage = isElite ? Math.max(def.damage + 1, Math.round(def.damage * 1.35)) : def.damage;
+    const shieldArmor = isElite && eliteModifier === 'shield' ? Math.round(def.hp * 0.85) : 0;
+    const nameVi =
+      isElite && eliteModifier
+        ? `[Tinh Anh] ${def.nameVi} (${ELITE_MODIFIER_LABELS_VI[eliteModifier]})`
+        : def.nameVi;
 
     let spawnX = x ?? this.map.width * 0.7;
     let spawnY = y ?? this.map.height * 0.5;
@@ -828,7 +1060,7 @@ export class WorldSim {
         const cx = this.rng.nextFloat(TILE_SIZE * 3, this.map.width - TILE_SIZE * 3);
         const cy = this.rng.nextFloat(TILE_SIZE * 3, this.map.height - TILE_SIZE * 3);
         const dSq = distanceSq(cx, cy, this.player.x, this.player.y);
-        const hit = this.map.checkProjectileWallHit(cx, cy, def.radius + 6);
+        const hit = this.map.checkProjectileWallHit(cx, cy, radius + 6);
         if (dSq >= 150 * 150 && !hit.hit) {
           spawnX = cx;
           spawnY = cy;
@@ -837,11 +1069,11 @@ export class WorldSim {
       }
     }
 
-    const resolved = this.map.resolveCircleCollision(spawnX, spawnY, def.radius);
+    const resolved = this.map.resolveCircleCollision(spawnX, spawnY, radius);
     const enemy: SimEnemyState = {
       id: ++this.nextEntityId,
       defId: def.id,
-      nameVi: def.nameVi,
+      nameVi,
       role: def.role,
       isDummy: false,
       prevX: resolved.x,
@@ -852,18 +1084,23 @@ export class WorldSim {
       vy: 0,
       kbVx: 0,
       kbVy: 0,
-      radius: def.radius,
+      radius,
       aimAngle: Math.atan2(this.player.y - resolved.y, this.player.x - resolved.x),
-      hp: def.hp,
-      maxHp: def.hp,
-      moveSpeed: def.moveSpeed,
-      damage: def.damage,
+      hp: baseHp,
+      maxHp: baseHp,
+      moveSpeed,
+      damage,
       aiState: skipSpawnWarmup ? 'move' : 'spawning',
       stateTimer: skipSpawnWarmup ? 0 : ENEMY_SPAWN_WARMUP_SEC,
       attackCooldownTimer: this.rng.nextFloat(0.4, 1.1),
       telegraphDurationSec: def.telegraphSec,
       telegraphAngle: 0,
-      telegraphRadius: defId === 'spore_bomber' ? SPORE_EXPLOSION_RADIUS : 0,
+      telegraphRadius:
+        defId === 'spore_bomber'
+          ? SPORE_EXPLOSION_RADIUS
+          : defId === 'spore_king'
+            ? BOSS_ERUPT_RADIUS
+            : 0,
       telegraphLength: defId === 'wild_boar' ? 220 : 0,
       hitFlashTimer: 0,
       strafeSign: this.rng.chance(0.5) ? 1 : -1,
@@ -878,9 +1115,27 @@ export class WorldSim {
       shockTimer: 0,
       surfaceTickTimer: 0,
       grassRustleCooldown: 0,
+      isElite,
+      eliteModifier: isElite ? eliteModifier : null,
+      shieldArmor,
+      maxShieldArmor: shieldArmor,
+      regenAccum: 0,
+      isBoss: Boolean(def.isBoss),
+      bossPhase: 1,
+      bossBurrowed: false,
+      bossTargetX: resolved.x,
+      bossTargetY: resolved.y,
+      bossAttackCycle: 0,
     };
 
     this.enemies.push(enemy);
+    if (enemy.isBoss) {
+      this.events.push({
+        kind: 'boss_spawned',
+        enemyId: enemy.id,
+        nameVi: enemy.nameVi,
+      });
+    }
     return enemy;
   }
 
@@ -895,11 +1150,850 @@ export class WorldSim {
     this.spawnEnemy('spore_bomber', cx - 30, cy + 120, false);
   }
 
+  public getCurrentRoom(): DungeonRoomNode {
+    return this.dungeon.rooms[this.currentRoomId] ?? this.dungeon.rooms[0]!;
+  }
+
+  public hasActiveCombatEnemies(): boolean {
+    for (let i = 0; i < this.enemies.length; i++) {
+      const e = this.enemies[i]!;
+      if (!e.isDummy && e.hp > 0) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  public getActiveBoss(): SimEnemyState | null {
+    for (let i = 0; i < this.enemies.length; i++) {
+      const e = this.enemies[i]!;
+      if (e.isBoss && e.hp > 0) {
+        return e;
+      }
+    }
+    return null;
+  }
+
+  public rebuildCurrentRoomDoors(): void {
+    this.doors.length = 0;
+    const room = this.getCurrentRoom();
+    const hasCombat = this.hasActiveCombatEnemies();
+
+    for (const [dir, targetRoomId] of Object.entries(room.connections) as [
+      CardinalDir,
+      number | undefined,
+    ][]) {
+      if (targetRoomId === undefined) continue;
+      const targetRoom = this.dungeon.rooms[targetRoomId];
+      if (!targetRoom) continue;
+
+      let x = this.map.width * 0.5;
+      let y = this.map.height * 0.5;
+      if (dir === 'N') {
+        x = 18 * TILE_SIZE + 16;
+        y = 1 * TILE_SIZE + 18;
+      } else if (dir === 'S') {
+        x = 18 * TILE_SIZE + 16;
+        y = (this.map.rows - 2) * TILE_SIZE + 14;
+      } else if (dir === 'W') {
+        x = 1 * TILE_SIZE + 18;
+        y = 11 * TILE_SIZE + 16;
+      } else if (dir === 'E') {
+        x = (this.map.cols - 2) * TILE_SIZE + 14;
+        y = 11 * TILE_SIZE + 16;
+      }
+
+      const isSecretPassage =
+        (room.type === 'start' && targetRoom.type === 'secret') ||
+        (room.type === 'secret' && targetRoom.type === 'start');
+      const locked = isSecretPassage
+        ? !this.secretWallBroken || hasCombat
+        : hasCombat || (!room.cleared && room.type !== 'start');
+
+      this.doors.push({
+        dir,
+        targetRoomId,
+        targetRoomType: targetRoom.type,
+        x,
+        y,
+        radius: 26,
+        locked,
+        isSecretPassage,
+      });
+    }
+  }
+
+  public enterRoom(roomId: number, entryDir?: CardinalDir): boolean {
+    const targetRoom = this.dungeon.rooms[roomId];
+    if (!targetRoom) return false;
+
+    if (this.initializedRoomIds.has(this.currentRoomId)) {
+      this.roomChestsByRoomId.set(this.currentRoomId, [...this.chests]);
+      this.roomItemsByRoomId.set(this.currentRoomId, [...this.worldItems]);
+    }
+
+    this.currentRoomId = roomId;
+    targetRoom.discovery = targetRoom.cleared ? 'cleared' : 'visited';
+    for (const adjId of Object.values(targetRoom.connections)) {
+      if (adjId !== undefined) {
+        const adjRoom = this.dungeon.rooms[adjId];
+        if (adjRoom && adjRoom.discovery === 'hidden' && adjRoom.type !== 'secret') {
+          adjRoom.discovery = 'discovered';
+        }
+      }
+    }
+
+    // Clear transient entities from previous room
+    this.enemies.length = 0;
+    for (let i = 0; i < this.projectiles.length; i++) {
+      const b = this.projectiles[i]!;
+      b.ttlSec = 0;
+      b.hitEntityIds.length = 0;
+      this.projectilePool.push(b);
+    }
+    this.projectiles.length = 0;
+    for (let i = 0; i < this.pickups.length; i++) {
+      this.pickupPool.push(this.pickups[i]!);
+    }
+    this.pickups.length = 0;
+    this.props.length = 0;
+    this.chests.length = 0;
+    this.worldItems.length = 0;
+    this.npcEntities.length = 0;
+    this.portalActive = false;
+    this.waveRespawnTimer = 0;
+    this.doorTransitionCooldown = 0.55;
+
+    if (this.map.getTile(18, 0) !== 'cracked_wall') {
+      this.secretWallBroken = true;
+    }
+
+    const roomSeed = Number(this.dungeon.seed) + roomId * 997 + this.currentFloor * 7919;
+    this.map.configureRoomLayout(targetRoom.type, roomSeed, this.secretWallBroken);
+
+    // Position player near the entrance door (opposite of entryDir)
+    let spawnX = this.map.width * 0.35;
+    let spawnY = this.map.height * 0.5;
+    if (entryDir) {
+      const arrivalSide = OPPOSITE_DIR[entryDir];
+      if (arrivalSide === 'N') {
+        spawnX = 18 * TILE_SIZE + 16;
+        spawnY = 3 * TILE_SIZE + 20;
+      } else if (arrivalSide === 'S') {
+        spawnX = 18 * TILE_SIZE + 16;
+        spawnY = (this.map.rows - 3) * TILE_SIZE - 8;
+      } else if (arrivalSide === 'W') {
+        spawnX = 3 * TILE_SIZE + 8;
+        spawnY = 11 * TILE_SIZE + 16;
+      } else if (arrivalSide === 'E') {
+        spawnX = (this.map.cols - 3) * TILE_SIZE - 8;
+        spawnY = 11 * TILE_SIZE + 16;
+      }
+    }
+    const resolvedPos = this.map.resolveCircleCollision(spawnX, spawnY, this.player.radius);
+    this.player.x = resolvedPos.x;
+    this.player.y = resolvedPos.y;
+    this.player.prevX = resolvedPos.x;
+    this.player.prevY = resolvedPos.y;
+    this.player.vx = 0;
+    this.player.vy = 0;
+
+    this.populateRoomContents(targetRoom);
+    this.initializedRoomIds.add(targetRoom.id);
+    this.roomChestsByRoomId.set(targetRoom.id, [...this.chests]);
+    this.roomItemsByRoomId.set(targetRoom.id, [...this.worldItems]);
+    this.rebuildCurrentRoomDoors();
+
+    this.events.push({
+      kind: 'room_entered',
+      roomId: targetRoom.id,
+      roomType: targetRoom.type,
+      floorNumber: this.currentFloor,
+    });
+    return true;
+  }
+
+  private populateRoomContents(room: DungeonRoomNode): void {
+    const cx = this.map.width * 0.5;
+    const cy = this.map.height * 0.5;
+    const hasSavedState =
+      room.id !== 0 &&
+      this.initializedRoomIds.has(room.id) &&
+      (this.roomChestsByRoomId.has(room.id) || this.roomItemsByRoomId.has(room.id));
+
+    if (hasSavedState) {
+      const savedChests = this.roomChestsByRoomId.get(room.id);
+      if (savedChests) this.chests.push(...savedChests);
+      const savedItems = this.roomItemsByRoomId.get(room.id);
+      if (savedItems) this.worldItems.push(...savedItems);
+    }
+
+    switch (room.type) {
+      case 'start': {
+        this.spawnTrainingDummy(210, 260);
+        this.spawnDefaultArenaProps();
+        if (!room.cleared) {
+          this.spawnSampleWave();
+        }
+        break;
+      }
+      case 'combat': {
+        this.spawnProp('torch_brazier', 8 * TILE_SIZE - 14, 5 * TILE_SIZE - 12);
+        this.spawnProp('torch_brazier', 28 * TILE_SIZE + 14, 5 * TILE_SIZE - 12);
+        this.spawnProp('torch_brazier', 8 * TILE_SIZE - 14, 17 * TILE_SIZE + 12);
+        this.spawnProp('torch_brazier', 28 * TILE_SIZE + 14, 17 * TILE_SIZE + 12);
+        this.spawnProp('glow_mushroom', 11 * TILE_SIZE - 12, 4 * TILE_SIZE + 16);
+        this.spawnProp('glow_mushroom', 25 * TILE_SIZE + 12, 17 * TILE_SIZE + 16);
+        this.spawnProp('explosive_barrel', 15 * TILE_SIZE + 16, 6 * TILE_SIZE + 16);
+        this.spawnProp('explosive_barrel', 21 * TILE_SIZE + 16, 15 * TILE_SIZE + 16);
+        this.spawnProp('wooden_crate', 6 * TILE_SIZE + 16, 5 * TILE_SIZE + 16);
+        this.spawnProp('clay_vase', 29 * TILE_SIZE + 16, 16 * TILE_SIZE + 16);
+
+        if (!room.cleared) {
+          room.wavesSpawned = 0;
+          room.wavesTotal = Math.max(2, room.waves.length || room.wavesTotal);
+          this.spawnNextRoomWave();
+        }
+        break;
+      }
+      case 'treasure': {
+        this.spawnProp('torch_brazier', cx - 110, cy - 80);
+        this.spawnProp('torch_brazier', cx + 110, cy - 80);
+        this.spawnProp('glow_mushroom', cx - 110, cy + 80);
+        this.spawnProp('glow_mushroom', cx + 110, cy + 80);
+        if (!hasSavedState && !room.chestOpened) {
+          const rarity = room.chestRarity ?? this.rollChestRarity(1);
+          this.spawnChest(cx, cy, rarity, room.chestWeaponId ?? undefined);
+        }
+        break;
+      }
+      case 'secret': {
+        this.secretWallBroken = true;
+        this.spawnProp('glow_mushroom', cx - 95, cy - 65);
+        this.spawnProp('glow_mushroom', cx + 95, cy - 65);
+        this.spawnProp('clay_vase', cx - 80, cy + 65);
+        this.spawnProp('clay_vase', cx + 80, cy + 65);
+        if (!hasSavedState && !room.chestOpened) {
+          const rarity: WeaponRarity =
+            room.chestRarity ?? (this.rng.chance(0.45) ? 'legendary' : 'epic');
+          this.spawnChest(cx, cy - 10, rarity, room.chestWeaponId ?? undefined);
+          for (let i = 0; i < 3; i++) {
+            this.pickups.push(
+              this.acquirePickup({
+                id: ++this.nextEntityId,
+                kind: 'gold',
+                x: cx + (i - 1) * 36,
+                y: cy + 36,
+                vx: 0,
+                vy: 0,
+                amount: 12,
+                ttlSec: 60,
+              }),
+            );
+          }
+        }
+        break;
+      }
+      case 'merchant': {
+        this.spawnProp('torch_brazier', cx - 150, cy - 90);
+        this.spawnProp('torch_brazier', cx + 150, cy - 90);
+        this.npcEntities.push({
+          id: ++this.nextEntityId,
+          kind: 'merchant',
+          nameVi: 'Thương Nhân Hắc Ám',
+          dialogueVi: '“Vàng đổi lấy thần khí... chọn đi trước khi rừng sâu nuốt chửng ngươi!”',
+          x: cx,
+          y: cy - 72,
+          radius: 18,
+          interacted: false,
+          costHp: 0,
+        });
+        if (!hasSavedState) {
+          const positions: readonly [number, number][] = [
+            [cx - 165, cy + 12],
+            [cx, cy + 34],
+            [cx + 165, cy + 12],
+          ];
+          if (room.shopOffers.length > 0) {
+            for (let i = 0; i < room.shopOffers.length; i++) {
+              const offer = room.shopOffers[i]!;
+              const [ox, oy] = positions[i % positions.length]!;
+              const item = this.spawnWorldItem({
+                kind: offer.kind,
+                weaponId: offer.weaponId,
+                rarity:
+                  offer.rarity ??
+                  (offer.kind === 'armor_upgrade' ? 'rare' : 'uncommon'),
+                nameVi: offer.nameVi,
+                costGold: offer.costGold,
+                healAmount: offer.kind === 'health_potion' ? 4 : 0,
+                x: ox,
+                y: oy,
+                offerId: offer.id,
+              });
+              item.pickedUp = offer.purchased;
+            }
+          } else {
+            this.spawnWorldItem({
+              kind: 'health_potion',
+              rarity: 'uncommon',
+              nameVi: 'Bình Máu Cổ Ngữ (+4 HP)',
+              costGold: 15,
+              healAmount: 4,
+              x: cx - 165,
+              y: cy + 12,
+            });
+            const rareWepId = this.rollRandomWeaponByRarities(['uncommon', 'rare']);
+            const rareWep = WEAPONS[rareWepId]!;
+            this.spawnWorldItem({
+              kind: 'weapon',
+              weaponId: rareWep.id,
+              rarity: rareWep.rarity,
+              nameVi: rareWep.nameVi,
+              costGold: rareWep.rarity === 'rare' ? 30 : 22,
+              healAmount: 0,
+              x: cx,
+              y: cy + 34,
+            });
+            const epicWepId = this.rollRandomWeaponByRarities(['epic', 'legendary']);
+            const epicWep = WEAPONS[epicWepId]!;
+            this.spawnWorldItem({
+              kind: 'weapon',
+              weaponId: epicWep.id,
+              rarity: epicWep.rarity,
+              nameVi: epicWep.nameVi,
+              costGold: epicWep.rarity === 'legendary' ? 50 : 38,
+              healAmount: 0,
+              x: cx + 165,
+              y: cy + 12,
+            });
+          }
+        }
+        break;
+      }
+      case 'shrine': {
+        this.spawnProp('glow_mushroom', cx - 110, cy - 75);
+        this.spawnProp('glow_mushroom', cx + 110, cy - 75);
+        this.spawnProp('torch_brazier', cx - 110, cy + 75);
+        this.spawnProp('torch_brazier', cx + 110, cy + 75);
+        this.npcEntities.push({
+          id: ++this.nextEntityId,
+          kind: 'shrine',
+          nameVi: 'Tượng Thần Cổ Đại',
+          dialogueVi: room.shrineUsed
+            ? 'Tượng thần đã ban phước lành cổ ngữ.'
+            : 'Dâng 25 Xu hoặc 2 Máu [E] để nhận Phước Lành & Thần Khí',
+          x: cx,
+          y: cy - 18,
+          radius: 22,
+          interacted: room.shrineUsed,
+          costHp: 2,
+          costGold: 25,
+        });
+        break;
+      }
+      case 'portal': {
+        this.spawnProp('torch_brazier', cx - 130, cy - 90);
+        this.spawnProp('torch_brazier', cx + 130, cy - 90);
+        this.spawnProp('torch_brazier', cx - 130, cy + 90);
+        this.spawnProp('torch_brazier', cx + 130, cy + 90);
+        this.portalX = cx;
+        this.portalY = cy;
+        if (!room.cleared) {
+          room.wavesSpawned = 0;
+          room.wavesTotal = Math.max(1, room.waves.length || room.wavesTotal);
+          this.spawnNextRoomWave();
+        } else {
+          this.portalActive = true;
+        }
+        break;
+      }
+      case 'boss': {
+        this.spawnProp('torch_brazier', 6 * TILE_SIZE, 4 * TILE_SIZE);
+        this.spawnProp('torch_brazier', 30 * TILE_SIZE, 4 * TILE_SIZE);
+        this.spawnProp('torch_brazier', 6 * TILE_SIZE, 18 * TILE_SIZE);
+        this.spawnProp('torch_brazier', 30 * TILE_SIZE, 18 * TILE_SIZE);
+        this.portalX = cx;
+        this.portalY = cy;
+        if (!room.cleared) {
+          room.wavesSpawned = 1;
+          room.wavesTotal = 1;
+          this.spawnEnemy('spore_king', this.map.width * 0.68, cy, false);
+        } else {
+          this.portalActive = true;
+        }
+        break;
+      }
+    }
+  }
+
+  public spawnNextRoomWave(): void {
+    const room = this.getCurrentRoom();
+    room.wavesSpawned += 1;
+    this.waveNumber += 1;
+
+    const cx = this.map.width * 0.64;
+    const cy = this.map.height * 0.5;
+    const offsets: readonly [number, number][] = [
+      [-90, -110],
+      [90, -110],
+      [130, 0],
+      [-80, 110],
+      [90, 110],
+      [0, -135],
+    ];
+
+    const waveDef = room.waves[room.wavesSpawned - 1];
+    if (waveDef && waveDef.enemies.length > 0) {
+      for (let i = 0; i < waveDef.enemies.length; i++) {
+        const entry = waveDef.enemies[i]!;
+        const [ox, oy] = offsets[i % offsets.length]!;
+        const eliteMod: EliteModifier | null = entry.isElite
+          ? (entry.eliteModifier ?? ELITE_MODIFIERS[(room.id + i) % ELITE_MODIFIERS.length]!)
+          : null;
+        this.spawnEnemy(entry.defId, cx + ox, cy + oy, false, eliteMod);
+      }
+    } else {
+      // Guarantees full Biome 1 enemy variety across waves (all 6 enemy types represented)
+      const count = this.currentFloor === 1 ? 4 : 5;
+      for (let i = 0; i < count; i++) {
+        const defId =
+          BIOME1_COMBAT_ENEMIES[
+            (room.id + room.wavesSpawned * 2 + i) % BIOME1_COMBAT_ENEMIES.length
+          ]!;
+        const [ox, oy] = offsets[i % offsets.length]!;
+        const isEliteSlot =
+          i === count - 1 && (room.wavesSpawned >= room.wavesTotal || room.type === 'portal');
+        const eliteMod: EliteModifier | null = isEliteSlot
+          ? ELITE_MODIFIERS[(room.id + this.currentFloor + i) % ELITE_MODIFIERS.length]!
+          : null;
+        this.spawnEnemy(defId, cx + ox, cy + oy, false, eliteMod);
+      }
+    }
+
+    this.rebuildCurrentRoomDoors();
+  }
+
+  private onRoomCleared(room: DungeonRoomNode): void {
+    room.cleared = true;
+    room.discovery = 'cleared';
+    this.runStats.roomsCleared += 1;
+    const cx = this.map.width * 0.5;
+    const cy = this.map.height * 0.5;
+
+    if (room.type === 'combat') {
+      const rarity = room.chestRarity ?? this.rollChestRarity(0);
+      this.spawnChest(cx, cy, rarity, room.chestWeaponId ?? undefined);
+    } else if (room.type === 'portal') {
+      this.portalActive = true;
+      this.portalX = cx;
+      this.portalY = cy;
+    } else if (room.type === 'boss') {
+      this.portalActive = true;
+      this.portalX = cx;
+      this.portalY = cy;
+      this.spawnChest(cx + 95, cy, 'legendary', room.chestWeaponId ?? 'solar_archon_staff');
+      this.runState = 'victory';
+    }
+
+    this.roomChestsByRoomId.set(room.id, [...this.chests]);
+    this.roomItemsByRoomId.set(room.id, [...this.worldItems]);
+    this.rebuildCurrentRoomDoors();
+    this.events.push({
+      kind: 'room_cleared',
+      roomId: room.id,
+      roomType: room.type,
+    });
+  }
+
+  public rollChestRarity(bonusTier = 0): WeaponRarity {
+    const r = this.rng.next() + bonusTier * 0.18 + (this.currentFloor - 1) * 0.12;
+    if (r >= 0.92) return 'legendary';
+    if (r >= 0.72) return 'epic';
+    if (r >= 0.45) return 'rare';
+    if (r >= 0.2) return 'uncommon';
+    return 'common';
+  }
+
+  public rollRandomWeaponByRarities(allowedRarities: readonly WeaponRarity[]): string {
+    const candidates = PHASE3_WEAPON_IDS.filter((id) => {
+      const w = WEAPONS[id];
+      return w && allowedRarities.includes(w.rarity);
+    });
+    if (candidates.length === 0) return 'gale_smg';
+    return this.rng.pick(candidates);
+  }
+
+  public spawnChest(
+    x: number,
+    y: number,
+    rarity: WeaponRarity,
+    preselectedWeaponId?: string,
+  ): SimChestState {
+    const droppedWeaponId =
+      preselectedWeaponId && WEAPONS[preselectedWeaponId]
+        ? preselectedWeaponId
+        : this.rollRandomWeaponByRarities([rarity]);
+    const chest: SimChestState = {
+      id: ++this.nextEntityId,
+      x,
+      y,
+      radius: 18,
+      rarity,
+      opened: false,
+      droppedWeaponId,
+    };
+    this.chests.push(chest);
+    return chest;
+  }
+
+  public spawnWorldItem(
+    init: Omit<SimWorldItemState, 'id' | 'radius' | 'pickedUp'>,
+  ): SimWorldItemState {
+    const item: SimWorldItemState = {
+      ...init,
+      id: ++this.nextEntityId,
+      radius: 15,
+      pickedUp: false,
+    };
+    this.worldItems.push(item);
+    return item;
+  }
+
+  public openChest(chest: SimChestState): boolean {
+    if (chest.opened) return false;
+    chest.opened = true;
+    const room = this.getCurrentRoom();
+    room.chestOpened = true;
+    this.runStats.chestsOpened += 1;
+
+    const wep = WEAPONS[chest.droppedWeaponId] ?? WEAPONS.gale_smg!;
+    this.spawnWorldItem({
+      kind: 'weapon',
+      weaponId: wep.id,
+      rarity: wep.rarity,
+      nameVi: wep.nameVi,
+      costGold: 0,
+      healAmount: 0,
+      x: chest.x,
+      y: chest.y + 28,
+    });
+    this.roomChestsByRoomId.set(room.id, [...this.chests]);
+    this.roomItemsByRoomId.set(room.id, [...this.worldItems]);
+
+    for (let i = 0; i < 3; i++) {
+      const ang = -Math.PI * 0.5 + (i - 1) * 0.6;
+      this.pickups.push(
+        this.acquirePickup({
+          id: ++this.nextEntityId,
+          kind: i === 1 ? 'energy' : 'gold',
+          x: chest.x,
+          y: chest.y,
+          vx: Math.cos(ang) * 95,
+          vy: Math.sin(ang) * 95,
+          amount: i === 1 ? 15 : 10,
+          ttlSec: 20,
+        }),
+      );
+    }
+
+    this.events.push({
+      kind: 'chest_opened',
+      chestId: chest.id,
+      rarity: chest.rarity,
+      weaponId: wep.id,
+      x: chest.x,
+      y: chest.y,
+    });
+    return true;
+  }
+
+  public pickupOrBuyWorldItem(item: SimWorldItemState): boolean {
+    if (item.pickedUp) return false;
+    if (item.costGold > 0) {
+      if (this.player.gold >= item.costGold) {
+        this.player.gold -= item.costGold;
+      } else if (!this.player.godMode) {
+        return false;
+      } else {
+        this.player.gold = 0;
+      }
+      this.events.push({
+        kind: 'item_purchased',
+        itemId: item.id,
+        nameVi: item.nameVi,
+        costGold: item.costGold,
+        x: item.x,
+        y: item.y,
+      });
+    }
+
+    item.pickedUp = true;
+    const room = this.getCurrentRoom();
+    if (item.offerId) {
+      const offer = room.shopOffers.find((o) => o.id === item.offerId);
+      if (offer) offer.purchased = true;
+    }
+    this.roomItemsByRoomId.set(room.id, [...this.worldItems]);
+
+    if (item.kind === 'health_potion') {
+      this.player.hp = Math.min(this.player.maxHp, this.player.hp + item.healAmount);
+      this.player.armor = Math.min(this.player.maxArmor, this.player.armor + 2);
+      return true;
+    }
+
+    if (item.kind === 'armor_upgrade') {
+      this.player.maxArmor += 2;
+      this.player.armor = this.player.maxArmor;
+      return true;
+    }
+
+    if (item.kind === 'weapon' && item.weaponId && WEAPONS[item.weaponId]) {
+      const existingIdx = this.player.weaponSlots.indexOf(item.weaponId);
+      if (existingIdx >= 0) {
+        this.equipWeaponSlot(existingIdx);
+      } else if (this.player.weaponSlots.length < 4) {
+        this.player.weaponSlots.push(item.weaponId);
+        this.equipWeaponSlot(this.player.weaponSlots.length - 1);
+      } else {
+        this.player.weaponSlots[this.player.activeWeaponSlot] = item.weaponId;
+        this.events.push({
+          kind: 'weapon_swapped',
+          weaponId: item.weaponId,
+          slot: this.player.activeWeaponSlot,
+        });
+      }
+      return true;
+    }
+    return false;
+  }
+
+  public activateShrine(shrine: SimNpcState): boolean {
+    if (shrine.kind !== 'shrine' || shrine.interacted) return false;
+    const costGold = shrine.costGold ?? 25;
+    if (this.player.gold >= costGold) {
+      this.player.gold -= costGold;
+    } else if (this.player.hp > shrine.costHp) {
+      this.player.hp -= shrine.costHp;
+    } else if (!this.player.godMode) {
+      return false;
+    }
+
+    shrine.interacted = true;
+    const room = this.getCurrentRoom();
+    room.shrineUsed = true;
+
+    this.player.maxEnergy += 30;
+    this.player.energy = this.player.maxEnergy;
+    this.player.armor = this.player.maxArmor;
+
+    // Also grant the room's shrineBlessingId buff if available
+    const blessingId = room.shrineBlessingId as BuffId | null;
+    if (blessingId && FLOOR_BUFFS[blessingId] && !this.activeBuffIds.includes(blessingId)) {
+      this.applyBuffEffects(blessingId);
+    }
+
+    const blessedWepId = this.rollRandomWeaponByRarities(['epic', 'legendary']);
+    const blessedWep = WEAPONS[blessedWepId]!;
+    this.spawnWorldItem({
+      kind: 'weapon',
+      weaponId: blessedWep.id,
+      rarity: blessedWep.rarity,
+      nameVi: blessedWep.nameVi,
+      costGold: 0,
+      healAmount: 0,
+      x: shrine.x,
+      y: shrine.y + 62,
+    });
+    this.roomItemsByRoomId.set(room.id, [...this.worldItems]);
+
+    const buffDef = blessingId ? FLOOR_BUFFS[blessingId] : undefined;
+    shrine.dialogueVi = buffDef
+      ? `Phước lành Cổ Ngữ: ${buffDef.nameVi} & ${blessedWep.nameVi}!`
+      : `Phước lành Cổ Ngữ: +30 Năng Lượng & ${blessedWep.nameVi}!`;
+    this.events.push({
+      kind: 'shrine_blessing',
+      x: shrine.x,
+      y: shrine.y,
+      rewardTextVi: shrine.dialogueVi,
+    });
+    return true;
+  }
+
+  public enterPortal(): boolean {
+    if (!this.portalActive) return false;
+    if (this.currentFloor === 1) {
+      this.runState = 'buff_choice';
+      this.rollPendingBuffChoices();
+      this.events.push({
+        kind: 'portal_entered',
+        floorNumber: this.currentFloor,
+      });
+      return true;
+    }
+    this.runState = 'victory';
+    this.events.push({
+      kind: 'portal_entered',
+      floorNumber: this.currentFloor,
+    });
+    return true;
+  }
+
+  private rollPendingBuffChoices(): void {
+    const available: BuffId[] = FLOOR_BUFF_LIST.map((b) => b.id).filter(
+      (id) => !this.activeBuffIds.includes(id),
+    );
+    const choices: BuffId[] = [];
+
+    // Ensure at least 1 Thiết Vệ skill upgrade is offered on Floor 1 -> 2 transition
+    const skillUpgrades = available.filter(
+      (id) => id === 'vanguard_fortress' || id === 'vanguard_charge',
+    );
+    if (skillUpgrades.length > 0) {
+      const pickedSkill = this.rng.pick(skillUpgrades);
+      choices.push(pickedSkill);
+    }
+
+    const rest = available.filter((id) => !choices.includes(id));
+    while (choices.length < 3 && rest.length > 0) {
+      const idx = this.rng.nextInt(0, rest.length - 1);
+      choices.push(rest[idx]!);
+      rest.splice(idx, 1);
+    }
+    this.pendingBuffChoices = choices;
+  }
+
+  private applyBuffEffects(buffId: BuffId): void {
+    const def = FLOOR_BUFFS[buffId];
+    if (!def || this.activeBuffIds.includes(buffId)) return;
+    this.activeBuffIds.push(buffId);
+    if (buffId === 'vitality_surge') {
+      this.player.maxHp += 3;
+      this.player.hp = this.player.maxHp;
+    } else if (buffId === 'iron_bastion') {
+      this.player.maxArmor += 2;
+      this.player.armor = this.player.maxArmor;
+      this.player.armorRegenDelaySec = Math.max(0.8, this.player.armorRegenDelaySec - 0.5);
+    } else if (buffId === 'arcane_wellspring') {
+      this.player.maxEnergy += 60;
+      this.player.energy = this.player.maxEnergy;
+    } else if (buffId === 'gale_reflex') {
+      this.player.moveSpeed = Math.round(this.player.moveSpeed * 1.2);
+    }
+    this.events.push({
+      kind: 'buff_selected',
+      buffId,
+      nameVi: def.nameVi,
+    });
+  }
+
+  public selectFloorBuff(buffId: BuffId): boolean {
+    const def = FLOOR_BUFFS[buffId];
+    if (!def) return false;
+
+    this.applyBuffEffects(buffId);
+
+    this.pendingBuffChoices = [];
+    if (this.currentFloor === 1) {
+      this.advanceToFloor(2);
+    } else {
+      this.runState = 'playing';
+    }
+    return true;
+  }
+
+  public advanceToFloor(floorNumber: 1 | 2): void {
+    this.currentFloor = floorNumber;
+    this.runStats.floorReached = Math.max(this.runStats.floorReached, floorNumber);
+    this.runState = 'playing';
+    this.roomChestsByRoomId.clear();
+    this.roomItemsByRoomId.clear();
+    this.initializedRoomIds.clear();
+    this.dungeon = generateDungeonFloor(this.baseSeed, floorNumber, 1);
+    this.enterRoom(this.dungeon.startRoomId);
+  }
+
+  public skipCurrentRoomWaves(): void {
+    const room = this.getCurrentRoom();
+    room.wavesSpawned = room.wavesTotal;
+    for (let i = 0; i < this.enemies.length; i++) {
+      const e = this.enemies[i]!;
+      if (!e.isDummy && e.hp > 0) {
+        e.shieldArmor = 0;
+        this.applyDamageToEnemy(e, e.hp, true, 'burn', 0, 0, true);
+      }
+    }
+    this.enemies = this.enemies.filter((e) => e.isDummy || e.hp > 0);
+    if (!room.cleared) {
+      this.onRoomCleared(room);
+    } else {
+      this.rebuildCurrentRoomDoors();
+    }
+  }
+
+  public interactWithNearest(): boolean {
+    const p = this.player;
+    const interactRange = 64;
+
+    // 1. Unopened Chests
+    for (let i = 0; i < this.chests.length; i++) {
+      const chest = this.chests[i]!;
+      if (!chest.opened && distance(p.x, p.y, chest.x, chest.y) <= interactRange) {
+        return this.openChest(chest);
+      }
+    }
+
+    // 2. World Items (Weapons / Shop Potions)
+    for (let i = 0; i < this.worldItems.length; i++) {
+      const item = this.worldItems[i]!;
+      if (!item.pickedUp && distance(p.x, p.y, item.x, item.y) <= interactRange) {
+        if (this.pickupOrBuyWorldItem(item)) {
+          return true;
+        }
+      }
+    }
+
+    // 3. Ancient Shrine
+    for (let i = 0; i < this.npcEntities.length; i++) {
+      const npc = this.npcEntities[i]!;
+      if (
+        npc.kind === 'shrine' &&
+        !npc.interacted &&
+        distance(p.x, p.y, npc.x, npc.y) <= interactRange + 8
+      ) {
+        return this.activateShrine(npc);
+      }
+    }
+
+    // 4. Active Portal
+    if (this.portalActive && distance(p.x, p.y, this.portalX, this.portalY) <= interactRange + 8) {
+      return this.enterPortal();
+    }
+
+    // 5. Unlocked Doors
+    for (let i = 0; i < this.doors.length; i++) {
+      const door = this.doors[i]!;
+      if (!door.locked && distance(p.x, p.y, door.x, door.y) <= interactRange + 8) {
+        return this.enterRoom(door.targetRoomId, door.dir);
+      }
+    }
+
+    return false;
+  }
+
   /**
    * Executes a single 60Hz deterministic simulation tick (dtSec = 1/60).
    */
   public step(dtSec: number): void {
     this.tick += 1;
+    this.runStats.ticksElapsed += 1;
+    if (this.doorTransitionCooldown > 0) {
+      this.doorTransitionCooldown = Math.max(0, this.doorTransitionCooldown - dtSec);
+    }
+
+    if (this.botAutoPlayActive && !this.stressTestActive) {
+      this.stepBotAutoPlay(dtSec);
+    }
 
     // 1. Save previous positions for render interpolation
     this.player.prevX = this.player.x;
@@ -952,7 +2046,7 @@ export class WorldSim {
     // 9. Update Pickups (Magnet & Collection)
     this.updatePickups(dtSec);
 
-    // 10. Stress Test top-up or normal wave completion
+    // 10. Stress Test top-up or Dungeon Room / Wave progression
     if (this.stressTestActive) {
       const enemyTypes = PHASE1_SAMPLE_ENEMIES;
       while (this.enemies.length < 80) {
@@ -964,24 +2058,8 @@ export class WorldSim {
       if (this.projectiles.length < 610) {
         this.topUpStressTestProjectiles(625);
       }
-    } else if (this.autoRespawnWaves) {
-      let hasCombatEnemies = false;
-      for (let i = 0; i < this.enemies.length; i++) {
-        const e = this.enemies[i]!;
-        if (!e.isDummy && e.hp > 0) {
-          hasCombatEnemies = true;
-          break;
-        }
-      }
-      if (!hasCombatEnemies) {
-        this.waveRespawnTimer += dtSec;
-        if (this.waveRespawnTimer >= 1.5) {
-          this.waveRespawnTimer = 0;
-          this.spawnSampleWave();
-        }
-      } else {
-        this.waveRespawnTimer = 0;
-      }
+    } else {
+      this.updateCurrentRoomProgression(dtSec);
     }
 
     // Prune old DPS history (> 3 seconds = 180 ticks)
@@ -1005,6 +2083,288 @@ export class WorldSim {
     this.prevButtons = this.currentInput.buttons;
     this.latchedButtons = 0;
     this.latchedWeaponSlot = null;
+  }
+
+  private updateCurrentRoomProgression(dtSec: number): void {
+    const room = this.getCurrentRoom();
+    if (room.type === 'start' && this.map.getTile(18, 0) !== 'cracked_wall') {
+      this.secretWallBroken = true;
+    }
+
+    const hasCombatEnemies = this.hasActiveCombatEnemies();
+
+    for (let i = 0; i < this.doors.length; i++) {
+      const d = this.doors[i]!;
+      if (d.isSecretPassage) {
+        d.locked = !this.secretWallBroken || hasCombatEnemies;
+      } else {
+        d.locked = hasCombatEnemies;
+      }
+    }
+
+    if (!hasCombatEnemies) {
+      if (!room.cleared) {
+        if (room.wavesSpawned < room.wavesTotal) {
+          this.waveRespawnTimer += dtSec;
+          if (this.waveRespawnTimer >= 0.85) {
+            this.waveRespawnTimer = 0;
+            this.spawnNextRoomWave();
+          }
+        } else {
+          this.onRoomCleared(room);
+        }
+      } else if (room.type === 'start' && this.autoRespawnWaves && !this.botAutoPlayActive) {
+        this.waveRespawnTimer += dtSec;
+        if (this.waveRespawnTimer >= 1.5) {
+          this.waveRespawnTimer = 0;
+          this.spawnSampleWave();
+        }
+      }
+    } else {
+      this.waveRespawnTimer = 0;
+    }
+  }
+
+  public stepBotAutoPlay(_dtSec: number): void {
+    const p = this.player;
+    p.godMode = true;
+    p.energy = p.maxEnergy;
+
+    if (this.runState === 'buff_choice' && this.pendingBuffChoices.length > 0) {
+      this.selectFloorBuff(this.pendingBuffChoices[0]!);
+      return;
+    }
+    if (this.runState === 'victory' || this.runState === 'defeat') {
+      return;
+    }
+
+    // Equip best ranged weapon in slots
+    let bestSlot = p.activeWeaponSlot;
+    let bestScore = -1;
+    for (let s = 0; s < p.weaponSlots.length; s++) {
+      const wid = p.weaponSlots[s]!;
+      const w = WEAPONS[wid];
+      if (!w || w.category === 'melee') continue;
+      const score = w.damage * w.fireRate * Math.max(1, w.pelletCount);
+      if (score > bestScore) {
+        bestScore = score;
+        bestSlot = s;
+      }
+    }
+    if (bestSlot !== p.activeWeaponSlot) {
+      this.equipWeaponSlot(bestSlot);
+    }
+
+    // 1. Fight active non-dummy enemies
+    let nearestEnemy: SimEnemyState | null = null;
+    let nearestDist = Infinity;
+    for (let i = 0; i < this.enemies.length; i++) {
+      const e = this.enemies[i]!;
+      if (e.isDummy || e.hp <= 0) continue;
+      const d = distance(p.x, p.y, e.x, e.y);
+      if (d < nearestDist) {
+        nearestDist = d;
+        nearestEnemy = e;
+      }
+    }
+
+    if (nearestEnemy) {
+      const angleToEnemy = Math.atan2(nearestEnemy.y - p.y, nearestEnemy.x - p.x);
+      const orbitDir = Math.sin(this.tick * 0.025) >= 0 ? 1 : -1;
+      const strafeAng = angleToEnemy + orbitDir * Math.PI * 0.5;
+      let moveX = 0;
+      let moveY = 0;
+      if (nearestDist > 190) {
+        moveX = Math.cos(angleToEnemy) * 0.8 + Math.cos(strafeAng) * 0.6;
+        moveY = Math.sin(angleToEnemy) * 0.8 + Math.sin(strafeAng) * 0.6;
+      } else if (nearestDist < 110) {
+        moveX = -Math.cos(angleToEnemy) * 0.8 + Math.cos(strafeAng) * 0.6;
+        moveY = -Math.sin(angleToEnemy) * 0.8 + Math.sin(strafeAng) * 0.6;
+      } else {
+        moveX = Math.cos(strafeAng);
+        moveY = Math.sin(strafeAng);
+      }
+
+      let buttons = INPUT_BUTTON.FIRE;
+      if (p.skillCooldownTimer <= 0 && p.skillActiveTimer <= 0) {
+        buttons |= INPUT_BUTTON.SKILL;
+      }
+      if (p.dashCooldownTimer <= 0 && nearestDist < 105) {
+        buttons |= INPUT_BUTTON.DASH;
+      }
+
+      this.setPlayerInput({
+        seq: this.tick,
+        tick: this.tick,
+        moveX,
+        moveY,
+        aimAngle: angleToEnemy,
+        buttons,
+        weaponSlotSelect: null,
+      });
+      return;
+    }
+
+    // 2. Open unopened chests in current room
+    const unopenedChest = this.chests.find((c) => !c.opened);
+    if (unopenedChest) {
+      const d = distance(p.x, p.y, unopenedChest.x, unopenedChest.y);
+      if (d <= 56) {
+        this.openChest(unopenedChest);
+      } else {
+        const ang = Math.atan2(unopenedChest.y - p.y, unopenedChest.x - p.x);
+        this.setPlayerInput({
+          seq: this.tick,
+          tick: this.tick,
+          moveX: Math.cos(ang),
+          moveY: Math.sin(ang),
+          aimAngle: ang,
+          buttons: INPUT_BUTTON.INTERACT,
+        });
+      }
+      return;
+    }
+
+    // 3. Pick up free weapons on the ground
+    const freeItem = this.worldItems.find((it) => !it.pickedUp && it.costGold === 0);
+    if (freeItem) {
+      const d = distance(p.x, p.y, freeItem.x, freeItem.y);
+      if (d <= 56) {
+        this.pickupOrBuyWorldItem(freeItem);
+      } else {
+        const ang = Math.atan2(freeItem.y - p.y, freeItem.x - p.x);
+        this.setPlayerInput({
+          seq: this.tick,
+          tick: this.tick,
+          moveX: Math.cos(ang),
+          moveY: Math.sin(ang),
+          aimAngle: ang,
+          buttons: INPUT_BUTTON.INTERACT,
+        });
+      }
+      return;
+    }
+
+    // 4. Activate Shrine if present
+    const unusedShrine = this.npcEntities.find((n) => n.kind === 'shrine' && !n.interacted);
+    if (unusedShrine) {
+      const d = distance(p.x, p.y, unusedShrine.x, unusedShrine.y);
+      if (d <= 58) {
+        this.activateShrine(unusedShrine);
+      } else {
+        const ang = Math.atan2(unusedShrine.y - p.y, unusedShrine.x - p.x);
+        this.setPlayerInput({
+          seq: this.tick,
+          tick: this.tick,
+          moveX: Math.cos(ang),
+          moveY: Math.sin(ang),
+          aimAngle: ang,
+          buttons: INPUT_BUTTON.INTERACT,
+        });
+      }
+      return;
+    }
+
+    // 5. Enter active portal if in portal/boss room
+    if (this.portalActive) {
+      const d = distance(p.x, p.y, this.portalX, this.portalY);
+      if (d <= 58) {
+        this.enterPortal();
+      } else {
+        const ang = Math.atan2(this.portalY - p.y, this.portalX - p.x);
+        this.setPlayerInput({
+          seq: this.tick,
+          tick: this.tick,
+          moveX: Math.cos(ang),
+          moveY: Math.sin(ang),
+          aimAngle: ang,
+          buttons: INPUT_BUTTON.INTERACT,
+        });
+      }
+      return;
+    }
+
+    // 6. Navigate via BFS to the next uncleared / unvisited room (or portal/boss room)
+    const nextDoor = this.findNextBotDoor();
+    if (nextDoor && !nextDoor.locked) {
+      const d = distance(p.x, p.y, nextDoor.x, nextDoor.y);
+      if (d <= 60) {
+        this.enterRoom(nextDoor.targetRoomId, nextDoor.dir);
+      } else {
+        const cx = this.map.width * 0.5;
+        const cy = this.map.height * 0.5;
+        // Route through the central cross corridor if far from axis to avoid corner pillars
+        let tx = nextDoor.x;
+        let ty = nextDoor.y;
+        if (
+          (nextDoor.dir === 'N' || nextDoor.dir === 'S') &&
+          Math.abs(p.x - nextDoor.x) > 90 &&
+          Math.abs(p.y - cy) > 70
+        ) {
+          tx = cx;
+          ty = cy;
+        } else if (
+          (nextDoor.dir === 'E' || nextDoor.dir === 'W') &&
+          Math.abs(p.y - nextDoor.y) > 90 &&
+          Math.abs(p.x - cx) > 70
+        ) {
+          tx = cx;
+          ty = cy;
+        }
+        const ang = Math.atan2(ty - p.y, tx - p.x);
+        this.setPlayerInput({
+          seq: this.tick,
+          tick: this.tick,
+          moveX: Math.cos(ang),
+          moveY: Math.sin(ang),
+          aimAngle: ang,
+          buttons: INPUT_BUTTON.INTERACT,
+        });
+      }
+    }
+  }
+
+  private findNextBotDoor(): SimDoorState | null {
+    const unlockedDoors = this.doors.filter((d) => !d.locked);
+    if (unlockedDoors.length === 0) return null;
+
+    // BFS from currentRoomId to find shortest path to exitRoomId (portal on Floor 1, boss on Floor 2)
+    const queue: { roomId: number; firstDir: CardinalDir }[] = [];
+    const visited = new Set<number>([this.currentRoomId]);
+
+    for (const d of unlockedDoors) {
+      visited.add(d.targetRoomId);
+      queue.push({ roomId: d.targetRoomId, firstDir: d.dir });
+    }
+
+    let unvisitedDir: CardinalDir | null = null;
+    while (queue.length > 0) {
+      const curr = queue.shift()!;
+      const room = this.dungeon.rooms[curr.roomId];
+      if (!room) continue;
+      if (curr.roomId === this.dungeon.exitRoomId) {
+        return unlockedDoors.find((d) => d.dir === curr.firstDir) ?? unlockedDoors[0]!;
+      }
+      if (
+        unvisitedDir === null &&
+        room.discovery !== 'visited' &&
+        room.discovery !== 'cleared' &&
+        room.type !== 'secret'
+      ) {
+        unvisitedDir = curr.firstDir;
+      }
+      for (const nextId of Object.values(room.connections)) {
+        if (nextId !== undefined && !visited.has(nextId)) {
+          visited.add(nextId);
+          queue.push({ roomId: nextId, firstDir: curr.firstDir });
+        }
+      }
+    }
+
+    if (unvisitedDir !== null) {
+      return unlockedDoors.find((d) => d.dir === unvisitedDir) ?? unlockedDoors[0]!;
+    }
+    return unlockedDoors[0]!;
   }
 
   private recordDamageHistory(amount: number): void {
@@ -1035,7 +2395,7 @@ export class WorldSim {
     this.enemySpatialGrid.clear();
     for (let i = 0; i < this.enemies.length; i++) {
       const e = this.enemies[i]!;
-      if (e.hp > 0 && e.aiState !== 'spawning') {
+      if (e.hp > 0 && e.aiState !== 'spawning' && !e.bossBurrowed) {
         this.enemySpatialGrid.insert(e);
       }
     }
@@ -1069,6 +2429,10 @@ export class WorldSim {
       this.cycleWeapon(1);
     }
 
+    if (justPressed & INPUT_BUTTON.INTERACT) {
+      this.interactWithNearest();
+    }
+
     if (p.dashCooldownTimer > 0) p.dashCooldownTimer = Math.max(0, p.dashCooldownTimer - dtSec);
     if (p.invulnerableTimer > 0) p.invulnerableTimer = Math.max(0, p.invulnerableTimer - dtSec);
     if (p.hurtFlashTimer > 0) p.hurtFlashTimer = Math.max(0, p.hurtFlashTimer - dtSec);
@@ -1079,7 +2443,8 @@ export class WorldSim {
       p.grassRustleCooldown = Math.max(0, p.grassRustleCooldown - dtSec);
 
     if (p.energy < p.maxEnergy) {
-      this.energyRegenAccum += dtSec * 3.5;
+      const regenMult = this.activeBuffIds.includes('arcane_wellspring') ? 1.5 : 1.0;
+      this.energyRegenAccum += dtSec * 3.5 * regenMult;
       if (this.energyRegenAccum >= 1) {
         const gain = Math.floor(this.energyRegenAccum);
         this.energyRegenAccum -= gain;
@@ -1126,9 +2491,12 @@ export class WorldSim {
       (this.stressTestActive && p.dashCooldownTimer <= 0 && this.tick % 90 === 0);
 
     if (triggerDash && p.dashCooldownTimer <= 0 && p.dashTimer <= 0) {
+      const dashCd = this.activeBuffIds.includes('gale_reflex')
+        ? DASH_COOLDOWN_SEC * 0.75
+        : DASH_COOLDOWN_SEC;
       p.dashTimer = DASH_DURATION_SEC;
       p.invulnerableTimer = Math.max(p.invulnerableTimer, DASH_IFRAME_SEC);
-      p.dashCooldownTimer = DASH_COOLDOWN_SEC;
+      p.dashCooldownTimer = dashCd;
       if (dirX !== 0 || dirY !== 0) {
         p.dashDirX = dirX;
         p.dashDirY = dirY;
@@ -1154,8 +2522,12 @@ export class WorldSim {
         this.releaseVanguardShieldShockwave();
       } else if (p.skillCooldownTimer <= 0) {
         const skillDef = CHARACTERS.vanguard.skill;
-        p.skillActiveTimer = skillDef.durationSec;
+        const bonusDur = this.activeBuffIds.includes('vanguard_fortress') ? 1.5 : 0;
+        p.skillActiveTimer = skillDef.durationSec + bonusDur;
         p.shieldStoredBullets = 0;
+        if (this.activeBuffIds.includes('vanguard_fortress')) {
+          p.armor = Math.min(p.maxArmor, p.armor + 2);
+        }
         this.events.push({
           kind: 'skill_cast',
           playerId: p.id,
@@ -1218,6 +2590,24 @@ export class WorldSim {
 
     if ((inp.buttons & INPUT_BUTTON.FIRE) && p.fireCooldownTimer <= 0 && p.hp > 0) {
       this.tryFireActiveWeapon();
+    }
+
+    if (!this.stressTestActive && this.doorTransitionCooldown <= 0 && !this.hasActiveCombatEnemies()) {
+      for (let i = 0; i < this.doors.length; i++) {
+        const door = this.doors[i]!;
+        if (door.locked) continue;
+        if (distance(p.x, p.y, door.x, door.y) <= 26) {
+          const movingIntoDoor =
+            (door.dir === 'N' && dirY < -0.3) ||
+            (door.dir === 'S' && dirY > 0.3) ||
+            (door.dir === 'W' && dirX < -0.3) ||
+            (door.dir === 'E' && dirX > 0.3);
+          if (movingIntoDoor) {
+            this.enterRoom(door.targetRoomId, door.dir);
+            break;
+          }
+        }
+      }
     }
   }
 
@@ -1445,6 +2835,8 @@ export class WorldSim {
           const wallCy = ty * TILE_SIZE + TILE_SIZE / 2;
           if (distance(barrel.x, barrel.y, wallCx, wallCy) <= blastR + TILE_SIZE * 0.7) {
             if (this.map.destroyCrackedWall(tx, ty)) {
+              this.secretWallBroken = true;
+              this.rebuildCurrentRoomDoors();
               this.events.push({
                 kind: 'cracked_wall_broken',
                 tx,
@@ -1474,7 +2866,8 @@ export class WorldSim {
     }
 
     // 3. Damage enemies in blast radius (+ apply burn or shatter frozen enemies!)
-    for (let i = 0; i < this.enemies.length; i++) {
+    const blastEnemyCount = this.enemies.length;
+    for (let i = 0; i < blastEnemyCount; i++) {
       const e = this.enemies[i]!;
       if (e.hp <= 0 || e.aiState === 'spawning') continue;
       const d = distance(barrel.x, barrel.y, e.x, e.y);
@@ -1514,11 +2907,42 @@ export class WorldSim {
     p.skillCooldownTimer = skillDef.cooldownSec;
     p.shieldStoredBullets = 0;
 
-    const shockwaveDamage = 12 + stored * 4;
-    const halfArc = (65 * Math.PI) / 180;
-    const range = 135;
+    const hasFortressUpgrade = this.activeBuffIds.includes('vanguard_fortress');
+    const hasChargeUpgrade = this.activeBuffIds.includes('vanguard_charge');
+    if (hasChargeUpgrade) {
+      const stepDist = 11;
+      const dirX = Math.cos(p.aimAngle);
+      const dirY = Math.sin(p.aimAngle);
+      for (let s = 0; s < 10; s++) {
+        const nextX = p.x + dirX * stepDist;
+        const nextY = p.y + dirY * stepDist;
+        const resolved = this.map.resolveCircleCollision(nextX, nextY, p.radius);
+        p.x = resolved.x;
+        p.y = resolved.y;
+      }
+      this.events.push({
+        kind: 'dash_started',
+        playerId: p.id,
+        x: p.x,
+        y: p.y,
+        dirX,
+        dirY,
+      });
+    }
 
-    for (let i = 0; i < this.enemies.length; i++) {
+    const baseShockDmg = 12 + stored * 4 + (hasFortressUpgrade ? 8 : 0);
+    const shockwaveDamage = baseShockDmg * (hasChargeUpgrade ? 2 : 1);
+    const shockElement: ElementType =
+      p.activeImbueElement !== 'none'
+        ? p.activeImbueElement
+        : hasChargeUpgrade
+          ? 'burn'
+          : 'none';
+    const halfArc = hasFortressUpgrade ? Math.PI : (65 * Math.PI) / 180;
+    const range = hasChargeUpgrade ? 165 : hasFortressUpgrade ? 150 : 135;
+
+    const shockEnemyCount = this.enemies.length;
+    for (let i = 0; i < shockEnemyCount; i++) {
       const e = this.enemies[i]!;
       if (e.hp <= 0 || e.aiState === 'spawning') continue;
       if (isCircleInCone(p.x, p.y, p.aimAngle, halfArc, range, e)) {
@@ -1526,10 +2950,10 @@ export class WorldSim {
         this.applyDamageToEnemy(
           e,
           shockwaveDamage,
-          stored >= 2,
-          p.activeImbueElement,
+          stored >= 2 || hasChargeUpgrade || hasFortressUpgrade,
+          shockElement,
           angleToEnemy,
-          260,
+          hasChargeUpgrade ? 340 : 260,
           true,
         );
       }
@@ -1562,8 +2986,13 @@ export class WorldSim {
       return;
     }
 
+    const hasGaleReflex = this.activeBuffIds.includes('gale_reflex');
+    const hasEaglePrecision = this.activeBuffIds.includes('eagle_precision');
+    const hasRicochetMastery = this.activeBuffIds.includes('ricochet_mastery');
+
     p.energy = Math.max(0, p.energy - cost);
-    p.fireCooldownTimer = 1 / w.fireRate;
+    const effectiveFireRate = w.fireRate * (hasGaleReflex ? 1.22 : 1);
+    p.fireCooldownTimer = 1 / effectiveFireRate;
     p.recoilTimer = 0.12;
     const shotElement: ElementType =
       p.activeImbueElement !== 'none' ? p.activeImbueElement : w.element;
@@ -1608,11 +3037,12 @@ export class WorldSim {
       }
 
       // Hit props in melee cone
+      const baseMeleeDmg = hasEaglePrecision ? Math.round(w.damage * 1.2) : w.damage;
       for (let i = 0; i < this.props.length; i++) {
         const prop = this.props[i]!;
         if (!prop.destructible || prop.hp <= 0) continue;
         if (isCircleInCone(p.x, p.y, p.aimAngle, halfArc, MELEE_RANGE + 6, prop)) {
-          this.damageProp(prop, w.damage, shotElement);
+          this.damageProp(prop, baseMeleeDmg, shotElement);
         }
       }
 
@@ -1620,13 +3050,18 @@ export class WorldSim {
       const baseCrit = CHARACTERS[p.characterId]?.baseCritChance ?? 0.05;
       let hitAny = false;
       let anyCrit = false;
-      for (let i = 0; i < this.enemies.length; i++) {
+      const meleeEnemyCount = this.enemies.length;
+      for (let i = 0; i < meleeEnemyCount; i++) {
         const e = this.enemies[i]!;
         if (e.hp <= 0 || e.aiState === 'spawning') continue;
         if (isCircleInCone(p.x, p.y, p.aimAngle, halfArc, MELEE_RANGE, e)) {
-          const critChance = clamp(baseCrit + w.critChance, 0, 1);
+          const critChance = clamp(
+            baseCrit + w.critChance + (hasEaglePrecision ? 0.18 : 0),
+            0,
+            1,
+          );
           const isCrit = this.rng.chance(critChance);
-          const dmg = isCrit ? Math.round(w.damage * 1.5) : w.damage;
+          const dmg = isCrit ? Math.round(baseMeleeDmg * 1.5) : baseMeleeDmg;
           const hitAngle = Math.atan2(e.y - p.y, e.x - p.x);
           this.applyDamageToEnemy(e, dmg, isCrit, shotElement, hitAngle, w.knockback, true);
           hitAny = true;
@@ -1663,6 +3098,7 @@ export class WorldSim {
     const spawnX = p.x + Math.cos(p.aimAngle) * muzzleDist;
     const spawnY = p.y + Math.sin(p.aimAngle) * muzzleDist;
     const baseCrit = CHARACTERS[p.characterId]?.baseCritChance ?? 0.05;
+    const rawWeaponDmg = hasEaglePrecision ? Math.round(w.damage * 1.2) : w.damage;
 
     for (let i = 0; i < pellets; i++) {
       let angleOffset = 0;
@@ -1674,9 +3110,13 @@ export class WorldSim {
       }
 
       const shotAngle = p.aimAngle + angleOffset;
-      const critChance = clamp(baseCrit + w.critChance, 0, 1);
+      const critChance = clamp(
+        baseCrit + w.critChance + (hasEaglePrecision ? 0.18 : 0),
+        0,
+        1,
+      );
       const isCrit = this.rng.chance(critChance);
-      const baseDmg = shieldBoost ? Math.round(w.damage * 1.3) : w.damage;
+      const baseDmg = shieldBoost ? Math.round(rawWeaponDmg * 1.3) : rawWeaponDmg;
       const finalDmg = isCrit ? Math.round(baseDmg * 1.5) : baseDmg;
 
       const proj = this.acquireProjectile({
@@ -1693,8 +3133,9 @@ export class WorldSim {
         damage: finalDmg,
         isCrit,
         knockback: w.knockback,
-        pierceRemaining: w.pierceCount + (shieldBoost ? 1 : 0),
-        bounceRemaining: w.bounceCount,
+        pierceRemaining:
+          w.pierceCount + (shieldBoost ? 1 : 0) + (hasRicochetMastery ? 1 : 0),
+        bounceRemaining: w.bounceCount + (hasRicochetMastery ? 1 : 0),
         ttlSec: w.category === 'shotgun' ? 0.55 : 1.4,
         element: shotElement,
         amplifiedByShield: shieldBoost,
@@ -1770,6 +3211,16 @@ export class WorldSim {
         continue;
       }
 
+      // Elite Regen modifier: regenerates 4 HP/sec if not poisoned
+      if (e.isElite && e.eliteModifier === 'regen' && e.hp < e.maxHp && e.poisonTimer <= 0) {
+        e.regenAccum += dtSec * 4;
+        if (e.regenAccum >= 1) {
+          const healPts = Math.floor(e.regenAccum);
+          e.regenAccum -= healPts;
+          e.hp = Math.min(e.maxHp, e.hp + healPts);
+        }
+      }
+
       if (e.aiState === 'stunned') {
         e.vx = 0;
         e.vy = 0;
@@ -1790,13 +3241,29 @@ export class WorldSim {
           this.updateWildBoarAI(e, distToPlayer, angleToPlayer, dtSec);
         } else if (e.defId === 'spore_bomber') {
           this.updateSporeBomberAI(e, distToPlayer, angleToPlayer, dtSec);
+        } else if (e.defId === 'green_slime' || e.defId === 'mini_slime') {
+          this.updateSlimeAI(e, distToPlayer, angleToPlayer, dtSec);
+        } else if (e.defId === 'goblin_shaman') {
+          this.updateGoblinShamanAI(e, distToPlayer, angleToPlayer, dtSec);
+        } else if (e.defId === 'thorn_turret') {
+          this.updateThornTurretAI(e, distToPlayer, angleToPlayer, dtSec);
+        } else if (e.defId === 'spore_king') {
+          this.updateBossSporeKingAI(e, distToPlayer, angleToPlayer, dtSec);
         }
+      }
+
+      // Stationary turrets do not move or get knocked around
+      if (e.defId === 'thorn_turret') {
+        e.vx = 0;
+        e.vy = 0;
+        e.kbVx = 0;
+        e.kbVy = 0;
       }
 
       // Apply Chill (-30%) and Oil (-15%) movement speed modifiers
       let speedMult = 1.0;
       if (e.chillTimer > 0) speedMult *= 0.7;
-      if (surf === 'oil' || surf === 'poison_swamp') speedMult *= 0.85;
+      if ((surf === 'oil' || surf === 'poison_swamp') && !e.isBoss) speedMult *= 0.85;
       e.vx *= speedMult;
       e.vy *= speedMult;
 
@@ -1809,17 +3276,19 @@ export class WorldSim {
       );
       let sepX = 0;
       let sepY = 0;
-      for (let j = 0; j < nearby.length; j++) {
-        const other = nearby[j]!;
-        if (other.id === e.id || other.hp <= 0) continue;
-        const odx = e.x - other.x;
-        const ody = e.y - other.y;
-        const d = Math.hypot(odx, ody);
-        const minSep = e.radius + other.radius + 4;
-        if (d > 0.001 && d < minSep) {
-          const push = ((minSep - d) / minSep) * 90;
-          sepX += (odx / d) * push;
-          sepY += (ody / d) * push;
+      if (e.defId !== 'thorn_turret' && !e.bossBurrowed) {
+        for (let j = 0; j < nearby.length; j++) {
+          const other = nearby[j]!;
+          if (other.id === e.id || other.hp <= 0) continue;
+          const odx = e.x - other.x;
+          const ody = e.y - other.y;
+          const d = Math.hypot(odx, ody);
+          const minSep = e.radius + other.radius + 4;
+          if (d > 0.001 && d < minSep) {
+            const push = ((minSep - d) / minSep) * 90;
+            sepX += (odx / d) * push;
+            sepY += (ody / d) * push;
+          }
         }
       }
 
@@ -1872,7 +3341,7 @@ export class WorldSim {
         e.burnTickTimer = 0.25;
       }
       e.burnTimer = Math.max(e.burnTimer, 2.5);
-    } else if (surf === 'poison_swamp') {
+    } else if (surf === 'poison_swamp' && !e.isBoss && e.defId !== 'spore_bomber') {
       if (e.poisonTimer <= 0) {
         e.poisonTickTimer = 0.3;
       }
@@ -1934,6 +3403,8 @@ export class WorldSim {
     }
     enemy.hp = Math.max(0, enemy.hp - amount);
     this.recordDamageHistory(amount);
+    this.runStats.damageDealt += amount;
+    this.checkBossPhaseTransitions(enemy);
 
     if (!this.stressTestActive) {
       this.events.push({
@@ -1952,13 +3423,7 @@ export class WorldSim {
     }
 
     if (enemy.hp <= 0 && !enemy.isDummy) {
-      this.events.push({
-        kind: 'entity_killed',
-        entityId: enemy.id,
-        defId: enemy.defId,
-        x: enemy.x,
-        y: enemy.y,
-      });
+      this.handleEnemyKilled(enemy);
     }
   }
 
@@ -1968,6 +3433,7 @@ export class WorldSim {
     angleToPlayer: number,
     dtSec: number,
   ): void {
+    const cdMult = e.isElite && e.eliteModifier === 'fast' ? 0.72 : 1.0;
     if (e.aiState === 'telegraph') {
       e.vx = 0;
       e.vy = 0;
@@ -2019,7 +3485,7 @@ export class WorldSim {
 
         e.aiState = 'cooldown';
         e.stateTimer = 0.35;
-        e.attackCooldownTimer = ENEMIES.goblin_shooter?.attackCooldownSec ?? 1.9;
+        e.attackCooldownTimer = (ENEMIES.goblin_shooter?.attackCooldownSec ?? 1.9) * cdMult;
       }
       return;
     }
@@ -2078,6 +3544,7 @@ export class WorldSim {
     angleToPlayer: number,
     dtSec: number,
   ): void {
+    const cdMult = e.isElite && e.eliteModifier === 'fast' ? 0.72 : 1.0;
     if (e.aiState === 'telegraph') {
       e.vx = 0;
       e.vy = 0;
@@ -2101,7 +3568,7 @@ export class WorldSim {
         this.applyDamageToPlayer(e.damage, e.telegraphAngle, 240, e.defId);
         e.aiState = 'cooldown';
         e.stateTimer = 0.5;
-        e.attackCooldownTimer = ENEMIES.wild_boar?.attackCooldownSec ?? 2.6;
+        e.attackCooldownTimer = (ENEMIES.wild_boar?.attackCooldownSec ?? 2.6) * cdMult;
         e.vx = 0;
         e.vy = 0;
         return;
@@ -2110,7 +3577,7 @@ export class WorldSim {
       if (e.stateTimer <= 0) {
         e.aiState = 'cooldown';
         e.stateTimer = 0.45;
-        e.attackCooldownTimer = ENEMIES.wild_boar?.attackCooldownSec ?? 2.6;
+        e.attackCooldownTimer = (ENEMIES.wild_boar?.attackCooldownSec ?? 2.6) * cdMult;
         e.vx = 0;
         e.vy = 0;
       }
@@ -2198,6 +3665,17 @@ export class WorldSim {
     const blastRadius = SPORE_EXPLOSION_RADIUS;
     e.hp = 0;
 
+    // Leave a toxic poison_swamp puddle at the detonation site!
+    const centerTx = Math.floor(e.x / TILE_SIZE);
+    const centerTy = Math.floor(e.y / TILE_SIZE);
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        if (Math.abs(dx) + Math.abs(dy) <= 1) {
+          this.map.setSurface(centerTx + dx, centerTy + dy, 'poison_swamp', 9.0, false);
+        }
+      }
+    }
+
     const distP = distance(e.x, e.y, this.player.x, this.player.y);
     if (distP <= blastRadius + this.player.radius) {
       const pushAngle = Math.atan2(this.player.y - e.y, this.player.x - e.x);
@@ -2235,6 +3713,578 @@ export class WorldSim {
       durationMs: 45,
       trauma: 0.42,
     });
+  }
+
+  private updateSlimeAI(
+    e: SimEnemyState,
+    distToPlayer: number,
+    angleToPlayer: number,
+    dtSec: number,
+  ): void {
+    const lungeSpeed = e.defId === 'mini_slime' ? 255 : 225;
+    if (e.aiState === 'telegraph') {
+      e.vx = 0;
+      e.vy = 0;
+      e.aimAngle = e.telegraphAngle;
+      e.stateTimer -= dtSec;
+      if (e.stateTimer <= 0) {
+        e.aiState = 'attack';
+        e.stateTimer = 0.24;
+        e.vx = Math.cos(e.telegraphAngle) * lungeSpeed;
+        e.vy = Math.sin(e.telegraphAngle) * lungeSpeed;
+      }
+      return;
+    }
+
+    if (e.aiState === 'attack') {
+      e.vx = Math.cos(e.telegraphAngle) * lungeSpeed;
+      e.vy = Math.sin(e.telegraphAngle) * lungeSpeed;
+      e.stateTimer -= dtSec;
+      if (circleVsCircle(e, this.player)) {
+        this.applyDamageToPlayer(e.damage, e.telegraphAngle, 160, e.defId);
+        e.aiState = 'cooldown';
+        e.stateTimer = 0.35;
+        e.attackCooldownTimer = ENEMIES[e.defId]?.attackCooldownSec ?? 1.25;
+        e.vx = 0;
+        e.vy = 0;
+        return;
+      }
+      if (e.stateTimer <= 0) {
+        e.aiState = 'cooldown';
+        e.stateTimer = 0.3;
+        e.attackCooldownTimer = ENEMIES[e.defId]?.attackCooldownSec ?? 1.25;
+        e.vx = 0;
+        e.vy = 0;
+      }
+      return;
+    }
+
+    if (e.aiState === 'cooldown') {
+      e.vx = 0;
+      e.vy = 0;
+      e.stateTimer -= dtSec;
+      if (e.stateTimer <= 0) {
+        e.aiState = 'move';
+      }
+      return;
+    }
+
+    e.aimAngle = angleToPlayer;
+    if (e.attackCooldownTimer <= 0 && distToPlayer <= 65) {
+      e.aiState = 'telegraph';
+      e.stateTimer = e.telegraphDurationSec;
+      e.telegraphAngle = angleToPlayer;
+      e.vx = 0;
+      e.vy = 0;
+      if (!this.stressTestActive) {
+        this.events.push({
+          kind: 'enemy_telegraph',
+          enemyId: e.id,
+          defId: e.defId,
+          x: e.x,
+          y: e.y,
+          angle: e.telegraphAngle,
+          durationSec: e.telegraphDurationSec,
+          radius: 0,
+        });
+      }
+      return;
+    }
+
+    e.vx = Math.cos(angleToPlayer) * e.moveSpeed;
+    e.vy = Math.sin(angleToPlayer) * e.moveSpeed;
+  }
+
+  private updateGoblinShamanAI(
+    e: SimEnemyState,
+    distToPlayer: number,
+    angleToPlayer: number,
+    dtSec: number,
+  ): void {
+    const cdMult = e.isElite && e.eliteModifier === 'fast' ? 0.72 : 1.0;
+    if (e.aiState === 'telegraph') {
+      e.vx = 0;
+      e.vy = 0;
+      e.aimAngle = e.telegraphAngle;
+      e.stateTimer -= dtSec;
+      if (e.stateTimer <= 0) {
+        // 1. Heal injured allies within SHAMAN_HEAL_RADIUS (220u) if they are NOT poisoned!
+        let healedCount = 0;
+        for (let i = 0; i < this.enemies.length; i++) {
+          const ally = this.enemies[i]!;
+          if (ally.id === e.id || ally.isDummy || ally.hp <= 0) continue;
+          if (
+            ally.hp < ally.maxHp &&
+            ally.poisonTimer <= 0 &&
+            distance(e.x, e.y, ally.x, ally.y) <= SHAMAN_HEAL_RADIUS
+          ) {
+            ally.hp = Math.min(ally.maxHp, ally.hp + 10);
+            healedCount += 1;
+          }
+        }
+        if (healedCount > 0 && !this.stressTestActive) {
+          this.events.push({
+            kind: 'shaman_heal',
+            shamanId: e.id,
+            x: e.x,
+            y: e.y,
+            radius: SHAMAN_HEAL_RADIUS,
+            healedCount,
+          });
+        }
+
+        // 2. Fire a Poison Bolt toward the player
+        const bulletSpeed = 245;
+        const muzzleX = e.x + Math.cos(e.telegraphAngle) * 16;
+        const muzzleY = e.y + Math.sin(e.telegraphAngle) * 16;
+        const proj = this.acquireProjectile({
+          id: ++this.nextEntityId,
+          ownerId: e.id,
+          team: 'enemy',
+          weaponId: 'shaman_staff',
+          x: muzzleX,
+          y: muzzleY,
+          vx: Math.cos(e.telegraphAngle) * bulletSpeed,
+          vy: Math.sin(e.telegraphAngle) * bulletSpeed,
+          angle: e.telegraphAngle,
+          radius: 6,
+          damage: e.damage,
+          isCrit: false,
+          knockback: 80,
+          pierceRemaining: 0,
+          bounceRemaining: 0,
+          ttlSec: 2.3,
+          element: 'poison',
+          amplifiedByShield: false,
+        });
+        this.projectiles.push(proj);
+        if (!this.stressTestActive) {
+          this.events.push({
+            kind: 'projectile_spawned',
+            projectileId: proj.id,
+            weaponId: 'shaman_staff',
+            team: 'enemy',
+            x: muzzleX,
+            y: muzzleY,
+            angle: e.telegraphAngle,
+          });
+        }
+
+        e.aiState = 'cooldown';
+        e.stateTimer = 0.45;
+        e.attackCooldownTimer = (ENEMIES.goblin_shaman?.attackCooldownSec ?? 2.5) * cdMult;
+      }
+      return;
+    }
+
+    if (e.aiState === 'cooldown') {
+      e.vx = 0;
+      e.vy = 0;
+      e.stateTimer -= dtSec;
+      if (e.stateTimer <= 0) {
+        e.aiState = 'move';
+      }
+      return;
+    }
+
+    e.aimAngle = angleToPlayer;
+    if (e.attackCooldownTimer <= 0 && distToPlayer <= 380) {
+      e.aiState = 'telegraph';
+      e.stateTimer = e.telegraphDurationSec;
+      e.telegraphAngle = angleToPlayer;
+      e.telegraphRadius = 38;
+      e.vx = 0;
+      e.vy = 0;
+      if (!this.stressTestActive) {
+        this.events.push({
+          kind: 'enemy_telegraph',
+          enemyId: e.id,
+          defId: e.defId,
+          x: e.x,
+          y: e.y,
+          angle: e.telegraphAngle,
+          durationSec: e.telegraphDurationSec,
+          radius: 38,
+        });
+      }
+      return;
+    }
+
+    // Keep supportive distance (160..260u)
+    let moveDirX = 0;
+    let moveDirY = 0;
+    if (distToPlayer > 250) {
+      moveDirX = Math.cos(angleToPlayer);
+      moveDirY = Math.sin(angleToPlayer);
+    } else if (distToPlayer < 155) {
+      moveDirX = -Math.cos(angleToPlayer);
+      moveDirY = -Math.sin(angleToPlayer);
+    } else {
+      const perpAngle = angleToPlayer + (Math.PI / 2) * e.strafeSign;
+      moveDirX = Math.cos(perpAngle) * 0.7;
+      moveDirY = Math.sin(perpAngle) * 0.7;
+    }
+    e.vx = moveDirX * e.moveSpeed;
+    e.vy = moveDirY * e.moveSpeed;
+  }
+
+  private updateThornTurretAI(
+    e: SimEnemyState,
+    _distToPlayer: number,
+    angleToPlayer: number,
+    dtSec: number,
+  ): void {
+    const cdMult = e.isElite && e.eliteModifier === 'fast' ? 0.72 : 1.0;
+    e.vx = 0;
+    e.vy = 0;
+    e.aimAngle = angleToPlayer;
+
+    if (e.aiState === 'telegraph') {
+      e.stateTimer -= dtSec;
+      if (e.stateTimer <= 0) {
+        // Fire 6 radial thorns in 360 degrees
+        const bulletSpeed = 245;
+        for (let k = 0; k < 6; k++) {
+          const shotAngle = e.telegraphAngle + k * (Math.PI / 3);
+          const mx = e.x + Math.cos(shotAngle) * 14;
+          const my = e.y + Math.sin(shotAngle) * 14;
+          const proj = this.acquireProjectile({
+            id: ++this.nextEntityId,
+            ownerId: e.id,
+            team: 'enemy',
+            weaponId: 'thorn_burst',
+            x: mx,
+            y: my,
+            vx: Math.cos(shotAngle) * bulletSpeed,
+            vy: Math.sin(shotAngle) * bulletSpeed,
+            angle: shotAngle,
+            radius: 5,
+            damage: e.damage,
+            isCrit: false,
+            knockback: 75,
+            pierceRemaining: 0,
+            bounceRemaining: 0,
+            ttlSec: 2.2,
+            element: 'none',
+            amplifiedByShield: false,
+          });
+          this.projectiles.push(proj);
+          if (!this.stressTestActive) {
+            this.events.push({
+              kind: 'projectile_spawned',
+              projectileId: proj.id,
+              weaponId: 'thorn_burst',
+              team: 'enemy',
+              x: mx,
+              y: my,
+              angle: shotAngle,
+            });
+          }
+        }
+        e.aiState = 'cooldown';
+        e.stateTimer = 0.4;
+        e.attackCooldownTimer = (ENEMIES.thorn_turret?.attackCooldownSec ?? 2.1) * cdMult;
+      }
+      return;
+    }
+
+    if (e.aiState === 'cooldown') {
+      e.stateTimer -= dtSec;
+      if (e.stateTimer <= 0) {
+        e.aiState = 'move';
+      }
+      return;
+    }
+
+    if (e.attackCooldownTimer <= 0) {
+      e.aiState = 'telegraph';
+      e.stateTimer = e.telegraphDurationSec;
+      e.telegraphAngle = angleToPlayer;
+      e.telegraphRadius = 32;
+      if (!this.stressTestActive) {
+        this.events.push({
+          kind: 'enemy_telegraph',
+          enemyId: e.id,
+          defId: e.defId,
+          x: e.x,
+          y: e.y,
+          angle: e.telegraphAngle,
+          durationSec: e.telegraphDurationSec,
+          radius: 32,
+        });
+      }
+    }
+  }
+
+  private checkBossPhaseTransitions(e: SimEnemyState): void {
+    if (!e.isBoss || e.hp <= 0) return;
+    const hpRatio = e.hp / e.maxHp;
+
+    if (hpRatio <= 0.66 && e.bossPhase === 1) {
+      e.bossPhase = 2;
+      e.attackCooldownTimer = 0.15;
+      this.events.push({
+        kind: 'boss_phase_changed',
+        enemyId: e.id,
+        phase: 2,
+        x: e.x,
+        y: e.y,
+      });
+      this.events.push({
+        kind: 'hit_stop',
+        durationMs: 60,
+        trauma: 0.6,
+      });
+    }
+
+    if (hpRatio <= 0.33 && e.bossPhase < 3) {
+      e.bossPhase = 3;
+      e.attackCooldownTimer = 0.15;
+      this.map.applyBossPhase3ToxicBorder();
+      this.events.push({
+        kind: 'boss_phase_changed',
+        enemyId: e.id,
+        phase: 3,
+        x: e.x,
+        y: e.y,
+      });
+      this.events.push({
+        kind: 'hit_stop',
+        durationMs: 80,
+        trauma: 0.78,
+      });
+    }
+  }
+
+  private updateBossSporeKingAI(
+    e: SimEnemyState,
+    distToPlayer: number,
+    angleToPlayer: number,
+    dtSec: number,
+  ): void {
+    this.checkBossPhaseTransitions(e);
+    e.aimAngle = angleToPlayer;
+
+    if (e.aiState === 'telegraph') {
+      e.vx = 0;
+      e.vy = 0;
+      e.stateTimer -= dtSec;
+      if (e.stateTimer <= 0) {
+        this.executeBossSporeKingAttack(e, angleToPlayer);
+      }
+      return;
+    }
+
+    if (e.aiState === 'cooldown') {
+      e.vx = 0;
+      e.vy = 0;
+      e.stateTimer -= dtSec;
+      if (e.stateTimer <= 0) {
+        e.aiState = 'move';
+      }
+      return;
+    }
+
+    if (e.attackCooldownTimer <= 0) {
+      e.aiState = 'telegraph';
+      e.stateTimer = e.bossPhase === 3 ? 0.52 : e.telegraphDurationSec;
+      e.telegraphAngle = angleToPlayer;
+
+      // In Phase 2 & 3, every odd attack cycle burrows underground and targets player's position!
+      if (e.bossPhase >= 2 && e.bossAttackCycle % 2 === 1) {
+        e.bossBurrowed = true;
+        const targetX = clamp(
+          this.player.x,
+          TILE_SIZE * 3.5,
+          this.map.width - TILE_SIZE * 3.5,
+        );
+        const targetY = clamp(
+          this.player.y,
+          TILE_SIZE * 3.5,
+          this.map.height - TILE_SIZE * 3.5,
+        );
+        e.bossTargetX = targetX;
+        e.bossTargetY = targetY;
+        e.x = targetX;
+        e.y = targetY;
+        e.prevX = targetX;
+        e.prevY = targetY;
+        e.telegraphRadius = BOSS_ERUPT_RADIUS;
+      } else {
+        e.bossBurrowed = false;
+        e.telegraphRadius = 60;
+      }
+
+      e.vx = 0;
+      e.vy = 0;
+      this.events.push({
+        kind: 'enemy_telegraph',
+        enemyId: e.id,
+        defId: e.defId,
+        x: e.x,
+        y: e.y,
+        angle: e.telegraphAngle,
+        durationSec: e.stateTimer,
+        radius: e.telegraphRadius,
+      });
+      return;
+    }
+
+    const phaseSpeedMult = e.bossPhase === 3 ? 1.35 : e.bossPhase === 2 ? 1.18 : 1.0;
+    if (distToPlayer > 95) {
+      e.vx = Math.cos(angleToPlayer) * e.moveSpeed * phaseSpeedMult;
+      e.vy = Math.sin(angleToPlayer) * e.moveSpeed * phaseSpeedMult;
+    } else {
+      const perp = angleToPlayer + Math.PI * 0.5 * e.strafeSign;
+      e.vx = Math.cos(perp) * e.moveSpeed * 0.7;
+      e.vy = Math.sin(perp) * e.moveSpeed * 0.7;
+    }
+  }
+
+  private executeBossSporeKingAttack(e: SimEnemyState, angleToPlayer: number): void {
+    const cycle = e.bossAttackCycle;
+    e.bossAttackCycle += 1;
+
+    if (e.bossBurrowed) {
+      // Phase 2/3 Burrow Eruption!
+      e.bossBurrowed = false;
+      const blastR = BOSS_ERUPT_RADIUS;
+      const tx = Math.floor(e.x / TILE_SIZE);
+      const ty = Math.floor(e.y / TILE_SIZE);
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          this.map.setSurface(tx + dx, ty + dy, 'poison_swamp', 10.0, false);
+        }
+      }
+
+      if (distance(e.x, e.y, this.player.x, this.player.y) <= blastR + this.player.radius) {
+        const pushAng = Math.atan2(this.player.y - e.y, this.player.x - e.x);
+        this.applyDamageToPlayer(e.damage + 1, pushAng, 260, e.defId);
+      }
+
+      // Erupt with 8 radial thorns
+      for (let k = 0; k < 8; k++) {
+        const ang = k * (Math.PI / 4) + (cycle % 2) * 0.2;
+        const proj = this.acquireProjectile({
+          id: ++this.nextEntityId,
+          ownerId: e.id,
+          team: 'enemy',
+          weaponId: 'thorn_burst',
+          x: e.x + Math.cos(ang) * 24,
+          y: e.y + Math.sin(ang) * 24,
+          vx: Math.cos(ang) * 255,
+          vy: Math.sin(ang) * 255,
+          angle: ang,
+          radius: 5.5,
+          damage: e.damage,
+          isCrit: false,
+          knockback: 110,
+          pierceRemaining: 0,
+          bounceRemaining: 0,
+          ttlSec: 2.3,
+          element: 'poison',
+          amplifiedByShield: false,
+        });
+        this.projectiles.push(proj);
+      }
+
+      this.events.push({
+        kind: 'explosion',
+        x: e.x,
+        y: e.y,
+        radius: blastR,
+        damage: e.damage + 1,
+        sourceDefId: e.defId,
+      });
+      this.events.push({
+        kind: 'hit_stop',
+        durationMs: 55,
+        trauma: 0.55,
+      });
+    } else {
+      // Spore Ring Nova + Summon Minions
+      const ringCount = e.bossPhase === 3 ? 16 : e.bossPhase === 2 ? 14 : 12;
+      const ringSpeed = e.bossPhase === 3 ? 255 : 225;
+      const baseOffset = cycle * 0.26;
+      for (let k = 0; k < ringCount; k++) {
+        const shotAngle = baseOffset + (k / ringCount) * Math.PI * 2;
+        const mx = e.x + Math.cos(shotAngle) * (e.radius + 6);
+        const my = e.y + Math.sin(shotAngle) * (e.radius + 6);
+        const proj = this.acquireProjectile({
+          id: ++this.nextEntityId,
+          ownerId: e.id,
+          team: 'enemy',
+          weaponId: 'boss_spore_ring',
+          x: mx,
+          y: my,
+          vx: Math.cos(shotAngle) * ringSpeed,
+          vy: Math.sin(shotAngle) * ringSpeed,
+          angle: shotAngle,
+          radius: 6,
+          damage: e.damage,
+          isCrit: false,
+          knockback: 95,
+          pierceRemaining: 0,
+          bounceRemaining: 0,
+          ttlSec: 2.6,
+          element: 'poison',
+          amplifiedByShield: false,
+        });
+        this.projectiles.push(proj);
+        this.events.push({
+          kind: 'projectile_spawned',
+          projectileId: proj.id,
+          weaponId: 'boss_spore_ring',
+          team: 'enemy',
+          x: mx,
+          y: my,
+          angle: shotAngle,
+        });
+      }
+
+      // Summon up to 2 spore minions on alternate cycles if active non-boss count < 4
+      const activeMinions = this.enemies.filter(
+        (m) => !m.isDummy && !m.isBoss && m.hp > 0,
+      ).length;
+      if (cycle % 2 === 1 && activeMinions < 3) {
+        const minionDef = e.bossPhase >= 2 ? 'spore_bomber' : 'mini_slime';
+        this.spawnEnemy(minionDef, e.x - 48, e.y - 36, false);
+        this.spawnEnemy('mini_slime', e.x + 48, e.y + 36, false);
+      }
+
+      // Phase 3 aimed 3-way toxic burst
+      if (e.bossPhase === 3) {
+        for (const mult of [-1, 0, 1]) {
+          const ang = angleToPlayer + mult * 0.22;
+          const proj = this.acquireProjectile({
+            id: ++this.nextEntityId,
+            ownerId: e.id,
+            team: 'enemy',
+            weaponId: 'shaman_staff',
+            x: e.x + Math.cos(ang) * 24,
+            y: e.y + Math.sin(ang) * 24,
+            vx: Math.cos(ang) * 290,
+            vy: Math.sin(ang) * 290,
+            angle: ang,
+            radius: 6.5,
+            damage: e.damage,
+            isCrit: false,
+            knockback: 110,
+            pierceRemaining: 0,
+            bounceRemaining: 0,
+            ttlSec: 2.4,
+            element: 'poison',
+            amplifiedByShield: false,
+          });
+          this.projectiles.push(proj);
+        }
+      }
+    }
+
+    e.aiState = 'cooldown';
+    e.stateTimer = e.bossPhase === 3 ? 0.35 : 0.45;
+    const baseCd = ENEMIES.spore_king?.attackCooldownSec ?? 2.2;
+    e.attackCooldownTimer = e.bossPhase === 3 ? baseCd * 0.65 : e.bossPhase === 2 ? baseCd * 0.82 : baseCd;
   }
 
   private updateProjectiles(dtSec: number): void {
@@ -2277,6 +4327,8 @@ export class WorldSim {
           (b.isCrit || b.element === 'burn')
         ) {
           if (this.map.destroyCrackedWall(wallHit.hitTx, wallHit.hitTy)) {
+            this.secretWallBroken = true;
+            this.rebuildCurrentRoomDoors();
             this.events.push({
               kind: 'cracked_wall_broken',
               tx: wallHit.hitTx,
@@ -2356,7 +4408,7 @@ export class WorldSim {
         );
         for (let j = 0; j < candidates.length; j++) {
           const enemy = candidates[j]!;
-          if (enemy.hp <= 0 || enemy.aiState === 'spawning') continue;
+          if (enemy.hp <= 0 || enemy.aiState === 'spawning' || enemy.bossBurrowed) continue;
           if (b.hitEntityIds.includes(enemy.id)) continue;
 
           if (circleVsCircle(b, enemy)) {
@@ -2401,7 +4453,9 @@ export class WorldSim {
           const dToPlayer = distance(b.x, b.y, p.x, p.y);
           if (dToPlayer <= shieldRadius + b.radius && dToPlayer >= p.radius * 0.5) {
             const angleFromPlayer = Math.atan2(b.y - p.y, b.x - p.x);
-            const halfShieldArc = (60 * Math.PI) / 180;
+            const halfShieldArc = this.activeBuffIds.includes('vanguard_fortress')
+              ? Math.PI
+              : (60 * Math.PI) / 180;
             if (Math.abs(angleDiff(angleFromPlayer, p.aimAngle)) <= halfShieldArc) {
               b.ttlSec = 0;
               p.shieldStoredBullets += 1;
@@ -2492,7 +4546,7 @@ export class WorldSim {
     knockback: number,
     isHeavyAttack = false,
   ): void {
-    if (enemy.hp <= 0) return;
+    if (enemy.hp <= 0 || enemy.bossBurrowed) return;
 
     let finalAmount = amount;
     let finalCrit = isCrit;
@@ -2514,15 +4568,24 @@ export class WorldSim {
     }
 
     const dmg = Math.max(1, Math.round(finalAmount));
+    let hitArmor = false;
     if (this.stressTestActive && enemy.hp <= dmg + 20) {
       enemy.hp = enemy.maxHp;
+    } else if (enemy.shieldArmor > 0) {
+      const absorbed = Math.min(enemy.shieldArmor, dmg);
+      enemy.shieldArmor -= absorbed;
+      const rem = dmg - absorbed;
+      hitArmor = absorbed > 0 && rem === 0;
+      enemy.hp = Math.max(0, enemy.hp - rem);
     } else {
       enemy.hp = Math.max(0, enemy.hp - dmg);
     }
     enemy.hitFlashTimer = 0.12;
     this.recordDamageHistory(dmg);
+    this.runStats.damageDealt += dmg;
+    this.checkBossPhaseTransitions(enemy);
 
-    const kbMult = enemy.isDummy ? 0.15 : 1.0;
+    const kbMult = enemy.isDummy ? 0.15 : enemy.defId === 'thorn_turret' ? 0 : enemy.isBoss ? 0.2 : 1.0;
     const kbX = Math.cos(hitAngleRad) * knockback * kbMult;
     const kbY = Math.sin(hitAngleRad) * knockback * kbMult;
     enemy.kbVx += kbX;
@@ -2542,7 +4605,7 @@ export class WorldSim {
         y: enemy.y,
         amount: dmg,
         isCrit: finalCrit,
-        hitArmor: false,
+        hitArmor,
         element,
         knockbackX: kbX,
         knockbackY: kbY,
@@ -2550,30 +4613,69 @@ export class WorldSim {
     }
 
     if (enemy.hp <= 0 && !enemy.isDummy) {
+      this.handleEnemyKilled(enemy);
+    }
+  }
+
+  private handleEnemyKilled(enemy: SimEnemyState): void {
+    this.runStats.kills += 1;
+    if (enemy.isElite) this.runStats.elitesKilled += 1;
+    if (enemy.isBoss) this.runStats.bossesKilled += 1;
+
+    this.events.push({
+      kind: 'entity_killed',
+      entityId: enemy.id,
+      defId: enemy.defId,
+      x: enemy.x,
+      y: enemy.y,
+    });
+
+    // Green Slime splits into 2 Mini Slimes on death!
+    if (enemy.defId === 'green_slime' && !this.stressTestActive) {
+      const m1 = this.spawnEnemy('mini_slime', enemy.x - 14, enemy.y - 8, true);
+      const m2 = this.spawnEnemy('mini_slime', enemy.x + 14, enemy.y + 8, true);
+      m1.kbVx = -95;
+      m1.kbVy = -45;
+      m2.kbVx = 95;
+      m2.kbVy = 45;
+    }
+
+    // Elite Explosive Death
+    if (!this.stressTestActive && enemy.isElite && enemy.eliteModifier === 'explosive_death') {
+      const blastR = 64;
+      this.map.igniteSurfaceInRadius(enemy.x, enemy.y, blastR);
       this.events.push({
-        kind: 'entity_killed',
-        entityId: enemy.id,
-        defId: enemy.defId,
+        kind: 'explosion',
         x: enemy.x,
         y: enemy.y,
+        radius: blastR,
+        damage: 14,
+        sourceDefId: enemy.defId,
       });
-
-      for (let k = 0; k < 2; k++) {
-        const ang = this.rng.nextFloat(-Math.PI, Math.PI);
-        const spd = this.rng.nextFloat(60, 130);
-        this.pickups.push(
-          this.acquirePickup({
-            id: ++this.nextEntityId,
-            kind: 'energy',
-            x: enemy.x,
-            y: enemy.y,
-            vx: Math.cos(ang) * spd,
-            vy: Math.sin(ang) * spd,
-            amount: 8,
-            ttlSec: 12,
-          }),
-        );
+      if (distance(enemy.x, enemy.y, this.player.x, this.player.y) <= blastR + this.player.radius && enemy.isElite) {
+        const ang = Math.atan2(this.player.y - enemy.y, this.player.x - enemy.x);
+        this.applyDamageToPlayer(2, ang, 180, enemy.defId);
       }
+    }
+
+    const dropMult = enemy.isBoss ? 6 : enemy.isElite ? 3 : 1;
+    for (let k = 0; k < 2 * dropMult; k++) {
+      const ang = this.rng.nextFloat(-Math.PI, Math.PI);
+      const spd = this.rng.nextFloat(60, 130);
+      this.pickups.push(
+        this.acquirePickup({
+          id: ++this.nextEntityId,
+          kind: 'energy',
+          x: enemy.x,
+          y: enemy.y,
+          vx: Math.cos(ang) * spd,
+          vy: Math.sin(ang) * spd,
+          amount: 8,
+          ttlSec: 14,
+        }),
+      );
+    }
+    for (let k = 0; k < dropMult; k++) {
       const coinAng = this.rng.nextFloat(-Math.PI, Math.PI);
       this.pickups.push(
         this.acquirePickup({
@@ -2584,7 +4686,7 @@ export class WorldSim {
           vx: Math.cos(coinAng) * 90,
           vy: Math.sin(coinAng) * 90,
           amount: 5,
-          ttlSec: 12,
+          ttlSec: 14,
         }),
       );
     }
@@ -2657,9 +4759,10 @@ export class WorldSim {
           });
         }
         // Chain lightning to up to 2 nearby enemies within 115 units
+        const maxChains = 2;
         const chainDmg = Math.max(2, Math.round(hitDamage * 0.5));
         let chained = 0;
-        for (let i = 0; i < this.enemies.length && chained < 2; i++) {
+        for (let i = 0; i < this.enemies.length && chained < maxChains; i++) {
           const other = this.enemies[i]!;
           if (other.id === enemy.id || other.hp <= 0 || other.aiState === 'spawning') continue;
           const d = distance(enemy.x, enemy.y, other.x, other.y);
@@ -2747,10 +4850,14 @@ export class WorldSim {
       trauma: hpDamage > 0 ? 0.45 : 0.28,
     });
 
-    if (p.hp <= 0 && this.autoRevivePlayer) {
-      p.hp = p.maxHp;
-      p.armor = p.maxArmor;
-      p.invulnerableTimer = 1.2;
+    if (p.hp <= 0) {
+      if (this.autoRevivePlayer) {
+        p.hp = p.maxHp;
+        p.armor = p.maxArmor;
+        p.invulnerableTimer = 1.2;
+      } else {
+        this.runState = 'defeat';
+      }
     }
 
     return true;
@@ -2786,6 +4893,7 @@ export class WorldSim {
           p.energy = Math.min(p.maxEnergy, p.energy + pk.amount);
         } else {
           p.gold += pk.amount;
+          this.runStats.goldEarned += pk.amount;
         }
         this.events.push({
           kind: 'pickup_collected',

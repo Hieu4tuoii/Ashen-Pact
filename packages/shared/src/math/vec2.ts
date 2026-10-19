@@ -62,6 +62,14 @@ export function circleVsAABB(circle: Circle, box: AABB): boolean {
   return distanceSq(circle.x, circle.y, closestX, closestY) <= circle.radius * circle.radius;
 }
 
+const circleAABBOut = {
+  x: 0,
+  y: 0,
+  collided: false,
+  normalX: 0,
+  normalY: 0,
+};
+
 /**
  * Resolves overlap between a moving circle and a static AABB (wall/pillar tile).
  * Returns the pushed-out position and whether a collision occurred.
@@ -79,7 +87,12 @@ export function resolveCircleVsAABB(
   const distSq = dx * dx + dy * dy;
 
   if (distSq > radius * radius) {
-    return { x, y, collided: false, normalX: 0, normalY: 0 };
+    circleAABBOut.x = x;
+    circleAABBOut.y = y;
+    circleAABBOut.collided = false;
+    circleAABBOut.normalX = 0;
+    circleAABBOut.normalY = 0;
+    return circleAABBOut;
   }
 
   // Circle center is outside the box
@@ -88,13 +101,12 @@ export function resolveCircleVsAABB(
     const nx = dx / dist;
     const ny = dy / dist;
     const penetration = radius - dist;
-    return {
-      x: x + nx * penetration,
-      y: y + ny * penetration,
-      collided: true,
-      normalX: nx,
-      normalY: ny,
-    };
+    circleAABBOut.x = x + nx * penetration;
+    circleAABBOut.y = y + ny * penetration;
+    circleAABBOut.collided = true;
+    circleAABBOut.normalX = nx;
+    circleAABBOut.normalY = ny;
+    return circleAABBOut;
   }
 
   // Circle center is inside the box: push out along minimum penetration axis
@@ -104,16 +116,33 @@ export function resolveCircleVsAABB(
   const bottomPen = box.maxY - y + radius;
   const minPen = Math.min(leftPen, rightPen, topPen, bottomPen);
 
+  circleAABBOut.collided = true;
   if (minPen === leftPen) {
-    return { x: box.minX - radius, y, collided: true, normalX: -1, normalY: 0 };
+    circleAABBOut.x = box.minX - radius;
+    circleAABBOut.y = y;
+    circleAABBOut.normalX = -1;
+    circleAABBOut.normalY = 0;
+    return circleAABBOut;
   }
   if (minPen === rightPen) {
-    return { x: box.maxX + radius, y, collided: true, normalX: 1, normalY: 0 };
+    circleAABBOut.x = box.maxX + radius;
+    circleAABBOut.y = y;
+    circleAABBOut.normalX = 1;
+    circleAABBOut.normalY = 0;
+    return circleAABBOut;
   }
   if (minPen === topPen) {
-    return { x, y: box.minY - radius, collided: true, normalX: 0, normalY: -1 };
+    circleAABBOut.x = x;
+    circleAABBOut.y = box.minY - radius;
+    circleAABBOut.normalX = 0;
+    circleAABBOut.normalY = -1;
+    return circleAABBOut;
   }
-  return { x, y: box.maxY + radius, collided: true, normalX: 0, normalY: 1 };
+  circleAABBOut.x = x;
+  circleAABBOut.y = box.maxY + radius;
+  circleAABBOut.normalX = 0;
+  circleAABBOut.normalY = 1;
+  return circleAABBOut;
 }
 
 /**

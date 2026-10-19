@@ -45,12 +45,12 @@
 
 ---
 
-## Phase 3 — Dungeon, Vòng Lặp Lượt Chơi & Biome 1 Hoàn Chỉnh (Vertical Slice Solo)
-- [ ] Sinh tầng procedural theo seed (đảm bảo liên thông — có unit test), các loại phòng, cửa khóa + đợt quái + vòng triệu hồi, minimap + fog of war, dịch chuyển giữa tầng.
-- [ ] Vũ khí ~12 cái, rương theo độ hiếm, xu + thương nhân + tượng thần, phòng bí mật, buff giữa tầng.
-- [ ] Toàn bộ quái + Elite biome 1, Boss Mục Vương đầy đủ 3 phase, màn hình thắng/thua/kết quả.
-- [ ] Thay toàn bộ placeholder bằng hình vẽ code hoàn chỉnh cho mọi entity/tile/icon của biome 1; cập nhật `ArtGallery`.
-- [ ] **DoD riêng Phase 3:** Chơi trọn biome 1 solo không lỗi; E2E bot tự đi qua 1 tầng bằng debug mà không crash; screenshot từng loại phòng + boss.
+## Phase 3 — Dungeon, Vòng Lặp Lượt Chơi & Biome 1 Hoàn Chỉnh (Vertical Slice Solo) (Hoàn thành ✅)
+- [x] Sinh tầng procedural theo seed (đảm bảo liên thông — có unit test), các loại phòng, cửa khóa + đợt quái + vòng triệu hồi, minimap + fog of war, dịch chuyển giữa tầng.
+- [x] Vũ khí ~12 cái (14 vũ khí đủ 5 bậc hiếm), rương theo độ hiếm, xu + thương nhân + tượng thần, phòng bí mật, buff giữa tầng.
+- [x] Toàn bộ quái + Elite biome 1, Boss Mục Vương đầy đủ 3 phase, màn hình thắng/thua/kết quả.
+- [x] Thay toàn bộ placeholder bằng hình vẽ code hoàn chỉnh cho mọi entity/tile/icon của biome 1; cập nhật `ArtGallery`.
+- [x] **DoD riêng Phase 3:** Chơi trọn biome 1 solo không lỗi; E2E bot tự đi qua 1 tầng bằng debug mà không crash; screenshot từng loại phòng + boss.
 
 ---
 

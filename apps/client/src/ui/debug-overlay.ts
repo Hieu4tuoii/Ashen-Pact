@@ -62,6 +62,20 @@ export interface GameDebugState {
   activeImbueElement: string;
   stressTestActive: boolean;
   heapUsedMb: number;
+  // Phase 3 Dungeon, Biome 1 & Boss telemetry
+  currentFloor: number;
+  currentRoomId: number;
+  currentRoomType: string;
+  totalRooms: number;
+  playerGold: number;
+  runState: 'playing' | 'buff_choice' | 'victory' | 'defeat';
+  bossActive: boolean;
+  bossPhase: number;
+  bossHp: number;
+  bossMaxHp: number;
+  fullMapOpen: boolean;
+  botAutoPlayActive: boolean;
+  activeBuffs: string[];
   errors: string[];
   warnings: string[];
 }
@@ -134,6 +148,19 @@ export function initGlobalDebugState(): GameDebugState {
     activeImbueElement: 'none',
     stressTestActive: false,
     heapUsedMb: 0,
+    currentFloor: 1,
+    currentRoomId: 0,
+    currentRoomType: 'start',
+    totalRooms: 9,
+    playerGold: 0,
+    runState: 'playing',
+    bossActive: false,
+    bossPhase: 1,
+    bossHp: 0,
+    bossMaxHp: 0,
+    fullMapOpen: false,
+    botAutoPlayActive: false,
+    activeBuffs: [],
     errors: [],
     warnings: [],
   };
@@ -216,7 +243,7 @@ export class DebugOverlay {
 
   public refreshResolution(bakeScale: number): void {
     this.textObj.setResolution(Math.min(2, bakeScale));
-    this.warmupFrames = 0;
+    this.resetSamples();
   }
 
   public resetSamples(): void {
@@ -242,8 +269,8 @@ export class DebugOverlay {
     const rawDelta = loop.delta > 0 ? loop.delta : 16.67;
 
     this.warmupFrames += 1;
-    // Ignore the first 3 scene-init frames where textures/DOM settle
-    if (this.warmupFrames > 3 && rawDelta < 100) {
+    // Ignore the first 5 scene-init/resize frames where high-DPI textures/DOM settle
+    if (this.warmupFrames > 5 && rawDelta < 45) {
       this.frameDeltaSamples.push(rawDelta);
       if (this.frameDeltaSamples.length > 30) {
         this.frameDeltaSamples.shift();

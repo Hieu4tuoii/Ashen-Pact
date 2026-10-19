@@ -6,7 +6,7 @@
 1. **Phase 0 — Nền móng & Thiết kế (ĐÃ HOÀN THÀNH ✅):** Thiết lập monorepo `pnpm` (`apps/client`, `apps/server`, `packages/shared`), TS strict, ESLint, Prettier, Vitest, Playwright, bộ tài liệu sống `docs/`, thư viện vẽ procedural vector (`palette`, `primitives`, `outlined()`, `TextureBaker` theo DPR, `CutoutRig`), nhân vật mẫu **Thiết Vệ** + quái mẫu **Goblin Xạ Thủ**, scene `ArtGallery`, khung Phaser scenes + Colyseus hello room + `window.__GAME_DEBUG__`.
 2. **Phase 1 — Core Gameplay & Game Feel (ĐÃ HOÀN THÀNH ✅):** Vòng lặp simulation 60Hz trong `packages/shared` + `LocalTransport`, di chuyển gia tốc, dash i-frame, camera lookahead, 4 vũ khí mẫu, 3 quái mẫu + AI/telegraph, spatial hash, hit-stop, screen shake, damage popup, ZzFX.
 3. **Phase 2 — Pipeline Hình ảnh & Tương tác Map (ĐÃ HOÀN THÀNH ✅):** Tilemap procedural + autotile, lightmap động + bloom/vignette, particle/decal pool, đồ vỡ/thùng nổ, bề mặt tương tác nguyên tố, stress test 60 FPS (4P + 80 quái + 600 đạn).
-4. **Phase 3 — Dungeon, Vòng lặp lượt chơi & Biome 1 hoàn chỉnh:** Sinh tầng procedural có kiểm chứng liên thông, minimap + fog of war, 12 vũ khí, rương/thương nhân/tượng thần/phòng bí mật, toàn bộ quái + Elite Biome 1, Boss **Mục Vương Nấm Độc** 3 phase.
+4. **Phase 3 — Dungeon, Vòng lặp lượt chơi & Biome 1 hoàn chỉnh (ĐÃ HOÀN THÀNH ✅):** Sinh tầng procedural có kiểm chứng liên thông, minimap + fog of war, 14 vũ khí, rương/thương nhân/tượng thần/phòng bí mật, toàn bộ quái + Elite Biome 1, Boss **Mục Vương Nấm Độc** 3 phase, màn hình thắng/thua/kết quả, bot E2E tự vượt tầng & hạ Boss.
 5. **Phase 4 — Co-op LAN:** Server authoritative Colyseus phục vụ tĩnh + WebSocket cùng cổng `2567`, LAN IP + QR code, `NetworkTransport`, client prediction + reconciliation, adaptive interpolation, deterministic bullet spawn, mô phỏng mạng Wi-Fi kém, E2E 4 client qua IP LAN thực.
 6. **Phase 5 — 5 Nhân vật, Hệ Nguyên tố & Synergy:** Hoàn thiện Thiết Vệ, Liệp Ưng, Lam Hỏa, Mộc Linh, Bánh Răng kèm nâng cấp skill, 6 phản ứng nguyên tố + Team Combo, công cụ Balance Harness headless xuất `docs/balance-report.md`.
 7. **Phase 6 — Biome 2 & 3 + Boss:** Hoàn thiện Hầm Băng Vĩnh Cửu (**Băng Hậu Kryssa**) và Lò Rèn Dung Nham (**Titan Lò Rèn**), đủ 24 vũ khí, cơ chế map chuyên biệt.
@@ -116,6 +116,52 @@
   - Phát hiện `bakeWallTile` và `bakePillarTile` vẽ viền tối `#141019` bao kín cả 4 cạnh của từng ô lẻ bất kể bitmask `mask`, trụ `2×2` bị tách thành 4 khối vuông có 4 chấm ngọc lục bảo riêng rẽ, các ô bề mặt (`water`, `lava`, `poison_swamp`, `oil`, `ice`, `grass`) bị bo góc tách rời nhau và vũng dầu `oil` đen đặc như hố thủng → Đã sửa autotiling tường/trụ nối liền mạch qua các cạnh tiếp giáp (`hasN/E/S/W`), gom tâm trụ `2×2` thành 1 biểu tượng cổ ngữ duy nhất ở giao điểm, bổ sung `getSurfaceAutotileMask(tx, ty)` + `TextureBaker.drawSurfaceTile()` nối liền các hồ bề mặt cùng loại và tạo ánh tím dầu hắc rõ nét cho `oil`.
   - Phát hiện hàm kẹp biên cứng `TILE_SIZE + radius` trong `ArenaMap.resolveCircleCollision` và `checkProjectileWallHit` chặn người chơi và đạn đi vào ô tường nứt bí mật `'cracked_wall'` tại `(18, 0)` ngay cả sau khi đã nổ thông thành `'floor'` → Đã kiểm tra tính đặc (`isSolidTile`) của ô biên trước khi kẹp và rớt thưởng (`gold` + `energy`) khi phá vỡ tường bí mật.
   - Phát hiện hạ cấu hình đồ họa (`G`) không cắt giảm các decal đã vẽ vượt `budget.maxDecals` hay thu phóng `lightmapRt` theo `budget.lightmapScale`, `teammateFxOpacity = 0.7` chưa áp dụng cho đạn của P2–P4, đạn Stress Test bị co nhỏ khi resize `1080p ↔ 1440p`, chấm trạng thái nguyên tố của quái ở sát mép trên đè lên thanh HUD, đồng đội giả lập P2–P4 cầm kiếm nhưng bắn đạn, và các phép cấp phát mảng/object mỗi frame trong `stepSurfaces` / `world-sim` / `GameScene` → Đã sửa triệt để toàn bộ các lỗi trên và kiểm chứng bằng soak test 3 phút (`10.800` ticks) cùng E2E test resize & hạ cấu hình.
-- **Bước tiếp theo (Phase 3):**
-  - Triển khai **Phase 3 — Dungeon, Vòng Lặp Lượt Chơi & Biome 1 Hoàn Chỉnh (Vertical Slice Solo)**: Sinh tầng procedural theo seed có kiểm chứng liên thông, các loại phòng (khởi đầu, chiến đấu, kho báu, thương nhân, tượng thần, bí mật, boss), minimap + fog of war, ~12 vũ khí, toàn bộ quái + Elite Biome 1, và Boss **Mục Vương Nấm Độc** đủ 3 phase.
+
+---
+
+### Phase 3 — Dungeon, Vòng Lặp Lượt Chơi & Biome 1 Hoàn Chỉnh (Vertical Slice Solo) (Hoàn thành ✅)
+- **Những việc đã hoàn thành:**
+  - **Sinh Tầng Procedural Theo Seed, Minimap & Fog of War (`packages/shared/src/sim/dungeon-gen.ts`):**
+    - Xây dựng `generateDungeonFloor(seed, floorNumber, playerCount)` tạo đồ thị `9` phòng trên lưới `5×5`: đường chính từ `Start` tới `Portal` (Tầng 1) hoặc `Boss` (Tầng 2) tại phòng xa nhất theo BFS, xáo trộn tất định (`seeded shuffle`) các phòng đặc biệt (**Phòng Kho Báu (`treasure`)**, **Cửa Hàng (`merchant`)**, **Điện Thờ Cổ (`shrine`)**) giữa các nhánh nhưng đảm bảo ít nhất 1 phòng kề `start` là `combat`, và nối **Phòng Bí Mật (`secret`)** qua tường nứt `'cracked_wall'`.
+    - Hàm `verifyDungeonConnectivity(graph)` dùng BFS xác minh 100% phòng liên thông từ phòng Khởi Đầu (kiểm chứng tự động trên `100` seed liên tiếp trong unit test).
+    - Cơ chế khóa cửa sắt (`door_locked`) khi vào phòng chiến đấu/trùm, sinh các đợt quái (`room.waves`) kèm vòng triệu hồi ma thuật `0.8s`, mở cửa (`door_open`) và rơi rương thưởng khi dọn sạch phòng, lưu bền vững trạng thái rương/vật phẩm rơi/cửa hàng theo `roomId` khi di chuyển qua lại giữa các phòng, cập nhật Fog of War (`hidden` / `discovered` / `visited` / `cleared`) và Minimap góc phải trên (bấm `Tab` phóng to bản đồ tầng).
+  - **14 Vũ Khí Đủ 5 Bậc Hiếm, Rương, Thương Nhân, Điện Thờ & 8 Buff Giữa Tầng (`packages/shared/src/data/game-data.ts`, `world-sim.ts`):**
+    - Mở rộng kho vũ khí lên **14 vũ khí** trải đều 5 bậc hiếm (`common`, `uncommon`, `rare`, `epic`, `legendary`): `knight_sword`, `hunting_bow`, `apprentice_wand`, `thorn_staff`, `rivet_gun`, `rusty_pistol`, `scrap_shotgun`, `gale_smg`, `frost_scepter`, `tesla_coil_rifle`, `scorpion_smg`, `dragonfire_shotgun`, `jade_guandao`, `solar_staff`.
+    - Rương kho báu theo bậc hiếm phát cột sáng màu tương ứng khi mở, Thương Nhân Hắc Ám bán vũ khí + Bình Máu (`health_potion`) + Giáp Tinh Luyện (`armor_upgrade` `+2` Giáp tối đa) từ `room.shopOffers` bằng Xu Vàng (`[E]`), Điện Thờ Cổ Đại cho phép dâng `25 Xu` hoặc `2 Máu` (`[E]`) để nhận phước lành (`shrineBlessingId` + `+30` Năng Lượng tối đa + Vũ khí Sử Thi/Huyền Thoại).
+    - Bảng chọn **1 trong 3 Buff Giữa Tầng** khi bước qua Cổng Dịch Chuyển sang Tầng 2 với đầy đủ hiệu ứng thực thi trong `WorldSim` cho cả 8 buff (`vitality_surge`, `iron_bastion`, `arcane_wellspring`, `eagle_precision`, `ricochet_mastery`, `gale_reflex` và 2 nâng cấp kỹ năng Thiết Vệ: `vanguard_fortress` khiên 360° & `vanguard_charge` lao kích nổ sóng lửa ×2 sát thương).
+  - **Đủ 6 Quái Thường Biome 1, Biến Thể Tinh Anh (Elite) & Boss Mục Vương Nấm Độc 3 Phase:**
+    - Hoàn thiện đủ 6 quái Biome 1: `goblin_shooter` (Goblin Xạ Thủ), `green_slime` (Slime Xanh tách làm 2 `mini_slime` khi chết), `spore_bomber` (Nấm Nổ Độc để lại đầm độc `poison_swamp`), `wild_boar` (Heo Rừng Húc), `goblin_shaman` (Pháp Sư Goblin hồi máu đồng minh không trúng độc & bắn cầu độc), `thorn_turret` (Ụ Gai Độc cố định bắn 6 gai vòng tròn).
+    - Biến thể **Elite** (`fast`, `shield`, `explosive_death`, `regen`) có hào quang vàng, kích thước `1.25×`, máu `2.2×` và rớt vật phẩm/xu giá trị cao.
+    - **Boss Mục Vương Nấm Độc (`spore_king`)** đầy đủ **3 Phase**:
+      - **Phase 1 (`100% → 66% HP`):** Bắn vòng 12 đạn bào tử độc xoay tròn + triệu hồi `mini_slime`.
+      - **Phase 2 (`66% → 33% HP`):** Độn thổ ngầm dưới đất rồi trồi lên phát nổ AoE + 8 gai độc hướng tâm + trải đầm độc `poison_swamp` tại điểm trồi, xen kẽ bắn vòng 14 bào tử + triệu hồi `spore_bomber`.
+      - **Phase 3 (`≤ 33% HP`):** Bao phủ viền phòng bằng sương độc `poison_swamp` (`applyBossPhase3ToxicBorder`), tăng tốc độ di chuyển/tấn công, bắn vòng 16 bào tử kèm chùm 3 đạn độc nhắm thẳng người chơi.
+    - Màn hình tổng kết Chiến Thắng / Thất Bại hiển thị đầy đủ thống kê lượt chơi (bao gồm cả thời gian hoàn thành lượt chơi và tổng xu thu thập) cùng nút/phím tắt **Chơi Lại (`[Enter]`)**.
+  - **100% Procedural Vector Art & Nâng Cấp `ArtGalleryScene` 3 Trang:**
+    - Bổ sung cutout rig 8 bộ phận cho `green_slime`, `mini_slime`, `goblin_shaman`, `thorn_turret`, `merchant`, `spore_king`, sprite 14 vũ khí, 5 bậc rương đóng/mở, cửa khóa/mở, cổng dịch chuyển, tượng thần cổ đại; nâng cấp `ArtGalleryScene` lên 3 trang trưng bày (`1. Mẫu Chuẩn`, `2. Quái & Boss`, `3. Vũ Khí & Map`) với cơ chế lazy-build từng trang để giữ tốc độ resize 1440p mượt mà.
+- **Kết quả kiểm thử & Hiệu năng:**
+  - `pnpm verify` (`typecheck` + `lint` + `test` + `build` + `e2e`) PASS 100% (5/5 Vitest test suites = 34 unit tests; 5/5 Playwright E2E test suites).
+  - Bot E2E tự động vượt toàn bộ Tầng 1, chọn Buff qua Cổng Dịch Chuyển sang Tầng 2, tiêu diệt Boss Mục Vương Nấm Độc qua đủ 3 phase và bấm `[Enter]` khởi tạo lượt chơi mới không lỗi, giữ vững **~60.0 FPS** (`0` console errors/warnings).
+  - Screenshots đã chụp và kiểm tra trực quan bằng mắt tại `docs/screenshots/phase-3/`:
+    - `docs/screenshots/phase-3/room-start-and-minimap-1080p.png`
+    - `docs/screenshots/phase-3/minimap-tab-expanded-1080p.png`
+    - `docs/screenshots/phase-3/room-combat-6-enemies-and-elite-1080p.png`
+    - `docs/screenshots/phase-3/room-treasure-chest-pillar-1080p.png`
+    - `docs/screenshots/phase-3/room-merchant-shop-1080p.png`
+    - `docs/screenshots/phase-3/room-shrine-blessing-1080p.png`
+    - `docs/screenshots/phase-3/room-secret-treasure-1080p.png`
+    - `docs/screenshots/phase-3/room-portal-active-1080p.png`
+    - `docs/screenshots/phase-3/modal-between-floor-buffs-1080p.png`
+    - `docs/screenshots/phase-3/room-boss-muc-vuong-phase1-1080p.png`
+    - `docs/screenshots/phase-3/room-boss-muc-vuong-phase3-1080p.png`
+    - `docs/screenshots/phase-3/modal-victory-summary-1080p.png`
+    - `docs/screenshots/phase-3/art-gallery-page2-enemies-boss-1080p.png`
+    - `docs/screenshots/phase-3/art-gallery-page3-weapons-props-1080p.png`
+- **Vấn đề đã phát hiện & xử lý trong Phase 3:**
+  - Phát hiện `WorldSim` chưa kết nối mảng `room.waves` và `room.shopOffers` từ `dungeon-gen.ts`, làm rơi mất trạng thái rương/vật phẩm khi quay lại phòng cũ và thiếu thực thi thực tế cho 5/8 buff tầng (`eagle_precision`, `ricochet_mastery`, `gale_reflex`, `vanguard_fortress`, `vanguard_charge`) → Đã kết nối trọn vẹn dữ liệu sinh phòng vào `WorldSim`, lưu bền vững `roomChestsByRoomId` / `roomItemsByRoomId`, bổ sung vật phẩm `armor_upgrade`, đổi 25 Xu hoặc 2 Máu tại Điện Thờ và cài đặt đầy đủ 8 buff kèm unit test kiểm chứng.
+  - Phát hiện nhãn cửa Bắc/Đông (`N/E`) bị đè lên thanh Top HUD / thanh máu Boss hoặc tràn mép phải màn hình, nhãn Điện Thờ đè lên vật phẩm rơi, và hiệu ứng Chromatic Aberration ở tâm màn hình làm nhòe chữ trong bảng chọn Buff / bảng Chiến Thắng → Đã kẹp tọa độ hiển thị nhãn cửa trong vùng an toàn camera (`safeTopY..safeBottomY`, `safeLeftX..safeRightX`), tách khoảng cách vật phẩm rơi ở Điện Thờ, giới hạn Chromatic Aberration ở rìa màn hình và tắt rung chấn khi mở bảng modal.
+  - Phát hiện `ArenaMap.resolveCircleCollision`, `checkProjectileWallHit` và `resolveCircleVsAABB` cấp phát đối tượng kết quả tạm trên mỗi lần gọi (gây áp lực GC trong soak test 3 phút) → Đã chuyển sang đối tượng kết quả tái sử dụng (`circleResOut`, `wallHitOut`, `circleAABBOut`) không cấp phát bộ nhớ trên đường nóng.
+- **Bước tiếp theo (Phase 4):**
+  - Triển khai **Phase 4 — Co-op LAN**: Host server (Colyseus) chạy simulation authoritative + phục vụ client tĩnh cùng cổng `2567`, `NetworkTransport`, client prediction + reconciliation, adaptive interpolation, lệnh `pnpm host` kèm IP LAN + mã QR, Hub nhiều người, scaling theo số người, gục/hồi sinh/linh hồn, loot instanced, ping + emote.
+
 
