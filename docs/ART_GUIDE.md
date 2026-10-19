@@ -3,7 +3,7 @@
 ## 1. Triết Lý & Quy Tắc Cốt Lõi
 - **100% Procedural Vector Art:** Toàn bộ nhân vật, quái, boss, vũ khí, đạn, tilemap, vật thể tương tác và biểu tượng UI đều được sinh bằng code thông qua thư viện `apps/client/src/art/`.
 - **Ngoại lệ duy nhất:** File font vector `Be Vietnam Pro` (giấy phép SIL Open Font License 1.1) đóng gói local trong `apps/client/public/fonts/`.
-- **Độ sắc nét theo DPR:** Mọi hình vẽ đều được bake ra texture ở độ phân giải `worldSize * cameraZoom * devicePixelRatio` (kẹp trong khoảng `2.0x – 4.0x` supersampling khi tạo canvas offscreen) để không bao giờ bị răng cưa hay mờ nhòe ở 1080p và 1440p.
+- **Độ sắc nét theo DPR:** Mọi hình vẽ đều được bake ra texture ở độ phân giải `worldSize * Math.ceil(cameraZoom * devicePixelRatio * 2.5)` (kẹp trong khoảng `4.0x – 8.0x` supersampling khi tạo canvas offscreen) để không bao giờ bị răng cưa hay mờ nhòe ở 1080p và 1440p (kể cả khi phóng đại preview `2.25×` trong `ArtGalleryScene`).
 
 ---
 

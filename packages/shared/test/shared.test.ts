@@ -27,10 +27,14 @@ describe('SeededRandom (PRNG)', () => {
     expect(seqA).toEqual(seqB);
   });
 
-  it('produces different sequences for different seeds and forks cleanly', () => {
+  it('produces different sequences for different seeds (including floats) and forks cleanly', () => {
     const rngA = new SeededRandom(12345);
     const rngB = new SeededRandom(54321);
     expect(rngA.next()).not.toBe(rngB.next());
+
+    const rngFloat1 = new SeededRandom(0.25);
+    const rngFloat2 = new SeededRandom(0.75);
+    expect(rngFloat1.next()).not.toBe(rngFloat2.next());
 
     const fork1 = rngA.fork('loot');
     const fork2 = rngA.fork('map');

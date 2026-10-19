@@ -14,8 +14,8 @@ export class TextureBaker {
 
   public static computeBakeScale(cameraZoom = 1.5): number {
     const dpr = typeof window !== 'undefined' ? Math.min(window.devicePixelRatio || 1, 2.5) : 1;
-    // Minimum 4x supersampling guarantees crisp lines even at 2.5x gallery zoom on 1440p
-    return Math.max(4, Math.min(6, Math.ceil(cameraZoom * dpr * 2)));
+    // Supersampling factor 2.5x (clamped 4..8) guarantees zero upscaling even on zoomed gallery previews at 1080p & 1440p
+    return Math.max(4, Math.min(8, Math.ceil(cameraZoom * dpr * 2.5)));
   }
 
   public static getBakeScale(): number {

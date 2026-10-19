@@ -1,5 +1,9 @@
 import Phaser from 'phaser';
-import { WORLD_VIEW_HEIGHT, WORLD_VIEW_WIDTH } from '@ashen-pact/shared';
+import {
+  VIETNAMESE_VERIFICATION_STRING,
+  WORLD_VIEW_HEIGHT,
+  WORLD_VIEW_WIDTH,
+} from '@ashen-pact/shared';
 import { TextureBaker } from '../art/texture-baker.js';
 import { initGlobalDebugState } from '../ui/debug-overlay.js';
 
@@ -32,10 +36,27 @@ export class PreloadScene extends Phaser.Scene {
       }
     };
 
-    if (typeof document !== 'undefined' && 'fonts' in document) {
-      document.fonts.ready.then(() => finalizeLoad()).catch(() => finalizeLoad());
-    } else {
-      finalizeLoad();
-    }
+    const loadAllFontSubsets = async (): Promise<void> => {
+      if (typeof document === 'undefined' || !('fonts' in document)) {
+        return;
+      }
+      const sampleText = `${VIETNAMESE_VERIFICATION_STRING} ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789`;
+      const weights = [400, 600, 700, 800];
+      await Promise.all(
+        weights.map((w) => document.fonts.load(`${w} 16px "Be Vietnam Pro"`, sampleText)),
+      );
+      const allFaces = Array.from(document.fonts);
+      if (allFaces.length > 0) {
+        await Promise.all(allFaces.map((face) => face.load()));
+      }
+      await document.fonts.ready;
+      const facesAfter = Array.from(document.fonts);
+      debug.fontsLoaded =
+        facesAfter.length > 0 && facesAfter.every((face) => face.status === 'loaded');
+    };
+
+    loadAllFontSubsets()
+      .then(() => finalizeLoad())
+      .catch(() => finalizeLoad());
   }
 }

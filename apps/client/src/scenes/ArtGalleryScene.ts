@@ -24,6 +24,7 @@ export class ArtGalleryScene extends Phaser.Scene {
   private rigs: CutoutRig[] = [];
   private playerRigs: CutoutRig[] = [];
   private floorTileSprites: { sprite: Phaser.GameObjects.Sprite; variant: number }[] = [];
+  private textObjects: Phaser.GameObjects.Text[] = [];
   private currentAnim: RigAnimState = 'idle';
   private currentSlot: 1 | 2 | 3 | 4 = 1;
   private currentBiome: 1 | 2 | 3 = 1;
@@ -44,16 +45,23 @@ export class ArtGalleryScene extends Phaser.Scene {
     this.rigs = [];
     this.playerRigs = [];
     this.floorTileSprites = [];
+    this.textObjects = [];
 
     this.applyCameraViewport();
     this.scale.on('resize', this.applyCameraViewport, this);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.scale.off('resize', this.applyCameraViewport, this);
+      delete window.__GALLERY_SET_ANIM__;
+      delete window.__GALLERY_SET_SLOT__;
+      delete window.__GALLERY_SET_BIOME__;
+    });
 
     const textRes = TextureBaker.getBakeScale();
 
-    // 1. Deep Backdrop
+    // 1. Deep Backdrop (extended for ultrawide / non-16:9 aspect ratios)
     const bg = this.add.graphics();
     bg.fillStyle(hexToNum(PALETTE.INK_DEEP), 1);
-    bg.fillRect(0, 0, WORLD_VIEW_WIDTH, WORLD_VIEW_HEIGHT);
+    bg.fillRect(-480, -270, WORLD_VIEW_WIDTH + 960, WORLD_VIEW_HEIGHT + 540);
 
     // 2. Top Header Banner
     const header = this.add.graphics();
@@ -62,15 +70,17 @@ export class ArtGalleryScene extends Phaser.Scene {
     header.fillRoundedRect(16, 10, 928, 54, 10);
     header.strokeRoundedRect(16, 10, 928, 54, 10);
 
-    this.add.text(32, 18, 'ART GALLERY — KIỂM ĐỊNH PHONG CÁCH ĐỒ HỌA VECTOR (PHASE 0)', {
-      fontFamily: '"Be Vietnam Pro", sans-serif',
-      fontSize: '16px',
-      fontStyle: '800',
-      color: PALETTE.SOLAR_GOLD,
-      stroke: PALETTE.INK_DARK,
-      strokeThickness: 4,
-      resolution: textRes,
-    });
+    this.textObjects.push(
+      this.add.text(32, 18, 'ART GALLERY — KIỂM ĐỊNH PHONG CÁCH ĐỒ HỌA VECTOR (PHASE 0)', {
+        fontFamily: '"Be Vietnam Pro", sans-serif',
+        fontSize: '16px',
+        fontStyle: '800',
+        color: PALETTE.SOLAR_GOLD,
+        stroke: PALETTE.INK_DARK,
+        strokeThickness: 4,
+        resolution: textRes,
+      }),
+    );
 
     this.stateStatusText = this.add.text(32, 41, '', {
       fontFamily: '"Be Vietnam Pro", sans-serif',
@@ -79,6 +89,21 @@ export class ArtGalleryScene extends Phaser.Scene {
       color: PALETTE.CYAN_FROST,
       resolution: textRes,
     });
+    this.textObjects.push(this.stateStatusText);
+
+    const menuBtn = this.add
+      .text(850, 28, '[Về Menu]', {
+        fontFamily: '"Be Vietnam Pro", sans-serif',
+        fontSize: '13px',
+        fontStyle: '700',
+        color: PALETTE.SOLAR_GOLD,
+        stroke: PALETTE.INK_DARK,
+        strokeThickness: 3,
+        resolution: textRes,
+      })
+      .setInteractive({ useHandCursor: true });
+    menuBtn.on('pointerdown', () => this.scene.start('MenuScene'));
+    this.textObjects.push(menuBtn);
 
     // 3. Left Stage: Thiết Vệ (Vanguard)
     this.createEntityStage({
@@ -135,22 +160,26 @@ export class ArtGalleryScene extends Phaser.Scene {
     panel.fillRoundedRect(cfg.x, cfg.y, cfg.w, cfg.h, 10);
     panel.strokeRoundedRect(cfg.x, cfg.y, cfg.w, cfg.h, 10);
 
-    this.add.text(cfg.x + 16, cfg.y + 12, cfg.titleVi, {
-      fontFamily: '"Be Vietnam Pro", sans-serif',
-      fontSize: '13px',
-      fontStyle: '800',
-      color: PALETTE.BONE_WHITE,
-      stroke: PALETTE.INK_DARK,
-      strokeThickness: 3,
-      resolution: textRes,
-    });
+    this.textObjects.push(
+      this.add.text(cfg.x + 16, cfg.y + 12, cfg.titleVi, {
+        fontFamily: '"Be Vietnam Pro", sans-serif',
+        fontSize: '13px',
+        fontStyle: '800',
+        color: PALETTE.BONE_WHITE,
+        stroke: PALETTE.INK_DARK,
+        strokeThickness: 3,
+        resolution: textRes,
+      }),
+    );
 
-    this.add.text(cfg.x + 16, cfg.y + 32, cfg.subtitleVi, {
-      fontFamily: '"Be Vietnam Pro", sans-serif',
-      fontSize: '11px',
-      color: PALETTE.SILVER_BRIGHT,
-      resolution: textRes,
-    });
+    this.textObjects.push(
+      this.add.text(cfg.x + 16, cfg.y + 32, cfg.subtitleVi, {
+        fontFamily: '"Be Vietnam Pro", sans-serif',
+        fontSize: '11px',
+        color: PALETTE.SILVER_BRIGHT,
+        resolution: textRes,
+      }),
+    );
 
     const invBake = 1 / textRes;
     const cols = 12;
@@ -176,9 +205,9 @@ export class ArtGalleryScene extends Phaser.Scene {
       displayScale: 1.0,
     });
 
-    const rigZoom = new CutoutRig(this, cfg.x + 310, cfg.y + 205, cfg.rigDef, {
+    const rigZoom = new CutoutRig(this, cfg.x + 310, cfg.y + 194, cfg.rigDef, {
       playerSlot: cfg.isPlayer ? this.currentSlot : null,
-      displayScale: 2.4,
+      displayScale: 2.25,
       initialPhaseOffset: 0.25,
     });
 
@@ -193,29 +222,33 @@ export class ArtGalleryScene extends Phaser.Scene {
 
     this.rigs.push(rig1x, rigZoom);
 
-    this.add
-      .text(cfg.x + 125, cfg.y + 246, '1.0× Kích Thước Thực (32u)', {
-        fontFamily: '"Be Vietnam Pro", sans-serif',
-        fontSize: '11px',
-        fontStyle: '700',
-        color: PALETTE.BONE_WHITE,
-        stroke: PALETTE.INK_DARK,
-        strokeThickness: 3,
-        resolution: textRes,
-      })
-      .setOrigin(0.5);
+    this.textObjects.push(
+      this.add
+        .text(cfg.x + 125, cfg.y + 248, '1.0× Kích Thước Thực (32u)', {
+          fontFamily: '"Be Vietnam Pro", sans-serif',
+          fontSize: '11px',
+          fontStyle: '700',
+          color: PALETTE.BONE_WHITE,
+          stroke: PALETTE.INK_DARK,
+          strokeThickness: 3,
+          resolution: textRes,
+        })
+        .setOrigin(0.5),
+    );
 
-    this.add
-      .text(cfg.x + 310, cfg.y + 246, '2.4× Phóng Đại Soi Chi Tiết', {
-        fontFamily: '"Be Vietnam Pro", sans-serif',
-        fontSize: '11px',
-        fontStyle: '700',
-        color: PALETTE.SOLAR_GOLD,
-        stroke: PALETTE.INK_DARK,
-        strokeThickness: 3,
-        resolution: textRes,
-      })
-      .setOrigin(0.5);
+    this.textObjects.push(
+      this.add
+        .text(cfg.x + 310, cfg.y + 248, '2.25× Phóng Đại Soi Chi Tiết', {
+          fontFamily: '"Be Vietnam Pro", sans-serif',
+          fontSize: '11px',
+          fontStyle: '700',
+          color: PALETTE.SOLAR_GOLD,
+          stroke: PALETTE.INK_DARK,
+          strokeThickness: 3,
+          resolution: textRes,
+        })
+        .setOrigin(0.5),
+    );
   }
 
   private createPaletteAndBiomePanel(x: number, y: number, w: number, h: number): void {
@@ -226,26 +259,30 @@ export class ArtGalleryScene extends Phaser.Scene {
     panel.fillRoundedRect(x, y, w, h, 10);
     panel.strokeRoundedRect(x, y, w, h, 10);
 
-    this.add.text(x + 16, y + 10, VIETNAMESE_VERIFICATION_STRING, {
-      fontFamily: '"Be Vietnam Pro", sans-serif',
-      fontSize: '15px',
-      fontStyle: '800',
-      color: PALETTE.BONE_WHITE,
-      stroke: PALETTE.INK_DARK,
-      strokeThickness: 3.5,
-      resolution: textRes,
-    });
-
-    this.add.text(
-      x + 16,
-      y + 34,
-      'Bảng Màu Chuẩn (42 Màu Cố Định) · Hướng Sáng Trên-Trái (-135°) · Đầy Đủ 4 Màu Định Danh P1–P4:',
-      {
+    this.textObjects.push(
+      this.add.text(x + 16, y + 10, VIETNAMESE_VERIFICATION_STRING, {
         fontFamily: '"Be Vietnam Pro", sans-serif',
-        fontSize: '11px',
-        color: PALETTE.SILVER_BRIGHT,
+        fontSize: '15px',
+        fontStyle: '800',
+        color: PALETTE.BONE_WHITE,
+        stroke: PALETTE.INK_DARK,
+        strokeThickness: 3.5,
         resolution: textRes,
-      },
+      }),
+    );
+
+    this.textObjects.push(
+      this.add.text(
+        x + 16,
+        y + 34,
+        'Bảng Màu Chuẩn (42 Màu Cố Định) · Hướng Sáng Trên-Trái (-135°) · Đầy Đủ 4 Màu Định Danh P1–P4:',
+        {
+          fontFamily: '"Be Vietnam Pro", sans-serif',
+          fontSize: '11px',
+          color: PALETTE.SILVER_BRIGHT,
+          resolution: textRes,
+        },
+      ),
     );
 
     const swatches = Object.values(PALETTE);
@@ -331,6 +368,7 @@ export class ArtGalleryScene extends Phaser.Scene {
         resolution: TextureBaker.getBakeScale(),
       })
       .setOrigin(0.5);
+    this.textObjects.push(txt);
 
     const hit = this.add
       .rectangle(0, 0, w, h, 0x000000, 0)
@@ -383,7 +421,8 @@ export class ArtGalleryScene extends Phaser.Scene {
   }
 
   private applyCameraViewport(): void {
-    const cam = this.cameras.main;
+    const cam = this.cameras?.main;
+    if (!cam) return;
     const zoom = Math.min(
       this.scale.width / WORLD_VIEW_WIDTH,
       this.scale.height / WORLD_VIEW_HEIGHT,
@@ -399,6 +438,10 @@ export class ArtGalleryScene extends Phaser.Scene {
         item.sprite.setTexture(TextureBaker.getBiomeTileTextureKey(this.currentBiome, item.variant));
         item.sprite.setScale(invBake);
       }
+      for (const txt of this.textObjects) {
+        txt.setResolution(newScale);
+      }
+      this.debugOverlay?.refreshResolution(newScale);
     }
     cam.setZoom(zoom);
     cam.centerOn(WORLD_VIEW_WIDTH / 2, WORLD_VIEW_HEIGHT / 2);

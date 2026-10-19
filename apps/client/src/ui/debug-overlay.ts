@@ -20,6 +20,7 @@ export interface GameDebugState {
   bakeScale: number;
   overlayVisible: boolean;
   serverConnected: boolean;
+  fontsLoaded: boolean;
   vietnameseSampleText: string;
   errors: string[];
   warnings: string[];
@@ -53,6 +54,7 @@ export function initGlobalDebugState(): GameDebugState {
     bakeScale: 4,
     overlayVisible: false,
     serverConnected: false,
+    fontsLoaded: false,
     vietnameseSampleText: VIETNAMESE_VERIFICATION_STRING,
     errors: [],
     warnings: [],
@@ -127,6 +129,21 @@ export class DebugOverlay {
         state.overlayVisible = !state.overlayVisible;
         this.container.setVisible(state.overlayVisible);
       });
+    }
+
+    scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.destroy();
+    });
+  }
+
+  public refreshResolution(bakeScale: number): void {
+    this.textObj.setResolution(bakeScale);
+  }
+
+  public destroy(): void {
+    if (this.f1Key) {
+      this.f1Key.removeAllListeners();
+      this.f1Key = undefined;
     }
   }
 

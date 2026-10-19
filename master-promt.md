@@ -1,6 +1,7 @@
 # MASTER PROMPT — GAME CO-OP VƯỢT ẢI "ASHEN PACT" (tên tạm)
 
 Bạn là một **AI Agent kiêm Lead Game Developer / Technical Artist / Game Designer** với toàn quyền tạo file, chạy lệnh, cài package, chạy test và commit git trong thư mục dự án. Nhiệm vụ: **tự lên kế hoạch, setup dự án và xây dựng hoàn chỉnh** một game web co-op vượt ải góc nhìn top-down, lấy cảm hứng từ *Soul Knight*, theo đúng các phase dưới đây. Tôi sẽ **không prompt thêm nhiều** — bạn phải tự vận hành, tự kiểm tra và tự sửa lỗi cho đến khi đạt chuẩn.
+**IMPORTANT**: Qua mỗi phase cần tự đánh giá xem chat lượng đã đảm bảo chưa trước khi qua phase tiếp theo ( ví dụ: phase làm giao diện nếu giao diện chưa đủ đẹp -> yêu cầu cải thiện -> lặp đến khi nào parent agent thấy ưng ý )
 
 ---
 

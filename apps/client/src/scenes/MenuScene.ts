@@ -15,6 +15,8 @@ export class MenuScene extends Phaser.Scene {
   private simLoop = new FixedTimestepLoop(60);
   private vanguardPreview?: CutoutRig;
   private goblinPreview?: CutoutRig;
+  private floorTileSprites: { sprite: Phaser.GameObjects.Sprite; variant: number }[] = [];
+  private textObjects: Phaser.GameObjects.Text[] = [];
   private debugOverlay?: DebugOverlay;
 
   constructor() {
@@ -25,27 +27,35 @@ export class MenuScene extends Phaser.Scene {
     const debug = initGlobalDebugState();
     debug.scene = 'MenuScene';
 
+    this.floorTileSprites = [];
+    this.textObjects = [];
+
     this.applyCameraViewport();
     this.scale.on('resize', this.applyCameraViewport, this);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.scale.off('resize', this.applyCameraViewport, this);
+    });
 
     const textRes = TextureBaker.getBakeScale();
 
-    // Background panel
+    // Background panel (extended for ultrawide / non-16:9 aspect ratios)
     const bg = this.add.graphics();
     bg.fillStyle(hexToNum(PALETTE.INK_DEEP), 1);
-    bg.fillRect(0, 0, WORLD_VIEW_WIDTH, WORLD_VIEW_HEIGHT);
+    bg.fillRect(-480, -270, WORLD_VIEW_WIDTH + 960, WORLD_VIEW_HEIGHT + 540);
 
     // Tiled biome 1 center arena rug
     const invBake = 1 / textRes;
     for (let gx = 0; gx < 24; gx++) {
       for (let gy = 0; gy < 8; gy++) {
+        const variant = (gx + gy) % 4;
         const tile = this.add.sprite(
           112 + gx * 32,
           170 + gy * 32,
-          TextureBaker.getBiomeTileTextureKey(1, (gx + gy) % 4),
+          TextureBaker.getBiomeTileTextureKey(1, variant),
         );
         tile.setScale(invBake);
         tile.setAlpha(0.78);
+        this.floorTileSprites.push({ sprite: tile, variant });
       }
     }
 
@@ -56,29 +66,33 @@ export class MenuScene extends Phaser.Scene {
     card.fillRoundedRect(120, 26, 720, 98, 12);
     card.strokeRoundedRect(120, 26, 720, 98, 12);
 
-    this.add
-      .text(480, 55, 'ASHEN PACT — KHẾ ƯỚC TRO TÀN', {
-        fontFamily: '"Be Vietnam Pro", sans-serif',
-        fontSize: '28px',
-        fontStyle: '800',
-        color: PALETTE.SOLAR_GOLD,
-        stroke: PALETTE.INK_DARK,
-        strokeThickness: 5,
-        resolution: textRes,
-      })
-      .setOrigin(0.5);
+    this.textObjects.push(
+      this.add
+        .text(480, 55, 'ASHEN PACT — KHẾ ƯỚC TRO TÀN', {
+          fontFamily: '"Be Vietnam Pro", sans-serif',
+          fontSize: '28px',
+          fontStyle: '800',
+          color: PALETTE.SOLAR_GOLD,
+          stroke: PALETTE.INK_DARK,
+          strokeThickness: 5,
+          resolution: textRes,
+        })
+        .setOrigin(0.5),
+    );
 
-    this.add
-      .text(480, 94, 'Top-Down Co-op LAN Action Roguelite · Phase 0 Foundation', {
-        fontFamily: '"Be Vietnam Pro", sans-serif',
-        fontSize: '14px',
-        fontStyle: '600',
-        color: PALETTE.SILVER_BRIGHT,
-        stroke: PALETTE.INK_DARK,
-        strokeThickness: 3,
-        resolution: textRes,
-      })
-      .setOrigin(0.5);
+    this.textObjects.push(
+      this.add
+        .text(480, 94, 'Top-Down Co-op LAN Action Roguelite · Phase 0 Foundation', {
+          fontFamily: '"Be Vietnam Pro", sans-serif',
+          fontSize: '14px',
+          fontStyle: '600',
+          color: PALETTE.SILVER_BRIGHT,
+          stroke: PALETTE.INK_DARK,
+          strokeThickness: 3,
+          resolution: textRes,
+        })
+        .setOrigin(0.5),
+    );
 
     // Sample Rigs flanking menu buttons with clean spacing
     this.vanguardPreview = new CutoutRig(this, 185, 315, VANGUARD_RIG_DEF, {
@@ -126,26 +140,30 @@ export class MenuScene extends Phaser.Scene {
     footer.fillRoundedRect(110, 448, 740, 64, 10);
     footer.strokeRoundedRect(110, 448, 740, 64, 10);
 
-    this.add
-      .text(480, 468, VIETNAMESE_VERIFICATION_STRING, {
-        fontFamily: '"Be Vietnam Pro", sans-serif',
-        fontSize: '16px',
-        fontStyle: '700',
-        color: PALETTE.BONE_WHITE,
-        stroke: PALETTE.INK_DARK,
-        strokeThickness: 3,
-        resolution: textRes,
-      })
-      .setOrigin(0.5);
+    this.textObjects.push(
+      this.add
+        .text(480, 468, VIETNAMESE_VERIFICATION_STRING, {
+          fontFamily: '"Be Vietnam Pro", sans-serif',
+          fontSize: '16px',
+          fontStyle: '700',
+          color: PALETTE.BONE_WHITE,
+          stroke: PALETTE.INK_DARK,
+          strokeThickness: 3,
+          resolution: textRes,
+        })
+        .setOrigin(0.5),
+    );
 
-    this.add
-      .text(480, 494, 'Nhấn [F1] để bật/tắt Debug Overlay · 100% Procedural Vector Art', {
-        fontFamily: '"Be Vietnam Pro", sans-serif',
-        fontSize: '12px',
-        color: PALETTE.CYAN_FROST,
-        resolution: textRes,
-      })
-      .setOrigin(0.5);
+    this.textObjects.push(
+      this.add
+        .text(480, 494, 'Nhấn [F1] để bật/tắt Debug Overlay · 100% Procedural Vector Art', {
+          fontFamily: '"Be Vietnam Pro", sans-serif',
+          fontSize: '12px',
+          color: PALETTE.CYAN_FROST,
+          resolution: textRes,
+        })
+        .setOrigin(0.5),
+    );
 
     this.debugOverlay = new DebugOverlay(this, false);
   }
@@ -182,6 +200,7 @@ export class MenuScene extends Phaser.Scene {
         resolution: TextureBaker.getBakeScale(),
       })
       .setOrigin(0.5);
+    this.textObjects.push(txt);
 
     const hitArea = this.add
       .rectangle(0, 0, w, h, 0x000000, 0)
@@ -195,12 +214,27 @@ export class MenuScene extends Phaser.Scene {
   }
 
   private applyCameraViewport(): void {
-    const cam = this.cameras.main;
+    const cam = this.cameras?.main;
+    if (!cam) return;
     const zoom = Math.min(
       this.scale.width / WORLD_VIEW_WIDTH,
       this.scale.height / WORLD_VIEW_HEIGHT,
     );
-    TextureBaker.bakeAll(this, zoom, false);
+    const prevScale = TextureBaker.getBakeScale();
+    const newScale = TextureBaker.bakeAll(this, zoom, false);
+    if (newScale !== prevScale) {
+      this.vanguardPreview?.refreshBakedTextures();
+      this.goblinPreview?.refreshBakedTextures();
+      const invBake = 1 / newScale;
+      for (const item of this.floorTileSprites) {
+        item.sprite.setTexture(TextureBaker.getBiomeTileTextureKey(1, item.variant));
+        item.sprite.setScale(invBake);
+      }
+      for (const txt of this.textObjects) {
+        txt.setResolution(newScale);
+      }
+      this.debugOverlay?.refreshResolution(newScale);
+    }
     cam.setZoom(zoom);
     cam.centerOn(WORLD_VIEW_WIDTH / 2, WORLD_VIEW_HEIGHT / 2);
   }

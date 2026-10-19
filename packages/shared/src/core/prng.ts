@@ -2,7 +2,7 @@
  * Hash a string or number seed into an unsigned 32-bit integer using FNV-1a.
  */
 export function hashSeed(seed: string | number): number {
-  if (typeof seed === 'number' && Number.isFinite(seed)) {
+  if (typeof seed === 'number' && Number.isInteger(seed)) {
     const n = seed >>> 0;
     return n === 0 ? 0x6d2b79f5 : n;
   }

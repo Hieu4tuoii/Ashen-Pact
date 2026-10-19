@@ -18,6 +18,8 @@ export class GameScene extends Phaser.Scene {
   private simLoop = new FixedTimestepLoop(60);
   private playerRig?: CutoutRig;
   private goblinRig?: CutoutRig;
+  private floorTileSprites: { sprite: Phaser.GameObjects.Sprite; variant: number }[] = [];
+  private textObjects: Phaser.GameObjects.Text[] = [];
   private debugOverlay?: DebugOverlay;
   private statusText?: Phaser.GameObjects.Text;
   private room?: ColyseusRoom;
@@ -42,20 +44,33 @@ export class GameScene extends Phaser.Scene {
     const debug = initGlobalDebugState();
     debug.scene = 'GameScene';
 
+    this.floorTileSprites = [];
+    this.textObjects = [];
+
     this.applyCameraViewport();
     this.scale.on('resize', this.applyCameraViewport, this);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.scale.off('resize', this.applyCameraViewport, this);
+      if (this.room) {
+        const activeRoom = this.room;
+        this.room = undefined;
+        void activeRoom.leave().catch(() => {});
+      }
+    });
 
     const textRes = TextureBaker.getBakeScale();
     const invBake = 1 / textRes;
 
     for (let tx = 2; tx < 28; tx++) {
       for (let ty = 3; ty < 15; ty++) {
+        const variant = (tx * 3 + ty) % 4;
         const tile = this.add.sprite(
           tx * 32 + 16,
           ty * 32 + 16,
-          TextureBaker.getBiomeTileTextureKey(1, (tx * 3 + ty) % 4),
+          TextureBaker.getBiomeTileTextureKey(1, variant),
         );
         tile.setScale(invBake);
+        this.floorTileSprites.push({ sprite: tile, variant });
       }
     }
 
@@ -89,19 +104,21 @@ export class GameScene extends Phaser.Scene {
     hudBar.strokeRoundedRect(16, 12, 928, 56, 8);
 
     const vanguardStats = CHARACTERS.vanguard;
-    this.add.text(
-      32,
-      22,
-      `${vanguardStats.nameVi} · HP ${vanguardStats.hp} · Giáp ${vanguardStats.armor} · NL ${vanguardStats.energy} | ${VIETNAMESE_VERIFICATION_STRING}`,
-      {
-        fontFamily: '"Be Vietnam Pro", sans-serif',
-        fontSize: '13px',
-        fontStyle: '700',
-        color: PALETTE.BONE_WHITE,
-        stroke: PALETTE.INK_DARK,
-        strokeThickness: 3,
-        resolution: textRes,
-      },
+    this.textObjects.push(
+      this.add.text(
+        32,
+        22,
+        `${vanguardStats.nameVi} · HP ${vanguardStats.hp} · Giáp ${vanguardStats.armor} · NL ${vanguardStats.energy} | ${VIETNAMESE_VERIFICATION_STRING}`,
+        {
+          fontFamily: '"Be Vietnam Pro", sans-serif',
+          fontSize: '13px',
+          fontStyle: '700',
+          color: PALETTE.BONE_WHITE,
+          stroke: PALETTE.INK_DARK,
+          strokeThickness: 3,
+          resolution: textRes,
+        },
+      ),
     );
 
     this.statusText = this.add.text(
@@ -115,9 +132,10 @@ export class GameScene extends Phaser.Scene {
         resolution: textRes,
       },
     );
+    this.textObjects.push(this.statusText);
 
     const galleryBtn = this.add
-      .text(815, 30, '[Xem Art Gallery]', {
+      .text(725, 30, '[Xem Art Gallery]', {
         fontFamily: '"Be Vietnam Pro", sans-serif',
         fontSize: '13px',
         fontStyle: '700',
@@ -128,6 +146,21 @@ export class GameScene extends Phaser.Scene {
       })
       .setInteractive({ useHandCursor: true });
     galleryBtn.on('pointerdown', () => this.scene.start('ArtGalleryScene'));
+    this.textObjects.push(galleryBtn);
+
+    const menuBtn = this.add
+      .text(858, 30, '[Về Menu]', {
+        fontFamily: '"Be Vietnam Pro", sans-serif',
+        fontSize: '13px',
+        fontStyle: '700',
+        color: PALETTE.CYAN_FROST,
+        stroke: PALETTE.INK_DARK,
+        strokeThickness: 3,
+        resolution: textRes,
+      })
+      .setInteractive({ useHandCursor: true });
+    menuBtn.on('pointerdown', () => this.scene.start('MenuScene'));
+    this.textObjects.push(menuBtn);
 
     if (this.input.keyboard) {
       this.keys = {
@@ -139,7 +172,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.debugOverlay = new DebugOverlay(this, false);
-    this.connectHelloRoom();
+    void this.connectHelloRoom();
   }
 
   private async connectHelloRoom(): Promise<void> {
@@ -148,10 +181,15 @@ export class GameScene extends Phaser.Scene {
       const wsHost = window.location.hostname || 'localhost';
       const client = new ColyseusClient(`ws://${wsHost}:2567`);
       const room = await client.joinOrCreate('hello_room', {});
+      if (!this.scene.isActive()) {
+        void room.leave().catch(() => {});
+        return;
+      }
       this.room = room;
       debug.serverConnected = true;
 
       room.onMessage('hello_welcome', (msg: { seed?: number; connectedPlayers?: number }) => {
+        if (!this.scene.isActive()) return;
         if (typeof msg.seed === 'number') {
           debug.seed = msg.seed;
         }
@@ -161,6 +199,7 @@ export class GameScene extends Phaser.Scene {
       });
 
       room.onMessage('pong_check', (payload: { clientTime: number }) => {
+        if (!this.scene.isActive()) return;
         debug.pingMs = Math.max(1, Date.now() - payload.clientTime);
       });
 
@@ -168,12 +207,13 @@ export class GameScene extends Phaser.Scene {
         delay: 1000,
         loop: true,
         callback: () => {
-          if (this.room) {
+          if (this.room && this.scene.isActive()) {
             this.room.send('ping_check', { clientTime: Date.now() });
           }
         },
       });
     } catch {
+      if (!this.scene.isActive()) return;
       debug.serverConnected = false;
       this.statusText?.setText(
         'WASD: Di chuyển · Chuột: Ngắm · [F1]: Debug · Chế độ Local Simulation (60Hz)',
@@ -182,12 +222,27 @@ export class GameScene extends Phaser.Scene {
   }
 
   private applyCameraViewport(): void {
-    const cam = this.cameras.main;
+    const cam = this.cameras?.main;
+    if (!cam) return;
     const zoom = Math.min(
       this.scale.width / WORLD_VIEW_WIDTH,
       this.scale.height / WORLD_VIEW_HEIGHT,
     );
-    TextureBaker.bakeAll(this, zoom, false);
+    const prevScale = TextureBaker.getBakeScale();
+    const newScale = TextureBaker.bakeAll(this, zoom, false);
+    if (newScale !== prevScale) {
+      this.playerRig?.refreshBakedTextures();
+      this.goblinRig?.refreshBakedTextures();
+      const invBake = 1 / newScale;
+      for (const item of this.floorTileSprites) {
+        item.sprite.setTexture(TextureBaker.getBiomeTileTextureKey(1, item.variant));
+        item.sprite.setScale(invBake);
+      }
+      for (const txt of this.textObjects) {
+        txt.setResolution(newScale);
+      }
+      this.debugOverlay?.refreshResolution(newScale);
+    }
     cam.setZoom(zoom);
     cam.centerOn(WORLD_VIEW_WIDTH / 2, WORLD_VIEW_HEIGHT / 2);
   }

@@ -249,9 +249,9 @@ export class CutoutRig {
       }
 
       if (head && headDef) {
-        head.x = headDef.offsetX + 1.2;
+        head.x = headDef.offsetX + 1.0 + Math.cos(localAim) * 0.6;
         head.y = headDef.offsetY + Math.sin(phase - 0.3) * 1.1;
-        head.rotation = 0.06 + Math.sin(phase) * 0.05;
+        head.rotation = 0.05 + Math.sin(phase) * 0.05 + Math.sin(localAim) * 0.06;
       }
 
       if (legL && legLDef) {
