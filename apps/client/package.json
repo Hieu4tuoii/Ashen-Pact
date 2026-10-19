@@ -1,0 +1,22 @@
+{
+  "name": "@ashen-pact/client",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --port 5173",
+    "build": "tsc -p tsconfig.json --noEmit && vite build",
+    "preview": "vite preview --port 4173",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@ashen-pact/shared": "workspace:*",
+    "@fontsource/be-vietnam-pro": "^5.1.0",
+    "colyseus.js": "^0.15.28",
+    "phaser": "^3.87.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "vite": "^5.4.11"
+  }
+}

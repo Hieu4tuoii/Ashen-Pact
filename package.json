@@ -1,0 +1,29 @@
+{
+  "name": "ashen-pact",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Ashen Pact - Top-down Action Roguelite Co-op LAN Game",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently -k -n SERVER,CLIENT \"pnpm --filter @ashen-pact/server dev\" \"pnpm --filter @ashen-pact/client dev\"",
+    "build": "pnpm --filter @ashen-pact/shared build && pnpm --filter @ashen-pact/client build && pnpm --filter @ashen-pact/server build",
+    "typecheck": "pnpm --filter @ashen-pact/shared typecheck && pnpm --filter @ashen-pact/client typecheck && pnpm --filter @ashen-pact/server typecheck",
+    "lint": "eslint \"packages/*/src/**/*.ts\" \"apps/*/src/**/*.ts\" \"tests/**/*.ts\"",
+    "format": "prettier --write \"packages/*/src/**/*.ts\" \"apps/*/src/**/*.ts\" \"tests/**/*.ts\"",
+    "test": "vitest run",
+    "e2e": "playwright test",
+    "verify": "pnpm typecheck && pnpm lint && pnpm test && pnpm build && pnpm e2e"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.15.0",
+    "@playwright/test": "^1.49.0",
+    "@types/node": "^22.9.0",
+    "concurrently": "^9.1.0",
+    "eslint": "^9.15.0",
+    "prettier": "^3.3.3",
+    "typescript": "^5.6.3",
+    "typescript-eslint": "^8.15.0",
+    "vitest": "^2.1.5"
+  },
+  "packageManager": "pnpm@9.15.2"
+}
