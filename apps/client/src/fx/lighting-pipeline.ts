@@ -47,17 +47,14 @@ void main() {
     color = texture2D(uMainSampler, uv).rgb;
   }
 
-  // 2. Lightweight 4-tap Emissive Bloom on High quality
+  // 2. Lightweight 2-tap Emissive Bloom on High quality
   if (uBloomStrength > 0.001) {
-    vec2 off1 = vec2(0.0022, 0.0038);
-    vec2 off2 = vec2(-0.0022, 0.0038);
-    vec3 s1 = texture2D(uMainSampler, clamp(uv + off1, 0.0, 1.0)).rgb;
-    vec3 s2 = texture2D(uMainSampler, clamp(uv - off1, 0.0, 1.0)).rgb;
-    vec3 s3 = texture2D(uMainSampler, clamp(uv + off2, 0.0, 1.0)).rgb;
-    vec3 s4 = texture2D(uMainSampler, clamp(uv - off2, 0.0, 1.0)).rgb;
-    vec3 avg = (s1 + s2 + s3 + s4) * 0.25;
+    vec2 off = vec2(0.0022, 0.0035);
+    vec3 s1 = texture2D(uMainSampler, clamp(uv + off, 0.0, 1.0)).rgb;
+    vec3 s2 = texture2D(uMainSampler, clamp(uv - off, 0.0, 1.0)).rgb;
+    vec3 avg = (color + s1 + s2) * 0.3333;
     float luma = dot(avg, vec3(0.299, 0.587, 0.114));
-    float brightFactor = smoothstep(0.52, 0.92, luma);
+    float brightFactor = smoothstep(0.50, 0.90, luma);
     color += avg * brightFactor * uBloomStrength;
   }
 
@@ -132,8 +129,8 @@ const BIOME_COLOR_GRADES: Record<1 | 2 | 3, [number, number, number]> = {
 const LIGHTMAP_RES_SCALE = 0.25;
 
 /**
- * Dynamic Lighting & Post-FX Pipeline (Section 3.4):
- * - Multiplicative RenderTexture Lightmap with per-biome dark ambient
+ * Dynamic Lighting & Post-FX Pipeline (Section 3.4 & 3.7):
+ * - Multiplicative RenderTexture Lightmap at depth 34 (above floor/props/entities, below telegraphs/projectiles/particles/damage numbers so combat hazards stay bright & readable in the dark)
  * - Additive soft radial point lights for players, torches (flickering), glowing mushrooms,
  *   explosive barrels, lava/burning surfaces, electrified water, projectiles, and explosions
  * - Custom WebGL PostFX shader for Bloom, Vignette, Low-HP Heartbeat, Chromatic Aberration, and Biome Color Grading
@@ -148,6 +145,7 @@ export class LightingPipeline {
   private frameCounter = 0;
   private activeLightCount = 0;
   private postFxAttached = false;
+  private currentLightmapScale = LIGHTMAP_RES_SCALE;
 
   constructor(scene: Phaser.Scene, biome: 1 | 2 | 3 = 1) {
     this.scene = scene;
@@ -157,15 +155,18 @@ export class LightingPipeline {
     this.brushSprite = scene.make.image({ key: 'fx_light_radial', add: false });
     this.brushSprite.setOrigin(0.5, 0.5);
 
+    this.currentLightmapScale = LIGHTMAP_RES_SCALE * graphicsSettings.getBudget().lightmapScale;
     this.lightmapRt = scene.add.renderTexture(
       0,
       0,
-      WORLD_VIEW_WIDTH * LIGHTMAP_RES_SCALE,
-      WORLD_VIEW_HEIGHT * LIGHTMAP_RES_SCALE,
+      Math.round(WORLD_VIEW_WIDTH * this.currentLightmapScale),
+      Math.round(WORLD_VIEW_HEIGHT * this.currentLightmapScale),
     );
     this.lightmapRt.setOrigin(0, 0);
-    this.lightmapRt.setScale(1 / LIGHTMAP_RES_SCALE);
-    this.lightmapRt.setDepth(780);
+    this.lightmapRt.setScale(1 / this.currentLightmapScale);
+    // Depth 34: multiplies floor (2), decals (6), props (18..22), pickups (25), afterimages (26), enemies (28), players (29..30), ambient leaves (32)
+    // Leaves telegraphs (38), projectiles (42), particles (45..58), lightning (62), damage numbers (80), hitboxes (90) at 100% emissive brightness!
+    this.lightmapRt.setDepth(34);
     this.lightmapRt.setBlendMode(Phaser.BlendModes.MULTIPLY);
 
     for (let i = 0; i < 32; i++) {
@@ -192,6 +193,10 @@ export class LightingPipeline {
     return this.activeLightCount;
   }
 
+  public isLightmapVisible(): boolean {
+    return this.lightmapRt.visible;
+  }
+
   public spawnTransientLight(
     x: number,
     y: number,
@@ -216,7 +221,7 @@ export class LightingPipeline {
     }
   }
 
-  public syncPostFxPipeline(isHeavySwarm = false): void {
+  public syncPostFxPipeline(): void {
     const renderer = this.scene.game.renderer;
     if (!(renderer instanceof Phaser.Renderer.WebGL.WebGLRenderer)) return;
 
@@ -224,10 +229,21 @@ export class LightingPipeline {
       renderer.pipelines.addPostPipeline('BiomePostFxPipeline', BiomePostFxPipeline);
     }
 
+    const budget = graphicsSettings.getBudget();
+    const targetScale = LIGHTMAP_RES_SCALE * budget.lightmapScale;
+    if (Math.abs(targetScale - this.currentLightmapScale) > 0.001) {
+      this.currentLightmapScale = targetScale;
+      this.lightmapRt.resize(
+        Math.round(WORLD_VIEW_WIDTH * this.currentLightmapScale),
+        Math.round(WORLD_VIEW_HEIGHT * this.currentLightmapScale),
+      );
+      this.lightmapRt.setScale(1 / this.currentLightmapScale);
+    }
+
     const quality = graphicsSettings.getState().quality;
     const cam = this.scene.cameras.main;
 
-    if (quality === 'low' || isHeavySwarm) {
+    if (quality === 'low') {
       if (this.postFxAttached) {
         cam.removePostPipeline('BiomePostFxPipeline');
         this.postFxAttached = false;
@@ -261,21 +277,21 @@ export class LightingPipeline {
 
     const budget = graphicsSettings.getBudget();
     const isHeavySwarm = projectiles.length > 200;
-    this.syncPostFxPipeline(isHeavySwarm);
+    this.syncPostFxPipeline();
     const cam = this.scene.cameras.main;
     const view = cam.worldView;
     const viewX = view && view.width > 0 ? view.x : 0;
     const viewY = view && view.height > 0 ? view.y : 0;
 
     this.lightmapRt.setPosition(viewX, viewY);
-    this.lightmapRt.setVisible(!isHeavySwarm);
+    this.lightmapRt.setVisible(true);
 
     // 1. Update PostFX uniforms (Bloom, Vignette, Chromatic Aberration, Low-HP Heartbeat)
     if (this.postFxAttached) {
       const postPipelines = cam.getPostPipeline('BiomePostFxPipeline');
       const pipeline = Array.isArray(postPipelines) ? postPipelines[0] : postPipelines;
       if (pipeline instanceof BiomePostFxPipeline) {
-        pipeline.bloomStrength = budget.enableBloomPostFx && !isHeavySwarm ? 0.28 : 0.0;
+        pipeline.bloomStrength = budget.enableBloomPostFx ? 0.28 : 0.0;
         pipeline.vignetteStrength = 0.34;
         pipeline.chromaAmount = isHeavySwarm ? 0 : clamp(trauma * 1.4, 0, 1);
         pipeline.colorGradeTint = BIOME_COLOR_GRADES[this.biome];
@@ -289,14 +305,10 @@ export class LightingPipeline {
       }
     }
 
-    if (isHeavySwarm) {
-      this.activeLightCount =
-        2 + simulatedPlayers.length * 2 + props.length + Math.min(24, projectiles.length);
-      return;
-    }
-
-    // 2. Render Dynamic Lightmap into Quarter-Res RenderTexture
+    // 2. Render Dynamic Lightmap into RenderTexture
     const ambientColor = BIOME_AMBIENT_COLORS[this.biome];
+    const lmScale = this.currentLightmapScale;
+    const maxLights = budget.tier === 'high' ? 48 : budget.tier === 'medium' ? 28 : 12;
     this.lightmapRt.clear();
     this.lightmapRt.fill(ambientColor, 1.0);
     this.lightmapRt.beginDraw();
@@ -309,6 +321,7 @@ export class LightingPipeline {
       colorNum: number,
       alpha: number,
     ) => {
+      if (lightsDrawn >= maxLights) return;
       const lx = worldX - viewX;
       const ly = worldY - viewY;
       if (
@@ -319,14 +332,10 @@ export class LightingPipeline {
       ) {
         return;
       }
-      this.brushSprite.setScale(((radius * 2) / 128) * LIGHTMAP_RES_SCALE);
+      this.brushSprite.setScale(((radius * 2) / 128) * lmScale);
       this.brushSprite.setTint(colorNum);
       this.brushSprite.setAlpha(clamp(alpha, 0, 1));
-      this.lightmapRt.batchDraw(
-        this.brushSprite,
-        lx * LIGHTMAP_RES_SCALE,
-        ly * LIGHTMAP_RES_SCALE,
-      );
+      this.lightmapRt.batchDraw(this.brushSprite, lx * lmScale, ly * lmScale);
       lightsDrawn += 1;
     };
 
@@ -374,7 +383,20 @@ export class LightingPipeline {
       drawLight(prop.x, prop.y, radius, hexToNum(prop.lightColorHex), alpha);
     }
 
-    // D. Glowing Interactive Surfaces (Lava, Burning Oil/Grass, Electrified Water, Poison Swamp)
+    // D. Transient Flash Lights (Muzzle flashes, Explosions, Lightning arcs)
+    for (let i = 0; i < this.transientPool.length; i++) {
+      const t = this.transientPool[i]!;
+      if (!t.active) continue;
+      t.age += dtSec;
+      if (t.age >= t.ttl) {
+        t.active = false;
+        continue;
+      }
+      const p = 1 - t.age / t.ttl;
+      drawLight(t.x, t.y, t.radius * (0.7 + 0.3 * p), t.color, t.intensity * p);
+    }
+
+    // E. Glowing Interactive Surfaces (Lava, Burning Oil/Grass, Electrified Water, Poison Swamp)
     const minTx = Math.max(1, Math.floor(viewX / TILE_SIZE));
     const maxTx = Math.min(map.cols - 2, Math.ceil((viewX + WORLD_VIEW_WIDTH) / TILE_SIZE));
     const minTy = Math.max(1, Math.floor(viewY / TILE_SIZE));
@@ -382,28 +404,34 @@ export class LightingPipeline {
 
     for (let ty = minTy; ty <= maxTy; ty++) {
       for (let tx = minTx; tx <= maxTx; tx++) {
-        // Sample every tile for active dynamic surfaces, or 2x2 stride for static swamp/lava to minimize overdraw
         const surf = map.getSurface(tx, ty);
-        if (surf === 'none' || surf === 'water' || surf === 'oil' || surf === 'grass' || surf === 'ash' || surf === 'ice') {
+        if (
+          surf === 'none' ||
+          surf === 'water' ||
+          surf === 'oil' ||
+          surf === 'grass' ||
+          surf === 'ash' ||
+          surf === 'ice'
+        ) {
           continue;
         }
         const wx = tx * TILE_SIZE + TILE_SIZE / 2;
         const wy = ty * TILE_SIZE + TILE_SIZE / 2;
-        if (surf === 'burning_oil' || surf === 'burning_grass') {
-          const flick = Math.sin(this.elapsedSec * 16 + tx * 3 + ty * 5) * 6;
-          drawLight(wx, wy, 68 + flick, hexToNum(PALETTE.FLAME_ORANGE), 0.65);
-        } else if (surf === 'electrified_water') {
-          drawLight(wx, wy, 64, hexToNum(PALETTE.CYAN_FROST), 0.62);
-        } else if (surf === 'lava' && (tx + ty) % 2 === 0) {
-          drawLight(wx, wy, 78, hexToNum(PALETTE.FLAME_ORANGE), 0.62);
-        } else if (surf === 'poison_swamp' && (tx + ty) % 2 === 0) {
-          drawLight(wx, wy, 62, hexToNum(PALETTE.TOXIC_PURPLE), 0.42);
+        if ((surf === 'burning_oil' || surf === 'burning_grass') && ((tx + ty) & 1) === 0) {
+          const flick = Math.sin(this.elapsedSec * 16 + tx * 3 + ty * 5) * 7;
+          drawLight(wx, wy, 82 + flick, hexToNum(PALETTE.FLAME_ORANGE), 0.72);
+        } else if (surf === 'electrified_water' && ((tx + ty) & 1) === 0) {
+          drawLight(wx, wy, 76, hexToNum(PALETTE.CYAN_FROST), 0.68);
+        } else if (surf === 'lava' && tx % 2 === 0 && ty % 2 === 0) {
+          drawLight(wx, wy, 90, hexToNum(PALETTE.FLAME_ORANGE), 0.68);
+        } else if (surf === 'poison_swamp' && tx % 2 === 0 && ty % 2 === 0) {
+          drawLight(wx, wy, 74, hexToNum(PALETTE.TOXIC_PURPLE), 0.48);
         }
       }
     }
 
-    // E. Enemy status / telegraph lights (Spore Bomber glow, burning/frozen/shocked enemies)
-    for (let i = 0; i < enemies.length; i += enemies.length > 30 ? 4 : 1) {
+    // F. Enemy status / telegraph lights (Spore Bomber glow, burning/frozen/shocked enemies)
+    for (let i = 0; i < enemies.length; i += enemies.length > 30 ? 8 : 1) {
       const e = enemies[i]!;
       if (e.hp <= 0) continue;
       if (e.aiState === 'spawning') {
@@ -419,11 +447,11 @@ export class LightingPipeline {
       }
     }
 
-    // F. Projectile Point Lights (adaptive stride when bullet count > 64 to keep 60+ FPS with 600+ bullets)
-    if (budget.enableProjectileLights && projectiles.length > 0) {
-      const maxBulletLights = isHeavySwarm ? 24 : budget.tier === 'high' ? 72 : 36;
-      const stride = Math.max(1, Math.ceil(projectiles.length / maxBulletLights));
-      for (let i = 0; i < projectiles.length; i += stride) {
+    // G. Projectile Point Lights (adaptive stride when bullet count > 64 to keep 60+ FPS with 600+ bullets)
+    if (budget.enableProjectileLights && projectiles.length > 0 && lightsDrawn < maxLights) {
+      const remaining = Math.max(1, maxLights - lightsDrawn);
+      const stride = Math.max(1, Math.ceil(projectiles.length / remaining));
+      for (let i = 0; i < projectiles.length && lightsDrawn < maxLights; i += stride) {
         const b = projectiles[i]!;
         let col = hexToNum(PALETTE.CYAN_FROST);
         if (b.team === 'enemy') col = hexToNum(PALETTE.CRIMSON_BRIGHT);
@@ -433,21 +461,8 @@ export class LightingPipeline {
         else if (b.element === 'poison') col = hexToNum(PALETTE.LIME_GLOW);
         else if (b.weaponId === 'scrap_shotgun') col = hexToNum(PALETTE.SOLAR_GOLD);
 
-        drawLight(b.x, b.y, b.team === 'enemy' ? 36 : 32, col, 0.48);
+        drawLight(b.x, b.y, b.team === 'enemy' ? 38 : 34, col, 0.52);
       }
-    }
-
-    // G. Transient Flash Lights (Muzzle flashes, Explosions, Lightning arcs)
-    for (let i = 0; i < this.transientPool.length; i++) {
-      const t = this.transientPool[i]!;
-      if (!t.active) continue;
-      t.age += dtSec;
-      if (t.age >= t.ttl) {
-        t.active = false;
-        continue;
-      }
-      const p = 1 - t.age / t.ttl;
-      drawLight(t.x, t.y, t.radius * (0.7 + 0.3 * p), t.color, t.intensity * p);
     }
 
     this.lightmapRt.endDraw();

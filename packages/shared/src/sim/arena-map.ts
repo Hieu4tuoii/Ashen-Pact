@@ -211,6 +211,40 @@ export class ArenaMap {
     return this.getSurface(tx, ty);
   }
 
+  /**
+   * 4-bit cardinal neighbor mask (N=1, E=2, S=4, W=8) for seamless surface pool rendering.
+   */
+  public getSurfaceAutotileMask(tx: number, ty: number): number {
+    const s = this.getSurface(tx, ty);
+    if (s === 'none') return 0;
+    let mask = 0;
+    if (this.isSameSurfaceFamily(s, this.getSurface(tx, ty - 1))) mask |= AUTOTILE_NORTH;
+    if (this.isSameSurfaceFamily(s, this.getSurface(tx + 1, ty))) mask |= AUTOTILE_EAST;
+    if (this.isSameSurfaceFamily(s, this.getSurface(tx, ty + 1))) mask |= AUTOTILE_SOUTH;
+    if (this.isSameSurfaceFamily(s, this.getSurface(tx - 1, ty))) mask |= AUTOTILE_WEST;
+    return mask;
+  }
+
+  private isSameSurfaceFamily(a: SurfaceKind, b: SurfaceKind): boolean {
+    if (a === b) return true;
+    if (
+      (a === 'water' || a === 'electrified_water' || a === 'ice') &&
+      (b === 'water' || b === 'electrified_water' || b === 'ice')
+    ) {
+      return true;
+    }
+    if ((a === 'oil' || a === 'burning_oil') && (b === 'oil' || b === 'burning_oil')) {
+      return true;
+    }
+    if (
+      (a === 'grass' || a === 'burning_grass' || a === 'ash') &&
+      (b === 'grass' || a === 'burning_grass' || b === 'ash')
+    ) {
+      return true;
+    }
+    return false;
+  }
+
   public setSurface(
     tx: number,
     ty: number,
@@ -347,12 +381,21 @@ export class ArenaMap {
     return changed;
   }
 
+  private readonly toIgniteOil: number[] = [];
+  private readonly toIgniteGrass: number[] = [];
+  private static readonly CARDINAL_OFFSETS: readonly [number, number][] = [
+    [1, 0],
+    [-1, 0],
+    [0, 1],
+    [0, -1],
+  ];
+
   /**
-   * Advances surface timers and spreads fire across adjacent oil/grass tiles.
+   * Advances surface timers and spreads fire across adjacent oil/grass tiles (zero-allocation).
    */
   public stepSurfaces(dtSec: number): void {
-    const toIgniteOil: number[] = [];
-    const toIgniteGrass: number[] = [];
+    this.toIgniteOil.length = 0;
+    this.toIgniteGrass.length = 0;
 
     for (let ty = 1; ty < this.rows - 1; ty++) {
       for (let tx = 1; tx < this.cols - 1; tx++) {
@@ -364,17 +407,12 @@ export class ArenaMap {
           // Spread fire to cardinal neighbors after burning for at least 0.25s
           const maxDur = surf === 'burning_oil' ? 5.0 : 3.5;
           if (maxDur - timer >= 0.25) {
-            const neighbors: readonly [number, number][] = [
-              [tx + 1, ty],
-              [tx - 1, ty],
-              [tx, ty + 1],
-              [tx, ty - 1],
-            ];
-            for (const [nx, ny] of neighbors) {
-              const nIdx = ny * this.cols + nx;
+            for (let k = 0; k < ArenaMap.CARDINAL_OFFSETS.length; k++) {
+              const [dx, dy] = ArenaMap.CARDINAL_OFFSETS[k]!;
+              const nIdx = (ty + dy) * this.cols + (tx + dx);
               const nSurf = this.surfaces[nIdx];
-              if (nSurf === 'oil') toIgniteOil.push(nIdx);
-              else if (nSurf === 'grass') toIgniteGrass.push(nIdx);
+              if (nSurf === 'oil') this.toIgniteOil.push(nIdx);
+              else if (nSurf === 'grass') this.toIgniteGrass.push(nIdx);
             }
           }
         }
@@ -401,16 +439,16 @@ export class ArenaMap {
       }
     }
 
-    for (let i = 0; i < toIgniteOil.length; i++) {
-      const idx = toIgniteOil[i]!;
+    for (let i = 0; i < this.toIgniteOil.length; i++) {
+      const idx = this.toIgniteOil[i]!;
       if (this.surfaces[idx] === 'oil') {
         this.surfaces[idx] = 'burning_oil';
         this.surfaceTimers[idx] = 5.0;
         this.mapRevision += 1;
       }
     }
-    for (let i = 0; i < toIgniteGrass.length; i++) {
-      const idx = toIgniteGrass[i]!;
+    for (let i = 0; i < this.toIgniteGrass.length; i++) {
+      const idx = this.toIgniteGrass[i]!;
       if (this.surfaces[idx] === 'grass') {
         this.surfaces[idx] = 'burning_grass';
         this.surfaceTimers[idx] = 3.5;
@@ -440,14 +478,26 @@ export class ArenaMap {
   /**
    * Resolves circle vs nearby solid tile-AABBs so entities slide smoothly along walls and pillars
    * without snagging on internal seams between adjacent tiles.
+   * Clamps to outer map bounds [radius..width-radius] so broken cracked_wall tiles on the border are passable.
    */
   public resolveCircleCollision(
     x: number,
     y: number,
     radius: number,
   ): { x: number; y: number; collided: boolean; normalX: number; normalY: number } {
-    let currX = clamp(x, TILE_SIZE + radius, this.width - TILE_SIZE - radius);
-    let currY = clamp(y, TILE_SIZE + radius, this.height - TILE_SIZE - radius);
+    const curTx = clamp(Math.floor(x / TILE_SIZE), 0, this.cols - 1);
+    const curTy = clamp(Math.floor(y / TILE_SIZE), 0, this.rows - 1);
+    const minBoundX = this.isSolidTile(0, curTy) ? TILE_SIZE + radius : radius;
+    const maxBoundX = this.isSolidTile(this.cols - 1, curTy)
+      ? this.width - TILE_SIZE - radius
+      : this.width - radius;
+    const minBoundY = this.isSolidTile(curTx, 0) ? TILE_SIZE + radius : radius;
+    const maxBoundY = this.isSolidTile(curTx, this.rows - 1)
+      ? this.height - TILE_SIZE - radius
+      : this.height - radius;
+
+    let currX = clamp(x, minBoundX, maxBoundX);
+    let currY = clamp(y, minBoundY, maxBoundY);
     let collided = currX !== x || currY !== y;
     let normalX = currX !== x ? Math.sign(currX - x) : 0;
     let normalY = currY !== y ? Math.sign(currY - y) : 0;
@@ -539,26 +589,26 @@ export class ArenaMap {
     }
 
     if (
-      x - radius <= TILE_SIZE ||
-      x + radius >= this.width - TILE_SIZE ||
-      y - radius <= TILE_SIZE ||
-      y + radius >= this.height - TILE_SIZE
+      x - radius <= 0 ||
+      x + radius >= this.width ||
+      y - radius <= 0 ||
+      y + radius >= this.height
     ) {
       let nx = 0;
       let ny = 0;
       let hitTx = clamp(Math.floor(x / TILE_SIZE), 0, this.cols - 1);
       let hitTy = clamp(Math.floor(y / TILE_SIZE), 0, this.rows - 1);
-      if (x - radius <= TILE_SIZE) {
+      if (x - radius <= 0) {
         nx = 1;
         hitTx = 0;
-      } else if (x + radius >= this.width - TILE_SIZE) {
+      } else if (x + radius >= this.width) {
         nx = -1;
         hitTx = this.cols - 1;
       }
-      if (y - radius <= TILE_SIZE) {
+      if (y - radius <= 0) {
         ny = 1;
         hitTy = 0;
-      } else if (y + radius >= this.height - TILE_SIZE) {
+      } else if (y + radius >= this.height) {
         ny = -1;
         hitTy = this.rows - 1;
       }
@@ -566,8 +616,8 @@ export class ArenaMap {
         hit: true,
         normalX: nx,
         normalY: ny,
-        resolvedX: clamp(x, TILE_SIZE + radius, this.width - TILE_SIZE - radius),
-        resolvedY: clamp(y, TILE_SIZE + radius, this.height - TILE_SIZE - radius),
+        resolvedX: clamp(x, radius, this.width - radius),
+        resolvedY: clamp(y, radius, this.height - radius),
         hitTx,
         hitTy,
       };

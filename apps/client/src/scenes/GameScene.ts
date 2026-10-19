@@ -61,6 +61,7 @@ interface ArenaTileVisual {
   autotileMask: number;
   aoMask: number;
   surface: SurfaceKind;
+  surfaceMask: number;
 }
 
 interface PropVisual {
@@ -96,6 +97,14 @@ export class GameScene extends Phaser.Scene {
   private readonly activePropIds = new Set<number>();
   private readonly activeProjIds = new Set<number>();
   private readonly activePickupIds = new Set<number>();
+
+  private readonly playerPosPreScratch = { x: 0, y: 0 };
+  private readonly playerPosScratch = { x: 0, y: 0 };
+  private readonly entityPosScratch = { x: 0, y: 0 };
+  private readonly simPlayerLightingScratch: {
+    pos: { x: number; y: number };
+    state: ReturnType<LocalTransport['getSim']>['player'];
+  }[] = [];
 
   private mapTileVisuals: ArenaTileVisual[] = [];
   private arenaGroundTex?: Phaser.Textures.CanvasTexture;
@@ -268,9 +277,9 @@ export class GameScene extends Phaser.Scene {
     // 2. Build Arena Tilemap (8 Floor Variants, Autotiled Walls/Pillars, Cracked Walls, AO Shadows, 6 Interactive Surfaces)
     this.buildArenaTiles();
 
-    // 3. Telegraph & Hitbox Overlay Graphics
+    // 3. Telegraph & Hitbox Overlay Graphics (depth 38: above lightmapRt depth 34 so telegraphs stay bright & readable in dark zones)
     this.telegraphGraphics = this.add.graphics();
-    this.telegraphGraphics.setDepth(15);
+    this.telegraphGraphics.setDepth(38);
 
     this.hitboxGraphics = this.add.graphics();
     this.hitboxGraphics.setDepth(90);
@@ -358,12 +367,14 @@ export class GameScene extends Phaser.Scene {
 
     if (tile.kind === 'floor') {
       if (tile.surface !== 'none') {
-        this.drawSourceKeyToCtx(
+        TextureBaker.drawSurfaceTile(
           groundCtx,
-          TextureBaker.getSurfaceTextureKey(tile.surface),
+          tile.surface,
+          tile.surfaceMask,
           dx,
           dy,
           cellPx,
+          tile.variant,
         );
       }
       if (tile.aoMask > 0) {
@@ -420,6 +431,7 @@ export class GameScene extends Phaser.Scene {
           autotileMask: map.getAutotileMask(tx, ty),
           aoMask: map.getWallAmbientOcclusionMask(tx, ty),
           surface: map.getSurface(tx, ty),
+          surfaceMask: map.getSurfaceAutotileMask(tx, ty),
         };
         this.mapTileVisuals.push(tile);
       }
@@ -463,18 +475,21 @@ export class GameScene extends Phaser.Scene {
       const newMask = map.getAutotileMask(tile.tx, tile.ty);
       const newAo = map.getWallAmbientOcclusionMask(tile.tx, tile.ty);
       const newSurface = map.getSurface(tile.tx, tile.ty);
+      const newSurfaceMask = map.getSurfaceAutotileMask(tile.tx, tile.ty);
 
       if (
         newKind !== tile.kind ||
         newMask !== tile.autotileMask ||
         newAo !== tile.aoMask ||
-        newSurface !== tile.surface
+        newSurface !== tile.surface ||
+        newSurfaceMask !== tile.surfaceMask
       ) {
         groundDirty = true;
         tile.kind = newKind;
         tile.autotileMask = newMask;
         tile.aoMask = newAo;
         tile.surface = newSurface;
+        tile.surfaceMask = newSurfaceMask;
         this.renderTileCellToComposite(tile);
       }
     }
@@ -844,13 +859,14 @@ export class GameScene extends Phaser.Scene {
         pv.shadow.setTexture('prop_shadow');
         pv.shadow.setScale(invBake);
       }
+      const stressInvBake = 1 / Math.min(2, newScale);
       for (const item of this.projectileSprites.values()) {
         item.sprite.setTexture(item.textureKey);
-        item.sprite.setScale(invBake);
+        item.sprite.setScale(item.textureKey.startsWith('proj_stress_') ? stressInvBake : invBake);
       }
       for (const item of this.projectileSpritePool) {
         item.sprite.setTexture(item.textureKey);
-        item.sprite.setScale(invBake);
+        item.sprite.setScale(item.textureKey.startsWith('proj_stress_') ? stressInvBake : invBake);
       }
       for (const item of this.pickupSprites.values()) {
         item.sprite.setTexture(item.textureKey);
@@ -890,7 +906,7 @@ export class GameScene extends Phaser.Scene {
     const worldPt = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
     const unshakenWorldX = worldPt.x - this.lastShakeX;
     const unshakenWorldY = worldPt.y - this.lastShakeY;
-    const pInterpPre = this.transport.getInterpolatedPlayerPos();
+    const pInterpPre = this.transport.getInterpolatedPlayerPos(this.playerPosPreScratch);
     const aimAngle = Math.atan2(unshakenWorldY - pInterpPre.y, unshakenWorldX - pInterpPre.x);
 
     let moveX = 0;
@@ -960,7 +976,7 @@ export class GameScene extends Phaser.Scene {
     this.processSimEvents(this.transport.consumeEvents());
 
     // 5. Render Interpolated Player & CutoutRig Animation + Dash Afterimage Ghosts
-    const playerPos = this.transport.getInterpolatedPlayerPos();
+    const playerPos = this.transport.getInterpolatedPlayerPos(this.playerPosScratch);
     if (this.playerRig) {
       this.playerRig.container.setPosition(playerPos.x, playerPos.y + RIG_FOOT_OFFSET_Y);
       this.playerRig.setAimAngle(aimAngle);
@@ -980,6 +996,7 @@ export class GameScene extends Phaser.Scene {
             playerPos.x,
             playerPos.y + RIG_FOOT_OFFSET_Y,
             this.playerRig.getFacingSign(),
+            sim.player.slot,
           );
         }
       } else {
@@ -1005,15 +1022,24 @@ export class GameScene extends Phaser.Scene {
       dtSec,
     );
 
-    // 9. Update Dynamic Lighting RenderTexture + WebGL PostFX Shader
+    // 9. Update Dynamic Lighting RenderTexture + WebGL PostFX Shader (zero-allocation scratch array)
+    this.simPlayerLightingScratch.length = sim.simulatedPlayers.length;
+    for (let i = 0; i < sim.simulatedPlayers.length; i++) {
+      const sp = sim.simulatedPlayers[i]!;
+      let slot = this.simPlayerLightingScratch[i];
+      if (!slot) {
+        slot = { pos: { x: 0, y: 0 }, state: sp };
+        this.simPlayerLightingScratch[i] = slot;
+      }
+      this.transport.getInterpolatedSimPlayerPos(sp, slot.pos);
+      slot.state = sp;
+    }
+
     this.lighting.update({
       dtSec,
       playerPos,
       player: sim.player,
-      simulatedPlayers: sim.simulatedPlayers.map((sp) => ({
-        pos: this.transport.getInterpolatedSimPlayerPos(sp),
-        state: sp,
-      })),
+      simulatedPlayers: this.simPlayerLightingScratch,
       enemies: sim.enemies,
       projectiles: sim.projectiles,
       props: sim.props,
@@ -1190,14 +1216,28 @@ export class GameScene extends Phaser.Scene {
         }
         case 'dash_started': {
           this.fx.spawnDashDust(ev.x, ev.y + RIG_FOOT_OFFSET_Y);
-          if (this.playerRig) {
+          if (ev.playerId === sim.player.id) {
+            if (this.playerRig) {
+              this.fx.spawnDashAfterimage(
+                ev.x,
+                ev.y + RIG_FOOT_OFFSET_Y,
+                this.playerRig.getFacingSign(),
+                sim.player.slot,
+              );
+            }
+          } else {
+            const simRig = this.simPlayerRigs.get(ev.playerId);
+            const spState = sim.simulatedPlayers.find((sp) => sp.id === ev.playerId);
             this.fx.spawnDashAfterimage(
               ev.x,
               ev.y + RIG_FOOT_OFFSET_Y,
-              this.playerRig.getFacingSign(),
+              simRig ? simRig.getFacingSign() : ev.dirX >= 0 ? 1 : -1,
+              spState ? spState.slot : 2,
             );
           }
-          zzfx.play('dash', ev.x, this.camFocusX);
+          if (allowStressSfx) {
+            zzfx.play('dash', ev.x, this.camFocusX);
+          }
           break;
         }
         case 'enemy_telegraph': {
@@ -1349,7 +1389,7 @@ export class GameScene extends Phaser.Scene {
         this.simPlayerRigs.set(sp.id, rig);
       }
 
-      const pos = this.transport.getInterpolatedSimPlayerPos(sp);
+      const pos = this.transport.getInterpolatedSimPlayerPos(sp, this.entityPosScratch);
       rig.container.setPosition(pos.x, pos.y + RIG_FOOT_OFFSET_Y);
       rig.setAimAngle(sp.aimAngle);
       const spWeaponId = sp.weaponSlots[sp.activeWeaponSlot] ?? 'rusty_pistol';
@@ -1394,7 +1434,7 @@ export class GameScene extends Phaser.Scene {
         this.enemyRigs.set(e.id, rig);
       }
 
-      const pos = this.transport.getInterpolatedEnemyPos(e);
+      const pos = this.transport.getInterpolatedEnemyPos(e, this.entityPosScratch);
       const inView =
         pos.x >= viewLeft && pos.x <= viewRight && pos.y >= viewTop && pos.y <= viewBottom;
       rig.container.setVisible(inView);
@@ -1498,6 +1538,7 @@ export class GameScene extends Phaser.Scene {
     const sim = this.transport.getSim();
     const invBake = 1 / TextureBaker.getBakeScale();
     const stressInvBake = 1 / Math.min(2, TextureBaker.getBakeScale());
+    const teammateOpacity = graphicsSettings.getState().teammateFxOpacity;
     const view = this.cameras.main.worldView;
     const hasView = view && view.width > 0;
     const viewLeft = hasView ? view.x - 24 : -9999;
@@ -1516,13 +1557,17 @@ export class GameScene extends Phaser.Scene {
       let tex = 'proj_player_bolt';
       let tint = 0xffffff;
       if (isStress) {
-        tex = 'proj_stress_orb';
-        if (b.team === 'enemy') tint = 0xfb7185;
-        else if (b.element === 'burn') tint = 0xfb923c;
-        else if (b.element === 'chill') tint = 0x38bdf8;
-        else if (b.element === 'shock') tint = 0xfde047;
-        else if (b.element === 'poison') tint = 0x4ade80;
-        else if (b.weaponId === 'scrap_shotgun') tint = 0xfacc15;
+        if (b.team === 'enemy') {
+          tex = 'proj_stress_enemy';
+        } else {
+          tex = 'proj_stress_player';
+          if (b.element === 'burn') tint = 0xfb923c;
+          else if (b.element === 'chill') tint = 0x38bdf8;
+          else if (b.element === 'shock') tint = 0xfde047;
+          else if (b.element === 'poison') tint = 0x4ade80;
+          else if (b.weaponId === 'scrap_shotgun') tint = 0xfacc15;
+          else tint = 0x7dd3fc;
+        }
       } else if (b.team === 'enemy') {
         tex = 'proj_enemy_orb';
       } else if (b.element === 'burn') {
@@ -1560,7 +1605,7 @@ export class GameScene extends Phaser.Scene {
         entry.sprite.setScale(projScale);
       }
 
-      const pos = this.transport.getInterpolatedProjectilePos(b);
+      const pos = this.transport.getInterpolatedProjectilePos(b, this.entityPosScratch);
       const inView =
         pos.x >= viewLeft && pos.x <= viewRight && pos.y >= viewTop && pos.y <= viewBottom;
       entry.sprite.setVisible(inView);
@@ -1570,8 +1615,10 @@ export class GameScene extends Phaser.Scene {
         } else {
           entry.sprite.setTint(tint);
         }
+        const isTeammateBullet = b.team === 'player' && b.ownerId !== sim.player.id;
+        entry.sprite.setAlpha(isTeammateBullet ? teammateOpacity : 1.0);
         entry.sprite.setPosition(pos.x, pos.y);
-        entry.sprite.setRotation(isStress ? 0 : b.angle);
+        entry.sprite.setRotation(b.team === 'enemy' ? 0 : b.angle);
       }
     }
 
@@ -1611,7 +1658,7 @@ export class GameScene extends Phaser.Scene {
         this.pickupSprites.set(pk.id, entry);
       }
 
-      const pos = this.transport.getInterpolatedPickupPos(pk);
+      const pos = this.transport.getInterpolatedPickupPos(pk, this.entityPosScratch);
       entry.sprite.setPosition(pos.x, pos.y);
     }
 
@@ -1678,6 +1725,8 @@ export class GameScene extends Phaser.Scene {
     const viewRight = hasView ? view.x + view.width + 48 : 9999;
     const viewTop = hasView ? view.y - 48 : -9999;
     const viewBottom = hasView ? view.y + view.height + 48 : 9999;
+    const hudSafeTop = hasView ? view.y + 72 : 72;
+    const hudSafeBottom = hasView ? view.y + view.height - 62 : 478;
 
     // 1. Thiết Vệ Active Skill: "Tường Khiên Hồng Ngọc" (120 deg arc shield in front of player)
     if (p.skillActiveTimer > 0) {
@@ -1708,7 +1757,7 @@ export class GameScene extends Phaser.Scene {
     for (let i = 0; i < sim.enemies.length; i++) {
       const e = sim.enemies[i]!;
       if (e.hp <= 0) continue;
-      const pos = this.transport.getInterpolatedEnemyPos(e);
+      const pos = this.transport.getInterpolatedEnemyPos(e, this.entityPosScratch);
       if (pos.x < viewLeft || pos.x > viewRight || pos.y < viewTop || pos.y > viewBottom) {
         continue;
       }
@@ -1784,15 +1833,21 @@ export class GameScene extends Phaser.Scene {
         }
       }
 
-      // Floating HP bar above non-dummy enemies or enemies with active elemental status
+      // Floating HP bar above non-dummy enemies or enemies with active elemental status (clipped to HUD safe bounds)
       const hasStatus =
         e.burnTimer > 0 ||
         e.chillStacks > 0 ||
         e.frozenTimer > 0 ||
         e.poisonStacks > 0 ||
         e.shockTimer > 0;
-      if (((!e.isDummy && e.hp < e.maxHp) || hasStatus) && (!isStress || hpBarsDrawn < 8)) {
-        this.drawEnemyHealthAndStatusBar(g, pos.x, pos.y - 30, e);
+      const barY = pos.y - 30;
+      if (
+        barY - 8 >= hudSafeTop &&
+        barY + 8 <= hudSafeBottom &&
+        ((!e.isDummy && e.hp < e.maxHp) || hasStatus) &&
+        (!isStress || hpBarsDrawn < 8)
+      ) {
+        this.drawEnemyHealthAndStatusBar(g, pos.x, barY, e);
         hpBarsDrawn += 1;
       }
     }
@@ -1868,7 +1923,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     // Player collision circle
-    const pPos = this.transport.getInterpolatedPlayerPos();
+    const pPos = this.transport.getInterpolatedPlayerPos(this.entityPosScratch);
     g.lineStyle(2, 0x4ade80, 0.95);
     g.strokeCircle(pPos.x, pPos.y, sim.player.radius);
 
@@ -1884,7 +1939,7 @@ export class GameScene extends Phaser.Scene {
     g.lineStyle(2, 0xfb7185, 0.95);
     for (const e of sim.enemies) {
       if (e.hp > 0) {
-        const ePos = this.transport.getInterpolatedEnemyPos(e);
+        const ePos = this.transport.getInterpolatedEnemyPos(e, this.entityPosScratch);
         g.strokeCircle(ePos.x, ePos.y, e.radius);
       }
     }
@@ -1892,7 +1947,7 @@ export class GameScene extends Phaser.Scene {
     // Projectile collision circles
     g.lineStyle(1.5, 0x22d3ee, 0.9);
     for (const b of sim.projectiles) {
-      const bPos = this.transport.getInterpolatedProjectilePos(b);
+      const bPos = this.transport.getInterpolatedProjectilePos(b, this.entityPosScratch);
       g.strokeCircle(bPos.x, bPos.y, b.radius);
     }
   }
@@ -2034,7 +2089,12 @@ export class GameScene extends Phaser.Scene {
     debug.afterimageCount = this.fx.getActiveAfterimageCount();
     debug.ambientParticleCount = this.fx.getActiveAmbientCount();
     debug.propCount = this.propVisuals.size;
-    debug.destructiblePropCount = sim.props.filter((pr) => pr.destructible && pr.hp > 0).length;
+    let destructibleCount = 0;
+    for (let i = 0; i < sim.props.length; i++) {
+      const pr = sim.props[i]!;
+      if (pr.destructible && pr.hp > 0) destructibleCount += 1;
+    }
+    debug.destructiblePropCount = destructibleCount;
     debug.activeImbueElement = p.activeImbueElement;
     debug.stressTestActive = sim.stressTestActive;
 

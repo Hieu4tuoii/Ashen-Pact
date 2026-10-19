@@ -429,6 +429,7 @@ export class WorldSim {
   private readonly projectilePool: SimProjectileState[] = [];
   private readonly pickupPool: SimPickupState[] = [];
   private readonly damageHistory: { tick: number; amount: number }[] = [];
+  private readonly damageHistoryPool: { tick: number; amount: number }[] = [];
 
   constructor(options: WorldSimOptions = {}) {
     const seedVal = options.seed ?? 0x1337c0de;
@@ -657,8 +658,11 @@ export class WorldSim {
       this.createPlayerState(3, 3, 'elementalist', this.map.width * 0.45, this.map.height * 0.65),
       this.createPlayerState(4, 4, 'engineer', this.map.width * 0.6, this.map.height * 0.5),
     ];
+    this.simulatedPlayers[0]!.activeWeaponSlot = 1; // Rusty Pistol
     this.simulatedPlayers[0]!.activeImbueElement = 'chill';
+    this.simulatedPlayers[1]!.activeWeaponSlot = 2; // Scrap Shotgun
     this.simulatedPlayers[1]!.activeImbueElement = 'burn';
+    this.simulatedPlayers[2]!.activeWeaponSlot = 3; // Gale SMG
     this.simulatedPlayers[2]!.activeImbueElement = 'shock';
 
     // Remove dummy so all 80 enemies are combat enemies
@@ -719,7 +723,13 @@ export class WorldSim {
     if (typeof input.weaponSlotSelect === 'number') {
       this.latchedWeaponSlot = input.weaponSlotSelect;
     }
-    this.currentInput = { ...input };
+    this.currentInput.seq = input.seq;
+    this.currentInput.tick = input.tick;
+    this.currentInput.moveX = input.moveX;
+    this.currentInput.moveY = input.moveY;
+    this.currentInput.aimAngle = input.aimAngle;
+    this.currentInput.buttons = input.buttons;
+    this.currentInput.weaponSlotSelect = input.weaponSlotSelect ?? null;
     this.player.lastProcessedSeq = input.seq;
   }
 
@@ -976,13 +986,41 @@ export class WorldSim {
 
     // Prune old DPS history (> 3 seconds = 180 ticks)
     const minTick = this.tick - 180;
-    while (this.damageHistory.length > 0 && this.damageHistory[0]!.tick < minTick) {
-      this.damageHistory.shift();
+    let firstValidIdx = 0;
+    while (
+      firstValidIdx < this.damageHistory.length &&
+      this.damageHistory[firstValidIdx]!.tick < minTick
+    ) {
+      this.damageHistoryPool.push(this.damageHistory[firstValidIdx]!);
+      firstValidIdx++;
+    }
+    if (firstValidIdx > 0) {
+      let writeIdx = 0;
+      for (let i = firstValidIdx; i < this.damageHistory.length; i++) {
+        this.damageHistory[writeIdx++] = this.damageHistory[i]!;
+      }
+      this.damageHistory.length = writeIdx;
     }
 
     this.prevButtons = this.currentInput.buttons;
     this.latchedButtons = 0;
     this.latchedWeaponSlot = null;
+  }
+
+  private recordDamageHistory(amount: number): void {
+    const last = this.damageHistory[this.damageHistory.length - 1];
+    if (last && last.tick === this.tick) {
+      last.amount += amount;
+      return;
+    }
+    const entry = this.damageHistoryPool.pop();
+    if (entry) {
+      entry.tick = this.tick;
+      entry.amount = amount;
+      this.damageHistory.push(entry);
+    } else {
+      this.damageHistory.push({ tick: this.tick, amount });
+    }
   }
 
   public getRollingDps(): number {
@@ -1414,6 +1452,21 @@ export class WorldSim {
                 x: wallCx,
                 y: wallCy,
               });
+              for (let k = 0; k < 3; k++) {
+                const ang = Math.PI * 0.25 + k * (Math.PI * 0.25);
+                this.pickups.push(
+                  this.acquirePickup({
+                    id: ++this.nextEntityId,
+                    kind: k === 1 ? 'energy' : 'gold',
+                    x: wallCx,
+                    y: wallCy + 10,
+                    vx: Math.cos(ang) * 75,
+                    vy: Math.sin(ang) * 75,
+                    amount: k === 1 ? 15 : 10,
+                    ttlSec: 15,
+                  }),
+                );
+              }
             }
           }
         }
@@ -1880,7 +1933,7 @@ export class WorldSim {
       return;
     }
     enemy.hp = Math.max(0, enemy.hp - amount);
-    this.damageHistory.push({ tick: this.tick, amount });
+    this.recordDamageHistory(amount);
 
     if (!this.stressTestActive) {
       this.events.push({
@@ -2467,7 +2520,7 @@ export class WorldSim {
       enemy.hp = Math.max(0, enemy.hp - dmg);
     }
     enemy.hitFlashTimer = 0.12;
-    this.damageHistory.push({ tick: this.tick, amount: dmg });
+    this.recordDamageHistory(dmg);
 
     const kbMult = enemy.isDummy ? 0.15 : 1.0;
     const kbX = Math.cos(hitAngleRad) * knockback * kbMult;

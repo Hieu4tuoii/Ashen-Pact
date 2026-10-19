@@ -36,12 +36,28 @@ describe('Phase 2 — Autotile Bitmasks, Wall AO Shadows, Seeded Variants & Crac
     const mapSameSeed = new ArenaMap({ cols: 36, rows: 22, seed: 42 });
     expect(map.getTileVariant(10, 10)).toBe(mapSameSeed.getTileVariant(10, 10));
 
-    // Cracked secret wall at (18, 0) is initially solid and becomes passable floor when destroyed
+    // Cracked secret wall at (18, 0) is initially solid and blocks movement/projectiles, then becomes passable when destroyed
     expect(map.getTile(18, 0)).toBe('cracked_wall');
     expect(map.isSolidTile(18, 0)).toBe(true);
+    const blockedMove = map.resolveCircleCollision(18 * TILE_SIZE + 16, 18, 13);
+    expect(blockedMove.y).toBeGreaterThanOrEqual(TILE_SIZE + 13);
+    expect(map.checkProjectileWallHit(18 * TILE_SIZE + 16, 16, 5).hit).toBe(true);
+
     expect(map.destroyCrackedWall(18, 0)).toBe(true);
     expect(map.getTile(18, 0)).toBe('floor');
     expect(map.isSolidTile(18, 0)).toBe(false);
+
+    // Once broken, player and projectiles can enter (18, 0) (y < 32), while neighboring wall (17, 0) remains solid
+    const passMove = map.resolveCircleCollision(18 * TILE_SIZE + 16, 18, 13);
+    expect(passMove.y).toBe(18);
+    expect(map.checkProjectileWallHit(18 * TILE_SIZE + 16, 16, 5).hit).toBe(false);
+    expect(map.checkProjectileWallHit(17 * TILE_SIZE + 16, 16, 5).hit).toBe(true);
+
+    // Surface autotile mask connects matching and dynamic family surface tiles seamlessly
+    map.setSurface(10, 10, 'oil', 0, true);
+    map.setSurface(11, 10, 'burning_oil', 2.0, true);
+    map.setSurface(10, 11, 'oil', 0, true);
+    expect(map.getSurfaceAutotileMask(10, 10)).toBe(AUTOTILE_EAST | AUTOTILE_SOUTH);
   });
 });
 
@@ -188,7 +204,7 @@ describe('Phase 2 — 6 Interactive Surfaces & Elemental Surface Transformations
     expect(sim.player.burnTimer).toBe(0);
   });
 
-  it('maintains 4 players, 80 enemies, and >= 600 projectiles in Stress Test mode without leaking arrays', () => {
+  it('maintains 4 players, 80 enemies, and >= 600 projectiles across a full 3-minute (10,800 ticks) Stress Test soak without memory leaks', () => {
     const sim = new WorldSim({
       seed: 5050,
       spawnInitialWave: false,
@@ -199,16 +215,36 @@ describe('Phase 2 — 6 Interactive Surfaces & Elemental Surface Transformations
 
     sim.configureStressTest(true);
     expect(1 + sim.simulatedPlayers.length).toBe(4);
+    expect(sim.simulatedPlayers[0]!.activeWeaponSlot).toBe(1);
+    expect(sim.simulatedPlayers[1]!.activeWeaponSlot).toBe(2);
+    expect(sim.simulatedPlayers[2]!.activeWeaponSlot).toBe(3);
     expect(sim.enemies.length).toBe(80);
     expect(sim.projectiles.length).toBeGreaterThanOrEqual(600);
 
-    for (let tick = 0; tick < 180; tick++) {
+    // Warm up object pools for 300 ticks (5s)
+    for (let tick = 0; tick < 300; tick++) {
       sim.step(SIM_STEP_SEC);
       sim.consumeEvents();
     }
 
-    expect(1 + sim.simulatedPlayers.length).toBe(4);
-    expect(sim.enemies.length).toBe(80);
-    expect(sim.projectiles.length).toBeGreaterThanOrEqual(600);
+    const heapSamples: number[] = [];
+    // Run full 3-minute simulation (10,800 ticks at 60Hz = 180 seconds)
+    for (let tick = 0; tick < 10_800; tick++) {
+      sim.step(SIM_STEP_SEC);
+      sim.consumeEvents();
+      if ((tick + 1) % 1800 === 0) {
+        expect(1 + sim.simulatedPlayers.length).toBe(4);
+        expect(sim.enemies.length).toBe(80);
+        expect(sim.projectiles.length).toBeGreaterThanOrEqual(600);
+        expect(sim.projectiles.length).toBeLessThan(700);
+        heapSamples.push(process.memoryUsage().heapUsed);
+      }
+    }
+
+    expect(heapSamples.length).toBe(6);
+    // Verify heap does not grow unbounded across the 3-minute soak
+    const firstHalfAvg = (heapSamples[0]! + heapSamples[1]! + heapSamples[2]!) / 3;
+    const secondHalfAvg = (heapSamples[3]! + heapSamples[4]! + heapSamples[5]!) / 3;
+    expect(secondHalfAvg - firstHalfAvg).toBeLessThan(12 * 1024 * 1024);
   });
 });

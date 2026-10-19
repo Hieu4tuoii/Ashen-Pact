@@ -183,7 +183,7 @@ export class CombatFxManager {
       const baseScale = isMist ? invBake * 1.8 : invBake * (0.75 + (i % 3) * 0.15);
       sprite.setScale(baseScale);
       sprite.setAlpha(isMist ? 0.35 : 0.72);
-      sprite.setDepth(72);
+      sprite.setDepth(32);
       this.ambientPool.push({
         sprite,
         kind: isMist ? 'mist' : 'leaf',
@@ -890,8 +890,25 @@ export class CombatFxManager {
       a.sprite.setAlpha(a.startAlpha * (1 - a.age / a.ttl));
     }
 
-    // 3. Update ambient leaves & parallax mist
-    const allowedAmbient = graphicsSettings.getBudget().ambientCount;
+    // 3. Enforce decal budget dynamically & update ambient leaves/mist
+    const budget = graphicsSettings.getBudget();
+    const maxDecals = budget.maxDecals;
+    if (this.activeDecalCount > maxDecals) {
+      let count = 0;
+      for (let i = 0; i < this.decalPool.length; i++) {
+        const d = this.decalPool[i]!;
+        if (!d.active) continue;
+        if (i >= maxDecals) {
+          d.active = false;
+          d.sprite.setVisible(false);
+        } else {
+          count += 1;
+        }
+      }
+      this.activeDecalCount = count;
+    }
+
+    const allowedAmbient = budget.ambientCount;
     const minX = camView && camView.width > 0 ? camView.x - 40 : 0;
     const maxX = minX + WORLD_VIEW_WIDTH + 80;
     const minY = camView && camView.height > 0 ? camView.y - 40 : 0;

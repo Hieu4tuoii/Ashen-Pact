@@ -227,11 +227,15 @@ test.describe('Phase 2 — Pipeline Hình Ảnh & Tương Tác Map', () => {
     const lowState = await page.evaluate(() => ({
       quality: window.__GAME_DEBUG__.graphicsQuality,
       ambient: window.__GAME_DEBUG__.ambientParticleCount,
+      decalCount: window.__GAME_DEBUG__.decalCount,
+      activeLightCount: window.__GAME_DEBUG__.activeLightCount,
       stored: JSON.parse(localStorage.getItem('ashen_pact_graphics_settings') || '{}').quality,
     }));
     expect(lowState.quality).toBe('low');
     expect(lowState.stored).toBe('low');
     expect(lowState.ambient).toBe(0);
+    expect(lowState.decalCount).toBeLessThanOrEqual(30);
+    expect(lowState.activeLightCount).toBeLessThanOrEqual(12);
 
     // Cycle back to High quality
     await page.keyboard.press('KeyG');
@@ -243,7 +247,7 @@ test.describe('Phase 2 — Pipeline Hình Ảnh & Tương Tác Map', () => {
       path: path.join(SCREENSHOT_DIR, 'graphics-quality-and-debug-1080p.png'),
     });
 
-    // 4. Phase 2 Specific DoD Stress Test: 4 Simulated Players + 80 Active Enemies + >= 600 Projectiles + Particles at 1080p High
+    // 4. Phase 2 Specific DoD Stress Test: 4 Simulated Players + 80 Active Enemies + >= 600 Projectiles + Particles + Dynamic Lighting at 1080p High
     await page.evaluate(() => {
       window.__GAME_SET_QUALITY__?.('high');
       window.__GAME_STRESS_TEST__?.(true);
@@ -259,10 +263,16 @@ test.describe('Phase 2 — Pipeline Hình Ảnh & Tương Tác Map', () => {
       { timeout: 10000 },
     );
 
+    // Test viewport resize (1080p -> 1440p -> 1080p) while Stress Test is active
+    await page.setViewportSize({ width: 2560, height: 1440 });
+    await page.waitForTimeout(150);
+    await page.setViewportSize({ width: 1920, height: 1080 });
+    await page.waitForTimeout(250);
+
     const heapBefore = await page.evaluate(() => window.__GAME_DEBUG__.heapUsedMb);
 
-    // Sustain stress test for 2 seconds at 1080p High and sample uninterrupted performance metrics
-    await page.waitForTimeout(2000);
+    // Sustain stress test at 1080p High and sample uninterrupted performance metrics
+    await page.waitForTimeout(2200);
 
     const stressMetrics = await page.evaluate(() => {
       const transport = window.__GAME_TRANSPORT__!;
@@ -291,17 +301,18 @@ test.describe('Phase 2 — Pipeline Hình Ảnh & Tương Tác Map', () => {
 
     expect(stressMetrics.entityCount).toBeGreaterThanOrEqual(84);
     expect(stressMetrics.bulletCount).toBeGreaterThanOrEqual(600);
+    expect(stressMetrics.activeLightCount).toBeGreaterThanOrEqual(30);
     expect(stressMetrics.stepMs).toBeLessThan(6.0);
     expect(stressMetrics.fps).toBeGreaterThanOrEqual(55);
     if (heapBefore > 0 && stressMetrics.heapAfter > 0) {
       expect(stressMetrics.heapAfter - heapBefore).toBeLessThan(20);
     }
 
-    // Turn off stress test cleanly
-    await page.evaluate(() => {
-      window.__GAME_STRESS_TEST__?.(false);
+    // Turn off stress test cleanly via F7
+    await page.keyboard.press('F7');
+    await page.waitForFunction(() => window.__GAME_DEBUG__?.stressTestActive === false, null, {
+      timeout: 5000,
     });
-    await page.waitForTimeout(100);
 
     expect(stressMetrics.errors).toEqual([]);
     expect(stressMetrics.warnings).toEqual([]);

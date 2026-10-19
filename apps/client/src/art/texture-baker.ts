@@ -429,7 +429,7 @@ export class TextureBaker {
     ctx.save();
     ctx.scale(scale, scale);
 
-    ctx.fillStyle = PALETTE.INK_DEEP;
+    ctx.fillStyle = BIOME_THEMES[biome].floorBase;
     ctx.fillRect(0, 0, size, size);
 
     const padN = hasN ? 0 : 1.5;
@@ -439,60 +439,116 @@ export class TextureBaker {
     const cliffH = hasS ? 0 : 7;
     const padS = hasS ? 0 : cliffH + 1.5;
 
-    if (!hasS) {
-      // 3D South Cliff Face
-      ctx.fillStyle = PALETTE.SLATE_DARK;
-      ctx.fillRect(padW, size - cliffH - 1.5, size - padW - padE, cliffH);
-      ctx.lineWidth = 1.5;
-      ctx.strokeStyle = PALETTE.INK_DARK;
-      ctx.strokeRect(padW, size - cliffH - 1.5, size - padW - padE, cliffH);
-
-      // Vertical stone mortar joints on cliff face
-      ctx.beginPath();
-      ctx.moveTo(11, size - cliffH - 1);
-      ctx.lineTo(11, size - 1.5);
-      ctx.moveTo(22, size - cliffH - 1);
-      ctx.lineTo(22, size - 1.5);
-      ctx.stroke();
-    }
-
     const capX = padW;
     const capY = padN;
     const capW = size - padW - padE;
     const capH = size - padN - padS;
 
-    outlined(
-      ctx,
-      {
-        fill: PALETTE.SLATE_MID,
-        shade: PALETTE.SLATE_DARK,
-        highlight: PALETTE.ASH_GRAY,
-        outlineColor: PALETTE.INK_DARK,
-        outlineWidth: 1.8,
-      },
-      (c) => traceRoundedRect(c, capX, capY, capW, capH, hasN || hasS || hasE || hasW ? 2 : 4),
-      { cx: 16, cy: 13, rx: 14, ry: 12 },
-    );
+    // 1. Fill top stone cap
+    ctx.fillStyle = PALETTE.SLATE_MID;
+    ctx.fillRect(capX, capY, capW, capH);
 
-    // Top-left directional rim highlight on exposed N/W edges
+    // 2. Subtle top-left directional bevel & bottom-right shade
+    if (!hasN) {
+      ctx.fillStyle = PALETTE.ASH_GRAY;
+      ctx.fillRect(capX, capY, capW, 3.2);
+    }
+    if (!hasW) {
+      ctx.fillStyle = PALETTE.ASH_GRAY;
+      ctx.fillRect(capX, capY, 3.2, capH);
+    }
+    if (!hasE) {
+      ctx.fillStyle = PALETTE.SLATE_DARK;
+      ctx.fillRect(capX + capW - 2.8, capY, 2.8, capH);
+    }
+    if (!hasS) {
+      ctx.fillStyle = PALETTE.SLATE_DARK;
+      ctx.fillRect(capX, capY + capH - 2.5, capW, 2.5);
+    }
+
+    // 3. Continuous stone block mortar seams across connected wall tiles
+    ctx.strokeStyle = PALETTE.SLATE_DARK;
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    if (capY < 13 && capY + capH > 15) {
+      ctx.moveTo(capX, 14);
+      ctx.lineTo(capX + capW, 14);
+    }
+    ctx.moveTo(16, capY);
+    ctx.lineTo(16, Math.min(capY + capH, 14));
+    if (capY + capH > 14) {
+      ctx.moveTo(8, Math.max(capY, 14));
+      ctx.lineTo(8, capY + capH);
+      ctx.moveTo(24, Math.max(capY, 14));
+      ctx.lineTo(24, capY + capH);
+    }
+    ctx.stroke();
+
+    // 4. Moss / rune accent on wall top
+    ctx.beginPath();
+    ctx.arc(11, 9, 2.1, 0, Math.PI * 2);
+    ctx.fillStyle = BIOME_THEMES[biome].floorHighlight;
+    ctx.fill();
+
+    // 5. 3D South Cliff Face when South is exposed (!hasS)
+    if (!hasS) {
+      const cliffY = size - cliffH - 1.5;
+      ctx.fillStyle = PALETTE.SLATE_DARK;
+      ctx.fillRect(capX, cliffY, capW, cliffH);
+      ctx.fillStyle = PALETTE.INK_DEEP;
+      ctx.fillRect(capX, cliffY + cliffH - 2, capW, 2);
+
+      // Vertical stone mortar joints on cliff face
+      ctx.beginPath();
+      ctx.moveTo(11, cliffY + 0.5);
+      ctx.lineTo(11, cliffY + cliffH - 0.5);
+      ctx.moveTo(22, cliffY + 0.5);
+      ctx.lineTo(22, cliffY + cliffH - 0.5);
+      ctx.lineWidth = 1.3;
+      ctx.strokeStyle = PALETTE.INK_DARK;
+      ctx.stroke();
+    }
+
+    // 6. Top-left directional rim highlight on exposed N/W edges
     ctx.beginPath();
     if (!hasW) {
-      ctx.moveTo(capX + 2, capY + capH - 2);
-      ctx.lineTo(capX + 2, capY + 2);
+      ctx.moveTo(capX + 1.8, capY + capH - 1);
+      ctx.lineTo(capX + 1.8, capY + 1.8);
     }
     if (!hasN) {
-      ctx.moveTo(capX + 2, capY + 2);
-      ctx.lineTo(capX + capW - 2, capY + 2);
+      ctx.moveTo(capX + 1.8, capY + 1.8);
+      ctx.lineTo(capX + capW - 1, capY + 1.8);
     }
-    ctx.lineWidth = 1.6;
+    ctx.lineWidth = 1.5;
     ctx.strokeStyle = PALETTE.WARM_STONE;
     ctx.stroke();
 
-    // Moss / rune accent on wall top
+    // 7. Crisp dark outlines ONLY along exposed non-connected edges
     ctx.beginPath();
-    ctx.arc(9, 9, 2.3, 0, Math.PI * 2);
-    ctx.fillStyle = BIOME_THEMES[biome].floorHighlight;
-    ctx.fill();
+    if (!hasN) {
+      ctx.moveTo(capX, capY);
+      ctx.lineTo(capX + capW, capY);
+    }
+    if (!hasW) {
+      ctx.moveTo(capX, capY);
+      ctx.lineTo(capX, hasS ? size : size - 1.5);
+    }
+    if (!hasE) {
+      ctx.moveTo(capX + capW, capY);
+      ctx.lineTo(capX + capW, hasS ? size : size - 1.5);
+    }
+    if (!hasS) {
+      const cliffY = size - cliffH - 1.5;
+      // Ridge line between cap and South cliff
+      ctx.moveTo(capX, cliffY);
+      ctx.lineTo(capX + capW, cliffY);
+      // Bottom base outline of South cliff
+      ctx.moveTo(capX, size - 1.5);
+      ctx.lineTo(capX + capW, size - 1.5);
+    }
+    ctx.lineWidth = 1.8;
+    ctx.strokeStyle = PALETTE.INK_DARK;
+    ctx.stroke();
 
     ctx.restore();
     this.registerCanvasTexture(scene, key, canvas);
@@ -520,49 +576,135 @@ export class TextureBaker {
     ctx.save();
     ctx.scale(scale, scale);
 
-    ctx.fillStyle = PALETTE.INK_DARK;
+    // Underlying biome floor in exposed margin
+    ctx.fillStyle = BIOME_THEMES[biome].floorBase;
     ctx.fillRect(0, 0, size, size);
 
-    const padN = hasN ? 0.5 : 2;
-    const padW = hasW ? 0.5 : 2;
-    const padE = hasE ? 0.5 : 2;
+    const padN = hasN ? 0 : 2;
+    const padW = hasW ? 0 : 2;
+    const padE = hasE ? 0 : 2;
     const cliffH = hasS ? 0 : 6.5;
-    const padS = hasS ? 0.5 : cliffH + 1.5;
+    const padS = hasS ? 0 : cliffH + 1.5;
 
+    const capX = padW;
+    const capY = padN;
+    const capW = size - padW - padE;
+    const capH = size - padN - padS;
+
+    // 1. Monolithic pillar top surface
+    ctx.fillStyle = PALETTE.WARM_STONE;
+    ctx.fillRect(capX, capY, capW, capH);
+
+    // 2. Exposed bevels (top-left Bone White highlight, bottom-right Ash Gray shade)
+    if (!hasN) {
+      ctx.fillStyle = PALETTE.BONE_WHITE;
+      ctx.fillRect(capX, capY, capW, 3.2);
+    }
+    if (!hasW) {
+      ctx.fillStyle = PALETTE.BONE_WHITE;
+      ctx.fillRect(capX, capY, 3.2, capH);
+    }
+    if (!hasE) {
+      ctx.fillStyle = PALETTE.ASH_GRAY;
+      ctx.fillRect(capX + capW - 3, capY, 3, capH);
+    }
     if (!hasS) {
-      ctx.fillStyle = PALETTE.STEEL_DARK;
-      ctx.fillRect(padW, size - cliffH - 1.5, size - padW - padE, cliffH);
-      ctx.lineWidth = 1.5;
-      ctx.strokeStyle = PALETTE.INK_DARK;
-      ctx.strokeRect(padW, size - cliffH - 1.5, size - padW - padE, cliffH);
+      ctx.fillStyle = PALETTE.ASH_GRAY;
+      ctx.fillRect(capX, capY + capH - 2.8, capW, 2.8);
     }
 
-    outlined(
-      ctx,
-      {
-        fill: PALETTE.WARM_STONE,
-        shade: PALETTE.ASH_GRAY,
-        highlight: PALETTE.BONE_WHITE,
-        outlineColor: PALETTE.INK_DARK,
-        outlineWidth: 2.0,
-      },
-      (c) =>
-        traceRoundedRect(
-          c,
-          padW,
-          padN,
-          size - padW - padE,
-          size - padN - padS,
-          3.5,
-        ),
-      { cx: 16, cy: 13, rx: 13, ry: 12 },
-    );
+    // 3. Carved inner frame on pillar cap
+    const inN = hasN ? 0 : capY + 5;
+    const inW = hasW ? 0 : capX + 5;
+    const inE = hasE ? size : capX + capW - 5;
+    const inS = hasS ? size : capY + capH - 5;
+    ctx.strokeStyle = PALETTE.SLATE_MID;
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    if (!hasN) {
+      ctx.moveTo(inW, inN);
+      ctx.lineTo(inE, inN);
+    }
+    if (!hasW) {
+      ctx.moveTo(inW, inN);
+      ctx.lineTo(inW, inS);
+    }
+    if (!hasE) {
+      ctx.moveTo(inE, inN);
+      ctx.lineTo(inE, inS);
+    }
+    if (!hasS) {
+      ctx.moveTo(inW, inS);
+      ctx.lineTo(inE, inS);
+    }
+    ctx.stroke();
+
+    // 4. Unified central rune medallion at the shared center of a 2x2 pillar (or tile center if 1x1)
+    const runeCx = hasE && !hasW ? size : hasW && !hasE ? 0 : 16;
+    const runeCy = hasS && !hasN ? size : hasN && !hasS ? 0 : 13;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(capX, capY, capW, capH);
+    ctx.clip();
 
     ctx.beginPath();
-    ctx.arc(16, 13, 3.2, 0, Math.PI * 2);
+    ctx.arc(runeCx, runeCy, 7.2, 0, Math.PI * 2);
+    ctx.fillStyle = PALETTE.SLATE_DARK;
+    ctx.fill();
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = PALETTE.INK_DARK;
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.arc(runeCx, runeCy, 4.4, 0, Math.PI * 2);
     ctx.fillStyle = BIOME_THEMES[biome].accentGlow;
     ctx.fill();
     ctx.lineWidth = 1.2;
+    ctx.strokeStyle = PALETTE.INK_DARK;
+    ctx.stroke();
+    ctx.restore();
+
+    // 5. 3D South Cliff Face when !hasS
+    if (!hasS) {
+      const cliffY = size - cliffH - 1.5;
+      ctx.fillStyle = PALETTE.STEEL_DARK;
+      ctx.fillRect(capX, cliffY, capW, cliffH);
+      ctx.fillStyle = PALETTE.SLATE_DARK;
+      ctx.fillRect(capX, cliffY + cliffH - 2, capW, 2);
+
+      // Vertical fluting lines on pillar cliff face
+      ctx.beginPath();
+      ctx.moveTo(10, cliffY + 0.5);
+      ctx.lineTo(10, cliffY + cliffH - 0.5);
+      ctx.moveTo(22, cliffY + 0.5);
+      ctx.lineTo(22, cliffY + cliffH - 0.5);
+      ctx.lineWidth = 1.3;
+      ctx.strokeStyle = PALETTE.INK_DARK;
+      ctx.stroke();
+    }
+
+    // 6. Dark outlines ONLY along exposed edges of the pillar
+    ctx.beginPath();
+    if (!hasN) {
+      ctx.moveTo(capX, capY);
+      ctx.lineTo(capX + capW, capY);
+    }
+    if (!hasW) {
+      ctx.moveTo(capX, capY);
+      ctx.lineTo(capX, hasS ? size : size - 1.5);
+    }
+    if (!hasE) {
+      ctx.moveTo(capX + capW, capY);
+      ctx.lineTo(capX + capW, hasS ? size : size - 1.5);
+    }
+    if (!hasS) {
+      const cliffY = size - cliffH - 1.5;
+      ctx.moveTo(capX, cliffY);
+      ctx.lineTo(capX + capW, cliffY);
+      ctx.moveTo(capX, size - 1.5);
+      ctx.lineTo(capX + capW, size - 1.5);
+    }
+    ctx.lineWidth = 2.0;
     ctx.strokeStyle = PALETTE.INK_DARK;
     ctx.stroke();
 
@@ -716,22 +858,26 @@ export class TextureBaker {
       ctx.stroke();
     });
 
-    // 3. Oil
+    // 3. Oil (iridescent dark petroleum sheen instead of flat black)
     this.bakeCustomCanvas(scene, 'surface_oil', 32, 32, scale, (ctx) => {
       outlined(
         ctx,
         {
-          fill: PALETTE.SLATE_DARK,
-          shade: PALETTE.INK_DEEP,
-          highlight: PALETTE.SLATE_MID,
+          fill: PALETTE.SLATE_MID,
+          shade: PALETTE.SLATE_DARK,
+          highlight: PALETTE.TOXIC_PURPLE,
           outlineWidth: 1.8,
         },
         (c) => traceRoundedRect(c, -14, -14, 28, 28, 6),
         { cx: 0, cy: 0, rx: 14, ry: 14 },
       );
       ctx.beginPath();
-      ctx.ellipse(-4, -4, 5, 2.5, -0.4, 0, Math.PI * 2);
+      ctx.ellipse(-3, -3, 6.5, 3.2, -0.35, 0, Math.PI * 2);
       ctx.fillStyle = PALETTE.TOXIC_PURPLE;
+      ctx.fill();
+      ctx.beginPath();
+      ctx.ellipse(4, 4, 4.5, 2.0, 0.3, 0, Math.PI * 2);
+      ctx.fillStyle = PALETTE.COBALT_SHADE;
       ctx.fill();
     });
 
@@ -899,6 +1045,260 @@ export class TextureBaker {
       ctx.lineCap = 'round';
       ctx.stroke();
     });
+  }
+
+  /**
+   * Draws a neighbor-aware interactive surface cell directly onto the arena composite canvas
+   * so multi-tile pools (water, oil, grass, swamp, lava, ice) join seamlessly without grid seams.
+   */
+  public static drawSurfaceTile(
+    ctx: CanvasRenderingContext2D,
+    surface: Exclude<SurfaceKind, 'none'>,
+    surfaceMask: number,
+    dx: number,
+    dy: number,
+    cellPx: number,
+    variant = 0,
+  ): void {
+    const scale = cellPx / 32;
+    const hasN = (surfaceMask & AUTOTILE_NORTH) !== 0;
+    const hasE = (surfaceMask & AUTOTILE_EAST) !== 0;
+    const hasS = (surfaceMask & AUTOTILE_SOUTH) !== 0;
+    const hasW = (surfaceMask & AUTOTILE_WEST) !== 0;
+
+    let fill: string = PALETTE.ABYSS_BLUE;
+    let rim: string = PALETTE.CYAN_FROST;
+    let shade: string = PALETTE.COBALT_SHADE;
+
+    switch (surface) {
+      case 'water':
+        fill = PALETTE.ABYSS_BLUE;
+        rim = PALETTE.CYAN_FROST;
+        shade = PALETTE.COBALT_SHADE;
+        break;
+      case 'electrified_water':
+        fill = PALETTE.AZURE_CORE;
+        rim = PALETTE.VOLT_YELLOW;
+        shade = PALETTE.COBALT_SHADE;
+        break;
+      case 'oil':
+        fill = '#262038';
+        rim = '#4C3D73';
+        shade = PALETTE.SLATE_DARK;
+        break;
+      case 'burning_oil':
+        fill = PALETTE.FLAME_ORANGE;
+        rim = PALETTE.SOLAR_GOLD;
+        shade = PALETTE.MAGMA_RED;
+        break;
+      case 'grass':
+        fill = PALETTE.FOREST_SHADE;
+        rim = PALETTE.GOBLIN_GREEN;
+        shade = PALETTE.MOSS_DARK;
+        break;
+      case 'burning_grass':
+        fill = PALETTE.MAGMA_RED;
+        rim = PALETTE.FLAME_ORANGE;
+        shade = PALETTE.FORGE_DARK;
+        break;
+      case 'ash':
+        fill = PALETTE.SLATE_DARK;
+        rim = PALETTE.ASH_GRAY;
+        shade = PALETTE.INK_DEEP;
+        break;
+      case 'poison_swamp':
+        fill = PALETTE.TOXIC_PURPLE;
+        rim = PALETTE.ELECTRIC_VIOLET;
+        shade = PALETTE.SLATE_DARK;
+        break;
+      case 'lava':
+        fill = PALETTE.MAGMA_RED;
+        rim = PALETTE.SOLAR_GOLD;
+        shade = PALETTE.FORGE_DARK;
+        break;
+      case 'ice':
+        fill = PALETTE.CYAN_FROST;
+        rim = PALETTE.ICE_WHITE;
+        shade = PALETTE.AZURE_CORE;
+        break;
+    }
+
+    const padN = hasN ? 0 : 2.5;
+    const padE = hasE ? 0 : 2.5;
+    const padS = hasS ? 0 : 2.5;
+    const padW = hasW ? 0 : 2.5;
+
+    const sx = padW;
+    const sy = padN;
+    const sw = 32 - padW - padE;
+    const sh = 32 - padN - padS;
+
+    ctx.save();
+    ctx.translate(dx, dy);
+    ctx.scale(scale, scale);
+
+    // 1. Base surface fill
+    ctx.fillStyle = fill;
+    ctx.fillRect(sx, sy, sw, sh);
+
+    // 2. Exposed shoreline / rim inner bevel & shade
+    if (!hasN) {
+      ctx.fillStyle = rim;
+      ctx.fillRect(sx, sy, sw, 2.4);
+    }
+    if (!hasW) {
+      ctx.fillStyle = rim;
+      ctx.fillRect(sx, sy, 2.4, sh);
+    }
+    if (!hasS) {
+      ctx.fillStyle = shade;
+      ctx.fillRect(sx, sy + sh - 2.4, sw, 2.4);
+    }
+    if (!hasE) {
+      ctx.fillStyle = shade;
+      ctx.fillRect(sx + sw - 2.4, sy, 2.4, sh);
+    }
+
+    // 3. Surface interior details (seeded by variant)
+    const ox = ((variant % 3) - 1) * 1.8;
+    const oy = ((Math.floor(variant / 3) % 3) - 1) * 1.5;
+
+    switch (surface) {
+      case 'water': {
+        ctx.beginPath();
+        ctx.arc(13 + ox, 14 + oy, 4.2, 0.1, Math.PI * 1.3);
+        ctx.strokeStyle = PALETTE.ICE_WHITE;
+        ctx.lineWidth = 1.3;
+        ctx.stroke();
+        break;
+      }
+      case 'electrified_water': {
+        ctx.beginPath();
+        ctx.moveTo(7 + ox, 10 + oy);
+        ctx.lineTo(15, 15);
+        ctx.lineTo(12, 20);
+        ctx.lineTo(25 + ox, 24 + oy);
+        ctx.strokeStyle = PALETTE.VOLT_YELLOW;
+        ctx.lineWidth = 2.0;
+        ctx.lineCap = 'round';
+        ctx.stroke();
+        break;
+      }
+      case 'oil': {
+        ctx.beginPath();
+        ctx.ellipse(13 + ox, 13 + oy, 6.2, 3.0, -0.35, 0, Math.PI * 2);
+        ctx.fillStyle = PALETTE.TOXIC_PURPLE;
+        ctx.fill();
+        ctx.beginPath();
+        ctx.ellipse(20 - ox, 20 - oy, 4.5, 2.1, 0.25, 0, Math.PI * 2);
+        ctx.fillStyle = PALETTE.COBALT_SHADE;
+        ctx.fill();
+        break;
+      }
+      case 'burning_oil': {
+        tracePolygon(ctx, [
+          { x: 10 + ox, y: 22 },
+          { x: 14 + ox, y: 8 },
+          { x: 18 + ox, y: 15 },
+          { x: 22 + ox, y: 7 },
+          { x: 25 + ox, y: 22 },
+        ]);
+        ctx.fillStyle = PALETTE.SOLAR_GOLD;
+        ctx.fill();
+        break;
+      }
+      case 'grass': {
+        for (const gx of [10, 17, 23]) {
+          tracePolygon(ctx, [
+            { x: gx + ox - 2.3, y: 22 + oy },
+            { x: gx + ox, y: 10 + oy },
+            { x: gx + ox + 2.3, y: 22 + oy },
+          ]);
+          ctx.fillStyle = PALETTE.LIME_GLOW;
+          ctx.fill();
+          ctx.lineWidth = 1.1;
+          ctx.strokeStyle = PALETTE.INK_DARK;
+          ctx.stroke();
+        }
+        break;
+      }
+      case 'burning_grass': {
+        for (const gx of [11, 20]) {
+          tracePolygon(ctx, [
+            { x: gx + ox - 2.8, y: 22 },
+            { x: gx + ox, y: 8 },
+            { x: gx + ox + 2.8, y: 22 },
+          ]);
+          ctx.fillStyle = PALETTE.SOLAR_GOLD;
+          ctx.fill();
+        }
+        break;
+      }
+      case 'poison_swamp': {
+        for (const [bx, by, br] of [
+          [11 + ox, 13 + oy, 3.0],
+          [21 - ox, 20 - oy, 2.4],
+        ] as const) {
+          ctx.beginPath();
+          ctx.arc(bx, by, br, 0, Math.PI * 2);
+          ctx.fillStyle = PALETTE.LIME_GLOW;
+          ctx.fill();
+          ctx.lineWidth = 1.1;
+          ctx.strokeStyle = PALETTE.INK_DARK;
+          ctx.stroke();
+        }
+        break;
+      }
+      case 'lava': {
+        ctx.beginPath();
+        ctx.moveTo(7 + ox, 11 + oy);
+        ctx.lineTo(16, 18 + oy);
+        ctx.lineTo(25 - ox, 12 + oy);
+        ctx.strokeStyle = PALETTE.SOLAR_GOLD;
+        ctx.lineWidth = 2.4;
+        ctx.lineCap = 'round';
+        ctx.stroke();
+        break;
+      }
+      case 'ice': {
+        ctx.beginPath();
+        ctx.moveTo(8 + ox, 22);
+        ctx.lineTo(22 + ox, 8);
+        ctx.moveTo(14 + ox, 24);
+        ctx.lineTo(25 + ox, 13);
+        ctx.strokeStyle = PALETTE.BONE_WHITE;
+        ctx.lineWidth = 1.5;
+        ctx.lineCap = 'round';
+        ctx.stroke();
+        break;
+      }
+      case 'ash':
+        break;
+    }
+
+    // 4. Outer dark border ONLY on exposed shoreline edges
+    ctx.beginPath();
+    if (!hasN) {
+      ctx.moveTo(sx, sy);
+      ctx.lineTo(sx + sw, sy);
+    }
+    if (!hasS) {
+      ctx.moveTo(sx, sy + sh);
+      ctx.lineTo(sx + sw, sy + sh);
+    }
+    if (!hasW) {
+      ctx.moveTo(sx, sy);
+      ctx.lineTo(sx, sy + sh);
+    }
+    if (!hasE) {
+      ctx.moveTo(sx + sw, sy);
+      ctx.lineTo(sx + sw, sy + sh);
+    }
+    ctx.lineWidth = 1.7;
+    ctx.strokeStyle = PALETTE.INK_DARK;
+    ctx.stroke();
+
+    ctx.restore();
   }
 
   private static bakeProps(scene: Phaser.Scene, scale: number): void {
@@ -1174,8 +1574,9 @@ export class TextureBaker {
       ctx.fill();
     });
 
-    // 3b. Native 1080p Stress Projectile Orb (axis-aligned, tintable, 2x native scale)
-    this.bakeCustomCanvas(scene, 'proj_stress_orb', 14, 14, Math.min(2, scale), (ctx) => {
+    // 3b. Native 1080p Stress Projectile textures (2x native scale, distinct silhouettes for enemy vs player)
+    const stressScale = Math.min(2, scale);
+    this.bakeCustomCanvas(scene, 'proj_stress_orb', 16, 16, stressScale, (ctx) => {
       outlined(
         ctx,
         {
@@ -1187,10 +1588,59 @@ export class TextureBaker {
         },
         (c) => {
           c.beginPath();
-          c.arc(0, 0, 4.6, 0, Math.PI * 2);
+          c.arc(0, 0, 4.8, 0, Math.PI * 2);
           c.closePath();
         },
         { cx: 0, cy: 0, rx: 4.5, ry: 4.5 },
+      );
+    });
+
+    this.bakeCustomCanvas(scene, 'proj_stress_enemy', 18, 18, stressScale, (ctx) => {
+      ctx.beginPath();
+      ctx.arc(0, 0, 7.6, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(232, 69, 69, 0.36)';
+      ctx.fill();
+      outlined(
+        ctx,
+        {
+          fill: PALETTE.CRIMSON_BRIGHT,
+          shade: PALETTE.RUBY_CORE,
+          highlight: PALETTE.SOLAR_GOLD,
+          outlineColor: PALETTE.INK_DARK,
+          outlineWidth: 2.2,
+        },
+        (c) => {
+          c.beginPath();
+          c.arc(0, 0, 5.2, 0, Math.PI * 2);
+          c.closePath();
+        },
+        { cx: 0, cy: 0, rx: 5, ry: 5 },
+      );
+      ctx.beginPath();
+      ctx.arc(-0.8, -0.8, 2.0, 0, Math.PI * 2);
+      ctx.fillStyle = PALETTE.BONE_WHITE;
+      ctx.fill();
+    });
+
+    this.bakeCustomCanvas(scene, 'proj_stress_player', 20, 12, stressScale, (ctx) => {
+      outlined(
+        ctx,
+        {
+          fill: PALETTE.ICE_WHITE,
+          shade: PALETTE.SILVER_BRIGHT,
+          highlight: PALETTE.BONE_WHITE,
+          outlineColor: PALETTE.INK_DARK,
+          outlineWidth: 2.0,
+        },
+        (c) =>
+          tracePolygon(c, [
+            { x: -6.5, y: -2.8 },
+            { x: 3.5, y: -3.2 },
+            { x: 8.2, y: 0 },
+            { x: 3.5, y: 3.2 },
+            { x: -6.5, y: 2.8 },
+          ]),
+        { cx: 0, cy: 0, rx: 6.5, ry: 3.2 },
       );
     });
 

@@ -22,11 +22,20 @@ export interface ITransport {
   step(deltaMs: number): { ticksExecuted: number; alpha: number; tick: number };
   getSim(): WorldSim;
   getInterpolationAlpha(): number;
-  getInterpolatedPlayerPos(): InterpolatedEntityPos;
-  getInterpolatedSimPlayerPos(player: SimPlayerState): InterpolatedEntityPos;
-  getInterpolatedEnemyPos(enemy: SimEnemyState): InterpolatedEntityPos;
-  getInterpolatedProjectilePos(proj: SimProjectileState): InterpolatedEntityPos;
-  getInterpolatedPickupPos(pickup: SimPickupState): InterpolatedEntityPos;
+  getInterpolatedPlayerPos(out?: InterpolatedEntityPos): InterpolatedEntityPos;
+  getInterpolatedSimPlayerPos(
+    player: SimPlayerState,
+    out?: InterpolatedEntityPos,
+  ): InterpolatedEntityPos;
+  getInterpolatedEnemyPos(enemy: SimEnemyState, out?: InterpolatedEntityPos): InterpolatedEntityPos;
+  getInterpolatedProjectilePos(
+    proj: SimProjectileState,
+    out?: InterpolatedEntityPos,
+  ): InterpolatedEntityPos;
+  getInterpolatedPickupPos(
+    pickup: SimPickupState,
+    out?: InterpolatedEntityPos,
+  ): InterpolatedEntityPos;
   consumeEvents(): SimEvent[];
 }
 
@@ -59,7 +68,13 @@ export class LocalTransport implements ITransport {
   }
 
   public sendInput(input: PlayerInputPacket): void {
-    this.latestInput = { ...input };
+    this.latestInput.seq = input.seq;
+    this.latestInput.tick = input.tick;
+    this.latestInput.moveX = input.moveX;
+    this.latestInput.moveY = input.moveY;
+    this.latestInput.aimAngle = input.aimAngle;
+    this.latestInput.buttons = input.buttons;
+    this.latestInput.weaponSlotSelect = input.weaponSlotSelect;
     this.sim.setPlayerInput(input);
   }
 
@@ -97,40 +112,72 @@ export class LocalTransport implements ITransport {
     return this.alpha;
   }
 
-  public getInterpolatedPlayerPos(): InterpolatedEntityPos {
+  public getInterpolatedPlayerPos(out?: InterpolatedEntityPos): InterpolatedEntityPos {
     const p = this.sim.player;
-    return {
-      x: lerp(p.prevX, p.x, this.alpha),
-      y: lerp(p.prevY, p.y, this.alpha),
-    };
+    const x = lerp(p.prevX, p.x, this.alpha);
+    const y = lerp(p.prevY, p.y, this.alpha);
+    if (out) {
+      out.x = x;
+      out.y = y;
+      return out;
+    }
+    return { x, y };
   }
 
-  public getInterpolatedSimPlayerPos(player: SimPlayerState): InterpolatedEntityPos {
-    return {
-      x: lerp(player.prevX, player.x, this.alpha),
-      y: lerp(player.prevY, player.y, this.alpha),
-    };
+  public getInterpolatedSimPlayerPos(
+    player: SimPlayerState,
+    out?: InterpolatedEntityPos,
+  ): InterpolatedEntityPos {
+    const x = lerp(player.prevX, player.x, this.alpha);
+    const y = lerp(player.prevY, player.y, this.alpha);
+    if (out) {
+      out.x = x;
+      out.y = y;
+      return out;
+    }
+    return { x, y };
   }
 
-  public getInterpolatedEnemyPos(enemy: SimEnemyState): InterpolatedEntityPos {
-    return {
-      x: lerp(enemy.prevX, enemy.x, this.alpha),
-      y: lerp(enemy.prevY, enemy.y, this.alpha),
-    };
+  public getInterpolatedEnemyPos(
+    enemy: SimEnemyState,
+    out?: InterpolatedEntityPos,
+  ): InterpolatedEntityPos {
+    const x = lerp(enemy.prevX, enemy.x, this.alpha);
+    const y = lerp(enemy.prevY, enemy.y, this.alpha);
+    if (out) {
+      out.x = x;
+      out.y = y;
+      return out;
+    }
+    return { x, y };
   }
 
-  public getInterpolatedProjectilePos(proj: SimProjectileState): InterpolatedEntityPos {
-    return {
-      x: lerp(proj.prevX, proj.x, this.alpha),
-      y: lerp(proj.prevY, proj.y, this.alpha),
-    };
+  public getInterpolatedProjectilePos(
+    proj: SimProjectileState,
+    out?: InterpolatedEntityPos,
+  ): InterpolatedEntityPos {
+    const x = lerp(proj.prevX, proj.x, this.alpha);
+    const y = lerp(proj.prevY, proj.y, this.alpha);
+    if (out) {
+      out.x = x;
+      out.y = y;
+      return out;
+    }
+    return { x, y };
   }
 
-  public getInterpolatedPickupPos(pickup: SimPickupState): InterpolatedEntityPos {
-    return {
-      x: lerp(pickup.prevX, pickup.x, this.alpha),
-      y: lerp(pickup.prevY, pickup.y, this.alpha),
-    };
+  public getInterpolatedPickupPos(
+    pickup: SimPickupState,
+    out?: InterpolatedEntityPos,
+  ): InterpolatedEntityPos {
+    const x = lerp(pickup.prevX, pickup.x, this.alpha);
+    const y = lerp(pickup.prevY, pickup.y, this.alpha);
+    if (out) {
+      out.x = x;
+      out.y = y;
+      return out;
+    }
+    return { x, y };
   }
 
   public consumeEvents(): SimEvent[] {
