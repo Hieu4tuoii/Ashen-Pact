@@ -26,13 +26,13 @@
 
 ---
 
-## Phase 1 — Core Gameplay & Game Feel (Solo, Phòng Thử Nghiệm)
-- [ ] Simulation trong `packages/shared` + `LocalTransport`; render interpolation.
-- [ ] Di chuyển có gia tốc, dash i-frame, ngắm chuột, camera lookahead, crosshair vẽ bằng code.
-- [ ] Nhân vật Thiết Vệ (animation cơ bản), 4 vũ khí mẫu (súng lục, shotgun, SMG, kiếm), đạn + va chạm tile + spatial hash grid.
-- [ ] 3 quái mẫu (bắn xa, lao húc, nổ) với AI cơ bản + telegraph.
-- [ ] HP/Giáp/Năng lượng, damage, knockback, hit flash, hit-stop, screen shake, số damage, SFX cơ bản (ZzFX).
-- [ ] **DoD riêng Phase 1:** Phản hồi input < 1 frame, không giật camera, chuyển động mượt ở 60/144Hz, bắn trúng có đủ flash + spark + âm + số damage + knockback; unit test cho damage/giáp/va chạm.
+## Phase 1 — Core Gameplay & Game Feel (Solo, Phòng Thử Nghiệm) (Hoàn thành ✅)
+- [x] Simulation trong `packages/shared` + `LocalTransport`; render interpolation.
+- [x] Di chuyển có gia tốc, dash i-frame, ngắm chuột, camera lookahead, crosshair vẽ bằng code.
+- [x] Nhân vật Thiết Vệ (animation cơ bản), 4 vũ khí mẫu (súng lục, shotgun, SMG, kiếm), đạn + va chạm tile + spatial hash grid.
+- [x] 3 quái mẫu (bắn xa, lao húc, nổ) với AI cơ bản + telegraph.
+- [x] HP/Giáp/Năng lượng, damage, knockback, hit flash, hit-stop, screen shake, số damage, SFX cơ bản (ZzFX).
+- [x] **DoD riêng Phase 1:** Phản hồi input < 1 frame, không giật camera, chuyển động mượt ở 60/144Hz, bắn trúng có đủ flash + spark + âm + số damage + knockback; unit test cho damage/giáp/va chạm.
 
 ---
 

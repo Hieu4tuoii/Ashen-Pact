@@ -884,7 +884,1019 @@ export const GOBLIN_SHOOTER_RIG_DEF: EntityRigDef = {
   ],
 };
 
+export const WILD_BOAR_RIG_DEF: EntityRigDef = {
+  id: 'wild_boar',
+  nameVi: 'Lợn Rừng Nanh Đá (Wild Boar)',
+  roleVi: 'Quái Lao Húc · Biome 1',
+  worldWidth: 36,
+  worldHeight: 36,
+  shadowRx: 15,
+  shadowRy: 6.5,
+  parts: [
+    {
+      id: 'backAccessory',
+      width: 28,
+      height: 22,
+      offsetX: -6,
+      offsetY: -16,
+      originX: 0.5,
+      originY: 0.5,
+      zIndex: 10,
+      shapes: [
+        // Jagged stone dorsal ridge spikes
+        {
+          kind: 'polygon',
+          points: [
+            { x: -10, y: 2 },
+            { x: -7, y: -8 },
+            { x: -2, y: -3 },
+            { x: 2, y: -9 },
+            { x: 6, y: -2 },
+            { x: 10, y: 2 },
+          ],
+          style: {
+            fill: PALETTE.WARM_STONE,
+            shade: PALETTE.ASH_GRAY,
+            highlight: PALETTE.BONE_WHITE,
+          },
+        },
+      ],
+    },
+    {
+      id: 'legLeft',
+      width: 14,
+      height: 14,
+      offsetX: -6.5,
+      offsetY: -4.5,
+      originX: 0.5,
+      originY: 0.25,
+      zIndex: 20,
+      shapes: [
+        {
+          kind: 'roundedRect',
+          x: -4,
+          y: -2.5,
+          w: 8,
+          h: 9,
+          r: 3,
+          style: {
+            fill: PALETTE.LEATHER_DARK,
+            shade: PALETTE.SLATE_DARK,
+            highlight: PALETTE.LEATHER_MID,
+          },
+        },
+      ],
+    },
+    {
+      id: 'legRight',
+      width: 14,
+      height: 14,
+      offsetX: 6.5,
+      offsetY: -4.5,
+      originX: 0.5,
+      originY: 0.25,
+      zIndex: 21,
+      shapes: [
+        {
+          kind: 'roundedRect',
+          x: -4,
+          y: -2.5,
+          w: 8,
+          h: 9,
+          r: 3,
+          style: {
+            fill: PALETTE.LEATHER_MID,
+            shade: PALETTE.LEATHER_DARK,
+            highlight: PALETTE.LEATHER_LIGHT,
+          },
+        },
+      ],
+    },
+    {
+      id: 'torso',
+      width: 34,
+      height: 24,
+      offsetX: -1,
+      offsetY: -12.5,
+      originX: 0.5,
+      originY: 0.55,
+      zIndex: 30,
+      shapes: [
+        // Heavy muscular boar body
+        {
+          kind: 'roundedRect',
+          x: -13,
+          y: -9.5,
+          w: 26,
+          h: 18,
+          r: 8,
+          style: {
+            fill: PALETTE.LEATHER_MID,
+            shade: PALETTE.LEATHER_DARK,
+            highlight: PALETTE.LEATHER_LIGHT,
+          },
+        },
+        // Mossy stone armor plate on shoulder
+        {
+          kind: 'polygon',
+          points: [
+            { x: -8, y: -9 },
+            { x: 9, y: -9 },
+            { x: 11, y: -1 },
+            { x: 0, y: 3 },
+            { x: -10, y: -1 },
+          ],
+          style: {
+            fill: PALETTE.ASH_GRAY,
+            shade: PALETTE.SLATE_MID,
+            highlight: PALETTE.WARM_STONE,
+            outlineWidth: INNER_OUTLINE_WIDTH,
+          },
+        },
+      ],
+    },
+    {
+      id: 'armLeft',
+      width: 14,
+      height: 14,
+      offsetX: -11,
+      offsetY: -10,
+      originX: 0.5,
+      originY: 0.5,
+      zIndex: 35,
+      shapes: [
+        {
+          kind: 'circle',
+          cx: 0,
+          cy: 0,
+          r: 4.5,
+          style: {
+            fill: PALETTE.LEATHER_DARK,
+            highlight: PALETTE.LEATHER_MID,
+          },
+        },
+      ],
+    },
+    {
+      id: 'head',
+      width: 36,
+      height: 30,
+      offsetX: 3,
+      offsetY: -22,
+      originX: 0.5,
+      originY: 0.6,
+      zIndex: 40,
+      shapes: [
+        // Boar ears
+        {
+          kind: 'polygon',
+          points: [
+            { x: -8, y: -6 },
+            { x: -15, y: -12 },
+            { x: -12, y: -2 },
+          ],
+          style: {
+            fill: PALETTE.LEATHER_MID,
+            shade: PALETTE.LEATHER_DARK,
+          },
+        },
+        {
+          kind: 'polygon',
+          points: [
+            { x: 8, y: -6 },
+            { x: 15, y: -12 },
+            { x: 12, y: -2 },
+          ],
+          style: {
+            fill: PALETTE.LEATHER_MID,
+            shade: PALETTE.LEATHER_DARK,
+          },
+        },
+        // Armored skull & snout
+        {
+          kind: 'roundedRect',
+          x: -11.5,
+          y: -9,
+          w: 23,
+          h: 17,
+          r: 7.5,
+          style: {
+            fill: PALETTE.LEATHER_MID,
+            shade: PALETTE.LEATHER_DARK,
+            highlight: PALETTE.LEATHER_LIGHT,
+          },
+        },
+        // Broad snout disc
+        {
+          kind: 'ellipse',
+          cx: 2,
+          cy: 2.5,
+          rx: 6.5,
+          ry: 4.2,
+          style: {
+            fill: PALETTE.SKIN_SHADE,
+            shade: PALETTE.LEATHER_MID,
+            highlight: PALETTE.SKIN_WARM,
+            outlineWidth: INNER_OUTLINE_WIDTH,
+          },
+        },
+        // Glowing furious flame-orange eyes
+        {
+          kind: 'polygon',
+          points: [
+            { x: -6.5, y: -3.5 },
+            { x: -1.5, y: -1.5 },
+            { x: -5.5, y: 0.5 },
+          ],
+          style: {
+            fill: PALETTE.FLAME_ORANGE,
+            highlight: PALETTE.SOLAR_GOLD,
+            outlineWidth: INNER_OUTLINE_WIDTH,
+          },
+        },
+        {
+          kind: 'polygon',
+          points: [
+            { x: 7.5, y: -3.5 },
+            { x: 2.5, y: -1.5 },
+            { x: 6.5, y: 0.5 },
+          ],
+          style: {
+            fill: PALETTE.FLAME_ORANGE,
+            highlight: PALETTE.SOLAR_GOLD,
+            outlineWidth: INNER_OUTLINE_WIDTH,
+          },
+        },
+      ],
+    },
+    {
+      id: 'weapon',
+      width: 34,
+      height: 24,
+      offsetX: 9,
+      offsetY: -16,
+      originX: 0.3,
+      originY: 0.5,
+      zIndex: 45,
+      shapes: [
+        // Upper curved stone tusk
+        {
+          kind: 'polygon',
+          points: [
+            { x: -2, y: -3 },
+            { x: 11, y: -9 },
+            { x: 15, y: -3 },
+            { x: 3, y: 0 },
+          ],
+          style: {
+            fill: PALETTE.BONE_WHITE,
+            shade: PALETTE.WARM_STONE,
+            highlight: PALETTE.SILVER_BRIGHT,
+          },
+        },
+        // Lower curved stone tusk
+        {
+          kind: 'polygon',
+          points: [
+            { x: -2, y: 3 },
+            { x: 11, y: 9 },
+            { x: 15, y: 3 },
+            { x: 3, y: 0 },
+          ],
+          style: {
+            fill: PALETTE.BONE_WHITE,
+            shade: PALETTE.WARM_STONE,
+            highlight: PALETTE.SILVER_BRIGHT,
+          },
+        },
+      ],
+    },
+    {
+      id: 'armRight',
+      width: 14,
+      height: 14,
+      offsetX: 9.5,
+      offsetY: -10,
+      originX: 0.5,
+      originY: 0.5,
+      zIndex: 50,
+      shapes: [
+        {
+          kind: 'circle',
+          cx: 0,
+          cy: 0,
+          r: 4.5,
+          style: {
+            fill: PALETTE.LEATHER_MID,
+            shade: PALETTE.LEATHER_DARK,
+            highlight: PALETTE.LEATHER_LIGHT,
+          },
+        },
+      ],
+    },
+  ],
+};
+
+export const SPORE_BOMBER_RIG_DEF: EntityRigDef = {
+  id: 'spore_bomber',
+  nameVi: 'Nấm Nổ Bào Tử (Spore Bomber)',
+  roleVi: 'Quái Nổ Tự Sát · Biome 1',
+  worldWidth: 30,
+  worldHeight: 36,
+  shadowRx: 12,
+  shadowRy: 5.5,
+  parts: [
+    {
+      id: 'backAccessory',
+      width: 24,
+      height: 24,
+      offsetX: -4,
+      offsetY: -15,
+      originX: 0.5,
+      originY: 0.5,
+      zIndex: 10,
+      shapes: [
+        // Volatile glowing toxic spore sac on back
+        {
+          kind: 'circle',
+          cx: 0,
+          cy: 0,
+          r: 7.5,
+          style: {
+            fill: PALETTE.TOXIC_PURPLE,
+            shade: PALETTE.SLATE_DARK,
+            highlight: PALETTE.LIME_GLOW,
+          },
+        },
+      ],
+    },
+    {
+      id: 'legLeft',
+      width: 12,
+      height: 12,
+      offsetX: -4,
+      offsetY: -4,
+      originX: 0.5,
+      originY: 0.25,
+      zIndex: 20,
+      shapes: [
+        {
+          kind: 'roundedRect',
+          x: -3.5,
+          y: -2,
+          w: 7,
+          h: 8,
+          r: 3,
+          style: {
+            fill: PALETTE.WARM_STONE,
+            shade: PALETTE.ASH_GRAY,
+            highlight: PALETTE.BONE_WHITE,
+          },
+        },
+      ],
+    },
+    {
+      id: 'legRight',
+      width: 12,
+      height: 12,
+      offsetX: 4,
+      offsetY: -4,
+      originX: 0.5,
+      originY: 0.25,
+      zIndex: 21,
+      shapes: [
+        {
+          kind: 'roundedRect',
+          x: -3.5,
+          y: -2,
+          w: 7,
+          h: 8,
+          r: 3,
+          style: {
+            fill: PALETTE.BONE_WHITE,
+            shade: PALETTE.WARM_STONE,
+            highlight: PALETTE.SILVER_BRIGHT,
+          },
+        },
+      ],
+    },
+    {
+      id: 'torso',
+      width: 24,
+      height: 20,
+      offsetX: 0,
+      offsetY: -12,
+      originX: 0.5,
+      originY: 0.55,
+      zIndex: 30,
+      shapes: [
+        // Plump mushroom stalk body
+        {
+          kind: 'roundedRect',
+          x: -8.5,
+          y: -7.5,
+          w: 17,
+          h: 14,
+          r: 6,
+          style: {
+            fill: PALETTE.BONE_WHITE,
+            shade: PALETTE.WARM_STONE,
+            highlight: PALETTE.SILVER_BRIGHT,
+          },
+        },
+        // Glowing crimson warning belly ring
+        {
+          kind: 'ellipse',
+          cx: 0,
+          cy: 0.5,
+          rx: 5,
+          ry: 3.5,
+          style: {
+            fill: PALETTE.CRIMSON_BRIGHT,
+            shade: PALETTE.RUBY_CORE,
+            highlight: PALETTE.FLAME_ORANGE,
+            outlineWidth: INNER_OUTLINE_WIDTH,
+          },
+        },
+      ],
+    },
+    {
+      id: 'armLeft',
+      width: 12,
+      height: 12,
+      offsetX: -8.5,
+      offsetY: -12,
+      originX: 0.5,
+      originY: 0.5,
+      zIndex: 35,
+      shapes: [
+        {
+          kind: 'circle',
+          cx: 0,
+          cy: 0,
+          r: 3.8,
+          style: {
+            fill: PALETTE.BONE_WHITE,
+            shade: PALETTE.WARM_STONE,
+          },
+        },
+      ],
+    },
+    {
+      id: 'head',
+      width: 38,
+      height: 30,
+      offsetX: 0,
+      offsetY: -25,
+      originX: 0.5,
+      originY: 0.65,
+      zIndex: 40,
+      shapes: [
+        // Wide volatile bulbous mushroom cap
+        {
+          kind: 'polygon',
+          points: [
+            { x: -15, y: 3 },
+            { x: -12, y: -9 },
+            { x: 0, y: -13 },
+            { x: 12, y: -9 },
+            { x: 15, y: 3 },
+            { x: 0, y: 6 },
+          ],
+          style: {
+            fill: PALETTE.TOXIC_PURPLE,
+            shade: PALETTE.RUBY_DARK,
+            highlight: PALETTE.ELECTRIC_VIOLET,
+          },
+        },
+        // Glowing lime & crimson spots on cap
+        {
+          kind: 'circle',
+          cx: -6.5,
+          cy: -5.5,
+          r: 3.2,
+          style: {
+            fill: PALETTE.LIME_GLOW,
+            highlight: PALETTE.MINT_LIGHT,
+            outlineWidth: INNER_OUTLINE_WIDTH,
+          },
+        },
+        {
+          kind: 'circle',
+          cx: 6,
+          cy: -6,
+          r: 2.8,
+          style: {
+            fill: PALETTE.CRIMSON_BRIGHT,
+            highlight: PALETTE.FLAME_ORANGE,
+            outlineWidth: INNER_OUTLINE_WIDTH,
+          },
+        },
+        {
+          kind: 'circle',
+          cx: 0,
+          cy: -9.5,
+          r: 2.2,
+          style: {
+            fill: PALETTE.SOLAR_GOLD,
+            outlineWidth: INNER_OUTLINE_WIDTH,
+          },
+        },
+        // Glowing lime-yellow manic eyes under cap rim
+        {
+          kind: 'circle',
+          cx: -4,
+          cy: 2.2,
+          r: 2.0,
+          style: {
+            fill: PALETTE.LIME_GLOW,
+            highlight: PALETTE.BONE_WHITE,
+            outlineWidth: INNER_OUTLINE_WIDTH,
+          },
+        },
+        {
+          kind: 'circle',
+          cx: 4,
+          cy: 2.2,
+          r: 2.0,
+          style: {
+            fill: PALETTE.LIME_GLOW,
+            highlight: PALETTE.BONE_WHITE,
+            outlineWidth: INNER_OUTLINE_WIDTH,
+          },
+        },
+      ],
+    },
+    {
+      id: 'weapon',
+      width: 20,
+      height: 20,
+      offsetX: 8,
+      offsetY: -12,
+      originX: 0.5,
+      originY: 0.5,
+      zIndex: 45,
+      shapes: [
+        {
+          kind: 'circle',
+          cx: 2,
+          cy: 0,
+          r: 4.2,
+          style: {
+            fill: PALETTE.CRIMSON_BRIGHT,
+            shade: PALETTE.RUBY_CORE,
+            highlight: PALETTE.SOLAR_GOLD,
+          },
+        },
+      ],
+    },
+    {
+      id: 'armRight',
+      width: 12,
+      height: 12,
+      offsetX: 8.5,
+      offsetY: -12,
+      originX: 0.5,
+      originY: 0.5,
+      zIndex: 50,
+      shapes: [
+        {
+          kind: 'circle',
+          cx: 0,
+          cy: 0,
+          r: 3.8,
+          style: {
+            fill: PALETTE.BONE_WHITE,
+            shade: PALETTE.WARM_STONE,
+          },
+        },
+      ],
+    },
+  ],
+};
+
+export const TRAINING_DUMMY_RIG_DEF: EntityRigDef = {
+  id: 'training_dummy',
+  nameVi: 'Hình Nộm Tập Bắn (Training Dummy)',
+  roleVi: 'Mục Tiêu Đo DPS · Phòng Thử Nghiệm',
+  worldWidth: 32,
+  worldHeight: 42,
+  shadowRx: 13,
+  shadowRy: 6,
+  parts: [
+    {
+      id: 'backAccessory',
+      width: 28,
+      height: 16,
+      offsetX: 0,
+      offsetY: -16,
+      originX: 0.5,
+      originY: 0.5,
+      zIndex: 10,
+      shapes: [
+        {
+          kind: 'roundedRect',
+          x: -12,
+          y: -3,
+          w: 24,
+          h: 6,
+          r: 2,
+          style: {
+            fill: PALETTE.LEATHER_MID,
+            shade: PALETTE.LEATHER_DARK,
+            highlight: PALETTE.LEATHER_LIGHT,
+          },
+        },
+      ],
+    },
+    {
+      id: 'legLeft',
+      width: 12,
+      height: 14,
+      offsetX: -2,
+      offsetY: -5,
+      originX: 0.5,
+      originY: 0.25,
+      zIndex: 20,
+      shapes: [
+        {
+          kind: 'roundedRect',
+          x: -3,
+          y: -3,
+          w: 6,
+          h: 10,
+          r: 2,
+          style: {
+            fill: PALETTE.LEATHER_DARK,
+            highlight: PALETTE.LEATHER_MID,
+          },
+        },
+      ],
+    },
+    {
+      id: 'legRight',
+      width: 12,
+      height: 14,
+      offsetX: 2,
+      offsetY: -5,
+      originX: 0.5,
+      originY: 0.25,
+      zIndex: 21,
+      shapes: [
+        {
+          kind: 'roundedRect',
+          x: -3,
+          y: -3,
+          w: 6,
+          h: 10,
+          r: 2,
+          style: {
+            fill: PALETTE.LEATHER_MID,
+            shade: PALETTE.LEATHER_DARK,
+          },
+        },
+      ],
+    },
+    {
+      id: 'torso',
+      width: 28,
+      height: 24,
+      offsetX: 0,
+      offsetY: -15,
+      originX: 0.5,
+      originY: 0.55,
+      zIndex: 30,
+      shapes: [
+        {
+          kind: 'roundedRect',
+          x: -10,
+          y: -9,
+          w: 20,
+          h: 18,
+          r: 5,
+          style: {
+            fill: PALETTE.COPPER_LIGHT,
+            shade: PALETTE.LEATHER_LIGHT,
+            highlight: PALETTE.BONE_WHITE,
+          },
+        },
+        {
+          kind: 'circle',
+          cx: 0,
+          cy: 0,
+          r: 6,
+          style: {
+            fill: PALETTE.CRIMSON_BRIGHT,
+            outlineWidth: INNER_OUTLINE_WIDTH,
+          },
+        },
+        {
+          kind: 'circle',
+          cx: 0,
+          cy: 0,
+          r: 2.8,
+          style: {
+            fill: PALETTE.BONE_WHITE,
+            outlineWidth: INNER_OUTLINE_WIDTH,
+          },
+        },
+      ],
+    },
+    {
+      id: 'armLeft',
+      width: 12,
+      height: 12,
+      offsetX: -11,
+      offsetY: -15,
+      originX: 0.5,
+      originY: 0.5,
+      zIndex: 35,
+      shapes: [
+        {
+          kind: 'circle',
+          cx: 0,
+          cy: 0,
+          r: 3.8,
+          style: {
+            fill: PALETTE.LEATHER_MID,
+            shade: PALETTE.LEATHER_DARK,
+          },
+        },
+      ],
+    },
+    {
+      id: 'head',
+      width: 28,
+      height: 28,
+      offsetX: 0,
+      offsetY: -29,
+      originX: 0.5,
+      originY: 0.65,
+      zIndex: 40,
+      shapes: [
+        {
+          kind: 'circle',
+          cx: 0,
+          cy: -1,
+          r: 9.5,
+          style: {
+            fill: PALETTE.COPPER_LIGHT,
+            shade: PALETTE.LEATHER_LIGHT,
+            highlight: PALETTE.BONE_WHITE,
+          },
+        },
+        {
+          kind: 'detailStroke',
+          points: [
+            { x: -5, y: -3 },
+            { x: -2, y: 0 },
+          ],
+          color: PALETTE.INK_DARK,
+          width: 1.8,
+        },
+        {
+          kind: 'detailStroke',
+          points: [
+            { x: 2, y: -3 },
+            { x: 5, y: 0 },
+          ],
+          color: PALETTE.INK_DARK,
+          width: 1.8,
+        },
+      ],
+    },
+    {
+      id: 'weapon',
+      width: 16,
+      height: 16,
+      offsetX: 10,
+      offsetY: -15,
+      originX: 0.5,
+      originY: 0.5,
+      zIndex: 45,
+      shapes: [
+        {
+          kind: 'circle',
+          cx: 0,
+          cy: 0,
+          r: 3.5,
+          style: {
+            fill: PALETTE.STEEL_LIGHT,
+            shade: PALETTE.STEEL_DARK,
+          },
+        },
+      ],
+    },
+    {
+      id: 'armRight',
+      width: 12,
+      height: 12,
+      offsetX: 11,
+      offsetY: -15,
+      originX: 0.5,
+      originY: 0.5,
+      zIndex: 50,
+      shapes: [
+        {
+          kind: 'circle',
+          cx: 0,
+          cy: 0,
+          r: 3.8,
+          style: {
+            fill: PALETTE.LEATHER_MID,
+            shade: PALETTE.LEATHER_DARK,
+          },
+        },
+      ],
+    },
+  ],
+};
+
+export interface WeaponVectorDef {
+  id: string;
+  width: number;
+  height: number;
+  originX: number;
+  originY: number;
+  shapes: readonly VectorShapeCommand[];
+}
+
+export const WEAPON_VECTOR_DEFS: Record<string, WeaponVectorDef> = {
+  knight_sword: {
+    id: 'knight_sword',
+    width: 44,
+    height: 20,
+    originX: 0.22,
+    originY: 0.5,
+    shapes: VANGUARD_RIG_DEF.parts.find((p) => p.id === 'weapon')!.shapes,
+  },
+  rusty_pistol: {
+    id: 'rusty_pistol',
+    width: 34,
+    height: 20,
+    originX: 0.28,
+    originY: 0.5,
+    shapes: [
+      // Leather grip
+      {
+        kind: 'roundedRect',
+        x: -6,
+        y: 0,
+        w: 7,
+        h: 8,
+        r: 2,
+        style: {
+          fill: PALETTE.LEATHER_MID,
+          shade: PALETTE.LEATHER_DARK,
+          highlight: PALETTE.LEATHER_LIGHT,
+        },
+      },
+      // Heavy steel barrel
+      {
+        kind: 'roundedRect',
+        x: -5,
+        y: -5,
+        w: 20,
+        h: 7.5,
+        r: 2.5,
+        style: {
+          fill: PALETTE.STEEL_LIGHT,
+          shade: PALETTE.STEEL_DARK,
+          highlight: PALETTE.SILVER_BRIGHT,
+        },
+      },
+      // Brass muzzle ring
+      {
+        kind: 'roundedRect',
+        x: 12,
+        y: -5.2,
+        w: 4.5,
+        h: 8,
+        r: 1.5,
+        style: {
+          fill: PALETTE.SOLAR_GOLD,
+          shade: PALETTE.BRASS_CORE,
+        },
+      },
+    ],
+  },
+  scrap_shotgun: {
+    id: 'scrap_shotgun',
+    width: 42,
+    height: 22,
+    originX: 0.26,
+    originY: 0.5,
+    shapes: [
+      // Wooden stock
+      {
+        kind: 'polygon',
+        points: [
+          { x: -10, y: -2 },
+          { x: -1, y: -3 },
+          { x: -1, y: 4 },
+          { x: -10, y: 6 },
+        ],
+        style: {
+          fill: PALETTE.LEATHER_MID,
+          shade: PALETTE.LEATHER_DARK,
+          highlight: PALETTE.LEATHER_LIGHT,
+        },
+      },
+      // Wide double barrel
+      {
+        kind: 'roundedRect',
+        x: -2,
+        y: -5.5,
+        w: 24,
+        h: 9.5,
+        r: 2.5,
+        style: {
+          fill: PALETTE.STEEL_DARK,
+          shade: PALETTE.SLATE_DARK,
+          highlight: PALETTE.STEEL_LIGHT,
+        },
+      },
+      // Flared crimson/brass blunderbuss muzzle
+      {
+        kind: 'polygon',
+        points: [
+          { x: 18, y: -6 },
+          { x: 25, y: -8 },
+          { x: 25, y: 6 },
+          { x: 18, y: 4 },
+        ],
+        style: {
+          fill: PALETTE.BRASS_CORE,
+          shade: PALETTE.BRONZE_SHADE,
+          highlight: PALETTE.SOLAR_GOLD,
+        },
+      },
+    ],
+  },
+  gale_smg: {
+    id: 'gale_smg',
+    width: 38,
+    height: 22,
+    originX: 0.28,
+    originY: 0.5,
+    shapes: [
+      // Forward magazine
+      {
+        kind: 'roundedRect',
+        x: 4,
+        y: 1,
+        w: 5.5,
+        h: 8.5,
+        r: 1.5,
+        style: {
+          fill: PALETTE.SLATE_MID,
+          shade: PALETTE.SLATE_DARK,
+        },
+      },
+      // Compact SMG receiver
+      {
+        kind: 'roundedRect',
+        x: -6,
+        y: -5,
+        w: 23,
+        h: 8,
+        r: 3,
+        style: {
+          fill: PALETTE.GOBLIN_GREEN,
+          shade: PALETTE.FOREST_SHADE,
+          highlight: PALETTE.LIME_GLOW,
+        },
+      },
+      // Rapid barrel tip
+      {
+        kind: 'roundedRect',
+        x: 15,
+        y: -3.2,
+        w: 7,
+        h: 4.5,
+        r: 1.5,
+        style: {
+          fill: PALETTE.SILVER_BRIGHT,
+          shade: PALETTE.STEEL_LIGHT,
+        },
+      },
+    ],
+  },
+};
+
+export const RIG_DEFS_BY_ID: Record<string, EntityRigDef> = {
+  vanguard: VANGUARD_RIG_DEF,
+  goblin_shooter: GOBLIN_SHOOTER_RIG_DEF,
+  wild_boar: WILD_BOAR_RIG_DEF,
+  spore_bomber: SPORE_BOMBER_RIG_DEF,
+  training_dummy: TRAINING_DUMMY_RIG_DEF,
+};
+
 export const ALL_SAMPLE_RIGS: readonly EntityRigDef[] = [
   VANGUARD_RIG_DEF,
   GOBLIN_SHOOTER_RIG_DEF,
+  WILD_BOAR_RIG_DEF,
+  SPORE_BOMBER_RIG_DEF,
+  TRAINING_DUMMY_RIG_DEF,
 ];
+

@@ -1,5 +1,11 @@
 import Phaser from 'phaser';
-import type { EntityRigDef, RigPartDef, RigPartId } from './rig-defs.js';
+import { easeOutBack, easeOutCubic } from './easing.js';
+import {
+  type EntityRigDef,
+  type RigPartDef,
+  type RigPartId,
+  WEAPON_VECTOR_DEFS,
+} from './rig-defs.js';
 import { TextureBaker } from './texture-baker.js';
 
 export type RigAnimState = 'idle' | 'run';
@@ -31,6 +37,18 @@ export class CutoutRig {
   private facingSign = 1;
   private displayScale = 1;
   private playerSlot: 1 | 2 | 3 | 4 | null;
+  private equippedWeaponId: string | null = null;
+
+  // Combat & Game Feel states
+  private recoilTimer = 0;
+  private recoilStrength = 4;
+  private meleeSwingTimer = 0;
+  private meleeSwingDir = 1;
+  private hitFlashTimer = 0;
+  private isHitFlashing = false;
+  private isDashing = false;
+  private telegraphProgress = 0; // 0 = none, (0..1] = active telegraph progress
+  private spawnProgress = 1; // 1 = fully spawned
 
   constructor(
     scene: Phaser.Scene,
@@ -93,6 +111,46 @@ export class CutoutRig {
     return this.animState;
   }
 
+  public setEquippedWeapon(weaponId: string): void {
+    if (this.equippedWeaponId === weaponId) return;
+    this.equippedWeaponId = weaponId;
+    const weaponSprite = this.partSprites.get('weapon');
+    const weaponVec = WEAPON_VECTOR_DEFS[weaponId];
+    if (weaponSprite && weaponVec) {
+      const key = TextureBaker.getWeaponTextureKey(weaponId);
+      if (this.scene.textures.exists(key)) {
+        weaponSprite.setTexture(key);
+        weaponSprite.setOrigin(weaponVec.originX, weaponVec.originY);
+      }
+    }
+  }
+
+  public triggerRecoil(strength = 5): void {
+    this.recoilTimer = 0.12;
+    this.recoilStrength = strength;
+  }
+
+  public triggerMeleeSwing(): void {
+    this.meleeSwingTimer = 0.18;
+    this.meleeSwingDir = -this.meleeSwingDir;
+  }
+
+  public triggerHitFlash(durationSec = 0.11): void {
+    this.hitFlashTimer = Math.max(this.hitFlashTimer, durationSec);
+  }
+
+  public setDashActive(active: boolean): void {
+    this.isDashing = active;
+  }
+
+  public setTelegraphProgress(progress01: number): void {
+    this.telegraphProgress = Math.max(0, Math.min(1, progress01));
+  }
+
+  public setSpawnProgress(progress01: number): void {
+    this.spawnProgress = Math.max(0, Math.min(1, progress01));
+  }
+
   public setPlayerSlot(slot: 1 | 2 | 3 | 4 | null): void {
     this.playerSlot = slot;
     const invBake = 1 / TextureBaker.getBakeScale();
@@ -132,17 +190,47 @@ export class CutoutRig {
       this.playerRingSprite.setScale(invBake);
     }
     for (const [partId, sprite] of this.partSprites.entries()) {
+      if (partId === 'weapon' && this.equippedWeaponId) {
+        const wKey = TextureBaker.getWeaponTextureKey(this.equippedWeaponId);
+        if (this.scene.textures.exists(wKey)) {
+          sprite.setTexture(wKey);
+          sprite.setScale(invBake);
+          continue;
+        }
+      }
       sprite.setTexture(TextureBaker.getPartTextureKey(this.def.id, partId));
       sprite.setScale(invBake);
     }
   }
 
   /**
-   * Parametric animation update adhering to docs/ART_GUIDE.md section 4.2.
+   * Parametric animation update adhering to docs/ART_GUIDE.md section 4.2 + combat juice states.
    */
   public update(dtSec: number): void {
     this.animTime += dtSec;
     const invBake = 1 / TextureBaker.getBakeScale();
+
+    if (this.recoilTimer > 0) this.recoilTimer = Math.max(0, this.recoilTimer - dtSec);
+    if (this.meleeSwingTimer > 0) this.meleeSwingTimer = Math.max(0, this.meleeSwingTimer - dtSec);
+    if (this.hitFlashTimer > 0) this.hitFlashTimer = Math.max(0, this.hitFlashTimer - dtSec);
+
+    // Hit flash or telegraph flash tint
+    const shouldFlashWhite = this.hitFlashTimer > 0;
+    const shouldFlashTelegraph =
+      !shouldFlashWhite &&
+      this.telegraphProgress > 0 &&
+      Math.floor(this.animTime * 18) % 2 === 0;
+
+    if (shouldFlashWhite) {
+      this.applyTintFill(0xffffff);
+      this.isHitFlashing = true;
+    } else if (shouldFlashTelegraph) {
+      this.applyTintFill(0xfde047);
+      this.isHitFlashing = true;
+    } else if (this.isHitFlashing) {
+      this.clearPartTints();
+      this.isHitFlashing = false;
+    }
 
     const torso = this.partSprites.get('torso');
     const head = this.partSprites.get('head');
@@ -162,7 +250,30 @@ export class CutoutRig {
     const backDef = this.partDefs.get('backAccessory');
     const weaponDef = this.partDefs.get('weapon');
 
-    this.bodyContainer.scaleX = this.facingSign;
+    // Spawn scale & hit punch scale
+    const spawnScale = this.spawnProgress < 1 ? easeOutBack(this.spawnProgress) : 1;
+    const hitPunch = this.hitFlashTimer > 0 ? 1 + (this.hitFlashTimer / 0.12) * 0.12 : 1;
+    const dashStretchX = this.isDashing ? 1.14 : 1;
+    const dashSquashY = this.isDashing ? 0.88 : 1;
+
+    // Telegraph swell for Spore Bomber / crouch for Boar & Goblin
+    let telegraphScaleX = 1;
+    let telegraphScaleY = 1;
+    if (this.telegraphProgress > 0) {
+      if (this.def.id === 'spore_bomber') {
+        const swell = Math.sin(this.animTime * 28) * 0.08 + this.telegraphProgress * 0.22;
+        telegraphScaleX = 1 + swell;
+        telegraphScaleY = 1 + swell;
+      } else {
+        telegraphScaleX = 1 + this.telegraphProgress * 0.1;
+        telegraphScaleY = 1 - this.telegraphProgress * 0.12;
+      }
+    }
+
+    this.bodyContainer.scaleX =
+      this.facingSign * spawnScale * hitPunch * dashStretchX * telegraphScaleX;
+    this.bodyContainer.scaleY = spawnScale * hitPunch * dashSquashY * telegraphScaleY;
+    this.bodyContainer.alpha = this.spawnProgress < 1 ? 0.35 + this.spawnProgress * 0.65 : 1;
 
     // Normalize local aim angle relative to facing direction
     const localAim =
@@ -170,8 +281,19 @@ export class CutoutRig {
         ? this.aimAngleRad
         : Math.atan2(Math.sin(this.aimAngleRad), -Math.cos(this.aimAngleRad));
 
+    // Weapon recoil & melee swing offset
+    const recoilT = this.recoilTimer > 0 ? easeOutCubic(this.recoilTimer / 0.12) : 0;
+    const recoilDist = recoilT * this.recoilStrength;
+    const recoilX = -Math.cos(localAim) * recoilDist;
+    const recoilY = -Math.sin(localAim) * recoilDist;
+
+    let swingAngleOffset = 0;
+    if (this.meleeSwingTimer > 0) {
+      const p = 1 - this.meleeSwingTimer / 0.18;
+      swingAngleOffset = this.meleeSwingDir * Math.sin(p * Math.PI) * 1.35;
+    }
+
     if (this.animState === 'idle') {
-      // Idle breathing cycle T = 1.6s (omega = 2*PI / 1.6)
       const omega = (Math.PI * 2) / 1.6;
       const s = Math.sin(this.animTime * omega);
       const sDelayed = Math.sin(this.animTime * omega - 0.4);
@@ -218,18 +340,17 @@ export class CutoutRig {
       }
 
       if (weapon && weaponDef) {
-        weapon.x = weaponDef.offsetX;
-        weapon.y = weaponDef.offsetY + s * 0.8;
-        weapon.rotation = localAim * 0.35 + s * 0.04;
+        weapon.x = weaponDef.offsetX + recoilX;
+        weapon.y = weaponDef.offsetY + s * 0.8 + recoilY;
+        weapon.rotation = localAim * 0.65 + s * 0.04 + swingAngleOffset;
       }
 
       if (armR && armRDef) {
-        armR.x = armRDef.offsetX;
-        armR.y = armRDef.offsetY + s * 0.8;
-        armR.rotation = localAim * 0.25;
+        armR.x = armRDef.offsetX + recoilX * 0.65;
+        armR.y = armRDef.offsetY + s * 0.8 + recoilY * 0.65;
+        armR.rotation = localAim * 0.45 + swingAngleOffset * 0.7;
       }
     } else {
-      // Run cycle T = 0.38s (omega = 2*PI / 0.38)
       const omega = (Math.PI * 2) / 0.38;
       const phase = this.animTime * omega;
       const swing = Math.sin(phase);
@@ -243,7 +364,7 @@ export class CutoutRig {
       if (torso && torsoDef) {
         torso.x = torsoDef.offsetX;
         torso.y = torsoDef.offsetY;
-        torso.rotation = 0.12;
+        torso.rotation = this.isDashing ? 0.25 : 0.12;
         torso.scaleX = invBake * (1 - squash * 0.04);
         torso.scaleY = invBake * (1 + squash * 0.05);
       }
@@ -279,16 +400,28 @@ export class CutoutRig {
       }
 
       if (weapon && weaponDef) {
-        weapon.x = weaponDef.offsetX - swing * 1.2;
-        weapon.y = weaponDef.offsetY;
-        weapon.rotation = localAim * 0.3 - swing * 0.18;
+        weapon.x = weaponDef.offsetX - swing * 1.2 + recoilX;
+        weapon.y = weaponDef.offsetY + recoilY;
+        weapon.rotation = localAim * 0.65 - swing * 0.14 + swingAngleOffset;
       }
 
       if (armR && armRDef) {
-        armR.x = armRDef.offsetX - swing * 1.2;
-        armR.y = armRDef.offsetY;
-        armR.rotation = localAim * 0.25 - swing * 0.18;
+        armR.x = armRDef.offsetX - swing * 1.2 + recoilX * 0.65;
+        armR.y = armRDef.offsetY + recoilY * 0.65;
+        armR.rotation = localAim * 0.45 - swing * 0.14 + swingAngleOffset * 0.7;
       }
+    }
+  }
+
+  private applyTintFill(color: number): void {
+    for (const sprite of this.partSprites.values()) {
+      sprite.setTintFill(color);
+    }
+  }
+
+  private clearPartTints(): void {
+    for (const sprite of this.partSprites.values()) {
+      sprite.clearTint();
     }
   }
 

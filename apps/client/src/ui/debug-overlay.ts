@@ -22,6 +22,31 @@ export interface GameDebugState {
   serverConnected: boolean;
   fontsLoaded: boolean;
   vietnameseSampleText: string;
+  // Phase 1 Gameplay & Feel telemetry
+  playerX: number;
+  playerY: number;
+  playerVx: number;
+  playerVy: number;
+  playerHp: number;
+  playerMaxHp: number;
+  playerArmor: number;
+  playerMaxArmor: number;
+  playerEnergy: number;
+  playerMaxEnergy: number;
+  activeWeaponId: string;
+  activeWeaponSlot: number;
+  godMode: boolean;
+  showHitboxes: boolean;
+  damagePopupCount: number;
+  totalDamagePopupsSpawned: number;
+  totalSparksSpawned: number;
+  totalHitStopsTriggered: number;
+  totalShakesTriggered: number;
+  sfxPlayedCount: number;
+  lastSfxId: string | null;
+  rollingDps: number;
+  cameraCenterX: number;
+  cameraCenterY: number;
   errors: string[];
   warnings: string[];
 }
@@ -56,6 +81,30 @@ export function initGlobalDebugState(): GameDebugState {
     serverConnected: false,
     fontsLoaded: false,
     vietnameseSampleText: VIETNAMESE_VERIFICATION_STRING,
+    playerX: 0,
+    playerY: 0,
+    playerVx: 0,
+    playerVy: 0,
+    playerHp: 8,
+    playerMaxHp: 8,
+    playerArmor: 6,
+    playerMaxArmor: 6,
+    playerEnergy: 150,
+    playerMaxEnergy: 150,
+    activeWeaponId: 'knight_sword',
+    activeWeaponSlot: 0,
+    godMode: false,
+    showHitboxes: false,
+    damagePopupCount: 0,
+    totalDamagePopupsSpawned: 0,
+    totalSparksSpawned: 0,
+    totalHitStopsTriggered: 0,
+    totalShakesTriggered: 0,
+    sfxPlayedCount: 0,
+    lastSfxId: null,
+    rollingDps: 0,
+    cameraCenterX: 480,
+    cameraCenterY: 270,
     errors: [],
     warnings: [],
   };
@@ -87,7 +136,7 @@ export function initGlobalDebugState(): GameDebugState {
 }
 
 /**
- * F1 Debug Overlay displaying FPS, frame time, entities, bullets, draw calls, ping, and tick.
+ * F1 Debug Overlay displaying FPS, frame time, entities, bullets, draw calls, ping, tick, and combat stats.
  */
 export class DebugOverlay {
   private readonly scene: Phaser.Scene;
@@ -107,10 +156,10 @@ export class DebugOverlay {
     this.container.setDepth(9999);
 
     this.bg = scene.add.graphics();
-    this.bg.fillStyle(0x0b090e, 0.9);
+    this.bg.fillStyle(0x0b090e, 0.92);
     this.bg.lineStyle(2, 0x38bdf8, 0.95);
-    this.bg.fillRoundedRect(0, 0, 310, 142, 8);
-    this.bg.strokeRoundedRect(0, 0, 310, 142, 8);
+    this.bg.fillRoundedRect(0, 0, 326, 172, 8);
+    this.bg.strokeRoundedRect(0, 0, 326, 172, 8);
 
     this.textObj = scene.add.text(12, 10, '', {
       fontFamily: '"Be Vietnam Pro", monospace',
@@ -200,10 +249,11 @@ export class DebugOverlay {
       this.textObj.setText(
         [
           `[F1] DEBUG OVERLAY — ${state.scene}`,
-          `FPS: ${state.fps.toFixed(1)} (${state.frameTimeMs.toFixed(2)} ms)`,
+          `FPS: ${state.fps.toFixed(1)} (${state.frameTimeMs.toFixed(2)} ms) | DPS: ${state.rollingDps.toFixed(1)}`,
           `Entities: ${state.entityCount} | Bullets: ${state.bulletCount}`,
           `Draw Calls (est): ${state.drawCalls} | Bake: ${state.bakeScale}x (DPR ${state.dpr.toFixed(2)})`,
           `Sim Tick: ${state.tick} | Seed: 0x${state.seed.toString(16)}`,
+          `Weapon: ${state.activeWeaponId} | God[F2]: ${state.godMode ? 'ON' : 'OFF'} | Hitbox[F4]: ${state.showHitboxes ? 'ON' : 'OFF'}`,
           `LAN Server: ${state.serverConnected ? `Online (${state.pingMs} ms)` : 'Local Sim'}`,
           `Errors: ${state.errors.length} | Warnings: ${state.warnings.length}`,
         ].join('\n'),

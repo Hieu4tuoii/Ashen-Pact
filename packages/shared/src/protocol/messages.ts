@@ -10,6 +10,15 @@ export const WORLD_VIEW_WIDTH = 960;
 export const WORLD_VIEW_HEIGHT = 540;
 export const TILE_SIZE = 32;
 
+export const INPUT_BUTTON = {
+  FIRE: 1 << 0,
+  SKILL: 1 << 1,
+  DASH: 1 << 2,
+  INTERACT: 1 << 3,
+  SWAP: 1 << 4,
+  PING: 1 << 5,
+} as const;
+
 export interface PlayerInputPacket {
   seq: number;
   tick: number;
@@ -17,6 +26,8 @@ export interface PlayerInputPacket {
   moveY: number;
   aimAngle: number;
   buttons: number;
+  /** Optional direct weapon slot selection (0..3) in test arena / inventory */
+  weaponSlotSelect?: number | null;
 }
 
 export interface HelloRoomMessage {
