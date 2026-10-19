@@ -6,6 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "concurrently -k -n SERVER,CLIENT \"pnpm --filter @ashen-pact/server dev\" \"pnpm --filter @ashen-pact/client dev\"",
+    "host": "pnpm build && node apps/server/dist/index.js --host",
     "build": "pnpm --filter @ashen-pact/shared build && pnpm --filter @ashen-pact/client build && pnpm --filter @ashen-pact/server build",
     "typecheck": "pnpm --filter @ashen-pact/shared typecheck && pnpm --filter @ashen-pact/client typecheck && pnpm --filter @ashen-pact/server typecheck",
     "lint": "eslint \"packages/*/src/**/*.ts\" \"apps/*/src/**/*.ts\" \"tests/**/*.ts\"",

@@ -24,7 +24,7 @@ export interface CutoutRigOptions {
 export class CutoutRig {
   public readonly container: Phaser.GameObjects.Container;
   public readonly bodyContainer: Phaser.GameObjects.Container;
-  public readonly def: EntityRigDef;
+  public def: EntityRigDef;
 
   private readonly scene: Phaser.Scene;
   private readonly partSprites = new Map<RigPartId, Phaser.GameObjects.Sprite>();
@@ -35,6 +35,7 @@ export class CutoutRig {
   private fastComposite = false;
 
   private animState: RigAnimState = 'idle';
+  private lifeState: 'alive' | 'downed' | 'ghost' = 'alive';
   private animTime = 0;
   private aimAngleRad = 0;
   private facingSign = 1;
@@ -213,6 +214,25 @@ export class CutoutRig {
     this.elementalStatusTint = color;
   }
 
+  public setLifeState(state: 'alive' | 'downed' | 'ghost'): void {
+    this.lifeState = state;
+  }
+
+  public setRigDef(def: EntityRigDef): void {
+    if (this.def.id === def.id) return;
+    this.def = def;
+    this.partDefs.clear();
+    for (const part of def.parts) {
+      this.partDefs.set(part.id, part);
+      const sprite = this.partSprites.get(part.id);
+      if (sprite) {
+        sprite.setOrigin(part.originX, part.originY);
+        sprite.setPosition(part.offsetX, part.offsetY);
+      }
+    }
+    this.refreshBakedTextures();
+  }
+
   public refreshBakedTextures(): void {
     const invBake = 1 / TextureBaker.getBakeScale();
     const compInvBake = 1 / Math.min(2, TextureBaker.getBakeScale());
@@ -251,7 +271,7 @@ export class CutoutRig {
     if (this.meleeSwingTimer > 0) this.meleeSwingTimer = Math.max(0, this.meleeSwingTimer - dtSec);
     if (this.hitFlashTimer > 0) this.hitFlashTimer = Math.max(0, this.hitFlashTimer - dtSec);
 
-    // Hit flash, telegraph flash, or elemental status tint
+    // Hit flash, telegraph flash, life state tint, or elemental status tint
     const shouldFlashWhite = this.hitFlashTimer > 0;
     const shouldFlashTelegraph =
       !shouldFlashWhite &&
@@ -267,6 +287,15 @@ export class CutoutRig {
       this.applyMultiplicativeTint(0xff9e64);
       this.isHitFlashing = true;
       this.isStatusTinted = false;
+    } else if (this.lifeState === 'downed') {
+      const pulse = Math.floor(this.animTime * 6) % 2 === 0 ? 0xf7768e : 0xff9e64;
+      this.applyMultiplicativeTint(pulse);
+      this.isHitFlashing = false;
+      this.isStatusTinted = true;
+    } else if (this.lifeState === 'ghost') {
+      this.applyMultiplicativeTint(0x7dcfff);
+      this.isHitFlashing = false;
+      this.isStatusTinted = true;
     } else if (this.elementalStatusTint !== null) {
       this.applyMultiplicativeTint(this.elementalStatusTint);
       this.isHitFlashing = false;
@@ -314,10 +343,14 @@ export class CutoutRig {
       return;
     }
 
+    const downedSquashY = this.lifeState === 'downed' ? 0.72 : 1;
     this.bodyContainer.scaleX =
       this.facingSign * spawnScale * hitPunch * dashStretchX * telegraphScaleX;
-    this.bodyContainer.scaleY = spawnScale * hitPunch * dashSquashY * telegraphScaleY;
-    this.bodyContainer.alpha = this.spawnProgress < 1 ? 0.35 + this.spawnProgress * 0.65 : 1;
+    this.bodyContainer.scaleY = spawnScale * hitPunch * dashSquashY * telegraphScaleY * downedSquashY;
+    this.bodyContainer.rotation = this.lifeState === 'downed' ? 0.38 * this.facingSign : 0;
+    const baseAlpha = this.spawnProgress < 1 ? 0.35 + this.spawnProgress * 0.65 : 1;
+    this.bodyContainer.alpha =
+      this.lifeState === 'ghost' ? 0.52 + Math.sin(this.animTime * 4) * 0.08 : baseAlpha;
 
     const torso = this.partSprites.get('torso');
     const head = this.partSprites.get('head');

@@ -8,10 +8,15 @@ import {
   type ElementType,
   ENEMY_SPAWN_WARMUP_SEC,
   FLOOR_BUFFS,
+  generateQrMatrix,
   INPUT_BUTTON,
   LocalTransport,
+  NetworkTransport,
   PHASE1_SAMPLE_WEAPONS,
+  PLAYER_SLOT_COLORS,
   type PropKind,
+  QUICK_EMOTES_VI,
+  type QuickEmoteId,
   type RoomType,
   type SimEnemyState,
   type SimEvent,
@@ -21,6 +26,7 @@ import {
   VIETNAMESE_VERIFICATION_STRING,
   WEAPON_RARITY_COLORS,
   WEAPONS,
+  type WifiProfileId,
   WORLD_VIEW_HEIGHT,
   WORLD_VIEW_WIDTH,
 } from '@ashen-pact/shared';
@@ -35,12 +41,24 @@ import { LightingPipeline } from '../fx/lighting-pipeline.js';
 import { DebugOverlay, initGlobalDebugState } from '../ui/debug-overlay.js';
 import { type GraphicsQualityTier, graphicsSettings } from '../ui/graphics-settings.js';
 
+export interface GameSceneInitData {
+  coopMode?: 'solo' | 'host' | 'join';
+  roomId?: string;
+  displayName?: string;
+  serverUrl?: string;
+}
+
 declare global {
   interface Window {
-    __GAME_TRANSPORT__?: LocalTransport;
+    __GAME_TRANSPORT__?: LocalTransport | NetworkTransport;
     __GAME_STRESS_TEST__?: (active: boolean) => void;
     __GAME_SET_QUALITY__?: (quality: GraphicsQualityTier) => void;
     __GAME_BOT_AUTOPLAY__?: (active: boolean) => void;
+    __GAME_SET_WIFI_PROFILE__?: (profile: WifiProfileId) => void;
+    __GAME_TRIGGER_LAG_SPIKE__?: (durationMs?: number) => void;
+    __GAME_FORCE_RECONNECT__?: () => Promise<boolean>;
+    __GAME_COOP_SEND__?: (type: string, payload?: unknown) => void;
+    __PHASER_GAME__?: Phaser.Game;
   }
 }
 
@@ -91,11 +109,41 @@ interface PropVisual {
 }
 
 export class GameScene extends Phaser.Scene {
-  private transport!: LocalTransport;
+  private transport!: LocalTransport | NetworkTransport;
+  private networkTransport: NetworkTransport | null = null;
+  private coopMode: 'solo' | 'host' | 'join' = 'solo';
+  private requestedRoomId: string | undefined;
+  private displayName = 'Hiệp Sĩ Tro';
+  private serverUrl: string | undefined;
+  private reconnectToken: string | null = null;
+  private hostInviteUrl: string | null = null;
+  private lanIps: string[] = [];
+  private primaryLanIp = '127.0.0.1';
+  private serverPort = 2567;
+  private invitePanelVisible = true;
+  private copyToastTimer = 0;
+
   private fx!: CombatFxManager;
   private lighting!: LightingPipeline;
   private playerRig?: CutoutRig;
   private simPlayerRigs = new Map<number, CutoutRig>();
+  private coopPlayerRigs = new Map<
+    number,
+    {
+      rig: CutoutRig;
+      nameLabel: Phaser.GameObjects.Text;
+      emoteLabel: Phaser.GameObjects.Text;
+      emoteBg: Phaser.GameObjects.Graphics;
+    }
+  >();
+  private localNameLabel?: Phaser.GameObjects.Text;
+  private localEmoteLabel?: Phaser.GameObjects.Text;
+  private localEmoteBg?: Phaser.GameObjects.Graphics;
+  private hubStatueRigs = new Map<
+    string,
+    { rig: CutoutRig; label: Phaser.GameObjects.Text; subLabel: Phaser.GameObjects.Text }
+  >();
+  private pingVisuals = new Map<number, Phaser.GameObjects.Text>();
   private enemyRigs = new Map<number, CutoutRig>();
   private propVisuals = new Map<number, PropVisual>();
   private projectileSprites = new Map<
@@ -128,6 +176,8 @@ export class GameScene extends Phaser.Scene {
 
   private readonly activeEnemyIds = new Set<number>();
   private readonly activeSimPlayerIds = new Set<number>();
+  private readonly activeCoopPlayerIds = new Set<number>();
+  private readonly activePingIds = new Set<number>();
   private readonly activePropIds = new Set<number>();
   private readonly activeProjIds = new Set<number>();
   private readonly activePickupIds = new Set<number>();
@@ -156,12 +206,15 @@ export class GameScene extends Phaser.Scene {
   private lastHudHp = -1;
   private lastHudArmor = -1;
   private lastHudEnergy = -1;
+  private lastHudCharacterId = '';
   private lastHudWeaponHash = '';
   private lastHudElement = '';
   private lastHudQuality = '';
   private lastHudStatsText = '';
   private lastMinimapHash = '';
   private lastBossHudHash = '';
+  private lastCoopHudHash = '';
+  private lastInvitePanelHash = '';
   private lastRunState = 'playing';
   private resultDismissed = false;
   private fullMapOpen = false;
@@ -177,6 +230,9 @@ export class GameScene extends Phaser.Scene {
   private minimapTitleText!: Phaser.GameObjects.Text;
   private bossBarGraphics!: Phaser.GameObjects.Graphics;
   private bossTitleText!: Phaser.GameObjects.Text;
+  private coopHudContainer!: Phaser.GameObjects.Container;
+  private invitePanelContainer!: Phaser.GameObjects.Container;
+  private offscreenArrowGraphics!: Phaser.GameObjects.Graphics;
   private modalContainer!: Phaser.GameObjects.Container;
   private hpLabelText!: Phaser.GameObjects.Text;
   private armorLabelText!: Phaser.GameObjects.Text;
@@ -192,6 +248,8 @@ export class GameScene extends Phaser.Scene {
 
   private debugOverlay?: DebugOverlay;
   private room?: ColyseusRoom;
+  private colyseusClient?: ColyseusClient;
+  private intentionalLeave = false;
 
   private inputSeq = 0;
   private queuedWeaponSlot: number | null = null;
@@ -199,6 +257,10 @@ export class GameScene extends Phaser.Scene {
   private dashQueued = false;
   private skillQueued = false;
   private interactQueued = false;
+  private dropWeaponQueued = false;
+  private readyToggleQueued = false;
+  private pingQueued: { x: number; y: number } | null = null;
+  private queuedEmote: QuickEmoteId | null = null;
 
   // Smooth camera tracking state
   private camFocusX = 480;
@@ -218,6 +280,10 @@ export class GameScene extends Phaser.Scene {
     E: Phaser.Input.Keyboard.Key;
     R: Phaser.Input.Keyboard.Key;
     G: Phaser.Input.Keyboard.Key;
+    Z: Phaser.Input.Keyboard.Key;
+    X: Phaser.Input.Keyboard.Key;
+    V: Phaser.Input.Keyboard.Key;
+    I: Phaser.Input.Keyboard.Key;
     TAB: Phaser.Input.Keyboard.Key;
     ONE: Phaser.Input.Keyboard.Key;
     TWO: Phaser.Input.Keyboard.Key;
@@ -230,17 +296,50 @@ export class GameScene extends Phaser.Scene {
     F6: Phaser.Input.Keyboard.Key;
     F7: Phaser.Input.Keyboard.Key;
     F8: Phaser.Input.Keyboard.Key;
+    F9: Phaser.Input.Keyboard.Key;
   };
 
   constructor() {
     super({ key: 'GameScene' });
   }
 
+  public init(data?: GameSceneInitData): void {
+    const params =
+      typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+    const urlCoop = params?.get('coop')?.toLowerCase();
+    const urlJoin = params?.get('join') ?? undefined;
+    const urlName = params?.get('name') ?? undefined;
+    const urlServer = params?.get('server') ?? undefined;
+
+    if (data?.coopMode) {
+      this.coopMode = data.coopMode;
+    } else if (urlCoop === 'host') {
+      this.coopMode = 'host';
+    } else if (urlCoop === 'join' || urlJoin) {
+      this.coopMode = 'join';
+    } else {
+      this.coopMode = 'solo';
+    }
+
+    this.requestedRoomId = data?.roomId ?? urlJoin;
+    this.displayName =
+      data?.displayName ??
+      urlName ??
+      (typeof window !== 'undefined' ? window.localStorage?.getItem('ashen_pact_name') : null) ??
+      'Hiệp Sĩ Tro';
+    this.serverUrl = data?.serverUrl ?? urlServer;
+    this.intentionalLeave = false;
+  }
+
   public create(): void {
     const debug = initGlobalDebugState();
     debug.scene = 'GameScene';
+    debug.coopMode = this.coopMode;
 
     this.simPlayerRigs.clear();
+    this.coopPlayerRigs.clear();
+    this.hubStatueRigs.clear();
+    this.pingVisuals.clear();
     this.enemyRigs.clear();
     this.propVisuals.clear();
     this.projectileSprites.clear();
@@ -251,6 +350,9 @@ export class GameScene extends Phaser.Scene {
     this.npcVisuals.clear();
     this.portalSprite = undefined;
     this.portalLabel = undefined;
+    this.localNameLabel = undefined;
+    this.localEmoteLabel = undefined;
+    this.localEmoteBg = undefined;
     this.projectileSpritePool = [];
     this.pickupSpritePool = [];
     this.mapTileVisuals = [];
@@ -266,41 +368,78 @@ export class GameScene extends Phaser.Scene {
     this.lastHudHp = -1;
     this.lastHudArmor = -1;
     this.lastHudEnergy = -1;
+    this.lastHudCharacterId = '';
     this.lastHudWeaponHash = '';
     this.lastHudElement = '';
     this.lastHudQuality = '';
     this.lastHudStatsText = '';
     this.lastMinimapHash = '';
     this.lastBossHudHash = '';
+    this.lastCoopHudHash = '';
+    this.lastInvitePanelHash = '';
     this.lastRunState = 'playing';
     this.resultDismissed = false;
     this.fullMapOpen = false;
+    this.invitePanelVisible = true;
+    this.copyToastTimer = 0;
+    this.pingQueued = null;
+    this.queuedEmote = null;
+    this.dropWeaponQueued = false;
+    this.readyToggleQueued = false;
 
-    // 1. Initialize LocalTransport + Authoritative 60Hz WorldSim
-    this.transport = new LocalTransport({
-      seed: debug.seed,
-      mapConfig: {
-        cols: 36,
-        rows: 22,
-        includePillars: true,
+    // 1. Initialize Transport (NetworkTransport for Co-op LAN Host/Join, LocalTransport for Solo)
+    if (this.coopMode === 'host' || this.coopMode === 'join') {
+      this.networkTransport = new NetworkTransport({
         seed: debug.seed,
-      },
-      spawnInitialWave: true,
-      includeTrainingDummy: true,
-      includeProps: true,
-      autoRespawnWaves: true,
-    });
+        startInHub: true,
+        localPlayerId: 1,
+        localPlayerSlot: 1,
+      });
+      this.transport = this.networkTransport;
+    } else {
+      this.networkTransport = null;
+      this.transport = new LocalTransport({
+        seed: debug.seed,
+        mapConfig: {
+          cols: 36,
+          rows: 22,
+          includePillars: true,
+          seed: debug.seed,
+        },
+        spawnInitialWave: true,
+        includeTrainingDummy: true,
+        includeProps: true,
+        autoRespawnWaves: true,
+      });
+    }
+
+    window.__PHASER_GAME__ = this.game;
     window.__GAME_TRANSPORT__ = this.transport;
     window.__GAME_STRESS_TEST__ = (active: boolean) => {
       this.setStressTestMode(active);
     };
     window.__GAME_SET_QUALITY__ = (quality: GraphicsQualityTier) => {
       graphicsSettings.setQuality(quality);
+      this.debugOverlay?.resetSamples();
     };
     window.__GAME_BOT_AUTOPLAY__ = (active: boolean) => {
       const s = this.transport.getSim();
       s.botAutoPlayActive = active;
       initGlobalDebugState().botAutoPlayActive = active;
+      if (this.room && this.coopMode !== 'solo') {
+        this.room.send('set_bot_autoplay', { active });
+      }
+    };
+    window.__GAME_SET_WIFI_PROFILE__ = (profile: WifiProfileId) => {
+      this.networkTransport?.setWifiProfile(profile);
+      initGlobalDebugState().wifiProfile = profile;
+    };
+    window.__GAME_TRIGGER_LAG_SPIKE__ = (durationMs = 300) => {
+      this.networkTransport?.triggerManualLagSpike(durationMs);
+    };
+    window.__GAME_FORCE_RECONNECT__ = () => this.forceCoopReconnect();
+    window.__GAME_COOP_SEND__ = (type: string, payload?: unknown) => {
+      this.room?.send(type, payload);
     };
 
     const sim = this.transport.getSim();
@@ -325,20 +464,35 @@ export class GameScene extends Phaser.Scene {
     };
     this.input.on('wheel', onWheel);
 
+    const onPointerDown = (pointer: Phaser.Input.Pointer) => {
+      zzfx.unlockOnUserGesture();
+      if (pointer.middleButtonDown()) {
+        const wPt = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
+        this.pingQueued = {
+          x: wPt.x - this.lastShakeX,
+          y: wPt.y - this.lastShakeY,
+        };
+      }
+    };
     const unlockAudio = () => zzfx.unlockOnUserGesture();
-    this.input.on('pointerdown', unlockAudio);
+    this.input.on('pointerdown', onPointerDown);
     this.input.keyboard?.on('keydown', unlockAudio);
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.intentionalLeave = true;
       this.scale.off('resize', this.applyCameraViewport, this);
       this.input.off('wheel', onWheel);
-      this.input.off('pointerdown', unlockAudio);
+      this.input.off('pointerdown', onPointerDown);
       this.input.keyboard?.off('keydown', unlockAudio);
       this.lighting?.destroy();
       delete window.__GAME_TRANSPORT__;
       delete window.__GAME_STRESS_TEST__;
       delete window.__GAME_SET_QUALITY__;
       delete window.__GAME_BOT_AUTOPLAY__;
+      delete window.__GAME_SET_WIFI_PROFILE__;
+      delete window.__GAME_TRIGGER_LAG_SPIKE__;
+      delete window.__GAME_FORCE_RECONNECT__;
+      delete window.__GAME_COOP_SEND__;
       if (this.room) {
         const activeRoom = this.room;
         this.room = undefined;
@@ -356,7 +510,8 @@ export class GameScene extends Phaser.Scene {
     this.hitboxGraphics = this.add.graphics();
     this.hitboxGraphics.setDepth(90);
 
-    // 4. Player CutoutRig (Thiết Vệ)
+    // 4. Player CutoutRig (Thiết Vệ default, switches dynamically in Hub)
+    const textRes = TextureBaker.getBakeScale();
     this.playerRig = new CutoutRig(
       this,
       sim.player.x,
@@ -370,6 +525,37 @@ export class GameScene extends Phaser.Scene {
     this.playerRig.container.setDepth(30);
     this.playerRig.setEquippedWeapon(sim.getActiveWeaponId());
 
+    this.localNameLabel = this.add
+      .text(sim.player.x, sim.player.y - 26, '', {
+        fontFamily: '"Be Vietnam Pro", sans-serif',
+        fontSize: '10px',
+        fontStyle: '800',
+        color: PLAYER_SLOT_COLORS[1],
+        stroke: PALETTE.INK_DEEP,
+        strokeThickness: 3,
+        resolution: textRes,
+      })
+      .setOrigin(0.5, 0.5)
+      .setDepth(48)
+      .setVisible(false);
+    this.textObjects.push(this.localNameLabel);
+
+    this.localEmoteBg = this.add.graphics().setDepth(49);
+    this.localEmoteLabel = this.add
+      .text(sim.player.x, sim.player.y - 44, '', {
+        fontFamily: '"Be Vietnam Pro", sans-serif',
+        fontSize: '10.5px',
+        fontStyle: '800',
+        color: PALETTE.BONE_WHITE,
+        stroke: PALETTE.INK_DEEP,
+        strokeThickness: 3,
+        resolution: textRes,
+      })
+      .setOrigin(0.5, 0.5)
+      .setDepth(50)
+      .setVisible(false);
+    this.textObjects.push(this.localEmoteLabel);
+
     // 5. Sync initial destructible & light-emitting props
     this.syncProps(0);
 
@@ -380,7 +566,7 @@ export class GameScene extends Phaser.Scene {
     this.lighting = new LightingPipeline(this);
 
     // 8. Custom Procedural Crosshair
-    const invBake = 1 / TextureBaker.getBakeScale();
+    const invBake = 1 / textRes;
     this.crosshairSprite = this.add.sprite(sim.player.x + 64, sim.player.y, 'ui_crosshair');
     this.crosshairSprite.setScale(invBake);
     this.crosshairSprite.setDepth(950);
@@ -392,7 +578,11 @@ export class GameScene extends Phaser.Scene {
     this.setupKeyboardBindings();
 
     this.debugOverlay = new DebugOverlay(this, false);
-    void this.connectHelloRoom();
+    if (this.coopMode === 'host' || this.coopMode === 'join') {
+      void this.connectCoopRoom();
+    } else {
+      void this.connectHelloRoom();
+    }
   }
 
   private setStressTestMode(active: boolean): void {
@@ -804,6 +994,16 @@ export class GameScene extends Phaser.Scene {
     this.textObjects.push(this.bossTitleText);
     this.hudContainer.add(this.bossTitleText);
 
+    // Co-op Teammate HUD Container (left side), Host Invite QR Panel (right side), and Off-Screen Arrows
+    this.offscreenArrowGraphics = this.add.graphics();
+    this.hudContainer.add(this.offscreenArrowGraphics);
+
+    this.coopHudContainer = this.add.container(0, 0);
+    this.hudContainer.add(this.coopHudContainer);
+
+    this.invitePanelContainer = this.add.container(0, 0);
+    this.hudContainer.add(this.invitePanelContainer);
+
     // Modal Container for Between-Floor Buff Selection & Run Victory/Defeat Summary
     this.modalContainer = this.add.container(0, 0);
     this.hudContainer.add(this.modalContainer);
@@ -824,6 +1024,10 @@ export class GameScene extends Phaser.Scene {
       E: kb.addKey(Phaser.Input.Keyboard.KeyCodes.E),
       R: kb.addKey(Phaser.Input.Keyboard.KeyCodes.R),
       G: kb.addKey(Phaser.Input.Keyboard.KeyCodes.G),
+      Z: kb.addKey(Phaser.Input.Keyboard.KeyCodes.Z),
+      X: kb.addKey(Phaser.Input.Keyboard.KeyCodes.X),
+      V: kb.addKey(Phaser.Input.Keyboard.KeyCodes.V),
+      I: kb.addKey(Phaser.Input.Keyboard.KeyCodes.I),
       TAB: kb.addKey(Phaser.Input.Keyboard.KeyCodes.TAB, false),
       ONE: kb.addKey(Phaser.Input.Keyboard.KeyCodes.ONE),
       TWO: kb.addKey(Phaser.Input.Keyboard.KeyCodes.TWO),
@@ -836,6 +1040,7 @@ export class GameScene extends Phaser.Scene {
       F6: kb.addKey(Phaser.Input.Keyboard.KeyCodes.F6),
       F7: kb.addKey(Phaser.Input.Keyboard.KeyCodes.F7),
       F8: kb.addKey(Phaser.Input.Keyboard.KeyCodes.F8),
+      F9: kb.addKey(Phaser.Input.Keyboard.KeyCodes.F9),
     };
 
     this.keys.SHIFT.on('down', () => {
@@ -850,6 +1055,28 @@ export class GameScene extends Phaser.Scene {
     this.keys.E.on('down', () => {
       this.interactQueued = true;
     });
+    this.keys.Z.on('down', () => {
+      const pointer = this.input.activePointer;
+      const wPt = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
+      this.pingQueued = {
+        x: wPt.x - this.lastShakeX,
+        y: wPt.y - this.lastShakeY,
+      };
+    });
+    this.keys.X.on('down', () => {
+      this.dropWeaponQueued = true;
+    });
+    this.keys.V.on('down', () => {
+      this.readyToggleQueued = true;
+      if (this.room && this.coopMode !== 'solo') {
+        const sim = this.transport.getSim();
+        this.room.send('set_ready', { ready: !sim.player.ready });
+      }
+    });
+    this.keys.I.on('down', () => {
+      this.invitePanelVisible = !this.invitePanelVisible;
+      this.lastInvitePanelHash = '';
+    });
     this.keys.TAB.on('down', () => {
       this.fullMapOpen = !this.fullMapOpen;
       initGlobalDebugState().fullMapOpen = this.fullMapOpen;
@@ -858,28 +1085,50 @@ export class GameScene extends Phaser.Scene {
       const sim = this.transport.getSim();
       if (sim.runState === 'buff_choice' && sim.pendingBuffChoices[0]) {
         sim.selectFloorBuff(sim.pendingBuffChoices[0]);
+        if (this.room && this.coopMode !== 'solo') {
+          this.room.send('select_buff', { buffId: sim.pendingBuffChoices[0] });
+        }
       } else {
         this.queuedWeaponSlot = 0;
+        if (this.coopMode !== 'solo' || sim.inHub || sim.getActivePlayerCount() > 1) {
+          this.queuedEmote = 1;
+        }
       }
     });
     this.keys.TWO.on('down', () => {
       const sim = this.transport.getSim();
       if (sim.runState === 'buff_choice' && sim.pendingBuffChoices[1]) {
         sim.selectFloorBuff(sim.pendingBuffChoices[1]);
+        if (this.room && this.coopMode !== 'solo') {
+          this.room.send('select_buff', { buffId: sim.pendingBuffChoices[1] });
+        }
       } else {
         this.queuedWeaponSlot = 1;
+        if (this.coopMode !== 'solo' || sim.inHub || sim.getActivePlayerCount() > 1) {
+          this.queuedEmote = 2;
+        }
       }
     });
     this.keys.THREE.on('down', () => {
       const sim = this.transport.getSim();
       if (sim.runState === 'buff_choice' && sim.pendingBuffChoices[2]) {
         sim.selectFloorBuff(sim.pendingBuffChoices[2]);
+        if (this.room && this.coopMode !== 'solo') {
+          this.room.send('select_buff', { buffId: sim.pendingBuffChoices[2] });
+        }
       } else {
         this.queuedWeaponSlot = 2;
+        if (this.coopMode !== 'solo' || sim.inHub || sim.getActivePlayerCount() > 1) {
+          this.queuedEmote = 3;
+        }
       }
     });
     this.keys.FOUR.on('down', () => {
+      const sim = this.transport.getSim();
       this.queuedWeaponSlot = 3;
+      if (this.coopMode !== 'solo' || sim.inHub || sim.getActivePlayerCount() > 1) {
+        this.queuedEmote = 4;
+      }
     });
 
     // R or F6: Cycle Elemental Imbue (None -> Burn -> Chill -> Shock -> Poison)
@@ -898,9 +1147,13 @@ export class GameScene extends Phaser.Scene {
     // F2: Toggle God Mode
     this.keys.F2.on('down', () => {
       const sim = this.transport.getSim();
-      sim.player.godMode = !sim.player.godMode;
+      const nextGod = !sim.player.godMode;
+      sim.player.godMode = nextGod;
       const debug = initGlobalDebugState();
-      debug.godMode = sim.player.godMode;
+      debug.godMode = nextGod;
+      if (this.room && this.coopMode !== 'solo') {
+        this.room.send('set_god_mode', { godMode: nextGod });
+      }
     });
 
     // F3: Spawn fresh sample wave of 3 enemies
@@ -921,6 +1174,9 @@ export class GameScene extends Phaser.Scene {
     this.keys.F5.on('down', () => {
       const sim = this.transport.getSim();
       sim.skipCurrentRoomWaves();
+      if (this.room && this.coopMode !== 'solo') {
+        this.room.send('skip_waves', {});
+      }
     });
 
     // F7: Toggle Phase 2 Stress Test (4 players + 80 enemies + 600+ projectiles)
@@ -932,8 +1188,22 @@ export class GameScene extends Phaser.Scene {
     // F8: Toggle Phase 3 Bot Auto-Play (auto-clears Floor 1 -> Buff -> Floor 2 + Boss)
     this.keys.F8.on('down', () => {
       const sim = this.transport.getSim();
-      sim.botAutoPlayActive = !sim.botAutoPlayActive;
-      initGlobalDebugState().botAutoPlayActive = sim.botAutoPlayActive;
+      const nextBot = !sim.botAutoPlayActive;
+      sim.botAutoPlayActive = nextBot;
+      initGlobalDebugState().botAutoPlayActive = nextBot;
+      if (this.room && this.coopMode !== 'solo') {
+        this.room.send('set_bot_autoplay', { active: nextBot });
+      }
+    });
+
+    // F9: Cycle Phase 4 Wi-Fi Network Simulation Profile (off -> good -> normal -> bad)
+    this.keys.F9.on('down', () => {
+      const profiles: WifiProfileId[] = ['off', 'good', 'normal', 'bad'];
+      const debug = initGlobalDebugState();
+      const idx = (profiles.indexOf(debug.wifiProfile) + 1) % profiles.length;
+      const nextProfile = profiles[idx]!;
+      debug.wifiProfile = nextProfile;
+      this.networkTransport?.setWifiProfile(nextProfile);
     });
 
     // ENTER: Replay run when Victory or Defeat summary modal is active
@@ -945,8 +1215,240 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
+  private getResolvedWsUrl(): string {
+    if (this.serverUrl) {
+      if (this.serverUrl.startsWith('ws://') || this.serverUrl.startsWith('wss://')) {
+        return this.serverUrl;
+      }
+      return `ws://${this.serverUrl}`;
+    }
+    const wsHost = window.location.hostname || 'localhost';
+    return `ws://${wsHost}:2567`;
+  }
+
+  private async fetchHostLanInfo(): Promise<void> {
+    const debug = initGlobalDebugState();
+    try {
+      const wsUrl = this.getResolvedWsUrl();
+      const httpBase = wsUrl.replace(/^ws:/, 'http:').replace(/^wss:/, 'https:');
+      const res = await fetch(`${httpBase}/api/host-info`);
+      if (res.ok) {
+        const data = (await res.json()) as {
+          lanIps?: string[];
+          primaryLanIp?: string;
+          port?: number;
+        };
+        if (data.primaryLanIp) this.primaryLanIp = data.primaryLanIp;
+        if (data.lanIps) this.lanIps = data.lanIps;
+        if (data.port) this.serverPort = data.port;
+        debug.lanIps = this.lanIps;
+        this.updateHostInviteUrl();
+      }
+    } catch {
+      // Ignore if endpoint is unreachable
+    }
+  }
+
+  private updateHostInviteUrl(): void {
+    const debug = initGlobalDebugState();
+    const ip = this.primaryLanIp || window.location.hostname || '127.0.0.1';
+    const roomQuery = this.room ? `?join=${this.room.roomId}` : '?coop=join';
+    this.hostInviteUrl = `http://${ip}:${this.serverPort}/${roomQuery}`;
+    debug.hostInviteUrl = this.hostInviteUrl;
+    this.lastInvitePanelHash = '';
+  }
+
+  private bindCoopRoomHandlers(room: ColyseusRoom): void {
+    const debug = initGlobalDebugState();
+    this.room = room;
+    debug.serverConnected = true;
+    debug.coopRoomId = room.roomId;
+    this.updateHostInviteUrl();
+
+    if (this.networkTransport) {
+      this.networkTransport.setOnSendInput((msg) => {
+        if (this.room === room) {
+          room.send('input', msg);
+        }
+      });
+    }
+
+    room.onMessage(
+      'coop_welcome',
+      (msg: {
+        playerId: number;
+        slot: 1 | 2 | 3 | 4;
+        seed: number;
+        reconnectToken: string;
+        isHost: boolean;
+      }) => {
+        if (!this.scene.isActive()) return;
+        debug.seed = msg.seed;
+        debug.playerSlot = msg.slot;
+        this.reconnectToken = msg.reconnectToken;
+        debug.reconnectToken = msg.reconnectToken;
+        try {
+          window.sessionStorage?.setItem('ashen_pact_reconnect_token', msg.reconnectToken);
+          window.sessionStorage?.setItem('ashen_pact_room_id', room.roomId);
+          if (room.reconnectionToken) {
+            window.sessionStorage?.setItem('ashen_pact_colyseus_token', room.reconnectionToken);
+          }
+        } catch {
+          // Ignore storage errors
+        }
+        this.networkTransport?.setLocalIdentity(msg.playerId, msg.slot);
+        this.playerRig?.setPlayerSlot(msg.slot);
+        this.lastInvitePanelHash = '';
+        this.lastCoopHudHash = '';
+      },
+    );
+
+    room.onMessage('world_snapshot', (snap) => {
+      if (!this.scene.isActive()) return;
+      this.networkTransport?.receiveSnapshot(snap);
+    });
+
+    room.onMessage('pong_check', (payload: { clientTime: number }) => {
+      if (!this.scene.isActive()) return;
+      const rtt = Math.max(1, Date.now() - payload.clientTime);
+      this.networkTransport?.setRttMs(rtt);
+      debug.pingMs = rtt;
+      room.send('report_ping', { rttMs: rtt });
+    });
+
+    room.onMessage('host_disconnected', (msg: { reasonVi?: string }) => {
+      if (!this.scene.isActive()) return;
+      this.intentionalLeave = true;
+      this.scene.start('MenuScene', {
+        disconnectReason: msg.reasonVi ?? 'Phòng Co-op đã đóng do Host ngắt kết nối.',
+      });
+    });
+
+    const onKicked = (msg: { reasonVi?: string }) => {
+      if (!this.scene.isActive()) return;
+      this.intentionalLeave = true;
+      this.scene.start('MenuScene', {
+        disconnectReason: msg.reasonVi ?? 'Bạn đã bị Host mời rời khỏi phòng.',
+      });
+    };
+    room.onMessage('kicked', onKicked);
+    room.onMessage('kicked_by_host', onKicked);
+
+    room.onMessage('character_select_result', () => {
+      this.lastInvitePanelHash = '';
+    });
+
+    room.onLeave((code: number) => {
+      if (!this.scene.isActive() || this.intentionalLeave) return;
+      // Code 4000 = Host disconnect, 4001 = Kicked
+      if (code === 4000 || code === 4001) {
+        this.scene.start('MenuScene', {
+          disconnectReason:
+            code === 4001
+              ? 'Bạn đã bị Host mời rời khỏi phòng.'
+              : 'Phòng Co-op đã đóng do Host ngắt kết nối.',
+        });
+        return;
+      }
+      debug.serverConnected = false;
+      void this.forceCoopReconnect();
+    });
+  }
+
+  private async connectCoopRoom(): Promise<void> {
+    const debug = initGlobalDebugState();
+    await this.fetchHostLanInfo();
+    try {
+      const wsUrl = this.getResolvedWsUrl();
+      this.colyseusClient = new ColyseusClient(wsUrl);
+      const savedToken =
+        this.reconnectToken ??
+        (typeof window !== 'undefined'
+          ? window.sessionStorage?.getItem('ashen_pact_reconnect_token')
+          : null);
+      const joinOpts = {
+        name: this.displayName,
+        reconnectToken: savedToken ?? undefined,
+        seed: debug.seed,
+      };
+
+      const room = this.requestedRoomId
+        ? await this.colyseusClient.joinById(this.requestedRoomId, joinOpts)
+        : await this.colyseusClient.joinOrCreate('coop_room', joinOpts);
+
+      if (!this.scene.isActive()) {
+        void room.leave().catch(() => {});
+        return;
+      }
+
+      this.bindCoopRoomHandlers(room);
+      room.send('ping_check', { clientTime: Date.now(), rttMs: 8 });
+
+      this.time.addEvent({
+        delay: 500,
+        loop: true,
+        callback: () => {
+          if (this.room && this.scene.isActive()) {
+            const curRtt = this.networkTransport?.getTelemetry().rttMs ?? debug.pingMs ?? 8;
+            this.room.send('ping_check', { clientTime: Date.now(), rttMs: curRtt });
+          }
+        },
+      });
+    } catch {
+      if (!this.scene.isActive()) return;
+      debug.serverConnected = false;
+    }
+  }
+
+  public async forceCoopReconnect(): Promise<boolean> {
+    if (!this.colyseusClient) {
+      this.colyseusClient = new ColyseusClient(this.getResolvedWsUrl());
+    }
+    const debug = initGlobalDebugState();
+    const targetRoomId =
+      this.room?.roomId ??
+      this.requestedRoomId ??
+      (typeof window !== 'undefined'
+        ? window.sessionStorage?.getItem('ashen_pact_room_id')
+        : null);
+    const savedToken =
+      this.reconnectToken ??
+      (typeof window !== 'undefined'
+        ? window.sessionStorage?.getItem('ashen_pact_reconnect_token')
+        : null);
+
+    if (this.room) {
+      const prevRoom = this.room;
+      this.intentionalLeave = true;
+      this.room = undefined;
+      try {
+        await prevRoom.leave(false);
+      } catch {
+        // Ignore leave errors during simulated drop
+      }
+      this.intentionalLeave = false;
+    }
+
+    try {
+      const joinOpts = {
+        name: this.displayName,
+        reconnectToken: savedToken ?? undefined,
+      };
+      const newRoom = targetRoomId
+        ? await this.colyseusClient.joinById(targetRoomId, joinOpts)
+        : await this.colyseusClient.joinOrCreate('coop_room', joinOpts);
+      this.bindCoopRoomHandlers(newRoom);
+      debug.serverConnected = true;
+      return true;
+    } catch {
+      debug.serverConnected = false;
+      return false;
+    }
+  }
+
   private async connectHelloRoom(): Promise<void> {
     const debug = initGlobalDebugState();
+    await this.fetchHostLanInfo();
     try {
       const wsHost = window.location.hostname || 'localhost';
       const client = new ColyseusClient(`ws://${wsHost}:2567`);
@@ -1001,6 +1503,16 @@ export class GameScene extends Phaser.Scene {
       for (const rig of this.simPlayerRigs.values()) {
         rig.refreshBakedTextures();
       }
+      for (const entry of this.coopPlayerRigs.values()) {
+        entry.rig.refreshBakedTextures();
+        entry.nameLabel.setResolution(newScale);
+        entry.emoteLabel.setResolution(newScale);
+      }
+      for (const entry of this.hubStatueRigs.values()) {
+        entry.rig.refreshBakedTextures();
+        entry.label.setResolution(newScale);
+        entry.subLabel.setResolution(newScale);
+      }
       for (const rig of this.enemyRigs.values()) {
         rig.refreshBakedTextures();
       }
@@ -1041,6 +1553,9 @@ export class GameScene extends Phaser.Scene {
       for (const txt of this.textObjects) {
         txt.setResolution(newScale);
       }
+      for (const txt of this.pingVisuals.values()) {
+        txt.setResolution(newScale);
+      }
       for (const entry of this.doorSprites.values()) {
         entry.sprite.destroy();
         entry.label.destroy();
@@ -1073,6 +1588,8 @@ export class GameScene extends Phaser.Scene {
         this.lastRunState = '';
         this.lastMinimapHash = '';
         this.lastBossHudHash = '';
+        this.lastCoopHudHash = '';
+        this.lastInvitePanelHash = '';
         this.syncRoomEntities(0);
         this.updateModalHud();
       }
@@ -1129,10 +1646,43 @@ export class GameScene extends Phaser.Scene {
       this.interactQueued = false;
     }
 
-    // Left mouse button -> FIRE (except when clicking top/bottom HUD buttons or modal)
+    if (this.dropWeaponQueued) {
+      buttons |= INPUT_BUTTON.DROP_WEAPON;
+      this.dropWeaponQueued = false;
+    }
+    if (this.readyToggleQueued) {
+      buttons |= INPUT_BUTTON.READY;
+      this.readyToggleQueued = false;
+    }
+
+    let pingWorldX: number | undefined;
+    let pingWorldY: number | undefined;
+    if (this.pingQueued) {
+      buttons |= INPUT_BUTTON.PING;
+      pingWorldX = this.pingQueued.x;
+      pingWorldY = this.pingQueued.y;
+      this.pingQueued = null;
+    }
+
+    const emoteId = this.queuedEmote ?? undefined;
+    this.queuedEmote = null;
+
+    // Left mouse button -> FIRE (except when clicking top/bottom HUD buttons, Invite panel, or modal)
     const camView = this.cameras.main.worldView;
+    const localViewX = worldPt.x - camView.x;
     const localViewY = worldPt.y - camView.y;
-    const isClickingHud = localViewY < 68 || localViewY > 480 || sim.runState !== 'playing';
+    const isClickingInvitePanel =
+      sim.inHub &&
+      this.invitePanelVisible &&
+      localViewX >= 676 &&
+      localViewX <= 952 &&
+      localViewY >= 70 &&
+      localViewY <= 360;
+    const isClickingHud =
+      localViewY < 68 ||
+      localViewY > 480 ||
+      isClickingInvitePanel ||
+      sim.runState !== 'playing';
     if (pointer.leftButtonDown() && !isClickingHud) {
       buttons |= INPUT_BUTTON.FIRE;
     }
@@ -1143,6 +1693,13 @@ export class GameScene extends Phaser.Scene {
     const slotSelect = this.queuedWeaponSlot;
     this.queuedWeaponSlot = null;
 
+    if (this.copyToastTimer > 0) {
+      this.copyToastTimer = Math.max(0, this.copyToastTimer - dtSec);
+      if (this.copyToastTimer === 0) {
+        this.lastInvitePanelHash = '';
+      }
+    }
+
     this.inputSeq += 1;
     this.transport.sendInput({
       seq: this.inputSeq,
@@ -1152,9 +1709,12 @@ export class GameScene extends Phaser.Scene {
       aimAngle,
       buttons,
       weaponSlotSelect: slotSelect,
+      pingWorldX,
+      pingWorldY,
+      emoteId,
     });
 
-    // 2. Hit-Stop check & Fixed 60Hz Simulation Step via LocalTransport
+    // 2. Hit-Stop check & Fixed 60Hz Simulation Step via Transport
     const { simDeltaMs } = this.fx.consumeHitStopDelta(Math.min(rawDeltaMs, 50));
     if (simDeltaMs > 0) {
       const effectiveDelta = sim.stressTestActive ? Math.min(simDeltaMs, 16.6667) : simDeltaMs;
@@ -1170,6 +1730,10 @@ export class GameScene extends Phaser.Scene {
     // 5. Render Interpolated Player & CutoutRig Animation + Dash Afterimage Ghosts
     const playerPos = this.transport.getInterpolatedPlayerPos(this.playerPosScratch);
     if (this.playerRig) {
+      const charRigDef = RIG_DEFS_BY_ID[sim.player.characterId] ?? VANGUARD_RIG_DEF;
+      this.playerRig.setRigDef(charRigDef);
+      this.playerRig.setPlayerSlot(sim.player.slot);
+      this.playerRig.setLifeState(sim.player.lifeState);
       this.playerRig.container.setPosition(playerPos.x, playerPos.y + RIG_FOOT_OFFSET_Y);
       this.playerRig.setAimAngle(aimAngle);
       this.playerRig.setEquippedWeapon(sim.getActiveWeaponId());
@@ -1194,9 +1758,18 @@ export class GameScene extends Phaser.Scene {
       } else {
         this.dashAfterimageTimer = 0;
       }
+
+      this.updatePlayerOverheadUi(
+        sim.player,
+        playerPos.x,
+        playerPos.y,
+        this.localNameLabel,
+        this.localEmoteLabel,
+        this.localEmoteBg,
+      );
     }
 
-    // 6. Sync Simulated Co-op Players (P2-P4), Enemies, Props, Projectiles, Pickups & Phase 3 Room Entities
+    // 6. Sync Simulated Co-op Players (P2-P4), Network Co-op Players, Enemies, Props, Projectiles, Pickups & Phase 3/4 Room Entities
     this.syncSimulatedPlayers(dtSec);
     this.syncEnemyRigs(dtSec);
     this.syncProps(dtSec);
@@ -1251,13 +1824,81 @@ export class GameScene extends Phaser.Scene {
     this.crosshairSprite.setPosition(updatedWorldPt.x, updatedWorldPt.y);
     this.crosshairSprite.setScale(invBake * (1 + this.crosshairPulse * 0.35));
 
-    // 11. Draw Telegraphs, Spawn Circles, Elemental Badges, Shield Wall & Optional F4 Hitboxes
+    // 11. Draw Telegraphs, Spawn Circles, Elemental Badges, Shield Wall, Revive Rings & Optional F4 Hitboxes
     this.renderTelegraphsAndShield(playerPos.x, playerPos.y);
     this.renderHitboxesIfEnabled();
 
     // 12. Update Camera-Pinned Vector HUD & Debug Telemetry
     this.updateVectorHud();
     this.updateDebugState(playerPos.x, playerPos.y);
+  }
+
+  private updatePlayerOverheadUi(
+    p: ReturnType<LocalTransport['getSim']>['player'],
+    x: number,
+    y: number,
+    nameLabel?: Phaser.GameObjects.Text,
+    emoteLabel?: Phaser.GameObjects.Text,
+    emoteBg?: Phaser.GameObjects.Graphics,
+  ): void {
+    const sim = this.transport.getSim();
+    const showName =
+      this.coopMode !== 'solo' ||
+      sim.inHub ||
+      sim.getActivePlayerCount() > 1 ||
+      p.lifeState !== 'alive';
+
+    if (nameLabel) {
+      if (!showName) {
+        nameLabel.setVisible(false);
+      } else {
+        nameLabel.setVisible(true);
+        let statusSuffix = '';
+        if (p.lifeState === 'downed') {
+          const revPct = Math.round(p.reviveProgress * 100);
+          statusSuffix =
+            revPct > 0
+              ? ` · CỨU ${revPct}%`
+              : ` · GỤC (${Math.ceil(p.downedTimer)}s) [Giữ E]`;
+        } else if (p.lifeState === 'ghost') {
+          statusSuffix = ' · LINH HỒN';
+        } else if (sim.inHub && p.ready) {
+          statusSuffix = ' · ✓';
+        }
+        const labelStr = `[P${p.slot}] ${p.displayName}${statusSuffix}`;
+        if (nameLabel.text !== labelStr) {
+          nameLabel.setText(labelStr);
+        }
+        const slotCol =
+          p.lifeState === 'downed'
+            ? PALETTE.CRIMSON_BRIGHT
+            : p.lifeState === 'ghost'
+              ? PALETTE.CYAN_FROST
+              : PLAYER_SLOT_COLORS[p.slot];
+        nameLabel.setColor(slotCol);
+        nameLabel.setPosition(x, y - 26);
+      }
+    }
+
+    if (emoteLabel && emoteBg) {
+      emoteBg.clear();
+      if (p.emoteTimer > 0 && p.emoteId) {
+        const emoteStr = `💬 ${QUICK_EMOTES_VI[p.emoteId]}`;
+        if (emoteLabel.text !== emoteStr) {
+          emoteLabel.setText(emoteStr);
+        }
+        emoteLabel.setVisible(true);
+        emoteLabel.setPosition(x, y - 44);
+        const bw = Math.max(76, emoteStr.length * 6.5 + 16);
+        const bh = 20;
+        emoteBg.fillStyle(hexToNum(PALETTE.SLATE_DARK), 0.94);
+        emoteBg.lineStyle(2, hexToNum(PLAYER_SLOT_COLORS[p.slot]), 1);
+        emoteBg.fillRoundedRect(x - bw / 2, y - 44 - bh / 2, bw, bh, 6);
+        emoteBg.strokeRoundedRect(x - bw / 2, y - 44 - bh / 2, bw, bh, 6);
+      } else {
+        emoteLabel.setVisible(false);
+      }
+    }
   }
 
   private resolvePlayerStatusTint(): number | null {
@@ -1422,7 +2063,8 @@ export class GameScene extends Phaser.Scene {
               );
             }
           } else {
-            const simRig = this.simPlayerRigs.get(ev.playerId);
+            const simRig =
+              this.simPlayerRigs.get(ev.playerId) ?? this.coopPlayerRigs.get(ev.playerId)?.rig;
             const spState = sim.simulatedPlayers.find((sp) => sp.id === ev.playerId);
             this.fx.spawnDashAfterimage(
               ev.x,
@@ -1588,6 +2230,47 @@ export class GameScene extends Phaser.Scene {
           zzfx.play('pickup', ev.x, this.camFocusX);
           break;
         }
+        case 'player_downed': {
+          this.lighting.spawnTransientLight(ev.x, ev.y, 110, PALETTE.CRIMSON_BRIGHT, 0.92, 0.35);
+          zzfx.play('player_hurt', ev.x, this.camFocusX);
+          break;
+        }
+        case 'player_revived': {
+          this.lighting.spawnTransientLight(ev.x, ev.y, 130, PALETTE.LIME_GLOW, 0.95, 0.4);
+          zzfx.play('skill_cast', ev.x, this.camFocusX);
+          break;
+        }
+        case 'player_ghost': {
+          this.lighting.spawnTransientLight(ev.x, ev.y, 120, PALETTE.CYAN_FROST, 0.9, 0.35);
+          zzfx.play('telegraph', ev.x, this.camFocusX);
+          break;
+        }
+        case 'players_teleported_to_room': {
+          this.lighting.spawnTransientLight(ev.x, ev.y, 120, PALETTE.CYAN_FROST, 0.9, 0.3);
+          this.camFocusX = sim.player.x;
+          this.camFocusY = sim.player.y;
+          break;
+        }
+        case 'character_selected': {
+          this.lighting.spawnTransientLight(
+            sim.player.x,
+            sim.player.y,
+            110,
+            PALETTE.SOLAR_GOLD,
+            0.9,
+            0.3,
+          );
+          zzfx.play('weapon_swap', sim.player.x, this.camFocusX);
+          break;
+        }
+        case 'ping_issued': {
+          zzfx.play('pickup', ev.x, this.camFocusX);
+          break;
+        }
+        case 'emote_triggered': {
+          zzfx.play('weapon_swap', ev.x, this.camFocusX);
+          break;
+        }
         case 'hit_stop': {
           maxHitStopMs = Math.max(maxHitStopMs, ev.durationMs);
           maxHitStopTrauma = Math.max(maxHitStopTrauma, ev.trauma);
@@ -1607,36 +2290,122 @@ export class GameScene extends Phaser.Scene {
 
   private syncSimulatedPlayers(dtSec: number): void {
     const sim = this.transport.getSim();
+    const textRes = TextureBaker.getBakeScale();
     this.activeSimPlayerIds.clear();
+    this.activeCoopPlayerIds.clear();
 
-    for (let i = 0; i < sim.simulatedPlayers.length; i++) {
-      const sp = sim.simulatedPlayers[i]!;
-      this.activeSimPlayerIds.add(sp.id);
+    if (sim.stressTestActive) {
+      // 1. Stress test simulated players
+      for (let i = 0; i < sim.simulatedPlayers.length; i++) {
+        const sp = sim.simulatedPlayers[i]!;
+        this.activeSimPlayerIds.add(sp.id);
 
-      let rig = this.simPlayerRigs.get(sp.id);
-      if (!rig) {
-        rig = new CutoutRig(this, sp.x, sp.y + RIG_FOOT_OFFSET_Y, VANGUARD_RIG_DEF, {
-          playerSlot: sp.slot,
-          displayScale: 1,
-          initialPhaseOffset: sp.slot * 0.3,
-        });
-        rig.container.setDepth(29);
-        this.simPlayerRigs.set(sp.id, rig);
+        let rig = this.simPlayerRigs.get(sp.id);
+        if (!rig) {
+          rig = new CutoutRig(this, sp.x, sp.y + RIG_FOOT_OFFSET_Y, VANGUARD_RIG_DEF, {
+            playerSlot: sp.slot,
+            displayScale: 1,
+            initialPhaseOffset: sp.slot * 0.3,
+          });
+          rig.container.setDepth(29);
+          this.simPlayerRigs.set(sp.id, rig);
+        }
+
+        const pos = this.transport.getInterpolatedSimPlayerPos(sp, this.entityPosScratch);
+        rig.container.setPosition(pos.x, pos.y + RIG_FOOT_OFFSET_Y);
+        rig.setAimAngle(sp.aimAngle);
+        const spWeaponId = sp.weaponSlots[sp.activeWeaponSlot] ?? 'rusty_pistol';
+        rig.setEquippedWeapon(spWeaponId);
+        rig.setAnimState('run');
+        rig.update(dtSec);
       }
+    } else {
+      // 2. Co-op LAN teammates (sim.simulatedPlayers when not in stress test)
+      for (let i = 0; i < sim.simulatedPlayers.length; i++) {
+        const cp = sim.simulatedPlayers[i]!;
+        if (cp.id === sim.player.id) continue;
+        this.activeCoopPlayerIds.add(cp.id);
 
-      const pos = this.transport.getInterpolatedSimPlayerPos(sp, this.entityPosScratch);
-      rig.container.setPosition(pos.x, pos.y + RIG_FOOT_OFFSET_Y);
-      rig.setAimAngle(sp.aimAngle);
-      const spWeaponId = sp.weaponSlots[sp.activeWeaponSlot] ?? 'rusty_pistol';
-      rig.setEquippedWeapon(spWeaponId);
-      rig.setAnimState('run');
-      rig.update(dtSec);
+        const charRigDef = RIG_DEFS_BY_ID[cp.characterId] ?? VANGUARD_RIG_DEF;
+        let entry = this.coopPlayerRigs.get(cp.id);
+        if (!entry) {
+          const rig = new CutoutRig(this, cp.x, cp.y + RIG_FOOT_OFFSET_Y, charRigDef, {
+            playerSlot: cp.slot,
+            displayScale: 1,
+            initialPhaseOffset: cp.slot * 0.25,
+          });
+          rig.container.setDepth(29);
+
+          const nameLabel = this.add
+            .text(cp.x, cp.y - 26, '', {
+              fontFamily: '"Be Vietnam Pro", sans-serif',
+              fontSize: '10px',
+              fontStyle: '800',
+              color: PLAYER_SLOT_COLORS[cp.slot],
+              stroke: PALETTE.INK_DEEP,
+              strokeThickness: 3,
+              resolution: textRes,
+            })
+            .setOrigin(0.5, 0.5)
+            .setDepth(48);
+
+          const emoteBg = this.add.graphics().setDepth(49);
+          const emoteLabel = this.add
+            .text(cp.x, cp.y - 44, '', {
+              fontFamily: '"Be Vietnam Pro", sans-serif',
+              fontSize: '10.5px',
+              fontStyle: '800',
+              color: PALETTE.BONE_WHITE,
+              stroke: PALETTE.INK_DEEP,
+              strokeThickness: 3,
+              resolution: textRes,
+            })
+            .setOrigin(0.5, 0.5)
+            .setDepth(50)
+            .setVisible(false);
+
+          entry = { rig, nameLabel, emoteLabel, emoteBg };
+          this.coopPlayerRigs.set(cp.id, entry);
+        }
+
+        const pos = this.transport.getInterpolatedSimPlayerPos(cp, this.entityPosScratch);
+
+        entry.rig.setRigDef(charRigDef);
+        entry.rig.setPlayerSlot(cp.slot);
+        entry.rig.setLifeState(cp.lifeState);
+        entry.rig.container.setPosition(pos.x, pos.y + RIG_FOOT_OFFSET_Y);
+        entry.rig.setAimAngle(cp.aimAngle);
+        const cpWeaponId = cp.weaponSlots[cp.activeWeaponSlot] ?? 'rusty_pistol';
+        entry.rig.setEquippedWeapon(cpWeaponId);
+        const moving = Math.hypot(cp.vx, cp.vy) > 10;
+        entry.rig.setAnimState(moving ? 'run' : 'idle');
+        entry.rig.update(dtSec);
+
+        this.updatePlayerOverheadUi(
+          cp,
+          pos.x,
+          pos.y,
+          entry.nameLabel,
+          entry.emoteLabel,
+          entry.emoteBg,
+        );
+      }
     }
 
     for (const [id, rig] of this.simPlayerRigs.entries()) {
       if (!this.activeSimPlayerIds.has(id)) {
         rig.destroy();
         this.simPlayerRigs.delete(id);
+      }
+    }
+
+    for (const [id, entry] of this.coopPlayerRigs.entries()) {
+      if (!this.activeCoopPlayerIds.has(id)) {
+        entry.rig.destroy();
+        entry.nameLabel.destroy();
+        entry.emoteLabel.destroy();
+        entry.emoteBg.destroy();
+        this.coopPlayerRigs.delete(id);
       }
     }
   }
@@ -1871,10 +2640,13 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    // 2. Pickups (Energy & Gold, object-pooled Sprites)
+    // 2. Pickups (Energy & Gold, object-pooled Sprites, instanced per player)
     this.activePickupIds.clear();
     for (let i = 0; i < sim.pickups.length; i++) {
       const pk = sim.pickups[i]!;
+      if (pk.ownerPlayerId !== undefined && pk.ownerPlayerId !== 0 && pk.ownerPlayerId !== sim.player.id) {
+        continue;
+      }
       this.activePickupIds.add(pk.id);
 
       let entry = this.pickupSprites.get(pk.id);
@@ -1916,6 +2688,110 @@ export class GameScene extends Phaser.Scene {
     const sim = this.transport.getSim();
     const textRes = TextureBaker.getBakeScale();
     const invBake = 1 / textRes;
+
+    // 0. Hub 5 Character Statues (Doanh Trại)
+    if (sim.inHub && sim.hubStatues.length > 0) {
+      for (let i = 0; i < sim.hubStatues.length; i++) {
+        const st = sim.hubStatues[i]!;
+        const cDef = CHARACTERS[st.characterId];
+        const rigDef = RIG_DEFS_BY_ID[st.characterId] ?? VANGUARD_RIG_DEF;
+        let entry = this.hubStatueRigs.get(st.characterId);
+        if (!entry) {
+          const rig = new CutoutRig(this, st.x, st.y + RIG_FOOT_OFFSET_Y, rigDef, {
+            displayScale: 1.12,
+            initialPhaseOffset: i * 0.35,
+          });
+          rig.container.setDepth(24);
+          rig.setEquippedWeapon(cDef.starterWeaponId);
+
+          const label = this.add
+            .text(st.x, st.y - 34, `[E] ${cDef.nameVi}`, {
+              fontFamily: '"Be Vietnam Pro", sans-serif',
+              fontSize: '10.5px',
+              fontStyle: '800',
+              color: PALETTE.SOLAR_GOLD,
+              stroke: PALETTE.INK_DEEP,
+              strokeThickness: 3,
+              resolution: textRes,
+            })
+            .setOrigin(0.5, 0.5)
+            .setDepth(46);
+
+          const subLabel = this.add
+            .text(st.x, st.y + 24, `HP ${cDef.hp} · Giáp ${cDef.armor} · ${cDef.skill.nameVi}`, {
+              fontFamily: '"Be Vietnam Pro", sans-serif',
+              fontSize: '8.5px',
+              fontStyle: '700',
+              color: PALETTE.SILVER_BRIGHT,
+              stroke: PALETTE.INK_DEEP,
+              strokeThickness: 2.5,
+              resolution: textRes,
+            })
+            .setOrigin(0.5, 0.5)
+            .setDepth(46);
+
+          entry = { rig, label, subLabel };
+          this.hubStatueRigs.set(st.characterId, entry);
+        }
+
+        const isSelectedByLocal = sim.player.characterId === st.characterId;
+        entry.label.setColor(isSelectedByLocal ? PALETTE.LIME_GLOW : PALETTE.SOLAR_GOLD);
+        entry.label.setText(
+          isSelectedByLocal ? `★ ${cDef.nameVi} (Đang Chọn)` : `[E] ${cDef.nameVi}`,
+        );
+        entry.rig.update(dtSec);
+      }
+    } else if (this.hubStatueRigs.size > 0) {
+      for (const entry of this.hubStatueRigs.values()) {
+        entry.rig.destroy();
+        entry.label.destroy();
+        entry.subLabel.destroy();
+      }
+      this.hubStatueRigs.clear();
+    }
+
+    // 0b. Contextual Ping Labels
+    this.activePingIds.clear();
+    for (let i = 0; i < sim.pings.length; i++) {
+      const ping = sim.pings[i]!;
+      this.activePingIds.add(ping.id);
+      let label = this.pingVisuals.get(ping.id);
+      const slotColor = PLAYER_SLOT_COLORS[ping.playerSlot];
+      const prefixIcon =
+        ping.kind === 'enemy'
+          ? '⚔'
+          : ping.kind === 'revive'
+            ? '✚'
+            : ping.kind === 'loot'
+              ? '★'
+              : '▼';
+      const txt = `[P${ping.playerSlot}] ${prefixIcon} ${ping.labelVi}`;
+      if (!label) {
+        label = this.add
+          .text(ping.x, ping.y - 26, txt, {
+            fontFamily: '"Be Vietnam Pro", sans-serif',
+            fontSize: '10.5px',
+            fontStyle: '800',
+            color: slotColor,
+            stroke: PALETTE.INK_DEEP,
+            strokeThickness: 3,
+            resolution: textRes,
+          })
+          .setOrigin(0.5, 0.5)
+          .setDepth(55);
+        this.pingVisuals.set(ping.id, label);
+      } else {
+        if (label.text !== txt) label.setText(txt);
+        label.setColor(slotColor);
+        label.setPosition(ping.x, ping.y - 26 - Math.sin(sim.tick * 0.15) * 3);
+      }
+    }
+    for (const [id, label] of this.pingVisuals.entries()) {
+      if (!this.activePingIds.has(id)) {
+        label.destroy();
+        this.pingVisuals.delete(id);
+      }
+    }
 
     // 1. Room Doors (North / South / East / West)
     const view = this.cameras.main.worldView;
@@ -1997,7 +2873,7 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    // 2. Treasure / Reward Chests (5 Rarities)
+    // 2. Treasure / Reward Chests (5 Rarities; opening spawns instanced drops in Co-op)
     this.activeChestIds.clear();
     for (let i = 0; i < sim.chests.length; i++) {
       const ch = sim.chests[i]!;
@@ -2022,11 +2898,14 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    // 3. World Items (Dropped Weapons & Merchant Shop Items)
+    // 3. World Items (Dropped Weapons & Merchant Shop Items, instanced per player unless shared)
     this.activeWorldItemIds.clear();
     for (let i = 0; i < sim.worldItems.length; i++) {
       const it = sim.worldItems[i]!;
       if (it.pickedUp) continue;
+      if (it.ownerPlayerId !== undefined && it.ownerPlayerId !== 0 && it.ownerPlayerId !== sim.player.id) {
+        continue;
+      }
       this.activeWorldItemIds.add(it.id);
       const tex =
         it.kind === 'weapon' && it.weaponId
@@ -2149,15 +3028,20 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    // 5. Floor Transition Portal
+    // 5. Floor Transition Portal (or Hub Departure Portal)
     if (sim.portalActive) {
       if (!this.portalSprite) {
         this.portalSprite = this.add.sprite(sim.portalX, sim.portalY, 'portal_active');
         this.portalSprite.setDepth(19);
       }
+      const portalText = sim.inHub
+        ? sim.areAllPlayersReady()
+          ? '[E] Cổng Khởi Hành — Vào Tầng 1!'
+          : '[E] Cổng Khởi Hành (Cần Tất Cả Sẵn Sàng [V])'
+        : '[E] Cổng Dịch Chuyển Tầng Tiếp';
       if (!this.portalLabel) {
         this.portalLabel = this.add
-          .text(sim.portalX, sim.portalY - 38, '[E] Cổng Dịch Chuyển Tầng Tiếp', {
+          .text(sim.portalX, sim.portalY - 38, portalText, {
             fontFamily: '"Be Vietnam Pro", sans-serif',
             fontSize: '11px',
             fontStyle: '800',
@@ -2168,6 +3052,8 @@ export class GameScene extends Phaser.Scene {
           })
           .setOrigin(0.5, 0.5)
           .setDepth(46);
+      } else if (this.portalLabel.text !== portalText) {
+        this.portalLabel.setText(portalText);
       }
       this.portalSprite.setVisible(true);
       this.portalSprite.setPosition(sim.portalX, sim.portalY);
@@ -2238,7 +3124,32 @@ export class GameScene extends Phaser.Scene {
     const hudSafeTop = hasView ? view.y + 72 : 72;
     const hudSafeBottom = hasView ? view.y + view.height - 62 : 478;
 
-    // 0. Rarity Light Pillars for Chests & World Weapon Drops
+    // 0a. Hub Campfire & Statue Pedestals (Doanh Trại)
+    if (sim.inHub) {
+      for (let i = 0; i < sim.hubStatues.length; i++) {
+        const st = sim.hubStatues[i]!;
+        const isCurrent = p.characterId === st.characterId;
+        g.fillStyle(hexToNum(PALETTE.SLATE_DARK), 0.92);
+        g.lineStyle(2.5, hexToNum(isCurrent ? PALETTE.LIME_GLOW : PALETTE.SOLAR_GOLD), 0.9);
+        g.fillEllipse(st.x, st.y + 12, 42, 18);
+        g.strokeEllipse(st.x, st.y + 12, 42, 18);
+      }
+
+      // Central Campfire
+      const fireX = sim.map.width * 0.5;
+      const fireY = sim.map.height * 0.5 + 32;
+      const flicker = Math.sin(sim.tick * 0.22) * 3;
+      g.fillStyle(hexToNum(PALETTE.SLATE_DARK), 0.95);
+      g.lineStyle(2, hexToNum(PALETTE.INK_DARK), 1);
+      g.fillCircle(fireX, fireY + 4, 18);
+      g.strokeCircle(fireX, fireY + 4, 18);
+      g.fillStyle(hexToNum(PALETTE.FLAME_ORANGE), 0.85);
+      g.fillCircle(fireX, fireY, 12 + flicker * 0.4);
+      g.fillStyle(hexToNum(PALETTE.SOLAR_GOLD), 0.95);
+      g.fillCircle(fireX, fireY - 2, 7 - flicker * 0.25);
+    }
+
+    // 0b. Rarity Light Pillars for Chests & World Weapon Drops (instanced)
     for (let i = 0; i < sim.chests.length; i++) {
       const ch = sim.chests[i]!;
       const col = hexToNum(WEAPON_RARITY_COLORS[ch.rarity]);
@@ -2253,6 +3164,9 @@ export class GameScene extends Phaser.Scene {
     for (let i = 0; i < sim.worldItems.length; i++) {
       const it = sim.worldItems[i]!;
       if (it.pickedUp) continue;
+      if (it.ownerPlayerId !== undefined && it.ownerPlayerId !== 0 && it.ownerPlayerId !== p.id) {
+        continue;
+      }
       const col = hexToNum(WEAPON_RARITY_COLORS[it.rarity]);
       g.fillStyle(col, 0.22);
       g.fillRect(it.x - 8, it.y - 54, 16, 54);
@@ -2260,29 +3174,88 @@ export class GameScene extends Phaser.Scene {
       g.strokeCircle(it.x, it.y + 6, 14);
     }
 
-    // 1. Thiết Vệ Active Skill: "Tường Khiên Hồng Ngọc" (120 deg arc or 360 deg with vanguard_fortress)
-    if (p.skillActiveTimer > 0) {
-      const halfArc = sim.activeBuffIds.includes('vanguard_fortress')
-        ? Math.PI
-        : (60 * Math.PI) / 180;
-      const startA = p.aimAngle - halfArc;
-      const endA = p.aimAngle + halfArc;
-      const r = 38;
+    // 1. Active Skills & Co-op Downed / Revive Circles for all players
+    const allPlayers = sim.getAllPlayers();
+    for (let i = 0; i < allPlayers.length; i++) {
+      const pl = allPlayers[i]!;
+      let px = pl.x;
+      let py = pl.y;
+      if (pl.id === p.id) {
+        px = playerX;
+        py = playerY;
+      } else {
+        const interp = this.transport.getInterpolatedSimPlayerPos(pl, this.entityPosScratch);
+        px = interp.x;
+        py = interp.y;
+      }
 
-      g.lineStyle(7, hexToNum(PALETTE.INK_DARK), 0.85);
-      g.beginPath();
-      g.arc(playerX, playerY, r, startA, endA, false);
-      g.strokePath();
+      if (pl.lifeState === 'downed') {
+        const pulseR = 24 + Math.sin(sim.tick * 0.2) * 3;
+        g.fillStyle(hexToNum(PALETTE.RUBY_DARK), 0.35);
+        g.fillCircle(px, py + 4, pulseR);
+        g.lineStyle(2.5, hexToNum(PALETTE.CRIMSON_BRIGHT), 0.9);
+        g.strokeCircle(px, py + 4, pulseR);
 
-      g.lineStyle(4, hexToNum(PALETTE.CRIMSON_BRIGHT), 0.95);
-      g.beginPath();
-      g.arc(playerX, playerY, r, startA, endA, false);
-      g.strokePath();
+        if (pl.reviveProgress > 0) {
+          g.lineStyle(4, hexToNum(PALETTE.LIME_GLOW), 1);
+          g.beginPath();
+          g.arc(
+            px,
+            py + 4,
+            pulseR + 4,
+            -Math.PI / 2,
+            -Math.PI / 2 + Math.PI * 2 * clamp(pl.reviveProgress, 0, 1),
+            false,
+          );
+          g.strokePath();
+        }
+      }
 
-      g.lineStyle(2, hexToNum(PALETTE.SOLAR_GOLD), 0.9);
-      g.beginPath();
-      g.arc(playerX, playerY, r - 4, startA, endA, false);
-      g.strokePath();
+      if (pl.skillActiveTimer > 0) {
+        if (pl.characterId === 'vanguard') {
+          const halfArc = sim.activeBuffIds.includes('vanguard_fortress')
+            ? Math.PI
+            : (60 * Math.PI) / 180;
+          const startA = pl.aimAngle - halfArc;
+          const endA = pl.aimAngle + halfArc;
+          const r = 38;
+
+          g.lineStyle(7, hexToNum(PALETTE.INK_DARK), 0.85);
+          g.beginPath();
+          g.arc(px, py, r, startA, endA, false);
+          g.strokePath();
+
+          g.lineStyle(4, hexToNum(PALETTE.CRIMSON_BRIGHT), 0.95);
+          g.beginPath();
+          g.arc(px, py, r, startA, endA, false);
+          g.strokePath();
+
+          g.lineStyle(2, hexToNum(PALETTE.SOLAR_GOLD), 0.9);
+          g.beginPath();
+          g.arc(px, py, r - 4, startA, endA, false);
+          g.strokePath();
+        } else if (pl.characterId === 'druid') {
+          g.fillStyle(hexToNum(PALETTE.LIME_GLOW), 0.14);
+          g.fillCircle(px, py, 96);
+          g.lineStyle(2.5, hexToNum(PALETTE.LIME_GLOW), 0.85);
+          g.strokeCircle(px, py, 96);
+        } else if (pl.characterId === 'engineer') {
+          g.lineStyle(2, hexToNum(PALETTE.BRASS_CORE), 0.85);
+          g.strokeCircle(px, py, 44);
+        }
+      }
+    }
+
+    // 1b. Contextual Ping World Rings
+    for (let i = 0; i < sim.pings.length; i++) {
+      const ping = sim.pings[i]!;
+      const col = hexToNum(PLAYER_SLOT_COLORS[ping.playerSlot]);
+      const waveR = 14 + ((sim.tick * 0.8) % 18);
+      g.fillStyle(col, 0.22);
+      g.fillCircle(ping.x, ping.y, 12);
+      g.lineStyle(2.5, col, 0.95);
+      g.strokeCircle(ping.x, ping.y, waveR);
+      g.strokeCircle(ping.x, ping.y, 8);
     }
 
     // 2. Enemy Spawn Circles, Attack Telegraphs, Boss Burrow Warning, Elite Aura & Mini HP Bars
@@ -2554,11 +3527,13 @@ export class GameScene extends Phaser.Scene {
     if (
       p.hp !== this.lastHudHp ||
       p.armor !== this.lastHudArmor ||
-      p.energy !== this.lastHudEnergy
+      p.energy !== this.lastHudEnergy ||
+      p.characterId !== this.lastHudCharacterId
     ) {
       this.lastHudHp = p.hp;
       this.lastHudArmor = p.armor;
       this.lastHudEnergy = p.energy;
+      this.lastHudCharacterId = p.characterId;
 
       const g = this.hudBarsGraphics;
       g.clear();
@@ -2586,15 +3561,16 @@ export class GameScene extends Phaser.Scene {
       drawStatBar(156, 13, 124, 20, p.armor / p.maxArmor, PALETTE.STEEL_LIGHT);
       drawStatBar(290, 13, 136, 20, p.energy / p.maxEnergy, PALETTE.AZURE_CORE);
 
-      this.hpLabelText.setText(`${CHARACTERS.vanguard.nameVi} · HP ${p.hp}/${p.maxHp}`);
+      const charNameVi = CHARACTERS[p.characterId]?.nameVi ?? CHARACTERS.vanguard.nameVi;
+      this.hpLabelText.setText(`${charNameVi} · HP ${p.hp}/${p.maxHp}`);
       this.armorLabelText.setText(`GIÁP ${p.armor}/${p.maxArmor}`);
       this.energyLabelText.setText(`NL ${p.energy}/${p.maxEnergy}`);
     }
 
-    if (sim.tick % 12 === 0 || !this.lastHudStatsText) {
+    if (sim.tick % 12 === 0 || sim.inHub || !this.lastHudStatsText) {
       const dps = sim.getRollingDps();
       const room = sim.getCurrentRoom();
-      const roomLabel = ROOM_TYPE_LABELS_VI[room.type];
+      const roomLabel = sim.inHub ? 'Doanh Trại' : ROOM_TYPE_LABELS_VI[room.type];
       const dashReady = p.dashCooldownTimer <= 0 ? 'Sẵn' : `${p.dashCooldownTimer.toFixed(1)}s`;
       const skillReady =
         p.skillActiveTimer > 0
@@ -2603,7 +3579,9 @@ export class GameScene extends Phaser.Scene {
             ? 'Sẵn'
             : `${p.skillCooldownTimer.toFixed(1)}s`;
 
-      const nextStats = `Tầng ${sim.currentFloor}/2 (${roomLabel}) · DPS: ${dps.toFixed(1)} · Xu: ${p.gold} · Đợt ${sim.waveNumber} · Dash: ${dashReady} · Khiên: ${skillReady}`;
+      const nextStats = sim.inHub
+        ? `Doanh Trại (${sim.getActivePlayerCount()}P) · [E] Chọn NV · [V] Sẵn Sàng · [Z] Ping · [X] Bỏ VK | ${VIETNAMESE_VERIFICATION_STRING}`
+        : `Tầng ${sim.currentFloor}/2 (${roomLabel}) · DPS: ${dps.toFixed(1)} · Xu: ${p.gold} · Đợt ${sim.waveNumber} · Dash: ${dashReady} · Kỹ Năng: ${skillReady}`;
       if (nextStats !== this.lastHudStatsText) {
         this.lastHudStatsText = nextStats;
         this.statsLineText.setText(nextStats);
@@ -2672,23 +3650,454 @@ export class GameScene extends Phaser.Scene {
     if (!sim.stressTestActive) {
       this.updateMinimapHud();
       this.updateBossHud();
+      this.updateCoopTeammateHud();
+      this.updateHubInvitePanel();
+      this.updateOffscreenTeammateArrows();
       this.updateModalHud();
+    }
+  }
+
+  private updateCoopTeammateHud(): void {
+    const sim = this.transport.getSim();
+    const debug = initGlobalDebugState();
+    const remotes = sim.stressTestActive ? [] : sim.simulatedPlayers;
+    const telemetry = this.networkTransport?.getTelemetry();
+    const localHighPing = (telemetry?.rttMs ?? 0) > 100 ? 1 : 0;
+    const hash =
+      debug.overlayVisible || remotes.length === 0
+        ? ''
+        : remotes
+            .map(
+              (r) =>
+                `${r.id}:${r.slot}:${r.displayName}:${r.characterId}:${r.hp}:${r.maxHp}:${r.armor}:${r.lifeState}:${r.ready ? 1 : 0}:${r.pingMs}`,
+            )
+            .join('|') + `:${localHighPing}`;
+
+    if (hash === this.lastCoopHudHash) return;
+    this.lastCoopHudHash = hash;
+
+    this.coopHudContainer.removeAll(true);
+    if (!hash) return;
+
+    const textRes = TextureBaker.getBakeScale();
+    const cardW = 216;
+    const cardH = 38;
+    const startX = 14;
+    const startY = 74;
+
+    remotes.forEach((cp, idx) => {
+      const cy = startY + idx * (cardH + 5);
+      const slotHex = PLAYER_SLOT_COLORS[cp.slot];
+      const charName = CHARACTERS[cp.characterId]?.nameVi ?? 'Thiết Vệ';
+      const playerPing = Math.max(1, Math.round(cp.pingMs || (telemetry?.rttMs ?? 8)));
+      const isHighPing = playerPing > 100;
+
+      const bg = this.add.graphics();
+      bg.fillStyle(hexToNum(PALETTE.INK_DEEP), 0.88);
+      bg.lineStyle(2, hexToNum(cp.lifeState === 'downed' ? PALETTE.CRIMSON_BRIGHT : slotHex), 1);
+      bg.fillRoundedRect(startX, cy, cardW, cardH, 6);
+      bg.strokeRoundedRect(startX, cy, cardW, cardH, 6);
+
+      // Mini HP bar
+      const hpRatio = clamp(cp.hp / Math.max(1, cp.maxHp), 0, 1);
+      bg.fillStyle(hexToNum(PALETTE.SLATE_DARK), 1);
+      bg.fillRect(startX + 8, cy + 22, 98, 8);
+      bg.fillStyle(
+        hexToNum(
+          cp.lifeState === 'downed'
+            ? PALETTE.CRIMSON_BRIGHT
+            : cp.lifeState === 'ghost'
+              ? PALETTE.CYAN_FROST
+              : PALETTE.RUBY_CORE,
+        ),
+        1,
+      );
+      bg.fillRect(startX + 8, cy + 22, Math.max(2, 98 * hpRatio), 8);
+
+      this.coopHudContainer.add(bg);
+
+      const stateTag =
+        cp.lifeState === 'downed'
+          ? 'GỤC NGÃ!'
+          : cp.lifeState === 'ghost'
+            ? 'LINH HỒN'
+            : sim.inHub && cp.ready
+              ? '✓ Sẵn sàng'
+              : `HP ${cp.hp}/${cp.maxHp} · G ${cp.armor}`;
+
+      const title = this.add.text(
+        startX + 8,
+        cy + 5,
+        `[P${cp.slot}] ${cp.displayName} (${charName})`,
+        {
+          fontFamily: '"Be Vietnam Pro", sans-serif',
+          fontSize: '9.5px',
+          fontStyle: '800',
+          color: slotHex,
+          stroke: PALETTE.INK_DARK,
+          strokeThickness: 2.5,
+          resolution: textRes,
+        },
+      );
+      const pingText = this.add
+        .text(startX + cardW - 7, cy + 5, `${isHighPing ? '⚠' : ''}${playerPing}ms`, {
+          fontFamily: '"Be Vietnam Pro", monospace',
+          fontSize: '9px',
+          fontStyle: '800',
+          color: isHighPing ? PALETTE.SOLAR_GOLD : PALETTE.SILVER_BRIGHT,
+          stroke: PALETTE.INK_DARK,
+          strokeThickness: 2.5,
+          resolution: textRes,
+        })
+        .setOrigin(1, 0);
+      const sub = this.add.text(startX + 112, cy + 20, stateTag, {
+        fontFamily: '"Be Vietnam Pro", sans-serif',
+        fontSize: '9px',
+        fontStyle: '700',
+        color: cp.lifeState === 'downed' ? PALETTE.CRIMSON_BRIGHT : PALETTE.BONE_WHITE,
+        stroke: PALETTE.INK_DARK,
+        strokeThickness: 2,
+        resolution: textRes,
+      });
+      this.coopHudContainer.add([title, pingText, sub]);
+    });
+  }
+
+  private updateHubInvitePanel(): void {
+    const sim = this.transport.getSim();
+    const showPanel = sim.inHub && this.invitePanelVisible && !this.fullMapOpen;
+    const allPlayers = sim.getAllPlayers();
+    const playersKey = allPlayers
+      .map((pl) => `${pl.id}:${pl.slot}:${pl.displayName}:${pl.characterId}:${pl.ready ? 1 : 0}`)
+      .join('|');
+    const hash = !showPanel
+      ? ''
+      : `${this.primaryLanIp}:${this.serverPort}:${this.hostInviteUrl ?? ''}:${sim.allowDuplicateCharacters ? 1 : 0}:${this.copyToastTimer > 0 ? 1 : 0}:${playersKey}`;
+
+    if (hash === this.lastInvitePanelHash) return;
+    this.lastInvitePanelHash = hash;
+
+    this.invitePanelContainer.removeAll(true);
+    if (!showPanel) return;
+
+    const textRes = TextureBaker.getBakeScale();
+    const px = 676;
+    const py = 184;
+    const pw = 272;
+    const ph = 286;
+
+    const bg = this.add.graphics();
+    bg.fillStyle(hexToNum(PALETTE.INK_DEEP), 0.92);
+    bg.lineStyle(2.5, hexToNum(PALETTE.SOLAR_GOLD), 0.95);
+    bg.fillRoundedRect(px, py, pw, ph, 9);
+    bg.strokeRoundedRect(px, py, pw, ph, 9);
+    this.invitePanelContainer.add(bg);
+
+    const header = this.add.text(px + 10, py + 7, 'DOANH TRẠI CO-OP LAN [I]', {
+      fontFamily: '"Be Vietnam Pro", sans-serif',
+      fontSize: '11px',
+      fontStyle: '800',
+      color: PALETTE.SOLAR_GOLD,
+      stroke: PALETTE.INK_DARK,
+      strokeThickness: 3,
+      resolution: textRes,
+    });
+    const ipText = this.add.text(
+      px + 10,
+      py + 23,
+      `IP LAN: ${this.primaryLanIp}:${this.serverPort}`,
+      {
+        fontFamily: '"Be Vietnam Pro", sans-serif',
+        fontSize: '10px',
+        fontStyle: '700',
+        color: PALETTE.CYAN_FROST,
+        stroke: PALETTE.INK_DARK,
+        strokeThickness: 2.5,
+        resolution: textRes,
+      },
+    );
+    this.invitePanelContainer.add([header, ipText]);
+
+    // Procedural Vector QR Code (ISO/IEC 18004)
+    const qrUrl =
+      this.hostInviteUrl ?? `http://${this.primaryLanIp}:${this.serverPort}/?coop=join`;
+    const qrMatrix = generateQrMatrix(qrUrl);
+    const qrSize = qrMatrix.length;
+    const qrBoxSize = 78;
+    const qrX = px + 10;
+    const qrY = py + 42;
+    const quietZone = 2;
+    const totalModules = qrSize + quietZone * 2;
+    const cellPx = qrBoxSize / totalModules;
+
+    const qrG = this.add.graphics();
+    qrG.fillStyle(hexToNum(PALETTE.BONE_WHITE), 1);
+    qrG.lineStyle(1.5, hexToNum(PALETTE.INK_DARK), 1);
+    qrG.fillRoundedRect(qrX, qrY, qrBoxSize, qrBoxSize, 4);
+    qrG.strokeRoundedRect(qrX, qrY, qrBoxSize, qrBoxSize, 4);
+    qrG.fillStyle(hexToNum(PALETTE.INK_DARK), 1);
+
+    for (let r = 0; r < qrSize; r++) {
+      for (let c = 0; c < qrSize; c++) {
+        if (qrMatrix[r]?.[c]) {
+          qrG.fillRect(
+            qrX + (c + quietZone) * cellPx,
+            qrY + (r + quietZone) * cellPx,
+            Math.ceil(cellPx),
+            Math.ceil(cellPx),
+          );
+        }
+      }
+    }
+    this.invitePanelContainer.add(qrG);
+
+    // Helper for compact buttons next to QR code
+    const makePanelBtn = (
+      bx: number,
+      by: number,
+      bw: number,
+      bh: number,
+      label: string,
+      fillHex: string,
+      onClick: () => void,
+    ) => {
+      const btnG = this.add.graphics();
+      btnG.fillStyle(hexToNum(fillHex), 0.95);
+      btnG.lineStyle(1.8, hexToNum(PALETTE.INK_DARK), 1);
+      btnG.fillRoundedRect(bx, by, bw, bh, 5);
+      btnG.strokeRoundedRect(bx, by, bw, bh, 5);
+
+      const txt = this.add
+        .text(bx + bw / 2, by + bh / 2, label, {
+          fontFamily: '"Be Vietnam Pro", sans-serif',
+          fontSize: '9.5px',
+          fontStyle: '800',
+          color: PALETTE.BONE_WHITE,
+          stroke: PALETTE.INK_DARK,
+          strokeThickness: 2.5,
+          resolution: textRes,
+        })
+        .setOrigin(0.5, 0.5);
+
+      const hit = this.add
+        .rectangle(bx + bw / 2, by + bh / 2, bw, bh, 0x000000, 0)
+        .setInteractive({ useHandCursor: true });
+      hit.on('pointerdown', onClick);
+
+      this.invitePanelContainer.add([btnG, txt, hit]);
+    };
+
+    const btnX = qrX + qrBoxSize + 8;
+    const btnW = pw - qrBoxSize - 28;
+
+    makePanelBtn(
+      btnX,
+      qrY,
+      btnW,
+      23,
+      this.copyToastTimer > 0 ? '✓ Đã sao chép link!' : 'Sao chép link mời',
+      this.copyToastTimer > 0 ? PALETTE.GOBLIN_GREEN : PALETTE.AZURE_CORE,
+      () => {
+        try {
+          void navigator.clipboard?.writeText(qrUrl);
+        } catch {
+          // Ignore clipboard errors
+        }
+        this.copyToastTimer = 2.0;
+        this.lastInvitePanelHash = '';
+      },
+    );
+
+    makePanelBtn(
+      btnX,
+      qrY + 27,
+      btnW,
+      23,
+      `Trùng NV: ${sim.allowDuplicateCharacters ? 'BẬT' : 'TẮT'}`,
+      PALETTE.SLATE_MID,
+      () => {
+        const nextAllow = !sim.allowDuplicateCharacters;
+        sim.allowDuplicateCharacters = nextAllow;
+        if (this.room && this.coopMode !== 'solo') {
+          this.room.send('toggle_duplicate_char', { allow: nextAllow });
+        }
+        this.lastInvitePanelHash = '';
+      },
+    );
+
+    makePanelBtn(
+      btnX,
+      qrY + 54,
+      btnW,
+      24,
+      sim.player.ready ? '✓ ĐÃ SẴN SÀNG [V]' : 'BẤM SẴN SÀNG [V]',
+      sim.player.ready ? PALETTE.GOBLIN_GREEN : PALETTE.RUBY_CORE,
+      () => {
+        this.readyToggleQueued = true;
+        if (this.room && this.coopMode !== 'solo') {
+          this.room.send('set_ready', { ready: !sim.player.ready });
+        }
+        this.lastInvitePanelHash = '';
+      },
+    );
+
+    // Player Slots List (P1..P4)
+    const listStartY = qrY + qrBoxSize + 8;
+    for (let slotIdx = 1; slotIdx <= 4; slotIdx++) {
+      const rowY = listStartY + (slotIdx - 1) * 28;
+      const pl = allPlayers.find((item) => item.slot === slotIdx);
+      const slotColor = PLAYER_SLOT_COLORS[slotIdx as 1 | 2 | 3 | 4];
+
+      const rowG = this.add.graphics();
+      rowG.fillStyle(hexToNum(PALETTE.SLATE_DARK), 0.9);
+      rowG.lineStyle(1.5, hexToNum(pl ? slotColor : PALETTE.INK_DARK), 0.9);
+      rowG.fillRoundedRect(px + 10, rowY, pw - 20, 24, 5);
+      rowG.strokeRoundedRect(px + 10, rowY, pw - 20, 24, 5);
+      this.invitePanelContainer.add(rowG);
+
+      if (pl) {
+        const charName = CHARACTERS[pl.characterId]?.nameVi ?? 'Thiết Vệ';
+        const rdyStr = pl.ready ? '✓ Sẵn sàng' : 'Đang chọn';
+        const rowTxt = this.add.text(
+          px + 16,
+          rowY + 5,
+          `P${pl.slot} · ${pl.displayName} (${charName}) — ${rdyStr}`,
+          {
+            fontFamily: '"Be Vietnam Pro", sans-serif',
+            fontSize: '9.2px',
+            fontStyle: '700',
+            color: pl.ready ? PALETTE.LIME_GLOW : slotColor,
+            stroke: PALETTE.INK_DARK,
+            strokeThickness: 2,
+            resolution: textRes,
+          },
+        );
+        this.invitePanelContainer.add(rowTxt);
+
+        if (sim.player.slot === 1 && pl.slot !== 1) {
+          makePanelBtn(px + pw - 56, rowY + 3, 42, 18, 'Đuổi', PALETTE.RUBY_DARK, () => {
+            if (this.room && this.coopMode !== 'solo') {
+              this.room.send('kick_player', { slot: pl.slot });
+            } else {
+              sim.removeCoopPlayer(pl.id);
+            }
+          });
+        }
+      } else {
+        const emptyTxt = this.add.text(
+          px + 16,
+          rowY + 5,
+          `P${slotIdx} · [Trống — Quét QR hoặc nhập IP để vào]`,
+          {
+            fontFamily: '"Be Vietnam Pro", sans-serif',
+            fontSize: '9px',
+            color: PALETTE.ASH_GRAY,
+            resolution: textRes,
+          },
+        );
+        this.invitePanelContainer.add(emptyTxt);
+      }
+    }
+
+    // Quick Emote Bar at bottom of Hub Panel
+    const emotes: { id: QuickEmoteId; key: string; shortVi: string }[] = [
+      { id: 1, key: '1', shortVi: 'Tuyệt!' },
+      { id: 2, key: '2', shortVi: 'Hồi máu!' },
+      { id: 3, key: '3', shortVi: 'Dồn ST!' },
+      { id: 4, key: '4', shortVi: 'Thắng!' },
+    ];
+    const emY = py + ph - 26;
+    const emW = 60;
+    emotes.forEach((em, idx) => {
+      makePanelBtn(
+        px + 10 + idx * (emW + 4),
+        emY,
+        emW,
+        20,
+        `[${em.key}] ${em.shortVi}`,
+        PALETTE.SLATE_MID,
+        () => {
+          this.queuedEmote = em.id;
+        },
+      );
+    });
+  }
+
+  private updateOffscreenTeammateArrows(): void {
+    const g = this.offscreenArrowGraphics;
+    g.clear();
+
+    const sim = this.transport.getSim();
+    if (sim.stressTestActive || sim.simulatedPlayers.length === 0) return;
+
+    const view = this.cameras.main.worldView;
+    if (!view || view.width <= 0) return;
+
+    const margin = 26;
+    const minX = margin;
+    const maxX = WORLD_VIEW_WIDTH - margin;
+    const minY = 74;
+    const maxY = 472;
+
+    for (let i = 0; i < sim.simulatedPlayers.length; i++) {
+      const cp = sim.simulatedPlayers[i]!;
+      if (cp.id === sim.player.id) continue;
+
+      const pos = this.transport.getInterpolatedSimPlayerPos(cp, this.entityPosScratch);
+
+      if (
+        pos.x >= view.x &&
+        pos.x <= view.x + view.width &&
+        pos.y >= view.y &&
+        pos.y <= view.y + view.height
+      ) {
+        continue;
+      }
+
+      const relX = pos.x - view.x;
+      const relY = pos.y - view.y;
+      const ax = clamp(relX, minX, maxX);
+      const ay = clamp(relY, minY, maxY);
+      const angle = Math.atan2(relY - WORLD_VIEW_HEIGHT * 0.5, relX - WORLD_VIEW_WIDTH * 0.5);
+
+      const col = hexToNum(
+        cp.lifeState === 'downed' ? PALETTE.CRIMSON_BRIGHT : PLAYER_SLOT_COLORS[cp.slot],
+      );
+      const tipX = ax + Math.cos(angle) * 10;
+      const tipY = ay + Math.sin(angle) * 10;
+      const leftX = ax + Math.cos(angle + 2.4) * 9;
+      const leftY = ay + Math.sin(angle + 2.4) * 9;
+      const rightX = ax + Math.cos(angle - 2.4) * 9;
+      const rightY = ay + Math.sin(angle - 2.4) * 9;
+
+      g.fillStyle(col, 0.95);
+      g.lineStyle(2, hexToNum(PALETTE.INK_DARK), 1);
+      g.beginPath();
+      g.moveTo(tipX, tipY);
+      g.lineTo(leftX, leftY);
+      g.lineTo(rightX, rightY);
+      g.closePath();
+      g.fillPath();
+      g.strokePath();
     }
   }
 
   private updateMinimapHud(): void {
     const sim = this.transport.getSim();
     const room = sim.getCurrentRoom();
-    const minimapHash = `${sim.currentFloor}:${sim.currentRoomId}:${this.fullMapOpen ? 1 : 0}:${sim.secretWallBroken ? 1 : 0}:${room.cleared ? 1 : 0}:${sim.runStats.roomsCleared}`;
+    const minimapHash = `${sim.inHub ? 'hub' : sim.currentFloor}:${sim.currentRoomId}:${this.fullMapOpen ? 1 : 0}:${sim.secretWallBroken ? 1 : 0}:${room.cleared ? 1 : 0}:${sim.runStats.roomsCleared}:${sim.pings.length}`;
     if (minimapHash === this.lastMinimapHash) return;
     this.lastMinimapHash = minimapHash;
 
     const g = this.minimapGraphics;
     g.clear();
 
+    const roomTypeVi = sim.inHub ? 'Doanh Trại' : ROOM_TYPE_LABELS_VI[room.type];
     const titleStr = this.fullMapOpen
-      ? `BẢN ĐỒ HẦM NGỤC — Tầng ${sim.currentFloor}/2 (${ROOM_TYPE_LABELS_VI[room.type]}) [Tab]`
-      : `T${sim.currentFloor}/2 · ${ROOM_TYPE_LABELS_VI[room.type]} [Tab]`;
+      ? `BẢN ĐỒ HẦM NGỤC — Tầng ${sim.currentFloor}/2 (${roomTypeVi}) [Tab]`
+      : sim.inHub
+        ? `Doanh Trại Co-op [Tab]`
+        : `T${sim.currentFloor}/2 · ${roomTypeVi} [Tab]`;
     if (this.minimapTitleText.text !== titleStr) {
       this.minimapTitleText.setText(titleStr);
     }
@@ -2951,6 +4360,9 @@ export class GameScene extends Phaser.Scene {
           .setInteractive({ useHandCursor: true });
         hit.on('pointerdown', () => {
           sim.selectFloorBuff(buffId);
+          if (this.room && this.coopMode !== 'solo') {
+            this.room.send('select_buff', { buffId });
+          }
           zzfx.play('skill_cast');
         });
         this.modalContainer.add(hit);
@@ -3076,6 +4488,7 @@ export class GameScene extends Phaser.Scene {
     debug.playerMaxArmor = p.maxArmor;
     debug.playerEnergy = p.energy;
     debug.playerMaxEnergy = p.maxEnergy;
+    debug.playerSlot = p.slot;
     debug.activeWeaponId = sim.getActiveWeaponId();
     debug.activeWeaponSlot = p.activeWeaponSlot;
     debug.godMode = p.godMode;
@@ -3112,7 +4525,7 @@ export class GameScene extends Phaser.Scene {
     const boss = sim.getActiveBoss();
     debug.currentFloor = sim.currentFloor;
     debug.currentRoomId = sim.currentRoomId;
-    debug.currentRoomType = currentRoom.type;
+    debug.currentRoomType = sim.inHub ? 'hub' : currentRoom.type;
     debug.totalRooms = sim.dungeon.rooms.length;
     debug.playerGold = p.gold;
     debug.runState = sim.runState;
@@ -3123,6 +4536,24 @@ export class GameScene extends Phaser.Scene {
     debug.fullMapOpen = this.fullMapOpen;
     debug.botAutoPlayActive = sim.botAutoPlayActive;
     debug.activeBuffs = sim.activeBuffIds;
+
+    // Phase 4 Co-op & Network telemetry
+    debug.coopMode = this.coopMode;
+    debug.coopPlayerCount = sim.getActivePlayerCount();
+    debug.inHub = sim.inHub;
+    if (this.networkTransport) {
+      const tel = this.networkTransport.getTelemetry();
+      debug.rttMs = tel.rttMs;
+      debug.jitterMs = tel.jitterMs;
+      debug.bandwidthKBps = Math.round((tel.bytesInPerSec / 1024) * 10) / 10;
+      debug.interpolationDelayMs = tel.interpolationDelayMs;
+      debug.wifiProfile = tel.wifiProfile;
+    } else {
+      debug.rttMs = debug.pingMs;
+      debug.jitterMs = 0;
+      debug.bandwidthKBps = 0;
+      debug.interpolationDelayMs = 0;
+    }
 
     const activeEnemyCount = this.activeEnemyIds.size;
     const totalEntities = 1 + sim.simulatedPlayers.length + activeEnemyCount;

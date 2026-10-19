@@ -92,6 +92,19 @@ export const ENEMIES: Record<string, EnemyStatsDef> = {
     telegraphSec: 0.55,
     attackCooldownSec: 2.8,
   },
+  spore_guardian: {
+    id: 'spore_guardian',
+    nameVi: 'Nấm Hộ Vệ Mục Vương',
+    nameEn: 'Spore Guardian',
+    biome: 1,
+    role: 'shielder',
+    hp: 55,
+    moveSpeed: 0,
+    damage: 1,
+    radius: 17,
+    telegraphSec: 0.6,
+    attackCooldownSec: 3.0,
+  },
   spore_king: {
     id: 'spore_king',
     nameVi: 'Mục Vương Nấm Độc',
@@ -118,7 +131,11 @@ export const BIOME1_COMBAT_ENEMIES = [
   'thorn_turret',
 ] as const;
 
-export type Biome1EnemyId = (typeof BIOME1_COMBAT_ENEMIES)[number] | 'mini_slime' | 'spore_king';
+export type Biome1EnemyId =
+  | (typeof BIOME1_COMBAT_ENEMIES)[number]
+  | 'mini_slime'
+  | 'spore_guardian'
+  | 'spore_king';
 
 export const ELITE_MODIFIERS: readonly EliteModifier[] = [
   'fast',

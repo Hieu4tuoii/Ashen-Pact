@@ -1,5 +1,6 @@
 export * from './core/prng.js';
 export * from './core/fixed-timestep.js';
+export * from './core/qr.js';
 export * from './math/vec2.js';
 export * from './math/spatial-hash.js';
 export * from './data/types.js';
@@ -8,8 +9,11 @@ export * from './data/enemies.js';
 export * from './data/weapons.js';
 export * from './data/scaling.js';
 export * from './protocol/messages.js';
+export * from './protocol/wifi-sim.js';
 export * from './protocol/transport.js';
+export * from './protocol/network-transport.js';
 export * from './sim/arena-map.js';
 export * from './sim/dungeon-gen.js';
 export * from './sim/world-sim.js';
+
 

@@ -1,5 +1,6 @@
 import { SeededRandom } from '../core/prng.js';
 import { BIOME1_COMBAT_ENEMIES, FLOOR_BUFFS } from '../data/enemies.js';
+import { COOP_SCALING } from '../data/scaling.js';
 import type {
   CardinalDir,
   EliteModifier,
@@ -73,6 +74,7 @@ export interface DungeonFloorGraph {
   seed: string | number;
   biome: 1 | 2 | 3;
   floorNumber: 1 | 2;
+  playerCount?: 1 | 2 | 3 | 4;
   rooms: DungeonRoomNode[];
   startRoomId: number;
   exitRoomId: number;
@@ -116,6 +118,7 @@ export function generateDungeonFloor(
   seed: string | number,
   floorNumber: 1 | 2 = 1,
   biome: 1 | 2 | 3 = 1,
+  playerCount: 1 | 2 | 3 | 4 = 1,
 ): DungeonFloorGraph {
   const rng = new SeededRandom(seed).fork(`dungeon_b${biome}_f${floorNumber}`);
 
@@ -355,12 +358,19 @@ export function generateDungeonFloor(
     } else if (room.type === 'combat') {
       combatRoomIndex += 1;
       const waveCount = combatRoomIndex >= 2 || floorNumber === 2 ? 3 : 2;
-      room.waves = generateRoomWaves(rng, waveCount, floorNumber, combatRoomIndex);
+      room.waves = generateRoomWaves(
+        rng,
+        waveCount,
+        floorNumber,
+        combatRoomIndex,
+        false,
+        playerCount,
+      );
       room.wavesTotal = room.waves.length;
     } else if (room.type === 'portal') {
       // Floor 1 Portal Guardian Room: 2 waves (with guaranteed Elite guardian on Wave 2), then portal unlocks!
       room.cleared = false;
-      room.waves = generateRoomWaves(rng, 2, floorNumber, 3, true);
+      room.waves = generateRoomWaves(rng, 2, floorNumber, 3, true, playerCount);
       room.wavesTotal = room.waves.length;
     } else if (room.type === 'boss') {
       // Floor 2 Boss Room: Boss Mục Vương Nấm Độc + Legendary reward chest on clear
@@ -390,6 +400,7 @@ export function generateDungeonFloor(
     seed,
     biome,
     floorNumber,
+    playerCount,
     rooms,
     startRoomId: 0,
     exitRoomId,
@@ -403,11 +414,17 @@ function generateRoomWaves(
   floorNumber: 1 | 2,
   roomDifficultyIndex: number,
   guaranteeEliteOnFinalWave = false,
+  playerCount: 1 | 2 | 3 | 4 = 1,
 ): DungeonWaveDef[] {
   const waves: DungeonWaveDef[] = [];
+  const tier = COOP_SCALING[playerCount] ?? COOP_SCALING[1];
 
   for (let w = 1; w <= waveCount; w++) {
-    const enemyCount = Math.min(5, 3 + Math.floor((w + floorNumber - 1) / 2));
+    const baseEnemyCount = Math.min(5, 3 + Math.floor((w + floorNumber - 1) / 2));
+    const enemyCount =
+      playerCount === 1
+        ? baseEnemyCount
+        : Math.max(baseEnemyCount, Math.round(baseEnemyCount * tier.waveCountMultiplier));
     const enemies: DungeonEnemySpawnDef[] = [];
 
     for (let i = 0; i < enemyCount; i++) {
@@ -417,7 +434,12 @@ function generateRoomWaves(
         i === 0 ? BIOME1_COMBAT_ENEMIES[poolIdx]! : rng.pick(BIOME1_COMBAT_ENEMIES);
 
       const isFinalWaveFirstEnemy = w === waveCount && i === 0;
-      const eliteChance = floorNumber === 2 ? 0.25 : 0.16;
+      const eliteChance =
+        playerCount === 1
+          ? floorNumber === 2
+            ? 0.25
+            : 0.16
+          : tier.eliteChance + (floorNumber === 2 ? 0.05 : 0);
       const isElite =
         defId !== 'thorn_turret' &&
         ((guaranteeEliteOnFinalWave && isFinalWaveFirstEnemy) ||

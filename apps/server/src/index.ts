@@ -1,18 +1,49 @@
+import { exec } from 'node:child_process';
+import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
-import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import express from 'express';
-import cors from 'cors';
 import { Server } from '@colyseus/core';
 import { WebSocketTransport } from '@colyseus/ws-transport';
+import cors from 'cors';
+import express from 'express';
+import { CoopRoom } from './rooms/CoopRoom.js';
 import { HelloRoom } from './rooms/HelloRoom.js';
 import { getLanIPv4Addresses } from './utils/network.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const DEFAULT_PORT = Number(process.env.PORT ?? 2567);
+function parseCliPort(): number | null {
+  const args = process.argv.slice(2);
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i]!;
+    if (arg === '--port' && args[i + 1]) {
+      const p = Number(args[i + 1]);
+      if (Number.isFinite(p) && p > 0) return p;
+    } else if (arg.startsWith('--port=')) {
+      const p = Number(arg.slice('--port='.length));
+      if (Number.isFinite(p) && p > 0) return p;
+    }
+  }
+  return null;
+}
+
+const DEFAULT_PORT = parseCliPort() ?? Number(process.env.PORT ?? 2567);
+
+function openBrowserUrl(url: string): void {
+  if (process.env.ASHEN_PACT_NO_OPEN_BROWSER === '1' || process.env.CI) return;
+  const platform = process.platform;
+  const cmd =
+    platform === 'win32'
+      ? `start "" "${url}"`
+      : platform === 'darwin'
+        ? `open "${url}"`
+        : `xdg-open "${url}"`;
+  exec(cmd, () => {
+    // Ignore errors in headless environments
+  });
+}
 
 export async function startServer(initialPort = DEFAULT_PORT): Promise<{
   port: number;
@@ -41,9 +72,15 @@ export async function startServer(initialPort = DEFAULT_PORT): Promise<{
       url: `http://${info.address}:${activePort}`,
       preferred: info.preferred,
     }));
+    const primaryLanIp =
+      lanAddresses.find((info) => info.preferred)?.address ??
+      lanAddresses[0]?.address ??
+      '127.0.0.1';
     res.json({
       port: activePort,
       localUrl: `http://localhost:${activePort}`,
+      primaryLanIp,
+      lanIps: lanAddresses.map((info) => info.address),
       lanUrls: urls,
     });
   });
@@ -62,6 +99,7 @@ export async function startServer(initialPort = DEFAULT_PORT): Promise<{
   });
 
   gameServer.define('hello_room', HelloRoom);
+  gameServer.define('coop_room', CoopRoom);
 
   for (let attempt = 0; attempt < 10; attempt++) {
     const candidatePort = initialPort + attempt;
@@ -89,11 +127,17 @@ export async function startServer(initialPort = DEFAULT_PORT): Promise<{
   }
 
   const lanList = getLanIPv4Addresses();
+  console.log('==========================================================');
   console.log(`[AshenPact Server] Listening on http://localhost:${activePort}`);
   for (const lan of lanList) {
     console.log(
-      `[AshenPact LAN] ${lan.interfaceName}: http://${lan.address}:${activePort}${lan.preferred ? ' (Preferred)' : ''}`,
+      `[AshenPact LAN] ${lan.interfaceName}: http://${lan.address}:${activePort}${lan.preferred ? ' (Ưu tiên LAN)' : ''}`,
     );
+  }
+  console.log('==========================================================');
+
+  if (process.argv.includes('--host')) {
+    openBrowserUrl(`http://localhost:${activePort}/?coop=host`);
   }
 
   return { port: activePort, gameServer };

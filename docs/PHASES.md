@@ -54,12 +54,12 @@
 
 ---
 
-## Phase 4 — Co-op LAN
-- [ ] Host server (Colyseus) chạy sim authoritative + phục vụ client tĩnh cùng cổng, `NetworkTransport`, prediction + reconciliation, interpolation thích ứng, đạn tất định, giả lập mạng wifi.
-- [ ] Lệnh `pnpm host`, hiển thị IP LAN + mã QR + nút sao chép link trong Hub; ô nhập IP thủ công ở menu.
-- [ ] Hub nhiều người, chọn nhân vật, sẵn sàng, reconnect, xử lý Host thoát.
-- [ ] Scaling theo số người, gục/hồi sinh/linh hồn, loot instanced, ping + emote, dịch chuyển người ở ngoài vào phòng chiến đấu, màu định danh người chơi.
-- [ ] **DoD riêng Phase 4:** E2E với 4 client kết nối qua địa chỉ IP LAN của máy, cùng vào Hub, qua 1 tầng; mượt dưới profile "wifi tệ"; băng thông ≤ ~30 KB/s/client; Host ≥ 60 FPS; unit test scaling; checklist test tay trên 2+ máy thật trong `PROGRESS.md`.
+## Phase 4 — Co-op LAN (Hoàn thành ✅)
+- [x] Host server (Colyseus) chạy sim authoritative + phục vụ client tĩnh cùng cổng, `NetworkTransport`, prediction + reconciliation, interpolation thích ứng, đạn tất định, giả lập mạng wifi.
+- [x] Lệnh `pnpm host`, hiển thị IP LAN + mã QR + nút sao chép link trong Hub; ô nhập IP thủ công ở menu.
+- [x] Hub nhiều người, chọn nhân vật, sẵn sàng, reconnect, xử lý Host thoát.
+- [x] Scaling theo số người, gục/hồi sinh/linh hồn, loot instanced, ping + emote, dịch chuyển người ở ngoài vào phòng chiến đấu, màu định danh người chơi.
+- [x] **DoD riêng Phase 4:** E2E với 4 client kết nối qua địa chỉ IP LAN của máy, cùng vào Hub, qua 1 tầng; mượt dưới profile "wifi tệ"; băng thông ≤ ~30 KB/s/client; Host ≥ 60 FPS; unit test scaling; checklist test tay trên 2+ máy thật trong `PROGRESS.md`.
 
 ---
 

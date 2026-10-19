@@ -17,7 +17,32 @@ export const INPUT_BUTTON = {
   INTERACT: 1 << 3,
   SWAP: 1 << 4,
   PING: 1 << 5,
+  DROP_WEAPON: 1 << 6,
+  READY: 1 << 7,
 } as const;
+
+export type QuickEmoteId = 1 | 2 | 3 | 4;
+
+export const QUICK_EMOTES_VI: Record<QuickEmoteId, string> = {
+  1: '👍 Tuyệt vời!',
+  2: '❤️ Cần hồi máu!',
+  3: '⚔️ Dồn sát thương!',
+  4: '🎉 Chiến thắng!',
+};
+
+export const PLAYER_SLOT_COLORS: Record<1 | 2 | 3 | 4, string> = {
+  1: '#38BDF8',
+  2: '#F43F5E',
+  3: '#22C55E',
+  4: '#FACC15',
+};
+
+export const PLAYER_SLOT_LABELS_VI: Record<1 | 2 | 3 | 4, string> = {
+  1: 'P1 Xanh Dương',
+  2: 'P2 Đỏ',
+  3: 'P3 Xanh Lá',
+  4: 'P4 Vàng',
+};
 
 export interface PlayerInputPacket {
   seq: number;
@@ -28,6 +53,11 @@ export interface PlayerInputPacket {
   buttons: number;
   /** Optional direct weapon slot selection (0..3) in test arena / inventory */
   weaponSlotSelect?: number | null;
+  /** Optional cursor world coordinates when issuing a contextual Ping */
+  pingWorldX?: number;
+  pingWorldY?: number;
+  /** Optional quick emote (1..4) */
+  emoteId?: QuickEmoteId | null;
 }
 
 export interface HelloRoomMessage {
@@ -36,6 +66,24 @@ export interface HelloRoomMessage {
   seed: number;
   connectedPlayers: number;
   welcomeVi: string;
+}
+
+/**
+ * Deterministic Bullet Volley Spawn event sent from authoritative server to clients.
+ * Clients simulate projectiles locally from this compact event instead of syncing per-bullet positions.
+ */
+export interface BulletVolleySpawnNetEvent {
+  eventId: number;
+  tick: number;
+  ownerId: number;
+  team: 'player' | 'enemy';
+  weaponId: string;
+  qx: number;
+  qy: number;
+  qAngle: number;
+  seed: number;
+  element: string;
+  amplifiedByShield: boolean;
 }
 
 /**
@@ -59,3 +107,4 @@ export function quantizeAngle(radians: number): number {
 export function dequantizeAngle(quantized: number): number {
   return quantized / 1000;
 }
+

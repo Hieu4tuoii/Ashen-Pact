@@ -175,6 +175,23 @@ export class ArenaMap {
     this.mapRevision += 1;
   }
 
+  public clearInteriorForHub(): void {
+    for (let ty = 1; ty < this.rows - 1; ty++) {
+      for (let tx = 1; tx < this.cols - 1; tx++) {
+        const idx = ty * this.cols + tx;
+        this.tiles[idx] = 'floor';
+        this.surfaces[idx] = 'none';
+        this.baseSurfaces[idx] = 'none';
+        this.surfaceTimers[idx] = 0;
+      }
+    }
+    if (this.cols >= 24) {
+      this.tiles[Math.floor(this.cols / 2)] = 'wall';
+    }
+    this.rebuildSolidBoxes();
+    this.mapRevision += 1;
+  }
+
   /**
    * Boss Phase 3 ("Mây Độc Thu Hẹp Mép Phòng"): floods the outer 2-tile ring of the Boss Arena
    * with creeping toxic swamp mist, shrinking the safe combat zone in the center.

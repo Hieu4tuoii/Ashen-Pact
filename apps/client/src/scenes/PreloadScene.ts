@@ -26,9 +26,20 @@ export class PreloadScene extends Phaser.Scene {
 
       const params = new URLSearchParams(window.location.search);
       const requestedScene = params.get('scene')?.toLowerCase();
+      const coopParam = params.get('coop')?.toLowerCase();
+      const joinRoomId = params.get('join');
 
       if (requestedScene === 'gallery' || requestedScene === 'artgallery') {
         this.scene.start('ArtGalleryScene');
+      } else if (requestedScene === 'menu') {
+        this.scene.start('MenuScene');
+      } else if (coopParam === 'host' || coopParam === 'join' || joinRoomId) {
+        this.scene.start('GameScene', {
+          coopMode: coopParam === 'host' ? 'host' : 'join',
+          roomId: joinRoomId ?? undefined,
+          displayName: params.get('name') ?? undefined,
+          serverUrl: params.get('server') ?? undefined,
+        });
       } else if (requestedScene === 'game') {
         this.scene.start('GameScene');
       } else {

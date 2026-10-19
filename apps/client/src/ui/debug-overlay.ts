@@ -76,6 +76,19 @@ export interface GameDebugState {
   fullMapOpen: boolean;
   botAutoPlayActive: boolean;
   activeBuffs: string[];
+  // Phase 4 Co-op LAN & Network telemetry
+  coopMode: 'solo' | 'host' | 'join';
+  coopRoomId: string | null;
+  coopPlayerCount: number;
+  inHub: boolean;
+  rttMs: number;
+  jitterMs: number;
+  bandwidthKBps: number;
+  interpolationDelayMs: number;
+  wifiProfile: 'off' | 'good' | 'normal' | 'bad';
+  reconnectToken: string | null;
+  hostInviteUrl: string | null;
+  lanIps: string[];
   errors: string[];
   warnings: string[];
 }
@@ -161,6 +174,18 @@ export function initGlobalDebugState(): GameDebugState {
     fullMapOpen: false,
     botAutoPlayActive: false,
     activeBuffs: [],
+    coopMode: 'solo',
+    coopRoomId: null,
+    coopPlayerCount: 1,
+    inHub: false,
+    rttMs: 0,
+    jitterMs: 0,
+    bandwidthKBps: 0,
+    interpolationDelayMs: 65,
+    wifiProfile: 'off',
+    reconnectToken: null,
+    hostInviteUrl: null,
+    lanIps: [],
     errors: [],
     warnings: [],
   };
@@ -214,8 +239,8 @@ export class DebugOverlay {
     this.bg = scene.add.graphics();
     this.bg.fillStyle(0x0b090e, 0.92);
     this.bg.lineStyle(2, 0x38bdf8, 0.95);
-    this.bg.fillRoundedRect(0, 0, 358, 206, 8);
-    this.bg.strokeRoundedRect(0, 0, 358, 206, 8);
+    this.bg.fillRoundedRect(0, 0, 368, 224, 8);
+    this.bg.strokeRoundedRect(0, 0, 368, 224, 8);
 
     this.textObj = scene.add.text(12, 10, '', {
       fontFamily: '"Be Vietnam Pro", monospace',
@@ -268,9 +293,10 @@ export class DebugOverlay {
     const loop = this.scene.game.loop;
     const rawDelta = loop.delta > 0 ? loop.delta : 16.67;
 
+    const isHidden = typeof document !== 'undefined' && document.hidden;
     this.warmupFrames += 1;
-    // Ignore the first 5 scene-init/resize frames where high-DPI textures/DOM settle
-    if (this.warmupFrames > 5 && rawDelta < 45) {
+    // Ignore the first 5 scene-init/resize frames and background-throttled frames
+    if (!isHidden && this.warmupFrames > 5 && rawDelta < 45) {
       this.frameDeltaSamples.push(rawDelta);
       if (this.frameDeltaSamples.length > 30) {
         this.frameDeltaSamples.shift();
@@ -286,8 +312,8 @@ export class DebugOverlay {
     state.fps = Math.round(computedFps * 10) / 10;
     state.frameTimeMs = Math.round(avgDelta * 100) / 100;
 
-    if (this.warmupFrames > 15) {
-      graphicsSettings.updateAutoQualityMonitor(state.fps, rawDelta / 1000);
+    if (state.coopMode === 'solo' && !isHidden && this.warmupFrames > 15 && rawDelta < 120) {
+      graphicsSettings.updateAutoQualityMonitor(state.fps, Math.min(0.05, rawDelta / 1000));
     }
     const gState = graphicsSettings.getState();
     state.graphicsQuality = gState.quality;
@@ -331,12 +357,13 @@ export class DebugOverlay {
       ) {
         this.textObj.setText(
           [
-            `[F1] DEBUG OVERLAY — ${state.scene}`,
+            `[F1] DEBUG OVERLAY — ${state.scene} (${state.coopMode.toUpperCase()} ${state.coopPlayerCount}P)`,
             `FPS: ${state.fps.toFixed(1)} (${state.frameTimeMs.toFixed(2)} ms) | DPS: ${state.rollingDps.toFixed(1)}`,
             `Entities: ${state.entityCount} | Bullets: ${state.bulletCount} | Props: ${state.propCount}`,
             `Quality[G]: ${state.graphicsQuality.toUpperCase()} (Auto:${state.autoQuality ? 'ON' : 'OFF'}) | Lights: ${state.activeLightCount}`,
             `Particles: ${state.particleCount} | Decals: ${state.decalCount} | Heap: ${state.heapUsedMb.toFixed(1)} MB`,
             `Draw Calls: ${state.drawCalls} | Bake: ${state.bakeScale}x (DPR ${state.dpr.toFixed(2)})`,
+            `Net[F9]: ${state.wifiProfile.toUpperCase()} | RTT: ${state.rttMs}±${state.jitterMs}ms | BW: ${state.bandwidthKBps}KB/s | Interp: ${state.interpolationDelayMs}ms`,
             `Weapon: ${state.activeWeaponId} (${state.activeImbueElement}) | Stress[F7]: ${state.stressTestActive ? 'ON' : 'OFF'}`,
             `God[F2]: ${state.godMode ? 'ON' : 'OFF'} | Hitbox[F4]: ${state.showHitboxes ? 'ON' : 'OFF'} | Tick: ${state.tick}`,
             `Errors: ${state.errors.length} | Warnings: ${state.warnings.length}`,

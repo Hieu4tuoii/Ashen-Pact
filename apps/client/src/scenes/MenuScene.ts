@@ -11,6 +11,18 @@ import { GOBLIN_SHOOTER_RIG_DEF, VANGUARD_RIG_DEF } from '../art/rig-defs.js';
 import { TextureBaker } from '../art/texture-baker.js';
 import { DebugOverlay, initGlobalDebugState } from '../ui/debug-overlay.js';
 
+const PRESET_NAMES_VI = [
+  'Hiệp Sĩ Tro',
+  'Cung Thủ Gió',
+  'Pháp Sư Lửa',
+  'Hiền Nhân Rừng',
+  'Kỹ Sư Thép',
+];
+
+export interface MenuSceneInitData {
+  disconnectReason?: string;
+}
+
 export class MenuScene extends Phaser.Scene {
   private simLoop = new FixedTimestepLoop(60);
   private vanguardPreview?: CutoutRig;
@@ -19,8 +31,28 @@ export class MenuScene extends Phaser.Scene {
   private textObjects: Phaser.GameObjects.Text[] = [];
   private debugOverlay?: DebugOverlay;
 
+  private displayName: string = PRESET_NAMES_VI[0]!;
+  private presetNameIndex = 0;
+  private serverHostPort = '';
+  private activeInputField: 'name' | 'ip' | null = null;
+  private disconnectReason: string | null = null;
+
   constructor() {
     super({ key: 'MenuScene' });
+  }
+
+  public init(data?: MenuSceneInitData): void {
+    this.disconnectReason = data?.disconnectReason ?? null;
+    const savedName =
+      typeof window !== 'undefined' ? window.localStorage?.getItem('ashen_pact_name') : null;
+    if (savedName) {
+      this.displayName = savedName;
+    } else {
+      this.presetNameIndex = Math.floor(Math.random() * PRESET_NAMES_VI.length);
+      this.displayName = PRESET_NAMES_VI[this.presetNameIndex] ?? 'Hiệp Sĩ Tro';
+    }
+    const host = typeof window !== 'undefined' ? window.location.hostname || '127.0.0.1' : '127.0.0.1';
+    this.serverHostPort = `${host}:2567`;
   }
 
   public create(): void {
@@ -29,12 +61,10 @@ export class MenuScene extends Phaser.Scene {
 
     this.floorTileSprites = [];
     this.textObjects = [];
+    this.activeInputField = null;
 
     this.applyCameraViewport();
     this.scale.on('resize', this.applyCameraViewport, this);
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
-      this.scale.off('resize', this.applyCameraViewport, this);
-    });
 
     const textRes = TextureBaker.getBakeScale();
 
@@ -82,7 +112,7 @@ export class MenuScene extends Phaser.Scene {
 
     this.textObjects.push(
       this.add
-        .text(480, 94, 'Top-Down Co-op LAN Action Roguelite · Phase 0 Foundation', {
+        .text(480, 94, 'Top-Down Co-op LAN Action Roguelite · 1–4 Người Chơi Mạng Nội Bộ', {
           fontFamily: '"Be Vietnam Pro", sans-serif',
           fontSize: '14px',
           fontStyle: '600',
@@ -93,6 +123,27 @@ export class MenuScene extends Phaser.Scene {
         })
         .setOrigin(0.5),
     );
+
+    if (this.disconnectReason) {
+      const banner = this.add.graphics();
+      banner.fillStyle(hexToNum(PALETTE.RUBY_DARK), 0.96);
+      banner.lineStyle(2, hexToNum(PALETTE.RUBY_CORE), 1);
+      banner.fillRoundedRect(210, 132, 540, 28, 7);
+      banner.strokeRoundedRect(210, 132, 540, 28, 7);
+      this.textObjects.push(
+        this.add
+          .text(480, 146, `⚠ ${this.disconnectReason}`, {
+            fontFamily: '"Be Vietnam Pro", sans-serif',
+            fontSize: '12px',
+            fontStyle: '700',
+            color: PALETTE.BONE_WHITE,
+            stroke: PALETTE.INK_DARK,
+            strokeThickness: 2,
+            resolution: textRes,
+          })
+          .setOrigin(0.5),
+      );
+    }
 
     // Sample Rigs flanking menu buttons with clean spacing
     this.vanguardPreview = new CutoutRig(this, 185, 315, VANGUARD_RIG_DEF, {
@@ -105,33 +156,157 @@ export class MenuScene extends Phaser.Scene {
     });
     this.goblinPreview.setAimAngle(Math.PI);
 
-    // Menu Buttons
-    this.createMenuButton(480, 225, 'Bắt Đầu Chơi Thử (Game Scene)', PALETTE.RUBY_CORE, () => {
-      this.scene.start('GameScene');
+    // Co-op LAN Profile & IP Bar at y=178
+    const coopBarBg = this.add.graphics();
+    const coopBarText = this.add
+      .text(480, 178, '', {
+        fontFamily: '"Be Vietnam Pro", sans-serif',
+        fontSize: '12px',
+        fontStyle: '700',
+        color: PALETTE.BONE_WHITE,
+        stroke: PALETTE.INK_DARK,
+        strokeThickness: 2.5,
+        resolution: textRes,
+      })
+      .setOrigin(0.5);
+    this.textObjects.push(coopBarText);
+
+    const refreshCoopBar = () => {
+      coopBarBg.clear();
+      coopBarBg.fillStyle(hexToNum(PALETTE.SLATE_DARK), 0.94);
+      coopBarBg.lineStyle(
+        2,
+        hexToNum(this.activeInputField ? PALETTE.SOLAR_GOLD : PALETTE.INK_DARK),
+        1,
+      );
+      coopBarBg.fillRoundedRect(240, 162, 480, 32, 8);
+      coopBarBg.strokeRoundedRect(240, 162, 480, 32, 8);
+
+      const nameCursor = this.activeInputField === 'name' ? '▌' : '';
+      const ipCursor = this.activeInputField === 'ip' ? '▌' : '';
+      coopBarText.setText(
+        `Tên: [${this.displayName}${nameCursor}] ↻   |   IP LAN: [${this.serverHostPort}${ipCursor}]`,
+      );
+    };
+    refreshCoopBar();
+
+    // Interactive zones for Name & IP
+    const nameZone = this.add
+      .rectangle(355, 178, 220, 30, 0x000000, 0)
+      .setInteractive({ useHandCursor: true });
+    nameZone.on('pointerdown', () => {
+      if (this.activeInputField === 'name') {
+        this.presetNameIndex = (this.presetNameIndex + 1) % PRESET_NAMES_VI.length;
+        this.displayName = PRESET_NAMES_VI[this.presetNameIndex] ?? 'Hiệp Sĩ Tro';
+      } else {
+        this.activeInputField = 'name';
+      }
+      refreshCoopBar();
+    });
+
+    const ipZone = this.add
+      .rectangle(605, 178, 220, 30, 0x000000, 0)
+      .setInteractive({ useHandCursor: true });
+    ipZone.on('pointerdown', () => {
+      this.activeInputField = this.activeInputField === 'ip' ? null : 'ip';
+      refreshCoopBar();
+    });
+
+    // Keyboard handler for typing custom Name or IP in MenuScene
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!this.activeInputField) return;
+      if (event.key === 'Escape' || event.key === 'Enter') {
+        this.activeInputField = null;
+        refreshCoopBar();
+        return;
+      }
+      if (event.key === 'Backspace') {
+        if (this.activeInputField === 'name') {
+          this.displayName = this.displayName.slice(0, -1);
+        } else {
+          this.serverHostPort = this.serverHostPort.slice(0, -1);
+        }
+        refreshCoopBar();
+        return;
+      }
+      if (event.key.length === 1 && !event.ctrlKey && !event.metaKey) {
+        if (this.activeInputField === 'name' && this.displayName.length < 18) {
+          this.displayName += event.key;
+        } else if (this.activeInputField === 'ip' && this.serverHostPort.length < 28) {
+          this.serverHostPort += event.key;
+        }
+        refreshCoopBar();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.scale.off('resize', this.applyCameraViewport, this);
+      window.removeEventListener('keydown', onKeyDown);
+    });
+
+    // Auto-detect LAN IP from server if available
+    fetch('/api/host-info')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((info: { primaryLanIp?: string; port?: number } | null) => {
+        if (info?.primaryLanIp && this.scene.isActive('MenuScene')) {
+          this.serverHostPort = `${info.primaryLanIp}:${info.port ?? 2567}`;
+          refreshCoopBar();
+        }
+      })
+      .catch(() => {
+        // Ignore when server is offline
+      });
+
+    // Menu Buttons (Button 1 kept at exact (480, 225) for Phase 0-3 E2E compatibility)
+    this.createMenuButton(480, 225, 340, 42, 'Bắt Đầu Chơi Thử (Solo)', PALETTE.RUBY_CORE, () => {
+      this.scene.start('GameScene', { coopMode: 'solo' });
     });
 
     this.createMenuButton(
       480,
-      290,
-      'Phòng Trưng Bày Nghệ Thuật (Art Gallery)',
-      PALETTE.AZURE_CORE,
+      276,
+      340,
+      42,
+      'Tạo Phòng Co-op LAN (Host)',
+      PALETTE.BRASS_CORE,
       () => {
-        this.scene.start('ArtGalleryScene');
+        this.saveProfileName();
+        this.scene.start('GameScene', {
+          coopMode: 'host',
+          displayName: this.displayName || 'Hiệp Sĩ Tro',
+          serverUrl: this.resolveServerWsUrl(),
+        });
       },
     );
 
     this.createMenuButton(
       480,
-      355,
-      'Đổi Animation Mẫu (Idle / Run)',
-      PALETTE.GOBLIN_GREEN,
+      327,
+      340,
+      42,
+      'Tham Gia Phòng LAN (Join IP)',
+      PALETTE.AZURE_CORE,
       () => {
-        const nextState = this.vanguardPreview?.getAnimState() === 'idle' ? 'run' : 'idle';
-        this.vanguardPreview?.setAnimState(nextState);
-        this.goblinPreview?.setAnimState(nextState);
-        debug.animState = nextState;
+        this.saveProfileName();
+        this.scene.start('GameScene', {
+          coopMode: 'join',
+          displayName: this.displayName || 'Cung Thủ Gió',
+          serverUrl: this.resolveServerWsUrl(),
+        });
       },
     );
+
+    this.createMenuButton(392, 378, 164, 38, 'Art Gallery', PALETTE.STEEL_DARK, () => {
+      this.scene.start('ArtGalleryScene');
+    });
+
+    this.createMenuButton(568, 378, 164, 38, 'Đổi Animation', PALETTE.GOBLIN_GREEN, () => {
+      const nextState = this.vanguardPreview?.getAnimState() === 'idle' ? 'run' : 'idle';
+      this.vanguardPreview?.setAnimState(nextState);
+      this.goblinPreview?.setAnimState(nextState);
+      debug.animState = nextState;
+    });
 
     // Vietnamese Diacritics Verification Footer
     const footer = this.add.graphics();
@@ -168,16 +343,34 @@ export class MenuScene extends Phaser.Scene {
     this.debugOverlay = new DebugOverlay(this, false);
   }
 
+  private saveProfileName(): void {
+    try {
+      window.localStorage?.setItem('ashen_pact_name', this.displayName);
+    } catch {
+      // Ignore storage restrictions
+    }
+  }
+
+  private resolveServerWsUrl(): string {
+    const trimmed = this.serverHostPort.trim();
+    if (trimmed.startsWith('ws://') || trimmed.startsWith('wss://')) {
+      return trimmed;
+    }
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const hostPort = trimmed.includes(':') ? trimmed : `${trimmed}:2567`;
+    return `${protocol}//${hostPort}`;
+  }
+
   private createMenuButton(
     x: number,
     y: number,
+    w: number,
+    h: number,
     label: string,
     fillHex: string,
     onClick: () => void,
   ): void {
     const container = this.add.container(x, y);
-    const w = 340;
-    const h = 48;
 
     const bg = this.add.graphics();
     const drawButton = (hover: boolean) => {
@@ -192,7 +385,7 @@ export class MenuScene extends Phaser.Scene {
     const txt = this.add
       .text(0, 0, label, {
         fontFamily: '"Be Vietnam Pro", sans-serif',
-        fontSize: '15px',
+        fontSize: '14px',
         fontStyle: '700',
         color: PALETTE.BONE_WHITE,
         stroke: PALETTE.INK_DARK,

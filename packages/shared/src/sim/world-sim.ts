@@ -28,7 +28,15 @@ import {
   distanceSq,
   isCircleInCone,
 } from '../math/vec2.js';
-import { INPUT_BUTTON, type PlayerInputPacket, TILE_SIZE } from '../protocol/messages.js';
+import { COOP_SCALING } from '../data/scaling.js';
+import {
+  INPUT_BUTTON,
+  PLAYER_SLOT_COLORS,
+  type PlayerInputPacket,
+  QUICK_EMOTES_VI,
+  type QuickEmoteId,
+  TILE_SIZE,
+} from '../protocol/messages.js';
 import { ArenaMap, type ArenaMapConfig, type SurfaceKind } from './arena-map.js';
 import {
   type DungeonFloorGraph,
@@ -62,6 +70,7 @@ export const BIOME1_ENEMY_IDS = [
   'mini_slime',
   'goblin_shaman',
   'thorn_turret',
+  'spore_guardian',
   'spore_king',
 ] as const;
 
@@ -71,6 +80,14 @@ export const ELEMENT_CYCLE_ORDER: readonly ElementType[] = [
   'chill',
   'shock',
   'poison',
+] as const;
+
+export const ALL_CHARACTER_IDS: readonly CharacterId[] = [
+  'vanguard',
+  'ranger',
+  'elementalist',
+  'druid',
+  'engineer',
 ] as const;
 
 export const PLAYER_RADIUS = 13;
@@ -86,6 +103,9 @@ export const BOAR_CHARGE_DURATION_SEC = 0.55;
 export const MELEE_RANGE = 50;
 export const BOSS_ERUPT_RADIUS = 84;
 export const SHAMAN_HEAL_RADIUS = 220;
+export const DOWNED_BLEEDOUT_SEC = 20.0;
+export const REVIVE_HOLD_DURATION_SEC = 2.5;
+export const DRUID_REVIVE_HOLD_DURATION_SEC = 1.25;
 
 export type EnemyAIState =
   | 'spawning'
@@ -154,6 +174,8 @@ export interface SimWorldItemState {
   radius: number;
   pickedUp: boolean;
   offerId?: string;
+  /** If set, instanced to a specific player (only that player can pick it up). If undefined/0, shared. */
+  ownerPlayerId?: number;
 }
 
 export interface SimNpcState {
@@ -169,6 +191,28 @@ export interface SimNpcState {
   costGold?: number;
 }
 
+export interface SimHubStatue {
+  characterId: CharacterId;
+  nameVi: string;
+  titleVi: string;
+  x: number;
+  y: number;
+  radius: number;
+}
+
+export type PingMarkerKind = 'enemy' | 'loot' | 'revive' | 'move';
+
+export interface SimPingMarker {
+  id: number;
+  playerId: number;
+  playerSlot: 1 | 2 | 3 | 4;
+  kind: PingMarkerKind;
+  labelVi: string;
+  x: number;
+  y: number;
+  ttlSec: number;
+}
+
 export interface RunSummaryStats {
   kills: number;
   elitesKilled: number;
@@ -181,10 +225,14 @@ export interface RunSummaryStats {
   ticksElapsed: number;
 }
 
+export type PlayerLifeState = 'alive' | 'downed' | 'ghost';
+
 export interface SimPlayerState {
   id: number;
   slot: 1 | 2 | 3 | 4;
   characterId: CharacterId;
+  displayName: string;
+  colorHex: string;
   prevX: number;
   prevY: number;
   x: number;
@@ -232,6 +280,16 @@ export interface SimPlayerState {
   shockTimer: number;
   surfaceTickTimer: number;
   grassRustleCooldown: number;
+  // Phase 4 Co-op states
+  lifeState: PlayerLifeState;
+  downedTimer: number;
+  reviveProgress: number;
+  reviverPlayerId: number | null;
+  ready: boolean;
+  pingMs: number;
+  emoteId: QuickEmoteId | null;
+  emoteTimer: number;
+  currentRoomId: number;
 }
 
 export interface SimEnemyState {
@@ -324,6 +382,8 @@ export interface SimPickupState {
   vy: number;
   amount: number;
   ttlSec: number;
+  /** If set, instanced to a specific player (only that player can collect it). */
+  ownerPlayerId?: number;
 }
 
 export type SimEvent =
@@ -539,6 +599,55 @@ export type SimEvent =
       kind: 'buff_selected';
       buffId: BuffId;
       nameVi: string;
+    }
+  | {
+      kind: 'player_downed';
+      playerId: number;
+      x: number;
+      y: number;
+    }
+  | {
+      kind: 'player_revived';
+      playerId: number;
+      reviverId: number;
+      x: number;
+      y: number;
+    }
+  | {
+      kind: 'player_ghost';
+      playerId: number;
+      x: number;
+      y: number;
+    }
+  | {
+      kind: 'players_teleported_to_room';
+      roomId: number;
+      x: number;
+      y: number;
+    }
+  | {
+      kind: 'ping_issued';
+      pingId: number;
+      playerId: number;
+      playerSlot: 1 | 2 | 3 | 4;
+      pingKind: PingMarkerKind;
+      labelVi: string;
+      x: number;
+      y: number;
+    }
+  | {
+      kind: 'emote_triggered';
+      playerId: number;
+      emoteId: QuickEmoteId;
+      labelVi: string;
+      x: number;
+      y: number;
+    }
+  | {
+      kind: 'character_selected';
+      playerId: number;
+      characterId: CharacterId;
+      nameVi: string;
     };
 
 export interface WorldSimOptions {
@@ -549,6 +658,17 @@ export interface WorldSimOptions {
   includeProps?: boolean;
   autoRespawnWaves?: boolean;
   autoRevivePlayer?: boolean;
+  startInHub?: boolean;
+  coopMode?: boolean;
+  playerCount?: 1 | 2 | 3 | 4;
+}
+
+interface CoPlayerInputEntry {
+  current: PlayerInputPacket;
+  prevButtons: number;
+  latchedButtons: number;
+  latchedWeaponSlot: number | null;
+  energyRegenAccum: number;
 }
 
 /**
@@ -571,6 +691,15 @@ export class WorldSim {
   public projectiles: SimProjectileState[] = [];
   public pickups: SimPickupState[] = [];
   public props: SimPropState[] = [];
+
+  // Phase 4 Hub & Co-op State
+  public inHub = false;
+  public coopModeActive = false;
+  public allowDuplicateCharacters = false;
+  public hubStatues: SimHubStatue[] = [];
+  public pings: SimPingMarker[] = [];
+  private coopPlayerCountOverride: (1 | 2 | 3 | 4) | null = null;
+  private readonly coopPlayerInputs = new Map<number, CoPlayerInputEntry>();
 
   // Phase 3 Dungeon, Rooms, Chests, Shop, Shrine, Buffs & Run Loop
   public readonly baseSeed: string | number;
@@ -637,7 +766,12 @@ export class WorldSim {
     const seedVal = options.seed ?? 0x1337c0de;
     this.baseSeed = seedVal;
     this.rng = new SeededRandom(seedVal);
-    const spawnWave = options.spawnInitialWave ?? true;
+    this.coopModeActive = options.coopMode ?? Boolean(options.startInHub);
+    if (options.playerCount) {
+      this.coopPlayerCountOverride = options.playerCount;
+    }
+
+    const spawnWave = options.startInHub ? false : (options.spawnInitialWave ?? true);
     this.map = new ArenaMap({
       seed: seedVal,
       includeSurfaces: spawnWave,
@@ -646,12 +780,18 @@ export class WorldSim {
     this.autoRespawnWaves = options.autoRespawnWaves ?? true;
     this.autoRevivePlayer = options.autoRevivePlayer ?? true;
 
-    this.dungeon = generateDungeonFloor(seedVal, 1, 1);
+    const initialPCount = this.coopPlayerCountOverride ?? 1;
+    this.dungeon = generateDungeonFloor(seedVal, 1, 1, initialPCount);
     this.currentRoomId = this.dungeon.startRoomId;
 
     const startX = this.map.width * 0.35;
     const startY = this.map.height * 0.5;
     this.player = this.createPlayerState(1, 1, 'vanguard', startX, startY);
+
+    if (options.startInHub) {
+      this.enterHub();
+      return;
+    }
 
     if (options.includeTrainingDummy ?? true) {
       this.spawnTrainingDummy(210, 260);
@@ -672,18 +812,25 @@ export class WorldSim {
     return this.activeEventsBuffer === 'A' ? this.eventsBufferA : this.eventsBufferB;
   }
 
-  private createPlayerState(
+  public createPlayerState(
     id: number,
     slot: 1 | 2 | 3 | 4,
     characterId: CharacterId,
     x: number,
     y: number,
+    displayName?: string,
   ): SimPlayerState {
     const cDef = CHARACTERS[characterId] ?? CHARACTERS.vanguard;
+    const starterWeapons =
+      characterId === 'vanguard'
+        ? [...PHASE1_SAMPLE_WEAPONS]
+        : [cDef.starterWeaponId, 'rusty_pistol', 'scrap_shotgun', 'gale_smg'];
     return {
       id,
       slot,
       characterId,
+      displayName: displayName ?? `${cDef.nameVi} P${slot}`,
+      colorHex: PLAYER_SLOT_COLORS[slot],
       prevX: x,
       prevY: y,
       x,
@@ -712,7 +859,7 @@ export class WorldSim {
       dashDirY: 0,
       invulnerableTimer: 0,
       hurtFlashTimer: 0,
-      weaponSlots: [...PHASE1_SAMPLE_WEAPONS],
+      weaponSlots: starterWeapons,
       activeWeaponSlot: 0,
       fireCooldownTimer: 0,
       recoilTimer: 0,
@@ -730,7 +877,532 @@ export class WorldSim {
       shockTimer: 0,
       surfaceTickTimer: 0,
       grassRustleCooldown: 0,
+      lifeState: 'alive',
+      downedTimer: 0,
+      reviveProgress: 0,
+      reviverPlayerId: null,
+      ready: false,
+      pingMs: 0,
+      emoteId: null,
+      emoteTimer: 0,
+      currentRoomId: this.currentRoomId,
     };
+  }
+
+  private readonly allPlayersScratch: SimPlayerState[] = [];
+
+  public getAllPlayers(): SimPlayerState[] {
+    this.allPlayersScratch.length = 0;
+    this.allPlayersScratch.push(this.player);
+    if (!this.stressTestActive) {
+      for (let i = 0; i < this.simulatedPlayers.length; i++) {
+        this.allPlayersScratch.push(this.simulatedPlayers[i]!);
+      }
+    }
+    return this.allPlayersScratch;
+  }
+
+  public getActivePlayerCount(): 1 | 2 | 3 | 4 {
+    if (this.coopPlayerCountOverride !== null) {
+      return this.coopPlayerCountOverride;
+    }
+    if (this.stressTestActive) {
+      return 1;
+    }
+    const total = clamp(1 + this.simulatedPlayers.length, 1, 4);
+    return total as 1 | 2 | 3 | 4;
+  }
+
+  public setPlayerCountOverride(count: (1 | 2 | 3 | 4) | null): void {
+    this.coopPlayerCountOverride = count;
+  }
+
+  public getPlayerById(playerId: number): SimPlayerState | undefined {
+    if (this.player.id === playerId) return this.player;
+    return this.simulatedPlayers.find((p) => p.id === playerId);
+  }
+
+  public getPlayerBySlot(slot: 1 | 2 | 3 | 4): SimPlayerState | undefined {
+    if (this.player.slot === slot) return this.player;
+    return this.simulatedPlayers.find((p) => p.slot === slot);
+  }
+
+  public addCoopPlayer(
+    slotOrId: 1 | 2 | 3 | 4 | number,
+    characterIdOrSlot: CharacterId | (1 | 2 | 3 | 4) = 'vanguard',
+    displayNameOrChar?: string,
+    idOrName?: number | string,
+  ): SimPlayerState {
+    this.coopModeActive = true;
+    let slot: 1 | 2 | 3 | 4;
+    let characterId: CharacterId;
+    let displayName: string | undefined;
+    let pid: number;
+
+    if (typeof characterIdOrSlot === 'number') {
+      pid = slotOrId;
+      slot = clamp(characterIdOrSlot, 1, 4) as 1 | 2 | 3 | 4;
+      characterId = (displayNameOrChar as CharacterId | undefined) ?? 'vanguard';
+      displayName = typeof idOrName === 'string' ? idOrName : undefined;
+    } else {
+      slot = clamp(slotOrId, 1, 4) as 1 | 2 | 3 | 4;
+      characterId = characterIdOrSlot;
+      displayName = displayNameOrChar;
+      pid = typeof idOrName === 'number' ? idOrName : slot;
+    }
+
+    const cx = this.map.width * 0.5;
+    const cy = this.map.height * 0.5;
+    const spawnOffsets: Record<1 | 2 | 3 | 4, [number, number]> = {
+      1: [-90, 8],
+      2: [15, 28],
+      3: [-90, 68],
+      4: [15, 88],
+    };
+    const [ox, oy] = spawnOffsets[slot];
+    const resolved = this.map.resolveCircleCollision(cx + ox, cy + oy, PLAYER_RADIUS);
+
+    if (slot === 1 && this.player.slot === 1) {
+      this.player.id = pid;
+      this.applyCharacterToPlayerState(this.player, characterId, displayName);
+      this.player.x = resolved.x;
+      this.player.y = resolved.y;
+      this.player.prevX = resolved.x;
+      this.player.prevY = resolved.y;
+      return this.player;
+    }
+
+    const existingIdx = this.simulatedPlayers.findIndex((p) => p.slot === slot || p.id === pid);
+    const state = this.createPlayerState(
+      pid,
+      slot,
+      characterId,
+      resolved.x,
+      resolved.y,
+      displayName,
+    );
+    if (existingIdx >= 0) {
+      this.simulatedPlayers[existingIdx] = state;
+    } else {
+      this.simulatedPlayers.push(state);
+      this.simulatedPlayers.sort((a, b) => a.slot - b.slot);
+    }
+    this.coopPlayerInputs.set(pid, {
+      current: {
+        seq: 0,
+        tick: this.tick,
+        moveX: 0,
+        moveY: 0,
+        aimAngle: 0,
+        buttons: 0,
+        weaponSlotSelect: null,
+      },
+      prevButtons: 0,
+      latchedButtons: 0,
+      latchedWeaponSlot: null,
+      energyRegenAccum: 0,
+    });
+    return state;
+  }
+
+  public removeCoopPlayer(playerId: number): boolean {
+    const idx = this.simulatedPlayers.findIndex((p) => p.id === playerId);
+    if (idx >= 0) {
+      this.simulatedPlayers.splice(idx, 1);
+      this.coopPlayerInputs.delete(playerId);
+      return true;
+    }
+    return false;
+  }
+
+  public setCoopPlayerInput(playerId: number, input: PlayerInputPacket): void {
+    if (playerId === this.player.id) {
+      this.setPlayerInput(input);
+      if (typeof input.pingWorldX === 'number' && typeof input.pingWorldY === 'number') {
+        this.triggerPing(playerId, input.pingWorldX, input.pingWorldY);
+      }
+      if (input.emoteId) {
+        this.triggerEmote(playerId, input.emoteId);
+      }
+      return;
+    }
+
+    const sp = this.getPlayerById(playerId);
+    if (!sp) return;
+    let entry = this.coopPlayerInputs.get(playerId);
+    if (!entry) {
+      entry = {
+        current: {
+          seq: 0,
+          tick: this.tick,
+          moveX: 0,
+          moveY: 0,
+          aimAngle: 0,
+          buttons: 0,
+          weaponSlotSelect: null,
+        },
+        prevButtons: 0,
+        latchedButtons: 0,
+        latchedWeaponSlot: null,
+        energyRegenAccum: 0,
+      };
+      this.coopPlayerInputs.set(playerId, entry);
+    }
+    const newEdges = input.buttons & ~entry.current.buttons;
+    entry.latchedButtons |= newEdges;
+    if (typeof input.weaponSlotSelect === 'number') {
+      entry.latchedWeaponSlot = input.weaponSlotSelect;
+    }
+    entry.current.seq = input.seq;
+    entry.current.tick = input.tick;
+    entry.current.moveX = input.moveX;
+    entry.current.moveY = input.moveY;
+    entry.current.aimAngle = input.aimAngle;
+    entry.current.buttons = input.buttons;
+    entry.current.weaponSlotSelect = input.weaponSlotSelect ?? null;
+    sp.lastProcessedSeq = input.seq;
+
+    if (typeof input.pingWorldX === 'number' && typeof input.pingWorldY === 'number') {
+      this.triggerPing(playerId, input.pingWorldX, input.pingWorldY);
+    }
+    if (input.emoteId) {
+      this.triggerEmote(playerId, input.emoteId);
+    }
+  }
+
+  private applyCharacterToPlayerState(
+    p: SimPlayerState,
+    characterId: CharacterId,
+    displayName?: string,
+  ): void {
+    const cDef = CHARACTERS[characterId] ?? CHARACTERS.vanguard;
+    p.characterId = characterId;
+    if (displayName) {
+      p.displayName = displayName;
+    } else if (p.displayName.includes(' P')) {
+      p.displayName = `${cDef.nameVi} P${p.slot}`;
+    }
+    p.maxHp = cDef.hp;
+    p.hp = cDef.hp;
+    p.maxArmor = cDef.armor;
+    p.armor = cDef.armor;
+    p.maxEnergy = cDef.energy;
+    p.energy = cDef.energy;
+    p.moveSpeed = cDef.moveSpeed;
+    p.armorRegenDelaySec = cDef.armorRegenDelaySec;
+    p.armorRegenPerSec = cDef.armorRegenPerSec;
+    p.weaponSlots =
+      characterId === 'vanguard'
+        ? [...PHASE1_SAMPLE_WEAPONS]
+        : [cDef.starterWeaponId, 'rusty_pistol', 'scrap_shotgun', 'gale_smg'];
+    p.activeWeaponSlot = 0;
+    p.skillActiveTimer = 0;
+    p.skillCooldownTimer = 0;
+  }
+
+  public selectCharacter(
+    playerId: number,
+    characterId: CharacterId,
+    allowDuplicateOverride?: boolean,
+  ): boolean {
+    if (!CHARACTERS[characterId]) return false;
+    const p = this.getPlayerById(playerId);
+    if (!p) return false;
+
+    const allowDuplicates = allowDuplicateOverride ?? this.allowDuplicateCharacters;
+    if (!allowDuplicates) {
+      const all = this.getAllPlayers();
+      const takenByOther = all.some(
+        (other) => other.id !== playerId && other.characterId === characterId,
+      );
+      if (takenByOther) {
+        return false;
+      }
+    }
+
+    this.applyCharacterToPlayerState(p, characterId);
+    this.events.push({
+      kind: 'character_selected',
+      playerId: p.id,
+      characterId,
+      nameVi: CHARACTERS[characterId].nameVi,
+    });
+    return true;
+  }
+
+  public togglePlayerReady(playerId: number, ready?: boolean): boolean {
+    const p = this.getPlayerById(playerId);
+    if (!p) return false;
+    p.ready = ready ?? !p.ready;
+    return p.ready;
+  }
+
+  public areAllPlayersReady(): boolean {
+    const all = this.getAllPlayers();
+    return all.length > 0 && all.every((p) => p.ready);
+  }
+
+  public enterHub(): void {
+    this.inHub = true;
+    this.coopModeActive = true;
+    this.runState = 'playing';
+    this.enemies.length = 0;
+    this.projectiles.length = 0;
+    this.pickups.length = 0;
+    this.props.length = 0;
+    this.chests.length = 0;
+    this.worldItems.length = 0;
+    this.npcEntities.length = 0;
+    this.doors.length = 0;
+    this.hubStatues.length = 0;
+
+    this.map.configureRoomLayout('start', Number(this.baseSeed), false);
+    this.map.clearInteriorForHub();
+    const cx = this.map.width * 0.5;
+    const cy = this.map.height * 0.5;
+
+    // 5 Character Statues in a staggered arc at the top of the Hub Camp (left of Invite Panel)
+    const statueCoords: readonly [CharacterId, number, number][] = [
+      ['vanguard', cx - 325, cy - 96],
+      ['ranger', cx - 235, cy - 182],
+      ['elementalist', cx - 145, cy - 96],
+      ['druid', cx - 55, cy - 182],
+      ['engineer', cx + 35, cy - 96],
+    ];
+    for (const [cid, sx, sy] of statueCoords) {
+      const cDef = CHARACTERS[cid];
+      this.hubStatues.push({
+        characterId: cid,
+        nameVi: cDef.nameVi,
+        titleVi: cDef.titleVi,
+        x: sx,
+        y: sy,
+        radius: 24,
+      });
+    }
+
+    // Central Campfire & Torch Braziers
+    this.spawnProp('torch_brazier', cx - 35, cy - 10);
+    this.spawnProp('torch_brazier', cx - 210, cy - 35);
+    this.spawnProp('torch_brazier', cx + 135, cy - 35);
+    this.spawnProp('glow_mushroom', cx - 310, cy + 10);
+    this.spawnProp('glow_mushroom', cx + 165, cy + 20);
+
+    // Training Dummy in the Hub (East-center side, left of Invite Panel)
+    this.spawnTrainingDummy(cx + 95, cy + 95);
+
+    // Weapon Test Rack (West side — 2x2 staggered grid so [E] labels never overlap)
+    const rackWeapons = ['hunter_crossbow', 'frost_scepter', 'tesla_carbine', 'dragon_breath_shotgun'] as const;
+    const rackOffsets: readonly [number, number][] = [
+      [-320, 48],
+      [-195, 48],
+      [-320, 118],
+      [-195, 118],
+    ];
+    for (let i = 0; i < rackWeapons.length; i++) {
+      const wid = rackWeapons[i]!;
+      const wep = WEAPONS[wid];
+      if (!wep) continue;
+      const [rx, ry] = rackOffsets[i % rackOffsets.length]!;
+      this.spawnWorldItem({
+        kind: 'weapon',
+        weaponId: wep.id,
+        rarity: wep.rarity,
+        nameVi: wep.nameVi,
+        costGold: 0,
+        healAmount: 0,
+        x: cx + rx,
+        y: cy + ry,
+      });
+    }
+
+    // Hub Expedition Portal at bottom center
+    this.portalActive = true;
+    this.portalX = cx - 30;
+    this.portalY = cy + 142;
+
+    // Position all players around the campfire in a wide vertically-staggered 2x2 formation
+    const allPlayers = this.getAllPlayers();
+    const offsets: readonly [number, number][] = [
+      [-90, 8],
+      [15, 28],
+      [-90, 68],
+      [15, 88],
+    ];
+    for (let i = 0; i < allPlayers.length; i++) {
+      const p = allPlayers[i]!;
+      const [ox, oy] = offsets[i % offsets.length]!;
+      const pos = this.map.resolveCircleCollision(cx + ox, cy + oy, p.radius);
+      p.x = pos.x;
+      p.y = pos.y;
+      p.prevX = pos.x;
+      p.prevY = pos.y;
+      p.vx = 0;
+      p.vy = 0;
+      p.lifeState = 'alive';
+      p.hp = p.maxHp;
+      p.armor = p.maxArmor;
+      p.energy = p.maxEnergy;
+      p.ready = false;
+    }
+  }
+
+  public startDungeonRunFromHub(): void {
+    this.inHub = false;
+    this.hubStatues.length = 0;
+    this.currentFloor = 1;
+    this.runState = 'playing';
+    this.roomChestsByRoomId.clear();
+    this.roomItemsByRoomId.clear();
+    this.initializedRoomIds.clear();
+
+    const pCount = this.getActivePlayerCount();
+    this.dungeon = generateDungeonFloor(this.baseSeed, 1, 1, pCount);
+    this.currentRoomId = this.dungeon.startRoomId;
+
+    const allPlayers = this.getAllPlayers();
+    for (const p of allPlayers) {
+      p.lifeState = 'alive';
+      p.downedTimer = 0;
+      p.reviveProgress = 0;
+      p.reviverPlayerId = null;
+      p.hp = p.maxHp;
+      p.armor = p.maxArmor;
+      p.energy = p.maxEnergy;
+      p.ready = false;
+      p.currentRoomId = this.currentRoomId;
+    }
+
+    this.enterRoom(this.dungeon.startRoomId);
+  }
+
+  public triggerPing(playerId: number, worldX: number, worldY: number): SimPingMarker | null {
+    const p = this.getPlayerById(playerId);
+    if (!p) return null;
+
+    let kind: PingMarkerKind = 'move';
+    let labelVi = 'Di chuyển tới đây!';
+    let px = clamp(worldX, TILE_SIZE * 1.5, this.map.width - TILE_SIZE * 1.5);
+    let py = clamp(worldY, TILE_SIZE * 1.5, this.map.height - TILE_SIZE * 1.5);
+
+    if (p.lifeState === 'downed') {
+      kind = 'revive';
+      labelVi = 'Cứu tôi!';
+      px = p.x;
+      py = p.y;
+    } else {
+      const downedAlly = this.getAllPlayers().find(
+        (ally) => ally.lifeState === 'downed' && distance(px, py, ally.x, ally.y) <= 64,
+      );
+      if (downedAlly) {
+        kind = 'revive';
+        labelVi = `Cứu ${downedAlly.displayName}!`;
+        px = downedAlly.x;
+        py = downedAlly.y;
+      } else {
+        const targetEnemy = this.enemies.find(
+          (e) => !e.isDummy && e.hp > 0 && distance(px, py, e.x, e.y) <= 64,
+        );
+        if (targetEnemy) {
+          kind = 'enemy';
+          labelVi = `Tập trung: ${targetEnemy.nameVi}!`;
+          px = targetEnemy.x;
+          py = targetEnemy.y;
+        } else {
+          const targetItem = this.worldItems.find(
+            (it) => !it.pickedUp && distance(px, py, it.x, it.y) <= 64,
+          );
+          const targetChest = this.chests.find(
+            (c) => !c.opened && distance(px, py, c.x, c.y) <= 64,
+          );
+          if (targetItem) {
+            kind = 'loot';
+            labelVi = `Vật phẩm: ${targetItem.nameVi}`;
+            px = targetItem.x;
+            py = targetItem.y;
+          } else if (targetChest) {
+            kind = 'loot';
+            labelVi = 'Rương Vũ Khí ở đây!';
+            px = targetChest.x;
+            py = targetChest.y;
+          }
+        }
+      }
+    }
+
+    // Replace existing ping from the same player so spam doesn't clutter
+    const existingIdx = this.pings.findIndex((m) => m.playerId === p.id);
+    if (existingIdx >= 0) {
+      this.pings.splice(existingIdx, 1);
+    }
+
+    const marker: SimPingMarker = {
+      id: ++this.nextEntityId,
+      playerId: p.id,
+      playerSlot: p.slot,
+      kind,
+      labelVi,
+      x: px,
+      y: py,
+      ttlSec: 4.0,
+    };
+    this.pings.push(marker);
+    this.events.push({
+      kind: 'ping_issued',
+      pingId: marker.id,
+      playerId: p.id,
+      playerSlot: p.slot,
+      pingKind: kind,
+      labelVi,
+      x: px,
+      y: py,
+    });
+    return marker;
+  }
+
+  public triggerEmote(playerId: number, emoteId: QuickEmoteId): boolean {
+    const p = this.getPlayerById(playerId);
+    const labelVi = QUICK_EMOTES_VI[emoteId];
+    if (!p || !labelVi) return false;
+    p.emoteId = emoteId;
+    p.emoteTimer = 2.5;
+    this.events.push({
+      kind: 'emote_triggered',
+      playerId: p.id,
+      emoteId,
+      labelVi,
+      x: p.x,
+      y: p.y,
+    });
+    return true;
+  }
+
+  public dropActiveWeapon(playerId = this.player.id): SimWorldItemState | null {
+    const p = this.getPlayerById(playerId);
+    if (!p || p.lifeState !== 'alive' || p.weaponSlots.length <= 1) return null;
+    const activeIdx = clamp(p.activeWeaponSlot, 0, p.weaponSlots.length - 1);
+    const wid = p.weaponSlots[activeIdx]!;
+    const wep = WEAPONS[wid];
+    if (!wep) return null;
+
+    p.weaponSlots.splice(activeIdx, 1);
+    p.activeWeaponSlot = Math.min(activeIdx, p.weaponSlots.length - 1);
+
+    const dropX = p.x + Math.cos(p.aimAngle) * 28;
+    const dropY = p.y + Math.sin(p.aimAngle) * 28;
+    const resolved = this.map.resolveCircleCollision(dropX, dropY, 15);
+    const droppedItem = this.spawnWorldItem({
+      kind: 'weapon',
+      weaponId: wep.id,
+      rarity: wep.rarity,
+      nameVi: wep.nameVi,
+      costGold: 0,
+      healAmount: 0,
+      x: resolved.x,
+      y: resolved.y,
+      ownerPlayerId: undefined, // Shared so any teammate can pick it up!
+    });
+    return droppedItem;
   }
 
   public spawnDefaultArenaProps(): void {
@@ -1040,13 +1712,21 @@ export class WorldSim {
       throw new Error(`Unknown enemy defId: ${defId}`);
     }
 
+    const playerCount = this.getActivePlayerCount();
+    const scaling = COOP_SCALING[playerCount];
     const isElite = eliteModifier !== null && !def.isBoss;
     const radius = isElite ? Math.round(def.radius * 1.25) : def.radius;
-    const baseHp = isElite ? Math.round(def.hp * 2.2) : def.hp;
+    const rawHp = isElite ? Math.round(def.hp * 2.2) : def.hp;
+    const hpMult = this.stressTestActive
+      ? 1.0
+      : def.isBoss
+        ? scaling.bossHpMultiplier
+        : scaling.enemyHpMultiplier;
+    const baseHp = Math.max(1, Math.round(rawHp * hpMult));
     const moveSpeed =
       isElite && eliteModifier === 'fast' ? Math.round(def.moveSpeed * 1.38) : def.moveSpeed;
     const damage = isElite ? Math.max(def.damage + 1, Math.round(def.damage * 1.35)) : def.damage;
-    const shieldArmor = isElite && eliteModifier === 'shield' ? Math.round(def.hp * 0.85) : 0;
+    const shieldArmor = isElite && eliteModifier === 'shield' ? Math.round(def.hp * 0.85 * hpMult) : 0;
     const nameVi =
       isElite && eliteModifier
         ? `[Tinh Anh] ${def.nameVi} (${ELITE_MODIFIER_LABELS_VI[eliteModifier]})`
@@ -1135,8 +1815,36 @@ export class WorldSim {
         enemyId: enemy.id,
         nameVi: enemy.nameVi,
       });
+      // Phase 4 Co-op 3-4P Boss Mechanic: Spore King spawns 2 Shield Guardian Mushrooms in 2 corners!
+      if (playerCount >= 3 && defId === 'spore_king') {
+        this.spawnBossGuardianMushrooms();
+      }
     }
     return enemy;
+  }
+
+  public spawnBossGuardianMushrooms(): void {
+    const existingGuardians = this.enemies.filter(
+      (e) => e.defId === 'spore_guardian' && e.hp > 0,
+    ).length;
+    if (existingGuardians >= 2) return;
+    this.spawnEnemy('spore_guardian', TILE_SIZE * 6.5, TILE_SIZE * 5.0, true);
+    this.spawnEnemy(
+      'spore_guardian',
+      this.map.width - TILE_SIZE * 6.5,
+      this.map.height - TILE_SIZE * 5.0,
+      true,
+    );
+  }
+
+  public hasActiveBossGuardians(): boolean {
+    for (let i = 0; i < this.enemies.length; i++) {
+      const e = this.enemies[i]!;
+      if (e.defId === 'spore_guardian' && e.hp > 0) {
+        return true;
+      }
+    }
+    return false;
   }
 
   public spawnSampleWave(): void {
@@ -1176,6 +1884,7 @@ export class WorldSim {
 
   public rebuildCurrentRoomDoors(): void {
     this.doors.length = 0;
+    if (this.inHub) return;
     const room = this.getCurrentRoom();
     const hasCombat = this.hasActiveCombatEnemies();
 
@@ -1226,7 +1935,9 @@ export class WorldSim {
   public enterRoom(roomId: number, entryDir?: CardinalDir): boolean {
     const targetRoom = this.dungeon.rooms[roomId];
     if (!targetRoom) return false;
+    this.inHub = false;
 
+    const prevRoomId = this.currentRoomId;
     if (this.initializedRoomIds.has(this.currentRoomId)) {
       this.roomChestsByRoomId.set(this.currentRoomId, [...this.chests]);
       this.roomItemsByRoomId.set(this.currentRoomId, [...this.worldItems]);
@@ -1271,7 +1982,7 @@ export class WorldSim {
     const roomSeed = Number(this.dungeon.seed) + roomId * 997 + this.currentFloor * 7919;
     this.map.configureRoomLayout(targetRoom.type, roomSeed, this.secretWallBroken);
 
-    // Position player near the entrance door (opposite of entryDir)
+    // Position player(s) near the entrance door (opposite of entryDir)
     let spawnX = this.map.width * 0.35;
     let spawnY = this.map.height * 0.5;
     if (entryDir) {
@@ -1291,12 +2002,60 @@ export class WorldSim {
       }
     }
     const resolvedPos = this.map.resolveCircleCollision(spawnX, spawnY, this.player.radius);
-    this.player.x = resolvedPos.x;
-    this.player.y = resolvedPos.y;
-    this.player.prevX = resolvedPos.x;
-    this.player.prevY = resolvedPos.y;
+    const hasCoopTeammates = !this.stressTestActive && this.simulatedPlayers.length > 0;
+    const p1Pos = hasCoopTeammates
+      ? this.map.resolveCircleCollision(resolvedPos.x - 68, resolvedPos.y - 28, this.player.radius)
+      : resolvedPos;
+    this.player.x = p1Pos.x;
+    this.player.y = p1Pos.y;
+    this.player.prevX = p1Pos.x;
+    this.player.prevY = p1Pos.y;
     this.player.vx = 0;
     this.player.vy = 0;
+    this.player.currentRoomId = roomId;
+
+    // Teleport co-op teammates into the new room around the entrance!
+    if (hasCoopTeammates) {
+      const offsets: readonly [number, number][] = [
+        [38, -28],
+        [-18, 44],
+        [88, 44],
+        [0, -54],
+      ];
+      let anyTeleportedFromOutside = false;
+      for (let i = 0; i < this.simulatedPlayers.length; i++) {
+        const sp = this.simulatedPlayers[i]!;
+        if (sp.currentRoomId !== roomId || prevRoomId !== roomId) {
+          anyTeleportedFromOutside = true;
+        }
+        const [ox, oy] = offsets[i % offsets.length]!;
+        const spPos = this.map.resolveCircleCollision(
+          resolvedPos.x + ox,
+          resolvedPos.y + oy,
+          sp.radius,
+        );
+        sp.x = spPos.x;
+        sp.y = spPos.y;
+        sp.prevX = spPos.x;
+        sp.prevY = spPos.y;
+        sp.vx = 0;
+        sp.vy = 0;
+        sp.currentRoomId = roomId;
+      }
+
+      if (
+        anyTeleportedFromOutside &&
+        !targetRoom.cleared &&
+        (targetRoom.type === 'combat' || targetRoom.type === 'portal' || targetRoom.type === 'boss')
+      ) {
+        this.events.push({
+          kind: 'players_teleported_to_room',
+          roomId: targetRoom.id,
+          x: resolvedPos.x,
+          y: resolvedPos.y,
+        });
+      }
+    }
 
     this.populateRoomContents(targetRoom);
     this.initializedRoomIds.add(targetRoom.id);
@@ -1581,6 +2340,27 @@ export class WorldSim {
     const cx = this.map.width * 0.5;
     const cy = this.map.height * 0.5;
 
+    // Phase 4 Co-op: Revive all Soul Ghosts & Downed teammates at 50% HP when a room is cleared!
+    const allPlayers = this.getAllPlayers();
+    for (const p of allPlayers) {
+      if (p.lifeState === 'ghost' || p.lifeState === 'downed') {
+        p.lifeState = 'alive';
+        p.downedTimer = 0;
+        p.reviveProgress = 0;
+        p.reviverPlayerId = null;
+        p.hp = Math.max(2, Math.ceil(p.maxHp * 0.5));
+        p.armor = Math.min(p.maxArmor, 2);
+        p.invulnerableTimer = 1.5;
+        this.events.push({
+          kind: 'player_revived',
+          playerId: p.id,
+          reviverId: 0,
+          x: p.x,
+          y: p.y,
+        });
+      }
+    }
+
     if (room.type === 'combat') {
       const rarity = room.chestRarity ?? this.rollChestRarity(0);
       this.spawnChest(cx, cy, rarity, room.chestWeaponId ?? undefined);
@@ -1668,34 +2448,76 @@ export class WorldSim {
     this.runStats.chestsOpened += 1;
 
     const wep = WEAPONS[chest.droppedWeaponId] ?? WEAPONS.gale_smg!;
-    this.spawnWorldItem({
-      kind: 'weapon',
-      weaponId: wep.id,
-      rarity: wep.rarity,
-      nameVi: wep.nameVi,
-      costGold: 0,
-      healAmount: 0,
-      x: chest.x,
-      y: chest.y + 28,
-    });
+    const allPlayers = this.getAllPlayers();
+
+    if (allPlayers.length > 1) {
+      // Phase 4 Co-op Instanced Loot: each player receives their own weapon drop & orbs!
+      for (let pIdx = 0; pIdx < allPlayers.length; pIdx++) {
+        const p = allPlayers[pIdx]!;
+        const instancedWepId =
+          pIdx === 0 ? wep.id : this.rollRandomWeaponByRarities([chest.rarity, wep.rarity]);
+        const instancedWep = WEAPONS[instancedWepId] ?? wep;
+        const offsetX = (pIdx - (allPlayers.length - 1) * 0.5) * 34;
+        this.spawnWorldItem({
+          kind: 'weapon',
+          weaponId: instancedWep.id,
+          rarity: instancedWep.rarity,
+          nameVi: instancedWep.nameVi,
+          costGold: 0,
+          healAmount: 0,
+          x: chest.x + offsetX,
+          y: chest.y + 28,
+          ownerPlayerId: p.id,
+        });
+
+        for (let i = 0; i < 3; i++) {
+          const ang = -Math.PI * 0.5 + (i - 1) * 0.6 + pIdx * 0.25;
+          this.pickups.push(
+            this.acquirePickup({
+              id: ++this.nextEntityId,
+              kind: i === 1 ? 'energy' : 'gold',
+              x: chest.x,
+              y: chest.y,
+              vx: Math.cos(ang) * 95,
+              vy: Math.sin(ang) * 95,
+              amount: i === 1 ? 15 : 10,
+              ttlSec: 20,
+              ownerPlayerId: p.id,
+            }),
+          );
+        }
+      }
+    } else {
+      this.spawnWorldItem({
+        kind: 'weapon',
+        weaponId: wep.id,
+        rarity: wep.rarity,
+        nameVi: wep.nameVi,
+        costGold: 0,
+        healAmount: 0,
+        x: chest.x,
+        y: chest.y + 28,
+      });
+
+      for (let i = 0; i < 3; i++) {
+        const ang = -Math.PI * 0.5 + (i - 1) * 0.6;
+        this.pickups.push(
+          this.acquirePickup({
+            id: ++this.nextEntityId,
+            kind: i === 1 ? 'energy' : 'gold',
+            x: chest.x,
+            y: chest.y,
+            vx: Math.cos(ang) * 95,
+            vy: Math.sin(ang) * 95,
+            amount: i === 1 ? 15 : 10,
+            ttlSec: 20,
+          }),
+        );
+      }
+    }
+
     this.roomChestsByRoomId.set(room.id, [...this.chests]);
     this.roomItemsByRoomId.set(room.id, [...this.worldItems]);
-
-    for (let i = 0; i < 3; i++) {
-      const ang = -Math.PI * 0.5 + (i - 1) * 0.6;
-      this.pickups.push(
-        this.acquirePickup({
-          id: ++this.nextEntityId,
-          kind: i === 1 ? 'energy' : 'gold',
-          x: chest.x,
-          y: chest.y,
-          vx: Math.cos(ang) * 95,
-          vy: Math.sin(ang) * 95,
-          amount: i === 1 ? 15 : 10,
-          ttlSec: 20,
-        }),
-      );
-    }
 
     this.events.push({
       kind: 'chest_opened',
@@ -1708,15 +2530,27 @@ export class WorldSim {
     return true;
   }
 
-  public pickupOrBuyWorldItem(item: SimWorldItemState): boolean {
-    if (item.pickedUp) return false;
+  public pickupOrBuyWorldItem(
+    item: SimWorldItemState,
+    collector: SimPlayerState = this.player,
+  ): boolean {
+    if (item.pickedUp || collector.lifeState !== 'alive') return false;
+    // Enforce Instanced Loot ownership if ownerPlayerId is set
+    if (
+      item.ownerPlayerId !== undefined &&
+      item.ownerPlayerId !== 0 &&
+      item.ownerPlayerId !== collector.id
+    ) {
+      return false;
+    }
+
     if (item.costGold > 0) {
-      if (this.player.gold >= item.costGold) {
-        this.player.gold -= item.costGold;
-      } else if (!this.player.godMode) {
+      if (collector.gold >= item.costGold) {
+        collector.gold -= item.costGold;
+      } else if (!collector.godMode) {
         return false;
       } else {
-        this.player.gold = 0;
+        collector.gold = 0;
       }
       this.events.push({
         kind: 'item_purchased',
@@ -1737,30 +2571,38 @@ export class WorldSim {
     this.roomItemsByRoomId.set(room.id, [...this.worldItems]);
 
     if (item.kind === 'health_potion') {
-      this.player.hp = Math.min(this.player.maxHp, this.player.hp + item.healAmount);
-      this.player.armor = Math.min(this.player.maxArmor, this.player.armor + 2);
+      collector.hp = Math.min(collector.maxHp, collector.hp + item.healAmount);
+      collector.armor = Math.min(collector.maxArmor, collector.armor + 2);
       return true;
     }
 
     if (item.kind === 'armor_upgrade') {
-      this.player.maxArmor += 2;
-      this.player.armor = this.player.maxArmor;
+      collector.maxArmor += 2;
+      collector.armor = collector.maxArmor;
       return true;
     }
 
     if (item.kind === 'weapon' && item.weaponId && WEAPONS[item.weaponId]) {
-      const existingIdx = this.player.weaponSlots.indexOf(item.weaponId);
+      const existingIdx = collector.weaponSlots.indexOf(item.weaponId);
       if (existingIdx >= 0) {
-        this.equipWeaponSlot(existingIdx);
-      } else if (this.player.weaponSlots.length < 4) {
-        this.player.weaponSlots.push(item.weaponId);
-        this.equipWeaponSlot(this.player.weaponSlots.length - 1);
+        if (collector.id === this.player.id) {
+          this.equipWeaponSlot(existingIdx);
+        } else {
+          collector.activeWeaponSlot = existingIdx;
+        }
+      } else if (collector.weaponSlots.length < 4) {
+        collector.weaponSlots.push(item.weaponId);
+        if (collector.id === this.player.id) {
+          this.equipWeaponSlot(collector.weaponSlots.length - 1);
+        } else {
+          collector.activeWeaponSlot = collector.weaponSlots.length - 1;
+        }
       } else {
-        this.player.weaponSlots[this.player.activeWeaponSlot] = item.weaponId;
+        collector.weaponSlots[collector.activeWeaponSlot] = item.weaponId;
         this.events.push({
           kind: 'weapon_swapped',
           weaponId: item.weaponId,
-          slot: this.player.activeWeaponSlot,
+          slot: collector.activeWeaponSlot,
         });
       }
       return true;
@@ -1768,14 +2610,14 @@ export class WorldSim {
     return false;
   }
 
-  public activateShrine(shrine: SimNpcState): boolean {
-    if (shrine.kind !== 'shrine' || shrine.interacted) return false;
+  public activateShrine(shrine: SimNpcState, actor: SimPlayerState = this.player): boolean {
+    if (shrine.kind !== 'shrine' || shrine.interacted || actor.lifeState !== 'alive') return false;
     const costGold = shrine.costGold ?? 25;
-    if (this.player.gold >= costGold) {
-      this.player.gold -= costGold;
-    } else if (this.player.hp > shrine.costHp) {
-      this.player.hp -= shrine.costHp;
-    } else if (!this.player.godMode) {
+    if (actor.gold >= costGold) {
+      actor.gold -= costGold;
+    } else if (actor.hp > shrine.costHp) {
+      actor.hp -= shrine.costHp;
+    } else if (!actor.godMode) {
       return false;
     }
 
@@ -1783,9 +2625,11 @@ export class WorldSim {
     const room = this.getCurrentRoom();
     room.shrineUsed = true;
 
-    this.player.maxEnergy += 30;
-    this.player.energy = this.player.maxEnergy;
-    this.player.armor = this.player.maxArmor;
+    for (const p of this.getAllPlayers()) {
+      p.maxEnergy += 30;
+      p.energy = p.maxEnergy;
+      p.armor = p.maxArmor;
+    }
 
     // Also grant the room's shrineBlessingId buff if available
     const blessingId = room.shrineBlessingId as BuffId | null;
@@ -1822,6 +2666,10 @@ export class WorldSim {
 
   public enterPortal(): boolean {
     if (!this.portalActive) return false;
+    if (this.inHub) {
+      this.startDungeonRunFromHub();
+      return true;
+    }
     if (this.currentFloor === 1) {
       this.runState = 'buff_choice';
       this.rollPendingBuffChoices();
@@ -1867,18 +2715,20 @@ export class WorldSim {
     const def = FLOOR_BUFFS[buffId];
     if (!def || this.activeBuffIds.includes(buffId)) return;
     this.activeBuffIds.push(buffId);
-    if (buffId === 'vitality_surge') {
-      this.player.maxHp += 3;
-      this.player.hp = this.player.maxHp;
-    } else if (buffId === 'iron_bastion') {
-      this.player.maxArmor += 2;
-      this.player.armor = this.player.maxArmor;
-      this.player.armorRegenDelaySec = Math.max(0.8, this.player.armorRegenDelaySec - 0.5);
-    } else if (buffId === 'arcane_wellspring') {
-      this.player.maxEnergy += 60;
-      this.player.energy = this.player.maxEnergy;
-    } else if (buffId === 'gale_reflex') {
-      this.player.moveSpeed = Math.round(this.player.moveSpeed * 1.2);
+    for (const p of this.getAllPlayers()) {
+      if (buffId === 'vitality_surge') {
+        p.maxHp += 3;
+        p.hp = p.maxHp;
+      } else if (buffId === 'iron_bastion') {
+        p.maxArmor += 2;
+        p.armor = p.maxArmor;
+        p.armorRegenDelaySec = Math.max(0.8, p.armorRegenDelaySec - 0.5);
+      } else if (buffId === 'arcane_wellspring') {
+        p.maxEnergy += 60;
+        p.energy = p.maxEnergy;
+      } else if (buffId === 'gale_reflex') {
+        p.moveSpeed = Math.round(p.moveSpeed * 1.2);
+      }
     }
     this.events.push({
       kind: 'buff_selected',
@@ -1909,7 +2759,7 @@ export class WorldSim {
     this.roomChestsByRoomId.clear();
     this.roomItemsByRoomId.clear();
     this.initializedRoomIds.clear();
-    this.dungeon = generateDungeonFloor(this.baseSeed, floorNumber, 1);
+    this.dungeon = generateDungeonFloor(this.baseSeed, floorNumber, 1, this.getActivePlayerCount());
     this.enterRoom(this.dungeon.startRoomId);
   }
 
@@ -1931,9 +2781,20 @@ export class WorldSim {
     }
   }
 
-  public interactWithNearest(): boolean {
-    const p = this.player;
+  public interactWithNearest(actor: SimPlayerState = this.player): boolean {
+    if (actor.lifeState !== 'alive') return false;
+    const p = actor;
     const interactRange = 64;
+
+    // 0. Hub Character Statues
+    if (this.inHub) {
+      for (let i = 0; i < this.hubStatues.length; i++) {
+        const statue = this.hubStatues[i]!;
+        if (distance(p.x, p.y, statue.x, statue.y) <= interactRange + 8) {
+          return this.selectCharacter(p.id, statue.characterId);
+        }
+      }
+    }
 
     // 1. Unopened Chests
     for (let i = 0; i < this.chests.length; i++) {
@@ -1947,7 +2808,7 @@ export class WorldSim {
     for (let i = 0; i < this.worldItems.length; i++) {
       const item = this.worldItems[i]!;
       if (!item.pickedUp && distance(p.x, p.y, item.x, item.y) <= interactRange) {
-        if (this.pickupOrBuyWorldItem(item)) {
+        if (this.pickupOrBuyWorldItem(item, p)) {
           return true;
         }
       }
@@ -1961,12 +2822,19 @@ export class WorldSim {
         !npc.interacted &&
         distance(p.x, p.y, npc.x, npc.y) <= interactRange + 8
       ) {
-        return this.activateShrine(npc);
+        return this.activateShrine(npc, p);
       }
     }
 
     // 4. Active Portal
     if (this.portalActive && distance(p.x, p.y, this.portalX, this.portalY) <= interactRange + 8) {
+      if (this.inHub) {
+        p.ready = true;
+        if (this.areAllPlayersReady()) {
+          this.startDungeonRunFromHub();
+        }
+        return true;
+      }
       return this.enterPortal();
     }
 
@@ -1989,6 +2857,19 @@ export class WorldSim {
     this.runStats.ticksElapsed += 1;
     if (this.doorTransitionCooldown > 0) {
       this.doorTransitionCooldown = Math.max(0, this.doorTransitionCooldown - dtSec);
+    }
+
+    // Decay active contextual ping markers
+    if (this.pings.length > 0) {
+      let pingWrite = 0;
+      for (let i = 0; i < this.pings.length; i++) {
+        const m = this.pings[i]!;
+        m.ttlSec -= dtSec;
+        if (m.ttlSec > 0) {
+          this.pings[pingWrite++] = m;
+        }
+      }
+      this.pings.length = pingWrite;
     }
 
     if (this.botAutoPlayActive && !this.stressTestActive) {
@@ -2025,10 +2906,13 @@ export class WorldSim {
     // 3. Rebuild enemy spatial grid once before player/enemy updates
     this.rebuildEnemySpatialGrid();
 
-    // 4. Update Player & Simulated Co-op Players
+    // 4. Update Player & Co-op / Simulated Players
     this.updatePlayer(dtSec);
     if (this.simulatedPlayers.length > 0) {
       this.updateSimulatedPlayers(dtSec);
+    }
+    if (!this.stressTestActive && (this.coopModeActive || this.simulatedPlayers.length > 0)) {
+      this.updateCoopDownedAndRevive(dtSec);
     }
 
     // 5. Update Destructible Props & Barrel Fuses
@@ -2058,7 +2942,7 @@ export class WorldSim {
       if (this.projectiles.length < 610) {
         this.topUpStressTestProjectiles(625);
       }
-    } else {
+    } else if (!this.inHub) {
       this.updateCurrentRoomProgression(dtSec);
     }
 
@@ -2129,6 +3013,14 @@ export class WorldSim {
     const p = this.player;
     p.godMode = true;
     p.energy = p.maxEnergy;
+
+    if (this.inHub) {
+      for (const ally of this.getAllPlayers()) {
+        ally.ready = true;
+      }
+      this.startDungeonRunFromHub();
+      return;
+    }
 
     if (this.runState === 'buff_choice' && this.pendingBuffChoices.length > 0) {
       this.selectFloorBuff(this.pendingBuffChoices[0]!);
@@ -2202,6 +3094,27 @@ export class WorldSim {
         buttons,
         weaponSlotSelect: null,
       });
+
+      // Also drive co-op teammates in botAutoPlay mode so all 4 players fight together!
+      for (let i = 0; i < this.simulatedPlayers.length; i++) {
+        const sp = this.simulatedPlayers[i]!;
+        sp.godMode = true;
+        sp.energy = sp.maxEnergy;
+        const spAng = Math.atan2(nearestEnemy.y - sp.y, nearestEnemy.x - sp.x);
+        const spDist = distance(sp.x, sp.y, nearestEnemy.x, nearestEnemy.y);
+        const spStrafe = spAng + (i % 2 === 0 ? 1 : -1) * Math.PI * 0.5;
+        const spMoveX = spDist > 175 ? Math.cos(spAng) : Math.cos(spStrafe);
+        const spMoveY = spDist > 175 ? Math.sin(spAng) : Math.sin(spStrafe);
+        this.setCoopPlayerInput(sp.id, {
+          seq: this.tick,
+          tick: this.tick,
+          moveX: spMoveX,
+          moveY: spMoveY,
+          aimAngle: spAng,
+          buttons: INPUT_BUTTON.FIRE | (sp.skillCooldownTimer <= 0 ? INPUT_BUTTON.SKILL : 0),
+          weaponSlotSelect: null,
+        });
+      }
       return;
     }
 
@@ -2225,12 +3138,17 @@ export class WorldSim {
       return;
     }
 
-    // 3. Pick up free weapons on the ground
-    const freeItem = this.worldItems.find((it) => !it.pickedUp && it.costGold === 0);
+    // 3. Pick up free weapons on the ground (belonging to P1 or shared)
+    const freeItem = this.worldItems.find(
+      (it) =>
+        !it.pickedUp &&
+        it.costGold === 0 &&
+        (it.ownerPlayerId === undefined || it.ownerPlayerId === 0 || it.ownerPlayerId === p.id),
+    );
     if (freeItem) {
       const d = distance(p.x, p.y, freeItem.x, freeItem.y);
       if (d <= 56) {
-        this.pickupOrBuyWorldItem(freeItem);
+        this.pickupOrBuyWorldItem(freeItem, p);
       } else {
         const ang = Math.atan2(freeItem.y - p.y, freeItem.x - p.x);
         this.setPlayerInput({
@@ -2250,7 +3168,7 @@ export class WorldSim {
     if (unusedShrine) {
       const d = distance(p.x, p.y, unusedShrine.x, unusedShrine.y);
       if (d <= 58) {
-        this.activateShrine(unusedShrine);
+        this.activateShrine(unusedShrine, p);
       } else {
         const ang = Math.atan2(unusedShrine.y - p.y, unusedShrine.x - p.x);
         this.setPlayerInput({
@@ -2412,25 +3330,96 @@ export class WorldSim {
   }
 
   private updatePlayer(dtSec: number): void {
-    const p = this.player;
     const inp = this.currentInput;
     const justPressed = (inp.buttons & ~this.prevButtons) | this.latchedButtons;
     const selectedSlot = this.latchedWeaponSlot ?? inp.weaponSlotSelect;
+    this.updateSinglePlayerState(this.player, inp, justPressed, selectedSlot ?? null, dtSec);
+  }
 
+  private updateSinglePlayerState(
+    p: SimPlayerState,
+    inp: PlayerInputPacket,
+    justPressed: number,
+    selectedSlot: number | null,
+    dtSec: number,
+  ): void {
     p.aimAngle = inp.aimAngle;
+
+    if (p.emoteTimer > 0) {
+      p.emoteTimer = Math.max(0, p.emoteTimer - dtSec);
+      if (p.emoteTimer <= 0) {
+        p.emoteId = null;
+      }
+    }
+
+    if (justPressed & INPUT_BUTTON.PING) {
+      const px =
+        typeof inp.pingWorldX === 'number'
+          ? inp.pingWorldX
+          : p.x + Math.cos(p.aimAngle) * 110;
+      const py =
+        typeof inp.pingWorldY === 'number'
+          ? inp.pingWorldY
+          : p.y + Math.sin(p.aimAngle) * 110;
+      this.triggerPing(p.id, px, py);
+    }
+
+    if (justPressed & INPUT_BUTTON.READY) {
+      if (this.inHub) {
+        this.togglePlayerReady(p.id);
+      }
+    }
+
+    if (justPressed & INPUT_BUTTON.DROP_WEAPON) {
+      this.dropActiveWeapon(p.id);
+    }
+
+    // Downed or Ghost players can only move slowly (crawl/float) and Ping/Emote
+    if (p.lifeState !== 'alive') {
+      let dirX = inp.moveX;
+      let dirY = inp.moveY;
+      const len = Math.hypot(dirX, dirY);
+      if (len > 1e-4) {
+        dirX /= len;
+        dirY /= len;
+      } else {
+        dirX = 0;
+        dirY = 0;
+      }
+      const crawlSpeed = p.lifeState === 'downed' ? 38 : p.moveSpeed * 0.85;
+      p.vx = dirX * crawlSpeed;
+      p.vy = dirY * crawlSpeed;
+      const col = this.map.resolveCircleCollision(
+        p.x + p.vx * dtSec,
+        p.y + p.vy * dtSec,
+        p.radius,
+      );
+      p.x = col.x;
+      p.y = col.y;
+      return;
+    }
 
     if (
       typeof selectedSlot === 'number' &&
       selectedSlot >= 0 &&
       selectedSlot < p.weaponSlots.length
     ) {
-      this.equipWeaponSlot(selectedSlot);
+      if (p.id === this.player.id) {
+        this.equipWeaponSlot(selectedSlot);
+      } else if (p.activeWeaponSlot !== selectedSlot) {
+        p.activeWeaponSlot = selectedSlot;
+        p.fireCooldownTimer = Math.min(p.fireCooldownTimer, 0.08);
+      }
     } else if (justPressed & INPUT_BUTTON.SWAP) {
-      this.cycleWeapon(1);
+      if (p.id === this.player.id) {
+        this.cycleWeapon(1);
+      } else if (p.weaponSlots.length > 1) {
+        p.activeWeaponSlot = (p.activeWeaponSlot + 1) % p.weaponSlots.length;
+      }
     }
 
     if (justPressed & INPUT_BUTTON.INTERACT) {
-      this.interactWithNearest();
+      this.interactWithNearest(p);
     }
 
     if (p.dashCooldownTimer > 0) p.dashCooldownTimer = Math.max(0, p.dashCooldownTimer - dtSec);
@@ -2452,11 +3441,36 @@ export class WorldSim {
       }
     }
 
+    // Engineer passive: allies within 4 tiles (128u) regenerate armor 30% faster!
+    let hasNearbyEngineer = p.characterId === 'engineer' && p.lifeState === 'alive';
+    if (!hasNearbyEngineer && !this.stressTestActive) {
+      if (
+        this.player.characterId === 'engineer' &&
+        this.player.lifeState === 'alive' &&
+        distance(p.x, p.y, this.player.x, this.player.y) <= TILE_SIZE * 4
+      ) {
+        hasNearbyEngineer = true;
+      } else {
+        for (let i = 0; i < this.simulatedPlayers.length; i++) {
+          const ally = this.simulatedPlayers[i]!;
+          if (
+            ally.characterId === 'engineer' &&
+            ally.lifeState === 'alive' &&
+            distance(p.x, p.y, ally.x, ally.y) <= TILE_SIZE * 4
+          ) {
+            hasNearbyEngineer = true;
+            break;
+          }
+        }
+      }
+    }
+    const armorRegenRate = p.armorRegenPerSec * (hasNearbyEngineer ? 1.3 : 1.0);
+
     if (p.armorRegenTimer > 0) {
       p.armorRegenTimer = Math.max(0, p.armorRegenTimer - dtSec);
       p.armorRegenAccum = 0;
     } else if (p.armor < p.maxArmor && p.hp > 0) {
-      p.armorRegenAccum += dtSec * p.armorRegenPerSec;
+      p.armorRegenAccum += dtSec * armorRegenRate;
       if (p.armorRegenAccum >= 1) {
         const pts = Math.floor(p.armorRegenAccum);
         p.armorRegenAccum -= pts;
@@ -2518,31 +3532,17 @@ export class WorldSim {
     }
 
     if (justPressed & INPUT_BUTTON.SKILL) {
-      if (p.skillActiveTimer > 0) {
-        this.releaseVanguardShieldShockwave();
-      } else if (p.skillCooldownTimer <= 0) {
-        const skillDef = CHARACTERS.vanguard.skill;
-        const bonusDur = this.activeBuffIds.includes('vanguard_fortress') ? 1.5 : 0;
-        p.skillActiveTimer = skillDef.durationSec + bonusDur;
-        p.shieldStoredBullets = 0;
-        if (this.activeBuffIds.includes('vanguard_fortress')) {
-          p.armor = Math.min(p.maxArmor, p.armor + 2);
-        }
-        this.events.push({
-          kind: 'skill_cast',
-          playerId: p.id,
-          skillId: skillDef.id,
-          x: p.x,
-          y: p.y,
-          angle: p.aimAngle,
-        });
-      }
+      this.activateCharacterSkill(p);
     }
 
     if (p.skillActiveTimer > 0) {
       p.skillActiveTimer -= dtSec;
       if (p.skillActiveTimer <= 0) {
-        this.releaseVanguardShieldShockwave();
+        if (p.characterId === 'vanguard') {
+          this.releaseVanguardShieldShockwave(p);
+        } else {
+          p.skillActiveTimer = 0;
+        }
       }
     }
 
@@ -2589,10 +3589,15 @@ export class WorldSim {
     }
 
     if ((inp.buttons & INPUT_BUTTON.FIRE) && p.fireCooldownTimer <= 0 && p.hp > 0) {
-      this.tryFireActiveWeapon();
+      this.tryFireActiveWeapon(p);
     }
 
-    if (!this.stressTestActive && this.doorTransitionCooldown <= 0 && !this.hasActiveCombatEnemies()) {
+    if (
+      !this.inHub &&
+      !this.stressTestActive &&
+      this.doorTransitionCooldown <= 0 &&
+      !this.hasActiveCombatEnemies()
+    ) {
       for (let i = 0; i < this.doors.length; i++) {
         const door = this.doors[i]!;
         if (door.locked) continue;
@@ -2611,7 +3616,189 @@ export class WorldSim {
     }
   }
 
+  private activateCharacterSkill(p: SimPlayerState): void {
+    const cDef = CHARACTERS[p.characterId] ?? CHARACTERS.vanguard;
+    const skillDef = cDef.skill;
+
+    if (p.characterId === 'vanguard') {
+      if (p.skillActiveTimer > 0) {
+        this.releaseVanguardShieldShockwave(p);
+      } else if (p.skillCooldownTimer <= 0) {
+        const bonusDur = this.activeBuffIds.includes('vanguard_fortress') ? 1.5 : 0;
+        p.skillActiveTimer = skillDef.durationSec + bonusDur;
+        p.shieldStoredBullets = 0;
+        if (this.activeBuffIds.includes('vanguard_fortress')) {
+          p.armor = Math.min(p.maxArmor, p.armor + 2);
+        }
+        this.events.push({
+          kind: 'skill_cast',
+          playerId: p.id,
+          skillId: skillDef.id,
+          x: p.x,
+          y: p.y,
+          angle: p.aimAngle,
+        });
+      }
+      return;
+    }
+
+    if (p.skillCooldownTimer > 0) return;
+    p.skillCooldownTimer = skillDef.cooldownSec;
+    this.events.push({
+      kind: 'skill_cast',
+      playerId: p.id,
+      skillId: skillDef.id,
+      x: p.x,
+      y: p.y,
+      angle: p.aimAngle,
+    });
+
+    if (p.characterId === 'ranger') {
+      // Predator Arrow: backflip i-frame + high-damage piercing arrow
+      p.dashTimer = 0.16;
+      p.invulnerableTimer = Math.max(p.invulnerableTimer, 0.35);
+      p.dashDirX = -Math.cos(p.aimAngle);
+      p.dashDirY = -Math.sin(p.aimAngle);
+      const proj = this.acquireProjectile({
+        id: ++this.nextEntityId,
+        ownerId: p.id,
+        team: 'player',
+        weaponId: 'hunter_crossbow',
+        x: p.x + Math.cos(p.aimAngle) * 18,
+        y: p.y + Math.sin(p.aimAngle) * 18,
+        vx: Math.cos(p.aimAngle) * 680,
+        vy: Math.sin(p.aimAngle) * 680,
+        angle: p.aimAngle,
+        radius: 6.5,
+        damage: 28,
+        isCrit: true,
+        knockback: 180,
+        pierceRemaining: 5,
+        bounceRemaining: 0,
+        ttlSec: 1.5,
+        element: p.activeImbueElement !== 'none' ? p.activeImbueElement : 'shock',
+        amplifiedByShield: true,
+      });
+      this.projectiles.push(proj);
+      return;
+    }
+
+    if (p.characterId === 'elementalist') {
+      // Elemental Orb: cycle element Lửa -> Băng -> Sét and detonate elemental zone
+      const cycle: readonly ElementType[] = ['burn', 'chill', 'shock'];
+      const curIdx = cycle.indexOf(p.activeImbueElement);
+      const nextEl = cycle[(curIdx + 1) % cycle.length] ?? 'burn';
+      p.activeImbueElement = nextEl;
+      const orbX = clamp(
+        p.x + Math.cos(p.aimAngle) * 115,
+        TILE_SIZE * 2,
+        this.map.width - TILE_SIZE * 2,
+      );
+      const orbY = clamp(
+        p.y + Math.sin(p.aimAngle) * 115,
+        TILE_SIZE * 2,
+        this.map.height - TILE_SIZE * 2,
+      );
+      this.applyElementAtWorldPoint(orbX, orbY, nextEl, 56);
+      for (let i = 0; i < this.enemies.length; i++) {
+        const e = this.enemies[i]!;
+        if (e.hp > 0 && distance(orbX, orbY, e.x, e.y) <= 68 + e.radius) {
+          this.applyDamageToEnemy(
+            e,
+            20,
+            true,
+            nextEl,
+            Math.atan2(e.y - orbY, e.x - orbX),
+            150,
+            true,
+          );
+        }
+      }
+      return;
+    }
+
+    if (p.characterId === 'druid') {
+      // Sacred Tree: heal allies +2 HP, root/stun nearby enemies 1.5s, and INSTANTLY revive downed teammates!
+      for (const ally of this.getAllPlayers()) {
+        if (ally.lifeState === 'downed' && distance(p.x, p.y, ally.x, ally.y) <= 175) {
+          ally.lifeState = 'alive';
+          ally.hp = 2;
+          ally.armor = Math.min(ally.maxArmor, 2);
+          ally.invulnerableTimer = 1.5;
+          ally.downedTimer = 0;
+          ally.reviveProgress = 0;
+          ally.reviverPlayerId = null;
+          this.events.push({
+            kind: 'player_revived',
+            playerId: ally.id,
+            reviverId: p.id,
+            x: ally.x,
+            y: ally.y,
+          });
+        } else if (ally.lifeState === 'alive') {
+          ally.hp = Math.min(ally.maxHp, ally.hp + 2);
+        }
+      }
+      for (let i = 0; i < this.enemies.length; i++) {
+        const e = this.enemies[i]!;
+        if (!e.isDummy && e.hp > 0 && distance(p.x, p.y, e.x, e.y) <= 150) {
+          e.aiState = 'stunned';
+          e.stateTimer = 1.5;
+          this.applyDamageToEnemy(e, 12, false, 'poison', Math.atan2(e.y - p.y, e.x - p.x), 80);
+        }
+      }
+      return;
+    }
+
+    if (p.characterId === 'engineer') {
+      // Tesla Turret / EMP Pulse: clear enemy bullets + chain lightning to nearby enemies + restore armor
+      for (let i = 0; i < this.projectiles.length; i++) {
+        const b = this.projectiles[i]!;
+        if (b.team === 'enemy' && b.ttlSec > 0 && distance(p.x, p.y, b.x, b.y) <= 150) {
+          b.ttlSec = 0;
+        }
+      }
+      for (const ally of this.getAllPlayers()) {
+        if (ally.lifeState === 'alive' && distance(p.x, p.y, ally.x, ally.y) <= 150) {
+          ally.armor = Math.min(ally.maxArmor, ally.armor + 2);
+        }
+      }
+      let zapped = 0;
+      for (let i = 0; i < this.enemies.length && zapped < 4; i++) {
+        const e = this.enemies[i]!;
+        if (e.hp > 0 && distance(p.x, p.y, e.x, e.y) <= 185) {
+          zapped += 1;
+          this.applyDamageToEnemy(e, 18, true, 'shock', Math.atan2(e.y - p.y, e.x - p.x), 110);
+          this.events.push({
+            kind: 'chain_lightning',
+            fromX: p.x,
+            fromY: p.y,
+            toX: e.x,
+            toY: e.y,
+          });
+        }
+      }
+    }
+  }
+
   private updateSimulatedPlayers(dtSec: number): void {
+    if (!this.stressTestActive) {
+      for (let i = 0; i < this.simulatedPlayers.length; i++) {
+        const sp = this.simulatedPlayers[i]!;
+        const entry = this.coopPlayerInputs.get(sp.id);
+        if (entry) {
+          const justPressed =
+            (entry.current.buttons & ~entry.prevButtons) | entry.latchedButtons;
+          const selectedSlot = entry.latchedWeaponSlot ?? entry.current.weaponSlotSelect;
+          this.updateSinglePlayerState(sp, entry.current, justPressed, selectedSlot ?? null, dtSec);
+          entry.prevButtons = entry.current.buttons;
+          entry.latchedButtons = 0;
+          entry.latchedWeaponSlot = null;
+        }
+      }
+      return;
+    }
+
     const cx = this.map.width * 0.5;
     const cy = this.map.height * 0.5;
 
@@ -2661,6 +3848,72 @@ export class WorldSim {
     }
   }
 
+  private updateCoopDownedAndRevive(dtSec: number): void {
+    const allPlayers = this.getAllPlayers();
+    for (let i = 0; i < allPlayers.length; i++) {
+      const downed = allPlayers[i]!;
+      if (downed.lifeState !== 'downed') continue;
+
+      // Find an alive teammate within 64 units holding INTERACT (E) or standing within 46 units
+      let reviver: SimPlayerState | null = null;
+      for (let j = 0; j < allPlayers.length; j++) {
+        const ally = allPlayers[j]!;
+        if (ally.id === downed.id || ally.lifeState !== 'alive') continue;
+        const d = distance(downed.x, downed.y, ally.x, ally.y);
+        if (d <= 64) {
+          const allyButtons =
+            ally.id === this.player.id
+              ? this.currentInput.buttons
+              : (this.coopPlayerInputs.get(ally.id)?.current.buttons ?? 0);
+          if ((allyButtons & INPUT_BUTTON.INTERACT) !== 0 || (this.botAutoPlayActive && d <= 46)) {
+            reviver = ally;
+            break;
+          }
+        }
+      }
+
+      if (reviver) {
+        downed.reviverPlayerId = reviver.id;
+        const requiredSec =
+          reviver.characterId === 'druid'
+            ? DRUID_REVIVE_HOLD_DURATION_SEC
+            : REVIVE_HOLD_DURATION_SEC;
+        downed.reviveProgress = Math.min(1, downed.reviveProgress + dtSec / requiredSec);
+        if (downed.reviveProgress >= 1) {
+          downed.lifeState = 'alive';
+          downed.hp = 2;
+          downed.armor = Math.min(downed.maxArmor, 2);
+          downed.invulnerableTimer = 1.5;
+          downed.downedTimer = 0;
+          downed.reviveProgress = 0;
+          downed.reviverPlayerId = null;
+          this.events.push({
+            kind: 'player_revived',
+            playerId: downed.id,
+            reviverId: reviver.id,
+            x: downed.x,
+            y: downed.y,
+          });
+          continue;
+        }
+      } else {
+        downed.reviverPlayerId = null;
+        downed.reviveProgress = Math.max(0, downed.reviveProgress - dtSec * 0.5);
+        downed.downedTimer = Math.max(0, downed.downedTimer - dtSec);
+        if (downed.downedTimer <= 0) {
+          downed.lifeState = 'ghost';
+          downed.reviveProgress = 0;
+          this.events.push({
+            kind: 'player_ghost',
+            playerId: downed.id,
+            x: downed.x,
+            y: downed.y,
+          });
+        }
+      }
+    }
+  }
+
   private updatePlayerSurfaceAndStatus(
     p: SimPlayerState,
     surf: SurfaceKind,
@@ -2676,7 +3929,7 @@ export class WorldSim {
       p.surfaceTickTimer += dtSec;
       if (p.surfaceTickTimer >= 0.75) {
         p.surfaceTickTimer = 0;
-        this.applyDamageToPlayer(1, 0, 20, 'electrified_water');
+        this.applyDamageToPlayer(1, 0, 20, 'electrified_water', p);
       }
     }
 
@@ -2685,7 +3938,7 @@ export class WorldSim {
       p.burnTickTimer += dtSec;
       if (p.burnTickTimer >= 0.8) {
         p.burnTickTimer = 0;
-        this.applyDamageToPlayer(1, 0, 10, 'burn');
+        this.applyDamageToPlayer(1, 0, 10, 'burn', p);
       }
     }
     if (p.poisonTimer > 0) {
@@ -2693,7 +3946,7 @@ export class WorldSim {
       p.poisonTickTimer += dtSec;
       if (p.poisonTickTimer >= 1.0) {
         p.poisonTickTimer = 0;
-        this.applyDamageToPlayer(1, 0, 10, 'poison');
+        this.applyDamageToPlayer(1, 0, 10, 'poison', p);
       }
     }
     if (p.chillTimer > 0) {
@@ -2877,11 +4130,13 @@ export class WorldSim {
       }
     }
 
-    // 4. Damage player if too close
-    const distP = distance(barrel.x, barrel.y, this.player.x, this.player.y);
-    if (distP <= blastR + this.player.radius) {
-      const pushAngle = Math.atan2(this.player.y - barrel.y, this.player.x - barrel.x);
-      this.applyDamageToPlayer(2, pushAngle, 220, 'explosive_barrel');
+    // 4. Damage any alive player if too close
+    for (const p of this.getAllPlayers()) {
+      const distP = distance(barrel.x, barrel.y, p.x, p.y);
+      if (distP <= blastR + p.radius) {
+        const pushAngle = Math.atan2(p.y - barrel.y, p.x - barrel.x);
+        this.applyDamageToPlayer(2, pushAngle, 220, 'explosive_barrel', p);
+      }
     }
 
     // 5. Chain reaction to nearby barrels & destructible crates/vases
@@ -2899,8 +4154,7 @@ export class WorldSim {
     }
   }
 
-  private releaseVanguardShieldShockwave(): void {
-    const p = this.player;
+  private releaseVanguardShieldShockwave(p: SimPlayerState = this.player): void {
     const skillDef = CHARACTERS.vanguard.skill;
     const stored = p.shieldStoredBullets;
     p.skillActiveTimer = 0;
@@ -2975,9 +4229,9 @@ export class WorldSim {
     });
   }
 
-  private tryFireActiveWeapon(): void {
-    const p = this.player;
-    const weaponId = this.getActiveWeaponId();
+  private tryFireActiveWeapon(p: SimPlayerState = this.player): void {
+    const weaponId =
+      p.weaponSlots[p.activeWeaponSlot] ?? p.weaponSlots[0] ?? 'knight_sword';
     const w = WEAPONS[weaponId];
     if (!w) return;
 
@@ -3154,8 +4408,36 @@ export class WorldSim {
     }
   }
 
+  private findNearestAlivePlayer(x: number, y: number): SimPlayerState {
+    if (this.stressTestActive || this.simulatedPlayers.length === 0) {
+      return this.player;
+    }
+    let best = this.player;
+    let bestDistSq =
+      this.player.lifeState === 'alive' && this.player.hp > 0
+        ? distanceSq(x, y, this.player.x, this.player.y)
+        : Infinity;
+    for (let i = 0; i < this.simulatedPlayers.length; i++) {
+      const candidate = this.simulatedPlayers[i]!;
+      if (candidate.lifeState !== 'alive' || candidate.hp <= 0) continue;
+      const dSq = distanceSq(x, y, candidate.x, candidate.y);
+      if (dSq < bestDistSq) {
+        bestDistSq = dSq;
+        best = candidate;
+      }
+    }
+    return best;
+  }
+
+  private getCoopEnemyCooldownScale(): number {
+    const pCount = this.getActivePlayerCount();
+    if (pCount <= 1 || this.stressTestActive) return 1.0;
+    const bonus = COOP_SCALING[pCount].enemyFireRateBonus;
+    return 1 / (1 + bonus);
+  }
+
   private updateEnemies(dtSec: number): void {
-    const p = this.player;
+    const coopCdScale = this.getCoopEnemyCooldownScale();
 
     for (let i = 0; i < this.enemies.length; i++) {
       const e = this.enemies[i]!;
@@ -3165,7 +4447,10 @@ export class WorldSim {
         e.hitFlashTimer = Math.max(0, e.hitFlashTimer - dtSec);
       }
       if (e.attackCooldownTimer > 0) {
-        e.attackCooldownTimer = Math.max(0, e.attackCooldownTimer - dtSec);
+        e.attackCooldownTimer = Math.max(
+          0,
+          e.attackCooldownTimer - dtSec / coopCdScale,
+        );
       }
       if (e.shockTimer > 0) {
         e.shockTimer = Math.max(0, e.shockTimer - dtSec);
@@ -3221,6 +4506,8 @@ export class WorldSim {
         }
       }
 
+      const targetPlayer = this.findNearestAlivePlayer(e.x, e.y);
+
       if (e.aiState === 'stunned') {
         e.vx = 0;
         e.vy = 0;
@@ -3230,8 +4517,8 @@ export class WorldSim {
           e.stateTimer = 0.6;
         }
       } else {
-        const dx = p.x - e.x;
-        const dy = p.y - e.y;
+        const dx = targetPlayer.x - e.x;
+        const dy = targetPlayer.y - e.y;
         const distToPlayer = Math.hypot(dx, dy);
         const angleToPlayer = Math.atan2(dy, dx);
 
@@ -3245,15 +4532,15 @@ export class WorldSim {
           this.updateSlimeAI(e, distToPlayer, angleToPlayer, dtSec);
         } else if (e.defId === 'goblin_shaman') {
           this.updateGoblinShamanAI(e, distToPlayer, angleToPlayer, dtSec);
-        } else if (e.defId === 'thorn_turret') {
+        } else if (e.defId === 'thorn_turret' || e.defId === 'spore_guardian') {
           this.updateThornTurretAI(e, distToPlayer, angleToPlayer, dtSec);
         } else if (e.defId === 'spore_king') {
-          this.updateBossSporeKingAI(e, distToPlayer, angleToPlayer, dtSec);
+          this.updateBossSporeKingAI(e, targetPlayer, distToPlayer, angleToPlayer, dtSec);
         }
       }
 
-      // Stationary turrets do not move or get knocked around
-      if (e.defId === 'thorn_turret') {
+      // Stationary turrets & guardian mushrooms do not move or get knocked around
+      if (e.defId === 'thorn_turret' || e.defId === 'spore_guardian') {
         e.vx = 0;
         e.vy = 0;
         e.kbVx = 0;
@@ -3276,7 +4563,7 @@ export class WorldSim {
       );
       let sepX = 0;
       let sepY = 0;
-      if (e.defId !== 'thorn_turret' && !e.bossBurrowed) {
+      if (e.defId !== 'thorn_turret' && e.defId !== 'spore_guardian' && !e.bossBurrowed) {
         for (let j = 0; j < nearby.length; j++) {
           const other = nearby[j]!;
           if (other.id === e.id || other.hp <= 0) continue;
@@ -3310,7 +4597,8 @@ export class WorldSim {
         e.stateTimer = 0.5;
         e.vx = 0;
         e.vy = 0;
-        e.attackCooldownTimer = ENEMIES.wild_boar?.attackCooldownSec ?? 2.6;
+        e.attackCooldownTimer =
+          (ENEMIES.wild_boar?.attackCooldownSec ?? 2.6) * this.getEnemyCooldownScale(false);
         this.events.push({
           kind: 'hit_stop',
           durationMs: 30,
@@ -3327,6 +4615,13 @@ export class WorldSim {
       }
     }
     this.enemies.length = writeIdx;
+  }
+
+  private getEnemyCooldownScale(isBoss: boolean): number {
+    const count = this.getActivePlayerCount();
+    const scaling = COOP_SCALING[count];
+    const rate = isBoss ? 1 + scaling.enemyFireRateBonus * 0.75 : 1 + scaling.enemyFireRateBonus;
+    return 1 / Math.max(1, rate);
   }
 
   private updateEnemyStatusAndSurface(
@@ -3433,7 +4728,8 @@ export class WorldSim {
     angleToPlayer: number,
     dtSec: number,
   ): void {
-    const cdMult = e.isElite && e.eliteModifier === 'fast' ? 0.72 : 1.0;
+    const cdMult =
+      (e.isElite && e.eliteModifier === 'fast' ? 0.72 : 1.0) * this.getEnemyCooldownScale(false);
     if (e.aiState === 'telegraph') {
       e.vx = 0;
       e.vy = 0;
@@ -3544,7 +4840,8 @@ export class WorldSim {
     angleToPlayer: number,
     dtSec: number,
   ): void {
-    const cdMult = e.isElite && e.eliteModifier === 'fast' ? 0.72 : 1.0;
+    const cdMult =
+      (e.isElite && e.eliteModifier === 'fast' ? 0.72 : 1.0) * this.getEnemyCooldownScale(false);
     if (e.aiState === 'telegraph') {
       e.vx = 0;
       e.vy = 0;
@@ -3564,14 +4861,19 @@ export class WorldSim {
       e.vy = Math.sin(e.telegraphAngle) * BOAR_CHARGE_SPEED;
       e.stateTimer -= dtSec;
 
-      if (circleVsCircle(e, this.player)) {
-        this.applyDamageToPlayer(e.damage, e.telegraphAngle, 240, e.defId);
-        e.aiState = 'cooldown';
-        e.stateTimer = 0.5;
-        e.attackCooldownTimer = (ENEMIES.wild_boar?.attackCooldownSec ?? 2.6) * cdMult;
-        e.vx = 0;
-        e.vy = 0;
-        return;
+      const allPlayers = this.getAllPlayers();
+      for (let i = 0; i < allPlayers.length; i++) {
+        const pl = allPlayers[i]!;
+        if (pl.lifeState !== 'alive') continue;
+        if (circleVsCircle(e, pl)) {
+          this.applyDamageToPlayer(e.damage, e.telegraphAngle, 240, e.defId, pl);
+          e.aiState = 'cooldown';
+          e.stateTimer = 0.5;
+          e.attackCooldownTimer = (ENEMIES.wild_boar?.attackCooldownSec ?? 2.6) * cdMult;
+          e.vx = 0;
+          e.vy = 0;
+          return;
+        }
       }
 
       if (e.stateTimer <= 0) {
@@ -3676,10 +4978,15 @@ export class WorldSim {
       }
     }
 
-    const distP = distance(e.x, e.y, this.player.x, this.player.y);
-    if (distP <= blastRadius + this.player.radius) {
-      const pushAngle = Math.atan2(this.player.y - e.y, this.player.x - e.x);
-      this.applyDamageToPlayer(e.damage, pushAngle, 230, e.defId);
+    const allPlayers = this.getAllPlayers();
+    for (let i = 0; i < allPlayers.length; i++) {
+      const pl = allPlayers[i]!;
+      if (pl.lifeState !== 'alive') continue;
+      const distP = distance(e.x, e.y, pl.x, pl.y);
+      if (distP <= blastRadius + pl.radius) {
+        const pushAngle = Math.atan2(pl.y - e.y, pl.x - e.x);
+        this.applyDamageToPlayer(e.damage, pushAngle, 230, e.defId, pl);
+      }
     }
 
     for (let i = 0; i < this.enemies.length; i++) {
@@ -3722,6 +5029,7 @@ export class WorldSim {
     dtSec: number,
   ): void {
     const lungeSpeed = e.defId === 'mini_slime' ? 255 : 225;
+    const cdScale = this.getEnemyCooldownScale(false);
     if (e.aiState === 'telegraph') {
       e.vx = 0;
       e.vy = 0;
@@ -3740,19 +5048,24 @@ export class WorldSim {
       e.vx = Math.cos(e.telegraphAngle) * lungeSpeed;
       e.vy = Math.sin(e.telegraphAngle) * lungeSpeed;
       e.stateTimer -= dtSec;
-      if (circleVsCircle(e, this.player)) {
-        this.applyDamageToPlayer(e.damage, e.telegraphAngle, 160, e.defId);
-        e.aiState = 'cooldown';
-        e.stateTimer = 0.35;
-        e.attackCooldownTimer = ENEMIES[e.defId]?.attackCooldownSec ?? 1.25;
-        e.vx = 0;
-        e.vy = 0;
-        return;
+      const allPlayers = this.getAllPlayers();
+      for (let i = 0; i < allPlayers.length; i++) {
+        const pl = allPlayers[i]!;
+        if (pl.lifeState !== 'alive') continue;
+        if (circleVsCircle(e, pl)) {
+          this.applyDamageToPlayer(e.damage, e.telegraphAngle, 160, e.defId, pl);
+          e.aiState = 'cooldown';
+          e.stateTimer = 0.35;
+          e.attackCooldownTimer = (ENEMIES[e.defId]?.attackCooldownSec ?? 1.25) * cdScale;
+          e.vx = 0;
+          e.vy = 0;
+          return;
+        }
       }
       if (e.stateTimer <= 0) {
         e.aiState = 'cooldown';
         e.stateTimer = 0.3;
-        e.attackCooldownTimer = ENEMIES[e.defId]?.attackCooldownSec ?? 1.25;
+        e.attackCooldownTimer = (ENEMIES[e.defId]?.attackCooldownSec ?? 1.25) * cdScale;
         e.vx = 0;
         e.vy = 0;
       }
@@ -3801,7 +5114,8 @@ export class WorldSim {
     angleToPlayer: number,
     dtSec: number,
   ): void {
-    const cdMult = e.isElite && e.eliteModifier === 'fast' ? 0.72 : 1.0;
+    const cdMult =
+      (e.isElite && e.eliteModifier === 'fast' ? 0.72 : 1.0) * this.getEnemyCooldownScale(false);
     if (e.aiState === 'telegraph') {
       e.vx = 0;
       e.vy = 0;
@@ -3934,7 +5248,8 @@ export class WorldSim {
     angleToPlayer: number,
     dtSec: number,
   ): void {
-    const cdMult = e.isElite && e.eliteModifier === 'fast' ? 0.72 : 1.0;
+    const cdMult =
+      (e.isElite && e.eliteModifier === 'fast' ? 0.72 : 1.0) * this.getEnemyCooldownScale(false);
     e.vx = 0;
     e.vy = 0;
     e.aimAngle = angleToPlayer;
@@ -3983,7 +5298,7 @@ export class WorldSim {
         }
         e.aiState = 'cooldown';
         e.stateTimer = 0.4;
-        e.attackCooldownTimer = (ENEMIES.thorn_turret?.attackCooldownSec ?? 2.1) * cdMult;
+        e.attackCooldownTimer = (ENEMIES[e.defId]?.attackCooldownSec ?? 2.1) * cdMult;
       }
       return;
     }
@@ -4058,12 +5373,14 @@ export class WorldSim {
 
   private updateBossSporeKingAI(
     e: SimEnemyState,
+    targetPlayer: SimPlayerState,
     distToPlayer: number,
     angleToPlayer: number,
     dtSec: number,
   ): void {
     this.checkBossPhaseTransitions(e);
     e.aimAngle = angleToPlayer;
+    const bossCdScale = this.getEnemyCooldownScale(true);
 
     if (e.aiState === 'telegraph') {
       e.vx = 0;
@@ -4087,19 +5404,19 @@ export class WorldSim {
 
     if (e.attackCooldownTimer <= 0) {
       e.aiState = 'telegraph';
-      e.stateTimer = e.bossPhase === 3 ? 0.52 : e.telegraphDurationSec;
+      e.stateTimer = (e.bossPhase === 3 ? 0.52 : e.telegraphDurationSec) * bossCdScale;
       e.telegraphAngle = angleToPlayer;
 
       // In Phase 2 & 3, every odd attack cycle burrows underground and targets player's position!
       if (e.bossPhase >= 2 && e.bossAttackCycle % 2 === 1) {
         e.bossBurrowed = true;
         const targetX = clamp(
-          this.player.x,
+          targetPlayer.x,
           TILE_SIZE * 3.5,
           this.map.width - TILE_SIZE * 3.5,
         );
         const targetY = clamp(
-          this.player.y,
+          targetPlayer.y,
           TILE_SIZE * 3.5,
           this.map.height - TILE_SIZE * 3.5,
         );
@@ -4131,19 +5448,21 @@ export class WorldSim {
     }
 
     const phaseSpeedMult = e.bossPhase === 3 ? 1.35 : e.bossPhase === 2 ? 1.18 : 1.0;
+    const coopBossSpeed = 1 + COOP_SCALING[this.getActivePlayerCount()].enemyFireRateBonus * 0.75;
     if (distToPlayer > 95) {
-      e.vx = Math.cos(angleToPlayer) * e.moveSpeed * phaseSpeedMult;
-      e.vy = Math.sin(angleToPlayer) * e.moveSpeed * phaseSpeedMult;
+      e.vx = Math.cos(angleToPlayer) * e.moveSpeed * phaseSpeedMult * coopBossSpeed;
+      e.vy = Math.sin(angleToPlayer) * e.moveSpeed * phaseSpeedMult * coopBossSpeed;
     } else {
       const perp = angleToPlayer + Math.PI * 0.5 * e.strafeSign;
-      e.vx = Math.cos(perp) * e.moveSpeed * 0.7;
-      e.vy = Math.sin(perp) * e.moveSpeed * 0.7;
+      e.vx = Math.cos(perp) * e.moveSpeed * 0.7 * coopBossSpeed;
+      e.vy = Math.sin(perp) * e.moveSpeed * 0.7 * coopBossSpeed;
     }
   }
 
   private executeBossSporeKingAttack(e: SimEnemyState, angleToPlayer: number): void {
     const cycle = e.bossAttackCycle;
     e.bossAttackCycle += 1;
+    const bossCdScale = this.getEnemyCooldownScale(true);
 
     if (e.bossBurrowed) {
       // Phase 2/3 Burrow Eruption!
@@ -4157,9 +5476,14 @@ export class WorldSim {
         }
       }
 
-      if (distance(e.x, e.y, this.player.x, this.player.y) <= blastR + this.player.radius) {
-        const pushAng = Math.atan2(this.player.y - e.y, this.player.x - e.x);
-        this.applyDamageToPlayer(e.damage + 1, pushAng, 260, e.defId);
+      const allPlayers = this.getAllPlayers();
+      for (let i = 0; i < allPlayers.length; i++) {
+        const pl = allPlayers[i]!;
+        if (pl.lifeState !== 'alive') continue;
+        if (distance(e.x, e.y, pl.x, pl.y) <= blastR + pl.radius) {
+          const pushAng = Math.atan2(pl.y - e.y, pl.x - e.x);
+          this.applyDamageToPlayer(e.damage + 1, pushAng, 260, e.defId, pl);
+        }
       }
 
       // Erupt with 8 radial thorns
@@ -4244,7 +5568,7 @@ export class WorldSim {
 
       // Summon up to 2 spore minions on alternate cycles if active non-boss count < 4
       const activeMinions = this.enemies.filter(
-        (m) => !m.isDummy && !m.isBoss && m.hp > 0,
+        (m) => !m.isDummy && !m.isBoss && m.defId !== 'spore_guardian' && m.hp > 0,
       ).length;
       if (cycle % 2 === 1 && activeMinions < 3) {
         const minionDef = e.bossPhase >= 2 ? 'spore_bomber' : 'mini_slime';
@@ -4282,13 +5606,14 @@ export class WorldSim {
     }
 
     e.aiState = 'cooldown';
-    e.stateTimer = e.bossPhase === 3 ? 0.35 : 0.45;
+    e.stateTimer = (e.bossPhase === 3 ? 0.35 : 0.45) * bossCdScale;
     const baseCd = ENEMIES.spore_king?.attackCooldownSec ?? 2.2;
-    e.attackCooldownTimer = e.bossPhase === 3 ? baseCd * 0.65 : e.bossPhase === 2 ? baseCd * 0.82 : baseCd;
+    e.attackCooldownTimer =
+      (e.bossPhase === 3 ? baseCd * 0.65 : e.bossPhase === 2 ? baseCd * 0.82 : baseCd) * bossCdScale;
   }
 
   private updateProjectiles(dtSec: number): void {
-    const p = this.player;
+    const allPlayers = this.getAllPlayers();
     let stressImpactEventsThisTick = 0;
 
     for (let i = 0; i < this.projectiles.length; i++) {
@@ -4447,19 +5772,49 @@ export class WorldSim {
           }
         }
       } else {
-        // 4. Enemy projectile vs Vanguard Shield or Player
-        if (p.skillActiveTimer > 0) {
-          const shieldRadius = 38;
-          const dToPlayer = distance(b.x, b.y, p.x, p.y);
-          if (dToPlayer <= shieldRadius + b.radius && dToPlayer >= p.radius * 0.5) {
-            const angleFromPlayer = Math.atan2(b.y - p.y, b.x - p.x);
-            const halfShieldArc = this.activeBuffIds.includes('vanguard_fortress')
-              ? Math.PI
-              : (60 * Math.PI) / 180;
-            if (Math.abs(angleDiff(angleFromPlayer, p.aimAngle)) <= halfShieldArc) {
-              b.ttlSec = 0;
-              p.shieldStoredBullets += 1;
-              p.energy = Math.min(p.maxEnergy, p.energy + 1);
+        // 4. Enemy projectile vs Vanguard Shield or any alive Player
+        let blockedByAnyShield = false;
+        for (let pIdx = 0; pIdx < allPlayers.length; pIdx++) {
+          const pl = allPlayers[pIdx]!;
+          if (pl.lifeState !== 'alive') continue;
+          if (pl.characterId === 'vanguard' && pl.skillActiveTimer > 0) {
+            const shieldRadius = 38;
+            const dToPlayer = distance(b.x, b.y, pl.x, pl.y);
+            if (dToPlayer <= shieldRadius + b.radius && dToPlayer >= pl.radius * 0.5) {
+              const angleFromPlayer = Math.atan2(b.y - pl.y, b.x - pl.x);
+              const halfShieldArc = this.activeBuffIds.includes('vanguard_fortress')
+                ? Math.PI
+                : (60 * Math.PI) / 180;
+              if (Math.abs(angleDiff(angleFromPlayer, pl.aimAngle)) <= halfShieldArc) {
+                b.ttlSec = 0;
+                pl.shieldStoredBullets += 1;
+                pl.energy = Math.min(pl.maxEnergy, pl.energy + 1);
+                this.events.push({
+                  kind: 'projectile_impact',
+                  x: b.x,
+                  y: b.y,
+                  angle: b.angle,
+                  team: 'enemy',
+                  hitWall: false,
+                  destroyedByMelee: false,
+                  blockedByShield: true,
+                  isCrit: false,
+                });
+                blockedByAnyShield = true;
+                break;
+              }
+            }
+          }
+        }
+        if (blockedByAnyShield) continue;
+
+        for (let pIdx = 0; pIdx < allPlayers.length; pIdx++) {
+          const pl = allPlayers[pIdx]!;
+          if (pl.lifeState !== 'alive') continue;
+          if (circleVsCircle(b, pl)) {
+            b.ttlSec = 0;
+            this.applyDamageToPlayer(b.damage, b.angle, b.knockback, b.weaponId, pl);
+            if (!this.stressTestActive) {
               this.events.push({
                 kind: 'projectile_impact',
                 x: b.x,
@@ -4468,29 +5823,11 @@ export class WorldSim {
                 team: 'enemy',
                 hitWall: false,
                 destroyedByMelee: false,
-                blockedByShield: true,
+                blockedByShield: false,
                 isCrit: false,
               });
-              continue;
             }
-          }
-        }
-
-        if (circleVsCircle(b, p)) {
-          b.ttlSec = 0;
-          this.applyDamageToPlayer(b.damage, b.angle, b.knockback, b.weaponId);
-          if (!this.stressTestActive) {
-            this.events.push({
-              kind: 'projectile_impact',
-              x: b.x,
-              y: b.y,
-              angle: b.angle,
-              team: 'enemy',
-              hitWall: false,
-              destroyedByMelee: false,
-              blockedByShield: false,
-              isCrit: false,
-            });
+            break;
           }
         }
       }
@@ -4551,9 +5888,14 @@ export class WorldSim {
     let finalAmount = amount;
     let finalCrit = isCrit;
 
+    // 3-4P Boss Mechanic: while Spore Guardian Mushrooms are alive, Spore King takes 65% less damage
+    if (enemy.isBoss && this.hasActiveBossGuardians()) {
+      finalAmount = Math.max(1, finalAmount * 0.35);
+    }
+
     // Section 6: Đóng Băng + đòn nặng (cận chiến/nổ/crit) -> Vỡ Băng (Shatter): Sát thương x3!
     if (enemy.frozenTimer > 0 && (isHeavyAttack || isCrit)) {
-      finalAmount = amount * 3;
+      finalAmount = finalAmount * 3;
       finalCrit = true;
       enemy.frozenTimer = 0;
       if (!this.stressTestActive) {
@@ -4585,7 +5927,8 @@ export class WorldSim {
     this.runStats.damageDealt += dmg;
     this.checkBossPhaseTransitions(enemy);
 
-    const kbMult = enemy.isDummy ? 0.15 : enemy.defId === 'thorn_turret' ? 0 : enemy.isBoss ? 0.2 : 1.0;
+    const kbMult =
+      enemy.isDummy ? 0.15 : enemy.defId === 'thorn_turret' || enemy.defId === 'spore_guardian' ? 0 : enemy.isBoss ? 0.2 : 1.0;
     const kbX = Math.cos(hitAngleRad) * knockback * kbMult;
     const kbY = Math.sin(hitAngleRad) * knockback * kbMult;
     enemy.kbVx += kbX;
@@ -4652,43 +5995,60 @@ export class WorldSim {
         damage: 14,
         sourceDefId: enemy.defId,
       });
-      if (distance(enemy.x, enemy.y, this.player.x, this.player.y) <= blastR + this.player.radius && enemy.isElite) {
-        const ang = Math.atan2(this.player.y - enemy.y, this.player.x - enemy.x);
-        this.applyDamageToPlayer(2, ang, 180, enemy.defId);
+      const allPlayers = this.getAllPlayers();
+      for (let i = 0; i < allPlayers.length; i++) {
+        const pl = allPlayers[i]!;
+        if (pl.lifeState !== 'alive') continue;
+        if (distance(enemy.x, enemy.y, pl.x, pl.y) <= blastR + pl.radius) {
+          const ang = Math.atan2(pl.y - enemy.y, pl.x - enemy.x);
+          this.applyDamageToPlayer(2, ang, 180, enemy.defId, pl);
+        }
       }
     }
 
+    const allPlayers = this.getAllPlayers();
+    const isCoop = allPlayers.length > 1;
     const dropMult = enemy.isBoss ? 6 : enemy.isElite ? 3 : 1;
     for (let k = 0; k < 2 * dropMult; k++) {
       const ang = this.rng.nextFloat(-Math.PI, Math.PI);
       const spd = this.rng.nextFloat(60, 130);
-      this.pickups.push(
-        this.acquirePickup({
-          id: ++this.nextEntityId,
-          kind: 'energy',
-          x: enemy.x,
-          y: enemy.y,
-          vx: Math.cos(ang) * spd,
-          vy: Math.sin(ang) * spd,
-          amount: 8,
-          ttlSec: 14,
-        }),
-      );
+      for (let pIdx = 0; pIdx < allPlayers.length; pIdx++) {
+        const pl = allPlayers[pIdx]!;
+        const instAng = ang + pIdx * 0.45;
+        this.pickups.push(
+          this.acquirePickup({
+            id: ++this.nextEntityId,
+            kind: 'energy',
+            x: enemy.x,
+            y: enemy.y,
+            vx: Math.cos(instAng) * spd,
+            vy: Math.sin(instAng) * spd,
+            amount: 8,
+            ttlSec: 14,
+            ownerPlayerId: isCoop ? pl.id : undefined,
+          }),
+        );
+      }
     }
     for (let k = 0; k < dropMult; k++) {
       const coinAng = this.rng.nextFloat(-Math.PI, Math.PI);
-      this.pickups.push(
-        this.acquirePickup({
-          id: ++this.nextEntityId,
-          kind: 'gold',
-          x: enemy.x,
-          y: enemy.y,
-          vx: Math.cos(coinAng) * 90,
-          vy: Math.sin(coinAng) * 90,
-          amount: 5,
-          ttlSec: 14,
-        }),
-      );
+      for (let pIdx = 0; pIdx < allPlayers.length; pIdx++) {
+        const pl = allPlayers[pIdx]!;
+        const instAng = coinAng + pIdx * 0.45;
+        this.pickups.push(
+          this.acquirePickup({
+            id: ++this.nextEntityId,
+            kind: 'gold',
+            x: enemy.x,
+            y: enemy.y,
+            vx: Math.cos(instAng) * 90,
+            vy: Math.sin(instAng) * 90,
+            amount: 5,
+            ttlSec: 14,
+            ownerPlayerId: isCoop ? pl.id : undefined,
+          }),
+        );
+      }
     }
   }
 
@@ -4808,9 +6168,10 @@ export class WorldSim {
     hitAngleRad: number,
     knockback: number,
     _sourceId = 'enemy',
+    targetPlayer: SimPlayerState = this.player,
   ): boolean {
-    const p = this.player;
-    if (p.godMode || p.invulnerableTimer > 0 || p.hp <= 0) {
+    const p = targetPlayer;
+    if (p.godMode || p.invulnerableTimer > 0 || p.hp <= 0 || p.lifeState !== 'alive') {
       return false;
     }
 
@@ -4855,6 +6216,25 @@ export class WorldSim {
         p.hp = p.maxHp;
         p.armor = p.maxArmor;
         p.invulnerableTimer = 1.2;
+        p.lifeState = 'alive';
+      } else if (this.getAllPlayers().length > 1) {
+        p.lifeState = 'downed';
+        p.downedTimer = 20.0;
+        p.reviveProgress = 0;
+        p.reviverPlayerId = null;
+        this.events.push({
+          kind: 'player_downed',
+          playerId: p.id,
+          x: p.x,
+          y: p.y,
+        });
+
+        // Check if any teammate is still alive; if all players are downed/ghost, team wipe!
+        const allPlayers = this.getAllPlayers();
+        const anyAlive = allPlayers.some((pl) => pl.lifeState === 'alive' && pl.hp > 0);
+        if (!anyAlive) {
+          this.runState = 'defeat';
+        }
       } else {
         this.runState = 'defeat';
       }
@@ -4864,20 +6244,31 @@ export class WorldSim {
   }
 
   private updatePickups(dtSec: number): void {
-    const p = this.player;
+    const allPlayers = this.getAllPlayers();
     for (let i = 0; i < this.pickups.length; i++) {
       const pk = this.pickups[i]!;
       pk.ttlSec -= dtSec;
       if (pk.ttlSec <= 0) continue;
 
-      const dx = p.x - pk.x;
-      const dy = p.y - pk.y;
-      const dist = Math.hypot(dx, dy);
+      let closestPlayer: SimPlayerState | null = null;
+      let closestDist = Infinity;
+      for (let pIdx = 0; pIdx < allPlayers.length; pIdx++) {
+        const pl = allPlayers[pIdx]!;
+        if (pl.lifeState !== 'alive') continue;
+        if (pk.ownerPlayerId !== undefined && pk.ownerPlayerId !== pl.id) continue;
+        const d = distance(pl.x, pl.y, pk.x, pk.y);
+        if (d < closestDist) {
+          closestDist = d;
+          closestPlayer = pl;
+        }
+      }
 
-      if (dist < 130 && dist > 0.01) {
-        const pullSpeed = lerpSpeed(dist, 130, 340);
-        pk.vx = approach(pk.vx, (dx / dist) * pullSpeed, 1400 * dtSec);
-        pk.vy = approach(pk.vy, (dy / dist) * pullSpeed, 1400 * dtSec);
+      if (closestPlayer && closestDist < 130 && closestDist > 0.01) {
+        const dx = closestPlayer.x - pk.x;
+        const dy = closestPlayer.y - pk.y;
+        const pullSpeed = lerpSpeed(closestDist, 130, 340);
+        pk.vx = approach(pk.vx, (dx / closestDist) * pullSpeed, 1400 * dtSec);
+        pk.vy = approach(pk.vy, (dy / closestDist) * pullSpeed, 1400 * dtSec);
       } else {
         const damping = Math.exp(-8 * dtSec);
         pk.vx *= damping;
@@ -4887,12 +6278,12 @@ export class WorldSim {
       pk.x += pk.vx * dtSec;
       pk.y += pk.vy * dtSec;
 
-      if (dist <= p.radius + 10) {
+      if (closestPlayer && closestDist <= closestPlayer.radius + 10) {
         pk.ttlSec = 0;
         if (pk.kind === 'energy') {
-          p.energy = Math.min(p.maxEnergy, p.energy + pk.amount);
+          closestPlayer.energy = Math.min(closestPlayer.maxEnergy, closestPlayer.energy + pk.amount);
         } else {
-          p.gold += pk.amount;
+          closestPlayer.gold += pk.amount;
           this.runStats.goldEarned += pk.amount;
         }
         this.events.push({
@@ -4966,6 +6357,7 @@ export class WorldSim {
       pooled.vy = init.vy;
       pooled.amount = init.amount;
       pooled.ttlSec = init.ttlSec;
+      pooled.ownerPlayerId = init.ownerPlayerId;
       return pooled;
     }
     return {
