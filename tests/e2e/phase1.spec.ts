@@ -202,7 +202,24 @@ test.describe('Phase 1 — Core Gameplay & Game Feel (Solo, Phòng Thử Nghiệ
     await page.keyboard.press('F4');
     await page.waitForTimeout(250);
 
+    await page.screenshot({
+      path: path.join(SCREENSHOT_DIR, 'debug-hitboxes-f1-f4-1080p.png'),
+    });
+
+    // 8. Verify live viewport resize (1080p -> 1440p -> 1080p) while projectiles & particles are active
+    await page.mouse.down({ button: 'left' });
+    await page.waitForTimeout(60);
+    await page.setViewportSize({ width: 2560, height: 1440 });
+    await page.waitForTimeout(120);
+    const scale1440 = await page.evaluate(() => window.__GAME_DEBUG__.bakeScale);
+    expect(scale1440).toBe(7);
+
+    await page.setViewportSize({ width: 1920, height: 1080 });
+    await page.mouse.up({ button: 'left' });
+    await page.waitForTimeout(120);
+
     const finalDebug = await page.evaluate(() => window.__GAME_DEBUG__);
+    expect(finalDebug.bakeScale).toBe(5);
     expect(finalDebug.overlayVisible).toBe(true);
     expect(finalDebug.showHitboxes).toBe(true);
     expect(finalDebug.fps).toBeGreaterThanOrEqual(50);
@@ -210,9 +227,5 @@ test.describe('Phase 1 — Core Gameplay & Game Feel (Solo, Phòng Thử Nghiệ
     expect(finalDebug.warnings).toEqual([]);
     expect(consoleErrors).toEqual([]);
     expect(consoleWarnings).toEqual([]);
-
-    await page.screenshot({
-      path: path.join(SCREENSHOT_DIR, 'debug-hitboxes-f1-f4-1080p.png'),
-    });
   });
 });

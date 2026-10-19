@@ -1,6 +1,6 @@
-import { FixedTimestepLoop, SIM_STEP_MS } from '../core/fixed-timestep.js';
+import { FixedTimestepLoop } from '../core/fixed-timestep.js';
 import { lerp } from '../math/vec2.js';
-import type { PlayerInputPacket } from './messages.js';
+import { INPUT_BUTTON, type PlayerInputPacket } from './messages.js';
 import {
   type SimEnemyState,
   type SimEvent,
@@ -53,7 +53,7 @@ export class LocalTransport implements ITransport {
     this.loop = new FixedTimestepLoop(60);
     // Pre-prime accumulator to ~99.9% of one tick so the first frame's input triggers an immediate tick
     // and 60Hz frames render at alpha ~ 1.0 (zero 1-frame interpolation lag).
-    this.loop.step(SIM_STEP_MS - 0.001, () => {});
+    this.loop.primeForImmediateTick();
     this.alpha = this.loop.getAlpha();
   }
 
@@ -63,6 +63,20 @@ export class LocalTransport implements ITransport {
   }
 
   public step(deltaMs: number): { ticksExecuted: number; alpha: number; tick: number } {
+    const p = this.sim.player;
+    const isAtRest =
+      p.vx === 0 && p.vy === 0 && p.prevX === p.x && p.prevY === p.y && p.dashTimer <= 0;
+    const hasImmediateIntent =
+      this.latestInput.moveX !== 0 ||
+      this.latestInput.moveY !== 0 ||
+      (this.latestInput.buttons &
+        (INPUT_BUTTON.DASH | INPUT_BUTTON.FIRE | INPUT_BUTTON.SKILL)) !==
+        0;
+
+    if (isAtRest && hasImmediateIntent) {
+      this.loop.primeForImmediateTick(deltaMs);
+    }
+
     const res = this.loop.step(deltaMs, (dtSec) => {
       this.sim.step(dtSec);
     });
@@ -84,24 +98,10 @@ export class LocalTransport implements ITransport {
 
   public getInterpolatedPlayerPos(): InterpolatedEntityPos {
     const p = this.sim.player;
-    let rx = lerp(p.prevX, p.x, this.alpha);
-    let ry = lerp(p.prevY, p.y, this.alpha);
-
-    // Sub-frame immediate response when starting from rest between 60Hz ticks on 120/144Hz displays
-    if (
-      p.vx === 0 &&
-      p.vy === 0 &&
-      (this.latestInput.moveX !== 0 || this.latestInput.moveY !== 0)
-    ) {
-      const len = Math.hypot(this.latestInput.moveX, this.latestInput.moveY);
-      if (len > 1e-4) {
-        const subStep = (1 - this.alpha) * 0.8;
-        rx += (this.latestInput.moveX / len) * subStep;
-        ry += (this.latestInput.moveY / len) * subStep;
-      }
-    }
-
-    return { x: rx, y: ry };
+    return {
+      x: lerp(p.prevX, p.x, this.alpha),
+      y: lerp(p.prevY, p.y, this.alpha),
+    };
   }
 
   public getInterpolatedEnemyPos(enemy: SimEnemyState): InterpolatedEntityPos {

@@ -30,13 +30,26 @@ declare global {
   }
 }
 
+/**
+ * CutoutRig uses (0, 0) as the foot/ground-shadow anchor with torso/head parts at offsetY = -12..-29,
+ * while WorldSim uses (x, y) as the center of the entity hitbox, projectile origin, and telegraphs.
+ * Offsetting the visual rig container by +12u aligns the visual torso center with the simulation hitbox center.
+ */
+const RIG_FOOT_OFFSET_Y = 12;
+
 export class GameScene extends Phaser.Scene {
   private transport!: LocalTransport;
   private fx!: CombatFxManager;
   private playerRig?: CutoutRig;
   private enemyRigs = new Map<number, CutoutRig>();
-  private projectileSprites = new Map<number, Phaser.GameObjects.Sprite>();
-  private pickupSprites = new Map<number, Phaser.GameObjects.Sprite>();
+  private projectileSprites = new Map<number, { sprite: Phaser.GameObjects.Sprite; textureKey: string }>();
+  private pickupSprites = new Map<number, { sprite: Phaser.GameObjects.Sprite; textureKey: string }>();
+  private projectileSpritePool: { sprite: Phaser.GameObjects.Sprite; textureKey: string }[] = [];
+  private pickupSpritePool: { sprite: Phaser.GameObjects.Sprite; textureKey: string }[] = [];
+
+  private readonly activeEnemyIds = new Set<number>();
+  private readonly activeProjIds = new Set<number>();
+  private readonly activePickupIds = new Set<number>();
 
   private mapTileSprites: {
     sprite: Phaser.GameObjects.Sprite;
@@ -72,6 +85,8 @@ export class GameScene extends Phaser.Scene {
   // Smooth camera tracking state
   private camFocusX = 480;
   private camFocusY = 270;
+  private lastShakeX = 0;
+  private lastShakeY = 0;
   private crosshairPulse = 0;
 
   private keys?: {
@@ -104,10 +119,14 @@ export class GameScene extends Phaser.Scene {
     this.enemyRigs.clear();
     this.projectileSprites.clear();
     this.pickupSprites.clear();
+    this.projectileSpritePool = [];
+    this.pickupSpritePool = [];
     this.mapTileSprites = [];
     this.textObjects = [];
     this.weaponSlotBgs = [];
     this.weaponIconSprites = [];
+    this.lastShakeX = 0;
+    this.lastShakeY = 0;
 
     // 1. Initialize LocalTransport + Authoritative 60Hz WorldSim
     this.transport = new LocalTransport({
@@ -169,10 +188,16 @@ export class GameScene extends Phaser.Scene {
     this.hitboxGraphics.setDepth(90);
 
     // 4. Player CutoutRig (Thiết Vệ)
-    this.playerRig = new CutoutRig(this, sim.player.x, sim.player.y, VANGUARD_RIG_DEF, {
-      playerSlot: 1,
-      displayScale: 1,
-    });
+    this.playerRig = new CutoutRig(
+      this,
+      sim.player.x,
+      sim.player.y + RIG_FOOT_OFFSET_Y,
+      VANGUARD_RIG_DEF,
+      {
+        playerSlot: 1,
+        displayScale: 1,
+      },
+    );
     this.playerRig.container.setDepth(30);
     this.playerRig.setEquippedWeapon(sim.getActiveWeaponId());
 
@@ -533,11 +558,21 @@ export class GameScene extends Phaser.Scene {
         }
         item.sprite.setScale(invBake);
       }
-      for (const spr of this.projectileSprites.values()) {
-        spr.setScale(invBake);
+      for (const item of this.projectileSprites.values()) {
+        item.sprite.setTexture(item.textureKey);
+        item.sprite.setScale(invBake);
       }
-      for (const spr of this.pickupSprites.values()) {
-        spr.setScale(invBake);
+      for (const item of this.projectileSpritePool) {
+        item.sprite.setTexture(item.textureKey);
+        item.sprite.setScale(invBake);
+      }
+      for (const item of this.pickupSprites.values()) {
+        item.sprite.setTexture(item.textureKey);
+        item.sprite.setScale(invBake);
+      }
+      for (const item of this.pickupSpritePool) {
+        item.sprite.setTexture(item.textureKey);
+        item.sprite.setScale(invBake);
       }
       this.weaponIconSprites.forEach((icon, idx) => {
         const wId = PHASE1_SAMPLE_WEAPONS[idx]!;
@@ -551,7 +586,7 @@ export class GameScene extends Phaser.Scene {
       for (const txt of this.textObjects) {
         txt.setResolution(newScale);
       }
-      this.fx?.refreshResolution(newScale);
+      this.fx?.refreshResolution(newScale, prevScale);
       this.debugOverlay?.refreshResolution(newScale);
     }
 
@@ -563,10 +598,13 @@ export class GameScene extends Phaser.Scene {
     const dtSec = Math.min(rawDeltaMs / 1000, 0.05);
 
     // 1. Sample Player Input (WASD + Mouse Aim + Buttons)
+    // Subtract lastShakeX/Y so screen shake never perturbs player aim angle or camera lookahead
     const pointer = this.input.activePointer;
     const worldPt = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
+    const unshakenWorldX = worldPt.x - this.lastShakeX;
+    const unshakenWorldY = worldPt.y - this.lastShakeY;
     const pInterpPre = this.transport.getInterpolatedPlayerPos();
-    const aimAngle = Math.atan2(worldPt.y - pInterpPre.y, worldPt.x - pInterpPre.x);
+    const aimAngle = Math.atan2(unshakenWorldY - pInterpPre.y, unshakenWorldX - pInterpPre.x);
 
     let moveX = 0;
     let moveY = 0;
@@ -633,7 +671,7 @@ export class GameScene extends Phaser.Scene {
     // 4. Render Interpolated Player & CutoutRig Animation
     const playerPos = this.transport.getInterpolatedPlayerPos();
     if (this.playerRig) {
-      this.playerRig.container.setPosition(playerPos.x, playerPos.y);
+      this.playerRig.container.setPosition(playerPos.x, playerPos.y + RIG_FOOT_OFFSET_Y);
       this.playerRig.setAimAngle(aimAngle);
       this.playerRig.setEquippedWeapon(sim.getActiveWeaponId());
       this.playerRig.setDashActive(sim.player.dashTimer > 0);
@@ -653,7 +691,13 @@ export class GameScene extends Phaser.Scene {
     this.fx.update(dtSec);
 
     // 8. Smooth Camera Follow + Cursor Lookahead (22%) + Trauma Screen Shake
-    this.updateCameraWithLookaheadAndShake(playerPos.x, playerPos.y, worldPt.x, worldPt.y, dtSec);
+    this.updateCameraWithLookaheadAndShake(
+      playerPos.x,
+      playerPos.y,
+      unshakenWorldX,
+      unshakenWorldY,
+      dtSec,
+    );
 
     // 9. Update Procedural Crosshair at Mouse World Position
     const updatedWorldPt = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
@@ -674,27 +718,41 @@ export class GameScene extends Phaser.Scene {
   }
 
   private processSimEvents(events: SimEvent[]): void {
+    if (events.length === 0) return;
+
+    let playerShotFxTriggered = false;
+    let enemyShotSfxTriggered = false;
+    let enemyHitCountThisStep = 0;
+    let enemyHitCritThisStep = false;
+    let enemyHitSfxX = this.camFocusX;
+    let maxHitStopMs = 0;
+    let maxHitStopTrauma = 0;
+
     for (let i = 0; i < events.length; i++) {
       const ev = events[i]!;
       switch (ev.kind) {
         case 'projectile_spawned': {
           if (ev.team === 'player') {
-            const isShotgun = ev.weaponId === 'scrap_shotgun';
-            this.fx.spawnMuzzleFlashAndCasing(ev.x, ev.y, ev.angle, isShotgun);
-            this.crosshairPulse = isShotgun ? 0.9 : 0.45;
-            this.playerRig?.triggerRecoil(isShotgun ? 6.5 : 4.2);
+            if (!playerShotFxTriggered) {
+              playerShotFxTriggered = true;
+              const isShotgun = ev.weaponId === 'scrap_shotgun';
+              this.fx.spawnMuzzleFlashAndCasing(ev.x, ev.y, ev.angle, isShotgun);
+              this.crosshairPulse = isShotgun ? 0.9 : 0.45;
+              this.playerRig?.triggerRecoil(isShotgun ? 6.5 : 4.2);
 
-            if (ev.weaponId === 'scrap_shotgun') {
-              zzfx.play('shoot_shotgun', ev.x, this.camFocusX);
-              this.fx.addTrauma(0.18);
-            } else if (ev.weaponId === 'gale_smg') {
-              zzfx.play('shoot_smg', ev.x, this.camFocusX);
-              this.fx.addTrauma(0.06);
-            } else {
-              zzfx.play('shoot_pistol', ev.x, this.camFocusX);
-              this.fx.addTrauma(0.1);
+              if (ev.weaponId === 'scrap_shotgun') {
+                zzfx.play('shoot_shotgun', ev.x, this.camFocusX);
+                this.fx.addTrauma(0.18);
+              } else if (ev.weaponId === 'gale_smg') {
+                zzfx.play('shoot_smg', ev.x, this.camFocusX);
+                this.fx.addTrauma(0.06);
+              } else {
+                zzfx.play('shoot_pistol', ev.x, this.camFocusX);
+                this.fx.addTrauma(0.1);
+              }
             }
-          } else {
+          } else if (!enemyShotSfxTriggered) {
+            enemyShotSfxTriggered = true;
             zzfx.play('shoot_pistol', ev.x, this.camFocusX);
           }
           break;
@@ -719,15 +777,18 @@ export class GameScene extends Phaser.Scene {
             hitArmor: ev.hitArmor,
           });
           const hitAngle = Math.atan2(ev.knockbackY, ev.knockbackX);
+          const sparkCount = enemyHitCountThisStep === 0 ? (ev.isCrit ? 10 : 6) : 3;
           this.fx.spawnHitSparks(ev.x, ev.y, hitAngle, {
             isCrit: ev.isCrit,
-            count: ev.isCrit ? 10 : 6,
+            count: sparkCount,
           });
 
           if (ev.targetKind === 'enemy') {
             const rig = this.enemyRigs.get(ev.targetId);
             rig?.triggerHitFlash(0.12);
-            zzfx.play(ev.isCrit ? 'crit_hit' : 'hit_enemy', ev.x, this.camFocusX);
+            enemyHitCountThisStep += 1;
+            if (ev.isCrit) enemyHitCritThisStep = true;
+            enemyHitSfxX = ev.x;
           } else {
             this.playerRig?.triggerHitFlash(0.16);
             zzfx.play('player_hurt', ev.x, this.camFocusX);
@@ -739,7 +800,7 @@ export class GameScene extends Phaser.Scene {
             isCrit: ev.isCrit,
             hitWall: ev.hitWall,
             blockedByShield: ev.blockedByShield || ev.destroyedByMelee,
-            count: ev.hitWall ? 4 : 6,
+            count: ev.hitWall ? 4 : 4,
           });
           if (ev.blockedByShield || ev.destroyedByMelee) {
             zzfx.play('bullet_deflect', ev.x, this.camFocusX);
@@ -752,7 +813,7 @@ export class GameScene extends Phaser.Scene {
           break;
         }
         case 'dash_started': {
-          this.fx.spawnDashDust(ev.x, ev.y);
+          this.fx.spawnDashDust(ev.x, ev.y + RIG_FOOT_OFFSET_Y);
           zzfx.play('dash', ev.x, this.camFocusX);
           break;
         }
@@ -783,27 +844,35 @@ export class GameScene extends Phaser.Scene {
           break;
         }
         case 'hit_stop': {
-          this.fx.triggerHitStop(ev.durationMs);
-          this.fx.addTrauma(ev.trauma);
+          maxHitStopMs = Math.max(maxHitStopMs, ev.durationMs);
+          maxHitStopTrauma = Math.max(maxHitStopTrauma, ev.trauma);
           break;
         }
       }
+    }
+
+    if (enemyHitCountThisStep > 0) {
+      zzfx.play(enemyHitCritThisStep ? 'crit_hit' : 'hit_enemy', enemyHitSfxX, this.camFocusX);
+    }
+    if (maxHitStopMs > 0) {
+      this.fx.triggerHitStop(maxHitStopMs);
+      this.fx.addTrauma(maxHitStopTrauma);
     }
   }
 
   private syncEnemyRigs(dtSec: number): void {
     const sim = this.transport.getSim();
-    const activeIds = new Set<number>();
+    this.activeEnemyIds.clear();
 
     for (let i = 0; i < sim.enemies.length; i++) {
       const e = sim.enemies[i]!;
       if (e.hp <= 0) continue;
-      activeIds.add(e.id);
+      this.activeEnemyIds.add(e.id);
 
       let rig = this.enemyRigs.get(e.id);
       if (!rig) {
         const rigDef = RIG_DEFS_BY_ID[e.defId] ?? RIG_DEFS_BY_ID.goblin_shooter!;
-        rig = new CutoutRig(this, e.x, e.y, rigDef, {
+        rig = new CutoutRig(this, e.x, e.y + RIG_FOOT_OFFSET_Y, rigDef, {
           displayScale: 1,
           initialPhaseOffset: (e.id % 7) * 0.25,
         });
@@ -812,7 +881,7 @@ export class GameScene extends Phaser.Scene {
       }
 
       const pos = this.transport.getInterpolatedEnemyPos(e);
-      rig.container.setPosition(pos.x, pos.y);
+      rig.container.setPosition(pos.x, pos.y + RIG_FOOT_OFFSET_Y);
       rig.setAimAngle(e.aimAngle);
 
       if (e.aiState === 'spawning') {
@@ -835,7 +904,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     for (const [id, rig] of this.enemyRigs.entries()) {
-      if (!activeIds.has(id)) {
+      if (!this.activeEnemyIds.has(id)) {
         rig.destroy();
         this.enemyRigs.delete(id);
       }
@@ -846,58 +915,86 @@ export class GameScene extends Phaser.Scene {
     const sim = this.transport.getSim();
     const invBake = 1 / TextureBaker.getBakeScale();
 
-    // 1. Projectiles
-    const activeProjIds = new Set<number>();
+    // 1. Projectiles (object-pooled Sprites)
+    this.activeProjIds.clear();
     for (let i = 0; i < sim.projectiles.length; i++) {
       const b = sim.projectiles[i]!;
-      activeProjIds.add(b.id);
+      this.activeProjIds.add(b.id);
 
-      let spr = this.projectileSprites.get(b.id);
-      if (!spr) {
+      let entry = this.projectileSprites.get(b.id);
+      if (!entry) {
         let tex = 'proj_player_bolt';
         if (b.team === 'enemy') tex = 'proj_enemy_orb';
         else if (b.weaponId === 'scrap_shotgun') tex = 'proj_player_pellet';
 
-        spr = this.add.sprite(b.x, b.y, tex);
-        spr.setScale(invBake);
-        spr.setDepth(b.team === 'enemy' ? 50 : 42);
-        this.projectileSprites.set(b.id, spr);
+        const pooled = this.projectileSpritePool.pop();
+        if (pooled) {
+          entry = pooled;
+          if (entry.textureKey !== tex) {
+            entry.textureKey = tex;
+            entry.sprite.setTexture(tex);
+          }
+          entry.sprite.setVisible(true);
+          entry.sprite.setActive(true);
+        } else {
+          const sprite = this.add.sprite(b.x, b.y, tex);
+          entry = { sprite, textureKey: tex };
+        }
+        entry.sprite.setScale(invBake);
+        entry.sprite.setDepth(b.team === 'enemy' ? 50 : 42);
+        this.projectileSprites.set(b.id, entry);
       }
 
       const pos = this.transport.getInterpolatedProjectilePos(b);
-      spr.setPosition(pos.x, pos.y);
-      spr.setRotation(b.angle);
+      entry.sprite.setPosition(pos.x, pos.y);
+      entry.sprite.setRotation(b.angle);
     }
 
-    for (const [id, spr] of this.projectileSprites.entries()) {
-      if (!activeProjIds.has(id)) {
-        spr.destroy();
+    for (const [id, entry] of this.projectileSprites.entries()) {
+      if (!this.activeProjIds.has(id)) {
+        entry.sprite.setVisible(false);
+        entry.sprite.setActive(false);
+        this.projectileSpritePool.push(entry);
         this.projectileSprites.delete(id);
       }
     }
 
-    // 2. Pickups (Energy & Gold)
-    const activePickupIds = new Set<number>();
+    // 2. Pickups (Energy & Gold, object-pooled Sprites)
+    this.activePickupIds.clear();
     for (let i = 0; i < sim.pickups.length; i++) {
       const pk = sim.pickups[i]!;
-      activePickupIds.add(pk.id);
+      this.activePickupIds.add(pk.id);
 
-      let spr = this.pickupSprites.get(pk.id);
-      if (!spr) {
+      let entry = this.pickupSprites.get(pk.id);
+      if (!entry) {
         const tex = pk.kind === 'energy' ? 'fx_pickup_energy' : 'fx_pickup_gold';
-        spr = this.add.sprite(pk.x, pk.y, tex);
-        spr.setScale(invBake);
-        spr.setDepth(25);
-        this.pickupSprites.set(pk.id, spr);
+        const pooled = this.pickupSpritePool.pop();
+        if (pooled) {
+          entry = pooled;
+          if (entry.textureKey !== tex) {
+            entry.textureKey = tex;
+            entry.sprite.setTexture(tex);
+          }
+          entry.sprite.setVisible(true);
+          entry.sprite.setActive(true);
+        } else {
+          const sprite = this.add.sprite(pk.x, pk.y, tex);
+          entry = { sprite, textureKey: tex };
+        }
+        entry.sprite.setScale(invBake);
+        entry.sprite.setDepth(25);
+        this.pickupSprites.set(pk.id, entry);
       }
 
       const pos = this.transport.getInterpolatedPickupPos(pk);
-      spr.setPosition(pos.x, pos.y);
+      entry.sprite.setPosition(pos.x, pos.y);
     }
 
-    for (const [id, spr] of this.pickupSprites.entries()) {
-      if (!activePickupIds.has(id)) {
-        spr.destroy();
+    for (const [id, entry] of this.pickupSprites.entries()) {
+      if (!this.activePickupIds.has(id)) {
+        entry.sprite.setVisible(false);
+        entry.sprite.setActive(false);
+        this.pickupSpritePool.push(entry);
         this.pickupSprites.delete(id);
       }
     }
@@ -932,6 +1029,8 @@ export class GameScene extends Phaser.Scene {
     const clampedY = clamp(this.camFocusY, halfH - 32, Math.max(halfH, map.height - halfH + 32));
 
     const shake = this.fx.computeCameraShakeOffset(dtSec);
+    this.lastShakeX = shake.offsetX;
+    this.lastShakeY = shake.offsetY;
     cam.centerOn(clampedX + shake.offsetX, clampedY + shake.offsetY);
 
     // Pin HUD container to camera worldView origin
@@ -1044,7 +1143,7 @@ export class GameScene extends Phaser.Scene {
 
       // Floating HP bar above non-dummy enemies
       if (!e.isDummy && e.hp < e.maxHp) {
-        this.drawEnemyHealthBar(g, pos.x, pos.y - 40, e);
+        this.drawEnemyHealthBar(g, pos.x, pos.y - 30, e);
       }
     }
   }

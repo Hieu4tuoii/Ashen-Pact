@@ -6,6 +6,7 @@ import { TextureBaker } from '../art/texture-baker.js';
 
 interface PooledParticle {
   sprite: Phaser.GameObjects.Sprite;
+  textureKey: string;
   active: boolean;
   x: number;
   y: number;
@@ -48,6 +49,7 @@ export class CombatFxManager {
   private trauma = 0;
   private shakeTime = 0;
   private shakeIntensitySetting = 1.0;
+  private popupSpreadIndex = 0;
 
   public totalHitStopsTriggered = 0;
   public totalShakesTriggered = 0;
@@ -66,6 +68,7 @@ export class CombatFxManager {
       sprite.setDepth(45);
       this.particlePool.push({
         sprite,
+        textureKey: 'fx_spark',
         active: false,
         x: 0,
         y: 0,
@@ -111,7 +114,18 @@ export class CombatFxManager {
     }
   }
 
-  public refreshResolution(bakeScale: number): void {
+  public refreshResolution(bakeScale: number, prevScale?: number): void {
+    const invBake = 1 / bakeScale;
+    const scaleRatio = prevScale && prevScale > 0 ? prevScale / bakeScale : 1;
+    for (const p of this.particlePool) {
+      p.sprite.setTexture(p.textureKey);
+      if (p.active && scaleRatio !== 1) {
+        p.startScale *= scaleRatio;
+        p.endScale *= scaleRatio;
+      } else if (!p.active) {
+        p.sprite.setScale(invBake);
+      }
+    }
     for (const item of this.damagePool) {
       item.text.setResolution(bakeScale);
     }
@@ -183,13 +197,16 @@ export class CombatFxManager {
     if (!slot) return;
 
     this.totalDamagePopupsSpawned += 1;
+    const fanIdx = this.popupSpreadIndex++ % 5;
+    const fanLane = fanIdx - 2; // -2, -1, 0, 1, 2
+
     slot.active = true;
     slot.age = 0;
     slot.ttl = params.isCrit ? 0.78 : 0.62;
-    slot.x = params.x + (Math.random() - 0.5) * 14;
-    slot.y = params.y - 24;
-    slot.vx = (Math.random() - 0.5) * 32;
-    slot.vy = params.isCrit ? -78 : -58;
+    slot.x = params.x + fanLane * 8 + (Math.random() - 0.5) * 4;
+    slot.y = params.y - 16 - Math.abs(fanLane) * 4;
+    slot.vx = fanLane * 18 + (Math.random() - 0.5) * 10;
+    slot.vy = (params.isCrit ? -78 : -58) - (fanIdx % 2) * 10;
     slot.baseScale = params.isCrit ? 1.32 : 1.0;
 
     let color: string = PALETTE.BONE_WHITE;
@@ -216,6 +233,7 @@ export class CombatFxManager {
     const flash = this.acquireParticleSlot();
     if (flash) {
       flash.active = true;
+      flash.textureKey = 'fx_muzzle_flash';
       flash.age = 0;
       flash.ttl = 0.075;
       flash.x = x + Math.cos(angleRad) * 6;
@@ -229,7 +247,7 @@ export class CombatFxManager {
       flash.gravityY = 0;
       flash.damping = 0;
 
-      flash.sprite.setTexture('fx_muzzle_flash');
+      flash.sprite.setTexture(flash.textureKey);
       flash.sprite.clearTint();
       flash.sprite.setPosition(flash.x, flash.y);
       flash.sprite.setRotation(angleRad);
@@ -244,6 +262,7 @@ export class CombatFxManager {
       const ejectAngle = angleRad - Math.PI * 0.65 + (Math.random() - 0.5) * 0.4;
       const spd = 75 + Math.random() * 45;
       casing.active = true;
+      casing.textureKey = 'fx_shell_casing';
       casing.age = 0;
       casing.ttl = 0.42;
       casing.x = x;
@@ -257,7 +276,7 @@ export class CombatFxManager {
       casing.gravityY = 180;
       casing.damping = 3;
 
-      casing.sprite.setTexture('fx_shell_casing');
+      casing.sprite.setTexture(casing.textureKey);
       casing.sprite.clearTint();
       casing.sprite.setPosition(casing.x, casing.y);
       casing.sprite.setRotation(Math.random() * Math.PI);
@@ -274,6 +293,7 @@ export class CombatFxManager {
     if (!slash) return;
 
     slash.active = true;
+    slash.textureKey = 'fx_slash_arc';
     slash.age = 0;
     slash.ttl = 0.14;
     slash.x = x + Math.cos(angleRad) * 8;
@@ -287,7 +307,7 @@ export class CombatFxManager {
     slash.gravityY = 0;
     slash.damping = 6;
 
-    slash.sprite.setTexture('fx_slash_arc');
+    slash.sprite.setTexture(slash.textureKey);
     slash.sprite.clearTint();
     slash.sprite.setPosition(slash.x, slash.y);
     slash.sprite.setRotation(angleRad);
@@ -321,6 +341,7 @@ export class CombatFxManager {
       const spd = 70 + Math.random() * 130;
 
       p.active = true;
+      p.textureKey = 'fx_spark';
       p.age = 0;
       p.ttl = 0.18 + Math.random() * 0.12;
       p.x = x;
@@ -334,7 +355,7 @@ export class CombatFxManager {
       p.gravityY = 0;
       p.damping = 8;
 
-      p.sprite.setTexture('fx_spark');
+      p.sprite.setTexture(p.textureKey);
       p.sprite.setTint(tint);
       p.sprite.setPosition(p.x, p.y);
       p.sprite.setRotation(dir);
@@ -353,6 +374,7 @@ export class CombatFxManager {
       const ang = Math.random() * Math.PI * 2;
       const spd = 20 + Math.random() * 45;
       p.active = true;
+      p.textureKey = 'fx_dust_puff';
       p.age = 0;
       p.ttl = 0.26 + Math.random() * 0.1;
       p.x = x + (Math.random() - 0.5) * 10;
@@ -366,7 +388,7 @@ export class CombatFxManager {
       p.gravityY = 0;
       p.damping = 5;
 
-      p.sprite.setTexture('fx_dust_puff');
+      p.sprite.setTexture(p.textureKey);
       p.sprite.setTint(hexToNum(PALETTE.CYAN_FROST));
       p.sprite.setPosition(p.x, p.y);
       p.sprite.setScale(p.startScale);
@@ -382,17 +404,20 @@ export class CombatFxManager {
   public spawnEnemyDeathBurst(defId: string, x: number, y: number): void {
     const invBake = 1 / TextureBaker.getBakeScale();
     const rigDef = RIG_DEFS_BY_ID[defId];
+    const rigFootY = y + 12;
     if (rigDef) {
       for (const part of rigDef.parts) {
         const p = this.acquireParticleSlot();
         if (!p) break;
         const ang = Math.random() * Math.PI * 2;
         const spd = 65 + Math.random() * 95;
+        const texKey = TextureBaker.getPartTextureKey(rigDef.id, part.id);
         p.active = true;
+        p.textureKey = texKey;
         p.age = 0;
         p.ttl = 0.55;
         p.x = x + part.offsetX * 0.5;
-        p.y = y + part.offsetY * 0.5;
+        p.y = rigFootY + part.offsetY * 0.5;
         p.vx = Math.cos(ang) * spd;
         p.vy = Math.sin(ang) * spd - 40;
         p.vr = (Math.random() - 0.5) * 14;
@@ -402,7 +427,7 @@ export class CombatFxManager {
         p.gravityY = 210;
         p.damping = 4;
 
-        p.sprite.setTexture(TextureBaker.getPartTextureKey(rigDef.id, part.id));
+        p.sprite.setTexture(texKey);
         p.sprite.clearTint();
         p.sprite.setPosition(p.x, p.y);
         p.sprite.setRotation(0);
@@ -424,7 +449,9 @@ export class CombatFxManager {
       if (!p) break;
       const ang = (i / 16) * Math.PI * 2 + (Math.random() - 0.5) * 0.25;
       const spd = (radius / 0.28) * (0.6 + Math.random() * 0.5);
+      const texKey = i % 2 === 0 ? 'fx_spark' : 'fx_dust_puff';
       p.active = true;
+      p.textureKey = texKey;
       p.age = 0;
       p.ttl = 0.34;
       p.x = x;
@@ -438,7 +465,7 @@ export class CombatFxManager {
       p.gravityY = 0;
       p.damping = 6;
 
-      p.sprite.setTexture(i % 2 === 0 ? 'fx_spark' : 'fx_dust_puff');
+      p.sprite.setTexture(texKey);
       p.sprite.setTint(i % 3 === 0 ? hexToNum(PALETTE.LIME_GLOW) : tint);
       p.sprite.setPosition(p.x, p.y);
       p.sprite.setRotation(ang);

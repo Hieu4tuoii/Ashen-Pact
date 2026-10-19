@@ -222,10 +222,11 @@ export class CutoutRig {
       Math.floor(this.animTime * 18) % 2 === 0;
 
     if (shouldFlashWhite) {
-      this.applyTintFill(0xffffff);
+      this.applyHitFlashTint();
       this.isHitFlashing = true;
     } else if (shouldFlashTelegraph) {
-      this.applyTintFill(0xfde047);
+      // Multiplicative tint preserves #141019 dark outlines while pulsing warm warning color
+      this.applyMultiplicativeTint(0xff9e64);
       this.isHitFlashing = true;
     } else if (this.isHitFlashing) {
       this.clearPartTints();
@@ -413,9 +414,19 @@ export class CutoutRig {
     }
   }
 
-  private applyTintFill(color: number): void {
+  private applyHitFlashTint(): void {
+    for (const [partId, sprite] of this.partSprites.entries()) {
+      if (partId === 'torso' || partId === 'head') {
+        sprite.setTintFill(0xf4f1ea);
+      } else {
+        sprite.clearTint();
+      }
+    }
+  }
+
+  private applyMultiplicativeTint(color: number): void {
     for (const sprite of this.partSprites.values()) {
-      sprite.setTintFill(color);
+      sprite.setTint(color);
     }
   }
 

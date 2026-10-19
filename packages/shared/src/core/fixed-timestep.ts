@@ -52,6 +52,14 @@ export class FixedTimestepLoop {
     return this.accumulatorMs / this.stepMs;
   }
 
+  public primeForImmediateTick(deltaMs = 0): void {
+    const targetAcc =
+      deltaMs > 0
+        ? Math.min(this.stepMs - 0.001, Math.max(0, 2 * this.stepMs - deltaMs - 0.001))
+        : this.stepMs - 0.001;
+    this.accumulatorMs = targetAcc;
+  }
+
   public reset(tick = 0): void {
     this.accumulatorMs = 0;
     this.currentTick = tick;

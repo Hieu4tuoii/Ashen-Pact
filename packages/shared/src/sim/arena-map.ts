@@ -96,8 +96,11 @@ export class ArenaMap {
     }
   }
 
+  private readonly scratchBox: AABB = { minX: 0, minY: 0, maxX: 0, maxY: 0 };
+
   /**
-   * Resolves circle vs nearby solid tile-AABBs so entities slide smoothly along walls.
+   * Resolves circle vs nearby solid tile-AABBs so entities slide smoothly along walls and pillars
+   * without snagging on internal seams between adjacent tiles.
    */
   public resolveCircleCollision(
     x: number,
@@ -115,22 +118,36 @@ export class ArenaMap {
     const minTy = Math.max(0, Math.floor((currY - radius) / TILE_SIZE) - 1);
     const maxTy = Math.min(this.rows - 1, Math.floor((currY + radius) / TILE_SIZE) + 1);
 
-    for (let ty = minTy; ty <= maxTy; ty++) {
-      for (let tx = minTx; tx <= maxTx; tx++) {
-        if (!this.isSolidTile(tx, ty)) continue;
-        const box: AABB = {
-          minX: tx * TILE_SIZE,
-          minY: ty * TILE_SIZE,
-          maxX: (tx + 1) * TILE_SIZE,
-          maxY: (ty + 1) * TILE_SIZE,
-        };
-        const res = resolveCircleVsAABB(currX, currY, radius, box);
-        if (res.collided) {
-          currX = res.x;
-          currY = res.y;
-          collided = true;
-          normalX = res.normalX;
-          normalY = res.normalY;
+    // Pass 1: Resolve cardinal face overlaps first so sliding across tile seams never snags on internal corners
+    // Pass 2: Resolve any remaining true outer-corner overlaps
+    for (let pass = 0; pass < 2; pass++) {
+      for (let ty = minTy; ty <= maxTy; ty++) {
+        for (let tx = minTx; tx <= maxTx; tx++) {
+          if (!this.isSolidTile(tx, ty)) continue;
+          const minX = tx * TILE_SIZE;
+          const minY = ty * TILE_SIZE;
+          const maxX = minX + TILE_SIZE;
+          const maxY = minY + TILE_SIZE;
+
+          const isCardinalFace =
+            (currX >= minX && currX <= maxX) || (currY >= minY && currY <= maxY);
+          if ((pass === 0 && !isCardinalFace) || (pass === 1 && isCardinalFace)) {
+            continue;
+          }
+
+          this.scratchBox.minX = minX;
+          this.scratchBox.minY = minY;
+          this.scratchBox.maxX = maxX;
+          this.scratchBox.maxY = maxY;
+
+          const res = resolveCircleVsAABB(currX, currY, radius, this.scratchBox);
+          if (res.collided) {
+            currX = res.x;
+            currY = res.y;
+            collided = true;
+            normalX = res.normalX;
+            normalY = res.normalY;
+          }
         }
       }
     }
@@ -175,13 +192,12 @@ export class ArenaMap {
     for (let ty = minTy; ty <= maxTy; ty++) {
       for (let tx = minTx; tx <= maxTx; tx++) {
         if (!this.isSolidTile(tx, ty)) continue;
-        const box: AABB = {
-          minX: tx * TILE_SIZE,
-          minY: ty * TILE_SIZE,
-          maxX: (tx + 1) * TILE_SIZE,
-          maxY: (ty + 1) * TILE_SIZE,
-        };
-        const res = resolveCircleVsAABB(x, y, radius, box);
+        this.scratchBox.minX = tx * TILE_SIZE;
+        this.scratchBox.minY = ty * TILE_SIZE;
+        this.scratchBox.maxX = (tx + 1) * TILE_SIZE;
+        this.scratchBox.maxY = (ty + 1) * TILE_SIZE;
+
+        const res = resolveCircleVsAABB(x, y, radius, this.scratchBox);
         if (res.collided) {
           return {
             hit: true,

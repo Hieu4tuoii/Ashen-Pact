@@ -323,6 +323,8 @@ export class WorldSim {
   private energyRegenAccum = 0;
   private readonly queryEnemyScratch: SimEnemyState[] = [];
   private readonly queryBulletScratch: SimProjectileState[] = [];
+  private readonly projectilePool: SimProjectileState[] = [];
+  private readonly pickupPool: SimPickupState[] = [];
   private readonly damageHistory: { tick: number; amount: number }[] = [];
 
   constructor(options: WorldSimOptions = {}) {
@@ -583,8 +585,15 @@ export class WorldSim {
 
     // 8. Check wave completion in solo test arena
     if (this.autoRespawnWaves) {
-      const combatEnemies = this.enemies.filter((e) => !e.isDummy && e.hp > 0);
-      if (combatEnemies.length === 0) {
+      let hasCombatEnemies = false;
+      for (let i = 0; i < this.enemies.length; i++) {
+        const e = this.enemies[i]!;
+        if (!e.isDummy && e.hp > 0) {
+          hasCombatEnemies = true;
+          break;
+        }
+      }
+      if (!hasCombatEnemies) {
         this.waveRespawnTimer += dtSec;
         if (this.waveRespawnTimer >= 1.5) {
           this.waveRespawnTimer = 0;
@@ -854,6 +863,11 @@ export class WorldSim {
           if (isCircleInCone(p.x, p.y, p.aimAngle, halfArc, MELEE_RANGE + 8, b)) {
             b.ttlSec = 0;
             bulletsDestroyed += 1;
+            const shieldActive = p.skillActiveTimer > 0;
+            if (shieldActive) {
+              p.shieldStoredBullets += 1;
+              p.energy = Math.min(p.maxEnergy, p.energy + 1);
+            }
             this.events.push({
               kind: 'projectile_impact',
               x: b.x,
@@ -862,7 +876,7 @@ export class WorldSim {
               team: 'enemy',
               hitWall: false,
               destroyedByMelee: true,
-              blockedByShield: false,
+              blockedByShield: shieldActive,
               isCrit: false,
             });
           }
@@ -870,13 +884,14 @@ export class WorldSim {
       }
 
       // Hit enemies in melee cone
+      const baseCrit = CHARACTERS[p.characterId]?.baseCritChance ?? 0.05;
       let hitAny = false;
       let anyCrit = false;
       for (let i = 0; i < this.enemies.length; i++) {
         const e = this.enemies[i]!;
         if (e.hp <= 0 || e.aiState === 'spawning') continue;
         if (isCircleInCone(p.x, p.y, p.aimAngle, halfArc, MELEE_RANGE, e)) {
-          const critChance = clamp(p.characterId === 'vanguard' ? 0.05 + w.critChance : w.critChance, 0, 1);
+          const critChance = clamp(baseCrit + w.critChance, 0, 1);
           const isCrit = this.rng.chance(critChance);
           const dmg = isCrit ? Math.round(w.damage * 1.5) : w.damage;
           const hitAngle = Math.atan2(e.y - p.y, e.x - p.x);
@@ -915,6 +930,7 @@ export class WorldSim {
     const muzzleDist = 18;
     const spawnX = p.x + Math.cos(p.aimAngle) * muzzleDist;
     const spawnY = p.y + Math.sin(p.aimAngle) * muzzleDist;
+    const baseCrit = CHARACTERS[p.characterId]?.baseCritChance ?? 0.05;
 
     for (let i = 0; i < pellets; i++) {
       let angleOffset = 0;
@@ -926,18 +942,16 @@ export class WorldSim {
       }
 
       const shotAngle = p.aimAngle + angleOffset;
-      const critChance = clamp(0.05 + w.critChance, 0, 1);
+      const critChance = clamp(baseCrit + w.critChance, 0, 1);
       const isCrit = this.rng.chance(critChance);
       const baseDmg = shieldBoost ? Math.round(w.damage * 1.3) : w.damage;
       const finalDmg = isCrit ? Math.round(baseDmg * 1.5) : baseDmg;
 
-      const proj: SimProjectileState = {
+      const proj = this.acquireProjectile({
         id: ++this.nextEntityId,
         ownerId: p.id,
         team: 'player',
         weaponId: w.id,
-        prevX: spawnX,
-        prevY: spawnY,
         x: spawnX,
         y: spawnY,
         vx: Math.cos(shotAngle) * w.projectileSpeed,
@@ -952,8 +966,7 @@ export class WorldSim {
         ttlSec: w.category === 'shotgun' ? 0.55 : 1.4,
         element: w.element,
         amplifiedByShield: shieldBoost,
-        hitEntityIds: [],
-      };
+      });
 
       this.projectiles.push(proj);
       this.events.push({
@@ -1073,8 +1086,15 @@ export class WorldSim {
       }
     }
 
-    // Remove dead enemies
-    this.enemies = this.enemies.filter((e) => e.hp > 0);
+    // Remove dead enemies in-place (zero array allocation)
+    let writeIdx = 0;
+    for (let i = 0; i < this.enemies.length; i++) {
+      const e = this.enemies[i]!;
+      if (e.hp > 0) {
+        this.enemies[writeIdx++] = e;
+      }
+    }
+    this.enemies.length = writeIdx;
   }
 
   private updateGoblinShooterAI(
@@ -1097,13 +1117,11 @@ export class WorldSim {
 
         for (const mult of [-1, 0, 1]) {
           const shotAngle = e.telegraphAngle + mult * spreadRad;
-          const proj: SimProjectileState = {
+          const proj = this.acquireProjectile({
             id: ++this.nextEntityId,
             ownerId: e.id,
             team: 'enemy',
             weaponId: 'goblin_bow',
-            prevX: muzzleX,
-            prevY: muzzleY,
             x: muzzleX,
             y: muzzleY,
             vx: Math.cos(shotAngle) * bulletSpeed,
@@ -1118,8 +1136,7 @@ export class WorldSim {
             ttlSec: 2.2,
             element: 'none',
             amplifiedByShield: false,
-            hitEntityIds: [],
-          };
+          });
           this.projectiles.push(proj);
           this.events.push({
             kind: 'projectile_spawned',
@@ -1482,7 +1499,17 @@ export class WorldSim {
       }
     }
 
-    this.projectiles = this.projectiles.filter((b) => b.ttlSec > 0);
+    let projWriteIdx = 0;
+    for (let i = 0; i < this.projectiles.length; i++) {
+      const b = this.projectiles[i]!;
+      if (b.ttlSec > 0) {
+        this.projectiles[projWriteIdx++] = b;
+      } else {
+        b.hitEntityIds.length = 0;
+        this.projectilePool.push(b);
+      }
+    }
+    this.projectiles.length = projWriteIdx;
   }
 
   public applyDamageToEnemy(
@@ -1533,32 +1560,32 @@ export class WorldSim {
       for (let k = 0; k < 2; k++) {
         const ang = this.rng.nextFloat(-Math.PI, Math.PI);
         const spd = this.rng.nextFloat(60, 130);
-        this.pickups.push({
-          id: ++this.nextEntityId,
-          kind: 'energy',
-          prevX: enemy.x,
-          prevY: enemy.y,
-          x: enemy.x,
-          y: enemy.y,
-          vx: Math.cos(ang) * spd,
-          vy: Math.sin(ang) * spd,
-          amount: 8,
-          ttlSec: 12,
-        });
+        this.pickups.push(
+          this.acquirePickup({
+            id: ++this.nextEntityId,
+            kind: 'energy',
+            x: enemy.x,
+            y: enemy.y,
+            vx: Math.cos(ang) * spd,
+            vy: Math.sin(ang) * spd,
+            amount: 8,
+            ttlSec: 12,
+          }),
+        );
       }
       const coinAng = this.rng.nextFloat(-Math.PI, Math.PI);
-      this.pickups.push({
-        id: ++this.nextEntityId,
-        kind: 'gold',
-        prevX: enemy.x,
-        prevY: enemy.y,
-        x: enemy.x,
-        y: enemy.y,
-        vx: Math.cos(coinAng) * 90,
-        vy: Math.sin(coinAng) * 90,
-        amount: 5,
-        ttlSec: 12,
-      });
+      this.pickups.push(
+        this.acquirePickup({
+          id: ++this.nextEntityId,
+          kind: 'gold',
+          x: enemy.x,
+          y: enemy.y,
+          vx: Math.cos(coinAng) * 90,
+          vy: Math.sin(coinAng) * 90,
+          amount: 5,
+          ttlSec: 12,
+        }),
+      );
     }
   }
 
@@ -1662,7 +1689,74 @@ export class WorldSim {
       }
     }
 
-    this.pickups = this.pickups.filter((pk) => pk.ttlSec > 0);
+    let pickupWriteIdx = 0;
+    for (let i = 0; i < this.pickups.length; i++) {
+      const pk = this.pickups[i]!;
+      if (pk.ttlSec > 0) {
+        this.pickups[pickupWriteIdx++] = pk;
+      } else {
+        this.pickupPool.push(pk);
+      }
+    }
+    this.pickups.length = pickupWriteIdx;
+  }
+
+  private acquireProjectile(
+    init: Omit<SimProjectileState, 'prevX' | 'prevY' | 'hitEntityIds'>,
+  ): SimProjectileState {
+    const pooled = this.projectilePool.pop();
+    if (pooled) {
+      pooled.id = init.id;
+      pooled.ownerId = init.ownerId;
+      pooled.team = init.team;
+      pooled.weaponId = init.weaponId;
+      pooled.prevX = init.x;
+      pooled.prevY = init.y;
+      pooled.x = init.x;
+      pooled.y = init.y;
+      pooled.vx = init.vx;
+      pooled.vy = init.vy;
+      pooled.angle = init.angle;
+      pooled.radius = init.radius;
+      pooled.damage = init.damage;
+      pooled.isCrit = init.isCrit;
+      pooled.knockback = init.knockback;
+      pooled.pierceRemaining = init.pierceRemaining;
+      pooled.bounceRemaining = init.bounceRemaining;
+      pooled.ttlSec = init.ttlSec;
+      pooled.element = init.element;
+      pooled.amplifiedByShield = init.amplifiedByShield;
+      pooled.hitEntityIds.length = 0;
+      return pooled;
+    }
+    return {
+      ...init,
+      prevX: init.x,
+      prevY: init.y,
+      hitEntityIds: [],
+    };
+  }
+
+  private acquirePickup(init: Omit<SimPickupState, 'prevX' | 'prevY'>): SimPickupState {
+    const pooled = this.pickupPool.pop();
+    if (pooled) {
+      pooled.id = init.id;
+      pooled.kind = init.kind;
+      pooled.prevX = init.x;
+      pooled.prevY = init.y;
+      pooled.x = init.x;
+      pooled.y = init.y;
+      pooled.vx = init.vx;
+      pooled.vy = init.vy;
+      pooled.amount = init.amount;
+      pooled.ttlSec = init.ttlSec;
+      return pooled;
+    }
+    return {
+      ...init,
+      prevX: init.x,
+      prevY: init.y,
+    };
   }
 
   public consumeEvents(): SimEvent[] {

@@ -39,12 +39,21 @@ describe('Phase 1 — SpatialHashGrid & Tile-AABB Collision', () => {
     expect(res.y).toBeCloseTo(116, 3);
     expect(res.normalX).toBe(-1);
 
-    const map = new ArenaMap({ cols: 24, rows: 16, includePillars: true });
+    const map = new ArenaMap({ cols: 36, rows: 22, includePillars: true });
     // Attempt to push player into left border wall (x < 32 + radius)
     const wallSlide = map.resolveCircleCollision(20, 200, 13);
     expect(wallSlide.collided).toBe(true);
     expect(wallSlide.x).toBeGreaterThanOrEqual(32 + 13);
     expect(wallSlide.y).toBeCloseTo(200, 3);
+
+    // Slide across the internal vertical seam (x = 9 * 32 = 288) between pillar tiles (8,5) and (9,5)
+    // Two-pass cardinal-before-corner resolution must push purely along Y without snagging X on tile (8,5)'s corner
+    const seamX = 9 * 32 + 0.5;
+    const seamY = 5 * 32 - 13 + 4;
+    const seamSlide = map.resolveCircleCollision(seamX, seamY, 13);
+    expect(seamSlide.collided).toBe(true);
+    expect(seamSlide.x).toBeCloseTo(seamX, 5);
+    expect(seamSlide.y).toBeCloseTo(5 * 32 - 13, 3);
   });
 });
 
@@ -94,7 +103,7 @@ describe('Phase 1 — Player Movement, Acceleration, Dash i-frames & LocalTransp
     expect(transport.getSim().player.vx).toBe(0);
   });
 
-  it('produces monotonic, jitter-free interpolated positions at 144Hz (6.944ms steps)', () => {
+  it('produces monotonic, jitter-free interpolated positions at 144Hz including wake-from-rest', () => {
     const transport = new LocalTransport({
       seed: 202,
       spawnInitialWave: false,
@@ -102,6 +111,17 @@ describe('Phase 1 — Player Movement, Acceleration, Dash i-frames & LocalTransp
       autoRespawnWaves: false,
     });
 
+    const dt144 = 1000 / 144;
+
+    // Stand still for 11 frames at 144Hz so accumulator has fractional remainder (alpha > 0)
+    for (let idleFrame = 0; idleFrame < 11; idleFrame++) {
+      transport.step(dt144);
+    }
+
+    let prevX = transport.getInterpolatedPlayerPos().x;
+
+    // Now press right (moveX = 1) after standing still -> must respond on the VERY FIRST 144Hz frame
+    // and move strictly monotonically forward on every subsequent frame without backwards jumps
     transport.sendInput({
       seq: 1,
       tick: 1,
@@ -111,10 +131,7 @@ describe('Phase 1 — Player Movement, Acceleration, Dash i-frames & LocalTransp
       buttons: 0,
     });
 
-    const dt144 = 1000 / 144;
-    let prevX = transport.getInterpolatedPlayerPos().x;
-
-    for (let frame = 0; frame < 30; frame++) {
+    for (let frame = 0; frame < 35; frame++) {
       transport.step(dt144);
       const currX = transport.getInterpolatedPlayerPos().x;
       expect(currX).toBeGreaterThan(prevX);
@@ -159,8 +176,8 @@ describe('Phase 1 — HP, Armor Regen (Thiết Vệ 2.0s), Knockback & 4 Sample 
       seed: 404,
       spawnInitialWave: false,
       includeTrainingDummy: false,
-      autoRespawnWaves: false,
       autoRevivePlayer: false,
+      autoRespawnWaves: false,
     });
 
     // Hit for 4 damage -> Armor drops from 6 to 2, HP stays 8
@@ -187,7 +204,7 @@ describe('Phase 1 — HP, Armor Regen (Thiết Vệ 2.0s), Knockback & 4 Sample 
     expect(sim.player.hp).toBe(6);
   });
 
-  it('cycles all 4 sample weapons, destroys enemy bullets with Knight Sword, and fires projectiles', () => {
+  it('cycles all 4 sample weapons, destroys enemy bullets with Knight Sword (+ Shield synergy), and reuses pooled projectiles', () => {
     const sim = new WorldSim({
       seed: 505,
       spawnInitialWave: false,
@@ -197,6 +214,10 @@ describe('Phase 1 — HP, Armor Regen (Thiết Vệ 2.0s), Knockback & 4 Sample 
 
     expect(sim.player.weaponSlots).toEqual([...PHASE1_SAMPLE_WEAPONS]);
     const target = sim.spawnEnemy('goblin_shooter', sim.player.x + 36, sim.player.y, true);
+
+    // Activate Thiết Vệ's Ruby Shield Wall and lower energy slightly to verify +1 energy gain on sword deflection
+    sim.player.skillActiveTimer = 3.0;
+    sim.player.energy = 100;
 
     // Spawn an incoming enemy bullet right in front of the player
     sim.projectiles.push({
@@ -222,8 +243,9 @@ describe('Phase 1 — HP, Armor Regen (Thiết Vệ 2.0s), Knockback & 4 Sample 
       amplifiedByShield: false,
       hitEntityIds: [],
     });
+    const deflectedBulletRef = sim.projectiles[0]!;
 
-    // 1. Swing Knight Sword (slot 0) -> damages enemy AND destroys enemy bullet
+    // 1. Swing Knight Sword (slot 0) -> damages enemy, destroys enemy bullet, and feeds active Shield Wall
     sim.setPlayerInput({
       seq: 1,
       tick: 1,
@@ -238,8 +260,10 @@ describe('Phase 1 — HP, Armor Regen (Thiết Vệ 2.0s), Knockback & 4 Sample 
     expect(target.hp).toBeLessThan(target.maxHp);
     expect(target.kbVx).toBeGreaterThan(0);
     expect(sim.projectiles.filter((b) => b.team === 'enemy')).toHaveLength(0);
+    expect(sim.player.shieldStoredBullets).toBe(1);
+    expect(sim.player.energy).toBe(101);
 
-    // 2. Switch to Scrap Shotgun (slot 2) -> fires 5 pellets and costs 3 energy
+    // 2. Switch to Scrap Shotgun (slot 2) -> fires 5 pellets, costs 3 energy, and reuses pooled projectile object
     const energyBefore = sim.player.energy;
     sim.player.fireCooldownTimer = 0;
     sim.setPlayerInput({
@@ -255,7 +279,9 @@ describe('Phase 1 — HP, Armor Regen (Thiết Vệ 2.0s), Knockback & 4 Sample 
 
     expect(sim.getActiveWeaponId()).toBe('scrap_shotgun');
     expect(sim.player.energy).toBe(energyBefore - 3);
-    expect(sim.projectiles.filter((b) => b.team === 'player')).toHaveLength(5);
+    const playerPellets = sim.projectiles.filter((b) => b.team === 'player');
+    expect(playerPellets).toHaveLength(5);
+    expect(playerPellets.some((b) => b === deflectedBulletRef)).toBe(true);
   });
 });
 
