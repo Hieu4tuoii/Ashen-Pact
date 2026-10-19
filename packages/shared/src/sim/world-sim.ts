@@ -1389,7 +1389,7 @@ export class WorldSim {
     p.characterId = characterId;
     if (displayName) {
       p.displayName = displayName;
-    } else if (p.displayName.includes(' P')) {
+    } else if (/^(Thiết Vệ|Liệp Ưng|Lam Hỏa|Mộc Linh|Bánh Răng|Chiến Hữu|Player) P\d+$/.test(p.displayName)) {
       p.displayName = `${cDef.nameVi} P${p.slot}`;
     }
     p.maxHp = cDef.hp;
@@ -1543,10 +1543,10 @@ export class WorldSim {
     // Position all players around the campfire in a wide vertically-staggered 2x2 formation
     const allPlayers = this.getAllPlayers();
     const offsets: readonly [number, number][] = [
-      [-90, 8],
-      [15, 28],
-      [-90, 68],
-      [15, 88],
+      [-105, 8],
+      [-18, 28],
+      [-105, 68],
+      [-18, 88],
     ];
     for (let i = 0; i < allPlayers.length; i++) {
       const p = allPlayers[i]!;
@@ -1570,10 +1570,28 @@ export class WorldSim {
     this.inHub = false;
     this.hubStatues.length = 0;
     this.currentFloor = 1;
+    this.currentBiome = 1;
     this.runState = 'playing';
+    this.teamComboCount = 0;
+    this.activeBuffIds = [];
+    this.pendingBuffChoices = [];
+    this.runStats = {
+      floorReached: 1,
+      roomsCleared: 0,
+      chestsOpened: 0,
+      kills: 0,
+      elitesKilled: 0,
+      bossesKilled: 0,
+      damageDealt: 0,
+      goldEarned: 0,
+      ticksElapsed: 0,
+      elementalReactions: 0,
+      teamCombos: 0,
+    };
     this.roomChestsByRoomId.clear();
     this.roomItemsByRoomId.clear();
     this.initializedRoomIds.clear();
+    this.completedPuzzleRoomIds.clear();
 
     const pCount = this.getActivePlayerCount();
     this.dungeon = generateDungeonFloor(this.baseSeed, 1, 1, pCount);
@@ -1590,6 +1608,12 @@ export class WorldSim {
       p.energy = p.maxEnergy;
       p.ready = false;
       p.currentRoomId = this.currentRoomId;
+      p.statsDamageDealt = 0;
+      p.statsDamageTaken = 0;
+      p.statsKills = 0;
+      p.statsRevives = 0;
+      p.statsElementalReactions = 0;
+      p.statsTeamCombos = 0;
     }
 
     this.enterRoom(this.dungeon.startRoomId);
@@ -3249,11 +3273,14 @@ export class WorldSim {
   public skipCurrentRoomWaves(): void {
     const room = this.getCurrentRoom();
     room.wavesSpawned = room.wavesTotal;
+    const allPlayers = this.getAllPlayers();
     for (let i = 0; i < this.enemies.length; i++) {
       const e = this.enemies[i]!;
       if (!e.isDummy && e.hp > 0) {
         e.shieldArmor = 0;
-        this.applyDamageToEnemy(e, e.hp, true, 'burn', 0, 0, true);
+        e.bossBurrowed = false;
+        const creditPlayer = allPlayers[i % Math.max(1, allPlayers.length)] ?? this.player;
+        this.applyDamageToEnemy(e, e.hp * 4, true, 'burn', e.aimAngle, 0, true, creditPlayer.id);
       }
     }
     this.enemies = this.enemies.filter((e) => e.isDummy || e.hp > 0);

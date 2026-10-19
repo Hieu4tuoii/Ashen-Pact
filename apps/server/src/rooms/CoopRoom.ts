@@ -142,6 +142,18 @@ export class CoopRoom extends Room<CoopRoomState> {
       }
     });
 
+    this.onMessage('return_to_hub', () => {
+      this.sim.botAutoPlayActive = false;
+      this.sim.enterHub();
+      this.broadcastImmediateSnapshot();
+    });
+
+    this.onMessage('replay_run', () => {
+      this.sim.botAutoPlayActive = false;
+      this.sim.startDungeonRunFromHub();
+      this.broadcastImmediateSnapshot();
+    });
+
     const handleToggleDuplicate = (client: Client, payload?: { allow?: boolean }) => {
       const meta = this.playersBySession.get(client.sessionId);
       if (!meta || !meta.isHost) return;
@@ -228,7 +240,7 @@ export class CoopRoom extends Room<CoopRoomState> {
         payload: {
           cmd?: string;
           roomId?: number;
-          floor?: 1 | 2;
+          floor?: 1 | 2 | 3 | 4 | 5 | 6;
           enabled?: boolean;
           playerId?: number;
         },
@@ -247,9 +259,11 @@ export class CoopRoom extends Room<CoopRoomState> {
           this.sim.enterRoom(payload.roomId);
         } else if (
           payload.cmd === 'advance_floor' &&
-          (payload.floor === 1 || payload.floor === 2)
+          typeof payload.floor === 'number' &&
+          payload.floor >= 1 &&
+          payload.floor <= 6
         ) {
-          this.sim.advanceToFloor(payload.floor);
+          this.sim.advanceToFloor(payload.floor as 1 | 2 | 3 | 4 | 5 | 6);
         } else if (payload.cmd === 'bot_autoplay') {
           this.sim.botAutoPlayActive = Boolean(payload.enabled);
         } else if (payload.cmd === 'god_mode_all') {

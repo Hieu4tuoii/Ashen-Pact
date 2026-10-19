@@ -1629,16 +1629,27 @@ export class GameScene extends Phaser.Scene {
     kb.on('keydown-ENTER', () => {
       const sim = this.transport.getSim();
       if ((sim.runState === 'victory' || sim.runState === 'defeat') && !this.resultDismissed) {
-        this.scene.restart();
+        if (this.room && this.coopMode !== 'solo') {
+          this.room.send('replay_run', {});
+          this.resultDismissed = true;
+          this.triggerIrisTransition('close');
+          this.invalidateAllHudCaches();
+        } else {
+          this.scene.restart();
+        }
       }
     });
 
     kb.on('keydown-H', () => {
       const sim = this.transport.getSim();
       if ((sim.runState === 'victory' || sim.runState === 'defeat') && !this.resultDismissed) {
+        if (this.room && this.coopMode !== 'solo') {
+          this.room.send('return_to_hub', {});
+        }
         sim.enterHub();
         this.resultDismissed = true;
         this.triggerIrisTransition();
+        this.invalidateAllHudCaches();
       }
     });
 
@@ -3458,8 +3469,10 @@ export class GameScene extends Phaser.Scene {
 
       // Natural Hub Guidance Signs (Statues Arc, Weapon Rack, Training Dummy live DPS)
       const isEn = i18n.getLocale() === 'en';
+      const hubCx = sim.map.width * 0.5;
+      const hubCy = sim.map.height * 0.5;
       const camScrollX = this.cameras.main.worldView?.x ?? 0;
-      const dummySignX = 620;
+      const dummySignX = hubCx + 95;
       const dummyBlockedByInvite =
         this.invitePanelVisible && !this.fullMapOpen && dummySignX - camScrollX > 560;
       const guideSpecs: {
@@ -3470,15 +3483,15 @@ export class GameScene extends Phaser.Scene {
         visible: boolean;
       }[] = [
         {
-          x: 500,
-          y: 112,
+          x: hubCx - 125,
+          y: hubCy - 142,
           text: i18n.t('ui.hubGuide.statuesSign'),
           color: PALETTE.CYAN_FROST,
-          visible: true,
+          visible: !previewOpen,
         },
         {
-          x: 255,
-          y: 268,
+          x: hubCx - 258,
+          y: hubCy - 8,
           text: isEn
             ? '⚔ PRACTICE WEAPON RACK — Press [E] to Test & Compare'
             : '⚔ KỆ VŨ KHÍ THỬ NGHIỆM — Nhấn [E] Nhặt Thử & So Sánh',
@@ -3487,7 +3500,7 @@ export class GameScene extends Phaser.Scene {
         },
         {
           x: dummySignX,
-          y: 392,
+          y: hubCy + 42,
           text: isEn
             ? `🎯 Training Dummy · DPS: ${sim.getRollingDps().toFixed(1)}`
             : `🎯 Bù Nhìn Tập Bắn · DPS: ${sim.getRollingDps().toFixed(1)}`,
@@ -4810,12 +4823,7 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    if (
-      sim.tick % 12 === 0 ||
-      sim.inHub ||
-      !this.lastHudStatsText ||
-      this.lastHudStatsText.includes(VIETNAMESE_VERIFICATION_STRING) !== sim.inHub
-    ) {
+    if (sim.tick % 12 === 0 || sim.inHub || !this.lastHudStatsText) {
       const dps = sim.getRollingDps();
       const room = sim.getCurrentRoom();
       const roomLabel = sim.inHub ? i18n.t('ui.hud.hub') : i18n.roomTypeName(room.type);
@@ -4843,7 +4851,7 @@ export class GameScene extends Phaser.Scene {
       const skShort = curLocale === 'en' ? 'Skill' : 'KN';
 
       const nextStats = sim.inHub
-        ? `${i18n.t('ui.hud.hubStatsHint', { count: sim.getActivePlayerCount() })} | ${VIETNAMESE_VERIFICATION_STRING}`
+        ? i18n.t('ui.hud.hubStatsHint', { count: sim.getActivePlayerCount() })
         : `${i18n.t('ui.hud.floor')} ${sim.currentFloor}/${sim.campaignMaxFloors} (${roomLabel}) · DPS ${dps.toFixed(1)} · ${i18n.t('ui.hud.gold')} ${p.gold} · ${i18n.t('ui.hud.wave')} ${sim.waveNumber} · Dash ${dashReady} · ${skShort} ${skillReady}${cycleTag}${comboTag}`;
       if (nextStats !== this.lastHudStatsText) {
         this.lastHudStatsText = nextStats;
@@ -6254,10 +6262,21 @@ export class GameScene extends Phaser.Scene {
 
       const btnY = py + ph - 44;
       makeModalBtn(130, btnY, 182, i18n.t('modal.btnReplay'), PALETTE.LIME_GLOW, () => {
-        this.scene.restart();
+        if (this.room && this.coopMode !== 'solo') {
+          this.room.send('replay_run', {});
+          this.resultDismissed = true;
+          this.triggerIrisTransition('close');
+          this.invalidateAllHudCaches();
+        } else {
+          this.scene.restart();
+        }
       });
       makeModalBtn(320, btnY, 172, i18n.t('modal.btnReturnHub'), PALETTE.CYAN_FROST, () => {
+        if (this.room && this.coopMode !== 'solo') {
+          this.room.send('return_to_hub', {});
+        }
         sim.enterHub();
+        this.resultDismissed = true;
         this.triggerIrisTransition('close');
         this.invalidateAllHudCaches();
       });

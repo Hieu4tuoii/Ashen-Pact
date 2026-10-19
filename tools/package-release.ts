@@ -105,7 +105,90 @@ internal static class Program
     {
         if (string.IsNullOrEmpty(arg)) return "\\"\\"";
         if (arg.IndexOfAny(new char[] { ' ', '\\t', '\\"' }) < 0) return arg;
-        return "\\"" + arg.Replace("\\"", "\\\\\\"") + "\\"";
+        StringBuilder sb = new StringBuilder();
+        sb.Append('\\"');
+        int backslashes = 0;
+        foreach (char c in arg)
+        {
+            if (c == '\\\\')
+            {
+                backslashes++;
+            }
+            else if (c == '\\"')
+            {
+                sb.Append('\\\\', backslashes * 2 + 1);
+                sb.Append('\\"');
+                backslashes = 0;
+            }
+            else
+            {
+                if (backslashes > 0)
+                {
+                    sb.Append('\\\\', backslashes);
+                    backslashes = 0;
+                }
+                sb.Append(c);
+            }
+        }
+        if (backslashes > 0)
+        {
+            sb.Append('\\\\', backslashes * 2);
+        }
+        sb.Append('\\"');
+        return sb.ToString();
+    }
+
+    private static void EnsureFirewallRuleIfInteractive(string baseDir)
+    {
+        if (Environment.GetEnvironmentVariable("ASHEN_PACT_NO_OPEN_BROWSER") == "1" ||
+            Environment.GetEnvironmentVariable("ASHEN_PACT_NO_FIREWALL_PROMPT") == "1")
+        {
+            return;
+        }
+
+        try
+        {
+            ProcessStartInfo checkPsi = new ProcessStartInfo();
+            checkPsi.FileName = "netsh.exe";
+            checkPsi.Arguments = "advfirewall firewall show rule name=\\"Ashen Pact Co-op LAN (TCP 2567-2576)\\"";
+            checkPsi.UseShellExecute = false;
+            checkPsi.CreateNoWindow = true;
+            checkPsi.RedirectStandardOutput = true;
+            checkPsi.RedirectStandardError = true;
+            using (Process checkProc = Process.Start(checkPsi))
+            {
+                if (checkProc != null)
+                {
+                    checkProc.WaitForExit(3000);
+                    if (checkProc.ExitCode == 0)
+                    {
+                        return;
+                    }
+                }
+            }
+
+            string firewallBat = Path.Combine(baseDir, "allow-firewall-port-2567.bat");
+            if (!File.Exists(firewallBat)) return;
+
+            Console.WriteLine("[AshenPact-Host] Dang yeu cau quyen Quan tri vien (UAC) de mo cong Windows Firewall TCP 2567-2576 cho mang LAN...");
+            ProcessStartInfo elevatePsi = new ProcessStartInfo();
+            elevatePsi.FileName = firewallBat;
+            elevatePsi.Arguments = "--no-pause --no-elevate";
+            elevatePsi.WorkingDirectory = baseDir;
+            elevatePsi.UseShellExecute = true;
+            elevatePsi.Verb = "runas";
+            using (Process elevateProc = Process.Start(elevatePsi))
+            {
+                if (elevateProc != null)
+                {
+                    elevateProc.WaitForExit(15000);
+                }
+            }
+        }
+        catch
+        {
+            Console.WriteLine("[AshenPact-Host] Bo qua tu dong mo Firewall. Neu ban be LAN khong ket noi duoc, hay chay allow-firewall-port-2567.bat.");
+        }
     }
 
     public static int Main(string[] args)
@@ -130,6 +213,8 @@ internal static class Program
             Console.Error.WriteLine("[AshenPact-Host] Khong tim thay file server-bundle.cjs tai: " + bundleScript);
             return 1;
         }
+
+        EnsureFirewallRuleIfInteractive(baseDir);
 
         StringBuilder argBuilder = new StringBuilder();
         argBuilder.Append(QuoteArg(bundleScript));
@@ -244,9 +329,16 @@ function writeBatchScripts(releaseDir: string): void {
     'echo ==================================================================',
     'net session >nul 2>&1',
     'if %ERRORLEVEL% neq 0 (',
+    '  if "%1"=="--no-elevate" goto :no_admin',
+    '  if "%2"=="--no-elevate" goto :no_admin',
+    '  echo [*] Dang yeu cau quyen Quan tri vien ^(UAC^) de mo cong TCP 2567-2576...',
+    '  powershell -NoProfile -ExecutionPolicy Bypass -Command "Start-Process -FilePath \'%~f0\' -ArgumentList \'--no-elevate\' -Verb RunAs"',
+    '  exit /b %ERRORLEVEL%',
+    ':no_admin',
     '  echo [!] Vui long nhap chuot phai vao file allow-firewall-port-2567.bat',
     '  echo     va chon "Run as administrator" ^(Chay voi quyen Quan tri vien^).',
     '  echo.',
+    '  if "%1"=="--no-pause" exit /b 1',
     '  pause',
     '  exit /b 1',
     ')',

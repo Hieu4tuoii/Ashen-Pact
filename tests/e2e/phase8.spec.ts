@@ -7,22 +7,35 @@ import { packageRelease } from '../../tools/package-release.js';
 const SCREENSHOT_DIR = path.resolve(process.cwd(), 'docs/screenshots/phase-8');
 const RELEASE_DIR = path.resolve(process.cwd(), 'release/AshenPact-v0.1.0-win-x64');
 const RELEASE_EXE = path.join(RELEASE_DIR, 'AshenPact-Host.exe');
+const RELEASE_ZIP = path.resolve(process.cwd(), 'release/AshenPact-v0.1.0-win-x64.zip');
 const RELEASE_PORT = 2578;
 
 test.beforeAll(() => {
   fs.mkdirSync(SCREENSHOT_DIR, { recursive: true });
-  if (!fs.existsSync(RELEASE_EXE)) {
+  if (!fs.existsSync(RELEASE_EXE) || !fs.existsSync(RELEASE_ZIP)) {
     packageRelease({ skipBuild: true });
   }
 });
 
 test.describe('Phase 8 — Standalone Windows Release Package (v0.1.0), Real LAN IP Co-op & Cross-Browser Verification', () => {
-  test('launches standalone AshenPact-Host.exe from clean release folder, verifies console ASCII QR & LAN IP, connects Chromium + Microsoft Edge clients over real LAN IPv4, and clears a full Dungeon Floor + Boss', async ({
+  test('stages AshenPact-v0.1.0-win-x64 into a clean path with spaces & Vietnamese Unicode, launches AshenPact-Host.exe, connects Chromium + Edge over real LAN IPv4, and verifies full Co-op Dungeon + Boss Victory stats', async ({
     browser,
   }) => {
     test.setTimeout(90000);
 
+    expect(fs.existsSync(RELEASE_ZIP)).toBe(true);
+    const zipStat = fs.statSync(RELEASE_ZIP);
+    expect(zipStat.size).toBeGreaterThan(10 * 1024 * 1024);
+    const zipFd = fs.openSync(RELEASE_ZIP, 'r');
+    const pkHeader = Buffer.alloc(4);
+    fs.readSync(zipFd, pkHeader, 0, 4, 0);
+    fs.closeSync(zipFd);
+    expect(pkHeader[0]).toBe(0x50); // 'P'
+    expect(pkHeader[1]).toBe(0x4b); // 'K'
+
     expect(fs.existsSync(RELEASE_EXE)).toBe(true);
+    expect(fs.existsSync(path.join(RELEASE_DIR, 'runtime/node.exe'))).toBe(true);
+    expect(fs.existsSync(path.join(RELEASE_DIR, 'server-bundle.cjs'))).toBe(true);
     expect(fs.existsSync(path.join(RELEASE_DIR, 'start-host.bat'))).toBe(true);
     expect(fs.existsSync(path.join(RELEASE_DIR, 'allow-firewall-port-2567.bat'))).toBe(true);
     expect(fs.existsSync(path.join(RELEASE_DIR, 'client/index.html'))).toBe(true);
@@ -37,6 +50,7 @@ test.describe('Phase 8 — Standalone Windows Release Package (v0.1.0), Real LAN
         env: {
           ...process.env,
           ASHEN_PACT_NO_OPEN_BROWSER: '1',
+          ASHEN_PACT_NO_FIREWALL_PROMPT: '1',
         },
       });
 
@@ -71,7 +85,7 @@ test.describe('Phase 8 — Standalone Windows Release Package (v0.1.0), Real LAN
       const consoleErrors: string[] = [];
       const consoleWarnings: string[] = [];
 
-      // 2. Launch Host in Chromium and Client 2 in Microsoft Edge (cross-browser verification!)
+      // 3. Launch Host in Chromium and Client 2 in Microsoft Edge (cross-browser verification!)
       const hostContext = await browser.newContext({ viewport: { width: 1920, height: 1080 } });
       let edgeBrowser = null;
       try {
@@ -106,7 +120,7 @@ test.describe('Phase 8 — Standalone Windows Release Package (v0.1.0), Real LAN
         });
       }
 
-      // 3. Query /api/host-info from the standalone release server to obtain the machine's real LAN IPv4
+      // 4. Query /api/host-info from the standalone release server to obtain the machine's real LAN IPv4
       const hostInfoRes = await pageHost.request.get(
         `http://127.0.0.1:${RELEASE_PORT}/api/host-info`,
       );
@@ -122,7 +136,7 @@ test.describe('Phase 8 — Standalone Windows Release Package (v0.1.0), Real LAN
 
       const lanBaseUrl = `http://${hostInfo.primaryLanIp}:${hostInfo.port}`;
 
-      // 4. Connect Host (P1) and Client 2 (P2 - MS Edge) over the real LAN IPv4 address
+      // 5. Connect Host (P1) and Client 2 (P2 - MS Edge) over the real LAN IPv4 address
       await pageHost.goto(
         `${lanBaseUrl}/?coop=host&name=${encodeURIComponent('Chủ Phòng v0.1')}&server=${hostInfo.primaryLanIp}:${hostInfo.port}`,
       );
@@ -157,13 +171,19 @@ test.describe('Phase 8 — Standalone Windows Release Package (v0.1.0), Real LAN
         window.__GAME_COOP_SEND__?.('select_character', { characterId: 'engineer' });
         window.__GAME_COOP_SEND__?.('set_ready', { ready: true });
       });
-      await pageHost.waitForTimeout(350);
+      await pageHost.waitForTimeout(400);
+
+      // Verify custom display names with " P" were preserved after character selection
+      const hubPlayerNames = await pageHost.evaluate(() =>
+        window.__GAME_TRANSPORT__!.getSim().getAllPlayers().map((pl) => pl.displayName),
+      );
+      expect(hubPlayerNames).toEqual(['Chủ Phòng v0.1', 'Đồng Đội Edge P2']);
 
       await pageHost.screenshot({
         path: path.join(SCREENSHOT_DIR, 'release-hub-lan-coop-1080p.png'),
       });
 
-      // 5. Start Dungeon Run from Hub -> Floor 1 -> Enter Combat Room & fight
+      // 6. Start Dungeon Run from Hub -> Floor 1 -> Enter Combat Room & fight
       await pageHost.evaluate(() => {
         window.__GAME_COOP_SEND__?.('debug_cmd', { cmd: 'god_mode_all', enabled: true });
         window.__GAME_COOP_SEND__?.('start_run', {});
@@ -189,7 +209,7 @@ test.describe('Phase 8 — Standalone Windows Release Package (v0.1.0), Real LAN
         null,
         { timeout: 10000 },
       );
-      await pageHost.waitForTimeout(900);
+      await pageHost.waitForTimeout(1200);
 
       await pageHost.screenshot({
         path: path.join(SCREENSHOT_DIR, 'release-dungeon-combat-1080p.png'),
@@ -220,36 +240,81 @@ test.describe('Phase 8 — Standalone Windows Release Package (v0.1.0), Real LAN
         null,
         { timeout: 10000 },
       );
-      await pageHost.waitForTimeout(600);
+      await pageHost.waitForTimeout(800);
 
       // Defeat Boss to complete the run from the standalone release build
       await pageHost.evaluate(() => {
         window.__GAME_COOP_SEND__?.('debug_cmd', { cmd: 'skip_waves' });
       });
 
-      await pageHost.waitForFunction(
-        () => window.__GAME_DEBUG__?.runState === 'victory',
-        null,
-        { timeout: 10000 },
-      );
+      for (const p of pages) {
+        await p.waitForFunction(
+          () => window.__GAME_DEBUG__?.runState === 'victory',
+          null,
+          { timeout: 10000 },
+        );
+      }
 
       // Sleep secondary browser loop briefly to measure clean single-GPU Host FPS
       await pageClient2.evaluate(() => window.__PHASER_GAME__?.loop.sleep());
       await pageHost.bringToFront();
       await pageHost.waitForTimeout(600);
 
-      const finalMetrics = await pageHost.evaluate(() => ({
-        fps: window.__GAME_DEBUG__.fps,
-        runState: window.__GAME_DEBUG__.runState,
-        coopPlayerCount: window.__GAME_DEBUG__.coopPlayerCount,
-      }));
+      const finalMetrics = await pageHost.evaluate(() => {
+        const sim = window.__GAME_TRANSPORT__!.getSim();
+        return {
+          fps: window.__GAME_DEBUG__.fps,
+          runState: window.__GAME_DEBUG__.runState,
+          coopPlayerCount: window.__GAME_DEBUG__.coopPlayerCount,
+          runStats: { ...sim.runStats },
+          players: sim.getAllPlayers().map((pl) => ({
+            displayName: pl.displayName,
+            damageDealt: pl.statsDamageDealt,
+            kills: pl.statsKills,
+            elementalReactions: pl.statsElementalReactions,
+          })),
+          mvpAwards: sim.computeMvpAwards(),
+        };
+      });
+
       expect(finalMetrics.runState).toBe('victory');
       expect(finalMetrics.coopPlayerCount).toBe(2);
       expect(finalMetrics.fps).toBeGreaterThanOrEqual(55);
+      // Verify Victory screen runStats and MVP awards are synchronized and non-zero!
+      expect(finalMetrics.runStats.kills).toBeGreaterThan(0);
+      expect(finalMetrics.runStats.damageDealt).toBeGreaterThan(0);
+      expect(finalMetrics.runStats.bossesKilled).toBeGreaterThanOrEqual(1);
+      expect(finalMetrics.runStats.roomsCleared).toBeGreaterThanOrEqual(2);
+      expect(finalMetrics.players.map((p) => p.displayName)).toEqual([
+        'Chủ Phòng v0.1',
+        'Đồng Đội Edge P2',
+      ]);
+      expect(
+        finalMetrics.players.reduce((sum, p) => sum + p.damageDealt, 0),
+      ).toBeGreaterThan(0);
+      expect(finalMetrics.mvpAwards.length).toBe(4);
+      expect(
+        finalMetrics.mvpAwards.find((a) => a.category === 'damage')?.value ?? 0,
+      ).toBeGreaterThan(0);
 
       await pageHost.screenshot({
         path: path.join(SCREENSHOT_DIR, 'release-boss-victory-1080p.png'),
       });
+
+      // Wake Client 2 and verify [H] Về Doanh Trại (return_to_hub) synchronizes both players back to Hub
+      await pageClient2.evaluate(() => window.__PHASER_GAME__?.loop.wake());
+      await pageHost.evaluate(() => {
+        window.__GAME_COOP_SEND__?.('return_to_hub', {});
+      });
+      for (const p of pages) {
+        await p.waitForFunction(
+          () =>
+            window.__GAME_DEBUG__?.inHub === true &&
+            window.__GAME_DEBUG__?.runState === 'playing',
+          null,
+          { timeout: 10000 },
+        );
+      }
 
       expect(consoleErrors).toEqual([]);
       expect(consoleWarnings).toEqual([]);
@@ -266,3 +331,4 @@ test.describe('Phase 8 — Standalone Windows Release Package (v0.1.0), Real LAN
     }
   });
 });
+

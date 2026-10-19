@@ -71,6 +71,12 @@ export interface QuantizedPlayerSnap {
   fireCd100: number;
   imbue: ElementType;
   lastSeq: number;
+  stDmg?: number;
+  stTaken?: number;
+  stKills?: number;
+  stRevives?: number;
+  stElem?: number;
+  stCombo?: number;
 }
 
 export interface QuantizedEnemySnap {
@@ -169,6 +175,19 @@ export interface QuantizedWorldSnapshot {
   summons?: SimSummonState[];
   skillZones?: SimSkillZoneState[];
   teamComboCount?: number;
+  runStats?: {
+    floorReached: number;
+    roomsCleared: number;
+    chestsOpened: number;
+    kills: number;
+    elitesKilled: number;
+    bossesKilled: number;
+    damageDealt: number;
+    goldEarned: number;
+    ticksElapsed: number;
+    elementalReactions: number;
+    teamCombos: number;
+  };
   surfaces: QuantizedSurfaceTuple[];
   discoveredRooms: Array<{
     id: number;
@@ -222,6 +241,12 @@ export function encodeWorldSnapshot(
     fireCd100: Math.round(p.fireCooldownTimer * 100),
     imbue: p.activeImbueElement,
     lastSeq: p.lastProcessedSeq,
+    stDmg: Math.round(p.statsDamageDealt ?? 0),
+    stTaken: Math.round(p.statsDamageTaken ?? 0),
+    stKills: p.statsKills ?? 0,
+    stRevives: p.statsRevives ?? 0,
+    stElem: p.statsElementalReactions ?? 0,
+    stCombo: p.statsTeamCombos ?? 0,
   }));
 
   const enemies: QuantizedEnemySnap[] = sim.enemies.map((e) => ({
@@ -321,6 +346,7 @@ export function encodeWorldSnapshot(
     summons: sim.summons.map((s) => ({ ...s })),
     skillZones: sim.skillZones.map((z) => ({ ...z })),
     teamComboCount: sim.teamComboCount,
+    runStats: { ...sim.runStats },
     surfaces,
     discoveredRooms,
     events: netEvents,
@@ -554,7 +580,6 @@ export class NetworkTransport implements ITransport {
 
     this.sim.tick = snapshot.tick;
     this.sim.inHub = snapshot.inHub;
-    this.sim.runState = snapshot.runState;
     this.sim.currentFloor = snapshot.currentFloor;
     if (snapshot.currentBiome) {
       this.sim.currentBiome = snapshot.currentBiome;
@@ -577,6 +602,21 @@ export class NetworkTransport implements ITransport {
       } else {
         this.sim.enterRoom(snapshot.currentRoomId);
       }
+    }
+
+    this.sim.runState = snapshot.runState;
+    if (snapshot.runStats) {
+      this.sim.runStats.floorReached = snapshot.runStats.floorReached;
+      this.sim.runStats.roomsCleared = snapshot.runStats.roomsCleared;
+      this.sim.runStats.chestsOpened = snapshot.runStats.chestsOpened ?? 0;
+      this.sim.runStats.kills = snapshot.runStats.kills;
+      this.sim.runStats.elitesKilled = snapshot.runStats.elitesKilled;
+      this.sim.runStats.bossesKilled = snapshot.runStats.bossesKilled;
+      this.sim.runStats.damageDealt = snapshot.runStats.damageDealt;
+      this.sim.runStats.goldEarned = snapshot.runStats.goldEarned;
+      this.sim.runStats.ticksElapsed = snapshot.runStats.ticksElapsed;
+      this.sim.runStats.elementalReactions = snapshot.runStats.elementalReactions;
+      this.sim.runStats.teamCombos = snapshot.runStats.teamCombos;
     }
 
     this.sim.portalActive = snapshot.portalActive;
@@ -648,6 +688,12 @@ export class NetworkTransport implements ITransport {
       pState.fireCooldownTimer = ps.fireCd100 / 100;
       pState.activeImbueElement = ps.imbue;
       pState.lastProcessedSeq = ps.lastSeq;
+      pState.statsDamageDealt = ps.stDmg ?? 0;
+      pState.statsDamageTaken = ps.stTaken ?? 0;
+      pState.statsKills = ps.stKills ?? 0;
+      pState.statsRevives = ps.stRevives ?? 0;
+      pState.statsElementalReactions = ps.stElem ?? 0;
+      pState.statsTeamCombos = ps.stCombo ?? 0;
 
       if (ps.id === this.localPlayerId) {
         // Local player: Client-Side Prediction + Server Reconciliation

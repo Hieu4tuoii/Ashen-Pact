@@ -9,8 +9,10 @@ import {
   BIOME3_COMBAT_ENEMIES,
   type CharacterId,
   INPUT_BUTTON,
+  NetworkTransport,
   SIM_STEP_SEC,
   WorldSim,
+  encodeWorldSnapshot,
   renderQrAscii,
 } from '../src/index.js';
 
@@ -246,6 +248,101 @@ describe('Phase 8 — QA Bug Bash Edge Cases & Release Artifacts', () => {
     expect(p1.lifeState).toBe('ghost');
   });
 
+  it('preserves custom player displayNames containing " P" across character changes and syncs runStats + per-player MVP stats over NetworkTransport', () => {
+    const serverSim = new WorldSim({
+      seed: 82828,
+      biome: 1,
+      startInHub: true,
+      coopMode: true,
+    });
+
+    const p1 = serverSim.player;
+    p1.displayName = 'Chủ Phòng v0.1';
+    const p2 = serverSim.addCoopPlayer(2, 'vanguard', 'Đồng Đội Edge P2', 2);
+    const p3 = serverSim.addCoopPlayer(3, 'vanguard', 'Thiết Vệ P3', 3);
+
+    serverSim.selectCharacter(p1.id, 'elementalist');
+    serverSim.selectCharacter(p2.id, 'engineer');
+    serverSim.selectCharacter(p3.id, 'druid');
+
+    // Custom names containing " P" must be preserved, while default placeholder "Thiết Vệ P3" updates to "Mộc Linh P3"
+    expect(p1.displayName).toBe('Chủ Phòng v0.1');
+    expect(p2.displayName).toBe('Đồng Đội Edge P2');
+    expect(p3.displayName).toBe('Mộc Linh P3');
+
+    p1.ready = true;
+    p2.ready = true;
+    p3.ready = true;
+    serverSim.startDungeonRunFromHub();
+
+    // Populate authoritative combat stats on serverSim
+    serverSim.runStats.kills = 48;
+    serverSim.runStats.damageDealt = 1845;
+    serverSim.runStats.elementalReactions = 22;
+    serverSim.runStats.teamCombos = 9;
+    serverSim.runStats.roomsCleared = 6;
+    serverSim.runStats.chestsOpened = 4;
+    serverSim.runStats.bossesKilled = 1;
+    serverSim.runStats.ticksElapsed = 8550;
+    serverSim.runState = 'victory';
+
+    p1.statsKills = 28;
+    p1.statsDamageDealt = 1120;
+    p1.statsElementalReactions = 16;
+    p1.statsTeamCombos = 5;
+    p1.statsRevives = 1;
+
+    p2.statsKills = 20;
+    p2.statsDamageDealt = 725;
+    p2.statsElementalReactions = 6;
+    p2.statsTeamCombos = 4;
+    p2.statsRevives = 2;
+
+    // Synchronize via NetworkTransport snapshot to a client WorldSim
+    const transport = new NetworkTransport({
+      seed: 82828,
+      localPlayerId: p2.id,
+      localPlayerSlot: 2,
+    });
+    const clientSim = transport.getSim();
+
+    const snapshot = encodeWorldSnapshot(serverSim, []);
+    transport.receiveSnapshot(snapshot);
+
+    expect(clientSim.runState).toBe('victory');
+    expect(clientSim.runStats.kills).toBe(48);
+    expect(clientSim.runStats.damageDealt).toBe(1845);
+    expect(clientSim.runStats.elementalReactions).toBe(22);
+    expect(clientSim.runStats.teamCombos).toBe(9);
+    expect(clientSim.runStats.roomsCleared).toBe(6);
+    expect(clientSim.runStats.chestsOpened).toBe(4);
+    expect(clientSim.runStats.bossesKilled).toBe(1);
+    expect(clientSim.runStats.ticksElapsed).toBe(8550);
+
+    const clientP1 = clientSim.getPlayerById(p1.id)!;
+    const clientP2 = clientSim.getPlayerById(p2.id)!;
+    expect(clientP1.displayName).toBe('Chủ Phòng v0.1');
+    expect(clientP1.statsDamageDealt).toBe(1120);
+    expect(clientP1.statsKills).toBe(28);
+    expect(clientP1.statsElementalReactions).toBe(16);
+    expect(clientP2.displayName).toBe('Đồng Đội Edge P2');
+    expect(clientP2.statsRevives).toBe(2);
+
+    const mvpAwards = clientSim.computeMvpAwards();
+    expect(mvpAwards.length).toBe(4);
+    expect(mvpAwards.find((a) => a.category === 'damage')?.value).toBe(1120);
+    expect(mvpAwards.find((a) => a.category === 'elemental')?.value).toBe(16);
+
+    // Starting a new run from Hub resets both team runStats and per-player stats
+    serverSim.enterHub();
+    for (const pl of serverSim.getAllPlayers()) pl.ready = true;
+    serverSim.startDungeonRunFromHub();
+    expect(serverSim.runStats.kills).toBe(0);
+    expect(serverSim.runStats.damageDealt).toBe(0);
+    expect(p1.statsDamageDealt).toBe(0);
+    expect(p1.statsKills).toBe(0);
+  });
+
   it('renders valid ISO/IEC 18004 QR ASCII art for console LAN invite links and verifies packaged release files', () => {
     const inviteUrl = 'http://192.168.12.103:2567';
     const asciiQr = renderQrAscii(inviteUrl, 2);
@@ -272,3 +369,4 @@ describe('Phase 8 — QA Bug Bash Edge Cases & Release Artifacts', () => {
     }
   });
 });
+
