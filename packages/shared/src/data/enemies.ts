@@ -120,6 +120,219 @@ export const ENEMIES: Record<string, EnemyStatsDef> = {
     attackCooldownSec: 2.1,
     isBoss: true,
   },
+
+  // ---------------------------------------------------------------------------
+  // Biome 2 — Hầm Băng Vĩnh Cửu (Frozen Depths)
+  // ---------------------------------------------------------------------------
+  frost_bat: {
+    id: 'frost_bat',
+    nameVi: 'Dơi Băng',
+    nameEn: 'Frost Bat',
+    biome: 2,
+    role: 'charger',
+    hp: 22,
+    moveSpeed: 158,
+    damage: 1,
+    radius: 11,
+    telegraphSec: 0.4,
+    attackCooldownSec: 1.5,
+    flying: true,
+  },
+  baby_yeti: {
+    id: 'baby_yeti',
+    nameVi: 'Yeti Con',
+    nameEn: 'Young Yeti',
+    biome: 2,
+    role: 'charger',
+    hp: 46,
+    moveSpeed: 118,
+    damage: 2,
+    radius: 17,
+    telegraphSec: 0.65,
+    attackCooldownSec: 2.3,
+  },
+  ice_mage: {
+    id: 'ice_mage',
+    nameVi: 'Pháp Sư Băng',
+    nameEn: 'Cryo Mage',
+    biome: 2,
+    role: 'ranged',
+    hp: 32,
+    moveSpeed: 98,
+    damage: 1,
+    radius: 13,
+    telegraphSec: 0.55,
+    attackCooldownSec: 2.1,
+  },
+  ice_golem: {
+    id: 'ice_golem',
+    nameVi: 'Golem Băng',
+    nameEn: 'Glacier Golem',
+    biome: 2,
+    role: 'shielder',
+    hp: 64,
+    moveSpeed: 76,
+    damage: 2,
+    radius: 19,
+    telegraphSec: 0.7,
+    attackCooldownSec: 2.6,
+    frontShieldReduction: 0.78,
+  },
+  snow_spirit: {
+    id: 'snow_spirit',
+    nameVi: 'Tinh Linh Tuyết',
+    nameEn: 'Snow Spirit',
+    biome: 2,
+    role: 'exploder',
+    hp: 24,
+    moveSpeed: 142,
+    damage: 2,
+    radius: 12,
+    telegraphSec: 0.55,
+    attackCooldownSec: 0,
+    flying: true,
+  },
+  kryssa_clone: {
+    id: 'kryssa_clone',
+    nameVi: 'Ảo Ảnh Gương Kryssa',
+    nameEn: 'Kryssa Mirror Clone',
+    biome: 2,
+    role: 'ranged',
+    hp: 18,
+    moveSpeed: 112,
+    damage: 1,
+    radius: 26,
+    telegraphSec: 0.55,
+    attackCooldownSec: 2.2,
+    isIllusion: true,
+  },
+  ice_prison: {
+    id: 'ice_prison',
+    nameVi: 'Lồng Băng Giam Cầm',
+    nameEn: 'Ice Prison Cage',
+    biome: 2,
+    role: 'shielder',
+    hp: 48,
+    moveSpeed: 0,
+    damage: 0,
+    radius: 20,
+    telegraphSec: 0,
+    attackCooldownSec: 99,
+  },
+  kryssa_ice_queen: {
+    id: 'kryssa_ice_queen',
+    nameVi: 'Băng Hậu Kryssa',
+    nameEn: 'Ice Queen Kryssa',
+    subtitleVi: 'Nữ Hoàng Hầm Băng Vĩnh Cửu',
+    biome: 2,
+    role: 'boss',
+    hp: 520,
+    moveSpeed: 104,
+    damage: 2,
+    radius: 32,
+    telegraphSec: 0.7,
+    attackCooldownSec: 2.0,
+    isBoss: true,
+  },
+
+  // ---------------------------------------------------------------------------
+  // Biome 3 — Lò Rèn Dung Nham (Molten Forge)
+  // ---------------------------------------------------------------------------
+  fire_imp: {
+    id: 'fire_imp',
+    nameVi: 'Tiểu Quỷ Lửa',
+    nameEn: 'Fire Imp',
+    biome: 3,
+    role: 'ranged',
+    hp: 28,
+    moveSpeed: 148,
+    damage: 1,
+    radius: 12,
+    telegraphSec: 0.45,
+    attackCooldownSec: 1.65,
+  },
+  dwarf_cannon: {
+    id: 'dwarf_cannon',
+    nameVi: 'Người Lùn Pháo Thủ',
+    nameEn: 'Dwarven Cannoneer',
+    biome: 3,
+    role: 'ranged',
+    hp: 44,
+    moveSpeed: 88,
+    damage: 2,
+    radius: 15,
+    telegraphSec: 0.65,
+    attackCooldownSec: 2.5,
+  },
+  coal_golem: {
+    id: 'coal_golem',
+    nameVi: 'Golem Than',
+    nameEn: 'Cinder Coal Golem',
+    biome: 3,
+    role: 'exploder',
+    hp: 68,
+    moveSpeed: 84,
+    damage: 2,
+    radius: 19,
+    telegraphSec: 0.7,
+    attackCooldownSec: 2.4,
+  },
+  welder_drone: {
+    id: 'welder_drone',
+    nameVi: 'Drone Hàn',
+    nameEn: 'Arc Welder Drone',
+    biome: 3,
+    role: 'summoner_healer',
+    hp: 34,
+    moveSpeed: 132,
+    damage: 1,
+    radius: 13,
+    telegraphSec: 0.5,
+    attackCooldownSec: 2.6,
+    flying: true,
+  },
+  iron_shielder: {
+    id: 'iron_shielder',
+    nameVi: 'Khiên Thủ Sắt',
+    nameEn: 'Iron Bulwark',
+    biome: 3,
+    role: 'shielder',
+    hp: 62,
+    moveSpeed: 80,
+    damage: 2,
+    radius: 17,
+    telegraphSec: 0.6,
+    attackCooldownSec: 2.3,
+    frontShieldReduction: 0.8,
+  },
+  forge_energy_core: {
+    id: 'forge_energy_core',
+    nameVi: 'Lõi Năng Lượng Lò Rèn',
+    nameEn: 'Forge Energy Core',
+    biome: 3,
+    role: 'turret',
+    hp: 56,
+    moveSpeed: 0,
+    damage: 1,
+    radius: 18,
+    telegraphSec: 0.6,
+    attackCooldownSec: 3.2,
+  },
+  forge_titan: {
+    id: 'forge_titan',
+    nameVi: 'Titan Lò Rèn',
+    nameEn: 'Molten Forge Titan',
+    subtitleVi: 'Cự Nhân Cơ Khí Dung Nham',
+    biome: 3,
+    role: 'boss',
+    hp: 620,
+    moveSpeed: 86,
+    damage: 3,
+    radius: 36,
+    telegraphSec: 0.75,
+    attackCooldownSec: 2.2,
+    isBoss: true,
+  },
 };
 
 export const BIOME1_COMBAT_ENEMIES = [
@@ -131,11 +344,41 @@ export const BIOME1_COMBAT_ENEMIES = [
   'thorn_turret',
 ] as const;
 
+export const BIOME2_COMBAT_ENEMIES = [
+  'frost_bat',
+  'baby_yeti',
+  'ice_mage',
+  'ice_golem',
+  'snow_spirit',
+] as const;
+
+export const BIOME3_COMBAT_ENEMIES = [
+  'fire_imp',
+  'dwarf_cannon',
+  'coal_golem',
+  'welder_drone',
+  'iron_shielder',
+] as const;
+
+export const ALL_BOSS_IDS = ['spore_king', 'kryssa_ice_queen', 'forge_titan'] as const;
+
 export type Biome1EnemyId =
   | (typeof BIOME1_COMBAT_ENEMIES)[number]
   | 'mini_slime'
   | 'spore_guardian'
   | 'spore_king';
+
+export type Biome2EnemyId =
+  | (typeof BIOME2_COMBAT_ENEMIES)[number]
+  | 'kryssa_clone'
+  | 'ice_prison'
+  | 'kryssa_ice_queen';
+
+export type Biome3EnemyId =
+  | (typeof BIOME3_COMBAT_ENEMIES)[number]
+  | 'forge_energy_core'
+  | 'forge_titan';
+
 
 export const ELITE_MODIFIERS: readonly EliteModifier[] = [
   'fast',

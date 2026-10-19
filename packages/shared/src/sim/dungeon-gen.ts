@@ -1,5 +1,10 @@
 import { SeededRandom } from '../core/prng.js';
-import { BIOME1_COMBAT_ENEMIES, FLOOR_BUFFS } from '../data/enemies.js';
+import {
+  BIOME1_COMBAT_ENEMIES,
+  BIOME2_COMBAT_ENEMIES,
+  BIOME3_COMBAT_ENEMIES,
+  FLOOR_BUFFS,
+} from '../data/enemies.js';
 import { COOP_SCALING } from '../data/scaling.js';
 import type {
   CardinalDir,
@@ -8,7 +13,7 @@ import type {
   RoomType,
   WeaponRarity,
 } from '../data/types.js';
-import { WEAPONS } from '../data/weapons.js';
+import { PHASE3_WEAPON_IDS, WEAPONS } from '../data/weapons.js';
 
 export const OPPOSITE_DIR: Record<CardinalDir, CardinalDir> = {
   N: 'S',
@@ -74,6 +79,7 @@ export interface DungeonFloorGraph {
   seed: string | number;
   biome: 1 | 2 | 3;
   floorNumber: 1 | 2;
+  globalFloorNumber?: number;
   playerCount?: 1 | 2 | 3 | 4;
   rooms: DungeonRoomNode[];
   startRoomId: number;
@@ -99,10 +105,33 @@ export const ROOM_TYPE_NAMES_VI: Record<RoomType, string> = {
   boss: 'Phòng Boss — Mục Vương',
 };
 
-export function rollWeaponForRarity(rng: SeededRandom, targetRarity: WeaponRarity): string {
-  const matching = Object.values(WEAPONS).filter(
-    (w) => w.rarity === targetRarity && w.id !== 'knight_sword',
-  );
+export const BIOME_NAMES_VI: Record<1 | 2 | 3, string> = {
+  1: 'Rừng Mục Cổ Đại',
+  2: 'Hầm Băng Vĩnh Cửu',
+  3: 'Lò Rèn Dung Nham',
+};
+
+export const BIOME_BOSS_IDS: Record<1 | 2 | 3, string> = {
+  1: 'spore_king',
+  2: 'kryssa_ice_queen',
+  3: 'forge_titan',
+};
+
+export const BIOME_BOSS_ROOM_NAMES_VI: Record<1 | 2 | 3, string> = {
+  1: 'Phòng Boss — Mục Vương',
+  2: 'Phòng Boss — Băng Hậu Kryssa',
+  3: 'Phòng Boss — Titan Lò Rèn',
+};
+
+export function rollWeaponForRarity(
+  rng: SeededRandom,
+  targetRarity: WeaponRarity,
+  biome: 1 | 2 | 3 = 1,
+): string {
+  const poolIds = biome === 1 ? PHASE3_WEAPON_IDS : Object.keys(WEAPONS);
+  const matching = poolIds
+    .map((id) => WEAPONS[id]!)
+    .filter((w) => w && w.rarity === targetRarity && w.id !== 'knight_sword');
   if (matching.length > 0) {
     return rng.pick(matching).id;
   }
@@ -112,7 +141,7 @@ export function rollWeaponForRarity(rng: SeededRandom, targetRarity: WeaponRarit
 /**
  * Generates a deterministic 9-room procedural dungeon floor (within the 7..10 rooms spec)
  * with guaranteed cardinal connectivity, secret room behind a cracked wall, combat waves
- * with Biome 1 enemies & Elites, treasure chest, merchant shop, ancient shrine, and portal/boss room.
+ * with Biome 1/2/3 enemies & Elites, treasure chest, merchant shop, ancient shrine, and portal/boss room.
  */
 export function generateDungeonFloor(
   seed: string | number,
@@ -120,7 +149,8 @@ export function generateDungeonFloor(
   biome: 1 | 2 | 3 = 1,
   playerCount: 1 | 2 | 3 | 4 = 1,
 ): DungeonFloorGraph {
-  const rng = new SeededRandom(seed).fork(`dungeon_b${biome}_f${floorNumber}`);
+  const localFloor: 1 | 2 = floorNumber % 2 === 0 ? 2 : 1;
+  const rng = new SeededRandom(seed).fork(`dungeon_b${biome}_f${localFloor}`);
 
   const gridMap = new Map<string, number>();
   const coordKey = (gx: number, gy: number) => `${gx},${gy}`;
@@ -132,7 +162,7 @@ export function generateDungeonFloor(
     gx,
     gy,
     type,
-    nameVi: ROOM_TYPE_NAMES_VI[type],
+    nameVi: type === 'boss' ? BIOME_BOSS_ROOM_NAMES_VI[biome] : ROOM_TYPE_NAMES_VI[type],
     distanceFromStart: 0,
     connections: {},
     secretWallBroken: false,
@@ -265,8 +295,9 @@ export function generateDungeonFloor(
   // Farthest room is Exit ('portal' on Floor 1, 'boss' on Floor 2)
   const exitRoomId = mainRoomIds[0]!;
   const exitRoom = rooms[exitRoomId]!;
-  exitRoom.type = floorNumber === 1 ? 'portal' : 'boss';
-  exitRoom.nameVi = ROOM_TYPE_NAMES_VI[exitRoom.type];
+  exitRoom.type = localFloor === 1 ? 'portal' : 'boss';
+  exitRoom.nameVi =
+    exitRoom.type === 'boss' ? BIOME_BOSS_ROOM_NAMES_VI[biome] : ROOM_TYPE_NAMES_VI[exitRoom.type];
 
   // Remaining rooms for special rooms + combat rooms
   const remainingIds = mainRoomIds.slice(1);
@@ -307,20 +338,20 @@ export function generateDungeonFloor(
     if (room.type === 'secret') {
       room.waves = [];
       room.wavesTotal = 0;
-      room.chestRarity = floorNumber === 2 ? 'legendary' : 'epic';
-      room.chestWeaponId = rollWeaponForRarity(rng, room.chestRarity);
+      room.chestRarity = localFloor === 2 ? 'legendary' : 'epic';
+      room.chestWeaponId = rollWeaponForRarity(rng, room.chestRarity, biome);
     } else if (room.type === 'treasure') {
       room.waves = [];
       room.wavesTotal = 0;
       const rarities: readonly WeaponRarity[] =
-        floorNumber === 2 ? ['rare', 'epic', 'legendary'] : ['uncommon', 'rare', 'epic'];
+        localFloor === 2 ? ['rare', 'epic', 'legendary'] : ['uncommon', 'rare', 'epic'];
       room.chestRarity = rng.pick(rarities);
-      room.chestWeaponId = rollWeaponForRarity(rng, room.chestRarity);
+      room.chestWeaponId = rollWeaponForRarity(rng, room.chestRarity, biome);
     } else if (room.type === 'merchant') {
       room.waves = [];
       room.wavesTotal = 0;
-      const shopRarity: WeaponRarity = floorNumber === 2 ? 'epic' : 'rare';
-      const shopWeaponId = rollWeaponForRarity(rng, shopRarity);
+      const shopRarity: WeaponRarity = localFloor === 2 ? 'epic' : 'rare';
+      const shopWeaponId = rollWeaponForRarity(rng, shopRarity, biome);
       const wDef = WEAPONS[shopWeaponId]!;
       room.shopOffers = [
         {
@@ -336,7 +367,7 @@ export function generateDungeonFloor(
           kind: 'weapon',
           nameVi: wDef.nameVi,
           descriptionVi: `Vũ khí ${wDef.rarity.toUpperCase()} · DMG ${wDef.damage}`,
-          costGold: floorNumber === 2 ? 40 : 28,
+          costGold: localFloor === 2 ? 40 : 28,
           weaponId: shopWeaponId,
           rarity: shopRarity,
           purchased: false,
@@ -357,32 +388,38 @@ export function generateDungeonFloor(
       room.shrineBlessingId = rng.pick(buffKeys);
     } else if (room.type === 'combat') {
       combatRoomIndex += 1;
-      const waveCount = combatRoomIndex >= 2 || floorNumber === 2 ? 3 : 2;
+      const waveCount = combatRoomIndex >= 2 || localFloor === 2 ? 3 : 2;
       room.waves = generateRoomWaves(
         rng,
         waveCount,
-        floorNumber,
+        localFloor,
         combatRoomIndex,
         false,
         playerCount,
+        biome,
       );
       room.wavesTotal = room.waves.length;
     } else if (room.type === 'portal') {
       // Floor 1 Portal Guardian Room: 2 waves (with guaranteed Elite guardian on Wave 2), then portal unlocks!
       room.cleared = false;
-      room.waves = generateRoomWaves(rng, 2, floorNumber, 3, true, playerCount);
+      room.waves = generateRoomWaves(rng, 2, localFloor, 3, true, playerCount, biome);
       room.wavesTotal = room.waves.length;
     } else if (room.type === 'boss') {
-      // Floor 2 Boss Room: Boss Mục Vương Nấm Độc + Legendary reward chest on clear
+      // Floor 2 Boss Room: Biome Boss + Legendary reward chest on clear
       room.cleared = false;
       room.chestRarity = 'legendary';
-      room.chestWeaponId = 'solar_archon_staff';
+      room.chestWeaponId =
+        biome === 2
+          ? 'thunder_hammer'
+          : biome === 3
+            ? 'magma_cannon'
+            : 'solar_archon_staff';
       room.waves = [
         {
           waveIndex: 1,
           enemies: [
             {
-              defId: 'spore_king',
+              defId: BIOME_BOSS_IDS[biome],
               isElite: false,
               eliteModifier: null,
             },
@@ -399,7 +436,8 @@ export function generateDungeonFloor(
   return {
     seed,
     biome,
-    floorNumber,
+    floorNumber: localFloor,
+    globalFloorNumber: (biome - 1) * 2 + localFloor,
     playerCount,
     rooms,
     startRoomId: 0,
@@ -415,9 +453,16 @@ function generateRoomWaves(
   roomDifficultyIndex: number,
   guaranteeEliteOnFinalWave = false,
   playerCount: 1 | 2 | 3 | 4 = 1,
+  biome: 1 | 2 | 3 = 1,
 ): DungeonWaveDef[] {
   const waves: DungeonWaveDef[] = [];
   const tier = COOP_SCALING[playerCount] ?? COOP_SCALING[1];
+  const enemyPool: readonly string[] =
+    biome === 2
+      ? BIOME2_COMBAT_ENEMIES
+      : biome === 3
+        ? BIOME3_COMBAT_ENEMIES
+        : BIOME1_COMBAT_ENEMIES;
 
   for (let w = 1; w <= waveCount; w++) {
     const baseEnemyCount = Math.min(5, 3 + Math.floor((w + floorNumber - 1) / 2));
@@ -428,10 +473,9 @@ function generateRoomWaves(
     const enemies: DungeonEnemySpawnDef[] = [];
 
     for (let i = 0; i < enemyCount; i++) {
-      // Ensure all 6 Biome 1 enemy types appear across waves
-      const poolIdx = (roomDifficultyIndex * 2 + w + i) % BIOME1_COMBAT_ENEMIES.length;
-      const defId =
-        i === 0 ? BIOME1_COMBAT_ENEMIES[poolIdx]! : rng.pick(BIOME1_COMBAT_ENEMIES);
+      // Ensure all biome enemy types appear across waves
+      const poolIdx = (roomDifficultyIndex * 2 + w + i) % enemyPool.length;
+      const defId = i === 0 ? enemyPool[poolIdx]! : rng.pick(enemyPool);
 
       const isFinalWaveFirstEnemy = w === waveCount && i === 0;
       const eliteChance =
@@ -461,6 +505,7 @@ function generateRoomWaves(
 
   return waves;
 }
+
 
 /**
  * Verifies that a generated DungeonFloorGraph is 100% connected via cardinal links,

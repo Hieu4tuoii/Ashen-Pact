@@ -218,6 +218,12 @@ export class CutoutRig {
     this.lifeState = state;
   }
 
+  public setShadowVisible(visible: boolean): void {
+    if (!this.fastComposite) {
+      this.shadowSprite.setVisible(visible);
+    }
+  }
+
   public setRigDef(def: EntityRigDef): void {
     if (this.def.id === def.id) return;
     this.def = def;

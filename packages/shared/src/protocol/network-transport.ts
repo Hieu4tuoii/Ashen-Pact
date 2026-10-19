@@ -139,7 +139,8 @@ export interface QuantizedWorldSnapshot {
   inHub: boolean;
   allowDuplicateCharacters: boolean;
   runState: 'playing' | 'buff_choice' | 'victory' | 'defeat';
-  currentFloor: 1 | 2;
+  currentFloor: 1 | 2 | 3 | 4 | 5 | 6;
+  currentBiome?: 1 | 2 | 3;
   currentRoomId: number;
   doorsLocked: boolean;
   secretWallBroken: boolean;
@@ -297,7 +298,8 @@ export function encodeWorldSnapshot(
     inHub: sim.inHub,
     allowDuplicateCharacters,
     runState: sim.runState,
-    currentFloor: sim.currentFloor === 2 ? 2 : 1,
+    currentFloor: sim.currentFloor,
+    currentBiome: sim.currentBiome,
     currentRoomId: sim.currentRoomId,
     doorsLocked: sim.doors.some((d) => d.locked),
     secretWallBroken: sim.secretWallBroken,
@@ -544,15 +546,19 @@ export class NetworkTransport implements ITransport {
     this.allowDuplicateCharacters = snapshot.allowDuplicateCharacters;
     this.sim.allowDuplicateCharacters = snapshot.allowDuplicateCharacters;
 
+    const floorChanged = this.sim.currentFloor !== snapshot.currentFloor;
     const roomChanged =
       this.sim.currentRoomId !== snapshot.currentRoomId ||
-      this.sim.currentFloor !== snapshot.currentFloor ||
+      floorChanged ||
       this.sim.inHub !== snapshot.inHub;
 
     this.sim.tick = snapshot.tick;
     this.sim.inHub = snapshot.inHub;
     this.sim.runState = snapshot.runState;
     this.sim.currentFloor = snapshot.currentFloor;
+    if (snapshot.currentBiome) {
+      this.sim.currentBiome = snapshot.currentBiome;
+    }
     this.sim.currentRoomId = snapshot.currentRoomId;
     this.sim.secretWallBroken = snapshot.secretWallBroken;
     this.sim.activeBuffIds = [...snapshot.activeBuffIds];
@@ -563,6 +569,11 @@ export class NetworkTransport implements ITransport {
       this.enemySamples.clear();
       if (snapshot.inHub) {
         this.sim.enterHub();
+      } else if (floorChanged) {
+        this.sim.advanceToFloor(snapshot.currentFloor);
+        if (this.sim.currentRoomId !== snapshot.currentRoomId) {
+          this.sim.enterRoom(snapshot.currentRoomId);
+        }
       } else {
         this.sim.enterRoom(snapshot.currentRoomId);
       }

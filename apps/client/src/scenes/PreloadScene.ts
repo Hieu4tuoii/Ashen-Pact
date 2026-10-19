@@ -51,7 +51,7 @@ export class PreloadScene extends Phaser.Scene {
           displayName: params.get('name') ?? undefined,
           serverUrl: params.get('server') ?? undefined,
         });
-      } else if (requestedScene === 'game' || hubParam === '1') {
+      } else if (requestedScene === 'game' || hubParam === '1' || params.has('biome')) {
         this.scene.start('GameScene');
       } else {
         this.scene.start('MenuScene');

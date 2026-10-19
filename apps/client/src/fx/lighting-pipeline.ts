@@ -142,6 +142,7 @@ export class LightingPipeline {
   private readonly brushSprite: Phaser.GameObjects.Image;
   private readonly transientPool: TransientLight[] = [];
   private biome: 1 | 2 | 3 = 1;
+  private blizzardVeil = false;
   private elapsedSec = 0;
   private frameCounter = 0;
   private activeLightCount = 0;
@@ -188,6 +189,14 @@ export class LightingPipeline {
 
   public setBiome(biome: 1 | 2 | 3): void {
     this.biome = biome;
+  }
+
+  public setBlizzardVeil(active: boolean): void {
+    this.blizzardVeil = active;
+  }
+
+  public isBlizzardVeilActive(): boolean {
+    return this.blizzardVeil;
   }
 
   public getActiveLightCount(): number {
@@ -293,9 +302,11 @@ export class LightingPipeline {
       const pipeline = Array.isArray(postPipelines) ? postPipelines[0] : postPipelines;
       if (pipeline instanceof BiomePostFxPipeline) {
         pipeline.bloomStrength = budget.enableBloomPostFx && !isHeavySwarm ? 0.28 : 0.0;
-        pipeline.vignetteStrength = 0.34;
+        pipeline.vignetteStrength = this.blizzardVeil ? 0.58 : 0.34;
         pipeline.chromaAmount = isHeavySwarm ? 0 : clamp(trauma * 1.4, 0, 1);
-        pipeline.colorGradeTint = BIOME_COLOR_GRADES[this.biome];
+        pipeline.colorGradeTint = this.blizzardVeil
+          ? [0.9, 1.0, 1.1]
+          : BIOME_COLOR_GRADES[this.biome];
         pipeline.contrast = 1.04;
 
         if (player.hp <= 2 && player.hp > 0) {
@@ -311,7 +322,7 @@ export class LightingPipeline {
       return;
     }
 
-    const ambientColor = BIOME_AMBIENT_COLORS[this.biome];
+    const ambientColor = this.blizzardVeil ? 0x1b2838 : BIOME_AMBIENT_COLORS[this.biome];
     const lmScale = this.currentLightmapScale;
     const maxLights = budget.tier === 'high' ? 48 : budget.tier === 'medium' ? 28 : 12;
     this.lightmapRt.clear();
@@ -344,8 +355,9 @@ export class LightingPipeline {
       lightsDrawn += 1;
     };
 
-    // A. Main Player soft aura light + active shield glow
-    drawLight(playerPos.x, playerPos.y, 175, 0xe0f2fe, 0.88);
+    // A. Main Player soft aura light + active shield glow (narrowed during Blizzard Phase 3)
+    const mainPlayerVisionRadius = this.blizzardVeil ? 118 : 175;
+    drawLight(playerPos.x, playerPos.y, mainPlayerVisionRadius, 0xe0f2fe, 0.88);
     drawLight(playerPos.x, playerPos.y, 85, hexToNum(PLAYER_SLOT_COLORS[player.slot].hex), 0.45);
     if (player.skillActiveTimer > 0) {
       drawLight(
@@ -358,13 +370,14 @@ export class LightingPipeline {
     }
 
     // B. Simulated Co-op Players (P2-P4) soft aura lights
+    const allyVisionRadius = this.blizzardVeil ? 105 : 145;
     for (let i = 0; i < simulatedPlayers.length; i++) {
       const sp = simulatedPlayers[i]!;
-      drawLight(sp.pos.x, sp.pos.y, 145, 0xe0f2fe, 0.72);
+      drawLight(sp.pos.x, sp.pos.y, allyVisionRadius, 0xe0f2fe, 0.72);
       drawLight(sp.pos.x, sp.pos.y, 75, hexToNum(PLAYER_SLOT_COLORS[sp.state.slot].hex), 0.42);
     }
 
-    // C. Props: Flickering Torches, Bioluminescent Mushrooms, Explosive Barrels
+    // C. Props: Flickering Torches, Bioluminescent Mushrooms, Crystal Pillars, Explosive Barrels
     for (let i = 0; i < props.length; i++) {
       const prop = props[i]!;
       if (prop.hp <= 0 || prop.lightRadius <= 0) continue;
@@ -377,10 +390,10 @@ export class LightingPipeline {
           Math.cos(this.elapsedSec * 23 + prop.id * 0.9) * 0.05;
         radius = prop.lightRadius * (1 + flicker);
         alpha = 0.85 + flicker * 0.5;
-      } else if (prop.kind === 'glow_mushroom') {
+      } else if (prop.kind === 'glow_mushroom' || prop.kind === 'crystal_pillar') {
         const pulse = Math.sin(this.elapsedSec * 3.2 + prop.id) * 0.08;
         radius = prop.lightRadius * (1 + pulse);
-        alpha = 0.68 + pulse;
+        alpha = 0.72 + pulse;
       } else if (prop.kind === 'explosive_barrel') {
         alpha = 0.52;
       }
@@ -416,7 +429,9 @@ export class LightingPipeline {
           surf === 'oil' ||
           surf === 'grass' ||
           surf === 'ash' ||
-          surf === 'ice'
+          surf === 'ice' ||
+          surf === 'chasm' ||
+          surf === 'conveyor'
         ) {
           continue;
         }

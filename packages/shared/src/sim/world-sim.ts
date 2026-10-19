@@ -1,7 +1,10 @@
 import { SeededRandom } from '../core/prng.js';
 import { CHARACTERS } from '../data/characters.js';
 import {
+  ALL_BOSS_IDS,
   BIOME1_COMBAT_ENEMIES,
+  BIOME2_COMBAT_ENEMIES,
+  BIOME3_COMBAT_ENEMIES,
   ELITE_MODIFIERS,
   ELITE_MODIFIER_LABELS_VI,
   ENEMIES,
@@ -18,7 +21,7 @@ import type {
   RoomType,
   WeaponRarity,
 } from '../data/types.js';
-import { PHASE3_WEAPON_IDS, WEAPONS } from '../data/weapons.js';
+import { ALL_WEAPON_IDS, PHASE3_WEAPON_IDS, PHASE6_WEAPON_IDS, WEAPONS } from '../data/weapons.js';
 import { SpatialHashGrid } from '../math/spatial-hash.js';
 import {
   angleDiff,
@@ -75,6 +78,29 @@ export const BIOME1_ENEMY_IDS = [
   'spore_king',
 ] as const;
 
+export const BIOME2_ENEMY_IDS = [
+  'frost_bat',
+  'baby_yeti',
+  'ice_mage',
+  'ice_golem',
+  'snow_spirit',
+  'kryssa_clone',
+  'ice_prison',
+  'kryssa_ice_queen',
+] as const;
+
+export const BIOME3_ENEMY_IDS = [
+  'fire_imp',
+  'dwarf_cannon',
+  'coal_golem',
+  'welder_drone',
+  'iron_shielder',
+  'forge_energy_core',
+  'forge_titan',
+] as const;
+
+export { ALL_BOSS_IDS, ALL_WEAPON_IDS, PHASE6_WEAPON_IDS };
+
 export const ELEMENT_CYCLE_ORDER: readonly ElementType[] = [
   'none',
   'burn',
@@ -129,7 +155,8 @@ export type PropKind =
   | 'explosive_barrel'
   | 'torch_brazier'
   | 'glow_mushroom'
-  | 'ancient_mechanism';
+  | 'ancient_mechanism'
+  | 'crystal_pillar';
 
 export interface SimPropState {
   id: number;
@@ -149,7 +176,7 @@ export interface SimPropState {
   repaired?: boolean;
 }
 
-export type SummonKind = 'sacred_tree' | 'tesla_turret' | 'ancient_turret';
+export type SummonKind = 'sacred_tree' | 'tesla_turret' | 'ancient_turret' | 'life_blossom';
 
 export interface SimSummonState {
   id: number;
@@ -184,6 +211,48 @@ export interface SimSkillZoneState {
   element: ElementType;
   secondaryElement: ElementType;
   vortex: boolean;
+}
+
+export interface SimPressurePlateState {
+  id: number;
+  x: number;
+  y: number;
+  radius: number;
+  pressed: boolean;
+}
+
+export interface SimPushBlockState {
+  id: number;
+  x: number;
+  y: number;
+  radius: number;
+}
+
+export interface SimShockwaveRingState {
+  id: number;
+  sourceEnemyId: number;
+  x: number;
+  y: number;
+  radius: number;
+  maxRadius: number;
+  speed: number;
+  thickness: number;
+  damage: number;
+  hitPlayerIds: number[];
+}
+
+export interface SimTetherBeamState {
+  id: number;
+  ownerPlayerId: number;
+  targetEntityId: number;
+  targetKind: 'player' | 'summon';
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  damage: number;
+  ttlSec: number;
+  tickTimer: number;
 }
 
 export interface SimDoorState {
@@ -338,6 +407,9 @@ export interface SimPlayerState {
   emoteId: QuickEmoteId | null;
   emoteTimer: number;
   currentRoomId: number;
+  // Phase 6 Ice Prison & Chasm states
+  encasedInIceTimer?: number;
+  icePrisonId?: number;
 }
 
 export interface SimEnemyState {
@@ -761,6 +833,19 @@ export type SimEvent =
       playerId: number;
       characterId: CharacterId;
       nameVi: string;
+    }
+  | {
+      kind: 'coop_puzzle_solved';
+      roomId: number;
+      x: number;
+      y: number;
+    }
+  | {
+      kind: 'shockwave_spawned';
+      enemyId: number;
+      x: number;
+      y: number;
+      maxRadius: number;
     };
 
 export interface WorldSimOptions {
@@ -774,6 +859,8 @@ export interface WorldSimOptions {
   startInHub?: boolean;
   coopMode?: boolean;
   playerCount?: 1 | 2 | 3 | 4;
+  biome?: 1 | 2 | 3;
+  campaignMaxFloors?: 2 | 6;
 }
 
 interface CoPlayerInputEntry {
@@ -808,6 +895,20 @@ export class WorldSim {
   public skillZones: SimSkillZoneState[] = [];
   public teamComboCount = 0;
 
+  // Phase 6 Biomes 2 & 3, Co-op Pressure Plates, Shockwave Rings & Tether Beams
+  public currentBiome: 1 | 2 | 3 = 1;
+  public campaignMaxFloors: 2 | 6 = 2;
+  public pressurePlates: SimPressurePlateState[] = [];
+  public pushBlocks: SimPushBlockState[] = [];
+  public coopPuzzleCompleted = false;
+  public shockwaveRings: SimShockwaveRingState[] = [];
+  public tetherBeams: SimTetherBeamState[] = [];
+  public blizzardVeilActive = false;
+  public titanCoreWindowTimer = 0;
+  public titanFirstCoreBrokenId = 0;
+  private nextPuzzleEntityId = 90000;
+  private readonly completedPuzzleRoomIds = new Set<number>();
+
   // Phase 4 Hub & Co-op State
   public inHub = false;
   public coopModeActive = false;
@@ -819,7 +920,7 @@ export class WorldSim {
 
   // Phase 3 Dungeon, Rooms, Chests, Shop, Shrine, Buffs & Run Loop
   public readonly baseSeed: string | number;
-  public currentFloor = 1;
+  public currentFloor: 1 | 2 | 3 | 4 | 5 | 6 = 1;
   public dungeon: DungeonFloorGraph;
   public currentRoomId = 0;
   public secretWallBroken = false;
@@ -888,18 +989,23 @@ export class WorldSim {
     if (options.playerCount) {
       this.coopPlayerCountOverride = options.playerCount;
     }
+    this.currentBiome = options.biome ?? options.mapConfig?.biome ?? 1;
+    this.campaignMaxFloors = options.campaignMaxFloors ?? (this.currentBiome > 1 ? 6 : 2);
+    this.currentFloor = this.currentBiome === 1 ? 1 : this.currentBiome === 2 ? 3 : 5;
 
     const spawnWave = options.startInHub ? false : (options.spawnInitialWave ?? true);
     this.map = new ArenaMap({
       seed: seedVal,
       includeSurfaces: spawnWave,
+      biome: this.currentBiome,
       ...options.mapConfig,
     });
     this.autoRespawnWaves = options.autoRespawnWaves ?? true;
     this.autoRevivePlayer = options.autoRevivePlayer ?? true;
 
     const initialPCount = this.coopPlayerCountOverride ?? 1;
-    this.dungeon = generateDungeonFloor(seedVal, 1, 1, initialPCount);
+    const floorInBiome: 1 | 2 = this.currentFloor % 2 === 1 ? 1 : 2;
+    this.dungeon = generateDungeonFloor(seedVal, floorInBiome, this.currentBiome, initialPCount);
     this.currentRoomId = this.dungeon.startRoomId;
 
     const startX = this.map.width * 0.35;
@@ -1615,6 +1721,14 @@ export class WorldSim {
         lightRadius = 110;
         lightColorHex = '#38BDF8';
         break;
+      case 'crystal_pillar':
+        radius = 18;
+        hp = 9999;
+        destructible = false;
+        blocksMovement = true;
+        lightRadius = 150;
+        lightColorHex = '#67E8F9';
+        break;
     }
 
     const prop: SimPropState = {
@@ -2009,9 +2123,19 @@ export class WorldSim {
 
     const cx = this.map.width * 0.72;
     const cy = this.map.height * 0.5;
-    this.spawnEnemy('goblin_shooter', cx + 40, cy - 110, false);
-    this.spawnEnemy('wild_boar', cx + 80, cy + 20, false);
-    this.spawnEnemy('spore_bomber', cx - 30, cy + 120, false);
+    if (this.currentBiome === 2) {
+      this.spawnEnemy('frost_bat', cx + 40, cy - 110, false);
+      this.spawnEnemy('baby_yeti', cx + 80, cy + 20, false);
+      this.spawnEnemy('ice_mage', cx - 30, cy + 120, false);
+    } else if (this.currentBiome === 3) {
+      this.spawnEnemy('fire_imp', cx + 40, cy - 110, false);
+      this.spawnEnemy('dwarf_cannon', cx + 80, cy + 20, false);
+      this.spawnEnemy('coal_golem', cx - 30, cy + 120, false);
+    } else {
+      this.spawnEnemy('goblin_shooter', cx + 40, cy - 110, false);
+      this.spawnEnemy('wild_boar', cx + 80, cy + 20, false);
+      this.spawnEnemy('spore_bomber', cx - 30, cy + 120, false);
+    }
   }
 
   public getCurrentRoom(): DungeonRoomNode {
@@ -2129,16 +2253,33 @@ export class WorldSim {
     this.chests.length = 0;
     this.worldItems.length = 0;
     this.npcEntities.length = 0;
+    this.pressurePlates.length = 0;
+    this.pushBlocks.length = 0;
+    this.shockwaveRings.length = 0;
+    this.tetherBeams.length = 0;
+    this.blizzardVeilActive = false;
+    this.titanCoreWindowTimer = 0;
+    this.titanFirstCoreBrokenId = 0;
     this.portalActive = false;
     this.waveRespawnTimer = 0;
     this.doorTransitionCooldown = 0.55;
+
+    for (const pl of this.getAllPlayers()) {
+      pl.encasedInIceTimer = 0;
+      pl.icePrisonId = 0;
+    }
 
     if (this.map.getTile(18, 0) !== 'cracked_wall') {
       this.secretWallBroken = true;
     }
 
     const roomSeed = Number(this.dungeon.seed) + roomId * 997 + this.currentFloor * 7919;
-    this.map.configureRoomLayout(targetRoom.type, roomSeed, this.secretWallBroken);
+    this.map.configureRoomLayout(
+      targetRoom.type,
+      roomSeed,
+      this.secretWallBroken,
+      this.currentBiome,
+    );
 
     // Position player(s) near the entrance door (opposite of entryDir)
     let spawnX = this.map.width * 0.35;
@@ -2230,6 +2371,37 @@ export class WorldSim {
     return true;
   }
 
+  public spawnCoopPressurePlatePuzzle(roomId = this.currentRoomId): void {
+    const cx = this.map.width * 0.5;
+    const cy = this.map.height * 0.5;
+    this.coopPuzzleCompleted = this.completedPuzzleRoomIds.has(roomId);
+    this.pressurePlates = [
+      {
+        id: ++this.nextPuzzleEntityId,
+        x: cx - 110,
+        y: cy - 118,
+        radius: 20,
+        pressed: this.coopPuzzleCompleted,
+      },
+      {
+        id: ++this.nextPuzzleEntityId,
+        x: cx + 110,
+        y: cy - 118,
+        radius: 20,
+        pressed: this.coopPuzzleCompleted,
+      },
+    ];
+    this.pushBlocks = [];
+    if (this.getActivePlayerCount() === 1) {
+      this.pushBlocks.push({
+        id: ++this.nextPuzzleEntityId,
+        x: cx + 110,
+        y: this.coopPuzzleCompleted ? cy - 118 : cy - 58,
+        radius: 15,
+      });
+    }
+  }
+
   private populateRoomContents(room: DungeonRoomNode): void {
     const cx = this.map.width * 0.5;
     const cy = this.map.height * 0.5;
@@ -2283,6 +2455,7 @@ export class WorldSim {
           const rarity = room.chestRarity ?? this.rollChestRarity(1);
           this.spawnChest(cx, cy, rarity, room.chestWeaponId ?? undefined);
         }
+        this.spawnCoopPressurePlatePuzzle(room.id);
         break;
       }
       case 'secret': {
@@ -2431,12 +2604,27 @@ export class WorldSim {
         this.spawnProp('torch_brazier', 30 * TILE_SIZE, 4 * TILE_SIZE);
         this.spawnProp('torch_brazier', 6 * TILE_SIZE, 18 * TILE_SIZE);
         this.spawnProp('torch_brazier', 30 * TILE_SIZE, 18 * TILE_SIZE);
+        if (this.currentBiome === 2) {
+          this.spawnProp('crystal_pillar', 11 * TILE_SIZE + 16, 6 * TILE_SIZE + 16);
+          this.spawnProp('crystal_pillar', 25 * TILE_SIZE + 16, 6 * TILE_SIZE + 16);
+          this.spawnProp('crystal_pillar', 11 * TILE_SIZE + 16, 16 * TILE_SIZE + 16);
+          this.spawnProp('crystal_pillar', 25 * TILE_SIZE + 16, 16 * TILE_SIZE + 16);
+        } else if (this.currentBiome === 3) {
+          this.spawnProp('ancient_mechanism', 11 * TILE_SIZE + 16, 6 * TILE_SIZE + 16);
+          this.spawnProp('ancient_mechanism', 25 * TILE_SIZE + 16, 16 * TILE_SIZE + 16);
+        }
         this.portalX = cx;
         this.portalY = cy;
         if (!room.cleared) {
           room.wavesSpawned = 1;
           room.wavesTotal = 1;
-          this.spawnEnemy('spore_king', this.map.width * 0.68, cy, false);
+          const bossDefId =
+            this.currentBiome === 2
+              ? 'kryssa_ice_queen'
+              : this.currentBiome === 3
+                ? 'forge_titan'
+                : 'spore_king';
+          this.spawnEnemy(bossDefId, this.map.width * 0.68, cy, false);
         } else {
           this.portalActive = true;
         }
@@ -2472,13 +2660,15 @@ export class WorldSim {
         this.spawnEnemy(entry.defId, cx + ox, cy + oy, false, eliteMod);
       }
     } else {
-      // Guarantees full Biome 1 enemy variety across waves (all 6 enemy types represented)
-      const count = this.currentFloor === 1 ? 4 : 5;
+      const combatPool =
+        this.currentBiome === 2
+          ? BIOME2_COMBAT_ENEMIES
+          : this.currentBiome === 3
+            ? BIOME3_COMBAT_ENEMIES
+            : BIOME1_COMBAT_ENEMIES;
+      const count = this.currentFloor % 2 === 1 ? 4 : 5;
       for (let i = 0; i < count; i++) {
-        const defId =
-          BIOME1_COMBAT_ENEMIES[
-            (room.id + room.wavesSpawned * 2 + i) % BIOME1_COMBAT_ENEMIES.length
-          ]!;
+        const defId = combatPool[(room.id + room.wavesSpawned * 2 + i) % combatPool.length]!;
         const [ox, oy] = offsets[i % offsets.length]!;
         const isEliteSlot =
           i === count - 1 && (room.wavesSpawned >= room.wavesTotal || room.type === 'portal');
@@ -2502,6 +2692,8 @@ export class WorldSim {
     // Phase 4 Co-op: Revive all Soul Ghosts & Downed teammates at 50% HP when a room is cleared!
     const allPlayers = this.getAllPlayers();
     for (const p of allPlayers) {
+      p.encasedInIceTimer = 0;
+      p.icePrisonId = 0;
       if (p.lifeState === 'ghost' || p.lifeState === 'downed') {
         p.lifeState = 'alive';
         p.downedTimer = 0;
@@ -2531,8 +2723,17 @@ export class WorldSim {
       this.portalActive = true;
       this.portalX = cx;
       this.portalY = cy;
-      this.spawnChest(cx + 95, cy, 'legendary', room.chestWeaponId ?? 'solar_archon_staff');
-      this.runState = 'victory';
+      this.blizzardVeilActive = false;
+      const defaultLegWep =
+        this.currentBiome === 2
+          ? 'frost_scepter'
+          : this.currentBiome === 3
+            ? 'thunder_hammer'
+            : 'solar_archon_staff';
+      this.spawnChest(cx + 95, cy, 'legendary', room.chestWeaponId ?? defaultLegWep);
+      if (this.currentFloor >= this.campaignMaxFloors) {
+        this.runState = 'victory';
+      }
     }
 
     this.roomChestsByRoomId.set(room.id, [...this.chests]);
@@ -2555,7 +2756,11 @@ export class WorldSim {
   }
 
   public rollRandomWeaponByRarities(allowedRarities: readonly WeaponRarity[]): string {
-    const candidates = PHASE3_WEAPON_IDS.filter((id) => {
+    const weaponPool =
+      this.currentBiome === 1 && this.campaignMaxFloors === 2
+        ? PHASE3_WEAPON_IDS
+        : ALL_WEAPON_IDS;
+    const candidates = weaponPool.filter((id) => {
       const w = WEAPONS[id];
       return w && allowedRarities.includes(w.rarity);
     });
@@ -2829,7 +3034,10 @@ export class WorldSim {
       this.startDungeonRunFromHub();
       return true;
     }
-    if (this.currentFloor === 1) {
+    if (this.currentFloor < 6) {
+      if (this.currentFloor >= 2) {
+        this.campaignMaxFloors = 6;
+      }
       this.runState = 'buff_choice';
       this.rollPendingBuffChoices();
       this.events.push({
@@ -2855,7 +3063,7 @@ export class WorldSim {
     ).map((b) => b.id);
     const choices: BuffId[] = [];
 
-    // Ensure at least 1 character skill upgrade for the active party is offered on Floor 1 -> 2 transition
+    // Ensure at least 1 character skill upgrade for the active party is offered on floor transition
     const skillUpgrades = available.filter((id) => {
       const def = FLOOR_BUFFS[id];
       return def?.category === 'skill_upgrade' && def.characterId && activeCharIds.has(def.characterId);
@@ -2907,23 +3115,43 @@ export class WorldSim {
     this.applyBuffEffects(buffId);
 
     this.pendingBuffChoices = [];
-    if (this.currentFloor === 1) {
-      this.advanceToFloor(2);
+    if (this.currentFloor < 6) {
+      this.advanceToFloor((this.currentFloor + 1) as 1 | 2 | 3 | 4 | 5 | 6);
     } else {
       this.runState = 'playing';
     }
     return true;
   }
 
-  public advanceToFloor(floorNumber: 1 | 2): void {
+  public advanceToFloor(floorNumber: 1 | 2 | 3 | 4 | 5 | 6): void {
     this.currentFloor = floorNumber;
+    this.currentBiome = floorNumber <= 2 ? 1 : floorNumber <= 4 ? 2 : 3;
+    if (floorNumber > 2) {
+      this.campaignMaxFloors = 6;
+    }
+    this.map.biome = this.currentBiome;
     this.runStats.floorReached = Math.max(this.runStats.floorReached, floorNumber);
     this.runState = 'playing';
     this.roomChestsByRoomId.clear();
     this.roomItemsByRoomId.clear();
     this.initializedRoomIds.clear();
-    this.dungeon = generateDungeonFloor(this.baseSeed, floorNumber, 1, this.getActivePlayerCount());
+    this.completedPuzzleRoomIds.clear();
+    const floorInBiome: 1 | 2 = floorNumber % 2 === 1 ? 1 : 2;
+    this.dungeon = generateDungeonFloor(
+      this.baseSeed,
+      floorInBiome,
+      this.currentBiome,
+      this.getActivePlayerCount(),
+    );
     this.enterRoom(this.dungeon.startRoomId);
+  }
+
+  public advanceToBiome(biome: 1 | 2 | 3): void {
+    if (biome > 1) {
+      this.campaignMaxFloors = 6;
+    }
+    const targetFloor: 1 | 3 | 5 = biome === 1 ? 1 : biome === 2 ? 3 : 5;
+    this.advanceToFloor(targetFloor);
   }
 
   public skipCurrentRoomWaves(): void {
@@ -3128,9 +3356,10 @@ export class WorldSim {
     // 5. Update Destructible Props & Barrel Fuses
     this.updateProps(dtSec);
 
-    // 5.5 Update Phase 5 Skill Zones (Elemental Orb) & Summons (Sacred Tree, Tesla Turret, Ancient Turret)
+    // 5.5 Update Phase 5 Skill Zones & Summons + Phase 6 Mechanics
     if (!this.stressTestActive) {
       this.updateSkillZonesAndSummons(dtSec);
+      this.updatePhase6Mechanics(dtSec);
     }
 
     // 6. Update Enemies, Elemental Status DoTs & AI
@@ -3147,7 +3376,12 @@ export class WorldSim {
 
     // 10. Stress Test top-up or Dungeon Room / Wave progression
     if (this.stressTestActive) {
-      const enemyTypes = PHASE1_SAMPLE_ENEMIES;
+      const enemyTypes =
+        this.currentBiome === 2
+          ? BIOME2_COMBAT_ENEMIES
+          : this.currentBiome === 3
+            ? BIOME3_COMBAT_ENEMIES
+            : PHASE1_SAMPLE_ENEMIES;
       while (this.enemies.length < 80) {
         const defId = enemyTypes[this.enemies.length % enemyTypes.length]!;
         const e = this.spawnEnemy(defId, undefined, undefined, true);
@@ -3614,6 +3848,44 @@ export class WorldSim {
       return;
     }
 
+    // Phase 6 Kryssa Phase 3 Ice Prison: encased players must be freed by teammates or solo button mashing
+    if (p.icePrisonId && p.icePrisonId > 0) {
+      const prison = this.enemies.find((e) => e.id === p.icePrisonId && e.hp > 0);
+      if (!prison) {
+        p.icePrisonId = 0;
+        p.encasedInIceTimer = 0;
+      } else {
+        p.x = prison.x;
+        p.y = prison.y;
+        p.vx = 0;
+        p.vy = 0;
+        p.encasedInIceTimer = Math.max(0, (p.encasedInIceTimer ?? 4.5) - dtSec);
+        const struggling =
+          justPressed !== 0 ||
+          Math.hypot(inp.moveX, inp.moveY) > 0.1 ||
+          (inp.buttons & (INPUT_BUTTON.FIRE | INPUT_BUTTON.DASH | INPUT_BUTTON.INTERACT)) !== 0;
+        if (struggling || this.getActivePlayerCount() === 1) {
+          const breakRate = this.getActivePlayerCount() === 1 ? 26 : 12;
+          const mashBonus = justPressed !== 0 ? 7 : 0;
+          prison.hp = Math.max(0, prison.hp - (breakRate * dtSec + mashBonus));
+          if (prison.hp <= 0) {
+            this.handleEnemyKilled(prison);
+            p.icePrisonId = 0;
+            p.encasedInIceTimer = 0;
+            return;
+          }
+        }
+        if ((p.encasedInIceTimer ?? 0) <= 0) {
+          prison.hp = 0;
+          this.handleEnemyKilled(prison);
+          p.icePrisonId = 0;
+          p.encasedInIceTimer = 0;
+          this.applyDamageToPlayer(1, 0, 80, 'ice_prison', p);
+        }
+        return;
+      }
+    }
+
     if (
       typeof selectedSlot === 'number' &&
       selectedSlot >= 0 &&
@@ -3791,12 +4063,24 @@ export class WorldSim {
     if (Math.abs(p.kbVx) < 1) p.kbVx = 0;
     if (Math.abs(p.kbVy) < 1) p.kbVy = 0;
 
-    const nextX = p.x + (p.vx + p.kbVx) * dtSec;
+    const conveyorVx = surf === 'conveyor' ? this.map.conveyorDirection * 62 : 0;
+    const prevSafeX = p.x;
+    const prevSafeY = p.y;
+    const nextX = p.x + (p.vx + p.kbVx + conveyorVx) * dtSec;
     const nextY = p.y + (p.vy + p.kbVy) * dtSec;
     const col = this.map.resolveCircleCollision(nextX, nextY, p.radius);
     p.x = col.x;
     p.y = col.y;
     this.resolvePropMovementCollision(p);
+
+    // Chasm hazard (Biome 2): walking onto a chasm tile without dashing deals 1 damage and pushes back to safe ledge
+    const nextSurf = this.map.getSurfaceAtWorld(p.x, p.y);
+    if (nextSurf === 'chasm' && p.dashTimer <= 0 && !this.botAutoPlayActive && !this.stressTestActive) {
+      const pushAng = Math.atan2(prevSafeY - p.y, prevSafeX - p.x);
+      p.x = prevSafeX;
+      p.y = prevSafeY;
+      this.applyDamageToPlayer(1, pushAng, 140, 'chasm', p);
+    }
 
     if (surf === 'grass' && Math.hypot(p.vx, p.vy) > 25 && p.grassRustleCooldown <= 0) {
       p.grassRustleCooldown = 0.22;
@@ -4419,6 +4703,39 @@ export class WorldSim {
               }
             }
           }
+        } else if (s.kind === 'life_blossom') {
+          s.tickTimer -= dtSec;
+          if (s.tickTimer <= 0) {
+            s.tickTimer = 1.1;
+            if (s.healsRemaining > 0) {
+              let healedAny = false;
+              for (const ally of this.getAllPlayers()) {
+                if (
+                  ally.lifeState === 'alive' &&
+                  distance(s.x, s.y, ally.x, ally.y) <= s.auraRadius
+                ) {
+                  if (ally.hp < ally.maxHp) {
+                    ally.hp = Math.min(ally.maxHp, ally.hp + 1);
+                    healedAny = true;
+                  } else if (ally.armor < ally.maxArmor) {
+                    ally.armor = Math.min(ally.maxArmor, ally.armor + 1);
+                    healedAny = true;
+                  }
+                }
+              }
+              if (healedAny) {
+                s.healsRemaining -= 1;
+              }
+            }
+            for (let j = 0; j < this.enemies.length; j++) {
+              const e = this.enemies[j]!;
+              if (e.hp <= 0 || e.aiState === 'spawning' || e.bossBurrowed) continue;
+              if (distance(s.x, s.y, e.x, e.y) <= s.auraRadius + e.radius) {
+                const ang = Math.atan2(e.y - s.y, e.x - s.x);
+                this.applyDamageToEnemy(e, 7, false, 'poison', ang, 25, false, s.ownerPlayerId);
+              }
+            }
+          }
         }
 
         this.summons[summonWrite++] = s;
@@ -4446,6 +4763,214 @@ export class WorldSim {
       }
     }
     this.summons.length = summonWrite;
+  }
+
+  private updatePhase6Mechanics(dtSec: number): void {
+    const allPlayers = this.getAllPlayers();
+
+    // 1. Pushable stone blocks (Solo alternative for 2-player pressure plates)
+    for (let i = 0; i < this.pushBlocks.length; i++) {
+      const block = this.pushBlocks[i]!;
+      for (let pIdx = 0; pIdx < allPlayers.length; pIdx++) {
+        const pl = allPlayers[pIdx]!;
+        if (pl.lifeState !== 'alive') continue;
+        const dx = block.x - pl.x;
+        const dy = block.y - pl.y;
+        const d = Math.hypot(dx, dy);
+        const minDist = pl.radius + block.radius + 2;
+        if (d > 0.001 && d < minDist) {
+          const push = (minDist - d) * 1.15;
+          const col = this.map.resolveCircleCollision(
+            block.x + (dx / d) * push,
+            block.y + (dy / d) * push,
+            block.radius,
+          );
+          block.x = col.x;
+          block.y = col.y;
+        }
+      }
+      // Snap gently onto a nearby pressure plate center if pushed within 18u
+      for (let k = 0; k < this.pressurePlates.length; k++) {
+        const plate = this.pressurePlates[k]!;
+        if (distance(block.x, block.y, plate.x, plate.y) <= 18) {
+          block.x = approach(block.x, plate.x, 80 * dtSec);
+          block.y = approach(block.y, plate.y, 80 * dtSec);
+        }
+      }
+    }
+
+    // 2. Co-op Dual Pressure Plates -> Unlock Bonus Co-op Treasure Chest
+    if (this.pressurePlates.length > 0) {
+      let allPressed = true;
+      for (let i = 0; i < this.pressurePlates.length; i++) {
+        const plate = this.pressurePlates[i]!;
+        if (this.coopPuzzleCompleted) {
+          plate.pressed = true;
+          continue;
+        }
+        let pressed = false;
+        for (let pIdx = 0; pIdx < allPlayers.length; pIdx++) {
+          const pl = allPlayers[pIdx]!;
+          if (pl.lifeState === 'alive' && distance(plate.x, plate.y, pl.x, pl.y) <= plate.radius + pl.radius + 4) {
+            pressed = true;
+            break;
+          }
+        }
+        if (!pressed) {
+          for (let bIdx = 0; bIdx < this.pushBlocks.length; bIdx++) {
+            const blk = this.pushBlocks[bIdx]!;
+            if (distance(plate.x, plate.y, blk.x, blk.y) <= plate.radius + blk.radius) {
+              pressed = true;
+              break;
+            }
+          }
+        }
+        if (!pressed) {
+          for (let sIdx = 0; sIdx < this.summons.length; sIdx++) {
+            const sum = this.summons[sIdx]!;
+            if (sum.hp > 0 && sum.ttlSec > 0 && distance(plate.x, plate.y, sum.x, sum.y) <= plate.radius + sum.radius) {
+              pressed = true;
+              break;
+            }
+          }
+        }
+        plate.pressed = pressed;
+        if (!pressed) allPressed = false;
+      }
+
+      if (allPressed && !this.coopPuzzleCompleted && this.pressurePlates.length >= 2) {
+        this.coopPuzzleCompleted = true;
+        this.completedPuzzleRoomIds.add(this.currentRoomId);
+        const cx = this.map.width * 0.5;
+        const cy = this.map.height * 0.5 - 118;
+        this.spawnChest(cx, cy, 'epic');
+        this.roomChestsByRoomId.set(this.currentRoomId, [...this.chests]);
+        this.events.push({
+          kind: 'coop_puzzle_solved',
+          roomId: this.currentRoomId,
+          x: cx,
+          y: cy,
+        });
+      }
+    }
+
+    // 3. Boss Forge Titan Expanding Shockwave Rings (players can Dash through with i-frames!)
+    if (this.shockwaveRings.length > 0) {
+      let ringWrite = 0;
+      for (let i = 0; i < this.shockwaveRings.length; i++) {
+        const ring = this.shockwaveRings[i]!;
+        ring.radius += ring.speed * dtSec;
+        if (ring.radius >= ring.maxRadius) continue;
+
+        for (let pIdx = 0; pIdx < allPlayers.length; pIdx++) {
+          const pl = allPlayers[pIdx]!;
+          if (pl.lifeState !== 'alive' || ring.hitPlayerIds.includes(pl.id)) continue;
+          const d = distance(ring.x, ring.y, pl.x, pl.y);
+          if (Math.abs(d - ring.radius) <= ring.thickness * 0.5 + pl.radius) {
+            ring.hitPlayerIds.push(pl.id);
+            // Dashing or invulnerable players pass right through the shockwave ring unharmed!
+            if (pl.dashTimer <= 0 && pl.invulnerableTimer <= 0) {
+              const pushAng = Math.atan2(pl.y - ring.y, pl.x - ring.x);
+              this.applyDamageToPlayer(ring.damage, pushAng, 210, 'forge_titan_shockwave', pl);
+            }
+          }
+        }
+        this.shockwaveRings[ringWrite++] = ring;
+      }
+      this.shockwaveRings.length = ringWrite;
+    }
+
+    // 4. Co-op Weapon Tether Beams (tether_staff: electric/fire beam linking 2 players or player + summon)
+    if (this.tetherBeams.length > 0) {
+      let beamWrite = 0;
+      for (let i = 0; i < this.tetherBeams.length; i++) {
+        const beam = this.tetherBeams[i]!;
+        beam.ttlSec -= dtSec;
+        if (beam.ttlSec <= 0) continue;
+
+        const owner = this.getPlayerById(beam.ownerPlayerId);
+        if (!owner || owner.lifeState !== 'alive') continue;
+        beam.x1 = owner.x;
+        beam.y1 = owner.y;
+
+        if (beam.targetKind === 'player') {
+          const targetPl = this.getPlayerById(beam.targetEntityId);
+          if (targetPl && targetPl.lifeState === 'alive') {
+            beam.x2 = targetPl.x;
+            beam.y2 = targetPl.y;
+          }
+        } else {
+          const targetSum = this.summons.find(
+            (s) => s.id === beam.targetEntityId && s.hp > 0 && s.ttlSec > 0,
+          );
+          if (targetSum) {
+            beam.x2 = targetSum.x;
+            beam.y2 = targetSum.y;
+          }
+        }
+
+        beam.tickTimer -= dtSec;
+        if (beam.tickTimer <= 0) {
+          beam.tickTimer = 0.25;
+          const segDx = beam.x2 - beam.x1;
+          const segDy = beam.y2 - beam.y1;
+          const segLenSq = segDx * segDx + segDy * segDy;
+          for (let j = 0; j < this.enemies.length; j++) {
+            const e = this.enemies[j]!;
+            if (e.hp <= 0 || e.aiState === 'spawning' || e.bossBurrowed) continue;
+            const t =
+              segLenSq > 0
+                ? clamp(((e.x - beam.x1) * segDx + (e.y - beam.y1) * segDy) / segLenSq, 0, 1)
+                : 0;
+            const distToBeam = distance(e.x, e.y, beam.x1 + t * segDx, beam.y1 + t * segDy);
+            if (distToBeam <= e.radius + 14) {
+              const hitAng = Math.atan2(segDy, segDx) + Math.PI * 0.5;
+              this.applyDamageToEnemy(
+                e,
+                beam.damage,
+                false,
+                'shock',
+                hitAng,
+                40,
+                false,
+                beam.ownerPlayerId,
+              );
+              if (e.hp > 0) {
+                e.burnTimer = Math.max(e.burnTimer, 2.0);
+                e.shockTimer = Math.max(e.shockTimer, 1.2);
+              }
+            }
+          }
+        }
+
+        this.tetherBeams[beamWrite++] = beam;
+      }
+      this.tetherBeams.length = beamWrite;
+    }
+
+    // 5. Boss Forge Titan Phase 2 Dual Energy Core synchronization window (3s Co-op / 6s Solo)
+    if (this.titanCoreWindowTimer > 0) {
+      this.titanCoreWindowTimer = Math.max(0, this.titanCoreWindowTimer - dtSec);
+      if (this.titanCoreWindowTimer <= 0) {
+        const titan = this.enemies.find((e) => e.defId === 'forge_titan' && e.hp > 0);
+        const remainingCores = this.enemies.filter(
+          (e) => e.defId === 'forge_energy_core' && e.hp > 0,
+        );
+        if (titan && titan.bossPhase === 2 && remainingCores.length === 1) {
+          // Window expired before second core was destroyed -> respawn first core at 50% HP
+          const survivor = remainingCores[0]!;
+          const spawnLeft = survivor.x >= titan.x;
+          const respawned = this.spawnEnemy(
+            'forge_energy_core',
+            titan.x + (spawnLeft ? -115 : 115),
+            titan.y,
+            true,
+          );
+          respawned.hp = Math.max(10, Math.round(respawned.maxHp * 0.5));
+        }
+        this.titanFirstCoreBrokenId = 0;
+      }
+    }
   }
 
   public triggerTeslaEmpBlast(turret: SimSummonState): void {
@@ -4971,6 +5496,12 @@ export class WorldSim {
     if (w.category === 'melee') {
       const arcRad = (w.spreadDeg * Math.PI) / 180;
       const halfArc = arcRad / 2;
+      const meleeRange =
+        w.id === 'thunder_hammer'
+          ? MELEE_RANGE + 20
+          : w.id === 'berserker_axe'
+            ? MELEE_RANGE + 10
+            : MELEE_RANGE;
       let bulletsDestroyed = 0;
 
       if (w.destroysEnemyBullets) {
@@ -4978,13 +5509,13 @@ export class WorldSim {
         const nearbyBullets = this.bulletSpatialGrid.queryCircle(
           p.x,
           p.y,
-          MELEE_RANGE + 12,
+          meleeRange + 12,
           this.queryBulletScratch,
         );
         for (let i = 0; i < nearbyBullets.length; i++) {
           const b = nearbyBullets[i]!;
           if (b.team !== 'enemy' || b.ttlSec <= 0) continue;
-          if (isCircleInCone(p.x, p.y, p.aimAngle, halfArc, MELEE_RANGE + 8, b)) {
+          if (isCircleInCone(p.x, p.y, p.aimAngle, halfArc, meleeRange + 8, b)) {
             b.ttlSec = 0;
             bulletsDestroyed += 1;
             const shieldActive = p.characterId === 'vanguard' && p.skillActiveTimer > 0;
@@ -5012,7 +5543,7 @@ export class WorldSim {
       for (let i = 0; i < this.props.length; i++) {
         const prop = this.props[i]!;
         if (!prop.destructible || prop.hp <= 0) continue;
-        if (isCircleInCone(p.x, p.y, p.aimAngle, halfArc, MELEE_RANGE + 6, prop)) {
+        if (isCircleInCone(p.x, p.y, p.aimAngle, halfArc, meleeRange + 6, prop)) {
           this.damageProp(prop, baseMeleeDmg, shotElement);
         }
       }
@@ -5030,7 +5561,7 @@ export class WorldSim {
       for (let i = 0; i < meleeEnemyCount; i++) {
         const e = this.enemies[i]!;
         if (e.hp <= 0 || e.aiState === 'spawning') continue;
-        if (isCircleInCone(p.x, p.y, p.aimAngle, halfArc, MELEE_RANGE, e)) {
+        if (isCircleInCone(p.x, p.y, p.aimAngle, halfArc, meleeRange, e)) {
           const isCrit = this.rng.chance(critChance);
           const dmg = isCrit ? Math.round(baseMeleeDmg * 1.5) : baseMeleeDmg;
           const hitAngle = Math.atan2(e.y - p.y, e.x - p.x);
@@ -5038,6 +5569,33 @@ export class WorldSim {
           hitAny = true;
           if (isCrit) anyCrit = true;
         }
+      }
+
+      // Legendary Thunder Hammer launches 3 piercing lightning bolts forward on each swing!
+      if (w.id === 'thunder_hammer') {
+        this.spawnDeterministicVolley({
+          kind: 'bullet_volley_spawned',
+          tick: this.tick,
+          ownerId: p.id,
+          team: 'player',
+          weaponId: w.id,
+          x: p.x + Math.cos(p.aimAngle) * 18,
+          y: p.y + Math.sin(p.aimAngle) * 18,
+          angle: p.aimAngle,
+          pelletCount: 3,
+          spreadRad: 0.42,
+          speed: w.projectileSpeed,
+          damage: Math.round(baseMeleeDmg * 0.75),
+          radius: 6,
+          knockback: w.knockback * 0.7,
+          pierceCount: 2,
+          bounceCount: 0,
+          ttlSec: 0.85,
+          element: 'shock',
+          critChance,
+          amplifiedByShield: false,
+          seed: this.rng.nextUint32(),
+        });
       }
 
       // Vanguard Shield Wall Synergy: Melee swings while Tường Khiên Hồng Ngọc is active launch a 200u Ruby Sword Wave!
@@ -5073,9 +5631,9 @@ export class WorldSim {
         for (let i = 0; i < waveEnemyCount; i++) {
           const e = this.enemies[i]!;
           if (e.hp <= 0 || e.aiState === 'spawning') continue;
-          // Enemies already hit in the inner MELEE_RANGE cone don't take double damage, only enemies in (MELEE_RANGE..200u]
+          // Enemies already hit in the inner meleeRange cone don't take double damage, only enemies in (meleeRange..200u]
           if (
-            !isCircleInCone(p.x, p.y, p.aimAngle, halfArc, MELEE_RANGE, e) &&
+            !isCircleInCone(p.x, p.y, p.aimAngle, halfArc, meleeRange, e) &&
             isCircleInCone(p.x, p.y, p.aimAngle, waveHalfArc, waveRange, e)
           ) {
             const isCrit = this.rng.chance(critChance);
@@ -5111,7 +5669,7 @@ export class WorldSim {
         y: p.y,
         angle: p.aimAngle,
         arcRad,
-        range: isVanguardSwordWave ? 200 : MELEE_RANGE,
+        range: isVanguardSwordWave ? 200 : meleeRange,
         bulletsDestroyed,
       });
 
@@ -5140,6 +5698,74 @@ export class WorldSim {
       1,
     );
 
+    // Co-op Weapon: Trượng Liên Kết (tether_staff) links player with nearest ally or summon/anchor!
+    if (w.id === 'tether_staff') {
+      const allPlayers = this.getAllPlayers();
+      let bestAlly: SimPlayerState | null = null;
+      let bestDist = Infinity;
+      for (let i = 0; i < allPlayers.length; i++) {
+        const cand = allPlayers[i]!;
+        if (cand.id === p.id || cand.lifeState !== 'alive') continue;
+        const d = distance(p.x, p.y, cand.x, cand.y);
+        if (d < bestDist) {
+          bestDist = d;
+          bestAlly = cand;
+        }
+      }
+
+      let targetKind: 'player' | 'summon' = 'player';
+      let targetEntityId = 0;
+      let x2 = p.x + Math.cos(p.aimAngle) * 165;
+      let y2 = p.y + Math.sin(p.aimAngle) * 165;
+
+      if (bestAlly) {
+        targetKind = 'player';
+        targetEntityId = bestAlly.id;
+        x2 = bestAlly.x;
+        y2 = bestAlly.y;
+      } else {
+        const activeSummon = this.summons.find((s) => s.hp > 0 && s.ttlSec > 0);
+        if (activeSummon) {
+          targetKind = 'summon';
+          targetEntityId = activeSummon.id;
+          x2 = activeSummon.x;
+          y2 = activeSummon.y;
+        } else {
+          targetKind = 'summon';
+          targetEntityId = 0;
+          const col = this.map.resolveCircleCollision(x2, y2, 10);
+          x2 = col.x;
+          y2 = col.y;
+        }
+      }
+
+      const existingBeam = this.tetherBeams.find((b) => b.ownerPlayerId === p.id);
+      if (existingBeam) {
+        existingBeam.targetKind = targetKind;
+        existingBeam.targetEntityId = targetEntityId;
+        existingBeam.x1 = p.x;
+        existingBeam.y1 = p.y;
+        existingBeam.x2 = x2;
+        existingBeam.y2 = y2;
+        existingBeam.ttlSec = 3.2;
+        existingBeam.damage = Math.max(8, Math.round(baseDmg * 0.85));
+      } else {
+        this.tetherBeams.push({
+          id: ++this.nextPuzzleEntityId,
+          ownerPlayerId: p.id,
+          targetEntityId,
+          targetKind,
+          x1: p.x,
+          y1: p.y,
+          x2,
+          y2,
+          ttlSec: 3.2,
+          tickTimer: 0.1,
+          damage: Math.max(8, Math.round(baseDmg * 0.85)),
+        });
+      }
+    }
+
     this.spawnDeterministicVolley({
       kind: 'bullet_volley_spawned',
       tick: this.tick,
@@ -5153,11 +5779,11 @@ export class WorldSim {
       spreadRad,
       speed: w.projectileSpeed,
       damage: baseDmg,
-      radius: w.category === 'shotgun' ? 4.5 : 5,
+      radius: w.category === 'shotgun' ? 4.5 : w.category === 'launcher' ? 7 : 5,
       knockback: w.knockback,
       pierceCount: w.pierceCount + (shieldBoost ? 1 : 0) + (hasRicochetMastery ? 1 : 0),
       bounceCount: w.bounceCount + (hasRicochetMastery ? 1 : 0),
-      ttlSec: w.category === 'shotgun' ? 0.55 : 1.4,
+      ttlSec: w.category === 'shotgun' ? 0.55 : w.category === 'laser' ? 1.0 : 1.4,
       element: shotElement,
       critChance,
       amplifiedByShield: shieldBoost,
@@ -5417,11 +6043,42 @@ export class WorldSim {
           this.updateThornTurretAI(e, distToPlayer, angleToPlayer, dtSec);
         } else if (e.defId === 'spore_king') {
           this.updateBossSporeKingAI(e, targetPlayer, distToPlayer, angleToPlayer, dtSec);
+        } else if (e.defId === 'frost_bat') {
+          this.updateFrostBatAI(e, distToPlayer, angleToPlayer, dtSec);
+        } else if (e.defId === 'baby_yeti') {
+          this.updateBabyYetiAI(e, distToPlayer, angleToPlayer, dtSec);
+        } else if (e.defId === 'ice_mage') {
+          this.updateIceMageAI(e, targetPlayer, distToPlayer, angleToPlayer, dtSec);
+        } else if (e.defId === 'ice_golem') {
+          this.updateIceGolemAI(e, distToPlayer, angleToPlayer, dtSec);
+        } else if (e.defId === 'snow_spirit') {
+          this.updateSnowSpiritAI(e, distToPlayer, angleToPlayer, dtSec);
+        } else if (e.defId === 'kryssa_clone') {
+          this.updateKryssaCloneAI(e, distToPlayer, angleToPlayer, dtSec);
+        } else if (e.defId === 'kryssa_ice_queen') {
+          this.updateBossKryssaAI(e, targetPlayer, distToPlayer, angleToPlayer, dtSec);
+        } else if (e.defId === 'fire_imp') {
+          this.updateFireImpAI(e, distToPlayer, angleToPlayer, dtSec);
+        } else if (e.defId === 'dwarf_cannon') {
+          this.updateDwarfCannonAI(e, distToPlayer, angleToPlayer, dtSec);
+        } else if (e.defId === 'coal_golem') {
+          this.updateCoalGolemAI(e, distToPlayer, angleToPlayer, dtSec);
+        } else if (e.defId === 'welder_drone') {
+          this.updateWelderDroneAI(e, distToPlayer, angleToPlayer, dtSec);
+        } else if (e.defId === 'iron_shielder') {
+          this.updateIronShielderAI(e, distToPlayer, angleToPlayer, dtSec);
+        } else if (e.defId === 'forge_titan') {
+          this.updateBossForgeTitanAI(e, targetPlayer, distToPlayer, angleToPlayer, dtSec);
         }
       }
 
-      // Stationary turrets, guardian mushrooms, or enemies rooted by Druid cannot move
-      if (e.defId === 'thorn_turret' || e.defId === 'spore_guardian' || e.rootedTimer > 0) {
+      // Stationary turrets, guardian mushrooms, ice prisons, energy cores, or enemies rooted by Druid cannot move
+      const isStationaryDef =
+        e.defId === 'thorn_turret' ||
+        e.defId === 'spore_guardian' ||
+        e.defId === 'ice_prison' ||
+        e.defId === 'forge_energy_core';
+      if (isStationaryDef || e.rootedTimer > 0) {
         e.vx = 0;
         e.vy = 0;
         e.kbVx = 0;
@@ -5431,7 +6088,9 @@ export class WorldSim {
       // Apply Chill (-30%) and Oil (-15%) movement speed modifiers
       let speedMult = 1.0;
       if (e.chillTimer > 0) speedMult *= 0.7;
-      if ((surf === 'oil' || surf === 'poison_swamp') && !e.isBoss) speedMult *= 0.85;
+      if ((surf === 'oil' || surf === 'poison_swamp') && !e.isBoss && !ENEMIES[e.defId]?.flying) {
+        speedMult *= 0.85;
+      }
       e.vx *= speedMult;
       e.vy *= speedMult;
 
@@ -5444,7 +6103,7 @@ export class WorldSim {
       );
       let sepX = 0;
       let sepY = 0;
-      if (e.defId !== 'thorn_turret' && e.defId !== 'spore_guardian' && !e.bossBurrowed && e.rootedTimer <= 0) {
+      if (!isStationaryDef && !e.bossBurrowed && e.rootedTimer <= 0) {
         for (let j = 0; j < nearby.length; j++) {
           const other = nearby[j]!;
           if (other.id === e.id || other.hp <= 0) continue;
@@ -5460,7 +6119,12 @@ export class WorldSim {
         }
       }
 
-      const nextX = e.x + (e.vx + e.kbVx + sepX) * dtSec;
+      const conveyorPushX =
+        surf === 'conveyor' && !isStationaryDef && !e.isBoss && !ENEMIES[e.defId]?.flying
+          ? this.map.conveyorDirection * 58
+          : 0;
+
+      const nextX = e.x + (e.vx + e.kbVx + sepX + conveyorPushX) * dtSec;
       const nextY = e.y + (e.vy + e.kbVy + sepY) * dtSec;
       const col = this.map.resolveCircleCollision(nextX, nextY, e.radius);
       e.x = col.x;
@@ -5473,13 +6137,13 @@ export class WorldSim {
         }
       }
 
-      if (e.defId === 'wild_boar' && e.aiState === 'attack' && col.collided) {
+      if ((e.defId === 'wild_boar' || e.defId === 'baby_yeti') && e.aiState === 'attack' && col.collided) {
         e.aiState = 'stunned';
         e.stateTimer = 0.5;
         e.vx = 0;
         e.vy = 0;
         e.attackCooldownTimer =
-          (ENEMIES.wild_boar?.attackCooldownSec ?? 2.6) * this.getEnemyCooldownScale(false);
+          (ENEMIES[e.defId]?.attackCooldownSec ?? 2.5) * this.getEnemyCooldownScale(false);
         this.events.push({
           kind: 'hit_stop',
           durationMs: 30,
@@ -6187,6 +6851,11 @@ export class WorldSim {
     if (hpRatio <= 0.66 && e.bossPhase === 1) {
       e.bossPhase = 2;
       e.attackCooldownTimer = 0.15;
+      if (e.defId === 'kryssa_ice_queen') {
+        this.spawnKryssaMirrorClones(e);
+      } else if (e.defId === 'forge_titan') {
+        this.spawnForgeTitanEnergyCores(e);
+      }
       this.events.push({
         kind: 'boss_phase_changed',
         enemyId: e.id,
@@ -6204,7 +6873,14 @@ export class WorldSim {
     if (hpRatio <= 0.33 && e.bossPhase < 3) {
       e.bossPhase = 3;
       e.attackCooldownTimer = 0.15;
-      this.map.applyBossPhase3ToxicBorder();
+      if (e.defId === 'kryssa_ice_queen') {
+        this.blizzardVeilActive = true;
+        this.map.applyBossPhase3BlizzardBorder();
+      } else if (e.defId === 'forge_titan') {
+        this.map.applyBossPhase3LavaBorder();
+      } else {
+        this.map.applyBossPhase3ToxicBorder();
+      }
       this.events.push({
         kind: 'boss_phase_changed',
         enemyId: e.id,
@@ -6452,6 +7128,1334 @@ export class WorldSim {
       (e.bossPhase === 3 ? baseCd * 0.65 : e.bossPhase === 2 ? baseCd * 0.82 : baseCd) * bossCdScale;
   }
 
+  // =========================================================================
+  // BIOME 2 (FROZEN DEPTHS) ENEMY & BOSS AI
+  // =========================================================================
+
+  private updateFrostBatAI(
+    e: SimEnemyState,
+    distToPlayer: number,
+    angleToPlayer: number,
+    dtSec: number,
+  ): void {
+    const cdMult =
+      (e.isElite && e.eliteModifier === 'fast' ? 0.72 : 1.0) * this.getEnemyCooldownScale(false);
+    if (e.aiState === 'telegraph') {
+      e.vx = 0;
+      e.vy = 0;
+      e.aimAngle = e.telegraphAngle;
+      e.stateTimer -= dtSec;
+      if (e.stateTimer <= 0) {
+        if (!this.stressTestActive || this.projectiles.length < 660) {
+          this.spawnDeterministicVolley({
+            kind: 'bullet_volley_spawned',
+            tick: this.tick,
+            ownerId: e.id,
+            team: 'enemy',
+            weaponId: 'frost_shard',
+            x: e.x + Math.cos(e.telegraphAngle) * 14,
+            y: e.y + Math.sin(e.telegraphAngle) * 14,
+            angle: e.telegraphAngle,
+            pelletCount: 2,
+            spreadRad: 0.24,
+            speed: 310,
+            damage: e.damage,
+            radius: 5,
+            knockback: 75,
+            pierceCount: 0,
+            bounceCount: 0,
+            ttlSec: 2.0,
+            element: 'chill',
+            critChance: 0,
+            amplifiedByShield: false,
+            seed: this.rng.nextUint32(),
+          });
+        }
+        e.aiState = 'cooldown';
+        e.stateTimer = 0.28;
+        e.attackCooldownTimer = (ENEMIES.frost_bat?.attackCooldownSec ?? 1.55) * cdMult;
+      }
+      return;
+    }
+
+    if (e.aiState === 'cooldown') {
+      e.stateTimer -= dtSec;
+      if (e.stateTimer <= 0) e.aiState = 'move';
+    }
+
+    e.aimAngle = angleToPlayer;
+    if (e.attackCooldownTimer <= 0 && distToPlayer <= 340) {
+      e.aiState = 'telegraph';
+      e.stateTimer = e.telegraphDurationSec;
+      e.telegraphAngle = angleToPlayer;
+      e.vx = 0;
+      e.vy = 0;
+      if (!this.stressTestActive) {
+        this.events.push({
+          kind: 'enemy_telegraph',
+          enemyId: e.id,
+          defId: e.defId,
+          x: e.x,
+          y: e.y,
+          angle: e.telegraphAngle,
+          durationSec: e.telegraphDurationSec,
+          radius: 0,
+        });
+      }
+      return;
+    }
+
+    const perp = angleToPlayer + (Math.PI / 2) * e.strafeSign;
+    const approachWeight = distToPlayer > 175 ? 0.65 : distToPlayer < 95 ? -0.6 : 0.1;
+    e.vx = (Math.cos(angleToPlayer) * approachWeight + Math.cos(perp) * 0.85) * e.moveSpeed;
+    e.vy = (Math.sin(angleToPlayer) * approachWeight + Math.sin(perp) * 0.85) * e.moveSpeed;
+  }
+
+  private updateBabyYetiAI(
+    e: SimEnemyState,
+    distToPlayer: number,
+    angleToPlayer: number,
+    dtSec: number,
+  ): void {
+    const cdMult =
+      (e.isElite && e.eliteModifier === 'fast' ? 0.72 : 1.0) * this.getEnemyCooldownScale(false);
+    const slideSpeed = 355;
+    if (e.aiState === 'telegraph') {
+      e.vx = 0;
+      e.vy = 0;
+      e.aimAngle = e.telegraphAngle;
+      e.stateTimer -= dtSec;
+      if (e.stateTimer <= 0) {
+        e.aiState = 'attack';
+        e.stateTimer = 0.56;
+        e.vx = Math.cos(e.telegraphAngle) * slideSpeed;
+        e.vy = Math.sin(e.telegraphAngle) * slideSpeed;
+      }
+      return;
+    }
+
+    if (e.aiState === 'attack') {
+      e.vx = Math.cos(e.telegraphAngle) * slideSpeed;
+      e.vy = Math.sin(e.telegraphAngle) * slideSpeed;
+      e.stateTimer -= dtSec;
+
+      const allPlayers = this.getAllPlayers();
+      for (let i = 0; i < allPlayers.length; i++) {
+        const pl = allPlayers[i]!;
+        if (pl.lifeState !== 'alive') continue;
+        if (circleVsCircle(e, pl)) {
+          pl.chillTimer = Math.max(pl.chillTimer, 2.5);
+          this.applyDamageToPlayer(e.damage, e.telegraphAngle, 250, e.defId, pl);
+          e.aiState = 'cooldown';
+          e.stateTimer = 0.45;
+          e.attackCooldownTimer = (ENEMIES.baby_yeti?.attackCooldownSec ?? 2.3) * cdMult;
+          e.vx = 0;
+          e.vy = 0;
+          return;
+        }
+      }
+
+      if (e.stateTimer <= 0) {
+        e.aiState = 'cooldown';
+        e.stateTimer = 0.4;
+        e.attackCooldownTimer = (ENEMIES.baby_yeti?.attackCooldownSec ?? 2.3) * cdMult;
+        e.vx = 0;
+        e.vy = 0;
+      }
+      return;
+    }
+
+    if (e.aiState === 'cooldown') {
+      e.vx = 0;
+      e.vy = 0;
+      e.stateTimer -= dtSec;
+      if (e.stateTimer <= 0) e.aiState = 'move';
+      return;
+    }
+
+    e.aimAngle = angleToPlayer;
+    if (e.attackCooldownTimer <= 0 && distToPlayer <= 265) {
+      e.aiState = 'telegraph';
+      e.stateTimer = e.telegraphDurationSec;
+      e.telegraphAngle = angleToPlayer;
+      e.vx = 0;
+      e.vy = 0;
+      if (!this.stressTestActive) {
+        this.events.push({
+          kind: 'enemy_telegraph',
+          enemyId: e.id,
+          defId: e.defId,
+          x: e.x,
+          y: e.y,
+          angle: e.telegraphAngle,
+          durationSec: e.telegraphDurationSec,
+          radius: 0,
+        });
+      }
+      return;
+    }
+
+    e.vx = Math.cos(angleToPlayer) * e.moveSpeed;
+    e.vy = Math.sin(angleToPlayer) * e.moveSpeed;
+  }
+
+  private updateIceMageAI(
+    e: SimEnemyState,
+    targetPlayer: SimPlayerState,
+    distToPlayer: number,
+    angleToPlayer: number,
+    dtSec: number,
+  ): void {
+    const cdMult =
+      (e.isElite && e.eliteModifier === 'fast' ? 0.72 : 1.0) * this.getEnemyCooldownScale(false);
+    if (e.aiState === 'telegraph') {
+      e.vx = 0;
+      e.vy = 0;
+      e.aimAngle = e.telegraphAngle;
+      e.stateTimer -= dtSec;
+      if (e.stateTimer <= 0) {
+        if (!this.stressTestActive) {
+          this.map.freezeSurfaceInRadius(targetPlayer.x, targetPlayer.y, 44);
+        }
+        if (!this.stressTestActive || this.projectiles.length < 660) {
+          this.spawnDeterministicVolley({
+            kind: 'bullet_volley_spawned',
+            tick: this.tick,
+            ownerId: e.id,
+            team: 'enemy',
+            weaponId: 'frost_orb',
+            x: e.x + Math.cos(e.telegraphAngle) * 16,
+            y: e.y + Math.sin(e.telegraphAngle) * 16,
+            angle: e.telegraphAngle,
+            pelletCount: 3,
+            spreadRad: 0.36,
+            speed: 265,
+            damage: e.damage,
+            radius: 6,
+            knockback: 85,
+            pierceCount: 0,
+            bounceCount: 0,
+            ttlSec: 2.3,
+            element: 'chill',
+            critChance: 0,
+            amplifiedByShield: false,
+            seed: this.rng.nextUint32(),
+          });
+        }
+        e.aiState = 'cooldown';
+        e.stateTimer = 0.4;
+        e.attackCooldownTimer = (ENEMIES.ice_mage?.attackCooldownSec ?? 2.35) * cdMult;
+      }
+      return;
+    }
+
+    if (e.aiState === 'cooldown') {
+      e.vx = 0;
+      e.vy = 0;
+      e.stateTimer -= dtSec;
+      if (e.stateTimer <= 0) e.aiState = 'move';
+      return;
+    }
+
+    e.aimAngle = angleToPlayer;
+    if (e.attackCooldownTimer <= 0 && distToPlayer <= 390) {
+      e.aiState = 'telegraph';
+      e.stateTimer = e.telegraphDurationSec;
+      e.telegraphAngle = angleToPlayer;
+      e.telegraphRadius = 40;
+      e.vx = 0;
+      e.vy = 0;
+      if (!this.stressTestActive) {
+        this.events.push({
+          kind: 'enemy_telegraph',
+          enemyId: e.id,
+          defId: e.defId,
+          x: e.x,
+          y: e.y,
+          angle: e.telegraphAngle,
+          durationSec: e.telegraphDurationSec,
+          radius: 40,
+        });
+      }
+      return;
+    }
+
+    if (distToPlayer > 250) {
+      e.vx = Math.cos(angleToPlayer) * e.moveSpeed;
+      e.vy = Math.sin(angleToPlayer) * e.moveSpeed;
+    } else if (distToPlayer < 150) {
+      e.vx = -Math.cos(angleToPlayer) * e.moveSpeed;
+      e.vy = -Math.sin(angleToPlayer) * e.moveSpeed;
+    } else {
+      const perp = angleToPlayer + (Math.PI / 2) * e.strafeSign;
+      e.vx = Math.cos(perp) * e.moveSpeed * 0.75;
+      e.vy = Math.sin(perp) * e.moveSpeed * 0.75;
+    }
+  }
+
+  private updateIceGolemAI(
+    e: SimEnemyState,
+    distToPlayer: number,
+    angleToPlayer: number,
+    dtSec: number,
+  ): void {
+    const cdMult =
+      (e.isElite && e.eliteModifier === 'fast' ? 0.72 : 1.0) * this.getEnemyCooldownScale(false);
+    if (e.aiState === 'telegraph') {
+      e.vx = 0;
+      e.vy = 0;
+      e.aimAngle = e.telegraphAngle;
+      e.stateTimer -= dtSec;
+      if (e.stateTimer <= 0) {
+        if (!this.stressTestActive || this.projectiles.length < 660) {
+          this.spawnDeterministicVolley({
+            kind: 'bullet_volley_spawned',
+            tick: this.tick,
+            ownerId: e.id,
+            team: 'enemy',
+            weaponId: 'glacier_spike',
+            x: e.x + Math.cos(e.telegraphAngle) * 18,
+            y: e.y + Math.sin(e.telegraphAngle) * 18,
+            angle: e.telegraphAngle,
+            pelletCount: 5,
+            spreadRad: 0.65,
+            speed: 250,
+            damage: e.damage,
+            radius: 6.5,
+            knockback: 130,
+            pierceCount: 0,
+            bounceCount: 0,
+            ttlSec: 1.9,
+            element: 'chill',
+            critChance: 0,
+            amplifiedByShield: false,
+            seed: this.rng.nextUint32(),
+          });
+        }
+        e.aiState = 'cooldown';
+        e.stateTimer = 0.55;
+        e.attackCooldownTimer = (ENEMIES.ice_golem?.attackCooldownSec ?? 2.6) * cdMult;
+      }
+      return;
+    }
+
+    if (e.aiState === 'cooldown') {
+      e.vx = 0;
+      e.vy = 0;
+      e.stateTimer -= dtSec;
+      if (e.stateTimer <= 0) e.aiState = 'move';
+      return;
+    }
+
+    // Ice Golem turns its front ice shield slowly so players can flank behind it!
+    const maxTurn = 2.1 * dtSec;
+    const diff = angleDiff(angleToPlayer, e.aimAngle);
+    e.aimAngle += clamp(diff, -maxTurn, maxTurn);
+
+    if (e.attackCooldownTimer <= 0 && distToPlayer <= 280) {
+      e.aiState = 'telegraph';
+      e.stateTimer = e.telegraphDurationSec;
+      e.telegraphAngle = e.aimAngle;
+      e.vx = 0;
+      e.vy = 0;
+      if (!this.stressTestActive) {
+        this.events.push({
+          kind: 'enemy_telegraph',
+          enemyId: e.id,
+          defId: e.defId,
+          x: e.x,
+          y: e.y,
+          angle: e.telegraphAngle,
+          durationSec: e.telegraphDurationSec,
+          radius: 0,
+        });
+      }
+      return;
+    }
+
+    e.vx = Math.cos(e.aimAngle) * e.moveSpeed;
+    e.vy = Math.sin(e.aimAngle) * e.moveSpeed;
+  }
+
+  private updateSnowSpiritAI(
+    e: SimEnemyState,
+    distToPlayer: number,
+    angleToPlayer: number,
+    dtSec: number,
+  ): void {
+    if (e.aiState === 'telegraph') {
+      e.vx = 0;
+      e.vy = 0;
+      e.stateTimer -= dtSec;
+      if (e.stateTimer <= 0) {
+        this.detonateSnowSpirit(e);
+      }
+      return;
+    }
+
+    e.aimAngle = angleToPlayer;
+    if (distToPlayer <= 54 && !this.stressTestActive) {
+      e.aiState = 'telegraph';
+      e.stateTimer = e.telegraphDurationSec;
+      e.telegraphAngle = angleToPlayer;
+      e.telegraphRadius = 64;
+      e.vx = 0;
+      e.vy = 0;
+      this.events.push({
+        kind: 'enemy_telegraph',
+        enemyId: e.id,
+        defId: e.defId,
+        x: e.x,
+        y: e.y,
+        angle: e.telegraphAngle,
+        durationSec: e.telegraphDurationSec,
+        radius: 64,
+      });
+      return;
+    }
+
+    e.vx = Math.cos(angleToPlayer) * e.moveSpeed;
+    e.vy = Math.sin(angleToPlayer) * e.moveSpeed;
+  }
+
+  private detonateSnowSpirit(e: SimEnemyState): void {
+    const blastRadius = 64;
+    e.hp = 0;
+
+    this.map.freezeSurfaceInRadius(e.x, e.y, blastRadius);
+
+    const allPlayers = this.getAllPlayers();
+    for (let i = 0; i < allPlayers.length; i++) {
+      const pl = allPlayers[i]!;
+      if (pl.lifeState !== 'alive') continue;
+      if (distance(e.x, e.y, pl.x, pl.y) <= blastRadius + pl.radius) {
+        pl.chillTimer = Math.max(pl.chillTimer, 3.0);
+        const pushAngle = Math.atan2(pl.y - e.y, pl.x - e.x);
+        this.applyDamageToPlayer(e.damage, pushAngle, 210, e.defId, pl);
+      }
+    }
+
+    this.events.push({
+      kind: 'explosion',
+      x: e.x,
+      y: e.y,
+      radius: blastRadius,
+      damage: e.damage,
+      sourceDefId: e.defId,
+    });
+    this.events.push({
+      kind: 'entity_killed',
+      entityId: e.id,
+      defId: e.defId,
+      x: e.x,
+      y: e.y,
+    });
+    this.events.push({
+      kind: 'hit_stop',
+      durationMs: 40,
+      trauma: 0.36,
+    });
+  }
+
+  private updateKryssaCloneAI(
+    e: SimEnemyState,
+    distToPlayer: number,
+    angleToPlayer: number,
+    dtSec: number,
+  ): void {
+    const cdScale = this.getEnemyCooldownScale(false);
+    if (e.aiState === 'telegraph') {
+      e.vx = 0;
+      e.vy = 0;
+      e.aimAngle = e.telegraphAngle;
+      e.stateTimer -= dtSec;
+      if (e.stateTimer <= 0) {
+        if (!this.stressTestActive || this.projectiles.length < 660) {
+          this.spawnDeterministicVolley({
+            kind: 'bullet_volley_spawned',
+            tick: this.tick,
+            ownerId: e.id,
+            team: 'enemy',
+            weaponId: 'kryssa_frost_nova',
+            x: e.x + Math.cos(e.telegraphAngle) * 16,
+            y: e.y + Math.sin(e.telegraphAngle) * 16,
+            angle: e.telegraphAngle,
+            pelletCount: 3,
+            spreadRad: 0.38,
+            speed: 270,
+            damage: e.damage,
+            radius: 5.5,
+            knockback: 80,
+            pierceCount: 0,
+            bounceCount: 0,
+            ttlSec: 2.1,
+            element: 'chill',
+            critChance: 0,
+            amplifiedByShield: false,
+            seed: this.rng.nextUint32(),
+          });
+        }
+        e.aiState = 'cooldown';
+        e.stateTimer = 0.35;
+        e.attackCooldownTimer = (ENEMIES.kryssa_clone?.attackCooldownSec ?? 1.9) * cdScale;
+      }
+      return;
+    }
+
+    if (e.aiState === 'cooldown') {
+      e.vx = 0;
+      e.vy = 0;
+      e.stateTimer -= dtSec;
+      if (e.stateTimer <= 0) e.aiState = 'move';
+      return;
+    }
+
+    e.aimAngle = angleToPlayer;
+    if (e.attackCooldownTimer <= 0 && distToPlayer <= 380) {
+      e.aiState = 'telegraph';
+      e.stateTimer = e.telegraphDurationSec;
+      e.telegraphAngle = angleToPlayer;
+      e.vx = 0;
+      e.vy = 0;
+      return;
+    }
+
+    const perp = angleToPlayer + (Math.PI / 2) * e.strafeSign;
+    e.vx = Math.cos(perp) * e.moveSpeed;
+    e.vy = Math.sin(perp) * e.moveSpeed;
+  }
+
+  private spawnKryssaMirrorClones(boss: SimEnemyState): void {
+    const existingClones = this.enemies.filter((m) => m.defId === 'kryssa_clone' && m.hp > 0).length;
+    if (existingClones >= 2) return;
+    const cx = this.map.width * 0.5;
+    const cy = this.map.height * 0.5;
+    this.spawnEnemy('kryssa_clone', clamp(cx - 170, 96, this.map.width - 96), clamp(cy - 90, 96, this.map.height - 96), true);
+    this.spawnEnemy('kryssa_clone', clamp(cx + 170, 96, this.map.width - 96), clamp(cy + 90, 96, this.map.height - 96), true);
+    boss.prevX = boss.x;
+    boss.prevY = boss.y;
+  }
+
+  public encasePlayerInIcePrison(target: SimPlayerState): SimEnemyState | null {
+    if (target.lifeState !== 'alive' || (target.encasedInIceTimer ?? 0) > 0) return null;
+    const prison = this.spawnEnemy('ice_prison', target.x, target.y, true);
+    target.encasedInIceTimer = 4.5;
+    target.icePrisonId = prison.id;
+    target.vx = 0;
+    target.vy = 0;
+    if (!this.stressTestActive) {
+      this.events.push({
+        kind: 'status_applied',
+        targetId: target.id,
+        status: 'frozen',
+        x: target.x,
+        y: target.y,
+      });
+    }
+    return prison;
+  }
+
+  private updateBossKryssaAI(
+    e: SimEnemyState,
+    targetPlayer: SimPlayerState,
+    distToPlayer: number,
+    angleToPlayer: number,
+    dtSec: number,
+  ): void {
+    this.checkBossPhaseTransitions(e);
+    e.aimAngle = angleToPlayer;
+    const bossCdScale = this.getEnemyCooldownScale(true);
+
+    if (e.aiState === 'telegraph') {
+      e.vx = 0;
+      e.vy = 0;
+      e.stateTimer -= dtSec;
+      if (e.stateTimer <= 0) {
+        this.executeBossKryssaAttack(e, targetPlayer, angleToPlayer);
+      }
+      return;
+    }
+
+    if (e.aiState === 'cooldown') {
+      e.vx = 0;
+      e.vy = 0;
+      e.stateTimer -= dtSec;
+      if (e.stateTimer <= 0) {
+        e.aiState = 'move';
+      }
+      return;
+    }
+
+    if (e.attackCooldownTimer <= 0) {
+      e.aiState = 'telegraph';
+      e.stateTimer = (e.bossPhase === 3 ? 0.5 : e.telegraphDurationSec) * bossCdScale;
+      e.telegraphAngle = angleToPlayer;
+      e.telegraphRadius = 56;
+      e.vx = 0;
+      e.vy = 0;
+      this.events.push({
+        kind: 'enemy_telegraph',
+        enemyId: e.id,
+        defId: e.defId,
+        x: e.x,
+        y: e.y,
+        angle: e.telegraphAngle,
+        durationSec: e.stateTimer,
+        radius: e.telegraphRadius,
+      });
+      return;
+    }
+
+    const phaseSpeedMult = e.bossPhase === 3 ? 1.32 : e.bossPhase === 2 ? 1.16 : 1.0;
+    const coopBossSpeed = 1 + COOP_SCALING[this.getActivePlayerCount()].enemyFireRateBonus * 0.75;
+    if (distToPlayer > 140) {
+      e.vx = Math.cos(angleToPlayer) * e.moveSpeed * phaseSpeedMult * coopBossSpeed;
+      e.vy = Math.sin(angleToPlayer) * e.moveSpeed * phaseSpeedMult * coopBossSpeed;
+    } else {
+      const perp = angleToPlayer + Math.PI * 0.5 * e.strafeSign;
+      e.vx = Math.cos(perp) * e.moveSpeed * 0.85 * coopBossSpeed;
+      e.vy = Math.sin(perp) * e.moveSpeed * 0.85 * coopBossSpeed;
+    }
+  }
+
+  private executeBossKryssaAttack(
+    e: SimEnemyState,
+    targetPlayer: SimPlayerState,
+    angleToPlayer: number,
+  ): void {
+    const cycle = e.bossAttackCycle;
+    e.bossAttackCycle += 1;
+    const bossCdScale = this.getEnemyCooldownScale(true);
+
+    // 1. Refracting Ice Laser Volley (bounces off crystal pillars & walls!)
+    const beamCount = e.bossPhase === 3 ? 5 : e.bossPhase === 2 ? 4 : 3;
+    this.spawnDeterministicVolley({
+      kind: 'bullet_volley_spawned',
+      tick: this.tick,
+      ownerId: e.id,
+      team: 'enemy',
+      weaponId: 'kryssa_ice_beam',
+      x: e.x,
+      y: e.y,
+      angle: angleToPlayer,
+      pelletCount: beamCount,
+      spreadRad: 0.55,
+      muzzleOffset: e.radius + 8,
+      speed: 350,
+      damage: e.damage,
+      radius: 6,
+      knockback: 105,
+      pierceCount: 1,
+      bounceCount: 3,
+      ttlSec: 2.8,
+      element: 'chill',
+      critChance: 0,
+      amplifiedByShield: false,
+      seed: this.rng.nextUint32(),
+    });
+
+    // 2. Alternate cycle: Radial Frost Crystal Nova
+    if (cycle % 2 === 1) {
+      const ringCount = e.bossPhase === 3 ? 14 : 10;
+      this.spawnDeterministicVolley({
+        kind: 'bullet_volley_spawned',
+        tick: this.tick,
+        ownerId: e.id,
+        team: 'enemy',
+        weaponId: 'kryssa_frost_nova',
+        x: e.x,
+        y: e.y,
+        angle: cycle * 0.3,
+        pelletCount: ringCount,
+        spreadRad: 0,
+        radialStepRad: (Math.PI * 2) / ringCount,
+        muzzleOffset: e.radius + 6,
+        speed: 240,
+        damage: e.damage,
+        radius: 5.5,
+        knockback: 90,
+        pierceCount: 0,
+        bounceCount: 1,
+        ttlSec: 2.5,
+        element: 'chill',
+        critChance: 0,
+        amplifiedByShield: false,
+        seed: this.rng.nextUint32(),
+      });
+    }
+
+    // 3. Phase 2+: Refresh Mirror Illusion Clones (no ground shadow!)
+    if (e.bossPhase >= 2 && cycle % 3 === 0) {
+      this.spawnKryssaMirrorClones(e);
+    }
+
+    // 4. Phase 3: Ice Prison Co-op Mechanic (encases 1 player in an Ice Prison block!)
+    if (e.bossPhase === 3 && cycle % 3 === 1 && !this.stressTestActive && !this.botAutoPlayActive) {
+      this.encasePlayerInIcePrison(targetPlayer);
+    }
+
+    e.aiState = 'cooldown';
+    e.stateTimer = (e.bossPhase === 3 ? 0.34 : 0.44) * bossCdScale;
+    const baseCd = ENEMIES.kryssa_ice_queen?.attackCooldownSec ?? 2.05;
+    e.attackCooldownTimer =
+      (e.bossPhase === 3 ? baseCd * 0.66 : e.bossPhase === 2 ? baseCd * 0.82 : baseCd) * bossCdScale;
+  }
+
+  // =========================================================================
+  // BIOME 3 (MOLTEN FORGE) ENEMY & BOSS AI
+  // =========================================================================
+
+  private updateFireImpAI(
+    e: SimEnemyState,
+    distToPlayer: number,
+    angleToPlayer: number,
+    dtSec: number,
+  ): void {
+    const cdMult =
+      (e.isElite && e.eliteModifier === 'fast' ? 0.72 : 1.0) * this.getEnemyCooldownScale(false);
+    if (e.aiState === 'telegraph') {
+      e.vx = 0;
+      e.vy = 0;
+      e.aimAngle = e.telegraphAngle;
+      e.stateTimer -= dtSec;
+      if (e.stateTimer <= 0) {
+        if (!this.stressTestActive || this.projectiles.length < 660) {
+          this.spawnDeterministicVolley({
+            kind: 'bullet_volley_spawned',
+            tick: this.tick,
+            ownerId: e.id,
+            team: 'enemy',
+            weaponId: 'imp_fireball',
+            x: e.x + Math.cos(e.telegraphAngle) * 14,
+            y: e.y + Math.sin(e.telegraphAngle) * 14,
+            angle: e.telegraphAngle,
+            pelletCount: 2,
+            spreadRad: 0.22,
+            speed: 315,
+            damage: e.damage,
+            radius: 5.5,
+            knockback: 80,
+            pierceCount: 0,
+            bounceCount: 0,
+            ttlSec: 2.0,
+            element: 'burn',
+            critChance: 0,
+            amplifiedByShield: false,
+            seed: this.rng.nextUint32(),
+          });
+        }
+        e.aiState = 'cooldown';
+        e.stateTimer = 0.25;
+        e.attackCooldownTimer = (ENEMIES.fire_imp?.attackCooldownSec ?? 1.45) * cdMult;
+      }
+      return;
+    }
+
+    if (e.aiState === 'cooldown') {
+      e.stateTimer -= dtSec;
+      if (e.stateTimer <= 0) e.aiState = 'move';
+    }
+
+    e.aimAngle = angleToPlayer;
+    if (e.attackCooldownTimer <= 0 && distToPlayer <= 340) {
+      e.aiState = 'telegraph';
+      e.stateTimer = e.telegraphDurationSec;
+      e.telegraphAngle = angleToPlayer;
+      e.vx = 0;
+      e.vy = 0;
+      if (!this.stressTestActive) {
+        this.events.push({
+          kind: 'enemy_telegraph',
+          enemyId: e.id,
+          defId: e.defId,
+          x: e.x,
+          y: e.y,
+          angle: e.telegraphAngle,
+          durationSec: e.telegraphDurationSec,
+          radius: 0,
+        });
+      }
+      return;
+    }
+
+    const perp = angleToPlayer + (Math.PI / 2) * e.strafeSign;
+    const approachDir = distToPlayer > 180 ? 0.7 : distToPlayer < 105 ? -0.65 : 0.15;
+    e.vx = (Math.cos(angleToPlayer) * approachDir + Math.cos(perp) * 0.85) * e.moveSpeed;
+    e.vy = (Math.sin(angleToPlayer) * approachDir + Math.sin(perp) * 0.85) * e.moveSpeed;
+  }
+
+  private updateDwarfCannonAI(
+    e: SimEnemyState,
+    distToPlayer: number,
+    angleToPlayer: number,
+    dtSec: number,
+  ): void {
+    const cdMult =
+      (e.isElite && e.eliteModifier === 'fast' ? 0.72 : 1.0) * this.getEnemyCooldownScale(false);
+    if (e.aiState === 'telegraph') {
+      e.vx = 0;
+      e.vy = 0;
+      e.aimAngle = e.telegraphAngle;
+      e.stateTimer -= dtSec;
+      if (e.stateTimer <= 0) {
+        if (!this.stressTestActive || this.projectiles.length < 660) {
+          this.spawnDeterministicVolley({
+            kind: 'bullet_volley_spawned',
+            tick: this.tick,
+            ownerId: e.id,
+            team: 'enemy',
+            weaponId: 'dwarf_mortar',
+            x: e.x + Math.cos(e.telegraphAngle) * 18,
+            y: e.y + Math.sin(e.telegraphAngle) * 18,
+            angle: e.telegraphAngle,
+            pelletCount: 1,
+            spreadRad: 0.08,
+            speed: 255,
+            damage: e.damage,
+            radius: 7.5,
+            knockback: 150,
+            pierceCount: 0,
+            bounceCount: 0,
+            ttlSec: 1.5,
+            element: 'burn',
+            critChance: 0,
+            amplifiedByShield: false,
+            seed: this.rng.nextUint32(),
+          });
+        }
+        e.aiState = 'cooldown';
+        e.stateTimer = 0.5;
+        e.attackCooldownTimer = (ENEMIES.dwarf_cannon?.attackCooldownSec ?? 2.4) * cdMult;
+      }
+      return;
+    }
+
+    if (e.aiState === 'cooldown') {
+      e.vx = 0;
+      e.vy = 0;
+      e.stateTimer -= dtSec;
+      if (e.stateTimer <= 0) e.aiState = 'move';
+      return;
+    }
+
+    e.aimAngle = angleToPlayer;
+    if (e.attackCooldownTimer <= 0 && distToPlayer <= 400) {
+      e.aiState = 'telegraph';
+      e.stateTimer = e.telegraphDurationSec;
+      e.telegraphAngle = angleToPlayer;
+      e.telegraphRadius = 48;
+      e.vx = 0;
+      e.vy = 0;
+      if (!this.stressTestActive) {
+        this.events.push({
+          kind: 'enemy_telegraph',
+          enemyId: e.id,
+          defId: e.defId,
+          x: e.x,
+          y: e.y,
+          angle: e.telegraphAngle,
+          durationSec: e.telegraphDurationSec,
+          radius: 48,
+        });
+      }
+      return;
+    }
+
+    if (distToPlayer > 260) {
+      e.vx = Math.cos(angleToPlayer) * e.moveSpeed;
+      e.vy = Math.sin(angleToPlayer) * e.moveSpeed;
+    } else if (distToPlayer < 140) {
+      e.vx = -Math.cos(angleToPlayer) * e.moveSpeed;
+      e.vy = -Math.sin(angleToPlayer) * e.moveSpeed;
+    } else {
+      e.vx = 0;
+      e.vy = 0;
+    }
+  }
+
+  private updateCoalGolemAI(
+    e: SimEnemyState,
+    distToPlayer: number,
+    angleToPlayer: number,
+    dtSec: number,
+  ): void {
+    const cdScale = this.getEnemyCooldownScale(false);
+    const lungeSpeed = 240;
+    if (e.aiState === 'telegraph') {
+      e.vx = 0;
+      e.vy = 0;
+      e.aimAngle = e.telegraphAngle;
+      e.stateTimer -= dtSec;
+      if (e.stateTimer <= 0) {
+        e.aiState = 'attack';
+        e.stateTimer = 0.28;
+        e.vx = Math.cos(e.telegraphAngle) * lungeSpeed;
+        e.vy = Math.sin(e.telegraphAngle) * lungeSpeed;
+      }
+      return;
+    }
+
+    if (e.aiState === 'attack') {
+      e.vx = Math.cos(e.telegraphAngle) * lungeSpeed;
+      e.vy = Math.sin(e.telegraphAngle) * lungeSpeed;
+      e.stateTimer -= dtSec;
+      const allPlayers = this.getAllPlayers();
+      for (let i = 0; i < allPlayers.length; i++) {
+        const pl = allPlayers[i]!;
+        if (pl.lifeState !== 'alive') continue;
+        if (circleVsCircle(e, pl)) {
+          pl.burnTimer = Math.max(pl.burnTimer, 2.0);
+          this.applyDamageToPlayer(e.damage, e.telegraphAngle, 190, e.defId, pl);
+          e.aiState = 'cooldown';
+          e.stateTimer = 0.4;
+          e.attackCooldownTimer = (ENEMIES.coal_golem?.attackCooldownSec ?? 1.85) * cdScale;
+          e.vx = 0;
+          e.vy = 0;
+          return;
+        }
+      }
+      if (e.stateTimer <= 0) {
+        e.aiState = 'cooldown';
+        e.stateTimer = 0.35;
+        e.attackCooldownTimer = (ENEMIES.coal_golem?.attackCooldownSec ?? 1.85) * cdScale;
+        e.vx = 0;
+        e.vy = 0;
+      }
+      return;
+    }
+
+    if (e.aiState === 'cooldown') {
+      e.vx = 0;
+      e.vy = 0;
+      e.stateTimer -= dtSec;
+      if (e.stateTimer <= 0) e.aiState = 'move';
+      return;
+    }
+
+    e.aimAngle = angleToPlayer;
+    if (e.attackCooldownTimer <= 0 && distToPlayer <= 80) {
+      e.aiState = 'telegraph';
+      e.stateTimer = e.telegraphDurationSec;
+      e.telegraphAngle = angleToPlayer;
+      e.vx = 0;
+      e.vy = 0;
+      return;
+    }
+
+    e.vx = Math.cos(angleToPlayer) * e.moveSpeed;
+    e.vy = Math.sin(angleToPlayer) * e.moveSpeed;
+  }
+
+  private updateWelderDroneAI(
+    e: SimEnemyState,
+    distToPlayer: number,
+    angleToPlayer: number,
+    dtSec: number,
+  ): void {
+    const cdMult =
+      (e.isElite && e.eliteModifier === 'fast' ? 0.72 : 1.0) * this.getEnemyCooldownScale(false);
+    if (e.aiState === 'telegraph') {
+      e.vx = 0;
+      e.vy = 0;
+      e.aimAngle = e.telegraphAngle;
+      e.stateTimer -= dtSec;
+      if (e.stateTimer <= 0) {
+        // Weld / grant shieldArmor (+10 up to 24) to nearby allies within 200u!
+        let weldedCount = 0;
+        for (let i = 0; i < this.enemies.length; i++) {
+          const ally = this.enemies[i]!;
+          if (ally.id === e.id || ally.isDummy || ally.hp <= 0) continue;
+          if (distance(e.x, e.y, ally.x, ally.y) <= 200) {
+            ally.shieldArmor = Math.min(24, ally.shieldArmor + 10);
+            weldedCount += 1;
+          }
+        }
+        if (weldedCount > 0 && !this.stressTestActive) {
+          this.events.push({
+            kind: 'shaman_heal',
+            shamanId: e.id,
+            x: e.x,
+            y: e.y,
+            radius: 200,
+            healedCount: weldedCount,
+          });
+        }
+
+        if (!this.stressTestActive || this.projectiles.length < 660) {
+          this.spawnDeterministicVolley({
+            kind: 'bullet_volley_spawned',
+            tick: this.tick,
+            ownerId: e.id,
+            team: 'enemy',
+            weaponId: 'welder_arc',
+            x: e.x + Math.cos(e.telegraphAngle) * 14,
+            y: e.y + Math.sin(e.telegraphAngle) * 14,
+            angle: e.telegraphAngle,
+            pelletCount: 1,
+            spreadRad: 0,
+            speed: 320,
+            damage: e.damage,
+            radius: 5.5,
+            knockback: 75,
+            pierceCount: 0,
+            bounceCount: 0,
+            ttlSec: 1.9,
+            element: 'shock',
+            critChance: 0,
+            amplifiedByShield: false,
+            seed: this.rng.nextUint32(),
+          });
+        }
+
+        e.aiState = 'cooldown';
+        e.stateTimer = 0.35;
+        e.attackCooldownTimer = (ENEMIES.welder_drone?.attackCooldownSec ?? 2.15) * cdMult;
+      }
+      return;
+    }
+
+    if (e.aiState === 'cooldown') {
+      e.vx = 0;
+      e.vy = 0;
+      e.stateTimer -= dtSec;
+      if (e.stateTimer <= 0) e.aiState = 'move';
+      return;
+    }
+
+    e.aimAngle = angleToPlayer;
+    if (e.attackCooldownTimer <= 0 && distToPlayer <= 360) {
+      e.aiState = 'telegraph';
+      e.stateTimer = e.telegraphDurationSec;
+      e.telegraphAngle = angleToPlayer;
+      e.vx = 0;
+      e.vy = 0;
+      return;
+    }
+
+    const perp = angleToPlayer + (Math.PI / 2) * e.strafeSign;
+    const approachDir = distToPlayer > 220 ? 0.6 : distToPlayer < 135 ? -0.6 : 0;
+    e.vx = (Math.cos(angleToPlayer) * approachDir + Math.cos(perp) * 0.8) * e.moveSpeed;
+    e.vy = (Math.sin(angleToPlayer) * approachDir + Math.sin(perp) * 0.8) * e.moveSpeed;
+  }
+
+  private updateIronShielderAI(
+    e: SimEnemyState,
+    distToPlayer: number,
+    angleToPlayer: number,
+    dtSec: number,
+  ): void {
+    const cdMult =
+      (e.isElite && e.eliteModifier === 'fast' ? 0.72 : 1.0) * this.getEnemyCooldownScale(false);
+    if (e.aiState === 'telegraph') {
+      e.vx = 0;
+      e.vy = 0;
+      e.aimAngle = e.telegraphAngle;
+      e.stateTimer -= dtSec;
+      if (e.stateTimer <= 0) {
+        if (!this.stressTestActive || this.projectiles.length < 660) {
+          this.spawnDeterministicVolley({
+            kind: 'bullet_volley_spawned',
+            tick: this.tick,
+            ownerId: e.id,
+            team: 'enemy',
+            weaponId: 'shielder_slug',
+            x: e.x + Math.cos(e.telegraphAngle) * 18,
+            y: e.y + Math.sin(e.telegraphAngle) * 18,
+            angle: e.telegraphAngle,
+            pelletCount: 3,
+            spreadRad: 0.35,
+            speed: 270,
+            damage: e.damage,
+            radius: 6,
+            knockback: 115,
+            pierceCount: 0,
+            bounceCount: 0,
+            ttlSec: 2.1,
+            element: 'burn',
+            critChance: 0,
+            amplifiedByShield: false,
+            seed: this.rng.nextUint32(),
+          });
+        }
+        e.aiState = 'cooldown';
+        e.stateTimer = 0.45;
+        e.attackCooldownTimer = (ENEMIES.iron_shielder?.attackCooldownSec ?? 2.3) * cdMult;
+      }
+      return;
+    }
+
+    if (e.aiState === 'cooldown') {
+      e.vx = 0;
+      e.vy = 0;
+      e.stateTimer -= dtSec;
+      if (e.stateTimer <= 0) e.aiState = 'move';
+      return;
+    }
+
+    // Iron Shielder turns its frontal iron shield slowly so teammates can flank!
+    const maxTurn = 2.0 * dtSec;
+    const diff = angleDiff(angleToPlayer, e.aimAngle);
+    e.aimAngle += clamp(diff, -maxTurn, maxTurn);
+
+    if (e.attackCooldownTimer <= 0 && distToPlayer <= 310) {
+      e.aiState = 'telegraph';
+      e.stateTimer = e.telegraphDurationSec;
+      e.telegraphAngle = e.aimAngle;
+      e.vx = 0;
+      e.vy = 0;
+      if (!this.stressTestActive) {
+        this.events.push({
+          kind: 'enemy_telegraph',
+          enemyId: e.id,
+          defId: e.defId,
+          x: e.x,
+          y: e.y,
+          angle: e.telegraphAngle,
+          durationSec: e.telegraphDurationSec,
+          radius: 0,
+        });
+      }
+      return;
+    }
+
+    e.vx = Math.cos(e.aimAngle) * e.moveSpeed;
+    e.vy = Math.sin(e.aimAngle) * e.moveSpeed;
+  }
+
+  public spawnForgeTitanEnergyCores(boss: SimEnemyState): void {
+    const existing = this.enemies.filter((m) => m.defId === 'forge_energy_core' && m.hp > 0).length;
+    if (existing > 0) return;
+    const leftX = clamp(boss.x - 125, TILE_SIZE * 3, this.map.width - TILE_SIZE * 3);
+    const rightX = clamp(boss.x + 125, TILE_SIZE * 3, this.map.width - TILE_SIZE * 3);
+    const coreY = clamp(boss.y, TILE_SIZE * 3, this.map.height - TILE_SIZE * 3);
+    this.spawnEnemy('forge_energy_core', leftX, coreY, true);
+    this.spawnEnemy('forge_energy_core', rightX, coreY, true);
+    this.titanCoreWindowTimer = 0;
+    this.titanFirstCoreBrokenId = 0;
+  }
+
+  private updateBossForgeTitanAI(
+    e: SimEnemyState,
+    _targetPlayer: SimPlayerState,
+    distToPlayer: number,
+    angleToPlayer: number,
+    dtSec: number,
+  ): void {
+    this.checkBossPhaseTransitions(e);
+    e.aimAngle = angleToPlayer;
+    const bossCdScale = this.getEnemyCooldownScale(true);
+
+    if (e.aiState === 'telegraph') {
+      e.vx = 0;
+      e.vy = 0;
+      e.stateTimer -= dtSec;
+      if (e.stateTimer <= 0) {
+        this.executeBossForgeTitanAttack(e, angleToPlayer);
+      }
+      return;
+    }
+
+    if (e.aiState === 'cooldown') {
+      e.vx = 0;
+      e.vy = 0;
+      e.stateTimer -= dtSec;
+      if (e.stateTimer <= 0) {
+        e.aiState = 'move';
+      }
+      return;
+    }
+
+    if (e.attackCooldownTimer <= 0) {
+      e.aiState = 'telegraph';
+      e.stateTimer = (e.bossPhase === 3 ? 0.54 : e.telegraphDurationSec) * bossCdScale;
+      e.telegraphAngle = angleToPlayer;
+      e.telegraphRadius = 72;
+      e.vx = 0;
+      e.vy = 0;
+      this.events.push({
+        kind: 'enemy_telegraph',
+        enemyId: e.id,
+        defId: e.defId,
+        x: e.x,
+        y: e.y,
+        angle: e.telegraphAngle,
+        durationSec: e.stateTimer,
+        radius: e.telegraphRadius,
+      });
+      return;
+    }
+
+    const phaseSpeedMult = e.bossPhase === 3 ? 1.3 : e.bossPhase === 2 ? 1.15 : 1.0;
+    const coopBossSpeed = 1 + COOP_SCALING[this.getActivePlayerCount()].enemyFireRateBonus * 0.75;
+    if (distToPlayer > 110) {
+      e.vx = Math.cos(angleToPlayer) * e.moveSpeed * phaseSpeedMult * coopBossSpeed;
+      e.vy = Math.sin(angleToPlayer) * e.moveSpeed * phaseSpeedMult * coopBossSpeed;
+    } else {
+      const perp = angleToPlayer + Math.PI * 0.5 * e.strafeSign;
+      e.vx = Math.cos(perp) * e.moveSpeed * 0.75 * coopBossSpeed;
+      e.vy = Math.sin(perp) * e.moveSpeed * 0.75 * coopBossSpeed;
+    }
+  }
+
+  private executeBossForgeTitanAttack(e: SimEnemyState, angleToPlayer: number): void {
+    const cycle = e.bossAttackCycle;
+    e.bossAttackCycle += 1;
+    const bossCdScale = this.getEnemyCooldownScale(true);
+
+    // 1. Hammer Slam Shockwave Ring (players Dash through with i-frames) + Reverse Conveyor Belts!
+    this.map.reverseConveyorDirection();
+    this.shockwaveRings.push({
+      id: ++this.nextPuzzleEntityId,
+      sourceEnemyId: e.id,
+      x: e.x,
+      y: e.y,
+      radius: e.radius,
+      maxRadius: 360,
+      speed: e.bossPhase === 3 ? 255 : 215,
+      thickness: 22,
+      damage: e.damage,
+      hitPlayerIds: [],
+    });
+
+    this.events.push({
+      kind: 'hit_stop',
+      durationMs: 50,
+      trauma: 0.52,
+    });
+
+    // 2. Magma Barrage Volley
+    const barrageCount = e.bossPhase === 3 ? 12 : e.bossPhase === 2 ? 10 : 8;
+    this.spawnDeterministicVolley({
+      kind: 'bullet_volley_spawned',
+      tick: this.tick,
+      ownerId: e.id,
+      team: 'enemy',
+      weaponId: 'titan_magma_barrage',
+      x: e.x,
+      y: e.y,
+      angle: cycle * 0.35,
+      pelletCount: barrageCount,
+      spreadRad: 0,
+      radialStepRad: (Math.PI * 2) / barrageCount,
+      muzzleOffset: e.radius + 8,
+      speed: 245,
+      damage: e.damage,
+      radius: 6.5,
+      knockback: 115,
+      pierceCount: 0,
+      bounceCount: 0,
+      ttlSec: 2.6,
+      element: 'burn',
+      critChance: 0,
+      amplifiedByShield: false,
+      seed: this.rng.nextUint32(),
+    });
+
+    // 3. Phase 3 Overheat: 360-degree Rotating Flame Sweep
+    if (e.bossPhase === 3) {
+      this.spawnDeterministicVolley({
+        kind: 'bullet_volley_spawned',
+        tick: this.tick,
+        ownerId: e.id,
+        team: 'enemy',
+        weaponId: 'titan_flame_sweep',
+        x: e.x,
+        y: e.y,
+        angle: angleToPlayer + cycle * 0.48,
+        pelletCount: 6,
+        spreadRad: 0,
+        radialStepRad: Math.PI / 3,
+        muzzleOffset: e.radius + 10,
+        speed: 285,
+        damage: e.damage,
+        radius: 6.5,
+        knockback: 110,
+        pierceCount: 0,
+        bounceCount: 0,
+        ttlSec: 2.2,
+        element: 'burn',
+        critChance: 0,
+        amplifiedByShield: false,
+        seed: this.rng.nextUint32(),
+      });
+    }
+
+    e.aiState = 'cooldown';
+    e.stateTimer = (e.bossPhase === 3 ? 0.35 : 0.45) * bossCdScale;
+    const baseCd = ENEMIES.forge_titan?.attackCooldownSec ?? 2.25;
+    e.attackCooldownTimer =
+      (e.bossPhase === 3 ? baseCd * 0.65 : e.bossPhase === 2 ? baseCd * 0.82 : baseCd) * bossCdScale;
+  }
+
+  private spawnSeedGunLifeBlossom(ownerId: number, x: number, y: number): void {
+    if (this.stressTestActive) return;
+    const blossoms = this.summons.filter((s) => s.kind === 'life_blossom' && s.hp > 0 && s.ttlSec > 0);
+    if (blossoms.length >= 3) {
+      blossoms[0]!.ttlSec = 0;
+    }
+    const col = this.map.resolveCircleCollision(x, y, 14);
+    this.summons.push({
+      id: ++this.nextPuzzleEntityId,
+      ownerPlayerId: ownerId,
+      kind: 'life_blossom',
+      nameVi: 'Hoa Sinh Mệnh',
+      x: col.x,
+      y: col.y,
+      radius: 14,
+      auraRadius: 92,
+      hp: 30,
+      maxHp: 30,
+      ttlSec: 6.5,
+      maxTtlSec: 6.5,
+      tickTimer: 0.4,
+      healsRemaining: 4,
+      charge: 0,
+      poisonRoots: false,
+      selfDestruct: false,
+      rootedEnemyIds: [],
+    });
+  }
+
+  private triggerLauncherProjectileExplosion(b: SimProjectileState, x: number, y: number): void {
+    if (this.stressTestActive) return;
+    const blastR = 64;
+    if (b.element === 'burn') {
+      this.map.igniteSurfaceInRadius(x, y, blastR);
+    }
+    this.events.push({
+      kind: 'explosion',
+      x,
+      y,
+      radius: blastR,
+      damage: b.damage,
+      sourceDefId: b.weaponId,
+    });
+
+    if (b.team === 'player') {
+      const blastDmg = Math.max(6, Math.round(b.damage * 0.65));
+      for (let i = 0; i < this.enemies.length; i++) {
+        const e = this.enemies[i]!;
+        if (e.hp <= 0 || e.aiState === 'spawning' || e.bossBurrowed || b.hitEntityIds.includes(e.id)) {
+          continue;
+        }
+        if (distance(x, y, e.x, e.y) <= blastR + e.radius) {
+          const ang = Math.atan2(e.y - y, e.x - x);
+          this.applyDamageToEnemy(e, blastDmg, false, b.element, ang, 160, true, b.ownerId);
+        }
+      }
+    } else {
+      const allPlayers = this.getAllPlayers();
+      for (let i = 0; i < allPlayers.length; i++) {
+        const pl = allPlayers[i]!;
+        if (pl.lifeState !== 'alive') continue;
+        if (distance(x, y, pl.x, pl.y) <= blastR + pl.radius) {
+          const ang = Math.atan2(pl.y - y, pl.x - x);
+          this.applyDamageToPlayer(b.damage, ang, 180, b.weaponId, pl);
+        }
+      }
+    }
+  }
+
   private updateProjectiles(dtSec: number): void {
     const allPlayers = this.getAllPlayers();
     let stressImpactEventsThisTick = 0;
@@ -6464,6 +8468,15 @@ export class WorldSim {
       if (b.ttlSec <= 0) {
         if (b.element !== 'none') {
           this.applyElementAtWorldPoint(b.x, b.y, b.element, 20);
+        }
+        if (b.weaponId === 'seed_gun') {
+          this.spawnSeedGunLifeBlossom(b.ownerId, b.x, b.y);
+        } else if (
+          b.weaponId === 'frag_launcher' ||
+          b.weaponId === 'magma_cannon' ||
+          b.weaponId === 'dwarf_mortar'
+        ) {
+          this.triggerLauncherProjectileExplosion(b, b.x, b.y);
         }
         continue;
       }
@@ -6516,6 +8529,15 @@ export class WorldSim {
           if (b.element !== 'none') {
             this.applyElementAtWorldPoint(wallHit.resolvedX, wallHit.resolvedY, b.element, 24);
           }
+          if (b.weaponId === 'seed_gun') {
+            this.spawnSeedGunLifeBlossom(b.ownerId, wallHit.resolvedX, wallHit.resolvedY);
+          } else if (
+            b.weaponId === 'frag_launcher' ||
+            b.weaponId === 'magma_cannon' ||
+            b.weaponId === 'dwarf_mortar'
+          ) {
+            this.triggerLauncherProjectileExplosion(b, wallHit.resolvedX, wallHit.resolvedY);
+          }
           if (!this.stressTestActive || stressImpactEventsThisTick < 3) {
             stressImpactEventsThisTick += 1;
             this.events.push({
@@ -6535,12 +8557,33 @@ export class WorldSim {
         }
       }
 
-      // 2. Check destructible props collision
+      // 2. Check destructible / refractive props collision
       if (!this.stressTestActive && this.props.length > 0) {
         let hitProp = false;
         for (let k = 0; k < this.props.length; k++) {
           const prop = this.props[k]!;
-          if (!prop.destructible || prop.hp <= 0) continue;
+          if (prop.hp <= 0) continue;
+          // Boss Kryssa's ice laser refracts off indestructible Crystal Pillars toward the nearest player!
+          if (prop.kind === 'crystal_pillar' && circleVsCircle(b, prop)) {
+            if (!b.hitEntityIds.includes(prop.id)) {
+              b.hitEntityIds.push(prop.id);
+              prop.hitFlashTimer = 0.16;
+              const spd = Math.hypot(b.vx, b.vy) || 350;
+              const nearestPl = this.findNearestAlivePlayer(prop.x, prop.y);
+              const refractAng =
+                b.weaponId === 'kryssa_ice_beam'
+                  ? Math.atan2(nearestPl.y - prop.y, nearestPl.x - prop.x)
+                  : b.angle + Math.PI * 0.65;
+              b.angle = refractAng;
+              b.vx = Math.cos(refractAng) * spd;
+              b.vy = Math.sin(refractAng) * spd;
+              b.x = prop.x + Math.cos(refractAng) * (prop.radius + b.radius + 3);
+              b.y = prop.y + Math.sin(refractAng) * (prop.radius + b.radius + 3);
+              b.ttlSec = Math.max(b.ttlSec, 1.4);
+            }
+            continue;
+          }
+          if (!prop.destructible) continue;
           if (circleVsCircle(b, prop)) {
             this.damageProp(prop, b.damage, b.element);
             b.ttlSec = 0;
@@ -6689,9 +8732,18 @@ export class WorldSim {
               b.element,
               b.angle,
               b.knockback,
-              b.weaponId === 'predator_arrow' || b.weaponId === 'ruby_sword_wave',
+              b.weaponId === 'predator_arrow' ||
+                b.weaponId === 'ruby_sword_wave' ||
+                b.weaponId === 'frag_launcher' ||
+                b.weaponId === 'magma_cannon',
               effectiveAttackerId,
             );
+
+            if (b.weaponId === 'seed_gun') {
+              this.spawnSeedGunLifeBlossom(b.ownerId, enemy.x, enemy.y);
+            } else if (b.weaponId === 'frag_launcher' || b.weaponId === 'magma_cannon') {
+              this.triggerLauncherProjectileExplosion(b, enemy.x, enemy.y);
+            }
 
             if (!this.stressTestActive || stressImpactEventsThisTick < 4) {
               stressImpactEventsThisTick += 1;
@@ -6793,7 +8845,16 @@ export class WorldSim {
           if (pl.lifeState !== 'alive') continue;
           if (circleVsCircle(b, pl)) {
             b.ttlSec = 0;
-            this.applyDamageToPlayer(b.damage, b.angle, b.knockback, b.weaponId, pl);
+            if (b.element === 'chill') {
+              pl.chillTimer = Math.max(pl.chillTimer, 2.5);
+            } else if (b.element === 'burn') {
+              pl.burnTimer = Math.max(pl.burnTimer, 2.0);
+            }
+            if (b.weaponId === 'dwarf_mortar') {
+              this.triggerLauncherProjectileExplosion(b, pl.x, pl.y);
+            } else {
+              this.applyDamageToPlayer(b.damage, b.angle, b.knockback, b.weaponId, pl);
+            }
             if (!this.stressTestActive) {
               this.events.push({
                 kind: 'projectile_impact',
@@ -7071,6 +9132,23 @@ export class WorldSim {
       finalAmount = Math.max(1, finalAmount * 0.35);
     }
 
+    // Biome 2 & 3 Front Shield Mechanic (ice_golem & iron_shielder):
+    // Frontal attacks within a 150-degree forward cone are heavily reduced unless flanked from behind or frozen/stunned!
+    let hitFrontShield = false;
+    const frontShieldReduction = ENEMIES[enemy.defId]?.frontShieldReduction ?? 0;
+    if (frontShieldReduction > 0 && enemy.frozenTimer <= 0 && enemy.aiState !== 'stunned') {
+      const incomingFromAngle = hitAngleRad + Math.PI;
+      if (Math.abs(angleDiff(incomingFromAngle, enemy.aimAngle)) <= (75 * Math.PI) / 180) {
+        finalAmount = Math.max(1, finalAmount * (1 - frontShieldReduction));
+        hitFrontShield = true;
+      }
+    }
+
+    // Boss Forge Titan takes 1.5x damage while stunned/overloaded from dual energy core destruction!
+    if (enemy.defId === 'forge_titan' && enemy.aiState === 'stunned') {
+      finalAmount *= 1.5;
+    }
+
     // Ranger Mark (+25% damage from all sources)
     if (enemy.markedTimer > 0) {
       finalAmount *= 1.25;
@@ -7112,14 +9190,14 @@ export class WorldSim {
     }
 
     const dmg = Math.max(1, Math.round(finalAmount));
-    let hitArmor = false;
+    let hitArmor = hitFrontShield;
     if (this.stressTestActive && enemy.hp <= dmg + 20) {
       enemy.hp = enemy.maxHp;
     } else if (enemy.shieldArmor > 0) {
       const absorbed = Math.min(enemy.shieldArmor, dmg);
       enemy.shieldArmor -= absorbed;
       const rem = dmg - absorbed;
-      hitArmor = absorbed > 0 && rem === 0;
+      hitArmor = hitArmor || (absorbed > 0 && rem === 0);
       enemy.hp = Math.max(0, enemy.hp - rem);
     } else {
       enemy.hp = Math.max(0, enemy.hp - dmg);
@@ -7129,8 +9207,13 @@ export class WorldSim {
     this.runStats.damageDealt += dmg;
     this.checkBossPhaseTransitions(enemy);
 
+    const isImmobileTarget =
+      enemy.defId === 'thorn_turret' ||
+      enemy.defId === 'spore_guardian' ||
+      enemy.defId === 'ice_prison' ||
+      enemy.defId === 'forge_energy_core';
     const kbMult =
-      enemy.isDummy ? 0.15 : enemy.defId === 'thorn_turret' || enemy.defId === 'spore_guardian' ? 0 : enemy.isBoss ? 0.2 : 1.0;
+      enemy.isDummy ? 0.15 : isImmobileTarget ? 0 : enemy.isBoss ? 0.2 : 1.0;
     const kbX = Math.cos(hitAngleRad) * knockback * kbMult;
     const kbY = Math.sin(hitAngleRad) * knockback * kbMult;
     enemy.kbVx += kbX;
@@ -7266,6 +9349,102 @@ export class WorldSim {
       m1.kbVy = -45;
       m2.kbVx = 95;
       m2.kbVy = 45;
+    }
+
+    // Biome 2 Snow Spirit freezes ground on death
+    if (enemy.defId === 'snow_spirit' && !this.stressTestActive) {
+      this.map.freezeSurfaceInRadius(enemy.x, enemy.y, 52);
+    }
+
+    // Biome 2 Kryssa Ice Prison destroyed -> rescue trapped player!
+    if (enemy.defId === 'ice_prison') {
+      for (let i = 0; i < allPlayers.length; i++) {
+        const pl = allPlayers[i]!;
+        if (pl.icePrisonId === enemy.id || (pl.encasedInIceTimer ?? 0) > 0) {
+          pl.encasedInIceTimer = 0;
+          pl.icePrisonId = 0;
+          pl.invulnerableTimer = Math.max(pl.invulnerableTimer, 1.0);
+        }
+      }
+      return;
+    }
+
+    // Biome 3 Coal Golem leaves a burning lava/fire pool on death!
+    if (enemy.defId === 'coal_golem' && !this.stressTestActive) {
+      const tx = Math.floor(enemy.x / TILE_SIZE);
+      const ty = Math.floor(enemy.y / TILE_SIZE);
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          if (Math.abs(dx) + Math.abs(dy) <= 1) {
+            this.map.setSurface(
+              tx + dx,
+              ty + dy,
+              dx === 0 && dy === 0 ? 'lava' : 'burning_oil',
+              8.0,
+              false,
+            );
+          }
+        }
+      }
+      this.events.push({ kind: 'surface_triggered', surface: 'lava', x: enemy.x, y: enemy.y });
+    }
+
+    // Biome 3 Boss Forge Titan Energy Core destroyed -> check 3s Co-op / 6s Solo sync window!
+    if (enemy.defId === 'forge_energy_core') {
+      const remainingCores = this.enemies.filter(
+        (m) => m.id !== enemy.id && m.defId === 'forge_energy_core' && m.hp > 0,
+      );
+      if (remainingCores.length > 0) {
+        this.titanCoreWindowTimer = this.getActivePlayerCount() > 1 ? 3.0 : 6.0;
+        this.titanFirstCoreBrokenId = enemy.id;
+      } else {
+        this.titanCoreWindowTimer = 0;
+        this.titanFirstCoreBrokenId = 0;
+        const titan = this.enemies.find((m) => m.defId === 'forge_titan' && m.hp > 0);
+        if (titan) {
+          titan.aiState = 'stunned';
+          titan.stateTimer = 4.5;
+          titan.superconductTimer = 6.0;
+          titan.vx = 0;
+          titan.vy = 0;
+          const overloadSelfDmg = Math.max(25, Math.round(titan.maxHp * 0.08));
+          titan.hp = Math.max(1, titan.hp - overloadSelfDmg);
+          this.checkBossPhaseTransitions(titan);
+          this.events.push({
+            kind: 'emp_blast',
+            x: titan.x,
+            y: titan.y,
+            radius: 160,
+            bulletsCleared: 0,
+          });
+          this.events.push({
+            kind: 'hit_stop',
+            durationMs: 70,
+            trauma: 0.65,
+          });
+        }
+      }
+      return;
+    }
+
+    // When a Boss dies, also clean up any active boss clones/cores/prisons
+    if (enemy.isBoss) {
+      this.blizzardVeilActive = false;
+      for (let i = 0; i < this.enemies.length; i++) {
+        const m = this.enemies[i]!;
+        if (
+          m.id !== enemy.id &&
+          m.hp > 0 &&
+          (m.defId === 'kryssa_clone' || m.defId === 'ice_prison' || m.defId === 'forge_energy_core')
+        ) {
+          m.hp = 0;
+        }
+      }
+      for (let i = 0; i < allPlayers.length; i++) {
+        const pl = allPlayers[i]!;
+        pl.encasedInIceTimer = 0;
+        pl.icePrisonId = 0;
+      }
     }
 
     // Elite Explosive Death

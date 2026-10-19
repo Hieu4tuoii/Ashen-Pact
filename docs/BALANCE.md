@@ -68,9 +68,21 @@
 - **Cây Gai (`thorn_turret`):** HP `32`, Cố định, Sát thương `1`, Bắn 6 gai tròn mỗi `2.8s`.
 - **Boss Mục Vương Nấm Độc (`boss_mycelium_king`):** HP cơ bản `2400` (1P), Sát thương `2`, 3 Phase (`100%`, `66%`, `33%`).
 
-### 5.2 Hệ số nhân cho Biome 2 & Biome 3
-- **Biome 2 (Hầm Băng Vĩnh Cửu):** HP quái trung bình `×1.30`, Sát thương `1–3`, Boss **Băng Hậu Kryssa** HP cơ bản `3000`.
-- **Biome 3 (Lò Rèn Dung Nham):** HP quái trung bình `×1.65`, Sát thương `2–4`, Boss **Titan Lò Rèn** HP cơ bản `3800`.
+### 5.2 Biome 2 — Hầm Băng Vĩnh Cửu & Biome 3 — Lò Rèn Dung Nham
+- **Biome 2 (Hầm Băng Vĩnh Cửu — Scaling `+25%`):**
+  - `frost_bat` (Dơi Băng): HP `22`, Tốc độ `150`, Bay qua vực, Bắn 2 mảnh băng Lạnh.
+  - `baby_yeti` (Yeti Con): HP `42`, Tốc độ `125` (Lao trượt băng `355`), Sát thương `2` + Lạnh.
+  - `ice_mage` (Pháp Sư Băng): HP `32`, Tốc độ `98`, Bắn 3 cầu băng + đóng băng mặt sàn dưới chân mục tiêu.
+  - `ice_golem` (Golem Băng): HP `56`, Tốc độ `82`, Sát thương `2`, **Khiên Băng phía trước giảm `78%` sát thương trực diện**.
+  - `snow_spirit` (Tinh Linh Tuyết): HP `24`, Tốc độ `142`, Sát thương nổ `2` + đóng băng mặt đất `R = 64u`.
+  - **Boss Băng Hậu Kryssa (`kryssa_ice_queen`):** HP cơ bản `450` (1P, quy mô theo `COOP_SCALING.bossHpMultiplier`), 3 Phase (`100%`, `66%`, `33%`), Cột pha lê phản xạ laser, Phân thân gương không bóng đổ (`kryssa_clone`), Bão tuyết Phase 3 & Lồng Băng (`ice_prison`).
+- **Biome 3 (Lò Rèn Dung Nham — Scaling `+56.25%` so với Biome 1):**
+  - `fire_imp` (Tiểu Quỷ Lửa): HP `28`, Tốc độ `145`, Bắn 2 cầu lửa Cháy.
+  - `dwarf_cannon` (Lùn Pháo Thủ): HP `44`, Tốc độ `88`, Sát thương `2`, Bắn pháo cối nổ AoE đốt sàn.
+  - `coal_golem` (Golem Than): HP `54`, Tốc độ `92`, Sát thương `2`, **Chết để lại hồ Dung nham (`lava`)**.
+  - `welder_drone` (Drone Hàn): HP `34`, Tốc độ `132`, Bay hỗ trợ **hàn `+10 Giáp Khiên` (`shieldArmor`)** cho đồng minh trong `200u`.
+  - `iron_shielder` (Khiên Thủ Sắt): HP `64`, Tốc độ `84`, Sát thương `2`, **Khiên Thép phía trước giảm `80%` sát thương trực diện**.
+  - **Boss Titan Lò Rèn (`forge_titan`):** HP cơ bản `520` (1P, quy mô theo `COOP_SCALING.bossHpMultiplier`), 3 Phase (`100%`, `66%`, `33%`), Sóng xung kích búa đập (`shockwaveRings`) + đảo chiều băng chuyền, **2 Lõi Năng Lượng (`forge_energy_core` — phá trong `3s` Co-op / `6s` Solo gây choáng `4.5s` nhận `×1.5` ST)**, Quét lửa 360° Phase 3.
 
 ---
 
@@ -89,16 +101,20 @@
 
 ---
 
-## 7. Kết Quả Kiểm Chứng Tự Động (Headless Balance Harness — Phase 5)
+## 7. Kết Quả Kiểm Chứng Tự Động (Headless Balance Harness — Phase 5 & Phase 6)
 
-Báo cáo chi tiết được sinh tự động tại [`docs/balance-report.md`](./balance-report.md) qua lệnh `pnpm balance` (`tools/balance-harness.ts`, chạy **283 lượt mô phỏng** ở tốc độ cao trên `WorldSim` 60Hz):
+Báo cáo chi tiết được sinh tự động tại [`docs/balance-report.md`](./balance-report.md) qua lệnh `pnpm balance` (`tools/balance-harness.ts`, chạy **299 lượt mô phỏng** ở tốc độ cao trên `WorldSim` 60Hz):
 
 - **TTK Quái thường (Vũ khí khởi đầu):** Trung bình **0.89s** (`0.59s – 1.12s`) — **✅ ĐẠT** (`0.5s – 1.5s`).
 - **Thời lượng 1 Phòng chiến đấu (1–4P):** Trung bình **47.0s** (`1P: 42.6s`, `2P: 46.7s`, `3P: 48.3s`, `4P: 50.2s`) — **✅ ĐẠT** (`30s – 60s`).
-- **Thời lượng hạ Boss Biome 1 (1P vs 4P):** `1P: 101.3s`, `2P: 121.1s`, `3P: 97.1s`, `4P: 111.6s` (Lệch 1P vs 4P: **±10.2%**) — **✅ ĐẠT** (`90s – 150s`, lệch `≤ ±20%`).
+- **Thời lượng hạ cả 3 Boss Biome 1–3 (1P vs 4P):**
+  - **Mục Vương Nấm Độc (`spore_king`):** `1P: 101.3s`, `4P: 111.6s` (Lệch 1P vs 4P: **±10.2%**) — **✅ ĐẠT**
+  - **Băng Hậu Kryssa (`kryssa_ice_queen`):** `1P: 112.7s`, `4P: 99.2s` (Lệch 1P vs 4P: **±12.0%**) — **✅ ĐẠT**
+  - **Titan Lò Rèn (`forge_titan`):** `1P: 105.1s`, `4P: 124.3s` (Lệch 1P vs 4P: **±18.3%**) — **✅ ĐẠT**
 - **Số đòn chịu được trước khi gục (WorldSim):** **6 – 10 đòn** (`6, 7, 9, 9, 10 đòn`) — **✅ ĐẠT** (`6 – 10 đòn`).
 - **Độ lệch DPS Solo 3 NV sát thương (`ranger`, `elementalist`, `engineer`):** **±10.6%** (`75.1`, `80.7`, `66.1 DPS`) & **5/5 Nhân vật Solo thắng Boss Biome 1 (100%)** — **✅ ĐẠT** (`≤ ±15%`).
 - **Uptime Kỹ năng chủ động trong giao tranh:** Trung bình **52.9%** (`44.4% – 57.8%`) — **✅ ĐẠT** (`40% – 60%`).
 - **Độ khó tăng giữa các Biome (Biome 1 → 2 → 3):** **+25%** mỗi Biome — **✅ ĐẠT**.
+
 
 

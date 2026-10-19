@@ -8,8 +8,8 @@
 3. **Phase 2 — Pipeline Hình ảnh & Tương tác Map (ĐÃ HOÀN THÀNH ✅):** Tilemap procedural + autotile, lightmap động + bloom/vignette, particle/decal pool, đồ vỡ/thùng nổ, bề mặt tương tác nguyên tố, stress test 60 FPS (4P + 80 quái + 600 đạn).
 4. **Phase 3 — Dungeon, Vòng lặp lượt chơi & Biome 1 hoàn chỉnh (ĐÃ HOÀN THÀNH ✅):** Sinh tầng procedural có kiểm chứng liên thông, minimap + fog of war, 14 vũ khí, rương/thương nhân/tượng thần/phòng bí mật, toàn bộ quái + Elite Biome 1, Boss **Mục Vương Nấm Độc** 3 phase, màn hình thắng/thua/kết quả, bot E2E tự vượt tầng & hạ Boss.
 5. **Phase 4 — Co-op LAN (ĐÃ HOÀN THÀNH ✅):** Server authoritative Colyseus phục vụ tĩnh + WebSocket cùng cổng `2567`, LAN IP + QR code, `NetworkTransport`, client prediction + reconciliation, adaptive interpolation, deterministic bullet spawn, mô phỏng mạng Wi-Fi kém, E2E 4 client qua IP LAN thực.
-6. **Phase 5 — 5 Nhân vật, Hệ Nguyên tố & Synergy:** Hoàn thiện Thiết Vệ, Liệp Ưng, Lam Hỏa, Mộc Linh, Bánh Răng kèm nâng cấp skill, 6 phản ứng nguyên tố + Team Combo, công cụ Balance Harness headless xuất `docs/balance-report.md`.
-7. **Phase 6 — Biome 2 & 3 + Boss:** Hoàn thiện Hầm Băng Vĩnh Cửu (**Băng Hậu Kryssa**) và Lò Rèn Dung Nham (**Titan Lò Rèn**), đủ 24 vũ khí, cơ chế map chuyên biệt.
+6. **Phase 5 — 5 Nhân vật, Hệ Nguyên tố & Synergy (ĐÃ HOÀN THÀNH ✅):** Hoàn thiện Thiết Vệ, Liệp Ưng, Lam Hỏa, Mộc Linh, Bánh Răng kèm nâng cấp skill, 6 phản ứng nguyên tố + Team Combo, công cụ Balance Harness headless xuất `docs/balance-report.md`.
+7. **Phase 6 — Biome 2 & 3 + Boss (ĐÃ HOÀN THÀNH ✅):** Hoàn thiện Hầm Băng Vĩnh Cửu (**Băng Hậu Kryssa**) và Lò Rèn Dung Nham (**Titan Lò Rèn**), đủ 24 vũ khí (kèm 2 vũ khí Co-op), câu đố 2 tấm áp lực, băng chuyền, vực thẳm, lồng băng & 2 lõi năng lượng.
 8. **Phase 7 — UI/UX & Âm thanh hoàn thiện:** Menu động, HUD vector, Settings đầy đủ, MVP screen, i18n `vi`/`en`, nhạc động 2 lớp khám phá/chiến đấu + âm thanh định vị.
 9. **Phase 8 — Cân bằng cuối, Hiệu năng, QA & Bản phát hành:** Soak test 20 phút, đóng gói `AshenPact-Host.exe` + `start-host.bat` chạy độc lập, `README.md` tiếng Việt, `RELEASE_NOTES.md`, tag `v0.1.0`.
 
@@ -269,4 +269,60 @@
   - Phát hiện chữ `Chu Kỳ: Hỏa (Cháy)→Băng (Đóng Băng)` trên thanh Top HUD làm tràn chữ `Combo Đội` ở mép phải, tỷ lệ phóng đại `1.72×` trong Trang 4 `ArtGalleryScene` làm mũ nhân vật chạm dòng chữ phụ, và `DebugOverlay` dùng `removeKey(f1Key, true)` có thể làm rơi phím `F1` khi chuyển cảnh từ `MenuScene` sang `GameScene` → Đã rút gọn chỉ báo chu kỳ thành `Chu Kỳ: Lửa→Băng`, căn chỉnh lại khung rig Trang 4 `ArtGalleryScene`, thêm chống chồng lấp dọc cho popup phản ứng nguyên tố đồng thời, và chuyển phím `F1` sang listener `window` an toàn qua mọi lần chuyển cảnh.
 - **Bước tiếp theo (Phase 6):**
   - Triển khai **Phase 6 — Biome 2 & 3 + Boss**: Tileset vẽ bằng code, ánh sáng, ambient, quái, Elite, cơ chế map riêng (băng trơn, băng chuyền, máy sửa được), nâng tổng vũ khí lên ~24, cùng 2 Boss **Băng Hậu Kryssa** và **Titan Lò Rèn** đầy đủ phase + cơ chế co-op.
+
+---
+
+### Phase 6 — Biome 2 & 3 + Boss (Hoàn thành ✅)
+- **Những việc đã hoàn thành:**
+  - **Chiến Dịch 3 Biome × 2 Tầng = 6 Tầng (`Floors 1–6`) & Câu Đố 2 Tấm Áp Lực Co-op (`packages/shared/src/sim/dungeon-gen.ts`, `arena-map.ts`, `world-sim.ts`):**
+    - Mở rộng `generateDungeonFloor` và `WorldSim` hỗ trợ đầy đủ 3 Biome × 2 Tầng = **6 Tầng (`1..6`)**:
+      - **Biome 1 (Tầng 1–2):** Rừng Cổ Mục Nát — Boss **Mục Vương Nấm Độc (`spore_king`)** ở cuối Tầng 2.
+      - **Biome 2 (Tầng 3–4):** Hầm Băng Vĩnh Cửu — Boss **Băng Hậu Kryssa (`kryssa_ice_queen`)** ở cuối Tầng 4.
+      - **Biome 3 (Tầng 5–6):** Lò Rèn Dung Nham — Boss **Titan Lò Rèn (`forge_titan`)** ở cuối Tầng 6.
+    - Bổ sung câu đố **2 Tấm Áp Lực Co-op (`pressurePlates` + `pushBlocks`)**: Yêu cầu 2 người chơi (hoặc 1 người chơi + 1 khối đá đẩy được `pushBlocks` / vật triệu hồi `summons` khi chơi Solo) đứng đồng thời lên 2 tấm áp lực để mở khóa Rương Kho Báu Thưởng (`coop_puzzle_solved`).
+    - Bổ sung phím tắt Debug **`F8`** chuyển nhanh qua lại giữa **Biome 1 → Biome 2 → Biome 3** và hỗ trợ tham số URL `?biome=1|2|3`.
+  - **Màn 2 — Hầm Băng Vĩnh Cửu (`Biome 2 — Frozen Depths`) & Boss Băng Hậu Kryssa:**
+    - **Tileset, Ánh sáng & Bề mặt:** Bake 8 biến thể gạch băng tinh thể xanh thẳm, 16 biến thể tường băng & 16 biến thể trụ pha lê autotile, ánh sáng xanh lam lạnh (`0x354b68`, color grading `[0.95, 1.01, 1.06]`), hạt bông tuyết rơi & hơi thở giá băng, cùng bề mặt **Băng trơn (`ice`)**, **Nước đóng băng (`water`)** và **Vực thẳm (`chasm` — chặn di chuyển bộ nhưng cho phép đạn và quái bay đi qua)**.
+    - **5 Quái thường + Biến thể Elite Biome 2 (`BIOME2_COMBAT_ENEMIES`):**
+      1. **Dơi Băng (`frost_bat`):** Quái bay nhanh qua địa hình/vực, bắn chùm 2 mảnh băng gây Lạnh (`chill`).
+      2. **Yeti Con (`baby_yeti`):** Trượt băng lao húc tốc độ cao gây Lạnh và đẩy lùi.
+      3. **Pháp Sư Băng (`ice_mage`):** Bắn 3 cầu sương giá đồng thời đóng băng mặt sàn dưới chân mục tiêu (`freezeSurfaceInRadius`).
+      4. **Golem Băng (`ice_golem`):** Giáp băng dày cầm khiên băng phía trước giảm **78% sát thương trực diện** (buộc đội hình phải bọc sườn/bắn sau lưng hoặc phá bằng Đóng Băng/Choáng).
+      5. **Tinh Linh Tuyết (`snow_spirit`):** Áp sát tự kích nổ vòng sương giá `R = 64u`, đóng băng mặt đất và làm Lạnh người chơi.
+    - **Boss Băng Hậu Kryssa (`kryssa_ice_queen` — 3 Phase):**
+      - **Cột Pha Lê Phản Xạ (`crystal_pillar`):** Đặt 4 cột pha lê trong phòng Boss phản xạ đạn laser băng (`kryssa_ice_beam`) của Boss lẫn đạn người chơi.
+      - **Phase 1 (`100% → 66% HP`):** Bắn chùm tia laser băng khúc xạ qua cột pha lê + vòng hoa băng xoay tròn (`kryssa_frost_nova`).
+      - **Phase 2 (`66% → 33% HP`):** Triệu hồi 2 **Phân Thân Gương (`kryssa_clone` — `isIllusion: true`)** cùng bắn đạn — phân biệt thật/giả nhờ **chỉ bản thật mới có bóng đổ dưới chân (`groundShadow`)**.
+      - **Phase 3 (`≤ 33% HP`):** Kích hoạt **Bão Tuyết (`blizzardVeilActive`)** đóng băng viền phòng + thu hẹp tầm nhìn, và tung kỹ năng Co-op **Lồng Băng Vĩnh Cửu (`ice_prison`)** nhốt 1 người chơi (đồng đội phải bắn vỡ khối `ice_prison` để giải cứu ngay lập tức).
+  - **Màn 3 — Lò Rèn Dung Nham (`Biome 3 — Molten Forge`) & Boss Titan Lò Rèn:**
+    - **Tileset, Ánh sáng & Băng Chuyền:** Bake 8 biến thể sàn thép đinh tán lò rèn, 16 biến thể tường/trụ thép nung đỏ autotile, ánh sáng cam rực (`0x52342c`, color grading `[1.05, 0.98, 0.94]`), hạt tàn lửa bay lên & khói tro, kênh **Dung nham (`lava`)** và **Băng chuyền cơ khí (`conveyor`)** tự động đẩy thực thể theo chiều mũi tên (có thể đảo chiều `reverseConveyorDirection`).
+    - **5 Quái thường + Biến thể Elite Biome 3 (`BIOME3_COMBAT_ENEMIES`):**
+      1. **Tiểu Quỷ Lửa (`fire_imp`):** Di chuyển lắt léo, bắn cầu lửa kép gây Cháy (`burn`).
+      2. **Người Lùn Pháo Thủ (`dwarf_cannon`):** Bắn đạn cối dung nham phát nổ AoE và đốt cháy mặt sàn.
+      3. **Golem Than (`coal_golem`):** Cận chiến hạng nặng, khi chết để lại hồ **Dung nham (`lava`)** và dầu cháy tại chỗ.
+      4. **Drone Hàn (`welder_drone`):** Quái bay hỗ trợ, phóng hồ quang điện Sét và hàn **+10 Giáp Khiên (`shieldArmor`)** cho đồng minh xung quanh.
+      5. **Khiên Thủ Sắt (`iron_shielder`):** Khiên thép chắn phía trước giảm **80% sát thương trực diện** và bắn đạn lửa 3 viên.
+    - **Boss Titan Lò Rèn (`forge_titan` — 3 Phase):**
+      - **Phase 1 (`100% → 66% HP`):** Nện búa tạo **Vòng Sóng Xung Kích (`shockwaveRings`)** lan rộng khắp phòng (người chơi dùng **Dash i-frame** lướt xuyên qua không mất máu) đồng thời **đảo chiều toàn bộ băng chuyền**, kết hợp mưa đạn dung nham.
+      - **Phase 2 (`66% → 33% HP`):** Lộ **2 Lõi Năng Lượng (`forge_energy_core`)** ở hai bên sườn — đồng đội phải phối hợp phá hủy cả 2 lõi trong cửa sổ **3.0s (Co-op)** / **6.0s (Solo)** để gây quá tải làm Titan **choáng cứng `4.5s` và nhận `×1.5` sát thương** (nếu quá thời gian, lõi thứ nhất tự tái tạo 50% HP).
+      - **Phase 3 (`≤ 33% HP`):** Quá nhiệt bao phủ viền phòng bằng dung nham nóng chảy (`applyBossPhase3LavaBorder`) và quét **Vòng Lửa 360° (`titan_flame_sweep`)** tốc độ cao.
+  - **Mở Rộng Kho Vũ Khí Lên Đủ 24 Vũ Khí (Kèm 2 Vũ Khí Co-op Đặc Biệt):**
+    - Bổ sung 10 vũ khí mới nâng tổng số lên **24 vũ khí** đủ 5 bậc hiếm (`common`, `uncommon`, `rare`, `epic`, `legendary`): `twin_pistols`, `assault_rifle`, `frost_bow`, `lightning_staff`, `shrapnel_launcher`, `berserker_axe`, `void_staff`, `prism_rifle`, `magma_cannon`, `falcon_sniper`, `thunder_hammer` và 2 vũ khí Co-op:
+      1. **Súng Hạt Giống (`seed_gun`):** Đạn nảy mầm thành **Hoa Sinh Mệnh (`life_blossom`)** hồi máu/giáp cho đồng đội đứng gần và phóng phấn độc lên quái.
+      2. **Trượng Liên Kết (`tether_staff`):** Tạo **Tia Năng Lượng Liên Kết (`tetherBeams`)** nối giữa người cầm và đồng đội gần nhất (hoặc trụ/vật triệu hồi khi đi Solo), gây sát thương Sét + Cháy liên tục cho mọi kẻ địch đi cắt ngang tia.
+  - **Nâng Cấp `ArtGalleryScene` 5 Trang & Công Cụ Balance Harness Cho Cả 3 Boss:**
+    - Mở rộng `ArtGalleryScene` lên 5 trang (`3. 24 Vũ Khí & Map`, `5. Biome 2 & 3` trưng bày đủ 10 quái mới + 2 Boss **Băng Hậu Kryssa** & **Titan Lò Rèn**).
+    - Cập nhật `tools/balance-harness.ts` kiểm chứng mô phỏng cả 3 Boss (`spore_king`: 1P `101.3s` / 4P `111.6s` ±10.2%; `kryssa_ice_queen`: 1P `112.7s` / 4P `99.2s` ±12.0%; `forge_titan`: 1P `105.1s` / 4P `124.3s` ±18.3%) — đạt **7/7 chỉ tiêu định lượng**.
+- **Kết quả kiểm thử & Hiệu năng:**
+  - `pnpm verify` (`typecheck` + `lint` + `test` + `build` + `e2e`) và `pnpm balance` PASS 100% (8/8 Vitest test suites = 58 unit tests; 8/8 Playwright E2E test suites).
+  - Screenshots nghiệm thu đã chụp và kiểm tra trực quan bằng mắt tại `docs/screenshots/phase-6/`:
+    - `docs/screenshots/phase-6/frozen-depths-combat-1080p.png`
+    - `docs/screenshots/phase-6/boss-kryssa-ice-queen-1080p.png`
+    - `docs/screenshots/phase-6/molten-forge-combat-1080p.png`
+    - `docs/screenshots/phase-6/boss-forge-titan-1080p.png`
+    - `docs/screenshots/phase-6/gallery-24-weapons-1080p.png`
+    - `docs/screenshots/phase-6/gallery-phase6-biomes-bosses-1080p.png`
+- **Bước tiếp theo (Phase 7):**
+  - Triển khai **Phase 7 — UI/UX Hoàn Thiện & Âm Thanh**: Menu động trên nền lửa trại, HUD vector đánh bóng, Settings đầy đủ, màn hình kết thúc vinh danh MVP, i18n `vi`/`en`, nhạc nền động 2 lớp + âm thanh định vị.
+
 

@@ -104,6 +104,7 @@ export class CombatFxManager {
   private trauma = 0;
   private shakeTime = 0;
   private popupSpreadIndex = 0;
+  private currentBiome: 1 | 2 | 3 = 1;
 
   public totalHitStopsTriggered = 0;
   public totalShakesTriggered = 0;
@@ -179,7 +180,7 @@ export class CombatFxManager {
       });
     }
 
-    // 4. Ambient Leaves & Mist Pool (depth 72)
+    // 4. Ambient Leaves / Snow / Embers & Mist Pool (depth 32)
     for (let i = 0; i < ambientCapacity; i++) {
       const isMist = i < 8;
       const tex = isMist ? 'fx_ambient_mist' : 'fx_ambient_leaf';
@@ -251,6 +252,71 @@ export class CombatFxManager {
     }
   }
 
+  public setBiome(biome: 1 | 2 | 3): void {
+    if (this.currentBiome === biome) return;
+    this.currentBiome = biome;
+    const invBake = 1 / TextureBaker.getBakeScale();
+    for (let i = 0; i < this.ambientPool.length; i++) {
+      const amb = this.ambientPool[i]!;
+      if (amb.kind === 'mist') {
+        amb.sprite.setTexture('fx_ambient_mist');
+        if (biome === 2) {
+          amb.sprite.setTint(hexToNum(PALETTE.CYAN_FROST));
+        } else if (biome === 3) {
+          amb.sprite.setTint(hexToNum(PALETTE.ASH_GRAY));
+        } else {
+          amb.sprite.clearTint();
+        }
+      } else {
+        if (biome === 2) {
+          amb.sprite.setTexture('fx_ice_shard');
+          amb.sprite.setTint(hexToNum(PALETTE.ICE_WHITE));
+          amb.vy = 22 + (i % 5) * 4;
+        } else if (biome === 3) {
+          amb.sprite.setTexture('fx_spark');
+          amb.sprite.setTint(
+            hexToNum(i % 2 === 0 ? PALETTE.FLAME_ORANGE : PALETTE.SOLAR_GOLD),
+          );
+          amb.vy = -(18 + (i % 5) * 4);
+        } else {
+          amb.sprite.setTexture('fx_ambient_leaf');
+          amb.sprite.clearTint();
+          amb.vy = 14 + (i % 4) * 3;
+        }
+        amb.baseScale = invBake * (0.75 + (i % 3) * 0.15);
+        amb.sprite.setScale(amb.baseScale);
+      }
+    }
+  }
+
+  public spawnFrostBreath(x: number, y: number, facingSign: number): void {
+    const p = this.acquireParticleSlot();
+    if (!p) return;
+    const invBake = 1 / TextureBaker.getBakeScale();
+    p.active = true;
+    p.textureKey = 'fx_dust_puff';
+    p.age = 0;
+    p.ttl = 0.42;
+    p.x = x + facingSign * 8;
+    p.y = y - 10;
+    p.vx = facingSign * (14 + Math.random() * 10);
+    p.vy = -12 - Math.random() * 8;
+    p.vr = 0;
+    p.startScale = invBake * 0.55;
+    p.endScale = invBake * 0.95;
+    p.startAlpha = 0.52;
+    p.gravityY = -8;
+    p.damping = 2.5;
+
+    p.sprite.setTexture(p.textureKey);
+    p.sprite.setTint(hexToNum(PALETTE.ICE_WHITE));
+    p.sprite.setPosition(p.x, p.y);
+    p.sprite.setScale(p.startScale);
+    p.sprite.setAlpha(p.startAlpha);
+    p.sprite.setDepth(33);
+    p.sprite.setVisible(true);
+  }
+
   public refreshResolution(bakeScale: number, prevScale?: number): void {
     const invBake = 1 / bakeScale;
     const scaleRatio = prevScale && prevScale > 0 ? prevScale / bakeScale : 1;
@@ -272,7 +338,14 @@ export class CombatFxManager {
       a.sprite.setScale(invBake * Math.sign(a.sprite.scaleX || 1), invBake);
     }
     for (const amb of this.ambientPool) {
-      const tex = amb.kind === 'mist' ? 'fx_ambient_mist' : 'fx_ambient_leaf';
+      const tex =
+        amb.kind === 'mist'
+          ? 'fx_ambient_mist'
+          : this.currentBiome === 2
+            ? 'fx_ice_shard'
+            : this.currentBiome === 3
+              ? 'fx_spark'
+              : 'fx_ambient_leaf';
       amb.sprite.setTexture(tex);
       amb.baseScale = amb.kind === 'mist' ? invBake * 1.8 : invBake * 0.9;
       amb.sprite.setScale(amb.baseScale);

@@ -8,6 +8,7 @@ import {
   type DungeonRoomNode,
   ELEMENTAL_REACTIONS,
   type ElementType,
+  ENEMIES,
   ENEMY_SPAWN_WARMUP_SEC,
   FLOOR_BUFFS,
   generateQrMatrix,
@@ -402,23 +403,31 @@ export class GameScene extends Phaser.Scene {
       });
       this.transport = this.networkTransport;
     } else {
+      const searchParams = new URLSearchParams(window.location.search);
+      const urlBiomeNum = Number(searchParams.get('biome'));
+      const initialBiome: 1 | 2 | 3 = urlBiomeNum === 2 ? 2 : urlBiomeNum === 3 ? 3 : 1;
       this.networkTransport = null;
       this.transport = new LocalTransport({
         seed: debug.seed,
+        biome: initialBiome,
         mapConfig: {
           cols: 36,
           rows: 22,
           includePillars: true,
           seed: debug.seed,
+          biome: initialBiome,
         },
         spawnInitialWave: true,
         includeTrainingDummy: true,
         includeProps: true,
         autoRespawnWaves: true,
       });
-      if (new URLSearchParams(window.location.search).get('hub') === '1') {
+      if (searchParams.get('hub') === '1') {
         this.transport.getSim().enterHub();
+      } else if (initialBiome > 1) {
+        this.transport.getSim().advanceToBiome(initialBiome);
       }
+      debug.currentBiome = this.transport.getSim().currentBiome;
     }
 
     window.__PHASER_GAME__ = this.game;
@@ -622,6 +631,7 @@ export class GameScene extends Phaser.Scene {
     const groundCtx = this.arenaGroundTex?.getContext();
     if (!groundCtx) return;
 
+    const biome = this.transport?.getSim()?.currentBiome ?? 1;
     const cellPx = TILE_SIZE * this.tileCompositeScale;
     const dx = tile.tx * cellPx;
     const dy = tile.ty * cellPx;
@@ -629,7 +639,7 @@ export class GameScene extends Phaser.Scene {
     groundCtx.clearRect(dx, dy, cellPx, cellPx);
     this.drawSourceKeyToCtx(
       groundCtx,
-      TextureBaker.getBiomeTileTextureKey(1, tile.variant),
+      TextureBaker.getBiomeTileTextureKey(biome, tile.variant),
       dx,
       dy,
       cellPx,
@@ -659,7 +669,7 @@ export class GameScene extends Phaser.Scene {
     } else {
       this.drawSourceKeyToCtx(
         groundCtx,
-        this.getStructureTextureKey(tile.kind, tile.autotileMask),
+        this.getStructureTextureKey(tile.kind, tile.autotileMask, biome),
         dx,
         dy,
         cellPx,
@@ -717,26 +727,42 @@ export class GameScene extends Phaser.Scene {
     this.arenaGroundSprite.setScale(1 / this.tileCompositeScale);
     this.arenaGroundSprite.setDepth(2);
 
-    this.lastMapRevision = map.mapRevision;
+    this.lastMapRevision =
+      sim.currentBiome * 10000000 +
+      sim.currentFloor * 1000000 +
+      sim.currentRoomId * 10000 +
+      map.mapRevision;
   }
 
-  private getStructureTextureKey(kind: TileKind, autotileMask: number): string {
+  private getStructureTextureKey(
+    kind: TileKind,
+    autotileMask: number,
+    biome: 1 | 2 | 3 = 1,
+  ): string {
     if (kind === 'pillar') {
-      return TextureBaker.getPillarTileTextureKey(1, autotileMask);
+      return TextureBaker.getPillarTileTextureKey(biome, autotileMask);
     }
     if (kind === 'cracked_wall') {
-      return TextureBaker.getCrackedWallTextureKey(1);
+      return TextureBaker.getCrackedWallTextureKey(biome);
     }
-    return TextureBaker.getWallTileTextureKey(1, autotileMask);
+    return TextureBaker.getWallTileTextureKey(biome, autotileMask);
   }
+
+  private lastRenderedBiome: 1 | 2 | 3 = 1;
 
   private syncArenaTilesWithMapRevision(): void {
     const sim = this.transport.getSim();
     if (sim.stressTestActive) return;
     const map = sim.map;
-    const revKey = sim.currentFloor * 1000000 + sim.currentRoomId * 10000 + map.mapRevision;
-    if (revKey === this.lastMapRevision) return;
+    const revKey =
+      sim.currentBiome * 10000000 +
+      sim.currentFloor * 1000000 +
+      sim.currentRoomId * 10000 +
+      map.mapRevision;
+    if (revKey === this.lastMapRevision && sim.currentBiome === this.lastRenderedBiome) return;
+    const biomeChanged = sim.currentBiome !== this.lastRenderedBiome;
     this.lastMapRevision = revKey;
+    this.lastRenderedBiome = sim.currentBiome;
 
     let groundDirty = false;
 
@@ -750,6 +776,7 @@ export class GameScene extends Phaser.Scene {
       const newSurfaceMask = map.getSurfaceAutotileMask(tile.tx, tile.ty);
 
       if (
+        biomeChanged ||
         newKind !== tile.kind ||
         newVariant !== tile.variant ||
         newMask !== tile.autotileMask ||
@@ -1793,6 +1820,11 @@ export class GameScene extends Phaser.Scene {
         this.localEmoteLabel,
         this.localEmoteBg,
       );
+
+      // Cold breath vapor in Biome 2 (Frozen Depths)
+      if (sim.currentBiome === 2 && !sim.stressTestActive && sim.tick % 90 === 0) {
+        this.fx.spawnFrostBreath(playerPos.x, playerPos.y, this.playerRig.getFacingSign());
+      }
     }
 
     // 6. Sync Simulated Co-op Players (P2-P4), Network Co-op Players, Enemies, Props, Projectiles, Pickups & Phase 3/4 Room Entities
@@ -1804,7 +1836,8 @@ export class GameScene extends Phaser.Scene {
       this.syncRoomEntities(dtSec);
     }
 
-    // 7. Update Pooled Particles, Ambient Leaves/Mist, Afterimages & Floating Damage Numbers
+    // 7. Update Pooled Particles, Ambient Leaves/Snow/Embers & Floating Damage Numbers
+    this.fx.setBiome(sim.currentBiome);
     this.fx.update(dtSec, this.cameras.main.worldView);
 
     // 8. Smooth Camera Follow + Cursor Lookahead (22%) + Trauma Screen Shake
@@ -1829,6 +1862,11 @@ export class GameScene extends Phaser.Scene {
       slot.state = sp;
     }
 
+    const activeBoss = sim.getActiveBoss();
+    const isBlizzardPhase3 =
+      activeBoss?.defId === 'kryssa_ice_queen' && activeBoss.bossPhase === 3;
+    this.lighting.setBiome(sim.currentBiome);
+    this.lighting.setBlizzardVeil(isBlizzardPhase3);
     this.lighting.update({
       dtSec,
       playerPos,
@@ -2521,9 +2559,12 @@ export class GameScene extends Phaser.Scene {
           initialPhaseOffset: (e.id % 7) * 0.25,
           fastComposite: useFastComposite,
         });
-        rig.container.setDepth(e.isBoss ? 31 : 28);
+        rig.container.setDepth(e.defId === 'ice_prison' ? 32 : e.isBoss ? 31 : 28);
         this.enemyRigs.set(e.id, rig);
       }
+
+      // Mirror clones (kryssa_clone) have no ground shadow so observant players can distinguish real vs illusion!
+      rig.setShadowVisible(!ENEMIES[e.defId]?.isIllusion);
 
       if (e.bossBurrowed) {
         rig.container.setVisible(false);
@@ -2666,6 +2707,9 @@ export class GameScene extends Phaser.Scene {
         }
       } else if (b.team === 'enemy') {
         tex = 'proj_enemy_orb';
+        if (b.element === 'chill') tint = 0x7dd3fc;
+        else if (b.element === 'burn') tint = 0xfb923c;
+        else if (b.element === 'shock') tint = 0xfde047;
       } else if (b.element === 'burn') {
         tex = 'proj_player_burn';
       } else if (b.element === 'chill') {
@@ -3403,6 +3447,20 @@ export class GameScene extends Phaser.Scene {
         g.fillCircle(sum.x - 4, sum.y - 11, 9);
         g.lineStyle(2.5, hexToNum(PALETTE.INK_DARK), 1);
         g.strokeCircle(sum.x, sum.y - 8, 16);
+      } else if (sum.kind === 'life_blossom') {
+        // Phase 6 Co-op Weapon: Súng Hạt Giống (seed_gun) blooming Life Blossom
+        const pulse = Math.sin(sim.tick * 0.18 + sum.id) * 2.5;
+        g.fillStyle(hexToNum(PALETTE.MINT_LIGHT), 0.14);
+        g.fillCircle(sum.x, sum.y, sum.auraRadius + pulse);
+        g.lineStyle(2, hexToNum(PALETTE.LIME_GLOW), 0.85);
+        g.strokeCircle(sum.x, sum.y, sum.auraRadius + pulse);
+
+        g.fillStyle(hexToNum(PALETTE.INK_DARK), 0.95);
+        g.fillCircle(sum.x, sum.y, 14);
+        g.fillStyle(hexToNum(PALETTE.LIME_GLOW), 0.95);
+        g.fillCircle(sum.x, sum.y, 11);
+        g.fillStyle(hexToNum(PALETTE.SOLAR_GOLD), 1);
+        g.fillCircle(sum.x, sum.y, 5);
       } else {
         // Tesla Turret / Ancient Turret
         const isAncient = sum.kind === 'ancient_turret';
@@ -3457,7 +3515,11 @@ export class GameScene extends Phaser.Scene {
       g.fillStyle(hexToNum(PALETTE.INK_DARK), 0.9);
       g.fillRect(sum.x - barW / 2 - 1, barY - 1, barW + 2, 5);
       g.fillStyle(
-        hexToNum(sum.kind === 'sacred_tree' ? PALETTE.LIME_GLOW : PALETTE.VOLT_YELLOW),
+        hexToNum(
+          sum.kind === 'sacred_tree' || sum.kind === 'life_blossom'
+            ? PALETTE.LIME_GLOW
+            : PALETTE.VOLT_YELLOW,
+        ),
         1,
       );
       g.fillRect(sum.x - barW / 2, barY, Math.max(2, barW * ttlRatio), 3);
@@ -3473,6 +3535,69 @@ export class GameScene extends Phaser.Scene {
       g.lineStyle(2.5, col, 0.95);
       g.strokeCircle(ping.x, ping.y, waveR);
       g.strokeCircle(ping.x, ping.y, 8);
+    }
+
+    // 1d. Phase 6 Co-op Dual Pressure Plates & Pushable Stone Blocks
+    for (let i = 0; i < sim.pressurePlates.length; i++) {
+      const plate = sim.pressurePlates[i]!;
+      const isPressed = plate.pressed || sim.coopPuzzleCompleted;
+      const plateCol = hexToNum(isPressed ? PALETTE.LIME_GLOW : PALETTE.SOLAR_GOLD);
+      g.fillStyle(hexToNum(isPressed ? PALETTE.FOREST_SHADE : PALETTE.SLATE_DARK), 0.92);
+      g.lineStyle(2.5, plateCol, 0.95);
+      g.fillRoundedRect(plate.x - 18, plate.y - 18, 36, 36, 6);
+      g.strokeRoundedRect(plate.x - 18, plate.y - 18, 36, 36, 6);
+      g.fillStyle(plateCol, isPressed ? 0.95 : 0.45);
+      g.fillCircle(plate.x, plate.y, 8);
+    }
+
+    for (let i = 0; i < sim.pushBlocks.length; i++) {
+      const blk = sim.pushBlocks[i]!;
+      g.fillStyle(hexToNum(PALETTE.INK_DARK), 0.95);
+      g.fillRoundedRect(blk.x - 17, blk.y - 17, 34, 34, 5);
+      g.fillStyle(hexToNum(PALETTE.WARM_STONE), 1);
+      g.lineStyle(2.5, hexToNum(PALETTE.SOLAR_GOLD), 0.95);
+      g.fillRoundedRect(blk.x - 15, blk.y - 15, 30, 30, 4);
+      g.strokeRoundedRect(blk.x - 15, blk.y - 15, 30, 30, 4);
+      g.fillStyle(hexToNum(PALETTE.CYAN_FROST), 0.95);
+      g.fillCircle(blk.x, blk.y, 5);
+    }
+
+    // 1e. Phase 6 Co-op Tether Staff Energy Beams (tether_staff)
+    for (let i = 0; i < sim.tetherBeams.length; i++) {
+      const beam = sim.tetherBeams[i]!;
+      if (beam.ttlSec <= 0) continue;
+      g.lineStyle(7, hexToNum(PALETTE.ELECTRIC_VIOLET), 0.45);
+      g.beginPath();
+      g.moveTo(beam.x1, beam.y1);
+      g.lineTo(beam.x2, beam.y2);
+      g.strokePath();
+
+      g.lineStyle(3.2, hexToNum(PALETTE.CYAN_FROST), 0.95);
+      g.beginPath();
+      g.moveTo(beam.x1, beam.y1);
+      g.lineTo(beam.x2, beam.y2);
+      g.strokePath();
+    }
+
+    // 1f. Phase 6 Boss Forge Titan Expanding Shockwave Rings (Dash through with i-frames!)
+    for (let i = 0; i < sim.shockwaveRings.length; i++) {
+      const ring = sim.shockwaveRings[i]!;
+      g.lineStyle(ring.thickness * 0.55, hexToNum(PALETTE.FLAME_ORANGE), 0.45);
+      g.strokeCircle(ring.x, ring.y, ring.radius);
+      g.lineStyle(3.5, hexToNum(PALETTE.SOLAR_GOLD), 0.95);
+      g.strokeCircle(ring.x, ring.y, ring.radius);
+    }
+
+    // 1g. Phase 6 Boss Kryssa Ice Prison Crystalline Cage around encased players
+    const allPl = sim.getAllPlayers();
+    for (let i = 0; i < allPl.length; i++) {
+      const pl = allPl[i]!;
+      if ((pl.encasedInIceTimer ?? 0) > 0 && pl.lifeState === 'alive') {
+        g.fillStyle(hexToNum(PALETTE.CYAN_FROST), 0.36);
+        g.lineStyle(3, hexToNum(PALETTE.ICE_WHITE), 0.95);
+        g.fillRoundedRect(pl.x - 19, pl.y - 24, 38, 42, 7);
+        g.strokeRoundedRect(pl.x - 19, pl.y - 24, 38, 42, 7);
+      }
     }
 
     // 2. Enemy Spawn Circles, Attack Telegraphs, Boss Burrow Warning, Elite Aura & Mini HP Bars
@@ -3508,6 +3633,29 @@ export class GameScene extends Phaser.Scene {
         g.lineStyle(2.2, hexToNum(PALETTE.ELECTRIC_VIOLET), 0.9);
         g.strokeCircle(pos.x, pos.y, r);
         continue;
+      }
+
+      // Directional Front Shield Arc for Ice Golem & Iron Shielder (must flank behind!)
+      const eStats = ENEMIES[e.defId];
+      if (eStats?.frontShieldReduction && !isStress) {
+        const halfArc = Math.PI * 0.4;
+        const shieldR = e.radius + 6;
+        const shieldHex =
+          e.defId === 'ice_golem' ? PALETTE.CYAN_FROST : PALETTE.STEEL_LIGHT;
+        g.lineStyle(5, hexToNum(PALETTE.INK_DARK), 0.88);
+        g.beginPath();
+        g.arc(pos.x, pos.y, shieldR, e.aimAngle - halfArc, e.aimAngle + halfArc, false);
+        g.strokePath();
+        g.lineStyle(3, hexToNum(shieldHex), 0.95);
+        g.beginPath();
+        g.arc(pos.x, pos.y, shieldR, e.aimAngle - halfArc, e.aimAngle + halfArc, false);
+        g.strokePath();
+      }
+
+      // Boss Overload Stun Ring (Forge Titan when both energy cores are broken)
+      if (e.aiState === 'stunned' && e.stateTimer > 0) {
+        g.lineStyle(3.5, hexToNum(PALETTE.VOLT_YELLOW), 0.95);
+        g.strokeCircle(pos.x, pos.y, e.radius + 10 + Math.sin(sim.tick * 0.3) * 3);
       }
 
       // Elite Golden-Violet Aura Ring & Shield Barrier
@@ -3559,7 +3707,7 @@ export class GameScene extends Phaser.Scene {
         const progress =
           e.telegraphDurationSec > 0 ? 1 - clamp(e.stateTimer / e.telegraphDurationSec, 0, 1) : 1;
 
-        if (e.defId === 'goblin_shooter') {
+        if (e.defId === 'goblin_shooter' || e.defId === 'frost_bat') {
           const spreadRad = (15 * Math.PI) / 180;
           for (const mult of [-1, 0, 1]) {
             const ang = e.telegraphAngle + mult * spreadRad;
@@ -3573,11 +3721,32 @@ export class GameScene extends Phaser.Scene {
             g.strokePath();
           }
         } else if (
+          e.defId === 'kryssa_ice_queen' ||
+          e.defId === 'kryssa_clone' ||
+          e.defId === 'ice_mage'
+        ) {
+          const len = e.telegraphLength || 320;
+          const tx = pos.x + Math.cos(e.telegraphAngle) * len;
+          const ty = pos.y + Math.sin(e.telegraphAngle) * len;
+          g.lineStyle(6, hexToNum(PALETTE.CYAN_FROST), 0.35 + progress * 0.35);
+          g.beginPath();
+          g.moveTo(pos.x, pos.y);
+          g.lineTo(tx, ty);
+          g.strokePath();
+          g.lineStyle(2.2, hexToNum(PALETTE.CRIMSON_BRIGHT), 0.65 + progress * 0.35);
+          g.beginPath();
+          g.moveTo(pos.x, pos.y);
+          g.lineTo(tx, ty);
+          g.strokePath();
+        } else if (
           e.defId === 'goblin_shaman' ||
           e.defId === 'green_slime' ||
-          e.defId === 'mini_slime'
+          e.defId === 'mini_slime' ||
+          e.defId === 'fire_imp' ||
+          e.defId === 'iron_shielder' ||
+          e.defId === 'welder_drone'
         ) {
-          const len = e.telegraphLength || 140;
+          const len = e.telegraphLength || 160;
           const tx = pos.x + Math.cos(e.telegraphAngle) * len;
           const ty = pos.y + Math.sin(e.telegraphAngle) * len;
           g.lineStyle(2.2, hexToNum(PALETTE.CRIMSON_BRIGHT), 0.5 + progress * 0.45);
@@ -3595,7 +3764,7 @@ export class GameScene extends Phaser.Scene {
             g.lineTo(pos.x + Math.cos(ang) * len, pos.y + Math.sin(ang) * len);
             g.strokePath();
           }
-        } else if (e.defId === 'wild_boar') {
+        } else if (e.defId === 'wild_boar' || e.defId === 'baby_yeti') {
           const len = e.telegraphLength || 220;
           const halfW = e.radius;
           const cos = Math.cos(e.telegraphAngle);
@@ -3619,8 +3788,16 @@ export class GameScene extends Phaser.Scene {
 
           g.lineStyle(2, hexToNum(PALETTE.CRIMSON_BRIGHT), 0.85);
           g.strokePath();
-        } else if (e.defId === 'spore_bomber' || e.defId === 'spore_king') {
-          const r = e.telegraphRadius || (e.isBoss ? 92 : 68);
+        } else if (
+          e.defId === 'spore_bomber' ||
+          e.defId === 'spore_king' ||
+          e.defId === 'snow_spirit' ||
+          e.defId === 'ice_golem' ||
+          e.defId === 'dwarf_cannon' ||
+          e.defId === 'coal_golem' ||
+          e.defId === 'forge_titan'
+        ) {
+          const r = e.telegraphRadius || (e.isBoss ? 96 : 68);
           g.fillStyle(hexToNum(PALETTE.CRIMSON_BRIGHT), 0.16 + progress * 0.24);
           g.fillCircle(pos.x, pos.y, r * (0.35 + progress * 0.65));
           g.lineStyle(2.5, hexToNum(PALETTE.CRIMSON_BRIGHT), 0.92);
@@ -3860,7 +4037,7 @@ export class GameScene extends Phaser.Scene {
 
       const nextStats = sim.inHub
         ? `Doanh Trại (${sim.getActivePlayerCount()}P) · [E] Chọn NV · [V] Sẵn Sàng · [Z] Ping · [X] Bỏ VK | ${VIETNAMESE_VERIFICATION_STRING}`
-        : `Tầng ${sim.currentFloor}/2 (${roomLabel}) · DPS ${dps.toFixed(1)} · Xu ${p.gold} · Đợt ${sim.waveNumber} · Dash ${dashReady} · KN ${skillReady}${cycleTag}${comboTag}`;
+        : `Tầng ${sim.currentFloor}/${sim.campaignMaxFloors} (${roomLabel}) · DPS ${dps.toFixed(1)} · Xu ${p.gold} · Đợt ${sim.waveNumber} · Dash ${dashReady} · KN ${skillReady}${cycleTag}${comboTag}`;
       if (nextStats !== this.lastHudStatsText) {
         this.lastHudStatsText = nextStats;
         this.statsLineText.setText(nextStats);
@@ -4474,10 +4651,10 @@ export class GameScene extends Phaser.Scene {
 
     const roomTypeVi = sim.inHub ? 'Doanh Trại' : ROOM_TYPE_LABELS_VI[room.type];
     const titleStr = this.fullMapOpen
-      ? `BẢN ĐỒ HẦM NGỤC — Tầng ${sim.currentFloor}/2 (${roomTypeVi}) [Tab]`
+      ? `BẢN ĐỒ HẦM NGỤC — Tầng ${sim.currentFloor}/${sim.campaignMaxFloors} (${roomTypeVi}) [Tab]`
       : sim.inHub
         ? `Doanh Trại Co-op [Tab]`
-        : `T${sim.currentFloor}/2 · ${roomTypeVi} [Tab]`;
+        : `T${sim.currentFloor}/${sim.campaignMaxFloors} · ${roomTypeVi} [Tab]`;
     if (this.minimapTitleText.text !== titleStr) {
       this.minimapTitleText.setText(titleStr);
     }
@@ -4606,10 +4783,12 @@ export class GameScene extends Phaser.Scene {
   private updateBossHud(): void {
     const sim = this.transport.getSim();
     const boss = sim.getActiveBoss();
+    const stunActive = boss && boss.aiState === 'stunned' && boss.stateTimer > 0 ? 1 : 0;
+    const coreWin = Math.ceil(sim.titanCoreWindowTimer);
     const bossHash =
       !boss || this.fullMapOpen || sim.runState !== 'playing'
         ? ''
-        : `${boss.id}:${boss.hp}:${boss.maxHp}:${boss.bossPhase}`;
+        : `${boss.defId}:${boss.id}:${boss.hp}:${boss.maxHp}:${boss.bossPhase}:${stunActive}:${coreWin}`;
     if (bossHash === this.lastBossHudHash) return;
     this.lastBossHudHash = bossHash;
 
@@ -4622,7 +4801,14 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.bossTitleText.setVisible(true);
-    const titleStr = `MỤC VƯƠNG NẤM ĐỘC (Pha ${boss.bossPhase}/3) — HP ${boss.hp}/${boss.maxHp}`;
+    const bossNameVi = (ENEMIES[boss.defId]?.nameVi ?? 'Mục Vương Nấm Độc').toUpperCase();
+    const statusSuffix =
+      boss.aiState === 'stunned' && boss.stateTimer > 0
+        ? ' · ⚡ QUÁ TẢI CHOÁNG (x1.5 ST)!'
+        : sim.titanCoreWindowTimer > 0
+          ? ` · [PHÁ 2 LÕI TRONG ${Math.ceil(sim.titanCoreWindowTimer)}s]`
+          : '';
+    const titleStr = `${bossNameVi} (Pha ${boss.bossPhase}/3) — HP ${boss.hp}/${boss.maxHp}${statusSuffix}`;
     if (this.bossTitleText.text !== titleStr) {
       this.bossTitleText.setText(titleStr);
     }
@@ -4638,11 +4824,19 @@ export class GameScene extends Phaser.Scene {
     g.fillRoundedRect(bx, by, bw, bh, 5);
 
     const fillHex =
-      boss.bossPhase === 3
-        ? PALETTE.TOXIC_PURPLE
-        : boss.bossPhase === 2
-          ? PALETTE.FLAME_ORANGE
-          : PALETTE.RUBY_CORE;
+      boss.defId === 'kryssa_ice_queen'
+        ? boss.bossPhase === 3
+          ? PALETTE.AZURE_CORE
+          : PALETTE.CYAN_FROST
+        : boss.defId === 'forge_titan'
+          ? boss.bossPhase === 3
+            ? PALETTE.MAGMA_RED
+            : PALETTE.FLAME_ORANGE
+          : boss.bossPhase === 3
+            ? PALETTE.TOXIC_PURPLE
+            : boss.bossPhase === 2
+              ? PALETTE.FLAME_ORANGE
+              : PALETTE.RUBY_CORE;
     if (ratio > 0) {
       g.fillStyle(hexToNum(fillHex), 1);
       g.fillRoundedRect(bx + 2, by + 2, Math.max(4, (bw - 4) * ratio), bh - 4, 3.5);
@@ -4749,6 +4943,12 @@ export class GameScene extends Phaser.Scene {
       });
     } else if ((sim.runState === 'victory' || sim.runState === 'defeat') && !this.resultDismissed) {
       const isWin = sim.runState === 'victory';
+      const biomeNameVi =
+        sim.currentBiome === 2
+          ? 'Hầm Băng Vĩnh Cửu'
+          : sim.currentBiome === 3
+            ? 'Lò Rèn Dung Nham'
+            : 'Rừng Mục Cổ Đại';
       const bg = this.add.graphics();
       bg.fillStyle(hexToNum(PALETTE.INK_DEEP), 0.94);
       bg.lineStyle(3, hexToNum(isWin ? PALETTE.SOLAR_GOLD : PALETTE.CRIMSON_BRIGHT), 1);
@@ -4760,7 +4960,9 @@ export class GameScene extends Phaser.Scene {
         .text(
           480,
           120,
-          isWin ? 'CHIẾN THẮNG! MỤC VƯƠNG ĐÃ BỊ TIÊU DIỆT' : 'THẤT BẠI NƠI HẦM NGỤC RỪNG MỤC',
+          isWin
+            ? `CHIẾN THẮNG! CHINH PHỤC ${biomeNameVi.toUpperCase()}`
+            : `THẤT BẠI NƠI ${biomeNameVi.toUpperCase()}`,
           {
             fontFamily: '"Be Vietnam Pro", sans-serif',
             fontSize: '16px',
@@ -4785,7 +4987,7 @@ export class GameScene extends Phaser.Scene {
       const secs = totalSec % 60;
       const timeStr = `${mins}p ${secs < 10 ? '0' : ''}${secs}s`;
       const summaryLines = [
-        `• Tầng đạt được: Tầng ${sim.currentFloor}/2 (Rừng Mục Cổ Đại)`,
+        `• Tầng đạt được: Tầng ${sim.currentFloor} (${biomeNameVi})`,
         `• Thời gian lượt chơi: ${timeStr}`,
         `• Phòng đã dọn sạch: ${sim.runStats.roomsCleared} phòng`,
         `• Kẻ địch tiêu diệt: ${sim.runStats.kills} quái (Tinh Anh: ${sim.runStats.elitesKilled})`,
@@ -4904,6 +5106,7 @@ export class GameScene extends Phaser.Scene {
     // Phase 3 telemetry
     const currentRoom = sim.getCurrentRoom();
     const boss = sim.getActiveBoss();
+    debug.biome = sim.currentBiome;
     debug.currentFloor = sim.currentFloor;
     debug.currentRoomId = sim.currentRoomId;
     debug.currentRoomType = sim.inHub ? 'hub' : currentRoom.type;
@@ -4911,6 +5114,7 @@ export class GameScene extends Phaser.Scene {
     debug.playerGold = p.gold;
     debug.runState = sim.runState;
     debug.bossActive = boss !== null;
+    debug.bossDefId = boss ? boss.defId : null;
     debug.bossPhase = boss ? boss.bossPhase : 0;
     debug.bossHp = boss ? boss.hp : 0;
     debug.bossMaxHp = boss ? boss.maxHp : 0;
@@ -4942,6 +5146,14 @@ export class GameScene extends Phaser.Scene {
     debug.elementalReactions = sim.runStats.elementalReactions;
     debug.activeSummonCount = sim.summons.length;
     debug.activeSkillZoneCount = sim.skillZones.length;
+
+    // Phase 6 telemetry
+    debug.blizzardVeilActive = this.lighting.isBlizzardVeilActive();
+    debug.conveyorDirection = sim.map.conveyorDirection;
+    debug.pressurePlatesSolved = sim.coopPuzzleCompleted;
+    debug.pressurePlateCount = sim.pressurePlates.length;
+    debug.shockwaveRingCount = sim.shockwaveRings.length;
+    debug.tetherBeamCount = sim.tetherBeams.length;
 
     const activeEnemyCount = this.activeEnemyIds.size;
     const totalEntities = 1 + sim.simulatedPlayers.length + activeEnemyCount + sim.summons.length;

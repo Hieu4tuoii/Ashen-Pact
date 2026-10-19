@@ -156,7 +156,11 @@ export interface EnemyStatsDef {
   attackCooldownSec: number;
   isBoss?: boolean;
   subtitleVi?: string;
+  flying?: boolean;
+  frontShieldReduction?: number;
+  isIllusion?: boolean;
 }
+
 
 export interface CoopScalingTier {
   playerCount: 1 | 2 | 3 | 4;

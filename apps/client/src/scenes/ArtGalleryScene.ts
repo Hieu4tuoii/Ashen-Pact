@@ -1,9 +1,9 @@
 import Phaser from 'phaser';
 import {
+  ALL_WEAPON_IDS,
   type CharacterId,
   CHARACTERS,
   FixedTimestepLoop,
-  PHASE3_WEAPON_IDS,
   VIETNAMESE_VERIFICATION_STRING,
   WEAPON_RARITY_COLORS,
   WEAPONS,
@@ -14,16 +14,31 @@ import {
 import { CutoutRig, type RigAnimState } from '../art/cutout-rig.js';
 import { hexToNum, PALETTE, PLAYER_SLOT_COLORS } from '../art/palette.js';
 import {
+  BABY_YETI_RIG_DEF,
+  COAL_GOLEM_RIG_DEF,
+  DWARF_CANNON_RIG_DEF,
+  FIRE_IMP_RIG_DEF,
+  FORGE_ENERGY_CORE_RIG_DEF,
+  FORGE_TITAN_RIG_DEF,
+  FROST_BAT_RIG_DEF,
   GOBLIN_SHAMAN_RIG_DEF,
   GOBLIN_SHOOTER_RIG_DEF,
   GREEN_SLIME_RIG_DEF,
+  ICE_GOLEM_RIG_DEF,
+  ICE_MAGE_RIG_DEF,
+  ICE_PRISON_RIG_DEF,
+  IRON_SHIELDER_RIG_DEF,
+  KRYSSA_CLONE_RIG_DEF,
+  KRYSSA_ICE_QUEEN_RIG_DEF,
   MERCHANT_RIG_DEF,
   MINI_SLIME_RIG_DEF,
   RIG_DEFS_BY_ID,
+  SNOW_SPIRIT_RIG_DEF,
   SPORE_BOMBER_RIG_DEF,
   SPORE_KING_RIG_DEF,
   THORN_TURRET_RIG_DEF,
   VANGUARD_RIG_DEF,
+  WELDER_DRONE_RIG_DEF,
   WILD_BOAR_RIG_DEF,
 } from '../art/rig-defs.js';
 import { TextureBaker } from '../art/texture-baker.js';
@@ -34,7 +49,7 @@ declare global {
     __GALLERY_SET_ANIM__?: (state: RigAnimState) => void;
     __GALLERY_SET_SLOT__?: (slot: 1 | 2 | 3 | 4) => void;
     __GALLERY_SET_BIOME__?: (biome: 1 | 2 | 3) => void;
-    __GALLERY_SET_PAGE__?: (page: 1 | 2 | 3 | 4) => void;
+    __GALLERY_SET_PAGE__?: (page: 1 | 2 | 3 | 4 | 5) => void;
   }
 }
 
@@ -42,14 +57,15 @@ export class ArtGalleryScene extends Phaser.Scene {
   private simLoop = new FixedTimestepLoop(60);
   private rigs: CutoutRig[] = [];
   private playerRigs: CutoutRig[] = [];
-  private floorTileSprites: { sprite: Phaser.GameObjects.Sprite; variant: number }[] = [];
+  private floorTileSprites: { sprite: Phaser.GameObjects.Sprite; variant: number; fixedBiome?: 1 | 2 | 3 }[] = [];
   private bakedSprites: { sprite: Phaser.GameObjects.Sprite; mult: number }[] = [];
   private textObjects: Phaser.GameObjects.Text[] = [];
   private pageContainers: Phaser.GameObjects.Container[] = [];
   private page2Built = false;
   private page3Built = false;
   private page4Built = false;
-  private currentPage: 1 | 2 | 3 | 4 = 1;
+  private page5Built = false;
+  private currentPage: 1 | 2 | 3 | 4 | 5 = 1;
   private currentAnim: RigAnimState = 'idle';
   private currentSlot: 1 | 2 | 3 | 4 = 1;
   private currentBiome: 1 | 2 | 3 = 1;
@@ -76,6 +92,7 @@ export class ArtGalleryScene extends Phaser.Scene {
     this.page2Built = false;
     this.page3Built = false;
     this.page4Built = false;
+    this.page5Built = false;
     this.currentPage = 1;
 
     this.applyCameraViewport();
@@ -124,21 +141,24 @@ export class ArtGalleryScene extends Phaser.Scene {
     this.textObjects.push(this.stateStatusText);
 
     // Page navigation buttons in top header
-    this.createSmallButton(502, 37, 84, 28, '1. Mẫu Chuẩn', PALETTE.AZURE_CORE, () => {
+    this.createSmallButton(428, 37, 78, 28, '1. Mẫu Chuẩn', PALETTE.AZURE_CORE, () => {
       this.setGalleryPage(1);
     });
-    this.createSmallButton(592, 37, 88, 28, '2. Quái & Boss', PALETTE.GOBLIN_GREEN, () => {
+    this.createSmallButton(512, 37, 82, 28, '2. Biome 1', PALETTE.GOBLIN_GREEN, () => {
       this.setGalleryPage(2);
     });
-    this.createSmallButton(686, 37, 94, 28, '3. Vũ Khí & Map', PALETTE.ELECTRIC_VIOLET, () => {
+    this.createSmallButton(600, 37, 86, 28, '3. 24 Vũ Khí', PALETTE.ELECTRIC_VIOLET, () => {
       this.setGalleryPage(3);
     });
-    this.createSmallButton(784, 37, 84, 28, '4. 5 Nhân Vật', PALETTE.RUBY_CORE, () => {
+    this.createSmallButton(692, 37, 82, 28, '4. 5 Nhân Vật', PALETTE.RUBY_CORE, () => {
       this.setGalleryPage(4);
+    });
+    this.createSmallButton(780, 37, 88, 28, '5. Biome 2 & 3', PALETTE.CYAN_FROST, () => {
+      this.setGalleryPage(5);
     });
 
     const menuBtn = this.add
-      .text(892, 28, '[Về Menu]', {
+      .text(898, 28, '[Về Menu]', {
         fontFamily: '"Be Vietnam Pro", sans-serif',
         fontSize: '12px',
         fontStyle: '700',
@@ -152,12 +172,13 @@ export class ArtGalleryScene extends Phaser.Scene {
     menuBtn.on('pointerdown', () => this.scene.start('MenuScene'));
     this.textObjects.push(menuBtn);
 
-    // 3. Build Gallery Page 1 initially (Pages 2, 3, 4 lazy-built on tab switch)
+    // 3. Build Gallery Page 1 initially (Pages 2, 3, 4, 5 lazy-built on tab switch)
     const p1 = this.add.container(0, 0);
     const p2 = this.add.container(0, 0);
     const p3 = this.add.container(0, 0);
     const p4 = this.add.container(0, 0);
-    this.pageContainers = [p1, p2, p3, p4];
+    const p5 = this.add.container(0, 0);
+    this.pageContainers = [p1, p2, p3, p4, p5];
 
     this.buildPage1StandardShowcase(p1);
     this.setGalleryPage(1);
@@ -171,12 +192,13 @@ export class ArtGalleryScene extends Phaser.Scene {
     window.__GALLERY_SET_ANIM__ = (state: RigAnimState) => this.setGalleryAnim(state);
     window.__GALLERY_SET_SLOT__ = (slot: 1 | 2 | 3 | 4) => this.setGallerySlot(slot);
     window.__GALLERY_SET_BIOME__ = (biome: 1 | 2 | 3) => this.setGalleryBiome(biome);
-    window.__GALLERY_SET_PAGE__ = (page: 1 | 2 | 3 | 4) => this.setGalleryPage(page);
+    window.__GALLERY_SET_PAGE__ = (page: 1 | 2 | 3 | 4 | 5) => this.setGalleryPage(page);
 
     this.input.keyboard?.on('keydown-ONE', () => this.setGalleryPage(1));
     this.input.keyboard?.on('keydown-TWO', () => this.setGalleryPage(2));
     this.input.keyboard?.on('keydown-THREE', () => this.setGalleryPage(3));
     this.input.keyboard?.on('keydown-FOUR', () => this.setGalleryPage(4));
+    this.input.keyboard?.on('keydown-FIVE', () => this.setGalleryPage(5));
   }
 
   private buildPage1StandardShowcase(parent: Phaser.GameObjects.Container): void {
@@ -341,21 +363,21 @@ export class ArtGalleryScene extends Phaser.Scene {
     const textRes = TextureBaker.getBakeScale();
     const invBake = 1 / textRes;
 
-    // 1. Weapons Panel (14 Weapons across 5 Rarities)
+    // 1. Weapons Panel (24 Weapons across 5 Rarities + Co-op Seed Gun & Tether Staff)
     const wepPanel = this.add.graphics();
     wepPanel.fillStyle(hexToNum(PALETTE.SLATE_DARK), 0.94);
     wepPanel.lineStyle(2, hexToNum(PALETTE.INK_DARK), 1);
-    wepPanel.fillRoundedRect(16, 72, 928, 252, 10);
-    wepPanel.strokeRoundedRect(16, 72, 928, 252, 10);
+    wepPanel.fillRoundedRect(16, 72, 928, 256, 10);
+    wepPanel.strokeRoundedRect(16, 72, 928, 256, 10);
     parent.add(wepPanel);
 
     const wepHeader = this.add.text(
-      32,
-      82,
-      'KHO VŨ KHÍ PROCEDURAL (14 MÓN · 5 ĐỘ HIẾM: COMMON → LEGENDARY)',
+      28,
+      80,
+      'KHO VŨ KHÍ PROCEDURAL (24 MÓN · 5 ĐỘ HIẾM · SÚNG HẠT GIỐNG & TRƯỢNG LIÊN KẾT CO-OP)',
       {
         fontFamily: '"Be Vietnam Pro", sans-serif',
-        fontSize: '13px',
+        fontSize: '12px',
         fontStyle: '800',
         color: PALETTE.SOLAR_GOLD,
         stroke: PALETTE.INK_DARK,
@@ -366,41 +388,41 @@ export class ArtGalleryScene extends Phaser.Scene {
     this.textObjects.push(wepHeader);
     parent.add(wepHeader);
 
-    const cardW = 124;
-    const cardH = 96;
-    PHASE3_WEAPON_IDS.forEach((wId, idx) => {
+    const cardW = 109;
+    const cardH = 68;
+    ALL_WEAPON_IDS.forEach((wId, idx) => {
       const wDef = WEAPONS[wId];
       if (!wDef) return;
-      const col = idx % 7;
-      const row = Math.floor(idx / 7);
-      const wx = 28 + col * (cardW + 6);
-      const wy = 110 + row * (cardH + 8);
+      const col = idx % 8;
+      const row = Math.floor(idx / 8);
+      const wx = 26 + col * (cardW + 5);
+      const wy = 104 + row * (cardH + 5);
       const rarityHex = WEAPON_RARITY_COLORS[wDef.rarity];
 
       const cg = this.add.graphics();
       cg.fillStyle(hexToNum(PALETTE.INK_DEEP), 0.9);
-      cg.lineStyle(2, hexToNum(rarityHex), 1);
-      cg.fillRoundedRect(wx, wy, cardW, cardH, 7);
-      cg.strokeRoundedRect(wx, wy, cardW, cardH, 7);
+      cg.lineStyle(1.8, hexToNum(rarityHex), 1);
+      cg.fillRoundedRect(wx, wy, cardW, cardH, 6);
+      cg.strokeRoundedRect(wx, wy, cardW, cardH, 6);
       parent.add(cg);
 
       const spr = this.add.sprite(
         wx + cardW / 2,
-        wy + 34,
+        wy + 23,
         TextureBaker.getWeaponTextureKey(wId),
       );
-      spr.setScale(invBake * 1.15);
-      this.bakedSprites.push({ sprite: spr, mult: 1.15 });
+      spr.setScale(invBake * 0.96);
+      this.bakedSprites.push({ sprite: spr, mult: 0.96 });
       parent.add(spr);
 
       const wName = this.add
-        .text(wx + cardW / 2, wy + 64, wDef.nameVi, {
+        .text(wx + cardW / 2, wy + 46, wDef.nameVi, {
           fontFamily: '"Be Vietnam Pro", sans-serif',
-          fontSize: '9.5px',
+          fontSize: '8.5px',
           fontStyle: '800',
           color: rarityHex,
           stroke: PALETTE.INK_DARK,
-          strokeThickness: 2.5,
+          strokeThickness: 2.2,
           resolution: textRes,
         })
         .setOrigin(0.5);
@@ -408,9 +430,9 @@ export class ArtGalleryScene extends Phaser.Scene {
       parent.add(wName);
 
       const wMeta = this.add
-        .text(wx + cardW / 2, wy + 80, `ST ${wDef.damage} · NL ${wDef.energyCost}`, {
+        .text(wx + cardW / 2, wy + 59, `ST ${wDef.damage} · NL ${wDef.energyCost}`, {
           fontFamily: '"Be Vietnam Pro", sans-serif',
-          fontSize: '9px',
+          fontSize: '8px',
           color: PALETTE.SILVER_BRIGHT,
           resolution: textRes,
         })
@@ -423,17 +445,17 @@ export class ArtGalleryScene extends Phaser.Scene {
     const propPanel = this.add.graphics();
     propPanel.fillStyle(hexToNum(PALETTE.SLATE_DARK), 0.94);
     propPanel.lineStyle(2, hexToNum(PALETTE.INK_DARK), 1);
-    propPanel.fillRoundedRect(16, 332, 928, 120, 10);
-    propPanel.strokeRoundedRect(16, 332, 928, 120, 10);
+    propPanel.fillRoundedRect(16, 334, 928, 118, 10);
+    propPanel.strokeRoundedRect(16, 334, 928, 118, 10);
     parent.add(propPanel);
 
     const propHeader = this.add.text(
-      32,
+      28,
       342,
-      'CÔNG TRÌNH HẦM NGỤC: 5 RƯƠNG ĐỘ HIẾM · CỬA KHÓA/MỞ · TƯỢNG THẦN · CỔNG DỊCH CHUYỂN · VẬT PHẨM',
+      'CÔNG TRÌNH HẦM NGỤC: 5 RƯƠNG · CỬA · TƯỢNG THẦN · TRỤ PHA LÊ · TẤM ÁP LỰC · KHỐI ĐÁ · BĂNG CHUYỀN',
       {
         fontFamily: '"Be Vietnam Pro", sans-serif',
-        fontSize: '12px',
+        fontSize: '11.5px',
         fontStyle: '800',
         color: PALETTE.CYAN_FROST,
         stroke: PALETTE.INK_DARK,
@@ -458,24 +480,26 @@ export class ArtGalleryScene extends Phaser.Scene {
         label: chestLabelsVi[r],
       })),
       { tex: 'door_locked', label: 'Cửa Khóa' },
-      { tex: 'door_open', label: 'Cửa Mở' },
       { tex: 'prop_shrine_statue', label: 'Tượng Thần' },
+      { tex: 'prop_crystal_pillar', label: 'Trụ Pha Lê' },
+      { tex: 'prop_pressure_plate_on', label: 'Tấm Áp Lực' },
+      { tex: 'prop_push_block', label: 'Khối Đá Đẩy' },
+      { tex: 'surface_conveyor', label: 'Băng Chuyền' },
       { tex: 'portal_active', label: 'Cổng Tầng' },
-      { tex: 'item_health_potion', label: 'Bình Máu' },
     ];
 
     propItems.forEach((pItem, idx) => {
-      const px = 64 + idx * 88;
+      const px = 52 + idx * 75;
       const py = 398;
       const spr = this.add.sprite(px, py, pItem.tex);
-      spr.setScale(invBake * 0.9);
-      this.bakedSprites.push({ sprite: spr, mult: 0.9 });
+      spr.setScale(invBake * 0.85);
+      this.bakedSprites.push({ sprite: spr, mult: 0.85 });
       parent.add(spr);
 
       const lbl = this.add
         .text(px, py + 36, pItem.label, {
           fontFamily: '"Be Vietnam Pro", sans-serif',
-          fontSize: '9.5px',
+          fontSize: '8.5px',
           fontStyle: '700',
           color: PALETTE.BONE_WHITE,
           stroke: PALETTE.INK_DARK,
@@ -603,6 +627,189 @@ export class ArtGalleryScene extends Phaser.Scene {
       this.textObjects.push(tDesc);
       parent.add(tDesc);
     });
+  }
+
+  private buildPage5Biome2And3Showcase(parent: Phaser.GameObjects.Container): void {
+    const textRes = TextureBaker.getBakeScale();
+    const invBake = 1 / textRes;
+
+    const biome2Entries = [
+      {
+        title: 'Dơi Băng',
+        sub: 'Bay nhanh · Lao thẳng',
+        rigDef: FROST_BAT_RIG_DEF,
+        scale: 1.15,
+      },
+      {
+        title: 'Yeti Con',
+        sub: 'Đập đất làm chậm',
+        rigDef: BABY_YETI_RIG_DEF,
+        scale: 1.15,
+      },
+      {
+        title: 'Pháp Sư Băng',
+        sub: 'Cầu băng khóa chân',
+        rigDef: ICE_MAGE_RIG_DEF,
+        scale: 1.15,
+      },
+      {
+        title: 'Golem Băng',
+        sub: 'Khiên băng trước -78%',
+        rigDef: ICE_GOLEM_RIG_DEF,
+        scale: 1.1,
+      },
+      {
+        title: 'Tinh Linh Tuyết',
+        sub: 'Tự nổ đóng băng AoE',
+        rigDef: SNOW_SPIRIT_RIG_DEF,
+        scale: 1.15,
+      },
+      {
+        title: 'Phân Thân & Lồng',
+        sub: 'Không bóng đổ · Nhốt P',
+        rigDef: KRYSSA_CLONE_RIG_DEF,
+        scale: 0.92,
+        companionDef: ICE_PRISON_RIG_DEF,
+        hideShadow: true,
+      },
+      {
+        title: 'BOSS: BĂNG HẬU KRYSSA',
+        sub: 'Laser Phản Xạ · Phân Thân · Bão Tuyết',
+        rigDef: KRYSSA_ICE_QUEEN_RIG_DEF,
+        scale: 0.98,
+        isBoss: true,
+      },
+    ];
+
+    const biome3Entries = [
+      {
+        title: 'Tiểu Quỷ Lửa',
+        sub: 'Đông đảo · Nhả đạn lửa',
+        rigDef: FIRE_IMP_RIG_DEF,
+        scale: 1.15,
+      },
+      {
+        title: 'Lùn Pháo Thủ',
+        sub: 'Bắn pháo cối nổ AoE',
+        rigDef: DWARF_CANNON_RIG_DEF,
+        scale: 1.15,
+      },
+      {
+        title: 'Golem Than',
+        sub: 'Chết để lại hồ dung nham',
+        rigDef: COAL_GOLEM_RIG_DEF,
+        scale: 1.1,
+      },
+      {
+        title: 'Drone Hàn',
+        sub: 'Bay · Bơm giáp đồng minh',
+        rigDef: WELDER_DRONE_RIG_DEF,
+        scale: 1.15,
+      },
+      {
+        title: 'Khiên Thủ Sắt',
+        sub: 'Khiên thép trước -80%',
+        rigDef: IRON_SHIELDER_RIG_DEF,
+        scale: 1.12,
+      },
+      {
+        title: 'Lõi Năng Lượng Lò',
+        sub: 'Phá 2 lõi trong 3s choáng',
+        rigDef: FORGE_ENERGY_CORE_RIG_DEF,
+        scale: 1.05,
+      },
+      {
+        title: 'BOSS: TITAN LÒ RÈN',
+        sub: 'Sóng Xung Kích · 2 Lõi · Lửa 360°',
+        rigDef: FORGE_TITAN_RIG_DEF,
+        scale: 0.94,
+        isBoss: true,
+      },
+    ];
+
+    const renderBiomeRow = (
+      entries: typeof biome2Entries,
+      rowIdx: number,
+      biomeId: 2 | 3,
+      accentHex: string,
+    ) => {
+      const cy = 72 + rowIdx * 192;
+      entries.forEach((item, idx) => {
+        const isBoss = Boolean(item.isBoss);
+        const cardW = isBoss ? 172 : 120;
+        const cardH = 182;
+        const cx = 16 + idx * 125;
+
+        const g = this.add.graphics();
+        g.fillStyle(hexToNum(PALETTE.SLATE_DARK), 0.95);
+        g.lineStyle(2, hexToNum(isBoss ? PALETTE.SOLAR_GOLD : accentHex), 1);
+        g.fillRoundedRect(cx, cy, cardW, cardH, 8);
+        g.strokeRoundedRect(cx, cy, cardW, cardH, 8);
+        parent.add(g);
+
+        const tileCols = isBoss ? 4 : 3;
+        for (let tx = 0; tx < tileCols; tx++) {
+          for (let ty = 0; ty < 3; ty++) {
+            const variant = (tx + ty + idx) % 8;
+            const spr = this.add.sprite(
+              cx + 12 + tx * 32 + 16,
+              cy + 58 + ty * 32 + 16,
+              TextureBaker.getBiomeTileTextureKey(biomeId, variant),
+            );
+            spr.setScale(invBake);
+            this.floorTileSprites.push({ sprite: spr, variant, fixedBiome: biomeId });
+            parent.add(spr);
+          }
+        }
+
+        const rig = new CutoutRig(
+          this,
+          cx + (item.companionDef ? 42 : cardW / 2),
+          cy + 122,
+          item.rigDef,
+          { displayScale: item.scale },
+        );
+        if (item.hideShadow) {
+          rig.setShadowVisible(false);
+        }
+        rig.setAnimState(this.currentAnim);
+        this.rigs.push(rig);
+        parent.add(rig.container);
+
+        if (item.companionDef) {
+          const comp = new CutoutRig(this, cx + 86, cy + 124, item.companionDef, {
+            displayScale: 0.92,
+          });
+          comp.setAnimState(this.currentAnim);
+          this.rigs.push(comp);
+          parent.add(comp.container);
+        }
+
+        const tTitle = this.add.text(cx + 8, cy + 8, item.title, {
+          fontFamily: '"Be Vietnam Pro", sans-serif',
+          fontSize: isBoss ? '10.5px' : '9.5px',
+          fontStyle: '800',
+          color: isBoss ? PALETTE.SOLAR_GOLD : PALETTE.BONE_WHITE,
+          stroke: PALETTE.INK_DARK,
+          strokeThickness: 2.5,
+          resolution: textRes,
+        });
+        this.textObjects.push(tTitle);
+        parent.add(tTitle);
+
+        const tSub = this.add.text(cx + 8, cy + 25, item.sub, {
+          fontFamily: '"Be Vietnam Pro", sans-serif',
+          fontSize: '8px',
+          color: PALETTE.SILVER_BRIGHT,
+          resolution: textRes,
+        });
+        this.textObjects.push(tSub);
+        parent.add(tSub);
+      });
+    };
+
+    renderBiomeRow(biome2Entries, 0, 2, PALETTE.CYAN_FROST);
+    renderBiomeRow(biome3Entries, 1, 3, PALETTE.FLAME_ORANGE);
   }
 
   private createEntityStage(
@@ -856,7 +1063,7 @@ export class ArtGalleryScene extends Phaser.Scene {
     container.add([bg, txt, hit]);
   }
 
-  public setGalleryPage(page: 1 | 2 | 3 | 4): void {
+  public setGalleryPage(page: 1 | 2 | 3 | 4 | 5): void {
     const zoom = Math.min(
       this.scale.width / WORLD_VIEW_WIDTH,
       this.scale.height / WORLD_VIEW_HEIGHT,
@@ -873,6 +1080,10 @@ export class ArtGalleryScene extends Phaser.Scene {
       TextureBaker.bakeAll(this, zoom, false);
       this.buildPage4CharactersAndSynergy(this.pageContainers[3]);
       this.page4Built = true;
+    } else if (page === 5 && !this.page5Built && this.pageContainers[4]) {
+      TextureBaker.bakeAll(this, zoom, false);
+      this.buildPage5Biome2And3Showcase(this.pageContainers[4]);
+      this.page5Built = true;
     }
     this.currentPage = page;
     initGlobalDebugState().galleryPage = page;
@@ -906,7 +1117,8 @@ export class ArtGalleryScene extends Phaser.Scene {
     this.currentBiome = biome;
     const invBake = 1 / TextureBaker.getBakeScale();
     for (const item of this.floorTileSprites) {
-      item.sprite.setTexture(TextureBaker.getBiomeTileTextureKey(biome, item.variant));
+      const targetBiome = item.fixedBiome ?? biome;
+      item.sprite.setTexture(TextureBaker.getBiomeTileTextureKey(targetBiome, item.variant));
       item.sprite.setScale(invBake);
     }
     const debug = initGlobalDebugState();
@@ -917,7 +1129,7 @@ export class ArtGalleryScene extends Phaser.Scene {
   private updateStatusBanner(): void {
     const slotInfo = PLAYER_SLOT_COLORS[this.currentSlot];
     this.stateStatusText?.setText(
-      `Trang ${this.currentPage}/4 · Anim: ${this.currentAnim.toUpperCase()} · ${slotInfo.labelVi} · Biome ${this.currentBiome} · Bake: ${TextureBaker.getBakeScale()}x`,
+      `Trang ${this.currentPage}/5 · Anim: ${this.currentAnim.toUpperCase()} · ${slotInfo.labelVi} · Biome ${this.currentBiome} · Bake: ${TextureBaker.getBakeScale()}x`,
     );
   }
 
@@ -930,7 +1142,7 @@ export class ArtGalleryScene extends Phaser.Scene {
     );
     const prevScale = TextureBaker.getBakeScale();
     const newScale =
-      !this.page2Built && !this.page3Built && !this.page4Built
+      !this.page2Built && !this.page3Built && !this.page4Built && !this.page5Built
         ? TextureBaker.bakeGalleryPage1(this, zoom)
         : TextureBaker.bakeAll(this, zoom, false);
     if (newScale !== prevScale) {
@@ -939,7 +1151,8 @@ export class ArtGalleryScene extends Phaser.Scene {
       }
       const invBake = 1 / newScale;
       for (const item of this.floorTileSprites) {
-        item.sprite.setTexture(TextureBaker.getBiomeTileTextureKey(this.currentBiome, item.variant));
+        const targetBiome = item.fixedBiome ?? this.currentBiome;
+        item.sprite.setTexture(TextureBaker.getBiomeTileTextureKey(targetBiome, item.variant));
         item.sprite.setScale(invBake);
       }
       for (const item of this.bakedSprites) {

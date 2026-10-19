@@ -16,7 +16,9 @@ export type SurfaceKind =
   | 'ash'
   | 'poison_swamp'
   | 'lava'
-  | 'ice';
+  | 'ice'
+  | 'chasm'
+  | 'conveyor';
 
 export const AUTOTILE_NORTH = 1;
 export const AUTOTILE_EAST = 2;
@@ -33,6 +35,7 @@ export interface ArenaMapConfig {
   includePillars?: boolean;
   includeSurfaces?: boolean;
   seed?: number | string;
+  biome?: 1 | 2 | 3;
 }
 
 /**
@@ -50,6 +53,8 @@ export class ArenaMap {
   public readonly baseSurfaces: SurfaceKind[];
   public readonly surfaceTimers: number[];
   public readonly solidBoxes: AABB[];
+  public biome: 1 | 2 | 3;
+  public conveyorDirection: 1 | -1 = 1;
   public mapRevision = 1;
 
   constructor(config: ArenaMapConfig = {}) {
@@ -57,6 +62,7 @@ export class ArenaMap {
     this.rows = config.rows ?? 22;
     this.width = this.cols * TILE_SIZE;
     this.height = this.rows * TILE_SIZE;
+    this.biome = config.biome ?? 1;
 
     const count = this.cols * this.rows;
     this.tiles = new Array<TileKind>(count).fill('floor');
@@ -74,11 +80,20 @@ export class ArenaMap {
     this.buildLayout(config.includePillars ?? true, config.includeSurfaces ?? true);
   }
 
+  public reverseConveyorDirection(): 1 | -1 {
+    this.conveyorDirection = this.conveyorDirection === 1 ? -1 : 1;
+    this.mapRevision += 1;
+    return this.conveyorDirection;
+  }
+
   public configureRoomLayout(
     roomType: RoomType,
     roomSeed: number,
     secretWallBroken = false,
+    biome: 1 | 2 | 3 = this.biome,
   ): void {
+    this.biome = biome;
+    this.conveyorDirection = 1;
     const count = this.cols * this.rows;
     const rng = new SeededRandom(roomSeed).fork(`room_${roomType}`);
     for (let i = 0; i < count; i++) {
@@ -91,6 +106,20 @@ export class ArenaMap {
 
     if (roomType === 'start') {
       this.buildLayout(true, true);
+      if (biome === 2) {
+        this.fillSurfaceRect(11, 3, 4, 3, 'ice');
+        this.fillSurfaceRect(17, 3, 4, 3, 'water');
+        this.fillSurfaceRect(22, 3, 3, 3, 'chasm');
+        this.fillSurfaceRect(11, 16, 4, 3, 'ice');
+        this.fillSurfaceRect(16, 16, 4, 3, 'ice');
+        this.fillSurfaceRect(22, 16, 3, 3, 'water');
+      } else if (biome === 3) {
+        this.fillSurfaceRect(11, 3, 9, 2, 'conveyor');
+        this.fillSurfaceRect(22, 3, 3, 3, 'lava');
+        this.fillSurfaceRect(11, 16, 4, 3, 'oil');
+        this.fillSurfaceRect(16, 16, 5, 2, 'conveyor');
+        this.fillSurfaceRect(22, 16, 3, 3, 'lava');
+      }
       if (secretWallBroken && this.cols >= 24) {
         this.setTile(Math.floor(this.cols / 2), 0, 'floor');
         this.rebuildSolidBoxes();
@@ -136,38 +165,70 @@ export class ArenaMap {
         placePillar2x2(10, 14);
         placePillar2x2(24, 14);
       }
-      // Biome 1 tactical surfaces (water, grass, poison_swamp, oil)
-      this.fillSurfaceRect(13, 3, 4, 3, 'water');
-      this.fillSurfaceRect(19, 3, 4, 3, 'grass');
-      this.fillSurfaceRect(13, 16, 4, 3, 'poison_swamp');
-      this.fillSurfaceRect(19, 16, 4, 3, 'oil');
+      if (biome === 2) {
+        // Biome 2 Frozen Depths tactical surfaces (ice sheets, freezing water, chasm pits)
+        this.fillSurfaceRect(13, 3, 5, 3, 'ice');
+        this.fillSurfaceRect(19, 3, 4, 3, 'water');
+        this.fillSurfaceRect(13, 16, 5, 3, 'ice');
+        this.fillSurfaceRect(20, 16, 3, 2, 'chasm');
+      } else if (biome === 3) {
+        // Biome 3 Molten Forge tactical surfaces (conveyor belts, molten lava, oil slicks)
+        this.fillSurfaceRect(12, 4, 12, 2, 'conveyor');
+        this.fillSurfaceRect(12, 16, 12, 2, 'conveyor');
+        this.fillSurfaceRect(5, 8, 3, 3, 'lava');
+        this.fillSurfaceRect(28, 11, 3, 3, 'oil');
+      } else {
+        // Biome 1 tactical surfaces (water, grass, poison_swamp, oil)
+        this.fillSurfaceRect(13, 3, 4, 3, 'water');
+        this.fillSurfaceRect(19, 3, 4, 3, 'grass');
+        this.fillSurfaceRect(13, 16, 4, 3, 'poison_swamp');
+        this.fillSurfaceRect(19, 16, 4, 3, 'oil');
+      }
     } else if (roomType === 'boss') {
-      // Wide open Boss Arena with 4 corner cover pillars and moss/water patches
+      // Wide open Boss Arena with 4 corner cover pillars
       placePillar2x2(7, 4);
       placePillar2x2(27, 4);
       placePillar2x2(7, 16);
       placePillar2x2(27, 16);
-      this.fillSurfaceRect(10, 4, 3, 2, 'grass');
-      this.fillSurfaceRect(23, 4, 3, 2, 'grass');
-      this.fillSurfaceRect(10, 16, 3, 2, 'water');
-      this.fillSurfaceRect(23, 16, 3, 2, 'poison_swamp');
+      if (biome === 2) {
+        // Ice Queen Kryssa Arena: slippery ice rings and freezing water pools
+        this.fillSurfaceRect(11, 4, 5, 3, 'ice');
+        this.fillSurfaceRect(20, 4, 5, 3, 'ice');
+        this.fillSurfaceRect(11, 15, 5, 3, 'water');
+        this.fillSurfaceRect(20, 15, 5, 3, 'ice');
+      } else if (biome === 3) {
+        // Forge Titan Arena: twin horizontal conveyor lanes + corner lava pools
+        this.fillSurfaceRect(11, 5, 14, 2, 'conveyor');
+        this.fillSurfaceRect(11, 15, 14, 2, 'conveyor');
+        this.fillSurfaceRect(4, 4, 2, 3, 'lava');
+        this.fillSurfaceRect(30, 4, 2, 3, 'lava');
+        this.fillSurfaceRect(4, 15, 2, 3, 'lava');
+        this.fillSurfaceRect(30, 15, 2, 3, 'lava');
+      } else {
+        this.fillSurfaceRect(10, 4, 3, 2, 'grass');
+        this.fillSurfaceRect(23, 4, 3, 2, 'grass');
+        this.fillSurfaceRect(10, 16, 3, 2, 'water');
+        this.fillSurfaceRect(23, 16, 3, 2, 'poison_swamp');
+      }
     } else {
       // Sanctuary rooms: treasure, merchant, shrine, secret, portal
       placePillar2x2(7, 4);
       placePillar2x2(27, 4);
       placePillar2x2(7, 16);
       placePillar2x2(27, 16);
+      const accentA: SurfaceKind = biome === 2 ? 'ice' : biome === 3 ? 'conveyor' : 'water';
+      const accentB: SurfaceKind = biome === 2 ? 'water' : biome === 3 ? 'oil' : 'grass';
       if (roomType === 'shrine' || roomType === 'portal') {
-        this.fillSurfaceRect(12, 5, 3, 3, 'water');
-        this.fillSurfaceRect(21, 5, 3, 3, 'water');
-        this.fillSurfaceRect(12, 14, 3, 3, 'grass');
-        this.fillSurfaceRect(21, 14, 3, 3, 'grass');
+        this.fillSurfaceRect(12, 5, 3, 3, accentA);
+        this.fillSurfaceRect(21, 5, 3, 3, accentA);
+        this.fillSurfaceRect(12, 14, 3, 3, accentB);
+        this.fillSurfaceRect(21, 14, 3, 3, accentB);
       } else if (roomType === 'secret') {
-        this.fillSurfaceRect(11, 5, 3, 3, 'grass');
-        this.fillSurfaceRect(22, 5, 3, 3, 'grass');
+        this.fillSurfaceRect(11, 5, 3, 3, accentB);
+        this.fillSurfaceRect(22, 5, 3, 3, accentB);
       } else {
-        this.fillSurfaceRect(10, 5, 3, 2, 'grass');
-        this.fillSurfaceRect(23, 5, 3, 2, 'grass');
+        this.fillSurfaceRect(10, 5, 3, 2, accentB);
+        this.fillSurfaceRect(23, 5, 3, 2, accentB);
       }
     }
 
@@ -207,6 +268,37 @@ export class ArenaMap {
       }
     }
   }
+
+  /**
+   * Boss 2 Kryssa Phase 3 ("Bão Tuyết Vĩnh Cửu"): freezes the outer ring of the Boss Arena into slippery ice.
+   */
+  public applyBossPhase3BlizzardBorder(): void {
+    for (let ty = 1; ty < this.rows - 1; ty++) {
+      for (let tx = 1; tx < this.cols - 1; tx++) {
+        const isOuterRing =
+          tx <= 3 || tx >= this.cols - 4 || ty <= 2 || ty >= this.rows - 3;
+        if (isOuterRing && !this.isSolidTile(tx, ty)) {
+          this.setSurface(tx, ty, 'ice', 0, true);
+        }
+      }
+    }
+  }
+
+  /**
+   * Boss 3 Forge Titan Phase 3 ("Quá Nhiệt Dung Nham"): floods the outer ring of the Boss Arena with molten lava.
+   */
+  public applyBossPhase3LavaBorder(): void {
+    for (let ty = 1; ty < this.rows - 1; ty++) {
+      for (let tx = 1; tx < this.cols - 1; tx++) {
+        const isOuterRing =
+          tx <= 2 || tx >= this.cols - 3 || ty <= 2 || ty >= this.rows - 3;
+        if (isOuterRing && !this.isSolidTile(tx, ty)) {
+          this.setSurface(tx, ty, 'lava', 0, true);
+        }
+      }
+    }
+  }
+
 
 
   private buildLayout(includePillars: boolean, includeSurfaces: boolean): void {

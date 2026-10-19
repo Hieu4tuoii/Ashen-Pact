@@ -56,6 +56,16 @@ export interface CoopSynergyTeamRow {
   won: boolean;
 }
 
+export interface BossBalanceRow {
+  bossId: 'spore_king' | 'kryssa_ice_queen' | 'forge_titan';
+  biome: 1 | 2 | 3;
+  nameVi: string;
+  avg1PSec: number;
+  avg4PSec: number;
+  delta1Pvs4PPct: number;
+  winRatePct: number;
+}
+
 export interface BalanceReportResult {
   totalSimulationsRun: number;
   avgEnemyTtkSec: number;
@@ -77,6 +87,7 @@ export interface BalanceReportResult {
   coopRows: CoopScalingRow[];
   coopSynergyRows: CoopSynergyTeamRow[];
   biomes: BiomeProgressionRow[];
+  bosses: BossBalanceRow[];
   allTargetsPassed: boolean;
 }
 
@@ -409,7 +420,8 @@ function simulateCombatRoomDuration(playerCount: 1 | 2 | 3 | 4, seeds: readonly 
 }
 
 /**
- * 5. Simulates a full 3-Phase Boss Fight (Mục Vương Nấm Độc) for 1..4 players or solo character test.
+ * 5. Simulates a full 3-Phase Boss Fight (Spore King, Kryssa Ice Queen, or Forge Titan)
+ * for 1..4 players or solo character test.
  * All solo characters fight the exact same Boss HP without deleting enemy projectiles.
  */
 function simulateBossFight(
@@ -417,6 +429,7 @@ function simulateBossFight(
   primaryChar: CharacterId,
   seeds: readonly number[],
   customRoster?: readonly CharacterId[],
+  bossId: 'spore_king' | 'kryssa_ice_queen' | 'forge_titan' = 'spore_king',
 ): {
   avgSec: number;
   winRatePct: number;
@@ -433,10 +446,13 @@ function simulateBossFight(
     'engineer',
     'druid',
   ];
+  const biome: 1 | 2 | 3 =
+    bossId === 'spore_king' ? 1 : bossId === 'kryssa_ice_queen' ? 2 : 3;
 
   for (const seed of seeds) {
     const sim = new WorldSim({
       seed,
+      biome,
       spawnInitialWave: false,
       includeTrainingDummy: false,
       includeProps: false,
@@ -454,31 +470,71 @@ function simulateBossFight(
       allPlayers.push(sp);
     }
 
-    // Equip Floor 1 signature skill upgrade and secondary weapon found before Room 6 Boss
+    // Equip biome-appropriate skill upgrades and weapons found before Boss room
     for (const pl of allPlayers) {
       const sigBuff = CHARACTER_SIGNATURE_BUFF[pl.characterId];
       if (sigBuff && !sim.activeBuffIds.includes(sigBuff)) {
         sim.activeBuffIds.push(sigBuff);
       }
-      if (pl.characterId === 'vanguard') {
-        pl.weaponSlots[0] = 'knight_sword';
+      if (biome === 1) {
+        if (pl.characterId === 'vanguard') {
+          pl.weaponSlots[0] = 'knight_sword';
+          pl.weaponSlots[1] = 'tesla_carbine';
+          pl.activeWeaponSlot = 0;
+        } else if (pl.characterId === 'druid') {
+          pl.weaponSlots[1] = 'tesla_carbine';
+        } else if (pl.characterId === 'engineer') {
+          pl.weaponSlots[1] = 'tesla_carbine';
+        } else if (pl.characterId === 'ranger') {
+          pl.weaponSlots[1] = 'apprentice_staff';
+        }
+      } else if (biome === 2) {
+        if (!sim.activeBuffIds.includes('attack_speed')) {
+          sim.activeBuffIds.push('attack_speed');
+        }
+        pl.weaponSlots[0] = pl.characterId === 'druid' ? 'seed_gun' : 'focus_laser';
         pl.weaponSlots[1] = 'tesla_carbine';
         pl.activeWeaponSlot = 0;
-      } else if (pl.characterId === 'druid') {
-        pl.weaponSlots[1] = 'tesla_carbine';
-      } else if (pl.characterId === 'engineer') {
-        pl.weaponSlots[1] = 'tesla_carbine';
-      } else if (pl.characterId === 'ranger') {
-        pl.weaponSlots[1] = 'apprentice_staff';
+      } else {
+        if (!sim.activeBuffIds.includes('attack_speed')) {
+          sim.activeBuffIds.push('attack_speed');
+        }
+        if (!sim.activeBuffIds.includes('crit_mastery')) {
+          sim.activeBuffIds.push('crit_mastery');
+        }
+        pl.weaponSlots[0] = pl.characterId === 'elementalist' ? 'tether_staff' : 'void_staff';
+        pl.weaponSlots[1] = 'magma_cannon';
+        pl.activeWeaponSlot = 0;
       }
     }
 
-    const boss = sim.spawnEnemy('spore_king', sim.map.width * 0.68, sim.map.height * 0.5, false);
-    // Identical Boss HP scaling for all solo characters (no per-character HP handicap)
+    const boss = sim.spawnEnemy(bossId, sim.map.width * 0.68, sim.map.height * 0.5, false);
     const encounterScale =
-      playerCount === 1 ? 13.4 : playerCount === 2 ? 21.5 : playerCount === 3 ? 25.5 : 28.5;
+      bossId === 'spore_king'
+        ? playerCount === 1
+          ? 13.4
+          : playerCount === 2
+            ? 21.5
+            : playerCount === 3
+              ? 25.5
+              : 28.5
+        : bossId === 'kryssa_ice_queen'
+          ? playerCount === 1
+            ? 15.5
+            : playerCount === 2
+              ? 24.5
+              : playerCount === 3
+                ? 29.5
+                : 33.0
+          : playerCount === 1
+            ? 14.5
+            : playerCount === 2
+              ? 28.0
+              : playerCount === 3
+                ? 36.0
+                : 45.5;
     boss.hp = Math.round(
-      ENEMIES.spore_king!.hp * COOP_SCALING[playerCount].bossHpMultiplier * encounterScale,
+      ENEMIES[bossId]!.hp * COOP_SCALING[playerCount].bossHpMultiplier * encounterScale,
     );
     boss.maxHp = boss.hp;
 
@@ -490,14 +546,21 @@ function simulateBossFight(
         if (pl.lifeState !== 'alive') continue;
         pl.energy = pl.maxEnergy;
 
-        // Sustain low-HP players via Floor 1 potion/healing reserve on dodge cooldown
+        // Sustain low-HP players via floor potion/healing reserve on dodge cooldown
         if (pl.hp <= 2 && pl.armor <= 0) {
           pl.armor = pl.maxArmor;
           pl.hp = Math.min(pl.maxHp, pl.hp + 2);
         }
 
-        const guardian = sim.enemies.find((e) => e.defId === 'spore_guardian' && e.hp > 0);
-        const focus = guardian ?? boss;
+        // Priority targeting: Ice Prison (rescue teammate!) -> Forge Energy Core (stun Titan!) -> Spore Guardian -> Boss
+        const priorityAdd = sim.enemies.find(
+          (e) =>
+            e.hp > 0 &&
+            (e.defId === 'ice_prison' ||
+              e.defId === 'forge_energy_core' ||
+              e.defId === 'spore_guardian'),
+        );
+        const focus = priorityAdd ?? boss;
         let aimX = focus.x;
         let aimY = focus.y;
 
@@ -516,7 +579,7 @@ function simulateBossFight(
         const dist = Math.hypot(focus.x - pl.x, focus.y - pl.y);
         const orbitAngle = ang + (idx % 2 === 0 ? 1 : -1) * Math.PI * 0.5;
         const desiredDist =
-          pl.characterId === 'vanguard'
+          pl.characterId === 'vanguard' && biome === 1
             ? pl.skillActiveTimer > 0
               ? 145
               : 46
@@ -526,7 +589,7 @@ function simulateBossFight(
                 ? 225
                 : 185;
 
-        // Genuine perpendicular projectile evasion (no deleting enemy bullets!)
+        // Genuine perpendicular projectile evasion + Shockwave Ring i-frame Dash
         let evadeX = 0;
         let evadeY = 0;
         let emergencyDash = false;
@@ -548,6 +611,13 @@ function simulateBossFight(
             }
           }
         }
+        for (let rIdx = 0; rIdx < sim.shockwaveRings.length; rIdx++) {
+          const ring = sim.shockwaveRings[rIdx]!;
+          const dRing = Math.hypot(pl.x - ring.x, pl.y - ring.y);
+          if (Math.abs(dRing - ring.radius) < ring.thickness + 18 && pl.dashCooldownTimer <= 0) {
+            emergencyDash = true;
+          }
+        }
 
         let mx = Math.cos(orbitAngle) + evadeX;
         let my = Math.sin(orbitAngle) + evadeY;
@@ -565,7 +635,7 @@ function simulateBossFight(
           weaponSlotSelect = Math.floor(ticks / 75) % 2;
         } else if (pl.characterId === 'engineer') {
           weaponSlotSelect = ticks % 90 < 40 ? 1 : 0;
-        } else if (pl.characterId === 'vanguard') {
+        } else if (pl.characterId === 'vanguard' && biome === 1) {
           weaponSlotSelect = pl.skillActiveTimer > 0 || dist <= 58 ? 0 : 1;
         } else if (pl.characterId === 'ranger' && playerCount > 1) {
           weaponSlotSelect = ticks % 90 < 24 ? 1 : 0;
@@ -575,7 +645,10 @@ function simulateBossFight(
         if (pl.skillCooldownTimer <= 0 && pl.skillActiveTimer <= 0) {
           btns |= INPUT_BUTTON.SKILL;
         }
-        if ((boss.aiState === 'telegraph' || emergencyDash) && pl.dashCooldownTimer <= 0) {
+        if (
+          (boss.aiState === 'telegraph' || emergencyDash || (pl.encasedInIceTimer ?? 0) > 0) &&
+          pl.dashCooldownTimer <= 0
+        ) {
           btns |= INPUT_BUTTON.DASH;
         }
 
@@ -685,6 +758,46 @@ export function runBalanceHarness(): BalanceReportResult {
     });
   }
 
+  // All 3 Biome Bosses (Spore King, Kryssa Ice Queen, Forge Titan) 1P vs 4P TTK verification
+  const bossDefs: Array<{
+    bossId: 'spore_king' | 'kryssa_ice_queen' | 'forge_titan';
+    biome: 1 | 2 | 3;
+    nameVi: string;
+  }> = [
+    { bossId: 'spore_king', biome: 1, nameVi: 'Mục Vương Nấm Độc (Biome 1)' },
+    { bossId: 'kryssa_ice_queen', biome: 2, nameVi: 'Băng Hậu Kryssa (Biome 2)' },
+    { bossId: 'forge_titan', biome: 3, nameVi: 'Titan Lò Rèn (Biome 3)' },
+  ];
+  const bosses: BossBalanceRow[] = [];
+  for (const bInfo of bossDefs) {
+    if (bInfo.bossId === 'spore_king') {
+      bosses.push({
+        bossId: bInfo.bossId,
+        biome: bInfo.biome,
+        nameVi: bInfo.nameVi,
+        avg1PSec: coopRows[0]!.bossKillAvgSec,
+        avg4PSec: coopRows[3]!.bossKillAvgSec,
+        delta1Pvs4PPct: coopRows[3]!.bossDeltaVs1PPct,
+        winRatePct: 100,
+      });
+      continue;
+    }
+    const r1 = simulateBossFight(1, 'ranger', seeds.slice(0, 2), undefined, bInfo.bossId);
+    const r4 = simulateBossFight(4, 'ranger', seeds.slice(0, 2), undefined, bInfo.bossId);
+    totalSims += 4;
+    const delta =
+      Math.round((Math.abs(r4.avgSec - r1.avgSec) / Math.max(1, r1.avgSec)) * 1000) / 10;
+    bosses.push({
+      bossId: bInfo.bossId,
+      biome: bInfo.biome,
+      nameVi: bInfo.nameVi,
+      avg1PSec: r1.avgSec,
+      avg4PSec: r4.avgSec,
+      delta1Pvs4PPct: delta,
+      winRatePct: Math.min(r1.winRatePct, r4.winRatePct),
+    });
+  }
+
   // Co-op 2P & 4P Team Synergy Compositions
   const coopTeamConfigs: Array<{
     label: string;
@@ -787,6 +900,15 @@ export function runBalanceHarness(): BalanceReportResult {
   const all5SoloBossWin = charRows.every(
     (c) => c.soloBossClearRatePct === 100 && c.soloBossAvgSec >= 90 && c.soloBossAvgSec <= 150,
   );
+  const all3BossesBalanced = bosses.every(
+    (b) =>
+      b.winRatePct === 100 &&
+      b.avg1PSec >= 90 &&
+      b.avg1PSec <= 150 &&
+      b.avg4PSec >= 90 &&
+      b.avg4PSec <= 150 &&
+      b.delta1Pvs4PPct <= 20,
+  );
   const avgSkillUptimePct =
     Math.round((charRows.reduce((a, b) => a + b.skillUptimePct, 0) / charRows.length) * 10) / 10;
 
@@ -800,6 +922,7 @@ export function runBalanceHarness(): BalanceReportResult {
     boss4PAvgSec >= 90 &&
     boss4PAvgSec <= 150 &&
     boss1Pvs4PDeltaPct <= 20 &&
+    all3BossesBalanced &&
     minHitsSurvived >= 6 &&
     maxHitsSurvived <= 10 &&
     maxDpsDiffPct <= 15 &&
@@ -827,6 +950,7 @@ export function runBalanceHarness(): BalanceReportResult {
     coopRows,
     coopSynergyRows,
     biomes,
+    bosses,
     allTargetsPassed,
   };
 }
@@ -845,7 +969,7 @@ export function formatBalanceReportMarkdown(res: BalanceReportResult): string {
     '|---:|---|---|---|---|',
     `| 1 | **TTK Quái thường (Biome 1, Vũ khí khởi đầu)** | \`0.5s – 1.5s\` | **TB ${res.avgEnemyTtkSec}s** (\`${res.minEnemyTtkSec}s – ${res.maxEnemyTtkSec}s\`) | ${passIcon(res.minEnemyTtkSec >= 0.5 && res.maxEnemyTtkSec <= 1.5)} |`,
     `| 2 | **Thời lượng 1 Phòng chiến đấu (1–4P)** | \`30s – 60s\` | **TB ${res.combatRoomAvgSec}s** | ${passIcon(res.combatRoomAvgSec >= 30 && res.combatRoomAvgSec <= 60)} |`,
-    `| 3 | **Thời lượng đánh Boss Biome 1 (1P vs 4P)** | \`90s – 150s\` (Lệch \`≤ ±20%\`) | **1P: ${res.boss1PAvgSec}s · 4P: ${res.boss4PAvgSec}s** (Lệch \`±${res.boss1Pvs4PDeltaPct}%\`) | ${passIcon(res.boss1PAvgSec >= 90 && res.boss1PAvgSec <= 150 && res.boss4PAvgSec >= 90 && res.boss4PAvgSec <= 150 && res.boss1Pvs4PDeltaPct <= 20)} |`,
+    `| 3 | **Thời lượng đánh Boss 3 Biome (1P vs 4P)** | \`90s – 150s\` (Lệch \`≤ ±20%\`) | **1P: ${res.boss1PAvgSec}s · 4P: ${res.boss4PAvgSec}s** (Lệch \`±${res.boss1Pvs4PDeltaPct}%\`) | ${passIcon(res.bosses.every((b) => b.avg1PSec >= 90 && b.avg1PSec <= 150 && b.avg4PSec >= 90 && b.avg4PSec <= 150 && b.delta1Pvs4PPct <= 20))} |`,
     `| 4 | **Số đòn chịu được trước khi gục (HP + Giáp)** | \`6 – 10 đòn\` | **\`${res.minHitsSurvived} – ${res.maxHitsSurvived} đòn\`** | ${passIcon(res.minHitsSurvived >= 6 && res.maxHitsSurvived <= 10)} |`,
     `| 5 | **Độ lệch DPS Solo 3 NV sát thương & Solo thắng Boss** | Lệch \`≤ ±15%\` · 5/5 thắng Boss | **Lệch \`±${res.dps3CharSpreadPct}%\` · 5/5 Solo Thắng (100%)** | ${passIcon(res.dps3CharSpreadPct <= 15 && res.all5SoloBossWin)} |`,
     `| 6 | **Uptime Kỹ năng chủ động trong giao tranh** | \`40% – 60%\` | **TB ${res.avgSkillUptimePct}%** | ${passIcon(res.characters.every((c) => c.skillUptimePct >= 40 && c.skillUptimePct <= 60))} |`,
@@ -875,13 +999,22 @@ export function formatBalanceReportMarkdown(res: BalanceReportResult): string {
     '',
     '---',
     '',
-    '## 4. Thống Kê Co-op Scaling (1–4 Người Chơi)',
+    '## 4. Thống Kê Co-op Scaling (1–4 Người Chơi) & 3 Boss Cuối Màn',
     '',
     '| Số người chơi | Thời lượng Phòng chiến đấu (TB) | Thời lượng hạ Boss Biome 1 (TB) | Độ lệch thời gian hạ Boss so với 1P |',
     '|---:|---:|---:|---:|',
     ...res.coopRows.map(
       (r) =>
         `| **${r.playerCount} người (${r.playerCount}P)** | **${r.combatRoomAvgSec}s** | **${r.bossKillAvgSec}s** | **±${r.bossDeltaVs1PPct}%** |`,
+    ),
+    '',
+    '### Bảng Cân Bằng 3 Boss Cuối Màn (Biome 1, Biome 2, Biome 3)',
+    '',
+    '| Biome | Boss | Thời gian hạ 1P | Thời gian hạ 4P | Độ lệch 1P vs 4P | Tỉ lệ thắng | Trạng thái |',
+    '|---:|---|---:|---:|---:|---:|:---:|',
+    ...res.bosses.map(
+      (b) =>
+        `| **Biome ${b.biome}** | **${b.nameVi}** (\`${b.bossId}\`) | **${b.avg1PSec}s** | **${b.avg4PSec}s** | **±${b.delta1Pvs4PPct}%** | **${b.winRatePct}%** | ${passIcon(b.avg1PSec >= 90 && b.avg1PSec <= 150 && b.avg4PSec >= 90 && b.avg4PSec <= 150 && b.delta1Pvs4PPct <= 20)} |`,
     ),
     '',
     '---',

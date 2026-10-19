@@ -158,20 +158,14 @@ export class TextureBaker {
     }
 
     for (const biome of [1, 2, 3] as const) {
-      const variantCount = biome === 1 ? 8 : 4;
-      for (let v = 0; v < variantCount; v++) {
+      for (let v = 0; v < 8; v++) {
         this.bakeBiomeTile(scene, biome, v, targetScale);
       }
-      if (biome === 1) {
-        for (let mask = 0; mask < 16; mask++) {
-          this.bakeWallTile(scene, biome, mask, targetScale);
-          this.bakePillarTile(scene, biome, mask, targetScale);
-        }
-        this.bakeCrackedWallTile(scene, biome, targetScale);
-      } else {
-        this.bakeWallTile(scene, biome, 0, targetScale);
-        this.bakePillarTile(scene, biome, 0, targetScale);
+      for (let mask = 0; mask < 16; mask++) {
+        this.bakeWallTile(scene, biome, mask, targetScale);
+        this.bakePillarTile(scene, biome, mask, targetScale);
       }
+      this.bakeCrackedWallTile(scene, biome, targetScale);
     }
 
     for (let aoMask = 1; aoMask <= 7; aoMask++) {
@@ -487,30 +481,55 @@ export class TextureBaker {
     const capW = size - padW - padE;
     const capH = size - padN - padS;
 
+    const capColor =
+      biome === 2
+        ? PALETTE.COBALT_SHADE
+        : biome === 3
+          ? PALETTE.STEEL_DARK
+          : PALETTE.SLATE_MID;
+    const bevelLight =
+      biome === 2
+        ? PALETTE.CYAN_FROST
+        : biome === 3
+          ? PALETTE.COPPER_LIGHT
+          : PALETTE.ASH_GRAY;
+    const bevelDark =
+      biome === 2
+        ? PALETTE.ABYSS_BLUE
+        : biome === 3
+          ? PALETTE.FORGE_DARK
+          : PALETTE.SLATE_DARK;
+    const rimStroke =
+      biome === 2
+        ? PALETTE.ICE_WHITE
+        : biome === 3
+          ? PALETTE.FLAME_ORANGE
+          : PALETTE.WARM_STONE;
+
     // 1. Fill top stone cap
-    ctx.fillStyle = PALETTE.SLATE_MID;
+    ctx.fillStyle = capColor;
     ctx.fillRect(capX, capY, capW, capH);
 
     // 2. Subtle top-left directional bevel & bottom-right shade
     if (!hasN) {
-      ctx.fillStyle = PALETTE.ASH_GRAY;
+      ctx.fillStyle = bevelLight;
       ctx.fillRect(capX, capY, capW, 3.2);
     }
     if (!hasW) {
-      ctx.fillStyle = PALETTE.ASH_GRAY;
+      ctx.fillStyle = bevelLight;
       ctx.fillRect(capX, capY, 3.2, capH);
     }
     if (!hasE) {
-      ctx.fillStyle = PALETTE.SLATE_DARK;
+      ctx.fillStyle = bevelDark;
       ctx.fillRect(capX + capW - 2.8, capY, 2.8, capH);
     }
     if (!hasS) {
-      ctx.fillStyle = PALETTE.SLATE_DARK;
+      ctx.fillStyle = bevelDark;
       ctx.fillRect(capX, capY + capH - 2.5, capW, 2.5);
     }
 
     // 3. Continuous stone block mortar seams across connected wall tiles
-    ctx.strokeStyle = PALETTE.SLATE_DARK;
+    ctx.strokeStyle = bevelDark;
     ctx.lineWidth = 1.2;
     ctx.beginPath();
     if (capY < 13 && capY + capH > 15) {
@@ -527,16 +546,16 @@ export class TextureBaker {
     }
     ctx.stroke();
 
-    // 4. Moss / rune accent on wall top
+    // 4. Moss / frost crystal / ember rune accent on wall top
     ctx.beginPath();
     ctx.arc(11, 9, 2.1, 0, Math.PI * 2);
-    ctx.fillStyle = BIOME_THEMES[biome].floorHighlight;
+    ctx.fillStyle = BIOME_THEMES[biome].accentGlow;
     ctx.fill();
 
     // 5. 3D South Cliff Face when South is exposed (!hasS)
     if (!hasS) {
       const cliffY = size - cliffH - 1.5;
-      ctx.fillStyle = PALETTE.SLATE_DARK;
+      ctx.fillStyle = bevelDark;
       ctx.fillRect(capX, cliffY, capW, cliffH);
       ctx.fillStyle = PALETTE.INK_DEEP;
       ctx.fillRect(capX, cliffY + cliffH - 2, capW, 2);
@@ -563,7 +582,7 @@ export class TextureBaker {
       ctx.lineTo(capX + capW - 1, capY + 1.8);
     }
     ctx.lineWidth = 1.5;
-    ctx.strokeStyle = PALETTE.WARM_STONE;
+    ctx.strokeStyle = rimStroke;
     ctx.stroke();
 
     // 7. Crisp dark outlines ONLY along exposed non-connected edges
@@ -634,25 +653,44 @@ export class TextureBaker {
     const capW = size - padW - padE;
     const capH = size - padN - padS;
 
+    const pillarCap =
+      biome === 2
+        ? PALETTE.AZURE_CORE
+        : biome === 3
+          ? PALETTE.BRASS_CORE
+          : PALETTE.WARM_STONE;
+    const pillarHighlight =
+      biome === 2
+        ? PALETTE.ICE_WHITE
+        : biome === 3
+          ? PALETTE.SOLAR_GOLD
+          : PALETTE.BONE_WHITE;
+    const pillarShade =
+      biome === 2
+        ? PALETTE.COBALT_SHADE
+        : biome === 3
+          ? PALETTE.LEATHER_DARK
+          : PALETTE.ASH_GRAY;
+
     // 1. Monolithic pillar top surface
-    ctx.fillStyle = PALETTE.WARM_STONE;
+    ctx.fillStyle = pillarCap;
     ctx.fillRect(capX, capY, capW, capH);
 
-    // 2. Exposed bevels (top-left Bone White highlight, bottom-right Ash Gray shade)
+    // 2. Exposed bevels
     if (!hasN) {
-      ctx.fillStyle = PALETTE.BONE_WHITE;
+      ctx.fillStyle = pillarHighlight;
       ctx.fillRect(capX, capY, capW, 3.2);
     }
     if (!hasW) {
-      ctx.fillStyle = PALETTE.BONE_WHITE;
+      ctx.fillStyle = pillarHighlight;
       ctx.fillRect(capX, capY, 3.2, capH);
     }
     if (!hasE) {
-      ctx.fillStyle = PALETTE.ASH_GRAY;
+      ctx.fillStyle = pillarShade;
       ctx.fillRect(capX + capW - 3, capY, 3, capH);
     }
     if (!hasS) {
-      ctx.fillStyle = PALETTE.ASH_GRAY;
+      ctx.fillStyle = pillarShade;
       ctx.fillRect(capX, capY + capH - 2.8, capW, 2.8);
     }
 
@@ -777,9 +815,24 @@ export class TextureBaker {
     outlined(
       ctx,
       {
-        fill: PALETTE.SLATE_MID,
-        shade: PALETTE.SLATE_DARK,
-        highlight: PALETTE.WARM_STONE,
+        fill:
+          biome === 2
+            ? PALETTE.COBALT_SHADE
+            : biome === 3
+              ? PALETTE.STEEL_DARK
+              : PALETTE.SLATE_MID,
+        shade:
+          biome === 2
+            ? PALETTE.ABYSS_BLUE
+            : biome === 3
+              ? PALETTE.FORGE_DARK
+              : PALETTE.SLATE_DARK,
+        highlight:
+          biome === 2
+            ? PALETTE.CYAN_FROST
+            : biome === 3
+              ? PALETTE.COPPER_LIGHT
+              : PALETTE.WARM_STONE,
         outlineColor: PALETTE.INK_DARK,
         outlineWidth: 2.0,
       },
@@ -1088,11 +1141,55 @@ export class TextureBaker {
       ctx.lineCap = 'round';
       ctx.stroke();
     });
+
+    // 11. Chasm (Biome 2 Frozen Abyss Pit)
+    this.bakeCustomCanvas(scene, 'surface_chasm', 32, 32, scale, (ctx) => {
+      outlined(
+        ctx,
+        {
+          fill: PALETTE.INK_DEEP,
+          shade: PALETTE.INK_DARK,
+          highlight: PALETTE.COBALT_SHADE,
+          outlineWidth: 2.0,
+        },
+        (c) => traceRoundedRect(c, -14.5, -14.5, 29, 29, 4),
+        { cx: 0, cy: 0, rx: 14, ry: 14 },
+      );
+      ctx.strokeStyle = PALETTE.ABYSS_BLUE;
+      ctx.lineWidth = 1.6;
+      ctx.strokeRect(-10, -10, 20, 20);
+    });
+
+    // 12. Conveyor Belt (Biome 3 Molten Forge Mechanical Belt)
+    this.bakeCustomCanvas(scene, 'surface_conveyor', 32, 32, scale, (ctx) => {
+      outlined(
+        ctx,
+        {
+          fill: PALETTE.STEEL_DARK,
+          shade: PALETTE.SLATE_DARK,
+          highlight: PALETTE.BRASS_CORE,
+          outlineWidth: 1.8,
+        },
+        (c) => traceRoundedRect(c, -14.5, -14.5, 29, 29, 3.5),
+        { cx: 0, cy: 0, rx: 14, ry: 14 },
+      );
+      for (const cx of [-6, 3]) {
+        ctx.beginPath();
+        ctx.moveTo(cx - 3, -7);
+        ctx.lineTo(cx + 3, 0);
+        ctx.lineTo(cx - 3, 7);
+        ctx.strokeStyle = PALETTE.SOLAR_GOLD;
+        ctx.lineWidth = 2.2;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.stroke();
+      }
+    });
   }
 
   /**
    * Draws a neighbor-aware interactive surface cell directly onto the arena composite canvas
-   * so multi-tile pools (water, oil, grass, swamp, lava, ice) join seamlessly without grid seams.
+   * so multi-tile pools (water, oil, grass, swamp, lava, ice, chasm, conveyor) join seamlessly without grid seams.
    */
   public static drawSurfaceTile(
     ctx: CanvasRenderingContext2D,
@@ -1163,6 +1260,16 @@ export class TextureBaker {
         fill = PALETTE.CYAN_FROST;
         rim = PALETTE.ICE_WHITE;
         shade = PALETTE.AZURE_CORE;
+        break;
+      case 'chasm':
+        fill = PALETTE.INK_DEEP;
+        rim = PALETTE.COBALT_SHADE;
+        shade = PALETTE.INK_DARK;
+        break;
+      case 'conveyor':
+        fill = PALETTE.STEEL_DARK;
+        rim = PALETTE.BRASS_CORE;
+        shade = PALETTE.SLATE_DARK;
         break;
     }
 
@@ -1313,6 +1420,26 @@ export class TextureBaker {
         ctx.lineWidth = 1.5;
         ctx.lineCap = 'round';
         ctx.stroke();
+        break;
+      }
+      case 'chasm': {
+        ctx.strokeStyle = PALETTE.ABYSS_BLUE;
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(6, 6, 20, 20);
+        break;
+      }
+      case 'conveyor': {
+        for (const cx of [10, 20]) {
+          ctx.beginPath();
+          ctx.moveTo(cx - 2.5, 9);
+          ctx.lineTo(cx + 2.5, 16);
+          ctx.lineTo(cx - 2.5, 23);
+          ctx.strokeStyle = PALETTE.SOLAR_GOLD;
+          ctx.lineWidth = 2.0;
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
+          ctx.stroke();
+        }
         break;
       }
       case 'ash':
@@ -1529,6 +1656,108 @@ export class TextureBaker {
       ctx.fillStyle = PALETTE.CYAN_FROST;
       ctx.fill();
       ctx.lineWidth = 1.5;
+      ctx.strokeStyle = PALETTE.INK_DARK;
+      ctx.stroke();
+    });
+
+    // 5c. Crystal Pillar (Biome 2 Frozen Depths laser-reflecting ice prism)
+    this.bakeCustomCanvas(scene, 'prop_crystal_pillar', 38, 44, scale, (ctx) => {
+      outlined(
+        ctx,
+        {
+          fill: PALETTE.COBALT_SHADE,
+          shade: PALETTE.ABYSS_BLUE,
+          highlight: PALETTE.CYAN_FROST,
+          outlineWidth: 2.4,
+        },
+        (c) => traceRoundedRect(c, -13, 4, 26, 12, 4),
+        { cx: 0, cy: 10, rx: 13, ry: 6 },
+      );
+      outlined(
+        ctx,
+        {
+          fill: PALETTE.CYAN_FROST,
+          shade: PALETTE.AZURE_CORE,
+          highlight: PALETTE.ICE_WHITE,
+          outlineWidth: 2.4,
+        },
+        (c) =>
+          tracePolygon(c, [
+            { x: 0, y: -18 },
+            { x: 11, y: -6 },
+            { x: 9, y: 11 },
+            { x: 0, y: 15 },
+            { x: -9, y: 11 },
+            { x: -11, y: -6 },
+          ]),
+        { cx: 0, cy: -1, rx: 11, ry: 16 },
+      );
+      ctx.beginPath();
+      ctx.moveTo(0, -14);
+      ctx.lineTo(0, 11);
+      ctx.strokeStyle = PALETTE.BONE_WHITE;
+      ctx.lineWidth = 1.8;
+      ctx.stroke();
+    });
+
+    // 5d. Co-op Pressure Plates (Inactive & Activated) and Pushable Stone Block
+    this.bakeCustomCanvas(scene, 'prop_pressure_plate_off', 40, 40, scale, (ctx) => {
+      outlined(
+        ctx,
+        {
+          fill: PALETTE.SLATE_MID,
+          shade: PALETTE.SLATE_DARK,
+          highlight: PALETTE.WARM_STONE,
+          outlineWidth: 2.2,
+        },
+        (c) => traceRoundedRect(c, -16, -16, 32, 32, 6),
+        { cx: 0, cy: 0, rx: 16, ry: 16 },
+      );
+      ctx.beginPath();
+      ctx.arc(0, 0, 8, 0, Math.PI * 2);
+      ctx.strokeStyle = PALETTE.ASH_GRAY;
+      ctx.lineWidth = 2.0;
+      ctx.stroke();
+    });
+
+    this.bakeCustomCanvas(scene, 'prop_pressure_plate_on', 40, 40, scale, (ctx) => {
+      outlined(
+        ctx,
+        {
+          fill: PALETTE.FOREST_SHADE,
+          shade: PALETTE.SLATE_DARK,
+          highlight: PALETTE.LIME_GLOW,
+          outlineWidth: 2.2,
+        },
+        (c) => traceRoundedRect(c, -16, -16, 32, 32, 6),
+        { cx: 0, cy: 0, rx: 16, ry: 16 },
+      );
+      ctx.beginPath();
+      ctx.arc(0, 0, 8.5, 0, Math.PI * 2);
+      ctx.fillStyle = PALETTE.LIME_GLOW;
+      ctx.fill();
+      ctx.lineWidth = 1.6;
+      ctx.strokeStyle = PALETTE.INK_DARK;
+      ctx.stroke();
+    });
+
+    this.bakeCustomCanvas(scene, 'prop_push_block', 38, 38, scale, (ctx) => {
+      outlined(
+        ctx,
+        {
+          fill: PALETTE.WARM_STONE,
+          shade: PALETTE.SLATE_MID,
+          highlight: PALETTE.BONE_WHITE,
+          outlineWidth: 2.5,
+        },
+        (c) => traceRoundedRect(c, -15, -15, 30, 30, 4),
+        { cx: 0, cy: 0, rx: 15, ry: 15 },
+      );
+      ctx.beginPath();
+      ctx.arc(0, 0, 5.5, 0, Math.PI * 2);
+      ctx.fillStyle = PALETTE.SOLAR_GOLD;
+      ctx.fill();
+      ctx.lineWidth = 1.6;
       ctx.strokeStyle = PALETTE.INK_DARK;
       ctx.stroke();
     });

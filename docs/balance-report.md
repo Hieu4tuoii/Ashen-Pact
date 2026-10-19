@@ -1,6 +1,6 @@
 # BÁO CÁO MÔ PHỎNG CÂN BẰNG TỰ ĐỘNG (BALANCE REPORT) — ASHEN PACT
 
-> Sinh tự động bởi công cụ Headless Balance Harness (`tools/balance-harness.ts`) với **283 lượt mô phỏng** ở tốc độ cao trên `WorldSim` (60Hz cố định).
+> Sinh tự động bởi công cụ Headless Balance Harness (`tools/balance-harness.ts`) với **291 lượt mô phỏng** ở tốc độ cao trên `WorldSim` (60Hz cố định).
 
 ## 1. Bảng Tổng Hợp 7 Chỉ Tiêu Cân Bằng Định Lượng (Mục 7.4)
 
@@ -8,7 +8,7 @@
 |---:|---|---|---|---|
 | 1 | **TTK Quái thường (Biome 1, Vũ khí khởi đầu)** | `0.5s – 1.5s` | **TB 0.89s** (`0.59s – 1.12s`) | ✅ ĐẠT |
 | 2 | **Thời lượng 1 Phòng chiến đấu (1–4P)** | `30s – 60s` | **TB 47s** | ✅ ĐẠT |
-| 3 | **Thời lượng đánh Boss Biome 1 (1P vs 4P)** | `90s – 150s` (Lệch `≤ ±20%`) | **1P: 101.3s · 4P: 111.6s** (Lệch `±10.2%`) | ✅ ĐẠT |
+| 3 | **Thời lượng đánh Boss 3 Biome (1P vs 4P)** | `90s – 150s` (Lệch `≤ ±20%`) | **1P: 101.3s · 4P: 111.6s** (Lệch `±10.2%`) | ✅ ĐẠT |
 | 4 | **Số đòn chịu được trước khi gục (HP + Giáp)** | `6 – 10 đòn` | **`6 – 10 đòn`** | ✅ ĐẠT |
 | 5 | **Độ lệch DPS Solo 3 NV sát thương & Solo thắng Boss** | Lệch `≤ ±15%` · 5/5 thắng Boss | **Lệch `±10.6%` · 5/5 Solo Thắng (100%)** | ✅ ĐẠT |
 | 6 | **Uptime Kỹ năng chủ động trong giao tranh** | `40% – 60%` | **TB 52.9%** | ✅ ĐẠT |
@@ -40,7 +40,7 @@
 
 ---
 
-## 4. Thống Kê Co-op Scaling (1–4 Người Chơi)
+## 4. Thống Kê Co-op Scaling (1–4 Người Chơi) & 3 Boss Cuối Màn
 
 | Số người chơi | Thời lượng Phòng chiến đấu (TB) | Thời lượng hạ Boss Biome 1 (TB) | Độ lệch thời gian hạ Boss so với 1P |
 |---:|---:|---:|---:|
@@ -48,6 +48,14 @@
 | **2 người (2P)** | **46.7s** | **121.1s** | **±19.5%** |
 | **3 người (3P)** | **48.3s** | **97.1s** | **±4.1%** |
 | **4 người (4P)** | **50.2s** | **111.6s** | **±10.2%** |
+
+### Bảng Cân Bằng 3 Boss Cuối Màn (Biome 1, Biome 2, Biome 3)
+
+| Biome | Boss | Thời gian hạ 1P | Thời gian hạ 4P | Độ lệch 1P vs 4P | Tỉ lệ thắng | Trạng thái |
+|---:|---|---:|---:|---:|---:|:---:|
+| **Biome 1** | **Mục Vương Nấm Độc (Biome 1)** (`spore_king`) | **101.3s** | **111.6s** | **±10.2%** | **100%** | ✅ ĐẠT |
+| **Biome 2** | **Băng Hậu Kryssa (Biome 2)** (`kryssa_ice_queen`) | **112.7s** | **99.2s** | **±12%** | **100%** | ✅ ĐẠT |
+| **Biome 3** | **Titan Lò Rèn (Biome 3)** (`forge_titan`) | **105.1s** | **124.3s** | **±18.3%** | **100%** | ✅ ĐẠT |
 
 ---
 

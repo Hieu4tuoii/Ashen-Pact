@@ -96,6 +96,15 @@ export interface GameDebugState {
   activeSummonCount: number;
   activeSkillZoneCount: number;
   hubPreviewCharacterId: string | null;
+  // Phase 6 Biomes 2 & 3 + Bosses + Co-op Mechanics telemetry
+  currentBiome: 1 | 2 | 3;
+  bossDefId: string | null;
+  blizzardVeilActive: boolean;
+  conveyorDirection: 1 | -1;
+  pressurePlatesSolved: boolean;
+  pressurePlateCount: number;
+  shockwaveRingCount: number;
+  tetherBeamCount: number;
   galleryPage: number;
   errors: string[];
   warnings: string[];
@@ -200,6 +209,14 @@ export function initGlobalDebugState(): GameDebugState {
     activeSummonCount: 0,
     activeSkillZoneCount: 0,
     hubPreviewCharacterId: null,
+    currentBiome: 1,
+    bossDefId: null,
+    blizzardVeilActive: false,
+    conveyorDirection: 1,
+    pressurePlatesSolved: false,
+    pressurePlateCount: 0,
+    shockwaveRingCount: 0,
+    tetherBeamCount: 0,
     galleryPage: 1,
     errors: [],
     warnings: [],
