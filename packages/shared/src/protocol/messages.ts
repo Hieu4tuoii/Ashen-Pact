@@ -3,8 +3,7 @@ import { clamp } from '../math/vec2.js';
 /**
  * Required Vietnamese diacritics verification string from master prompt section 3.2 & Phase 0 DoD.
  */
-export const VIETNAMESE_VERIFICATION_STRING =
-  'Tiếng Việt: ắ ằ ẳ ẵ ặ ầ ẩ ẫ ậ ỡ ự ữ ỹ Đ đ';
+export const VIETNAMESE_VERIFICATION_STRING = 'Tiếng Việt: ắ ằ ẳ ẵ ặ ầ ẩ ẫ ậ ỡ ự ữ ỹ Đ đ';
 
 export const WORLD_VIEW_WIDTH = 960;
 export const WORLD_VIEW_HEIGHT = 540;
@@ -107,4 +106,3 @@ export function quantizeAngle(radians: number): number {
 export function dequantizeAngle(quantized: number): number {
   return quantized / 1000;
 }
-

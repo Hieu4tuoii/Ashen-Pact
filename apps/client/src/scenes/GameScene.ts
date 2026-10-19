@@ -1460,9 +1460,7 @@ export class GameScene extends Phaser.Scene {
     const targetRoomId =
       this.room?.roomId ??
       this.requestedRoomId ??
-      (typeof window !== 'undefined'
-        ? window.sessionStorage?.getItem('ashen_pact_room_id')
-        : null);
+      (typeof window !== 'undefined' ? window.sessionStorage?.getItem('ashen_pact_room_id') : null);
     const savedToken =
       this.reconnectToken ??
       (typeof window !== 'undefined'
@@ -1732,10 +1730,7 @@ export class GameScene extends Phaser.Scene {
       localViewY >= 70 &&
       localViewY <= 360;
     const isClickingHud =
-      localViewY < 68 ||
-      localViewY > 480 ||
-      isClickingInvitePanel ||
-      sim.runState !== 'playing';
+      localViewY < 68 || localViewY > 480 || isClickingInvitePanel || sim.runState !== 'playing';
     if (pointer.leftButtonDown() && !isClickingHud) {
       buttons |= INPUT_BUTTON.FIRE;
     }
@@ -1863,8 +1858,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     const activeBoss = sim.getActiveBoss();
-    const isBlizzardPhase3 =
-      activeBoss?.defId === 'kryssa_ice_queen' && activeBoss.bossPhase === 3;
+    const isBlizzardPhase3 = activeBoss?.defId === 'kryssa_ice_queen' && activeBoss.bossPhase === 3;
     this.lighting.setBiome(sim.currentBiome);
     this.lighting.setBlizzardVeil(isBlizzardPhase3);
     this.lighting.update({
@@ -1928,9 +1922,7 @@ export class GameScene extends Phaser.Scene {
         if (p.lifeState === 'downed') {
           const revPct = Math.round(p.reviveProgress * 100);
           statusSuffix =
-            revPct > 0
-              ? ` · CỨU ${revPct}%`
-              : ` · GỤC (${Math.ceil(p.downedTimer)}s) [Giữ E]`;
+            revPct > 0 ? ` · CỨU ${revPct}%` : ` · GỤC (${Math.ceil(p.downedTimer)}s) [Giữ E]`;
         } else if (p.lifeState === 'ghost') {
           statusSuffix = ' · LINH HỒN';
         } else if (sim.inHub && p.ready) {
@@ -2017,14 +2009,7 @@ export class GameScene extends Phaser.Scene {
                 this.fx.spawnMuzzleFlashAndCasing(ev.x, ev.y, ev.angle, isShotgun);
               }
               if (!isStress) {
-                this.lighting.spawnTransientLight(
-                  ev.x,
-                  ev.y,
-                  82,
-                  PALETTE.SOLAR_GOLD,
-                  0.72,
-                  0.08,
-                );
+                this.lighting.spawnTransientLight(ev.x, ev.y, 82, PALETTE.SOLAR_GOLD, 0.72, 0.08);
               }
               this.crosshairPulse = isShotgun ? 0.9 : 0.45;
               this.playerRig?.triggerRecoil(isShotgun ? 6.5 : 4.2);
@@ -2159,14 +2144,7 @@ export class GameScene extends Phaser.Scene {
           const isBarrel = ev.sourceDefId === 'explosive_barrel';
           const colorHex = isBarrel ? PALETTE.FLAME_ORANGE : PALETTE.TOXIC_PURPLE;
           this.fx.spawnExplosionBurst(ev.x, ev.y, ev.radius, colorHex);
-          this.lighting.spawnTransientLight(
-            ev.x,
-            ev.y,
-            ev.radius * 2.2,
-            colorHex,
-            1.0,
-            0.38,
-          );
+          this.lighting.spawnTransientLight(ev.x, ev.y, ev.radius * 2.2, colorHex, 1.0, 0.38);
           if (allowStressSfx) {
             zzfx.play('explosion', ev.x, this.camFocusX);
           }
@@ -2514,6 +2492,15 @@ export class GameScene extends Phaser.Scene {
           entry.emoteLabel,
           entry.emoteBg,
         );
+
+        if (
+          sim.currentBiome === 2 &&
+          !sim.stressTestActive &&
+          cp.lifeState === 'alive' &&
+          (sim.tick + cp.slot * 23) % 90 === 0
+        ) {
+          this.fx.spawnFrostBreath(pos.x, pos.y, entry.rig.getFacingSign());
+        }
       }
     }
 
@@ -2626,11 +2613,7 @@ export class GameScene extends Phaser.Scene {
         shadow.setScale(invBake);
         shadow.setDepth(18);
 
-        const sprite = this.add.sprite(
-          prop.x,
-          prop.y,
-          TextureBaker.getPropTextureKey(prop.kind),
-        );
+        const sprite = this.add.sprite(prop.x, prop.y, TextureBaker.getPropTextureKey(prop.kind));
         sprite.setScale(invBake);
         sprite.setDepth(22);
 
@@ -2775,7 +2758,11 @@ export class GameScene extends Phaser.Scene {
     this.activePickupIds.clear();
     for (let i = 0; i < sim.pickups.length; i++) {
       const pk = sim.pickups[i]!;
-      if (pk.ownerPlayerId !== undefined && pk.ownerPlayerId !== 0 && pk.ownerPlayerId !== sim.player.id) {
+      if (
+        pk.ownerPlayerId !== undefined &&
+        pk.ownerPlayerId !== 0 &&
+        pk.ownerPlayerId !== sim.player.id
+      ) {
         continue;
       }
       this.activePickupIds.add(pk.id);
@@ -3052,7 +3039,11 @@ export class GameScene extends Phaser.Scene {
     for (let i = 0; i < sim.worldItems.length; i++) {
       const it = sim.worldItems[i]!;
       if (it.pickedUp) continue;
-      if (it.ownerPlayerId !== undefined && it.ownerPlayerId !== 0 && it.ownerPlayerId !== sim.player.id) {
+      if (
+        it.ownerPlayerId !== undefined &&
+        it.ownerPlayerId !== 0 &&
+        it.ownerPlayerId !== sim.player.id
+      ) {
         continue;
       }
       this.activeWorldItemIds.add(it.id);
@@ -3640,8 +3631,7 @@ export class GameScene extends Phaser.Scene {
       if (eStats?.frontShieldReduction && !isStress) {
         const halfArc = Math.PI * 0.4;
         const shieldR = e.radius + 6;
-        const shieldHex =
-          e.defId === 'ice_golem' ? PALETTE.CYAN_FROST : PALETTE.STEEL_LIGHT;
+        const shieldHex = e.defId === 'ice_golem' ? PALETTE.CYAN_FROST : PALETTE.STEEL_LIGHT;
         g.lineStyle(5, hexToNum(PALETTE.INK_DARK), 0.88);
         g.beginPath();
         g.arc(pos.x, pos.y, shieldR, e.aimAngle - halfArc, e.aimAngle + halfArc, false);
@@ -4276,8 +4266,7 @@ export class GameScene extends Phaser.Scene {
     this.invitePanelContainer.add([header, ipText]);
 
     // Procedural Vector QR Code (ISO/IEC 18004)
-    const qrUrl =
-      this.hostInviteUrl ?? `http://${this.primaryLanIp}:${this.serverPort}/?coop=join`;
+    const qrUrl = this.hostInviteUrl ?? `http://${this.primaryLanIp}:${this.serverPort}/?coop=join`;
     const qrMatrix = generateQrMatrix(qrUrl);
     const qrSize = qrMatrix.length;
     const qrBoxSize = 78;
@@ -4856,6 +4845,9 @@ export class GameScene extends Phaser.Scene {
 
   private updateModalHud(): void {
     const sim = this.transport.getSim();
+    if (sim.runState === 'playing' || sim.runState === 'buff_choice') {
+      this.resultDismissed = false;
+    }
     const modalKey = `${sim.runState}:${sim.pendingBuffChoices.join(',')}:${this.resultDismissed}`;
     if (modalKey === this.lastRunState) return;
     this.lastRunState = modalKey;

@@ -296,7 +296,10 @@ export class ZzfxSynth {
     const userActivated =
       typeof navigator !== 'undefined' &&
       'userActivation' in navigator &&
-      Boolean((navigator as Navigator & { userActivation?: { hasBeenActive?: boolean } }).userActivation?.hasBeenActive);
+      Boolean(
+        (navigator as Navigator & { userActivation?: { hasBeenActive?: boolean } }).userActivation
+          ?.hasBeenActive,
+      );
 
     if (!this.ctx && userActivated) {
       this.unlockOnUserGesture();
@@ -344,7 +347,8 @@ export class ZzfxSynth {
         }
 
         const noiseSample = (Math.random() * 2 - 1) * preset.noise;
-        data[i] = (osc * (1 - preset.noise * 0.55) + noiseSample) * env * preset.volume * this.masterVolume;
+        data[i] =
+          (osc * (1 - preset.noise * 0.55) + noiseSample) * env * preset.volume * this.masterVolume;
       }
 
       const source = this.ctx.createBufferSource();

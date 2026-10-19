@@ -99,11 +99,7 @@ export class CutoutRig {
     // 3. Sorted Cutout Parts (or single pre-baked composite sprite in fastComposite swarm mode)
     if (this.fastComposite) {
       const compInvBake = 1 / Math.min(2, TextureBaker.getBakeScale());
-      this.compositeSprite = scene.add.sprite(
-        0,
-        0,
-        TextureBaker.getFullRigTextureKey(def.id),
-      );
+      this.compositeSprite = scene.add.sprite(0, 0, TextureBaker.getFullRigTextureKey(def.id));
       this.compositeSprite.setOrigin(0.5, 0.78);
       this.compositeSprite.setScale(compInvBake);
       this.container.add(this.compositeSprite);
@@ -280,9 +276,7 @@ export class CutoutRig {
     // Hit flash, telegraph flash, life state tint, or elemental status tint
     const shouldFlashWhite = this.hitFlashTimer > 0;
     const shouldFlashTelegraph =
-      !shouldFlashWhite &&
-      this.telegraphProgress > 0 &&
-      Math.floor(this.animTime * 18) % 2 === 0;
+      !shouldFlashWhite && this.telegraphProgress > 0 && Math.floor(this.animTime * 18) % 2 === 0;
 
     if (shouldFlashWhite) {
       this.applyHitFlashTint();
@@ -352,7 +346,8 @@ export class CutoutRig {
     const downedSquashY = this.lifeState === 'downed' ? 0.72 : 1;
     this.bodyContainer.scaleX =
       this.facingSign * spawnScale * hitPunch * dashStretchX * telegraphScaleX;
-    this.bodyContainer.scaleY = spawnScale * hitPunch * dashSquashY * telegraphScaleY * downedSquashY;
+    this.bodyContainer.scaleY =
+      spawnScale * hitPunch * dashSquashY * telegraphScaleY * downedSquashY;
     this.bodyContainer.rotation = this.lifeState === 'downed' ? 0.38 * this.facingSign : 0;
     const baseAlpha = this.spawnProgress < 1 ? 0.35 + this.spawnProgress * 0.65 : 1;
     this.bodyContainer.alpha =

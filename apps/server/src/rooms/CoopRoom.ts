@@ -92,10 +92,7 @@ export class CoopRoom extends Room<CoopRoomState> {
       }
     }, SIM_STEP_MS);
 
-    const handlePlayerInput = (
-      client: Client,
-      packet: PlayerInputPacket & { rttMs?: number },
-    ) => {
+    const handlePlayerInput = (client: Client, packet: PlayerInputPacket & { rttMs?: number }) => {
       const meta = this.playersBySession.get(client.sessionId);
       if (!meta || !packet) return;
       const pState = this.sim.getPlayerById(meta.playerId);
@@ -128,11 +125,7 @@ export class CoopRoom extends Room<CoopRoomState> {
       const meta = this.playersBySession.get(client.sessionId);
       if (!meta) return;
       this.sim.togglePlayerReady(meta.playerId, payload?.ready);
-      if (
-        this.sim.inHub &&
-        payload?.autoStartIfAllReady &&
-        this.sim.areAllPlayersReady()
-      ) {
+      if (this.sim.inHub && payload?.autoStartIfAllReady && this.sim.areAllPlayersReady()) {
         this.sim.startDungeonRunFromHub();
       }
       this.broadcastImmediateSnapshot();
@@ -153,9 +146,7 @@ export class CoopRoom extends Room<CoopRoomState> {
       const meta = this.playersBySession.get(client.sessionId);
       if (!meta || !meta.isHost) return;
       this.sim.allowDuplicateCharacters =
-        payload?.allow !== undefined
-          ? Boolean(payload.allow)
-          : !this.sim.allowDuplicateCharacters;
+        payload?.allow !== undefined ? Boolean(payload.allow) : !this.sim.allowDuplicateCharacters;
       this.broadcastImmediateSnapshot();
     };
     this.onMessage('toggle_duplicate_chars', handleToggleDuplicate);
@@ -254,7 +245,10 @@ export class CoopRoom extends Room<CoopRoomState> {
           }
         } else if (payload.cmd === 'enter_room' && typeof payload.roomId === 'number') {
           this.sim.enterRoom(payload.roomId);
-        } else if (payload.cmd === 'advance_floor' && (payload.floor === 1 || payload.floor === 2)) {
+        } else if (
+          payload.cmd === 'advance_floor' &&
+          (payload.floor === 1 || payload.floor === 2)
+        ) {
           this.sim.advanceToFloor(payload.floor);
         } else if (payload.cmd === 'bot_autoplay') {
           this.sim.botAutoPlayActive = Boolean(payload.enabled);
@@ -342,11 +336,7 @@ export class CoopRoom extends Room<CoopRoomState> {
     }
 
     // New players (without reconnectToken) can only join in the Hub or between floors (buff_choice)
-    if (
-      this.playersBySession.size > 0 &&
-      !this.sim.inHub &&
-      this.sim.runState !== 'buff_choice'
-    ) {
+    if (this.playersBySession.size > 0 && !this.sim.inHub && this.sim.runState !== 'buff_choice') {
       client.send('join_rejected', {
         reasonVi: 'Đội đang chiến đấu — chỉ có thể tham gia ở Sảnh Chờ (Hub) hoặc giữa các tầng!',
       });

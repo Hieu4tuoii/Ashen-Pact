@@ -30,8 +30,7 @@ test.describe('Phase 6 — Biomes 2 & 3 (Frozen Depths & Molten Forge), 24 Weapo
     await page.goto('/?biome=2');
     await page.waitForFunction(
       () =>
-        window.__GAME_DEBUG__?.scene === 'GameScene' &&
-        window.__GAME_DEBUG__?.currentBiome === 2,
+        window.__GAME_DEBUG__?.scene === 'GameScene' && window.__GAME_DEBUG__?.currentBiome === 2,
       null,
       { timeout: 15000 },
     );
@@ -430,22 +429,40 @@ test.describe('Phase 6 — Biomes 2 & 3 (Frozen Depths & Molten Forge), 24 Weapo
     });
     expect(titanStunned).toBe(true);
 
+    // 4b. Biome 3 Stress Test (4 players + fire/smoke particles + 80 enemies + 600+ bullets) >= 60 FPS
+    await page.keyboard.press('F7');
+    await page.waitForTimeout(450);
+    const biome3StressPerf = await page.evaluate(() => {
+      const sim = window.__GAME_TRANSPORT__!.getSim();
+      return {
+        stressActive: sim.stressTestActive,
+        currentBiome: sim.currentBiome,
+        simulatedPlayers: sim.simulatedPlayers.length,
+        enemies: sim.enemies.length,
+        fps: window.__GAME_DEBUG__.fps,
+        frameTimeMs: window.__GAME_DEBUG__.frameTimeMs,
+      };
+    });
+    expect(biome3StressPerf.stressActive).toBe(true);
+    expect(biome3StressPerf.currentBiome).toBe(3);
+    expect(biome3StressPerf.simulatedPlayers).toBe(3); // P1 + 3 simulated = 4 players
+    expect(biome3StressPerf.enemies).toBeGreaterThanOrEqual(80);
+    expect(biome3StressPerf.fps).toBeGreaterThanOrEqual(58);
+    expect(biome3StressPerf.frameTimeMs).toBeLessThanOrEqual(17.5);
+    await page.keyboard.press('F7');
+
     // 5. Art Gallery Page 3 (24 Weapons + Phase 6 Props) & Page 5 (Biome 2 & 3 Enemies + Bosses Kryssa & Forge Titan)
     await page.goto('/?gallery=1');
-    await page.waitForFunction(
-      () => window.__GAME_DEBUG__?.scene === 'ArtGalleryScene',
-      null,
-      { timeout: 15000 },
-    );
+    await page.waitForFunction(() => window.__GAME_DEBUG__?.scene === 'ArtGalleryScene', null, {
+      timeout: 15000,
+    });
 
     await page.evaluate(() => {
       window.__GALLERY_SET_PAGE__?.(3);
     });
-    await page.waitForFunction(
-      () => window.__GAME_DEBUG__?.galleryPage === 3,
-      null,
-      { timeout: 5000 },
-    );
+    await page.waitForFunction(() => window.__GAME_DEBUG__?.galleryPage === 3, null, {
+      timeout: 5000,
+    });
     await page.waitForTimeout(300);
     await page.screenshot({
       path: path.join(SCREENSHOT_DIR, 'gallery-24-weapons-1080p.png'),
@@ -454,11 +471,9 @@ test.describe('Phase 6 — Biomes 2 & 3 (Frozen Depths & Molten Forge), 24 Weapo
     await page.evaluate(() => {
       window.__GALLERY_SET_PAGE__?.(5);
     });
-    await page.waitForFunction(
-      () => window.__GAME_DEBUG__?.galleryPage === 5,
-      null,
-      { timeout: 5000 },
-    );
+    await page.waitForFunction(() => window.__GAME_DEBUG__?.galleryPage === 5, null, {
+      timeout: 5000,
+    });
     await page.waitForTimeout(300);
     await page.screenshot({
       path: path.join(SCREENSHOT_DIR, 'gallery-phase6-biomes-bosses-1080p.png'),

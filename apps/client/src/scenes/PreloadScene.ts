@@ -31,11 +31,7 @@ export class PreloadScene extends Phaser.Scene {
       const hubParam = params.get('hub');
       const galleryParam = params.get('gallery');
 
-      if (
-        requestedScene === 'gallery' ||
-        requestedScene === 'artgallery' ||
-        galleryParam === '1'
-      ) {
+      if (requestedScene === 'gallery' || requestedScene === 'artgallery' || galleryParam === '1') {
         this.scene.start('ArtGalleryScene');
       } else if (requestedScene === 'menu') {
         this.scene.start('MenuScene');

@@ -19,12 +19,7 @@ export type WeaponCategory =
 export type PlayerSlot = 1 | 2 | 3 | 4;
 
 export type ElementalReactionId =
-  | 'vaporize'
-  | 'shatter'
-  | 'superconduct'
-  | 'toxic_blast'
-  | 'paralysis'
-  | 'overload';
+  'vaporize' | 'shatter' | 'superconduct' | 'toxic_blast' | 'paralysis' | 'overload';
 
 export interface ElementalReactionMeta {
   id: ElementalReactionId;
@@ -101,14 +96,7 @@ export type EnemyRole =
 export type EliteModifier = 'fast' | 'shield' | 'explosive_death' | 'regen';
 
 export type RoomType =
-  | 'start'
-  | 'combat'
-  | 'treasure'
-  | 'merchant'
-  | 'shrine'
-  | 'secret'
-  | 'portal'
-  | 'boss';
+  'start' | 'combat' | 'treasure' | 'merchant' | 'shrine' | 'secret' | 'portal' | 'boss';
 
 export type RoomDiscoveryState = 'hidden' | 'discovered' | 'visited' | 'cleared';
 
@@ -161,7 +149,6 @@ export interface EnemyStatsDef {
   isIllusion?: boolean;
 }
 
-
 export interface CoopScalingTier {
   playerCount: 1 | 2 | 3 | 4;
   enemyHpMultiplier: number;
@@ -170,4 +157,3 @@ export interface CoopScalingTier {
   bossHpMultiplier: number;
   enemyFireRateBonus: number;
 }
-

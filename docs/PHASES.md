@@ -70,10 +70,10 @@
 
 ---
 
-## Phase 6 — Biome 2 & 3 + Boss
-- [ ] Tileset vẽ bằng code, ánh sáng, ambient, quái, Elite, cơ chế map riêng (băng trơn, băng chuyền, máy sửa được), nâng tổng vũ khí lên ~24.
-- [ ] Boss Băng Hậu Kryssa và Titan Lò Rèn đầy đủ phase + cơ chế co-op + biến thể theo số người.
-- [ ] **DoD riêng Phase 6:** Chơi trọn 3 biome solo và 4 người (bot/debug) không crash; boss TTK đạt mục tiêu theo harness; stress test ở biome 3 ≥ 60 FPS.
+## Phase 6 — Biome 2 & 3 + Boss (Hoàn thành ✅)
+- [x] Tileset vẽ bằng code, ánh sáng, ambient, quái, Elite, cơ chế map riêng (băng trơn, băng chuyền, máy sửa được), nâng tổng vũ khí lên ~24.
+- [x] Boss Băng Hậu Kryssa và Titan Lò Rèn đầy đủ phase + cơ chế co-op + biến thể theo số người.
+- [x] **DoD riêng Phase 6:** Chơi trọn 3 biome solo và 4 người (bot/debug) không crash; boss TTK đạt mục tiêu theo harness; stress test ở biome 3 ≥ 60 FPS.
 
 ---
 

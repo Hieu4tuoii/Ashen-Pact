@@ -176,23 +176,15 @@ export function outlined(
 /**
  * Executes a declarative VectorShapeCommand through the unified outlined() pipeline.
  */
-export function renderShapeCommand(
-  ctx: CanvasRenderingContext2D,
-  cmd: VectorShapeCommand,
-): void {
+export function renderShapeCommand(ctx: CanvasRenderingContext2D, cmd: VectorShapeCommand): void {
   switch (cmd.kind) {
     case 'roundedRect': {
-      outlined(
-        ctx,
-        cmd.style,
-        (c) => traceRoundedRect(c, cmd.x, cmd.y, cmd.w, cmd.h, cmd.r),
-        {
-          cx: cmd.x + cmd.w / 2,
-          cy: cmd.y + cmd.h / 2,
-          rx: cmd.w / 2,
-          ry: cmd.h / 2,
-        },
-      );
+      outlined(ctx, cmd.style, (c) => traceRoundedRect(c, cmd.x, cmd.y, cmd.w, cmd.h, cmd.r), {
+        cx: cmd.x + cmd.w / 2,
+        cy: cmd.y + cmd.h / 2,
+        rx: cmd.w / 2,
+        ry: cmd.h / 2,
+      });
       break;
     }
     case 'ellipse': {
@@ -232,17 +224,12 @@ export function renderShapeCommand(
         if (p.y < minY) minY = p.y;
         if (p.y > maxY) maxY = p.y;
       }
-      outlined(
-        ctx,
-        cmd.style,
-        (c) => tracePolygon(c, cmd.points, true),
-        {
-          cx: (minX + maxX) / 2,
-          cy: (minY + maxY) / 2,
-          rx: (maxX - minX) / 2,
-          ry: (maxY - minY) / 2,
-        },
-      );
+      outlined(ctx, cmd.style, (c) => tracePolygon(c, cmd.points, true), {
+        cx: (minX + maxX) / 2,
+        cy: (minY + maxY) / 2,
+        rx: (maxX - minX) / 2,
+        ry: (maxY - minY) / 2,
+      });
       break;
     }
     case 'bezier': {

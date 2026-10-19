@@ -165,7 +165,8 @@ test.describe('Phase 2 — Pipeline Hình Ảnh & Tương Tác Map', () => {
       }
 
       transport.step(16.6667);
-      const healedWhilePoisoned = dummy.hp > dummyHpAfterPoisonHit ? dummy.hp - dummyHpAfterPoisonHit : 0;
+      const healedWhilePoisoned =
+        dummy.hp > dummyHpAfterPoisonHit ? dummy.hp - dummyHpAfterPoisonHit : 0;
 
       let burningTiles = 0;
       let electrifiedWaterTiles = 0;

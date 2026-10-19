@@ -157,7 +157,12 @@ export function generateDungeonFloor(
 
   const rooms: DungeonRoomNode[] = [];
 
-  const createEmptyNode = (id: number, gx: number, gy: number, type: RoomType): DungeonRoomNode => ({
+  const createEmptyNode = (
+    id: number,
+    gx: number,
+    gy: number,
+    type: RoomType,
+  ): DungeonRoomNode => ({
     id,
     gx,
     gy,
@@ -409,11 +414,7 @@ export function generateDungeonFloor(
       room.cleared = false;
       room.chestRarity = 'legendary';
       room.chestWeaponId =
-        biome === 2
-          ? 'thunder_hammer'
-          : biome === 3
-            ? 'magma_cannon'
-            : 'solar_archon_staff';
+        biome === 2 ? 'thunder_hammer' : biome === 3 ? 'magma_cannon' : 'solar_archon_staff';
       room.waves = [
         {
           waveIndex: 1,
@@ -505,7 +506,6 @@ function generateRoomWaves(
 
   return waves;
 }
-
 
 /**
  * Verifies that a generated DungeonFloorGraph is 100% connected via cardinal links,

@@ -312,9 +312,10 @@
       2. **Trượng Liên Kết (`tether_staff`):** Tạo **Tia Năng Lượng Liên Kết (`tetherBeams`)** nối giữa người cầm và đồng đội gần nhất (hoặc trụ/vật triệu hồi khi đi Solo), gây sát thương Sét + Cháy liên tục cho mọi kẻ địch đi cắt ngang tia.
   - **Nâng Cấp `ArtGalleryScene` 5 Trang & Công Cụ Balance Harness Cho Cả 3 Boss:**
     - Mở rộng `ArtGalleryScene` lên 5 trang (`3. 24 Vũ Khí & Map`, `5. Biome 2 & 3` trưng bày đủ 10 quái mới + 2 Boss **Băng Hậu Kryssa** & **Titan Lò Rèn**).
-    - Cập nhật `tools/balance-harness.ts` kiểm chứng mô phỏng cả 3 Boss (`spore_king`: 1P `101.3s` / 4P `111.6s` ±10.2%; `kryssa_ice_queen`: 1P `112.7s` / 4P `99.2s` ±12.0%; `forge_titan`: 1P `105.1s` / 4P `124.3s` ±18.3%) — đạt **7/7 chỉ tiêu định lượng**.
+    - Cập nhật `tools/balance-harness.ts` kiểm chứng mô phỏng cả 3 Boss (`spore_king`: 1P `101.3s` / 4P `111.6s` ±10.2%; `kryssa_ice_queen`: 1P `112.7s` / 4P `99.2s` ±12.0%; `forge_titan`: 1P `105.1s` / 4P `112.4s` ±6.9%) — đạt **7/7 chỉ tiêu định lượng**.
 - **Kết quả kiểm thử & Hiệu năng:**
-  - `pnpm verify` (`typecheck` + `lint` + `test` + `build` + `e2e`) và `pnpm balance` PASS 100% (8/8 Vitest test suites = 58 unit tests; 8/8 Playwright E2E test suites).
+  - `pnpm verify` (`typecheck` + `lint` + `test` + `build` + `e2e`) và `pnpm balance` PASS 100% (8/8 Vitest test suites = 59 unit tests; 8/8 Playwright E2E test suites).
+  - Stress test 4 người chơi + hạt lửa/khói + 80 quái + 600+ đạn tại **Biome 3 — Lò Rèn Dung Nham** giữ vững **~60 FPS** (`frameTimeMs <= 17.5ms`).
   - Screenshots nghiệm thu đã chụp và kiểm tra trực quan bằng mắt tại `docs/screenshots/phase-6/`:
     - `docs/screenshots/phase-6/frozen-depths-combat-1080p.png`
     - `docs/screenshots/phase-6/boss-kryssa-ice-queen-1080p.png`
@@ -322,7 +323,12 @@
     - `docs/screenshots/phase-6/boss-forge-titan-1080p.png`
     - `docs/screenshots/phase-6/gallery-24-weapons-1080p.png`
     - `docs/screenshots/phase-6/gallery-phase6-biomes-bosses-1080p.png`
+- **Vấn đề đã phát hiện & xử lý trong Phase 6:**
+  - Phát hiện toàn bộ 15 rig thực thể Biome 2 & 3 trong `apps/client/src/art/rig-defs.ts` (`frost_bat`, `baby_yeti`, `ice_mage`, `ice_golem`, `snow_spirit`, `kryssa_ice_queen`, `kryssa_clone`, `ice_prison`, `fire_imp`, `dwarf_cannon`, `coal_golem`, `welder_drone`, `iron_shielder`, `forge_energy_core`, `forge_titan`) dùng chung một hàm khuôn mẫu `buildBiomeEntityRig` vẽ hình người mặc áo choàng cầm súng lục (vi phạm `ART_GUIDE.md` về silhouette đặc trưng) → Đã thiết kế lại toàn bộ 15 rig thủ công bằng đa giác/hình học vector riêng biệt theo đúng giải phẫu và vai trò từng loài (cánh dơi băng nhọn, lông Yeti + sừng cừu, bông tuyết 8 cánh cho Tinh Linh Tuyết, vương miện 5 đỉnh + áo choàng cực quang cho Băng Hậu Kryssa, lồng băng tinh thể giam giữ đồng đội, râu tết + pháo cối cho Người Lùn Pháo Thủ, cánh quạt hover + mỏ hàn hồ quang cho Drone Hàn, trụ tụ điện plasma cho Lõi Năng Lượng, ống khói lò rèn kép + đại chùy dung nham cho Titan Lò Rèn).
+  - Phát hiện vũ khí Huyền Thoại `thunder_hammer` (`Búa Lôi Thần`) có `projectileSpeed: 0` khiến 3 tia sét phóng ra khi vung búa bị đứng yên tại chỗ (`vx = 0, vy = 0`) → Đã cập nhật `projectileSpeed: 540` trong `weapons.ts` và `speed: w.projectileSpeed || 540` trong `world-sim.ts`, kèm unit test kiểm chứng vận tốc tia sét.
+  - Phát hiện cờ `resultDismissed` của bảng kết quả trong `GameScene.ts` không được đặt lại về `false` khi người chơi qua tầng tiếp theo, và đồng đội Co-op (`simulatedPlayers`) chưa tỏa hơi thở lạnh ở Biome 2 → Đã tự động reset `resultDismissed = false` khi `runState` quay lại `'playing'` hoặc `'buff_choice'`, đồng thời bổ sung hạt hơi thở lạnh cho toàn bộ đồng đội Co-op còn sống tại Biome 2.
 - **Bước tiếp theo (Phase 7):**
   - Triển khai **Phase 7 — UI/UX Hoàn Thiện & Âm Thanh**: Menu động trên nền lửa trại, HUD vector đánh bóng, Settings đầy đủ, màn hình kết thúc vinh danh MVP, i18n `vi`/`en`, nhạc nền động 2 lớp + âm thanh định vị.
+
 
 

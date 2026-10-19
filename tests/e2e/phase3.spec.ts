@@ -60,7 +60,15 @@ test.describe('Phase 3 — Dungeon, Vòng Lặp Lượt Chơi & Biome 1 Hoàn Ch
     expect(dungeonInfo.totalRooms).toBeGreaterThanOrEqual(7);
     expect(dungeonInfo.totalRooms).toBeLessThanOrEqual(10);
     expect(dungeonInfo.roomTypes).toEqual(
-      expect.arrayContaining(['start', 'combat', 'treasure', 'merchant', 'shrine', 'secret', 'portal']),
+      expect.arrayContaining([
+        'start',
+        'combat',
+        'treasure',
+        'merchant',
+        'shrine',
+        'secret',
+        'portal',
+      ]),
     );
 
     await page.waitForTimeout(180);
@@ -243,7 +251,9 @@ test.describe('Phase 3 — Dungeon, Vòng Lặp Lượt Chơi & Biome 1 Hoàn Ch
 
       // Kill green_slime to verify it splits into 2 mini_slime
       sim.applyDamageToEnemy(e2, 999, true, 'none', 0, 0);
-      const miniSlimesAfterKill = sim.enemies.filter((e) => e.defId === 'mini_slime' && e.hp > 0).length;
+      const miniSlimesAfterKill = sim.enemies.filter(
+        (e) => e.defId === 'mini_slime' && e.hp > 0,
+      ).length;
 
       // Spawn another green_slime so all 6 + mini_slime + elite are visible in screenshot
       sim.spawnEnemy('green_slime', 460, 200, true);
@@ -461,7 +471,9 @@ test.describe('Phase 3 — Dungeon, Vòng Lặp Lượt Chơi & Biome 1 Hoàn Ch
     await page.waitForTimeout(300);
 
     await page.evaluate(() => {
-      (window as unknown as { __GALLERY_SET_PAGE__?: (p: 1 | 2 | 3) => void }).__GALLERY_SET_PAGE__?.(2);
+      (
+        window as unknown as { __GALLERY_SET_PAGE__?: (p: 1 | 2 | 3) => void }
+      ).__GALLERY_SET_PAGE__?.(2);
     });
     await page.waitForTimeout(250);
     await page.screenshot({
@@ -469,7 +481,9 @@ test.describe('Phase 3 — Dungeon, Vòng Lặp Lượt Chơi & Biome 1 Hoàn Ch
     });
 
     await page.evaluate(() => {
-      (window as unknown as { __GALLERY_SET_PAGE__?: (p: 1 | 2 | 3) => void }).__GALLERY_SET_PAGE__?.(3);
+      (
+        window as unknown as { __GALLERY_SET_PAGE__?: (p: 1 | 2 | 3) => void }
+      ).__GALLERY_SET_PAGE__?.(3);
     });
     await page.waitForTimeout(250);
     await page.screenshot({
@@ -480,4 +494,3 @@ test.describe('Phase 3 — Dungeon, Vòng Lặp Lượt Chơi & Biome 1 Hoàn Ch
     expect(consoleWarnings).toEqual([]);
   });
 });
-

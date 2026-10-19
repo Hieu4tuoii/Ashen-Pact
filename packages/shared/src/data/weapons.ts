@@ -448,7 +448,7 @@ export const WEAPONS: Record<string, WeaponStatsDef> = {
     pelletCount: 1,
     fireRate: 1.75,
     energyCost: 3,
-    projectileSpeed: 0,
+    projectileSpeed: 540,
     spreadDeg: 165,
     critChance: 0.22,
     pierceCount: 99,
@@ -506,6 +506,3 @@ export const WEAPON_RARITY_COLORS: Record<WeaponStatsDef['rarity'], string> = {
   epic: '#A855F7',
   legendary: '#F97316',
 };
-
-
-

@@ -134,10 +134,7 @@ export class WifiSimulator {
   }
 
   public triggerManualLagSpike(durationMs = 300): void {
-    this.activeSpikeUntilMs = Math.max(
-      this.activeSpikeUntilMs,
-      this.virtualClockMs + durationMs,
-    );
+    this.activeSpikeUntilMs = Math.max(this.activeSpikeUntilMs, this.virtualClockMs + durationMs);
     this.totalSpikesTriggered += 1;
   }
 
@@ -154,7 +151,11 @@ export class WifiSimulator {
       return;
     }
 
-    if (droppable && this.profile.packetLossRate > 0 && this.rng.chance(this.profile.packetLossRate)) {
+    if (
+      droppable &&
+      this.profile.packetLossRate > 0 &&
+      this.rng.chance(this.profile.packetLossRate)
+    ) {
       this.totalPacketsDropped += 1;
       return;
     }

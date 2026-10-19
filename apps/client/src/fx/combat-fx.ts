@@ -184,11 +184,7 @@ export class CombatFxManager {
     for (let i = 0; i < ambientCapacity; i++) {
       const isMist = i < 8;
       const tex = isMist ? 'fx_ambient_mist' : 'fx_ambient_leaf';
-      const sprite = scene.add.sprite(
-        (i * 97) % 1100,
-        (i * 61) % 680,
-        tex,
-      );
+      const sprite = scene.add.sprite((i * 97) % 1100, (i * 61) % 680, tex);
       const baseScale = isMist ? invBake * 1.8 : invBake * (0.75 + (i % 3) * 0.15);
       sprite.setScale(baseScale);
       sprite.setAlpha(isMist ? 0.35 : 0.72);
@@ -274,9 +270,7 @@ export class CombatFxManager {
           amb.vy = 22 + (i % 5) * 4;
         } else if (biome === 3) {
           amb.sprite.setTexture('fx_spark');
-          amb.sprite.setTint(
-            hexToNum(i % 2 === 0 ? PALETTE.FLAME_ORANGE : PALETTE.SOLAR_GOLD),
-          );
+          amb.sprite.setTint(hexToNum(i % 2 === 0 ? PALETTE.FLAME_ORANGE : PALETTE.SOLAR_GOLD));
           amb.vy = -(18 + (i % 5) * 4);
         } else {
           amb.sprite.setTexture('fx_ambient_leaf');
@@ -740,7 +734,12 @@ export class CombatFxManager {
     slot.text.setActive(true);
   }
 
-  public spawnMuzzleFlashAndCasing(x: number, y: number, angleRad: number, isShotgun = false): void {
+  public spawnMuzzleFlashAndCasing(
+    x: number,
+    y: number,
+    angleRad: number,
+    isShotgun = false,
+  ): void {
     const invBake = 1 / TextureBaker.getBakeScale();
     const flash = this.acquireParticleSlot();
     if (flash) {

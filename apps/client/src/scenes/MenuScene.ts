@@ -51,7 +51,8 @@ export class MenuScene extends Phaser.Scene {
       this.presetNameIndex = Math.floor(Math.random() * PRESET_NAMES_VI.length);
       this.displayName = PRESET_NAMES_VI[this.presetNameIndex] ?? 'Hiệp Sĩ Tro';
     }
-    const host = typeof window !== 'undefined' ? window.location.hostname || '127.0.0.1' : '127.0.0.1';
+    const host =
+      typeof window !== 'undefined' ? window.location.hostname || '127.0.0.1' : '127.0.0.1';
     this.serverHostPort = `${host}:2567`;
   }
 

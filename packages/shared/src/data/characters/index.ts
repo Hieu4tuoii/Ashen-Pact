@@ -78,7 +78,8 @@ export const CHARACTERS: Record<CharacterId, CharacterStatsDef> = {
         {
           id: 'ranger_prey_chain',
           nameVi: 'Chuỗi Con Mồi',
-          descriptionVi: '30% sát thương lên mục tiêu bị đánh dấu lan sang các mục tiêu bị đánh dấu khác.',
+          descriptionVi:
+            '30% sát thương lên mục tiêu bị đánh dấu lan sang các mục tiêu bị đánh dấu khác.',
         },
       ],
     },
@@ -98,7 +99,8 @@ export const CHARACTERS: Record<CharacterId, CharacterStatsDef> = {
     baseCritChance: 0.08,
     starterWeaponId: 'apprentice_staff',
     passiveNameVi: 'Vòng Xoay Nguyên Tố',
-    passiveDescriptionVi: 'Xoay vòng Lửa → Băng → Sét sau mỗi lần dùng kỹ năng; đạn thường áp nguyên tố hiện hành.',
+    passiveDescriptionVi:
+      'Xoay vòng Lửa → Băng → Sét sau mỗi lần dùng kỹ năng; đạn thường áp nguyên tố hiện hành.',
     skill: {
       id: 'elemental_orb',
       nameVi: 'Cầu Nguyên Tố',
@@ -138,7 +140,8 @@ export const CHARACTERS: Record<CharacterId, CharacterStatsDef> = {
     baseCritChance: 0.05,
     starterWeaponId: 'thorn_staff',
     passiveNameVi: 'Hạt Giống Sự Sống',
-    passiveDescriptionVi: 'Quái bị hạ có 15% rơi hạt hồi 1 HP bay tới đồng đội ít máu nhất; hồi sinh nhanh gấp đôi.',
+    passiveDescriptionVi:
+      'Quái bị hạ có 15% rơi hạt hồi 1 HP bay tới đồng đội ít máu nhất; hồi sinh nhanh gấp đôi.',
     skill: {
       id: 'sacred_tree',
       nameVi: 'Cây Thiêng',
@@ -178,7 +181,8 @@ export const CHARACTERS: Record<CharacterId, CharacterStatsDef> = {
     baseCritChance: 0.08,
     starterWeaponId: 'rivet_gun',
     passiveNameVi: 'Thợ Sửa',
-    passiveDescriptionVi: 'Đồng minh trong 4 ô hồi giáp nhanh hơn 30%; sửa và kích hoạt máy móc trên map.',
+    passiveDescriptionVi:
+      'Đồng minh trong 4 ô hồi giáp nhanh hơn 30%; sửa và kích hoạt máy móc trên map.',
     skill: {
       id: 'tesla_turret',
       nameVi: 'Trụ Tesla',

@@ -86,10 +86,7 @@ export class LocalTransport implements ITransport {
       this.latestInput.moveX !== 0 ||
       this.latestInput.moveY !== 0 ||
       (this.latestInput.buttons &
-        (INPUT_BUTTON.DASH |
-          INPUT_BUTTON.FIRE |
-          INPUT_BUTTON.SKILL |
-          INPUT_BUTTON.INTERACT)) !==
+        (INPUT_BUTTON.DASH | INPUT_BUTTON.FIRE | INPUT_BUTTON.SKILL | INPUT_BUTTON.INTERACT)) !==
         0;
 
     if (isAtRest && hasImmediateIntent) {

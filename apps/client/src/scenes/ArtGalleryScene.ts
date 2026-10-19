@@ -57,7 +57,11 @@ export class ArtGalleryScene extends Phaser.Scene {
   private simLoop = new FixedTimestepLoop(60);
   private rigs: CutoutRig[] = [];
   private playerRigs: CutoutRig[] = [];
-  private floorTileSprites: { sprite: Phaser.GameObjects.Sprite; variant: number; fixedBiome?: 1 | 2 | 3 }[] = [];
+  private floorTileSprites: {
+    sprite: Phaser.GameObjects.Sprite;
+    variant: number;
+    fixedBiome?: 1 | 2 | 3;
+  }[] = [];
   private bakedSprites: { sprite: Phaser.GameObjects.Sprite; mult: number }[] = [];
   private textObjects: Phaser.GameObjects.Text[] = [];
   private pageContainers: Phaser.GameObjects.Container[] = [];
@@ -314,15 +318,9 @@ export class ArtGalleryScene extends Phaser.Scene {
         }
       }
 
-      const rig = new CutoutRig(
-        this,
-        cx + (item.companionDef ? 94 : 112),
-        cy + 122,
-        item.rigDef,
-        {
-          displayScale: item.scale,
-        },
-      );
+      const rig = new CutoutRig(this, cx + (item.companionDef ? 94 : 112), cy + 122, item.rigDef, {
+        displayScale: item.scale,
+      });
       rig.setAnimState(this.currentAnim);
       this.rigs.push(rig);
       parent.add(rig.container);
@@ -406,11 +404,7 @@ export class ArtGalleryScene extends Phaser.Scene {
       cg.strokeRoundedRect(wx, wy, cardW, cardH, 6);
       parent.add(cg);
 
-      const spr = this.add.sprite(
-        wx + cardW / 2,
-        wy + 23,
-        TextureBaker.getWeaponTextureKey(wId),
-      );
+      const spr = this.add.sprite(wx + cardW / 2, wy + 23, TextureBaker.getWeaponTextureKey(wId));
       spr.setScale(invBake * 0.96);
       this.bakedSprites.push({ sprite: spr, mult: 0.96 });
       parent.add(spr);
@@ -1053,9 +1047,7 @@ export class ArtGalleryScene extends Phaser.Scene {
       .setOrigin(0.5);
     this.textObjects.push(txt);
 
-    const hit = this.add
-      .rectangle(0, 0, w, h, 0x000000, 0)
-      .setInteractive({ useHandCursor: true });
+    const hit = this.add.rectangle(0, 0, w, h, 0x000000, 0).setInteractive({ useHandCursor: true });
     hit.on('pointerover', () => draw(true));
     hit.on('pointerout', () => draw(false));
     hit.on('pointerdown', onClick);

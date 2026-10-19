@@ -15,5 +15,3 @@ export * from './protocol/network-transport.js';
 export * from './sim/arena-map.js';
 export * from './sim/dungeon-gen.js';
 export * from './sim/world-sim.js';
-
-

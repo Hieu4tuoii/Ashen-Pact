@@ -102,7 +102,9 @@ test.describe('Phase 4 — Co-op LAN Authoritative, Prediction/Interpolation, Hu
     }
 
     // Verify slots 1..4, LAN IP invite URL, and default non-duplicate character assignment in Hub
-    const slots = await Promise.all(pages.map((p) => p.evaluate(() => window.__GAME_DEBUG__.playerSlot)));
+    const slots = await Promise.all(
+      pages.map((p) => p.evaluate(() => window.__GAME_DEBUG__.playerSlot)),
+    );
     expect(slots).toEqual([1, 2, 3, 4]);
 
     const hostInviteUrl = await page1.evaluate(() => window.__GAME_DEBUG__.hostInviteUrl);
@@ -173,11 +175,9 @@ test.describe('Phase 4 — Co-op LAN Authoritative, Prediction/Interpolation, Hu
     });
 
     for (const p of pages) {
-      await p.waitForFunction(
-        () => window.__GAME_DEBUG__?.currentRoomType === 'combat',
-        null,
-        { timeout: 10000 },
-      );
+      await p.waitForFunction(() => window.__GAME_DEBUG__?.currentRoomType === 'combat', null, {
+        timeout: 10000,
+      });
     }
 
     // 5. Enable "bad" Wi-Fi profile (80ms latency, +-20ms jitter, 2% loss) + 300ms lag spike on P2

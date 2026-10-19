@@ -58,11 +58,7 @@ export const PHASE1_SAMPLE_WEAPONS = [
 
 export type Phase1WeaponId = (typeof PHASE1_SAMPLE_WEAPONS)[number];
 
-export const PHASE1_SAMPLE_ENEMIES = [
-  'goblin_shooter',
-  'wild_boar',
-  'spore_bomber',
-] as const;
+export const PHASE1_SAMPLE_ENEMIES = ['goblin_shooter', 'wild_boar', 'spore_bomber'] as const;
 
 export type Phase1EnemyId = (typeof PHASE1_SAMPLE_ENEMIES)[number];
 
@@ -141,13 +137,7 @@ export const REVIVE_HOLD_DURATION_SEC = 2.5;
 export const DRUID_REVIVE_HOLD_DURATION_SEC = 1.25;
 
 export type EnemyAIState =
-  | 'spawning'
-  | 'idle'
-  | 'move'
-  | 'telegraph'
-  | 'attack'
-  | 'cooldown'
-  | 'stunned';
+  'spawning' | 'idle' | 'move' | 'telegraph' | 'attack' | 'cooldown' | 'stunned';
 
 export type PropKind =
   | 'wooden_crate'
@@ -1428,7 +1418,12 @@ export class WorldSim {
     this.spawnTrainingDummy(cx + 95, cy + 95);
 
     // Weapon Test Rack (West side — 2x2 staggered grid so [E] labels never overlap)
-    const rackWeapons = ['hunter_crossbow', 'frost_scepter', 'tesla_carbine', 'dragon_breath_shotgun'] as const;
+    const rackWeapons = [
+      'hunter_crossbow',
+      'frost_scepter',
+      'tesla_carbine',
+      'dragon_breath_shotgun',
+    ] as const;
     const rackOffsets: readonly [number, number][] = [
       [-320, 48],
       [-195, 48],
@@ -1989,7 +1984,8 @@ export class WorldSim {
     const moveSpeed =
       isElite && eliteModifier === 'fast' ? Math.round(def.moveSpeed * 1.38) : def.moveSpeed;
     const damage = isElite ? Math.max(def.damage + 1, Math.round(def.damage * 1.35)) : def.damage;
-    const shieldArmor = isElite && eliteModifier === 'shield' ? Math.round(def.hp * 0.85 * hpMult) : 0;
+    const shieldArmor =
+      isElite && eliteModifier === 'shield' ? Math.round(def.hp * 0.85 * hpMult) : 0;
     const nameVi =
       isElite && eliteModifier
         ? `[Tinh Anh] ${def.nameVi} (${ELITE_MODIFIER_LABELS_VI[eliteModifier]})`
@@ -2512,9 +2508,7 @@ export class WorldSim {
               const item = this.spawnWorldItem({
                 kind: offer.kind,
                 weaponId: offer.weaponId,
-                rarity:
-                  offer.rarity ??
-                  (offer.kind === 'armor_upgrade' ? 'rare' : 'uncommon'),
+                rarity: offer.rarity ?? (offer.kind === 'armor_upgrade' ? 'rare' : 'uncommon'),
                 nameVi: offer.nameVi,
                 costGold: offer.costGold,
                 healAmount: offer.kind === 'health_potion' ? 4 : 0,
@@ -2757,9 +2751,7 @@ export class WorldSim {
 
   public rollRandomWeaponByRarities(allowedRarities: readonly WeaponRarity[]): string {
     const weaponPool =
-      this.currentBiome === 1 && this.campaignMaxFloors === 2
-        ? PHASE3_WEAPON_IDS
-        : ALL_WEAPON_IDS;
+      this.currentBiome === 1 && this.campaignMaxFloors === 2 ? PHASE3_WEAPON_IDS : ALL_WEAPON_IDS;
     const candidates = weaponPool.filter((id) => {
       const w = WEAPONS[id];
       return w && allowedRarities.includes(w.rarity);
@@ -3059,14 +3051,17 @@ export class WorldSim {
     const available: BuffId[] = FLOOR_BUFF_LIST.filter(
       (b) =>
         !this.activeBuffIds.includes(b.id) &&
-        (b.category === 'general' || (b.characterId !== undefined && activeCharIds.has(b.characterId))),
+        (b.category === 'general' ||
+          (b.characterId !== undefined && activeCharIds.has(b.characterId))),
     ).map((b) => b.id);
     const choices: BuffId[] = [];
 
     // Ensure at least 1 character skill upgrade for the active party is offered on floor transition
     const skillUpgrades = available.filter((id) => {
       const def = FLOOR_BUFFS[id];
-      return def?.category === 'skill_upgrade' && def.characterId && activeCharIds.has(def.characterId);
+      return (
+        def?.category === 'skill_upgrade' && def.characterId && activeCharIds.has(def.characterId)
+      );
     });
     if (skillUpgrades.length > 0) {
       const pickedSkill = this.rng.pick(skillUpgrades);
@@ -3190,7 +3185,9 @@ export class WorldSim {
     // 0.5 Engineer Passive: Repair & Activate Ancient Mechanism on the map!
     const hasEngineerInParty =
       p.characterId === 'engineer' ||
-      this.getAllPlayers().some((ally) => ally.characterId === 'engineer' && ally.lifeState === 'alive');
+      this.getAllPlayers().some(
+        (ally) => ally.characterId === 'engineer' && ally.lifeState === 'alive',
+      );
     if (hasEngineerInParty) {
       for (let i = 0; i < this.props.length; i++) {
         const prop = this.props[i]!;
@@ -3803,13 +3800,9 @@ export class WorldSim {
 
     if (justPressed & INPUT_BUTTON.PING) {
       const px =
-        typeof inp.pingWorldX === 'number'
-          ? inp.pingWorldX
-          : p.x + Math.cos(p.aimAngle) * 110;
+        typeof inp.pingWorldX === 'number' ? inp.pingWorldX : p.x + Math.cos(p.aimAngle) * 110;
       const py =
-        typeof inp.pingWorldY === 'number'
-          ? inp.pingWorldY
-          : p.y + Math.sin(p.aimAngle) * 110;
+        typeof inp.pingWorldY === 'number' ? inp.pingWorldY : p.y + Math.sin(p.aimAngle) * 110;
       this.triggerPing(p.id, px, py);
     }
 
@@ -3838,11 +3831,7 @@ export class WorldSim {
       const crawlSpeed = p.lifeState === 'downed' ? 38 : p.moveSpeed * 0.85;
       p.vx = dirX * crawlSpeed;
       p.vy = dirY * crawlSpeed;
-      const col = this.map.resolveCircleCollision(
-        p.x + p.vx * dtSec,
-        p.y + p.vy * dtSec,
-        p.radius,
-      );
+      const col = this.map.resolveCircleCollision(p.x + p.vx * dtSec, p.y + p.vy * dtSec, p.radius);
       p.x = col.x;
       p.y = col.y;
       return;
@@ -4047,8 +4036,7 @@ export class WorldSim {
       const effectiveSpeed = p.moveSpeed * speedMult;
       const targetVx = dirX * effectiveSpeed;
       const targetVy = dirY * effectiveSpeed;
-      let accelRate =
-        dirX !== 0 || dirY !== 0 ? effectiveSpeed / 0.055 : effectiveSpeed / 0.045;
+      let accelRate = dirX !== 0 || dirY !== 0 ? effectiveSpeed / 0.055 : effectiveSpeed / 0.045;
       if (surf === 'ice') {
         accelRate *= dirX !== 0 || dirY !== 0 ? 0.32 : 0.16;
       }
@@ -4075,7 +4063,12 @@ export class WorldSim {
 
     // Chasm hazard (Biome 2): walking onto a chasm tile without dashing deals 1 damage and pushes back to safe ledge
     const nextSurf = this.map.getSurfaceAtWorld(p.x, p.y);
-    if (nextSurf === 'chasm' && p.dashTimer <= 0 && !this.botAutoPlayActive && !this.stressTestActive) {
+    if (
+      nextSurf === 'chasm' &&
+      p.dashTimer <= 0 &&
+      !this.botAutoPlayActive &&
+      !this.stressTestActive
+    ) {
       const pushAng = Math.atan2(prevSafeY - p.y, prevSafeX - p.x);
       p.x = prevSafeX;
       p.y = prevSafeY;
@@ -4087,7 +4080,7 @@ export class WorldSim {
       this.events.push({ kind: 'grass_rustle', x: p.x, y: p.y });
     }
 
-    if ((inp.buttons & INPUT_BUTTON.FIRE) && p.fireCooldownTimer <= 0 && p.hp > 0) {
+    if (inp.buttons & INPUT_BUTTON.FIRE && p.fireCooldownTimer <= 0 && p.hp > 0) {
       this.tryFireActiveWeapon(p);
     }
 
@@ -4811,7 +4804,10 @@ export class WorldSim {
         let pressed = false;
         for (let pIdx = 0; pIdx < allPlayers.length; pIdx++) {
           const pl = allPlayers[pIdx]!;
-          if (pl.lifeState === 'alive' && distance(plate.x, plate.y, pl.x, pl.y) <= plate.radius + pl.radius + 4) {
+          if (
+            pl.lifeState === 'alive' &&
+            distance(plate.x, plate.y, pl.x, pl.y) <= plate.radius + pl.radius + 4
+          ) {
             pressed = true;
             break;
           }
@@ -4828,7 +4824,11 @@ export class WorldSim {
         if (!pressed) {
           for (let sIdx = 0; sIdx < this.summons.length; sIdx++) {
             const sum = this.summons[sIdx]!;
-            if (sum.hp > 0 && sum.ttlSec > 0 && distance(plate.x, plate.y, sum.x, sum.y) <= plate.radius + sum.radius) {
+            if (
+              sum.hp > 0 &&
+              sum.ttlSec > 0 &&
+              distance(plate.x, plate.y, sum.x, sum.y) <= plate.radius + sum.radius
+            ) {
               pressed = true;
               break;
             }
@@ -4981,7 +4981,11 @@ export class WorldSim {
     // 1. Clear all enemy bullets around the turret
     for (let i = 0; i < this.projectiles.length; i++) {
       const b = this.projectiles[i]!;
-      if (b.team === 'enemy' && b.ttlSec > 0 && distance(turret.x, turret.y, b.x, b.y) <= empRadius) {
+      if (
+        b.team === 'enemy' &&
+        b.ttlSec > 0 &&
+        distance(turret.x, turret.y, b.x, b.y) <= empRadius
+      ) {
         b.ttlSec = 0;
         bulletsCleared += 1;
       }
@@ -5021,8 +5025,7 @@ export class WorldSim {
         const sp = this.simulatedPlayers[i]!;
         const entry = this.coopPlayerInputs.get(sp.id);
         if (entry) {
-          const justPressed =
-            (entry.current.buttons & ~entry.prevButtons) | entry.latchedButtons;
+          const justPressed = (entry.current.buttons & ~entry.prevButtons) | entry.latchedButtons;
           const selectedSlot = entry.latchedWeaponSlot ?? entry.current.weaponSlotSelect;
           this.updateSinglePlayerState(sp, entry.current, justPressed, selectedSlot ?? null, dtSec);
           entry.prevButtons = entry.current.buttons;
@@ -5046,7 +5049,8 @@ export class WorldSim {
       const dist = Math.hypot(dx, dy);
 
       sp.aimAngle = phase + Math.PI * 0.5;
-      if (sp.dashCooldownTimer > 0) sp.dashCooldownTimer = Math.max(0, sp.dashCooldownTimer - dtSec);
+      if (sp.dashCooldownTimer > 0)
+        sp.dashCooldownTimer = Math.max(0, sp.dashCooldownTimer - dtSec);
       if (sp.dashTimer > 0) {
         sp.dashTimer = Math.max(0, sp.dashTimer - dtSec);
         sp.vx = sp.dashDirX * sp.moveSpeed * DASH_SPEED_MULTIPLIER;
@@ -5148,11 +5152,7 @@ export class WorldSim {
     }
   }
 
-  private updatePlayerSurfaceAndStatus(
-    p: SimPlayerState,
-    surf: SurfaceKind,
-    dtSec: number,
-  ): void {
+  private updatePlayerSurfaceAndStatus(p: SimPlayerState, surf: SurfaceKind, dtSec: number): void {
     if (surf === 'water') {
       p.burnTimer = 0;
     } else if (surf === 'burning_oil' || surf === 'burning_grass' || surf === 'lava') {
@@ -5392,7 +5392,10 @@ export class WorldSim {
     const skillDef = CHARACTERS.vanguard.skill;
     const stored = p.shieldStoredBullets;
     p.skillActiveTimer = 0;
-    p.skillCooldownTimer = Math.max(p.skillCooldownTimer, skillDef.cooldownSec - skillDef.durationSec);
+    p.skillCooldownTimer = Math.max(
+      p.skillCooldownTimer,
+      skillDef.cooldownSec - skillDef.durationSec,
+    );
     p.shieldStoredBullets = 0;
 
     const hasFortressUpgrade = this.activeBuffIds.includes('vanguard_fortress');
@@ -5421,11 +5424,7 @@ export class WorldSim {
     const baseShockDmg = 12 + stored * 4 + (hasFortressUpgrade ? 8 : 0);
     const shockwaveDamage = baseShockDmg * (hasChargeUpgrade ? 2 : 1);
     const shockElement: ElementType =
-      p.activeImbueElement !== 'none'
-        ? p.activeImbueElement
-        : hasChargeUpgrade
-          ? 'burn'
-          : 'none';
+      p.activeImbueElement !== 'none' ? p.activeImbueElement : hasChargeUpgrade ? 'burn' : 'none';
     const halfArc = hasFortressUpgrade ? Math.PI : (65 * Math.PI) / 180;
     const range = hasChargeUpgrade ? 165 : hasFortressUpgrade ? 150 : 135;
 
@@ -5472,8 +5471,7 @@ export class WorldSim {
   }
 
   private tryFireActiveWeapon(p: SimPlayerState = this.player): void {
-    const weaponId =
-      p.weaponSlots[p.activeWeaponSlot] ?? p.weaponSlots[0] ?? 'knight_sword';
+    const weaponId = p.weaponSlots[p.activeWeaponSlot] ?? p.weaponSlots[0] ?? 'knight_sword';
     const w = WEAPONS[weaponId];
     if (!w) return;
 
@@ -5550,11 +5548,7 @@ export class WorldSim {
 
       // Hit enemies in melee cone
       const baseCrit = CHARACTERS[p.characterId]?.baseCritChance ?? 0.05;
-      const critChance = clamp(
-        baseCrit + w.critChance + (hasEaglePrecision ? 0.18 : 0),
-        0,
-        1,
-      );
+      const critChance = clamp(baseCrit + w.critChance + (hasEaglePrecision ? 0.18 : 0), 0, 1);
       let hitAny = false;
       let anyCrit = false;
       const meleeEnemyCount = this.enemies.length;
@@ -5584,7 +5578,7 @@ export class WorldSim {
           angle: p.aimAngle,
           pelletCount: 3,
           spreadRad: 0.42,
-          speed: w.projectileSpeed,
+          speed: w.projectileSpeed || 540,
           damage: Math.round(baseMeleeDmg * 0.75),
           radius: 6,
           knockback: w.knockback * 0.7,
@@ -5692,11 +5686,7 @@ export class WorldSim {
     const baseCrit = CHARACTERS[p.characterId]?.baseCritChance ?? 0.05;
     const rawWeaponDmg = hasEaglePrecision ? Math.round(w.damage * 1.2) : w.damage;
     const baseDmg = shieldBoost ? Math.round(rawWeaponDmg * 1.3) : rawWeaponDmg;
-    const critChance = clamp(
-      baseCrit + w.critChance + (hasEaglePrecision ? 0.18 : 0),
-      0,
-      1,
-    );
+    const critChance = clamp(baseCrit + w.critChance + (hasEaglePrecision ? 0.18 : 0), 0, 1);
 
     // Co-op Weapon: Trượng Liên Kết (tether_staff) links player with nearest ally or summon/anchor!
     if (w.id === 'tether_staff') {
@@ -5798,10 +5788,7 @@ export class WorldSim {
    * Given the same BulletVolleySpawnEvent (tick, origin, angle, weaponId, seed), both server and client
    * spawn the exact same projectiles with identical angles, speeds, and crit rolls without syncing per-bullet states.
    */
-  public spawnDeterministicVolley(
-    ev: BulletVolleySpawnEvent,
-    emitEvents = true,
-  ): void {
+  public spawnDeterministicVolley(ev: BulletVolleySpawnEvent, emitEvents = true): void {
     this.volleyRng.setState(ev.seed || 0x6d2b79f5);
     const volleyRng = this.volleyRng;
     const pellets = Math.max(1, ev.pelletCount);
@@ -5817,9 +5804,7 @@ export class WorldSim {
       } else if (pellets > 1) {
         const t = i / (pellets - 1) - 0.5;
         const jitter =
-          ev.team === 'player'
-            ? volleyRng.nextFloat(-ev.spreadRad * 0.12, ev.spreadRad * 0.12)
-            : 0;
+          ev.team === 'player' ? volleyRng.nextFloat(-ev.spreadRad * 0.12, ev.spreadRad * 0.12) : 0;
         shotAngle = ev.angle + t * ev.spreadRad + jitter;
       } else if (ev.spreadRad > 0) {
         shotAngle = ev.angle + volleyRng.nextFloat(-ev.spreadRad * 0.5, ev.spreadRad * 0.5);
@@ -5921,10 +5906,7 @@ export class WorldSim {
         e.hitFlashTimer = Math.max(0, e.hitFlashTimer - dtSec);
       }
       if (e.attackCooldownTimer > 0) {
-        e.attackCooldownTimer = Math.max(
-          0,
-          e.attackCooldownTimer - dtSec / coopCdScale,
-        );
+        e.attackCooldownTimer = Math.max(0, e.attackCooldownTimer - dtSec / coopCdScale);
       }
       if (e.shockTimer > 0) {
         e.shockTimer = Math.max(0, e.shockTimer - dtSec);
@@ -6137,7 +6119,11 @@ export class WorldSim {
         }
       }
 
-      if ((e.defId === 'wild_boar' || e.defId === 'baby_yeti') && e.aiState === 'attack' && col.collided) {
+      if (
+        (e.defId === 'wild_boar' || e.defId === 'baby_yeti') &&
+        e.aiState === 'attack' &&
+        col.collided
+      ) {
         e.aiState = 'stunned';
         e.stateTimer = 0.5;
         e.vx = 0;
@@ -6169,11 +6155,7 @@ export class WorldSim {
     return 1 / Math.max(1, rate);
   }
 
-  private updateEnemyStatusAndSurface(
-    e: SimEnemyState,
-    surf: SurfaceKind,
-    dtSec: number,
-  ): void {
+  private updateEnemyStatusAndSurface(e: SimEnemyState, surf: SurfaceKind, dtSec: number): void {
     if (surf === 'water') {
       e.burnTimer = 0;
     } else if (surf === 'burning_oil' || surf === 'burning_grass' || surf === 'lava') {
@@ -6935,16 +6917,8 @@ export class WorldSim {
       // In Phase 2 & 3, every odd attack cycle burrows underground and targets player's position!
       if (e.bossPhase >= 2 && e.bossAttackCycle % 2 === 1) {
         e.bossBurrowed = true;
-        const targetX = clamp(
-          targetPlayer.x,
-          TILE_SIZE * 3.5,
-          this.map.width - TILE_SIZE * 3.5,
-        );
-        const targetY = clamp(
-          targetPlayer.y,
-          TILE_SIZE * 3.5,
-          this.map.height - TILE_SIZE * 3.5,
-        );
+        const targetX = clamp(targetPlayer.x, TILE_SIZE * 3.5, this.map.width - TILE_SIZE * 3.5);
+        const targetY = clamp(targetPlayer.y, TILE_SIZE * 3.5, this.map.height - TILE_SIZE * 3.5);
         e.bossTargetX = targetX;
         e.bossTargetY = targetY;
         e.x = targetX;
@@ -7125,7 +7099,8 @@ export class WorldSim {
     e.stateTimer = (e.bossPhase === 3 ? 0.35 : 0.45) * bossCdScale;
     const baseCd = ENEMIES.spore_king?.attackCooldownSec ?? 2.2;
     e.attackCooldownTimer =
-      (e.bossPhase === 3 ? baseCd * 0.65 : e.bossPhase === 2 ? baseCd * 0.82 : baseCd) * bossCdScale;
+      (e.bossPhase === 3 ? baseCd * 0.65 : e.bossPhase === 2 ? baseCd * 0.82 : baseCd) *
+      bossCdScale;
   }
 
   // =========================================================================
@@ -7626,12 +7601,24 @@ export class WorldSim {
   }
 
   private spawnKryssaMirrorClones(boss: SimEnemyState): void {
-    const existingClones = this.enemies.filter((m) => m.defId === 'kryssa_clone' && m.hp > 0).length;
+    const existingClones = this.enemies.filter(
+      (m) => m.defId === 'kryssa_clone' && m.hp > 0,
+    ).length;
     if (existingClones >= 2) return;
     const cx = this.map.width * 0.5;
     const cy = this.map.height * 0.5;
-    this.spawnEnemy('kryssa_clone', clamp(cx - 170, 96, this.map.width - 96), clamp(cy - 90, 96, this.map.height - 96), true);
-    this.spawnEnemy('kryssa_clone', clamp(cx + 170, 96, this.map.width - 96), clamp(cy + 90, 96, this.map.height - 96), true);
+    this.spawnEnemy(
+      'kryssa_clone',
+      clamp(cx - 170, 96, this.map.width - 96),
+      clamp(cy - 90, 96, this.map.height - 96),
+      true,
+    );
+    this.spawnEnemy(
+      'kryssa_clone',
+      clamp(cx + 170, 96, this.map.width - 96),
+      clamp(cy + 90, 96, this.map.height - 96),
+      true,
+    );
     boss.prevX = boss.x;
     boss.prevY = boss.y;
   }
@@ -7798,7 +7785,8 @@ export class WorldSim {
     e.stateTimer = (e.bossPhase === 3 ? 0.34 : 0.44) * bossCdScale;
     const baseCd = ENEMIES.kryssa_ice_queen?.attackCooldownSec ?? 2.05;
     e.attackCooldownTimer =
-      (e.bossPhase === 3 ? baseCd * 0.66 : e.bossPhase === 2 ? baseCd * 0.82 : baseCd) * bossCdScale;
+      (e.bossPhase === 3 ? baseCd * 0.66 : e.bossPhase === 2 ? baseCd * 0.82 : baseCd) *
+      bossCdScale;
   }
 
   // =========================================================================
@@ -8384,12 +8372,15 @@ export class WorldSim {
     e.stateTimer = (e.bossPhase === 3 ? 0.35 : 0.45) * bossCdScale;
     const baseCd = ENEMIES.forge_titan?.attackCooldownSec ?? 2.25;
     e.attackCooldownTimer =
-      (e.bossPhase === 3 ? baseCd * 0.65 : e.bossPhase === 2 ? baseCd * 0.82 : baseCd) * bossCdScale;
+      (e.bossPhase === 3 ? baseCd * 0.65 : e.bossPhase === 2 ? baseCd * 0.82 : baseCd) *
+      bossCdScale;
   }
 
   private spawnSeedGunLifeBlossom(ownerId: number, x: number, y: number): void {
     if (this.stressTestActive) return;
-    const blossoms = this.summons.filter((s) => s.kind === 'life_blossom' && s.hp > 0 && s.ttlSec > 0);
+    const blossoms = this.summons.filter(
+      (s) => s.kind === 'life_blossom' && s.hp > 0 && s.ttlSec > 0,
+    );
     if (blossoms.length >= 3) {
       blossoms[0]!.ttlSec = 0;
     }
@@ -8435,7 +8426,12 @@ export class WorldSim {
       const blastDmg = Math.max(6, Math.round(b.damage * 0.65));
       for (let i = 0; i < this.enemies.length; i++) {
         const e = this.enemies[i]!;
-        if (e.hp <= 0 || e.aiState === 'spawning' || e.bossBurrowed || b.hitEntityIds.includes(e.id)) {
+        if (
+          e.hp <= 0 ||
+          e.aiState === 'spawning' ||
+          e.bossBurrowed ||
+          b.hitEntityIds.includes(e.id)
+        ) {
           continue;
         }
         if (distance(x, y, e.x, e.y) <= blastR + e.radius) {
@@ -8488,7 +8484,8 @@ export class WorldSim {
       if (!this.stressTestActive && b.element !== 'none') {
         const surfUnder = this.map.getSurfaceAtWorld(b.x, b.y);
         if (
-          (b.element === 'burn' && (surfUnder === 'oil' || surfUnder === 'grass' || surfUnder === 'ice')) ||
+          (b.element === 'burn' &&
+            (surfUnder === 'oil' || surfUnder === 'grass' || surfUnder === 'ice')) ||
           (b.element === 'chill' && (surfUnder === 'water' || surfUnder === 'burning_oil')) ||
           (b.element === 'shock' && surfUnder === 'water')
         ) {
@@ -8612,7 +8609,11 @@ export class WorldSim {
         if (!b.amplifiedByShield) {
           for (let pIdx = 0; pIdx < allPlayers.length; pIdx++) {
             const pl = allPlayers[pIdx]!;
-            if (pl.lifeState !== 'alive' || pl.characterId !== 'vanguard' || pl.skillActiveTimer <= 0) {
+            if (
+              pl.lifeState !== 'alive' ||
+              pl.characterId !== 'vanguard' ||
+              pl.skillActiveTimer <= 0
+            ) {
               continue;
             }
             const dToVanguard = distance(b.x, b.y, pl.x, pl.y);
@@ -8657,7 +8658,11 @@ export class WorldSim {
         }
 
         // 3c. Engineer Tesla Turret Co-op Synergy: Shooting a Tesla Turret charges its EMP!
-        if (this.summons.length > 0 && b.weaponId !== 'tesla_turret' && b.weaponId !== 'ancient_turret') {
+        if (
+          this.summons.length > 0 &&
+          b.weaponId !== 'tesla_turret' &&
+          b.weaponId !== 'ancient_turret'
+        ) {
           for (let sIdx = 0; sIdx < this.summons.length; sIdx++) {
             const sum = this.summons[sIdx]!;
             if (sum.kind !== 'tesla_turret' || sum.hp <= 0 || sum.ttlSec <= 0) continue;
@@ -9073,12 +9078,7 @@ export class WorldSim {
     this.projectiles.length = projWriteIdx;
   }
 
-  public applyElementAtWorldPoint(
-    x: number,
-    y: number,
-    element: ElementType,
-    radius = 24,
-  ): void {
+  public applyElementAtWorldPoint(x: number, y: number, element: ElementType, radius = 24): void {
     if (this.stressTestActive) return;
     const tx = Math.floor(x / TILE_SIZE);
     const ty = Math.floor(y / TILE_SIZE);
@@ -9212,8 +9212,7 @@ export class WorldSim {
       enemy.defId === 'spore_guardian' ||
       enemy.defId === 'ice_prison' ||
       enemy.defId === 'forge_energy_core';
-    const kbMult =
-      enemy.isDummy ? 0.15 : isImmobileTarget ? 0 : enemy.isBoss ? 0.2 : 1.0;
+    const kbMult = enemy.isDummy ? 0.15 : isImmobileTarget ? 0 : enemy.isBoss ? 0.2 : 1.0;
     const kbX = Math.cos(hitAngleRad) * knockback * kbMult;
     const kbY = Math.sin(hitAngleRad) * knockback * kbMult;
     enemy.kbVx += kbX;
@@ -9232,7 +9231,11 @@ export class WorldSim {
     }
 
     // Ranger Upgrade 2 (Chuỗi Con Mồi / ranger_prey_chain): Marked target propagates 30% damage to nearby enemies
-    if (!isChainDamage && enemy.markedTimer > 0 && this.activeBuffIds.includes('ranger_prey_chain')) {
+    if (
+      !isChainDamage &&
+      enemy.markedTimer > 0 &&
+      this.activeBuffIds.includes('ranger_prey_chain')
+    ) {
       const chainAmt = Math.max(1, Math.round(dmg * 0.3));
       let chained = 0;
       for (let i = 0; i < this.enemies.length && chained < 3; i++) {
@@ -9435,7 +9438,9 @@ export class WorldSim {
         if (
           m.id !== enemy.id &&
           m.hp > 0 &&
-          (m.defId === 'kryssa_clone' || m.defId === 'ice_prison' || m.defId === 'forge_energy_core')
+          (m.defId === 'kryssa_clone' ||
+            m.defId === 'ice_prison' ||
+            m.defId === 'forge_energy_core')
         ) {
           m.hp = 0;
         }
@@ -9919,7 +9924,10 @@ export class WorldSim {
       if (closestPlayer && closestDist <= closestPlayer.radius + 10) {
         pk.ttlSec = 0;
         if (pk.kind === 'energy') {
-          closestPlayer.energy = Math.min(closestPlayer.maxEnergy, closestPlayer.energy + pk.amount);
+          closestPlayer.energy = Math.min(
+            closestPlayer.maxEnergy,
+            closestPlayer.energy + pk.amount,
+          );
         } else if (pk.kind === 'life_seed') {
           if (closestPlayer.hp < closestPlayer.maxHp) {
             closestPlayer.hp = Math.min(closestPlayer.maxHp, closestPlayer.hp + pk.amount);

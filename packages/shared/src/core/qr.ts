@@ -95,13 +95,9 @@ function encodeUtf8Bytes(text: string): Uint8Array {
  */
 export function generateQrMatrix(text: string): boolean[][] {
   const payloadBytes = encodeUtf8Bytes(text);
-  const spec =
-    payloadBytes.length <= 53
-      ? QR_VERSIONS[0]!
-      : QR_VERSIONS[1]!;
+  const spec = payloadBytes.length <= 53 ? QR_VERSIONS[0]! : QR_VERSIONS[1]!;
   const maxBytes = spec.dataCodewords - 2;
-  const trimmed =
-    payloadBytes.length > maxBytes ? payloadBytes.slice(0, maxBytes) : payloadBytes;
+  const trimmed = payloadBytes.length > maxBytes ? payloadBytes.slice(0, maxBytes) : payloadBytes;
 
   // 1. Build bit stream: Byte Mode indicator (0100) + 8-bit length + bytes + terminator (0000) + pad
   const bits: number[] = [];

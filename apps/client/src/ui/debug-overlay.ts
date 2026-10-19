@@ -356,9 +356,7 @@ export class DebugOverlay {
     state.autoQuality = gState.autoQuality;
     state.autoDowngradeCount = graphicsSettings.autoDowngradeCount;
 
-    const perfMem = (
-      performance as Performance & { memory?: { usedJSHeapSize?: number } }
-    ).memory;
+    const perfMem = (performance as Performance & { memory?: { usedJSHeapSize?: number } }).memory;
     if (perfMem && typeof perfMem.usedJSHeapSize === 'number') {
       state.heapUsedMb = Math.round((perfMem.usedJSHeapSize / (1024 * 1024)) * 100) / 100;
     }

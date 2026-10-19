@@ -363,22 +363,13 @@ export const BIOME3_COMBAT_ENEMIES = [
 export const ALL_BOSS_IDS = ['spore_king', 'kryssa_ice_queen', 'forge_titan'] as const;
 
 export type Biome1EnemyId =
-  | (typeof BIOME1_COMBAT_ENEMIES)[number]
-  | 'mini_slime'
-  | 'spore_guardian'
-  | 'spore_king';
+  (typeof BIOME1_COMBAT_ENEMIES)[number] | 'mini_slime' | 'spore_guardian' | 'spore_king';
 
 export type Biome2EnemyId =
-  | (typeof BIOME2_COMBAT_ENEMIES)[number]
-  | 'kryssa_clone'
-  | 'ice_prison'
-  | 'kryssa_ice_queen';
+  (typeof BIOME2_COMBAT_ENEMIES)[number] | 'kryssa_clone' | 'ice_prison' | 'kryssa_ice_queen';
 
 export type Biome3EnemyId =
-  | (typeof BIOME3_COMBAT_ENEMIES)[number]
-  | 'forge_energy_core'
-  | 'forge_titan';
-
+  (typeof BIOME3_COMBAT_ENEMIES)[number] | 'forge_energy_core' | 'forge_titan';
 
 export const ELITE_MODIFIERS: readonly EliteModifier[] = [
   'fast',
@@ -447,7 +438,8 @@ export const FLOOR_BUFFS: Record<string, BuffDef> = {
     id: 'vanguard_fortress',
     nameVi: 'Nâng Cấp: Pháo Đài 360°',
     nameEn: 'Fortress 360',
-    descriptionVi: 'Tường Khiên Hồng Ngọc bao bọc toàn diện 360° quanh Thiết Vệ và tăng sát thương phản kích.',
+    descriptionVi:
+      'Tường Khiên Hồng Ngọc bao bọc toàn diện 360° quanh Thiết Vệ và tăng sát thương phản kích.',
     category: 'skill_upgrade',
     characterId: 'vanguard',
     accentColor: '#F97316',
@@ -456,7 +448,8 @@ export const FLOOR_BUFFS: Record<string, BuffDef> = {
     id: 'vanguard_charge',
     nameVi: 'Nâng Cấp: Xung Phong Khiên',
     nameEn: 'Shield Charge',
-    descriptionVi: 'Tái kích hoạt Tường Khiên sẽ lao mạnh về phía trước, hất văng và gây sát thương lớn cho quái.',
+    descriptionVi:
+      'Tái kích hoạt Tường Khiên sẽ lao mạnh về phía trước, hất văng và gây sát thương lớn cho quái.',
     category: 'skill_upgrade',
     characterId: 'vanguard',
     accentColor: '#84CC16',
@@ -465,7 +458,8 @@ export const FLOOR_BUFFS: Record<string, BuffDef> = {
     id: 'ranger_arrow_volley',
     nameVi: 'Nâng Cấp: Mưa Tên',
     nameEn: 'Arrow Volley',
-    descriptionVi: 'Mũi Tên Săn Mồi tách thành 5 mũi tên hình quạt xuyên thấu, đánh dấu nhiều mục tiêu cùng lúc.',
+    descriptionVi:
+      'Mũi Tên Săn Mồi tách thành 5 mũi tên hình quạt xuyên thấu, đánh dấu nhiều mục tiêu cùng lúc.',
     category: 'skill_upgrade',
     characterId: 'ranger',
     accentColor: '#10B981',
@@ -474,7 +468,8 @@ export const FLOOR_BUFFS: Record<string, BuffDef> = {
     id: 'ranger_prey_chain',
     nameVi: 'Nâng Cấp: Chuỗi Con Mồi',
     nameEn: 'Prey Chain',
-    descriptionVi: '30% sát thương gây lên mục tiêu bị đánh dấu sẽ tự động lan sang các mục tiêu bị đánh dấu khác.',
+    descriptionVi:
+      '30% sát thương gây lên mục tiêu bị đánh dấu sẽ tự động lan sang các mục tiêu bị đánh dấu khác.',
     category: 'skill_upgrade',
     characterId: 'ranger',
     accentColor: '#34D399',
@@ -492,7 +487,8 @@ export const FLOOR_BUFFS: Record<string, BuffDef> = {
     id: 'elementalist_dual',
     nameVi: 'Nâng Cấp: Song Nguyên Tố',
     nameEn: 'Dual Element',
-    descriptionVi: 'Vùng Cầu Nguyên Tố mang đồng thời cả 2 nguyên tố hiện tại và kế tiếp, kích hoạt phản ứng ngay lập tức.',
+    descriptionVi:
+      'Vùng Cầu Nguyên Tố mang đồng thời cả 2 nguyên tố hiện tại và kế tiếp, kích hoạt phản ứng ngay lập tức.',
     category: 'skill_upgrade',
     characterId: 'elementalist',
     accentColor: '#C084FC',
@@ -501,7 +497,8 @@ export const FLOOR_BUFFS: Record<string, BuffDef> = {
     id: 'druid_poison_roots',
     nameVi: 'Nâng Cấp: Rễ Gai Độc',
     nameEn: 'Poison Roots',
-    descriptionVi: 'Rễ của Cây Thiêng quất sát thương định kỳ và áp trạng thái Độc lên mọi quái vật trong vùng.',
+    descriptionVi:
+      'Rễ của Cây Thiêng quất sát thương định kỳ và áp trạng thái Độc lên mọi quái vật trong vùng.',
     category: 'skill_upgrade',
     characterId: 'druid',
     accentColor: '#4ADE80',
@@ -510,7 +507,8 @@ export const FLOOR_BUFFS: Record<string, BuffDef> = {
     id: 'druid_sacred_grove',
     nameVi: 'Nâng Cấp: Rừng Thiêng',
     nameEn: 'Sacred Grove',
-    descriptionVi: 'Mỗi lần dùng kỹ năng sẽ trồng đồng thời 2 Cây Thiêng tạo thành trận địa hồi phục và trói chân.',
+    descriptionVi:
+      'Mỗi lần dùng kỹ năng sẽ trồng đồng thời 2 Cây Thiêng tạo thành trận địa hồi phục và trói chân.',
     category: 'skill_upgrade',
     characterId: 'druid',
     accentColor: '#2DD4BF',
@@ -528,7 +526,8 @@ export const FLOOR_BUFFS: Record<string, BuffDef> = {
     id: 'engineer_self_destruct',
     nameVi: 'Nâng Cấp: Tự Hủy Quá Tải',
     nameEn: 'Overload Self-Destruct',
-    descriptionVi: 'Khi hết thời gian tồn tại hoặc bị phá hủy, Trụ Tesla phát nổ lớn gây sát thương diện rộng.',
+    descriptionVi:
+      'Khi hết thời gian tồn tại hoặc bị phá hủy, Trụ Tesla phát nổ lớn gây sát thương diện rộng.',
     category: 'skill_upgrade',
     characterId: 'engineer',
     accentColor: '#EF4444',
@@ -562,7 +561,8 @@ export const ELEMENTAL_REACTIONS: Record<
     nameVi: 'SIÊU DẪN',
     nameEn: 'Superconduct',
     comboLabelVi: 'Sét + Băng',
-    effectVi: 'Phá giáp/khiên mục tiêu và khiến mục tiêu nhận +30% sát thương từ mọi nguồn trong 4s.',
+    effectVi:
+      'Phá giáp/khiên mục tiêu và khiến mục tiêu nhận +30% sát thương từ mọi nguồn trong 4s.',
     colorHex: '#A78BFA',
   },
   toxic_blast: {
@@ -590,5 +590,3 @@ export const ELEMENTAL_REACTIONS: Record<
     colorHex: '#FB923C',
   },
 };
-
-

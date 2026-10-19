@@ -260,8 +260,7 @@ export class ArenaMap {
   public applyBossPhase3ToxicBorder(): void {
     for (let ty = 1; ty < this.rows - 1; ty++) {
       for (let tx = 1; tx < this.cols - 1; tx++) {
-        const isOuterRing =
-          tx <= 3 || tx >= this.cols - 4 || ty <= 2 || ty >= this.rows - 3;
+        const isOuterRing = tx <= 3 || tx >= this.cols - 4 || ty <= 2 || ty >= this.rows - 3;
         if (isOuterRing && !this.isSolidTile(tx, ty)) {
           this.setSurface(tx, ty, 'poison_swamp', 0, true);
         }
@@ -275,8 +274,7 @@ export class ArenaMap {
   public applyBossPhase3BlizzardBorder(): void {
     for (let ty = 1; ty < this.rows - 1; ty++) {
       for (let tx = 1; tx < this.cols - 1; tx++) {
-        const isOuterRing =
-          tx <= 3 || tx >= this.cols - 4 || ty <= 2 || ty >= this.rows - 3;
+        const isOuterRing = tx <= 3 || tx >= this.cols - 4 || ty <= 2 || ty >= this.rows - 3;
         if (isOuterRing && !this.isSolidTile(tx, ty)) {
           this.setSurface(tx, ty, 'ice', 0, true);
         }
@@ -290,16 +288,13 @@ export class ArenaMap {
   public applyBossPhase3LavaBorder(): void {
     for (let ty = 1; ty < this.rows - 1; ty++) {
       for (let tx = 1; tx < this.cols - 1; tx++) {
-        const isOuterRing =
-          tx <= 2 || tx >= this.cols - 3 || ty <= 2 || ty >= this.rows - 3;
+        const isOuterRing = tx <= 2 || tx >= this.cols - 3 || ty <= 2 || ty >= this.rows - 3;
         if (isOuterRing && !this.isSolidTile(tx, ty)) {
           this.setSurface(tx, ty, 'lava', 0, true);
         }
       }
     }
   }
-
-
 
   private buildLayout(includePillars: boolean, includeSurfaces: boolean): void {
     for (let ty = 0; ty < this.rows; ty++) {
@@ -882,4 +877,3 @@ export class ArenaMap {
     return out;
   }
 }
-

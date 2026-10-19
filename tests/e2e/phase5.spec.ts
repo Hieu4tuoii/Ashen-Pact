@@ -29,9 +29,7 @@ test.describe('Phase 5 — 5 Playable Characters, Skills & 10 Upgrades, 6 Elemen
     // 1. Open Hub room and verify 5 character statues & Skill/Synergy Preview panel
     await page.goto('/?hub=1');
     await page.waitForFunction(
-      () =>
-        window.__GAME_DEBUG__?.scene === 'GameScene' &&
-        window.__GAME_DEBUG__?.inHub === true,
+      () => window.__GAME_DEBUG__?.scene === 'GameScene' && window.__GAME_DEBUG__?.inHub === true,
       null,
       { timeout: 15000 },
     );
@@ -221,19 +219,15 @@ test.describe('Phase 5 — 5 Playable Characters, Skills & 10 Upgrades, 6 Elemen
 
     // 3. Open Art Gallery Page 4 (4. 5 Nhân Vật) and capture 1080p showcase
     await page.goto('/?gallery=1');
-    await page.waitForFunction(
-      () => window.__GAME_DEBUG__?.scene === 'ArtGalleryScene',
-      null,
-      { timeout: 15000 },
-    );
+    await page.waitForFunction(() => window.__GAME_DEBUG__?.scene === 'ArtGalleryScene', null, {
+      timeout: 15000,
+    });
     await page.evaluate(() => {
       window.__GALLERY_SET_PAGE__?.(4);
     });
-    await page.waitForFunction(
-      () => window.__GAME_DEBUG__?.galleryPage === 4,
-      null,
-      { timeout: 5000 },
-    );
+    await page.waitForFunction(() => window.__GAME_DEBUG__?.galleryPage === 4, null, {
+      timeout: 5000,
+    });
     await page.waitForTimeout(350);
 
     await page.screenshot({

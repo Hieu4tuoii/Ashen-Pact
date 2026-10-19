@@ -410,4 +410,49 @@ describe('Phase 6 — Biomes 2 & 3, 24 Weapons, Co-op Mechanics & Bosses Kryssa 
     const bossRoom6 = sim.dungeon.rooms.find((r) => r.type === 'boss')!;
     expect(bossRoom6.waves[0]?.enemies.some((s) => s.defId === 'forge_titan')).toBe(true);
   });
+
+  it('launches 3 moving lightning projectiles on Thunder Hammer swing and cleans up Ice Prison on Kryssa death', () => {
+    const sim = new WorldSim({
+      seed: 909,
+      spawnInitialWave: false,
+      includeTrainingDummy: false,
+    });
+    sim.player.weaponSlots = ['thunder_hammer'];
+    sim.player.activeWeaponSlot = 0;
+    sim.player.energy = sim.player.maxEnergy;
+
+    sim.setPlayerInput({
+      seq: 1,
+      tick: sim.tick,
+      moveX: 0,
+      moveY: 0,
+      aimAngle: 0,
+      buttons: INPUT_BUTTON.FIRE,
+      weaponSlotSelect: null,
+    });
+    sim.step(SIM_STEP_SEC);
+
+    const bolts = sim.projectiles.filter((b) => b.weaponId === 'thunder_hammer');
+    expect(bolts).toHaveLength(3);
+    for (const bolt of bolts) {
+      expect(Math.hypot(bolt.vx, bolt.vy)).toBeGreaterThanOrEqual(500);
+      expect(bolt.element).toBe('shock');
+    }
+
+    // Spawn Kryssa + Ice Prison + Clone and verify killing Kryssa frees trapped player and clears blizzard
+    const kryssa = sim.spawnEnemy('kryssa_ice_queen', 480, 180, true);
+    const clone = sim.spawnEnemy('kryssa_clone', 380, 180, true);
+    const prison = sim.spawnEnemy('ice_prison', sim.player.x, sim.player.y, true);
+    sim.player.encasedInIceTimer = 5.0;
+    sim.player.icePrisonId = prison.id;
+    sim.blizzardVeilActive = true;
+
+    sim.applyDamageToEnemy(kryssa, 99999, true, 'burn', 0, 0, true, sim.player.id);
+    expect(kryssa.hp).toBe(0);
+    expect(clone.hp).toBe(0);
+    expect(prison.hp).toBe(0);
+    expect(sim.player.encasedInIceTimer).toBe(0);
+    expect(sim.blizzardVeilActive).toBe(false);
+  });
 });
+

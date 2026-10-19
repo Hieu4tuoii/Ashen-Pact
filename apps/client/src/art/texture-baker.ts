@@ -191,11 +191,7 @@ export class TextureBaker {
     }
   }
 
-  private static bakeFullRigComposite(
-    scene: Phaser.Scene,
-    rig: EntityRigDef,
-    scale: number,
-  ): void {
+  private static bakeFullRigComposite(scene: Phaser.Scene, rig: EntityRigDef, scale: number): void {
     const key = this.getFullRigTextureKey(rig.id);
     const compScale = Math.min(2, scale);
     const worldW = Math.max(68, rig.worldWidth + 28);
@@ -280,11 +276,7 @@ export class TextureBaker {
     this.registerCanvasTexture(scene, key, canvas);
   }
 
-  private static bakeWeapon(
-    scene: Phaser.Scene,
-    weaponDef: WeaponVectorDef,
-    scale: number,
-  ): void {
+  private static bakeWeapon(scene: Phaser.Scene, weaponDef: WeaponVectorDef, scale: number): void {
     const key = this.getWeaponTextureKey(weaponDef.id);
     const pad = 8;
     const worldW = weaponDef.width + pad * 2;
@@ -307,11 +299,7 @@ export class TextureBaker {
     this.registerCanvasTexture(scene, key, canvas);
   }
 
-  private static bakePlayerRing(
-    scene: Phaser.Scene,
-    slot: 1 | 2 | 3 | 4,
-    scale: number,
-  ): void {
+  private static bakePlayerRing(scene: Phaser.Scene, slot: 1 | 2 | 3 | 4, scale: number): void {
     const key = this.getPlayerRingTextureKey(slot);
     const rx = 18;
     const ry = 8.5;
@@ -482,29 +470,13 @@ export class TextureBaker {
     const capH = size - padN - padS;
 
     const capColor =
-      biome === 2
-        ? PALETTE.COBALT_SHADE
-        : biome === 3
-          ? PALETTE.STEEL_DARK
-          : PALETTE.SLATE_MID;
+      biome === 2 ? PALETTE.COBALT_SHADE : biome === 3 ? PALETTE.STEEL_DARK : PALETTE.SLATE_MID;
     const bevelLight =
-      biome === 2
-        ? PALETTE.CYAN_FROST
-        : biome === 3
-          ? PALETTE.COPPER_LIGHT
-          : PALETTE.ASH_GRAY;
+      biome === 2 ? PALETTE.CYAN_FROST : biome === 3 ? PALETTE.COPPER_LIGHT : PALETTE.ASH_GRAY;
     const bevelDark =
-      biome === 2
-        ? PALETTE.ABYSS_BLUE
-        : biome === 3
-          ? PALETTE.FORGE_DARK
-          : PALETTE.SLATE_DARK;
+      biome === 2 ? PALETTE.ABYSS_BLUE : biome === 3 ? PALETTE.FORGE_DARK : PALETTE.SLATE_DARK;
     const rimStroke =
-      biome === 2
-        ? PALETTE.ICE_WHITE
-        : biome === 3
-          ? PALETTE.FLAME_ORANGE
-          : PALETTE.WARM_STONE;
+      biome === 2 ? PALETTE.ICE_WHITE : biome === 3 ? PALETTE.FLAME_ORANGE : PALETTE.WARM_STONE;
 
     // 1. Fill top stone cap
     ctx.fillStyle = capColor;
@@ -654,23 +626,11 @@ export class TextureBaker {
     const capH = size - padN - padS;
 
     const pillarCap =
-      biome === 2
-        ? PALETTE.AZURE_CORE
-        : biome === 3
-          ? PALETTE.BRASS_CORE
-          : PALETTE.WARM_STONE;
+      biome === 2 ? PALETTE.AZURE_CORE : biome === 3 ? PALETTE.BRASS_CORE : PALETTE.WARM_STONE;
     const pillarHighlight =
-      biome === 2
-        ? PALETTE.ICE_WHITE
-        : biome === 3
-          ? PALETTE.SOLAR_GOLD
-          : PALETTE.BONE_WHITE;
+      biome === 2 ? PALETTE.ICE_WHITE : biome === 3 ? PALETTE.SOLAR_GOLD : PALETTE.BONE_WHITE;
     const pillarShade =
-      biome === 2
-        ? PALETTE.COBALT_SHADE
-        : biome === 3
-          ? PALETTE.LEATHER_DARK
-          : PALETTE.ASH_GRAY;
+      biome === 2 ? PALETTE.COBALT_SHADE : biome === 3 ? PALETTE.LEATHER_DARK : PALETTE.ASH_GRAY;
 
     // 1. Monolithic pillar top surface
     ctx.fillStyle = pillarCap;
@@ -793,11 +753,7 @@ export class TextureBaker {
     this.registerCanvasTexture(scene, key, canvas);
   }
 
-  private static bakeCrackedWallTile(
-    scene: Phaser.Scene,
-    biome: 1 | 2 | 3,
-    scale: number,
-  ): void {
+  private static bakeCrackedWallTile(scene: Phaser.Scene, biome: 1 | 2 | 3, scale: number): void {
     const key = this.getCrackedWallTextureKey(biome);
     const size = 32;
     const canvas = document.createElement('canvas');
@@ -816,17 +772,9 @@ export class TextureBaker {
       ctx,
       {
         fill:
-          biome === 2
-            ? PALETTE.COBALT_SHADE
-            : biome === 3
-              ? PALETTE.STEEL_DARK
-              : PALETTE.SLATE_MID,
+          biome === 2 ? PALETTE.COBALT_SHADE : biome === 3 ? PALETTE.STEEL_DARK : PALETTE.SLATE_MID,
         shade:
-          biome === 2
-            ? PALETTE.ABYSS_BLUE
-            : biome === 3
-              ? PALETTE.FORGE_DARK
-              : PALETTE.SLATE_DARK,
+          biome === 2 ? PALETTE.ABYSS_BLUE : biome === 3 ? PALETTE.FORGE_DARK : PALETTE.SLATE_DARK,
         highlight:
           biome === 2
             ? PALETTE.CYAN_FROST
@@ -892,11 +840,7 @@ export class TextureBaker {
       ctx.fillRect(0, 0, 11, size);
     }
 
-    if (
-      (aoMask & WALL_AO_NORTH_WEST) &&
-      !(aoMask & WALL_AO_NORTH) &&
-      !(aoMask & WALL_AO_WEST)
-    ) {
+    if (aoMask & WALL_AO_NORTH_WEST && !(aoMask & WALL_AO_NORTH) && !(aoMask & WALL_AO_WEST)) {
       const gradNW = ctx.createRadialGradient(0, 0, 1, 0, 0, 13);
       gradNW.addColorStop(0, 'rgba(11, 9, 14, 0.45)');
       gradNW.addColorStop(1, 'rgba(11, 9, 14, 0)');

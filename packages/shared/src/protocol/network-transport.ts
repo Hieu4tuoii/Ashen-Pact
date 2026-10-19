@@ -614,14 +614,7 @@ export class NetworkTransport implements ITransport {
       } else {
         pState = this.sim.simulatedPlayers.find((p) => p.id === ps.id);
         if (!pState) {
-          pState = this.sim.createPlayerState(
-            ps.id,
-            ps.slot,
-            ps.charId,
-            authX,
-            authY,
-            ps.name,
-          );
+          pState = this.sim.createPlayerState(ps.id, ps.slot, ps.charId, authX, authY, ps.name);
           this.sim.simulatedPlayers.push(pState);
           this.sim.simulatedPlayers.sort((a, b) => a.slot - b.slot);
         }
@@ -801,8 +794,8 @@ export class NetworkTransport implements ITransport {
         maxHp: es.maxHp,
         shieldArmor: es.shield,
         maxShieldArmor: es.maxShield,
-        moveSpeed: prev?.moveSpeed ?? (def?.moveSpeed ?? 90),
-        damage: prev?.damage ?? (def?.damage ?? 2),
+        moveSpeed: prev?.moveSpeed ?? def?.moveSpeed ?? 90,
+        damage: prev?.damage ?? def?.damage ?? 2,
         aiState: es.ai,
         stateTimer: es.st100 / 100,
         attackCooldownTimer: 0,

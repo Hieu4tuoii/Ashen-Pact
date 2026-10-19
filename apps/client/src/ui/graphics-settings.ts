@@ -135,8 +135,7 @@ export class GraphicsSettingsManager {
         this.lowFpsAccumSec = 0;
         this.downgradeCooldownSec = 3.0;
         this.autoDowngradeCount += 1;
-        const nextTier: GraphicsQualityTier =
-          this.state.quality === 'high' ? 'medium' : 'low';
+        const nextTier: GraphicsQualityTier = this.state.quality === 'high' ? 'medium' : 'low';
         this.setQuality(nextTier);
         return true;
       }
@@ -153,11 +152,7 @@ export class GraphicsSettingsManager {
       const raw = window.localStorage.getItem(STORAGE_KEY);
       if (!raw) return;
       const parsed = JSON.parse(raw) as Partial<GraphicsSettingsState>;
-      if (
-        parsed.quality === 'high' ||
-        parsed.quality === 'medium' ||
-        parsed.quality === 'low'
-      ) {
+      if (parsed.quality === 'high' || parsed.quality === 'medium' || parsed.quality === 'low') {
         this.state.quality = parsed.quality;
       }
       if (typeof parsed.autoQuality === 'boolean') {
