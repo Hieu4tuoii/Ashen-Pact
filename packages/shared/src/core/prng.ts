@@ -41,6 +41,13 @@ export class SeededRandom {
   }
 
   /**
+   * Returns a deterministic unsigned 32-bit integer.
+   */
+  public nextUint32(): number {
+    return (this.next() * 0x100000000) >>> 0;
+  }
+
+  /**
    * Returns a deterministic float in [min, max).
    */
   public nextFloat(min: number, max: number): number {

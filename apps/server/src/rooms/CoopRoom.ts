@@ -55,7 +55,7 @@ export class CoopRoom extends Room<CoopRoomState> {
     this.sim.allowDuplicateCharacters =
       options.allowDuplicateCharacters !== undefined
         ? Boolean(options.allowDuplicateCharacters)
-        : true;
+        : false;
 
     const state = new CoopRoomState();
     state.seed = seed;
@@ -266,8 +266,8 @@ export class CoopRoom extends Room<CoopRoomState> {
           const target = this.sim.getPlayerById(payload.playerId ?? 2);
           if (target) {
             const nearHost = this.sim.map.resolveCircleCollision(
-              this.sim.player.x + 68,
-              this.sim.player.y - 6,
+              this.sim.player.x + 56,
+              this.sim.player.y - 24,
               target.radius,
             );
             target.x = nearHost.x;
@@ -276,6 +276,16 @@ export class CoopRoom extends Room<CoopRoomState> {
             target.prevY = nearHost.y;
             target.vx = 0;
             target.vy = 0;
+            // Keep nearby enemies and other teammates clear of the downed revival circle
+            for (const e of this.sim.enemies) {
+              if (!e.isDummy && Math.hypot(e.x - target.x, e.y - target.y) < 110) {
+                const col = this.sim.map.resolveCircleCollision(target.x + 145, target.y, e.radius);
+                e.x = col.x;
+                e.y = col.y;
+                e.prevX = col.x;
+                e.prevY = col.y;
+              }
+            }
             target.godMode = false;
             target.invulnerableTimer = 0;
             target.armor = 0;
@@ -331,6 +341,19 @@ export class CoopRoom extends Room<CoopRoomState> {
       return;
     }
 
+    // New players (without reconnectToken) can only join in the Hub or between floors (buff_choice)
+    if (
+      this.playersBySession.size > 0 &&
+      !this.sim.inHub &&
+      this.sim.runState !== 'buff_choice'
+    ) {
+      client.send('join_rejected', {
+        reasonVi: 'Đội đang chiến đấu — chỉ có thể tham gia ở Sảnh Chờ (Hub) hoặc giữa các tầng!',
+      });
+      client.leave(4003);
+      return;
+    }
+
     if (this.playersBySession.size + this.disconnectedByToken.size >= 4) {
       client.leave(4002);
       return;
@@ -340,11 +363,27 @@ export class CoopRoom extends Room<CoopRoomState> {
     const playerId = slot;
     const isHost = slot === 1 && !Array.from(this.playersBySession.values()).some((m) => m.isHost);
     const defaultChar: CharacterId = ALL_CHARACTER_IDS[(slot - 1) % ALL_CHARACTER_IDS.length]!;
-    const requestedChar =
+    let requestedChar =
       typeof options?.characterId === 'string' &&
       ALL_CHARACTER_IDS.includes(options.characterId as CharacterId)
         ? (options.characterId as CharacterId)
         : defaultChar;
+
+    if (!this.sim.allowDuplicateCharacters && this.playersBySession.size > 0) {
+      const takenChars = new Set(
+        this.sim
+          .getAllPlayers()
+          .filter((p) => p.id !== playerId)
+          .map((p) => p.characterId),
+      );
+      if (takenChars.has(requestedChar)) {
+        const freeChar = ALL_CHARACTER_IDS.find((cid) => !takenChars.has(cid));
+        if (freeChar) {
+          requestedChar = freeChar;
+        }
+      }
+    }
+
     const rawNameCandidate =
       typeof options?.displayName === 'string'
         ? options.displayName

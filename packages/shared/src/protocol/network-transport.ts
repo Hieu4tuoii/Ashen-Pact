@@ -243,21 +243,8 @@ export function encodeWorldSnapshot(
     poison: e.poisonStacks,
   }));
 
-  const projectiles: QuantizedProjectileTuple[] = sim.projectiles.slice(0, 96).map((b) => [
-    b.id,
-    b.ownerId,
-    b.team === 'enemy' ? 1 : 0,
-    b.weaponId,
-    quantizeCoord(b.x),
-    quantizeCoord(b.y),
-    Math.round(b.vx),
-    Math.round(b.vy),
-    quantizeAngle(b.angle),
-    Math.round(b.radius * 10),
-    Math.round(b.ttlSec * 100),
-    b.element,
-    b.amplifiedByShield ? 1 : 0,
-  ]);
+  // Projectiles are spawned deterministically via bullet_volley_spawned events and simulated locally by clients
+  const projectiles: QuantizedProjectileTuple[] = [];
 
   const pickups = sim.pickups.slice(0, 64).map((pk) => ({
     id: pk.id,
@@ -281,6 +268,14 @@ export function encodeWorldSnapshot(
     discovery: r.discovery,
     cleared: r.cleared,
   }));
+
+  const netEvents = events
+    .filter(
+      (ev) =>
+        ev.kind !== 'projectile_spawned' &&
+        (ev.kind !== 'projectile_impact' || ev.destroyedByMelee || ev.blockedByShield),
+    )
+    .slice(0, 32);
 
   return {
     tick: sim.tick,
@@ -310,7 +305,7 @@ export function encodeWorldSnapshot(
     hubStatues: sim.hubStatues.map((st) => ({ ...st })),
     surfaces,
     discoveredRooms,
-    events: events.slice(0, 32),
+    events: netEvents,
   };
 }
 
@@ -358,6 +353,7 @@ export interface NetworkTelemetry {
  * NetworkTransport implements ITransport for Phase 4 Authoritative Co-op LAN:
  * - Client-Side Prediction + Smooth Reconciliation for the local player (movement + dash)
  * - Adaptive Entity Interpolation (50-100ms buffer based on measured jitter) for remote players & enemies
+ * - Deterministic client-side projectile simulation + immediate cosmetic hit prediction
  * - Integrated WifiSimulator ('off' | 'good' | 'normal' | 'bad')
  * - Real-time bandwidth & latency telemetry
  */
@@ -370,7 +366,7 @@ export class NetworkTransport implements ITransport {
 
   private localPlayerId = 1;
   private localPlayerSlot: 1 | 2 | 3 | 4 = 1;
-  private allowDuplicateCharacters = true;
+  private allowDuplicateCharacters = false;
   private alpha = 1;
 
   private latestInput: PlayerInputPacket = {
@@ -812,34 +808,37 @@ export class NetworkTransport implements ITransport {
       }
     }
 
-    // Sync projectiles
-    this.sim.projectiles = snapshot.projectiles.map((pt): SimProjectileState => {
-      const px = dequantizeCoord(pt[4]);
-      const py = dequantizeCoord(pt[5]);
-      return {
-        id: pt[0],
-        ownerId: pt[1],
-        team: pt[2] === 1 ? 'enemy' : 'player',
-        weaponId: pt[3],
-        prevX: px,
-        prevY: py,
-        x: px,
-        y: py,
-        vx: pt[6],
-        vy: pt[7],
-        angle: dequantizeAngle(pt[8]),
-        radius: pt[9] / 10,
-        damage: 1,
-        isCrit: false,
-        knockback: 0,
-        pierceRemaining: 0,
-        bounceRemaining: 0,
-        ttlSec: pt[10] / 100,
-        element: pt[11],
-        amplifiedByShield: pt[12] === 1,
-        hitEntityIds: [],
-      };
-    });
+    // Projectiles are simulated deterministically on the client via bullet_volley_spawned events.
+    // Only apply explicit snapshot.projectiles if provided (e.g. legacy/custom snapshots).
+    if (snapshot.projectiles.length > 0) {
+      this.sim.projectiles = snapshot.projectiles.map((pt): SimProjectileState => {
+        const px = dequantizeCoord(pt[4]);
+        const py = dequantizeCoord(pt[5]);
+        return {
+          id: pt[0],
+          ownerId: pt[1],
+          team: pt[2] === 1 ? 'enemy' : 'player',
+          weaponId: pt[3],
+          prevX: px,
+          prevY: py,
+          x: px,
+          y: py,
+          vx: pt[6],
+          vy: pt[7],
+          angle: dequantizeAngle(pt[8]),
+          radius: pt[9] / 10,
+          damage: 1,
+          isCrit: false,
+          knockback: 0,
+          pierceRemaining: 0,
+          bounceRemaining: 0,
+          ttlSec: pt[10] / 100,
+          element: pt[11],
+          amplifiedByShield: pt[12] === 1,
+          hitEntityIds: [],
+        };
+      });
+    }
 
     // Sync props, chests, world items, NPCs, pickups, pings, statues
     this.sim.props = snapshot.props.map((pr) => ({ ...pr }));
@@ -877,7 +876,20 @@ export class NetworkTransport implements ITransport {
     }
 
     for (const ev of snapshot.events) {
-      this.pendingEvents.push(ev);
+      if (ev.kind === 'bullet_volley_spawned') {
+        this.sim.spawnDeterministicVolley(ev, false);
+        this.pendingEvents.push({
+          kind: 'projectile_spawned',
+          projectileId: 0,
+          weaponId: ev.weaponId,
+          team: ev.team,
+          x: ev.x,
+          y: ev.y,
+          angle: ev.angle,
+        });
+      } else {
+        this.pendingEvents.push(ev);
+      }
     }
   }
 
@@ -902,7 +914,7 @@ export class NetworkTransport implements ITransport {
     if (Math.abs(this.reconcileOffsetX) < 0.05) this.reconcileOffsetX = 0;
     if (Math.abs(this.reconcileOffsetY) < 0.05) this.reconcileOffsetY = 0;
 
-    // Step local player prediction at 60Hz and dead-reckon active projectiles smoothly between 30Hz snapshots
+    // Step local player prediction at 60Hz and simulate deterministic projectiles + cosmetic hit prediction
     const res = this.loop.step(deltaMs, (fixedDt) => {
       this.stepLocalPrediction(fixedDt);
     });
@@ -918,10 +930,6 @@ export class NetworkTransport implements ITransport {
     const localPlayer = this.getLocalPlayerState();
     localPlayer.prevX = localPlayer.x;
     localPlayer.prevY = localPlayer.y;
-
-    if (localPlayer.lifeState === 'ghost') {
-      return;
-    }
 
     const inp = this.latestInput;
     localPlayer.aimAngle = inp.aimAngle;
@@ -951,7 +959,12 @@ export class NetworkTransport implements ITransport {
       const len = Math.hypot(inp.moveX, inp.moveY);
       const nx = len > 0.001 ? inp.moveX / Math.max(1, len) : 0;
       const ny = len > 0.001 ? inp.moveY / Math.max(1, len) : 0;
-      const speed = localPlayer.lifeState === 'downed' ? 38 : localPlayer.moveSpeed;
+      const speed =
+        localPlayer.lifeState === 'downed'
+          ? 38
+          : localPlayer.lifeState === 'ghost'
+            ? localPlayer.moveSpeed * 0.85
+            : localPlayer.moveSpeed;
       localPlayer.vx = nx * speed;
       localPlayer.vy = ny * speed;
     }
@@ -962,15 +975,8 @@ export class NetworkTransport implements ITransport {
     localPlayer.x = col.x;
     localPlayer.y = col.y;
 
-    // Advance projectile positions smoothly between 30Hz snapshots
-    for (let i = 0; i < this.sim.projectiles.length; i++) {
-      const b = this.sim.projectiles[i]!;
-      b.prevX = b.x;
-      b.prevY = b.y;
-      b.x += b.vx * dtSec;
-      b.y += b.vy * dtSec;
-      b.ttlSec = Math.max(0, b.ttlSec - dtSec);
-    }
+    // Deterministically simulate projectiles on client (wall bounce + immediate cosmetic enemy hit prediction)
+    this.sim.stepClientProjectilesCosmetic(dtSec);
   }
 
   public getLocalPlayerState(): SimPlayerState {
@@ -1110,7 +1116,10 @@ export class NetworkTransport implements ITransport {
   }
 
   public consumeEvents(): SimEvent[] {
-    if (this.pendingEvents.length === 0) return [];
-    return this.pendingEvents.splice(0, this.pendingEvents.length);
+    const localSimEvents = this.sim.consumeEvents();
+    if (this.pendingEvents.length === 0 && localSimEvents.length === 0) return [];
+    const merged = [...localSimEvents, ...this.pendingEvents];
+    this.pendingEvents.length = 0;
+    return merged;
   }
 }

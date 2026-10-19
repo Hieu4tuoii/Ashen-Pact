@@ -292,7 +292,7 @@ export class LightingPipeline {
       const postPipelines = cam.getPostPipeline('BiomePostFxPipeline');
       const pipeline = Array.isArray(postPipelines) ? postPipelines[0] : postPipelines;
       if (pipeline instanceof BiomePostFxPipeline) {
-        pipeline.bloomStrength = budget.enableBloomPostFx ? 0.28 : 0.0;
+        pipeline.bloomStrength = budget.enableBloomPostFx && !isHeavySwarm ? 0.28 : 0.0;
         pipeline.vignetteStrength = 0.34;
         pipeline.chromaAmount = isHeavySwarm ? 0 : clamp(trauma * 1.4, 0, 1);
         pipeline.colorGradeTint = BIOME_COLOR_GRADES[this.biome];
@@ -306,8 +306,8 @@ export class LightingPipeline {
       }
     }
 
-    // 2. Render Dynamic Lightmap into RenderTexture (amortized every 2nd frame during 600+ bullet swarm)
-    if (isHeavySwarm && (this.frameCounter & 1) === 1 && this.activeLightCount >= 30) {
+    // 2. Render Dynamic Lightmap into RenderTexture (amortized during 600+ bullet swarm)
+    if (isHeavySwarm && this.frameCounter % 3 !== 0 && this.activeLightCount >= 30) {
       return;
     }
 

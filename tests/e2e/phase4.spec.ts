@@ -68,16 +68,17 @@ test.describe('Phase 4 — Co-op LAN Authoritative, Prediction/Interpolation, Hu
     const roomId = await page1.evaluate(() => window.__GAME_DEBUG__.coopRoomId!);
     expect(roomId).toBeTruthy();
 
-    // 3. Clients P2, P3, P4 join the exact room sequentially via LAN IPv4 invite link (?join=<roomId>)
-    const joinQueue: Array<{ page: typeof page1; name: string }> = [
+    // 3. Clients P2, P3 join via LAN IPv4 invite link (?join=<roomId>) and P4 joins via direct root LAN URL (http://<LAN-IP>:2567/)
+    const joinQueue: Array<{ page: typeof page1; name: string; directRootUrl?: boolean }> = [
       { page: page2, name: 'Cung Thủ P2' },
       { page: page3, name: 'Pháp Sư P3' },
-      { page: page4, name: 'Hiền Nhân P4' },
+      { page: page4, name: 'Hiền Nhân P4', directRootUrl: true },
     ];
     for (const item of joinQueue) {
-      await item.page.goto(
-        `${lanBaseUrl}/?join=${roomId}&name=${encodeURIComponent(item.name)}&server=${hostInfo.primaryLanIp}:${hostInfo.port}`,
-      );
+      const targetUrl = item.directRootUrl
+        ? `${lanBaseUrl}/?name=${encodeURIComponent(item.name)}`
+        : `${lanBaseUrl}/?join=${roomId}&name=${encodeURIComponent(item.name)}&server=${hostInfo.primaryLanIp}:${hostInfo.port}`;
+      await item.page.goto(targetUrl);
       await item.page.waitForFunction(
         () =>
           window.__GAME_DEBUG__?.scene === 'GameScene' &&
@@ -100,13 +101,27 @@ test.describe('Phase 4 — Co-op LAN Authoritative, Prediction/Interpolation, Hu
       );
     }
 
-    // Verify slots 1..4, LAN IP invite URL, and select 4 different characters + emote + ping + ready in Hub
+    // Verify slots 1..4, LAN IP invite URL, and default non-duplicate character assignment in Hub
     const slots = await Promise.all(pages.map((p) => p.evaluate(() => window.__GAME_DEBUG__.playerSlot)));
     expect(slots).toEqual([1, 2, 3, 4]);
 
     const hostInviteUrl = await page1.evaluate(() => window.__GAME_DEBUG__.hostInviteUrl);
     expect(hostInviteUrl).toContain(hostInfo.primaryLanIp);
     expect(hostInviteUrl).toContain(roomId);
+
+    // Verify duplicate character selection is rejected by default (allowDuplicateCharacters = false)
+    await page2.evaluate(() => {
+      window.__GAME_COOP_SEND__?.('select_character', { characterId: 'vanguard' });
+    });
+    await page2.waitForTimeout(120);
+    const p2CharAfterDupAttempt = await page2.evaluate(
+      () =>
+        window.__GAME_TRANSPORT__
+          ?.getSim()
+          .getAllPlayers()
+          .find((p) => p.slot === 2)?.characterId,
+    );
+    expect(p2CharAfterDupAttempt).toBe('ranger');
 
     // P1=vanguard, P2=ranger, P3=elementalist, P4=druid; trigger Emotes & Ping & Ready
     await page1.evaluate(() => {
@@ -157,11 +172,13 @@ test.describe('Phase 4 — Co-op LAN Authoritative, Prediction/Interpolation, Hu
       }
     });
 
-    await page1.waitForFunction(
-      () => window.__GAME_DEBUG__?.currentRoomType === 'combat',
-      null,
-      { timeout: 10000 },
-    );
+    for (const p of pages) {
+      await p.waitForFunction(
+        () => window.__GAME_DEBUG__?.currentRoomType === 'combat',
+        null,
+        { timeout: 10000 },
+      );
+    }
 
     // 5. Enable "bad" Wi-Fi profile (80ms latency, +-20ms jitter, 2% loss) + 300ms lag spike on P2
     // Verify smooth local movement prediction/reconciliation, bandwidth <= 30 KB/s, and Host FPS
@@ -171,7 +188,6 @@ test.describe('Phase 4 — Co-op LAN Authoritative, Prediction/Interpolation, Hu
     });
 
     await page2.keyboard.down('KeyD');
-    await page2.keyboard.down('KeyW');
     await page1.mouse.move(1120, 480);
     await page1.mouse.down();
 
@@ -186,7 +202,6 @@ test.describe('Phase 4 — Co-op LAN Authoritative, Prediction/Interpolation, Hu
     }
 
     await page2.keyboard.up('KeyD');
-    await page2.keyboard.up('KeyW');
     await page1.mouse.up();
 
     // Verify P2 actually moved and never snapped/teleported erratically during bad Wi-Fi + lag spike

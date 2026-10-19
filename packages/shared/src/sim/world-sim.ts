@@ -386,7 +386,34 @@ export interface SimPickupState {
   ownerPlayerId?: number;
 }
 
+export interface BulletVolleySpawnEvent {
+  kind: 'bullet_volley_spawned';
+  tick: number;
+  ownerId: number;
+  team: 'player' | 'enemy';
+  weaponId: string;
+  x: number;
+  y: number;
+  angle: number;
+  pelletCount: number;
+  spreadRad: number;
+  radialStepRad?: number;
+  muzzleOffset?: number;
+  speed: number;
+  damage: number;
+  radius: number;
+  knockback: number;
+  pierceCount: number;
+  bounceCount: number;
+  ttlSec: number;
+  element: ElementType;
+  critChance: number;
+  amplifiedByShield: boolean;
+  seed: number;
+}
+
 export type SimEvent =
+  | BulletVolleySpawnEvent
   | {
       kind: 'projectile_spawned';
       projectileId: number;
@@ -1163,11 +1190,11 @@ export class WorldSim {
 
     // 5 Character Statues in a staggered arc at the top of the Hub Camp (left of Invite Panel)
     const statueCoords: readonly [CharacterId, number, number][] = [
-      ['vanguard', cx - 325, cy - 96],
-      ['ranger', cx - 235, cy - 182],
-      ['elementalist', cx - 145, cy - 96],
-      ['druid', cx - 55, cy - 182],
-      ['engineer', cx + 35, cy - 96],
+      ['vanguard', cx - 355, cy - 96],
+      ['ranger', cx - 265, cy - 182],
+      ['elementalist', cx - 175, cy - 96],
+      ['druid', cx - 85, cy - 182],
+      ['engineer', cx + 5, cy - 96],
     ];
     for (const [cid, sx, sy] of statueCoords) {
       const cDef = CHARACTERS[cid];
@@ -2004,7 +2031,7 @@ export class WorldSim {
     const resolvedPos = this.map.resolveCircleCollision(spawnX, spawnY, this.player.radius);
     const hasCoopTeammates = !this.stressTestActive && this.simulatedPlayers.length > 0;
     const p1Pos = hasCoopTeammates
-      ? this.map.resolveCircleCollision(resolvedPos.x - 68, resolvedPos.y - 28, this.player.radius)
+      ? this.map.resolveCircleCollision(resolvedPos.x - 95, resolvedPos.y - 48, this.player.radius)
       : resolvedPos;
     this.player.x = p1Pos.x;
     this.player.y = p1Pos.y;
@@ -2017,10 +2044,10 @@ export class WorldSim {
     // Teleport co-op teammates into the new room around the entrance!
     if (hasCoopTeammates) {
       const offsets: readonly [number, number][] = [
-        [38, -28],
-        [-18, 44],
-        [88, 44],
-        [0, -54],
+        [35, -48],
+        [-95, 52],
+        [35, 52],
+        [0, -76],
       ];
       let anyTeleportedFromOutside = false;
       for (let i = 0; i < this.simulatedPlayers.length; i++) {
@@ -3659,27 +3686,29 @@ export class WorldSim {
       p.invulnerableTimer = Math.max(p.invulnerableTimer, 0.35);
       p.dashDirX = -Math.cos(p.aimAngle);
       p.dashDirY = -Math.sin(p.aimAngle);
-      const proj = this.acquireProjectile({
-        id: ++this.nextEntityId,
+      this.spawnDeterministicVolley({
+        kind: 'bullet_volley_spawned',
+        tick: this.tick,
         ownerId: p.id,
         team: 'player',
         weaponId: 'hunter_crossbow',
         x: p.x + Math.cos(p.aimAngle) * 18,
         y: p.y + Math.sin(p.aimAngle) * 18,
-        vx: Math.cos(p.aimAngle) * 680,
-        vy: Math.sin(p.aimAngle) * 680,
         angle: p.aimAngle,
-        radius: 6.5,
+        pelletCount: 1,
+        spreadRad: 0,
+        speed: 680,
         damage: 28,
-        isCrit: true,
+        radius: 6.5,
         knockback: 180,
-        pierceRemaining: 5,
-        bounceRemaining: 0,
+        pierceCount: 5,
+        bounceCount: 0,
         ttlSec: 1.5,
         element: p.activeImbueElement !== 'none' ? p.activeImbueElement : 'shock',
+        critChance: 1.0,
         amplifiedByShield: true,
+        seed: this.rng.nextUint32(),
       });
-      this.projectiles.push(proj);
       return;
     }
 
@@ -4353,58 +4382,126 @@ export class WorldSim {
     const spawnY = p.y + Math.sin(p.aimAngle) * muzzleDist;
     const baseCrit = CHARACTERS[p.characterId]?.baseCritChance ?? 0.05;
     const rawWeaponDmg = hasEaglePrecision ? Math.round(w.damage * 1.2) : w.damage;
+    const baseDmg = shieldBoost ? Math.round(rawWeaponDmg * 1.3) : rawWeaponDmg;
+    const critChance = clamp(
+      baseCrit + w.critChance + (hasEaglePrecision ? 0.18 : 0),
+      0,
+      1,
+    );
+
+    this.spawnDeterministicVolley({
+      kind: 'bullet_volley_spawned',
+      tick: this.tick,
+      ownerId: p.id,
+      team: 'player',
+      weaponId: w.id,
+      x: spawnX,
+      y: spawnY,
+      angle: p.aimAngle,
+      pelletCount: pellets,
+      spreadRad,
+      speed: w.projectileSpeed,
+      damage: baseDmg,
+      radius: w.category === 'shotgun' ? 4.5 : 5,
+      knockback: w.knockback,
+      pierceCount: w.pierceCount + (shieldBoost ? 1 : 0) + (hasRicochetMastery ? 1 : 0),
+      bounceCount: w.bounceCount + (hasRicochetMastery ? 1 : 0),
+      ttlSec: w.category === 'shotgun' ? 0.55 : 1.4,
+      element: shotElement,
+      critChance,
+      amplifiedByShield: shieldBoost,
+      seed: this.rng.nextUint32(),
+    });
+  }
+
+  private readonly volleyRng = new SeededRandom(1);
+
+  /**
+   * Deterministic bullet volley spawner shared by authoritative server/local sim and LAN Co-op clients.
+   * Given the same BulletVolleySpawnEvent (tick, origin, angle, weaponId, seed), both server and client
+   * spawn the exact same projectiles with identical angles, speeds, and crit rolls without syncing per-bullet states.
+   */
+  public spawnDeterministicVolley(
+    ev: BulletVolleySpawnEvent,
+    emitEvents = true,
+  ): void {
+    this.volleyRng.setState(ev.seed || 0x6d2b79f5);
+    const volleyRng = this.volleyRng;
+    const pellets = Math.max(1, ev.pelletCount);
+
+    if (emitEvents && !this.stressTestActive) {
+      this.events.push(ev);
+    }
 
     for (let i = 0; i < pellets; i++) {
-      let angleOffset = 0;
-      if (pellets > 1) {
+      let shotAngle = ev.angle;
+      if (ev.radialStepRad !== undefined && ev.radialStepRad !== 0) {
+        shotAngle = ev.angle + i * ev.radialStepRad;
+      } else if (pellets > 1) {
         const t = i / (pellets - 1) - 0.5;
-        angleOffset = t * spreadRad + this.rng.nextFloat(-spreadRad * 0.12, spreadRad * 0.12);
-      } else if (spreadRad > 0) {
-        angleOffset = this.rng.nextFloat(-spreadRad * 0.5, spreadRad * 0.5);
+        const jitter =
+          ev.team === 'player'
+            ? volleyRng.nextFloat(-ev.spreadRad * 0.12, ev.spreadRad * 0.12)
+            : 0;
+        shotAngle = ev.angle + t * ev.spreadRad + jitter;
+      } else if (ev.spreadRad > 0) {
+        shotAngle = ev.angle + volleyRng.nextFloat(-ev.spreadRad * 0.5, ev.spreadRad * 0.5);
       }
 
-      const shotAngle = p.aimAngle + angleOffset;
-      const critChance = clamp(
-        baseCrit + w.critChance + (hasEaglePrecision ? 0.18 : 0),
-        0,
-        1,
-      );
-      const isCrit = this.rng.chance(critChance);
-      const baseDmg = shieldBoost ? Math.round(rawWeaponDmg * 1.3) : rawWeaponDmg;
-      const finalDmg = isCrit ? Math.round(baseDmg * 1.5) : baseDmg;
+      const bx =
+        ev.muzzleOffset && ev.muzzleOffset > 0
+          ? ev.x + Math.cos(shotAngle) * ev.muzzleOffset
+          : ev.x;
+      const by =
+        ev.muzzleOffset && ev.muzzleOffset > 0
+          ? ev.y + Math.sin(shotAngle) * ev.muzzleOffset
+          : ev.y;
+
+      let isCrit = false;
+      let finalDmg = ev.damage;
+      if (ev.critChance >= 1) {
+        isCrit = true;
+      } else if (ev.critChance > 0) {
+        isCrit = volleyRng.chance(ev.critChance);
+        if (isCrit) {
+          finalDmg = Math.round(ev.damage * 1.5);
+        }
+      }
 
       const proj = this.acquireProjectile({
         id: ++this.nextEntityId,
-        ownerId: p.id,
-        team: 'player',
-        weaponId: w.id,
-        x: spawnX,
-        y: spawnY,
-        vx: Math.cos(shotAngle) * w.projectileSpeed,
-        vy: Math.sin(shotAngle) * w.projectileSpeed,
+        ownerId: ev.ownerId,
+        team: ev.team,
+        weaponId: ev.weaponId,
+        x: bx,
+        y: by,
+        vx: Math.cos(shotAngle) * ev.speed,
+        vy: Math.sin(shotAngle) * ev.speed,
         angle: shotAngle,
-        radius: w.category === 'shotgun' ? 4.5 : 5,
+        radius: ev.radius,
         damage: finalDmg,
         isCrit,
-        knockback: w.knockback,
-        pierceRemaining:
-          w.pierceCount + (shieldBoost ? 1 : 0) + (hasRicochetMastery ? 1 : 0),
-        bounceRemaining: w.bounceCount + (hasRicochetMastery ? 1 : 0),
-        ttlSec: w.category === 'shotgun' ? 0.55 : 1.4,
-        element: shotElement,
-        amplifiedByShield: shieldBoost,
+        knockback: ev.knockback,
+        pierceRemaining: ev.pierceCount,
+        bounceRemaining: ev.bounceCount,
+        ttlSec: ev.ttlSec,
+        element: ev.element,
+        amplifiedByShield: ev.amplifiedByShield,
       });
 
       this.projectiles.push(proj);
-      this.events.push({
-        kind: 'projectile_spawned',
-        projectileId: proj.id,
-        weaponId: w.id,
-        team: 'player',
-        x: spawnX,
-        y: spawnY,
-        angle: shotAngle,
-      });
+
+      if (emitEvents && !this.stressTestActive) {
+        this.events.push({
+          kind: 'projectile_spawned',
+          projectileId: proj.id,
+          weaponId: ev.weaponId,
+          team: ev.team,
+          x: bx,
+          y: by,
+          angle: shotAngle,
+        });
+      }
     }
   }
 
@@ -4742,41 +4839,29 @@ export class WorldSim {
           const muzzleX = e.x + Math.cos(e.telegraphAngle) * 14;
           const muzzleY = e.y + Math.sin(e.telegraphAngle) * 14;
 
-          for (const mult of [-1, 0, 1]) {
-            const shotAngle = e.telegraphAngle + mult * spreadRad;
-            const proj = this.acquireProjectile({
-              id: ++this.nextEntityId,
-              ownerId: e.id,
-              team: 'enemy',
-              weaponId: 'goblin_bow',
-              x: muzzleX,
-              y: muzzleY,
-              vx: Math.cos(shotAngle) * bulletSpeed,
-              vy: Math.sin(shotAngle) * bulletSpeed,
-              angle: shotAngle,
-              radius: 5.5,
-              damage: e.damage,
-              isCrit: false,
-              knockback: 90,
-              pierceRemaining: 0,
-              bounceRemaining: 0,
-              ttlSec: 2.2,
-              element: 'none',
-              amplifiedByShield: false,
-            });
-            this.projectiles.push(proj);
-            if (!this.stressTestActive) {
-              this.events.push({
-                kind: 'projectile_spawned',
-                projectileId: proj.id,
-                weaponId: 'goblin_bow',
-                team: 'enemy',
-                x: muzzleX,
-                y: muzzleY,
-                angle: shotAngle,
-              });
-            }
-          }
+          this.spawnDeterministicVolley({
+            kind: 'bullet_volley_spawned',
+            tick: this.tick,
+            ownerId: e.id,
+            team: 'enemy',
+            weaponId: 'goblin_bow',
+            x: muzzleX,
+            y: muzzleY,
+            angle: e.telegraphAngle,
+            pelletCount: 3,
+            spreadRad: spreadRad * 2,
+            speed: bulletSpeed,
+            damage: e.damage,
+            radius: 5.5,
+            knockback: 90,
+            pierceCount: 0,
+            bounceCount: 0,
+            ttlSec: 2.2,
+            element: 'none',
+            critChance: 0,
+            amplifiedByShield: false,
+            seed: this.rng.nextUint32(),
+          });
         }
 
         e.aiState = 'cooldown';
@@ -5151,38 +5236,29 @@ export class WorldSim {
         const bulletSpeed = 245;
         const muzzleX = e.x + Math.cos(e.telegraphAngle) * 16;
         const muzzleY = e.y + Math.sin(e.telegraphAngle) * 16;
-        const proj = this.acquireProjectile({
-          id: ++this.nextEntityId,
+        this.spawnDeterministicVolley({
+          kind: 'bullet_volley_spawned',
+          tick: this.tick,
           ownerId: e.id,
           team: 'enemy',
           weaponId: 'shaman_staff',
           x: muzzleX,
           y: muzzleY,
-          vx: Math.cos(e.telegraphAngle) * bulletSpeed,
-          vy: Math.sin(e.telegraphAngle) * bulletSpeed,
           angle: e.telegraphAngle,
-          radius: 6,
+          pelletCount: 1,
+          spreadRad: 0,
+          speed: bulletSpeed,
           damage: e.damage,
-          isCrit: false,
+          radius: 6,
           knockback: 80,
-          pierceRemaining: 0,
-          bounceRemaining: 0,
+          pierceCount: 0,
+          bounceCount: 0,
           ttlSec: 2.3,
           element: 'poison',
+          critChance: 0,
           amplifiedByShield: false,
+          seed: this.rng.nextUint32(),
         });
-        this.projectiles.push(proj);
-        if (!this.stressTestActive) {
-          this.events.push({
-            kind: 'projectile_spawned',
-            projectileId: proj.id,
-            weaponId: 'shaman_staff',
-            team: 'enemy',
-            x: muzzleX,
-            y: muzzleY,
-            angle: e.telegraphAngle,
-          });
-        }
 
         e.aiState = 'cooldown';
         e.stateTimer = 0.45;
@@ -5259,43 +5335,31 @@ export class WorldSim {
       if (e.stateTimer <= 0) {
         // Fire 6 radial thorns in 360 degrees
         const bulletSpeed = 245;
-        for (let k = 0; k < 6; k++) {
-          const shotAngle = e.telegraphAngle + k * (Math.PI / 3);
-          const mx = e.x + Math.cos(shotAngle) * 14;
-          const my = e.y + Math.sin(shotAngle) * 14;
-          const proj = this.acquireProjectile({
-            id: ++this.nextEntityId,
-            ownerId: e.id,
-            team: 'enemy',
-            weaponId: 'thorn_burst',
-            x: mx,
-            y: my,
-            vx: Math.cos(shotAngle) * bulletSpeed,
-            vy: Math.sin(shotAngle) * bulletSpeed,
-            angle: shotAngle,
-            radius: 5,
-            damage: e.damage,
-            isCrit: false,
-            knockback: 75,
-            pierceRemaining: 0,
-            bounceRemaining: 0,
-            ttlSec: 2.2,
-            element: 'none',
-            amplifiedByShield: false,
-          });
-          this.projectiles.push(proj);
-          if (!this.stressTestActive) {
-            this.events.push({
-              kind: 'projectile_spawned',
-              projectileId: proj.id,
-              weaponId: 'thorn_burst',
-              team: 'enemy',
-              x: mx,
-              y: my,
-              angle: shotAngle,
-            });
-          }
-        }
+        this.spawnDeterministicVolley({
+          kind: 'bullet_volley_spawned',
+          tick: this.tick,
+          ownerId: e.id,
+          team: 'enemy',
+          weaponId: 'thorn_burst',
+          x: e.x,
+          y: e.y,
+          angle: e.telegraphAngle,
+          pelletCount: 6,
+          spreadRad: 0,
+          radialStepRad: Math.PI / 3,
+          muzzleOffset: 14,
+          speed: bulletSpeed,
+          damage: e.damage,
+          radius: 5,
+          knockback: 75,
+          pierceCount: 0,
+          bounceCount: 0,
+          ttlSec: 2.2,
+          element: 'none',
+          critChance: 0,
+          amplifiedByShield: false,
+          seed: this.rng.nextUint32(),
+        });
         e.aiState = 'cooldown';
         e.stateTimer = 0.4;
         e.attackCooldownTimer = (ENEMIES[e.defId]?.attackCooldownSec ?? 2.1) * cdMult;
@@ -5487,30 +5551,31 @@ export class WorldSim {
       }
 
       // Erupt with 8 radial thorns
-      for (let k = 0; k < 8; k++) {
-        const ang = k * (Math.PI / 4) + (cycle % 2) * 0.2;
-        const proj = this.acquireProjectile({
-          id: ++this.nextEntityId,
-          ownerId: e.id,
-          team: 'enemy',
-          weaponId: 'thorn_burst',
-          x: e.x + Math.cos(ang) * 24,
-          y: e.y + Math.sin(ang) * 24,
-          vx: Math.cos(ang) * 255,
-          vy: Math.sin(ang) * 255,
-          angle: ang,
-          radius: 5.5,
-          damage: e.damage,
-          isCrit: false,
-          knockback: 110,
-          pierceRemaining: 0,
-          bounceRemaining: 0,
-          ttlSec: 2.3,
-          element: 'poison',
-          amplifiedByShield: false,
-        });
-        this.projectiles.push(proj);
-      }
+      this.spawnDeterministicVolley({
+        kind: 'bullet_volley_spawned',
+        tick: this.tick,
+        ownerId: e.id,
+        team: 'enemy',
+        weaponId: 'thorn_burst',
+        x: e.x,
+        y: e.y,
+        angle: (cycle % 2) * 0.2,
+        pelletCount: 8,
+        spreadRad: 0,
+        radialStepRad: Math.PI / 4,
+        muzzleOffset: 24,
+        speed: 255,
+        damage: e.damage,
+        radius: 5.5,
+        knockback: 110,
+        pierceCount: 0,
+        bounceCount: 0,
+        ttlSec: 2.3,
+        element: 'poison',
+        critChance: 0,
+        amplifiedByShield: false,
+        seed: this.rng.nextUint32(),
+      });
 
       this.events.push({
         kind: 'explosion',
@@ -5530,41 +5595,31 @@ export class WorldSim {
       const ringCount = e.bossPhase === 3 ? 16 : e.bossPhase === 2 ? 14 : 12;
       const ringSpeed = e.bossPhase === 3 ? 255 : 225;
       const baseOffset = cycle * 0.26;
-      for (let k = 0; k < ringCount; k++) {
-        const shotAngle = baseOffset + (k / ringCount) * Math.PI * 2;
-        const mx = e.x + Math.cos(shotAngle) * (e.radius + 6);
-        const my = e.y + Math.sin(shotAngle) * (e.radius + 6);
-        const proj = this.acquireProjectile({
-          id: ++this.nextEntityId,
-          ownerId: e.id,
-          team: 'enemy',
-          weaponId: 'boss_spore_ring',
-          x: mx,
-          y: my,
-          vx: Math.cos(shotAngle) * ringSpeed,
-          vy: Math.sin(shotAngle) * ringSpeed,
-          angle: shotAngle,
-          radius: 6,
-          damage: e.damage,
-          isCrit: false,
-          knockback: 95,
-          pierceRemaining: 0,
-          bounceRemaining: 0,
-          ttlSec: 2.6,
-          element: 'poison',
-          amplifiedByShield: false,
-        });
-        this.projectiles.push(proj);
-        this.events.push({
-          kind: 'projectile_spawned',
-          projectileId: proj.id,
-          weaponId: 'boss_spore_ring',
-          team: 'enemy',
-          x: mx,
-          y: my,
-          angle: shotAngle,
-        });
-      }
+      this.spawnDeterministicVolley({
+        kind: 'bullet_volley_spawned',
+        tick: this.tick,
+        ownerId: e.id,
+        team: 'enemy',
+        weaponId: 'boss_spore_ring',
+        x: e.x,
+        y: e.y,
+        angle: baseOffset,
+        pelletCount: ringCount,
+        spreadRad: 0,
+        radialStepRad: (Math.PI * 2) / ringCount,
+        muzzleOffset: e.radius + 6,
+        speed: ringSpeed,
+        damage: e.damage,
+        radius: 6,
+        knockback: 95,
+        pierceCount: 0,
+        bounceCount: 0,
+        ttlSec: 2.6,
+        element: 'poison',
+        critChance: 0,
+        amplifiedByShield: false,
+        seed: this.rng.nextUint32(),
+      });
 
       // Summon up to 2 spore minions on alternate cycles if active non-boss count < 4
       const activeMinions = this.enemies.filter(
@@ -5578,30 +5633,30 @@ export class WorldSim {
 
       // Phase 3 aimed 3-way toxic burst
       if (e.bossPhase === 3) {
-        for (const mult of [-1, 0, 1]) {
-          const ang = angleToPlayer + mult * 0.22;
-          const proj = this.acquireProjectile({
-            id: ++this.nextEntityId,
-            ownerId: e.id,
-            team: 'enemy',
-            weaponId: 'shaman_staff',
-            x: e.x + Math.cos(ang) * 24,
-            y: e.y + Math.sin(ang) * 24,
-            vx: Math.cos(ang) * 290,
-            vy: Math.sin(ang) * 290,
-            angle: ang,
-            radius: 6.5,
-            damage: e.damage,
-            isCrit: false,
-            knockback: 110,
-            pierceRemaining: 0,
-            bounceRemaining: 0,
-            ttlSec: 2.4,
-            element: 'poison',
-            amplifiedByShield: false,
-          });
-          this.projectiles.push(proj);
-        }
+        this.spawnDeterministicVolley({
+          kind: 'bullet_volley_spawned',
+          tick: this.tick,
+          ownerId: e.id,
+          team: 'enemy',
+          weaponId: 'shaman_staff',
+          x: e.x,
+          y: e.y,
+          angle: angleToPlayer,
+          pelletCount: 3,
+          spreadRad: 0.44,
+          muzzleOffset: 24,
+          speed: 290,
+          damage: e.damage,
+          radius: 6.5,
+          knockback: 110,
+          pierceCount: 0,
+          bounceCount: 0,
+          ttlSec: 2.4,
+          element: 'poison',
+          critChance: 0,
+          amplifiedByShield: false,
+          seed: this.rng.nextUint32(),
+        });
       }
     }
 
@@ -5827,6 +5882,192 @@ export class WorldSim {
                 isCrit: false,
               });
             }
+            break;
+          }
+        }
+      }
+    }
+
+    let projWriteIdx = 0;
+    for (let i = 0; i < this.projectiles.length; i++) {
+      const b = this.projectiles[i]!;
+      if (b.ttlSec > 0) {
+        this.projectiles[projWriteIdx++] = b;
+      } else {
+        b.hitEntityIds.length = 0;
+        this.projectilePool.push(b);
+      }
+    }
+    this.projectiles.length = projWriteIdx;
+  }
+
+  /**
+   * Simulates deterministically spawned projectiles on a LAN Co-op client at 60Hz.
+   * Server remains authoritative for actual HP/damage, while client predicts projectile
+   * trajectories, wall bounces, and immediate cosmetic hit effects (sparks + hitFlashTimer).
+   */
+  public stepClientProjectilesCosmetic(dtSec: number): void {
+    if (this.projectiles.length === 0) return;
+
+    this.rebuildEnemySpatialGrid();
+    const allPlayers = this.getAllPlayers();
+
+    for (let i = 0; i < this.projectiles.length; i++) {
+      const b = this.projectiles[i]!;
+      if (b.ttlSec <= 0) continue;
+
+      b.prevX = b.x;
+      b.prevY = b.y;
+      b.ttlSec -= dtSec;
+      if (b.ttlSec <= 0) continue;
+
+      b.x += b.vx * dtSec;
+      b.y += b.vy * dtSec;
+
+      // 1. Wall / Pillar collision & ricochet bounce
+      const wallHit = this.map.checkProjectileWallHit(b.x, b.y, b.radius);
+      if (wallHit.hit) {
+        if (b.bounceRemaining > 0) {
+          b.bounceRemaining -= 1;
+          b.x = wallHit.resolvedX;
+          b.y = wallHit.resolvedY;
+          if (wallHit.normalX !== 0) b.vx = -b.vx;
+          if (wallHit.normalY !== 0) b.vy = -b.vy;
+          b.angle = Math.atan2(b.vy, b.vx);
+        } else {
+          b.ttlSec = 0;
+          this.events.push({
+            kind: 'projectile_impact',
+            x: wallHit.resolvedX,
+            y: wallHit.resolvedY,
+            angle: b.angle,
+            team: b.team,
+            hitWall: true,
+            destroyedByMelee: false,
+            blockedByShield: false,
+            isCrit: b.isCrit,
+            element: b.element,
+          });
+          continue;
+        }
+      }
+
+      // 2. Destructible prop cosmetic hit prediction
+      if (this.props.length > 0) {
+        let hitProp = false;
+        for (let k = 0; k < this.props.length; k++) {
+          const prop = this.props[k]!;
+          if (!prop.destructible || prop.hp <= 0) continue;
+          if (circleVsCircle(b, prop)) {
+            prop.hitFlashTimer = Math.max(prop.hitFlashTimer, 0.1);
+            b.ttlSec = 0;
+            hitProp = true;
+            this.events.push({
+              kind: 'projectile_impact',
+              x: b.x,
+              y: b.y,
+              angle: b.angle,
+              team: b.team,
+              hitWall: false,
+              destroyedByMelee: false,
+              blockedByShield: false,
+              isCrit: b.isCrit,
+              element: b.element,
+            });
+            break;
+          }
+        }
+        if (hitProp) continue;
+      }
+
+      // 3. Player projectile vs Enemy cosmetic hit prediction
+      if (b.team === 'player') {
+        const candidates = this.enemySpatialGrid.queryCircle(
+          b.x,
+          b.y,
+          b.radius,
+          this.queryEnemyScratch,
+        );
+        for (let j = 0; j < candidates.length; j++) {
+          const enemy = candidates[j]!;
+          if (enemy.hp <= 0 || enemy.aiState === 'spawning' || enemy.bossBurrowed) continue;
+          if (b.hitEntityIds.includes(enemy.id)) continue;
+
+          if (circleVsCircle(b, enemy)) {
+            b.hitEntityIds.push(enemy.id);
+            enemy.hitFlashTimer = Math.max(enemy.hitFlashTimer, 0.12);
+            this.events.push({
+              kind: 'projectile_impact',
+              x: b.x,
+              y: b.y,
+              angle: b.angle,
+              team: 'player',
+              hitWall: false,
+              destroyedByMelee: false,
+              blockedByShield: false,
+              isCrit: b.isCrit,
+              element: b.element,
+            });
+
+            if (b.pierceRemaining > 0) {
+              b.pierceRemaining -= 1;
+            } else {
+              b.ttlSec = 0;
+              break;
+            }
+          }
+        }
+      } else {
+        // 4. Enemy projectile vs Vanguard shield or alive Player cosmetic hit prediction
+        let blocked = false;
+        for (let pIdx = 0; pIdx < allPlayers.length; pIdx++) {
+          const pl = allPlayers[pIdx]!;
+          if (pl.lifeState !== 'alive') continue;
+          if (pl.characterId === 'vanguard' && pl.skillActiveTimer > 0) {
+            const shieldRadius = 38;
+            const dToPlayer = distance(b.x, b.y, pl.x, pl.y);
+            if (dToPlayer <= shieldRadius + b.radius && dToPlayer >= pl.radius * 0.5) {
+              const angleFromPlayer = Math.atan2(b.y - pl.y, b.x - pl.x);
+              const halfShieldArc = this.activeBuffIds.includes('vanguard_fortress')
+                ? Math.PI
+                : (60 * Math.PI) / 180;
+              if (Math.abs(angleDiff(angleFromPlayer, pl.aimAngle)) <= halfShieldArc) {
+                b.ttlSec = 0;
+                this.events.push({
+                  kind: 'projectile_impact',
+                  x: b.x,
+                  y: b.y,
+                  angle: b.angle,
+                  team: 'enemy',
+                  hitWall: false,
+                  destroyedByMelee: false,
+                  blockedByShield: true,
+                  isCrit: false,
+                });
+                blocked = true;
+                break;
+              }
+            }
+          }
+        }
+        if (blocked) continue;
+
+        for (let pIdx = 0; pIdx < allPlayers.length; pIdx++) {
+          const pl = allPlayers[pIdx]!;
+          if (pl.lifeState !== 'alive') continue;
+          if (circleVsCircle(b, pl)) {
+            b.ttlSec = 0;
+            this.events.push({
+              kind: 'projectile_impact',
+              x: b.x,
+              y: b.y,
+              angle: b.angle,
+              team: 'enemy',
+              hitWall: false,
+              destroyedByMelee: false,
+              blockedByShield: false,
+              isCrit: false,
+            });
             break;
           }
         }

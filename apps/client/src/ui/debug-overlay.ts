@@ -295,8 +295,8 @@ export class DebugOverlay {
 
     const isHidden = typeof document !== 'undefined' && document.hidden;
     this.warmupFrames += 1;
-    // Ignore the first 5 scene-init/resize frames and background-throttled frames
-    if (!isHidden && this.warmupFrames > 5 && rawDelta < 45) {
+    // Ignore scene-init/resize warmup frames and background-throttled frames
+    if (!isHidden && this.warmupFrames > 10 && rawDelta < 45) {
       this.frameDeltaSamples.push(rawDelta);
       if (this.frameDeltaSamples.length > 30) {
         this.frameDeltaSamples.shift();
@@ -350,8 +350,9 @@ export class DebugOverlay {
       if (view && view.width > 0) {
         this.container.setPosition(view.x + 16, view.y + 76);
       }
+      const textInterval = state.stressTestActive ? 30 : 6;
       if (
-        this.warmupFrames % 6 === 1 ||
+        this.warmupFrames % textInterval === 1 ||
         this.textObj.text.length === 0 ||
         !this.textObj.text.includes(`Quality[G]: ${state.graphicsQuality.toUpperCase()}`)
       ) {

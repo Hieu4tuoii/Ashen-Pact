@@ -1334,19 +1334,33 @@ export class GameScene extends Phaser.Scene {
     room.onMessage('kicked', onKicked);
     room.onMessage('kicked_by_host', onKicked);
 
+    room.onMessage('join_rejected', (msg: { reasonVi?: string }) => {
+      if (!this.scene.isActive()) return;
+      this.intentionalLeave = true;
+      this.scene.start('MenuScene', {
+        disconnectReason:
+          msg.reasonVi ??
+          'Đội đang chiến đấu — chỉ có thể tham gia ở Sảnh Chờ (Hub) hoặc giữa các tầng!',
+      });
+    });
+
     room.onMessage('character_select_result', () => {
       this.lastInvitePanelHash = '';
     });
 
     room.onLeave((code: number) => {
       if (!this.scene.isActive() || this.intentionalLeave) return;
-      // Code 4000 = Host disconnect, 4001 = Kicked
-      if (code === 4000 || code === 4001) {
+      // Code 4000 = Host disconnect, 4001 = Kicked, 4002 = Room Full, 4003 = Mid-run Join Rejected
+      if (code === 4000 || code === 4001 || code === 4002 || code === 4003) {
         this.scene.start('MenuScene', {
           disconnectReason:
             code === 4001
               ? 'Bạn đã bị Host mời rời khỏi phòng.'
-              : 'Phòng Co-op đã đóng do Host ngắt kết nối.',
+              : code === 4002
+                ? 'Phòng Co-op đã đủ 4 người chơi.'
+                : code === 4003
+                  ? 'Đội đang chiến đấu — chỉ có thể tham gia ở Sảnh Chờ (Hub) hoặc giữa các tầng!'
+                  : 'Phòng Co-op đã đóng do Host ngắt kết nối.',
         });
         return;
       }
@@ -1843,10 +1857,17 @@ export class GameScene extends Phaser.Scene {
   ): void {
     const sim = this.transport.getSim();
     const showName =
-      this.coopMode !== 'solo' ||
-      sim.inHub ||
-      sim.getActivePlayerCount() > 1 ||
-      p.lifeState !== 'alive';
+      !sim.stressTestActive &&
+      (this.coopMode !== 'solo' ||
+        sim.inHub ||
+        sim.getActivePlayerCount() > 1 ||
+        p.lifeState !== 'alive');
+
+    const view = this.cameras.main.worldView;
+    const safeTopY = (view && view.width > 0 ? view.y : 0) + 84;
+    const placeBelow = y - 26 < safeTopY;
+    const nameY = placeBelow ? y + 24 : y - 26;
+    const emoteY = placeBelow ? y + 42 : Math.max(safeTopY + 12, y - 44);
 
     if (nameLabel) {
       if (!showName) {
@@ -1876,7 +1897,7 @@ export class GameScene extends Phaser.Scene {
               ? PALETTE.CYAN_FROST
               : PLAYER_SLOT_COLORS[p.slot];
         nameLabel.setColor(slotCol);
-        nameLabel.setPosition(x, y - 26);
+        nameLabel.setPosition(x, nameY);
       }
     }
 
@@ -1888,13 +1909,13 @@ export class GameScene extends Phaser.Scene {
           emoteLabel.setText(emoteStr);
         }
         emoteLabel.setVisible(true);
-        emoteLabel.setPosition(x, y - 44);
+        emoteLabel.setPosition(x, emoteY);
         const bw = Math.max(76, emoteStr.length * 6.5 + 16);
         const bh = 20;
         emoteBg.fillStyle(hexToNum(PALETTE.SLATE_DARK), 0.94);
         emoteBg.lineStyle(2, hexToNum(PLAYER_SLOT_COLORS[p.slot]), 1);
-        emoteBg.fillRoundedRect(x - bw / 2, y - 44 - bh / 2, bw, bh, 6);
-        emoteBg.strokeRoundedRect(x - bw / 2, y - 44 - bh / 2, bw, bh, 6);
+        emoteBg.fillRoundedRect(x - bw / 2, emoteY - bh / 2, bw, bh, 6);
+        emoteBg.strokeRoundedRect(x - bw / 2, emoteY - bh / 2, bw, bh, 6);
       } else {
         emoteLabel.setVisible(false);
       }
@@ -3109,12 +3130,14 @@ export class GameScene extends Phaser.Scene {
   }
 
   private renderTelegraphsAndShield(playerX: number, playerY: number): void {
-    const g = this.telegraphGraphics;
-    g.clear();
-
     const sim = this.transport.getSim();
     const p = sim.player;
     const isStress = sim.stressTestActive;
+    if (isStress && sim.tick % 4 !== 0) {
+      return;
+    }
+    const g = this.telegraphGraphics;
+    g.clear();
     const view = this.cameras.main.worldView;
     const hasView = view && view.width > 0;
     const viewLeft = hasView ? view.x - 48 : -9999;

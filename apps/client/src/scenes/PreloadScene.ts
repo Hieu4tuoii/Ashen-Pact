@@ -33,7 +33,12 @@ export class PreloadScene extends Phaser.Scene {
         this.scene.start('ArtGalleryScene');
       } else if (requestedScene === 'menu') {
         this.scene.start('MenuScene');
-      } else if (coopParam === 'host' || coopParam === 'join' || joinRoomId) {
+      } else if (
+        coopParam === 'host' ||
+        coopParam === 'join' ||
+        joinRoomId ||
+        window.location.port === '2567'
+      ) {
         this.scene.start('GameScene', {
           coopMode: coopParam === 'host' ? 'host' : 'join',
           roomId: joinRoomId ?? undefined,

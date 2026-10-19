@@ -341,4 +341,79 @@ describe('Phase 4 — Co-op LAN, Hub, 5 Characters, Scaling, Revive/Ghost & Netw
     expect(telemetry.interpolationDelayMs).toBeGreaterThanOrEqual(50);
     expect(telemetry.interpolationDelayMs).toBeLessThanOrEqual(100);
   });
+
+  it('spawns deterministic bullet volleys via event seed with zero per-bullet snapshot sync and runs client-side cosmetic hit prediction', () => {
+    const serverSim = new WorldSim({
+      seed: 8080,
+      startInHub: false,
+      spawnInitialWave: false,
+      includeTrainingDummy: false,
+    });
+    const enemy = serverSim.spawnEnemy('goblin_shooter', serverSim.player.x + 80, serverSim.player.y, false);
+    enemy.aiState = 'idle';
+    enemy.spawnTimer = 0;
+    const initialHp = enemy.hp;
+
+    const clientTransport = new NetworkTransport({
+      seed: 8080,
+      startInHub: false,
+      localPlayerId: 1,
+      localPlayerSlot: 1,
+      wifiProfile: 'off',
+    });
+
+    // Fire a multi-pellet shotgun volley on server
+    serverSim.player.weaponSlots = ['scrap_shotgun'];
+    serverSim.player.activeWeaponSlot = 0;
+    serverSim.setPlayerInput({
+      seq: 1,
+      tick: 1,
+      moveX: 0,
+      moveY: 0,
+      aimAngle: 0,
+      buttons: INPUT_BUTTON.FIRE,
+      weaponSlotSelect: null,
+    });
+    serverSim.step(1 / 60);
+
+    const serverEvents = serverSim.consumeEvents();
+    const volleyEvt = serverEvents.find((e) => e.kind === 'bullet_volley_spawned');
+    expect(volleyEvt).toBeDefined();
+    if (!volleyEvt || volleyEvt.kind !== 'bullet_volley_spawned') {
+      throw new Error('Expected bullet_volley_spawned event');
+    }
+
+    // Verify encodeWorldSnapshot does not serialize per-bullet state arrays
+    const snap = encodeWorldSnapshot(serverSim, serverEvents);
+    expect(snap.projectiles.length).toBe(0);
+
+    // Apply snapshot on client -> client deterministically spawns the exact same pellet volley from event seed
+    clientTransport.receiveSnapshot(snap);
+    const clientSim = clientTransport.getSim();
+    expect(clientSim.projectiles.length).toBe(serverSim.projectiles.length);
+    for (let i = 0; i < serverSim.projectiles.length; i++) {
+      expect(clientSim.projectiles[i]!.vx).toBeCloseTo(serverSim.projectiles[i]!.vx, 5);
+      expect(clientSim.projectiles[i]!.vy).toBeCloseTo(serverSim.projectiles[i]!.vy, 5);
+    }
+
+    // Drain initial events, then step client prediction forward without any new server snapshot
+    clientTransport.consumeEvents();
+    let cosmeticImpactSeen = false;
+    for (let stepIdx = 0; stepIdx < 12; stepIdx++) {
+      clientTransport.step(16.67);
+      const clientEvents = clientTransport.consumeEvents();
+      if (clientEvents.some((e) => e.kind === 'projectile_impact')) {
+        cosmeticImpactSeen = true;
+        break;
+      }
+    }
+
+    // Client-side cosmetic hit prediction flashes the enemy and spawns impact spark immediately,
+    // while keeping authoritative enemy HP unchanged until server confirms damage
+    expect(cosmeticImpactSeen).toBe(true);
+    const clientEnemy = clientSim.enemies.find((e) => e.id === enemy.id)!;
+    expect(clientEnemy.hitFlashTimer).toBeGreaterThan(0);
+    expect(clientEnemy.hp).toBe(initialHp);
+  });
 });
+
