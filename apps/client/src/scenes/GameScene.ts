@@ -2,9 +2,11 @@ import Phaser from 'phaser';
 import { Client as ColyseusClient, type Room as ColyseusRoom } from 'colyseus.js';
 import {
   type BuffId,
+  type CharacterId,
   CHARACTERS,
   clamp,
   type DungeonRoomNode,
+  ELEMENTAL_REACTIONS,
   type ElementType,
   ENEMY_SPAWN_WARMUP_SEC,
   FLOOR_BUFFS,
@@ -215,6 +217,7 @@ export class GameScene extends Phaser.Scene {
   private lastBossHudHash = '';
   private lastCoopHudHash = '';
   private lastInvitePanelHash = '';
+  private lastHubPreviewHash = '';
   private lastRunState = 'playing';
   private resultDismissed = false;
   private fullMapOpen = false;
@@ -232,6 +235,7 @@ export class GameScene extends Phaser.Scene {
   private bossTitleText!: Phaser.GameObjects.Text;
   private coopHudContainer!: Phaser.GameObjects.Container;
   private invitePanelContainer!: Phaser.GameObjects.Container;
+  private hubPreviewContainer!: Phaser.GameObjects.Container;
   private offscreenArrowGraphics!: Phaser.GameObjects.Graphics;
   private modalContainer!: Phaser.GameObjects.Container;
   private hpLabelText!: Phaser.GameObjects.Text;
@@ -377,6 +381,7 @@ export class GameScene extends Phaser.Scene {
     this.lastBossHudHash = '';
     this.lastCoopHudHash = '';
     this.lastInvitePanelHash = '';
+    this.lastHubPreviewHash = '';
     this.lastRunState = 'playing';
     this.resultDismissed = false;
     this.fullMapOpen = false;
@@ -411,6 +416,9 @@ export class GameScene extends Phaser.Scene {
         includeProps: true,
         autoRespawnWaves: true,
       });
+      if (new URLSearchParams(window.location.search).get('hub') === '1') {
+        this.transport.getSim().enterHub();
+      }
     }
 
     window.__PHASER_GAME__ = this.game;
@@ -1003,6 +1011,9 @@ export class GameScene extends Phaser.Scene {
 
     this.invitePanelContainer = this.add.container(0, 0);
     this.hudContainer.add(this.invitePanelContainer);
+
+    this.hubPreviewContainer = this.add.container(0, 0);
+    this.hudContainer.add(this.hubPreviewContainer);
 
     // Modal Container for Between-Floor Buff Selection & Run Victory/Defeat Summary
     this.modalContainer = this.add.container(0, 0);
@@ -1604,6 +1615,7 @@ export class GameScene extends Phaser.Scene {
         this.lastBossHudHash = '';
         this.lastCoopHudHash = '';
         this.lastInvitePanelHash = '';
+        this.lastHubPreviewHash = '';
         this.syncRoomEntities(0);
         this.updateModalHud();
       }
@@ -2292,6 +2304,60 @@ export class GameScene extends Phaser.Scene {
           zzfx.play('weapon_swap', ev.x, this.camFocusX);
           break;
         }
+        case 'elemental_reaction': {
+          if (!isStress || statusFxCountThisStep < 2) {
+            statusFxCountThisStep += 1;
+            const meta = ELEMENTAL_REACTIONS[ev.reaction];
+            this.fx.spawnElementalReactionFx({
+              reaction: ev.reaction,
+              x: ev.x,
+              y: ev.y,
+              damage: ev.damage,
+              isTeamCombo: ev.isTeamCombo,
+            });
+            this.lighting.spawnTransientLight(
+              ev.x,
+              ev.y,
+              ev.isTeamCombo ? 165 : 124,
+              meta?.colorHex ?? PALETTE.SOLAR_GOLD,
+              0.96,
+              0.38,
+            );
+            if (allowStressSfx) {
+              zzfx.play(ev.isTeamCombo ? 'team_combo' : 'elemental_reaction', ev.x, this.camFocusX);
+            }
+          }
+          break;
+        }
+        case 'summon_spawned': {
+          this.lighting.spawnTransientLight(
+            ev.x,
+            ev.y,
+            135,
+            ev.summonKind === 'sacred_tree' ? PALETTE.LIME_GLOW : PALETTE.VOLT_YELLOW,
+            0.92,
+            0.35,
+          );
+          if (allowStressSfx) {
+            zzfx.play('skill_cast', ev.x, this.camFocusX);
+          }
+          break;
+        }
+        case 'emp_blast': {
+          this.fx.spawnExplosionBurst(ev.x, ev.y, ev.radius, PALETTE.VOLT_YELLOW);
+          this.lighting.spawnTransientLight(
+            ev.x,
+            ev.y,
+            ev.radius * 2,
+            PALETTE.VOLT_YELLOW,
+            1.0,
+            0.38,
+          );
+          if (allowStressSfx) {
+            zzfx.play('emp_blast', ev.x, this.camFocusX);
+          }
+          break;
+        }
         case 'hit_stop': {
           maxHitStopMs = Math.max(maxHitStopMs, ev.durationMs);
           maxHitStopTrauma = Math.max(maxHitStopTrauma, ev.trauma);
@@ -2671,8 +2737,13 @@ export class GameScene extends Phaser.Scene {
       this.activePickupIds.add(pk.id);
 
       let entry = this.pickupSprites.get(pk.id);
+      const tex =
+        pk.kind === 'energy'
+          ? 'fx_pickup_energy'
+          : pk.kind === 'life_seed'
+            ? 'fx_ambient_leaf'
+            : 'fx_pickup_gold';
       if (!entry) {
-        const tex = pk.kind === 'energy' ? 'fx_pickup_energy' : 'fx_pickup_gold';
         const pooled = this.pickupSpritePool.pop();
         if (pooled) {
           entry = pooled;
@@ -2687,10 +2758,19 @@ export class GameScene extends Phaser.Scene {
           sprite.setDepth(25);
           entry = { sprite, textureKey: tex };
         }
-        entry.sprite.setScale(invBake);
+        entry.sprite.setScale(invBake * (pk.kind === 'life_seed' ? 1.35 : 1));
         this.pickupSprites.set(pk.id, entry);
+      } else if (entry.textureKey !== tex) {
+        entry.textureKey = tex;
+        entry.sprite.setTexture(tex);
+        entry.sprite.setScale(invBake * (pk.kind === 'life_seed' ? 1.35 : 1));
       }
 
+      if (pk.kind === 'life_seed') {
+        entry.sprite.setTint(hexToNum(PALETTE.LIME_GLOW));
+      } else {
+        entry.sprite.clearTint();
+      }
       const pos = this.transport.getInterpolatedPickupPos(pk, this.entityPosScratch);
       entry.sprite.setPosition(pos.x, pos.y);
     }
@@ -2739,13 +2819,15 @@ export class GameScene extends Phaser.Scene {
             .setDepth(46);
 
           const subLabel = this.add
-            .text(st.x, st.y + 24, `HP ${cDef.hp} · Giáp ${cDef.armor} · ${cDef.skill.nameVi}`, {
+            .text(st.x, st.y + 27, `HP ${cDef.hp} · Giáp ${cDef.armor}\n[Q] ${cDef.skill.nameVi}`, {
               fontFamily: '"Be Vietnam Pro", sans-serif',
               fontSize: '8.5px',
               fontStyle: '700',
               color: PALETTE.SILVER_BRIGHT,
               stroke: PALETTE.INK_DEEP,
               strokeThickness: 2.5,
+              align: 'center',
+              lineSpacing: 1,
               resolution: textRes,
             })
             .setOrigin(0.5, 0.5)
@@ -2756,10 +2838,12 @@ export class GameScene extends Phaser.Scene {
         }
 
         const isSelectedByLocal = sim.player.characterId === st.characterId;
+        const isInspecting = Math.hypot(sim.player.x - st.x, sim.player.y - st.y) <= 72;
         entry.label.setColor(isSelectedByLocal ? PALETTE.LIME_GLOW : PALETTE.SOLAR_GOLD);
         entry.label.setText(
           isSelectedByLocal ? `★ ${cDef.nameVi} (Đang Chọn)` : `[E] ${cDef.nameVi}`,
         );
+        entry.subLabel.setVisible(!isInspecting);
         entry.rig.update(dtSec);
       }
     } else if (this.hubStatueRigs.size > 0) {
@@ -2968,6 +3052,7 @@ export class GameScene extends Phaser.Scene {
       const bobY = Math.sin(sim.tick * 0.08 + it.id) * 2.5;
       entry.sprite.setPosition(it.x, it.y + bobY);
       entry.label.setPosition(it.x, it.y - 24 + bobY * 0.5);
+      entry.label.setVisible(!(sim.inHub && initGlobalDebugState().hubPreviewCharacterId !== null));
     }
 
     for (const [id, entry] of this.worldItemSprites.entries()) {
@@ -3081,7 +3166,9 @@ export class GameScene extends Phaser.Scene {
       this.portalSprite.setScale(invBake * (1 + Math.sin(sim.tick * 0.1) * 0.06));
       this.portalSprite.setRotation(sim.tick * 0.03);
 
-      this.portalLabel.setVisible(true);
+      this.portalLabel.setVisible(
+        !(sim.inHub && initGlobalDebugState().hubPreviewCharacterId !== null),
+      );
       this.portalLabel.setPosition(sim.portalX, sim.portalY - 38);
     } else {
       this.portalSprite?.setVisible(false);
@@ -3257,19 +3344,126 @@ export class GameScene extends Phaser.Scene {
           g.beginPath();
           g.arc(px, py, r - 4, startA, endA, false);
           g.strokePath();
-        } else if (pl.characterId === 'druid') {
-          g.fillStyle(hexToNum(PALETTE.LIME_GLOW), 0.14);
-          g.fillCircle(px, py, 96);
-          g.lineStyle(2.5, hexToNum(PALETTE.LIME_GLOW), 0.85);
-          g.strokeCircle(px, py, 96);
-        } else if (pl.characterId === 'engineer') {
-          g.lineStyle(2, hexToNum(PALETTE.BRASS_CORE), 0.85);
-          g.strokeCircle(px, py, 44);
         }
       }
     }
 
-    // 1b. Contextual Ping World Rings
+    // 1a. Phase 5 Elementalist Skill Zones (Vùng Cầu Nguyên Tố + Xoáy Nguyên Tố)
+    for (let i = 0; i < sim.skillZones.length; i++) {
+      const z = sim.skillZones[i]!;
+      if (z.ttlSec <= 0) continue;
+      const elHex =
+        z.element === 'burn'
+          ? PALETTE.FLAME_ORANGE
+          : z.element === 'chill'
+            ? PALETTE.CYAN_FROST
+            : PALETTE.VOLT_YELLOW;
+      const col = hexToNum(elHex);
+      const pulse = Math.sin(sim.tick * 0.16 + z.id) * 3;
+
+      g.fillStyle(col, 0.15);
+      g.fillCircle(z.x, z.y, z.radius + pulse);
+      g.lineStyle(2.5, col, 0.88);
+      g.strokeCircle(z.x, z.y, z.radius + pulse);
+
+      if (z.vortex) {
+        g.lineStyle(1.8, hexToNum(PALETTE.BONE_WHITE), 0.55);
+        g.strokeCircle(z.x, z.y, z.radius * 0.62 - pulse);
+      }
+
+      // Floating elemental orb core
+      g.fillStyle(hexToNum(PALETTE.INK_DARK), 0.9);
+      g.fillCircle(z.x, z.y, 11);
+      g.fillStyle(col, 0.95);
+      g.fillCircle(z.x, z.y, 8);
+      g.fillStyle(hexToNum(PALETTE.BONE_WHITE), 0.9);
+      g.fillCircle(z.x - 2, z.y - 2, 3);
+    }
+
+    // 1b. Phase 5 Summoned Entities (Druid Sacred Tree & Engineer Tesla / Ancient Turrets)
+    for (let i = 0; i < sim.summons.length; i++) {
+      const sum = sim.summons[i]!;
+      if (sum.hp <= 0 || sum.ttlSec <= 0) continue;
+
+      if (sum.kind === 'sacred_tree') {
+        const pulse = Math.sin(sim.tick * 0.12 + sum.id) * 3;
+        g.fillStyle(hexToNum(PALETTE.LIME_GLOW), 0.12);
+        g.fillCircle(sum.x, sum.y, sum.auraRadius + pulse);
+        g.lineStyle(2.2, hexToNum(PALETTE.LIME_GLOW), 0.82);
+        g.strokeCircle(sum.x, sum.y, sum.auraRadius + pulse);
+
+        // Tree trunk & glowing emerald canopy
+        g.fillStyle(hexToNum(PALETTE.INK_DARK), 0.95);
+        g.fillCircle(sum.x, sum.y, 20);
+        g.fillStyle(hexToNum(PALETTE.LEATHER_MID), 1);
+        g.fillRoundedRect(sum.x - 6, sum.y - 4, 12, 18, 3);
+        g.fillStyle(hexToNum(PALETTE.GOBLIN_GREEN), 0.98);
+        g.fillCircle(sum.x, sum.y - 8, 16);
+        g.fillStyle(hexToNum(PALETTE.LIME_GLOW), 0.95);
+        g.fillCircle(sum.x - 4, sum.y - 11, 9);
+        g.lineStyle(2.5, hexToNum(PALETTE.INK_DARK), 1);
+        g.strokeCircle(sum.x, sum.y - 8, 16);
+      } else {
+        // Tesla Turret / Ancient Turret
+        const isAncient = sum.kind === 'ancient_turret';
+        const auraCol = hexToNum(isAncient ? PALETTE.SOLAR_GOLD : PALETTE.CYAN_FROST);
+        g.fillStyle(auraCol, 0.08);
+        g.fillCircle(sum.x, sum.y, sum.auraRadius);
+        g.lineStyle(1.6, auraCol, 0.55);
+        g.strokeCircle(sum.x, sum.y, sum.auraRadius);
+
+        // Turret base + rotating barrel
+        g.fillStyle(hexToNum(PALETTE.INK_DARK), 0.95);
+        g.fillCircle(sum.x, sum.y, 16);
+        g.fillStyle(hexToNum(PALETTE.STEEL_DARK), 1);
+        g.fillCircle(sum.x, sum.y, 13);
+        g.fillStyle(hexToNum(isAncient ? PALETTE.SOLAR_GOLD : PALETTE.BRASS_CORE), 1);
+        g.fillCircle(sum.x, sum.y, 8);
+
+        const barrelAng = this.time.now * 0.002 + sum.id;
+        const bx = sum.x + Math.cos(barrelAng) * 16;
+        const by = sum.y + Math.sin(barrelAng) * 16;
+        g.lineStyle(6, hexToNum(PALETTE.INK_DARK), 1);
+        g.beginPath();
+        g.moveTo(sum.x, sum.y);
+        g.lineTo(bx, by);
+        g.strokePath();
+        g.lineStyle(3.2, hexToNum(PALETTE.STEEL_LIGHT), 1);
+        g.beginPath();
+        g.moveTo(sum.x, sum.y);
+        g.lineTo(bx, by);
+        g.strokePath();
+
+        // EMP Charge Arc around Tesla Turret (Co-op Synergy indicator)
+        if (sum.charge > 0) {
+          g.lineStyle(3, hexToNum(PALETTE.VOLT_YELLOW), 0.95);
+          g.beginPath();
+          g.arc(
+            sum.x,
+            sum.y,
+            19,
+            -Math.PI / 2,
+            -Math.PI / 2 + Math.PI * 2 * clamp(sum.charge / 100, 0, 1),
+            false,
+          );
+          g.strokePath();
+        }
+      }
+
+      // Mini TTL / HP bar above summon
+      const barW = 28;
+      const barY = sum.y - 28;
+      const ttlRatio = clamp(sum.ttlSec / Math.max(1, sum.maxTtlSec), 0, 1);
+      g.fillStyle(hexToNum(PALETTE.INK_DARK), 0.9);
+      g.fillRect(sum.x - barW / 2 - 1, barY - 1, barW + 2, 5);
+      g.fillStyle(
+        hexToNum(sum.kind === 'sacred_tree' ? PALETTE.LIME_GLOW : PALETTE.VOLT_YELLOW),
+        1,
+      );
+      g.fillRect(sum.x - barW / 2, barY, Math.max(2, barW * ttlRatio), 3);
+    }
+
+    // 1c. Contextual Ping World Rings
     for (let i = 0; i < sim.pings.length; i++) {
       const ping = sim.pings[i]!;
       const col = hexToNum(PLAYER_SLOT_COLORS[ping.playerSlot]);
@@ -3332,6 +3526,31 @@ export class GameScene extends Phaser.Scene {
         g.fillCircle(pos.x, pos.y, e.radius + 5);
         g.lineStyle(2.2, hexToNum(PALETTE.BONE_WHITE), 0.9);
         g.strokeCircle(pos.x, pos.y, e.radius + 5);
+      }
+
+      // Druid Rooted vines ring around enemy feet
+      if (e.rootedTimer > 0 && !isStress) {
+        g.lineStyle(2.5, hexToNum(PALETTE.LIME_GLOW), 0.92);
+        g.strokeEllipse(pos.x, pos.y + 8, e.radius * 2.1, e.radius * 1.1);
+      }
+
+      // Superconduct defense-shred aura ring
+      if (e.superconductTimer > 0 && !isStress) {
+        g.lineStyle(2, hexToNum(PALETTE.ELECTRIC_VIOLET), 0.9);
+        g.strokeCircle(pos.x, pos.y, e.radius + 6);
+      }
+
+      // Ranger Predator Mark Crosshair above enemy (visible through Fog of War!)
+      if (e.markedTimer > 0 && !isStress) {
+        const markY = pos.y - (e.isBoss ? 54 : 40);
+        g.lineStyle(2.2, hexToNum(PALETTE.SOLAR_GOLD), 0.95);
+        g.strokeCircle(pos.x, markY, 6);
+        g.beginPath();
+        g.moveTo(pos.x - 9, markY);
+        g.lineTo(pos.x + 9, markY);
+        g.moveTo(pos.x, markY - 9);
+        g.lineTo(pos.x, markY + 9);
+        g.strokePath();
       }
 
       // Enemy Attack Telegraphs (Section 3.7: high readability red warning before damage)
@@ -3415,7 +3634,10 @@ export class GameScene extends Phaser.Scene {
         e.chillStacks > 0 ||
         e.frozenTimer > 0 ||
         e.poisonStacks > 0 ||
-        e.shockTimer > 0;
+        e.shockTimer > 0 ||
+        e.markedTimer > 0 ||
+        e.superconductTimer > 0 ||
+        e.rootedTimer > 0;
       const barY = pos.y - (e.isBoss ? 44 : 30);
       if (
         barY - 8 >= hudSafeTop &&
@@ -3461,7 +3683,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     // Elemental status pips above HP bar
-    let pipX = x - 10;
+    let pipX = x - 12;
     const pipY = y - 6;
     if (e.burnTimer > 0) {
       g.fillStyle(hexToNum(PALETTE.FLAME_ORANGE), 1);
@@ -3481,6 +3703,16 @@ export class GameScene extends Phaser.Scene {
     if (e.poisonStacks > 0) {
       g.fillStyle(hexToNum(PALETTE.TOXIC_PURPLE), 1);
       g.fillCircle(pipX, pipY, 2.5);
+      pipX += 6;
+    }
+    if (e.superconductTimer > 0) {
+      g.fillStyle(hexToNum(PALETTE.ELECTRIC_VIOLET), 1);
+      g.fillCircle(pipX, pipY, 2.5);
+      pipX += 6;
+    }
+    if (e.markedTimer > 0) {
+      g.fillStyle(hexToNum(PALETTE.SOLAR_GOLD), 1);
+      g.fillCircle(pipX, pipY, 2.8);
     }
   }
 
@@ -3590,7 +3822,12 @@ export class GameScene extends Phaser.Scene {
       this.energyLabelText.setText(`NL ${p.energy}/${p.maxEnergy}`);
     }
 
-    if (sim.tick % 12 === 0 || sim.inHub || !this.lastHudStatsText) {
+    if (
+      sim.tick % 12 === 0 ||
+      sim.inHub ||
+      !this.lastHudStatsText ||
+      this.lastHudStatsText.startsWith('Doanh Trại') !== sim.inHub
+    ) {
       const dps = sim.getRollingDps();
       const room = sim.getCurrentRoom();
       const roomLabel = sim.inHub ? 'Doanh Trại' : ROOM_TYPE_LABELS_VI[room.type];
@@ -3602,9 +3839,15 @@ export class GameScene extends Phaser.Scene {
             ? 'Sẵn'
             : `${p.skillCooldownTimer.toFixed(1)}s`;
 
+      const cycleTag =
+        p.characterId === 'elementalist'
+          ? ` · Chu Kỳ: ${ELEMENT_LABELS_VI[p.activeImbueElement]}`
+          : '';
+      const comboTag = sim.teamComboCount > 0 ? ` · Combo Đội: ${sim.teamComboCount}` : '';
+
       const nextStats = sim.inHub
         ? `Doanh Trại (${sim.getActivePlayerCount()}P) · [E] Chọn NV · [V] Sẵn Sàng · [Z] Ping · [X] Bỏ VK | ${VIETNAMESE_VERIFICATION_STRING}`
-        : `Tầng ${sim.currentFloor}/2 (${roomLabel}) · DPS: ${dps.toFixed(1)} · Xu: ${p.gold} · Đợt ${sim.waveNumber} · Dash: ${dashReady} · Kỹ Năng: ${skillReady}`;
+        : `Tầng ${sim.currentFloor}/2 (${roomLabel}) · DPS: ${dps.toFixed(1)} · Xu: ${p.gold} · Đợt ${sim.waveNumber} · Dash: ${dashReady} · Kỹ Năng: ${skillReady}${cycleTag}${comboTag}`;
       if (nextStats !== this.lastHudStatsText) {
         this.lastHudStatsText = nextStats;
         this.statsLineText.setText(nextStats);
@@ -3675,6 +3918,7 @@ export class GameScene extends Phaser.Scene {
       this.updateBossHud();
       this.updateCoopTeammateHud();
       this.updateHubInvitePanel();
+      this.updateHubCharacterSkillPreview();
       this.updateOffscreenTeammateArrows();
       this.updateModalHud();
     }
@@ -4044,6 +4288,106 @@ export class GameScene extends Phaser.Scene {
         },
       );
     });
+  }
+
+  private updateHubCharacterSkillPreview(): void {
+    const sim = this.transport.getSim();
+    const debug = initGlobalDebugState();
+    let nearestCharId: CharacterId | null = null;
+    let bestDist = 72;
+
+    if (sim.inHub && !this.fullMapOpen && !debug.overlayVisible) {
+      for (let i = 0; i < sim.hubStatues.length; i++) {
+        const st = sim.hubStatues[i]!;
+        const d = Math.hypot(sim.player.x - st.x, sim.player.y - st.y);
+        if (d <= bestDist) {
+          bestDist = d;
+          nearestCharId = st.characterId;
+        }
+      }
+    }
+
+    debug.hubPreviewCharacterId = nearestCharId;
+    const isEquipped = nearestCharId === sim.player.characterId;
+    const hash = nearestCharId ? `${nearestCharId}:${isEquipped ? 1 : 0}` : '';
+
+    if (hash === this.lastHubPreviewHash) return;
+    this.lastHubPreviewHash = hash;
+
+    this.hubPreviewContainer.removeAll(true);
+    if (!nearestCharId) return;
+
+    const cDef = CHARACTERS[nearestCharId];
+    if (!cDef) return;
+
+    const textRes = TextureBaker.getBakeScale();
+    const px = 14;
+    const py = 308;
+    const pw = 556;
+    const ph = 168;
+
+    const bg = this.add.graphics();
+    bg.fillStyle(hexToNum(PALETTE.INK_DEEP), 0.99);
+    bg.lineStyle(2.5, hexToNum(isEquipped ? PALETTE.LIME_GLOW : PALETTE.SOLAR_GOLD), 0.96);
+    bg.fillRoundedRect(px, py, pw, ph, 8);
+    bg.strokeRoundedRect(px, py, pw, ph, 8);
+    this.hubPreviewContainer.add(bg);
+
+    const statusBadge = isEquipped ? '✓ ĐANG CHỌN' : 'Nhấn [E] Chọn';
+    const header = this.add.text(
+      px + 12,
+      py + 8,
+      `${cDef.nameVi.toUpperCase()} — ${cDef.titleVi}`,
+      {
+        fontFamily: '"Be Vietnam Pro", sans-serif',
+        fontSize: '10px',
+        fontStyle: '800',
+        color: isEquipped ? PALETTE.LIME_GLOW : PALETTE.SOLAR_GOLD,
+        stroke: PALETTE.INK_DARK,
+        strokeThickness: 3,
+        resolution: textRes,
+      },
+    );
+
+    const statsBadge = this.add
+      .text(
+        px + pw - 12,
+        py + 8.5,
+        `[${statusBadge}] · HP ${cDef.hp} · Giáp ${cDef.armor} · NL ${cDef.energy} · Tốc ${cDef.moveSpeed}`,
+        {
+          fontFamily: '"Be Vietnam Pro", sans-serif',
+          fontSize: '8.8px',
+          fontStyle: '700',
+          color: PALETTE.CYAN_FROST,
+          stroke: PALETTE.INK_DARK,
+          strokeThickness: 2.5,
+          resolution: textRes,
+        },
+      )
+      .setOrigin(1, 0);
+
+    const upg1 = cDef.skill.upgrades[0];
+    const upg2 = cDef.skill.upgrades[1];
+    const bodyLines = [
+      `• Nội tại (${cDef.passiveNameVi}): ${cDef.passiveDescriptionVi}`,
+      `• Kỹ năng [Q] (${cDef.skill.nameVi} · Hồi ${cDef.skill.cooldownSec}s): ${cDef.skill.descriptionVi}`,
+      `• Nâng cấp: (1) ${upg1.nameVi}: ${upg1.descriptionVi} | (2) ${upg2.nameVi}: ${upg2.descriptionVi}`,
+      `• Synergy Co-op: ${cDef.skill.synergyVi}`,
+    ].join('\n');
+
+    const body = this.add.text(px + 12, py + 28, bodyLines, {
+      fontFamily: '"Be Vietnam Pro", sans-serif',
+      fontSize: '9px',
+      fontStyle: '600',
+      color: PALETTE.BONE_WHITE,
+      stroke: PALETTE.INK_DARK,
+      strokeThickness: 2,
+      lineSpacing: 3,
+      wordWrap: { width: pw - 24 },
+      resolution: textRes,
+    });
+
+    this.hubPreviewContainer.add([header, statsBadge, body]);
   }
 
   private updateOffscreenTeammateArrows(): void {
@@ -4433,20 +4777,21 @@ export class GameScene extends Phaser.Scene {
         `• Phòng đã dọn sạch: ${sim.runStats.roomsCleared} phòng`,
         `• Kẻ địch tiêu diệt: ${sim.runStats.kills} quái (Tinh Anh: ${sim.runStats.elitesKilled})`,
         `• Tổng sát thương gây ra: ${Math.round(sim.runStats.damageDealt)} ST`,
+        `• Phản ứng nguyên tố: ${sim.runStats.elementalReactions} (Đồng Đội Combo: ${sim.runStats.teamCombos})`,
         `• Xu thu thập: ${sim.player.gold} Xu (Tổng nhận: ${totalGoldEarned} Xu)`,
         `• Vũ khí đang cầm: ${activeWDef.nameVi}`,
         `• Phước lành kích hoạt: ${buffNames}`,
       ].join('\n');
 
       const body = this.add
-        .text(240, 158, summaryLines, {
+        .text(240, 152, summaryLines, {
           fontFamily: '"Be Vietnam Pro", sans-serif',
-          fontSize: '11.5px',
+          fontSize: '11px',
           fontStyle: '700',
           color: PALETTE.BONE_WHITE,
           stroke: PALETTE.INK_DARK,
           strokeThickness: 2.5,
-          lineSpacing: 5,
+          lineSpacing: 4,
           resolution: textRes,
         })
         .setOrigin(0, 0);
@@ -4578,8 +4923,15 @@ export class GameScene extends Phaser.Scene {
       debug.interpolationDelayMs = 0;
     }
 
+    // Phase 5 telemetry
+    debug.playerCharacterId = p.characterId;
+    debug.teamComboCount = sim.teamComboCount;
+    debug.elementalReactions = sim.runStats.elementalReactions;
+    debug.activeSummonCount = sim.summons.length;
+    debug.activeSkillZoneCount = sim.skillZones.length;
+
     const activeEnemyCount = this.activeEnemyIds.size;
-    const totalEntities = 1 + sim.simulatedPlayers.length + activeEnemyCount;
+    const totalEntities = 1 + sim.simulatedPlayers.length + activeEnemyCount + sim.summons.length;
 
     this.debugOverlay?.update({
       entityCount: totalEntities,

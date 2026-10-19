@@ -16,6 +16,8 @@ import {
   type SimPlayerState,
   type SimProjectileState,
   type SimPropState,
+  type SimSkillZoneState,
+  type SimSummonState,
   type SimWorldItemState,
   WorldSim,
   type WorldSimOptions,
@@ -98,6 +100,10 @@ export interface QuantizedEnemySnap {
   froz10: number;
   shock10: number;
   poison: number;
+  mark10?: number;
+  sc10?: number;
+  root10?: number;
+  blind10?: number;
 }
 
 /**
@@ -151,7 +157,7 @@ export interface QuantizedWorldSnapshot {
   npcEntities: SimNpcState[];
   pickups: Array<{
     id: number;
-    kind: 'energy' | 'gold';
+    kind: 'energy' | 'gold' | 'life_seed';
     qx: number;
     qy: number;
     amount: number;
@@ -159,6 +165,9 @@ export interface QuantizedWorldSnapshot {
   }>;
   pings: SimPingMarker[];
   hubStatues: SimHubStatue[];
+  summons?: SimSummonState[];
+  skillZones?: SimSkillZoneState[];
+  teamComboCount?: number;
   surfaces: QuantizedSurfaceTuple[];
   discoveredRooms: Array<{
     id: number;
@@ -241,6 +250,10 @@ export function encodeWorldSnapshot(
     froz10: Math.round(e.frozenTimer * 10),
     shock10: Math.round(e.shockTimer * 10),
     poison: e.poisonStacks,
+    mark10: Math.round(e.markedTimer * 10),
+    sc10: Math.round(e.superconductTimer * 10),
+    root10: Math.round(e.rootedTimer * 10),
+    blind10: Math.round(e.steamBlindTimer * 10),
   }));
 
   // Projectiles are spawned deterministically via bullet_volley_spawned events and simulated locally by clients
@@ -303,6 +316,9 @@ export function encodeWorldSnapshot(
     pickups,
     pings: sim.pings.map((pg) => ({ ...pg })),
     hubStatues: sim.hubStatues.map((st) => ({ ...st })),
+    summons: sim.summons.map((s) => ({ ...s })),
+    skillZones: sim.skillZones.map((z) => ({ ...z })),
+    teamComboCount: sim.teamComboCount,
     surfaces,
     discoveredRooms,
     events: netEvents,
@@ -795,6 +811,13 @@ export class NetworkTransport implements ITransport {
         poisonStacks: es.poison,
         poisonTimer: es.poison > 0 ? 2.0 : 0,
         poisonTickTimer: 0.5,
+        markedTimer: (es.mark10 ?? 0) / 10,
+        markedByPlayerId: 0,
+        superconductTimer: (es.sc10 ?? 0) / 10,
+        rootedTimer: (es.root10 ?? 0) / 10,
+        steamBlindTimer: (es.blind10 ?? 0) / 10,
+        lastElementOwnerId: 0,
+        lastElementApplied: 'none',
         regenAccum: 0,
         surfaceTickTimer: 0,
         grassRustleCooldown: 0,
@@ -840,7 +863,7 @@ export class NetworkTransport implements ITransport {
       });
     }
 
-    // Sync props, chests, world items, NPCs, pickups, pings, statues
+    // Sync props, chests, world items, NPCs, pickups, pings, statues, summons, skillZones
     this.sim.props = snapshot.props.map((pr) => ({ ...pr }));
     this.sim.chests = snapshot.chests.map((c) => ({ ...c }));
     this.sim.worldItems = snapshot.worldItems.map((wi) => ({ ...wi }));
@@ -864,6 +887,15 @@ export class NetworkTransport implements ITransport {
     });
     this.sim.pings = snapshot.pings.map((pg) => ({ ...pg }));
     this.sim.hubStatues = snapshot.hubStatues.map((st) => ({ ...st }));
+    if (snapshot.summons) {
+      this.sim.summons = snapshot.summons.map((s) => ({ ...s }));
+    }
+    if (snapshot.skillZones) {
+      this.sim.skillZones = snapshot.skillZones.map((z) => ({ ...z }));
+    }
+    if (snapshot.teamComboCount !== undefined) {
+      this.sim.teamComboCount = snapshot.teamComboCount;
+    }
 
     // Sync dynamic surfaces
     this.sim.map.surfaces.fill('none');

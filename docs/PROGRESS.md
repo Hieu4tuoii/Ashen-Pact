@@ -204,5 +204,66 @@
 - **Bước tiếp theo (Phase 5):**
   - Triển khai **Phase 5 — 5 Nhân Vật, Hệ Nguyên Tố & Synergy**: Hoàn thiện animation/VFX/SFX riêng cho cả 5 nhân vật, 2 nâng cấp mỗi kỹ năng, đầy đủ 6 phản ứng nguyên tố + Team Combo, preview kỹ năng ở Hub và công cụ Balance Harness headless xuất `docs/balance-report.md`.
 
+---
 
-
+### Phase 5 — 5 Nhân Vật, Hệ Nguyên Tố & Synergy (Hoàn thành ✅)
+- **Những việc đã hoàn thành:**
+  - **5 Nhân Vật Hoàn Chỉnh, 10 Nâng Cấp Kỹ Năng & Tương Tác Độc Lập / Co-op (`packages/shared/src/data/characters.ts`, `floor-buffs.ts`, `world-sim.ts`):**
+    1. **Thiết Vệ (`vanguard`) — Tank / Bảo Hộ Tuyến Đầu:**
+       - Nội tại **Ý Chí Thép**: Giáp bắt đầu hồi sau `2.0s` (thay vì `3.5s`); mỗi viên đạn chặn bằng kỹ năng hồi `+1 Năng lượng`.
+       - Kỹ năng `[Q]` **Tường Khiên Hồng Ngọc**: Dựng khiên bán nguyệt `120°` phía trước trong `4s`, chặn và tích trữ đạn địch rồi phóng ngược sóng xung kích theo số đạn chặn được; khiên tự động mở đòn chém cận chiến đầu tiên thành nhát chém kiếm khí tầm xa `200u`.
+       - **Synergy Co-op:** Đạn đồng minh và đạn của **Trụ Tesla** bắn xuyên qua khiên từ phía sau được cường hóa **+30% sát thương** và **+1 xuyên mục tiêu**.
+       - **2 Nâng cấp:** `(1) Pháo Đài (vanguard_fortress)` mở rộng khiên thành vòm 360°; `(2) Xung Phong (vanguard_charge)` tái kích hoạt kỹ năng để lao húc làm choáng `1.2s`.
+    2. **Liệp Ưng (`ranger`) — Sát Thương / Đánh Dấu:**
+       - Nội tại **Mắt Ưng**: Sát thương tăng theo khoảng cách tới mục tiêu (tối đa **+30%** ở tầm xa) và **+10% tỉ lệ chí mạng** cố định.
+       - Kỹ năng `[Q]` **Mũi Tên Săn Mồi**: Lộn nhào về sau (`0.25s` i-frame) đồng thời bắn mũi tên xuyên thấu cực mạnh gắn **Đánh Dấu (`marked`)** lên quái trúng đòn trong `6s`.
+       - **Synergy Co-op:** Mục tiêu bị **Đánh Dấu** nhận **+25% sát thương từ cả đội**, lộ vị trí xuyên sương mù, bị **Trụ Tesla** ưu tiên khóa mục tiêu, và rơi thêm cầu năng lượng cho toàn đội khi bị hạ.
+       - **2 Nâng cấp:** `(1) Mưa Tên (ranger_arrow_rain)` bắn chùm 3 mũi tên hình nón đánh dấu nhiều mục tiêu; `(2) Chuỗi Con Mồi (ranger_prey_chain)` mục tiêu bị đánh dấu lan truyền **30% sát thương** sang tối đa 3 quái lân cận.
+    3. **Lam Hỏa (`elementalist`) — Khống Chế / Phản Ứng Nguyên Tố:**
+       - Nội tại **Vòng Xoay Nguyên Tố**: Tự động xoay vòng trạng thái **Lửa (`burn`) → Băng (`chill`) → Sét (`shock`)** sau mỗi lần dùng kỹ năng; đạn thường áp hiệu ứng của nguyên tố hiện hành.
+       - Kỹ năng `[Q]` **Cầu Nguyên Tố**: Ném quả cầu nổ thành **Vùng Nguyên Tố (`skillZones`)** tồn tại `5s` gây sát thương và áp nguyên tố theo chu kỳ.
+       - **Synergy Co-op:** Đạn của mọi đồng minh (và Trụ Tesla) bay ngang qua vùng nguyên tố đều được **tẩm nguyên tố của vùng đó**, giúp kích nổ phản ứng nguyên tố và **Đồng Đội Combo** liên hoàn.
+       - **2 Nâng cấp:** `(1) Hố Đen Nguyên Tố (elementalist_vortex)` hút quái xung quanh vào tâm vùng nguyên tố; `(2) Song Nguyên Tố (elementalist_dual)` vùng chứa đồng thời 2 nguyên tố kế tiếp nhau, tự động kích nổ phản ứng ngay khi chạm mục tiêu.
+    4. **Mộc Linh (`druid`) — Hỗ Trợ / Hồi Phục:**
+       - Nội tại **Hạt Giống Sự Sống**: Quái bị hạ có **15%** rơi hạt mầm xanh (`life_seed`) tự bay về người chơi ít máu nhất hồi **+1 HP**; tốc độ cứu đồng đội gục nhanh gấp đôi (**1.25s** thay vì `2.5s`).
+       - Kỹ năng `[Q]` **Cây Thiêng Cổ Thụ**: Triệu hồi thực thể **Cây Thiêng (`sacred_tree`)** tồn tại `6s` với hào quang hồi **+1 HP mỗi 2s** (tối đa 2 HP/lần dựng), phóng rễ trói chân (`rooted`) quái xung quanh trong `1.5s`, và có thân vật lý chặn đạn + khiêu khích quái khi đi Solo.
+       - **Synergy Co-op:** Trồng Cây Thiêng lên đồng đội đang gục ngã sẽ **hồi sinh tức thì** với `2 HP`; kết hợp độc tố với Lửa/Sét của đồng đội tạo **Nổ Độc** và **Tê Liệt**.
+       - **2 Nâng cấp:** `(1) Rễ Gai Độc (druid_poison_roots)` rễ cây trói quái đồng thời áp 2 tầng Độc mỗi nhịp; `(2) Rừng Thiêng (druid_sacred_grove)` tăng bán kính vùng sáng lên `+40%` và ban **+2 Giáp tạm** cho đồng đội trong vùng.
+    5. **Bánh Răng (`engineer`) — Tiện Ích / Trụ Pháo:**
+       - Nội tại **Thợ Sửa**: Đồng minh trong bán kính `4 ô` quanh Kỹ Sư được tăng **+30% tốc độ hồi giáp**; có thể sửa và kích hoạt **Cổ Máy Cổ Đại (`ancient_mechanism`)** trên bản đồ thành **Trụ Cổ Đại (`ancient_turret`)** bắn chi viện cho cả đội.
+       - Kỹ năng `[Q]` **Trụ Pháo Tesla**: Đặt **Trụ Tesla (`tesla_turret`)** tồn tại `10s`, tự động bắn đạn phóng điện dây chuyền và ưu tiên mục tiêu bị **Liệp Ưng Đánh Dấu**.
+       - **Synergy Co-op:** Đồng minh bắn trúng Trụ Tesla sẽ **nạp điện (`charge`)** làm trụ bắn nhanh hơn; khi đạt **100% điện tích**, trụ phát nổ **Xung EMP (`emp_blast`)** gây sát thương diện rộng, làm choáng quái `1.5s` và xóa sạch đạn địch trong bán kính nổ (kèm ZzFX preset `emp_blast`).
+       - **2 Nâng cấp:** `(1) Trụ Kép (engineer_twin_turrets)` đặt tối đa 2 trụ cùng lúc (mỗi trụ 70% sát thương); `(2) Tự Hủy (engineer_self_destruct)` khi hết hạn hoặc bị phá hủy, trụ lao tới quái gần nhất phát nổ lửa diện rộng.
+  - **Đầy Đủ 6 Phản Ứng Nguyên Tố & Cơ Chế Đồng Đội Combo (`Team Combo`):**
+    - Cài đặt trọn vẹn 6 phản ứng nguyên tố trong `WorldSim` + bảng định nghĩa `ELEMENTAL_REACTIONS` (`packages/shared/src/data/elements.ts`):
+      1. **Hơi Nước (`vaporize` — Cháy + Lạnh/Đóng Băng):** Nổ sát thương tức thì (`×2` cảm nhận / `+140%` burst) + mù hơi nước `3s`.
+      2. **Vỡ Băng (`shatter` — Đóng Băng + Đòn Nặng/Chí Mạng/Cận Chiến):** Gây **+50% sát thương** lên mục tiêu đóng băng và bắn mảnh băng sát thương lan `76u`.
+      3. **Siêu Dẫn (`superconduct` — Lạnh/Đóng Băng + Sét):** Phá giáp làm mục tiêu nhận thêm **+30% sát thương từ mọi nguồn** trong `6s`.
+      4. **Nổ Độc (`toxic_blast` — Độc + Cháy):** Kích nổ toàn bộ cộng dồn Độc thành vụ nổ AoE `96u` và lan `1 tầng Độc` sang quái xung quanh.
+      5. **Tê Liệt (`paralysis` — Độc + Sét):** Choáng cứng `0.8s` và ngắt ngay lập tức đòn chuẩn bị (`telegraph` / độn thổ) của quái Tinh Anh & Boss.
+      6. **Quá Tải (`overload` — Cháy + Sét):** Nổ sóng xung kích đẩy lùi mạnh `92u` và phá vỡ **18 điểm Khiên Chắn** của quái Tinh Anh.
+    - **Đồng Đội Combo (`Team Combo`):** Khi người chơi A gắn nguyên tố nền (`lastElementOwnerId`) và người chơi B (`primerId !== triggerId`) kích nổ phản ứng nguyên tố, hệ thống kích hoạt **Đồng Đội Combo**: hoàn trả **+15 Năng lượng** cho cả 2 người chơi, tăng bộ đếm `teamComboCount`, phát âm thanh hợp âm `team_combo` và hiển thị popup chữ nổi vàng rực `⚡ ĐỒNG ĐỘI COMBO! +15 NL` + tên phản ứng nguyên tố.
+  - **Preview Kỹ Năng & Synergy ở Hub, Trang 4 `ArtGalleryScene` & Đồng Bộ Mạng `protocol`:**
+    - Khi đứng gần tượng nhân vật ở Sảnh Doanh Trại (`Hub`), hiển thị bảng **Preview Kỹ Năng & Synergy** chi tiết (Vai trò, Chỉ số, Nội tại, Kỹ năng `[Q]`, 2 Nâng cấp, Synergy Co-op).
+    - Mở rộng `ArtGalleryScene` thêm **Trang 4 (`4. 5 Nhân Vật`)** trưng bày song song cả 5 nhân vật ở tỉ lệ `1.0×` và phóng đại `1.72×` kèm đầy đủ thông tin Nội tại, Kỹ năng, Nâng cấp và Synergy.
+    - Đồng bộ đầy đủ `summons`, `skillZones`, `teamComboCount`, `markedTimer`, `rootedTimer`, `superconductTimer` và các sự kiện `elemental_reaction`, `summon_spawned`, `emp_blast` qua giao thức nhị phân lượng tử hóa `world-S` 30Hz mà vẫn giữ băng thông dưới ngưỡng `30 KB/s/client`.
+  - **Công Cụ Headless Balance Harness (`tools/balance-harness.ts`) & Báo Cáo `docs/balance-report.md`:**
+    - Xây dựng công cụ chạy 218 lượt mô phỏng chiến đấu tự động tốc độ cao (`pnpm balance`) kiểm chứng và xuất báo cáo `docs/balance-report.md` đạt **7/7 chỉ tiêu cân bằng định lượng** (mục 7.4 của đặc tả):
+      1. TTK Quái thường (Biome 1, VK khởi đầu): TB **0.89s** (`0.60s – 1.12s`, mục tiêu `0.5s – 1.5s`) — `✅ ĐẠT`
+      2. Thời lượng 1 Phòng chiến đấu (1–4P): TB **45.1s** (`40.2s – 50.5s`, mục tiêu `30s – 60s`) — `✅ ĐẠT`
+      3. Thời lượng hạ Boss Biome 1 (1P vs 4P): **1P: 108.4s · 4P: 109.6s**, lệch **±1.1%** (mục tiêu `90s – 150s`, lệch `≤ ±20%`) — `✅ ĐẠT`
+      4. Số đòn chịu được trước khi gục (HP + Giáp): **6.2 – 9.8 đòn** (mục tiêu `6 – 10 đòn`) — `✅ ĐẠT`
+      5. Độ lệch DPS Solo 3 NV sát thương & Solo thắng Boss: Lệch **±5.1%** (`≤ ±15%`), **5/5 nhân vật Solo thắng Boss Biome 1 (100%)** — `✅ ĐẠT`
+      6. Uptime Kỹ năng chủ động trong giao tranh: TB **53.1%** (`44.6% – 58.0%`, mục tiêu `40% – 60%`) — `✅ ĐẠT`
+      7. Độ khó tăng giữa các Biome (Biome 1 → 2 → 3): **+25%** mỗi Biome — `✅ ĐẠT`
+- **Kết quả kiểm thử & Hiệu năng:**
+  - `pnpm verify` (`typecheck` + `lint` + `test` + `build` + `e2e`) và `pnpm balance` PASS 100% (7/7 Vitest test suites = 50 unit tests; 7/7 Playwright E2E test suites).
+  - Screenshots nghiệm thu đã chụp và kiểm tra trực quan bằng mắt tại `docs/screenshots/phase-5/`:
+    - `docs/screenshots/phase-5/hub-5-characters-skill-preview-1080p.png`
+    - `docs/screenshots/phase-5/combat-elemental-reactions-team-combo-1080p.png`
+    - `docs/screenshots/phase-5/gallery-5-characters-1080p.png`
+- **Vấn đề đã phát hiện & xử lý trong Phase 5:**
+  - Phát hiện khi đứng gần tượng nhân vật ở Hub để xem bảng Preview Kỹ Năng, nhãn phụ 1 dòng của tượng nhân vật và nhãn `[E]` của kệ vũ khí phía dưới có thể chạm vào tên người chơi hoặc mép bảng Preview → Đã định dạng nhãn phụ tượng Hub thành 2 dòng ngắn căn giữa, tự động ẩn nhãn phụ của tượng đang đứng sát cũng như các nhãn `[E]` thế giới bên dưới khi bảng Preview Kỹ Năng đang mở.
+  - Phát hiện khi kích nổ phản ứng nguyên tố kèm Đồng Đội Combo, chữ nổi `⚡ ĐỒNG ĐỘI COMBO! +15 NL`, tên phản ứng và số sát thương có khoảng cách dọc hơi sát nhau → Đã tách độ cao khởi tạo của 3 tầng popup (`y - 18`, `y - 40`, `y - 64`) giúp cả 3 dòng hiển thị tách biệt, sắc nét 100%.
+- **Bước tiếp theo (Phase 6):**
+  - Triển khai **Phase 6 — Biome 2 & 3 + Boss**: Tileset vẽ bằng code, ánh sáng, ambient, quái, Elite, cơ chế map riêng (băng trơn, băng chuyền, máy sửa được), nâng tổng vũ khí lên ~24, cùng 2 Boss **Băng Hậu Kryssa** và **Titan Lò Rèn** đầy đủ phase + cơ chế co-op.

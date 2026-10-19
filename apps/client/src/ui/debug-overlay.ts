@@ -89,6 +89,14 @@ export interface GameDebugState {
   reconnectToken: string | null;
   hostInviteUrl: string | null;
   lanIps: string[];
+  // Phase 5 Characters, Elemental Reactions & Synergy telemetry
+  playerCharacterId: string;
+  teamComboCount: number;
+  elementalReactions: number;
+  activeSummonCount: number;
+  activeSkillZoneCount: number;
+  hubPreviewCharacterId: string | null;
+  galleryPage: number;
   errors: string[];
   warnings: string[];
 }
@@ -186,6 +194,13 @@ export function initGlobalDebugState(): GameDebugState {
     reconnectToken: null,
     hostInviteUrl: null,
     lanIps: [],
+    playerCharacterId: 'vanguard',
+    teamComboCount: 0,
+    elementalReactions: 0,
+    activeSummonCount: 0,
+    activeSkillZoneCount: 0,
+    hubPreviewCharacterId: null,
+    galleryPage: 1,
     errors: [],
     warnings: [],
   };
@@ -254,8 +269,9 @@ export class DebugOverlay {
     this.container.setVisible(state.overlayVisible);
 
     if (scene.input.keyboard) {
-      this.f1Key = scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.F1);
+      this.f1Key = scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.F1, true);
       this.f1Key.on('down', () => {
+        if (!this.scene.scene.isActive()) return;
         state.overlayVisible = !state.overlayVisible;
         this.container.setVisible(state.overlayVisible);
       });
@@ -279,6 +295,7 @@ export class DebugOverlay {
   public destroy(): void {
     if (this.f1Key) {
       this.f1Key.removeAllListeners();
+      this.scene.input.keyboard?.removeKey(this.f1Key, true);
       this.f1Key = undefined;
     }
   }

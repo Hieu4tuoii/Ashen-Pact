@@ -27,14 +27,16 @@ export const CHARACTERS: Record<CharacterId, CharacterStatsDef> = {
       durationSec: 4,
       descriptionVi:
         'Dựng khiên cung 120° chặn và tích trữ đạn địch rồi phóng ngược sóng xung kích. Đạn đồng minh bắn qua khiên từ phía sau được +30% sát thương và xuyên mục tiêu.',
+      synergyVi:
+        'Đạn đồng minh và Trụ Tesla bắn xuyên qua khiên từ phía sau được +30% sát thương và +1 xuyên mục tiêu.',
       upgrades: [
         {
-          id: 'fortress_dome',
+          id: 'vanguard_fortress',
           nameVi: 'Pháo Đài',
           descriptionVi: 'Khiên bao phủ 360° quanh bản thân với bán kính nhỏ hơn.',
         },
         {
-          id: 'shield_charge',
+          id: 'vanguard_charge',
           nameVi: 'Xung Phong',
           descriptionVi: 'Bấm lại kỹ năng để lao tới cùng khiên, hất văng quái trên đường.',
         },
@@ -65,14 +67,16 @@ export const CHARACTERS: Record<CharacterId, CharacterStatsDef> = {
       durationSec: 6,
       descriptionVi:
         'Lộn lùi (i-frame) và bắn mũi tên xuyên thấu đánh dấu quái trong 6s: nhận +25% sát thương từ mọi nguồn, lộ diện xuyên tường và rơi cầu năng lượng khi chết.',
+      synergyVi:
+        'Mục tiêu bị Đánh Dấu nhận +25% sát thương từ cả đội, lộ diện xuyên sương mù, bị Trụ Tesla ưu tiên khóa mục tiêu và rơi cầu năng lượng khi bị hạ.',
       upgrades: [
         {
-          id: 'arrow_volley',
+          id: 'ranger_arrow_volley',
           nameVi: 'Mưa Tên',
           descriptionVi: 'Tách thành 5 mũi tên hình quạt.',
         },
         {
-          id: 'prey_chain',
+          id: 'ranger_prey_chain',
           nameVi: 'Chuỗi Con Mồi',
           descriptionVi: '30% sát thương lên mục tiêu bị đánh dấu lan sang các mục tiêu bị đánh dấu khác.',
         },
@@ -103,14 +107,16 @@ export const CHARACTERS: Record<CharacterId, CharacterStatsDef> = {
       durationSec: 5,
       descriptionVi:
         'Ném quả cầu nổ thành vùng nguyên tố 5s. Đạn đồng minh bay qua vùng được tẩm nguyên tố đó.',
+      synergyVi:
+        'Đạn đồng minh bay qua vùng nguyên tố được tẩm nguyên tố đó, dễ dàng kích hoạt Đồng Đội Combo (+15 Năng lượng cho cả 2 người chơi).',
       upgrades: [
         {
-          id: 'elemental_vortex',
+          id: 'elementalist_vortex',
           nameVi: 'Hố Đen Nguyên Tố',
           descriptionVi: 'Vùng nguyên tố hút quái xung quanh vào tâm.',
         },
         {
-          id: 'dual_element',
+          id: 'elementalist_dual',
           nameVi: 'Song Nguyên Tố',
           descriptionVi: 'Vùng chứa đồng thời 2 nguyên tố, kích hoạt phản ứng ngay lập tức.',
         },
@@ -141,14 +147,16 @@ export const CHARACTERS: Record<CharacterId, CharacterStatsDef> = {
       durationSec: 6,
       descriptionVi:
         'Trồng cây thần hồi 1 HP mỗi 2s, trói chân quái 1.5s, chặn đạn và khiêu khích quái. Trồng lên đồng đội đang gục sẽ hồi sinh ngay với 2 HP.',
+      synergyVi:
+        'Trồng Cây Thiêng lên đồng đội đang gục sẽ hồi sinh tức thì với 2 HP; đạn Độc kết hợp Lửa/Sét đồng đội tạo Nổ Độc và Tê Liệt.',
       upgrades: [
         {
-          id: 'poison_roots',
+          id: 'druid_poison_roots',
           nameVi: 'Rễ Gai Độc',
           descriptionVi: 'Rễ cây gây sát thương và áp trạng thái Độc.',
         },
         {
-          id: 'sacred_grove',
+          id: 'druid_sacred_grove',
           nameVi: 'Rừng Thiêng',
           descriptionVi: 'Trồng 2 cây nhỏ hơn cùng lúc.',
         },
@@ -179,14 +187,16 @@ export const CHARACTERS: Record<CharacterId, CharacterStatsDef> = {
       durationSec: 10,
       descriptionVi:
         'Đặt trụ phóng sét dây chuyền ưu tiên mục tiêu bị đánh dấu. Đạn đồng minh bắn trúng trụ sẽ nạp điện; đủ 100% phát xung EMP làm choáng quái và xóa đạn địch.',
+      synergyVi:
+        'Đồng minh bắn trúng Trụ Tesla giúp nạp điện tăng tốc bắn; đủ 100% phát nổ Xung EMP làm choáng quái và xóa sạch đạn địch xung quanh.',
       upgrades: [
         {
-          id: 'twin_turrets',
+          id: 'engineer_twin_turrets',
           nameVi: 'Trụ Kép',
           descriptionVi: 'Đặt tối đa 2 trụ hoạt động song song.',
         },
         {
-          id: 'self_destruct',
+          id: 'engineer_self_destruct',
           nameVi: 'Tự Hủy',
           descriptionVi: 'Khi hết thời gian tồn tại, trụ phát nổ diện rộng.',
         },

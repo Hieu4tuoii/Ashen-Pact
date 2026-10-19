@@ -1,5 +1,7 @@
 import Phaser from 'phaser';
 import {
+  type CharacterId,
+  CHARACTERS,
   FixedTimestepLoop,
   PHASE3_WEAPON_IDS,
   VIETNAMESE_VERIFICATION_STRING,
@@ -10,13 +12,14 @@ import {
   WORLD_VIEW_WIDTH,
 } from '@ashen-pact/shared';
 import { CutoutRig, type RigAnimState } from '../art/cutout-rig.js';
-import { BIOME_THEMES, hexToNum, PALETTE, PLAYER_SLOT_COLORS } from '../art/palette.js';
+import { hexToNum, PALETTE, PLAYER_SLOT_COLORS } from '../art/palette.js';
 import {
   GOBLIN_SHAMAN_RIG_DEF,
   GOBLIN_SHOOTER_RIG_DEF,
   GREEN_SLIME_RIG_DEF,
   MERCHANT_RIG_DEF,
   MINI_SLIME_RIG_DEF,
+  RIG_DEFS_BY_ID,
   SPORE_BOMBER_RIG_DEF,
   SPORE_KING_RIG_DEF,
   THORN_TURRET_RIG_DEF,
@@ -31,7 +34,7 @@ declare global {
     __GALLERY_SET_ANIM__?: (state: RigAnimState) => void;
     __GALLERY_SET_SLOT__?: (slot: 1 | 2 | 3 | 4) => void;
     __GALLERY_SET_BIOME__?: (biome: 1 | 2 | 3) => void;
-    __GALLERY_SET_PAGE__?: (page: 1 | 2 | 3) => void;
+    __GALLERY_SET_PAGE__?: (page: 1 | 2 | 3 | 4) => void;
   }
 }
 
@@ -45,7 +48,8 @@ export class ArtGalleryScene extends Phaser.Scene {
   private pageContainers: Phaser.GameObjects.Container[] = [];
   private page2Built = false;
   private page3Built = false;
-  private currentPage: 1 | 2 | 3 = 1;
+  private page4Built = false;
+  private currentPage: 1 | 2 | 3 | 4 = 1;
   private currentAnim: RigAnimState = 'idle';
   private currentSlot: 1 | 2 | 3 | 4 = 1;
   private currentBiome: 1 | 2 | 3 = 1;
@@ -71,6 +75,7 @@ export class ArtGalleryScene extends Phaser.Scene {
     this.pageContainers = [];
     this.page2Built = false;
     this.page3Built = false;
+    this.page4Built = false;
     this.currentPage = 1;
 
     this.applyCameraViewport();
@@ -98,9 +103,9 @@ export class ArtGalleryScene extends Phaser.Scene {
     header.strokeRoundedRect(16, 10, 928, 54, 10);
 
     this.textObjects.push(
-      this.add.text(28, 17, 'ART GALLERY — TRIỂN LÃM ĐỒ HỌA VECTOR PROCEDURAL', {
+      this.add.text(28, 17, 'ART GALLERY — TRIỂN LÃM ĐỒ HỌA VECTOR', {
         fontFamily: '"Be Vietnam Pro", sans-serif',
-        fontSize: '15px',
+        fontSize: '14px',
         fontStyle: '800',
         color: PALETTE.SOLAR_GOLD,
         stroke: PALETTE.INK_DARK,
@@ -111,7 +116,7 @@ export class ArtGalleryScene extends Phaser.Scene {
 
     this.stateStatusText = this.add.text(28, 40, '', {
       fontFamily: '"Be Vietnam Pro", sans-serif',
-      fontSize: '11.5px',
+      fontSize: '10.5px',
       fontStyle: '600',
       color: PALETTE.CYAN_FROST,
       resolution: textRes,
@@ -119,18 +124,21 @@ export class ArtGalleryScene extends Phaser.Scene {
     this.textObjects.push(this.stateStatusText);
 
     // Page navigation buttons in top header
-    this.createSmallButton(564, 37, 94, 28, '1. Mẫu Chuẩn', PALETTE.AZURE_CORE, () => {
+    this.createSmallButton(502, 37, 84, 28, '1. Mẫu Chuẩn', PALETTE.AZURE_CORE, () => {
       this.setGalleryPage(1);
     });
-    this.createSmallButton(666, 37, 98, 28, '2. Quái & Boss', PALETTE.GOBLIN_GREEN, () => {
+    this.createSmallButton(592, 37, 88, 28, '2. Quái & Boss', PALETTE.GOBLIN_GREEN, () => {
       this.setGalleryPage(2);
     });
-    this.createSmallButton(772, 37, 104, 28, '3. Vũ Khí & Map', PALETTE.ELECTRIC_VIOLET, () => {
+    this.createSmallButton(686, 37, 94, 28, '3. Vũ Khí & Map', PALETTE.ELECTRIC_VIOLET, () => {
       this.setGalleryPage(3);
+    });
+    this.createSmallButton(784, 37, 84, 28, '4. 5 Nhân Vật', PALETTE.RUBY_CORE, () => {
+      this.setGalleryPage(4);
     });
 
     const menuBtn = this.add
-      .text(888, 28, '[Về Menu]', {
+      .text(892, 28, '[Về Menu]', {
         fontFamily: '"Be Vietnam Pro", sans-serif',
         fontSize: '12px',
         fontStyle: '700',
@@ -144,11 +152,12 @@ export class ArtGalleryScene extends Phaser.Scene {
     menuBtn.on('pointerdown', () => this.scene.start('MenuScene'));
     this.textObjects.push(menuBtn);
 
-    // 3. Build Gallery Page 1 initially (Pages 2 & 3 lazy-built on tab switch)
+    // 3. Build Gallery Page 1 initially (Pages 2, 3, 4 lazy-built on tab switch)
     const p1 = this.add.container(0, 0);
     const p2 = this.add.container(0, 0);
     const p3 = this.add.container(0, 0);
-    this.pageContainers = [p1, p2, p3];
+    const p4 = this.add.container(0, 0);
+    this.pageContainers = [p1, p2, p3, p4];
 
     this.buildPage1StandardShowcase(p1);
     this.setGalleryPage(1);
@@ -162,7 +171,12 @@ export class ArtGalleryScene extends Phaser.Scene {
     window.__GALLERY_SET_ANIM__ = (state: RigAnimState) => this.setGalleryAnim(state);
     window.__GALLERY_SET_SLOT__ = (slot: 1 | 2 | 3 | 4) => this.setGallerySlot(slot);
     window.__GALLERY_SET_BIOME__ = (biome: 1 | 2 | 3) => this.setGalleryBiome(biome);
-    window.__GALLERY_SET_PAGE__ = (page: 1 | 2 | 3) => this.setGalleryPage(page);
+    window.__GALLERY_SET_PAGE__ = (page: 1 | 2 | 3 | 4) => this.setGalleryPage(page);
+
+    this.input.keyboard?.on('keydown-ONE', () => this.setGalleryPage(1));
+    this.input.keyboard?.on('keydown-TWO', () => this.setGalleryPage(2));
+    this.input.keyboard?.on('keydown-THREE', () => this.setGalleryPage(3));
+    this.input.keyboard?.on('keydown-FOUR', () => this.setGalleryPage(4));
   }
 
   private buildPage1StandardShowcase(parent: Phaser.GameObjects.Container): void {
@@ -474,6 +488,123 @@ export class ArtGalleryScene extends Phaser.Scene {
     });
   }
 
+  private buildPage4CharactersAndSynergy(parent: Phaser.GameObjects.Container): void {
+    const textRes = TextureBaker.getBakeScale();
+    const invBake = 1 / textRes;
+    const cardW = 179;
+    const cardH = 378;
+    const gapX = 8;
+    const charIds: readonly CharacterId[] = [
+      'vanguard',
+      'ranger',
+      'elementalist',
+      'druid',
+      'engineer',
+    ];
+
+    charIds.forEach((charId, idx) => {
+      const cDef = CHARACTERS[charId];
+      const rigDef = RIG_DEFS_BY_ID[charId] ?? VANGUARD_RIG_DEF;
+      const cx = 16 + idx * (cardW + gapX);
+      const cy = 72;
+
+      const g = this.add.graphics();
+      g.fillStyle(hexToNum(PALETTE.SLATE_DARK), 0.95);
+      g.lineStyle(2.5, hexToNum(PALETTE.SOLAR_GOLD), 0.95);
+      g.fillRoundedRect(cx, cy, cardW, cardH, 9);
+      g.strokeRoundedRect(cx, cy, cardW, cardH, 9);
+      parent.add(g);
+
+      for (let tx = 0; tx < 4; tx++) {
+        for (let ty = 0; ty < 3; ty++) {
+          const variant = (tx + ty + idx) % 4;
+          const spr = this.add.sprite(
+            cx + 25 + tx * 32 + 16,
+            cy + 56 + ty * 32 + 16,
+            TextureBaker.getBiomeTileTextureKey(this.currentBiome, variant),
+          );
+          spr.setScale(invBake);
+          this.floorTileSprites.push({ sprite: spr, variant });
+          parent.add(spr);
+        }
+      }
+
+      const rig1x = new CutoutRig(this, cx + 52, cy + 114, rigDef, {
+        playerSlot: this.currentSlot,
+        displayScale: 1.0,
+      });
+      rig1x.setAnimState(this.currentAnim);
+      rig1x.setEquippedWeapon(cDef.starterWeaponId);
+      this.rigs.push(rig1x);
+      this.playerRigs.push(rig1x);
+      parent.add(rig1x.container);
+
+      const rigZoom = new CutoutRig(this, cx + 122, cy + 118, rigDef, {
+        playerSlot: this.currentSlot,
+        displayScale: 1.72,
+        initialPhaseOffset: idx * 0.2,
+      });
+      rigZoom.setAnimState(this.currentAnim);
+      rigZoom.setEquippedWeapon(cDef.starterWeaponId);
+      this.rigs.push(rigZoom);
+      this.playerRigs.push(rigZoom);
+      parent.add(rigZoom.container);
+
+      const tTitle = this.add.text(cx + 9, cy + 7, `${idx + 1}. ${cDef.nameVi.toUpperCase()}`, {
+        fontFamily: '"Be Vietnam Pro", sans-serif',
+        fontSize: '11.5px',
+        fontStyle: '800',
+        color: PALETTE.SOLAR_GOLD,
+        stroke: PALETTE.INK_DARK,
+        strokeThickness: 3,
+        resolution: textRes,
+      });
+      this.textObjects.push(tTitle);
+      parent.add(tTitle);
+
+      const tRole = this.add.text(
+        cx + 9,
+        cy + 24,
+        `${cDef.titleVi}\nHP ${cDef.hp} · Giáp ${cDef.armor} · NL ${cDef.energy} · Tốc ${cDef.moveSpeed}`,
+        {
+          fontFamily: '"Be Vietnam Pro", sans-serif',
+          fontSize: '8px',
+          fontStyle: '700',
+          color: PALETTE.CYAN_FROST,
+          stroke: PALETTE.INK_DARK,
+          strokeThickness: 2,
+          lineSpacing: 1,
+          resolution: textRes,
+        },
+      );
+      this.textObjects.push(tRole);
+      parent.add(tRole);
+
+      const upg1 = cDef.skill.upgrades[0];
+      const upg2 = cDef.skill.upgrades[1];
+      const descLines = [
+        `• Nội tại (${cDef.passiveNameVi}): ${cDef.passiveDescriptionVi}`,
+        `• Kỹ năng [Q] (${cDef.skill.nameVi}): ${cDef.skill.descriptionVi}`,
+        `• Nâng cấp: (1) ${upg1.nameVi} | (2) ${upg2.nameVi}`,
+        `• Synergy: ${cDef.skill.synergyVi}`,
+      ].join('\n');
+
+      const tDesc = this.add.text(cx + 8, cy + 160, descLines, {
+        fontFamily: '"Be Vietnam Pro", sans-serif',
+        fontSize: '7.8px',
+        fontStyle: '600',
+        color: PALETTE.BONE_WHITE,
+        stroke: PALETTE.INK_DARK,
+        strokeThickness: 2,
+        lineSpacing: 1.8,
+        wordWrap: { width: cardW - 16 },
+        resolution: textRes,
+      });
+      this.textObjects.push(tDesc);
+      parent.add(tDesc);
+    });
+  }
+
   private createEntityStage(
     parent: Phaser.GameObjects.Container,
     cfg: {
@@ -725,7 +856,7 @@ export class ArtGalleryScene extends Phaser.Scene {
     container.add([bg, txt, hit]);
   }
 
-  public setGalleryPage(page: 1 | 2 | 3): void {
+  public setGalleryPage(page: 1 | 2 | 3 | 4): void {
     const zoom = Math.min(
       this.scale.width / WORLD_VIEW_WIDTH,
       this.scale.height / WORLD_VIEW_HEIGHT,
@@ -738,8 +869,13 @@ export class ArtGalleryScene extends Phaser.Scene {
       TextureBaker.bakeAll(this, zoom, false);
       this.buildPage3WeaponsAndProps(this.pageContainers[2]);
       this.page3Built = true;
+    } else if (page === 4 && !this.page4Built && this.pageContainers[3]) {
+      TextureBaker.bakeAll(this, zoom, false);
+      this.buildPage4CharactersAndSynergy(this.pageContainers[3]);
+      this.page4Built = true;
     }
     this.currentPage = page;
+    initGlobalDebugState().galleryPage = page;
     this.pageContainers.forEach((c, idx) => {
       c.setVisible(idx + 1 === page);
     });
@@ -780,9 +916,8 @@ export class ArtGalleryScene extends Phaser.Scene {
 
   private updateStatusBanner(): void {
     const slotInfo = PLAYER_SLOT_COLORS[this.currentSlot];
-    const biomeInfo = BIOME_THEMES[this.currentBiome];
     this.stateStatusText?.setText(
-      `Trang ${this.currentPage}/3 · Anim: ${this.currentAnim.toUpperCase()} · ${slotInfo.labelVi} · ${biomeInfo.nameVi} · Bake: ${TextureBaker.getBakeScale()}x`,
+      `Trang ${this.currentPage}/4 · Anim: ${this.currentAnim.toUpperCase()} · ${slotInfo.labelVi} · Biome ${this.currentBiome} · Bake: ${TextureBaker.getBakeScale()}x`,
     );
   }
 
@@ -795,7 +930,7 @@ export class ArtGalleryScene extends Phaser.Scene {
     );
     const prevScale = TextureBaker.getBakeScale();
     const newScale =
-      !this.page2Built && !this.page3Built
+      !this.page2Built && !this.page3Built && !this.page4Built
         ? TextureBaker.bakeGalleryPage1(this, zoom)
         : TextureBaker.bakeAll(this, zoom, false);
     if (newScale !== prevScale) {

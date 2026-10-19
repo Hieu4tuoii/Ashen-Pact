@@ -1,5 +1,13 @@
 import Phaser from 'phaser';
-import { clamp, type ElementType, type PropKind, WORLD_VIEW_HEIGHT, WORLD_VIEW_WIDTH } from '@ashen-pact/shared';
+import {
+  clamp,
+  ELEMENTAL_REACTIONS,
+  type ElementalReactionId,
+  type ElementType,
+  type PropKind,
+  WORLD_VIEW_HEIGHT,
+  WORLD_VIEW_WIDTH,
+} from '@ashen-pact/shared';
 import { hexToNum, PALETTE, PLAYER_SLOT_COLORS } from '../art/palette.js';
 import { RIG_DEFS_BY_ID } from '../art/rig-defs.js';
 import { TextureBaker } from '../art/texture-baker.js';
@@ -483,10 +491,18 @@ export class CombatFxManager {
   }
 
   public spawnStatusBurst(
-    status: 'burn' | 'chill' | 'frozen' | 'shock' | 'poison' | 'shatter',
+    status: 'burn' | 'chill' | 'frozen' | 'shock' | 'poison' | 'shatter' | 'marked' | 'rooted',
     x: number,
     y: number,
   ): void {
+    if (status === 'marked' || status === 'rooted') {
+      this.spawnHitSparks(x, y - 10, -Math.PI / 2, {
+        isCrit: status === 'marked',
+        element: status === 'rooted' ? 'poison' : 'none',
+        count: 6,
+      });
+      return;
+    }
     if (status === 'frozen' || status === 'shatter') {
       this.spawnFloorDecal('frost', x, y, status === 'shatter' ? 1.2 : 0.9);
       const invBake = 1 / TextureBaker.getBakeScale();
@@ -518,6 +534,67 @@ export class CombatFxManager {
         p.sprite.setAlpha(1);
         p.sprite.setDepth(56);
         p.sprite.setVisible(true);
+      }
+    }
+  }
+
+  public spawnElementalReactionFx(params: {
+    reaction: ElementalReactionId;
+    x: number;
+    y: number;
+    damage: number;
+    isTeamCombo: boolean;
+  }): void {
+    const meta = ELEMENTAL_REACTIONS[params.reaction];
+    this.spawnExplosionBurst(
+      params.x,
+      params.y,
+      params.isTeamCombo ? 84 : 62,
+      meta?.colorHex ?? PALETTE.SOLAR_GOLD,
+    );
+
+    const rxSlot = this.acquireDamageSlot();
+    if (rxSlot) {
+      this.totalDamagePopupsSpawned += 1;
+      rxSlot.active = true;
+      rxSlot.age = 0;
+      rxSlot.ttl = 1.05;
+      rxSlot.x = params.x;
+      rxSlot.y = params.y - 40;
+      rxSlot.vx = 0;
+      rxSlot.vy = -68;
+      rxSlot.baseScale = 1.18;
+
+      const label = `${(meta?.nameVi ?? params.reaction).toUpperCase()}! +${params.damage}`;
+      rxSlot.text.setText(label);
+      rxSlot.text.setColor(meta?.colorHex ?? PALETTE.SOLAR_GOLD);
+      rxSlot.text.setPosition(rxSlot.x, rxSlot.y);
+      rxSlot.text.setScale(rxSlot.baseScale * 1.2);
+      rxSlot.text.setAlpha(1);
+      rxSlot.text.setVisible(true);
+      rxSlot.text.setActive(true);
+    }
+
+    if (params.isTeamCombo) {
+      const comboSlot = this.acquireDamageSlot();
+      if (comboSlot) {
+        this.totalDamagePopupsSpawned += 1;
+        comboSlot.active = true;
+        comboSlot.age = 0;
+        comboSlot.ttl = 1.25;
+        comboSlot.x = params.x;
+        comboSlot.y = params.y - 64;
+        comboSlot.vx = 0;
+        comboSlot.vy = -74;
+        comboSlot.baseScale = 1.26;
+
+        comboSlot.text.setText('⚡ ĐỒNG ĐỘI COMBO! +15 NL');
+        comboSlot.text.setColor(PALETTE.SOLAR_GOLD);
+        comboSlot.text.setPosition(comboSlot.x, comboSlot.y);
+        comboSlot.text.setScale(comboSlot.baseScale * 1.2);
+        comboSlot.text.setAlpha(1);
+        comboSlot.text.setVisible(true);
+        comboSlot.text.setActive(true);
       }
     }
   }

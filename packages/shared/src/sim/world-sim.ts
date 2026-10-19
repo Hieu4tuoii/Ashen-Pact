@@ -12,6 +12,7 @@ import type {
   BuffId,
   CardinalDir,
   CharacterId,
+  ElementalReactionId,
   EliteModifier,
   ElementType,
   RoomType,
@@ -82,6 +83,12 @@ export const ELEMENT_CYCLE_ORDER: readonly ElementType[] = [
   'poison',
 ] as const;
 
+export const ELEMENTALIST_ROTATION_ORDER: readonly ElementType[] = [
+  'burn',
+  'chill',
+  'shock',
+] as const;
+
 export const ALL_CHARACTER_IDS: readonly CharacterId[] = [
   'vanguard',
   'ranger',
@@ -121,7 +128,8 @@ export type PropKind =
   | 'clay_vase'
   | 'explosive_barrel'
   | 'torch_brazier'
-  | 'glow_mushroom';
+  | 'glow_mushroom'
+  | 'ancient_mechanism';
 
 export interface SimPropState {
   id: number;
@@ -138,6 +146,44 @@ export interface SimPropState {
   lightColorHex: string;
   hitFlashTimer: number;
   fuseTimer: number;
+  repaired?: boolean;
+}
+
+export type SummonKind = 'sacred_tree' | 'tesla_turret' | 'ancient_turret';
+
+export interface SimSummonState {
+  id: number;
+  ownerPlayerId: number;
+  kind: SummonKind;
+  nameVi: string;
+  x: number;
+  y: number;
+  radius: number;
+  auraRadius: number;
+  hp: number;
+  maxHp: number;
+  ttlSec: number;
+  maxTtlSec: number;
+  tickTimer: number;
+  healsRemaining: number;
+  charge: number;
+  poisonRoots: boolean;
+  selfDestruct: boolean;
+  rootedEnemyIds: number[];
+}
+
+export interface SimSkillZoneState {
+  id: number;
+  ownerPlayerId: number;
+  x: number;
+  y: number;
+  radius: number;
+  ttlSec: number;
+  maxTtlSec: number;
+  tickTimer: number;
+  element: ElementType;
+  secondaryElement: ElementType;
+  vortex: boolean;
 }
 
 export interface SimDoorState {
@@ -223,6 +269,8 @@ export interface RunSummaryStats {
   chestsOpened: number;
   floorReached: number;
   ticksElapsed: number;
+  elementalReactions: number;
+  teamCombos: number;
 }
 
 export type PlayerLifeState = 'alive' | 'downed' | 'ghost';
@@ -345,6 +393,14 @@ export interface SimEnemyState {
   bossTargetX: number;
   bossTargetY: number;
   bossAttackCycle: number;
+  // Phase 5 Synergy & Elemental Reaction states
+  markedTimer: number;
+  markedByPlayerId: number;
+  superconductTimer: number;
+  rootedTimer: number;
+  steamBlindTimer: number;
+  lastElementOwnerId: number;
+  lastElementApplied: ElementType;
 }
 
 export interface SimProjectileState {
@@ -368,12 +424,13 @@ export interface SimProjectileState {
   ttlSec: number;
   element: ElementType;
   amplifiedByShield: boolean;
+  imbuedByZone?: boolean;
   hitEntityIds: number[];
 }
 
 export interface SimPickupState {
   id: number;
-  kind: 'energy' | 'gold';
+  kind: 'energy' | 'gold' | 'life_seed';
   prevX: number;
   prevY: number;
   x: number;
@@ -511,7 +568,7 @@ export type SimEvent =
     }
   | {
       kind: 'pickup_collected';
-      pickupKind: 'energy' | 'gold';
+      pickupKind: 'energy' | 'gold' | 'life_seed';
       amount: number;
       x: number;
       y: number;
@@ -550,9 +607,35 @@ export type SimEvent =
   | {
       kind: 'status_applied';
       targetId: number;
-      status: 'burn' | 'chill' | 'frozen' | 'shock' | 'poison' | 'shatter';
+      status: 'burn' | 'chill' | 'frozen' | 'shock' | 'poison' | 'shatter' | 'marked' | 'rooted';
       x: number;
       y: number;
+    }
+  | {
+      kind: 'elemental_reaction';
+      reaction: ElementalReactionId;
+      x: number;
+      y: number;
+      targetId: number;
+      damage: number;
+      isTeamCombo: boolean;
+      primerPlayerId: number;
+      triggerPlayerId: number;
+    }
+  | {
+      kind: 'summon_spawned';
+      summonId: number;
+      summonKind: SummonKind;
+      ownerPlayerId: number;
+      x: number;
+      y: number;
+    }
+  | {
+      kind: 'emp_blast';
+      x: number;
+      y: number;
+      radius: number;
+      bulletsCleared: number;
     }
   | {
       kind: 'surface_triggered';
@@ -718,6 +801,9 @@ export class WorldSim {
   public projectiles: SimProjectileState[] = [];
   public pickups: SimPickupState[] = [];
   public props: SimPropState[] = [];
+  public summons: SimSummonState[] = [];
+  public skillZones: SimSkillZoneState[] = [];
+  public teamComboCount = 0;
 
   // Phase 4 Hub & Co-op State
   public inHub = false;
@@ -754,6 +840,8 @@ export class WorldSim {
     chestsOpened: 0,
     floorReached: 1,
     ticksElapsed: 0,
+    elementalReactions: 0,
+    teamCombos: 0,
   };
 
   private nextEntityId = 100;
@@ -895,7 +983,7 @@ export class WorldSim {
       shieldStoredBullets: 0,
       godMode: false,
       lastProcessedSeq: 0,
-      activeImbueElement: 'none',
+      activeImbueElement: characterId === 'elementalist' ? 'burn' : 'none',
       burnTimer: 0,
       burnTickTimer: 0,
       chillTimer: 0,
@@ -946,12 +1034,20 @@ export class WorldSim {
 
   public getPlayerById(playerId: number): SimPlayerState | undefined {
     if (this.player.id === playerId) return this.player;
-    return this.simulatedPlayers.find((p) => p.id === playerId);
+    for (let i = 0; i < this.simulatedPlayers.length; i++) {
+      const sp = this.simulatedPlayers[i]!;
+      if (sp.id === playerId) return sp;
+    }
+    return undefined;
   }
 
   public getPlayerBySlot(slot: 1 | 2 | 3 | 4): SimPlayerState | undefined {
     if (this.player.slot === slot) return this.player;
-    return this.simulatedPlayers.find((p) => p.slot === slot);
+    for (let i = 0; i < this.simulatedPlayers.length; i++) {
+      const sp = this.simulatedPlayers[i]!;
+      if (sp.slot === slot) return sp;
+    }
+    return undefined;
   }
 
   public addCoopPlayer(
@@ -1125,6 +1221,7 @@ export class WorldSim {
     p.activeWeaponSlot = 0;
     p.skillActiveTimer = 0;
     p.skillCooldownTimer = 0;
+    p.activeImbueElement = characterId === 'elementalist' ? 'burn' : 'none';
   }
 
   public selectCharacter(
@@ -1177,6 +1274,8 @@ export class WorldSim {
     this.projectiles.length = 0;
     this.pickups.length = 0;
     this.props.length = 0;
+    this.summons.length = 0;
+    this.skillZones.length = 0;
     this.chests.length = 0;
     this.worldItems.length = 0;
     this.npcEntities.length = 0;
@@ -1188,13 +1287,14 @@ export class WorldSim {
     const cx = this.map.width * 0.5;
     const cy = this.map.height * 0.5;
 
-    // 5 Character Statues in a staggered arc at the top of the Hub Camp (left of Invite Panel)
+    // 5 Character Statues in a staggered 2-row arc at the top-center of the Hub Camp
+    // Positioned cleanly between the top-left [P2..P4] HUD cards (cx - 340) and the right Invite Panel (cx + 112)
     const statueCoords: readonly [CharacterId, number, number][] = [
-      ['vanguard', cx - 355, cy - 96],
-      ['ranger', cx - 265, cy - 182],
-      ['elementalist', cx - 175, cy - 96],
-      ['druid', cx - 85, cy - 182],
-      ['engineer', cx + 5, cy - 96],
+      ['vanguard', cx - 245, cy - 96],
+      ['ranger', cx - 185, cy - 182],
+      ['elementalist', cx - 125, cy - 96],
+      ['druid', cx - 65, cy - 182],
+      ['engineer', cx - 5, cy - 96],
     ];
     for (const [cid, sx, sy] of statueCoords) {
       const cDef = CHARACTERS[cid];
@@ -1458,6 +1558,9 @@ export class WorldSim {
     this.spawnProp('clay_vase', 7 * TILE_SIZE + 12, 4 * TILE_SIZE + 16);
     this.spawnProp('clay_vase', 30 * TILE_SIZE + 16, 10 * TILE_SIZE + 16);
     this.spawnProp('wooden_crate', 30 * TILE_SIZE + 16, 11 * TILE_SIZE + 20);
+
+    // Ancient Mechanism that Engineer can repair & activate with [E]
+    this.spawnProp('ancient_mechanism', 15 * TILE_SIZE + 16, 11 * TILE_SIZE + 16);
   }
 
   public spawnProp(kind: PropKind, x: number, y: number): SimPropState {
@@ -1501,6 +1604,14 @@ export class WorldSim {
         lightRadius = 135;
         lightColorHex = '#84CC16';
         break;
+      case 'ancient_mechanism':
+        radius = 15;
+        hp = 9999;
+        destructible = false;
+        blocksMovement = false;
+        lightRadius = 110;
+        lightColorHex = '#38BDF8';
+        break;
     }
 
     const prop: SimPropState = {
@@ -1518,6 +1629,7 @@ export class WorldSim {
       lightColorHex,
       hitFlashTimer: 0,
       fuseTimer: 0,
+      repaired: false,
     };
     this.props.push(prop);
     return prop;
@@ -1722,6 +1834,13 @@ export class WorldSim {
       bossTargetX: resolved.x,
       bossTargetY: resolved.y,
       bossAttackCycle: 0,
+      markedTimer: 0,
+      markedByPlayerId: 0,
+      superconductTimer: 0,
+      rootedTimer: 0,
+      steamBlindTimer: 0,
+      lastElementOwnerId: 0,
+      lastElementApplied: 'none',
     };
     this.enemies.push(dummy);
     return dummy;
@@ -1833,6 +1952,13 @@ export class WorldSim {
       bossTargetX: resolved.x,
       bossTargetY: resolved.y,
       bossAttackCycle: 0,
+      markedTimer: 0,
+      markedByPlayerId: 0,
+      superconductTimer: 0,
+      rootedTimer: 0,
+      steamBlindTimer: 0,
+      lastElementOwnerId: 0,
+      lastElementApplied: 'none',
     };
 
     this.enemies.push(enemy);
@@ -1995,6 +2121,8 @@ export class WorldSim {
     }
     this.pickups.length = 0;
     this.props.length = 0;
+    this.summons.length = 0;
+    this.skillZones.length = 0;
     this.chests.length = 0;
     this.worldItems.length = 0;
     this.npcEntities.length = 0;
@@ -2134,6 +2262,7 @@ export class WorldSim {
         this.spawnProp('explosive_barrel', 21 * TILE_SIZE + 16, 15 * TILE_SIZE + 16);
         this.spawnProp('wooden_crate', 6 * TILE_SIZE + 16, 5 * TILE_SIZE + 16);
         this.spawnProp('clay_vase', 29 * TILE_SIZE + 16, 16 * TILE_SIZE + 16);
+        this.spawnProp('ancient_mechanism', 15 * TILE_SIZE + 16, 11 * TILE_SIZE + 16);
 
         if (!room.cleared) {
           room.wavesSpawned = 0;
@@ -2715,15 +2844,19 @@ export class WorldSim {
   }
 
   private rollPendingBuffChoices(): void {
-    const available: BuffId[] = FLOOR_BUFF_LIST.map((b) => b.id).filter(
-      (id) => !this.activeBuffIds.includes(id),
-    );
+    const activeCharIds = new Set(this.getAllPlayers().map((p) => p.characterId));
+    const available: BuffId[] = FLOOR_BUFF_LIST.filter(
+      (b) =>
+        !this.activeBuffIds.includes(b.id) &&
+        (b.category === 'general' || (b.characterId !== undefined && activeCharIds.has(b.characterId))),
+    ).map((b) => b.id);
     const choices: BuffId[] = [];
 
-    // Ensure at least 1 Thiết Vệ skill upgrade is offered on Floor 1 -> 2 transition
-    const skillUpgrades = available.filter(
-      (id) => id === 'vanguard_fortress' || id === 'vanguard_charge',
-    );
+    // Ensure at least 1 character skill upgrade for the active party is offered on Floor 1 -> 2 transition
+    const skillUpgrades = available.filter((id) => {
+      const def = FLOOR_BUFFS[id];
+      return def?.category === 'skill_upgrade' && def.characterId && activeCharIds.has(def.characterId);
+    });
     if (skillUpgrades.length > 0) {
       const pickedSkill = this.rng.pick(skillUpgrades);
       choices.push(pickedSkill);
@@ -2819,6 +2952,53 @@ export class WorldSim {
         const statue = this.hubStatues[i]!;
         if (distance(p.x, p.y, statue.x, statue.y) <= interactRange + 8) {
           return this.selectCharacter(p.id, statue.characterId);
+        }
+      }
+    }
+
+    // 0.5 Engineer Passive: Repair & Activate Ancient Mechanism on the map!
+    const hasEngineerInParty =
+      p.characterId === 'engineer' ||
+      this.getAllPlayers().some((ally) => ally.characterId === 'engineer' && ally.lifeState === 'alive');
+    if (hasEngineerInParty) {
+      for (let i = 0; i < this.props.length; i++) {
+        const prop = this.props[i]!;
+        if (
+          prop.kind === 'ancient_mechanism' &&
+          !prop.repaired &&
+          distance(p.x, p.y, prop.x, prop.y) <= interactRange + 10
+        ) {
+          prop.repaired = true;
+          const summon: SimSummonState = {
+            id: ++this.nextEntityId,
+            ownerPlayerId: p.id,
+            kind: 'ancient_turret',
+            nameVi: 'Ụ Pháo Cổ Tự Động',
+            x: prop.x,
+            y: prop.y,
+            radius: 15,
+            auraRadius: 210,
+            hp: 55,
+            maxHp: 55,
+            ttlSec: 14.0,
+            maxTtlSec: 14.0,
+            tickTimer: 0.25,
+            healsRemaining: 0,
+            charge: 0,
+            poisonRoots: false,
+            selfDestruct: false,
+            rootedEnemyIds: [],
+          };
+          this.summons.push(summon);
+          this.events.push({
+            kind: 'summon_spawned',
+            summonId: summon.id,
+            summonKind: 'ancient_turret',
+            ownerPlayerId: p.id,
+            x: summon.x,
+            y: summon.y,
+          });
+          return true;
         }
       }
     }
@@ -2944,6 +3124,11 @@ export class WorldSim {
 
     // 5. Update Destructible Props & Barrel Fuses
     this.updateProps(dtSec);
+
+    // 5.5 Update Phase 5 Skill Zones (Elemental Orb) & Summons (Sacred Tree, Tesla Turret, Ancient Turret)
+    if (!this.stressTestActive) {
+      this.updateSkillZonesAndSummons(dtSec);
+    }
 
     // 6. Update Enemies, Elemental Status DoTs & AI
     this.updateEnemies(dtSec);
@@ -3653,6 +3838,7 @@ export class WorldSim {
       } else if (p.skillCooldownTimer <= 0) {
         const bonusDur = this.activeBuffIds.includes('vanguard_fortress') ? 1.5 : 0;
         p.skillActiveTimer = skillDef.durationSec + bonusDur;
+        p.skillCooldownTimer = skillDef.cooldownSec;
         p.shieldStoredBullets = 0;
         if (this.activeBuffIds.includes('vanguard_fortress')) {
           p.armor = Math.min(p.maxArmor, p.armor + 2);
@@ -3681,7 +3867,8 @@ export class WorldSim {
     });
 
     if (p.characterId === 'ranger') {
-      // Predator Arrow: backflip i-frame + high-damage piercing arrow
+      // Predator Arrow: backflip i-frame + high-damage piercing arrow (or 5-arrow fan with ranger_arrow_volley)
+      const hasVolley = this.activeBuffIds.includes('ranger_arrow_volley');
       p.dashTimer = 0.16;
       p.invulnerableTimer = Math.max(p.invulnerableTimer, 0.35);
       p.dashDirX = -Math.cos(p.aimAngle);
@@ -3691,20 +3878,20 @@ export class WorldSim {
         tick: this.tick,
         ownerId: p.id,
         team: 'player',
-        weaponId: 'hunter_crossbow',
+        weaponId: 'predator_arrow',
         x: p.x + Math.cos(p.aimAngle) * 18,
         y: p.y + Math.sin(p.aimAngle) * 18,
         angle: p.aimAngle,
-        pelletCount: 1,
-        spreadRad: 0,
+        pelletCount: hasVolley ? 5 : 1,
+        spreadRad: hasVolley ? 0.48 : 0,
         speed: 680,
-        damage: 28,
+        damage: hasVolley ? 22 : 28,
         radius: 6.5,
         knockback: 180,
         pierceCount: 5,
         bounceCount: 0,
         ttlSec: 1.5,
-        element: p.activeImbueElement !== 'none' ? p.activeImbueElement : 'shock',
+        element: p.activeImbueElement !== 'none' ? p.activeImbueElement : 'none',
         critChance: 1.0,
         amplifiedByShield: true,
         seed: this.rng.nextUint32(),
@@ -3713,11 +3900,17 @@ export class WorldSim {
     }
 
     if (p.characterId === 'elementalist') {
-      // Elemental Orb: cycle element Lửa -> Băng -> Sét and detonate elemental zone
-      const cycle: readonly ElementType[] = ['burn', 'chill', 'shock'];
-      const curIdx = cycle.indexOf(p.activeImbueElement);
-      const nextEl = cycle[(curIdx + 1) % cycle.length] ?? 'burn';
+      // Elemental Orb: throw an orb that detonates into a 5s Elemental Zone, then rotate Lửa -> Băng -> Sét
+      const cycle = ELEMENTALIST_ROTATION_ORDER;
+      const curIdx = Math.max(0, cycle.indexOf(p.activeImbueElement));
+      const orbEl = cycle[curIdx] ?? 'burn';
+      const nextEl = cycle[(curIdx + 1) % cycle.length] ?? 'chill';
       p.activeImbueElement = nextEl;
+
+      const hasVortex = this.activeBuffIds.includes('elementalist_vortex');
+      const hasDual = this.activeBuffIds.includes('elementalist_dual');
+      const secondaryEl: ElementType = hasDual ? nextEl : 'none';
+
       const orbX = clamp(
         p.x + Math.cos(p.aimAngle) * 115,
         TILE_SIZE * 2,
@@ -3728,28 +3921,66 @@ export class WorldSim {
         TILE_SIZE * 2,
         this.map.height - TILE_SIZE * 2,
       );
-      this.applyElementAtWorldPoint(orbX, orbY, nextEl, 56);
+      const zoneRadius = 76;
+
+      this.skillZones.push({
+        id: ++this.nextEntityId,
+        ownerPlayerId: p.id,
+        x: orbX,
+        y: orbY,
+        radius: zoneRadius,
+        ttlSec: skillDef.durationSec,
+        maxTtlSec: skillDef.durationSec,
+        tickTimer: 0.45,
+        element: orbEl,
+        secondaryElement: secondaryEl,
+        vortex: hasVortex,
+      });
+
+      this.applyElementAtWorldPoint(orbX, orbY, orbEl, 58);
+      if (secondaryEl !== 'none') {
+        this.applyElementAtWorldPoint(orbX, orbY, secondaryEl, 48);
+      }
+
       for (let i = 0; i < this.enemies.length; i++) {
         const e = this.enemies[i]!;
-        if (e.hp > 0 && distance(orbX, orbY, e.x, e.y) <= 68 + e.radius) {
-          this.applyDamageToEnemy(
-            e,
-            20,
-            true,
-            nextEl,
-            Math.atan2(e.y - orbY, e.x - orbX),
-            150,
-            true,
-          );
+        if (e.hp > 0 && distance(orbX, orbY, e.x, e.y) <= zoneRadius + e.radius) {
+          const hitAng = Math.atan2(e.y - orbY, e.x - orbX);
+          this.applyDamageToEnemy(e, 18, true, orbEl, hitAng, 140, true, p.id);
+          if (e.hp > 0 && secondaryEl !== 'none') {
+            this.applyDamageToEnemy(e, 10, false, secondaryEl, hitAng, 60, false, p.id);
+          }
         }
       }
       return;
     }
 
     if (p.characterId === 'druid') {
-      // Sacred Tree: heal allies +2 HP, root/stun nearby enemies 1.5s, and INSTANTLY revive downed teammates!
+      // Sacred Tree: plant 1 tree (or 2 with druid_sacred_grove).
+      // Planting on a downed teammate revives them immediately with 2 HP (cooldown x2).
+      const hasPoisonRoots = this.activeBuffIds.includes('druid_poison_roots');
+      const hasSacredGrove = this.activeBuffIds.includes('druid_sacred_grove');
+
+      let targetX = clamp(
+        p.x + Math.cos(p.aimAngle) * 80,
+        TILE_SIZE * 2.2,
+        this.map.width - TILE_SIZE * 2.2,
+      );
+      let targetY = clamp(
+        p.y + Math.sin(p.aimAngle) * 80,
+        TILE_SIZE * 2.2,
+        this.map.height - TILE_SIZE * 2.2,
+      );
+
+      let revivedAnyDowned = false;
       for (const ally of this.getAllPlayers()) {
-        if (ally.lifeState === 'downed' && distance(p.x, p.y, ally.x, ally.y) <= 175) {
+        if (
+          ally.lifeState === 'downed' &&
+          (distance(p.x, p.y, ally.x, ally.y) <= 185 ||
+            distance(targetX, targetY, ally.x, ally.y) <= 120)
+        ) {
+          targetX = ally.x;
+          targetY = ally.y;
           ally.lifeState = 'alive';
           ally.hp = 2;
           ally.armor = Math.min(ally.maxArmor, 2);
@@ -3757,6 +3988,7 @@ export class WorldSim {
           ally.downedTimer = 0;
           ally.reviveProgress = 0;
           ally.reviverPlayerId = null;
+          revivedAnyDowned = true;
           this.events.push({
             kind: 'player_revived',
             playerId: ally.id,
@@ -3764,50 +3996,397 @@ export class WorldSim {
             x: ally.x,
             y: ally.y,
           });
-        } else if (ally.lifeState === 'alive') {
-          ally.hp = Math.min(ally.maxHp, ally.hp + 2);
         }
       }
-      for (let i = 0; i < this.enemies.length; i++) {
-        const e = this.enemies[i]!;
-        if (!e.isDummy && e.hp > 0 && distance(p.x, p.y, e.x, e.y) <= 150) {
-          e.aiState = 'stunned';
-          e.stateTimer = 1.5;
-          this.applyDamageToEnemy(e, 12, false, 'poison', Math.atan2(e.y - p.y, e.x - p.x), 80);
+      if (revivedAnyDowned) {
+        p.skillCooldownTimer = skillDef.cooldownSec * 2;
+      }
+
+      const treeCount = hasSacredGrove ? 2 : 1;
+      const perpAngle = p.aimAngle + Math.PI * 0.5;
+      for (let t = 0; t < treeCount; t++) {
+        const offset = treeCount === 2 ? (t === 0 ? -34 : 34) : 0;
+        const tx = clamp(
+          targetX + Math.cos(perpAngle) * offset,
+          TILE_SIZE * 2,
+          this.map.width - TILE_SIZE * 2,
+        );
+        const ty = clamp(
+          targetY + Math.sin(perpAngle) * offset,
+          TILE_SIZE * 2,
+          this.map.height - TILE_SIZE * 2,
+        );
+        const resolved = this.map.resolveCircleCollision(tx, ty, 16);
+        const auraRadius = hasSacredGrove ? 105 : 120;
+        const rootedIds: number[] = [];
+
+        // Root nearby enemies for 1.5s on initial growth
+        for (let i = 0; i < this.enemies.length; i++) {
+          const e = this.enemies[i]!;
+          if (!e.isDummy && e.hp > 0 && distance(resolved.x, resolved.y, e.x, e.y) <= auraRadius) {
+            e.rootedTimer = Math.max(e.rootedTimer, 1.5);
+            rootedIds.push(e.id);
+            this.events.push({
+              kind: 'status_applied',
+              targetId: e.id,
+              status: 'rooted',
+              x: e.x,
+              y: e.y,
+            });
+            if (hasPoisonRoots) {
+              this.applyDamageToEnemy(
+                e,
+                10,
+                false,
+                'poison',
+                Math.atan2(e.y - resolved.y, e.x - resolved.x),
+                60,
+                false,
+                p.id,
+              );
+            }
+          }
         }
+
+        // Initial pulse heals allies +1 HP (2 more ticks of +1 HP every 2s = max 3 HP per cast)
+        for (const ally of this.getAllPlayers()) {
+          if (
+            ally.lifeState === 'alive' &&
+            distance(resolved.x, resolved.y, ally.x, ally.y) <= auraRadius
+          ) {
+            ally.hp = Math.min(ally.maxHp, ally.hp + 1);
+          }
+        }
+
+        const tree: SimSummonState = {
+          id: ++this.nextEntityId,
+          ownerPlayerId: p.id,
+          kind: 'sacred_tree',
+          nameVi: 'Cây Thiêng',
+          x: resolved.x,
+          y: resolved.y,
+          radius: hasSacredGrove ? 15 : 18,
+          auraRadius,
+          hp: hasSacredGrove ? 36 : 48,
+          maxHp: hasSacredGrove ? 36 : 48,
+          ttlSec: skillDef.durationSec,
+          maxTtlSec: skillDef.durationSec,
+          tickTimer: 2.0,
+          healsRemaining: 2,
+          charge: 0,
+          poisonRoots: hasPoisonRoots,
+          selfDestruct: false,
+          rootedEnemyIds: rootedIds,
+        };
+        this.summons.push(tree);
+        this.events.push({
+          kind: 'summon_spawned',
+          summonId: tree.id,
+          summonKind: 'sacred_tree',
+          ownerPlayerId: p.id,
+          x: tree.x,
+          y: tree.y,
+        });
       }
       return;
     }
 
     if (p.characterId === 'engineer') {
-      // Tesla Turret / EMP Pulse: clear enemy bullets + chain lightning to nearby enemies + restore armor
-      for (let i = 0; i < this.projectiles.length; i++) {
-        const b = this.projectiles[i]!;
-        if (b.team === 'enemy' && b.ttlSec > 0 && distance(p.x, p.y, b.x, b.y) <= 150) {
-          b.ttlSec = 0;
-        }
+      // Tesla Turret: deploy 1 turret (or up to 2 parallel turrets with engineer_twin_turrets)
+      const hasTwinTurrets = this.activeBuffIds.includes('engineer_twin_turrets');
+      const hasSelfDestruct = this.activeBuffIds.includes('engineer_self_destruct');
+      const maxTurrets = hasTwinTurrets ? 2 : 1;
+
+      const existingTurrets = this.summons.filter(
+        (s) => s.kind === 'tesla_turret' && s.ownerPlayerId === p.id && s.hp > 0 && s.ttlSec > 0,
+      );
+      const spawnCount = hasTwinTurrets && existingTurrets.length === 0 ? 2 : 1;
+      while (existingTurrets.length + spawnCount > maxTurrets && existingTurrets.length > 0) {
+        const oldest = existingTurrets.shift()!;
+        oldest.ttlSec = 0;
+        oldest.hp = 0;
       }
+
+      const perpAngle = p.aimAngle + Math.PI * 0.5;
+      for (let t = 0; t < spawnCount; t++) {
+        const lateral = spawnCount === 2 ? (t === 0 ? -28 : 28) : 0;
+        const baseX = p.x + Math.cos(p.aimAngle) * 48 + Math.cos(perpAngle) * lateral;
+        const baseY = p.y + Math.sin(p.aimAngle) * 48 + Math.sin(perpAngle) * lateral;
+        const resolved = this.map.resolveCircleCollision(
+          clamp(baseX, TILE_SIZE * 2, this.map.width - TILE_SIZE * 2),
+          clamp(baseY, TILE_SIZE * 2, this.map.height - TILE_SIZE * 2),
+          15,
+        );
+
+        const turret: SimSummonState = {
+          id: ++this.nextEntityId,
+          ownerPlayerId: p.id,
+          kind: 'tesla_turret',
+          nameVi: 'Trụ Tesla',
+          x: resolved.x,
+          y: resolved.y,
+          radius: 15,
+          auraRadius: 195,
+          hp: 45,
+          maxHp: 45,
+          ttlSec: skillDef.durationSec,
+          maxTtlSec: skillDef.durationSec,
+          tickTimer: 0.15,
+          healsRemaining: 0,
+          charge: 0,
+          poisonRoots: false,
+          selfDestruct: hasSelfDestruct,
+          rootedEnemyIds: [],
+        };
+        this.summons.push(turret);
+        this.events.push({
+          kind: 'summon_spawned',
+          summonId: turret.id,
+          summonKind: 'tesla_turret',
+          ownerPlayerId: p.id,
+          x: turret.x,
+          y: turret.y,
+        });
+      }
+
+      // Immediate small armor boost to nearby allies on deployment
       for (const ally of this.getAllPlayers()) {
-        if (ally.lifeState === 'alive' && distance(p.x, p.y, ally.x, ally.y) <= 150) {
-          ally.armor = Math.min(ally.maxArmor, ally.armor + 2);
-        }
-      }
-      let zapped = 0;
-      for (let i = 0; i < this.enemies.length && zapped < 4; i++) {
-        const e = this.enemies[i]!;
-        if (e.hp > 0 && distance(p.x, p.y, e.x, e.y) <= 185) {
-          zapped += 1;
-          this.applyDamageToEnemy(e, 18, true, 'shock', Math.atan2(e.y - p.y, e.x - p.x), 110);
-          this.events.push({
-            kind: 'chain_lightning',
-            fromX: p.x,
-            fromY: p.y,
-            toX: e.x,
-            toY: e.y,
-          });
+        if (ally.lifeState === 'alive' && distance(p.x, p.y, ally.x, ally.y) <= 140) {
+          ally.armor = Math.min(ally.maxArmor, ally.armor + 1);
         }
       }
     }
+  }
+
+  private updateSkillZonesAndSummons(dtSec: number): void {
+    // 1. Update Elemental Skill Zones (Lam Hỏa's Cầu Nguyên Tố)
+    let zoneWrite = 0;
+    for (let i = 0; i < this.skillZones.length; i++) {
+      const z = this.skillZones[i]!;
+      z.ttlSec -= dtSec;
+      if (z.ttlSec <= 0) continue;
+
+      if (z.vortex) {
+        const pullRadius = z.radius + 60;
+        for (let j = 0; j < this.enemies.length; j++) {
+          const e = this.enemies[j]!;
+          if (
+            e.hp <= 0 ||
+            e.aiState === 'spawning' ||
+            e.defId === 'thorn_turret' ||
+            e.defId === 'spore_guardian' ||
+            e.bossBurrowed
+          ) {
+            continue;
+          }
+          const d = distance(z.x, z.y, e.x, e.y);
+          if (d > 10 && d <= pullRadius) {
+            const pullStrength = (e.isBoss ? 38 : 95) * dtSec;
+            const nx = e.x + ((z.x - e.x) / d) * pullStrength;
+            const ny = e.y + ((z.y - e.y) / d) * pullStrength;
+            const col = this.map.resolveCircleCollision(nx, ny, e.radius);
+            e.x = col.x;
+            e.y = col.y;
+          }
+        }
+      }
+
+      z.tickTimer -= dtSec;
+      if (z.tickTimer <= 0) {
+        z.tickTimer = 0.5;
+        this.applyElementAtWorldPoint(z.x, z.y, z.element, z.radius * 0.65);
+        for (let j = 0; j < this.enemies.length; j++) {
+          const e = this.enemies[j]!;
+          if (e.hp <= 0 || e.aiState === 'spawning' || e.bossBurrowed) continue;
+          if (distance(z.x, z.y, e.x, e.y) <= z.radius + e.radius) {
+            const ang = Math.atan2(e.y - z.y, e.x - z.x);
+            this.applyDamageToEnemy(e, 6, false, z.element, ang, 20, false, z.ownerPlayerId);
+            if (e.hp > 0 && z.secondaryElement !== 'none') {
+              this.applyDamageToEnemy(
+                e,
+                5,
+                false,
+                z.secondaryElement,
+                ang,
+                15,
+                false,
+                z.ownerPlayerId,
+              );
+            }
+          }
+        }
+      }
+
+      this.skillZones[zoneWrite++] = z;
+    }
+    this.skillZones.length = zoneWrite;
+
+    // 2. Update Summons (Mộc Linh's Cây Thiêng & Bánh Răng's Trụ Tesla / Ụ Pháo Cổ)
+    let summonWrite = 0;
+    for (let i = 0; i < this.summons.length; i++) {
+      const s = this.summons[i]!;
+      s.ttlSec -= dtSec;
+
+      if (s.ttlSec > 0 && s.hp > 0) {
+        if (s.kind === 'sacred_tree') {
+          // Root any enemy entering Sacred Tree aura for the first time
+          for (let j = 0; j < this.enemies.length; j++) {
+            const e = this.enemies[j]!;
+            if (e.isDummy || e.hp <= 0 || e.aiState === 'spawning') continue;
+            if (
+              distance(s.x, s.y, e.x, e.y) <= s.auraRadius + e.radius &&
+              !s.rootedEnemyIds.includes(e.id)
+            ) {
+              s.rootedEnemyIds.push(e.id);
+              e.rootedTimer = Math.max(e.rootedTimer, 1.5);
+              this.events.push({
+                kind: 'status_applied',
+                targetId: e.id,
+                status: 'rooted',
+                x: e.x,
+                y: e.y,
+              });
+            }
+          }
+
+          s.tickTimer -= dtSec;
+          if (s.tickTimer <= 0) {
+            s.tickTimer = 2.0;
+            if (s.healsRemaining > 0) {
+              s.healsRemaining -= 1;
+              for (const ally of this.getAllPlayers()) {
+                if (
+                  ally.lifeState === 'alive' &&
+                  distance(s.x, s.y, ally.x, ally.y) <= s.auraRadius
+                ) {
+                  ally.hp = Math.min(ally.maxHp, ally.hp + 1);
+                }
+              }
+            }
+            if (s.poisonRoots) {
+              for (let j = 0; j < this.enemies.length; j++) {
+                const e = this.enemies[j]!;
+                if (e.hp <= 0 || e.aiState === 'spawning' || e.bossBurrowed) continue;
+                if (distance(s.x, s.y, e.x, e.y) <= s.auraRadius + e.radius) {
+                  const ang = Math.atan2(e.y - s.y, e.x - s.x);
+                  this.applyDamageToEnemy(e, 9, false, 'poison', ang, 35, false, s.ownerPlayerId);
+                }
+              }
+            }
+          }
+        } else if (s.kind === 'tesla_turret' || s.kind === 'ancient_turret') {
+          s.tickTimer -= dtSec;
+          if (s.tickTimer <= 0) {
+            const rateBoost = 1 + (s.charge / 100) * 0.65;
+            s.tickTimer = (s.kind === 'ancient_turret' ? 0.7 : 0.85) / rateBoost;
+
+            // Prioritize Marked targets (Synergy with Ranger's Predator Arrow!), otherwise nearest enemy
+            let target: SimEnemyState | null = null;
+            let bestScore = Infinity;
+            for (let j = 0; j < this.enemies.length; j++) {
+              const e = this.enemies[j]!;
+              if (e.hp <= 0 || e.aiState === 'spawning' || e.bossBurrowed) continue;
+              const d = distance(s.x, s.y, e.x, e.y);
+              if (d > s.auraRadius) continue;
+              // Marked enemies get a -10000 distance priority score so turret always locks onto them first!
+              const score = (e.markedTimer > 0 ? -10000 : 0) + (e.isDummy ? 5000 : 0) + d;
+              if (score < bestScore) {
+                bestScore = score;
+                target = e;
+              }
+            }
+
+            if (target) {
+              const ang = Math.atan2(target.y - s.y, target.x - s.x);
+              const zapDmg = s.kind === 'ancient_turret' ? 12 : 11;
+              this.events.push({
+                kind: 'chain_lightning',
+                fromX: s.x,
+                fromY: s.y,
+                toX: target.x,
+                toY: target.y,
+              });
+              this.applyDamageToEnemy(
+                target,
+                zapDmg,
+                target.markedTimer > 0,
+                'shock',
+                ang,
+                55,
+                false,
+                s.ownerPlayerId,
+              );
+            }
+          }
+        }
+
+        this.summons[summonWrite++] = s;
+      } else {
+        // Summon expired or destroyed: check Engineer's Self-Destruct upgrade!
+        if (s.kind === 'tesla_turret' && s.selfDestruct) {
+          const blastR = 120;
+          this.events.push({
+            kind: 'explosion',
+            x: s.x,
+            y: s.y,
+            radius: blastR,
+            damage: 30,
+            sourceDefId: 'tesla_turret_self_destruct',
+          });
+          for (let j = 0; j < this.enemies.length; j++) {
+            const e = this.enemies[j]!;
+            if (e.hp <= 0 || e.aiState === 'spawning' || e.bossBurrowed) continue;
+            if (distance(s.x, s.y, e.x, e.y) <= blastR + e.radius) {
+              const ang = Math.atan2(e.y - s.y, e.x - s.x);
+              this.applyDamageToEnemy(e, 30, true, 'burn', ang, 240, true, s.ownerPlayerId);
+            }
+          }
+        }
+      }
+    }
+    this.summons.length = summonWrite;
+  }
+
+  public triggerTeslaEmpBlast(turret: SimSummonState): void {
+    turret.charge = 0;
+    const empRadius = 165;
+    let bulletsCleared = 0;
+
+    // 1. Clear all enemy bullets around the turret
+    for (let i = 0; i < this.projectiles.length; i++) {
+      const b = this.projectiles[i]!;
+      if (b.team === 'enemy' && b.ttlSec > 0 && distance(turret.x, turret.y, b.x, b.y) <= empRadius) {
+        b.ttlSec = 0;
+        bulletsCleared += 1;
+      }
+    }
+
+    // 2. Stun and deal shock damage to all enemies in EMP radius
+    for (let i = 0; i < this.enemies.length; i++) {
+      const e = this.enemies[i]!;
+      if (e.hp <= 0 || e.aiState === 'spawning' || e.bossBurrowed) continue;
+      if (distance(turret.x, turret.y, e.x, e.y) <= empRadius + e.radius) {
+        if (!e.isDummy) {
+          e.aiState = 'stunned';
+          e.stateTimer = Math.max(e.stateTimer, 1.5);
+        }
+        const ang = Math.atan2(e.y - turret.y, e.x - turret.x);
+        this.applyDamageToEnemy(e, 22, true, 'shock', ang, 180, true, turret.ownerPlayerId);
+      }
+    }
+
+    this.events.push({
+      kind: 'emp_blast',
+      x: turret.x,
+      y: turret.y,
+      radius: empRadius,
+      bulletsCleared,
+    });
+    this.events.push({
+      kind: 'hit_stop',
+      durationMs: 45,
+      trauma: 0.4,
+    });
   }
 
   private updateSimulatedPlayers(dtSec: number): void {
@@ -4187,7 +4766,7 @@ export class WorldSim {
     const skillDef = CHARACTERS.vanguard.skill;
     const stored = p.shieldStoredBullets;
     p.skillActiveTimer = 0;
-    p.skillCooldownTimer = skillDef.cooldownSec;
+    p.skillCooldownTimer = Math.max(p.skillCooldownTimer, skillDef.cooldownSec - skillDef.durationSec);
     p.shieldStoredBullets = 0;
 
     const hasFortressUpgrade = this.activeBuffIds.includes('vanguard_fortress');
@@ -4238,6 +4817,7 @@ export class WorldSim {
           angleToEnemy,
           hasChargeUpgrade ? 340 : 260,
           true,
+          p.id,
         );
       }
     }
@@ -4299,7 +4879,7 @@ export class WorldSim {
           if (isCircleInCone(p.x, p.y, p.aimAngle, halfArc, MELEE_RANGE + 8, b)) {
             b.ttlSec = 0;
             bulletsDestroyed += 1;
-            const shieldActive = p.skillActiveTimer > 0;
+            const shieldActive = p.characterId === 'vanguard' && p.skillActiveTimer > 0;
             if (shieldActive) {
               p.shieldStoredBullets += 1;
               p.energy = Math.min(p.maxEnergy, p.energy + 1);
@@ -4346,7 +4926,7 @@ export class WorldSim {
           const isCrit = this.rng.chance(critChance);
           const dmg = isCrit ? Math.round(baseMeleeDmg * 1.5) : baseMeleeDmg;
           const hitAngle = Math.atan2(e.y - p.y, e.x - p.x);
-          this.applyDamageToEnemy(e, dmg, isCrit, shotElement, hitAngle, w.knockback, true);
+          this.applyDamageToEnemy(e, dmg, isCrit, shotElement, hitAngle, w.knockback, true, p.id);
           hitAny = true;
           if (isCrit) anyCrit = true;
         }
@@ -4376,7 +4956,7 @@ export class WorldSim {
 
     const pellets = Math.max(1, w.pelletCount);
     const spreadRad = (w.spreadDeg * Math.PI) / 180;
-    const shieldBoost = p.skillActiveTimer > 0;
+    const shieldBoost = p.characterId === 'vanguard' && p.skillActiveTimer > 0;
     const muzzleDist = 18;
     const spawnX = p.x + Math.cos(p.aimAngle) * muzzleDist;
     const spawnY = p.y + Math.sin(p.aimAngle) * muzzleDist;
@@ -4555,6 +5135,19 @@ export class WorldSim {
       if (e.grassRustleCooldown > 0) {
         e.grassRustleCooldown = Math.max(0, e.grassRustleCooldown - dtSec);
       }
+      if (e.markedTimer > 0) {
+        e.markedTimer = Math.max(0, e.markedTimer - dtSec);
+        if (e.markedTimer <= 0) e.markedByPlayerId = 0;
+      }
+      if (e.superconductTimer > 0) {
+        e.superconductTimer = Math.max(0, e.superconductTimer - dtSec);
+      }
+      if (e.rootedTimer > 0) {
+        e.rootedTimer = Math.max(0, e.rootedTimer - dtSec);
+      }
+      if (e.steamBlindTimer > 0) {
+        e.steamBlindTimer = Math.max(0, e.steamBlindTimer - dtSec);
+      }
 
       // Decay knockback
       const kbDecay = Math.exp(-12 * dtSec);
@@ -4604,6 +5197,22 @@ export class WorldSim {
       }
 
       const targetPlayer = this.findNearestAlivePlayer(e.x, e.y);
+      let targetX = targetPlayer.x;
+      let targetY = targetPlayer.y;
+
+      // Druid's Sacred Tree taunts nearby non-boss enemies within 170u
+      if (!e.isBoss && this.summons.length > 0) {
+        for (let sIdx = 0; sIdx < this.summons.length; sIdx++) {
+          const sum = this.summons[sIdx]!;
+          if (sum.kind === 'sacred_tree' && sum.hp > 0 && sum.ttlSec > 0) {
+            if (distance(e.x, e.y, sum.x, sum.y) <= 170) {
+              targetX = sum.x;
+              targetY = sum.y;
+              break;
+            }
+          }
+        }
+      }
 
       if (e.aiState === 'stunned') {
         e.vx = 0;
@@ -4614,10 +5223,14 @@ export class WorldSim {
           e.stateTimer = 0.6;
         }
       } else {
-        const dx = targetPlayer.x - e.x;
-        const dy = targetPlayer.y - e.y;
+        const dx = targetX - e.x;
+        const dy = targetY - e.y;
         const distToPlayer = Math.hypot(dx, dy);
-        const angleToPlayer = Math.atan2(dy, dx);
+        let angleToPlayer = Math.atan2(dy, dx);
+        // Vaporize Steam Blindness causes enemies to misaim by ~30 degrees!
+        if (e.steamBlindTimer > 0) {
+          angleToPlayer += 0.52 * e.strafeSign;
+        }
 
         if (e.defId === 'goblin_shooter') {
           this.updateGoblinShooterAI(e, distToPlayer, angleToPlayer, dtSec);
@@ -4636,8 +5249,8 @@ export class WorldSim {
         }
       }
 
-      // Stationary turrets & guardian mushrooms do not move or get knocked around
-      if (e.defId === 'thorn_turret' || e.defId === 'spore_guardian') {
+      // Stationary turrets, guardian mushrooms, or enemies rooted by Druid cannot move
+      if (e.defId === 'thorn_turret' || e.defId === 'spore_guardian' || e.rootedTimer > 0) {
         e.vx = 0;
         e.vy = 0;
         e.kbVx = 0;
@@ -4660,7 +5273,7 @@ export class WorldSim {
       );
       let sepX = 0;
       let sepY = 0;
-      if (e.defId !== 'thorn_turret' && e.defId !== 'spore_guardian' && !e.bossBurrowed) {
+      if (e.defId !== 'thorn_turret' && e.defId !== 'spore_guardian' && !e.bossBurrowed && e.rootedTimer <= 0) {
         for (let j = 0; j < nearby.length; j++) {
           const other = nearby[j]!;
           if (other.id === e.id || other.hp <= 0) continue;
@@ -5778,8 +6391,62 @@ export class WorldSim {
         if (hitProp) continue;
       }
 
-      // 3. Player projectile vs Enemies (using SpatialHashGrid)
+      // 3. Player projectile vs Allies/Synergies & Enemies
       if (b.team === 'player') {
+        // 3a. Vanguard Shield Co-op Synergy: Ally bullets passing through active Vanguard shield get +30% damage & +1 pierce
+        if (!b.amplifiedByShield) {
+          for (let pIdx = 0; pIdx < allPlayers.length; pIdx++) {
+            const pl = allPlayers[pIdx]!;
+            if (pl.lifeState !== 'alive' || pl.characterId !== 'vanguard' || pl.skillActiveTimer <= 0) {
+              continue;
+            }
+            const dToVanguard = distance(b.x, b.y, pl.x, pl.y);
+            if (dToVanguard <= 42 + b.radius) {
+              const angFromVanguard = Math.atan2(b.y - pl.y, b.x - pl.x);
+              const halfShieldArc = this.activeBuffIds.includes('vanguard_fortress')
+                ? Math.PI
+                : (65 * Math.PI) / 180;
+              if (Math.abs(angleDiff(angFromVanguard, pl.aimAngle)) <= halfShieldArc) {
+                b.amplifiedByShield = true;
+                b.damage = Math.round(b.damage * 1.3);
+                b.pierceRemaining += 1;
+                break;
+              }
+            }
+          }
+        }
+
+        // 3b. Elementalist Skill Zone Synergy: Bullets passing through an Elemental Orb Zone get imbued + 15% damage
+        if (this.skillZones.length > 0) {
+          for (let zIdx = 0; zIdx < this.skillZones.length; zIdx++) {
+            const z = this.skillZones[zIdx]!;
+            if (z.ttlSec <= 0 || b.hitEntityIds.includes(z.id)) continue;
+            if (distance(b.x, b.y, z.x, z.y) <= z.radius) {
+              b.hitEntityIds.push(z.id);
+              if (b.element === 'none') {
+                b.element = z.element;
+              }
+              b.damage = Math.round(b.damage * 1.15);
+            }
+          }
+        }
+
+        // 3c. Engineer Tesla Turret Co-op Synergy: Shooting a Tesla Turret charges its EMP!
+        if (this.summons.length > 0 && b.weaponId !== 'tesla_turret' && b.weaponId !== 'ancient_turret') {
+          for (let sIdx = 0; sIdx < this.summons.length; sIdx++) {
+            const sum = this.summons[sIdx]!;
+            if (sum.kind !== 'tesla_turret' || sum.hp <= 0 || sum.ttlSec <= 0) continue;
+            if (b.hitEntityIds.includes(sum.id)) continue;
+            if (distance(b.x, b.y, sum.x, sum.y) <= sum.radius + b.radius + 6) {
+              b.hitEntityIds.push(sum.id);
+              sum.charge = Math.min(100, sum.charge + (b.element !== 'none' ? 50 : 35));
+              if (sum.charge >= 100) {
+                this.triggerTeslaEmpBlast(sum);
+              }
+            }
+          }
+        }
+
         const candidates = this.enemySpatialGrid.queryCircle(
           b.x,
           b.y,
@@ -5793,7 +6460,41 @@ export class WorldSim {
 
           if (circleVsCircle(b, enemy)) {
             b.hitEntityIds.push(enemy.id);
-            this.applyDamageToEnemy(enemy, b.damage, b.isCrit, b.element, b.angle, b.knockback);
+
+            // Predator Arrow skill marks the target for 6s (+25% damage from all sources)
+            if (b.weaponId === 'predator_arrow') {
+              enemy.markedTimer = 6.0;
+              enemy.markedByPlayerId = b.ownerId;
+              if (!this.stressTestActive) {
+                this.events.push({
+                  kind: 'status_applied',
+                  targetId: enemy.id,
+                  status: 'marked',
+                  x: enemy.x,
+                  y: enemy.y,
+                });
+              }
+            }
+
+            // Ranger Passive (Mắt Ưng): ranged damage scales up with distance to target (up to +25%)
+            let hitDamage = b.damage;
+            const shooter = allPlayers.find((p) => p.id === b.ownerId);
+            if (shooter && shooter.characterId === 'ranger') {
+              const distFromShooter = distance(shooter.x, shooter.y, enemy.x, enemy.y);
+              const distBonus = clamp((distFromShooter - 70) / 300, 0, 0.25);
+              hitDamage = Math.round(hitDamage * (1 + distBonus));
+            }
+
+            this.applyDamageToEnemy(
+              enemy,
+              hitDamage,
+              b.isCrit,
+              b.element,
+              b.angle,
+              b.knockback,
+              b.weaponId === 'predator_arrow',
+              b.ownerId,
+            );
 
             if (!this.stressTestActive || stressImpactEventsThisTick < 4) {
               stressImpactEventsThisTick += 1;
@@ -5827,7 +6528,7 @@ export class WorldSim {
           }
         }
       } else {
-        // 4. Enemy projectile vs Vanguard Shield or any alive Player
+        // 4. Enemy projectile vs Vanguard Shield, Druid Sacred Tree, or any alive Player
         let blockedByAnyShield = false;
         for (let pIdx = 0; pIdx < allPlayers.length; pIdx++) {
           const pl = allPlayers[pIdx]!;
@@ -5862,6 +6563,34 @@ export class WorldSim {
           }
         }
         if (blockedByAnyShield) continue;
+
+        // Check Sacred Tree blocking enemy projectiles
+        if (this.summons.length > 0) {
+          let blockedBySummon = false;
+          for (let sIdx = 0; sIdx < this.summons.length; sIdx++) {
+            const sum = this.summons[sIdx]!;
+            if (sum.kind === 'sacred_tree' && sum.hp > 0 && sum.ttlSec > 0) {
+              if (circleVsCircle(b, sum)) {
+                b.ttlSec = 0;
+                sum.hp = Math.max(0, sum.hp - b.damage);
+                this.events.push({
+                  kind: 'projectile_impact',
+                  x: b.x,
+                  y: b.y,
+                  angle: b.angle,
+                  team: 'enemy',
+                  hitWall: false,
+                  destroyedByMelee: false,
+                  blockedByShield: true,
+                  isCrit: false,
+                });
+                blockedBySummon = true;
+                break;
+              }
+            }
+          }
+          if (blockedBySummon) continue;
+        }
 
         for (let pIdx = 0; pIdx < allPlayers.length; pIdx++) {
           const pl = allPlayers[pIdx]!;
@@ -6123,22 +6852,49 @@ export class WorldSim {
     hitAngleRad: number,
     knockback: number,
     isHeavyAttack = false,
+    attackerPlayerId = this.player.id,
+    isChainDamage = false,
   ): void {
     if (enemy.hp <= 0 || enemy.bossBurrowed) return;
 
     let finalAmount = amount;
     let finalCrit = isCrit;
 
+    // Ranger Passive (Mắt Ưng): Damage increases with distance to target (up to +30%)
+    if (attackerPlayerId > 0) {
+      const attacker = this.getPlayerById(attackerPlayerId);
+      if (attacker && attacker.characterId === 'ranger') {
+        const distToTarget = distance(attacker.x, attacker.y, enemy.x, enemy.y);
+        const distBonus = Math.min(0.3, (distToTarget / 320) * 0.3);
+        finalAmount *= 1 + distBonus;
+      }
+    }
+
     // 3-4P Boss Mechanic: while Spore Guardian Mushrooms are alive, Spore King takes 65% less damage
     if (enemy.isBoss && this.hasActiveBossGuardians()) {
       finalAmount = Math.max(1, finalAmount * 0.35);
     }
 
-    // Section 6: Đóng Băng + đòn nặng (cận chiến/nổ/crit) -> Vỡ Băng (Shatter): Sát thương x3!
-    if (enemy.frozenTimer > 0 && (isHeavyAttack || isCrit)) {
+    // Ranger Mark (+25% damage from all sources)
+    if (enemy.markedTimer > 0) {
+      finalAmount *= 1.25;
+    }
+
+    // Superconduct (+30% damage from all sources / -30% defense)
+    if (enemy.superconductTimer > 0) {
+      finalAmount *= 1.3;
+    }
+
+    // Section 6.2: Đóng Băng + đòn nặng (cận chiến/nổ/crit) -> Vỡ Băng (Shatter): Sát thương x3 + mảnh băng văng AoE!
+    let triggeredShatter = false;
+    if ((enemy.frozenTimer > 0 || enemy.chillStacks >= 2) && (isHeavyAttack || isCrit)) {
       finalAmount = finalAmount * 3;
       finalCrit = true;
+      triggeredShatter = true;
+      const primerId = enemy.lastElementOwnerId;
       enemy.frozenTimer = 0;
+      enemy.chillTimer = 0;
+      enemy.chillStacks = 0;
       if (!this.stressTestActive) {
         this.events.push({
           kind: 'status_applied',
@@ -6148,6 +6904,13 @@ export class WorldSim {
           y: enemy.y,
         });
       }
+      this.triggerElementalReaction(
+        enemy,
+        'shatter',
+        Math.round(finalAmount),
+        primerId,
+        attackerPlayerId,
+      );
     }
 
     const dmg = Math.max(1, Math.round(finalAmount));
@@ -6175,9 +6938,47 @@ export class WorldSim {
     enemy.kbVx += kbX;
     enemy.kbVy += kbY;
 
-    // Apply Elemental Status
+    // Shatter ice shards splash damage to nearby enemies within 85u
+    if (triggeredShatter && !isChainDamage) {
+      const shardDmg = Math.max(8, Math.round(amount * 1.1));
+      for (let i = 0; i < this.enemies.length; i++) {
+        const other = this.enemies[i]!;
+        if (other.id === enemy.id || other.hp <= 0 || other.aiState === 'spawning') continue;
+        if (distance(enemy.x, enemy.y, other.x, other.y) <= 85) {
+          this.applyDotDamageToEnemy(other, shardDmg, 'chill');
+        }
+      }
+    }
+
+    // Ranger Upgrade 2 (Chuỗi Con Mồi / ranger_prey_chain): Marked target propagates 30% damage to nearby enemies
+    if (!isChainDamage && enemy.markedTimer > 0 && this.activeBuffIds.includes('ranger_prey_chain')) {
+      const chainAmt = Math.max(1, Math.round(dmg * 0.3));
+      let chained = 0;
+      for (let i = 0; i < this.enemies.length && chained < 3; i++) {
+        const other = this.enemies[i]!;
+        if (other.id === enemy.id || other.hp <= 0 || other.aiState === 'spawning') continue;
+        if (other.markedTimer > 0 || distance(enemy.x, enemy.y, other.x, other.y) <= 220) {
+          chained += 1;
+          other.markedTimer = Math.max(other.markedTimer, 4.0);
+          other.markedByPlayerId = enemy.markedByPlayerId || attackerPlayerId;
+          this.applyDamageToEnemy(
+            other,
+            chainAmt,
+            false,
+            'none',
+            hitAngleRad,
+            40,
+            false,
+            attackerPlayerId,
+            true,
+          );
+        }
+      }
+    }
+
+    // Apply Elemental Status & check Elemental Reactions
     if (element !== 'none') {
-      this.applyElementStatusToEnemy(enemy, element, dmg);
+      this.applyElementStatusToEnemy(enemy, element, dmg, attackerPlayerId);
     }
 
     if (!this.stressTestActive || this.tick % 4 === 0) {
@@ -6201,6 +7002,49 @@ export class WorldSim {
     }
   }
 
+  private triggerElementalReaction(
+    enemy: SimEnemyState,
+    reaction: ElementalReactionId,
+    damage: number,
+    primerPlayerId: number,
+    triggerPlayerId: number,
+  ): void {
+    this.runStats.elementalReactions += 1;
+    const isTeamCombo =
+      primerPlayerId > 0 && triggerPlayerId > 0 && primerPlayerId !== triggerPlayerId;
+
+    if (isTeamCombo) {
+      this.teamComboCount += 1;
+      this.runStats.teamCombos += 1;
+      const allPlayers = this.getAllPlayers();
+      for (let i = 0; i < allPlayers.length; i++) {
+        const pl = allPlayers[i]!;
+        if (pl.id === primerPlayerId || pl.id === triggerPlayerId) {
+          pl.energy = Math.min(pl.maxEnergy, pl.energy + 15);
+        }
+      }
+    }
+
+    if (!this.stressTestActive) {
+      this.events.push({
+        kind: 'elemental_reaction',
+        reaction,
+        x: enemy.x,
+        y: enemy.y,
+        targetId: enemy.id,
+        damage,
+        isTeamCombo,
+        primerPlayerId,
+        triggerPlayerId,
+      });
+      this.events.push({
+        kind: 'hit_stop',
+        durationMs: isTeamCombo ? 55 : 35,
+        trauma: isTeamCombo ? 0.42 : 0.26,
+      });
+    }
+  }
+
   private handleEnemyKilled(enemy: SimEnemyState): void {
     this.runStats.kills += 1;
     if (enemy.isElite) this.runStats.elitesKilled += 1;
@@ -6213,6 +7057,8 @@ export class WorldSim {
       x: enemy.x,
       y: enemy.y,
     });
+
+    const allPlayers = this.getAllPlayers();
 
     // Green Slime splits into 2 Mini Slimes on death!
     if (enemy.defId === 'green_slime' && !this.stressTestActive) {
@@ -6236,7 +7082,6 @@ export class WorldSim {
         damage: 14,
         sourceDefId: enemy.defId,
       });
-      const allPlayers = this.getAllPlayers();
       for (let i = 0; i < allPlayers.length; i++) {
         const pl = allPlayers[i]!;
         if (pl.lifeState !== 'alive') continue;
@@ -6247,7 +7092,6 @@ export class WorldSim {
       }
     }
 
-    const allPlayers = this.getAllPlayers();
     const isCoop = allPlayers.length > 1;
     const dropMult = enemy.isBoss ? 6 : enemy.isElite ? 3 : 1;
     for (let k = 0; k < 2 * dropMult; k++) {
@@ -6271,6 +7115,46 @@ export class WorldSim {
         );
       }
     }
+
+    // Ranger Co-op Synergy: Marked enemies drop bonus team energy orbs on death!
+    if (enemy.markedTimer > 0) {
+      for (let pIdx = 0; pIdx < allPlayers.length; pIdx++) {
+        const pl = allPlayers[pIdx]!;
+        const instAng = pIdx * 0.8;
+        this.pickups.push(
+          this.acquirePickup({
+            id: ++this.nextEntityId,
+            kind: 'energy',
+            x: enemy.x,
+            y: enemy.y,
+            vx: Math.cos(instAng) * 95,
+            vy: Math.sin(instAng) * 95,
+            amount: 16,
+            ttlSec: 14,
+            ownerPlayerId: isCoop ? pl.id : undefined,
+          }),
+        );
+      }
+    }
+
+    // Druid Passive (Hạt Giống Sự Sống): 15% chance (100% on Elite/Boss) to drop a healing Life Seed
+    const hasDruid = allPlayers.some((p) => p.characterId === 'druid');
+    if (hasDruid && (enemy.isBoss || enemy.isElite || this.rng.chance(0.15))) {
+      const seedAng = this.rng.nextFloat(-Math.PI, Math.PI);
+      this.pickups.push(
+        this.acquirePickup({
+          id: ++this.nextEntityId,
+          kind: 'life_seed',
+          x: enemy.x,
+          y: enemy.y,
+          vx: Math.cos(seedAng) * 75,
+          vy: Math.sin(seedAng) * 75,
+          amount: 1,
+          ttlSec: 16,
+        }),
+      );
+    }
+
     for (let k = 0; k < dropMult; k++) {
       const coinAng = this.rng.nextFloat(-Math.PI, Math.PI);
       for (let pIdx = 0; pIdx < allPlayers.length; pIdx++) {
@@ -6297,8 +7181,121 @@ export class WorldSim {
     enemy: SimEnemyState,
     element: ElementType,
     hitDamage: number,
+    attackerPlayerId = this.player.id,
   ): void {
     this.applyElementAtWorldPoint(enemy.x, enemy.y, element, 26);
+
+    if (!this.stressTestActive) {
+      const primerId = enemy.lastElementOwnerId || attackerPlayerId;
+
+      // Check 6 Elemental Reactions before applying the new status
+      // 1. Vaporize (Hơi Nước): Burn + Chill/Frozen -> x2 burst damage + 3s Steam Blindness
+      if (
+        (element === 'chill' && enemy.burnTimer > 0) ||
+        (element === 'burn' && (enemy.chillTimer > 0 || enemy.frozenTimer > 0))
+      ) {
+        enemy.burnTimer = 0;
+        enemy.chillTimer = 0;
+        enemy.chillStacks = 0;
+        enemy.frozenTimer = 0;
+        enemy.steamBlindTimer = 3.0;
+        const vaporizeDmg = Math.max(12, Math.round(hitDamage * 1.4));
+        this.triggerElementalReaction(enemy, 'vaporize', vaporizeDmg, primerId, attackerPlayerId);
+        this.applyDotDamageToEnemy(enemy, vaporizeDmg, 'burn');
+        enemy.lastElementOwnerId = 0;
+        enemy.lastElementApplied = 'none';
+        return;
+      }
+
+      // 2. Superconduct (Siêu Dẫn): Chill/Frozen + Shock -> -30% defense (+30% damage taken) for 6s
+      if (
+        (element === 'shock' && (enemy.chillTimer > 0 || enemy.frozenTimer > 0)) ||
+        (element === 'chill' && enemy.shockTimer > 0)
+      ) {
+        enemy.superconductTimer = 6.0;
+        const scDmg = Math.max(8, Math.round(hitDamage * 0.75));
+        this.triggerElementalReaction(enemy, 'superconduct', scDmg, primerId, attackerPlayerId);
+        this.applyDotDamageToEnemy(enemy, scDmg, 'shock');
+        enemy.lastElementOwnerId = attackerPlayerId;
+        enemy.lastElementApplied = element;
+        return;
+      }
+
+      // 3. Toxic Blast (Nổ Độc): Poison + Burn -> Detonate poison stacks AoE + spread 1 stack Poison
+      if (
+        (element === 'burn' && enemy.poisonTimer > 0) ||
+        (element === 'poison' && enemy.burnTimer > 0)
+      ) {
+        const stacks = Math.max(1, enemy.poisonStacks);
+        const blastDmg = Math.max(14, Math.round(hitDamage * 1.15 + stacks * 10));
+        enemy.poisonTimer = 0;
+        enemy.poisonStacks = 0;
+        enemy.burnTimer = 0;
+        this.triggerElementalReaction(enemy, 'toxic_blast', blastDmg, primerId, attackerPlayerId);
+        this.applyDotDamageToEnemy(enemy, blastDmg, 'poison');
+        for (let i = 0; i < this.enemies.length; i++) {
+          const other = this.enemies[i]!;
+          if (other.id === enemy.id || other.hp <= 0 || other.aiState === 'spawning') continue;
+          if (distance(enemy.x, enemy.y, other.x, other.y) <= 96) {
+            other.poisonStacks = Math.max(1, other.poisonStacks);
+            other.poisonTimer = Math.max(other.poisonTimer, 4.0);
+            other.poisonTickTimer = 0.6;
+            this.applyDotDamageToEnemy(other, Math.round(blastDmg * 0.7), 'poison');
+          }
+        }
+        enemy.lastElementOwnerId = 0;
+        enemy.lastElementApplied = 'none';
+        return;
+      }
+
+      // 4. Paralysis (Tê Liệt): Poison + Shock -> Stun 0.8s + interrupt Elite/Boss telegraph
+      if (
+        (element === 'shock' && enemy.poisonTimer > 0) ||
+        (element === 'poison' && enemy.shockTimer > 0)
+      ) {
+        enemy.aiState = 'stunned';
+        enemy.stateTimer = Math.max(enemy.stateTimer, 0.8);
+        enemy.vx = 0;
+        enemy.vy = 0;
+        enemy.bossBurrowed = false;
+        const paraDmg = Math.max(8, Math.round(hitDamage * 0.7));
+        this.triggerElementalReaction(enemy, 'paralysis', paraDmg, primerId, attackerPlayerId);
+        this.applyDotDamageToEnemy(enemy, paraDmg, 'shock');
+        enemy.lastElementOwnerId = attackerPlayerId;
+        enemy.lastElementApplied = element;
+        return;
+      }
+
+      // 5. Overload (Quá Tải): Burn + Shock -> Explosive shockwave AoE + heavy knockback + shield break
+      if (
+        (element === 'shock' && enemy.burnTimer > 0) ||
+        (element === 'burn' && enemy.shockTimer > 0)
+      ) {
+        enemy.burnTimer = 0;
+        enemy.shockTimer = 0;
+        const overloadDmg = Math.max(14, Math.round(hitDamage * 1.35));
+        this.triggerElementalReaction(enemy, 'overload', overloadDmg, primerId, attackerPlayerId);
+        enemy.shieldArmor = Math.max(0, enemy.shieldArmor - 18);
+        this.applyDotDamageToEnemy(enemy, overloadDmg, 'burn');
+        for (let i = 0; i < this.enemies.length; i++) {
+          const other = this.enemies[i]!;
+          if (other.id === enemy.id || other.hp <= 0 || other.aiState === 'spawning') continue;
+          if (distance(enemy.x, enemy.y, other.x, other.y) <= 92) {
+            const pushAng = Math.atan2(other.y - enemy.y, other.x - enemy.x);
+            other.kbVx += Math.cos(pushAng) * 260;
+            other.kbVy += Math.sin(pushAng) * 260;
+            other.shieldArmor = Math.max(0, other.shieldArmor - 18);
+            this.applyDotDamageToEnemy(other, Math.round(overloadDmg * 0.75), 'shock');
+          }
+        }
+        enemy.lastElementOwnerId = 0;
+        enemy.lastElementApplied = 'none';
+        return;
+      }
+    }
+
+    enemy.lastElementOwnerId = attackerPlayerId;
+    enemy.lastElementApplied = element;
 
     switch (element) {
       case 'burn': {
@@ -6498,16 +7495,20 @@ export class WorldSim {
         if (pl.lifeState !== 'alive') continue;
         if (pk.ownerPlayerId !== undefined && pk.ownerPlayerId !== pl.id) continue;
         const d = distance(pl.x, pl.y, pk.x, pk.y);
-        if (d < closestDist) {
+        // Life Seeds prioritize injured allies within 180u
+        const effectiveDist =
+          pk.kind === 'life_seed' && pl.hp < pl.maxHp ? d * 0.55 : d;
+        if (effectiveDist < closestDist) {
           closestDist = d;
           closestPlayer = pl;
         }
       }
 
-      if (closestPlayer && closestDist < 130 && closestDist > 0.01) {
+      const magnetRange = pk.kind === 'life_seed' ? 180 : 130;
+      if (closestPlayer && closestDist < magnetRange && closestDist > 0.01) {
         const dx = closestPlayer.x - pk.x;
         const dy = closestPlayer.y - pk.y;
-        const pullSpeed = lerpSpeed(closestDist, 130, 340);
+        const pullSpeed = lerpSpeed(closestDist, magnetRange, 340);
         pk.vx = approach(pk.vx, (dx / closestDist) * pullSpeed, 1400 * dtSec);
         pk.vy = approach(pk.vy, (dy / closestDist) * pullSpeed, 1400 * dtSec);
       } else {
@@ -6523,6 +7524,12 @@ export class WorldSim {
         pk.ttlSec = 0;
         if (pk.kind === 'energy') {
           closestPlayer.energy = Math.min(closestPlayer.maxEnergy, closestPlayer.energy + pk.amount);
+        } else if (pk.kind === 'life_seed') {
+          if (closestPlayer.hp < closestPlayer.maxHp) {
+            closestPlayer.hp = Math.min(closestPlayer.maxHp, closestPlayer.hp + pk.amount);
+          } else {
+            closestPlayer.armor = Math.min(closestPlayer.maxArmor, closestPlayer.armor + pk.amount);
+          }
         } else {
           closestPlayer.gold += pk.amount;
           this.runStats.goldEarned += pk.amount;

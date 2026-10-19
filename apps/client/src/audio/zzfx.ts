@@ -21,7 +21,10 @@ export type SfxId =
   | 'freeze'
   | 'shatter'
   | 'chain_lightning'
-  | 'surface_ignite';
+  | 'surface_ignite'
+  | 'elemental_reaction'
+  | 'team_combo'
+  | 'emp_blast';
 
 interface ZzfxPreset {
   volume: number;
@@ -221,6 +224,33 @@ const SFX_PRESETS: Record<SfxId, ZzfxPreset> = {
     attackSec: 0.008,
     decaySec: 0.22,
     noise: 0.72,
+    wave: 'sawtooth',
+  },
+  elemental_reaction: {
+    volume: 0.32,
+    freq: 620,
+    slide: 360,
+    attackSec: 0.004,
+    decaySec: 0.2,
+    noise: 0.35,
+    wave: 'sawtooth',
+  },
+  team_combo: {
+    volume: 0.36,
+    freq: 780,
+    slide: 520,
+    attackSec: 0.005,
+    decaySec: 0.28,
+    noise: 0.15,
+    wave: 'triangle',
+  },
+  emp_blast: {
+    volume: 0.35,
+    freq: 480,
+    slide: -320,
+    attackSec: 0.003,
+    decaySec: 0.26,
+    noise: 0.45,
     wave: 'sawtooth',
   },
 };

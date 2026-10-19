@@ -28,8 +28,14 @@ export class PreloadScene extends Phaser.Scene {
       const requestedScene = params.get('scene')?.toLowerCase();
       const coopParam = params.get('coop')?.toLowerCase();
       const joinRoomId = params.get('join');
+      const hubParam = params.get('hub');
+      const galleryParam = params.get('gallery');
 
-      if (requestedScene === 'gallery' || requestedScene === 'artgallery') {
+      if (
+        requestedScene === 'gallery' ||
+        requestedScene === 'artgallery' ||
+        galleryParam === '1'
+      ) {
         this.scene.start('ArtGalleryScene');
       } else if (requestedScene === 'menu') {
         this.scene.start('MenuScene');
@@ -45,7 +51,7 @@ export class PreloadScene extends Phaser.Scene {
           displayName: params.get('name') ?? undefined,
           serverUrl: params.get('server') ?? undefined,
         });
-      } else if (requestedScene === 'game') {
+      } else if (requestedScene === 'game' || hubParam === '1') {
         this.scene.start('GameScene');
       } else {
         this.scene.start('MenuScene');

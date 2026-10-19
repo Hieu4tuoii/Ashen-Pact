@@ -235,6 +235,7 @@ test.describe('Phase 4 — Co-op LAN Authoritative, Prediction/Interpolation, Hu
     await Promise.all(
       [page2, page3, page4].map((p) => p.evaluate(() => window.__PHASER_GAME__?.loop.sleep())),
     );
+    await page1.bringToFront();
     await page1.evaluate(() => window.__GAME_SET_QUALITY__?.('high'));
     await page1.waitForTimeout(800);
 

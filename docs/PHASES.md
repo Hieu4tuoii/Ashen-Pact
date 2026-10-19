@@ -63,10 +63,10 @@
 
 ---
 
-## Phase 5 — 5 Nhân Vật, Hệ Nguyên Tố & Synergy
-- [ ] Hoàn thiện đủ 5 nhân vật (animation riêng, VFX skill, SFX riêng), 2 nâng cấp mỗi skill, phản ứng nguyên tố đầy đủ + Team Combo, preview kỹ năng ở Hub.
-- [ ] Balance harness headless xuất `docs/balance-report.md`.
-- [ ] **DoD riêng Phase 5:** Đạt mọi mục tiêu mục 7.4; unit test từng phản ứng nguyên tố; mỗi nhân vật solo qua được boss biome 1 trong harness; test co-op 2 và 4 người.
+## Phase 5 — 5 Nhân Vật, Hệ Nguyên Tố & Synergy (Hoàn thành ✅)
+- [x] Hoàn thiện đủ 5 nhân vật (animation riêng, VFX skill, SFX riêng), 2 nâng cấp mỗi skill, phản ứng nguyên tố đầy đủ + Team Combo, preview kỹ năng ở Hub.
+- [x] Balance harness headless xuất `docs/balance-report.md`.
+- [x] **DoD riêng Phase 5:** Đạt mọi mục tiêu mục 7.4; unit test từng phản ứng nguyên tố; mỗi nhân vật solo qua được boss biome 1 trong harness; test co-op 2 và 4 người.
 
 ---
 

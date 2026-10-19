@@ -101,12 +101,21 @@ export class TextureBaker {
     this.currentBakeScale = targetScale;
 
     for (const rig of ALL_SAMPLE_RIGS) {
-      if (rig.id === 'vanguard' || rig.id === 'goblin_shooter') {
+      if (
+        rig.id === 'vanguard' ||
+        rig.id === 'ranger' ||
+        rig.id === 'elementalist' ||
+        rig.id === 'druid' ||
+        rig.id === 'engineer' ||
+        rig.id === 'goblin_shooter'
+      ) {
         this.bakeRig(scene, rig, targetScale);
       }
     }
-    const swordDef = WEAPON_VECTOR_DEFS.knight_sword;
-    if (swordDef) this.bakeWeapon(scene, swordDef, targetScale);
+    for (const wKey of ['knight_sword', 'hunter_bow', 'rusty_pistol'] as const) {
+      const wDef = WEAPON_VECTOR_DEFS[wKey];
+      if (wDef) this.bakeWeapon(scene, wDef, targetScale);
+    }
 
     for (const slot of [1, 2, 3, 4] as const) {
       this.bakePlayerRing(scene, slot, targetScale);
@@ -1485,6 +1494,43 @@ export class TextureBaker {
         },
         { cx: 6, cy: 4, rx: 5.2, ry: 5.2 },
       );
+    });
+
+    // 5b. Ancient Mechanism (Engineer repairable turret base)
+    this.bakeCustomCanvas(scene, 'prop_ancient_mechanism', 40, 40, scale, (ctx) => {
+      outlined(
+        ctx,
+        {
+          fill: PALETTE.STEEL_DARK,
+          shade: PALETTE.SLATE_DARK,
+          highlight: PALETTE.STEEL_LIGHT,
+          outlineWidth: 2.5,
+        },
+        (c) => traceRoundedRect(c, -15, -15, 30, 30, 6),
+        { cx: 0, cy: 0, rx: 15, ry: 15 },
+      );
+      outlined(
+        ctx,
+        {
+          fill: PALETTE.BRASS_CORE,
+          shade: PALETTE.LEATHER_MID,
+          highlight: PALETTE.SOLAR_GOLD,
+          outlineWidth: 2.0,
+        },
+        (c) => {
+          c.beginPath();
+          c.arc(0, 0, 9.5, 0, Math.PI * 2);
+          c.closePath();
+        },
+        { cx: 0, cy: 0, rx: 9.5, ry: 9.5 },
+      );
+      ctx.beginPath();
+      ctx.arc(0, 0, 4.2, 0, Math.PI * 2);
+      ctx.fillStyle = PALETTE.CYAN_FROST;
+      ctx.fill();
+      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = PALETTE.INK_DARK;
+      ctx.stroke();
     });
 
     // 6. Phase 3 Treasure Chests (5 Rarities, Closed & Open)

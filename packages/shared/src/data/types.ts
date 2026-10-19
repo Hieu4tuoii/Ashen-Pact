@@ -18,6 +18,23 @@ export type WeaponCategory =
 
 export type PlayerSlot = 1 | 2 | 3 | 4;
 
+export type ElementalReactionId =
+  | 'vaporize'
+  | 'shatter'
+  | 'superconduct'
+  | 'toxic_blast'
+  | 'paralysis'
+  | 'overload';
+
+export interface ElementalReactionMeta {
+  id: ElementalReactionId;
+  nameVi: string;
+  nameEn: string;
+  comboLabelVi: string;
+  effectVi: string;
+  colorHex: string;
+}
+
 export interface CharacterSkillDef {
   id: string;
   nameVi: string;
@@ -25,9 +42,10 @@ export interface CharacterSkillDef {
   cooldownSec: number;
   durationSec: number;
   descriptionVi: string;
+  synergyVi?: string;
   upgrades: readonly [
-    { id: string; nameVi: string; descriptionVi: string },
-    { id: string; nameVi: string; descriptionVi: string },
+    { id: BuffId | string; nameVi: string; descriptionVi: string },
+    { id: BuffId | string; nameVi: string; descriptionVi: string },
   ];
 }
 
@@ -104,7 +122,15 @@ export type BuffId =
   | 'gale_reflex'
   | 'ricochet_mastery'
   | 'vanguard_fortress'
-  | 'vanguard_charge';
+  | 'vanguard_charge'
+  | 'ranger_arrow_volley'
+  | 'ranger_prey_chain'
+  | 'elementalist_vortex'
+  | 'elementalist_dual'
+  | 'druid_poison_roots'
+  | 'druid_sacred_grove'
+  | 'engineer_twin_turrets'
+  | 'engineer_self_destruct';
 
 export interface BuffDef {
   id: BuffId;
