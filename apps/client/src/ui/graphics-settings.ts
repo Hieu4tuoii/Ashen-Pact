@@ -1,3 +1,5 @@
+import { clamp, i18n, type SupportedLocale } from '@ashen-pact/shared';
+
 export type GraphicsQualityTier = 'high' | 'medium' | 'low';
 
 export interface QualityPresetBudget {
@@ -50,22 +52,34 @@ export interface GraphicsSettingsState {
   screenShakeIntensity: number;
   showDamageNumbers: boolean;
   teammateFxOpacity: number;
+  masterVolume: number;
+  musicVolume: number;
+  sfxVolume: number;
+  fullscreen: boolean;
+  language: SupportedLocale;
 }
+
+export const DEFAULT_GRAPHICS_SETTINGS: GraphicsSettingsState = {
+  quality: 'high',
+  autoQuality: true,
+  screenShakeIntensity: 1.0,
+  showDamageNumbers: true,
+  teammateFxOpacity: 0.7,
+  masterVolume: 0.85,
+  musicVolume: 0.7,
+  sfxVolume: 0.9,
+  fullscreen: false,
+  language: 'vi',
+};
 
 const STORAGE_KEY = 'ashen_pact_graphics_settings';
 
 /**
- * Manages persistent Graphics Quality settings (High / Medium / Low) in localStorage
+ * Manages persistent Graphics, Audio, Gameplay, and Language settings in localStorage
  * and automatic quality step-down when sustained FPS drops below threshold.
  */
 export class GraphicsSettingsManager {
-  private state: GraphicsSettingsState = {
-    quality: 'high',
-    autoQuality: true,
-    screenShakeIntensity: 1.0,
-    showDamageNumbers: true,
-    teammateFxOpacity: 0.7,
-  };
+  private state: GraphicsSettingsState = { ...DEFAULT_GRAPHICS_SETTINGS };
 
   private lowFpsAccumSec = 0;
   private downgradeCooldownSec = 0;
@@ -74,6 +88,7 @@ export class GraphicsSettingsManager {
 
   constructor() {
     this.loadFromStorage();
+    i18n.setLocale(this.state.language);
   }
 
   public getState(): Readonly<GraphicsSettingsState> {
@@ -103,6 +118,82 @@ export class GraphicsSettingsManager {
   public setAutoQuality(enabled: boolean): void {
     if (this.state.autoQuality === enabled) return;
     this.state = { ...this.state, autoQuality: enabled };
+    this.lowFpsAccumSec = 0;
+    this.saveToStorage();
+    this.notify();
+  }
+
+  public setScreenShakeIntensity(val: number): void {
+    const clamped = Math.round(clamp(val, 0, 1) * 20) / 20;
+    if (this.state.screenShakeIntensity === clamped) return;
+    this.state = { ...this.state, screenShakeIntensity: clamped };
+    this.saveToStorage();
+    this.notify();
+  }
+
+  public setShowDamageNumbers(enabled: boolean): void {
+    if (this.state.showDamageNumbers === enabled) return;
+    this.state = { ...this.state, showDamageNumbers: enabled };
+    this.saveToStorage();
+    this.notify();
+  }
+
+  public setTeammateFxOpacity(val: number): void {
+    const clamped = Math.round(clamp(val, 0.3, 1.0) * 20) / 20;
+    if (this.state.teammateFxOpacity === clamped) return;
+    this.state = { ...this.state, teammateFxOpacity: clamped };
+    this.saveToStorage();
+    this.notify();
+  }
+
+  public setMasterVolume(val: number): void {
+    const clamped = Math.round(clamp(val, 0, 1) * 20) / 20;
+    if (this.state.masterVolume === clamped) return;
+    this.state = { ...this.state, masterVolume: clamped };
+    this.saveToStorage();
+    this.notify();
+  }
+
+  public setMusicVolume(val: number): void {
+    const clamped = Math.round(clamp(val, 0, 1) * 20) / 20;
+    if (this.state.musicVolume === clamped) return;
+    this.state = { ...this.state, musicVolume: clamped };
+    this.saveToStorage();
+    this.notify();
+  }
+
+  public setSfxVolume(val: number): void {
+    const clamped = Math.round(clamp(val, 0, 1) * 20) / 20;
+    if (this.state.sfxVolume === clamped) return;
+    this.state = { ...this.state, sfxVolume: clamped };
+    this.saveToStorage();
+    this.notify();
+  }
+
+  public setFullscreen(enabled: boolean): void {
+    if (this.state.fullscreen === enabled) return;
+    this.state = { ...this.state, fullscreen: enabled };
+    this.saveToStorage();
+    this.notify();
+  }
+
+  public setLanguage(language: SupportedLocale): void {
+    i18n.setLocale(language);
+    if (this.state.language === language) return;
+    this.state = { ...this.state, language };
+    this.saveToStorage();
+    this.notify();
+  }
+
+  public toggleLanguage(): SupportedLocale {
+    const next: SupportedLocale = this.state.language === 'vi' ? 'en' : 'vi';
+    this.setLanguage(next);
+    return next;
+  }
+
+  public resetDefaults(): void {
+    this.state = { ...DEFAULT_GRAPHICS_SETTINGS };
+    i18n.setLocale(this.state.language);
     this.lowFpsAccumSec = 0;
     this.saveToStorage();
     this.notify();
@@ -159,13 +250,28 @@ export class GraphicsSettingsManager {
         this.state.autoQuality = parsed.autoQuality;
       }
       if (typeof parsed.screenShakeIntensity === 'number') {
-        this.state.screenShakeIntensity = parsed.screenShakeIntensity;
+        this.state.screenShakeIntensity = clamp(parsed.screenShakeIntensity, 0, 1);
       }
       if (typeof parsed.showDamageNumbers === 'boolean') {
         this.state.showDamageNumbers = parsed.showDamageNumbers;
       }
       if (typeof parsed.teammateFxOpacity === 'number') {
-        this.state.teammateFxOpacity = parsed.teammateFxOpacity;
+        this.state.teammateFxOpacity = clamp(parsed.teammateFxOpacity, 0.3, 1.0);
+      }
+      if (typeof parsed.masterVolume === 'number') {
+        this.state.masterVolume = clamp(parsed.masterVolume, 0, 1);
+      }
+      if (typeof parsed.musicVolume === 'number') {
+        this.state.musicVolume = clamp(parsed.musicVolume, 0, 1);
+      }
+      if (typeof parsed.sfxVolume === 'number') {
+        this.state.sfxVolume = clamp(parsed.sfxVolume, 0, 1);
+      }
+      if (typeof parsed.fullscreen === 'boolean') {
+        this.state.fullscreen = parsed.fullscreen;
+      }
+      if (parsed.language === 'vi' || parsed.language === 'en') {
+        this.state.language = parsed.language;
       }
     } catch {
       // Ignore storage read errors in restricted contexts
@@ -189,3 +295,4 @@ export class GraphicsSettingsManager {
 }
 
 export const graphicsSettings = new GraphicsSettingsManager();
+

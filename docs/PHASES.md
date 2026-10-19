@@ -77,10 +77,10 @@
 
 ---
 
-## Phase 7 — UI/UX & Âm Thanh Hoàn Thiện
-- [ ] Menu chính động, HUD hoàn chỉnh, Settings đầy đủ, màn hình kết quả + MVP, chuyển cảnh, tooltip/hướng dẫn, i18n `vi`/`en`.
-- [ ] Bộ SFX đầy đủ, nhạc động khám phá/chiến đấu/boss, âm thanh định vị, voice limit.
-- [ ] **DoD riêng Phase 7:** Mọi luồng UI đi được bằng chuột không kẹt; không có chuỗi chưa dịch; mọi hành động gameplay đều có âm thanh; screenshot tất cả màn hình UI.
+## Phase 7 — UI/UX & Âm Thanh Hoàn Thiện (Hoàn thành ✅)
+- [x] Menu chính động, HUD hoàn chỉnh, Settings đầy đủ, màn hình kết quả + MVP, chuyển cảnh, tooltip/hướng dẫn, i18n `vi`/`en`.
+- [x] Bộ SFX đầy đủ, nhạc động khám phá/chiến đấu/boss, âm thanh định vị, voice limit.
+- [x] **DoD riêng Phase 7:** Mọi luồng UI đi được bằng chuột không kẹt; không có chuỗi chưa dịch; mọi hành động gameplay đều có âm thanh; screenshot tất cả màn hình UI.
 
 ---
 

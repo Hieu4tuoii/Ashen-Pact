@@ -106,6 +106,20 @@ export interface GameDebugState {
   shockwaveRingCount: number;
   tetherBeamCount: number;
   galleryPage: number;
+  // Phase 7 UI/UX, i18n, Modals, HUD & Dynamic Audio telemetry
+  language: 'vi' | 'en';
+  pauseModalOpen: boolean;
+  settingsModalOpen: boolean;
+  controlsModalOpen: boolean;
+  creditsModalOpen: boolean;
+  weaponComparisonVisible: boolean;
+  comparedWeaponId: string | null;
+  irisTransitionProgress: number;
+  trailingHpRatio: number;
+  trailingArmorRatio: number;
+  musicTheme: string;
+  musicCombatMix: number;
+  mvpAwardsCount: number;
   errors: string[];
   warnings: string[];
 }
@@ -218,6 +232,19 @@ export function initGlobalDebugState(): GameDebugState {
     shockwaveRingCount: 0,
     tetherBeamCount: 0,
     galleryPage: 1,
+    language: gState.language,
+    pauseModalOpen: false,
+    settingsModalOpen: false,
+    controlsModalOpen: false,
+    creditsModalOpen: false,
+    weaponComparisonVisible: false,
+    comparedWeaponId: null,
+    irisTransitionProgress: 0,
+    trailingHpRatio: 1,
+    trailingArmorRatio: 1,
+    musicTheme: 'menu_hub',
+    musicCombatMix: 0,
+    mvpAwardsCount: 0,
     errors: [],
     warnings: [],
   };

@@ -332,6 +332,21 @@ export interface RunSummaryStats {
   teamCombos: number;
 }
 
+export type MvpAwardCategory = 'damage' | 'medic' | 'elemental' | 'slayer';
+
+export interface MvpAwardEntry {
+  category: MvpAwardCategory;
+  titleKey: string;
+  descKey: string;
+  playerId: number;
+  playerSlot: 1 | 2 | 3 | 4;
+  displayName: string;
+  characterId: CharacterId;
+  colorHex: string;
+  value: number;
+  secondaryValue: number;
+}
+
 export type PlayerLifeState = 'alive' | 'downed' | 'ghost';
 
 export interface SimPlayerState {
@@ -400,6 +415,13 @@ export interface SimPlayerState {
   // Phase 6 Ice Prison & Chasm states
   encasedInIceTimer?: number;
   icePrisonId?: number;
+  // Phase 7 Per-Player Run Statistics & MVP Awards
+  statsDamageDealt?: number;
+  statsDamageTaken?: number;
+  statsKills?: number;
+  statsRevives?: number;
+  statsElementalReactions?: number;
+  statsTeamCombos?: number;
 }
 
 export interface SimEnemyState {
@@ -836,6 +858,14 @@ export type SimEvent =
       x: number;
       y: number;
       maxRadius: number;
+    }
+  | {
+      kind: 'armor_broken';
+      targetKind: 'player' | 'enemy';
+      targetId: number;
+      playerId?: number;
+      x: number;
+      y: number;
     };
 
 export interface WorldSimOptions {
@@ -1100,6 +1130,12 @@ export class WorldSim {
       emoteId: null,
       emoteTimer: 0,
       currentRoomId: this.currentRoomId,
+      statsDamageDealt: 0,
+      statsDamageTaken: 0,
+      statsKills: 0,
+      statsRevives: 0,
+      statsElementalReactions: 0,
+      statsTeamCombos: 0,
     };
   }
 
@@ -4276,6 +4312,7 @@ export class WorldSim {
           ally.downedTimer = 0;
           ally.reviveProgress = 0;
           ally.reviverPlayerId = null;
+          p.statsRevives = (p.statsRevives ?? 0) + 1;
           revivedAnyDowned = true;
           this.events.push({
             kind: 'player_revived',
@@ -5125,6 +5162,7 @@ export class WorldSim {
           downed.downedTimer = 0;
           downed.reviveProgress = 0;
           downed.reviverPlayerId = null;
+          reviver.statsRevives = (reviver.statsRevives ?? 0) + 1;
           this.events.push({
             kind: 'player_revived',
             playerId: downed.id,
@@ -6227,6 +6265,8 @@ export class WorldSim {
     enemy.hp = Math.max(0, enemy.hp - amount);
     this.recordDamageHistory(amount);
     this.runStats.damageDealt += amount;
+    const ownerPl = this.getPlayerById(enemy.lastElementOwnerId || this.player.id) ?? this.player;
+    ownerPl.statsDamageDealt = (ownerPl.statsDamageDealt ?? 0) + amount;
     this.checkBossPhaseTransitions(enemy);
 
     if (emitEvent && !this.stressTestActive) {
@@ -6246,7 +6286,7 @@ export class WorldSim {
     }
 
     if (enemy.hp <= 0 && !enemy.isDummy) {
-      this.handleEnemyKilled(enemy);
+      this.handleEnemyKilled(enemy, ownerPl.id);
     }
   }
 
@@ -9194,17 +9234,32 @@ export class WorldSim {
     if (this.stressTestActive && enemy.hp <= dmg + 20) {
       enemy.hp = enemy.maxHp;
     } else if (enemy.shieldArmor > 0) {
+      const prevShield = enemy.shieldArmor;
       const absorbed = Math.min(enemy.shieldArmor, dmg);
       enemy.shieldArmor -= absorbed;
       const rem = dmg - absorbed;
       hitArmor = hitArmor || (absorbed > 0 && rem === 0);
       enemy.hp = Math.max(0, enemy.hp - rem);
+      if (prevShield > 0 && enemy.shieldArmor === 0) {
+        this.events.push({
+          kind: 'armor_broken',
+          targetKind: 'enemy',
+          targetId: enemy.id,
+          x: enemy.x,
+          y: enemy.y,
+        });
+      }
     } else {
       enemy.hp = Math.max(0, enemy.hp - dmg);
     }
     enemy.hitFlashTimer = 0.12;
     this.recordDamageHistory(dmg);
     this.runStats.damageDealt += dmg;
+    const attackerPl =
+      attackerPlayerId > 0
+        ? (this.getPlayerById(attackerPlayerId) ?? this.player)
+        : this.player;
+    attackerPl.statsDamageDealt = (attackerPl.statsDamageDealt ?? 0) + dmg;
     this.checkBossPhaseTransitions(enemy);
 
     const isImmobileTarget =
@@ -9282,7 +9337,7 @@ export class WorldSim {
     }
 
     if (enemy.hp <= 0 && !enemy.isDummy) {
-      this.handleEnemyKilled(enemy);
+      this.handleEnemyKilled(enemy, attackerPl.id);
     }
   }
 
@@ -9294,6 +9349,11 @@ export class WorldSim {
     triggerPlayerId: number,
   ): void {
     this.runStats.elementalReactions += 1;
+    const triggerPl =
+      triggerPlayerId > 0
+        ? (this.getPlayerById(triggerPlayerId) ?? this.player)
+        : this.player;
+    triggerPl.statsElementalReactions = (triggerPl.statsElementalReactions ?? 0) + 1;
     const isTeamCombo =
       primerPlayerId > 0 && triggerPlayerId > 0 && primerPlayerId !== triggerPlayerId;
 
@@ -9305,6 +9365,7 @@ export class WorldSim {
         const pl = allPlayers[i]!;
         if (pl.id === primerPlayerId || pl.id === triggerPlayerId) {
           pl.energy = Math.min(pl.maxEnergy, pl.energy + 15);
+          pl.statsTeamCombos = (pl.statsTeamCombos ?? 0) + 1;
         }
       }
     }
@@ -9329,10 +9390,12 @@ export class WorldSim {
     }
   }
 
-  private handleEnemyKilled(enemy: SimEnemyState): void {
+  private handleEnemyKilled(enemy: SimEnemyState, killerPlayerId = this.player.id): void {
     this.runStats.kills += 1;
     if (enemy.isElite) this.runStats.elitesKilled += 1;
     if (enemy.isBoss) this.runStats.bossesKilled += 1;
+    const killerPl = this.getPlayerById(killerPlayerId) ?? this.player;
+    killerPl.statsKills = (killerPl.statsKills ?? 0) + 1;
 
     this.events.push({
       kind: 'entity_killed',
@@ -9811,11 +9874,24 @@ export class WorldSim {
     }
 
     const dmg = Math.max(1, Math.round(rawDamage));
+    const prevArmor = p.armor;
     const armorAbsorbed = Math.min(p.armor, dmg);
     const hpDamage = dmg - armorAbsorbed;
 
     p.armor -= armorAbsorbed;
     p.hp = Math.max(0, p.hp - hpDamage);
+    p.statsDamageTaken = (p.statsDamageTaken ?? 0) + dmg;
+
+    if (prevArmor > 0 && p.armor === 0) {
+      this.events.push({
+        kind: 'armor_broken',
+        targetKind: 'player',
+        targetId: p.id,
+        playerId: p.id,
+        x: p.x,
+        y: p.y,
+      });
+    }
 
     p.armorRegenTimer = p.armorRegenDelaySec;
     p.armorRegenAccum = 0;
@@ -10021,6 +10097,127 @@ export class WorldSim {
       prevX: init.x,
       prevY: init.y,
     };
+  }
+
+  public computeMvpAwards(): MvpAwardEntry[] {
+    const players = [...this.getAllPlayers()];
+    if (players.length === 0) return [];
+
+    // Pick best damage dealer
+    let bestDmgPlayer = players[0]!;
+    let bestDmg = bestDmgPlayer.statsDamageDealt ?? 0;
+    for (let i = 1; i < players.length; i++) {
+      const p = players[i]!;
+      const d = p.statsDamageDealt ?? 0;
+      if (d > bestDmg) {
+        bestDmg = d;
+        bestDmgPlayer = p;
+      }
+    }
+    if (players.length === 1 && bestDmg === 0) {
+      bestDmg = this.runStats.damageDealt;
+    }
+
+    // Pick best slayer (kills)
+    let bestSlayerPlayer = players[0]!;
+    let bestKills = bestSlayerPlayer.statsKills ?? 0;
+    for (let i = 1; i < players.length; i++) {
+      const p = players[i]!;
+      const k = p.statsKills ?? 0;
+      if (k > bestKills) {
+        bestKills = k;
+        bestSlayerPlayer = p;
+      }
+    }
+    if (players.length === 1 && bestKills === 0) {
+      bestKills = this.runStats.kills;
+    }
+
+    // Pick best elemental grandmaster
+    let bestElemPlayer = players[0]!;
+    let bestElemScore =
+      (bestElemPlayer.statsElementalReactions ?? 0) +
+      (bestElemPlayer.statsTeamCombos ?? 0) * 2;
+    for (let i = 1; i < players.length; i++) {
+      const p = players[i]!;
+      const score = (p.statsElementalReactions ?? 0) + (p.statsTeamCombos ?? 0) * 2;
+      if (score > bestElemScore) {
+        bestElemScore = score;
+        bestElemPlayer = p;
+      }
+    }
+    const elemReactions =
+      players.length === 1 && (bestElemPlayer.statsElementalReactions ?? 0) === 0
+        ? this.runStats.elementalReactions
+        : (bestElemPlayer.statsElementalReactions ?? 0);
+    const elemCombos =
+      players.length === 1 && (bestElemPlayer.statsTeamCombos ?? 0) === 0
+        ? this.runStats.teamCombos
+        : (bestElemPlayer.statsTeamCombos ?? 0);
+
+    // Pick best guardian / medic
+    let bestMedicPlayer = players[0]!;
+    let bestMedicScore =
+      (bestMedicPlayer.statsRevives ?? 0) * 100 + (bestMedicPlayer.statsDamageTaken ?? 0);
+    for (let i = 1; i < players.length; i++) {
+      const p = players[i]!;
+      const score = (p.statsRevives ?? 0) * 100 + (p.statsDamageTaken ?? 0);
+      if (score > bestMedicScore) {
+        bestMedicScore = score;
+        bestMedicPlayer = p;
+      }
+    }
+
+    return [
+      {
+        category: 'damage',
+        titleKey: 'ui.result.mvpDamageTitle',
+        descKey: 'ui.result.mvpDamageDesc',
+        playerId: bestDmgPlayer.id,
+        playerSlot: bestDmgPlayer.slot,
+        displayName: bestDmgPlayer.displayName,
+        characterId: bestDmgPlayer.characterId,
+        colorHex: bestDmgPlayer.colorHex,
+        value: bestDmg,
+        secondaryValue: 0,
+      },
+      {
+        category: 'slayer',
+        titleKey: 'ui.result.mvpSlayerTitle',
+        descKey: 'ui.result.mvpSlayerDesc',
+        playerId: bestSlayerPlayer.id,
+        playerSlot: bestSlayerPlayer.slot,
+        displayName: bestSlayerPlayer.displayName,
+        characterId: bestSlayerPlayer.characterId,
+        colorHex: bestSlayerPlayer.colorHex,
+        value: bestKills,
+        secondaryValue: this.runStats.elitesKilled + this.runStats.bossesKilled,
+      },
+      {
+        category: 'elemental',
+        titleKey: 'ui.result.mvpElementalTitle',
+        descKey: 'ui.result.mvpElementalDesc',
+        playerId: bestElemPlayer.id,
+        playerSlot: bestElemPlayer.slot,
+        displayName: bestElemPlayer.displayName,
+        characterId: bestElemPlayer.characterId,
+        colorHex: bestElemPlayer.colorHex,
+        value: elemReactions,
+        secondaryValue: elemCombos,
+      },
+      {
+        category: 'medic',
+        titleKey: 'ui.result.mvpMedicTitle',
+        descKey: 'ui.result.mvpMedicDesc',
+        playerId: bestMedicPlayer.id,
+        playerSlot: bestMedicPlayer.slot,
+        displayName: bestMedicPlayer.displayName,
+        characterId: bestMedicPlayer.characterId,
+        colorHex: bestMedicPlayer.colorHex,
+        value: bestMedicPlayer.statsRevives ?? 0,
+        secondaryValue: bestMedicPlayer.statsDamageTaken ?? 0,
+      },
+    ];
   }
 
   public consumeEvents(): SimEvent[] {

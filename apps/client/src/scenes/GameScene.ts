@@ -12,6 +12,7 @@ import {
   ENEMY_SPAWN_WARMUP_SEC,
   FLOOR_BUFFS,
   generateQrMatrix,
+  i18n,
   INPUT_BUTTON,
   LocalTransport,
   NetworkTransport,
@@ -38,11 +39,13 @@ import { dampLerp } from '../art/easing.js';
 import { hexToNum, PALETTE } from '../art/palette.js';
 import { MERCHANT_RIG_DEF, RIG_DEFS_BY_ID, VANGUARD_RIG_DEF } from '../art/rig-defs.js';
 import { TextureBaker } from '../art/texture-baker.js';
-import { zzfx } from '../audio/zzfx.js';
+import { musicManager } from '../audio/music-synth.js';
+import { resolveWeaponShootSfx, zzfx } from '../audio/zzfx.js';
 import { CombatFxManager } from '../fx/combat-fx.js';
 import { LightingPipeline } from '../fx/lighting-pipeline.js';
 import { DebugOverlay, initGlobalDebugState } from '../ui/debug-overlay.js';
 import { type GraphicsQualityTier, graphicsSettings } from '../ui/graphics-settings.js';
+import { ModalOverlayManager } from '../ui/settings-modal.js';
 
 export interface GameSceneInitData {
   coopMode?: 'solo' | 'host' | 'join';
@@ -219,9 +222,17 @@ export class GameScene extends Phaser.Scene {
   private lastCoopHudHash = '';
   private lastInvitePanelHash = '';
   private lastHubPreviewHash = '';
+  private lastWeaponCompareHash = '';
   private lastRunState = 'playing';
   private resultDismissed = false;
   private fullMapOpen = false;
+  private pauseModalOpen = false;
+  private trailingHpRatio = 1.0;
+  private trailingArmorRatio = 1.0;
+  private trailingBossHpRatio = 1.0;
+  private lowHpHeartbeatTimer = 0;
+  private irisTransitionProgress = 0.0;
+  private irisTransitionDir: -1 | 0 | 1 = 0;
 
   private telegraphGraphics!: Phaser.GameObjects.Graphics;
   private hitboxGraphics!: Phaser.GameObjects.Graphics;
@@ -230,6 +241,9 @@ export class GameScene extends Phaser.Scene {
   // Camera-pinned HUD elements
   private hudContainer!: Phaser.GameObjects.Container;
   private hudBarsGraphics!: Phaser.GameObjects.Graphics;
+  private abilityHudGraphics!: Phaser.GameObjects.Graphics;
+  private skillCdText!: Phaser.GameObjects.Text;
+  private dashCdText!: Phaser.GameObjects.Text;
   private minimapGraphics!: Phaser.GameObjects.Graphics;
   private minimapTitleText!: Phaser.GameObjects.Text;
   private bossBarGraphics!: Phaser.GameObjects.Graphics;
@@ -237,6 +251,10 @@ export class GameScene extends Phaser.Scene {
   private coopHudContainer!: Phaser.GameObjects.Container;
   private invitePanelContainer!: Phaser.GameObjects.Container;
   private hubPreviewContainer!: Phaser.GameObjects.Container;
+  private weaponCompareContainer!: Phaser.GameObjects.Container;
+  private pauseContainer!: Phaser.GameObjects.Container;
+  private irisGraphics!: Phaser.GameObjects.Graphics;
+  private settingsModal?: ModalOverlayManager;
   private offscreenArrowGraphics!: Phaser.GameObjects.Graphics;
   private modalContainer!: Phaser.GameObjects.Container;
   private hpLabelText!: Phaser.GameObjects.Text;
@@ -339,7 +357,15 @@ export class GameScene extends Phaser.Scene {
   public create(): void {
     const debug = initGlobalDebugState();
     debug.scene = 'GameScene';
+    debug.tick = 0;
     debug.coopMode = this.coopMode;
+    debug.language = graphicsSettings.getState().language;
+    debug.pauseModalOpen = false;
+    debug.settingsModalOpen = false;
+    debug.controlsModalOpen = false;
+    debug.creditsModalOpen = false;
+    debug.weaponComparisonVisible = false;
+    debug.comparedWeaponId = null;
 
     this.simPlayerRigs.clear();
     this.coopPlayerRigs.clear();
@@ -383,15 +409,23 @@ export class GameScene extends Phaser.Scene {
     this.lastCoopHudHash = '';
     this.lastInvitePanelHash = '';
     this.lastHubPreviewHash = '';
+    this.lastWeaponCompareHash = '';
     this.lastRunState = 'playing';
     this.resultDismissed = false;
     this.fullMapOpen = false;
+    this.pauseModalOpen = false;
+    this.trailingHpRatio = 1.0;
+    this.trailingArmorRatio = 1.0;
+    this.trailingBossHpRatio = 1.0;
+    this.lowHpHeartbeatTimer = 0;
+    this.irisTransitionProgress = 0.0;
     this.invitePanelVisible = true;
     this.copyToastTimer = 0;
     this.pingQueued = null;
     this.queuedEmote = null;
     this.dropWeaponQueued = false;
     this.readyToggleQueued = false;
+    musicManager.setPaused(false);
 
     // 1. Initialize Transport (NetworkTransport for Co-op LAN Host/Join, LocalTransport for Solo)
     if (this.coopMode === 'host' || this.coopMode === 'join') {
@@ -994,6 +1028,113 @@ export class GameScene extends Phaser.Scene {
       this.hudContainer.add(hit);
     });
 
+    // Bottom-Left Skill [Space/RMB] & Dash [Shift] Cooldown Cards + Bottom-Right [Esc] Pause Card
+    this.abilityHudGraphics = this.add.graphics();
+    this.hudContainer.add(this.abilityHudGraphics);
+
+    this.skillCdText = this.add
+      .text(45, barY + 29, 'Sẵn', {
+        fontFamily: '"Be Vietnam Pro", sans-serif',
+        fontSize: '9.5px',
+        fontStyle: '800',
+        color: PALETTE.LIME_GLOW,
+        stroke: PALETTE.INK_DARK,
+        strokeThickness: 2.5,
+        resolution: textRes,
+      })
+      .setOrigin(0.5);
+    this.textObjects.push(this.skillCdText);
+    this.hudContainer.add(this.skillCdText);
+
+    const skillLabel = this.add
+      .text(45, barY + 12, '⚡KN [Space]', {
+        fontFamily: '"Be Vietnam Pro", sans-serif',
+        fontSize: '8.5px',
+        fontStyle: '700',
+        color: PALETTE.BONE_WHITE,
+        stroke: PALETTE.INK_DARK,
+        strokeThickness: 2,
+        resolution: textRes,
+      })
+      .setOrigin(0.5);
+    this.textObjects.push(skillLabel);
+    this.hudContainer.add(skillLabel);
+
+    const skillHit = this.add
+      .rectangle(45, barY + slotH / 2, 62, slotH, 0x000000, 0)
+      .setInteractive({ useHandCursor: true });
+    skillHit.on('pointerdown', () => {
+      this.skillQueued = true;
+    });
+    this.hudContainer.add(skillHit);
+
+    this.dashCdText = this.add
+      .text(111, barY + 29, 'Sẵn', {
+        fontFamily: '"Be Vietnam Pro", sans-serif',
+        fontSize: '9.5px',
+        fontStyle: '800',
+        color: PALETTE.CYAN_FROST,
+        stroke: PALETTE.INK_DARK,
+        strokeThickness: 2.5,
+        resolution: textRes,
+      })
+      .setOrigin(0.5);
+    this.textObjects.push(this.dashCdText);
+    this.hudContainer.add(this.dashCdText);
+
+    const dashLabel = this.add
+      .text(111, barY + 12, '💨Dash [Shift]', {
+        fontFamily: '"Be Vietnam Pro", sans-serif',
+        fontSize: '8.5px',
+        fontStyle: '700',
+        color: PALETTE.BONE_WHITE,
+        stroke: PALETTE.INK_DARK,
+        strokeThickness: 2,
+        resolution: textRes,
+      })
+      .setOrigin(0.5);
+    this.textObjects.push(dashLabel);
+    this.hudContainer.add(dashLabel);
+
+    const dashHit = this.add
+      .rectangle(111, barY + slotH / 2, 62, slotH, 0x000000, 0)
+      .setInteractive({ useHandCursor: true });
+    dashHit.on('pointerdown', () => {
+      this.dashQueued = true;
+    });
+    this.hudContainer.add(dashHit);
+
+    const pauseBtnBg = this.add.graphics();
+    pauseBtnBg.fillStyle(hexToNum(PALETTE.SLATE_DARK), 0.92);
+    pauseBtnBg.lineStyle(2, hexToNum(PALETTE.SOLAR_GOLD), 0.95);
+    pauseBtnBg.fillRoundedRect(848, barY, 98, slotH, 8);
+    pauseBtnBg.strokeRoundedRect(848, barY, 98, slotH, 8);
+    this.hudContainer.add(pauseBtnBg);
+
+    const pauseBtnText = this.add
+      .text(897, barY + slotH / 2, '⚙ [Esc]\nTạm Dừng', {
+        fontFamily: '"Be Vietnam Pro", sans-serif',
+        fontSize: '9.5px',
+        fontStyle: '800',
+        color: PALETTE.SOLAR_GOLD,
+        stroke: PALETTE.INK_DARK,
+        strokeThickness: 2.5,
+        align: 'center',
+        resolution: textRes,
+      })
+      .setOrigin(0.5);
+    this.textObjects.push(pauseBtnText);
+    this.hudContainer.add(pauseBtnText);
+
+    const pauseBtnHit = this.add
+      .rectangle(897, barY + slotH / 2, 98, slotH, 0x000000, 0)
+      .setInteractive({ useHandCursor: true });
+    pauseBtnHit.on('pointerdown', () => {
+      zzfx.play('ui_click');
+      this.togglePauseModal();
+    });
+    this.hudContainer.add(pauseBtnHit);
+
     // Top-Right Minimap & Fog of War Overlay
     this.minimapGraphics = this.add.graphics();
     this.hudContainer.add(this.minimapGraphics);
@@ -1042,9 +1183,209 @@ export class GameScene extends Phaser.Scene {
     this.hubPreviewContainer = this.add.container(0, 0);
     this.hudContainer.add(this.hubPreviewContainer);
 
+    this.weaponCompareContainer = this.add.container(0, 0);
+    this.hudContainer.add(this.weaponCompareContainer);
+
     // Modal Container for Between-Floor Buff Selection & Run Victory/Defeat Summary
     this.modalContainer = this.add.container(0, 0);
     this.hudContainer.add(this.modalContainer);
+
+    // Pause Overlay Container & Settings/Controls Modal Manager & Iris Transition Graphics
+    this.pauseContainer = this.add.container(0, 0).setVisible(false);
+    this.hudContainer.add(this.pauseContainer);
+
+    this.settingsModal = new ModalOverlayManager(this, () => {
+      this.invalidateAllHudCaches();
+      if (this.pauseModalOpen) {
+        this.rebuildPauseModal();
+      }
+    });
+    this.irisGraphics = this.add.graphics();
+    this.hudContainer.add(this.irisGraphics);
+  }
+
+  private invalidateAllHudCaches(): void {
+    this.lastHudHp = -1;
+    this.lastHudWeaponHash = '';
+    this.lastHudElement = '';
+    this.lastHudQuality = '';
+    this.lastHudStatsText = '';
+    this.lastMinimapHash = '';
+    this.lastBossHudHash = '';
+    this.lastCoopHudHash = '';
+    this.lastInvitePanelHash = '';
+    this.lastHubPreviewHash = '';
+    this.lastWeaponCompareHash = '';
+    this.lastRunState = '';
+  }
+
+  private togglePauseModal(forceState?: boolean): void {
+    const next = typeof forceState === 'boolean' ? forceState : !this.pauseModalOpen;
+    this.pauseModalOpen = next;
+    initGlobalDebugState().pauseModalOpen = next;
+    if (this.coopMode === 'solo') {
+      musicManager.setPaused(next);
+    }
+    if (!next) {
+      this.pauseContainer.removeAll(true);
+      this.pauseContainer.setVisible(false);
+    } else {
+      this.rebuildPauseModal();
+    }
+  }
+
+  private rebuildPauseModal(): void {
+    this.pauseContainer.removeAll(true);
+    if (!this.pauseModalOpen) {
+      this.pauseContainer.setVisible(false);
+      return;
+    }
+    this.pauseContainer.setVisible(true);
+    const textRes = TextureBaker.getBakeScale();
+
+    const blocker = this.add
+      .rectangle(480, 270, 1920, 1080, hexToNum(PALETTE.INK_DARK), 0.78)
+      .setInteractive();
+    this.pauseContainer.add(blocker);
+
+    const cardW = 420;
+    const cardH = 330;
+    const cardX = 480 - cardW / 2;
+    const cardY = 270 - cardH / 2;
+
+    const panel = this.add.graphics();
+    panel.fillStyle(hexToNum(PALETTE.SLATE_DARK), 0.98);
+    panel.lineStyle(3, hexToNum(PALETTE.SOLAR_GOLD), 1);
+    panel.fillRoundedRect(cardX, cardY, cardW, cardH, 12);
+    panel.strokeRoundedRect(cardX, cardY, cardW, cardH, 12);
+    this.pauseContainer.add(panel);
+
+    const title = this.add
+      .text(480, cardY + 30, i18n.t('ui.pause.title'), {
+        fontFamily: '"Be Vietnam Pro", sans-serif',
+        fontSize: '20px',
+        fontStyle: '800',
+        color: PALETTE.SOLAR_GOLD,
+        stroke: PALETTE.INK_DARK,
+        strokeThickness: 4,
+        resolution: textRes,
+      })
+      .setOrigin(0.5);
+    this.pauseContainer.add(title);
+
+    const notice = this.add
+      .text(
+        480,
+        cardY + 58,
+        this.coopMode === 'solo' ? i18n.t('ui.pause.soloNotice') : i18n.t('ui.pause.coopNotice'),
+        {
+          fontFamily: '"Be Vietnam Pro", sans-serif',
+          fontSize: '11px',
+          fontStyle: '700',
+          color: this.coopMode === 'solo' ? PALETTE.CYAN_FROST : PALETTE.FLAME_ORANGE,
+          stroke: PALETTE.INK_DARK,
+          strokeThickness: 2.5,
+          resolution: textRes,
+        },
+      )
+      .setOrigin(0.5);
+    this.pauseContainer.add(notice);
+
+    const actions: { label: string; color: string; onClick: () => void }[] = [
+      {
+        label: i18n.t('ui.pause.resume'),
+        color: PALETTE.FOREST_SHADE,
+        onClick: () => {
+          zzfx.play('ui_click');
+          this.togglePauseModal(false);
+        },
+      },
+      {
+        label: `⚙ ${i18n.t('ui.pause.settings')}`,
+        color: PALETTE.SLATE_MID,
+        onClick: () => {
+          zzfx.play('ui_click');
+          this.settingsModal?.open('settings');
+        },
+      },
+      {
+        label: `⌨ ${i18n.t('ui.pause.controls')}`,
+        color: PALETTE.SLATE_MID,
+        onClick: () => {
+          zzfx.play('ui_click');
+          this.settingsModal?.open('controls');
+        },
+      },
+      {
+        label: i18n.t('ui.pause.returnHub'),
+        color: PALETTE.BRASS_CORE,
+        onClick: () => {
+          zzfx.play('portal_enter');
+          this.togglePauseModal(false);
+          this.transport.getSim().enterHub();
+          this.triggerIrisTransition();
+        },
+      },
+      {
+        label: i18n.t('ui.pause.leaveMenu'),
+        color: PALETTE.RUBY_CORE,
+        onClick: () => {
+          zzfx.play('ui_click');
+          this.togglePauseModal(false);
+          this.scene.start('MenuScene');
+        },
+      },
+    ];
+
+    actions.forEach((act, idx) => {
+      const by = cardY + 96 + idx * 44;
+      const bw = 310;
+      const bh = 34;
+
+      const btnBg = this.add.graphics();
+      const draw = (hover: boolean) => {
+        btnBg.clear();
+        btnBg.fillStyle(hexToNum(hover ? PALETTE.SOLAR_GOLD : act.color), 1);
+        btnBg.lineStyle(2, hexToNum(PALETTE.INK_DARK), 1);
+        btnBg.fillRoundedRect(480 - bw / 2, by - bh / 2, bw, bh, 7);
+        btnBg.strokeRoundedRect(480 - bw / 2, by - bh / 2, bw, bh, 7);
+      };
+      draw(false);
+
+      const txt = this.add
+        .text(480, by, act.label, {
+          fontFamily: '"Be Vietnam Pro", sans-serif',
+          fontSize: '12.5px',
+          fontStyle: '800',
+          color: PALETTE.BONE_WHITE,
+          stroke: PALETTE.INK_DARK,
+          strokeThickness: 2.5,
+          resolution: textRes,
+        })
+        .setOrigin(0.5);
+
+      const hit = this.add
+        .rectangle(480, by, bw, bh, 0x000000, 0)
+        .setInteractive({ useHandCursor: true });
+      hit.on('pointerover', () => {
+        draw(true);
+        zzfx.play('ui_hover');
+      });
+      hit.on('pointerout', () => draw(false));
+      hit.on('pointerdown', act.onClick);
+
+      this.pauseContainer.add([btnBg, txt, hit]);
+    });
+  }
+
+  public triggerIrisTransition(mode: 'open' | 'close' = 'open'): void {
+    if (mode === 'close') {
+      this.irisTransitionDir = -1;
+      this.irisTransitionProgress = 0.02;
+    } else {
+      this.irisTransitionDir = 1;
+      this.irisTransitionProgress = 1.0;
+    }
   }
 
   private setupKeyboardBindings(): void {
@@ -1080,6 +1421,20 @@ export class GameScene extends Phaser.Scene {
       F8: kb.addKey(Phaser.Input.Keyboard.KeyCodes.F8),
       F9: kb.addKey(Phaser.Input.Keyboard.KeyCodes.F9),
     };
+
+    kb.on('keydown-ESC', () => {
+      zzfx.play('ui_click');
+      if (this.settingsModal?.isOpen()) {
+        this.settingsModal.close();
+        return;
+      }
+      if (this.fullMapOpen) {
+        this.fullMapOpen = false;
+        initGlobalDebugState().fullMapOpen = false;
+        return;
+      }
+      this.togglePauseModal();
+    });
 
     this.keys.SHIFT.on('down', () => {
       this.dashQueued = true;
@@ -1249,6 +1604,22 @@ export class GameScene extends Phaser.Scene {
       const sim = this.transport.getSim();
       if ((sim.runState === 'victory' || sim.runState === 'defeat') && !this.resultDismissed) {
         this.scene.restart();
+      }
+    });
+
+    kb.on('keydown-H', () => {
+      const sim = this.transport.getSim();
+      if ((sim.runState === 'victory' || sim.runState === 'defeat') && !this.resultDismissed) {
+        sim.enterHub();
+        this.resultDismissed = true;
+        this.triggerIrisTransition();
+      }
+    });
+
+    kb.on('keydown-M', () => {
+      const sim = this.transport.getSim();
+      if ((sim.runState === 'victory' || sim.runState === 'defeat') && !this.resultDismissed) {
+        this.scene.start('MenuScene');
       }
     });
   }
@@ -1635,15 +2006,14 @@ export class GameScene extends Phaser.Scene {
         this.portalLabel = undefined;
       }
       if (this.hudContainer) {
-        this.lastRunState = '';
-        this.lastMinimapHash = '';
-        this.lastBossHudHash = '';
-        this.lastCoopHudHash = '';
-        this.lastInvitePanelHash = '';
-        this.lastHubPreviewHash = '';
+        this.invalidateAllHudCaches();
         this.syncRoomEntities(0);
         this.updateModalHud();
+        if (this.pauseModalOpen) {
+          this.rebuildPauseModal();
+        }
       }
+      this.settingsModal?.refreshResolution(newScale);
       this.fx?.refreshResolution(newScale, prevScale);
       this.lighting?.refreshResolution();
       this.debugOverlay?.refreshResolution(newScale);
@@ -1655,6 +2025,8 @@ export class GameScene extends Phaser.Scene {
   public override update(_time: number, rawDeltaMs: number): void {
     const sim = this.transport.getSim();
     const dtSec = Math.min(rawDeltaMs / 1000, 0.05);
+    const isModalOrPaused = this.pauseModalOpen || (this.settingsModal?.isOpen() ?? false);
+    const isSoloPaused = isModalOrPaused && this.coopMode === 'solo';
 
     // 1. Sample Player Input (WASD + Mouse Aim + Buttons)
     // Subtract lastShakeX/Y so screen shake never perturbs player aim angle or camera lookahead
@@ -1669,7 +2041,7 @@ export class GameScene extends Phaser.Scene {
     let moveY = 0;
     let buttons = 0;
 
-    if (this.keys) {
+    if (this.keys && !isModalOrPaused) {
       if (this.keys.A.isDown) moveX -= 1;
       if (this.keys.D.isDown) moveX += 1;
       if (this.keys.W.isDown) moveY -= 1;
@@ -1681,41 +2053,43 @@ export class GameScene extends Phaser.Scene {
     }
 
     if (this.dashQueued) {
-      buttons |= INPUT_BUTTON.DASH;
+      if (!isModalOrPaused) buttons |= INPUT_BUTTON.DASH;
       this.dashQueued = false;
     }
     if (this.skillQueued) {
-      buttons |= INPUT_BUTTON.SKILL;
+      if (!isModalOrPaused) buttons |= INPUT_BUTTON.SKILL;
       this.skillQueued = false;
     }
     if (this.wheelSwapQueued) {
-      buttons |= INPUT_BUTTON.SWAP;
+      if (!isModalOrPaused) buttons |= INPUT_BUTTON.SWAP;
       this.wheelSwapQueued = false;
     }
     if (this.interactQueued) {
-      buttons |= INPUT_BUTTON.INTERACT;
+      if (!isModalOrPaused) buttons |= INPUT_BUTTON.INTERACT;
       this.interactQueued = false;
     }
 
     if (this.dropWeaponQueued) {
-      buttons |= INPUT_BUTTON.DROP_WEAPON;
+      if (!isModalOrPaused) buttons |= INPUT_BUTTON.DROP_WEAPON;
       this.dropWeaponQueued = false;
     }
     if (this.readyToggleQueued) {
-      buttons |= INPUT_BUTTON.READY;
+      if (!isModalOrPaused) buttons |= INPUT_BUTTON.READY;
       this.readyToggleQueued = false;
     }
 
     let pingWorldX: number | undefined;
     let pingWorldY: number | undefined;
     if (this.pingQueued) {
-      buttons |= INPUT_BUTTON.PING;
-      pingWorldX = this.pingQueued.x;
-      pingWorldY = this.pingQueued.y;
+      if (!isModalOrPaused) {
+        buttons |= INPUT_BUTTON.PING;
+        pingWorldX = this.pingQueued.x;
+        pingWorldY = this.pingQueued.y;
+      }
       this.pingQueued = null;
     }
 
-    const emoteId = this.queuedEmote ?? undefined;
+    const emoteId = !isModalOrPaused ? (this.queuedEmote ?? undefined) : undefined;
     this.queuedEmote = null;
 
     // Left mouse button -> FIRE (except when clicking top/bottom HUD buttons, Invite panel, or modal)
@@ -1730,15 +2104,19 @@ export class GameScene extends Phaser.Scene {
       localViewY >= 70 &&
       localViewY <= 360;
     const isClickingHud =
-      localViewY < 68 || localViewY > 480 || isClickingInvitePanel || sim.runState !== 'playing';
+      localViewY < 68 ||
+      localViewY > 480 ||
+      isClickingInvitePanel ||
+      isModalOrPaused ||
+      sim.runState !== 'playing';
     if (pointer.leftButtonDown() && !isClickingHud) {
       buttons |= INPUT_BUTTON.FIRE;
     }
-    if (pointer.rightButtonDown() && sim.runState === 'playing') {
+    if (pointer.rightButtonDown() && sim.runState === 'playing' && !isModalOrPaused) {
       buttons |= INPUT_BUTTON.SKILL;
     }
 
-    const slotSelect = this.queuedWeaponSlot;
+    const slotSelect = !isModalOrPaused ? this.queuedWeaponSlot : null;
     this.queuedWeaponSlot = null;
 
     if (this.copyToastTimer > 0) {
@@ -1748,32 +2126,94 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    this.inputSeq += 1;
-    this.transport.sendInput({
-      seq: this.inputSeq,
-      tick: sim.tick,
-      moveX,
-      moveY,
-      aimAngle,
-      buttons,
-      weaponSlotSelect: slotSelect,
-      pingWorldX,
-      pingWorldY,
-      emoteId,
-    });
+    if (!isSoloPaused) {
+      this.inputSeq += 1;
+      this.transport.sendInput({
+        seq: this.inputSeq,
+        tick: sim.tick,
+        moveX,
+        moveY,
+        aimAngle,
+        buttons,
+        weaponSlotSelect: slotSelect,
+        pingWorldX,
+        pingWorldY,
+        emoteId,
+      });
 
-    // 2. Hit-Stop check & Fixed 60Hz Simulation Step via Transport
-    const { simDeltaMs } = this.fx.consumeHitStopDelta(Math.min(rawDeltaMs, 50));
-    if (simDeltaMs > 0) {
-      const effectiveDelta = sim.stressTestActive ? Math.min(simDeltaMs, 16.6667) : simDeltaMs;
-      this.transport.step(effectiveDelta);
+      // 2. Hit-Stop check & Fixed 60Hz Simulation Step via Transport
+      const { simDeltaMs } = this.fx.consumeHitStopDelta(Math.min(rawDeltaMs, 50));
+      if (simDeltaMs > 0) {
+        const effectiveDelta = sim.stressTestActive ? Math.min(simDeltaMs, 16.6667) : simDeltaMs;
+        this.transport.step(effectiveDelta);
+      }
+
+      // 3. Sync dynamic map changes (room transitions, cracked walls destroyed, surface ignitions/electrifications/freezes)
+      this.syncArenaTilesWithMapRevision();
+
+      // 4. Process Sim Events (SFX, Sparks, Damage Numbers, Decals, Chain Lightning, Hit-Stop, Screen Shake)
+      this.processSimEvents(this.transport.consumeEvents());
     }
 
-    // 3. Sync dynamic map changes (room transitions, cracked walls destroyed, surface ignitions/electrifications/freezes)
-    this.syncArenaTilesWithMapRevision();
+    // 4b. Trailing Damage Bars, Low-HP Heartbeat Warning & Dynamic Procedural Music
+    const hpRatio = clamp(sim.player.hp / Math.max(1, sim.player.maxHp), 0, 1);
+    if (hpRatio >= this.trailingHpRatio) {
+      this.trailingHpRatio = hpRatio;
+    } else {
+      this.trailingHpRatio = dampLerp(this.trailingHpRatio, hpRatio, 5.5, dtSec);
+    }
 
-    // 4. Process Sim Events (SFX, Sparks, Damage Numbers, Decals, Chain Lightning, Hit-Stop, Screen Shake)
-    this.processSimEvents(this.transport.consumeEvents());
+    const armorRatio = clamp(sim.player.armor / Math.max(1, sim.player.maxArmor), 0, 1);
+    if (armorRatio >= this.trailingArmorRatio) {
+      this.trailingArmorRatio = armorRatio;
+    } else {
+      this.trailingArmorRatio = dampLerp(this.trailingArmorRatio, armorRatio, 5.5, dtSec);
+    }
+
+    const activeBoss = sim.getActiveBoss();
+    const bossRatio = activeBoss ? clamp(activeBoss.hp / Math.max(1, activeBoss.maxHp), 0, 1) : 1;
+    if (!activeBoss || bossRatio >= this.trailingBossHpRatio) {
+      this.trailingBossHpRatio = bossRatio;
+    } else {
+      this.trailingBossHpRatio = dampLerp(this.trailingBossHpRatio, bossRatio, 4.5, dtSec);
+    }
+
+    if (
+      !isSoloPaused &&
+      sim.runState === 'playing' &&
+      !sim.inHub &&
+      !sim.stressTestActive &&
+      sim.player.lifeState === 'alive' &&
+      sim.player.hp > 0 &&
+      sim.player.hp <= 2
+    ) {
+      this.lowHpHeartbeatTimer -= dtSec;
+      if (this.lowHpHeartbeatTimer <= 0) {
+        this.lowHpHeartbeatTimer = 1.05;
+        zzfx.play('low_hp_heartbeat');
+      }
+    } else {
+      this.lowHpHeartbeatTimer = 0;
+    }
+
+    const musicTheme = sim.inHub
+      ? 'menu_hub'
+      : activeBoss
+        ? activeBoss.defId === 'kryssa_ice_queen'
+          ? 'boss_kryssa'
+          : activeBoss.defId === 'forge_titan'
+            ? 'boss_forge_titan'
+            : 'boss_spore_king'
+        : sim.currentBiome === 2
+          ? 'biome2'
+          : sim.currentBiome === 3
+            ? 'biome3'
+            : 'biome1';
+    const inCombat =
+      !sim.inHub &&
+      sim.runState === 'playing' &&
+      (activeBoss !== null || sim.enemies.some((e) => e.hp > 0 && !e.isDummy));
+    musicManager.update(musicTheme, inCombat, dtSec);
 
     // 5. Render Interpolated Player & CutoutRig Animation + Dash Afterimage Ghosts
     const playerPos = this.transport.getInterpolatedPlayerPos(this.playerPosScratch);
@@ -1790,9 +2230,11 @@ export class GameScene extends Phaser.Scene {
 
       const isMoving = Math.hypot(sim.player.vx, sim.player.vy) > 12;
       this.playerRig.setAnimState(isMoving ? 'run' : 'idle');
-      this.playerRig.update(dtSec);
+      if (!isSoloPaused) {
+        this.playerRig.update(dtSec);
+      }
 
-      if (sim.player.dashTimer > 0) {
+      if (sim.player.dashTimer > 0 && !isSoloPaused) {
         this.dashAfterimageTimer -= dtSec;
         if (this.dashAfterimageTimer <= 0) {
           this.dashAfterimageTimer = 0.038;
@@ -1817,23 +2259,31 @@ export class GameScene extends Phaser.Scene {
       );
 
       // Cold breath vapor in Biome 2 (Frozen Depths)
-      if (sim.currentBiome === 2 && !sim.stressTestActive && sim.tick % 90 === 0) {
+      if (
+        !isSoloPaused &&
+        sim.currentBiome === 2 &&
+        !sim.stressTestActive &&
+        sim.tick % 90 === 0
+      ) {
         this.fx.spawnFrostBreath(playerPos.x, playerPos.y, this.playerRig.getFacingSign());
       }
     }
 
     // 6. Sync Simulated Co-op Players (P2-P4), Network Co-op Players, Enemies, Props, Projectiles, Pickups & Phase 3/4 Room Entities
-    this.syncSimulatedPlayers(dtSec);
-    this.syncEnemyRigs(dtSec);
-    this.syncProps(dtSec);
+    const animDt = isSoloPaused ? 0 : dtSec;
+    this.syncSimulatedPlayers(animDt);
+    this.syncEnemyRigs(animDt);
+    this.syncProps(animDt);
     this.syncProjectilesAndPickups();
     if (!sim.stressTestActive) {
-      this.syncRoomEntities(dtSec);
+      this.syncRoomEntities(animDt);
     }
 
     // 7. Update Pooled Particles, Ambient Leaves/Snow/Embers & Floating Damage Numbers
     this.fx.setBiome(sim.currentBiome);
-    this.fx.update(dtSec, this.cameras.main.worldView);
+    if (!isSoloPaused) {
+      this.fx.update(dtSec, this.cameras.main.worldView);
+    }
 
     // 8. Smooth Camera Follow + Cursor Lookahead (22%) + Trauma Screen Shake
     this.updateCameraWithLookaheadAndShake(
@@ -1857,12 +2307,11 @@ export class GameScene extends Phaser.Scene {
       slot.state = sp;
     }
 
-    const activeBoss = sim.getActiveBoss();
     const isBlizzardPhase3 = activeBoss?.defId === 'kryssa_ice_queen' && activeBoss.bossPhase === 3;
     this.lighting.setBiome(sim.currentBiome);
     this.lighting.setBlizzardVeil(isBlizzardPhase3);
     this.lighting.update({
-      dtSec,
+      dtSec: animDt,
       playerPos,
       player: sim.player,
       simulatedPlayers: this.simPlayerLightingScratch,
@@ -1870,7 +2319,7 @@ export class GameScene extends Phaser.Scene {
       projectiles: sim.projectiles,
       props: sim.props,
       map: sim.map,
-      trauma: sim.runState === 'playing' ? this.fx.getTrauma() : 0,
+      trauma: sim.runState === 'playing' && !isSoloPaused ? this.fx.getTrauma() : 0,
     });
 
     // 10. Update Procedural Crosshair at Mouse World Position
@@ -1886,9 +2335,38 @@ export class GameScene extends Phaser.Scene {
     this.renderTelegraphsAndShield(playerPos.x, playerPos.y);
     this.renderHitboxesIfEnabled();
 
-    // 12. Update Camera-Pinned Vector HUD & Debug Telemetry
+    // 12. Update Camera-Pinned Vector HUD, Iris Transition & Debug Telemetry
     this.updateVectorHud();
+    this.updateIrisTransition(dtSec);
     this.updateDebugState(playerPos.x, playerPos.y);
+  }
+
+  private updateIrisTransition(dtSec: number): void {
+    const g = this.irisGraphics;
+    if (!g) return;
+    g.clear();
+
+    if (this.irisTransitionDir === -1) {
+      this.irisTransitionProgress = Math.min(1, this.irisTransitionProgress + dtSec * 4.2);
+      if (this.irisTransitionProgress >= 1) {
+        this.irisTransitionDir = 1;
+      }
+    } else if (this.irisTransitionDir === 1) {
+      this.irisTransitionProgress = Math.max(0, this.irisTransitionProgress - dtSec * 2.8);
+      if (this.irisTransitionProgress <= 0) {
+        this.irisTransitionDir = 0;
+      }
+    }
+
+    if (this.irisTransitionProgress <= 0.005) return;
+
+    const maxHoleR = 560;
+    const holeR = Math.max(2, maxHoleR * (1 - this.irisTransitionProgress));
+    const ringThickness = 640;
+    g.lineStyle(ringThickness, hexToNum(PALETTE.INK_DARK), 1);
+    g.strokeCircle(480, 270, holeR + ringThickness * 0.5);
+    g.lineStyle(3, hexToNum(PALETTE.SOLAR_GOLD), 0.9);
+    g.strokeCircle(480, 270, holeR);
   }
 
   private updatePlayerOverheadUi(
@@ -1993,6 +2471,7 @@ export class GameScene extends Phaser.Scene {
     let statusFxCountThisStep = 0;
     let enemyHitCritThisStep = false;
     let enemyHitSfxX = this.camFocusX;
+    let enemyHitSfxY = this.camFocusY;
     let maxHitStopMs = 0;
     let maxHitStopTrauma = 0;
 
@@ -2003,8 +2482,8 @@ export class GameScene extends Phaser.Scene {
           if (ev.team === 'player') {
             if (!playerShotFxTriggered) {
               playerShotFxTriggered = true;
-              const isShotgun =
-                ev.weaponId === 'scrap_shotgun' || ev.weaponId === 'dragon_breath_shotgun';
+              const shootSfx = resolveWeaponShootSfx(ev.weaponId);
+              const isShotgun = shootSfx === 'shoot_shotgun';
               if (!isStress || sim.tick % 3 === 0) {
                 this.fx.spawnMuzzleFlashAndCasing(ev.x, ev.y, ev.angle, isShotgun);
               }
@@ -2015,21 +2494,13 @@ export class GameScene extends Phaser.Scene {
               this.playerRig?.triggerRecoil(isShotgun ? 6.5 : 4.2);
 
               if (allowStressSfx) {
-                if (isShotgun) {
-                  zzfx.play('shoot_shotgun', ev.x, this.camFocusX);
-                  this.fx.addTrauma(0.18);
-                } else if (ev.weaponId === 'gale_smg' || ev.weaponId === 'venom_smg') {
-                  zzfx.play('shoot_smg', ev.x, this.camFocusX);
-                  this.fx.addTrauma(0.06);
-                } else {
-                  zzfx.play('shoot_pistol', ev.x, this.camFocusX);
-                  this.fx.addTrauma(0.1);
-                }
+                zzfx.play(shootSfx, ev.x, this.camFocusX, ev.y, this.camFocusY);
+                this.fx.addTrauma(isShotgun ? 0.18 : shootSfx === 'shoot_smg' ? 0.06 : 0.1);
               }
             }
           } else if (!enemyShotSfxTriggered && allowStressSfx) {
             enemyShotSfxTriggered = true;
-            zzfx.play('shoot_pistol', ev.x, this.camFocusX);
+            zzfx.play('shoot_pistol', ev.x, this.camFocusX, ev.y, this.camFocusY);
           }
           break;
         }
@@ -2038,9 +2509,10 @@ export class GameScene extends Phaser.Scene {
           this.fx.spawnMeleeSlash(ev.x, ev.y, ev.angle);
           this.lighting.spawnTransientLight(ev.x, ev.y, 92, PALETTE.CYAN_FROST, 0.65, 0.12);
           this.crosshairPulse = 0.6;
-          zzfx.play('swing_sword', ev.x, this.camFocusX);
+          const swingSfx = resolveWeaponShootSfx(ev.weaponId);
+          zzfx.play(swingSfx, ev.x, this.camFocusX, ev.y, this.camFocusY);
           if (ev.bulletsDestroyed > 0) {
-            zzfx.play('bullet_deflect', ev.x, this.camFocusX);
+            zzfx.play('bullet_deflect', ev.x, this.camFocusX, ev.y, this.camFocusY);
           }
           break;
         }
@@ -2076,9 +2548,24 @@ export class GameScene extends Phaser.Scene {
               enemyHitCritThisStep = true;
             }
             enemyHitSfxX = ev.x;
+            enemyHitSfxY = ev.y;
           } else {
             this.playerRig?.triggerHitFlash(0.16);
-            zzfx.play('player_hurt', ev.x, this.camFocusX);
+            zzfx.play('player_hurt', ev.x, this.camFocusX, ev.y, this.camFocusY);
+          }
+          break;
+        }
+        case 'armor_broken': {
+          if (!isStress) {
+            this.fx.spawnHitSparks(ev.x, ev.y, 0, {
+              isCrit: true,
+              element: 'shock',
+              count: 8,
+            });
+            this.lighting.spawnTransientLight(ev.x, ev.y, 110, PALETTE.SOLAR_GOLD, 0.9, 0.25);
+          }
+          if (allowStressSfx) {
+            zzfx.play('armor_break', ev.x, this.camFocusX, ev.y, this.camFocusY);
           }
           break;
         }
@@ -2093,7 +2580,7 @@ export class GameScene extends Phaser.Scene {
             });
           }
           if ((ev.blockedByShield || ev.destroyedByMelee) && allowStressSfx) {
-            zzfx.play('bullet_deflect', ev.x, this.camFocusX);
+            zzfx.play('bullet_deflect', ev.x, this.camFocusX, ev.y, this.camFocusY);
           }
           break;
         }
@@ -2102,7 +2589,7 @@ export class GameScene extends Phaser.Scene {
             statusFxCountThisStep += 1;
             this.fx.spawnEnemyDeathBurst(ev.defId, ev.x, ev.y);
             if (allowStressSfx) {
-              zzfx.play('kill_enemy', ev.x, this.camFocusX);
+              zzfx.play('kill_enemy', ev.x, this.camFocusX, ev.y, this.camFocusY);
             }
           }
           break;
@@ -2130,13 +2617,13 @@ export class GameScene extends Phaser.Scene {
             );
           }
           if (allowStressSfx) {
-            zzfx.play('dash', ev.x, this.camFocusX);
+            zzfx.play('dash', ev.x, this.camFocusX, ev.y, this.camFocusY);
           }
           break;
         }
         case 'enemy_telegraph': {
           if (allowStressSfx) {
-            zzfx.play('telegraph', ev.x, this.camFocusX);
+            zzfx.play('telegraph', ev.x, this.camFocusX, ev.y, this.camFocusY);
           }
           break;
         }
@@ -2146,21 +2633,21 @@ export class GameScene extends Phaser.Scene {
           this.fx.spawnExplosionBurst(ev.x, ev.y, ev.radius, colorHex);
           this.lighting.spawnTransientLight(ev.x, ev.y, ev.radius * 2.2, colorHex, 1.0, 0.38);
           if (allowStressSfx) {
-            zzfx.play('explosion', ev.x, this.camFocusX);
+            zzfx.play('explosion', ev.x, this.camFocusX, ev.y, this.camFocusY);
           }
           break;
         }
         case 'prop_destroyed': {
           this.fx.spawnPropBreakBurst(ev.propKind, ev.x, ev.y);
           if (ev.propKind !== 'explosive_barrel' && allowStressSfx) {
-            zzfx.play('prop_break', ev.x, this.camFocusX);
+            zzfx.play('prop_break', ev.x, this.camFocusX, ev.y, this.camFocusY);
           }
           break;
         }
         case 'cracked_wall_broken': {
           this.fx.spawnPropBreakBurst('clay_vase', ev.x, ev.y);
           this.lighting.spawnTransientLight(ev.x, ev.y, 120, PALETTE.CYAN_FROST, 0.85, 0.4);
-          zzfx.play('prop_break', ev.x, this.camFocusX);
+          zzfx.play('prop_break', ev.x, this.camFocusX, ev.y, this.camFocusY);
           break;
         }
         case 'status_applied': {
@@ -2170,10 +2657,10 @@ export class GameScene extends Phaser.Scene {
             if (!isStress) {
               if (ev.status === 'frozen') {
                 this.lighting.spawnTransientLight(ev.x, ev.y, 96, PALETTE.CYAN_FROST, 0.9, 0.28);
-                zzfx.play('freeze', ev.x, this.camFocusX);
+                zzfx.play('freeze', ev.x, this.camFocusX, ev.y, this.camFocusY);
               } else if (ev.status === 'shatter') {
                 this.lighting.spawnTransientLight(ev.x, ev.y, 124, PALETTE.CYAN_FROST, 1.0, 0.34);
-                zzfx.play('shatter', ev.x, this.camFocusX);
+                zzfx.play('shatter', ev.x, this.camFocusX, ev.y, this.camFocusY);
               } else if (ev.status === 'burn') {
                 this.lighting.spawnTransientLight(ev.x, ev.y, 84, PALETTE.FLAME_ORANGE, 0.78, 0.2);
               } else if (ev.status === 'shock') {
@@ -2196,7 +2683,7 @@ export class GameScene extends Phaser.Scene {
                 0.92,
                 0.22,
               );
-              zzfx.play('chain_lightning', ev.toX, this.camFocusX);
+              zzfx.play('chain_lightning', ev.toX, this.camFocusX, ev.toY, this.camFocusY);
             }
           }
           break;
@@ -2204,11 +2691,11 @@ export class GameScene extends Phaser.Scene {
         case 'surface_triggered': {
           if (allowStressSfx) {
             if (ev.surface === 'burning_oil' || ev.surface === 'burning_grass') {
-              zzfx.play('surface_ignite', ev.x, this.camFocusX);
+              zzfx.play('surface_ignite', ev.x, this.camFocusX, ev.y, this.camFocusY);
             } else if (ev.surface === 'electrified_water') {
-              zzfx.play('chain_lightning', ev.x, this.camFocusX);
+              zzfx.play('chain_lightning', ev.x, this.camFocusX, ev.y, this.camFocusY);
             } else if (ev.surface === 'ice') {
-              zzfx.play('freeze', ev.x, this.camFocusX);
+              zzfx.play('freeze', ev.x, this.camFocusX, ev.y, this.camFocusY);
             }
           }
           break;
@@ -2221,13 +2708,22 @@ export class GameScene extends Phaser.Scene {
         }
         case 'skill_cast': {
           this.lighting.spawnTransientLight(ev.x, ev.y, 115, PALETTE.CRIMSON_BRIGHT, 0.88, 0.26);
-          zzfx.play('skill_cast', ev.x, this.camFocusX);
+          const caster = sim.getAllPlayers().find((pl) => pl.id === ev.playerId) ?? sim.player;
+          const skillSfxMap = {
+            vanguard: 'skill_vanguard',
+            ranger: 'skill_ranger',
+            elementalist: 'skill_elementalist',
+            druid: 'skill_druid',
+            engineer: 'skill_engineer',
+          } as const;
+          const skillSfx = skillSfxMap[caster.characterId] ?? 'skill_cast';
+          zzfx.play(skillSfx, ev.x, this.camFocusX, ev.y, this.camFocusY);
           break;
         }
         case 'shield_shockwave': {
           this.fx.spawnExplosionBurst(ev.x, ev.y, 90, PALETTE.CRIMSON_BRIGHT);
           this.lighting.spawnTransientLight(ev.x, ev.y, 150, PALETTE.CRIMSON_BRIGHT, 0.95, 0.32);
-          zzfx.play('shield_shockwave', ev.x, this.camFocusX);
+          zzfx.play('shield_shockwave', ev.x, this.camFocusX, ev.y, this.camFocusY);
           break;
         }
         case 'weapon_swapped': {
@@ -2236,7 +2732,7 @@ export class GameScene extends Phaser.Scene {
         }
         case 'pickup_collected': {
           if (allowStressSfx) {
-            zzfx.play('pickup', ev.x, this.camFocusX);
+            zzfx.play('pickup', ev.x, this.camFocusX, ev.y, this.camFocusY);
           }
           break;
         }
@@ -2255,43 +2751,58 @@ export class GameScene extends Phaser.Scene {
             0.95,
             0.45,
           );
-          zzfx.play('pickup', ev.x, this.camFocusX);
+          zzfx.play('chest_open', ev.x, this.camFocusX, ev.y, this.camFocusY);
           break;
         }
-        case 'room_entered':
+        case 'room_cleared': {
+          zzfx.play('door_open');
+          break;
+        }
+        case 'room_entered': {
+          this.camFocusX = sim.player.x;
+          this.camFocusY = sim.player.y;
+          break;
+        }
         case 'portal_entered': {
           this.camFocusX = sim.player.x;
           this.camFocusY = sim.player.y;
+          zzfx.play('portal_enter');
+          this.triggerIrisTransition('close');
+          break;
+        }
+        case 'boss_spawned': {
+          this.fx.addTrauma(0.32);
+          zzfx.play('boss_roar');
           break;
         }
         case 'boss_phase_changed': {
           this.fx.addTrauma(0.42);
           this.lighting.spawnTransientLight(ev.x, ev.y, 220, PALETTE.TOXIC_PURPLE, 1.0, 0.45);
-          zzfx.play('explosion', ev.x, this.camFocusX);
+          zzfx.play('boss_phase_change', ev.x, this.camFocusX, ev.y, this.camFocusY);
           break;
         }
         case 'shrine_blessing': {
           this.lighting.spawnTransientLight(ev.x, ev.y, 140, PALETTE.CYAN_FROST, 0.95, 0.4);
-          zzfx.play('skill_cast', ev.x, this.camFocusX);
+          zzfx.play('skill_druid', ev.x, this.camFocusX, ev.y, this.camFocusY);
           break;
         }
         case 'item_purchased': {
-          zzfx.play('pickup', ev.x, this.camFocusX);
+          zzfx.play('pickup', ev.x, this.camFocusX, ev.y, this.camFocusY);
           break;
         }
         case 'player_downed': {
           this.lighting.spawnTransientLight(ev.x, ev.y, 110, PALETTE.CRIMSON_BRIGHT, 0.92, 0.35);
-          zzfx.play('player_hurt', ev.x, this.camFocusX);
+          zzfx.play('player_downed', ev.x, this.camFocusX, ev.y, this.camFocusY);
           break;
         }
         case 'player_revived': {
           this.lighting.spawnTransientLight(ev.x, ev.y, 130, PALETTE.LIME_GLOW, 0.95, 0.4);
-          zzfx.play('skill_cast', ev.x, this.camFocusX);
+          zzfx.play('player_revived', ev.x, this.camFocusX, ev.y, this.camFocusY);
           break;
         }
         case 'player_ghost': {
           this.lighting.spawnTransientLight(ev.x, ev.y, 120, PALETTE.CYAN_FROST, 0.9, 0.35);
-          zzfx.play('telegraph', ev.x, this.camFocusX);
+          zzfx.play('telegraph', ev.x, this.camFocusX, ev.y, this.camFocusY);
           break;
         }
         case 'players_teleported_to_room': {
@@ -2309,15 +2820,15 @@ export class GameScene extends Phaser.Scene {
             0.9,
             0.3,
           );
-          zzfx.play('weapon_swap', sim.player.x, this.camFocusX);
+          zzfx.play('weapon_swap', sim.player.x, this.camFocusX, sim.player.y, this.camFocusY);
           break;
         }
         case 'ping_issued': {
-          zzfx.play('pickup', ev.x, this.camFocusX);
+          zzfx.play('pickup', ev.x, this.camFocusX, ev.y, this.camFocusY);
           break;
         }
         case 'emote_triggered': {
-          zzfx.play('weapon_swap', ev.x, this.camFocusX);
+          zzfx.play('weapon_swap', ev.x, this.camFocusX, ev.y, this.camFocusY);
           break;
         }
         case 'elemental_reaction': {
@@ -2340,7 +2851,19 @@ export class GameScene extends Phaser.Scene {
               0.38,
             );
             if (allowStressSfx) {
-              zzfx.play(ev.isTeamCombo ? 'team_combo' : 'elemental_reaction', ev.x, this.camFocusX);
+              const reactionSfxMap = {
+                vaporize: 'reaction_vaporize',
+                shatter: 'shatter',
+                superconduct: 'reaction_superconduct',
+                toxic_blast: 'reaction_toxic_blast',
+                paralysis: 'reaction_paralysis',
+                overload: 'reaction_overload',
+              } as const;
+              const rSfx = reactionSfxMap[ev.reaction] ?? 'elemental_reaction';
+              zzfx.play(rSfx, ev.x, this.camFocusX, ev.y, this.camFocusY);
+              if (ev.isTeamCombo) {
+                zzfx.play('team_combo', ev.x, this.camFocusX, ev.y, this.camFocusY);
+              }
             }
           }
           break;
@@ -2355,7 +2878,13 @@ export class GameScene extends Phaser.Scene {
             0.35,
           );
           if (allowStressSfx) {
-            zzfx.play('skill_cast', ev.x, this.camFocusX);
+            zzfx.play(
+              ev.summonKind === 'sacred_tree' ? 'skill_druid' : 'skill_engineer',
+              ev.x,
+              this.camFocusX,
+              ev.y,
+              this.camFocusY,
+            );
           }
           break;
         }
@@ -2370,7 +2899,7 @@ export class GameScene extends Phaser.Scene {
             0.38,
           );
           if (allowStressSfx) {
-            zzfx.play('emp_blast', ev.x, this.camFocusX);
+            zzfx.play('emp_blast', ev.x, this.camFocusX, ev.y, this.camFocusY);
           }
           break;
         }
@@ -2383,7 +2912,13 @@ export class GameScene extends Phaser.Scene {
     }
 
     if (enemyHitCountThisStep > 0 && allowStressSfx) {
-      zzfx.play(enemyHitCritThisStep ? 'crit_hit' : 'hit_enemy', enemyHitSfxX, this.camFocusX);
+      zzfx.play(
+        enemyHitCritThisStep ? 'crit_hit' : 'hit_enemy',
+        enemyHitSfxX,
+        this.camFocusX,
+        enemyHitSfxY,
+        this.camFocusY,
+      );
     }
     if (maxHitStopMs > 0 && !isStress) {
       this.fx.triggerHitStop(maxHitStopMs);
@@ -3945,12 +4480,20 @@ export class GameScene extends Phaser.Scene {
   private updateVectorHud(): void {
     const sim = this.transport.getSim();
     const p = sim.player;
+    const hpRatio = clamp(p.hp / Math.max(1, p.maxHp), 0, 1);
+    const armorRatio = clamp(p.armor / Math.max(1, p.maxArmor), 0, 1);
+    const trailingAnimating =
+      Math.abs(this.trailingHpRatio - hpRatio) > 0.004 ||
+      Math.abs(this.trailingArmorRatio - armorRatio) > 0.004;
+    const lowHpPulse = p.hp > 0 && p.hp <= 2 && sim.tick % 10 === 0;
 
     if (
       p.hp !== this.lastHudHp ||
       p.armor !== this.lastHudArmor ||
       p.energy !== this.lastHudEnergy ||
-      p.characterId !== this.lastHudCharacterId
+      p.characterId !== this.lastHudCharacterId ||
+      trailingAnimating ||
+      lowHpPulse
     ) {
       this.lastHudHp = p.hp;
       this.lastHudArmor = p.armor;
@@ -3966,11 +4509,24 @@ export class GameScene extends Phaser.Scene {
         w: number,
         h: number,
         ratio: number,
+        trailingRatio: number,
         fillHex: string,
+        trailingHex: string,
+        borderHex: string,
       ) => {
         g.fillStyle(hexToNum(PALETTE.INK_DEEP), 0.95);
-        g.lineStyle(2, hexToNum(PALETTE.INK_DARK), 1);
+        g.lineStyle(2, hexToNum(borderHex), 1);
         g.fillRoundedRect(x, y, w, h, 5);
+        if (trailingRatio > ratio + 0.003) {
+          g.fillStyle(hexToNum(trailingHex), 0.85);
+          g.fillRoundedRect(
+            x + 2,
+            y + 2,
+            Math.max(4, (w - 4) * clamp(trailingRatio, 0, 1)),
+            h - 4,
+            3.5,
+          );
+        }
         if (ratio > 0) {
           g.fillStyle(hexToNum(fillHex), 1);
           g.fillRoundedRect(x + 2, y + 2, Math.max(4, (w - 4) * clamp(ratio, 0, 1)), h - 4, 3.5);
@@ -3978,32 +4534,148 @@ export class GameScene extends Phaser.Scene {
         g.strokeRoundedRect(x, y, w, h, 5);
       };
 
-      // HP, Armor, Energy bars
-      drawStatBar(22, 13, 124, 20, p.hp / p.maxHp, PALETTE.RUBY_CORE);
-      drawStatBar(156, 13, 124, 20, p.armor / p.maxArmor, PALETTE.STEEL_LIGHT);
-      drawStatBar(290, 13, 136, 20, p.energy / p.maxEnergy, PALETTE.AZURE_CORE);
+      const hpBorder =
+        p.hp > 0 && p.hp <= 2 && Math.floor(sim.tick / 10) % 2 === 0
+          ? PALETTE.CRIMSON_BRIGHT
+          : PALETTE.INK_DARK;
 
-      const charNameVi = CHARACTERS[p.characterId]?.nameVi ?? CHARACTERS.vanguard.nameVi;
-      this.hpLabelText.setText(`${charNameVi} · HP ${p.hp}/${p.maxHp}`);
-      this.armorLabelText.setText(`GIÁP ${p.armor}/${p.maxArmor}`);
-      this.energyLabelText.setText(`NL ${p.energy}/${p.maxEnergy}`);
+      // HP, Armor, Energy bars with smooth trailing damage bars
+      drawStatBar(
+        22,
+        13,
+        124,
+        20,
+        hpRatio,
+        this.trailingHpRatio,
+        PALETTE.RUBY_CORE,
+        PALETTE.SOLAR_GOLD,
+        hpBorder,
+      );
+      drawStatBar(
+        156,
+        13,
+        124,
+        20,
+        armorRatio,
+        this.trailingArmorRatio,
+        PALETTE.STEEL_LIGHT,
+        PALETTE.CRIMSON_BRIGHT,
+        PALETTE.INK_DARK,
+      );
+      drawStatBar(
+        290,
+        13,
+        136,
+        20,
+        p.energy / Math.max(1, p.maxEnergy),
+        p.energy / Math.max(1, p.maxEnergy),
+        PALETTE.AZURE_CORE,
+        PALETTE.AZURE_CORE,
+        PALETTE.INK_DARK,
+      );
+
+      const charDef = CHARACTERS[p.characterId] ?? CHARACTERS.vanguard;
+      const charName = i18n.charName(p.characterId, charDef.nameVi);
+      this.hpLabelText.setText(`${charName} · ${i18n.t('hud.hp')} ${p.hp}/${p.maxHp}`);
+      this.armorLabelText.setText(`${i18n.t('hud.armor')} ${p.armor}/${p.maxArmor}`);
+      this.energyLabelText.setText(`${i18n.t('hud.energy')} ${p.energy}/${p.maxEnergy}`);
+    }
+
+    // Update Bottom-Left Skill [Space] & Dash [Shift] Cooldown Sweep Cards
+    if (this.abilityHudGraphics) {
+      const ag = this.abilityHudGraphics;
+      ag.clear();
+      const barY = 486;
+      const cardW = 62;
+      const cardH = 44;
+
+      const cDef = CHARACTERS[p.characterId] ?? CHARACTERS.vanguard;
+      const skillMaxCd = Math.max(0.5, cDef.skill.cooldownSec);
+      const skillReadyRatio =
+        p.skillActiveTimer > 0
+          ? 1
+          : clamp(1 - p.skillCooldownTimer / skillMaxCd, 0, 1);
+      const skillBorder =
+        p.skillActiveTimer > 0
+          ? PALETTE.SOLAR_GOLD
+          : p.skillCooldownTimer <= 0
+            ? PALETTE.LIME_GLOW
+            : PALETTE.INK_DARK;
+
+      ag.fillStyle(hexToNum(PALETTE.SLATE_DARK), 0.92);
+      ag.fillRoundedRect(14, barY, cardW, cardH, 7);
+      if (skillReadyRatio > 0) {
+        const fillH = (cardH - 4) * skillReadyRatio;
+        ag.fillStyle(
+          hexToNum(p.skillActiveTimer > 0 ? PALETTE.SOLAR_GOLD : PALETTE.FOREST_SHADE),
+          p.skillCooldownTimer <= 0 ? 0.55 : 0.35,
+        );
+        ag.fillRoundedRect(16, barY + cardH - 2 - fillH, cardW - 4, fillH, 5);
+      }
+      ag.lineStyle(2, hexToNum(skillBorder), 1);
+      ag.strokeRoundedRect(14, barY, cardW, cardH, 7);
+
+      const dashMaxCd = 1.2;
+      const dashReadyRatio = clamp(1 - p.dashCooldownTimer / dashMaxCd, 0, 1);
+      const dashBorder = p.dashCooldownTimer <= 0 ? PALETTE.CYAN_FROST : PALETTE.INK_DARK;
+
+      ag.fillStyle(hexToNum(PALETTE.SLATE_DARK), 0.92);
+      ag.fillRoundedRect(80, barY, cardW, cardH, 7);
+      if (dashReadyRatio > 0) {
+        const fillH = (cardH - 4) * dashReadyRatio;
+        ag.fillStyle(
+          hexToNum(PALETTE.COBALT_SHADE),
+          p.dashCooldownTimer <= 0 ? 0.55 : 0.35,
+        );
+        ag.fillRoundedRect(82, barY + cardH - 2 - fillH, cardW - 4, fillH, 5);
+      }
+      ag.lineStyle(2, hexToNum(dashBorder), 1);
+      ag.strokeRoundedRect(80, barY, cardW, cardH, 7);
+
+      if (this.skillCdText) {
+        const skTxt =
+          p.skillActiveTimer > 0
+            ? `${p.skillActiveTimer.toFixed(1)}s`
+            : p.skillCooldownTimer <= 0
+              ? i18n.t('hud.ready')
+              : `${p.skillCooldownTimer.toFixed(1)}s`;
+        if (this.skillCdText.text !== skTxt) this.skillCdText.setText(skTxt);
+        this.skillCdText.setColor(
+          p.skillActiveTimer > 0
+            ? PALETTE.SOLAR_GOLD
+            : p.skillCooldownTimer <= 0
+              ? PALETTE.LIME_GLOW
+              : PALETTE.ASH_GRAY,
+        );
+      }
+      if (this.dashCdText) {
+        const dTxt =
+          p.dashCooldownTimer <= 0
+            ? i18n.t('hud.ready')
+            : `${p.dashCooldownTimer.toFixed(1)}s`;
+        if (this.dashCdText.text !== dTxt) this.dashCdText.setText(dTxt);
+        this.dashCdText.setColor(
+          p.dashCooldownTimer <= 0 ? PALETTE.CYAN_FROST : PALETTE.ASH_GRAY,
+        );
+      }
     }
 
     if (
       sim.tick % 12 === 0 ||
       sim.inHub ||
       !this.lastHudStatsText ||
-      this.lastHudStatsText.startsWith('Doanh Trại') !== sim.inHub
+      this.lastHudStatsText.includes(VIETNAMESE_VERIFICATION_STRING) !== sim.inHub
     ) {
       const dps = sim.getRollingDps();
       const room = sim.getCurrentRoom();
-      const roomLabel = sim.inHub ? 'Doanh Trại' : ROOM_TYPE_LABELS_VI[room.type];
-      const dashReady = p.dashCooldownTimer <= 0 ? 'Sẵn' : `${p.dashCooldownTimer.toFixed(1)}s`;
+      const roomLabel = sim.inHub ? i18n.t('hud.hub') : ROOM_TYPE_LABELS_VI[room.type];
+      const dashReady =
+        p.dashCooldownTimer <= 0 ? i18n.t('hud.ready') : `${p.dashCooldownTimer.toFixed(1)}s`;
       const skillReady =
         p.skillActiveTimer > 0
           ? `Bật (${p.skillActiveTimer.toFixed(1)}s)`
           : p.skillCooldownTimer <= 0
-            ? 'Sẵn'
+            ? i18n.t('hud.ready')
             : `${p.skillCooldownTimer.toFixed(1)}s`;
 
       const shortElemVi: Record<string, string> = {
@@ -4047,7 +4719,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     // Update 4-slot Weapon Bar when active slot or equipped weapons change
-    const weaponHash = `${p.activeWeaponSlot}:${p.weaponSlots.join(',')}`;
+    const weaponHash = `${p.activeWeaponSlot}:${p.weaponSlots.join(',')}:${i18n.getLocale()}`;
     if (weaponHash !== this.lastHudWeaponHash) {
       this.lastHudWeaponHash = weaponHash;
       const slotW = 166;
@@ -4083,7 +4755,7 @@ export class GameScene extends Phaser.Scene {
         }
         const nameTxt = this.weaponNameTexts[idx];
         if (nameTxt) {
-          nameTxt.setText(`[${idx + 1}] ${wDef.nameVi}`);
+          nameTxt.setText(`[${idx + 1}] ${i18n.weaponName(wId, wDef.nameVi)}`);
           nameTxt.setColor(rarityHex);
         }
         const metaTxt = this.weaponMetaTexts[idx];
@@ -4099,6 +4771,7 @@ export class GameScene extends Phaser.Scene {
       this.updateCoopTeammateHud();
       this.updateHubInvitePanel();
       this.updateHubCharacterSkillPreview();
+      this.updateWeaponComparisonCard();
       this.updateOffscreenTeammateArrows();
       this.updateModalHud();
     }
@@ -4116,7 +4789,7 @@ export class GameScene extends Phaser.Scene {
         : remotes
             .map(
               (r) =>
-                `${r.id}:${r.slot}:${r.displayName}:${r.characterId}:${r.hp}:${r.maxHp}:${r.armor}:${r.lifeState}:${r.ready ? 1 : 0}:${r.pingMs}`,
+                `${r.id}:${r.slot}:${r.displayName}:${r.characterId}:${r.hp}:${r.maxHp}:${r.armor}:${r.lifeState}:${r.ready ? 1 : 0}:${Math.ceil(r.skillCooldownTimer)}:${r.pingMs}`,
             )
             .join('|') + `:${localHighPing}`;
 
@@ -4127,17 +4800,19 @@ export class GameScene extends Phaser.Scene {
     if (!hash) return;
 
     const textRes = TextureBaker.getBakeScale();
-    const cardW = 216;
-    const cardH = 38;
+    const cardW = 224;
+    const cardH = 40;
     const startX = 14;
     const startY = 74;
 
     remotes.forEach((cp, idx) => {
       const cy = startY + idx * (cardH + 5);
       const slotHex = PLAYER_SLOT_COLORS[cp.slot];
-      const charName = CHARACTERS[cp.characterId]?.nameVi ?? 'Thiết Vệ';
+      const charDef = CHARACTERS[cp.characterId] ?? CHARACTERS.vanguard;
+      const charName = i18n.charName(cp.characterId, charDef.nameVi);
       const playerPing = Math.max(1, Math.round(cp.pingMs || (telemetry?.rttMs ?? 8)));
       const isHighPing = playerPing > 100;
+      const skillReady = cp.skillCooldownTimer <= 0;
 
       const bg = this.add.graphics();
       bg.fillStyle(hexToNum(PALETTE.INK_DEEP), 0.88);
@@ -4148,7 +4823,7 @@ export class GameScene extends Phaser.Scene {
       // Mini HP bar
       const hpRatio = clamp(cp.hp / Math.max(1, cp.maxHp), 0, 1);
       bg.fillStyle(hexToNum(PALETTE.SLATE_DARK), 1);
-      bg.fillRect(startX + 8, cy + 22, 98, 8);
+      bg.fillRect(startX + 8, cy + 21, 96, 7);
       bg.fillStyle(
         hexToNum(
           cp.lifeState === 'downed'
@@ -4159,22 +4834,32 @@ export class GameScene extends Phaser.Scene {
         ),
         1,
       );
-      bg.fillRect(startX + 8, cy + 22, Math.max(2, 98 * hpRatio), 8);
+      bg.fillRect(startX + 8, cy + 21, Math.max(2, 96 * hpRatio), 7);
+
+      // Mini Armor bar
+      const armorRatio = clamp(cp.armor / Math.max(1, cp.maxArmor), 0, 1);
+      bg.fillStyle(hexToNum(PALETTE.SLATE_DARK), 1);
+      bg.fillRect(startX + 8, cy + 30, 96, 4);
+      if (armorRatio > 0) {
+        bg.fillStyle(hexToNum(PALETTE.STEEL_LIGHT), 1);
+        bg.fillRect(startX + 8, cy + 30, Math.max(2, 96 * armorRatio), 4);
+      }
 
       this.coopHudContainer.add(bg);
 
+      const skillTag = skillReady ? '[Q✓]' : `[Q ${Math.ceil(cp.skillCooldownTimer)}s]`;
       const stateTag =
         cp.lifeState === 'downed'
           ? 'GỤC NGÃ!'
           : cp.lifeState === 'ghost'
             ? 'LINH HỒN'
             : sim.inHub && cp.ready
-              ? '✓ Sẵn sàng'
-              : `HP ${cp.hp}/${cp.maxHp} · G ${cp.armor}`;
+              ? `✓ Sẵn sàng · ${skillTag}`
+              : `HP ${cp.hp}/${cp.maxHp} · ${skillTag}`;
 
       const title = this.add.text(
         startX + 8,
-        cy + 5,
+        cy + 4,
         `[P${cp.slot}] ${cp.displayName} (${charName})`,
         {
           fontFamily: '"Be Vietnam Pro", sans-serif',
@@ -4187,7 +4872,7 @@ export class GameScene extends Phaser.Scene {
         },
       );
       const pingText = this.add
-        .text(startX + cardW - 7, cy + 5, `${isHighPing ? '⚠' : ''}${playerPing}ms`, {
+        .text(startX + cardW - 7, cy + 4, `${isHighPing ? '⚠' : ''}${playerPing}ms`, {
           fontFamily: '"Be Vietnam Pro", monospace',
           fontSize: '9px',
           fontStyle: '800',
@@ -4197,11 +4882,16 @@ export class GameScene extends Phaser.Scene {
           resolution: textRes,
         })
         .setOrigin(1, 0);
-      const sub = this.add.text(startX + 112, cy + 20, stateTag, {
+      const sub = this.add.text(startX + 110, cy + 20, stateTag, {
         fontFamily: '"Be Vietnam Pro", sans-serif',
-        fontSize: '9px',
+        fontSize: '8.8px',
         fontStyle: '700',
-        color: cp.lifeState === 'downed' ? PALETTE.CRIMSON_BRIGHT : PALETTE.BONE_WHITE,
+        color:
+          cp.lifeState === 'downed'
+            ? PALETTE.CRIMSON_BRIGHT
+            : skillReady
+              ? PALETTE.LIME_GLOW
+              : PALETTE.BONE_WHITE,
         stroke: PALETTE.INK_DARK,
         strokeThickness: 2,
         resolution: textRes,
@@ -4569,6 +5259,124 @@ export class GameScene extends Phaser.Scene {
     this.hubPreviewContainer.add([header, statsBadge, body]);
   }
 
+  private updateWeaponComparisonCard(): void {
+    const sim = this.transport.getSim();
+    const debug = initGlobalDebugState();
+    let nearestWeaponItem: (typeof sim.worldItems)[number] | null = null;
+    let bestDist = 64;
+
+    if (
+      sim.runState === 'playing' &&
+      !this.fullMapOpen &&
+      !this.pauseModalOpen &&
+      !(this.settingsModal?.isOpen() ?? false) &&
+      !debug.overlayVisible &&
+      debug.hubPreviewCharacterId === null
+    ) {
+      for (let i = 0; i < sim.worldItems.length; i++) {
+        const it = sim.worldItems[i]!;
+        if (it.pickedUp || it.kind !== 'weapon' || !it.weaponId) continue;
+        if (
+          it.ownerPlayerId !== undefined &&
+          it.ownerPlayerId !== 0 &&
+          it.ownerPlayerId !== sim.player.id
+        ) {
+          continue;
+        }
+        const d = Math.hypot(sim.player.x - it.x, sim.player.y - it.y);
+        if (d <= bestDist) {
+          bestDist = d;
+          nearestWeaponItem = it;
+        }
+      }
+    }
+
+    const dropWId = nearestWeaponItem?.weaponId ?? null;
+    debug.weaponComparisonVisible = dropWId !== null;
+    debug.comparedWeaponId = dropWId;
+
+    const currWId = sim.getActiveWeaponId();
+    const hash = dropWId
+      ? `${dropWId}:${currWId}:${nearestWeaponItem?.costGold ?? 0}:${i18n.getLocale()}`
+      : '';
+    if (hash === this.lastWeaponCompareHash) return;
+    this.lastWeaponCompareHash = hash;
+
+    this.weaponCompareContainer.removeAll(true);
+    if (!dropWId || !nearestWeaponItem) return;
+
+    const wDrop = WEAPONS[dropWId] ?? WEAPONS.rusty_pistol!;
+    const wCurr = WEAPONS[currWId] ?? WEAPONS.rusty_pistol!;
+    const textRes = TextureBaker.getBakeScale();
+    const px = 260;
+    const py = 368;
+    const pw = 440;
+    const ph = 110;
+
+    const bg = this.add.graphics();
+    bg.fillStyle(hexToNum(PALETTE.INK_DEEP), 0.96);
+    bg.lineStyle(2.5, hexToNum(WEAPON_RARITY_COLORS[wDrop.rarity]), 0.96);
+    bg.fillRoundedRect(px, py, pw, ph, 8);
+    bg.strokeRoundedRect(px, py, pw, ph, 8);
+    this.weaponCompareContainer.add(bg);
+
+    const dropName = i18n.weaponName(wDrop.id, wDrop.nameVi);
+    const currName = i18n.weaponName(wCurr.id, wCurr.nameVi);
+    const costSuffix =
+      nearestWeaponItem.costGold > 0 ? ` (${nearestWeaponItem.costGold} Xu)` : '';
+
+    const header = this.add.text(
+      px + 12,
+      py + 7,
+      `★ ${dropName.toUpperCase()}${costSuffix}  ⇄  ${currName}`,
+      {
+        fontFamily: '"Be Vietnam Pro", sans-serif',
+        fontSize: '10px',
+        fontStyle: '800',
+        color: WEAPON_RARITY_COLORS[wDrop.rarity],
+        stroke: PALETTE.INK_DARK,
+        strokeThickness: 3,
+        resolution: textRes,
+      },
+    );
+    this.weaponCompareContainer.add(header);
+
+    const dropTotalDmg = wDrop.damage * Math.max(1, wDrop.pelletCount);
+    const currTotalDmg = wCurr.damage * Math.max(1, wCurr.pelletCount);
+    const dmgDiff = dropTotalDmg - currTotalDmg;
+    const rateDiff = Math.round((wDrop.fireRate - wCurr.fireRate) * 10) / 10;
+    const nrgDiff = wDrop.energyCost - wCurr.energyCost;
+
+    const fmtDelta = (diff: number, invertGood = false) => {
+      if (Math.abs(diff) < 0.05) return '(=)';
+      const isGood = invertGood ? diff < 0 : diff > 0;
+      const sign = diff > 0 ? '+' : '';
+      return isGood ? `▲ ${sign}${diff}` : `▼ ${sign}${diff}`;
+    };
+
+    const statsLine1 = `${i18n.t('hud.weaponCompareDmg')}: ${wDrop.damage}${wDrop.pelletCount > 1 ? `×${wDrop.pelletCount}` : ''} (${fmtDelta(dmgDiff)})   ·   ${i18n.t('hud.weaponCompareFireRate')}: ${wDrop.fireRate}/s (${fmtDelta(rateDiff)})`;
+    const statsLine2 = `${i18n.t('hud.weaponCompareEnergy')}: ${wDrop.energyCost} (${fmtDelta(nrgDiff, true)})   ·   ${i18n.t('hud.weaponCompareCrit')}: ${Math.round(wDrop.critChance * 100)}%   ·   Ng.Tố: ${ELEMENT_LABELS_VI[wDrop.element]}`;
+    const descLine = `${i18n.getWeaponText(wDrop.id).desc} — [E] ${i18n.t('hud.weaponCompareSwap')}`;
+
+    const body = this.add.text(
+      px + 12,
+      py + 27,
+      [statsLine1, statsLine2, descLine].join('\n'),
+      {
+        fontFamily: '"Be Vietnam Pro", sans-serif',
+        fontSize: '9.2px',
+        fontStyle: '700',
+        color: PALETTE.BONE_WHITE,
+        stroke: PALETTE.INK_DARK,
+        strokeThickness: 2.2,
+        lineSpacing: 4,
+        wordWrap: { width: pw - 24 },
+        resolution: textRes,
+      },
+    );
+    this.weaponCompareContainer.add(body);
+  }
+
   private updateOffscreenTeammateArrows(): void {
     const g = this.offscreenArrowGraphics;
     g.clear();
@@ -4774,10 +5582,11 @@ export class GameScene extends Phaser.Scene {
     const boss = sim.getActiveBoss();
     const stunActive = boss && boss.aiState === 'stunned' && boss.stateTimer > 0 ? 1 : 0;
     const coreWin = Math.ceil(sim.titanCoreWindowTimer);
+    const trailKey = Math.round(this.trailingBossHpRatio * 200);
     const bossHash =
       !boss || this.fullMapOpen || sim.runState !== 'playing'
         ? ''
-        : `${boss.defId}:${boss.id}:${boss.hp}:${boss.maxHp}:${boss.bossPhase}:${stunActive}:${coreWin}`;
+        : `${boss.defId}:${boss.id}:${boss.hp}:${boss.maxHp}:${boss.bossPhase}:${stunActive}:${coreWin}:${trailKey}`;
     if (bossHash === this.lastBossHudHash) return;
     this.lastBossHudHash = bossHash;
 
@@ -4811,6 +5620,17 @@ export class GameScene extends Phaser.Scene {
     g.fillStyle(hexToNum(PALETTE.INK_DEEP), 0.94);
     g.lineStyle(2.5, hexToNum(PALETTE.INK_DARK), 1);
     g.fillRoundedRect(bx, by, bw, bh, 5);
+
+    if (this.trailingBossHpRatio > ratio + 0.003) {
+      g.fillStyle(hexToNum(PALETTE.SOLAR_GOLD), 0.85);
+      g.fillRoundedRect(
+        bx + 2,
+        by + 2,
+        Math.max(4, (bw - 4) * clamp(this.trailingBossHpRatio, 0, 1)),
+        bh - 4,
+        3.5,
+      );
+    }
 
     const fillHex =
       boss.defId === 'kryssa_ice_queen'
@@ -4848,9 +5668,16 @@ export class GameScene extends Phaser.Scene {
     if (sim.runState === 'playing' || sim.runState === 'buff_choice') {
       this.resultDismissed = false;
     }
-    const modalKey = `${sim.runState}:${sim.pendingBuffChoices.join(',')}:${this.resultDismissed}`;
+    const modalKey = `${sim.runState}:${sim.pendingBuffChoices.join(',')}:${this.resultDismissed}:${i18n.getLocale()}`;
     if (modalKey === this.lastRunState) return;
+    const prevRunState = this.lastRunState.split(':')[0];
     this.lastRunState = modalKey;
+
+    if (sim.runState === 'victory' && prevRunState !== 'victory') {
+      zzfx.play('ui_victory');
+    } else if (sim.runState === 'defeat' && prevRunState !== 'defeat') {
+      zzfx.play('ui_defeat');
+    }
 
     this.modalContainer.removeAll(true);
     const textRes = TextureBaker.getBakeScale();
@@ -4864,7 +5691,7 @@ export class GameScene extends Phaser.Scene {
       this.modalContainer.add(bg);
 
       const header = this.add
-        .text(480, 132, 'CHỌN PHƯỚC LÀNH QUA TẦNG (Nhấn Phím 1 / 2 / 3 hoặc Click)', {
+        .text(480, 132, i18n.t('modal.buffChoiceTitle'), {
           fontFamily: '"Be Vietnam Pro", sans-serif',
           fontSize: '15px',
           fontStyle: '800',
@@ -4935,29 +5762,31 @@ export class GameScene extends Phaser.Scene {
       });
     } else if ((sim.runState === 'victory' || sim.runState === 'defeat') && !this.resultDismissed) {
       const isWin = sim.runState === 'victory';
-      const biomeNameVi =
-        sim.currentBiome === 2
-          ? 'Hầm Băng Vĩnh Cửu'
-          : sim.currentBiome === 3
-            ? 'Lò Rèn Dung Nham'
-            : 'Rừng Mục Cổ Đại';
+      const biomeName = i18n.biomeName(sim.currentBiome);
+      const px = 110;
+      const py = 74;
+      const pw = 740;
+      const ph = 398;
+
       const bg = this.add.graphics();
-      bg.fillStyle(hexToNum(PALETTE.INK_DEEP), 0.94);
+      bg.fillStyle(hexToNum(PALETTE.INK_DARK), 0.78);
+      bg.fillRect(-200, 68, 1360, 412);
+      bg.fillStyle(hexToNum(PALETTE.INK_DEEP), 0.96);
       bg.lineStyle(3, hexToNum(isWin ? PALETTE.SOLAR_GOLD : PALETTE.CRIMSON_BRIGHT), 1);
-      bg.fillRoundedRect(200, 100, 560, 336, 12);
-      bg.strokeRoundedRect(200, 100, 560, 336, 12);
+      bg.fillRoundedRect(px, py, pw, ph, 12);
+      bg.strokeRoundedRect(px, py, pw, ph, 12);
       this.modalContainer.add(bg);
 
       const header = this.add
         .text(
           480,
-          120,
+          py + 14,
           isWin
-            ? `CHIẾN THẮNG! CHINH PHỤC ${biomeNameVi.toUpperCase()}`
-            : `THẤT BẠI NƠI ${biomeNameVi.toUpperCase()}`,
+            ? i18n.t('modal.victoryTitle', { biome: biomeName.toUpperCase() })
+            : i18n.t('modal.defeatTitle', { biome: biomeName.toUpperCase() }),
           {
             fontFamily: '"Be Vietnam Pro", sans-serif',
-            fontSize: '16px',
+            fontSize: '15.5px',
             fontStyle: '800',
             color: isWin ? PALETTE.SOLAR_GOLD : PALETTE.CRIMSON_BRIGHT,
             stroke: PALETTE.INK_DARK,
@@ -4979,70 +5808,148 @@ export class GameScene extends Phaser.Scene {
       const secs = totalSec % 60;
       const timeStr = `${mins}p ${secs < 10 ? '0' : ''}${secs}s`;
       const summaryLines = [
-        `• Tầng đạt được: Tầng ${sim.currentFloor} (${biomeNameVi})`,
+        `• Tầng đạt được: Tầng ${sim.currentFloor} (${biomeName})`,
         `• Thời gian lượt chơi: ${timeStr}`,
         `• Phòng đã dọn sạch: ${sim.runStats.roomsCleared} phòng`,
         `• Kẻ địch tiêu diệt: ${sim.runStats.kills} quái (Tinh Anh: ${sim.runStats.elitesKilled})`,
         `• Tổng sát thương gây ra: ${Math.round(sim.runStats.damageDealt)} ST`,
-        `• Phản ứng nguyên tố: ${sim.runStats.elementalReactions} (Đồng Đội Combo: ${sim.runStats.teamCombos})`,
+        `• Phản ứng nguyên tố: ${sim.runStats.elementalReactions} (Combo Đội: ${sim.runStats.teamCombos})`,
         `• Xu thu thập: ${sim.player.gold} Xu (Tổng nhận: ${totalGoldEarned} Xu)`,
-        `• Vũ khí đang cầm: ${activeWDef.nameVi}`,
-        `• Phước lành kích hoạt: ${buffNames}`,
+        `• Vũ khí đang cầm: ${i18n.weaponName(activeWDef.id, activeWDef.nameVi)}`,
+        `• Phước lành: ${buffNames}`,
       ].join('\n');
 
       const body = this.add
-        .text(240, 152, summaryLines, {
+        .text(px + 20, py + 44, summaryLines, {
           fontFamily: '"Be Vietnam Pro", sans-serif',
-          fontSize: '11px',
+          fontSize: '10.2px',
           fontStyle: '700',
           color: PALETTE.BONE_WHITE,
           stroke: PALETTE.INK_DARK,
           strokeThickness: 2.5,
-          lineSpacing: 4,
+          lineSpacing: 3,
+          wordWrap: { width: 345 },
           resolution: textRes,
         })
         .setOrigin(0, 0);
       this.modalContainer.add(body);
 
-      // Action buttons: [Chơi Lại Lượt Mới] and [Đóng Bảng Kết Quả]
+      // Right Column: 4 MVP Award Cards (Danh Hiệu MVP Đội Hình)
+      const mvpHeader = this.add.text(px + 380, py + 44, `🏆 ${i18n.t('mvp.sectionTitle')}`, {
+        fontFamily: '"Be Vietnam Pro", sans-serif',
+        fontSize: '11px',
+        fontStyle: '800',
+        color: PALETTE.SOLAR_GOLD,
+        stroke: PALETTE.INK_DARK,
+        strokeThickness: 3,
+        resolution: textRes,
+      });
+      this.modalContainer.add(mvpHeader);
+
+      const mvpAwards = sim.computeMvpAwards();
+      mvpAwards.forEach((award, idx) => {
+        const ay = py + 66 + idx * 62;
+        const aw = 340;
+        const ah = 56;
+        const cardG = this.add.graphics();
+        cardG.fillStyle(hexToNum(PALETTE.SLATE_DARK), 0.94);
+        cardG.lineStyle(2, hexToNum(award.colorHex), 0.95);
+        cardG.fillRoundedRect(px + 380, ay, aw, ah, 7);
+        cardG.strokeRoundedRect(px + 380, ay, aw, ah, 7);
+        this.modalContainer.add(cardG);
+
+        const cDef = CHARACTERS[award.characterId] ?? CHARACTERS.vanguard;
+        const charName = i18n.charName(award.characterId, cDef.nameVi);
+        const titleTxt = this.add.text(
+          px + 390,
+          ay + 6,
+          `★ ${i18n.t(award.titleKey)} — [P${award.playerSlot}] ${award.displayName}`,
+          {
+            fontFamily: '"Be Vietnam Pro", sans-serif',
+            fontSize: '9.8px',
+            fontStyle: '800',
+            color: award.colorHex,
+            stroke: PALETTE.INK_DARK,
+            strokeThickness: 2.5,
+            resolution: textRes,
+          },
+        );
+        const descParams: Record<string, string | number> =
+          award.category === 'medic'
+            ? { revives: award.value, taken: award.secondaryValue }
+            : award.category === 'elemental'
+              ? { reactions: award.value, combos: award.secondaryValue }
+              : { val: award.value };
+        const subTxt = this.add.text(
+          px + 390,
+          ay + 26,
+          `${charName} · ${i18n.t(award.descKey, descParams)}`,
+          {
+            fontFamily: '"Be Vietnam Pro", sans-serif',
+            fontSize: '9px',
+            fontStyle: '700',
+            color: PALETTE.BONE_WHITE,
+            stroke: PALETTE.INK_DARK,
+            strokeThickness: 2,
+            resolution: textRes,
+          },
+        );
+        this.modalContainer.add([titleTxt, subTxt]);
+      });
+
+      // Bottom Action Buttons: [Enter] Chơi Lại, [H] Về Doanh Trại, [M] Menu Chính, Đóng Bảng
       const makeModalBtn = (
         bx: number,
         by: number,
         bw: number,
         label: string,
+        borderHex: string,
         onClick: () => void,
       ) => {
         const btnG = this.add.graphics();
         btnG.fillStyle(hexToNum(PALETTE.SLATE_MID), 0.96);
-        btnG.lineStyle(2, hexToNum(PALETTE.SOLAR_GOLD), 1);
-        btnG.fillRoundedRect(bx, by, bw, 36, 7);
-        btnG.strokeRoundedRect(bx, by, bw, 36, 7);
+        btnG.lineStyle(2, hexToNum(borderHex), 1);
+        btnG.fillRoundedRect(bx, by, bw, 34, 7);
+        btnG.strokeRoundedRect(bx, by, bw, 34, 7);
         this.modalContainer.add(btnG);
 
         const txt = this.add
-          .text(bx + bw / 2, by + 18, label, {
+          .text(bx + bw / 2, by + 17, label, {
             fontFamily: '"Be Vietnam Pro", sans-serif',
-            fontSize: '12px',
+            fontSize: '10.5px',
             fontStyle: '800',
-            color: PALETTE.SOLAR_GOLD,
+            color: borderHex,
             stroke: PALETTE.INK_DARK,
-            strokeThickness: 3,
+            strokeThickness: 2.8,
             resolution: textRes,
           })
           .setOrigin(0.5, 0.5);
         this.modalContainer.add(txt);
 
         const hit = this.add
-          .rectangle(bx + bw / 2, by + 18, bw, 36, 0x000000, 0)
+          .rectangle(bx + bw / 2, by + 17, bw, 34, 0x000000, 0)
           .setInteractive({ useHandCursor: true });
-        hit.on('pointerdown', onClick);
+        hit.on('pointerover', () => zzfx.play('ui_hover'));
+        hit.on('pointerdown', () => {
+          zzfx.play('ui_click');
+          onClick();
+        });
         this.modalContainer.add(hit);
       };
 
-      makeModalBtn(245, 382, 220, '[Enter] Chơi Lại Lượt Mới', () => {
+      const btnY = py + ph - 44;
+      makeModalBtn(130, btnY, 182, i18n.t('modal.btnReplay'), PALETTE.LIME_GLOW, () => {
         this.scene.restart();
       });
-      makeModalBtn(495, 382, 220, 'Đóng Bảng Kết Quả', () => {
+      makeModalBtn(320, btnY, 172, i18n.t('modal.btnReturnHub'), PALETTE.CYAN_FROST, () => {
+        sim.enterHub();
+        this.triggerIrisTransition('close');
+        this.invalidateAllHudCaches();
+      });
+      makeModalBtn(500, btnY, 162, i18n.t('modal.btnMainMenu'), PALETTE.SOLAR_GOLD, () => {
+        this.scene.start('MenuScene');
+      });
+      makeModalBtn(670, btnY, 160, i18n.t('modal.btnDismiss'), PALETTE.SILVER_BRIGHT, () => {
         this.resultDismissed = true;
       });
     }
@@ -5099,6 +6006,7 @@ export class GameScene extends Phaser.Scene {
     const currentRoom = sim.getCurrentRoom();
     const boss = sim.getActiveBoss();
     debug.biome = sim.currentBiome;
+    debug.currentBiome = sim.currentBiome;
     debug.currentFloor = sim.currentFloor;
     debug.currentRoomId = sim.currentRoomId;
     debug.currentRoomType = sim.inHub ? 'hub' : currentRoom.type;
@@ -5146,6 +6054,19 @@ export class GameScene extends Phaser.Scene {
     debug.pressurePlateCount = sim.pressurePlates.length;
     debug.shockwaveRingCount = sim.shockwaveRings.length;
     debug.tetherBeamCount = sim.tetherBeams.length;
+
+    // Phase 7 UI/UX & Audio telemetry
+    debug.language = graphicsSettings.getState().language;
+    debug.pauseModalOpen = this.pauseModalOpen;
+    debug.settingsModalOpen = this.settingsModal?.getActiveModal() === 'settings';
+    debug.controlsModalOpen = this.settingsModal?.getActiveModal() === 'controls';
+    debug.creditsModalOpen = this.settingsModal?.getActiveModal() === 'credits';
+    debug.irisTransitionProgress = Math.round(this.irisTransitionProgress * 100) / 100;
+    debug.trailingHpRatio = Math.round(this.trailingHpRatio * 1000) / 1000;
+    debug.trailingArmorRatio = Math.round(this.trailingArmorRatio * 1000) / 1000;
+    debug.musicTheme = musicManager.getCurrentTheme();
+    debug.musicCombatMix = musicManager.getCombatMix();
+    debug.mvpAwardsCount = sim.computeMvpAwards().length;
 
     const activeEnemyCount = this.activeEnemyIds.size;
     const totalEntities = 1 + sim.simulatedPlayers.length + activeEnemyCount + sim.summons.length;

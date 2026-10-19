@@ -10,7 +10,7 @@
 5. **Phase 4 — Co-op LAN (ĐÃ HOÀN THÀNH ✅):** Server authoritative Colyseus phục vụ tĩnh + WebSocket cùng cổng `2567`, LAN IP + QR code, `NetworkTransport`, client prediction + reconciliation, adaptive interpolation, deterministic bullet spawn, mô phỏng mạng Wi-Fi kém, E2E 4 client qua IP LAN thực.
 6. **Phase 5 — 5 Nhân vật, Hệ Nguyên tố & Synergy (ĐÃ HOÀN THÀNH ✅):** Hoàn thiện Thiết Vệ, Liệp Ưng, Lam Hỏa, Mộc Linh, Bánh Răng kèm nâng cấp skill, 6 phản ứng nguyên tố + Team Combo, công cụ Balance Harness headless xuất `docs/balance-report.md`.
 7. **Phase 6 — Biome 2 & 3 + Boss (ĐÃ HOÀN THÀNH ✅):** Hoàn thiện Hầm Băng Vĩnh Cửu (**Băng Hậu Kryssa**) và Lò Rèn Dung Nham (**Titan Lò Rèn**), đủ 24 vũ khí (kèm 2 vũ khí Co-op), câu đố 2 tấm áp lực, băng chuyền, vực thẳm, lồng băng & 2 lõi năng lượng.
-8. **Phase 7 — UI/UX & Âm thanh hoàn thiện:** Menu động, HUD vector, Settings đầy đủ, MVP screen, i18n `vi`/`en`, nhạc động 2 lớp khám phá/chiến đấu + âm thanh định vị.
+8. **Phase 7 — UI/UX & Âm thanh hoàn thiện (ĐÃ HOÀN THÀNH ✅):** Menu động trên nền lửa trại 5 nhân vật, HUD vector hoàn chỉnh (thanh máu phụ tụt trễ, thẻ đồng đội Co-op, thẻ kỹ năng/dash, so sánh vũ khí dưới đất, tạm dừng `[Esc]`, Iris transition), Settings đầy đủ lưu `localStorage`, bảng vinh danh 4 danh hiệu MVP, đa ngôn ngữ `vi`/`en` (404 khóa 100% đồng bộ), 47 preset SFX định vị 2D + 7 bản nhạc nền động 2 lớp khám phá/chiến đấu.
 9. **Phase 8 — Cân bằng cuối, Hiệu năng, QA & Bản phát hành:** Soak test 20 phút, đóng gói `AshenPact-Host.exe` + `start-host.bat` chạy độc lập, `README.md` tiếng Việt, `RELEASE_NOTES.md`, tag `v0.1.0`.
 
 ### 1.2 Các Giả Định Kỹ Thuật (Explicit Assumptions)
@@ -329,6 +329,49 @@
   - Phát hiện cờ `resultDismissed` của bảng kết quả trong `GameScene.ts` không được đặt lại về `false` khi người chơi qua tầng tiếp theo, và đồng đội Co-op (`simulatedPlayers`) chưa tỏa hơi thở lạnh ở Biome 2 → Đã tự động reset `resultDismissed = false` khi `runState` quay lại `'playing'` hoặc `'buff_choice'`, đồng thời bổ sung hạt hơi thở lạnh cho toàn bộ đồng đội Co-op còn sống tại Biome 2.
 - **Bước tiếp theo (Phase 7):**
   - Triển khai **Phase 7 — UI/UX Hoàn Thiện & Âm Thanh**: Menu động trên nền lửa trại, HUD vector đánh bóng, Settings đầy đủ, màn hình kết thúc vinh danh MVP, i18n `vi`/`en`, nhạc nền động 2 lớp + âm thanh định vị.
+
+---
+
+### Phase 7 — UI/UX & Âm Thanh Hoàn Thiện (Hoàn thành ✅)
+- **Những việc đã hoàn thành:**
+  - **Đa Ngôn Ngữ Hoàn Chỉnh `vi` / `en` (`packages/shared/src/i18n/vi.json`, `en.json`, `index.ts`):**
+    - Xây dựng hệ thống đa ngôn ngữ `t(key, params)` và `setLocale('vi' | 'en')` trong `@ashen-pact/shared` với **404 khóa chuỗi lá đồng bộ 100%** giữa tiếng Việt (`vi`) và tiếng Anh (`en`) — bao phủ toàn bộ Menu, Cài đặt, Điều khiển, Credits, HUD, Tạm dừng, Kết quả lượt chơi, 4 Danh hiệu MVP, 5 Nhân vật, 24 Vũ khí, 6 Phản ứng nguyên tố và 3 Biome/Boss.
+    - Kiểm chứng tự động bằng unit test đảm bảo 0 chuỗi rỗng, 0 khóa thiếu và đồng bộ `{{param}}` tuyệt đối giữa `vi.json` và `en.json`.
+  - **Menu Chính Động Trên Nền Lửa Trại Hub (`apps/client/src/scenes/MenuScene.ts`):**
+    - Dựng cảnh lửa trại động ở nền Menu chính với **2 đống lửa trại bập bùng** tại `(195, 285)` và `(765, 285)` tỏa quầng sáng ấm áp (`drawCampfires`) + **26 hạt tàn lửa bay lên** (`updateEmbers`) + **5 nhân vật (`Vanguard`, `Ranger`, `Elementalist`, `Druid`, `Engineer`)** và trinh sát **Goblin** đứng canh quanh lửa trại chạy hoạt ảnh thời gian thực.
+    - Hệ thống nút bấm vector có viền kép + hiệu ứng hover nảy nhẹ (`scale: 1.03`) + âm thanh `ui_hover` / `ui_click`: **Chơi Đơn (`Play Solo` giữ đúng tọa độ thế giới `(480, 225)` để tương thích ngược E2E Phase 0–3)**, **Tạo Phòng LAN**, **Vào Phòng LAN**, **Art Gallery**, **Đổi Anim**, **Cài Đặt (`[O]`)**, **Điều Khiển (`[K]`)**, **Credits (`[C]`)** và **Ngôn Ngữ (`[L]`: `VI` ↔ `EN`)**.
+  - **Cửa Sổ Cài Đặt, Điều Khiển & Credits (`apps/client/src/ui/settings-modal.ts`, `graphics-settings.ts`):**
+    - Mở rộng `GraphicsSettingsManager` lưu bền vững vào `localStorage` (`ashen_pact_graphics_settings`): Âm lượng Tổng (`masterVolume`), Nhạc nền (`musicVolume`), Hiệu ứng (`sfxVolume`), Chất lượng đồ họa (`High / Medium / Low`), Tự giảm chất lượng khi tụt FPS (`autoQuality`), Độ rung màn hình (`screenShakeIntensity`), Hiện số sát thương (`showDamageNumbers`), Độ đậm hiệu ứng đồng đội (`teammateFxOpacity`), Toàn màn hình (`fullscreen`) và Ngôn ngữ (`language: 'vi' | 'en'`), kèm nút **Khôi phục mặc định (`Reset Defaults`)**.
+    - Tích hợp modal **Hướng dẫn điều khiển (`Controls`)** và modal **Credits (`CREDITS`)** ngay trên `MenuScene` lẫn trong menu **Tạm dừng (`Pause`)** của `GameScene`.
+  - **HUD Vector Đánh Bóng, So Sánh Vũ Khí, Tạm Dừng & Chuyển Cảnh Iris (`apps/client/src/scenes/GameScene.ts`):**
+    - **Khung Trạng Thái & Thanh Máu Phụ Tụt Trễ (`trailingHpRatio`, `trailingArmorRatio`):** Thanh HP/Giáp người chơi và thanh máu Boss phía trên trung tâm đều có lớp thanh phụ màu vàng cam tụt đuổi theo sau khi trúng đòn, kèm vạch chia 3 Phase (`66%`, `33%`) trên thanh máu Boss và sự kiện vỡ giáp (`armor_broken`).
+    - **Thẻ Đồng Đội Co-op & Thẻ Kỹ Năng/Dash:** Hiển thị thẻ đồng đội bên trái với thanh HP, thanh Giáp mini, huy hiệu **`[Q✓]`** khi kỹ năng chủ động của đồng đội sẵn sàng, trạng thái Gục/Linh hồn và ping mạng; góc dưới hiển thị 2 thẻ **Kỹ năng (`[Space]`)** & **Lướt (`[Shift]`)** với lớp quét hồi chiêu trực quan và nút **`[Esc] Tạm dừng`**.
+    - **Tooltip So Sánh Vũ Khí Dưới Đất (`updateWeaponCompareHud`):** Khi đứng gần vũ khí rơi dưới đất (`dist <= 64u`), tự động hiển thị bảng so sánh trực quan 4 chỉ số (**Sát thương**, **Tốc bắn**, **Tiêu hao NL**, **DPS ước tính**) kèm chênh lệch màu xanh (`+`) / đỏ (`-`) so với vũ khí đang cầm.
+    - **Màn Hình Tạm Dừng (`[Esc]`) & Hiệu Ứng Chuyển Cảnh Iris (`updateIrisTransition`):** Bấm `Esc` mở lớp phủ Tạm dừng (tạm dừng simulation khi đi Solo; giữ nguyên mô phỏng thời gian thực khi đi Co-op LAN) với đầy đủ nút Tiếp tục, Cài đặt, Điều khiển, Chơi lại và Về Menu; hiệu ứng màn trập tròn **Iris Transition** khép/mở mượt mà khi bắt đầu màn và khi qua cổng dịch chuyển tầng.
+  - **Màn Hình Kết Thúc & Vinh Danh 4 Danh Hiệu MVP (`packages/shared/src/sim/world-sim.ts`, `GameScene.ts`):**
+    - Theo dõi thống kê cá nhân từng người chơi trong `WorldSim` (`statsDamageDealt`, `statsDamageTaken`, `statsKills`, `statsRevives`, `statsElementalReactions`, `statsTeamCombos`) và tính toán **4 danh hiệu MVP (`computeMvpAwards`)** trên màn hình Chiến Thắng / Thất Bại:
+      1. ** Sát Thương Chủ Lực (`damage` — Most Damage Dealt)**
+      2. ** Thợ Săn Tinh Anh (`slayer` — Most Enemies Slain)**
+      3. ** Bậc Thầy Nguyên Tố (`elemental` — Most Elemental Reactions & Combos)**
+      4. ** Thiên Thần Hộ Mệnh (`medic` — Most Revives & Survival)**
+  - **Hệ Thống Âm Thanh Định Vị 2D & Nhạc Nền Động 2 Lớp (`apps/client/src/audio/zzfx.ts`, `music-synth.ts`):**
+    - Mở rộng `ZzfxSynth` lên **47 preset SFX riêng biệt** phủ kín toàn bộ vũ khí, đòn đánh/chí mạng/hạ gục, vỡ giáp (`armor_break`), nhịp tim máu thấp (`low_hp_pulse`), gục/hồi sinh, 5 kỹ năng nhân vật, 6 phản ứng nguyên tố + Team Combo, nhặt vật phẩm/mở rương/cửa/cổng, tiếng gầm & chuyển phase Boss, và âm thanh UI (`ui_hover`, `ui_click`, `ui_victory`, `ui_defeat`).
+    - Trang bị biến thiên cao độ ngẫu nhiên **`±7%`**, định vị không gian 2D (`stereo pan` + suy giảm âm lượng theo khoảng cách tới người nghe), giới hạn đồng thời **12 kênh (`MAX_CONCURRENT_VOICES = 12`)** và chống dội âm theo từng preset.
+    - Xây dựng bộ tổng hợp nhạc nền động **`ProceduralMusicSynth`** gồm **7 chủ đề âm nhạc** (`menu_hub`, `biome1`, `biome2`, `biome3`, `boss_spore_king`, `boss_kryssa`, `boss_forge_titan`) với **2 lớp Khám Phá (Exploration) và Chiến Đấu (Combat)** tự động crossfade mượt (`combatMix`) theo trạng thái giao tranh thực tế trong phòng.
+- **Kết quả kiểm thử & Hiệu năng:**
+  - `pnpm verify` (`typecheck` + `lint` + `test` + `build` + `e2e`) và `pnpm balance` PASS 100% (9/9 Vitest test suites = 64 unit tests; 9/9 Playwright E2E test suites).
+  - Screenshots nghiệm thu đã chụp và kiểm tra trực quan bằng mắt tại `docs/screenshots/phase-7/`:
+    - `docs/screenshots/phase-7/menu-campfire-hub-1080p.png`
+    - `docs/screenshots/phase-7/menu-campfire-settings.png`
+    - `docs/screenshots/phase-7/hud-weapon-compare-1080p.png`
+    - `docs/screenshots/phase-7/hud-weapon-compare-pause.png`
+    - `docs/screenshots/phase-7/victory-mvp-awards.png`
+- **Vấn đề đã phát hiện & xử lý trong Phase 7:**
+  - Qua kiểm tra trực quan ảnh chụp `menu-campfire-hub-1080p.png` ban đầu, phát hiện nhân vật Mộc Linh (`druid`) ở tọa độ `(205, 372)` đè nhẹ lên mép trái nút `⚙ Cài Đặt` và 2 khóa `ui.menu.debugHint` / `ui.menu.language` bị lệch tên so với `ui.menu.footerHint` / `ui.menu.languageBtn` trong `vi.json` → Đã dời vị trí Mộc Linh lên `(195, 198)` và Goblin lên `(765, 198)` phía trên 2 đống lửa trại, đồng bộ lại khóa i18n, giúp toàn bộ 5 nhân vật, nhãn tên, nút bấm và dòng hướng dẫn chân trang hiển thị rõ nét, không chồng lấp.
+  - Qua kiểm tra trực quan ảnh chụp `menu-campfire-settings.png` và `victory-mvp-awards.png`, phát hiện nút `Toàn màn hình (Fullscreen): TẮT` rộng `165px` hơi hẹp với chuỗi tiếng Việt và thẻ đồng đội Co-op bên trái chưa được làm tối phía sau bảng Chiến Thắng → Đã nới rộng nút Toàn màn hình lên `228px` trong `settings-modal.ts` và thêm lớp nền tối mờ (`alpha: 0.78`) phía sau bảng Chiến Thắng / Thất Bại trong `GameScene.ts`.
+- **Bước tiếp theo (Phase 8):**
+  - Triển khai **Phase 8 — Cân Bằng Cuối, Hiệu Năng, QA & Bản Phát Hành**: Soak test 20 phút, rà soát bug bash toàn diện, đóng gói `AshenPact-Host.exe` + `start-host.bat`, hoàn thiện `README.md` tiếng Việt + `CREDITS.md` + `docs/RELEASE_NOTES.md`, và gắn thẻ phát hành `v0.1.0`.
+
 
 
 
