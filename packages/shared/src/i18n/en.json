@@ -177,24 +177,46 @@
       "btnMainMenu": "[M] Main Menu",
       "btnDismiss": "Dismiss"
     },
+    "hub": {
+      "roomType": "Campfire Hub",
+      "passive": "Passive",
+      "activeSkill": "Skill [Q]",
+      "upgrades": "Upgrades",
+      "coopSynergy": "Co-op Synergy"
+    },
+    "minimap": {
+      "fullTitle": "DUNGEON MAP — Floor {floor}/{max} ({roomType}) [Tab]",
+      "hubMini": "Co-op Hub [Tab]",
+      "floorMini": "F{floor}/{max} · {roomType} [Tab]"
+    },
+    "boss": {
+      "stunned": " · ⚡ STUN OVERLOAD (x1.5 DMG)!",
+      "breakCores": " · [BREAK 2 CORES IN {sec}s]",
+      "titleFormat": "{name} (Phase {phase}/3) — HP {hp}/{maxHp}{suffix}"
+    },
     "mvp": {
       "sectionTitle": "MATCH MVP HONORS"
     },
     "result": {
       "victoryTitle": "VICTORY! CONQUERED {biome}",
       "defeatTitle": "DEFEATED IN {biome}",
-      "floorReached": "Floor Reached",
+      "floorReached": "• Floor Reached: Floor {floor} ({biome})",
+      "timeElapsed": "• Run Duration: {time}",
       "runTime": "Run Duration",
-      "roomsCleared": "Rooms Cleared",
-      "enemiesKilled": "Enemies Slain",
+      "roomsCleared": "• Rooms Cleared: {count} rooms",
+      "enemiesKilled": "• Enemies Slain: {kills} (Elites: {elites})",
       "elites": "Elites",
-      "totalDamage": "Total Party Damage",
+      "totalDamage": "• Total Party Damage: {dmg} DMG",
+      "elementalReactions": "• Elemental Reactions: {reactions} (Team Combos: {combos})",
       "reactions": "Elemental Reactions",
       "teamCombos": "Team Combos",
-      "goldCollected": "Gold Collected",
+      "goldCollected": "• Gold Collected: {gold} Gold (Total Earned: {totalGold})",
+      "activeWeapon": "• Active Weapon: {weapon}",
+      "blessings": "• Active Blessings: {buffs}",
       "activeBuffs": "Active Blessings",
       "none": "None",
       "playerStatsHeader": "PER-PLAYER PERFORMANCE BREAKDOWN",
+      "playerRowFormat": "DMG: {dmg} · Taken: {taken} · Kills: {kills} · Revives: {revives} · Elem: {elem} (Combo: {combo})",
       "colPlayer": "Player",
       "colDamageDealt": "DMG Dealt",
       "colDamageTaken": "DMG Taken",
@@ -338,48 +360,168 @@
     }
   },
   "weapons": {
-    "knight_sword": { "name": "Knight Sword", "desc": "Wide melee cleave that destroys standard enemy projectiles." },
-    "hunter_crossbow": { "name": "Hunter Crossbow", "desc": "High-velocity piercing bolts with elevated critical chance." },
-    "apprentice_staff": { "name": "Apprentice Staff", "desc": "Fires arcane bolts infused with your current element." },
-    "thorn_staff": { "name": "Thorn Staff", "desc": "Launches briar thorns that inflict stacking Poison damage." },
-    "rivet_gun": { "name": "Rivet Gun", "desc": "Reliable sidearm firing heated steel rivets at 0 Energy cost." },
-    "rusty_pistol": { "name": "Rusty Pistol", "desc": "Balanced semi-automatic pistol with low energy consumption." },
-    "scrap_shotgun": { "name": "Scrap Shotgun", "desc": "Blasts a 5-pellet close-quarters spread with heavy knockback." },
-    "gale_smg": { "name": "Gale SMG", "desc": "Rapid-fire submachine gun ideal for suppressing swarms." },
-    "frost_scepter": { "name": "Frost Scepter", "desc": "Fires cryo orbs that chill and freeze enemies solid." },
-    "tesla_carbine": { "name": "Tesla Carbine", "desc": "Piercing electro-rifle that arcs chain lightning between foes." },
-    "venom_smg": { "name": "Scorpion Venom SMG", "desc": "High-rate submachine gun coated in corrosive venom." },
-    "dragon_breath_shotgun": { "name": "Dragon Breath Shotgun", "desc": "Unleashes 6 incendiary pellets that ignite enemies and oil." },
-    "emerald_cleaver": { "name": "Emerald Great-Cleaver", "desc": "Massive jade blade that cleaves bullets and applies Poison." },
-    "solar_archon_staff": { "name": "Solar Archon Staff", "desc": "Fires 3 bouncing solar fireballs that ricochet across walls." },
-    "dual_pistols": { "name": "Dual Pistols", "desc": "Twin-linked pistols firing two parallel rounds per trigger pull." },
-    "frost_bow": { "name": "Frostbite Bow", "desc": "Piercing cryo-arrows that rapidly stack Chill." },
-    "frag_launcher": { "name": "Frag Grenade Launcher", "desc": "Bouncing explosive shells that detonate in fiery blasts." },
-    "seed_gun": { "name": "Life-Seed Blaster", "desc": "Co-op Special: Sprouts a Life Blossom that heals nearby allies." },
-    "tether_staff": { "name": "Soul-Tether Staff", "desc": "Co-op Special: Links an electric tether to an ally, searing foes between you." },
-    "focus_laser": { "name": "Focus Beam Rifle", "desc": "Hyper-velocity thermal beam that pierces 2 targets." },
-    "void_staff": { "name": "Void Vortex Staff", "desc": "Pierces 3 targets with corrosive void energy." },
-    "berserker_axe": { "name": "Berserker Great-Axe", "desc": "Sweeping 155° flame cleave that obliterates enemy bullets." },
-    "magma_cannon": { "name": "Molten Magma Cannon", "desc": "Heavy siege cannon launching devastating magma payloads." },
-    "thunder_hammer": { "name": "Mjolnir Thunder Hammer", "desc": "Smashes projectiles and unleashes 3 lightning shock bolts." }
+    "knight_sword": {
+      "name": "Knight Sword",
+      "desc": "Wide melee cleave that destroys standard enemy projectiles."
+    },
+    "hunter_crossbow": {
+      "name": "Hunter Crossbow",
+      "desc": "High-velocity piercing bolts with elevated critical chance."
+    },
+    "apprentice_staff": {
+      "name": "Apprentice Staff",
+      "desc": "Fires arcane bolts infused with your current element."
+    },
+    "thorn_staff": {
+      "name": "Thorn Staff",
+      "desc": "Launches briar thorns that inflict stacking Poison damage."
+    },
+    "rivet_gun": {
+      "name": "Rivet Gun",
+      "desc": "Reliable sidearm firing heated steel rivets at 0 Energy cost."
+    },
+    "rusty_pistol": {
+      "name": "Rusty Pistol",
+      "desc": "Balanced semi-automatic pistol with low energy consumption."
+    },
+    "scrap_shotgun": {
+      "name": "Scrap Shotgun",
+      "desc": "Blasts a 5-pellet close-quarters spread with heavy knockback."
+    },
+    "gale_smg": {
+      "name": "Gale SMG",
+      "desc": "Rapid-fire submachine gun ideal for suppressing swarms."
+    },
+    "frost_scepter": {
+      "name": "Frost Scepter",
+      "desc": "Fires cryo orbs that chill and freeze enemies solid."
+    },
+    "tesla_carbine": {
+      "name": "Tesla Carbine",
+      "desc": "Piercing electro-rifle that arcs chain lightning between foes."
+    },
+    "venom_smg": {
+      "name": "Scorpion Venom SMG",
+      "desc": "High-rate submachine gun coated in corrosive venom."
+    },
+    "dragon_breath_shotgun": {
+      "name": "Dragon Breath Shotgun",
+      "desc": "Unleashes 6 incendiary pellets that ignite enemies and oil."
+    },
+    "emerald_cleaver": {
+      "name": "Emerald Great-Cleaver",
+      "desc": "Massive jade blade that cleaves bullets and applies Poison."
+    },
+    "solar_archon_staff": {
+      "name": "Solar Archon Staff",
+      "desc": "Fires 3 bouncing solar fireballs that ricochet across walls."
+    },
+    "dual_pistols": {
+      "name": "Dual Pistols",
+      "desc": "Twin-linked pistols firing two parallel rounds per trigger pull."
+    },
+    "frost_bow": {
+      "name": "Frostbite Bow",
+      "desc": "Piercing cryo-arrows that rapidly stack Chill."
+    },
+    "frag_launcher": {
+      "name": "Frag Grenade Launcher",
+      "desc": "Bouncing explosive shells that detonate in fiery blasts."
+    },
+    "seed_gun": {
+      "name": "Life-Seed Blaster",
+      "desc": "Co-op Special: Sprouts a Life Blossom that heals nearby allies."
+    },
+    "tether_staff": {
+      "name": "Soul-Tether Staff",
+      "desc": "Co-op Special: Links an electric tether to an ally, searing foes between you."
+    },
+    "focus_laser": {
+      "name": "Focus Beam Rifle",
+      "desc": "Hyper-velocity thermal beam that pierces 2 targets."
+    },
+    "void_staff": {
+      "name": "Void Vortex Staff",
+      "desc": "Pierces 3 targets with corrosive void energy."
+    },
+    "berserker_axe": {
+      "name": "Berserker Great-Axe",
+      "desc": "Sweeping 155° flame cleave that obliterates enemy bullets."
+    },
+    "magma_cannon": {
+      "name": "Molten Magma Cannon",
+      "desc": "Heavy siege cannon launching devastating magma payloads."
+    },
+    "thunder_hammer": {
+      "name": "Mjolnir Thunder Hammer",
+      "desc": "Smashes projectiles and unleashes 3 lightning shock bolts."
+    }
   },
   "buffs": {
-    "vitality_surge": { "name": "Ancient Heart", "desc": "+3 Max HP and immediately restores full HP." },
-    "iron_bastion": { "name": "Primeval Steel Armor", "desc": "+2 Max Armor and reduces Armor regen delay by 0.5s." },
-    "arcane_wellspring": { "name": "Arcane Wellspring", "desc": "+60 Max Energy and +50% passive Energy regeneration." },
-    "eagle_precision": { "name": "Razor Sight", "desc": "+18% Critical Chance and +20% Weapon Damage." },
-    "gale_reflex": { "name": "Gale Reflex", "desc": "+20% Move Speed and +22% Fire Rate." },
-    "ricochet_mastery": { "name": "Ricochet Mastery", "desc": "All ranged projectiles gain +1 Wall Bounce and +1 Pierce." },
-    "vanguard_fortress": { "name": "Upgrade: Fortress 360°", "desc": "Ruby Shield Wall surrounds Vanguard in a full 360° dome and boosts counter damage." },
-    "vanguard_charge": { "name": "Upgrade: Shield Charge", "desc": "Reactivating Ruby Shield Wall dashes forward, knocking back and stunning enemies." },
-    "ranger_arrow_volley": { "name": "Upgrade: Arrow Volley", "desc": "Predator Arrow splits into a 5-arrow piercing fan, marking multiple targets." },
-    "ranger_prey_chain": { "name": "Upgrade: Prey Chain", "desc": "30% of damage dealt to a Marked target chains to other Marked enemies nearby." },
-    "elementalist_vortex": { "name": "Upgrade: Elemental Vortex", "desc": "Elemental Orb zone pulls surrounding enemies toward its center." },
-    "elementalist_dual": { "name": "Upgrade: Dual Element", "desc": "Elemental Orb zone carries both current and next elements, triggering reactions immediately." },
-    "druid_poison_roots": { "name": "Upgrade: Poison Roots", "desc": "Sacred Tree roots deal periodic damage and inflict Poison on enemies in range." },
-    "druid_sacred_grove": { "name": "Upgrade: Sacred Grove", "desc": "Each skill cast plants 2 Sacred Trees simultaneously for wider healing and rooting." },
-    "engineer_twin_turrets": { "name": "Upgrade: Twin Turrets", "desc": "Allows up to 2 Tesla Turrets to operate simultaneously on the battlefield." },
-    "engineer_self_destruct": { "name": "Upgrade: Overload Self-Destruct", "desc": "When expiring or destroyed, Tesla Turret charges the nearest foe and explodes." }
+    "vitality_surge": {
+      "name": "Ancient Heart",
+      "desc": "+3 Max HP and immediately restores full HP."
+    },
+    "iron_bastion": {
+      "name": "Primeval Steel Armor",
+      "desc": "+2 Max Armor and reduces Armor regen delay by 0.5s."
+    },
+    "arcane_wellspring": {
+      "name": "Arcane Wellspring",
+      "desc": "+60 Max Energy and +50% passive Energy regeneration."
+    },
+    "eagle_precision": {
+      "name": "Razor Sight",
+      "desc": "+18% Critical Chance and +20% Weapon Damage."
+    },
+    "gale_reflex": {
+      "name": "Gale Reflex",
+      "desc": "+20% Move Speed and +22% Fire Rate."
+    },
+    "ricochet_mastery": {
+      "name": "Ricochet Mastery",
+      "desc": "All ranged projectiles gain +1 Wall Bounce and +1 Pierce."
+    },
+    "vanguard_fortress": {
+      "name": "Upgrade: Fortress 360°",
+      "desc": "Ruby Shield Wall surrounds Vanguard in a full 360° dome and boosts counter damage."
+    },
+    "vanguard_charge": {
+      "name": "Upgrade: Shield Charge",
+      "desc": "Reactivating Ruby Shield Wall dashes forward, knocking back and stunning enemies."
+    },
+    "ranger_arrow_volley": {
+      "name": "Upgrade: Arrow Volley",
+      "desc": "Predator Arrow splits into a 5-arrow piercing fan, marking multiple targets."
+    },
+    "ranger_prey_chain": {
+      "name": "Upgrade: Prey Chain",
+      "desc": "30% of damage dealt to a Marked target chains to other Marked enemies nearby."
+    },
+    "elementalist_vortex": {
+      "name": "Upgrade: Elemental Vortex",
+      "desc": "Elemental Orb zone pulls surrounding enemies toward its center."
+    },
+    "elementalist_dual": {
+      "name": "Upgrade: Dual Element",
+      "desc": "Elemental Orb zone carries both current and next elements, triggering reactions immediately."
+    },
+    "druid_poison_roots": {
+      "name": "Upgrade: Poison Roots",
+      "desc": "Sacred Tree roots deal periodic damage and inflict Poison on enemies in range."
+    },
+    "druid_sacred_grove": {
+      "name": "Upgrade: Sacred Grove",
+      "desc": "Each skill cast plants 2 Sacred Trees simultaneously for wider healing and rooting."
+    },
+    "engineer_twin_turrets": {
+      "name": "Upgrade: Twin Turrets",
+      "desc": "Allows up to 2 Tesla Turrets to operate simultaneously on the battlefield."
+    },
+    "engineer_self_destruct": {
+      "name": "Upgrade: Overload Self-Destruct",
+      "desc": "When expiring or destroyed, Tesla Turret charges the nearest foe and explodes."
+    }
   },
   "enemies": {
     "goblin_shooter": { "name": "Goblin Shooter", "subtitle": "" },
@@ -390,7 +532,10 @@
     "goblin_shaman": { "name": "Goblin Shaman", "subtitle": "" },
     "thorn_turret": { "name": "Ancient Thorn", "subtitle": "" },
     "spore_guardian": { "name": "Spore Guardian", "subtitle": "" },
-    "spore_king": { "name": "Spore King", "subtitle": "Lord of the Overgrown Ruins" },
+    "spore_king": {
+      "name": "Spore King",
+      "subtitle": "Lord of the Overgrown Ruins"
+    },
     "frost_bat": { "name": "Frost Bat", "subtitle": "" },
     "baby_yeti": { "name": "Young Yeti", "subtitle": "" },
     "ice_mage": { "name": "Cryo Mage", "subtitle": "" },
@@ -398,14 +543,20 @@
     "snow_spirit": { "name": "Snow Spirit", "subtitle": "" },
     "kryssa_clone": { "name": "Kryssa Mirror Clone", "subtitle": "" },
     "ice_prison": { "name": "Ice Prison Cage", "subtitle": "" },
-    "kryssa_ice_queen": { "name": "Ice Queen Kryssa", "subtitle": "Empress of the Frozen Depths" },
+    "kryssa_ice_queen": {
+      "name": "Ice Queen Kryssa",
+      "subtitle": "Empress of the Frozen Depths"
+    },
     "fire_imp": { "name": "Fire Imp", "subtitle": "" },
     "dwarf_cannon": { "name": "Dwarven Cannoneer", "subtitle": "" },
     "coal_golem": { "name": "Cinder Coal Golem", "subtitle": "" },
     "welder_drone": { "name": "Arc Welder Drone", "subtitle": "" },
     "iron_shielder": { "name": "Iron Bulwark", "subtitle": "" },
     "forge_energy_core": { "name": "Forge Energy Core", "subtitle": "" },
-    "forge_titan": { "name": "Molten Forge Titan", "subtitle": "Colossus of the Molten Forge" },
+    "forge_titan": {
+      "name": "Molten Forge Titan",
+      "subtitle": "Colossus of the Molten Forge"
+    },
     "training_dummy": { "name": "Training Dummy", "subtitle": "" }
   }
 }

@@ -1,12 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  CHARACTERS,
-  enLocale,
-  i18n,
-  viLocale,
-  WEAPONS,
-  WorldSim,
-} from '../src/index.js';
+import { CHARACTERS, enLocale, i18n, viLocale, WEAPONS, WorldSim } from '../src/index.js';
 
 function collectLeafKeys(obj: Record<string, unknown>, prefix = ''): string[] {
   const keys: string[] = [];
@@ -45,22 +38,58 @@ describe('Phase 7 — i18n Localization & MVP Awards & Armor Break Events', () =
     i18n.setLocale('vi');
     expect(i18n.getLocale()).toBe('vi');
     expect(i18n.t('menu.playSolo')).toContain('Chơi Đơn');
-    expect(
-      i18n.t('modal.victoryTitle', { biome: 'RỪNG MỤC CỔ ĐẠI' }),
-    ).toBe('CHIẾN THẮNG! CHINH PHỤC RỪNG MỤC CỔ ĐẠI');
+    expect(i18n.t('modal.victoryTitle', { biome: 'RỪNG MỤC CỔ ĐẠI' })).toBe(
+      'CHIẾN THẮNG! CHINH PHỤC RỪNG MỤC CỔ ĐẠI',
+    );
     expect(i18n.charName('vanguard', 'Fallback')).toBe('Thiết Vệ');
     expect(i18n.weaponName('rusty_pistol', 'Fallback')).toBe('Súng Lục Rỉ Sét');
     expect(i18n.biomeName(2)).toBe('Hầm Băng Vĩnh Cửu');
+    expect(i18n.roomTypeLabel('hub')).toBe('Doanh Trại');
+    expect(i18n.roomTypeLabel('combat')).toBe('Giao Chiến');
+    expect(i18n.elementName('burn')).toBe('Hỏa (Cháy)');
+    expect(i18n.elementShortName('chill')).toBe('Băng');
+    expect(i18n.enemyName('spore_king', 'Fallback')).toBe('Mục Vương Nấm Độc');
+    expect(i18n.t('ui.minimap.floorMini', { floor: 1, max: 2, roomType: 'Giao Chiến' })).toBe(
+      'T1/2 · Giao Chiến [Tab]',
+    );
+    expect(
+      i18n.t('ui.result.playerRowFormat', {
+        dmg: 940,
+        taken: 18,
+        kills: 34,
+        revives: 1,
+        elem: 3,
+        combo: 2,
+      }),
+    ).toContain('940');
 
     i18n.setLocale('en');
     expect(i18n.getLocale()).toBe('en');
     expect(i18n.t('menu.playSolo')).toContain('Solo');
-    expect(
-      i18n.t('modal.victoryTitle', { biome: 'ANCIENT ROTWOOD' }),
-    ).toBe('VICTORY! CONQUERED ANCIENT ROTWOOD');
+    expect(i18n.t('modal.victoryTitle', { biome: 'ANCIENT ROTWOOD' })).toBe(
+      'VICTORY! CONQUERED ANCIENT ROTWOOD',
+    );
     expect(i18n.charName('vanguard', 'Fallback')).toBe('Vanguard');
     expect(i18n.weaponName('rusty_pistol', 'Fallback')).toBe('Rusty Pistol');
     expect(i18n.biomeName(2)).toBe('Frozen Depths');
+    expect(i18n.roomTypeLabel('hub')).toBe('Campfire Hub');
+    expect(i18n.roomTypeLabel('combat')).toBe('Combat');
+    expect(i18n.elementName('burn')).toBe('Fire (Burn)');
+    expect(i18n.elementShortName('chill')).toBe('Ice');
+    expect(i18n.enemyName('spore_king', 'Fallback')).toBe('Spore King');
+    expect(i18n.t('ui.minimap.floorMini', { floor: 1, max: 2, roomType: 'Combat' })).toBe(
+      'F1/2 · Combat [Tab]',
+    );
+    expect(
+      i18n.t('ui.result.playerRowFormat', {
+        dmg: 940,
+        taken: 18,
+        kills: 34,
+        revives: 1,
+        elem: 3,
+        combo: 2,
+      }),
+    ).toContain('DMG: 940');
 
     // Fallback for unknown key
     expect(i18n.t('nonexistent.deep.key')).toBe('nonexistent.deep.key');

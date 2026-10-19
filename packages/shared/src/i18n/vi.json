@@ -177,24 +177,46 @@
       "btnMainMenu": "[M] Menu Chính",
       "btnDismiss": "Đóng Bảng"
     },
+    "hub": {
+      "roomType": "Doanh Trại",
+      "passive": "Nội tại",
+      "activeSkill": "Kỹ năng [Q]",
+      "upgrades": "Nâng cấp",
+      "coopSynergy": "Synergy Co-op"
+    },
+    "minimap": {
+      "fullTitle": "BẢN ĐỒ HẦM NGỤC — Tầng {floor}/{max} ({roomType}) [Tab]",
+      "hubMini": "Doanh Trại Co-op [Tab]",
+      "floorMini": "T{floor}/{max} · {roomType} [Tab]"
+    },
+    "boss": {
+      "stunned": " · ⚡ QUÁ TẢI CHOÁNG (x1.5 ST)!",
+      "breakCores": " · [PHÁ 2 LÕI TRONG {sec}s]",
+      "titleFormat": "{name} (Pha {phase}/3) — HP {hp}/{maxHp}{suffix}"
+    },
     "mvp": {
       "sectionTitle": "VINH DANH MVP TRẬN ĐẤU"
     },
     "result": {
       "victoryTitle": "CHIẾN THẮNG! CHINH PHỤC {biome}",
       "defeatTitle": "THẤT BẠI NƠI {biome}",
-      "floorReached": "Tầng đạt được",
+      "floorReached": "• Tầng đạt được: Tầng {floor} ({biome})",
+      "timeElapsed": "• Thời gian lượt chơi: {time}",
       "runTime": "Thời gian lượt chơi",
-      "roomsCleared": "Phòng dọn sạch",
-      "enemiesKilled": "Kẻ địch tiêu diệt",
+      "roomsCleared": "• Phòng đã dọn sạch: {count} phòng",
+      "enemiesKilled": "• Kẻ địch tiêu diệt: {kills} quái (Tinh Anh: {elites})",
       "elites": "Tinh Anh",
-      "totalDamage": "Tổng sát thương đội",
+      "totalDamage": "• Tổng sát thương đội: {dmg} ST",
+      "elementalReactions": "• Phản ứng nguyên tố: {reactions} (Combo Đội: {combos})",
       "reactions": "Phản ứng nguyên tố",
       "teamCombos": "Đồng Đội Combo",
-      "goldCollected": "Xu thu thập",
+      "goldCollected": "• Xu thu thập: {gold} Xu (Tổng nhận: {totalGold} Xu)",
+      "activeWeapon": "• Vũ khí đang cầm: {weapon}",
+      "blessings": "• Phước lành: {buffs}",
       "activeBuffs": "Phước lành kích hoạt",
       "none": "Không có",
       "playerStatsHeader": "THỐNG KÊ CHI TIẾT TỪNG NGƯỜI CHƠI",
+      "playerRowFormat": "ST gây ra: {dmg} · ST nhận: {taken} · Hạ: {kills} · Cứu: {revives} · Ng.Tố: {elem} (Combo: {combo})",
       "colPlayer": "Người chơi",
       "colDamageDealt": "ST Gây Ra",
       "colDamageTaken": "ST Nhận",
@@ -338,48 +360,168 @@
     }
   },
   "weapons": {
-    "knight_sword": { "name": "Kiếm Hiệp Sĩ", "desc": "Chém vòng cung rộng, phá hủy đạn thường của địch." },
-    "hunter_crossbow": { "name": "Nỏ Săn", "desc": "Bắn tên tốc độ cao xuyên thấu và tỉ lệ chí mạng lớn." },
-    "apprentice_staff": { "name": "Trượng Tập Sự", "desc": "Phóng cầu năng lượng mang nguyên tố hiện hành." },
-    "thorn_staff": { "name": "Trượng Gai", "desc": "Bắn gai rừng gây sát thương Độc theo thời gian." },
-    "rivet_gun": { "name": "Súng Đinh Tán", "desc": "Súng cơ khí bắn đinh tán ổn định, không tốn năng lượng." },
-    "rusty_pistol": { "name": "Súng Lục Rỉ Sét", "desc": "Súng lục bán tự động gọn nhẹ, tiêu hao ít năng lượng." },
-    "scrap_shotgun": { "name": "Shotgun Phế Liệu", "desc": "Bắn chùm 5 mảnh đạn cận chiến đẩy lùi mạnh." },
-    "gale_smg": { "name": "Tiểu Liên Gió Lốc", "desc": "Tốc độ bắn cực nhanh, áp chế đám đông hiệu quả." },
-    "frost_scepter": { "name": "Quyền Trượng Băng Giá", "desc": "Phóng cầu băng làm chậm và đóng băng mục tiêu." },
-    "tesla_carbine": { "name": "Súng Điện Từ Tesla", "desc": "Đạn điện xuyên thấu kích hoạt chuỗi sét giật lan." },
-    "venom_smg": { "name": "Tiểu Liên Bọ Cạp", "desc": "Súng tiểu liên tốc bắn cao tẩm nọc độc ăn mòn." },
-    "dragon_breath_shotgun": { "name": "Shotgun Hỏa Long", "desc": "Phun 6 viên đạn lửa thiêu đốt mặt đất và kẻ địch." },
-    "emerald_cleaver": { "name": "Đại Đao Lục Bảo", "desc": "Lưỡi đao ngọc bích chém tan đạn và gây độc tố nặng." },
-    "solar_archon_staff": { "name": "Trượng Thái Dương", "desc": "Phóng 3 quả cầu lửa mặt trời nảy tường liên hoàn." },
-    "dual_pistols": { "name": "Súng Lục Đôi", "desc": "Bắn song song 2 viên đạn nhịp độ nhanh." },
-    "frost_bow": { "name": "Cung Băng Giá", "desc": "Mũi tên băng xuyên thấu gây trạng thái Lạnh sâu." },
-    "frag_launcher": { "name": "Súng Phóng Lựu Mảnh", "desc": "Đạn lựu nảy tường phát nổ sát thương Lửa lớn." },
-    "seed_gun": { "name": "Súng Hạt Giống", "desc": "Vũ khí Co-op: Đạn nảy mầm thành Hoa Sinh Mệnh hồi máu đồng đội." },
-    "tether_staff": { "name": "Trượng Liên Kết", "desc": "Vũ khí Co-op: Tạo tia sét liên kết với đồng đội thiêu đốt kẻ địch đi qua." },
-    "focus_laser": { "name": "Súng Tia Hội Tụ", "desc": "Tia năng lượng tốc độ cực cao xuyên 2 mục tiêu." },
-    "void_staff": { "name": "Trượng Hư Không", "desc": "Quả cầu hư không xuyên 3 mục tiêu và gây độc diện rộng." },
-    "berserker_axe": { "name": "Rìu Chiến Berserker", "desc": "Vung rìu lửa 155° uy lực cực lớn, chém bay đạn địch." },
-    "magma_cannon": { "name": "Pháo Dung Nham", "desc": "Đại pháo hạng nặng bắn cầu dung nham hủy diệt." },
-    "thunder_hammer": { "name": "Búa Lôi Thần", "desc": "Nện búa sấm sét xóa đạn địch và phóng 3 luồng điện." }
+    "knight_sword": {
+      "name": "Kiếm Hiệp Sĩ",
+      "desc": "Chém vòng cung rộng, phá hủy đạn thường của địch."
+    },
+    "hunter_crossbow": {
+      "name": "Nỏ Săn",
+      "desc": "Bắn tên tốc độ cao xuyên thấu và tỉ lệ chí mạng lớn."
+    },
+    "apprentice_staff": {
+      "name": "Trượng Tập Sự",
+      "desc": "Phóng cầu năng lượng mang nguyên tố hiện hành."
+    },
+    "thorn_staff": {
+      "name": "Trượng Gai",
+      "desc": "Bắn gai rừng gây sát thương Độc theo thời gian."
+    },
+    "rivet_gun": {
+      "name": "Súng Đinh Tán",
+      "desc": "Súng cơ khí bắn đinh tán ổn định, không tốn năng lượng."
+    },
+    "rusty_pistol": {
+      "name": "Súng Lục Rỉ Sét",
+      "desc": "Súng lục bán tự động gọn nhẹ, tiêu hao ít năng lượng."
+    },
+    "scrap_shotgun": {
+      "name": "Shotgun Phế Liệu",
+      "desc": "Bắn chùm 5 mảnh đạn cận chiến đẩy lùi mạnh."
+    },
+    "gale_smg": {
+      "name": "Tiểu Liên Gió Lốc",
+      "desc": "Tốc độ bắn cực nhanh, áp chế đám đông hiệu quả."
+    },
+    "frost_scepter": {
+      "name": "Quyền Trượng Băng Giá",
+      "desc": "Phóng cầu băng làm chậm và đóng băng mục tiêu."
+    },
+    "tesla_carbine": {
+      "name": "Súng Điện Từ Tesla",
+      "desc": "Đạn điện xuyên thấu kích hoạt chuỗi sét giật lan."
+    },
+    "venom_smg": {
+      "name": "Tiểu Liên Bọ Cạp",
+      "desc": "Súng tiểu liên tốc bắn cao tẩm nọc độc ăn mòn."
+    },
+    "dragon_breath_shotgun": {
+      "name": "Shotgun Hỏa Long",
+      "desc": "Phun 6 viên đạn lửa thiêu đốt mặt đất và kẻ địch."
+    },
+    "emerald_cleaver": {
+      "name": "Đại Đao Lục Bảo",
+      "desc": "Lưỡi đao ngọc bích chém tan đạn và gây độc tố nặng."
+    },
+    "solar_archon_staff": {
+      "name": "Trượng Thái Dương",
+      "desc": "Phóng 3 quả cầu lửa mặt trời nảy tường liên hoàn."
+    },
+    "dual_pistols": {
+      "name": "Súng Lục Đôi",
+      "desc": "Bắn song song 2 viên đạn nhịp độ nhanh."
+    },
+    "frost_bow": {
+      "name": "Cung Băng Giá",
+      "desc": "Mũi tên băng xuyên thấu gây trạng thái Lạnh sâu."
+    },
+    "frag_launcher": {
+      "name": "Súng Phóng Lựu Mảnh",
+      "desc": "Đạn lựu nảy tường phát nổ sát thương Lửa lớn."
+    },
+    "seed_gun": {
+      "name": "Súng Hạt Giống",
+      "desc": "Vũ khí Co-op: Đạn nảy mầm thành Hoa Sinh Mệnh hồi máu đồng đội."
+    },
+    "tether_staff": {
+      "name": "Trượng Liên Kết",
+      "desc": "Vũ khí Co-op: Tạo tia sét liên kết với đồng đội thiêu đốt kẻ địch đi qua."
+    },
+    "focus_laser": {
+      "name": "Súng Tia Hội Tụ",
+      "desc": "Tia năng lượng tốc độ cực cao xuyên 2 mục tiêu."
+    },
+    "void_staff": {
+      "name": "Trượng Hư Không",
+      "desc": "Quả cầu hư không xuyên 3 mục tiêu và gây độc diện rộng."
+    },
+    "berserker_axe": {
+      "name": "Rìu Chiến Berserker",
+      "desc": "Vung rìu lửa 155° uy lực cực lớn, chém bay đạn địch."
+    },
+    "magma_cannon": {
+      "name": "Pháo Dung Nham",
+      "desc": "Đại pháo hạng nặng bắn cầu dung nham hủy diệt."
+    },
+    "thunder_hammer": {
+      "name": "Búa Lôi Thần",
+      "desc": "Nện búa sấm sét xóa đạn địch và phóng 3 luồng điện."
+    }
   },
   "buffs": {
-    "vitality_surge": { "name": "Trái Tim Cổ Thụ", "desc": "+3 HP tối đa và hồi phục toàn bộ HP ngay lập tức." },
-    "iron_bastion": { "name": "Giáp Thép Nguyên Bản", "desc": "+2 Giáp tối đa và giảm 0.5s thời gian chờ hồi Giáp." },
-    "arcane_wellspring": { "name": "Suối Nguồn Năng Lượng", "desc": "+60 Năng lượng tối đa và tăng 50% tốc độ tự hồi Năng lượng." },
-    "eagle_precision": { "name": "Nhãn Quan Sắc Bén", "desc": "+18% Tỉ lệ chí mạng và +20% Sát thương vũ khí." },
-    "gale_reflex": { "name": "Cuồng Phong Trợ Lực", "desc": "+20% Tốc độ di chuyển và +22% Tốc độ bắn." },
-    "ricochet_mastery": { "name": "Đạn Đạo Nảy Tường", "desc": "Mọi đạn tầm xa được +1 lần nảy tường và +1 xuyên thấu." },
-    "vanguard_fortress": { "name": "Nâng Cấp: Pháo Đài 360°", "desc": "Tường Khiên Hồng Ngọc bao bọc toàn diện 360° quanh Thiết Vệ và tăng sát thương phản kích." },
-    "vanguard_charge": { "name": "Nâng Cấp: Xung Phong Khiên", "desc": "Tái kích hoạt Tường Khiên sẽ lao mạnh về phía trước, hất văng và gây sát thương lớn cho quái." },
-    "ranger_arrow_volley": { "name": "Nâng Cấp: Mưa Tên", "desc": "Mũi Tên Săn Mồi tách thành 5 mũi tên hình quạt xuyên thấu, đánh dấu nhiều mục tiêu cùng lúc." },
-    "ranger_prey_chain": { "name": "Nâng Cấp: Chuỗi Con Mồi", "desc": "30% sát thương gây lên mục tiêu bị đánh dấu sẽ tự động lan sang các mục tiêu bị đánh dấu khác." },
-    "elementalist_vortex": { "name": "Nâng Cấp: Hố Đen Nguyên Tố", "desc": "Vùng Cầu Nguyên Tố tạo lực hút kéo mọi quái vật xung quanh về tâm vùng nổ." },
-    "elementalist_dual": { "name": "Nâng Cấp: Song Nguyên Tố", "desc": "Vùng Cầu Nguyên Tố mang đồng thời cả 2 nguyên tố hiện tại và kế tiếp, kích hoạt phản ứng ngay lập tức." },
-    "druid_poison_roots": { "name": "Nâng Cấp: Rễ Gai Độc", "desc": "Rễ của Cây Thiêng quất sát thương định kỳ và áp trạng thái Độc lên mọi quái vật trong vùng." },
-    "druid_sacred_grove": { "name": "Nâng Cấp: Rừng Thiêng", "desc": "Mỗi lần dùng kỹ năng sẽ trồng đồng thời 2 Cây Thiêng tạo thành trận địa hồi phục và trói chân." },
-    "engineer_twin_turrets": { "name": "Nâng Cấp: Trụ Kép", "desc": "Cho phép duy trì tối đa 2 Trụ Tesla hoạt động song song trên chiến trường." },
-    "engineer_self_destruct": { "name": "Nâng Cấp: Tự Hủy Quá Tải", "desc": "Khi hết thời gian tồn tại hoặc bị phá hủy, Trụ Tesla phát nổ lớn gây sát thương diện rộng." }
+    "vitality_surge": {
+      "name": "Trái Tim Cổ Thụ",
+      "desc": "+3 HP tối đa và hồi phục toàn bộ HP ngay lập tức."
+    },
+    "iron_bastion": {
+      "name": "Giáp Thép Nguyên Bản",
+      "desc": "+2 Giáp tối đa và giảm 0.5s thời gian chờ hồi Giáp."
+    },
+    "arcane_wellspring": {
+      "name": "Suối Nguồn Năng Lượng",
+      "desc": "+60 Năng lượng tối đa và tăng 50% tốc độ tự hồi Năng lượng."
+    },
+    "eagle_precision": {
+      "name": "Nhãn Quan Sắc Bén",
+      "desc": "+18% Tỉ lệ chí mạng và +20% Sát thương vũ khí."
+    },
+    "gale_reflex": {
+      "name": "Cuồng Phong Trợ Lực",
+      "desc": "+20% Tốc độ di chuyển và +22% Tốc độ bắn."
+    },
+    "ricochet_mastery": {
+      "name": "Đạn Đạo Nảy Tường",
+      "desc": "Mọi đạn tầm xa được +1 lần nảy tường và +1 xuyên thấu."
+    },
+    "vanguard_fortress": {
+      "name": "Nâng Cấp: Pháo Đài 360°",
+      "desc": "Tường Khiên Hồng Ngọc bao bọc toàn diện 360° quanh Thiết Vệ và tăng sát thương phản kích."
+    },
+    "vanguard_charge": {
+      "name": "Nâng Cấp: Xung Phong Khiên",
+      "desc": "Tái kích hoạt Tường Khiên sẽ lao mạnh về phía trước, hất văng và gây sát thương lớn cho quái."
+    },
+    "ranger_arrow_volley": {
+      "name": "Nâng Cấp: Mưa Tên",
+      "desc": "Mũi Tên Săn Mồi tách thành 5 mũi tên hình quạt xuyên thấu, đánh dấu nhiều mục tiêu cùng lúc."
+    },
+    "ranger_prey_chain": {
+      "name": "Nâng Cấp: Chuỗi Con Mồi",
+      "desc": "30% sát thương gây lên mục tiêu bị đánh dấu sẽ tự động lan sang các mục tiêu bị đánh dấu khác."
+    },
+    "elementalist_vortex": {
+      "name": "Nâng Cấp: Hố Đen Nguyên Tố",
+      "desc": "Vùng Cầu Nguyên Tố tạo lực hút kéo mọi quái vật xung quanh về tâm vùng nổ."
+    },
+    "elementalist_dual": {
+      "name": "Nâng Cấp: Song Nguyên Tố",
+      "desc": "Vùng Cầu Nguyên Tố mang đồng thời cả 2 nguyên tố hiện tại và kế tiếp, kích hoạt phản ứng ngay lập tức."
+    },
+    "druid_poison_roots": {
+      "name": "Nâng Cấp: Rễ Gai Độc",
+      "desc": "Rễ của Cây Thiêng quất sát thương định kỳ và áp trạng thái Độc lên mọi quái vật trong vùng."
+    },
+    "druid_sacred_grove": {
+      "name": "Nâng Cấp: Rừng Thiêng",
+      "desc": "Mỗi lần dùng kỹ năng sẽ trồng đồng thời 2 Cây Thiêng tạo thành trận địa hồi phục và trói chân."
+    },
+    "engineer_twin_turrets": {
+      "name": "Nâng Cấp: Trụ Kép",
+      "desc": "Cho phép duy trì tối đa 2 Trụ Tesla hoạt động song song trên chiến trường."
+    },
+    "engineer_self_destruct": {
+      "name": "Nâng Cấp: Tự Hủy Quá Tải",
+      "desc": "Khi hết thời gian tồn tại hoặc bị phá hủy, Trụ Tesla phát nổ lớn gây sát thương diện rộng."
+    }
   },
   "enemies": {
     "goblin_shooter": { "name": "Goblin Xạ Thủ", "subtitle": "" },
@@ -390,7 +532,10 @@
     "goblin_shaman": { "name": "Pháp Sư Goblin", "subtitle": "" },
     "thorn_turret": { "name": "Cây Gai Cổ Thụ", "subtitle": "" },
     "spore_guardian": { "name": "Nấm Hộ Vệ Mục Vương", "subtitle": "" },
-    "spore_king": { "name": "Mục Vương Nấm Độc", "subtitle": "Chúa Tể Rừng Cổ Mục Nát" },
+    "spore_king": {
+      "name": "Mục Vương Nấm Độc",
+      "subtitle": "Chúa Tể Rừng Cổ Mục Nát"
+    },
     "frost_bat": { "name": "Dơi Băng", "subtitle": "" },
     "baby_yeti": { "name": "Yeti Con", "subtitle": "" },
     "ice_mage": { "name": "Pháp Sư Băng", "subtitle": "" },
@@ -398,14 +543,20 @@
     "snow_spirit": { "name": "Tinh Linh Tuyết", "subtitle": "" },
     "kryssa_clone": { "name": "Ảo Ảnh Gương Kryssa", "subtitle": "" },
     "ice_prison": { "name": "Lồng Băng Giam Cầm", "subtitle": "" },
-    "kryssa_ice_queen": { "name": "Băng Hậu Kryssa", "subtitle": "Nữ Hoàng Hầm Băng Vĩnh Cửu" },
+    "kryssa_ice_queen": {
+      "name": "Băng Hậu Kryssa",
+      "subtitle": "Nữ Hoàng Hầm Băng Vĩnh Cửu"
+    },
     "fire_imp": { "name": "Tiểu Quỷ Lửa", "subtitle": "" },
     "dwarf_cannon": { "name": "Người Lùn Pháo Thủ", "subtitle": "" },
     "coal_golem": { "name": "Golem Than", "subtitle": "" },
     "welder_drone": { "name": "Drone Hàn", "subtitle": "" },
     "iron_shielder": { "name": "Khiên Thủ Sắt", "subtitle": "" },
     "forge_energy_core": { "name": "Lõi Năng Lượng Lò Rèn", "subtitle": "" },
-    "forge_titan": { "name": "Titan Lò Rèn", "subtitle": "Cự Nhân Cơ Khí Dung Nham" },
+    "forge_titan": {
+      "name": "Titan Lò Rèn",
+      "subtitle": "Cự Nhân Cơ Khí Dung Nham"
+    },
     "training_dummy": { "name": "Bù Nhìn Tập Luyện", "subtitle": "" }
   }
 }

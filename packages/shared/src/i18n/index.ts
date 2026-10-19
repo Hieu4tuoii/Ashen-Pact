@@ -1,5 +1,3 @@
-import viDict from './vi.json' with { type: 'json' };
-import enDict from './en.json' with { type: 'json' };
 import type {
   BuffId,
   CharacterId,
@@ -9,6 +7,8 @@ import type {
   WeaponRarity,
 } from '../data/types.js';
 import type { QuickEmoteId } from '../protocol/messages.js';
+import enDict from './en.json' with { type: 'json' };
+import viDict from './vi.json' with { type: 'json' };
 
 export type SupportedLocale = 'vi' | 'en';
 
@@ -31,7 +31,11 @@ function resolvePath(obj: unknown, path: string): string | undefined {
     cur = (cur as Record<string, unknown>)[parts[i]!];
   }
   if (typeof cur === 'string') return cur;
-  if (cur !== null && typeof cur === 'object' && typeof (cur as { name?: unknown }).name === 'string') {
+  if (
+    cur !== null &&
+    typeof cur === 'object' &&
+    typeof (cur as { name?: unknown }).name === 'string'
+  ) {
     return (cur as { name: string }).name;
   }
   return undefined;
@@ -159,10 +163,18 @@ export class I18nManager {
     };
   }
 
-  public getBuffText(buffId: BuffId | string): { name: string; desc: string } {
+  public getBuffText(
+    buffId: BuffId | string,
+    fallbackName = '',
+    fallbackDesc = '',
+  ): { name: string; desc: string } {
+    const nameKey = `buffs.${buffId}.name`;
+    const descKey = `buffs.${buffId}.desc`;
+    const nameVal = this.t(nameKey);
+    const descVal = this.t(descKey);
     return {
-      name: this.t(`buffs.${buffId}.name`),
-      desc: this.t(`buffs.${buffId}.desc`),
+      name: nameVal === nameKey ? fallbackName || String(buffId) : nameVal,
+      desc: descVal === descKey ? fallbackDesc : descVal,
     };
   }
 
@@ -171,6 +183,12 @@ export class I18nManager {
       name: this.t(`enemies.${enemyId}.name`),
       subtitle: this.t(`enemies.${enemyId}.subtitle`),
     };
+  }
+
+  public enemyName(enemyId: string, fallback = ''): string {
+    const key = `enemies.${enemyId}.name`;
+    const val = this.t(key);
+    return val === key ? fallback || enemyId : val;
   }
 
   public getReactionText(reactionId: ElementalReactionId): {
@@ -193,8 +211,24 @@ export class I18nManager {
     return this.t(`rooms.${roomType}`);
   }
 
+  public roomTypeName(roomType: RoomType): string {
+    return this.getRoomTypeName(roomType);
+  }
+
+  public roomTypeLabel(roomType: RoomType | 'hub'): string {
+    return roomType === 'hub' ? this.t('ui.hub.roomType') : this.getRoomTypeName(roomType);
+  }
+
   public getElementLabel(el: ElementType, short = false): string {
     return short ? this.t(`elements.short.${el}`) : this.t(`elements.${el}`);
+  }
+
+  public elementName(el: ElementType): string {
+    return this.getElementLabel(el, false);
+  }
+
+  public elementShortName(el: ElementType): string {
+    return this.getElementLabel(el, true);
   }
 
   public getRarityLabel(rarity: WeaponRarity): string {
@@ -203,6 +237,10 @@ export class I18nManager {
 
   public getEmoteLabel(id: QuickEmoteId): string {
     return this.t(`emotes.${id}`);
+  }
+
+  public emoteText(id: QuickEmoteId): string {
+    return this.getEmoteLabel(id);
   }
 
   private loadFromStorage(): void {
@@ -230,7 +268,9 @@ export class I18nManager {
 
   private saveToStorage(): void {
     try {
-      const g = globalThis as unknown as { window?: { localStorage?: Storage } };
+      const g = globalThis as unknown as {
+        window?: { localStorage?: Storage };
+      };
       g.window?.localStorage?.setItem(LOCALE_STORAGE_KEY, this.locale);
     } catch {
       // Ignore storage errors

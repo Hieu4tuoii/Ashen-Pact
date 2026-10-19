@@ -1,13 +1,14 @@
-import Phaser from 'phaser';
 import {
   clamp,
   ELEMENTAL_REACTIONS,
   type ElementalReactionId,
   type ElementType,
+  i18n,
   type PropKind,
   WORLD_VIEW_HEIGHT,
   WORLD_VIEW_WIDTH,
 } from '@ashen-pact/shared';
+import type Phaser from 'phaser';
 import { hexToNum, PALETTE, PLAYER_SLOT_COLORS } from '../art/palette.js';
 import { RIG_DEFS_BY_ID } from '../art/rig-defs.js';
 import { TextureBaker } from '../art/texture-baker.js';
@@ -355,7 +356,10 @@ export class CombatFxManager {
     this.totalHitStopsTriggered += 1;
   }
 
-  public consumeHitStopDelta(rawDeltaMs: number): { simDeltaMs: number; isHitStopped: boolean } {
+  public consumeHitStopDelta(rawDeltaMs: number): {
+    simDeltaMs: number;
+    isHitStopped: boolean;
+  } {
     if (this.hitStopRemainingMs <= 0) {
       return { simDeltaMs: rawDeltaMs, isHitStopped: false };
     }
@@ -377,7 +381,10 @@ export class CombatFxManager {
     return this.trauma;
   }
 
-  public computeCameraShakeOffset(dtSec: number): { offsetX: number; offsetY: number } {
+  public computeCameraShakeOffset(dtSec: number): {
+    offsetX: number;
+    offsetY: number;
+  } {
     this.shakeTime += dtSec;
     if (this.trauma <= 0.001) {
       this.trauma = 0;
@@ -647,7 +654,8 @@ export class CombatFxManager {
       rxSlot.vy = -68;
       rxSlot.baseScale = 1.18;
 
-      const label = `${(meta?.nameVi ?? params.reaction).toUpperCase()}! +${params.damage}`;
+      const rxText = i18n.getReactionText(params.reaction);
+      const label = `${(rxText.name || meta?.nameVi || params.reaction).toUpperCase()}! +${params.damage}`;
       rxSlot.text.setText(label);
       rxSlot.text.setColor(meta?.colorHex ?? PALETTE.SOLAR_GOLD);
       rxSlot.text.setPosition(rxSlot.x, rxSlot.y);
@@ -670,7 +678,9 @@ export class CombatFxManager {
         comboSlot.vy = -74;
         comboSlot.baseScale = 1.26;
 
-        comboSlot.text.setText('⚡ ĐỒNG ĐỘI COMBO! +15 NL');
+        const comboLabel =
+          i18n.getLocale() === 'en' ? '⚡ TEAM COMBO! +15 EN' : '⚡ ĐỒNG ĐỘI COMBO! +15 NL';
+        comboSlot.text.setText(comboLabel);
         comboSlot.text.setColor(PALETTE.SOLAR_GOLD);
         comboSlot.text.setPosition(comboSlot.x, comboSlot.y);
         comboSlot.text.setScale(comboSlot.baseScale * 1.2);

@@ -1,4 +1,3 @@
-import Phaser from 'phaser';
 import {
   type CharacterId,
   FixedTimestepLoop,
@@ -7,6 +6,7 @@ import {
   WORLD_VIEW_HEIGHT,
   WORLD_VIEW_WIDTH,
 } from '@ashen-pact/shared';
+import Phaser from 'phaser';
 import { CutoutRig } from '../art/cutout-rig.js';
 import { hexToNum, PALETTE } from '../art/palette.js';
 import { GOBLIN_SHOOTER_RIG_DEF, RIG_DEFS_BY_ID } from '../art/rig-defs.js';
@@ -44,12 +44,19 @@ interface CampfireEmber {
 
 export class MenuScene extends Phaser.Scene {
   private simLoop = new FixedTimestepLoop(60);
-  private heroRigs: { charId: CharacterId; rig: CutoutRig; label: Phaser.GameObjects.Text }[] = [];
+  private heroRigs: {
+    charId: CharacterId;
+    rig: CutoutRig;
+    label: Phaser.GameObjects.Text;
+  }[] = [];
   private goblinPreview?: CutoutRig;
   private campfireGfx?: Phaser.GameObjects.Graphics;
   private campfireTimeSec = 0;
   private embers: CampfireEmber[] = [];
-  private floorTileSprites: { sprite: Phaser.GameObjects.Sprite; variant: number }[] = [];
+  private floorTileSprites: {
+    sprite: Phaser.GameObjects.Sprite;
+    variant: number;
+  }[] = [];
   private textObjects: Phaser.GameObjects.Text[] = [];
   private debugOverlay?: DebugOverlay;
   private modalManager?: ModalOverlayManager;
@@ -190,7 +197,7 @@ export class MenuScene extends Phaser.Scene {
       );
     }
 
-    // 5 Playable Hero Rigs gathered around the Hub campfires
+    // 5 Playable Hero Rigs gathered around the Hub campfires in a staggered semicircle
     const heroPlacements: {
       charId: CharacterId;
       x: number;
@@ -199,42 +206,57 @@ export class MenuScene extends Phaser.Scene {
       aim: number;
       phase: number;
     }[] = [
-      { charId: 'vanguard', x: 104, y: 232, slot: 1, aim: 0.25, phase: 0.0 },
-      { charId: 'ranger', x: 104, y: 348, slot: 2, aim: -0.15, phase: 0.4 },
-      { charId: 'druid', x: 195, y: 198, slot: 4, aim: 0.45, phase: 0.8 },
-      { charId: 'elementalist', x: 856, y: 232, slot: 3, aim: Math.PI - 0.25, phase: 0.2 },
-      { charId: 'engineer', x: 856, y: 348, slot: 1, aim: Math.PI + 0.15, phase: 0.6 },
+      { charId: 'vanguard', x: 82, y: 196, slot: 1, aim: 0.35, phase: 0.0 },
+      { charId: 'druid', x: 162, y: 266, slot: 4, aim: 0.1, phase: 0.8 },
+      { charId: 'ranger', x: 86, y: 334, slot: 2, aim: -0.25, phase: 0.4 },
+      {
+        charId: 'elementalist',
+        x: 878,
+        y: 196,
+        slot: 3,
+        aim: Math.PI - 0.35,
+        phase: 0.2,
+      },
+      {
+        charId: 'engineer',
+        x: 798,
+        y: 266,
+        slot: 1,
+        aim: Math.PI - 0.05,
+        phase: 0.6,
+      },
     ];
 
     for (const hp of heroPlacements) {
       const rigDef = RIG_DEFS_BY_ID[hp.charId]!;
       const rig = new CutoutRig(this, hp.x, hp.y, rigDef, {
         playerSlot: hp.slot,
-        displayScale: 1.85,
+        displayScale: 1.65,
         initialPhaseOffset: hp.phase,
       });
       rig.setAimAngle(hp.aim);
 
       const label = this.add
-        .text(hp.x, hp.y + 30, i18n.t(`characters.${hp.charId}.name`), {
+        .text(hp.x, hp.y + 24, i18n.t(`characters.${hp.charId}.name`), {
           fontFamily: '"Be Vietnam Pro", sans-serif',
           fontSize: '10.5px',
-          fontStyle: '700',
+          fontStyle: '800',
           color: PALETTE.SOLAR_GOLD,
           stroke: PALETTE.INK_DARK,
-          strokeThickness: 2.5,
+          strokeThickness: 2.8,
           resolution: textRes,
         })
-        .setOrigin(0.5);
+        .setOrigin(0.5)
+        .setDepth(25);
       this.textObjects.push(label);
       this.heroRigs.push({ charId: hp.charId, rig, label });
     }
 
-    this.goblinPreview = new CutoutRig(this, 765, 198, GOBLIN_SHOOTER_RIG_DEF, {
-      displayScale: 1.75,
+    this.goblinPreview = new CutoutRig(this, 874, 334, GOBLIN_SHOOTER_RIG_DEF, {
+      displayScale: 1.6,
       initialPhaseOffset: 0.7,
     });
-    this.goblinPreview.setAimAngle(Math.PI - 0.35);
+    this.goblinPreview.setAimAngle(Math.PI + 0.25);
 
     // Co-op LAN Profile & IP Bar at y=176
     const coopBarBg = this.add.graphics();
@@ -564,8 +586,8 @@ export class MenuScene extends Phaser.Scene {
   private initCampfireEmbers(): void {
     this.embers = [];
     const firePositions: [number, number][] = [
-      [195, 285],
-      [765, 285],
+      [236, 285],
+      [724, 285],
     ];
     for (let i = 0; i < 24; i++) {
       const [ox, oy] = firePositions[i % 2]!;
@@ -592,8 +614,8 @@ export class MenuScene extends Phaser.Scene {
     gfx.clear();
 
     const firePositions: [number, number][] = [
-      [195, 285],
-      [765, 285],
+      [236, 285],
+      [724, 285],
     ];
 
     for (let f = 0; f < firePositions.length; f++) {
@@ -636,10 +658,7 @@ export class MenuScene extends Phaser.Scene {
       e.y += e.vy * dtSec;
       const progress = e.life / e.maxLife;
       const alpha = Math.max(0, (1 - progress) * e.alpha);
-      gfx.fillStyle(
-        hexToNum(i % 2 === 0 ? PALETTE.SOLAR_GOLD : PALETTE.FLAME_ORANGE),
-        alpha,
-      );
+      gfx.fillStyle(hexToNum(i % 2 === 0 ? PALETTE.SOLAR_GOLD : PALETTE.FLAME_ORANGE), alpha);
       gfx.fillCircle(e.x, e.y, e.size * (1 - progress * 0.4));
     }
   }

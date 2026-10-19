@@ -1,9 +1,7 @@
-import Phaser from 'phaser';
-import { Client as ColyseusClient, type Room as ColyseusRoom } from 'colyseus.js';
 import {
   type BuffId,
-  type CharacterId,
   CHARACTERS,
+  type CharacterId,
   clamp,
   type DungeonRoomNode,
   ELEMENTAL_REACTIONS,
@@ -12,8 +10,8 @@ import {
   ENEMY_SPAWN_WARMUP_SEC,
   FLOOR_BUFFS,
   generateQrMatrix,
-  i18n,
   INPUT_BUTTON,
+  i18n,
   LocalTransport,
   NetworkTransport,
   PHASE1_SAMPLE_WEAPONS,
@@ -21,7 +19,6 @@ import {
   type PropKind,
   QUICK_EMOTES_VI,
   type QuickEmoteId,
-  type RoomType,
   type SimEnemyState,
   type SimEvent,
   type SurfaceKind,
@@ -34,6 +31,8 @@ import {
   WORLD_VIEW_HEIGHT,
   WORLD_VIEW_WIDTH,
 } from '@ashen-pact/shared';
+import { Client as ColyseusClient, type Room as ColyseusRoom } from 'colyseus.js';
+import Phaser from 'phaser';
 import { CutoutRig } from '../art/cutout-rig.js';
 import { dampLerp } from '../art/easing.js';
 import { hexToNum, PALETTE } from '../art/palette.js';
@@ -74,25 +73,6 @@ declare global {
  * Offsetting the visual rig container by +12u aligns the visual torso center with the simulation hitbox center.
  */
 const RIG_FOOT_OFFSET_Y = 12;
-
-const ELEMENT_LABELS_VI: Record<ElementType, string> = {
-  none: 'Vật Lý',
-  burn: 'Hỏa (Cháy)',
-  chill: 'Băng (Đóng Băng)',
-  shock: 'Lôi (Giật Điện)',
-  poison: 'Độc (Trúng Độc)',
-};
-
-const ROOM_TYPE_LABELS_VI: Record<RoomType, string> = {
-  start: 'Khởi Đầu',
-  combat: 'Giao Chiến',
-  treasure: 'Kho Báu',
-  merchant: 'Cửa Hàng',
-  shrine: 'Điện Thờ',
-  secret: 'Phòng Bí Mật',
-  portal: 'Cổng Dịch Chuyển',
-  boss: 'Sào Huyệt Trùm',
-};
 
 interface ArenaTileVisual {
   tx: number;
@@ -147,7 +127,11 @@ export class GameScene extends Phaser.Scene {
   private localEmoteBg?: Phaser.GameObjects.Graphics;
   private hubStatueRigs = new Map<
     string,
-    { rig: CutoutRig; label: Phaser.GameObjects.Text; subLabel: Phaser.GameObjects.Text }
+    {
+      rig: CutoutRig;
+      label: Phaser.GameObjects.Text;
+      subLabel: Phaser.GameObjects.Text;
+    }
   >();
   private pingVisuals = new Map<number, Phaser.GameObjects.Text>();
   private enemyRigs = new Map<number, CutoutRig>();
@@ -160,8 +144,14 @@ export class GameScene extends Phaser.Scene {
     number,
     { sprite: Phaser.GameObjects.Sprite; textureKey: string }
   >();
-  private projectileSpritePool: { sprite: Phaser.GameObjects.Sprite; textureKey: string }[] = [];
-  private pickupSpritePool: { sprite: Phaser.GameObjects.Sprite; textureKey: string }[] = [];
+  private projectileSpritePool: {
+    sprite: Phaser.GameObjects.Sprite;
+    textureKey: string;
+  }[] = [];
+  private pickupSpritePool: {
+    sprite: Phaser.GameObjects.Sprite;
+    textureKey: string;
+  }[] = [];
 
   // Phase 3 Room Visuals (Doors, Chests, World Items, NPCs, Portal)
   private doorSprites = new Map<
@@ -175,7 +165,11 @@ export class GameScene extends Phaser.Scene {
   >();
   private npcVisuals = new Map<
     number,
-    { rig?: CutoutRig; sprite?: Phaser.GameObjects.Sprite; label: Phaser.GameObjects.Text }
+    {
+      rig?: CutoutRig;
+      sprite?: Phaser.GameObjects.Sprite;
+      label: Phaser.GameObjects.Text;
+    }
   >();
   private portalSprite?: Phaser.GameObjects.Sprite;
   private portalLabel?: Phaser.GameObjects.Text;
@@ -209,6 +203,7 @@ export class GameScene extends Phaser.Scene {
   private textObjects: Phaser.GameObjects.Text[] = [];
 
   // Cached HUD state to avoid redundant per-frame Canvas2D text uploads
+  private lastHudLocale = '';
   private lastHudHp = -1;
   private lastHudArmor = -1;
   private lastHudEnergy = -1;
@@ -244,6 +239,10 @@ export class GameScene extends Phaser.Scene {
   private abilityHudGraphics!: Phaser.GameObjects.Graphics;
   private skillCdText!: Phaser.GameObjects.Text;
   private dashCdText!: Phaser.GameObjects.Text;
+  private skillLabelText?: Phaser.GameObjects.Text;
+  private pauseBtnText?: Phaser.GameObjects.Text;
+  private menuBtnText?: Phaser.GameObjects.Text;
+  private hubGuideTexts: Phaser.GameObjects.Text[] = [];
   private minimapGraphics!: Phaser.GameObjects.Graphics;
   private minimapTitleText!: Phaser.GameObjects.Text;
   private bossBarGraphics!: Phaser.GameObjects.Graphics;
@@ -384,6 +383,7 @@ export class GameScene extends Phaser.Scene {
     this.localNameLabel = undefined;
     this.localEmoteLabel = undefined;
     this.localEmoteBg = undefined;
+    this.hubGuideTexts = [];
     this.projectileSpritePool = [];
     this.pickupSpritePool = [];
     this.mapTileVisuals = [];
@@ -396,6 +396,7 @@ export class GameScene extends Phaser.Scene {
     this.weaponMetaTexts = [];
     this.lastShakeX = 0;
     this.lastShakeY = 0;
+    this.lastHudLocale = '';
     this.lastHudHp = -1;
     this.lastHudArmor = -1;
     this.lastHudEnergy = -1;
@@ -624,6 +625,7 @@ export class GameScene extends Phaser.Scene {
 
     // 9. Camera-Pinned Vector HUD
     this.buildVectorHud();
+    this.triggerIrisTransition('open');
 
     // 10. Keyboard & Debug Bindings
     this.setupKeyboardBindings();
@@ -954,7 +956,7 @@ export class GameScene extends Phaser.Scene {
     this.hudContainer.add(galleryBtn);
 
     const menuBtn = this.add
-      .text(868, 42, '[Về Menu]', {
+      .text(868, 42, i18n.t('ui.hud.menuBtn'), {
         fontFamily: '"Be Vietnam Pro", sans-serif',
         fontSize: '11.5px',
         fontStyle: '700',
@@ -965,6 +967,7 @@ export class GameScene extends Phaser.Scene {
       })
       .setInteractive({ useHandCursor: true });
     menuBtn.on('pointerdown', () => this.scene.start('MenuScene'));
+    this.menuBtnText = menuBtn;
     this.textObjects.push(menuBtn);
     this.hudContainer.add(menuBtn);
 
@@ -991,15 +994,20 @@ export class GameScene extends Phaser.Scene {
       this.weaponIconSprites.push(icon);
       this.hudContainer.add(icon);
 
-      const nameTxt = this.add.text(sx + 48, barY + 7, `[${idx + 1}] ${wDef.nameVi}`, {
-        fontFamily: '"Be Vietnam Pro", sans-serif',
-        fontSize: '10px',
-        fontStyle: '700',
-        color: PALETTE.BONE_WHITE,
-        stroke: PALETTE.INK_DARK,
-        strokeThickness: 2.5,
-        resolution: textRes,
-      });
+      const nameTxt = this.add.text(
+        sx + 48,
+        barY + 7,
+        `[${idx + 1}] ${i18n.weaponName(weaponId, wDef.nameVi)}`,
+        {
+          fontFamily: '"Be Vietnam Pro", sans-serif',
+          fontSize: '10px',
+          fontStyle: '700',
+          color: PALETTE.BONE_WHITE,
+          stroke: PALETTE.INK_DARK,
+          strokeThickness: 2.5,
+          resolution: textRes,
+        },
+      );
       this.weaponNameTexts.push(nameTxt);
       this.textObjects.push(nameTxt);
       this.hudContainer.add(nameTxt);
@@ -1007,7 +1015,7 @@ export class GameScene extends Phaser.Scene {
       const metaTxt = this.add.text(
         sx + 48,
         barY + 24,
-        `DMG ${wDef.damage}${wDef.pelletCount > 1 ? `×${wDef.pelletCount}` : ''} · NL ${wDef.energyCost}`,
+        `DMG ${wDef.damage}${wDef.pelletCount > 1 ? `×${wDef.pelletCount}` : ''} · ${i18n.t('ui.hud.energy')} ${wDef.energyCost}`,
         {
           fontFamily: '"Be Vietnam Pro", sans-serif',
           fontSize: '9.5px',
@@ -1033,7 +1041,7 @@ export class GameScene extends Phaser.Scene {
     this.hudContainer.add(this.abilityHudGraphics);
 
     this.skillCdText = this.add
-      .text(45, barY + 29, 'Sẵn', {
+      .text(45, barY + 29, i18n.t('ui.hud.ready'), {
         fontFamily: '"Be Vietnam Pro", sans-serif',
         fontSize: '9.5px',
         fontStyle: '800',
@@ -1047,7 +1055,7 @@ export class GameScene extends Phaser.Scene {
     this.hudContainer.add(this.skillCdText);
 
     const skillLabel = this.add
-      .text(45, barY + 12, '⚡KN [Space]', {
+      .text(45, barY + 12, i18n.getLocale() === 'en' ? '⚡Skill [Space]' : '⚡KN [Space]', {
         fontFamily: '"Be Vietnam Pro", sans-serif',
         fontSize: '8.5px',
         fontStyle: '700',
@@ -1057,6 +1065,7 @@ export class GameScene extends Phaser.Scene {
         resolution: textRes,
       })
       .setOrigin(0.5);
+    this.skillLabelText = skillLabel;
     this.textObjects.push(skillLabel);
     this.hudContainer.add(skillLabel);
 
@@ -1069,7 +1078,7 @@ export class GameScene extends Phaser.Scene {
     this.hudContainer.add(skillHit);
 
     this.dashCdText = this.add
-      .text(111, barY + 29, 'Sẵn', {
+      .text(111, barY + 29, i18n.t('ui.hud.ready'), {
         fontFamily: '"Be Vietnam Pro", sans-serif',
         fontSize: '9.5px',
         fontStyle: '800',
@@ -1112,17 +1121,23 @@ export class GameScene extends Phaser.Scene {
     this.hudContainer.add(pauseBtnBg);
 
     const pauseBtnText = this.add
-      .text(897, barY + slotH / 2, '⚙ [Esc]\nTạm Dừng', {
-        fontFamily: '"Be Vietnam Pro", sans-serif',
-        fontSize: '9.5px',
-        fontStyle: '800',
-        color: PALETTE.SOLAR_GOLD,
-        stroke: PALETTE.INK_DARK,
-        strokeThickness: 2.5,
-        align: 'center',
-        resolution: textRes,
-      })
+      .text(
+        897,
+        barY + slotH / 2,
+        i18n.getLocale() === 'en' ? '⚙ [Esc]\nPause' : '⚙ [Esc]\nTạm Dừng',
+        {
+          fontFamily: '"Be Vietnam Pro", sans-serif',
+          fontSize: '9.5px',
+          fontStyle: '800',
+          color: PALETTE.SOLAR_GOLD,
+          stroke: PALETTE.INK_DARK,
+          strokeThickness: 2.5,
+          align: 'center',
+          resolution: textRes,
+        },
+      )
       .setOrigin(0.5);
+    this.pauseBtnText = pauseBtnText;
     this.textObjects.push(pauseBtnText);
     this.hudContainer.add(pauseBtnText);
 
@@ -1186,11 +1201,15 @@ export class GameScene extends Phaser.Scene {
     this.weaponCompareContainer = this.add.container(0, 0);
     this.hudContainer.add(this.weaponCompareContainer);
 
+    // Iris Transition Graphics placed below Modals & Pause Overlay so modals are never obscured
+    this.irisGraphics = this.add.graphics();
+    this.hudContainer.add(this.irisGraphics);
+
     // Modal Container for Between-Floor Buff Selection & Run Victory/Defeat Summary
     this.modalContainer = this.add.container(0, 0);
     this.hudContainer.add(this.modalContainer);
 
-    // Pause Overlay Container & Settings/Controls Modal Manager & Iris Transition Graphics
+    // Pause Overlay Container & Settings/Controls Modal Manager
     this.pauseContainer = this.add.container(0, 0).setVisible(false);
     this.hudContainer.add(this.pauseContainer);
 
@@ -1200,8 +1219,6 @@ export class GameScene extends Phaser.Scene {
         this.rebuildPauseModal();
       }
     });
-    this.irisGraphics = this.add.graphics();
-    this.hudContainer.add(this.irisGraphics);
   }
 
   private invalidateAllHudCaches(): void {
@@ -1217,6 +1234,15 @@ export class GameScene extends Phaser.Scene {
     this.lastHubPreviewHash = '';
     this.lastWeaponCompareHash = '';
     this.lastRunState = '';
+    const isEn = i18n.getLocale() === 'en';
+    this.statusText?.setText(
+      isEn
+        ? 'WASD: Move · Mouse: Shoot/Skill · Shift: Dash · R: Elem · G: Quality · F1-F7: Debug'
+        : 'WASD: Chạy · Chuột: Bắn/Khiên · Shift: Dash · R: Ng.Tố · G: Đồ Họa · F1-F7: Debug',
+    );
+    this.menuBtnText?.setText(i18n.t('ui.hud.menuBtn'));
+    this.skillLabelText?.setText(isEn ? '⚡Skill [Space]' : '⚡KN [Space]');
+    this.pauseBtnText?.setText(isEn ? '⚙ [Esc]\nPause' : '⚙ [Esc]\nTạm Dừng');
   }
 
   private togglePauseModal(forceState?: boolean): void {
@@ -1813,7 +1839,10 @@ export class GameScene extends Phaser.Scene {
         callback: () => {
           if (this.room && this.scene.isActive()) {
             const curRtt = this.networkTransport?.getTelemetry().rttMs ?? debug.pingMs ?? 8;
-            this.room.send('ping_check', { clientTime: Date.now(), rttMs: curRtt });
+            this.room.send('ping_check', {
+              clientTime: Date.now(),
+              rttMs: curRtt,
+            });
           }
         },
       });
@@ -2259,12 +2288,7 @@ export class GameScene extends Phaser.Scene {
       );
 
       // Cold breath vapor in Biome 2 (Frozen Depths)
-      if (
-        !isSoloPaused &&
-        sim.currentBiome === 2 &&
-        !sim.stressTestActive &&
-        sim.tick % 90 === 0
-      ) {
+      if (!isSoloPaused && sim.currentBiome === 2 && !sim.stressTestActive && sim.tick % 90 === 0) {
         this.fx.spawnFrostBreath(playerPos.x, playerPos.y, this.playerRig.getFacingSign());
       }
     }
@@ -2346,6 +2370,13 @@ export class GameScene extends Phaser.Scene {
     if (!g) return;
     g.clear();
 
+    const sim = this.transport.getSim();
+    if (sim.runState !== 'playing') {
+      this.irisTransitionProgress = 0;
+      this.irisTransitionDir = 0;
+      return;
+    }
+
     if (this.irisTransitionDir === -1) {
       this.irisTransitionProgress = Math.min(1, this.irisTransitionProgress + dtSec * 4.2);
       if (this.irisTransitionProgress >= 1) {
@@ -2400,9 +2431,11 @@ export class GameScene extends Phaser.Scene {
         if (p.lifeState === 'downed') {
           const revPct = Math.round(p.reviveProgress * 100);
           statusSuffix =
-            revPct > 0 ? ` · CỨU ${revPct}%` : ` · GỤC (${Math.ceil(p.downedTimer)}s) [Giữ E]`;
+            revPct > 0
+              ? ` · ${i18n.t('ui.hud.reviving')} ${revPct}%`
+              : ` · ${i18n.t('ui.hud.downed')} (${Math.ceil(p.downedTimer)}s) ${i18n.t('ui.hud.holdEToRevive')}`;
         } else if (p.lifeState === 'ghost') {
-          statusSuffix = ' · LINH HỒN';
+          statusSuffix = ` · ${i18n.t('ui.hud.ghost')}`;
         } else if (sim.inHub && p.ready) {
           statusSuffix = ' · ✓';
         }
@@ -2424,7 +2457,7 @@ export class GameScene extends Phaser.Scene {
     if (emoteLabel && emoteBg) {
       emoteBg.clear();
       if (p.emoteTimer > 0 && p.emoteId) {
-        const emoteStr = `💬 ${QUICK_EMOTES_VI[p.emoteId]}`;
+        const emoteStr = `💬 ${i18n.emoteText(p.emoteId) || QUICK_EMOTES_VI[p.emoteId]}`;
         if (emoteLabel.text !== emoteStr) {
           emoteLabel.setText(emoteStr);
         }
@@ -3356,11 +3389,13 @@ export class GameScene extends Phaser.Scene {
     const textRes = TextureBaker.getBakeScale();
     const invBake = 1 / textRes;
 
-    // 0. Hub 5 Character Statues (Doanh Trại)
+    // 0. Hub 5 Character Statues & Natural Hub Guidance Signs (Doanh Trại)
+    const previewOpen = initGlobalDebugState().hubPreviewCharacterId !== null;
     if (sim.inHub && sim.hubStatues.length > 0) {
       for (let i = 0; i < sim.hubStatues.length; i++) {
         const st = sim.hubStatues[i]!;
         const cDef = CHARACTERS[st.characterId];
+        const charTxt = i18n.getCharacterText(st.characterId);
         const rigDef = RIG_DEFS_BY_ID[st.characterId] ?? VANGUARD_RIG_DEF;
         let entry = this.hubStatueRigs.get(st.characterId);
         if (!entry) {
@@ -3372,7 +3407,7 @@ export class GameScene extends Phaser.Scene {
           rig.setEquippedWeapon(cDef.starterWeaponId);
 
           const label = this.add
-            .text(st.x, st.y - 34, `[E] ${cDef.nameVi}`, {
+            .text(st.x, st.y - 30, `[E] ${charTxt.name}`, {
               fontFamily: '"Be Vietnam Pro", sans-serif',
               fontSize: '10.5px',
               fontStyle: '800',
@@ -3385,7 +3420,7 @@ export class GameScene extends Phaser.Scene {
             .setDepth(46);
 
           const subLabel = this.add
-            .text(st.x, st.y + 27, `HP ${cDef.hp} · Giáp ${cDef.armor}\n[Q] ${cDef.skill.nameVi}`, {
+            .text(st.x, st.y + 23, `HP ${cDef.hp} · ${i18n.t('ui.hud.armor')} ${cDef.armor}`, {
               fontFamily: '"Be Vietnam Pro", sans-serif',
               fontSize: '8.5px',
               fontStyle: '700',
@@ -3393,7 +3428,6 @@ export class GameScene extends Phaser.Scene {
               stroke: PALETTE.INK_DEEP,
               strokeThickness: 2.5,
               align: 'center',
-              lineSpacing: 1,
               resolution: textRes,
             })
             .setOrigin(0.5, 0.5)
@@ -3406,19 +3440,99 @@ export class GameScene extends Phaser.Scene {
         const isSelectedByLocal = sim.player.characterId === st.characterId;
         const isInspecting = Math.hypot(sim.player.x - st.x, sim.player.y - st.y) <= 72;
         entry.label.setColor(isSelectedByLocal ? PALETTE.LIME_GLOW : PALETTE.SOLAR_GOLD);
+        const selTag = i18n.getLocale() === 'en' ? 'Selected' : 'Đang Chọn';
         entry.label.setText(
-          isSelectedByLocal ? `★ ${cDef.nameVi} (Đang Chọn)` : `[E] ${cDef.nameVi}`,
+          isSelectedByLocal ? `★ ${charTxt.name} (${selTag})` : `[E] ${charTxt.name}`,
         );
-        entry.subLabel.setVisible(!isInspecting);
+        const nextSub = `HP ${cDef.hp} · ${i18n.t('ui.hud.armor')} ${cDef.armor}`;
+        if (entry.subLabel.text !== nextSub) {
+          entry.subLabel.setText(nextSub);
+        }
+        entry.subLabel.setVisible(
+          !isInspecting && !(previewOpen && st.y > sim.map.height * 0.5 - 120),
+        );
         entry.rig.update(dtSec);
       }
-    } else if (this.hubStatueRigs.size > 0) {
-      for (const entry of this.hubStatueRigs.values()) {
-        entry.rig.destroy();
-        entry.label.destroy();
-        entry.subLabel.destroy();
+
+      // Natural Hub Guidance Signs (Statues Arc, Weapon Rack, Training Dummy live DPS)
+      const isEn = i18n.getLocale() === 'en';
+      const camScrollX = this.cameras.main.worldView?.x ?? 0;
+      const dummySignX = 620;
+      const dummyBlockedByInvite =
+        this.invitePanelVisible && !this.fullMapOpen && dummySignX - camScrollX > 560;
+      const guideSpecs: {
+        x: number;
+        y: number;
+        text: string;
+        color: string;
+        visible: boolean;
+      }[] = [
+        {
+          x: 500,
+          y: 112,
+          text: i18n.t('ui.hubGuide.statuesSign'),
+          color: PALETTE.CYAN_FROST,
+          visible: true,
+        },
+        {
+          x: 255,
+          y: 268,
+          text: isEn
+            ? '⚔ PRACTICE WEAPON RACK — Press [E] to Test & Compare'
+            : '⚔ KỆ VŨ KHÍ THỬ NGHIỆM — Nhấn [E] Nhặt Thử & So Sánh',
+          color: PALETTE.SOLAR_GOLD,
+          visible: !previewOpen,
+        },
+        {
+          x: dummySignX,
+          y: 392,
+          text: isEn
+            ? `🎯 Training Dummy · DPS: ${sim.getRollingDps().toFixed(1)}`
+            : `🎯 Bù Nhìn Tập Bắn · DPS: ${sim.getRollingDps().toFixed(1)}`,
+          color: PALETTE.LIME_GLOW,
+          visible: !dummyBlockedByInvite,
+        },
+      ];
+
+      for (let gIdx = 0; gIdx < guideSpecs.length; gIdx++) {
+        const spec = guideSpecs[gIdx]!;
+        let gTxt = this.hubGuideTexts[gIdx];
+        if (!gTxt) {
+          gTxt = this.add
+            .text(spec.x, spec.y, spec.text, {
+              fontFamily: '"Be Vietnam Pro", sans-serif',
+              fontSize: '9.5px',
+              fontStyle: '800',
+              color: spec.color,
+              stroke: PALETTE.INK_DEEP,
+              strokeThickness: 3,
+              resolution: textRes,
+            })
+            .setOrigin(0.5, 0.5)
+            .setDepth(45);
+          this.hubGuideTexts[gIdx] = gTxt;
+        } else {
+          if (gTxt.text !== spec.text) gTxt.setText(spec.text);
+          gTxt.setColor(spec.color);
+          gTxt.setPosition(spec.x, spec.y);
+        }
+        gTxt.setVisible(spec.visible);
       }
-      this.hubStatueRigs.clear();
+    } else {
+      if (this.hubStatueRigs.size > 0) {
+        for (const entry of this.hubStatueRigs.values()) {
+          entry.rig.destroy();
+          entry.label.destroy();
+          entry.subLabel.destroy();
+        }
+        this.hubStatueRigs.clear();
+      }
+      if (this.hubGuideTexts.length > 0) {
+        for (const gTxt of this.hubGuideTexts) {
+          gTxt.destroy();
+        }
+        this.hubGuideTexts = [];
+      }
     }
 
     // 0b. Contextual Ping Labels
@@ -3482,7 +3596,11 @@ export class GameScene extends Phaser.Scene {
       const isOpen = !door.locked;
       const tex = isOpen ? 'door_open' : 'door_locked';
       const targetRoom = sim.dungeon.rooms.find((r) => r.id === door.targetRoomId);
-      const roomLabel = targetRoom ? ROOM_TYPE_LABELS_VI[targetRoom.type] : 'Phòng';
+      const roomLabel = targetRoom
+        ? i18n.roomTypeName(targetRoom.type)
+        : i18n.getLocale() === 'en'
+          ? 'Room'
+          : 'Phòng';
       const labelStr = isOpen ? `→ ${roomLabel}` : `🔒 ${roomLabel}`;
       const labelColor = isOpen ? PALETTE.LIME_GLOW : PALETTE.CRIMSON_BRIGHT;
 
@@ -3570,6 +3688,27 @@ export class GameScene extends Phaser.Scene {
     }
 
     // 3. World Items (Dropped Weapons & Merchant Shop Items, instanced per player unless shared)
+    let comparedWeaponItemId = -1;
+    let bestWeaponDist = 64;
+    if (sim.runState === 'playing' && !this.fullMapOpen) {
+      for (let i = 0; i < sim.worldItems.length; i++) {
+        const it = sim.worldItems[i]!;
+        if (it.pickedUp || it.kind !== 'weapon' || !it.weaponId) continue;
+        if (
+          it.ownerPlayerId !== undefined &&
+          it.ownerPlayerId !== 0 &&
+          it.ownerPlayerId !== sim.player.id
+        ) {
+          continue;
+        }
+        const d = Math.hypot(sim.player.x - it.x, sim.player.y - it.y);
+        if (d <= bestWeaponDist) {
+          bestWeaponDist = d;
+          comparedWeaponItemId = it.id;
+        }
+      }
+    }
+
     this.activeWorldItemIds.clear();
     for (let i = 0; i < sim.worldItems.length; i++) {
       const it = sim.worldItems[i]!;
@@ -3586,8 +3725,16 @@ export class GameScene extends Phaser.Scene {
         it.kind === 'weapon' && it.weaponId
           ? TextureBaker.getWeaponTextureKey(it.weaponId)
           : 'item_health_potion';
+      const itemName =
+        it.kind === 'weapon' && it.weaponId
+          ? i18n.weaponName(it.weaponId, it.nameVi)
+          : i18n.getLocale() === 'en'
+            ? `Health Potion (+${it.healAmount || 3} HP)`
+            : it.nameVi;
       const labelText =
-        it.costGold > 0 ? `[E] ${it.nameVi} · ${it.costGold} Xu` : `[E] ${it.nameVi}`;
+        it.costGold > 0
+          ? `[E] ${itemName} · ${it.costGold} ${i18n.t('ui.hud.gold')}`
+          : `[E] ${itemName}`;
 
       let entry = this.worldItemSprites.get(it.id);
       if (!entry) {
@@ -3622,7 +3769,7 @@ export class GameScene extends Phaser.Scene {
       const bobY = Math.sin(sim.tick * 0.08 + it.id) * 2.5;
       entry.sprite.setPosition(it.x, it.y + bobY);
       entry.label.setPosition(it.x, it.y - 24 + bobY * 0.5);
-      entry.label.setVisible(!(sim.inHub && initGlobalDebugState().hubPreviewCharacterId !== null));
+      entry.label.setVisible(!(sim.inHub && previewOpen) && it.id !== comparedWeaponItemId);
     }
 
     for (const [id, entry] of this.worldItemSprites.entries()) {
@@ -3647,7 +3794,7 @@ export class GameScene extends Phaser.Scene {
           });
           rig.container.setDepth(27);
           const label = this.add
-            .text(npc.x, npc.y - 38, 'Thương Nhân Hắc Ám', {
+            .text(npc.x, npc.y - 38, i18n.t('ui.hud.merchantName'), {
               fontFamily: '"Be Vietnam Pro", sans-serif',
               fontSize: '11px',
               fontStyle: '800',
@@ -3664,7 +3811,7 @@ export class GameScene extends Phaser.Scene {
           sprite.setScale(invBake);
           sprite.setDepth(24);
           const label = this.add
-            .text(npc.x, npc.y - 42, '[E] Điện Thờ Cổ Đại (25 Xu / 2 Máu → Phước Lành)', {
+            .text(npc.x, npc.y - 42, i18n.t('ui.hud.shrineActive'), {
               fontFamily: '"Be Vietnam Pro", sans-serif',
               fontSize: '11px',
               fontStyle: '800',
@@ -3682,11 +3829,15 @@ export class GameScene extends Phaser.Scene {
 
       if (entry.rig) {
         entry.rig.update(dtSec);
+        if (npc.kind === 'merchant') {
+          const mTxt = i18n.t('ui.hud.merchantName');
+          if (entry.label.text !== mTxt) entry.label.setText(mTxt);
+        }
       }
       if (npc.kind === 'shrine') {
         const shrineTxt = npc.interacted
-          ? 'Điện Thờ Cổ Đại (Đã Ban Phước)'
-          : '[E] Điện Thờ Cổ Đại (25 Xu / 2 Máu → Phước Lành)';
+          ? i18n.t('ui.hud.shrineUsed')
+          : i18n.t('ui.hud.shrineActive');
         if (entry.label.text !== shrineTxt) {
           entry.label.setText(shrineTxt);
           entry.label.setColor(npc.interacted ? PALETTE.ASH_GRAY : PALETTE.CYAN_FROST);
@@ -3712,9 +3863,9 @@ export class GameScene extends Phaser.Scene {
       }
       const portalText = sim.inHub
         ? sim.areAllPlayersReady()
-          ? '[E] Cổng Khởi Hành — Vào Tầng 1!'
-          : '[E] Cổng Khởi Hành (Cần Tất Cả Sẵn Sàng [V])'
-        : '[E] Cổng Dịch Chuyển Tầng Tiếp';
+          ? i18n.t('ui.hud.portalHubReady')
+          : i18n.t('ui.hud.portalHubWait')
+        : i18n.t('ui.hud.portalNextFloor');
       if (!this.portalLabel) {
         this.portalLabel = this.add
           .text(sim.portalX, sim.portalY - 38, portalText, {
@@ -4480,6 +4631,12 @@ export class GameScene extends Phaser.Scene {
   private updateVectorHud(): void {
     const sim = this.transport.getSim();
     const p = sim.player;
+    const curLocale = i18n.getLocale();
+    if (curLocale !== this.lastHudLocale) {
+      this.lastHudLocale = curLocale;
+      this.invalidateAllHudCaches();
+    }
+
     const hpRatio = clamp(p.hp / Math.max(1, p.maxHp), 0, 1);
     const armorRatio = clamp(p.armor / Math.max(1, p.maxArmor), 0, 1);
     const trailingAnimating =
@@ -4576,9 +4733,9 @@ export class GameScene extends Phaser.Scene {
 
       const charDef = CHARACTERS[p.characterId] ?? CHARACTERS.vanguard;
       const charName = i18n.charName(p.characterId, charDef.nameVi);
-      this.hpLabelText.setText(`${charName} · ${i18n.t('hud.hp')} ${p.hp}/${p.maxHp}`);
-      this.armorLabelText.setText(`${i18n.t('hud.armor')} ${p.armor}/${p.maxArmor}`);
-      this.energyLabelText.setText(`${i18n.t('hud.energy')} ${p.energy}/${p.maxEnergy}`);
+      this.hpLabelText.setText(`${charName} · ${i18n.t('ui.hud.hp')} ${p.hp}/${p.maxHp}`);
+      this.armorLabelText.setText(`${i18n.t('ui.hud.armor')} ${p.armor}/${p.maxArmor}`);
+      this.energyLabelText.setText(`${i18n.t('ui.hud.energy')} ${p.energy}/${p.maxEnergy}`);
     }
 
     // Update Bottom-Left Skill [Space] & Dash [Shift] Cooldown Sweep Cards
@@ -4592,9 +4749,7 @@ export class GameScene extends Phaser.Scene {
       const cDef = CHARACTERS[p.characterId] ?? CHARACTERS.vanguard;
       const skillMaxCd = Math.max(0.5, cDef.skill.cooldownSec);
       const skillReadyRatio =
-        p.skillActiveTimer > 0
-          ? 1
-          : clamp(1 - p.skillCooldownTimer / skillMaxCd, 0, 1);
+        p.skillActiveTimer > 0 ? 1 : clamp(1 - p.skillCooldownTimer / skillMaxCd, 0, 1);
       const skillBorder =
         p.skillActiveTimer > 0
           ? PALETTE.SOLAR_GOLD
@@ -4623,10 +4778,7 @@ export class GameScene extends Phaser.Scene {
       ag.fillRoundedRect(80, barY, cardW, cardH, 7);
       if (dashReadyRatio > 0) {
         const fillH = (cardH - 4) * dashReadyRatio;
-        ag.fillStyle(
-          hexToNum(PALETTE.COBALT_SHADE),
-          p.dashCooldownTimer <= 0 ? 0.55 : 0.35,
-        );
+        ag.fillStyle(hexToNum(PALETTE.COBALT_SHADE), p.dashCooldownTimer <= 0 ? 0.55 : 0.35);
         ag.fillRoundedRect(82, barY + cardH - 2 - fillH, cardW - 4, fillH, 5);
       }
       ag.lineStyle(2, hexToNum(dashBorder), 1);
@@ -4637,7 +4789,7 @@ export class GameScene extends Phaser.Scene {
           p.skillActiveTimer > 0
             ? `${p.skillActiveTimer.toFixed(1)}s`
             : p.skillCooldownTimer <= 0
-              ? i18n.t('hud.ready')
+              ? i18n.t('ui.hud.ready')
               : `${p.skillCooldownTimer.toFixed(1)}s`;
         if (this.skillCdText.text !== skTxt) this.skillCdText.setText(skTxt);
         this.skillCdText.setColor(
@@ -4650,13 +4802,9 @@ export class GameScene extends Phaser.Scene {
       }
       if (this.dashCdText) {
         const dTxt =
-          p.dashCooldownTimer <= 0
-            ? i18n.t('hud.ready')
-            : `${p.dashCooldownTimer.toFixed(1)}s`;
+          p.dashCooldownTimer <= 0 ? i18n.t('ui.hud.ready') : `${p.dashCooldownTimer.toFixed(1)}s`;
         if (this.dashCdText.text !== dTxt) this.dashCdText.setText(dTxt);
-        this.dashCdText.setColor(
-          p.dashCooldownTimer <= 0 ? PALETTE.CYAN_FROST : PALETTE.ASH_GRAY,
-        );
+        this.dashCdText.setColor(p.dashCooldownTimer <= 0 ? PALETTE.CYAN_FROST : PALETTE.ASH_GRAY);
       }
     }
 
@@ -4668,24 +4816,17 @@ export class GameScene extends Phaser.Scene {
     ) {
       const dps = sim.getRollingDps();
       const room = sim.getCurrentRoom();
-      const roomLabel = sim.inHub ? i18n.t('hud.hub') : ROOM_TYPE_LABELS_VI[room.type];
+      const roomLabel = sim.inHub ? i18n.t('ui.hud.hub') : i18n.roomTypeName(room.type);
       const dashReady =
-        p.dashCooldownTimer <= 0 ? i18n.t('hud.ready') : `${p.dashCooldownTimer.toFixed(1)}s`;
+        p.dashCooldownTimer <= 0 ? i18n.t('ui.hud.ready') : `${p.dashCooldownTimer.toFixed(1)}s`;
       const skillReady =
         p.skillActiveTimer > 0
-          ? `Bật (${p.skillActiveTimer.toFixed(1)}s)`
+          ? `${i18n.t('ui.hud.active')} (${p.skillActiveTimer.toFixed(1)}s)`
           : p.skillCooldownTimer <= 0
-            ? i18n.t('hud.ready')
+            ? i18n.t('ui.hud.ready')
             : `${p.skillCooldownTimer.toFixed(1)}s`;
 
-      const shortElemVi: Record<string, string> = {
-        burn: 'Lửa',
-        chill: 'Băng',
-        shock: 'Sét',
-        poison: 'Độc',
-        none: 'Vật Lý',
-      };
-      const nextElem =
+      const nextElem: ElementType =
         p.activeImbueElement === 'burn'
           ? 'chill'
           : p.activeImbueElement === 'chill'
@@ -4693,33 +4834,44 @@ export class GameScene extends Phaser.Scene {
             : 'burn';
       const cycleTag =
         p.characterId === 'elementalist'
-          ? ` · Chu Kỳ: ${shortElemVi[p.activeImbueElement] ?? 'Lửa'}→${shortElemVi[nextElem]}`
+          ? ` · ${i18n.t('ui.hud.cycle')}: ${i18n.elementShortName(p.activeImbueElement)}→${i18n.elementShortName(nextElem)}`
           : '';
-      const comboTag = sim.teamComboCount > 0 ? ` · Combo Đội: ${sim.teamComboCount}` : '';
+      const comboTag =
+        sim.teamComboCount > 0 ? ` · ${i18n.t('ui.hud.teamCombo')}: ${sim.teamComboCount}` : '';
+      const skShort = curLocale === 'en' ? 'Skill' : 'KN';
 
       const nextStats = sim.inHub
-        ? `Doanh Trại (${sim.getActivePlayerCount()}P) · [E] Chọn NV · [V] Sẵn Sàng · [Z] Ping · [X] Bỏ VK | ${VIETNAMESE_VERIFICATION_STRING}`
-        : `Tầng ${sim.currentFloor}/${sim.campaignMaxFloors} (${roomLabel}) · DPS ${dps.toFixed(1)} · Xu ${p.gold} · Đợt ${sim.waveNumber} · Dash ${dashReady} · KN ${skillReady}${cycleTag}${comboTag}`;
+        ? `${i18n.t('ui.hud.hubStatsHint', { count: sim.getActivePlayerCount() })} | ${VIETNAMESE_VERIFICATION_STRING}`
+        : `${i18n.t('ui.hud.floor')} ${sim.currentFloor}/${sim.campaignMaxFloors} (${roomLabel}) · DPS ${dps.toFixed(1)} · ${i18n.t('ui.hud.gold')} ${p.gold} · ${i18n.t('ui.hud.wave')} ${sim.waveNumber} · Dash ${dashReady} · ${skShort} ${skillReady}${cycleTag}${comboTag}`;
       if (nextStats !== this.lastHudStatsText) {
         this.lastHudStatsText = nextStats;
         this.statsLineText.setText(nextStats);
       }
     }
 
-    if (this.elementBtnText && p.activeImbueElement !== this.lastHudElement) {
-      this.lastHudElement = p.activeImbueElement;
-      this.elementBtnText.setText(`[R] Ng.Tố: ${ELEMENT_LABELS_VI[p.activeImbueElement]}`);
+    const elemKey = `${p.activeImbueElement}:${curLocale}`;
+    if (this.elementBtnText && elemKey !== this.lastHudElement) {
+      this.lastHudElement = elemKey;
+      this.elementBtnText.setText(
+        `${i18n.t('ui.hud.elementBtn')}: ${i18n.elementName(p.activeImbueElement)}`,
+      );
     }
 
     const q = graphicsSettings.getState().quality;
-    if (this.qualityBtnText && q !== this.lastHudQuality) {
-      this.lastHudQuality = q;
-      const qVi = q === 'high' ? 'CAO' : q === 'medium' ? 'TB' : 'THẤP';
-      this.qualityBtnText.setText(`[G] Đồ Họa: ${qVi}`);
+    const qKey = `${q}:${curLocale}`;
+    if (this.qualityBtnText && qKey !== this.lastHudQuality) {
+      this.lastHudQuality = qKey;
+      const qLabel =
+        q === 'high'
+          ? i18n.t('ui.settings.qualityHigh')
+          : q === 'medium'
+            ? i18n.t('ui.settings.qualityMedium')
+            : i18n.t('ui.settings.qualityLow');
+      this.qualityBtnText.setText(`${i18n.t('ui.hud.qualityBtn')}: ${qLabel}`);
     }
 
     // Update 4-slot Weapon Bar when active slot or equipped weapons change
-    const weaponHash = `${p.activeWeaponSlot}:${p.weaponSlots.join(',')}:${i18n.getLocale()}`;
+    const weaponHash = `${p.activeWeaponSlot}:${p.weaponSlots.join(',')}:${curLocale}`;
     if (weaponHash !== this.lastHudWeaponHash) {
       this.lastHudWeaponHash = weaponHash;
       const slotW = 166;
@@ -4727,6 +4879,8 @@ export class GameScene extends Phaser.Scene {
       const startX = 148;
       const barY = 486;
       const invBake = 1 / TextureBaker.getBakeScale();
+      const dmgPrefix = curLocale === 'en' ? 'DMG' : 'ST';
+      const nrgPrefix = i18n.t('ui.hud.energy');
 
       this.weaponSlotBgs.forEach((slotBg, idx) => {
         const wId = p.weaponSlots[idx] ?? PHASE1_SAMPLE_WEAPONS[idx]!;
@@ -4760,7 +4914,9 @@ export class GameScene extends Phaser.Scene {
         }
         const metaTxt = this.weaponMetaTexts[idx];
         if (metaTxt) {
-          metaTxt.setText(`ST ${wDef.damage} · NL ${wDef.energyCost}`);
+          metaTxt.setText(
+            `${dmgPrefix} ${wDef.damage}${wDef.pelletCount > 1 ? `×${wDef.pelletCount}` : ''} · ${nrgPrefix} ${wDef.energyCost}`,
+          );
         }
       });
     }
@@ -4783,15 +4939,17 @@ export class GameScene extends Phaser.Scene {
     const remotes = sim.stressTestActive ? [] : sim.simulatedPlayers;
     const telemetry = this.networkTransport?.getTelemetry();
     const localHighPing = (telemetry?.rttMs ?? 0) > 100 ? 1 : 0;
+    const resultModalActive =
+      (sim.runState === 'victory' || sim.runState === 'defeat') && !this.resultDismissed;
     const hash =
-      debug.overlayVisible || remotes.length === 0
+      debug.overlayVisible || remotes.length === 0 || resultModalActive
         ? ''
         : remotes
             .map(
               (r) =>
                 `${r.id}:${r.slot}:${r.displayName}:${r.characterId}:${r.hp}:${r.maxHp}:${r.armor}:${r.lifeState}:${r.ready ? 1 : 0}:${Math.ceil(r.skillCooldownTimer)}:${r.pingMs}`,
             )
-            .join('|') + `:${localHighPing}`;
+            .join('|') + `:${localHighPing}:${i18n.getLocale()}`;
 
     if (hash === this.lastCoopHudHash) return;
     this.lastCoopHudHash = hash;
@@ -4850,11 +5008,11 @@ export class GameScene extends Phaser.Scene {
       const skillTag = skillReady ? '[Q✓]' : `[Q ${Math.ceil(cp.skillCooldownTimer)}s]`;
       const stateTag =
         cp.lifeState === 'downed'
-          ? 'GỤC NGÃ!'
+          ? i18n.t('ui.hud.downed')
           : cp.lifeState === 'ghost'
-            ? 'LINH HỒN'
+            ? i18n.t('ui.hud.ghost')
             : sim.inHub && cp.ready
-              ? `✓ Sẵn sàng · ${skillTag}`
+              ? `${i18n.t('ui.hud.readyShort')} · ${skillTag}`
               : `HP ${cp.hp}/${cp.maxHp} · ${skillTag}`;
 
       const title = this.add.text(
@@ -4909,7 +5067,7 @@ export class GameScene extends Phaser.Scene {
       .join('|');
     const hash = !showPanel
       ? ''
-      : `${this.primaryLanIp}:${this.serverPort}:${this.hostInviteUrl ?? ''}:${sim.allowDuplicateCharacters ? 1 : 0}:${this.copyToastTimer > 0 ? 1 : 0}:${playersKey}`;
+      : `${this.primaryLanIp}:${this.serverPort}:${this.hostInviteUrl ?? ''}:${sim.allowDuplicateCharacters ? 1 : 0}:${this.copyToastTimer > 0 ? 1 : 0}:${playersKey}:${i18n.getLocale()}`;
 
     if (hash === this.lastInvitePanelHash) return;
     this.lastInvitePanelHash = hash;
@@ -4930,7 +5088,7 @@ export class GameScene extends Phaser.Scene {
     bg.strokeRoundedRect(px, py, pw, ph, 9);
     this.invitePanelContainer.add(bg);
 
-    const header = this.add.text(px + 10, py + 7, 'DOANH TRẠI CO-OP LAN [I]', {
+    const header = this.add.text(px + 10, py + 7, i18n.t('ui.hud.coopInviteHeader'), {
       fontFamily: '"Be Vietnam Pro", sans-serif',
       fontSize: '11px',
       fontStyle: '800',
@@ -4942,7 +5100,7 @@ export class GameScene extends Phaser.Scene {
     const ipText = this.add.text(
       px + 10,
       py + 23,
-      `IP LAN: ${this.primaryLanIp}:${this.serverPort}`,
+      `${i18n.t('ui.menu.ipLabel')}: ${this.primaryLanIp}:${this.serverPort}`,
       {
         fontFamily: '"Be Vietnam Pro", sans-serif',
         fontSize: '10px',
@@ -5031,7 +5189,7 @@ export class GameScene extends Phaser.Scene {
       qrY,
       btnW,
       23,
-      this.copyToastTimer > 0 ? '✓ Đã sao chép link!' : 'Sao chép link mời',
+      this.copyToastTimer > 0 ? i18n.t('ui.hud.copiedInviteLink') : i18n.t('ui.hud.copyInviteLink'),
       this.copyToastTimer > 0 ? PALETTE.GOBLIN_GREEN : PALETTE.AZURE_CORE,
       () => {
         try {
@@ -5049,7 +5207,7 @@ export class GameScene extends Phaser.Scene {
       qrY + 27,
       btnW,
       23,
-      `Trùng NV: ${sim.allowDuplicateCharacters ? 'BẬT' : 'TẮT'}`,
+      `${i18n.t('ui.hud.duplicateChar')}: ${sim.allowDuplicateCharacters ? i18n.t('ui.hud.on') : i18n.t('ui.hud.off')}`,
       PALETTE.SLATE_MID,
       () => {
         const nextAllow = !sim.allowDuplicateCharacters;
@@ -5066,7 +5224,7 @@ export class GameScene extends Phaser.Scene {
       qrY + 54,
       btnW,
       24,
-      sim.player.ready ? '✓ ĐÃ SẴN SÀNG [V]' : 'BẤM SẴN SÀNG [V]',
+      sim.player.ready ? i18n.t('ui.hud.readyDone') : i18n.t('ui.hud.pressReady'),
       sim.player.ready ? PALETTE.GOBLIN_GREEN : PALETTE.RUBY_CORE,
       () => {
         this.readyToggleQueued = true;
@@ -5092,8 +5250,9 @@ export class GameScene extends Phaser.Scene {
       this.invitePanelContainer.add(rowG);
 
       if (pl) {
-        const charName = CHARACTERS[pl.characterId]?.nameVi ?? 'Thiết Vệ';
-        const rdyStr = pl.ready ? '✓ Sẵn sàng' : 'Đang chọn';
+        const charDef = CHARACTERS[pl.characterId] ?? CHARACTERS.vanguard;
+        const charName = i18n.charName(pl.characterId, charDef.nameVi);
+        const rdyStr = pl.ready ? i18n.t('ui.hud.readyShort') : i18n.t('ui.hud.selectingChar');
         const rowTxt = this.add.text(
           px + 16,
           rowY + 5,
@@ -5111,19 +5270,27 @@ export class GameScene extends Phaser.Scene {
         this.invitePanelContainer.add(rowTxt);
 
         if (sim.player.slot === 1 && pl.slot !== 1) {
-          makePanelBtn(px + pw - 56, rowY + 3, 42, 18, 'Đuổi', PALETTE.RUBY_DARK, () => {
-            if (this.room && this.coopMode !== 'solo') {
-              this.room.send('kick_player', { slot: pl.slot });
-            } else {
-              sim.removeCoopPlayer(pl.id);
-            }
-          });
+          makePanelBtn(
+            px + pw - 56,
+            rowY + 3,
+            42,
+            18,
+            i18n.t('ui.hud.kick'),
+            PALETTE.RUBY_DARK,
+            () => {
+              if (this.room && this.coopMode !== 'solo') {
+                this.room.send('kick_player', { slot: pl.slot });
+              } else {
+                sim.removeCoopPlayer(pl.id);
+              }
+            },
+          );
         }
       } else {
         const emptyTxt = this.add.text(
           px + 16,
           rowY + 5,
-          `P${slotIdx} · [Trống — Quét QR hoặc nhập IP để vào]`,
+          `P${slotIdx} · ${i18n.t('ui.hud.emptySlot')}`,
           {
             fontFamily: '"Be Vietnam Pro", sans-serif',
             fontSize: '9px',
@@ -5136,11 +5303,11 @@ export class GameScene extends Phaser.Scene {
     }
 
     // Quick Emote Bar at bottom of Hub Panel
-    const emotes: { id: QuickEmoteId; key: string; shortVi: string }[] = [
-      { id: 1, key: '1', shortVi: 'Tuyệt!' },
-      { id: 2, key: '2', shortVi: 'Hồi máu!' },
-      { id: 3, key: '3', shortVi: 'Dồn ST!' },
-      { id: 4, key: '4', shortVi: 'Thắng!' },
+    const emotes: { id: QuickEmoteId; key: string }[] = [
+      { id: 1, key: '1' },
+      { id: 2, key: '2' },
+      { id: 3, key: '3' },
+      { id: 4, key: '4' },
     ];
     const emY = py + ph - 26;
     const emW = 60;
@@ -5150,7 +5317,7 @@ export class GameScene extends Phaser.Scene {
         emY,
         emW,
         20,
-        `[${em.key}] ${em.shortVi}`,
+        `[${em.key}] ${i18n.emoteText(em.id)}`,
         PALETTE.SLATE_MID,
         () => {
           this.queuedEmote = em.id;
@@ -5178,7 +5345,7 @@ export class GameScene extends Phaser.Scene {
 
     debug.hubPreviewCharacterId = nearestCharId;
     const isEquipped = nearestCharId === sim.player.characterId;
-    const hash = nearestCharId ? `${nearestCharId}:${isEquipped ? 1 : 0}` : '';
+    const hash = nearestCharId ? `${nearestCharId}:${isEquipped ? 1 : 0}:${i18n.getLocale()}` : '';
 
     if (hash === this.lastHubPreviewHash) return;
     this.lastHubPreviewHash = hash;
@@ -5188,6 +5355,8 @@ export class GameScene extends Phaser.Scene {
 
     const cDef = CHARACTERS[nearestCharId];
     if (!cDef) return;
+    const charTxt = i18n.getCharacterText(nearestCharId);
+    const isEn = i18n.getLocale() === 'en';
 
     const textRes = TextureBaker.getBakeScale();
     const px = 14;
@@ -5202,11 +5371,13 @@ export class GameScene extends Phaser.Scene {
     bg.strokeRoundedRect(px, py, pw, ph, 8);
     this.hubPreviewContainer.add(bg);
 
-    const statusBadge = isEquipped ? '✓ ĐANG CHỌN' : 'Nhấn [E] Chọn';
+    const statusBadge = isEquipped
+      ? i18n.t('ui.hud.equippedBadge')
+      : i18n.t('ui.hud.pressEToSelect');
     const header = this.add.text(
       px + 12,
       py + 7,
-      `${cDef.nameVi.toUpperCase()} — ${cDef.titleVi}`,
+      `${charTxt.name.toUpperCase()} — ${charTxt.title}`,
       {
         fontFamily: '"Be Vietnam Pro", sans-serif',
         fontSize: '9.8px',
@@ -5218,11 +5389,12 @@ export class GameScene extends Phaser.Scene {
       },
     );
 
+    const spdLabel = isEn ? 'Spd' : 'Tốc';
     const statsBadge = this.add
       .text(
         px + pw - 12,
         py + 7.5,
-        `[${statusBadge}] · HP ${cDef.hp} · Giáp ${cDef.armor} · NL ${cDef.energy} · Tốc ${cDef.moveSpeed}`,
+        `[${statusBadge}] · HP ${cDef.hp} · ${i18n.t('ui.hud.armor')} ${cDef.armor} · ${i18n.t('ui.hud.energy')} ${cDef.energy} · ${spdLabel} ${cDef.moveSpeed}`,
         {
           fontFamily: '"Be Vietnam Pro", sans-serif',
           fontSize: '8.6px',
@@ -5237,12 +5409,21 @@ export class GameScene extends Phaser.Scene {
 
     const upg1 = cDef.skill.upgrades[0];
     const upg2 = cDef.skill.upgrades[1];
-    const bodyLines = [
-      `• Nội tại (${cDef.passiveNameVi}): ${cDef.passiveDescriptionVi}`,
-      `• Kỹ năng [Q] (${cDef.skill.nameVi} · Hồi ${cDef.skill.cooldownSec}s): ${cDef.skill.descriptionVi}`,
-      `• Nâng cấp: (1) ${upg1.nameVi}: ${upg1.descriptionVi} | (2) ${upg2.nameVi}: ${upg2.descriptionVi}`,
-      `• Synergy Co-op: ${cDef.skill.synergyVi}`,
-    ].join('\n');
+    const upg1Txt = i18n.getBuffText(upg1.id);
+    const upg2Txt = i18n.getBuffText(upg2.id);
+    const bodyLines = isEn
+      ? [
+          `• Passive (${charTxt.passiveName}): ${charTxt.passiveDesc}`,
+          `• Skill [Space/RMB] (${charTxt.skillName} · CD ${cDef.skill.cooldownSec}s): ${charTxt.skillDesc}`,
+          `• Upgrades: (1) ${upg1Txt.name}: ${upg1Txt.desc} | (2) ${upg2Txt.name}: ${upg2Txt.desc}`,
+          `• Co-op Synergy: ${charTxt.synergy}`,
+        ].join('\n')
+      : [
+          `• Nội tại (${charTxt.passiveName}): ${charTxt.passiveDesc}`,
+          `• Kỹ năng [Q] (${charTxt.skillName} · Hồi ${cDef.skill.cooldownSec}s): ${charTxt.skillDesc}`,
+          `• Nâng cấp: (1) ${upg1Txt.name}: ${upg1Txt.desc} | (2) ${upg2Txt.name}: ${upg2Txt.desc}`,
+          `• Synergy Co-op: ${charTxt.synergy}`,
+        ].join('\n');
 
     const body = this.add.text(px + 12, py + 25, bodyLines, {
       fontFamily: '"Be Vietnam Pro", sans-serif',
@@ -5308,10 +5489,10 @@ export class GameScene extends Phaser.Scene {
     const wDrop = WEAPONS[dropWId] ?? WEAPONS.rusty_pistol!;
     const wCurr = WEAPONS[currWId] ?? WEAPONS.rusty_pistol!;
     const textRes = TextureBaker.getBakeScale();
-    const px = 260;
-    const py = 368;
-    const pw = 440;
-    const ph = 110;
+    const px = 230;
+    const py = 356;
+    const pw = 500;
+    const ph = 122;
 
     const bg = this.add.graphics();
     bg.fillStyle(hexToNum(PALETTE.INK_DEEP), 0.96);
@@ -5320,18 +5501,36 @@ export class GameScene extends Phaser.Scene {
     bg.strokeRoundedRect(px, py, pw, ph, 8);
     this.weaponCompareContainer.add(bg);
 
+    const dropTotalDmg = wDrop.damage * Math.max(1, wDrop.pelletCount);
+    const currTotalDmg = wCurr.damage * Math.max(1, wCurr.pelletCount);
+    const dmgDiff = dropTotalDmg - currTotalDmg;
+    const rateDiff = Math.round((wDrop.fireRate - wCurr.fireRate) * 10) / 10;
+    const nrgDiff = wDrop.energyCost - wCurr.energyCost;
+    const dropDps = Math.round(dropTotalDmg * wDrop.fireRate * (1 + wDrop.critChance * 0.5));
+    const currDps = Math.round(currTotalDmg * wCurr.fireRate * (1 + wCurr.critChance * 0.5));
+    const dpsDiff = dropDps - currDps;
+
+    const fmtDelta = (diff: number, invertGood = false) => {
+      if (Math.abs(diff) < 0.05) return '(=)';
+      const isGood = invertGood ? diff < 0 : diff > 0;
+      const sign = diff > 0 ? '+' : '';
+      return isGood ? `▲ ${sign}${diff}` : `▼ ${sign}${diff}`;
+    };
+
     const dropName = i18n.weaponName(wDrop.id, wDrop.nameVi);
     const currName = i18n.weaponName(wCurr.id, wCurr.nameVi);
     const costSuffix =
-      nearestWeaponItem.costGold > 0 ? ` (${nearestWeaponItem.costGold} Xu)` : '';
+      nearestWeaponItem.costGold > 0
+        ? ` (${nearestWeaponItem.costGold} ${i18n.t('ui.hud.gold')})`
+        : '';
 
     const header = this.add.text(
       px + 12,
       py + 7,
-      `★ ${dropName.toUpperCase()}${costSuffix}  ⇄  ${currName}`,
+      `★ ${dropName.toUpperCase()}${costSuffix}  ⇄  ${currName}   ·   DPS ~${dropDps} (${fmtDelta(dpsDiff)})`,
       {
         fontFamily: '"Be Vietnam Pro", sans-serif',
-        fontSize: '10px',
+        fontSize: '9.8px',
         fontStyle: '800',
         color: WEAPON_RARITY_COLORS[wDrop.rarity],
         stroke: PALETTE.INK_DARK,
@@ -5341,40 +5540,31 @@ export class GameScene extends Phaser.Scene {
     );
     this.weaponCompareContainer.add(header);
 
-    const dropTotalDmg = wDrop.damage * Math.max(1, wDrop.pelletCount);
-    const currTotalDmg = wCurr.damage * Math.max(1, wCurr.pelletCount);
-    const dmgDiff = dropTotalDmg - currTotalDmg;
-    const rateDiff = Math.round((wDrop.fireRate - wCurr.fireRate) * 10) / 10;
-    const nrgDiff = wDrop.energyCost - wCurr.energyCost;
+    const statsLine1 = `${i18n.t('ui.hud.weaponCompareDmg')}: ${wDrop.damage}${wDrop.pelletCount > 1 ? `×${wDrop.pelletCount}` : ''} (${fmtDelta(dmgDiff)})   ·   ${i18n.t('ui.hud.weaponCompareFireRate')}: ${wDrop.fireRate}/s (${fmtDelta(rateDiff)})   ·   ${i18n.t('ui.hud.weaponCompareEnergy')}: ${wDrop.energyCost} (${fmtDelta(nrgDiff, true)})`;
+    const statsLine2 = `${i18n.t('ui.hud.weaponCompareCrit')}: ${Math.round(wDrop.critChance * 100)}%   ·   ${i18n.t('ui.tooltip.element')}: ${i18n.elementName(wDrop.element)}   ·   [E] ${i18n.t('ui.hud.weaponCompareSwap')}`;
+    const descLine = `${i18n.getWeaponText(wDrop.id).desc}`;
 
-    const fmtDelta = (diff: number, invertGood = false) => {
-      if (Math.abs(diff) < 0.05) return '(=)';
-      const isGood = invertGood ? diff < 0 : diff > 0;
-      const sign = diff > 0 ? '+' : '';
-      return isGood ? `▲ ${sign}${diff}` : `▼ ${sign}${diff}`;
-    };
-
-    const statsLine1 = `${i18n.t('hud.weaponCompareDmg')}: ${wDrop.damage}${wDrop.pelletCount > 1 ? `×${wDrop.pelletCount}` : ''} (${fmtDelta(dmgDiff)})   ·   ${i18n.t('hud.weaponCompareFireRate')}: ${wDrop.fireRate}/s (${fmtDelta(rateDiff)})`;
-    const statsLine2 = `${i18n.t('hud.weaponCompareEnergy')}: ${wDrop.energyCost} (${fmtDelta(nrgDiff, true)})   ·   ${i18n.t('hud.weaponCompareCrit')}: ${Math.round(wDrop.critChance * 100)}%   ·   Ng.Tố: ${ELEMENT_LABELS_VI[wDrop.element]}`;
-    const descLine = `${i18n.getWeaponText(wDrop.id).desc} — [E] ${i18n.t('hud.weaponCompareSwap')}`;
-
-    const body = this.add.text(
-      px + 12,
-      py + 27,
-      [statsLine1, statsLine2, descLine].join('\n'),
-      {
-        fontFamily: '"Be Vietnam Pro", sans-serif',
-        fontSize: '9.2px',
-        fontStyle: '700',
-        color: PALETTE.BONE_WHITE,
-        stroke: PALETTE.INK_DARK,
-        strokeThickness: 2.2,
-        lineSpacing: 4,
-        wordWrap: { width: pw - 24 },
-        resolution: textRes,
-      },
-    );
-    this.weaponCompareContainer.add(body);
+    const body = this.add.text(px + 12, py + 26, [statsLine1, statsLine2, descLine].join('\n'), {
+      fontFamily: '"Be Vietnam Pro", sans-serif',
+      fontSize: '8.9px',
+      fontStyle: '700',
+      color: PALETTE.BONE_WHITE,
+      stroke: PALETTE.INK_DARK,
+      strokeThickness: 2.2,
+      lineSpacing: 3,
+      wordWrap: { width: pw - 24 },
+      resolution: textRes,
+    });
+    const tipText = this.add.text(px + 12, py + ph - 19, i18n.t('ui.tooltip.firstPickupHint'), {
+      fontFamily: '"Be Vietnam Pro", sans-serif',
+      fontSize: '8.3px',
+      fontStyle: '700',
+      color: PALETTE.CYAN_FROST,
+      stroke: PALETTE.INK_DARK,
+      strokeThickness: 2,
+      resolution: textRes,
+    });
+    this.weaponCompareContainer.add([body, tipText]);
   }
 
   private updateOffscreenTeammateArrows(): void {
@@ -5439,19 +5629,27 @@ export class GameScene extends Phaser.Scene {
   private updateMinimapHud(): void {
     const sim = this.transport.getSim();
     const room = sim.getCurrentRoom();
-    const minimapHash = `${sim.inHub ? 'hub' : sim.currentFloor}:${sim.currentRoomId}:${this.fullMapOpen ? 1 : 0}:${sim.secretWallBroken ? 1 : 0}:${room.cleared ? 1 : 0}:${sim.runStats.roomsCleared}:${sim.pings.length}`;
+    const minimapHash = `${sim.inHub ? 'hub' : sim.currentFloor}:${sim.currentRoomId}:${this.fullMapOpen ? 1 : 0}:${sim.secretWallBroken ? 1 : 0}:${room.cleared ? 1 : 0}:${sim.runStats.roomsCleared}:${sim.pings.length}:${i18n.getLocale()}`;
     if (minimapHash === this.lastMinimapHash) return;
     this.lastMinimapHash = minimapHash;
 
     const g = this.minimapGraphics;
     g.clear();
 
-    const roomTypeVi = sim.inHub ? 'Doanh Trại' : ROOM_TYPE_LABELS_VI[room.type];
+    const roomTypeStr = sim.inHub ? i18n.roomTypeLabel('hub') : i18n.roomTypeLabel(room.type);
     const titleStr = this.fullMapOpen
-      ? `BẢN ĐỒ HẦM NGỤC — Tầng ${sim.currentFloor}/${sim.campaignMaxFloors} (${roomTypeVi}) [Tab]`
+      ? i18n.t('ui.minimap.fullTitle', {
+          floor: sim.currentFloor,
+          max: sim.campaignMaxFloors,
+          roomType: roomTypeStr,
+        })
       : sim.inHub
-        ? `Doanh Trại Co-op [Tab]`
-        : `T${sim.currentFloor}/${sim.campaignMaxFloors} · ${roomTypeVi} [Tab]`;
+        ? i18n.t('ui.minimap.hubMini')
+        : i18n.t('ui.minimap.floorMini', {
+            floor: sim.currentFloor,
+            max: sim.campaignMaxFloors,
+            roomType: roomTypeStr,
+          });
     if (this.minimapTitleText.text !== titleStr) {
       this.minimapTitleText.setText(titleStr);
     }
@@ -5586,7 +5784,7 @@ export class GameScene extends Phaser.Scene {
     const bossHash =
       !boss || this.fullMapOpen || sim.runState !== 'playing'
         ? ''
-        : `${boss.defId}:${boss.id}:${boss.hp}:${boss.maxHp}:${boss.bossPhase}:${stunActive}:${coreWin}:${trailKey}`;
+        : `${boss.defId}:${boss.id}:${boss.hp}:${boss.maxHp}:${boss.bossPhase}:${stunActive}:${coreWin}:${trailKey}:${i18n.getLocale()}`;
     if (bossHash === this.lastBossHudHash) return;
     this.lastBossHudHash = bossHash;
 
@@ -5599,14 +5797,25 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.bossTitleText.setVisible(true);
-    const bossNameVi = (ENEMIES[boss.defId]?.nameVi ?? 'Mục Vương Nấm Độc').toUpperCase();
+    const bossDef = ENEMIES[boss.defId];
+    const bossName = i18n
+      .enemyName(boss.defId, bossDef?.nameVi ?? 'Mục Vương Nấm Độc')
+      .toUpperCase();
     const statusSuffix =
       boss.aiState === 'stunned' && boss.stateTimer > 0
-        ? ' · ⚡ QUÁ TẢI CHOÁNG (x1.5 ST)!'
+        ? i18n.t('ui.boss.stunned')
         : sim.titanCoreWindowTimer > 0
-          ? ` · [PHÁ 2 LÕI TRONG ${Math.ceil(sim.titanCoreWindowTimer)}s]`
+          ? i18n.t('ui.boss.breakCores', {
+              sec: Math.ceil(sim.titanCoreWindowTimer),
+            })
           : '';
-    const titleStr = `${bossNameVi} (Pha ${boss.bossPhase}/3) — HP ${boss.hp}/${boss.maxHp}${statusSuffix}`;
+    const titleStr = i18n.t('ui.boss.titleFormat', {
+      name: bossName,
+      phase: boss.bossPhase,
+      hp: boss.hp,
+      maxHp: boss.maxHp,
+      suffix: statusSuffix,
+    });
     if (this.bossTitleText.text !== titleStr) {
       this.bossTitleText.setText(titleStr);
     }
@@ -5668,7 +5877,17 @@ export class GameScene extends Phaser.Scene {
     if (sim.runState === 'playing' || sim.runState === 'buff_choice') {
       this.resultDismissed = false;
     }
-    const modalKey = `${sim.runState}:${sim.pendingBuffChoices.join(',')}:${this.resultDismissed}:${i18n.getLocale()}`;
+    const statsSig =
+      sim.runState === 'victory' || sim.runState === 'defeat'
+        ? `${sim.runStats.kills}:${Math.round(sim.runStats.damageDealt)}:${sim.runStats.teamCombos}:${sim
+            .getAllPlayers()
+            .map(
+              (pl) =>
+                `${pl.id}:${Math.round(pl.statsDamageDealt ?? 0)}:${pl.statsKills ?? 0}:${pl.statsRevives ?? 0}`,
+            )
+            .join('|')}`
+        : '';
+    const modalKey = `${sim.runState}:${sim.pendingBuffChoices.join(',')}:${this.resultDismissed}:${i18n.getLocale()}:${statsSig}`;
     if (modalKey === this.lastRunState) return;
     const prevRunState = this.lastRunState.split(':')[0];
     this.lastRunState = modalKey;
@@ -5680,7 +5899,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.modalContainer.removeAll(true);
-    const textRes = TextureBaker.getBakeScale();
+    const textRes = Math.min(TextureBaker.getBakeScale(), 3);
 
     if (sim.runState === 'buff_choice') {
       const bg = this.add.graphics();
@@ -5706,6 +5925,7 @@ export class GameScene extends Phaser.Scene {
       sim.pendingBuffChoices.forEach((buffId: BuffId, idx: number) => {
         const bDef = FLOOR_BUFFS[buffId];
         if (!bDef) return;
+        const buffTxt = i18n.getBuffText(buffId, bDef.nameVi, bDef.descriptionVi);
         const cardX = 166 + idx * 214;
         const cardY = 172;
         const cardW = 200;
@@ -5719,7 +5939,7 @@ export class GameScene extends Phaser.Scene {
         this.modalContainer.add(cardG);
 
         const title = this.add
-          .text(cardX + cardW / 2, cardY + 22, `[${idx + 1}] ${bDef.nameVi}`, {
+          .text(cardX + cardW / 2, cardY + 22, `[${idx + 1}] ${buffTxt.name}`, {
             fontFamily: '"Be Vietnam Pro", sans-serif',
             fontSize: '13px',
             fontStyle: '800',
@@ -5734,7 +5954,7 @@ export class GameScene extends Phaser.Scene {
         this.modalContainer.add(title);
 
         const desc = this.add
-          .text(cardX + cardW / 2, cardY + 74, bDef.descriptionVi, {
+          .text(cardX + cardW / 2, cardY + 74, buffTxt.desc, {
             fontFamily: '"Be Vietnam Pro", sans-serif',
             fontSize: '11px',
             fontStyle: '600',
@@ -5780,13 +6000,13 @@ export class GameScene extends Phaser.Scene {
       const header = this.add
         .text(
           480,
-          py + 14,
+          py + 12,
           isWin
             ? i18n.t('modal.victoryTitle', { biome: biomeName.toUpperCase() })
             : i18n.t('modal.defeatTitle', { biome: biomeName.toUpperCase() }),
           {
             fontFamily: '"Be Vietnam Pro", sans-serif',
-            fontSize: '15.5px',
+            fontSize: '15px',
             fontStyle: '800',
             color: isWin ? PALETTE.SOLAR_GOLD : PALETTE.CRIMSON_BRIGHT,
             stroke: PALETTE.INK_DARK,
@@ -5799,45 +6019,137 @@ export class GameScene extends Phaser.Scene {
 
       const buffNames =
         sim.activeBuffIds.length > 0
-          ? sim.activeBuffIds.map((b: BuffId) => FLOOR_BUFFS[b]?.nameVi ?? b).join(', ')
-          : 'Không có';
+          ? sim.activeBuffIds
+              .map((b: BuffId) => {
+                const def = FLOOR_BUFFS[b];
+                return def ? i18n.getBuffText(b, def.nameVi, def.descriptionVi).name : b;
+              })
+              .join(', ')
+          : i18n.t('ui.result.none');
       const activeWDef = WEAPONS[sim.getActiveWeaponId()] ?? WEAPONS.rusty_pistol!;
       const totalGoldEarned = Math.max(sim.runStats.goldEarned, sim.player.gold);
       const totalSec = Math.max(1, Math.round(sim.runStats.ticksElapsed / 60));
       const mins = Math.floor(totalSec / 60);
       const secs = totalSec % 60;
-      const timeStr = `${mins}p ${secs < 10 ? '0' : ''}${secs}s`;
+      const timeStr = `${mins}m ${secs < 10 ? '0' : ''}${secs}s`;
       const summaryLines = [
-        `• Tầng đạt được: Tầng ${sim.currentFloor} (${biomeName})`,
-        `• Thời gian lượt chơi: ${timeStr}`,
-        `• Phòng đã dọn sạch: ${sim.runStats.roomsCleared} phòng`,
-        `• Kẻ địch tiêu diệt: ${sim.runStats.kills} quái (Tinh Anh: ${sim.runStats.elitesKilled})`,
-        `• Tổng sát thương gây ra: ${Math.round(sim.runStats.damageDealt)} ST`,
-        `• Phản ứng nguyên tố: ${sim.runStats.elementalReactions} (Combo Đội: ${sim.runStats.teamCombos})`,
-        `• Xu thu thập: ${sim.player.gold} Xu (Tổng nhận: ${totalGoldEarned} Xu)`,
-        `• Vũ khí đang cầm: ${i18n.weaponName(activeWDef.id, activeWDef.nameVi)}`,
-        `• Phước lành: ${buffNames}`,
+        i18n.t('ui.result.floorReached', {
+          floor: sim.currentFloor,
+          biome: biomeName,
+        }),
+        i18n.t('ui.result.timeElapsed', { time: timeStr }),
+        i18n.t('ui.result.roomsCleared', { count: sim.runStats.roomsCleared }),
+        i18n.t('ui.result.enemiesKilled', {
+          kills: sim.runStats.kills,
+          elites: sim.runStats.elitesKilled,
+        }),
+        i18n.t('ui.result.totalDamage', {
+          dmg: Math.round(sim.runStats.damageDealt),
+        }),
+        i18n.t('ui.result.elementalReactions', {
+          reactions: sim.runStats.elementalReactions,
+          combos: sim.runStats.teamCombos,
+        }),
+        i18n.t('ui.result.goldCollected', {
+          gold: sim.player.gold,
+          totalGold: totalGoldEarned,
+        }),
+        i18n.t('ui.result.activeWeapon', {
+          weapon: i18n.weaponName(activeWDef.id, activeWDef.nameVi),
+        }),
+        i18n.t('ui.result.blessings', { buffs: buffNames }),
       ].join('\n');
 
       const body = this.add
-        .text(px + 20, py + 44, summaryLines, {
+        .text(px + 18, py + 36, summaryLines, {
           fontFamily: '"Be Vietnam Pro", sans-serif',
-          fontSize: '10.2px',
+          fontSize: '8.8px',
           fontStyle: '700',
           color: PALETTE.BONE_WHITE,
           stroke: PALETTE.INK_DARK,
-          strokeThickness: 2.5,
-          lineSpacing: 3,
-          wordWrap: { width: 345 },
+          strokeThickness: 2.2,
+          lineSpacing: 1,
+          wordWrap: { width: 348 },
           resolution: textRes,
         })
         .setOrigin(0, 0);
       this.modalContainer.add(body);
 
+      // Left Column Bottom: Per-Player Performance Breakdown Table
+      const playerHeader = this.add.text(
+        px + 18,
+        py + 196,
+        `📊 ${i18n.t('ui.result.playerStatsHeader')}`,
+        {
+          fontFamily: '"Be Vietnam Pro", sans-serif',
+          fontSize: '9.8px',
+          fontStyle: '800',
+          color: PALETTE.CYAN_FROST,
+          stroke: PALETTE.INK_DARK,
+          strokeThickness: 2.6,
+          resolution: textRes,
+        },
+      );
+      this.modalContainer.add(playerHeader);
+
+      const allPlayers = sim.getAllPlayers().slice(0, 4);
+      allPlayers.forEach((pl, idx) => {
+        const ry = py + 214 + idx * 33;
+        const rw = 348;
+        const rh = 30;
+        const slotColor = PLAYER_SLOT_COLORS[pl.slot] ?? PALETTE.CYAN_FROST;
+
+        const rowG = this.add.graphics();
+        rowG.fillStyle(hexToNum(PALETTE.SLATE_DARK), 0.92);
+        rowG.lineStyle(1.5, hexToNum(slotColor), 0.9);
+        rowG.fillRoundedRect(px + 18, ry, rw, rh, 5);
+        rowG.strokeRoundedRect(px + 18, ry, rw, rh, 5);
+        this.modalContainer.add(rowG);
+
+        const cDef = CHARACTERS[pl.characterId] ?? CHARACTERS.vanguard;
+        const charName = i18n.charName(pl.characterId, cDef.nameVi);
+        const pNameTxt = this.add.text(
+          px + 25,
+          ry + 3,
+          `[P${pl.slot}] ${pl.displayName} (${charName})`,
+          {
+            fontFamily: '"Be Vietnam Pro", sans-serif',
+            fontSize: '8.6px',
+            fontStyle: '800',
+            color: slotColor,
+            stroke: PALETTE.INK_DARK,
+            strokeThickness: 2.2,
+            resolution: textRes,
+          },
+        );
+        const pStatsTxt = this.add.text(
+          px + 25,
+          ry + 15,
+          i18n.t('ui.result.playerRowFormat', {
+            dmg: Math.round(pl.statsDamageDealt ?? 0),
+            taken: Math.round(pl.statsDamageTaken ?? 0),
+            kills: pl.statsKills ?? 0,
+            revives: pl.statsRevives ?? 0,
+            elem: pl.statsElementalReactions ?? 0,
+            combo: pl.statsTeamCombos ?? 0,
+          }),
+          {
+            fontFamily: '"Be Vietnam Pro", sans-serif',
+            fontSize: '8px',
+            fontStyle: '700',
+            color: PALETTE.BONE_WHITE,
+            stroke: PALETTE.INK_DARK,
+            strokeThickness: 2,
+            resolution: textRes,
+          },
+        );
+        this.modalContainer.add([pNameTxt, pStatsTxt]);
+      });
+
       // Right Column: 4 MVP Award Cards (Danh Hiệu MVP Đội Hình)
-      const mvpHeader = this.add.text(px + 380, py + 44, `🏆 ${i18n.t('mvp.sectionTitle')}`, {
+      const mvpHeader = this.add.text(px + 380, py + 38, `🏆 ${i18n.t('mvp.sectionTitle')}`, {
         fontFamily: '"Be Vietnam Pro", sans-serif',
-        fontSize: '11px',
+        fontSize: '10.8px',
         fontStyle: '800',
         color: PALETTE.SOLAR_GOLD,
         stroke: PALETTE.INK_DARK,
@@ -5848,8 +6160,8 @@ export class GameScene extends Phaser.Scene {
 
       const mvpAwards = sim.computeMvpAwards();
       mvpAwards.forEach((award, idx) => {
-        const ay = py + 66 + idx * 62;
-        const aw = 340;
+        const ay = py + 60 + idx * 62;
+        const aw = 342;
         const ah = 56;
         const cardG = this.add.graphics();
         cardG.fillStyle(hexToNum(PALETTE.SLATE_DARK), 0.94);
