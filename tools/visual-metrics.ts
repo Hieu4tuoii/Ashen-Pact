@@ -22,6 +22,7 @@ export interface RegionMetrics {
   meanS: number;
   contrastWithInkDark: number;
   sampleCount: number;
+  clipWhiteRatio?: number;
 }
 
 export interface SceneEnvironmentSummary {
@@ -31,8 +32,12 @@ export interface SceneEnvironmentSummary {
   floorMeanS: number;
   contrastWithInkDark: number;
   minLitFloorL: number;
+  minCornerL: number;
   cornerRetentionRatio: number;
+  cornerToUnlitRatio: number;
   brazierLightPoolDeltaL: number;
+  brazierToFloorDeltaL: number;
+  clipWhiteRatio: number;
 }
 
 export interface SceneManifestEntry {
@@ -144,6 +149,7 @@ export function analyzePngBufferRegions(
     let sumS = 0;
     let minL = Infinity;
     let maxL = -Infinity;
+    let clipWhiteCount = 0;
 
     for (let y = y1; y < y2; y++) {
       for (let x = x1; x < x2; x++) {
@@ -151,6 +157,10 @@ export function analyzePngBufferRegions(
         const r = data[idx]!;
         const g = data[idx + 1]!;
         const b = data[idx + 2]!;
+
+        if (r >= 254 && g >= 254 && b >= 254) {
+          clipWhiteCount += 1;
+        }
 
         const l = srgbToCieL(r, g, b);
         const s = srgbToHslSaturation(r, g, b);
@@ -172,6 +182,7 @@ export function analyzePngBufferRegions(
     const p95L = computePercentile(lValues, 0.95);
     const deltaL = p95L - p5L;
     const contrastWithInkDark = meanL - INK_DARK_L;
+    const clipWhiteRatio = sampleCount > 0 ? clipWhiteCount / sampleCount : 0;
 
     result[region.name] = {
       meanL,
@@ -183,6 +194,7 @@ export function analyzePngBufferRegions(
       meanS,
       contrastWithInkDark,
       sampleCount,
+      clipWhiteRatio,
     };
   }
 
@@ -375,6 +387,7 @@ export function computeSceneEnvironmentSummary(
   ];
 
   let cornerRetentionRatio = 1;
+  let minCornerL = litFloor?.meanL ?? 0;
   if (cornerKeys.length > 0) {
     const litCornerVals = cornerKeys
       .map((k) => litRegions[k]?.meanL)
@@ -382,6 +395,10 @@ export function computeSceneEnvironmentSummary(
     const unlitCornerVals = cornerKeys
       .map((k) => unlitRegions[k]?.meanL)
       .filter((v): v is number => typeof v === 'number');
+
+    if (litCornerVals.length > 0) {
+      minCornerL = Math.min(...litCornerVals);
+    }
 
     const avgLitCorner =
       litCornerVals.length > 0
@@ -401,6 +418,14 @@ export function computeSceneEnvironmentSummary(
     ? brazierPool.meanL - (litFloor?.meanL ?? 0)
     : 0;
 
+  let totalLitSamples = 0;
+  let totalClipWhite = 0;
+  for (const reg of Object.values(litRegions)) {
+    totalLitSamples += reg.sampleCount;
+    totalClipWhite += (reg.clipWhiteRatio ?? 0) * reg.sampleCount;
+  }
+  const clipWhiteRatio = totalLitSamples > 0 ? totalClipWhite / totalLitSamples : 0;
+
   return {
     floorMeanL,
     floorDeltaL,
@@ -408,8 +433,12 @@ export function computeSceneEnvironmentSummary(
     floorMeanS,
     contrastWithInkDark,
     minLitFloorL,
+    minCornerL,
     cornerRetentionRatio,
+    cornerToUnlitRatio: cornerRetentionRatio,
     brazierLightPoolDeltaL,
+    brazierToFloorDeltaL: brazierLightPoolDeltaL,
+    clipWhiteRatio,
   };
 }
 

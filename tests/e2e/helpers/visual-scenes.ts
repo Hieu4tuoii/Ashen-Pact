@@ -390,7 +390,10 @@ export const VISUAL_SCENES: readonly VisualSceneDef[] = [
 
   // 5. Bosses
   makeScene('boss-b1', 'Biome 1 Boss Mục Vương Nấm Độc (Phase 1)', DEFAULT_GAME_URL, 'GameScene', (p) => setupBossScene(p, 2, 1)),
-  makeScene('boss-b2', 'Biome 2 Boss Băng Hậu Kryssa (Phase 1)', BIOME2_GAME_URL, 'GameScene', (p) => setupBossScene(p, 4, 1)),
+  makeScene('boss-b2', 'Biome 2 Boss Băng Hậu Kryssa (Phase 1)', BIOME2_GAME_URL, 'GameScene', (p) => setupBossScene(p, 4, 1), {
+    captureUnlit: true,
+    sampleRects: ENVIRONMENT_SAMPLE_RECTS,
+  }),
   makeScene('boss-b3', 'Biome 3 Boss Titan Lò Rèn (Phase 2 with Energy Cores & Shockwave)', BIOME3_GAME_URL, 'GameScene', (p) => setupBossScene(p, 6, 2, true)),
   makeScene('boss-b1-phase3', 'Biome 1 Boss Mục Vương Phase 3 with creeping poison border', DEFAULT_GAME_URL, 'GameScene', (p) => setupBossScene(p, 2, 3)),
   makeScene('boss-b2-blizzard', 'Biome 2 Boss Kryssa Phase 3 with Blizzard Veil', BIOME2_GAME_URL, 'GameScene', (p) => setupBossScene(p, 4, 3), {

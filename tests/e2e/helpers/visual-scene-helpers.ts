@@ -40,13 +40,13 @@ export const ENVIRONMENT_SAMPLE_RECTS: SampleRect[] = [
 ];
 
 export const HUB_SAMPLE_RECTS: SampleRect[] = [
-  { name: 'floor_center', x: 860, y: 480, width: 200, height: 120 },
-  { name: 'corner_tl', x: 160, y: 260, width: 64, height: 56 },
-  { name: 'corner_tr', x: 1680, y: 260, width: 64, height: 56 },
-  { name: 'corner_bl', x: 160, y: 780, width: 64, height: 56 },
-  { name: 'corner_br', x: 1680, y: 780, width: 64, height: 56 },
+  { name: 'floor_center', x: 424, y: 480, width: 160, height: 100 },
+  { name: 'corner_tl', x: 232, y: 240, width: 64, height: 56 },
+  { name: 'corner_tr', x: 1104, y: 200, width: 64, height: 56 },
+  { name: 'corner_bl', x: 232, y: 520, width: 64, height: 56 },
+  { name: 'corner_br', x: 1272, y: 896, width: 64, height: 56 },
   { name: 'wall_top', x: 860, y: 88, width: 200, height: 36 },
-  { name: 'brazier_pool', x: 468, y: 466, width: 56, height: 56 },
+  { name: 'brazier_pool', x: 1118, y: 656, width: 56, height: 56 },
 ];
 
 export const DEFAULT_FREEZE_MASK_RECTS: SampleRect[] = [
@@ -454,6 +454,21 @@ export async function setupBossScene(
         }
         boss.aiState = 'move';
         boss.stateTimer = 0;
+        let minionIdx = 0;
+        for (const e of sim.enemies) {
+          if (e.id !== boss.id) {
+            e.x = 580;
+            e.y = minionIdx % 2 === 0 ? 220 : 380;
+            e.prevX = e.x;
+            e.prevY = e.y;
+            e.vx = 0;
+            e.vy = 0;
+            e.spawnWarmupTimer = 0;
+            e.aiState = 'idle';
+            e.stateTimer = 99;
+            minionIdx += 1;
+          }
+        }
         if (addRing) {
           sim.shockwaveRings.push({
             id: 96001,
