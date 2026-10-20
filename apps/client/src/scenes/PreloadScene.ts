@@ -5,6 +5,11 @@ import {
   WORLD_VIEW_WIDTH,
 } from '@ashen-pact/shared';
 import { TextureBaker } from '../art/texture-baker.js';
+import {
+  installDebugHotkeyListener,
+  isDebugUiEnabled,
+  isTestHooksEnabled,
+} from '../core/debug-flag.js';
 import { initGlobalDebugState } from '../ui/debug-overlay.js';
 
 export class PreloadScene extends Phaser.Scene {
@@ -13,6 +18,7 @@ export class PreloadScene extends Phaser.Scene {
   }
 
   public create(): void {
+    installDebugHotkeyListener();
     const debug = initGlobalDebugState();
     debug.scene = 'PreloadScene';
 
@@ -30,11 +36,15 @@ export class PreloadScene extends Phaser.Scene {
       const joinRoomId = params.get('join');
       const hubParam = params.get('hub');
       const galleryParam = params.get('gallery');
+      const allowSceneShortcuts = isDebugUiEnabled() || isTestHooksEnabled();
 
       const locPort = window.location.port;
       const isHostServerPort = Boolean(locPort && locPort !== '5173' && locPort !== '4173');
 
-      if (requestedScene === 'gallery' || requestedScene === 'artgallery' || galleryParam === '1') {
+      if (
+        allowSceneShortcuts &&
+        (requestedScene === 'gallery' || requestedScene === 'artgallery' || galleryParam === '1')
+      ) {
         this.scene.start('ArtGalleryScene');
       } else if (requestedScene === 'menu') {
         this.scene.start('MenuScene');
@@ -50,7 +60,10 @@ export class PreloadScene extends Phaser.Scene {
           displayName: params.get('name') ?? undefined,
           serverUrl: params.get('server') ?? undefined,
         });
-      } else if (requestedScene === 'game' || hubParam === '1' || params.has('biome')) {
+      } else if (
+        allowSceneShortcuts &&
+        (requestedScene === 'game' || hubParam === '1' || params.has('biome'))
+      ) {
         this.scene.start('GameScene');
       } else {
         this.scene.start('MenuScene');

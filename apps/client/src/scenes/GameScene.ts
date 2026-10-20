@@ -255,6 +255,8 @@ export class GameScene extends Phaser.Scene {
   public statusText?: Phaser.GameObjects.Text;
   public qualityBtnText?: Phaser.GameObjects.Text;
   public elementBtnText?: Phaser.GameObjects.Text;
+  public galleryBtnText?: Phaser.GameObjects.Text;
+  public unsubDebugFlags?: () => void;
   public weaponSlotBgs: Phaser.GameObjects.Graphics[] = [];
   public weaponIconSprites: Phaser.GameObjects.Sprite[] = [];
   public weaponNameTexts: Phaser.GameObjects.Text[] = [];

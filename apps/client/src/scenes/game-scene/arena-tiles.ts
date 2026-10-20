@@ -18,12 +18,65 @@ import { VANGUARD_RIG_DEF } from '../../art/rig-defs.js';
 import { TextureBaker } from '../../art/texture-baker.js';
 import { musicManager } from '../../audio/music-synth.js';
 import { zzfx } from '../../audio/zzfx.js';
+import {
+  isDebugUiEnabled,
+  isTestHooksEnabled,
+  onDebugFlagsChanged,
+} from '../../core/debug-flag.js';
 import { resetClientFreezeRandom } from '../../core/visual-query.js';
 import { CombatFxManager } from '../../fx/combat-fx.js';
 import { LightingPipeline } from '../../fx/lighting-pipeline.js';
 import { DebugOverlay, initGlobalDebugState } from '../../ui/debug-overlay.js';
 import { type GraphicsQualityTier, graphicsSettings } from '../../ui/graphics-settings.js';
 import { type ArenaTileVisual, type GameScene, RIG_FOOT_OFFSET_Y } from '../GameScene.js';
+
+export function syncGameSceneTestHooks(scene: GameScene): void {
+  if (typeof window === 'undefined') return;
+  if (isTestHooksEnabled()) {
+    window.__PHASER_GAME__ = scene.game;
+    window.__GAME_TRANSPORT__ = scene.transport;
+    window.__GAME_STRESS_TEST__ = (active: boolean) => {
+      scene.setStressTestMode(active);
+    };
+    window.__GAME_SET_QUALITY__ = (quality: GraphicsQualityTier) => {
+      graphicsSettings.setQuality(quality);
+      scene.debugOverlay?.resetSamples();
+    };
+    window.__GAME_BOT_AUTOPLAY__ = (active: boolean) => {
+      const s = scene.transport.getSim();
+      s.botAutoPlayActive = active;
+      initGlobalDebugState().botAutoPlayActive = active;
+      if (scene.room && scene.coopMode !== 'solo') {
+        scene.room.send('set_bot_autoplay', { active });
+      }
+    };
+    window.__GAME_SET_WIFI_PROFILE__ = (profile: WifiProfileId) => {
+      scene.networkTransport?.setWifiProfile(profile);
+      initGlobalDebugState().wifiProfile = profile;
+    };
+    window.__GAME_TRIGGER_LAG_SPIKE__ = (durationMs = 300) => {
+      scene.networkTransport?.triggerManualLagSpike(durationMs);
+    };
+    window.__GAME_SET_LIGHTING__ = (enabled: boolean) => {
+      scene.lighting?.setLightingEnabled(enabled);
+    };
+    window.__GAME_FORCE_RECONNECT__ = () => scene.forceCoopReconnect();
+    window.__GAME_COOP_SEND__ = (type: string, payload?: unknown) => {
+      scene.room?.send(type, payload);
+    };
+  } else {
+    delete window.__PHASER_GAME__;
+    delete window.__GAME_TRANSPORT__;
+    delete window.__GAME_STRESS_TEST__;
+    delete window.__GAME_SET_QUALITY__;
+    delete window.__GAME_SET_LIGHTING__;
+    delete window.__GAME_BOT_AUTOPLAY__;
+    delete window.__GAME_SET_WIFI_PROFILE__;
+    delete window.__GAME_TRIGGER_LAG_SPIKE__;
+    delete window.__GAME_FORCE_RECONNECT__;
+    delete window.__GAME_COOP_SEND__;
+  }
+}
 
 export function createImpl(this: GameScene): void {
   const debug = initGlobalDebugState();
@@ -112,7 +165,8 @@ export function createImpl(this: GameScene): void {
     this.transport = this.networkTransport;
   } else {
     const searchParams = new URLSearchParams(window.location.search);
-    const urlBiomeNum = Number(searchParams.get('biome'));
+    const allowShortcuts = isDebugUiEnabled() || isTestHooksEnabled();
+    const urlBiomeNum = allowShortcuts ? Number(searchParams.get('biome')) : 1;
     const initialBiome: 1 | 2 | 3 = urlBiomeNum === 2 ? 2 : urlBiomeNum === 3 ? 3 : 1;
     this.networkTransport = null;
     this.transport = new LocalTransport({
@@ -130,45 +184,20 @@ export function createImpl(this: GameScene): void {
       includeProps: true,
       autoRespawnWaves: false,
     });
-    if (searchParams.get('hub') === '1') {
+    if (allowShortcuts && searchParams.get('hub') === '1') {
       this.transport.getSim().enterHub();
-    } else if (initialBiome > 1) {
+    } else if (allowShortcuts && initialBiome > 1) {
       this.transport.getSim().advanceToBiome(initialBiome);
     }
     debug.currentBiome = this.transport.getSim().currentBiome;
   }
 
-  window.__PHASER_GAME__ = this.game;
-  window.__GAME_TRANSPORT__ = this.transport;
-  window.__GAME_STRESS_TEST__ = (active: boolean) => {
-    this.setStressTestMode(active);
-  };
-  window.__GAME_SET_QUALITY__ = (quality: GraphicsQualityTier) => {
-    graphicsSettings.setQuality(quality);
-    this.debugOverlay?.resetSamples();
-  };
-  window.__GAME_BOT_AUTOPLAY__ = (active: boolean) => {
-    const s = this.transport.getSim();
-    s.botAutoPlayActive = active;
-    initGlobalDebugState().botAutoPlayActive = active;
-    if (this.room && this.coopMode !== 'solo') {
-      this.room.send('set_bot_autoplay', { active });
-    }
-  };
-  window.__GAME_SET_WIFI_PROFILE__ = (profile: WifiProfileId) => {
-    this.networkTransport?.setWifiProfile(profile);
-    initGlobalDebugState().wifiProfile = profile;
-  };
-  window.__GAME_TRIGGER_LAG_SPIKE__ = (durationMs = 300) => {
-    this.networkTransport?.triggerManualLagSpike(durationMs);
-  };
-  window.__GAME_SET_LIGHTING__ = (enabled: boolean) => {
-    this.lighting?.setLightingEnabled(enabled);
-  };
-  window.__GAME_FORCE_RECONNECT__ = () => this.forceCoopReconnect();
-  window.__GAME_COOP_SEND__ = (type: string, payload?: unknown) => {
-    this.room?.send(type, payload);
-  };
+  syncGameSceneTestHooks(this);
+  this.unsubDebugFlags?.();
+  this.unsubDebugFlags = onDebugFlagsChanged(() => {
+    syncGameSceneTestHooks(this);
+    this.invalidateAllHudCaches();
+  });
 
   const sim = this.transport.getSim();
   this.camFocusX = sim.player.x;
@@ -213,6 +242,9 @@ export function createImpl(this: GameScene): void {
     this.input.off('pointerdown', onPointerDown);
     this.input.keyboard?.off('keydown', unlockAudio);
     this.lighting?.destroy();
+    this.unsubDebugFlags?.();
+    this.unsubDebugFlags = undefined;
+    delete window.__PHASER_GAME__;
     delete window.__GAME_TRANSPORT__;
     delete window.__GAME_STRESS_TEST__;
     delete window.__GAME_SET_QUALITY__;

@@ -8,10 +8,37 @@ import { hexToNum, PALETTE } from '../../art/palette.js';
 import { TextureBaker } from '../../art/texture-baker.js';
 import { musicManager } from '../../audio/music-synth.js';
 import { zzfx } from '../../audio/zzfx.js';
+import { isEffectiveDebugUiEnabled } from '../../core/debug-flag.js';
 import { initGlobalDebugState } from '../../ui/debug-overlay.js';
 import { graphicsSettings } from '../../ui/graphics-settings.js';
 import { ModalOverlayManager } from '../../ui/settings-modal.js';
 import { type GameScene } from '../GameScene.js';
+
+export function syncHudDebugVisibility(scene: GameScene): void {
+  const showDebug = isEffectiveDebugUiEnabled(scene.coopMode !== 'solo');
+  const isEn = i18n.getLocale() === 'en';
+  const nextStatus = showDebug
+    ? isEn
+      ? 'WASD: Move · Mouse: Shoot/Skill · Shift: Dash · R: Elem · G: Quality · F1-F7: Debug'
+      : 'WASD: Chạy · Chuột: Bắn/Khiên · Shift: Dash · R: Ng.Tố · G: Đồ Họa · F1-F7: Debug'
+    : isEn
+      ? 'WASD: Move · Mouse: Shoot/Skill · Shift: Dash · E: Interact · Tab: Map'
+      : 'WASD: Chạy · Chuột: Bắn/Kỹ năng · Shift: Dash · E: Tương tác · Tab: Bản đồ';
+  if (scene.statusText && scene.statusText.text !== nextStatus) {
+    scene.statusText.setText(nextStatus);
+  }
+  for (const btn of [scene.elementBtnText, scene.qualityBtnText, scene.galleryBtnText]) {
+    if (!btn) continue;
+    if (btn.visible !== showDebug) {
+      btn.setVisible(showDebug);
+      if (showDebug) {
+        btn.setInteractive({ useHandCursor: true });
+      } else {
+        btn.disableInteractive();
+      }
+    }
+  }
+}
 
 export function buildVectorHudImpl(this: GameScene): void {
   const textRes = TextureBaker.getBakeScale();
@@ -53,7 +80,9 @@ export function buildVectorHudImpl(this: GameScene): void {
   this.statsLineText = this.add.text(
     432,
     16.5,
-    `DPS: 0.0 · Đợt 1 | ${VIETNAMESE_VERIFICATION_STRING}`,
+    isEffectiveDebugUiEnabled(this.coopMode !== 'solo')
+      ? `DPS: 0.0 · Đợt 1 | ${VIETNAMESE_VERIFICATION_STRING}`
+      : 'Tầng 1/2 (Khởi Đầu) · Vàng 0 · Đợt 1 · Dash Sẵn Sàng · KN Sẵn Sàng',
     {
       fontFamily: '"Be Vietnam Pro", sans-serif',
       fontSize: '9px',
@@ -94,6 +123,7 @@ export function buildVectorHudImpl(this: GameScene): void {
     })
     .setInteractive({ useHandCursor: true });
   this.elementBtnText.on('pointerdown', () => {
+    if (!isEffectiveDebugUiEnabled(this.coopMode !== 'solo')) return;
     this.transport.getSim().cycleImbueElement();
     zzfx.play('weapon_swap');
   });
@@ -112,6 +142,7 @@ export function buildVectorHudImpl(this: GameScene): void {
     })
     .setInteractive({ useHandCursor: true });
   this.qualityBtnText.on('pointerdown', () => {
+    if (!isEffectiveDebugUiEnabled(this.coopMode !== 'solo')) return;
     graphicsSettings.cycleQuality();
   });
   this.textObjects.push(this.qualityBtnText);
@@ -128,7 +159,11 @@ export function buildVectorHudImpl(this: GameScene): void {
       resolution: textRes,
     })
     .setInteractive({ useHandCursor: true });
-  galleryBtn.on('pointerdown', () => this.scene.start('ArtGalleryScene'));
+  galleryBtn.on('pointerdown', () => {
+    if (!isEffectiveDebugUiEnabled(this.coopMode !== 'solo')) return;
+    this.scene.start('ArtGalleryScene');
+  });
+  this.galleryBtnText = galleryBtn;
   this.textObjects.push(galleryBtn);
   this.hudContainer.add(galleryBtn);
 
@@ -396,6 +431,7 @@ export function buildVectorHudImpl(this: GameScene): void {
       this.rebuildPauseModal();
     }
   });
+  syncHudDebugVisibility(this);
 }
 
 export function invalidateAllHudCachesImpl(this: GameScene): void {
@@ -412,11 +448,7 @@ export function invalidateAllHudCachesImpl(this: GameScene): void {
   this.lastWeaponCompareHash = '';
   this.lastRunState = '';
   const isEn = i18n.getLocale() === 'en';
-  this.statusText?.setText(
-    isEn
-      ? 'WASD: Move · Mouse: Shoot/Skill · Shift: Dash · R: Elem · G: Quality · F1-F7: Debug'
-      : 'WASD: Chạy · Chuột: Bắn/Khiên · Shift: Dash · R: Ng.Tố · G: Đồ Họa · F1-F7: Debug',
-  );
+  syncHudDebugVisibility(this);
   this.menuBtnText?.setText(i18n.t('ui.hud.menuBtn'));
   this.skillLabelText?.setText(isEn ? '⚡Skill [Space]' : '⚡KN [Space]');
   this.pauseBtnText?.setText(isEn ? '⚙ [Esc]\nPause' : '⚙ [Esc]\nTạm Dừng');

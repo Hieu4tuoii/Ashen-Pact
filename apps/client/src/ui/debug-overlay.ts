@@ -2,6 +2,11 @@ import Phaser from 'phaser';
 import { VIETNAMESE_VERIFICATION_STRING } from '@ashen-pact/shared';
 import { PALETTE } from '../art/palette.js';
 import { TextureBaker } from '../art/texture-baker.js';
+import {
+  isEffectiveDebugUiEnabled,
+  isTestHooksEnabled,
+  onDebugFlagsChanged,
+} from '../core/debug-flag.js';
 import { getVisualQueryConfig } from '../core/visual-query.js';
 import { type GraphicsQualityTier, graphicsSettings } from './graphics-settings.js';
 
@@ -131,12 +136,33 @@ declare global {
   }
 }
 
+let rawDebugState: GameDebugState | null = null;
+let readOnlyDebugProxy: GameDebugState | null = null;
+let windowDebugSubscribed = false;
+
+export function syncWindowDebugAccess(): void {
+  if (typeof window === 'undefined' || !rawDebugState || !readOnlyDebugProxy) return;
+  try {
+    Object.defineProperty(window, '__GAME_DEBUG__', {
+      configurable: true,
+      enumerable: true,
+      get: () => (isTestHooksEnabled() ? rawDebugState! : readOnlyDebugProxy!),
+      set: () => {
+        // Ignore external overwrites of window.__GAME_DEBUG__
+      },
+    });
+  } catch {
+    // Ignore defineProperty errors in non-standard environments
+  }
+}
+
 export function initGlobalDebugState(): GameDebugState {
-  if (typeof window !== 'undefined' && window.__GAME_DEBUG__) {
-    if (window.location.search.includes('seed=')) {
-      window.__GAME_DEBUG__.seed = getVisualQueryConfig().seed;
+  if (rawDebugState) {
+    if (typeof window !== 'undefined' && window.location.search.includes('seed=')) {
+      rawDebugState.seed = getVisualQueryConfig().seed;
     }
-    return window.__GAME_DEBUG__;
+    syncWindowDebugAccess();
+    return rawDebugState;
   }
 
   const gState = graphicsSettings.getState();
@@ -253,8 +279,21 @@ export function initGlobalDebugState(): GameDebugState {
     warnings: [],
   };
 
+  rawDebugState = state;
+  readOnlyDebugProxy = new Proxy(state, {
+    set: () => false,
+    defineProperty: () => false,
+    deleteProperty: () => false,
+  });
+
   if (typeof window !== 'undefined') {
-    window.__GAME_DEBUG__ = state;
+    syncWindowDebugAccess();
+    if (!windowDebugSubscribed) {
+      windowDebugSubscribed = true;
+      onDebugFlagsChanged(() => {
+        syncWindowDebugAccess();
+      });
+    }
 
     const origError = console.error.bind(console);
     console.error = (...args: unknown[]) => {
@@ -290,12 +329,13 @@ export class DebugOverlay {
   private readonly frameDeltaSamples: number[] = [];
   private warmupFrames = 0;
   private onKeyDown?: (ev: KeyboardEvent) => void;
+  private unsubDebugFlags?: () => void;
 
   constructor(scene: Phaser.Scene, startVisible = false) {
     this.scene = scene;
     const state = initGlobalDebugState();
-    const debugParam = getVisualQueryConfig().debugParam;
-    state.overlayVisible = debugParam !== null ? debugParam : startVisible;
+    const canShow = isEffectiveDebugUiEnabled(state.coopMode !== 'solo');
+    state.overlayVisible = canShow ? startVisible : false;
 
     this.container = scene.add.container(16, 76);
     this.container.setDepth(9999);
@@ -317,11 +357,19 @@ export class DebugOverlay {
     this.container.add([this.bg, this.textObj]);
     this.container.setVisible(state.overlayVisible);
 
+    this.unsubDebugFlags = onDebugFlagsChanged(() => {
+      if (!isEffectiveDebugUiEnabled(state.coopMode !== 'solo')) {
+        state.overlayVisible = false;
+        this.container.setVisible(false);
+      }
+    });
+
     if (typeof window !== 'undefined') {
       this.onKeyDown = (ev: KeyboardEvent) => {
         if (ev.key === 'F1' || ev.code === 'F1') {
           ev.preventDefault();
           if (!this.scene.scene.isActive()) return;
+          if (!isEffectiveDebugUiEnabled(state.coopMode !== 'solo')) return;
           state.overlayVisible = !state.overlayVisible;
           this.container.setVisible(state.overlayVisible);
         }
@@ -349,6 +397,10 @@ export class DebugOverlay {
       window.removeEventListener('keydown', this.onKeyDown);
       this.onKeyDown = undefined;
     }
+    if (this.unsubDebugFlags) {
+      this.unsubDebugFlags();
+      this.unsubDebugFlags = undefined;
+    }
   }
 
   public update(params: {
@@ -358,6 +410,12 @@ export class DebugOverlay {
     pingMs?: number;
   }): void {
     const state = initGlobalDebugState();
+    if (!isEffectiveDebugUiEnabled(state.coopMode !== 'solo')) {
+      state.overlayVisible = false;
+      if (this.container.visible) {
+        this.container.setVisible(false);
+      }
+    }
     const loop = this.scene.game.loop;
     const rawDelta = loop.delta > 0 ? loop.delta : 16.67;
 

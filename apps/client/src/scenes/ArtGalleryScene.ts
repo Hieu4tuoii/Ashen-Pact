@@ -3,6 +3,11 @@ import Phaser from 'phaser';
 import type { CutoutRig, RigAnimState } from '../art/cutout-rig.js';
 import { hexToNum, PALETTE, PLAYER_SLOT_COLORS } from '../art/palette.js';
 import { TextureBaker } from '../art/texture-baker.js';
+import {
+  isDebugUiEnabled,
+  isTestHooksEnabled,
+  onDebugFlagsChanged,
+} from '../core/debug-flag.js';
 import { getVisualQueryConfig, resetClientFreezeRandom } from '../core/visual-query.js';
 import { DebugOverlay, initGlobalDebugState } from '../ui/debug-overlay.js';
 import {
@@ -46,12 +51,32 @@ export class ArtGalleryScene extends Phaser.Scene {
   public currentBiome: 1 | 2 | 3 = 1;
   public stateStatusText?: Phaser.GameObjects.Text;
   public debugOverlay?: DebugOverlay;
+  private unsubDebugFlags?: () => void;
 
   constructor() {
     super({ key: 'ArtGalleryScene' });
   }
 
+  private syncGalleryTestHooks(): void {
+    if (isTestHooksEnabled()) {
+      window.__GALLERY_SET_ANIM__ = (state: RigAnimState) => this.setGalleryAnim(state);
+      window.__GALLERY_SET_SLOT__ = (slot: 1 | 2 | 3 | 4) => this.setGallerySlot(slot);
+      window.__GALLERY_SET_BIOME__ = (biome: 1 | 2 | 3) => this.setGalleryBiome(biome);
+      window.__GALLERY_SET_PAGE__ = (page: 1 | 2 | 3 | 4 | 5) => this.setGalleryPage(page);
+    } else {
+      delete window.__GALLERY_SET_ANIM__;
+      delete window.__GALLERY_SET_SLOT__;
+      delete window.__GALLERY_SET_BIOME__;
+      delete window.__GALLERY_SET_PAGE__;
+    }
+  }
+
   public create(): void {
+    if (!(isDebugUiEnabled() || isTestHooksEnabled())) {
+      this.scene.start('MenuScene');
+      return;
+    }
+
     resetClientFreezeRandom(getVisualQueryConfig().seed);
     const debug = initGlobalDebugState();
     debug.scene = 'ArtGalleryScene';
@@ -73,8 +98,13 @@ export class ArtGalleryScene extends Phaser.Scene {
 
     this.applyCameraViewport();
     this.scale.on('resize', this.applyCameraViewport, this);
+    this.unsubDebugFlags = onDebugFlagsChanged(() => {
+      this.syncGalleryTestHooks();
+    });
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.scale.off('resize', this.applyCameraViewport, this);
+      this.unsubDebugFlags?.();
+      this.unsubDebugFlags = undefined;
       delete window.__GALLERY_SET_ANIM__;
       delete window.__GALLERY_SET_SLOT__;
       delete window.__GALLERY_SET_BIOME__;
@@ -164,11 +194,7 @@ export class ArtGalleryScene extends Phaser.Scene {
 
     this.updateStatusBanner();
     this.debugOverlay = new DebugOverlay(this, false);
-
-    window.__GALLERY_SET_ANIM__ = (state: RigAnimState) => this.setGalleryAnim(state);
-    window.__GALLERY_SET_SLOT__ = (slot: 1 | 2 | 3 | 4) => this.setGallerySlot(slot);
-    window.__GALLERY_SET_BIOME__ = (biome: 1 | 2 | 3) => this.setGalleryBiome(biome);
-    window.__GALLERY_SET_PAGE__ = (page: 1 | 2 | 3 | 4 | 5) => this.setGalleryPage(page);
+    this.syncGalleryTestHooks();
 
     this.input.keyboard?.on('keydown-ONE', () => this.setGalleryPage(1));
     this.input.keyboard?.on('keydown-TWO', () => this.setGalleryPage(2));

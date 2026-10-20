@@ -14,9 +14,11 @@ import {
 } from '@ashen-pact/shared';
 import { hexToNum, PALETTE } from '../../art/palette.js';
 import { TextureBaker } from '../../art/texture-baker.js';
+import { isEffectiveDebugUiEnabled } from '../../core/debug-flag.js';
 import { initGlobalDebugState } from '../../ui/debug-overlay.js';
 import { graphicsSettings } from '../../ui/graphics-settings.js';
 import { type GameScene } from '../GameScene.js';
+import { syncHudDebugVisibility } from './hud-setup-and-pause.js';
 
 export function updateVectorHudImpl(this: GameScene): void {
   const sim = this.transport.getSim();
@@ -26,6 +28,7 @@ export function updateVectorHudImpl(this: GameScene): void {
     this.lastHudLocale = curLocale;
     this.invalidateAllHudCaches();
   }
+  syncHudDebugVisibility(this);
 
   const hpRatio = clamp(p.hp / Math.max(1, p.maxHp), 0, 1);
   const armorRatio = clamp(p.armor / Math.max(1, p.maxArmor), 0, 1);
@@ -225,11 +228,14 @@ export function updateVectorHudImpl(this: GameScene): void {
       sim.teamComboCount > 0 ? ` · ${i18n.t('ui.hud.teamCombo')}: ${sim.teamComboCount}` : '';
     const skShort = curLocale === 'en' ? 'Skill' : 'KN';
 
+    const showDebug = isEffectiveDebugUiEnabled(this.coopMode !== 'solo');
+    const dpsSegment = showDebug ? ` · DPS ${dps.toFixed(1)}` : '';
     const nextStats = sim.inHub
       ? i18n.t('ui.hud.hubStatsHint', { count: sim.getActivePlayerCount() })
-      : `${i18n.t('ui.hud.floor')} ${sim.currentFloor}/${sim.campaignMaxFloors} (${roomLabel}) · DPS ${dps.toFixed(1)} · ${i18n.t('ui.hud.gold')} ${p.gold} · ${i18n.t('ui.hud.wave')} ${sim.waveNumber} · Dash ${dashReady} · ${skShort} ${skillReady}${cycleTag}${comboTag}`;
-    if (nextStats !== this.lastHudStatsText) {
-      this.lastHudStatsText = nextStats;
+      : `${i18n.t('ui.hud.floor')} ${sim.currentFloor}/${sim.campaignMaxFloors} (${roomLabel})${dpsSegment} · ${i18n.t('ui.hud.gold')} ${p.gold} · ${i18n.t('ui.hud.wave')} ${sim.waveNumber} · Dash ${dashReady} · ${skShort} ${skillReady}${cycleTag}${comboTag}`;
+    const statsCacheKey = `${showDebug ? '1' : '0'}:${nextStats}`;
+    if (statsCacheKey !== this.lastHudStatsText) {
+      this.lastHudStatsText = statsCacheKey;
       this.statsLineText.setText(nextStats);
     }
   }

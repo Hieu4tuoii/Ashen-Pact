@@ -4,6 +4,7 @@ import {
 import { Client as ColyseusClient, type Room as ColyseusRoom } from 'colyseus.js';
 import Phaser from 'phaser';
 import { zzfx } from '../../audio/zzfx.js';
+import { isEffectiveDebugUiEnabled } from '../../core/debug-flag.js';
 import { initGlobalDebugState } from '../../ui/debug-overlay.js';
 import { graphicsSettings } from '../../ui/graphics-settings.js';
 import { type GameScene } from '../GameScene.js';
@@ -181,6 +182,7 @@ export function setupKeyboardBindingsImpl(this: GameScene): void {
 
   // R or F6: Cycle Elemental Imbue (None -> Burn -> Chill -> Shock -> Poison)
   const cycleElement = () => {
+    if (!isEffectiveDebugUiEnabled(this.coopMode !== 'solo')) return;
     this.transport.getSim().cycleImbueElement();
     zzfx.play('weapon_swap');
   };
@@ -189,11 +191,13 @@ export function setupKeyboardBindingsImpl(this: GameScene): void {
 
   // G: Cycle Graphics Quality Preset (High -> Medium -> Low -> High)
   this.keys.G.on('down', () => {
+    if (!isEffectiveDebugUiEnabled(this.coopMode !== 'solo')) return;
     graphicsSettings.cycleQuality();
   });
 
   // F2: Toggle God Mode
   this.keys.F2.on('down', () => {
+    if (!isEffectiveDebugUiEnabled(this.coopMode !== 'solo')) return;
     const sim = this.transport.getSim();
     const nextGod = !sim.player.godMode;
     sim.player.godMode = nextGod;
@@ -206,11 +210,13 @@ export function setupKeyboardBindingsImpl(this: GameScene): void {
 
   // F3: Spawn fresh sample wave of 3 enemies
   this.keys.F3.on('down', () => {
+    if (!isEffectiveDebugUiEnabled(this.coopMode !== 'solo')) return;
     this.transport.getSim().spawnSampleWave();
   });
 
   // F4: Toggle Hitbox & SpatialHashGrid visualization
   this.keys.F4.on('down', () => {
+    if (!isEffectiveDebugUiEnabled(this.coopMode !== 'solo')) return;
     const debug = initGlobalDebugState();
     debug.showHitboxes = !debug.showHitboxes;
     if (!debug.showHitboxes) {
@@ -220,6 +226,7 @@ export function setupKeyboardBindingsImpl(this: GameScene): void {
 
   // F5: Skip current room waves & unlock doors
   this.keys.F5.on('down', () => {
+    if (!isEffectiveDebugUiEnabled(this.coopMode !== 'solo')) return;
     const sim = this.transport.getSim();
     sim.skipCurrentRoomWaves();
     if (this.room && this.coopMode !== 'solo') {
@@ -229,12 +236,14 @@ export function setupKeyboardBindingsImpl(this: GameScene): void {
 
   // F7: Toggle Phase 2 Stress Test (4 players + 80 enemies + 600+ projectiles)
   this.keys.F7.on('down', () => {
+    if (!isEffectiveDebugUiEnabled(this.coopMode !== 'solo')) return;
     const sim = this.transport.getSim();
     this.setStressTestMode(!sim.stressTestActive);
   });
 
   // F8: Toggle Phase 3 Bot Auto-Play (auto-clears Floor 1 -> Buff -> Floor 2 + Boss)
   this.keys.F8.on('down', () => {
+    if (!isEffectiveDebugUiEnabled(this.coopMode !== 'solo')) return;
     const sim = this.transport.getSim();
     const nextBot = !sim.botAutoPlayActive;
     sim.botAutoPlayActive = nextBot;
@@ -246,6 +255,7 @@ export function setupKeyboardBindingsImpl(this: GameScene): void {
 
   // F9: Cycle Phase 4 Wi-Fi Network Simulation Profile (off -> good -> normal -> bad)
   this.keys.F9.on('down', () => {
+    if (!isEffectiveDebugUiEnabled(this.coopMode !== 'solo')) return;
     const profiles: WifiProfileId[] = ['off', 'good', 'normal', 'bad'];
     const debug = initGlobalDebugState();
     const idx = (profiles.indexOf(debug.wifiProfile) + 1) % profiles.length;

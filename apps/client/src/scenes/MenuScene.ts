@@ -13,6 +13,7 @@ import { GOBLIN_SHOOTER_RIG_DEF, RIG_DEFS_BY_ID } from '../art/rig-defs.js';
 import { TextureBaker } from '../art/texture-baker.js';
 import { musicManager } from '../audio/music-synth.js';
 import { zzfx } from '../audio/zzfx.js';
+import { isDebugUiEnabled, onDebugFlagsChanged } from '../core/debug-flag.js';
 import {
   getClientFreezeRandom,
   getVisualQueryConfig,
@@ -70,6 +71,12 @@ export class MenuScene extends Phaser.Scene {
   private subtitleText?: Phaser.GameObjects.Text;
   private debugHintText?: Phaser.GameObjects.Text;
   private buttonLabels = new Map<string, Phaser.GameObjects.Text>();
+  private buttonEntries = new Map<
+    string,
+    { container: Phaser.GameObjects.Container; hitArea: Phaser.GameObjects.Rectangle }
+  >();
+  private debugUiObjects: (Phaser.GameObjects.Graphics | Phaser.GameObjects.Text)[] = [];
+  private unsubDebugFlags?: () => void;
   private refreshCoopBarFn?: () => void;
 
   private displayName: string = PRESET_NAMES_VI[0]!;
@@ -115,6 +122,8 @@ export class MenuScene extends Phaser.Scene {
     this.textObjects = [];
     this.heroRigs = [];
     this.buttonLabels.clear();
+    this.buttonEntries.clear();
+    this.debugUiObjects = [];
     this.activeInputField = null;
     this.campfireTimeSec = 0;
 
@@ -383,9 +392,15 @@ export class MenuScene extends Phaser.Scene {
     };
     window.addEventListener('keydown', onKeyDown);
 
+    this.unsubDebugFlags = onDebugFlagsChanged(() => {
+      this.syncDebugUiVisibility();
+    });
+
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.scale.off('resize', this.applyCameraViewport, this);
       window.removeEventListener('keydown', onKeyDown);
+      this.unsubDebugFlags?.();
+      this.unsubDebugFlags = undefined;
     });
 
     // Auto-detect LAN IP from server if available
@@ -466,7 +481,7 @@ export class MenuScene extends Phaser.Scene {
       i18n.t('ui.menu.artGallery'),
       PALETTE.STEEL_DARK,
       () => {
-        if (this.modalManager?.isOpen()) return;
+        if (this.modalManager?.isOpen() || !isDebugUiEnabled()) return;
         zzfx.play('ui_click');
         this.scene.start('ArtGalleryScene');
       },
@@ -481,7 +496,7 @@ export class MenuScene extends Phaser.Scene {
       i18n.t('ui.menu.toggleAnim'),
       PALETTE.GOBLIN_GREEN,
       () => {
-        if (this.modalManager?.isOpen()) return;
+        if (this.modalManager?.isOpen() || !isDebugUiEnabled()) return;
         zzfx.play('ui_click');
         const firstRig = this.heroRigs[0]?.rig;
         const nextState = firstRig?.getAnimState() === 'idle' ? 'run' : 'idle';
@@ -562,19 +577,18 @@ export class MenuScene extends Phaser.Scene {
     footer.fillRoundedRect(110, 448, 740, 64, 10);
     footer.strokeRoundedRect(110, 448, 740, 64, 10);
 
-    this.textObjects.push(
-      this.add
-        .text(480, 468, VIETNAMESE_VERIFICATION_STRING, {
-          fontFamily: '"Be Vietnam Pro", sans-serif',
-          fontSize: '16px',
-          fontStyle: '700',
-          color: PALETTE.BONE_WHITE,
-          stroke: PALETTE.INK_DARK,
-          strokeThickness: 3,
-          resolution: textRes,
-        })
-        .setOrigin(0.5),
-    );
+    const footerSampleText = this.add
+      .text(480, 468, VIETNAMESE_VERIFICATION_STRING, {
+        fontFamily: '"Be Vietnam Pro", sans-serif',
+        fontSize: '16px',
+        fontStyle: '700',
+        color: PALETTE.BONE_WHITE,
+        stroke: PALETTE.INK_DARK,
+        strokeThickness: 3,
+        resolution: textRes,
+      })
+      .setOrigin(0.5);
+    this.textObjects.push(footerSampleText);
 
     this.debugHintText = this.add
       .text(480, 494, i18n.t('ui.menu.footerHint'), {
@@ -585,12 +599,32 @@ export class MenuScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
     this.textObjects.push(this.debugHintText);
+    this.debugUiObjects.push(footer, footerSampleText, this.debugHintText);
 
     this.modalManager = new ModalOverlayManager(this, () => {
       this.refreshLocalizedText();
     });
 
     this.debugOverlay = new DebugOverlay(this, false);
+    this.syncDebugUiVisibility();
+  }
+
+  private syncDebugUiVisibility(): void {
+    const showDebug = isDebugUiEnabled();
+    for (const id of ['artGallery', 'toggleAnim']) {
+      const entry = this.buttonEntries.get(id);
+      if (entry) {
+        entry.container.setVisible(showDebug);
+        if (showDebug) {
+          entry.hitArea.setInteractive({ useHandCursor: true });
+        } else {
+          entry.hitArea.disableInteractive();
+        }
+      }
+    }
+    for (const obj of this.debugUiObjects) {
+      obj.setVisible(showDebug);
+    }
   }
 
   private initCampfireEmbers(): void {
@@ -769,6 +803,7 @@ export class MenuScene extends Phaser.Scene {
     hitArea.on('pointerdown', onClick);
 
     container.add([bg, txt, hitArea]);
+    this.buttonEntries.set(id, { container, hitArea });
   }
 
   private applyCameraViewport(): void {
