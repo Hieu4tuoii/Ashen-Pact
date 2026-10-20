@@ -1083,10 +1083,12 @@ export class CombatFxManager {
     }
 
     const allowedAmbient = budget.ambientCount;
+    const viewW = camView && camView.width > 0 ? camView.width : WORLD_VIEW_WIDTH;
+    const viewH = camView && camView.height > 0 ? camView.height : WORLD_VIEW_HEIGHT;
     const minX = camView && camView.width > 0 ? camView.x - 40 : 0;
-    const maxX = minX + WORLD_VIEW_WIDTH + 80;
+    const maxX = minX + viewW + 80;
     const minY = camView && camView.height > 0 ? camView.y - 40 : 0;
-    const maxY = minY + WORLD_VIEW_HEIGHT + 80;
+    const maxY = minY + viewH + 80;
 
     for (let i = 0; i < this.ambientPool.length; i++) {
       const amb = this.ambientPool[i]!;

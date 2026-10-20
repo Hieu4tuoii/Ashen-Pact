@@ -75,7 +75,7 @@ void main() {
 
 export class BiomePostFxPipeline extends Phaser.Renderer.WebGL.Pipelines.PostFXPipeline {
   public bloomStrength = 0.26;
-  public vignetteStrength = 0.34;
+  public vignetteStrength = 0.18;
   public chromaAmount = 0;
   public lowHpPulse = 0;
   public colorGradeTint: [number, number, number] = [0.98, 1.02, 1.0];
@@ -116,9 +116,9 @@ interface TransientLight {
 }
 
 const BIOME_AMBIENT_COLORS: Record<1 | 2 | 3, number> = {
-  1: 0x3b524e, // Overgrown Ruins: deep moonlit emerald-slate ambient
-  2: 0x354b68, // Frozen Depths: deep glacial cobalt ambient
-  3: 0x52342c, // Molten Forge: deep smoky ember ambient
+  1: 0x72918b, // Overgrown Ruins: softer moonlit emerald-slate ambient
+  2: 0x6c89ab, // Frozen Depths: softer glacial cobalt ambient
+  3: 0x90695e, // Molten Forge: softer smoky ember ambient
 };
 
 const BIOME_COLOR_GRADES: Record<1 | 2 | 3, [number, number, number]> = {
@@ -148,6 +148,8 @@ export class LightingPipeline {
   private activeLightCount = 0;
   private postFxAttached = false;
   private currentLightmapScale = LIGHTMAP_RES_SCALE;
+  private currentCoverW = WORLD_VIEW_WIDTH;
+  private currentCoverH = WORLD_VIEW_HEIGHT;
 
   constructor(scene: Phaser.Scene, biome: 1 | 2 | 3 = 1) {
     this.scene = scene;
@@ -244,8 +246,8 @@ export class LightingPipeline {
     if (Math.abs(targetScale - this.currentLightmapScale) > 0.001) {
       this.currentLightmapScale = targetScale;
       this.lightmapRt.resize(
-        Math.round(WORLD_VIEW_WIDTH * this.currentLightmapScale),
-        Math.round(WORLD_VIEW_HEIGHT * this.currentLightmapScale),
+        Math.round(this.currentCoverW * this.currentLightmapScale),
+        Math.round(this.currentCoverH * this.currentLightmapScale),
       );
       this.lightmapRt.setScale(1 / this.currentLightmapScale);
     }
@@ -290,8 +292,27 @@ export class LightingPipeline {
     this.syncPostFxPipeline();
     const cam = this.scene.cameras.main;
     const view = cam.worldView;
-    const viewX = view && view.width > 0 ? view.x : 0;
-    const viewY = view && view.height > 0 ? view.y : 0;
+    const zoom = Math.max(0.1, cam.zoom || 1);
+    const viewW = cam.width > 0 ? cam.width / zoom : view && view.width > 0 ? view.width : WORLD_VIEW_WIDTH;
+    const viewH = cam.height > 0 ? cam.height / zoom : view && view.height > 0 ? view.height : WORLD_VIEW_HEIGHT;
+    const rawViewX = cam.width > 0 ? cam.scrollX + cam.width * 0.5 - viewW * 0.5 : view && view.width > 0 ? view.x : 0;
+    const rawViewY = cam.height > 0 ? cam.scrollY + cam.height * 0.5 - viewH * 0.5 : view && view.height > 0 ? view.y : 0;
+    const pad = 64;
+    const viewX = rawViewX - pad;
+    const viewY = rawViewY - pad;
+    const coverW = Math.ceil(viewW + pad * 2);
+    const coverH = Math.ceil(viewH + pad * 2);
+    if (coverW !== this.currentCoverW || coverH !== this.currentCoverH) {
+      this.currentCoverW = coverW;
+      this.currentCoverH = coverH;
+      this.lightmapRt.resize(
+        Math.round(this.currentCoverW * this.currentLightmapScale),
+        Math.round(this.currentCoverH * this.currentLightmapScale),
+      );
+      this.lightmapRt.setScale(1 / this.currentLightmapScale);
+    }
+
+
 
     this.lightmapRt.setPosition(viewX, viewY);
     this.lightmapRt.setVisible(true);
@@ -302,7 +323,7 @@ export class LightingPipeline {
       const pipeline = Array.isArray(postPipelines) ? postPipelines[0] : postPipelines;
       if (pipeline instanceof BiomePostFxPipeline) {
         pipeline.bloomStrength = budget.enableBloomPostFx && !isHeavySwarm ? 0.28 : 0.0;
-        pipeline.vignetteStrength = this.blizzardVeil ? 0.58 : 0.34;
+        pipeline.vignetteStrength = this.blizzardVeil ? 0.38 : 0.18;
         pipeline.chromaAmount = isHeavySwarm ? 0 : clamp(trauma * 1.4, 0, 1);
         pipeline.colorGradeTint = this.blizzardVeil
           ? [0.9, 1.0, 1.1]
@@ -322,7 +343,7 @@ export class LightingPipeline {
       return;
     }
 
-    const ambientColor = this.blizzardVeil ? 0x1b2838 : BIOME_AMBIENT_COLORS[this.biome];
+    const ambientColor = this.blizzardVeil ? 0x3e5672 : BIOME_AMBIENT_COLORS[this.biome];
     const lmScale = this.currentLightmapScale;
     const maxLights = budget.tier === 'high' ? 48 : budget.tier === 'medium' ? 28 : 12;
     this.lightmapRt.clear();
@@ -342,9 +363,9 @@ export class LightingPipeline {
       const ly = worldY - viewY;
       if (
         lx + radius < -16 ||
-        lx - radius > WORLD_VIEW_WIDTH + 16 ||
+        lx - radius > coverW + 16 ||
         ly + radius < -16 ||
-        ly - radius > WORLD_VIEW_HEIGHT + 16
+        ly - radius > coverH + 16
       ) {
         return;
       }
@@ -356,9 +377,11 @@ export class LightingPipeline {
     };
 
     // A. Main Player soft aura light + active shield glow (narrowed during Blizzard Phase 3)
-    const mainPlayerVisionRadius = this.blizzardVeil ? 118 : 175;
-    drawLight(playerPos.x, playerPos.y, mainPlayerVisionRadius, 0xe0f2fe, 0.88);
-    drawLight(playerPos.x, playerPos.y, 85, hexToNum(PLAYER_SLOT_COLORS[player.slot].hex), 0.45);
+    const mainPlayerVisionRadius = this.blizzardVeil ? 185 : 310;
+    drawLight(playerPos.x, playerPos.y, mainPlayerVisionRadius, 0xe0f2fe, 0.96);
+    drawLight(playerPos.x, playerPos.y, 145, hexToNum(PLAYER_SLOT_COLORS[player.slot].hex), 0.5);
+
+
     if (player.skillActiveTimer > 0) {
       drawLight(
         playerPos.x + Math.cos(player.aimAngle) * 28,
@@ -370,11 +393,12 @@ export class LightingPipeline {
     }
 
     // B. Simulated Co-op Players (P2-P4) soft aura lights
-    const allyVisionRadius = this.blizzardVeil ? 105 : 145;
+    const allyVisionRadius = this.blizzardVeil ? 160 : 250;
     for (let i = 0; i < simulatedPlayers.length; i++) {
       const sp = simulatedPlayers[i]!;
-      drawLight(sp.pos.x, sp.pos.y, allyVisionRadius, 0xe0f2fe, 0.72);
-      drawLight(sp.pos.x, sp.pos.y, 75, hexToNum(PLAYER_SLOT_COLORS[sp.state.slot].hex), 0.42);
+      drawLight(sp.pos.x, sp.pos.y, allyVisionRadius, 0xe0f2fe, 0.86);
+      drawLight(sp.pos.x, sp.pos.y, 115, hexToNum(PLAYER_SLOT_COLORS[sp.state.slot].hex), 0.45);
+
     }
 
     // C. Props: Flickering Torches, Bioluminescent Mushrooms, Crystal Pillars, Explosive Barrels
@@ -398,7 +422,7 @@ export class LightingPipeline {
         alpha = 0.52;
       }
 
-      drawLight(prop.x, prop.y, radius, hexToNum(prop.lightColorHex), alpha);
+      drawLight(prop.x, prop.y, radius * 1.25, hexToNum(prop.lightColorHex), alpha);
     }
 
     // D. Transient Flash Lights (Muzzle flashes, Explosions, Lightning arcs)
@@ -416,9 +440,9 @@ export class LightingPipeline {
 
     // E. Glowing Interactive Surfaces (Lava, Burning Oil/Grass, Electrified Water, Poison Swamp)
     const minTx = Math.max(1, Math.floor(viewX / TILE_SIZE));
-    const maxTx = Math.min(map.cols - 2, Math.ceil((viewX + WORLD_VIEW_WIDTH) / TILE_SIZE));
+    const maxTx = Math.min(map.cols - 2, Math.ceil((viewX + coverW) / TILE_SIZE));
     const minTy = Math.max(1, Math.floor(viewY / TILE_SIZE));
-    const maxTy = Math.min(map.rows - 2, Math.ceil((viewY + WORLD_VIEW_HEIGHT) / TILE_SIZE));
+    const maxTy = Math.min(map.rows - 2, Math.ceil((viewY + coverH) / TILE_SIZE));
 
     for (let ty = minTy; ty <= maxTy; ty++) {
       for (let tx = minTx; tx <= maxTx; tx++) {

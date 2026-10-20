@@ -1972,8 +1972,8 @@ export class TextureBaker {
     const half = size / 2;
     const grad = ctx.createRadialGradient(half, half, 2, half, half, half);
     grad.addColorStop(0, 'rgba(255, 255, 255, 1.0)');
-    grad.addColorStop(0.35, 'rgba(255, 255, 255, 0.65)');
-    grad.addColorStop(0.7, 'rgba(255, 255, 255, 0.22)');
+    grad.addColorStop(0.48, 'rgba(255, 255, 255, 0.82)');
+    grad.addColorStop(0.78, 'rgba(255, 255, 255, 0.38)');
     grad.addColorStop(1, 'rgba(255, 255, 255, 0.0)');
 
     ctx.fillStyle = grad;
