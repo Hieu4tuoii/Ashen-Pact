@@ -97,7 +97,7 @@
 | Phase | Nội dung | Yêu cầu gốc | Trạng thái |
 |---|---|---|---|
 | P0 | Hạ tầng chụp ảnh/metrics/reviewer + baseline | Kiểm chứng bằng hình ảnh | [x] |
-| P1 | Chế độ debug, dọn UI debug | Ẩn debug trong .exe | [ ] |
+| P1 | Chế độ debug, dọn UI debug | Ẩn debug trong .exe | [x] |
 | P2 | Vũ khí 2 ô + rơi vũ khí | 2 vũ khí, đổi thì rơi | [ ] |
 | P3 | Nền ánh sáng, PostFX, `HudScene`, camera không méo | Map dễ nhìn, ánh sáng | [ ] |
 | P4 | **Phòng chuẩn B1** (vertical slice) → Palette ENV, sàn, tường, surface cho mọi biome | Map đẹp, giảm tương phản | [ ] |

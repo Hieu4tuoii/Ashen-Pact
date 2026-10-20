@@ -491,3 +491,22 @@
     - **Lit:** Tỷ lệ giữ sáng 4 góc `cornerRetentionRatio` sụt nặng (`b1-combat: 47.4%`, `b2-combat: 47.6%`, `b3-combat: 35.5%`, `boss-b2-blizzard: 39.3%`, `hub-solo: 62.3%`; mục tiêu `≥ 72%–82%`), `minLitFloorL = 0.00`; vũng sáng chậu lửa `brazierLightPoolDeltaL` âm hoặc xấp xỉ 0 (`-4.43` đến `+0.07`; mục tiêu `≥ +6..+8`).
   - **Đánh giá độc lập của Visual Reviewer (`docs/screenshots/polish-p0/review-baseline.md` & `docs/POLISH_BASELINE.md`):**
     - Điểm trung bình Rubric 9 tiêu chí: **`2.44 / 10`** (Môi trường `3/10`, Ánh sáng `2/10`, Độ dễ đọc `3/10`, Vật thể tương tác `2/10`, Portal/Cửa `2/10`, UI/HUD `2/10`, Nhân vật/Rig `3/10`, FX `3/10`, Cảm giác sản phẩm `2/10`), kèm bảng xếp hạng Top 15 vấn đề thị giác ưu tiên xử lý ở P1–P12.
+- **Phase P1 — Chế độ Debug & Dọn sạch UI Debug (Hoàn thành ✅):**
+  - **Commits:** `43e6ba0`, `533e53f`, `8864899`.
+  - **Hệ thống cờ Debug kép trên Client (`apps/client/src/core/debug-flag.ts` + 7 unit tests trong `apps/client/test/debug-flag.test.ts`):**
+    - Tách bạch 2 cờ độc lập `debugUi` và `testHooks` (`resolveDebugFlags`, `isDebugUiEnabled`, `isEffectiveDebugUiEnabled`, `isTestHooksEnabled`), cho phép `?debug=0` cưỡng bức tắt `debugUi` kể cả trên môi trường dev và `?debug=0&testHooks=1` phục vụ chụp ảnh tự động (`pnpm shots`) với giao diện người chơi sạch 100%.
+    - Phím tắt `Ctrl+Shift+D` toàn cục gọi `ev.preventDefault()`, bật/tắt `debugUi` tại runtime, lưu bền vững vào `localStorage['ashen_pact_debug']`, hiển thị thông báo nổi không xâm lấn (`"Debug ON"` / `"Debug OFF"`) và đồng bộ tức thì trạng thái hiển thị của `MenuScene`, `GameScene`, `DebugOverlay`.
+    - Khi `!isTestHooksEnabled()`, `window.__GAME_DEBUG__` được bọc qua `Proxy` chỉ-đọc (chặn ghi đè từ console) và toàn bộ hook `window.__GAME_*` / `window.__PHASER_GAME__` / `window.__GALLERY_*` không được gắn lên `window`.
+    - Ẩn toàn bộ nút/chữ debug khỏi giao diện người chơi khi `debugUi` tắt: ẩn `Bộ Sưu Tập`, `Đổi Hoạt Ảnh`, hộp kiểm tra dấu tiếng Việt cuối trang ở `MenuScene`; ẩn `[R] Ng.Tố`, `[G] Đồ Họa`, `[Art Gallery]`, chỉ số `DPS`, gợi ý `F1-F7: Debug` và khóa các phím `F1..F9`, `R`, `G` ở `GameScene`.
+  - **Cổng kiểm soát Debug trên Server (`apps/server/src/debug-gate.ts` + 9 unit tests trong `packages/shared/test/server-debug-gate.test.ts`):**
+    - Kiểm tra cờ CLI `--debug` hoặc biến môi trường `ASHEN_PACT_DEBUG=1`; đồng bộ `debugAllowed` trong `/api/health`, `/api/host-info`, `hello_welcome` và `coop_welcome` (chế độ Co-op chỉ mở UI/hotkey debug khi cả client và server cùng bật).
+    - Khi server tắt debug, `CoopRoom` từ chối mọi lệnh `skip_waves`, `set_bot_autoplay`, `set_god_mode`, `debug_cmd`, ghi `console.warn` và phản hồi `debug_rejected` về client.
+  - **Launcher C#, Script phát hành, Tài liệu & Kiểm thử E2E Release (`tools/package-release.ts`, `README.md`, `tests/e2e/phase8.spec.ts`):**
+    - Sửa C# `AshenPactHostLauncher` luôn giữ cờ `--host` khi truyền thêm tham số CLI (như `--debug` hoặc `--port`), bổ sung `start-host-debug.bat` và mục hướng dẫn *"Bật Chế Độ Debug"* trong `README.md`.
+    - Mở rộng `tests/e2e/phase8.spec.ts` kiểm thử cả 2 chế độ của bản đóng gói `AshenPact-Host.exe`: chế độ `--debug` (Co-op 2 trình duyệt vượt tầng + thắng Boss) và chế độ mặc định không `--debug` (`debugAllowed: false`, `window.__GAME_*` `undefined`, `window.__GAME_DEBUG__` read-only Proxy, phím `F1/F2/G/R` vô hiệu, server từ chối `set_god_mode`/`debug_cmd` với `debug_rejected`).
+  - **Quyết định kỹ thuật (Rulings 1–3):**
+    1. Các tham số URL chuyển cảnh nhanh (`?biome=`, `?hub=1`, `?scene=gallery`, `?gallery=1`, `?scene=game`) được cổng hóa theo `isDebugUiEnabled() || isTestHooksEnabled()` (người chơi bản release mặc định bị chuyển về `MenuScene`, trong khi `pnpm shots` với `?debug=0&testHooks=1` vẫn dựng được mọi cảnh).
+    2. Nút `[R] Ng.Tố` và phím `R`/`F6` (`cycleImbueElement`) được xếp vào công cụ debug theo đúng `docs/GDD.md` Mục 3.1 & 4.
+    3. Script `pnpm --filter @ashen-pact/server dev` truyền sẵn `--debug` cho môi trường dev/E2E phase 0–7, trong khi bản phát hành `AshenPact-Host.exe` mặc định tắt debug trừ khi chạy qua `start-host-debug.bat` hoặc truyền `--debug`.
+  - **Visual Gate (`docs/screenshots/polish-p1/review.md`):**
+    - Đánh giá mù A/B (Blind A/B Review bởi độc lập `pro` Visual Reviewer): **PASS** (nhận diện chính xác `version-B` = `after`, `0` blocker, `0` major, Criterion 6 UI/HUD đạt **`8.5 / 10`**, Criterion 9 Product Feel đạt **`8.0 / 10`**, Phase P1 DoD đạt **`10 / 10`**).
