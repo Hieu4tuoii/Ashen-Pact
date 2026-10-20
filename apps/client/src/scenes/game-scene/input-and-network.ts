@@ -26,6 +26,7 @@ export function setupKeyboardBindingsImpl(this: GameScene): void {
     G: kb.addKey(Phaser.Input.Keyboard.KeyCodes.G),
     Z: kb.addKey(Phaser.Input.Keyboard.KeyCodes.Z),
     X: kb.addKey(Phaser.Input.Keyboard.KeyCodes.X),
+    T: kb.addKey(Phaser.Input.Keyboard.KeyCodes.T),
     V: kb.addKey(Phaser.Input.Keyboard.KeyCodes.V),
     I: kb.addKey(Phaser.Input.Keyboard.KeyCodes.I),
     TAB: kb.addKey(Phaser.Input.Keyboard.KeyCodes.TAB, false),
@@ -130,6 +131,23 @@ export function setupKeyboardBindingsImpl(this: GameScene): void {
     this.fullMapOpen = !this.fullMapOpen;
     initGlobalDebugState().fullMapOpen = this.fullMapOpen;
   });
+  this.keys.T.on('down', () => {
+    const sim = this.transport.getSim();
+    if (!this.pauseModalOpen && !(this.settingsModal?.isOpen() ?? false) && sim.runState === 'playing') {
+      this.emoteWheelOpen = true;
+      initGlobalDebugState().emoteWheelOpen = true;
+    }
+  });
+  this.keys.T.on('up', () => {
+    if (this.emoteWheelOpen) {
+      if (this.emoteWheelHoveredId !== null) {
+        this.queuedEmote = this.emoteWheelHoveredId;
+      }
+      this.emoteWheelOpen = false;
+      this.emoteWheelHoveredId = null;
+      initGlobalDebugState().emoteWheelOpen = false;
+    }
+  });
   this.keys.ONE.on('down', () => {
     const sim = this.transport.getSim();
     if (sim.runState === 'buff_choice' && sim.pendingBuffChoices[0]) {
@@ -137,11 +155,13 @@ export function setupKeyboardBindingsImpl(this: GameScene): void {
       if (this.room && this.coopMode !== 'solo') {
         this.room.send('select_buff', { buffId: sim.pendingBuffChoices[0] });
       }
+    } else if (this.keys?.T.isDown || this.emoteWheelOpen) {
+      this.queuedEmote = 1;
+      this.emoteWheelOpen = false;
+      this.emoteWheelHoveredId = null;
+      initGlobalDebugState().emoteWheelOpen = false;
     } else {
       this.queuedWeaponSlot = 0;
-      if (this.coopMode !== 'solo' || sim.inHub || sim.getActivePlayerCount() > 1) {
-        this.queuedEmote = 1;
-      }
     }
   });
   this.keys.TWO.on('down', () => {
@@ -151,11 +171,13 @@ export function setupKeyboardBindingsImpl(this: GameScene): void {
       if (this.room && this.coopMode !== 'solo') {
         this.room.send('select_buff', { buffId: sim.pendingBuffChoices[1] });
       }
+    } else if (this.keys?.T.isDown || this.emoteWheelOpen) {
+      this.queuedEmote = 2;
+      this.emoteWheelOpen = false;
+      this.emoteWheelHoveredId = null;
+      initGlobalDebugState().emoteWheelOpen = false;
     } else {
       this.queuedWeaponSlot = 1;
-      if (this.coopMode !== 'solo' || sim.inHub || sim.getActivePlayerCount() > 1) {
-        this.queuedEmote = 2;
-      }
     }
   });
   this.keys.THREE.on('down', () => {
@@ -165,18 +187,19 @@ export function setupKeyboardBindingsImpl(this: GameScene): void {
       if (this.room && this.coopMode !== 'solo') {
         this.room.send('select_buff', { buffId: sim.pendingBuffChoices[2] });
       }
-    } else {
-      this.queuedWeaponSlot = 2;
-      if (this.coopMode !== 'solo' || sim.inHub || sim.getActivePlayerCount() > 1) {
-        this.queuedEmote = 3;
-      }
+    } else if (this.keys?.T.isDown || this.emoteWheelOpen) {
+      this.queuedEmote = 3;
+      this.emoteWheelOpen = false;
+      this.emoteWheelHoveredId = null;
+      initGlobalDebugState().emoteWheelOpen = false;
     }
   });
   this.keys.FOUR.on('down', () => {
-    const sim = this.transport.getSim();
-    this.queuedWeaponSlot = 3;
-    if (this.coopMode !== 'solo' || sim.inHub || sim.getActivePlayerCount() > 1) {
+    if (this.keys?.T.isDown || this.emoteWheelOpen) {
       this.queuedEmote = 4;
+      this.emoteWheelOpen = false;
+      this.emoteWheelHoveredId = null;
+      initGlobalDebugState().emoteWheelOpen = false;
     }
   });
 

@@ -273,10 +273,10 @@ export function updateHubInvitePanelImpl(this: GameScene): void {
 
   // Quick Emote Bar at bottom of Hub Panel
   const emotes: { id: QuickEmoteId; key: string }[] = [
-    { id: 1, key: '1' },
-    { id: 2, key: '2' },
-    { id: 3, key: '3' },
-    { id: 4, key: '4' },
+    { id: 1, key: 'T+1' },
+    { id: 2, key: 'T+2' },
+    { id: 3, key: 'T+3' },
+    { id: 4, key: 'T+4' },
   ];
   const emY = py + ph - 26;
   const emW = 60;
@@ -534,4 +534,85 @@ export function updateWeaponComparisonCardImpl(this: GameScene): void {
     resolution: textRes,
   });
   this.weaponCompareContainer.add([body, tipText]);
+}
+
+export function updateEmoteWheelHudImpl(this: GameScene): void {
+  const showWheel =
+    this.emoteWheelOpen &&
+    !this.fullMapOpen &&
+    !this.pauseModalOpen &&
+    !(this.settingsModal?.isOpen() ?? false);
+  const hash = showWheel ? `${this.emoteWheelHoveredId ?? 0}:${i18n.getLocale()}` : '';
+  if (hash === this.lastEmoteWheelHash) return;
+  this.lastEmoteWheelHash = hash;
+
+  this.emoteWheelContainer.removeAll(true);
+  if (!showWheel) return;
+
+  const textRes = TextureBaker.getBakeScale();
+  const isEn = i18n.getLocale() === 'en';
+  const cx = 480;
+  const cy = 270;
+
+  const bg = this.add.graphics();
+  bg.fillStyle(hexToNum(PALETTE.INK_DARK), 0.72);
+  bg.lineStyle(2, hexToNum(PALETTE.SOLAR_GOLD), 0.85);
+  bg.fillCircle(cx, cy, 44);
+  bg.strokeCircle(cx, cy, 44);
+  this.emoteWheelContainer.add(bg);
+
+  const centerTxt = this.add
+    .text(cx, cy, isEn ? '[T] EMOTE' : '[T] BIỂU CẢM', {
+      fontFamily: '"Be Vietnam Pro", sans-serif',
+      fontSize: '9.5px',
+      fontStyle: '800',
+      color: PALETTE.SOLAR_GOLD,
+      stroke: PALETTE.INK_DARK,
+      strokeThickness: 3,
+      align: 'center',
+      resolution: textRes,
+    })
+    .setOrigin(0.5);
+  this.emoteWheelContainer.add(centerTxt);
+
+  const cards: { id: QuickEmoteId; x: number; y: number }[] = [
+    { id: 1, x: 480, y: 196 },
+    { id: 2, x: 606, y: 270 },
+    { id: 3, x: 480, y: 344 },
+    { id: 4, x: 354, y: 270 },
+  ];
+
+  const cardW = 128;
+  const cardH = 34;
+
+  for (let i = 0; i < cards.length; i++) {
+    const c = cards[i]!;
+    const isHovered = this.emoteWheelHoveredId === c.id;
+    const cardG = this.add.graphics();
+    cardG.fillStyle(
+      hexToNum(isHovered ? PALETTE.SLATE_MID : PALETTE.INK_DEEP),
+      isHovered ? 0.98 : 0.9,
+    );
+    cardG.lineStyle(
+      isHovered ? 2.5 : 2,
+      hexToNum(isHovered ? PALETTE.SOLAR_GOLD : PALETTE.CYAN_FROST),
+      1,
+    );
+    cardG.fillRoundedRect(c.x - cardW / 2, c.y - cardH / 2, cardW, cardH, 8);
+    cardG.strokeRoundedRect(c.x - cardW / 2, c.y - cardH / 2, cardW, cardH, 8);
+
+    const txt = this.add
+      .text(c.x, c.y, `[${c.id}] ${i18n.emoteText(c.id)}`, {
+        fontFamily: '"Be Vietnam Pro", sans-serif',
+        fontSize: '10.5px',
+        fontStyle: '800',
+        color: isHovered ? PALETTE.SOLAR_GOLD : PALETTE.BONE_WHITE,
+        stroke: PALETTE.INK_DARK,
+        strokeThickness: 2.8,
+        resolution: textRes,
+      })
+      .setOrigin(0.5);
+
+    this.emoteWheelContainer.add([cardG, txt]);
+  }
 }

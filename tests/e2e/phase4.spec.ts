@@ -144,15 +144,108 @@ test.describe('Phase 4 — Co-op LAN Authoritative, Prediction/Interpolation, Hu
       window.__GAME_COOP_SEND__?.('set_ready', { ready: true });
     });
 
-    // Trigger Quick Emote [1] on P1 and Contextual Ping [Z] on P2 after post-warmup ping check settles
+    // Trigger Emote Wheel [Hold T + 1] on P1 and Contextual Ping [Z] on P2 after post-warmup ping check settles
     await page1.waitForTimeout(550);
+    await page1.keyboard.down('KeyT');
+    await page1.waitForTimeout(60);
+    expect(await page1.evaluate(() => window.__GAME_DEBUG__.emoteWheelOpen)).toBe(true);
     await page1.keyboard.press('Digit1');
+    await page1.keyboard.up('KeyT');
     await page2.keyboard.press('KeyZ');
     await page1.waitForTimeout(250);
 
     await page1.screenshot({
       path: path.join(SCREENSHOT_DIR, 'hub-4p-qr-1080p.png'),
     });
+
+    // 3b. Verify 2-Weapon Inventory Co-op Swap/Drop: P1 picks up when full (2/2) -> drops old weapon -> P2 sees & picks up dropped weapon
+    const walkPlayerTo = async (
+      pg: typeof page1,
+      targetX: number,
+      targetY: number,
+      tolerance = 18,
+    ) => {
+      for (let step = 0; step < 45; step++) {
+        const pos = await pg.evaluate(() => ({
+          x: window.__GAME_DEBUG__.playerX,
+          y: window.__GAME_DEBUG__.playerY,
+        }));
+        const dx = targetX - pos.x;
+        const dy = targetY - pos.y;
+        if (Math.hypot(dx, dy) <= tolerance) break;
+        if (Math.abs(dx) > 8) {
+          await pg.keyboard.down(dx > 0 ? 'KeyD' : 'KeyA');
+        } else {
+          await pg.keyboard.up('KeyA');
+          await pg.keyboard.up('KeyD');
+        }
+        if (Math.abs(dy) > 8) {
+          await pg.keyboard.down(dy > 0 ? 'KeyS' : 'KeyW');
+        } else {
+          await pg.keyboard.up('KeyW');
+          await pg.keyboard.up('KeyS');
+        }
+        await pg.waitForTimeout(45);
+      }
+      await pg.keyboard.up('KeyA');
+      await pg.keyboard.up('KeyD');
+      await pg.keyboard.up('KeyW');
+      await pg.keyboard.up('KeyS');
+    };
+
+    // P1 (starts with 1 weapon: knight_sword) walks to frost_scepter (381, 400) and equips it into slot 2 (now full 2/2)
+    await walkPlayerTo(page1, 396, 400, 18);
+    await page1.keyboard.press('KeyE');
+    await page1.waitForFunction(
+      () => window.__GAME_TRANSPORT__?.getSim().player.weaponSlots.length === 2,
+      null,
+      { timeout: 5000 },
+    );
+
+    // Wait for 0.3s weaponPickupLockTimer to expire, aim East, walk to (404, 470) near dragon_breath_shotgun (381, 470), and press E while full (2/2)
+    await page1.waitForTimeout(360);
+    await page1.mouse.move(1450, 540);
+    await walkPlayerTo(page1, 404, 470, 16);
+    await page1.keyboard.press('KeyE');
+
+    // Verify P1 replaced frost_scepter with dragon_breath_shotgun and P2 sees the dropped frost_scepter on the ground
+    await page2.waitForFunction(
+      () =>
+        window.__GAME_TRANSPORT__
+          ?.getSim()
+          .worldItems.some(
+            (it) =>
+              !it.pickedUp &&
+              !it.isHubRackItem &&
+              it.weaponId === 'frost_scepter' &&
+              it.droppedByPlayerId === 1,
+          ) === true,
+      null,
+      { timeout: 5000 },
+    );
+
+    const droppedPos = await page2.evaluate(() => {
+      const it = window.__GAME_TRANSPORT__!
+        .getSim()
+        .worldItems.find(
+          (w) =>
+            !w.pickedUp &&
+            !w.isHubRackItem &&
+            w.weaponId === 'frost_scepter' &&
+            w.droppedByPlayerId === 1,
+        )!;
+      return { x: it.x, y: it.y };
+    });
+
+    // P2 walks to the East side of the dropped frost_scepter (away from the rack item at x=381) and presses E to pick it up
+    await walkPlayerTo(page2, droppedPos.x + 18, droppedPos.y, 16);
+    await page2.keyboard.press('KeyE');
+    await page2.waitForFunction(
+      () =>
+        window.__GAME_TRANSPORT__?.getSim().player.weaponSlots.includes('frost_scepter') === true,
+      null,
+      { timeout: 5000 },
+    );
 
     // 4. Start Dungeon Run from Hub -> Floor 1 and enter first Combat room (teleporting all 4 teammates)
     await page1.evaluate(() => {

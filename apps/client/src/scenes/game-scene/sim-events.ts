@@ -275,7 +275,30 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
         break;
       }
       case 'weapon_swapped': {
-        zzfx.play('weapon_swap');
+        if (ev.playerId === undefined || ev.playerId === sim.player.id) {
+          zzfx.play('weapon_swap');
+        } else {
+          const swapper = sim.getAllPlayers().find((pl) => pl.id === ev.playerId);
+          if (swapper) {
+            zzfx.play('weapon_swap', swapper.x, this.camFocusX, swapper.y, this.camFocusY);
+          }
+        }
+        break;
+      }
+      case 'weapon_dropped': {
+        this.lighting.spawnTransientLight(
+          ev.x,
+          ev.y,
+          96,
+          WEAPON_RARITY_COLORS[ev.rarity],
+          0.85,
+          0.28,
+        );
+        if (ev.playerId === sim.player.id) {
+          zzfx.play('weapon_swap');
+        } else {
+          zzfx.play('weapon_swap', ev.x, this.camFocusX, ev.y, this.camFocusY);
+        }
         break;
       }
       case 'pickup_collected': {

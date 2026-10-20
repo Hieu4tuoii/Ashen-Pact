@@ -2,7 +2,6 @@ import {
   clamp,
   LocalTransport,
   NetworkTransport,
-  PHASE1_SAMPLE_WEAPONS,
   PLAYER_SLOT_COLORS,
   TILE_SIZE,
   type TileKind,
@@ -91,6 +90,7 @@ export function createImpl(this: GameScene): void {
   debug.creditsModalOpen = false;
   debug.weaponComparisonVisible = false;
   debug.comparedWeaponId = null;
+  debug.emoteWheelOpen = false;
   debug.lastDebugRejected = null;
 
   this.simPlayerRigs.clear();
@@ -138,6 +138,9 @@ export function createImpl(this: GameScene): void {
   this.lastInvitePanelHash = '';
   this.lastHubPreviewHash = '';
   this.lastWeaponCompareHash = '';
+  this.lastEmoteWheelHash = '';
+  this.emoteWheelOpen = false;
+  this.emoteWheelHoveredId = null;
   this.lastRunState = 'playing';
   this.resultDismissed = false;
   this.fullMapOpen = false;
@@ -610,9 +613,14 @@ export function applyCameraViewportImpl(this: GameScene): void {
     }
     const sim = this.transport?.getSim();
     this.weaponIconSprites.forEach((icon, idx) => {
-      const wId = sim?.player.weaponSlots[idx] ?? PHASE1_SAMPLE_WEAPONS[idx]!;
-      icon.setTexture(TextureBaker.getWeaponTextureKey(wId));
-      icon.setScale(invBake * 0.82);
+      const wId = sim?.player.weaponSlots[idx];
+      if (wId) {
+        icon.setVisible(true);
+        icon.setTexture(TextureBaker.getWeaponTextureKey(wId));
+        icon.setScale(invBake * 0.82);
+      } else {
+        icon.setVisible(false);
+      }
     });
     if (this.crosshairSprite) {
       this.crosshairSprite.setTexture('ui_crosshair');
@@ -635,6 +643,7 @@ export function applyCameraViewportImpl(this: GameScene): void {
     this.chestSprites.clear();
     for (const entry of this.worldItemSprites.values()) {
       entry.sprite.destroy();
+      entry.glow.destroy();
       entry.label.destroy();
     }
     this.worldItemSprites.clear();

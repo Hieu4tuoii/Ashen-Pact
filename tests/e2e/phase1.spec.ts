@@ -104,7 +104,7 @@ test.describe('Phase 1 — Core Gameplay & Game Feel (Solo, Phòng Thử Nghiệ
     expect(dashState.vx).toBeGreaterThan(300);
     expect(dashState.invulnerableTimer).toBeGreaterThan(0);
 
-    // 4. Verify cycling all 4 sample weapons (knight_sword, rusty_pistol, scrap_shotgun, gale_smg)
+    // 4. Verify cycling 2 starter weapon slots (knight_sword, rusty_pistol)
     for (let slot = 0; slot < PHASE1_SAMPLE_WEAPONS.length; slot++) {
       await page.keyboard.press(`Digit${slot + 1}`);
       await page.waitForTimeout(80);
@@ -112,7 +112,7 @@ test.describe('Phase 1 — Core Gameplay & Game Feel (Solo, Phòng Thử Nghiệ
       expect(activeId).toBe(PHASE1_SAMPLE_WEAPONS[slot]);
     }
 
-    // 5. Set up a rich combat & hit-feel showcase scene (Shotgun firing into enemies -> flash + spark + sfx + damage popup + knockback)
+    // 5. Set up a rich combat & hit-feel showcase scene (equip Scrap Shotgun into slot 2 while full -> drops rusty_pistol, then fire into enemies -> flash + spark + sfx + damage popup + knockback)
     const combatStats = await page.evaluate(() => {
       const transport = window.__GAME_TRANSPORT__!;
       const sim = transport.getSim();
@@ -121,6 +121,21 @@ test.describe('Phase 1 — Core Gameplay & Game Feel (Solo, Phòng Thử Nghiệ
       sim.player.prevX = 420;
       sim.player.prevY = 350;
       sim.player.energy = sim.player.maxEnergy;
+      sim.equipWeaponSlot(1);
+      const shotgunItem = sim.spawnWorldItem({
+        kind: 'weapon',
+        weaponId: 'scrap_shotgun',
+        rarity: 'uncommon',
+        nameVi: 'Shotgun Phế Liệu',
+        costGold: 0,
+        healAmount: 0,
+        x: sim.player.x,
+        y: sim.player.y,
+      });
+      sim.pickupOrBuyWorldItem(shotgunItem, sim.player);
+      const droppedRustyPistol = sim.worldItems.some(
+        (it) => !it.pickedUp && it.weaponId === 'rusty_pistol' && it.droppedByPlayerId === sim.player.id,
+      );
 
       // Spawn all 3 sample enemies right in front of the player
       sim.enemies = sim.enemies.filter((e) => e.isDummy);
@@ -128,11 +143,19 @@ test.describe('Phase 1 — Core Gameplay & Game Feel (Solo, Phòng Thử Nghiệ
       const b = sim.spawnEnemy('wild_boar', 530, 365, true);
       const s = sim.spawnEnemy('spore_bomber', 505, 395, true);
 
-      return { goblinId: g.id, boarId: b.id, sporeId: s.id };
+      return {
+        goblinId: g.id,
+        boarId: b.id,
+        sporeId: s.id,
+        activeWeaponId: sim.getActiveWeaponId(),
+        droppedRustyPistol,
+      };
     });
+    expect(combatStats.activeWeaponId).toBe('scrap_shotgun');
+    expect(combatStats.droppedRustyPistol).toBe(true);
 
-    // Equip Scrap Shotgun (Digit3), aim at enemies, and fire!
-    await page.keyboard.press('Digit3');
+    // Ensure slot 2 (Scrap Shotgun) is active, aim at enemies, and fire!
+    await page.keyboard.press('Digit2');
     await page.mouse.move(1120, 560);
     await page.mouse.down({ button: 'left' });
     await page.waitForTimeout(140);

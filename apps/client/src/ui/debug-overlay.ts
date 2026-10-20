@@ -120,6 +120,7 @@ export interface GameDebugState {
   creditsModalOpen: boolean;
   weaponComparisonVisible: boolean;
   comparedWeaponId: string | null;
+  emoteWheelOpen: boolean;
   irisTransitionProgress: number;
   trailingHpRatio: number;
   trailingArmorRatio: number;
@@ -270,6 +271,7 @@ export function initGlobalDebugState(): GameDebugState {
     creditsModalOpen: false,
     weaponComparisonVisible: false,
     comparedWeaponId: null,
+    emoteWheelOpen: false,
     irisTransitionProgress: 0,
     trailingHpRatio: 1,
     trailingArmorRatio: 1,

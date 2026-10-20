@@ -6,7 +6,7 @@ import {
   WEAPON_RARITY_COLORS,
 } from '@ashen-pact/shared';
 import { CutoutRig } from '../../art/cutout-rig.js';
-import { PALETTE } from '../../art/palette.js';
+import { hexToNum, PALETTE } from '../../art/palette.js';
 import { MERCHANT_RIG_DEF, RIG_DEFS_BY_ID, VANGUARD_RIG_DEF } from '../../art/rig-defs.js';
 import { TextureBaker } from '../../art/texture-baker.js';
 import { initGlobalDebugState } from '../../ui/debug-overlay.js';
@@ -368,6 +368,9 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
 
     let entry = this.worldItemSprites.get(it.id);
     if (!entry) {
+      const glow = this.add.graphics();
+      glow.setDepth(25);
+      glow.setBlendMode(Phaser.BlendModes.ADD);
       const sprite = this.add.sprite(it.x, it.y, tex);
       sprite.setScale(invBake * 0.95);
       sprite.setDepth(26);
@@ -385,7 +388,7 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
         .setOrigin(0.5, 0.5)
         .setDepth(46);
 
-      entry = { sprite, label };
+      entry = { sprite, glow, label };
       this.worldItemSprites.set(it.id, entry);
     } else {
       if (entry.sprite.texture.key !== tex) {
@@ -396,9 +399,43 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
       }
     }
 
-    const bobY = Math.sin(sim.tick * 0.08 + it.id) * 2.5;
-    entry.sprite.setPosition(it.x, it.y + bobY);
-    entry.label.setPosition(it.x, it.y - 24 + bobY * 0.5);
+    let renderX = it.x;
+    let renderY = it.y;
+    let arcOffsetY = 0;
+    if (it.droppedAtTick !== undefined) {
+      const ageSec = Math.max(0, (sim.tick - it.droppedAtTick) / 60);
+      if (ageSec < 0.25) {
+        const t = clamp(ageSec / 0.25, 0, 1);
+        const startX = it.fromX ?? it.x;
+        const startY = it.fromY ?? it.y;
+        renderX = startX + (it.x - startX) * t;
+        renderY = startY + (it.y - startY) * t;
+        const bounceY =
+          t < 0.72
+            ? -Math.sin((t / 0.72) * Math.PI) * 18
+            : -Math.sin(((t - 0.72) / 0.28) * Math.PI) * 5;
+        arcOffsetY = bounceY;
+        entry.sprite.setRotation(Math.sin(t * Math.PI * 2) * 0.28);
+      } else {
+        entry.sprite.setRotation(0);
+        arcOffsetY = Math.sin(sim.tick * 0.08 + it.id) * 2.5;
+      }
+    } else {
+      entry.sprite.setRotation(0);
+      arcOffsetY = Math.sin(sim.tick * 0.08 + it.id) * 2.5;
+    }
+
+    const glowColor = hexToNum(WEAPON_RARITY_COLORS[it.rarity]);
+    const pulse = 0.75 + Math.sin(sim.tick * 0.1 + it.id) * 0.25;
+    entry.glow.clear();
+    entry.glow.fillStyle(glowColor, 0.22 * pulse);
+    entry.glow.fillEllipse(renderX, renderY + 6, 26, 11);
+    entry.glow.lineStyle(1.4, glowColor, 0.45 * pulse);
+    entry.glow.strokeEllipse(renderX, renderY + 6, 24, 9);
+    entry.glow.fillStyle(glowColor, 0.14 * pulse);
+    entry.glow.fillCircle(renderX, renderY + arcOffsetY, 14);
+    entry.sprite.setPosition(renderX, renderY + arcOffsetY);
+    entry.label.setPosition(renderX, renderY - 24 + arcOffsetY * 0.5);
     entry.label.setVisible(!(sim.inHub && previewOpen) && it.id !== comparedWeaponItemId);
   }
 
@@ -406,6 +443,7 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
     if (!this.activeWorldItemIds.has(id)) {
       entry.sprite.destroy();
       entry.label.destroy();
+      entry.glow.destroy();
       this.worldItemSprites.delete(id);
     }
   }

@@ -533,6 +533,7 @@ export function updateDebugStateImpl(this: GameScene, playerRenderX: number, pla
   debug.settingsModalOpen = this.settingsModal?.getActiveModal() === 'settings';
   debug.controlsModalOpen = this.settingsModal?.getActiveModal() === 'controls';
   debug.creditsModalOpen = this.settingsModal?.getActiveModal() === 'credits';
+  debug.emoteWheelOpen = this.emoteWheelOpen;
   debug.irisTransitionProgress = Math.round(this.irisTransitionProgress * 100) / 100;
   debug.trailingHpRatio = Math.round(this.trailingHpRatio * 1000) / 1000;
   debug.trailingArmorRatio = Math.round(this.trailingArmorRatio * 1000) / 1000;

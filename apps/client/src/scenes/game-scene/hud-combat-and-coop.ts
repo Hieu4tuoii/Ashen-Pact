@@ -5,7 +5,6 @@ import {
   type ElementType,
   ENEMIES,
   i18n,
-  PHASE1_SAMPLE_WEAPONS,
   PLAYER_SLOT_COLORS,
   WEAPON_RARITY_COLORS,
   WEAPONS,
@@ -261,7 +260,7 @@ export function updateVectorHudImpl(this: GameScene): void {
     this.qualityBtnText.setText(`${i18n.t('ui.hud.qualityBtn')}: ${qLabel}`);
   }
 
-  // Update 4-slot Weapon Bar when active slot or equipped weapons change
+  // Update 2-slot Weapon Bar when active slot or equipped weapons change
   const weaponHash = `${p.activeWeaponSlot}:${p.weaponSlots.join(',')}:${curLocale}`;
   if (weaponHash !== this.lastHudWeaponHash) {
     this.lastHudWeaponHash = weaponHash;
@@ -274,40 +273,61 @@ export function updateVectorHudImpl(this: GameScene): void {
     const nrgPrefix = i18n.t('ui.hud.energy');
 
     this.weaponSlotBgs.forEach((slotBg, idx) => {
-      const wId = p.weaponSlots[idx] ?? PHASE1_SAMPLE_WEAPONS[idx]!;
-      const wDef = WEAPONS[wId] ?? WEAPONS.rusty_pistol!;
-      const isSelected = idx === p.activeWeaponSlot;
+      const wId = p.weaponSlots[idx];
+      const wDef = wId ? WEAPONS[wId] : undefined;
+      const isSelected = idx === p.activeWeaponSlot && Boolean(wDef);
       const sx = startX + idx * (slotW + 8);
-      const rarityHex = WEAPON_RARITY_COLORS[wDef.rarity];
+      const icon = this.weaponIconSprites[idx];
+      const nameTxt = this.weaponNameTexts[idx];
+      const metaTxt = this.weaponMetaTexts[idx];
 
       slotBg.clear();
-      slotBg.fillStyle(
-        hexToNum(isSelected ? PALETTE.SLATE_MID : PALETTE.SLATE_DARK),
-        isSelected ? 0.96 : 0.86,
-      );
-      slotBg.lineStyle(
-        isSelected ? 2.5 : 2,
-        hexToNum(isSelected ? PALETTE.SOLAR_GOLD : rarityHex),
-        1,
-      );
-      slotBg.fillRoundedRect(sx, barY, slotW, slotH, 8);
-      slotBg.strokeRoundedRect(sx, barY, slotW, slotH, 8);
-
-      const icon = this.weaponIconSprites[idx];
-      if (icon) {
-        icon.setTexture(TextureBaker.getWeaponTextureKey(wId));
-        icon.setScale(invBake * 0.82);
-      }
-      const nameTxt = this.weaponNameTexts[idx];
-      if (nameTxt) {
-        nameTxt.setText(`[${idx + 1}] ${i18n.weaponName(wId, wDef.nameVi)}`);
-        nameTxt.setColor(rarityHex);
-      }
-      const metaTxt = this.weaponMetaTexts[idx];
-      if (metaTxt) {
-        metaTxt.setText(
-          `${dmgPrefix} ${wDef.damage}${wDef.pelletCount > 1 ? `×${wDef.pelletCount}` : ''} · ${nrgPrefix} ${wDef.energyCost}`,
+      if (wId && wDef) {
+        const rarityHex = WEAPON_RARITY_COLORS[wDef.rarity];
+        slotBg.fillStyle(
+          hexToNum(isSelected ? PALETTE.SLATE_MID : PALETTE.SLATE_DARK),
+          isSelected ? 0.96 : 0.86,
         );
+        slotBg.lineStyle(
+          isSelected ? 2.5 : 2,
+          hexToNum(isSelected ? PALETTE.SOLAR_GOLD : rarityHex),
+          1,
+        );
+        slotBg.fillRoundedRect(sx, barY, slotW, slotH, 8);
+        slotBg.strokeRoundedRect(sx, barY, slotW, slotH, 8);
+
+        if (icon) {
+          icon.setVisible(true);
+          icon.setTexture(TextureBaker.getWeaponTextureKey(wId));
+          icon.setScale(invBake * 0.82);
+        }
+        if (nameTxt) {
+          nameTxt.setText(`[${idx + 1}] ${i18n.weaponName(wId, wDef.nameVi)}`);
+          nameTxt.setColor(rarityHex);
+        }
+        if (metaTxt) {
+          metaTxt.setText(
+            `${dmgPrefix} ${wDef.damage}${wDef.pelletCount > 1 ? `×${wDef.pelletCount}` : ''} · ${nrgPrefix} ${wDef.energyCost}`,
+          );
+          metaTxt.setColor(PALETTE.SILVER_BRIGHT);
+        }
+      } else {
+        slotBg.fillStyle(hexToNum(PALETTE.INK_DARK), 0.68);
+        slotBg.lineStyle(1.5, hexToNum(PALETTE.SLATE_MID), 0.6);
+        slotBg.fillRoundedRect(sx, barY, slotW, slotH, 8);
+        slotBg.strokeRoundedRect(sx, barY, slotW, slotH, 8);
+
+        if (icon) {
+          icon.setVisible(false);
+        }
+        if (nameTxt) {
+          nameTxt.setText(`[${idx + 1}] ${curLocale === 'en' ? 'Empty Slot' : 'Ô Trống'}`);
+          nameTxt.setColor(PALETTE.ASH_GRAY);
+        }
+        if (metaTxt) {
+          metaTxt.setText(curLocale === 'en' ? 'Press [E] to equip' : 'Nhấn [E] để nhặt');
+          metaTxt.setColor(PALETTE.ASH_GRAY);
+        }
       }
     });
   }
@@ -319,6 +339,7 @@ export function updateVectorHudImpl(this: GameScene): void {
     this.updateHubInvitePanel();
     this.updateHubCharacterSkillPreview();
     this.updateWeaponComparisonCard();
+    this.updateEmoteWheelHud();
     this.updateOffscreenTeammateArrows();
     this.updateModalHud();
   }

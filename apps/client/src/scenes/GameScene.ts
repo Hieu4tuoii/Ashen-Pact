@@ -28,7 +28,7 @@ import type { ModalOverlayManager } from '../ui/settings-modal.js';
 import { applyCameraViewportImpl, buildArenaTilesImpl, createImpl, drawSourceKeyToCtxImpl, getStructureTextureKeyImpl, rebuildAllTileCellsToCompositeImpl, renderTileCellToCompositeImpl, setStressTestModeImpl, syncArenaTilesWithMapRevisionImpl, triggerIrisTransitionImpl, updateCameraWithLookaheadAndShakeImpl, updateIrisTransitionImpl } from './game-scene/arena-tiles.js';
 import { resolveEnemyStatusTintImpl, resolvePlayerStatusTintImpl, syncEnemyRigsImpl, syncProjectilesAndPickupsImpl, syncPropsImpl, syncSimulatedPlayersImpl, updatePlayerOverheadUiImpl } from './game-scene/entity-sync.js';
 import { updateBossHudImpl, updateCoopTeammateHudImpl, updateMinimapHudImpl, updateOffscreenTeammateArrowsImpl, updateVectorHudImpl } from './game-scene/hud-combat-and-coop.js';
-import { updateHubCharacterSkillPreviewImpl, updateHubInvitePanelImpl, updateWeaponComparisonCardImpl } from './game-scene/hud-hub-and-cards.js';
+import { updateEmoteWheelHudImpl, updateHubCharacterSkillPreviewImpl, updateHubInvitePanelImpl, updateWeaponComparisonCardImpl } from './game-scene/hud-hub-and-cards.js';
 import { updateDebugStateImpl, updateModalHudImpl } from './game-scene/hud-modals-and-debug.js';
 import { buildVectorHudImpl, invalidateAllHudCachesImpl, rebuildPauseModalImpl, togglePauseModalImpl } from './game-scene/hud-setup-and-pause.js';
 import { bindCoopRoomHandlersImpl, connectCoopRoomImpl, connectHelloRoomImpl, fetchHostLanInfoImpl, forceCoopReconnectImpl, getResolvedWsUrlImpl, setupKeyboardBindingsImpl, updateHostInviteUrlImpl } from './game-scene/input-and-network.js';
@@ -152,7 +152,11 @@ export class GameScene extends Phaser.Scene {
   public chestSprites = new Map<number, Phaser.GameObjects.Sprite>();
   public worldItemSprites = new Map<
     number,
-    { sprite: Phaser.GameObjects.Sprite; label: Phaser.GameObjects.Text }
+    {
+      sprite: Phaser.GameObjects.Sprite;
+      glow: Phaser.GameObjects.Graphics;
+      label: Phaser.GameObjects.Text;
+    }
   >();
   public npcVisuals = new Map<
     number,
@@ -210,6 +214,9 @@ export class GameScene extends Phaser.Scene {
   public lastInvitePanelHash = '';
   public lastHubPreviewHash = '';
   public lastWeaponCompareHash = '';
+  public lastEmoteWheelHash = '';
+  public emoteWheelOpen = false;
+  public emoteWheelHoveredId: QuickEmoteId | null = null;
   public lastRunState = 'playing';
   public resultDismissed = false;
   public fullMapOpen = false;
@@ -243,6 +250,7 @@ export class GameScene extends Phaser.Scene {
   public invitePanelContainer!: Phaser.GameObjects.Container;
   public hubPreviewContainer!: Phaser.GameObjects.Container;
   public weaponCompareContainer!: Phaser.GameObjects.Container;
+  public emoteWheelContainer!: Phaser.GameObjects.Container;
   public pauseContainer!: Phaser.GameObjects.Container;
   public irisGraphics!: Phaser.GameObjects.Graphics;
   public settingsModal?: ModalOverlayManager;
@@ -298,6 +306,7 @@ export class GameScene extends Phaser.Scene {
     G: Phaser.Input.Keyboard.Key;
     Z: Phaser.Input.Keyboard.Key;
     X: Phaser.Input.Keyboard.Key;
+    T: Phaser.Input.Keyboard.Key;
     V: Phaser.Input.Keyboard.Key;
     I: Phaser.Input.Keyboard.Key;
     TAB: Phaser.Input.Keyboard.Key;
@@ -417,13 +426,33 @@ export class GameScene extends Phaser.Scene {
       this.pingQueued = null;
     }
 
-    const emoteId = !isModalOrPaused ? (this.queuedEmote ?? undefined) : undefined;
-    this.queuedEmote = null;
-
-    // Left mouse button -> FIRE (except when clicking top/bottom HUD buttons, Invite panel, or modal)
+    // Left mouse button -> FIRE (except when clicking top/bottom HUD buttons, Invite panel, Emote Wheel, or modal)
     const camView = this.cameras.main.worldView;
     const localViewX = worldPt.x - camView.x;
     const localViewY = worldPt.y - camView.y;
+    let suppressFireForEmoteWheel = false;
+    if (this.emoteWheelOpen) {
+      suppressFireForEmoteWheel = true;
+      const dx = localViewX - 480;
+      const dy = localViewY - 270;
+      const dist = Math.hypot(dx, dy);
+      if (dist >= 22) {
+        this.emoteWheelHoveredId = (
+          Math.abs(dy) >= Math.abs(dx) ? (dy < 0 ? 1 : 3) : dx > 0 ? 2 : 4
+        ) as QuickEmoteId;
+      } else {
+        this.emoteWheelHoveredId = null;
+      }
+      if (pointer.leftButtonDown() && this.emoteWheelHoveredId !== null) {
+        this.queuedEmote = this.emoteWheelHoveredId;
+        this.emoteWheelOpen = false;
+        this.emoteWheelHoveredId = null;
+      }
+    }
+
+    const emoteId = !isModalOrPaused ? (this.queuedEmote ?? undefined) : undefined;
+    this.queuedEmote = null;
+
     const isClickingInvitePanel =
       sim.inHub &&
       this.invitePanelVisible &&
@@ -435,6 +464,7 @@ export class GameScene extends Phaser.Scene {
       localViewY < 68 ||
       localViewY > 480 ||
       isClickingInvitePanel ||
+      suppressFireForEmoteWheel ||
       isModalOrPaused ||
       sim.runState !== 'playing';
     if (pointer.leftButtonDown() && !isClickingHud) {
@@ -705,6 +735,7 @@ export class GameScene extends Phaser.Scene {
   public updateHubInvitePanel(): void { updateHubInvitePanelImpl.call(this); }
   public updateHubCharacterSkillPreview(): void { updateHubCharacterSkillPreviewImpl.call(this); }
   public updateWeaponComparisonCard(): void { updateWeaponComparisonCardImpl.call(this); }
+  public updateEmoteWheelHud(): void { updateEmoteWheelHudImpl.call(this); }
   public updateOffscreenTeammateArrows(): void { updateOffscreenTeammateArrowsImpl.call(this); }
   public updateMinimapHud(): void { updateMinimapHudImpl.call(this); }
   public updateBossHud(): void { updateBossHudImpl.call(this); }

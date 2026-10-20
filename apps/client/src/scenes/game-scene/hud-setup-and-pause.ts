@@ -1,6 +1,6 @@
 import {
   i18n,
-  PHASE1_SAMPLE_WEAPONS,
+  MAX_WEAPON_SLOTS,
   VIETNAMESE_VERIFICATION_STRING,
   WEAPONS,
 } from '@ashen-pact/shared';
@@ -189,8 +189,10 @@ export function buildVectorHudImpl(this: GameScene): void {
   const startX = 148;
   const barY = 486;
 
-  PHASE1_SAMPLE_WEAPONS.forEach((weaponId, idx) => {
-    const wDef = WEAPONS[weaponId]!;
+  const sim = this.transport.getSim();
+  for (let idx = 0; idx < MAX_WEAPON_SLOTS; idx++) {
+    const weaponId = sim.player.weaponSlots[idx] ?? 'knight_sword';
+    const wDef = WEAPONS[weaponId] ?? WEAPONS.knight_sword!;
     const sx = startX + idx * (slotW + 8);
 
     const slotBg = this.add.graphics();
@@ -246,7 +248,7 @@ export function buildVectorHudImpl(this: GameScene): void {
       this.queuedWeaponSlot = idx;
     });
     this.hudContainer.add(hit);
-  });
+  }
 
   // Bottom-Left Skill [Space/RMB] & Dash [Shift] Cooldown Cards + Bottom-Right [Esc] Pause Card
   this.abilityHudGraphics = this.add.graphics();
@@ -413,6 +415,9 @@ export function buildVectorHudImpl(this: GameScene): void {
   this.weaponCompareContainer = this.add.container(0, 0);
   this.hudContainer.add(this.weaponCompareContainer);
 
+  this.emoteWheelContainer = this.add.container(0, 0);
+  this.hudContainer.add(this.emoteWheelContainer);
+
   // Iris Transition Graphics placed below Modals & Pause Overlay so modals are never obscured
   this.irisGraphics = this.add.graphics();
   this.hudContainer.add(this.irisGraphics);
@@ -446,6 +451,7 @@ export function invalidateAllHudCachesImpl(this: GameScene): void {
   this.lastInvitePanelHash = '';
   this.lastHubPreviewHash = '';
   this.lastWeaponCompareHash = '';
+  this.lastEmoteWheelHash = '';
   this.lastRunState = '';
   const isEn = i18n.getLocale() === 'en';
   syncHudDebugVisibility(this);
