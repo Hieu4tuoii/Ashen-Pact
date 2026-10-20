@@ -455,7 +455,7 @@ export class GameScene extends Phaser.Scene {
         spawnInitialWave: true,
         includeTrainingDummy: true,
         includeProps: true,
-        autoRespawnWaves: true,
+        autoRespawnWaves: false,
       });
       if (searchParams.get('hub') === '1') {
         this.transport.getSim().enterHub();
@@ -1473,6 +1473,27 @@ export class GameScene extends Phaser.Scene {
     });
     this.keys.E.on('down', () => {
       this.interactQueued = true;
+      const sim = this.transport.getSim();
+      if (sim.runState === 'victory' && sim.currentFloor < 6 && !this.resultDismissed) {
+        this.resultDismissed = true;
+        sim.campaignMaxFloors = 6;
+        sim.runState = 'playing';
+        if (this.room && this.coopMode !== 'solo') {
+          this.room.send('continue_campaign', {});
+        }
+      } else if (
+        this.room &&
+        this.coopMode !== 'solo' &&
+        sim.inHub &&
+        sim.portalActive &&
+        Math.hypot(sim.player.x - sim.portalX, sim.player.y - sim.portalY) <= 76
+      ) {
+        sim.player.ready = true;
+        this.room.send('set_ready', { ready: true, autoStartIfAllReady: true });
+        if (sim.areAllPlayersReady() || sim.player.slot === 1) {
+          this.room.send('start_run', {});
+        }
+      }
     });
     this.keys.Z.on('down', () => {
       const pointer = this.input.activePointer;
@@ -1486,11 +1507,25 @@ export class GameScene extends Phaser.Scene {
       this.dropWeaponQueued = true;
     });
     this.keys.V.on('down', () => {
-      this.readyToggleQueued = true;
+      const sim = this.transport.getSim();
       if (this.room && this.coopMode !== 'solo') {
-        const sim = this.transport.getSim();
-        this.room.send('set_ready', { ready: !sim.player.ready });
+        if (!sim.player.ready) {
+          sim.player.ready = true;
+          this.room.send('set_ready', { ready: true, autoStartIfAllReady: true });
+        } else if (sim.inHub && (sim.areAllPlayersReady() || sim.player.slot === 1)) {
+          this.room.send('start_run', {});
+        } else {
+          sim.player.ready = false;
+          this.room.send('set_ready', { ready: false });
+        }
+      } else {
+        this.readyToggleQueued = true;
+        if (sim.inHub) {
+          sim.player.ready = true;
+          sim.startDungeonRunFromHub();
+        }
       }
+      this.lastInvitePanelHash = '';
     });
     this.keys.I.on('down', () => {
       this.invitePanelVisible = !this.invitePanelVisible;
@@ -5237,9 +5272,22 @@ export class GameScene extends Phaser.Scene {
       sim.player.ready ? i18n.t('ui.hud.readyDone') : i18n.t('ui.hud.pressReady'),
       sim.player.ready ? PALETTE.GOBLIN_GREEN : PALETTE.RUBY_CORE,
       () => {
-        this.readyToggleQueued = true;
         if (this.room && this.coopMode !== 'solo') {
-          this.room.send('set_ready', { ready: !sim.player.ready });
+          if (!sim.player.ready) {
+            sim.player.ready = true;
+            this.room.send('set_ready', { ready: true, autoStartIfAllReady: true });
+          } else if (sim.inHub && (sim.areAllPlayersReady() || sim.player.slot === 1)) {
+            this.room.send('start_run', {});
+          } else {
+            sim.player.ready = false;
+            this.room.send('set_ready', { ready: false });
+          }
+        } else {
+          this.readyToggleQueued = true;
+          if (sim.inHub) {
+            sim.player.ready = true;
+            sim.startDungeonRunFromHub();
+          }
         }
         this.lastInvitePanelHash = '';
       },
@@ -6285,6 +6333,13 @@ export class GameScene extends Phaser.Scene {
       });
       makeModalBtn(670, btnY, 160, i18n.t('modal.btnDismiss'), PALETTE.SILVER_BRIGHT, () => {
         this.resultDismissed = true;
+        if (isWin && sim.currentFloor < 6) {
+          sim.campaignMaxFloors = 6;
+          sim.runState = 'playing';
+          if (this.room && this.coopMode !== 'solo') {
+            this.room.send('continue_campaign', {});
+          }
+        }
       });
     }
   }

@@ -1020,7 +1020,7 @@ export class WorldSim {
       biome: this.currentBiome,
       ...options.mapConfig,
     });
-    this.autoRespawnWaves = options.autoRespawnWaves ?? true;
+    this.autoRespawnWaves = options.autoRespawnWaves ?? false;
     this.autoRevivePlayer = options.autoRevivePlayer ?? true;
 
     const initialPCount = this.coopPlayerCountOverride ?? 1;
@@ -2696,6 +2696,7 @@ export class WorldSim {
         this.spawnProp('torch_brazier', cx + 130, cy + 90);
         this.portalX = cx;
         this.portalY = cy;
+      this.doorTransitionCooldown = Math.max(this.doorTransitionCooldown, 0.75);
         if (!room.cleared) {
           room.wavesSpawned = 0;
           room.wavesTotal = Math.max(1, room.waves.length || room.wavesTotal);
@@ -2721,6 +2722,7 @@ export class WorldSim {
         }
         this.portalX = cx;
         this.portalY = cy;
+      this.doorTransitionCooldown = Math.max(this.doorTransitionCooldown, 0.75);
         if (!room.cleared) {
           room.wavesSpawned = 1;
           room.wavesTotal = 1;
@@ -2834,10 +2836,12 @@ export class WorldSim {
       this.portalActive = true;
       this.portalX = cx;
       this.portalY = cy;
+      this.doorTransitionCooldown = Math.max(this.doorTransitionCooldown, 0.75);
     } else if (room.type === 'boss') {
       this.portalActive = true;
       this.portalX = cx;
       this.portalY = cy;
+      this.doorTransitionCooldown = Math.max(this.doorTransitionCooldown, 0.75);
       this.blizzardVeilActive = false;
       const defaultLegWep =
         this.currentBiome === 2
@@ -3389,7 +3393,7 @@ export class WorldSim {
     if (this.portalActive && distance(p.x, p.y, this.portalX, this.portalY) <= interactRange + 8) {
       if (this.inHub) {
         p.ready = true;
-        if (this.areAllPlayersReady()) {
+        if (this.areAllPlayersReady() || p.slot === 1) {
           this.startDungeonRunFromHub();
         }
         return true;
@@ -4204,6 +4208,26 @@ export class WorldSim {
       this.events.push({ kind: 'grass_rustle', x: p.x, y: p.y });
     }
 
+    if (
+      !this.stressTestActive &&
+      this.doorTransitionCooldown <= 0 &&
+      this.portalActive &&
+      (dirX !== 0 || dirY !== 0) &&
+      distance(p.x, p.y, this.portalX, this.portalY) <= 26
+    ) {
+      if (this.inHub) {
+        p.ready = true;
+        if (this.areAllPlayersReady() || p.slot === 1) {
+          this.startDungeonRunFromHub();
+        }
+      } else if (
+        !this.hasActiveCombatEnemies() &&
+        (this.runState === 'playing' || (this.runState === 'victory' && this.currentFloor < 6))
+      ) {
+        this.enterPortal();
+      }
+    }
+
     if (inp.buttons & INPUT_BUTTON.FIRE && p.fireCooldownTimer <= 0 && p.hp > 0) {
       this.tryFireActiveWeapon(p);
     }
@@ -4217,7 +4241,7 @@ export class WorldSim {
       for (let i = 0; i < this.doors.length; i++) {
         const door = this.doors[i]!;
         if (door.locked) continue;
-        if (distance(p.x, p.y, door.x, door.y) <= 26) {
+        if (distance(p.x, p.y, door.x, door.y) <= 44) {
           const movingIntoDoor =
             (door.dir === 'N' && dirY < -0.3) ||
             (door.dir === 'S' && dirY > 0.3) ||

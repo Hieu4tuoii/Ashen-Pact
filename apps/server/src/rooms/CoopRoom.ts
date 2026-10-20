@@ -148,6 +148,14 @@ export class CoopRoom extends Room<CoopRoomState> {
       this.broadcastImmediateSnapshot();
     });
 
+    this.onMessage('continue_campaign', () => {
+      if (this.sim.runState === 'victory' && this.sim.currentFloor < 6) {
+        this.sim.campaignMaxFloors = 6;
+        this.sim.runState = 'playing';
+        this.broadcastImmediateSnapshot();
+      }
+    });
+
     this.onMessage('replay_run', () => {
       this.sim.botAutoPlayActive = false;
       this.sim.startDungeonRunFromHub();
