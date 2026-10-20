@@ -1,14 +1,19 @@
 # STYLE GUIDE ĐỒ HỌA PROCEDURAL (ART_GUIDE.md) — ASHEN PACT
 
 ## 1. Triết Lý & Quy Tắc Cốt Lõi
-- **100% Procedural Vector Art:** Toàn bộ nhân vật, quái, boss, vũ khí, đạn, tilemap, vật thể tương tác và biểu tượng UI đều được sinh bằng code thông qua thư viện `apps/client/src/art/`.
+- **100% Procedural Vector Art:** Toàn bộ nhân vật, quái, boss, vũ khí, đạn, tilemap, vật thể tương tác và biểu tượng UI đều được sinh bằng code thông qua thư viện `apps/client/src/art/` (được chia mô-đun gồm `texture-baker.ts` + 5 sub-bakers `texture-baker-canvas.ts`, `texture-baker-tiles.ts`, `texture-baker-props.ts`, `texture-baker-surfaces.ts`, `texture-baker-fx.ts`; và `cutout-rig.ts` + `rig-defs.ts` + 14 file định nghĩa rig `rig-defs-heroes-1/2.ts`, `rig-defs-biome1/2/3-*.ts`, `rig-defs-weapons-1/2.ts`).
 - **Ngoại lệ duy nhất:** File font vector `Be Vietnam Pro` (giấy phép SIL Open Font License 1.1) đóng gói local trong `apps/client/public/fonts/`.
 - **Độ sắc nét theo DPR:** Mọi hình vẽ đều được bake ra texture ở độ phân giải `worldSize * Math.ceil(cameraZoom * devicePixelRatio * 2.5)` (kẹp trong khoảng `4.0x – 8.0x` supersampling khi tạo canvas offscreen) để không bao giờ bị răng cưa hay mờ nhòe ở 1080p và 1440p (kể cả khi phóng đại preview `2.25×` trong `ArtGalleryScene`).
+- **Tầm nhìn toàn màn hình trong trẻo (Full-Screen Clear Visibility):**
+  - **Không sương mù che màn hình:** Cấm dùng particle sương mù lớn trôi ngang (`fx_ambient_mist`) làm đục màu nền và giảm độ tương phản.
+  - **Không giới hạn vòng tầm nhìn tối (No Fog-of-War):** Toàn bộ căn phòng từ tâm ra 4 góc màn hình luôn sáng rõ (`ambientColor` ~0.84–0.90 trung bình kênh, `vignetteStrength = 0.0` mặc định). Ambient không đặt cao hơn vì lightmap blend `MULTIPLY` bị kẹp ở 1.0: cần chừa 10–16% dư địa để vũng sáng nhìn thấy được. Cũng không đặt thấp hơn 0.84 vì `MULTIPLY` nhân trên giá trị sRGB nên L\* sàn tối giảm nhanh hơn tỉ lệ ambient (0.82 chỉ giữ ~83% L\*). Ánh sáng từ chậu lửa ven tường, rương, cổng dịch chuyển, đạn và nguyên tố đóng vai trò tô điểm chiều sâu và dẫn hướng thị giác bằng `BlendMode.ADD`, không phải đèn pin soi bóng tối.
+- **Hình ảnh = ngữ nghĩa gameplay:** Thứ trông như hazard (dung nham, độc, băng trơn) phải là surface thật trong sim. Thứ trông như vật cản (cột, bệ, đe, bánh răng lớn) phải nằm trên ô `wall`/`pillar` hoặc gắn vào mặt tường. Decor chỉ có ở client mà nằm trên ô đi được thì phải phẳng: không viền INK, không đổ bóng, `ΔL* ≤ 10`.
+- **Surface động luôn thắng decal:** surface sinh giữa trận (boss phase 3 phủ vòng ngoài phòng, kỹ năng, quái để lại sàn) render **trên** mọi decal sàn; decal ở ô vừa thành surface phải ẩn (fade ≤ 200ms). Phòng boss không đặt decal có nghĩa "lối đi" (đá bước chân, lưới sắt, rãnh nhiệt) trong 3 ô ngoài cùng.
 
 ---
 
-## 2. Bảng Màu Cố Định (Master Palette — 42 Màu)
-Toàn bộ màu sắc bề mặt vật thể bắt buộc lấy từ `PALETTE` trong `apps/client/src/art/palette.ts` (ngoại trừ ánh sáng additive/glow):
+## 2. Bảng Màu Cố Định (Master Palette — 42 Màu Gốc + Nhóm Màu Môi Trường `ENV`)
+Toàn bộ màu sắc bề mặt vật thể bắt buộc lấy từ `PALETTE` trong `apps/client/src/art/palette.ts` (ngoại trừ ánh sáng additive/glow). Từ phiên bản **v0.2.0 (thay đổi convention đã duyệt)**, bảng màu được mở rộng thêm nhóm màu môi trường trầm `ENV` (độ bão hòa HSL `S ≤ 0.35`, riêng B2 `≤ 0.40`) để nền map dịu mắt và tôn nổi nhân vật/đạn địch:
 
 | Nhóm màu | Tên mã màu | Mã Hex | Mục đích sử dụng |
 |---|---|---|---|
@@ -34,7 +39,7 @@ Toàn bộ màu sắc bề mặt vật thể bắt buộc lấy từ `PALETTE` t
 | | `SOLAR_GOLD` | `#FACC15` | Viền vàng hoàng gia, chí mạng, định danh **P4** |
 | **Emerald / Nature / P3 (6)** | `MOSS_DARK` | `#163024` | Nền tối Biome 1 (Rừng Cổ Mục Nát) |
 | | `FOREST_SHADE` | `#1E4E38` | Bóng lá cây, da Goblin vùng tối |
-| | `GOBLIN_GREEN` | `#3B8EA5` → `#499F54` | Màu chủ đạo da Goblin & Mộc Linh |
+| | `GOBLIN_GREEN` | `#499F54` | Màu chủ đạo da Goblin & Mộc Linh |
 | | `LIME_GLOW` | `#84CC16` | Nấm phát quang, định danh **P3** |
 | | `MINT_LIGHT` | `#A7F3D0` | Highlight lá/hồi máu |
 | | `TOXIC_PURPLE` | `#9333EA` | Nguyên tố **Độc**, đầm lầy độc, Mục Vương |
@@ -55,6 +60,16 @@ Toàn bộ màu sắc bề mặt vật thể bắt buộc lấy từ `PALETTE` t
 | | `P3_RING` | `#4ADE80` | Vòng định danh Người chơi 3 (Xanh lá) |
 | | `P4_RING` | `#FBBF24` | Vòng định danh Người chơi 4 (Vàng) |
 
+### 2.1 Bảng Màu Môi Trường Trầm (`ENV` Palette — v0.2.0)
+Giá trị xuất phát, được tinh chỉnh theo ảnh chụp thật trong Visual Gate. L\* sàn ~30–32 (B2 ~44) để viền `INK_DARK` (L\* ≈ 5) không chìm vào nền. Quan hệ so với sàn: `seam` −7, `var` +3.5, `wallTop` +15, `wallFront` −10 ΔL\*.
+
+| Khu vực / Biome | `floor` | `seam` | `var` | `wallTop` | `wallFront` | Điểm nhấn / Ghi chú |
+|---|---|---|---|---|---|---|
+| **Hub (Khu Đá Cổ)** | `#414B61` | `#343B4C` | `#47546C` | `#64708B` | `#2D3547` | Shadow `#151A24`, lửa chậu ven tường `#F59E42` |
+| **B1 Rừng Cổ Mục Nát** | `#3D4F47` | `#303E38` | `#43584E` | `#627468` | `#2B3731` | Rêu tối, rễ cây cổ thụ bò tràn mép tường |
+| **B2 Hầm Băng Vĩnh Cửu** | `#446E78` | `#3B5C64` | `#4A7881` | `#6F949E` | `#345462` | Rim băng `#CFE8EE`, vòng Astrolabe chìm |
+| **B3 Lò Rèn Dung Nham** | `#53433F` | `#413431` | `#5D4B44` | `#7F6559` | `#3B2D29` | Rãnh nhiệt có nắp lưới sắt, ánh dung nham lộ qua khe (`ADD`) |
+
 ---
 
 ## 3. Tỉ Lệ Nhân Vật, Độ Dày Nét Outline & Quy Tắc Shading
@@ -73,31 +88,37 @@ Toàn bộ màu sắc bề mặt vật thể bắt buộc lấy từ `PALETTE` t
 - **Boss & Công trình lớn:** `3.5` đơn vị thế giới (màu `INK_DEEP` `#0B090E`).
 - **Chi tiết nội bộ (vết khâu, khe mũ, mắt, hoa văn giáp):** `1.5` đơn vị thế giới.
 
-### 3.3 Quy tắc Ánh sáng & 3 Lớp Tô (Pipeline `outlined()`)
-- **Hướng sáng toàn cục cố định:** Từ **Trên – Trái (Top-Left, góc -135°)** chiếu xuống **Dưới – Phải (Bottom-Right)**.
-- Mọi hình khối đi qua hàm `outlined(ctx, shapeDef)` đều được vẽ tuần tự 4 bước:
-  1. **Lớp Outline ngoài:** Vẽ mở rộng hoặc stroke `INK_DARK` dày `2.5` đơn vị.
-  2. **Lớp Base Fill:** Tô phẳng màu chính từ `PALETTE`.
+### 3.3 Quy tắc Ánh sáng, Shading 2 Lớp (Cutout 2.0) & Full-Screen Clear Visibility
+- **Hướng sáng toàn cục cố định:** Một key light từ **Trên – Trái (Top-Left)**. Quy ước: `-135°` luôn chỉ **vị trí nguồn sáng** (tọa độ màn hình, y hướng xuống). Rim-light nằm ở mép trên-trái; mọi bóng đổ bake (tường, cột, trụ, decor) đổ về **Dưới – Phải (+45°, Đông–Nam)**, đồng bộ giữa Nhân vật, Quái, Tường 3D, cột/bệ đá và luồng sáng môi trường. Chậu lửa/đuốc/cổng chỉ tạo vũng sáng, **không tạo bóng đổ**.
+- **Tô bóng Nhân vật & Quái (Cutout 2.0 — `cutout-rig.ts` & `rig-defs-*.ts`):**
+  1. **Lớp Outline ngoài:** Stroke `INK_DARK` dày `2.5` đơn vị (`3.5` cho Boss), bo tròn đầu nét.
+  2. **Lớp Base Fill + Soft Gradient:** Tô màu chính từ `PALETTE` kết hợp chuyển sắc mềm nhẹ từ trên-trái xuống dưới-phải.
   3. **Lớp Cel-Shade (Bóng khối):** Vẽ vùng bán nguyệt/vát ở góc **Dưới – Phải** bằng màu tối hơn trong cùng dải màu (hoặc phủ `INK_DARK` với `alpha = 0.24`).
-  4. **Lớp Rim Light / Highlight:** Vẽ vệt cong mảnh hoặc đốm sáng ở góc **Trên – Trái** bằng màu sáng hơn (hoặc `BONE_WHITE` với `alpha = 0.45`).
+  4. **Lớp Highlight Vật Liệu & Rim Light (`-135°`):** Kim loại có vệt phản quang sắc nét (`SILVER_BRIGHT`), vải/da chuyển sáng êm, pha lê/năng lượng có lõi phát sáng; mép **Trên – Trái** của đầu/vai/giáp luôn có viền rim light mảnh (`alpha = 0.45`) để tách bạch silhouette nhân vật khỏi sàn.
+- **Ánh sáng Thế giới Trong Trẻo Không Sương Mù (`lighting-pipeline.ts`):**
+  - `brushSprite` bắt buộc đặt `BlendMode.ADD` để các nguồn sáng giao nhau cộng hưởng tự nhiên, không bao giờ ghi đè gây ám màu.
+  - **Sáng rõ toàn màn hình nhưng còn dư địa cho ánh sáng:** Nền `lightmapRt` dùng `ambientColor` `~0.84–0.90` trung bình kênh (điểm xuất phát B1 `0xD9E3DD`, B2 `0xD2E0E8`, B3 `0xEBDBD1`, Hub `0xD6DCE8`, giữ ≥ 86% L\* sàn ENV). Vũng sáng ấm của chậu lửa được vẽ thêm bằng sprite `fx_light_radial` blend `ADD` ở depth phía trên lightmap (alpha `0.10–0.18`, `#F59E42`). Tuyệt đối **không** dùng vòng tròn giới hạn tầm nhìn quanh người chơi (`mainPlayerVisionRadius`, `allyVisionRadius`) để làm tối phần còn lại của phòng, và **tắt hẳn vignette đen ở góc màn hình theo mặc định (`vignetteStrength = 0.0`)** (chỉ bật nhịp tim đỏ `lowHpPulse` khi `HP <= 2`).
+  - **Bão tuyết Boss 2 (`blizzardVeil`, phase 3 Kryssa):** là dấu hiệu của cơ chế boss nên được giữ, nhưng **không làm tối**: tuyết dày ×3 thổi xiên theo gió, color grade lạnh nhẹ (L\* trung bình giảm ≤ 5%), viền sương giá mỏng ở mép màn hình (alpha ≤ 0.12, màu `#CFE8EE`, không đen), kèm banner + SFX lúc kích hoạt.
+  - **Không sương mù (`fx_ambient_mist`):** Loại bỏ hoàn toàn các đám mây mờ kích thước lớn trôi ngang màn hình; chỉ sử dụng các hạt môi trường nhỏ, sắc nét, trong trẻo (đom đóm/lá nhỏ ở B1, bông tuyết tròn 2–4px ở B2, tàn lửa embers ở B3, hạt bụi sáng li ti trong vũng sáng đuốc).
 
 ---
 
-## 4. Cấu Trúc Cutout Rig & Đường Cong Animation
+## 4. Cấu Trúc Cutout Rig 2.0 & Đường Cong Animation
 
 ### 4.1 Thứ tự lớp (Z-Order) trong `CutoutRig`
-Mỗi thực thể nhân vật/quái gồm các bộ phận độc lập được bake thành texture riêng và lắp ráp theo thứ tự từ dưới lên trên:
-1. `playerRing` (Vòng màu định danh P1–P4 dưới chân, chỉ dành cho người chơi)
-2. `groundShadow` (Bóng đổ elip mềm màu `#0B090E`, `alpha = 0.42`)
-3. `backAccessory` (Áo choàng đỏ của Thiết Vệ / Túi tên của Goblin)
-4. `legLeft` & `legRight` (Hai chân tách rời, pivot đặt tại khớp hông)
+Mỗi thực thể nhân vật/quái (ở mức đồ họa High/Medium, quái dùng **full rig** thay vì `fastComposite`) gồm các bộ phận độc lập được bake thành texture riêng và lắp ráp theo thứ tự từ dưới lên trên:
+1. `playerRing` (Vòng màu định danh P1–P4 mềm dưới chân, chỉ dành cho người chơi)
+2. `groundShadow` (Bóng đổ elip mềm có blur nhẹ màu `#0B090E`, `alpha = 0.42`)
+3. `backAccessory` (Áo choàng đỏ của Thiết Vệ / Túi tên của Goblin — có **secondary motion dạng spring** trễ pha theo chuyển động)
+4. `legLeft` & `legRight` (Hai chân tách rời, pivot đặt tại khớp hông; sinh hạt bụi nhỏ dưới chân khi chạy)
 5. `armLeft` (Tay phụ hoặc khiên gắn tay trái, pivot tại vai)
-6. `torso` (Thân giáp/áo, pivot tại tâm hông)
-7. `head` (Đầu + mũ/tai/mắt, pivot tại cổ; mắt dịch chuyển nhẹ theo góc ngắm)
-8. `weapon` (Vũ khí xoay theo góc ngắm và giật lùi khi bắn)
+6. `torso` (Thân giáp/áo, pivot tại tâm hông, nghiêng theo `moveDirX`)
+7. `head` (Đầu + mũ/tai/mắt, pivot tại cổ; mắt & đầu dõi theo hướng ngắm, **chớp mắt ngẫu nhiên mỗi 3–5s**)
+8. `weapon` (Vũ khí **chĩa hẳn về con trỏ chuột** quanh pivot tay cầm, giật lùi có hồi spring khi bắn)
 9. `armRight` (Tay cầm vũ khí, pivot tại vai)
 
-### 4.2 Đường cong Easing & Tham số Animation
+### 4.2 Đường cong Easing, Crossfade & Pose Động
+- **Crossfade chuyển trạng thái:** Mọi chuyển đổi giữa `idle`, `run`, `attack`, `hurt`, `dash`, `cast`, `downed/revive` đều nội suy mượt trong `0.10–0.15s`, không giật (snap).
 - **Idle (Đứng nghỉ):**
   - Nhịp thở chu kỳ `T = 1.6s` (`ω = 2π / 1.6`):
   - `torso.y = baseTorsoY + Math.sin(t * ω) * 1.2`
@@ -110,15 +131,65 @@ Mỗi thực thể nhân vật/quái gồm các bộ phận độc lập đượ
   - Độ nẩy bước chân (bounce 2 lần mỗi chu kỳ): `bodyBounceY = -Math.abs(Math.sin(t * ω)) * 3.2`
   - Thân nghiêng về hướng chạy: `torso.rotation = moveDirX * 0.14`
   - Squash & Stretch theo nhịp chạm đất: `scaleY = 1 + Math.cos(t * ω * 2) * 0.05`, `scaleX = 1 - Math.cos(t * ω * 2) * 0.04`
+- **Pose Chiến Đấu (Attack / Hurt / Dash / Cast):**
+  - `attack`: Thân vươn nhẹ theo hướng đòn đánh, tay vũ khí giật recoil rồi hồi bằng spring.
+  - `hurt`: Thân giật lùi ngược hướng sát thương + nghiêng đầu + hit-flash trắng ngắn.
+  - `dash`: Kéo dãn theo vector lướt (`scaleX/Y`), thân chúi về trước, để lại vệt afterimage.
+  - `cast`: Tay phụ giơ cao kèm vòng sáng năng lượng dưới chân.
 - **Các hàm Easing chuẩn (`src/art/easing.ts`):**
-  - `easeOutBack(x)` cho hiệu ứng bung nảy (spawn, mở rương, giương vũ khí).
-  - `easeOutCubic(x)` cho dash, giật lùi (recoil recovery).
+  - `easeOutBack(x)` cho hiệu ứng bung nảy (spawn, mở rương, giương vũ khí, popup sát thương chí mạng).
+  - `easeOutCubic(x)` cho dash, giật lùi (recoil recovery), vòng sóng va chạm.
   - `easeInOutSine(x)` cho chuyển động thở và lơ lửng.
 
 ---
 
-## 5. Typography & Chuỗi Kiểm Chứng Tiếng Việt
+## 5. Kiến Trúc Map Chủ Đạo — "Chi Tiết Ven Tường, Tĩnh Lặng Giữa Tâm" & Hiệu Ứng Nguyên Tố
+
+### 5.1 Triết lý bố cục không gian (Hybrid P4 + Style A + Điểm nhấn Biome P1/P2/P3)
+1. **Vùng chiến đấu trung tâm (Center Arena — Tĩnh lặng, `distToWall > 2`):**
+   - Mặt sàn phẳng mịn liền khối, độ tương phản nội vùng cực thấp (`ΔL* ≤ 6–8`), hoàn toàn **bỏ viền đen từng ô**, bỏ ellipse chữ "C" và bỏ bevel sáng gắt.
+   - Mạch gạch mờ dần (`alpha ≤ 0.12`, radial/edge fade-out) khi tiến vào giữa phòng để loại bỏ cảm giác "giấy kẻ ô" và giúp đạn địch (`#E84545`), vòng telegraph cùng nhân vật nổi bật tuyệt đối.
+2. **Vùng ven tường (Perimeter — Chi tiết, `distToWall <= 2`):**
+   - Dải `1.5–2` ô sát tường sử dụng gạch đá nguyên khối đan xen gạch chia nhỏ (`1×1` và `2×2` theo cụm noise), vết nứt mảnh, sỏi nhỏ và **lưới thoát nước sắt lõm** (khung vuông âm sàn có các thanh song sắt dọc tối màu), đón nhận trực tiếp vũng ánh sáng ấm áp từ các chậu lửa ven tường.
+3. **Tường 3D 3 lớp & Đổ bóng sâu (`texture-baker-tiles.ts`):**
+   - **Lớp 1 — Top Cap:** Mặt trên tường sáng hơn sàn (`ΔL* +12–18`), có viền ngoài `2–2.5u` và gờ rim-light sắc nét ở cạnh Bắc/Tây (đón key light `-135°`).
+   - **Lớp 2 — South Cliff Face:** Mặt đứng của tường cao `cliffH = 12–14u`, tối hơn sàn (`ΔL* −8–12`), có mạch gạch ngang/dọc trầm tĩnh (bỏ hoàn toàn chấm glow lặp lại trên mỗi ô tường).
+   - **Lớp 3 — AO Shadow & Cast Shadow:** Bóng đổ mềm `6–8u` (`alpha ~0.35`) dưới chân tường kết hợp bóng đổ chéo về **dưới-phải** (`12–16u`, `alpha ~0.22`) từ góc tường và các trụ cột. Mọi bóng trong phòng cùng một hướng.
+4. **Ngân sách mật độ (mỗi phòng):** ≤ 8 decor lớn (tính cả chậu lửa); ≤ 1 decor nhỏ trên 3 ô ven tường; **≥ 40% ô ven tường để trống**; 0 decor nổi trong Center Arena. Mỗi phòng chọn theo seed 2 trong 3 motif ven tường của biome để các phòng không lặp y hệt. Quality Low giữ phần bake tĩnh, tắt animation decor, God-rays, than hồng, bụi sáng; giữ ≤ 2 glow `ADD` chậu lửa trong khung nhìn.
+5. **Số chậu lửa theo loại phòng:** start 2 (hai bên cửa vào); combat 4 (góc phòng, có thể bỏ 1 theo seed); rương 2 (hai bên rương); merchant/shrine 2; boss 6–8 bố trí đối xứng; phòng nhỏ ≤ 2.
+6. **Ngưỡng đo (`metrics.json`):** sàn ảnh `?lighting=0`: L\* trung bình 28–40 (B2 40–50), `ΔL*` toàn sàn ≤ 14, Center Arena ≤ 8, HSL S ≤ 0.35 (B2 ≤ 0.40), L\* sàn − L\* `INK_DARK` ≥ 22. Ảnh có lighting: 4 góc màn hình (sàn trống cách mọi nguồn sáng ≥ 200u) ≥ 82% L\* của cùng vùng trên ảnh `?lighting=0`, không vùng sàn nào L\* < 15, tâm vũng sáng chậu lửa ≥ `ΔL* +8` so với sàn trống.
+
+### 5.2 Đặc tả hình học cho từng Biome (`apps/client/src/world/biome-architecture.ts`)
+Toàn bộ lớp kiến trúc dưới đây được render hoàn toàn ở phía client, giữ nguyên lưới va chạm `32 × 32` tất định của simulation và tuân thủ nguyên tắc "Hình ảnh = ngữ nghĩa gameplay" (mục 1). Các con số là **gợi ý xuất phát**. Mục tiêu thật là bố cục đẹp, nhận ra biome trong 1 giây và không rối; được bỏ hoặc thay chi tiết nếu ảnh chụp cho thấy nó gây rối.
+1. **Kiến trúc Phế Tích Chung & Hub (`P4 Dark Storybook Ruin` + `Style A`):**
+   - **Bệ đá & Chậu lửa treo (`Hanging Braziers`):** số lượng theo loại phòng (5.1). Bệ trụ đá giật cấp (`stepped stone pedestal` vát 4 cạnh) **đặt trên ô tường/góc tường**, giá đỡ sắt rèn vươn chéo `45°` ra phía trên sàn (vẽ trên nhân vật, không có hitbox) treo chậu lửa/lồng sắt cháy rực (`#F59E42` + lõi `#FFD27A`, hạt than hồng bay lên).
+   - **Trụ cột đá rãnh & Bóng đổ dài (`Fluted Columns & Long Cast Shadows`):** cột đá tròn có rãnh hoặc trụ đá gãy **chỉ đặt trên ô `pillar` của sim hoặc dạng nửa cột gắn vào mặt tường**. Mỗi cột đổ một vệt **bóng về dưới-phải dài `40–64u`** (`alpha 0.32 → 0` mờ dần về phía Đông–Nam).
+   - **Gờ tường đá vỡ & Hàng rào sắt rèn (`Wrought-Iron Fencing`):** Trên mép tường xen kẽ các đoạn gờ đá cổ bị mẻ với đoạn hàng rào song sắt rèn mũi nhọn (`#241F2E` / highlight `#565E75`) và dây xích treo. Chỉ nằm trên ô tường.
+2. **Biome 1 — Rừng Cổ Mục Nát (`P1 Illustrated Organic Diorama`):**
+   - **Rễ cây cổ thụ uốn lượn (`Bezier S-Curve Roots`):** Bezier hình chữ S vươn dài `28–56u` từ chân tường và góc phòng. **Phần gốc dày (`10–12u`, viền `INK_DARK` `2.5u`, cel-shade gỗ ấm `#7D4B32` / `#4E2F21`, đốm rêu `#499F54`) nằm trên tường/mặt đứng.** Phần tràn xuống sàn đi được thì thuôn về `2u` và phẳng như decal (không viền INK, không đổ bóng, `ΔL* ≤ 10`).
+   - **Cụm nấm phát quang & Dây leo:** Góc tường và chân cột có cụm 3 mũ nấm phát quang (`#84CC16` / `#A7F3D0`, glow nhẹ `alpha ≤ 0.30`) cùng dây leo rủ qua mặt đứng `South Cliff Face`.
+   - **Đầm độc tự nhiên & Đá bước chân (`Stepping Stones`):** Các vùng surface độc/nước ở B1 có viền bờ đất/rêu uốn lượn tự nhiên (2 lớp viền đồng tâm) kèm **4–6 phiến đá bước chân hình elip bất đối xứng** (`#627468`, viền `1.5u`) nằm dọc mép đầm, **chỉ trên ô khô ngoài surface** (không gợi ý "lối an toàn" xuyên qua vùng gây sát thương).
+3. **Biome 2 — Hầm Băng Vĩnh Cửu (`P2 Floating Abyss Sanctuary`):**
+   - **Vòng cổ ngữ băng khắc chìm giữa phòng (`Sunken 3-Ring Ice Astrolabe`):** Chính giữa tâm phòng vẽ decal khắc chìm gồm **3 vòng tròn đồng tâm**, bán kính gợi ý `70u`, `120u`, `165u` (phòng chuẩn 36×22 ô, Center Arena ≈ 960×512). Vòng ngoài ≤ `0.45 × min(rộng, cao)` của Center Arena thực tế, không tràn vào dải ven tường. Chia thành **8 cung bằng các trục mảnh `1.5u`**, lồng **vòng bán nguyệt lệch tâm (`crescent inlay`)** và rune nhỏ tại các giao điểm. Chỉ chênh `ΔL* 5–7` (`alpha 0.16–0.24`) so với sàn `#446E78`: chi tiết **thấy khi để ý, không nổi bật**, và vùng tâm vẫn `ΔL* ≤ 8`.
+   - **Tường Đền Băng & Hốc Thác Băng phía Bắc:** Tường Bắc điểm xuyết các hốc vòm đá băng (`arched alcoves`) có dải băng đóng băng đổ dọc xuống và cụm tinh thể pha lê vát cạnh (`#22D3EE` / `#CFFAFE`) kèm bờ tuyết mềm ở góc phòng.
+   - **Luồng sáng God-rays:** Phủ 2–3 dải tứ giác ánh sáng song song chiếu xiên từ hướng key light (tường Bắc–Tây) xuống sàn (`rộng 60–100u`, gradient tuyến tính `alpha 0.06 → 0`). Tắt ở Low.
+4. **Biome 3 — Lò Rèn Dung Nham (`P3 Octagonal Elemental Conduit`):**
+   - **Rãnh nhiệt có nắp lưới sắt ven tường (`Grated Heat Channels`):** **máng đá âm sàn rộng `24–28u`** (gờ bazan vát cạnh `4u` màu `#7F6559` + viền trong `#3B2D29`) dọc dải ven tường và từ lò nhiệt/chậu lửa, **phủ kín bằng lưới sắt rèn** (song sắt `#241F2E`, khe `4–6u`). Ánh dung nham chỉ lộ qua khe lưới (`#F97316` + lõi `#FFD27A`, `ADD`, alpha ≤ 0.35, nhịp thở chậm), nên người chơi đọc ngay là "sàn sắt đi được". Không có cầu, không chạy xuyên Center Arena. Không dùng rãnh dung nham lộ thiên chỉ có ở client.
+   - **Dung nham thật (surface `lava` của sim)** dùng bờ rãnh đá vát (5.3). Đây là chỗ duy nhất có dung nham lộ thiên sáng mạnh.
+   - **Cơ khí Lò Rèn gắn tường (`Brass Gears & Steam Pipes`):** **Trên mặt tường và ô tường góc phòng** gắn các **bánh răng đồng thau nhiều răng (`8–12 răng`, `#D97706` / `#92400E`) quay chậm** (đứng yên ở Low), đường ống hơi nước có mặt bích tán đinh (`flanged steam pipes`) chạy dọc mặt đứng, xích sắt. Đe rèn chỉ đặt trên ô `pillar`.
+
+### 5.3 Bề mặt Nguyên Tố & Phản Ứng Combo (`texture-baker-surfaces.ts` & `combat-fx.ts`)
+- **Bề mặt nguyên tố ăn nhập kiến trúc:** Nước, Dầu, Băng, Dung nham, Đầm độc giảm độ bão hòa nền ~30%, độ tương phản hoa văn bên trong `ΔL* ≤ 10`, có bờ viền/rãnh đá hoặc mép bọt mềm ăn nhập với sàn thay vì mảng màu phẳng cắt vuông.
+- **Phản ứng Nguyên Tố & Tia Sáng (`BlendMode.ADD`):** Mọi tia lửa, muzzle flash, đạn sáng, cột sáng độ hiếm (Tím/Cam) và vụ nổ Combo Nguyên Tố (*Hơi Nước, Vỡ Băng, Siêu Dẫn, Nổ Độc, Tê Liệt, Quá Tải*) đều vẽ trên lightmap với `BlendMode.ADD`, kèm vòng sóng xung kích (`easeOutCubic`) và chữ combo gộp hiện đại (ví dụ `HƠI NƯỚC ×3` trong cửa sổ `0.4s`).
+- **Đạn địch nhận biết bằng hình dạng (bắt buộc):** mọi đạn địch có lõi sáng gần trắng + thân `CRIMSON_BRIGHT` `#E84545` + viền `INK_DARK` `1.5u`, giống nhau ở mọi biome. Không FX/decor/ambient nào (than hồng, tàn lửa, chậu lửa, khe dung nham, pha lê) dùng cùng tổ hợp "lõi trắng + viền tối" ở cỡ 6–14px. Tàn lửa B3 ≤ 4px, không viền, bay lên. Phải phân biệt được cả trên ảnh chuyển xám.
+
+---
+
+## 6. Typography & Chuỗi Kiểm Chứng Tiếng Việt
 - **Font chính:** `Be Vietnam Pro` (Regular 400, SemiBold 600, ExtraBold 800) đóng gói `.woff2` local.
 - **Chuỗi kiểm chứng bắt buộc:**
   `"Tiếng Việt: ắ ằ ẳ ẵ ặ ầ ẩ ẫ ậ ỡ ự ữ ỹ Đ đ"`
 - Toàn bộ chữ lớn trên HUD/Banner đều có stroke viền `#141019` dày `3px` và đổ bóng lệch `(0, 2)` để đọc rõ trên mọi nền sáng/tối.
+- **Không cắt dấu:** line-height ≥ 1.3 và padding trên đủ cho dấu chồng (`Ở`, `Ữ`, `Ặ`); chữ nhỏ nhất trên HUD là 13px tại 1080p.
+- **Độ nét UI:** text/icon trong `HudScene` (scene overlay tạo ở P3 của Polish v0.2.0) render theo `devicePixelRatio × UI scale`, vì không được zoom theo camera thế giới.
+- **Màu panel UI** lấy từ nhóm `ENV` (nền gần `#2D3547`, viền gần `#64708B`, alpha 0.72–0.85) để HUD cùng tông với map.
