@@ -10,6 +10,7 @@ import type Phaser from 'phaser';
 import { hexToNum, PALETTE, PLAYER_SLOT_COLORS } from '../art/palette.js';
 import { RIG_DEFS_BY_ID } from '../art/rig-defs.js';
 import { TextureBaker } from '../art/texture-baker.js';
+import { getClientFreezeRandom } from '../core/visual-query.js';
 import { graphicsSettings } from '../ui/graphics-settings.js';
 import {
   acquireDamageSlot,
@@ -131,8 +132,8 @@ export class CombatFxManager {
     p.ttl = 0.42;
     p.x = x + facingSign * 8;
     p.y = y - 10;
-    p.vx = facingSign * (14 + Math.random() * 10);
-    p.vy = -12 - Math.random() * 8;
+    p.vx = facingSign * (14 + getClientFreezeRandom()() * 10);
+    p.vy = -12 - getClientFreezeRandom()() * 8;
     p.vr = 0;
     p.startScale = invBake * 0.55;
     p.endScale = invBake * 0.95;
@@ -272,17 +273,17 @@ export class CombatFxManager {
     for (let i = 0; i < 3; i++) {
       const p = this.acquireParticleSlot();
       if (!p) break;
-      const ang = -Math.PI * 0.5 + (Math.random() - 0.5) * 1.6;
-      const spd = 25 + Math.random() * 35;
+      const ang = -Math.PI * 0.5 + (getClientFreezeRandom()() - 0.5) * 1.6;
+      const spd = 25 + getClientFreezeRandom()() * 35;
       p.active = true;
       p.textureKey = 'fx_ambient_leaf';
       p.age = 0;
       p.ttl = 0.35;
-      p.x = x + (Math.random() - 0.5) * 12;
+      p.x = x + (getClientFreezeRandom()() - 0.5) * 12;
       p.y = y;
       p.vx = Math.cos(ang) * spd;
       p.vy = Math.sin(ang) * spd - 15;
-      p.vr = (Math.random() - 0.5) * 10;
+      p.vr = (getClientFreezeRandom()() - 0.5) * 10;
       p.startScale = invBake * 0.95;
       p.endScale = invBake * 0.4;
       p.startAlpha = 0.9;
@@ -311,8 +312,8 @@ export class CombatFxManager {
     for (let i = 0; i < count; i++) {
       const p = this.acquireParticleSlot();
       if (!p) break;
-      const ang = (i / count) * Math.PI * 2 + (Math.random() - 0.5) * 0.4;
-      const spd = 65 + Math.random() * 85;
+      const ang = (i / count) * Math.PI * 2 + (getClientFreezeRandom()() - 0.5) * 0.4;
+      const spd = 65 + getClientFreezeRandom()() * 85;
       p.active = true;
       p.textureKey = 'fx_wood_shard';
       p.age = 0;
@@ -321,7 +322,7 @@ export class CombatFxManager {
       p.y = y;
       p.vx = Math.cos(ang) * spd;
       p.vy = Math.sin(ang) * spd - 30;
-      p.vr = (Math.random() - 0.5) * 16;
+      p.vr = (getClientFreezeRandom()() - 0.5) * 16;
       p.startScale = invBake * 1.05;
       p.endScale = invBake * 0.45;
       p.startAlpha = 1;
@@ -364,7 +365,7 @@ export class CombatFxManager {
         const p = this.acquireParticleSlot();
         if (!p) break;
         const ang = (i / shardCount) * Math.PI * 2;
-        const spd = status === 'shatter' ? 110 + Math.random() * 70 : 55;
+        const spd = status === 'shatter' ? 110 + getClientFreezeRandom()() * 70 : 55;
         p.active = true;
         p.textureKey = 'fx_ice_shard';
         p.age = 0;
@@ -490,9 +491,9 @@ export class CombatFxManager {
     slot.active = true;
     slot.age = 0;
     slot.ttl = params.isCrit ? 0.78 : 0.62;
-    slot.x = params.x + fanLane * 8 + (Math.random() - 0.5) * 4;
+    slot.x = params.x + fanLane * 8 + (getClientFreezeRandom()() - 0.5) * 4;
     slot.y = params.y - 16 - Math.abs(fanLane) * 4;
-    slot.vx = fanLane * 18 + (Math.random() - 0.5) * 10;
+    slot.vx = fanLane * 18 + (getClientFreezeRandom()() - 0.5) * 10;
     slot.vy = (params.isCrit ? -78 : -58) - (fanIdx % 2) * 10;
     slot.baseScale = params.isCrit ? 1.32 : 1.0;
 
@@ -559,8 +560,8 @@ export class CombatFxManager {
 
     const casing = this.acquireParticleSlot();
     if (casing) {
-      const ejectAngle = angleRad - Math.PI * 0.65 + (Math.random() - 0.5) * 0.4;
-      const spd = 75 + Math.random() * 45;
+      const ejectAngle = angleRad - Math.PI * 0.65 + (getClientFreezeRandom()() - 0.5) * 0.4;
+      const spd = 75 + getClientFreezeRandom()() * 45;
       casing.active = true;
       casing.textureKey = 'fx_shell_casing';
       casing.age = 0;
@@ -569,7 +570,7 @@ export class CombatFxManager {
       casing.y = y;
       casing.vx = Math.cos(ejectAngle) * spd;
       casing.vy = Math.sin(ejectAngle) * spd - 25;
-      casing.vr = (Math.random() - 0.5) * 18;
+      casing.vr = (getClientFreezeRandom()() - 0.5) * 18;
       casing.startScale = invBake;
       casing.endScale = invBake * 0.85;
       casing.startAlpha = 0.95;
@@ -579,7 +580,7 @@ export class CombatFxManager {
       casing.sprite.setTexture(casing.textureKey);
       casing.sprite.clearTint();
       casing.sprite.setPosition(casing.x, casing.y);
-      casing.sprite.setRotation(Math.random() * Math.PI);
+      casing.sprite.setRotation(getClientFreezeRandom()() * Math.PI);
       casing.sprite.setScale(casing.startScale);
       casing.sprite.setAlpha(casing.startAlpha);
       casing.sprite.setDepth(22);
@@ -648,19 +649,19 @@ export class CombatFxManager {
       const p = this.acquireParticleSlot();
       if (!p) break;
 
-      const spread = (Math.random() - 0.5) * 2.2;
+      const spread = (getClientFreezeRandom()() - 0.5) * 2.2;
       const dir = impactAngleRad + Math.PI + spread;
-      const spd = 70 + Math.random() * 130;
+      const spd = 70 + getClientFreezeRandom()() * 130;
 
       p.active = true;
       p.textureKey = 'fx_spark';
       p.age = 0;
-      p.ttl = 0.18 + Math.random() * 0.12;
+      p.ttl = 0.18 + getClientFreezeRandom()() * 0.12;
       p.x = x;
       p.y = y;
       p.vx = Math.cos(dir) * spd;
       p.vy = Math.sin(dir) * spd;
-      p.vr = (Math.random() - 0.5) * 12;
+      p.vr = (getClientFreezeRandom()() - 0.5) * 12;
       p.startScale = invBake * (options.isCrit ? 1.2 : 0.9);
       p.endScale = invBake * 0.15;
       p.startAlpha = 1;
@@ -683,14 +684,14 @@ export class CombatFxManager {
     for (let i = 0; i < 4; i++) {
       const p = this.acquireParticleSlot();
       if (!p) break;
-      const ang = Math.random() * Math.PI * 2;
-      const spd = 20 + Math.random() * 45;
+      const ang = getClientFreezeRandom()() * Math.PI * 2;
+      const spd = 20 + getClientFreezeRandom()() * 45;
       p.active = true;
       p.textureKey = 'fx_dust_puff';
       p.age = 0;
-      p.ttl = 0.26 + Math.random() * 0.1;
-      p.x = x + (Math.random() - 0.5) * 10;
-      p.y = y + (Math.random() - 0.5) * 6;
+      p.ttl = 0.26 + getClientFreezeRandom()() * 0.1;
+      p.x = x + (getClientFreezeRandom()() - 0.5) * 10;
+      p.y = y + (getClientFreezeRandom()() - 0.5) * 6;
       p.vx = Math.cos(ang) * spd;
       p.vy = Math.sin(ang) * spd - 12;
       p.vr = 0;
@@ -723,8 +724,8 @@ export class CombatFxManager {
       for (const part of rigDef.parts) {
         const p = this.acquireParticleSlot();
         if (!p) break;
-        const ang = Math.random() * Math.PI * 2;
-        const spd = 65 + Math.random() * 95;
+        const ang = getClientFreezeRandom()() * Math.PI * 2;
+        const spd = 65 + getClientFreezeRandom()() * 95;
         const texKey = TextureBaker.getPartTextureKey(rigDef.id, part.id);
         p.active = true;
         p.textureKey = texKey;
@@ -734,7 +735,7 @@ export class CombatFxManager {
         p.y = rigFootY + part.offsetY * 0.5;
         p.vx = Math.cos(ang) * spd;
         p.vy = Math.sin(ang) * spd - 40;
-        p.vr = (Math.random() - 0.5) * 14;
+        p.vr = (getClientFreezeRandom()() - 0.5) * 14;
         p.startScale = invBake * 0.9;
         p.endScale = invBake * 0.4;
         p.startAlpha = 0.95;
@@ -769,8 +770,8 @@ export class CombatFxManager {
     for (let i = 0; i < count; i++) {
       const p = this.acquireParticleSlot();
       if (!p) break;
-      const ang = (i / count) * Math.PI * 2 + (Math.random() - 0.5) * 0.25;
-      const spd = (radius / 0.28) * (0.6 + Math.random() * 0.5);
+      const ang = (i / count) * Math.PI * 2 + (getClientFreezeRandom()() - 0.5) * 0.25;
+      const spd = (radius / 0.28) * (0.6 + getClientFreezeRandom()() * 0.5);
       const texKey = i % 2 === 0 ? 'fx_spark' : 'fx_dust_puff';
       p.active = true;
       p.textureKey = texKey;
@@ -780,7 +781,7 @@ export class CombatFxManager {
       p.y = y;
       p.vx = Math.cos(ang) * spd;
       p.vy = Math.sin(ang) * spd;
-      p.vr = (Math.random() - 0.5) * 10;
+      p.vr = (getClientFreezeRandom()() - 0.5) * 10;
       p.startScale = invBake * 1.4;
       p.endScale = invBake * 0.2;
       p.startAlpha = 1;

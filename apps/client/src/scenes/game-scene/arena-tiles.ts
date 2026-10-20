@@ -18,6 +18,7 @@ import { VANGUARD_RIG_DEF } from '../../art/rig-defs.js';
 import { TextureBaker } from '../../art/texture-baker.js';
 import { musicManager } from '../../audio/music-synth.js';
 import { zzfx } from '../../audio/zzfx.js';
+import { resetClientFreezeRandom } from '../../core/visual-query.js';
 import { CombatFxManager } from '../../fx/combat-fx.js';
 import { LightingPipeline } from '../../fx/lighting-pipeline.js';
 import { DebugOverlay, initGlobalDebugState } from '../../ui/debug-overlay.js';
@@ -26,6 +27,7 @@ import { type ArenaTileVisual, type GameScene, RIG_FOOT_OFFSET_Y } from '../Game
 
 export function createImpl(this: GameScene): void {
   const debug = initGlobalDebugState();
+  resetClientFreezeRandom(debug.seed);
   debug.scene = 'GameScene';
   debug.tick = 0;
   debug.coopMode = this.coopMode;
@@ -160,6 +162,9 @@ export function createImpl(this: GameScene): void {
   window.__GAME_TRIGGER_LAG_SPIKE__ = (durationMs = 300) => {
     this.networkTransport?.triggerManualLagSpike(durationMs);
   };
+  window.__GAME_SET_LIGHTING__ = (enabled: boolean) => {
+    this.lighting?.setLightingEnabled(enabled);
+  };
   window.__GAME_FORCE_RECONNECT__ = () => this.forceCoopReconnect();
   window.__GAME_COOP_SEND__ = (type: string, payload?: unknown) => {
     this.room?.send(type, payload);
@@ -211,6 +216,7 @@ export function createImpl(this: GameScene): void {
     delete window.__GAME_TRANSPORT__;
     delete window.__GAME_STRESS_TEST__;
     delete window.__GAME_SET_QUALITY__;
+    delete window.__GAME_SET_LIGHTING__;
     delete window.__GAME_BOT_AUTOPLAY__;
     delete window.__GAME_SET_WIFI_PROFILE__;
     delete window.__GAME_TRIGGER_LAG_SPIKE__;

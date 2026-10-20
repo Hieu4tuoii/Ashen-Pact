@@ -11,6 +11,7 @@ import {
 } from '@ashen-pact/shared';
 import type { ArenaMap } from '@ashen-pact/shared';
 import { hexToNum, PALETTE, PLAYER_SLOT_COLORS } from '../art/palette.js';
+import { getVisualQueryConfig } from '../core/visual-query.js';
 import { graphicsSettings } from '../ui/graphics-settings.js';
 
 const BIOME_POSTFX_FRAG = `
@@ -147,6 +148,7 @@ export class LightingPipeline {
   private frameCounter = 0;
   private activeLightCount = 0;
   private postFxAttached = false;
+  private lightingEnabled = getVisualQueryConfig().lightingEnabled;
   private currentLightmapScale = LIGHTMAP_RES_SCALE;
   private currentCoverW = WORLD_VIEW_WIDTH;
   private currentCoverH = WORLD_VIEW_HEIGHT;
@@ -172,6 +174,7 @@ export class LightingPipeline {
     // Leaves telegraphs (38), projectiles (42), particles (45..58), lightning (62), damage numbers (80), hitboxes (90) at 100% emissive brightness!
     this.lightmapRt.setDepth(34);
     this.lightmapRt.setBlendMode(Phaser.BlendModes.MULTIPLY);
+    this.lightmapRt.setVisible(this.lightingEnabled);
 
     for (let i = 0; i < 32; i++) {
       this.transientPool.push({
@@ -203,6 +206,15 @@ export class LightingPipeline {
 
   public getActiveLightCount(): number {
     return this.activeLightCount;
+  }
+
+  public setLightingEnabled(enabled: boolean): void {
+    this.lightingEnabled = enabled;
+    this.lightmapRt.setVisible(enabled);
+    if (!enabled) {
+      this.activeLightCount = 0;
+    }
+    this.syncPostFxPipeline();
   }
 
   public isLightmapVisible(): boolean {
@@ -255,7 +267,7 @@ export class LightingPipeline {
     const quality = graphicsSettings.getState().quality;
     const cam = this.scene.cameras.main;
 
-    if (quality === 'low') {
+    if (!this.lightingEnabled || quality === 'low') {
       if (this.postFxAttached) {
         cam.removePostPipeline('BiomePostFxPipeline');
         this.postFxAttached = false;
@@ -284,7 +296,18 @@ export class LightingPipeline {
   }): void {
     const { dtSec, playerPos, player, simulatedPlayers, enemies, projectiles, props, map, trauma } =
       params;
-    this.elapsedSec += dtSec;
+    if (getVisualQueryConfig().freeze) {
+      this.elapsedSec = 1.0;
+    } else {
+      this.elapsedSec += dtSec;
+    }
+
+    if (!this.lightingEnabled) {
+      this.lightmapRt.setVisible(false);
+      this.activeLightCount = 0;
+      this.syncPostFxPipeline();
+      return;
+    }
     this.frameCounter += 1;
 
     const budget = graphicsSettings.getBudget();

@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { VIETNAMESE_VERIFICATION_STRING } from '@ashen-pact/shared';
 import { PALETTE } from '../art/palette.js';
 import { TextureBaker } from '../art/texture-baker.js';
+import { getVisualQueryConfig } from '../core/visual-query.js';
 import { type GraphicsQualityTier, graphicsSettings } from './graphics-settings.js';
 
 export interface GameDebugState {
@@ -132,6 +133,9 @@ declare global {
 
 export function initGlobalDebugState(): GameDebugState {
   if (typeof window !== 'undefined' && window.__GAME_DEBUG__) {
+    if (window.location.search.includes('seed=')) {
+      window.__GAME_DEBUG__.seed = getVisualQueryConfig().seed;
+    }
     return window.__GAME_DEBUG__;
   }
 
@@ -144,7 +148,7 @@ export function initGlobalDebugState(): GameDebugState {
     drawCalls: 1,
     pingMs: 0,
     tick: 0,
-    seed: 0x1337c0de,
+    seed: getVisualQueryConfig().seed,
     scene: 'BootScene',
     animState: 'idle',
     playerSlot: 1,
@@ -290,7 +294,8 @@ export class DebugOverlay {
   constructor(scene: Phaser.Scene, startVisible = false) {
     this.scene = scene;
     const state = initGlobalDebugState();
-    state.overlayVisible = startVisible;
+    const debugParam = getVisualQueryConfig().debugParam;
+    state.overlayVisible = debugParam !== null ? debugParam : startVisible;
 
     this.container = scene.add.container(16, 76);
     this.container.setDepth(9999);

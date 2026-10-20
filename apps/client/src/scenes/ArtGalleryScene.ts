@@ -3,6 +3,7 @@ import Phaser from 'phaser';
 import type { CutoutRig, RigAnimState } from '../art/cutout-rig.js';
 import { hexToNum, PALETTE, PLAYER_SLOT_COLORS } from '../art/palette.js';
 import { TextureBaker } from '../art/texture-baker.js';
+import { getVisualQueryConfig, resetClientFreezeRandom } from '../core/visual-query.js';
 import { DebugOverlay, initGlobalDebugState } from '../ui/debug-overlay.js';
 import {
   buildPage1StandardShowcase,
@@ -51,6 +52,7 @@ export class ArtGalleryScene extends Phaser.Scene {
   }
 
   public create(): void {
+    resetClientFreezeRandom(getVisualQueryConfig().seed);
     const debug = initGlobalDebugState();
     debug.scene = 'ArtGalleryScene';
     debug.animState = this.currentAnim;
@@ -399,6 +401,9 @@ export class ArtGalleryScene extends Phaser.Scene {
   }
 
   public override update(_time: number, deltaMs: number): void {
+    if (getVisualQueryConfig().freeze) {
+      deltaMs = 16.6667;
+    }
     const stepRes = this.simLoop.step(deltaMs, () => {});
     const dtSec = Math.min(deltaMs / 1000, 0.05);
 

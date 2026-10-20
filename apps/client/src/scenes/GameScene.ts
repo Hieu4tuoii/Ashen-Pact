@@ -19,6 +19,7 @@ import { RIG_DEFS_BY_ID, VANGUARD_RIG_DEF } from '../art/rig-defs.js';
 import { TextureBaker } from '../art/texture-baker.js';
 import { musicManager } from '../audio/music-synth.js';
 import { zzfx } from '../audio/zzfx.js';
+import { getVisualQueryConfig } from '../core/visual-query.js';
 import type { CombatFxManager } from '../fx/combat-fx.js';
 import type { LightingPipeline } from '../fx/lighting-pipeline.js';
 import type { DebugOverlay } from '../ui/debug-overlay.js';
@@ -47,6 +48,7 @@ declare global {
     __GAME_TRANSPORT__?: LocalTransport | NetworkTransport;
     __GAME_STRESS_TEST__?: (active: boolean) => void;
     __GAME_SET_QUALITY__?: (quality: GraphicsQualityTier) => void;
+    __GAME_SET_LIGHTING__?: (enabled: boolean) => void;
     __GAME_BOT_AUTOPLAY__?: (active: boolean) => void;
     __GAME_SET_WIFI_PROFILE__?: (profile: WifiProfileId) => void;
     __GAME_TRIGGER_LAG_SPIKE__?: (durationMs?: number) => void;
@@ -344,6 +346,9 @@ export class GameScene extends Phaser.Scene {
   }
 
   public override update(_time: number, rawDeltaMs: number): void {
+    if (getVisualQueryConfig().freeze) {
+      rawDeltaMs = 16.6667;
+    }
     const sim = this.transport.getSim();
     const dtSec = Math.min(rawDeltaMs / 1000, 0.05);
     const isModalOrPaused = this.pauseModalOpen || (this.settingsModal?.isOpen() ?? false);

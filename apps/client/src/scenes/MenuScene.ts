@@ -13,6 +13,11 @@ import { GOBLIN_SHOOTER_RIG_DEF, RIG_DEFS_BY_ID } from '../art/rig-defs.js';
 import { TextureBaker } from '../art/texture-baker.js';
 import { musicManager } from '../audio/music-synth.js';
 import { zzfx } from '../audio/zzfx.js';
+import {
+  getClientFreezeRandom,
+  getVisualQueryConfig,
+  resetClientFreezeRandom,
+} from '../core/visual-query.js';
 import { DebugOverlay, initGlobalDebugState } from '../ui/debug-overlay.js';
 import { graphicsSettings } from '../ui/graphics-settings.js';
 import { ModalOverlayManager } from '../ui/settings-modal.js';
@@ -84,7 +89,9 @@ export class MenuScene extends Phaser.Scene {
     if (savedName) {
       this.displayName = savedName;
     } else {
-      this.presetNameIndex = Math.floor(Math.random() * PRESET_NAMES_VI.length);
+      this.presetNameIndex = getVisualQueryConfig().freeze
+        ? 0
+        : Math.floor(getClientFreezeRandom()() * PRESET_NAMES_VI.length);
       this.displayName = PRESET_NAMES_VI[this.presetNameIndex] ?? 'Hiệp Sĩ Tro';
     }
     const host =
@@ -95,6 +102,7 @@ export class MenuScene extends Phaser.Scene {
   }
 
   public create(): void {
+    resetClientFreezeRandom(getVisualQueryConfig().seed);
     const debug = initGlobalDebugState();
     debug.scene = 'MenuScene';
     debug.language = graphicsSettings.getState().language;
@@ -610,7 +618,12 @@ export class MenuScene extends Phaser.Scene {
 
   private drawCampfires(dtSec: number): void {
     if (!this.campfireGfx) return;
-    this.campfireTimeSec += dtSec;
+    if (getVisualQueryConfig().freeze) {
+      this.campfireTimeSec = 1.0;
+      dtSec = 0;
+    } else {
+      this.campfireTimeSec += dtSec;
+    }
     const t = this.campfireTimeSec;
     const gfx = this.campfireGfx;
     gfx.clear();
@@ -787,8 +800,9 @@ export class MenuScene extends Phaser.Scene {
   }
 
   public override update(_time: number, deltaMs: number): void {
-    const stepRes = this.simLoop.step(deltaMs, () => {});
-    const dtSec = Math.min(deltaMs / 1000, 0.05);
+    const effectiveDeltaMs = getVisualQueryConfig().freeze ? 16.6667 : deltaMs;
+    const stepRes = this.simLoop.step(effectiveDeltaMs, () => {});
+    const dtSec = Math.min(effectiveDeltaMs / 1000, 0.05);
     for (const hr of this.heroRigs) {
       hr.rig.update(dtSec);
     }

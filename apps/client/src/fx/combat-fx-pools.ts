@@ -2,6 +2,7 @@ import { WORLD_VIEW_HEIGHT, WORLD_VIEW_WIDTH } from '@ashen-pact/shared';
 import type Phaser from 'phaser';
 import { hexToNum, PALETTE } from '../art/palette.js';
 import { TextureBaker } from '../art/texture-baker.js';
+import { getVisualQueryConfig } from '../core/visual-query.js';
 import { graphicsSettings } from '../ui/graphics-settings.js';
 import type { CombatFxManager } from './combat-fx.js';
 
@@ -362,9 +363,10 @@ export function update(this: CombatFxManager, dtSec: number, camView?: Phaser.Ge
     }
     if (!amb.sprite.visible) amb.sprite.setVisible(true);
 
-    amb.phase += dtSec * (amb.kind === 'leaf' ? 2.4 : 0.8);
-    amb.x += (amb.vx + Math.sin(amb.phase) * 8) * dtSec;
-    amb.y += amb.vy * dtSec;
+    const ambDt = getVisualQueryConfig().freeze ? 0 : dtSec;
+    amb.phase += ambDt * (amb.kind === 'leaf' ? 2.4 : 0.8);
+    amb.x += (amb.vx + Math.sin(amb.phase) * 8) * ambDt;
+    amb.y += amb.vy * ambDt;
 
     if (amb.x > maxX) amb.x = minX;
     else if (amb.x < minX) amb.x = maxX;
