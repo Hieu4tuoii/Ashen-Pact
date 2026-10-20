@@ -8,6 +8,7 @@ import { Server } from '@colyseus/core';
 import { WebSocketTransport } from '@colyseus/ws-transport';
 import cors from 'cors';
 import express from 'express';
+import { isServerDebugEnabled } from './debug-gate.js';
 import { CoopRoom } from './rooms/CoopRoom.js';
 import { HelloRoom } from './rooms/HelloRoom.js';
 import { getLanIPv4Addresses } from './utils/network.js';
@@ -89,6 +90,7 @@ export async function startServer(initialPort = DEFAULT_PORT): Promise<{
       game: 'Ashen Pact',
       version: '0.1.0',
       port: activePort,
+      debugAllowed: isServerDebugEnabled(),
       lanAddresses: getLanIPv4Addresses(),
     });
   });
@@ -108,6 +110,7 @@ export async function startServer(initialPort = DEFAULT_PORT): Promise<{
     res.json({
       version: '0.1.0',
       port: activePort,
+      debugAllowed: isServerDebugEnabled(),
       localUrl: `http://localhost:${activePort}`,
       primaryLanIp,
       lanIps: lanAddresses.map((info) => info.address),
@@ -190,7 +193,7 @@ export async function startServer(initialPort = DEFAULT_PORT): Promise<{
   console.log('==================================================================');
 
   if (process.argv.includes('--host')) {
-    openBrowserUrl(`http://localhost:${activePort}/?coop=host`);
+    openBrowserUrl(`http://localhost:${activePort}/?coop=host${isServerDebugEnabled() ? '&debug=1' : ''}`);
   }
 
   return { port: activePort, gameServer };

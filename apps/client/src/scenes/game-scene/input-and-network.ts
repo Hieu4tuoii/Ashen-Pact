@@ -4,7 +4,7 @@ import {
 import { Client as ColyseusClient, type Room as ColyseusRoom } from 'colyseus.js';
 import Phaser from 'phaser';
 import { zzfx } from '../../audio/zzfx.js';
-import { isEffectiveDebugUiEnabled } from '../../core/debug-flag.js';
+import { isEffectiveDebugUiEnabled, setServerDebugAllowed } from '../../core/debug-flag.js';
 import { initGlobalDebugState } from '../../ui/debug-overlay.js';
 import { graphicsSettings } from '../../ui/graphics-settings.js';
 import { type GameScene } from '../GameScene.js';
@@ -324,7 +324,11 @@ export async function fetchHostLanInfoImpl(this: GameScene): Promise<void> {
         lanIps?: string[];
         primaryLanIp?: string;
         port?: number;
+        debugAllowed?: boolean;
       };
+      if (typeof data.debugAllowed === 'boolean') {
+        setServerDebugAllowed(data.debugAllowed);
+      }
       if (data.primaryLanIp) this.primaryLanIp = data.primaryLanIp;
       if (data.lanIps) this.lanIps = data.lanIps;
       if (data.port) this.serverPort = data.port;
@@ -368,8 +372,12 @@ export function bindCoopRoomHandlersImpl(this: GameScene, room: ColyseusRoom): v
       seed: number;
       reconnectToken: string;
       isHost: boolean;
+      debugAllowed?: boolean;
     }) => {
       if (!this.scene.isActive()) return;
+      if (typeof msg.debugAllowed === 'boolean') {
+        setServerDebugAllowed(msg.debugAllowed);
+      }
       debug.seed = msg.seed;
       debug.playerSlot = msg.slot;
       this.reconnectToken = msg.reconnectToken;
@@ -433,6 +441,11 @@ export function bindCoopRoomHandlersImpl(this: GameScene, room: ColyseusRoom): v
 
   room.onMessage('character_select_result', () => {
     this.lastInvitePanelHash = '';
+  });
+
+  room.onMessage('debug_rejected', (msg: { command?: string; reason?: string }) => {
+    if (!this.scene.isActive()) return;
+    debug.lastDebugRejected = msg?.command ?? 'unknown';
   });
 
   room.onLeave((code: number) => {
@@ -562,8 +575,11 @@ export async function connectHelloRoomImpl(this: GameScene): Promise<void> {
     this.room = room;
     debug.serverConnected = true;
 
-    room.onMessage('hello_welcome', (msg: { seed?: number }) => {
+    room.onMessage('hello_welcome', (msg: { seed?: number; debugAllowed?: boolean }) => {
       if (!this.scene.isActive()) return;
+      if (typeof msg.debugAllowed === 'boolean') {
+        setServerDebugAllowed(msg.debugAllowed);
+      }
       if (typeof msg.seed === 'number') {
         debug.seed = msg.seed;
       }

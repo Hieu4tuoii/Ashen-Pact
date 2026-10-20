@@ -65,6 +65,7 @@ export interface HelloRoomMessage {
   seed: number;
   connectedPlayers: number;
   welcomeVi: string;
+  debugAllowed?: boolean;
 }
 
 /**

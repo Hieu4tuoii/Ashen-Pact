@@ -218,11 +218,19 @@ internal static class Program
 
         StringBuilder argBuilder = new StringBuilder();
         argBuilder.Append(QuoteArg(bundleScript));
-        if (args == null || args.Length == 0)
+        bool hasHostFlag = false;
+        if (args != null)
+        {
+            for (int i = 0; i < args.Length; i++)
+            {
+                if (args[i] == "--host") hasHostFlag = true;
+            }
+        }
+        if (!hasHostFlag)
         {
             argBuilder.Append(" --host");
         }
-        else
+        if (args != null)
         {
             for (int i = 0; i < args.Length; i++)
             {
@@ -354,7 +362,26 @@ function writeBatchScripts(releaseDir: string): void {
     '',
   ].join('\r\n');
 
+  const startHostDebugBat = [
+    '@echo off',
+    'chcp 65001 >nul',
+    'title Ashen Pact v0.1.0 - Co-op LAN Host Server (DEBUG MODE)',
+    'cd /d "%~dp0"',
+    'if exist "%~dp0AshenPact-Host.exe" (',
+    '  "%~dp0AshenPact-Host.exe" --host --debug %*',
+    ') else (',
+    '  "%~dp0runtime\\node.exe" "%~dp0server-bundle.cjs" --host --debug %*',
+    ')',
+    'if %ERRORLEVEL% neq 0 (',
+    '  echo.',
+    '  echo [Ashen Pact] May chu da dung voi ma loi %ERRORLEVEL%.',
+    '  pause',
+    ')',
+    '',
+  ].join('\r\n');
+
   fs.writeFileSync(path.join(releaseDir, 'start-host.bat'), startHostBat, 'utf8');
+  fs.writeFileSync(path.join(releaseDir, 'start-host-debug.bat'), startHostDebugBat, 'utf8');
   fs.writeFileSync(path.join(releaseDir, 'allow-firewall-port-2567.bat'), firewallBat, 'utf8');
 }
 
@@ -363,6 +390,7 @@ export interface PackageReleaseResult {
   releaseZip: string;
   hostExePath: string;
   startHostBatPath: string;
+  startHostDebugBatPath: string;
   firewallBatPath: string;
   serverBundlePath: string;
   clientIndexHtmlPath: string;
@@ -452,6 +480,7 @@ export function packageRelease(options?: { skipBuild?: boolean; skipZip?: boolea
     releaseZip: RELEASE_ZIP,
     hostExePath,
     startHostBatPath: path.join(RELEASE_DIR, 'start-host.bat'),
+    startHostDebugBatPath: path.join(RELEASE_DIR, 'start-host-debug.bat'),
     firewallBatPath: path.join(RELEASE_DIR, 'allow-firewall-port-2567.bat'),
     serverBundlePath,
     clientIndexHtmlPath: path.join(releaseClientDir, 'index.html'),

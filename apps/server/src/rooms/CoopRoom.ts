@@ -11,6 +11,7 @@ import {
   WorldSim,
   encodeWorldSnapshot,
 } from '@ashen-pact/shared';
+import { isServerDebugEnabled } from '../debug-gate.js';
 
 export class CoopRoomState extends Schema {
   @type('number') public tick = 0;
@@ -201,17 +202,29 @@ export class CoopRoom extends Room<CoopRoomState> {
       }
     });
 
-    this.onMessage('skip_waves', () => {
+    const rejectIfDebugDisabled = (client: Client, cmdName: string): boolean => {
+      if (isServerDebugEnabled()) return false;
+      console.warn(
+        `[CoopRoom] Ignored debug command "${cmdName}" from session ${client.sessionId}: server debug mode is disabled.`,
+      );
+      client.send('debug_rejected', { command: cmdName, reason: 'debug_disabled' });
+      return true;
+    };
+
+    this.onMessage('skip_waves', (client) => {
+      if (rejectIfDebugDisabled(client, 'skip_waves')) return;
       this.sim.skipCurrentRoomWaves();
       this.broadcastImmediateSnapshot();
     });
 
-    this.onMessage('set_bot_autoplay', (_client, payload?: { active?: boolean }) => {
+    this.onMessage('set_bot_autoplay', (client, payload?: { active?: boolean }) => {
+      if (rejectIfDebugDisabled(client, 'set_bot_autoplay')) return;
       this.sim.botAutoPlayActive = Boolean(payload?.active);
       this.broadcastImmediateSnapshot();
     });
 
     this.onMessage('set_god_mode', (client, payload?: { godMode?: boolean }) => {
+      if (rejectIfDebugDisabled(client, 'set_god_mode')) return;
       const meta = this.playersBySession.get(client.sessionId);
       if (!meta) return;
       const p = this.sim.getPlayerById(meta.playerId);
@@ -244,7 +257,7 @@ export class CoopRoom extends Room<CoopRoomState> {
     this.onMessage(
       'debug_cmd',
       (
-        _client,
+        client,
         payload: {
           cmd?: string;
           roomId?: number;
@@ -253,6 +266,7 @@ export class CoopRoom extends Room<CoopRoomState> {
           playerId?: number;
         },
       ) => {
+        if (rejectIfDebugDisabled(client, 'debug_cmd')) return;
         if (!payload?.cmd) return;
         if (payload.cmd === 'skip_waves') {
           this.sim.skipCurrentRoomWaves();
@@ -352,6 +366,7 @@ export class CoopRoom extends Room<CoopRoomState> {
         roomId: this.roomId,
         reconnected: true,
         allowDuplicateCharacters: this.sim.allowDuplicateCharacters,
+        debugAllowed: isServerDebugEnabled(),
       });
       this.broadcastImmediateSnapshot();
       return;
@@ -434,6 +449,7 @@ export class CoopRoom extends Room<CoopRoomState> {
       roomId: this.roomId,
       reconnected: false,
       allowDuplicateCharacters: this.sim.allowDuplicateCharacters,
+      debugAllowed: isServerDebugEnabled(),
     });
 
     this.broadcastImmediateSnapshot();

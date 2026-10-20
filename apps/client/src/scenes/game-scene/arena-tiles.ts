@@ -91,6 +91,7 @@ export function createImpl(this: GameScene): void {
   debug.creditsModalOpen = false;
   debug.weaponComparisonVisible = false;
   debug.comparedWeaponId = null;
+  debug.lastDebugRejected = null;
 
   this.simPlayerRigs.clear();
   this.coopPlayerRigs.clear();

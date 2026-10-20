@@ -164,3 +164,17 @@ pnpm package:release
 ├── tests/e2e/           # Bộ kiểm thử tự động Playwright E2E từ Phase 0 đến Phase 8
 └── docs/                # Tài liệu thiết kế (GDD, TECH, ART_GUIDE, BALANCE, QA_CHECKLIST, RELEASE_NOTES, PROGRESS)
 ```
+
+---
+
+## Bật chế độ Debug (Dành cho Nhà phát triển / Kiểm thử)
+
+Ở bản đóng gói phát hành (`release`), toàn bộ giao diện, nút tắt và lệnh Debug đều được ẩn và khóa mặc định để đảm bảo trải nghiệm chuẩn cho người chơi. Khi cần kiểm thử hoặc gỡ lỗi, bạn có thể bật chế độ Debug theo các cách sau:
+
+- **Phím tắt trong game:** Nhấn tổ hợp phím **`Ctrl + Shift + D`** bất kỳ lúc nào để bật/tắt nhanh giao diện Debug (lưu trạng thái vào `localStorage['ashen_pact_debug']` và hiển thị thông báo `"Debug ON"` / `"Debug OFF"`).
+- **Tham số URL:** Thêm `?debug=1` vào đường dẫn trình duyệt để bật giao diện Debug, hoặc thêm `?debug=0` để ép tắt giao diện Debug (ngay cả trong môi trường `pnpm dev`).
+- **Máy chủ Co-op LAN / Bản đóng gói `.exe`:**
+  - Chạy file **`start-host-debug.bat`** trong thư mục phát hành, hoặc
+  - Truyền cờ CLI `--debug` khi khởi chạy (`AshenPact-Host.exe --debug`), hoặc
+  - Đặt biến môi trường `ASHEN_PACT_DEBUG=1`.
+  - *Lưu ý:* Trong chế độ **Co-op LAN**, giao diện Debug và các lệnh/phím tắt Debug (`F1–F9`, `God Mode`, `Skip Waves`...) chỉ hoạt động khi **cả máy chủ lẫn trình duyệt client đều bật Debug**. Nếu máy chủ không bật `--debug`, mọi lệnh Debug gửi lên phòng chơi sẽ bị từ chối (`debug_rejected`) và ghi cảnh báo trên máy chủ.

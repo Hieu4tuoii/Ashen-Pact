@@ -7,6 +7,7 @@ import {
   VIETNAMESE_VERIFICATION_STRING,
   type HelloRoomMessage,
 } from '@ashen-pact/shared';
+import { isServerDebugEnabled } from '../debug-gate.js';
 
 export class HelloRoomState extends Schema {
   @type('number') public tick = 0;
@@ -50,6 +51,7 @@ export class HelloRoom extends Room<HelloRoomState> {
       seed: this.state.seed,
       connectedPlayers: this.clients.length,
       welcomeVi: VIETNAMESE_VERIFICATION_STRING,
+      debugAllowed: isServerDebugEnabled(),
     };
     client.send('hello_welcome', welcome);
   }

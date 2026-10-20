@@ -126,6 +126,7 @@ export interface GameDebugState {
   musicTheme: string;
   musicCombatMix: number;
   mvpAwardsCount: number;
+  lastDebugRejected: string | null;
   errors: string[];
   warnings: string[];
 }
@@ -275,6 +276,7 @@ export function initGlobalDebugState(): GameDebugState {
     musicTheme: 'menu_hub',
     musicCombatMix: 0,
     mvpAwardsCount: 0,
+    lastDebugRejected: null,
     errors: [],
     warnings: [],
   };

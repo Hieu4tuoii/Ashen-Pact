@@ -41,11 +41,12 @@ export class PreloadScene extends Phaser.Scene {
       const locPort = window.location.port;
       const isHostServerPort = Boolean(locPort && locPort !== '5173' && locPort !== '4173');
 
-      if (
-        allowSceneShortcuts &&
-        (requestedScene === 'gallery' || requestedScene === 'artgallery' || galleryParam === '1')
-      ) {
-        this.scene.start('ArtGalleryScene');
+      if (requestedScene === 'gallery' || requestedScene === 'artgallery' || galleryParam === '1') {
+        if (allowSceneShortcuts) {
+          this.scene.start('ArtGalleryScene');
+        } else {
+          this.scene.start('MenuScene');
+        }
       } else if (requestedScene === 'menu') {
         this.scene.start('MenuScene');
       } else if (
