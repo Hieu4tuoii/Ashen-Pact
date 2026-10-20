@@ -510,3 +510,20 @@
     3. Script `pnpm --filter @ashen-pact/server dev` truyền sẵn `--debug` cho môi trường dev/E2E phase 0–7, trong khi bản phát hành `AshenPact-Host.exe` mặc định tắt debug trừ khi chạy qua `start-host-debug.bat` hoặc truyền `--debug`.
   - **Visual Gate (`docs/screenshots/polish-p1/review.md`):**
     - Đánh giá mù A/B (Blind A/B Review bởi độc lập `pro` Visual Reviewer): **PASS** (nhận diện chính xác `version-B` = `after`, `0` blocker, `0` major, Criterion 6 UI/HUD đạt **`8.5 / 10`**, Criterion 9 Product Feel đạt **`8.0 / 10`**, Phase P1 DoD đạt **`10 / 10`**).
+
+### 3.7 Phase P2 — Vũ khí 2 ô & rơi vũ khí + Vòng Emote (Hoàn thành ✅)
+- **Commits:** `10f4a13`, `a3e9caa`, `3543e3a`, `99d3a2f`.
+- **Hạng mục đã thực hiện:**
+  1. **Simulation 2 Ô Vũ Khí, Rơi Vũ Khí & Chống Phình Snapshot (`packages/shared` + 9 unit tests trong `packages/shared/test/polish-p2-weapons.test.ts`):**
+     - Định nghĩa và export `MAX_WEAPON_SLOTS = 2` cùng `estimateWeaponDps` trong `weapons.ts`; cập nhật `PHASE1_SAMPLE_WEAPONS = ['knight_sword', 'rusty_pistol'] as const` và loadout khởi đầu của cả 5 nhân vật thành `[starterWeaponId, 'rusty_pistol']`.
+     - Bổ sung helper chung `spawnDroppedWeapon` dùng thống nhất cho cả `dropActiveWeapon` (phím `X`) và `pickupOrBuyWorldItem` (nhặt trên đất hoặc mua tại Thương Nhân khi đầy `2/2` ô): vũ khí đang cầm ở `activeWeaponSlot` được thả ra thành `worldItem` dùng chung (`ownerPlayerId = undefined`, `costGold = 0`, kèm `fromX`, `fromY`, `droppedByPlayerId`, `droppedAtTick`), xóa item không có `offerId` khỏi `worldItems` sau khi nhặt để kích thước snapshot mạng không tăng sau 200 lần đổi liên tiếp.
+     - Cơ chế khóa nhặt lại `0.3s` (`18` ticks, `weaponPickupLockTimer`) cho người vừa thả (đồng đội Co-op vẫn nhặt được ngay lập tức); tự động bổ sung lại vũ khí trên kệ thử nghiệm ở Hub (`isHubRackItem: true`) và dọn sạch đồ rơi khi bắt đầu lượt chơi mới (`startDungeonRunFromHub`).
+     - Cập nhật AI Bot Autoplay (`sim-progression-bot.ts`): bỏ qua vũ khí vừa do chính mình đánh rơi và chỉ nhặt vũ khí có DPS ước tính cao hơn ít nhất `+5%` khi đã đầy 2 ô, chấm dứt vòng lặp nhặt–rơi vô tận.
+  2. **Client HUD 2 Ô, Vòng Biểu Cảm Giữ Phím `T` & Hoạt Ảnh Văng Nảy `0.25s` (`apps/client`):**
+     - Cập nhật thanh vũ khí HUD theo đúng `MAX_WEAPON_SLOTS = 2`; khi chỉ còn 1 vũ khí, ô thứ 2 hiển thị trạng thái rỗng (`[2] Ô Trống` / `Nhấn [E] để nhặt`, ẩn icon), loại bỏ hoàn toàn fallback "vũ khí ma".
+     - Tách riêng phím số `1`/`2` (chọn ô vũ khí `0`/`1`, hoặc chọn buff khi `sim.runState === 'buff_choice'`) khỏi Vòng Biểu Cảm giữ phím `T` (`updateEmoteWheelHudImpl`: 4 góc phần tư chọn bằng hướng trỏ chuột + nhả `T`/click chuột hoặc bấm `1–4` khi đang giữ `T`); chuẩn hóa phím thả vũ khí thành `[X]`.
+     - Vẽ quỹ đạo parabol văng nảy 2 nhịp trong `0.25s` (`15` ticks) kèm xoay nhẹ, nhịp bobbing hình sin, hào quang mặt đất (`BlendMode.ADD`) và cột sáng theo màu độ hiếm `WEAPON_RARITY_COLORS` di chuyển đồng bộ cùng vũ khí rơi.
+  3. **Kiểm Thử E2E, Cảnh Chụp Visual & Visual Gate (`tests/e2e/` & `docs/screenshots/polish-p2/`):**
+     - Cập nhật `tests/e2e/phase1.spec.ts` (2 ô vũ khí + nhặt `scrap_shotgun` thay vào ô đang cầm) và `tests/e2e/phase4.spec.ts` (emote `KeyT + Digit1` và kịch bản Co-op 2 trình duyệt: P1 đầy 2 ô nhặt vũ khí mới → vũ khí cũ rơi ra đất → P2 nhìn thấy và nhấn `E` nhặt thành công).
+     - Bổ sung `stripFramesPerStep` cùng 2 cảnh mới `b1-weapon-drop` (kèm dải 8 frame `b1-weapon-drop-strip.png` ghi lại trọn vẹn cung văng nảy `0.25s`) và `ui-emote-wheel` vào `tests/e2e/helpers/visual-scenes.ts`; chụp bộ ảnh `after` với `--verify-freeze` đạt `diffRatio === 0` trên cả 6 cảnh.
+     - **Visual Gate (`docs/screenshots/polish-p2/review.md`):** Đánh giá mù A/B (Blind A/B Review bởi độc lập `pro` Visual Reviewer): **PASS** (`version-A` = `after` thắng tuyệt đối trên cả 4 cảnh; `0` blocker, `0` major; Readability **`8.5 / 10`**, Interactables/Weapons **`9.0 / 10`**, UI/HUD 2-slot & Emote Wheel **`9.0 / 10`**, Animation **`8.5 / 10`**, Product Feel **`8.5 / 10`**, Phase P2 DoD **`10 / 10`**).
