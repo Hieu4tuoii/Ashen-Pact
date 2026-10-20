@@ -1,0 +1,659 @@
+import { ENEMIES } from '../data/enemies.js';
+import type { ElementType } from '../data/types.js';
+import { approach, clamp, distance, distanceSq } from '../math/vec2.js';
+import { COOP_SCALING } from '../data/scaling.js';
+import type { SurfaceKind } from './arena-map.js';
+import type { SimPlayerState, SimEnemyState } from './world-sim-types.js';
+import type { WorldSim } from './world-sim.js';
+
+export function updatePhase6MechanicsImpl(this: WorldSim, dtSec: number): void {
+  const allPlayers = this.getAllPlayers();
+
+  // 1. Pushable stone blocks (Solo alternative for 2-player pressure plates)
+  for (let i = 0; i < this.pushBlocks.length; i++) {
+    const block = this.pushBlocks[i]!;
+    for (let pIdx = 0; pIdx < allPlayers.length; pIdx++) {
+      const pl = allPlayers[pIdx]!;
+      if (pl.lifeState !== 'alive') continue;
+      const dx = block.x - pl.x;
+      const dy = block.y - pl.y;
+      const d = Math.hypot(dx, dy);
+      const minDist = pl.radius + block.radius + 2;
+      if (d > 0.001 && d < minDist) {
+        const push = (minDist - d) * 1.15;
+        const col = this.map.resolveCircleCollision(
+          block.x + (dx / d) * push,
+          block.y + (dy / d) * push,
+          block.radius,
+        );
+        block.x = col.x;
+        block.y = col.y;
+      }
+    }
+    // Snap gently onto a nearby pressure plate center if pushed within 18u
+    for (let k = 0; k < this.pressurePlates.length; k++) {
+      const plate = this.pressurePlates[k]!;
+      if (distance(block.x, block.y, plate.x, plate.y) <= 18) {
+        block.x = approach(block.x, plate.x, 80 * dtSec);
+        block.y = approach(block.y, plate.y, 80 * dtSec);
+      }
+    }
+  }
+
+  // 2. Co-op Dual Pressure Plates -> Unlock Bonus Co-op Treasure Chest
+  if (this.pressurePlates.length > 0) {
+    let allPressed = true;
+    for (let i = 0; i < this.pressurePlates.length; i++) {
+      const plate = this.pressurePlates[i]!;
+      if (this.coopPuzzleCompleted) {
+        plate.pressed = true;
+        continue;
+      }
+      let pressed = false;
+      for (let pIdx = 0; pIdx < allPlayers.length; pIdx++) {
+        const pl = allPlayers[pIdx]!;
+        if (
+          pl.lifeState === 'alive' &&
+          distance(plate.x, plate.y, pl.x, pl.y) <= plate.radius + pl.radius + 4
+        ) {
+          pressed = true;
+          break;
+        }
+      }
+      if (!pressed) {
+        for (let bIdx = 0; bIdx < this.pushBlocks.length; bIdx++) {
+          const blk = this.pushBlocks[bIdx]!;
+          if (distance(plate.x, plate.y, blk.x, blk.y) <= plate.radius + blk.radius) {
+            pressed = true;
+            break;
+          }
+        }
+      }
+      if (!pressed) {
+        for (let sIdx = 0; sIdx < this.summons.length; sIdx++) {
+          const sum = this.summons[sIdx]!;
+          if (
+            sum.hp > 0 &&
+            sum.ttlSec > 0 &&
+            distance(plate.x, plate.y, sum.x, sum.y) <= plate.radius + sum.radius
+          ) {
+            pressed = true;
+            break;
+          }
+        }
+      }
+      plate.pressed = pressed;
+      if (!pressed) allPressed = false;
+    }
+
+    if (allPressed && !this.coopPuzzleCompleted && this.pressurePlates.length >= 2) {
+      this.coopPuzzleCompleted = true;
+      this.completedPuzzleRoomIds.add(this.currentRoomId);
+      const cx = this.map.width * 0.5;
+      const cy = this.map.height * 0.5 - 118;
+      this.spawnChest(cx, cy, 'epic');
+      this.roomChestsByRoomId.set(this.currentRoomId, [...this.chests]);
+      this.events.push({
+        kind: 'coop_puzzle_solved',
+        roomId: this.currentRoomId,
+        x: cx,
+        y: cy,
+      });
+    }
+  }
+
+  // 3. Boss Forge Titan Expanding Shockwave Rings (players can Dash through with i-frames!)
+  if (this.shockwaveRings.length > 0) {
+    let ringWrite = 0;
+    for (let i = 0; i < this.shockwaveRings.length; i++) {
+      const ring = this.shockwaveRings[i]!;
+      ring.radius += ring.speed * dtSec;
+      if (ring.radius >= ring.maxRadius) continue;
+
+      for (let pIdx = 0; pIdx < allPlayers.length; pIdx++) {
+        const pl = allPlayers[pIdx]!;
+        if (pl.lifeState !== 'alive' || ring.hitPlayerIds.includes(pl.id)) continue;
+        const d = distance(ring.x, ring.y, pl.x, pl.y);
+        if (Math.abs(d - ring.radius) <= ring.thickness * 0.5 + pl.radius) {
+          ring.hitPlayerIds.push(pl.id);
+          // Dashing or invulnerable players pass right through the shockwave ring unharmed!
+          if (pl.dashTimer <= 0 && pl.invulnerableTimer <= 0) {
+            const pushAng = Math.atan2(pl.y - ring.y, pl.x - ring.x);
+            this.applyDamageToPlayer(ring.damage, pushAng, 210, 'forge_titan_shockwave', pl);
+          }
+        }
+      }
+      this.shockwaveRings[ringWrite++] = ring;
+    }
+    this.shockwaveRings.length = ringWrite;
+  }
+
+  // 4. Co-op Weapon Tether Beams (tether_staff: electric/fire beam linking 2 players or player + summon)
+  if (this.tetherBeams.length > 0) {
+    let beamWrite = 0;
+    for (let i = 0; i < this.tetherBeams.length; i++) {
+      const beam = this.tetherBeams[i]!;
+      beam.ttlSec -= dtSec;
+      if (beam.ttlSec <= 0) continue;
+
+      const owner = this.getPlayerById(beam.ownerPlayerId);
+      if (!owner || owner.lifeState !== 'alive') continue;
+      beam.x1 = owner.x;
+      beam.y1 = owner.y;
+
+      if (beam.targetKind === 'player') {
+        const targetPl = this.getPlayerById(beam.targetEntityId);
+        if (targetPl && targetPl.lifeState === 'alive') {
+          beam.x2 = targetPl.x;
+          beam.y2 = targetPl.y;
+        }
+      } else {
+        const targetSum = this.summons.find(
+          (s) => s.id === beam.targetEntityId && s.hp > 0 && s.ttlSec > 0,
+        );
+        if (targetSum) {
+          beam.x2 = targetSum.x;
+          beam.y2 = targetSum.y;
+        }
+      }
+
+      beam.tickTimer -= dtSec;
+      if (beam.tickTimer <= 0) {
+        beam.tickTimer = 0.25;
+        const segDx = beam.x2 - beam.x1;
+        const segDy = beam.y2 - beam.y1;
+        const segLenSq = segDx * segDx + segDy * segDy;
+        for (let j = 0; j < this.enemies.length; j++) {
+          const e = this.enemies[j]!;
+          if (e.hp <= 0 || e.aiState === 'spawning' || e.bossBurrowed) continue;
+          const t =
+            segLenSq > 0
+              ? clamp(((e.x - beam.x1) * segDx + (e.y - beam.y1) * segDy) / segLenSq, 0, 1)
+              : 0;
+          const distToBeam = distance(e.x, e.y, beam.x1 + t * segDx, beam.y1 + t * segDy);
+          if (distToBeam <= e.radius + 14) {
+            const hitAng = Math.atan2(segDy, segDx) + Math.PI * 0.5;
+            this.applyDamageToEnemy(
+              e,
+              beam.damage,
+              false,
+              'shock',
+              hitAng,
+              40,
+              false,
+              beam.ownerPlayerId,
+            );
+            if (e.hp > 0) {
+              e.burnTimer = Math.max(e.burnTimer, 2.0);
+              e.shockTimer = Math.max(e.shockTimer, 1.2);
+            }
+          }
+        }
+      }
+
+      this.tetherBeams[beamWrite++] = beam;
+    }
+    this.tetherBeams.length = beamWrite;
+  }
+
+  // 5. Boss Forge Titan Phase 2 Dual Energy Core synchronization window (3s Co-op / 6s Solo)
+  if (this.titanCoreWindowTimer > 0) {
+    this.titanCoreWindowTimer = Math.max(0, this.titanCoreWindowTimer - dtSec);
+    if (this.titanCoreWindowTimer <= 0) {
+      const titan = this.enemies.find((e) => e.defId === 'forge_titan' && e.hp > 0);
+      const remainingCores = this.enemies.filter(
+        (e) => e.defId === 'forge_energy_core' && e.hp > 0,
+      );
+      if (titan && titan.bossPhase === 2 && remainingCores.length === 1) {
+        // Window expired before second core was destroyed -> respawn first core at 50% HP
+        const survivor = remainingCores[0]!;
+        const spawnLeft = survivor.x >= titan.x;
+        const respawned = this.spawnEnemy(
+          'forge_energy_core',
+          titan.x + (spawnLeft ? -115 : 115),
+          titan.y,
+          true,
+        );
+        respawned.hp = Math.max(10, Math.round(respawned.maxHp * 0.5));
+      }
+      this.titanFirstCoreBrokenId = 0;
+    }
+  }
+}
+
+export function findNearestAlivePlayerImpl(this: WorldSim, x: number, y: number): SimPlayerState {
+  if (this.stressTestActive || this.simulatedPlayers.length === 0) {
+    return this.player;
+  }
+  let best = this.player;
+  let bestDistSq =
+    this.player.lifeState === 'alive' && this.player.hp > 0
+      ? distanceSq(x, y, this.player.x, this.player.y)
+      : Infinity;
+  for (let i = 0; i < this.simulatedPlayers.length; i++) {
+    const candidate = this.simulatedPlayers[i]!;
+    if (candidate.lifeState !== 'alive' || candidate.hp <= 0) continue;
+    const dSq = distanceSq(x, y, candidate.x, candidate.y);
+    if (dSq < bestDistSq) {
+      bestDistSq = dSq;
+      best = candidate;
+    }
+  }
+  return best;
+}
+
+export function getCoopEnemyCooldownScaleImpl(this: WorldSim): number {
+  const pCount = this.getActivePlayerCount();
+  if (pCount <= 1 || this.stressTestActive) return 1.0;
+  const bonus = COOP_SCALING[pCount].enemyFireRateBonus;
+  return 1 / (1 + bonus);
+}
+
+export function updateEnemiesImpl(this: WorldSim, dtSec: number): void {
+  const coopCdScale = this.getCoopEnemyCooldownScale();
+
+  for (let i = 0; i < this.enemies.length; i++) {
+    const e = this.enemies[i]!;
+    if (e.hp <= 0) continue;
+
+    if (e.hitFlashTimer > 0) {
+      e.hitFlashTimer = Math.max(0, e.hitFlashTimer - dtSec);
+    }
+    if (e.attackCooldownTimer > 0) {
+      e.attackCooldownTimer = Math.max(0, e.attackCooldownTimer - dtSec / coopCdScale);
+    }
+    if (e.shockTimer > 0) {
+      e.shockTimer = Math.max(0, e.shockTimer - dtSec);
+    }
+    if (e.grassRustleCooldown > 0) {
+      e.grassRustleCooldown = Math.max(0, e.grassRustleCooldown - dtSec);
+    }
+    if (e.markedTimer > 0) {
+      e.markedTimer = Math.max(0, e.markedTimer - dtSec);
+      if (e.markedTimer <= 0) e.markedByPlayerId = 0;
+    }
+    if (e.superconductTimer > 0) {
+      e.superconductTimer = Math.max(0, e.superconductTimer - dtSec);
+    }
+    if (e.rootedTimer > 0) {
+      e.rootedTimer = Math.max(0, e.rootedTimer - dtSec);
+    }
+    if (e.steamBlindTimer > 0) {
+      e.steamBlindTimer = Math.max(0, e.steamBlindTimer - dtSec);
+    }
+
+    // Decay knockback
+    const kbDecay = Math.exp(-12 * dtSec);
+    e.kbVx *= kbDecay;
+    e.kbVy *= kbDecay;
+    if (Math.abs(e.kbVx) < 1) e.kbVx = 0;
+    if (Math.abs(e.kbVy) < 1) e.kbVy = 0;
+
+    // Update Elemental Status Timers & Surface interactions
+    const surf = this.map.getSurfaceAtWorld(e.x, e.y);
+    this.updateEnemyStatusAndSurface(e, surf, dtSec);
+    if (e.hp <= 0) continue;
+
+    if (e.isDummy) {
+      // Poison blocks healing! Dummy only regenerates when not poisoned
+      if (e.hp < e.maxHp && e.poisonTimer <= 0) {
+        e.hp = e.maxHp;
+      }
+      continue;
+    }
+
+    if (e.aiState === 'spawning') {
+      e.stateTimer -= dtSec;
+      if (e.stateTimer <= 0) {
+        e.aiState = 'move';
+        e.stateTimer = 0;
+      }
+      continue;
+    }
+
+    // Frozen enemies cannot move or execute AI
+    if (e.frozenTimer > 0) {
+      e.vx = 0;
+      e.vy = 0;
+      e.frozenTimer = Math.max(0, e.frozenTimer - dtSec);
+      continue;
+    }
+
+    // Elite Regen modifier: regenerates 4 HP/sec if not poisoned
+    if (e.isElite && e.eliteModifier === 'regen' && e.hp < e.maxHp && e.poisonTimer <= 0) {
+      e.regenAccum += dtSec * 4;
+      if (e.regenAccum >= 1) {
+        const healPts = Math.floor(e.regenAccum);
+        e.regenAccum -= healPts;
+        e.hp = Math.min(e.maxHp, e.hp + healPts);
+      }
+    }
+
+    const targetPlayer = this.findNearestAlivePlayer(e.x, e.y);
+    let targetX = targetPlayer.x;
+    let targetY = targetPlayer.y;
+
+    // Druid's Sacred Tree taunts nearby non-boss enemies within 170u
+    if (!e.isBoss && this.summons.length > 0) {
+      for (let sIdx = 0; sIdx < this.summons.length; sIdx++) {
+        const sum = this.summons[sIdx]!;
+        if (sum.kind === 'sacred_tree' && sum.hp > 0 && sum.ttlSec > 0) {
+          if (distance(e.x, e.y, sum.x, sum.y) <= 170) {
+            targetX = sum.x;
+            targetY = sum.y;
+            break;
+          }
+        }
+      }
+    }
+
+    if (e.aiState === 'stunned') {
+      e.vx = 0;
+      e.vy = 0;
+      e.stateTimer -= dtSec;
+      if (e.stateTimer <= 0) {
+        e.aiState = 'cooldown';
+        e.stateTimer = 0.6;
+      }
+    } else {
+      const dx = targetX - e.x;
+      const dy = targetY - e.y;
+      const distToPlayer = Math.hypot(dx, dy);
+      let angleToPlayer = Math.atan2(dy, dx);
+      // Vaporize Steam Blindness causes enemies to misaim by ~30 degrees!
+      if (e.steamBlindTimer > 0) {
+        angleToPlayer += 0.52 * e.strafeSign;
+      }
+
+      if (e.defId === 'goblin_shooter') {
+        this.updateGoblinShooterAI(e, distToPlayer, angleToPlayer, dtSec);
+      } else if (e.defId === 'wild_boar') {
+        this.updateWildBoarAI(e, distToPlayer, angleToPlayer, dtSec);
+      } else if (e.defId === 'spore_bomber') {
+        this.updateSporeBomberAI(e, distToPlayer, angleToPlayer, dtSec);
+      } else if (e.defId === 'green_slime' || e.defId === 'mini_slime') {
+        this.updateSlimeAI(e, distToPlayer, angleToPlayer, dtSec);
+      } else if (e.defId === 'goblin_shaman') {
+        this.updateGoblinShamanAI(e, distToPlayer, angleToPlayer, dtSec);
+      } else if (e.defId === 'thorn_turret' || e.defId === 'spore_guardian') {
+        this.updateThornTurretAI(e, distToPlayer, angleToPlayer, dtSec);
+      } else if (e.defId === 'spore_king') {
+        this.updateBossSporeKingAI(e, targetPlayer, distToPlayer, angleToPlayer, dtSec);
+      } else if (e.defId === 'frost_bat') {
+        this.updateFrostBatAI(e, distToPlayer, angleToPlayer, dtSec);
+      } else if (e.defId === 'baby_yeti') {
+        this.updateBabyYetiAI(e, distToPlayer, angleToPlayer, dtSec);
+      } else if (e.defId === 'ice_mage') {
+        this.updateIceMageAI(e, targetPlayer, distToPlayer, angleToPlayer, dtSec);
+      } else if (e.defId === 'ice_golem') {
+        this.updateIceGolemAI(e, distToPlayer, angleToPlayer, dtSec);
+      } else if (e.defId === 'snow_spirit') {
+        this.updateSnowSpiritAI(e, distToPlayer, angleToPlayer, dtSec);
+      } else if (e.defId === 'kryssa_clone') {
+        this.updateKryssaCloneAI(e, distToPlayer, angleToPlayer, dtSec);
+      } else if (e.defId === 'kryssa_ice_queen') {
+        this.updateBossKryssaAI(e, targetPlayer, distToPlayer, angleToPlayer, dtSec);
+      } else if (e.defId === 'fire_imp') {
+        this.updateFireImpAI(e, distToPlayer, angleToPlayer, dtSec);
+      } else if (e.defId === 'dwarf_cannon') {
+        this.updateDwarfCannonAI(e, distToPlayer, angleToPlayer, dtSec);
+      } else if (e.defId === 'coal_golem') {
+        this.updateCoalGolemAI(e, distToPlayer, angleToPlayer, dtSec);
+      } else if (e.defId === 'welder_drone') {
+        this.updateWelderDroneAI(e, distToPlayer, angleToPlayer, dtSec);
+      } else if (e.defId === 'iron_shielder') {
+        this.updateIronShielderAI(e, distToPlayer, angleToPlayer, dtSec);
+      } else if (e.defId === 'forge_titan') {
+        this.updateBossForgeTitanAI(e, targetPlayer, distToPlayer, angleToPlayer, dtSec);
+      }
+    }
+
+    // Stationary turrets, guardian mushrooms, ice prisons, energy cores, or enemies rooted by Druid cannot move
+    const isStationaryDef =
+      e.defId === 'thorn_turret' ||
+      e.defId === 'spore_guardian' ||
+      e.defId === 'ice_prison' ||
+      e.defId === 'forge_energy_core';
+    if (isStationaryDef || e.rootedTimer > 0) {
+      e.vx = 0;
+      e.vy = 0;
+      e.kbVx = 0;
+      e.kbVy = 0;
+    }
+
+    // Apply Chill (-30%) and Oil (-15%) movement speed modifiers
+    let speedMult = 1.0;
+    if (e.chillTimer > 0) speedMult *= 0.7;
+    if ((surf === 'oil' || surf === 'poison_swamp') && !e.isBoss && !ENEMIES[e.defId]?.flying) {
+      speedMult *= 0.85;
+    }
+    e.vx *= speedMult;
+    e.vy *= speedMult;
+
+    // Soft separation between nearby enemies
+    const nearby = this.enemySpatialGrid.queryCircle(
+      e.x,
+      e.y,
+      e.radius + 18,
+      this.queryEnemyScratch,
+    );
+    let sepX = 0;
+    let sepY = 0;
+    if (!isStationaryDef && !e.bossBurrowed && e.rootedTimer <= 0) {
+      for (let j = 0; j < nearby.length; j++) {
+        const other = nearby[j]!;
+        if (other.id === e.id || other.hp <= 0) continue;
+        const odx = e.x - other.x;
+        const ody = e.y - other.y;
+        const d = Math.hypot(odx, ody);
+        const minSep = e.radius + other.radius + 4;
+        if (d > 0.001 && d < minSep) {
+          const push = ((minSep - d) / minSep) * 90;
+          sepX += (odx / d) * push;
+          sepY += (ody / d) * push;
+        }
+      }
+    }
+
+    const conveyorPushX =
+      surf === 'conveyor' && !isStationaryDef && !e.isBoss && !ENEMIES[e.defId]?.flying
+        ? this.map.conveyorDirection * 58
+        : 0;
+
+    const nextX = e.x + (e.vx + e.kbVx + sepX + conveyorPushX) * dtSec;
+    const nextY = e.y + (e.vy + e.kbVy + sepY) * dtSec;
+    const col = this.map.resolveCircleCollision(nextX, nextY, e.radius);
+    e.x = col.x;
+    e.y = col.y;
+
+    if (surf === 'grass' && Math.hypot(e.vx, e.vy) > 25 && e.grassRustleCooldown <= 0) {
+      e.grassRustleCooldown = 0.35;
+      if (!this.stressTestActive) {
+        this.events.push({ kind: 'grass_rustle', x: e.x, y: e.y });
+      }
+    }
+
+    if (
+      (e.defId === 'wild_boar' || e.defId === 'baby_yeti') &&
+      e.aiState === 'attack' &&
+      col.collided
+    ) {
+      e.aiState = 'stunned';
+      e.stateTimer = 0.5;
+      e.vx = 0;
+      e.vy = 0;
+      e.attackCooldownTimer =
+        (ENEMIES[e.defId]?.attackCooldownSec ?? 2.5) * this.getEnemyCooldownScale(false);
+      this.events.push({
+        kind: 'hit_stop',
+        durationMs: 30,
+        trauma: 0.25,
+      });
+    }
+  }
+
+  let writeIdx = 0;
+  for (let i = 0; i < this.enemies.length; i++) {
+    const e = this.enemies[i]!;
+    if (e.hp > 0) {
+      this.enemies[writeIdx++] = e;
+    }
+  }
+  this.enemies.length = writeIdx;
+}
+
+export function getEnemyCooldownScaleImpl(this: WorldSim, isBoss: boolean): number {
+  const count = this.getActivePlayerCount();
+  const scaling = COOP_SCALING[count];
+  const rate = isBoss ? 1 + scaling.enemyFireRateBonus * 0.75 : 1 + scaling.enemyFireRateBonus;
+  return 1 / Math.max(1, rate);
+}
+
+export function updateEnemyStatusAndSurfaceImpl(this: WorldSim, e: SimEnemyState, surf: SurfaceKind, dtSec: number): void {
+  if (surf === 'water') {
+    e.burnTimer = 0;
+  } else if (surf === 'burning_oil' || surf === 'burning_grass' || surf === 'lava') {
+    if (e.burnTimer <= 0) {
+      e.burnTickTimer = 0.25;
+    }
+    e.burnTimer = Math.max(e.burnTimer, 2.5);
+  } else if (surf === 'poison_swamp' && !e.isBoss && e.defId !== 'spore_bomber') {
+    if (e.poisonTimer <= 0) {
+      e.poisonTickTimer = 0.3;
+    }
+    e.poisonTimer = Math.max(e.poisonTimer, 3.0);
+    e.poisonStacks = Math.max(1, e.poisonStacks);
+  } else if (surf === 'electrified_water') {
+    e.surfaceTickTimer += dtSec;
+    if (e.surfaceTickTimer >= 0.5) {
+      e.surfaceTickTimer = 0;
+      e.shockTimer = 0.45;
+      this.applyDotDamageToEnemy(e, 4, 'shock');
+      if (e.hp <= 0) return;
+    }
+  }
+
+  if (e.burnTimer > 0) {
+    e.burnTimer = Math.max(0, e.burnTimer - dtSec);
+    if (!this.stressTestActive && (surf === 'oil' || surf === 'grass')) {
+      this.map.igniteSurfaceInRadius(e.x, e.y, 18);
+    }
+    e.burnTickTimer -= dtSec;
+    if (e.burnTickTimer <= 0) {
+      e.burnTickTimer = 0.5;
+      this.applyDotDamageToEnemy(e, 3, 'burn');
+      if (e.hp <= 0) return;
+    }
+  }
+
+  if (e.chillTimer > 0) {
+    e.chillTimer = Math.max(0, e.chillTimer - dtSec);
+    if (e.chillTimer <= 0) {
+      e.chillStacks = 0;
+    }
+  }
+
+  if (e.poisonTimer > 0) {
+    e.poisonTimer = Math.max(0, e.poisonTimer - dtSec);
+    e.poisonTickTimer -= dtSec;
+    if (e.poisonTickTimer <= 0) {
+      e.poisonTickTimer = 0.6;
+      this.applyDotDamageToEnemy(e, 2 * Math.max(1, e.poisonStacks), 'poison');
+      if (e.hp <= 0) return;
+    }
+    if (e.poisonTimer <= 0) {
+      e.poisonStacks = 0;
+    }
+  }
+}
+
+export function applyDotDamageToEnemyImpl(this: WorldSim,
+  enemy: SimEnemyState,
+  amount: number,
+  element: ElementType,
+  emitEvent = true,
+): void {
+  if (enemy.hp <= 0) return;
+  if (this.stressTestActive && enemy.hp <= amount + 20) {
+    enemy.hp = enemy.maxHp;
+    return;
+  }
+  enemy.hp = Math.max(0, enemy.hp - amount);
+  this.recordDamageHistory(amount);
+  this.runStats.damageDealt += amount;
+  const ownerPl = this.getPlayerById(enemy.lastElementOwnerId || this.player.id) ?? this.player;
+  ownerPl.statsDamageDealt = (ownerPl.statsDamageDealt ?? 0) + amount;
+  this.checkBossPhaseTransitions(enemy);
+
+  if (emitEvent && !this.stressTestActive) {
+    this.events.push({
+      kind: 'damage_dealt',
+      targetId: enemy.id,
+      targetKind: 'enemy',
+      x: enemy.x,
+      y: enemy.y,
+      amount,
+      isCrit: false,
+      hitArmor: false,
+      element,
+      knockbackX: 0,
+      knockbackY: 0,
+    });
+  }
+
+  if (enemy.hp <= 0 && !enemy.isDummy) {
+    this.handleEnemyKilled(enemy, ownerPl.id);
+  }
+}
+
+export function checkBossPhaseTransitionsImpl(this: WorldSim, e: SimEnemyState): void {
+  if (!e.isBoss || e.hp <= 0) return;
+  const hpRatio = e.hp / e.maxHp;
+
+  if (hpRatio <= 0.66 && e.bossPhase === 1) {
+    e.bossPhase = 2;
+    e.attackCooldownTimer = 0.15;
+    if (e.defId === 'kryssa_ice_queen') {
+      this.spawnKryssaMirrorClones(e);
+    } else if (e.defId === 'forge_titan') {
+      this.spawnForgeTitanEnergyCores(e);
+    }
+    this.events.push({
+      kind: 'boss_phase_changed',
+      enemyId: e.id,
+      phase: 2,
+      x: e.x,
+      y: e.y,
+    });
+    this.events.push({
+      kind: 'hit_stop',
+      durationMs: 60,
+      trauma: 0.6,
+    });
+  }
+
+  if (hpRatio <= 0.33 && e.bossPhase < 3) {
+    e.bossPhase = 3;
+    e.attackCooldownTimer = 0.15;
+    if (e.defId === 'kryssa_ice_queen') {
+      this.blizzardVeilActive = true;
+      this.map.applyBossPhase3BlizzardBorder();
+    } else if (e.defId === 'forge_titan') {
+      this.map.applyBossPhase3LavaBorder();
+    } else {
+      this.map.applyBossPhase3ToxicBorder();
+    }
+    this.events.push({
+      kind: 'boss_phase_changed',
+      enemyId: e.id,
+      phase: 3,
+      x: e.x,
+      y: e.y,
+    });
+    this.events.push({
+      kind: 'hit_stop',
+      durationMs: 80,
+      trauma: 0.78,
+    });
+  }
+}

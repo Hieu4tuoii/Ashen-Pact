@@ -1,0 +1,339 @@
+import type { BuffId, CharacterId, ElementalReactionId, ElementType, RoomType, WeaponRarity } from '../data/types.js';
+import type { PlayerInputPacket, QuickEmoteId } from '../protocol/messages.js';
+import type { ArenaMapConfig, SurfaceKind } from './arena-map.js';
+import type { PropKind, SummonKind, PingMarkerKind, BulletVolleySpawnEvent } from './world-sim-types.js';
+
+export type SimEvent =
+  | BulletVolleySpawnEvent
+  | {
+      kind: 'projectile_spawned';
+      projectileId: number;
+      weaponId: string;
+      team: 'player' | 'enemy';
+      x: number;
+      y: number;
+      angle: number;
+    }
+  | {
+      kind: 'melee_swing';
+      playerId: number;
+      weaponId: string;
+      x: number;
+      y: number;
+      angle: number;
+      arcRad: number;
+      range: number;
+      bulletsDestroyed: number;
+    }
+  | {
+      kind: 'damage_dealt';
+      targetId: number;
+      targetKind: 'player' | 'enemy';
+      x: number;
+      y: number;
+      amount: number;
+      isCrit: boolean;
+      hitArmor: boolean;
+      element: ElementType;
+      knockbackX: number;
+      knockbackY: number;
+    }
+  | {
+      kind: 'projectile_impact';
+      x: number;
+      y: number;
+      angle: number;
+      team: 'player' | 'enemy';
+      hitWall: boolean;
+      destroyedByMelee: boolean;
+      blockedByShield: boolean;
+      isCrit: boolean;
+      element?: ElementType;
+    }
+  | {
+      kind: 'entity_killed';
+      entityId: number;
+      defId: string;
+      x: number;
+      y: number;
+    }
+  | {
+      kind: 'dash_started';
+      playerId: number;
+      x: number;
+      y: number;
+      dirX: number;
+      dirY: number;
+    }
+  | {
+      kind: 'enemy_telegraph';
+      enemyId: number;
+      defId: string;
+      x: number;
+      y: number;
+      angle: number;
+      durationSec: number;
+      radius: number;
+    }
+  | {
+      kind: 'explosion';
+      x: number;
+      y: number;
+      radius: number;
+      damage: number;
+      sourceDefId: string;
+    }
+  | {
+      kind: 'skill_cast';
+      playerId: number;
+      skillId: string;
+      x: number;
+      y: number;
+      angle: number;
+    }
+  | {
+      kind: 'shield_shockwave';
+      playerId: number;
+      x: number;
+      y: number;
+      angle: number;
+      storedBullets: number;
+      damage: number;
+    }
+  | {
+      kind: 'pickup_collected';
+      pickupKind: 'energy' | 'gold' | 'life_seed';
+      amount: number;
+      x: number;
+      y: number;
+    }
+  | {
+      kind: 'weapon_swapped';
+      weaponId: string;
+      slot: number;
+    }
+  | {
+      kind: 'hit_stop';
+      durationMs: number;
+      trauma: number;
+    }
+  | {
+      kind: 'prop_destroyed';
+      propId: number;
+      propKind: PropKind;
+      x: number;
+      y: number;
+    }
+  | {
+      kind: 'cracked_wall_broken';
+      tx: number;
+      ty: number;
+      x: number;
+      y: number;
+    }
+  | {
+      kind: 'chain_lightning';
+      fromX: number;
+      fromY: number;
+      toX: number;
+      toY: number;
+    }
+  | {
+      kind: 'status_applied';
+      targetId: number;
+      status: 'burn' | 'chill' | 'frozen' | 'shock' | 'poison' | 'shatter' | 'marked' | 'rooted';
+      x: number;
+      y: number;
+    }
+  | {
+      kind: 'elemental_reaction';
+      reaction: ElementalReactionId;
+      x: number;
+      y: number;
+      targetId: number;
+      damage: number;
+      isTeamCombo: boolean;
+      primerPlayerId: number;
+      triggerPlayerId: number;
+    }
+  | {
+      kind: 'summon_spawned';
+      summonId: number;
+      summonKind: SummonKind;
+      ownerPlayerId: number;
+      x: number;
+      y: number;
+    }
+  | {
+      kind: 'emp_blast';
+      x: number;
+      y: number;
+      radius: number;
+      bulletsCleared: number;
+    }
+  | {
+      kind: 'surface_triggered';
+      surface: SurfaceKind;
+      x: number;
+      y: number;
+    }
+  | {
+      kind: 'grass_rustle';
+      x: number;
+      y: number;
+    }
+  | {
+      kind: 'shaman_heal';
+      shamanId: number;
+      x: number;
+      y: number;
+      radius: number;
+      healedCount: number;
+    }
+  | {
+      kind: 'boss_spawned';
+      enemyId: number;
+      nameVi: string;
+    }
+  | {
+      kind: 'boss_phase_changed';
+      enemyId: number;
+      phase: 1 | 2 | 3;
+      x: number;
+      y: number;
+    }
+  | {
+      kind: 'room_entered';
+      roomId: number;
+      roomType: RoomType;
+      floorNumber: number;
+    }
+  | {
+      kind: 'room_cleared';
+      roomId: number;
+      roomType: RoomType;
+    }
+  | {
+      kind: 'chest_opened';
+      chestId: number;
+      rarity: WeaponRarity;
+      weaponId: string;
+      x: number;
+      y: number;
+    }
+  | {
+      kind: 'item_purchased';
+      itemId: number;
+      nameVi: string;
+      costGold: number;
+      x: number;
+      y: number;
+    }
+  | {
+      kind: 'shrine_blessing';
+      x: number;
+      y: number;
+      rewardTextVi: string;
+    }
+  | {
+      kind: 'portal_entered';
+      floorNumber: number;
+    }
+  | {
+      kind: 'buff_selected';
+      buffId: BuffId;
+      nameVi: string;
+    }
+  | {
+      kind: 'player_downed';
+      playerId: number;
+      x: number;
+      y: number;
+    }
+  | {
+      kind: 'player_revived';
+      playerId: number;
+      reviverId: number;
+      x: number;
+      y: number;
+    }
+  | {
+      kind: 'player_ghost';
+      playerId: number;
+      x: number;
+      y: number;
+    }
+  | {
+      kind: 'players_teleported_to_room';
+      roomId: number;
+      x: number;
+      y: number;
+    }
+  | {
+      kind: 'ping_issued';
+      pingId: number;
+      playerId: number;
+      playerSlot: 1 | 2 | 3 | 4;
+      pingKind: PingMarkerKind;
+      labelVi: string;
+      x: number;
+      y: number;
+    }
+  | {
+      kind: 'emote_triggered';
+      playerId: number;
+      emoteId: QuickEmoteId;
+      labelVi: string;
+      x: number;
+      y: number;
+    }
+  | {
+      kind: 'character_selected';
+      playerId: number;
+      characterId: CharacterId;
+      nameVi: string;
+    }
+  | {
+      kind: 'coop_puzzle_solved';
+      roomId: number;
+      x: number;
+      y: number;
+    }
+  | {
+      kind: 'shockwave_spawned';
+      enemyId: number;
+      x: number;
+      y: number;
+      maxRadius: number;
+    }
+  | {
+      kind: 'armor_broken';
+      targetKind: 'player' | 'enemy';
+      targetId: number;
+      playerId?: number;
+      x: number;
+      y: number;
+    };
+
+export interface WorldSimOptions {
+  seed?: string | number;
+  mapConfig?: ArenaMapConfig;
+  spawnInitialWave?: boolean;
+  includeTrainingDummy?: boolean;
+  includeProps?: boolean;
+  autoRespawnWaves?: boolean;
+  autoRevivePlayer?: boolean;
+  startInHub?: boolean;
+  coopMode?: boolean;
+  playerCount?: 1 | 2 | 3 | 4;
+  biome?: 1 | 2 | 3;
+  campaignMaxFloors?: 2 | 6;
+}
+
+export interface CoPlayerInputEntry {
+  current: PlayerInputPacket;
+  prevButtons: number;
+  latchedButtons: number;
+  latchedWeaponSlot: number | null;
+  energyRegenAccum: number;
+}

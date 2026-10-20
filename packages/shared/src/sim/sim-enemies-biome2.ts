@@ -1,0 +1,687 @@
+import { ENEMIES } from '../data/enemies.js';
+import { angleDiff, circleVsCircle, clamp, distance } from '../math/vec2.js';
+import { COOP_SCALING } from '../data/scaling.js';
+import type { SimPlayerState, SimEnemyState } from './world-sim-types.js';
+import type { WorldSim } from './world-sim.js';
+
+export function updateFrostBatAIImpl(this: WorldSim,
+  e: SimEnemyState,
+  distToPlayer: number,
+  angleToPlayer: number,
+  dtSec: number,
+): void {
+  const cdMult =
+    (e.isElite && e.eliteModifier === 'fast' ? 0.72 : 1.0) * this.getEnemyCooldownScale(false);
+  if (e.aiState === 'telegraph') {
+    e.vx = 0;
+    e.vy = 0;
+    e.aimAngle = e.telegraphAngle;
+    e.stateTimer -= dtSec;
+    if (e.stateTimer <= 0) {
+      if (!this.stressTestActive || this.projectiles.length < 660) {
+        this.spawnDeterministicVolley({
+          kind: 'bullet_volley_spawned',
+          tick: this.tick,
+          ownerId: e.id,
+          team: 'enemy',
+          weaponId: 'frost_shard',
+          x: e.x + Math.cos(e.telegraphAngle) * 14,
+          y: e.y + Math.sin(e.telegraphAngle) * 14,
+          angle: e.telegraphAngle,
+          pelletCount: 2,
+          spreadRad: 0.24,
+          speed: 310,
+          damage: e.damage,
+          radius: 5,
+          knockback: 75,
+          pierceCount: 0,
+          bounceCount: 0,
+          ttlSec: 2.0,
+          element: 'chill',
+          critChance: 0,
+          amplifiedByShield: false,
+          seed: this.rng.nextUint32(),
+        });
+      }
+      e.aiState = 'cooldown';
+      e.stateTimer = 0.28;
+      e.attackCooldownTimer = (ENEMIES.frost_bat?.attackCooldownSec ?? 1.55) * cdMult;
+    }
+    return;
+  }
+
+  if (e.aiState === 'cooldown') {
+    e.stateTimer -= dtSec;
+    if (e.stateTimer <= 0) e.aiState = 'move';
+  }
+
+  e.aimAngle = angleToPlayer;
+  if (e.attackCooldownTimer <= 0 && distToPlayer <= 340) {
+    e.aiState = 'telegraph';
+    e.stateTimer = e.telegraphDurationSec;
+    e.telegraphAngle = angleToPlayer;
+    e.vx = 0;
+    e.vy = 0;
+    if (!this.stressTestActive) {
+      this.events.push({
+        kind: 'enemy_telegraph',
+        enemyId: e.id,
+        defId: e.defId,
+        x: e.x,
+        y: e.y,
+        angle: e.telegraphAngle,
+        durationSec: e.telegraphDurationSec,
+        radius: 0,
+      });
+    }
+    return;
+  }
+
+  const perp = angleToPlayer + (Math.PI / 2) * e.strafeSign;
+  const approachWeight = distToPlayer > 175 ? 0.65 : distToPlayer < 95 ? -0.6 : 0.1;
+  e.vx = (Math.cos(angleToPlayer) * approachWeight + Math.cos(perp) * 0.85) * e.moveSpeed;
+  e.vy = (Math.sin(angleToPlayer) * approachWeight + Math.sin(perp) * 0.85) * e.moveSpeed;
+}
+
+export function updateBabyYetiAIImpl(this: WorldSim,
+  e: SimEnemyState,
+  distToPlayer: number,
+  angleToPlayer: number,
+  dtSec: number,
+): void {
+  const cdMult =
+    (e.isElite && e.eliteModifier === 'fast' ? 0.72 : 1.0) * this.getEnemyCooldownScale(false);
+  const slideSpeed = 355;
+  if (e.aiState === 'telegraph') {
+    e.vx = 0;
+    e.vy = 0;
+    e.aimAngle = e.telegraphAngle;
+    e.stateTimer -= dtSec;
+    if (e.stateTimer <= 0) {
+      e.aiState = 'attack';
+      e.stateTimer = 0.56;
+      e.vx = Math.cos(e.telegraphAngle) * slideSpeed;
+      e.vy = Math.sin(e.telegraphAngle) * slideSpeed;
+    }
+    return;
+  }
+
+  if (e.aiState === 'attack') {
+    e.vx = Math.cos(e.telegraphAngle) * slideSpeed;
+    e.vy = Math.sin(e.telegraphAngle) * slideSpeed;
+    e.stateTimer -= dtSec;
+
+    const allPlayers = this.getAllPlayers();
+    for (let i = 0; i < allPlayers.length; i++) {
+      const pl = allPlayers[i]!;
+      if (pl.lifeState !== 'alive') continue;
+      if (circleVsCircle(e, pl)) {
+        pl.chillTimer = Math.max(pl.chillTimer, 2.5);
+        this.applyDamageToPlayer(e.damage, e.telegraphAngle, 250, e.defId, pl);
+        e.aiState = 'cooldown';
+        e.stateTimer = 0.45;
+        e.attackCooldownTimer = (ENEMIES.baby_yeti?.attackCooldownSec ?? 2.3) * cdMult;
+        e.vx = 0;
+        e.vy = 0;
+        return;
+      }
+    }
+
+    if (e.stateTimer <= 0) {
+      e.aiState = 'cooldown';
+      e.stateTimer = 0.4;
+      e.attackCooldownTimer = (ENEMIES.baby_yeti?.attackCooldownSec ?? 2.3) * cdMult;
+      e.vx = 0;
+      e.vy = 0;
+    }
+    return;
+  }
+
+  if (e.aiState === 'cooldown') {
+    e.vx = 0;
+    e.vy = 0;
+    e.stateTimer -= dtSec;
+    if (e.stateTimer <= 0) e.aiState = 'move';
+    return;
+  }
+
+  e.aimAngle = angleToPlayer;
+  if (e.attackCooldownTimer <= 0 && distToPlayer <= 265) {
+    e.aiState = 'telegraph';
+    e.stateTimer = e.telegraphDurationSec;
+    e.telegraphAngle = angleToPlayer;
+    e.vx = 0;
+    e.vy = 0;
+    if (!this.stressTestActive) {
+      this.events.push({
+        kind: 'enemy_telegraph',
+        enemyId: e.id,
+        defId: e.defId,
+        x: e.x,
+        y: e.y,
+        angle: e.telegraphAngle,
+        durationSec: e.telegraphDurationSec,
+        radius: 0,
+      });
+    }
+    return;
+  }
+
+  e.vx = Math.cos(angleToPlayer) * e.moveSpeed;
+  e.vy = Math.sin(angleToPlayer) * e.moveSpeed;
+}
+
+export function updateIceMageAIImpl(this: WorldSim,
+  e: SimEnemyState,
+  targetPlayer: SimPlayerState,
+  distToPlayer: number,
+  angleToPlayer: number,
+  dtSec: number,
+): void {
+  const cdMult =
+    (e.isElite && e.eliteModifier === 'fast' ? 0.72 : 1.0) * this.getEnemyCooldownScale(false);
+  if (e.aiState === 'telegraph') {
+    e.vx = 0;
+    e.vy = 0;
+    e.aimAngle = e.telegraphAngle;
+    e.stateTimer -= dtSec;
+    if (e.stateTimer <= 0) {
+      if (!this.stressTestActive) {
+        this.map.freezeSurfaceInRadius(targetPlayer.x, targetPlayer.y, 44);
+      }
+      if (!this.stressTestActive || this.projectiles.length < 660) {
+        this.spawnDeterministicVolley({
+          kind: 'bullet_volley_spawned',
+          tick: this.tick,
+          ownerId: e.id,
+          team: 'enemy',
+          weaponId: 'frost_orb',
+          x: e.x + Math.cos(e.telegraphAngle) * 16,
+          y: e.y + Math.sin(e.telegraphAngle) * 16,
+          angle: e.telegraphAngle,
+          pelletCount: 3,
+          spreadRad: 0.36,
+          speed: 265,
+          damage: e.damage,
+          radius: 6,
+          knockback: 85,
+          pierceCount: 0,
+          bounceCount: 0,
+          ttlSec: 2.3,
+          element: 'chill',
+          critChance: 0,
+          amplifiedByShield: false,
+          seed: this.rng.nextUint32(),
+        });
+      }
+      e.aiState = 'cooldown';
+      e.stateTimer = 0.4;
+      e.attackCooldownTimer = (ENEMIES.ice_mage?.attackCooldownSec ?? 2.35) * cdMult;
+    }
+    return;
+  }
+
+  if (e.aiState === 'cooldown') {
+    e.vx = 0;
+    e.vy = 0;
+    e.stateTimer -= dtSec;
+    if (e.stateTimer <= 0) e.aiState = 'move';
+    return;
+  }
+
+  e.aimAngle = angleToPlayer;
+  if (e.attackCooldownTimer <= 0 && distToPlayer <= 390) {
+    e.aiState = 'telegraph';
+    e.stateTimer = e.telegraphDurationSec;
+    e.telegraphAngle = angleToPlayer;
+    e.telegraphRadius = 40;
+    e.vx = 0;
+    e.vy = 0;
+    if (!this.stressTestActive) {
+      this.events.push({
+        kind: 'enemy_telegraph',
+        enemyId: e.id,
+        defId: e.defId,
+        x: e.x,
+        y: e.y,
+        angle: e.telegraphAngle,
+        durationSec: e.telegraphDurationSec,
+        radius: 40,
+      });
+    }
+    return;
+  }
+
+  if (distToPlayer > 250) {
+    e.vx = Math.cos(angleToPlayer) * e.moveSpeed;
+    e.vy = Math.sin(angleToPlayer) * e.moveSpeed;
+  } else if (distToPlayer < 150) {
+    e.vx = -Math.cos(angleToPlayer) * e.moveSpeed;
+    e.vy = -Math.sin(angleToPlayer) * e.moveSpeed;
+  } else {
+    const perp = angleToPlayer + (Math.PI / 2) * e.strafeSign;
+    e.vx = Math.cos(perp) * e.moveSpeed * 0.75;
+    e.vy = Math.sin(perp) * e.moveSpeed * 0.75;
+  }
+}
+
+export function updateIceGolemAIImpl(this: WorldSim,
+  e: SimEnemyState,
+  distToPlayer: number,
+  angleToPlayer: number,
+  dtSec: number,
+): void {
+  const cdMult =
+    (e.isElite && e.eliteModifier === 'fast' ? 0.72 : 1.0) * this.getEnemyCooldownScale(false);
+  if (e.aiState === 'telegraph') {
+    e.vx = 0;
+    e.vy = 0;
+    e.aimAngle = e.telegraphAngle;
+    e.stateTimer -= dtSec;
+    if (e.stateTimer <= 0) {
+      if (!this.stressTestActive || this.projectiles.length < 660) {
+        this.spawnDeterministicVolley({
+          kind: 'bullet_volley_spawned',
+          tick: this.tick,
+          ownerId: e.id,
+          team: 'enemy',
+          weaponId: 'glacier_spike',
+          x: e.x + Math.cos(e.telegraphAngle) * 18,
+          y: e.y + Math.sin(e.telegraphAngle) * 18,
+          angle: e.telegraphAngle,
+          pelletCount: 5,
+          spreadRad: 0.65,
+          speed: 250,
+          damage: e.damage,
+          radius: 6.5,
+          knockback: 130,
+          pierceCount: 0,
+          bounceCount: 0,
+          ttlSec: 1.9,
+          element: 'chill',
+          critChance: 0,
+          amplifiedByShield: false,
+          seed: this.rng.nextUint32(),
+        });
+      }
+      e.aiState = 'cooldown';
+      e.stateTimer = 0.55;
+      e.attackCooldownTimer = (ENEMIES.ice_golem?.attackCooldownSec ?? 2.6) * cdMult;
+    }
+    return;
+  }
+
+  if (e.aiState === 'cooldown') {
+    e.vx = 0;
+    e.vy = 0;
+    e.stateTimer -= dtSec;
+    if (e.stateTimer <= 0) e.aiState = 'move';
+    return;
+  }
+
+  // Ice Golem turns its front ice shield slowly so players can flank behind it!
+  const maxTurn = 2.1 * dtSec;
+  const diff = angleDiff(angleToPlayer, e.aimAngle);
+  e.aimAngle += clamp(diff, -maxTurn, maxTurn);
+
+  if (e.attackCooldownTimer <= 0 && distToPlayer <= 280) {
+    e.aiState = 'telegraph';
+    e.stateTimer = e.telegraphDurationSec;
+    e.telegraphAngle = e.aimAngle;
+    e.vx = 0;
+    e.vy = 0;
+    if (!this.stressTestActive) {
+      this.events.push({
+        kind: 'enemy_telegraph',
+        enemyId: e.id,
+        defId: e.defId,
+        x: e.x,
+        y: e.y,
+        angle: e.telegraphAngle,
+        durationSec: e.telegraphDurationSec,
+        radius: 0,
+      });
+    }
+    return;
+  }
+
+  e.vx = Math.cos(e.aimAngle) * e.moveSpeed;
+  e.vy = Math.sin(e.aimAngle) * e.moveSpeed;
+}
+
+export function updateSnowSpiritAIImpl(this: WorldSim,
+  e: SimEnemyState,
+  distToPlayer: number,
+  angleToPlayer: number,
+  dtSec: number,
+): void {
+  if (e.aiState === 'telegraph') {
+    e.vx = 0;
+    e.vy = 0;
+    e.stateTimer -= dtSec;
+    if (e.stateTimer <= 0) {
+      this.detonateSnowSpirit(e);
+    }
+    return;
+  }
+
+  e.aimAngle = angleToPlayer;
+  if (distToPlayer <= 54 && !this.stressTestActive) {
+    e.aiState = 'telegraph';
+    e.stateTimer = e.telegraphDurationSec;
+    e.telegraphAngle = angleToPlayer;
+    e.telegraphRadius = 64;
+    e.vx = 0;
+    e.vy = 0;
+    this.events.push({
+      kind: 'enemy_telegraph',
+      enemyId: e.id,
+      defId: e.defId,
+      x: e.x,
+      y: e.y,
+      angle: e.telegraphAngle,
+      durationSec: e.telegraphDurationSec,
+      radius: 64,
+    });
+    return;
+  }
+
+  e.vx = Math.cos(angleToPlayer) * e.moveSpeed;
+  e.vy = Math.sin(angleToPlayer) * e.moveSpeed;
+}
+
+export function detonateSnowSpiritImpl(this: WorldSim, e: SimEnemyState): void {
+  const blastRadius = 64;
+  e.hp = 0;
+
+  this.map.freezeSurfaceInRadius(e.x, e.y, blastRadius);
+
+  const allPlayers = this.getAllPlayers();
+  for (let i = 0; i < allPlayers.length; i++) {
+    const pl = allPlayers[i]!;
+    if (pl.lifeState !== 'alive') continue;
+    if (distance(e.x, e.y, pl.x, pl.y) <= blastRadius + pl.radius) {
+      pl.chillTimer = Math.max(pl.chillTimer, 3.0);
+      const pushAngle = Math.atan2(pl.y - e.y, pl.x - e.x);
+      this.applyDamageToPlayer(e.damage, pushAngle, 210, e.defId, pl);
+    }
+  }
+
+  this.events.push({
+    kind: 'explosion',
+    x: e.x,
+    y: e.y,
+    radius: blastRadius,
+    damage: e.damage,
+    sourceDefId: e.defId,
+  });
+  this.events.push({
+    kind: 'entity_killed',
+    entityId: e.id,
+    defId: e.defId,
+    x: e.x,
+    y: e.y,
+  });
+  this.events.push({
+    kind: 'hit_stop',
+    durationMs: 40,
+    trauma: 0.36,
+  });
+}
+
+export function updateKryssaCloneAIImpl(this: WorldSim,
+  e: SimEnemyState,
+  distToPlayer: number,
+  angleToPlayer: number,
+  dtSec: number,
+): void {
+  const cdScale = this.getEnemyCooldownScale(false);
+  if (e.aiState === 'telegraph') {
+    e.vx = 0;
+    e.vy = 0;
+    e.aimAngle = e.telegraphAngle;
+    e.stateTimer -= dtSec;
+    if (e.stateTimer <= 0) {
+      if (!this.stressTestActive || this.projectiles.length < 660) {
+        this.spawnDeterministicVolley({
+          kind: 'bullet_volley_spawned',
+          tick: this.tick,
+          ownerId: e.id,
+          team: 'enemy',
+          weaponId: 'kryssa_frost_nova',
+          x: e.x + Math.cos(e.telegraphAngle) * 16,
+          y: e.y + Math.sin(e.telegraphAngle) * 16,
+          angle: e.telegraphAngle,
+          pelletCount: 3,
+          spreadRad: 0.38,
+          speed: 270,
+          damage: e.damage,
+          radius: 5.5,
+          knockback: 80,
+          pierceCount: 0,
+          bounceCount: 0,
+          ttlSec: 2.1,
+          element: 'chill',
+          critChance: 0,
+          amplifiedByShield: false,
+          seed: this.rng.nextUint32(),
+        });
+      }
+      e.aiState = 'cooldown';
+      e.stateTimer = 0.35;
+      e.attackCooldownTimer = (ENEMIES.kryssa_clone?.attackCooldownSec ?? 1.9) * cdScale;
+    }
+    return;
+  }
+
+  if (e.aiState === 'cooldown') {
+    e.vx = 0;
+    e.vy = 0;
+    e.stateTimer -= dtSec;
+    if (e.stateTimer <= 0) e.aiState = 'move';
+    return;
+  }
+
+  e.aimAngle = angleToPlayer;
+  if (e.attackCooldownTimer <= 0 && distToPlayer <= 380) {
+    e.aiState = 'telegraph';
+    e.stateTimer = e.telegraphDurationSec;
+    e.telegraphAngle = angleToPlayer;
+    e.vx = 0;
+    e.vy = 0;
+    return;
+  }
+
+  const perp = angleToPlayer + (Math.PI / 2) * e.strafeSign;
+  e.vx = Math.cos(perp) * e.moveSpeed;
+  e.vy = Math.sin(perp) * e.moveSpeed;
+}
+
+export function spawnKryssaMirrorClonesImpl(this: WorldSim, boss: SimEnemyState): void {
+  const existingClones = this.enemies.filter(
+    (m) => m.defId === 'kryssa_clone' && m.hp > 0,
+  ).length;
+  if (existingClones >= 2) return;
+  const cx = this.map.width * 0.5;
+  const cy = this.map.height * 0.5;
+  this.spawnEnemy(
+    'kryssa_clone',
+    clamp(cx - 170, 96, this.map.width - 96),
+    clamp(cy - 90, 96, this.map.height - 96),
+    true,
+  );
+  this.spawnEnemy(
+    'kryssa_clone',
+    clamp(cx + 170, 96, this.map.width - 96),
+    clamp(cy + 90, 96, this.map.height - 96),
+    true,
+  );
+  boss.prevX = boss.x;
+  boss.prevY = boss.y;
+}
+
+export function encasePlayerInIcePrisonImpl(this: WorldSim, target: SimPlayerState): SimEnemyState | null {
+  if (target.lifeState !== 'alive' || (target.encasedInIceTimer ?? 0) > 0) return null;
+  const prison = this.spawnEnemy('ice_prison', target.x, target.y, true);
+  target.encasedInIceTimer = 4.5;
+  target.icePrisonId = prison.id;
+  target.vx = 0;
+  target.vy = 0;
+  if (!this.stressTestActive) {
+    this.events.push({
+      kind: 'status_applied',
+      targetId: target.id,
+      status: 'frozen',
+      x: target.x,
+      y: target.y,
+    });
+  }
+  return prison;
+}
+
+export function updateBossKryssaAIImpl(this: WorldSim,
+  e: SimEnemyState,
+  targetPlayer: SimPlayerState,
+  distToPlayer: number,
+  angleToPlayer: number,
+  dtSec: number,
+): void {
+  this.checkBossPhaseTransitions(e);
+  e.aimAngle = angleToPlayer;
+  const bossCdScale = this.getEnemyCooldownScale(true);
+
+  if (e.aiState === 'telegraph') {
+    e.vx = 0;
+    e.vy = 0;
+    e.stateTimer -= dtSec;
+    if (e.stateTimer <= 0) {
+      this.executeBossKryssaAttack(e, targetPlayer, angleToPlayer);
+    }
+    return;
+  }
+
+  if (e.aiState === 'cooldown') {
+    e.vx = 0;
+    e.vy = 0;
+    e.stateTimer -= dtSec;
+    if (e.stateTimer <= 0) {
+      e.aiState = 'move';
+    }
+    return;
+  }
+
+  if (e.attackCooldownTimer <= 0) {
+    e.aiState = 'telegraph';
+    e.stateTimer = (e.bossPhase === 3 ? 0.5 : e.telegraphDurationSec) * bossCdScale;
+    e.telegraphAngle = angleToPlayer;
+    e.telegraphRadius = 56;
+    e.vx = 0;
+    e.vy = 0;
+    this.events.push({
+      kind: 'enemy_telegraph',
+      enemyId: e.id,
+      defId: e.defId,
+      x: e.x,
+      y: e.y,
+      angle: e.telegraphAngle,
+      durationSec: e.stateTimer,
+      radius: e.telegraphRadius,
+    });
+    return;
+  }
+
+  const phaseSpeedMult = e.bossPhase === 3 ? 1.32 : e.bossPhase === 2 ? 1.16 : 1.0;
+  const coopBossSpeed = 1 + COOP_SCALING[this.getActivePlayerCount()].enemyFireRateBonus * 0.75;
+  if (distToPlayer > 140) {
+    e.vx = Math.cos(angleToPlayer) * e.moveSpeed * phaseSpeedMult * coopBossSpeed;
+    e.vy = Math.sin(angleToPlayer) * e.moveSpeed * phaseSpeedMult * coopBossSpeed;
+  } else {
+    const perp = angleToPlayer + Math.PI * 0.5 * e.strafeSign;
+    e.vx = Math.cos(perp) * e.moveSpeed * 0.85 * coopBossSpeed;
+    e.vy = Math.sin(perp) * e.moveSpeed * 0.85 * coopBossSpeed;
+  }
+}
+
+export function executeBossKryssaAttackImpl(this: WorldSim,
+  e: SimEnemyState,
+  targetPlayer: SimPlayerState,
+  angleToPlayer: number,
+): void {
+  const cycle = e.bossAttackCycle;
+  e.bossAttackCycle += 1;
+  const bossCdScale = this.getEnemyCooldownScale(true);
+
+  // 1. Refracting Ice Laser Volley (bounces off crystal pillars & walls!)
+  const beamCount = e.bossPhase === 3 ? 5 : e.bossPhase === 2 ? 4 : 3;
+  this.spawnDeterministicVolley({
+    kind: 'bullet_volley_spawned',
+    tick: this.tick,
+    ownerId: e.id,
+    team: 'enemy',
+    weaponId: 'kryssa_ice_beam',
+    x: e.x,
+    y: e.y,
+    angle: angleToPlayer,
+    pelletCount: beamCount,
+    spreadRad: 0.55,
+    muzzleOffset: e.radius + 8,
+    speed: 350,
+    damage: e.damage,
+    radius: 6,
+    knockback: 105,
+    pierceCount: 1,
+    bounceCount: 3,
+    ttlSec: 2.8,
+    element: 'chill',
+    critChance: 0,
+    amplifiedByShield: false,
+    seed: this.rng.nextUint32(),
+  });
+
+  // 2. Alternate cycle: Radial Frost Crystal Nova
+  if (cycle % 2 === 1) {
+    const ringCount = e.bossPhase === 3 ? 14 : 10;
+    this.spawnDeterministicVolley({
+      kind: 'bullet_volley_spawned',
+      tick: this.tick,
+      ownerId: e.id,
+      team: 'enemy',
+      weaponId: 'kryssa_frost_nova',
+      x: e.x,
+      y: e.y,
+      angle: cycle * 0.3,
+      pelletCount: ringCount,
+      spreadRad: 0,
+      radialStepRad: (Math.PI * 2) / ringCount,
+      muzzleOffset: e.radius + 6,
+      speed: 240,
+      damage: e.damage,
+      radius: 5.5,
+      knockback: 90,
+      pierceCount: 0,
+      bounceCount: 1,
+      ttlSec: 2.5,
+      element: 'chill',
+      critChance: 0,
+      amplifiedByShield: false,
+      seed: this.rng.nextUint32(),
+    });
+  }
+
+  // 3. Phase 2+: Refresh Mirror Illusion Clones (no ground shadow!)
+  if (e.bossPhase >= 2 && cycle % 3 === 0) {
+    this.spawnKryssaMirrorClones(e);
+  }
+
+  // 4. Phase 3: Ice Prison Co-op Mechanic (encases 1 player in an Ice Prison block!)
+  if (e.bossPhase === 3 && cycle % 3 === 1 && !this.stressTestActive && !this.botAutoPlayActive) {
+    this.encasePlayerInIcePrison(targetPlayer);
+  }
+
+  e.aiState = 'cooldown';
+  e.stateTimer = (e.bossPhase === 3 ? 0.34 : 0.44) * bossCdScale;
+  const baseCd = ENEMIES.kryssa_ice_queen?.attackCooldownSec ?? 2.05;
+  e.attackCooldownTimer =
+    (e.bossPhase === 3 ? baseCd * 0.66 : e.bossPhase === 2 ? baseCd * 0.82 : baseCd) *
+    bossCdScale;
+}
