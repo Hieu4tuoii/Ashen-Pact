@@ -348,6 +348,11 @@ export const VISUAL_SCENES: readonly VisualSceneDef[] = [
     });
     await lockCameraAndIrisToPlayer(page);
     await stepDeterministicFrames(page, 45);
+  }, {
+    captureUnlit: true,
+    sampleRects: ENVIRONMENT_SAMPLE_RECTS.map((r) =>
+      r.name === 'floor_center' ? { ...r, x: 384, y: 640 } : r,
+    ),
   }),
 
   // 4. Biome 2 & 3
@@ -386,6 +391,11 @@ export const VISUAL_SCENES: readonly VisualSceneDef[] = [
     });
     await lockCameraAndIrisToPlayer(page);
     await stepDeterministicFrames(page, 45);
+  }, {
+    captureUnlit: true,
+    sampleRects: ENVIRONMENT_SAMPLE_RECTS.map((r) =>
+      r.name === 'floor_center' ? { ...r, x: 1280, y: 576 } : r,
+    ),
   }),
 
   // 5. Bosses
@@ -541,7 +551,10 @@ export const VISUAL_SCENES: readonly VisualSceneDef[] = [
     captureUnlit: true,
     sampleRects: ENVIRONMENT_SAMPLE_RECTS,
   }),
-  makeScene('b3-combat-low', 'Biome 3 combat at Low quality', BIOME3_GAME_URL, 'GameScene', (p) => setupB3CombatState(p, true)),
+  makeScene('b3-combat-low', 'Biome 3 combat at Low quality', BIOME3_GAME_URL, 'GameScene', (p) => setupB3CombatState(p, true), {
+    captureUnlit: true,
+    sampleRects: ENVIRONMENT_SAMPLE_RECTS,
+  }),
   makeScene('b1-portal-active-low', 'Biome 1 active portal at Low quality', DEFAULT_GAME_URL, 'GameScene', async (page) => {
     await page.evaluate(() => {
       window.__GAME_SET_QUALITY__?.('low');

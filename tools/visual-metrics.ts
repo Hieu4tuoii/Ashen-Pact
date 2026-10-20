@@ -361,16 +361,37 @@ export function computeSceneEnvironmentSummary(
   unlitRegions: Record<string, RegionMetrics>,
   litRegions: Record<string, RegionMetrics>,
 ): SceneEnvironmentSummary {
-  const unlitFloor = unlitRegions['floor_all'] ?? Object.values(unlitRegions)[0];
-  const litFloor = litRegions['floor_all'] ?? Object.values(litRegions)[0];
+  const unlitFloor =
+    unlitRegions['floor_all'] ?? unlitRegions['floor_center'] ?? Object.values(unlitRegions)[0];
+  const litFloor =
+    litRegions['floor_all'] ?? litRegions['floor_center'] ?? Object.values(litRegions)[0];
 
   const floorMeanL = unlitFloor?.meanL ?? litFloor?.meanL ?? 0;
-  const floorDeltaL = unlitFloor?.deltaL ?? litFloor?.deltaL ?? 0;
 
   const centerDeltaL =
     unlitRegions['center_arena']?.deltaL ??
+    unlitRegions['floor_center']?.deltaL ??
     litRegions['center_arena']?.deltaL ??
-    floorDeltaL;
+    litRegions['floor_center']?.deltaL ??
+    (unlitFloor?.deltaL ?? litFloor?.deltaL ?? 0);
+
+  let floorDeltaL = unlitFloor?.deltaL ?? litFloor?.deltaL ?? 0;
+  if (unlitRegions['floor_all']) {
+    floorDeltaL = unlitRegions['floor_all'].deltaL;
+  } else {
+    const floorSampleRegions = Object.entries(unlitRegions)
+      .filter(
+        ([k]) => k === 'floor_center' || k === 'floor_perimeter' || k.startsWith('corner_'),
+      )
+      .map(([, v]) => v);
+    if (floorSampleRegions.length > 0) {
+      const maxP95 = Math.max(...floorSampleRegions.map((r) => r.p95L));
+      const minP5 = Math.min(...floorSampleRegions.map((r) => r.p5L));
+      floorDeltaL = maxP95 - minP5;
+    } else if (litRegions['floor_all']) {
+      floorDeltaL = litRegions['floor_all'].deltaL;
+    }
+  }
 
   const floorMeanS = unlitFloor?.meanS ?? litFloor?.meanS ?? 0;
   const contrastWithInkDark =

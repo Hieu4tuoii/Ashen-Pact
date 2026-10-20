@@ -72,6 +72,7 @@ export interface ArenaTileVisual {
   ty: number;
   kind: TileKind;
   variant: number;
+  distToWall: number;
   autotileMask: number;
   aoMask: number;
   surface: SurfaceKind;
@@ -196,7 +197,7 @@ export class GameScene extends Phaser.Scene {
   public arenaGroundSprite?: Phaser.GameObjects.Image;
   public readonly tileCompositeScale = 2;
   public lastMapRevision = -1;
-  public lastRenderedBiome: 1 | 2 | 3 = 1;
+  public lastRenderedBiome: 0 | 1 | 2 | 3 = 1;
   public dashAfterimageTimer = 0;
   public textObjects: Phaser.GameObjects.Text[] = [];
 
@@ -725,7 +726,7 @@ export class GameScene extends Phaser.Scene {
   public renderTileCellToComposite(tile: ArenaTileVisual): void { renderTileCellToCompositeImpl.call(this, tile); }
   public rebuildAllTileCellsToComposite(): void { rebuildAllTileCellsToCompositeImpl.call(this); }
   public buildArenaTiles(): void { buildArenaTilesImpl.call(this); }
-  public getStructureTextureKey(kind: TileKind, autotileMask: number, biome: 1 | 2 | 3 = 1): string { return getStructureTextureKeyImpl.call(this, kind, autotileMask, biome); }
+  public getStructureTextureKey(kind: TileKind, autotileMask: number, biome: 0 | 1 | 2 | 3 = 1): string { return getStructureTextureKeyImpl.call(this, kind, autotileMask, biome); }
   public syncArenaTilesWithMapRevision(): void { syncArenaTilesWithMapRevisionImpl.call(this); }
   public buildVectorHud(): void { buildVectorHudImpl.call(this); }
   public invalidateAllHudCaches(): void { invalidateAllHudCachesImpl.call(this); }

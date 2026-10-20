@@ -105,8 +105,28 @@ describe('visual-metrics color math & PNG analyzers', () => {
     };
     const summary = computeSceneEnvironmentSummary(unlit, lit);
     expect(summary.floorMeanL).toBe(32);
+    expect(summary.floorDeltaL).toBe(9);
     expect(summary.centerDeltaL).toBe(5);
     expect(summary.cornerRetentionRatio).toBeCloseTo(27.5 / 32, 3);
     expect(summary.brazierLightPoolDeltaL).toBeCloseTo(39 - 28, 3);
+  });
+
+  it('computes centerDeltaL from floor_center and whole-floor floorDeltaL across floor_center + corner_* when floor_all is absent', () => {
+    const unlit = {
+      floor_center: { meanL: 32, p5L: 30, p95L: 35, deltaL: 5, minL: 29.5, maxL: 35.5, meanS: 0.14, contrastWithInkDark: 26.7, sampleCount: 100 },
+      corner_tl: { meanL: 30, p5L: 26, p95L: 34, deltaL: 8, minL: 25, maxL: 35, meanS: 0.15, contrastWithInkDark: 24.7, sampleCount: 50 },
+      corner_br: { meanL: 33, p5L: 28, p95L: 37, deltaL: 9, minL: 27, maxL: 38, meanS: 0.14, contrastWithInkDark: 27.7, sampleCount: 50 },
+    };
+    const lit = {
+      floor_center: { meanL: 29, p5L: 27, p95L: 32, deltaL: 5, minL: 26, maxL: 33, meanS: 0.14, contrastWithInkDark: 23.7, sampleCount: 100 },
+      corner_tl: { meanL: 26, p5L: 23, p95L: 29, deltaL: 6, minL: 22, maxL: 30, meanS: 0.15, contrastWithInkDark: 20.7, sampleCount: 50 },
+      corner_br: { meanL: 28, p5L: 25, p95L: 31, deltaL: 6, minL: 24, maxL: 32, meanS: 0.14, contrastWithInkDark: 22.7, sampleCount: 50 },
+      brazier_pool: { meanL: 38, p5L: 34, p95L: 42, deltaL: 8, minL: 33, maxL: 43, meanS: 0.24, contrastWithInkDark: 32.7, sampleCount: 50 },
+    };
+    const summary = computeSceneEnvironmentSummary(unlit, lit);
+    expect(summary.floorMeanL).toBe(32);
+    expect(summary.centerDeltaL).toBe(5);
+    expect(summary.floorDeltaL).toBe(37 - 26); // max(p95L) - min(p5L) = 11
+    expect(summary.brazierToFloorDeltaL).toBeCloseTo(38 - 29, 3);
   });
 });

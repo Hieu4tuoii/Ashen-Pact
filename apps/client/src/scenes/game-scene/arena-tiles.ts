@@ -28,6 +28,12 @@ import { computeUniformViewportMetrics } from '../../fx/lighting-config.js';
 import { LightingPipeline } from '../../fx/lighting-pipeline.js';
 import { DebugOverlay, initGlobalDebugState } from '../../ui/debug-overlay.js';
 import { type GraphicsQualityTier, graphicsSettings } from '../../ui/graphics-settings.js';
+import {
+  buildRoomArchitecturePlan,
+  computeTileDistToWall,
+  renderBiomeArchitectureToComposite,
+  resolveHybridFloorVariant,
+} from '../../world/biome-architecture.js';
 import { type ArenaTileVisual, type GameScene, RIG_FOOT_OFFSET_Y } from '../GameScene.js';
 import type { HudScene } from '../HudScene.js';
 import { applyHudEdgeAnchors } from './hud-setup-and-pause.js';
@@ -395,7 +401,8 @@ export function renderTileCellToCompositeImpl(this: GameScene, tile: ArenaTileVi
   const groundCtx = this.arenaGroundTex?.getContext();
   if (!groundCtx) return;
 
-  const biome = this.transport?.getSim()?.currentBiome ?? 1;
+  const sim = this.transport?.getSim();
+  const effectiveBiome: 0 | 1 | 2 | 3 = sim ? (sim.inHub ? 0 : sim.currentBiome) : 1;
   const cellPx = TILE_SIZE * this.tileCompositeScale;
   const dx = tile.tx * cellPx;
   const dy = tile.ty * cellPx;
@@ -403,7 +410,7 @@ export function renderTileCellToCompositeImpl(this: GameScene, tile: ArenaTileVi
   groundCtx.clearRect(dx, dy, cellPx, cellPx);
   this.drawSourceKeyToCtx(
     groundCtx,
-    TextureBaker.getBiomeTileTextureKey(biome, tile.variant),
+    TextureBaker.getBiomeTileTextureKey(effectiveBiome, tile.variant),
     dx,
     dy,
     cellPx,
@@ -433,7 +440,7 @@ export function renderTileCellToCompositeImpl(this: GameScene, tile: ArenaTileVi
   } else {
     this.drawSourceKeyToCtx(
       groundCtx,
-      this.getStructureTextureKey(tile.kind, tile.autotileMask, biome),
+      this.getStructureTextureKey(tile.kind, tile.autotileMask, effectiveBiome),
       dx,
       dy,
       cellPx,
@@ -446,12 +453,33 @@ export function rebuildAllTileCellsToCompositeImpl(this: GameScene): void {
   for (let i = 0; i < this.mapTileVisuals.length; i++) {
     this.renderTileCellToComposite(this.mapTileVisuals[i]!);
   }
+  const groundCtx = this.arenaGroundTex.getContext();
+  const sim = this.transport?.getSim();
+  if (groundCtx && sim) {
+    const effectiveBiome: 0 | 1 | 2 | 3 = sim.inHub ? 0 : sim.currentBiome;
+    const roomType = sim.inHub
+      ? 'start'
+      : (sim.dungeon.rooms.find((r) => r.id === sim.currentRoomId)?.type ?? 'combat');
+    const plan = buildRoomArchitecturePlan(
+      sim.map,
+      roomType,
+      effectiveBiome,
+      `${sim.dungeon.seed}_${sim.currentFloor}_${sim.currentRoomId}`,
+    );
+    renderBiomeArchitectureToComposite(
+      groundCtx,
+      sim.map,
+      plan,
+      TILE_SIZE * this.tileCompositeScale,
+    );
+  }
   this.arenaGroundTex.refresh();
 }
 
 export function buildArenaTilesImpl(this: GameScene): void {
   const sim = this.transport.getSim();
   const map = sim.map;
+  const effectiveBiome: 0 | 1 | 2 | 3 = sim.inHub ? 0 : sim.currentBiome;
 
   this.cameras.main.setBackgroundColor(PALETTE.INK_DEEP);
 
@@ -467,11 +495,13 @@ export function buildArenaTilesImpl(this: GameScene): void {
 
   for (let ty = 0; ty < map.rows; ty++) {
     for (let tx = 0; tx < map.cols; tx++) {
+      const distToWall = computeTileDistToWall(map, tx, ty);
       const tile: ArenaTileVisual = {
         tx,
         ty,
         kind: map.getTile(tx, ty),
-        variant: map.getTileVariant(tx, ty),
+        variant: resolveHybridFloorVariant(tx, ty, distToWall),
+        distToWall,
         autotileMask: map.getAutotileMask(tx, ty),
         aoMask: map.getWallAmbientOcclusionMask(tx, ty),
         surface: map.getSurface(tx, ty),
@@ -491,8 +521,9 @@ export function buildArenaTilesImpl(this: GameScene): void {
   this.arenaGroundSprite.setScale(1 / this.tileCompositeScale);
   this.arenaGroundSprite.setDepth(2);
 
+  this.lastRenderedBiome = effectiveBiome;
   this.lastMapRevision =
-    sim.currentBiome * 10000000 +
+    effectiveBiome * 10000000 +
     sim.currentFloor * 1000000 +
     sim.currentRoomId * 10000 +
     map.mapRevision;
@@ -502,7 +533,7 @@ export function getStructureTextureKeyImpl(
   this: GameScene,
   kind: TileKind,
   autotileMask: number,
-  biome: 1 | 2 | 3 = 1,
+  biome: 0 | 1 | 2 | 3 = 1,
 ): string {
   if (kind === 'pillar') {
     return TextureBaker.getPillarTileTextureKey(biome, autotileMask);
@@ -517,22 +548,24 @@ export function syncArenaTilesWithMapRevisionImpl(this: GameScene): void {
   const sim = this.transport.getSim();
   if (sim.stressTestActive) return;
   const map = sim.map;
+  const effectiveBiome: 0 | 1 | 2 | 3 = sim.inHub ? 0 : sim.currentBiome;
   const revKey =
-    sim.currentBiome * 10000000 +
+    effectiveBiome * 10000000 +
     sim.currentFloor * 1000000 +
     sim.currentRoomId * 10000 +
     map.mapRevision;
-  if (revKey === this.lastMapRevision && sim.currentBiome === this.lastRenderedBiome) return;
-  const biomeChanged = sim.currentBiome !== this.lastRenderedBiome;
+  if (revKey === this.lastMapRevision && effectiveBiome === this.lastRenderedBiome) return;
+  const biomeChanged = effectiveBiome !== this.lastRenderedBiome;
   this.lastMapRevision = revKey;
-  this.lastRenderedBiome = sim.currentBiome;
+  this.lastRenderedBiome = effectiveBiome;
 
   let groundDirty = false;
 
   for (let i = 0; i < this.mapTileVisuals.length; i++) {
     const tile = this.mapTileVisuals[i]!;
     const newKind = map.getTile(tile.tx, tile.ty);
-    const newVariant = map.getTileVariant(tile.tx, tile.ty);
+    const newDistToWall = computeTileDistToWall(map, tile.tx, tile.ty);
+    const newVariant = resolveHybridFloorVariant(tile.tx, tile.ty, newDistToWall);
     const newMask = map.getAutotileMask(tile.tx, tile.ty);
     const newAo = map.getWallAmbientOcclusionMask(tile.tx, tile.ty);
     const newSurface = map.getSurface(tile.tx, tile.ty);
@@ -542,6 +575,7 @@ export function syncArenaTilesWithMapRevisionImpl(this: GameScene): void {
       biomeChanged ||
       newKind !== tile.kind ||
       newVariant !== tile.variant ||
+      newDistToWall !== tile.distToWall ||
       newMask !== tile.autotileMask ||
       newAo !== tile.aoMask ||
       newSurface !== tile.surface ||
@@ -550,16 +584,16 @@ export function syncArenaTilesWithMapRevisionImpl(this: GameScene): void {
       groundDirty = true;
       tile.kind = newKind;
       tile.variant = newVariant;
+      tile.distToWall = newDistToWall;
       tile.autotileMask = newMask;
       tile.aoMask = newAo;
       tile.surface = newSurface;
       tile.surfaceMask = newSurfaceMask;
-      this.renderTileCellToComposite(tile);
     }
   }
 
   if (groundDirty) {
-    this.arenaGroundTex?.refresh();
+    this.rebuildAllTileCellsToComposite();
   }
 }
 

@@ -16,9 +16,9 @@ export function bakeSurfaces(scene: Phaser.Scene, scale: number): void {
     outlined(
       ctx,
       {
-        fill: PALETTE.ABYSS_BLUE,
-        shade: PALETTE.COBALT_SHADE,
-        highlight: PALETTE.CYAN_FROST,
+        fill: '#1D334A',
+        shade: '#162738',
+        highlight: '#4B7294',
         outlineWidth: 1.6,
       },
       (c) => traceRoundedRect(c, -14.5, -14.5, 29, 29, 5),
@@ -26,8 +26,8 @@ export function bakeSurfaces(scene: Phaser.Scene, scale: number): void {
     );
     ctx.beginPath();
     ctx.arc(-4, -3, 4.5, 0, Math.PI * 1.4);
-    ctx.strokeStyle = PALETTE.ICE_WHITE;
-    ctx.lineWidth = 1.4;
+    ctx.strokeStyle = '#4B7294';
+    ctx.lineWidth = 1.3;
     ctx.stroke();
   });
 
@@ -36,34 +36,33 @@ export function bakeSurfaces(scene: Phaser.Scene, scale: number): void {
     outlined(
       ctx,
       {
-        fill: PALETTE.AZURE_CORE,
-        shade: PALETTE.COBALT_SHADE,
-        highlight: PALETTE.CYAN_FROST,
+        fill: '#234463',
+        shade: '#1A334B',
+        highlight: '#6BA2C9',
         outlineWidth: 1.8,
       },
       (c) => traceRoundedRect(c, -14.5, -14.5, 29, 29, 5),
       { cx: 0, cy: 0, rx: 14, ry: 14 },
     );
-    // Jagged lightning arc on water surface
     ctx.beginPath();
     ctx.moveTo(-10, -6);
     ctx.lineTo(-2, -1);
     ctx.lineTo(-5, 4);
     ctx.lineTo(9, 8);
-    ctx.strokeStyle = PALETTE.VOLT_YELLOW;
-    ctx.lineWidth = 2.2;
+    ctx.strokeStyle = '#A89B42';
+    ctx.lineWidth = 1.8;
     ctx.lineCap = 'round';
     ctx.stroke();
   });
 
-  // 3. Oil (iridescent dark petroleum sheen instead of flat black)
+  // 3. Oil
   bakeCustomCanvas(scene, 'surface_oil', 32, 32, scale, (ctx) => {
     outlined(
       ctx,
       {
-        fill: PALETTE.SLATE_MID,
-        shade: PALETTE.SLATE_DARK,
-        highlight: PALETTE.TOXIC_PURPLE,
+        fill: '#262333',
+        shade: '#1B1924',
+        highlight: '#3B2D29',
         outlineWidth: 1.8,
       },
       (c) => traceRoundedRect(c, -14, -14, 28, 28, 6),
@@ -71,11 +70,7 @@ export function bakeSurfaces(scene: Phaser.Scene, scale: number): void {
     );
     ctx.beginPath();
     ctx.ellipse(-3, -3, 6.5, 3.2, -0.35, 0, Math.PI * 2);
-    ctx.fillStyle = PALETTE.TOXIC_PURPLE;
-    ctx.fill();
-    ctx.beginPath();
-    ctx.ellipse(4, 4, 4.5, 2.0, 0.3, 0, Math.PI * 2);
-    ctx.fillStyle = PALETTE.COBALT_SHADE;
+    ctx.fillStyle = '#363047';
     ctx.fill();
   });
 
@@ -84,9 +79,9 @@ export function bakeSurfaces(scene: Phaser.Scene, scale: number): void {
     outlined(
       ctx,
       {
-        fill: PALETTE.FLAME_ORANGE,
-        shade: PALETTE.MAGMA_RED,
-        highlight: PALETTE.SOLAR_GOLD,
+        fill: '#8F452C',
+        shade: '#632E1D',
+        highlight: '#AD623B',
         outlineWidth: 2.0,
       },
       (c) => traceRoundedRect(c, -14.5, -14.5, 29, 29, 6),
@@ -94,12 +89,12 @@ export function bakeSurfaces(scene: Phaser.Scene, scale: number): void {
     );
     tracePolygon(ctx, [
       { x: -6, y: 6 },
-      { x: -2, y: -9 },
+      { x: -2, y: -8 },
       { x: 2, y: -1 },
-      { x: 6, y: -10 },
+      { x: 6, y: -9 },
       { x: 9, y: 6 },
     ]);
-    ctx.fillStyle = PALETTE.SOLAR_GOLD;
+    ctx.fillStyle = '#AD623B';
     ctx.fill();
   });
 
@@ -108,26 +103,22 @@ export function bakeSurfaces(scene: Phaser.Scene, scale: number): void {
     outlined(
       ctx,
       {
-        fill: PALETTE.FOREST_SHADE,
-        shade: PALETTE.MOSS_DARK,
-        highlight: PALETTE.GOBLIN_GREEN,
+        fill: '#2C4736',
+        shade: '#23382B',
+        highlight: '#3D6149',
         outlineWidth: 1.6,
       },
       (c) => traceRoundedRect(c, -14, -14, 28, 28, 5),
       { cx: 0, cy: 0, rx: 14, ry: 14 },
     );
-    // Stylized grass blades
     for (const ox of [-6, 1, 7]) {
       tracePolygon(ctx, [
-        { x: ox - 2.5, y: 6 },
-        { x: ox, y: -6 },
-        { x: ox + 2.5, y: 6 },
+        { x: ox - 2.2, y: 5 },
+        { x: ox, y: -5 },
+        { x: ox + 2.2, y: 5 },
       ]);
-      ctx.fillStyle = PALETTE.LIME_GLOW;
+      ctx.fillStyle = '#466E53';
       ctx.fill();
-      ctx.lineWidth = 1.2;
-      ctx.strokeStyle = PALETTE.INK_DARK;
-      ctx.stroke();
     }
   });
 
@@ -136,9 +127,9 @@ export function bakeSurfaces(scene: Phaser.Scene, scale: number): void {
     outlined(
       ctx,
       {
-        fill: PALETTE.MAGMA_RED,
-        shade: PALETTE.FORGE_DARK,
-        highlight: PALETTE.FLAME_ORANGE,
+        fill: '#6E332B',
+        shade: '#4A2420',
+        highlight: '#8F4738',
         outlineWidth: 1.8,
       },
       (c) => traceRoundedRect(c, -14, -14, 28, 28, 5),
@@ -146,11 +137,11 @@ export function bakeSurfaces(scene: Phaser.Scene, scale: number): void {
     );
     for (const ox of [-5, 3]) {
       tracePolygon(ctx, [
-        { x: ox - 3, y: 6 },
-        { x: ox, y: -8 },
-        { x: ox + 3, y: 6 },
+        { x: ox - 2.6, y: 5 },
+        { x: ox, y: -6 },
+        { x: ox + 2.6, y: 5 },
       ]);
-      ctx.fillStyle = PALETTE.SOLAR_GOLD;
+      ctx.fillStyle = '#9E5B3E';
       ctx.fill();
     }
   });
@@ -160,9 +151,9 @@ export function bakeSurfaces(scene: Phaser.Scene, scale: number): void {
     outlined(
       ctx,
       {
-        fill: PALETTE.SLATE_DARK,
-        shade: PALETTE.INK_DEEP,
-        highlight: PALETTE.ASH_GRAY,
+        fill: '#332E36',
+        shade: '#221E24',
+        highlight: '#423C46',
         outlineWidth: 1.4,
       },
       (c) => traceRoundedRect(c, -13, -13, 26, 26, 6),
@@ -175,25 +166,22 @@ export function bakeSurfaces(scene: Phaser.Scene, scale: number): void {
     outlined(
       ctx,
       {
-        fill: PALETTE.TOXIC_PURPLE,
-        shade: PALETTE.SLATE_DARK,
-        highlight: PALETTE.ELECTRIC_VIOLET,
+        fill: '#3B2D4A',
+        shade: '#2B2138',
+        highlight: '#4E6B48',
         outlineWidth: 1.8,
       },
       (c) => traceRoundedRect(c, -14.5, -14.5, 29, 29, 6),
       { cx: 0, cy: 0, rx: 14, ry: 14 },
     );
     for (const [bx, by, br] of [
-      [-5, -3, 3.2],
-      [5, 4, 2.5],
+      [-5, -3, 3.0],
+      [5, 4, 2.3],
     ] as const) {
       ctx.beginPath();
       ctx.arc(bx, by, br, 0, Math.PI * 2);
-      ctx.fillStyle = PALETTE.LIME_GLOW;
+      ctx.fillStyle = '#526B47';
       ctx.fill();
-      ctx.lineWidth = 1.1;
-      ctx.strokeStyle = PALETTE.INK_DARK;
-      ctx.stroke();
     }
   });
 
@@ -202,9 +190,9 @@ export function bakeSurfaces(scene: Phaser.Scene, scale: number): void {
     outlined(
       ctx,
       {
-        fill: PALETTE.MAGMA_RED,
-        shade: PALETTE.FORGE_DARK,
-        highlight: PALETTE.FLAME_ORANGE,
+        fill: '#8A342B',
+        shade: '#59201B',
+        highlight: '#A85236',
         outlineWidth: 2.0,
       },
       (c) => traceRoundedRect(c, -14.5, -14.5, 29, 29, 5),
@@ -214,8 +202,8 @@ export function bakeSurfaces(scene: Phaser.Scene, scale: number): void {
     ctx.moveTo(-9, -6);
     ctx.lineTo(0, 2);
     ctx.lineTo(9, -4);
-    ctx.strokeStyle = PALETTE.SOLAR_GOLD;
-    ctx.lineWidth = 2.6;
+    ctx.strokeStyle = '#A85236';
+    ctx.lineWidth = 2.2;
     ctx.lineCap = 'round';
     ctx.stroke();
   });
@@ -225,9 +213,9 @@ export function bakeSurfaces(scene: Phaser.Scene, scale: number): void {
     outlined(
       ctx,
       {
-        fill: PALETTE.CYAN_FROST,
-        shade: PALETTE.AZURE_CORE,
-        highlight: PALETTE.ICE_WHITE,
+        fill: '#4F7A8A',
+        shade: '#3D606E',
+        highlight: '#739EAE',
         outlineWidth: 1.7,
       },
       (c) => traceRoundedRect(c, -14.5, -14.5, 29, 29, 5),
@@ -238,8 +226,8 @@ export function bakeSurfaces(scene: Phaser.Scene, scale: number): void {
     ctx.lineTo(6, -8);
     ctx.moveTo(-2, 8);
     ctx.lineTo(9, -3);
-    ctx.strokeStyle = PALETTE.BONE_WHITE;
-    ctx.lineWidth = 1.6;
+    ctx.strokeStyle = '#6892A3';
+    ctx.lineWidth = 1.5;
     ctx.lineCap = 'round';
     ctx.stroke();
   });
@@ -249,16 +237,16 @@ export function bakeSurfaces(scene: Phaser.Scene, scale: number): void {
     outlined(
       ctx,
       {
-        fill: PALETTE.INK_DEEP,
+        fill: '#11131A',
         shade: PALETTE.INK_DARK,
-        highlight: PALETTE.COBALT_SHADE,
+        highlight: '#1D2230',
         outlineWidth: 2.0,
       },
       (c) => traceRoundedRect(c, -14.5, -14.5, 29, 29, 4),
       { cx: 0, cy: 0, rx: 14, ry: 14 },
     );
-    ctx.strokeStyle = PALETTE.ABYSS_BLUE;
-    ctx.lineWidth = 1.6;
+    ctx.strokeStyle = '#1D2230';
+    ctx.lineWidth = 1.5;
     ctx.strokeRect(-10, -10, 20, 20);
   });
 
@@ -267,9 +255,9 @@ export function bakeSurfaces(scene: Phaser.Scene, scale: number): void {
     outlined(
       ctx,
       {
-        fill: PALETTE.STEEL_DARK,
-        shade: PALETTE.SLATE_DARK,
-        highlight: PALETTE.BRASS_CORE,
+        fill: '#343A45',
+        shade: '#232730',
+        highlight: '#7F6559',
         outlineWidth: 1.8,
       },
       (c) => traceRoundedRect(c, -14.5, -14.5, 29, 29, 3.5),
@@ -277,11 +265,11 @@ export function bakeSurfaces(scene: Phaser.Scene, scale: number): void {
     );
     for (const cx of [-6, 3]) {
       ctx.beginPath();
-      ctx.moveTo(cx - 3, -7);
+      ctx.moveTo(cx - 3, -6);
       ctx.lineTo(cx + 3, 0);
-      ctx.lineTo(cx - 3, 7);
-      ctx.strokeStyle = PALETTE.SOLAR_GOLD;
-      ctx.lineWidth = 2.2;
+      ctx.lineTo(cx - 3, 6);
+      ctx.strokeStyle = '#525A69';
+      ctx.lineWidth = 2.0;
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
       ctx.stroke();
@@ -289,9 +277,22 @@ export function bakeSurfaces(scene: Phaser.Scene, scale: number): void {
   });
 }
 
+function isOrganicShorelineSurface(surface: Exclude<SurfaceKind, 'none'>): boolean {
+  return (
+    surface === 'water' ||
+    surface === 'electrified_water' ||
+    surface === 'poison_swamp' ||
+    surface === 'grass' ||
+    surface === 'burning_grass' ||
+    surface === 'ice'
+  );
+}
+
 /**
- * Draws a neighbor-aware interactive surface cell directly onto the arena composite canvas
- * so multi-tile pools (water, oil, grass, swamp, lava, ice, chasm, conveyor) join seamlessly without grid seams.
+ * Draws a neighbor-aware interactive surface cell directly onto the arena composite canvas:
+ * - Desaturated surface fills (~30% reduced saturation) and interior patterns with deltaL <= 10
+ * - P1 Organic 2-layer curved shoreline on exposed edges of water, electrified_water, poison_swamp, grass, burning_grass, ice
+ * - P3 Beveled 4u basalt stone conduit curb (#7F6559 / #3B2D29) on exposed edges of lava, oil, burning_oil, conveyor, chasm, ash
  */
 export function drawSurfaceTile(
   ctx: CanvasRenderingContext2D,
@@ -304,81 +305,96 @@ export function drawSurfaceTile(
 ): void {
   const scale = cellPx / 32;
   const hasN = (surfaceMask & AUTOTILE_NORTH) !== 0;
-  const hasE = (surfaceMask & AUTOTILE_EAST) !== 0;
-  const hasS = (surfaceMask & AUTOTILE_SOUTH) !== 0;
-  const hasW = (surfaceMask & AUTOTILE_WEST) !== 0;
+  const hasE = (maskHas(surfaceMask, AUTOTILE_EAST));
+  const hasS = (maskHas(surfaceMask, AUTOTILE_SOUTH));
+  const hasW = (maskHas(surfaceMask, AUTOTILE_WEST));
 
-  let fill: string = PALETTE.ABYSS_BLUE;
-  let rim: string = PALETTE.CYAN_FROST;
-  let shade: string = PALETTE.COBALT_SHADE;
+  const organic = isOrganicShorelineSurface(surface);
+
+  let fill = '#1D334A';
+  let outerBank = '#2A4763';
+  let innerLip = '#4B7294';
+  let detailColor = '#3B5C7A';
 
   switch (surface) {
     case 'water':
-      fill = PALETTE.ABYSS_BLUE;
-      rim = PALETTE.CYAN_FROST;
-      shade = PALETTE.COBALT_SHADE;
+      fill = '#1D334A';
+      outerBank = '#263B52';
+      innerLip = '#3E6282';
+      detailColor = '#32516E';
       break;
     case 'electrified_water':
-      fill = PALETTE.AZURE_CORE;
-      rim = PALETTE.VOLT_YELLOW;
-      shade = PALETTE.COBALT_SHADE;
-      break;
-    case 'oil':
-      fill = '#262038';
-      rim = '#4C3D73';
-      shade = PALETTE.SLATE_DARK;
-      break;
-    case 'burning_oil':
-      fill = PALETTE.FLAME_ORANGE;
-      rim = PALETTE.SOLAR_GOLD;
-      shade = PALETTE.MAGMA_RED;
-      break;
-    case 'grass':
-      fill = PALETTE.FOREST_SHADE;
-      rim = PALETTE.GOBLIN_GREEN;
-      shade = PALETTE.MOSS_DARK;
-      break;
-    case 'burning_grass':
-      fill = PALETTE.MAGMA_RED;
-      rim = PALETTE.FLAME_ORANGE;
-      shade = PALETTE.FORGE_DARK;
-      break;
-    case 'ash':
-      fill = PALETTE.SLATE_DARK;
-      rim = PALETTE.ASH_GRAY;
-      shade = PALETTE.INK_DEEP;
+      fill = '#234463';
+      outerBank = '#2C5173';
+      innerLip = '#5687AD';
+      detailColor = '#8F853B';
       break;
     case 'poison_swamp':
-      fill = PALETTE.TOXIC_PURPLE;
-      rim = PALETTE.ELECTRIC_VIOLET;
-      shade = PALETTE.SLATE_DARK;
+      fill = '#3B2D4A';
+      outerBank = '#2D3B36';
+      innerLip = '#496146';
+      detailColor = '#4D6347';
       break;
-    case 'lava':
-      fill = PALETTE.MAGMA_RED;
-      rim = PALETTE.SOLAR_GOLD;
-      shade = PALETTE.FORGE_DARK;
+    case 'grass':
+      fill = '#2C4736';
+      outerBank = '#253B2D';
+      innerLip = '#3B5E47';
+      detailColor = '#41664D';
+      break;
+    case 'burning_grass':
+      fill = '#6E332B';
+      outerBank = '#4F2621';
+      innerLip = '#8A4538';
+      detailColor = '#96543B';
       break;
     case 'ice':
-      fill = PALETTE.CYAN_FROST;
-      rim = PALETTE.ICE_WHITE;
-      shade = PALETTE.AZURE_CORE;
+      fill = '#4F7A8A';
+      outerBank = '#3E616E';
+      innerLip = '#6A94A3';
+      detailColor = '#618999';
       break;
-    case 'chasm':
-      fill = PALETTE.INK_DEEP;
-      rim = PALETTE.COBALT_SHADE;
-      shade = PALETTE.INK_DARK;
+    case 'lava':
+      fill = '#8A342B';
+      outerBank = '#7F6559';
+      innerLip = '#3B2D29';
+      detailColor = '#A34E35';
+      break;
+    case 'oil':
+      fill = '#262333';
+      outerBank = '#7F6559';
+      innerLip = '#3B2D29';
+      detailColor = '#353047';
+      break;
+    case 'burning_oil':
+      fill = '#8F452C';
+      outerBank = '#7F6559';
+      innerLip = '#3B2D29';
+      detailColor = '#A85E3A';
       break;
     case 'conveyor':
-      fill = PALETTE.STEEL_DARK;
-      rim = PALETTE.BRASS_CORE;
-      shade = PALETTE.SLATE_DARK;
+      fill = '#343A45';
+      outerBank = '#7F6559';
+      innerLip = '#3B2D29';
+      detailColor = '#4E5666';
+      break;
+    case 'chasm':
+      fill = '#11131A';
+      outerBank = '#7F6559';
+      innerLip = '#3B2D29';
+      detailColor = '#1C202E';
+      break;
+    case 'ash':
+      fill = '#332E36';
+      outerBank = '#7F6559';
+      innerLip = '#3B2D29';
+      detailColor = '#413B45';
       break;
   }
 
-  const padN = hasN ? 0 : 2.5;
-  const padE = hasE ? 0 : 2.5;
-  const padS = hasS ? 0 : 2.5;
-  const padW = hasW ? 0 : 2.5;
+  const padN = hasN ? 0 : organic ? 2.2 : 3.6;
+  const padE = hasE ? 0 : organic ? 2.2 : 3.6;
+  const padS = hasS ? 0 : organic ? 2.2 : 3.6;
+  const padW = hasW ? 0 : organic ? 2.2 : 3.6;
 
   const sx = padW;
   const sy = padN;
@@ -389,48 +405,94 @@ export function drawSurfaceTile(
   ctx.translate(dx, dy);
   ctx.scale(scale, scale);
 
-  // 1. Base surface fill
+  // 1. Base desaturated surface fill
   ctx.fillStyle = fill;
   ctx.fillRect(sx, sy, sw, sh);
 
-  // 2. Exposed shoreline / rim inner bevel & shade
-  if (!hasN) {
-    ctx.fillStyle = rim;
-    ctx.fillRect(sx, sy, sw, 2.4);
-  }
-  if (!hasW) {
-    ctx.fillStyle = rim;
-    ctx.fillRect(sx, sy, 2.4, sh);
-  }
-  if (!hasS) {
-    ctx.fillStyle = shade;
-    ctx.fillRect(sx, sy + sh - 2.4, sw, 2.4);
-  }
-  if (!hasE) {
-    ctx.fillStyle = shade;
-    ctx.fillRect(sx + sw - 2.4, sy, 2.4, sh);
-  }
+  // 2. Interior details (kept strictly within deltaL <= 10 of fill)
+  const ox = ((variant % 3) - 1) * 1.6;
+  const oy = ((Math.floor(variant / 3) % 3) - 1) * 1.4;
 
-  // 3. Surface interior details (seeded by variant)
-  const ox = ((variant % 3) - 1) * 1.8;
-  const oy = ((Math.floor(variant / 3) % 3) - 1) * 1.5;
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(sx, sy, sw, sh);
+  ctx.clip();
 
   switch (surface) {
     case 'water': {
       ctx.beginPath();
-      ctx.arc(13 + ox, 14 + oy, 4.2, 0.1, Math.PI * 1.3);
-      ctx.strokeStyle = PALETTE.ICE_WHITE;
-      ctx.lineWidth = 1.3;
+      ctx.arc(14 + ox, 15 + oy, 4.0, 0.15, Math.PI * 1.25);
+      ctx.strokeStyle = detailColor;
+      ctx.lineWidth = 1.2;
       ctx.stroke();
       break;
     }
     case 'electrified_water': {
       ctx.beginPath();
-      ctx.moveTo(7 + ox, 10 + oy);
+      ctx.moveTo(8 + ox, 11 + oy);
       ctx.lineTo(15, 15);
-      ctx.lineTo(12, 20);
-      ctx.lineTo(25 + ox, 24 + oy);
-      ctx.strokeStyle = PALETTE.VOLT_YELLOW;
+      ctx.lineTo(13, 20);
+      ctx.lineTo(23 + ox, 23 + oy);
+      ctx.strokeStyle = detailColor;
+      ctx.lineWidth = 1.6;
+      ctx.lineCap = 'round';
+      ctx.stroke();
+      break;
+    }
+    case 'poison_swamp': {
+      for (const [bx, by, br] of [
+        [11 + ox, 13 + oy, 2.8],
+        [21 - ox, 20 - oy, 2.2],
+      ] as const) {
+        ctx.beginPath();
+        ctx.arc(bx, by, br, 0, Math.PI * 2);
+        ctx.fillStyle = detailColor;
+        ctx.fill();
+      }
+      break;
+    }
+    case 'grass': {
+      for (const gx of [10, 17, 23]) {
+        tracePolygon(ctx, [
+          { x: gx + ox - 2.0, y: 21 + oy },
+          { x: gx + ox, y: 11 + oy },
+          { x: gx + ox + 2.0, y: 21 + oy },
+        ]);
+        ctx.fillStyle = detailColor;
+        ctx.fill();
+      }
+      break;
+    }
+    case 'burning_grass': {
+      for (const gx of [11, 20]) {
+        tracePolygon(ctx, [
+          { x: gx + ox - 2.4, y: 21 },
+          { x: gx + ox, y: 10 },
+          { x: gx + ox + 2.4, y: 21 },
+        ]);
+        ctx.fillStyle = detailColor;
+        ctx.fill();
+      }
+      break;
+    }
+    case 'ice': {
+      ctx.beginPath();
+      ctx.moveTo(9 + ox, 21);
+      ctx.lineTo(21 + ox, 9);
+      ctx.moveTo(14 + ox, 23);
+      ctx.lineTo(24 + ox, 13);
+      ctx.strokeStyle = detailColor;
+      ctx.lineWidth = 1.3;
+      ctx.lineCap = 'round';
+      ctx.stroke();
+      break;
+    }
+    case 'lava': {
+      ctx.beginPath();
+      ctx.moveTo(8 + ox, 12 + oy);
+      ctx.lineTo(16, 18 + oy);
+      ctx.lineTo(24 - ox, 13 + oy);
+      ctx.strokeStyle = detailColor;
       ctx.lineWidth = 2.0;
       ctx.lineCap = 'round';
       ctx.stroke();
@@ -438,137 +500,178 @@ export function drawSurfaceTile(
     }
     case 'oil': {
       ctx.beginPath();
-      ctx.ellipse(13 + ox, 13 + oy, 6.2, 3.0, -0.35, 0, Math.PI * 2);
-      ctx.fillStyle = PALETTE.TOXIC_PURPLE;
-      ctx.fill();
-      ctx.beginPath();
-      ctx.ellipse(20 - ox, 20 - oy, 4.5, 2.1, 0.25, 0, Math.PI * 2);
-      ctx.fillStyle = PALETTE.COBALT_SHADE;
+      ctx.ellipse(13 + ox, 14 + oy, 5.8, 2.8, -0.3, 0, Math.PI * 2);
+      ctx.fillStyle = detailColor;
       ctx.fill();
       break;
     }
     case 'burning_oil': {
       tracePolygon(ctx, [
-        { x: 10 + ox, y: 22 },
-        { x: 14 + ox, y: 8 },
-        { x: 18 + ox, y: 15 },
-        { x: 22 + ox, y: 7 },
-        { x: 25 + ox, y: 22 },
+        { x: 10 + ox, y: 21 },
+        { x: 14 + ox, y: 10 },
+        { x: 18 + ox, y: 16 },
+        { x: 22 + ox, y: 9 },
+        { x: 24 + ox, y: 21 },
       ]);
-      ctx.fillStyle = PALETTE.SOLAR_GOLD;
+      ctx.fillStyle = detailColor;
       ctx.fill();
-      break;
-    }
-    case 'grass': {
-      for (const gx of [10, 17, 23]) {
-        tracePolygon(ctx, [
-          { x: gx + ox - 2.3, y: 22 + oy },
-          { x: gx + ox, y: 10 + oy },
-          { x: gx + ox + 2.3, y: 22 + oy },
-        ]);
-        ctx.fillStyle = PALETTE.LIME_GLOW;
-        ctx.fill();
-        ctx.lineWidth = 1.1;
-        ctx.strokeStyle = PALETTE.INK_DARK;
-        ctx.stroke();
-      }
-      break;
-    }
-    case 'burning_grass': {
-      for (const gx of [11, 20]) {
-        tracePolygon(ctx, [
-          { x: gx + ox - 2.8, y: 22 },
-          { x: gx + ox, y: 8 },
-          { x: gx + ox + 2.8, y: 22 },
-        ]);
-        ctx.fillStyle = PALETTE.SOLAR_GOLD;
-        ctx.fill();
-      }
-      break;
-    }
-    case 'poison_swamp': {
-      for (const [bx, by, br] of [
-        [11 + ox, 13 + oy, 3.0],
-        [21 - ox, 20 - oy, 2.4],
-      ] as const) {
-        ctx.beginPath();
-        ctx.arc(bx, by, br, 0, Math.PI * 2);
-        ctx.fillStyle = PALETTE.LIME_GLOW;
-        ctx.fill();
-        ctx.lineWidth = 1.1;
-        ctx.strokeStyle = PALETTE.INK_DARK;
-        ctx.stroke();
-      }
-      break;
-    }
-    case 'lava': {
-      ctx.beginPath();
-      ctx.moveTo(7 + ox, 11 + oy);
-      ctx.lineTo(16, 18 + oy);
-      ctx.lineTo(25 - ox, 12 + oy);
-      ctx.strokeStyle = PALETTE.SOLAR_GOLD;
-      ctx.lineWidth = 2.4;
-      ctx.lineCap = 'round';
-      ctx.stroke();
-      break;
-    }
-    case 'ice': {
-      ctx.beginPath();
-      ctx.moveTo(8 + ox, 22);
-      ctx.lineTo(22 + ox, 8);
-      ctx.moveTo(14 + ox, 24);
-      ctx.lineTo(25 + ox, 13);
-      ctx.strokeStyle = PALETTE.BONE_WHITE;
-      ctx.lineWidth = 1.5;
-      ctx.lineCap = 'round';
-      ctx.stroke();
-      break;
-    }
-    case 'chasm': {
-      ctx.strokeStyle = PALETTE.ABYSS_BLUE;
-      ctx.lineWidth = 1.5;
-      ctx.strokeRect(6, 6, 20, 20);
       break;
     }
     case 'conveyor': {
       for (const cx of [10, 20]) {
         ctx.beginPath();
-        ctx.moveTo(cx - 2.5, 9);
-        ctx.lineTo(cx + 2.5, 16);
-        ctx.lineTo(cx - 2.5, 23);
-        ctx.strokeStyle = PALETTE.SOLAR_GOLD;
-        ctx.lineWidth = 2.0;
+        ctx.moveTo(cx - 2.4, 10);
+        ctx.lineTo(cx + 2.4, 16);
+        ctx.lineTo(cx - 2.4, 22);
+        ctx.strokeStyle = detailColor;
+        ctx.lineWidth = 1.8;
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
         ctx.stroke();
       }
       break;
     }
+    case 'chasm': {
+      ctx.strokeStyle = detailColor;
+      ctx.lineWidth = 1.4;
+      ctx.strokeRect(7, 7, 18, 18);
+      break;
+    }
     case 'ash':
       break;
   }
+  ctx.restore();
 
-  // 4. Outer dark border ONLY on exposed shoreline edges
-  ctx.beginPath();
-  if (!hasN) {
-    ctx.moveTo(sx, sy);
-    ctx.lineTo(sx + sw, sy);
+  // 3. Exposed Edge Architecture: P1 Organic 2-Layer Curved Shoreline vs P3 4u Basalt Conduit Curb
+  if (organic) {
+    // P1: 2-layer organic curved shoreline along exposed edges
+    const waveOffset = ((variant & 1) === 0 ? 1 : -1) * 1.1;
+
+    // Layer 1: Outer damp bank (3.2u)
+    ctx.strokeStyle = outerBank;
+    ctx.lineWidth = 3.2;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    if (!hasN) {
+      ctx.moveTo(sx, sy + 0.8);
+      ctx.quadraticCurveTo(16, sy + 0.8 + waveOffset, sx + sw, sy + 0.8);
+    }
+    if (!hasS) {
+      ctx.moveTo(sx, sy + sh - 0.8);
+      ctx.quadraticCurveTo(16, sy + sh - 0.8 - waveOffset, sx + sw, sy + sh - 0.8);
+    }
+    if (!hasW) {
+      ctx.moveTo(sx + 0.8, sy);
+      ctx.quadraticCurveTo(sx + 0.8 + waveOffset, 16, sx + 0.8, sy + sh);
+    }
+    if (!hasE) {
+      ctx.moveTo(sx + sw - 0.8, sy);
+      ctx.quadraticCurveTo(sx + sw - 0.8 - waveOffset, 16, sx + sw - 0.8, sy + sh);
+    }
+    ctx.stroke();
+
+    // Layer 2: Inner foam / moss / frost shoreline lip (1.6u)
+    ctx.strokeStyle = innerLip;
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    if (!hasN) {
+      ctx.moveTo(sx + 0.5, sy + 2.2);
+      ctx.quadraticCurveTo(16, sy + 2.2 + waveOffset, sx + sw - 0.5, sy + 2.2);
+    }
+    if (!hasS) {
+      ctx.moveTo(sx + 0.5, sy + sh - 2.2);
+      ctx.quadraticCurveTo(16, sy + sh - 2.2 - waveOffset, sx + sw - 0.5, sy + sh - 2.2);
+    }
+    if (!hasW) {
+      ctx.moveTo(sx + 2.2, sy + 0.5);
+      ctx.quadraticCurveTo(sx + 2.2 + waveOffset, 16, sx + 2.2, sy + sh - 0.5);
+    }
+    if (!hasE) {
+      ctx.moveTo(sx + sw - 2.2, sy + 0.5);
+      ctx.quadraticCurveTo(sx + sw - 2.2 - waveOffset, 16, sx + sw - 2.2, sy + sh - 0.5);
+    }
+    ctx.stroke();
+  } else {
+    // P3: Beveled 4u basalt stone conduit curb (#7F6559 top cap / #3B2D29 inner wall)
+    const curbTop = '#7F6559';
+    const curbFront = '#3B2D29';
+    const curbJoint = '#1F1614';
+
+    if (!hasN) {
+      ctx.fillStyle = curbTop;
+      ctx.fillRect(0, 0, 32, 2.4);
+      ctx.fillStyle = curbFront;
+      ctx.fillRect(0, 2.4, 32, 1.6);
+      ctx.strokeStyle = curbJoint;
+      ctx.lineWidth = 1.1;
+      ctx.beginPath();
+      ctx.moveTo(16, 0);
+      ctx.lineTo(16, 4.0);
+      ctx.stroke();
+    }
+    if (!hasS) {
+      ctx.fillStyle = curbFront;
+      ctx.fillRect(0, 28.0, 32, 1.6);
+      ctx.fillStyle = curbTop;
+      ctx.fillRect(0, 29.6, 32, 2.4);
+      ctx.strokeStyle = curbJoint;
+      ctx.lineWidth = 1.1;
+      ctx.beginPath();
+      ctx.moveTo(16, 28.0);
+      ctx.lineTo(16, 32);
+      ctx.stroke();
+    }
+    if (!hasW) {
+      ctx.fillStyle = curbTop;
+      ctx.fillRect(0, 0, 2.4, 32);
+      ctx.fillStyle = curbFront;
+      ctx.fillRect(2.4, 0, 1.6, 32);
+      ctx.strokeStyle = curbJoint;
+      ctx.lineWidth = 1.1;
+      ctx.beginPath();
+      ctx.moveTo(0, 16);
+      ctx.lineTo(4.0, 16);
+      ctx.stroke();
+    }
+    if (!hasE) {
+      ctx.fillStyle = curbFront;
+      ctx.fillRect(28.0, 0, 1.6, 32);
+      ctx.fillStyle = curbTop;
+      ctx.fillRect(29.6, 0, 2.4, 32);
+      ctx.strokeStyle = curbJoint;
+      ctx.lineWidth = 1.1;
+      ctx.beginPath();
+      ctx.moveTo(28.0, 16);
+      ctx.lineTo(32, 16);
+      ctx.stroke();
+    }
+
+    // Crisp outer contour on exposed conduit curb edges
+    ctx.strokeStyle = PALETTE.INK_DARK;
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    if (!hasN) {
+      ctx.moveTo(0, 0.7);
+      ctx.lineTo(32, 0.7);
+    }
+    if (!hasS) {
+      ctx.moveTo(0, 31.3);
+      ctx.lineTo(32, 31.3);
+    }
+    if (!hasW) {
+      ctx.moveTo(0.7, 0);
+      ctx.lineTo(0.7, 32);
+    }
+    if (!hasE) {
+      ctx.moveTo(31.3, 0);
+      ctx.lineTo(31.3, 32);
+    }
+    ctx.stroke();
   }
-  if (!hasS) {
-    ctx.moveTo(sx, sy + sh);
-    ctx.lineTo(sx + sw, sy + sh);
-  }
-  if (!hasW) {
-    ctx.moveTo(sx, sy);
-    ctx.lineTo(sx, sy + sh);
-  }
-  if (!hasE) {
-    ctx.moveTo(sx + sw, sy);
-    ctx.lineTo(sx + sw, sy + sh);
-  }
-  ctx.lineWidth = 1.7;
-  ctx.strokeStyle = PALETTE.INK_DARK;
-  ctx.stroke();
 
   ctx.restore();
+}
+
+function maskHas(mask: number, bit: number): boolean {
+  return (mask & bit) !== 0;
 }

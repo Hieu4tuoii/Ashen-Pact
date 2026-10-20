@@ -4,10 +4,10 @@ export const STANDARD_OUTLINE_WIDTH = 2.5;
 export const INNER_OUTLINE_WIDTH = 1.5;
 
 export interface OutlinedStyle {
-  fill: PaletteHex;
-  shade?: PaletteHex;
-  highlight?: PaletteHex;
-  outlineColor?: PaletteHex;
+  fill: PaletteHex | string;
+  shade?: PaletteHex | string;
+  highlight?: PaletteHex | string;
+  outlineColor?: PaletteHex | string;
   outlineWidth?: number;
   shadeOffset?: { dx: number; dy: number };
   highlightOffset?: { dx: number; dy: number };

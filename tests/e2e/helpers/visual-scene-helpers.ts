@@ -30,21 +30,21 @@ export const DEBUG_MENU_URL = '/?scene=menu&seed=1337&freeze=1&debug=1&testHooks
 export const DEBUG_GAME_URL = '/?scene=game&seed=1337&freeze=1&debug=1&testHooks=1';
 
 export const ENVIRONMENT_SAMPLE_RECTS: SampleRect[] = [
-  { name: 'floor_center', x: 860, y: 480, width: 200, height: 120 },
-  { name: 'corner_tl', x: 216, y: 660, width: 64, height: 56 },
-  { name: 'corner_tr', x: 1112, y: 252, width: 64, height: 56 },
-  { name: 'corner_bl', x: 1112, y: 852, width: 64, height: 56 },
-  { name: 'corner_br', x: 1584, y: 660, width: 64, height: 56 },
+  { name: 'floor_center', x: 832, y: 664, width: 128, height: 96 },
+  { name: 'corner_tl', x: 196, y: 320, width: 56, height: 52 },
+  { name: 'corner_tr', x: 1796, y: 520, width: 56, height: 52 },
+  { name: 'corner_bl', x: 196, y: 768, width: 56, height: 52 },
+  { name: 'corner_br', x: 1732, y: 768, width: 56, height: 52 },
   { name: 'wall_top', x: 860, y: 88, width: 200, height: 36 },
   { name: 'brazier_pool', x: 476, y: 272, width: 56, height: 56 },
 ];
 
 export const HUB_SAMPLE_RECTS: SampleRect[] = [
-  { name: 'floor_center', x: 424, y: 480, width: 160, height: 100 },
-  { name: 'corner_tl', x: 232, y: 240, width: 64, height: 56 },
-  { name: 'corner_tr', x: 1104, y: 200, width: 64, height: 56 },
-  { name: 'corner_bl', x: 232, y: 520, width: 64, height: 56 },
-  { name: 'corner_br', x: 1272, y: 896, width: 64, height: 56 },
+  { name: 'floor_center', x: 384, y: 384, width: 128, height: 96 },
+  { name: 'corner_tl', x: 196, y: 320, width: 56, height: 52 },
+  { name: 'corner_tr', x: 1344, y: 196, width: 56, height: 52 },
+  { name: 'corner_bl', x: 196, y: 484, width: 56, height: 52 },
+  { name: 'corner_br', x: 1280, y: 768, width: 56, height: 52 },
   { name: 'wall_top', x: 860, y: 88, width: 200, height: 36 },
   { name: 'brazier_pool', x: 1118, y: 656, width: 56, height: 56 },
 ];

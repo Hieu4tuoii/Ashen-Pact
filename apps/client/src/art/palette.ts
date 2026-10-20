@@ -1,6 +1,6 @@
 /**
  * Master 42-color palette for Ashen Pact (strictly matching docs/ART_GUIDE.md).
- * All procedural surface colors must come from this palette.
+ * All procedural surface colors must come from this palette or ENV_PALETTE.
  */
 export const PALETTE = {
   // 1. Ink & Outline (4)
@@ -76,42 +76,111 @@ export const PLAYER_SLOT_COLORS: Record<1 | 2 | 3 | 4, { hex: PaletteHex; labelV
   4: { hex: PALETTE.P4_RING, labelVi: 'P4 · Vàng Kim' },
 };
 
-export interface BiomePaletteTheme {
-  id: 1 | 2 | 3;
-  nameVi: string;
-  bgDark: PaletteHex;
-  floorBase: PaletteHex;
-  floorShade: PaletteHex;
-  floorHighlight: PaletteHex;
-  accentGlow: PaletteHex;
+export interface EnvPaletteEntry {
+  floor: string;
+  seam: string;
+  var: string;
+  wallTop: string;
+  wallFront: string;
+  shadow: string;
+  rim: string;
+  accent: string;
 }
+
+export const ENV_PALETTE: Record<0 | 1 | 2 | 3, EnvPaletteEntry> = {
+  0: {
+    floor: '#414B61',
+    seam: '#343B4C',
+    var: '#47546C',
+    wallTop: '#64708B',
+    wallFront: '#2D3547',
+    shadow: '#151A24',
+    rim: '#8B97B5',
+    accent: '#F59E42',
+  },
+  1: {
+    floor: '#3D4F47',
+    seam: '#303E38',
+    var: '#43584E',
+    wallTop: '#627468',
+    wallFront: '#2B3731',
+    shadow: '#16201C',
+    rim: '#9C9286',
+    accent: '#84CC16',
+  },
+  2: {
+    floor: '#446E78',
+    seam: '#3B5C64',
+    var: '#4A7881',
+    wallTop: '#6F949E',
+    wallFront: '#345462',
+    shadow: '#182A33',
+    rim: '#CFE8EE',
+    accent: '#22D3EE',
+  },
+  3: {
+    floor: '#53433F',
+    seam: '#413431',
+    var: '#5D4B44',
+    wallTop: '#7F6559',
+    wallFront: '#3B2D29',
+    shadow: '#1F1614',
+    rim: '#FDBA74',
+    accent: '#F97316',
+  },
+};
+
+export interface BiomePaletteTheme {
+  id: 0 | 1 | 2 | 3;
+  nameVi: string;
+  bgDark: string;
+  floorBase: string;
+  floorShade: string;
+  floorHighlight: string;
+  accentGlow: string;
+}
+
+export const HUB_THEME: BiomePaletteTheme = {
+  id: 0,
+  nameVi: 'Hub: Khu Đá Cổ',
+  bgDark: ENV_PALETTE[0].shadow,
+  floorBase: ENV_PALETTE[0].floor,
+  floorShade: ENV_PALETTE[0].seam,
+  floorHighlight: ENV_PALETTE[0].var,
+  accentGlow: ENV_PALETTE[0].accent,
+};
 
 export const BIOME_THEMES: Record<1 | 2 | 3, BiomePaletteTheme> = {
   1: {
     id: 1,
     nameVi: 'Biome 1: Rừng Cổ Mục Nát',
-    bgDark: PALETTE.MOSS_DARK,
-    floorBase: PALETTE.FOREST_SHADE,
-    floorShade: PALETTE.MOSS_DARK,
-    floorHighlight: PALETTE.GOBLIN_GREEN,
-    accentGlow: PALETTE.LIME_GLOW,
+    bgDark: ENV_PALETTE[1].shadow,
+    floorBase: ENV_PALETTE[1].floor,
+    floorShade: ENV_PALETTE[1].seam,
+    floorHighlight: ENV_PALETTE[1].var,
+    accentGlow: ENV_PALETTE[1].accent,
   },
   2: {
     id: 2,
     nameVi: 'Biome 2: Hầm Băng Vĩnh Cửu',
-    bgDark: PALETTE.ABYSS_BLUE,
-    floorBase: PALETTE.COBALT_SHADE,
-    floorShade: PALETTE.ABYSS_BLUE,
-    floorHighlight: PALETTE.CYAN_FROST,
-    accentGlow: PALETTE.ICE_WHITE,
+    bgDark: ENV_PALETTE[2].shadow,
+    floorBase: ENV_PALETTE[2].floor,
+    floorShade: ENV_PALETTE[2].seam,
+    floorHighlight: ENV_PALETTE[2].var,
+    accentGlow: ENV_PALETTE[2].accent,
   },
   3: {
     id: 3,
     nameVi: 'Biome 3: Lò Rèn Dung Nham',
-    bgDark: PALETTE.FORGE_DARK,
-    floorBase: PALETTE.LEATHER_MID,
-    floorShade: PALETTE.LEATHER_DARK,
-    floorHighlight: PALETTE.BRONZE_SHADE,
-    accentGlow: PALETTE.FLAME_ORANGE,
+    bgDark: ENV_PALETTE[3].shadow,
+    floorBase: ENV_PALETTE[3].floor,
+    floorShade: ENV_PALETTE[3].seam,
+    floorHighlight: ENV_PALETTE[3].var,
+    accentGlow: ENV_PALETTE[3].accent,
   },
 };
+
+export function getBiomeTheme(biome: 0 | 1 | 2 | 3): BiomePaletteTheme {
+  if (biome === 0) return HUB_THEME;
+  return BIOME_THEMES[biome] ?? BIOME_THEMES[1];
+}

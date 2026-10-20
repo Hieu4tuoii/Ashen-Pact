@@ -57,19 +57,19 @@ export class TextureBaker {
     return `player_ring_${slot}`;
   }
 
-  public static getBiomeTileTextureKey(biome: 1 | 2 | 3, variant = 0): string {
+  public static getBiomeTileTextureKey(biome: 0 | 1 | 2 | 3, variant = 0): string {
     return `biome_tile_${biome}_${variant % 8}`;
   }
 
-  public static getWallTileTextureKey(biome: 1 | 2 | 3 = 1, mask = 0): string {
+  public static getWallTileTextureKey(biome: 0 | 1 | 2 | 3 = 1, mask = 0): string {
     return mask === 0 ? `biome_wall_${biome}` : `biome_wall_${biome}_${mask & 15}`;
   }
 
-  public static getPillarTileTextureKey(biome: 1 | 2 | 3 = 1, mask = 0): string {
+  public static getPillarTileTextureKey(biome: 0 | 1 | 2 | 3 = 1, mask = 0): string {
     return mask === 0 ? `biome_pillar_${biome}` : `biome_pillar_${biome}_${mask & 15}`;
   }
 
-  public static getCrackedWallTextureKey(biome: 1 | 2 | 3 = 1): string {
+  public static getCrackedWallTextureKey(biome: 0 | 1 | 2 | 3 = 1): string {
     return `biome_cracked_wall_${biome}`;
   }
 
@@ -120,8 +120,8 @@ export class TextureBaker {
     for (const slot of [1, 2, 3, 4] as const) {
       this.bakePlayerRing(scene, slot, targetScale);
     }
-    for (const biome of [1, 2, 3] as const) {
-      for (let v = 0; v < 4; v++) {
+    for (const biome of [0, 1, 2, 3] as const) {
+      for (let v = 0; v < 8; v++) {
         this.bakeBiomeTile(scene, biome, v, targetScale);
       }
     }
@@ -136,7 +136,8 @@ export class TextureBaker {
       scene.textures.exists('player_ring_1') &&
       scene.textures.exists('ui_crosshair') &&
       scene.textures.exists('fx_light_radial') &&
-      scene.textures.exists('chest_closed_legendary')
+      scene.textures.exists('chest_closed_legendary') &&
+      scene.textures.exists('biome_tile_0_0')
     ) {
       this.currentBakeScale = targetScale;
       return this.currentBakeScale;
@@ -157,7 +158,7 @@ export class TextureBaker {
       this.bakePlayerRing(scene, slot, targetScale);
     }
 
-    for (const biome of [1, 2, 3] as const) {
+    for (const biome of [0, 1, 2, 3] as const) {
       for (let v = 0; v < 8; v++) {
         this.bakeBiomeTile(scene, biome, v, targetScale);
       }
@@ -338,7 +339,7 @@ export class TextureBaker {
 
   public static bakeBiomeTile(
     scene: Phaser.Scene,
-    biome: 1 | 2 | 3,
+    biome: 0 | 1 | 2 | 3,
     variant: number,
     scale: number,
   ): void {
@@ -347,7 +348,7 @@ export class TextureBaker {
 
   public static bakeWallTile(
     scene: Phaser.Scene,
-    biome: 1 | 2 | 3,
+    biome: 0 | 1 | 2 | 3,
     mask: number,
     scale: number,
   ): void {
@@ -356,14 +357,14 @@ export class TextureBaker {
 
   public static bakePillarTile(
     scene: Phaser.Scene,
-    biome: 1 | 2 | 3,
+    biome: 0 | 1 | 2 | 3,
     mask: number,
     scale: number,
   ): void {
     bakePillarTile(scene, biome, mask, scale);
   }
 
-  public static bakeCrackedWallTile(scene: Phaser.Scene, biome: 1 | 2 | 3, scale: number): void {
+  public static bakeCrackedWallTile(scene: Phaser.Scene, biome: 0 | 1 | 2 | 3, scale: number): void {
     bakeCrackedWallTile(scene, biome, scale);
   }
 
