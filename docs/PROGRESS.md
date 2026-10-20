@@ -413,3 +413,21 @@
   - Phát hiện qua kiểm tra ảnh chụp màn hình `release-dungeon-combat-1080p.png` và `release-hub-lan-coop-1080p.png`: nhãn `[R] Ng.Tố: Băng (Đóng Băng)` hơi chạm vào nút `[G] Đồ Họa: CAO` trên thanh HUD trên cùng, và dòng tên người chơi `P2` trong bảng mời Doanh Trại hơi chạm vào nút `Đuổi` khi tên dài → Đã tinh chỉnh tọa độ/cỡ chữ của thanh nút HUD trên cùng (`x = 490`, `658`, `772`) và cỡ chữ dòng slot có nút `Đuổi` (`8.2px`), loại bỏ hoàn toàn chồng lấp.
 - **Trạng thái dự án:**
   - Hoàn thành toàn bộ **Phase 0 → Phase 8**. Phiên bản **`v0.1.0`** đã sẵn sàng phát hành!
+
+
+---
+
+### Bản Cập Nhật Hậu Phát Hành (`Post-Release Update v0.1.0`) — Tối Ưu Ánh Sáng, Toàn Màn Hình & Luồng Qua Màn (Hoàn thành ✅)
+- **Lịch sử chỉnh sửa & Cải tiến:**
+  1. **Sửa lỗi nháy phím Sẵn Sàng (`[V]`) ở Sảnh Co-op & Luồng Qua Phòng / Qua Tầng / Qua Màn (`commit 90e59ff`):**
+     - Tách riêng kênh lắng nghe phím `[V]` (Sẵn sàng) ở Sảnh Chờ Co-op để không bị ghi đè lặp lại giữa trạng thái `hub_ready` của client và gói tin đồng bộ từ server.
+     - Tắt cờ `autoRespawnWaves` khi bắt đầu hành trình ở phòng Khởi Đầu (`start`) để cửa sang các phòng tiếp theo mở sẵn ngay từ đầu mà không tự khóa lại sau 1.5s.
+     - Tự động mở bảng chọn Buff khi bước chạm vào cổng dịch chuyển cuối tầng (`portalActive`) hoặc cho phép bấm `[E]` để qua tầng / qua màn mượt mà.
+  2. **Giảm hiệu ứng bóng đêm, mở rộng tầm nhìn & sửa vùng phủ bóng đêm toàn màn hình (`commit 70d9ece`):**
+     - Tăng độ sáng nền (`BIOME_AMBIENT_COLORS`: Biome 1 `0x58685c`, Biome 2 `0x4c6888`, Biome 3 `0x725244`) để nhìn rõ địa hình, bẫy và quái vật hơn.
+     - Mở rộng bán kính vùng sáng quanh người chơi chính (`205` → `310`), đồng đội Co-op (`165` → `250`), đuốc/tinh thể/lò rèn (`+25%`) và giảm độ tối viền `vignetteStrength` (`0.42` → `0.18`).
+     - Đồng bộ tọa độ vẽ `lightmapRt` theo khung nhìn thực tế của camera, khắc phục triệt để hiện tượng phần bóng đêm chỉ phủ ~80% bên trái và bị hụt ở mép phải khi mở rộng cửa sổ.
+  3. **Hiển thị Full 100% Khung Hình Trình Duyệt (`commit 38c2708`):**
+     - Cập nhật `resizeViewport` trong `PreloadScene`, `MenuScene`, `GameScene` và `ArtGalleryScene` dùng `cam.setZoom(width / 960, height / 540)` để thanh HUD trên/dưới, Minimap, bản đồ và lớp ánh sáng phủ kín 100% chiều rộng và chiều cao cửa sổ trình duyệt ở mọi tỉ lệ màn hình.
+  4. **Chụp lại toàn bộ lịch sử ảnh chụp màn hình (`docs/screenshots/phase-0/` → `docs/screenshots/phase-8/`):**
+     - Chạy lại toàn bộ 10 bộ kiểm thử E2E (`pnpm e2e`) và cập nhật mới toàn bộ **49 ảnh chụp màn hình 1080p/1440p** từ `phase-0` đến `phase-8` để lưu trữ lịch sử trực quan phục vụ các đợt cập nhật tiếp theo.

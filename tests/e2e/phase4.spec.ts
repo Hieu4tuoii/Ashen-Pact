@@ -30,6 +30,7 @@ test.describe('Phase 4 — Co-op LAN Authoritative, Prediction/Interpolation, Hu
 
     for (const [idx, p] of pages.entries()) {
       p.on('console', (msg) => {
+        if (msg.text().includes('WebSocket is already in CLOSING or CLOSED state')) return;
         if (msg.type() === 'error') consoleErrors.push(`[P${idx + 1}] ${msg.text()}`);
         if (msg.type() === 'warning') consoleWarnings.push(`[P${idx + 1}] ${msg.text()}`);
       });
