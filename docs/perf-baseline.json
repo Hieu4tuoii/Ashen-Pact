@@ -1,0 +1,57 @@
+{
+  "generatedAt": "2026-10-20T17:22:10.133Z",
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "quality": "high",
+  "gpu": {
+    "vendor": "Google Inc. (AMD)",
+    "renderer": "ANGLE (AMD, AMD Radeon(TM) Graphics (0x0000164C) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+    "hardwareAccelerated": true
+  },
+  "uncapped": {
+    "normalCombat": {
+      "sampleCount": 2708,
+      "durationMs": 20001.5,
+      "meanMs": 7.386,
+      "p50Ms": 7.2,
+      "p95Ms": 8.7,
+      "p99Ms": 10.293,
+      "minMs": 6.2,
+      "maxMs": 16.2,
+      "avgFpsEquivalent": 135.39,
+      "heapStartMb": 119.3,
+      "heapEndMb": 144.46,
+      "heapDeltaMb": 25.15
+    },
+    "stressCombat": {
+      "sampleCount": 1719,
+      "durationMs": 20008.1,
+      "meanMs": 11.639,
+      "p50Ms": 11.4,
+      "p95Ms": 13.5,
+      "p99Ms": 16.246,
+      "minMs": 0.5,
+      "maxMs": 34.5,
+      "avgFpsEquivalent": 85.92,
+      "heapStartMb": 129.96,
+      "heapEndMb": 149.24,
+      "heapDeltaMb": 19.29
+    }
+  },
+  "vsync": {
+    "normalCombatFps": 60.05,
+    "stressCombatFps": 59.2,
+    "normalCombatP95Ms": 17,
+    "stressCombatP95Ms": 17
+  },
+  "targets": {
+    "uncappedNormalP50MaxMs": 6,
+    "uncappedNormalP95MaxMs": 11,
+    "uncappedStressP50MaxMs": 10,
+    "uncappedStressP95MaxMs": 15,
+    "vsyncNormalMinFps": 60,
+    "vsyncStressMinFps": 58
+  }
+}
