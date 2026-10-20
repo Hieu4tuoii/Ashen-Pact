@@ -26,6 +26,7 @@ import type { LightingPipeline } from '../fx/lighting-pipeline.js';
 import type { DebugOverlay } from '../ui/debug-overlay.js';
 import type { GraphicsQualityTier } from '../ui/graphics-settings.js';
 import type { ModalOverlayManager } from '../ui/settings-modal.js';
+import type { HudScene } from './HudScene.js';
 import { applyCameraViewportImpl, buildArenaTilesImpl, createImpl, drawSourceKeyToCtxImpl, getStructureTextureKeyImpl, rebuildAllTileCellsToCompositeImpl, renderTileCellToCompositeImpl, setStressTestModeImpl, syncArenaTilesWithMapRevisionImpl, triggerIrisTransitionImpl, updateCameraWithLookaheadAndShakeImpl, updateIrisTransitionImpl } from './game-scene/arena-tiles.js';
 import { resolveEnemyStatusTintImpl, resolvePlayerStatusTintImpl, syncEnemyRigsImpl, syncProjectilesAndPickupsImpl, syncPropsImpl, syncSimulatedPlayersImpl, updatePlayerOverheadUiImpl } from './game-scene/entity-sync.js';
 import { updateBossHudImpl, updateCoopTeammateHudImpl, updateMinimapHudImpl, updateOffscreenTeammateArrowsImpl, updateVectorHudImpl } from './game-scene/hud-combat-and-coop.js';
@@ -235,6 +236,18 @@ export class GameScene extends Phaser.Scene {
   public crosshairSprite!: Phaser.GameObjects.Sprite;
 
   // Camera-pinned HUD elements
+  public hudScene?: HudScene;
+  public hudPadX = 0;
+  public hudPadY = 0;
+  public hudTopBarBg?: Phaser.GameObjects.Graphics;
+  public hudBottomBarBg?: Phaser.GameObjects.Graphics;
+  public hudTopLeftContainer?: Phaser.GameObjects.Container;
+  public hudTopCenterContainer?: Phaser.GameObjects.Container;
+  public hudTopRightContainer?: Phaser.GameObjects.Container;
+  public hudBottomCenterContainer?: Phaser.GameObjects.Container;
+  public get uiScene(): Phaser.Scene {
+    return this.hudScene ?? this;
+  }
   public hudContainer!: Phaser.GameObjects.Container;
   public hudBarsGraphics!: Phaser.GameObjects.Graphics;
   public abilityHudGraphics!: Phaser.GameObjects.Graphics;
@@ -429,9 +442,9 @@ export class GameScene extends Phaser.Scene {
     }
 
     // Left mouse button -> FIRE (except when clicking top/bottom HUD buttons, Invite panel, Emote Wheel, or modal)
-    const camView = this.cameras.main.worldView;
-    const localViewX = worldPt.x - camView.x;
-    const localViewY = worldPt.y - camView.y;
+    const hudPt = this.uiScene.cameras.main.getWorldPoint(pointer.x, pointer.y);
+    const localViewX = hudPt.x;
+    const localViewY = hudPt.y;
     let suppressFireForEmoteWheel = false;
     if (this.emoteWheelOpen) {
       suppressFireForEmoteWheel = true;
@@ -458,13 +471,13 @@ export class GameScene extends Phaser.Scene {
     const isClickingInvitePanel =
       sim.inHub &&
       this.invitePanelVisible &&
-      localViewX >= 676 &&
-      localViewX <= 952 &&
-      localViewY >= 70 &&
-      localViewY <= 360;
+      localViewX >= 676 + this.hudPadX &&
+      localViewX <= 952 + this.hudPadX &&
+      localViewY >= 70 - this.hudPadY &&
+      localViewY <= 470 - this.hudPadY;
     const isClickingHud =
-      localViewY < 68 ||
-      localViewY > 480 ||
+      localViewY < 68 - this.hudPadY ||
+      localViewY > 480 + this.hudPadY ||
       isClickingInvitePanel ||
       suppressFireForEmoteWheel ||
       isModalOrPaused ||
@@ -688,13 +701,12 @@ export class GameScene extends Phaser.Scene {
       inHub: sim.inHub,
     });
 
-    // 10. Update Procedural Crosshair at Mouse World Position
-    const updatedWorldPt = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
+    // 10. Update Procedural Crosshair at Mouse HUD Position
     const invBake = 1 / TextureBaker.getBakeScale();
     if (this.crosshairPulse > 0) {
       this.crosshairPulse = Math.max(0, this.crosshairPulse - dtSec * 5);
     }
-    this.crosshairSprite.setPosition(updatedWorldPt.x, updatedWorldPt.y);
+    this.crosshairSprite.setPosition(hudPt.x, hudPt.y);
     this.crosshairSprite.setScale(invBake * (1 + this.crosshairPulse * 0.35));
 
     // 11. Draw Telegraphs, Spawn Circles, Elemental Badges, Shield Wall, Revive Rings & Optional F4 Hitboxes

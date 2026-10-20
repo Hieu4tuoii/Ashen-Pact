@@ -109,6 +109,9 @@ export class MenuScene extends Phaser.Scene {
   }
 
   public create(): void {
+    if (this.scene.isActive('HudScene')) {
+      this.scene.stop('HudScene');
+    }
     resetClientFreezeRandom(getVisualQueryConfig().seed);
     const debug = initGlobalDebugState();
     debug.scene = 'MenuScene';
@@ -830,7 +833,7 @@ export class MenuScene extends Phaser.Scene {
       this.modalManager?.refreshResolution(newScale);
       this.debugOverlay?.refreshResolution(newScale);
     }
-    cam.setZoom(zoomX, zoomY);
+    cam.setZoom(zoom);
     cam.centerOn(WORLD_VIEW_WIDTH / 2, WORLD_VIEW_HEIGHT / 2);
   }
 

@@ -14,6 +14,7 @@ import { initGlobalDebugState } from '../../ui/debug-overlay.js';
 import { type GameScene } from '../GameScene.js';
 
 export function updateHubInvitePanelImpl(this: GameScene): void {
+  const ui = this.uiScene;
   const sim = this.transport.getSim();
   const showPanel = sim.inHub && this.invitePanelVisible && !this.fullMapOpen;
   const allPlayers = sim.getAllPlayers();
@@ -36,14 +37,14 @@ export function updateHubInvitePanelImpl(this: GameScene): void {
   const pw = 272;
   const ph = 286;
 
-  const bg = this.add.graphics();
+  const bg = ui.add.graphics();
   bg.fillStyle(hexToNum(PALETTE.INK_DEEP), 0.92);
   bg.lineStyle(2.5, hexToNum(PALETTE.SOLAR_GOLD), 0.95);
   bg.fillRoundedRect(px, py, pw, ph, 9);
   bg.strokeRoundedRect(px, py, pw, ph, 9);
   this.invitePanelContainer.add(bg);
 
-  const header = this.add.text(px + 10, py + 7, i18n.t('ui.hud.coopInviteHeader'), {
+  const header = ui.add.text(px + 10, py + 7, i18n.t('ui.hud.coopInviteHeader'), {
     fontFamily: '"Be Vietnam Pro", sans-serif',
     fontSize: '11px',
     fontStyle: '800',
@@ -52,7 +53,7 @@ export function updateHubInvitePanelImpl(this: GameScene): void {
     strokeThickness: 3,
     resolution: textRes,
   });
-  const ipText = this.add.text(
+  const ipText = ui.add.text(
     px + 10,
     py + 23,
     `${i18n.t('ui.menu.ipLabel')}: ${this.primaryLanIp}:${this.serverPort}`,
@@ -79,7 +80,7 @@ export function updateHubInvitePanelImpl(this: GameScene): void {
   const totalModules = qrSize + quietZone * 2;
   const cellPx = qrBoxSize / totalModules;
 
-  const qrG = this.add.graphics();
+  const qrG = ui.add.graphics();
   qrG.fillStyle(hexToNum(PALETTE.BONE_WHITE), 1);
   qrG.lineStyle(1.5, hexToNum(PALETTE.INK_DARK), 1);
   qrG.fillRoundedRect(qrX, qrY, qrBoxSize, qrBoxSize, 4);
@@ -111,13 +112,13 @@ export function updateHubInvitePanelImpl(this: GameScene): void {
     onClick: () => void,
     fontSize = '9.5px',
   ) => {
-    const btnG = this.add.graphics();
+    const btnG = ui.add.graphics();
     btnG.fillStyle(hexToNum(fillHex), 0.95);
     btnG.lineStyle(1.8, hexToNum(PALETTE.INK_DARK), 1);
     btnG.fillRoundedRect(bx, by, bw, bh, 5);
     btnG.strokeRoundedRect(bx, by, bw, bh, 5);
 
-    const txt = this.add
+    const txt = ui.add
       .text(bx + bw / 2, by + bh / 2, label, {
         fontFamily: '"Be Vietnam Pro", sans-serif',
         fontSize,
@@ -129,7 +130,7 @@ export function updateHubInvitePanelImpl(this: GameScene): void {
       })
       .setOrigin(0.5, 0.5);
 
-    const hit = this.add
+    const hit = ui.add
       .rectangle(bx + bw / 2, by + bh / 2, bw, bh, 0x000000, 0)
       .setInteractive({ useHandCursor: true });
     hit.on('pointerdown', onClick);
@@ -211,7 +212,7 @@ export function updateHubInvitePanelImpl(this: GameScene): void {
     const pl = allPlayers.find((item) => item.slot === slotIdx);
     const slotColor = PLAYER_SLOT_COLORS[slotIdx as 1 | 2 | 3 | 4];
 
-    const rowG = this.add.graphics();
+    const rowG = ui.add.graphics();
     rowG.fillStyle(hexToNum(PALETTE.SLATE_DARK), 0.9);
     rowG.lineStyle(1.5, hexToNum(pl ? slotColor : PALETTE.INK_DARK), 0.9);
     rowG.fillRoundedRect(px + 10, rowY, pw - 20, 24, 5);
@@ -223,7 +224,7 @@ export function updateHubInvitePanelImpl(this: GameScene): void {
       const charName = i18n.charName(pl.characterId, charDef.nameVi);
       const rdyStr = pl.ready ? i18n.t('ui.hud.readyShort') : i18n.t('ui.hud.selectingChar');
       const hasKickBtn = sim.player.slot === 1 && pl.slot !== 1;
-      const rowTxt = this.add.text(
+      const rowTxt = ui.add.text(
         px + 15,
         rowY + 5.5,
         `P${pl.slot} · ${pl.displayName} (${charName}) — ${rdyStr}`,
@@ -257,7 +258,7 @@ export function updateHubInvitePanelImpl(this: GameScene): void {
         );
       }
     } else {
-      const emptyTxt = this.add.text(
+      const emptyTxt = ui.add.text(
         px + 16,
         rowY + 5,
         `P${slotIdx} · ${i18n.t('ui.hud.emptySlot')}`,
@@ -298,6 +299,7 @@ export function updateHubInvitePanelImpl(this: GameScene): void {
 }
 
 export function updateHubCharacterSkillPreviewImpl(this: GameScene): void {
+  const ui = this.uiScene;
   const sim = this.transport.getSim();
   const debug = initGlobalDebugState();
   let nearestCharId: CharacterId | null = null;
@@ -335,7 +337,7 @@ export function updateHubCharacterSkillPreviewImpl(this: GameScene): void {
   const pw = 542;
   const ph = 158;
 
-  const bg = this.add.graphics();
+  const bg = ui.add.graphics();
   bg.fillStyle(hexToNum(PALETTE.INK_DEEP), 0.99);
   bg.lineStyle(2.5, hexToNum(isEquipped ? PALETTE.LIME_GLOW : PALETTE.SOLAR_GOLD), 0.96);
   bg.fillRoundedRect(px, py, pw, ph, 8);
@@ -345,7 +347,7 @@ export function updateHubCharacterSkillPreviewImpl(this: GameScene): void {
   const statusBadge = isEquipped
     ? i18n.t('ui.hud.equippedBadge')
     : i18n.t('ui.hud.pressEToSelect');
-  const header = this.add.text(
+  const header = ui.add.text(
     px + 12,
     py + 7,
     `${charTxt.name.toUpperCase()} — ${charTxt.title}`,
@@ -361,7 +363,7 @@ export function updateHubCharacterSkillPreviewImpl(this: GameScene): void {
   );
 
   const spdLabel = isEn ? 'Spd' : 'Tốc';
-  const statsBadge = this.add
+  const statsBadge = ui.add
     .text(
       px + pw - 12,
       py + 7.5,
@@ -396,7 +398,7 @@ export function updateHubCharacterSkillPreviewImpl(this: GameScene): void {
         `• Synergy Co-op: ${charTxt.synergy}`,
       ].join('\n');
 
-  const body = this.add.text(px + 12, py + 25, bodyLines, {
+  const body = ui.add.text(px + 12, py + 25, bodyLines, {
     fontFamily: '"Be Vietnam Pro", sans-serif',
     fontSize: '8.7px',
     fontStyle: '600',
@@ -412,6 +414,7 @@ export function updateHubCharacterSkillPreviewImpl(this: GameScene): void {
 }
 
 export function updateWeaponComparisonCardImpl(this: GameScene): void {
+  const ui = this.uiScene;
   const sim = this.transport.getSim();
   const debug = initGlobalDebugState();
   let nearestWeaponItem: (typeof sim.worldItems)[number] | null = null;
@@ -465,7 +468,7 @@ export function updateWeaponComparisonCardImpl(this: GameScene): void {
   const pw = 500;
   const ph = 122;
 
-  const bg = this.add.graphics();
+  const bg = ui.add.graphics();
   bg.fillStyle(hexToNum(PALETTE.INK_DEEP), 0.96);
   bg.lineStyle(2.5, hexToNum(WEAPON_RARITY_COLORS[wDrop.rarity]), 0.96);
   bg.fillRoundedRect(px, py, pw, ph, 8);
@@ -495,7 +498,7 @@ export function updateWeaponComparisonCardImpl(this: GameScene): void {
       ? ` (${nearestWeaponItem.costGold} ${i18n.t('ui.hud.gold')})`
       : '';
 
-  const header = this.add.text(
+  const header = ui.add.text(
     px + 12,
     py + 7,
     `★ ${dropName.toUpperCase()}${costSuffix}  ⇄  ${currName}   ·   DPS ~${dropDps} (${fmtDelta(dpsDiff)})`,
@@ -515,7 +518,7 @@ export function updateWeaponComparisonCardImpl(this: GameScene): void {
   const statsLine2 = `${i18n.t('ui.hud.weaponCompareCrit')}: ${Math.round(wDrop.critChance * 100)}%   ·   ${i18n.t('ui.tooltip.element')}: ${i18n.elementName(wDrop.element)}   ·   [E] ${i18n.t('ui.hud.weaponCompareSwap')}`;
   const descLine = `${i18n.getWeaponText(wDrop.id).desc}`;
 
-  const body = this.add.text(px + 12, py + 26, [statsLine1, statsLine2, descLine].join('\n'), {
+  const body = ui.add.text(px + 12, py + 26, [statsLine1, statsLine2, descLine].join('\n'), {
     fontFamily: '"Be Vietnam Pro", sans-serif',
     fontSize: '8.9px',
     fontStyle: '700',
@@ -526,7 +529,7 @@ export function updateWeaponComparisonCardImpl(this: GameScene): void {
     wordWrap: { width: pw - 24 },
     resolution: textRes,
   });
-  const tipText = this.add.text(px + 12, py + ph - 19, i18n.t('ui.tooltip.firstPickupHint'), {
+  const tipText = ui.add.text(px + 12, py + ph - 19, i18n.t('ui.tooltip.firstPickupHint'), {
     fontFamily: '"Be Vietnam Pro", sans-serif',
     fontSize: '8.3px',
     fontStyle: '700',
@@ -539,6 +542,7 @@ export function updateWeaponComparisonCardImpl(this: GameScene): void {
 }
 
 export function updateEmoteWheelHudImpl(this: GameScene): void {
+  const ui = this.uiScene;
   const showWheel =
     this.emoteWheelOpen &&
     !this.fullMapOpen &&
@@ -556,14 +560,14 @@ export function updateEmoteWheelHudImpl(this: GameScene): void {
   const cx = 480;
   const cy = 270;
 
-  const bg = this.add.graphics();
+  const bg = ui.add.graphics();
   bg.fillStyle(hexToNum(PALETTE.INK_DARK), 0.72);
   bg.lineStyle(2, hexToNum(PALETTE.SOLAR_GOLD), 0.85);
   bg.fillCircle(cx, cy, 44);
   bg.strokeCircle(cx, cy, 44);
   this.emoteWheelContainer.add(bg);
 
-  const centerTxt = this.add
+  const centerTxt = ui.add
     .text(cx, cy, isEn ? '[T] EMOTE' : '[T] BIỂU CẢM', {
       fontFamily: '"Be Vietnam Pro", sans-serif',
       fontSize: '9.5px',
@@ -590,7 +594,7 @@ export function updateEmoteWheelHudImpl(this: GameScene): void {
   for (let i = 0; i < cards.length; i++) {
     const c = cards[i]!;
     const isHovered = this.emoteWheelHoveredId === c.id;
-    const cardG = this.add.graphics();
+    const cardG = ui.add.graphics();
     cardG.fillStyle(
       hexToNum(isHovered ? PALETTE.SLATE_MID : PALETTE.INK_DEEP),
       isHovered ? 0.98 : 0.9,
@@ -603,7 +607,7 @@ export function updateEmoteWheelHudImpl(this: GameScene): void {
     cardG.fillRoundedRect(c.x - cardW / 2, c.y - cardH / 2, cardW, cardH, 8);
     cardG.strokeRoundedRect(c.x - cardW / 2, c.y - cardH / 2, cardW, cardH, 8);
 
-    const txt = this.add
+    const txt = ui.add
       .text(c.x, c.y, `[${c.id}] ${i18n.emoteText(c.id)}`, {
         fontFamily: '"Be Vietnam Pro", sans-serif',
         fontSize: '10.5px',

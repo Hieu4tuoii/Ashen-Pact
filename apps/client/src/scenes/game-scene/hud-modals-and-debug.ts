@@ -15,6 +15,7 @@ import { graphicsSettings } from '../../ui/graphics-settings.js';
 import { type GameScene } from '../GameScene.js';
 
 export function updateModalHudImpl(this: GameScene): void {
+  const ui = this.uiScene;
   const sim = this.transport.getSim();
   if (sim.runState === 'playing' || sim.runState === 'buff_choice') {
     this.resultDismissed = false;
@@ -44,14 +45,14 @@ export function updateModalHudImpl(this: GameScene): void {
   const textRes = Math.min(TextureBaker.getBakeScale(), 3);
 
   if (sim.runState === 'buff_choice') {
-    const bg = this.add.graphics();
+    const bg = ui.add.graphics();
     bg.fillStyle(hexToNum(PALETTE.INK_DEEP), 0.92);
     bg.lineStyle(3, hexToNum(PALETTE.SOLAR_GOLD), 1);
     bg.fillRoundedRect(140, 110, 680, 310, 12);
     bg.strokeRoundedRect(140, 110, 680, 310, 12);
     this.modalContainer.add(bg);
 
-    const header = this.add
+    const header = ui.add
       .text(480, 132, i18n.t('modal.buffChoiceTitle'), {
         fontFamily: '"Be Vietnam Pro", sans-serif',
         fontSize: '15px',
@@ -73,14 +74,14 @@ export function updateModalHudImpl(this: GameScene): void {
       const cardW = 200;
       const cardH = 216;
 
-      const cardG = this.add.graphics();
+      const cardG = ui.add.graphics();
       cardG.fillStyle(hexToNum(PALETTE.SLATE_DARK), 0.96);
       cardG.lineStyle(2.5, hexToNum(PALETTE.CYAN_FROST), 1);
       cardG.fillRoundedRect(cardX, cardY, cardW, cardH, 9);
       cardG.strokeRoundedRect(cardX, cardY, cardW, cardH, 9);
       this.modalContainer.add(cardG);
 
-      const title = this.add
+      const title = ui.add
         .text(cardX + cardW / 2, cardY + 22, `[${idx + 1}] ${buffTxt.name}`, {
           fontFamily: '"Be Vietnam Pro", sans-serif',
           fontSize: '13px',
@@ -95,7 +96,7 @@ export function updateModalHudImpl(this: GameScene): void {
         .setOrigin(0.5, 0);
       this.modalContainer.add(title);
 
-      const desc = this.add
+      const desc = ui.add
         .text(cardX + cardW / 2, cardY + 74, buffTxt.desc, {
           fontFamily: '"Be Vietnam Pro", sans-serif',
           fontSize: '11px',
@@ -110,7 +111,7 @@ export function updateModalHudImpl(this: GameScene): void {
         .setOrigin(0.5, 0);
       this.modalContainer.add(desc);
 
-      const hit = this.add
+      const hit = ui.add
         .rectangle(cardX + cardW / 2, cardY + cardH / 2, cardW, cardH, 0x000000, 0)
         .setInteractive({ useHandCursor: true });
       hit.on('pointerdown', () => {
@@ -130,16 +131,16 @@ export function updateModalHudImpl(this: GameScene): void {
     const pw = 740;
     const ph = 398;
 
-    const bg = this.add.graphics();
+    const bg = ui.add.graphics();
     bg.fillStyle(hexToNum(PALETTE.INK_DARK), 0.78);
-    bg.fillRect(-200, 68, 1360, 412);
+    bg.fillRect(-480, -270, 1920, 1080);
     bg.fillStyle(hexToNum(PALETTE.INK_DEEP), 0.96);
     bg.lineStyle(3, hexToNum(isWin ? PALETTE.SOLAR_GOLD : PALETTE.CRIMSON_BRIGHT), 1);
     bg.fillRoundedRect(px, py, pw, ph, 12);
     bg.strokeRoundedRect(px, py, pw, ph, 12);
     this.modalContainer.add(bg);
 
-    const header = this.add
+    const header = ui.add
       .text(
         480,
         py + 12,
@@ -202,7 +203,7 @@ export function updateModalHudImpl(this: GameScene): void {
       i18n.t('ui.result.blessings', { buffs: buffNames }),
     ].join('\n');
 
-    const body = this.add
+    const body = ui.add
       .text(px + 18, py + 36, summaryLines, {
         fontFamily: '"Be Vietnam Pro", sans-serif',
         fontSize: '8.8px',
@@ -218,7 +219,7 @@ export function updateModalHudImpl(this: GameScene): void {
     this.modalContainer.add(body);
 
     // Left Column Bottom: Per-Player Performance Breakdown Table
-    const playerHeader = this.add.text(
+    const playerHeader = ui.add.text(
       px + 18,
       py + 196,
       `📊 ${i18n.t('ui.result.playerStatsHeader')}`,
@@ -241,7 +242,7 @@ export function updateModalHudImpl(this: GameScene): void {
       const rh = 30;
       const slotColor = PLAYER_SLOT_COLORS[pl.slot] ?? PALETTE.CYAN_FROST;
 
-      const rowG = this.add.graphics();
+      const rowG = ui.add.graphics();
       rowG.fillStyle(hexToNum(PALETTE.SLATE_DARK), 0.92);
       rowG.lineStyle(1.5, hexToNum(slotColor), 0.9);
       rowG.fillRoundedRect(px + 18, ry, rw, rh, 5);
@@ -250,7 +251,7 @@ export function updateModalHudImpl(this: GameScene): void {
 
       const cDef = CHARACTERS[pl.characterId] ?? CHARACTERS.vanguard;
       const charName = i18n.charName(pl.characterId, cDef.nameVi);
-      const pNameTxt = this.add.text(
+      const pNameTxt = ui.add.text(
         px + 25,
         ry + 3,
         `[P${pl.slot}] ${pl.displayName} (${charName})`,
@@ -264,7 +265,7 @@ export function updateModalHudImpl(this: GameScene): void {
           resolution: textRes,
         },
       );
-      const pStatsTxt = this.add.text(
+      const pStatsTxt = ui.add.text(
         px + 25,
         ry + 15,
         i18n.t('ui.result.playerRowFormat', {
@@ -289,7 +290,7 @@ export function updateModalHudImpl(this: GameScene): void {
     });
 
     // Right Column: 4 MVP Award Cards (Danh Hiệu MVP Đội Hình)
-    const mvpHeader = this.add.text(px + 380, py + 38, `🏆 ${i18n.t('mvp.sectionTitle')}`, {
+    const mvpHeader = ui.add.text(px + 380, py + 38, `🏆 ${i18n.t('mvp.sectionTitle')}`, {
       fontFamily: '"Be Vietnam Pro", sans-serif',
       fontSize: '10.8px',
       fontStyle: '800',
@@ -305,7 +306,7 @@ export function updateModalHudImpl(this: GameScene): void {
       const ay = py + 60 + idx * 62;
       const aw = 342;
       const ah = 56;
-      const cardG = this.add.graphics();
+      const cardG = ui.add.graphics();
       cardG.fillStyle(hexToNum(PALETTE.SLATE_DARK), 0.94);
       cardG.lineStyle(2, hexToNum(award.colorHex), 0.95);
       cardG.fillRoundedRect(px + 380, ay, aw, ah, 7);
@@ -314,7 +315,7 @@ export function updateModalHudImpl(this: GameScene): void {
 
       const cDef = CHARACTERS[award.characterId] ?? CHARACTERS.vanguard;
       const charName = i18n.charName(award.characterId, cDef.nameVi);
-      const titleTxt = this.add.text(
+      const titleTxt = ui.add.text(
         px + 390,
         ay + 6,
         `★ ${i18n.t(award.titleKey)} — [P${award.playerSlot}] ${award.displayName}`,
@@ -334,7 +335,7 @@ export function updateModalHudImpl(this: GameScene): void {
           : award.category === 'elemental'
             ? { reactions: award.value, combos: award.secondaryValue }
             : { val: award.value };
-      const subTxt = this.add.text(
+      const subTxt = ui.add.text(
         px + 390,
         ay + 26,
         `${charName} · ${i18n.t(award.descKey, descParams)}`,
@@ -360,14 +361,14 @@ export function updateModalHudImpl(this: GameScene): void {
       borderHex: string,
       onClick: () => void,
     ) => {
-      const btnG = this.add.graphics();
+      const btnG = ui.add.graphics();
       btnG.fillStyle(hexToNum(PALETTE.SLATE_MID), 0.96);
       btnG.lineStyle(2, hexToNum(borderHex), 1);
       btnG.fillRoundedRect(bx, by, bw, 34, 7);
       btnG.strokeRoundedRect(bx, by, bw, 34, 7);
       this.modalContainer.add(btnG);
 
-      const txt = this.add
+      const txt = ui.add
         .text(bx + bw / 2, by + 17, label, {
           fontFamily: '"Be Vietnam Pro", sans-serif',
           fontSize: '10.5px',
@@ -380,7 +381,7 @@ export function updateModalHudImpl(this: GameScene): void {
         .setOrigin(0.5, 0.5);
       this.modalContainer.add(txt);
 
-      const hit = this.add
+      const hit = ui.add
         .rectangle(bx + bw / 2, by + 17, bw, 34, 0x000000, 0)
         .setInteractive({ useHandCursor: true });
       hit.on('pointerover', () => zzfx.play('ui_hover'));

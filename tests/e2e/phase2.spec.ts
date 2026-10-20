@@ -264,7 +264,56 @@ test.describe('Phase 2 — Pipeline Hình Ảnh & Tương Tác Map', () => {
       { timeout: 10000 },
     );
 
-    // Test viewport resize (1080p -> 1440p -> 1080p) while Stress Test is active
+    // Test viewport resize (1080p -> 2560x1080 -> 1280x1024 -> 1440p -> 1080p) while Stress Test is active
+    // and verify HudScene isolation + uniform camera zoom (zoomX === zoomY) across aspect ratios
+    const hudIsolationCheck = await page.evaluate(() => {
+      const game = window.__PHASER_GAME__!;
+      const gs = game.scene.getScene('GameScene') as unknown as {
+        hudContainer: { scene: { scene: { key: string } } };
+      };
+      const hs = game.scene.getScene('HudScene');
+      return {
+        hudSceneActive: game.scene.isActive('HudScene'),
+        hudScenePostPipelines: hs.cameras.main.postPipelines.length,
+        hudContainerSceneKey: gs.hudContainer.scene.scene.key,
+      };
+    });
+    expect(hudIsolationCheck.hudSceneActive).toBe(true);
+    expect(hudIsolationCheck.hudScenePostPipelines).toBe(0);
+    expect(hudIsolationCheck.hudContainerSceneKey).toBe('HudScene');
+
+    await page.setViewportSize({ width: 2560, height: 1080 });
+    await page.waitForTimeout(100);
+    const ultrawideZoom = await page.evaluate(() => {
+      const game = window.__PHASER_GAME__!;
+      const gCam = game.scene.getScene('GameScene').cameras.main;
+      const hCam = game.scene.getScene('HudScene').cameras.main;
+      return {
+        gZoomX: gCam.zoomX,
+        gZoomY: gCam.zoomY,
+        hZoomX: hCam.zoomX,
+        hZoomY: hCam.zoomY,
+      };
+    });
+    expect(ultrawideZoom.gZoomX).toBeCloseTo(ultrawideZoom.gZoomY, 5);
+    expect(ultrawideZoom.hZoomX).toBeCloseTo(ultrawideZoom.hZoomY, 5);
+
+    await page.setViewportSize({ width: 1280, height: 1024 });
+    await page.waitForTimeout(100);
+    const aspect5x4Zoom = await page.evaluate(() => {
+      const game = window.__PHASER_GAME__!;
+      const gCam = game.scene.getScene('GameScene').cameras.main;
+      const hCam = game.scene.getScene('HudScene').cameras.main;
+      return {
+        gZoomX: gCam.zoomX,
+        gZoomY: gCam.zoomY,
+        hZoomX: hCam.zoomX,
+        hZoomY: hCam.zoomY,
+      };
+    });
+    expect(aspect5x4Zoom.gZoomX).toBeCloseTo(aspect5x4Zoom.gZoomY, 5);
+    expect(aspect5x4Zoom.hZoomX).toBeCloseTo(aspect5x4Zoom.hZoomY, 5);
+
     await page.setViewportSize({ width: 2560, height: 1440 });
     await page.waitForTimeout(150);
     await page.setViewportSize({ width: 1920, height: 1080 });

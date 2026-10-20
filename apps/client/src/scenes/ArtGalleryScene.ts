@@ -72,6 +72,9 @@ export class ArtGalleryScene extends Phaser.Scene {
   }
 
   public create(): void {
+    if (this.scene.isActive('HudScene')) {
+      this.scene.stop('HudScene');
+    }
     if (!(isDebugUiEnabled() || isTestHooksEnabled())) {
       this.scene.start('MenuScene');
       return;
@@ -419,9 +422,7 @@ export class ArtGalleryScene extends Phaser.Scene {
       }
       this.debugOverlay?.refreshResolution(newScale);
     }
-    const zoomX = this.scale.width / WORLD_VIEW_WIDTH;
-    const zoomY = this.scale.height / WORLD_VIEW_HEIGHT;
-    cam.setZoom(zoomX, zoomY);
+    cam.setZoom(zoom);
     cam.centerOn(WORLD_VIEW_WIDTH / 2, WORLD_VIEW_HEIGHT / 2);
     this.updateStatusBanner();
   }

@@ -24,10 +24,13 @@ import {
 } from '../../core/debug-flag.js';
 import { resetClientFreezeRandom } from '../../core/visual-query.js';
 import { CombatFxManager } from '../../fx/combat-fx.js';
+import { computeUniformViewportMetrics } from '../../fx/lighting-config.js';
 import { LightingPipeline } from '../../fx/lighting-pipeline.js';
 import { DebugOverlay, initGlobalDebugState } from '../../ui/debug-overlay.js';
 import { type GraphicsQualityTier, graphicsSettings } from '../../ui/graphics-settings.js';
 import { type ArenaTileVisual, type GameScene, RIG_FOOT_OFFSET_Y } from '../GameScene.js';
+import type { HudScene } from '../HudScene.js';
+import { applyHudEdgeAnchors } from './hud-setup-and-pause.js';
 
 export function syncGameSceneTestHooks(scene: GameScene): void {
   if (typeof window === 'undefined') return;
@@ -207,6 +210,14 @@ export function createImpl(this: GameScene): void {
   this.camFocusX = sim.player.x;
   this.camFocusY = sim.player.y;
 
+  if (!this.scene.isActive('HudScene')) {
+    this.game.scene.start('HudScene');
+  }
+  this.scene.bringToTop('HudScene');
+  const hudScene = this.scene.get('HudScene') as HudScene;
+  hudScene.attachGameScene();
+  this.hudScene = hudScene;
+
   this.applyCameraViewport();
   this.scale.on('resize', this.applyCameraViewport, this);
 
@@ -246,6 +257,9 @@ export function createImpl(this: GameScene): void {
     this.input.off('pointerdown', onPointerDown);
     this.input.keyboard?.off('keydown', unlockAudio);
     this.lighting?.destroy();
+    this.settingsModal?.destroy();
+    this.hudScene?.detachGameScene();
+    this.hudScene = undefined;
     this.unsubDebugFlags?.();
     this.unsubDebugFlags = undefined;
     delete window.__PHASER_GAME__;
@@ -330,11 +344,11 @@ export function createImpl(this: GameScene): void {
   // 7. Dynamic Lighting Pipeline + WebGL PostFX Shader
   this.lighting = new LightingPipeline(this);
 
-  // 8. Custom Procedural Crosshair
+  // 8. Custom Procedural Crosshair (in HudScene so it is unaffected by PostFX/lightmap)
   const invBake = 1 / textRes;
-  this.crosshairSprite = this.add.sprite(sim.player.x + 64, sim.player.y, 'ui_crosshair');
+  this.crosshairSprite = this.uiScene.add.sprite(480, 270, 'ui_crosshair');
   this.crosshairSprite.setScale(invBake);
-  this.crosshairSprite.setDepth(950);
+  this.crosshairSprite.setDepth(5000);
 
   // 9. Camera-Pinned Vector HUD
   this.buildVectorHud();
@@ -343,7 +357,7 @@ export function createImpl(this: GameScene): void {
   // 10. Keyboard & Debug Bindings
   this.setupKeyboardBindings();
 
-  this.debugOverlay = new DebugOverlay(this, false);
+  this.debugOverlay = new DebugOverlay(this, false, this.uiScene);
   if (this.coopMode === 'host' || this.coopMode === 'join') {
     void this.connectCoopRoom();
   } else {
@@ -562,9 +576,10 @@ export function triggerIrisTransitionImpl(this: GameScene, mode: 'open' | 'close
 export function applyCameraViewportImpl(this: GameScene): void {
   const cam = this.cameras?.main;
   if (!cam) return;
-  const zoomX = this.scale.width / WORLD_VIEW_WIDTH;
-  const zoomY = this.scale.height / WORLD_VIEW_HEIGHT;
-  const zoom = Math.min(zoomX, zoomY);
+  const vp = computeUniformViewportMetrics(this.scale.width, this.scale.height);
+  const zoom = vp.zoom;
+  this.hudPadX = vp.padX;
+  this.hudPadY = vp.padY;
   const prevScale = TextureBaker.getBakeScale();
   const newScale = TextureBaker.bakeAll(this, zoom, false);
 
@@ -675,7 +690,11 @@ export function applyCameraViewportImpl(this: GameScene): void {
     this.debugOverlay?.refreshResolution(newScale);
   }
 
-  cam.setZoom(zoomX, zoomY);
+  cam.setZoom(zoom);
+  this.hudScene?.applyViewport();
+  if (this.hudContainer) {
+    applyHudEdgeAnchors(this);
+  }
 }
 
 export function updateIrisTransitionImpl(this: GameScene, dtSec: number): void {
@@ -704,9 +723,11 @@ export function updateIrisTransitionImpl(this: GameScene, dtSec: number): void {
 
   if (this.irisTransitionProgress <= 0.005) return;
 
-  const maxHoleR = 560;
+  const maxHoleR =
+    Math.hypot(WORLD_VIEW_WIDTH * 0.5 + this.hudPadX, WORLD_VIEW_HEIGHT * 0.5 + this.hudPadY) +
+    40;
   const holeR = Math.max(2, maxHoleR * (1 - this.irisTransitionProgress));
-  const ringThickness = 640;
+  const ringThickness = 840;
   g.lineStyle(ringThickness, hexToNum(PALETTE.INK_DARK), 1);
   g.strokeCircle(480, 270, holeR + ringThickness * 0.5);
   g.lineStyle(3, hexToNum(PALETTE.SOLAR_GOLD), 0.9);
@@ -737,10 +758,17 @@ export function updateCameraWithLookaheadAndShakeImpl(
   this.camFocusX = dampLerp(this.camFocusX, targetX, 14, dtSec);
   this.camFocusY = dampLerp(this.camFocusY, targetY, 14, dtSec);
 
-  const halfW = WORLD_VIEW_WIDTH / 2;
-  const halfH = WORLD_VIEW_HEIGHT / 2;
-  const clampedX = clamp(this.camFocusX, halfW - 32, Math.max(halfW, map.width - halfW + 32));
-  const clampedY = clamp(this.camFocusY, halfH - 32, Math.max(halfH, map.height - halfH + 32));
+  const zoom = Math.max(0.1, cam.zoom || 1);
+  const viewW = cam.width > 0 ? cam.width / zoom : WORLD_VIEW_WIDTH;
+  const viewH = cam.height > 0 ? cam.height / zoom : WORLD_VIEW_HEIGHT;
+  const halfW = viewW * 0.5;
+  const halfH = viewH * 0.5;
+  const minCamX = halfW - 32;
+  const maxCamX = map.width - halfW + 32;
+  const minCamY = halfH - 32;
+  const maxCamY = map.height - halfH + 32;
+  const clampedX = minCamX > maxCamX ? map.width * 0.5 : clamp(this.camFocusX, minCamX, maxCamX);
+  const clampedY = minCamY > maxCamY ? map.height * 0.5 : clamp(this.camFocusY, minCamY, maxCamY);
 
   const shake = this.fx.computeCameraShakeOffset(dtSec);
   this.lastShakeX = shake.offsetX;
@@ -748,11 +776,4 @@ export function updateCameraWithLookaheadAndShakeImpl(
   const finalCamX = clampedX + shake.offsetX;
   const finalCamY = clampedY + shake.offsetY;
   cam.centerOn(finalCamX, finalCamY);
-
-  // Pin HUD container to camera worldView origin
-  const zoomX = Math.max(0.1, cam.zoomX || cam.zoom || 1);
-  const zoomY = Math.max(0.1, cam.zoomY || cam.zoom || 1);
-  const viewW = cam.width > 0 ? cam.width / zoomX : WORLD_VIEW_WIDTH;
-  const viewH = cam.height > 0 ? cam.height / zoomY : WORLD_VIEW_HEIGHT;
-  this.hudContainer.setPosition(finalCamX - viewW * 0.5, finalCamY - viewH * 0.5);
 }

@@ -346,6 +346,7 @@ export function updateVectorHudImpl(this: GameScene): void {
 }
 
 export function updateCoopTeammateHudImpl(this: GameScene): void {
+  const ui = this.uiScene;
   const sim = this.transport.getSim();
   const debug = initGlobalDebugState();
   const remotes = sim.stressTestActive ? [] : sim.simulatedPlayers;
@@ -384,7 +385,7 @@ export function updateCoopTeammateHudImpl(this: GameScene): void {
     const isHighPing = playerPing > 100;
     const skillReady = cp.skillCooldownTimer <= 0;
 
-    const bg = this.add.graphics();
+    const bg = ui.add.graphics();
     bg.fillStyle(hexToNum(PALETTE.INK_DEEP), 0.88);
     bg.lineStyle(2, hexToNum(cp.lifeState === 'downed' ? PALETTE.CRIMSON_BRIGHT : slotHex), 1);
     bg.fillRoundedRect(startX, cy, cardW, cardH, 6);
@@ -422,12 +423,12 @@ export function updateCoopTeammateHudImpl(this: GameScene): void {
       cp.lifeState === 'downed'
         ? i18n.t('ui.hud.downed')
         : cp.lifeState === 'ghost'
-          ? i18n.t('ui.hud.ghost')
-          : sim.inHub && cp.ready
-            ? `${i18n.t('ui.hud.readyShort')} · ${skillTag}`
-            : `HP ${cp.hp}/${cp.maxHp} · ${skillTag}`;
+            ? i18n.t('ui.hud.ghost')
+            : sim.inHub && cp.ready
+              ? `${i18n.t('ui.hud.readyShort')} · ${skillTag}`
+              : `HP ${cp.hp}/${cp.maxHp} · ${skillTag}`;
 
-    const title = this.add.text(
+    const title = ui.add.text(
       startX + 8,
       cy + 4,
       `[P${cp.slot}] ${cp.displayName} (${charName})`,
@@ -441,7 +442,7 @@ export function updateCoopTeammateHudImpl(this: GameScene): void {
         resolution: textRes,
       },
     );
-    const pingText = this.add
+    const pingText = ui.add
       .text(startX + cardW - 7, cy + 4, `${isHighPing ? '⚠' : ''}${playerPing}ms`, {
         fontFamily: '"Be Vietnam Pro", monospace',
         fontSize: '9px',
@@ -452,7 +453,7 @@ export function updateCoopTeammateHudImpl(this: GameScene): void {
         resolution: textRes,
       })
       .setOrigin(1, 0);
-    const sub = this.add.text(startX + 110, cy + 20, stateTag, {
+    const sub = ui.add.text(startX + 110, cy + 20, stateTag, {
       fontFamily: '"Be Vietnam Pro", sans-serif',
       fontSize: '8.8px',
       fontStyle: '700',
@@ -477,14 +478,14 @@ export function updateOffscreenTeammateArrowsImpl(this: GameScene): void {
   const sim = this.transport.getSim();
   if (sim.stressTestActive || sim.simulatedPlayers.length === 0) return;
 
-  const view = this.cameras.main.worldView;
+  const cam = this.cameras.main;
+  const view = cam.worldView;
   if (!view || view.width <= 0) return;
 
-  const margin = 26;
-  const minX = margin;
-  const maxX = WORLD_VIEW_WIDTH - margin;
-  const minY = 74;
-  const maxY = 472;
+  const minX = -this.hudPadX + 26;
+  const maxX = WORLD_VIEW_WIDTH + this.hudPadX - 26;
+  const minY = -this.hudPadY + 74;
+  const maxY = WORLD_VIEW_HEIGHT + this.hudPadY - 68;
 
   for (let i = 0; i < sim.simulatedPlayers.length; i++) {
     const cp = sim.simulatedPlayers[i]!;
@@ -501,8 +502,8 @@ export function updateOffscreenTeammateArrowsImpl(this: GameScene): void {
       continue;
     }
 
-    const relX = pos.x - view.x;
-    const relY = pos.y - view.y;
+    const relX = pos.x - cam.midPoint.x + WORLD_VIEW_WIDTH * 0.5;
+    const relY = pos.y - cam.midPoint.y + WORLD_VIEW_HEIGHT * 0.5;
     const ax = clamp(relX, minX, maxX);
     const ay = clamp(relY, minY, maxY);
     const angle = Math.atan2(relY - WORLD_VIEW_HEIGHT * 0.5, relX - WORLD_VIEW_WIDTH * 0.5);
@@ -532,7 +533,7 @@ export function updateOffscreenTeammateArrowsImpl(this: GameScene): void {
 export function updateMinimapHudImpl(this: GameScene): void {
   const sim = this.transport.getSim();
   const room = sim.getCurrentRoom();
-  const minimapHash = `${sim.inHub ? 'hub' : sim.currentFloor}:${sim.currentRoomId}:${this.fullMapOpen ? 1 : 0}:${sim.secretWallBroken ? 1 : 0}:${room.cleared ? 1 : 0}:${sim.runStats.roomsCleared}:${sim.pings.length}:${i18n.getLocale()}`;
+  const minimapHash = `${sim.inHub ? 'hub' : sim.currentFloor}:${sim.currentRoomId}:${this.fullMapOpen ? 1 : 0}:${sim.secretWallBroken ? 1 : 0}:${room.cleared ? 1 : 0}:${sim.runStats.roomsCleared}:${sim.pings.length}:${i18n.getLocale()}:${this.hudPadX}:${this.hudPadY}`;
   if (minimapHash === this.lastMinimapHash) return;
   this.lastMinimapHash = minimapHash;
 
@@ -573,8 +574,8 @@ export function updateMinimapHudImpl(this: GameScene): void {
   const spanX = Math.max(1, maxGx - minGx + 1);
   const spanY = Math.max(1, maxGy - minGy + 1);
 
-  const panelX = this.fullMapOpen ? 260 : 776;
-  const panelY = this.fullMapOpen ? 105 : 72;
+  const panelX = this.fullMapOpen ? 260 : 776 + this.hudPadX;
+  const panelY = this.fullMapOpen ? 105 : 72 - this.hudPadY;
   const panelW = this.fullMapOpen ? 440 : 172;
   const panelH = this.fullMapOpen ? 310 : 108;
 

@@ -3,6 +3,7 @@ import {
   MAX_WEAPON_SLOTS,
   VIETNAMESE_VERIFICATION_STRING,
   WEAPONS,
+  WORLD_VIEW_WIDTH,
 } from '@ashen-pact/shared';
 import { hexToNum, PALETTE } from '../../art/palette.js';
 import { TextureBaker } from '../../art/texture-baker.js';
@@ -40,26 +41,55 @@ export function syncHudDebugVisibility(scene: GameScene): void {
   }
 }
 
+export function applyHudEdgeAnchors(scene: GameScene): void {
+  const padX = scene.hudPadX;
+  const padY = scene.hudPadY;
+
+  if (scene.hudTopBarBg) {
+    scene.hudTopBarBg.clear();
+    scene.hudTopBarBg.fillStyle(hexToNum(PALETTE.INK_DARK), 0.72);
+    scene.hudTopBarBg.fillRect(-padX, -padY, WORLD_VIEW_WIDTH + padX * 2, 66);
+    scene.hudTopBarBg.lineStyle(1.5, hexToNum(PALETTE.SLATE_MID), 0.75);
+    scene.hudTopBarBg.lineBetween(-padX, 66 - padY, WORLD_VIEW_WIDTH + padX, 66 - padY);
+  }
+
+  if (scene.hudBottomBarBg) {
+    scene.hudBottomBarBg.clear();
+    scene.hudBottomBarBg.fillStyle(hexToNum(PALETTE.INK_DARK), 0.78);
+    scene.hudBottomBarBg.fillRect(-padX, 482 + padY, WORLD_VIEW_WIDTH + padX * 2, 58);
+    scene.hudBottomBarBg.lineStyle(1.5, hexToNum(PALETTE.SLATE_MID), 0.8);
+    scene.hudBottomBarBg.lineBetween(-padX, 482 + padY, WORLD_VIEW_WIDTH + padX, 482 + padY);
+  }
+
+  scene.hudTopLeftContainer?.setPosition(-padX, -padY);
+  scene.hudTopCenterContainer?.setPosition(0, -padY);
+  scene.hudTopRightContainer?.setPosition(padX, -padY);
+  scene.hudBottomCenterContainer?.setPosition(0, padY);
+  scene.coopHudContainer?.setPosition(-padX, -padY);
+  scene.hubPreviewContainer?.setPosition(-padX, padY);
+  scene.lastMinimapHash = '';
+}
+
 export function buildVectorHudImpl(this: GameScene): void {
+  const ui = this.uiScene;
   const textRes = TextureBaker.getBakeScale();
   const invBake = 1 / textRes;
 
-  this.hudContainer = this.add.container(0, 0);
-  this.hudContainer.setDepth(900);
+  this.hudContainer = ui.add.container(0, 0).setDepth(2000);
 
-  // Top HUD Panel (x: 12, y: 8, w: 936, h: 60)
-  const topPanel = this.add.graphics();
-  topPanel.fillStyle(hexToNum(PALETTE.SLATE_DARK), 0.92);
-  topPanel.lineStyle(2.5, hexToNum(PALETTE.INK_DARK), 1);
-  topPanel.fillRoundedRect(12, 8, 936, 60, 9);
-  topPanel.strokeRoundedRect(12, 8, 936, 60, 9);
-  this.hudContainer.add(topPanel);
+  this.hudTopBarBg = ui.add.graphics();
+  this.hudBottomBarBg = ui.add.graphics();
+  this.hudTopLeftContainer = ui.add.container(0, 0);
+  this.hudTopCenterContainer = ui.add.container(0, 0);
+  this.hudTopRightContainer = ui.add.container(0, 0);
+  this.hudBottomCenterContainer = ui.add.container(0, 0);
 
-  this.hudBarsGraphics = this.add.graphics();
-  this.hudContainer.add(this.hudBarsGraphics);
+  // 1. Top-Left HUD Bars & Stats
+  this.hudBarsGraphics = ui.add.graphics();
+  this.hudTopLeftContainer.add(this.hudBarsGraphics);
 
   const makeBarText = (x: number, y: number, initText: string) => {
-    const t = this.add.text(x, y, initText, {
+    const t = ui.add.text(x, y, initText, {
       fontFamily: '"Be Vietnam Pro", sans-serif',
       fontSize: '11px',
       fontStyle: '800',
@@ -69,7 +99,7 @@ export function buildVectorHudImpl(this: GameScene): void {
       resolution: textRes,
     });
     this.textObjects.push(t);
-    this.hudContainer.add(t);
+    this.hudTopLeftContainer?.add(t);
     return t;
   };
 
@@ -77,7 +107,7 @@ export function buildVectorHudImpl(this: GameScene): void {
   this.armorLabelText = makeBarText(162, 15, 'GIÁP 6/6');
   this.energyLabelText = makeBarText(296, 15, 'NL 150/150');
 
-  this.statsLineText = this.add.text(
+  this.statsLineText = ui.add.text(
     432,
     16.5,
     isEffectiveDebugUiEnabled(this.coopMode !== 'solo')
@@ -94,9 +124,9 @@ export function buildVectorHudImpl(this: GameScene): void {
     },
   );
   this.textObjects.push(this.statsLineText);
-  this.hudContainer.add(this.statsLineText);
+  this.hudTopLeftContainer.add(this.statsLineText);
 
-  this.statusText = this.add.text(
+  this.statusText = ui.add.text(
     24,
     44,
     'WASD: Chạy · Chuột: Bắn/Khiên · Shift: Dash · R: Ng.Tố · G: Đồ Họa · F1-F7: Debug',
@@ -109,9 +139,10 @@ export function buildVectorHudImpl(this: GameScene): void {
     },
   );
   this.textObjects.push(this.statusText);
-  this.hudContainer.add(this.statusText);
+  this.hudTopLeftContainer.add(this.statusText);
 
-  this.elementBtnText = this.add
+  // 2. Top-Right HUD Buttons & Invite Panel
+  this.elementBtnText = ui.add
     .text(490, 42, '[R] Ng.Tố: Vật Lý', {
       fontFamily: '"Be Vietnam Pro", sans-serif',
       fontSize: '10.5px',
@@ -128,9 +159,9 @@ export function buildVectorHudImpl(this: GameScene): void {
     zzfx.play('weapon_swap');
   });
   this.textObjects.push(this.elementBtnText);
-  this.hudContainer.add(this.elementBtnText);
+  this.hudTopRightContainer.add(this.elementBtnText);
 
-  this.qualityBtnText = this.add
+  this.qualityBtnText = ui.add
     .text(658, 42, '[G] Đồ Họa: CAO', {
       fontFamily: '"Be Vietnam Pro", sans-serif',
       fontSize: '10.5px',
@@ -146,9 +177,9 @@ export function buildVectorHudImpl(this: GameScene): void {
     graphicsSettings.cycleQuality();
   });
   this.textObjects.push(this.qualityBtnText);
-  this.hudContainer.add(this.qualityBtnText);
+  this.hudTopRightContainer.add(this.qualityBtnText);
 
-  const galleryBtn = this.add
+  const galleryBtn = ui.add
     .text(772, 42, '[Art Gallery]', {
       fontFamily: '"Be Vietnam Pro", sans-serif',
       fontSize: '11px',
@@ -165,9 +196,9 @@ export function buildVectorHudImpl(this: GameScene): void {
   });
   this.galleryBtnText = galleryBtn;
   this.textObjects.push(galleryBtn);
-  this.hudContainer.add(galleryBtn);
+  this.hudTopRightContainer.add(galleryBtn);
 
-  const menuBtn = this.add
+  const menuBtn = ui.add
     .text(868, 42, i18n.t('ui.hud.menuBtn'), {
       fontFamily: '"Be Vietnam Pro", sans-serif',
       fontSize: '11.5px',
@@ -181,9 +212,12 @@ export function buildVectorHudImpl(this: GameScene): void {
   menuBtn.on('pointerdown', () => this.scene.start('MenuScene'));
   this.menuBtnText = menuBtn;
   this.textObjects.push(menuBtn);
-  this.hudContainer.add(menuBtn);
+  this.hudTopRightContainer.add(menuBtn);
 
-  // Bottom Weapon & Skill Bar (y: 482, h: 50)
+  this.invitePanelContainer = ui.add.container(0, 0);
+  this.hudTopRightContainer.add(this.invitePanelContainer);
+
+  // 3. Bottom-Center Weapon & Skill Bar (y: 482, h: 50)
   const slotW = 166;
   const slotH = 44;
   const startX = 148;
@@ -195,20 +229,20 @@ export function buildVectorHudImpl(this: GameScene): void {
     const wDef = WEAPONS[weaponId] ?? WEAPONS.knight_sword!;
     const sx = startX + idx * (slotW + 8);
 
-    const slotBg = this.add.graphics();
+    const slotBg = ui.add.graphics();
     this.weaponSlotBgs.push(slotBg);
-    this.hudContainer.add(slotBg);
+    this.hudBottomCenterContainer.add(slotBg);
 
-    const icon = this.add.sprite(
+    const icon = ui.add.sprite(
       sx + 26,
       barY + slotH / 2,
       TextureBaker.getWeaponTextureKey(weaponId),
     );
     icon.setScale(invBake * 0.82);
     this.weaponIconSprites.push(icon);
-    this.hudContainer.add(icon);
+    this.hudBottomCenterContainer.add(icon);
 
-    const nameTxt = this.add.text(
+    const nameTxt = ui.add.text(
       sx + 48,
       barY + 7,
       `[${idx + 1}] ${i18n.weaponName(weaponId, wDef.nameVi)}`,
@@ -224,9 +258,9 @@ export function buildVectorHudImpl(this: GameScene): void {
     );
     this.weaponNameTexts.push(nameTxt);
     this.textObjects.push(nameTxt);
-    this.hudContainer.add(nameTxt);
+    this.hudBottomCenterContainer.add(nameTxt);
 
-    const metaTxt = this.add.text(
+    const metaTxt = ui.add.text(
       sx + 48,
       barY + 24,
       `DMG ${wDef.damage}${wDef.pelletCount > 1 ? `×${wDef.pelletCount}` : ''} · ${i18n.t('ui.hud.energy')} ${wDef.energyCost}`,
@@ -239,22 +273,22 @@ export function buildVectorHudImpl(this: GameScene): void {
     );
     this.weaponMetaTexts.push(metaTxt);
     this.textObjects.push(metaTxt);
-    this.hudContainer.add(metaTxt);
+    this.hudBottomCenterContainer.add(metaTxt);
 
-    const hit = this.add
+    const hit = ui.add
       .rectangle(sx + slotW / 2, barY + slotH / 2, slotW, slotH, 0x000000, 0)
       .setInteractive({ useHandCursor: true });
     hit.on('pointerdown', () => {
       this.queuedWeaponSlot = idx;
     });
-    this.hudContainer.add(hit);
+    this.hudBottomCenterContainer.add(hit);
   }
 
-  // Bottom-Left Skill [Space/RMB] & Dash [Shift] Cooldown Cards + Bottom-Right [Esc] Pause Card
-  this.abilityHudGraphics = this.add.graphics();
-  this.hudContainer.add(this.abilityHudGraphics);
+  // Bottom Skill [Space/RMB] & Dash [Shift] Cooldown Cards + [Esc] Pause Card
+  this.abilityHudGraphics = ui.add.graphics();
+  this.hudBottomCenterContainer.add(this.abilityHudGraphics);
 
-  this.skillCdText = this.add
+  this.skillCdText = ui.add
     .text(45, barY + 29, i18n.t('ui.hud.ready'), {
       fontFamily: '"Be Vietnam Pro", sans-serif',
       fontSize: '9.5px',
@@ -266,9 +300,9 @@ export function buildVectorHudImpl(this: GameScene): void {
     })
     .setOrigin(0.5);
   this.textObjects.push(this.skillCdText);
-  this.hudContainer.add(this.skillCdText);
+  this.hudBottomCenterContainer.add(this.skillCdText);
 
-  const skillLabel = this.add
+  const skillLabel = ui.add
     .text(45, barY + 12, i18n.getLocale() === 'en' ? '⚡Skill [Space]' : '⚡KN [Space]', {
       fontFamily: '"Be Vietnam Pro", sans-serif',
       fontSize: '8.5px',
@@ -281,17 +315,17 @@ export function buildVectorHudImpl(this: GameScene): void {
     .setOrigin(0.5);
   this.skillLabelText = skillLabel;
   this.textObjects.push(skillLabel);
-  this.hudContainer.add(skillLabel);
+  this.hudBottomCenterContainer.add(skillLabel);
 
-  const skillHit = this.add
+  const skillHit = ui.add
     .rectangle(45, barY + slotH / 2, 62, slotH, 0x000000, 0)
     .setInteractive({ useHandCursor: true });
   skillHit.on('pointerdown', () => {
     this.skillQueued = true;
   });
-  this.hudContainer.add(skillHit);
+  this.hudBottomCenterContainer.add(skillHit);
 
-  this.dashCdText = this.add
+  this.dashCdText = ui.add
     .text(111, barY + 29, i18n.t('ui.hud.ready'), {
       fontFamily: '"Be Vietnam Pro", sans-serif',
       fontSize: '9.5px',
@@ -303,9 +337,9 @@ export function buildVectorHudImpl(this: GameScene): void {
     })
     .setOrigin(0.5);
   this.textObjects.push(this.dashCdText);
-  this.hudContainer.add(this.dashCdText);
+  this.hudBottomCenterContainer.add(this.dashCdText);
 
-  const dashLabel = this.add
+  const dashLabel = ui.add
     .text(111, barY + 12, '💨Dash [Shift]', {
       fontFamily: '"Be Vietnam Pro", sans-serif',
       fontSize: '8.5px',
@@ -317,24 +351,24 @@ export function buildVectorHudImpl(this: GameScene): void {
     })
     .setOrigin(0.5);
   this.textObjects.push(dashLabel);
-  this.hudContainer.add(dashLabel);
+  this.hudBottomCenterContainer.add(dashLabel);
 
-  const dashHit = this.add
+  const dashHit = ui.add
     .rectangle(111, barY + slotH / 2, 62, slotH, 0x000000, 0)
     .setInteractive({ useHandCursor: true });
   dashHit.on('pointerdown', () => {
     this.dashQueued = true;
   });
-  this.hudContainer.add(dashHit);
+  this.hudBottomCenterContainer.add(dashHit);
 
-  const pauseBtnBg = this.add.graphics();
+  const pauseBtnBg = ui.add.graphics();
   pauseBtnBg.fillStyle(hexToNum(PALETTE.SLATE_DARK), 0.92);
   pauseBtnBg.lineStyle(2, hexToNum(PALETTE.SOLAR_GOLD), 0.95);
   pauseBtnBg.fillRoundedRect(848, barY, 98, slotH, 8);
   pauseBtnBg.strokeRoundedRect(848, barY, 98, slotH, 8);
-  this.hudContainer.add(pauseBtnBg);
+  this.hudBottomCenterContainer.add(pauseBtnBg);
 
-  const pauseBtnText = this.add
+  const pauseBtnText = ui.add
     .text(
       897,
       barY + slotH / 2,
@@ -353,38 +387,25 @@ export function buildVectorHudImpl(this: GameScene): void {
     .setOrigin(0.5);
   this.pauseBtnText = pauseBtnText;
   this.textObjects.push(pauseBtnText);
-  this.hudContainer.add(pauseBtnText);
+  this.hudBottomCenterContainer.add(pauseBtnText);
 
-  const pauseBtnHit = this.add
+  const pauseBtnHit = ui.add
     .rectangle(897, barY + slotH / 2, 98, slotH, 0x000000, 0)
     .setInteractive({ useHandCursor: true });
   pauseBtnHit.on('pointerdown', () => {
     zzfx.play('ui_click');
     this.togglePauseModal();
   });
-  this.hudContainer.add(pauseBtnHit);
+  this.hudBottomCenterContainer.add(pauseBtnHit);
 
-  // Top-Right Minimap & Fog of War Overlay
-  this.minimapGraphics = this.add.graphics();
-  this.hudContainer.add(this.minimapGraphics);
+  this.weaponCompareContainer = ui.add.container(0, 0);
+  this.hudBottomCenterContainer.add(this.weaponCompareContainer);
 
-  this.minimapTitleText = this.add.text(784, 76, 'T1/2 · Khởi Đầu [Tab]', {
-    fontFamily: '"Be Vietnam Pro", sans-serif',
-    fontSize: '9.5px',
-    fontStyle: '700',
-    color: PALETTE.SOLAR_GOLD,
-    stroke: PALETTE.INK_DARK,
-    strokeThickness: 2.5,
-    resolution: textRes,
-  });
-  this.textObjects.push(this.minimapTitleText);
-  this.hudContainer.add(this.minimapTitleText);
+  // 4. Top-Center Boss HP Bar (Phase 1 / Phase 2 / Phase 3 with 66% & 33% markers)
+  this.bossBarGraphics = ui.add.graphics();
+  this.hudTopCenterContainer.add(this.bossBarGraphics);
 
-  // Top-Center Boss HP Bar (Phase 1 / Phase 2 / Phase 3 with 66% & 33% markers)
-  this.bossBarGraphics = this.add.graphics();
-  this.hudContainer.add(this.bossBarGraphics);
-
-  this.bossTitleText = this.add
+  this.bossTitleText = ui.add
     .text(480, 76, '', {
       fontFamily: '"Be Vietnam Pro", sans-serif',
       fontSize: '12px',
@@ -397,46 +418,59 @@ export function buildVectorHudImpl(this: GameScene): void {
     .setOrigin(0.5, 0)
     .setVisible(false);
   this.textObjects.push(this.bossTitleText);
-  this.hudContainer.add(this.bossTitleText);
+  this.hudTopCenterContainer.add(this.bossTitleText);
 
-  // Co-op Teammate HUD Container (left side), Host Invite QR Panel (right side), and Off-Screen Arrows
-  this.offscreenArrowGraphics = this.add.graphics();
-  this.hudContainer.add(this.offscreenArrowGraphics);
+  // 5. Top-Right Minimap & Fog of War Overlay
+  this.minimapGraphics = ui.add.graphics();
+  this.minimapTitleText = ui.add.text(784, 76, 'T1/2 · Khởi Đầu [Tab]', {
+    fontFamily: '"Be Vietnam Pro", sans-serif',
+    fontSize: '9.5px',
+    fontStyle: '700',
+    color: PALETTE.SOLAR_GOLD,
+    stroke: PALETTE.INK_DARK,
+    strokeThickness: 2.5,
+    resolution: textRes,
+  });
+  this.textObjects.push(this.minimapTitleText);
 
-  this.coopHudContainer = this.add.container(0, 0);
-  this.hudContainer.add(this.coopHudContainer);
+  // 6. Co-op Teammate HUD Container (left side), Hub Preview, Off-Screen Arrows & Emote Wheel
+  this.coopHudContainer = ui.add.container(0, 0);
+  this.hubPreviewContainer = ui.add.container(0, 0);
+  this.offscreenArrowGraphics = ui.add.graphics();
+  this.emoteWheelContainer = ui.add.container(0, 0);
 
-  this.invitePanelContainer = this.add.container(0, 0);
-  this.hudContainer.add(this.invitePanelContainer);
+  // 7. Modal Container, Pause Overlay Container & Iris Transition Graphics
+  this.modalContainer = ui.add.container(0, 0);
+  this.pauseContainer = ui.add.container(0, 0).setVisible(false);
+  this.irisGraphics = ui.add.graphics();
 
-  this.hubPreviewContainer = this.add.container(0, 0);
-  this.hudContainer.add(this.hubPreviewContainer);
+  this.hudContainer.add([
+    this.hudTopBarBg,
+    this.hudBottomBarBg,
+    this.hudTopLeftContainer,
+    this.hudTopCenterContainer,
+    this.hudTopRightContainer,
+    this.hudBottomCenterContainer,
+    this.minimapGraphics,
+    this.minimapTitleText,
+    this.coopHudContainer,
+    this.hubPreviewContainer,
+    this.offscreenArrowGraphics,
+    this.emoteWheelContainer,
+    this.modalContainer,
+    this.pauseContainer,
+    this.irisGraphics,
+  ]);
 
-  this.weaponCompareContainer = this.add.container(0, 0);
-  this.hudContainer.add(this.weaponCompareContainer);
-
-  this.emoteWheelContainer = this.add.container(0, 0);
-  this.hudContainer.add(this.emoteWheelContainer);
-
-  // Iris Transition Graphics placed below Modals & Pause Overlay so modals are never obscured
-  this.irisGraphics = this.add.graphics();
-  this.hudContainer.add(this.irisGraphics);
-
-  // Modal Container for Between-Floor Buff Selection & Run Victory/Defeat Summary
-  this.modalContainer = this.add.container(0, 0);
-  this.hudContainer.add(this.modalContainer);
-
-  // Pause Overlay Container & Settings/Controls Modal Manager
-  this.pauseContainer = this.add.container(0, 0).setVisible(false);
-  this.hudContainer.add(this.pauseContainer);
-
-  this.settingsModal = new ModalOverlayManager(this, () => {
+  this.settingsModal?.destroy();
+  this.settingsModal = new ModalOverlayManager(ui, () => {
     this.invalidateAllHudCaches();
     if (this.pauseModalOpen) {
       this.rebuildPauseModal();
     }
   });
   syncHudDebugVisibility(this);
+  applyHudEdgeAnchors(this);
 }
 
 export function invalidateAllHudCachesImpl(this: GameScene): void {
@@ -476,6 +510,7 @@ export function togglePauseModalImpl(this: GameScene, forceState?: boolean): voi
 }
 
 export function rebuildPauseModalImpl(this: GameScene): void {
+  const ui = this.uiScene;
   this.pauseContainer.removeAll(true);
   if (!this.pauseModalOpen) {
     this.pauseContainer.setVisible(false);
@@ -484,8 +519,8 @@ export function rebuildPauseModalImpl(this: GameScene): void {
   this.pauseContainer.setVisible(true);
   const textRes = TextureBaker.getBakeScale();
 
-  const blocker = this.add
-    .rectangle(480, 270, 1920, 1080, hexToNum(PALETTE.INK_DARK), 0.78)
+  const blocker = ui.add
+    .rectangle(480, 270, 2400, 1600, hexToNum(PALETTE.INK_DARK), 0.78)
     .setInteractive();
   this.pauseContainer.add(blocker);
 
@@ -494,14 +529,14 @@ export function rebuildPauseModalImpl(this: GameScene): void {
   const cardX = 480 - cardW / 2;
   const cardY = 270 - cardH / 2;
 
-  const panel = this.add.graphics();
+  const panel = ui.add.graphics();
   panel.fillStyle(hexToNum(PALETTE.SLATE_DARK), 0.98);
   panel.lineStyle(3, hexToNum(PALETTE.SOLAR_GOLD), 1);
   panel.fillRoundedRect(cardX, cardY, cardW, cardH, 12);
   panel.strokeRoundedRect(cardX, cardY, cardW, cardH, 12);
   this.pauseContainer.add(panel);
 
-  const title = this.add
+  const title = ui.add
     .text(480, cardY + 30, i18n.t('ui.pause.title'), {
       fontFamily: '"Be Vietnam Pro", sans-serif',
       fontSize: '20px',
@@ -514,7 +549,7 @@ export function rebuildPauseModalImpl(this: GameScene): void {
     .setOrigin(0.5);
   this.pauseContainer.add(title);
 
-  const notice = this.add
+  const notice = ui.add
     .text(
       480,
       cardY + 58,
@@ -583,7 +618,7 @@ export function rebuildPauseModalImpl(this: GameScene): void {
     const bw = 310;
     const bh = 34;
 
-    const btnBg = this.add.graphics();
+    const btnBg = ui.add.graphics();
     const draw = (hover: boolean) => {
       btnBg.clear();
       btnBg.fillStyle(hexToNum(hover ? PALETTE.SOLAR_GOLD : act.color), 1);
@@ -593,7 +628,7 @@ export function rebuildPauseModalImpl(this: GameScene): void {
     };
     draw(false);
 
-    const txt = this.add
+    const txt = ui.add
       .text(480, by, act.label, {
         fontFamily: '"Be Vietnam Pro", sans-serif',
         fontSize: '12.5px',
@@ -605,7 +640,7 @@ export function rebuildPauseModalImpl(this: GameScene): void {
       })
       .setOrigin(0.5);
 
-    const hit = this.add
+    const hit = ui.add
       .rectangle(480, by, bw, bh, 0x000000, 0)
       .setInteractive({ useHandCursor: true });
     hit.on('pointerover', () => {

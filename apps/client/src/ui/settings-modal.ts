@@ -26,11 +26,15 @@ export class ModalOverlayManager {
   }
 
   public syncViewportPosition(): void {
-    if (!this.container.visible) return;
-    const view = this.scene.cameras?.main?.worldView;
-    if (view && view.width > 0) {
-      this.container.setPosition(view.x, view.y);
+    if (!this.container.active || !this.container.visible) return;
+    const cam = this.scene.cameras?.main;
+    if (cam) {
+      this.container.setPosition(cam.midPoint.x - 480, cam.midPoint.y - 270);
     }
+  }
+
+  public destroy(): void {
+    this.scene.events.off(Phaser.Scenes.Events.POST_UPDATE, this.syncViewportPosition, this);
   }
 
   public getActiveModal(): ModalKind {
@@ -85,7 +89,7 @@ export class ModalOverlayManager {
 
     // Fullscreen dark backdrop blocker (absorbs clicks behind modal)
     const blocker = this.scene.add
-      .rectangle(480, 270, 1920, 1080, hexToNum(PALETTE.INK_DARK), 0.82)
+      .rectangle(480, 270, 2400, 1600, hexToNum(PALETTE.INK_DARK), 0.82)
       .setInteractive();
     this.container.add(blocker);
 

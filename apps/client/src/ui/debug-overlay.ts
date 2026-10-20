@@ -327,6 +327,7 @@ export function initGlobalDebugState(): GameDebugState {
  */
 export class DebugOverlay {
   private readonly scene: Phaser.Scene;
+  private readonly uiScene: Phaser.Scene;
   private readonly container: Phaser.GameObjects.Container;
   private readonly bg: Phaser.GameObjects.Graphics;
   private readonly textObj: Phaser.GameObjects.Text;
@@ -335,22 +336,23 @@ export class DebugOverlay {
   private onKeyDown?: (ev: KeyboardEvent) => void;
   private unsubDebugFlags?: () => void;
 
-  constructor(scene: Phaser.Scene, startVisible = false) {
+  constructor(scene: Phaser.Scene, startVisible = false, uiScene: Phaser.Scene = scene) {
     this.scene = scene;
+    this.uiScene = uiScene;
     const state = initGlobalDebugState();
     const canShow = isEffectiveDebugUiEnabled(state.coopMode !== 'solo');
     state.overlayVisible = canShow ? startVisible : false;
 
-    this.container = scene.add.container(16, 76);
+    this.container = this.uiScene.add.container(16, 76);
     this.container.setDepth(9999);
 
-    this.bg = scene.add.graphics();
+    this.bg = this.uiScene.add.graphics();
     this.bg.fillStyle(0x0b090e, 0.92);
     this.bg.lineStyle(2, 0x38bdf8, 0.95);
     this.bg.fillRoundedRect(0, 0, 368, 224, 8);
     this.bg.strokeRoundedRect(0, 0, 368, 224, 8);
 
-    this.textObj = scene.add.text(12, 10, '', {
+    this.textObj = this.uiScene.add.text(12, 10, '', {
       fontFamily: '"Be Vietnam Pro", monospace',
       fontSize: '11px',
       color: PALETTE.BONE_WHITE,
@@ -474,7 +476,7 @@ export class DebugOverlay {
         : Math.max(1, Math.ceil(this.scene.children.length / 4));
 
     if (this.container.visible) {
-      const view = this.scene.cameras.main.worldView;
+      const view = this.uiScene.cameras.main.worldView;
       if (view && view.width > 0) {
         this.container.setPosition(view.x + 16, view.y + 76);
       }

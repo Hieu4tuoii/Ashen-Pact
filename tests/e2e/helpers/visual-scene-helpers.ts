@@ -201,7 +201,18 @@ export async function lockCameraAndIrisToPlayer(page: Page): Promise<void> {
   await page.evaluate(() => {
     const sim = window.__GAME_TRANSPORT__?.getSim();
     const gs = window.__PHASER_GAME__?.scene.getScene('GameScene') as
-      | Record<string, unknown>
+      | (Record<string, unknown> & {
+          cameras?: {
+            main?: {
+              zoom?: number;
+              width: number;
+              height: number;
+              centerOn: (x: number, y: number) => void;
+            };
+          };
+          hudScene?: unknown;
+          hudContainer?: { setPosition: (x: number, y: number) => void };
+        })
       | undefined;
     if (sim && gs) {
       sim.player.prevX = sim.player.x;
@@ -216,6 +227,30 @@ export async function lockCameraAndIrisToPlayer(page: Page): Promise<void> {
         hostInviteUrl: 'http://127.0.0.1:2567/?coop=join',
         lastInvitePanelHash: '',
       });
+      const cam = gs.cameras?.main;
+      if (cam) {
+        const zoom = Math.max(0.1, cam.zoom || 1);
+        const viewW = cam.width > 0 ? cam.width / zoom : 960;
+        const viewH = cam.height > 0 ? cam.height / zoom : 540;
+        const halfW = viewW * 0.5;
+        const halfH = viewH * 0.5;
+        const minCamX = halfW - 32;
+        const maxCamX = sim.map.width - halfW + 32;
+        const minCamY = halfH - 32;
+        const maxCamY = sim.map.height - halfH + 32;
+        const clampedX =
+          minCamX > maxCamX
+            ? sim.map.width * 0.5
+            : Math.max(minCamX, Math.min(maxCamX, sim.player.x));
+        const clampedY =
+          minCamY > maxCamY
+            ? sim.map.height * 0.5
+            : Math.max(minCamY, Math.min(maxCamY, sim.player.y));
+        cam.centerOn(clampedX, clampedY);
+        if (!gs.hudScene && gs.hudContainer) {
+          gs.hudContainer.setPosition(clampedX - halfW, clampedY - halfH);
+        }
+      }
     }
   });
 }
