@@ -527,3 +527,33 @@
      - Cập nhật `tests/e2e/phase1.spec.ts` (2 ô vũ khí + nhặt `scrap_shotgun` thay vào ô đang cầm) và `tests/e2e/phase4.spec.ts` (emote `KeyT + Digit1` và kịch bản Co-op 2 trình duyệt: P1 đầy 2 ô nhặt vũ khí mới → vũ khí cũ rơi ra đất → P2 nhìn thấy và nhấn `E` nhặt thành công).
      - Bổ sung `stripFramesPerStep` cùng 2 cảnh mới `b1-weapon-drop` (kèm dải 8 frame `b1-weapon-drop-strip.png` ghi lại trọn vẹn cung văng nảy `0.25s`) và `ui-emote-wheel` vào `tests/e2e/helpers/visual-scenes.ts`; chụp bộ ảnh `after` với `--verify-freeze` đạt `diffRatio === 0` trên cả 6 cảnh.
      - **Visual Gate (`docs/screenshots/polish-p2/review.md`):** Đánh giá mù A/B (Blind A/B Review bởi độc lập `pro` Visual Reviewer): **PASS** (`version-A` = `after` thắng tuyệt đối trên cả 4 cảnh; `0` blocker, `0` major; Readability **`8.5 / 10`**, Interactables/Weapons **`9.0 / 10`**, UI/HUD 2-slot & Emote Wheel **`9.0 / 10`**, Animation **`8.5 / 10`**, Product Feel **`8.5 / 10`**, Phase P2 DoD **`10 / 10`**).
+
+### 3.8 Phase P3 — Nền Ánh Sáng Trong Trẻo, PostFX, Tách `HudScene` & Camera Không Méo (Hoàn thành ✅)
+- **Commits:** `1f88cb6`, `e90d17c`, `b63a44a`, `2f87e1d`.
+- **Hạng mục đã thực hiện:**
+  1. **Nền tảng Ánh sáng Trong Trẻo Toàn Màn Hình & Vũng Sáng Cộng Tính (`apps/client/src/fx/lighting.ts`, `fx-ambient.ts`, `fx-particles.ts`, `arena-tiles.ts`):**
+     - Nâng `ambientColor` của 3 biome lên mức sáng trong trẻo (`Biome 1`: `#DEE2EC` `~0.88`, `Biome 2`: `#D4E1EE` `~0.86`, `Biome 3`: `#EBDBD1` `~0.88`); loại bỏ hoàn toàn cơ chế cắt tầm nhìn quanh người chơi (`mainPlayerVisionRadius`, `allyVisionRadius`) và tắt vignette đen mặc định (`uVignetteStrength = 0.0`).
+     - Bổ sung lớp `glowTexture` (`Phaser.BlendModes.ADD`, `alpha = 0.55`) cùng `soft_light_falloff_glow` với đường cong suy giảm mượt $(1 - d/R)^2 \cdot (1 - 0.35 d/R)$ để đèn đuốc/chậu lửa luôn tạo vũng sáng ấm cam-vàng (`#F59E42` + lõi `#FFD27A`, $\Delta L^* \ge +12.91\text{..}+29.23$) ngay cả khi ambient cao và ở cả cấu hình `Low`.
+     - Sửa lỗi dùng chung `brushSprite` với `glow_mushroom` gây ám xanh lá lên sàn băng Biome 2; loại bỏ sương mù đục `fx_ambient_mist` và dọn sạch prop `glow_mushroom` khỏi Biome 2 & 3; nâng nhẹ độ sáng sàn nền Biome 3 (`floorBase: LEATHER_MID`, `floorShade: LEATHER_DARK`) để mọi góc đạt $L^* \ge 20.17$.
+  2. **Làm Lại Hiệu Ứng Bão Tuyết Boss 2 Kryssa Phase 3 (`lighting.ts`, `fx-ambient.ts`, `game-scene-Boss2AndCoopHelpers.ts`):**
+     - Thay thế lớp phủ làm tối màn hình bằng mưa tuyết chéo dày gấp 3 lần (`vx = -155..-95`, `vy = 95..145`), chuyển màu lạnh nhẹ bảo toàn độ sáng (`uGradeLift = [0.008, 0.018, 0.032]`, độ sáng sàn $L^*$ tăng nhẹ `+0.89%`, tức mức sụt giảm `0.0% <= 5%`) và viền sương giá băng thanh khiết `#CFE8EE` ở 4 mép màn hình (`alpha <= 0.11`).
+  3. **Tách `HudScene` Độc Lập & Camera Zoom Đồng Đều Đa Tỉ Lệ Màn Hình (`HudScene.ts`, `main.ts`, `arena-tiles.ts`, `game-scene-HudLifecycle.ts`):**
+     - Tách toàn bộ HUD, minimap, bảng Co-op, preview kỹ năng Hub, vòng biểu cảm, modal chọn buff/cài đặt/tạm dừng/kết quả, `DebugOverlay` và tâm ngắm sang `HudScene` chạy song song phía trên `GameScene` với `postPipelines.length === 0` và không chịu ảnh hưởng của `lightTexture`/`glowTexture`.
+     - Sửa lỗi méo hình trên màn hình `21:9` (`2560×1080`) và `5:4` (`1280×1024`) bằng công thức zoom đồng đều `zoom = Math.min(w / 960, h / 540)` (`cam.setZoom(zoom)`, `zoomX === zoomY`) trên cả `GameScene`, `HudScene`, `MenuScene` và `ArtGalleryScene`, đồng thời căn giữa map khi viewport lớn hơn kích thước phòng và neo các cụm HUD sát 4 góc/cạnh thật của màn hình (`hudPadX`, `hudPadY`).
+  4. **Số đo Trắc quang Định lượng (`docs/screenshots/polish-p3/after/metrics.json`):**
+
+| Cảnh (`scene`) | `unlitFloorMeanL` | `litFloorMeanL` | `cornerToUnlitRatio` (`≥ 0.82`) | `minCornerL` (`≥ 15`) | `brazierToFloorDeltaL` (`≥ +8.0`) | `clipWhiteRatio` (`< 0.005`) | `freezeDiffRatio` (`< 0.005`) | Kết quả |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| `b1-start-room` | `20.99` | `22.70` | **`0.9555`** (95.6%) | **`16.61`** | **`+25.94`** | `0.00000` | `0.00000` | PASS |
+| `b1-combat` | `20.89` | `23.72` | **`0.9606`** (96.1%) | **`16.51`** | **`+16.02`** | `0.00000` | `0.00000` | PASS |
+| `b1-combat-low` | `21.02` | `23.50` | **`0.9926`** (99.3%) | **`17.94`** | **`+16.24`** | `0.00000` | `0.00000` | PASS |
+| `b2-start-room` | `24.64` | `27.14` | **`0.9781`** (97.8%) | **`17.27`** | **`+26.19`** | `0.00000` | `0.00000` | PASS |
+| `b2-combat` | `23.85` | `26.82` | **`0.9347`** (93.5%) | **`17.34`** | **`+19.30`** | `0.00000` | `0.00000` | PASS |
+| `b3-start-room` | `22.35` | `24.16` | **`0.9437`** (94.4%) | **`20.36`** | **`+23.41`** | `0.00000` | `0.00000` | PASS |
+| `b3-combat` | `21.97` | `25.73` | **`0.9371`** (93.7%) | **`20.17`** | **`+21.84`** | `0.00000` | `0.00000` | PASS |
+| `hub-solo` | `22.34` | `23.48` | **`0.9771`** (97.7%) | **`16.93`** | **`+29.23`** | `0.00000` | `0.00000` | PASS |
+| `boss-b2` | `23.20` | `24.01` | **`0.9629`** (96.3%) | **`16.37`** | **`+13.11`** | `0.00006` | `0.00000` | PASS |
+| `boss-b2-blizzard` | `23.43` | `24.23` | **`0.9390`** (93.9%) | **`16.37`** | **`+12.91`** | `0.00006` | `0.00000` | PASS |
+
+  5. **Visual Gate (`docs/screenshots/polish-p3/review.md`):**
+     - Đánh giá mù A/B (Blind A/B Review trên 15 cặp cảnh ngẫu nhiên bởi độc lập `pro` Visual Reviewer `32b8410a-1a30-4317-9367-5040a4d93252`): **PASS** (`after` thắng tuyệt đối **15/15 cảnh = 100%**; `0` blocker, `0` major; Environment **`8.5 / 10`**, Lighting & Clear Visibility **`9.5 / 10`**, Readability **`9.0 / 10`**, UI/HUD `HudScene` & Multi-Aspect **`9.5 / 10`**, FX Blizzard **`9.5 / 10`**, Product Feel **`9.0 / 10`**, Phase P3 DoD **`10 / 10`**).
