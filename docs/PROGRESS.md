@@ -557,3 +557,45 @@
 
   5. **Visual Gate (`docs/screenshots/polish-p3/review.md`):**
      - Đánh giá mù A/B (Blind A/B Review trên 15 cặp cảnh ngẫu nhiên bởi độc lập `pro` Visual Reviewer `32b8410a-1a30-4317-9367-5040a4d93252`): **PASS** (`after` thắng tuyệt đối **15/15 cảnh = 100%**; `0` blocker, `0` major; Environment **`8.5 / 10`**, Lighting & Clear Visibility **`9.5 / 10`**, Readability **`9.0 / 10`**, UI/HUD `HudScene` & Multi-Aspect **`9.5 / 10`**, FX Blizzard **`9.5 / 10`**, Product Feel **`9.0 / 10`**, Phase P3 DoD **`10 / 10`**).
+
+### 3.9 Phase P4 — Kiến Trúc Map Hybrid: Phòng Chuẩn B1, Palette `ENV`, Sàn "Tĩnh Lặng Giữa Tâm", Tường 3D 3 Lớp & Surface Kiến Trúc (Hoàn thành ✅)
+- **Commits:** `464b426`, `d2cc91f`.
+- **Hạng mục đã thực hiện:**
+  1. **Bảng Màu Môi Trường Trầm `ENV_PALETTE` (`apps/client/src/art/palette.ts` + 5 unit tests trong `apps/client/test/polish-p4-map-architecture.test.ts`):**
+     - Định nghĩa chính xác 8 khóa màu môi trường (`floor`, `seam`, `var`, `wallTop`, `wallFront`, `shadow`, `rim`, `accent`) cho cả 4 khu vực: **Hub (`0`)** (`#414B61`), **Biome 1 (`1`)** (`#3D4F47`), **Biome 2 (`2`)** (`#446E78`), **Biome 3 (`3`)** (`#53433F`).
+     - Đảm bảo quan hệ trắc quang CIE $L^*$ nhất quán: $L^*_{\text{floor}} - L^*_{\text{INK\_DARK}} \ge 22.0$, $L^*_{\text{wallTop}} - L^*_{\text{floor}} \in [+12, +18]$, $L^*_{\text{wallFront}} - L^*_{\text{floor}} \in [-12, -8]$, và độ bão hòa HSL $S \le 0.35$ (riêng B2 $\le 0.40$).
+  2. **Sàn Hybrid 2 Vùng Theo `distToWall` & Tường 3D 3 Lớp Có Đổ Bóng Hướng `-135°` (`apps/client/src/art/texture-baker-tiles.ts`, `arena-tiles.ts`):**
+     - Loại bỏ hoàn toàn viền đen `INK_DARK` quanh từng ô sàn (`32×32`), họa tiết bóng bán nguyệt chữ "C" và gờ sáng gắt gây hiệu ứng "giấy kẻ ô" (waffle-grid).
+     - Phân tách tự động bằng khoảng cách Chebyshev `computeTileDistToWall(map, tx, ty)` tới ô `wall`/`pillar`/`cracked_wall` gần nhất:
+       - **Perimeter (`distToWall <= 2`, variants `0..3`):** Đan xen phiến đá `1×1` (`variant 0`), gạch chia `2×2` (`variant 1`), **lưới thoát nước sắt lõm** (`variant 2` tại `distToWall === 1`), và phiến chuyển tiếp (`variant 3` tại `distToWall === 2`, mạch mờ `alpha = 0.20`).
+       - **Center Arena (`distToWall > 2`, variants `4..7`):** Mặt sàn đá nguyên khối phẳng mịn (mạch `ENV.seam` `alpha = 0.06`, biến thiên cụm 3–4 ô bằng `ENV.var` ở `alpha = 0.00..0.60`), đạt `centerDeltaL = 1.13..2.95 <= 8.0`.
+     - Tường & cột trụ 3D 3 lớp: `Top Cap` (`y = 0..20` khi `!hasS`, màu `ENV.wallTop`) có gờ rim-light `ENV.rim` dày `1.8u` ở cạnh Bắc/Tây (`-135°`) và viền ngoài `INK_DARK` `2.2u` chỉ vẽ trên rìa tiếp giáp sàn; `South Cliff Face` cao `cliffH = 12u` (`ENV.wallFront`) có bóng gờ trên `2u` và 2 hàng mạch đá ngang/dọc so le (xóa bỏ chấm glow lặp trên tường); lớp `Wall AO` đổ bóng tiếp xúc `7u` (`alpha = 0.35 → 0`) và bóng đổ chéo Đông–Nam `14u` (`alpha = 0.22 → 0`).
+  3. **Surface Nguyên Tố Ăn Nhập Kiến Trúc (`apps/client/src/art/texture-baker-surfaces.ts`):**
+     - Giảm ~30% độ bão hòa nền của cả 12 loại surface và giữ chi tiết nội vùng $\Delta L^* \le 10$.
+     - Nhóm hữu cơ `P1` (`water`, `electrified_water`, `poison_swamp`, `grass`, `burning_grass`, `ice`): bo tròn góc ngoài lộ thiên `r = 9u` để lộ nền `ENV.floor` tự nhiên và vẽ bờ cong 2 lớp đồng tâm (`outerBank` `3.2u` + `innerLip` `1.6u`) uốn lượn theo rìa ngoài.
+     - Nhóm dẫn nhiệt/cơ khí `P3` (`lava`, `oil`, `burning_oil`, `conveyor`, `chasm`, `ash`): đóng khung bằng gờ đá bazan vát cạnh rộng `4u` (`#7F6559` mặt trên `2.4u` + `#3B2D29` thành trong `1.6u` + viền ngoài `INK_DARK` `1.4u`).
+  4. **Kiến Trúc Đặc Trưng Từng Biome & Khóa Phòng Chuẩn B1 (`apps/client/src/world/biome-architecture.ts`, `docs/ART_GUIDE.md` Mục 5.4, `docs/screenshots/polish-p4/golden-room/`):**
+     - Tuân thủ nghiêm ngặt 3 nguyên tắc: bóng đổ dài `44u` (`alpha = 0.22 → 0`) về hướng Đông–Nam (`-135°`) từ trụ cột `2×2`; vật thể có khối (`hasVolume = true`) chỉ đặt trên ô `wall`/`pillar`; decal sàn (`hasVolume = false`) không viền `INK_DARK`, tự động ẩn khi ô bị phủ bởi surface động (`isFloorDecalVisible`), giữ `largeDecorCount <= 8`, `emptyPerimeterRatio >= 0.40`.
+     - **Biome 1 (Phòng chuẩn B1 — khóa tại `docs/screenshots/polish-p4/golden-room/`):** Rễ cây cổ thụ Bezier S-curve (`root_base` trên tường + `root_decal_tip` `2u` phẳng trên sàn `distToWall === 1`), cụm nấm phát quang `mushroom_cluster` ở góc tường/chân cột, dây leo `cliff_vines` trên mặt đứng tường Bắc, và đá bước chân `stepping_stone` trên ô sàn khô sát mép nước/đầm độc.
+     - **Biome 2:** Hốc vòm thác băng `ice_alcove` trên tường Bắc, cụm tinh thể băng `frost_crystal_cluster` ở góc tường, và vòng cổ ngữ `sunken_astrolabe` 3 vòng đồng tâm khắc chìm ở Center Arena (`alpha = 0.20`, $\Delta L^* \le 6$).
+     - **Biome 3:** Bánh răng đồng thau 8 răng `brass_gear_wall` trên tường Bắc, đường ống hơi nước mặt bích + van đồng `steam_pipe_wall` trên tường bên, và rãnh nhiệt nắp lưới sắt phẳng `grated_heat_channel` dọc dải ven tường.
+     - **Hub (`0`):** Bệ đá chậu lửa `brazier_pedestal` và hàng rào sắt rèn mũi nhọn `wrought_iron_fence` trên gờ tường đá cổ.
+  5. **Số Đo Trắc Quang Định Lượng Toàn Bộ 11 Cảnh (`docs/screenshots/polish-p4/after/metrics.json`):**
+
+| Cảnh (`scene`) | `floorMeanL` (`28–40` / B2 `40–50`) | `centerDeltaL` (`≤ 8.0`) | `floorDeltaL` (`≤ 14.0`) | `floorMeanS` (`≤ 0.35` / B2 `≤ 0.40`) | `contrastWithInkDark` (`≥ 22.0`) | `cornerToUnlitRatio` (`≥ 0.82`) | `minCornerL` (`≥ 15.0`) | `brazierToFloorDeltaL` (`≥ +8.0`) | `clipWhiteRatio` (`< 0.005`) | `freezeDiffRatio` (`< 0.005`) | Kết quả |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| `b1-start-room` | **`32.83`** | **`2.42`** | **`2.42`** | **`0.132`** | **`27.50`** | **`1.030`** | **`30.37`** | **`+20.75`** | `0.000` | `0.000` | PASS |
+| `b1-combat` | **`32.83`** | **`2.42`** | **`11.38`** | **`0.132`** | **`27.50`** | **`1.029`** | **`29.67`** | **`+25.13`** | `0.000` | `0.000` | PASS |
+| `b1-combat-low` | **`32.83`** | **`2.42`** | **`11.38`** | **`0.132`** | **`27.50`** | **`1.003`** | **`31.13`** | **`+22.54`** | `0.000` | `0.000` | PASS |
+| `b1-poison-swamp` | **`33.09`** | **`1.28`** | **`2.75`** | **`0.134`** | **`27.77`** | **`1.017`** | **`29.40`** | **`+20.61`** | `0.000` | `0.000` | PASS |
+| `b2-start-room` | **`44.88`** | **`2.95`** | **`2.95`** | **`0.276`** | **`39.55`** | **`1.000`** | **`40.58`** | **`+11.88`** | `0.000` | `0.000` | PASS |
+| `b2-combat` | **`44.88`** | **`2.95`** | **`2.95`** | **`0.276`** | **`39.55`** | **`0.989`** | **`39.60`** | **`+22.11`** | `0.000` | `0.000` | PASS |
+| `b3-start-room` | **`30.84`** | **`2.35`** | **`2.35`** | **`0.143`** | **`25.51`** | **`1.020`** | **`27.97`** | **`+21.85`** | `0.000` | `0.000` | PASS |
+| `b3-combat` | **`30.84`** | **`2.35`** | **`2.35`** | **`0.143`** | **`25.51`** | **`1.019`** | **`26.93`** | **`+23.62`** | `0.000` | `0.000` | PASS |
+| `b3-lava-surface` | **`30.76`** | **`1.13`** | **`1.13`** | **`0.144`** | **`25.43`** | **`1.019`** | **`26.93`** | **`+24.06`** | `0.000` | `0.000` | PASS |
+| `b3-combat-low` | **`30.84`** | **`2.35`** | **`2.35`** | **`0.143`** | **`25.51`** | **`1.002`** | **`28.59`** | **`+22.10`** | `0.000` | `0.000` | PASS |
+| `hub-solo` | **`32.53`** | **`1.55`** | **`3.07`** | **`0.200`** | **`27.21`** | **`1.010`** | **`28.11`** | **`+25.52`** | `0.000` | `0.000` | PASS |
+
+  6. **Visual Gate Bước A & Bước B (`docs/screenshots/polish-p4/review-step-a.md` & `docs/screenshots/polish-p4/review.md`):**
+     - **Bước A (Phòng chuẩn B1 — 4 cảnh):** Đánh giá mù A/B bởi độc lập `pro` Visual Reviewer (`43253b9f-a379-470b-9cac-73c7ed104604`): **PASS** ngay ở Vòng 1 (`4/4` cảnh chọn `after`, `0` blocker, `0` major; Environment **`9.2 / 10`**, Lighting **`9.5 / 10`**, Readability **`9.4 / 10`**, Product Feel **`9.0 / 10`**) → Tự động khóa bộ ảnh `docs/screenshots/polish-p4/golden-room/*.png` và Mục 5.4 `docs/ART_GUIDE.md`.
+     - **Bước B (Toàn bộ 11 cảnh Hub, B1, B2, B3):** Đánh giá mù A/B bởi độc lập `pro` Visual Reviewer (`133901ef-a6e1-48b9-bf20-1627c8b16f65`): **PASS** ngay ở Vòng 1 (**`11/11` cảnh + `11/11` cặp `-unlit.png` = 100%** chọn `after`, `0` blocker, `0` major; Environment **`9.4 / 10`**, Lighting **`9.5 / 10`**, Readability **`9.5 / 10`**, Style Consistency vs Golden Room B1 **`9.5 / 10`**, Product Feel **`9.2 / 10`**, Phase P4 DoD **`10 / 10`**).
