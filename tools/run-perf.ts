@@ -192,50 +192,35 @@ async function setupActiveCombatInPage(page: Page, baseUrl: string): Promise<{
   );
 
   const gpuInfo = await page.evaluate(() => {
-    const win = window as unknown as {
-      __GAME_SET_QUALITY__?: (preset: 'high' | 'low') => void;
-      __GAME_TRANSPORT__?: {
-        getSimulation?: () => {
-          step: (dt: number) => void;
-          dungeon: {
-            rooms: Array<{
-              id: string;
-              type: string;
-              x: number;
-              y: number;
-              width: number;
-              height: number;
-            }>;
-          };
-          getPlayersMap: () => Map<
-            string,
-            { x: number; y: number; hp: number; maxHp: number }
-          >;
-        };
-      };
-    };
+    window.__GAME_SET_QUALITY__?.('high');
 
-    win.__GAME_SET_QUALITY__?.('high');
-
-    // Enter combat room r1 so normal combat has active enemies & AI
-    const sim = win.__GAME_TRANSPORT__?.getSimulation?.();
-    if (sim) {
-      const combatRoom =
-        sim.dungeon.rooms.find((r) => r.id === 'r1') ??
-        sim.dungeon.rooms.find((r) => r.type === 'combat') ??
-        sim.dungeon.rooms[0];
-      const player = sim.getPlayersMap().values().next().value;
-      if (combatRoom && player) {
-        player.x = (combatRoom.x + combatRoom.width / 2) * 32;
-        player.y = (combatRoom.y + combatRoom.height / 2) * 32;
-        player.maxHp = 999_999;
-        player.hp = 999_999;
-        sim.step(1 / 60);
-      }
+    const sim = window.__GAME_TRANSPORT__?.getSim();
+    if (!sim) {
+      throw new Error('window.__GAME_TRANSPORT__.getSim() unavailable in GameScene');
     }
 
-    const canvas =
-      document.querySelector('canvas') ?? document.createElement('canvas');
+    const combatRoom =
+      sim.dungeon.rooms.find((r) => r.type === 'combat') ?? sim.dungeon.rooms[0]!;
+    sim.enterRoom(combatRoom.id);
+    sim.player.godMode = true;
+    sim.player.x = 340;
+    sim.player.y = 270;
+
+    const spawned = [
+      sim.spawnEnemy('goblin_shooter', 520, 210, true),
+      sim.spawnEnemy('green_slime', 580, 250, true),
+      sim.spawnEnemy('spore_bomber', 650, 215, true),
+      sim.spawnEnemy('wild_boar', 540, 330, true),
+      sim.spawnEnemy('goblin_shaman', 640, 340, true),
+      sim.spawnEnemy('thorn_turret', 720, 275, true),
+      sim.spawnEnemy('wild_boar', 600, 280, true, 'shield'),
+    ];
+    for (const e of spawned) {
+      e.hp = 999_999;
+      e.maxHp = 999_999;
+    }
+
+    const canvas = document.createElement('canvas');
     const gl = (canvas.getContext('webgl2') ||
       canvas.getContext('webgl')) as WebGLRenderingContext | null;
     if (!gl) {

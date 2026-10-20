@@ -966,7 +966,6 @@ export const VISUAL_SCENES: readonly VisualSceneDef[] = [
     await stepDeterministicFrames(page, 5);
   }),
   makeScene('modal-buff-en', 'Between-floor Buff Selection Modal in English locale', DEFAULT_GAME_URL, 'GameScene', async (page) => {
-    await lockCameraAndIrisToPlayer(page);
     await switchGameSceneToEnglish(page);
     await page.evaluate(() => {
       const sim = window.__GAME_TRANSPORT__!.getSim();
@@ -977,6 +976,7 @@ export const VISUAL_SCENES: readonly VisualSceneDef[] = [
       sim.player.y = sim.portalY;
       sim.interactWithNearest();
     });
+    await lockCameraAndIrisToPlayer(page);
     await stepDeterministicFrames(page, 45);
   }),
   makeScene('modal-victory-en', 'Run Victory Summary Modal in English locale', DEFAULT_GAME_URL, 'GameScene', (p) => setupRunResultModalScene(p, 'victory', true)),
