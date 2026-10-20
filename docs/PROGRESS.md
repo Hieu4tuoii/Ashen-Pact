@@ -473,3 +473,21 @@
 
 ### 3.5 Nhật ký thực thi Polish v0.2.0
 - **Khởi động (0.1):** Đã tạo worktree `.worktrees/polish-v0.2.0` trên nhánh `polish/v0.2.0`, chép spec `docs/superpowers/specs/2026-10-20-polish-v0.2.0-design.md`, cập nhật `ART_GUIDE.md`, `GDD.md`, `PHASES.md`, `PROGRESS.md`.
+- **Phase P0 — Hạ tầng kiểm chứng hình ảnh & Baseline (Hoàn thành ✅):**
+  - **Commits:** `9035058`, `64020db`, `576d25a`, `f61b735`, `2703b78`, `2e47ab7`.
+  - **Hạ tầng đã xây dựng:**
+    - `tools/visual-metrics.ts` (+ 12 unit tests trong `packages/shared/src/__tests__/visual-metrics.test.ts`): Đo CIE $L^*$ chuẩn D65, $\Delta L^* = p95 - p5$, độ bão hòa HSL $S$, độ tương phản với `INK_DARK`, `cornerRetentionRatio`, `brazierLightPoolDeltaL`, so sánh điểm ảnh `pixelmatch`, chuyển ảnh xám `b3-combat-grayscale.png` và ghép dải 8 frame `-strip.png`.
+    - Client hooks (`url-params.ts`, `GameScene`, `MenuScene`, `ArtGalleryScene`, `LightingPipeline`): Hỗ trợ `?seed=<number>`, `?freeze=1` (khóa time/sway/flicker/particles tất định sau 45 frames), `?lighting=0` + `window.__GAME_SET_LIGHTING__(enabled)` (tắt lightmap & PostFX để đo sàn unlit thuần), `?testHooks=1`.
+    - Bộ 58 cảnh chuẩn (`tests/e2e/helpers/visual-scenes.ts`, `tests/e2e/visual.spec.ts`), CLI `pnpm shots` (`tools/run-shots.ts`) và benchmark GPU phần cứng `pnpm perf` (`tools/run-perf.ts`).
+  - **Kiểm chứng tính tất định (`pnpm shots -- --phase p0 --label baseline --verify-freeze`):**
+    - Chụp thành công **58/58 scenes** (kèm 9 ảnh `-unlit.png`, `b3-combat-grayscale.png`, 2 ảnh `-strip.png`, `metrics.json`) với `0` console error / `0` console warning.
+    - **57/58 scenes** đạt `0.0000%` pixel-diff (`0` pixel lệch); **1/58 scene (`coop-4p-combat`)** lệch `106 / 2,073,600` pixels (`max diffRatio = 0.0051%` < ngưỡng `0.5%`).
+  - **Chuẩn hiệu năng GPU phần cứng (`docs/perf-baseline.json`):**
+    - **GPU:** `ANGLE (AMD, AMD Radeon(TM) Graphics (0x0000164C) Direct3D11 vs_5_0 ps_5_0, D3D11)` (`hardwareAccelerated: true`).
+    - **Uncapped Frame-Time (1080p High):** Normal Combat `p50 = 7.2ms`, `p95 = 8.7ms` (`135.39 FPS`); Stress Combat (`4P + 80E + 600B`) `p50 = 11.4ms`, `p95 = 13.5ms` (`85.92 FPS`).
+    - **VSync 60Hz FPS:** Normal Combat **`60.05 FPS`** (mục tiêu `≥ 60`); Stress Combat **`59.20 FPS`** (mục tiêu `≥ 58`).
+  - **Số đo trắc quang Baseline (`docs/screenshots/polish-p0/baseline/metrics.json`):**
+    - **Unlit (`?lighting=0`):** $\Delta L^*$ toàn sàn rất cao (`b1-combat: 53.51`, `b2-combat: 72.61`, `b3-combat: 42.61`, `hub-solo: 72.22`; mục tiêu `≤ 14`); vùng trung tâm `center_arena` $\Delta L^* = 54.53\text{–}72.57$ (mục tiêu `≤ 8`); bão hòa `meanS = 0.320\text{–}0.578`.
+    - **Lit:** Tỷ lệ giữ sáng 4 góc `cornerRetentionRatio` sụt nặng (`b1-combat: 47.4%`, `b2-combat: 47.6%`, `b3-combat: 35.5%`, `boss-b2-blizzard: 39.3%`, `hub-solo: 62.3%`; mục tiêu `≥ 72%–82%`), `minLitFloorL = 0.00`; vũng sáng chậu lửa `brazierLightPoolDeltaL` âm hoặc xấp xỉ 0 (`-4.43` đến `+0.07`; mục tiêu `≥ +6..+8`).
+  - **Đánh giá độc lập của Visual Reviewer (`docs/screenshots/polish-p0/review-baseline.md` & `docs/POLISH_BASELINE.md`):**
+    - Điểm trung bình Rubric 9 tiêu chí: **`2.44 / 10`** (Môi trường `3/10`, Ánh sáng `2/10`, Độ dễ đọc `3/10`, Vật thể tương tác `2/10`, Portal/Cửa `2/10`, UI/HUD `2/10`, Nhân vật/Rig `3/10`, FX `3/10`, Cảm giác sản phẩm `2/10`), kèm bảng xếp hạng Top 15 vấn đề thị giác ưu tiên xử lý ở P1–P12.
