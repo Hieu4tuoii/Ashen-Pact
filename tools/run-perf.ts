@@ -178,6 +178,7 @@ async function setupActiveCombatInPage(page: Page, baseUrl: string): Promise<{
 }> {
   await page.setViewportSize({ width: 1920, height: 1080 });
   await page.goto(`${baseUrl}/?scene=game&seed=1337&debug=0&testHooks=1`);
+  await page.evaluate('window.__name = function(fn) { return fn; };');
   await page.waitForFunction(
     () => {
       const dbg = (

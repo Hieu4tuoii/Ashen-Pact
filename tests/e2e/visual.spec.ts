@@ -95,6 +95,17 @@ test.describe('@visual Deterministic Visual Scene Catalog', () => {
   test('captures requested visual scenes, computes metrics, and optionally verifies freeze determinism', async ({
     page,
   }) => {
+    const consoleErrors: string[] = [];
+    const consoleWarnings: string[] = [];
+
+    page.on('console', (msg) => {
+      if (msg.type() === 'error') consoleErrors.push(msg.text());
+      if (msg.type() === 'warning') consoleWarnings.push(msg.text());
+    });
+    page.on('pageerror', (err) => {
+      consoleErrors.push(err.message);
+    });
+
     const phase = (process.env['ASHEN_SHOTS_PHASE'] ?? 'p0').trim();
     const label = (process.env['ASHEN_SHOTS_LABEL'] ?? 'baseline').trim();
     const scenesFilterRaw = (process.env['ASHEN_SHOTS_SCENES'] ?? '').trim();
@@ -203,21 +214,31 @@ test.describe('@visual Deterministic Visual Scene Catalog', () => {
       'utf8',
     );
 
+    const freezeDiffs: Record<
+      string,
+      { diffPixels: number; totalPixels: number; diffRatio: number }
+    > = {};
+
     const metricsPath = path.join(shotDir, 'metrics.json');
-    fs.writeFileSync(
-      metricsPath,
-      JSON.stringify(
-        {
-          generatedAt: new Date().toISOString(),
-          phase,
-          label,
-          scenes: metricsOutput,
-        },
-        null,
-        2,
-      ),
-      'utf8',
-    );
+    const writeMetricsFile = (): void => {
+      fs.writeFileSync(
+        metricsPath,
+        JSON.stringify(
+          {
+            generatedAt: new Date().toISOString(),
+            phase,
+            label,
+            scenes: metricsOutput,
+            ...(verifyFreeze ? { freezeDiffs } : {}),
+          },
+          null,
+          2,
+        ),
+        'utf8',
+      );
+    };
+
+    writeMetricsFile();
 
     if (verifyFreeze) {
       const capturedPass2 = new Map<string, Buffer>();
@@ -233,6 +254,12 @@ test.describe('@visual Deterministic Visual Scene Catalog', () => {
           pass2.litBuffer,
           scene.freezeMaskRects,
         );
+
+        freezeDiffs[scene.id] = {
+          diffPixels: diff.diffPixels,
+          totalPixels: diff.totalPixels,
+          diffRatio: diff.diffRatio,
+        };
 
         if (diff.diffRatio >= 0.005) {
           fs.writeFileSync(
@@ -250,6 +277,11 @@ test.describe('@visual Deterministic Visual Scene Catalog', () => {
           `Freeze determinism failed for scene "${scene.id}": diffRatio=${(diff.diffRatio * 100).toFixed(4)}% (${diff.diffPixels}/${diff.totalPixels} pixels) exceeds 0.5% threshold`,
         ).toBeLessThan(0.005);
       }
+
+      writeMetricsFile();
     }
+
+    expect(consoleErrors, 'Expected 0 console errors during visual capture').toEqual([]);
+    expect(consoleWarnings, 'Expected 0 console warnings during visual capture').toEqual([]);
   });
 });
