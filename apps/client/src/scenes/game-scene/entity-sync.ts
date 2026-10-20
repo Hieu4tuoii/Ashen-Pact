@@ -323,6 +323,9 @@ export function syncPropsImpl(this: GameScene, dtSec: number): void {
   for (let i = 0; i < sim.props.length; i++) {
     const prop = sim.props[i]!;
     if (prop.hp <= 0) continue;
+    if (prop.kind === 'glow_mushroom' && (sim.currentBiome !== 1 || sim.inHub)) {
+      continue;
+    }
     this.activePropIds.add(prop.id);
 
     let pv = this.propVisuals.get(prop.id);

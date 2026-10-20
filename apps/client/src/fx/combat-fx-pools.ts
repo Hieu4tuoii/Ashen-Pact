@@ -52,7 +52,7 @@ export interface PooledAfterimage {
 
 export interface PooledAmbientParticle {
   sprite: Phaser.GameObjects.Sprite;
-  kind: 'leaf' | 'mist';
+  kind: 'leaf';
   x: number;
   y: number;
   vx: number;
@@ -79,7 +79,7 @@ export function initCombatFxPools(
   damageCapacity = 48,
   decalCapacity = 120,
   afterimageCapacity = 24,
-  ambientCapacity = 36,
+  ambientCapacity = 96,
 ): void {
   const invBake = 1 / TextureBaker.getBakeScale();
   const textRes = TextureBaker.getBakeScale();
@@ -140,22 +140,20 @@ export function initCombatFxPools(
     });
   }
 
-  // 4. Ambient Leaves / Snow / Embers & Mist Pool (depth 32)
+  // 4. Ambient Leaves / Snow / Embers Pool (depth 32, no mist)
   for (let i = 0; i < ambientCapacity; i++) {
-    const isMist = i < 8;
-    const tex = isMist ? 'fx_ambient_mist' : 'fx_ambient_leaf';
-    const sprite = scene.add.sprite((i * 97) % 1100, (i * 61) % 680, tex);
-    const baseScale = isMist ? invBake * 1.8 : invBake * (0.75 + (i % 3) * 0.15);
+    const sprite = scene.add.sprite((i * 97) % 1100, (i * 61) % 680, 'fx_ambient_leaf');
+    const baseScale = invBake * (0.75 + (i % 3) * 0.15);
     sprite.setScale(baseScale);
-    sprite.setAlpha(isMist ? 0.35 : 0.72);
+    sprite.setAlpha(0.72);
     sprite.setDepth(32);
     this.ambientPool.push({
       sprite,
-      kind: isMist ? 'mist' : 'leaf',
+      kind: 'leaf',
       x: sprite.x,
       y: sprite.y,
-      vx: isMist ? 12 + (i % 4) * 3 : 16 + (i % 5) * 4,
-      vy: isMist ? 2 : 14 + (i % 4) * 3,
+      vx: 16 + (i % 5) * 4,
+      vy: 14 + (i % 4) * 3,
       phase: i * 0.7,
       baseScale,
     });
@@ -232,17 +230,16 @@ export function refreshResolution(
     a.sprite.setTexture('fx_afterimage_vanguard');
     a.sprite.setScale(invBake * Math.sign(a.sprite.scaleX || 1), invBake);
   }
-  for (const amb of this.ambientPool) {
+  for (let i = 0; i < this.ambientPool.length; i++) {
+    const amb = this.ambientPool[i]!;
     const tex =
-      amb.kind === 'mist'
-        ? 'fx_ambient_mist'
-        : this.currentBiome === 2
-          ? 'fx_ice_shard'
-          : this.currentBiome === 3
-            ? 'fx_spark'
-            : 'fx_ambient_leaf';
+      this.currentBiome === 2
+        ? 'fx_ice_shard'
+        : this.currentBiome === 3
+          ? 'fx_spark'
+          : 'fx_ambient_leaf';
     amb.sprite.setTexture(tex);
-    amb.baseScale = amb.kind === 'mist' ? invBake * 1.8 : invBake * 0.9;
+    amb.baseScale = invBake * (0.75 + (i % 3) * 0.15);
     amb.sprite.setScale(amb.baseScale);
   }
   const popupRes = Math.min(2, bakeScale);
@@ -347,7 +344,12 @@ export function update(this: CombatFxManager, dtSec: number, camView?: Phaser.Ge
     this.activeDecalCount = count;
   }
 
-  const allowedAmbient = budget.ambientCount;
+  const isBlizzard = this.currentBiome === 2 && this.isBlizzardIntense();
+  const baseLimit = budget.tier === 'high' ? 32 : budget.tier === 'medium' ? 18 : 10;
+  const allowedAmbient = isBlizzard
+    ? Math.min(this.ambientPool.length, budget.tier === 'low' ? 29 : baseLimit * 3)
+    : budget.ambientCount;
+  const invBake = 1 / TextureBaker.getBakeScale();
   const viewW = camView && camView.width > 0 ? camView.width : WORLD_VIEW_WIDTH;
   const viewH = camView && camView.height > 0 ? camView.height : WORLD_VIEW_HEIGHT;
   const minX = camView && camView.width > 0 ? camView.x - 40 : 0;
@@ -363,8 +365,15 @@ export function update(this: CombatFxManager, dtSec: number, camView?: Phaser.Ge
     }
     if (!amb.sprite.visible) amb.sprite.setVisible(true);
 
+    if (isBlizzard) {
+      amb.vx = -165 - (i % 5) * 18;
+      amb.vy = 115 + (i % 4) * 14;
+      amb.sprite.setAlpha(0.55 + (i % 3) * 0.12);
+      amb.sprite.setScale(invBake * (0.65 + (i % 3) * 0.2));
+    }
+
     const ambDt = getVisualQueryConfig().freeze ? 0 : dtSec;
-    amb.phase += ambDt * (amb.kind === 'leaf' ? 2.4 : 0.8);
+    amb.phase += ambDt * 2.4;
     amb.x += (amb.vx + Math.sin(amb.phase) * 8) * ambDt;
     amb.y += amb.vy * ambDt;
 
@@ -374,9 +383,7 @@ export function update(this: CombatFxManager, dtSec: number, camView?: Phaser.Ge
     else if (amb.y < minY) amb.y = maxY;
 
     amb.sprite.setPosition(amb.x, amb.y);
-    if (amb.kind === 'leaf') {
-      amb.sprite.setRotation(Math.sin(amb.phase) * 0.6);
-    }
+    amb.sprite.setRotation(isBlizzard ? -0.58 + Math.sin(amb.phase) * 0.25 : Math.sin(amb.phase) * 0.6);
   }
 
   // 4. Update & draw chain lightning arcs

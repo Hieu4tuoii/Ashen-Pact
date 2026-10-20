@@ -10,9 +10,26 @@ import {
   WORLD_VIEW_WIDTH,
 } from '@ashen-pact/shared';
 import type { ArenaMap } from '@ashen-pact/shared';
-import { hexToNum, PALETTE, PLAYER_SLOT_COLORS } from '../art/palette.js';
+import { hexToNum, PALETTE } from '../art/palette.js';
 import { getVisualQueryConfig } from '../core/visual-query.js';
 import { graphicsSettings } from '../ui/graphics-settings.js';
+import {
+  BIOME_LIGHTING_CONFIG,
+  type BiomeLightingEntry,
+  computeUniformViewportMetrics,
+  POSTFX_DEFAULTS,
+  resolveSceneLightingConfig,
+  type UniformViewportMetrics,
+} from './lighting-config.js';
+
+export {
+  BIOME_LIGHTING_CONFIG,
+  type BiomeLightingEntry,
+  computeUniformViewportMetrics,
+  POSTFX_DEFAULTS,
+  resolveSceneLightingConfig,
+  type UniformViewportMetrics,
+};
 
 const BIOME_POSTFX_FRAG = `
 #ifdef GL_FRAGMENT_PRECISION_HIGH
@@ -75,12 +92,12 @@ void main() {
 `;
 
 export class BiomePostFxPipeline extends Phaser.Renderer.WebGL.Pipelines.PostFXPipeline {
-  public bloomStrength = 0.26;
-  public vignetteStrength = 0.18;
+  public bloomStrength: number = POSTFX_DEFAULTS.bloomStrength;
+  public vignetteStrength: number = POSTFX_DEFAULTS.vignetteStrength;
   public chromaAmount = 0;
   public lowHpPulse = 0;
-  public colorGradeTint: [number, number, number] = [0.98, 1.02, 1.0];
-  public contrast = 1.04;
+  public colorGradeTint: [number, number, number] = [...BIOME_LIGHTING_CONFIG[1].colorGradeTint];
+  public contrast: number = POSTFX_DEFAULTS.contrast;
 
   constructor(game: Phaser.Game) {
     super({
@@ -116,32 +133,24 @@ interface TransientLight {
   ttl: number;
 }
 
-const BIOME_AMBIENT_COLORS: Record<1 | 2 | 3, number> = {
-  1: 0x72918b, // Overgrown Ruins: softer moonlit emerald-slate ambient
-  2: 0x6c89ab, // Frozen Depths: softer glacial cobalt ambient
-  3: 0x90695e, // Molten Forge: softer smoky ember ambient
-};
-
-const BIOME_COLOR_GRADES: Record<1 | 2 | 3, [number, number, number]> = {
-  1: [0.98, 1.03, 1.0],
-  2: [0.95, 1.01, 1.06],
-  3: [1.05, 0.98, 0.94],
-};
-
 const LIGHTMAP_RES_SCALE = 0.25;
+const WARM_GLOW_POOL_SIZE = 32; // 16 braziers * 2 additive layers (outer #F59E42 + inner #FFD27A)
 
 /**
- * Dynamic Lighting & Post-FX Pipeline (Section 3.4 & 3.7):
- * - Multiplicative RenderTexture Lightmap at depth 34 (above floor/props/entities, below telegraphs/projectiles/particles/damage numbers so combat hazards stay bright & readable in the dark)
- * - Additive soft radial point lights for players, torches (flickering), glowing mushrooms,
- *   explosive barrels, lava/burning surfaces, electrified water, projectiles, and explosions
- * - Custom WebGL PostFX shader for Bloom, Vignette, Low-HP Heartbeat, Chromatic Aberration, and Biome Color Grading
+ * Dynamic Lighting & Post-FX Pipeline (Full-Screen Clear Visibility Model):
+ * - Multiplicative RenderTexture Lightmap at depth 34 with bright biome ambient (~84-90%)
+ * - Additive (BlendModes.ADD) brush draws into lightmapRt so colored lights never darken other channels
+ * - Zero-allocation pool of 32 warm ADD glow sprites at depth 35 above lightmapRt for torch_brazier pools
+ * - Frost rim overlay at depth 36 for Boss 2 Kryssa Phase 3 blizzard without darkening the arena
  */
 export class LightingPipeline {
   private readonly scene: Phaser.Scene;
   private readonly lightmapRt: Phaser.GameObjects.RenderTexture;
   private readonly brushSprite: Phaser.GameObjects.Image;
+  private readonly warmGlowPool: Phaser.GameObjects.Image[] = [];
+  private readonly blizzardRimGraphics: Phaser.GameObjects.Graphics;
   private readonly transientPool: TransientLight[] = [];
+  private readonly brushBaseTexWidth = 128;
   private biome: 1 | 2 | 3 = 1;
   private blizzardVeil = false;
   private elapsedSec = 0;
@@ -160,6 +169,7 @@ export class LightingPipeline {
     // Offscreen brush sprite used for batched radial light draws into RenderTexture
     this.brushSprite = scene.make.image({ key: 'fx_light_radial', add: false });
     this.brushSprite.setOrigin(0.5, 0.5);
+    this.brushSprite.setBlendMode(Phaser.BlendModes.ADD);
 
     this.currentLightmapScale = LIGHTMAP_RES_SCALE * graphicsSettings.getBudget().lightmapScale;
     this.lightmapRt = scene.add.renderTexture(
@@ -170,11 +180,23 @@ export class LightingPipeline {
     );
     this.lightmapRt.setOrigin(0, 0);
     this.lightmapRt.setScale(1 / this.currentLightmapScale);
-    // Depth 34: multiplies floor (2), decals (6), props (18..22), pickups (25), afterimages (26), enemies (28), players (29..30), ambient leaves (32)
-    // Leaves telegraphs (38), projectiles (42), particles (45..58), lightning (62), damage numbers (80), hitboxes (90) at 100% emissive brightness!
     this.lightmapRt.setDepth(34);
     this.lightmapRt.setBlendMode(Phaser.BlendModes.MULTIPLY);
     this.lightmapRt.setVisible(this.lightingEnabled);
+
+    // Pre-allocate 32 warm additive glow sprites at depth 35 (above lightmapRt at depth 34)
+    for (let i = 0; i < WARM_GLOW_POOL_SIZE; i++) {
+      const glow = scene.add.image(-1000, -1000, 'fx_light_radial');
+      glow.setOrigin(0.5, 0.5);
+      glow.setBlendMode(Phaser.BlendModes.ADD);
+      glow.setDepth(35);
+      glow.setVisible(false);
+      this.warmGlowPool.push(glow);
+    }
+
+    // Frost rim graphics for Kryssa Phase 3 Blizzard (depth 36, pure ice tint #CFE8EE, never black)
+    this.blizzardRimGraphics = scene.add.graphics();
+    this.blizzardRimGraphics.setDepth(36);
 
     for (let i = 0; i < 32; i++) {
       this.transientPool.push({
@@ -213,6 +235,11 @@ export class LightingPipeline {
     this.lightmapRt.setVisible(enabled);
     if (!enabled) {
       this.activeLightCount = 0;
+      for (let i = 0; i < this.warmGlowPool.length; i++) {
+        const g = this.warmGlowPool[i]!;
+        if (g.visible) g.setVisible(false);
+      }
+      this.blizzardRimGraphics.clear();
     }
     this.syncPostFxPipeline();
   }
@@ -280,7 +307,45 @@ export class LightingPipeline {
 
   public refreshResolution(): void {
     this.brushSprite.setTexture('fx_light_radial');
+    this.brushSprite.setBlendMode(Phaser.BlendModes.ADD);
+    for (let i = 0; i < this.warmGlowPool.length; i++) {
+      this.warmGlowPool[i]!.setTexture('fx_light_radial');
+    }
     this.syncPostFxPipeline();
+  }
+
+  private drawBlizzardRim(rawViewX: number, rawViewY: number, viewW: number, viewH: number): void {
+    this.blizzardRimGraphics.clear();
+    if (!this.blizzardVeil || !this.lightingEnabled) {
+      return;
+    }
+
+    const iceColor = 0xcfe8ee;
+    // Outer frost rim along 4 viewport edges
+    this.blizzardRimGraphics.lineStyle(18, iceColor, 0.11);
+    this.blizzardRimGraphics.strokeRect(rawViewX + 9, rawViewY + 9, viewW - 18, viewH - 18);
+
+    // Inner softer frost rim
+    this.blizzardRimGraphics.lineStyle(36, iceColor, 0.06);
+    this.blizzardRimGraphics.strokeRect(rawViewX + 27, rawViewY + 27, viewW - 54, viewH - 54);
+
+    // Subtle diagonal frost crystal streaks at the 4 corners (alpha <= 0.12, pure #CFE8EE)
+    this.blizzardRimGraphics.lineStyle(2.5, iceColor, 0.12);
+    const corners: readonly [number, number, number, number][] = [
+      [rawViewX + 6, rawViewY + 6, 1, 1],
+      [rawViewX + viewW - 6, rawViewY + 6, -1, 1],
+      [rawViewX + 6, rawViewY + viewH - 6, 1, -1],
+      [rawViewX + viewW - 6, rawViewY + viewH - 6, -1, -1],
+    ];
+    for (let c = 0; c < corners.length; c++) {
+      const [cx, cy, sx, sy] = corners[c]!;
+      this.blizzardRimGraphics.beginPath();
+      this.blizzardRimGraphics.moveTo(cx, cy + sy * 42);
+      this.blizzardRimGraphics.lineTo(cx + sx * 42, cy);
+      this.blizzardRimGraphics.moveTo(cx, cy + sy * 64);
+      this.blizzardRimGraphics.lineTo(cx + sx * 64, cy);
+      this.blizzardRimGraphics.strokePath();
+    }
   }
 
   public update(params: {
@@ -293,9 +358,20 @@ export class LightingPipeline {
     props: readonly SimPropState[];
     map: ArenaMap;
     trauma: number;
+    inHub?: boolean;
   }): void {
-    const { dtSec, playerPos, player, simulatedPlayers, enemies, projectiles, props, map, trauma } =
-      params;
+    const {
+      dtSec,
+      playerPos,
+      player,
+      simulatedPlayers,
+      enemies,
+      projectiles,
+      props,
+      map,
+      trauma,
+      inHub = false,
+    } = params;
     if (getVisualQueryConfig().freeze) {
       this.elapsedSec = 1.0;
     } else {
@@ -305,6 +381,11 @@ export class LightingPipeline {
     if (!this.lightingEnabled) {
       this.lightmapRt.setVisible(false);
       this.activeLightCount = 0;
+      for (let i = 0; i < this.warmGlowPool.length; i++) {
+        const g = this.warmGlowPool[i]!;
+        if (g.visible) g.setVisible(false);
+      }
+      this.blizzardRimGraphics.clear();
       this.syncPostFxPipeline();
       return;
     }
@@ -317,10 +398,22 @@ export class LightingPipeline {
     const view = cam.worldView;
     const zoomX = Math.max(0.1, cam.zoomX || cam.zoom || 1);
     const zoomY = Math.max(0.1, cam.zoomY || cam.zoom || 1);
-    const viewW = cam.width > 0 ? cam.width / zoomX : view && view.width > 0 ? view.width : WORLD_VIEW_WIDTH;
-    const viewH = cam.height > 0 ? cam.height / zoomY : view && view.height > 0 ? view.height : WORLD_VIEW_HEIGHT;
-    const rawViewX = cam.width > 0 ? cam.scrollX + cam.width * 0.5 - viewW * 0.5 : view && view.width > 0 ? view.x : 0;
-    const rawViewY = cam.height > 0 ? cam.scrollY + cam.height * 0.5 - viewH * 0.5 : view && view.height > 0 ? view.y : 0;
+    const viewW =
+      cam.width > 0 ? cam.width / zoomX : view && view.width > 0 ? view.width : WORLD_VIEW_WIDTH;
+    const viewH =
+      cam.height > 0 ? cam.height / zoomY : view && view.height > 0 ? view.height : WORLD_VIEW_HEIGHT;
+    const rawViewX =
+      cam.width > 0
+        ? cam.scrollX + cam.width * 0.5 - viewW * 0.5
+        : view && view.width > 0
+          ? view.x
+          : 0;
+    const rawViewY =
+      cam.height > 0
+        ? cam.scrollY + cam.height * 0.5 - viewH * 0.5
+        : view && view.height > 0
+          ? view.y
+          : 0;
     const pad = 64;
     const viewX = rawViewX - pad;
     const viewY = rawViewY - pad;
@@ -336,23 +429,22 @@ export class LightingPipeline {
       this.lightmapRt.setScale(1 / this.currentLightmapScale);
     }
 
-
-
     this.lightmapRt.setPosition(viewX, viewY);
     this.lightmapRt.setVisible(true);
+
+    const sceneConfig = resolveSceneLightingConfig(this.biome, inHub, this.blizzardVeil);
 
     // 1. Update PostFX uniforms (Bloom, Vignette, Chromatic Aberration, Low-HP Heartbeat)
     if (this.postFxAttached) {
       const postPipelines = cam.getPostPipeline('BiomePostFxPipeline');
       const pipeline = Array.isArray(postPipelines) ? postPipelines[0] : postPipelines;
       if (pipeline instanceof BiomePostFxPipeline) {
-        pipeline.bloomStrength = budget.enableBloomPostFx && !isHeavySwarm ? 0.28 : 0.0;
-        pipeline.vignetteStrength = this.blizzardVeil ? 0.38 : 0.18;
+        pipeline.bloomStrength =
+          budget.enableBloomPostFx && !isHeavySwarm ? POSTFX_DEFAULTS.bloomStrength : 0.0;
+        pipeline.vignetteStrength = sceneConfig.vignetteStrength;
         pipeline.chromaAmount = isHeavySwarm ? 0 : clamp(trauma * 1.4, 0, 1);
-        pipeline.colorGradeTint = this.blizzardVeil
-          ? [0.9, 1.0, 1.1]
-          : BIOME_COLOR_GRADES[this.biome];
-        pipeline.contrast = 1.04;
+        pipeline.colorGradeTint = sceneConfig.colorGradeTint;
+        pipeline.contrast = POSTFX_DEFAULTS.contrast;
 
         if (player.hp <= 2 && player.hp > 0) {
           pipeline.lowHpPulse = 0.45 + 0.45 * Math.sin(this.elapsedSec * 9.5);
@@ -362,12 +454,15 @@ export class LightingPipeline {
       }
     }
 
+    // Draw frost rim when Kryssa Phase 3 blizzardVeil is active
+    this.drawBlizzardRim(rawViewX, rawViewY, viewW, viewH);
+
     // 2. Render Dynamic Lightmap into RenderTexture (amortized during 600+ bullet swarm)
     if (isHeavySwarm && this.frameCounter % 3 !== 0 && this.activeLightCount >= 30) {
       return;
     }
 
-    const ambientColor = this.blizzardVeil ? 0x3e5672 : BIOME_AMBIENT_COLORS[this.biome];
+    const ambientColor = sceneConfig.ambientColor;
     const lmScale = this.currentLightmapScale;
     const maxLights = budget.tier === 'high' ? 48 : budget.tier === 'medium' ? 28 : 12;
     this.lightmapRt.clear();
@@ -393,18 +488,22 @@ export class LightingPipeline {
       ) {
         return;
       }
-      this.brushSprite.setScale(((radius * 2) / 128) * lmScale);
+      this.brushSprite.setScale(((radius * 2) / this.brushBaseTexWidth) * lmScale);
       this.brushSprite.setTint(colorNum);
       this.brushSprite.setAlpha(clamp(alpha, 0, 1));
       this.lightmapRt.batchDraw(this.brushSprite, lx * lmScale, ly * lmScale);
       lightsDrawn += 1;
     };
 
-    // A. Main Player soft aura light + active shield glow (narrowed during Blizzard Phase 3)
-    const mainPlayerVisionRadius = this.blizzardVeil ? 185 : 310;
-    drawLight(playerPos.x, playerPos.y, mainPlayerVisionRadius, 0xe0f2fe, 0.96);
-    drawLight(playerPos.x, playerPos.y, 145, hexToNum(PLAYER_SLOT_COLORS[player.slot].hex), 0.5);
-
+    // A. Main Player gentle foot aura (no fog-of-war vision circle)
+    const dashBoost = player.dashTimer > 0 ? 1 : 0;
+    drawLight(
+      playerPos.x,
+      playerPos.y,
+      160 + dashBoost * 20,
+      0xfff3d6,
+      0.24 + dashBoost * 0.08,
+    );
 
     if (player.skillActiveTimer > 0) {
       drawLight(
@@ -412,41 +511,140 @@ export class LightingPipeline {
         playerPos.y + Math.sin(player.aimAngle) * 28,
         115,
         hexToNum(PALETTE.CRIMSON_BRIGHT),
-        0.75,
+        0.55,
       );
     }
 
-    // B. Simulated Co-op Players (P2-P4) soft aura lights
-    const allyVisionRadius = this.blizzardVeil ? 160 : 250;
+    // B. Simulated Co-op Players (P2-P4) gentle foot aura
     for (let i = 0; i < simulatedPlayers.length; i++) {
       const sp = simulatedPlayers[i]!;
-      drawLight(sp.pos.x, sp.pos.y, allyVisionRadius, 0xe0f2fe, 0.86);
-      drawLight(sp.pos.x, sp.pos.y, 115, hexToNum(PLAYER_SLOT_COLORS[sp.state.slot].hex), 0.45);
-
+      drawLight(sp.pos.x, sp.pos.y, 145, 0xe8f4ff, 0.22);
     }
 
-    // C. Props: Flickering Torches, Bioluminescent Mushrooms, Crystal Pillars, Explosive Barrels
+    // C. Props: Flickering Torches (with Warm ADD Glow Pool at depth 35), Bioluminescent Mushrooms (B1 only), Crystal Pillars, Explosive Barrels
+    // On Low quality tier, Spec 3.5 caps scene lights at 2 closest braziers to camera center
+    const camCenterX = rawViewX + viewW * 0.5;
+    const camCenterY = rawViewY + viewH * 0.5;
+    const isLowTier = budget.tier === 'low';
+    const maxBrazierCount = isLowTier ? 2 : 16;
+
+    let lowBestBrazierIdx1 = -1;
+    let lowBestBrazierIdx2 = -1;
+    if (isLowTier) {
+      let bestDist1 = Infinity;
+      let bestDist2 = Infinity;
+      for (let i = 0; i < props.length; i++) {
+        const pr = props[i]!;
+        if (pr.hp <= 0 || pr.lightRadius <= 0 || pr.kind !== 'torch_brazier') continue;
+        const lx = pr.x - viewX;
+        const ly = pr.y - viewY;
+        const r = pr.lightRadius * 1.25;
+        if (lx + r < -16 || lx - r > coverW + 16 || ly + r < -16 || ly - r > coverH + 16) {
+          continue;
+        }
+        const dSq =
+          (pr.x - camCenterX) * (pr.x - camCenterX) + (pr.y - camCenterY) * (pr.y - camCenterY);
+        if (dSq < bestDist1) {
+          bestDist2 = bestDist1;
+          lowBestBrazierIdx2 = lowBestBrazierIdx1;
+          bestDist1 = dSq;
+          lowBestBrazierIdx1 = i;
+        } else if (dSq < bestDist2) {
+          bestDist2 = dSq;
+          lowBestBrazierIdx2 = i;
+        }
+      }
+    }
+
+    let warmGlowCursor = 0;
+    let braziersActive = 0;
+    let scenePropLightsActive = 0;
+    const maxScenePropLights = isLowTier ? 2 : 32;
+
     for (let i = 0; i < props.length; i++) {
       const prop = props[i]!;
       if (prop.hp <= 0 || prop.lightRadius <= 0) continue;
 
-      let radius = prop.lightRadius;
-      let alpha = 0.78;
+      // Client-only biome filter: glow_mushroom is strictly Biome 1 dungeon only
+      if (prop.kind === 'glow_mushroom' && (this.biome !== 1 || inHub)) {
+        continue;
+      }
+
       if (prop.kind === 'torch_brazier') {
+        if (isLowTier && i !== lowBestBrazierIdx1 && i !== lowBestBrazierIdx2) {
+          continue;
+        }
+        if (braziersActive >= maxBrazierCount || scenePropLightsActive >= maxScenePropLights) {
+          continue;
+        }
+        const lx = prop.x - viewX;
+        const ly = prop.y - viewY;
+        const checkR = prop.lightRadius * 1.25;
+        if (
+          lx + checkR < -16 ||
+          lx - checkR > coverW + 16 ||
+          ly + checkR < -16 ||
+          ly - checkR > coverH + 16
+        ) {
+          continue;
+        }
+
         const flicker =
           Math.sin(this.elapsedSec * 13 + prop.id * 1.7) * 0.08 +
           Math.cos(this.elapsedSec * 23 + prop.id * 0.9) * 0.05;
-        radius = prop.lightRadius * (1 + flicker);
-        alpha = 0.85 + flicker * 0.5;
-      } else if (prop.kind === 'glow_mushroom' || prop.kind === 'crystal_pillar') {
-        const pulse = Math.sin(this.elapsedSec * 3.2 + prop.id) * 0.08;
-        radius = prop.lightRadius * (1 + pulse);
-        alpha = 0.72 + pulse;
-      } else if (prop.kind === 'explosive_barrel') {
-        alpha = 0.52;
+        const flickerA = 1 + flicker * 0.5;
+        const radius = prop.lightRadius * (1 + flicker);
+        const alpha = 0.85 + flicker * 0.5;
+
+        drawLight(prop.x, prop.y, radius * 1.25, hexToNum(prop.lightColorHex), alpha);
+        braziersActive += 1;
+        scenePropLightsActive += 1;
+
+        if (warmGlowCursor + 1 < this.warmGlowPool.length) {
+          const outerGlow = this.warmGlowPool[warmGlowCursor++]!;
+          const outerRadius = prop.lightRadius * 1.15;
+          outerGlow.setPosition(prop.x, prop.y);
+          outerGlow.setTint(0xf59e42);
+          outerGlow.setAlpha(clamp(0.22 * flickerA, 0, 1));
+          outerGlow.setScale((outerRadius * 2) / this.brushBaseTexWidth);
+          outerGlow.setVisible(true);
+
+          const innerGlow = this.warmGlowPool[warmGlowCursor++]!;
+          const innerRadius = prop.lightRadius * 0.6;
+          innerGlow.setPosition(prop.x, prop.y);
+          innerGlow.setTint(0xffd27a);
+          innerGlow.setAlpha(clamp(0.16 * flickerA, 0, 1));
+          innerGlow.setScale((innerRadius * 2) / this.brushBaseTexWidth);
+          innerGlow.setVisible(true);
+        }
+        continue;
       }
 
-      drawLight(prop.x, prop.y, radius * 1.25, hexToNum(prop.lightColorHex), alpha);
+      if (scenePropLightsActive >= maxScenePropLights) {
+        continue;
+      }
+
+      let radius = prop.lightRadius;
+      let alpha = 0.52;
+      if (prop.kind === 'glow_mushroom') {
+        const pulse = Math.sin(this.elapsedSec * 3.2 + prop.id) * 0.05;
+        radius = prop.lightRadius * (1 + pulse);
+        alpha = clamp(0.3 + pulse, 0.15, 0.35);
+      } else if (prop.kind === 'crystal_pillar') {
+        const pulse = Math.sin(this.elapsedSec * 3.2 + prop.id) * 0.08;
+        radius = prop.lightRadius * (1 + pulse);
+        alpha = 0.55 + pulse;
+      } else if (prop.kind === 'explosive_barrel') {
+        alpha = 0.45;
+      }
+
+      drawLight(prop.x, prop.y, radius * 1.15, hexToNum(prop.lightColorHex), alpha);
+      scenePropLightsActive += 1;
+    }
+
+    for (let i = warmGlowCursor; i < this.warmGlowPool.length; i++) {
+      const g = this.warmGlowPool[i]!;
+      if (g.visible) g.setVisible(false);
     }
 
     // D. Transient Flash Lights (Muzzle flashes, Explosions, Lightning arcs)
@@ -487,13 +685,13 @@ export class LightingPipeline {
         const wy = ty * TILE_SIZE + TILE_SIZE / 2;
         if ((surf === 'burning_oil' || surf === 'burning_grass') && ((tx + ty) & 1) === 0) {
           const flick = Math.sin(this.elapsedSec * 16 + tx * 3 + ty * 5) * 7;
-          drawLight(wx, wy, 82 + flick, hexToNum(PALETTE.FLAME_ORANGE), 0.72);
+          drawLight(wx, wy, 82 + flick, hexToNum(PALETTE.FLAME_ORANGE), 0.55);
         } else if (surf === 'electrified_water' && ((tx + ty) & 1) === 0) {
-          drawLight(wx, wy, 76, hexToNum(PALETTE.CYAN_FROST), 0.68);
+          drawLight(wx, wy, 76, hexToNum(PALETTE.CYAN_FROST), 0.52);
         } else if (surf === 'lava' && tx % 2 === 0 && ty % 2 === 0) {
-          drawLight(wx, wy, 90, hexToNum(PALETTE.FLAME_ORANGE), 0.68);
+          drawLight(wx, wy, 90, hexToNum(PALETTE.FLAME_ORANGE), 0.52);
         } else if (surf === 'poison_swamp' && tx % 2 === 0 && ty % 2 === 0) {
-          drawLight(wx, wy, 74, hexToNum(PALETTE.TOXIC_PURPLE), 0.48);
+          drawLight(wx, wy, 74, hexToNum(PALETTE.TOXIC_PURPLE), 0.35);
         }
       }
     }
@@ -503,15 +701,15 @@ export class LightingPipeline {
       const e = enemies[i]!;
       if (e.hp <= 0) continue;
       if (e.aiState === 'spawning') {
-        drawLight(e.x, e.y, 52, hexToNum(PALETTE.ELECTRIC_VIOLET), 0.65);
+        drawLight(e.x, e.y, 52, hexToNum(PALETTE.ELECTRIC_VIOLET), 0.45);
       } else if (e.aiState === 'telegraph') {
-        drawLight(e.x, e.y, 58, hexToNum(PALETTE.CRIMSON_BRIGHT), 0.6);
+        drawLight(e.x, e.y, 58, hexToNum(PALETTE.CRIMSON_BRIGHT), 0.45);
       } else if (e.burnTimer > 0) {
-        drawLight(e.x, e.y, 48, hexToNum(PALETTE.FLAME_ORANGE), 0.55);
+        drawLight(e.x, e.y, 48, hexToNum(PALETTE.FLAME_ORANGE), 0.42);
       } else if (e.frozenTimer > 0) {
-        drawLight(e.x, e.y, 48, hexToNum(PALETTE.CYAN_FROST), 0.55);
+        drawLight(e.x, e.y, 48, hexToNum(PALETTE.CYAN_FROST), 0.42);
       } else if (e.shockTimer > 0) {
-        drawLight(e.x, e.y, 54, hexToNum(PALETTE.VOLT_YELLOW), 0.65);
+        drawLight(e.x, e.y, 54, hexToNum(PALETTE.VOLT_YELLOW), 0.48);
       }
     }
 
@@ -529,7 +727,7 @@ export class LightingPipeline {
         else if (b.element === 'poison') col = hexToNum(PALETTE.LIME_GLOW);
         else if (b.weaponId === 'scrap_shotgun') col = hexToNum(PALETTE.SOLAR_GOLD);
 
-        drawLight(b.x, b.y, b.team === 'enemy' ? 38 : 34, col, 0.52);
+        drawLight(b.x, b.y, b.team === 'enemy' ? 38 : 34, col, 0.38);
       }
     }
 
@@ -543,6 +741,11 @@ export class LightingPipeline {
       cam.removePostPipeline('BiomePostFxPipeline');
       this.postFxAttached = false;
     }
+    for (let i = 0; i < this.warmGlowPool.length; i++) {
+      this.warmGlowPool[i]!.destroy();
+    }
+    this.warmGlowPool.length = 0;
+    this.blizzardRimGraphics.destroy();
     this.brushSprite.destroy();
     this.lightmapRt.destroy();
   }

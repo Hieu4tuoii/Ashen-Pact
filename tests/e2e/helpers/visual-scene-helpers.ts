@@ -30,13 +30,23 @@ export const DEBUG_MENU_URL = '/?scene=menu&seed=1337&freeze=1&debug=1&testHooks
 export const DEBUG_GAME_URL = '/?scene=game&seed=1337&freeze=1&debug=1&testHooks=1';
 
 export const ENVIRONMENT_SAMPLE_RECTS: SampleRect[] = [
-  { name: 'floor_all', x: 240, y: 200, width: 1200, height: 640 },
-  { name: 'center_arena', x: 760, y: 420, width: 320, height: 200 },
-  { name: 'corner_tl', x: 140, y: 160, width: 180, height: 120 },
-  { name: 'corner_tr', x: 1320, y: 160, width: 180, height: 120 },
-  { name: 'corner_bl', x: 140, y: 760, width: 180, height: 120 },
-  { name: 'corner_br', x: 1480, y: 760, width: 180, height: 120 },
-  { name: 'brazier_pool', x: 380, y: 260, width: 70, height: 70 },
+  { name: 'floor_center', x: 860, y: 480, width: 200, height: 120 },
+  { name: 'corner_tl', x: 216, y: 660, width: 64, height: 56 },
+  { name: 'corner_tr', x: 1112, y: 252, width: 64, height: 56 },
+  { name: 'corner_bl', x: 1112, y: 852, width: 64, height: 56 },
+  { name: 'corner_br', x: 1584, y: 660, width: 64, height: 56 },
+  { name: 'wall_top', x: 860, y: 88, width: 200, height: 36 },
+  { name: 'brazier_pool', x: 476, y: 272, width: 56, height: 56 },
+];
+
+export const HUB_SAMPLE_RECTS: SampleRect[] = [
+  { name: 'floor_center', x: 860, y: 480, width: 200, height: 120 },
+  { name: 'corner_tl', x: 160, y: 260, width: 64, height: 56 },
+  { name: 'corner_tr', x: 1680, y: 260, width: 64, height: 56 },
+  { name: 'corner_bl', x: 160, y: 780, width: 64, height: 56 },
+  { name: 'corner_br', x: 1680, y: 780, width: 64, height: 56 },
+  { name: 'wall_top', x: 860, y: 88, width: 200, height: 36 },
+  { name: 'brazier_pool', x: 468, y: 466, width: 56, height: 56 },
 ];
 
 export const DEFAULT_FREEZE_MASK_RECTS: SampleRect[] = [

@@ -1,5 +1,6 @@
 import {
   clamp,
+  i18n,
   INPUT_BUTTON,
   LocalTransport,
   NetworkTransport,
@@ -225,6 +226,7 @@ export class GameScene extends Phaser.Scene {
   public trailingArmorRatio = 1.0;
   public trailingBossHpRatio = 1.0;
   public lowHpHeartbeatTimer = 0;
+  public lastBlizzardPhase3 = false;
   public irisTransitionProgress = 0.0;
   public irisTransitionDir: -1 | 0 | 1 = 0;
 
@@ -633,7 +635,18 @@ export class GameScene extends Phaser.Scene {
     }
 
     // 7. Update Pooled Particles, Ambient Leaves/Snow/Embers & Floating Damage Numbers
+    const isBlizzardPhase3 = activeBoss?.defId === 'kryssa_ice_queen' && activeBoss.bossPhase === 3;
+    if (isBlizzardPhase3 && !this.lastBlizzardPhase3 && activeBoss) {
+      zzfx.play('boss_phase_change', activeBoss.x, this.camFocusX, activeBoss.y, this.camFocusY);
+      this.fx.spawnFloatingAlert(
+        activeBoss.x,
+        activeBoss.y,
+        i18n.getLocale() === 'en' ? '❄ ETERNAL BLIZZARD!' : '❄ BÃO TUYẾT VĨNH CỬU!',
+      );
+    }
+    this.lastBlizzardPhase3 = isBlizzardPhase3;
     this.fx.setBiome(sim.currentBiome);
+    this.fx.setBlizzardIntense(isBlizzardPhase3);
     if (!isSoloPaused) {
       this.fx.update(dtSec, this.cameras.main.worldView);
     }
@@ -660,7 +673,6 @@ export class GameScene extends Phaser.Scene {
       slot.state = sp;
     }
 
-    const isBlizzardPhase3 = activeBoss?.defId === 'kryssa_ice_queen' && activeBoss.bossPhase === 3;
     this.lighting.setBiome(sim.currentBiome);
     this.lighting.setBlizzardVeil(isBlizzardPhase3);
     this.lighting.update({
@@ -673,6 +685,7 @@ export class GameScene extends Phaser.Scene {
       props: sim.props,
       map: sim.map,
       trauma: sim.runState === 'playing' && !isSoloPaused ? this.fx.getTrauma() : 0,
+      inHub: sim.inHub,
     });
 
     // 10. Update Procedural Crosshair at Mouse World Position

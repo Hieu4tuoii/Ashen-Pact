@@ -60,6 +60,7 @@ export class CombatFxManager {
   public shakeTime = 0;
   public popupSpreadIndex = 0;
   public currentBiome: 1 | 2 | 3 = 1;
+  private blizzardIntense = false;
 
   public totalHitStopsTriggered = 0;
   public totalShakesTriggered = 0;
@@ -74,7 +75,7 @@ export class CombatFxManager {
     damageCapacity = 48,
     decalCapacity = 120,
     afterimageCapacity = 24,
-    ambientCapacity = 36,
+    ambientCapacity = 96,
   ) {
     initCombatFxPools.call(
       this,
@@ -87,39 +88,79 @@ export class CombatFxManager {
     );
   }
 
+  public setBlizzardIntense(active: boolean): void {
+    if (this.blizzardIntense === active) return;
+    this.blizzardIntense = active;
+    if (!active && this.currentBiome === 2) {
+      const invBake = 1 / TextureBaker.getBakeScale();
+      for (let i = 0; i < this.ambientPool.length; i++) {
+        const amb = this.ambientPool[i]!;
+        amb.vx = 16 + (i % 5) * 4;
+        amb.vy = 22 + (i % 5) * 4;
+        amb.baseScale = invBake * (0.75 + (i % 3) * 0.15);
+        amb.sprite.setScale(amb.baseScale);
+        amb.sprite.setAlpha(0.72);
+      }
+    }
+  }
+
+  public isBlizzardIntense(): boolean {
+    return this.blizzardIntense;
+  }
+
   public setBiome(biome: 1 | 2 | 3): void {
     if (this.currentBiome === biome) return;
     this.currentBiome = biome;
     const invBake = 1 / TextureBaker.getBakeScale();
     for (let i = 0; i < this.ambientPool.length; i++) {
       const amb = this.ambientPool[i]!;
-      if (amb.kind === 'mist') {
-        amb.sprite.setTexture('fx_ambient_mist');
-        if (biome === 2) {
-          amb.sprite.setTint(hexToNum(PALETTE.CYAN_FROST));
-        } else if (biome === 3) {
-          amb.sprite.setTint(hexToNum(PALETTE.ASH_GRAY));
-        } else {
-          amb.sprite.clearTint();
-        }
+      if (biome === 2) {
+        amb.sprite.setTexture('fx_ice_shard');
+        amb.sprite.setTint(hexToNum(PALETTE.ICE_WHITE));
+        amb.vx = 16 + (i % 5) * 4;
+        amb.vy = 22 + (i % 5) * 4;
+      } else if (biome === 3) {
+        amb.sprite.setTexture('fx_spark');
+        amb.sprite.setTint(hexToNum(i % 2 === 0 ? PALETTE.FLAME_ORANGE : PALETTE.SOLAR_GOLD));
+        amb.vx = 16 + (i % 5) * 4;
+        amb.vy = -(18 + (i % 5) * 4);
       } else {
-        if (biome === 2) {
-          amb.sprite.setTexture('fx_ice_shard');
-          amb.sprite.setTint(hexToNum(PALETTE.ICE_WHITE));
-          amb.vy = 22 + (i % 5) * 4;
-        } else if (biome === 3) {
-          amb.sprite.setTexture('fx_spark');
-          amb.sprite.setTint(hexToNum(i % 2 === 0 ? PALETTE.FLAME_ORANGE : PALETTE.SOLAR_GOLD));
-          amb.vy = -(18 + (i % 5) * 4);
-        } else {
-          amb.sprite.setTexture('fx_ambient_leaf');
-          amb.sprite.clearTint();
-          amb.vy = 14 + (i % 4) * 3;
-        }
-        amb.baseScale = invBake * (0.75 + (i % 3) * 0.15);
-        amb.sprite.setScale(amb.baseScale);
+        amb.sprite.setTexture('fx_ambient_leaf');
+        amb.sprite.clearTint();
+        amb.vx = 16 + (i % 5) * 4;
+        amb.vy = 14 + (i % 4) * 3;
       }
+      amb.baseScale = invBake * (0.75 + (i % 3) * 0.15);
+      amb.sprite.setScale(amb.baseScale);
+      amb.sprite.setAlpha(0.72);
     }
+  }
+
+  public spawnFloatingAlert(
+    x: number,
+    y: number,
+    label: string,
+    colorHex: string = PALETTE.CYAN_FROST,
+  ): void {
+    const slot = this.acquireDamageSlot();
+    if (!slot) return;
+    this.totalDamagePopupsSpawned += 1;
+    slot.active = true;
+    slot.age = 0;
+    slot.ttl = 0.65;
+    slot.x = x;
+    slot.y = y - 36;
+    slot.vx = 0;
+    slot.vy = -52;
+    slot.baseScale = 1.18;
+
+    slot.text.setText(label);
+    slot.text.setColor(colorHex);
+    slot.text.setPosition(slot.x, slot.y);
+    slot.text.setScale(slot.baseScale * 1.2);
+    slot.text.setAlpha(1);
+    slot.text.setVisible(true);
+    slot.text.setActive(true);
   }
 
   public spawnFrostBreath(x: number, y: number, facingSign: number): void {

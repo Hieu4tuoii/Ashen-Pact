@@ -9,6 +9,7 @@ import {
   DEFAULT_HUB_URL,
   DEFAULT_MENU_URL,
   ENVIRONMENT_SAMPLE_RECTS,
+  HUB_SAMPLE_RECTS,
   installDeterministicRafGate,
   lockCameraAndIrisToPlayer,
   makeScene,
@@ -29,6 +30,7 @@ import {
 export {
   DEFAULT_FREEZE_MASK_RECTS,
   ENVIRONMENT_SAMPLE_RECTS,
+  HUB_SAMPLE_RECTS,
   installDeterministicRafGate,
   setSceneLightingAndRenderStaticFrame,
   stepDeterministicFrames,
@@ -71,7 +73,7 @@ export const VISUAL_SCENES: readonly VisualSceneDef[] = [
   // 2. Hub
   makeScene('hub-solo', 'Hub courtyard solo with statues and weapon rack', DEFAULT_HUB_URL, 'GameScene', setupHubSoloScene, {
     captureUnlit: true,
-    sampleRects: ENVIRONMENT_SAMPLE_RECTS,
+    sampleRects: HUB_SAMPLE_RECTS,
   }),
   makeScene('hub-coop-2p', 'Hub courtyard with 2 Co-op players and LAN Invite QR panel', DEFAULT_HUB_URL, 'GameScene', async (page) => {
     await page.evaluate(() => {
