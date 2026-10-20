@@ -9,6 +9,7 @@ export interface VisualSceneDef {
   viewport?: { width: number; height: number };
   captureUnlit?: boolean;
   captureStrip?: boolean;
+  stripFramesPerStep?: number;
   grayscaleFrom?: string;
   sampleRects?: SampleRect[];
   freezeMaskRects?: SampleRect[];
@@ -534,7 +535,12 @@ export function makeScene(
   opts?: Partial<
     Pick<
       VisualSceneDef,
-      'viewport' | 'captureUnlit' | 'captureStrip' | 'grayscaleFrom' | 'sampleRects'
+      | 'viewport'
+      | 'captureUnlit'
+      | 'captureStrip'
+      | 'stripFramesPerStep'
+      | 'grayscaleFrom'
+      | 'sampleRects'
     >
   >,
 ): VisualSceneDef {

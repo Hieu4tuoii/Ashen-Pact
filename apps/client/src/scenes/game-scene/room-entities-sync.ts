@@ -369,11 +369,11 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
     let entry = this.worldItemSprites.get(it.id);
     if (!entry) {
       const glow = this.add.graphics();
-      glow.setDepth(25);
+      glow.setDepth(35);
       glow.setBlendMode(Phaser.BlendModes.ADD);
       const sprite = this.add.sprite(it.x, it.y, tex);
       sprite.setScale(invBake * 0.95);
-      sprite.setDepth(26);
+      sprite.setDepth(32);
 
       const label = this.add
         .text(it.x, it.y - 24, labelText, {

@@ -72,11 +72,21 @@ export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, 
     if (it.ownerPlayerId !== undefined && it.ownerPlayerId !== 0 && it.ownerPlayerId !== p.id) {
       continue;
     }
+    let rx = it.x;
+    let ry = it.y;
+    if (it.droppedAtTick !== undefined) {
+      const ageSec = Math.max(0, (sim.tick - it.droppedAtTick) / 60);
+      if (ageSec < 0.25) {
+        const u = clamp(ageSec / 0.25, 0, 1);
+        rx = (it.fromX ?? it.x) + (it.x - (it.fromX ?? it.x)) * u;
+        ry = (it.fromY ?? it.y) + (it.y - (it.fromY ?? it.y)) * u;
+      }
+    }
     const col = hexToNum(WEAPON_RARITY_COLORS[it.rarity]);
     g.fillStyle(col, 0.22);
-    g.fillRect(it.x - 8, it.y - 54, 16, 54);
+    g.fillRect(rx - 8, ry - 54, 16, 54);
     g.lineStyle(2, col, 0.88);
-    g.strokeCircle(it.x, it.y + 6, 14);
+    g.strokeCircle(rx, ry + 6, 14);
   }
 
   // 1. Active Skills & Co-op Downed / Revive Circles for all players

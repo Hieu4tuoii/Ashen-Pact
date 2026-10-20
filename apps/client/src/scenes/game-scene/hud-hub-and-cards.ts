@@ -109,6 +109,7 @@ export function updateHubInvitePanelImpl(this: GameScene): void {
     label: string,
     fillHex: string,
     onClick: () => void,
+    fontSize = '9.5px',
   ) => {
     const btnG = this.add.graphics();
     btnG.fillStyle(hexToNum(fillHex), 0.95);
@@ -119,7 +120,7 @@ export function updateHubInvitePanelImpl(this: GameScene): void {
     const txt = this.add
       .text(bx + bw / 2, by + bh / 2, label, {
         fontFamily: '"Be Vietnam Pro", sans-serif',
-        fontSize: '9.5px',
+        fontSize,
         fontStyle: '800',
         color: PALETTE.BONE_WHITE,
         stroke: PALETTE.INK_DARK,
@@ -291,6 +292,7 @@ export function updateHubInvitePanelImpl(this: GameScene): void {
       () => {
         this.queuedEmote = em.id;
       },
+      '7.5px',
     );
   });
 }

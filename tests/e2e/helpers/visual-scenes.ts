@@ -189,6 +189,32 @@ export const VISUAL_SCENES: readonly VisualSceneDef[] = [
   makeScene('b1-weapon-ground-far', 'Biome 1 dropped weapon from far (> 180u)', DEFAULT_GAME_URL, 'GameScene', (p) => setupWeaponGroundDistanceScene(p, 210)),
   makeScene('b1-weapon-ground-mid', 'Biome 1 dropped weapon from mid (~100u)', DEFAULT_GAME_URL, 'GameScene', (p) => setupWeaponGroundDistanceScene(p, 100)),
   makeScene('b1-weapon-ground-near', 'Biome 1 dropped weapon within interact range (<= 64u)', DEFAULT_GAME_URL, 'GameScene', (p) => setupWeaponGroundDistanceScene(p, 32)),
+  makeScene('b1-weapon-drop', 'Biome 1 active weapon drop [X] with 2-slot HUD empty state and 8-frame 0.25s parabolic toss arc strip', DEFAULT_GAME_URL, 'GameScene', async (page) => {
+    await page.evaluate(() => {
+      const sim = window.__GAME_TRANSPORT__!.getSim();
+      sim.enterRoom(sim.dungeon.startRoomId);
+      sim.skipCurrentRoomWaves();
+      sim.enemies.length = 0;
+      sim.projectiles.length = 0;
+      sim.worldItems.length = 0;
+      sim.player.x = 340;
+      sim.player.y = 270;
+      sim.player.weaponSlots = ['knight_sword', 'solar_archon_staff'];
+      sim.player.activeWeaponSlot = 1;
+    });
+    await lockCameraAndIrisToPlayer(page);
+    await stepDeterministicFrames(page, 43);
+    await page.evaluate(() => {
+      const sim = window.__GAME_TRANSPORT__!.getSim();
+      sim.player.aimAngle = 0;
+      const dropped = sim.dropActiveWeapon(sim.player.id);
+      if (dropped) {
+        dropped.fromX = sim.player.x + 24;
+        dropped.x = sim.player.x + 58;
+      }
+    });
+    await stepDeterministicFrames(page, 2);
+  }, { captureStrip: true, stripFramesPerStep: 2 }),
   makeScene('b1-merchant', 'Biome 1 Dark Merchant room with shop items', DEFAULT_GAME_URL, 'GameScene', async (page) => {
     await page.evaluate(() => {
       const sim = window.__GAME_TRANSPORT__!.getSim();
@@ -463,6 +489,27 @@ export const VISUAL_SCENES: readonly VisualSceneDef[] = [
       document.body.appendChild(host);
     });
     await stepDeterministicFrames(page, 45);
+  }),
+  makeScene('ui-emote-wheel', 'In-game 4-quadrant radial Emote Wheel while holding [T]', DEFAULT_GAME_URL, 'GameScene', async (page) => {
+    await page.keyboard.up('KeyT');
+    await page.evaluate(() => {
+      const sim = window.__GAME_TRANSPORT__!.getSim();
+      sim.enterRoom(sim.dungeon.startRoomId);
+      sim.skipCurrentRoomWaves();
+      sim.enemies.length = 0;
+      sim.projectiles.length = 0;
+      sim.player.x = 480;
+      sim.player.y = 270;
+    });
+    await lockCameraAndIrisToPlayer(page);
+    await stepDeterministicFrames(page, 42);
+    await page.mouse.move(960, 300);
+    await page.keyboard.down('KeyT');
+    await stepDeterministicFrames(page, 3);
+    const wheelOpen = await page.evaluate(() => window.__GAME_DEBUG__?.emoteWheelOpen === true);
+    if (!wheelOpen) {
+      throw new Error('Expected Emote Wheel to be open in ui-emote-wheel scene');
+    }
   }),
 
   // 8. Gallery

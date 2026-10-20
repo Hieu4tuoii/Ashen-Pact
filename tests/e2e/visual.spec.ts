@@ -75,12 +75,14 @@ async function captureSingleScene(
   if (scene.captureStrip) {
     const stripFrames: Buffer[] = [litBuffer];
     for (let i = 1; i < 8; i++) {
-      await stepDeterministicFrames(page, 5);
+      await stepDeterministicFrames(page, scene.stripFramesPerStep ?? 5);
       const frameBuf = await page.screenshot({ type: 'png' });
       stripFrames.push(frameBuf);
     }
     stripBuffer = stitchPngBuffersHorizontal(stripFrames);
   }
+
+  await page.keyboard.up('KeyT');
 
   return {
     litBuffer,
