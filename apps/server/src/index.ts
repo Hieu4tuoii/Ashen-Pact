@@ -118,7 +118,15 @@ export async function startServer(initialPort = DEFAULT_PORT): Promise<{
   // Serve built static client when available
   const clientDistPath = resolveClientDistPath();
   if (clientDistPath) {
-    app.use(express.static(clientDistPath));
+    app.use(
+      express.static(clientDistPath, {
+        setHeaders: (res, filePath) => {
+          if (filePath.endsWith('.html')) {
+            res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+          }
+        },
+      }),
+    );
   }
 
   const httpServer = http.createServer(app);

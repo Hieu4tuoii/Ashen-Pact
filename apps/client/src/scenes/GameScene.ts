@@ -1988,10 +1988,9 @@ export class GameScene extends Phaser.Scene {
   private applyCameraViewport(): void {
     const cam = this.cameras?.main;
     if (!cam) return;
-    const zoom = Math.min(
-      this.scale.width / WORLD_VIEW_WIDTH,
-      this.scale.height / WORLD_VIEW_HEIGHT,
-    );
+    const zoomX = this.scale.width / WORLD_VIEW_WIDTH;
+    const zoomY = this.scale.height / WORLD_VIEW_HEIGHT;
+    const zoom = Math.min(zoomX, zoomY);
     const prevScale = TextureBaker.getBakeScale();
     const newScale = TextureBaker.bakeAll(this, zoom, false);
 
@@ -2096,7 +2095,7 @@ export class GameScene extends Phaser.Scene {
       this.debugOverlay?.refreshResolution(newScale);
     }
 
-    cam.setZoom(zoom);
+    cam.setZoom(zoomX, zoomY);
   }
 
   public override update(_time: number, rawDeltaMs: number): void {
@@ -3978,13 +3977,16 @@ export class GameScene extends Phaser.Scene {
     const shake = this.fx.computeCameraShakeOffset(dtSec);
     this.lastShakeX = shake.offsetX;
     this.lastShakeY = shake.offsetY;
-    cam.centerOn(clampedX + shake.offsetX, clampedY + shake.offsetY);
+    const finalCamX = clampedX + shake.offsetX;
+    const finalCamY = clampedY + shake.offsetY;
+    cam.centerOn(finalCamX, finalCamY);
 
     // Pin HUD container to camera worldView origin
-    const view = cam.worldView;
-    if (view && view.width > 0) {
-      this.hudContainer.setPosition(view.x, view.y);
-    }
+    const zoomX = Math.max(0.1, cam.zoomX || cam.zoom || 1);
+    const zoomY = Math.max(0.1, cam.zoomY || cam.zoom || 1);
+    const viewW = cam.width > 0 ? cam.width / zoomX : WORLD_VIEW_WIDTH;
+    const viewH = cam.height > 0 ? cam.height / zoomY : WORLD_VIEW_HEIGHT;
+    this.hudContainer.setPosition(finalCamX - viewW * 0.5, finalCamY - viewH * 0.5);
   }
 
   private renderTelegraphsAndShield(playerX: number, playerY: number): void {

@@ -292,9 +292,10 @@ export class LightingPipeline {
     this.syncPostFxPipeline();
     const cam = this.scene.cameras.main;
     const view = cam.worldView;
-    const zoom = Math.max(0.1, cam.zoom || 1);
-    const viewW = cam.width > 0 ? cam.width / zoom : view && view.width > 0 ? view.width : WORLD_VIEW_WIDTH;
-    const viewH = cam.height > 0 ? cam.height / zoom : view && view.height > 0 ? view.height : WORLD_VIEW_HEIGHT;
+    const zoomX = Math.max(0.1, cam.zoomX || cam.zoom || 1);
+    const zoomY = Math.max(0.1, cam.zoomY || cam.zoom || 1);
+    const viewW = cam.width > 0 ? cam.width / zoomX : view && view.width > 0 ? view.width : WORLD_VIEW_WIDTH;
+    const viewH = cam.height > 0 ? cam.height / zoomY : view && view.height > 0 ? view.height : WORLD_VIEW_HEIGHT;
     const rawViewX = cam.width > 0 ? cam.scrollX + cam.width * 0.5 - viewW * 0.5 : view && view.width > 0 ? view.x : 0;
     const rawViewY = cam.height > 0 ? cam.scrollY + cam.height * 0.5 - viewH * 0.5 : view && view.height > 0 ? view.y : 0;
     const pad = 64;

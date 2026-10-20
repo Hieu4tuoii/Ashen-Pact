@@ -1155,7 +1155,9 @@ export class ArtGalleryScene extends Phaser.Scene {
       }
       this.debugOverlay?.refreshResolution(newScale);
     }
-    cam.setZoom(zoom);
+    const zoomX = this.scale.width / WORLD_VIEW_WIDTH;
+    const zoomY = this.scale.height / WORLD_VIEW_HEIGHT;
+    cam.setZoom(zoomX, zoomY);
     cam.centerOn(WORLD_VIEW_WIDTH / 2, WORLD_VIEW_HEIGHT / 2);
     this.updateStatusBanner();
   }

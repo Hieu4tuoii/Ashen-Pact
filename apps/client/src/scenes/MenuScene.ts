@@ -761,10 +761,9 @@ export class MenuScene extends Phaser.Scene {
   private applyCameraViewport(): void {
     const cam = this.cameras?.main;
     if (!cam) return;
-    const zoom = Math.min(
-      this.scale.width / WORLD_VIEW_WIDTH,
-      this.scale.height / WORLD_VIEW_HEIGHT,
-    );
+    const zoomX = this.scale.width / WORLD_VIEW_WIDTH;
+    const zoomY = this.scale.height / WORLD_VIEW_HEIGHT;
+    const zoom = Math.min(zoomX, zoomY);
     const prevScale = TextureBaker.getBakeScale();
     const newScale = TextureBaker.bakeAll(this, zoom, false);
     if (newScale !== prevScale) {
@@ -783,7 +782,7 @@ export class MenuScene extends Phaser.Scene {
       this.modalManager?.refreshResolution(newScale);
       this.debugOverlay?.refreshResolution(newScale);
     }
-    cam.setZoom(zoom);
+    cam.setZoom(zoomX, zoomY);
     cam.centerOn(WORLD_VIEW_WIDTH / 2, WORLD_VIEW_HEIGHT / 2);
   }
 
