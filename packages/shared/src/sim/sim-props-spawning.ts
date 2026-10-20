@@ -147,7 +147,8 @@ export function configureStressTestImpl(this: WorldSim, active: boolean): void {
   }
 
   this.player.godMode = true;
-  this.player.activeWeaponSlot = 3; // Gale SMG
+  this.player.weaponSlots = ['knight_sword', 'gale_smg'];
+  this.player.activeWeaponSlot = 1; // Gale SMG
 
   // Spawn 3 simulated co-op teammates (total 4 players: P1..P4)
   this.simulatedPlayers = [
@@ -155,11 +156,14 @@ export function configureStressTestImpl(this: WorldSim, active: boolean): void {
     this.createPlayerState(3, 3, 'elementalist', this.map.width * 0.45, this.map.height * 0.65),
     this.createPlayerState(4, 4, 'engineer', this.map.width * 0.6, this.map.height * 0.5),
   ];
+  this.simulatedPlayers[0]!.weaponSlots = ['hunter_crossbow', 'rusty_pistol'];
   this.simulatedPlayers[0]!.activeWeaponSlot = 1; // Rusty Pistol
   this.simulatedPlayers[0]!.activeImbueElement = 'chill';
-  this.simulatedPlayers[1]!.activeWeaponSlot = 2; // Scrap Shotgun
+  this.simulatedPlayers[1]!.weaponSlots = ['apprentice_staff', 'scrap_shotgun'];
+  this.simulatedPlayers[1]!.activeWeaponSlot = 1; // Scrap Shotgun
   this.simulatedPlayers[1]!.activeImbueElement = 'burn';
-  this.simulatedPlayers[2]!.activeWeaponSlot = 3; // Gale SMG
+  this.simulatedPlayers[2]!.weaponSlots = ['rivet_gun', 'gale_smg'];
+  this.simulatedPlayers[2]!.activeWeaponSlot = 1; // Gale SMG
   this.simulatedPlayers[2]!.activeImbueElement = 'shock';
 
   // Remove dummy so all 80 enemies are combat enemies
@@ -245,6 +249,7 @@ export function equipWeaponSlotImpl(this: WorldSim, slotIndex: number): void {
       this.player.fireCooldownTimer = Math.min(this.player.fireCooldownTimer, 0.08);
       this.events.push({
         kind: 'weapon_swapped',
+        playerId: this.player.id,
         weaponId: this.getActiveWeaponId(),
         slot: slotIndex,
       });

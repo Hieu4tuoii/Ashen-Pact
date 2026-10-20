@@ -216,8 +216,8 @@ describe('Phase 2 — 6 Interactive Surfaces & Elemental Surface Transformations
     sim.configureStressTest(true);
     expect(1 + sim.simulatedPlayers.length).toBe(4);
     expect(sim.simulatedPlayers[0]!.activeWeaponSlot).toBe(1);
-    expect(sim.simulatedPlayers[1]!.activeWeaponSlot).toBe(2);
-    expect(sim.simulatedPlayers[2]!.activeWeaponSlot).toBe(3);
+    expect(sim.simulatedPlayers[1]!.activeWeaponSlot).toBe(1);
+    expect(sim.simulatedPlayers[2]!.activeWeaponSlot).toBe(1);
     expect(sim.enemies.length).toBe(80);
     expect(sim.projectiles.length).toBeGreaterThanOrEqual(600);
 

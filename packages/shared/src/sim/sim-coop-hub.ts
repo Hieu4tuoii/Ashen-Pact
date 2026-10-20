@@ -1,10 +1,10 @@
 import { CHARACTERS } from '../data/characters.js';
 import type { CharacterId } from '../data/types.js';
-import { WEAPONS } from '../data/weapons.js';
+import { MAX_WEAPON_SLOTS, WEAPONS } from '../data/weapons.js';
 import { clamp, distance } from '../math/vec2.js';
 import { INPUT_BUTTON, PLAYER_SLOT_COLORS, type PlayerInputPacket, QUICK_EMOTES_VI, type QuickEmoteId, TILE_SIZE } from '../protocol/messages.js';
 import { generateDungeonFloor } from './dungeon-gen.js';
-import { PHASE1_SAMPLE_WEAPONS, PLAYER_RADIUS, REVIVE_HOLD_DURATION_SEC, DRUID_REVIVE_HOLD_DURATION_SEC, type SimWorldItemState, type PingMarkerKind, type SimPingMarker, type SimPlayerState } from './world-sim-types.js';
+import { PLAYER_RADIUS, REVIVE_HOLD_DURATION_SEC, DRUID_REVIVE_HOLD_DURATION_SEC, type SimWorldItemState, type PingMarkerKind, type SimPingMarker, type SimPlayerState } from './world-sim-types.js';
 import type { WorldSim } from './world-sim.js';
 
 export function createPlayerStateImpl(this: WorldSim,
@@ -16,10 +16,7 @@ export function createPlayerStateImpl(this: WorldSim,
   displayName?: string,
 ): SimPlayerState {
   const cDef = CHARACTERS[characterId] ?? CHARACTERS.vanguard;
-  const starterWeapons =
-    characterId === 'vanguard'
-      ? [...PHASE1_SAMPLE_WEAPONS]
-      : [cDef.starterWeaponId, 'rusty_pistol', 'scrap_shotgun', 'gale_smg'];
+  const starterWeapons = [cDef.starterWeaponId, 'rusty_pistol'].slice(0, MAX_WEAPON_SLOTS);
   return {
     id,
     slot,
@@ -56,6 +53,7 @@ export function createPlayerStateImpl(this: WorldSim,
     hurtFlashTimer: 0,
     weaponSlots: starterWeapons,
     activeWeaponSlot: 0,
+    weaponPickupLockTimer: 0,
     fireCooldownTimer: 0,
     recoilTimer: 0,
     skillActiveTimer: 0,
@@ -350,11 +348,9 @@ export function applyCharacterToPlayerStateImpl(this: WorldSim,
   p.moveSpeed = cDef.moveSpeed;
   p.armorRegenDelaySec = cDef.armorRegenDelaySec;
   p.armorRegenPerSec = cDef.armorRegenPerSec;
-  p.weaponSlots =
-    characterId === 'vanguard'
-      ? [...PHASE1_SAMPLE_WEAPONS]
-      : [cDef.starterWeaponId, 'rusty_pistol', 'scrap_shotgun', 'gale_smg'];
+  p.weaponSlots = [cDef.starterWeaponId, 'rusty_pistol'].slice(0, MAX_WEAPON_SLOTS);
   p.activeWeaponSlot = 0;
+  p.weaponPickupLockTimer = 0;
   p.skillActiveTimer = 0;
   p.skillCooldownTimer = 0;
   p.activeImbueElement = characterId === 'elementalist' ? 'burn' : 'none';
@@ -481,6 +477,7 @@ export function enterHubImpl(this: WorldSim): void {
       healAmount: 0,
       x: cx + rx,
       y: cy + ry,
+      isHubRackItem: true,
     });
   }
 
@@ -669,6 +666,58 @@ export function triggerEmoteImpl(this: WorldSim, playerId: number, emoteId: Quic
   return true;
 }
 
+export function spawnDroppedWeaponImpl(
+  this: WorldSim,
+  weaponId: string,
+  x: number,
+  y: number,
+  droppedByPlayerId = this.player.id,
+  fromX = x,
+  fromY = y,
+): SimWorldItemState | null {
+  const wep = WEAPONS[weaponId];
+  if (!wep) return null;
+
+  const droppedItem = this.spawnWorldItem({
+    kind: 'weapon',
+    weaponId: wep.id,
+    rarity: wep.rarity,
+    nameVi: wep.nameVi,
+    costGold: 0,
+    healAmount: 0,
+    x,
+    y,
+    ownerPlayerId: undefined,
+    droppedByPlayerId,
+    droppedAtTick: this.tick,
+    fromX,
+    fromY,
+  });
+
+  this.events.push({
+    kind: 'weapon_dropped',
+    playerId: droppedByPlayerId,
+    itemId: droppedItem.id,
+    weaponId: wep.id,
+    rarity: wep.rarity,
+    fromX,
+    fromY,
+    x,
+    y,
+  });
+
+  const dropper = this.getPlayerById(droppedByPlayerId);
+  if (dropper) {
+    dropper.weaponPickupLockTimer = 0.3;
+  }
+
+  if (!this.inHub) {
+    this.roomItemsByRoomId.set(this.currentRoomId, [...this.worldItems]);
+  }
+
+  return droppedItem;
+}
+
 export function dropActiveWeaponImpl(this: WorldSim, playerId = this.player.id): SimWorldItemState | null {
   const p = this.getPlayerById(playerId);
   if (!p || p.lifeState !== 'alive' || p.weaponSlots.length <= 1) return null;
@@ -683,16 +732,12 @@ export function dropActiveWeaponImpl(this: WorldSim, playerId = this.player.id):
   const dropX = p.x + Math.cos(p.aimAngle) * 28;
   const dropY = p.y + Math.sin(p.aimAngle) * 28;
   const resolved = this.map.resolveCircleCollision(dropX, dropY, 15);
-  const droppedItem = this.spawnWorldItem({
-    kind: 'weapon',
-    weaponId: wep.id,
-    rarity: wep.rarity,
-    nameVi: wep.nameVi,
-    costGold: 0,
-    healAmount: 0,
-    x: resolved.x,
-    y: resolved.y,
-    ownerPlayerId: undefined, // Shared so any teammate can pick it up!
+  const droppedItem = this.spawnDroppedWeapon(wid, resolved.x, resolved.y, p.id, p.x, p.y);
+  this.events.push({
+    kind: 'weapon_swapped',
+    playerId: p.id,
+    weaponId: p.weaponSlots[p.activeWeaponSlot]!,
+    slot: p.activeWeaponSlot,
   });
   return droppedItem;
 }

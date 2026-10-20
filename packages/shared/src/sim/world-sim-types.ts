@@ -1,14 +1,12 @@
 import { ALL_BOSS_IDS } from '../data/enemies.js';
 import type { CardinalDir, CharacterId, EliteModifier, ElementType, RoomType, WeaponRarity } from '../data/types.js';
-import { ALL_WEAPON_IDS, PHASE6_WEAPON_IDS } from '../data/weapons.js';
+import { ALL_WEAPON_IDS, MAX_WEAPON_SLOTS, PHASE6_WEAPON_IDS, estimateWeaponDps } from '../data/weapons.js';
 import { clamp } from '../math/vec2.js';
 import type { QuickEmoteId } from '../protocol/messages.js';
 
 export const PHASE1_SAMPLE_WEAPONS = [
   'knight_sword',
   'rusty_pistol',
-  'scrap_shotgun',
-  'gale_smg',
 ] as const;
 
 export type Phase1WeaponId = (typeof PHASE1_SAMPLE_WEAPONS)[number];
@@ -50,7 +48,7 @@ export const BIOME3_ENEMY_IDS = [
   'forge_titan',
 ] as const;
 
-export { ALL_BOSS_IDS, ALL_WEAPON_IDS, PHASE6_WEAPON_IDS };
+export { ALL_BOSS_IDS, ALL_WEAPON_IDS, MAX_WEAPON_SLOTS, PHASE6_WEAPON_IDS, estimateWeaponDps };
 
 export const ELEMENT_CYCLE_ORDER: readonly ElementType[] = [
   'none',
@@ -236,6 +234,11 @@ export interface SimWorldItemState {
   offerId?: string;
   /** If set, instanced to a specific player (only that player can pick it up). If undefined/0, shared. */
   ownerPlayerId?: number;
+  droppedByPlayerId?: number;
+  droppedAtTick?: number;
+  fromX?: number;
+  fromY?: number;
+  isHubRackItem?: boolean;
 }
 
 export interface SimNpcState {
@@ -340,6 +343,7 @@ export interface SimPlayerState {
   hurtFlashTimer: number;
   weaponSlots: string[];
   activeWeaponSlot: number;
+  weaponPickupLockTimer?: number;
   fireCooldownTimer: number;
   recoilTimer: number;
   skillActiveTimer: number;

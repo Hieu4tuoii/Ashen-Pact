@@ -1,7 +1,8 @@
 import { BIOME1_COMBAT_ENEMIES, BIOME2_COMBAT_ENEMIES, BIOME3_COMBAT_ENEMIES, ELITE_MODIFIERS } from '../data/enemies.js';
 import type { CardinalDir, EliteModifier, WeaponRarity } from '../data/types.js';
-import { WEAPONS } from '../data/weapons.js';
+import { MAX_WEAPON_SLOTS, WEAPONS } from '../data/weapons.js';
 import { COOP_SCALING } from '../data/scaling.js';
+import { clamp } from '../math/vec2.js';
 import { TILE_SIZE } from '../protocol/messages.js';
 import { type DungeonRoomNode, OPPOSITE_DIR } from './dungeon-gen.js';
 import type { SimChestState, SimWorldItemState, SimPlayerState } from './world-sim-types.js';
@@ -251,7 +252,6 @@ export function populateRoomContentsImpl(this: WorldSim, room: DungeonRoomNode):
   const cx = this.map.width * 0.5;
   const cy = this.map.height * 0.5;
   const hasSavedState =
-    room.id !== 0 &&
     this.initializedRoomIds.has(room.id) &&
     (this.roomChestsByRoomId.has(room.id) || this.roomItemsByRoomId.has(room.id));
 
@@ -706,6 +706,17 @@ export function pickupOrBuyWorldItemImpl(this: WorldSim,
     return false;
   }
 
+  if (item.kind === 'weapon') {
+    const lockActive = (collector.weaponPickupLockTimer ?? 0) > 0;
+    const droppedRecentlyByCollector =
+      item.droppedByPlayerId === collector.id &&
+      (lockActive ||
+        (item.droppedAtTick !== undefined && this.tick - item.droppedAtTick < 18));
+    if (droppedRecentlyByCollector || (lockActive && item.isHubRackItem)) {
+      return false;
+    }
+  }
+
   if (item.costGold > 0) {
     if (collector.gold >= item.costGold) {
       collector.gold -= item.costGold;
@@ -729,45 +740,119 @@ export function pickupOrBuyWorldItemImpl(this: WorldSim,
   if (item.offerId) {
     const offer = room.shopOffers.find((o) => o.id === item.offerId);
     if (offer) offer.purchased = true;
+  } else {
+    const idx = this.worldItems.indexOf(item);
+    if (idx >= 0) {
+      this.worldItems.splice(idx, 1);
+    }
   }
-  this.roomItemsByRoomId.set(room.id, [...this.worldItems]);
+
+  if (this.inHub && item.isHubRackItem && item.weaponId) {
+    this.spawnWorldItem({
+      kind: 'weapon',
+      weaponId: item.weaponId,
+      rarity: item.rarity,
+      nameVi: item.nameVi,
+      costGold: 0,
+      healAmount: 0,
+      x: item.x,
+      y: item.y,
+      isHubRackItem: true,
+      droppedByPlayerId: collector.id,
+      droppedAtTick: this.tick,
+    });
+  }
 
   if (item.kind === 'health_potion') {
     collector.hp = Math.min(collector.maxHp, collector.hp + item.healAmount);
     collector.armor = Math.min(collector.maxArmor, collector.armor + 2);
+    if (!this.inHub) {
+      this.roomItemsByRoomId.set(room.id, [...this.worldItems]);
+    }
     return true;
   }
 
   if (item.kind === 'armor_upgrade') {
     collector.maxArmor += 2;
     collector.armor = collector.maxArmor;
+    if (!this.inHub) {
+      this.roomItemsByRoomId.set(room.id, [...this.worldItems]);
+    }
     return true;
   }
 
   if (item.kind === 'weapon' && item.weaponId && WEAPONS[item.weaponId]) {
+    collector.weaponPickupLockTimer = 0.3;
     const existingIdx = collector.weaponSlots.indexOf(item.weaponId);
     if (existingIdx >= 0) {
       if (collector.id === this.player.id) {
         this.equipWeaponSlot(existingIdx);
-      } else {
+      } else if (collector.activeWeaponSlot !== existingIdx) {
         collector.activeWeaponSlot = existingIdx;
+        this.events.push({
+          kind: 'weapon_swapped',
+          playerId: collector.id,
+          weaponId: item.weaponId,
+          slot: existingIdx,
+        });
       }
-    } else if (collector.weaponSlots.length < 4) {
+    } else if (collector.weaponSlots.length < MAX_WEAPON_SLOTS) {
       collector.weaponSlots.push(item.weaponId);
+      const newSlot = collector.weaponSlots.length - 1;
       if (collector.id === this.player.id) {
-        this.equipWeaponSlot(collector.weaponSlots.length - 1);
+        this.equipWeaponSlot(newSlot);
       } else {
-        collector.activeWeaponSlot = collector.weaponSlots.length - 1;
+        collector.activeWeaponSlot = newSlot;
+        this.events.push({
+          kind: 'weapon_swapped',
+          playerId: collector.id,
+          weaponId: item.weaponId,
+          slot: newSlot,
+        });
       }
     } else {
-      collector.weaponSlots[collector.activeWeaponSlot] = item.weaponId;
+      const activeIdx = clamp(collector.activeWeaponSlot, 0, collector.weaponSlots.length - 1);
+      const oldWeaponId = collector.weaponSlots[activeIdx]!;
+      if (this.inHub && item.isHubRackItem) {
+        const dropPos = this.map.resolveCircleCollision(
+          collector.x + Math.cos(collector.aimAngle) * 28,
+          collector.y + Math.sin(collector.aimAngle) * 28,
+          15,
+        );
+        this.spawnDroppedWeapon(
+          oldWeaponId,
+          dropPos.x,
+          dropPos.y,
+          collector.id,
+          collector.x,
+          collector.y,
+        );
+      } else {
+        this.spawnDroppedWeapon(
+          oldWeaponId,
+          item.x,
+          item.y,
+          collector.id,
+          collector.x,
+          collector.y,
+        );
+      }
+      collector.weaponSlots[activeIdx] = item.weaponId;
+      collector.activeWeaponSlot = activeIdx;
       this.events.push({
         kind: 'weapon_swapped',
+        playerId: collector.id,
         weaponId: item.weaponId,
-        slot: collector.activeWeaponSlot,
+        slot: activeIdx,
       });
     }
+    if (!this.inHub) {
+      this.roomItemsByRoomId.set(room.id, [...this.worldItems]);
+    }
     return true;
+  }
+  if (!this.inHub) {
+    this.roomItemsByRoomId.set(room.id, [...this.worldItems]);
   }
   return false;
 }

@@ -491,6 +491,14 @@ export const PHASE6_WEAPON_IDS: readonly string[] = [
 
 export const ALL_WEAPON_IDS: readonly string[] = Object.keys(WEAPONS);
 
+export const MAX_WEAPON_SLOTS = 2;
+
+export function estimateWeaponDps(weaponId: string): number {
+  const w = WEAPONS[weaponId];
+  if (!w) return 0;
+  return w.damage * Math.max(1, w.pelletCount) * w.fireRate * (1 + w.critChance * 0.5);
+}
+
 export const WEAPON_RARITY_LABELS_VI: Record<WeaponStatsDef['rarity'], string> = {
   common: 'Thường (Trắng)',
   uncommon: 'Tốt (Lục)',

@@ -263,8 +263,9 @@ describe('Phase 1 — HP, Armor Regen (Thiết Vệ 2.0s), Knockback & 4 Sample 
     expect(sim.player.shieldStoredBullets).toBe(1);
     expect(sim.player.energy).toBe(101);
 
-    // 2. Switch to Scrap Shotgun (slot 2) -> fires 5 pellets, costs 3 energy, and reuses pooled projectile object
+    // 2. Equip Scrap Shotgun into slot 1 -> fires 5 pellets, costs 3 energy, and reuses pooled projectile object
     const energyBefore = sim.player.energy;
+    sim.player.weaponSlots[1] = 'scrap_shotgun';
     sim.player.fireCooldownTimer = 0;
     sim.setPlayerInput({
       seq: 2,
@@ -273,7 +274,7 @@ describe('Phase 1 — HP, Armor Regen (Thiết Vệ 2.0s), Knockback & 4 Sample 
       moveY: 0,
       aimAngle: -Math.PI / 2,
       buttons: INPUT_BUTTON.FIRE,
-      weaponSlotSelect: 2,
+      weaponSlotSelect: 1,
     });
     sim.step(SIM_STEP_SEC);
 

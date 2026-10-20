@@ -43,7 +43,7 @@
 - **Tỉ lệ chí mạng (Crit Chance) & Sát thương chí mạng (Crit Multiplier):** Mặc định ×1.5 sát thương khi chí mạng (Vỡ Băng: ×3.0).
 - **Giới hạn 2 Ô Vũ Khí (`MAX_WEAPON_SLOTS = 2`) & Rơi Vũ Khí:**
   - Mỗi nhân vật mang tối đa **2 vũ khí**. Loadout khởi đầu gồm `[starterWeaponId, 'rusty_pistol']` (ví dụ Thiết Vệ khởi đầu với `[knight_sword, rusty_pistol]`).
-  - Khi cả 2 ô đã đầy mà người chơi nhặt hoặc mua vũ khí mới, vũ khí đang cầm trên tay sẽ **văng ra đất tại vị trí món vừa nhặt** thành `worldItem` dùng chung (`costGold = 0`) thay vì biến mất, cho phép đổi lại hoặc nhường cho đồng đội.
+  - Khi cả 2 ô đã đầy mà người chơi nhặt hoặc mua vũ khí mới, vũ khí đang cầm trên tay sẽ **văng ra đất tại vị trí món vừa nhặt** thành `worldItem` dùng chung (`costGold = 0`) qua `spawnDroppedWeapon` thay vì biến mất, áp dụng khóa nhặt lại `0.3s` (`18` ticks) cho người vừa thả để tránh nhặt đúp ngoài ý muốn và cho phép đổi lại hoặc nhường cho đồng đội.
 
 ---
 
@@ -81,7 +81,7 @@
 ## 6. Cấu Trúc Lượt Chơi, Vũ Khí & Thế Giới
 
 ### 6.1 Doanh Trại (Hub) & Cấu trúc Tầng
-- **Hub (Doanh Trại):** Có lửa trại ấm áp ở trung tâm, 5 bục tượng nhân vật (tương tác `E` để đổi nhân vật & xem preview kỹ năng), giá vũ khí thử nghiệm, hình nộm tập bắn có bảng đo **DPS thời gian thực**, bảng thông tin **Mời bạn bè LAN (IP + QR)** và Cổng Xuất Phát (kích hoạt khi mọi người trong phòng đều Sẵn Sàng).
+- **Hub (Doanh Trại):** Có lửa trại ấm áp ở trung tâm, 5 bục tượng nhân vật (tương tác `E` để đổi nhân vật & xem preview kỹ năng), giá vũ khí thử nghiệm tự động bổ sung (`isHubRackItem` không bao giờ trống kệ), hình nộm tập bắn có bảng đo **DPS thời gian thực**, bảng thông tin **Mời bạn bè LAN (IP + QR)** và Cổng Xuất Phát (kích hoạt khi mọi người trong phòng đều Sẵn Sàng).
 - **Cấu trúc mỗi Tầng (Floor):** 7–10 phòng nối bằng hành lang trên lưới:
   1. Phòng Bắt Đầu (An toàn)
   2. 3–5 Phòng Chiến Đấu (2–4 đợt quái, khóa cửa khi vào, dịch chuyển đồng đội bên ngoài vào phòng)

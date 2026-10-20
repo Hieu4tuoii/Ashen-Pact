@@ -109,8 +109,20 @@ export type SimEvent =
     }
   | {
       kind: 'weapon_swapped';
+      playerId: number;
       weaponId: string;
       slot: number;
+    }
+  | {
+      kind: 'weapon_dropped';
+      playerId: number;
+      itemId: number;
+      weaponId: string;
+      rarity: WeaponRarity;
+      fromX: number;
+      fromY: number;
+      x: number;
+      y: number;
     }
   | {
       kind: 'hit_stop';

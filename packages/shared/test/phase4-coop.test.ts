@@ -257,8 +257,8 @@ describe('Phase 4 — Co-op LAN, Hub, 5 Characters, Scaling, Revive/Ghost & Netw
     expect(p2Items.length).toBe(1);
 
     // P1 drops their secondary weapon so any teammate can pick it up
-    p1.weaponSlots.push('hunter_crossbow');
-    p1.activeWeaponSlot = p1.weaponSlots.length - 1;
+    p1.weaponSlots[1] = 'hunter_crossbow';
+    p1.activeWeaponSlot = 1;
     const dropped = sim.dropActiveWeapon(p1.id);
     expect(dropped).not.toBeNull();
     const sharedDrop = sim.worldItems.find(

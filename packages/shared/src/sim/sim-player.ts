@@ -29,6 +29,10 @@ export function updateSinglePlayerStateImpl(this: WorldSim,
       p.emoteId = null;
     }
   }
+  if ((p.weaponPickupLockTimer ?? 0) > 0) {
+    const nextLock = (p.weaponPickupLockTimer ?? 0) - dtSec;
+    p.weaponPickupLockTimer = nextLock < 1e-6 ? 0 : nextLock;
+  }
 
   if (justPressed & INPUT_BUTTON.PING) {
     const px =
@@ -117,12 +121,25 @@ export function updateSinglePlayerStateImpl(this: WorldSim,
     } else if (p.activeWeaponSlot !== selectedSlot) {
       p.activeWeaponSlot = selectedSlot;
       p.fireCooldownTimer = Math.min(p.fireCooldownTimer, 0.08);
+      this.events.push({
+        kind: 'weapon_swapped',
+        playerId: p.id,
+        weaponId: p.weaponSlots[selectedSlot]!,
+        slot: selectedSlot,
+      });
     }
   } else if (justPressed & INPUT_BUTTON.SWAP) {
     if (p.id === this.player.id) {
       this.cycleWeapon(1);
     } else if (p.weaponSlots.length > 1) {
       p.activeWeaponSlot = (p.activeWeaponSlot + 1) % p.weaponSlots.length;
+      p.fireCooldownTimer = Math.min(p.fireCooldownTimer, 0.08);
+      this.events.push({
+        kind: 'weapon_swapped',
+        playerId: p.id,
+        weaponId: p.weaponSlots[p.activeWeaponSlot]!,
+        slot: p.activeWeaponSlot,
+      });
     }
   }
 

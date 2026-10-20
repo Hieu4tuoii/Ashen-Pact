@@ -1,6 +1,6 @@
 import { FLOOR_BUFFS, FLOOR_BUFF_LIST } from '../data/enemies.js';
 import type { BuffId, CardinalDir } from '../data/types.js';
-import { WEAPONS } from '../data/weapons.js';
+import { MAX_WEAPON_SLOTS, WEAPONS, estimateWeaponDps } from '../data/weapons.js';
 import { approach, distance } from '../math/vec2.js';
 import { INPUT_BUTTON } from '../protocol/messages.js';
 import { generateDungeonFloor } from './dungeon-gen.js';
@@ -286,6 +286,7 @@ export function interactWithNearestImpl(this: WorldSim, actor: SimPlayerState = 
   // 2. World Items (Weapons / Shop Potions)
   for (let i = 0; i < this.worldItems.length; i++) {
     const item = this.worldItems[i]!;
+    if (item.kind === 'weapon' && (p.weaponPickupLockTimer ?? 0) > 0) continue;
     if (!item.pickedUp && distance(p.x, p.y, item.x, item.y) <= interactRange) {
       if (this.pickupOrBuyWorldItem(item, p)) {
         return true;
@@ -498,15 +499,45 @@ export function stepBotAutoPlayImpl(this: WorldSim, _dtSec: number): void {
   }
 
   // 3. Pick up free weapons on the ground (belonging to P1 or shared)
-  const freeItem = this.worldItems.find(
-    (it) =>
-      !it.pickedUp &&
-      it.costGold === 0 &&
-      (it.ownerPlayerId === undefined || it.ownerPlayerId === 0 || it.ownerPlayerId === p.id),
-  );
+  const freeItem = this.worldItems.find((it) => {
+    if (
+      it.pickedUp ||
+      it.costGold !== 0 ||
+      (it.ownerPlayerId !== undefined && it.ownerPlayerId !== 0 && it.ownerPlayerId !== p.id)
+    ) {
+      return false;
+    }
+    if (it.kind !== 'weapon' || !it.weaponId || p.weaponSlots.includes(it.weaponId)) {
+      return false;
+    }
+    if (
+      it.droppedByPlayerId === p.id &&
+      it.droppedAtTick !== undefined &&
+      this.tick - it.droppedAtTick < 600
+    ) {
+      return false;
+    }
+    if (p.weaponSlots.length >= MAX_WEAPON_SLOTS) {
+      const wDef = WEAPONS[it.weaponId];
+      if (!wDef) return false;
+      const candDps = estimateWeaponDps(it.weaponId);
+      if (wDef.category === 'melee') {
+        const slot0Def = WEAPONS[p.weaponSlots[0] ?? ''];
+        return slot0Def?.category === 'melee' && candDps > estimateWeaponDps(p.weaponSlots[0]!);
+      }
+      const rangedSlotIdx = p.weaponSlots.length > 1 ? 1 : 0;
+      return candDps > estimateWeaponDps(p.weaponSlots[rangedSlotIdx]!);
+    }
+    return true;
+  });
   if (freeItem) {
     const d = distance(p.x, p.y, freeItem.x, freeItem.y);
     if (d <= 56) {
+      if (p.weaponSlots.length >= MAX_WEAPON_SLOTS && freeItem.weaponId) {
+        const wDef = WEAPONS[freeItem.weaponId];
+        const targetSlot = wDef?.category === 'melee' ? 0 : Math.min(1, p.weaponSlots.length - 1);
+        this.equipWeaponSlot(targetSlot);
+      }
       this.pickupOrBuyWorldItem(freeItem, p);
     } else {
       const ang = Math.atan2(freeItem.y - p.y, freeItem.x - p.x);
