@@ -401,21 +401,26 @@ export function drawSurfaceTile(
   const sw = 32 - padW - padE;
   const sh = 32 - padN - padS;
 
+  const rNW = organic && !hasN && !hasW ? 9 : 0;
+  const rNE = organic && !hasN && !hasE ? 9 : 0;
+  const rSE = organic && !hasS && !hasE ? 9 : 0;
+  const rSW = organic && !hasS && !hasW ? 9 : 0;
+
   ctx.save();
   ctx.translate(dx, dy);
   ctx.scale(scale, scale);
 
-  // 1. Base desaturated surface fill
+  // 1. Base desaturated surface fill (clipped to rounded r=9u outer corners on organic P1 pools)
   ctx.fillStyle = fill;
-  ctx.fillRect(sx, sy, sw, sh);
+  traceOrganicSurfaceRect(ctx, sx, sy, sw, sh, rNW, rNE, rSE, rSW);
+  ctx.fill();
 
   // 2. Interior details (kept strictly within deltaL <= 10 of fill)
   const ox = ((variant % 3) - 1) * 1.6;
   const oy = ((Math.floor(variant / 3) % 3) - 1) * 1.4;
 
   ctx.save();
-  ctx.beginPath();
-  ctx.rect(sx, sy, sw, sh);
+  traceOrganicSurfaceRect(ctx, sx, sy, sw, sh, rNW, rNE, rSE, rSW);
   ctx.clip();
 
   switch (surface) {
@@ -544,52 +549,53 @@ export function drawSurfaceTile(
 
   // 3. Exposed Edge Architecture: P1 Organic 2-Layer Curved Shoreline vs P3 4u Basalt Conduit Curb
   if (organic) {
-    // P1: 2-layer organic curved shoreline along exposed edges
+    // P1: 2-layer organic curved shoreline along exposed edges & rounded outer corners
     const waveOffset = ((variant & 1) === 0 ? 1 : -1) * 1.1;
 
     // Layer 1: Outer damp bank (3.2u)
     ctx.strokeStyle = outerBank;
     ctx.lineWidth = 3.2;
     ctx.lineCap = 'round';
-    ctx.beginPath();
-    if (!hasN) {
-      ctx.moveTo(sx, sy + 0.8);
-      ctx.quadraticCurveTo(16, sy + 0.8 + waveOffset, sx + sw, sy + 0.8);
-    }
-    if (!hasS) {
-      ctx.moveTo(sx, sy + sh - 0.8);
-      ctx.quadraticCurveTo(16, sy + sh - 0.8 - waveOffset, sx + sw, sy + sh - 0.8);
-    }
-    if (!hasW) {
-      ctx.moveTo(sx + 0.8, sy);
-      ctx.quadraticCurveTo(sx + 0.8 + waveOffset, 16, sx + 0.8, sy + sh);
-    }
-    if (!hasE) {
-      ctx.moveTo(sx + sw - 0.8, sy);
-      ctx.quadraticCurveTo(sx + sw - 0.8 - waveOffset, 16, sx + sw - 0.8, sy + sh);
-    }
+    ctx.lineJoin = 'round';
+    traceOrganicShorelineLayer(
+      ctx,
+      sx,
+      sy,
+      sw,
+      sh,
+      hasN,
+      hasE,
+      hasS,
+      hasW,
+      rNW,
+      rNE,
+      rSE,
+      rSW,
+      0.8,
+      waveOffset,
+    );
     ctx.stroke();
 
     // Layer 2: Inner foam / moss / frost shoreline lip (1.6u)
     ctx.strokeStyle = innerLip;
     ctx.lineWidth = 1.6;
-    ctx.beginPath();
-    if (!hasN) {
-      ctx.moveTo(sx + 0.5, sy + 2.2);
-      ctx.quadraticCurveTo(16, sy + 2.2 + waveOffset, sx + sw - 0.5, sy + 2.2);
-    }
-    if (!hasS) {
-      ctx.moveTo(sx + 0.5, sy + sh - 2.2);
-      ctx.quadraticCurveTo(16, sy + sh - 2.2 - waveOffset, sx + sw - 0.5, sy + sh - 2.2);
-    }
-    if (!hasW) {
-      ctx.moveTo(sx + 2.2, sy + 0.5);
-      ctx.quadraticCurveTo(sx + 2.2 + waveOffset, 16, sx + 2.2, sy + sh - 0.5);
-    }
-    if (!hasE) {
-      ctx.moveTo(sx + sw - 2.2, sy + 0.5);
-      ctx.quadraticCurveTo(sx + sw - 2.2 - waveOffset, 16, sx + sw - 2.2, sy + sh - 0.5);
-    }
+    traceOrganicShorelineLayer(
+      ctx,
+      sx,
+      sy,
+      sw,
+      sh,
+      hasN,
+      hasE,
+      hasS,
+      hasW,
+      rNW,
+      rNE,
+      rSE,
+      rSW,
+      2.2,
+      waveOffset,
+    );
     ctx.stroke();
   } else {
     // P3: Beveled 4u basalt stone conduit curb (#7F6559 top cap / #3B2D29 inner wall)
@@ -670,6 +676,102 @@ export function drawSurfaceTile(
   }
 
   ctx.restore();
+}
+
+function traceOrganicSurfaceRect(
+  ctx: CanvasRenderingContext2D,
+  sx: number,
+  sy: number,
+  sw: number,
+  sh: number,
+  rNW: number,
+  rNE: number,
+  rSE: number,
+  rSW: number,
+): void {
+  ctx.beginPath();
+  ctx.moveTo(sx + rNW, sy);
+  ctx.lineTo(sx + sw - rNE, sy);
+  if (rNE > 0) {
+    ctx.arcTo(sx + sw, sy, sx + sw, sy + rNE, rNE);
+  }
+  ctx.lineTo(sx + sw, sy + sh - rSE);
+  if (rSE > 0) {
+    ctx.arcTo(sx + sw, sy + sh, sx + sw - rSE, sy + sh, rSE);
+  }
+  ctx.lineTo(sx + rSW, sy + sh);
+  if (rSW > 0) {
+    ctx.arcTo(sx, sy + sh, sx, sy + sh - rSW, rSW);
+  }
+  ctx.lineTo(sx, sy + rNW);
+  if (rNW > 0) {
+    ctx.arcTo(sx, sy, sx + rNW, sy, rNW);
+  }
+  ctx.closePath();
+}
+
+function traceOrganicShorelineLayer(
+  ctx: CanvasRenderingContext2D,
+  sx: number,
+  sy: number,
+  sw: number,
+  sh: number,
+  hasN: boolean,
+  hasE: boolean,
+  hasS: boolean,
+  hasW: boolean,
+  rNW: number,
+  rNE: number,
+  rSE: number,
+  rSW: number,
+  inset: number,
+  waveOffset: number,
+): void {
+  ctx.beginPath();
+  if (!hasN) {
+    const x0 = sx + (rNW > 0 ? rNW : 0);
+    const x1 = sx + sw - (rNE > 0 ? rNE : 0);
+    ctx.moveTo(x0, sy + inset);
+    ctx.quadraticCurveTo(16, sy + inset + waveOffset, x1, sy + inset);
+  }
+  if (!hasS) {
+    const x0 = sx + (rSW > 0 ? rSW : 0);
+    const x1 = sx + sw - (rSE > 0 ? rSE : 0);
+    ctx.moveTo(x0, sy + sh - inset);
+    ctx.quadraticCurveTo(16, sy + sh - inset - waveOffset, x1, sy + sh - inset);
+  }
+  if (!hasW) {
+    const y0 = sy + (rNW > 0 ? rNW : 0);
+    const y1 = sy + sh - (rSW > 0 ? rSW : 0);
+    ctx.moveTo(sx + inset, y0);
+    ctx.quadraticCurveTo(sx + inset + waveOffset, 16, sx + inset, y1);
+  }
+  if (!hasE) {
+    const y0 = sy + (rNE > 0 ? rNE : 0);
+    const y1 = sy + sh - (rSE > 0 ? rSE : 0);
+    ctx.moveTo(sx + sw - inset, y0);
+    ctx.quadraticCurveTo(sx + sw - inset - waveOffset, 16, sx + sw - inset, y1);
+  }
+  if (rNW > 0) {
+    const r = Math.max(1.5, rNW - inset);
+    ctx.moveTo(sx + inset, sy + rNW);
+    ctx.arcTo(sx + inset, sy + inset, sx + rNW, sy + inset, r);
+  }
+  if (rNE > 0) {
+    const r = Math.max(1.5, rNE - inset);
+    ctx.moveTo(sx + sw - rNE, sy + inset);
+    ctx.arcTo(sx + sw - inset, sy + inset, sx + sw - inset, sy + rNE, r);
+  }
+  if (rSE > 0) {
+    const r = Math.max(1.5, rSE - inset);
+    ctx.moveTo(sx + sw - inset, sy + sh - rSE);
+    ctx.arcTo(sx + sw - inset, sy + sh - inset, sx + sw - rSE, sy + sh - inset, r);
+  }
+  if (rSW > 0) {
+    const r = Math.max(1.5, rSW - inset);
+    ctx.moveTo(sx + rSW, sy + sh - inset);
+    ctx.arcTo(sx + inset, sy + sh - inset, sx + inset, sy + sh - rSW, r);
+  }
 }
 
 function maskHas(mask: number, bit: number): boolean {

@@ -220,4 +220,59 @@ describe('Phase P4 — Hybrid Map Architecture, ENV_PALETTE & Biome 1 Golden Roo
       }
     }
   });
+
+  it('builds architecture plans for Hub (0), Biome 2 (2), and Biome 3 (3) with biome-specific motifs and strict density budgets', () => {
+    // 1. Hub (biome 0)
+    const hubMap = new ArenaMap({ cols: 36, rows: 22, includePillars: true, seed: 1337, biome: 1 });
+    hubMap.configureRoomLayout('start', 1337, false, 1);
+    const hubPlan = buildRoomArchitecturePlan(hubMap, 'start', 0, 1337);
+    expect(hubPlan.biome).toBe(0);
+    const hubSolidKinds = new Set(hubPlan.solidDecors.map((d) => d.kind));
+    expect(hubSolidKinds.has('brazier_pedestal')).toBe(true);
+    expect(hubSolidKinds.has('wrought_iron_fence')).toBe(true);
+    expect(hubPlan.budget.largeDecorCount).toBeLessThanOrEqual(8);
+    expect(hubPlan.budget.emptyPerimeterRatio).toBeGreaterThanOrEqual(0.4);
+    expect(hubPlan.budget.centerArenaSolidDecorCount).toBe(0);
+
+    // 2. Biome 2 (Hầm Băng Vĩnh Cửu)
+    const b2Map = new ArenaMap({ cols: 36, rows: 22, includePillars: true, seed: 1337, biome: 2 });
+    b2Map.configureRoomLayout('combat', 1337, false, 2);
+    const b2Plan = buildRoomArchitecturePlan(b2Map, 'combat', 2, 1337);
+    expect(b2Plan.biome).toBe(2);
+    const b2SolidKinds = new Set(b2Plan.solidDecors.map((d) => d.kind));
+    expect(b2SolidKinds.has('brazier_pedestal')).toBe(true);
+    expect(b2SolidKinds.has('ice_alcove')).toBe(true);
+    expect(b2SolidKinds.has('frost_crystal_cluster')).toBe(true);
+    for (const item of b2Plan.solidDecors) {
+      expect(b2Map.isSolidTile(item.tx, item.ty)).toBe(true);
+    }
+    const b2DecalKinds = new Set(b2Plan.floorDecals.map((d) => d.kind));
+    expect(b2DecalKinds.has('sunken_astrolabe')).toBe(true);
+    expect(b2Plan.budget.largeDecorCount).toBeLessThanOrEqual(8);
+    expect(b2Plan.budget.emptyPerimeterRatio).toBeGreaterThanOrEqual(0.4);
+    expect(b2Plan.budget.centerArenaSolidDecorCount).toBe(0);
+
+    // 3. Biome 3 (Lò Rèn Dung Nham)
+    const b3Map = new ArenaMap({ cols: 36, rows: 22, includePillars: true, seed: 1337, biome: 3 });
+    b3Map.configureRoomLayout('combat', 1337, false, 3);
+    const b3Plan = buildRoomArchitecturePlan(b3Map, 'combat', 3, 1337);
+    expect(b3Plan.biome).toBe(3);
+    const b3SolidKinds = new Set(b3Plan.solidDecors.map((d) => d.kind));
+    expect(b3SolidKinds.has('brazier_pedestal')).toBe(true);
+    expect(b3SolidKinds.has('brass_gear_wall')).toBe(true);
+    expect(b3SolidKinds.has('steam_pipe_wall')).toBe(true);
+    for (const item of b3Plan.solidDecors) {
+      expect(b3Map.isSolidTile(item.tx, item.ty)).toBe(true);
+    }
+    const b3DecalKinds = new Set(b3Plan.floorDecals.map((d) => d.kind));
+    expect(b3DecalKinds.has('grated_heat_channel')).toBe(true);
+    for (const decal of b3Plan.floorDecals) {
+      expect(b3Map.isSolidTile(decal.tx, decal.ty)).toBe(false);
+      expect(computeTileDistToWall(b3Map, decal.tx, decal.ty)).toBeLessThanOrEqual(2);
+      expect(isFloorDecalVisible(decal, b3Map)).toBe(true);
+    }
+    expect(b3Plan.budget.largeDecorCount).toBeLessThanOrEqual(8);
+    expect(b3Plan.budget.emptyPerimeterRatio).toBeGreaterThanOrEqual(0.4);
+    expect(b3Plan.budget.centerArenaSolidDecorCount).toBe(0);
+  });
 });

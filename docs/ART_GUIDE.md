@@ -183,6 +183,26 @@ Toàn bộ lớp kiến trúc dưới đây được render hoàn toàn ở phí
 - **Phản ứng Nguyên Tố & Tia Sáng (`BlendMode.ADD`):** Mọi tia lửa, muzzle flash, đạn sáng, cột sáng độ hiếm (Tím/Cam) và vụ nổ Combo Nguyên Tố (*Hơi Nước, Vỡ Băng, Siêu Dẫn, Nổ Độc, Tê Liệt, Quá Tải*) đều vẽ trên lightmap với `BlendMode.ADD`, kèm vòng sóng xung kích (`easeOutCubic`) và chữ combo gộp hiện đại (ví dụ `HƠI NƯỚC ×3` trong cửa sổ `0.4s`).
 - **Đạn địch nhận biết bằng hình dạng (bắt buộc):** mọi đạn địch có lõi sáng gần trắng + thân `CRIMSON_BRIGHT` `#E84545` + viền `INK_DARK` `1.5u`, giống nhau ở mọi biome. Không FX/decor/ambient nào (than hồng, tàn lửa, chậu lửa, khe dung nham, pha lê) dùng cùng tổ hợp "lõi trắng + viền tối" ở cỡ 6–14px. Tàn lửa B3 ≤ 4px, không viền, bay lên. Phải phân biệt được cả trên ảnh chuyển xám.
 
+### 5.4 Phòng chuẩn (Golden Room B1 — Khóa tại Phase P4)
+Bộ tham chiếu chuẩn đã vượt qua Visual Gate Bước A (Env `9.2/10`, Lighting `9.5/10`, Readability `9.4/10`, Product Feel `9.0/10`) và được khóa tại `docs/screenshots/polish-p4/golden-room/` (`b1-start-room`, `b1-combat`, `b1-combat-low`, `b1-poison-swamp` kèm cặp `-unlit.png`):
+- **Bảng màu `ENV_PALETTE` khóa chuẩn (`apps/client/src/art/palette.ts`):**
+  - **Hub (`0`):** `floor: '#414B61'`, `seam: '#343B4C'`, `var: '#47546C'`, `wallTop: '#64708B'`, `wallFront: '#2D3547'`, `shadow: '#151A24'`, `rim: '#8B97B5'`, `accent: '#F59E42'`
+  - **Biome 1 (`1`):** `floor: '#3D4F47'`, `seam: '#303E38'`, `var: '#43584E'`, `wallTop: '#627468'`, `wallFront: '#2B3731'`, `shadow: '#16201C'`, `rim: '#9C9286'`, `accent: '#84CC16'`
+  - **Biome 2 (`2`):** `floor: '#446E78'`, `seam: '#3B5C64'`, `var: '#4A7881'`, `wallTop: '#6F949E'`, `wallFront: '#345462'`, `shadow: '#182A33'`, `rim: '#CFE8EE'`, `accent: '#22D3EE'`
+  - **Biome 3 (`3`):** `floor: '#53433F'`, `seam: '#413431'`, `var: '#5D4B44'`, `wallTop: '#7F6559'`, `wallFront: '#3B2D29'`, `shadow: '#1F1614'`, `rim: '#FDBA74'`, `accent: '#F97316'`
+- **Sàn 2 vùng theo `distToWall` (Chebyshev distance tới ô `wall`/`pillar`/`cracked_wall` gần nhất):**
+  - **Perimeter (`distToWall <= 2`, variants `0..3`):** `distToWall === 1` đan xen gạch đá `1×1` (`variant 0`, mạch `ENV.seam` `1u` ở `alpha = 0.45`), gạch chia `2×2` (`variant 1`, `ENV.var` `alpha = 0.42`), và **lưới thoát nước sắt lõm** (`variant 2`, khung âm `[8,8,16,16]` `ENV.seam` `alpha = 0.52` + 4 thanh sắt dọc `ENV.wallFront` `alpha = 0.48`); `distToWall === 2` dùng gạch chuyển tiếp (`variant 3`, mạch `ENV.seam` `alpha = 0.20`).
+  - **Center Arena (`distToWall > 2`, variants `4..7`):** Sàn nguyên khối phẳng mịn (mạch `ENV.seam` cực mờ `alpha = 0.06`, biến thiên cụm 3–4 ô bằng `ENV.var` ở `alpha = 0.00 / 0.20 / 0.40 / 0.60`), đạt `centerDeltaL ≈ 2.42 <= 8.0` và `floorDeltaL ≈ 2.42 <= 14.0`.
+- **Tường 3D 3 lớp & Đổ bóng hướng `-135°` (`texture-baker-tiles.ts`):**
+  - `Top Cap` (`y = 0..20` khi `!hasS`, màu `ENV.wallTop`, `+15 ΔL*` so với sàn), gờ rim-light `ENV.rim` dày `1.8u` ở cạnh Bắc/Tây (`-135°`), và viền ngoài `INK_DARK` dày `2.2u` chỉ vẽ trên rìa tiếp giáp sàn.
+  - `South Cliff Face` cao `cliffH = 12u` (`y = 20..32`, màu `ENV.wallFront`, `−10 ΔL*` so với sàn) có bóng gờ trên `2u` (`ENV.shadow`) và 2 hàng mạch đá ngang/dọc so le.
+  - Bóng tiếp xúc `7u` (`alpha = 0.35 → 0`) dưới tường Bắc/Tây + bóng đổ chéo Đông–Nam `14u` (`alpha = 0.22 → 0`) ở góc tường và bóng đổ dài `44u` (`alpha = 0.22 → 0`) từ cột trụ `2×2`.
+- **Surface Kiến trúc (`texture-baker-surfaces.ts`):**
+  - Nhóm hữu cơ `P1` (`water`, `electrified_water`, `poison_swamp`, `grass`, `burning_grass`, `ice`): bo tròn góc ngoài lộ thiên `r = 9u` để lộ nền `ENV.floor`, kèm bờ cong 2 lớp đồng tâm (`outerBank` `3.2u` + `innerLip` `1.6u`).
+  - Nhóm dẫn nhiệt/cơ khí `P3` (`lava`, `oil`, `burning_oil`, `conveyor`, `chasm`, `ash`): gờ đá bazan vát cạnh rộng `4u` (`#7F6559` mặt trên `2.4u` + `#3B2D29` thành trong `1.6u` + viền ngoài `INK_DARK` `1.4u`).
+- **Ngân sách mật độ Decor Phòng chuẩn B1 (`biome-architecture.ts`):**
+  - Vật thể có khối (`hasVolume = true`: `brazier_pedestal`, `root_base`, `mushroom_cluster`, `cliff_vines`) chỉ đặt trên ô `wall`/`pillar`; decal sàn (`hasVolume = false`: `root_decal_tip` rộng `2u`, `stepping_stone` elip bất đối xứng trên ô sàn khô sát mép nước/đầm độc) không viền `INK_DARK`, tự động ẩn khi ô bị phủ bởi surface động. Đảm bảo `largeDecorCount <= 8`, `smallPerimeterDecorCount <= floor(perimeterTileCount / 3)`, `emptyPerimeterRatio >= 0.40`, `centerArenaSolidDecorCount = 0`.
+
 ---
 
 ## 6. Typography & Chuỗi Kiểm Chứng Tiếng Việt
