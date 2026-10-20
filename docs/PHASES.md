@@ -90,3 +90,26 @@
 - [x] Build production + đóng gói Host app cho Windows (`AshenPact-Host.exe` + `start-host.bat` + `allow-firewall-port-2567.bat`), thư mục release zip sạch (`release/AshenPact-v0.1.0-win-x64.zip`).
 - [x] `README.md` tiếng Việt + hướng dẫn Windows Firewall + AP Isolation, `CREDITS.md` đầy đủ, `docs/RELEASE_NOTES.md`, `git tag phase-8` & `git tag v0.1.0`.
 
+---
+
+## Giai đoạn Polish v0.2.0
+
+| Phase | Nội dung | Yêu cầu gốc | Trạng thái |
+|---|---|---|---|
+| P0 | Hạ tầng chụp ảnh/metrics/reviewer + baseline | Kiểm chứng bằng hình ảnh | [ ] |
+| P1 | Chế độ debug, dọn UI debug | Ẩn debug trong .exe | [ ] |
+| P2 | Vũ khí 2 ô + rơi vũ khí | 2 vũ khí, đổi thì rơi | [ ] |
+| P3 | Nền ánh sáng, PostFX, `HudScene`, camera không méo | Map dễ nhìn, ánh sáng | [ ] |
+| P4 | **Phòng chuẩn B1** (vertical slice) → Palette ENV, sàn, tường, surface cho mọi biome | Map đẹp, giảm tương phản | [ ] |
+| P5 | Trang trí biome còn lại, chậu lửa | Map đẹp, nguồn sáng đuốc | [ ] |
+| P6 | Đèn/glow vật thể tương tác | Nguồn sáng cho rương/đuốc/cổng/vật phẩm | [ ] |
+| P7 | Nhãn theo khoảng cách, prompt [E] | Gần mới hiện [E] tên | [ ] |
+| P8 | Cổng dịch chuyển & cổng qua phòng | Cổng đẹp, sáng ảo diệu | [ ] |
+| P9a | Design system, HUD trong game | UI/UX hiện đại (HUD) | [ ] |
+| P9b | Menu, Hub, modal, Pause, Settings, kết quả | UI/UX hiện đại (Screens/Modals) | [ ] |
+| P10a | Nhân vật Cutout 2.0 & Quái Full Rig: animation, shading 2 lớp & rim-light | Chi tiết, mượt, đẹp (Rig) | [ ] |
+| P10b | FX, Phản Ứng Nguyên Tố & Hạt Môi Trường Trong Trẻo | Chi tiết, mượt, đẹp (FX) | [ ] |
+| P11 | Harness thật + độ khó + kịch tính | Khó và kịch tính hơn | [ ] |
+| P12 | Hồi quy, hiệu năng, release v0.2.0 | Chất lượng sản phẩm | [ ] |
+
+

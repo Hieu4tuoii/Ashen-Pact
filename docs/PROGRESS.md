@@ -431,3 +431,45 @@
      - Cập nhật `resizeViewport` trong `PreloadScene`, `MenuScene`, `GameScene` và `ArtGalleryScene` dùng `cam.setZoom(width / 960, height / 540)` để thanh HUD trên/dưới, Minimap, bản đồ và lớp ánh sáng phủ kín 100% chiều rộng và chiều cao cửa sổ trình duyệt ở mọi tỉ lệ màn hình.
   4. **Chụp lại toàn bộ lịch sử ảnh chụp màn hình (`docs/screenshots/phase-0/` → `docs/screenshots/phase-8/`):**
      - Chạy lại toàn bộ 10 bộ kiểm thử E2E (`pnpm e2e`) và cập nhật mới toàn bộ **49 ảnh chụp màn hình 1080p/1440p** từ `phase-0` đến `phase-8` để lưu trữ lịch sử trực quan phục vụ các đợt cập nhật tiếp theo.
+
+
+---
+
+## 3. Polish v0.2.0
+
+### 3.1 Kế hoạch (13 Phase — P0 đến P12, tách P9a/P9b và P10a/P10b thành 15 chặng kiểm soát)
+- **P0:** Hạ tầng kiểm chứng hình ảnh (`visual-scenes.ts`, `visual.spec.ts`, `pnpm shots`, `tools/visual-metrics.ts`, pixel-diff, `?seed=`, `?freeze=1`, `?lighting=0`, `?testHooks=1`, strip khung hình, `pnpm perf`) & Baseline (`docs/POLISH_BASELINE.md`).
+- **P1:** Chế độ Debug (`debugUi`, `testHooks`, `Ctrl+Shift+D`, server gate, launcher giữ `--host`, `start-host-debug.bat`) & dọn sạch UI debug trên bản người chơi.
+- **P2:** Vũ khí 2 ô (`MAX_WEAPON_SLOTS = 2`) & rơi vũ khí ra đất (`spawnDroppedWeapon`), tách vòng emote `T`, bot autoplay không lặp nhặt vũ khí.
+- **P3:** Nền tảng ánh sáng trong trẻo (Full-Screen Clear Visibility, bỏ `fx_ambient_mist`, bỏ `mainPlayerVisionRadius`/`allyVisionRadius`, `ambientColor` ~0.84–0.90, `vignetteStrength = 0.0`, `blizzardVeil` không làm tối), tách `HudScene` overlay, camera zoom đồng đều `min(w/960, h/540)`.
+- **P4:** Kiến trúc Map Hybrid — Bước A: Phòng chuẩn B1 (vertical slice, khóa chuẩn sau khi qua Visual Gate; chỉ dừng hỏi user nếu trượt Visual Gate sau 4 vòng) → Bước B: Nhân rộng Palette `ENV`, sàn "Tĩnh lặng giữa tâm", tường 3D 3 lớp & surface kiến trúc cho Hub/B2/B3.
+- **P5:** Bản sắc kiến trúc Biome (`biome-architecture.ts`: P4 Chung & Hub, B1 rễ Bezier & nấm, B2 Sunken Astrolabe & God-rays, B3 rãnh nhiệt lưới sắt & bánh răng đồng thau) & Chậu lửa ven tường.
+- **P6:** Ánh sáng & glow cho vật thể tương tác (`interactableLights` quota riêng + glow sprite `ADD` phía trên lightmap + cột sáng độ hiếm).
+- **P7:** Nhãn theo khoảng cách & prompt `[E]` duy nhất (`findInteractTarget` dùng chung giữa sim và client, hysteresis ~8u, fade 120–150ms, nameplate gọn).
+- **P8:** Cổng dịch chuyển tầng (shader GLSL xoáy năng lượng per-object + burst + bước vào) & cổng qua phòng (khung vòm đá + màn chắn năng lượng khóa/tan biến/dựng lên + fallback Low).
+- **P9a:** UI/UX — Design system (`theme.ts`, `ui/components/`), HUD mới trong `HudScene`, popup sát thương/phản ứng gộp (`×N` trong 0.4s), chỉ báo QoL, UI scale 80–130%.
+- **P9b:** UI/UX — Menu chính (HTML input overlay), Hub (bảng mời thu gọn), modal chọn buff, kết quả (bỏ nút đóng vô nghĩa), Pause (xác nhận thoát), Settings chia tab.
+- **P10a:** Nhân vật Cutout 2.0 & Quái Full Rig (crossfade 0.10–0.15s, pose attack/hurt/dash/cast/downed, chớp mắt, spring secondary motion, shading 2 lớp + rim-light `-135°`, tắt `useFastComposite` ở High/Medium).
+- **P10b:** FX, Phản Ứng Nguyên Tố (`BlendMode.ADD`, sóng xung kích + chữ combo gộp) & Hạt Môi Trường Trong Trẻo (đom đóm B1, tuyết tròn B2, tàn lửa nhỏ B3; đạn địch phân biệt bằng hình dạng lõi trắng + thân `#E84545` + viền `INK_DARK` 1.5u).
+- **P11:** Độ khó & kịch tính — Bước 1: Harness thật không hệ số giả (`tools/bot-profile.ts` khóa trước khi tune) → Bước 2: Tune data-driven (`BIOME_SCALING`, sửa lỗi tốc bắn co-op nhân đôi, đợt quái chồng nhau, kháng CC boss, chuyển phase boss, enrage mềm sau 90s).
+- **P12:** Hồi quy toàn diện, soak test 20 phút, đóng gói `v0.2.0`, review toàn nhánh (`pro`) & kết thúc nhánh (`finishing-a-development-branch`).
+
+### 3.2 Giả định & Quy tắc Thực thi
+- Thực thi trên worktree cách ly `.worktrees/polish-v0.2.0` (nhánh `polish/v0.2.0`), không commit thẳng lên `master`.
+- Main Agent (Controller) chỉ điều phối, viết plan, chạy gate (test/verify/shots/metrics/perf), điều phối Task Reviewer và Visual Reviewer độc lập (`pro`), tuyệt đối không tự sửa code.
+- Main Agent tự động duyệt qua phase kế tiếp khi đạt đủ Task Review + Visual Gate + Phase Gate; ở P4 Bước A chỉ dừng lại hỏi nếu trượt Visual Gate sau 4 vòng (theo yêu cầu trực tiếp của User).
+- Giữ kỷ luật kiến trúc module hóa (`< 1000` dòng/file).
+
+### 3.3 Quyết định đã khóa (theo Mục 0.6 Spec)
+- **Palette:** Mở rộng nhóm màu `ENV` trầm (HSL `S ≤ 0.35`, B2 `≤ 0.40`).
+- **Tầm nhìn & Sương mù:** Full-Screen Clear Visibility (xóa `fx_ambient_mist`, bỏ `mainPlayerVisionRadius`/`allyVisionRadius`, tắt vignette đen mặc định, `ambientColor` ~0.84–0.90 + lớp glow `ADD` trên lightmap).
+- **Bão tuyết Boss 2 (`blizzardVeil`):** Bỏ phần làm tối, giữ hiệu ứng tuyết dày ×3 thổi xiên + color grade lạnh nhẹ (`L*` giảm ≤ 5%) + viền sương giá mỏng (`alpha ≤ 0.12`).
+- **Hướng sáng:** Key light toàn cục từ góc trên-trái (`-135°`), bóng đổ về dưới-phải (`+45°`).
+- **Ngữ nghĩa hình ảnh:** Hình ảnh = ngữ nghĩa sim (hazard phải là surface thật, vật cản có khối chỉ trên `wall`/`pillar`, decor trên ô đi được phải phẳng `ΔL* ≤ 10`, surface động thắng decal).
+- **Vũ khí:** 2 ô (`MAX_WEAPON_SLOTS = 2`), nhặt khi đầy thì vũ khí đang cầm rơi ra đất.
+
+### 3.4 Danh sách "Cần tôi xem" (Items Parked for User Review)
+- *(Chưa có mục nào)*
+
+### 3.5 Nhật ký thực thi Polish v0.2.0
+- **Khởi động (0.1):** Đã tạo worktree `.worktrees/polish-v0.2.0` trên nhánh `polish/v0.2.0`, chép spec `docs/superpowers/specs/2026-10-20-polish-v0.2.0-design.md`, cập nhật `ART_GUIDE.md`, `GDD.md`, `PHASES.md`, `PROGRESS.md`.
