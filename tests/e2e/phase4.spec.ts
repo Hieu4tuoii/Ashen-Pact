@@ -193,20 +193,30 @@ test.describe('Phase 4 — Co-op LAN Authoritative, Prediction/Interpolation, Hu
       await pg.keyboard.up('KeyS');
     };
 
-    // P1 (starts with 1 weapon: knight_sword) walks to frost_scepter (381, 400) and equips it into slot 2 (now full 2/2)
-    await walkPlayerTo(page1, 396, 400, 18);
+    // P1 (starts full 2/2: knight_sword + rusty_pistol) walks to frost_scepter (381, 400) and equips it
+    await walkPlayerTo(page1, 396, 400, 14);
     await page1.keyboard.press('KeyE');
     await page1.waitForFunction(
-      () => window.__GAME_TRANSPORT__?.getSim().player.weaponSlots.length === 2,
+      () =>
+        window.__GAME_TRANSPORT__?.getSim().player.weaponSlots.includes('frost_scepter') === true,
       null,
       { timeout: 5000 },
     );
 
-    // Wait for 0.3s weaponPickupLockTimer to expire, aim East, walk to (404, 470) near dragon_breath_shotgun (381, 470), and press E while full (2/2)
+    // Wait for 0.3s weaponPickupLockTimer to expire, walk to (398, 475) near dragon_breath_shotgun (381, 470), aim East, and press E while full (2/2)
     await page1.waitForTimeout(360);
+    await walkPlayerTo(page1, 398, 475, 12);
     await page1.mouse.move(1450, 540);
-    await walkPlayerTo(page1, 404, 470, 16);
+    await page1.waitForTimeout(60);
     await page1.keyboard.press('KeyE');
+    await page1.waitForFunction(
+      () =>
+        window.__GAME_TRANSPORT__
+          ?.getSim()
+          .player.weaponSlots.includes('dragon_breath_shotgun') === true,
+      null,
+      { timeout: 5000 },
+    );
 
     // Verify P1 replaced frost_scepter with dragon_breath_shotgun and P2 sees the dropped frost_scepter on the ground
     await page2.waitForFunction(
@@ -238,7 +248,7 @@ test.describe('Phase 4 — Co-op LAN Authoritative, Prediction/Interpolation, Hu
     });
 
     // P2 walks to the East side of the dropped frost_scepter (away from the rack item at x=381) and presses E to pick it up
-    await walkPlayerTo(page2, droppedPos.x + 18, droppedPos.y, 16);
+    await walkPlayerTo(page2, droppedPos.x + 18, droppedPos.y, 12);
     await page2.keyboard.press('KeyE');
     await page2.waitForFunction(
       () =>

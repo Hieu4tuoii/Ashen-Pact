@@ -357,4 +357,45 @@ describe('Phase P2 — 2-Slot Weapon System, Dropped Weapons, Pickup Lock & Hub 
     sim.stepBotAutoPlay(SIM_STEP_SEC);
     expect(sim.player.weaponSlots).toEqual(['knight_sword', 'solar_archon_staff']);
   });
+
+  it('9. interactWithNearest picks the closest eligible worldItem when multiple weapons are within interactRange (64u)', () => {
+    const sim = new WorldSim({
+      seed: 909,
+      spawnInitialWave: false,
+      includeTrainingDummy: false,
+    });
+    sim.worldItems.length = 0;
+    sim.player.x = 400;
+    sim.player.y = 460;
+    sim.player.activeWeaponSlot = 1;
+
+    // Spawn a farther weapon first in worldItems array (58u away, <= 64u interactRange)
+    const scepterDef = WEAPONS.frost_scepter!;
+    sim.spawnWorldItem({
+      kind: 'weapon',
+      weaponId: scepterDef.id,
+      rarity: scepterDef.rarity,
+      nameVi: scepterDef.nameVi,
+      costGold: 0,
+      healAmount: 0,
+      x: 400,
+      y: 402,
+    });
+
+    // Spawn a closer weapon second in worldItems array (18u away, <= 64u interactRange)
+    const shotgunDef = WEAPONS.dragon_breath_shotgun!;
+    sim.spawnWorldItem({
+      kind: 'weapon',
+      weaponId: shotgunDef.id,
+      rarity: shotgunDef.rarity,
+      nameVi: shotgunDef.nameVi,
+      costGold: 0,
+      healAmount: 0,
+      x: 382,
+      y: 460,
+    });
+
+    expect(sim.interactWithNearest(sim.player)).toBe(true);
+    expect(sim.player.weaponSlots[1]).toBe('dragon_breath_shotgun');
+  });
 });

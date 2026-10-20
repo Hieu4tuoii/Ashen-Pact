@@ -283,14 +283,18 @@ export function interactWithNearestImpl(this: WorldSim, actor: SimPlayerState = 
     }
   }
 
-  // 2. World Items (Weapons / Shop Potions)
-  for (let i = 0; i < this.worldItems.length; i++) {
-    const item = this.worldItems[i]!;
-    if (item.kind === 'weapon' && (p.weaponPickupLockTimer ?? 0) > 0) continue;
-    if (!item.pickedUp && distance(p.x, p.y, item.x, item.y) <= interactRange) {
-      if (this.pickupOrBuyWorldItem(item, p)) {
-        return true;
-      }
+  // 2. World Items (Weapons / Shop Potions) — evaluate closest first
+  const candidateItems = this.worldItems
+    .filter(
+      (item) =>
+        !item.pickedUp &&
+        !(item.kind === 'weapon' && (p.weaponPickupLockTimer ?? 0) > 0) &&
+        distance(p.x, p.y, item.x, item.y) <= interactRange,
+    )
+    .sort((a, b) => distance(p.x, p.y, a.x, a.y) - distance(p.x, p.y, b.x, b.y));
+  for (let i = 0; i < candidateItems.length; i++) {
+    if (this.pickupOrBuyWorldItem(candidateItems[i]!, p)) {
+      return true;
     }
   }
 
