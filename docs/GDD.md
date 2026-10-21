@@ -28,7 +28,7 @@
 | `Chuột trái (Giữ)` | Bắn / Tấn công | Tự động lặp theo tốc bắn của vũ khí đang cầm |
 | `Chuột phải / Space` | Kỹ năng nhân vật (Skill) | Kích hoạt kỹ năng chủ động (hoặc tái kích hoạt với kỹ năng 2 pha) |
 | `Shift` | Dash / Lộn | Tốc độ ×2.6 trong 0.22s, i-frame 0.20s, hồi chiêu 1.2s, để lại vệt afterimage |
-| `E` | Tương tác / Nhặt / Hồi sinh | Nhấn để mở rương/nhặt/mua đồ (chọn đối tượng gần nhất trong nhóm ưu tiên cao nhất có ứng viên trong bán kính `INTERACT_RANGE = 64` qua `findInteractTarget`); giữ 2.5s (Mộc Linh 1.25s) để hồi sinh đồng đội |
+| `E` | Tương tác / Nhặt / Hồi sinh | Nhấn để mở rương/nhặt/mua đồ qua hàm dùng chung `findInteractTarget(sim, playerId)` (`INTERACT_RANGE = 64`, offset theo loại: `hub_statue +8`, `ancient_mechanism +10`, `chest +0`, `world_item +0`, `shrine +8`, `portal +8`, `door +8`; chọn **đối tượng gần nhất trong nhóm ưu tiên cao nhất có ứng viên** theo thứ tự `hub_statue → ancient_mechanism → chest → world_item → shrine → portal → door`, kèm `INTERACT_HYSTERESIS = 8` trên client để chống nhấp nháy ở rìa tầm); giữ 2.5s (Mộc Linh 1.25s) để hồi sinh đồng đội |
 | `1 / 2` hoặc `Q / Lăn chuột` | Đổi vũ khí | Chuyển đổi trực tiếp hoặc xoay vòng giữa 2 ô vũ khí mang theo (`MAX_WEAPON_SLOTS = 2`) |
 | `X` | Thả vũ khí | Thả vũ khí đang cầm xuống đất để nhường cho đồng đội (`spawnDroppedWeapon`) |
 | `Tab` | Bản đồ lớn | Mở rộng minimap và trạng thái khám phá phòng |

@@ -390,8 +390,8 @@ export async function setupHubSoloScene(page: Page): Promise<void> {
   await page.evaluate(() => {
     const sim = window.__GAME_TRANSPORT__!.getSim();
     sim.enterHub();
-    sim.player.x = 340;
-    sim.player.y = 270;
+    sim.player.x = 225;
+    sim.player.y = 295;
   });
   await lockCameraAndIrisToPlayer(page);
   await stepDeterministicFrames(page, 45);

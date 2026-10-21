@@ -70,10 +70,10 @@
 
 ### Task 1: Refine/Add Phase P7 3-Distance Visual Scenes, Capture P7 `before` Screenshots, and Implement Shared `findInteractTarget` with Seeded Behavioral Unit Tests (TDD RED → GREEN)
 
-- [ ] **Step 1:** Update `tests/e2e/helpers/visual-scene-helpers.ts` and `tests/e2e/helpers/visual-scenes.ts` with the 3-distance scenes (`hub-solo`, `hub-statue-mid`, `hub-near-statue`, `b1-merchant-far`, `b1-merchant-mid`, `b1-merchant`, `b1-chest-closed-far`, `b1-chest-mid`, `b1-chest-near`, plus clean `b1-door-locked` / `b1-door-open` player offsets) and capture the 19 Phase P7 `before` screenshots (`docs/screenshots/polish-p7/before/`).
-- [ ] **Step 2 (TDD RED):** Create `packages/shared/test/polish-p7-interact-target.test.ts` testing `findInteractTarget` and behavioral equivalence with `sim.interactWithNearest()` across 30+ seeded layouts, priority groups, closest-within-group selection, instanced loot, Engineer mechanisms, and `8u` hysteresis; run Vitest to record the RED failure.
-- [ ] **Step 3 (TDD GREEN):** Implement `packages/shared/src/sim/interact-target.ts`, export it from `packages/shared/src/index.ts`, refactor `interactWithNearestImpl` in `packages/shared/src/sim/sim-progression-bot.ts` to use `findInteractTarget`, and update `docs/GDD.md`.
-- [ ] **Step 4:** Verify `npx vitest run packages/shared/test/polish-p7-interact-target.test.ts`, `pnpm typecheck`, `pnpm lint`, and `pnpm test` all pass. Commit Task 1 changes.
+- [x] **Step 1:** Update `tests/e2e/helpers/visual-scene-helpers.ts` and `tests/e2e/helpers/visual-scenes.ts` with the 3-distance scenes (`hub-solo`, `hub-statue-mid`, `hub-near-statue`, `b1-merchant-far`, `b1-merchant-mid`, `b1-merchant`, `b1-chest-closed-far`, `b1-chest-mid`, `b1-chest-near`, plus clean `b1-door-locked` / `b1-door-open` player offsets) and capture the 19 Phase P7 `before` screenshots (`docs/screenshots/polish-p7/before/`).
+- [x] **Step 2 (TDD RED):** Create `packages/shared/test/polish-p7-interact-target.test.ts` testing `findInteractTarget` and behavioral equivalence with `sim.interactWithNearest()` across 30+ seeded layouts, priority groups, closest-within-group selection, instanced loot, Engineer mechanisms, and `8u` hysteresis; run Vitest to record the RED failure.
+- [x] **Step 3 (TDD GREEN):** Implement `packages/shared/src/sim/interact-target.ts`, export it from `packages/shared/src/index.ts`, refactor `interactWithNearestImpl` in `packages/shared/src/sim/sim-progression-bot.ts` to use `findInteractTarget`, and update `docs/GDD.md`.
+- [x] **Step 4:** Verify `npx vitest run packages/shared/test/polish-p7-interact-target.test.ts`, `pnpm typecheck`, `pnpm lint`, and `pnpm test` all pass. Commit Task 1 changes.
 
 ### Task 2: Implement Single-Pill `[E]` Prompt (`120–150ms` Fade + `8u` Hysteresis), Weapon Card Deduplication, Hub Guidance Signs (`<= 200u`), Door Lock/Proximity Labels (`<= 120u`), and Player Nameplates
 

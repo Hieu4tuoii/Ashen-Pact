@@ -4,6 +4,7 @@ import { MAX_WEAPON_SLOTS, WEAPONS, estimateWeaponDps } from '../data/weapons.js
 import { approach, distance } from '../math/vec2.js';
 import { INPUT_BUTTON } from '../protocol/messages.js';
 import { generateDungeonFloor } from './dungeon-gen.js';
+import { findInteractTarget } from './interact-target.js';
 import { lerpSpeed, type SimSummonState, type SimDoorState, type SimNpcState, type SimPlayerState, type SimEnemyState, type SimPickupState } from './world-sim-types.js';
 import type { WorldSim } from './world-sim.js';
 
@@ -214,123 +215,78 @@ export function skipCurrentRoomWavesImpl(this: WorldSim): void {
 export function interactWithNearestImpl(this: WorldSim, actor: SimPlayerState = this.player): boolean {
   if (actor.lifeState !== 'alive') return false;
   const p = actor;
-  const interactRange = 64;
+  const target = findInteractTarget(this, p.id);
+  if (!target) return false;
 
-  // 0. Hub Character Statues
-  if (this.inHub) {
-    for (let i = 0; i < this.hubStatues.length; i++) {
-      const statue = this.hubStatues[i]!;
-      if (distance(p.x, p.y, statue.x, statue.y) <= interactRange + 8) {
-        return this.selectCharacter(p.id, statue.characterId);
-      }
+  switch (target.kind) {
+    case 'hub_statue':
+      return this.selectCharacter(p.id, target.statue.characterId);
+
+    case 'ancient_mechanism': {
+      const prop = target.prop;
+      prop.repaired = true;
+      const summon: SimSummonState = {
+        id: ++this.nextEntityId,
+        ownerPlayerId: p.id,
+        kind: 'ancient_turret',
+        nameVi: 'Ụ Pháo Cổ Tự Động',
+        x: prop.x,
+        y: prop.y,
+        radius: 15,
+        auraRadius: 210,
+        hp: 55,
+        maxHp: 55,
+        ttlSec: 14.0,
+        maxTtlSec: 14.0,
+        tickTimer: 0.25,
+        healsRemaining: 0,
+        charge: 0,
+        poisonRoots: false,
+        selfDestruct: false,
+        rootedEnemyIds: [],
+      };
+      this.summons.push(summon);
+      this.events.push({
+        kind: 'summon_spawned',
+        summonId: summon.id,
+        summonKind: 'ancient_turret',
+        ownerPlayerId: p.id,
+        x: summon.x,
+        y: summon.y,
+      });
+      return true;
     }
-  }
 
-  // 0.5 Engineer Passive: Repair & Activate Ancient Mechanism on the map!
-  const hasEngineerInParty =
-    p.characterId === 'engineer' ||
-    this.getAllPlayers().some(
-      (ally) => ally.characterId === 'engineer' && ally.lifeState === 'alive',
-    );
-  if (hasEngineerInParty) {
-    for (let i = 0; i < this.props.length; i++) {
-      const prop = this.props[i]!;
-      if (
-        prop.kind === 'ancient_mechanism' &&
-        !prop.repaired &&
-        distance(p.x, p.y, prop.x, prop.y) <= interactRange + 10
-      ) {
-        prop.repaired = true;
-        const summon: SimSummonState = {
-          id: ++this.nextEntityId,
-          ownerPlayerId: p.id,
-          kind: 'ancient_turret',
-          nameVi: 'Ụ Pháo Cổ Tự Động',
-          x: prop.x,
-          y: prop.y,
-          radius: 15,
-          auraRadius: 210,
-          hp: 55,
-          maxHp: 55,
-          ttlSec: 14.0,
-          maxTtlSec: 14.0,
-          tickTimer: 0.25,
-          healsRemaining: 0,
-          charge: 0,
-          poisonRoots: false,
-          selfDestruct: false,
-          rootedEnemyIds: [],
-        };
-        this.summons.push(summon);
-        this.events.push({
-          kind: 'summon_spawned',
-          summonId: summon.id,
-          summonKind: 'ancient_turret',
-          ownerPlayerId: p.id,
-          x: summon.x,
-          y: summon.y,
-        });
+    case 'chest':
+      return this.openChest(target.chest);
+
+    case 'world_item': {
+      if (this.pickupOrBuyWorldItem(target.item, p)) {
         return true;
       }
-    }
-  }
-
-  // 1. Unopened Chests
-  for (let i = 0; i < this.chests.length; i++) {
-    const chest = this.chests[i]!;
-    if (!chest.opened && distance(p.x, p.y, chest.x, chest.y) <= interactRange) {
-      return this.openChest(chest);
-    }
-  }
-
-  // 2. World Items (Weapons / Shop Potions) — evaluate closest first
-  const candidateItems = this.worldItems
-    .filter(
-      (item) =>
-        !item.pickedUp &&
-        !(item.kind === 'weapon' && (p.weaponPickupLockTimer ?? 0) > 0) &&
-        distance(p.x, p.y, item.x, item.y) <= interactRange,
-    )
-    .sort((a, b) => distance(p.x, p.y, a.x, a.y) - distance(p.x, p.y, b.x, b.y));
-  for (let i = 0; i < candidateItems.length; i++) {
-    if (this.pickupOrBuyWorldItem(candidateItems[i]!, p)) {
-      return true;
-    }
-  }
-
-  // 3. Ancient Shrine
-  for (let i = 0; i < this.npcEntities.length; i++) {
-    const npc = this.npcEntities[i]!;
-    if (
-      npc.kind === 'shrine' &&
-      !npc.interacted &&
-      distance(p.x, p.y, npc.x, npc.y) <= interactRange + 8
-    ) {
-      return this.activateShrine(npc, p);
-    }
-  }
-
-  // 4. Active Portal
-  if (this.portalActive && distance(p.x, p.y, this.portalX, this.portalY) <= interactRange + 8) {
-    if (this.inHub) {
-      p.ready = true;
-      if (this.areAllPlayersReady() || p.slot === 1) {
-        this.startDungeonRunFromHub();
+      const fallback = findInteractTarget(this, p.id, { requireAffordable: true });
+      if (fallback?.kind === 'world_item' && fallback.item.id !== target.item.id) {
+        return this.pickupOrBuyWorldItem(fallback.item, p);
       }
-      return true;
+      return false;
     }
-    return this.enterPortal();
-  }
 
-  // 5. Unlocked Doors
-  for (let i = 0; i < this.doors.length; i++) {
-    const door = this.doors[i]!;
-    if (!door.locked && distance(p.x, p.y, door.x, door.y) <= interactRange + 8) {
-      return this.enterRoom(door.targetRoomId, door.dir);
-    }
-  }
+    case 'shrine':
+      return this.activateShrine(target.npc, p);
 
-  return false;
+    case 'portal':
+      if (this.inHub) {
+        p.ready = true;
+        if (this.areAllPlayersReady() || p.slot === 1) {
+          this.startDungeonRunFromHub();
+        }
+        return true;
+      }
+      return this.enterPortal();
+
+    case 'door':
+      return this.enterRoom(target.door.targetRoomId, target.door.dir);
+  }
 }
 
 export function updateCurrentRoomProgressionImpl(this: WorldSim, dtSec: number): void {

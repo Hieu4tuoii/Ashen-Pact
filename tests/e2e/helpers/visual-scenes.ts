@@ -85,13 +85,24 @@ export const VISUAL_SCENES: readonly VisualSceneDef[] = [
     await lockCameraAndIrisToPlayer(page);
     await stepDeterministicFrames(page, 45);
   }),
+  makeScene('hub-statue-mid', 'Hub courtyard with player near a Character Statue but outside interact range (~86u)', DEFAULT_HUB_URL, 'GameScene', async (page) => {
+    await page.evaluate(() => {
+      const sim = window.__GAME_TRANSPORT__!.getSim();
+      sim.enterHub();
+      const statue = sim.hubStatues[0]!;
+      sim.player.x = statue.x;
+      sim.player.y = statue.y + 86;
+    });
+    await lockCameraAndIrisToPlayer(page);
+    await stepDeterministicFrames(page, 45);
+  }),
   makeScene('hub-near-statue', 'Hub courtyard with player near a Character Statue', DEFAULT_HUB_URL, 'GameScene', async (page) => {
     await page.evaluate(() => {
       const sim = window.__GAME_TRANSPORT__!.getSim();
       sim.enterHub();
       const statue = sim.hubStatues[0]!;
       sim.player.x = statue.x;
-      sim.player.y = statue.y + 28;
+      sim.player.y = statue.y + 34;
     });
     await lockCameraAndIrisToPlayer(page);
     await stepDeterministicFrames(page, 45);
@@ -176,14 +187,27 @@ export const VISUAL_SCENES: readonly VisualSceneDef[] = [
     await lockCameraAndIrisToPlayer(page);
     await stepDeterministicFrames(page, 45);
   }),
+  makeScene('b1-chest-mid', 'Biome 1 treasure room with closed chest at mid distance outside interact range (~90u)', DEFAULT_GAME_URL, 'GameScene', async (page) => {
+    await page.evaluate(() => {
+      const sim = window.__GAME_TRANSPORT__!.getSim();
+      const room = sim.dungeon.rooms.find((r) => r.type === 'treasure')!;
+      sim.enterRoom(room.id);
+      const chest = sim.chests[0]!;
+      sim.player.x = chest.x - 90;
+      sim.player.y = chest.y;
+    });
+    await lockCameraAndIrisToPlayer(page);
+    await stepDeterministicFrames(page, 45);
+  }),
   makeScene('b1-chest-near', 'Biome 1 treasure room with player near chest', DEFAULT_GAME_URL, 'GameScene', async (page) => {
     await page.evaluate(() => {
       const sim = window.__GAME_TRANSPORT__!.getSim();
       const room = sim.dungeon.rooms.find((r) => r.type === 'treasure')!;
       sim.enterRoom(room.id);
       const chest = sim.chests[0]!;
-      sim.player.x = chest.x;
-      sim.player.y = chest.y + 28;
+      sim.player.x = chest.x - 42;
+      sim.player.y = chest.y + 14;
+      sim.player.aimAngle = 0;
     });
     await lockCameraAndIrisToPlayer(page);
     await stepDeterministicFrames(page, 45);
@@ -217,14 +241,38 @@ export const VISUAL_SCENES: readonly VisualSceneDef[] = [
     });
     await stepDeterministicFrames(page, 2);
   }, { captureStrip: true, stripFramesPerStep: 2 }),
+  makeScene('b1-merchant-far', 'Biome 1 Dark Merchant room from far away (> 155u)', DEFAULT_GAME_URL, 'GameScene', async (page) => {
+    await page.evaluate(() => {
+      const sim = window.__GAME_TRANSPORT__!.getSim();
+      const room = sim.dungeon.rooms.find((r) => r.type === 'merchant')!;
+      sim.enterRoom(room.id);
+      sim.player.gold = 250;
+      sim.player.x = sim.map.width * 0.5 - 255;
+      sim.player.y = sim.map.height * 0.5 - 105;
+    });
+    await lockCameraAndIrisToPlayer(page);
+    await stepDeterministicFrames(page, 45);
+  }),
+  makeScene('b1-merchant-mid', 'Biome 1 Dark Merchant room at mid distance outside interact range (~86u)', DEFAULT_GAME_URL, 'GameScene', async (page) => {
+    await page.evaluate(() => {
+      const sim = window.__GAME_TRANSPORT__!.getSim();
+      const room = sim.dungeon.rooms.find((r) => r.type === 'merchant')!;
+      sim.enterRoom(room.id);
+      sim.player.gold = 250;
+      sim.player.x = sim.map.width * 0.5 - 165;
+      sim.player.y = sim.map.height * 0.5 + 12 + 86;
+    });
+    await lockCameraAndIrisToPlayer(page);
+    await stepDeterministicFrames(page, 45);
+  }),
   makeScene('b1-merchant', 'Biome 1 Dark Merchant room with shop items', DEFAULT_GAME_URL, 'GameScene', async (page) => {
     await page.evaluate(() => {
       const sim = window.__GAME_TRANSPORT__!.getSim();
       const room = sim.dungeon.rooms.find((r) => r.type === 'merchant')!;
       sim.enterRoom(room.id);
       sim.player.gold = 250;
-      sim.player.x = sim.map.width * 0.5 - 60;
-      sim.player.y = sim.map.height * 0.5 + 10;
+      sim.player.x = sim.map.width * 0.5 - 165;
+      sim.player.y = sim.map.height * 0.5 + 12 + 38;
     });
     await lockCameraAndIrisToPlayer(page);
     await stepDeterministicFrames(page, 45);
@@ -251,8 +299,15 @@ export const VISUAL_SCENES: readonly VisualSceneDef[] = [
       keeper.maxHp = 9999;
       const door = sim.doors[0];
       sim.player.godMode = true;
-      sim.player.x = door ? door.x + 64 : 180;
-      sim.player.y = door ? door.y : 270;
+      if (door) {
+        const dx = door.dir === 'E' ? -48 : door.dir === 'W' ? 48 : 0;
+        const dy = door.dir === 'S' ? -48 : door.dir === 'N' ? 48 : 0;
+        sim.player.x = door.x + dx;
+        sim.player.y = door.y + dy;
+      } else {
+        sim.player.x = 180;
+        sim.player.y = 270;
+      }
     });
     await lockCameraAndIrisToPlayer(page);
     await stepDeterministicFrames(page, 45);
@@ -263,10 +318,18 @@ export const VISUAL_SCENES: readonly VisualSceneDef[] = [
       const combatRoom = sim.dungeon.rooms.find((r) => r.type === 'combat') ?? sim.dungeon.rooms[0]!;
       sim.enterRoom(combatRoom.id);
       sim.skipCurrentRoomWaves();
+      sim.consumeEvents();
       sim.enemies.length = 0;
       const door = sim.doors[0];
-      sim.player.x = door ? door.x + 64 : 180;
-      sim.player.y = door ? door.y : 270;
+      if (door) {
+        const dx = door.dir === 'E' ? -48 : door.dir === 'W' ? 48 : 0;
+        const dy = door.dir === 'S' ? -48 : door.dir === 'N' ? 48 : 0;
+        sim.player.x = door.x + dx;
+        sim.player.y = door.y + dy;
+      } else {
+        sim.player.x = 180;
+        sim.player.y = 270;
+      }
     });
     await lockCameraAndIrisToPlayer(page);
     await stepDeterministicFrames(page, 45);
