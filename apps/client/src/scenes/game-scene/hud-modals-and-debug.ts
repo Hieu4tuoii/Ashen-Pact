@@ -19,9 +19,9 @@ import { UI_THEME } from '../../ui/theme.js';
 import { type GameScene } from '../GameScene.js';
 
 export interface ResultScreenButtonSpec {
-  id: 'replay' | 'returnHub' | 'mainMenu';
+  id: 'replay' | 'returnHub';
   tier: 'primary' | 'secondary';
-  hotkey: 'Enter' | 'H' | 'M';
+  hotkey: 'Enter' | 'H';
   x: number;
   w: number;
   h: number;
@@ -68,8 +68,9 @@ export function resolveLocalizedBuffText(
 }
 
 /**
- * Returns the 3 hierarchical action buttons for the Victory/Defeat screen
- * (1 prominent primary button + 2 balanced secondary buttons; no redundant Dismiss button).
+ * Returns the 2 hierarchical action buttons for the Victory/Defeat screen
+ * (1 prominent primary button 'Chơi lại [Enter]' + 1 secondary button 'Về Hub [H]',
+ * removing redundant 'Về Menu' and 'Đóng Bảng' buttons per Spec 3.7.4).
  */
 export function getResultScreenButtonSpecs(
   locale: SupportedLocale = i18n.getLocale(),
@@ -80,28 +81,19 @@ export function getResultScreenButtonSpecs(
       id: 'replay',
       tier: 'primary',
       hotkey: 'Enter',
-      x: 158,
-      w: 248,
+      x: 242,
+      w: 256,
       h: 36,
-      label: isEn ? '⚔  Play Again [Enter]' : '⚔  Chơi Lại [Enter]',
+      label: isEn ? '⚔  Play Again [Enter]' : '⚔  Chơi lại [Enter]',
     },
     {
       id: 'returnHub',
       tier: 'secondary',
       hotkey: 'H',
-      x: 422,
-      w: 192,
+      x: 518,
+      w: 200,
       h: 34,
-      label: isEn ? '🏕  Return to Hub [H]' : '🏕  Về Doanh Trại [H]',
-    },
-    {
-      id: 'mainMenu',
-      tier: 'secondary',
-      hotkey: 'M',
-      x: 628,
-      w: 174,
-      h: 34,
-      label: isEn ? '🏠  Main Menu [M]' : '🏠  Menu Chính [M]',
+      label: isEn ? '🏕  Return to Hub [H]' : '🏕  Về Hub [H]',
     },
   ];
 }
@@ -839,8 +831,6 @@ export function updateModalHudImpl(this: GameScene): void {
           this.resultDismissed = true;
           this.triggerIrisTransition('close');
           this.invalidateAllHudCaches();
-        } else if (spec.id === 'mainMenu') {
-          this.scene.start('MenuScene');
         }
       });
       this.modalContainer.add(hit);

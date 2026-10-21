@@ -134,7 +134,7 @@ describe('Phase P9b — Menus, Hub Invite Panel, Modals, Pause Confirm & 4-Tab S
     expect(rowHost).toBe('P1 · Hiệp Sĩ Tro (Thiết Vệ) — ✓ Sẵn sàng');
   });
 
-  it('resolves localized buff names (including legacy aliases) and defines 3 hierarchical Result Screen buttons without Dismiss', () => {
+  it('resolves localized buff names (including legacy aliases) and defines 2 hierarchical Result Screen buttons (Play Again + Return to Hub)', () => {
     const vitVi = resolveLocalizedBuffText('bountiful_vitality', 'vi');
     const vitEn = resolveLocalizedBuffText('bountiful_vitality', 'en');
     expect(vitVi.name).toBe('Trái Tim Cổ Thụ');
@@ -147,21 +147,20 @@ describe('Phase P9b — Menus, Hub Invite Panel, Modals, Pause Confirm & 4-Tab S
 
     const viBtns = getResultScreenButtonSpecs('vi');
     const enBtns = getResultScreenButtonSpecs('en');
-    expect(viBtns).toHaveLength(3);
-    expect(enBtns).toHaveLength(3);
-    expect(viBtns.map((b) => b.id)).toEqual(['replay', 'returnHub', 'mainMenu']);
+    expect(viBtns).toHaveLength(2);
+    expect(enBtns).toHaveLength(2);
+    expect(viBtns.map((b) => b.id)).toEqual(['replay', 'returnHub']);
     expect(viBtns[0]!.tier).toBe('primary');
     expect(viBtns[1]!.tier).toBe('secondary');
-    expect(viBtns[2]!.tier).toBe('secondary');
     expect(viBtns[0]!.w).toBeGreaterThan(viBtns[1]!.w);
   });
 
   it('defines 4 Settings tabs, single-language headers, and persists UI Scale + Key Hints', () => {
     expect(SETTINGS_TABS).toEqual(['audio', 'video', 'gameplay', 'controls']);
 
-    expect(getSettingsModalTitle('vi')).toBe('CÀI ĐẶT HỆ THỐNG');
+    expect(getSettingsModalTitle('vi')).toBe('CÀI ĐẶT');
     expect(getSettingsModalTitle('vi')).not.toContain('SETTINGS');
-    expect(getSettingsModalTitle('en')).toBe('SYSTEM SETTINGS');
+    expect(getSettingsModalTitle('en')).toBe('SETTINGS');
 
     const viTabs = getSettingsTabSpecs('vi');
     const enTabs = getSettingsTabSpecs('en');

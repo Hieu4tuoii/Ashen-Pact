@@ -37,7 +37,7 @@ export interface SettingsTabSpec {
 export function getSettingsModalTitle(
   locale: SupportedLocale = i18n.getLocale(),
 ): string {
-  return locale === 'en' ? 'SYSTEM SETTINGS' : 'CÀI ĐẶT HỆ THỐNG';
+  return locale === 'en' ? 'SETTINGS' : 'CÀI ĐẶT';
 }
 
 /**
@@ -137,11 +137,16 @@ export class ModalOverlayManager {
     return this.activeTab;
   }
 
+  public setLanguage(lang: SupportedLocale): void {
+    graphicsSettings.setLanguage(lang);
+    this.syncDebugFlags();
+    this.onLocaleChanged?.();
+    if (this.activeModal !== 'none') this.rebuild();
+  }
+
   public selectTab(tab: SettingsTabId): void {
     this.activeTab = tab;
-    if (this.activeModal === 'controls' && tab !== 'controls') {
-      this.activeModal = 'settings';
-    }
+    if (this.activeModal === 'controls' && tab !== 'controls') this.activeModal = 'settings';
     this.syncDebugFlags();
     this.rebuild();
   }
@@ -152,11 +157,7 @@ export class ModalOverlayManager {
 
   public open(kind: Exclude<ModalKind, 'none'>, initialTab?: SettingsTabId): void {
     this.activeModal = kind;
-    if (kind === 'controls') {
-      this.activeTab = 'controls';
-    } else if (kind === 'settings') {
-      this.activeTab = initialTab ?? 'audio';
-    }
+    this.activeTab = kind === 'controls' ? 'controls' : (initialTab ?? 'audio');
     this.syncDebugFlags();
     this.rebuild();
   }
@@ -172,9 +173,7 @@ export class ModalOverlayManager {
 
   public refreshResolution(scale: number): void {
     for (const txt of this.textObjects) {
-      if (txt.active) {
-        txt.setResolution(scale);
-      }
+      if (txt.active) txt.setResolution(scale);
     }
   }
 

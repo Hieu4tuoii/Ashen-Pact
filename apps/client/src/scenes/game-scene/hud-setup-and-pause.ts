@@ -829,7 +829,7 @@ export function rebuildPauseModalImpl(this: GameScene): void {
 
   const actions: [string, string, () => void][] = [
     [
-      i18n.t('ui.pause.resume'),
+      isEn ? '▶ Resume [Esc]' : '▶ Tiếp Tục [Esc]',
       PALETTE.FOREST_SHADE,
       () => {
         zzfx.play('ui_click');
@@ -837,7 +837,7 @@ export function rebuildPauseModalImpl(this: GameScene): void {
       },
     ],
     [
-      `⚙ ${i18n.t('ui.pause.settings')}`,
+      isEn ? '⚙ Settings [O]' : '⚙ Cài Đặt [O]',
       PALETTE.SLATE_MID,
       () => {
         zzfx.play('ui_click');
@@ -845,15 +845,7 @@ export function rebuildPauseModalImpl(this: GameScene): void {
       },
     ],
     [
-      `⌨ ${i18n.t('ui.pause.controls')}`,
-      PALETTE.SLATE_MID,
-      () => {
-        zzfx.play('ui_click');
-        this.settingsModal?.open('controls');
-      },
-    ],
-    [
-      i18n.t('ui.pause.returnHub'),
+      isEn ? '↻ Restart Run [H]' : '↻ Khởi Động Lại [H]',
       PALETTE.BRASS_CORE,
       () => {
         zzfx.play('portal_enter');
@@ -863,7 +855,7 @@ export function rebuildPauseModalImpl(this: GameScene): void {
       },
     ],
     [
-      i18n.t('ui.pause.leaveMenu'),
+      isEn ? '🏠 Leave to Menu [M]' : '🏠 Về Menu Chính [M]',
       PALETTE.RUBY_CORE,
       () => {
         zzfx.play('ui_click');
@@ -873,7 +865,7 @@ export function rebuildPauseModalImpl(this: GameScene): void {
   ];
 
   actions.forEach(([label, color, onClick], idx) => {
-    addBtn(480, cardY + 96 + idx * 44, 310, 34, label, color, PALETTE.INK_DARK, 18, true, onClick);
+    addBtn(480, cardY + 104 + idx * 56, 310, 38, label, color, PALETTE.INK_DARK, 18, true, onClick);
   });
 
   if (this.pauseConfirmExitOpen) {
@@ -913,10 +905,10 @@ export function rebuildPauseModalImpl(this: GameScene): void {
         480,
         cY + 78,
         isEn
-          ? 'Current run progress will be lost.\nAre you sure you want to leave the match?'
-          : 'Tiến trình lượt chơi hiện tại sẽ kết thúc.\nBạn có chắc chắn muốn rời trận đấu?',
+          ? 'Leave current match? Progress will be lost.'
+          : 'Rời trận đấu hiện tại? Tiến trình sẽ mất.',
         createUiTextStyle({
-          fontPxAt1080p: 15,
+          fontPxAt1080p: 16,
           weight: 700,
           color: PALETTE.BONE_WHITE,
           align: 'center',

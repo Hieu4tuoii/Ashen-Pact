@@ -176,43 +176,6 @@ export function resolveMenuButtonHierarchySpec(
   }
 }
 
-/**
- * Formats and truncates a player's display name + class/ready status in the Hub Co-op Invite Panel
- * so it never collides with the host's right-aligned "Đuổi" (`Kick`) button (`px + pw - 64`).
- */
-export function formatHubInvitePlayerRowText(params: {
-  slot: number;
-  name: string;
-  charName: string;
-  readyLabel: string;
-  hasKickBtn: boolean;
-  panelWidth?: number;
-}): { text: string; maxTextWidthPx: number; kickButtonLeftOffsetPx: number } {
-  const pw = params.panelWidth ?? 278;
-  const kickButtonLeftOffsetPx = pw - 64;
-  // Row text starts at px + 18; leave at least 10px gap before Kick button at px + pw - 64
-  const maxTextWidthPx = params.hasKickBtn ? kickButtonLeftOffsetPx - 18 - 10 : pw - 28;
-  const maxNameChars = params.hasKickBtn ? 10 : 18;
-  const cleanName = Array.from(params.name.trim());
-  const displayName =
-    cleanName.length > maxNameChars
-      ? `${cleanName.slice(0, maxNameChars - 1).join('')}…`
-      : params.name.trim();
-  const cleanChar = Array.from(params.charName.trim());
-  const maxCharChars = params.hasKickBtn ? 8 : 14;
-  const displayChar =
-    cleanChar.length > maxCharChars
-      ? `${cleanChar.slice(0, maxCharChars - 1).join('')}…`
-      : params.charName.trim();
-
-  const text = `P${params.slot} ${displayName} [${displayChar}] - ${params.readyLabel}`;
-  return {
-    text,
-    maxTextWidthPx,
-    kickButtonLeftOffsetPx,
-  };
-}
-
 export interface CampfireEmber {
   x: number;
   y: number;
