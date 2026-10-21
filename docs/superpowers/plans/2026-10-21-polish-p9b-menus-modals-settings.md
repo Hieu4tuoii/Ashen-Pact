@@ -52,19 +52,19 @@
 
 ### Task 1: Add Phase P9b Visual Scenes (`SCENE_GROUPS.p9b`), Capture 18 `before` Screenshots, and Implement Main Menu Hierarchy + HTML `<input>` Overlay & Hub Collapsed Invite Chip (TDD RED → GREEN)
 
-- [ ] **Step 1:** Add `p9b` (18 scenes) to `SCENE_GROUPS` in `tests/e2e/helpers/visual-scene-p9a-helpers.ts` and `tools/run-shots.ts`, add `hub-coop-invite-open` and update `pause-confirm-exit` in `tests/e2e/helpers/visual-scenes.ts`, and capture all 18 `before` screenshots in `docs/screenshots/polish-p9b/before/` with `--verify-freeze`.
-- [ ] **Step 2 (TDD RED):** Create `apps/client/test/polish-p9b-menus-modals-settings.test.ts` testing `computeMenuInputOverlayRect`, `resolveMenuButtonHierarchySpec`, `sanitizeMenuInputValue`, `formatHubInvitePlayerRowText`, and Hub Invite collapsed/expanded state helpers.
-- [ ] **Step 3 (TDD GREEN):** Implement `apps/client/src/ui/html-input-overlay.ts`, update `apps/client/src/scenes/MenuScene.ts`, update `packages/shared/src/i18n/vi.json` & `en.json`, and update `apps/client/src/scenes/game-scene/hud-hub-and-cards.ts`, `GameScene.ts`, and `arena-tiles.ts`.
-- [ ] **Step 4:** Verify unit tests, `pnpm typecheck`, `pnpm lint`, and `pnpm test` pass 100%, all files `< 1000` lines, and commit Task 1.
+- [x] **Step 1:** Add `p9b` (18 scenes) to `SCENE_GROUPS` in `tests/e2e/helpers/visual-scene-p9a-helpers.ts` and `tools/run-shots.ts`, add `hub-coop-invite-open` and update `pause-confirm-exit` in `tests/e2e/helpers/visual-scenes.ts`, and capture all 18 `before` screenshots in `docs/screenshots/polish-p9b/before/` with `--verify-freeze`.
+- [x] **Step 2 (TDD RED):** Create `apps/client/test/polish-p9b-menus-modals-settings.test.ts` testing `computeMenuInputOverlayRect`, `resolveMenuButtonHierarchySpec`, `sanitizeMenuInputValue`, `formatHubInvitePlayerRowText`, and Hub Invite collapsed/expanded state helpers.
+- [x] **Step 3 (TDD GREEN):** Implement `apps/client/src/ui/html-input-overlay.ts`, update `apps/client/src/scenes/MenuScene.ts`, update `packages/shared/src/i18n/vi.json` & `en.json`, and update `apps/client/src/scenes/game-scene/hud-hub-and-cards.ts`, `GameScene.ts`, and `arena-tiles.ts`.
+- [x] **Step 4:** Verify unit tests, `pnpm typecheck`, `pnpm lint`, and `pnpm test` pass 100%, all files `< 1000` lines, and commit Task 1.
 
 ### Task 2: Redesign Buff Modal, Victory/Defeat Result Modal, Pause Overlay + Exit Confirmation, and 4-Tab Settings Modal + E2E Paste/Navigation Tests (TDD RED → GREEN)
 
-- [ ] **Step 1 (TDD RED):** Extend `apps/client/test/polish-p9b-menus-modals-settings.test.ts` with tests for 4-tab Settings model (`audio`, `graphics`, `gameplay`, `controls`), single-language titles, Pause exit confirmation state machine, Buff card rarity/icon spec, and Result modal button hierarchy (no `"Đóng Bảng"` button).
-- [ ] **Step 2 (TDD GREEN):** Implement the 4-tab Settings modal in `apps/client/src/ui/settings-modal.ts`, Pause exit confirmation in `apps/client/src/scenes/game-scene/hud-setup-and-pause.ts`, and redesigned Buff & Victory/Defeat modals in `apps/client/src/scenes/game-scene/hud-modals-and-debug.ts`.
-- [ ] **Step 3:** Add E2E verification for HTML `<input>` paste/keyboard and modal mouse/keyboard navigation, verify all unit & E2E tests pass, and commit Task 2.
+- [x] **Step 1 (TDD RED):** Extend `apps/client/test/polish-p9b-menus-modals-settings.test.ts` with tests for 4-tab Settings model (`audio`, `graphics`, `gameplay`, `controls`), single-language titles, Pause exit confirmation state machine, Buff card rarity/icon spec, and Result modal button hierarchy (no `"Đóng Bảng"` button).
+- [x] **Step 2 (TDD GREEN):** Implement the 4-tab Settings modal in `apps/client/src/ui/settings-modal.ts`, Pause exit confirmation in `apps/client/src/scenes/game-scene/hud-setup-and-pause.ts`, and redesigned Buff & Victory/Defeat modals in `apps/client/src/scenes/game-scene/hud-modals-and-debug.ts`.
+- [x] **Step 3:** Add E2E verification for HTML `<input>` paste/keyboard and modal mouse/keyboard navigation, verify all unit & E2E tests pass, and commit Task 2.
 
 ### Task 3: Capture 18 P9b `after` Screenshots with `--verify-freeze`, Conduct Blind A/B `pro` Visual Gate, Run Phase P9b Quality Gate, and Tag `polish-p9b`
 
-- [ ] **Step 1:** Run `pnpm shots -- --phase p9b --label after --group p9b --verify-freeze` and verify all 18 scenes pass `freezeDiffRatio <= 0.005`.
-- [ ] **Step 2:** Set up the 18-scene Blind A/B directory (`version-A` vs `version-B` + `ab-mapping.json`), dispatch the independent `pro` Visual Reviewer subagent, and record results in `docs/screenshots/polish-p9b/review.md`.
-- [ ] **Step 3:** Run fresh `pnpm verify` and `pnpm perf`, update `docs/PROGRESS.md` & `docs/PHASES.md`, commit, and tag `polish-p9b`.
+- [x] **Step 1:** Run `pnpm shots -- --phase p9b --label after --group p9b --verify-freeze` and verify all 18 scenes pass `freezeDiffRatio <= 0.005`.
+- [x] **Step 2:** Set up the 18-scene Blind A/B directory (`version-A` vs `version-B` + `ab-mapping.json`), dispatch the independent `pro` Visual Reviewer subagent, and record results in `docs/screenshots/polish-p9b/review.md`.
+- [x] **Step 3:** Run fresh `pnpm verify` and `pnpm perf`, update `docs/PROGRESS.md` & `docs/PHASES.md`, commit, and tag `polish-p9b`.
