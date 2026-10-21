@@ -162,6 +162,7 @@ export class LightingPipeline {
   private elapsedSec = 0;
   private frameCounter = 0;
   private activeLightCount = 0;
+  private activeInteractableLightCount = 0;
   private postFxAttached = false;
   private lightingEnabled = getVisualQueryConfig().lightingEnabled;
   private currentLightmapScale = LIGHTMAP_RES_SCALE;
@@ -236,6 +237,10 @@ export class LightingPipeline {
     return this.activeLightCount;
   }
 
+  public getActiveInteractableLightCount(): number {
+    return this.activeInteractableLightCount;
+  }
+
   public getElapsedSec(): number {
     return this.elapsedSec;
   }
@@ -245,6 +250,7 @@ export class LightingPipeline {
     this.lightmapRt.setVisible(enabled);
     if (!enabled) {
       this.activeLightCount = 0;
+      this.activeInteractableLightCount = 0;
       for (let i = 0; i < this.warmGlowPool.length; i++) {
         const g = this.warmGlowPool[i]!;
         if (g.visible) g.setVisible(false);
@@ -393,6 +399,7 @@ export class LightingPipeline {
     if (!this.lightingEnabled) {
       this.lightmapRt.setVisible(false);
       this.activeLightCount = 0;
+      this.activeInteractableLightCount = 0;
       for (let i = 0; i < this.warmGlowPool.length; i++) {
         const g = this.warmGlowPool[i]!;
         if (g.visible) g.setVisible(false);
@@ -665,7 +672,9 @@ export class LightingPipeline {
     if (interactableLights && interactableLights.length > 0) {
       for (
         let i = 0;
-        i < interactableLights.length && interactableLightsDrawn < interactableQuota;
+        i < interactableLights.length &&
+        interactableLightsDrawn < interactableQuota &&
+        lightsDrawn < maxLights;
         i++
       ) {
         const entry = interactableLights[i]!;
@@ -701,6 +710,7 @@ export class LightingPipeline {
         }
 
         interactableLightsDrawn += 1;
+        lightsDrawn += 1;
       }
     }
 
@@ -789,7 +799,8 @@ export class LightingPipeline {
     }
 
     this.lightmapRt.endDraw();
-    this.activeLightCount = lightsDrawn + interactableLightsDrawn;
+    this.activeLightCount = lightsDrawn;
+    this.activeInteractableLightCount = interactableLightsDrawn;
   }
 
   public destroy(): void {

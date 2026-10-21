@@ -713,25 +713,29 @@ export class GameScene extends Phaser.Scene {
 
     this.lighting.setBiome(sim.currentBiome);
     this.lighting.setBlizzardVeil(isBlizzardPhase3);
-    const qualityTier = graphicsSettings.getState().quality;
-    populateInteractableLightsScratch(this.interactableLightsScratch, {
-      tier: qualityTier,
-      elapsedSec: getVisualQueryConfig().freeze ? 1.0 : this.lighting.getElapsedSec(),
-      simTick: sim.tick,
-      biome: sim.currentBiome,
-      inHub: sim.inHub,
-      hubReady: sim.areAllPlayersReady(),
-      playerId: sim.player.id,
-      portalActive: sim.portalActive,
-      portalX: sim.portalX,
-      portalY: sim.portalY,
-      chests: sim.chests,
-      worldItems: sim.worldItems,
-      pickups: sim.pickups,
-      doors: sim.doors,
-      npcEntities: sim.npcEntities,
-      hubStatues: sim.hubStatues,
-    });
+    if (sim.stressTestActive) {
+      this.interactableLightsScratch.length = 0;
+    } else {
+      const qualityTier = graphicsSettings.getState().quality;
+      populateInteractableLightsScratch(this.interactableLightsScratch, {
+        tier: qualityTier,
+        elapsedSec: getVisualQueryConfig().freeze ? 1.0 : this.lighting.getElapsedSec(),
+        simTick: sim.tick,
+        biome: sim.currentBiome,
+        inHub: sim.inHub,
+        hubReady: sim.areAllPlayersReady(),
+        playerId: sim.player.id,
+        portalActive: sim.portalActive,
+        portalX: sim.portalX,
+        portalY: sim.portalY,
+        chests: sim.chests,
+        worldItems: sim.worldItems,
+        pickups: sim.pickups,
+        doors: sim.doors,
+        npcEntities: sim.npcEntities,
+        hubStatues: sim.hubStatues,
+      });
+    }
     this.lighting.update({
       dtSec: animDt,
       playerPos,
@@ -745,12 +749,14 @@ export class GameScene extends Phaser.Scene {
       trauma: sim.runState === 'playing' && !isSoloPaused ? this.fx.getTrauma() : 0,
       inHub: sim.inHub,
     });
-    this.biomeArchLive?.update({
-      dtSec: animDt,
-      map: sim.map,
-      props: sim.props,
-      lightingEnabled: this.lighting.isLightmapVisible(),
-    });
+    if (!sim.stressTestActive) {
+      this.biomeArchLive?.update({
+        dtSec: animDt,
+        map: sim.map,
+        props: sim.props,
+        lightingEnabled: this.lighting.isLightmapVisible(),
+      });
+    }
 
     // 10. Update Procedural Crosshair at Mouse HUD Position
     const invBake = 1 / TextureBaker.getBakeScale();

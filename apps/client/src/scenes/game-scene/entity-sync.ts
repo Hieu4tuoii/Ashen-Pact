@@ -482,7 +482,9 @@ export function syncProjectilesAndPickupsImpl(this: GameScene): void {
     ? 1.0
     : (this.lighting?.getElapsedSec() ?? 1.0);
   const showPickupGlow =
-    graphicsSettings.getState().quality === 'high' && (this.lighting?.isLightmapVisible() ?? false);
+    !sim.stressTestActive &&
+    graphicsSettings.getState().quality === 'high' &&
+    (this.lighting?.isLightmapVisible() ?? false);
   this.activePickupIds.clear();
   for (let i = 0; i < sim.pickups.length; i++) {
     const pk = sim.pickups[i]!;
