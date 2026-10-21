@@ -147,20 +147,26 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
     const guideSpecs: {
       x: number;
       y: number;
+      anchorX: number;
+      anchorY: number;
       text: string;
       color: string;
       blocked: boolean;
     }[] = [
       {
         x: hubCx - 125,
-        y: hubCy - 142,
+        y: hubCy - 60,
+        anchorX: hubCx - 125,
+        anchorY: hubCy - 125,
         text: i18n.t('ui.hubGuide.statuesSign'),
         color: PALETTE.CYAN_FROST,
         blocked: previewOpen,
       },
       {
         x: hubCx - 258,
-        y: hubCy - 8,
+        y: hubCy + 22,
+        anchorX: hubCx - 258,
+        anchorY: hubCy + 22,
         text: isEn
           ? '⚔ PRACTICE WEAPON RACK — Press [E] to Test & Compare'
           : '⚔ KỆ VŨ KHÍ THỬ NGHIỆM — Nhấn [E] Nhặt Thử & So Sánh',
@@ -170,6 +176,8 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
       {
         x: dummySignX,
         y: hubCy + 42,
+        anchorX: dummySignX,
+        anchorY: hubCy + 42,
         text: isEn
           ? `🎯 Training Dummy · DPS: ${sim.getRollingDps().toFixed(1)}`
           : `🎯 Bù Nhìn Tập Bắn · DPS: ${sim.getRollingDps().toFixed(1)}`,
@@ -203,8 +211,8 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
       const guideVis = resolveHubGuideVisibility(
         sim.player.x,
         sim.player.y,
-        spec.x,
-        spec.y,
+        spec.anchorX,
+        spec.anchorY,
         spec.blocked,
       );
       gTxt.setAlpha(guideVis.alpha);
@@ -376,9 +384,7 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
           ? door.y + 30
           : door.dir === 'S'
             ? door.y - 24
-            : door.dir === 'E'
-              ? Math.max(door.y - 24, hasView ? view.y + 194 : door.y - 24)
-              : door.y - 24;
+            : door.y - 42;
       entry.label.setPosition(
         clamp(rawLabelX, safeLeftX, safeRightX),
         clamp(rawLabelY, safeTopY, safeBottomY),

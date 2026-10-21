@@ -27,7 +27,7 @@ export const HUB_GUIDE_MAX_DIST = 200;
 export const DOOR_NAME_MAX_DIST = 120;
 
 /** Vertical offset above player center for co-op teammate nameplates so text never overlaps the head/helmet. */
-export const PLAYER_NAMEPLATE_OFFSET_Y = -35;
+export const PLAYER_NAMEPLATE_OFFSET_Y = -44;
 export const PLAYER_NAMEPLATE_BELOW_OFFSET_Y = 26;
 
 export interface InteractPromptSpec {
@@ -234,12 +234,17 @@ export function resolveInteractPromptSpec(
 
     case 'shrine': {
       const colorHex = PALETTE.CYAN_FROST;
-      const titleText = stripLeadingKeyTag(i18n.t('ui.hud.shrineActive'));
+      const titleText = isEn ? 'Ancient Shrine' : 'Điện Thờ Cổ Đại';
+      const costGold = target.npc.costGold ?? 25;
+      const costHp = target.npc.costHp ?? 2;
+      const priceText = isEn
+        ? `${costGold} Gold / ${costHp} HP`
+        : `${costGold} Xu / ${costHp} Máu`;
       return {
         key: target.key,
         kind: 'shrine',
         x: target.x,
-        y: target.y - 42,
+        y: target.y - 35,
         targetX: target.x,
         targetY: target.y,
         highlightRadiusX: 24,
@@ -248,9 +253,9 @@ export function resolveInteractPromptSpec(
         titleText,
         colorHex,
         colorNum: hexToNum(colorHex),
-        costGold: 0,
-        hasCoinIcon: false,
-        priceText: '',
+        costGold,
+        hasCoinIcon: costGold > 0,
+        priceText,
         suppressedByWeaponCard: false,
       };
     }
@@ -295,7 +300,7 @@ export function resolveInteractPromptSpec(
       const colorHex = PALETTE.LIME_GLOW;
       const accentNum = hexToNum(ENV_PALETTE[sim.inHub ? 0 : sim.currentBiome].accent);
       const pillX = door.dir === 'W' ? door.x + 42 : door.dir === 'E' ? door.x - 42 : door.x;
-      const pillY = door.dir === 'N' ? door.y + 30 : door.y - 24;
+      const pillY = door.dir === 'N' ? door.y + 30 : door.dir === 'S' ? door.y - 24 : door.y - 42;
       return {
         key: target.key,
         kind: 'door',
@@ -487,7 +492,7 @@ export function resolvePlayerNameplateSpec(params: {
 
   const placeBelow = y + PLAYER_NAMEPLATE_OFFSET_Y < safeTopY;
   const nameY = placeBelow ? y + PLAYER_NAMEPLATE_BELOW_OFFSET_Y : y + PLAYER_NAMEPLATE_OFFSET_Y;
-  const emoteY = placeBelow ? y + 44 : Math.max(safeTopY + 12, y - 50);
+  const emoteY = placeBelow ? y + 44 : Math.max(safeTopY + 12, y - 60);
 
   if (stressTestActive || p.id === localPlayerId) {
     return {

@@ -142,7 +142,7 @@ export function syncSimulatedPlayersImpl(this: GameScene, dtSec: number): void {
         rig.container.setDepth(29);
 
         const nameLabel = this.add
-          .text(cp.x, cp.y - 26, '', {
+          .text(cp.x, cp.y - 44, '', {
             fontFamily: '"Be Vietnam Pro", sans-serif',
             fontSize: '11.5px',
             fontStyle: '800',
@@ -158,7 +158,7 @@ export function syncSimulatedPlayersImpl(this: GameScene, dtSec: number): void {
 
         const emoteBg = this.add.graphics().setDepth(49);
         const emoteLabel = this.add
-          .text(cp.x, cp.y - 44, '', {
+          .text(cp.x, cp.y - 60, '', {
             fontFamily: '"Be Vietnam Pro", sans-serif',
             fontSize: '10.5px',
             fontStyle: '800',

@@ -146,7 +146,10 @@ describe('Phase P7 — Single-Pill [E] Prompt, Fade + Hysteresis, Door Labels, H
     expect(spec?.kind).toBe('shrine');
     expect(spec?.key).toBe('shrine:701');
     expect(spec?.colorHex).toBe(PALETTE.CYAN_FROST);
-    expect(spec?.titleText).toContain('Điện Thờ Cổ Đại');
+    expect(spec?.titleText).toBe('Điện Thờ Cổ Đại');
+    expect(spec?.costGold).toBe(25);
+    expect(spec?.hasCoinIcon).toBe(true);
+    expect(spec?.priceText).toContain('25 Xu');
     expect(spec?.titleText).not.toMatch(/^\[E\]/i);
 
     // 6. Active Portal
@@ -355,7 +358,7 @@ describe('Phase P7 — Single-Pill [E] Prompt, Fade + Hysteresis, Door Labels, H
     expect(blockedSign.alpha).toBe(0);
   });
 
-  it('hides local player own nameplate and styles teammate nameplates at 11.5px@1080p, alpha 0.75, slot color, y - 35 above head', () => {
+  it('hides local player own nameplate and styles teammate nameplates at 11.5px@1080p, alpha 0.75, slot color, y - 44 above head', () => {
     i18n.setLocale('vi');
     const ownSpec = resolvePlayerNameplateSpec({
       player: {
@@ -395,7 +398,7 @@ describe('Phase P7 — Single-Pill [E] Prompt, Fade + Hysteresis, Door Labels, H
     expect(teammateSpec.worldFontSize).toBe('11.5px');
     expect(teammateSpec.worldScale).toBe(0.5);
     expect(teammateSpec.color).toBe(PLAYER_SLOT_COLORS[2]);
-    expect(teammateSpec.y).toBe(300 - 35);
+    expect(teammateSpec.y).toBe(300 - 44);
     expect(teammateSpec.text).toBe('[P2] Ưng Nhãn P2 · ✓');
 
     const downedTeammateSpec = resolvePlayerNameplateSpec({
