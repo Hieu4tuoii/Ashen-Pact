@@ -1,6 +1,7 @@
 import {
   type CharacterId,
   clamp,
+  type RoomType,
   type SimChestState,
   type SimDoorState,
   type SimHubStatue,
@@ -152,6 +153,7 @@ export interface PopulateInteractableLightsParams {
   biome: 1 | 2 | 3;
   inHub?: boolean;
   hubReady?: boolean;
+  roomType?: RoomType;
   elapsedSec: number;
   playerId?: number;
   simTick?: number;
@@ -193,6 +195,7 @@ export function populateInteractableLightsScratch(
     biome,
     inHub = false,
     hubReady = false,
+    roomType,
     elapsedSec,
     playerId,
     simTick,
@@ -244,11 +247,21 @@ export function populateInteractableLightsScratch(
     count += 1;
   };
 
-  // 1. Active Floor / Hub Portal (Purple #A855F7 outer + Cyan #22D3EE inner core, radius 140-180)
+  // 1. Floor / Hub Portal (Active purple/cyan, Hub waiting silver/cyan, Hub ready gold, or Dungeon inactive gray-purple)
   if (portalActive) {
-    const portalRadius = clamp(160 + 14 * Math.sin(elapsedSec * 2.8), 140, 180);
-    const outerCol = inHub && hubReady ? 0xf59e42 : 0xa855f7;
-    writeEntry('portal', portalX, portalY, portalRadius, outerCol, 0.34, 0x22d3ee, 86, 0.3);
+    if (inHub && !hubReady) {
+      const portalRadius = clamp(136 + 8 * Math.sin(elapsedSec * 2.2), 124, 152);
+      writeEntry('portal', portalX, portalY, portalRadius, 0x64748b, 0.26, 0x38bdf8, 72, 0.22);
+    } else if (inHub && hubReady) {
+      const portalRadius = clamp(164 + 12 * Math.sin(elapsedSec * 2.8), 144, 180);
+      writeEntry('portal', portalX, portalY, portalRadius, 0xf59e42, 0.34, 0xfef08a, 88, 0.3);
+    } else {
+      const portalRadius = clamp(160 + 14 * Math.sin(elapsedSec * 2.8), 140, 180);
+      writeEntry('portal', portalX, portalY, portalRadius, 0xa855f7, 0.34, 0x22d3ee, 86, 0.3);
+    }
+  } else if (!inHub && roomType === 'portal') {
+    const inactiveRadius = clamp(96 + 4 * Math.sin(elapsedSec * 1.4), 88, 108);
+    writeEntry('portal', portalX, portalY, inactiveRadius, 0x4c3d63, 0.2, 0x6d5b87, 52, 0.16);
   }
 
   // 2. Unopened Chests (Rarity color, radius 70-90, slow 2s pulse; 0 when opened)
@@ -374,6 +387,7 @@ export type ResolveInteractableGlowInput =
       active: boolean;
       inHub?: boolean;
       hubReady?: boolean;
+      roomType?: RoomType;
       elapsedSec?: number;
     }
   | {
@@ -515,11 +529,45 @@ export function resolveInteractableVisualGlowSpec(
 
     case 'portal': {
       if (!input.active) {
+        if (!input.inHub && input.roomType === 'portal') {
+          const pulse = Math.sin((input.elapsedSec ?? 1.0) * 1.4);
+          const r = 52 + 2 * pulse;
+          return {
+            glowAlpha: clamp(0.16 + 0.02 * pulse, 0.13, 0.2),
+            glowRadiusX: r,
+            glowRadiusY: r,
+            colorNum: 0x6d5b87,
+            hasRarityBeam: false,
+            beamColorNum: 0,
+            beamHeight: 0,
+            beamWidth: 0,
+            beamAlpha: 0,
+            hasSparkles: false,
+            hasShopPedestal: false,
+          };
+        }
         return {
           glowAlpha: 0,
           glowRadiusX: 0,
           glowRadiusY: 0,
           colorNum: 0xa855f7,
+          hasRarityBeam: false,
+          beamColorNum: 0,
+          beamHeight: 0,
+          beamWidth: 0,
+          beamAlpha: 0,
+          hasSparkles: false,
+          hasShopPedestal: false,
+        };
+      }
+      if (input.inHub && !input.hubReady) {
+        const pulse = Math.sin((input.elapsedSec ?? 1.0) * 2.2);
+        const r = 64 + 3 * pulse;
+        return {
+          glowAlpha: clamp(0.24 + 0.02 * pulse, 0.21, 0.27),
+          glowRadiusX: r,
+          glowRadiusY: r,
+          colorNum: 0x38bdf8,
           hasRarityBeam: false,
           beamColorNum: 0,
           beamHeight: 0,

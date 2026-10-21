@@ -58,9 +58,9 @@ export interface PortalShaderUniformState {
   activity: number;
   pulse: number;
   burstProgress: number;
-  outerRgb: [number, number, number];
-  coreRgb: [number, number, number];
-  rimRgb: [number, number, number];
+  outerRgb: readonly [number, number, number];
+  coreRgb: readonly [number, number, number];
+  rimRgb: readonly [number, number, number];
 }
 
 export type PortalShaderSprite = Phaser.GameObjects.Sprite & {
@@ -72,8 +72,8 @@ export interface DoorShaderUniformState {
   lockupProgress: number;
   dissolveProgress: number;
   isVertical: number;
-  primaryRgb: [number, number, number];
-  rimRgb: [number, number, number];
+  primaryRgb: readonly [number, number, number];
+  rimRgb: readonly [number, number, number];
 }
 
 export type DoorShaderSprite = Phaser.GameObjects.Sprite & {
@@ -739,4 +739,128 @@ export function ensurePortalAndDoorPipelinesRegistered(
     renderer.pipelines.add(DOOR_BARRIER_PIPELINE_KEY, createDoorBarrierPipeline(game, phaserNs));
   }
   return true;
+}
+
+export interface PortalDoorParticlePose {
+  x: number;
+  y: number;
+  scaleX: number;
+  scaleY: number;
+  rotation: number;
+  alpha: number;
+}
+
+export function computePortalSpiralParticlePose(
+  index: number,
+  count: number,
+  elapsedSec: number,
+  spinSpeedRadPerSec: number,
+  portalX: number,
+  portalY: number,
+): PortalDoorParticlePose {
+  const safeCount = Math.max(1, count);
+  const u = (((elapsedSec * 0.75 + index / safeCount) % 1) + 1) % 1;
+  const radius = 32 - u * 28;
+  const angle =
+    (index / safeCount) * Math.PI * 2 + elapsedSec * spinSpeedRadPerSec * 1.15 + u * 2.8;
+  const scale = clamp(0.45 + (1 - u) * 0.65, 0.35, 1.15);
+  return {
+    x: portalX + Math.cos(angle) * radius,
+    y: portalY + Math.sin(angle) * radius * 0.88,
+    scaleX: scale,
+    scaleY: scale,
+    rotation: angle + Math.PI * 0.5,
+    alpha: clamp(Math.sin(u * Math.PI) * 0.88, 0.08, 0.9),
+  };
+}
+
+export function computePortalEnergyRayPose(
+  index: number,
+  count: number,
+  elapsedSec: number,
+  portalX: number,
+  portalY: number,
+): PortalDoorParticlePose {
+  const safeCount = Math.max(1, count);
+  const phase = (((elapsedSec * 0.85 + index / safeCount) % 1) + 1) % 1;
+  const offsetX =
+    (index - (safeCount - 1) * 0.5) * 14 + Math.sin(elapsedSec * 2.1 + index * 1.7) * 3;
+  const sinPhase = Math.sin(phase * Math.PI);
+  return {
+    x: portalX + offsetX,
+    y: portalY + 2 - phase * 34,
+    scaleX: 0.75 + 0.25 * sinPhase,
+    scaleY: 0.65 + 0.55 * sinPhase,
+    rotation: 0,
+    alpha: clamp(sinPhase * 0.72, 0.06, 0.75),
+  };
+}
+
+export function computeDoorMotePose(
+  index: number,
+  orientation: 'ns' | 'ew',
+  doorX: number,
+  doorY: number,
+  locked: boolean,
+  dissolveActive: boolean,
+  dissolveProgress: number,
+  elapsedSec: number,
+): PortalDoorParticlePose {
+  if (dissolveActive) {
+    const angle = (index / 4) * Math.PI * 2 + 0.4 + dissolveProgress * 1.2;
+    const dist = 8 + dissolveProgress * 28;
+    const scale = clamp(1.15 - dissolveProgress * 0.65, 0.35, 1.2);
+    return {
+      x: doorX + Math.cos(angle) * dist,
+      y: doorY + Math.sin(angle) * dist,
+      scaleX: scale,
+      scaleY: scale,
+      rotation: angle,
+      alpha: clamp((1 - dissolveProgress) * 0.95, 0.05, 0.95),
+    };
+  }
+  if (locked) {
+    if (index < 2) {
+      const sign = index === 0 ? -1 : 1;
+      const dx = orientation === 'ns' ? sign * 24 : 0;
+      const dy = orientation === 'ns' ? -2 : sign * 24;
+      const pulse = Math.sin(elapsedSec * 4.2 + index * 1.5);
+      const scale = 0.85 + 0.15 * pulse;
+      return {
+        x: doorX + dx,
+        y: doorY + dy,
+        scaleX: scale,
+        scaleY: scale,
+        rotation: elapsedSec * 1.2,
+        alpha: clamp(0.78 + 0.14 * pulse, 0.62, 0.94),
+      };
+    }
+    const barOffset = (index === 2 ? -10 : 10) + Math.sin(elapsedSec * 2.8 + index) * 4;
+    const dx = orientation === 'ns' ? barOffset : 0;
+    const dy = orientation === 'ns' ? 0 : barOffset;
+    const scale = 0.65 + 0.1 * Math.sin(elapsedSec * 3.4 + index);
+    return {
+      x: doorX + dx,
+      y: doorY + dy,
+      scaleX: scale,
+      scaleY: scale,
+      rotation: -elapsedSec * 1.5,
+      alpha: clamp(0.48 + 0.18 * Math.sin(elapsedSec * 3.1 + index), 0.25, 0.7),
+    };
+  }
+  const phase = (((elapsedSec * 0.55 + index * 0.25) % 1) + 1) % 1;
+  const spread = (index - 1.5) * 11;
+  const drift = (0.5 - phase) * 14;
+  const dx = orientation === 'ns' ? spread : drift;
+  const dy = orientation === 'ns' ? drift : spread;
+  const sinPhase = Math.sin(phase * Math.PI);
+  const scale = 0.55 + 0.35 * sinPhase;
+  return {
+    x: doorX + dx,
+    y: doorY + dy,
+    scaleX: scale,
+    scaleY: scale,
+    rotation: elapsedSec * 0.9 + index,
+    alpha: clamp(sinPhase * 0.62, 0.08, 0.65),
+  };
 }

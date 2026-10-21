@@ -338,7 +338,7 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
         this.camFocusX = sim.player.x;
         this.camFocusY = sim.player.y;
         zzfx.play('portal_enter');
-        this.triggerIrisTransition('close');
+        this.triggerPortalEnterSequence();
         break;
       }
       case 'boss_spawned': {

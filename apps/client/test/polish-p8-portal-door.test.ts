@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import type Phaser from 'phaser';
 import {
+  type InteractableLightEntry,
+  populateInteractableLightsScratch,
+  resolveInteractableVisualGlowSpec,
+} from '../src/fx/lighting-config.js';
+import {
+  computeDoorMotePose,
+  computePortalEnergyRayPose,
+  computePortalSpiralParticlePose,
   createDoorAnimState,
   createDoorBarrierPipeline,
   createPortalAnimState,
@@ -425,6 +433,111 @@ describe('Phase P8 — Portals & Room Doors Visual State & Animation Resolvers',
       expect(doorPipe.uniforms1f.get('uLockupProgress')).toBeCloseTo(0.6, 3);
       expect(doorPipe.uniforms1f.get('uDissolveProgress')).toBeCloseTo(0.35, 3);
       expect(doorPipe.uniforms1f.get('uIsVertical')).toBe(1.0);
+    });
+  });
+
+  describe('Task 2 — Portal & Door Lighting, Glow & Deterministic Particle Helpers', () => {
+    it('populates dim gray-purple light and glow for dungeon_inactive portal in portal rooms, and distinct colors for hub_waiting vs hub_ready', () => {
+      const scratch: InteractableLightEntry[] = [];
+
+      // 1. dungeon_inactive in portal room
+      const inactiveCount = populateInteractableLightsScratch(scratch, {
+        tier: 'high',
+        biome: 1,
+        inHub: false,
+        hubReady: false,
+        roomType: 'portal',
+        elapsedSec: 1.0,
+        portalActive: false,
+        portalX: 480,
+        portalY: 270,
+      });
+      expect(inactiveCount).toBe(1);
+      expect(scratch[0]?.kind).toBe('portal');
+      expect(scratch[0]?.colorNum).toBe(0x4c3d63);
+      expect(scratch[0]?.secondaryColorNum).toBe(0x6d5b87);
+      expect(scratch[0]?.radius).toBeGreaterThanOrEqual(85);
+      expect(scratch[0]?.radius).toBeLessThanOrEqual(115);
+      expect(scratch[0]?.alpha).toBeCloseTo(0.2, 1);
+
+      const inactiveGlow = resolveInteractableVisualGlowSpec({
+        kind: 'portal',
+        active: false,
+        inHub: false,
+        hubReady: false,
+        roomType: 'portal',
+        elapsedSec: 1.0,
+      });
+      expect(inactiveGlow.glowAlpha).toBeGreaterThan(0.12);
+      expect(inactiveGlow.glowAlpha).toBeLessThan(0.24);
+      expect(inactiveGlow.colorNum).toBe(0x6d5b87);
+
+      // 2. hub_waiting portal
+      populateInteractableLightsScratch(scratch, {
+        tier: 'high',
+        biome: 1,
+        inHub: true,
+        hubReady: false,
+        elapsedSec: 1.0,
+        portalActive: true,
+        portalX: 480,
+        portalY: 270,
+      });
+      expect(scratch[0]?.colorNum).toBe(0x64748b);
+      expect(scratch[0]?.secondaryColorNum).toBe(0x38bdf8);
+
+      const hubWaitGlow = resolveInteractableVisualGlowSpec({
+        kind: 'portal',
+        active: true,
+        inHub: true,
+        hubReady: false,
+        elapsedSec: 1.0,
+      });
+      expect(hubWaitGlow.colorNum).toBe(0x38bdf8);
+      expect(hubWaitGlow.glowAlpha).toBeCloseTo(0.24, 1);
+
+      // 3. hub_ready portal
+      populateInteractableLightsScratch(scratch, {
+        tier: 'high',
+        biome: 1,
+        inHub: true,
+        hubReady: true,
+        elapsedSec: 1.0,
+        portalActive: true,
+        portalX: 480,
+        portalY: 270,
+      });
+      expect(scratch[0]?.colorNum).toBe(0xf59e42);
+      expect(scratch[0]?.secondaryColorNum).toBe(0xfef08a);
+
+      const hubReadyGlow = resolveInteractableVisualGlowSpec({
+        kind: 'portal',
+        active: true,
+        inHub: true,
+        hubReady: true,
+        elapsedSec: 1.0,
+      });
+      expect(hubReadyGlow.colorNum).toBe(0xf59e42);
+      expect(hubReadyGlow.glowAlpha).toBeGreaterThanOrEqual(0.32);
+    });
+
+    it('computes deterministic inward spiral particle poses, rising energy rays, and door lock/unlock motes', () => {
+      const p0 = computePortalSpiralParticlePose(0, 12, 1.0, 2.6, 500, 300);
+      const p0Repeat = computePortalSpiralParticlePose(0, 12, 1.0, 2.6, 500, 300);
+      expect(p0).toEqual(p0Repeat);
+      expect(Math.hypot(p0.x - 500, p0.y - 300)).toBeLessThanOrEqual(34);
+      expect(p0.alpha).toBeGreaterThan(0);
+
+      const ray0 = computePortalEnergyRayPose(0, 4, 1.2, 500, 300);
+      expect(ray0.y).toBeLessThan(304);
+      expect(ray0.alpha).toBeGreaterThan(0);
+
+      const lockedLamp = computeDoorMotePose(0, 'ns', 400, 100, true, false, 0, 1.0);
+      expect(lockedLamp.alpha).toBeGreaterThan(0.5);
+
+      const unlockSpark = computeDoorMotePose(2, 'ew', 400, 100, false, true, 0.4, 1.0);
+      expect(unlockSpark.alpha).toBeGreaterThan(0.2);
+      expect(Math.hypot(unlockSpark.x - 400, unlockSpark.y - 100)).toBeGreaterThan(4);
     });
   });
 });

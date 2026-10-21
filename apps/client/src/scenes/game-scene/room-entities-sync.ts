@@ -17,7 +17,6 @@ import { resolveInteractableVisualGlowSpec } from '../../fx/lighting-config.js';
 import { initGlobalDebugState } from '../../ui/debug-overlay.js';
 import { type GameScene, RIG_FOOT_OFFSET_Y } from '../GameScene.js';
 import {
-  resolveDoorLabelState,
   resolveHubGuideVisibility,
   resolveInteractPromptSpec,
   syncWorldInteractPromptPill,
@@ -281,129 +280,9 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
     }
   }
 
-  // 1. Room Doors (North / South / East / West)
-  const view = this.cameras.main.worldView;
-  const hasView = view && view.width > 0;
-  const bossActive = sim.getActiveBoss() !== null;
-  const safeTopY = hasView ? view.y + (bossActive ? 122 : 82) : 82;
-  const safeBottomY = hasView ? view.y + view.height - 66 : 474;
-  const safeLeftX = hasView ? view.x + 18 : 18;
-  const safeRightX = hasView ? view.x + view.width - 18 : 942;
-
-  this.activeDoorKeys.clear();
-  for (let i = 0; i < sim.doors.length; i++) {
-    const door = sim.doors[i]!;
-    const key = `${sim.currentFloor}_${sim.currentRoomId}_${door.dir}`;
-    this.activeDoorKeys.add(key);
-
-    const isOpen = !door.locked;
-    const tex = isOpen ? 'door_open' : 'door_locked';
-    const targetRoom = sim.dungeon.rooms.find((r) => r.id === door.targetRoomId);
-    const roomLabel = targetRoom
-      ? i18n.roomTypeName(targetRoom.type)
-      : i18n.getLocale() === 'en'
-        ? 'Room'
-        : 'Phòng';
-    const isActiveInteractDoor = target?.kind === 'door' && target.door.dir === door.dir;
-    const doorLabelState = resolveDoorLabelState(
-      door,
-      sim.player.x,
-      sim.player.y,
-      roomLabel,
-      isActiveInteractDoor,
-    );
-
-    let entry = this.doorSprites.get(key);
-    if (!entry) {
-      const sprite = this.add.sprite(door.x, door.y, tex);
-      sprite.setScale(invBake);
-      sprite.setDepth(16);
-      if (door.dir === 'E' || door.dir === 'W') {
-        sprite.setRotation(Math.PI / 2);
-      }
-
-      const glowSprite = this.add.image(door.x, door.y, 'fx_light_radial');
-      glowSprite.setDepth(35);
-      glowSprite.setBlendMode(Phaser.BlendModes.ADD);
-
-      const originX = door.dir === 'E' ? 1 : door.dir === 'W' ? 0 : 0.5;
-      const label = this.add
-        .text(door.x, door.y, doorLabelState.text, {
-          fontFamily: '"Be Vietnam Pro", sans-serif',
-          fontSize: '10px',
-          fontStyle: '800',
-          color: doorLabelState.colorHex,
-          stroke: PALETTE.INK_DEEP,
-          strokeThickness: 3,
-          resolution: textRes,
-        })
-        .setOrigin(originX, 0.5)
-        .setDepth(45);
-
-      entry = { sprite, glowSprite, label };
-      this.doorSprites.set(key, entry);
-    } else {
-      if (entry.sprite.texture.key !== tex) {
-        entry.sprite.setTexture(tex);
-      }
-      if (doorLabelState.visible && entry.label.text !== doorLabelState.text) {
-        entry.label.setText(doorLabelState.text);
-        entry.label.setColor(doorLabelState.colorHex);
-      }
-    }
-
-    const doorGlowSpec = resolveInteractableVisualGlowSpec({
-      kind: 'door',
-      locked: door.locked,
-      biome: sim.currentBiome,
-      inHub: sim.inHub,
-    });
-    if (lightingEnabled && doorGlowSpec.glowAlpha > 0) {
-      entry.glowSprite.setPosition(door.x, door.y);
-      entry.glowSprite.setDisplaySize(doorGlowSpec.glowRadiusX * 2, doorGlowSpec.glowRadiusY * 2);
-      entry.glowSprite.setTint(doorGlowSpec.colorNum);
-      entry.glowSprite.setAlpha(doorGlowSpec.glowAlpha);
-      entry.glowSprite.setVisible(true);
-    } else {
-      entry.glowSprite.setVisible(false);
-    }
-
-    if (doorLabelState.visible) {
-      const originX =
-        doorLabelState.mode === 'lock_icon_only'
-          ? 0.5
-          : door.dir === 'E'
-            ? 1
-            : door.dir === 'W'
-              ? 0
-              : 0.5;
-      entry.label.setOrigin(originX, 0.5);
-      entry.label.setAlpha(doorLabelState.alpha);
-      entry.label.setVisible(true);
-      const rawLabelX = door.dir === 'W' ? door.x + 22 : door.dir === 'E' ? door.x - 22 : door.x;
-      const rawLabelY =
-        door.dir === 'N'
-          ? door.y + 30
-          : door.dir === 'S'
-            ? door.y - 24
-            : door.y - 42;
-      entry.label.setPosition(
-        clamp(rawLabelX, safeLeftX, safeRightX),
-        clamp(rawLabelY, safeTopY, safeBottomY),
-      );
-    } else {
-      entry.label.setVisible(false);
-    }
-  }
-
-  for (const [key, entry] of this.doorSprites.entries()) {
-    if (!this.activeDoorKeys.has(key)) {
-      entry.sprite.destroy();
-      entry.glowSprite.destroy();
-      entry.label.destroy();
-      this.doorSprites.delete(key);
-    }
-  }
+  // 1. Floor / Hub Portal & Room Doors (North / South / East / West)
+  this.syncPortalVisuals(dtSec);
+  this.syncDoorVisuals(dtSec, target);
 
   // 2. Treasure / Reward Chests (5 Rarities; opening spawns instanced drops in Co-op)
   this.activeChestIds.clear();
@@ -748,46 +627,6 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
       entry.label.destroy();
       this.npcVisuals.delete(id);
     }
-  }
-
-  // 5. Floor Transition Portal (or Hub Departure Portal)
-  if (sim.portalActive) {
-    if (!this.portalSprite) {
-      this.portalSprite = this.add.sprite(sim.portalX, sim.portalY, 'portal_active');
-      this.portalSprite.setDepth(19);
-    }
-    if (!this.portalGlowSprite) {
-      this.portalGlowSprite = this.add.image(sim.portalX, sim.portalY, 'fx_light_radial');
-      this.portalGlowSprite.setDepth(35);
-      this.portalGlowSprite.setBlendMode(Phaser.BlendModes.ADD);
-    }
-    this.portalSprite.setVisible(true);
-    this.portalSprite.setPosition(sim.portalX, sim.portalY);
-    this.portalSprite.setScale(invBake * (1 + Math.sin(visualTimeSec * 6.0) * 0.06));
-    this.portalSprite.setRotation(visualTimeSec * 1.8);
-
-    const pGlow = resolveInteractableVisualGlowSpec({
-      kind: 'portal',
-      active: true,
-      inHub: sim.inHub,
-      hubReady: sim.areAllPlayersReady(),
-      elapsedSec: visualTimeSec,
-    });
-    if (lightingEnabled && pGlow.glowAlpha > 0) {
-      this.portalGlowSprite.setPosition(sim.portalX, sim.portalY);
-      this.portalGlowSprite.setDisplaySize(pGlow.glowRadiusX * 2, pGlow.glowRadiusY * 2);
-      this.portalGlowSprite.setTint(pGlow.colorNum);
-      this.portalGlowSprite.setAlpha(pGlow.glowAlpha);
-      this.portalGlowSprite.setVisible(true);
-    } else {
-      this.portalGlowSprite.setVisible(false);
-    }
-
-    this.portalLabel?.setVisible(false);
-  } else {
-    this.portalSprite?.setVisible(false);
-    this.portalGlowSprite?.setVisible(false);
-    this.portalLabel?.setVisible(false);
   }
 
   // 6. Current [E] Target Luminous Outline Highlight (viền sáng) & Single Rounded-Pill [E] Prompt

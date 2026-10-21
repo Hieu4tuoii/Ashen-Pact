@@ -39,6 +39,7 @@ import { type ArenaTileVisual, type GameScene, RIG_FOOT_OFFSET_Y } from '../Game
 import type { HudScene } from '../HudScene.js';
 import { applyHudEdgeAnchors } from './hud-setup-and-pause.js';
 import { createInteractPromptFadeState } from './interact-prompt.js';
+import { createPortalAnimState } from '../../fx/portal-door-shaders.js';
 
 export function syncGameSceneTestHooks(scene: GameScene): void {
   if (typeof window === 'undefined') return;
@@ -121,6 +122,9 @@ export function createImpl(this: GameScene): void {
   this.portalSprite = undefined;
   this.portalGlowSprite = undefined;
   this.portalLabel = undefined;
+  this.portalVisualGroup = undefined;
+  this.portalAnimState = createPortalAnimState();
+  this.portalDoorAnimClockSec = 0;
   this.interactPromptState = createInteractPromptFadeState();
   this.currentInteractTarget = null;
   this.interactPromptVisuals = undefined;
@@ -271,6 +275,7 @@ export function createImpl(this: GameScene): void {
     this.input.off('pointerdown', onPointerDown);
     this.input.keyboard?.off('keydown', unlockAudio);
     this.lighting?.destroy();
+    this.destroyPortalAndDoorVisuals();
     this.biomeArchLive?.destroy();
     this.biomeArchLive = undefined;
     this.settingsModal?.destroy();

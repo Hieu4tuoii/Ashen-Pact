@@ -28,6 +28,7 @@ import {
   populateInteractableLightsScratch,
 } from '../fx/lighting-config.js';
 import type { LightingPipeline } from '../fx/lighting-pipeline.js';
+import { createPortalAnimState, type PortalAnimState } from '../fx/portal-door-shaders.js';
 import type { DebugOverlay } from '../ui/debug-overlay.js';
 import { type GraphicsQualityTier, graphicsSettings } from '../ui/graphics-settings.js';
 import type { ModalOverlayManager } from '../ui/settings-modal.js';
@@ -45,6 +46,18 @@ import {
   type InteractPromptFadeState,
   type InteractPromptPillVisuals,
 } from './game-scene/interact-prompt.js';
+import {
+  destroyPortalAndDoorVisualsImpl,
+  type DoorVisualEntry,
+  type PortalVisualGroup,
+  resetPortalAndDoorTestStateImpl,
+  syncDoorVisualsImpl,
+  syncPortalVisualsImpl,
+  triggerDoorCombatLockupImpl,
+  triggerDoorUnlockTransitionImpl,
+  triggerPortalActivationBurstImpl,
+  triggerPortalEnterSequenceImpl,
+} from './game-scene/portal-door-sync.js';
 import { syncRoomEntitiesImpl } from './game-scene/room-entities-sync.js';
 import { processSimEventsImpl } from './game-scene/sim-events.js';
 import { drawEnemyHealthAndStatusBarImpl, renderHitboxesIfEnabledImpl, renderTelegraphsAndShieldImpl } from './game-scene/telegraphs-and-overlays.js';
@@ -165,14 +178,7 @@ export class GameScene extends Phaser.Scene {
   }[] = [];
 
   // Phase 3 Room Visuals (Doors, Chests, World Items, NPCs, Portal)
-  public doorSprites = new Map<
-    string,
-    {
-      sprite: Phaser.GameObjects.Sprite;
-      glowSprite: Phaser.GameObjects.Image;
-      label: Phaser.GameObjects.Text;
-    }
-  >();
+  public doorSprites = new Map<string, DoorVisualEntry>();
   public chestSprites = new Map<number, Phaser.GameObjects.Sprite>();
   public chestGlowSprites = new Map<number, Phaser.GameObjects.Image>();
   public chestSparkleSprites = new Map<number, Phaser.GameObjects.Image[]>();
@@ -198,6 +204,9 @@ export class GameScene extends Phaser.Scene {
   public portalSprite?: Phaser.GameObjects.Sprite;
   public portalGlowSprite?: Phaser.GameObjects.Image;
   public portalLabel?: Phaser.GameObjects.Text;
+  public portalVisualGroup?: PortalVisualGroup;
+  public portalAnimState: PortalAnimState = createPortalAnimState();
+  public portalDoorAnimClockSec = 0;
   public interactHighlightGraphics!: Phaser.GameObjects.Graphics;
   public interactPromptState: InteractPromptFadeState = createInteractPromptFadeState();
   public currentInteractTarget: InteractTargetResult | null = null;
@@ -733,6 +742,7 @@ export class GameScene extends Phaser.Scene {
         biome: sim.currentBiome,
         inHub: sim.inHub,
         hubReady: sim.areAllPlayersReady(),
+        roomType: sim.getCurrentRoom().type,
         playerId: sim.player.id,
         portalActive: sim.portalActive,
         portalX: sim.portalX,
@@ -816,6 +826,14 @@ export class GameScene extends Phaser.Scene {
   public syncEnemyRigs(dtSec: number): void { syncEnemyRigsImpl.call(this, dtSec); }
   public syncProps(dtSec: number): void { syncPropsImpl.call(this, dtSec); }
   public syncProjectilesAndPickups(): void { syncProjectilesAndPickupsImpl.call(this); }
+  public syncPortalVisuals(dtSec: number): void { syncPortalVisualsImpl.call(this, dtSec); }
+  public syncDoorVisuals(dtSec: number, target: InteractTargetResult | null): void { syncDoorVisualsImpl.call(this, dtSec, target); }
+  public triggerPortalActivationBurst(): void { triggerPortalActivationBurstImpl.call(this); }
+  public triggerPortalEnterSequence(): void { triggerPortalEnterSequenceImpl.call(this); }
+  public triggerDoorUnlockTransition(): void { triggerDoorUnlockTransitionImpl.call(this); }
+  public triggerDoorCombatLockup(): void { triggerDoorCombatLockupImpl.call(this); }
+  public resetPortalAndDoorTestState(): void { resetPortalAndDoorTestStateImpl.call(this); }
+  public destroyPortalAndDoorVisuals(): void { destroyPortalAndDoorVisualsImpl.call(this); }
   public syncRoomEntities(dtSec: number): void { syncRoomEntitiesImpl.call(this, dtSec); }
   public updateCameraWithLookaheadAndShake(playerX: number, playerY: number, cursorWorldX: number, cursorWorldY: number, dtSec: number): void { updateCameraWithLookaheadAndShakeImpl.call(this, playerX, playerY, cursorWorldX, cursorWorldY, dtSec); }
   public renderTelegraphsAndShield(playerX: number, playerY: number): void { renderTelegraphsAndShieldImpl.call(this, playerX, playerY); }

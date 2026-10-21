@@ -212,9 +212,12 @@ export async function lockCameraAndIrisToPlayer(page: Page): Promise<void> {
           };
           hudScene?: unknown;
           hudContainer?: { setPosition: (x: number, y: number) => void };
+          resetPortalAndDoorTestState?: () => void;
         })
       | undefined;
     if (sim && gs) {
+      window.__GAME_TRANSPORT__?.consumeEvents();
+      gs.resetPortalAndDoorTestState?.();
       sim.player.prevX = sim.player.x;
       sim.player.prevY = sim.player.y;
       Object.assign(gs, {
