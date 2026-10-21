@@ -102,7 +102,7 @@
 | P3 | Nền ánh sáng, PostFX, `HudScene`, camera không méo | Map dễ nhìn, ánh sáng | [x] |
 | P4 | **Phòng chuẩn B1** (vertical slice) → Palette ENV, sàn, tường, surface cho mọi biome | Map đẹp, giảm tương phản | [x] |
 | P5 | Trang trí biome còn lại, chậu lửa | Map đẹp, nguồn sáng đuốc | [x] |
-| P6 | Đèn/glow vật thể tương tác | Nguồn sáng cho rương/đuốc/cổng/vật phẩm | [ ] |
+| P6 | Đèn/glow vật thể tương tác | Nguồn sáng cho rương/đuốc/cổng/vật phẩm | [x] |
 | P7 | Nhãn theo khoảng cách, prompt [E] | Gần mới hiện [E] tên | [ ] |
 | P8 | Cổng dịch chuyển & cổng qua phòng | Cổng đẹp, sáng ảo diệu | [ ] |
 | P9a | Design system, HUD trong game | UI/UX hiện đại (HUD) | [ ] |
