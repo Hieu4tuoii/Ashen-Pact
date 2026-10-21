@@ -165,7 +165,17 @@ test.describe('Phase 4 — Co-op LAN Authoritative, Prediction/Interpolation, Hu
       targetY: number,
       tolerance = 18,
     ) => {
-      for (let step = 0; step < 45; step++) {
+      let downA = false;
+      let downD = false;
+      let downW = false;
+      let downS = false;
+      const setKey = async (code: string, cur: boolean, next: boolean): Promise<boolean> => {
+        if (cur === next) return cur;
+        if (next) await pg.keyboard.down(code);
+        else await pg.keyboard.up(code);
+        return next;
+      };
+      for (let step = 0; step < 80; step++) {
         const pos = await pg.evaluate(() => ({
           x: window.__GAME_DEBUG__.playerX,
           y: window.__GAME_DEBUG__.playerY,
@@ -173,24 +183,17 @@ test.describe('Phase 4 — Co-op LAN Authoritative, Prediction/Interpolation, Hu
         const dx = targetX - pos.x;
         const dy = targetY - pos.y;
         if (Math.hypot(dx, dy) <= tolerance) break;
-        if (Math.abs(dx) > 8) {
-          await pg.keyboard.down(dx > 0 ? 'KeyD' : 'KeyA');
-        } else {
-          await pg.keyboard.up('KeyA');
-          await pg.keyboard.up('KeyD');
-        }
-        if (Math.abs(dy) > 8) {
-          await pg.keyboard.down(dy > 0 ? 'KeyS' : 'KeyW');
-        } else {
-          await pg.keyboard.up('KeyW');
-          await pg.keyboard.up('KeyS');
-        }
-        await pg.waitForTimeout(45);
+        downA = await setKey('KeyA', downA, dx < -6);
+        downD = await setKey('KeyD', downD, dx > 6);
+        downW = await setKey('KeyW', downW, dy < -6);
+        downS = await setKey('KeyS', downS, dy > 6);
+        await pg.waitForTimeout(25);
       }
-      await pg.keyboard.up('KeyA');
-      await pg.keyboard.up('KeyD');
-      await pg.keyboard.up('KeyW');
-      await pg.keyboard.up('KeyS');
+      await setKey('KeyA', downA, false);
+      await setKey('KeyD', downD, false);
+      await setKey('KeyW', downW, false);
+      await setKey('KeyS', downS, false);
+      await pg.waitForTimeout(50);
     };
 
     // P1 (starts full 2/2: knight_sword + rusty_pistol) walks to frost_scepter (381, 400) and equips it
@@ -247,7 +250,8 @@ test.describe('Phase 4 — Co-op LAN Authoritative, Prediction/Interpolation, Hu
       return { x: it.x, y: it.y };
     });
 
-    // P2 walks to the East side of the dropped frost_scepter (away from the rack item at x=381) and presses E to pick it up
+    // Wait for 0.25s drop toss arc to finish, then P2 walks to the East side of the dropped frost_scepter (away from the rack item at x=381) and presses E to pick it up
+    await page2.waitForTimeout(300);
     await walkPlayerTo(page2, droppedPos.x + 18, droppedPos.y, 12);
     await page2.keyboard.press('KeyE');
     await page2.waitForFunction(
