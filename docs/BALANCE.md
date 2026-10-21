@@ -2,18 +2,27 @@
 
 > Lưu ý: Toàn bộ các chỉ số dưới đây được khai báo dạng data có kiểu tĩnh tại `packages/shared/src/data/` và tuyệt đối không hardcode trong logic simulation.
 
-## 1. Mục Tiêu Cân Bằng Định Lượng (Balance Targets)
+## 1. Mục Tiêu Cân Bằng Định Lượng & Hồ Sơ Bot Khóa Cứng (Spec Section 3.10 — v0.2.0)
 
-| Chỉ tiêu | Giá trị mục tiêu | Phương pháp kiểm chứng |
+### 1.1 Hồ Sơ Bot "Người Chơi Trung Bình" Khóa Cứng (`tools/bot-profile.ts`)
+- **Chính sách chống chỉnh bot cho pass (Anti-Manipulation Policy):** Hồ sơ bot `AVERAGE_PLAYER_BOT_PROFILE` được đóng băng sâu (`Object.freeze`) và commit khóa trước khi cân chỉnh thông số gameplay:
+  - **Độ chính xác ngắm (`aimAccuracy`):** `70%` (`0.70`, nằm trong khoảng `65% – 75%`).
+  - **Độ trễ phản xạ (`reactionDelaySec`):** `250ms` (`0.25s`, nằm trong khoảng `200ms – 300ms`) trước khi né telegraph / vòng xung kích / đạn địch.
+  - **Xác suất Dash né telegraph (`dashDodgeProbability`):** `65%` (`0.65`, nằm trong khoảng `60% – 70%`).
+  - **Không gian lận:** `godMode = false`, `infiniteEnergy = false`, `autoRevivePlayer = false`, không nhân hệ số giả (`encounterScale` / `roomFactor` bị loại bỏ hoàn toàn).
+  - **Tập seed cố định:** `30` seeds độc lập (`101 .. 3030`) cho mỗi cấu hình; báo cáo đồng thời **trung vị (`p50`)** và khoảng phân vị **`p10 – p90`**.
+
+### 1.2 Bảng Mục Tiêu Cân Bằng Định Lượng (Bot Trung Bình, Solo Trừ Khi Ghi Khác)
+
+| Chỉ tiêu | Giá trị mục tiêu (Spec 3.10) | Phương pháp kiểm chứng (`>= 30` runs / cấu hình) |
 |---|---|---|
-| **TTK Quái thường (Biome 1, Solo, Vũ khí khởi đầu)** | **0.5s – 1.5s** | Balance Harness (`tools/balance-harness`) |
-| **Thời gian dọn 1 Phòng chiến đấu** | **30s – 60s** | Balance Harness & E2E Bot |
-| **Thời gian hạ Boss (TTK Boss)** | **90s – 150s** | Balance Harness (1–4 người) |
-| **Độ lệch thời gian hạ Boss giữa 1 và 4 người** | **≤ ±20%** | So sánh kết quả mô phỏng 1P vs 4P |
-| **Khả năng chịu đòn của Người chơi ở Biome 1** | **6 – 10 đòn** trước khi gục | `(HP + Armor) / EnemyDamage` |
-| **Độ lệch DPS Solo giữa 3 nhân vật thiên sát thương** | **≤ ±15%** | Liệp Ưng, Lam Hỏa, Bánh Răng |
-| **Tỉ lệ thời gian hoạt động kỹ năng (Skill Uptime)** | **40% – 60%** | `Duration / Cooldown` hoặc chu kỳ hiệu lực |
-| **Độ khó tăng dần qua từng Biome** | **+25% mỗi Biome** | Biome 2 = ×1.25 Biome 1; Biome 3 = ×1.25 Biome 2 |
+| **Quái thường chết (Vũ khí khởi đầu, Biome 1)** | **0.6s – 1.5s** (`p50`) | `tools/balance-harness.ts` (`enemyTtkStats` `p10 / p50 / p90`) |
+| **Thời gian dọn 1 Phòng combat** | **35s – 70s** (`p50`) | Mô phỏng phòng multi-wave thật trên `WorldSim` (`combatRoomSecStats`) |
+| **Thời gian hạ Boss B1 / B2 / B3** | **60s – 120s** (`p50`); lệch **1P ↔ 4P ≤ ±20%** | Mô phỏng 3 Boss thật trên `WorldSim` (`bossBiomeRows`) |
+| **HP + Giáp mất mỗi phòng (Biome 1 Solo)** | **25% – 50% tổng** (`p50`) | `b1HpArmorLostPctStats` (`statsDamageTaken / (maxHp + maxArmor)`) |
+| **Tỉ lệ thắng Boss Solo & Không One-Shot** | **B1: 80–95% · B2: 70–90% · B3: 60–85%**; **Không có one-shot** (`maxSingleHit < 85% EHP`) | `bossBiomeRows` (`winRate1PPct`, `zeroOneShots`) |
+| **Biome sau so với Biome trước** | **Khó hơn ~20% – 25%** (đo thật trên `WorldSim`) | `measureBiomeDifficultyProgression` (`biomeDifficultyRows`) |
+| **Khả năng chịu đòn cơ bản & Độ lệch DPS Solo 3 NV sát thương** | **6 – 10 đòn** · Lệch **≤ ±15%** | `simulateHitsSurvived` & `measureCombatDpsAndSkillUptime` |
 
 ---
 
@@ -101,21 +110,9 @@
 
 ---
 
-## 7. Kết Quả Kiểm Chứng Tự Động (Headless Balance Harness — Phase 8 Final)
+## 7. Kết Quả Kiểm Chứng Tự Động (Headless Balance Harness — Phase 8 Baseline → Phase P11)
 
-Báo cáo chi tiết được sinh tự động tại [`docs/balance-report.md`](./balance-report.md) qua lệnh `pnpm balance` (`tools/balance-harness.ts`, chạy **291 lượt mô phỏng** ở tốc độ cao trên `WorldSim` 60Hz):
-
-- **TTK Quái thường (Vũ khí khởi đầu):** Trung bình **0.89s** (`0.59s – 1.12s`) — **✅ ĐẠT** (`0.5s – 1.5s`).
-- **Thời lượng 1 Phòng chiến đấu (1–4P):** Trung bình **47.0s** (`1P: 42.6s`, `2P: 46.7s`, `3P: 48.3s`, `4P: 50.2s`) — **✅ ĐẠT** (`30s – 60s`).
-- **Thời lượng hạ cả 3 Boss Biome 1–3 (1P vs 4P):**
-  - **Mục Vương Nấm Độc (`spore_king`):** `1P: 101.3s`, `4P: 111.6s` (Lệch 1P vs 4P: **±10.2%**) — **✅ ĐẠT**
-  - **Băng Hậu Kryssa (`kryssa_ice_queen`):** `1P: 112.7s`, `4P: 99.2s` (Lệch 1P vs 4P: **±12.0%**) — **✅ ĐẠT**
-  - **Titan Lò Rèn (`forge_titan`):** `1P: 105.1s`, `4P: 112.4s` (Lệch 1P vs 4P: **±6.9%**) — **✅ ĐẠT**
-- **5 Đội hình Co-op Synergy (2P & 4P):** `107.6s – 142.7s` (100% Thắng, hàng trăm phản ứng nguyên tố & Đồng Đội Combo) — **✅ ĐẠT**.
-- **Số đòn chịu được trước khi gục (WorldSim):** **6 – 10 đòn** (`6, 7, 9, 9, 10 đòn`) — **✅ ĐẠT** (`6 – 10 đòn`).
-- **Độ lệch DPS Solo 3 NV sát thương (`ranger`, `elementalist`, `engineer`):** **±10.6%** (`75.1`, `80.7`, `66.1 DPS`) & **5/5 Nhân vật Solo thắng Boss Biome 1 (100%)** — **✅ ĐẠT** (`≤ ±15%`).
-- **Uptime Kỹ năng chủ động trong giao tranh:** Trung bình **52.9%** (`44.4% – 57.8%`) — **✅ ĐẠT** (`40% – 60%`).
-- **Độ khó tăng giữa các Biome (Biome 1 → 2 → 3):** **+25%** mỗi Biome — **✅ ĐẠT**.
+Báo cáo chi tiết được sinh tự động tại [`docs/balance-report.md`](./balance-report.md) qua lệnh `pnpm balance` (`tools/balance-harness.ts` & `tools/bot-profile.ts`, chạy trên `WorldSim` 60Hz với 30 seeds khóa cứng).
 
 ---
 
@@ -127,7 +124,3 @@ Kiểm chứng tự động trong `packages/shared/test/phase8-soak-release.test
   - Số lượng thực thể (`enemies`, `projectiles`, `pickups`, `summons`, `skillZones`, `shockwaveRings`, `tetherBeams`) luôn được giới hạn và tái sử dụng qua Object Pool, không phình vô hạn.
   - Bộ nhớ Heap ổn định suốt 4 chặng (`18k`, `36k`, `54k`, `72k` ticks), không rò rỉ bộ nhớ.
   - Thời gian xử lý trung bình mỗi tick ổn định (`< 0.25 ms/tick`, thấp hơn `60×` ngân sách `16.67 ms/tick`), không suy giảm ở chặng cuối so với chặng đầu.
-
-
-
-

@@ -86,6 +86,17 @@ export const SCENE_GROUPS: Readonly<Record<string, readonly string[]>> = {
     'boss-b2-blizzard',
     'hub-solo',
   ],
+  p11: [
+    'p11-boss-phase-transition',
+    'p11-boss-enrage',
+    'p11-wave-overlap-challenge',
+    'boss-b1',
+    'boss-b2',
+    'boss-b3',
+    'b1-combat',
+    'b2-combat',
+    'b3-combat',
+  ],
 };
 
 export interface ShotsCliOptions {

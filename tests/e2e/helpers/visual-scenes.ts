@@ -39,12 +39,14 @@ import {
 } from './visual-scene-p9a-helpers.js';
 import { P10A_VISUAL_SCENES } from './visual-scene-p10a-helpers.js';
 import { P10B_VISUAL_SCENES } from './visual-scene-p10b-helpers.js';
+import { P11_SCENE_IDS, P11_VISUAL_SCENES } from './visual-scene-p11-helpers.js';
 
 export {
   DEFAULT_FREEZE_MASK_RECTS,
   ENVIRONMENT_SAMPLE_RECTS,
   HUB_SAMPLE_RECTS,
   installDeterministicRafGate,
+  P11_SCENE_IDS,
   SCENE_GROUPS,
   setSceneLightingAndRenderStaticFrame,
   stepDeterministicFrames,
@@ -924,4 +926,7 @@ export const VISUAL_SCENES: readonly VisualSceneDef[] = [
 
   // 12. Phase P10b FX, Elemental Combo & Clear Biome Ambient Scenes
   ...P10B_VISUAL_SCENES,
+
+  // 13. Phase P11 Boss Phase Transition, Enrage & Wave Overlap Scenes
+  ...P11_VISUAL_SCENES,
 ];

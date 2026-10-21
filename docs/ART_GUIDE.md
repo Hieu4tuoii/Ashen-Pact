@@ -39,7 +39,7 @@ Toàn bộ màu sắc bề mặt vật thể bắt buộc lấy từ `PALETTE` t
 | | `SOLAR_GOLD` | `#FACC15` | Viền vàng hoàng gia, chí mạng, định danh **P4** |
 | **Emerald / Nature / P3 (6)** | `MOSS_DARK` | `#163024` | Nền tối Biome 1 (Rừng Cổ Mục Nát) |
 | | `FOREST_SHADE` | `#1E4E38` | Bóng lá cây, da Goblin vùng tối |
-| | `GOBLIN_GREEN` | `#499F54` | Màu chủ đạo da Goblin & Mộc Linh |
+| | `GOBLIN_GREEN` | `#499F54` | Màu chủ đạo da Goblin, áo choàng Liệp Ưng, Mộc Linh & độ hiếm Uncommon |
 | | `LIME_GLOW` | `#84CC16` | Nấm phát quang, định danh **P3** |
 | | `MINT_LIGHT` | `#A7F3D0` | Highlight lá/hồi máu |
 | | `TOXIC_PURPLE` | `#9333EA` | Nguyên tố **Độc**, đầm lầy độc, Mục Vương |

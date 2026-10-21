@@ -1,8 +1,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { BIOME1_COMBAT_ENEMIES, CHARACTERS, type CharacterId } from '../packages/shared/src/index.js';
+import { CHARACTERS, type CharacterId } from '../packages/shared/src/index.js';
 import {
+  type BalanceHarnessReport,
   type BalanceReportResult,
   type BiomeProgressionRow,
   type BossBalanceRow,
@@ -12,34 +13,49 @@ import {
   type CoopSynergyTeamRow,
   MATRIX_WEAPON_IDS,
   type WeaponMatrixRow,
+  measureBiomeDifficultyProgression,
+  measureCombatDpsAndSkillUptime,
+  measureCombatRoomClearSec,
   simulateBossFight,
-  simulateCharacterDpsAndUptime,
-  simulateCombatRoomDuration,
   simulateHitsSurvived,
-  simulateStarterWeaponTtk,
+  simulateStarterWeaponTtkSamples,
 } from './balance-simulations.js';
+import { AVERAGE_PLAYER_BOT_PROFILE, computeDistributionStats } from './bot-profile.js';
 
 export * from './balance-simulations.js';
+export * from './bot-profile.js';
 
-export function runBalanceHarness(): BalanceReportResult {
-  const seeds = [101, 202, 303, 404, 505];
+export interface BalanceHarnessOptions {
+  seedsPerConfig?: number;
+}
+
+export function runBalanceHarness(options?: BalanceHarnessOptions): BalanceHarnessReport {
+  const requestedCount = options?.seedsPerConfig ?? AVERAGE_PLAYER_BOT_PROFILE.seeds.length;
+  const seeds = AVERAGE_PLAYER_BOT_PROFILE.seeds.slice(
+    0,
+    Math.max(1, Math.min(AVERAGE_PLAYER_BOT_PROFILE.seeds.length, requestedCount)),
+  );
   let totalSims = 0;
 
-  // 1 & 4 & 5 & 6: Character metrics
+  // 1. Character starter TTK, survivability, sustained DPS, skill uptime & solo boss
   const charRows: CharacterBalanceRow[] = [];
+  const allEnemyTtkSamples: number[] = [];
+
   for (const cid of CHARACTER_LIST) {
     const cDef = CHARACTERS[cid];
-    const starterTtkSec = simulateStarterWeaponTtk(cid, seeds);
-    totalSims += seeds.length * BIOME1_COMBAT_ENEMIES.length;
+    const charTtkSamples = simulateStarterWeaponTtkSamples(cid, seeds);
+    allEnemyTtkSamples.push(...charTtkSamples);
+    totalSims += charTtkSamples.length;
+    const charTtkStats = computeDistributionStats(charTtkSamples);
 
     const hitsSurvivedAvg = simulateHitsSurvived(cid);
     totalSims += 1;
 
-    const { dps, uptimePct } = simulateCharacterDpsAndUptime(cid, seeds);
+    const { dps, uptimePct } = measureCombatDpsAndSkillUptime(cid, seeds);
     totalSims += seeds.length;
 
-    const bossSolo = simulateBossFight(1, cid, seeds.slice(0, 3));
-    totalSims += 3;
+    const bossSolo = simulateBossFight(1, cid, seeds, undefined, 'spore_king');
+    totalSims += seeds.length;
 
     charRows.push({
       characterId: cid,
@@ -48,7 +64,7 @@ export function runBalanceHarness(): BalanceReportResult {
       hp: cDef.hp,
       armor: cDef.armor,
       hitsSurvivedAvg,
-      starterTtkSec,
+      starterTtkSec: charTtkStats.p50,
       soloSustainedDps: dps,
       skillUptimePct: uptimePct,
       soloBossClearRatePct: bossSolo.winRatePct,
@@ -56,14 +72,17 @@ export function runBalanceHarness(): BalanceReportResult {
     });
   }
 
-  // Character x Weapon DPS Matrix (5 characters x 5 weapon archetypes)
+  const enemyTtkStats = computeDistributionStats(allEnemyTtkSamples);
+
+  // 2. Character x Weapon DPS Matrix (5 characters x 5 weapon archetypes)
+  const matrixSeeds = seeds.slice(0, Math.min(6, seeds.length));
   const weaponMatrix: WeaponMatrixRow[] = [];
   for (const cid of CHARACTER_LIST) {
     const cDef = CHARACTERS[cid];
     const dpsByWeapon: Record<string, number> = {};
     for (const wid of MATRIX_WEAPON_IDS) {
-      dpsByWeapon[wid] = simulateCharacterDpsAndUptime(cid, seeds.slice(0, 2), wid).dps;
-      totalSims += 2;
+      dpsByWeapon[wid] = measureCombatDpsAndSkillUptime(cid, matrixSeeds, wid).dps;
+      totalSims += matrixSeeds.length;
     }
     weaponMatrix.push({
       characterId: cid,
@@ -72,27 +91,76 @@ export function runBalanceHarness(): BalanceReportResult {
     });
   }
 
-  // 2 & 3: Co-op 1P..4P Combat Room & Boss TTK
+  // 3. Co-op 1P..4P Combat Room & Boss TTK across all seeds
   const coopRows: CoopScalingRow[] = [];
-  let boss1PSec = 100;
+  const b1RoomClearAllSec: number[] = [];
+  const b1SoloHpArmorLostSamples: number[] = [];
+  let coopDownedEvents = 0;
+  let coopRoomsSimulated = 0;
+
+  let b1Boss1PRes = simulateBossFight(1, 'ranger', seeds, undefined, 'spore_king');
+  let b1Boss4PRes = b1Boss1PRes;
+
   for (const pCount of [1, 2, 3, 4] as const) {
-    const roomSec = simulateCombatRoomDuration(pCount, seeds.slice(0, 4));
-    totalSims += 4;
-    const bossRes = simulateBossFight(pCount, 'ranger', seeds.slice(0, 3));
-    totalSims += 3;
-    if (pCount === 1) boss1PSec = bossRes.avgSec;
+    const roomSecSamples: number[] = [];
+    const roomHpLostSamples: number[] = [];
+    let pCountDowned = 0;
+
+    for (const seed of seeds) {
+      const sample = measureCombatRoomClearSec(pCount, seed, 1);
+      totalSims += 1;
+      roomSecSamples.push(sample.clearSec);
+      b1RoomClearAllSec.push(sample.clearSec);
+      roomHpLostSamples.push(sample.hpAndArmorLostPct);
+      if (pCount === 1) {
+        b1SoloHpArmorLostSamples.push(sample.hpAndArmorLostPct);
+      } else {
+        coopDownedEvents += sample.downedCount;
+        coopRoomsSimulated += 1;
+      }
+      pCountDowned += sample.downedCount;
+    }
+
+    const roomStats = computeDistributionStats(roomSecSamples);
+    const hpLostStats = computeDistributionStats(roomHpLostSamples);
+
+    const bossRes =
+      pCount === 1
+        ? b1Boss1PRes
+        : simulateBossFight(pCount, 'ranger', seeds, undefined, 'spore_king');
+    if (pCount === 1) {
+      totalSims += seeds.length;
+    } else {
+      totalSims += seeds.length;
+    }
+    if (pCount === 4) {
+      b1Boss4PRes = bossRes;
+    }
+
     const deltaPct =
-      Math.round((Math.abs(bossRes.avgSec - boss1PSec) / Math.max(1, boss1PSec)) * 1000) / 10;
+      Math.round(
+        (Math.abs(bossRes.avgSec - b1Boss1PRes.avgSec) / Math.max(1, b1Boss1PRes.avgSec)) * 1000,
+      ) / 10;
+
     coopRows.push({
       playerCount: pCount,
-      combatRoomAvgSec: roomSec,
+      combatRoomAvgSec: roomStats.p50,
+      combatRoomStats: roomStats,
+      hpArmorLostPctAvg: hpLostStats.p50,
+      downedPerRoomRate: Math.round((pCountDowned / Math.max(1, seeds.length)) * 100) / 100,
       bossKillAvgSec: bossRes.avgSec,
+      bossKillStats: bossRes.durationStats,
       bossDeltaVs1PPct: deltaPct,
     });
   }
 
-  // All 3 Biome Bosses (Spore King, Kryssa Ice Queen, Forge Titan) 1P vs 4P TTK verification
-  const bossDefs: Array<{
+  const combatRoomSecStats = computeDistributionStats(b1RoomClearAllSec);
+  const b1HpArmorLostPctStats = computeDistributionStats(b1SoloHpArmorLostSamples);
+  const coopDownedPerRoomRate =
+    Math.round((coopDownedEvents / Math.max(1, coopRoomsSimulated)) * 100) / 100;
+
+  // 4. All 3 Biome Bosses (Spore King, Kryssa Ice Queen, Forge Titan) 1P vs 4P across all seeds
+  const bossDefs: ReadonlyArray<{
     bossId: 'spore_king' | 'kryssa_ice_queen' | 'forge_titan';
     biome: 1 | 2 | 3;
     nameVi: string;
@@ -101,38 +169,43 @@ export function runBalanceHarness(): BalanceReportResult {
     { bossId: 'kryssa_ice_queen', biome: 2, nameVi: 'Băng Hậu Kryssa (Biome 2)' },
     { bossId: 'forge_titan', biome: 3, nameVi: 'Titan Lò Rèn (Biome 3)' },
   ];
+
   const bosses: BossBalanceRow[] = [];
   for (const bInfo of bossDefs) {
-    if (bInfo.bossId === 'spore_king') {
-      bosses.push({
-        bossId: bInfo.bossId,
-        biome: bInfo.biome,
-        nameVi: bInfo.nameVi,
-        avg1PSec: coopRows[0]!.bossKillAvgSec,
-        avg4PSec: coopRows[3]!.bossKillAvgSec,
-        delta1Pvs4PPct: coopRows[3]!.bossDeltaVs1PPct,
-        winRatePct: 100,
-      });
-      continue;
+    const r1 =
+      bInfo.bossId === 'spore_king'
+        ? b1Boss1PRes
+        : simulateBossFight(1, 'ranger', seeds, undefined, bInfo.bossId);
+    const r4 =
+      bInfo.bossId === 'spore_king'
+        ? b1Boss4PRes
+        : simulateBossFight(4, 'ranger', seeds, undefined, bInfo.bossId);
+    if (bInfo.bossId !== 'spore_king') {
+      totalSims += seeds.length * 2;
     }
-    const r1 = simulateBossFight(1, 'ranger', seeds.slice(0, 2), undefined, bInfo.bossId);
-    const r4 = simulateBossFight(4, 'ranger', seeds.slice(0, 2), undefined, bInfo.bossId);
-    totalSims += 4;
     const delta =
       Math.round((Math.abs(r4.avgSec - r1.avgSec) / Math.max(1, r1.avgSec)) * 1000) / 10;
+    const maxHitFrac = Math.max(r1.maxSingleHitFraction, r4.maxSingleHitFraction);
     bosses.push({
       bossId: bInfo.bossId,
       biome: bInfo.biome,
       nameVi: bInfo.nameVi,
       avg1PSec: r1.avgSec,
       avg4PSec: r4.avgSec,
+      stats1PSec: r1.durationStats,
+      stats4PSec: r4.durationStats,
       delta1Pvs4PPct: delta,
-      winRatePct: Math.min(r1.winRatePct, r4.winRatePct),
+      winRate1PPct: r1.winRatePct,
+      winRate4PPct: r4.winRatePct,
+      winRatePct: r1.winRatePct,
+      maxSingleHitFraction: maxHitFrac,
+      zeroOneShots: r1.zeroOneShots && r4.zeroOneShots,
     });
   }
 
-  // Co-op 2P & 4P Team Synergy Compositions
-  const coopTeamConfigs: Array<{
+  // 5. Co-op 2P & 4P Team Synergy Compositions
+  const synergySeeds = seeds.slice(0, Math.min(10, seeds.length));
+  const coopTeamConfigs: ReadonlyArray<{
     label: string;
     playerCount: 2 | 4;
     roster: CharacterId[];
@@ -166,48 +239,27 @@ export function runBalanceHarness(): BalanceReportResult {
 
   const coopSynergyRows: CoopSynergyTeamRow[] = [];
   for (const cfg of coopTeamConfigs) {
-    const res = simulateBossFight(cfg.playerCount, cfg.roster[0]!, seeds.slice(0, 2), cfg.roster);
-    totalSims += 2;
+    const res = simulateBossFight(cfg.playerCount, cfg.roster[0]!, synergySeeds, cfg.roster);
+    totalSims += synergySeeds.length;
     coopSynergyRows.push({
       label: cfg.label,
       playerCount: cfg.playerCount,
       killTimeSec: res.avgSec,
       reactionsTriggered: res.reactionsTriggered,
       teamCombos: res.teamCombos,
-      won: res.winRatePct === 100,
+      won: res.winRatePct >= 70,
     });
   }
 
-  // 7: Biome 1 -> 2 -> 3 Progression (+25% per biome)
-  const biomes: BiomeProgressionRow[] = [
-    {
-      biome: 1,
-      nameVi: 'Biome 1 — Rừng Cổ Mục Nát',
-      difficultyIndex: 1.0,
-      stepIncreasePct: 0,
-    },
-    {
-      biome: 2,
-      nameVi: 'Biome 2 — Hầm Băng Vĩnh Cửu',
-      difficultyIndex: 1.25,
-      stepIncreasePct: 25.0,
-    },
-    {
-      biome: 3,
-      nameVi: 'Biome 3 — Lò Rèn Dung Nham',
-      difficultyIndex: 1.5625,
-      stepIncreasePct: 25.0,
-    },
-  ];
+  // 6. Real Biome 1 -> 2 -> 3 Difficulty Progression (measured in WorldSim)
+  const biomes = measureBiomeDifficultyProgression(seeds);
+  totalSims += Math.min(seeds.length, 10) * 3;
 
-  const ttkValues = charRows.map((c) => c.starterTtkSec);
-  const avgEnemyTtkSec =
-    Math.round((ttkValues.reduce((a, b) => a + b, 0) / ttkValues.length) * 100) / 100;
-  const minEnemyTtkSec = Math.min(...ttkValues);
-  const maxEnemyTtkSec = Math.max(...ttkValues);
+  const avgEnemyTtkSec = enemyTtkStats.p50;
+  const minEnemyTtkSec = enemyTtkStats.p10;
+  const maxEnemyTtkSec = enemyTtkStats.p90;
 
-  const combatRoomAvgSec =
-    Math.round((coopRows.reduce((a, b) => a + b.combatRoomAvgSec, 0) / coopRows.length) * 10) / 10;
+  const combatRoomAvgSec = combatRoomSecStats.p50;
   const boss1PAvgSec = coopRows[0]!.bossKillAvgSec;
   const boss4PAvgSec = coopRows[3]!.bossKillAvgSec;
   const boss1Pvs4PDeltaPct = coopRows[3]!.bossDeltaVs1PPct;
@@ -216,7 +268,6 @@ export function runBalanceHarness(): BalanceReportResult {
   const minHitsSurvived = Math.min(...hitsValues);
   const maxHitsSurvived = Math.max(...hitsValues);
 
-  // 3 damage-focused characters: Ranger, Elementalist, Engineer
   const dmgChars = charRows.filter(
     (c) =>
       c.characterId === 'ranger' ||
@@ -224,46 +275,73 @@ export function runBalanceHarness(): BalanceReportResult {
       c.characterId === 'engineer',
   );
   const dpsVals = dmgChars.map((c) => c.soloSustainedDps);
-  const meanDps = dpsVals.reduce((a, b) => a + b, 0) / dpsVals.length;
+  const meanDps = dpsVals.reduce((a, b) => a + b, 0) / Math.max(1, dpsVals.length);
   const maxDpsDiffPct =
     Math.round(
       (Math.max(...dpsVals.map((v) => Math.abs(v - meanDps))) / Math.max(1, meanDps)) * 1000,
     ) / 10;
 
   const all5SoloBossWin = charRows.every(
-    (c) => c.soloBossClearRatePct === 100 && c.soloBossAvgSec >= 90 && c.soloBossAvgSec <= 150,
+    (c) =>
+      c.soloBossClearRatePct >= 80 &&
+      c.soloBossClearRatePct <= 95 &&
+      c.soloBossAvgSec >= 60 &&
+      c.soloBossAvgSec <= 120,
   );
-  const all3BossesBalanced = bosses.every(
-    (b) =>
-      b.winRatePct === 100 &&
-      b.avg1PSec >= 90 &&
-      b.avg1PSec <= 150 &&
-      b.avg4PSec >= 90 &&
-      b.avg4PSec <= 150 &&
-      b.delta1Pvs4PPct <= 20,
-  );
+
+  const b1Row = bosses[0]!;
+  const b2Row = bosses[1]!;
+  const b3Row = bosses[2]!;
+  const all3BossesBalanced =
+    bosses.every(
+      (b) =>
+        b.avg1PSec >= 60 &&
+        b.avg1PSec <= 120 &&
+        b.avg4PSec >= 60 &&
+        b.avg4PSec <= 120 &&
+        b.delta1Pvs4PPct <= 20 &&
+        b.zeroOneShots,
+    ) &&
+    b1Row.winRate1PPct >= 80 &&
+    b1Row.winRate1PPct <= 95 &&
+    b2Row.winRate1PPct >= 70 &&
+    b2Row.winRate1PPct <= 90 &&
+    b3Row.winRate1PPct >= 60 &&
+    b3Row.winRate1PPct <= 85;
+
   const avgSkillUptimePct =
     Math.round((charRows.reduce((a, b) => a + b.skillUptimePct, 0) / charRows.length) * 10) / 10;
 
+  const biome2IncreasePct = biomes[1]?.stepIncreasePct ?? 0;
+  const biome3IncreasePct = biomes[2]?.stepIncreasePct ?? 0;
+  const biomeProgressionPassed =
+    biome2IncreasePct >= 20 &&
+    biome2IncreasePct <= 25 &&
+    biome3IncreasePct >= 20 &&
+    biome3IncreasePct <= 25;
+
   const allTargetsPassed =
-    minEnemyTtkSec >= 0.5 &&
-    maxEnemyTtkSec <= 1.5 &&
-    combatRoomAvgSec >= 30 &&
-    combatRoomAvgSec <= 60 &&
-    boss1PAvgSec >= 90 &&
-    boss1PAvgSec <= 150 &&
-    boss4PAvgSec >= 90 &&
-    boss4PAvgSec <= 150 &&
-    boss1Pvs4PDeltaPct <= 20 &&
+    enemyTtkStats.p50 >= 0.6 &&
+    enemyTtkStats.p50 <= 1.5 &&
+    combatRoomSecStats.p50 >= 35 &&
+    combatRoomSecStats.p50 <= 70 &&
+    b1HpArmorLostPctStats.p50 >= 25 &&
+    b1HpArmorLostPctStats.p50 <= 50 &&
     all3BossesBalanced &&
+    biomeProgressionPassed &&
     minHitsSurvived >= 6 &&
     maxHitsSurvived <= 10 &&
-    maxDpsDiffPct <= 15 &&
-    all5SoloBossWin &&
-    charRows.every((c) => c.skillUptimePct >= 40 && c.skillUptimePct <= 60);
+    maxDpsDiffPct <= 15;
 
   return {
     totalSimulationsRun: totalSims,
+    seedsUsed: seeds,
+    enemyTtkStats,
+    combatRoomSecStats,
+    b1HpArmorLostPctStats,
+    coopDownedPerRoomRate,
+    bossBiomeRows: bosses,
+    biomeDifficultyRows: biomes,
     avgEnemyTtkSec,
     minEnemyTtkSec,
     maxEnemyTtkSec,
@@ -276,8 +354,8 @@ export function runBalanceHarness(): BalanceReportResult {
     dps3CharSpreadPct: maxDpsDiffPct,
     all5SoloBossWin,
     avgSkillUptimePct,
-    biome2IncreasePct: 25.0,
-    biome3IncreasePct: 25.0,
+    biome2IncreasePct,
+    biome3IncreasePct,
     characters: charRows,
     weaponMatrix,
     coopRows,
@@ -288,31 +366,34 @@ export function runBalanceHarness(): BalanceReportResult {
   };
 }
 
-export function formatBalanceReportMarkdown(res: BalanceReportResult): string {
+export function formatMarkdownReport(res: BalanceHarnessReport): string {
   const passIcon = (ok: boolean) => (ok ? '✅ ĐẠT' : '❌ CHƯA ĐẠT');
+  const b1Boss = res.bossBiomeRows[0]!;
+  const b2Boss = res.bossBiomeRows[1]!;
+  const b3Boss = res.bossBiomeRows[2]!;
 
   const lines: string[] = [
-    '# BÁO CÁO MÔ PHỎNG CÂN BẰNG TỰ ĐỘNG (BALANCE REPORT) — ASHEN PACT',
+    '# BÁO CÁO MÔ PHỎNG CÂN BẰNG TỰ ĐỘNG (BALANCE REPORT) — ASHEN PACT (v0.2.0 P11)',
     '',
-    `> Sinh tự động bởi công cụ Headless Balance Harness (\`tools/balance-harness.ts\`) với **${res.totalSimulationsRun} lượt mô phỏng** ở tốc độ cao trên \`WorldSim\` (60Hz cố định).`,
+    `> Sinh tự động bởi công cụ Headless Balance Harness (\`tools/balance-harness.ts\`) với **${res.totalSimulationsRun} lượt mô phỏng** trên \`WorldSim\` (60Hz cố định) sử dụng hồ sơ bot khóa cứng \`AVERAGE_PLAYER_BOT_PROFILE\` (\`tools/bot-profile.ts\`: \`aimAccuracy = ${AVERAGE_PLAYER_BOT_PROFILE.aimAccuracy * 100}%\`, \`reactionDelaySec = ${AVERAGE_PLAYER_BOT_PROFILE.reactionDelaySec}s\`, \`dashDodgeProbability = ${AVERAGE_PLAYER_BOT_PROFILE.dashDodgeProbability * 100}%\`, \`godMode = false\`, **${res.seedsUsed.length} seeds**).`,
     '',
-    '## 1. Bảng Tổng Hợp 7 Chỉ Tiêu Cân Bằng Định Lượng (Mục 7.4)',
+    '## 1. Bảng Tổng Hợp Mục Tiêu Cân Bằng Định Lượng (Spec Section 3.10)',
     '',
-    '| # | Chỉ tiêu cân bằng | Mục tiêu thiết kế | Kết quả thực đo | Trạng thái |',
+    '| # | Chỉ tiêu cân bằng (Spec 3.10) | Mục tiêu thiết kế | Trung vị `p50` (`p10 – p90`) | Trạng thái |',
     '|---:|---|---|---|---|',
-    `| 1 | **TTK Quái thường (Biome 1, Vũ khí khởi đầu)** | \`0.5s – 1.5s\` | **TB ${res.avgEnemyTtkSec}s** (\`${res.minEnemyTtkSec}s – ${res.maxEnemyTtkSec}s\`) | ${passIcon(res.minEnemyTtkSec >= 0.5 && res.maxEnemyTtkSec <= 1.5)} |`,
-    `| 2 | **Thời lượng 1 Phòng chiến đấu (1–4P)** | \`30s – 60s\` | **TB ${res.combatRoomAvgSec}s** | ${passIcon(res.combatRoomAvgSec >= 30 && res.combatRoomAvgSec <= 60)} |`,
-    `| 3 | **Thời lượng đánh Boss 3 Biome (1P vs 4P)** | \`90s – 150s\` (Lệch \`≤ ±20%\`) | **1P: ${res.boss1PAvgSec}s · 4P: ${res.boss4PAvgSec}s** (Lệch \`±${res.boss1Pvs4PDeltaPct}%\`) | ${passIcon(res.bosses.every((b) => b.avg1PSec >= 90 && b.avg1PSec <= 150 && b.avg4PSec >= 90 && b.avg4PSec <= 150 && b.delta1Pvs4PPct <= 20))} |`,
-    `| 4 | **Số đòn chịu được trước khi gục (HP + Giáp)** | \`6 – 10 đòn\` | **\`${res.minHitsSurvived} – ${res.maxHitsSurvived} đòn\`** | ${passIcon(res.minHitsSurvived >= 6 && res.maxHitsSurvived <= 10)} |`,
-    `| 5 | **Độ lệch DPS Solo 3 NV sát thương & Solo thắng Boss** | Lệch \`≤ ±15%\` · 5/5 thắng Boss | **Lệch \`±${res.dps3CharSpreadPct}%\` · 5/5 Solo Thắng (100%)** | ${passIcon(res.dps3CharSpreadPct <= 15 && res.all5SoloBossWin)} |`,
-    `| 6 | **Uptime Kỹ năng chủ động trong giao tranh** | \`40% – 60%\` | **TB ${res.avgSkillUptimePct}%** | ${passIcon(res.characters.every((c) => c.skillUptimePct >= 40 && c.skillUptimePct <= 60))} |`,
-    `| 7 | **Độ khó tăng giữa các Biome (Biome 1 → 2 → 3)** | \`+25%\` mỗi Biome | **Biome 2 \`+${res.biome2IncreasePct}%\` · Biome 3 \`+${res.biome3IncreasePct}%\`** | ${passIcon(res.biome2IncreasePct === 25 && res.biome3IncreasePct === 25)} |`,
+    `| 1 | **TTK Quái thường (Biome 1, Vũ khí khởi đầu)** | \`0.6s – 1.5s\` | **p50 ${res.enemyTtkStats.p50}s** (\`${res.enemyTtkStats.p10}s – ${res.enemyTtkStats.p90}s\`) | ${passIcon(res.enemyTtkStats.p50 >= 0.6 && res.enemyTtkStats.p50 <= 1.5)} |`,
+    `| 2 | **Thời lượng Phòng combat (1–4P)** | \`35s – 70s\` | **p50 ${res.combatRoomSecStats.p50}s** (\`${res.combatRoomSecStats.p10}s – ${res.combatRoomSecStats.p90}s\`) | ${passIcon(res.combatRoomSecStats.p50 >= 35 && res.combatRoomSecStats.p50 <= 70)} |`,
+    `| 3 | **HP + Giáp mất mỗi phòng (Biome 1 Solo)** | \`25% – 50% tổng\` | **p50 ${res.b1HpArmorLostPctStats.p50}%** (\`${res.b1HpArmorLostPctStats.p10}% – ${res.b1HpArmorLostPctStats.p90}%\`) | ${passIcon(res.b1HpArmorLostPctStats.p50 >= 25 && res.b1HpArmorLostPctStats.p50 <= 50)} |`,
+    `| 4 | **Thời lượng đánh Boss B1 / B2 / B3 (1P vs 4P)** | \`60s – 120s\` (Lệch \`≤ ±20%\`) | **B1: ${b1Boss.avg1PSec}s/${b1Boss.avg4PSec}s · B2: ${b2Boss.avg1PSec}s/${b2Boss.avg4PSec}s · B3: ${b3Boss.avg1PSec}s/${b3Boss.avg4PSec}s** | ${passIcon(res.bossBiomeRows.every((b) => b.avg1PSec >= 60 && b.avg1PSec <= 120 && b.avg4PSec >= 60 && b.avg4PSec <= 120 && b.delta1Pvs4PPct <= 20))} |`,
+    `| 5 | **Tỉ lệ thắng Boss Solo & Không One-Shot** | \`B1: 80–95%, B2: 70–90%, B3: 60–85%\` | **B1: ${b1Boss.winRate1PPct}% · B2: ${b2Boss.winRate1PPct}% · B3: ${b3Boss.winRate1PPct}%** (Zero One-Shot: \`${res.bossBiomeRows.every((b) => b.zeroOneShots)}\`) | ${passIcon(b1Boss.winRate1PPct >= 80 && b1Boss.winRate1PPct <= 95 && b2Boss.winRate1PPct >= 70 && b2Boss.winRate1PPct <= 90 && b3Boss.winRate1PPct >= 60 && b3Boss.winRate1PPct <= 85 && res.bossBiomeRows.every((b) => b.zeroOneShots))} |`,
+    `| 6 | **Độ khó tăng giữa các Biome (Đo thật WorldSim)** | \`+20% – 25%\` mỗi Biome | **Biome 2 \`+${res.biome2IncreasePct}%\` · Biome 3 \`+${res.biome3IncreasePct}%\`** | ${passIcon(res.biome2IncreasePct >= 20 && res.biome2IncreasePct <= 25 && res.biome3IncreasePct >= 20 && res.biome3IncreasePct <= 25)} |`,
+    `| 7 | **Chịu đòn cơ bản & Độ lệch DPS 3 NV sát thương** | \`6 – 10 đòn\` · Lệch \`≤ ±15%\` | **\`${res.minHitsSurvived} – ${res.maxHitsSurvived} đòn\` · Lệch \`±${res.dps3CharSpreadPct}%\`** | ${passIcon(res.minHitsSurvived >= 6 && res.maxHitsSurvived <= 10 && res.dps3CharSpreadPct <= 15)} |`,
     '',
     '---',
     '',
     '## 2. Thống Kê Chi Tiết 5 Nhân Vật (Solo & Kỹ Năng)',
     '',
-    '| Nhân vật | Vai trò | HP / Giáp | Chịu đòn (WorldSim) | TTK Quái thường | DPS Giao tranh | Uptime Kỹ năng | Solo Boss Biome 1 (Cùng HP) |',
+    '| Nhân vật | Vai trò | HP / Giáp | Chịu đòn (WorldSim) | TTK Quái thường (p50) | DPS Giao tranh | Uptime Kỹ năng | Solo Boss Biome 1 |',
     '|---|---|---:|---:|---:|---:|---:|---|',
     ...res.characters.map(
       (c) =>
@@ -334,27 +415,27 @@ export function formatBalanceReportMarkdown(res: BalanceReportResult): string {
     '',
     '## 4. Thống Kê Co-op Scaling (1–4 Người Chơi) & 3 Boss Cuối Màn',
     '',
-    '| Số người chơi | Thời lượng Phòng chiến đấu (TB) | Thời lượng hạ Boss Biome 1 (TB) | Độ lệch thời gian hạ Boss so với 1P |',
-    '|---:|---:|---:|---:|',
+    '| Số người chơi | Thời lượng Phòng combat `p50` (`p10–p90`) | HP+Giáp mất TB | Tỉ lệ gục / phòng | Thời lượng hạ Boss B1 `p50` (`p10–p90`) | Lệch so với 1P |',
+    '|---:|---|---:|---:|---|---:|',
     ...res.coopRows.map(
       (r) =>
-        `| **${r.playerCount} người (${r.playerCount}P)** | **${r.combatRoomAvgSec}s** | **${r.bossKillAvgSec}s** | **±${r.bossDeltaVs1PPct}%** |`,
+        `| **${r.playerCount}P** | **${r.combatRoomStats.p50}s** (\`${r.combatRoomStats.p10}s–${r.combatRoomStats.p90}s\`) | **${r.hpArmorLostPctAvg}%** | **${r.downedPerRoomRate}** | **${r.bossKillStats.p50}s** (\`${r.bossKillStats.p10}s–${r.bossKillStats.p90}s\`) | **±${r.bossDeltaVs1PPct}%** |`,
     ),
     '',
     '### Bảng Cân Bằng 3 Boss Cuối Màn (Biome 1, Biome 2, Biome 3)',
     '',
-    '| Biome | Boss | Thời gian hạ 1P | Thời gian hạ 4P | Độ lệch 1P vs 4P | Tỉ lệ thắng | Trạng thái |',
-    '|---:|---|---:|---:|---:|---:|:---:|',
-    ...res.bosses.map(
+    '| Biome | Boss | 1P `p50` (`p10–p90`) | 4P `p50` (`p10–p90`) | Lệch 1P↔4P | Tỉ lệ thắng Solo | Max Hit / EHP | Trạng thái |',
+    '|---:|---|---|---|---:|---:|---:|:---:|',
+    ...res.bossBiomeRows.map(
       (b) =>
-        `| **Biome ${b.biome}** | **${b.nameVi}** (\`${b.bossId}\`) | **${b.avg1PSec}s** | **${b.avg4PSec}s** | **±${b.delta1Pvs4PPct}%** | **${b.winRatePct}%** | ${passIcon(b.avg1PSec >= 90 && b.avg1PSec <= 150 && b.avg4PSec >= 90 && b.avg4PSec <= 150 && b.delta1Pvs4PPct <= 20)} |`,
+        `| **Biome ${b.biome}** | **${b.nameVi}** (\`${b.bossId}\`) | **${b.stats1PSec.p50}s** (\`${b.stats1PSec.p10}s–${b.stats1PSec.p90}s\`) | **${b.stats4PSec.p50}s** (\`${b.stats4PSec.p10}s–${b.stats4PSec.p90}s\`) | **±${b.delta1Pvs4PPct}%** | **${b.winRate1PPct}%** | \`${Math.round(b.maxSingleHitFraction * 100)}%\` | ${passIcon(b.avg1PSec >= 60 && b.avg1PSec <= 120 && b.avg4PSec >= 60 && b.avg4PSec <= 120 && b.delta1Pvs4PPct <= 20 && b.zeroOneShots)} |`,
     ),
     '',
     '---',
     '',
     '## 5. Mô Phỏng Đội Hình Phối Hợp Co-op 2P & 4P (Synergy & Đồng Đội Combo)',
     '',
-    '| Đội hình Co-op | Số người | Thời gian hạ Boss | Phản ứng Nguyên tố | Đồng Đội Combo (+15 Năng lượng) | Kết quả |',
+    '| Đội hình Co-op | Số người | Thời gian hạ Boss (p50) | Phản ứng Nguyên tố | Đồng Đội Combo (+15 NL) | Kết quả |',
     '|---|---:|---:|---:|---:|:---:|',
     ...res.coopSynergyRows.map(
       (t) =>
@@ -363,21 +444,23 @@ export function formatBalanceReportMarkdown(res: BalanceReportResult): string {
     '',
     '---',
     '',
-    '## 6. Độ Khó Tăng Dần Qua 3 Biome',
+    '## 6. Độ Khó Tăng Dần Qua 3 Biome (Đo Thực Tế Trên WorldSim)',
     '',
-    '| Biome | Tên Biome | Chỉ số độ khó chuẩn hóa | Mức tăng so với Biome trước |',
-    '|---:|---|---:|---:|',
-    ...res.biomes.map(
+    '| Biome | Tên Biome | EHP Quái TB | Thời gian dọn phòng | HP+Giáp mất TB | Chỉ số độ khó | Tăng so với Biome trước |',
+    '|---:|---|---:|---:|---:|---:|---:|',
+    ...res.biomeDifficultyRows.map(
       (b) =>
-        `| **Biome ${b.biome}** | ${b.nameVi} | \`×${b.difficultyIndex.toFixed(2)}\` | ${b.biome === 1 ? 'Cơ sở (Baseline)' : `**+${b.stepIncreasePct.toFixed(0)}%**`} |`,
+        `| **Biome ${b.biome}** | ${b.nameVi} | \`${b.measuredWaveEhp}\` | \`${b.measuredRoomClearSec}s\` | \`${b.measuredHpArmorLostPct}%\` | \`×${b.difficultyIndex.toFixed(2)}\` | ${b.biome === 1 ? 'Cơ sở (Baseline)' : `**+${b.stepIncreasePct.toFixed(1)}%**`} |`,
     ),
     '',
-    `## 7. Kết Luận Kiểm Chứng: ${res.allTargetsPassed ? '✅ ĐẠT 100% TẤT CẢ MỤC TIÊU CÂN BẰNG (7/7)' : '❌ CẦN ĐIỀU CHỈNH'}`,
+    `## 7. Kết Luận Kiểm Chứng: ${res.allTargetsPassed ? '✅ ĐẠT 100% TẤT CẢ MỤC TIÊU CÂN BẰNG SPEC 3.10' : '❌ CHƯA ĐẠT (CẦN TUNE DATA Ở BƯỚC 2)'}`,
     '',
   ];
 
   return lines.join('\n');
 }
+
+export const formatBalanceReportMarkdown = formatMarkdownReport;
 
 const isMain =
   process.argv[1] &&
@@ -385,7 +468,7 @@ const isMain =
 
 if (isMain) {
   const result = runBalanceHarness();
-  const markdown = formatBalanceReportMarkdown(result);
+  const markdown = formatMarkdownReport(result);
   const outPath = path.resolve(
     path.dirname(fileURLToPath(import.meta.url)),
     '../docs/balance-report.md',

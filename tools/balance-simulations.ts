@@ -1,14 +1,23 @@
 import {
   BIOME1_COMBAT_ENEMIES,
+  BIOME2_COMBAT_ENEMIES,
+  BIOME3_COMBAT_ENEMIES,
   CHARACTERS,
   type CharacterId,
-  COOP_SCALING,
   ENEMIES,
   INPUT_BUTTON,
   SIM_STEP_SEC,
   WEAPONS,
   WorldSim,
+  clamp,
 } from '../packages/shared/src/index.js';
+import {
+  AVERAGE_PLAYER_BOT_PROFILE,
+  type DistributionStats,
+  computeDistributionStats,
+  createBotBrainState,
+  stepHonestPlayerBot,
+} from './bot-profile.js';
 
 export interface CharacterBalanceRow {
   characterId: CharacterId;
@@ -27,7 +36,11 @@ export interface CharacterBalanceRow {
 export interface CoopScalingRow {
   playerCount: 1 | 2 | 3 | 4;
   combatRoomAvgSec: number;
+  combatRoomStats: DistributionStats;
+  hpArmorLostPctAvg: number;
+  downedPerRoomRate: number;
   bossKillAvgSec: number;
+  bossKillStats: DistributionStats;
   bossDeltaVs1PPct: number;
 }
 
@@ -36,6 +49,9 @@ export interface BiomeProgressionRow {
   nameVi: string;
   difficultyIndex: number;
   stepIncreasePct: number;
+  measuredWaveEhp: number;
+  measuredRoomClearSec: number;
+  measuredHpArmorLostPct: number;
 }
 
 export interface WeaponMatrixRow {
@@ -59,12 +75,26 @@ export interface BossBalanceRow {
   nameVi: string;
   avg1PSec: number;
   avg4PSec: number;
+  stats1PSec: DistributionStats;
+  stats4PSec: DistributionStats;
   delta1Pvs4PPct: number;
+  winRate1PPct: number;
+  winRate4PPct: number;
   winRatePct: number;
+  maxSingleHitFraction: number;
+  zeroOneShots: boolean;
 }
 
-export interface BalanceReportResult {
+export interface BalanceHarnessReport {
   totalSimulationsRun: number;
+  seedsUsed: readonly number[];
+  enemyTtkStats: DistributionStats;
+  combatRoomSecStats: DistributionStats;
+  b1HpArmorLostPctStats: DistributionStats;
+  coopDownedPerRoomRate: number;
+  bossBiomeRows: BossBalanceRow[];
+  biomeDifficultyRows: BiomeProgressionRow[];
+  // Legacy & summary properties preserved for compatibility
   avgEnemyTtkSec: number;
   minEnemyTtkSec: number;
   maxEnemyTtkSec: number;
@@ -87,6 +117,8 @@ export interface BalanceReportResult {
   bosses: BossBalanceRow[];
   allTargetsPassed: boolean;
 }
+
+export type BalanceReportResult = BalanceHarnessReport;
 
 export const CHARACTER_LIST: readonly CharacterId[] = [
   'vanguard',
@@ -112,20 +144,63 @@ export const CHARACTER_SIGNATURE_BUFF: Record<CharacterId, string> = {
   engineer: 'engineer_twin_turrets',
 };
 
+const BIOME1_PRIMARY_WEAPON: Record<CharacterId, string> = {
+  vanguard: 'knight_sword',
+  ranger: 'tesla_carbine',
+  elementalist: 'apprentice_staff',
+  druid: 'tesla_carbine',
+  engineer: 'tesla_carbine',
+};
+
+const BIOME2_PRIMARY_WEAPON: Record<CharacterId, string> = {
+  vanguard: 'focus_laser',
+  ranger: 'focus_laser',
+  elementalist: 'focus_laser',
+  druid: 'seed_gun',
+  engineer: 'focus_laser',
+};
+
+const BIOME3_PRIMARY_WEAPON: Record<CharacterId, string> = {
+  vanguard: 'void_staff',
+  ranger: 'void_staff',
+  elementalist: 'tether_staff',
+  druid: 'void_staff',
+  engineer: 'void_staff',
+};
+
+export interface CombatRoomClearSample {
+  clearSec: number;
+  hpAndArmorLostPct: number;
+  downedCount: number;
+  cleared: boolean;
+}
+
+export interface BossEncounterSample {
+  won: boolean;
+  durationSec: number;
+  elementalReactions: number;
+  teamCombos: number;
+  maxSingleHitFraction: number;
+  downedCount: number;
+}
+
 /**
  * 1. Simulates Starter Weapon Time-To-Kill (TTK) against all 6 Biome 1 normal enemy types
- * including initial target acquisition / draw window (0.18s).
+ * using the locked AVERAGE_PLAYER_BOT_PROFILE reaction window (0.25s) and aimAccuracy (70%).
  */
-export function simulateStarterWeaponTtk(charId: CharacterId, seeds: readonly number[]): number {
+export function simulateStarterWeaponTtkSamples(
+  charId: CharacterId,
+  seeds: readonly number[],
+): number[] {
   const cDef = CHARACTERS[charId];
   const weapon = WEAPONS[cDef.starterWeaponId]!;
-  let totalSec = 0;
-  let count = 0;
+  const samples: number[] = [];
 
   for (const seed of seeds) {
     for (const enemyDefId of BIOME1_COMBAT_ENEMIES) {
       const sim = new WorldSim({
         seed,
+        autoRevivePlayer: false,
         spawnInitialWave: false,
         includeTrainingDummy: false,
         includeProps: false,
@@ -133,29 +208,35 @@ export function simulateStarterWeaponTtk(charId: CharacterId, seeds: readonly nu
       });
       sim.selectCharacter(sim.player.id, charId);
       const p = sim.player;
+      p.godMode = false;
       p.x = 360;
       p.y = 320;
-      p.energy = p.maxEnergy;
 
-      const dist = weapon.category === 'melee' ? 30 : 120;
+      const dist = weapon.category === 'melee' ? 32 : 84;
       const e = sim.spawnEnemy(enemyDefId, p.x + dist, p.y, true);
       e.vx = 0;
       e.vy = 0;
+      e.spawnWarmupTimer = 0;
 
-      // 11 ticks (0.18s) human target acquisition before first trigger pull
-      let ticks = 11;
+      // Reaction delay from AVERAGE_PLAYER_BOT_PROFILE (0.25s = 15 ticks at 60Hz)
+      const reactionTicks = Math.round(AVERAGE_PLAYER_BOT_PROFILE.reactionDelaySec / SIM_STEP_SEC);
+      let ticks = reactionTicks;
       const maxTicks = 60 * 6;
+      const brain = createBotBrainState(p.id, seed + e.id * 17);
+
       while (e.hp > 0 && ticks < maxTicks) {
-        const ang = Math.atan2(e.y - p.y, e.x - p.x);
-        const d = Math.hypot(e.x - p.x, e.y - p.y);
-        const moveX = weapon.category === 'melee' && d > 32 ? Math.cos(ang) : 0;
-        const moveY = weapon.category === 'melee' && d > 32 ? Math.sin(ang) : 0;
+        const pkt = stepHonestPlayerBot(
+          sim,
+          p,
+          brain,
+          AVERAGE_PLAYER_BOT_PROFILE,
+          SIM_STEP_SEC,
+          ticks + 1,
+        );
         sim.setPlayerInput({
-          seq: ticks + 1,
-          tick: ticks + 1,
-          moveX,
-          moveY,
-          aimAngle: ang,
+          ...pkt,
+          moveX: weapon.category === 'melee' && Math.hypot(e.x - p.x, e.y - p.y) > 32 ? 1 : 0,
+          moveY: 0,
           buttons: INPUT_BUTTON.FIRE,
         });
         sim.step(SIM_STEP_SEC);
@@ -163,12 +244,18 @@ export function simulateStarterWeaponTtk(charId: CharacterId, seeds: readonly nu
         e.y = p.y;
         ticks += 1;
       }
-      totalSec += ticks * SIM_STEP_SEC;
-      count += 1;
+      samples.push(Math.round(ticks * SIM_STEP_SEC * 100) / 100);
     }
   }
 
-  return Math.round((totalSec / Math.max(1, count)) * 100) / 100;
+  return samples;
+}
+
+export function simulateStarterWeaponTtk(charId: CharacterId, seeds: readonly number[]): number {
+  const samples = simulateStarterWeaponTtkSamples(charId, seeds);
+  if (samples.length === 0) return 0;
+  const sum = samples.reduce((a, b) => a + b, 0);
+  return Math.round((sum / samples.length) * 100) / 100;
 }
 
 /**
@@ -178,18 +265,18 @@ export function simulateStarterWeaponTtk(charId: CharacterId, seeds: readonly nu
 export function simulateHitsSurvived(charId: CharacterId): number {
   const sim = new WorldSim({
     seed: 20202,
+    autoRevivePlayer: false,
     spawnInitialWave: false,
     includeTrainingDummy: false,
     includeProps: false,
     autoRespawnWaves: false,
   });
-  sim.autoRevivePlayer = false;
   sim.selectCharacter(sim.player.id, charId);
   const p = sim.player;
+  p.godMode = false;
   p.x = 360;
   p.y = 320;
 
-  // Biome 1 enemy roster hit sequence using all 6 Biome 1 normal enemy types
   const hitRoster = BIOME1_COMBAT_ENEMIES.map((id) => ENEMIES[id]!.damage);
 
   let hitsSurvived = 0;
@@ -224,21 +311,23 @@ export function simulateHitsSurvived(charId: CharacterId): number {
 
 /**
  * 3. Measures solo sustained combat DPS (Weapon + Passive + Active Skill + Elemental Reactions)
- * and active skill uptime % directly from WorldSim state over a 36-second combat encounter.
+ * and active skill uptime % directly from WorldSim state over a 24-second combat window
+ * WITHOUT `godMode = true` or per-tick infinite energy cheats.
  */
-export function simulateCharacterDpsAndUptime(
+export function measureCombatDpsAndSkillUptime(
   charId: CharacterId,
   seeds: readonly number[],
   overrideWeaponId?: string,
 ): { dps: number; uptimePct: number } {
   let totalDmg = 0;
   let totalActiveTicks = 0;
-  const durationSec = 36;
+  const durationSec = 24;
   const totalTicksPerRun = durationSec * 60;
 
   for (const seed of seeds) {
     const sim = new WorldSim({
       seed,
+      autoRevivePlayer: false,
       spawnInitialWave: false,
       includeTrainingDummy: false,
       includeProps: false,
@@ -246,12 +335,13 @@ export function simulateCharacterDpsAndUptime(
     });
     sim.selectCharacter(sim.player.id, charId);
     const p = sim.player;
-    p.godMode = true;
+    p.godMode = false;
     p.x = 360;
     p.y = 320;
 
     if (overrideWeaponId) {
       p.weaponSlots[0] = overrideWeaponId;
+      p.weaponSlots[1] = CHARACTERS[charId].starterWeaponId;
       p.activeWeaponSlot = 0;
     } else if (charId === 'vanguard') {
       p.weaponSlots[0] = 'knight_sword';
@@ -260,12 +350,29 @@ export function simulateCharacterDpsAndUptime(
     const activeWepId = p.weaponSlots[0] ?? 'knight_sword';
     const isMelee = WEAPONS[activeWepId]?.category === 'melee';
 
+    // Non-attacking combat target so player can be evaluated with godMode: false
     const target = sim.spawnEnemy('spore_king', 560, 320, true);
     target.hp = 999999;
     target.maxHp = 999999;
+    target.isDummy = true;
 
     for (let t = 0; t < totalTicksPerRun; t++) {
-      p.energy = p.maxEnergy;
+      // Spawn natural combat energy orb drop every 3.5s (as dropped by combat room adds/crates)
+      if (t > 0 && t % 210 === 0) {
+        sim.pickups.push(
+          sim.acquirePickup({
+            id: ++sim.nextEntityId,
+            kind: 'energy',
+            x: p.x,
+            y: p.y,
+            vx: 0,
+            vy: 0,
+            amount: 28,
+            ttlSec: 10,
+          }),
+        );
+      }
+
       const distPref = isMelee
         ? p.characterId === 'vanguard' && p.skillActiveTimer > 0
           ? 140
@@ -280,6 +387,9 @@ export function simulateCharacterDpsAndUptime(
       target.x = 560;
       target.y = 320;
       target.bossBurrowed = false;
+      target.aiState = 'idle';
+      target.stateTimer = 99;
+      target.attackCooldownTimer = 99;
 
       const canCastSkill = p.skillCooldownTimer <= 0 && p.skillActiveTimer <= 0;
 
@@ -293,7 +403,6 @@ export function simulateCharacterDpsAndUptime(
       });
       sim.step(SIM_STEP_SEC);
 
-      // Measure active skill uptime directly from WorldSim's skillActiveTimer
       const hasActiveZone = sim.skillZones.some(
         (z) => z.ownerPlayerId === p.id && z.ttlSec > 0.8,
       );
@@ -305,122 +414,297 @@ export function simulateCharacterDpsAndUptime(
     totalDmg += sim.runStats.damageDealt;
   }
 
-  const avgDps = totalDmg / (seeds.length * durationSec);
-  const avgUptimePct = (totalActiveTicks / (seeds.length * totalTicksPerRun)) * 100;
+  const avgDps = totalDmg / (Math.max(1, seeds.length) * durationSec);
+  const avgUptimePct = (totalActiveTicks / (Math.max(1, seeds.length) * totalTicksPerRun)) * 100;
   return {
     dps: Math.round(avgDps * 10) / 10,
     uptimePct: Math.round(avgUptimePct * 10) / 10,
   };
 }
 
+export const simulateCharacterDpsAndUptime = measureCombatDpsAndSkillUptime;
+
 /**
- * 4. Simulates a 3-wave Biome 1 Combat Room (including tactical movement, wave spawns, and elite cleanup)
- * across 1P, 2P, 3P, and 4P.
+ * 4. Honest multi-wave Combat Room simulation in WorldSim using `stepHonestPlayerBot`
+ * and `AVERAGE_PLAYER_BOT_PROFILE` (`godMode: false`, no fake room HP multipliers, no infinite energy).
  */
-export function simulateCombatRoomDuration(playerCount: 1 | 2 | 3 | 4, seeds: readonly number[]): number {
-  let totalSec = 0;
+export function measureCombatRoomClearSec(
+  playerCount: 1 | 2 | 3 | 4,
+  seed: number,
+  biome: 1 | 2 | 3 = 1,
+): CombatRoomClearSample {
   const roster: readonly CharacterId[] = ['ranger', 'elementalist', 'engineer', 'druid'];
+  const floor = biome === 1 ? 1 : biome === 2 ? 3 : 5;
 
-  for (const seed of seeds) {
-    const sim = new WorldSim({
-      seed,
-      spawnInitialWave: false,
-      includeTrainingDummy: false,
-      includeProps: false,
-      autoRespawnWaves: false,
-    });
-    sim.selectCharacter(sim.player.id, roster[0]!);
-    sim.player.godMode = true;
-    const allPlayers = [sim.player];
-    for (let slot = 2; slot <= playerCount; slot++) {
-      const sp = sim.addCoopPlayer(
-        slot as 2 | 3 | 4,
-        roster[(slot - 1) % roster.length]!,
-        `Bot P${slot}`,
-        slot,
-      );
-      sp.godMode = true;
-      allPlayers.push(sp);
-    }
-
-    // Spawn 3 tactical waves across the arena with realistic room traversal & cover factor
-    let wavesRemaining = 3;
-    const spawnTacticalWave = (waveIdx: number) => {
-      const baseCount = Math.round((4 + waveIdx) * COOP_SCALING[playerCount].waveCountMultiplier);
-      for (let i = 0; i < baseCount; i++) {
-        const defId = BIOME1_COMBAT_ENEMIES[(waveIdx * 2 + i) % BIOME1_COMBAT_ENEMIES.length]!;
-        const ex = 260 + ((i * 150 + waveIdx * 90) % 620);
-        const ey = 160 + ((i * 110 + waveIdx * 70) % 380);
-        const isElite = i === baseCount - 1;
-        const e = sim.spawnEnemy(defId, ex, ey, false, isElite ? 'shield' : null);
-        // Factor in multi-wave room traversal, cover navigation, and target switching
-        const roomFactor =
-          playerCount === 1 ? 2.8 : playerCount === 2 ? 4.3 : playerCount === 3 ? 5.2 : 5.7;
-        e.hp = Math.round(e.hp * roomFactor);
-        e.maxHp = e.hp;
-      }
-    };
-
-    spawnTacticalWave(0);
-    wavesRemaining -= 1;
-
-    let ticks = 0;
-    const maxTicks = 60 * 90;
-    while (ticks < maxTicks) {
-      const aliveEnemies = sim.enemies.filter((e) => !e.isDummy && e.hp > 0);
-      if (aliveEnemies.length === 0) {
-        if (wavesRemaining > 0) {
-          spawnTacticalWave(3 - wavesRemaining);
-          wavesRemaining -= 1;
-        } else {
-          break;
-        }
-      }
-
-      const focus = sim.enemies.find((e) => !e.isDummy && e.hp > 0);
-      if (focus) {
-        for (let idx = 0; idx < allPlayers.length; idx++) {
-          const pl = allPlayers[idx]!;
-          pl.energy = pl.maxEnergy;
-          const ang = Math.atan2(focus.y - pl.y, focus.x - pl.x);
-          const dist = Math.hypot(focus.x - pl.x, focus.y - pl.y);
-          const mx = dist > 165 ? Math.cos(ang) : dist < 95 ? -Math.cos(ang) : 0;
-          const my = dist > 165 ? Math.sin(ang) : dist < 95 ? -Math.sin(ang) : 0;
-          const canSkill =
-            pl.skillCooldownTimer <= 0 &&
-            pl.skillActiveTimer <= 0 &&
-            (pl.characterId !== 'ranger' || dist < 150);
-          const pkt = {
-            seq: ticks + 1,
-            tick: ticks + 1,
-            moveX: mx,
-            moveY: my,
-            aimAngle: ang,
-            buttons: INPUT_BUTTON.FIRE | (canSkill ? INPUT_BUTTON.SKILL : 0),
-            weaponSlotSelect: null,
-          };
-          if (pl.id === sim.player.id) {
-            sim.setPlayerInput(pkt);
-          } else {
-            sim.setCoopPlayerInput(pl.id, pkt);
-          }
-        }
-      }
-
-      sim.step(SIM_STEP_SEC);
-      ticks += 1;
-    }
-    totalSec += ticks * SIM_STEP_SEC;
+  const sim = new WorldSim({
+    seed,
+    biome,
+    autoRevivePlayer: false,
+    spawnInitialWave: false,
+    includeTrainingDummy: false,
+    includeProps: true,
+    autoRespawnWaves: true,
+  });
+  if (floor > 1) {
+    sim.advanceToFloor(floor);
   }
 
+  sim.selectCharacter(sim.player.id, roster[0]!);
+  sim.player.godMode = false;
+  const allPlayers = [sim.player];
+  for (let slot = 2; slot <= playerCount; slot++) {
+    const sp = sim.addCoopPlayer(
+      slot as 2 | 3 | 4,
+      roster[(slot - 1) % roster.length]!,
+      `Bot P${slot}`,
+      slot,
+    );
+    sp.godMode = false;
+    allPlayers.push(sp);
+  }
+
+  const combatRoom = sim.dungeon.rooms.find((r) => r.type === 'combat') ?? sim.dungeon.rooms[1]!;
+  sim.enterRoom(combatRoom.id);
+
+  // Equip biome-tier secondary weapon for Biome 2 & 3 combat rooms
+  for (const pl of allPlayers) {
+    pl.godMode = false;
+    pl.statsDamageTaken = 0;
+    if (biome === 2) {
+      pl.weaponSlots[0] = 'tesla_carbine';
+      pl.weaponSlots[1] = CHARACTERS[pl.characterId].starterWeaponId;
+    } else if (biome === 3) {
+      pl.weaponSlots[0] = 'focus_laser';
+      pl.weaponSlots[1] = CHARACTERS[pl.characterId].starterWeaponId;
+    }
+  }
+
+  const initialTotalHpAndArmor = allPlayers.reduce(
+    (acc, pl) => acc + pl.maxHp + pl.maxArmor,
+    0,
+  );
+  const brains = new Map(allPlayers.map((pl) => [pl.id, createBotBrainState(pl.id, seed)]));
+  const prevLifeState = new Map(allPlayers.map((pl) => [pl.id, pl.lifeState]));
+
+  let downedCount = 0;
+  let ticks = 0;
+  const maxTicks = 60 * 180;
+
+  while (!combatRoom.cleared && sim.runState !== 'defeat' && ticks < maxTicks) {
+    const anyAlive = allPlayers.some((pl) => pl.lifeState === 'alive' && pl.hp > 0);
+    if (!anyAlive) break;
+
+    for (const pl of allPlayers) {
+      const brain = brains.get(pl.id)!;
+      const pkt = stepHonestPlayerBot(
+        sim,
+        pl,
+        brain,
+        AVERAGE_PLAYER_BOT_PROFILE,
+        SIM_STEP_SEC,
+        ticks + 1,
+      );
+      if (pl.id === sim.player.id) {
+        sim.setPlayerInput(pkt);
+      } else {
+        sim.setCoopPlayerInput(pl.id, pkt);
+      }
+    }
+
+    sim.step(SIM_STEP_SEC);
+    ticks += 1;
+
+    for (const pl of allPlayers) {
+      const wasState = prevLifeState.get(pl.id);
+      if (wasState === 'alive' && (pl.lifeState === 'downed' || pl.lifeState === 'ghost' || pl.hp <= 0)) {
+        downedCount += 1;
+      }
+      prevLifeState.set(pl.id, pl.lifeState);
+    }
+  }
+
+  const totalDamageTaken = allPlayers.reduce(
+    (acc, pl) => acc + (pl.statsDamageTaken ?? 0),
+    0,
+  );
+  const hpAndArmorLostPct =
+    Math.round(
+      clamp((totalDamageTaken / Math.max(1, initialTotalHpAndArmor)) * 100, 0, 100) * 10,
+    ) / 10;
+
+  return {
+    clearSec: Math.round(ticks * SIM_STEP_SEC * 100) / 100,
+    hpAndArmorLostPct,
+    downedCount,
+    cleared: combatRoom.cleared,
+  };
+}
+
+export function simulateCombatRoomDuration(
+  playerCount: 1 | 2 | 3 | 4,
+  seeds: readonly number[],
+): number {
+  if (seeds.length === 0) return 0;
+  let totalSec = 0;
+  for (const seed of seeds) {
+    totalSec += measureCombatRoomClearSec(playerCount, seed, 1).clearSec;
+  }
   return Math.round((totalSec / seeds.length) * 10) / 10;
 }
 
 /**
- * 5. Simulates a full 3-Phase Boss Fight (Spore King, Kryssa Ice Queen, or Forge Titan)
- * for 1..4 players or solo character test.
- * All solo characters fight the exact same Boss HP without deleting enemy projectiles.
+ * 5. Honest 60Hz Boss Encounter simulation in WorldSim using `stepHonestPlayerBot`
+ * and `AVERAGE_PLAYER_BOT_PROFILE` (`godMode: false`, no fake boss HP multipliers, no fake healing, no infinite energy).
  */
+export function simulateBossEncounter(
+  playerCount: 1 | 2 | 3 | 4,
+  primaryChar: CharacterId,
+  seed: number,
+  customRoster?: readonly CharacterId[],
+  bossId: 'spore_king' | 'kryssa_ice_queen' | 'forge_titan' = 'spore_king',
+): BossEncounterSample {
+  const coopRoster: readonly CharacterId[] = customRoster ?? [
+    primaryChar,
+    'elementalist',
+    'engineer',
+    'druid',
+  ];
+  const biome: 1 | 2 | 3 =
+    bossId === 'spore_king' ? 1 : bossId === 'kryssa_ice_queen' ? 2 : 3;
+  const floor = biome === 1 ? 2 : biome === 2 ? 4 : 6;
+
+  const sim = new WorldSim({
+    seed,
+    biome,
+    autoRevivePlayer: false,
+    spawnInitialWave: false,
+    includeTrainingDummy: false,
+    includeProps: true,
+    autoRespawnWaves: false,
+  });
+  sim.advanceToFloor(floor);
+
+  sim.selectCharacter(sim.player.id, coopRoster[0]!);
+  sim.player.godMode = false;
+  const allPlayers = [sim.player];
+  for (let slot = 2; slot <= playerCount; slot++) {
+    const sp = sim.addCoopPlayer(
+      slot as 2 | 3 | 4,
+      coopRoster[(slot - 1) % coopRoster.length]!,
+      `Bot P${slot}`,
+      slot,
+    );
+    sp.godMode = false;
+    allPlayers.push(sp);
+  }
+
+  const bossRoom =
+    sim.dungeon.rooms.find((r) => r.type === 'boss') ?? sim.dungeon.rooms[0]!;
+  sim.enterRoom(bossRoom.id);
+
+  // Equip realistic campaign progression loadouts reached by the end of Biome 1 / 2 / 3
+  for (const pl of allPlayers) {
+    pl.godMode = false;
+    pl.statsDamageTaken = 0;
+    const sigBuff = CHARACTER_SIGNATURE_BUFF[pl.characterId];
+    if (sigBuff && !sim.activeBuffIds.includes(sigBuff)) {
+      sim.activeBuffIds.push(sigBuff);
+    }
+
+    const starterId = CHARACTERS[pl.characterId].starterWeaponId;
+    if (biome === 1) {
+      pl.weaponSlots[0] = BIOME1_PRIMARY_WEAPON[pl.characterId];
+      pl.weaponSlots[1] = starterId;
+      pl.activeWeaponSlot = 0;
+    } else if (biome === 2) {
+      if (!sim.activeBuffIds.includes('attack_speed')) {
+        sim.activeBuffIds.push('attack_speed');
+      }
+      pl.weaponSlots[0] = BIOME2_PRIMARY_WEAPON[pl.characterId];
+      pl.weaponSlots[1] = starterId;
+      pl.activeWeaponSlot = 0;
+    } else {
+      if (!sim.activeBuffIds.includes('attack_speed')) {
+        sim.activeBuffIds.push('attack_speed');
+      }
+      if (!sim.activeBuffIds.includes('crit_mastery')) {
+        sim.activeBuffIds.push('crit_mastery');
+      }
+      pl.weaponSlots[0] = BIOME3_PRIMARY_WEAPON[pl.characterId];
+      pl.weaponSlots[1] = 'tesla_carbine';
+      pl.activeWeaponSlot = 0;
+    }
+  }
+
+  let boss = sim.getActiveBoss();
+  if (!boss || boss.defId !== bossId) {
+    sim.enemies.length = 0;
+    boss = sim.spawnEnemy(bossId, sim.map.width * 0.68, sim.map.height * 0.5, false);
+  }
+
+  const brains = new Map(allPlayers.map((pl) => [pl.id, createBotBrainState(pl.id, seed)]));
+  const prevDamageTaken = new Map(allPlayers.map((pl) => [pl.id, pl.statsDamageTaken ?? 0]));
+  const prevLifeState = new Map(allPlayers.map((pl) => [pl.id, pl.lifeState]));
+
+  let maxSingleHitFraction = 0;
+  let downedCount = 0;
+  let ticks = 0;
+  const maxTicks = 60 * 210;
+
+  while (boss.hp > 0 && sim.runState !== 'defeat' && ticks < maxTicks) {
+    const anyAlive = allPlayers.some((pl) => pl.lifeState === 'alive' && pl.hp > 0);
+    if (!anyAlive) break;
+
+    for (const pl of allPlayers) {
+      const brain = brains.get(pl.id)!;
+      const pkt = stepHonestPlayerBot(
+        sim,
+        pl,
+        brain,
+        AVERAGE_PLAYER_BOT_PROFILE,
+        SIM_STEP_SEC,
+        ticks + 1,
+      );
+      if (pl.id === sim.player.id) {
+        sim.setPlayerInput(pkt);
+      } else {
+        sim.setCoopPlayerInput(pl.id, pkt);
+      }
+    }
+
+    sim.step(SIM_STEP_SEC);
+    ticks += 1;
+
+    for (const pl of allPlayers) {
+      const nowDmg = pl.statsDamageTaken ?? 0;
+      const prevDmg = prevDamageTaken.get(pl.id) ?? 0;
+      const deltaDmg = nowDmg - prevDmg;
+      if (deltaDmg > 0) {
+        const hitFrac = deltaDmg / Math.max(1, pl.maxHp + pl.maxArmor);
+        if (hitFrac > maxSingleHitFraction) {
+          maxSingleHitFraction = hitFrac;
+        }
+      }
+      prevDamageTaken.set(pl.id, nowDmg);
+
+      const wasState = prevLifeState.get(pl.id);
+      if (wasState === 'alive' && (pl.lifeState === 'downed' || pl.lifeState === 'ghost' || pl.hp <= 0)) {
+        downedCount += 1;
+      }
+      prevLifeState.set(pl.id, pl.lifeState);
+    }
+  }
+
+  return {
+    won: boss.hp <= 0,
+    durationSec: Math.round(ticks * SIM_STEP_SEC * 100) / 100,
+    elementalReactions: sim.runStats.elementalReactions,
+    teamCombos: sim.runStats.teamCombos,
+    maxSingleHitFraction: Math.round(maxSingleHitFraction * 1000) / 1000,
+    downedCount,
+  };
+}
+
 export function simulateBossFight(
   playerCount: 1 | 2 | 3 | 4,
   primaryChar: CharacterId,
@@ -432,264 +716,164 @@ export function simulateBossFight(
   winRatePct: number;
   reactionsTriggered: number;
   teamCombos: number;
+  durationStats: DistributionStats;
+  maxSingleHitFraction: number;
+  zeroOneShots: boolean;
 } {
-  let totalSec = 0;
+  const durations: number[] = [];
   let wins = 0;
   let totalReactions = 0;
   let totalCombos = 0;
-  const coopRoster: readonly CharacterId[] = customRoster ?? [
-    primaryChar,
-    'elementalist',
-    'engineer',
-    'druid',
-  ];
-  const biome: 1 | 2 | 3 =
-    bossId === 'spore_king' ? 1 : bossId === 'kryssa_ice_queen' ? 2 : 3;
+  let maxSingleHitFraction = 0;
 
   for (const seed of seeds) {
-    const sim = new WorldSim({
-      seed,
-      biome,
+    const sample = simulateBossEncounter(playerCount, primaryChar, seed, customRoster, bossId);
+    durations.push(sample.durationSec);
+    if (sample.won) wins += 1;
+    totalReactions += sample.elementalReactions;
+    totalCombos += sample.teamCombos;
+    if (sample.maxSingleHitFraction > maxSingleHitFraction) {
+      maxSingleHitFraction = sample.maxSingleHitFraction;
+    }
+  }
+
+  const stats = computeDistributionStats(durations);
+  const count = Math.max(1, seeds.length);
+  return {
+    avgSec: stats.p50,
+    winRatePct: Math.round((wins / count) * 100),
+    reactionsTriggered: Math.round(totalReactions / count),
+    teamCombos: Math.round(totalCombos / count),
+    durationStats: stats,
+    maxSingleHitFraction,
+    zeroOneShots: maxSingleHitFraction < 0.85,
+  };
+}
+
+/**
+ * 6. Measures real Biome 1 -> Biome 2 -> Biome 3 difficulty progression from actual WorldSim
+ * spawned enemy EHP, incoming attack cadence, and simulated combat room pressure (no hardcoded constants).
+ */
+export function measureBiomeDifficultyProgression(
+  seeds: readonly number[],
+): BiomeProgressionRow[] {
+  const biomeMeta: ReadonlyArray<{
+    biome: 1 | 2 | 3;
+    floor: number;
+    nameVi: string;
+    roster: readonly string[];
+  }> = [
+    {
+      biome: 1,
+      floor: 1,
+      nameVi: 'Biome 1 — Rừng Cổ Mục Nát',
+      roster: BIOME1_COMBAT_ENEMIES,
+    },
+    {
+      biome: 2,
+      floor: 3,
+      nameVi: 'Biome 2 — Hầm Băng Vĩnh Cửu',
+      roster: BIOME2_COMBAT_ENEMIES,
+    },
+    {
+      biome: 3,
+      floor: 5,
+      nameVi: 'Biome 3 — Lò Rèn Dung Nham',
+      roster: BIOME3_COMBAT_ENEMIES,
+    },
+  ];
+
+  const rawScores: Array<{
+    biome: 1 | 2 | 3;
+    nameVi: string;
+    measuredWaveEhp: number;
+    measuredRoomClearSec: number;
+    measuredHpArmorLostPct: number;
+    compositeRaw: number;
+  }> = [];
+
+  const sampleSeeds = seeds.slice(0, Math.min(seeds.length, 10));
+
+  for (const b of biomeMeta) {
+    // Measure actual spawned enemy EHP & attack cadence in WorldSim for this biome
+    const probeSim = new WorldSim({
+      seed: sampleSeeds[0] ?? 101,
+      biome: b.biome,
+      autoRevivePlayer: false,
       spawnInitialWave: false,
       includeTrainingDummy: false,
       includeProps: false,
       autoRespawnWaves: false,
     });
-    sim.selectCharacter(sim.player.id, coopRoster[0]!);
-    const allPlayers = [sim.player];
-    for (let slot = 2; slot <= playerCount; slot++) {
-      const sp = sim.addCoopPlayer(
-        slot as 2 | 3 | 4,
-        coopRoster[(slot - 1) % coopRoster.length]!,
-        `Bot P${slot}`,
-        slot,
-      );
-      allPlayers.push(sp);
+    if (b.floor > 1) {
+      probeSim.advanceToFloor(b.floor);
     }
 
-    // Equip biome-appropriate skill upgrades and weapons found before Boss room
-    const is2PElemEng =
-      playerCount === 2 &&
-      allPlayers.some((p) => p.characterId === 'elementalist') &&
-      allPlayers.some((p) => p.characterId === 'engineer');
-    for (const pl of allPlayers) {
-      const sigBuff =
-        is2PElemEng && pl.characterId === 'elementalist'
-          ? 'elementalist_vortex'
-          : is2PElemEng && pl.characterId === 'engineer'
-            ? 'engineer_self_destruct'
-            : CHARACTER_SIGNATURE_BUFF[pl.characterId];
-      if (sigBuff && !sim.activeBuffIds.includes(sigBuff)) {
-        sim.activeBuffIds.push(sigBuff);
-      }
-      if (biome === 1) {
-        if (pl.characterId === 'vanguard') {
-          pl.weaponSlots[0] = 'knight_sword';
-          pl.weaponSlots[1] = 'tesla_carbine';
-          pl.activeWeaponSlot = 0;
-        } else if (pl.characterId === 'druid') {
-          pl.weaponSlots[1] = 'tesla_carbine';
-        } else if (pl.characterId === 'engineer') {
-          pl.weaponSlots[1] = is2PElemEng ? 'rusty_pistol' : 'tesla_carbine';
-        } else if (pl.characterId === 'ranger') {
-          pl.weaponSlots[1] = 'apprentice_staff';
-        }
-      } else if (biome === 2) {
-        if (!sim.activeBuffIds.includes('attack_speed')) {
-          sim.activeBuffIds.push('attack_speed');
-        }
-        pl.weaponSlots[0] = pl.characterId === 'druid' ? 'seed_gun' : 'focus_laser';
-        pl.weaponSlots[1] = 'tesla_carbine';
-        pl.activeWeaponSlot = 0;
-      } else {
-        if (!sim.activeBuffIds.includes('attack_speed')) {
-          sim.activeBuffIds.push('attack_speed');
-        }
-        if (!sim.activeBuffIds.includes('crit_mastery')) {
-          sim.activeBuffIds.push('crit_mastery');
-        }
-        pl.weaponSlots[0] = pl.characterId === 'elementalist' ? 'tether_staff' : 'void_staff';
-        pl.weaponSlots[1] = 'magma_cannon';
-        pl.activeWeaponSlot = 0;
-      }
+    let totalRosterEhp = 0;
+    let totalThreatDps = 0;
+    for (let i = 0; i < b.roster.length; i++) {
+      const defId = b.roster[i]!;
+      const e = probeSim.spawnEnemy(defId, 300 + i * 40, 300, true);
+      const frontShieldFactor =
+        defId === 'ice_golem' ? 1.35 : defId === 'iron_shielder' ? 1.4 : 1.0;
+      const ehp = (e.maxHp + (e.maxShieldArmor ?? 0)) * frontShieldFactor;
+      const cdSec = ENEMIES[defId]?.attackCooldownSec ?? 1.2;
+      totalRosterEhp += ehp;
+      totalThreatDps += e.damage / Math.max(0.4, cdSec);
     }
+    const avgEnemyEhp = totalRosterEhp / b.roster.length;
+    const avgEnemyThreatDps = totalThreatDps / b.roster.length;
 
-    const boss = sim.spawnEnemy(bossId, sim.map.width * 0.68, sim.map.height * 0.5, false);
-    const encounterScale =
-      bossId === 'spore_king'
-        ? playerCount === 1
-          ? 13.4
-          : playerCount === 2
-            ? 20.6
-            : playerCount === 3
-              ? 25.5
-              : 28.5
-        : bossId === 'kryssa_ice_queen'
-          ? playerCount === 1
-            ? 15.5
-            : playerCount === 2
-              ? 24.5
-              : playerCount === 3
-                ? 29.5
-                : 33.0
-          : playerCount === 1
-            ? 14.5
-            : playerCount === 2
-              ? 28.0
-              : playerCount === 3
-                ? 36.0
-                : 45.5;
-    boss.hp = Math.round(
-      ENEMIES[bossId]!.hp * COOP_SCALING[playerCount].bossHpMultiplier * encounterScale,
-    );
-    boss.maxHp = boss.hp;
-
-    let ticks = 0;
-    const maxTicks = 60 * 180;
-    while (boss.hp > 0 && sim.runState !== 'defeat' && ticks < maxTicks) {
-      for (let idx = 0; idx < allPlayers.length; idx++) {
-        const pl = allPlayers[idx]!;
-        if (pl.lifeState !== 'alive') continue;
-        pl.energy = pl.maxEnergy;
-
-        // Sustain low-HP players via floor potion/healing reserve on dodge cooldown
-        if (pl.hp <= 2 && pl.armor <= 0) {
-          pl.armor = pl.maxArmor;
-          pl.hp = Math.min(pl.maxHp, pl.hp + 2);
-        }
-
-        // Priority targeting: Ice Prison (rescue teammate!) -> Forge Energy Core (stun Titan!) -> Spore Guardian -> Boss
-        const priorityAdd = sim.enemies.find(
-          (e) =>
-            e.hp > 0 &&
-            (e.defId === 'ice_prison' ||
-              e.defId === 'forge_energy_core' ||
-              e.defId === 'spore_guardian'),
-        );
-        const focus = priorityAdd ?? boss;
-        let aimX = focus.x;
-        let aimY = focus.y;
-
-        // Engineer shoots their own Tesla Turret briefly every 1.2s to trigger Co-op EMP Blast
-        if (pl.characterId === 'engineer' && sim.summons.length > 0 && ticks % 72 < 5) {
-          const myTurret = sim.summons.find(
-            (s) => s.kind === 'tesla_turret' && s.ownerPlayerId === pl.id && s.hp > 0,
-          );
-          if (myTurret) {
-            aimX = myTurret.x;
-            aimY = myTurret.y;
-          }
-        }
-
-        const ang = Math.atan2(aimY - pl.y, aimX - pl.x);
-        const dist = Math.hypot(focus.x - pl.x, focus.y - pl.y);
-        const orbitAngle = ang + (idx % 2 === 0 ? 1 : -1) * Math.PI * 0.5;
-        const desiredDist =
-          pl.characterId === 'vanguard' && biome === 1
-            ? pl.skillActiveTimer > 0
-              ? 145
-              : 46
-            : pl.characterId === 'druid'
-              ? 125
-              : pl.characterId === 'ranger'
-                ? 225
-                : 185;
-
-        // Genuine perpendicular projectile evasion + Shockwave Ring i-frame Dash
-        let evadeX = 0;
-        let evadeY = 0;
-        let emergencyDash = false;
-        for (let bIdx = 0; bIdx < sim.projectiles.length; bIdx++) {
-          const b = sim.projectiles[bIdx]!;
-          if (b.team !== 'enemy' || b.ttlSec <= 0) continue;
-          const dx = pl.x - b.x;
-          const dy = pl.y - b.y;
-          const d = Math.hypot(dx, dy);
-          if (d < 76 && dx * b.vx + dy * b.vy > 0) {
-            const spd = Math.hypot(b.vx, b.vy) || 1;
-            const px = -b.vy / spd;
-            const py = b.vx / spd;
-            const side = dx * px + dy * py >= 0 ? 1 : -1;
-            evadeX += px * side * 1.4;
-            evadeY += py * side * 1.4;
-            if (d < 34 && pl.dashCooldownTimer <= 0) {
-              emergencyDash = true;
-            }
-          }
-        }
-        for (let rIdx = 0; rIdx < sim.shockwaveRings.length; rIdx++) {
-          const ring = sim.shockwaveRings[rIdx]!;
-          const dRing = Math.hypot(pl.x - ring.x, pl.y - ring.y);
-          if (Math.abs(dRing - ring.radius) < ring.thickness + 18 && pl.dashCooldownTimer <= 0) {
-            emergencyDash = true;
-          }
-        }
-
-        let mx = Math.cos(orbitAngle) + evadeX;
-        let my = Math.sin(orbitAngle) + evadeY;
-        if (dist > desiredDist + 24) {
-          mx += Math.cos(ang) * 0.9;
-          my += Math.sin(ang) * 0.9;
-        } else if (dist < desiredDist - 24 || (boss.aiState === 'telegraph' && dist < 110)) {
-          mx -= Math.cos(ang) * 1.15;
-          my -= Math.sin(ang) * 1.15;
-        }
-
-        // Weapon slot selection based on tactical range and elemental combo rotation
-        let weaponSlotSelect: number | null = null;
-        if (pl.characterId === 'druid') {
-          weaponSlotSelect = Math.floor(ticks / 75) % 2;
-        } else if (pl.characterId === 'engineer') {
-          weaponSlotSelect = ticks % 90 < 40 ? 1 : 0;
-        } else if (pl.characterId === 'vanguard' && biome === 1) {
-          weaponSlotSelect = pl.skillActiveTimer > 0 || dist <= 58 ? 0 : 1;
-        } else if (pl.characterId === 'ranger' && playerCount > 1) {
-          weaponSlotSelect = ticks % 90 < 24 ? 1 : 0;
-        }
-
-        let btns = INPUT_BUTTON.FIRE;
-        if (pl.skillCooldownTimer <= 0 && pl.skillActiveTimer <= 0) {
-          btns |= INPUT_BUTTON.SKILL;
-        }
-        if (
-          (boss.aiState === 'telegraph' || emergencyDash || (pl.encasedInIceTimer ?? 0) > 0) &&
-          pl.dashCooldownTimer <= 0
-        ) {
-          btns |= INPUT_BUTTON.DASH;
-        }
-
-        const pkt = {
-          seq: ticks + 1,
-          tick: ticks + 1,
-          moveX: mx,
-          moveY: my,
-          aimAngle: ang,
-          buttons: btns,
-          weaponSlotSelect,
-        };
-        if (pl.id === sim.player.id) {
-          sim.setPlayerInput(pkt);
-        } else {
-          sim.setCoopPlayerInput(pl.id, pkt);
-        }
-      }
-
-      sim.step(SIM_STEP_SEC);
-      ticks += 1;
+    // Also run actual combat room clears in this biome
+    let clearSecSum = 0;
+    let hpLostSum = 0;
+    for (const seed of sampleSeeds) {
+      const roomRes = measureCombatRoomClearSec(1, seed, b.biome);
+      clearSecSum += roomRes.clearSec;
+      hpLostSum += roomRes.hpAndArmorLostPct;
     }
+    const avgClearSec = clearSecSum / Math.max(1, sampleSeeds.length);
+    const avgHpLostPct = hpLostSum / Math.max(1, sampleSeeds.length);
 
-    if (boss.hp <= 0) {
-      wins += 1;
-    }
-    totalSec += ticks * SIM_STEP_SEC;
-    totalReactions += sim.runStats.elementalReactions;
-    totalCombos += sim.runStats.teamCombos;
+    // Composite difficulty score combining spawned enemy EHP, enemy threat cadence, and room pressure
+    const compositeRaw =
+      avgEnemyEhp * 0.55 +
+      avgEnemyThreatDps * 12.0 +
+      avgClearSec * 0.45 +
+      avgHpLostPct * 0.25;
+
+    rawScores.push({
+      biome: b.biome,
+      nameVi: b.nameVi,
+      measuredWaveEhp: Math.round(avgEnemyEhp * 10) / 10,
+      measuredRoomClearSec: Math.round(avgClearSec * 10) / 10,
+      measuredHpArmorLostPct: Math.round(avgHpLostPct * 10) / 10,
+      compositeRaw,
+    });
   }
 
-  return {
-    avgSec: Math.round((totalSec / seeds.length) * 10) / 10,
-    winRatePct: Math.round((wins / seeds.length) * 100),
-    reactionsTriggered: Math.round(totalReactions / seeds.length),
-    teamCombos: Math.round(totalCombos / seeds.length),
-  };
+  const baseRaw = Math.max(1e-4, rawScores[0]!.compositeRaw);
+  const rows: BiomeProgressionRow[] = [];
+
+  for (let idx = 0; idx < rawScores.length; idx++) {
+    const item = rawScores[idx]!;
+    const prevRaw = idx === 0 ? item.compositeRaw : rawScores[idx - 1]!.compositeRaw;
+    const difficultyIndex = Math.round((item.compositeRaw / baseRaw) * 1000) / 1000;
+    const stepIncreasePct =
+      idx === 0
+        ? 0
+        : Math.round(((item.compositeRaw - prevRaw) / Math.max(1e-4, prevRaw)) * 1000) / 10;
+
+    rows.push({
+      biome: item.biome,
+      nameVi: item.nameVi,
+      difficultyIndex,
+      stepIncreasePct,
+      measuredWaveEhp: item.measuredWaveEhp,
+      measuredRoomClearSec: item.measuredRoomClearSec,
+      measuredHpArmorLostPct: item.measuredHpArmorLostPct,
+    });
+  }
+
+  return rows;
 }
