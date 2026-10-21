@@ -59,6 +59,7 @@ export class ArtGalleryScene extends Phaser.Scene {
 
   private syncGalleryTestHooks(): void {
     if (isTestHooksEnabled()) {
+      window.__PHASER_GAME__ = this.game;
       window.__GALLERY_SET_ANIM__ = (state: RigAnimState) => this.setGalleryAnim(state);
       window.__GALLERY_SET_SLOT__ = (slot: 1 | 2 | 3 | 4) => this.setGallerySlot(slot);
       window.__GALLERY_SET_BIOME__ = (biome: 1 | 2 | 3) => this.setGalleryBiome(biome);
@@ -361,6 +362,7 @@ export class ArtGalleryScene extends Phaser.Scene {
     const state = this.currentAnim;
     for (const rig of this.rigs) {
       rig.setDashActive(state === 'dash');
+      rig.triggerCastPose(state === 'cast' ? 5 : 0);
       if (state === 'dash') {
         rig.setMoveVelocity(220, 0);
       } else if (state === 'run') {
@@ -370,9 +372,6 @@ export class ArtGalleryScene extends Phaser.Scene {
         rig.triggerRecoil(4);
       } else if (state === 'hurt') {
         rig.setMoveVelocity(-60, 0);
-      } else if (state === 'cast') {
-        rig.setMoveVelocity(0, 0);
-        rig.triggerCastPose(5);
       } else {
         rig.setMoveVelocity(0, 0);
       }

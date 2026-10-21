@@ -1,6 +1,6 @@
 import type Phaser from 'phaser';
 import type { PropKind, SurfaceKind } from '@ashen-pact/shared';
-import { PALETTE, PLAYER_SLOT_COLORS } from './palette.js';
+import { PLAYER_SLOT_COLORS } from './palette.js';
 import { renderShapeCommand } from './primitives.js';
 import {
   ALL_SAMPLE_RIGS,
@@ -198,6 +198,25 @@ export class TextureBaker {
     }
   }
 
+  private static drawSoftEllipticalShadow(
+    ctx: CanvasRenderingContext2D,
+    shadowRx: number,
+    shadowRy: number,
+  ): void {
+    ctx.save();
+    ctx.scale(shadowRx, shadowRy);
+    const grad = ctx.createRadialGradient(0, 0, 0, 0, 0, 1.15);
+    grad.addColorStop(0, 'rgba(11, 9, 14, 0.54)');
+    grad.addColorStop(0.58, 'rgba(11, 9, 14, 0.34)');
+    grad.addColorStop(0.85, 'rgba(11, 9, 14, 0.12)');
+    grad.addColorStop(1, 'rgba(11, 9, 14, 0)');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(0, 0, 1.15, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
   private static bakeFullRigComposite(scene: Phaser.Scene, rig: EntityRigDef, scale: number): void {
     const key = this.getFullRigTextureKey(rig.id);
     const compScale = Math.min(2, scale);
@@ -213,10 +232,7 @@ export class TextureBaker {
     ctx.scale(compScale, compScale);
     ctx.translate(worldW * 0.5, worldH * 0.78);
 
-    ctx.beginPath();
-    ctx.ellipse(0, 0, rig.shadowRx, rig.shadowRy, 0, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(11, 9, 14, 0.48)';
-    ctx.fill();
+    this.drawSoftEllipticalShadow(ctx, rig.shadowRx, rig.shadowRy);
 
     const sortedParts = [...rig.parts].sort((a, b) => a.zIndex - b.zIndex);
     for (const part of sortedParts) {
@@ -234,8 +250,8 @@ export class TextureBaker {
 
   private static bakeShadow(scene: Phaser.Scene, rig: EntityRigDef, scale: number): void {
     const key = this.getShadowTextureKey(rig.id);
-    const w = Math.ceil((rig.shadowRx * 2 + 8) * scale);
-    const h = Math.ceil((rig.shadowRy * 2 + 8) * scale);
+    const w = Math.ceil((rig.shadowRx * 2.4 + 8) * scale);
+    const h = Math.ceil((rig.shadowRy * 2.4 + 8) * scale);
     const canvas = document.createElement('canvas');
     canvas.width = w;
     canvas.height = h;
@@ -246,10 +262,7 @@ export class TextureBaker {
     ctx.scale(scale, scale);
     ctx.translate(w / (2 * scale), h / (2 * scale));
 
-    ctx.beginPath();
-    ctx.ellipse(0, 0, rig.shadowRx, rig.shadowRy, 0, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(11, 9, 14, 0.48)';
-    ctx.fill();
+    this.drawSoftEllipticalShadow(ctx, rig.shadowRx, rig.shadowRy);
 
     ctx.restore();
     this.registerCanvasTexture(scene, key, canvas);
@@ -324,20 +337,48 @@ export class TextureBaker {
     ctx.scale(scale, scale);
     ctx.translate(worldW / 2, worldH / 2);
 
+    // 1. Soft radial gradient inner glow
+    ctx.save();
+    ctx.scale(rx, ry);
+    const glow = ctx.createRadialGradient(0, 0, 0.1, 0, 0, 1.08);
+    glow.addColorStop(0, `${color}38`);
+    glow.addColorStop(0.75, `${color}12`);
+    glow.addColorStop(1, `${color}00`);
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.arc(0, 0, 1.08, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    // 2. Softened dark outer halo
     ctx.beginPath();
     ctx.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2);
-    ctx.lineWidth = 4.2;
-    ctx.strokeStyle = PALETTE.INK_DARK;
+    ctx.lineWidth = 3.2;
+    ctx.strokeStyle = 'rgba(20, 16, 25, 0.65)';
     ctx.stroke();
 
+    // 3. Harmonious slot-colored ring + 4 subtle cardinal ticks
+    ctx.save();
+    ctx.globalAlpha = 0.82;
     ctx.beginPath();
     ctx.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2);
-    ctx.lineWidth = 2.2;
+    ctx.lineWidth = 1.8;
     ctx.strokeStyle = color;
     ctx.stroke();
 
-    ctx.fillStyle = `${color}28`;
-    ctx.fill();
+    ctx.lineWidth = 1.5;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(-rx - 1.5, 0);
+    ctx.lineTo(-rx + 2.2, 0);
+    ctx.moveTo(rx - 2.2, 0);
+    ctx.lineTo(rx + 1.5, 0);
+    ctx.moveTo(0, -ry - 1.2);
+    ctx.lineTo(0, -ry + 1.8);
+    ctx.moveTo(0, ry - 1.8);
+    ctx.lineTo(0, ry + 1.2);
+    ctx.stroke();
+    ctx.restore();
 
     ctx.restore();
     this.registerCanvasTexture(scene, key, canvas);

@@ -9,6 +9,8 @@ import {
   createStateCrossfadeController,
   createWeaponRecoilSpringState,
   evaluateRigPose,
+  shouldEmitFootstepDust,
+  shouldUseEnemyFastComposite,
   STATE_CROSSFADE_DURATION_SEC,
   stepBackAccessorySpring,
   stepStateCrossfade,
@@ -17,10 +19,21 @@ import {
   transitionRigAnimState,
   triggerWeaponRecoilImpulse,
 } from '../src/art/cutout-rig-math.js';
+import { PALETTE } from '../src/art/palette.js';
 import {
+  resolveShapeMaterialProfile,
+  STANDARD_OUTLINE_WIDTH,
+} from '../src/art/primitives.js';
+import {
+  BOSS_OUTLINE_WIDTH,
   COAL_GOLEM_RIG_DEF,
+  FORGE_TITAN_RIG_DEF,
   FROST_BAT_RIG_DEF,
+  GOBLIN_SHOOTER_RIG_DEF,
   GREEN_SLIME_RIG_DEF,
+  KRYSSA_CLONE_RIG_DEF,
+  KRYSSA_ICE_QUEEN_RIG_DEF,
+  SPORE_KING_RIG_DEF,
   VANGUARD_RIG_DEF,
 } from '../src/art/rig-defs.js';
 
@@ -272,5 +285,171 @@ describe('Phase P10a — Cutout 2.0 Parametric Animation & Spring Math Engine', 
 
     // Heavy golem with telegraph has strong wind-up crouch/lean
     expect(golemMod.telegraphTorsoRotOffset).not.toBe(0);
+  });
+
+  it('8. classifies shape materials (metal, cloth, crystal, organic) and returns 2-layer shading + -135 deg rim-light specs', () => {
+    const metalProfile = resolveShapeMaterialProfile({
+      fill: PALETTE.STEEL_LIGHT,
+      shade: PALETTE.STEEL_DARK,
+      highlight: PALETTE.SILVER_BRIGHT,
+    });
+    expect(metalProfile.material).toBe('metal');
+    expect(metalProfile.rimLightAngleRad).toBeCloseTo(-Math.PI * 0.75, 5);
+    expect(metalProfile.rimLightAlpha).toBeGreaterThanOrEqual(0.45);
+    expect(metalProfile.softGradientTopLeftAlpha).toBeGreaterThan(0.1);
+    expect(metalProfile.softGradientBottomRightAlpha).toBeGreaterThan(0.2);
+    expect(metalProfile.highlightAlpha).toBeCloseTo(0.88, 2);
+    expect(metalProfile.hasSecondaryGlint).toBe(true);
+
+    const crystalProfile = resolveShapeMaterialProfile({
+      fill: PALETTE.CYAN_FROST,
+      shade: PALETTE.COBALT_SHADE,
+      highlight: PALETTE.ICE_WHITE,
+    });
+    expect(crystalProfile.material).toBe('crystal');
+    expect(crystalProfile.highlightAlpha).toBeCloseTo(0.92, 2);
+    expect(crystalProfile.hasSecondaryGlint).toBe(true);
+
+    const organicProfile = resolveShapeMaterialProfile({
+      fill: PALETTE.GOBLIN_GREEN,
+      shade: PALETTE.FOREST_SHADE,
+      highlight: PALETTE.LIME_GLOW,
+    });
+    expect(organicProfile.material).toBe('organic');
+    expect(organicProfile.highlightAlpha).toBeCloseTo(0.52, 2);
+    expect(organicProfile.hasSecondaryGlint).toBe(false);
+
+    const clothProfile = resolveShapeMaterialProfile({
+      fill: PALETTE.LEATHER_MID,
+      shade: PALETTE.LEATHER_DARK,
+      highlight: PALETTE.LEATHER_LIGHT,
+    });
+    expect(clothProfile.material).toBe('cloth');
+    expect(clothProfile.highlightAlpha).toBeCloseTo(0.52, 2);
+
+    // Explicit style.material override is honored
+    const overrideCrystal = resolveShapeMaterialProfile({
+      fill: PALETTE.SLATE_DARK,
+      material: 'crystal',
+    });
+    expect(overrideCrystal.material).toBe('crystal');
+  });
+
+  it('9. enforces BOSS_OUTLINE_WIDTH (3.5u) on all 3 Boss rigs and STANDARD_OUTLINE_WIDTH (2.5u) on standard heroes/enemies', () => {
+    expect(BOSS_OUTLINE_WIDTH).toBe(3.5);
+    expect(STANDARD_OUTLINE_WIDTH).toBe(2.5);
+
+    const primaryPartIds = [
+      'backAccessory',
+      'legLeft',
+      'legRight',
+      'torso',
+      'armLeft',
+      'head',
+      'armRight',
+    ] as const;
+
+    for (const bossRig of [
+      SPORE_KING_RIG_DEF,
+      KRYSSA_ICE_QUEEN_RIG_DEF,
+      FORGE_TITAN_RIG_DEF,
+    ]) {
+      for (const partId of primaryPartIds) {
+        const part = bossRig.parts.find((p) => p.id === partId);
+        expect(part, `${bossRig.id}.${partId}`).toBeDefined();
+        const firstOutlined = part!.shapes.find((s) => s.kind !== 'detailStroke');
+        expect(firstOutlined, `${bossRig.id}.${partId} first shape`).toBeDefined();
+        if (firstOutlined && firstOutlined.kind !== 'detailStroke') {
+          expect(
+            firstOutlined.style.outlineWidth,
+            `${bossRig.id}.${partId} outlineWidth`,
+          ).toBe(BOSS_OUTLINE_WIDTH);
+        }
+      }
+    }
+
+    // Clone & standard hero/enemy rigs use default 2.5u outlineWidth (undefined -> STANDARD_OUTLINE_WIDTH)
+    for (const stdRig of [VANGUARD_RIG_DEF, GOBLIN_SHOOTER_RIG_DEF, KRYSSA_CLONE_RIG_DEF]) {
+      const torsoPart = stdRig.parts.find((p) => p.id === 'torso')!;
+      const firstShape = torsoPart.shapes[0]!;
+      if (firstShape.kind !== 'detailStroke') {
+        expect(firstShape.style.outlineWidth ?? STANDARD_OUTLINE_WIDTH).toBe(
+          STANDARD_OUTLINE_WIDTH,
+        );
+      }
+    }
+  });
+
+  it('10. selects full 8-part enemy rigs at High/Medium quality in normal rooms and fastComposite at Low or stress test', () => {
+    // High & Medium in normal rooms (even with 25-36 enemies) -> full 8-part rig (fastComposite = false)
+    expect(
+      shouldUseEnemyFastComposite({
+        quality: 'high',
+        stressTestActive: false,
+        enemyCount: 32,
+        distFromCamera: 180,
+      }),
+    ).toBe(false);
+    expect(
+      shouldUseEnemyFastComposite({
+        quality: 'medium',
+        stressTestActive: false,
+        enemyCount: 36,
+        distFromCamera: 260,
+      }),
+    ).toBe(false);
+
+    // Low quality or stress test -> fastComposite = true
+    expect(
+      shouldUseEnemyFastComposite({
+        quality: 'low',
+        stressTestActive: false,
+        enemyCount: 6,
+        distFromCamera: 80,
+      }),
+    ).toBe(true);
+    expect(
+      shouldUseEnemyFastComposite({
+        quality: 'high',
+        stressTestActive: true,
+        enemyCount: 80,
+        distFromCamera: 100,
+      }),
+    ).toBe(true);
+
+    // Distance LOD fallback when enemyCount > 40 and far from camera (> 420u)
+    expect(
+      shouldUseEnemyFastComposite({
+        quality: 'high',
+        stressTestActive: false,
+        enemyCount: 45,
+        distFromCamera: 460,
+      }),
+    ).toBe(true);
+    expect(
+      shouldUseEnemyFastComposite({
+        quality: 'high',
+        stressTestActive: false,
+        enemyCount: 45,
+        distFromCamera: 220,
+      }),
+    ).toBe(false);
+  });
+
+  it('11. emits running footstep dust deterministically on 0.19s half-stride boundaries for ground units only', () => {
+    // Crossing 0.19s boundary while moving on ground -> emits
+    expect(shouldEmitFootstepDust(0.16, 0.20, true, false, false)).toBe(true);
+    // Within same half-stride -> does not emit
+    expect(shouldEmitFootstepDust(0.20, 0.26, true, false, false)).toBe(false);
+    // Crossing 0.38s boundary -> emits
+    expect(shouldEmitFootstepDust(0.36, 0.40, true, false, false)).toBe(true);
+
+    // Idle, flying, or stress test -> never emits
+    expect(shouldEmitFootstepDust(0.16, 0.20, false, false, false)).toBe(false);
+    expect(shouldEmitFootstepDust(0.16, 0.20, true, true, false)).toBe(false);
+    expect(shouldEmitFootstepDust(0.16, 0.20, true, 'frost_bat', false)).toBe(false);
+    expect(shouldEmitFootstepDust(0.16, 0.20, true, 'snow_spirit', false)).toBe(false);
+    expect(shouldEmitFootstepDust(0.16, 0.20, true, 'welder_drone', false)).toBe(false);
+    expect(shouldEmitFootstepDust(0.16, 0.20, true, false, true)).toBe(false);
   });
 });

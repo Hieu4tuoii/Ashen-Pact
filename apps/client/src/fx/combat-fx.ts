@@ -791,6 +791,41 @@ export class CombatFxManager {
     }
   }
 
+  public spawnFootstepDust(x: number, y: number, biome: 1 | 2 | 3 = this.currentBiome): void {
+    if (graphicsSettings.getState().quality === 'low') return;
+    const invBake = 1 / TextureBaker.getBakeScale();
+    const tint = hexToNum(
+      biome === 2 ? PALETTE.ICE_WHITE : biome === 3 ? PALETTE.COPPER_LIGHT : PALETTE.WARM_STONE,
+    );
+    for (let i = 0; i < 2; i++) {
+      const p = this.acquireParticleSlot();
+      if (!p) break;
+      const side = i === 0 ? -1 : 1;
+      p.active = true;
+      p.textureKey = 'fx_dust_puff';
+      p.age = 0;
+      p.ttl = 0.24;
+      p.x = x + side * 3.5;
+      p.y = y - 1;
+      p.vx = side * (10 + getClientFreezeRandom()() * 8);
+      p.vy = -8 - getClientFreezeRandom()() * 6;
+      p.vr = 0;
+      p.startScale = invBake * 0.45;
+      p.endScale = invBake * 0.15;
+      p.startAlpha = 0.42;
+      p.gravityY = -6;
+      p.damping = 4;
+
+      p.sprite.setTexture(p.textureKey);
+      p.sprite.setTint(tint);
+      p.sprite.setPosition(p.x, p.y);
+      p.sprite.setScale(p.startScale);
+      p.sprite.setAlpha(p.startAlpha);
+      p.sprite.setDepth(18);
+      p.sprite.setVisible(true);
+    }
+  }
+
   /**
    * Section 3.3 & 3.5: Enemy death breaks cutout rig parts apart, fades out, and leaves a persistent splatter decal.
    */
@@ -804,23 +839,24 @@ export class CombatFxManager {
       for (const part of rigDef.parts) {
         const p = this.acquireParticleSlot();
         if (!p) break;
-        const ang = getClientFreezeRandom()() * Math.PI * 2;
-        const spd = 65 + getClientFreezeRandom()() * 95;
+        const radialAng = Math.atan2(part.offsetY + 14, part.offsetX || 0.1);
+        const ang = radialAng + (getClientFreezeRandom()() - 0.5) * 0.55;
+        const spd = 72 + getClientFreezeRandom()() * 88;
         const texKey = TextureBaker.getPartTextureKey(rigDef.id, part.id);
         p.active = true;
         p.textureKey = texKey;
         p.age = 0;
         p.ttl = 0.55;
-        p.x = x + part.offsetX * 0.5;
-        p.y = rigFootY + part.offsetY * 0.5;
+        p.x = x + part.offsetX * 0.65;
+        p.y = rigFootY + part.offsetY * 0.65;
         p.vx = Math.cos(ang) * spd;
-        p.vy = Math.sin(ang) * spd - 40;
-        p.vr = (getClientFreezeRandom()() - 0.5) * 14;
-        p.startScale = invBake * 0.9;
-        p.endScale = invBake * 0.4;
-        p.startAlpha = 0.95;
+        p.vy = Math.sin(ang) * spd - 46;
+        p.vr = (part.offsetX >= 0 ? 1 : -1) * (6 + getClientFreezeRandom()() * 9);
+        p.startScale = invBake * 0.92;
+        p.endScale = invBake * 0.36;
+        p.startAlpha = 0.96;
         p.gravityY = 210;
-        p.damping = 4;
+        p.damping = 3.8;
 
         p.sprite.setTexture(texKey);
         p.sprite.clearTint();

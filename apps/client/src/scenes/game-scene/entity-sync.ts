@@ -10,6 +10,11 @@ import {
 } from '@ashen-pact/shared';
 import Phaser from 'phaser';
 import { CutoutRig } from '../../art/cutout-rig.js';
+import {
+  isFlyingRigId,
+  shouldEmitFootstepDust,
+  shouldUseEnemyFastComposite,
+} from '../../art/cutout-rig-math.js';
 import { hexToNum, PALETTE } from '../../art/palette.js';
 import { RIG_DEFS_BY_ID, VANGUARD_RIG_DEF } from '../../art/rig-defs.js';
 import { TextureBaker } from '../../art/texture-baker.js';
@@ -17,6 +22,8 @@ import { getVisualQueryConfig } from '../../core/visual-query.js';
 import { graphicsSettings } from '../../ui/graphics-settings.js';
 import { type GameScene, RIG_FOOT_OFFSET_Y } from '../GameScene.js';
 import { resolvePlayerNameplateSpec } from './interact-prompt.js';
+
+export { shouldUseEnemyFastComposite };
 
 export function updatePlayerOverheadUiImpl(
   this: GameScene,
@@ -123,6 +130,7 @@ export function syncSimulatedPlayersImpl(this: GameScene, dtSec: number): void {
       rig.setAimAngle(sp.aimAngle);
       const spWeaponId = sp.weaponSlots[sp.activeWeaponSlot] ?? 'rusty_pistol';
       rig.setEquippedWeapon(spWeaponId);
+      rig.setMoveVelocity(sp.vx, sp.vy);
       rig.setAnimState('run');
       rig.update(dtSec);
     }
@@ -179,16 +187,36 @@ export function syncSimulatedPlayersImpl(this: GameScene, dtSec: number): void {
 
       const pos = this.transport.getInterpolatedSimPlayerPos(cp, this.entityPosScratch);
 
+      const prevAnimTime = entry.rig.getAnimTime();
       entry.rig.setRigDef(charRigDef);
       entry.rig.setPlayerSlot(cp.slot);
       entry.rig.setLifeState(cp.lifeState);
+      entry.rig.setReviveProgress(cp.reviveProgress ?? 0);
       entry.rig.container.setPosition(pos.x, pos.y + RIG_FOOT_OFFSET_Y);
       entry.rig.setAimAngle(cp.aimAngle);
       const cpWeaponId = cp.weaponSlots[cp.activeWeaponSlot] ?? 'rusty_pistol';
       entry.rig.setEquippedWeapon(cpWeaponId);
-      const moving = Math.hypot(cp.vx, cp.vy) > 10;
-      entry.rig.setAnimState(moving ? 'run' : 'idle');
+      entry.rig.setDashActive(cp.dashTimer > 0);
+      entry.rig.setMoveVelocity(cp.vx, cp.vy);
+      const moving = cp.lifeState === 'alive' && Math.hypot(cp.vx, cp.vy) > 10;
+      if (cp.lifeState === 'downed') {
+        entry.rig.setAnimState((cp.reviveProgress ?? 0) > 0.05 ? 'revive' : 'downed');
+      } else {
+        entry.rig.setAnimState(moving ? 'run' : 'idle');
+      }
       entry.rig.update(dtSec);
+
+      if (
+        shouldEmitFootstepDust(
+          prevAnimTime,
+          entry.rig.getAnimTime(),
+          moving && cp.dashTimer <= 0,
+          false,
+          sim.stressTestActive,
+        )
+      ) {
+        this.fx.spawnFootstepDust(pos.x, pos.y + RIG_FOOT_OFFSET_Y, sim.currentBiome);
+      }
 
       this.updatePlayerOverheadUi(
         cp,
@@ -231,7 +259,8 @@ export function syncSimulatedPlayersImpl(this: GameScene, dtSec: number): void {
 export function syncEnemyRigsImpl(this: GameScene, dtSec: number): void {
   const sim = this.transport.getSim();
   this.activeEnemyIds.clear();
-  const useFastComposite = sim.stressTestActive || sim.enemies.length > 24;
+  const quality = graphicsSettings.getState().quality;
+  const enemyCount = sim.enemies.length;
   const view = this.cameras.main.worldView;
   const hasView = view && view.width > 0;
   const viewLeft = hasView ? view.x - 48 : -9999;
@@ -239,18 +268,31 @@ export function syncEnemyRigsImpl(this: GameScene, dtSec: number): void {
   const viewTop = hasView ? view.y - 48 : -9999;
   const viewBottom = hasView ? view.y + view.height + 48 : 9999;
 
-  for (let i = 0; i < sim.enemies.length; i++) {
+  for (let i = 0; i < enemyCount; i++) {
     const e = sim.enemies[i]!;
     if (e.hp <= 0) continue;
     this.activeEnemyIds.add(e.id);
 
+    const distFromCamera = Math.hypot(e.x - this.camFocusX, e.y - this.camFocusY);
+    const wantFastComposite = shouldUseEnemyFastComposite({
+      quality,
+      stressTestActive: sim.stressTestActive,
+      enemyCount,
+      distFromCamera,
+    });
+
     let rig = this.enemyRigs.get(e.id);
+    if (rig && rig.isFastComposite() !== wantFastComposite) {
+      rig.destroy();
+      this.enemyRigs.delete(e.id);
+      rig = undefined;
+    }
     if (!rig) {
       const rigDef = RIG_DEFS_BY_ID[e.defId] ?? RIG_DEFS_BY_ID.goblin_shooter!;
       rig = new CutoutRig(this, e.x, e.y + RIG_FOOT_OFFSET_Y, rigDef, {
         displayScale: e.isElite && !e.isBoss ? 1.22 : 1,
         initialPhaseOffset: (e.id % 7) * 0.25,
-        fastComposite: useFastComposite,
+        fastComposite: wantFastComposite,
       });
       rig.container.setDepth(e.defId === 'ice_prison' ? 32 : e.isBoss ? 31 : 28);
       this.enemyRigs.set(e.id, rig);
@@ -288,10 +330,24 @@ export function syncEnemyRigsImpl(this: GameScene, dtSec: number): void {
       rig.setTelegraphProgress(0);
     }
 
+    const prevAnimTime = rig.getAnimTime();
     const moving = e.frozenTimer <= 0 && Math.hypot(e.vx, e.vy) > 10;
+    rig.setMoveVelocity(e.vx, e.vy);
     rig.setAnimState(moving ? 'run' : 'idle');
     if (!sim.stressTestActive || (i + sim.tick) % 2 === 0) {
       rig.update(sim.stressTestActive ? dtSec * 2 : dtSec);
+    }
+    if (
+      (e.id + i) % 2 === 0 &&
+      shouldEmitFootstepDust(
+        prevAnimTime,
+        rig.getAnimTime(),
+        moving,
+        isFlyingRigId(e.defId) || e.defId === 'ice_prison' || Boolean(e.isDummy),
+        sim.stressTestActive,
+      )
+    ) {
+      this.fx.spawnFootstepDust(pos.x, pos.y + RIG_FOOT_OFFSET_Y, sim.currentBiome);
     }
   }
 

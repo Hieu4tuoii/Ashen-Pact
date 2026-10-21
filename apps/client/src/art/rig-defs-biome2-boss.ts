@@ -1,5 +1,5 @@
 import { PALETTE } from './palette.js';
-import type { EntityRigDef } from './rig-types.js';
+import { BOSS_OUTLINE_WIDTH, type EntityRigDef } from './rig-types.js';
 
 function buildKryssaQueenRig(spec: {
   id: string;
@@ -9,6 +9,8 @@ function buildKryssaQueenRig(spec: {
   isClone: boolean;
 }): EntityRigDef {
   const s = spec.scale;
+  const bossOutline = spec.isClone ? undefined : BOSS_OUTLINE_WIDTH;
+  const bossOutlineColor = spec.isClone ? undefined : PALETTE.INK_DEEP;
   return {
     id: spec.id,
     nameVi: spec.nameVi,
@@ -47,6 +49,8 @@ function buildKryssaQueenRig(spec: {
               fill: spec.isClone ? PALETTE.ELECTRIC_VIOLET : PALETTE.COBALT_SHADE,
               shade: PALETTE.ABYSS_BLUE,
               highlight: PALETTE.CYAN_FROST,
+              outlineColor: bossOutlineColor,
+              outlineWidth: bossOutline,
             },
           },
         ],
@@ -72,6 +76,8 @@ function buildKryssaQueenRig(spec: {
             style: {
               fill: PALETTE.ABYSS_BLUE,
               shade: PALETTE.INK_DARK,
+              outlineColor: bossOutlineColor,
+              outlineWidth: bossOutline,
             },
           },
         ],
@@ -97,6 +103,8 @@ function buildKryssaQueenRig(spec: {
             style: {
               fill: PALETTE.ABYSS_BLUE,
               shade: PALETTE.INK_DARK,
+              outlineColor: bossOutlineColor,
+              outlineWidth: bossOutline,
             },
           },
         ],
@@ -127,6 +135,8 @@ function buildKryssaQueenRig(spec: {
               fill: spec.isClone ? PALETTE.CYAN_FROST : PALETTE.AZURE_CORE,
               shade: PALETTE.COBALT_SHADE,
               highlight: PALETTE.ICE_WHITE,
+              outlineColor: bossOutlineColor,
+              outlineWidth: bossOutline,
             },
           },
           // Glowing frost-heart gem
@@ -167,6 +177,8 @@ function buildKryssaQueenRig(spec: {
             style: {
               fill: PALETTE.ICE_WHITE,
               shade: PALETTE.CYAN_FROST,
+              outlineColor: bossOutlineColor,
+              outlineWidth: bossOutline,
             },
           },
         ],
@@ -197,6 +209,8 @@ function buildKryssaQueenRig(spec: {
               fill: PALETTE.ICE_WHITE,
               shade: PALETTE.CYAN_FROST,
               highlight: PALETTE.BONE_WHITE,
+              outlineColor: bossOutlineColor,
+              outlineWidth: bossOutline,
             },
           },
           {
@@ -210,6 +224,8 @@ function buildKryssaQueenRig(spec: {
               fill: PALETTE.ICE_WHITE,
               shade: PALETTE.CYAN_FROST,
               highlight: PALETTE.BONE_WHITE,
+              outlineColor: bossOutlineColor,
+              outlineWidth: bossOutline,
             },
           },
           {
@@ -257,6 +273,8 @@ function buildKryssaQueenRig(spec: {
             style: {
               fill: PALETTE.CYAN_FROST,
               shade: PALETTE.COBALT_SHADE,
+              outlineColor: bossOutlineColor,
+              outlineWidth: bossOutline,
             },
           },
           {
@@ -271,6 +289,8 @@ function buildKryssaQueenRig(spec: {
               fill: PALETTE.ICE_WHITE,
               shade: PALETTE.ELECTRIC_VIOLET,
               highlight: PALETTE.BONE_WHITE,
+              outlineColor: bossOutlineColor,
+              outlineWidth: bossOutline,
             },
           },
         ],
@@ -293,6 +313,8 @@ function buildKryssaQueenRig(spec: {
             style: {
               fill: PALETTE.ICE_WHITE,
               shade: PALETTE.CYAN_FROST,
+              outlineColor: bossOutlineColor,
+              outlineWidth: bossOutline,
             },
           },
         ],

@@ -1,5 +1,5 @@
 import { PALETTE } from './palette.js';
-import type { EntityRigDef } from './rig-types.js';
+import { BOSS_OUTLINE_WIDTH, type EntityRigDef } from './rig-types.js';
 
 export const FORGE_TITAN_RIG_DEF: EntityRigDef = {
   id: 'forge_titan',
@@ -32,6 +32,8 @@ export const FORGE_TITAN_RIG_DEF: EntityRigDef = {
             fill: PALETTE.FORGE_DARK,
             shade: PALETTE.INK_DARK,
             highlight: PALETTE.MAGMA_RED,
+            outlineColor: PALETTE.INK_DEEP,
+            outlineWidth: BOSS_OUTLINE_WIDTH,
           },
         },
         {
@@ -45,6 +47,8 @@ export const FORGE_TITAN_RIG_DEF: EntityRigDef = {
             fill: PALETTE.FORGE_DARK,
             shade: PALETTE.INK_DARK,
             highlight: PALETTE.MAGMA_RED,
+            outlineColor: PALETTE.INK_DEEP,
+            outlineWidth: BOSS_OUTLINE_WIDTH,
           },
         },
         {
@@ -59,6 +63,8 @@ export const FORGE_TITAN_RIG_DEF: EntityRigDef = {
             fill: PALETTE.BRASS_CORE,
             shade: PALETTE.BRONZE_SHADE,
             highlight: PALETTE.SOLAR_GOLD,
+            outlineColor: PALETTE.INK_DEEP,
+            outlineWidth: BOSS_OUTLINE_WIDTH,
           },
         },
       ],
@@ -84,6 +90,8 @@ export const FORGE_TITAN_RIG_DEF: EntityRigDef = {
             fill: PALETTE.STEEL_DARK,
             shade: PALETTE.INK_DARK,
             highlight: PALETTE.STEEL_LIGHT,
+            outlineColor: PALETTE.INK_DEEP,
+            outlineWidth: BOSS_OUTLINE_WIDTH,
           },
         },
       ],
@@ -109,6 +117,8 @@ export const FORGE_TITAN_RIG_DEF: EntityRigDef = {
             fill: PALETTE.STEEL_DARK,
             shade: PALETTE.INK_DARK,
             highlight: PALETTE.STEEL_LIGHT,
+            outlineColor: PALETTE.INK_DEEP,
+            outlineWidth: BOSS_OUTLINE_WIDTH,
           },
         },
       ],
@@ -138,6 +148,8 @@ export const FORGE_TITAN_RIG_DEF: EntityRigDef = {
             fill: PALETTE.BRASS_CORE,
             shade: PALETTE.BRONZE_SHADE,
             highlight: PALETTE.SOLAR_GOLD,
+            outlineColor: PALETTE.INK_DEEP,
+            outlineWidth: BOSS_OUTLINE_WIDTH,
           },
         },
         // Glowing molten furnace core grate
@@ -177,6 +189,8 @@ export const FORGE_TITAN_RIG_DEF: EntityRigDef = {
             fill: PALETTE.STEEL_DARK,
             shade: PALETTE.INK_DARK,
             highlight: PALETTE.FLAME_ORANGE,
+            outlineColor: PALETTE.INK_DEEP,
+            outlineWidth: BOSS_OUTLINE_WIDTH,
           },
         },
       ],
@@ -203,6 +217,8 @@ export const FORGE_TITAN_RIG_DEF: EntityRigDef = {
             fill: PALETTE.SOLAR_GOLD,
             shade: PALETTE.BRASS_CORE,
             highlight: PALETTE.VOLT_YELLOW,
+            outlineColor: PALETTE.INK_DEEP,
+            outlineWidth: BOSS_OUTLINE_WIDTH,
           },
         },
         {
@@ -216,6 +232,8 @@ export const FORGE_TITAN_RIG_DEF: EntityRigDef = {
             fill: PALETTE.SOLAR_GOLD,
             shade: PALETTE.BRASS_CORE,
             highlight: PALETTE.VOLT_YELLOW,
+            outlineColor: PALETTE.INK_DEEP,
+            outlineWidth: BOSS_OUTLINE_WIDTH,
           },
         },
         {
@@ -229,6 +247,8 @@ export const FORGE_TITAN_RIG_DEF: EntityRigDef = {
             fill: PALETTE.STEEL_DARK,
             shade: PALETTE.INK_DARK,
             highlight: PALETTE.STEEL_LIGHT,
+            outlineColor: PALETTE.INK_DEEP,
+            outlineWidth: BOSS_OUTLINE_WIDTH,
           },
         },
         // Blazing furnace visor slit
@@ -268,6 +288,8 @@ export const FORGE_TITAN_RIG_DEF: EntityRigDef = {
           style: {
             fill: PALETTE.STEEL_LIGHT,
             shade: PALETTE.STEEL_DARK,
+            outlineColor: PALETTE.INK_DEEP,
+            outlineWidth: BOSS_OUTLINE_WIDTH,
           },
         },
         {
@@ -281,6 +303,8 @@ export const FORGE_TITAN_RIG_DEF: EntityRigDef = {
             fill: PALETTE.MAGMA_RED,
             shade: PALETTE.RUBY_DARK,
             highlight: PALETTE.VOLT_YELLOW,
+            outlineColor: PALETTE.INK_DEEP,
+            outlineWidth: BOSS_OUTLINE_WIDTH,
           },
         },
       ],
@@ -304,6 +328,8 @@ export const FORGE_TITAN_RIG_DEF: EntityRigDef = {
             fill: PALETTE.BRASS_CORE,
             shade: PALETTE.BRONZE_SHADE,
             highlight: PALETTE.SOLAR_GOLD,
+            outlineColor: PALETTE.INK_DEEP,
+            outlineWidth: BOSS_OUTLINE_WIDTH,
           },
         },
       ],

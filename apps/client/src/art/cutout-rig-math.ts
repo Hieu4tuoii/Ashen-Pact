@@ -12,6 +12,48 @@ export type RigAnimState =
   | 'revive';
 
 export const STATE_CROSSFADE_DURATION_SEC = 0.12;
+export const FOOTSTEP_STRIDE_INTERVAL_SEC = 0.19;
+
+export interface EnemyFastCompositeParams {
+  quality: 'high' | 'medium' | 'low';
+  stressTestActive: boolean;
+  enemyCount: number;
+  distFromCamera?: number;
+}
+
+export function shouldUseEnemyFastComposite(params: EnemyFastCompositeParams): boolean {
+  if (params.stressTestActive || params.quality === 'low') {
+    return true;
+  }
+  if (params.enemyCount > 40 && (params.distFromCamera ?? 0) > 420) {
+    return true;
+  }
+  return false;
+}
+
+export function isFlyingRigId(rigId: string): boolean {
+  return rigId === 'frost_bat' || rigId === 'snow_spirit' || rigId === 'welder_drone';
+}
+
+export function shouldEmitFootstepDust(
+  prevTime: number,
+  nextTime: number,
+  isMoving: boolean,
+  isFlyingOrRigId: boolean | string = false,
+  stressTestActive = false,
+): boolean {
+  if (!isMoving || stressTestActive || nextTime <= prevTime) {
+    return false;
+  }
+  const isFlying =
+    typeof isFlyingOrRigId === 'string' ? isFlyingRigId(isFlyingOrRigId) : isFlyingOrRigId;
+  if (isFlying) {
+    return false;
+  }
+  const prevStep = Math.floor(prevTime / FOOTSTEP_STRIDE_INTERVAL_SEC);
+  const nextStep = Math.floor(nextTime / FOOTSTEP_STRIDE_INTERVAL_SEC);
+  return nextStep > prevStep;
+}
 
 const ALL_PART_IDS: readonly RigPartId[] = [
   'backAccessory',

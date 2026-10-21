@@ -3,6 +3,8 @@ import { PALETTE, type PaletteHex } from './palette.js';
 export const STANDARD_OUTLINE_WIDTH = 2.5;
 export const INNER_OUTLINE_WIDTH = 1.5;
 
+export type ShapeMaterialKind = 'metal' | 'cloth' | 'crystal' | 'organic';
+
 export interface OutlinedStyle {
   fill: PaletteHex | string;
   shade?: PaletteHex | string;
@@ -11,6 +13,65 @@ export interface OutlinedStyle {
   outlineWidth?: number;
   shadeOffset?: { dx: number; dy: number };
   highlightOffset?: { dx: number; dy: number };
+  material?: ShapeMaterialKind;
+  rimLight?: boolean;
+}
+
+export interface ShapeMaterialProfile {
+  material: ShapeMaterialKind;
+  softGradientTopLeftAlpha: number;
+  softGradientBottomRightAlpha: number;
+  rimLightAngleRad: number;
+  rimLightAlpha: number;
+  rimLightColor: string;
+  highlightAlpha: number;
+  hasSecondaryGlint: boolean;
+}
+
+const METAL_FILL_SET = new Set<string>([
+  PALETTE.STEEL_DARK, PALETTE.STEEL_LIGHT, PALETTE.SILVER_BRIGHT,
+  PALETTE.BRASS_CORE, PALETTE.BRONZE_SHADE, PALETTE.COPPER_LIGHT,
+]);
+
+const CRYSTAL_FILL_SET = new Set<string>([
+  PALETTE.CYAN_FROST, PALETTE.ICE_WHITE, PALETTE.ELECTRIC_VIOLET,
+  PALETTE.SOLAR_GOLD, PALETTE.LIME_GLOW, PALETTE.MINT_LIGHT,
+  PALETTE.VOLT_YELLOW, PALETTE.FLAME_ORANGE, PALETTE.MAGMA_RED,
+]);
+
+const ORGANIC_FILL_SET = new Set<string>([
+  PALETTE.GOBLIN_GREEN, PALETTE.FOREST_SHADE, PALETTE.MOSS_DARK,
+  PALETTE.TOXIC_PURPLE, PALETTE.SKIN_WARM, PALETTE.SKIN_SHADE,
+]);
+
+export function resolveShapeMaterialProfile(style: OutlinedStyle): ShapeMaterialProfile {
+  let material: ShapeMaterialKind = 'cloth';
+  if (style.material) material = style.material;
+  else if (METAL_FILL_SET.has(style.fill)) material = 'metal';
+  else if (CRYSTAL_FILL_SET.has(style.fill)) material = 'crystal';
+  else if (ORGANIC_FILL_SET.has(style.fill)) material = 'organic';
+
+  const highlightAlpha = material === 'crystal' ? 0.92 : material === 'metal' ? 0.88 : 0.52;
+  const hasSecondaryGlint = material === 'metal' || material === 'crystal';
+  const rimLightAlpha = material === 'crystal' ? 0.62 : material === 'metal' ? 0.58 : 0.52;
+  const rimLightColor =
+    style.highlight ??
+    (material === 'crystal'
+      ? PALETTE.ICE_WHITE
+      : material === 'metal'
+        ? PALETTE.SILVER_BRIGHT
+        : PALETTE.BONE_WHITE);
+
+  return {
+    material,
+    softGradientTopLeftAlpha: 0.14,
+    softGradientBottomRightAlpha: 0.28,
+    rimLightAngleRad: -Math.PI * 0.75,
+    rimLightAlpha,
+    rimLightColor,
+    highlightAlpha,
+    hasSecondaryGlint,
+  };
 }
 
 export type VectorShapeCommand =
@@ -106,11 +167,13 @@ export function tracePolygon(
 }
 
 /**
- * Core procedural rendering pipeline required by ART_GUIDE.md:
+ * Core procedural rendering pipeline (Cutout 2.0 Shading):
  * 1. Base flat fill from PALETTE
- * 2. Clipped Cel-Shading on bottom-right (light source fixed at top-left -135 deg)
- * 3. Clipped Rim-Light / Highlight on top-left
- * 4. Crisp outer dark outline (default 2.5 world units, INK_DARK #141019)
+ * 2. Clipped Layer 1 Soft Directional Gradient (-135 deg top-left -> +45 deg bottom-right)
+ * 3. Clipped Layer 2 Cel-Shade crescent on bottom-right
+ * 4. Clipped Material-Specific Highlight (metal specular glint, crystal core, cloth/organic soft matte)
+ * 5. Clipped Top-Left (-135 deg) Rim-Light Arc inside the silhouette border
+ * 6. Crisp outer dark outline (default 2.5 world units, 3.5 for bosses, INK_DARK #141019)
  */
 export function outlined(
   ctx: CanvasRenderingContext2D,
@@ -120,6 +183,7 @@ export function outlined(
 ): void {
   const outlineColor = style.outlineColor ?? PALETTE.INK_DARK;
   const outlineWidth = style.outlineWidth ?? STANDARD_OUTLINE_WIDTH;
+  const profile = resolveShapeMaterialProfile(style);
 
   ctx.save();
 
@@ -128,37 +192,90 @@ export function outlined(
   ctx.fillStyle = style.fill;
   ctx.fill();
 
-  // 2. Clipped Cel-Shading & Rim-Light
-  if (style.shade || style.highlight) {
-    ctx.save();
+  // 2. Clipped 2-Layer Shading, Material Highlight & -135 deg Top-Left Rim-Light
+  ctx.save();
+  tracePath(ctx);
+  ctx.clip();
+
+  const cx = boundsHint?.cx ?? 0;
+  const cy = boundsHint?.cy ?? 0;
+  const rx = Math.max(4, boundsHint?.rx ?? 14);
+  const ry = Math.max(4, boundsHint?.ry ?? 14);
+
+  // Layer 1: Soft directional gradient (-135 deg top-left to +45 deg bottom-right)
+  if (outlineWidth > 0 || style.shade || style.highlight) {
+    const grad = ctx.createLinearGradient(cx - rx, cy - ry, cx + rx, cy + ry);
+    grad.addColorStop(0, `rgba(255, 252, 242, ${profile.softGradientTopLeftAlpha})`);
+    grad.addColorStop(0.48, 'rgba(255, 252, 242, 0)');
+    grad.addColorStop(1, `rgba(20, 16, 25, ${profile.softGradientBottomRightAlpha})`);
     tracePath(ctx);
-    ctx.clip();
+    ctx.fillStyle = grad;
+    ctx.fill();
+  }
 
-    const cx = boundsHint?.cx ?? 0;
-    const cy = boundsHint?.cy ?? 0;
-    const rx = Math.max(4, boundsHint?.rx ?? 14);
-    const ry = Math.max(4, boundsHint?.ry ?? 14);
+  // Layer 2: Cel-Shade crescent on bottom-right
+  if (style.shade) {
+    const sdx = style.shadeOffset?.dx ?? rx * 0.36;
+    const sdy = style.shadeOffset?.dy ?? ry * 0.38;
+    ctx.beginPath();
+    ctx.ellipse(cx + sdx, cy + sdy, rx * 1.08, ry * 1.05, -0.25, 0, Math.PI * 2);
+    ctx.fillStyle = style.shade;
+    ctx.fill();
+  }
 
-    if (style.shade) {
-      const sdx = style.shadeOffset?.dx ?? rx * 0.36;
-      const sdy = style.shadeOffset?.dy ?? ry * 0.38;
+  // Layer 3: Material-specific highlight
+  if (style.highlight) {
+    const hdx = style.highlightOffset?.dx ?? -rx * 0.34;
+    const hdy = style.highlightOffset?.dy ?? -ry * 0.36;
+    ctx.save();
+    ctx.globalAlpha = profile.highlightAlpha;
+    ctx.fillStyle = style.highlight;
+
+    if (profile.material === 'metal') {
       ctx.beginPath();
-      ctx.ellipse(cx + sdx, cy + sdy, rx * 1.08, ry * 1.05, -0.25, 0, Math.PI * 2);
-      ctx.fillStyle = style.shade;
+      ctx.ellipse(cx + hdx, cy + hdy, rx * 0.54, ry * 0.22, -0.68, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(
+        cx + hdx + rx * 0.26,
+        cy + hdy - ry * 0.12,
+        Math.max(1.1, Math.min(rx, ry) * 0.14),
+        0,
+        Math.PI * 2,
+      );
+      ctx.fill();
+    } else if (profile.material === 'crystal') {
+      ctx.beginPath();
+      ctx.ellipse(cx + hdx * 0.9, cy + hdy * 0.9, rx * 0.5, ry * 0.38, -0.55, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 0.78;
+      ctx.fillStyle = PALETTE.BONE_WHITE;
+      ctx.beginPath();
+      ctx.ellipse(cx + hdx * 0.78, cy + hdy * 0.78, rx * 0.22, ry * 0.16, -0.55, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      ctx.beginPath();
+      ctx.ellipse(cx + hdx, cy + hdy, rx * 0.52, ry * 0.38, -0.52, 0, Math.PI * 2);
       ctx.fill();
     }
-
-    if (style.highlight) {
-      const hdx = style.highlightOffset?.dx ?? -rx * 0.34;
-      const hdy = style.highlightOffset?.dy ?? -ry * 0.36;
-      ctx.beginPath();
-      ctx.ellipse(cx + hdx, cy + hdy, rx * 0.48, ry * 0.35, -0.55, 0, Math.PI * 2);
-      ctx.fillStyle = style.highlight;
-      ctx.fill();
-    }
-
     ctx.restore();
   }
+
+  // Layer 4: Top-Left (-135 deg) Rim-Light Arc along inner silhouette edge
+  if (outlineWidth >= STANDARD_OUTLINE_WIDTH && style.rimLight !== false) {
+    ctx.save();
+    ctx.translate(1.3, 1.3);
+    tracePath(ctx);
+    ctx.lineWidth = outlineWidth + 1.6;
+    ctx.strokeStyle = profile.rimLightColor;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.globalAlpha = profile.rimLightAlpha;
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  ctx.restore();
 
   // 3. Outer crisp vector outline
   if (outlineWidth > 0) {

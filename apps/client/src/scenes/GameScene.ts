@@ -16,6 +16,7 @@ import {
 import { type Client as ColyseusClient, type Room as ColyseusRoom } from 'colyseus.js';
 import Phaser from 'phaser';
 import type { CutoutRig } from '../art/cutout-rig.js';
+import { shouldEmitFootstepDust } from '../art/cutout-rig-math.js';
 import { dampLerp } from '../art/easing.js';
 import { RIG_DEFS_BY_ID, VANGUARD_RIG_DEF } from '../art/rig-defs.js';
 import { TextureBaker } from '../art/texture-baker.js';
@@ -692,20 +693,45 @@ export class GameScene extends Phaser.Scene {
     // 5. Render Interpolated Player & CutoutRig Animation + Dash Afterimage Ghosts
     const playerPos = this.transport.getInterpolatedPlayerPos(this.playerPosScratch);
     if (this.playerRig) {
+      const prevAnimTime = this.playerRig.getAnimTime();
       const charRigDef = RIG_DEFS_BY_ID[sim.player.characterId] ?? VANGUARD_RIG_DEF;
       this.playerRig.setRigDef(charRigDef);
       this.playerRig.setPlayerSlot(sim.player.slot);
       this.playerRig.setLifeState(sim.player.lifeState);
+      this.playerRig.setReviveProgress(sim.player.reviveProgress ?? 0);
       this.playerRig.container.setPosition(playerPos.x, playerPos.y + RIG_FOOT_OFFSET_Y);
       this.playerRig.setAimAngle(aimAngle);
       this.playerRig.setEquippedWeapon(sim.getActiveWeaponId());
       this.playerRig.setDashActive(sim.player.dashTimer > 0);
+      this.playerRig.setMoveVelocity(sim.player.vx, sim.player.vy);
       this.playerRig.setElementalStatusTint(this.resolvePlayerStatusTint());
 
-      const isMoving = Math.hypot(sim.player.vx, sim.player.vy) > 12;
-      this.playerRig.setAnimState(isMoving ? 'run' : 'idle');
+      const isMoving =
+        sim.player.lifeState === 'alive' && Math.hypot(sim.player.vx, sim.player.vy) > 12;
+      if (sim.player.lifeState === 'downed') {
+        this.playerRig.setAnimState(
+          (sim.player.reviveProgress ?? 0) > 0.05 ? 'revive' : 'downed',
+        );
+      } else {
+        this.playerRig.setAnimState(isMoving ? 'run' : 'idle');
+      }
       if (!isSoloPaused) {
         this.playerRig.update(dtSec);
+        if (
+          shouldEmitFootstepDust(
+            prevAnimTime,
+            this.playerRig.getAnimTime(),
+            isMoving && sim.player.dashTimer <= 0,
+            false,
+            sim.stressTestActive,
+          )
+        ) {
+          this.fx.spawnFootstepDust(
+            playerPos.x,
+            playerPos.y + RIG_FOOT_OFFSET_Y,
+            sim.currentBiome,
+          );
+        }
       }
 
       if (sim.player.dashTimer > 0 && !isSoloPaused) {

@@ -97,13 +97,17 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
           }
           enemyHitSfxX = ev.x;
           enemyHitSfxY = ev.y;
-        } else {
+        } else if (ev.targetId === sim.player.id) {
           this.playerRig?.triggerHitFlash(0.16);
           if (Math.hypot(ev.knockbackX, ev.knockbackY) > 0.01) {
             this.triggerPlayerHitDirectionIndicator(Math.atan2(-ev.knockbackY, -ev.knockbackX));
           } else {
             this.triggerPlayerHitDirectionIndicator(-Math.PI * 0.5);
           }
+          zzfx.play('player_hurt', ev.x, this.camFocusX, ev.y, this.camFocusY);
+        } else {
+          this.coopPlayerRigs.get(ev.targetId)?.rig.triggerHitFlash(0.16);
+          this.simPlayerRigs.get(ev.targetId)?.triggerHitFlash(0.16);
           zzfx.play('player_hurt', ev.x, this.camFocusX, ev.y, this.camFocusY);
         }
         break;
@@ -260,6 +264,12 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
         break;
       }
       case 'skill_cast': {
+        if (ev.playerId === undefined || ev.playerId === sim.player.id) {
+          this.playerRig?.triggerCastPose(0.32);
+        } else {
+          this.coopPlayerRigs.get(ev.playerId)?.rig.triggerCastPose(0.32);
+          this.simPlayerRigs.get(ev.playerId)?.triggerCastPose(0.32);
+        }
         this.lighting.spawnTransientLight(ev.x, ev.y, 115, PALETTE.CRIMSON_BRIGHT, 0.88, 0.26);
         const caster = sim.getAllPlayers().find((pl) => pl.id === ev.playerId) ?? sim.player;
         const skillSfxMap = {

@@ -178,6 +178,19 @@ export class CutoutRig {
     return this.animState;
   }
 
+  public getAnimTime(): number {
+    return this.animTime;
+  }
+
+  public getCrossfadeAlpha(): number {
+    if (!this.crossfadeCtrl.fromPose) return 1;
+    const raw =
+      this.crossfadeCtrl.crossfadeDurationSec > 0
+        ? this.crossfadeCtrl.crossfadeElapsedSec / this.crossfadeCtrl.crossfadeDurationSec
+        : 1;
+    return Math.max(0, Math.min(1, raw));
+  }
+
   public setMoveVelocity(vx: number, vy: number): void {
     this.moveVx = vx;
     this.moveVy = vy;
@@ -192,7 +205,7 @@ export class CutoutRig {
   }
 
   public triggerCastPose(durationSec = 0.42): void {
-    this.castPoseTimer = Math.max(this.castPoseTimer, durationSec);
+    this.castPoseTimer = durationSec <= 0 ? 0 : Math.max(this.castPoseTimer, durationSec);
   }
 
   public setReviveProgress(progress01: number): void {
