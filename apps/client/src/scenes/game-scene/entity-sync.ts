@@ -48,7 +48,9 @@ export function updatePlayerOverheadUiImpl(
       if (nameLabel.text !== spec.text) {
         nameLabel.setText(spec.text);
       }
-      nameLabel.setColor(spec.color);
+      if (nameLabel.style.color !== spec.color) {
+        nameLabel.setColor(spec.color);
+      }
       nameLabel.setAlpha(spec.alpha);
       nameLabel.setScale(spec.worldScale);
       nameLabel.setPosition(spec.x, spec.y);

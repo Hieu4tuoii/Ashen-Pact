@@ -33,10 +33,12 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
     : (this.lighting?.getElapsedSec() ?? 1.0);
 
   const debug = initGlobalDebugState();
-  const target = findInteractTarget(sim, sim.player.id, {
-    currentTargetKey: this.interactPromptState.currentTargetKey,
-    hysteresis: INTERACT_HYSTERESIS,
-  });
+  const target = sim.stressTestActive
+    ? null
+    : findInteractTarget(sim, sim.player.id, {
+        currentTargetKey: this.interactPromptState.currentTargetKey,
+        hysteresis: INTERACT_HYSTERESIS,
+      });
   this.currentInteractTarget = target;
 
   // 0. Hub 5 Character Statues & Natural Hub Guidance Signs (Doanh Trại)
@@ -205,7 +207,7 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
         this.hubGuideTexts[gIdx] = gTxt;
       } else {
         if (gTxt.text !== spec.text) gTxt.setText(spec.text);
-        gTxt.setColor(spec.color);
+        if (gTxt.style.color !== spec.color) gTxt.setColor(spec.color);
         gTxt.setPosition(spec.x, spec.y);
       }
       const guideVis = resolveHubGuideVisibility(
@@ -268,7 +270,7 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
       this.pingVisuals.set(ping.id, label);
     } else {
       if (label.text !== txt) label.setText(txt);
-      label.setColor(slotColor);
+      if (label.style.color !== slotColor) label.setColor(slotColor);
       label.setPosition(ping.x, ping.y - 26 - Math.sin(visualTimeSec * 9.0) * 3);
     }
   }

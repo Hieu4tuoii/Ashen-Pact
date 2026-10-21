@@ -84,5 +84,5 @@
 ### Task 3: Capture P7 `after` Screenshots with `--verify-freeze`, Conduct Blind A/B `pro` Visual Gate, Run Phase P7 Quality Gate, and Tag `polish-p7`
 
 - [x] **Step 1:** Run `pnpm shots -- --phase p7 --label after --scenes hub-solo,hub-statue-mid,hub-near-statue,hub-near-rack,hub-coop-2p,b1-merchant-far,b1-merchant-mid,b1-merchant,b1-chest-closed-far,b1-chest-mid,b1-chest-near,b1-weapon-ground-far,b1-weapon-ground-mid,b1-weapon-ground-near,b1-door-locked,b1-door-open,b1-shrine,b1-portal-active,coop-4p-combat --verify-freeze` and verify `diffRatio < 0.005` on all 19 scenes.
-- [ ] **Step 2:** Set up the 19-scene Blind A/B directory (`version-A` vs `version-B` + `ab-mapping.json`), dispatch the independent `pro` Visual Reviewer subagent, and record results in `docs/screenshots/polish-p7/review-1.md`.
-- [ ] **Step 3:** Run fresh `pnpm verify` and `pnpm perf`, update `docs/PROGRESS.md` & `docs/PHASES.md`, commit, and tag `polish-p7`.
+- [x] **Step 2:** Set up the 19-scene Blind A/B directory (`version-A` vs `version-B` + `ab-mapping.json`), dispatch the independent `pro` Visual Reviewer subagent, and record results in `docs/screenshots/polish-p7/review.md`.
+- [x] **Step 3:** Run fresh `pnpm verify` and `pnpm perf`, update `docs/PROGRESS.md` & `docs/PHASES.md`, commit, and tag `polish-p7`.
