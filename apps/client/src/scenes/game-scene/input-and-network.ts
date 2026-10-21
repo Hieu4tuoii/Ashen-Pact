@@ -339,6 +339,13 @@ export function setupKeyboardBindingsImpl(this: GameScene): void {
     }
   });
 
+  kb.on('keydown-O', () => {
+    if (this.pauseModalOpen && !this.pauseConfirmExitOpen && !this.settingsModal?.isOpen()) {
+      zzfx.play('ui_click');
+      this.settingsModal?.open('settings');
+    }
+  });
+
   kb.on('keydown-M', () => {
     const sim = this.transport.getSim();
     if (this.pauseModalOpen && !this.pauseConfirmExitOpen && !this.settingsModal?.isOpen()) {

@@ -1,4 +1,4 @@
-# GHI NHẬN BẢN QUYỀN & TÀI NGUYÊN (CREDITS.md) — ASHEN PACT (`v0.1.0`)
+# GHI NHẬN BẢN QUYỀN & TÀI NGUYÊN (CREDITS.md) — ASHEN PACT (`v0.2.0`)
 
 ## 1. Đồ Họa Vector & Âm Thanh Thủ Tục (100% Procedural Code)
 - **Đồ họa 2D Vector & Cutout Rig (`100% Procedural Vector Art`):**
@@ -37,4 +37,4 @@
 
 ## 4. Cảm Ơn Đặc Biệt (Inspirations)
 - Lấy cảm hứng về nhịp độ hành động và cơ chế vượt ải co-op từ **Soul Knight** (*ChillyRoom*).
-- Thiết kế, kiến trúc simulation 60Hz, đồ họa procedural vector, âm nhạc tổng hợp và kiểm định tự động được thực hiện trọn vẹn cho dự án **Ashen Pact (`v0.1.0`)**.
+- Thiết kế, kiến trúc simulation 60Hz, đồ họa procedural vector, âm nhạc tổng hợp và kiểm định tự động được thực hiện trọn vẹn cho dự án **Ashen Pact (`v0.2.0`)**.

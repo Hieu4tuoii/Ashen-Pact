@@ -1,15 +1,15 @@
-# 🔥 ASHEN PACT (`v0.1.0`) — Game Co-op Vượt Ải Mạng LAN (1–4 Người)
+# 🔥 ASHEN PACT (`v0.2.0`) — Game Co-op Vượt Ải Mạng LAN (1–4 Người)
 
-> **Ashen Pact** là tựa game hành động bắn súng vượt ải góc nhìn từ trên xuống (*Top-Down Action Roguelite Shooter*) lấy cảm hứng từ *Soul Knight*, hỗ trợ **chơi đơn (Solo)** và **phối hợp mạng nội bộ Wi-Fi / LAN từ 2 đến 4 người chơi** ngay trên trình duyệt mà **không cần cài đặt trên máy bạn bè, không cần kết nối Internet**.
+> **Ashen Pact (`v0.2.0` — *"Polish & Depth"*)** là tựa game hành động bắn súng vượt ải góc nhìn từ trên xuống (*Top-Down Action Roguelite Shooter*) lấy cảm hứng từ *Soul Knight*, hỗ trợ **chơi đơn (Solo)** và **phối hợp mạng nội bộ Wi-Fi / LAN từ 2 đến 4 người chơi** ngay trên trình duyệt mà **không cần cài đặt trên máy bạn bè, không cần kết nối Internet**.
 >
-> **Điểm đặc biệt:** 100% hình ảnh nhân vật, quái vật, trùm (Boss), 24 vũ khí, hiệu ứng ánh sáng động và toàn bộ 47 hiệu ứng âm thanh / 7 bản nhạc nền đều được **vẽ và tổng hợp trực tiếp bằng mã nguồn (Procedural Vector Art & Web Audio Synth)**.
+> **Điểm đặc biệt:** 100% hình ảnh nhân vật, quái vật, trùm (Boss), 24 vũ khí, kiến trúc 3D hybrid, cổng dịch chuyển shader, ánh sáng động và toàn bộ 47 hiệu ứng âm thanh / 7 bản nhạc nền đều được **vẽ và tổng hợp trực tiếp bằng mã nguồn (Procedural Vector Art Cutout 2.0 & Web Audio Synth)**.
 
 ---
 
 ## 🚀 1. Cách Chơi Ngay Bản Phát Hành (Dành Cho Người Chơi Phổ Thông)
 
 ### Bước 1: Người làm Chủ Phòng (Host) khởi động game
-1. Giải nén file **`AshenPact-v0.1.0-win-x64.zip`** ra một thư mục bất kỳ trên máy tính Windows.
+1. Giải nén file **`AshenPact-v0.2.0-win-x64.zip`** ra một thư mục bất kỳ trên máy tính Windows.
 2. Nhấp đúp chuột vào **`AshenPact-Host.exe`** (hoặc chạy file dự phòng **`start-host.bat`**).
 3. Một cửa sổ màn hình đen (Console) sẽ hiện lên:
    - Tự động khởi chạy máy chủ game tại cổng `2567` (nếu cổng `2567` đang bận, game tự động chuyển sang cổng kế tiếp `2568`, `2569`...).
@@ -26,7 +26,7 @@ Bạn bè của bạn (dùng Laptop hoặc PC khác đang bắt **cùng một m�
    ```
    *(Trình duyệt sẽ tự động tải game từ máy Chủ Phòng và đưa thẳng vào Sảnh Doanh Trại chỉ sau 1–2 giây!)*
 2. **Cách 2 (Quét mã QR):** Dùng camera điện thoại hoặc thiết bị quét **Mã QR** hiển thị trên bảng **Mời Bạn Bè (`[I]`)** ở góc phải Sảnh Doanh Trại (hoặc trên cửa sổ Console của Chủ Phòng) để lấy đường dẫn vào phòng.
-3. **Cách 3 (Nhập IP thủ công tại Menu chính):** Nếu bạn bè đang ở Menu chính của game, chỉ cần nhập địa chỉ IP LAN của Chủ Phòng (ví dụ `192.168.1.25:2567`) vào ô **IP LAN** rồi bấm nút **Vào Phòng LAN**.
+3. **Cách 3 (Nhập IP thủ công tại Menu chính):** Nếu bạn bè đang ở Menu chính của game, chỉ cần nhập địa chỉ IP LAN của Chủ Phòng (ví dụ `192.168.1.25:2567`) vào ô **IP LAN** (hỗ trợ dán nhanh `Ctrl+V`) rồi bấm nút **Vào Phòng LAN**.
 
 ---
 
@@ -67,14 +67,16 @@ rồi bấm **Allow access (Cho phép truy cập)**.
 | **`Space`** hoặc **Chuột phải** | Kích hoạt **Kỹ năng chủ động** của nhân vật |
 | **`Shift`** | **Lướt (Dash)** — Cho **0.2 giây bất tử (`i-frame`)** để né đạn & sóng xung kích (Hồi chiêu `1.2s`) |
 | **`E`** | **Tương tác:** Chọn tượng nhân vật ở Doanh Trại · Mở rương · Nhặt vũ khí · Mua đồ Thương Nhân · Dâng lễ Điện Thờ · Sửa máy cổ đại · **Giữ `[E]` để cứu đồng đội gục ngã** |
-| **`Q`** hoặc **Con lăn chuột** | Đổi qua lại giữa 2 ô vũ khí mang theo |
-| **`X`** | **Vứt vũ khí đang cầm ra đất** để nhường cho đồng đội |
-| **`Tab`** | Bật / Tắt bản đồ tầng phóng to (Minimap) |
+| **`1` · `2`** | Chọn trực tiếp **Ô Vũ Khí 1** / **Ô Vũ Khí 2** (hoặc chọn nhanh Thẻ Phước Lành `1`·`2`·`3` khi qua tầng) |
+| **`Q`** hoặc **Con lăn chuột** | Đổi nhanh qua lại giữa 2 ô vũ khí mang theo |
+| **`X`** | **Vứt vũ khí đang cầm ra đất** (`35u` phía trước) để nhường cho đồng đội (khi đang cầm 2 vũ khí; hoặc tự động rơi vũ khí đang cầm khi nhặt vũ khí mới lúc đầy 2 ô) |
+| **`T` (Giữ)** | Mở **Vòng Biểu Cảm (Radial Emote Wheel)** 4 hướng (`👍 Tuyệt vời!` · `⚡ Sẵn sàng!` · `🆘 Cứu với!` · `🔥 Tập trung!`); bấm nhanh `1`·`2`·`3`·`4` khi đang giữ `T` (hoặc rê chuột/nhấp) để phát biểu cảm |
 | **`Z`** hoặc **Chuột giữa** | **Phát tín hiệu Ping thông minh** theo ngữ cảnh (*Tập trung đánh quái / Chỉ vị trí rương & vũ khí / Gọi cứu thương / Chỉ hướng di chuyển*) |
-| **`1` · `2` · `3` · `4`** | Biểu cảm nhanh (Emote): `👍 Tuyệt vời!` · `⚡ Sẵn sàng!` · `🆘 Cứu với!` · `🔥 Tập trung!` |
+| **`Tab`** | Bật / Tắt bản đồ tầng phóng to (Minimap) |
 | **`V`** | Bật / Tắt trạng thái **Sẵn Sàng** tại Sảnh Doanh Trại |
-| **`I`** | Bật / Tắt bảng **Mời Bạn Bè Co-op LAN** (IP LAN + Mã QR + Sao chép link + Kick) |
-| **`Esc`** | Mở menu **Tạm dừng (Pause)** / Cài đặt âm thanh & đồ họa / Hướng dẫn điều khiển *(Lưu ý: Chơi Co-op LAN không làm dừng thời gian của đồng đội)* |
+| **`I`** | Mở / Thu gọn bảng **Mời Bạn Bè Co-op LAN** (mặc định thu gọn thành chip góc phải trên ở Doanh Trại; mở ra để xem IP LAN + Mã QR + Sao chép link + Kick) |
+| **`F11`** | Bật / Tắt chế độ **Toàn màn hình (Fullscreen)** kèm thông báo Toast |
+| **`Esc`** | Mở menu **Tạm dừng (Pause)** với 4 nút: Tiếp tục (`[Esc]`), Cài đặt 4 tab (`[O]`), Khởi động lại về Doanh Trại (`[H]`), Về Menu chính có bước xác nhận thoát (`[M]` / `[Enter]`) |
 
 ---
 
@@ -84,8 +86,8 @@ Tại Sảnh Doanh Trại, hãy đi tới bức tượng của từng nhân vậ
 
 | Nhân vật | Vai trò | HP / Giáp / NL | Vũ khí đầu | Nội tại (Passive) | Kỹ năng chủ động (`[Space]` / Chuột phải) & Synergy Co-op |
 |---|---|:---:|---|---|---|
-| 🛡️ **Thiết Vệ** (`vanguard`) | Tank / Bảo hộ tuyến đầu | `8 / 6 / 150` | Kiếm Hiệp Sĩ *(chém tan đạn)* | **Ý Chí Thép:** Giáp tự hồi sớm sau `2s`; mỗi viên đạn chặn bằng khiên hồi `+1 NL`. | **Tường Khiên Hồng Ngọc:** Dựng khiên chắn 120° chặn mọi đạn địch và phóng ngược sóng xung kích. **Đạn đồng minh (và Trụ Tesla) bắn xuyên qua khiên từ phía sau được `+30% sát thương` và `+1 xuyên thấu`.** *(Nâng cấp: Pháo Đài 360° · Xung Phong làm choáng)* |
-| 🏹 **Liệp Ưng** (`ranger`) | Sát thương / Đánh dấu | `5 / 4 / 200` | Nỏ Săn | **Mắt Ưng:** Tăng tối đa `+30%` sát thương ở tầm xa và `+10%` chí mạng. | **Mũi Tên Săn Mồi:** Lộn nhào về sau (`i-frame`) và bắn tên xuyên thấu **Đánh Dấu** mục tiêu `6s`: **nhận `+25% sát thương từ cả đội`**, lộ diện xuyên sương mù, bị Trụ Tesla ưu tiên bắn và rơi thêm năng lượng khi chết. *(Nâng cấp: Mưa Tên · Chuỗi Con Mồi)* |
+| 🛡️ **Thiết Vệ** (`vanguard`) | Tank / Bảo hộ tuyến đầu | `8 / 6 / 150` | Kiếm Hiệp Sĩ *(chém tan đạn)* | **Ý Chí Thép:** Giáp tự hồi sớm sau `3.3s` (`4.0s` với nhân vật khác); mỗi viên đạn chặn bằng khiên hồi `+1 NL`. | **Tường Khiên Hồng Ngọc:** Dựng khiên chắn 120° chặn mọi đạn địch và phóng ngược sóng xung kích. **Đạn đồng minh (và Trụ Tesla) bắn xuyên qua khiên từ phía sau được `+30% sát thương` và `+1 xuyên thấu`.** *(Nâng cấp: Pháo Đài 360° · Xung Phong làm choáng)* |
+| 🏹 **Liệp Ưng** (`ranger`) | Sát thương / Đánh dấu | `5 / 4 / 200` | Nỏ Săn | **Mắt Ưng:** Tăng tối đa `+30%` sát thương ở tầm xa và `+10%` chí mạng. | **Mũi Tên Săn Mồi:** Lộn nhào về sau (`i-frame`) và bắn tên xuyên thấu **Đánh Dấu** mục tiêu `6s`: **nhận `+25% sát thương từ cả đội`**, lộ diện rõ ràng, bị Trụ Tesla ưu tiên bắn và rơi thêm năng lượng khi chết. *(Nâng cấp: Mưa Tên · Chuỗi Con Mồi)* |
 | 🔥 **Lam Hỏa** (`elementalist`) | Khống chế / Nguyên tố | `5 / 3 / 260` | Trượng Tập Sự | **Vòng Xoay Nguyên Tố:** Xoay vòng **Lửa → Băng → Sét** sau mỗi lần tung kỹ năng; đạn thường áp nguyên tố hiện hành. | **Cầu Nguyên Tố:** Tạo vùng nguyên tố tồn tại `5s` trên sàn. **Mọi đạn của đồng đội bay qua vùng nguyên tố đều được tẩm nguyên tố đó**, giúp kích nổ phản ứng liên hoàn. *(Nâng cấp: Hố Đen Nguyên Tố · Song Nguyên Tố)* |
 | 🌿 **Mộc Linh** (`druid`) | Hỗ trợ / Hồi phục | `6 / 4 / 200` | Trượng Gai *(Độc)* | **Hạt Giống Sự Sống:** Quái bị hạ có `15%` rơi hạt mầm tự bay về đồng đội ít máu nhất hồi `+1 HP`; cứu đồng đội nhanh gấp đôi (`1.25s`). | **Cây Thiêng Cổ Thụ:** Trồng cây thần hồi máu theo nhịp cho cả đội, phóng rễ trói chân quái `1.5s` và chặn đạn. **Trồng thẳng lên đồng đội đang gục sẽ hồi sinh tức thì với `2 HP`!** *(Nâng cấp: Rễ Gai Độc · Rừng Thiêng)* |
 | ⚙️ **Bánh Răng** (`engineer`) | Tiện ích / Trụ pháo | `6 / 5 / 180` | Súng Đinh Tán | **Thợ Sửa:** Đồng đội trong 4 ô hồi giáp nhanh hơn `+30%`; bấm `[E]` sửa **Cổ Máy Cổ Đại** trên bản đồ thành Trụ chi viện. | **Trụ Pháo Tesla:** Đặt trụ bắn sét dây chuyền. **Đồng đội bắn vào Trụ Tesla sẽ nạp điện tăng tốc bắn; đủ `100%` phát nổ Xung EMP làm choáng quái và xóa sạch đạn địch quanh trụ!** *(Nâng cấp: Trụ Kép · Tự Hủy)* |
@@ -107,18 +109,20 @@ Kết hợp 4 trạng thái nguyên tố (**Cháy 🔥**, **Lạnh/Đóng Băng 
 
 ---
 
-## 🗺️ 6. Ba Màn Chơi (Biomes) & Ba Boss Cuối Màn
+## 🗺️ 6. Ba Màn Chơi (Biomes), Phòng Thử Thách & Ba Boss Cuối Màn
 
-Một chiến dịch hoàn chỉnh gồm **3 Màn (Biome) × 2 Tầng = 6 Tầng**, kèm các phòng Chiến Đấu, Kho Báu (với câu đố **2 Tấm Áp Lực Co-op**), Thương Nhân Hắc Ám, Điện Thờ Cổ Đại và Phòng Bí Mật (phá tường nứt):
+Một chiến dịch hoàn chỉnh gồm **3 Màn (Biome) × 2 Tầng = 6 Tầng** (mỗi tầng **10 phòng**), bao gồm: Phòng Khởi Đầu, các Phòng Chiến Đấu (với cơ chế tràn đợt *Overlapping Waves* khi còn `≤ 2` quái hoặc sau `14s`), **Phòng Thử Thách (`Challenge Room` — kích hoạt đài huyết chiến vượt 2 đợt quái chồng lấp nhận rương thưởng cam kết bậc Tím `'epic'` / Cam `'legendary'`)**, Phòng Kho Báu (câu đố **2 Tấm Áp Lực Co-op**), Thương Nhân Hắc Ám, Điện Thờ Cổ Đại, Phòng Bí Mật (phá tường nứt) và Phòng Cổng / Boss.
+
+Cả 3 Boss đều có cơ chế **Kháng Khống Chế Tăng Dần (`CC Diminishing Returns`: `100% → 50% → 25% → Miễn nhiễm 4s`)**, **Chuyển Pha Bất Tử `1.2s` (`Phase Transition Shield + Roar` xóa sạch hiệu ứng xấu và đẩy lùi người chơi áp sát)** và **Cuồng Nộ Mềm (`Soft Enrage` sau `90s`: `+25%` tốc độ & tốc bắn)**:
 
 1. **Màn 1 (Tầng 1–2) — Rừng Cổ Mục Nát (*Overgrown Ruins*):**
-   - **Địa hình:** Cỏ cháy lan, hồ nước dẫn điện, đầm lầy độc, thùng thuốc nổ dây chuyền.
+   - **Địa hình & Kiến trúc:** Cỏ cháy lan, hồ nước dẫn điện, đầm lầy độc, thùng thuốc nổ dây chuyền, rễ cây leo cột đá cổ và đom đóm lập lòe.
    - **Boss: Mục Vương Nấm Độc (`spore_king`)** — Bắn vòng bào tử xoay tròn, độn thổ trồi lên dưới chân người chơi (P2), bao phủ viền phòng bằng sương độc (P3). Ở chế độ 3–4 người, triệu hồi thêm **2 Nấm Hộ Vệ** tạo khiên bảo vệ Boss đòi hỏi cả đội chia nhau tiêu diệt.
 2. **Màn 2 (Tầng 3–4) — Hầm Băng Vĩnh Cửu (*Frozen Depths*):**
-   - **Địa hình:** Sàn băng trơn trượt quán tính, hồ nước đóng băng, vực thẳm và 4 cột pha lê phản xạ tia laser.
-   - **Boss: Băng Hậu Kryssa (`kryssa_ice_queen`)** — Bắn tia laser khúc xạ qua cột pha lê (P1), tạo **Phân Thân Gương** *(mẹo: chỉ bản thật mới có bóng đổ dưới chân!)* (P2), gọi **Bão Tuyết** thu hẹp tầm nhìn và nhốt người chơi vào **Lồng Băng Vĩnh Cửu** (đồng đội phải bắn vỡ lồng băng để giải cứu!).
+   - **Địa hình & Kiến trúc:** Sàn băng trơn trượt quán tính, hồ nước đóng băng, vực thẳm, 4 cột pha lê phản xạ tia laser và vết nứt băng phát sáng.
+   - **Boss: Băng Hậu Kryssa (`kryssa_ice_queen`)** — Bắn tia laser khúc xạ qua cột pha lê (P1), tạo **Phân Thân Gương** *(mẹo: chỉ bản thật mới có bóng đổ dưới chân!)* (P2), gọi **Bão Tuyết Vĩnh Cửu** quét gió tuyết chéo tốc độ cao kèm viền băng giá lạnh buốt (vẫn giữ tầm nhìn sàn đấu trong trẻo) và nhốt người chơi vào **Lồng Băng Vĩnh Cửu** (đồng đội phải bắn vỡ lồng băng để giải cứu!).
 3. **Màn 3 (Tầng 5–6) — Lò Rèn Dung Nham (*Molten Forge*):**
-   - **Địa hình:** Kênh dung nham nóng chảy, băng chuyền cơ khí đẩy thực thể, máy móc cổ đại có thể sửa chữa.
+   - **Địa hình & Kiến trúc:** Kênh dung nham nóng chảy, băng chuyền cơ khí đẩy thực thể, máy móc cổ đại có thể sửa chữa, đường ống đồng hồ áp suất và bánh răng xoay.
    - **Boss: Titan Lò Rèn (`forge_titan`)** — Nện đại chùy tạo **Vòng Sóng Xung Kích** lan rộng (dùng `Shift` lướt xuyên qua bằng i-frame) và đảo chiều băng chuyền (P1); lộ **2 Lõi Năng Lượng** hai bên sườn ở P2 *(cả đội phải phối hợp phá hủy cả 2 lõi trong vòng `3 giây` để làm Titan quá tải choáng cứng `4.5s` và nhận `×1.5` sát thương!)*; quá nhiệt quét lửa 360° ở P3.
 
 ---
@@ -135,33 +139,39 @@ Một chiến dịch hoàn chỉnh gồm **3 Màn (Biome) × 2 Tầng = 6 Tầng
 # 1. Cài đặt toàn bộ dependencies của monorepo
 pnpm install
 
-# 2. Chạy môi trường phát triển (Server Colyseus cổng 2567 + Client Vite cổng 5173)
+# 2. Chạy môi trường phát triển (Server Colyseus cổng 2567 --debug + Client Vite cổng 5173)
 pnpm dev
 
 # 3. Build production và khởi chạy Host Co-op LAN ngay tại cổng 2567
 pnpm host
 
-# 4. Chạy bộ công cụ mô phỏng cân bằng tự động (291 lượt sim -> xuất docs/balance-report.md)
+# 4. Chạy bộ công cụ mô phỏng cân bằng 60Hz thực tế (1,795 lượt sim trên 30 locked seeds -> xuất docs/balance-report.md & .json)
 pnpm balance
 
-# 5. Chạy toàn bộ cổng kiểm định chất lượng (Typecheck + ESLint + Vitest Unit/Soak Tests + Build + Playwright E2E)
+# 5. Chụp bộ ảnh chuẩn hóa 24 cảnh (pnpm shots) & đo hiệu năng FPS / Tick / Bandwidth (pnpm perf)
+pnpm shots
+pnpm perf
+
+# 6. Chạy toàn bộ cổng kiểm định chất lượng (Typecheck + ESLint + Vitest Unit/Soak Tests + Build + Playwright E2E)
 pnpm verify
 
-# 6. Đóng gói bản phát hành Windows hoàn chỉnh vào release/AshenPact-v0.1.0-win-x64/ và file .zip
+# 7. Đóng gói bản phát hành Windows hoàn chỉnh vào release/AshenPact-v0.2.0-win-x64/ và file .zip
 pnpm package:release
 ```
 
 ### Cấu trúc thư mục dự án
 ```text
 ├── apps/
-│   ├── client/          # Giao diện Phaser 3 WebGL, Procedural Vector Art Baker, Lighting/PostFX, ZzFX & Music Synth
-│   └── server/          # Máy chủ Authoritative Colyseus 60Hz + phục vụ tĩnh & khám phá IP LAN / QR ASCII
+│   ├── client/          # Giao diện Phaser 3 WebGL (GameScene + HudScene), Cutout 2.0 Art Baker, Hybrid 3D Biome, Lighting/PostFX, ZzFX & Music Synth
+│   └── server/          # Máy chủ Authoritative Colyseus 60Hz + Debug Gate + phục vụ tĩnh & khám phá IP LAN / QR ASCII
 ├── packages/
-│   └── shared/          # Simulation 60Hz thuần TypeScript, vật lý Spatial Hash, dữ liệu cân bằng, giao thức mạng & i18n
+│   └── shared/          # Simulation 60Hz thuần TypeScript, Spatial Hash, dữ liệu cân bằng, Challenge Room, Boss CC DR & i18n
 ├── tools/
-│   ├── balance-harness.ts   # Công cụ kiểm chứng cân bằng tự động tốc độ cao
+│   ├── balance-harness.ts   # Công cụ kiểm chứng cân bằng tự động 60Hz WorldSim thực tế
+│   ├── run-shots.ts         # Công cụ chụp 24 ảnh chuẩn hóa & so sánh pixelmatch
+│   ├── run-perf.ts          # Công cụ đo lường FPS, Frame Time p95/p99, Server Tick & Bandwidth
 │   └── package-release.ts   # Công cụ đóng gói AshenPact-Host.exe, batch scripts & gói ZIP phát hành
-├── tests/e2e/           # Bộ kiểm thử tự động Playwright E2E từ Phase 0 đến Phase 8
+├── tests/e2e/           # Bộ kiểm thử tự động Playwright E2E (phase0..phase8 & polish-p1..p11)
 └── docs/                # Tài liệu thiết kế (GDD, TECH, ART_GUIDE, BALANCE, QA_CHECKLIST, RELEASE_NOTES, PROGRESS)
 ```
 

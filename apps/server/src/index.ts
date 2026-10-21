@@ -88,7 +88,7 @@ export async function startServer(initialPort = DEFAULT_PORT): Promise<{
     res.json({
       status: 'ok',
       game: 'Ashen Pact',
-      version: '0.1.0',
+      version: '0.2.0',
       port: activePort,
       debugAllowed: isServerDebugEnabled(),
       lanAddresses: getLanIPv4Addresses(),
@@ -108,7 +108,7 @@ export async function startServer(initialPort = DEFAULT_PORT): Promise<{
       lanAddresses[0]?.address ??
       '127.0.0.1';
     res.json({
-      version: '0.1.0',
+      version: '0.2.0',
       port: activePort,
       debugAllowed: isServerDebugEnabled(),
       localUrl: `http://localhost:${activePort}`,
@@ -173,7 +173,7 @@ export async function startServer(initialPort = DEFAULT_PORT): Promise<{
   const primaryInviteUrl = `http://${primaryLanIp}:${activePort}`;
 
   console.log('==================================================================');
-  console.log('  ASHEN PACT v0.1.0 — MÁY CHỦ CO-OP LAN ĐÃ KHỞI ĐỘNG THÀNH CÔNG');
+  console.log('  ASHEN PACT v0.2.0 — MÁY CHỦ CO-OP LAN ĐÃ KHỞI ĐỘNG THÀNH CÔNG');
   console.log('==================================================================');
   console.log(`[AshenPact Server] Listening on http://localhost:${activePort}`);
   console.log(`[Máy Chủ / Host]   http://localhost:${activePort}/?coop=host`);

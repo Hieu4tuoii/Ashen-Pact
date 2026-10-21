@@ -947,10 +947,13 @@ export function updateDebugStateImpl(
   debug.pauseModalOpen = this.pauseModalOpen;
   debug.pauseConfirmExitOpen = this.pauseConfirmExitOpen;
   debug.invitePanelVisible = this.invitePanelVisible;
-  debug.settingsModalOpen = this.settingsModal?.getActiveModal() === 'settings';
-  debug.controlsModalOpen = this.settingsModal?.getActiveModal() === 'controls';
-  debug.creditsModalOpen = this.settingsModal?.getActiveModal() === 'credits';
-  debug.settingsActiveTab = this.settingsModal?.getActiveTab() ?? 'audio';
+  const activeModal = this.settingsModal?.getActiveModal() ?? 'none';
+  const activeTab = this.settingsModal?.getActiveTab() ?? 'audio';
+  debug.settingsModalOpen = activeModal === 'settings';
+  debug.controlsModalOpen =
+    activeModal === 'controls' || (activeModal === 'settings' && activeTab === 'controls');
+  debug.creditsModalOpen = activeModal === 'credits';
+  debug.settingsActiveTab = activeTab;
   debug.emoteWheelOpen = this.emoteWheelOpen;
   debug.irisTransitionProgress = Math.round(this.irisTransitionProgress * 100) / 100;
   debug.trailingHpRatio = Math.round(this.trailingHpRatio * 1000) / 1000;

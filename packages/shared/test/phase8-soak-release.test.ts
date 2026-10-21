@@ -257,7 +257,7 @@ describe('Phase 8 — QA Bug Bash Edge Cases & Release Artifacts', () => {
     });
 
     const p1 = serverSim.player;
-    p1.displayName = 'Chủ Phòng v0.1';
+    p1.displayName = 'Chủ Phòng v0.2';
     const p2 = serverSim.addCoopPlayer(2, 'vanguard', 'Đồng Đội Edge P2', 2);
     const p3 = serverSim.addCoopPlayer(3, 'vanguard', 'Thiết Vệ P3', 3);
 
@@ -266,7 +266,7 @@ describe('Phase 8 — QA Bug Bash Edge Cases & Release Artifacts', () => {
     serverSim.selectCharacter(p3.id, 'druid');
 
     // Custom names containing " P" must be preserved, while default placeholder "Thiết Vệ P3" updates to "Mộc Linh P3"
-    expect(p1.displayName).toBe('Chủ Phòng v0.1');
+    expect(p1.displayName).toBe('Chủ Phòng v0.2');
     expect(p2.displayName).toBe('Đồng Đội Edge P2');
     expect(p3.displayName).toBe('Mộc Linh P3');
 
@@ -321,7 +321,7 @@ describe('Phase 8 — QA Bug Bash Edge Cases & Release Artifacts', () => {
 
     const clientP1 = clientSim.getPlayerById(p1.id)!;
     const clientP2 = clientSim.getPlayerById(p2.id)!;
-    expect(clientP1.displayName).toBe('Chủ Phòng v0.1');
+    expect(clientP1.displayName).toBe('Chủ Phòng v0.2');
     expect(clientP1.statsDamageDealt).toBe(1120);
     expect(clientP1.statsKills).toBe(28);
     expect(clientP1.statsElementalReactions).toBe(16);
@@ -353,8 +353,8 @@ describe('Phase 8 — QA Bug Bash Edge Cases & Release Artifacts', () => {
     expect(asciiQr).toContain('▀');
     expect(asciiQr).toContain('▄');
 
-    const releaseDir = path.join(ROOT_DIR, 'release/AshenPact-v0.1.0-win-x64');
-    const releaseZip = path.join(ROOT_DIR, 'release/AshenPact-v0.1.0-win-x64.zip');
+    const releaseDir = path.join(ROOT_DIR, 'release/AshenPact-v0.2.0-win-x64');
+    const releaseZip = path.join(ROOT_DIR, 'release/AshenPact-v0.2.0-win-x64.zip');
     if (fs.existsSync(releaseDir)) {
       expect(fs.existsSync(path.join(releaseDir, 'AshenPact-Host.exe'))).toBe(true);
       expect(fs.existsSync(path.join(releaseDir, 'start-host.bat'))).toBe(true);
