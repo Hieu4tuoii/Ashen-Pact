@@ -71,6 +71,6 @@ Implement Spec Section 3.9 and Section 4.P10b (`docs/superpowers/specs/2026-10-2
 
 ### Task 3: Capture P10b `after` Screenshots & 8-Frame Strips with `--verify-freeze`, Conduct Blind A/B `pro` Visual Gate, Run Phase P10b Quality Gate, and Tag `polish-p10b`
 
-- [ ] **Step 1:** Run `pnpm shots -- --phase p10b --label after --group p10b --verify-freeze` and verify all 16 scenes + 9 8-frame strips + `b3-combat-grayscale.png` pass `freezeDiffRatio <= 0.005`.
-- [ ] **Step 2:** Set up per-scene randomized Blind A/B folders (`version-A` vs `version-B` with `ab-mapping.json` isolated outside `blind-ab/` during review), dispatch the independent `pro` Visual Reviewer subagent to inspect all static images, `b3-combat-grayscale.png`, and 8-frame animation strips, and save `docs/screenshots/polish-p10b/review.md` (Target: Criterion 8 `FX & hạt >= 8.0/10`, Criterion 3 `Độ dễ đọc trong combat >= 8.0/10`, `0` Blockers, `0` Majors).
-- [ ] **Step 3:** Run fresh `pnpm verify` and `pnpm perf`, update `docs/PROGRESS.md` & `docs/PHASES.md`, commit, and tag `polish-p10b`.
+- [x] **Step 1:** Run `pnpm shots -- --phase p10b --label after --group p10b --verify-freeze` and verify all 16 scenes + 9 8-frame strips + `b3-combat-grayscale.png` pass `freezeDiffRatio <= 0.005`.
+- [x] **Step 2:** Set up per-scene randomized Blind A/B folders (`version-A` vs `version-B` with `ab-mapping.json` isolated outside `blind-ab/` during review), dispatch the independent `pro` Visual Reviewer subagent to inspect all static images, `b3-combat-grayscale.png`, and 8-frame animation strips, and save `docs/screenshots/polish-p10b/review.md` (Target: Criterion 8 `FX & hạt >= 8.0/10`, Criterion 3 `Độ dễ đọc trong combat >= 8.0/10`, `0` Blockers, `0` Majors).
+- [x] **Step 3:** Run fresh `pnpm verify` and `pnpm perf`, update `docs/PROGRESS.md` & `docs/PHASES.md`, commit, and tag `polish-p10b`.
