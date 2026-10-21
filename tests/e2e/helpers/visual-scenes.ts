@@ -38,6 +38,7 @@ import {
   setupUiViDiacriticsScene,
 } from './visual-scene-p9a-helpers.js';
 import { P10A_VISUAL_SCENES } from './visual-scene-p10a-helpers.js';
+import { P10B_VISUAL_SCENES } from './visual-scene-p10b-helpers.js';
 
 export {
   DEFAULT_FREEZE_MASK_RECTS,
@@ -920,4 +921,7 @@ export const VISUAL_SCENES: readonly VisualSceneDef[] = [
 
   // 11. Phase P10a Cutout 2.0 & Full-Rig Enemies Showcase Scenes
   ...P10A_VISUAL_SCENES,
+
+  // 12. Phase P10b FX, Elemental Combo & Clear Biome Ambient Scenes
+  ...P10B_VISUAL_SCENES,
 ];

@@ -68,6 +68,24 @@ export const SCENE_GROUPS: Readonly<Record<string, readonly string[]>> = {
     'boss-b2',
     'boss-b3',
   ],
+  p10b: [
+    'p10b-fx-shoot-hit',
+    'p10b-fx-explosion',
+    'p10b-fx-elemental-combo',
+    'p10b-fx-chest-open',
+    'p10b-fx-enemy-spawn',
+    'p10b-fx-boss-kill',
+    'p10b-ambient-b1',
+    'p10b-ambient-b2',
+    'p10b-ambient-b3',
+    'b1-combat',
+    'b2-combat',
+    'b3-combat',
+    'b1-combat-4p',
+    'stress-4p',
+    'boss-b2-blizzard',
+    'hub-solo',
+  ],
 };
 
 export interface ShotsCliOptions {

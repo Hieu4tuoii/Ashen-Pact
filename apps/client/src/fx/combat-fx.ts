@@ -1,9 +1,7 @@
 import {
   clamp,
-  ELEMENTAL_REACTIONS,
   type ElementalReactionId,
   type ElementType,
-  i18n,
   type PropKind,
 } from '@ashen-pact/shared';
 import type Phaser from 'phaser';
@@ -15,6 +13,7 @@ import { graphicsSettings } from '../ui/graphics-settings.js';
 import {
   acquireDamageSlot,
   acquireParticleSlot,
+  BIOME_AMBIENT_POOL_SLOTS,
   computeCameraShakeOffset,
   computePopupScalePop,
   getActiveAfterimageCount,
@@ -22,6 +21,7 @@ import {
   getActiveDamagePopupCount,
   getActiveDecalCount,
   getActiveParticleCount,
+  getActiveTorchMoteCount,
   initCombatFxPools,
   type PooledAfterimage,
   type PooledAmbientParticle,
@@ -33,71 +33,31 @@ import {
   resolveSpatialPopupCellSlot,
   update,
 } from './combat-fx-pools.js';
+import {
+  activateParticle,
+  applyBiomeToAmbientSlot,
+  type CoalescedReactionBannerState,
+  spawnElementalReactionFxImpl,
+  spawnExplosionBurstImpl,
+  spawnHitSparksImpl,
+  spawnMuzzleFlashAndCasingImpl,
+} from './combat-fx-spawners.js';
 
 export * from './combat-fx-pools.js';
-
-export interface CoalescedReactionBannerState {
-  reaction: ElementalReactionId;
-  count: number;
-  totalDamage: number;
-  isTeamCombo: boolean;
-  windowTimerSec: number;
-  displayTimerSec: number;
-  label: string;
-  colorHex: string;
-}
-
-export function coalesceElementalReaction(
-  prev: CoalescedReactionBannerState | null,
-  reaction: ElementalReactionId,
-  damage: number,
-  isTeamCombo: boolean,
-  windowSec = 0.4,
-): CoalescedReactionBannerState {
-  const meta = ELEMENTAL_REACTIONS[reaction];
-  const rxText = i18n.getReactionText(reaction);
-  const baseName = (rxText.name || meta?.nameVi || reaction).toUpperCase();
-  const colorHex = meta?.colorHex ?? PALETTE.SOLAR_GOLD;
-
-  if (prev && prev.reaction === reaction && prev.windowTimerSec > 0) {
-    const nextCount = prev.count + 1;
-    const nextDamage = prev.totalDamage + damage;
-    const nextCombo = prev.isTeamCombo || isTeamCombo;
-    return {
-      reaction,
-      count: nextCount,
-      totalDamage: nextDamage,
-      isTeamCombo: nextCombo,
-      windowTimerSec: windowSec,
-      displayTimerSec: 1.6,
-      label: `${baseName} ×${nextCount}`,
-      colorHex,
-    };
-  }
-
-  return {
-    reaction,
-    count: 1,
-    totalDamage: damage,
-    isTeamCombo,
-    windowTimerSec: windowSec,
-    displayTimerSec: 1.6,
-    label: baseName,
-    colorHex,
-  };
-}
+export * from './combat-fx-spawners.js';
 
 /**
- * Object-pooled Combat FX, Decals, Dash Afterimages, Ambient Particles & Game Feel ("Juice") system:
- * - Hit-stop freeze frames (30-60ms)
+ * Object-pooled Combat FX, Decals, Dash Afterimages, Clear Biome Ambient Particles & Game Feel ("Juice") system:
+ * - Hit-stop freeze frames (30-60ms) & boss kill dramatic slow-mo (0.42s)
  * - Trauma-based screen shake (Perlin-like harmonic noise)
- * - Pooled floating damage numbers (normal, crit, armor, player hurt, elemental color)
- * - Pooled vector sprites for muzzle flash, shell casings, sword slash arcs, sparks, dust, shards, and enemy death part bursts
+ * - Pooled floating damage numbers & coalesced elemental combo callouts
+ * - Additive (BlendMode.ADD, depth > 34) combat FX for sparks, spark trails, impact/shockwave rings, and multi-layer muzzle flashes
+ * - Physical shell casings with floor drop shadows (depth 19)
  * - Persistent floor decal ring-buffer (scorch marks, monster splatters, frost scars)
- * - Dash afterimage ghost pool
- * - Ambient biome leaves & parallax mist pool
+ * - Clear biome ambient particles (B1 leaves + fireflies, B2 60-80 2-layer parallax snow, B3 <= 4px rising embers, torch dust motes; ZERO mist)
  */
 export class CombatFxManager {
+  private readonly sceneRef: Phaser.Scene;
   public readonly particlePool: PooledParticle[] = [];
   public readonly damagePool: PooledDamageText[] = [];
   public readonly decalPool: PooledDecal[] = [];
@@ -109,11 +69,15 @@ export class CombatFxManager {
   public decalWriteCursor = 0;
   public activeDecalCount = 0;
   public hitStopRemainingMs = 0;
+  public bossKillSlowMoTimer = 0;
+  public bossKillFlashTimer = 0;
   public trauma = 0;
   public shakeTime = 0;
   public popupSpreadIndex = 0;
   public currentBiome: 1 | 2 | 3 = 1;
   private blizzardIntense = false;
+  public allowFreezeAmbientMotion = false;
+  public torchPositions: Array<{ x: number; y: number }> = [];
 
   public totalHitStopsTriggered = 0;
   public totalShakesTriggered = 0;
@@ -122,6 +86,7 @@ export class CombatFxManager {
   public totalDecalsSpawned = 0;
   public totalAfterimagesSpawned = 0;
   public activeReactionBanner: CoalescedReactionBannerState | null = null;
+  public activeWorldReactionPopupSlot: PooledDamageText | null = null;
 
   constructor(
     scene: Phaser.Scene,
@@ -131,6 +96,7 @@ export class CombatFxManager {
     afterimageCapacity = 24,
     ambientCapacity = 96,
   ) {
+    this.sceneRef = scene;
     initCombatFxPools.call(
       this,
       scene,
@@ -142,18 +108,31 @@ export class CombatFxManager {
     );
   }
 
+  public setAllowFreezeAmbientMotion(active: boolean): void {
+    this.allowFreezeAmbientMotion = active;
+  }
+
+  public syncTorchPositions(
+    props: ReadonlyArray<{ kind: string; x: number; y: number; hp: number }>,
+  ): void {
+    this.torchPositions.length = 0;
+    for (let i = 0; i < props.length; i++) {
+      const p = props[i]!;
+      if (p.hp > 0 && p.kind === 'torch_brazier') {
+        this.torchPositions.push({ x: p.x, y: p.y });
+      }
+    }
+  }
+
   public setBlizzardIntense(active: boolean): void {
     if (this.blizzardIntense === active) return;
     this.blizzardIntense = active;
-    if (!active && this.currentBiome === 2) {
+    if (this.currentBiome === 2) {
       const invBake = 1 / TextureBaker.getBakeScale();
-      for (let i = 0; i < this.ambientPool.length; i++) {
-        const amb = this.ambientPool[i]!;
-        amb.vx = 16 + (i % 5) * 4;
-        amb.vy = 22 + (i % 5) * 4;
-        amb.baseScale = invBake * (0.75 + (i % 3) * 0.15);
-        amb.sprite.setScale(amb.baseScale);
-        amb.sprite.setAlpha(0.72);
+      const tier = graphicsSettings.getBudget().tier;
+      const limit = Math.min(BIOME_AMBIENT_POOL_SLOTS, this.ambientPool.length);
+      for (let i = 0; i < limit; i++) {
+        applyBiomeToAmbientSlot(this.ambientPool[i]!, i, 2, tier, active, invBake);
       }
     }
   }
@@ -166,30 +145,11 @@ export class CombatFxManager {
     if (this.currentBiome === biome) return;
     this.currentBiome = biome;
     const invBake = 1 / TextureBaker.getBakeScale();
-    for (let i = 0; i < this.ambientPool.length; i++) {
-      const amb = this.ambientPool[i]!;
-      if (biome === 2) {
-        amb.sprite.setTexture('fx_ice_shard');
-        amb.sprite.setTint(hexToNum(PALETTE.ICE_WHITE));
-        amb.sprite.setBlendMode('NORMAL');
-        amb.vx = 16 + (i % 5) * 4;
-        amb.vy = 22 + (i % 5) * 4;
-      } else if (biome === 3) {
-        amb.sprite.setTexture('fx_ember_mote');
-        amb.sprite.setTint(hexToNum(i % 2 === 0 ? PALETTE.FLAME_ORANGE : PALETTE.SOLAR_GOLD));
-        amb.sprite.setBlendMode('ADD');
-        amb.vx = 10 + (i % 5) * 3;
-        amb.vy = -(22 + (i % 5) * 5);
-      } else {
-        amb.sprite.setTexture('fx_ambient_leaf');
-        amb.sprite.clearTint();
-        amb.sprite.setBlendMode('NORMAL');
-        amb.vx = 16 + (i % 5) * 4;
-        amb.vy = 14 + (i % 4) * 3;
-      }
-      amb.baseScale = invBake * (0.75 + (i % 3) * 0.15);
-      amb.sprite.setScale(amb.baseScale);
-      amb.sprite.setAlpha(0.72);
+    const tier = graphicsSettings.getBudget().tier;
+    const isBlizzard = biome === 2 && this.blizzardIntense;
+    const limit = Math.min(BIOME_AMBIENT_POOL_SLOTS, this.ambientPool.length);
+    for (let i = 0; i < limit; i++) {
+      applyBiomeToAmbientSlot(this.ambientPool[i]!, i, biome, tier, isBlizzard, invBake);
     }
   }
 
@@ -224,28 +184,23 @@ export class CombatFxManager {
     const p = this.acquireParticleSlot();
     if (!p) return;
     const invBake = 1 / TextureBaker.getBakeScale();
-    p.active = true;
-    p.textureKey = 'fx_dust_puff';
-    p.age = 0;
-    p.ttl = 0.42;
-    p.x = x + facingSign * 8;
-    p.y = y - 10;
-    p.vx = facingSign * (14 + getClientFreezeRandom()() * 10);
-    p.vy = -12 - getClientFreezeRandom()() * 8;
-    p.vr = 0;
-    p.startScale = invBake * 0.55;
-    p.endScale = invBake * 0.95;
-    p.startAlpha = 0.52;
-    p.gravityY = -8;
-    p.damping = 2.5;
-
-    p.sprite.setTexture(p.textureKey);
-    p.sprite.setTint(hexToNum(PALETTE.ICE_WHITE));
-    p.sprite.setPosition(p.x, p.y);
-    p.sprite.setScale(p.startScale);
-    p.sprite.setAlpha(p.startAlpha);
-    p.sprite.setDepth(33);
-    p.sprite.setVisible(true);
+    activateParticle(p, {
+      textureKey: 'fx_dust_puff',
+      x: x + facingSign * 8,
+      y: y - 10,
+      vx: facingSign * (14 + getClientFreezeRandom()() * 10),
+      vy: -12 - getClientFreezeRandom()() * 8,
+      vr: 0,
+      ttl: 0.42,
+      startScale: invBake * 0.55,
+      endScale: invBake * 0.95,
+      startAlpha: 0.52,
+      gravityY: -8,
+      damping: 2.5,
+      tint: hexToNum(PALETTE.ICE_WHITE),
+      blendMode: 'NORMAL',
+      depth: 33,
+    });
   }
 
   public refreshResolution(bakeScale: number, prevScale?: number): void {
@@ -262,7 +217,8 @@ export class CombatFxManager {
     isHitStopped: boolean;
   } {
     if (this.hitStopRemainingMs <= 0) {
-      return { simDeltaMs: rawDeltaMs, isHitStopped: false };
+      const slowMoMult = this.bossKillSlowMoTimer > 0 ? 0.25 : 1.0;
+      return { simDeltaMs: rawDeltaMs * slowMoMult, isHitStopped: false };
     }
     if (rawDeltaMs <= this.hitStopRemainingMs) {
       this.hitStopRemainingMs -= rawDeltaMs;
@@ -270,7 +226,8 @@ export class CombatFxManager {
     }
     const rem = rawDeltaMs - this.hitStopRemainingMs;
     this.hitStopRemainingMs = 0;
-    return { simDeltaMs: rem, isHitStopped: false };
+    const slowMoMult = this.bossKillSlowMoTimer > 0 ? 0.25 : 1.0;
+    return { simDeltaMs: rem * slowMoMult, isHitStopped: false };
   }
 
   public addTrauma(amount: number): void {
@@ -329,7 +286,11 @@ export class CombatFxManager {
     y: number,
     facingSign: number,
     slot: 1 | 2 | 3 | 4 = 1,
+    isTeammate = false,
   ): void {
+    const alphaMult = isTeammate
+      ? clamp(graphicsSettings.getState().teammateFxOpacity, 0.25, 1.0)
+      : 1.0;
     for (let i = 0; i < this.afterimagePool.length; i++) {
       const ghost = this.afterimagePool[i]!;
       if (!ghost.active) {
@@ -337,7 +298,7 @@ export class CombatFxManager {
         ghost.active = true;
         ghost.age = 0;
         ghost.ttl = 0.22;
-        ghost.startAlpha = 0.55;
+        ghost.startAlpha = 0.55 * alphaMult;
         ghost.sprite.setPosition(x, y - 14);
         ghost.sprite.setScale(invBake * (facingSign >= 0 ? 1 : -1), invBake);
         ghost.sprite.setTint(hexToNum(PLAYER_SLOT_COLORS[slot].hex));
@@ -373,28 +334,22 @@ export class CombatFxManager {
       if (!p) break;
       const ang = -Math.PI * 0.5 + (getClientFreezeRandom()() - 0.5) * 1.6;
       const spd = 25 + getClientFreezeRandom()() * 35;
-      p.active = true;
-      p.textureKey = 'fx_ambient_leaf';
-      p.age = 0;
-      p.ttl = 0.35;
-      p.x = x + (getClientFreezeRandom()() - 0.5) * 12;
-      p.y = y;
-      p.vx = Math.cos(ang) * spd;
-      p.vy = Math.sin(ang) * spd - 15;
-      p.vr = (getClientFreezeRandom()() - 0.5) * 10;
-      p.startScale = invBake * 0.95;
-      p.endScale = invBake * 0.4;
-      p.startAlpha = 0.9;
-      p.gravityY = 90;
-      p.damping = 3;
-
-      p.sprite.setTexture(p.textureKey);
-      p.sprite.clearTint();
-      p.sprite.setPosition(p.x, p.y);
-      p.sprite.setScale(p.startScale);
-      p.sprite.setAlpha(p.startAlpha);
-      p.sprite.setDepth(32);
-      p.sprite.setVisible(true);
+      activateParticle(p, {
+        textureKey: 'fx_ambient_leaf',
+        x: x + (getClientFreezeRandom()() - 0.5) * 12,
+        y,
+        vx: Math.cos(ang) * spd,
+        vy: Math.sin(ang) * spd - 15,
+        vr: (getClientFreezeRandom()() - 0.5) * 10,
+        ttl: 0.35,
+        startScale: invBake * 0.95,
+        endScale: invBake * 0.4,
+        startAlpha: 0.9,
+        gravityY: 90,
+        damping: 3,
+        blendMode: 'NORMAL',
+        depth: 32,
+      });
     }
   }
 
@@ -412,33 +367,24 @@ export class CombatFxManager {
       if (!p) break;
       const ang = (i / count) * Math.PI * 2 + (getClientFreezeRandom()() - 0.5) * 0.4;
       const spd = 65 + getClientFreezeRandom()() * 85;
-      p.active = true;
-      p.textureKey = 'fx_wood_shard';
-      p.age = 0;
-      p.ttl = 0.45;
-      p.x = x;
-      p.y = y;
-      p.vx = Math.cos(ang) * spd;
-      p.vy = Math.sin(ang) * spd - 30;
-      p.vr = (getClientFreezeRandom()() - 0.5) * 16;
-      p.startScale = invBake * 1.05;
-      p.endScale = invBake * 0.45;
-      p.startAlpha = 1;
-      p.gravityY = 200;
-      p.damping = 4;
-
-      p.sprite.setTexture(p.textureKey);
-      if (kind === 'clay_vase') {
-        p.sprite.setTint(hexToNum(PALETTE.COPPER_LIGHT));
-      } else {
-        p.sprite.clearTint();
-      }
-      p.sprite.setPosition(p.x, p.y);
-      p.sprite.setRotation(ang);
-      p.sprite.setScale(p.startScale);
-      p.sprite.setAlpha(1);
-      p.sprite.setDepth(38);
-      p.sprite.setVisible(true);
+      activateParticle(p, {
+        textureKey: 'fx_wood_shard',
+        x,
+        y,
+        vx: Math.cos(ang) * spd,
+        vy: Math.sin(ang) * spd - 30,
+        vr: (getClientFreezeRandom()() - 0.5) * 16,
+        ttl: 0.45,
+        startScale: invBake * 1.05,
+        endScale: invBake * 0.45,
+        startAlpha: 1,
+        gravityY: 200,
+        damping: 4,
+        rotation: ang,
+        tint: kind === 'clay_vase' ? hexToNum(PALETTE.COPPER_LIGHT) : null,
+        blendMode: 'NORMAL',
+        depth: 38,
+      });
     }
   }
 
@@ -464,28 +410,22 @@ export class CombatFxManager {
         if (!p) break;
         const ang = (i / shardCount) * Math.PI * 2;
         const spd = status === 'shatter' ? 110 + getClientFreezeRandom()() * 70 : 55;
-        p.active = true;
-        p.textureKey = 'fx_ice_shard';
-        p.age = 0;
-        p.ttl = 0.35;
-        p.x = x;
-        p.y = y;
-        p.vx = Math.cos(ang) * spd;
-        p.vy = Math.sin(ang) * spd - 20;
-        p.vr = 10;
-        p.startScale = invBake * 1.1;
-        p.endScale = invBake * 0.3;
-        p.startAlpha = 1;
-        p.gravityY = 120;
-        p.damping = 4;
-
-        p.sprite.setTexture(p.textureKey);
-        p.sprite.clearTint();
-        p.sprite.setPosition(p.x, p.y);
-        p.sprite.setScale(p.startScale);
-        p.sprite.setAlpha(1);
-        p.sprite.setDepth(56);
-        p.sprite.setVisible(true);
+        activateParticle(p, {
+          textureKey: 'fx_ice_shard',
+          x,
+          y,
+          vx: Math.cos(ang) * spd,
+          vy: Math.sin(ang) * spd - 20,
+          vr: 10,
+          ttl: 0.35,
+          startScale: invBake * 1.1,
+          endScale: invBake * 0.3,
+          startAlpha: 1,
+          gravityY: 120,
+          damping: 4,
+          blendMode: 'NORMAL',
+          depth: 56,
+        });
       }
     }
   }
@@ -497,22 +437,146 @@ export class CombatFxManager {
     damage: number;
     isTeamCombo: boolean;
   }): void {
-    const meta = ELEMENTAL_REACTIONS[params.reaction];
-    this.spawnExplosionBurst(
-      params.x,
-      params.y,
-      params.isTeamCombo ? 84 : 62,
-      meta?.colorHex ?? PALETTE.SOLAR_GOLD,
-    );
+    spawnElementalReactionFxImpl.call(this, params);
+  }
 
-    this.totalDamagePopupsSpawned += 1;
-    this.activeReactionBanner = coalesceElementalReaction(
-      this.activeReactionBanner,
-      params.reaction,
-      params.damage,
-      params.isTeamCombo,
-      0.4,
-    );
+  public spawnChestOpenBurst(
+    x: number,
+    y: number,
+    rarity: 'common' | 'rare' | 'epic' | 'legendary' = 'rare',
+  ): void {
+    const invBake = 1 / TextureBaker.getBakeScale();
+    const colorHex =
+      rarity === 'legendary'
+        ? PALETTE.SOLAR_GOLD
+        : rarity === 'epic'
+          ? PALETTE.TOXIC_PURPLE
+          : rarity === 'rare'
+            ? PALETTE.CYAN_FROST
+            : PALETTE.BONE_WHITE;
+    const tint = hexToNum(colorHex);
+
+    const beam = this.acquireParticleSlot();
+    if (beam) {
+      activateParticle(beam, {
+        textureKey: 'fx_rarity_beam',
+        x,
+        y: y - 28,
+        vy: -14,
+        ttl: 0.52,
+        startScale: invBake * 0.85,
+        endScale: invBake * 1.35,
+        startAlpha: 0.92,
+        damping: 2,
+        tint,
+        depth: 46,
+        easeCurve: 'easeOutBack',
+        scaleRatioY: 1.45,
+      });
+    }
+
+    const ring = this.acquireParticleSlot();
+    if (ring) {
+      activateParticle(ring, {
+        textureKey: 'fx_impact_ring',
+        x,
+        y,
+        ttl: 0.34,
+        startScale: invBake * 0.25,
+        endScale: invBake * (rarity === 'legendary' ? 1.65 : 1.3),
+        startAlpha: 0.9,
+        tint,
+        depth: 54,
+        easeCurve: 'easeOutCubic',
+      });
+    }
+
+    const count = rarity === 'legendary' ? 14 : 10;
+    for (let i = 0; i < count; i++) {
+      const p = this.acquireParticleSlot();
+      if (!p) break;
+      const ang = -Math.PI * 0.5 + (i / (count - 1) - 0.5) * 1.45;
+      const spd = 75 + (i % 4) * 28;
+      const isMote = i % 2 === 0;
+      activateParticle(p, {
+        textureKey: isMote ? 'fx_sparkle_mote' : 'fx_spark_trail',
+        x,
+        y: y - 6,
+        vx: Math.cos(ang) * spd,
+        vy: Math.sin(ang) * spd - 35,
+        vr: isMote ? 6 : 0,
+        ttl: 0.46,
+        startScale: invBake * 1.05,
+        endScale: invBake * 0.22,
+        startAlpha: 0.96,
+        gravityY: 140,
+        damping: 2.5,
+        rotation: ang,
+        tint: i % 3 === 0 ? hexToNum(PALETTE.BONE_WHITE) : tint,
+        depth: 47,
+        scaleRatioY: isMote ? 1 : 0.45,
+        alignToVelocity: !isMote,
+      });
+    }
+  }
+
+  public spawnBossKillBurst(x: number, y: number, defId = 'spore_king'): void {
+    this.bossKillSlowMoTimer = 0.42;
+    this.bossKillFlashTimer = 0.28;
+    this.triggerHitStop(55);
+    this.addTrauma(0.85);
+
+    const invBake = 1 / TextureBaker.getBakeScale();
+    const primaryHex =
+      defId === 'kryssa_ice_queen'
+        ? PALETTE.CYAN_FROST
+        : defId === 'forge_titan'
+          ? PALETTE.FLAME_ORANGE
+          : PALETTE.SOLAR_GOLD;
+
+    for (let r = 0; r < 2; r++) {
+      const ring = this.acquireParticleSlot();
+      if (!ring) break;
+      activateParticle(ring, {
+        textureKey: 'fx_shockwave_ring',
+        x,
+        y,
+        vr: r === 0 ? 2.2 : -1.8,
+        ttl: 0.45 + r * 0.12,
+        startScale: invBake * (0.25 + r * 0.12),
+        endScale: invBake * (2.6 - r * 0.45),
+        startAlpha: 0.98,
+        tint: hexToNum(r === 0 ? primaryHex : PALETTE.BONE_WHITE),
+        depth: 56 + r,
+        easeCurve: 'easeOutCubic',
+      });
+    }
+
+    const count = 20;
+    for (let i = 0; i < count; i++) {
+      const p = this.acquireParticleSlot();
+      if (!p) break;
+      const ang = (i / count) * Math.PI * 2;
+      const spd = 140 + (i % 4) * 55;
+      const isTrail = i % 2 === 0;
+      activateParticle(p, {
+        textureKey: isTrail ? 'fx_spark_trail' : 'fx_sparkle_mote',
+        x,
+        y,
+        vx: Math.cos(ang) * spd,
+        vy: Math.sin(ang) * spd,
+        vr: isTrail ? 0 : 8,
+        ttl: 0.44,
+        startScale: invBake * 1.38,
+        endScale: invBake * 0.22,
+        damping: 4.2,
+        rotation: ang,
+        tint: hexToNum(i % 2 === 0 ? primaryHex : PALETTE.SOLAR_GOLD),
+        depth: 58,
+        scaleRatioY: isTrail ? 0.45 : 1,
+        alignToVelocity: isTrail,
+      });
+    }
   }
 
   public tickReactionBanner(dtSec: number): void {
@@ -609,93 +673,37 @@ export class CombatFxManager {
     y: number,
     angleRad: number,
     isShotgun = false,
+    isTeammate = false,
   ): void {
-    const invBake = 1 / TextureBaker.getBakeScale();
-    const flash = this.acquireParticleSlot();
-    if (flash) {
-      flash.active = true;
-      flash.textureKey = 'fx_muzzle_flash';
-      flash.age = 0;
-      flash.ttl = 0.075;
-      flash.x = x + Math.cos(angleRad) * 6;
-      flash.y = y + Math.sin(angleRad) * 6;
-      flash.vx = 0;
-      flash.vy = 0;
-      flash.vr = 0;
-      flash.startScale = invBake * (isShotgun ? 1.45 : 1.05);
-      flash.endScale = invBake * 0.4;
-      flash.startAlpha = 1;
-      flash.gravityY = 0;
-      flash.damping = 0;
-
-      flash.sprite.setTexture(flash.textureKey);
-      flash.sprite.clearTint();
-      flash.sprite.setPosition(flash.x, flash.y);
-      flash.sprite.setRotation(angleRad);
-      flash.sprite.setScale(flash.startScale);
-      flash.sprite.setAlpha(1);
-      flash.sprite.setDepth(48);
-      flash.sprite.setVisible(true);
-    }
-
-    const casing = this.acquireParticleSlot();
-    if (casing) {
-      const ejectAngle = angleRad - Math.PI * 0.65 + (getClientFreezeRandom()() - 0.5) * 0.4;
-      const spd = 75 + getClientFreezeRandom()() * 45;
-      casing.active = true;
-      casing.textureKey = 'fx_shell_casing';
-      casing.age = 0;
-      casing.ttl = 0.42;
-      casing.x = x;
-      casing.y = y;
-      casing.vx = Math.cos(ejectAngle) * spd;
-      casing.vy = Math.sin(ejectAngle) * spd - 25;
-      casing.vr = (getClientFreezeRandom()() - 0.5) * 18;
-      casing.startScale = invBake;
-      casing.endScale = invBake * 0.85;
-      casing.startAlpha = 0.95;
-      casing.gravityY = 180;
-      casing.damping = 3;
-
-      casing.sprite.setTexture(casing.textureKey);
-      casing.sprite.clearTint();
-      casing.sprite.setPosition(casing.x, casing.y);
-      casing.sprite.setRotation(getClientFreezeRandom()() * Math.PI);
-      casing.sprite.setScale(casing.startScale);
-      casing.sprite.setAlpha(casing.startAlpha);
-      casing.sprite.setDepth(22);
-      casing.sprite.setVisible(true);
-    }
+    spawnMuzzleFlashAndCasingImpl.call(this, x, y, angleRad, isShotgun, isTeammate);
   }
 
-  public spawnMeleeSlash(x: number, y: number, angleRad: number): void {
+  public spawnMeleeSlash(x: number, y: number, angleRad: number, isTeammate = false): void {
     const invBake = 1 / TextureBaker.getBakeScale();
     const slash = this.acquireParticleSlot();
     if (!slash) return;
+    const alphaMult = isTeammate
+      ? clamp(graphicsSettings.getState().teammateFxOpacity, 0.25, 1.0)
+      : 1.0;
 
-    slash.active = true;
-    slash.textureKey = 'fx_slash_arc';
-    slash.age = 0;
-    slash.ttl = 0.14;
-    slash.x = x + Math.cos(angleRad) * 8;
-    slash.y = y + Math.sin(angleRad) * 8;
-    slash.vx = Math.cos(angleRad) * 40;
-    slash.vy = Math.sin(angleRad) * 40;
-    slash.vr = 0;
-    slash.startScale = invBake * 0.95;
-    slash.endScale = invBake * 1.18;
-    slash.startAlpha = 0.95;
-    slash.gravityY = 0;
-    slash.damping = 6;
-
-    slash.sprite.setTexture(slash.textureKey);
-    slash.sprite.clearTint();
-    slash.sprite.setPosition(slash.x, slash.y);
-    slash.sprite.setRotation(angleRad);
-    slash.sprite.setScale(slash.startScale);
-    slash.sprite.setAlpha(slash.startAlpha);
-    slash.sprite.setDepth(52);
-    slash.sprite.setVisible(true);
+    activateParticle(slash, {
+      textureKey: 'fx_slash_arc',
+      x: x + Math.cos(angleRad) * 8,
+      y: y + Math.sin(angleRad) * 8,
+      vx: Math.cos(angleRad) * 40,
+      vy: Math.sin(angleRad) * 40,
+      vr: 0,
+      ttl: 0.14,
+      startScale: invBake * 0.95,
+      endScale: invBake * 1.18,
+      startAlpha: 0.95 * alphaMult,
+      gravityY: 0,
+      damping: 6,
+      rotation: angleRad,
+      blendMode: 'ADD',
+      depth: 52,
+      easeCurve: 'easeOutCubic',
+    });
   }
 
   public spawnHitSparks(
@@ -708,55 +716,10 @@ export class CombatFxManager {
       blockedByShield?: boolean;
       element?: ElementType;
       count?: number;
+      isTeammate?: boolean;
     } = {},
   ): void {
-    const invBake = 1 / TextureBaker.getBakeScale();
-    const budgetRatio = graphicsSettings.getBudget().particleBudgetRatio;
-    const rawCount = options.count ?? (options.isCrit ? 10 : 6);
-    const count = Math.max(1, Math.round(rawCount * budgetRatio));
-    this.totalSparksSpawned += count;
-
-    let tint = hexToNum(PALETTE.CYAN_FROST);
-    if (options.element === 'burn') tint = hexToNum(PALETTE.FLAME_ORANGE);
-    else if (options.element === 'chill') tint = hexToNum(PALETTE.CYAN_FROST);
-    else if (options.element === 'shock') tint = hexToNum(PALETTE.VOLT_YELLOW);
-    else if (options.element === 'poison') tint = hexToNum(PALETTE.LIME_GLOW);
-    else if (options.isCrit) tint = hexToNum(PALETTE.SOLAR_GOLD);
-    else if (options.blockedByShield) tint = hexToNum(PALETTE.CRIMSON_BRIGHT);
-    else if (options.hitWall) tint = hexToNum(PALETTE.WARM_STONE);
-
-    for (let i = 0; i < count; i++) {
-      const p = this.acquireParticleSlot();
-      if (!p) break;
-
-      const spread = (getClientFreezeRandom()() - 0.5) * 2.2;
-      const dir = impactAngleRad + Math.PI + spread;
-      const spd = 70 + getClientFreezeRandom()() * 130;
-
-      p.active = true;
-      p.textureKey = 'fx_spark';
-      p.age = 0;
-      p.ttl = 0.18 + getClientFreezeRandom()() * 0.12;
-      p.x = x;
-      p.y = y;
-      p.vx = Math.cos(dir) * spd;
-      p.vy = Math.sin(dir) * spd;
-      p.vr = (getClientFreezeRandom()() - 0.5) * 12;
-      p.startScale = invBake * (options.isCrit ? 1.2 : 0.9);
-      p.endScale = invBake * 0.15;
-      p.startAlpha = 1;
-      p.gravityY = 0;
-      p.damping = 8;
-
-      p.sprite.setTexture(p.textureKey);
-      p.sprite.setTint(tint);
-      p.sprite.setPosition(p.x, p.y);
-      p.sprite.setRotation(dir);
-      p.sprite.setScale(p.startScale);
-      p.sprite.setAlpha(1);
-      p.sprite.setDepth(55);
-      p.sprite.setVisible(true);
-    }
+    spawnHitSparksImpl.call(this, x, y, impactAngleRad, options);
   }
 
   public spawnDashDust(x: number, y: number): void {
@@ -766,28 +729,23 @@ export class CombatFxManager {
       if (!p) break;
       const ang = getClientFreezeRandom()() * Math.PI * 2;
       const spd = 20 + getClientFreezeRandom()() * 45;
-      p.active = true;
-      p.textureKey = 'fx_dust_puff';
-      p.age = 0;
-      p.ttl = 0.26 + getClientFreezeRandom()() * 0.1;
-      p.x = x + (getClientFreezeRandom()() - 0.5) * 10;
-      p.y = y + (getClientFreezeRandom()() - 0.5) * 6;
-      p.vx = Math.cos(ang) * spd;
-      p.vy = Math.sin(ang) * spd - 12;
-      p.vr = 0;
-      p.startScale = invBake * 0.95;
-      p.endScale = invBake * 0.2;
-      p.startAlpha = 0.75;
-      p.gravityY = 0;
-      p.damping = 5;
-
-      p.sprite.setTexture(p.textureKey);
-      p.sprite.setTint(hexToNum(PALETTE.CYAN_FROST));
-      p.sprite.setPosition(p.x, p.y);
-      p.sprite.setScale(p.startScale);
-      p.sprite.setAlpha(p.startAlpha);
-      p.sprite.setDepth(18);
-      p.sprite.setVisible(true);
+      activateParticle(p, {
+        textureKey: 'fx_dust_puff',
+        x: x + (getClientFreezeRandom()() - 0.5) * 10,
+        y: y + (getClientFreezeRandom()() - 0.5) * 6,
+        vx: Math.cos(ang) * spd,
+        vy: Math.sin(ang) * spd - 12,
+        vr: 0,
+        ttl: 0.26 + getClientFreezeRandom()() * 0.1,
+        startScale: invBake * 0.95,
+        endScale: invBake * 0.2,
+        startAlpha: 0.75,
+        gravityY: 0,
+        damping: 5,
+        tint: hexToNum(PALETTE.CYAN_FROST),
+        blendMode: 'NORMAL',
+        depth: 18,
+      });
     }
   }
 
@@ -801,36 +759,32 @@ export class CombatFxManager {
       const p = this.acquireParticleSlot();
       if (!p) break;
       const side = i === 0 ? -1 : 1;
-      p.active = true;
-      p.textureKey = 'fx_dust_puff';
-      p.age = 0;
-      p.ttl = 0.24;
-      p.x = x + side * 3.5;
-      p.y = y - 1;
-      p.vx = side * (10 + getClientFreezeRandom()() * 8);
-      p.vy = -8 - getClientFreezeRandom()() * 6;
-      p.vr = 0;
-      p.startScale = invBake * 0.45;
-      p.endScale = invBake * 0.15;
-      p.startAlpha = 0.42;
-      p.gravityY = -6;
-      p.damping = 4;
-
-      p.sprite.setTexture(p.textureKey);
-      p.sprite.setTint(tint);
-      p.sprite.setPosition(p.x, p.y);
-      p.sprite.setScale(p.startScale);
-      p.sprite.setAlpha(p.startAlpha);
-      p.sprite.setDepth(18);
-      p.sprite.setVisible(true);
+      activateParticle(p, {
+        textureKey: 'fx_dust_puff',
+        x: x + side * 3.5,
+        y: y - 1,
+        vx: side * (10 + getClientFreezeRandom()() * 8),
+        vy: -8 - getClientFreezeRandom()() * 6,
+        vr: 0,
+        ttl: 0.24,
+        startScale: invBake * 0.45,
+        endScale: invBake * 0.15,
+        startAlpha: 0.42,
+        gravityY: -6,
+        damping: 4,
+        tint,
+        blendMode: 'NORMAL',
+        depth: 18,
+      });
     }
   }
 
-  /**
-   * Section 3.3 & 3.5: Enemy death breaks cutout rig parts apart, fades out, and leaves a persistent splatter decal.
-   */
   public spawnEnemyDeathBurst(defId: string, x: number, y: number): void {
     this.spawnFloorDecal('splatter', x, y + 6, 1.0);
+
+    if (defId === 'spore_king' || defId === 'kryssa_ice_queen' || defId === 'forge_titan') {
+      this.spawnBossKillBurst(x, y, defId);
+    }
 
     const invBake = 1 / TextureBaker.getBakeScale();
     const rigDef = RIG_DEFS_BY_ID[defId];
@@ -843,29 +797,22 @@ export class CombatFxManager {
         const ang = radialAng + (getClientFreezeRandom()() - 0.5) * 0.55;
         const spd = 72 + getClientFreezeRandom()() * 88;
         const texKey = TextureBaker.getPartTextureKey(rigDef.id, part.id);
-        p.active = true;
-        p.textureKey = texKey;
-        p.age = 0;
-        p.ttl = 0.55;
-        p.x = x + part.offsetX * 0.65;
-        p.y = rigFootY + part.offsetY * 0.65;
-        p.vx = Math.cos(ang) * spd;
-        p.vy = Math.sin(ang) * spd - 46;
-        p.vr = (part.offsetX >= 0 ? 1 : -1) * (6 + getClientFreezeRandom()() * 9);
-        p.startScale = invBake * 0.92;
-        p.endScale = invBake * 0.36;
-        p.startAlpha = 0.96;
-        p.gravityY = 210;
-        p.damping = 3.8;
-
-        p.sprite.setTexture(texKey);
-        p.sprite.clearTint();
-        p.sprite.setPosition(p.x, p.y);
-        p.sprite.setRotation(0);
-        p.sprite.setScale(p.startScale);
-        p.sprite.setAlpha(p.startAlpha);
-        p.sprite.setDepth(35);
-        p.sprite.setVisible(true);
+        activateParticle(p, {
+          textureKey: texKey,
+          x: x + part.offsetX * 0.65,
+          y: rigFootY + part.offsetY * 0.65,
+          vx: Math.cos(ang) * spd,
+          vy: Math.sin(ang) * spd - 46,
+          vr: (part.offsetX >= 0 ? 1 : -1) * (6 + getClientFreezeRandom()() * 9),
+          ttl: 0.55,
+          startScale: invBake * 0.92,
+          endScale: invBake * 0.36,
+          startAlpha: 0.96,
+          gravityY: 210,
+          damping: 3.8,
+          blendMode: 'NORMAL',
+          depth: 35,
+        });
       }
     }
 
@@ -878,44 +825,22 @@ export class CombatFxManager {
     radius: number,
     colorHex: string = PALETTE.TOXIC_PURPLE,
   ): void {
-    this.spawnFloorDecal('scorch', x, y, clamp(radius / 64, 0.8, 1.5));
-
-    const invBake = 1 / TextureBaker.getBakeScale();
-    const tint = hexToNum(colorHex);
-    const count = Math.max(6, Math.round(16 * graphicsSettings.getBudget().particleBudgetRatio));
-    for (let i = 0; i < count; i++) {
-      const p = this.acquireParticleSlot();
-      if (!p) break;
-      const ang = (i / count) * Math.PI * 2 + (getClientFreezeRandom()() - 0.5) * 0.25;
-      const spd = (radius / 0.28) * (0.6 + getClientFreezeRandom()() * 0.5);
-      const texKey = i % 2 === 0 ? 'fx_spark' : 'fx_dust_puff';
-      p.active = true;
-      p.textureKey = texKey;
-      p.age = 0;
-      p.ttl = 0.34;
-      p.x = x;
-      p.y = y;
-      p.vx = Math.cos(ang) * spd;
-      p.vy = Math.sin(ang) * spd;
-      p.vr = (getClientFreezeRandom()() - 0.5) * 10;
-      p.startScale = invBake * 1.4;
-      p.endScale = invBake * 0.2;
-      p.startAlpha = 1;
-      p.gravityY = 0;
-      p.damping = 6;
-
-      p.sprite.setTexture(texKey);
-      p.sprite.setTint(i % 3 === 0 ? hexToNum(PALETTE.SOLAR_GOLD) : tint);
-      p.sprite.setPosition(p.x, p.y);
-      p.sprite.setRotation(ang);
-      p.sprite.setScale(p.startScale);
-      p.sprite.setAlpha(1);
-      p.sprite.setDepth(58);
-      p.sprite.setVisible(true);
-    }
+    spawnExplosionBurstImpl.call(this, x, y, radius, colorHex);
   }
 
   public update(dtSec: number, camView?: Phaser.Geom.Rectangle): void {
+    const simProps = (
+      this.sceneRef as unknown as {
+        transport?: {
+          getSim?: () => {
+            props?: ReadonlyArray<{ kind: string; x: number; y: number; hp: number }>;
+          };
+        };
+      }
+    ).transport?.getSim?.()?.props;
+    if (simProps) {
+      this.syncTorchPositions(simProps);
+    }
     update.call(this, dtSec, camView);
   }
 
@@ -937,6 +862,10 @@ export class CombatFxManager {
 
   public getActiveAmbientCount(): number {
     return getActiveAmbientCount.call(this);
+  }
+
+  public getActiveTorchMoteCount(): number {
+    return getActiveTorchMoteCount.call(this);
   }
 
   public acquireParticleSlot(): PooledParticle | null {

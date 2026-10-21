@@ -137,6 +137,7 @@ export class TextureBaker {
       scene.textures.exists('player_ring_1') &&
       scene.textures.exists('ui_crosshair') &&
       scene.textures.exists('fx_light_radial') &&
+      scene.textures.exists('fx_impact_ring') &&
       scene.textures.exists('chest_closed_legendary') &&
       scene.textures.exists('portal_pedestal_base') &&
       scene.textures.exists('portal_particle_mote') &&

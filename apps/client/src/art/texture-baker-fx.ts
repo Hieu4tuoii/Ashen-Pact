@@ -3,6 +3,54 @@ import { PALETTE, type PaletteHex } from './palette.js';
 import { outlined, tracePolygon, traceRoundedRect } from './primitives.js';
 import { bakeCustomCanvas, registerCanvasTexture } from './texture-baker-canvas.js';
 
+export const ENEMY_BULLET_VISUAL_SPEC = {
+  fill: PALETTE.CRIMSON_BRIGHT,
+  core: PALETTE.BONE_WHITE,
+  outlineColor: PALETTE.INK_DARK,
+  outlineWidth: 1.5,
+  coreRadius: 2.6,
+  stressCoreRadius: 2.2,
+  depth: 60,
+  neverTintByElement: true,
+} as const;
+
+export const BAKED_FX_TEXTURE_KEYS = [
+  'fx_light_radial',
+  'proj_player_bolt',
+  'proj_player_burn',
+  'proj_player_chill',
+  'proj_player_shock',
+  'proj_player_poison',
+  'proj_player_pellet',
+  'proj_enemy_orb',
+  'proj_stress_orb',
+  'proj_stress_enemy',
+  'proj_stress_player',
+  'fx_slash_arc',
+  'fx_spark',
+  'fx_spark_trail',
+  'fx_impact_ring',
+  'fx_shockwave_ring',
+  'fx_muzzle_flash',
+  'fx_muzzle_core',
+  'fx_shell_casing',
+  'fx_dust_puff',
+  'fx_pickup_energy',
+  'fx_pickup_gold',
+  'fx_decal_scorch',
+  'fx_decal_splatter',
+  'fx_decal_frost',
+  'fx_ember_mote',
+  'fx_ambient_leaf',
+  'fx_ambient_firefly',
+  'fx_ambient_snow',
+  'fx_wood_shard',
+  'fx_ice_shard',
+  'fx_afterimage_vanguard',
+  'fx_rarity_beam',
+  'fx_sparkle_mote',
+] as const;
+
 /**
  * Bakes the soft radial falloff light brush texture used by the dynamic RenderTexture Lightmap.
  */
@@ -35,7 +83,7 @@ export function bakeProjectilesAndFx(scene: Phaser.Scene, scale: number): void {
         fill: PALETTE.CYAN_FROST,
         shade: PALETTE.AZURE_CORE,
         highlight: PALETTE.BONE_WHITE,
-        outlineWidth: 2.2,
+        outlineWidth: 2.0,
       },
       (c) =>
         tracePolygon(c, [
@@ -60,7 +108,7 @@ export function bakeProjectilesAndFx(scene: Phaser.Scene, scale: number): void {
     bakeCustomCanvas(scene, key, 24, 14, scale, (ctx) => {
       outlined(
         ctx,
-        { fill, shade, highlight, outlineWidth: 2.2 },
+        { fill, shade, highlight, outlineWidth: 2.0 },
         (c) =>
           tracePolygon(c, [
             { x: -8, y: -3.4 },
@@ -82,7 +130,7 @@ export function bakeProjectilesAndFx(scene: Phaser.Scene, scale: number): void {
         fill: PALETTE.SOLAR_GOLD,
         shade: PALETTE.FLAME_ORANGE,
         highlight: PALETTE.BONE_WHITE,
-        outlineWidth: 2.2,
+        outlineWidth: 2.0,
       },
       (c) => {
         c.beginPath();
@@ -93,21 +141,21 @@ export function bakeProjectilesAndFx(scene: Phaser.Scene, scale: number): void {
     );
   });
 
-  // 3. Enemy Projectile Orb (high saturation crimson, thick dark outline + bright core + outer glow)
+  // 3. Enemy Projectile Orb (high-contrast concentric bullseye: #E84545 body + 1.5u #141019 outline + centered #FFFDF5 core)
   bakeCustomCanvas(scene, 'proj_enemy_orb', 24, 24, scale, (ctx) => {
     ctx.beginPath();
-    ctx.arc(0, 0, 9.5, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(232, 69, 69, 0.35)';
+    ctx.arc(0, 0, 9.4, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(232, 69, 69, 0.36)';
     ctx.fill();
 
     outlined(
       ctx,
       {
-        fill: PALETTE.CRIMSON_BRIGHT,
+        fill: ENEMY_BULLET_VISUAL_SPEC.fill,
         shade: PALETTE.RUBY_CORE,
-        highlight: PALETTE.SOLAR_GOLD,
-        outlineColor: PALETTE.INK_DARK,
-        outlineWidth: 2.6,
+        highlight: PALETTE.CRIMSON_BRIGHT,
+        outlineColor: ENEMY_BULLET_VISUAL_SPEC.outlineColor,
+        outlineWidth: ENEMY_BULLET_VISUAL_SPEC.outlineWidth,
       },
       (c) => {
         c.beginPath();
@@ -117,9 +165,15 @@ export function bakeProjectilesAndFx(scene: Phaser.Scene, scale: number): void {
       { cx: 0, cy: 0, rx: 6, ry: 6 },
     );
 
+    // Subtle dark crimson separator ring around the white core for maximum grayscale bullseye contrast
     ctx.beginPath();
-    ctx.arc(-1, -1, 2.4, 0, Math.PI * 2);
-    ctx.fillStyle = PALETTE.BONE_WHITE;
+    ctx.arc(0, 0, ENEMY_BULLET_VISUAL_SPEC.coreRadius + 0.9, 0, Math.PI * 2);
+    ctx.fillStyle = PALETTE.RUBY_DARK;
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.arc(0, 0, ENEMY_BULLET_VISUAL_SPEC.coreRadius, 0, Math.PI * 2);
+    ctx.fillStyle = ENEMY_BULLET_VISUAL_SPEC.core;
     ctx.fill();
   });
 
@@ -133,7 +187,7 @@ export function bakeProjectilesAndFx(scene: Phaser.Scene, scale: number): void {
         shade: PALETTE.CYAN_FROST,
         highlight: PALETTE.BONE_WHITE,
         outlineColor: PALETTE.INK_DARK,
-        outlineWidth: 2.0,
+        outlineWidth: 1.8,
       },
       (c) => {
         c.beginPath();
@@ -152,11 +206,11 @@ export function bakeProjectilesAndFx(scene: Phaser.Scene, scale: number): void {
     outlined(
       ctx,
       {
-        fill: PALETTE.CRIMSON_BRIGHT,
+        fill: ENEMY_BULLET_VISUAL_SPEC.fill,
         shade: PALETTE.RUBY_CORE,
-        highlight: PALETTE.SOLAR_GOLD,
-        outlineColor: PALETTE.INK_DARK,
-        outlineWidth: 2.2,
+        highlight: PALETTE.CRIMSON_BRIGHT,
+        outlineColor: ENEMY_BULLET_VISUAL_SPEC.outlineColor,
+        outlineWidth: ENEMY_BULLET_VISUAL_SPEC.outlineWidth,
       },
       (c) => {
         c.beginPath();
@@ -166,8 +220,12 @@ export function bakeProjectilesAndFx(scene: Phaser.Scene, scale: number): void {
       { cx: 0, cy: 0, rx: 5, ry: 5 },
     );
     ctx.beginPath();
-    ctx.arc(-0.8, -0.8, 2.0, 0, Math.PI * 2);
-    ctx.fillStyle = PALETTE.BONE_WHITE;
+    ctx.arc(0, 0, ENEMY_BULLET_VISUAL_SPEC.stressCoreRadius + 0.7, 0, Math.PI * 2);
+    ctx.fillStyle = PALETTE.RUBY_DARK;
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(0, 0, ENEMY_BULLET_VISUAL_SPEC.stressCoreRadius, 0, Math.PI * 2);
+    ctx.fillStyle = ENEMY_BULLET_VISUAL_SPEC.core;
     ctx.fill();
   });
 
@@ -179,7 +237,7 @@ export function bakeProjectilesAndFx(scene: Phaser.Scene, scale: number): void {
         shade: PALETTE.SILVER_BRIGHT,
         highlight: PALETTE.BONE_WHITE,
         outlineColor: PALETTE.INK_DARK,
-        outlineWidth: 2.0,
+        outlineWidth: 1.8,
       },
       (c) =>
         tracePolygon(c, [
@@ -193,7 +251,7 @@ export function bakeProjectilesAndFx(scene: Phaser.Scene, scale: number): void {
     );
   });
 
-  // 4. Melee Slash Crescent Arc
+  // 4. Melee Slash Crescent Arc (BlendMode.ADD)
   bakeCustomCanvas(scene, 'fx_slash_arc', 110, 110, scale, (ctx) => {
     outlined(
       ctx,
@@ -202,7 +260,7 @@ export function bakeProjectilesAndFx(scene: Phaser.Scene, scale: number): void {
         shade: PALETTE.CYAN_FROST,
         highlight: PALETTE.BONE_WHITE,
         outlineColor: PALETTE.INK_DARK,
-        outlineWidth: 2.2,
+        outlineWidth: 1.8,
       },
       (c) => {
         c.beginPath();
@@ -214,52 +272,171 @@ export function bakeProjectilesAndFx(scene: Phaser.Scene, scale: number): void {
     );
   });
 
-  // 5. Impact Spark Star
+  // 5. Impact Spark Star (BlendMode.ADD)
   bakeCustomCanvas(scene, 'fx_spark', 18, 18, scale, (ctx) => {
-    outlined(
-      ctx,
-      {
-        fill: PALETTE.BONE_WHITE,
-        outlineColor: PALETTE.INK_DARK,
-        outlineWidth: 1.5,
-      },
-      (c) =>
-        tracePolygon(c, [
-          { x: -6, y: 0 },
-          { x: -1.5, y: -1.8 },
-          { x: 0, y: -5 },
-          { x: 1.5, y: -1.8 },
-          { x: 6, y: 0 },
-          { x: 1.5, y: 1.8 },
-          { x: 0, y: 5 },
-          { x: -1.5, y: 1.8 },
-        ]),
-      { cx: 0, cy: 0, rx: 6, ry: 5 },
-    );
+    const glow = ctx.createRadialGradient(0, 0, 0.4, 0, 0, 7.5);
+    glow.addColorStop(0, 'rgba(255, 253, 245, 0.95)');
+    glow.addColorStop(0.5, 'rgba(255, 255, 255, 0.42)');
+    glow.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.arc(0, 0, 7.5, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = PALETTE.BONE_WHITE;
+    tracePolygon(ctx, [
+      { x: -6.5, y: 0 },
+      { x: -1.4, y: -1.5 },
+      { x: 0, y: -5.5 },
+      { x: 1.4, y: -1.5 },
+      { x: 6.5, y: 0 },
+      { x: 1.4, y: 1.5 },
+      { x: 0, y: 5.5 },
+      { x: -1.4, y: 1.5 },
+    ]);
+    ctx.fill();
   });
 
-  // 6. Muzzle Flash
-  bakeCustomCanvas(scene, 'fx_muzzle_flash', 28, 24, scale, (ctx) => {
-    outlined(
-      ctx,
-      {
-        fill: PALETTE.SOLAR_GOLD,
-        shade: PALETTE.FLAME_ORANGE,
-        highlight: PALETTE.BONE_WHITE,
-        outlineWidth: 1.8,
-      },
-      (c) =>
-        tracePolygon(c, [
-          { x: -6, y: -4 },
-          { x: 4, y: -8 },
-          { x: 2, y: -2 },
-          { x: 11, y: 0 },
-          { x: 2, y: 2 },
-          { x: 4, y: 8 },
-          { x: -6, y: 4 },
-        ]),
-      { cx: 2, cy: 0, rx: 8, ry: 7 },
-    );
+  // 5b. Directional Elongated Spark Trail (28x10, BlendMode.ADD)
+  bakeCustomCanvas(scene, 'fx_spark_trail', 28, 10, scale, (ctx) => {
+    const tailGrad = ctx.createLinearGradient(-13, 0, 12, 0);
+    tailGrad.addColorStop(0, 'rgba(255, 255, 255, 0)');
+    tailGrad.addColorStop(0.45, 'rgba(255, 255, 255, 0.55)');
+    tailGrad.addColorStop(0.85, 'rgba(255, 253, 245, 0.98)');
+    tailGrad.addColorStop(1, 'rgba(255, 253, 245, 1)');
+    ctx.fillStyle = tailGrad;
+    tracePolygon(ctx, [
+      { x: -13, y: 0 },
+      { x: 2, y: -3.2 },
+      { x: 12.5, y: 0 },
+      { x: 2, y: 3.2 },
+    ]);
+    ctx.fill();
+
+    ctx.fillStyle = PALETTE.BONE_WHITE;
+    tracePolygon(ctx, [
+      { x: -4, y: 0 },
+      { x: 4, y: -1.4 },
+      { x: 12, y: 0 },
+      { x: 4, y: 1.4 },
+    ]);
+    ctx.fill();
+  });
+
+  // 5c. Expanding Hit Impact Ring (40x40, easeOutCubic + BlendMode.ADD)
+  bakeCustomCanvas(scene, 'fx_impact_ring', 40, 40, scale, (ctx) => {
+    const radGrad = ctx.createRadialGradient(0, 0, 6, 0, 0, 18);
+    radGrad.addColorStop(0, 'rgba(255, 255, 255, 0)');
+    radGrad.addColorStop(0.62, 'rgba(255, 255, 255, 0.18)');
+    radGrad.addColorStop(0.84, 'rgba(255, 253, 245, 0.92)');
+    radGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    ctx.fillStyle = radGrad;
+    ctx.beginPath();
+    ctx.arc(0, 0, 18, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.strokeStyle = PALETTE.BONE_WHITE;
+    ctx.lineWidth = 1.9;
+    ctx.beginPath();
+    ctx.arc(0, 0, 14.2, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // 4 crisp cardinal energy notches
+    ctx.lineWidth = 1.6;
+    for (let i = 0; i < 4; i++) {
+      const a = (i * Math.PI) / 2;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a) * 11.2, Math.sin(a) * 11.2);
+      ctx.lineTo(Math.cos(a) * 17.2, Math.sin(a) * 17.2);
+      ctx.stroke();
+    }
+  });
+
+  // 5d. Elemental Combo & Explosion Double Shockwave Ring (96x96, easeOutCubic + BlendMode.ADD)
+  bakeCustomCanvas(scene, 'fx_shockwave_ring', 96, 96, scale, (ctx) => {
+    const halo = ctx.createRadialGradient(0, 0, 14, 0, 0, 45);
+    halo.addColorStop(0, 'rgba(255, 255, 255, 0)');
+    halo.addColorStop(0.55, 'rgba(255, 255, 255, 0.14)');
+    halo.addColorStop(0.82, 'rgba(255, 253, 245, 0.88)');
+    halo.addColorStop(0.94, 'rgba(255, 255, 255, 0.35)');
+    halo.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    ctx.fillStyle = halo;
+    ctx.beginPath();
+    ctx.arc(0, 0, 45, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Outer primary shockwave rim
+    ctx.strokeStyle = PALETTE.BONE_WHITE;
+    ctx.lineWidth = 2.8;
+    ctx.beginPath();
+    ctx.arc(0, 0, 37.5, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Inner harmonic ring
+    ctx.strokeStyle = 'rgba(255, 253, 245, 0.72)';
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    ctx.arc(0, 0, 26.5, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // 8 radial energy ticks
+    ctx.lineWidth = 2.0;
+    for (let i = 0; i < 8; i++) {
+      const a = (i * Math.PI) / 4;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a) * 31, Math.sin(a) * 31);
+      ctx.lineTo(Math.cos(a) * 43, Math.sin(a) * 43);
+      ctx.stroke();
+    }
+  });
+
+  // 6. Muzzle Flash Outer Star Cone (BlendMode.ADD)
+  bakeCustomCanvas(scene, 'fx_muzzle_flash', 30, 26, scale, (ctx) => {
+    const rad = ctx.createRadialGradient(1, 0, 0.5, 1, 0, 12);
+    rad.addColorStop(0, 'rgba(255, 253, 245, 0.95)');
+    rad.addColorStop(0.55, 'rgba(250, 204, 21, 0.65)');
+    rad.addColorStop(1, 'rgba(249, 115, 22, 0)');
+    ctx.fillStyle = rad;
+    ctx.beginPath();
+    ctx.arc(1, 0, 12, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = PALETTE.SOLAR_GOLD;
+    tracePolygon(ctx, [
+      { x: -6.5, y: -4.2 },
+      { x: 4.5, y: -9.5 },
+      { x: 2.2, y: -2.4 },
+      { x: 13.0, y: 0 },
+      { x: 2.2, y: 2.4 },
+      { x: 4.5, y: 9.5 },
+      { x: -6.5, y: 4.2 },
+    ]);
+    ctx.fill();
+  });
+
+  // 6b. Muzzle Flash Inner White-Gold Core Flare (24x20, BlendMode.ADD)
+  bakeCustomCanvas(scene, 'fx_muzzle_core', 24, 20, scale, (ctx) => {
+    const coreGrad = ctx.createRadialGradient(1, 0, 0.3, 1, 0, 8.5);
+    coreGrad.addColorStop(0, 'rgba(255, 253, 245, 1)');
+    coreGrad.addColorStop(0.6, 'rgba(254, 240, 138, 0.85)');
+    coreGrad.addColorStop(1, 'rgba(250, 204, 21, 0)');
+    ctx.fillStyle = coreGrad;
+    ctx.beginPath();
+    ctx.arc(1, 0, 8.5, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = PALETTE.BONE_WHITE;
+    tracePolygon(ctx, [
+      { x: -4.5, y: 0 },
+      { x: 0, y: -2.2 },
+      { x: 2.5, y: -6.2 },
+      { x: 3.5, y: -1.8 },
+      { x: 10.2, y: 0 },
+      { x: 3.5, y: 1.8 },
+      { x: 2.5, y: 6.2 },
+      { x: 0, y: 2.2 },
+    ]);
+    ctx.fill();
   });
 
   // 7. Ejected Brass Shell Casing
@@ -332,7 +509,7 @@ export function bakeProjectilesAndFx(scene: Phaser.Scene, scale: number): void {
     );
   });
 
-  // 11. Persistent Floor Decals (Scorch, Splatter, Frost, Debris)
+  // 11. Persistent Floor Decals (Scorch, Splatter, Frost)
   bakeCustomCanvas(scene, 'fx_decal_scorch', 42, 42, scale, (ctx) => {
     ctx.beginPath();
     ctx.ellipse(0, 0, 17, 13, 0.2, 0, Math.PI * 2);
@@ -365,18 +542,20 @@ export function bakeProjectilesAndFx(scene: Phaser.Scene, scale: number): void {
     }
   });
 
-  // 12. Ambient Forest Leaf, Un-outlined Ember Mote, Mist & Shards
+  // 12. Clear Biome Ambient Particles (Zero Fog: NO fx_ambient_mist!)
+  // Biome 3: Small <= 4px un-outlined warm rising ember mote (never white core + dark outline!)
   bakeCustomCanvas(scene, 'fx_ember_mote', 8, 8, scale, (ctx) => {
-    const grad = ctx.createRadialGradient(0, 0, 0.3, 0, 0, 1.7);
-    grad.addColorStop(0, 'rgba(255, 255, 255, 1)');
-    grad.addColorStop(0.65, 'rgba(255, 210, 122, 0.85)');
+    const grad = ctx.createRadialGradient(0, 0, 0.2, 0, 0, 1.75);
+    grad.addColorStop(0, 'rgba(254, 240, 138, 0.96)');
+    grad.addColorStop(0.55, 'rgba(251, 146, 60, 0.82)');
     grad.addColorStop(1, 'rgba(249, 115, 22, 0)');
     ctx.fillStyle = grad;
     ctx.beginPath();
-    ctx.arc(0, 0, 1.7, 0, Math.PI * 2);
+    ctx.arc(0, 0, 1.75, 0, Math.PI * 2);
     ctx.fill();
   });
 
+  // Biome 1: Forest leaf
   bakeCustomCanvas(scene, 'fx_ambient_leaf', 14, 14, scale, (ctx) => {
     outlined(
       ctx,
@@ -396,13 +575,27 @@ export function bakeProjectilesAndFx(scene: Phaser.Scene, scale: number): void {
     );
   });
 
-  bakeCustomCanvas(scene, 'fx_ambient_mist', 64, 32, scale, (ctx) => {
-    const grad = ctx.createRadialGradient(0, 0, 2, 0, 0, 28);
-    grad.addColorStop(0, 'rgba(167, 243, 208, 0.18)');
-    grad.addColorStop(1, 'rgba(167, 243, 208, 0.0)');
+  // Biome 1: Un-outlined glowing firefly mote (BlendMode.ADD)
+  bakeCustomCanvas(scene, 'fx_ambient_firefly', 12, 12, scale, (ctx) => {
+    const grad = ctx.createRadialGradient(0, 0, 0.3, 0, 0, 4.6);
+    grad.addColorStop(0, 'rgba(254, 240, 138, 0.98)');
+    grad.addColorStop(0.45, 'rgba(163, 230, 53, 0.68)');
+    grad.addColorStop(1, 'rgba(74, 222, 128, 0)');
     ctx.fillStyle = grad;
     ctx.beginPath();
-    ctx.ellipse(0, 0, 28, 12, 0, 0, Math.PI * 2);
+    ctx.arc(0, 0, 4.6, 0, Math.PI * 2);
+    ctx.fill();
+  });
+
+  // Biome 2: Soft round un-outlined 2-4px snowflake
+  bakeCustomCanvas(scene, 'fx_ambient_snow', 10, 10, scale, (ctx) => {
+    const grad = ctx.createRadialGradient(0, 0, 0.25, 0, 0, 2.2);
+    grad.addColorStop(0, 'rgba(255, 253, 245, 0.96)');
+    grad.addColorStop(0.65, 'rgba(224, 242, 254, 0.72)');
+    grad.addColorStop(1, 'rgba(186, 230, 253, 0)');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(0, 0, 2.2, 0, Math.PI * 2);
     ctx.fill();
   });
 
@@ -457,7 +650,6 @@ export function bakeProjectilesAndFx(scene: Phaser.Scene, scale: number): void {
 
   // 14. Phase P6 Soul Knight-Style Vertical Rarity Light Beam (32x128, BlendModes.ADD)
   bakeCustomCanvas(scene, 'fx_rarity_beam', 32, 128, scale, (ctx) => {
-    // Soft outer vertical column tapering upward
     const outerGrad = ctx.createLinearGradient(0, 54, 0, -60);
     outerGrad.addColorStop(0, 'rgba(255, 255, 255, 0.85)');
     outerGrad.addColorStop(0.42, 'rgba(255, 255, 255, 0.45)');
@@ -472,7 +664,6 @@ export function bakeProjectilesAndFx(scene: Phaser.Scene, scale: number): void {
     ctx.closePath();
     ctx.fill();
 
-    // Slender bright inner needle core
     const coreGrad = ctx.createLinearGradient(0, 54, 0, -54);
     coreGrad.addColorStop(0, 'rgba(255, 255, 255, 0.98)');
     coreGrad.addColorStop(0.55, 'rgba(255, 255, 255, 0.68)');
@@ -485,7 +676,6 @@ export function bakeProjectilesAndFx(scene: Phaser.Scene, scale: number): void {
     ctx.closePath();
     ctx.fill();
 
-    // Horizontal base flare ellipse at foot of beam (y = +54 -> 118px from top)
     ctx.save();
     ctx.translate(0, 54);
     ctx.scale(13, 4.8);

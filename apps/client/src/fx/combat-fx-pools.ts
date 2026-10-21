@@ -6,9 +6,21 @@ import { TextureBaker } from '../art/texture-baker.js';
 import { getVisualQueryConfig } from '../core/visual-query.js';
 import { graphicsSettings } from '../ui/graphics-settings.js';
 import type { CombatFxManager } from './combat-fx.js';
+import {
+  applyBiomeToAmbientSlot,
+  computeFxParticleScale,
+  computeShellCasingShadowOffset,
+  computeTorchMotePosition,
+  type FxEaseCurve,
+  resolveAmbientBudgetCount,
+} from './combat-fx-spawners.js';
+
+export const BIOME_AMBIENT_POOL_SLOTS = 80;
+export const TORCH_MOTE_POOL_SLOTS = 16;
 
 export interface PooledParticle {
   sprite: Phaser.GameObjects.Sprite;
+  shadowSprite?: Phaser.GameObjects.Sprite;
   textureKey: string;
   active: boolean;
   x: number;
@@ -23,6 +35,11 @@ export interface PooledParticle {
   startAlpha: number;
   gravityY: number;
   damping: number;
+  blendMode: 'NORMAL' | 'ADD';
+  easeCurve: FxEaseCurve;
+  scaleRatioY: number;
+  alignToVelocity: boolean;
+  hasGroundShadow: boolean;
 }
 
 export interface PooledDamageText {
@@ -56,13 +73,18 @@ export interface PooledAfterimage {
 
 export interface PooledAmbientParticle {
   sprite: Phaser.GameObjects.Sprite;
-  kind: 'leaf';
+  kind: 'leaf' | 'firefly' | 'snow' | 'ember' | 'torch_mote';
+  parallaxLayer: 0 | 1;
   x: number;
   y: number;
   vx: number;
   vy: number;
+  swayAmp: number;
+  swayFreq: number;
   phase: number;
   baseScale: number;
+  anchorX?: number;
+  anchorY?: number;
 }
 
 export interface PooledLightningArc {
@@ -118,15 +140,24 @@ export function initCombatFxPools(
     });
   }
 
-  // 3. Main Combat Particle Pool
+  // 3. Main Combat Particle Pool + Ground Shadows (shadow at depth 19)
   for (let i = 0; i < particleCapacity; i++) {
     const sprite = scene.add.sprite(-1000, -1000, 'fx_spark');
     sprite.setVisible(false);
     sprite.setActive(false);
     sprite.setScale(invBake);
     sprite.setDepth(45);
+
+    const shadowSprite = scene.add.sprite(-1000, -1000, 'fx_dust_puff');
+    shadowSprite.setVisible(false);
+    shadowSprite.setActive(false);
+    shadowSprite.setTint(hexToNum(PALETTE.INK_DARK));
+    shadowSprite.setScale(invBake * 0.5, invBake * 0.32);
+    shadowSprite.setDepth(19);
+
     this.particlePool.push({
       sprite,
+      shadowSprite,
       textureKey: 'fx_spark',
       active: false,
       x: 0,
@@ -141,26 +172,62 @@ export function initCombatFxPools(
       startAlpha: 1,
       gravityY: 0,
       damping: 4,
+      blendMode: 'ADD',
+      easeCurve: 'linear',
+      scaleRatioY: 1,
+      alignToVelocity: false,
+      hasGroundShadow: false,
     });
   }
 
-  // 4. Ambient Leaves / Snow / Embers Pool (depth 32, no mist)
+  // 4. Clear Biome Ambient Pool (0..79 biome particles + 80..95 torch brazier dust motes; ZERO mist)
+  const tier = graphicsSettings.getBudget().tier;
+  const biomeSlots = Math.min(BIOME_AMBIENT_POOL_SLOTS, ambientCapacity);
   for (let i = 0; i < ambientCapacity; i++) {
-    const sprite = scene.add.sprite((i * 97) % 1100, (i * 61) % 680, 'fx_ambient_leaf');
-    const baseScale = invBake * (0.75 + (i % 3) * 0.15);
-    sprite.setScale(baseScale);
-    sprite.setAlpha(0.72);
-    sprite.setDepth(32);
-    this.ambientPool.push({
-      sprite,
-      kind: 'leaf',
-      x: sprite.x,
-      y: sprite.y,
-      vx: 16 + (i % 5) * 4,
-      vy: 14 + (i % 4) * 3,
-      phase: i * 0.7,
-      baseScale,
-    });
+    if (i < biomeSlots) {
+      const initX = (i * 97) % 1100;
+      let initY = (i * 61) % 680;
+      if (initX >= 420 && initX <= 540 && initY >= 240 && initY <= 340) {
+        initY = (initY + 110) % 680;
+      }
+      const sprite = scene.add.sprite(initX, initY, 'fx_ambient_leaf');
+      const amb: PooledAmbientParticle = {
+        sprite,
+        kind: 'leaf',
+        parallaxLayer: i % 2 === 0 ? 0 : 1,
+        x: initX,
+        y: initY,
+        vx: 16,
+        vy: 14,
+        swayAmp: 10,
+        swayFreq: 2.0,
+        phase: i * 0.7,
+        baseScale: invBake,
+      };
+      applyBiomeToAmbientSlot(amb, i, this.currentBiome, tier, this.isBlizzardIntense(), invBake);
+      this.ambientPool.push(amb);
+    } else {
+      const sprite = scene.add.sprite(-1000, -1000, 'fx_ember_mote');
+      const baseScale = invBake * 0.82;
+      sprite.setScale(baseScale);
+      sprite.setBlendMode('ADD');
+      sprite.setTint(hexToNum(i % 2 === 0 ? PALETTE.SOLAR_GOLD : PALETTE.FLAME_ORANGE));
+      sprite.setDepth(36);
+      sprite.setVisible(false);
+      this.ambientPool.push({
+        sprite,
+        kind: 'torch_mote',
+        parallaxLayer: i % 2 === 0 ? 0 : 1,
+        x: -1000,
+        y: -1000,
+        vx: 0,
+        vy: 0,
+        swayAmp: 8,
+        swayFreq: 2.1 + (i % 3) * 0.25,
+        phase: i * 0.85,
+        baseScale,
+      });
+    }
   }
 
   // 5. Chain Lightning Graphics (depth 62)
@@ -220,6 +287,9 @@ export function refreshResolution(
   const scaleRatio = prevScale && prevScale > 0 ? prevScale / bakeScale : 1;
   for (const p of this.particlePool) {
     p.sprite.setTexture(p.textureKey);
+    if (p.shadowSprite) {
+      p.shadowSprite.setTexture('fx_dust_puff');
+    }
     if (p.active && scaleRatio !== 1) {
       p.startScale *= scaleRatio;
       p.endScale *= scaleRatio;
@@ -235,17 +305,17 @@ export function refreshResolution(
     a.sprite.setTexture('fx_afterimage_vanguard');
     a.sprite.setScale(invBake * Math.sign(a.sprite.scaleX || 1), invBake);
   }
+  const tier = graphicsSettings.getBudget().tier;
+  const isBlizzard = this.currentBiome === 2 && this.isBlizzardIntense();
   for (let i = 0; i < this.ambientPool.length; i++) {
     const amb = this.ambientPool[i]!;
-    const tex =
-      this.currentBiome === 2
-        ? 'fx_ice_shard'
-        : this.currentBiome === 3
-          ? 'fx_ember_mote'
-          : 'fx_ambient_leaf';
-    amb.sprite.setTexture(tex);
-    amb.baseScale = invBake * (0.75 + (i % 3) * 0.15);
-    amb.sprite.setScale(amb.baseScale);
+    if (i < BIOME_AMBIENT_POOL_SLOTS) {
+      applyBiomeToAmbientSlot(amb, i, this.currentBiome, tier, isBlizzard, invBake);
+    } else {
+      amb.sprite.setTexture('fx_ember_mote');
+      amb.baseScale = invBake * 0.82;
+      amb.sprite.setScale(amb.baseScale);
+    }
   }
   const popupRes = Math.min(2, bakeScale);
   for (const item of this.damagePool) {
@@ -289,7 +359,14 @@ export function computeCameraShakeOffset(
 }
 
 export function update(this: CombatFxManager, dtSec: number, camView?: Phaser.Geom.Rectangle): void {
-  // 1. Update pooled particles
+  if (this.bossKillSlowMoTimer > 0) {
+    this.bossKillSlowMoTimer = Math.max(0, this.bossKillSlowMoTimer - dtSec);
+  }
+  if (this.bossKillFlashTimer > 0) {
+    this.bossKillFlashTimer = Math.max(0, this.bossKillFlashTimer - dtSec);
+  }
+
+  // 1. Update pooled particles & shell casing ground shadows
   for (let i = 0; i < this.particlePool.length; i++) {
     const p = this.particlePool[i]!;
     if (!p.active) continue;
@@ -298,6 +375,9 @@ export function update(this: CombatFxManager, dtSec: number, camView?: Phaser.Ge
     if (p.age >= p.ttl) {
       p.active = false;
       p.sprite.setVisible(false);
+      if (p.shadowSprite?.visible) {
+        p.shadowSprite.setVisible(false);
+      }
       continue;
     }
 
@@ -312,12 +392,22 @@ export function update(this: CombatFxManager, dtSec: number, camView?: Phaser.Ge
     p.y += p.vy * dtSec;
 
     p.sprite.setPosition(p.x, p.y);
-    if (p.vr !== 0) {
+    if (p.alignToVelocity) {
+      p.sprite.setRotation(Math.atan2(p.vy, p.vx));
+    } else if (p.vr !== 0) {
       p.sprite.rotation += p.vr * dtSec;
     }
-    const scale = p.startScale + (p.endScale - p.startScale) * progress;
-    p.sprite.setScale(scale);
+
+    const scale = computeFxParticleScale(p.startScale, p.endScale, progress, p.easeCurve);
+    p.sprite.setScale(scale, scale * (p.scaleRatioY || 1));
     p.sprite.setAlpha(p.startAlpha * (1 - progress));
+
+    if (p.hasGroundShadow && p.shadowSprite) {
+      const sh = computeShellCasingShadowOffset(p.age, p.ttl);
+      p.shadowSprite.setPosition(p.x, p.y + sh.offsetY);
+      p.shadowSprite.setScale(p.startScale * sh.scale, p.startScale * sh.scale * 0.65);
+      p.shadowSprite.setAlpha(sh.alpha);
+    }
   }
 
   // 2. Update dash afterimages
@@ -333,7 +423,7 @@ export function update(this: CombatFxManager, dtSec: number, camView?: Phaser.Ge
     a.sprite.setAlpha(a.startAlpha * (1 - a.age / a.ttl));
   }
 
-  // 3. Enforce decal budget dynamically & update ambient leaves/mist
+  // 3. Enforce decal budget dynamically & update clear biome ambient + torch dust motes
   const budget = graphicsSettings.getBudget();
   const maxDecals = budget.maxDecals;
   if (this.activeDecalCount > maxDecals) {
@@ -352,19 +442,21 @@ export function update(this: CombatFxManager, dtSec: number, camView?: Phaser.Ge
   }
 
   const isBlizzard = this.currentBiome === 2 && this.isBlizzardIntense();
-  const baseLimit = budget.tier === 'high' ? 32 : budget.tier === 'medium' ? 18 : 10;
-  const allowedAmbient = isBlizzard
-    ? Math.min(this.ambientPool.length, budget.tier === 'low' ? 29 : baseLimit * 3)
-    : budget.ambientCount;
-  const invBake = 1 / TextureBaker.getBakeScale();
+  const allowedAmbient = Math.min(
+    BIOME_AMBIENT_POOL_SLOTS,
+    resolveAmbientBudgetCount(this.currentBiome, budget.tier, isBlizzard),
+  );
   const viewW = camView && camView.width > 0 ? camView.width : WORLD_VIEW_WIDTH;
   const viewH = camView && camView.height > 0 ? camView.height : WORLD_VIEW_HEIGHT;
   const minX = camView && camView.width > 0 ? camView.x - 40 : 0;
   const maxX = minX + viewW + 80;
   const minY = camView && camView.height > 0 ? camView.y - 40 : 0;
   const maxY = minY + viewH + 80;
+  const ambDt =
+    getVisualQueryConfig().freeze && !this.allowFreezeAmbientMotion ? 0 : dtSec;
 
-  for (let i = 0; i < this.ambientPool.length; i++) {
+  const biomeLimit = Math.min(BIOME_AMBIENT_POOL_SLOTS, this.ambientPool.length);
+  for (let i = 0; i < biomeLimit; i++) {
     const amb = this.ambientPool[i]!;
     if (i >= allowedAmbient) {
       if (amb.sprite.visible) amb.sprite.setVisible(false);
@@ -372,16 +464,8 @@ export function update(this: CombatFxManager, dtSec: number, camView?: Phaser.Ge
     }
     if (!amb.sprite.visible) amb.sprite.setVisible(true);
 
-    if (isBlizzard) {
-      amb.vx = -165 - (i % 5) * 18;
-      amb.vy = 115 + (i % 4) * 14;
-      amb.sprite.setAlpha(0.55 + (i % 3) * 0.12);
-      amb.sprite.setScale(invBake * (0.65 + (i % 3) * 0.2));
-    }
-
-    const ambDt = getVisualQueryConfig().freeze ? 0 : dtSec;
-    amb.phase += ambDt * 2.4;
-    amb.x += (amb.vx + Math.sin(amb.phase) * 8) * ambDt;
+    amb.phase += ambDt * amb.swayFreq;
+    amb.x += (amb.vx + Math.sin(amb.phase) * amb.swayAmp) * ambDt;
     amb.y += amb.vy * ambDt;
 
     if (amb.x > maxX) amb.x = minX;
@@ -390,7 +474,43 @@ export function update(this: CombatFxManager, dtSec: number, camView?: Phaser.Ge
     else if (amb.y < minY) amb.y = maxY;
 
     amb.sprite.setPosition(amb.x, amb.y);
-    amb.sprite.setRotation(isBlizzard ? -0.58 + Math.sin(amb.phase) * 0.25 : Math.sin(amb.phase) * 0.6);
+    if (amb.kind === 'firefly') {
+      amb.sprite.setRotation(0);
+      amb.sprite.setAlpha(0.38 + 0.48 * (0.5 + 0.5 * Math.sin(amb.phase * 1.6)));
+    } else if (amb.kind === 'snow') {
+      amb.sprite.setRotation(
+        isBlizzard ? -0.45 + Math.sin(amb.phase) * 0.18 : Math.sin(amb.phase * 0.5) * 0.25,
+      );
+    } else if (amb.kind === 'ember') {
+      amb.sprite.setRotation(0);
+      amb.sprite.setAlpha(
+        (amb.parallaxLayer === 1 ? 0.65 : 0.48) + 0.22 * (0.5 + 0.5 * Math.sin(amb.phase * 1.9)),
+      );
+    } else {
+      amb.sprite.setRotation(Math.sin(amb.phase) * 0.6);
+    }
+  }
+
+  // Torch Brazier warm light pool dust motes (indices 80..95)
+  const torches = this.torchPositions;
+  const showTorchMotes = budget.tier === 'high' && torches.length > 0;
+  for (let i = BIOME_AMBIENT_POOL_SLOTS; i < this.ambientPool.length; i++) {
+    const amb = this.ambientPool[i]!;
+    if (!showTorchMotes) {
+      if (amb.sprite.visible) amb.sprite.setVisible(false);
+      continue;
+    }
+    const moteIdx = i - BIOME_AMBIENT_POOL_SLOTS;
+    const torch = torches[moteIdx % torches.length]!;
+    amb.phase += ambDt * amb.swayFreq;
+    const pos = computeTorchMotePosition(torch.x, torch.y - 6, amb.phase, moteIdx);
+    amb.x = pos.x;
+    amb.y = pos.y;
+    amb.anchorX = torch.x;
+    amb.anchorY = torch.y - 6;
+    amb.sprite.setPosition(pos.x, pos.y);
+    amb.sprite.setAlpha(pos.alpha);
+    if (!amb.sprite.visible) amb.sprite.setVisible(true);
   }
 
   // 4. Update & draw chain lightning arcs
@@ -570,7 +690,16 @@ export function getActiveAfterimageCount(this: CombatFxManager): number {
 
 export function getActiveAmbientCount(this: CombatFxManager): number {
   let count = 0;
-  for (let i = 0; i < this.ambientPool.length; i++) {
+  const limit = Math.min(BIOME_AMBIENT_POOL_SLOTS, this.ambientPool.length);
+  for (let i = 0; i < limit; i++) {
+    if (this.ambientPool[i]!.sprite.visible) count += 1;
+  }
+  return count;
+}
+
+export function getActiveTorchMoteCount(this: CombatFxManager): number {
+  let count = 0;
+  for (let i = BIOME_AMBIENT_POOL_SLOTS; i < this.ambientPool.length; i++) {
     if (this.ambientPool[i]!.sprite.visible) count += 1;
   }
   return count;
