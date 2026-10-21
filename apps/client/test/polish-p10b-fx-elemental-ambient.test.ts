@@ -1,4 +1,10 @@
-import { ELEMENTAL_REACTIONS, type ElementalReactionId, type ElementType, i18n } from '@ashen-pact/shared';
+import {
+  ELEMENTAL_REACTIONS,
+  type ElementalReactionId,
+  type ElementType,
+  i18n,
+  WorldSim,
+} from '@ashen-pact/shared';
 import { describe, expect, it } from 'vitest';
 import { PALETTE } from '../src/art/palette.js';
 import {
@@ -7,9 +13,15 @@ import {
 } from '../src/art/texture-baker-fx.js';
 import {
   coalesceElementalReaction,
+  CombatFxManager,
+  computeBossKillFlashAlpha,
+  computeChestOpenBounce,
+  computeEnemySpawnCircleSpec,
   computeFxParticleScale,
+  computeIrisHoleRadius,
   computeShellCasingShadowOffset,
   computeTorchMotePosition,
+  computeWorldItemArcPose,
   resolveAmbientBudgetCount,
   resolveBiomeAmbientSpec,
   resolveElementalReactionBurstSpec,
@@ -323,6 +335,123 @@ describe('Phase P10b — Combat FX (BlendMode.ADD), Elemental Combo FX & Clear B
           expect(pos.alpha).toBeLessThanOrEqual(0.75);
         }
       }
+    });
+  });
+
+  describe('5. Chest Open Loot Arc & Lid Pop Bounce, Enemy Spawn Rune Pillar, Boss Kill Slow-Mo/Flash & Iris Easing', () => {
+    it('sets fromX = chest.x, fromY = chest.y - 6, and droppedAtTick = sim.tick on weapons spawned by openChest (solo & co-op) and arcs them parabolically', () => {
+      // Solo chest open
+      const soloSim = new WorldSim({ seed: 4242 });
+      soloSim.tick = 120;
+      const soloChest = soloSim.spawnChest(480, 260, 'legendary', 'solar_archon_staff');
+      expect(soloSim.openChest(soloChest)).toBe(true);
+      expect(soloSim.worldItems.length).toBe(1);
+      const soloDrop = soloSim.worldItems[0]!;
+      expect(soloDrop.fromX).toBe(480);
+      expect(soloDrop.fromY).toBe(254);
+      expect(soloDrop.droppedAtTick).toBe(120);
+      expect(soloDrop.y).toBe(288);
+
+      // Parabolic trajectory check via computeWorldItemArcPose
+      const startPose = computeWorldItemArcPose(
+        0,
+        soloDrop.fromX!,
+        soloDrop.fromY!,
+        soloDrop.x,
+        soloDrop.y,
+      );
+      const peakPose = computeWorldItemArcPose(
+        0.12,
+        soloDrop.fromX!,
+        soloDrop.fromY!,
+        soloDrop.x,
+        soloDrop.y,
+      );
+      const settledPose = computeWorldItemArcPose(
+        0.4,
+        soloDrop.fromX!,
+        soloDrop.fromY!,
+        soloDrop.x,
+        soloDrop.y,
+      );
+      expect(startPose.inArc).toBe(true);
+      expect(startPose.x).toBeCloseTo(480, 3);
+      expect(startPose.y).toBeCloseTo(254, 3);
+      expect(peakPose.inArc).toBe(true);
+      expect(peakPose.arcOffsetY).toBeLessThan(-18);
+      expect(peakPose.y).toBeLessThan(soloDrop.fromY!);
+      expect(settledPose.inArc).toBe(false);
+      expect(settledPose.x).toBeCloseTo(soloDrop.x, 3);
+
+      // 2-player co-op chest open
+      const coopSim = new WorldSim({ seed: 4242, coopMode: true });
+      coopSim.addCoopPlayer(2, 2, 'ranger', 'Teammate');
+      coopSim.tick = 240;
+      const coopChest = coopSim.spawnChest(500, 300, 'epic');
+      expect(coopSim.openChest(coopChest)).toBe(true);
+      expect(coopSim.worldItems.length).toBe(2);
+      for (const item of coopSim.worldItems) {
+        expect(item.fromX).toBe(500);
+        expect(item.fromY).toBe(294);
+        expect(item.droppedAtTick).toBe(240);
+        expect(item.x).not.toBe(500);
+        expect(item.y).toBe(328);
+      }
+    });
+
+    it('computes easeOutBack lid pop bounce during the first 0.36s after opening a chest and settles cleanly afterward', () => {
+      const midBounce = computeChestOpenBounce(0.12);
+      expect(midBounce.offsetY).toBeLessThan(0);
+      expect(midBounce.scaleX).toBeGreaterThan(1);
+      expect(midBounce.scaleY).toBeGreaterThan(1);
+
+      const settledBefore = computeChestOpenBounce(0);
+      expect(settledBefore).toEqual({ offsetY: 0, scaleX: 1, scaleY: 1 });
+
+      const settledAfter = computeChestOpenBounce(0.4);
+      expect(settledAfter).toEqual({ offsetY: 0, scaleX: 1, scaleY: 1 });
+    });
+
+    it('computes counter-rotating arcane rune circle and rising vertical light pillar (ADD) for spawning enemies', () => {
+      const early = computeEnemySpawnCircleSpec(14, 0.2, false, false);
+      const mid = computeEnemySpawnCircleSpec(14, 0.55, false, false);
+      const bossSpec = computeEnemySpawnCircleSpec(28, 0.55, true, true);
+
+      expect(early.outerRadius).toBeGreaterThan(early.innerRadius);
+      expect(early.runeCount).toBe(6);
+      expect(bossSpec.runeCount).toBe(8);
+      expect(mid.runeRotationRad).toBeGreaterThan(early.runeRotationRad);
+      expect(mid.counterRuneRotationRad).toBeLessThan(early.counterRuneRotationRad);
+      expect(mid.pillarHeightPx).toBeGreaterThan(0);
+      expect(bossSpec.pillarHeightPx).toBeGreaterThan(mid.pillarHeightPx);
+      expect(mid.pillarAlpha).toBeGreaterThan(0);
+      expect(mid.blendMode).toBe('ADD');
+    });
+
+    it('computes boss kill flash alpha decay, scales consumeHitStopDelta by 0.25x during boss kill slow-mo, and uses smooth easeInOutCubic iris transition hole radius', () => {
+      const dummyFx = Object.create(CombatFxManager.prototype) as CombatFxManager;
+      dummyFx.hitStopRemainingMs = 0;
+      dummyFx.bossKillSlowMoTimer = 0.42;
+      dummyFx.bossKillFlashTimer = 0.28;
+
+      const slowMoStep = dummyFx.consumeHitStopDelta(16);
+      expect(slowMoStep.isHitStopped).toBe(false);
+      expect(slowMoStep.simDeltaMs).toBeCloseTo(4, 4);
+
+      expect(computeBossKillFlashAlpha(0.28, 0.28)).toBeGreaterThan(0.35);
+      expect(computeBossKillFlashAlpha(0.14, 0.28)).toBeGreaterThan(0.1);
+      expect(computeBossKillFlashAlpha(0, 0.28)).toBe(0);
+
+      const maxR = 600;
+      expect(computeIrisHoleRadius(0, maxR)).toBeCloseTo(600, 4);
+      expect(computeIrisHoleRadius(0.5, maxR)).toBeCloseTo(300, 4);
+      expect(computeIrisHoleRadius(1, maxR)).toBeCloseTo(2, 4);
+
+      // Verify easeInOutCubic differs from linear at progress = 0.25 and 0.75
+      const rQuarter = computeIrisHoleRadius(0.25, maxR);
+      const rThreeQuarter = computeIrisHoleRadius(0.75, maxR);
+      expect(rQuarter).toBeGreaterThan(maxR * 0.75); // easeInOutCubic(0.25) = 0.0625 => hole stays wider initially
+      expect(rThreeQuarter).toBeLessThan(maxR * 0.25); // easeInOutCubic(0.75) = 0.9375 => hole closes smoothly at end
     });
   });
 });

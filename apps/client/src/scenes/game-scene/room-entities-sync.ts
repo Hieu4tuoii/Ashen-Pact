@@ -13,6 +13,7 @@ import { PALETTE } from '../../art/palette.js';
 import { MERCHANT_RIG_DEF, RIG_DEFS_BY_ID, VANGUARD_RIG_DEF } from '../../art/rig-defs.js';
 import { TextureBaker } from '../../art/texture-baker.js';
 import { getVisualQueryConfig } from '../../core/visual-query.js';
+import { computeChestOpenBounce, computeWorldItemArcPose } from '../../fx/combat-fx.js';
 import { resolveInteractableVisualGlowSpec } from '../../fx/lighting-config.js';
 import { initGlobalDebugState } from '../../ui/debug-overlay.js';
 import { type GameScene, RIG_FOOT_OFFSET_Y } from '../GameScene.js';
@@ -21,6 +22,14 @@ import {
   resolveInteractPromptSpec,
   syncWorldInteractPromptPill,
 } from './interact-prompt.js';
+
+const chestOpenedAtTickById = new Map<number, number>();
+const prevChestOpenedById = new Map<number, boolean>();
+
+export function recordChestOpenedAnim(chestId: number, simTick: number): void {
+  chestOpenedAtTickById.set(chestId, simTick);
+  prevChestOpenedById.set(chestId, true);
+}
 
 export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
   const sim = this.transport.getSim();
@@ -299,7 +308,21 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
     } else if (sprite.texture.key !== tex) {
       sprite.setTexture(tex);
     }
-    sprite.setPosition(ch.x, ch.y);
+
+    const wasOpened = prevChestOpenedById.get(ch.id);
+    if (ch.opened && wasOpened === false && !chestOpenedAtTickById.has(ch.id)) {
+      chestOpenedAtTickById.set(ch.id, sim.tick);
+    }
+    prevChestOpenedById.set(ch.id, ch.opened);
+
+    const openedAtTick = ch.opened ? chestOpenedAtTickById.get(ch.id) : undefined;
+    const openAgeSec =
+      openedAtTick !== undefined && sim.tick >= openedAtTick
+        ? (sim.tick - openedAtTick) / 60
+        : 999;
+    const bounce = computeChestOpenBounce(openAgeSec);
+    sprite.setPosition(ch.x, ch.y + bounce.offsetY);
+    sprite.setScale(invBake * bounce.scaleX, invBake * bounce.scaleY);
 
     let glowSprite = this.chestGlowSprites.get(ch.id);
     if (!glowSprite) {
@@ -317,11 +340,16 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
       id: ch.id,
     });
 
-    if (lightingEnabled && chestGlowSpec.glowAlpha > 0) {
-      glowSprite.setPosition(ch.x, ch.y + 2);
-      glowSprite.setDisplaySize(chestGlowSpec.glowRadiusX * 2, chestGlowSpec.glowRadiusY * 2);
+    const burstGlowRatio = openAgeSec < 0.38 ? 1 - openAgeSec / 0.38 : 0;
+    const effectiveGlowAlpha = Math.max(chestGlowSpec.glowAlpha, burstGlowRatio * 0.72);
+    if (lightingEnabled && effectiveGlowAlpha > 0) {
+      glowSprite.setPosition(ch.x, ch.y + 2 - burstGlowRatio * 10);
+      glowSprite.setDisplaySize(
+        chestGlowSpec.glowRadiusX * 2 * (1 + burstGlowRatio * 0.35),
+        chestGlowSpec.glowRadiusY * 2 * (1 + burstGlowRatio * 0.85),
+      );
       glowSprite.setTint(chestGlowSpec.colorNum);
-      glowSprite.setAlpha(chestGlowSpec.glowAlpha);
+      glowSprite.setAlpha(effectiveGlowAlpha);
       glowSprite.setVisible(true);
     } else {
       glowSprite.setVisible(false);
@@ -362,6 +390,8 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
     if (!this.activeChestIds.has(id)) {
       sprite.destroy();
       this.chestSprites.delete(id);
+      chestOpenedAtTickById.delete(id);
+      prevChestOpenedById.delete(id);
       const glow = this.chestGlowSprites.get(id);
       if (glow) {
         glow.destroy();
@@ -440,27 +470,24 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
     let renderX = it.x;
     let renderY = it.y;
     let arcOffsetY = 0;
+    const idlePhaseRad = visualTimeSec * 4.8 + it.id;
     if (it.droppedAtTick !== undefined) {
       const ageSec = Math.max(0, (sim.tick - it.droppedAtTick) / 60);
-      if (ageSec < 0.25) {
-        const t = clamp(ageSec / 0.25, 0, 1);
-        const startX = it.fromX ?? it.x;
-        const startY = it.fromY ?? it.y;
-        renderX = startX + (it.x - startX) * t;
-        renderY = startY + (it.y - startY) * t;
-        const bounceY =
-          t < 0.72
-            ? -Math.sin((t / 0.72) * Math.PI) * 18
-            : -Math.sin(((t - 0.72) / 0.28) * Math.PI) * 5;
-        arcOffsetY = bounceY;
-        entry.sprite.setRotation(Math.sin(t * Math.PI * 2) * 0.28);
-      } else {
-        entry.sprite.setRotation(0);
-        arcOffsetY = Math.sin(visualTimeSec * 4.8 + it.id) * 2.5;
-      }
+      const pose = computeWorldItemArcPose(
+        ageSec,
+        it.fromX ?? it.x,
+        it.fromY ?? it.y,
+        it.x,
+        it.y,
+        idlePhaseRad,
+      );
+      renderX = pose.x;
+      renderY = pose.y - pose.arcOffsetY;
+      arcOffsetY = pose.arcOffsetY;
+      entry.sprite.setRotation(pose.rotationRad);
     } else {
       entry.sprite.setRotation(0);
-      arcOffsetY = Math.sin(visualTimeSec * 4.8 + it.id) * 2.5;
+      arcOffsetY = Math.sin(idlePhaseRad) * 2.5;
     }
 
     const itemGlowSpec = resolveInteractableVisualGlowSpec({

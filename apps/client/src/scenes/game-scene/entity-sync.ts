@@ -19,6 +19,7 @@ import { hexToNum, PALETTE } from '../../art/palette.js';
 import { RIG_DEFS_BY_ID, VANGUARD_RIG_DEF } from '../../art/rig-defs.js';
 import { TextureBaker } from '../../art/texture-baker.js';
 import { getVisualQueryConfig } from '../../core/visual-query.js';
+import { resolveProjectileRenderSpec } from '../../fx/combat-fx.js';
 import { graphicsSettings } from '../../ui/graphics-settings.js';
 import { type GameScene, RIG_FOOT_OFFSET_Y } from '../GameScene.js';
 import { resolvePlayerNameplateSpec } from './interact-prompt.js';
@@ -440,36 +441,18 @@ export function syncProjectilesAndPickupsImpl(this: GameScene): void {
     const b = sim.projectiles[i]!;
     this.activeProjIds.add(b.id);
 
-    let tex = 'proj_player_bolt';
-    let tint = 0xffffff;
-    if (isStress) {
-      if (b.team === 'enemy') {
-        tex = 'proj_stress_enemy';
-      } else {
-        tex = 'proj_stress_player';
-        if (b.element === 'burn') tint = 0xfb923c;
-        else if (b.element === 'chill') tint = 0x38bdf8;
-        else if (b.element === 'shock') tint = 0xfde047;
-        else if (b.element === 'poison') tint = 0x4ade80;
-        else if (b.weaponId === 'scrap_shotgun') tint = 0xfacc15;
-        else tint = 0x7dd3fc;
-      }
-    } else if (b.team === 'enemy') {
-      tex = 'proj_enemy_orb';
-      if (b.element === 'chill') tint = 0x7dd3fc;
-      else if (b.element === 'burn') tint = 0xfb923c;
-      else if (b.element === 'shock') tint = 0xfde047;
-    } else if (b.element === 'burn') {
-      tex = 'proj_player_burn';
-    } else if (b.element === 'chill') {
-      tex = 'proj_player_chill';
-    } else if (b.element === 'shock') {
-      tex = 'proj_player_shock';
-    } else if (b.element === 'poison') {
-      tex = 'proj_player_poison';
-    } else if (b.weaponId === 'scrap_shotgun') {
-      tex = 'proj_player_pellet';
-    }
+    const isTeammateBullet = b.team === 'player' && b.ownerId !== sim.player.id;
+    const spec = resolveProjectileRenderSpec({
+      team: b.team,
+      element: b.element,
+      weaponId: b.weaponId,
+      biome: sim.currentBiome,
+      isStress,
+      isTeammate: isTeammateBullet,
+      teammateFxOpacity: teammateOpacity,
+    });
+    const tex = spec.textureKey;
+    const tint = spec.tint;
 
     let entry = this.projectileSprites.get(b.id);
     if (!entry) {
@@ -483,7 +466,6 @@ export function syncProjectilesAndPickupsImpl(this: GameScene): void {
         entry.sprite.setActive(true);
       } else {
         const sprite = this.add.sprite(b.x, b.y, tex);
-        sprite.setDepth(42);
         entry = { sprite, textureKey: tex };
       }
       entry.sprite.setScale(projScale);
@@ -493,6 +475,11 @@ export function syncProjectilesAndPickupsImpl(this: GameScene): void {
       entry.sprite.setTexture(tex);
       entry.sprite.setScale(projScale);
     }
+
+    entry.sprite.setDepth(spec.depth);
+    entry.sprite.setBlendMode(
+      spec.blendMode === 'ADD' ? Phaser.BlendModes.ADD : Phaser.BlendModes.NORMAL,
+    );
 
     const pos = this.transport.getInterpolatedProjectilePos(b, this.entityPosScratch);
     const inView =
@@ -504,8 +491,7 @@ export function syncProjectilesAndPickupsImpl(this: GameScene): void {
       } else {
         entry.sprite.setTint(tint);
       }
-      const isTeammateBullet = b.team === 'player' && b.ownerId !== sim.player.id;
-      entry.sprite.setAlpha(isTeammateBullet ? teammateOpacity : 1.0);
+      entry.sprite.setAlpha(spec.alpha);
       entry.sprite.setPosition(pos.x, pos.y);
       entry.sprite.setRotation(b.team === 'enemy' ? 0 : b.angle);
     }

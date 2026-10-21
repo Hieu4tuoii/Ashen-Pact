@@ -635,6 +635,9 @@ export function openChestImpl(this: WorldSim, chest: SimChestState): boolean {
         healAmount: 0,
         x: chest.x + offsetX,
         y: chest.y + 28,
+        fromX: chest.x,
+        fromY: chest.y - 6,
+        droppedAtTick: this.tick,
         ownerPlayerId: p.id,
       });
 
@@ -665,6 +668,9 @@ export function openChestImpl(this: WorldSim, chest: SimChestState): boolean {
       healAmount: 0,
       x: chest.x,
       y: chest.y + 28,
+      fromX: chest.x,
+      fromY: chest.y - 6,
+      droppedAtTick: this.tick,
     });
 
     for (let i = 0; i < 3; i++) {

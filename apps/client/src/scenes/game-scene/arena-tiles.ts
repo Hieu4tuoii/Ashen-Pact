@@ -23,7 +23,7 @@ import {
   onDebugFlagsChanged,
 } from '../../core/debug-flag.js';
 import { resetClientFreezeRandom } from '../../core/visual-query.js';
-import { CombatFxManager } from '../../fx/combat-fx.js';
+import { CombatFxManager, computeIrisHoleRadius } from '../../fx/combat-fx.js';
 import { computeUniformViewportMetrics } from '../../fx/lighting-config.js';
 import { LightingPipeline } from '../../fx/lighting-pipeline.js';
 import { DebugOverlay, initGlobalDebugState } from '../../ui/debug-overlay.js';
@@ -810,12 +810,16 @@ export function updateIrisTransitionImpl(this: GameScene, dtSec: number): void {
   const maxHoleR =
     Math.hypot(WORLD_VIEW_WIDTH * 0.5 + this.hudPadX, WORLD_VIEW_HEIGHT * 0.5 + this.hudPadY) +
     40;
-  const holeR = Math.max(2, maxHoleR * (1 - this.irisTransitionProgress));
+  const holeR = computeIrisHoleRadius(this.irisTransitionProgress, maxHoleR);
   const ringThickness = 840;
   g.lineStyle(ringThickness, hexToNum(PALETTE.INK_DARK), 1);
   g.strokeCircle(480, 270, holeR + ringThickness * 0.5);
-  g.lineStyle(3, hexToNum(PALETTE.SOLAR_GOLD), 0.9);
+  g.lineStyle(3.2, hexToNum(PALETTE.SOLAR_GOLD), 0.92);
   g.strokeCircle(480, 270, holeR);
+  if (holeR > 5) {
+    g.lineStyle(1.6, hexToNum(PALETTE.CYAN_FROST), 0.72);
+    g.strokeCircle(480, 270, holeR - 2.5);
+  }
 }
 
 export function updateCameraWithLookaheadAndShakeImpl(

@@ -50,24 +50,24 @@ Implement Spec Section 3.9 and Section 4.P10b (`docs/superpowers/specs/2026-10-2
 
 ### Task 1: Add Phase P10b Visual Scenes (`SCENE_GROUPS.p10b`), Capture `before` Screenshots & 8-Frame Strips, and Implement Core FX Upgrade (`BlendMode.ADD`, Hit Spark Trail + Impact Ring, Multi-Layer Muzzle Flash + Casing Shadow, Elemental Combo FX, and Clear Biome Ambient Particles)
 
-- [ ] **Step 1:** Create `tests/e2e/helpers/visual-scene-p10b-helpers.ts`, register `p10b` in `visual-scenes.ts` and `tools/run-shots.ts`, and capture `docs/screenshots/polish-p10b/before/` with `pnpm shots -- --phase p10b --label before --group p10b --verify-freeze` BEFORE changing FX production rendering.
-- [ ] **Step 2 (TDD RED):** Create `apps/client/test/polish-p10b-fx-elemental-ambient.test.ts` testing:
+- [x] **Step 1:** Create `tests/e2e/helpers/visual-scene-p10b-helpers.ts`, register `p10b` in `visual-scenes.ts` and `tools/run-shots.ts`, and capture `docs/screenshots/polish-p10b/before/` with `pnpm shots -- --phase p10b --label before --group p10b --verify-freeze` BEFORE changing FX production rendering.
+- [x] **Step 2 (TDD RED):** Create `apps/client/test/polish-p10b-fx-elemental-ambient.test.ts` testing:
   - `fx_ambient_mist` is completely absent and B1/B2/B3 ambient configs produce crisp leaves+fireflies (B1), `60–80` 2–4px round 2-layer parallax snow (B2), and `<= 4px` rising un-outlined embers (B3) + torch brazier dust motes.
   - Glowing FX (`fx_spark`, `fx_spark_trail`, `fx_impact_ring`, `fx_shockwave_ring`, `fx_muzzle_flash`, `fx_muzzle_core`) use `BlendMode.ADD` and `depth > 34`, while `fx_shell_casing` uses `NORMAL` and renders a ground shadow.
   - `spawnElementalReactionFx` spawns `easeOutCubic` shockwave rings + `BlendMode.ADD` elemental particles and coalesces reaction labels (`"HƠI NƯỚC ×3"`) within `0.4s`.
   - Enemy bullet spec (`proj_enemy_orb`) preserves `#E84545` body + `#FFFDF5` core + `1.5u` `INK_DARK` outline in all biomes (`tint === 0xffffff`, `depth = 60`).
-- [ ] **Step 3 (TDD GREEN):** Implement `texture-baker-fx.ts`, `combat-fx-pools.ts`, `combat-fx-spawners.ts`, and `combat-fx.ts`.
-- [ ] **Step 4:** Run Vitest, `pnpm typecheck`, and `pnpm lint`, verify all files `< 1000` lines, and commit Task 1.
+- [x] **Step 3 (TDD GREEN):** Implement `texture-baker-fx.ts`, `combat-fx-pools.ts`, `combat-fx-spawners.ts`, and `combat-fx.ts`.
+- [x] **Step 4:** Run Vitest, `pnpm typecheck`, and `pnpm lint`, verify all files `< 1000` lines, and commit Task 1 (`5d117d8`).
 
 ### Task 2: Wire Chest Open Arc + Lid Pop + Rarity Pillar, Enemy Spawn Rotating Rune Circle + Light Pillar, Boss Kill Slow-Mo + Flash, Teammate FX Opacity, Enemy Bullet Guardrails & E2E Spec (`tests/e2e/polish-p10b.spec.ts`)
 
-- [ ] **Step 1 (TDD RED):** Extend `apps/client/test/polish-p10b-fx-elemental-ambient.test.ts` with tests for:
+- [x] **Step 1 (TDD RED):** Extend `apps/client/test/polish-p10b-fx-elemental-ambient.test.ts` with tests for:
   - `openChestImpl` setting `fromX`, `fromY`, `droppedAtTick` on chest-spawned `worldItems` + chest lid pop bounce & rarity pillar burst.
   - Enemy spawn (`aiState === 'spawning'`) rotating rune circle geometry & short vertical light pillar parameters.
   - Boss kill slow-mo time scale & flash burst + `easeInOutCubic` iris transition.
   - Teammate FX opacity scaling (`teammateFxOpacity`).
-- [ ] **Step 2 (TDD GREEN):** Update `packages/shared/src/sim/sim-dungeon-rooms.ts`, `apps/client/src/scenes/game-scene/sim-events.ts`, `entity-sync.ts`, `room-entities-sync.ts`, `telegraphs-and-overlays.ts`, `arena-tiles.ts`, and `GameScene.ts`.
-- [ ] **Step 3:** Create `tests/e2e/polish-p10b.spec.ts`, run `pnpm verify`, restore any legacy screenshots dirtied by `pnpm e2e`, verify all files `< 1000` lines, and commit Task 2.
+- [x] **Step 2 (TDD GREEN):** Update `packages/shared/src/sim/sim-dungeon-rooms.ts`, `apps/client/src/scenes/game-scene/sim-events.ts`, `entity-sync.ts`, `room-entities-sync.ts`, `telegraphs-and-overlays.ts`, `arena-tiles.ts`, and `GameScene.ts`.
+- [x] **Step 3:** Create `tests/e2e/polish-p10b.spec.ts`, run `pnpm verify`, restore any legacy screenshots dirtied by `pnpm e2e`, verify all files `< 1000` lines, and commit Task 2.
 
 ### Task 3: Capture P10b `after` Screenshots & 8-Frame Strips with `--verify-freeze`, Conduct Blind A/B `pro` Visual Gate, Run Phase P10b Quality Gate, and Tag `polish-p10b`
 

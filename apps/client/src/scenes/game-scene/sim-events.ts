@@ -6,6 +6,7 @@ import {
 import { PALETTE } from '../../art/palette.js';
 import { resolveWeaponShootSfx, zzfx } from '../../audio/zzfx.js';
 import { type GameScene, RIG_FOOT_OFFSET_Y } from '../GameScene.js';
+import { recordChestOpenedAnim } from './room-entities-sync.js';
 
 export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void {
   if (events.length === 0) return;
@@ -32,18 +33,25 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
             playerShotFxTriggered = true;
             const shootSfx = resolveWeaponShootSfx(ev.weaponId);
             const isShotgun = shootSfx === 'shoot_shotgun';
+            const spawnedProj = sim.projectiles.find((b) => b.id === ev.projectileId);
+            const isTeammate =
+              spawnedProj?.ownerId !== undefined && spawnedProj.ownerId !== sim.player.id;
             if (!isStress || sim.tick % 3 === 0) {
-              this.fx.spawnMuzzleFlashAndCasing(ev.x, ev.y, ev.angle, isShotgun);
+              this.fx.spawnMuzzleFlashAndCasing(ev.x, ev.y, ev.angle, isShotgun, isTeammate);
             }
             if (!isStress) {
               this.lighting.spawnTransientLight(ev.x, ev.y, 82, PALETTE.SOLAR_GOLD, 0.72, 0.08);
             }
-            this.crosshairPulse = isShotgun ? 0.9 : 0.45;
-            this.playerRig?.triggerRecoil(isShotgun ? 6.5 : 4.2);
+            if (!isTeammate) {
+              this.crosshairPulse = isShotgun ? 0.9 : 0.45;
+              this.playerRig?.triggerRecoil(isShotgun ? 6.5 : 4.2);
+            }
 
             if (allowStressSfx) {
               zzfx.play(shootSfx, ev.x, this.camFocusX, ev.y, this.camFocusY);
-              this.fx.addTrauma(isShotgun ? 0.18 : shootSfx === 'shoot_smg' ? 0.06 : 0.1);
+              if (!isTeammate) {
+                this.fx.addTrauma(isShotgun ? 0.18 : shootSfx === 'shoot_smg' ? 0.06 : 0.1);
+              }
             }
           }
         } else if (!enemyShotSfxTriggered && allowStressSfx) {
@@ -53,10 +61,16 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
         break;
       }
       case 'melee_swing': {
-        this.playerRig?.triggerMeleeSwing();
-        this.fx.spawnMeleeSlash(ev.x, ev.y, ev.angle);
+        const isTeammate = ev.playerId !== sim.player.id;
+        if (!isTeammate) {
+          this.playerRig?.triggerMeleeSwing();
+          this.crosshairPulse = 0.6;
+        } else {
+          this.coopPlayerRigs.get(ev.playerId)?.rig.triggerMeleeSwing();
+          this.simPlayerRigs.get(ev.playerId)?.triggerMeleeSwing();
+        }
+        this.fx.spawnMeleeSlash(ev.x, ev.y, ev.angle, isTeammate);
         this.lighting.spawnTransientLight(ev.x, ev.y, 92, PALETTE.CYAN_FROST, 0.65, 0.12);
-        this.crosshairPulse = 0.6;
         const swingSfx = resolveWeaponShootSfx(ev.weaponId);
         zzfx.play(swingSfx, ev.x, this.camFocusX, ev.y, this.camFocusY);
         if (ev.bulletsDestroyed > 0) {
@@ -145,6 +159,13 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
         if (!isStress || statusFxCountThisStep < 1) {
           statusFxCountThisStep += 1;
           this.fx.spawnEnemyDeathBurst(ev.defId, ev.x, ev.y);
+          if (
+            ev.defId === 'spore_king' ||
+            ev.defId === 'kryssa_ice_queen' ||
+            ev.defId === 'forge_titan'
+          ) {
+            this.lighting.spawnTransientLight(ev.x, ev.y, 260, PALETTE.SOLAR_GOLD, 1.0, 0.55);
+          }
           if (allowStressSfx) {
             zzfx.play('kill_enemy', ev.x, this.camFocusX, ev.y, this.camFocusY);
           }
@@ -160,6 +181,7 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
               ev.y + RIG_FOOT_OFFSET_Y,
               this.playerRig.getFacingSign(),
               sim.player.slot,
+              false,
             );
           }
         } else {
@@ -171,6 +193,7 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
             ev.y + RIG_FOOT_OFFSET_Y,
             simRig ? simRig.getFacingSign() : ev.dirX >= 0 ? 1 : -1,
             spState ? spState.slot : 2,
+            true,
           );
         }
         if (allowStressSfx) {
@@ -329,6 +352,12 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
         break;
       }
       case 'chest_opened': {
+        recordChestOpenedAnim(ev.chestId, sim.tick);
+        this.fx.spawnChestOpenBurst(
+          ev.x,
+          ev.y,
+          ev.rarity === 'uncommon' ? 'rare' : ev.rarity,
+        );
         this.lighting.spawnTransientLight(
           ev.x,
           ev.y,

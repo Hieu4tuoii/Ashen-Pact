@@ -7,6 +7,10 @@ import {
 } from '@ashen-pact/shared';
 import Phaser from 'phaser';
 import { hexToNum, PALETTE } from '../../art/palette.js';
+import {
+  computeBossKillFlashAlpha,
+  computeEnemySpawnCircleSpec,
+} from '../../fx/combat-fx.js';
 import { initGlobalDebugState } from '../../ui/debug-overlay.js';
 import { type GameScene } from '../GameScene.js';
 
@@ -349,14 +353,73 @@ export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, 
       continue;
     }
 
-    // 0.8s Magic Summoning Circle on Floor
+    // 0.8s Rotating Arcane Rune Summoning Circle + Short Vertical Light Pillar on Floor
     if (e.aiState === 'spawning') {
       const progress = 1 - clamp(e.stateTimer / ENEMY_SPAWN_WARMUP_SEC, 0, 1);
-      const r = e.radius + 8;
-      g.fillStyle(hexToNum(PALETTE.ELECTRIC_VIOLET), 0.22 * progress);
-      g.fillCircle(pos.x, pos.y, r * progress);
-      g.lineStyle(2.2, hexToNum(PALETTE.ELECTRIC_VIOLET), 0.9);
-      g.strokeCircle(pos.x, pos.y, r);
+      const spec = computeEnemySpawnCircleSpec(e.radius, progress, e.isElite, e.isBoss);
+      const primaryNum = hexToNum(spec.primaryColorHex);
+      const coreNum = hexToNum(spec.coreColorHex);
+
+      // 1. Outer & inner arcane rings
+      g.fillStyle(primaryNum, 0.18 + 0.16 * progress);
+      g.fillCircle(pos.x, pos.y, spec.outerRadius * progress);
+      g.lineStyle(2.4, primaryNum, 0.92);
+      g.strokeCircle(pos.x, pos.y, spec.outerRadius);
+      g.lineStyle(1.4, coreNum, 0.82);
+      g.strokeCircle(pos.x, pos.y, spec.innerRadius);
+
+      // 2. Inscribed counter-rotating hexagram (2 equilateral triangles) & orbiting rune ticks
+      if (!isStress) {
+        const triAngles: readonly [number, number] = [
+          spec.runeRotationRad,
+          spec.counterRuneRotationRad + Math.PI / 3,
+        ];
+        for (let tIdx = 0; tIdx < 2; tIdx++) {
+          const baseAng = triAngles[tIdx]!;
+          g.lineStyle(1.3, tIdx === 0 ? primaryNum : coreNum, 0.78);
+          g.beginPath();
+          for (let v = 0; v <= 3; v++) {
+            const ang = baseAng + ((v % 3) * Math.PI * 2) / 3;
+            const vx = pos.x + Math.cos(ang) * spec.innerRadius;
+            const vy = pos.y + Math.sin(ang) * spec.innerRadius;
+            if (v === 0) g.moveTo(vx, vy);
+            else g.lineTo(vx, vy);
+          }
+          g.strokePath();
+        }
+
+        for (let rIdx = 0; rIdx < spec.runeCount; rIdx++) {
+          const rAng = spec.runeRotationRad + (rIdx * Math.PI * 2) / spec.runeCount;
+          const rx1 = pos.x + Math.cos(rAng) * (spec.innerRadius + 1.5);
+          const ry1 = pos.y + Math.sin(rAng) * (spec.innerRadius + 1.5);
+          const rx2 = pos.x + Math.cos(rAng) * (spec.outerRadius + 2.5);
+          const ry2 = pos.y + Math.sin(rAng) * (spec.outerRadius + 2.5);
+          g.lineStyle(1.8, rIdx % 2 === 0 ? coreNum : primaryNum, 0.86);
+          g.lineBetween(rx1, ry1, rx2, ry2);
+        }
+      }
+
+      // 3. Short vertical light pillar (cột sáng ngắn) + 3 rising rune motes
+      const pillarBaseY = pos.y + 4;
+      const pillarTopY = pos.y - spec.pillarHeightPx;
+      g.fillStyle(primaryNum, spec.pillarAlpha * 0.42);
+      g.fillTriangle(
+        pos.x - spec.pillarWidthPx,
+        pillarBaseY,
+        pos.x + spec.pillarWidthPx,
+        pillarBaseY,
+        pos.x,
+        pillarTopY,
+      );
+      g.lineStyle(2.2, coreNum, spec.pillarAlpha);
+      g.lineBetween(pos.x, pillarBaseY, pos.x, pillarTopY);
+      for (let m = 0; m < 3; m++) {
+        const mPhase = (progress * 1.8 + m * 0.33) % 1;
+        const my = pillarBaseY - mPhase * spec.pillarHeightPx;
+        const mx = pos.x + Math.sin(spec.runeRotationRad * 2 + m * 2.1) * (spec.pillarWidthPx * 0.45);
+        g.fillStyle(coreNum, (1 - mPhase) * 0.9);
+        g.fillCircle(mx, my, 1.8);
+      }
       continue;
     }
 
@@ -548,6 +611,22 @@ export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, 
     ) {
       this.drawEnemyHealthAndStatusBar(g, pos.x, barY, e);
       hpBarsDrawn += 1;
+    }
+  }
+
+  // 3. Boss Kill Dramatic Flash Overlay (0.28s additive-feeling golden-white world flash)
+  if (this.fx.bossKillFlashTimer > 0) {
+    const flashAlpha = computeBossKillFlashAlpha(this.fx.bossKillFlashTimer);
+    if (flashAlpha > 0.005) {
+      g.fillStyle(hexToNum(PALETTE.BONE_WHITE), flashAlpha);
+      g.fillRect(
+        viewLeft - 64,
+        viewTop - 64,
+        viewRight - viewLeft + 128,
+        viewBottom - viewTop + 128,
+      );
+      g.lineStyle(4, hexToNum(PALETTE.SOLAR_GOLD), flashAlpha * 1.6);
+      g.strokeCircle(this.camFocusX, this.camFocusY, (1 - this.fx.bossKillFlashTimer / 0.28) * 320);
     }
   }
 }

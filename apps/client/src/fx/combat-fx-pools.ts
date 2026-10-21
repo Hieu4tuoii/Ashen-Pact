@@ -1,6 +1,6 @@
 import { clamp, WORLD_VIEW_HEIGHT, WORLD_VIEW_WIDTH } from '@ashen-pact/shared';
 import type Phaser from 'phaser';
-import { easeOutBack } from '../art/easing.js';
+import { easeInOutCubic, easeOutBack, easeOutCubic } from '../art/easing.js';
 import { hexToNum, PALETTE } from '../art/palette.js';
 import { TextureBaker } from '../art/texture-baker.js';
 import { getVisualQueryConfig } from '../core/visual-query.js';
@@ -733,4 +733,127 @@ export function acquireDamageSlot(
     if (!slot.active) return slot;
   }
   return null;
+}
+
+export interface ChestOpenBouncePose {
+  offsetY: number;
+  scaleX: number;
+  scaleY: number;
+}
+
+export function computeChestOpenBounce(ageSec: number): ChestOpenBouncePose {
+  if (ageSec <= 0 || ageSec >= 0.36) {
+    return { offsetY: 0, scaleX: 1, scaleY: 1 };
+  }
+  const t = clamp(ageSec / 0.36, 0, 1);
+  const arc = Math.sin(t * Math.PI);
+  const back = Math.max(0.05, easeOutBack(1 - t * 0.85) * (1 - t));
+  return {
+    offsetY: -8.5 * arc * (0.65 + 0.35 * back),
+    scaleX: 1 + 0.14 * arc * (0.7 + 0.3 * back),
+    scaleY: 1 + 0.22 * arc * (0.7 + 0.3 * back),
+  };
+}
+
+export interface WorldItemArcPose {
+  x: number;
+  y: number;
+  arcOffsetY: number;
+  rotationRad: number;
+  inArc: boolean;
+}
+
+export function computeWorldItemArcPose(
+  ageSec: number,
+  fromX: number,
+  fromY: number,
+  toX: number,
+  toY: number,
+  idlePhaseRad = 0,
+): WorldItemArcPose {
+  const arcDurationSec = 0.34;
+  if (ageSec >= 0 && ageSec < arcDurationSec) {
+    const t = clamp(ageSec / arcDurationSec, 0, 1);
+    const easeT = easeOutCubic(t);
+    const x = fromX + (toX - fromX) * easeT;
+    const baseY = fromY + (toY - fromY) * easeT;
+    const arcOffsetY =
+      t < 0.72
+        ? -Math.sin((t / 0.72) * Math.PI) * 26
+        : -Math.sin(((t - 0.72) / 0.28) * Math.PI) * 7;
+    const rotationRad = Math.sin(t * Math.PI * 2) * 0.34 * (1 - t * 0.5);
+    return {
+      x,
+      y: baseY + arcOffsetY,
+      arcOffsetY,
+      rotationRad,
+      inArc: true,
+    };
+  }
+  const hoverOffsetY = Math.sin(idlePhaseRad) * 2.5;
+  return {
+    x: toX,
+    y: toY + hoverOffsetY,
+    arcOffsetY: hoverOffsetY,
+    rotationRad: 0,
+    inArc: false,
+  };
+}
+
+export interface EnemySpawnCircleSpec {
+  outerRadius: number;
+  innerRadius: number;
+  runeRotationRad: number;
+  counterRuneRotationRad: number;
+  runeCount: 6 | 8;
+  pillarHeightPx: number;
+  pillarWidthPx: number;
+  pillarAlpha: number;
+  blendMode: 'ADD';
+  primaryColorHex: string;
+  coreColorHex: string;
+}
+
+export function computeEnemySpawnCircleSpec(
+  radius: number,
+  spawnProgress: number,
+  isElite = false,
+  isBoss = false,
+): EnemySpawnCircleSpec {
+  const p = clamp(spawnProgress, 0, 1);
+  const baseOuter = radius + (isBoss ? 14 : isElite ? 10 : 8);
+  const outerRadius = baseOuter * (0.45 + 0.55 * easeOutBack(Math.min(1, p * 1.25)));
+  const innerRadius = outerRadius * 0.68;
+  const runeRotationRad = p * Math.PI * 1.65;
+  const counterRuneRotationRad = -p * Math.PI * 1.35;
+  const runeCount: 6 | 8 = isBoss ? 8 : 6;
+  const maxPillarH = isBoss ? 68 : isElite ? 56 : 46;
+  const riseCurve = p < 0.7 ? easeOutCubic(p / 0.7) : 1 - ((p - 0.7) / 0.3) * 0.45;
+  const pillarHeightPx = Math.max(8, maxPillarH * Math.max(0.18, riseCurve));
+  const pillarWidthPx = Math.max(4, radius * (0.75 - p * 0.28));
+  const pillarAlpha = clamp(0.22 + Math.sin(p * Math.PI) * 0.66, 0.18, 0.88);
+  return {
+    outerRadius,
+    innerRadius,
+    runeRotationRad,
+    counterRuneRotationRad,
+    runeCount,
+    pillarHeightPx,
+    pillarWidthPx,
+    pillarAlpha,
+    blendMode: 'ADD',
+    primaryColorHex: isBoss || isElite ? PALETTE.SOLAR_GOLD : PALETTE.ELECTRIC_VIOLET,
+    coreColorHex: isBoss || isElite ? PALETTE.BONE_WHITE : PALETTE.CYAN_FROST,
+  };
+}
+
+export function computeBossKillFlashAlpha(flashTimerSec: number, durationSec = 0.28): number {
+  if (flashTimerSec <= 0 || durationSec <= 0) return 0;
+  const remainingRatio = clamp(flashTimerSec / durationSec, 0, 1);
+  return easeOutCubic(remainingRatio) * 0.42;
+}
+
+export function computeIrisHoleRadius(progress: number, maxHoleRadius: number): number {
+  const eased = easeInOutCubic(clamp(progress, 0, 1));
+  return Math.max(2, maxHoleRadius * (1 - eased));
 }
