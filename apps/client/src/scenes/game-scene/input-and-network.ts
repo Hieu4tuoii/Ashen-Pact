@@ -1,6 +1,4 @@
-import {
-  type WifiProfileId,
-} from '@ashen-pact/shared';
+import { type WifiProfileId } from '@ashen-pact/shared';
 import { Client as ColyseusClient, type Room as ColyseusRoom } from 'colyseus.js';
 import Phaser from 'phaser';
 import { zzfx } from '../../audio/zzfx.js';
@@ -48,6 +46,12 @@ export function setupKeyboardBindingsImpl(this: GameScene): void {
     zzfx.play('ui_click');
     if (this.settingsModal?.isOpen()) {
       this.settingsModal.close();
+      return;
+    }
+    if (this.pauseModalOpen && this.pauseConfirmExitOpen) {
+      this.pauseConfirmExitOpen = false;
+      initGlobalDebugState().pauseConfirmExitOpen = false;
+      this.rebuildPauseModal();
       return;
     }
     if (this.fullMapOpen) {
@@ -125,6 +129,7 @@ export function setupKeyboardBindingsImpl(this: GameScene): void {
   });
   this.keys.I.on('down', () => {
     this.invitePanelVisible = !this.invitePanelVisible;
+    initGlobalDebugState().invitePanelVisible = this.invitePanelVisible;
     this.lastInvitePanelHash = '';
   });
   this.keys.TAB.on('down', () => {
@@ -133,7 +138,11 @@ export function setupKeyboardBindingsImpl(this: GameScene): void {
   });
   this.keys.T.on('down', () => {
     const sim = this.transport.getSim();
-    if (!this.pauseModalOpen && !(this.settingsModal?.isOpen() ?? false) && sim.runState === 'playing') {
+    if (
+      !this.pauseModalOpen &&
+      !(this.settingsModal?.isOpen() ?? false) &&
+      sim.runState === 'playing'
+    ) {
       this.emoteWheelOpen = true;
       initGlobalDebugState().emoteWheelOpen = true;
     }
@@ -287,8 +296,16 @@ export function setupKeyboardBindingsImpl(this: GameScene): void {
     this.networkTransport?.setWifiProfile(nextProfile);
   });
 
-  // ENTER: Replay run when Victory or Defeat summary modal is active
+  // ENTER: Confirm exit when Pause Exit Confirmation is open, or Replay run when Victory/Defeat modal is active
   kb.on('keydown-ENTER', () => {
+    if (this.pauseModalOpen && this.pauseConfirmExitOpen) {
+      zzfx.play('ui_click');
+      this.pauseConfirmExitOpen = false;
+      initGlobalDebugState().pauseConfirmExitOpen = false;
+      this.togglePauseModal(false);
+      this.scene.start('MenuScene');
+      return;
+    }
     const sim = this.transport.getSim();
     if ((sim.runState === 'victory' || sim.runState === 'defeat') && !this.resultDismissed) {
       if (this.room && this.coopMode !== 'solo') {
@@ -304,6 +321,13 @@ export function setupKeyboardBindingsImpl(this: GameScene): void {
 
   kb.on('keydown-H', () => {
     const sim = this.transport.getSim();
+    if (this.pauseModalOpen && !this.pauseConfirmExitOpen && !this.settingsModal?.isOpen()) {
+      zzfx.play('portal_enter');
+      this.togglePauseModal(false);
+      sim.enterHub();
+      this.triggerIrisTransition();
+      return;
+    }
     if ((sim.runState === 'victory' || sim.runState === 'defeat') && !this.resultDismissed) {
       if (this.room && this.coopMode !== 'solo') {
         this.room.send('return_to_hub', {});
@@ -317,6 +341,11 @@ export function setupKeyboardBindingsImpl(this: GameScene): void {
 
   kb.on('keydown-M', () => {
     const sim = this.transport.getSim();
+    if (this.pauseModalOpen && !this.pauseConfirmExitOpen && !this.settingsModal?.isOpen()) {
+      zzfx.play('ui_click');
+      this.openPauseConfirmExit();
+      return;
+    }
     if ((sim.runState === 'victory' || sim.runState === 'defeat') && !this.resultDismissed) {
       this.scene.start('MenuScene');
     }

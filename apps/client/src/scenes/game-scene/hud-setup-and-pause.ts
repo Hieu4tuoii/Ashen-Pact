@@ -687,7 +687,10 @@ export function invalidateAllHudCachesImpl(this: GameScene): void {
 export function togglePauseModalImpl(this: GameScene, forceState?: boolean): void {
   const next = typeof forceState === 'boolean' ? forceState : !this.pauseModalOpen;
   this.pauseModalOpen = next;
-  initGlobalDebugState().pauseModalOpen = next;
+  this.pauseConfirmExitOpen = false;
+  const debug = initGlobalDebugState();
+  debug.pauseModalOpen = next;
+  debug.pauseConfirmExitOpen = false;
   if (this.coopMode === 'solo') {
     musicManager.setPaused(next);
   }
@@ -707,11 +710,16 @@ export function rebuildPauseModalImpl(this: GameScene): void {
     return;
   }
   this.pauseContainer.setVisible(true);
+  const debug = initGlobalDebugState();
+  debug.pauseModalOpen = true;
+  debug.pauseConfirmExitOpen = this.pauseConfirmExitOpen;
+
   const textRes = computeUiTextResolution(
     typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1,
     ui.cameras?.main?.zoom || 2,
     graphicsSettings.getState().uiScale,
   );
+  const isEn = i18n.getLocale() === 'en';
 
   const blocker = ui.add
     .rectangle(480, 270, 2400, 1600, hexToNum(PALETTE.INK_DARK), 0.78)
@@ -766,94 +774,193 @@ export function rebuildPauseModalImpl(this: GameScene): void {
     .setOrigin(0.5);
   this.pauseContainer.add(notice);
 
-  const actions: { label: string; color: string; onClick: () => void }[] = [
-    {
-      label: i18n.t('ui.pause.resume'),
-      color: PALETTE.FOREST_SHADE,
-      onClick: () => {
-        zzfx.play('ui_click');
-        this.togglePauseModal(false);
-      },
-    },
-    {
-      label: `⚙ ${i18n.t('ui.pause.settings')}`,
-      color: PALETTE.SLATE_MID,
-      onClick: () => {
-        zzfx.play('ui_click');
-        this.settingsModal?.open('settings');
-      },
-    },
-    {
-      label: `⌨ ${i18n.t('ui.pause.controls')}`,
-      color: PALETTE.SLATE_MID,
-      onClick: () => {
-        zzfx.play('ui_click');
-        this.settingsModal?.open('controls');
-      },
-    },
-    {
-      label: i18n.t('ui.pause.returnHub'),
-      color: PALETTE.BRASS_CORE,
-      onClick: () => {
-        zzfx.play('portal_enter');
-        this.togglePauseModal(false);
-        this.transport.getSim().enterHub();
-        this.triggerIrisTransition();
-      },
-    },
-    {
-      label: i18n.t('ui.pause.leaveMenu'),
-      color: PALETTE.RUBY_CORE,
-      onClick: () => {
-        zzfx.play('ui_click');
-        this.togglePauseModal(false);
-        this.scene.start('MenuScene');
-      },
-    },
-  ];
-
-  actions.forEach((act, idx) => {
-    const by = cardY + 96 + idx * 44;
-    const bw = 310;
-    const bh = 34;
-
-    const btnBg = ui.add.graphics();
+  const addBtn = (
+    bx: number,
+    by: number,
+    bw: number,
+    bh: number,
+    label: string,
+    fillHex: string,
+    borderHex: string,
+    fontPx: number,
+    disabledWhenConfirm: boolean,
+    onClick: () => void,
+  ) => {
+    const g = ui.add.graphics();
     const draw = (hover: boolean) => {
-      btnBg.clear();
-      drawStyledPanel(btnBg, 480 - bw / 2, by - bh / 2, bw, bh, {
-        fillColor: hexToNum(hover ? PALETTE.SOLAR_GOLD : act.color),
+      g.clear();
+      drawStyledPanel(g, bx - bw / 2, by - bh / 2, bw, bh, {
+        fillColor: hexToNum(hover ? PALETTE.SOLAR_GOLD : fillHex),
         fillAlpha: 0.96,
-        borderColor: UI_THEME.inkDark,
+        borderColor: hexToNum(hover ? PALETTE.SOLAR_GOLD : borderHex),
         borderWidth: 1.8,
         radius: UI_THEME.panelRadius.sm,
       });
     };
     draw(false);
-
-    const txt = ui.add
+    const t = ui.add
       .text(
-        480,
+        bx,
         by,
-        act.label,
+        label,
         createUiTextStyle({
-          fontPxAt1080p: 18,
+          fontPxAt1080p: fontPx,
           weight: 800,
           color: PALETTE.BONE_WHITE,
           resolution: textRes,
         }),
       )
       .setOrigin(0.5);
-
     const hit = ui.add
-      .rectangle(480, by, bw, bh, 0x000000, 0)
+      .rectangle(bx, by, bw, bh, 0x000000, 0)
       .setInteractive({ useHandCursor: true });
     hit.on('pointerover', () => {
+      if (disabledWhenConfirm && this.pauseConfirmExitOpen) return;
       draw(true);
       zzfx.play('ui_hover');
     });
     hit.on('pointerout', () => draw(false));
-    hit.on('pointerdown', act.onClick);
+    hit.on('pointerdown', () => {
+      if (disabledWhenConfirm && this.pauseConfirmExitOpen) return;
+      onClick();
+    });
+    this.pauseContainer.add([g, t, hit]);
+  };
 
-    this.pauseContainer.add([btnBg, txt, hit]);
+  const actions: [string, string, () => void][] = [
+    [
+      i18n.t('ui.pause.resume'),
+      PALETTE.FOREST_SHADE,
+      () => {
+        zzfx.play('ui_click');
+        this.togglePauseModal(false);
+      },
+    ],
+    [
+      `⚙ ${i18n.t('ui.pause.settings')}`,
+      PALETTE.SLATE_MID,
+      () => {
+        zzfx.play('ui_click');
+        this.settingsModal?.open('settings');
+      },
+    ],
+    [
+      `⌨ ${i18n.t('ui.pause.controls')}`,
+      PALETTE.SLATE_MID,
+      () => {
+        zzfx.play('ui_click');
+        this.settingsModal?.open('controls');
+      },
+    ],
+    [
+      i18n.t('ui.pause.returnHub'),
+      PALETTE.BRASS_CORE,
+      () => {
+        zzfx.play('portal_enter');
+        this.togglePauseModal(false);
+        this.transport.getSim().enterHub();
+        this.triggerIrisTransition();
+      },
+    ],
+    [
+      i18n.t('ui.pause.leaveMenu'),
+      PALETTE.RUBY_CORE,
+      () => {
+        zzfx.play('ui_click');
+        this.openPauseConfirmExit();
+      },
+    ],
+  ];
+
+  actions.forEach(([label, color, onClick], idx) => {
+    addBtn(480, cardY + 96 + idx * 44, 310, 34, label, color, PALETTE.INK_DARK, 18, true, onClick);
   });
+
+  if (this.pauseConfirmExitOpen) {
+    const confirmBlocker = ui.add
+      .rectangle(480, 270, 2400, 1600, hexToNum(PALETTE.INK_DARK), 0.65)
+      .setInteractive();
+    const cW = 396;
+    const cH = 192;
+    const cX = 480 - cW / 2;
+    const cY = 270 - cH / 2;
+    const confirmPanel = ui.add.graphics();
+    drawStyledPanel(confirmPanel, cX, cY, cW, cH, {
+      fillColor: UI_THEME.panelBgDark,
+      fillAlpha: 0.98,
+      borderColor: hexToNum(PALETTE.RUBY_CORE),
+      borderWidth: 2.4,
+      radius: UI_THEME.panelRadius.lg,
+      accentColor: hexToNum(PALETTE.RUBY_CORE),
+      accentSide: 'top',
+    });
+    const confirmTitle = ui.add
+      .text(
+        480,
+        cY + 30,
+        isEn ? '⚠ RETURN TO MAIN MENU?' : '⚠ XÁC NHẬN VỀ MENU CHÍNH?',
+        createUiTextStyle({
+          fontPxAt1080p: 22,
+          weight: 800,
+          color: PALETTE.SOLAR_GOLD,
+          strokeThickness: 3.2,
+          resolution: textRes,
+        }),
+      )
+      .setOrigin(0.5);
+    const confirmBody = ui.add
+      .text(
+        480,
+        cY + 78,
+        isEn
+          ? 'Current run progress will be lost.\nAre you sure you want to leave the match?'
+          : 'Tiến trình lượt chơi hiện tại sẽ kết thúc.\nBạn có chắc chắn muốn rời trận đấu?',
+        createUiTextStyle({
+          fontPxAt1080p: 15,
+          weight: 700,
+          color: PALETTE.BONE_WHITE,
+          align: 'center',
+          wordWrapWidth: cW - 36,
+          resolution: textRes,
+        }),
+      )
+      .setOrigin(0.5);
+    this.pauseContainer.add([confirmBlocker, confirmPanel, confirmTitle, confirmBody]);
+
+    addBtn(
+      392,
+      cY + 148,
+      154,
+      34,
+      isEn ? 'Cancel [Esc]' : 'Hủy [Esc]',
+      PALETTE.SLATE_MID,
+      PALETTE.CYAN_FROST,
+      16,
+      false,
+      () => {
+        zzfx.play('ui_click');
+        this.pauseConfirmExitOpen = false;
+        initGlobalDebugState().pauseConfirmExitOpen = false;
+        this.rebuildPauseModal();
+      },
+    );
+    addBtn(
+      568,
+      cY + 148,
+      166,
+      34,
+      isEn ? 'Confirm Exit [Enter]' : 'Xác nhận thoát [Enter]',
+      PALETTE.RUBY_CORE,
+      PALETTE.SOLAR_GOLD,
+      16,
+      false,
+      () => {
+        zzfx.play('ui_click');
+        this.pauseConfirmExitOpen = false;
+        initGlobalDebugState().pauseConfirmExitOpen = false;
+        this.togglePauseModal(false);
+        this.scene.start('MenuScene');
+      },
+    );
+  }
 }

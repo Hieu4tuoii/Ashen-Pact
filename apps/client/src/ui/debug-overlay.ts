@@ -1,4 +1,4 @@
-import Phaser from 'phaser';
+import type Phaser from 'phaser';
 import { VIETNAMESE_VERIFICATION_STRING } from '@ashen-pact/shared';
 import { PALETTE } from '../art/palette.js';
 import { TextureBaker } from '../art/texture-baker.js';
@@ -127,6 +127,12 @@ export interface GameDebugState {
   musicTheme: string;
   musicCombatMix: number;
   mvpAwardsCount: number;
+  menuDisplayName: string;
+  menuServerHostPort: string;
+  menuActiveInput: 'name' | 'ip' | null;
+  invitePanelVisible: boolean;
+  pauseConfirmExitOpen: boolean;
+  settingsActiveTab: string;
   lastDebugRejected: string | null;
   errors: string[];
   warnings: string[];
@@ -278,6 +284,12 @@ export function initGlobalDebugState(): GameDebugState {
     musicTheme: 'menu_hub',
     musicCombatMix: 0,
     mvpAwardsCount: 0,
+    menuDisplayName: 'Hiệp Sĩ Tro',
+    menuServerHostPort: '127.0.0.1:2567',
+    menuActiveInput: null,
+    invitePanelVisible: false,
+    pauseConfirmExitOpen: false,
+    settingsActiveTab: 'audio',
     lastDebugRejected: null,
     errors: [],
     warnings: [],
@@ -383,7 +395,7 @@ export class DebugOverlay {
       window.addEventListener('keydown', this.onKeyDown);
     }
 
-    scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+    scene.events.once('shutdown', () => {
       this.destroy();
     });
   }

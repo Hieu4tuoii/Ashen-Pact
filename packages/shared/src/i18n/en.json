@@ -106,7 +106,7 @@
       "graphicsQuality": "Graphics Quality",
       "autoQuality": "Auto Downgrade Quality (FPS < 50)",
       "fullscreen": "Fullscreen Mode",
-      "language": "Language (Ngôn ngữ)",
+      "language": "Display Language",
       "qualityLow": "LOW",
       "qualityMedium": "MEDIUM",
       "qualityHigh": "HIGH",

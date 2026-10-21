@@ -135,7 +135,7 @@ export class GameScene extends Phaser.Scene {
   public lanIps: string[] = [];
   public primaryLanIp = '127.0.0.1';
   public serverPort = 2567;
-  public invitePanelVisible = true;
+  public invitePanelVisible = false;
   public copyToastTimer = 0;
 
   public fx!: CombatFxManager;
@@ -282,6 +282,8 @@ export class GameScene extends Phaser.Scene {
   public resultDismissed = false;
   public fullMapOpen = false;
   public pauseModalOpen = false;
+  public pauseConfirmExitOpen = false;
+  public buffHoveredIdx: number | null = null;
   public trailingHpRatio = 1.0;
   public trailingArmorRatio = 1.0;
   public trailingBossHpRatio = 1.0;
@@ -838,6 +840,12 @@ export class GameScene extends Phaser.Scene {
     if (this.crosshairPulse > 0) {
       this.crosshairPulse = Math.max(0, this.crosshairPulse - dtSec * 5);
     }
+    const modalBlockingCrosshair =
+      sim.runState !== 'playing' ||
+      this.pauseModalOpen ||
+      (this.settingsModal?.isOpen() ?? false) ||
+      this.fullMapOpen;
+    this.crosshairSprite.setVisible(!modalBlockingCrosshair);
     this.crosshairSprite.setPosition(hudPt.x, hudPt.y);
     this.crosshairSprite.setScale(invBake * (1 + this.crosshairPulse * 0.35));
 
@@ -862,6 +870,11 @@ export class GameScene extends Phaser.Scene {
   public buildVectorHud(): void { buildVectorHudImpl.call(this); }
   public invalidateAllHudCaches(): void { invalidateAllHudCachesImpl.call(this); }
   public togglePauseModal(forceState?: boolean): void { togglePauseModalImpl.call(this, forceState); }
+  public openPauseConfirmExit(): void {
+    this.pauseModalOpen = true;
+    this.pauseConfirmExitOpen = true;
+    this.rebuildPauseModal();
+  }
   public rebuildPauseModal(): void { rebuildPauseModalImpl.call(this); }
   public triggerIrisTransition(mode: 'open' | 'close' = 'open'): void { triggerIrisTransitionImpl.call(this, mode); }
   public setupKeyboardBindings(): void { setupKeyboardBindingsImpl.call(this); }

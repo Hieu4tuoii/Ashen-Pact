@@ -32,6 +32,9 @@ import {
   setupB1HudQolShowcaseScene,
   setupB1HudWeaponCompareScene,
   setupCoop4pCombatScene,
+  setupGameSettingsScene,
+  setupHubCoop2pExpandedScene,
+  setupPauseConfirmExitScene,
   setupUiViDiacriticsScene,
 } from './visual-scene-p9a-helpers.js';
 
@@ -101,6 +104,24 @@ export const VISUAL_SCENES: readonly VisualSceneDef[] = [
       sim.enterHub();
       sim.addCoopPlayer(2, 'ranger', 'Ưng Nhãn P2', 2);
       sim.enterHub();
+    });
+    await lockCameraAndIrisToPlayer(page);
+    await stepDeterministicFrames(page, 45);
+  }),
+  makeScene('hub-coop-invite-open', 'Hub courtyard with 2 Co-op players and LAN Invite QR panel explicitly expanded', DEFAULT_HUB_URL, 'GameScene', async (page) => {
+    await page.evaluate(() => {
+      const sim = window.__GAME_TRANSPORT__!.getSim();
+      sim.enterHub();
+      sim.addCoopPlayer(2, 'ranger', 'Ưng Nhãn P2', 2);
+      sim.enterHub();
+      const gs = window.__PHASER_GAME__?.scene.getScene('GameScene') as
+        | { invitePanelVisible?: boolean; lastInvitePanelHash?: string; updateHubInvitePanel?: () => void }
+        | undefined;
+      if (gs) {
+        gs.invitePanelVisible = true;
+        gs.lastInvitePanelHash = '';
+        gs.updateHubInvitePanel?.();
+      }
     });
     await lockCameraAndIrisToPlayer(page);
     await stepDeterministicFrames(page, 45);
@@ -754,13 +775,7 @@ export const VISUAL_SCENES: readonly VisualSceneDef[] = [
     await page.keyboard.press('Escape');
     await stepDeterministicFrames(page, 5);
   }),
-  makeScene('pause-confirm-exit', 'Pause Overlay Modal focused on Leave to Menu action', DEFAULT_GAME_URL, 'GameScene', async (page) => {
-    await lockCameraAndIrisToPlayer(page);
-    await stepDeterministicFrames(page, 40);
-    await page.keyboard.press('Escape');
-    await page.mouse.move(960, 754);
-    await stepDeterministicFrames(page, 5);
-  }),
+  makeScene('pause-confirm-exit', 'Pause Overlay Modal focused on Leave to Menu action', DEFAULT_GAME_URL, 'GameScene', (p) => setupPauseConfirmExitScene(p, false)),
   makeScene('ui-vi-diacritics', 'Vietnamese stacked diacritics verification across 12px-40px', DEFAULT_GAME_URL, 'GameScene', setupUiViDiacriticsScene),
   makeScene('ui-emote-wheel', 'In-game 4-quadrant radial Emote Wheel while holding [T]', DEFAULT_GAME_URL, 'GameScene', async (page) => {
     await page.keyboard.up('KeyT');
@@ -888,6 +903,11 @@ export const VISUAL_SCENES: readonly VisualSceneDef[] = [
     await stepDeterministicFrames(page, 45);
   }),
   makeScene('modal-victory-en', 'Run Victory Summary Modal in English locale', DEFAULT_GAME_URL, 'GameScene', (p) => setupRunResultModalScene(p, 'victory', true)),
+  makeScene('modal-defeat-en', 'Run Defeat Summary Modal in English locale', DEFAULT_GAME_URL, 'GameScene', (p) => setupRunResultModalScene(p, 'defeat', true)),
+  makeScene('pause-confirm-exit-en', 'Pause Overlay Leave to Menu confirmation in English locale', DEFAULT_GAME_URL, 'GameScene', (p) => setupPauseConfirmExitScene(p, true)),
+  makeScene('hub-coop-2p-expanded', 'Hub courtyard with 2 Co-op players and LAN Invite QR panel expanded', DEFAULT_HUB_URL, 'GameScene', setupHubCoop2pExpandedScene),
+  makeScene('game-settings', 'In-game Settings modal open in Vietnamese locale', DEFAULT_GAME_URL, 'GameScene', (p) => setupGameSettingsScene(p, false)),
+  makeScene('game-settings-en', 'In-game Settings modal open in English locale', DEFAULT_GAME_URL, 'GameScene', (p) => setupGameSettingsScene(p, true)),
 
   // 10. Phase P9a HUD & QoL Scenes
   makeScene('b1-boss-p1', 'Biome 1 Boss Mục Vương Nấm Độc (Phase 1 HUD)', DEFAULT_GAME_URL, 'GameScene', (p) => setupBossScene(p, 2, 1)),

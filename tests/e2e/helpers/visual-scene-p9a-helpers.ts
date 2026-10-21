@@ -3,6 +3,7 @@ import {
   lockCameraAndIrisToPlayer,
   setupStartRoomScene,
   stepDeterministicFrames,
+  switchGameSceneToEnglish,
 } from './visual-scene-helpers.js';
 
 export const SCENE_GROUPS: Readonly<Record<string, readonly string[]>> = {
@@ -23,7 +24,81 @@ export const SCENE_GROUPS: Readonly<Record<string, readonly string[]>> = {
     'b1-hud-qol-showcase',
     'ui-vi-diacritics',
   ],
+  p9b: [
+    'menu',
+    'menu-en',
+    'menu-debug-on',
+    'menu-join-input',
+    'menu-settings',
+    'menu-settings-en',
+    'hub-solo',
+    'hub-coop-2p',
+    'hub-coop-2p-expanded',
+    'hub-coop-invite-open',
+    'hub-near-statue',
+    'pause',
+    'pause-en',
+    'pause-confirm-exit',
+    'pause-confirm-exit-en',
+    'modal-buff',
+    'modal-buff-en',
+    'modal-victory',
+    'modal-victory-en',
+    'modal-defeat',
+    'modal-defeat-en',
+    'game-settings',
+    'game-settings-en',
+  ],
 };
+
+export async function setupHubCoop2pExpandedScene(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const sim = window.__GAME_TRANSPORT__!.getSim();
+    sim.enterHub();
+    sim.addCoopPlayer(2, 'ranger', 'Ưng Nhãn P2', 2);
+    sim.enterHub();
+    const gs = window.__PHASER_GAME__?.scene.getScene('GameScene') as
+      | { invitePanelVisible?: boolean; lastInvitePanelHash?: string }
+      | undefined;
+    if (gs) {
+      gs.invitePanelVisible = true;
+      gs.lastInvitePanelHash = '';
+    }
+  });
+  await lockCameraAndIrisToPlayer(page);
+  await stepDeterministicFrames(page, 45);
+}
+
+export async function setupPauseConfirmExitScene(page: Page, english = false): Promise<void> {
+  await lockCameraAndIrisToPlayer(page);
+  if (english) {
+    await switchGameSceneToEnglish(page);
+  }
+  await stepDeterministicFrames(page, 40);
+  await page.keyboard.press('Escape');
+  await page.mouse.move(960, 754);
+  await page.evaluate(() => {
+    const gs = window.__PHASER_GAME__?.scene.getScene('GameScene') as
+      | { openPauseConfirmExit?: () => void }
+      | undefined;
+    gs?.openPauseConfirmExit?.();
+  });
+  await stepDeterministicFrames(page, 5);
+}
+
+export async function setupGameSettingsScene(page: Page, english = false): Promise<void> {
+  await setupStartRoomScene(page);
+  if (english) {
+    await switchGameSceneToEnglish(page);
+  }
+  await page.evaluate(() => {
+    const gs = window.__PHASER_GAME__?.scene.getScene('GameScene') as
+      | { settingsModal?: { open: (k: 'settings') => void } }
+      | undefined;
+    gs?.settingsModal?.open('settings');
+  });
+  await stepDeterministicFrames(page, 5);
+}
 
 export async function setupCoop4pCombatScene(page: Page): Promise<void> {
   await page.evaluate(() => {

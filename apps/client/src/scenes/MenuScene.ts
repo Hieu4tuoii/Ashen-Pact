@@ -8,7 +8,7 @@ import {
 } from '@ashen-pact/shared';
 import Phaser from 'phaser';
 import { CutoutRig } from '../art/cutout-rig.js';
-import { hexToNum, PALETTE } from '../art/palette.js';
+import { ENV_PALETTE, hexToNum, PALETTE } from '../art/palette.js';
 import { GOBLIN_SHOOTER_RIG_DEF, RIG_DEFS_BY_ID } from '../art/rig-defs.js';
 import { TextureBaker } from '../art/texture-baker.js';
 import { musicManager } from '../audio/music-synth.js';
@@ -19,9 +19,23 @@ import {
   getVisualQueryConfig,
   resetClientFreezeRandom,
 } from '../core/visual-query.js';
+import { drawStyledPanel } from '../ui/components/hud-primitives.js';
 import { DebugOverlay, initGlobalDebugState } from '../ui/debug-overlay.js';
 import { graphicsSettings } from '../ui/graphics-settings.js';
+import {
+  applyMenuInputEdit,
+  type CampfireEmber,
+  createCampfireEmbers,
+  drawMenuCampfires,
+  MENU_INPUT_BOUNDS,
+  MENU_IP_MAX_LEN,
+  MENU_NAME_MAX_LEN,
+  type MenuButtonTier,
+  MenuDomInputOverlay,
+  type MenuInputFieldId,
+} from '../ui/html-input-overlay.js';
 import { ModalOverlayManager } from '../ui/settings-modal.js';
+import { UI_THEME } from '../ui/theme.js';
 
 const PRESET_NAMES_VI = [
   'Hiệp Sĩ Tro',
@@ -33,19 +47,6 @@ const PRESET_NAMES_VI = [
 
 export interface MenuSceneInitData {
   disconnectReason?: string;
-}
-
-interface CampfireEmber {
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-  size: number;
-  alpha: number;
-  life: number;
-  maxLife: number;
-  originX: number;
-  originY: number;
 }
 
 export class MenuScene extends Phaser.Scene {
@@ -66,9 +67,11 @@ export class MenuScene extends Phaser.Scene {
   private textObjects: Phaser.GameObjects.Text[] = [];
   private debugOverlay?: DebugOverlay;
   private modalManager?: ModalOverlayManager;
+  private domInputs?: MenuDomInputOverlay;
 
   private titleText?: Phaser.GameObjects.Text;
   private subtitleText?: Phaser.GameObjects.Text;
+  private rosterStripText?: Phaser.GameObjects.Text;
   private debugHintText?: Phaser.GameObjects.Text;
   private buttonLabels = new Map<string, Phaser.GameObjects.Text>();
   private buttonEntries = new Map<
@@ -82,7 +85,7 @@ export class MenuScene extends Phaser.Scene {
   private displayName: string = PRESET_NAMES_VI[0]!;
   private presetNameIndex = 0;
   private serverHostPort = '';
-  private activeInputField: 'name' | 'ip' | null = null;
+  private activeInputField: MenuInputFieldId | null = null;
   private disconnectReason: string | null = null;
 
   constructor() {
@@ -120,6 +123,9 @@ export class MenuScene extends Phaser.Scene {
     debug.settingsModalOpen = false;
     debug.controlsModalOpen = false;
     debug.creditsModalOpen = false;
+    debug.menuDisplayName = this.displayName;
+    debug.menuServerHostPort = this.serverHostPort;
+    debug.menuActiveInput = null;
 
     this.floorTileSprites = [];
     this.textObjects = [];
@@ -138,11 +144,18 @@ export class MenuScene extends Phaser.Scene {
     });
 
     const textRes = TextureBaker.getBakeScale();
+    const hubEnv = ENV_PALETTE[0];
 
-    // Background panel (extended for ultrawide / non-16:9 aspect ratios)
+    // Warm Hub night stone backdrop (extended for ultrawide / non-16:9 aspect ratios)
     const bg = this.add.graphics();
-    bg.fillStyle(hexToNum(PALETTE.INK_DEEP), 1);
+    bg.fillStyle(hexToNum(hubEnv.shadow), 1);
     bg.fillRect(-480, -270, WORLD_VIEW_WIDTH + 960, WORLD_VIEW_HEIGHT + 540);
+    bg.fillStyle(hexToNum(hubEnv.wallFront), 0.92);
+    bg.fillRoundedRect(26, 114, 908, 376, 12);
+    bg.lineStyle(2.5, hexToNum(hubEnv.wallTop), 0.95);
+    bg.strokeRoundedRect(26, 114, 908, 376, 12);
+    bg.lineStyle(1.2, hexToNum(PALETTE.SOLAR_GOLD), 0.35);
+    bg.strokeRoundedRect(30, 118, 900, 368, 10);
 
     // Tiled Hub courtyard floor
     const invBake = 1 / textRes;
@@ -155,7 +168,7 @@ export class MenuScene extends Phaser.Scene {
           TextureBaker.getBiomeTileTextureKey(1, variant),
         );
         tile.setScale(invBake);
-        tile.setAlpha(0.76);
+        tile.setAlpha(0.84);
         this.floorTileSprites.push({ sprite: tile, variant });
       }
     }
@@ -165,101 +178,105 @@ export class MenuScene extends Phaser.Scene {
     this.initCampfireEmbers();
     this.drawCampfires(0);
 
-    // Header Card
+    // Header Card (UI_THEME styled panel with gold top accent & version badge)
     const card = this.add.graphics();
-    card.fillStyle(hexToNum(PALETTE.SLATE_DARK), 0.95);
-    card.lineStyle(2.5, hexToNum(PALETTE.INK_DARK), 1);
-    card.fillRoundedRect(120, 22, 720, 96, 12);
-    card.strokeRoundedRect(120, 22, 720, 96, 12);
+    drawStyledPanel(card, 120, 18, 720, 96, {
+      fillColor: UI_THEME.panelBgDark,
+      fillAlpha: 0.96,
+      borderColor: hexToNum(PALETTE.SOLAR_GOLD),
+      borderWidth: 2.2,
+      radius: UI_THEME.panelRadius.lg,
+      accentColor: hexToNum(PALETTE.SOLAR_GOLD),
+      accentSide: 'top',
+    });
+    // Subtle inner divider rule between title and subtitle
+    card.lineStyle(1, hexToNum(PALETTE.SOLAR_GOLD), 0.25);
+    card.lineBetween(200, 72, 760, 72);
+    // Version badge pill at top-right of Header Card
+    drawStyledPanel(card, 738, 26, 92, 20, {
+      fillColor: UI_THEME.panelBgElevated,
+      fillAlpha: 0.95,
+      borderColor: hexToNum(PALETTE.CYAN_FROST),
+      borderWidth: 1.2,
+      radius: 5,
+    });
 
-    this.titleText = this.add
-      .text(480, 51, i18n.t('ui.menu.title'), {
-        fontFamily: '"Be Vietnam Pro", sans-serif',
-        fontSize: '27px',
-        fontStyle: '800',
-        color: PALETTE.SOLAR_GOLD,
-        stroke: PALETTE.INK_DARK,
-        strokeThickness: 5,
-        resolution: textRes,
-      })
-      .setOrigin(0.5);
-    this.textObjects.push(this.titleText);
+    const addCenteredText = (
+      tx: number,
+      ty: number,
+      str: string,
+      size: string,
+      weight: string,
+      col: string,
+      strokeW: number,
+      mono = false,
+    ) => {
+      const t = this.add
+        .text(tx, ty, str, {
+          fontFamily: mono ? '"JetBrains Mono", monospace' : '"Be Vietnam Pro", sans-serif',
+          fontSize: size,
+          fontStyle: weight,
+          color: col,
+          stroke: PALETTE.INK_DARK,
+          strokeThickness: strokeW,
+          resolution: textRes,
+        })
+        .setOrigin(0.5);
+      this.textObjects.push(t);
+      return t;
+    };
 
-    this.subtitleText = this.add
-      .text(480, 89, i18n.t('ui.menu.subtitle'), {
-        fontFamily: '"Be Vietnam Pro", sans-serif',
-        fontSize: '13.5px',
-        fontStyle: '600',
-        color: PALETTE.SILVER_BRIGHT,
-        stroke: PALETTE.INK_DARK,
-        strokeThickness: 3,
-        resolution: textRes,
-      })
-      .setOrigin(0.5);
-    this.textObjects.push(this.subtitleText);
+    addCenteredText(784, 36, 'v0.2.0 · LAN', '10px', '700', PALETTE.CYAN_FROST, 2, true);
+    this.titleText = addCenteredText(
+      480,
+      46,
+      i18n.t('ui.menu.title'),
+      '26px',
+      '800',
+      PALETTE.SOLAR_GOLD,
+      5,
+    );
+    this.subtitleText = addCenteredText(
+      480,
+      90,
+      i18n.t('ui.menu.subtitle'),
+      '13px',
+      '600',
+      PALETTE.SILVER_BRIGHT,
+      3,
+    );
 
     if (this.disconnectReason) {
       const banner = this.add.graphics();
-      banner.fillStyle(hexToNum(PALETTE.RUBY_DARK), 0.96);
-      banner.lineStyle(2, hexToNum(PALETTE.RUBY_CORE), 1);
-      banner.fillRoundedRect(210, 124, 540, 26, 7);
-      banner.strokeRoundedRect(210, 124, 540, 26, 7);
-      this.textObjects.push(
-        this.add
-          .text(480, 137, `⚠ ${this.disconnectReason}`, {
-            fontFamily: '"Be Vietnam Pro", sans-serif',
-            fontSize: '12px',
-            fontStyle: '700',
-            color: PALETTE.BONE_WHITE,
-            stroke: PALETTE.INK_DARK,
-            strokeThickness: 2,
-            resolution: textRes,
-          })
-          .setOrigin(0.5),
-      );
+      drawStyledPanel(banner, 210, 122, 540, 26, {
+        fillColor: hexToNum(PALETTE.RUBY_DARK),
+        fillAlpha: 0.96,
+        borderColor: hexToNum(PALETTE.RUBY_CORE),
+        borderWidth: 1.8,
+        radius: 6,
+      });
+      addCenteredText(480, 135, `⚠ ${this.disconnectReason}`, '12px', '700', PALETTE.BONE_WHITE, 2);
     }
 
     // 5 Playable Hero Rigs gathered around the Hub campfires in a staggered semicircle
-    const heroPlacements: {
-      charId: CharacterId;
-      x: number;
-      y: number;
-      slot: 1 | 2 | 3 | 4;
-      aim: number;
-      phase: number;
-    }[] = [
-      { charId: 'vanguard', x: 82, y: 196, slot: 1, aim: 0.35, phase: 0.0 },
-      { charId: 'druid', x: 162, y: 266, slot: 4, aim: 0.1, phase: 0.8 },
-      { charId: 'ranger', x: 86, y: 334, slot: 2, aim: -0.25, phase: 0.4 },
-      {
-        charId: 'elementalist',
-        x: 878,
-        y: 196,
-        slot: 3,
-        aim: Math.PI - 0.35,
-        phase: 0.2,
-      },
-      {
-        charId: 'engineer',
-        x: 798,
-        y: 266,
-        slot: 1,
-        aim: Math.PI - 0.05,
-        phase: 0.6,
-      },
+    const heroPlacements: [CharacterId, number, number, 1 | 2 | 3 | 4, number, number][] = [
+      ['vanguard', 82, 196, 1, 0.35, 0.0],
+      ['druid', 162, 266, 4, 0.1, 0.8],
+      ['ranger', 86, 334, 2, -0.25, 0.4],
+      ['elementalist', 878, 196, 3, Math.PI - 0.35, 0.2],
+      ['engineer', 798, 266, 1, Math.PI - 0.05, 0.6],
     ];
 
-    for (const hp of heroPlacements) {
-      const rigDef = RIG_DEFS_BY_ID[hp.charId]!;
-      const rig = new CutoutRig(this, hp.x, hp.y, rigDef, {
-        playerSlot: hp.slot,
+    for (const [charId, hx, hy, slot, aim, phase] of heroPlacements) {
+      const rig = new CutoutRig(this, hx, hy, RIG_DEFS_BY_ID[charId]!, {
+        playerSlot: slot,
         displayScale: 1.65,
-        initialPhaseOffset: hp.phase,
+        initialPhaseOffset: phase,
       });
-      rig.setAimAngle(hp.aim);
+      rig.setAimAngle(aim);
 
       const label = this.add
-        .text(hp.x, hp.y + 24, i18n.t(`characters.${hp.charId}.name`), {
+        .text(hx, hy + 24, i18n.t(`characters.${charId}.name`), {
           fontFamily: '"Be Vietnam Pro", sans-serif',
           fontSize: '10.5px',
           fontStyle: '800',
@@ -271,7 +288,7 @@ export class MenuScene extends Phaser.Scene {
         .setOrigin(0.5)
         .setDepth(25);
       this.textObjects.push(label);
-      this.heroRigs.push({ charId: hp.charId, rig, label });
+      this.heroRigs.push({ charId, rig, label });
     }
 
     this.goblinPreview = new CutoutRig(this, 874, 334, GOBLIN_SHOOTER_RIG_DEF, {
@@ -280,73 +297,190 @@ export class MenuScene extends Phaser.Scene {
     });
     this.goblinPreview.setAimAngle(Math.PI + 0.25);
 
-    // Co-op LAN Profile & IP Bar at y=176
+    // Distinct Profile Name & LAN IP Input Cards at y=176
     const coopBarBg = this.add.graphics();
-    const coopBarText = this.add
-      .text(480, 176, '', {
-        fontFamily: '"Be Vietnam Pro", sans-serif',
-        fontSize: '12px',
-        fontStyle: '700',
-        color: PALETTE.BONE_WHITE,
-        stroke: PALETTE.INK_DARK,
-        strokeThickness: 2.5,
-        resolution: textRes,
-      })
-      .setOrigin(0.5);
-    this.textObjects.push(coopBarText);
+    const nameBounds = MENU_INPUT_BOUNDS.name;
+    const ipBounds = MENU_INPUT_BOUNDS.ip;
+    const makeBarText = (
+      tx: number,
+      ty: number,
+      initStr: string,
+      size: string,
+      weight: string,
+      col: string,
+      originX = 0,
+      mono = false,
+    ) =>
+      this.add
+        .text(tx, ty, initStr, {
+          fontFamily: mono ? '"JetBrains Mono", monospace' : '"Be Vietnam Pro", sans-serif',
+          fontSize: size,
+          fontStyle: weight,
+          color: col,
+          stroke: PALETTE.INK_DARK,
+          strokeThickness: 2.3,
+          resolution: textRes,
+        })
+        .setOrigin(originX, 0.5);
+
+    const nameLabelText = makeBarText(
+      nameBounds.cx - nameBounds.w / 2 + 10,
+      nameBounds.cy,
+      '',
+      '11px',
+      '800',
+      PALETTE.ASH_GRAY,
+    );
+    const nameValueText = makeBarText(
+      nameBounds.cx - nameBounds.w / 2 + 54,
+      nameBounds.cy,
+      '',
+      '12px',
+      '700',
+      PALETTE.BONE_WHITE,
+    );
+    const nameCycleText = makeBarText(
+      nameBounds.cx + nameBounds.w / 2 - 14,
+      nameBounds.cy,
+      '↻',
+      '13px',
+      '800',
+      PALETTE.SOLAR_GOLD,
+      0.5,
+    );
+    const ipLabelText = makeBarText(
+      ipBounds.cx - ipBounds.w / 2 + 10,
+      ipBounds.cy,
+      '',
+      '11px',
+      '800',
+      PALETTE.CYAN_FROST,
+    );
+    const ipValueText = makeBarText(
+      ipBounds.cx - ipBounds.w / 2 + 64,
+      ipBounds.cy,
+      '',
+      '12px',
+      '700',
+      PALETTE.BONE_WHITE,
+      0,
+      true,
+    );
+
+    this.textObjects.push(nameLabelText, nameValueText, nameCycleText, ipLabelText, ipValueText);
 
     const refreshCoopBar = () => {
       coopBarBg.clear();
-      coopBarBg.fillStyle(hexToNum(PALETTE.SLATE_DARK), 0.94);
-      coopBarBg.lineStyle(
-        2,
-        hexToNum(this.activeInputField ? PALETTE.SOLAR_GOLD : PALETTE.INK_DARK),
-        1,
-      );
-      coopBarBg.fillRoundedRect(240, 160, 480, 32, 8);
-      coopBarBg.strokeRoundedRect(240, 160, 480, 32, 8);
+      const nameFocused = this.activeInputField === 'name';
+      const ipFocused = this.activeInputField === 'ip';
 
-      const nameCursor = this.activeInputField === 'name' ? '▌' : '';
-      const ipCursor = this.activeInputField === 'ip' ? '▌' : '';
-      coopBarText.setText(
-        `${i18n.t('ui.menu.nameLabel')}: [${this.displayName}${nameCursor}] ↻   |   ${i18n.t('ui.menu.ipLabel')}: [${this.serverHostPort}${ipCursor}]`,
-      );
+      // Name Box
+      const nx = nameBounds.cx - nameBounds.w / 2;
+      const ny = nameBounds.cy - nameBounds.h / 2;
+      drawStyledPanel(coopBarBg, nx, ny, nameBounds.w, nameBounds.h, {
+        fillColor: UI_THEME.panelBgDark,
+        fillAlpha: 0.95,
+        borderColor: nameFocused ? hexToNum(PALETTE.SOLAR_GOLD) : UI_THEME.panelBorder,
+        borderWidth: nameFocused ? 2.2 : 1.5,
+        radius: 6,
+      });
+      // Inner editable field well for Name
+      coopBarBg.fillStyle(0x121620, 0.92);
+      coopBarBg.fillRoundedRect(nx + 48, ny + 4, nameBounds.w - 78, nameBounds.h - 8, 4);
+      // Cycle preset button pill on right of Name box
+      drawStyledPanel(coopBarBg, nx + nameBounds.w - 26, ny + 4, 22, nameBounds.h - 8, {
+        fillColor: UI_THEME.panelBgElevated,
+        fillAlpha: 0.95,
+        borderColor: hexToNum(PALETTE.SOLAR_GOLD),
+        borderWidth: 1.2,
+        radius: 4,
+      });
+
+      // IP Box
+      const ix = ipBounds.cx - ipBounds.w / 2;
+      const iy = ipBounds.cy - ipBounds.h / 2;
+      drawStyledPanel(coopBarBg, ix, iy, ipBounds.w, ipBounds.h, {
+        fillColor: UI_THEME.panelBgDark,
+        fillAlpha: 0.95,
+        borderColor: ipFocused ? hexToNum(PALETTE.SOLAR_GOLD) : UI_THEME.panelBorder,
+        borderWidth: ipFocused ? 2.2 : 1.5,
+        radius: 6,
+      });
+      // Inner editable field well for IP
+      coopBarBg.fillStyle(0x121620, 0.92);
+      coopBarBg.fillRoundedRect(ix + 58, iy + 4, ipBounds.w - 64, ipBounds.h - 8, 4);
+
+      nameLabelText.setText(`${i18n.t('ui.menu.nameLabel')}:`);
+      nameValueText.setText(`${this.displayName}${nameFocused ? '▌' : ''}`);
+      nameValueText.setColor(nameFocused ? PALETTE.SOLAR_GOLD : PALETTE.BONE_WHITE);
+
+      ipLabelText.setText(`${i18n.t('ui.menu.ipLabel')}:`);
+      ipValueText.setText(`${this.serverHostPort}${ipFocused ? '▌' : ''}`);
+      ipValueText.setColor(ipFocused ? PALETTE.SOLAR_GOLD : PALETTE.BONE_WHITE);
+
+      this.domInputs?.syncValues(this.displayName, this.serverHostPort);
+      const gDebug = initGlobalDebugState();
+      gDebug.menuDisplayName = this.displayName;
+      gDebug.menuServerHostPort = this.serverHostPort;
+      gDebug.menuActiveInput = this.activeInputField;
     };
     this.refreshCoopBarFn = refreshCoopBar;
     refreshCoopBar();
 
-    // Interactive zones for Name & IP
-    const nameZone = this.add
-      .rectangle(355, 176, 220, 30, 0x000000, 0)
-      .setInteractive({ useHandCursor: true });
-    nameZone.on('pointerdown', () => {
-      if (this.modalManager?.isOpen()) return;
-      zzfx.play('ui_click');
-      if (this.activeInputField === 'name') {
-        this.presetNameIndex = (this.presetNameIndex + 1) % PRESET_NAMES_VI.length;
-        this.displayName = PRESET_NAMES_VI[this.presetNameIndex] ?? 'Hiệp Sĩ Tro';
-      } else {
-        this.activeInputField = 'name';
-      }
-      refreshCoopBar();
+    // Mount real HTML <input> overlays for native selection, paste (Ctrl+V), Backspace/Delete
+    this.domInputs = new MenuDomInputOverlay(this, this.displayName, this.serverHostPort, {
+      onFocusChange: (field) => {
+        if (this.modalManager?.isOpen()) return;
+        if (this.activeInputField !== field) {
+          this.activeInputField = field;
+          if (field !== null) {
+            zzfx.play('ui_click');
+          }
+          refreshCoopBar();
+        }
+      },
+      onValueChange: (field, val) => {
+        if (field === 'name') {
+          this.displayName = val;
+        } else {
+          this.serverHostPort = val;
+        }
+        refreshCoopBar();
+      },
     });
 
-    const ipZone = this.add
-      .rectangle(605, 176, 220, 30, 0x000000, 0)
-      .setInteractive({ useHandCursor: true });
-    ipZone.on('pointerdown', () => {
-      if (this.modalManager?.isOpen()) return;
-      zzfx.play('ui_click');
-      this.activeInputField = this.activeInputField === 'ip' ? null : 'ip';
-      refreshCoopBar();
+    // Interactive Phaser fallback zones for Name, Cycle Preset (↻), & IP
+    const addBarZone = (zx: number, zy: number, zw: number, zh: number, fn: () => void) => {
+      this.add
+        .rectangle(zx, zy, zw, zh, 0x000000, 0)
+        .setInteractive({ useHandCursor: true })
+        .on('pointerdown', () => {
+          if (this.modalManager?.isOpen()) return;
+          zzfx.play('ui_click');
+          fn();
+          refreshCoopBar();
+        });
+    };
+    addBarZone(nameBounds.cx - 14, nameBounds.cy, nameBounds.w - 28, nameBounds.h, () => {
+      this.activeInputField = 'name';
+      this.domInputs?.focusField('name');
+    });
+    addBarZone(nameBounds.cx + nameBounds.w / 2 - 14, nameBounds.cy, 26, nameBounds.h, () => {
+      this.presetNameIndex = (this.presetNameIndex + 1) % PRESET_NAMES_VI.length;
+      this.displayName = PRESET_NAMES_VI[this.presetNameIndex] ?? 'Hiệp Sĩ Tro';
+    });
+    addBarZone(ipBounds.cx, ipBounds.cy, ipBounds.w, ipBounds.h, () => {
+      this.activeInputField = 'ip';
+      this.domInputs?.focusField('ip');
     });
 
-    // Keyboard handler for typing custom Name/IP or opening Menu Modals
+    // Keyboard handler for canvas fallback typing or opening Menu Modals
     const onKeyDown = (event: KeyboardEvent) => {
       if (this.modalManager?.isOpen()) {
         if (event.key === 'Escape') {
           zzfx.play('ui_click');
           this.modalManager.close();
+          this.domInputs?.setModalBlocked(false);
         }
         return;
       }
@@ -354,39 +488,47 @@ export class MenuScene extends Phaser.Scene {
       if (this.activeInputField) {
         if (event.key === 'Escape' || event.key === 'Enter') {
           this.activeInputField = null;
+          this.domInputs?.focusField(null);
           refreshCoopBar();
           return;
         }
-        if (event.key === 'Backspace') {
-          if (this.activeInputField === 'name') {
-            this.displayName = this.displayName.slice(0, -1);
-          } else {
-            this.serverHostPort = this.serverHostPort.slice(0, -1);
-          }
-          refreshCoopBar();
-          return;
-        }
-        if (event.key.length === 1 && !event.ctrlKey && !event.metaKey) {
-          if (this.activeInputField === 'name' && this.displayName.length < 18) {
-            this.displayName += event.key;
-          } else if (this.activeInputField === 'ip' && this.serverHostPort.length < 28) {
-            this.serverHostPort += event.key;
-          }
+        const curVal = this.activeInputField === 'name' ? this.displayName : this.serverHostPort;
+        const maxLen = this.activeInputField === 'name' ? MENU_NAME_MAX_LEN : MENU_IP_MAX_LEN;
+        const action =
+          event.key === 'Backspace'
+            ? ({ kind: 'backspace' } as const)
+            : event.key === 'Delete'
+              ? ({ kind: 'delete' } as const)
+              : event.key.length === 1 && !event.ctrlKey && !event.metaKey
+                ? ({ kind: 'insert', text: event.key } as const)
+                : null;
+        if (action) {
+          const selStart = action.kind === 'delete' ? 0 : curVal.length;
+          const next = applyMenuInputEdit(
+            curVal,
+            selStart,
+            curVal.length,
+            action,
+            this.activeInputField,
+            maxLen,
+          );
+          if (this.activeInputField === 'name') this.displayName = next.value;
+          else this.serverHostPort = next.value;
           refreshCoopBar();
         }
         return;
       }
 
       const upper = event.key.toUpperCase();
-      if (upper === 'O') {
+      const modalKeyMap: Record<string, 'settings' | 'controls' | 'credits'> = {
+        O: 'settings',
+        K: 'controls',
+        C: 'credits',
+      };
+      if (modalKeyMap[upper]) {
         zzfx.play('ui_click');
-        this.modalManager?.open('settings');
-      } else if (upper === 'K') {
-        zzfx.play('ui_click');
-        this.modalManager?.open('controls');
-      } else if (upper === 'C') {
-        zzfx.play('ui_click');
-        this.modalManager?.open('credits');
+        this.domInputs?.setModalBlocked(true);
+        this.modalManager?.open(modalKeyMap[upper]!);
       } else if (upper === 'L') {
         zzfx.play('ui_click');
         graphicsSettings.toggleLanguage();
@@ -404,13 +546,15 @@ export class MenuScene extends Phaser.Scene {
       window.removeEventListener('keydown', onKeyDown);
       this.unsubDebugFlags?.();
       this.unsubDebugFlags = undefined;
+      this.domInputs?.destroy();
+      this.domInputs = undefined;
     });
 
     // Auto-detect LAN IP from server if available
     fetch('/api/host-info')
       .then((res) => (res.ok ? res.json() : null))
       .then((info: { primaryLanIp?: string; port?: number } | null) => {
-        if (info?.primaryLanIp && this.scene.isActive('MenuScene')) {
+        if (info?.primaryLanIp && this.scene.isActive('MenuScene') && !this.activeInputField) {
           this.serverHostPort = `${info.primaryLanIp}:${info.port ?? 2567}`;
           refreshCoopBar();
         }
@@ -419,29 +563,31 @@ export class MenuScene extends Phaser.Scene {
         // Ignore when server is offline
       });
 
-    // Menu Buttons (Button 1 kept at exact (480, 225) for Phase 0-3 E2E compatibility)
+    // 1. Primary Large CTA Button: Play Solo kept at exact (480, 225) for Phase 0-7 E2E compatibility
     this.createMenuButton(
       'playSolo',
       480,
       225,
-      340,
-      38,
-      i18n.t('ui.menu.playSolo'),
+      348,
+      42,
+      `⚔  ${i18n.t('ui.menu.playSolo')}`,
       PALETTE.RUBY_CORE,
       () => {
         if (this.modalManager?.isOpen()) return;
         zzfx.play('ui_click');
         this.scene.start('GameScene', { coopMode: 'solo' });
       },
+      'primary',
     );
 
+    // 2. Secondary Co-op Action Row: Host LAN & Join LAN side-by-side at y=272
     this.createMenuButton(
       'hostCoop',
-      480,
-      268,
-      340,
-      38,
-      i18n.t('ui.menu.hostCoop'),
+      390,
+      272,
+      170,
+      34,
+      this.formatCoopBtnLabel('host'),
       PALETTE.BRASS_CORE,
       () => {
         if (this.modalManager?.isOpen()) return;
@@ -453,15 +599,16 @@ export class MenuScene extends Phaser.Scene {
           serverUrl: this.resolveServerWsUrl(),
         });
       },
+      'secondary',
     );
 
     this.createMenuButton(
       'joinCoop',
-      480,
-      311,
-      340,
-      38,
-      i18n.t('ui.menu.joinCoop'),
+      570,
+      272,
+      170,
+      34,
+      this.formatCoopBtnLabel('join'),
       PALETTE.AZURE_CORE,
       () => {
         if (this.modalManager?.isOpen()) return;
@@ -473,14 +620,35 @@ export class MenuScene extends Phaser.Scene {
           serverUrl: this.resolveServerWsUrl(),
         });
       },
+      'secondary',
     );
 
+    // 3. Campfire Hero Roster Preview Strip at y=313
+    const rosterGfx = this.add.graphics();
+    drawStyledPanel(rosterGfx, 480 - 174, 313 - 13, 348, 26, {
+      fillColor: UI_THEME.panelBgDark,
+      fillAlpha: 0.9,
+      borderColor: UI_THEME.panelBorder,
+      borderWidth: 1.2,
+      radius: 5,
+    });
+    this.rosterStripText = addCenteredText(
+      480,
+      313,
+      this.formatRosterStripLabel(),
+      '10.5px',
+      '700',
+      PALETTE.SILVER_BRIGHT,
+      2.2,
+    );
+
+    // 4. Debug Row (?debug=1) at exact (392, 353) and (568, 353)
     this.createMenuButton(
       'artGallery',
       392,
       353,
-      164,
-      34,
+      166,
+      32,
       i18n.t('ui.menu.artGallery'),
       PALETTE.STEEL_DARK,
       () => {
@@ -488,128 +656,144 @@ export class MenuScene extends Phaser.Scene {
         zzfx.play('ui_click');
         this.scene.start('ArtGalleryScene');
       },
+      'debug',
     );
 
     this.createMenuButton(
       'toggleAnim',
       568,
       353,
-      164,
-      34,
+      166,
+      32,
       i18n.t('ui.menu.toggleAnim'),
       PALETTE.GOBLIN_GREEN,
       () => {
         if (this.modalManager?.isOpen() || !isDebugUiEnabled()) return;
         zzfx.play('ui_click');
-        const firstRig = this.heroRigs[0]?.rig;
-        const nextState = firstRig?.getAnimState() === 'idle' ? 'run' : 'idle';
-        for (const hr of this.heroRigs) {
-          hr.rig.setAnimState(nextState);
-        }
+        const nextState = this.heroRigs[0]?.rig.getAnimState() === 'idle' ? 'run' : 'idle';
+        for (const hr of this.heroRigs) hr.rig.setAnimState(nextState);
         this.goblinPreview?.setAnimState(nextState);
         debug.animState = nextState;
       },
+      'debug',
     );
 
-    // Phase 7 Action Row: Settings [O], Controls [K], Credits [C], Language [L]
-    this.createMenuButton(
-      'settings',
-      246,
-      394,
-      146,
-      32,
-      i18n.t('ui.menu.settings'),
-      PALETTE.SLATE_MID,
-      () => {
-        if (this.modalManager?.isOpen()) return;
-        zzfx.play('ui_click');
-        this.modalManager?.open('settings');
-      },
-    );
+    // 5. Compact Utility Action Bar at y=396: Settings [O], Controls [K], Credits [C], Language [L]
+    const utilityButtons: [string, number, string, string, () => void][] = [
+      [
+        'settings',
+        252,
+        `${i18n.t('ui.menu.settings')} [O]`,
+        PALETTE.SLATE_MID,
+        () => {
+          this.domInputs?.setModalBlocked(true);
+          this.modalManager?.open('settings');
+        },
+      ],
+      [
+        'controls',
+        404,
+        `${i18n.t('ui.menu.controls')} [K]`,
+        PALETTE.SLATE_MID,
+        () => {
+          this.domInputs?.setModalBlocked(true);
+          this.modalManager?.open('controls');
+        },
+      ],
+      [
+        'credits',
+        556,
+        `${i18n.t('ui.menu.credits')} [C]`,
+        PALETTE.SLATE_MID,
+        () => {
+          this.domInputs?.setModalBlocked(true);
+          this.modalManager?.open('credits');
+        },
+      ],
+      [
+        'language',
+        708,
+        `${i18n.t('ui.menu.languageBtn')} [L]`,
+        PALETTE.FOREST_SHADE,
+        () => {
+          graphicsSettings.toggleLanguage();
+          this.refreshLocalizedText();
+        },
+      ],
+    ];
+    for (const [id, ux, uLabel, uHex, uAction] of utilityButtons) {
+      this.createMenuButton(
+        id,
+        ux,
+        396,
+        144,
+        30,
+        uLabel,
+        uHex,
+        () => {
+          if (this.modalManager?.isOpen()) return;
+          zzfx.play('ui_click');
+          uAction();
+        },
+        'utility',
+      );
+    }
 
-    this.createMenuButton(
-      'controls',
-      402,
-      394,
-      146,
-      32,
-      i18n.t('ui.menu.controls'),
-      PALETTE.SLATE_MID,
-      () => {
-        if (this.modalManager?.isOpen()) return;
-        zzfx.play('ui_click');
-        this.modalManager?.open('controls');
-      },
-    );
-
-    this.createMenuButton(
-      'credits',
-      558,
-      394,
-      146,
-      32,
-      i18n.t('ui.menu.credits'),
-      PALETTE.SLATE_MID,
-      () => {
-        if (this.modalManager?.isOpen()) return;
-        zzfx.play('ui_click');
-        this.modalManager?.open('credits');
-      },
-    );
-
-    this.createMenuButton(
-      'language',
-      714,
-      394,
-      146,
-      32,
-      i18n.t('ui.menu.languageBtn'),
-      PALETTE.FOREST_SHADE,
-      () => {
-        if (this.modalManager?.isOpen()) return;
-        zzfx.play('ui_click');
-        graphicsSettings.toggleLanguage();
-        this.refreshLocalizedText();
-      },
-    );
-
-    // Vietnamese Diacritics Verification Footer
+    // Vietnamese Diacritics Verification Footer (?debug=1)
     const footer = this.add.graphics();
-    footer.fillStyle(hexToNum(PALETTE.SLATE_DARK), 0.95);
-    footer.lineStyle(2, hexToNum(PALETTE.INK_DARK), 1);
-    footer.fillRoundedRect(110, 448, 740, 64, 10);
-    footer.strokeRoundedRect(110, 448, 740, 64, 10);
-
-    const footerSampleText = this.add
-      .text(480, 468, VIETNAMESE_VERIFICATION_STRING, {
-        fontFamily: '"Be Vietnam Pro", sans-serif',
-        fontSize: '16px',
-        fontStyle: '700',
-        color: PALETTE.BONE_WHITE,
-        stroke: PALETTE.INK_DARK,
-        strokeThickness: 3,
-        resolution: textRes,
-      })
-      .setOrigin(0.5);
-    this.textObjects.push(footerSampleText);
-
-    this.debugHintText = this.add
-      .text(480, 494, i18n.t('ui.menu.footerHint'), {
-        fontFamily: '"Be Vietnam Pro", sans-serif',
-        fontSize: '12px',
-        color: PALETTE.CYAN_FROST,
-        resolution: textRes,
-      })
-      .setOrigin(0.5);
-    this.textObjects.push(this.debugHintText);
+    drawStyledPanel(footer, 110, 448, 740, 64, {
+      fillColor: UI_THEME.panelBgDark,
+      fillAlpha: 0.95,
+      borderColor: UI_THEME.inkDark,
+      borderWidth: 2,
+      radius: 10,
+    });
+    const footerSampleText = addCenteredText(
+      480,
+      468,
+      VIETNAMESE_VERIFICATION_STRING,
+      '16px',
+      '700',
+      PALETTE.BONE_WHITE,
+      3,
+    );
+    this.debugHintText = addCenteredText(
+      480,
+      494,
+      i18n.t('ui.menu.footerHint'),
+      '12px',
+      '600',
+      PALETTE.CYAN_FROST,
+      0,
+    );
     this.debugUiObjects.push(footer, footerSampleText, this.debugHintText);
 
     this.modalManager = new ModalOverlayManager(this, () => {
       this.refreshLocalizedText();
+      if (!this.modalManager?.isOpen()) {
+        this.domInputs?.setModalBlocked(false);
+      }
     });
 
     this.debugOverlay = new DebugOverlay(this, false);
     this.syncDebugUiVisibility();
+  }
+
+  private formatCoopBtnLabel(mode: 'host' | 'join'): string {
+    const isEn = i18n.getLocale() === 'en';
+    return mode === 'host'
+      ? isEn
+        ? '📡 Host LAN Room'
+        : '📡 Tạo Phòng LAN'
+      : isEn
+        ? '🔗 Join LAN IP'
+        : '🔗 Vào Phòng LAN';
+  }
+
+  private formatRosterStripLabel(): string {
+    return i18n.getLocale() === 'en'
+      ? '🔥 5 Heroes Ready: Vanguard · Ranger · Elementalist · Druid · Engineer'
+      : '🔥 5 Anh Hùng Hội Tụ: Thiết Vệ · Liệp Ưng · Lam Hỏa · Mộc Linh · Bánh Răng';
   }
 
   private syncDebugUiVisibility(): void {
@@ -618,125 +802,45 @@ export class MenuScene extends Phaser.Scene {
       const entry = this.buttonEntries.get(id);
       if (entry) {
         entry.container.setVisible(showDebug);
-        if (showDebug) {
-          entry.hitArea.setInteractive({ useHandCursor: true });
-        } else {
-          entry.hitArea.disableInteractive();
-        }
+        if (showDebug) entry.hitArea.setInteractive({ useHandCursor: true });
+        else entry.hitArea.disableInteractive();
       }
     }
-    for (const obj of this.debugUiObjects) {
-      obj.setVisible(showDebug);
-    }
+    for (const obj of this.debugUiObjects) obj.setVisible(showDebug);
   }
 
   private initCampfireEmbers(): void {
-    this.embers = [];
-    const firePositions: [number, number][] = [
-      [236, 285],
-      [724, 285],
-    ];
-    for (let i = 0; i < 24; i++) {
-      const [ox, oy] = firePositions[i % 2]!;
-      this.embers.push({
-        x: ox + ((i * 7) % 18) - 9,
-        y: oy - ((i * 11) % 45),
-        vx: (((i * 13) % 20) - 10) * 0.8,
-        vy: -18 - ((i * 5) % 22),
-        size: 1.5 + (i % 3) * 0.8,
-        alpha: 0.4 + (i % 5) * 0.12,
-        life: (i * 0.13) % 1.8,
-        maxLife: 1.4 + (i % 4) * 0.35,
-        originX: ox,
-        originY: oy,
-      });
-    }
+    this.embers = createCampfireEmbers();
   }
 
   private drawCampfires(dtSec: number): void {
     if (!this.campfireGfx) return;
-    if (getVisualQueryConfig().freeze) {
-      this.campfireTimeSec = 1.0;
-      dtSec = 0;
-    } else {
-      this.campfireTimeSec += dtSec;
-    }
-    const t = this.campfireTimeSec;
-    const gfx = this.campfireGfx;
-    gfx.clear();
-
-    const firePositions: [number, number][] = [
-      [236, 285],
-      [724, 285],
-    ];
-
-    for (let f = 0; f < firePositions.length; f++) {
-      const [fx, fy] = firePositions[f]!;
-      const pulse = Math.sin(t * 7.5 + f * 1.9) * 3.5;
-
-      // Warm radial light pools
-      gfx.fillStyle(hexToNum(PALETTE.FLAME_ORANGE), 0.09);
-      gfx.fillCircle(fx, fy, 88 + pulse);
-      gfx.fillStyle(hexToNum(PALETTE.SOLAR_GOLD), 0.13);
-      gfx.fillCircle(fx, fy, 52 + pulse * 0.6);
-
-      // Stone firepit ring & charred logs
-      gfx.fillStyle(hexToNum(PALETTE.INK_DARK), 0.95);
-      gfx.fillCircle(fx, fy + 4, 17);
-      gfx.lineStyle(2.5, hexToNum(PALETTE.SLATE_MID), 1);
-      gfx.strokeCircle(fx, fy + 4, 17);
-
-      // Flickering flame tongues
-      const flameH = 22 + Math.sin(t * 11 + f) * 4;
-      const sway = Math.cos(t * 9 + f * 2) * 3;
-      gfx.fillStyle(hexToNum(PALETTE.CRIMSON_BRIGHT), 0.9);
-      gfx.fillTriangle(fx - 11, fy + 4, fx + 11, fy + 4, fx + sway, fy - flameH);
-      gfx.fillStyle(hexToNum(PALETTE.FLAME_ORANGE), 0.95);
-      gfx.fillTriangle(fx - 8, fy + 4, fx + 8, fy + 4, fx - sway * 0.7, fy - flameH * 0.82);
-      gfx.fillStyle(hexToNum(PALETTE.SOLAR_GOLD), 1);
-      gfx.fillTriangle(fx - 4.5, fy + 4, fx + 4.5, fy + 4, fx + sway * 0.4, fy - flameH * 0.55);
-    }
-
-    // Update & render floating embers
-    for (let i = 0; i < this.embers.length; i++) {
-      const e = this.embers[i]!;
-      e.life += dtSec;
-      if (e.life >= e.maxLife) {
-        e.life = 0;
-        e.x = e.originX + Math.sin(t * 5 + i) * 8;
-        e.y = e.originY;
-      }
-      e.x += (e.vx + Math.sin(t * 4 + i) * 6) * dtSec;
-      e.y += e.vy * dtSec;
-      const progress = e.life / e.maxLife;
-      const alpha = Math.max(0, (1 - progress) * e.alpha);
-      gfx.fillStyle(hexToNum(i % 2 === 0 ? PALETTE.SOLAR_GOLD : PALETTE.FLAME_ORANGE), alpha);
-      gfx.fillCircle(e.x, e.y, e.size * (1 - progress * 0.4));
-    }
+    const frozen = getVisualQueryConfig().freeze;
+    this.campfireTimeSec = frozen ? 1.0 : this.campfireTimeSec + dtSec;
+    drawMenuCampfires(this.campfireGfx, this.embers, this.campfireTimeSec, frozen ? 0 : dtSec);
   }
 
   private refreshLocalizedText(): void {
-    const debug = initGlobalDebugState();
-    debug.language = graphicsSettings.getState().language;
-
+    initGlobalDebugState().language = graphicsSettings.getState().language;
     this.titleText?.setText(i18n.t('ui.menu.title'));
     this.subtitleText?.setText(i18n.t('ui.menu.subtitle'));
+    this.rosterStripText?.setText(this.formatRosterStripLabel());
     this.debugHintText?.setText(i18n.t('ui.menu.footerHint'));
     this.refreshCoopBarFn?.();
 
-    this.buttonLabels.get('playSolo')?.setText(i18n.t('ui.menu.playSolo'));
-    this.buttonLabels.get('hostCoop')?.setText(i18n.t('ui.menu.hostCoop'));
-    this.buttonLabels.get('joinCoop')?.setText(i18n.t('ui.menu.joinCoop'));
-    this.buttonLabels.get('artGallery')?.setText(i18n.t('ui.menu.artGallery'));
-    this.buttonLabels.get('toggleAnim')?.setText(i18n.t('ui.menu.toggleAnim'));
-    this.buttonLabels.get('settings')?.setText(i18n.t('ui.menu.settings'));
-    this.buttonLabels.get('controls')?.setText(i18n.t('ui.menu.controls'));
-    this.buttonLabels.get('credits')?.setText(i18n.t('ui.menu.credits'));
-    this.buttonLabels.get('language')?.setText(i18n.t('ui.menu.languageBtn'));
-
-    for (const hr of this.heroRigs) {
-      hr.label.setText(i18n.t(`characters.${hr.charId}.name`));
-    }
+    const labels: [string, string][] = [
+      ['playSolo', `⚔  ${i18n.t('ui.menu.playSolo')}`],
+      ['hostCoop', this.formatCoopBtnLabel('host')],
+      ['joinCoop', this.formatCoopBtnLabel('join')],
+      ['artGallery', i18n.t('ui.menu.artGallery')],
+      ['toggleAnim', i18n.t('ui.menu.toggleAnim')],
+      ['settings', `${i18n.t('ui.menu.settings')} [O]`],
+      ['controls', `${i18n.t('ui.menu.controls')} [K]`],
+      ['credits', `${i18n.t('ui.menu.credits')} [C]`],
+      ['language', `${i18n.t('ui.menu.languageBtn')} [L]`],
+    ];
+    for (const [id, text] of labels) this.buttonLabels.get(id)?.setText(text);
+    for (const hr of this.heroRigs) hr.label.setText(i18n.t(`characters.${hr.charId}.name`));
   }
 
   private saveProfileName(): void {
@@ -749,12 +853,9 @@ export class MenuScene extends Phaser.Scene {
 
   private resolveServerWsUrl(): string {
     const trimmed = this.serverHostPort.trim();
-    if (trimmed.startsWith('ws://') || trimmed.startsWith('wss://')) {
-      return trimmed;
-    }
+    if (trimmed.startsWith('ws://') || trimmed.startsWith('wss://')) return trimmed;
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const hostPort = trimmed.includes(':') ? trimmed : `${trimmed}:2567`;
-    return `${protocol}//${hostPort}`;
+    return `${protocol}//${trimmed.includes(':') ? trimmed : `${trimmed}:2567`}`;
   }
 
   private createMenuButton(
@@ -766,27 +867,49 @@ export class MenuScene extends Phaser.Scene {
     label: string,
     fillHex: string,
     onClick: () => void,
+    tier: MenuButtonTier = 'secondary',
   ): void {
     const container = this.add.container(x, y);
-
     const bg = this.add.graphics();
     const drawButton = (hover: boolean) => {
       bg.clear();
-      bg.fillStyle(hexToNum(hover ? PALETTE.SOLAR_GOLD : fillHex), 1);
-      bg.lineStyle(2.5, hexToNum(PALETTE.INK_DARK), 1);
-      bg.fillRoundedRect(-w / 2, -h / 2, w, h, 9);
-      bg.strokeRoundedRect(-w / 2, -h / 2, w, h, 9);
+      const isPri = tier === 'primary';
+      const isSec = tier === 'secondary';
+      drawStyledPanel(bg, -w / 2, -h / 2, w, h, {
+        fillColor: isPri
+          ? hexToNum(hover ? PALETTE.FLAME_ORANGE : fillHex)
+          : isSec
+            ? hover
+              ? UI_THEME.panelBgElevated
+              : UI_THEME.panelBg
+            : hover
+              ? UI_THEME.panelBgElevated
+              : hexToNum(fillHex),
+        fillAlpha: isPri ? 0.98 : isSec ? 0.96 : 0.94,
+        borderColor: isPri
+          ? hexToNum(PALETTE.SOLAR_GOLD)
+          : isSec
+            ? hexToNum(hover ? PALETTE.SOLAR_GOLD : fillHex)
+            : hover
+              ? hexToNum(PALETTE.SOLAR_GOLD)
+              : UI_THEME.panelBorder,
+        borderWidth: isPri ? (hover ? 2.6 : 2.2) : isSec ? (hover ? 2.2 : 1.8) : 1.5,
+        radius: isPri ? 8 : isSec ? 7 : 6,
+        accentColor: isPri ? hexToNum(PALETTE.SOLAR_GOLD) : isSec ? hexToNum(fillHex) : undefined,
+        accentSide: isPri ? 'top' : isSec ? 'left' : undefined,
+      });
     };
     drawButton(false);
 
+    const fontSize = tier === 'primary' ? '15px' : tier === 'secondary' ? '12.5px' : '11.5px';
     const txt = this.add
       .text(0, 0, label, {
         fontFamily: '"Be Vietnam Pro", sans-serif',
-        fontSize: h <= 34 ? '12.5px' : '14px',
-        fontStyle: '700',
-        color: PALETTE.BONE_WHITE,
+        fontSize,
+        fontStyle: tier === 'primary' ? '800' : '700',
+        color: tier === 'primary' ? PALETTE.SOLAR_GOLD : PALETTE.BONE_WHITE,
         stroke: PALETTE.INK_DARK,
-        strokeThickness: 3,
+        strokeThickness: tier === 'primary' ? 3.5 : 2.8,
         resolution: TextureBaker.getBakeScale(),
       })
       .setOrigin(0.5);
@@ -795,15 +918,14 @@ export class MenuScene extends Phaser.Scene {
 
     const hitArea = this.add
       .rectangle(0, 0, w, h, 0x000000, 0)
-      .setInteractive({ useHandCursor: true });
-
-    hitArea.on('pointerover', () => {
-      if (this.modalManager?.isOpen()) return;
-      drawButton(true);
-      zzfx.play('ui_hover');
-    });
-    hitArea.on('pointerout', () => drawButton(false));
-    hitArea.on('pointerdown', onClick);
+      .setInteractive({ useHandCursor: true })
+      .on('pointerover', () => {
+        if (this.modalManager?.isOpen()) return;
+        drawButton(true);
+        zzfx.play('ui_hover');
+      })
+      .on('pointerout', () => drawButton(false))
+      .on('pointerdown', onClick);
 
     container.add([bg, txt, hitArea]);
     this.buttonEntries.set(id, { container, hitArea });
@@ -812,38 +934,34 @@ export class MenuScene extends Phaser.Scene {
   private applyCameraViewport(): void {
     const cam = this.cameras?.main;
     if (!cam) return;
-    const zoomX = this.scale.width / WORLD_VIEW_WIDTH;
-    const zoomY = this.scale.height / WORLD_VIEW_HEIGHT;
-    const zoom = Math.min(zoomX, zoomY);
+    const zoom = Math.min(
+      this.scale.width / WORLD_VIEW_WIDTH,
+      this.scale.height / WORLD_VIEW_HEIGHT,
+    );
     const prevScale = TextureBaker.getBakeScale();
     const newScale = TextureBaker.bakeAll(this, zoom, false);
     if (newScale !== prevScale) {
-      for (const hr of this.heroRigs) {
-        hr.rig.refreshBakedTextures();
-      }
+      for (const hr of this.heroRigs) hr.rig.refreshBakedTextures();
       this.goblinPreview?.refreshBakedTextures();
       const invBake = 1 / newScale;
       for (const item of this.floorTileSprites) {
         item.sprite.setTexture(TextureBaker.getBiomeTileTextureKey(1, item.variant));
         item.sprite.setScale(invBake);
       }
-      for (const txt of this.textObjects) {
-        txt.setResolution(newScale);
-      }
+      for (const txt of this.textObjects) txt.setResolution(newScale);
       this.modalManager?.refreshResolution(newScale);
       this.debugOverlay?.refreshResolution(newScale);
     }
     cam.setZoom(zoom);
     cam.centerOn(WORLD_VIEW_WIDTH / 2, WORLD_VIEW_HEIGHT / 2);
+    this.domInputs?.reposition();
   }
 
   public override update(_time: number, deltaMs: number): void {
     const effectiveDeltaMs = getVisualQueryConfig().freeze ? 16.6667 : deltaMs;
     const stepRes = this.simLoop.step(effectiveDeltaMs, () => {});
     const dtSec = Math.min(effectiveDeltaMs / 1000, 0.05);
-    for (const hr of this.heroRigs) {
-      hr.rig.update(dtSec);
-    }
+    for (const hr of this.heroRigs) hr.rig.update(dtSec);
     this.goblinPreview?.update(dtSec);
     this.drawCampfires(dtSec);
 
@@ -852,7 +970,9 @@ export class MenuScene extends Phaser.Scene {
     const debug = initGlobalDebugState();
     debug.musicTheme = mState.theme;
     debug.musicCombatMix = mState.combatMix;
-
+    if (this.modalManager && !this.modalManager.isOpen()) {
+      this.domInputs?.setModalBlocked(false);
+    }
     this.debugOverlay?.update({
       entityCount: this.heroRigs.length + 1,
       bulletCount: 0,

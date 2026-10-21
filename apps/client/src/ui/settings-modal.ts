@@ -1,27 +1,119 @@
-import Phaser from 'phaser';
-import { i18n } from '@ashen-pact/shared';
+import { i18n, type SupportedLocale } from '@ashen-pact/shared';
+import type Phaser from 'phaser';
 import { hexToNum, PALETTE } from '../art/palette.js';
 import { TextureBaker } from '../art/texture-baker.js';
 import { zzfx } from '../audio/zzfx.js';
+import {
+  drawKeyChip,
+  drawSegmentedBar,
+  drawStyledPanel,
+} from './components/hud-primitives.js';
 import { initGlobalDebugState } from './debug-overlay.js';
 import { graphicsSettings } from './graphics-settings.js';
+import { UI_THEME } from './theme.js';
 
 export type ModalKind = 'none' | 'settings' | 'controls' | 'credits';
+export type SettingsTabId = 'audio' | 'video' | 'gameplay' | 'controls';
+
+export const SETTINGS_TABS: readonly SettingsTabId[] = [
+  'audio',
+  'video',
+  'gameplay',
+  'controls',
+];
+
+export interface SettingsTabSpec {
+  id: SettingsTabId;
+  label: string;
+  cx: number;
+  cy: number;
+  w: number;
+  h: number;
+}
+
+/**
+ * Returns the single-language header title for the Settings modal in the active locale.
+ */
+export function getSettingsModalTitle(
+  locale: SupportedLocale = i18n.getLocale(),
+): string {
+  return locale === 'en' ? 'SYSTEM SETTINGS' : 'CÀI ĐẶT HỆ THỐNG';
+}
+
+/**
+ * Returns the 4 tab specifications (Audio, Video, Gameplay, Controls) with 960x540 coordinates.
+ */
+export function getSettingsTabSpecs(
+  locale: SupportedLocale = i18n.getLocale(),
+): SettingsTabSpec[] {
+  const isEn = locale === 'en';
+  const cy = 108;
+  const w = 144;
+  const h = 28;
+  return [
+    {
+      id: 'audio',
+      label: isEn ? '🔊 Audio' : '🔊 Âm thanh',
+      cx: 247,
+      cy,
+      w,
+      h,
+    },
+    {
+      id: 'video',
+      label: isEn ? '🖥 Video' : '🖥 Hình ảnh',
+      cx: 402,
+      cy,
+      w,
+      h,
+    },
+    {
+      id: 'gameplay',
+      label: '🎮 Gameplay',
+      cx: 558,
+      cy,
+      w,
+      h,
+    },
+    {
+      id: 'controls',
+      label: isEn ? '⌨ Controls' : '⌨ Điều khiển',
+      cx: 713,
+      cy,
+      w,
+      h,
+    },
+  ];
+}
+
+interface SettingRowSpec {
+  id: string;
+  label: string;
+  subLabel?: string;
+  valueText: string;
+  ratio?: number;
+  segments?: number;
+  barColor?: number;
+  onDec?: () => void;
+  onInc?: () => void;
+  onToggle?: () => void;
+}
 
 export class ModalOverlayManager {
   private readonly scene: Phaser.Scene;
   private readonly onLocaleChanged?: () => void;
   private container: Phaser.GameObjects.Container;
   private activeModal: ModalKind = 'none';
+  private activeTab: SettingsTabId = 'audio';
   private textObjects: Phaser.GameObjects.Text[] = [];
 
   constructor(scene: Phaser.Scene, onLocaleChanged?: () => void) {
     this.scene = scene;
     this.onLocaleChanged = onLocaleChanged;
     this.container = scene.add.container(0, 0).setDepth(4200).setVisible(false);
-    scene.events.on(Phaser.Scenes.Events.POST_UPDATE, this.syncViewportPosition, this);
-    scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
-      scene.events.off(Phaser.Scenes.Events.POST_UPDATE, this.syncViewportPosition, this);
+    scene.events.on('postupdate', this.syncViewportPosition, this);
+    scene.events.once('shutdown', () => {
+      scene.events.off('postupdate', this.syncViewportPosition, this);
     });
   }
 
@@ -34,19 +126,37 @@ export class ModalOverlayManager {
   }
 
   public destroy(): void {
-    this.scene.events.off(Phaser.Scenes.Events.POST_UPDATE, this.syncViewportPosition, this);
+    this.scene.events.off('postupdate', this.syncViewportPosition, this);
   }
 
   public getActiveModal(): ModalKind {
     return this.activeModal;
   }
 
+  public getActiveTab(): SettingsTabId {
+    return this.activeTab;
+  }
+
+  public selectTab(tab: SettingsTabId): void {
+    this.activeTab = tab;
+    if (this.activeModal === 'controls' && tab !== 'controls') {
+      this.activeModal = 'settings';
+    }
+    this.syncDebugFlags();
+    this.rebuild();
+  }
+
   public isOpen(): boolean {
     return this.activeModal !== 'none';
   }
 
-  public open(kind: Exclude<ModalKind, 'none'>): void {
+  public open(kind: Exclude<ModalKind, 'none'>, initialTab?: SettingsTabId): void {
     this.activeModal = kind;
+    if (kind === 'controls') {
+      this.activeTab = 'controls';
+    } else if (kind === 'settings') {
+      this.activeTab = initialTab ?? 'audio';
+    }
     this.syncDebugFlags();
     this.rebuild();
   }
@@ -71,8 +181,11 @@ export class ModalOverlayManager {
   private syncDebugFlags(): void {
     const debug = initGlobalDebugState();
     debug.settingsModalOpen = this.activeModal === 'settings';
-    debug.controlsModalOpen = this.activeModal === 'controls';
+    debug.controlsModalOpen =
+      this.activeModal === 'controls' ||
+      (this.activeModal === 'settings' && this.activeTab === 'controls');
     debug.creditsModalOpen = this.activeModal === 'credits';
+    debug.settingsActiveTab = this.activeTab;
     debug.language = graphicsSettings.getState().language;
   }
 
@@ -93,31 +206,40 @@ export class ModalOverlayManager {
       .setInteractive();
     this.container.add(blocker);
 
-    if (this.activeModal === 'settings') {
-      this.buildSettingsModal(textRes);
-    } else if (this.activeModal === 'controls') {
-      this.buildControlsModal(textRes);
+    if (this.activeModal === 'settings' || this.activeModal === 'controls') {
+      this.buildTabbedSettingsModal(textRes);
     } else if (this.activeModal === 'credits') {
       this.buildCreditsModal(textRes);
     }
   }
 
-  private buildSettingsModal(textRes: number): void {
+  private buildTabbedSettingsModal(textRes: number): void {
     const s = graphicsSettings.getState();
-    const cardW = 640;
-    const cardH = 446;
+    const isEn = s.language === 'en';
+    const cardW = 660;
+    const cardH = 444;
     const cardX = 480 - cardW / 2;
     const cardY = 270 - cardH / 2;
 
     const panel = this.scene.add.graphics();
-    panel.fillStyle(hexToNum(PALETTE.SLATE_DARK), 0.98);
-    panel.lineStyle(3, hexToNum(PALETTE.SOLAR_GOLD), 1);
-    panel.fillRoundedRect(cardX, cardY, cardW, cardH, 12);
-    panel.strokeRoundedRect(cardX, cardY, cardW, cardH, 12);
+    drawStyledPanel(panel, cardX, cardY, cardW, cardH, {
+      fillColor: UI_THEME.panelBgDark,
+      fillAlpha: 0.98,
+      borderColor: hexToNum(PALETTE.SOLAR_GOLD),
+      borderWidth: 2.4,
+      radius: UI_THEME.panelRadius.lg,
+      accentColor: hexToNum(PALETTE.SOLAR_GOLD),
+      accentSide: 'top',
+    });
+    // Header divider line below tabs
+    panel.lineStyle(1.2, UI_THEME.panelBorder, 0.75);
+    panel.lineBetween(cardX + 20, cardY + 82, cardX + cardW - 20, cardY + 82);
+    // Footer divider line
+    panel.lineBetween(cardX + 20, cardY + cardH - 52, cardX + cardW - 20, cardY + cardH - 52);
     this.container.add(panel);
 
     const title = this.scene.add
-      .text(480, cardY + 26, i18n.t('ui.settings.title'), {
+      .text(480, cardY + 24, getSettingsModalTitle(s.language), {
         fontFamily: '"Be Vietnam Pro", sans-serif',
         fontSize: '20px',
         fontStyle: '800',
@@ -130,243 +252,102 @@ export class ModalOverlayManager {
     this.textObjects.push(title);
     this.container.add(title);
 
-    interface RowSpec {
-      label: string;
-      valueText: string;
-      ratio?: number;
-      barColor?: string;
-      onDec?: () => void;
-      onInc?: () => void;
-      onToggle?: () => void;
-    }
+    // 4-Tab Bar (Audio, Video, Gameplay, Controls)
+    const tabSpecs = getSettingsTabSpecs(s.language);
+    for (const tab of tabSpecs) {
+      const isSelected = this.activeTab === tab.id;
+      const tabBtn = this.scene.add.container(tab.cx, tab.cy);
+      const tabBg = this.scene.add.graphics();
+      const drawTab = (hover: boolean) => {
+        tabBg.clear();
+        drawStyledPanel(tabBg, -tab.w / 2, -tab.h / 2, tab.w, tab.h, {
+          fillColor: isSelected
+            ? UI_THEME.panelBgElevated
+            : hover
+              ? UI_THEME.panelBg
+              : UI_THEME.panelBgDark,
+          fillAlpha: 0.96,
+          borderColor: hexToNum(
+            isSelected ? PALETTE.SOLAR_GOLD : hover ? PALETTE.CYAN_FROST : PALETTE.SLATE_MID,
+          ),
+          borderWidth: isSelected ? 2.2 : 1.4,
+          radius: 6,
+          accentColor: isSelected ? hexToNum(PALETTE.SOLAR_GOLD) : undefined,
+          accentSide: isSelected ? 'top' : 'none',
+        });
+      };
+      drawTab(false);
 
-    const qualityLabel =
-      s.quality === 'high'
-        ? i18n.t('ui.settings.qualityHigh')
-        : s.quality === 'medium'
-          ? i18n.t('ui.settings.qualityMedium')
-          : i18n.t('ui.settings.qualityLow');
-
-    const rows: RowSpec[] = [
-      {
-        label: i18n.t('ui.settings.masterVolume'),
-        valueText: `${Math.round(s.masterVolume * 100)}%`,
-        ratio: s.masterVolume,
-        barColor: PALETTE.SOLAR_GOLD,
-        onDec: () => {
-          graphicsSettings.setMasterVolume(s.masterVolume - 0.1);
-          zzfx.play('ui_click');
-          this.rebuild();
-        },
-        onInc: () => {
-          graphicsSettings.setMasterVolume(s.masterVolume + 0.1);
-          zzfx.play('ui_click');
-          this.rebuild();
-        },
-      },
-      {
-        label: i18n.t('ui.settings.musicVolume'),
-        valueText: `${Math.round(s.musicVolume * 100)}%`,
-        ratio: s.musicVolume,
-        barColor: PALETTE.AZURE_CORE,
-        onDec: () => {
-          graphicsSettings.setMusicVolume(s.musicVolume - 0.1);
-          zzfx.play('ui_click');
-          this.rebuild();
-        },
-        onInc: () => {
-          graphicsSettings.setMusicVolume(s.musicVolume + 0.1);
-          zzfx.play('ui_click');
-          this.rebuild();
-        },
-      },
-      {
-        label: i18n.t('ui.settings.sfxVolume'),
-        valueText: `${Math.round(s.sfxVolume * 100)}%`,
-        ratio: s.sfxVolume,
-        barColor: PALETTE.GOBLIN_GREEN,
-        onDec: () => {
-          graphicsSettings.setSfxVolume(s.sfxVolume - 0.1);
-          zzfx.play('ui_click');
-          this.rebuild();
-        },
-        onInc: () => {
-          graphicsSettings.setSfxVolume(s.sfxVolume + 0.1);
-          zzfx.play('ui_click');
-          this.rebuild();
-        },
-      },
-      {
-        label: i18n.t('ui.settings.graphicsQuality'),
-        valueText: qualityLabel,
-        onToggle: () => {
-          graphicsSettings.cycleQuality();
-          zzfx.play('ui_click');
-          this.rebuild();
-        },
-      },
-      {
-        label: i18n.t('ui.settings.autoQuality'),
-        valueText: s.autoQuality ? i18n.t('ui.settings.on') : i18n.t('ui.settings.off'),
-        onToggle: () => {
-          graphicsSettings.setAutoQuality(!s.autoQuality);
-          zzfx.play('ui_click');
-          this.rebuild();
-        },
-      },
-      {
-        label: i18n.t('ui.settings.screenShake'),
-        valueText: `${Math.round(s.screenShakeIntensity * 100)}%`,
-        ratio: s.screenShakeIntensity,
-        barColor: PALETTE.FLAME_ORANGE,
-        onDec: () => {
-          graphicsSettings.setScreenShakeIntensity(s.screenShakeIntensity - 0.2);
-          zzfx.play('ui_click');
-          this.rebuild();
-        },
-        onInc: () => {
-          graphicsSettings.setScreenShakeIntensity(s.screenShakeIntensity + 0.2);
-          zzfx.play('ui_click');
-          this.rebuild();
-        },
-      },
-      {
-        label: i18n.t('ui.settings.damageNumbers'),
-        valueText: s.showDamageNumbers ? i18n.t('ui.settings.on') : i18n.t('ui.settings.off'),
-        onToggle: () => {
-          graphicsSettings.setShowDamageNumbers(!s.showDamageNumbers);
-          zzfx.play('ui_click');
-          this.rebuild();
-        },
-      },
-      {
-        label: i18n.t('ui.settings.teammateFxOpacity'),
-        valueText: `${Math.round(s.teammateFxOpacity * 100)}%`,
-        ratio: (s.teammateFxOpacity - 0.3) / 0.7,
-        barColor: PALETTE.CYAN_FROST,
-        onDec: () => {
-          graphicsSettings.setTeammateFxOpacity(s.teammateFxOpacity - 0.1);
-          zzfx.play('ui_click');
-          this.rebuild();
-        },
-        onInc: () => {
-          graphicsSettings.setTeammateFxOpacity(s.teammateFxOpacity + 0.1);
-          zzfx.play('ui_click');
-          this.rebuild();
-        },
-      },
-      {
-        label: i18n.t('ui.settings.language'),
-        valueText: s.language === 'vi' ? 'Tiếng Việt (VI)' : 'English (EN)',
-        onToggle: () => {
-          graphicsSettings.toggleLanguage();
-          this.syncDebugFlags();
-          zzfx.play('ui_click');
-          this.onLocaleChanged?.();
-          this.rebuild();
-        },
-      },
-    ];
-
-    const startY = cardY + 62;
-    const rowStep = 34;
-
-    rows.forEach((r, idx) => {
-      const ry = startY + idx * rowStep;
-      const rowBg = this.scene.add.graphics();
-      rowBg.fillStyle(hexToNum(idx % 2 === 0 ? PALETTE.INK_DEEP : PALETTE.STEEL_DARK), 0.55);
-      rowBg.fillRoundedRect(cardX + 22, ry - 13, cardW - 44, 28, 6);
-      this.container.add(rowBg);
-
-      const lbl = this.scene.add
-        .text(cardX + 36, ry, r.label, {
+      const tabTxt = this.scene.add
+        .text(0, 0, tab.label, {
           fontFamily: '"Be Vietnam Pro", sans-serif',
-          fontSize: '13px',
-          fontStyle: '700',
-          color: PALETTE.BONE_WHITE,
+          fontSize: '12px',
+          fontStyle: '800',
+          color: isSelected ? PALETTE.SOLAR_GOLD : PALETTE.BONE_WHITE,
           stroke: PALETTE.INK_DARK,
           strokeThickness: 2.5,
           resolution: textRes,
         })
-        .setOrigin(0, 0.5);
-      this.textObjects.push(lbl);
-      this.container.add(lbl);
+        .setOrigin(0.5);
+      this.textObjects.push(tabTxt);
 
-      if (typeof r.ratio === 'number' && r.onDec && r.onInc) {
-        this.addSmallButton(cardX + 355, ry, 28, 22, '−', PALETTE.SLATE_MID, r.onDec, textRes);
-
-        const barW = 120;
-        const barH = 10;
-        const barX = cardX + 376;
-        const barY = ry - barH / 2;
-        const barGfx = this.scene.add.graphics();
-        barGfx.fillStyle(hexToNum(PALETTE.INK_DARK), 0.95);
-        barGfx.fillRoundedRect(barX, barY, barW, barH, 4);
-        barGfx.fillStyle(hexToNum(r.barColor ?? PALETTE.SOLAR_GOLD), 1);
-        barGfx.fillRoundedRect(barX + 1, barY + 1, Math.max(2, (barW - 2) * r.ratio), barH - 2, 3);
-        this.container.add(barGfx);
-
-        this.addSmallButton(cardX + 516, ry, 28, 22, '+', PALETTE.SLATE_MID, r.onInc, textRes);
-
-        const valTxt = this.scene.add
-          .text(cardX + 575, ry, r.valueText, {
-            fontFamily: '"JetBrains Mono", monospace',
-            fontSize: '12px',
-            fontStyle: '700',
-            color: PALETTE.SOLAR_GOLD,
-            stroke: PALETTE.INK_DARK,
-            strokeThickness: 2,
-            resolution: textRes,
-          })
-          .setOrigin(0.5);
-        this.textObjects.push(valTxt);
-        this.container.add(valTxt);
-      } else if (r.onToggle) {
-        this.addSmallButton(
-          cardX + 485,
-          ry,
-          210,
-          24,
-          `◀  ${r.valueText}  ▶`,
-          PALETTE.SLATE_MID,
-          r.onToggle,
-          textRes,
-        );
-      }
-    });
-
-    // Bottom buttons: Fullscreen, Reset Defaults, Close
-    const btnY = cardY + cardH - 32;
-    this.addSmallButton(
-      292,
-      btnY,
-      228,
-      30,
-      `${i18n.t('ui.settings.fullscreen')}: ${s.fullscreen ? i18n.t('ui.settings.on') : i18n.t('ui.settings.off')}`,
-      PALETTE.STEEL_DARK,
-      () => {
-        const nextFs = !s.fullscreen;
-        graphicsSettings.setFullscreen(nextFs);
-        try {
-          if (nextFs && !this.scene.scale.isFullscreen) {
-            this.scene.scale.startFullscreen();
-          } else if (!nextFs && this.scene.scale.isFullscreen) {
-            this.scene.scale.stopFullscreen();
-          }
-        } catch {
-          // Ignore fullscreen API restrictions in headless browsers
+      const tabHit = this.scene.add
+        .rectangle(0, 0, tab.w, tab.h, 0x000000, 0)
+        .setInteractive({ useHandCursor: true });
+      tabHit.on('pointerover', () => {
+        if (!isSelected) {
+          drawTab(true);
+          zzfx.play('ui_hover');
         }
-        zzfx.play('ui_click');
-        this.rebuild();
-      },
-      textRes,
-    );
+      });
+      tabHit.on('pointerout', () => drawTab(false));
+      tabHit.on('pointerdown', () => {
+        if (this.activeTab !== tab.id) {
+          zzfx.play('ui_click');
+          this.selectTab(tab.id);
+        }
+      });
+
+      tabBtn.add([tabBg, tabTxt, tabHit]);
+      this.container.add(tabBtn);
+    }
+
+    // Active Tab Content Area
+    if (this.activeTab === 'controls') {
+      this.buildControlsTabContent(cardX, cardY, cardW, textRes, isEn);
+    } else {
+      const rows = this.getRowsForTab(this.activeTab, textRes);
+      this.renderSettingRows(cardX, cardY, cardW, rows, textRes);
+    }
+
+    // Bottom Footer: Auto-save hint + Restore Defaults + Close [Esc]
+    const footerY = cardY + cardH - 26;
+    const subHint = this.scene.add
+      .text(
+        cardX + 24,
+        footerY,
+        isEn
+          ? '💾 Automatically saved to browser localStorage'
+          : '💾 Tự động lưu vào trình duyệt (localStorage)',
+        {
+          fontFamily: '"Be Vietnam Pro", sans-serif',
+          fontSize: '11.5px',
+          fontStyle: '600',
+          color: PALETTE.ASH_GRAY,
+          stroke: PALETTE.INK_DARK,
+          strokeThickness: 2,
+          resolution: textRes,
+        },
+      )
+      .setOrigin(0, 0.5);
+    this.textObjects.push(subHint);
+    this.container.add(subHint);
 
     this.addSmallButton(
-      512,
-      btnY,
-      174,
-      30,
+      534,
+      footerY,
+      166,
+      28,
       i18n.t('ui.settings.resetDefaults'),
       PALETTE.BRONZE_SHADE,
       () => {
@@ -380,10 +361,10 @@ export class ModalOverlayManager {
     );
 
     this.addSmallButton(
-      695,
-      btnY,
-      155,
-      30,
+      704,
+      footerY,
+      146,
+      28,
       i18n.t('ui.settings.close'),
       PALETTE.RUBY_CORE,
       () => {
@@ -394,63 +375,447 @@ export class ModalOverlayManager {
     );
   }
 
-  private buildControlsModal(textRes: number): void {
-    const cardW = 660;
-    const cardH = 420;
-    const cardX = 480 - cardW / 2;
-    const cardY = 270 - cardH / 2;
+  private getRowsForTab(
+    tab: Exclude<SettingsTabId, 'controls'>,
+    _textRes: number,
+  ): SettingRowSpec[] {
+    const s = graphicsSettings.getState();
+    const isEn = s.language === 'en';
+    const onLabel = i18n.t('ui.settings.on');
+    const offLabel = i18n.t('ui.settings.off');
 
-    const panel = this.scene.add.graphics();
-    panel.fillStyle(hexToNum(PALETTE.SLATE_DARK), 0.98);
-    panel.lineStyle(3, hexToNum(PALETTE.AZURE_CORE), 1);
-    panel.fillRoundedRect(cardX, cardY, cardW, cardH, 12);
-    panel.strokeRoundedRect(cardX, cardY, cardW, cardH, 12);
-    this.container.add(panel);
+    if (tab === 'audio') {
+      const isMuted = s.masterVolume <= 0.001;
+      return [
+        {
+          id: 'masterVolume',
+          label: i18n.t('ui.settings.masterVolume'),
+          subLabel: isEn
+            ? 'Global output level for all synthesized audio'
+            : 'Mức âm lượng tổng cho toàn bộ âm thanh trong game',
+          valueText: `${Math.round(s.masterVolume * 100)}%`,
+          ratio: s.masterVolume,
+          segments: 10,
+          barColor: hexToNum(PALETTE.SOLAR_GOLD),
+          onDec: () => {
+            graphicsSettings.setMasterVolume(s.masterVolume - 0.1);
+            zzfx.play('ui_click');
+            this.rebuild();
+          },
+          onInc: () => {
+            graphicsSettings.setMasterVolume(s.masterVolume + 0.1);
+            zzfx.play('ui_click');
+            this.rebuild();
+          },
+        },
+        {
+          id: 'musicVolume',
+          label: i18n.t('ui.settings.musicVolume'),
+          subLabel: isEn
+            ? 'Dual-layer ambient & combat synth sequencer'
+            : 'Nhạc nền động 2 lớp chuyển pha theo giao chiến',
+          valueText: `${Math.round(s.musicVolume * 100)}%`,
+          ratio: s.musicVolume,
+          segments: 10,
+          barColor: hexToNum(PALETTE.AZURE_CORE),
+          onDec: () => {
+            graphicsSettings.setMusicVolume(s.musicVolume - 0.1);
+            zzfx.play('ui_click');
+            this.rebuild();
+          },
+          onInc: () => {
+            graphicsSettings.setMusicVolume(s.musicVolume + 0.1);
+            zzfx.play('ui_click');
+            this.rebuild();
+          },
+        },
+        {
+          id: 'sfxVolume',
+          label: i18n.t('ui.settings.sfxVolume'),
+          subLabel: isEn
+            ? 'Weapons, elemental reactions, boss telegraphs & UI'
+            : 'Tiếng vũ khí, phản ứng nguyên tố, đòn trùm & giao diện',
+          valueText: `${Math.round(s.sfxVolume * 100)}%`,
+          ratio: s.sfxVolume,
+          segments: 10,
+          barColor: hexToNum(PALETTE.LIME_GLOW),
+          onDec: () => {
+            graphicsSettings.setSfxVolume(s.sfxVolume - 0.1);
+            zzfx.play('ui_click');
+            this.rebuild();
+          },
+          onInc: () => {
+            graphicsSettings.setSfxVolume(s.sfxVolume + 0.1);
+            zzfx.play('ui_click');
+            this.rebuild();
+          },
+        },
+        {
+          id: 'muteAll',
+          label: isEn ? 'Mute All Audio' : 'Tắt tiếng nhanh',
+          subLabel: isEn
+            ? 'Instantly mute or restore master audio output'
+            : 'Tắt hoặc khôi phục nhanh toàn bộ âm thanh',
+          valueText: isMuted ? onLabel : offLabel,
+          onToggle: () => {
+            graphicsSettings.setMasterVolume(isMuted ? 0.85 : 0);
+            zzfx.play('ui_click');
+            this.rebuild();
+          },
+        },
+      ];
+    }
 
-    const title = this.scene.add
-      .text(480, cardY + 28, i18n.t('ui.controls.title'), {
-        fontFamily: '"Be Vietnam Pro", sans-serif',
-        fontSize: '20px',
-        fontStyle: '800',
-        color: PALETTE.CYAN_FROST,
-        stroke: PALETTE.INK_DARK,
-        strokeThickness: 4,
-        resolution: textRes,
-      })
-      .setOrigin(0.5);
-    this.textObjects.push(title);
-    this.container.add(title);
+    if (tab === 'video') {
+      const qualityLabel =
+        s.quality === 'high'
+          ? i18n.t('ui.settings.qualityHigh')
+          : s.quality === 'medium'
+            ? i18n.t('ui.settings.qualityMedium')
+            : i18n.t('ui.settings.qualityLow');
 
-    const lines = [
-      i18n.t('ui.controls.move'),
-      i18n.t('ui.controls.aimShoot'),
-      i18n.t('ui.controls.skill'),
-      i18n.t('ui.controls.dash'),
-      i18n.t('ui.controls.swapWeapon'),
-      i18n.t('ui.controls.interact'),
-      i18n.t('ui.controls.map'),
-      i18n.t('ui.controls.ping'),
-      i18n.t('ui.controls.emote'),
-      i18n.t('ui.controls.pause'),
+      return [
+        {
+          id: 'graphicsQuality',
+          label: i18n.t('ui.settings.graphicsQuality'),
+          subLabel: isEn
+            ? 'Controls lightmap resolution, bloom & particle budget'
+            : 'Điều chỉnh độ phân giải ánh sáng động, bloom & hạt hiệu ứng',
+          valueText: qualityLabel,
+          onToggle: () => {
+            graphicsSettings.cycleQuality();
+            zzfx.play('ui_click');
+            this.onLocaleChanged?.();
+            this.rebuild();
+          },
+        },
+        {
+          id: 'autoQuality',
+          label: i18n.t('ui.settings.autoQuality'),
+          subLabel: isEn
+            ? 'Steps down preset automatically if sustained FPS drops'
+            : 'Tự động giảm bậc đồ họa khi FPS duy trì dưới ngưỡng',
+          valueText: s.autoQuality ? onLabel : offLabel,
+          onToggle: () => {
+            graphicsSettings.setAutoQuality(!s.autoQuality);
+            zzfx.play('ui_click');
+            this.rebuild();
+          },
+        },
+        {
+          id: 'screenShake',
+          label: i18n.t('ui.settings.screenShake'),
+          subLabel: isEn
+            ? 'Camera trauma shake on heavy hits & explosions'
+            : 'Độ rung camera khi nổ nguyên tố hoặc trúng đòn mạnh',
+          valueText: `${Math.round(s.screenShakeIntensity * 100)}%`,
+          ratio: s.screenShakeIntensity,
+          segments: 5,
+          barColor: hexToNum(PALETTE.FLAME_ORANGE),
+          onDec: () => {
+            graphicsSettings.setScreenShakeIntensity(s.screenShakeIntensity - 0.2);
+            zzfx.play('ui_click');
+            this.rebuild();
+          },
+          onInc: () => {
+            graphicsSettings.setScreenShakeIntensity(s.screenShakeIntensity + 0.2);
+            zzfx.play('ui_click');
+            this.rebuild();
+          },
+        },
+        {
+          id: 'fullscreen',
+          label: i18n.t('ui.settings.fullscreen'),
+          subLabel: isEn
+            ? 'Toggle borderless browser fullscreen mode'
+            : 'Chuyển đổi chế độ hiển thị toàn màn hình',
+          valueText: s.fullscreen ? onLabel : offLabel,
+          onToggle: () => {
+            const nextFs = !s.fullscreen;
+            graphicsSettings.setFullscreen(nextFs);
+            try {
+              if (nextFs && !this.scene.scale.isFullscreen) {
+                this.scene.scale.startFullscreen();
+              } else if (!nextFs && this.scene.scale.isFullscreen) {
+                this.scene.scale.stopFullscreen();
+              }
+            } catch {
+              // Ignore fullscreen API restrictions in headless browsers
+            }
+            zzfx.play('ui_click');
+            this.rebuild();
+          },
+        },
+      ];
+    }
+
+    // Gameplay tab: Language, UI Scale (80%-130%), Key Hints (On/Off), Damage Numbers, Teammate FX Opacity
+    return [
+      {
+        id: 'language',
+        label: isEn ? 'Display Language' : 'Ngôn ngữ hiển thị',
+        subLabel: isEn
+          ? 'Switch all UI, weapon & blessing texts (VI / EN)'
+          : 'Chuyển đổi ngôn ngữ giao diện, vũ khí & phước lành',
+        valueText: s.language === 'vi' ? 'Tiếng Việt (VI)' : 'English (EN)',
+        onToggle: () => {
+          graphicsSettings.toggleLanguage();
+          this.syncDebugFlags();
+          zzfx.play('ui_click');
+          this.onLocaleChanged?.();
+          this.rebuild();
+        },
+      },
+      {
+        id: 'uiScale',
+        label: isEn ? 'HUD & UI Scale' : 'Tỷ lệ Giao diện (UI Scale)',
+        subLabel: isEn
+          ? 'Scale combat HUD panels from 80% to 130%'
+          : 'Thu phóng kích thước cụm HUD chiến đấu từ 80% đến 130%',
+        valueText: `${Math.round(s.uiScale * 100)}%`,
+        ratio: (s.uiScale - 0.8) / 0.5,
+        segments: 10,
+        barColor: hexToNum(PALETTE.SOLAR_GOLD),
+        onDec: () => {
+          graphicsSettings.setUiScale(s.uiScale - 0.05);
+          zzfx.play('ui_click');
+          this.onLocaleChanged?.();
+          this.rebuild();
+        },
+        onInc: () => {
+          graphicsSettings.setUiScale(s.uiScale + 0.05);
+          zzfx.play('ui_click');
+          this.onLocaleChanged?.();
+          this.rebuild();
+        },
+      },
+      {
+        id: 'showKeyHints',
+        label: isEn ? 'Show Keybind Hints' : 'Hiển thị Gợi ý Phím tắt',
+        subLabel: isEn
+          ? 'Display [Space], [Shift], [E], [Q] key chips on HUD'
+          : 'Hiển thị nhãn phím [Space], [Shift], [E], [Q] trên HUD',
+        valueText: s.showKeyHints ? onLabel : offLabel,
+        onToggle: () => {
+          graphicsSettings.setShowKeyHints(!s.showKeyHints);
+          zzfx.play('ui_click');
+          this.onLocaleChanged?.();
+          this.rebuild();
+        },
+      },
+      {
+        id: 'damageNumbers',
+        label: i18n.t('ui.settings.damageNumbers'),
+        subLabel: isEn
+          ? 'Floating damage popups & critical hit callouts'
+          : 'Hiển thị số sát thương bay lên khi bắn trúng mục tiêu',
+        valueText: s.showDamageNumbers ? onLabel : offLabel,
+        onToggle: () => {
+          graphicsSettings.setShowDamageNumbers(!s.showDamageNumbers);
+          zzfx.play('ui_click');
+          this.rebuild();
+        },
+      },
+      {
+        id: 'teammateFxOpacity',
+        label: i18n.t('ui.settings.teammateFxOpacity'),
+        subLabel: isEn
+          ? 'Adjust ally projectile & skill visual intensity (30%–100%)'
+          : 'Độ rõ đạn và kỹ năng của đồng đội Co-op (30%–100%)',
+        valueText: `${Math.round(s.teammateFxOpacity * 100)}%`,
+        ratio: (s.teammateFxOpacity - 0.3) / 0.7,
+        segments: 7,
+        barColor: hexToNum(PALETTE.CYAN_FROST),
+        onDec: () => {
+          graphicsSettings.setTeammateFxOpacity(s.teammateFxOpacity - 0.1);
+          zzfx.play('ui_click');
+          this.rebuild();
+        },
+        onInc: () => {
+          graphicsSettings.setTeammateFxOpacity(s.teammateFxOpacity + 0.1);
+          zzfx.play('ui_click');
+          this.rebuild();
+        },
+      },
     ];
+  }
 
-    lines.forEach((line, idx) => {
+  private renderSettingRows(
+    cardX: number,
+    cardY: number,
+    cardW: number,
+    rows: SettingRowSpec[],
+    textRes: number,
+  ): void {
+    const startY = cardY + 114;
+    const rowStep = rows.length <= 4 ? 64 : 54;
+    const rowH = rows.length <= 4 ? 52 : 44;
+
+    rows.forEach((r, idx) => {
+      const ry = startY + idx * rowStep;
+      const rowBg = this.scene.add.graphics();
+      drawStyledPanel(rowBg, cardX + 22, ry - rowH / 2, cardW - 44, rowH, {
+        fillColor: idx % 2 === 0 ? UI_THEME.panelBg : UI_THEME.panelBgElevated,
+        fillAlpha: 0.88,
+        borderColor: UI_THEME.panelBorder,
+        borderWidth: 1.2,
+        radius: 6,
+      });
+      this.container.add(rowBg);
+
+      const lbl = this.scene.add
+        .text(cardX + 36, r.subLabel ? ry - 7 : ry, r.label, {
+          fontFamily: '"Be Vietnam Pro", sans-serif',
+          fontSize: '13px',
+          fontStyle: '800',
+          color: PALETTE.BONE_WHITE,
+          stroke: PALETTE.INK_DARK,
+          strokeThickness: 2.5,
+          resolution: textRes,
+        })
+        .setOrigin(0, 0.5);
+      this.textObjects.push(lbl);
+      this.container.add(lbl);
+
+      if (r.subLabel) {
+        const sub = this.scene.add
+          .text(cardX + 36, ry + 10, r.subLabel, {
+            fontFamily: '"Be Vietnam Pro", sans-serif',
+            fontSize: '10.5px',
+            fontStyle: '600',
+            color: PALETTE.ASH_GRAY,
+            stroke: PALETTE.INK_DARK,
+            strokeThickness: 2,
+            resolution: textRes,
+          })
+          .setOrigin(0, 0.5);
+        this.textObjects.push(sub);
+        this.container.add(sub);
+      }
+
+      if (typeof r.ratio === 'number' && r.onDec && r.onInc) {
+        // Dec button at cardX + 355 (x = 505), bar at cardX + 376..496, Inc button at cardX + 516 (x = 666)
+        this.addSmallButton(cardX + 355, ry, 28, 24, '−', PALETTE.SLATE_MID, r.onDec, textRes);
+
+        const barW = 120;
+        const barH = 12;
+        const barX = cardX + 376;
+        const barY = ry - barH / 2;
+        const barGfx = this.scene.add.graphics();
+        const segCount = r.segments ?? 10;
+        drawSegmentedBar(barGfx, {
+          x: barX,
+          y: barY,
+          width: barW,
+          height: barH,
+          current: r.ratio * segCount,
+          max: segCount,
+          maxSegments: segCount,
+          fillColor: r.barColor ?? hexToNum(PALETTE.SOLAR_GOLD),
+        });
+        this.container.add(barGfx);
+
+        this.addSmallButton(cardX + 516, ry, 28, 24, '+', PALETTE.SLATE_MID, r.onInc, textRes);
+
+        const valTxt = this.scene.add
+          .text(cardX + 576, ry, r.valueText, {
+            fontFamily: '"JetBrains Mono", monospace',
+            fontSize: '12.5px',
+            fontStyle: '700',
+            color: PALETTE.SOLAR_GOLD,
+            stroke: PALETTE.INK_DARK,
+            strokeThickness: 2.2,
+            resolution: textRes,
+          })
+          .setOrigin(0.5);
+        this.textObjects.push(valTxt);
+        this.container.add(valTxt);
+      } else if (r.onToggle) {
+        this.addSmallButton(
+          cardX + 485,
+          ry,
+          210,
+          26,
+          `◀  ${r.valueText}  ▶`,
+          PALETTE.SLATE_MID,
+          r.onToggle,
+          textRes,
+        );
+      }
+    });
+  }
+
+  private buildControlsTabContent(
+    cardX: number,
+    cardY: number,
+    cardW: number,
+    textRes: number,
+    isEn: boolean,
+  ): void {
+    const keyEntries: Array<{ key: string; desc: string }> = isEn
+      ? [
+          { key: 'WASD', desc: '8-way movement' },
+          { key: 'LMB', desc: 'Aim & Auto-fire weapon' },
+          { key: 'Space', desc: 'Cast Active Hero Skill' },
+          { key: 'Shift', desc: 'Dash (0.2s i-frames)' },
+          { key: 'Q / 1-2', desc: 'Swap weapon · [X] Drop' },
+          { key: 'E', desc: 'Interact / Loot / Revive' },
+          { key: 'Tab', desc: 'Toggle Dungeon Map' },
+          { key: 'Z', desc: 'Contextual Team Ping' },
+          { key: 'Hold T', desc: 'Radial Emote Wheel' },
+          { key: 'Esc', desc: 'Pause & System Settings' },
+        ]
+      : [
+          { key: 'WASD', desc: 'Di chuyển 8 hướng' },
+          { key: 'LMB', desc: 'Ngắm & Bắn tự động' },
+          { key: 'Space', desc: 'Kỹ năng chủ động NV' },
+          { key: 'Shift', desc: 'Lướt Dash (0.2s bất tử)' },
+          { key: 'Q / 1-2', desc: 'Đổi vũ khí · [X] Thả VK' },
+          { key: 'E', desc: 'Tương tác / Nhặt / Cứu' },
+          { key: 'Tab', desc: 'Bản đồ Hầm ngục' },
+          { key: 'Z', desc: 'Ping ngữ cảnh đồng đội' },
+          { key: 'Hold T', desc: 'Vòng biểu cảm nhanh' },
+          { key: 'Esc', desc: 'Tạm dừng & Cài đặt' },
+        ];
+
+    keyEntries.forEach((entry, idx) => {
       const col = idx % 2;
       const row = Math.floor(idx / 2);
-      const lx = cardX + 32 + col * 305;
-      const ly = cardY + 72 + row * 40;
+      const lx = cardX + 24 + col * 308;
+      const ly = cardY + 106 + row * 38;
+      const boxW = 300;
+      const boxH = 31;
 
       const box = this.scene.add.graphics();
-      box.fillStyle(hexToNum(PALETTE.INK_DEEP), 0.72);
-      box.lineStyle(1.5, hexToNum(PALETTE.SLATE_MID), 0.8);
-      box.fillRoundedRect(lx, ly - 15, 290, 30, 6);
-      box.strokeRoundedRect(lx, ly - 15, 290, 30, 6);
+      drawStyledPanel(box, lx, ly - boxH / 2, boxW, boxH, {
+        fillColor: UI_THEME.panelBg,
+        fillAlpha: 0.9,
+        borderColor: UI_THEME.panelBorder,
+        borderWidth: 1.2,
+        radius: 5,
+      });
+      const chip = drawKeyChip(box, lx + 8, ly - 7, entry.key, {
+        active: true,
+        sceneFontPx: 8.5,
+      });
       this.container.add(box);
 
-      const txt = this.scene.add
-        .text(lx + 12, ly, line, {
+      const keyTxt = this.scene.add
+        .text(lx + 8 + chip.width * 0.5, ly, entry.key, {
+          fontFamily: '"JetBrains Mono", monospace',
+          fontSize: '10.5px',
+          fontStyle: '800',
+          color: PALETTE.SOLAR_GOLD,
+          stroke: PALETTE.INK_DARK,
+          strokeThickness: 2,
+          resolution: textRes,
+        })
+        .setOrigin(0.5, 0.5);
+
+      const descTxt = this.scene.add
+        .text(lx + 16 + chip.width, ly, entry.desc, {
           fontFamily: '"Be Vietnam Pro", sans-serif',
-          fontSize: '12px',
+          fontSize: '11.5px',
           fontStyle: '700',
           color: PALETTE.BONE_WHITE,
           stroke: PALETTE.INK_DARK,
@@ -458,30 +823,36 @@ export class ModalOverlayManager {
           resolution: textRes,
         })
         .setOrigin(0, 0.5);
-      this.textObjects.push(txt);
-      this.container.add(txt);
+
+      this.textObjects.push(keyTxt, descTxt);
+      this.container.add([keyTxt, descTxt]);
     });
 
     // Elemental Reactions summary box
-    const reactBoxY = cardY + 275;
+    const reactBoxY = cardY + 292;
     const rBox = this.scene.add.graphics();
-    rBox.fillStyle(hexToNum(PALETTE.INK_DEEP), 0.85);
-    rBox.lineStyle(1.5, hexToNum(PALETTE.SOLAR_GOLD), 0.9);
-    rBox.fillRoundedRect(cardX + 32, reactBoxY, cardW - 64, 82, 8);
-    rBox.strokeRoundedRect(cardX + 32, reactBoxY, cardW - 64, 82, 8);
+    drawStyledPanel(rBox, cardX + 24, reactBoxY, cardW - 48, 86, {
+      fillColor: UI_THEME.panelBgElevated,
+      fillAlpha: 0.92,
+      borderColor: hexToNum(PALETTE.SOLAR_GOLD),
+      borderWidth: 1.5,
+      radius: 7,
+      accentColor: hexToNum(PALETTE.SOLAR_GOLD),
+      accentSide: 'left',
+    });
     this.container.add(rBox);
 
     const reactLines = [
       `${i18n.t('reactions.vaporize')}: ${i18n.t('elements.burn')} + ${i18n.t('elements.chill')}   |   ${i18n.t('reactions.superconduct')}: ${i18n.t('elements.chill')} + ${i18n.t('elements.shock')}`,
       `${i18n.t('reactions.toxic_blast')}: ${i18n.t('elements.poison')} + ${i18n.t('elements.burn')}   |   ${i18n.t('reactions.paralysis')}: ${i18n.t('elements.poison')} + ${i18n.t('elements.shock')}`,
-      `${i18n.t('reactions.overload')}: ${i18n.t('elements.burn')} + ${i18n.t('elements.shock')}   |   ${i18n.t('reactions.shatter')}: ${i18n.t('elements.chill')} (x3) + Crit/Melee`,
+      `${i18n.t('reactions.overload')}: ${i18n.t('elements.burn')} + ${i18n.t('elements.shock')}   |   ${i18n.t('reactions.shatter')}: ${i18n.t('elements.chill')} (×3) + Crit`,
     ];
 
     reactLines.forEach((rl, idx) => {
       const rt = this.scene.add
-        .text(480, reactBoxY + 18 + idx * 22, rl, {
+        .text(480, reactBoxY + 19 + idx * 23, rl, {
           fontFamily: '"Be Vietnam Pro", sans-serif',
-          fontSize: '11.5px',
+          fontSize: '11px',
           fontStyle: '700',
           color: idx === 0 ? PALETTE.SOLAR_GOLD : PALETTE.SILVER_BRIGHT,
           stroke: PALETTE.INK_DARK,
@@ -492,20 +863,6 @@ export class ModalOverlayManager {
       this.textObjects.push(rt);
       this.container.add(rt);
     });
-
-    this.addSmallButton(
-      480,
-      cardY + cardH - 30,
-      180,
-      30,
-      i18n.t('ui.controls.close'),
-      PALETTE.RUBY_CORE,
-      () => {
-        zzfx.play('ui_click');
-        this.close();
-      },
-      textRes,
-    );
   }
 
   private buildCreditsModal(textRes: number): void {
@@ -515,10 +872,15 @@ export class ModalOverlayManager {
     const cardY = 270 - cardH / 2;
 
     const panel = this.scene.add.graphics();
-    panel.fillStyle(hexToNum(PALETTE.SLATE_DARK), 0.98);
-    panel.lineStyle(3, hexToNum(PALETTE.SOLAR_GOLD), 1);
-    panel.fillRoundedRect(cardX, cardY, cardW, cardH, 12);
-    panel.strokeRoundedRect(cardX, cardY, cardW, cardH, 12);
+    drawStyledPanel(panel, cardX, cardY, cardW, cardH, {
+      fillColor: UI_THEME.panelBgDark,
+      fillAlpha: 0.98,
+      borderColor: hexToNum(PALETTE.SOLAR_GOLD),
+      borderWidth: 2.4,
+      radius: UI_THEME.panelRadius.lg,
+      accentColor: hexToNum(PALETTE.SOLAR_GOLD),
+      accentSide: 'top',
+    });
     this.container.add(panel);
 
     const title = this.scene.add
@@ -588,10 +950,13 @@ export class ModalOverlayManager {
     const bg = this.scene.add.graphics();
     const draw = (hover: boolean) => {
       bg.clear();
-      bg.fillStyle(hexToNum(hover ? PALETTE.SOLAR_GOLD : fillHex), 1);
-      bg.lineStyle(2, hexToNum(PALETTE.INK_DARK), 1);
-      bg.fillRoundedRect(-w / 2, -h / 2, w, h, 6);
-      bg.strokeRoundedRect(-w / 2, -h / 2, w, h, 6);
+      drawStyledPanel(bg, -w / 2, -h / 2, w, h, {
+        fillColor: hexToNum(hover ? PALETTE.SOLAR_GOLD : fillHex),
+        fillAlpha: 0.96,
+        borderColor: hover ? hexToNum(PALETTE.SOLAR_GOLD) : UI_THEME.inkDark,
+        borderWidth: 1.8,
+        radius: 6,
+      });
     };
     draw(false);
 

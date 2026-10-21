@@ -97,6 +97,8 @@ export function createImpl(this: GameScene): void {
   debug.coopMode = this.coopMode;
   debug.language = graphicsSettings.getState().language;
   debug.pauseModalOpen = false;
+  debug.pauseConfirmExitOpen = false;
+  debug.invitePanelVisible = false;
   debug.settingsModalOpen = false;
   debug.controlsModalOpen = false;
   debug.creditsModalOpen = false;
@@ -167,12 +169,14 @@ export function createImpl(this: GameScene): void {
   this.resultDismissed = false;
   this.fullMapOpen = false;
   this.pauseModalOpen = false;
+  this.pauseConfirmExitOpen = false;
+  this.buffHoveredIdx = null;
   this.trailingHpRatio = 1.0;
   this.trailingArmorRatio = 1.0;
   this.trailingBossHpRatio = 1.0;
   this.lowHpHeartbeatTimer = 0;
   this.irisTransitionProgress = 0.0;
-  this.invitePanelVisible = true;
+  this.invitePanelVisible = false;
   this.copyToastTimer = 0;
   this.pingQueued = null;
   this.queuedEmote = null;

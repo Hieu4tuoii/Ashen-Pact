@@ -586,10 +586,19 @@ export async function setupRunResultModalScene(
 export async function switchGameSceneToEnglish(page: Page): Promise<void> {
   await page.evaluate(() => {
     const gs = window.__PHASER_GAME__?.scene.getScene('GameScene') as
-      | { settingsModal?: { open: (k: 'settings') => void } }
+      | {
+          settingsModal?: {
+            open: (k: 'settings') => void;
+            setLanguage?: (lang: 'vi' | 'en') => void;
+          };
+        }
       | undefined;
     if (window.__GAME_DEBUG__?.language !== 'en') {
-      gs?.settingsModal?.open('settings');
+      if (gs?.settingsModal?.setLanguage) {
+        gs.settingsModal.setLanguage('en');
+      } else {
+        gs?.settingsModal?.open('settings');
+      }
     }
   });
   await stepDeterministicFrames(page, 2);

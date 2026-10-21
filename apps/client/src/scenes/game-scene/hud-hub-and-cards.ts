@@ -21,39 +21,116 @@ import { graphicsSettings } from '../../ui/graphics-settings.js';
 import { computeUiTextResolution, createUiTextStyle, UI_THEME } from '../../ui/theme.js';
 import { type GameScene } from '../GameScene.js';
 
+export function formatHubInvitePlayerRowText(
+  slot: number,
+  displayName: string,
+  charName: string,
+  readyStr: string,
+  hasKickBtn: boolean,
+): string {
+  const maxNameChars = hasKickBtn ? 12 : 16;
+  const trimmedName =
+    displayName.length > maxNameChars ? `${displayName.slice(0, maxNameChars - 1)}…` : displayName;
+  return `P${slot} · ${trimmedName} (${charName}) — ${readyStr}`;
+}
+
 export function updateHubInvitePanelImpl(this: GameScene): void {
   const ui = this.uiScene;
   const sim = this.transport.getSim();
-  const showPanel = sim.inHub && this.invitePanelVisible && !this.fullMapOpen;
+  const showInHub = sim.inHub && !this.fullMapOpen;
   const allPlayers = sim.getAllPlayers();
   const playersKey = allPlayers
     .map((pl) => `${pl.id}:${pl.slot}:${pl.displayName}:${pl.characterId}:${pl.ready ? 1 : 0}`)
     .join('|');
-  const hash = !showPanel
+  const hash = !showInHub
     ? ''
-    : `${this.primaryLanIp}:${this.serverPort}:${this.hostInviteUrl ?? ''}:${sim.allowDuplicateCharacters ? 1 : 0}:${this.copyToastTimer > 0 ? 1 : 0}:${playersKey}:${i18n.getLocale()}:${this.currentHudUiScale}`;
+    : `${this.invitePanelVisible ? 1 : 0}:${this.primaryLanIp}:${this.serverPort}:${this.hostInviteUrl ?? ''}:${sim.allowDuplicateCharacters ? 1 : 0}:${this.copyToastTimer > 0 ? 1 : 0}:${playersKey}:${i18n.getLocale()}:${this.currentHudUiScale}`;
 
   if (hash === this.lastInvitePanelHash) return;
   this.lastInvitePanelHash = hash;
 
   this.invitePanelContainer.removeAll(true);
-  if (!showPanel) return;
+  if (!showInHub) return;
 
   const textRes = computeUiTextResolution(
     typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1,
     ui.cameras?.main?.zoom || 2,
     this.currentHudUiScale || 1,
   );
-  // Local coordinates inside hudTopRightContainer (anchored at WORLD_VIEW_WIDTH + padX, -padY)
-  const pw = 272;
-  const ph = 278;
+  const isEn = i18n.getLocale() === 'en';
+  const activeCount = Math.max(1, allPlayers.length);
+
+  // Collapsed default state: compact top-right chip "📡 Mời bạn [I] · 2/4"
+  if (!this.invitePanelVisible) {
+    const chipW = 166;
+    const chipH = 26;
+    const chipX = -12 - chipW;
+    const chipY = 144;
+
+    const chipBg = ui.add.graphics();
+    drawStyledPanel(chipBg, chipX, chipY, chipW, chipH, {
+      fillColor: UI_THEME.panelBgDark,
+      fillAlpha: 0.92,
+      borderColor: hexToNum(PALETTE.SOLAR_GOLD),
+      borderWidth: 1.6,
+      radius: UI_THEME.panelRadius.md,
+      accentColor: hexToNum(PALETTE.SOLAR_GOLD),
+      accentSide: 'left',
+    });
+
+    const labelStr = isEn ? `📡 Invite · ${activeCount}/4` : `📡 Mời bạn · ${activeCount}/4`;
+    const chipTxt = ui.add
+      .text(
+        chipX + 10,
+        chipY + chipH * 0.5,
+        labelStr,
+        createUiTextStyle({
+          fontPxAt1080p: 13,
+          weight: 800,
+          color: PALETTE.SOLAR_GOLD,
+          resolution: textRes,
+        }),
+      )
+      .setOrigin(0, 0.5);
+
+    const keyMetrics = drawKeyChip(chipBg, chipX + chipW - 22, chipY + 7, 'I', { active: true });
+    const keyTxt = ui.add
+      .text(
+        chipX + chipW - 22 + keyMetrics.width * 0.5,
+        chipY + chipH * 0.5,
+        'I',
+        createUiTextStyle({
+          fontPxAt1080p: 12,
+          weight: 800,
+          color: PALETTE.SOLAR_GOLD,
+          resolution: textRes,
+        }),
+      )
+      .setOrigin(0.5, 0.5);
+
+    const hit = ui.add
+      .rectangle(chipX + chipW * 0.5, chipY + chipH * 0.5, chipW, chipH, 0x000000, 0)
+      .setInteractive({ useHandCursor: true });
+    hit.on('pointerdown', () => {
+      this.invitePanelVisible = true;
+      initGlobalDebugState().invitePanelVisible = true;
+      this.lastInvitePanelHash = '';
+    });
+
+    this.invitePanelContainer.add([chipBg, chipTxt, keyTxt, hit]);
+    return;
+  }
+
+  // Expanded state: full QR + LAN IP + 4-Slot Co-op Roster inside hudTopRightContainer
+  const pw = 284;
+  const ph = 282;
   const px = -12 - pw;
   const py = 144;
 
   const bg = ui.add.graphics();
   drawStyledPanel(bg, px, py, pw, ph, {
     fillColor: UI_THEME.panelBgDark,
-    fillAlpha: 0.9,
+    fillAlpha: 0.94,
     borderColor: hexToNum(PALETTE.SOLAR_GOLD),
     borderWidth: 1.8,
     radius: UI_THEME.panelRadius.md,
@@ -65,9 +142,9 @@ export function updateHubInvitePanelImpl(this: GameScene): void {
   const header = ui.add.text(
     px + 10,
     py + 6,
-    i18n.t('ui.hud.coopInviteHeader'),
+    `${i18n.t('ui.hud.coopInviteHeader')} · ${activeCount}/4`,
     createUiTextStyle({
-      fontPxAt1080p: 15,
+      fontPxAt1080p: 14,
       weight: 800,
       color: PALETTE.SOLAR_GOLD,
       resolution: textRes,
@@ -85,6 +162,48 @@ export function updateHubInvitePanelImpl(this: GameScene): void {
     }),
   );
   this.invitePanelContainer.add([header, ipText]);
+
+  // Collapse button [I] at top-right of expanded panel
+  const collapseBtnW = 54;
+  const collapseBtnH = 18;
+  const collapseBtnX = px + pw - collapseBtnW - 8;
+  const collapseBtnY = py + 6;
+  drawStyledPanel(bg, collapseBtnX, collapseBtnY, collapseBtnW, collapseBtnH, {
+    fillColor: UI_THEME.panelBgElevated,
+    fillAlpha: 0.95,
+    borderColor: UI_THEME.panelBorder,
+    borderWidth: 1.2,
+    radius: 4,
+  });
+  const collapseTxt = ui.add
+    .text(
+      collapseBtnX + collapseBtnW * 0.5,
+      collapseBtnY + collapseBtnH * 0.5,
+      isEn ? 'Hide [I]' : 'Ẩn [I]',
+      createUiTextStyle({
+        fontPxAt1080p: 11,
+        weight: 800,
+        color: PALETTE.SILVER_BRIGHT,
+        resolution: textRes,
+      }),
+    )
+    .setOrigin(0.5, 0.5);
+  const collapseHit = ui.add
+    .rectangle(
+      collapseBtnX + collapseBtnW * 0.5,
+      collapseBtnY + collapseBtnH * 0.5,
+      collapseBtnW,
+      collapseBtnH,
+      0x000000,
+      0,
+    )
+    .setInteractive({ useHandCursor: true });
+  collapseHit.on('pointerdown', () => {
+    this.invitePanelVisible = false;
+    initGlobalDebugState().invitePanelVisible = false;
+    this.lastInvitePanelHash = '';
+  });
+  this.invitePanelContainer.add([collapseTxt, collapseHit]);
 
   // Procedural Vector QR Code (ISO/IEC 18004)
   const qrUrl = this.hostInviteUrl ?? `http://${this.primaryLanIp}:${this.serverPort}/?coop=join`;
@@ -248,24 +367,43 @@ export function updateHubInvitePanelImpl(this: GameScene): void {
       const charName = i18n.charName(pl.characterId, charDef.nameVi);
       const rdyStr = pl.ready ? i18n.t('ui.hud.readyShort') : i18n.t('ui.hud.selectingChar');
       const hasKickBtn = sim.player.slot === 1 && pl.slot !== 1;
+      const kickBtnX = px + pw - 56;
+      const maxRowTextW = hasKickBtn ? kickBtnX - (px + 15) - 8 : pw - 32;
+
+      const fullRowStr = formatHubInvitePlayerRowText(
+        pl.slot,
+        pl.displayName,
+        charName,
+        rdyStr,
+        hasKickBtn,
+      );
       const rowTxt = ui.add
         .text(
           px + 15,
           rowY + 11.5,
-          `P${pl.slot} · ${pl.displayName} (${charName}) — ${rdyStr}`,
+          fullRowStr,
           createUiTextStyle({
-            fontPxAt1080p: 13,
+            fontPxAt1080p: 12,
             weight: 700,
             color: pl.ready ? PALETTE.LIME_GLOW : slotColor,
             resolution: textRes,
           }),
         )
         .setOrigin(0, 0.5);
+
+      // Guarantee zero overlap with the "Đuổi" / "Kick" button on the right
+      if (rowTxt.width > maxRowTextW) {
+        let shortened = fullRowStr;
+        while (shortened.length > 8 && rowTxt.width > maxRowTextW) {
+          shortened = `${shortened.slice(0, -2)}…`;
+          rowTxt.setText(shortened);
+        }
+      }
       this.invitePanelContainer.add(rowTxt);
 
       if (hasKickBtn) {
         makePanelBtn(
-          px + pw - 56,
+          kickBtnX,
           rowY + 2.5,
           42,
           18,
@@ -278,6 +416,7 @@ export function updateHubInvitePanelImpl(this: GameScene): void {
               sim.removeCoopPlayer(pl.id);
             }
           },
+          12,
         );
       }
     } else {
@@ -287,7 +426,7 @@ export function updateHubInvitePanelImpl(this: GameScene): void {
           rowY + 11.5,
           `P${slotIdx} · ${i18n.t('ui.hud.emptySlot')}`,
           createUiTextStyle({
-            fontPxAt1080p: 13,
+            fontPxAt1080p: 12,
             weight: 600,
             color: PALETTE.ASH_GRAY,
             resolution: textRes,
@@ -306,7 +445,7 @@ export function updateHubInvitePanelImpl(this: GameScene): void {
     { id: 4, key: 'T+4' },
   ];
   const emY = py + ph - 25;
-  const emW = 60;
+  const emW = 63;
   emotes.forEach((em, idx) => {
     makePanelBtn(
       px + 10 + idx * (emW + 4),
@@ -318,7 +457,7 @@ export function updateHubInvitePanelImpl(this: GameScene): void {
       () => {
         this.queuedEmote = em.id;
       },
-      13,
+      12,
     );
   });
 }
