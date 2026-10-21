@@ -341,6 +341,8 @@ export async function setupP11WaveOverlapChallengeScene(page: Page): Promise<voi
 
     // Active Vengeful death ring telegraph on floor
     sim.pendingVengefulRings.push({
+      id: 99001,
+      ownerId: 299,
       x: 535,
       y: 275,
       timerSec: 0.25,

@@ -540,7 +540,7 @@ function generateRoomWaves(
         : BIOME1_COMBAT_ENEMIES;
 
   for (let w = 1; w <= waveCount; w++) {
-    const baseEnemyCount = Math.min(6, 4 + Math.floor((w + floorNumber - 1) / 2));
+    const baseEnemyCount = Math.min(7, 5 + Math.floor((w + floorNumber - 1) / 2));
     const enemyCount =
       playerCount === 1
         ? baseEnemyCount
@@ -553,12 +553,7 @@ function generateRoomWaves(
       const defId = i === 0 ? enemyPool[poolIdx]! : rng.pick(enemyPool);
 
       const isFinalWaveFirstEnemy = w === waveCount && i === 0;
-      const eliteChance =
-        playerCount === 1
-          ? floorNumber === 2
-            ? 0.32
-            : 0.22
-          : tier.eliteChance + (floorNumber === 2 ? 0.05 : 0);
+      const eliteChance = tier.eliteChance + (floorNumber === 2 ? 0.05 : 0);
       const isElite =
         defId !== 'thorn_turret' &&
         ((guaranteeEliteEveryWave && i === 0) ||

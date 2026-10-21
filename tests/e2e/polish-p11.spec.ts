@@ -8,7 +8,12 @@ test.describe('Phase P11 — Balance, Data-Driven Difficulty Levers, Boss Drama 
 
     const consoleErrors: string[] = [];
     page.on('console', (msg) => {
-      if (msg.type() === 'error') consoleErrors.push(msg.text());
+      if (msg.type() === 'error' || msg.type() === 'warning') {
+        const text = msg.text();
+        if (!text.includes('AudioContext') && !text.includes('WebGL')) {
+          consoleErrors.push(`[${msg.type()}] ${text}`);
+        }
+      }
     });
     page.on('pageerror', (err) => {
       consoleErrors.push(err.message);
@@ -100,10 +105,22 @@ test.describe('Phase P11 — Balance, Data-Driven Difficulty Levers, Boss Drama 
             };
             processSimEvents: () => void;
             updateQoLHudAndMinimap: (dt: number) => void;
-            p11WaveBannerContainer?: { visible: boolean };
+            p11WaveBannerContainer?: {
+              visible: boolean;
+              x: number;
+              y: number;
+              scrollFactorX: number;
+              scrollFactorY: number;
+            };
             p11WaveBannerTitleText?: { text: string };
-            p11RemainingEnemiesBg?: { visible: boolean };
-            p11RemainingEnemiesText?: { visible: boolean; text: string };
+            p11RemainingEnemiesBg?: {
+              visible: boolean;
+              x: number;
+              y: number;
+              scrollFactorX: number;
+              scrollFactorY: number;
+            };
+            p11RemainingEnemiesText?: { visible: boolean; text: string; x: number; y: number };
           }
         | undefined;
       if (!gs) return null;
@@ -117,6 +134,12 @@ test.describe('Phase P11 — Balance, Data-Driven Difficulty Levers, Boss Drama 
       const wave1RemainingText = gs.p11RemainingEnemiesText?.text ?? '';
       const wave1BannerVisible = Boolean(gs.p11WaveBannerContainer?.visible);
       const wave1RemainingVisible = Boolean(gs.p11RemainingEnemiesBg?.visible);
+      const bannerX = gs.p11WaveBannerContainer?.x ?? -1;
+      const bannerY = gs.p11WaveBannerContainer?.y ?? -1;
+      const bannerScrollX = gs.p11WaveBannerContainer?.scrollFactorX ?? 0;
+      const pillX = gs.p11RemainingEnemiesBg?.x ?? -1;
+      const pillY = gs.p11RemainingEnemiesBg?.y ?? -1;
+      const pillScrollX = gs.p11RemainingEnemiesBg?.scrollFactorX ?? 0;
 
       // Step 2.0s so waveElapsedSec >= 1.5s, then kill all but 1 enemy to trigger overlapping Wave 2
       for (let i = 0; i < 120; i++) {
@@ -135,6 +158,12 @@ test.describe('Phase P11 — Balance, Data-Driven Difficulty Levers, Boss Drama 
         wave1BannerTitle,
         wave1RemainingVisible,
         wave1RemainingText,
+        bannerX,
+        bannerY,
+        bannerScrollX,
+        pillX,
+        pillY,
+        pillScrollX,
         wavesSpawnedAfterOverlap: challengeRoom.wavesSpawned,
         wave2BannerTitle: gs.p11WaveBannerTitleText?.text ?? '',
       };
@@ -146,6 +175,16 @@ test.describe('Phase P11 — Balance, Data-Driven Difficulty Levers, Boss Drama 
     expect(waveDramaCheck!.wave1BannerTitle).toContain('ĐỢT 1/3');
     expect(waveDramaCheck!.wave1RemainingVisible).toBe(true);
     expect(waveDramaCheck!.wave1RemainingText).toContain('Còn:');
+    expect(waveDramaCheck!.bannerX).toBeGreaterThanOrEqual(0);
+    expect(waveDramaCheck!.bannerX).toBeLessThanOrEqual(960);
+    expect(waveDramaCheck!.bannerY).toBeGreaterThanOrEqual(0);
+    expect(waveDramaCheck!.bannerY).toBeLessThanOrEqual(540);
+    expect(waveDramaCheck!.bannerScrollX).toBe(1);
+    expect(waveDramaCheck!.pillX).toBeGreaterThanOrEqual(0);
+    expect(waveDramaCheck!.pillX).toBeLessThanOrEqual(960);
+    expect(waveDramaCheck!.pillY).toBeGreaterThanOrEqual(0);
+    expect(waveDramaCheck!.pillY).toBeLessThanOrEqual(540);
+    expect(waveDramaCheck!.pillScrollX).toBe(1);
     expect(waveDramaCheck!.wavesSpawnedAfterOverlap).toBe(2);
     expect(waveDramaCheck!.wave2BannerTitle).toContain('ĐỢT 2/3');
 
@@ -182,7 +221,12 @@ test.describe('Phase P11 — Balance, Data-Driven Difficulty Levers, Boss Drama 
             updateQoLHudAndMinimap: (dt: number) => void;
             bossTitleText: { text: string };
             p11WaveBannerTitleText?: { text: string };
-            p11SettingsToastContainer?: { visible: boolean };
+            p11SettingsToastContainer?: {
+              visible: boolean;
+              x: number;
+              y: number;
+              scrollFactorX: number;
+            };
             p11SettingsToastText?: { text: string };
             music: { getState: () => { intensityBoost?: number } };
           }
@@ -222,6 +266,16 @@ test.describe('Phase P11 — Balance, Data-Driven Difficulty Levers, Boss Drama 
         }),
       );
 
+      // Also verify botAutoPlayActive cleanly clears a combat room
+      sim.advanceToFloor(1);
+      const combatRoom = sim.dungeon.rooms.find((r) => r.type === 'combat' && !r.isChallenge)!;
+      sim.enterRoom(combatRoom.id);
+      (sim as unknown as { botAutoPlayActive: boolean }).botAutoPlayActive = true;
+      for (let i = 0; i < 4200 && !combatRoom.cleared; i++) {
+        sim.step(1 / 60);
+      }
+      (sim as unknown as { botAutoPlayActive: boolean }).botAutoPlayActive = false;
+
       return {
         bossPhase: boss.bossPhase,
         transitionTimer,
@@ -231,6 +285,10 @@ test.describe('Phase P11 — Balance, Data-Driven Difficulty Levers, Boss Drama 
         enrageTitle,
         toastVisible: Boolean(gs.p11SettingsToastContainer?.visible),
         toastText: gs.p11SettingsToastText?.text ?? '',
+        toastX: gs.p11SettingsToastContainer?.x ?? -1,
+        toastY: gs.p11SettingsToastContainer?.y ?? -1,
+        toastScrollX: gs.p11SettingsToastContainer?.scrollFactorX ?? 0,
+        botRoomCleared: Boolean(combatRoom.cleared),
       };
     });
 
@@ -243,6 +301,12 @@ test.describe('Phase P11 — Balance, Data-Driven Difficulty Levers, Boss Drama 
     expect(bossAndToastCheck!.enrageTitle).toContain('CUỒNG NỘ ×1');
     expect(bossAndToastCheck!.toastVisible).toBe(true);
     expect(bossAndToastCheck!.toastText).toContain('Toàn màn hình');
+    expect(bossAndToastCheck!.toastX).toBeGreaterThanOrEqual(0);
+    expect(bossAndToastCheck!.toastX).toBeLessThanOrEqual(960);
+    expect(bossAndToastCheck!.toastY).toBeGreaterThanOrEqual(0);
+    expect(bossAndToastCheck!.toastY).toBeLessThanOrEqual(540);
+    expect(bossAndToastCheck!.toastScrollX).toBe(1);
+    expect(bossAndToastCheck!.botRoomCleared).toBe(true);
     expect(consoleErrors).toEqual([]);
   });
 });

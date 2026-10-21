@@ -1,8 +1,10 @@
 import type Phaser from 'phaser';
-import type { SimEnemyState } from '@ashen-pact/shared';
+import { i18n, type SimEnemyState, WORLD_VIEW_WIDTH } from '@ashen-pact/shared';
+import { graphicsSettings } from '../../ui/graphics-settings.js';
 import type { GameScene } from '../GameScene.js';
 
 const UI_FONT_FAMILY = '"Be Vietnam Pro", system-ui, sans-serif';
+const HUD_VIEW_W = WORLD_VIEW_WIDTH || 960;
 
 export interface WaveBannerSpec {
   titleVi: string;
@@ -21,21 +23,32 @@ export function computeWaveBannerSpec(
   waveIndex: number,
   wavesTotal: number,
   isChallenge = false,
+  locale: 'vi' | 'en' = i18n.getLocale(),
 ): WaveBannerSpec {
   const safeWave = Math.max(1, waveIndex);
   const safeTotal = Math.max(safeWave, wavesTotal);
+  const isEn = locale === 'en';
   if (isChallenge) {
     return {
-      titleVi: `PHÒNG THỬ THÁCH — ĐỢT ${safeWave}/${safeTotal}`,
-      subtitleVi: 'Tinh Anh Xuất Hiện Mỗi Đợt · Thưởng Rương Cao Cấp',
+      titleVi: isEn
+        ? `CHALLENGE ROOM — WAVE ${safeWave}/${safeTotal}`
+        : `PHÒNG THỬ THÁCH — ĐỢT ${safeWave}/${safeTotal}`,
+      subtitleVi: isEn
+        ? 'Guaranteed Elite Per Wave · High-Tier Chest Reward'
+        : 'Tinh Anh Xuất Hiện Mỗi Đợt · Thưởng Rương Cao Cấp',
       accentColor: 0xfbbf24,
       accentHex: '#FBBF24',
     };
   }
   return {
-    titleVi: `ĐỢT ${safeWave}/${safeTotal}`,
-    subtitleVi:
-      safeWave > 1 ? 'Đợt tiếp theo tràn vào chiến trường!' : 'Tiêu diệt toàn bộ quái vật!',
+    titleVi: isEn ? `WAVE ${safeWave}/${safeTotal}` : `ĐỢT ${safeWave}/${safeTotal}`,
+    subtitleVi: isEn
+      ? safeWave > 1
+        ? 'Reinforcements incoming!'
+        : 'Eliminate all hostiles!'
+      : safeWave > 1
+        ? 'Đợt tiếp theo tràn vào chiến trường!'
+        : 'Tiêu diệt toàn bộ quái vật!',
     accentColor: 0xf97316,
     accentHex: '#F97316',
   };
@@ -46,13 +59,17 @@ export function computeRemainingEnemiesText(
   waveIndex: number,
   wavesTotal: number,
   isChallenge = false,
+  locale: 'vi' | 'en' = i18n.getLocale(),
 ): string {
   const safeCount = Math.max(0, Math.floor(aliveCount));
+  const isEn = locale === 'en';
   if (wavesTotal > 1) {
-    const prefix = isChallenge ? '★ Thử Thách · ' : '';
-    return `${prefix}Đợt ${Math.max(1, waveIndex)}/${wavesTotal} · Còn: ${safeCount}`;
+    const prefix = isChallenge ? (isEn ? '★ Challenge · ' : '★ Thử Thách · ') : '';
+    return isEn
+      ? `${prefix}Wave ${Math.max(1, waveIndex)}/${wavesTotal} · Left: ${safeCount}`
+      : `${prefix}Đợt ${Math.max(1, waveIndex)}/${wavesTotal} · Còn: ${safeCount}`;
   }
-  return `Quái còn: ${safeCount}`;
+  return isEn ? `Hostiles left: ${safeCount}` : `Quái còn: ${safeCount}`;
 }
 
 export function computeMusicIntensityBoost(
@@ -76,12 +93,13 @@ export function computeMusicIntensityBoost(
 export function formatSettingsToastMessage(
   kind: 'fullscreen' | 'auto_quality',
   detailVi: string,
+  locale: 'vi' | 'en' = i18n.getLocale(),
 ): string {
   const clean = detailVi.trim();
   if (kind === 'fullscreen') {
     return `🖥 ${clean}`;
   }
-  return `⚙ Tự động chỉnh Đồ họa: ${clean}`;
+  return locale === 'en' ? `⚙ Auto Quality: ${clean}` : `⚙ Tự động chỉnh Đồ họa: ${clean}`;
 }
 
 export function triggerP11WaveBanner(
@@ -112,37 +130,37 @@ export function triggerP11WaveBanner(
     prev.destroy();
   }
 
-  const cx = uiScene.scale.width * 0.5;
-  const cy = 88;
-  const container = uiScene.add.container(cx, cy).setDepth(2150).setScrollFactor(0);
+  const cx = HUD_VIEW_W * 0.5;
+  const cy = 60;
+  const container = uiScene.add.container(cx, cy).setDepth(2150);
   rec.__p11WaveBannerContainer = container;
 
   const bg = uiScene.add.graphics();
   bg.fillStyle(0x090d16, 0.9);
-  bg.fillRoundedRect(-175, -24, 350, 48, 8);
-  bg.lineStyle(2, spec.accentColor, 0.95);
-  bg.strokeRoundedRect(-175, -24, 350, 48, 8);
+  bg.fillRoundedRect(-150, -20, 300, 40, 7);
+  bg.lineStyle(1.8, spec.accentColor, 0.95);
+  bg.strokeRoundedRect(-150, -20, 300, 40, 7);
 
   const title = uiScene.add
-    .text(0, -6, spec.titleVi, {
+    .text(0, -5, spec.titleVi, {
       fontFamily: UI_FONT_FAMILY,
-      fontSize: '15px',
+      fontSize: '13px',
       fontStyle: 'bold',
       color: spec.accentHex,
       stroke: '#000000',
-      strokeThickness: 3,
-      padding: { top: 4, bottom: 2, left: 4, right: 4 },
+      strokeThickness: 2.5,
+      padding: { top: 3, bottom: 2, left: 4, right: 4 },
     })
     .setOrigin(0.5);
 
   const sub = uiScene.add
-    .text(0, 12, spec.subtitleVi, {
+    .text(0, 10, spec.subtitleVi, {
       fontFamily: UI_FONT_FAMILY,
-      fontSize: '11px',
+      fontSize: '10px',
       color: '#E2E8F0',
       stroke: '#000000',
       strokeThickness: 2,
-      padding: { top: 3, bottom: 2, left: 4, right: 4 },
+      padding: { top: 2, bottom: 2, left: 4, right: 4 },
     })
     .setOrigin(0.5);
 
@@ -155,7 +173,7 @@ export function triggerP11WaveBanner(
   uiScene.tweens.add({
     targets: container,
     alpha: 0,
-    y: cy - 10,
+    y: cy - 8,
     delay: 1450,
     duration: 260,
     ease: 'Sine.easeIn',
@@ -180,29 +198,29 @@ export function triggerP11SettingsToast(scene: GameScene, messageVi: string): vo
     prev.destroy();
   }
 
-  const cx = uiScene.scale.width * 0.5;
-  const cy = 54;
-  const container = uiScene.add.container(cx, cy).setDepth(2400).setScrollFactor(0);
+  const cx = HUD_VIEW_W * 0.5;
+  const cy = 28;
+  const container = uiScene.add.container(cx, cy).setDepth(2400);
   rec.__p11ToastContainer = container;
 
   const textObj = uiScene.add
     .text(0, 0, messageVi, {
       fontFamily: UI_FONT_FAMILY,
-      fontSize: '12px',
+      fontSize: '11px',
       fontStyle: 'bold',
       color: '#F8FAFC',
       stroke: '#000000',
-      strokeThickness: 3,
-      padding: { top: 4, bottom: 2, left: 4, right: 4 },
+      strokeThickness: 2.5,
+      padding: { top: 3, bottom: 2, left: 4, right: 4 },
     })
     .setOrigin(0.5);
 
-  const w = Math.max(220, textObj.width + 28);
+  const w = Math.max(190, textObj.width + 24);
   const bg = uiScene.add.graphics();
   bg.fillStyle(0x0f172a, 0.92);
-  bg.fillRoundedRect(-w * 0.5, -15, w, 30, 7);
+  bg.fillRoundedRect(-w * 0.5, -13, w, 26, 6);
   bg.lineStyle(1.5, 0x38bdf8, 0.9);
-  bg.strokeRoundedRect(-w * 0.5, -15, w, 30, 7);
+  bg.strokeRoundedRect(-w * 0.5, -13, w, 26, 6);
 
   container.add([bg, textObj]);
   container.setAlpha(1);
@@ -233,6 +251,9 @@ export function bindP11SettingsToastListener(scene: GameScene): void {
       triggerP11WaveBanner(scene, wave, total, isChallenge);
     };
   }
+  graphicsSettings.onToast((toast) => {
+    triggerP11SettingsToast(scene, toast.messageVi);
+  });
   window.addEventListener('ashen-pact:settings-toast', (ev: Event) => {
     const customEv = ev as CustomEvent<{
       messageVi?: string;
@@ -273,23 +294,24 @@ export function updateP11RemainingEnemiesHud(scene: GameScene): void {
   const uiScene = ((rec.uiScene ?? rec.hudScene ?? scene) as Phaser.Scene | undefined);
   if (!uiScene || !uiScene.add) return;
 
+  const pillX = HUD_VIEW_W - 12;
+  const pillY = 148;
   let pill = rec.__p11RemainingHudText as
     | Phaser.GameObjects.Text
     | undefined;
   if (!pill || !pill.scene) {
     pill = uiScene.add
-      .text(uiScene.scale.width - 14, 144, '', {
+      .text(pillX, pillY, '', {
         fontFamily: UI_FONT_FAMILY,
-        fontSize: '11px',
+        fontSize: '10px',
         fontStyle: 'bold',
         color: '#FDE68A',
         backgroundColor: 'rgba(9, 13, 22, 0.86)',
-        padding: { left: 8, right: 8, top: 4, bottom: 4 },
+        padding: { left: 7, right: 7, top: 3, bottom: 3 },
         stroke: '#000000',
         strokeThickness: 2,
       })
       .setOrigin(1, 0)
-      .setScrollFactor(0)
       .setDepth(1950)
       .setVisible(false);
     rec.__p11RemainingHudText = pill;
@@ -332,7 +354,7 @@ export function updateP11RemainingEnemiesHud(scene: GameScene): void {
   );
   pill.setText(label);
   pill.setColor(isChallenge ? '#FBBF24' : '#FDE68A');
-  pill.setPosition(uiScene.scale.width - 14, 144);
+  pill.setPosition(pillX, pillY);
   pill.setVisible(true);
   if (typeof window !== 'undefined') {
     (window as unknown as Record<string, unknown>).__P11_REMAINING_HUD_TEXT__ = label;

@@ -311,7 +311,7 @@ export function updateCurrentRoomProgressionImpl(this: WorldSim, dtSec: number):
     if (!room.cleared) {
       if (room.wavesSpawned < room.wavesTotal) {
         this.waveRespawnTimer += dtSec;
-        if (this.waveRespawnTimer >= 3.2) {
+        if (this.waveRespawnTimer >= 0.85) {
           this.waveRespawnTimer = 0;
           this.spawnNextRoomWave();
         }
@@ -344,7 +344,7 @@ export function updateCurrentRoomProgressionImpl(this: WorldSim, dtSec: number):
         const waveTotal = Math.max(1, room.currentWaveSpawnedCount ?? 4);
         const lowRemaining = currentWaveAlive <= Math.floor(waveTotal * 0.25);
         const timeExpired = this.waveElapsedSec >= 12.0;
-        const minOverlapSec = room.wavesSpawned === 1 ? 1.5 : 9.0;
+        const minOverlapSec = 1.5;
         if (
           activeWaves.size < 2 &&
           this.waveElapsedSec >= minOverlapSec &&

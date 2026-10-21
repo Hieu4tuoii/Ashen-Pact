@@ -170,7 +170,7 @@ export class ArenaMap {
         this.fillSurfaceRect(13, 3, 5, 3, 'ice');
         this.fillSurfaceRect(19, 3, 4, 3, 'water');
         this.fillSurfaceRect(13, 16, 5, 3, 'ice');
-        this.fillSurfaceRect(20, 16, 3, 2, 'chasm');
+        this.fillSurfaceRect(2, 2, 2, 1, 'chasm');
       } else if (biome === 3) {
         // Biome 3 Molten Forge tactical surfaces (conveyor belts, molten lava, oil slicks)
         this.fillSurfaceRect(12, 4, 12, 2, 'conveyor');
@@ -288,7 +288,7 @@ export class ArenaMap {
   public applyBossPhase3LavaBorder(): void {
     for (let ty = 1; ty < this.rows - 1; ty++) {
       for (let tx = 1; tx < this.cols - 1; tx++) {
-        const isOuterRing = tx <= 2 || tx >= this.cols - 3 || ty <= 2 || ty >= this.rows - 3;
+        const isOuterRing = tx <= 1 || tx >= this.cols - 2 || ty <= 1 || ty >= this.rows - 2;
         if (isOuterRing && !this.isSolidTile(tx, ty)) {
           this.setSurface(tx, ty, 'lava', 0, true);
         }

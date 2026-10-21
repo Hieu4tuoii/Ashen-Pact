@@ -84,6 +84,10 @@ export function updateSinglePlayerStateImpl(this: WorldSim,
       p.y = prison.y;
       p.vx = 0;
       p.vy = 0;
+      if (p.dashCooldownTimer > 0) p.dashCooldownTimer = Math.max(0, p.dashCooldownTimer - dtSec);
+      if (p.invulnerableTimer > 0) p.invulnerableTimer = Math.max(0, p.invulnerableTimer - dtSec);
+      if (p.hurtFlashTimer > 0) p.hurtFlashTimer = Math.max(0, p.hurtFlashTimer - dtSec);
+      if (p.skillCooldownTimer > 0) p.skillCooldownTimer = Math.max(0, p.skillCooldownTimer - dtSec);
       p.encasedInIceTimer = Math.max(0, (p.encasedInIceTimer ?? 4.5) - dtSec);
       const struggling =
         justPressed !== 0 ||
@@ -310,16 +314,23 @@ export function updateSinglePlayerStateImpl(this: WorldSim,
   p.y = col.y;
   this.resolvePropMovementCollision(p);
 
-  // Chasm hazard (Biome 2): walking onto a chasm tile without dashing pushes back to safe ledge
+  // Chasm hazard (Biome 2): walking onto a chasm tile without dashing pushes back to safe ledge and deals 1 damage
   const nextSurf = this.map.getSurfaceAtWorld(p.x, p.y);
   if (
+    surf !== 'chasm' &&
     nextSurf === 'chasm' &&
     p.dashTimer <= 0 &&
     !this.botAutoPlayActive &&
     !this.stressTestActive
   ) {
+    const chasmCenterX = Math.floor(p.x / TILE_SIZE) * TILE_SIZE + TILE_SIZE * 0.5;
+    const chasmCenterY = Math.floor(p.y / TILE_SIZE) * TILE_SIZE + TILE_SIZE * 0.5;
+    const pushAng = Math.atan2(prevSafeY - chasmCenterY, prevSafeX - chasmCenterX);
     p.x = prevSafeX;
     p.y = prevSafeY;
+    this.applyDamageToPlayer(1, pushAng, 60, 'chasm', p);
+    p.kbVx = 0;
+    p.kbVy = 0;
   }
 
   if (surf === 'grass' && Math.hypot(p.vx, p.vy) > 25 && p.grassRustleCooldown <= 0) {

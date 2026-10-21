@@ -114,7 +114,15 @@ export function updatePhase6MechanicsImpl(this: WorldSim, dtSec: number): void {
         const pl = allPlayers[pIdx]!;
         if (pl.lifeState !== 'alive' || ring.hitPlayerIds.includes(pl.id)) continue;
         const d = distance(ring.x, ring.y, pl.x, pl.y);
-        if (Math.abs(d - ring.radius) <= ring.thickness * 0.5 + pl.radius) {
+        if (
+          (pl.dashTimer > 0 || pl.invulnerableTimer > 0) &&
+          d >= ring.radius - ring.thickness &&
+          d <= ring.radius + ring.thickness + 68
+        ) {
+          ring.hitPlayerIds.push(pl.id);
+          continue;
+        }
+        if (d >= ring.radius - 12 && d <= ring.radius + pl.radius) {
           ring.hitPlayerIds.push(pl.id);
           // Dashing or invulnerable players pass right through the shockwave ring unharmed!
           if (pl.dashTimer <= 0 && pl.invulnerableTimer <= 0) {
@@ -259,33 +267,31 @@ export function updateEnemiesImpl(this: WorldSim, dtSec: number): void {
       if (ring.timerSec > 0) {
         this.pendingVengefulRings[ringWrite++] = ring;
       } else if (!this.stressTestActive || this.projectiles.length < 660) {
-        const count = 8;
-        const speed = 150;
-        for (let k = 0; k < count; k++) {
-          const ang = (k / count) * Math.PI * 2;
-          this.projectiles.push(
-            this.acquireProjectile({
-              id: ++this.nextEntityId,
-              ownerId: ring.ownerId,
-              team: 'enemy',
-              weaponId: 'vengeful_orb',
-              x: ring.x,
-              y: ring.y,
-              vx: Math.cos(ang) * speed,
-              vy: Math.sin(ang) * speed,
-              angle: ang,
-              radius: 6,
-              damage: ring.damage,
-              isCrit: false,
-              knockback: 110,
-              pierceRemaining: 0,
-              bounceRemaining: 0,
-              ttlSec: 2.6,
-              element: 'none',
-              amplifiedByShield: false,
-            }),
-          );
-        }
+        this.spawnDeterministicVolley({
+          kind: 'bullet_volley_spawned',
+          tick: this.tick,
+          ownerId: ring.ownerId,
+          team: 'enemy',
+          weaponId: 'vengeful_ring',
+          x: ring.x,
+          y: ring.y,
+          angle: 0,
+          pelletCount: 8,
+          spreadRad: 0,
+          radialStepRad: Math.PI / 4,
+          muzzleOffset: 10,
+          speed: 175,
+          damage: ring.damage,
+          radius: 6,
+          knockback: 90,
+          pierceCount: 0,
+          bounceCount: 0,
+          ttlSec: 2.2,
+          element: 'none',
+          critChance: 0,
+          amplifiedByShield: false,
+          seed: this.rng.nextUint32(),
+        });
       }
     }
     this.pendingVengefulRings.length = ringWrite;
@@ -680,9 +686,6 @@ export function applyDotDamageToEnemyImpl(
   if (enemy.isBoss && this.hasActiveBossGuardians()) {
     effectiveAmount = Math.max(1, Math.round(effectiveAmount * 0.35));
   }
-  if (enemy.isBoss && this.simulatedPlayers.length > 0) {
-    effectiveAmount = Math.max(2, Math.round(effectiveAmount * 0.32));
-  }
   if (this.stressTestActive && enemy.hp <= effectiveAmount + 20) {
     enemy.hp = enemy.maxHp;
     return;
@@ -743,7 +746,7 @@ function clearBossNearbyProjectiles(sim: WorldSim, cx: number, cy: number, radiu
         y: pl.y,
         vx: 0,
         vy: 0,
-        amount: pl.characterId === 'elementalist' ? 3 : 2,
+        amount: 2,
         ttlSec: 22,
         ownerPlayerId: isCoop ? pl.id : undefined,
       }),
@@ -784,6 +787,9 @@ export function checkBossPhaseTransitionsImpl(this: WorldSim, e: SimEnemyState):
     } else if (e.defId === 'forge_titan') {
       this.spawnForgeTitanEnergyCores(e);
     }
+    if (this.getActivePlayerCount() >= 3 && e.defId !== 'spore_king') {
+      this.spawnBossGuardianMushrooms();
+    }
     this.events.push({
       kind: 'boss_phase_changed',
       enemyId: e.id,
@@ -812,6 +818,9 @@ export function checkBossPhaseTransitionsImpl(this: WorldSim, e: SimEnemyState):
     if (e.defId === 'kryssa_ice_queen') {
       this.blizzardVeilActive = true;
       this.map.applyBossPhase3BlizzardBorder();
+      if (this.getActivePlayerCount() >= 3) {
+        this.spawnBossGuardianMushrooms();
+      }
     } else if (e.defId === 'forge_titan') {
       this.map.applyBossPhase3LavaBorder();
     } else {

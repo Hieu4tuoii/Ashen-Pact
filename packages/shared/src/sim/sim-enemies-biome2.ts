@@ -20,7 +20,6 @@ export function updateFrostBatAIImpl(
     e.stateTimer -= dtSec;
     if (e.stateTimer <= 0) {
       if (!this.stressTestActive || this.projectiles.length < 660) {
-        const extraVolley = e.isElite && e.eliteModifier === 'volley' ? 2 : 0;
         this.spawnDeterministicVolley({
           kind: 'bullet_volley_spawned',
           tick: this.tick,
@@ -30,9 +29,9 @@ export function updateFrostBatAIImpl(
           x: e.x + Math.cos(e.telegraphAngle) * 14,
           y: e.y + Math.sin(e.telegraphAngle) * 14,
           angle: e.telegraphAngle,
-          pelletCount: 2 + extraVolley,
-          spreadRad: 0.24 + extraVolley * 0.14,
-          speed: 350,
+          pelletCount: 2,
+          spreadRad: 0.72,
+          speed: 285,
           damage: e.damage,
           radius: 5,
           knockback: 75,
@@ -149,7 +148,7 @@ export function updateBabyYetiAIImpl(
   }
 
   e.aimAngle = angleToPlayer;
-  if (e.attackCooldownTimer <= 0 && distToPlayer <= 265) {
+  if (e.attackCooldownTimer <= 0 && distToPlayer <= 180) {
     e.aiState = 'telegraph';
     e.stateTimer = e.telegraphDurationSec;
     e.telegraphAngle = angleToPlayer;
@@ -177,7 +176,7 @@ export function updateBabyYetiAIImpl(
 export function updateIceMageAIImpl(
   this: WorldSim,
   e: SimEnemyState,
-  targetPlayer: SimPlayerState,
+  _targetPlayer: SimPlayerState,
   distToPlayer: number,
   angleToPlayer: number,
   dtSec: number,
@@ -191,10 +190,9 @@ export function updateIceMageAIImpl(
     e.stateTimer -= dtSec;
     if (e.stateTimer <= 0) {
       if (!this.stressTestActive) {
-        this.map.freezeSurfaceInRadius(targetPlayer.x, targetPlayer.y, 44);
+        this.map.freezeSurfaceInRadius(e.x, e.y, 44);
       }
       if (!this.stressTestActive || this.projectiles.length < 660) {
-        const extraVolley = e.isElite && e.eliteModifier === 'volley' ? 2 : 0;
         this.spawnDeterministicVolley({
           kind: 'bullet_volley_spawned',
           tick: this.tick,
@@ -204,15 +202,15 @@ export function updateIceMageAIImpl(
           x: e.x + Math.cos(e.telegraphAngle) * 16,
           y: e.y + Math.sin(e.telegraphAngle) * 16,
           angle: e.telegraphAngle,
-          pelletCount: 1 + extraVolley,
-          spreadRad: extraVolley > 0 ? 0.34 : 0,
+          pelletCount: 3,
+          spreadRad: 0.96,
           speed: 265,
           damage: e.damage,
-          radius: 5.5,
+          radius: 6,
           knockback: 85,
           pierceCount: 0,
           bounceCount: 0,
-          ttlSec: 2.0,
+          ttlSec: 2.3,
           element: 'chill',
           critChance: 0,
           amplifiedByShield: false,
@@ -286,7 +284,6 @@ export function updateIceGolemAIImpl(
     e.stateTimer -= dtSec;
     if (e.stateTimer <= 0) {
       if (!this.stressTestActive || this.projectiles.length < 660) {
-        const extraVolley = e.isElite && e.eliteModifier === 'volley' ? 2 : 0;
         this.spawnDeterministicVolley({
           kind: 'bullet_volley_spawned',
           tick: this.tick,
@@ -296,15 +293,15 @@ export function updateIceGolemAIImpl(
           x: e.x + Math.cos(e.telegraphAngle) * 18,
           y: e.y + Math.sin(e.telegraphAngle) * 18,
           angle: e.telegraphAngle,
-          pelletCount: 2 + extraVolley,
-          spreadRad: 0.1 + extraVolley * 0.12,
-          speed: 255,
+          pelletCount: 5,
+          spreadRad: 1.68,
+          speed: 250,
           damage: e.damage,
-          radius: 5.5,
+          radius: 6.5,
           knockback: 130,
           pierceCount: 0,
           bounceCount: 0,
-          ttlSec: 1.8,
+          ttlSec: 1.9,
           element: 'chill',
           critChance: 0,
           amplifiedByShield: false,
@@ -461,15 +458,15 @@ export function updateKryssaCloneAIImpl(
           x: e.x + Math.cos(e.telegraphAngle) * 16,
           y: e.y + Math.sin(e.telegraphAngle) * 16,
           angle: e.telegraphAngle,
-          pelletCount: 1,
-          spreadRad: 0,
-          speed: 255,
+          pelletCount: 3,
+          spreadRad: 0.96,
+          speed: 250,
           damage: e.damage,
           radius: 5.5,
           knockback: 80,
           pierceCount: 0,
           bounceCount: 0,
-          ttlSec: 1.9,
+          ttlSec: 1.35,
           element: 'chill',
           critChance: 0,
           amplifiedByShield: false,
@@ -477,8 +474,8 @@ export function updateKryssaCloneAIImpl(
         });
       }
       e.aiState = 'cooldown';
-      e.stateTimer = 0.45;
-      e.attackCooldownTimer = (ENEMIES.kryssa_clone?.attackCooldownSec ?? 1.95) * cdScale * 1.25;
+      e.stateTimer = 0.35;
+      e.attackCooldownTimer = (ENEMIES.kryssa_clone?.attackCooldownSec ?? 1.95) * cdScale;
     }
     return;
   }
@@ -502,8 +499,9 @@ export function updateKryssaCloneAIImpl(
   }
 
   const perp = angleToPlayer + (Math.PI / 2) * e.strafeSign;
-  e.vx = Math.cos(perp) * e.moveSpeed;
-  e.vy = Math.sin(perp) * e.moveSpeed;
+  const approach = distToPlayer > 55 ? 0.9 : 0;
+  e.vx = (Math.cos(angleToPlayer) * approach + Math.cos(perp) * 0.65) * e.moveSpeed;
+  e.vy = (Math.sin(angleToPlayer) * approach + Math.sin(perp) * 0.65) * e.moveSpeed;
 }
 
 export function spawnKryssaMirrorClonesImpl(this: WorldSim, boss: SimEnemyState): void {
@@ -605,7 +603,7 @@ export function updateBossKryssaAIImpl(
 
   const phaseSpeedMult = e.bossPhase === 3 ? 1.32 : e.bossPhase === 2 ? 1.16 : 1.0;
   const coopBossSpeed = 1 + COOP_SCALING[this.getActivePlayerCount()].enemyFireRateBonus * 0.75;
-  if (distToPlayer > 140) {
+  if (distToPlayer > 175) {
     e.vx = Math.cos(angleToPlayer) * e.moveSpeed * phaseSpeedMult * coopBossSpeed;
     e.vy = Math.sin(angleToPlayer) * e.moveSpeed * phaseSpeedMult * coopBossSpeed;
   } else {
@@ -626,7 +624,7 @@ export function executeBossKryssaAttackImpl(
   const bossCdScale = this.getEnemyCooldownScale(true);
 
   // 1. Refracting Ice Laser Volley (bounces off crystal pillars & walls!)
-  const beamCount = 2;
+  const beamCount = e.bossPhase === 3 ? 5 : e.bossPhase === 2 ? 4 : 3;
   this.spawnDeterministicVolley({
     kind: 'bullet_volley_spawned',
     tick: this.tick,
@@ -637,15 +635,15 @@ export function executeBossKryssaAttackImpl(
     y: e.y,
     angle: angleToPlayer,
     pelletCount: beamCount,
-    spreadRad: 0.1,
+    spreadRad: cycle % 2 === 0 ? 0.38 : 0.18,
     muzzleOffset: e.radius + 8,
-    speed: 270,
-    damage: e.damage,
-    radius: 5,
+    speed: 250,
+    damage: e.damage + (cycle % 3 === 0 ? 1 : 0),
+    radius: 5.5,
     knockback: 105,
-    pierceCount: 0,
-    bounceCount: 1,
-    ttlSec: 1.8,
+    pierceCount: 1,
+    bounceCount: 3,
+    ttlSec: 1.25,
     element: 'chill',
     critChance: 0,
     amplifiedByShield: false,
@@ -654,7 +652,7 @@ export function executeBossKryssaAttackImpl(
 
   // 2. Alternate cycle: Radial Frost Crystal Nova
   if (cycle % 2 === 1) {
-    const ringCount = 6;
+    const ringCount = e.bossPhase === 3 ? 14 : 10;
     this.spawnDeterministicVolley({
       kind: 'bullet_volley_spawned',
       tick: this.tick,
@@ -663,18 +661,18 @@ export function executeBossKryssaAttackImpl(
       weaponId: 'kryssa_frost_nova',
       x: e.x,
       y: e.y,
-      angle: angleToPlayer,
+      angle: angleToPlayer + 0.58,
       pelletCount: ringCount,
       spreadRad: 0,
-      radialStepRad: (Math.PI * 2) / ringCount,
+      radialStepRad: (Math.PI * 1.58) / ringCount,
       muzzleOffset: e.radius + 6,
-      speed: 235,
+      speed: 220,
       damage: e.damage,
-      radius: 5,
+      radius: 5.5,
       knockback: 90,
       pierceCount: 0,
-      bounceCount: 0,
-      ttlSec: 1.9,
+      bounceCount: 1,
+      ttlSec: 1.45,
       element: 'chill',
       critChance: 0,
       amplifiedByShield: false,
@@ -688,7 +686,12 @@ export function executeBossKryssaAttackImpl(
   }
 
   // 4. Phase 3: Ice Prison Co-op Mechanic (encases 1 player in an Ice Prison block!)
-  if (e.bossPhase === 3 && cycle % 3 === 1 && !this.stressTestActive && !this.botAutoPlayActive) {
+  if (
+    e.bossPhase === 3 &&
+    cycle % 3 === 1 &&
+    this.getActivePlayerCount() > 1 &&
+    !this.stressTestActive
+  ) {
     this.encasePlayerInIcePrison(targetPlayer);
   }
 

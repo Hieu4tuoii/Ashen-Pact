@@ -21,7 +21,6 @@ export function updateFireImpAIImpl(
     e.stateTimer -= dtSec;
     if (e.stateTimer <= 0) {
       if (!this.stressTestActive || this.projectiles.length < 660) {
-        const extraVolley = e.isElite && e.eliteModifier === 'volley' ? 2 : 0;
         this.spawnDeterministicVolley({
           kind: 'bullet_volley_spawned',
           tick: this.tick,
@@ -31,15 +30,15 @@ export function updateFireImpAIImpl(
           x: e.x + Math.cos(e.telegraphAngle) * 14,
           y: e.y + Math.sin(e.telegraphAngle) * 14,
           angle: e.telegraphAngle,
-          pelletCount: 1 + extraVolley,
-          spreadRad: extraVolley > 0 ? 0.32 : 0,
-          speed: 270,
+          pelletCount: 2,
+          spreadRad: 0.68,
+          speed: 290,
           damage: e.damage,
-          radius: 5,
+          radius: 5.5,
           knockback: 80,
           pierceCount: 0,
           bounceCount: 0,
-          ttlSec: 1.9,
+          ttlSec: 2.0,
           element: 'burn',
           critChance: 0,
           amplifiedByShield: false,
@@ -102,7 +101,6 @@ export function updateDwarfCannonAIImpl(
     e.stateTimer -= dtSec;
     if (e.stateTimer <= 0) {
       if (!this.stressTestActive || this.projectiles.length < 660) {
-        const extraVolley = e.isElite && e.eliteModifier === 'volley' ? 2 : 0;
         this.spawnDeterministicVolley({
           kind: 'bullet_volley_spawned',
           tick: this.tick,
@@ -112,9 +110,9 @@ export function updateDwarfCannonAIImpl(
           x: e.x + Math.cos(e.telegraphAngle) * 18,
           y: e.y + Math.sin(e.telegraphAngle) * 18,
           angle: e.telegraphAngle,
-          pelletCount: 1 + extraVolley,
-          spreadRad: extraVolley > 0 ? 0.32 : 0.08,
-          speed: 290,
+          pelletCount: 1,
+          spreadRad: 0.08,
+          speed: 255,
           damage: e.damage,
           radius: 7.5,
           knockback: 150,
@@ -288,7 +286,6 @@ export function updateWelderDroneAIImpl(
       }
 
       if (!this.stressTestActive || this.projectiles.length < 660) {
-        const extraVolley = e.isElite && e.eliteModifier === 'volley' ? 2 : 0;
         this.spawnDeterministicVolley({
           kind: 'bullet_volley_spawned',
           tick: this.tick,
@@ -298,9 +295,9 @@ export function updateWelderDroneAIImpl(
           x: e.x + Math.cos(e.telegraphAngle) * 14,
           y: e.y + Math.sin(e.telegraphAngle) * 14,
           angle: e.telegraphAngle,
-          pelletCount: 1 + extraVolley,
-          spreadRad: extraVolley > 0 ? 0.34 : 0,
-          speed: 360,
+          pelletCount: 1,
+          spreadRad: 0,
+          speed: 320,
           damage: e.damage,
           radius: 5.5,
           knockback: 75,
@@ -361,7 +358,6 @@ export function updateIronShielderAIImpl(
     e.stateTimer -= dtSec;
     if (e.stateTimer <= 0) {
       if (!this.stressTestActive || this.projectiles.length < 660) {
-        const extraVolley = e.isElite && e.eliteModifier === 'volley' ? 2 : 0;
         this.spawnDeterministicVolley({
           kind: 'bullet_volley_spawned',
           tick: this.tick,
@@ -371,15 +367,15 @@ export function updateIronShielderAIImpl(
           x: e.x + Math.cos(e.telegraphAngle) * 18,
           y: e.y + Math.sin(e.telegraphAngle) * 18,
           angle: e.telegraphAngle,
-          pelletCount: 2 + extraVolley,
-          spreadRad: 0.1 + extraVolley * 0.12,
-          speed: 260,
+          pelletCount: 3,
+          spreadRad: 0.96,
+          speed: 270,
           damage: e.damage,
-          radius: 5.5,
+          radius: 6,
           knockback: 115,
           pierceCount: 0,
           bounceCount: 0,
-          ttlSec: 1.9,
+          ttlSec: 2.1,
           element: 'burn',
           critChance: 0,
           amplifiedByShield: false,
@@ -475,7 +471,10 @@ export function updateBossForgeTitanAIImpl(
     return;
   }
 
-  if (e.attackCooldownTimer <= 0) {
+  const hasCloseShockwave = this.shockwaveRings.some(
+    (r) => r.sourceEnemyId === e.id && r.radius < 265,
+  );
+  if (e.attackCooldownTimer <= 0 && !hasCloseShockwave) {
     e.aiState = 'telegraph';
     e.stateTimer = Math.max(0.45, (e.bossPhase === 3 ? 0.54 : e.telegraphDurationSec) * bossCdScale);
     e.telegraphAngle = angleToPlayer;
@@ -497,7 +496,7 @@ export function updateBossForgeTitanAIImpl(
 
   const phaseSpeedMult = e.bossPhase === 3 ? 1.3 : e.bossPhase === 2 ? 1.15 : 1.0;
   const coopBossSpeed = 1 + COOP_SCALING[this.getActivePlayerCount()].enemyFireRateBonus * 0.75;
-  if (distToPlayer > 110) {
+  if (distToPlayer > 140) {
     e.vx = Math.cos(angleToPlayer) * e.moveSpeed * phaseSpeedMult * coopBossSpeed;
     e.vy = Math.sin(angleToPlayer) * e.moveSpeed * phaseSpeedMult * coopBossSpeed;
   } else {
@@ -525,23 +524,22 @@ export function executeBossForgeTitanAttackImpl(
       x: e.x,
       y: e.y,
       radius: e.radius,
-      maxRadius: 162,
-      speed: 135,
-      thickness: 20,
-      damage: Math.min(4, e.damage + 1),
+      maxRadius: 360,
+      speed: e.bossPhase === 3 ? 215 : 205,
+      thickness: 28,
+      damage: e.damage,
       hitPlayerIds: [],
     });
   }
-
   this.events.push({
     kind: 'hit_stop',
     durationMs: 50,
     trauma: 0.52,
   });
 
-  // 2. Magma Barrage Volley (alternates with shockwave slam in Phases 1-2)
+  // 2. Magma Barrage Volley
   if (cycle % 2 === 1 || e.bossPhase === 3) {
-    const barrageCount = 6;
+    const barrageCount = e.bossPhase === 3 ? 12 : e.bossPhase === 2 ? 10 : 8;
     this.spawnDeterministicVolley({
       kind: 'bullet_volley_spawned',
       tick: this.tick,
@@ -550,18 +548,18 @@ export function executeBossForgeTitanAttackImpl(
       weaponId: 'titan_magma_barrage',
       x: e.x,
       y: e.y,
-      angle: angleToPlayer,
+      angle: angleToPlayer + 0.74,
       pelletCount: barrageCount,
       spreadRad: 0,
-      radialStepRad: (Math.PI * 2) / barrageCount,
+      radialStepRad: (Math.PI * 1.49) / barrageCount,
       muzzleOffset: e.radius + 8,
-      speed: 245,
-      damage: Math.max(2, e.damage - 1),
-      radius: 5,
+      speed: 215,
+      damage: e.damage,
+      radius: 6,
       knockback: 115,
       pierceCount: 0,
       bounceCount: 0,
-      ttlSec: 1.9,
+      ttlSec: 1.55,
       element: 'burn',
       critChance: 0,
       amplifiedByShield: false,
@@ -570,7 +568,7 @@ export function executeBossForgeTitanAttackImpl(
   }
 
   // 3. Phase 3 Overheat: 360-degree Rotating Flame Sweep
-  if (e.bossPhase === 3 && cycle % 3 === 2) {
+  if (e.bossPhase === 3 && cycle % 2 === 1) {
     this.spawnDeterministicVolley({
       kind: 'bullet_volley_spawned',
       tick: this.tick,
@@ -579,18 +577,18 @@ export function executeBossForgeTitanAttackImpl(
       weaponId: 'titan_flame_sweep',
       x: e.x,
       y: e.y,
-      angle: angleToPlayer + Math.PI / 6,
+      angle: angleToPlayer + 0.74,
       pelletCount: 6,
       spreadRad: 0,
-      radialStepRad: Math.PI / 3,
+      radialStepRad: (Math.PI * 1.48) / 6,
       muzzleOffset: e.radius + 10,
-      speed: 245,
-      damage: Math.max(2, e.damage - 1),
-      radius: 5,
+      speed: 225,
+      damage: e.damage,
+      radius: 6,
       knockback: 110,
       pierceCount: 0,
       bounceCount: 0,
-      ttlSec: 1.9,
+      ttlSec: 1.5,
       element: 'burn',
       critChance: 0,
       amplifiedByShield: false,

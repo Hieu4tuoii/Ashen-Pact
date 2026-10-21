@@ -473,19 +473,29 @@ export function measureCombatRoomClearSec(
     pl.godMode = false;
     pl.statsDamageTaken = 0;
     if (biome === 2) {
-      pl.weaponSlots[0] = 'tesla_carbine';
+      pl.weaponSlots[0] = BIOME2_PRIMARY_WEAPON[pl.characterId];
       pl.weaponSlots[1] = CHARACTERS[pl.characterId].starterWeaponId;
+      pl.maxArmor += 2;
+      pl.armor = pl.maxArmor;
+      pl.maxEnergy += 45;
+      pl.energy = pl.maxEnergy;
     } else if (biome === 3) {
       pl.weaponSlots[0] = 'focus_laser';
       pl.weaponSlots[1] = CHARACTERS[pl.characterId].starterWeaponId;
+      pl.maxArmor += 5;
+      pl.armor = pl.maxArmor;
+      pl.maxEnergy += 75;
+      pl.energy = pl.maxEnergy;
     }
   }
   if (biome >= 2) {
     sim.applyBuffEffects('iron_bastion');
     sim.applyBuffEffects('vitality_surge');
+    sim.applyBuffEffects('gale_reflex');
   }
   if (biome >= 3) {
-    sim.applyBuffEffects('gale_reflex');
+    sim.applyBuffEffects('eagle_precision');
+    sim.applyBuffEffects('arcane_wellspring');
   }
 
   const initialTotalHpAndArmor = allPlayers.reduce(
@@ -629,10 +639,18 @@ export function simulateBossEncounter(
       pl.weaponSlots[0] = BIOME2_PRIMARY_WEAPON[pl.characterId];
       pl.weaponSlots[1] = starterId;
       pl.activeWeaponSlot = 0;
+      pl.maxArmor += 1;
+      pl.armor = pl.maxArmor;
+      pl.maxEnergy += 50;
+      pl.energy = pl.maxEnergy;
     } else {
       pl.weaponSlots[0] = BIOME3_PRIMARY_WEAPON[pl.characterId];
       pl.weaponSlots[1] = 'tesla_carbine';
       pl.activeWeaponSlot = 0;
+      pl.maxArmor += 3;
+      pl.armor = pl.maxArmor;
+      pl.maxEnergy += 75;
+      pl.energy = pl.maxEnergy;
     }
   }
   sim.applyBuffEffects('iron_bastion');

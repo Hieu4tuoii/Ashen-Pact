@@ -695,16 +695,7 @@ export function triggerTeslaEmpBlastImpl(this: WorldSim, turret: SimSummonState)
         }
       }
       const ang = Math.atan2(e.y - turret.y, e.x - turret.x);
-      this.applyDamageToEnemy(
-        e,
-        e.isBoss ? 12 : 22,
-        true,
-        'shock',
-        ang,
-        180,
-        true,
-        turret.ownerPlayerId,
-      );
+      this.applyDamageToEnemy(e, 22, true, 'shock', ang, 180, true, turret.ownerPlayerId);
     }
   }
 

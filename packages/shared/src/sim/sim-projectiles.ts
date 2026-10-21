@@ -1,3 +1,4 @@
+import { BIOME_SCALING } from '../data/scaling.js';
 import { angleDiff, circleVsCircle, distance } from '../math/vec2.js';
 import { TILE_SIZE } from '../protocol/messages.js';
 import type { SimProjectileState, BulletVolleySpawnEvent } from './world-sim-types.js';
@@ -6,7 +7,26 @@ import type { WorldSim } from './world-sim.js';
 export function spawnDeterministicVolleyImpl(this: WorldSim, ev: BulletVolleySpawnEvent, emitEvents = true): void {
   this.volleyRng.setState(ev.seed || 0x6d2b79f5);
   const volleyRng = this.volleyRng;
-  const pellets = Math.max(1, ev.pelletCount);
+  let pellets = Math.max(1, ev.pelletCount);
+  let spreadRad = ev.spreadRad;
+  let radialStepRad = ev.radialStepRad;
+  let speed = ev.speed;
+
+  if (ev.team === 'enemy') {
+    const biomeScale = BIOME_SCALING[this.currentBiome] ?? BIOME_SCALING[1];
+    if (ev.weaponId !== 'vengeful_ring') {
+      speed = Math.min(390, Math.round(speed * biomeScale.projectileSpeedMultiplier));
+    }
+    const ownerEnemy = this.enemies.find((e) => e.id === ev.ownerId);
+    if (ownerEnemy?.isElite && ownerEnemy.eliteModifier === 'volley') {
+      pellets += 2;
+      if (radialStepRad !== undefined && radialStepRad !== 0) {
+        radialStepRad = (Math.PI * 2) / pellets;
+      } else if (spreadRad < 0.36) {
+        spreadRad = Math.max(0.36, spreadRad * 2);
+      }
+    }
+  }
 
   if (emitEvents && !this.stressTestActive) {
     this.events.push(ev);
@@ -14,15 +34,15 @@ export function spawnDeterministicVolleyImpl(this: WorldSim, ev: BulletVolleySpa
 
   for (let i = 0; i < pellets; i++) {
     let shotAngle = ev.angle;
-    if (ev.radialStepRad !== undefined && ev.radialStepRad !== 0) {
-      shotAngle = ev.angle + i * ev.radialStepRad;
+    if (radialStepRad !== undefined && radialStepRad !== 0) {
+      shotAngle = ev.angle + i * radialStepRad;
     } else if (pellets > 1) {
       const t = i / (pellets - 1) - 0.5;
       const jitter =
-        ev.team === 'player' ? volleyRng.nextFloat(-ev.spreadRad * 0.12, ev.spreadRad * 0.12) : 0;
-      shotAngle = ev.angle + t * ev.spreadRad + jitter;
-    } else if (ev.spreadRad > 0) {
-      shotAngle = ev.angle + volleyRng.nextFloat(-ev.spreadRad * 0.5, ev.spreadRad * 0.5);
+        ev.team === 'player' ? volleyRng.nextFloat(-spreadRad * 0.12, spreadRad * 0.12) : 0;
+      shotAngle = ev.angle + t * spreadRad + jitter;
+    } else if (spreadRad > 0) {
+      shotAngle = ev.angle + volleyRng.nextFloat(-spreadRad * 0.5, spreadRad * 0.5);
     }
 
     const bx =
@@ -52,8 +72,8 @@ export function spawnDeterministicVolleyImpl(this: WorldSim, ev: BulletVolleySpa
       weaponId: ev.weaponId,
       x: bx,
       y: by,
-      vx: Math.cos(shotAngle) * ev.speed,
-      vy: Math.sin(shotAngle) * ev.speed,
+      vx: Math.cos(shotAngle) * speed,
+      vy: Math.sin(shotAngle) * speed,
       angle: shotAngle,
       radius: ev.radius,
       damage: finalDmg,
@@ -504,9 +524,6 @@ export function updateProjectilesImpl(this: WorldSim, dtSec: number): void {
               b.ttlSec = 0;
               pl.shieldStoredBullets += 1;
               pl.energy = Math.min(pl.maxEnergy, pl.energy + 1);
-              if (this.getActiveBoss() !== null) {
-                pl.skillActiveTimer = Math.max(0.05, pl.skillActiveTimer - 0.35);
-              }
               this.events.push({
                 kind: 'projectile_impact',
                 x: b.x,

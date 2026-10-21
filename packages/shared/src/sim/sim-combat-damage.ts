@@ -73,24 +73,6 @@ export function applyDamageToEnemyImpl(
     finalAmount *= 1.3;
   }
 
-  // Co-op Boss Synergy Resilience: keeps multi-player elemental + mark stacking aligned with 1P TTK
-  if (enemy.isBoss && this.simulatedPlayers.length > 0 && amount < enemy.maxHp * 0.25) {
-    const coopPlayers = 1 + this.simulatedPlayers.length;
-    const damp =
-      enemy.defId === 'kryssa_ice_queen'
-        ? coopPlayers >= 4
-          ? 0.52
-          : 0.72
-        : enemy.defId === 'forge_titan'
-          ? coopPlayers >= 4
-            ? 0.64
-            : 0.78
-          : coopPlayers >= 4
-            ? 0.78
-            : 0.88;
-    finalAmount *= damp;
-  }
-
   // Section 6.2: Đóng Băng + đòn nặng (cận chiến/nổ/crit) -> Vỡ Băng (Shatter): Sát thương x3 + mảnh băng văng AoE!
   let triggeredShatter = false;
   if ((enemy.frozenTimer > 0 || enemy.chillStacks >= 2) && (isHeavyAttack || isCrit)) {
@@ -387,7 +369,60 @@ export function handleEnemyKilledImpl(
         });
       }
     }
+    const isCoopCore = allPlayers.length > 1;
+    for (let pIdx = 0; pIdx < allPlayers.length; pIdx++) {
+      const pl = allPlayers[pIdx]!;
+      if (pl.lifeState !== 'alive') continue;
+      this.pickups.push(
+        this.acquirePickup({
+          id: ++this.nextEntityId,
+          kind: 'life_seed',
+          x: pl.x,
+          y: pl.y,
+          vx: 0,
+          vy: 0,
+          amount: 1,
+          ttlSec: 18,
+          ownerPlayerId: isCoopCore ? pl.id : undefined,
+        }),
+      );
+      this.pickups.push(
+        this.acquirePickup({
+          id: ++this.nextEntityId,
+          kind: 'energy',
+          x: pl.x,
+          y: pl.y,
+          vx: 0,
+          vy: 0,
+          amount: 20,
+          ttlSec: 18,
+          ownerPlayerId: isCoopCore ? pl.id : undefined,
+        }),
+      );
+    }
     return;
+  }
+
+  // Boss add killed during active Boss encounter drops a sustain seed for active players
+  if (!enemy.isBoss && !this.stressTestActive && this.getActiveBoss() !== null) {
+    const isCoopAdd = allPlayers.length > 1;
+    for (let pIdx = 0; pIdx < allPlayers.length; pIdx++) {
+      const pl = allPlayers[pIdx]!;
+      if (pl.lifeState !== 'alive') continue;
+      this.pickups.push(
+        this.acquirePickup({
+          id: ++this.nextEntityId,
+          kind: 'life_seed',
+          x: pl.x,
+          y: pl.y,
+          vx: 0,
+          vy: 0,
+          amount: 1,
+          ttlSec: 18,
+          ownerPlayerId: isCoopAdd ? pl.id : undefined,
+        }),
+      );
+    }
   }
 
   // When a Boss dies, also clean up any active boss clones/cores/prisons
@@ -442,7 +477,7 @@ export function handleEnemyKilledImpl(
       x: enemy.x,
       y: enemy.y,
       timerSec: 0.5,
-      damage: Math.max(1, ENEMIES[enemy.defId]?.damage ?? 1),
+      damage: Math.max(2, enemy.damage),
     });
     this.events.push({
       kind: 'vengeful_telegraph',
@@ -803,13 +838,7 @@ export function applyDamageToPlayerImpl(
     return false;
   }
 
-  const isCorrosiveBossHit =
-    (_sourceId === 'shaman_staff' ||
-      _sourceId === 'thorn_burst' ||
-      _sourceId === 'boss_spore_ring' ||
-      _sourceId === 'spore_king') &&
-    (p.characterId === 'vanguard' || p.characterId === 'engineer');
-  const dmg = Math.max(1, Math.round(rawDamage)) + (isCorrosiveBossHit ? 1 : 0);
+  const dmg = Math.max(1, Math.round(rawDamage));
   const prevArmor = p.armor;
   const armorAbsorbed = Math.min(p.armor, dmg);
   const hpDamage = dmg - armorAbsorbed;
@@ -832,12 +861,9 @@ export function applyDamageToPlayerImpl(
   const isDotTick =
     _sourceId === 'burn' || _sourceId === 'poison' || _sourceId === 'electrified_water';
   if (isDotTick) {
-    p.armorRegenTimer = Math.max(
-      p.armorRegenTimer,
-      p.characterId === 'vanguard' || p.characterId === 'engineer' ? 1.05 : 0.8,
-    );
+    p.armorRegenTimer = Math.max(p.armorRegenTimer, 0.8);
   } else {
-    p.armorRegenTimer = p.armorRegenDelaySec + (isCorrosiveBossHit ? 0.8 : 0);
+    p.armorRegenTimer = p.armorRegenDelaySec;
     p.armorRegenAccum = 0;
   }
   p.hurtFlashTimer = 0.16;

@@ -185,7 +185,8 @@ describe('Phase P11 — Step 2: Data-Driven Difficulty Levers, Boss Drama & Pres
     const ringProjectiles = sim.projectiles.filter((p) => p.ttlSec > 0 && p.team === 'enemy');
     expect(ringProjectiles.length).toBe(8);
     for (const p of ringProjectiles) {
-      expect(Math.hypot(p.vx, p.vy)).toBeLessThanOrEqual(165);
+      expect(p.weaponId).toBe('vengeful_ring');
+      expect(Math.hypot(p.vx, p.vy)).toBeCloseTo(175, 1);
     }
   });
 

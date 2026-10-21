@@ -353,7 +353,8 @@ export function spawnEnemyImpl(this: WorldSim,
   const rawHp = isElite
     ? Math.round(def.hp * 2.2 * biomeTier.eliteBonusMultiplier)
     : def.hp;
-  const biomeHpMult = def.isBoss || def.isIllusion ? 1.0 : biomeTier.hpMultiplier;
+  const biomeHpMult =
+    def.isBoss || def.isIllusion || defId === 'spore_guardian' ? 1.0 : biomeTier.hpMultiplier;
   const hpMult = this.stressTestActive
     ? 1.0
     : def.isBoss
@@ -468,8 +469,8 @@ export function spawnEnemyImpl(this: WorldSim,
       enemyId: enemy.id,
       nameVi: enemy.nameVi,
     });
-    // Phase 4 Co-op 3-4P Boss Mechanic: Spore King spawns 2 Shield Guardian Mushrooms in 2 corners!
-    if (playerCount >= 3 && defId === 'spore_king') {
+    // Phase 4 Co-op 3-4P Boss Mechanic: Bosses spawn 2 Shield Guardian Mushrooms in 2 corners!
+    if (playerCount >= 3) {
       this.spawnBossGuardianMushrooms();
     }
   }

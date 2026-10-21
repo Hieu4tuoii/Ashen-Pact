@@ -107,6 +107,12 @@ export function parseUiQueryOverrides(search: string): {
   return result;
 }
 
+export interface SettingsToastEvent {
+  kind: 'fullscreen' | 'auto_quality';
+  detailVi: string;
+  messageVi: string;
+}
+
 const STORAGE_KEY = 'ashen_pact_graphics_settings';
 
 /**
@@ -120,6 +126,7 @@ export class GraphicsSettingsManager {
   private downgradeCooldownSec = 0;
   public autoDowngradeCount = 0;
   private readonly listeners = new Set<(state: GraphicsSettingsState) => void>();
+  private readonly toastListeners = new Set<(toast: SettingsToastEvent) => void>();
 
   constructor() {
     this.loadFromStorage();
@@ -279,6 +286,13 @@ export class GraphicsSettingsManager {
     };
   }
 
+  public onToast(cb: (toast: SettingsToastEvent) => void): () => void {
+    this.toastListeners.add(cb);
+    return () => {
+      this.toastListeners.delete(cb);
+    };
+  }
+
   /**
    * Monitors rolling FPS and automatically downgrades quality (High -> Medium -> Low)
    * if sustained FPS stays below 46 FPS for 2.2 seconds while autoQuality is active.
@@ -380,12 +394,16 @@ export class GraphicsSettingsManager {
     const clean = detailVi.trim();
     const messageVi =
       kind === 'fullscreen' ? `🖥 ${clean}` : `⚙ Tự động chỉnh Đồ họa: ${clean}`;
+    const payload: SettingsToastEvent = { kind, detailVi: clean, messageVi };
+    for (const cb of this.toastListeners) {
+      cb(payload);
+    }
     if (typeof window !== 'undefined') {
       (window as unknown as Record<string, unknown>).__LAST_P11_TOAST__ = messageVi;
       if (typeof window.dispatchEvent === 'function' && typeof CustomEvent === 'function') {
         window.dispatchEvent(
           new CustomEvent('ashen-pact:settings-toast', {
-            detail: { kind, detailVi: clean, messageVi },
+            detail: payload,
           }),
         );
       }

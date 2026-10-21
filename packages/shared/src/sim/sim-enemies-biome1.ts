@@ -29,8 +29,7 @@ export function updateGoblinShooterAIImpl(
     e.stateTimer -= dtSec;
     if (e.stateTimer <= 0) {
       if (!this.stressTestActive || this.projectiles.length < 660) {
-        const spreadRad = (4 * Math.PI) / 180;
-        const extraVolley = e.isElite && e.eliteModifier === 'volley' ? 2 : 0;
+        const spreadRad = (15 * Math.PI) / 180;
         const muzzleX = e.x + Math.cos(e.telegraphAngle) * 14;
         const muzzleY = e.y + Math.sin(e.telegraphAngle) * 14;
 
@@ -43,9 +42,9 @@ export function updateGoblinShooterAIImpl(
           x: muzzleX,
           y: muzzleY,
           angle: e.telegraphAngle,
-          pelletCount: 3 + extraVolley,
-          spreadRad: extraVolley > 0 ? spreadRad * 2 : spreadRad,
-          speed: 280,
+          pelletCount: 3,
+          spreadRad,
+          speed: 250,
           damage: e.damage,
           radius: 5,
           knockback: 90,
@@ -432,8 +431,7 @@ export function updateGoblinShamanAIImpl(
       }
 
       // 2. Fire a Poison Bolt toward the player
-      const bulletSpeed = 275;
-      const extraVolley = e.isElite && e.eliteModifier === 'volley' ? 2 : 0;
+      const bulletSpeed = 245;
       const muzzleX = e.x + Math.cos(e.telegraphAngle) * 16;
       const muzzleY = e.y + Math.sin(e.telegraphAngle) * 16;
       this.spawnDeterministicVolley({
@@ -445,8 +443,8 @@ export function updateGoblinShamanAIImpl(
         x: muzzleX,
         y: muzzleY,
         angle: e.telegraphAngle,
-        pelletCount: 1 + extraVolley,
-        spreadRad: extraVolley > 0 ? 0.36 : 0,
+        pelletCount: 1,
+        spreadRad: 0,
         speed: bulletSpeed,
         damage: e.damage,
         radius: 6,
@@ -534,10 +532,8 @@ export function updateThornTurretAIImpl(
   if (e.aiState === 'telegraph') {
     e.stateTimer -= dtSec;
     if (e.stateTimer <= 0) {
-      // Fire radial thorns in 360 degrees
-      const bulletSpeed = 245;
-      const extraVolley = e.isElite && e.eliteModifier === 'volley' ? 2 : 0;
-      const count = 6 + extraVolley;
+      // Fire 6 radial thorns in 360 degrees
+      const bulletSpeed = 215;
       this.spawnDeterministicVolley({
         kind: 'bullet_volley_spawned',
         tick: this.tick,
@@ -547,9 +543,9 @@ export function updateThornTurretAIImpl(
         x: e.x,
         y: e.y,
         angle: 0,
-        pelletCount: count,
+        pelletCount: 6,
         spreadRad: 0,
-        radialStepRad: (Math.PI * 2) / count,
+        radialStepRad: Math.PI / 3,
         muzzleOffset: 14,
         speed: bulletSpeed,
         damage: e.damage,
@@ -638,8 +634,8 @@ export function updateBossSporeKingAIImpl(
     if (e.bossPhase >= 2 && e.bossAttackCycle % 3 === 2) {
       e.bossBurrowed = true;
       e.stateTimer = Math.max(0.72, 0.78 * bossCdScale);
-      const offsetX = Math.cos(angleToPlayer + Math.PI) * 22;
-      const offsetY = Math.sin(angleToPlayer + Math.PI) * 22;
+      const offsetX = Math.cos(angleToPlayer + Math.PI) * 95;
+      const offsetY = Math.sin(angleToPlayer + Math.PI) * 95;
       const targetX = clamp(
         targetPlayer.x + offsetX,
         TILE_SIZE * 3.5,
@@ -702,10 +698,14 @@ export function executeBossSporeKingAttackImpl(
   if (e.bossBurrowed) {
     // Phase 2/3 Burrow Eruption!
     e.bossBurrowed = false;
-    const blastR = 54;
+    const blastR = BOSS_ERUPT_RADIUS;
     const tx = Math.floor(e.x / TILE_SIZE);
     const ty = Math.floor(e.y / TILE_SIZE);
-    this.map.setSurface(tx, ty, 'poison_swamp', 6.0, false);
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        this.map.setSurface(tx + dx, ty + dy, 'poison_swamp', 10.0, false);
+      }
+    }
 
     const allPlayers = this.getAllPlayers();
     for (let i = 0; i < allPlayers.length; i++) {
@@ -717,7 +717,7 @@ export function executeBossSporeKingAttackImpl(
       }
     }
 
-    // Erupt with 4 radial thorns
+    // Also erupt with 8 radial thorns
     this.spawnDeterministicVolley({
       kind: 'bullet_volley_spawned',
       tick: this.tick,
@@ -726,18 +726,18 @@ export function executeBossSporeKingAttackImpl(
       weaponId: 'thorn_burst',
       x: e.x,
       y: e.y,
-      angle: angleToPlayer,
-      pelletCount: 4,
+      angle: angleToPlayer + 0.65,
+      pelletCount: 8,
       spreadRad: 0,
-      radialStepRad: Math.PI / 2,
+      radialStepRad: (Math.PI * 1.55) / 8,
       muzzleOffset: 24,
-      speed: 245,
+      speed: 225,
       damage: e.damage,
-      radius: 5,
+      radius: 5.5,
       knockback: 110,
       pierceCount: 0,
       bounceCount: 0,
-      ttlSec: 1.9,
+      ttlSec: 1.85,
       element: 'poison',
       critChance: 0,
       amplifiedByShield: false,
@@ -748,7 +748,7 @@ export function executeBossSporeKingAttackImpl(
       kind: 'explosion',
       x: e.x,
       y: e.y,
-      radius: BOSS_ERUPT_RADIUS,
+      radius: blastR,
       damage: e.damage + 1,
       sourceDefId: e.defId,
     });
@@ -759,8 +759,8 @@ export function executeBossSporeKingAttackImpl(
     });
   } else {
     // Spore Ring Nova + Summon Minions
-    const ringCount = 4;
-    const ringSpeed = 245;
+    const ringCount = e.bossPhase === 3 ? 16 : e.bossPhase === 2 ? 14 : 12;
+    const ringSpeed = e.bossPhase === 3 ? 235 : 215;
     this.spawnDeterministicVolley({
       kind: 'bullet_volley_spawned',
       tick: this.tick,
@@ -769,18 +769,18 @@ export function executeBossSporeKingAttackImpl(
       weaponId: 'boss_spore_ring',
       x: e.x,
       y: e.y,
-      angle: angleToPlayer,
+      angle: angleToPlayer + 0.68,
       pelletCount: ringCount,
       spreadRad: 0,
-      radialStepRad: (Math.PI * 2) / ringCount,
+      radialStepRad: (Math.PI * 1.5) / ringCount,
       muzzleOffset: e.radius + 6,
       speed: ringSpeed,
       damage: e.damage,
-      radius: 5,
+      radius: 5.5,
       knockback: 95,
       pierceCount: 0,
       bounceCount: 0,
-      ttlSec: 1.9,
+      ttlSec: 1.85,
       element: 'poison',
       critChance: 0,
       amplifiedByShield: false,
@@ -791,12 +791,13 @@ export function executeBossSporeKingAttackImpl(
     const activeMinions = this.enemies.filter(
       (m) => !m.isDummy && !m.isBoss && m.defId !== 'spore_guardian' && m.hp > 0,
     ).length;
-    if (cycle % 3 === 1 && activeMinions < 2) {
-      this.spawnEnemy('mini_slime', e.x + 48, e.y + 36, false);
+    if (cycle % 2 === 1 && activeMinions < 2) {
+      const minionDef = e.bossPhase >= 2 && cycle % 4 === 3 ? 'spore_bomber' : 'mini_slime';
+      this.spawnEnemy(minionDef, e.x + 48, e.y + 36, false);
     }
 
-    // Phase 3 aimed toxic burst
-    if (e.bossPhase === 3 && cycle % 3 === 0) {
+    // Phase 3 aimed 3-way toxic burst
+    if (e.bossPhase === 3 && cycle % 2 === 0) {
       this.spawnDeterministicVolley({
         kind: 'bullet_volley_spawned',
         tick: this.tick,
@@ -806,16 +807,16 @@ export function executeBossSporeKingAttackImpl(
         x: e.x,
         y: e.y,
         angle: angleToPlayer,
-        pelletCount: 2,
-        spreadRad: 0.1,
+        pelletCount: 3,
+        spreadRad: 0.38,
         muzzleOffset: 24,
-        speed: 255,
-        damage: e.damage,
-        radius: 5,
+        speed: 245,
+        damage: e.damage + 1,
+        radius: 6,
         knockback: 110,
         pierceCount: 0,
         bounceCount: 0,
-        ttlSec: 1.9,
+        ttlSec: 1.8,
         element: 'poison',
         critChance: 0,
         amplifiedByShield: false,

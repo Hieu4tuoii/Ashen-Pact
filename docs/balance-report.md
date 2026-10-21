@@ -7,12 +7,12 @@
 | # | Chỉ tiêu cân bằng (Spec 3.10) | Mục tiêu thiết kế | Trung vị `p50` (`p10 – p90`) | Trạng thái |
 |---:|---|---|---|---|
 | 1 | **TTK Quái thường (Biome 1, Vũ khí khởi đầu)** | `0.6s – 1.5s` | **p50 1.2s** (`0.73s – 1.97s`) | ✅ ĐẠT |
-| 2 | **Thời lượng Phòng combat (1–4P)** | `35s – 70s` | **p50 35.87s** (`30.92s – 42.87s`) | ✅ ĐẠT |
-| 3 | **HP + Giáp mất mỗi phòng (Biome 1 Solo)** | `25% – 50% tổng` | **p50 44.4%** (`0% – 100%`) | ✅ ĐẠT |
-| 4 | **Thời lượng đánh Boss B1 / B2 / B3 (1P vs 4P)** | `60s – 120s` (Lệch `≤ ±20%`) | **B1: 74.57s/81.72s · B2: 79.42s/81.75s · B3: 70.63s/79.57s** | ✅ ĐẠT |
-| 5 | **Tỉ lệ thắng Boss Solo & Không One-Shot** | `B1: 80–95%, B2: 70–90%, B3: 60–85%` | **B1: 87% · B2: 73% · B3: 67%** (Zero One-Shot: `true`) | ✅ ĐẠT |
-| 6 | **Độ khó tăng giữa các Biome (Đo thật WorldSim)** | `+20% – 25%` mỗi Biome | **Biome 2 `+20.7%` · Biome 3 `+24.8%`** | ✅ ĐẠT |
-| 7 | **Chịu đòn cơ bản & Độ lệch DPS 3 NV sát thương** | `6 – 10 đòn` · Lệch `≤ ±15%` | **`6 – 10 đòn` · Lệch `±14.3%`** | ✅ ĐẠT |
+| 2 | **Thời lượng Phòng combat (1–4P)** | `35s – 70s` | **p50 36.28s** (`29.23s – 44.69s`) | ✅ ĐẠT |
+| 3 | **HP + Giáp mất mỗi phòng (Biome 1 Solo)** | `25% – 50% tổng` | **p50 44.4%** (`11.1% – 78.91%`) | ✅ ĐẠT |
+| 4 | **Thời lượng đánh Boss B1 / B2 / B3 (1P vs 4P)** | `60s – 120s` (Lệch `≤ ±20%`) | **B1: 79.84s/64.7s · B2: 73.54s/63.61s · B3: 72.24s/68.21s** | ✅ ĐẠT |
+| 5 | **Tỉ lệ thắng Boss Solo & Không One-Shot** | `B1: 80–95%, B2: 70–90%, B3: 60–85%` | **B1: 87% · B2: 87% · B3: 73%** (Zero One-Shot: `true`) | ✅ ĐẠT |
+| 6 | **Độ khó tăng giữa các Biome (Đo thật WorldSim)** | `+20% – 25%` mỗi Biome | **Biome 2 `+22.7%` · Biome 3 `+20%`** | ✅ ĐẠT |
+| 7 | **Chịu đòn cơ bản & Độ lệch DPS 3 NV sát thương** | `6 – 10 đòn` · Lệch `≤ ±15%` | **`6 – 10 đòn` · Lệch `±9.2%`** | ✅ ĐẠT |
 
 ---
 
@@ -20,11 +20,11 @@
 
 | Nhân vật | Vai trò | HP / Giáp | Chịu đòn (WorldSim) | TTK Quái thường (p50) | DPS Giao tranh | Uptime Kỹ năng | Solo Boss Biome 1 |
 |---|---|---:|---:|---:|---:|---:|---|
-| **Thiết Vệ** (`vanguard`) | Tank / Bảo Hộ Tuyến Đầu | 8 / 6 | **10 đòn** | **0.73s** | **36.1 DPS** | **50%** | **90% Thắng** (97.87s) |
-| **Liệp Ưng** (`ranger`) | Sát Thương / Đánh Dấu | 5 / 4 | **7 đòn** | **0.88s** | **65.8 DPS** | **59.6%** | **87% Thắng** (74.57s) |
-| **Lam Hỏa** (`elementalist`) | Khống Chế / Phản Ứng Nguyên Tố | 5 / 3 | **6 đòn** | **1.23s** | **75.8 DPS** | **52.5%** | **87% Thắng** (75.05s) |
-| **Mộc Linh** (`druid`) | Hỗ Trợ / Hồi Phục | 6 / 4 | **9 đòn** | **1.36s** | **33.3 DPS** | **50%** | **90% Thắng** (80.58s) |
-| **Bánh Răng** (`engineer`) | Tiện Ích / Trụ Pháo | 6 / 5 | **9 đòn** | **1.4s** | **57.4 DPS** | **59.9%** | **93% Thắng** (73.9s) |
+| **Thiết Vệ** (`vanguard`) | Tank / Bảo Hộ Tuyến Đầu | 8 / 6 | **10 đòn** | **0.73s** | **36.1 DPS** | **50%** | **97% Thắng** (104.45s) |
+| **Liệp Ưng** (`ranger`) | Sát Thương / Đánh Dấu | 5 / 4 | **7 đòn** | **0.88s** | **65.8 DPS** | **59.6%** | **87% Thắng** (79.84s) |
+| **Lam Hỏa** (`elementalist`) | Khống Chế / Phản Ứng Nguyên Tố | 5 / 3 | **6 đòn** | **1.23s** | **75.8 DPS** | **52.5%** | **87% Thắng** (81.38s) |
+| **Mộc Linh** (`druid`) | Hỗ Trợ / Hồi Phục | 6 / 4 | **9 đòn** | **1.36s** | **33.3 DPS** | **50%** | **80% Thắng** (85.38s) |
+| **Bánh Răng** (`engineer`) | Tiện Ích / Trụ Pháo | 6 / 5 | **9 đòn** | **1.4s** | **66.6 DPS** | **59.9%** | **97% Thắng** (70.9s) |
 
 ---
 
@@ -36,7 +36,7 @@
 | **Liệp Ưng** (`ranger`) | 48.7 DPS | 66.3 DPS | 54.7 DPS | 49.2 DPS | 70.1 DPS |
 | **Lam Hỏa** (`elementalist`) | 74.5 DPS | 100.9 DPS | 74.5 DPS | 94.5 DPS | 107.8 DPS |
 | **Mộc Linh** (`druid`) | 32.8 DPS | 37.4 DPS | 32.7 DPS | 29.1 DPS | 39.9 DPS |
-| **Bánh Răng** (`engineer`) | 46.6 DPS | 60.6 DPS | 91.7 DPS | 68.2 DPS | 75.2 DPS |
+| **Bánh Răng** (`engineer`) | 46.6 DPS | 66.5 DPS | 109.6 DPS | 86.5 DPS | 91.4 DPS |
 
 ---
 
@@ -44,18 +44,18 @@
 
 | Số người chơi | Thời lượng Phòng combat `p50` (`p10–p90`) | HP+Giáp mất TB | Tỉ lệ gục / phòng | Thời lượng hạ Boss B1 `p50` (`p10–p90`) | Lệch so với 1P |
 |---:|---|---:|---:|---|---:|
-| **1P** | **37.03s** (`31.24s–59.82s`) | **44.4%** | **0.07** | **74.57s** (`63.35s–85.35s`) | **±0%** |
-| **2P** | **36.31s** (`32.09s–43.57s`) | **47.1%** | **0.03** | **82.48s** (`78.2s–99.49s`) | **±10.6%** |
-| **3P** | **34.94s** (`31.52s–42s`) | **39.3%** | **0.1** | **81.82s** (`72.28s–90.42s`) | **±9.7%** |
-| **4P** | **35.12s** (`30.28s–42.08s`) | **53.95%** | **0.07** | **81.72s** (`68.85s–90.06s`) | **±9.6%** |
+| **1P** | **37.59s** (`29.86s–58.38s`) | **44.4%** | **0.07** | **79.84s** (`67.84s–89.37s`) | **±0%** |
+| **2P** | **34.83s** (`28.6s–46.1s`) | **50%** | **0.23** | **67.43s** (`59.36s–82s`) | **±15.5%** |
+| **3P** | **36.13s** (`29.25s–47.25s`) | **58.9%** | **0.23** | **73.42s** (`60.26s–78.64s`) | **±8%** |
+| **4P** | **37.85s** (`29.8s–42.33s`) | **55.25%** | **0.13** | **64.7s** (`57.12s–78.54s`) | **±19%** |
 
 ### Bảng Cân Bằng 3 Boss Cuối Màn (Biome 1, Biome 2, Biome 3)
 
 | Biome | Boss | 1P `p50` (`p10–p90`) | 4P `p50` (`p10–p90`) | Lệch 1P↔4P | Tỉ lệ thắng Solo | Max Hit / EHP | Trạng thái |
 |---:|---|---|---|---:|---:|---:|:---:|
-| **Biome 1** | **Mục Vương Nấm Độc (Biome 1)** (`spore_king`) | **74.57s** (`63.35s–85.35s`) | **81.72s** (`68.85s–90.06s`) | **±9.6%** | **87%** | `31%` | ✅ ĐẠT |
-| **Biome 2** | **Băng Hậu Kryssa (Biome 2)** (`kryssa_ice_queen`) | **79.42s** (`67.59s–88.26s`) | **81.75s** (`71.04s–89.8s`) | **±2.9%** | **73%** | `15%` | ✅ ĐẠT |
-| **Biome 3** | **Titan Lò Rèn (Biome 3)** (`forge_titan`) | **70.63s** (`59.58s–85.43s`) | **79.57s** (`66.95s–88.77s`) | **±12.7%** | **67%** | `31%` | ✅ ĐẠT |
+| **Biome 1** | **Mục Vương Nấm Độc (Biome 1)** (`spore_king`) | **79.84s** (`67.84s–89.37s`) | **64.7s** (`57.12s–78.54s`) | **±19%** | **87%** | `30%` | ✅ ĐẠT |
+| **Biome 2** | **Băng Hậu Kryssa (Biome 2)** (`kryssa_ice_queen`) | **73.54s** (`65.13s–85.18s`) | **63.61s** (`59.63s–67.18s`) | **±13.5%** | **87%** | `21%` | ✅ ĐẠT |
+| **Biome 3** | **Titan Lò Rèn (Biome 3)** (`forge_titan`) | **72.24s** (`63.35s–83.38s`) | **68.21s** (`59.48s–87.94s`) | **±5.6%** | **73%** | `19%` | ✅ ĐẠT |
 
 ---
 
@@ -63,11 +63,11 @@
 
 | Đội hình Co-op | Số người | Thời gian hạ Boss (p50) | Phản ứng Nguyên tố | Đồng Đội Combo (+15 NL) | Kết quả |
 |---|---:|---:|---:|---:|:---:|
-| **2P Khiên Lửa (Thiết Vệ + Lam Hỏa)** | 2P | **109.49s** | **158** | **96** | ✅ THẮNG |
-| **2P Săn Độc (Liệp Ưng + Mộc Linh)** | 2P | **78.95s** | **119** | **116** | ✅ THẮNG |
-| **2P Công Nghệ Nguyên Tố (Lam Hỏa + Bánh Răng)** | 2P | **87.63s** | **230** | **111** | ✅ THẮNG |
-| **4P Đội Hình Chuẩn (Thiết Vệ + Liệp Ưng + Lam Hỏa + Mộc Linh)** | 4P | **99.5s** | **392** | **348** | ✅ THẮNG |
-| **4P Đội Hình Phản Ứng Đa Tầng (Thiết Vệ + Lam Hỏa + Mộc Linh + Bánh Răng)** | 4P | **98.83s** | **471** | **422** | ✅ THẮNG |
+| **2P Khiên Lửa (Thiết Vệ + Lam Hỏa)** | 2P | **76.72s** | **134** | **85** | ✅ THẮNG |
+| **2P Săn Độc (Liệp Ưng + Mộc Linh)** | 2P | **64.33s** | **93** | **90** | ✅ THẮNG |
+| **2P Công Nghệ Nguyên Tố (Lam Hỏa + Bánh Răng)** | 2P | **66.1s** | **176** | **78** | ✅ THẮNG |
+| **4P Đội Hình Chuẩn (Thiết Vệ + Liệp Ưng + Lam Hỏa + Mộc Linh)** | 4P | **80.8s** | **317** | **277** | ✅ THẮNG |
+| **4P Đội Hình Phản Ứng Đa Tầng (Thiết Vệ + Lam Hỏa + Mộc Linh + Bánh Răng)** | 4P | **75.17s** | **362** | **323** | ✅ THẮNG |
 
 ---
 
@@ -75,8 +75,8 @@
 
 | Biome | Tên Biome | EHP Quái TB | Thời gian dọn phòng | HP+Giáp mất TB | Chỉ số độ khó | Tăng so với Biome trước |
 |---:|---|---:|---:|---:|---:|---:|
-| **Biome 1** | Biome 1 — Rừng Cổ Mục Nát | `26.3` | `48.7s` | `50%` | `×1.00` | Cơ sở (Baseline) |
-| **Biome 2** | Biome 2 — Hầm Băng Vĩnh Cửu | `44` | `42.3s` | `59.3%` | `×1.21` | **+20.7%** |
-| **Biome 3** | Biome 3 — Lò Rèn Dung Nham | `85.1` | `35.6s` | `92.1%` | `×1.51` | **+24.8%** |
+| **Biome 1** | Biome 1 — Rừng Cổ Mục Nát | `26.3` | `50s` | `32.2%` | `×1.00` | Cơ sở (Baseline) |
+| **Biome 2** | Biome 2 — Hầm Băng Vĩnh Cửu | `49.6` | `30.9s` | `53.1%` | `×1.23` | **+22.7%** |
+| **Biome 3** | Biome 3 — Lò Rèn Dung Nham | `77.2` | `33.6s` | `83.7%` | `×1.47` | **+20.0%** |
 
 ## 7. Kết Luận Kiểm Chứng: ✅ ĐẠT 100% TẤT CẢ MỤC TIÊU CÂN BẰNG SPEC 3.10

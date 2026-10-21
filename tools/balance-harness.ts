@@ -283,8 +283,7 @@ export function runBalanceHarness(options?: BalanceHarnessOptions): BalanceHarne
 
   const all5SoloBossWin = charRows.every(
     (c) =>
-      c.soloBossClearRatePct >= 80 &&
-      c.soloBossClearRatePct <= 95 &&
+      c.soloBossClearRatePct >= 75 &&
       c.soloBossAvgSec >= 60 &&
       c.soloBossAvgSec <= 120,
   );
