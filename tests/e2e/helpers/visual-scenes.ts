@@ -26,12 +26,21 @@ import {
   switchGameSceneToEnglish,
   type VisualSceneDef,
 } from './visual-scene-helpers.js';
+import {
+  SCENE_GROUPS,
+  setupB1CombatDownedScene,
+  setupB1HudQolShowcaseScene,
+  setupB1HudWeaponCompareScene,
+  setupCoop4pCombatScene,
+  setupUiViDiacriticsScene,
+} from './visual-scene-p9a-helpers.js';
 
 export {
   DEFAULT_FREEZE_MASK_RECTS,
   ENVIRONMENT_SAMPLE_RECTS,
   HUB_SAMPLE_RECTS,
   installDeterministicRafGate,
+  SCENE_GROUPS,
   setSceneLightingAndRenderStaticFrame,
   stepDeterministicFrames,
   type VisualSceneDef,
@@ -714,45 +723,9 @@ export const VISUAL_SCENES: readonly VisualSceneDef[] = [
   }),
 
   // 6. Co-op & Stress
-  makeScene('coop-4p-combat', '4-player Co-op combat with skills and teammate HUD', DEFAULT_GAME_URL, 'GameScene', async (page) => {
-    await page.evaluate(() => {
-      const sim = window.__GAME_TRANSPORT__!.getSim();
-      const combatRoom = sim.dungeon.rooms.find((r) => r.type === 'combat') ?? sim.dungeon.rooms[0]!;
-      sim.enterRoom(combatRoom.id);
-      sim.enemies.length = 0;
-      sim.projectiles.length = 0;
-      const p1 = sim.player;
-      sim.selectCharacter(p1.id, 'elementalist');
-      p1.godMode = true;
-      p1.x = 340;
-      p1.y = 290;
-      const p2 = sim.addCoopPlayer(2, 'druid', 'Mộc Linh P2', 2);
-      const p3 = sim.addCoopPlayer(3, 'engineer', 'Bánh Răng P3', 3);
-      const p4 = sim.addCoopPlayer(4, 'vanguard', 'Thiết Vệ P4', 4);
-      p2.godMode = p3.godMode = p4.godMode = true;
-      p2.x = 340;
-      p2.y = 220;
-      p3.x = 340;
-      p3.y = 360;
-      p4.x = 430;
-      p4.y = 290;
-      p4.skillActiveTimer = 3.5;
-      const spawned = [
-        sim.spawnEnemy('wild_boar', 600, 260, true, 'shield'),
-        sim.spawnEnemy('goblin_shaman', 660, 330, true),
-        sim.spawnEnemy('spore_bomber', 560, 350, true),
-      ];
-      for (const e of spawned) {
-        e.hp = 1200;
-        e.maxHp = 1200;
-      }
-      sim.activateCharacterSkill(p1);
-      sim.activateCharacterSkill(p2);
-      sim.activateCharacterSkill(p3);
-    });
-    await lockCameraAndIrisToPlayer(page);
-    await stepDeterministicFrames(page, 45);
-  }),
+  makeScene('coop-4p-combat', '4-player Co-op combat with skills and teammate HUD', DEFAULT_GAME_URL, 'GameScene', setupCoop4pCombatScene),
+  makeScene('b1-combat-4p', 'Biome 1 4-player Co-op combat with skills and teammate HUD', DEFAULT_GAME_URL, 'GameScene', setupCoop4pCombatScene),
+  makeScene('b1-combat-downed', 'Biome 1 4-player Co-op combat with downed teammates, revive progress, and low-HP HUD', DEFAULT_GAME_URL, 'GameScene', setupB1CombatDownedScene),
   makeScene('stress-4p', '4-player + 80 enemies + 600+ bullets stress test scene', DEFAULT_GAME_URL, 'GameScene', async (page) => {
     await page.evaluate(() => window.__GAME_STRESS_TEST__?.(true));
     await lockCameraAndIrisToPlayer(page);
@@ -788,24 +761,7 @@ export const VISUAL_SCENES: readonly VisualSceneDef[] = [
     await page.mouse.move(960, 754);
     await stepDeterministicFrames(page, 5);
   }),
-  makeScene('ui-vi-diacritics', 'Vietnamese stacked diacritics verification across 12px-40px', DEFAULT_MENU_URL, 'MenuScene', async (page) => {
-    await page.evaluate(() => {
-      const sample = 'Tiếng Việt: ắ ằ ẳ ẵ ặ ầ ẩ ẫ ậ ỡ ự ữ ỹ Đ đ — 0123456789';
-      const sizes = [12, 14, 16, 20, 28, 40];
-      const host = document.createElement('div');
-      host.id = 'vi-diacritics-showcase';
-      host.style.cssText =
-        'position:fixed;inset:48px 120px;background:rgba(14,18,26,0.97);border:3px solid #facc15;border-radius:14px;padding:32px 48px;z-index:99999;display:flex;flex-direction:column;justify-content:space-between;font-family:"Be Vietnam Pro",sans-serif;color:#f8fafc;box-sizing:border-box;';
-      for (const sz of sizes) {
-        const row = document.createElement('div');
-        row.style.cssText = `font-size:${sz}px;font-weight:700;line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-bottom:1px solid rgba(148,163,184,0.22);padding-bottom:6px;`;
-        row.textContent = `[${sz}px] ${sample}`;
-        host.appendChild(row);
-      }
-      document.body.appendChild(host);
-    });
-    await stepDeterministicFrames(page, 45);
-  }),
+  makeScene('ui-vi-diacritics', 'Vietnamese stacked diacritics verification across 12px-40px', DEFAULT_GAME_URL, 'GameScene', setupUiViDiacriticsScene),
   makeScene('ui-emote-wheel', 'In-game 4-quadrant radial Emote Wheel while holding [T]', DEFAULT_GAME_URL, 'GameScene', async (page) => {
     await page.keyboard.up('KeyT');
     await page.evaluate(() => {
@@ -932,4 +888,12 @@ export const VISUAL_SCENES: readonly VisualSceneDef[] = [
     await stepDeterministicFrames(page, 45);
   }),
   makeScene('modal-victory-en', 'Run Victory Summary Modal in English locale', DEFAULT_GAME_URL, 'GameScene', (p) => setupRunResultModalScene(p, 'victory', true)),
+
+  // 10. Phase P9a HUD & QoL Scenes
+  makeScene('b1-boss-p1', 'Biome 1 Boss Mục Vương Nấm Độc (Phase 1 HUD)', DEFAULT_GAME_URL, 'GameScene', (p) => setupBossScene(p, 2, 1)),
+  makeScene('b1-boss-p3', 'Biome 1 Boss Mục Vương Phase 3 HUD with creeping poison border', DEFAULT_GAME_URL, 'GameScene', (p) => setupBossScene(p, 2, 3)),
+  makeScene('b1-hud-weapon-compare', 'Biome 1 HUD with Weapon Comparison Card and active cooldowns', DEFAULT_GAME_URL, 'GameScene', setupB1HudWeaponCompareScene),
+  makeScene('b1-combat-uiscale-80', 'Biome 1 combat HUD scaled at 80% (?uiScale=0.8)', `${DEFAULT_GAME_URL}&uiScale=0.8`, 'GameScene', (p) => setupB1CombatState(p, false)),
+  makeScene('b1-combat-uiscale-130', 'Biome 1 combat HUD scaled at 130% (?uiScale=1.3)', `${DEFAULT_GAME_URL}&uiScale=1.3`, 'GameScene', (p) => setupB1CombatState(p, false)),
+  makeScene('b1-hud-qol-showcase', 'Biome 1 combat QoL showcase with off-screen enemy arrows, directional hit arc, wave banner, coalesced reaction popup, and damage numbers', DEFAULT_GAME_URL, 'GameScene', setupB1HudQolShowcaseScene),
 ];

@@ -7,6 +7,7 @@ import Phaser from 'phaser';
 import { ENV_PALETTE, PALETTE } from '../../art/palette.js';
 import { TextureBaker } from '../../art/texture-baker.js';
 import { zzfx } from '../../audio/zzfx.js';
+import { resetClientFreezeRandom } from '../../core/visual-query.js';
 import { resolveInteractableVisualGlowSpec } from '../../fx/lighting-config.js';
 import {
   computeDoorMotePose,
@@ -845,6 +846,7 @@ export function triggerDoorCombatLockupImpl(this: GameScene): void {
 }
 
 export function resetPortalAndDoorTestStateImpl(this: GameScene): void {
+  resetClientFreezeRandom();
   const sim = this.transport.getSim();
   this.portalDoorAnimClockSec = 0;
   this.portalAnimState = createPortalAnimState();

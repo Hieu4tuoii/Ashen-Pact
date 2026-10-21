@@ -440,11 +440,13 @@ export class DebugOverlay {
         ? this.frameDeltaSamples.reduce((acc, v) => acc + v, 0) / this.frameDeltaSamples.length
         : 16.67;
 
-    const computedFps = Math.min(144, 1000 / Math.max(1, avgDelta));
+    const isFreeze = getVisualQueryConfig().freeze;
+    const computedFps = isFreeze ? 60 : Math.min(144, 1000 / Math.max(1, avgDelta));
     state.fps = Math.round(computedFps * 10) / 10;
-    state.frameTimeMs = Math.round(avgDelta * 100) / 100;
+    state.frameTimeMs = isFreeze ? 16.67 : Math.round(avgDelta * 100) / 100;
 
     if (
+      !isFreeze &&
       state.coopMode === 'solo' &&
       !state.stressTestActive &&
       !isHidden &&
@@ -459,7 +461,9 @@ export class DebugOverlay {
     state.autoDowngradeCount = graphicsSettings.autoDowngradeCount;
 
     const perfMem = (performance as Performance & { memory?: { usedJSHeapSize?: number } }).memory;
-    if (perfMem && typeof perfMem.usedJSHeapSize === 'number') {
+    if (isFreeze) {
+      state.heapUsedMb = 42.0;
+    } else if (perfMem && typeof perfMem.usedJSHeapSize === 'number') {
       state.heapUsedMb = Math.round((perfMem.usedJSHeapSize / (1024 * 1024)) * 100) / 100;
     }
 

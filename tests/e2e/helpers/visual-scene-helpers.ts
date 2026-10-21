@@ -218,6 +218,32 @@ export async function lockCameraAndIrisToPlayer(page: Page): Promise<void> {
     if (sim && gs) {
       window.__GAME_TRANSPORT__?.consumeEvents();
       gs.resetPortalAndDoorTestState?.();
+      sim.tick = 10;
+      sim.rng.setState(sim.rng.initialSeed);
+      const fx = gs['fx'] as
+        | {
+            popupSpreadIndex?: number;
+            totalSparksSpawned?: number;
+            particlePool?: Array<{ active: boolean; sprite: { setVisible: (v: boolean) => void } }>;
+            damagePool?: Array<{ active: boolean; text: { setVisible: (v: boolean) => void } }>;
+            lightningPool?: Array<{ active: boolean }>;
+          }
+        | undefined;
+      if (fx) {
+        fx.popupSpreadIndex = 0;
+        fx.totalSparksSpawned = 0;
+        for (const p of fx.particlePool ?? []) {
+          p.active = false;
+          p.sprite.setVisible(false);
+        }
+        for (const d of fx.damagePool ?? []) {
+          d.active = false;
+          d.text.setVisible(false);
+        }
+        for (const l of fx.lightningPool ?? []) {
+          l.active = false;
+        }
+      }
       sim.player.prevX = sim.player.x;
       sim.player.prevY = sim.player.y;
       Object.assign(gs, {

@@ -57,6 +57,8 @@ export interface GraphicsSettingsState {
   sfxVolume: number;
   fullscreen: boolean;
   language: SupportedLocale;
+  uiScale: number;
+  showKeyHints: boolean;
 }
 
 export const DEFAULT_GRAPHICS_SETTINGS: GraphicsSettingsState = {
@@ -70,12 +72,45 @@ export const DEFAULT_GRAPHICS_SETTINGS: GraphicsSettingsState = {
   sfxVolume: 0.9,
   fullscreen: false,
   language: 'vi',
+  uiScale: 1.0,
+  showKeyHints: true,
 };
+
+export function clampUiScale(val: number): number {
+  if (!Number.isFinite(val)) return 1.0;
+  return Math.round(clamp(val, 0.8, 1.3) * 20) / 20;
+}
+
+export function parseUiQueryOverrides(search: string): {
+  uiScale?: number;
+  showKeyHints?: boolean;
+} {
+  const result: { uiScale?: number; showKeyHints?: boolean } = {};
+  if (!search) return result;
+  const params = new URLSearchParams(search.startsWith('?') ? search : `?${search}`);
+  const uiScaleRaw = params.get('uiScale');
+  if (uiScaleRaw !== null && uiScaleRaw.trim() !== '') {
+    const parsed = Number.parseFloat(uiScaleRaw);
+    if (Number.isFinite(parsed)) {
+      result.uiScale = clampUiScale(parsed);
+    }
+  }
+  const keyHintsRaw = params.get('keyHints');
+  if (keyHintsRaw !== null && keyHintsRaw.trim() !== '') {
+    const normalized = keyHintsRaw.trim().toLowerCase();
+    if (normalized === '0' || normalized === 'false' || normalized === 'off') {
+      result.showKeyHints = false;
+    } else if (normalized === '1' || normalized === 'true' || normalized === 'on') {
+      result.showKeyHints = true;
+    }
+  }
+  return result;
+}
 
 const STORAGE_KEY = 'ashen_pact_graphics_settings';
 
 /**
- * Manages persistent Graphics, Audio, Gameplay, and Language settings in localStorage
+ * Manages persistent Graphics, Audio, Gameplay, UI Scale, and Language settings in localStorage
  * and automatic quality step-down when sustained FPS drops below threshold.
  */
 export class GraphicsSettingsManager {
@@ -88,6 +123,7 @@ export class GraphicsSettingsManager {
 
   constructor() {
     this.loadFromStorage();
+    this.applyUrlQueryOverrides();
     i18n.setLocale(this.state.language);
   }
 
@@ -191,6 +227,39 @@ export class GraphicsSettingsManager {
     return next;
   }
 
+  public setUiScale(val: number): void {
+    const clamped = clampUiScale(val);
+    if (this.state.uiScale === clamped) return;
+    this.state = { ...this.state, uiScale: clamped };
+    this.saveToStorage();
+    this.notify();
+  }
+
+  public setShowKeyHints(enabled: boolean): void {
+    if (this.state.showKeyHints === enabled) return;
+    this.state = { ...this.state, showKeyHints: enabled };
+    this.saveToStorage();
+    this.notify();
+  }
+
+  public applyUrlQueryOverrides(search?: string): void {
+    const rawSearch =
+      search ?? (typeof window !== 'undefined' && window.location ? window.location.search : '');
+    const overrides = parseUiQueryOverrides(rawSearch);
+    let changed = false;
+    if (overrides.uiScale !== undefined && this.state.uiScale !== overrides.uiScale) {
+      this.state = { ...this.state, uiScale: overrides.uiScale };
+      changed = true;
+    }
+    if (overrides.showKeyHints !== undefined && this.state.showKeyHints !== overrides.showKeyHints) {
+      this.state = { ...this.state, showKeyHints: overrides.showKeyHints };
+      changed = true;
+    }
+    if (changed) {
+      this.notify();
+    }
+  }
+
   public resetDefaults(): void {
     this.state = { ...DEFAULT_GRAPHICS_SETTINGS };
     i18n.setLocale(this.state.language);
@@ -273,6 +342,12 @@ export class GraphicsSettingsManager {
       if (parsed.language === 'vi' || parsed.language === 'en') {
         this.state.language = parsed.language;
       }
+      if (typeof parsed.uiScale === 'number') {
+        this.state.uiScale = clampUiScale(parsed.uiScale);
+      }
+      if (typeof parsed.showKeyHints === 'boolean') {
+        this.state.showKeyHints = parsed.showKeyHints;
+      }
     } catch {
       // Ignore storage read errors in restricted contexts
     }
@@ -295,4 +370,3 @@ export class GraphicsSettingsManager {
 }
 
 export const graphicsSettings = new GraphicsSettingsManager();
-

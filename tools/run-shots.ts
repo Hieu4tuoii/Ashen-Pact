@@ -4,9 +4,30 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
+export const SCENE_GROUPS: Readonly<Record<string, readonly string[]>> = {
+  p9a: [
+    'b1-combat',
+    'b1-combat-1440p',
+    'b1-combat-ultrawide',
+    'b1-combat-4p',
+    'b1-combat-downed',
+    'b1-boss-p1',
+    'b1-boss-p3',
+    'b2-combat',
+    'b3-combat',
+    'b1-hud-weapon-compare',
+    'b1-hud-debug-on',
+    'b1-combat-uiscale-80',
+    'b1-combat-uiscale-130',
+    'b1-hud-qol-showcase',
+    'ui-vi-diacritics',
+  ],
+};
+
 export interface ShotsCliOptions {
   phase: string;
   label: string;
+  group?: string;
   scenes?: string;
   verifyFreeze: boolean;
 }
@@ -14,6 +35,7 @@ export interface ShotsCliOptions {
 export function parseShotsArgs(argv: string[]): ShotsCliOptions {
   let phase = 'p0';
   let label = 'baseline';
+  let group: string | undefined;
   let scenes: string | undefined;
   let verifyFreeze = false;
 
@@ -29,6 +51,10 @@ export function parseShotsArgs(argv: string[]): ShotsCliOptions {
       label = args[++i]!;
     } else if (arg.startsWith('--label=')) {
       label = arg.slice('--label='.length);
+    } else if (arg === '--group' && args[i + 1]) {
+      group = args[++i]!;
+    } else if (arg.startsWith('--group=')) {
+      group = arg.slice('--group='.length);
     } else if (arg === '--scenes' && args[i + 1]) {
       const collected: string[] = [];
       while (i + 1 < args.length && !args[i + 1]!.startsWith('--')) {
@@ -42,9 +68,20 @@ export function parseShotsArgs(argv: string[]): ShotsCliOptions {
     }
   }
 
+  if (group) {
+    const groupScenes = SCENE_GROUPS[group];
+    if (!groupScenes) {
+      throw new Error(
+        `Unknown scene group "${group}". Available groups: ${Object.keys(SCENE_GROUPS).join(', ')}`,
+      );
+    }
+    scenes = scenes ? `${groupScenes.join(',')},${scenes}` : groupScenes.join(',');
+  }
+
   return {
     phase,
     label,
+    ...(group ? { group } : {}),
     ...(scenes ? { scenes } : {}),
     verifyFreeze,
   };
@@ -54,7 +91,7 @@ export function runShotsCli(argv: string[] = process.argv.slice(2)): void {
   const options = parseShotsArgs(argv);
 
   console.log(
-    `[shots] Running visual capture: phase=${options.phase}, label=${options.label}, scenes=${options.scenes ?? 'ALL'}, verifyFreeze=${options.verifyFreeze}`,
+    `[shots] Running visual capture: phase=${options.phase}, label=${options.label}, group=${options.group ?? 'none'}, scenes=${options.scenes ?? 'ALL'}, verifyFreeze=${options.verifyFreeze}`,
   );
 
   const env: NodeJS.ProcessEnv = {
@@ -80,4 +117,7 @@ export function runShotsCli(argv: string[] = process.argv.slice(2)): void {
   process.exit(result.status ?? 0);
 }
 
-runShotsCli();
+const invokedPath = process.argv[1] ?? '';
+if (invokedPath.endsWith('run-shots.ts') || invokedPath.endsWith('capture-visual-scenes.ts')) {
+  runShotsCli();
+}
