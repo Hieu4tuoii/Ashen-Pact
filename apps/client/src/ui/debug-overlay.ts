@@ -444,7 +444,13 @@ export class DebugOverlay {
     state.fps = Math.round(computedFps * 10) / 10;
     state.frameTimeMs = Math.round(avgDelta * 100) / 100;
 
-    if (state.coopMode === 'solo' && !isHidden && this.warmupFrames > 15 && rawDelta < 120) {
+    if (
+      state.coopMode === 'solo' &&
+      !state.stressTestActive &&
+      !isHidden &&
+      this.warmupFrames > 15 &&
+      rawDelta < 120
+    ) {
       graphicsSettings.updateAutoQualityMonitor(state.fps, Math.min(0.05, rawDelta / 1000));
     }
     const gState = graphicsSettings.getState();

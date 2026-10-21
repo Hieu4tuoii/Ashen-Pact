@@ -398,6 +398,16 @@ export function setStressTestModeImpl(this: GameScene, active: boolean): void {
     rig.destroy();
   }
   this.enemyRigs.clear();
+  if (active) {
+    this.transport.consumeEvents();
+    this.fx?.consumeHitStopDelta(999);
+    this.syncArenaTilesWithMapRevision();
+    this.destroyPortalAndDoorVisuals();
+    this.syncSimulatedPlayers(0);
+    this.syncEnemyRigs(0);
+    this.syncProps(0);
+    this.syncProjectilesAndPickups();
+  }
   this.debugOverlay?.resetSamples();
 }
 
@@ -641,6 +651,7 @@ export function applyCameraViewportImpl(this: GameScene): void {
   this.hudPadY = vp.padY;
   const prevScale = TextureBaker.getBakeScale();
   const newScale = TextureBaker.bakeAll(this, zoom, false);
+  initGlobalDebugState().bakeScale = newScale;
 
   if (newScale !== prevScale) {
     const invBake = 1 / newScale;
@@ -743,7 +754,9 @@ export function applyCameraViewportImpl(this: GameScene): void {
     }
     if (this.hudContainer) {
       this.invalidateAllHudCaches();
-      this.syncRoomEntities(0);
+      if (!sim?.stressTestActive) {
+        this.syncRoomEntities(0);
+      }
       this.updateModalHud();
       if (this.pauseModalOpen) {
         this.rebuildPauseModal();

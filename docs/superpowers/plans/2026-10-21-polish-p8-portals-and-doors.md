@@ -76,12 +76,12 @@
 
 ### Task 2: Integrate Multi-Layer Portals & Biome Doors, Activation Burst (`0.72s`), Player Enter Stretch/Spiral (`0.30s`), Door Lock-up (`250ms`) & Unlock Dissolve (`380ms`), and Low Quality Fallback into `GameScene`
 
-- [ ] **Step 1 (TDD RED):** Extend `apps/client/test/polish-p8-portal-door.test.ts` with tests for portal particle/ray descriptors, inactive dungeon portal light/glow specs, and door transition triggers on room clear / combat room entry; run Vitest to record the RED failure.
-- [ ] **Step 2 (TDD GREEN):** Implement `apps/client/src/scenes/game-scene/portal-door-sync.ts` and wire it into `GameScene.ts`, `room-entities-sync.ts`, `input-and-network.ts`, `sim-events.ts`, and `lighting-config.ts` (all files `< 1000` lines, zero per-frame allocations).
-- [ ] **Step 3:** Verify `npx vitest run apps/client/test/polish-p8-portal-door.test.ts`, `pnpm typecheck`, `pnpm lint`, and `pnpm test` all pass. Commit Task 2 changes.
+- [x] **Step 1 (TDD RED):** Extend `apps/client/test/polish-p8-portal-door.test.ts` with tests for portal particle/ray descriptors, inactive dungeon portal light/glow specs, and door transition triggers on room clear / combat room entry; run Vitest to record the RED failure.
+- [x] **Step 2 (TDD GREEN):** Implement `apps/client/src/scenes/game-scene/portal-door-sync.ts` and wire it into `GameScene.ts`, `room-entities-sync.ts`, `input-and-network.ts`, `sim-events.ts`, and `lighting-config.ts` (all files `< 1000` lines, zero per-frame allocations).
+- [x] **Step 3:** Verify `npx vitest run apps/client/test/polish-p8-portal-door.test.ts`, `pnpm typecheck`, `pnpm lint`, and `pnpm test` all pass. Commit Task 2 changes.
 
 ### Task 3: Capture P8 `after` Screenshots with `--verify-freeze`, Conduct Blind A/B `pro` Visual Gate, Run Phase P8 Quality Gate, and Tag `polish-p8`
 
-- [ ] **Step 1:** Run `pnpm shots -- --phase p8 --label after --scenes hub-solo,hub-portal-ready,hub-coop-2p,b1-portal-inactive,b1-portal-active,b1-portal-burst,b1-portal-enter,b1-portal-active-low,b1-door-locked,b1-door-open,b1-door-ns-locked,b1-door-ns-open,b1-door-unlock,b1-door-lockup,b1-door-locked-low,b2-start-room,b3-start-room --verify-freeze` and verify `diffRatio < 0.005` on all 17 scenes.
-- [ ] **Step 2:** Set up the 17-scene Blind A/B directory (`version-A` vs `version-B` + `ab-mapping.json`), dispatch the independent `pro` Visual Reviewer subagent, and record results in `docs/screenshots/polish-p8/review.md`.
-- [ ] **Step 3:** Run fresh `pnpm verify` and `pnpm perf`, update `docs/PROGRESS.md` & `docs/PHASES.md`, commit, and tag `polish-p8`.
+- [x] **Step 1:** Run `pnpm shots -- --phase p8 --label after --scenes hub-solo,hub-portal-ready,hub-coop-2p,b1-portal-inactive,b1-portal-active,b1-portal-burst,b1-portal-enter,b1-portal-active-low,b1-door-locked,b1-door-open,b1-door-ns-locked,b1-door-ns-open,b1-door-unlock,b1-door-lockup,b1-door-locked-low,b2-start-room,b3-start-room --verify-freeze` and verify `diffRatio < 0.005` on all 17 scenes.
+- [x] **Step 2:** Set up the 17-scene Blind A/B directory (`version-A` vs `version-B` + `ab-mapping.json`), dispatch the independent `pro` Visual Reviewer subagent, and record results in `docs/screenshots/polish-p8/review.md`.
+- [x] **Step 3:** Run fresh `pnpm verify` and `pnpm perf`, update `docs/PROGRESS.md` & `docs/PHASES.md`, commit, and tag `polish-p8`.
