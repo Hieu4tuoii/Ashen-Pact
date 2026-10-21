@@ -4,7 +4,6 @@ import {
   ENEMY_SPAWN_WARMUP_SEC,
   PLAYER_SLOT_COLORS,
   type SimEnemyState,
-  WEAPON_RARITY_COLORS,
 } from '@ashen-pact/shared';
 import Phaser from 'phaser';
 import { hexToNum, PALETTE } from '../../art/palette.js';
@@ -52,41 +51,6 @@ export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, 
     g.fillCircle(fireX, fireY, 12 + flicker * 0.4);
     g.fillStyle(hexToNum(PALETTE.SOLAR_GOLD), 0.95);
     g.fillCircle(fireX, fireY - 2, 7 - flicker * 0.25);
-  }
-
-  // 0b. Rarity Light Pillars for Chests & World Weapon Drops (instanced)
-  for (let i = 0; i < sim.chests.length; i++) {
-    const ch = sim.chests[i]!;
-    const col = hexToNum(WEAPON_RARITY_COLORS[ch.rarity]);
-    const beamH = ch.opened ? 72 : 46;
-    const beamAlpha = ch.opened ? 0.24 : 0.14;
-    g.fillStyle(col, beamAlpha);
-    g.fillRect(ch.x - 12, ch.y - beamH, 24, beamH);
-    g.lineStyle(2, col, ch.opened ? 0.9 : 0.65);
-    g.strokeCircle(ch.x, ch.y + 6, 18);
-  }
-
-  for (let i = 0; i < sim.worldItems.length; i++) {
-    const it = sim.worldItems[i]!;
-    if (it.pickedUp) continue;
-    if (it.ownerPlayerId !== undefined && it.ownerPlayerId !== 0 && it.ownerPlayerId !== p.id) {
-      continue;
-    }
-    let rx = it.x;
-    let ry = it.y;
-    if (it.droppedAtTick !== undefined) {
-      const ageSec = Math.max(0, (sim.tick - it.droppedAtTick) / 60);
-      if (ageSec < 0.25) {
-        const u = clamp(ageSec / 0.25, 0, 1);
-        rx = (it.fromX ?? it.x) + (it.x - (it.fromX ?? it.x)) * u;
-        ry = (it.fromY ?? it.y) + (it.y - (it.fromY ?? it.y)) * u;
-      }
-    }
-    const col = hexToNum(WEAPON_RARITY_COLORS[it.rarity]);
-    g.fillStyle(col, 0.22);
-    g.fillRect(rx - 8, ry - 54, 16, 54);
-    g.lineStyle(2, col, 0.88);
-    g.strokeCircle(rx, ry + 6, 14);
   }
 
   // 1. Active Skills & Co-op Downed / Revive Circles for all players

@@ -13,6 +13,7 @@ import { CutoutRig } from '../../art/cutout-rig.js';
 import { hexToNum, PALETTE } from '../../art/palette.js';
 import { RIG_DEFS_BY_ID, VANGUARD_RIG_DEF } from '../../art/rig-defs.js';
 import { TextureBaker } from '../../art/texture-baker.js';
+import { getVisualQueryConfig } from '../../core/visual-query.js';
 import { graphicsSettings } from '../../ui/graphics-settings.js';
 import { type GameScene, RIG_FOOT_OFFSET_Y } from '../GameScene.js';
 
@@ -477,6 +478,11 @@ export function syncProjectilesAndPickupsImpl(this: GameScene): void {
   }
 
   // 2. Pickups (Energy & Gold, object-pooled Sprites, instanced per player)
+  const visualTimeSec = getVisualQueryConfig().freeze
+    ? 1.0
+    : (this.lighting?.getElapsedSec() ?? 1.0);
+  const showPickupGlow =
+    graphicsSettings.getState().quality === 'high' && (this.lighting?.isLightmapVisible() ?? false);
   this.activePickupIds.clear();
   for (let i = 0; i < sim.pickups.length; i++) {
     const pk = sim.pickups[i]!;
@@ -506,10 +512,15 @@ export function syncProjectilesAndPickupsImpl(this: GameScene): void {
         }
         entry.sprite.setVisible(true);
         entry.sprite.setActive(true);
+        entry.glowSprite.setActive(true);
       } else {
         const sprite = this.add.sprite(pk.x, pk.y, tex);
         sprite.setDepth(25);
-        entry = { sprite, textureKey: tex };
+        const glowSprite = this.add.image(pk.x, pk.y, 'fx_light_radial');
+        glowSprite.setDepth(35);
+        glowSprite.setBlendMode(Phaser.BlendModes.ADD);
+        glowSprite.setVisible(false);
+        entry = { sprite, glowSprite, textureKey: tex };
       }
       entry.sprite.setScale(invBake * (pk.kind === 'life_seed' ? 1.35 : 1));
       this.pickupSprites.set(pk.id, entry);
@@ -525,13 +536,28 @@ export function syncProjectilesAndPickupsImpl(this: GameScene): void {
       entry.sprite.clearTint();
     }
     const pos = this.transport.getInterpolatedPickupPos(pk, this.entityPosScratch);
-    entry.sprite.setPosition(pos.x, pos.y);
+    const bobY = Math.sin(visualTimeSec * 5 + pk.id) * 1.5;
+    entry.sprite.setPosition(pos.x, pos.y + bobY);
+
+    if (showPickupGlow) {
+      const glowCol =
+        pk.kind === 'gold' ? 0xfacc15 : pk.kind === 'energy' ? 0x38bdf8 : 0x4ade80;
+      entry.glowSprite.setPosition(pos.x, pos.y + bobY);
+      entry.glowSprite.setDisplaySize(28, 22);
+      entry.glowSprite.setTint(glowCol);
+      entry.glowSprite.setAlpha(0.25);
+      entry.glowSprite.setVisible(true);
+    } else if (entry.glowSprite.visible) {
+      entry.glowSprite.setVisible(false);
+    }
   }
 
   for (const [id, entry] of this.pickupSprites.entries()) {
     if (!this.activePickupIds.has(id)) {
       entry.sprite.setVisible(false);
       entry.sprite.setActive(false);
+      entry.glowSprite.setVisible(false);
+      entry.glowSprite.setActive(false);
       this.pickupSpritePool.push(entry);
       this.pickupSprites.delete(id);
     }

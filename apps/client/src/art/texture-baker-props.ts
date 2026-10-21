@@ -379,54 +379,116 @@ export function bakeProps(scene: Phaser.Scene, scale: number): void {
     });
   }
 
-  // 7. Ancient Shrine Statue (Tượng Thần Cổ Đại)
-  bakeCustomCanvas(scene, 'prop_shrine_statue', 52, 60, scale, (ctx) => {
+  // 7. Ancient Shrine Statue (Tượng Thần Cổ Đại — Active Cyan & Used Extinguished Slate)
+  for (const [key, isUsed] of [
+    ['prop_shrine_statue', false],
+    ['prop_shrine_statue_used', true],
+  ] as const) {
+    bakeCustomCanvas(scene, key, 52, 60, scale, (ctx) => {
+      outlined(
+        ctx,
+        {
+          fill: PALETTE.SLATE_MID,
+          shade: PALETTE.SLATE_DARK,
+          highlight: PALETTE.WARM_STONE,
+          outlineWidth: 2.5,
+        },
+        (c) => traceRoundedRect(c, -18, 8, 36, 14, 4),
+        { cx: 0, cy: 15, rx: 18, ry: 7 },
+      );
+      outlined(
+        ctx,
+        {
+          fill: PALETTE.WARM_STONE,
+          shade: PALETTE.ASH_GRAY,
+          highlight: PALETTE.BONE_WHITE,
+          outlineWidth: 2.5,
+        },
+        (c) =>
+          tracePolygon(c, [
+            { x: -12, y: 10 },
+            { x: -15, y: -8 },
+            { x: 0, y: -24 },
+            { x: 15, y: -8 },
+            { x: 12, y: 10 },
+          ]),
+        { cx: 0, cy: -7, rx: 15, ry: 17 },
+      );
+      outlined(
+        ctx,
+        {
+          fill: isUsed ? PALETTE.SLATE_DARK : PALETTE.CYAN_FROST,
+          shade: isUsed ? PALETTE.INK_DARK : PALETTE.AZURE_CORE,
+          highlight: isUsed ? PALETTE.ASH_GRAY : PALETTE.ICE_WHITE,
+          outlineWidth: 1.8,
+        },
+        (c) =>
+          tracePolygon(c, [
+            { x: 0, y: -13 },
+            { x: 6, y: -4 },
+            { x: 0, y: 5 },
+            { x: -6, y: -4 },
+          ]),
+        { cx: 0, cy: -4, rx: 6, ry: 9 },
+      );
+    });
+  }
+
+  // 7b. Merchant Shop Display Pedestal Mat ('item_shop_pedestal') for wares with costGold > 0
+  bakeCustomCanvas(scene, 'item_shop_pedestal', 38, 24, scale, (ctx) => {
+    // Outer braided gold rim
     outlined(
       ctx,
       {
-        fill: PALETTE.SLATE_MID,
-        shade: PALETTE.SLATE_DARK,
-        highlight: PALETTE.WARM_STONE,
-        outlineWidth: 2.5,
-      },
-      (c) => traceRoundedRect(c, -18, 8, 36, 14, 4),
-      { cx: 0, cy: 15, rx: 18, ry: 7 },
-    );
-    outlined(
-      ctx,
-      {
-        fill: PALETTE.WARM_STONE,
-        shade: PALETTE.ASH_GRAY,
+        fill: PALETTE.SOLAR_GOLD,
+        shade: PALETTE.BRASS_CORE,
         highlight: PALETTE.BONE_WHITE,
-        outlineWidth: 2.5,
+        outlineWidth: 2.0,
       },
-      (c) =>
-        tracePolygon(c, [
-          { x: -12, y: 10 },
-          { x: -15, y: -8 },
-          { x: 0, y: -24 },
-          { x: 15, y: -8 },
-          { x: 12, y: 10 },
-        ]),
-      { cx: 0, cy: -7, rx: 15, ry: 17 },
+      (c) => {
+        c.beginPath();
+        c.ellipse(0, 1, 16, 8.5, 0, 0, Math.PI * 2);
+        c.closePath();
+      },
+      { cx: 0, cy: 1, rx: 16, ry: 8.5 },
     );
+    // Inner dark crimson velvet cushion
     outlined(
       ctx,
       {
-        fill: PALETTE.CRIMSON_BRIGHT,
-        shade: PALETTE.RUBY_CORE,
-        highlight: PALETTE.SOLAR_GOLD,
-        outlineWidth: 1.8,
+        fill: PALETTE.RUBY_DARK,
+        shade: PALETTE.INK_DARK,
+        highlight: PALETTE.RUBY_CORE,
+        outlineWidth: 1.4,
       },
-      (c) =>
-        tracePolygon(c, [
-          { x: 0, y: -13 },
-          { x: 6, y: -4 },
-          { x: 0, y: 5 },
-          { x: -6, y: -4 },
-        ]),
-      { cx: 0, cy: -4, rx: 6, ry: 9 },
+      (c) => {
+        c.beginPath();
+        c.ellipse(0, 0.5, 12.5, 6.0, 0, 0, Math.PI * 2);
+        c.closePath();
+      },
+      { cx: 0, cy: 0.5, rx: 12.5, ry: 6.0 },
     );
+    // Two gleaming gold coins at front-right corner to unmistakably denote a priced shop ware
+    for (const [cx, cy] of [
+      [10.5, 5.2],
+      [13.8, 3.8],
+    ] as const) {
+      outlined(
+        ctx,
+        {
+          fill: PALETTE.SOLAR_GOLD,
+          shade: PALETTE.BRASS_CORE,
+          highlight: PALETTE.BONE_WHITE,
+          outlineWidth: 1.3,
+        },
+        (c) => {
+          c.beginPath();
+          c.arc(cx, cy, 2.7, 0, Math.PI * 2);
+          c.closePath();
+        },
+        { cx, cy, rx: 2.7, ry: 2.7 },
+      );
+    }
   });
 
   // 8. Dungeon Doors (Open & Locked) and Floor Portal

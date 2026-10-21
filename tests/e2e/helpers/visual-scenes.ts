@@ -314,18 +314,25 @@ export const VISUAL_SCENES: readonly VisualSceneDef[] = [
       sim.chests.length = 0;
       sim.worldItems.length = 0;
       sim.npcEntities.length = 0;
-      sim.player.x = 280;
+      sim.pickups.length = 0;
+      sim.events.length = 0;
+      sim.player.x = 260;
       sim.player.y = 270;
-      sim.spawnChest(610, 175, 'epic', 'arc_lightning_rifle');
-      sim.spawnWorldItem({ kind: 'weapon', weaponId: 'dragon_breath_shotgun', rarity: 'legendary', nameVi: 'Shotgun Hỏa Long', costGold: 0, healAmount: 0, x: 610, y: 255 });
-      sim.spawnWorldItem({ kind: 'weapon', weaponId: 'frost_bow', rarity: 'rare', nameVi: 'Cung Băng Giá', costGold: 55, healAmount: 0, x: 610, y: 335, offerId: 1 });
-      sim.npcEntities.push({ id: ++sim.nextEntityId, kind: 'shrine', nameVi: 'Điện Thờ Cổ Đại', dialogueVi: 'Hiến tế máu đổi lấy phước lành.', x: 710, y: 215, radius: 20, interacted: false, costHp: 2 });
+      sim.spawnChest(555, 205, 'epic', 'arc_lightning_rifle');
+      sim.spawnWorldItem({ kind: 'weapon', weaponId: 'dragon_breath_shotgun', rarity: 'legendary', nameVi: 'Shotgun Hỏa Long', costGold: 0, healAmount: 0, x: 555, y: 280 });
+      sim.spawnWorldItem({ kind: 'weapon', weaponId: 'frost_bow', rarity: 'rare', nameVi: 'Cung Băng Giá', costGold: 55, healAmount: 0, x: 555, y: 355, offerId: 1 });
+      sim.npcEntities.push({ id: ++sim.nextEntityId, kind: 'shrine', nameVi: 'Điện Thờ Cổ Đại', dialogueVi: 'Hiến tế máu đổi lấy phước lành.', x: 650, y: 225, radius: 20, interacted: false, costHp: 2 });
       sim.portalActive = true;
-      sim.portalX = 710;
-      sim.portalY = 325;
+      sim.portalX = 650;
+      sim.portalY = 335;
+      sim.pickups.push(
+        sim.acquirePickup({ id: ++sim.nextEntityId, kind: 'gold', x: 605, y: 250, vx: 0, vy: 0, amount: 12, ttlSec: 30 }),
+        sim.acquirePickup({ id: ++sim.nextEntityId, kind: 'energy', x: 615, y: 258, vx: 0, vy: 0, amount: 10, ttlSec: 30 }),
+        sim.acquirePickup({ id: ++sim.nextEntityId, kind: 'life_seed', x: 602, y: 264, vx: 0, vy: 0, amount: 2, ttlSec: 30 }),
+      );
     });
     await lockCameraAndIrisToPlayer(page);
-    await stepDeterministicFrames(page, 45);
+    await stepDeterministicFrames(page, 60);
   }),
   makeScene('b1-poison-swamp', 'Biome 1 poison swamp surface pool with enemies', DEFAULT_GAME_URL, 'GameScene', async (page) => {
     await page.evaluate(() => {

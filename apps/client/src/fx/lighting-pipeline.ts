@@ -17,6 +17,9 @@ import {
   BIOME_LIGHTING_CONFIG,
   type BiomeLightingEntry,
   computeUniformViewportMetrics,
+  getInteractableLightQuota,
+  INTERACTABLE_LIGHT_QUOTA,
+  type InteractableLightEntry,
   POSTFX_DEFAULTS,
   resolveSceneLightingConfig,
   type UniformViewportMetrics,
@@ -26,6 +29,9 @@ export {
   BIOME_LIGHTING_CONFIG,
   type BiomeLightingEntry,
   computeUniformViewportMetrics,
+  getInteractableLightQuota,
+  INTERACTABLE_LIGHT_QUOTA,
+  type InteractableLightEntry,
   POSTFX_DEFAULTS,
   resolveSceneLightingConfig,
   type UniformViewportMetrics,
@@ -230,6 +236,10 @@ export class LightingPipeline {
     return this.activeLightCount;
   }
 
+  public getElapsedSec(): number {
+    return this.elapsedSec;
+  }
+
   public setLightingEnabled(enabled: boolean): void {
     this.lightingEnabled = enabled;
     this.lightmapRt.setVisible(enabled);
@@ -356,6 +366,7 @@ export class LightingPipeline {
     enemies: readonly SimEnemyState[];
     projectiles: readonly SimProjectileState[];
     props: readonly SimPropState[];
+    interactableLights?: readonly InteractableLightEntry[];
     map: ArenaMap;
     trauma: number;
     inHub?: boolean;
@@ -368,6 +379,7 @@ export class LightingPipeline {
       enemies,
       projectiles,
       props,
+      interactableLights,
       map,
       trauma,
       inHub = false,
@@ -647,6 +659,51 @@ export class LightingPipeline {
       if (g.visible) g.setVisible(false);
     }
 
+    // C2. Phase P6 Interactable & Pickup Lights (reserved quota: 16 High / 10 Medium / 6 Low, alpha <= 0.35)
+    const interactableQuota = getInteractableLightQuota(budget.tier);
+    let interactableLightsDrawn = 0;
+    if (interactableLights && interactableLights.length > 0) {
+      for (
+        let i = 0;
+        i < interactableLights.length && interactableLightsDrawn < interactableQuota;
+        i++
+      ) {
+        const entry = interactableLights[i]!;
+        const lx = entry.x - viewX;
+        const ly = entry.y - viewY;
+        const r = entry.radius;
+        if (
+          lx + r < -16 ||
+          lx - r > coverW + 16 ||
+          ly + r < -16 ||
+          ly - r > coverH + 16
+        ) {
+          continue;
+        }
+        this.brushSprite.setScale(((r * 2) / this.brushBaseTexWidth) * lmScale);
+        this.brushSprite.setTint(entry.colorNum);
+        this.brushSprite.setAlpha(clamp(entry.alpha, 0, 0.35));
+        this.lightmapRt.batchDraw(this.brushSprite, lx * lmScale, ly * lmScale);
+
+        if (
+          entry.secondaryColorNum !== undefined &&
+          entry.secondaryRadius !== undefined &&
+          entry.secondaryAlpha !== undefined &&
+          entry.secondaryRadius > 0 &&
+          entry.secondaryAlpha > 0
+        ) {
+          this.brushSprite.setScale(
+            ((entry.secondaryRadius * 2) / this.brushBaseTexWidth) * lmScale,
+          );
+          this.brushSprite.setTint(entry.secondaryColorNum);
+          this.brushSprite.setAlpha(clamp(entry.secondaryAlpha, 0, 0.35));
+          this.lightmapRt.batchDraw(this.brushSprite, lx * lmScale, ly * lmScale);
+        }
+
+        interactableLightsDrawn += 1;
+      }
+    }
+
     // D. Transient Flash Lights (Muzzle flashes, Explosions, Lightning arcs)
     for (let i = 0; i < this.transientPool.length; i++) {
       const t = this.transientPool[i]!;
@@ -732,7 +789,7 @@ export class LightingPipeline {
     }
 
     this.lightmapRt.endDraw();
-    this.activeLightCount = lightsDrawn;
+    this.activeLightCount = lightsDrawn + interactableLightsDrawn;
   }
 
   public destroy(): void {

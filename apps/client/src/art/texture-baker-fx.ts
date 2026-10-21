@@ -454,6 +454,76 @@ export function bakeProjectilesAndFx(scene: Phaser.Scene, scale: number): void {
     traceRoundedRect(ctx, -9, -2, 18, 15, 5);
     ctx.fill();
   });
+
+  // 14. Phase P6 Soul Knight-Style Vertical Rarity Light Beam (32x128, BlendModes.ADD)
+  bakeCustomCanvas(scene, 'fx_rarity_beam', 32, 128, scale, (ctx) => {
+    // Soft outer vertical column tapering upward
+    const outerGrad = ctx.createLinearGradient(0, 54, 0, -60);
+    outerGrad.addColorStop(0, 'rgba(255, 255, 255, 0.85)');
+    outerGrad.addColorStop(0.42, 'rgba(255, 255, 255, 0.45)');
+    outerGrad.addColorStop(0.82, 'rgba(255, 255, 255, 0.12)');
+    outerGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    ctx.fillStyle = outerGrad;
+    ctx.beginPath();
+    ctx.moveTo(-7.5, 54);
+    ctx.lineTo(-3.2, -60);
+    ctx.lineTo(3.2, -60);
+    ctx.lineTo(7.5, 54);
+    ctx.closePath();
+    ctx.fill();
+
+    // Slender bright inner needle core
+    const coreGrad = ctx.createLinearGradient(0, 54, 0, -54);
+    coreGrad.addColorStop(0, 'rgba(255, 255, 255, 0.98)');
+    coreGrad.addColorStop(0.55, 'rgba(255, 255, 255, 0.68)');
+    coreGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    ctx.fillStyle = coreGrad;
+    ctx.beginPath();
+    ctx.moveTo(-2.3, 54);
+    ctx.lineTo(0, -54);
+    ctx.lineTo(2.3, 54);
+    ctx.closePath();
+    ctx.fill();
+
+    // Horizontal base flare ellipse at foot of beam (y = +54 -> 118px from top)
+    ctx.save();
+    ctx.translate(0, 54);
+    ctx.scale(13, 4.8);
+    const baseGrad = ctx.createRadialGradient(0, 0, 0.05, 0, 0, 1);
+    baseGrad.addColorStop(0, 'rgba(255, 255, 255, 0.95)');
+    baseGrad.addColorStop(0.55, 'rgba(255, 255, 255, 0.48)');
+    baseGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    ctx.fillStyle = baseGrad;
+    ctx.beginPath();
+    ctx.arc(0, 0, 1, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  });
+
+  // 15. Phase P6 Borderless 4-Point Diamond Sparkle Mote for Rare+ Closed Chests
+  bakeCustomCanvas(scene, 'fx_sparkle_mote', 16, 16, scale, (ctx) => {
+    const haloGrad = ctx.createRadialGradient(0, 0, 0.4, 0, 0, 6.2);
+    haloGrad.addColorStop(0, 'rgba(255, 255, 255, 0.95)');
+    haloGrad.addColorStop(0.5, 'rgba(255, 255, 255, 0.38)');
+    haloGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    ctx.fillStyle = haloGrad;
+    ctx.beginPath();
+    ctx.arc(0, 0, 6.2, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.98)';
+    tracePolygon(ctx, [
+      { x: -5.5, y: 0 },
+      { x: -1.2, y: -1.2 },
+      { x: 0, y: -5.5 },
+      { x: 1.2, y: -1.2 },
+      { x: 5.5, y: 0 },
+      { x: 1.2, y: 1.2 },
+      { x: 0, y: 5.5 },
+      { x: -1.2, y: 1.2 },
+    ]);
+    ctx.fill();
+  });
 }
 
 export function bakeCrosshair(scene: Phaser.Scene, scale: number): void {

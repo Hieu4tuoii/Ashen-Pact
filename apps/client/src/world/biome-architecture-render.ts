@@ -643,6 +643,8 @@ export class BiomeArchitectureLiveLayer {
   private readonly godRaySprites: Phaser.GameObjects.Image[] = [];
   private plan: RoomArchitecturePlan | null = null;
   private elapsedSec = 1.0;
+  private lastBracketSig = '';
+  private gearHadContent = false;
 
   constructor(scene: Phaser.Scene) {
     ensureGodRayTexture(scene);
@@ -668,6 +670,7 @@ export class BiomeArchitectureLiveLayer {
 
   public setPlan(plan: RoomArchitecturePlan): void {
     this.plan = plan;
+    this.lastBracketSig = '';
   }
 
   public update(params: {
@@ -686,12 +689,18 @@ export class BiomeArchitectureLiveLayer {
       this.elapsedSec += dtSec;
     }
 
-    this.gearGraphics.clear();
-    this.bracketGraphics.clear();
     this.additiveGraphics.clear();
 
     const plan = this.plan;
     if (!plan) {
+      if (this.gearHadContent) {
+        this.gearGraphics.clear();
+        this.gearHadContent = false;
+      }
+      if (this.lastBracketSig !== '') {
+        this.bracketGraphics.clear();
+        this.lastBracketSig = '';
+      }
       for (const s of this.godRaySprites) s.setVisible(false);
       return;
     }
@@ -713,6 +722,8 @@ export class BiomeArchitectureLiveLayer {
 
     // 2. Biome 3 Slowly Rotating 8-12 Tooth Brass Wall Gears (~18 deg/s on High/Medium, static on Low)
     if (plan.biome === 3) {
+      this.gearGraphics.clear();
+      this.gearHadContent = true;
       const rotRad = isLow ? 0 : this.elapsedSec * ((18 * Math.PI) / 180);
       for (let i = 0; i < plan.solidDecors.length; i++) {
         const item = plan.solidDecors[i]!;
@@ -751,6 +762,9 @@ export class BiomeArchitectureLiveLayer {
         this.gearGraphics.fillStyle(hexToNum(PALETTE.COPPER_LIGHT), 1);
         this.gearGraphics.fillCircle(cx, cy, 2.8);
       }
+    } else if (this.gearHadContent) {
+      this.gearGraphics.clear();
+      this.gearHadContent = false;
     }
 
     // 3. P4 45-deg Wrought-Iron Hanging Brazier Brackets (depth 31, above player) & Brazier Embers/Warm Dust Motes
@@ -760,23 +774,41 @@ export class BiomeArchitectureLiveLayer {
     const ironLightNum = hexToNum(PALETTE.STEEL_LIGHT);
     const inkNum = hexToNum(PALETTE.INK_DARK);
 
+    let brazierCount = 0;
+    let brazierHash = 0;
     for (let i = 0; i < props.length; i++) {
       const pr = props[i]!;
-      if (pr.hp <= 0 || pr.kind !== 'torch_brazier') continue;
+      if (pr.hp > 0 && pr.kind === 'torch_brazier') {
+        brazierCount += 1;
+        brazierHash = (brazierHash * 31 + ((pr.x | 0) ^ ((pr.y | 0) << 10))) | 0;
+      }
+    }
+    const bracketSig = `${brazierCount}:${brazierHash}`;
+    if (bracketSig !== this.lastBracketSig) {
+      this.lastBracketSig = bracketSig;
+      this.bracketGraphics.clear();
+      for (let i = 0; i < props.length; i++) {
+        const pr = props[i]!;
+        if (pr.hp <= 0 || pr.kind !== 'torch_brazier') continue;
+        const bx = pr.x;
+        const by = pr.y;
+        this.bracketGraphics.lineStyle(3.2, inkNum, 0.92);
+        this.bracketGraphics.lineBetween(bx + 12, by - 18, bx + 1, by - 7);
+        this.bracketGraphics.lineStyle(1.8, ironDarkNum, 1);
+        this.bracketGraphics.lineBetween(bx + 12, by - 18, bx + 1, by - 7);
+        this.bracketGraphics.lineStyle(1.0, ironLightNum, 0.85);
+        this.bracketGraphics.lineBetween(bx + 11, by - 18, bx + 1, by - 8);
+      }
+    }
 
-      // 45-deg wrought-iron hanging bracket arm extending from top-right corbel (+12, -18) down-left to brazier cage
-      // (Kept to the right of NW brazier_pool sample rect so unlit metrics stay untouched)
-      const bx = pr.x;
-      const by = pr.y;
-      this.bracketGraphics.lineStyle(3.2, inkNum, 0.92);
-      this.bracketGraphics.lineBetween(bx + 12, by - 18, bx + 1, by - 7);
-      this.bracketGraphics.lineStyle(1.8, ironDarkNum, 1);
-      this.bracketGraphics.lineBetween(bx + 12, by - 18, bx + 1, by - 7);
-      this.bracketGraphics.lineStyle(1.0, ironLightNum, 0.85);
-      this.bracketGraphics.lineBetween(bx + 11, by - 18, bx + 1, by - 8);
+    if (!isLow && lightingEnabled) {
+      for (let i = 0; i < props.length; i++) {
+        const pr = props[i]!;
+        if (pr.hp <= 0 || pr.kind !== 'torch_brazier') continue;
+        const bx = pr.x;
+        const by = pr.y;
 
-      // Rising Embers (<= 3.5px diameter -> r <= 1.65px, no dark outline, BlendModes.ADD) & Warm Dust Motes (<= 3px)
-      if (!isLow && lightingEnabled) {
+        // Rising Embers (<= 3.5px diameter -> r <= 1.65px, no dark outline, BlendModes.ADD) & Warm Dust Motes (<= 3px)
         for (let e = 0; e < 4; e++) {
           const cycle = (this.elapsedSec * (0.85 + e * 0.14) + i * 0.37 + e * 0.25) % 1;
           const emberX = bx + Math.sin(this.elapsedSec * 3.2 + i * 1.7 + e * 2.1) * 5.5;

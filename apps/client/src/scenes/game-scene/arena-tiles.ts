@@ -113,9 +113,12 @@ export function createImpl(this: GameScene): void {
   this.pickupSprites.clear();
   this.doorSprites.clear();
   this.chestSprites.clear();
+  this.chestGlowSprites.clear();
+  this.chestSparkleSprites.clear();
   this.worldItemSprites.clear();
   this.npcVisuals.clear();
   this.portalSprite = undefined;
+  this.portalGlowSprite = undefined;
   this.portalLabel = undefined;
   this.localNameLabel = undefined;
   this.localEmoteLabel = undefined;
@@ -291,7 +294,11 @@ export function createImpl(this: GameScene): void {
   // 2. Build Arena Tilemap (8 Floor Variants, Autotiled Walls/Pillars, Cracked Walls, AO Shadows, 6 Interactive Surfaces)
   this.buildArenaTiles();
 
-  // 3. Telegraph & Hitbox Overlay Graphics (depth 38: above lightmapRt depth 34 so telegraphs stay bright & readable in dark zones)
+  // 3. Telegraph, Interact Highlight & Hitbox Overlay Graphics (depth 35.6..38: above lightmapRt depth 34)
+  this.interactHighlightGraphics = this.add.graphics();
+  this.interactHighlightGraphics.setDepth(35.6);
+  this.interactHighlightGraphics.setBlendMode(Phaser.BlendModes.ADD);
+
   this.telegraphGraphics = this.add.graphics();
   this.telegraphGraphics.setDepth(38);
 
@@ -638,6 +645,7 @@ export function applyCameraViewportImpl(this: GameScene): void {
     }
     for (const entry of this.hubStatueRigs.values()) {
       entry.rig.refreshBakedTextures();
+      entry.glowSprite.setTexture('fx_light_radial');
       entry.label.setResolution(newScale);
       entry.subLabel.setResolution(newScale);
     }
@@ -663,10 +671,12 @@ export function applyCameraViewportImpl(this: GameScene): void {
     for (const item of this.pickupSprites.values()) {
       item.sprite.setTexture(item.textureKey);
       item.sprite.setScale(invBake);
+      item.glowSprite.setTexture('fx_light_radial');
     }
     for (const item of this.pickupSpritePool) {
       item.sprite.setTexture(item.textureKey);
       item.sprite.setScale(invBake);
+      item.glowSprite.setTexture('fx_light_radial');
     }
     const sim = this.transport?.getSim();
     this.weaponIconSprites.forEach((icon, idx) => {
@@ -691,6 +701,7 @@ export function applyCameraViewportImpl(this: GameScene): void {
     }
     for (const entry of this.doorSprites.values()) {
       entry.sprite.destroy();
+      entry.glowSprite.destroy();
       entry.label.destroy();
     }
     this.doorSprites.clear();
@@ -698,21 +709,36 @@ export function applyCameraViewportImpl(this: GameScene): void {
       sprite.destroy();
     }
     this.chestSprites.clear();
+    for (const glow of this.chestGlowSprites.values()) {
+      glow.destroy();
+    }
+    this.chestGlowSprites.clear();
+    for (const sparkles of this.chestSparkleSprites.values()) {
+      for (const sp of sparkles) sp.destroy();
+    }
+    this.chestSparkleSprites.clear();
     for (const entry of this.worldItemSprites.values()) {
       entry.sprite.destroy();
-      entry.glow.destroy();
+      entry.glowSprite.destroy();
+      entry.beamSprite.destroy();
+      entry.shopMatSprite.destroy();
       entry.label.destroy();
     }
     this.worldItemSprites.clear();
     for (const entry of this.npcVisuals.values()) {
       entry.rig?.destroy();
       entry.sprite?.destroy();
+      entry.glowSprite.destroy();
       entry.label.destroy();
     }
     this.npcVisuals.clear();
     if (this.portalSprite) {
       this.portalSprite.destroy();
       this.portalSprite = undefined;
+    }
+    if (this.portalGlowSprite) {
+      this.portalGlowSprite.destroy();
+      this.portalGlowSprite = undefined;
     }
     if (this.portalLabel) {
       this.portalLabel.destroy();

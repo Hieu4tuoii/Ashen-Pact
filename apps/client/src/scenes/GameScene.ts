@@ -22,9 +22,13 @@ import { musicManager } from '../audio/music-synth.js';
 import { zzfx } from '../audio/zzfx.js';
 import { getVisualQueryConfig } from '../core/visual-query.js';
 import type { CombatFxManager } from '../fx/combat-fx.js';
+import {
+  type InteractableLightEntry,
+  populateInteractableLightsScratch,
+} from '../fx/lighting-config.js';
 import type { LightingPipeline } from '../fx/lighting-pipeline.js';
 import type { DebugOverlay } from '../ui/debug-overlay.js';
-import type { GraphicsQualityTier } from '../ui/graphics-settings.js';
+import { type GraphicsQualityTier, graphicsSettings } from '../ui/graphics-settings.js';
 import type { ModalOverlayManager } from '../ui/settings-modal.js';
 import type { BiomeArchitectureLiveLayer } from '../world/biome-architecture.js';
 import type { HudScene } from './HudScene.js';
@@ -124,6 +128,7 @@ export class GameScene extends Phaser.Scene {
     string,
     {
       rig: CutoutRig;
+      glowSprite: Phaser.GameObjects.Image;
       label: Phaser.GameObjects.Text;
       subLabel: Phaser.GameObjects.Text;
     }
@@ -137,7 +142,11 @@ export class GameScene extends Phaser.Scene {
   >();
   public pickupSprites = new Map<
     number,
-    { sprite: Phaser.GameObjects.Sprite; textureKey: string }
+    {
+      sprite: Phaser.GameObjects.Sprite;
+      glowSprite: Phaser.GameObjects.Image;
+      textureKey: string;
+    }
   >();
   public projectileSpritePool: {
     sprite: Phaser.GameObjects.Sprite;
@@ -145,20 +154,29 @@ export class GameScene extends Phaser.Scene {
   }[] = [];
   public pickupSpritePool: {
     sprite: Phaser.GameObjects.Sprite;
+    glowSprite: Phaser.GameObjects.Image;
     textureKey: string;
   }[] = [];
 
   // Phase 3 Room Visuals (Doors, Chests, World Items, NPCs, Portal)
   public doorSprites = new Map<
     string,
-    { sprite: Phaser.GameObjects.Sprite; label: Phaser.GameObjects.Text }
+    {
+      sprite: Phaser.GameObjects.Sprite;
+      glowSprite: Phaser.GameObjects.Image;
+      label: Phaser.GameObjects.Text;
+    }
   >();
   public chestSprites = new Map<number, Phaser.GameObjects.Sprite>();
+  public chestGlowSprites = new Map<number, Phaser.GameObjects.Image>();
+  public chestSparkleSprites = new Map<number, Phaser.GameObjects.Image[]>();
   public worldItemSprites = new Map<
     number,
     {
       sprite: Phaser.GameObjects.Sprite;
-      glow: Phaser.GameObjects.Graphics;
+      glowSprite: Phaser.GameObjects.Image;
+      beamSprite: Phaser.GameObjects.Image;
+      shopMatSprite: Phaser.GameObjects.Image;
       label: Phaser.GameObjects.Text;
     }
   >();
@@ -167,11 +185,14 @@ export class GameScene extends Phaser.Scene {
     {
       rig?: CutoutRig;
       sprite?: Phaser.GameObjects.Sprite;
+      glowSprite: Phaser.GameObjects.Image;
       label: Phaser.GameObjects.Text;
     }
   >();
   public portalSprite?: Phaser.GameObjects.Sprite;
+  public portalGlowSprite?: Phaser.GameObjects.Image;
   public portalLabel?: Phaser.GameObjects.Text;
+  public interactHighlightGraphics!: Phaser.GameObjects.Graphics;
 
   public readonly activeEnemyIds = new Set<number>();
   public readonly activeSimPlayerIds = new Set<number>();
@@ -192,6 +213,7 @@ export class GameScene extends Phaser.Scene {
     pos: { x: number; y: number };
     state: ReturnType<LocalTransport['getSim']>['player'];
   }[] = [];
+  public readonly interactableLightsScratch: InteractableLightEntry[] = [];
 
   public mapTileVisuals: ArenaTileVisual[] = [];
   public arenaGroundTex?: Phaser.Textures.CanvasTexture;
@@ -691,6 +713,25 @@ export class GameScene extends Phaser.Scene {
 
     this.lighting.setBiome(sim.currentBiome);
     this.lighting.setBlizzardVeil(isBlizzardPhase3);
+    const qualityTier = graphicsSettings.getState().quality;
+    populateInteractableLightsScratch(this.interactableLightsScratch, {
+      tier: qualityTier,
+      elapsedSec: getVisualQueryConfig().freeze ? 1.0 : this.lighting.getElapsedSec(),
+      simTick: sim.tick,
+      biome: sim.currentBiome,
+      inHub: sim.inHub,
+      hubReady: sim.areAllPlayersReady(),
+      playerId: sim.player.id,
+      portalActive: sim.portalActive,
+      portalX: sim.portalX,
+      portalY: sim.portalY,
+      chests: sim.chests,
+      worldItems: sim.worldItems,
+      pickups: sim.pickups,
+      doors: sim.doors,
+      npcEntities: sim.npcEntities,
+      hubStatues: sim.hubStatues,
+    });
     this.lighting.update({
       dtSec: animDt,
       playerPos,
@@ -699,6 +740,7 @@ export class GameScene extends Phaser.Scene {
       enemies: sim.enemies,
       projectiles: sim.projectiles,
       props: sim.props,
+      interactableLights: this.interactableLightsScratch,
       map: sim.map,
       trauma: sim.runState === 'playing' && !isSoloPaused ? this.fx.getTrauma() : 0,
       inHub: sim.inHub,
