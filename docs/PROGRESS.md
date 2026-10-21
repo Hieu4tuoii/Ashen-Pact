@@ -599,3 +599,42 @@
   6. **Visual Gate Bước A & Bước B (`docs/screenshots/polish-p4/review-step-a.md` & `docs/screenshots/polish-p4/review.md`):**
      - **Bước A (Phòng chuẩn B1 — 4 cảnh):** Đánh giá mù A/B bởi độc lập `pro` Visual Reviewer (`43253b9f-a379-470b-9cac-73c7ed104604`): **PASS** ngay ở Vòng 1 (`4/4` cảnh chọn `after`, `0` blocker, `0` major; Environment **`9.2 / 10`**, Lighting **`9.5 / 10`**, Readability **`9.4 / 10`**, Product Feel **`9.0 / 10`**) → Tự động khóa bộ ảnh `docs/screenshots/polish-p4/golden-room/*.png` và Mục 5.4 `docs/ART_GUIDE.md`.
      - **Bước B (Toàn bộ 11 cảnh Hub, B1, B2, B3):** Đánh giá mù A/B bởi độc lập `pro` Visual Reviewer (`133901ef-a6e1-48b9-bf20-1627c8b16f65`): **PASS** ngay ở Vòng 1 (**`11/11` cảnh + `11/11` cặp `-unlit.png` = 100%** chọn `after`, `0` blocker, `0` major; Environment **`9.4 / 10`**, Lighting **`9.5 / 10`**, Readability **`9.5 / 10`**, Style Consistency vs Golden Room B1 **`9.5 / 10`**, Product Feel **`9.2 / 10`**, Phase P4 DoD **`10 / 10`**).
+
+### 3.10 Phase P5 — Bản Sắc Kiến Trúc Biome (`P1/P2/P3/P4`) & Chậu Lửa Ven Tường (Hoàn thành ✅)
+- **Commits:** `19f467b`.
+- **Hạng mục đã thực hiện:**
+  1. **Chuẩn Hóa Số Lượng Chậu Lửa (`torch_brazier`) Theo Loại Phòng (`packages/shared/src/sim/sim-props-spawning.ts`, `sim-dungeon-rooms.ts`):**
+     - Phân bổ số lượng `torch_brazier` theo đúng loại phòng trong `WorldSim`: `start: 2` (2 bên cửa vào phía Tây, giữ nguyên chậu lửa góc Tây–Bắc tại `(8 * TILE_SIZE - 14, 5 * TILE_SIZE - 12)` để vùng mẫu `brazier_pool` luôn đo chính xác), `combat: 3–4` (phòng combat đầu tiên có đủ 4 góc, các phòng combat phụ có thể bỏ 1 góc theo seed), `treasure: 2`, `merchant: 2`, `shrine: 2`, `portal: 2`, `secret: 0`, và `boss: 6` đối xứng dọc khán đài Bắc–Nam.
+  2. **Hoàn Thiện Kiến Trúc `P1/P2/P3/P4` & Chọn `2/3` Motif Theo Seed (`apps/client/src/world/biome-architecture.ts`, `biome-arch-live.ts`):**
+     - Mỗi phòng chọn tất định **2 trong 3 motif ven tường** (`plan.selectedMotifs.length === 2`) kết hợp ngân sách mật độ nghiêm ngặt (`largeDecorCount <= 8`, `smallPerimeterDecorCount <= Math.floor(perimeterTileCount / 3)`, `emptyPerimeterRatio >= 0.40`, `centerArenaSolidDecorCount === 0`).
+     - **P4 Chung & Hub (`0`):** Bệ đá giật cấp + giá đỡ sắt rèn vươn chéo `45°` (`brazier_pedestal`) khớp trực tiếp với danh sách `torch_brazier` thực tế của từng phòng; cột đá rãnh (`fluted_column`) trên ô `pillar` và nửa cột gắn tường (`fluted_pilaster`) đổ bóng dài `48u` về hướng Đông–Nam (`-135°`); gờ tường đá vỡ xen hàng rào sắt rèn mũi nhọn (`wrought_iron_fence`).
+     - **Biome 1 (`P1 Rừng Cổ`):** Rễ cây cổ thụ Bezier S-curve (`root_base`) tràn qua mép tường với đầu mút decal phẳng `2u` (`root_decal_tip`), cụm nấm phát quang (`mushroom_cluster`) + dây leo mặt đứng (`cliff_vines`), và đá bước chân (`stepping_stone`) chỉ đặt trên ô sàn khô (`surface === 'none'`) sát mép nước/đầm độc.
+     - **Biome 2 (`P2 Hầm Băng`):** Vòng cổ ngữ **Sunken 3-Ring Ice Astrolabe** (`70u/120u/165u`, bán kính vòng ngoài `<= 0.45 * min(w, h)` của Center Arena, 8 nan hướng tâm, bán nguyệt lệch tâm, $\Delta L^* \in [5, 7]$), hốc vòm thác băng tường Bắc (`ice_alcove`), cụm tinh thể băng vát cạnh (`frost_crystal_cluster`), và **2–3 dải tứ giác ánh sáng God-rays** chiếu xiên `-135°` (`rộng 60–90u`, `alpha 0.06 → 0`, tự động tắt ở `Low`).
+     - **Biome 3 (`P3 Lò Rèn`):** Rãnh nhiệt âm sàn rộng `24–28u` có nắp lưới sắt rèn (`grated_heat_channel`, `hasIronGrateCover = true`, không đi qua Center Arena, ánh dung nham lộ nhẹ qua khe lưới `alpha <= 0.30` nhịp thở chậm ở High/Medium và tắt ở Low), bánh răng đồng thau `8–12 răng` gắn tường Bắc (`brass_gear_wall`) quay chậm ở High/Medium (đứng yên ở Low), ống dẫn hơi nước mặt bích tán đinh (`steam_pipe_wall`), và đe rèn (`forge_anvil`) chỉ đặt trên ô `pillar`.
+     - Đảm bảo 100% decal sàn (`sunken_astrolabe`, `grated_heat_channel`, `stepping_stone`, `root_decal_tip`) tự động ẩn ngay khi ô bị phủ bởi surface động hoặc hiệu ứng Boss Phase 3 (`applyBossPhase3ToxicBorder`, `applyBossPhase3BlizzardBorder`, `applyBossPhase3LavaBorder`).
+  3. **Hạt Than Hồng Bay Lên & Bụi Sáng Quanh Chậu Lửa (`apps/client/src/fx/combat-fx.ts`, `GameScene.ts`):**
+     - Sinh hạt than hồng nhỏ (`<= 3.5px`, không viền đen, `BlendModes.ADD`) bay lên từ chậu lửa và hạt bụi sáng ấm li ti lơ lửng trong bán kính vũng sáng của `torch_brazier` (tự động tắt khi `quality === 'low'`).
+  4. **Kiểm Thử Đơn Vị DoD Phase P5 (`apps/client/test/polish-p5-biome-architecture.test.ts`):**
+     - **5/5 nhóm unit test DoD P5** PASS 100%: (1) BFS giữa mọi cặp cửa Bắc/Nam/Đông/Tây thông suốt 100%; (2) Decor có khối (`hasVolume = true`) chỉ nằm trên `wall`/`pillar`, riêng `forge_anvil` và `fluted_column` chỉ trên `pillar`; (3) Ngân sách mật độ + chọn `2/3` motif + số lượng `torch_brazier` theo từng loại phòng; (4) `hasHazardGlow === false` trên mọi decor/decal, `stepping_stone` chỉ trên ô khô, `grated_heat_channel` có nắp lưới sắt và ngoài Center Arena; (5) Surface Boss Phase 3 B1/B2/B3 luôn thắng và ẩn toàn bộ decal sàn.
+  5. **Số Đo Trắc Quang Định Lượng Toàn Bộ 13 Cảnh Đo & 18 Cảnh `--verify-freeze` (`docs/screenshots/polish-p5/after/metrics.json`):**
+
+| Cảnh (`scene`) | `floorMeanL` (`28–40` / B2 `40–50`) | `centerDeltaL` (`≤ 8.0`) | `floorDeltaL` (`≤ 14.0`) | `floorMeanS` (`≤ 0.35` / B2 `≤ 0.40`) | `contrastWithInkDark` (`≥ 22.0`) | `cornerToUnlitRatio` (`≥ 0.82`) | `minCornerL` (`≥ 15.0`) | `brazierToFloorDeltaL` (`≥ +8.0`) | `clipWhiteRatio` (`< 0.005`) | `freezeDiffRatio` (`< 0.005`) | Kết quả |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| `hub-solo` | **`32.53`** | **`1.55`** | **`3.07`** | **`0.200`** | **`27.21`** | **`1.012`** | **`28.10`** | **`+28.27`** | `0.000` | `0.000` | PASS |
+| `b1-start-room` | **`32.83`** | **`2.42`** | **`2.42`** | **`0.132`** | **`27.50`** | **`0.967`** | **`28.17`** | **`+20.20`** | `0.000` | `0.000` | PASS |
+| `b1-combat` | **`32.83`** | **`2.42`** | **`11.38`** | **`0.132`** | **`27.50`** | **`1.022`** | **`29.32`** | **`+24.35`** | `0.000` | `0.000` | PASS |
+| `b1-combat-low` | **`32.83`** | **`2.42`** | **`11.38`** | **`0.132`** | **`27.50`** | **`0.985`** | **`30.24`** | **`+21.66`** | `0.000` | `0.000` | PASS |
+| `boss-b1-phase3` | **`32.48`** | **`2.42`** | **`2.42`** | **`0.134`** | **`27.16`** | **`0.979`** | **`30.19`** | **`+16.88`** | `0.000` | `0.000` | PASS |
+| `b2-start-room` | **`44.88`** | **`2.95`** | **`2.95`** | **`0.276`** | **`39.55`** | **`0.928`** | **`39.19`** | **`+10.99`** | `0.000` | `0.000` | PASS |
+| `b2-combat` | **`44.88`** | **`2.95`** | **`2.95`** | **`0.276`** | **`39.55`** | **`0.982`** | **`39.60`** | **`+22.10`** | `0.000` | `0.000` | PASS |
+| `b2-combat-low` | **`44.88`** | **`2.95`** | **`2.95`** | **`0.276`** | **`39.55`** | **`0.983`** | **`41.02`** | **`+18.14`** | `0.000` | `0.000` | PASS |
+| `boss-b2` | **`44.46`** | **`2.95`** | **`3.25`** | **`0.277`** | **`39.13`** | **`0.985`** | **`40.56`** | **`+12.11`** | `0.000` | `0.000` | PASS |
+| `b3-start-room` | **`30.84`** | **`2.35`** | **`2.35`** | **`0.143`** | **`25.51`** | **`0.942`** | **`26.43`** | **`+21.18`** | `0.000` | `0.000` | PASS |
+| `b3-combat` | **`30.84`** | **`2.35`** | **`2.35`** | **`0.143`** | **`25.51`** | **`1.012`** | **`26.93`** | **`+23.84`** | `0.000` | `0.000` | PASS |
+| `b3-combat-low` | **`30.84`** | **`2.35`** | **`2.35`** | **`0.143`** | **`25.51`** | **`1.003`** | **`28.82`** | **`+22.10`** | `0.000` | `0.000` | PASS |
+| `boss-b3-phase3` | **`30.48`** | **`2.35`** | **`2.35`** | **`0.141`** | **`25.15`** | **`0.992`** | **`28.10`** | **`+16.64`** | `0.000` | `0.000` | PASS |
+
+     - 5 cảnh bổ sung (`b1-chest-near`, `boss-b1`, `b2-chest`, `b3-chest`, `boss-b3`) cũng đạt `diffPixels = 0` (`freezeDiffRatio = 0.000 < 0.005`), nâng tổng số cảnh vượt qua `--verify-freeze` lên **18/18 cảnh tuyệt đối**.
+  6. **Visual Gate (`docs/screenshots/polish-p5/review.md`):**
+     - Đánh giá mù A/B (Blind A/B Review trên 18 cặp cảnh bởi độc lập `pro` Visual Reviewer `aa6fa86a-b284-49b2-b7d4-e8e60fa92b51`, đối chiếu trực tiếp với `docs/screenshots/polish-p4/golden-room/`): **PASS** (`version-A` = `after` thắng tuyệt đối **18/18 cảnh = 100%**; `0` blocker, `0` major, `0` minor; Environment **`9.3 / 10`** `>= 8.5`, Lighting **`9.5 / 10`**, Readability **`9.3 / 10`**, Style Consistency vs Golden Room B1 **`9.4 / 10`**, Product Feel **`9.2 / 10`**).
+
