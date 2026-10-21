@@ -217,7 +217,7 @@ describe('Phase 4 — Co-op LAN, Hub, 5 Characters, Scaling, Revive/Ghost & Netw
     sim.skipCurrentRoomWaves();
     sim.step(1 / 60);
     expect(p2.lifeState).toBe('alive');
-    expect(p2.hp).toBe(Math.max(2, Math.ceil(p2.maxHp * 0.5)));
+    expect(p2.hp).toBe(Math.max(2, Math.ceil(p2.maxHp * 0.35)));
 
     // Down all 3 players -> Team Wipe ('defeat')
     for (const pl of [p1, p2, p3]) {

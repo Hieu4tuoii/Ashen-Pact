@@ -9,6 +9,7 @@ import {
   WORLD_VIEW_WIDTH,
 } from '@ashen-pact/shared';
 import { hexToNum, PALETTE } from '../../art/palette.js';
+import { musicManager } from '../../audio/music-synth.js';
 import {
   computeOffscreenArrowPose,
   drawKeyChip,
@@ -27,6 +28,12 @@ import {
   UI_THEME,
 } from '../../ui/theme.js';
 import type { GameScene } from '../GameScene.js';
+import {
+  computeMusicIntensityBoost,
+  computeWaveBannerSpec,
+  triggerP11WaveBanner,
+  updateP11RemainingEnemiesHud,
+} from './p11-drama-hud.js';
 
 const scratchAliveBosses: SimEnemyState[] = [];
 const scratchAliveEnemies: SimEnemyState[] = [];
@@ -41,12 +48,16 @@ export function triggerPlayerHitDirectionIndicatorImpl(this: GameScene, angleRad
 }
 
 export function triggerWaveBannerImpl(this: GameScene, wave: number, maxWaves = 3): void {
-  const isEn = i18n.getLocale() === 'en';
-  this.hudBannerTextStr = isEn
-    ? `⚔ WAVE ${wave}/${Math.max(wave, maxWaves)}`
-    : `⚔ ĐỢT ${wave}/${Math.max(wave, maxWaves)}`;
-  this.hudBannerAccentColor = 0xfacc15;
-  this.hudBannerTimer = 2.1;
+  const sim = this.transport.getSim();
+  const room = sim.getCurrentRoom();
+  const isChallenge = Boolean(
+    room.isChallenge || (room as unknown as Record<string, unknown>).isChallengeRoom,
+  );
+  const spec = computeWaveBannerSpec(wave, maxWaves, isChallenge);
+  if (typeof window !== 'undefined') {
+    (window as unknown as Record<string, unknown>).__LAST_P11_WAVE_BANNER__ = spec.titleVi;
+  }
+  triggerP11WaveBanner(this, wave, maxWaves, isChallenge);
 }
 
 export function triggerRoomClearedBannerImpl(this: GameScene): void {
@@ -269,12 +280,22 @@ export function updateBossHudImpl(this: GameScene): void {
   }
   const boss = scratchAliveBosses[0] ?? null;
   const stunActive = boss && boss.aiState === 'stunned' && boss.stateTimer > 0 ? 1 : 0;
+  const transActive = boss && (boss.bossPhaseTransitionTimer ?? 0) > 0 ? 1 : 0;
+  const bossExt = boss as unknown as Record<string, number | undefined> | null;
+  const bossElapsed = boss ? Number(boss.bossCombatElapsedSec ?? bossExt?.bossFightElapsedSec ?? 0) : 0;
+  const enrageLvl = boss
+    ? Math.max(
+        boss.bossEnrageLevel ?? 0,
+        bossExt?.bossEnrageStacks ?? 0,
+        bossElapsed >= 90 ? Math.floor((bossElapsed - 90) / 15) + 1 : 0,
+      )
+    : 0;
   const coreWin = Math.ceil(sim.titanCoreWindowTimer);
   const trailKey = Math.round(this.trailingBossHpRatio * 200);
   const bossHash =
     !boss || this.fullMapOpen || sim.runState !== 'playing'
       ? ''
-      : `${boss.defId}:${boss.id}:${boss.hp}:${boss.maxHp}:${boss.bossPhase}:${stunActive}:${coreWin}:${trailKey}:${i18n.getLocale()}`;
+      : `${boss.defId}:${boss.id}:${boss.hp}:${boss.maxHp}:${boss.bossPhase}:${stunActive}:${transActive}:${enrageLvl}:${coreWin}:${trailKey}:${i18n.getLocale()}`;
   if (bossHash === this.lastBossHudHash) return;
   this.lastBossHudHash = bossHash;
 
@@ -291,14 +312,23 @@ export function updateBossHudImpl(this: GameScene): void {
   const bossName = i18n
     .enemyName(boss.defId, bossDef?.nameVi ?? 'Mục Vương Nấm Độc')
     .toUpperCase();
+  const isEn = i18n.getLocale() === 'en';
   const statusSuffix =
-    boss.aiState === 'stunned' && boss.stateTimer > 0
-      ? i18n.t('ui.boss.stunned')
-      : sim.titanCoreWindowTimer > 0
-        ? i18n.t('ui.boss.breakCores', {
-            sec: Math.ceil(sim.titanCoreWindowTimer),
-          })
-        : '';
+    transActive > 0
+      ? isEn
+        ? ' [INVULNERABLE]'
+        : ' [BẤT TỬ · CHUYỂN PHA]'
+      : enrageLvl > 0
+        ? isEn
+          ? ` [ENRAGE ×${enrageLvl}]`
+          : ` [CUỒNG NỘ ×${enrageLvl}]`
+        : boss.aiState === 'stunned' && boss.stateTimer > 0
+          ? i18n.t('ui.boss.stunned')
+          : sim.titanCoreWindowTimer > 0
+            ? i18n.t('ui.boss.breakCores', {
+                sec: Math.ceil(sim.titanCoreWindowTimer),
+              })
+            : '';
   const titleStr = i18n.t('ui.boss.titleFormat', {
     name: bossName,
     phase: boss.bossPhase,
@@ -317,7 +347,15 @@ export function updateBossHudImpl(this: GameScene): void {
   const panelY = 8;
 
   const phaseAccent =
-    boss.bossPhase === 3 ? 0xa855f7 : boss.bossPhase === 2 ? 0xf97316 : 0xe84545;
+    transActive > 0
+      ? 0xfacc15
+      : enrageLvl > 0
+        ? 0xff2a2a
+        : boss.bossPhase === 3
+          ? 0xa855f7
+          : boss.bossPhase === 2
+            ? 0xf97316
+            : 0xe84545;
 
   drawStyledPanel(g, panelX, panelY, panelW, panelH, {
     fillColor: UI_THEME.panelBgDark,
@@ -382,6 +420,25 @@ export function updateTopCenterBannersAndQolImpl(this: GameScene, dtSec: number)
   const isEn = i18n.getLocale() === 'en';
   const uiScale = this.currentHudUiScale || graphicsSettings.getState().uiScale;
 
+  updateP11RemainingEnemiesHud(this);
+
+  const hpRatio = clamp(sim.player.hp / Math.max(1, sim.player.maxHp), 0, 1);
+  const activeBoss = sim.getActiveBoss();
+  const bossExt = activeBoss as unknown as Record<string, number | undefined> | null;
+  const bossElapsed = activeBoss
+    ? Number(activeBoss.bossCombatElapsedSec ?? bossExt?.bossFightElapsedSec ?? 0)
+    : 0;
+  const bossEnrageLvl = activeBoss
+    ? Math.max(
+        activeBoss.bossEnrageLevel ?? 0,
+        bossExt?.bossEnrageStacks ?? 0,
+        bossElapsed >= 90 ? Math.floor((bossElapsed - 90) / 15) + 1 : 0,
+      )
+    : 0;
+  musicManager.setIntensityBoost(
+    computeMusicIntensityBoost(hpRatio, bossEnrageLvl, activeBoss?.bossPhase ?? 0),
+  );
+
   // Detect room / wave transitions automatically
   if (sim.currentRoomId !== this.lastBannerRoomId) {
     this.lastBannerRoomId = sim.currentRoomId;
@@ -390,7 +447,7 @@ export function updateTopCenterBannersAndQolImpl(this: GameScene, dtSec: number)
   } else if (!sim.inHub && sim.runState === 'playing') {
     if (sim.waveNumber > 0 && sim.waveNumber !== this.lastBannerWaveNumber && !room.cleared) {
       this.lastBannerWaveNumber = sim.waveNumber;
-      this.triggerWaveBanner(sim.waveNumber, 3);
+      this.triggerWaveBanner(Math.max(1, room.wavesSpawned || 1), room.wavesTotal || 3);
     }
     if (room.cleared && !this.lastBannerRoomCleared && room.type === 'combat') {
       this.lastBannerRoomCleared = true;

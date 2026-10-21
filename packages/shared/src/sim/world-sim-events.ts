@@ -325,6 +325,27 @@ export type SimEvent =
       playerId?: number;
       x: number;
       y: number;
+    }
+  | {
+      kind: 'wave_started';
+      roomId: number;
+      waveIndex: number;
+      wavesTotal: number;
+      isChallenge: boolean;
+    }
+  | {
+      kind: 'boss_enraged';
+      enemyId: number;
+      enrageLevel: number;
+      x: number;
+      y: number;
+    }
+  | {
+      kind: 'vengeful_telegraph';
+      enemyId: number;
+      x: number;
+      y: number;
+      delaySec: number;
     };
 
 export interface WorldSimOptions {

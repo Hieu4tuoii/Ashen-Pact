@@ -73,6 +73,8 @@ export interface DungeonRoomNode {
   shrineBlessingId?: string;
   shrineUsed: boolean;
   surfaceLayoutSeed: number;
+  isChallenge?: boolean;
+  currentWaveSpawnedCount?: number;
 }
 
 export interface DungeonFloorGraph {
@@ -92,6 +94,8 @@ const ELITE_MODIFIERS: readonly EliteModifier[] = [
   'shield',
   'explosive_death',
   'regen',
+  'volley',
+  'vengeful',
 ] as const;
 
 export const ROOM_TYPE_NAMES_VI: Record<RoomType, string> = {
@@ -139,9 +143,10 @@ export function rollWeaponForRarity(
 }
 
 /**
- * Generates a deterministic 9-room procedural dungeon floor (within the 7..10 rooms spec)
- * with guaranteed cardinal connectivity, secret room behind a cracked wall, combat waves
- * with Biome 1/2/3 enemies & Elites, treasure chest, merchant shop, ancient shrine, and portal/boss room.
+ * Generates a deterministic 10-room procedural dungeon floor (within the 7..10 rooms spec)
+ * with guaranteed cardinal connectivity, secret room behind a cracked wall, 4 combat rooms
+ * (3 standard + 1 Challenge Room) with Biome 1/2/3 enemies & Elites, treasure chest,
+ * merchant shop, ancient shrine, and portal/boss room.
  */
 export function generateDungeonFloor(
   seed: string | number,
@@ -337,6 +342,56 @@ export function generateDungeonFloor(
     room.cleared = false;
   }
 
+  // 5b. Attach 1 Challenge Combat Room (id = 9) using a forked RNG so rooms 0..8 layout is 100% preserved
+  const challengeRng = rng.fork('challenge_combat_room');
+  const firstCombatId = rooms.find((r) => r.type === 'combat')?.id ?? -1;
+  const preferredParentIds = [
+    ...rooms
+      .filter((r) => r.type === 'shrine' || r.type === 'merchant' || r.type === 'treasure')
+      .map((r) => r.id),
+    ...rooms.filter((r) => r.type === 'combat' && r.id !== firstCombatId).map((r) => r.id),
+    ...rooms.filter((r) => r.id !== 1).map((r) => r.id),
+  ];
+  for (const pId of preferredParentIds) {
+    const parent = rooms[pId];
+    if (!parent) continue;
+    const openDirs = allDirs.filter((d) => {
+      if (pId === 0 && d === 'N') return false;
+      const nx = parent.gx + DIR_OFFSET[d].dx;
+      const ny = parent.gy + DIR_OFFSET[d].dy;
+      return nx >= 0 && nx <= 6 && ny >= 0 && ny <= 6 && !gridMap.has(coordKey(nx, ny));
+    });
+    if (openDirs.length === 0) continue;
+    const chosenDir = challengeRng.pick(openDirs);
+    const nx = parent.gx + DIR_OFFSET[chosenDir].dx;
+    const ny = parent.gy + DIR_OFFSET[chosenDir].dy;
+    const newId = rooms.length;
+    const child: DungeonRoomNode = {
+      id: newId,
+      gx: nx,
+      gy: ny,
+      type: 'combat',
+      nameVi: 'Phòng Thử Thách',
+      isChallenge: true,
+      distanceFromStart: parent.distanceFromStart + 1,
+      connections: {},
+      secretWallBroken: false,
+      discovery: pId === 0 ? 'discovered' : 'hidden',
+      cleared: false,
+      waves: [],
+      wavesSpawned: 0,
+      wavesTotal: 3,
+      chestOpened: false,
+      shopOffers: [],
+      shrineUsed: false,
+      surfaceLayoutSeed: challengeRng.nextInt(1000, 999999),
+    };
+    rooms.push(child);
+    gridMap.set(coordKey(nx, ny), newId);
+    linkRooms(pId, newId, chosenDir);
+    break;
+  }
+
   // 6. Populate content for each room type
   let combatRoomIndex = 0;
   for (const room of rooms) {
@@ -364,7 +419,7 @@ export function generateDungeonFloor(
           kind: 'health_potion',
           nameVi: 'Bình Máu Rừng Cổ (+3 HP)',
           descriptionVi: 'Hồi phục ngay 3 HP cho người chơi.',
-          costGold: 15,
+          costGold: 25,
           purchased: false,
         },
         {
@@ -372,7 +427,7 @@ export function generateDungeonFloor(
           kind: 'weapon',
           nameVi: wDef.nameVi,
           descriptionVi: `Vũ khí ${wDef.rarity.toUpperCase()} · DMG ${wDef.damage}`,
-          costGold: localFloor === 2 ? 40 : 28,
+          costGold: localFloor === 2 ? 60 : 40,
           weaponId: shopWeaponId,
           rarity: shopRarity,
           purchased: false,
@@ -382,7 +437,7 @@ export function generateDungeonFloor(
           kind: 'armor_upgrade',
           nameVi: 'Giáp Cổ Ngữ (+2 Giáp)',
           descriptionVi: 'Tăng +2 Giáp tối đa và hồi đầy Giáp.',
-          costGold: 30,
+          costGold: 45,
           purchased: false,
         },
       ];
@@ -392,22 +447,40 @@ export function generateDungeonFloor(
       const buffKeys = Object.keys(FLOOR_BUFFS);
       room.shrineBlessingId = rng.pick(buffKeys);
     } else if (room.type === 'combat') {
-      combatRoomIndex += 1;
-      const waveCount = combatRoomIndex >= 2 || localFloor === 2 ? 3 : 2;
-      room.waves = generateRoomWaves(
-        rng,
-        waveCount,
-        localFloor,
-        combatRoomIndex,
-        false,
-        playerCount,
-        biome,
-      );
-      room.wavesTotal = room.waves.length;
+      if (room.isChallenge) {
+        room.nameVi = 'Phòng Thử Thách';
+        room.waves = generateRoomWaves(
+          challengeRng,
+          3,
+          localFloor,
+          4,
+          true,
+          playerCount,
+          biome,
+          true,
+        );
+        room.wavesTotal = room.waves.length;
+        room.chestRarity = localFloor === 2 ? 'legendary' : 'epic';
+        room.chestWeaponId = rollWeaponForRarity(challengeRng, room.chestRarity, biome);
+      } else {
+        combatRoomIndex += 1;
+        const waveCount = 4;
+        room.waves = generateRoomWaves(
+          rng,
+          waveCount,
+          localFloor,
+          combatRoomIndex,
+          false,
+          playerCount,
+          biome,
+          false,
+        );
+        room.wavesTotal = room.waves.length;
+      }
     } else if (room.type === 'portal') {
       // Floor 1 Portal Guardian Room: 2 waves (with guaranteed Elite guardian on Wave 2), then portal unlocks!
       room.cleared = false;
-      room.waves = generateRoomWaves(rng, 2, localFloor, 3, true, playerCount, biome);
+      room.waves = generateRoomWaves(rng, 2, localFloor, 3, true, playerCount, biome, false);
       room.wavesTotal = room.waves.length;
     } else if (room.type === 'boss') {
       // Floor 2 Boss Room: Biome Boss + Legendary reward chest on clear
@@ -455,6 +528,7 @@ function generateRoomWaves(
   guaranteeEliteOnFinalWave = false,
   playerCount: 1 | 2 | 3 | 4 = 1,
   biome: 1 | 2 | 3 = 1,
+  guaranteeEliteEveryWave = false,
 ): DungeonWaveDef[] {
   const waves: DungeonWaveDef[] = [];
   const tier = COOP_SCALING[playerCount] ?? COOP_SCALING[1];
@@ -466,7 +540,7 @@ function generateRoomWaves(
         : BIOME1_COMBAT_ENEMIES;
 
   for (let w = 1; w <= waveCount; w++) {
-    const baseEnemyCount = Math.min(5, 3 + Math.floor((w + floorNumber - 1) / 2));
+    const baseEnemyCount = Math.min(6, 4 + Math.floor((w + floorNumber - 1) / 2));
     const enemyCount =
       playerCount === 1
         ? baseEnemyCount
@@ -482,12 +556,13 @@ function generateRoomWaves(
       const eliteChance =
         playerCount === 1
           ? floorNumber === 2
-            ? 0.25
-            : 0.16
+            ? 0.32
+            : 0.22
           : tier.eliteChance + (floorNumber === 2 ? 0.05 : 0);
       const isElite =
         defId !== 'thorn_turret' &&
-        ((guaranteeEliteOnFinalWave && isFinalWaveFirstEnemy) ||
+        ((guaranteeEliteEveryWave && i === 0) ||
+          (guaranteeEliteOnFinalWave && isFinalWaveFirstEnemy) ||
           (isFinalWaveFirstEnemy && roomDifficultyIndex >= 2) ||
           rng.chance(eliteChance));
 
@@ -496,6 +571,12 @@ function generateRoomWaves(
         isElite,
         eliteModifier: isElite ? rng.pick(ELITE_MODIFIERS) : null,
       });
+    }
+
+    if (guaranteeEliteEveryWave && !enemies.some((e) => e.isElite) && enemies.length > 0) {
+      const nonTurret = enemies.find((e) => e.defId !== 'thorn_turret') ?? enemies[0]!;
+      nonTurret.isElite = true;
+      nonTurret.eliteModifier = rng.pick(ELITE_MODIFIERS);
     }
 
     waves.push({

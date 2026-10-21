@@ -93,7 +93,13 @@ export type EnemyRole =
   | 'shielder'
   | 'boss';
 
-export type EliteModifier = 'fast' | 'shield' | 'explosive_death' | 'regen';
+export type EliteModifier =
+  | 'fast'
+  | 'shield'
+  | 'explosive_death'
+  | 'regen'
+  | 'volley'
+  | 'vengeful';
 
 export type RoomType =
   'start' | 'combat' | 'treasure' | 'merchant' | 'shrine' | 'secret' | 'portal' | 'boss';

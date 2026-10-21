@@ -504,6 +504,9 @@ export function updateProjectilesImpl(this: WorldSim, dtSec: number): void {
               b.ttlSec = 0;
               pl.shieldStoredBullets += 1;
               pl.energy = Math.min(pl.maxEnergy, pl.energy + 1);
+              if (this.getActiveBoss() !== null) {
+                pl.skillActiveTimer = Math.max(0.05, pl.skillActiveTimer - 0.35);
+              }
               this.events.push({
                 kind: 'projectile_impact',
                 x: b.x,
@@ -528,10 +531,14 @@ export function updateProjectilesImpl(this: WorldSim, dtSec: number): void {
         let blockedBySummon = false;
         for (let sIdx = 0; sIdx < this.summons.length; sIdx++) {
           const sum = this.summons[sIdx]!;
-          if (sum.kind === 'sacred_tree' && sum.hp > 0 && sum.ttlSec > 0) {
+          if (
+            (sum.kind === 'sacred_tree' || sum.kind === 'tesla_turret') &&
+            sum.hp > 0 &&
+            sum.ttlSec > 0
+          ) {
             if (circleVsCircle(b, sum)) {
               b.ttlSec = 0;
-              sum.hp = Math.max(0, sum.hp - b.damage);
+              sum.hp = Math.max(0, sum.hp - b.damage * (sum.kind === 'tesla_turret' ? 3 : 1));
               this.events.push({
                 kind: 'projectile_impact',
                 x: b.x,
@@ -556,15 +563,19 @@ export function updateProjectilesImpl(this: WorldSim, dtSec: number): void {
         if (pl.lifeState !== 'alive') continue;
         if (circleVsCircle(b, pl)) {
           b.ttlSec = 0;
-          if (b.element === 'chill') {
-            pl.chillTimer = Math.max(pl.chillTimer, 2.5);
-          } else if (b.element === 'burn') {
-            pl.burnTimer = Math.max(pl.burnTimer, 2.0);
-          }
+          let damaged = false;
           if (b.weaponId === 'dwarf_mortar') {
+            damaged = pl.invulnerableTimer <= 0 && !pl.godMode;
             this.triggerLauncherProjectileExplosion(b, pl.x, pl.y);
           } else {
-            this.applyDamageToPlayer(b.damage, b.angle, b.knockback, b.weaponId, pl);
+            damaged = this.applyDamageToPlayer(b.damage, b.angle, b.knockback, b.weaponId, pl);
+          }
+          if (damaged) {
+            if (b.element === 'chill') {
+              pl.chillTimer = Math.max(pl.chillTimer, 2.0);
+            } else if (b.element === 'burn') {
+              pl.burnTimer = Math.max(pl.burnTimer, 1.6);
+            }
           }
           if (!this.stressTestActive) {
             this.events.push({

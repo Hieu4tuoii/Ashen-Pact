@@ -680,11 +680,31 @@ export function triggerTeslaEmpBlastImpl(this: WorldSim, turret: SimSummonState)
     if (e.hp <= 0 || e.aiState === 'spawning' || e.bossBurrowed) continue;
     if (distance(turret.x, turret.y, e.x, e.y) <= empRadius + e.radius) {
       if (!e.isDummy) {
-        e.aiState = 'stunned';
-        e.stateTimer = Math.max(e.stateTimer, 1.5);
+        if (e.isBoss) {
+          if (!(e.bossPhase >= 3 && e.aiState === 'telegraph')) {
+            if ((e.bossFreezeDrTimer ?? 0) <= 0) e.bossFreezeCountWindow = 0;
+            e.bossFreezeDrTimer = 8.0;
+            const c = e.bossFreezeCountWindow ?? 0;
+            e.aiState = 'stunned';
+            e.stateTimer = Math.max(e.stateTimer, c === 0 ? 0.6 : c === 1 ? 0.3 : 0.15);
+            e.bossFreezeCountWindow = c + 1;
+          }
+        } else {
+          e.aiState = 'stunned';
+          e.stateTimer = Math.max(e.stateTimer, 1.5);
+        }
       }
       const ang = Math.atan2(e.y - turret.y, e.x - turret.x);
-      this.applyDamageToEnemy(e, 22, true, 'shock', ang, 180, true, turret.ownerPlayerId);
+      this.applyDamageToEnemy(
+        e,
+        e.isBoss ? 12 : 22,
+        true,
+        'shock',
+        ang,
+        180,
+        true,
+        turret.ownerPlayerId,
+      );
     }
   }
 
@@ -749,11 +769,25 @@ export function releaseVanguardShieldShockwaveImpl(this: WorldSim, p: SimPlayerS
     if (isCircleInCone(p.x, p.y, p.aimAngle, halfArc, range, e)) {
       const angleToEnemy = Math.atan2(e.y - p.y, e.x - p.x);
       if (hasChargeUpgrade) {
-        e.aiState = 'stunned';
-        e.stateTimer = Math.max(e.stateTimer, 1.2);
-        e.vx = 0;
-        e.vy = 0;
-        e.bossBurrowed = false;
+        if (e.isBoss) {
+          if (!(e.bossPhase >= 3 && e.aiState === 'telegraph')) {
+            if ((e.bossFreezeDrTimer ?? 0) <= 0) e.bossFreezeCountWindow = 0;
+            e.bossFreezeDrTimer = 8.0;
+            const c = e.bossFreezeCountWindow ?? 0;
+            e.aiState = 'stunned';
+            e.stateTimer = Math.max(e.stateTimer, c === 0 ? 0.6 : c === 1 ? 0.3 : 0.15);
+            e.bossFreezeCountWindow = c + 1;
+            e.vx = 0;
+            e.vy = 0;
+            e.bossBurrowed = false;
+          }
+        } else {
+          e.aiState = 'stunned';
+          e.stateTimer = Math.max(e.stateTimer, 1.2);
+          e.vx = 0;
+          e.vy = 0;
+          e.bossBurrowed = false;
+        }
       }
       this.applyDamageToEnemy(
         e,

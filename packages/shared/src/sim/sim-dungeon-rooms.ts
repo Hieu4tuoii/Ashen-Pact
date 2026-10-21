@@ -108,6 +108,8 @@ export function enterRoomImpl(this: WorldSim, roomId: number, entryDir?: Cardina
   this.titanFirstCoreBrokenId = 0;
   this.portalActive = false;
   this.waveRespawnTimer = 0;
+  this.waveElapsedSec = 0;
+  this.pendingVengefulRings.length = 0;
   this.doorTransitionCooldown = 0.55;
 
   for (const pl of this.getAllPlayers()) {
@@ -378,7 +380,7 @@ export function populateRoomContentsImpl(this: WorldSim, room: DungeonRoomNode):
             kind: 'health_potion',
             rarity: 'uncommon',
             nameVi: 'Bình Máu Cổ Ngữ (+4 HP)',
-            costGold: 15,
+            costGold: 25,
             healAmount: 4,
             x: cx - 165,
             y: cy + 12,
@@ -390,7 +392,7 @@ export function populateRoomContentsImpl(this: WorldSim, room: DungeonRoomNode):
             weaponId: rareWep.id,
             rarity: rareWep.rarity,
             nameVi: rareWep.nameVi,
-            costGold: rareWep.rarity === 'rare' ? 30 : 22,
+            costGold: 40,
             healAmount: 0,
             x: cx,
             y: cy + 34,
@@ -402,7 +404,7 @@ export function populateRoomContentsImpl(this: WorldSim, room: DungeonRoomNode):
             weaponId: epicWep.id,
             rarity: epicWep.rarity,
             nameVi: epicWep.nameVi,
-            costGold: epicWep.rarity === 'legendary' ? 50 : 38,
+            costGold: 60,
             healAmount: 0,
             x: cx + 165,
             y: cy + 12,
@@ -488,6 +490,7 @@ export function spawnNextRoomWaveImpl(this: WorldSim): void {
   const room = this.getCurrentRoom();
   room.wavesSpawned += 1;
   this.waveNumber += 1;
+  this.waveElapsedSec = 0;
 
   const cx = this.map.width * 0.64;
   const cy = this.map.height * 0.5;
@@ -500,6 +503,7 @@ export function spawnNextRoomWaveImpl(this: WorldSim): void {
     [0, -135],
   ];
 
+  let spawnedCount = 0;
   const waveDef = room.waves[room.wavesSpawned - 1];
   if (waveDef && waveDef.enemies.length > 0) {
     const currentPCount = this.getActivePlayerCount();
@@ -517,7 +521,9 @@ export function spawnNextRoomWaveImpl(this: WorldSim): void {
       const eliteMod: EliteModifier | null = entry.isElite
         ? (entry.eliteModifier ?? ELITE_MODIFIERS[(room.id + i) % ELITE_MODIFIERS.length]!)
         : null;
-      this.spawnEnemy(entry.defId, cx + ox, cy + oy, false, eliteMod);
+      const spawned = this.spawnEnemy(entry.defId, cx + ox, cy + oy, false, eliteMod);
+      spawned.waveIndex = room.wavesSpawned;
+      spawnedCount += 1;
     }
   } else {
     const combatPool =
@@ -535,10 +541,20 @@ export function spawnNextRoomWaveImpl(this: WorldSim): void {
       const eliteMod: EliteModifier | null = isEliteSlot
         ? ELITE_MODIFIERS[(room.id + this.currentFloor + i) % ELITE_MODIFIERS.length]!
         : null;
-      this.spawnEnemy(defId, cx + ox, cy + oy, false, eliteMod);
+      const spawned = this.spawnEnemy(defId, cx + ox, cy + oy, false, eliteMod);
+      spawned.waveIndex = room.wavesSpawned;
+      spawnedCount += 1;
     }
   }
 
+  room.currentWaveSpawnedCount = spawnedCount;
+  this.events.push({
+    kind: 'wave_started',
+    roomId: room.id,
+    waveIndex: room.wavesSpawned,
+    wavesTotal: room.wavesTotal,
+    isChallenge: Boolean(room.isChallenge),
+  });
   this.rebuildCurrentRoomDoors();
 }
 
@@ -549,7 +565,7 @@ export function onRoomClearedImpl(this: WorldSim, room: DungeonRoomNode): void {
   const cx = this.map.width * 0.5;
   const cy = this.map.height * 0.5;
 
-  // Phase 4 Co-op: Revive all Soul Ghosts & Downed teammates at 50% HP when a room is cleared!
+  // Phase 4 Co-op (tightened in P11): Revive all Soul Ghosts & Downed teammates at 35% HP when a room is cleared!
   const allPlayers = this.getAllPlayers();
   for (const p of allPlayers) {
     p.encasedInIceTimer = 0;
@@ -559,7 +575,7 @@ export function onRoomClearedImpl(this: WorldSim, room: DungeonRoomNode): void {
       p.downedTimer = 0;
       p.reviveProgress = 0;
       p.reviverPlayerId = null;
-      p.hp = Math.max(2, Math.ceil(p.maxHp * 0.5));
+      p.hp = Math.max(2, Math.ceil(p.maxHp * 0.35));
       p.armor = Math.min(p.maxArmor, 2);
       p.invulnerableTimer = 1.5;
       this.events.push({

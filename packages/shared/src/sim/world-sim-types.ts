@@ -444,6 +444,13 @@ export interface SimEnemyState {
   steamBlindTimer: number;
   lastElementOwnerId: number;
   lastElementApplied: ElementType;
+  // Phase P11 Wave Overlap & Boss Drama states
+  waveIndex?: number;
+  bossPhaseTransitionTimer?: number;
+  bossCombatElapsedSec?: number;
+  bossFreezeDrTimer?: number;
+  bossFreezeCountWindow?: number;
+  bossEnrageLevel?: number;
 }
 
 export interface SimProjectileState {

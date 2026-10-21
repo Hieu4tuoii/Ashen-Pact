@@ -5,7 +5,8 @@ import { TILE_SIZE } from '../protocol/messages.js';
 import type { SimPlayerState, SimEnemyState } from './world-sim-types.js';
 import type { WorldSim } from './world-sim.js';
 
-export function applyDamageToEnemyImpl(this: WorldSim,
+export function applyDamageToEnemyImpl(
+  this: WorldSim,
   enemy: SimEnemyState,
   amount: number,
   isCrit: boolean,
@@ -16,7 +17,16 @@ export function applyDamageToEnemyImpl(this: WorldSim,
   attackerPlayerId = this.player.id,
   isChainDamage = false,
 ): void {
-  if (enemy.hp <= 0 || enemy.bossBurrowed) return;
+  if (
+    enemy.hp <= 0 ||
+    enemy.bossBurrowed ||
+    (enemy.isBoss &&
+      (enemy.bossPhaseTransitionTimer ?? 0) > 0 &&
+      enemy.aiState !== 'stunned' &&
+      amount < enemy.maxHp * 0.3)
+  ) {
+    return;
+  }
 
   let finalAmount = amount;
   let finalCrit = isCrit;
@@ -61,6 +71,24 @@ export function applyDamageToEnemyImpl(this: WorldSim,
   // Superconduct (+30% damage from all sources / -30% defense)
   if (enemy.superconductTimer > 0) {
     finalAmount *= 1.3;
+  }
+
+  // Co-op Boss Synergy Resilience: keeps multi-player elemental + mark stacking aligned with 1P TTK
+  if (enemy.isBoss && this.simulatedPlayers.length > 0 && amount < enemy.maxHp * 0.25) {
+    const coopPlayers = 1 + this.simulatedPlayers.length;
+    const damp =
+      enemy.defId === 'kryssa_ice_queen'
+        ? coopPlayers >= 4
+          ? 0.52
+          : 0.72
+        : enemy.defId === 'forge_titan'
+          ? coopPlayers >= 4
+            ? 0.64
+            : 0.78
+          : coopPlayers >= 4
+            ? 0.78
+            : 0.88;
+    finalAmount *= damp;
   }
 
   // Section 6.2: Đóng Băng + đòn nặng (cận chiến/nổ/crit) -> Vỡ Băng (Shatter): Sát thương x3 + mảnh băng văng AoE!
@@ -205,7 +233,8 @@ export function applyDamageToEnemyImpl(this: WorldSim,
   }
 }
 
-export function triggerElementalReactionImpl(this: WorldSim,
+export function triggerElementalReactionImpl(
+  this: WorldSim,
   enemy: SimEnemyState,
   reaction: ElementalReactionId,
   damage: number,
@@ -254,7 +283,11 @@ export function triggerElementalReactionImpl(this: WorldSim,
   }
 }
 
-export function handleEnemyKilledImpl(this: WorldSim, enemy: SimEnemyState, killerPlayerId = this.player.id): void {
+export function handleEnemyKilledImpl(
+  this: WorldSim,
+  enemy: SimEnemyState,
+  killerPlayerId = this.player.id,
+): void {
   this.runStats.kills += 1;
   if (enemy.isElite) this.runStats.elitesKilled += 1;
   if (enemy.isBoss) this.runStats.bossesKilled += 1;
@@ -401,6 +434,25 @@ export function handleEnemyKilledImpl(this: WorldSim, enemy: SimEnemyState, kill
     }
   }
 
+  // Elite Vengeful Death: 0.5s warning telegraph ring -> 8 slow radial projectiles
+  if (!this.stressTestActive && enemy.isElite && enemy.eliteModifier === 'vengeful') {
+    this.pendingVengefulRings.push({
+      id: ++this.nextEntityId,
+      ownerId: enemy.id,
+      x: enemy.x,
+      y: enemy.y,
+      timerSec: 0.5,
+      damage: Math.max(1, ENEMIES[enemy.defId]?.damage ?? 1),
+    });
+    this.events.push({
+      kind: 'vengeful_telegraph',
+      enemyId: enemy.id,
+      x: enemy.x,
+      y: enemy.y,
+      delaySec: 0.5,
+    });
+  }
+
   const isCoop = allPlayers.length > 1;
   const dropMult = enemy.isBoss ? 6 : enemy.isElite ? 3 : 1;
   for (let k = 0; k < 2 * dropMult; k++) {
@@ -486,7 +538,8 @@ export function handleEnemyKilledImpl(this: WorldSim, enemy: SimEnemyState, kill
   }
 }
 
-export function applyElementStatusToEnemyImpl(this: WorldSim,
+export function applyElementStatusToEnemyImpl(
+  this: WorldSim,
   enemy: SimEnemyState,
   element: ElementType,
   hitDamage: number,
@@ -569,7 +622,7 @@ export function applyElementStatusToEnemyImpl(this: WorldSim,
       return;
     }
 
-    // 4. Paralysis (Tê Liệt): Poison + Shock -> Stun 1.0s + interrupt Elite/Boss telegraph
+    // 4. Paralysis (Tê Liệt): Poison + Shock -> Stun 1.0s + interrupt Elite/Boss telegraph (except Boss Phase 3)
     if (
       (element === 'shock' && enemy.poisonTimer > 0) ||
       (element === 'poison' && enemy.shockTimer > 0)
@@ -577,11 +630,13 @@ export function applyElementStatusToEnemyImpl(this: WorldSim,
       enemy.poisonTimer = 0;
       enemy.poisonStacks = 0;
       enemy.shockTimer = 0;
-      enemy.aiState = 'stunned';
-      enemy.stateTimer = Math.max(enemy.stateTimer, 1.0);
-      enemy.vx = 0;
-      enemy.vy = 0;
-      enemy.bossBurrowed = false;
+      if (!(enemy.isBoss && enemy.bossPhase >= 3 && enemy.aiState === 'telegraph')) {
+        enemy.aiState = 'stunned';
+        enemy.stateTimer = Math.max(enemy.stateTimer, 1.0);
+        enemy.vx = 0;
+        enemy.vy = 0;
+        enemy.bossBurrowed = false;
+      }
       const paraDmg = Math.max(8, Math.round(hitDamage * 0.7));
       this.triggerElementalReaction(enemy, 'paralysis', paraDmg, primerId, attackerPlayerId);
       this.applyDotDamageToEnemy(enemy, paraDmg, 'shock', false);
@@ -599,7 +654,7 @@ export function applyElementStatusToEnemyImpl(this: WorldSim,
       enemy.shockTimer = 0;
       const overloadDmg = Math.max(14, Math.round(hitDamage * 1.35));
       this.triggerElementalReaction(enemy, 'overload', overloadDmg, primerId, attackerPlayerId);
-      enemy.shieldArmor = Math.max(0, enemy.shieldArmor - 18);
+      enemy.shieldArmor = 0;
       this.applyDotDamageToEnemy(enemy, overloadDmg, 'burn', false);
       for (let i = 0; i < this.enemies.length; i++) {
         const other = this.enemies[i]!;
@@ -608,7 +663,7 @@ export function applyElementStatusToEnemyImpl(this: WorldSim,
           const pushAng = Math.atan2(other.y - enemy.y, other.x - enemy.x);
           other.kbVx += Math.cos(pushAng) * 260;
           other.kbVy += Math.sin(pushAng) * 260;
-          other.shieldArmor = Math.max(0, other.shieldArmor - 18);
+          other.shieldArmor = 0;
           this.applyDotDamageToEnemy(other, Math.round(overloadDmg * 0.75), 'shock');
         }
       }
@@ -645,7 +700,17 @@ export function applyElementStatusToEnemyImpl(this: WorldSim,
         if (enemy.chillStacks >= 3) {
           enemy.chillStacks = 0;
           enemy.chillTimer = 0;
-          enemy.frozenTimer = 1.5;
+          if (enemy.isBoss) {
+            if ((enemy.bossFreezeDrTimer ?? 0) <= 0) {
+              enemy.bossFreezeCountWindow = 0;
+            }
+            enemy.bossFreezeDrTimer = 8.0;
+            const count = enemy.bossFreezeCountWindow ?? 0;
+            enemy.frozenTimer = count === 0 ? 0.6 : count === 1 ? 0.3 : 0.15;
+            enemy.bossFreezeCountWindow = count + 1;
+          } else {
+            enemy.frozenTimer = 1.5;
+          }
           enemy.vx = 0;
           enemy.vy = 0;
           if (!this.stressTestActive) {
@@ -725,7 +790,8 @@ export function applyElementStatusToEnemyImpl(this: WorldSim,
   }
 }
 
-export function applyDamageToPlayerImpl(this: WorldSim,
+export function applyDamageToPlayerImpl(
+  this: WorldSim,
   rawDamage: number,
   hitAngleRad: number,
   knockback: number,
@@ -737,7 +803,13 @@ export function applyDamageToPlayerImpl(this: WorldSim,
     return false;
   }
 
-  const dmg = Math.max(1, Math.round(rawDamage));
+  const isCorrosiveBossHit =
+    (_sourceId === 'shaman_staff' ||
+      _sourceId === 'thorn_burst' ||
+      _sourceId === 'boss_spore_ring' ||
+      _sourceId === 'spore_king') &&
+    (p.characterId === 'vanguard' || p.characterId === 'engineer');
+  const dmg = Math.max(1, Math.round(rawDamage)) + (isCorrosiveBossHit ? 1 : 0);
   const prevArmor = p.armor;
   const armorAbsorbed = Math.min(p.armor, dmg);
   const hpDamage = dmg - armorAbsorbed;
@@ -757,10 +829,19 @@ export function applyDamageToPlayerImpl(this: WorldSim,
     });
   }
 
-  p.armorRegenTimer = p.armorRegenDelaySec;
-  p.armorRegenAccum = 0;
+  const isDotTick =
+    _sourceId === 'burn' || _sourceId === 'poison' || _sourceId === 'electrified_water';
+  if (isDotTick) {
+    p.armorRegenTimer = Math.max(
+      p.armorRegenTimer,
+      p.characterId === 'vanguard' || p.characterId === 'engineer' ? 1.05 : 0.8,
+    );
+  } else {
+    p.armorRegenTimer = p.armorRegenDelaySec + (isCorrosiveBossHit ? 0.8 : 0);
+    p.armorRegenAccum = 0;
+  }
   p.hurtFlashTimer = 0.16;
-  p.invulnerableTimer = 0.35;
+  p.invulnerableTimer = isDotTick ? Math.max(p.invulnerableTimer, 0.3) : 0.6;
 
   const kbX = Math.cos(hitAngleRad) * knockback * 0.7;
   const kbY = Math.sin(hitAngleRad) * knockback * 0.7;

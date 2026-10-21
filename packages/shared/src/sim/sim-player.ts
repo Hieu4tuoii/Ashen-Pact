@@ -310,7 +310,7 @@ export function updateSinglePlayerStateImpl(this: WorldSim,
   p.y = col.y;
   this.resolvePropMovementCollision(p);
 
-  // Chasm hazard (Biome 2): walking onto a chasm tile without dashing deals 1 damage and pushes back to safe ledge
+  // Chasm hazard (Biome 2): walking onto a chasm tile without dashing pushes back to safe ledge
   const nextSurf = this.map.getSurfaceAtWorld(p.x, p.y);
   if (
     nextSurf === 'chasm' &&
@@ -318,10 +318,8 @@ export function updateSinglePlayerStateImpl(this: WorldSim,
     !this.botAutoPlayActive &&
     !this.stressTestActive
   ) {
-    const pushAng = Math.atan2(prevSafeY - p.y, prevSafeX - p.x);
     p.x = prevSafeX;
     p.y = prevSafeY;
-    this.applyDamageToPlayer(1, pushAng, 140, 'chasm', p);
   }
 
   if (surf === 'grass' && Math.hypot(p.vx, p.vy) > 25 && p.grassRustleCooldown <= 0) {
@@ -447,16 +445,30 @@ export function updateSimulatedPlayersImpl(this: WorldSim, dtSec: number): void 
 export function updatePlayerSurfaceAndStatusImpl(this: WorldSim, p: SimPlayerState, surf: SurfaceKind, dtSec: number): void {
   if (surf === 'water') {
     p.burnTimer = 0;
-  } else if (surf === 'burning_oil' || surf === 'burning_grass' || surf === 'lava') {
-    p.burnTimer = Math.max(p.burnTimer, 2.0);
-  } else if (surf === 'poison_swamp') {
-    p.poisonTimer = Math.max(p.poisonTimer, 2.5);
-  } else if (surf === 'electrified_water') {
+    p.surfaceTickTimer = 0;
+  } else if (
+    (surf === 'burning_oil' || surf === 'burning_grass' || surf === 'lava') &&
+    p.dashTimer <= 0
+  ) {
+    p.surfaceTickTimer += dtSec;
+    if (p.surfaceTickTimer >= 0.75) {
+      p.surfaceTickTimer = 0;
+      p.burnTimer = Math.max(p.burnTimer, 1.6);
+    }
+  } else if (surf === 'poison_swamp' && p.dashTimer <= 0) {
+    p.surfaceTickTimer += dtSec;
+    if (p.surfaceTickTimer >= 1.35) {
+      p.surfaceTickTimer = 0;
+      p.poisonTimer = Math.max(p.poisonTimer, 2.0);
+    }
+  } else if (surf === 'electrified_water' && p.dashTimer <= 0) {
     p.surfaceTickTimer += dtSec;
     if (p.surfaceTickTimer >= 0.75) {
       p.surfaceTickTimer = 0;
       this.applyDamageToPlayer(1, 0, 20, 'electrified_water', p);
     }
+  } else {
+    p.surfaceTickTimer = Math.max(0, p.surfaceTickTimer - dtSec * 2);
   }
 
   if (p.burnTimer > 0) {

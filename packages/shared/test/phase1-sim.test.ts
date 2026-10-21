@@ -192,8 +192,8 @@ describe('Phase 1 — HP, Armor Regen (Thiết Vệ 2.0s), Knockback & 4 Sample 
     }
     expect(sim.player.armor).toBe(2);
 
-    // Wait another 1.6s (total 3.1s > 2.0s delay + 1.0s regen) -> Armor regenerates to 3
-    for (let i = 0; i < 96; i++) {
+    // Wait another 3.0s (total 4.5s > 3.3s delay + 1.0s regen) -> Armor regenerates to 3
+    for (let i = 0; i < 180; i++) {
       sim.step(SIM_STEP_SEC);
     }
     expect(sim.player.armor).toBe(3);

@@ -12,7 +12,7 @@ export const ENEMIES: Record<string, EnemyStatsDef> = {
     damage: 1,
     radius: 13,
     telegraphSec: 0.5,
-    attackCooldownSec: 1.9,
+    attackCooldownSec: 1.65,
   },
   green_slime: {
     id: 'green_slime',
@@ -25,7 +25,7 @@ export const ENEMIES: Record<string, EnemyStatsDef> = {
     damage: 1,
     radius: 14,
     telegraphSec: 0.4,
-    attackCooldownSec: 1.4,
+    attackCooldownSec: 1.25,
   },
   mini_slime: {
     id: 'mini_slime',
@@ -37,8 +37,8 @@ export const ENEMIES: Record<string, EnemyStatsDef> = {
     moveSpeed: 135,
     damage: 1,
     radius: 10,
-    telegraphSec: 0.35,
-    attackCooldownSec: 1.5,
+    telegraphSec: 0.4,
+    attackCooldownSec: 1.35,
   },
   spore_bomber: {
     id: 'spore_bomber',
@@ -64,7 +64,7 @@ export const ENEMIES: Record<string, EnemyStatsDef> = {
     damage: 2,
     radius: 16,
     telegraphSec: 0.7,
-    attackCooldownSec: 2.6,
+    attackCooldownSec: 2.25,
   },
   goblin_shaman: {
     id: 'goblin_shaman',
@@ -77,7 +77,7 @@ export const ENEMIES: Record<string, EnemyStatsDef> = {
     damage: 1,
     radius: 14,
     telegraphSec: 0.65,
-    attackCooldownSec: 3.8,
+    attackCooldownSec: 3.3,
   },
   thorn_turret: {
     id: 'thorn_turret',
@@ -90,7 +90,7 @@ export const ENEMIES: Record<string, EnemyStatsDef> = {
     damage: 1,
     radius: 15,
     telegraphSec: 0.55,
-    attackCooldownSec: 2.8,
+    attackCooldownSec: 2.45,
   },
   spore_guardian: {
     id: 'spore_guardian',
@@ -103,7 +103,7 @@ export const ENEMIES: Record<string, EnemyStatsDef> = {
     damage: 1,
     radius: 17,
     telegraphSec: 0.6,
-    attackCooldownSec: 3.0,
+    attackCooldownSec: 2.7,
   },
   spore_king: {
     id: 'spore_king',
@@ -112,12 +112,12 @@ export const ENEMIES: Record<string, EnemyStatsDef> = {
     subtitleVi: 'Chúa Tể Rừng Cổ Mục Nát',
     biome: 1,
     role: 'boss',
-    hp: 420,
+    hp: 3350,
     moveSpeed: 92,
     damage: 2,
     radius: 34,
     telegraphSec: 0.75,
-    attackCooldownSec: 2.1,
+    attackCooldownSec: 1.85,
     isBoss: true,
   },
 
@@ -135,7 +135,7 @@ export const ENEMIES: Record<string, EnemyStatsDef> = {
     damage: 1,
     radius: 11,
     telegraphSec: 0.4,
-    attackCooldownSec: 1.5,
+    attackCooldownSec: 1.32,
     flying: true,
   },
   baby_yeti: {
@@ -144,12 +144,12 @@ export const ENEMIES: Record<string, EnemyStatsDef> = {
     nameEn: 'Young Yeti',
     biome: 2,
     role: 'charger',
-    hp: 46,
+    hp: 42,
     moveSpeed: 118,
     damage: 2,
     radius: 17,
     telegraphSec: 0.65,
-    attackCooldownSec: 2.3,
+    attackCooldownSec: 2.0,
   },
   ice_mage: {
     id: 'ice_mage',
@@ -162,7 +162,7 @@ export const ENEMIES: Record<string, EnemyStatsDef> = {
     damage: 1,
     radius: 13,
     telegraphSec: 0.55,
-    attackCooldownSec: 2.1,
+    attackCooldownSec: 1.82,
   },
   ice_golem: {
     id: 'ice_golem',
@@ -170,12 +170,12 @@ export const ENEMIES: Record<string, EnemyStatsDef> = {
     nameEn: 'Glacier Golem',
     biome: 2,
     role: 'shielder',
-    hp: 64,
+    hp: 56,
     moveSpeed: 76,
     damage: 2,
     radius: 19,
     telegraphSec: 0.7,
-    attackCooldownSec: 2.6,
+    attackCooldownSec: 2.25,
     frontShieldReduction: 0.78,
   },
   snow_spirit: {
@@ -203,7 +203,7 @@ export const ENEMIES: Record<string, EnemyStatsDef> = {
     damage: 1,
     radius: 26,
     telegraphSec: 0.55,
-    attackCooldownSec: 2.2,
+    attackCooldownSec: 1.95,
     isIllusion: true,
   },
   ice_prison: {
@@ -226,12 +226,12 @@ export const ENEMIES: Record<string, EnemyStatsDef> = {
     subtitleVi: 'Nữ Hoàng Hầm Băng Vĩnh Cửu',
     biome: 2,
     role: 'boss',
-    hp: 520,
+    hp: 3900,
     moveSpeed: 104,
     damage: 2,
     radius: 32,
     telegraphSec: 0.7,
-    attackCooldownSec: 2.0,
+    attackCooldownSec: 1.75,
     isBoss: true,
   },
 
@@ -249,7 +249,7 @@ export const ENEMIES: Record<string, EnemyStatsDef> = {
     damage: 1,
     radius: 12,
     telegraphSec: 0.45,
-    attackCooldownSec: 1.65,
+    attackCooldownSec: 1.44,
   },
   dwarf_cannon: {
     id: 'dwarf_cannon',
@@ -262,7 +262,7 @@ export const ENEMIES: Record<string, EnemyStatsDef> = {
     damage: 2,
     radius: 15,
     telegraphSec: 0.65,
-    attackCooldownSec: 2.5,
+    attackCooldownSec: 2.18,
   },
   coal_golem: {
     id: 'coal_golem',
@@ -275,7 +275,7 @@ export const ENEMIES: Record<string, EnemyStatsDef> = {
     damage: 2,
     radius: 19,
     telegraphSec: 0.7,
-    attackCooldownSec: 2.4,
+    attackCooldownSec: 2.1,
   },
   welder_drone: {
     id: 'welder_drone',
@@ -288,7 +288,7 @@ export const ENEMIES: Record<string, EnemyStatsDef> = {
     damage: 1,
     radius: 13,
     telegraphSec: 0.5,
-    attackCooldownSec: 2.6,
+    attackCooldownSec: 2.25,
     flying: true,
   },
   iron_shielder: {
@@ -302,7 +302,7 @@ export const ENEMIES: Record<string, EnemyStatsDef> = {
     damage: 2,
     radius: 17,
     telegraphSec: 0.6,
-    attackCooldownSec: 2.3,
+    attackCooldownSec: 2.0,
     frontShieldReduction: 0.8,
   },
   forge_energy_core: {
@@ -316,7 +316,7 @@ export const ENEMIES: Record<string, EnemyStatsDef> = {
     damage: 1,
     radius: 18,
     telegraphSec: 0.6,
-    attackCooldownSec: 3.2,
+    attackCooldownSec: 2.8,
   },
   forge_titan: {
     id: 'forge_titan',
@@ -325,12 +325,12 @@ export const ENEMIES: Record<string, EnemyStatsDef> = {
     subtitleVi: 'Cự Nhân Cơ Khí Dung Nham',
     biome: 3,
     role: 'boss',
-    hp: 620,
+    hp: 6650,
     moveSpeed: 86,
     damage: 3,
     radius: 36,
     telegraphSec: 0.75,
-    attackCooldownSec: 2.2,
+    attackCooldownSec: 1.9,
     isBoss: true,
   },
 };
@@ -376,6 +376,8 @@ export const ELITE_MODIFIERS: readonly EliteModifier[] = [
   'shield',
   'explosive_death',
   'regen',
+  'volley',
+  'vengeful',
 ] as const;
 
 export const ELITE_MODIFIER_LABELS_VI: Record<EliteModifier, string> = {
@@ -383,6 +385,8 @@ export const ELITE_MODIFIER_LABELS_VI: Record<EliteModifier, string> = {
   shield: 'Tinh Anh · Khiên Chắn',
   explosive_death: 'Tinh Anh · Nổ Tử Vong',
   regen: 'Tinh Anh · Tự Tái Tạo',
+  volley: 'Tinh Anh · Tán Xạ',
+  vengeful: 'Tinh Anh · Báo Oán',
 };
 
 export const FLOOR_BUFFS: Record<string, BuffDef> = {

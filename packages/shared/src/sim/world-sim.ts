@@ -117,6 +117,15 @@ export class WorldSim {
   public readonly autoRespawnWaves: boolean;
   public readonly autoRevivePlayer: boolean;
   public waveRespawnTimer = 0;
+  public waveElapsedSec = 0;
+  public pendingVengefulRings: {
+    id: number;
+    ownerId: number;
+    x: number;
+    y: number;
+    timerSec: number;
+    damage: number;
+  }[] = [];
   public doorTransitionCooldown = 0;
   public energyRegenAccum = 0;
   public readonly queryEnemyScratch: SimEnemyState[] = [];

@@ -92,6 +92,7 @@ export interface MusicStateSnapshot {
   inCombat: boolean;
   explorationMix: number;
   combatMix: number;
+  intensityBoost: number;
   effectiveVolume: number;
   stepIndex: number;
   notesScheduledCount: number;
@@ -105,6 +106,7 @@ export class ProceduralMusicManager {
   private currentTheme: MusicThemeId = 'menu_hub';
   private inCombat = false;
   private combatMix = 0;
+  private intensityBoost = 0;
   private stepTimerSec = 0;
   private stepIndex = 0;
   private notesScheduledCount = 0;
@@ -116,6 +118,14 @@ export class ProceduralMusicManager {
 
   public isPaused(): boolean {
     return this.paused;
+  }
+
+  public setIntensityBoost(boost: number): void {
+    this.intensityBoost = clamp(boost, 0, 1);
+  }
+
+  public getIntensityBoost(): number {
+    return Number(this.intensityBoost.toFixed(3));
   }
 
   public getCurrentTheme(): MusicThemeId {
@@ -134,6 +144,7 @@ export class ProceduralMusicManager {
       inCombat: this.inCombat,
       explorationMix: Number((1 - this.combatMix * 0.55).toFixed(3)),
       combatMix: Number(this.combatMix.toFixed(3)),
+      intensityBoost: Number(this.intensityBoost.toFixed(3)),
       effectiveVolume: Number(effectiveVolume.toFixed(3)),
       stepIndex: this.stepIndex,
       notesScheduledCount: this.notesScheduledCount,
@@ -212,16 +223,17 @@ export class ProceduralMusicManager {
         );
       }
 
-      // Bass foundation on beats 0, 4, 8, 12
-      if (this.stepIndex % 4 === 0) {
+      // Bass foundation on beats 0, 4, 8, 12 (or double-time on beats 0, 2, 4, ... when intensityBoost >= 0.35)
+      if (this.stepIndex % 4 === 0 || (this.intensityBoost >= 0.35 && this.stepIndex % 2 === 0)) {
         const bassFreq = def.bassNotesHz[(this.stepIndex >> 2) % def.bassNotesHz.length] ?? 110;
-        const bassGain = (0.045 + this.combatMix * 0.04) * effectiveVol;
+        const bassGain =
+          (0.045 + this.combatMix * 0.04 + this.intensityBoost * 0.018) * effectiveVol;
         this.scheduleTone(ctx, bassFreq, 'triangle', now, stepDurationSec * 2.4, bassGain, 0);
       }
 
-      // Layer 2: Combat driving lead & pulse (crossfaded by combatMix)
+      // Layer 2: Combat driving lead & pulse (crossfaded by combatMix + intensityBoost)
       if (this.combatMix > 0.08) {
-        const combatGain = this.combatMix * 0.052 * effectiveVol;
+        const combatGain = (this.combatMix * 0.052 + this.intensityBoost * 0.02) * effectiveVol;
         const cFreq = def.combatNotesHz[noteIdx] ?? 329.63;
         this.scheduleTone(
           ctx,

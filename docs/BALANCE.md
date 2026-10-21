@@ -30,24 +30,24 @@
 
 | ID | Tên nhân vật | HP | Giáp | Năng lượng | Hồi Giáp (Delay / Rate) | Tốc độ chạy (u/s) | Crit cơ bản | Vũ khí khởi đầu |
 |---|---|---:|---:|---:|---|---:|---:|---|
-| `vanguard` | **Thiết Vệ** | 8 | 6 | 150 | 2.0s / 1.0s | 171 (`95%`) | 5% | `knight_sword` |
-| `ranger` | **Liệp Ưng** | 5 | 4 | 200 | 3.0s / 1.0s | 189 (`105%`) | 15% | `hunter_crossbow` |
-| `elementalist` | **Lam Hỏa** | 5 | 3 | 260 | 3.0s / 1.0s | 180 (`100%`) | 8% | `apprentice_staff` |
-| `druid` | **Mộc Linh** | 6 | 4 | 200 | 3.0s / 1.0s | 180 (`100%`) | 5% | `thorn_staff` |
-| `engineer` | **Bánh Răng** | 6 | 5 | 180 | 3.0s / 1.0s | 180 (`100%`) | 8% | `rivet_gun` |
+| `vanguard` | **Thiết Vệ** | 8 | 6 | 150 | 3.3s / 1.0s | 171 (`95%`) | 5% | `knight_sword` |
+| `ranger` | **Liệp Ưng** | 5 | 4 | 200 | 4.0s / 1.0s | 189 (`105%`) | 15% | `hunter_crossbow` |
+| `elementalist` | **Lam Hỏa** | 5 | 3 | 260 | 4.0s / 1.0s | 180 (`100%`) | 8% | `apprentice_staff` |
+| `druid` | **Mộc Linh** | 6 | 4 | 200 | 4.0s / 1.0s | 180 (`100%`) | 5% | `thorn_staff` |
+| `engineer` | **Bánh Răng** | 6 | 5 | 180 | 4.0s / 1.0s | 180 (`100%`) | 8% | `rivet_gun` |
 
 *(Tốc độ chạy chuẩn `100%` = `180` đơn vị thế giới / giây = `5.625` ô / giây).*
 
 ---
 
-## 3. Hệ Số Scaling Theo Số Người Chơi (Co-op Scaling)
+## 3. Hệ Số Scaling Theo Số Người Chơi & Biome (Co-op & Biome Scaling)
 
 | Số người chơi | Hệ số HP Quái | Số lượng Quái / Đợt | Tỉ lệ xuất hiện Elite | Hệ số HP Boss | Tốc bắn Quái | Cơ chế Boss bổ sung |
 |---:|---:|---:|---:|---:|---:|---|
-| **1 người** | `×1.00` | `×1.00` | `10%` | `×1.00` | `+0%` | Cơ bản |
-| **2 người** | `×1.40` | `×1.35` | `15%` | `×1.90` | `+8%` | Tốc độ pattern nhanh hơn `+10%` |
-| **3 người** | `×1.80` | `×1.70` | `20%` | `×2.80` | `+16%` | Thêm đệ tử hộ vệ & pattern phụ |
-| **4 người** | `×2.20` | `×2.00` | `25%` | `×3.70` | `+24%` | Thêm pattern phụ & đổi mục tiêu liên tục |
+| **1 người** | `×1.00` | `×1.00` | `22%` (`32%` Challenge) | `×1.00` | `+0%` | Cơ bản |
+| **2 người** | `×1.55` | `×1.40` | `15%` (`25%` Challenge) | `×1.90` | `+8%` | Tốc độ pattern nhanh hơn `+10%` |
+| **3 người** | `×2.05` | `×1.75` | `20%` (`30%` Challenge) | `×2.80` | `+16%` | Thêm đệ tử hộ vệ & pattern phụ |
+| **4 người** | `×2.55` | `×2.05` | `25%` (`35%` Challenge) | `×3.70` | `+24%` | Thêm pattern phụ & đổi mục tiêu liên tục |
 
 ---
 
@@ -75,23 +75,23 @@
 - **Lợn Rừng (`wild_boar`):** HP `36`, Tốc độ `130` (Lao húc `380`), Sát thương `2`, Telegraph dậm chân đỏ `0.7s`.
 - **Pháp Sư Goblin (`goblin_shaman`):** HP `28`, Tốc độ `95`, Sát thương `1`, Hồi `6 HP` cho quái quanh đó mỗi `4s`.
 - **Cây Gai (`thorn_turret`):** HP `32`, Cố định, Sát thương `1`, Bắn 6 gai tròn mỗi `2.8s`.
-- **Boss Mục Vương Nấm Độc (`spore_king`):** HP cơ bản `380` (1P, quy mô theo `COOP_SCALING.bossHpMultiplier`), Sát thương `2`, 3 Phase (`100%`, `66%`, `33%`).
+- **Boss Mục Vương Nấm Độc (`spore_king`):** HP cơ bản `3350` (1P, quy mô theo `COOP_SCALING.bossHpMultiplier`), Sát thương `2`, 3 Phase (`100%`, `66%`, `33%`).
 
 ### 5.2 Biome 2 — Hầm Băng Vĩnh Cửu & Biome 3 — Lò Rèn Dung Nham
-- **Biome 2 (Hầm Băng Vĩnh Cửu — Scaling `+25%`):**
-  - `frost_bat` (Dơi Băng): HP `22`, Tốc độ `150`, Bay qua vực, Bắn 2 mảnh băng Lạnh.
-  - `baby_yeti` (Yeti Con): HP `42`, Tốc độ `125` (Lao trượt băng `355`), Sát thương `2` + Lạnh.
+- **Biome 2 (Hầm Băng Vĩnh Cửu — Scaling `+20% – 25%`):**
+  - `frost_bat` (Dơi Băng): HP `22`, Tốc độ `158`, Bay qua vực, Bắn 2 mảnh băng Lạnh.
+  - `baby_yeti` (Yeti Con): HP `42`, Tốc độ `118` (Lao trượt băng `355`), Sát thương `2` + Lạnh.
   - `ice_mage` (Pháp Sư Băng): HP `32`, Tốc độ `98`, Bắn 3 cầu băng + đóng băng mặt sàn dưới chân mục tiêu.
-  - `ice_golem` (Golem Băng): HP `56`, Tốc độ `82`, Sát thương `2`, **Khiên Băng phía trước giảm `78%` sát thương trực diện**.
+  - `ice_golem` (Golem Băng): HP `56`, Tốc độ `76`, Sát thương `2`, **Khiên Băng phía trước giảm `78%` sát thương trực diện**.
   - `snow_spirit` (Tinh Linh Tuyết): HP `24`, Tốc độ `142`, Sát thương nổ `2` + đóng băng mặt đất `R = 64u`.
-  - **Boss Băng Hậu Kryssa (`kryssa_ice_queen`):** HP cơ bản `450` (1P, quy mô theo `COOP_SCALING.bossHpMultiplier`), 3 Phase (`100%`, `66%`, `33%`), Cột pha lê phản xạ laser, Phân thân gương không bóng đổ (`kryssa_clone`), Bão tuyết Phase 3 & Lồng Băng (`ice_prison`).
-- **Biome 3 (Lò Rèn Dung Nham — Scaling `+56.25%` so với Biome 1):**
+  - **Boss Băng Hậu Kryssa (`kryssa_ice_queen`):** HP cơ bản `3900` (1P, quy mô theo `COOP_SCALING.bossHpMultiplier`), 3 Phase (`100%`, `66%`, `33%`), Cột pha lê phản xạ laser, Phân thân gương không bóng đổ (`kryssa_clone`), Bão tuyết Phase 3 & Lồng Băng (`ice_prison`).
+- **Biome 3 (Lò Rèn Dung Nham — Scaling `+20% – 25%` so với Biome 2):**
   - `fire_imp` (Tiểu Quỷ Lửa): HP `28`, Tốc độ `145`, Bắn 2 cầu lửa Cháy.
   - `dwarf_cannon` (Lùn Pháo Thủ): HP `44`, Tốc độ `88`, Sát thương `2`, Bắn pháo cối nổ AoE đốt sàn.
   - `coal_golem` (Golem Than): HP `54`, Tốc độ `92`, Sát thương `2`, **Chết để lại hồ Dung nham (`lava`)**.
   - `welder_drone` (Drone Hàn): HP `34`, Tốc độ `132`, Bay hỗ trợ **hàn `+10 Giáp Khiên` (`shieldArmor`)** cho đồng minh trong `200u`.
   - `iron_shielder` (Khiên Thủ Sắt): HP `64`, Tốc độ `84`, Sát thương `2`, **Khiên Thép phía trước giảm `80%` sát thương trực diện**.
-  - **Boss Titan Lò Rèn (`forge_titan`):** HP cơ bản `520` (1P, quy mô theo `COOP_SCALING.bossHpMultiplier`), 3 Phase (`100%`, `66%`, `33%`), Sóng xung kích búa đập (`shockwaveRings`) + đảo chiều băng chuyền, **2 Lõi Năng Lượng (`forge_energy_core` — phá trong `3s` Co-op / `6s` Solo gây choáng `4.5s` nhận `×1.5` ST)**, Quét lửa 360° Phase 3.
+  - **Boss Titan Lò Rèn (`forge_titan`):** HP cơ bản `6650` (1P, quy mô theo `COOP_SCALING.bossHpMultiplier`), 3 Phase (`100%`, `66%`, `33%`), Sóng xung kích búa đập (`shockwaveRings`) + đảo chiều băng chuyền, **2 Lõi Năng Lượng (`forge_energy_core` — phá trong `3s` Co-op / `6s` Solo gây choáng `4.5s` nhận `×1.5` ST)**, Quét lửa 360° Phase 3.
 
 ---
 

@@ -916,7 +916,7 @@ export class GameScene extends Phaser.Scene {
   public updatePlayerOverheadUi(p: ReturnType<LocalTransport['getSim']>['player'], x: number, y: number, nameLabel?: Phaser.GameObjects.Text, emoteLabel?: Phaser.GameObjects.Text, emoteBg?: Phaser.GameObjects.Graphics): void { updatePlayerOverheadUiImpl.call(this, p, x, y, nameLabel, emoteLabel, emoteBg); }
   public resolvePlayerStatusTint(): number | null { return resolvePlayerStatusTintImpl.call(this); }
   public resolveEnemyStatusTint(e: SimEnemyState): number | null { return resolveEnemyStatusTintImpl.call(this, e); }
-  public processSimEvents(events: SimEvent[]): void { processSimEventsImpl.call(this, events); }
+  public processSimEvents(events?: SimEvent[]): void { processSimEventsImpl.call(this, events ?? this.transport.getSim().consumeEvents()); }
   public syncSimulatedPlayers(dtSec: number): void { syncSimulatedPlayersImpl.call(this, dtSec); }
   public syncEnemyRigs(dtSec: number): void { syncEnemyRigsImpl.call(this, dtSec); }
   public syncProps(dtSec: number): void { syncPropsImpl.call(this, dtSec); }
@@ -944,6 +944,7 @@ export class GameScene extends Phaser.Scene {
   public updateMinimapHud(): void { updateMinimapHudImpl.call(this); }
   public updateBossHud(): void { updateBossHudImpl.call(this); }
   public updateTopCenterBannersAndQol(dtSec: number): void { updateTopCenterBannersAndQolImpl.call(this, dtSec); }
+  public updateQoLHudAndMinimap(dtSec = 0.016): void { this.updateMinimapHud(); this.updateBossHud(); this.updateTopCenterBannersAndQol(dtSec); }
   public triggerPlayerHitDirectionIndicator(angleRad: number): void { triggerPlayerHitDirectionIndicatorImpl.call(this, angleRad); }
   public triggerWaveBanner(wave: number, maxWaves = 3): void { triggerWaveBannerImpl.call(this, wave, maxWaves); }
   public triggerRoomClearedBanner(): void { triggerRoomClearedBannerImpl.call(this); }

@@ -1,7 +1,7 @@
 import { ENEMIES } from '../data/enemies.js';
 import type { ElementType } from '../data/types.js';
 import { approach, clamp, distance, distanceSq } from '../math/vec2.js';
-import { COOP_SCALING } from '../data/scaling.js';
+import { BIOME_SCALING, COOP_SCALING } from '../data/scaling.js';
 import type { SurfaceKind } from './arena-map.js';
 import type { SimPlayerState, SimEnemyState } from './world-sim-types.js';
 import type { WorldSim } from './world-sim.js';
@@ -250,7 +250,46 @@ export function getCoopEnemyCooldownScaleImpl(this: WorldSim): number {
 }
 
 export function updateEnemiesImpl(this: WorldSim, dtSec: number): void {
-  const coopCdScale = this.getCoopEnemyCooldownScale();
+  // Process pending Vengeful Elite death-ring telegraphs (0.5s warning -> 8 slow radial bullets)
+  if (this.pendingVengefulRings.length > 0) {
+    let ringWrite = 0;
+    for (let rIdx = 0; rIdx < this.pendingVengefulRings.length; rIdx++) {
+      const ring = this.pendingVengefulRings[rIdx]!;
+      ring.timerSec -= dtSec;
+      if (ring.timerSec > 0) {
+        this.pendingVengefulRings[ringWrite++] = ring;
+      } else if (!this.stressTestActive || this.projectiles.length < 660) {
+        const count = 8;
+        const speed = 150;
+        for (let k = 0; k < count; k++) {
+          const ang = (k / count) * Math.PI * 2;
+          this.projectiles.push(
+            this.acquireProjectile({
+              id: ++this.nextEntityId,
+              ownerId: ring.ownerId,
+              team: 'enemy',
+              weaponId: 'vengeful_orb',
+              x: ring.x,
+              y: ring.y,
+              vx: Math.cos(ang) * speed,
+              vy: Math.sin(ang) * speed,
+              angle: ang,
+              radius: 6,
+              damage: ring.damage,
+              isCrit: false,
+              knockback: 110,
+              pierceRemaining: 0,
+              bounceRemaining: 0,
+              ttlSec: 2.6,
+              element: 'none',
+              amplifiedByShield: false,
+            }),
+          );
+        }
+      }
+    }
+    this.pendingVengefulRings.length = ringWrite;
+  }
 
   for (let i = 0; i < this.enemies.length; i++) {
     const e = this.enemies[i]!;
@@ -260,7 +299,13 @@ export function updateEnemiesImpl(this: WorldSim, dtSec: number): void {
       e.hitFlashTimer = Math.max(0, e.hitFlashTimer - dtSec);
     }
     if (e.attackCooldownTimer > 0) {
-      e.attackCooldownTimer = Math.max(0, e.attackCooldownTimer - dtSec / coopCdScale);
+      e.attackCooldownTimer = Math.max(0, e.attackCooldownTimer - dtSec);
+    }
+    if ((e.bossFreezeDrTimer ?? 0) > 0) {
+      e.bossFreezeDrTimer = Math.max(0, (e.bossFreezeDrTimer ?? 0) - dtSec);
+      if (e.bossFreezeDrTimer <= 0) {
+        e.bossFreezeCountWindow = 0;
+      }
     }
     if (e.shockTimer > 0) {
       e.shockTimer = Math.max(0, e.shockTimer - dtSec);
@@ -309,6 +354,37 @@ export function updateEnemiesImpl(this: WorldSim, dtSec: number): void {
         e.stateTimer = 0;
       }
       continue;
+    }
+
+    // Track Boss combat elapsed time & Soft Enrage after 90s (every 15s cooldown x0.93 down to x0.75)
+    if (e.isBoss) {
+      e.bossCombatElapsedSec = (e.bossCombatElapsedSec ?? 0) + dtSec;
+      const elapsed = e.bossCombatElapsedSec;
+      if (elapsed >= 90) {
+        const newLevel = Math.min(4, Math.floor((elapsed - 90) / 15) + 1);
+        if (newLevel > (e.bossEnrageLevel ?? 0)) {
+          e.bossEnrageLevel = newLevel;
+          this.events.push({
+            kind: 'boss_enraged',
+            enemyId: e.id,
+            enrageLevel: newLevel,
+            x: e.x,
+            y: e.y,
+          });
+        }
+      }
+    }
+
+    // Dramatic 1.2s Boss Phase Transition roar/invulnerability pause
+    if (e.aiState === 'idle') {
+      e.bossPhaseTransitionTimer = 0;
+    } else if ((e.bossPhaseTransitionTimer ?? 0) > 0) {
+      e.bossPhaseTransitionTimer = Math.max(0, (e.bossPhaseTransitionTimer ?? 0) - dtSec);
+      e.vx = 0;
+      e.vy = 0;
+      if (e.bossPhaseTransitionTimer > 0) {
+        continue;
+      }
     }
 
     // Frozen enemies cannot move or execute AI
@@ -505,11 +581,27 @@ export function updateEnemiesImpl(this: WorldSim, dtSec: number): void {
 export function getEnemyCooldownScaleImpl(this: WorldSim, isBoss: boolean): number {
   const count = this.getActivePlayerCount();
   const scaling = COOP_SCALING[count];
+  const biomeTier = BIOME_SCALING[this.currentBiome] ?? BIOME_SCALING[1];
   const rate = isBoss ? 1 + scaling.enemyFireRateBonus * 0.75 : 1 + scaling.enemyFireRateBonus;
-  return 1 / Math.max(1, rate);
+  let cdScale = (1 / Math.max(1, rate)) * (isBoss ? 1.0 : biomeTier.cooldownScale);
+  if (isBoss) {
+    const boss = this.enemies.find((m) => m.isBoss && m.hp > 0);
+    const elapsed = boss?.bossCombatElapsedSec ?? 0;
+    if (elapsed >= 90) {
+      const steps = Math.floor((elapsed - 90) / 15) + 1;
+      const enrageMult = Math.max(0.75, Math.pow(0.93, steps));
+      cdScale *= enrageMult;
+    }
+  }
+  return cdScale;
 }
 
-export function updateEnemyStatusAndSurfaceImpl(this: WorldSim, e: SimEnemyState, surf: SurfaceKind, dtSec: number): void {
+export function updateEnemyStatusAndSurfaceImpl(
+  this: WorldSim,
+  e: SimEnemyState,
+  surf: SurfaceKind,
+  dtSec: number,
+): void {
   if (surf === 'water') {
     e.burnTimer = 0;
   } else if (surf === 'burning_oil' || surf === 'burning_grass' || surf === 'lava') {
@@ -567,22 +659,39 @@ export function updateEnemyStatusAndSurfaceImpl(this: WorldSim, e: SimEnemyState
   }
 }
 
-export function applyDotDamageToEnemyImpl(this: WorldSim,
+export function applyDotDamageToEnemyImpl(
+  this: WorldSim,
   enemy: SimEnemyState,
   amount: number,
   element: ElementType,
   emitEvent = true,
 ): void {
-  if (enemy.hp <= 0) return;
-  if (this.stressTestActive && enemy.hp <= amount + 20) {
+  if (
+    enemy.hp <= 0 ||
+    enemy.bossBurrowed ||
+    (enemy.isBoss &&
+      (enemy.bossPhaseTransitionTimer ?? 0) > 0 &&
+      enemy.aiState !== 'stunned' &&
+      amount < enemy.maxHp * 0.3)
+  ) {
+    return;
+  }
+  let effectiveAmount = amount;
+  if (enemy.isBoss && this.hasActiveBossGuardians()) {
+    effectiveAmount = Math.max(1, Math.round(effectiveAmount * 0.35));
+  }
+  if (enemy.isBoss && this.simulatedPlayers.length > 0) {
+    effectiveAmount = Math.max(2, Math.round(effectiveAmount * 0.32));
+  }
+  if (this.stressTestActive && enemy.hp <= effectiveAmount + 20) {
     enemy.hp = enemy.maxHp;
     return;
   }
-  enemy.hp = Math.max(0, enemy.hp - amount);
-  this.recordDamageHistory(amount);
-  this.runStats.damageDealt += amount;
+  enemy.hp = Math.max(0, enemy.hp - effectiveAmount);
+  this.recordDamageHistory(effectiveAmount);
+  this.runStats.damageDealt += effectiveAmount;
   const ownerPl = this.getPlayerById(enemy.lastElementOwnerId || this.player.id) ?? this.player;
-  ownerPl.statsDamageDealt = (ownerPl.statsDamageDealt ?? 0) + amount;
+  ownerPl.statsDamageDealt = (ownerPl.statsDamageDealt ?? 0) + effectiveAmount;
   this.checkBossPhaseTransitions(enemy);
 
   if (emitEvent && !this.stressTestActive) {
@@ -606,13 +715,70 @@ export function applyDotDamageToEnemyImpl(this: WorldSim,
   }
 }
 
+function clearBossNearbyProjectiles(sim: WorldSim, cx: number, cy: number, radius: number): void {
+  let writeIdx = 0;
+  for (let i = 0; i < sim.projectiles.length; i++) {
+    const b = sim.projectiles[i]!;
+    if (distance(cx, cy, b.x, b.y) <= radius) {
+      b.ttlSec = 0;
+      b.hitEntityIds.length = 0;
+      sim.projectilePool.push(b);
+    } else {
+      sim.projectiles[writeIdx++] = b;
+    }
+  }
+  sim.projectiles.length = writeIdx;
+
+  // Drop phase-break sustain orbs (Life Seed + Energy) right at active players so orbit isn't interrupted
+  const players = sim.getAllPlayers();
+  const isCoop = players.length > 1;
+  for (let i = 0; i < players.length; i++) {
+    const pl = players[i]!;
+    if (pl.lifeState !== 'alive') continue;
+    sim.pickups.push(
+      sim.acquirePickup({
+        id: ++sim.nextEntityId,
+        kind: 'life_seed',
+        x: pl.x,
+        y: pl.y,
+        vx: 0,
+        vy: 0,
+        amount: pl.characterId === 'elementalist' ? 3 : 2,
+        ttlSec: 22,
+        ownerPlayerId: isCoop ? pl.id : undefined,
+      }),
+    );
+    sim.pickups.push(
+      sim.acquirePickup({
+        id: ++sim.nextEntityId,
+        kind: 'energy',
+        x: pl.x,
+        y: pl.y,
+        vx: 0,
+        vy: 0,
+        amount: 24,
+        ttlSec: 22,
+        ownerPlayerId: isCoop ? pl.id : undefined,
+      }),
+    );
+  }
+}
+
 export function checkBossPhaseTransitionsImpl(this: WorldSim, e: SimEnemyState): void {
   if (!e.isBoss || e.hp <= 0) return;
   const hpRatio = e.hp / e.maxHp;
 
   if (hpRatio <= 0.66 && e.bossPhase === 1) {
     e.bossPhase = 2;
-    e.attackCooldownTimer = 0.15;
+    e.bossPhaseTransitionTimer = 1.2;
+    e.attackCooldownTimer = 0;
+    e.aiState = 'telegraph';
+    e.stateTimer = Math.max(0.55, e.telegraphDurationSec);
+    e.telegraphAngle = Math.atan2(this.player.y - e.y, this.player.x - e.x);
+    e.vx = 0;
+    e.vy = 0;
+    e.bossBurrowed = false;
+    clearBossNearbyProjectiles(this, e.x, e.y, 280);
     if (e.defId === 'kryssa_ice_queen') {
       this.spawnKryssaMirrorClones(e);
     } else if (e.defId === 'forge_titan') {
@@ -627,14 +793,22 @@ export function checkBossPhaseTransitionsImpl(this: WorldSim, e: SimEnemyState):
     });
     this.events.push({
       kind: 'hit_stop',
-      durationMs: 60,
-      trauma: 0.6,
+      durationMs: 90,
+      trauma: 0.72,
     });
   }
 
   if (hpRatio <= 0.33 && e.bossPhase < 3) {
     e.bossPhase = 3;
-    e.attackCooldownTimer = 0.15;
+    e.bossPhaseTransitionTimer = 1.2;
+    e.attackCooldownTimer = 0;
+    e.aiState = 'telegraph';
+    e.stateTimer = Math.max(0.55, e.telegraphDurationSec);
+    e.telegraphAngle = Math.atan2(this.player.y - e.y, this.player.x - e.x);
+    e.vx = 0;
+    e.vy = 0;
+    e.bossBurrowed = false;
+    clearBossNearbyProjectiles(this, e.x, e.y, 280);
     if (e.defId === 'kryssa_ice_queen') {
       this.blizzardVeilActive = true;
       this.map.applyBossPhase3BlizzardBorder();
@@ -652,8 +826,8 @@ export function checkBossPhaseTransitionsImpl(this: WorldSim, e: SimEnemyState):
     });
     this.events.push({
       kind: 'hit_stop',
-      durationMs: 80,
-      trauma: 0.78,
+      durationMs: 110,
+      trauma: 0.85,
     });
   }
 }

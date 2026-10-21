@@ -4,7 +4,8 @@ import { COOP_SCALING } from '../data/scaling.js';
 import type { SimPlayerState, SimEnemyState } from './world-sim-types.js';
 import type { WorldSim } from './world-sim.js';
 
-export function updateFrostBatAIImpl(this: WorldSim,
+export function updateFrostBatAIImpl(
+  this: WorldSim,
   e: SimEnemyState,
   distToPlayer: number,
   angleToPlayer: number,
@@ -19,6 +20,7 @@ export function updateFrostBatAIImpl(this: WorldSim,
     e.stateTimer -= dtSec;
     if (e.stateTimer <= 0) {
       if (!this.stressTestActive || this.projectiles.length < 660) {
+        const extraVolley = e.isElite && e.eliteModifier === 'volley' ? 2 : 0;
         this.spawnDeterministicVolley({
           kind: 'bullet_volley_spawned',
           tick: this.tick,
@@ -28,9 +30,9 @@ export function updateFrostBatAIImpl(this: WorldSim,
           x: e.x + Math.cos(e.telegraphAngle) * 14,
           y: e.y + Math.sin(e.telegraphAngle) * 14,
           angle: e.telegraphAngle,
-          pelletCount: 2,
-          spreadRad: 0.24,
-          speed: 310,
+          pelletCount: 2 + extraVolley,
+          spreadRad: 0.24 + extraVolley * 0.14,
+          speed: 350,
           damage: e.damage,
           radius: 5,
           knockback: 75,
@@ -45,7 +47,7 @@ export function updateFrostBatAIImpl(this: WorldSim,
       }
       e.aiState = 'cooldown';
       e.stateTimer = 0.28;
-      e.attackCooldownTimer = (ENEMIES.frost_bat?.attackCooldownSec ?? 1.55) * cdMult;
+      e.attackCooldownTimer = (ENEMIES.frost_bat?.attackCooldownSec ?? 1.32) * cdMult;
     }
     return;
   }
@@ -83,7 +85,8 @@ export function updateFrostBatAIImpl(this: WorldSim,
   e.vy = (Math.sin(angleToPlayer) * approachWeight + Math.sin(perp) * 0.85) * e.moveSpeed;
 }
 
-export function updateBabyYetiAIImpl(this: WorldSim,
+export function updateBabyYetiAIImpl(
+  this: WorldSim,
   e: SimEnemyState,
   distToPlayer: number,
   angleToPlayer: number,
@@ -120,7 +123,7 @@ export function updateBabyYetiAIImpl(this: WorldSim,
         this.applyDamageToPlayer(e.damage, e.telegraphAngle, 250, e.defId, pl);
         e.aiState = 'cooldown';
         e.stateTimer = 0.45;
-        e.attackCooldownTimer = (ENEMIES.baby_yeti?.attackCooldownSec ?? 2.3) * cdMult;
+        e.attackCooldownTimer = (ENEMIES.baby_yeti?.attackCooldownSec ?? 2.0) * cdMult;
         e.vx = 0;
         e.vy = 0;
         return;
@@ -130,7 +133,7 @@ export function updateBabyYetiAIImpl(this: WorldSim,
     if (e.stateTimer <= 0) {
       e.aiState = 'cooldown';
       e.stateTimer = 0.4;
-      e.attackCooldownTimer = (ENEMIES.baby_yeti?.attackCooldownSec ?? 2.3) * cdMult;
+      e.attackCooldownTimer = (ENEMIES.baby_yeti?.attackCooldownSec ?? 2.0) * cdMult;
       e.vx = 0;
       e.vy = 0;
     }
@@ -171,7 +174,8 @@ export function updateBabyYetiAIImpl(this: WorldSim,
   e.vy = Math.sin(angleToPlayer) * e.moveSpeed;
 }
 
-export function updateIceMageAIImpl(this: WorldSim,
+export function updateIceMageAIImpl(
+  this: WorldSim,
   e: SimEnemyState,
   targetPlayer: SimPlayerState,
   distToPlayer: number,
@@ -190,6 +194,7 @@ export function updateIceMageAIImpl(this: WorldSim,
         this.map.freezeSurfaceInRadius(targetPlayer.x, targetPlayer.y, 44);
       }
       if (!this.stressTestActive || this.projectiles.length < 660) {
+        const extraVolley = e.isElite && e.eliteModifier === 'volley' ? 2 : 0;
         this.spawnDeterministicVolley({
           kind: 'bullet_volley_spawned',
           tick: this.tick,
@@ -199,15 +204,15 @@ export function updateIceMageAIImpl(this: WorldSim,
           x: e.x + Math.cos(e.telegraphAngle) * 16,
           y: e.y + Math.sin(e.telegraphAngle) * 16,
           angle: e.telegraphAngle,
-          pelletCount: 3,
-          spreadRad: 0.36,
+          pelletCount: 1 + extraVolley,
+          spreadRad: extraVolley > 0 ? 0.34 : 0,
           speed: 265,
           damage: e.damage,
-          radius: 6,
+          radius: 5.5,
           knockback: 85,
           pierceCount: 0,
           bounceCount: 0,
-          ttlSec: 2.3,
+          ttlSec: 2.0,
           element: 'chill',
           critChance: 0,
           amplifiedByShield: false,
@@ -216,7 +221,7 @@ export function updateIceMageAIImpl(this: WorldSim,
       }
       e.aiState = 'cooldown';
       e.stateTimer = 0.4;
-      e.attackCooldownTimer = (ENEMIES.ice_mage?.attackCooldownSec ?? 2.35) * cdMult;
+      e.attackCooldownTimer = (ENEMIES.ice_mage?.attackCooldownSec ?? 1.82) * cdMult;
     }
     return;
   }
@@ -265,7 +270,8 @@ export function updateIceMageAIImpl(this: WorldSim,
   }
 }
 
-export function updateIceGolemAIImpl(this: WorldSim,
+export function updateIceGolemAIImpl(
+  this: WorldSim,
   e: SimEnemyState,
   distToPlayer: number,
   angleToPlayer: number,
@@ -280,6 +286,7 @@ export function updateIceGolemAIImpl(this: WorldSim,
     e.stateTimer -= dtSec;
     if (e.stateTimer <= 0) {
       if (!this.stressTestActive || this.projectiles.length < 660) {
+        const extraVolley = e.isElite && e.eliteModifier === 'volley' ? 2 : 0;
         this.spawnDeterministicVolley({
           kind: 'bullet_volley_spawned',
           tick: this.tick,
@@ -289,15 +296,15 @@ export function updateIceGolemAIImpl(this: WorldSim,
           x: e.x + Math.cos(e.telegraphAngle) * 18,
           y: e.y + Math.sin(e.telegraphAngle) * 18,
           angle: e.telegraphAngle,
-          pelletCount: 5,
-          spreadRad: 0.65,
-          speed: 250,
+          pelletCount: 2 + extraVolley,
+          spreadRad: 0.1 + extraVolley * 0.12,
+          speed: 255,
           damage: e.damage,
-          radius: 6.5,
+          radius: 5.5,
           knockback: 130,
           pierceCount: 0,
           bounceCount: 0,
-          ttlSec: 1.9,
+          ttlSec: 1.8,
           element: 'chill',
           critChance: 0,
           amplifiedByShield: false,
@@ -306,7 +313,7 @@ export function updateIceGolemAIImpl(this: WorldSim,
       }
       e.aiState = 'cooldown';
       e.stateTimer = 0.55;
-      e.attackCooldownTimer = (ENEMIES.ice_golem?.attackCooldownSec ?? 2.6) * cdMult;
+      e.attackCooldownTimer = (ENEMIES.ice_golem?.attackCooldownSec ?? 2.25) * cdMult;
     }
     return;
   }
@@ -349,7 +356,8 @@ export function updateIceGolemAIImpl(this: WorldSim,
   e.vy = Math.sin(e.aimAngle) * e.moveSpeed;
 }
 
-export function updateSnowSpiritAIImpl(this: WorldSim,
+export function updateSnowSpiritAIImpl(
+  this: WorldSim,
   e: SimEnemyState,
   distToPlayer: number,
   angleToPlayer: number,
@@ -429,7 +437,8 @@ export function detonateSnowSpiritImpl(this: WorldSim, e: SimEnemyState): void {
   });
 }
 
-export function updateKryssaCloneAIImpl(this: WorldSim,
+export function updateKryssaCloneAIImpl(
+  this: WorldSim,
   e: SimEnemyState,
   distToPlayer: number,
   angleToPlayer: number,
@@ -452,15 +461,15 @@ export function updateKryssaCloneAIImpl(this: WorldSim,
           x: e.x + Math.cos(e.telegraphAngle) * 16,
           y: e.y + Math.sin(e.telegraphAngle) * 16,
           angle: e.telegraphAngle,
-          pelletCount: 3,
-          spreadRad: 0.38,
-          speed: 270,
+          pelletCount: 1,
+          spreadRad: 0,
+          speed: 255,
           damage: e.damage,
           radius: 5.5,
           knockback: 80,
           pierceCount: 0,
           bounceCount: 0,
-          ttlSec: 2.1,
+          ttlSec: 1.9,
           element: 'chill',
           critChance: 0,
           amplifiedByShield: false,
@@ -468,8 +477,8 @@ export function updateKryssaCloneAIImpl(this: WorldSim,
         });
       }
       e.aiState = 'cooldown';
-      e.stateTimer = 0.35;
-      e.attackCooldownTimer = (ENEMIES.kryssa_clone?.attackCooldownSec ?? 1.9) * cdScale;
+      e.stateTimer = 0.45;
+      e.attackCooldownTimer = (ENEMIES.kryssa_clone?.attackCooldownSec ?? 1.95) * cdScale * 1.25;
     }
     return;
   }
@@ -520,7 +529,10 @@ export function spawnKryssaMirrorClonesImpl(this: WorldSim, boss: SimEnemyState)
   boss.prevY = boss.y;
 }
 
-export function encasePlayerInIcePrisonImpl(this: WorldSim, target: SimPlayerState): SimEnemyState | null {
+export function encasePlayerInIcePrisonImpl(
+  this: WorldSim,
+  target: SimPlayerState,
+): SimEnemyState | null {
   if (target.lifeState !== 'alive' || (target.encasedInIceTimer ?? 0) > 0) return null;
   const prison = this.spawnEnemy('ice_prison', target.x, target.y, true);
   target.encasedInIceTimer = 4.5;
@@ -539,7 +551,8 @@ export function encasePlayerInIcePrisonImpl(this: WorldSim, target: SimPlayerSta
   return prison;
 }
 
-export function updateBossKryssaAIImpl(this: WorldSim,
+export function updateBossKryssaAIImpl(
+  this: WorldSim,
   e: SimEnemyState,
   targetPlayer: SimPlayerState,
   distToPlayer: number,
@@ -555,7 +568,7 @@ export function updateBossKryssaAIImpl(this: WorldSim,
     e.vy = 0;
     e.stateTimer -= dtSec;
     if (e.stateTimer <= 0) {
-      this.executeBossKryssaAttack(e, targetPlayer, angleToPlayer);
+      this.executeBossKryssaAttack(e, targetPlayer, e.telegraphAngle);
     }
     return;
   }
@@ -572,7 +585,7 @@ export function updateBossKryssaAIImpl(this: WorldSim,
 
   if (e.attackCooldownTimer <= 0) {
     e.aiState = 'telegraph';
-    e.stateTimer = (e.bossPhase === 3 ? 0.5 : e.telegraphDurationSec) * bossCdScale;
+    e.stateTimer = Math.max(0.45, (e.bossPhase === 3 ? 0.5 : e.telegraphDurationSec) * bossCdScale);
     e.telegraphAngle = angleToPlayer;
     e.telegraphRadius = 56;
     e.vx = 0;
@@ -602,7 +615,8 @@ export function updateBossKryssaAIImpl(this: WorldSim,
   }
 }
 
-export function executeBossKryssaAttackImpl(this: WorldSim,
+export function executeBossKryssaAttackImpl(
+  this: WorldSim,
   e: SimEnemyState,
   targetPlayer: SimPlayerState,
   angleToPlayer: number,
@@ -612,7 +626,7 @@ export function executeBossKryssaAttackImpl(this: WorldSim,
   const bossCdScale = this.getEnemyCooldownScale(true);
 
   // 1. Refracting Ice Laser Volley (bounces off crystal pillars & walls!)
-  const beamCount = e.bossPhase === 3 ? 5 : e.bossPhase === 2 ? 4 : 3;
+  const beamCount = 2;
   this.spawnDeterministicVolley({
     kind: 'bullet_volley_spawned',
     tick: this.tick,
@@ -623,15 +637,15 @@ export function executeBossKryssaAttackImpl(this: WorldSim,
     y: e.y,
     angle: angleToPlayer,
     pelletCount: beamCount,
-    spreadRad: 0.55,
+    spreadRad: 0.1,
     muzzleOffset: e.radius + 8,
-    speed: 350,
+    speed: 270,
     damage: e.damage,
-    radius: 6,
+    radius: 5,
     knockback: 105,
-    pierceCount: 1,
-    bounceCount: 3,
-    ttlSec: 2.8,
+    pierceCount: 0,
+    bounceCount: 1,
+    ttlSec: 1.8,
     element: 'chill',
     critChance: 0,
     amplifiedByShield: false,
@@ -640,7 +654,7 @@ export function executeBossKryssaAttackImpl(this: WorldSim,
 
   // 2. Alternate cycle: Radial Frost Crystal Nova
   if (cycle % 2 === 1) {
-    const ringCount = e.bossPhase === 3 ? 14 : 10;
+    const ringCount = 6;
     this.spawnDeterministicVolley({
       kind: 'bullet_volley_spawned',
       tick: this.tick,
@@ -649,18 +663,18 @@ export function executeBossKryssaAttackImpl(this: WorldSim,
       weaponId: 'kryssa_frost_nova',
       x: e.x,
       y: e.y,
-      angle: cycle * 0.3,
+      angle: angleToPlayer,
       pelletCount: ringCount,
       spreadRad: 0,
       radialStepRad: (Math.PI * 2) / ringCount,
       muzzleOffset: e.radius + 6,
-      speed: 240,
+      speed: 235,
       damage: e.damage,
-      radius: 5.5,
+      radius: 5,
       knockback: 90,
       pierceCount: 0,
-      bounceCount: 1,
-      ttlSec: 2.5,
+      bounceCount: 0,
+      ttlSec: 1.9,
       element: 'chill',
       critChance: 0,
       amplifiedByShield: false,
@@ -680,7 +694,7 @@ export function executeBossKryssaAttackImpl(this: WorldSim,
 
   e.aiState = 'cooldown';
   e.stateTimer = (e.bossPhase === 3 ? 0.34 : 0.44) * bossCdScale;
-  const baseCd = ENEMIES.kryssa_ice_queen?.attackCooldownSec ?? 2.05;
+  const baseCd = ENEMIES.kryssa_ice_queen?.attackCooldownSec ?? 1.75;
   e.attackCooldownTimer =
     (e.bossPhase === 3 ? baseCd * 0.66 : e.bossPhase === 2 ? baseCd * 0.82 : baseCd) *
     bossCdScale;

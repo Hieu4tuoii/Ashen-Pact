@@ -211,6 +211,10 @@ export class GraphicsSettingsManager {
     this.state = { ...this.state, fullscreen: enabled };
     this.saveToStorage();
     this.notify();
+    this.emitSettingsToast(
+      'fullscreen',
+      enabled ? 'Toàn màn hình: BẬT' : 'Toàn màn hình: TẮT (Cửa sổ)',
+    );
   }
 
   public setLanguage(language: SupportedLocale): void {
@@ -297,6 +301,10 @@ export class GraphicsSettingsManager {
         this.autoDowngradeCount += 1;
         const nextTier: GraphicsQualityTier = this.state.quality === 'high' ? 'medium' : 'low';
         this.setQuality(nextTier);
+        this.emitSettingsToast(
+          'auto_quality',
+          `Giảm xuống mức ${QUALITY_PRESETS[nextTier].labelVi} để giữ 60 FPS`,
+        );
         return true;
       }
     } else {
@@ -365,6 +373,22 @@ export class GraphicsSettingsManager {
   private notify(): void {
     for (const cb of this.listeners) {
       cb(this.state);
+    }
+  }
+
+  private emitSettingsToast(kind: 'fullscreen' | 'auto_quality', detailVi: string): void {
+    const clean = detailVi.trim();
+    const messageVi =
+      kind === 'fullscreen' ? `🖥 ${clean}` : `⚙ Tự động chỉnh Đồ họa: ${clean}`;
+    if (typeof window !== 'undefined') {
+      (window as unknown as Record<string, unknown>).__LAST_P11_TOAST__ = messageVi;
+      if (typeof window.dispatchEvent === 'function' && typeof CustomEvent === 'function') {
+        window.dispatchEvent(
+          new CustomEvent('ashen-pact:settings-toast', {
+            detail: { kind, detailVi: clean, messageVi },
+          }),
+        );
+      }
     }
   }
 }

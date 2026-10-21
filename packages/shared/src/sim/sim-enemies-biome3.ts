@@ -5,7 +5,8 @@ import { TILE_SIZE } from '../protocol/messages.js';
 import type { MvpAwardEntry, SimPlayerState, SimEnemyState } from './world-sim-types.js';
 import type { WorldSim } from './world-sim.js';
 
-export function updateFireImpAIImpl(this: WorldSim,
+export function updateFireImpAIImpl(
+  this: WorldSim,
   e: SimEnemyState,
   distToPlayer: number,
   angleToPlayer: number,
@@ -20,6 +21,7 @@ export function updateFireImpAIImpl(this: WorldSim,
     e.stateTimer -= dtSec;
     if (e.stateTimer <= 0) {
       if (!this.stressTestActive || this.projectiles.length < 660) {
+        const extraVolley = e.isElite && e.eliteModifier === 'volley' ? 2 : 0;
         this.spawnDeterministicVolley({
           kind: 'bullet_volley_spawned',
           tick: this.tick,
@@ -29,15 +31,15 @@ export function updateFireImpAIImpl(this: WorldSim,
           x: e.x + Math.cos(e.telegraphAngle) * 14,
           y: e.y + Math.sin(e.telegraphAngle) * 14,
           angle: e.telegraphAngle,
-          pelletCount: 2,
-          spreadRad: 0.22,
-          speed: 315,
+          pelletCount: 1 + extraVolley,
+          spreadRad: extraVolley > 0 ? 0.32 : 0,
+          speed: 270,
           damage: e.damage,
-          radius: 5.5,
+          radius: 5,
           knockback: 80,
           pierceCount: 0,
           bounceCount: 0,
-          ttlSec: 2.0,
+          ttlSec: 1.9,
           element: 'burn',
           critChance: 0,
           amplifiedByShield: false,
@@ -46,7 +48,7 @@ export function updateFireImpAIImpl(this: WorldSim,
       }
       e.aiState = 'cooldown';
       e.stateTimer = 0.25;
-      e.attackCooldownTimer = (ENEMIES.fire_imp?.attackCooldownSec ?? 1.45) * cdMult;
+      e.attackCooldownTimer = (ENEMIES.fire_imp?.attackCooldownSec ?? 1.44) * cdMult;
     }
     return;
   }
@@ -84,7 +86,8 @@ export function updateFireImpAIImpl(this: WorldSim,
   e.vy = (Math.sin(angleToPlayer) * approachDir + Math.sin(perp) * 0.85) * e.moveSpeed;
 }
 
-export function updateDwarfCannonAIImpl(this: WorldSim,
+export function updateDwarfCannonAIImpl(
+  this: WorldSim,
   e: SimEnemyState,
   distToPlayer: number,
   angleToPlayer: number,
@@ -99,6 +102,7 @@ export function updateDwarfCannonAIImpl(this: WorldSim,
     e.stateTimer -= dtSec;
     if (e.stateTimer <= 0) {
       if (!this.stressTestActive || this.projectiles.length < 660) {
+        const extraVolley = e.isElite && e.eliteModifier === 'volley' ? 2 : 0;
         this.spawnDeterministicVolley({
           kind: 'bullet_volley_spawned',
           tick: this.tick,
@@ -108,9 +112,9 @@ export function updateDwarfCannonAIImpl(this: WorldSim,
           x: e.x + Math.cos(e.telegraphAngle) * 18,
           y: e.y + Math.sin(e.telegraphAngle) * 18,
           angle: e.telegraphAngle,
-          pelletCount: 1,
-          spreadRad: 0.08,
-          speed: 255,
+          pelletCount: 1 + extraVolley,
+          spreadRad: extraVolley > 0 ? 0.32 : 0.08,
+          speed: 290,
           damage: e.damage,
           radius: 7.5,
           knockback: 150,
@@ -125,7 +129,7 @@ export function updateDwarfCannonAIImpl(this: WorldSim,
       }
       e.aiState = 'cooldown';
       e.stateTimer = 0.5;
-      e.attackCooldownTimer = (ENEMIES.dwarf_cannon?.attackCooldownSec ?? 2.4) * cdMult;
+      e.attackCooldownTimer = (ENEMIES.dwarf_cannon?.attackCooldownSec ?? 2.18) * cdMult;
     }
     return;
   }
@@ -173,7 +177,8 @@ export function updateDwarfCannonAIImpl(this: WorldSim,
   }
 }
 
-export function updateCoalGolemAIImpl(this: WorldSim,
+export function updateCoalGolemAIImpl(
+  this: WorldSim,
   e: SimEnemyState,
   distToPlayer: number,
   angleToPlayer: number,
@@ -208,7 +213,7 @@ export function updateCoalGolemAIImpl(this: WorldSim,
         this.applyDamageToPlayer(e.damage, e.telegraphAngle, 190, e.defId, pl);
         e.aiState = 'cooldown';
         e.stateTimer = 0.4;
-        e.attackCooldownTimer = (ENEMIES.coal_golem?.attackCooldownSec ?? 1.85) * cdScale;
+        e.attackCooldownTimer = (ENEMIES.coal_golem?.attackCooldownSec ?? 2.1) * cdScale;
         e.vx = 0;
         e.vy = 0;
         return;
@@ -217,7 +222,7 @@ export function updateCoalGolemAIImpl(this: WorldSim,
     if (e.stateTimer <= 0) {
       e.aiState = 'cooldown';
       e.stateTimer = 0.35;
-      e.attackCooldownTimer = (ENEMIES.coal_golem?.attackCooldownSec ?? 1.85) * cdScale;
+      e.attackCooldownTimer = (ENEMIES.coal_golem?.attackCooldownSec ?? 2.1) * cdScale;
       e.vx = 0;
       e.vy = 0;
     }
@@ -246,7 +251,8 @@ export function updateCoalGolemAIImpl(this: WorldSim,
   e.vy = Math.sin(angleToPlayer) * e.moveSpeed;
 }
 
-export function updateWelderDroneAIImpl(this: WorldSim,
+export function updateWelderDroneAIImpl(
+  this: WorldSim,
   e: SimEnemyState,
   distToPlayer: number,
   angleToPlayer: number,
@@ -282,6 +288,7 @@ export function updateWelderDroneAIImpl(this: WorldSim,
       }
 
       if (!this.stressTestActive || this.projectiles.length < 660) {
+        const extraVolley = e.isElite && e.eliteModifier === 'volley' ? 2 : 0;
         this.spawnDeterministicVolley({
           kind: 'bullet_volley_spawned',
           tick: this.tick,
@@ -291,9 +298,9 @@ export function updateWelderDroneAIImpl(this: WorldSim,
           x: e.x + Math.cos(e.telegraphAngle) * 14,
           y: e.y + Math.sin(e.telegraphAngle) * 14,
           angle: e.telegraphAngle,
-          pelletCount: 1,
-          spreadRad: 0,
-          speed: 320,
+          pelletCount: 1 + extraVolley,
+          spreadRad: extraVolley > 0 ? 0.34 : 0,
+          speed: 360,
           damage: e.damage,
           radius: 5.5,
           knockback: 75,
@@ -309,7 +316,7 @@ export function updateWelderDroneAIImpl(this: WorldSim,
 
       e.aiState = 'cooldown';
       e.stateTimer = 0.35;
-      e.attackCooldownTimer = (ENEMIES.welder_drone?.attackCooldownSec ?? 2.15) * cdMult;
+      e.attackCooldownTimer = (ENEMIES.welder_drone?.attackCooldownSec ?? 2.25) * cdMult;
     }
     return;
   }
@@ -338,7 +345,8 @@ export function updateWelderDroneAIImpl(this: WorldSim,
   e.vy = (Math.sin(angleToPlayer) * approachDir + Math.sin(perp) * 0.8) * e.moveSpeed;
 }
 
-export function updateIronShielderAIImpl(this: WorldSim,
+export function updateIronShielderAIImpl(
+  this: WorldSim,
   e: SimEnemyState,
   distToPlayer: number,
   angleToPlayer: number,
@@ -353,6 +361,7 @@ export function updateIronShielderAIImpl(this: WorldSim,
     e.stateTimer -= dtSec;
     if (e.stateTimer <= 0) {
       if (!this.stressTestActive || this.projectiles.length < 660) {
+        const extraVolley = e.isElite && e.eliteModifier === 'volley' ? 2 : 0;
         this.spawnDeterministicVolley({
           kind: 'bullet_volley_spawned',
           tick: this.tick,
@@ -362,15 +371,15 @@ export function updateIronShielderAIImpl(this: WorldSim,
           x: e.x + Math.cos(e.telegraphAngle) * 18,
           y: e.y + Math.sin(e.telegraphAngle) * 18,
           angle: e.telegraphAngle,
-          pelletCount: 3,
-          spreadRad: 0.35,
-          speed: 270,
+          pelletCount: 2 + extraVolley,
+          spreadRad: 0.1 + extraVolley * 0.12,
+          speed: 260,
           damage: e.damage,
-          radius: 6,
+          radius: 5.5,
           knockback: 115,
           pierceCount: 0,
           bounceCount: 0,
-          ttlSec: 2.1,
+          ttlSec: 1.9,
           element: 'burn',
           critChance: 0,
           amplifiedByShield: false,
@@ -379,7 +388,7 @@ export function updateIronShielderAIImpl(this: WorldSim,
       }
       e.aiState = 'cooldown';
       e.stateTimer = 0.45;
-      e.attackCooldownTimer = (ENEMIES.iron_shielder?.attackCooldownSec ?? 2.3) * cdMult;
+      e.attackCooldownTimer = (ENEMIES.iron_shielder?.attackCooldownSec ?? 2.0) * cdMult;
     }
     return;
   }
@@ -434,7 +443,8 @@ export function spawnForgeTitanEnergyCoresImpl(this: WorldSim, boss: SimEnemySta
   this.titanFirstCoreBrokenId = 0;
 }
 
-export function updateBossForgeTitanAIImpl(this: WorldSim,
+export function updateBossForgeTitanAIImpl(
+  this: WorldSim,
   e: SimEnemyState,
   _targetPlayer: SimPlayerState,
   distToPlayer: number,
@@ -450,7 +460,7 @@ export function updateBossForgeTitanAIImpl(this: WorldSim,
     e.vy = 0;
     e.stateTimer -= dtSec;
     if (e.stateTimer <= 0) {
-      this.executeBossForgeTitanAttack(e, angleToPlayer);
+      this.executeBossForgeTitanAttack(e, e.telegraphAngle);
     }
     return;
   }
@@ -467,7 +477,7 @@ export function updateBossForgeTitanAIImpl(this: WorldSim,
 
   if (e.attackCooldownTimer <= 0) {
     e.aiState = 'telegraph';
-    e.stateTimer = (e.bossPhase === 3 ? 0.54 : e.telegraphDurationSec) * bossCdScale;
+    e.stateTimer = Math.max(0.45, (e.bossPhase === 3 ? 0.54 : e.telegraphDurationSec) * bossCdScale);
     e.telegraphAngle = angleToPlayer;
     e.telegraphRadius = 72;
     e.vx = 0;
@@ -497,25 +507,31 @@ export function updateBossForgeTitanAIImpl(this: WorldSim,
   }
 }
 
-export function executeBossForgeTitanAttackImpl(this: WorldSim, e: SimEnemyState, angleToPlayer: number): void {
+export function executeBossForgeTitanAttackImpl(
+  this: WorldSim,
+  e: SimEnemyState,
+  angleToPlayer: number,
+): void {
   const cycle = e.bossAttackCycle;
   e.bossAttackCycle += 1;
   const bossCdScale = this.getEnemyCooldownScale(true);
 
   // 1. Hammer Slam Shockwave Ring (players Dash through with i-frames) + Reverse Conveyor Belts!
   this.map.reverseConveyorDirection();
-  this.shockwaveRings.push({
-    id: ++this.nextPuzzleEntityId,
-    sourceEnemyId: e.id,
-    x: e.x,
-    y: e.y,
-    radius: e.radius,
-    maxRadius: 360,
-    speed: e.bossPhase === 3 ? 255 : 215,
-    thickness: 22,
-    damage: e.damage,
-    hitPlayerIds: [],
-  });
+  if (cycle % 2 === 0) {
+    this.shockwaveRings.push({
+      id: ++this.nextPuzzleEntityId,
+      sourceEnemyId: e.id,
+      x: e.x,
+      y: e.y,
+      radius: e.radius,
+      maxRadius: 162,
+      speed: 135,
+      thickness: 20,
+      damage: Math.min(4, e.damage + 1),
+      hitPlayerIds: [],
+    });
+  }
 
   this.events.push({
     kind: 'hit_stop',
@@ -523,36 +539,38 @@ export function executeBossForgeTitanAttackImpl(this: WorldSim, e: SimEnemyState
     trauma: 0.52,
   });
 
-  // 2. Magma Barrage Volley
-  const barrageCount = e.bossPhase === 3 ? 12 : e.bossPhase === 2 ? 10 : 8;
-  this.spawnDeterministicVolley({
-    kind: 'bullet_volley_spawned',
-    tick: this.tick,
-    ownerId: e.id,
-    team: 'enemy',
-    weaponId: 'titan_magma_barrage',
-    x: e.x,
-    y: e.y,
-    angle: cycle * 0.35,
-    pelletCount: barrageCount,
-    spreadRad: 0,
-    radialStepRad: (Math.PI * 2) / barrageCount,
-    muzzleOffset: e.radius + 8,
-    speed: 245,
-    damage: e.damage,
-    radius: 6.5,
-    knockback: 115,
-    pierceCount: 0,
-    bounceCount: 0,
-    ttlSec: 2.6,
-    element: 'burn',
-    critChance: 0,
-    amplifiedByShield: false,
-    seed: this.rng.nextUint32(),
-  });
+  // 2. Magma Barrage Volley (alternates with shockwave slam in Phases 1-2)
+  if (cycle % 2 === 1 || e.bossPhase === 3) {
+    const barrageCount = 6;
+    this.spawnDeterministicVolley({
+      kind: 'bullet_volley_spawned',
+      tick: this.tick,
+      ownerId: e.id,
+      team: 'enemy',
+      weaponId: 'titan_magma_barrage',
+      x: e.x,
+      y: e.y,
+      angle: angleToPlayer,
+      pelletCount: barrageCount,
+      spreadRad: 0,
+      radialStepRad: (Math.PI * 2) / barrageCount,
+      muzzleOffset: e.radius + 8,
+      speed: 245,
+      damage: Math.max(2, e.damage - 1),
+      radius: 5,
+      knockback: 115,
+      pierceCount: 0,
+      bounceCount: 0,
+      ttlSec: 1.9,
+      element: 'burn',
+      critChance: 0,
+      amplifiedByShield: false,
+      seed: this.rng.nextUint32(),
+    });
+  }
 
   // 3. Phase 3 Overheat: 360-degree Rotating Flame Sweep
-  if (e.bossPhase === 3) {
+  if (e.bossPhase === 3 && cycle % 3 === 2) {
     this.spawnDeterministicVolley({
       kind: 'bullet_volley_spawned',
       tick: this.tick,
@@ -561,18 +579,18 @@ export function executeBossForgeTitanAttackImpl(this: WorldSim, e: SimEnemyState
       weaponId: 'titan_flame_sweep',
       x: e.x,
       y: e.y,
-      angle: angleToPlayer + cycle * 0.48,
+      angle: angleToPlayer + Math.PI / 6,
       pelletCount: 6,
       spreadRad: 0,
       radialStepRad: Math.PI / 3,
       muzzleOffset: e.radius + 10,
-      speed: 285,
-      damage: e.damage,
-      radius: 6.5,
+      speed: 245,
+      damage: Math.max(2, e.damage - 1),
+      radius: 5,
       knockback: 110,
       pierceCount: 0,
       bounceCount: 0,
-      ttlSec: 2.2,
+      ttlSec: 1.9,
       element: 'burn',
       critChance: 0,
       amplifiedByShield: false,
@@ -582,7 +600,7 @@ export function executeBossForgeTitanAttackImpl(this: WorldSim, e: SimEnemyState
 
   e.aiState = 'cooldown';
   e.stateTimer = (e.bossPhase === 3 ? 0.35 : 0.45) * bossCdScale;
-  const baseCd = ENEMIES.forge_titan?.attackCooldownSec ?? 2.25;
+  const baseCd = ENEMIES.forge_titan?.attackCooldownSec ?? 1.9;
   e.attackCooldownTimer =
     (e.bossPhase === 3 ? baseCd * 0.65 : e.bossPhase === 2 ? baseCd * 0.82 : baseCd) *
     bossCdScale;

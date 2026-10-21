@@ -2,6 +2,8 @@ import {
   BIOME1_COMBAT_ENEMIES,
   BIOME2_COMBAT_ENEMIES,
   BIOME3_COMBAT_ENEMIES,
+  BIOME_SCALING,
+  type BuffId,
   CHARACTERS,
   type CharacterId,
   ENEMIES,
@@ -145,10 +147,10 @@ export const CHARACTER_SIGNATURE_BUFF: Record<CharacterId, string> = {
 };
 
 const BIOME1_PRIMARY_WEAPON: Record<CharacterId, string> = {
-  vanguard: 'knight_sword',
+  vanguard: 'tesla_carbine',
   ranger: 'tesla_carbine',
-  elementalist: 'apprentice_staff',
-  druid: 'tesla_carbine',
+  elementalist: 'frost_scepter',
+  druid: 'focus_laser',
   engineer: 'tesla_carbine',
 };
 
@@ -466,7 +468,7 @@ export function measureCombatRoomClearSec(
   const combatRoom = sim.dungeon.rooms.find((r) => r.type === 'combat') ?? sim.dungeon.rooms[1]!;
   sim.enterRoom(combatRoom.id);
 
-  // Equip biome-tier secondary weapon for Biome 2 & 3 combat rooms
+  // Equip biome-tier secondary weapon & progression buffs for Biome 2 & 3 combat rooms
   for (const pl of allPlayers) {
     pl.godMode = false;
     pl.statsDamageTaken = 0;
@@ -477,6 +479,13 @@ export function measureCombatRoomClearSec(
       pl.weaponSlots[0] = 'focus_laser';
       pl.weaponSlots[1] = CHARACTERS[pl.characterId].starterWeaponId;
     }
+  }
+  if (biome >= 2) {
+    sim.applyBuffEffects('iron_bastion');
+    sim.applyBuffEffects('vitality_surge');
+  }
+  if (biome >= 3) {
+    sim.applyBuffEffects('gale_reflex');
   }
 
   const initialTotalHpAndArmor = allPlayers.reduce(
@@ -603,13 +612,13 @@ export function simulateBossEncounter(
   sim.enterRoom(bossRoom.id);
 
   // Equip realistic campaign progression loadouts reached by the end of Biome 1 / 2 / 3
+  const leadSigBuff = CHARACTER_SIGNATURE_BUFF[allPlayers[0]!.characterId] as BuffId | undefined;
+  if (leadSigBuff && !sim.activeBuffIds.includes(leadSigBuff)) {
+    sim.applyBuffEffects(leadSigBuff);
+  }
   for (const pl of allPlayers) {
     pl.godMode = false;
     pl.statsDamageTaken = 0;
-    const sigBuff = CHARACTER_SIGNATURE_BUFF[pl.characterId];
-    if (sigBuff && !sim.activeBuffIds.includes(sigBuff)) {
-      sim.activeBuffIds.push(sigBuff);
-    }
 
     const starterId = CHARACTERS[pl.characterId].starterWeaponId;
     if (biome === 1) {
@@ -617,23 +626,26 @@ export function simulateBossEncounter(
       pl.weaponSlots[1] = starterId;
       pl.activeWeaponSlot = 0;
     } else if (biome === 2) {
-      if (!sim.activeBuffIds.includes('attack_speed')) {
-        sim.activeBuffIds.push('attack_speed');
-      }
       pl.weaponSlots[0] = BIOME2_PRIMARY_WEAPON[pl.characterId];
       pl.weaponSlots[1] = starterId;
       pl.activeWeaponSlot = 0;
     } else {
-      if (!sim.activeBuffIds.includes('attack_speed')) {
-        sim.activeBuffIds.push('attack_speed');
-      }
-      if (!sim.activeBuffIds.includes('crit_mastery')) {
-        sim.activeBuffIds.push('crit_mastery');
-      }
       pl.weaponSlots[0] = BIOME3_PRIMARY_WEAPON[pl.characterId];
       pl.weaponSlots[1] = 'tesla_carbine';
       pl.activeWeaponSlot = 0;
     }
+  }
+  sim.applyBuffEffects('iron_bastion');
+  if (allPlayers[0]?.characterId === 'elementalist') {
+    sim.applyBuffEffects('vitality_surge');
+  }
+  if (biome >= 2) {
+    sim.applyBuffEffects('vitality_surge');
+    sim.applyBuffEffects('gale_reflex');
+  }
+  if (biome >= 3) {
+    sim.applyBuffEffects('eagle_precision');
+    sim.applyBuffEffects('arcane_wellspring');
   }
 
   let boss = sim.getActiveBoss();
@@ -817,7 +829,8 @@ export function measureBiomeDifficultyProgression(
       const frontShieldFactor =
         defId === 'ice_golem' ? 1.35 : defId === 'iron_shielder' ? 1.4 : 1.0;
       const ehp = (e.maxHp + (e.maxShieldArmor ?? 0)) * frontShieldFactor;
-      const cdSec = ENEMIES[defId]?.attackCooldownSec ?? 1.2;
+      const cdSec =
+        (ENEMIES[defId]?.attackCooldownSec ?? 1.2) * BIOME_SCALING[b.biome].cooldownScale;
       totalRosterEhp += ehp;
       totalThreatDps += e.damage / Math.max(0.4, cdSec);
     }

@@ -2,7 +2,7 @@ import { ELITE_MODIFIER_LABELS_VI, ENEMIES } from '../data/enemies.js';
 import type { EliteModifier, ElementType, WeaponRarity } from '../data/types.js';
 import { ALL_WEAPON_IDS, PHASE3_WEAPON_IDS, WEAPONS } from '../data/weapons.js';
 import { distance, distanceSq } from '../math/vec2.js';
-import { COOP_SCALING } from '../data/scaling.js';
+import { BIOME_SCALING, COOP_SCALING } from '../data/scaling.js';
 import { type PlayerInputPacket, TILE_SIZE } from '../protocol/messages.js';
 import type { DungeonRoomNode } from './dungeon-gen.js';
 import { PHASE1_SAMPLE_ENEMIES, ELEMENT_CYCLE_ORDER, ENEMY_SPAWN_WARMUP_SEC, SPORE_EXPLOSION_RADIUS, BARREL_EXPLOSION_RADIUS, BOSS_ERUPT_RADIUS, type PropKind, type SimPropState, type SimChestState, type SimWorldItemState, type SimEnemyState } from './world-sim-types.js';
@@ -322,6 +322,12 @@ export function spawnTrainingDummyImpl(this: WorldSim, x: number, y: number): Si
     steamBlindTimer: 0,
     lastElementOwnerId: 0,
     lastElementApplied: 'none',
+    waveIndex: 1,
+    bossPhaseTransitionTimer: 0,
+    bossCombatElapsedSec: 0,
+    bossFreezeDrTimer: 0,
+    bossFreezeCountWindow: 0,
+    bossEnrageLevel: 0,
   };
   this.enemies.push(dummy);
   return dummy;
@@ -341,18 +347,24 @@ export function spawnEnemyImpl(this: WorldSim,
 
   const playerCount = this.getActivePlayerCount();
   const scaling = COOP_SCALING[playerCount];
+  const biomeTier = BIOME_SCALING[this.currentBiome] ?? BIOME_SCALING[1];
   const isElite = eliteModifier !== null && !def.isBoss;
   const radius = isElite ? Math.round(def.radius * 1.25) : def.radius;
-  const rawHp = isElite ? Math.round(def.hp * 2.2) : def.hp;
+  const rawHp = isElite
+    ? Math.round(def.hp * 2.2 * biomeTier.eliteBonusMultiplier)
+    : def.hp;
+  const biomeHpMult = def.isBoss || def.isIllusion ? 1.0 : biomeTier.hpMultiplier;
   const hpMult = this.stressTestActive
     ? 1.0
     : def.isBoss
       ? scaling.bossHpMultiplier
-      : scaling.enemyHpMultiplier;
+      : scaling.enemyHpMultiplier * biomeHpMult;
   const baseHp = Math.max(1, Math.round(rawHp * hpMult));
   const moveSpeed =
     isElite && eliteModifier === 'fast' ? Math.round(def.moveSpeed * 1.38) : def.moveSpeed;
-  const damage = isElite ? Math.max(def.damage + 1, Math.round(def.damage * 1.35)) : def.damage;
+  const damage = isElite
+    ? Math.max(def.damage + 1, Math.round(def.damage * 1.35)) + biomeTier.eliteDamageBonus
+    : def.damage;
   const shieldArmor =
     isElite && eliteModifier === 'shield' ? Math.round(def.hp * 0.85 * hpMult) : 0;
   const nameVi =
@@ -441,6 +453,12 @@ export function spawnEnemyImpl(this: WorldSim,
     steamBlindTimer: 0,
     lastElementOwnerId: 0,
     lastElementApplied: 'none',
+    waveIndex: 1,
+    bossPhaseTransitionTimer: 0,
+    bossCombatElapsedSec: 0,
+    bossFreezeDrTimer: 0,
+    bossFreezeCountWindow: 0,
+    bossEnrageLevel: 0,
   };
 
   this.enemies.push(enemy);

@@ -175,7 +175,9 @@ export async function setupP11BossEnrageScene(page: Page): Promise<void> {
       boss.spawnWarmupTimer = 0;
       // Transition through Phase 2 and into Phase 3 (~30% HP)
       sim.applyDamageToEnemy(boss, Math.ceil(boss.maxHp * 0.36), false, 'none', 0, 0);
+      boss.bossPhaseTransitionTimer = 0;
       sim.applyDamageToEnemy(boss, Math.ceil(boss.maxHp * 0.34), false, 'none', 0, 0);
+      boss.bossPhaseTransitionTimer = 0;
       boss.x = 640;
       boss.y = 300;
       boss.prevX = 640;
@@ -187,6 +189,8 @@ export async function setupP11BossEnrageScene(page: Page): Promise<void> {
       boss.telegraphDurationSec = 0.54;
 
       // Set P11 soft-enrage state (135s elapsed -> 3 enrage stacks after 90s threshold)
+      boss.bossCombatElapsedSec = 135;
+      boss.bossEnrageLevel = 3;
       const bossExt = boss as unknown as Record<string, unknown>;
       bossExt.bossFightElapsedSec = 135;
       bossExt.bossEnrageStacks = 3;
@@ -277,6 +281,7 @@ export async function setupP11WaveOverlapChallengeScene(page: Page): Promise<voi
     combatRoom.cleared = false;
     combatRoom.wavesTotal = 3;
     combatRoom.wavesSpawned = 2;
+    combatRoom.isChallenge = true;
     sim.waveNumber = 2;
     (combatRoom as unknown as Record<string, unknown>).isChallengeRoom = true;
 
@@ -292,9 +297,9 @@ export async function setupP11WaveOverlapChallengeScene(page: Page): Promise<voi
     });
 
     // Remaining Wave 1 enemies (25% left -> triggers Wave 2 overlap!)
-    const w1EliteA = sim.spawnEnemy('goblin_shooter', 495, 225, true, 'shield');
-    const w1EliteB = sim.spawnEnemy('wild_boar', 510, 320, true, 'fast');
-    // Tag elite modifiers so P11 `after` can showcase new `volley` / `vengeful` modifiers if supported
+    const w1EliteA = sim.spawnEnemy('goblin_shooter', 495, 225, true, 'volley');
+    const w1EliteB = sim.spawnEnemy('wild_boar', 510, 320, true, 'vengeful');
+    // Tag elite modifiers so P11 `after` can showcase new `volley` / `vengeful` modifiers
     (w1EliteA as unknown as Record<string, unknown>).p11PreferredModifier = 'volley';
     (w1EliteB as unknown as Record<string, unknown>).p11PreferredModifier = 'vengeful';
 
@@ -326,12 +331,21 @@ export async function setupP11WaveOverlapChallengeScene(page: Page): Promise<voi
       const e = sim.spawnEnemy(defId, ex, ey, false, mod);
       e.hp = 900;
       e.maxHp = 900;
+      e.waveIndex = 2;
       e.aiState = 'spawning';
       e.stateTimer = timer;
       e.spawnWarmupTimer = timer;
       e.vx = 0;
       e.vy = 0;
     }
+
+    // Active Vengeful death ring telegraph on floor
+    sim.pendingVengefulRings.push({
+      x: 535,
+      y: 275,
+      timerSec: 0.25,
+      damage: 2,
+    });
 
     // Active enemy volley from Wave 1 Elite
     const ownerId = sim.enemies[0]?.id ?? 200;

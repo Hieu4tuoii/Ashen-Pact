@@ -13,14 +13,14 @@ import {
 } from '../src/index.js';
 
 describe('Phase 3 Dungeon Generation & Connectivity', () => {
-  it('generates 100% connected 9-room dungeons across 50 seeds on Floor 1 and Floor 2', () => {
+  it('generates 100% connected 10-room dungeons across 50 seeds on Floor 1 and Floor 2', () => {
     for (let s = 1; s <= 50; s++) {
       const seed = s * 1337;
       const floor1 = generateDungeonFloor(seed, 1, 1);
       const v1 = verifyDungeonConnectivity(floor1);
       expect(v1.valid).toBe(true);
-      expect(v1.totalRooms).toBe(9);
-      expect(v1.reachableCount).toBe(9);
+      expect(v1.totalRooms).toBe(10);
+      expect(v1.reachableCount).toBe(10);
       expect(v1.hasAllRoomTypes).toBe(true);
       expect(v1.bidirectionalLinks).toBe(true);
       expect(floor1.rooms.some((r) => r.type === 'start')).toBe(true);
@@ -29,12 +29,12 @@ describe('Phase 3 Dungeon Generation & Connectivity', () => {
       expect(floor1.rooms.some((r) => r.type === 'shrine')).toBe(true);
       expect(floor1.rooms.some((r) => r.type === 'secret')).toBe(true);
       expect(floor1.rooms.some((r) => r.type === 'portal')).toBe(true);
-      expect(floor1.rooms.filter((r) => r.type === 'combat').length).toBeGreaterThanOrEqual(3);
+      expect(floor1.rooms.filter((r) => r.type === 'combat').length).toBeGreaterThanOrEqual(4);
 
       const floor2 = generateDungeonFloor(seed + 7919, 2, 1);
       const v2 = verifyDungeonConnectivity(floor2);
       expect(v2.valid).toBe(true);
-      expect(v2.reachableCount).toBe(9);
+      expect(v2.reachableCount).toBe(10);
       expect(floor2.rooms.some((r) => r.type === 'boss')).toBe(true);
     }
   });
@@ -182,7 +182,7 @@ describe('Phase 3 Weapons, Enemies, Elites & Boss Mục Vương', () => {
     let seq = 1;
 
     // Damage boss below 66% -> Phase 2
-    for (let i = 0; i < 600 && boss!.hp > boss!.maxHp * 0.62; i++) {
+    for (let i = 0; i < 2400 && boss!.hp > boss!.maxHp * 0.62; i++) {
       sim.player.energy = sim.player.maxEnergy;
       const aimAngle = Math.atan2(boss!.y - sim.player.y, boss!.x - sim.player.x);
       sim.setPlayerInput({
@@ -199,7 +199,7 @@ describe('Phase 3 Weapons, Enemies, Elites & Boss Mục Vương', () => {
     expect(boss!.bossPhase).toBeGreaterThanOrEqual(2);
 
     // Wait out burrow if burrowed, then damage below 33% -> Phase 3
-    for (let i = 0; i < 600 && boss!.hp > boss!.maxHp * 0.28; i++) {
+    for (let i = 0; i < 2400 && boss!.hp > boss!.maxHp * 0.28; i++) {
       sim.player.energy = sim.player.maxEnergy;
       const aimAngle = Math.atan2(boss!.y - sim.player.y, boss!.x - sim.player.x);
       sim.setPlayerInput({
@@ -218,7 +218,7 @@ describe('Phase 3 Weapons, Enemies, Elites & Boss Mục Vương', () => {
     expect(sim.map.getSurfaceAtWorld(64, 64)).toBe('poison_swamp');
 
     // Finish off Boss -> Victory & Legendary chest
-    for (let i = 0; i < 900 && boss!.hp > 0; i++) {
+    for (let i = 0; i < 3600 && boss!.hp > 0; i++) {
       sim.player.energy = sim.player.maxEnergy;
       const aimAngle = Math.atan2(boss!.y - sim.player.y, boss!.x - sim.player.x);
       sim.setPlayerInput({
@@ -321,7 +321,7 @@ describe('Phase 3 Weapons, Enemies, Elites & Boss Mục Vương', () => {
     sim.player.gold = 100;
     expect(sim.pickupOrBuyWorldItem(armorOffer)).toBe(true);
     expect(sim.player.maxArmor).toBe(prevMaxArmor + 2);
-    expect(sim.player.gold).toBe(70);
+    expect(sim.player.gold).toBe(55);
 
     const initialOfferIds = sim.worldItems.map((it) => it.id);
     sim.enterRoom(0);

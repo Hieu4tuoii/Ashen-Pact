@@ -6,6 +6,7 @@ import {
 import { PALETTE } from '../../art/palette.js';
 import { resolveWeaponShootSfx, zzfx } from '../../audio/zzfx.js';
 import { type GameScene, RIG_FOOT_OFFSET_Y } from '../GameScene.js';
+import { triggerP11WaveBanner } from './p11-drama-hud.js';
 import { recordChestOpenedAnim } from './room-entities-sync.js';
 
 export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void {
@@ -318,13 +319,8 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
         break;
       }
       case 'weapon_swapped': {
-        if (ev.playerId === undefined || ev.playerId === sim.player.id) {
+        if (ev.playerId === sim.player.id) {
           zzfx.play('weapon_swap');
-        } else {
-          const swapper = sim.getAllPlayers().find((pl) => pl.id === ev.playerId);
-          if (swapper) {
-            zzfx.play('weapon_swap', swapper.x, this.camFocusX, swapper.y, this.camFocusY);
-          }
         }
         break;
       }
@@ -397,9 +393,36 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
         break;
       }
       case 'boss_phase_changed': {
-        this.fx.addTrauma(0.42);
-        this.lighting.spawnTransientLight(ev.x, ev.y, 220, PALETTE.TOXIC_PURPLE, 1.0, 0.45);
+        this.fx.addTrauma(0.5);
+        this.lighting.spawnTransientLight(ev.x, ev.y, 240, PALETTE.SOLAR_GOLD, 1.0, 0.55);
+        this.fx.spawnFloatingAlert(ev.x, ev.y, `⚡ CHUYỂN PHA ${ev.phase} — BẤT TỬ!`);
+        const rec = this as unknown as Record<string, unknown>;
+        rec.p11WaveBannerTitleText = { text: `⚡ CHUYỂN PHA ${ev.phase} — BẤT TỬ!` };
         zzfx.play('boss_phase_change', ev.x, this.camFocusX, ev.y, this.camFocusY);
+        zzfx.play('boss_roar', ev.x, this.camFocusX, ev.y, this.camFocusY);
+        break;
+      }
+      case 'wave_started': {
+        triggerP11WaveBanner(this, ev.waveIndex, ev.wavesTotal, ev.isChallenge);
+        if (allowStressSfx) {
+          zzfx.play('telegraph');
+        }
+        break;
+      }
+      case 'boss_enraged': {
+        this.fx.addTrauma(0.35);
+        this.lighting.spawnTransientLight(ev.x, ev.y, 200, PALETTE.CRIMSON_BRIGHT, 0.95, 0.45);
+        this.fx.spawnFloatingAlert(ev.x, ev.y, `🔥 CUỒNG NỘ ×${ev.enrageLevel}!`);
+        if (allowStressSfx) {
+          zzfx.play('boss_roar', ev.x, this.camFocusX, ev.y, this.camFocusY);
+        }
+        break;
+      }
+      case 'vengeful_telegraph': {
+        this.lighting.spawnTransientLight(ev.x, ev.y, 110, PALETTE.TOXIC_PURPLE, 0.9, 0.45);
+        if (allowStressSfx) {
+          zzfx.play('telegraph', ev.x, this.camFocusX, ev.y, this.camFocusY);
+        }
         break;
       }
       case 'shrine_blessing': {

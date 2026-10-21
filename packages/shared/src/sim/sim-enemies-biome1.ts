@@ -2,10 +2,19 @@ import { ENEMIES } from '../data/enemies.js';
 import { circleVsCircle, clamp, distance } from '../math/vec2.js';
 import { COOP_SCALING } from '../data/scaling.js';
 import { TILE_SIZE } from '../protocol/messages.js';
-import { SPORE_EXPLOSION_RADIUS, BOAR_CHARGE_SPEED, BOAR_CHARGE_DURATION_SEC, BOSS_ERUPT_RADIUS, SHAMAN_HEAL_RADIUS, type SimPlayerState, type SimEnemyState } from './world-sim-types.js';
+import {
+  SPORE_EXPLOSION_RADIUS,
+  BOAR_CHARGE_SPEED,
+  BOAR_CHARGE_DURATION_SEC,
+  BOSS_ERUPT_RADIUS,
+  SHAMAN_HEAL_RADIUS,
+  type SimPlayerState,
+  type SimEnemyState,
+} from './world-sim-types.js';
 import type { WorldSim } from './world-sim.js';
 
-export function updateGoblinShooterAIImpl(this: WorldSim,
+export function updateGoblinShooterAIImpl(
+  this: WorldSim,
   e: SimEnemyState,
   distToPlayer: number,
   angleToPlayer: number,
@@ -20,8 +29,8 @@ export function updateGoblinShooterAIImpl(this: WorldSim,
     e.stateTimer -= dtSec;
     if (e.stateTimer <= 0) {
       if (!this.stressTestActive || this.projectiles.length < 660) {
-        const spreadRad = (15 * Math.PI) / 180;
-        const bulletSpeed = 285;
+        const spreadRad = (4 * Math.PI) / 180;
+        const extraVolley = e.isElite && e.eliteModifier === 'volley' ? 2 : 0;
         const muzzleX = e.x + Math.cos(e.telegraphAngle) * 14;
         const muzzleY = e.y + Math.sin(e.telegraphAngle) * 14;
 
@@ -34,15 +43,15 @@ export function updateGoblinShooterAIImpl(this: WorldSim,
           x: muzzleX,
           y: muzzleY,
           angle: e.telegraphAngle,
-          pelletCount: 3,
-          spreadRad: spreadRad * 2,
-          speed: bulletSpeed,
+          pelletCount: 3 + extraVolley,
+          spreadRad: extraVolley > 0 ? spreadRad * 2 : spreadRad,
+          speed: 280,
           damage: e.damage,
-          radius: 5.5,
+          radius: 5,
           knockback: 90,
           pierceCount: 0,
           bounceCount: 0,
-          ttlSec: 2.2,
+          ttlSec: 2.0,
           element: 'none',
           critChance: 0,
           amplifiedByShield: false,
@@ -52,7 +61,7 @@ export function updateGoblinShooterAIImpl(this: WorldSim,
 
       e.aiState = 'cooldown';
       e.stateTimer = 0.35;
-      e.attackCooldownTimer = (ENEMIES.goblin_shooter?.attackCooldownSec ?? 1.9) * cdMult;
+      e.attackCooldownTimer = (ENEMIES.goblin_shooter?.attackCooldownSec ?? 1.65) * cdMult;
     }
     return;
   }
@@ -105,7 +114,8 @@ export function updateGoblinShooterAIImpl(this: WorldSim,
   e.vy = moveDirY * e.moveSpeed;
 }
 
-export function updateWildBoarAIImpl(this: WorldSim,
+export function updateWildBoarAIImpl(
+  this: WorldSim,
   e: SimEnemyState,
   distToPlayer: number,
   angleToPlayer: number,
@@ -140,7 +150,7 @@ export function updateWildBoarAIImpl(this: WorldSim,
         this.applyDamageToPlayer(e.damage, e.telegraphAngle, 240, e.defId, pl);
         e.aiState = 'cooldown';
         e.stateTimer = 0.5;
-        e.attackCooldownTimer = (ENEMIES.wild_boar?.attackCooldownSec ?? 2.6) * cdMult;
+        e.attackCooldownTimer = (ENEMIES.wild_boar?.attackCooldownSec ?? 2.25) * cdMult;
         e.vx = 0;
         e.vy = 0;
         return;
@@ -150,7 +160,7 @@ export function updateWildBoarAIImpl(this: WorldSim,
     if (e.stateTimer <= 0) {
       e.aiState = 'cooldown';
       e.stateTimer = 0.45;
-      e.attackCooldownTimer = (ENEMIES.wild_boar?.attackCooldownSec ?? 2.6) * cdMult;
+      e.attackCooldownTimer = (ENEMIES.wild_boar?.attackCooldownSec ?? 2.25) * cdMult;
       e.vx = 0;
       e.vy = 0;
     }
@@ -193,7 +203,8 @@ export function updateWildBoarAIImpl(this: WorldSim,
   e.vy = Math.sin(angleToPlayer) * e.moveSpeed;
 }
 
-export function updateSporeBomberAIImpl(this: WorldSim,
+export function updateSporeBomberAIImpl(
+  this: WorldSim,
   e: SimEnemyState,
   distToPlayer: number,
   angleToPlayer: number,
@@ -293,7 +304,8 @@ export function detonateSporeBomberImpl(this: WorldSim, e: SimEnemyState): void 
   });
 }
 
-export function updateSlimeAIImpl(this: WorldSim,
+export function updateSlimeAIImpl(
+  this: WorldSim,
   e: SimEnemyState,
   distToPlayer: number,
   angleToPlayer: number,
@@ -379,7 +391,8 @@ export function updateSlimeAIImpl(this: WorldSim,
   e.vy = Math.sin(angleToPlayer) * e.moveSpeed;
 }
 
-export function updateGoblinShamanAIImpl(this: WorldSim,
+export function updateGoblinShamanAIImpl(
+  this: WorldSim,
   e: SimEnemyState,
   distToPlayer: number,
   angleToPlayer: number,
@@ -419,7 +432,8 @@ export function updateGoblinShamanAIImpl(this: WorldSim,
       }
 
       // 2. Fire a Poison Bolt toward the player
-      const bulletSpeed = 245;
+      const bulletSpeed = 275;
+      const extraVolley = e.isElite && e.eliteModifier === 'volley' ? 2 : 0;
       const muzzleX = e.x + Math.cos(e.telegraphAngle) * 16;
       const muzzleY = e.y + Math.sin(e.telegraphAngle) * 16;
       this.spawnDeterministicVolley({
@@ -431,8 +445,8 @@ export function updateGoblinShamanAIImpl(this: WorldSim,
         x: muzzleX,
         y: muzzleY,
         angle: e.telegraphAngle,
-        pelletCount: 1,
-        spreadRad: 0,
+        pelletCount: 1 + extraVolley,
+        spreadRad: extraVolley > 0 ? 0.36 : 0,
         speed: bulletSpeed,
         damage: e.damage,
         radius: 6,
@@ -448,7 +462,7 @@ export function updateGoblinShamanAIImpl(this: WorldSim,
 
       e.aiState = 'cooldown';
       e.stateTimer = 0.45;
-      e.attackCooldownTimer = (ENEMIES.goblin_shaman?.attackCooldownSec ?? 2.5) * cdMult;
+      e.attackCooldownTimer = (ENEMIES.goblin_shaman?.attackCooldownSec ?? 3.3) * cdMult;
     }
     return;
   }
@@ -504,7 +518,8 @@ export function updateGoblinShamanAIImpl(this: WorldSim,
   e.vy = moveDirY * e.moveSpeed;
 }
 
-export function updateThornTurretAIImpl(this: WorldSim,
+export function updateThornTurretAIImpl(
+  this: WorldSim,
   e: SimEnemyState,
   _distToPlayer: number,
   angleToPlayer: number,
@@ -519,8 +534,10 @@ export function updateThornTurretAIImpl(this: WorldSim,
   if (e.aiState === 'telegraph') {
     e.stateTimer -= dtSec;
     if (e.stateTimer <= 0) {
-      // Fire 6 radial thorns in 360 degrees
+      // Fire radial thorns in 360 degrees
       const bulletSpeed = 245;
+      const extraVolley = e.isElite && e.eliteModifier === 'volley' ? 2 : 0;
+      const count = 6 + extraVolley;
       this.spawnDeterministicVolley({
         kind: 'bullet_volley_spawned',
         tick: this.tick,
@@ -529,10 +546,10 @@ export function updateThornTurretAIImpl(this: WorldSim,
         weaponId: 'thorn_burst',
         x: e.x,
         y: e.y,
-        angle: e.telegraphAngle,
-        pelletCount: 6,
+        angle: 0,
+        pelletCount: count,
         spreadRad: 0,
-        radialStepRad: Math.PI / 3,
+        radialStepRad: (Math.PI * 2) / count,
         muzzleOffset: 14,
         speed: bulletSpeed,
         damage: e.damage,
@@ -548,7 +565,7 @@ export function updateThornTurretAIImpl(this: WorldSim,
       });
       e.aiState = 'cooldown';
       e.stateTimer = 0.4;
-      e.attackCooldownTimer = (ENEMIES[e.defId]?.attackCooldownSec ?? 2.1) * cdMult;
+      e.attackCooldownTimer = (ENEMIES[e.defId]?.attackCooldownSec ?? 2.45) * cdMult;
     }
     return;
   }
@@ -581,7 +598,8 @@ export function updateThornTurretAIImpl(this: WorldSim,
   }
 }
 
-export function updateBossSporeKingAIImpl(this: WorldSim,
+export function updateBossSporeKingAIImpl(
+  this: WorldSim,
   e: SimEnemyState,
   targetPlayer: SimPlayerState,
   distToPlayer: number,
@@ -597,7 +615,7 @@ export function updateBossSporeKingAIImpl(this: WorldSim,
     e.vy = 0;
     e.stateTimer -= dtSec;
     if (e.stateTimer <= 0) {
-      this.executeBossSporeKingAttack(e, angleToPlayer);
+      this.executeBossSporeKingAttack(e, e.telegraphAngle);
     }
     return;
   }
@@ -614,14 +632,24 @@ export function updateBossSporeKingAIImpl(this: WorldSim,
 
   if (e.attackCooldownTimer <= 0) {
     e.aiState = 'telegraph';
-    e.stateTimer = (e.bossPhase === 3 ? 0.52 : e.telegraphDurationSec) * bossCdScale;
     e.telegraphAngle = angleToPlayer;
 
-    // In Phase 2 & 3, every odd attack cycle burrows underground and targets player's position!
-    if (e.bossPhase >= 2 && e.bossAttackCycle % 2 === 1) {
+    // In Phase 2 & 3, every 3rd attack cycle burrows underground and targets near player's position!
+    if (e.bossPhase >= 2 && e.bossAttackCycle % 3 === 2) {
       e.bossBurrowed = true;
-      const targetX = clamp(targetPlayer.x, TILE_SIZE * 3.5, this.map.width - TILE_SIZE * 3.5);
-      const targetY = clamp(targetPlayer.y, TILE_SIZE * 3.5, this.map.height - TILE_SIZE * 3.5);
+      e.stateTimer = Math.max(0.72, 0.78 * bossCdScale);
+      const offsetX = Math.cos(angleToPlayer + Math.PI) * 22;
+      const offsetY = Math.sin(angleToPlayer + Math.PI) * 22;
+      const targetX = clamp(
+        targetPlayer.x + offsetX,
+        TILE_SIZE * 3.5,
+        this.map.width - TILE_SIZE * 3.5,
+      );
+      const targetY = clamp(
+        targetPlayer.y + offsetY,
+        TILE_SIZE * 3.5,
+        this.map.height - TILE_SIZE * 3.5,
+      );
       e.bossTargetX = targetX;
       e.bossTargetY = targetY;
       e.x = targetX;
@@ -631,6 +659,7 @@ export function updateBossSporeKingAIImpl(this: WorldSim,
       e.telegraphRadius = BOSS_ERUPT_RADIUS;
     } else {
       e.bossBurrowed = false;
+      e.stateTimer = Math.max(0.45, (e.bossPhase === 3 ? 0.54 : e.telegraphDurationSec) * bossCdScale);
       e.telegraphRadius = 60;
     }
 
@@ -661,7 +690,11 @@ export function updateBossSporeKingAIImpl(this: WorldSim,
   }
 }
 
-export function executeBossSporeKingAttackImpl(this: WorldSim, e: SimEnemyState, angleToPlayer: number): void {
+export function executeBossSporeKingAttackImpl(
+  this: WorldSim,
+  e: SimEnemyState,
+  angleToPlayer: number,
+): void {
   const cycle = e.bossAttackCycle;
   e.bossAttackCycle += 1;
   const bossCdScale = this.getEnemyCooldownScale(true);
@@ -669,14 +702,10 @@ export function executeBossSporeKingAttackImpl(this: WorldSim, e: SimEnemyState,
   if (e.bossBurrowed) {
     // Phase 2/3 Burrow Eruption!
     e.bossBurrowed = false;
-    const blastR = BOSS_ERUPT_RADIUS;
+    const blastR = 54;
     const tx = Math.floor(e.x / TILE_SIZE);
     const ty = Math.floor(e.y / TILE_SIZE);
-    for (let dy = -1; dy <= 1; dy++) {
-      for (let dx = -1; dx <= 1; dx++) {
-        this.map.setSurface(tx + dx, ty + dy, 'poison_swamp', 10.0, false);
-      }
-    }
+    this.map.setSurface(tx, ty, 'poison_swamp', 6.0, false);
 
     const allPlayers = this.getAllPlayers();
     for (let i = 0; i < allPlayers.length; i++) {
@@ -688,7 +717,7 @@ export function executeBossSporeKingAttackImpl(this: WorldSim, e: SimEnemyState,
       }
     }
 
-    // Erupt with 8 radial thorns
+    // Erupt with 4 radial thorns
     this.spawnDeterministicVolley({
       kind: 'bullet_volley_spawned',
       tick: this.tick,
@@ -697,18 +726,18 @@ export function executeBossSporeKingAttackImpl(this: WorldSim, e: SimEnemyState,
       weaponId: 'thorn_burst',
       x: e.x,
       y: e.y,
-      angle: (cycle % 2) * 0.2,
-      pelletCount: 8,
+      angle: angleToPlayer,
+      pelletCount: 4,
       spreadRad: 0,
-      radialStepRad: Math.PI / 4,
+      radialStepRad: Math.PI / 2,
       muzzleOffset: 24,
-      speed: 255,
+      speed: 245,
       damage: e.damage,
-      radius: 5.5,
+      radius: 5,
       knockback: 110,
       pierceCount: 0,
       bounceCount: 0,
-      ttlSec: 2.3,
+      ttlSec: 1.9,
       element: 'poison',
       critChance: 0,
       amplifiedByShield: false,
@@ -719,7 +748,7 @@ export function executeBossSporeKingAttackImpl(this: WorldSim, e: SimEnemyState,
       kind: 'explosion',
       x: e.x,
       y: e.y,
-      radius: blastR,
+      radius: BOSS_ERUPT_RADIUS,
       damage: e.damage + 1,
       sourceDefId: e.defId,
     });
@@ -730,9 +759,8 @@ export function executeBossSporeKingAttackImpl(this: WorldSim, e: SimEnemyState,
     });
   } else {
     // Spore Ring Nova + Summon Minions
-    const ringCount = e.bossPhase === 3 ? 16 : e.bossPhase === 2 ? 14 : 12;
-    const ringSpeed = e.bossPhase === 3 ? 255 : 225;
-    const baseOffset = cycle * 0.26;
+    const ringCount = 4;
+    const ringSpeed = 245;
     this.spawnDeterministicVolley({
       kind: 'bullet_volley_spawned',
       tick: this.tick,
@@ -741,36 +769,34 @@ export function executeBossSporeKingAttackImpl(this: WorldSim, e: SimEnemyState,
       weaponId: 'boss_spore_ring',
       x: e.x,
       y: e.y,
-      angle: baseOffset,
+      angle: angleToPlayer,
       pelletCount: ringCount,
       spreadRad: 0,
       radialStepRad: (Math.PI * 2) / ringCount,
       muzzleOffset: e.radius + 6,
       speed: ringSpeed,
       damage: e.damage,
-      radius: 6,
+      radius: 5,
       knockback: 95,
       pierceCount: 0,
       bounceCount: 0,
-      ttlSec: 2.6,
+      ttlSec: 1.9,
       element: 'poison',
       critChance: 0,
       amplifiedByShield: false,
       seed: this.rng.nextUint32(),
     });
 
-    // Summon up to 2 spore minions on alternate cycles if active non-boss count < 4
+    // Summon spore minion on alternate cycles if active non-boss count < 2
     const activeMinions = this.enemies.filter(
       (m) => !m.isDummy && !m.isBoss && m.defId !== 'spore_guardian' && m.hp > 0,
     ).length;
-    if (cycle % 2 === 1 && activeMinions < 3) {
-      const minionDef = e.bossPhase >= 2 ? 'spore_bomber' : 'mini_slime';
-      this.spawnEnemy(minionDef, e.x - 48, e.y - 36, false);
+    if (cycle % 3 === 1 && activeMinions < 2) {
       this.spawnEnemy('mini_slime', e.x + 48, e.y + 36, false);
     }
 
-    // Phase 3 aimed 3-way toxic burst
-    if (e.bossPhase === 3) {
+    // Phase 3 aimed toxic burst
+    if (e.bossPhase === 3 && cycle % 3 === 0) {
       this.spawnDeterministicVolley({
         kind: 'bullet_volley_spawned',
         tick: this.tick,
@@ -780,16 +806,16 @@ export function executeBossSporeKingAttackImpl(this: WorldSim, e: SimEnemyState,
         x: e.x,
         y: e.y,
         angle: angleToPlayer,
-        pelletCount: 3,
-        spreadRad: 0.44,
+        pelletCount: 2,
+        spreadRad: 0.1,
         muzzleOffset: 24,
-        speed: 290,
+        speed: 255,
         damage: e.damage,
-        radius: 6.5,
+        radius: 5,
         knockback: 110,
         pierceCount: 0,
         bounceCount: 0,
-        ttlSec: 2.4,
+        ttlSec: 1.9,
         element: 'poison',
         critChance: 0,
         amplifiedByShield: false,
@@ -800,7 +826,7 @@ export function executeBossSporeKingAttackImpl(this: WorldSim, e: SimEnemyState,
 
   e.aiState = 'cooldown';
   e.stateTimer = (e.bossPhase === 3 ? 0.35 : 0.45) * bossCdScale;
-  const baseCd = ENEMIES.spore_king?.attackCooldownSec ?? 2.2;
+  const baseCd = ENEMIES.spore_king?.attackCooldownSec ?? 1.85;
   e.attackCooldownTimer =
     (e.bossPhase === 3 ? baseCd * 0.65 : e.bossPhase === 2 ? baseCd * 0.82 : baseCd) *
     bossCdScale;

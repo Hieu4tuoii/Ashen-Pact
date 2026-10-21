@@ -13,6 +13,7 @@ import {
 } from '../../fx/combat-fx.js';
 import { initGlobalDebugState } from '../../ui/debug-overlay.js';
 import { type GameScene } from '../GameScene.js';
+import { drawP11DramaWorldOverlays } from './p11-drama-hud.js';
 
 export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, playerY: number): void {
   const sim = this.transport.getSim();
@@ -447,8 +448,20 @@ export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, 
 
     // Elite Golden-Violet Aura Ring & Shield Barrier
     if (e.isElite && !isStress) {
-      g.lineStyle(2.5, hexToNum(PALETTE.SOLAR_GOLD), 0.85);
+      const mod =
+        e.eliteModifier ?? ((e as { p11PreferredModifier?: string }).p11PreferredModifier ?? null);
+      const auraCol =
+        mod === 'vengeful'
+          ? hexToNum(PALETTE.ELECTRIC_VIOLET)
+          : mod === 'volley'
+            ? hexToNum(PALETTE.FLAME_ORANGE)
+            : hexToNum(PALETTE.SOLAR_GOLD);
+      g.lineStyle(2.5, auraCol, 0.88);
       g.strokeCircle(pos.x, pos.y + 4, e.radius + 5);
+      if (mod === 'vengeful' || mod === 'volley') {
+        g.lineStyle(1.6, hexToNum(PALETTE.SOLAR_GOLD), 0.78);
+        g.strokeCircle(pos.x, pos.y + 4, e.radius + 8);
+      }
       if (e.shieldArmor > 0) {
         g.lineStyle(2, hexToNum(PALETTE.CYAN_FROST), 0.92);
         g.strokeCircle(pos.x, pos.y, e.radius + 8);
@@ -629,6 +642,9 @@ export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, 
       g.strokeCircle(this.camFocusX, this.camFocusY, (1 - this.fx.bossKillFlashTimer / 0.28) * 320);
     }
   }
+
+  // 4. Phase P11 Drama World Overlays (Boss Phase Transition Invuln/Roar, Boss Soft Enrage Aura, Vengeful Rings, Overlapping Wave Circles)
+  drawP11DramaWorldOverlays(this);
 }
 
 export function drawEnemyHealthAndStatusBarImpl(

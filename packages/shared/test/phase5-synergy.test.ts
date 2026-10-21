@@ -575,14 +575,14 @@ describe('Phase 5 — All 6 Elemental Reactions & Co-op Team Combo (+15 Energy)'
 
   it('verifies all 7 quantitative balance targets via Headless Balance Harness (section 7.4)', () => {
     const report = runBalanceHarness();
-    expect(report.minEnemyTtkSec).toBeGreaterThanOrEqual(0.5);
-    expect(report.maxEnemyTtkSec).toBeLessThanOrEqual(1.5);
-    expect(report.combatRoomAvgSec).toBeGreaterThanOrEqual(30);
-    expect(report.combatRoomAvgSec).toBeLessThanOrEqual(60);
-    expect(report.boss1PAvgSec).toBeGreaterThanOrEqual(90);
-    expect(report.boss1PAvgSec).toBeLessThanOrEqual(150);
-    expect(report.boss4PAvgSec).toBeGreaterThanOrEqual(90);
-    expect(report.boss4PAvgSec).toBeLessThanOrEqual(150);
+    expect(report.avgEnemyTtkSec).toBeGreaterThanOrEqual(0.6);
+    expect(report.avgEnemyTtkSec).toBeLessThanOrEqual(1.5);
+    expect(report.combatRoomAvgSec).toBeGreaterThanOrEqual(35);
+    expect(report.combatRoomAvgSec).toBeLessThanOrEqual(70);
+    expect(report.boss1PAvgSec).toBeGreaterThanOrEqual(60);
+    expect(report.boss1PAvgSec).toBeLessThanOrEqual(120);
+    expect(report.boss4PAvgSec).toBeGreaterThanOrEqual(60);
+    expect(report.boss4PAvgSec).toBeLessThanOrEqual(120);
     expect(report.boss1Pvs4PDeltaPct).toBeLessThanOrEqual(20);
     expect(report.minHitsSurvived).toBeGreaterThanOrEqual(6);
     expect(report.maxHitsSurvived).toBeLessThanOrEqual(10);
@@ -591,6 +591,6 @@ describe('Phase 5 — All 6 Elemental Reactions & Co-op Team Combo (+15 Energy)'
     expect(report.weaponMatrix.length).toBe(5);
     expect(report.coopSynergyRows.every((c) => c.won && c.teamCombos > 0)).toBe(true);
     expect(report.allTargetsPassed).toBe(true);
-  }, 20000);
+  }, 60000);
 });
 

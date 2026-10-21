@@ -296,13 +296,14 @@ export function updateCurrentRoomProgressionImpl(this: WorldSim, dtSec: number):
   }
 
   const hasCombatEnemies = this.hasActiveCombatEnemies();
+  const wavesRemaining = !room.cleared && room.wavesSpawned < room.wavesTotal;
 
   for (let i = 0; i < this.doors.length; i++) {
     const d = this.doors[i]!;
     if (d.isSecretPassage) {
-      d.locked = !this.secretWallBroken || hasCombatEnemies;
+      d.locked = !this.secretWallBroken || hasCombatEnemies || wavesRemaining;
     } else {
-      d.locked = hasCombatEnemies;
+      d.locked = hasCombatEnemies || wavesRemaining;
     }
   }
 
@@ -310,7 +311,7 @@ export function updateCurrentRoomProgressionImpl(this: WorldSim, dtSec: number):
     if (!room.cleared) {
       if (room.wavesSpawned < room.wavesTotal) {
         this.waveRespawnTimer += dtSec;
-        if (this.waveRespawnTimer >= 0.85) {
+        if (this.waveRespawnTimer >= 3.2) {
           this.waveRespawnTimer = 0;
           this.spawnNextRoomWave();
         }
@@ -326,6 +327,34 @@ export function updateCurrentRoomProgressionImpl(this: WorldSim, dtSec: number):
     }
   } else {
     this.waveRespawnTimer = 0;
+    if (!room.cleared && (room.type === 'combat' || room.type === 'portal')) {
+      this.waveElapsedSec += dtSec;
+      if (room.wavesSpawned < room.wavesTotal) {
+        const activeWaves = new Set<number>();
+        let currentWaveAlive = 0;
+        for (let i = 0; i < this.enemies.length; i++) {
+          const e = this.enemies[i]!;
+          if (e.isDummy || e.hp <= 0) continue;
+          const wIdx = e.waveIndex ?? 1;
+          activeWaves.add(wIdx);
+          if (wIdx === room.wavesSpawned) {
+            currentWaveAlive += 1;
+          }
+        }
+        const waveTotal = Math.max(1, room.currentWaveSpawnedCount ?? 4);
+        const lowRemaining = currentWaveAlive <= Math.floor(waveTotal * 0.25);
+        const timeExpired = this.waveElapsedSec >= 12.0;
+        const minOverlapSec = room.wavesSpawned === 1 ? 1.5 : 9.0;
+        if (
+          activeWaves.size < 2 &&
+          this.waveElapsedSec >= minOverlapSec &&
+          (lowRemaining || timeExpired)
+        ) {
+          this.waveRespawnTimer = 0;
+          this.spawnNextRoomWave();
+        }
+      }
+    }
   }
 }
 
