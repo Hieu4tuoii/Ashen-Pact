@@ -204,6 +204,10 @@ export class ArtGalleryScene extends Phaser.Scene {
     this.input.keyboard?.on('keydown-THREE', () => this.setGalleryPage(3));
     this.input.keyboard?.on('keydown-FOUR', () => this.setGalleryPage(4));
     this.input.keyboard?.on('keydown-FIVE', () => this.setGalleryPage(5));
+    this.input.keyboard?.on('keydown-SIX', () => this.setGalleryAnim('attack'));
+    this.input.keyboard?.on('keydown-SEVEN', () => this.setGalleryAnim('dash'));
+    this.input.keyboard?.on('keydown-EIGHT', () => this.setGalleryAnim('hurt'));
+    this.input.keyboard?.on('keydown-NINE', () => this.setGalleryAnim('cast'));
   }
 
   public buildPage1StandardShowcase(parent: Phaser.GameObjects.Container): void {
@@ -349,14 +353,36 @@ export class ArtGalleryScene extends Phaser.Scene {
     this.pageContainers.forEach((c, idx) => {
       c.setVisible(idx + 1 === page);
     });
+    this.applyGalleryAnimToRigs();
     this.updateStatusBanner();
+  }
+
+  private applyGalleryAnimToRigs(): void {
+    const state = this.currentAnim;
+    for (const rig of this.rigs) {
+      rig.setDashActive(state === 'dash');
+      if (state === 'dash') {
+        rig.setMoveVelocity(220, 0);
+      } else if (state === 'run') {
+        rig.setMoveVelocity(160, 0);
+      } else if (state === 'attack') {
+        rig.setMoveVelocity(90, 0);
+        rig.triggerRecoil(4);
+      } else if (state === 'hurt') {
+        rig.setMoveVelocity(-60, 0);
+      } else if (state === 'cast') {
+        rig.setMoveVelocity(0, 0);
+        rig.triggerCastPose(5);
+      } else {
+        rig.setMoveVelocity(0, 0);
+      }
+      rig.setAnimState(state);
+    }
   }
 
   public setGalleryAnim(state: RigAnimState): void {
     this.currentAnim = state;
-    for (const rig of this.rigs) {
-      rig.setAnimState(state);
-    }
+    this.applyGalleryAnimToRigs();
     const debug = initGlobalDebugState();
     debug.animState = state;
     this.updateStatusBanner();

@@ -47,6 +47,27 @@ export const SCENE_GROUPS: Readonly<Record<string, readonly string[]>> = {
     'game-settings',
     'game-settings-en',
   ],
+  p10a: [
+    'gallery-p1',
+    'gallery-characters-idle',
+    'gallery-characters',
+    'gallery-characters-attack',
+    'gallery-characters-dash',
+    'gallery-characters-hurt',
+    'gallery-characters-crossfade',
+    'gallery-enemies-b1',
+    'gallery-enemies',
+    'p10a-ingame-poses',
+    'hub-solo',
+    'b1-combat',
+    'b2-combat',
+    'b3-combat',
+    'b1-combat-4p',
+    'b1-combat-downed',
+    'boss-b1',
+    'boss-b2',
+    'boss-b3',
+  ],
 };
 
 export interface ShotsCliOptions {

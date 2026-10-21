@@ -5,6 +5,7 @@ import {
   stepDeterministicFrames,
   switchGameSceneToEnglish,
 } from './visual-scene-helpers.js';
+import { P10A_SCENE_GROUP } from './visual-scene-p10a-helpers.js';
 
 export const SCENE_GROUPS: Readonly<Record<string, readonly string[]>> = {
   p9a: [
@@ -49,6 +50,7 @@ export const SCENE_GROUPS: Readonly<Record<string, readonly string[]>> = {
     'game-settings',
     'game-settings-en',
   ],
+  p10a: P10A_SCENE_GROUP,
 };
 
 export async function setupHubCoop2pExpandedScene(page: Page): Promise<void> {

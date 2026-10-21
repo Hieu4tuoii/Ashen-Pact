@@ -1,5 +1,6 @@
 import type Phaser from 'phaser';
 import { VIETNAMESE_VERIFICATION_STRING } from '@ashen-pact/shared';
+import type { RigAnimState } from '../art/cutout-rig.js';
 import { PALETTE } from '../art/palette.js';
 import { TextureBaker } from '../art/texture-baker.js';
 import {
@@ -20,7 +21,7 @@ export interface GameDebugState {
   tick: number;
   seed: number;
   scene: string;
-  animState: 'idle' | 'run';
+  animState: RigAnimState;
   playerSlot: 1 | 2 | 3 | 4;
   biome: 1 | 2 | 3;
   dpr: number;

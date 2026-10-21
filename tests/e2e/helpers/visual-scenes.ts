@@ -37,6 +37,7 @@ import {
   setupPauseConfirmExitScene,
   setupUiViDiacriticsScene,
 } from './visual-scene-p9a-helpers.js';
+import { P10A_VISUAL_SCENES } from './visual-scene-p10a-helpers.js';
 
 export {
   DEFAULT_FREEZE_MASK_RECTS,
@@ -807,10 +808,10 @@ export const VISUAL_SCENES: readonly VisualSceneDef[] = [
     });
     await stepDeterministicFrames(page, 45);
   }, { captureStrip: true }),
-  makeScene('gallery-enemies', 'ArtGalleryScene Page 5 (Biome 2 & 3 Enemies and Bosses)', DEFAULT_GALLERY_URL, 'ArtGalleryScene', async (page) => {
+  makeScene('gallery-enemies', 'ArtGalleryScene Page 5 (Biome 2 & 3 Enemies and Bosses) with 8-frame strip', DEFAULT_GALLERY_URL, 'ArtGalleryScene', async (page) => {
     await page.evaluate(() => window.__GALLERY_SET_PAGE__?.(5));
     await stepDeterministicFrames(page, 45);
-  }),
+  }, { captureStrip: true }),
 
   // 9. Variants
   makeScene('b1-combat-1440p', 'Biome 1 combat at 2560x1440', DEFAULT_GAME_URL, 'GameScene', (p) => setupB1CombatState(p, false), { viewport: { width: 2560, height: 1440 } }),
@@ -916,4 +917,7 @@ export const VISUAL_SCENES: readonly VisualSceneDef[] = [
   makeScene('b1-combat-uiscale-80', 'Biome 1 combat HUD scaled at 80% (?uiScale=0.8)', `${DEFAULT_GAME_URL}&uiScale=0.8`, 'GameScene', (p) => setupB1CombatState(p, false)),
   makeScene('b1-combat-uiscale-130', 'Biome 1 combat HUD scaled at 130% (?uiScale=1.3)', `${DEFAULT_GAME_URL}&uiScale=1.3`, 'GameScene', (p) => setupB1CombatState(p, false)),
   makeScene('b1-hud-qol-showcase', 'Biome 1 combat QoL showcase with off-screen enemy arrows, directional hit arc, wave banner, coalesced reaction popup, and damage numbers', DEFAULT_GAME_URL, 'GameScene', setupB1HudQolShowcaseScene),
+
+  // 11. Phase P10a Cutout 2.0 & Full-Rig Enemies Showcase Scenes
+  ...P10A_VISUAL_SCENES,
 ];

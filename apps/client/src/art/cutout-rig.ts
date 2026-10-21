@@ -1,5 +1,24 @@
 import Phaser from 'phaser';
-import { easeOutBack, easeOutCubic } from './easing.js';
+import {
+  type BackAccessorySpringState,
+  blendRigPoseSnapshots,
+  computeEnemyArchetypeMotion,
+  createBackAccessorySpringState,
+  createStateCrossfadeController,
+  createWeaponRecoilSpringState,
+  evaluateRigPose,
+  type RigAnimState,
+  type RigPoseSnapshot,
+  type StateCrossfadeController,
+  stepBackAccessorySpring,
+  stepStateCrossfade,
+  stepTorsoMoveLean,
+  stepWeaponRecoilSpring,
+  transitionRigAnimState,
+  triggerWeaponRecoilImpulse,
+  type WeaponRecoilSpringState,
+} from './cutout-rig-math.js';
+import { easeOutBack } from './easing.js';
 import {
   type EntityRigDef,
   type RigPartDef,
@@ -8,7 +27,7 @@ import {
 } from './rig-defs.js';
 import { TextureBaker } from './texture-baker.js';
 
-export type RigAnimState = 'idle' | 'run';
+export type { RigAnimState };
 
 export interface CutoutRigOptions {
   playerSlot?: 1 | 2 | 3 | 4 | null;
@@ -17,9 +36,18 @@ export interface CutoutRigOptions {
   fastComposite?: boolean;
 }
 
+function hashRigId(id: string): number {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) {
+    h = (h * 31 + id.charCodeAt(i)) | 0;
+  }
+  return Math.abs(h % 100) * 0.017;
+}
+
 /**
  * CutoutRig assembles pre-baked procedural vector part textures into a Phaser Container
- * and animates them parametrically at 60+ FPS using sin/cosine/easing curves (zero per-frame Graphics redraws).
+ * and animates them parametrically at 60+ FPS using sin/cosine/spring/crossfade curves
+ * (zero per-frame Graphics redraws).
  */
 export class CutoutRig {
   public readonly container: Phaser.GameObjects.Container;
@@ -37,11 +65,22 @@ export class CutoutRig {
   private animState: RigAnimState = 'idle';
   private lifeState: 'alive' | 'downed' | 'ghost' = 'alive';
   private animTime = 0;
+  private phaseSeed = 0;
   private aimAngleRad = 0;
   private facingSign = 1;
   private displayScale = 1;
   private playerSlot: 1 | 2 | 3 | 4 | null;
   private equippedWeaponId: string | null = null;
+
+  // Cutout 2.0 locomotion, spring secondary motion, and crossfade states
+  private moveVx = 0;
+  private moveVy = 0;
+  private moveLeanRad = 0;
+  private prevBodyY = 0;
+  private crossfadeCtrl: StateCrossfadeController = createStateCrossfadeController('idle');
+  private lastBlendedPose: RigPoseSnapshot | null = null;
+  private backSpring: BackAccessorySpringState = createBackAccessorySpringState();
+  private recoilSpring: WeaponRecoilSpringState = createWeaponRecoilSpringState();
 
   // Combat & Game Feel states
   private recoilTimer = 0;
@@ -49,12 +88,14 @@ export class CutoutRig {
   private meleeSwingTimer = 0;
   private meleeSwingDir = 1;
   private hitFlashTimer = 0;
+  private castPoseTimer = 0;
+  private reviveProgress = 0;
   private isHitFlashing = false;
+  private isStatusTinted = false;
   private isDashing = false;
   private telegraphProgress = 0; // 0 = none, (0..1] = active telegraph progress
   private spawnProgress = 1; // 1 = fully spawned
   private elementalStatusTint: number | null = null;
-  private isStatusTinted = false;
 
   constructor(
     scene: Phaser.Scene,
@@ -68,6 +109,7 @@ export class CutoutRig {
     this.displayScale = options.displayScale ?? 1;
     this.playerSlot = options.playerSlot ?? null;
     this.animTime = options.initialPhaseOffset ?? 0;
+    this.phaseSeed = (options.initialPhaseOffset ?? 0) + hashRigId(def.id);
     this.fastComposite = options.fastComposite ?? false;
 
     this.container = scene.add.container(x, y);
@@ -124,12 +166,37 @@ export class CutoutRig {
     this.container.setScale(this.displayScale);
   }
 
+  public isFastComposite(): boolean {
+    return this.fastComposite;
+  }
+
   public setAnimState(state: RigAnimState): void {
     this.animState = state;
   }
 
   public getAnimState(): RigAnimState {
     return this.animState;
+  }
+
+  public setMoveVelocity(vx: number, vy: number): void {
+    this.moveVx = vx;
+    this.moveVy = vy;
+  }
+
+  public getMoveLeanRad(): number {
+    return this.moveLeanRad;
+  }
+
+  public getEyeBlinkScaleY(): number {
+    return this.lastBlendedPose?.eyeBlinkScaleY ?? 1;
+  }
+
+  public triggerCastPose(durationSec = 0.42): void {
+    this.castPoseTimer = Math.max(this.castPoseTimer, durationSec);
+  }
+
+  public setReviveProgress(progress01: number): void {
+    this.reviveProgress = Math.max(0, Math.min(1, progress01));
   }
 
   public setEquippedWeapon(weaponId: string): void {
@@ -149,6 +216,7 @@ export class CutoutRig {
   public triggerRecoil(strength = 5): void {
     this.recoilTimer = 0.12;
     this.recoilStrength = strength;
+    this.recoilSpring = triggerWeaponRecoilImpulse(this.recoilSpring, strength);
   }
 
   public triggerMeleeSwing(): void {
@@ -232,6 +300,7 @@ export class CutoutRig {
         sprite.setPosition(part.offsetX, part.offsetY);
       }
     }
+    this.lastBlendedPose = null;
     this.refreshBakedTextures();
   }
 
@@ -262,8 +331,23 @@ export class CutoutRig {
     }
   }
 
+  private resolveEffectiveAnimState(): RigAnimState {
+    if (this.lifeState === 'downed') {
+      return this.reviveProgress > 0.02 ? 'revive' : 'downed';
+    }
+    if (this.animState !== 'idle' && this.animState !== 'run') {
+      return this.animState;
+    }
+    if (this.hitFlashTimer > 0.02) return 'hurt';
+    if (this.isDashing) return 'dash';
+    if (this.castPoseTimer > 0) return 'cast';
+    if (this.meleeSwingTimer > 0.02) return 'attack';
+    return this.animState;
+  }
+
   /**
-   * Parametric animation update adhering to docs/ART_GUIDE.md section 4.2 + combat juice states.
+   * Parametric Cutout 2.0 animation update with 0.12s state crossfade, moveDirX torso lean,
+   * deterministic 3-5s eye blink, head/eye aim tracking, spring backAccessory, and 100% weapon aim.
    */
   public update(dtSec: number): void {
     this.animTime += dtSec;
@@ -272,6 +356,7 @@ export class CutoutRig {
     if (this.recoilTimer > 0) this.recoilTimer = Math.max(0, this.recoilTimer - dtSec);
     if (this.meleeSwingTimer > 0) this.meleeSwingTimer = Math.max(0, this.meleeSwingTimer - dtSec);
     if (this.hitFlashTimer > 0) this.hitFlashTimer = Math.max(0, this.hitFlashTimer - dtSec);
+    if (this.castPoseTimer > 0) this.castPoseTimer = Math.max(0, this.castPoseTimer - dtSec);
 
     // Hit flash, telegraph flash, life state tint, or elemental status tint
     const shouldFlashWhite = this.hitFlashTimer > 0;
@@ -283,7 +368,6 @@ export class CutoutRig {
       this.isHitFlashing = true;
       this.isStatusTinted = false;
     } else if (shouldFlashTelegraph) {
-      // Multiplicative tint preserves #141019 dark outlines while pulsing warm warning color
       this.applyMultiplicativeTint(0xff9e64);
       this.isHitFlashing = true;
       this.isStatusTinted = false;
@@ -306,82 +390,77 @@ export class CutoutRig {
       this.isStatusTinted = false;
     }
 
-    // Spawn scale & hit punch scale
     const spawnScale = this.spawnProgress < 1 ? easeOutBack(this.spawnProgress) : 1;
     const hitPunch = this.hitFlashTimer > 0 ? 1 + (this.hitFlashTimer / 0.12) * 0.12 : 1;
-    const dashStretchX = this.isDashing ? 1.14 : 1;
-    const dashSquashY = this.isDashing ? 0.88 : 1;
-
-    // Telegraph swell for Spore Bomber / crouch for Boar & Goblin
-    let telegraphScaleX = 1;
-    let telegraphScaleY = 1;
-    if (this.telegraphProgress > 0) {
-      if (this.def.id === 'spore_bomber') {
-        const swell = Math.sin(this.animTime * 28) * 0.08 + this.telegraphProgress * 0.22;
-        telegraphScaleX = 1 + swell;
-        telegraphScaleY = 1 + swell;
-      } else {
-        telegraphScaleX = 1 + this.telegraphProgress * 0.1;
-        telegraphScaleY = 1 - this.telegraphProgress * 0.12;
-      }
-    }
+    const effectiveState = this.resolveEffectiveAnimState();
 
     if (this.fastComposite && this.compositeSprite) {
       const compInvBake = 1 / Math.min(2, TextureBaker.getBakeScale());
+      const arch = computeEnemyArchetypeMotion(
+        this.def.id,
+        effectiveState,
+        this.animTime,
+        this.telegraphProgress,
+      );
+      const dashStretchX = this.isDashing || effectiveState === 'dash' ? 1.14 : 1;
+      const dashSquashY = this.isDashing || effectiveState === 'dash' ? 0.88 : 1;
       this.compositeSprite.scaleX =
-        compInvBake * this.facingSign * spawnScale * hitPunch * dashStretchX * telegraphScaleX;
+        compInvBake * this.facingSign * spawnScale * hitPunch * dashStretchX * arch.scaleXMult;
       this.compositeSprite.scaleY =
-        compInvBake * spawnScale * hitPunch * dashSquashY * telegraphScaleY;
+        compInvBake * spawnScale * hitPunch * dashSquashY * arch.scaleYMult;
       this.compositeSprite.alpha = this.spawnProgress < 1 ? 0.35 + this.spawnProgress * 0.65 : 1;
-      if (this.animState === 'idle') {
+      if (effectiveState === 'idle') {
         const s = Math.sin(this.animTime * ((Math.PI * 2) / 1.6));
-        this.compositeSprite.y = s * 1.1;
+        this.compositeSprite.y = arch.bodyYOffset + s * 1.1;
       } else {
-        const phase = this.animTime * ((Math.PI * 2) / 0.38);
-        this.compositeSprite.y = -Math.abs(Math.sin(phase)) * 3.0;
+        const phase = this.animTime * ((Math.PI * 2) / 0.38) * arch.cadenceMult;
+        this.compositeSprite.y =
+          arch.bodyYOffset - Math.abs(Math.sin(phase)) * 3.0 * arch.strideBounceMult;
       }
       return;
     }
 
-    const downedSquashY = this.lifeState === 'downed' ? 0.72 : 1;
-    this.bodyContainer.scaleX =
-      this.facingSign * spawnScale * hitPunch * dashStretchX * telegraphScaleX;
-    this.bodyContainer.scaleY =
-      spawnScale * hitPunch * dashSquashY * telegraphScaleY * downedSquashY;
-    this.bodyContainer.rotation = this.lifeState === 'downed' ? 0.38 * this.facingSign : 0;
-    const baseAlpha = this.spawnProgress < 1 ? 0.35 + this.spawnProgress * 0.65 : 1;
-    this.bodyContainer.alpha =
-      this.lifeState === 'ghost' ? 0.52 + Math.sin(this.animTime * 4) * 0.08 : baseAlpha;
+    if (effectiveState !== this.crossfadeCtrl.currentState) {
+      if (this.lastBlendedPose) {
+        transitionRigAnimState(this.crossfadeCtrl, effectiveState, this.lastBlendedPose);
+      } else {
+        this.crossfadeCtrl.currentState = effectiveState;
+        this.crossfadeCtrl.prevState = effectiveState;
+      }
+    }
 
-    const torso = this.partSprites.get('torso');
-    const head = this.partSprites.get('head');
-    const legL = this.partSprites.get('legLeft');
-    const legR = this.partSprites.get('legRight');
-    const armL = this.partSprites.get('armLeft');
-    const armR = this.partSprites.get('armRight');
-    const back = this.partSprites.get('backAccessory');
-    const weapon = this.partSprites.get('weapon');
-
-    const torsoDef = this.partDefs.get('torso');
-    const headDef = this.partDefs.get('head');
-    const legLDef = this.partDefs.get('legLeft');
-    const legRDef = this.partDefs.get('legRight');
-    const armLDef = this.partDefs.get('armLeft');
-    const armRDef = this.partDefs.get('armRight');
-    const backDef = this.partDefs.get('backAccessory');
-    const weaponDef = this.partDefs.get('weapon');
-
-    // Normalize local aim angle relative to facing direction
     const localAim =
       this.facingSign >= 0
         ? this.aimAngleRad
         : Math.atan2(Math.sin(this.aimAngleRad), -Math.cos(this.aimAngleRad));
 
-    // Weapon recoil & melee swing offset
-    const recoilT = this.recoilTimer > 0 ? easeOutCubic(this.recoilTimer / 0.12) : 0;
-    const recoilDist = recoilT * this.recoilStrength;
-    const recoilX = -Math.cos(localAim) * recoilDist;
-    const recoilY = -Math.sin(localAim) * recoilDist;
+    const effectiveMoveVx =
+      Math.abs(this.moveVx) > 0.1
+        ? this.moveVx
+        : effectiveState === 'run' || effectiveState === 'dash'
+          ? 145 * this.facingSign
+          : 0;
+    const localMoveDirX = (effectiveMoveVx / 160) * this.facingSign;
+    this.moveLeanRad = stepTorsoMoveLean(this.moveLeanRad, localMoveDirX, dtSec);
+
+    if (this.recoilTimer > 0 && this.recoilSpring.displacement < 0.2) {
+      this.recoilSpring = triggerWeaponRecoilImpulse(this.recoilSpring, this.recoilStrength);
+    }
+    this.recoilSpring = stepWeaponRecoilSpring(this.recoilSpring, dtSec);
+
+    const bodyBounceVelY =
+      dtSec > 1e-4 && this.lastBlendedPose
+        ? (this.lastBlendedPose.bodyY - this.prevBodyY) / dtSec
+        : 0;
+    this.backSpring = stepBackAccessorySpring(this.backSpring, {
+      moveVx: effectiveMoveVx,
+      moveVy: this.moveVy,
+      bodyBounceVelY,
+      facingSign: this.facingSign,
+      isDashing: this.isDashing || effectiveState === 'dash',
+      animState: effectiveState,
+      dtSec,
+    });
 
     let swingAngleOffset = 0;
     if (this.meleeSwingTimer > 0) {
@@ -389,123 +468,54 @@ export class CutoutRig {
       swingAngleOffset = this.meleeSwingDir * Math.sin(p * Math.PI) * 1.35;
     }
 
-    if (this.animState === 'idle') {
-      const omega = (Math.PI * 2) / 1.6;
-      const s = Math.sin(this.animTime * omega);
-      const sDelayed = Math.sin(this.animTime * omega - 0.4);
+    const targetPose = evaluateRigPose({
+      def: this.def,
+      animState: effectiveState,
+      animTime: this.animTime,
+      localAim,
+      moveLeanRad: this.moveLeanRad,
+      recoilSpring: this.recoilSpring,
+      backSpring: this.backSpring,
+      meleeSwingOffsetRad: swingAngleOffset,
+      telegraphProgress: this.telegraphProgress,
+      reviveProgress: this.reviveProgress,
+      phaseSeed: this.phaseSeed,
+    });
 
-      this.bodyContainer.y = 0;
-      this.shadowSprite.scaleX = invBake * (1 - s * 0.03);
-      this.shadowSprite.scaleY = invBake * (1 - s * 0.03);
+    const alpha = stepStateCrossfade(this.crossfadeCtrl, dtSec);
+    const pose =
+      this.crossfadeCtrl.fromPose && alpha < 1
+        ? blendRigPoseSnapshots(this.crossfadeCtrl.fromPose, targetPose, alpha)
+        : targetPose;
 
-      if (torso && torsoDef) {
-        torso.x = torsoDef.offsetX;
-        torso.y = torsoDef.offsetY + s * 1.2;
-        torso.rotation = 0;
-        torso.scaleX = invBake * (1 - s * 0.02);
-        torso.scaleY = invBake * (1 + s * 0.03);
-      }
+    this.prevBodyY = this.lastBlendedPose?.bodyY ?? pose.bodyY;
+    this.lastBlendedPose = pose;
 
-      if (head && headDef) {
-        head.x = headDef.offsetX + Math.cos(localAim) * 0.8;
-        head.y = headDef.offsetY + sDelayed * 1.6;
-        head.rotation = Math.sin(localAim) * 0.08;
-      }
+    this.bodyContainer.y = pose.bodyY;
+    this.bodyContainer.scaleX = this.facingSign * spawnScale * hitPunch * pose.bodyScaleX;
+    this.bodyContainer.scaleY = spawnScale * hitPunch * pose.bodyScaleY;
+    this.bodyContainer.rotation = pose.bodyRotation * this.facingSign;
 
-      if (legL && legLDef) {
-        legL.x = legLDef.offsetX;
-        legL.y = legLDef.offsetY;
-        legL.rotation = 0;
-      }
-      if (legR && legRDef) {
-        legR.x = legRDef.offsetX;
-        legR.y = legRDef.offsetY;
-        legR.rotation = 0;
-      }
+    const baseAlpha = this.spawnProgress < 1 ? 0.35 + this.spawnProgress * 0.65 : 1;
+    this.bodyContainer.alpha =
+      this.lifeState === 'ghost' ? 0.52 + Math.sin(this.animTime * 4) * 0.08 : baseAlpha;
 
-      if (armL && armLDef) {
-        armL.x = armLDef.offsetX;
-        armL.y = armLDef.offsetY + s * 0.9;
-        armL.rotation = s * 0.06;
-      }
+    this.shadowSprite.scaleX = invBake * pose.shadowScale;
+    this.shadowSprite.scaleY = invBake * pose.shadowScale;
 
-      if (back && backDef) {
-        back.x = backDef.offsetX;
-        back.y = backDef.offsetY + sDelayed * 1.0;
-        back.rotation = sDelayed * 0.04;
-      }
+    if (this.playerRingSprite && this.playerRingSprite.visible) {
+      const castRingMult =
+        effectiveState === 'cast' ? 1.12 + Math.sin(this.animTime * 10) * 0.06 : 1.0;
+      this.playerRingSprite.setScale(invBake * castRingMult);
+    }
 
-      if (weapon && weaponDef) {
-        weapon.x = weaponDef.offsetX + recoilX;
-        weapon.y = weaponDef.offsetY + s * 0.8 + recoilY;
-        weapon.rotation = localAim * 0.65 + s * 0.04 + swingAngleOffset;
-      }
-
-      if (armR && armRDef) {
-        armR.x = armRDef.offsetX + recoilX * 0.65;
-        armR.y = armRDef.offsetY + s * 0.8 + recoilY * 0.65;
-        armR.rotation = localAim * 0.45 + swingAngleOffset * 0.7;
-      }
-    } else {
-      const omega = (Math.PI * 2) / 0.38;
-      const phase = this.animTime * omega;
-      const swing = Math.sin(phase);
-      const bounce = -Math.abs(Math.sin(phase)) * 3.2;
-      const squash = Math.cos(phase * 2);
-
-      this.bodyContainer.y = bounce;
-      this.shadowSprite.scaleX = invBake * (1 + bounce * 0.025);
-      this.shadowSprite.scaleY = invBake * (1 + bounce * 0.025);
-
-      if (torso && torsoDef) {
-        torso.x = torsoDef.offsetX;
-        torso.y = torsoDef.offsetY;
-        torso.rotation = this.isDashing ? 0.25 : 0.12;
-        torso.scaleX = invBake * (1 - squash * 0.04);
-        torso.scaleY = invBake * (1 + squash * 0.05);
-      }
-
-      if (head && headDef) {
-        head.x = headDef.offsetX + 1.0 + Math.cos(localAim) * 0.6;
-        head.y = headDef.offsetY + Math.sin(phase - 0.3) * 1.1;
-        head.rotation = 0.05 + Math.sin(phase) * 0.05 + Math.sin(localAim) * 0.06;
-      }
-
-      if (legL && legLDef) {
-        legL.x = legLDef.offsetX - swing * 2.4;
-        legL.y = legLDef.offsetY - Math.max(0, swing) * 1.8;
-        legL.rotation = swing * 0.55;
-      }
-
-      if (legR && legRDef) {
-        legR.x = legRDef.offsetX + swing * 2.4;
-        legR.y = legRDef.offsetY - Math.max(0, -swing) * 1.8;
-        legR.rotation = -swing * 0.55;
-      }
-
-      if (armL && armLDef) {
-        armL.x = armLDef.offsetX + swing * 1.5;
-        armL.y = armLDef.offsetY;
-        armL.rotation = -swing * 0.32;
-      }
-
-      if (back && backDef) {
-        back.x = backDef.offsetX - 1.5;
-        back.y = backDef.offsetY;
-        back.rotation = -0.18 + Math.sin(phase - 0.5) * 0.14;
-      }
-
-      if (weapon && weaponDef) {
-        weapon.x = weaponDef.offsetX - swing * 1.2 + recoilX;
-        weapon.y = weaponDef.offsetY + recoilY;
-        weapon.rotation = localAim * 0.65 - swing * 0.14 + swingAngleOffset;
-      }
-
-      if (armR && armRDef) {
-        armR.x = armRDef.offsetX - swing * 1.2 + recoilX * 0.65;
-        armR.y = armRDef.offsetY + recoilY * 0.65;
-        armR.rotation = localAim * 0.45 - swing * 0.14 + swingAngleOffset * 0.7;
-      }
+    for (const [partId, sprite] of this.partSprites.entries()) {
+      const pt = pose.parts[partId];
+      sprite.x = pt.x;
+      sprite.y = pt.y;
+      sprite.rotation = pt.rotation;
+      sprite.scaleX = invBake * pt.scaleX;
+      sprite.scaleY = invBake * pt.scaleY;
     }
   }
 
