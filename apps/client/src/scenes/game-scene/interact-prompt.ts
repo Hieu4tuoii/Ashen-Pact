@@ -627,6 +627,9 @@ export function syncWorldInteractPromptPill(
   const hash = `${renderSpec.key}:${renderSpec.titleText}:${renderSpec.colorHex}:${renderSpec.costGold}:${renderSpec.priceText}:${textRes}`;
   if (hash !== visuals.lastHash) {
     visuals.lastHash = hash;
+    visuals.keyText.setResolution(textRes);
+    visuals.titleText.setResolution(textRes);
+    visuals.priceText.setResolution(textRes);
     visuals.titleText.setText(renderSpec.titleText);
     visuals.titleText.setColor(renderSpec.colorHex);
 

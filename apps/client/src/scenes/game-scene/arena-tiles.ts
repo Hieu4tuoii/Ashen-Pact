@@ -644,7 +644,7 @@ export function applyCameraViewportImpl(this: GameScene): void {
     }
     for (const entry of this.coopPlayerRigs.values()) {
       entry.rig.refreshBakedTextures();
-      entry.nameLabel.setResolution(newScale);
+      entry.nameLabel.setResolution(newScale * 2);
       entry.emoteLabel.setResolution(newScale);
     }
     for (const entry of this.hubStatueRigs.values()) {
