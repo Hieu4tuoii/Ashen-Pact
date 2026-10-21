@@ -11,8 +11,14 @@ import {
   WEAPONS,
 } from '@ashen-pact/shared';
 import { hexToNum, PALETTE } from '../../art/palette.js';
-import { TextureBaker } from '../../art/texture-baker.js';
+import {
+  drawKeyChip,
+  drawStyledPanel,
+  drawVectorHudIcon,
+} from '../../ui/components/hud-primitives.js';
 import { initGlobalDebugState } from '../../ui/debug-overlay.js';
+import { graphicsSettings } from '../../ui/graphics-settings.js';
+import { computeUiTextResolution, createUiTextStyle, UI_THEME } from '../../ui/theme.js';
 import { type GameScene } from '../GameScene.js';
 
 export function updateHubInvitePanelImpl(this: GameScene): void {
@@ -25,7 +31,7 @@ export function updateHubInvitePanelImpl(this: GameScene): void {
     .join('|');
   const hash = !showPanel
     ? ''
-    : `${this.primaryLanIp}:${this.serverPort}:${this.hostInviteUrl ?? ''}:${sim.allowDuplicateCharacters ? 1 : 0}:${this.copyToastTimer > 0 ? 1 : 0}:${playersKey}:${i18n.getLocale()}`;
+    : `${this.primaryLanIp}:${this.serverPort}:${this.hostInviteUrl ?? ''}:${sim.allowDuplicateCharacters ? 1 : 0}:${this.copyToastTimer > 0 ? 1 : 0}:${playersKey}:${i18n.getLocale()}:${this.currentHudUiScale}`;
 
   if (hash === this.lastInvitePanelHash) return;
   this.lastInvitePanelHash = hash;
@@ -33,41 +39,50 @@ export function updateHubInvitePanelImpl(this: GameScene): void {
   this.invitePanelContainer.removeAll(true);
   if (!showPanel) return;
 
-  const textRes = TextureBaker.getBakeScale();
-  const px = 676;
-  const py = 184;
+  const textRes = computeUiTextResolution(
+    typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1,
+    ui.cameras?.main?.zoom || 2,
+    this.currentHudUiScale || 1,
+  );
+  // Local coordinates inside hudTopRightContainer (anchored at WORLD_VIEW_WIDTH + padX, -padY)
   const pw = 272;
-  const ph = 286;
+  const ph = 278;
+  const px = -12 - pw;
+  const py = 144;
 
   const bg = ui.add.graphics();
-  bg.fillStyle(hexToNum(PALETTE.INK_DEEP), 0.92);
-  bg.lineStyle(2.5, hexToNum(PALETTE.SOLAR_GOLD), 0.95);
-  bg.fillRoundedRect(px, py, pw, ph, 9);
-  bg.strokeRoundedRect(px, py, pw, ph, 9);
+  drawStyledPanel(bg, px, py, pw, ph, {
+    fillColor: UI_THEME.panelBgDark,
+    fillAlpha: 0.9,
+    borderColor: hexToNum(PALETTE.SOLAR_GOLD),
+    borderWidth: 1.8,
+    radius: UI_THEME.panelRadius.md,
+    accentColor: hexToNum(PALETTE.SOLAR_GOLD),
+    accentSide: 'top',
+  });
   this.invitePanelContainer.add(bg);
 
-  const header = ui.add.text(px + 10, py + 7, i18n.t('ui.hud.coopInviteHeader'), {
-    fontFamily: '"Be Vietnam Pro", sans-serif',
-    fontSize: '11px',
-    fontStyle: '800',
-    color: PALETTE.SOLAR_GOLD,
-    stroke: PALETTE.INK_DARK,
-    strokeThickness: 3,
-    resolution: textRes,
-  });
+  const header = ui.add.text(
+    px + 10,
+    py + 6,
+    i18n.t('ui.hud.coopInviteHeader'),
+    createUiTextStyle({
+      fontPxAt1080p: 15,
+      weight: 800,
+      color: PALETTE.SOLAR_GOLD,
+      resolution: textRes,
+    }),
+  );
   const ipText = ui.add.text(
     px + 10,
-    py + 23,
+    py + 21,
     `${i18n.t('ui.menu.ipLabel')}: ${this.primaryLanIp}:${this.serverPort}`,
-    {
-      fontFamily: '"Be Vietnam Pro", sans-serif',
-      fontSize: '10px',
-      fontStyle: '700',
+    createUiTextStyle({
+      fontPxAt1080p: 13,
+      weight: 700,
       color: PALETTE.CYAN_FROST,
-      stroke: PALETTE.INK_DARK,
-      strokeThickness: 2.5,
       resolution: textRes,
-    },
+    }),
   );
   this.invitePanelContainer.add([header, ipText]);
 
@@ -75,9 +90,9 @@ export function updateHubInvitePanelImpl(this: GameScene): void {
   const qrUrl = this.hostInviteUrl ?? `http://${this.primaryLanIp}:${this.serverPort}/?coop=join`;
   const qrMatrix = generateQrMatrix(qrUrl);
   const qrSize = qrMatrix.length;
-  const qrBoxSize = 78;
+  const qrBoxSize = 76;
   const qrX = px + 10;
-  const qrY = py + 42;
+  const qrY = py + 38;
   const quietZone = 2;
   const totalModules = qrSize + quietZone * 2;
   const cellPx = qrBoxSize / totalModules;
@@ -103,7 +118,6 @@ export function updateHubInvitePanelImpl(this: GameScene): void {
   }
   this.invitePanelContainer.add(qrG);
 
-  // Helper for compact buttons next to QR code
   const makePanelBtn = (
     bx: number,
     by: number,
@@ -112,24 +126,29 @@ export function updateHubInvitePanelImpl(this: GameScene): void {
     label: string,
     fillHex: string,
     onClick: () => void,
-    fontSize = '9.5px',
+    fontPxAt1080p = 13,
   ) => {
     const btnG = ui.add.graphics();
-    btnG.fillStyle(hexToNum(fillHex), 0.95);
-    btnG.lineStyle(1.8, hexToNum(PALETTE.INK_DARK), 1);
-    btnG.fillRoundedRect(bx, by, bw, bh, 5);
-    btnG.strokeRoundedRect(bx, by, bw, bh, 5);
+    drawStyledPanel(btnG, bx, by, bw, bh, {
+      fillColor: hexToNum(fillHex),
+      fillAlpha: 0.94,
+      borderColor: UI_THEME.inkDark,
+      borderWidth: 1.4,
+      radius: 4,
+    });
 
     const txt = ui.add
-      .text(bx + bw / 2, by + bh / 2, label, {
-        fontFamily: '"Be Vietnam Pro", sans-serif',
-        fontSize,
-        fontStyle: '800',
-        color: PALETTE.BONE_WHITE,
-        stroke: PALETTE.INK_DARK,
-        strokeThickness: 2.5,
-        resolution: textRes,
-      })
+      .text(
+        bx + bw / 2,
+        by + bh / 2,
+        label,
+        createUiTextStyle({
+          fontPxAt1080p,
+          weight: 800,
+          color: PALETTE.BONE_WHITE,
+          resolution: textRes,
+        }),
+      )
       .setOrigin(0.5, 0.5);
 
     const hit = ui.add
@@ -147,7 +166,7 @@ export function updateHubInvitePanelImpl(this: GameScene): void {
     btnX,
     qrY,
     btnW,
-    23,
+    22,
     this.copyToastTimer > 0 ? i18n.t('ui.hud.copiedInviteLink') : i18n.t('ui.hud.copyInviteLink'),
     this.copyToastTimer > 0 ? PALETTE.GOBLIN_GREEN : PALETTE.AZURE_CORE,
     () => {
@@ -163,9 +182,9 @@ export function updateHubInvitePanelImpl(this: GameScene): void {
 
   makePanelBtn(
     btnX,
-    qrY + 27,
+    qrY + 26,
     btnW,
-    23,
+    22,
     `${i18n.t('ui.hud.duplicateChar')}: ${sim.allowDuplicateCharacters ? i18n.t('ui.hud.on') : i18n.t('ui.hud.off')}`,
     PALETTE.SLATE_MID,
     () => {
@@ -180,7 +199,7 @@ export function updateHubInvitePanelImpl(this: GameScene): void {
 
   makePanelBtn(
     btnX,
-    qrY + 54,
+    qrY + 52,
     btnW,
     24,
     sim.player.ready ? i18n.t('ui.hud.readyDone') : i18n.t('ui.hud.pressReady'),
@@ -210,15 +229,18 @@ export function updateHubInvitePanelImpl(this: GameScene): void {
   // Player Slots List (P1..P4)
   const listStartY = qrY + qrBoxSize + 8;
   for (let slotIdx = 1; slotIdx <= 4; slotIdx++) {
-    const rowY = listStartY + (slotIdx - 1) * 28;
+    const rowY = listStartY + (slotIdx - 1) * 27;
     const pl = allPlayers.find((item) => item.slot === slotIdx);
     const slotColor = PLAYER_SLOT_COLORS[slotIdx as 1 | 2 | 3 | 4];
 
     const rowG = ui.add.graphics();
-    rowG.fillStyle(hexToNum(PALETTE.SLATE_DARK), 0.9);
-    rowG.lineStyle(1.5, hexToNum(pl ? slotColor : PALETTE.INK_DARK), 0.9);
-    rowG.fillRoundedRect(px + 10, rowY, pw - 20, 24, 5);
-    rowG.strokeRoundedRect(px + 10, rowY, pw - 20, 24, 5);
+    drawStyledPanel(rowG, px + 10, rowY, pw - 20, 23, {
+      fillColor: UI_THEME.panelBg,
+      fillAlpha: 0.88,
+      borderColor: hexToNum(pl ? slotColor : PALETTE.INK_DARK),
+      borderWidth: 1.2,
+      radius: 4,
+    });
     this.invitePanelContainer.add(rowG);
 
     if (pl) {
@@ -226,26 +248,25 @@ export function updateHubInvitePanelImpl(this: GameScene): void {
       const charName = i18n.charName(pl.characterId, charDef.nameVi);
       const rdyStr = pl.ready ? i18n.t('ui.hud.readyShort') : i18n.t('ui.hud.selectingChar');
       const hasKickBtn = sim.player.slot === 1 && pl.slot !== 1;
-      const rowTxt = ui.add.text(
-        px + 15,
-        rowY + 5.5,
-        `P${pl.slot} · ${pl.displayName} (${charName}) — ${rdyStr}`,
-        {
-          fontFamily: '"Be Vietnam Pro", sans-serif',
-          fontSize: hasKickBtn ? '8.2px' : '9px',
-          fontStyle: '700',
-          color: pl.ready ? PALETTE.LIME_GLOW : slotColor,
-          stroke: PALETTE.INK_DARK,
-          strokeThickness: 2,
-          resolution: textRes,
-        },
-      );
+      const rowTxt = ui.add
+        .text(
+          px + 15,
+          rowY + 11.5,
+          `P${pl.slot} · ${pl.displayName} (${charName}) — ${rdyStr}`,
+          createUiTextStyle({
+            fontPxAt1080p: 13,
+            weight: 700,
+            color: pl.ready ? PALETTE.LIME_GLOW : slotColor,
+            resolution: textRes,
+          }),
+        )
+        .setOrigin(0, 0.5);
       this.invitePanelContainer.add(rowTxt);
 
       if (hasKickBtn) {
         makePanelBtn(
           px + pw - 56,
-          rowY + 3,
+          rowY + 2.5,
           42,
           18,
           i18n.t('ui.hud.kick'),
@@ -260,17 +281,19 @@ export function updateHubInvitePanelImpl(this: GameScene): void {
         );
       }
     } else {
-      const emptyTxt = ui.add.text(
-        px + 16,
-        rowY + 5,
-        `P${slotIdx} · ${i18n.t('ui.hud.emptySlot')}`,
-        {
-          fontFamily: '"Be Vietnam Pro", sans-serif',
-          fontSize: '9px',
-          color: PALETTE.ASH_GRAY,
-          resolution: textRes,
-        },
-      );
+      const emptyTxt = ui.add
+        .text(
+          px + 16,
+          rowY + 11.5,
+          `P${slotIdx} · ${i18n.t('ui.hud.emptySlot')}`,
+          createUiTextStyle({
+            fontPxAt1080p: 13,
+            weight: 600,
+            color: PALETTE.ASH_GRAY,
+            resolution: textRes,
+          }),
+        )
+        .setOrigin(0, 0.5);
       this.invitePanelContainer.add(emptyTxt);
     }
   }
@@ -282,20 +305,20 @@ export function updateHubInvitePanelImpl(this: GameScene): void {
     { id: 3, key: 'T+3' },
     { id: 4, key: 'T+4' },
   ];
-  const emY = py + ph - 26;
+  const emY = py + ph - 25;
   const emW = 60;
   emotes.forEach((em, idx) => {
     makePanelBtn(
       px + 10 + idx * (emW + 4),
       emY,
       emW,
-      20,
+      19,
       `[${em.key}] ${i18n.emoteText(em.id)}`,
       PALETTE.SLATE_MID,
       () => {
         this.queuedEmote = em.id;
       },
-      '7.5px',
+      13,
     );
   });
 }
@@ -317,7 +340,9 @@ export function updateHubCharacterSkillPreviewImpl(this: GameScene): void {
 
   debug.hubPreviewCharacterId = nearestCharId;
   const isEquipped = nearestCharId === sim.player.characterId;
-  const hash = nearestCharId ? `${nearestCharId}:${isEquipped ? 1 : 0}:${i18n.getLocale()}` : '';
+  const hash = nearestCharId
+    ? `${nearestCharId}:${isEquipped ? 1 : 0}:${i18n.getLocale()}:${this.currentHudUiScale}`
+    : '';
 
   if (hash === this.lastHubPreviewHash) return;
   this.lastHubPreviewHash = hash;
@@ -330,17 +355,28 @@ export function updateHubCharacterSkillPreviewImpl(this: GameScene): void {
   const charTxt = i18n.getCharacterText(nearestCharId);
   const isEn = i18n.getLocale() === 'en';
 
-  const textRes = TextureBaker.getBakeScale();
-  const px = 14;
-  const py = 302;
-  const pw = 542;
-  const ph = 158;
+  const textRes = computeUiTextResolution(
+    typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1,
+    ui.cameras?.main?.zoom || 2,
+    this.currentHudUiScale || 1,
+  );
+  // Local coordinates inside hubPreviewContainer (anchored at -padX, WORLD_VIEW_HEIGHT + padY)
+  const px = 12;
+  const pw = 516;
+  const ph = 152;
+  const py = -12 - ph;
 
   const bg = ui.add.graphics();
-  bg.fillStyle(hexToNum(PALETTE.INK_DEEP), 0.99);
-  bg.lineStyle(2.5, hexToNum(isEquipped ? PALETTE.LIME_GLOW : PALETTE.SOLAR_GOLD), 0.96);
-  bg.fillRoundedRect(px, py, pw, ph, 8);
-  bg.strokeRoundedRect(px, py, pw, ph, 8);
+  const borderCol = hexToNum(isEquipped ? PALETTE.LIME_GLOW : PALETTE.SOLAR_GOLD);
+  drawStyledPanel(bg, px, py, pw, ph, {
+    fillColor: UI_THEME.panelBgDark,
+    fillAlpha: 0.94,
+    borderColor: borderCol,
+    borderWidth: 1.8,
+    radius: UI_THEME.panelRadius.md,
+    accentColor: borderCol,
+    accentSide: 'left',
+  });
   this.hubPreviewContainer.add(bg);
 
   const statusBadge = isEquipped
@@ -348,34 +384,28 @@ export function updateHubCharacterSkillPreviewImpl(this: GameScene): void {
     : i18n.t('ui.hud.pressEToSelect');
   const header = ui.add.text(
     px + 12,
-    py + 7,
+    py + 6,
     `${charTxt.name.toUpperCase()} — ${charTxt.title}`,
-    {
-      fontFamily: '"Be Vietnam Pro", sans-serif',
-      fontSize: '9.8px',
-      fontStyle: '800',
+    createUiTextStyle({
+      fontPxAt1080p: 15,
+      weight: 800,
       color: isEquipped ? PALETTE.LIME_GLOW : PALETTE.SOLAR_GOLD,
-      stroke: PALETTE.INK_DARK,
-      strokeThickness: 3,
       resolution: textRes,
-    },
+    }),
   );
 
   const spdLabel = isEn ? 'Spd' : 'Tốc';
   const statsBadge = ui.add
     .text(
       px + pw - 12,
-      py + 7.5,
+      py + 7,
       `[${statusBadge}] · HP ${cDef.hp} · ${i18n.t('ui.hud.armor')} ${cDef.armor} · ${i18n.t('ui.hud.energy')} ${cDef.energy} · ${spdLabel} ${cDef.moveSpeed}`,
-      {
-        fontFamily: '"Be Vietnam Pro", sans-serif',
-        fontSize: '8.6px',
-        fontStyle: '700',
+      createUiTextStyle({
+        fontPxAt1080p: 13,
+        weight: 700,
         color: PALETTE.CYAN_FROST,
-        stroke: PALETTE.INK_DARK,
-        strokeThickness: 2.5,
         resolution: textRes,
-      },
+      }),
     )
     .setOrigin(1, 0);
 
@@ -392,22 +422,23 @@ export function updateHubCharacterSkillPreviewImpl(this: GameScene): void {
       ].join('\n')
     : [
         `• Nội tại (${charTxt.passiveName}): ${charTxt.passiveDesc}`,
-        `• Kỹ năng [Q] (${charTxt.skillName} · Hồi ${cDef.skill.cooldownSec}s): ${charTxt.skillDesc}`,
+        `• Kỹ năng [Space] (${charTxt.skillName} · Hồi ${cDef.skill.cooldownSec}s): ${charTxt.skillDesc}`,
         `• Nâng cấp: (1) ${upg1Txt.name}: ${upg1Txt.desc} | (2) ${upg2Txt.name}: ${upg2Txt.desc}`,
         `• Synergy Co-op: ${charTxt.synergy}`,
       ].join('\n');
 
-  const body = ui.add.text(px + 12, py + 25, bodyLines, {
-    fontFamily: '"Be Vietnam Pro", sans-serif',
-    fontSize: '8.7px',
-    fontStyle: '600',
-    color: PALETTE.BONE_WHITE,
-    stroke: PALETTE.INK_DARK,
-    strokeThickness: 2,
-    lineSpacing: 2.2,
-    wordWrap: { width: pw - 24 },
-    resolution: textRes,
-  });
+  const body = ui.add.text(
+    px + 12,
+    py + 24,
+    bodyLines,
+    createUiTextStyle({
+      fontPxAt1080p: 13,
+      weight: 600,
+      color: PALETTE.BONE_WHITE,
+      wordWrapWidth: pw - 24,
+      resolution: textRes,
+    }),
+  );
 
   this.hubPreviewContainer.add([header, statsBadge, body]);
 }
@@ -440,8 +471,9 @@ export function updateWeaponComparisonCardImpl(this: GameScene): void {
   debug.comparedWeaponId = dropWId;
 
   const currWId = sim.getActiveWeaponId();
+  const showHints = graphicsSettings.getState().showKeyHints;
   const hash = dropWId
-    ? `${dropWId}:${currWId}:${nearestWeaponItem?.costGold ?? 0}:${i18n.getLocale()}`
+    ? `${dropWId}:${currWId}:${nearestWeaponItem?.costGold ?? 0}:${i18n.getLocale()}:${showHints ? 1 : 0}:${this.currentHudUiScale}`
     : '';
   if (hash === this.lastWeaponCompareHash) return;
   this.lastWeaponCompareHash = hash;
@@ -451,18 +483,32 @@ export function updateWeaponComparisonCardImpl(this: GameScene): void {
 
   const wDrop = WEAPONS[dropWId] ?? WEAPONS.rusty_pistol!;
   const wCurr = WEAPONS[currWId] ?? WEAPONS.rusty_pistol!;
-  const textRes = TextureBaker.getBakeScale();
+  const textRes = computeUiTextResolution(
+    typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1,
+    ui.cameras?.main?.zoom || 2,
+    this.currentHudUiScale || 1,
+  );
   const isEn = i18n.getLocale() === 'en';
-  const px = 230;
-  const py = 356;
-  const pw = 500;
-  const ph = 122;
 
+  // Local coordinates inside hudBottomCenterContainer (anchored at x = 480, y = WORLD_VIEW_HEIGHT + padY)
+  // Shifted slightly left (-276..+100) so it never collides with bottom-right Weapon & Cooldown cards!
+  const pw = 376;
+  const ph = 108;
+  const px = -276;
+  const py = -12 - ph;
+
+  const rarityHex = WEAPON_RARITY_COLORS[wDrop.rarity];
+  const rarityNum = hexToNum(rarityHex);
   const bg = ui.add.graphics();
-  bg.fillStyle(hexToNum(PALETTE.INK_DEEP), 0.96);
-  bg.lineStyle(2.5, hexToNum(WEAPON_RARITY_COLORS[wDrop.rarity]), 0.96);
-  bg.fillRoundedRect(px, py, pw, ph, 8);
-  bg.strokeRoundedRect(px, py, pw, ph, 8);
+  drawStyledPanel(bg, px, py, pw, ph, {
+    fillColor: UI_THEME.panelBgDark,
+    fillAlpha: 0.94,
+    borderColor: rarityNum,
+    borderWidth: 1.8,
+    radius: UI_THEME.panelRadius.md,
+    accentColor: rarityNum,
+    accentSide: 'left',
+  });
   this.weaponCompareContainer.add(bg);
 
   const dropTotalDmg = wDrop.damage * Math.max(1, wDrop.pelletCount);
@@ -478,7 +524,7 @@ export function updateWeaponComparisonCardImpl(this: GameScene): void {
     if (Math.abs(diff) < 0.05) return '(=)';
     const isGood = invertGood ? diff < 0 : diff > 0;
     const sign = diff > 0 ? '+' : '';
-    return isGood ? `▲ ${sign}${diff}` : `▼ ${sign}${diff}`;
+    return isGood ? `▲${sign}${diff}` : `▼${sign}${diff}`;
   };
 
   const dropName = i18n.weaponName(wDrop.id, wDrop.nameVi);
@@ -486,125 +532,123 @@ export function updateWeaponComparisonCardImpl(this: GameScene): void {
 
   const header = ui.add.text(
     px + 12,
-    py + 7,
-    `★ ${dropName.toUpperCase()}  ⇄  ${currName}  ·  DPS ~${dropDps} (${fmtDelta(dpsDiff)})`,
-    {
-      fontFamily: '"Be Vietnam Pro", sans-serif',
-      fontSize: '9.3px',
-      fontStyle: '800',
-      color: WEAPON_RARITY_COLORS[wDrop.rarity],
-      stroke: PALETTE.INK_DARK,
-      strokeThickness: 3,
+    py + 6,
+    `★ ${dropName.toUpperCase()} ⇄ ${currName} · DPS ~${dropDps} (${fmtDelta(dpsDiff)})`,
+    createUiTextStyle({
+      fontPxAt1080p: 14,
+      weight: 800,
+      color: rarityHex,
       resolution: textRes,
-    },
+    }),
   );
   this.weaponCompareContainer.add(header);
 
-  // Merged [E] prompt pill badge at top-right of the Weapon Comparison Card (Spec 3.3 deduplication)
+  // Merged [E] prompt pill badge at top-right of the Weapon Comparison Card
   const costGold = Math.max(0, nearestWeaponItem.costGold ?? 0);
   const isPriced = costGold > 0;
-  const actionLabel = isPriced
-    ? isEn
-      ? 'Buy'
-      : 'Mua'
-    : i18n.t('ui.hud.weaponCompareSwap');
+  const actionLabel = isPriced ? (isEn ? 'Buy' : 'Mua') : i18n.t('ui.hud.weaponCompareSwap');
+
   const keyTxt = ui.add
-    .text(0, 0, 'E', {
-      fontFamily: '"Be Vietnam Pro", sans-serif',
-      fontSize: '8.5px',
-      fontStyle: '800',
-      color: PALETTE.SOLAR_GOLD,
-      stroke: PALETTE.INK_DARK,
-      strokeThickness: 2,
-      resolution: textRes,
-    })
+    .text(
+      0,
+      0,
+      'E',
+      createUiTextStyle({
+        fontPxAt1080p: 13,
+        weight: 800,
+        color: PALETTE.SOLAR_GOLD,
+        resolution: textRes,
+      }),
+    )
     .setOrigin(0.5, 0.5);
+
   const actionTxt = ui.add
-    .text(0, 0, actionLabel, {
-      fontFamily: '"Be Vietnam Pro", sans-serif',
-      fontSize: '8.5px',
-      fontStyle: '800',
-      color: PALETTE.BONE_WHITE,
-      stroke: PALETTE.INK_DARK,
-      strokeThickness: 2,
-      resolution: textRes,
-    })
+    .text(
+      0,
+      0,
+      actionLabel,
+      createUiTextStyle({
+        fontPxAt1080p: 13,
+        weight: 800,
+        color: PALETTE.BONE_WHITE,
+        resolution: textRes,
+      }),
+    )
     .setOrigin(0, 0.5);
+
   const priceTxt = isPriced
     ? ui.add
-        .text(0, 0, `${costGold} ${i18n.t('ui.hud.gold')}`, {
-          fontFamily: '"Be Vietnam Pro", sans-serif',
-          fontSize: '8.6px',
-          fontStyle: '800',
-          color: '#FACC15',
-          stroke: PALETTE.INK_DARK,
-          strokeThickness: 2,
-          resolution: textRes,
-        })
+        .text(
+          0,
+          0,
+          `${costGold}`,
+          createUiTextStyle({
+            fontPxAt1080p: 13,
+            weight: 800,
+            color: UI_THEME.status.goldBrightHex,
+            resolution: textRes,
+          }),
+        )
         .setOrigin(0, 0.5)
     : null;
 
-  const chipW = 13;
-  const chipH = 13;
+  const chipW = 14;
   const pillH = 18;
   const coinBlockW = priceTxt ? 6 + 9 + 4 + priceTxt.width : 0;
   const pillW = Math.ceil(5 + chipW + 5 + actionTxt.width + coinBlockW + 6);
-  const pillX = px + pw - 10 - pillW;
+  const pillX = px + pw - 8 - pillW;
   const pillY = py + 5;
   const pillCy = pillY + pillH * 0.5;
 
-  bg.fillStyle(hexToNum(PALETTE.SLATE_DARK), 0.96);
-  bg.lineStyle(1.5, hexToNum(WEAPON_RARITY_COLORS[wDrop.rarity]), 0.95);
-  bg.fillRoundedRect(pillX, pillY, pillW, pillH, 5);
-  bg.strokeRoundedRect(pillX, pillY, pillW, pillH, 5);
+  drawStyledPanel(bg, pillX, pillY, pillW, pillH, {
+    fillColor: UI_THEME.panelBg,
+    fillAlpha: 0.96,
+    borderColor: rarityNum,
+    borderWidth: 1.2,
+    radius: 4,
+  });
 
-  const chipX = pillX + 5;
-  bg.fillStyle(hexToNum(PALETTE.SLATE_MID), 0.98);
-  bg.lineStyle(1.2, hexToNum(PALETTE.SOLAR_GOLD), 0.98);
-  bg.fillRoundedRect(chipX, pillCy - chipH * 0.5, chipW, chipH, 3);
-  bg.strokeRoundedRect(chipX, pillCy - chipH * 0.5, chipW, chipH, 3);
-  keyTxt.setPosition(chipX + chipW * 0.5, pillCy);
-
-  const actionX = chipX + chipW + 5;
+  const chipMetrics = drawKeyChip(bg, pillX + 4, pillCy - 5.5, 'E', { active: true });
+  keyTxt.setPosition(pillX + 4 + chipMetrics.width * 0.5, pillCy);
+  const actionX = pillX + 4 + chipMetrics.width + 5;
   actionTxt.setPosition(actionX, pillCy);
   this.weaponCompareContainer.add([keyTxt, actionTxt]);
 
   if (priceTxt) {
-    const coinCx = actionX + actionTxt.width + 6 + 4.2;
-    bg.fillStyle(0xfacc15, 1);
-    bg.fillCircle(coinCx, pillCy, 4.2);
-    bg.lineStyle(1, 0xf59e42, 1);
-    bg.strokeCircle(coinCx, pillCy, 4.2);
-    bg.lineStyle(1, 0xfffbeb, 0.9);
-    bg.lineBetween(coinCx, pillCy - 2, coinCx, pillCy + 2);
-    priceTxt.setPosition(coinCx + 4.2 + 4, pillCy);
+    const coinCx = actionX + actionTxt.width + 8;
+    drawVectorHudIcon(bg, 'coin', coinCx, pillCy, 4.2, UI_THEME.status.gold);
+    priceTxt.setPosition(coinCx + 6, pillCy);
     this.weaponCompareContainer.add(priceTxt);
   }
 
-  const statsLine1 = `${i18n.t('ui.hud.weaponCompareDmg')}: ${wDrop.damage}${wDrop.pelletCount > 1 ? `×${wDrop.pelletCount}` : ''} (${fmtDelta(dmgDiff)})   ·   ${i18n.t('ui.hud.weaponCompareFireRate')}: ${wDrop.fireRate}/s (${fmtDelta(rateDiff)})   ·   ${i18n.t('ui.hud.weaponCompareEnergy')}: ${wDrop.energyCost} (${fmtDelta(nrgDiff, true)})`;
-  const statsLine2 = `${i18n.t('ui.hud.weaponCompareCrit')}: ${Math.round(wDrop.critChance * 100)}%   ·   ${i18n.t('ui.tooltip.element')}: ${i18n.elementName(wDrop.element)}   ·   ${i18n.getRarityLabel(wDrop.rarity)}`;
+  const statsLine1 = `${i18n.t('ui.hud.weaponCompareDmg')}: ${wDrop.damage}${wDrop.pelletCount > 1 ? `×${wDrop.pelletCount}` : ''} (${fmtDelta(dmgDiff)}) · ${i18n.t('ui.hud.weaponCompareFireRate')}: ${wDrop.fireRate}/s (${fmtDelta(rateDiff)}) · ${i18n.t('ui.hud.weaponCompareEnergy')}: ${wDrop.energyCost} (${fmtDelta(nrgDiff, true)})`;
+  const statsLine2 = `${i18n.t('ui.hud.weaponCompareCrit')}: ${Math.round(wDrop.critChance * 100)}% · ${i18n.t('ui.tooltip.element')}: ${i18n.elementName(wDrop.element)} · ${i18n.getRarityLabel(wDrop.rarity)}`;
   const descLine = `${i18n.getWeaponText(wDrop.id).desc}`;
 
-  const body = ui.add.text(px + 12, py + 26, [statsLine1, statsLine2, descLine].join('\n'), {
-    fontFamily: '"Be Vietnam Pro", sans-serif',
-    fontSize: '8.9px',
-    fontStyle: '700',
-    color: PALETTE.BONE_WHITE,
-    stroke: PALETTE.INK_DARK,
-    strokeThickness: 2.2,
-    lineSpacing: 3,
-    wordWrap: { width: pw - 24 },
-    resolution: textRes,
-  });
-  const tipText = ui.add.text(px + 12, py + ph - 19, i18n.t('ui.tooltip.firstPickupHint'), {
-    fontFamily: '"Be Vietnam Pro", sans-serif',
-    fontSize: '8.3px',
-    fontStyle: '700',
-    color: PALETTE.CYAN_FROST,
-    stroke: PALETTE.INK_DARK,
-    strokeThickness: 2,
-    resolution: textRes,
-  });
+  const body = ui.add.text(
+    px + 12,
+    py + 25,
+    [statsLine1, statsLine2, descLine].join('\n'),
+    createUiTextStyle({
+      fontPxAt1080p: 13,
+      weight: 600,
+      color: PALETTE.BONE_WHITE,
+      wordWrapWidth: pw - 24,
+      resolution: textRes,
+    }),
+  );
+
+  const tipText = ui.add.text(
+    px + 12,
+    py + ph - 18,
+    i18n.t('ui.tooltip.firstPickupHint'),
+    createUiTextStyle({
+      fontPxAt1080p: 13,
+      weight: 700,
+      color: PALETTE.CYAN_FROST,
+      resolution: textRes,
+    }),
+  );
   this.weaponCompareContainer.add([body, tipText]);
 }
 
@@ -622,29 +666,35 @@ export function updateEmoteWheelHudImpl(this: GameScene): void {
   this.emoteWheelContainer.removeAll(true);
   if (!showWheel) return;
 
-  const textRes = TextureBaker.getBakeScale();
+  const textRes = computeUiTextResolution(
+    typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1,
+    ui.cameras?.main?.zoom || 2,
+    this.currentHudUiScale || 1,
+  );
   const isEn = i18n.getLocale() === 'en';
   const cx = 480;
   const cy = 270;
 
   const bg = ui.add.graphics();
-  bg.fillStyle(hexToNum(PALETTE.INK_DARK), 0.72);
-  bg.lineStyle(2, hexToNum(PALETTE.SOLAR_GOLD), 0.85);
+  bg.fillStyle(UI_THEME.panelBgDark, 0.85);
+  bg.lineStyle(2, hexToNum(PALETTE.SOLAR_GOLD), 0.9);
   bg.fillCircle(cx, cy, 44);
   bg.strokeCircle(cx, cy, 44);
   this.emoteWheelContainer.add(bg);
 
   const centerTxt = ui.add
-    .text(cx, cy, isEn ? '[T] EMOTE' : '[T] BIỂU CẢM', {
-      fontFamily: '"Be Vietnam Pro", sans-serif',
-      fontSize: '9.5px',
-      fontStyle: '800',
-      color: PALETTE.SOLAR_GOLD,
-      stroke: PALETTE.INK_DARK,
-      strokeThickness: 3,
-      align: 'center',
-      resolution: textRes,
-    })
+    .text(
+      cx,
+      cy,
+      isEn ? '[T] EMOTE' : '[T] BIỂU CẢM',
+      createUiTextStyle({
+        fontPxAt1080p: 14,
+        weight: 800,
+        color: PALETTE.SOLAR_GOLD,
+        align: 'center',
+        resolution: textRes,
+      }),
+    )
     .setOrigin(0.5);
   this.emoteWheelContainer.add(centerTxt);
 
@@ -662,28 +712,26 @@ export function updateEmoteWheelHudImpl(this: GameScene): void {
     const c = cards[i]!;
     const isHovered = this.emoteWheelHoveredId === c.id;
     const cardG = ui.add.graphics();
-    cardG.fillStyle(
-      hexToNum(isHovered ? PALETTE.SLATE_MID : PALETTE.INK_DEEP),
-      isHovered ? 0.98 : 0.9,
-    );
-    cardG.lineStyle(
-      isHovered ? 2.5 : 2,
-      hexToNum(isHovered ? PALETTE.SOLAR_GOLD : PALETTE.CYAN_FROST),
-      1,
-    );
-    cardG.fillRoundedRect(c.x - cardW / 2, c.y - cardH / 2, cardW, cardH, 8);
-    cardG.strokeRoundedRect(c.x - cardW / 2, c.y - cardH / 2, cardW, cardH, 8);
+    drawStyledPanel(cardG, c.x - cardW / 2, c.y - cardH / 2, cardW, cardH, {
+      fillColor: isHovered ? UI_THEME.panelBgElevated : UI_THEME.panelBgDark,
+      fillAlpha: isHovered ? 0.96 : 0.88,
+      borderColor: hexToNum(isHovered ? PALETTE.SOLAR_GOLD : PALETTE.CYAN_FROST),
+      borderWidth: isHovered ? 2.2 : 1.5,
+      radius: UI_THEME.panelRadius.md,
+    });
 
     const txt = ui.add
-      .text(c.x, c.y, `[${c.id}] ${i18n.emoteText(c.id)}`, {
-        fontFamily: '"Be Vietnam Pro", sans-serif',
-        fontSize: '10.5px',
-        fontStyle: '800',
-        color: isHovered ? PALETTE.SOLAR_GOLD : PALETTE.BONE_WHITE,
-        stroke: PALETTE.INK_DARK,
-        strokeThickness: 2.8,
-        resolution: textRes,
-      })
+      .text(
+        c.x,
+        c.y,
+        `[${c.id}] ${i18n.emoteText(c.id)}`,
+        createUiTextStyle({
+          fontPxAt1080p: 15,
+          weight: 800,
+          color: isHovered ? PALETTE.SOLAR_GOLD : PALETTE.BONE_WHITE,
+          resolution: textRes,
+        }),
+      )
       .setOrigin(0.5);
 
     this.emoteWheelContainer.add([cardG, txt]);

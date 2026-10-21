@@ -1,5 +1,6 @@
-import { WORLD_VIEW_HEIGHT, WORLD_VIEW_WIDTH } from '@ashen-pact/shared';
+import { clamp, WORLD_VIEW_HEIGHT, WORLD_VIEW_WIDTH } from '@ashen-pact/shared';
 import type Phaser from 'phaser';
+import { easeOutBack } from '../art/easing.js';
 import { hexToNum, PALETTE } from '../art/palette.js';
 import { TextureBaker } from '../art/texture-baker.js';
 import { getVisualQueryConfig } from '../core/visual-query.js';
@@ -29,6 +30,9 @@ export interface PooledDamageText {
   active: boolean;
   x: number;
   y: number;
+  originX?: number;
+  originY?: number;
+  cellSlotIndex?: number;
   vx: number;
   vy: number;
   age: number;
@@ -187,6 +191,7 @@ export function initCombatFxPools(
         stroke: PALETTE.INK_DARK,
         strokeThickness: 3.5,
         resolution: popupRes,
+        padding: { top: 4, bottom: 3, left: 2, right: 2 },
       })
       .setOrigin(0.5);
     text.setVisible(false);
@@ -425,7 +430,8 @@ export function update(this: CombatFxManager, dtSec: number, camView?: Phaser.Ge
     this.lightningGraphics.strokePath();
   }
 
-  // 5. Update pooled damage numbers
+  // 5. Update pooled damage numbers & coalesced reaction banner timer
+  this.tickReactionBanner(dtSec);
   for (let i = 0; i < this.damagePool.length; i++) {
     const d = this.damagePool[i]!;
     if (!d.active) continue;
@@ -443,10 +449,93 @@ export function update(this: CombatFxManager, dtSec: number, camView?: Phaser.Ge
     d.y += d.vy * dtSec;
 
     d.text.setPosition(d.x, d.y);
-    const popScale = progress < 0.18 ? 1.25 - (progress / 0.18) * 0.25 : 1.0;
-    d.text.setScale(d.baseScale * popScale);
+    d.text.setScale(computePopupScalePop(d.age, d.ttl, d.baseScale));
     d.text.setAlpha(progress > 0.65 ? 1 - (progress - 0.65) / 0.35 : 1);
   }
+}
+
+export function computePopupScalePop(ageSec: number, ttlSec: number, baseScale = 1): number {
+  const safeTtl = Math.max(0.1, ttlSec);
+  const progress = clamp(ageSec / safeTtl, 0, 1);
+  if (progress < 0.22) {
+    const t = progress / 0.22;
+    const pop = 0.72 + easeOutBack(t) * 0.28;
+    return baseScale * pop;
+  }
+  return baseScale;
+}
+
+export interface SpatialCellPopupResolution {
+  cellX: number;
+  cellY: number;
+  activeInCell: number;
+  slotIndex: number;
+  staggerOffsetY: number;
+  evictIndex: number | null;
+}
+
+export function resolveSpatialPopupCellSlot(
+  pool: ReadonlyArray<{
+    active: boolean;
+    x: number;
+    y: number;
+    originX?: number;
+    originY?: number;
+    cellSlotIndex?: number;
+    age: number;
+  }>,
+  x: number,
+  y: number,
+  cellSize = 120,
+  maxPerCell = 3,
+): SpatialCellPopupResolution {
+  const safeCell = Math.max(16, cellSize);
+  const cellX = Math.floor(x / safeCell);
+  const cellY = Math.floor(y / safeCell);
+  let activeInCell = 0;
+  let oldestAge = -1;
+  let evictIndex: number | null = null;
+  let evictedSlotIndex: number | undefined;
+  const usedSlots = new Set<number>();
+
+  for (let i = 0; i < pool.length; i += 1) {
+    const item = pool[i]!;
+    if (!item.active) continue;
+    const ix = item.originX ?? item.x;
+    const iy = item.originY ?? item.y;
+    if (Math.floor(ix / safeCell) === cellX && Math.floor(iy / safeCell) === cellY) {
+      activeInCell += 1;
+      if (item.cellSlotIndex !== undefined) {
+        usedSlots.add(item.cellSlotIndex);
+      }
+      if (item.age > oldestAge) {
+        oldestAge = item.age;
+        evictIndex = i;
+        evictedSlotIndex = item.cellSlotIndex;
+      }
+    }
+  }
+
+  let slotIndex = Math.min(maxPerCell - 1, activeInCell);
+  if (activeInCell >= maxPerCell && evictedSlotIndex !== undefined) {
+    slotIndex = evictedSlotIndex;
+  } else {
+    for (let s = 0; s < maxPerCell; s += 1) {
+      if (!usedSlots.has(s)) {
+        slotIndex = s;
+        break;
+      }
+    }
+  }
+
+  return {
+    cellX,
+    cellY,
+    activeInCell,
+    slotIndex,
+    staggerOffsetY: slotIndex * 14,
+    evictIndex: activeInCell >= maxPerCell ? evictIndex : null,
+  };
 }
 
 export function getActiveDamagePopupCount(this: CombatFxManager): number {
@@ -497,7 +586,17 @@ export function acquireParticleSlot(this: CombatFxManager): PooledParticle | nul
   return null;
 }
 
-export function acquireDamageSlot(this: CombatFxManager): PooledDamageText | null {
+export function acquireDamageSlot(
+  this: CombatFxManager,
+  targetX?: number,
+  targetY?: number,
+): PooledDamageText | null {
+  if (targetX !== undefined && targetY !== undefined) {
+    const res = resolveSpatialPopupCellSlot(this.damagePool, targetX, targetY, 120, 3);
+    if (res.evictIndex !== null) {
+      return this.damagePool[res.evictIndex] ?? null;
+    }
+  }
   for (let i = 0; i < this.damagePool.length; i++) {
     const slot = this.damagePool[i]!;
     if (!slot.active) return slot;

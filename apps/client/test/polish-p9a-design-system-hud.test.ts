@@ -1,14 +1,24 @@
 import type Phaser from 'phaser';
 import { describe, expect, it, vi } from 'vitest';
 import { ENV_PALETTE, hexToNum } from '../src/art/palette.js';
+import {
+  type CoalescedReactionBannerState,
+  coalesceElementalReaction,
+  computePopupScalePop,
+  resolveSpatialPopupCellSlot,
+} from '../src/fx/combat-fx.js';
 import { clampUiScale as clampUiScaleFromFx } from '../src/fx/graphics-settings.js';
+import { shouldShowOffscreenEnemyArrows } from '../src/scenes/game-scene/hud-qol-and-minimap.js';
 import {
   computeCircularCooldownGeometry,
   computeKeyChipMetrics,
+  computeOffscreenArrowPose,
   computeSegmentedBarGeometry,
   drawCircularCooldown,
   drawKeyChip,
   drawMiniCharacterPortrait,
+  drawOffscreenEnemyArrow,
+  drawPlayerHitDirectionArc,
   drawSegmentedBar,
   drawStyledPanel,
   drawVectorHudIcon,
@@ -308,6 +318,131 @@ describe('Phase P9a — Design System, Typography & HUD Primitives', () => {
         drawMiniCharacterPortrait(mockGraphics, charId, 50, 50, 10);
       }
       expect(mockGraphics.strokeCircle).toHaveBeenCalled();
+    });
+  });
+
+  describe('Coalesced reaction popups (0.4s window), 120px cell cap (<= 3) & combat QoL indicators', () => {
+    it('coalesces same-type elemental reactions within a 0.4s window into "HƠI NƯỚC ×3"', () => {
+      let state: CoalescedReactionBannerState | null = null;
+
+      state = coalesceElementalReaction(state, 'vaporize', 24, false, 0.4);
+      expect(state.count).toBe(1);
+      expect(state.totalDamage).toBe(24);
+      expect(state.label).toBe('HƠI NƯỚC');
+
+      state.windowTimerSec = 0.25;
+      state = coalesceElementalReaction(state, 'vaporize', 24, false, 0.4);
+      expect(state.count).toBe(2);
+      expect(state.label).toBe('HƠI NƯỚC ×2');
+
+      state.windowTimerSec = 0.22;
+      state = coalesceElementalReaction(state, 'vaporize', 24, true, 0.4);
+      expect(state.count).toBe(3);
+      expect(state.totalDamage).toBe(72);
+      expect(state.isTeamCombo).toBe(true);
+      expect(state.label).toBe('HƠI NƯỚC ×3');
+
+      // After > 0.4s window expires (windowTimerSec === 0), count resets to 1
+      state.windowTimerSec = 0;
+      state = coalesceElementalReaction(state, 'vaporize', 30, false, 0.4);
+      expect(state.count).toBe(1);
+      expect(state.totalDamage).toBe(30);
+      expect(state.label).toBe('HƠI NƯỚC');
+    });
+
+    it('caps active damage popups at <= 3 per 120px spatial cell and staggers vertical offset by 14px', () => {
+      const activePopups: Array<{
+        active: boolean;
+        x: number;
+        y: number;
+        originX: number;
+        originY: number;
+        cellSlotIndex: number;
+        age: number;
+      }> = [];
+
+      for (let i = 0; i < 4; i++) {
+        const spawnX = 520 + i * 8;
+        const spawnY = 260;
+        const placement = resolveSpatialPopupCellSlot(activePopups, spawnX, spawnY, 120, 3);
+        if (placement.evictIndex !== null) {
+          activePopups[placement.evictIndex]!.active = false;
+        }
+        activePopups.push({
+          active: true,
+          x: spawnX,
+          y: spawnY - placement.staggerOffsetY,
+          originX: spawnX,
+          originY: spawnY,
+          cellSlotIndex: placement.slotIndex,
+          age: (4 - i) * 0.1,
+        });
+      }
+
+      const activeInCell = activePopups.filter((p) => p.active);
+      expect(activeInCell).toHaveLength(3);
+      const distinctY = new Set(activeInCell.map((p) => Math.round(p.y)));
+      expect(distinctY.size).toBe(3);
+    });
+
+    it('evaluates easeOutBack scale-pop curve for normal vs crit popups', () => {
+      const normalStart = computePopupScalePop(0.0, 0.62, 1.0);
+      const normalPeak = computePopupScalePop(0.08, 0.62, 1.0);
+      const critPeak = computePopupScalePop(0.08, 0.62, 1.32);
+      const settled = computePopupScalePop(0.35, 0.62, 1.0);
+
+      expect(normalStart).toBeCloseTo(0.72, 2);
+      expect(normalPeak).toBeGreaterThan(1.0);
+      expect(critPeak).toBeGreaterThan(normalPeak * 1.25);
+      expect(settled).toBeCloseTo(1.0, 2);
+    });
+
+    it('shows off-screen enemy directional arrows only when 1 <= aliveNonDummyEnemies <= 3 and clamps to viewport edge', () => {
+      expect(shouldShowOffscreenEnemyArrows(0)).toBe(false);
+      expect(shouldShowOffscreenEnemyArrows(1)).toBe(true);
+      expect(shouldShowOffscreenEnemyArrows(2)).toBe(true);
+      expect(shouldShowOffscreenEnemyArrows(3)).toBe(true);
+      expect(shouldShowOffscreenEnemyArrows(4)).toBe(false);
+
+      const pose = computeOffscreenArrowPose({
+        targetWorldX: 1120,
+        targetWorldY: 270,
+        camMidX: 480,
+        camMidY: 270,
+        viewX: 0,
+        viewY: 0,
+        viewW: 960,
+        viewH: 540,
+        minScreenX: 36,
+        maxScreenX: 924,
+        minScreenY: 42,
+        maxScreenY: 498,
+      });
+      expect(pose.isOffscreen).toBe(true);
+      expect(pose.ax).toBeCloseTo(924, 2);
+      expect(pose.ay).toBeCloseTo(270, 2);
+      expect(pose.angleRad).toBeCloseTo(0, 3);
+
+      const mockGraphics = {
+        fillStyle: vi.fn().mockReturnThis(),
+        fillCircle: vi.fn().mockReturnThis(),
+        fillTriangle: vi.fn().mockReturnThis(),
+        lineStyle: vi.fn().mockReturnThis(),
+        beginPath: vi.fn().mockReturnThis(),
+        moveTo: vi.fn().mockReturnThis(),
+        lineTo: vi.fn().mockReturnThis(),
+        closePath: vi.fn().mockReturnThis(),
+        fillPath: vi.fn().mockReturnThis(),
+        arc: vi.fn().mockReturnThis(),
+        strokePath: vi.fn().mockReturnThis(),
+      } as unknown as Phaser.GameObjects.Graphics;
+
+      drawOffscreenEnemyArrow(mockGraphics, pose.ax, pose.ay, pose.angleRad, true, 1.0);
+      expect(mockGraphics.fillPath).toHaveBeenCalled();
+      expect(mockGraphics.strokePath).toHaveBeenCalled();
+
+      drawPlayerHitDirectionArc(mockGraphics, 480, 270, 0.35, 0.85, 1.0);
+      expect(mockGraphics.arc).toHaveBeenCalled();
     });
   });
 });

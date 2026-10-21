@@ -15,7 +15,8 @@ export type HudVectorIconKind =
   | 'chest'
   | 'portal'
   | 'shrine'
-  | 'merchant';
+  | 'merchant'
+  | 'stairs';
 
 export interface SegmentedBarSegmentRect {
   index: number;
@@ -502,7 +503,150 @@ export function drawVectorHudIcon(
       g.fillRect(cx - r * 0.25, cy - r * 0.64, r * 0.5, r * 0.28);
       break;
     }
+    case 'stairs': {
+      const col = colorNum ?? 0xfacc15;
+      g.fillStyle(col, 1);
+      g.fillRect(cx - r * 0.65, cy + r * 0.2, r * 1.3, r * 0.36);
+      g.fillRect(cx - r * 0.2, cy - r * 0.16, r * 0.85, r * 0.36);
+      g.fillRect(cx + r * 0.25, cy - r * 0.52, r * 0.4, r * 0.36);
+      break;
+    }
   }
+}
+
+export interface OffscreenArrowPose {
+  ax: number;
+  ay: number;
+  angleRad: number;
+  isOffscreen: boolean;
+}
+
+export function computeOffscreenArrowPose(params: {
+  targetWorldX: number;
+  targetWorldY: number;
+  camMidX: number;
+  camMidY: number;
+  viewX: number;
+  viewY: number;
+  viewW: number;
+  viewH: number;
+  minScreenX: number;
+  maxScreenX: number;
+  minScreenY: number;
+  maxScreenY: number;
+  baseCenterW?: number;
+  baseCenterH?: number;
+  edgeBufferWorld?: number;
+}): OffscreenArrowPose {
+  const centerW = params.baseCenterW ?? 480;
+  const centerH = params.baseCenterH ?? 270;
+  const buf = params.edgeBufferWorld ?? 0;
+  const inView =
+    params.targetWorldX >= params.viewX + buf &&
+    params.targetWorldX <= params.viewX + params.viewW - buf &&
+    params.targetWorldY >= params.viewY + buf &&
+    params.targetWorldY <= params.viewY + params.viewH - buf;
+
+  const relX = params.targetWorldX - params.camMidX + centerW;
+  const relY = params.targetWorldY - params.camMidY + centerH;
+  const ax = clamp(relX, params.minScreenX, params.maxScreenX);
+  const ay = clamp(relY, params.minScreenY, params.maxScreenY);
+  const angleRad = Math.atan2(relY - centerH, relX - centerW);
+
+  return {
+    ax,
+    ay,
+    angleRad,
+    isOffscreen: !inView,
+  };
+}
+
+export function drawOffscreenEnemyArrow(
+  g: Phaser.GameObjects.Graphics,
+  ax: number,
+  ay: number,
+  angleRad: number,
+  isElite = false,
+  uiScale = 1,
+): void {
+  const s = clamp(uiScale, 0.8, 1.3);
+  const len = 9.5 * s;
+  const wing = 8.2 * s;
+  const fillCol = isElite ? 0xfacc15 : 0xe84545;
+  const innerCol = isElite ? 0xfef08a : 0xfca5a5;
+
+  const tipX = ax + Math.cos(angleRad) * len;
+  const tipY = ay + Math.sin(angleRad) * len;
+  const leftX = ax + Math.cos(angleRad + 2.42) * wing;
+  const leftY = ay + Math.sin(angleRad + 2.42) * wing;
+  const rightX = ax + Math.cos(angleRad - 2.42) * wing;
+  const rightY = ay + Math.sin(angleRad - 2.42) * wing;
+
+  // Outer dark silhouette
+  g.fillStyle(UI_THEME.inkDeep, 0.9);
+  g.fillCircle(ax, ay, 7.2 * s);
+
+  g.fillStyle(fillCol, 0.96);
+  g.lineStyle(1.8 * s, UI_THEME.inkDark, 1);
+  g.beginPath();
+  g.moveTo(tipX, tipY);
+  g.lineTo(leftX, leftY);
+  g.lineTo(rightX, rightY);
+  g.closePath();
+  g.fillPath();
+  g.strokePath();
+
+  // Inner bright core dot
+  g.fillStyle(innerCol, 0.95);
+  g.fillCircle(ax - Math.cos(angleRad) * 1.5 * s, ay - Math.sin(angleRad) * 1.5 * s, 2.2 * s);
+}
+
+export function drawPlayerHitDirectionArc(
+  g: Phaser.GameObjects.Graphics,
+  cx: number,
+  cy: number,
+  angleRad: number,
+  alpha: number,
+  uiScale = 1,
+): void {
+  const a = clamp(alpha, 0, 1);
+  if (a <= 0.01) return;
+  const s = clamp(uiScale, 0.8, 1.3);
+  const radius = 52 * s;
+  const halfSpan = 0.44;
+  const startAng = angleRad - halfSpan;
+  const endAng = angleRad + halfSpan;
+
+  // Soft outer crimson glow arc
+  g.lineStyle(7.5 * s, 0xdc2626, a * 0.42);
+  g.beginPath();
+  g.arc(cx, cy, radius, startAng, endAng, false);
+  g.strokePath();
+
+  // Sharp core crimson arc
+  g.lineStyle(3.8 * s, 0xe84545, a * 0.95);
+  g.beginPath();
+  g.arc(cx, cy, radius, startAng, endAng, false);
+  g.strokePath();
+
+  // Inner bright highlight rim
+  g.lineStyle(1.4 * s, 0xfca5a5, a * 0.9);
+  g.beginPath();
+  g.arc(cx, cy, radius - 1.8 * s, angleRad - halfSpan * 0.65, angleRad + halfSpan * 0.65, false);
+  g.strokePath();
+
+  // Directional outer spike chevron at center of arc
+  const tipDist = radius + 7.5 * s;
+  const baseDist = radius + 1.5 * s;
+  const tipX = cx + Math.cos(angleRad) * tipDist;
+  const tipY = cy + Math.sin(angleRad) * tipDist;
+  const leftX = cx + Math.cos(angleRad - 0.14) * baseDist;
+  const leftY = cy + Math.sin(angleRad - 0.14) * baseDist;
+  const rightX = cx + Math.cos(angleRad + 0.14) * baseDist;
+  const rightY = cy + Math.sin(angleRad + 0.14) * baseDist;
+
+  g.fillStyle(0xe84545, a * 0.98);
+  g.fillTriangle(tipX, tipY, leftX, leftY, rightX, rightY);
 }
 
 export function drawMiniCharacterPortrait(

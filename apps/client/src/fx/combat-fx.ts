@@ -6,7 +6,7 @@ import {
   i18n,
   type PropKind,
 } from '@ashen-pact/shared';
-import Phaser from 'phaser';
+import type Phaser from 'phaser';
 import { hexToNum, PALETTE, PLAYER_SLOT_COLORS } from '../art/palette.js';
 import { RIG_DEFS_BY_ID } from '../art/rig-defs.js';
 import { TextureBaker } from '../art/texture-baker.js';
@@ -16,6 +16,7 @@ import {
   acquireDamageSlot,
   acquireParticleSlot,
   computeCameraShakeOffset,
+  computePopupScalePop,
   getActiveAfterimageCount,
   getActiveAmbientCount,
   getActiveDamagePopupCount,
@@ -29,10 +30,62 @@ import {
   type PooledLightningArc,
   type PooledParticle,
   refreshResolution,
+  resolveSpatialPopupCellSlot,
   update,
 } from './combat-fx-pools.js';
 
 export * from './combat-fx-pools.js';
+
+export interface CoalescedReactionBannerState {
+  reaction: ElementalReactionId;
+  count: number;
+  totalDamage: number;
+  isTeamCombo: boolean;
+  windowTimerSec: number;
+  displayTimerSec: number;
+  label: string;
+  colorHex: string;
+}
+
+export function coalesceElementalReaction(
+  prev: CoalescedReactionBannerState | null,
+  reaction: ElementalReactionId,
+  damage: number,
+  isTeamCombo: boolean,
+  windowSec = 0.4,
+): CoalescedReactionBannerState {
+  const meta = ELEMENTAL_REACTIONS[reaction];
+  const rxText = i18n.getReactionText(reaction);
+  const baseName = (rxText.name || meta?.nameVi || reaction).toUpperCase();
+  const colorHex = meta?.colorHex ?? PALETTE.SOLAR_GOLD;
+
+  if (prev && prev.reaction === reaction && prev.windowTimerSec > 0) {
+    const nextCount = prev.count + 1;
+    const nextDamage = prev.totalDamage + damage;
+    const nextCombo = prev.isTeamCombo || isTeamCombo;
+    return {
+      reaction,
+      count: nextCount,
+      totalDamage: nextDamage,
+      isTeamCombo: nextCombo,
+      windowTimerSec: windowSec,
+      displayTimerSec: 1.6,
+      label: `${baseName} ×${nextCount}`,
+      colorHex,
+    };
+  }
+
+  return {
+    reaction,
+    count: 1,
+    totalDamage: damage,
+    isTeamCombo,
+    windowTimerSec: windowSec,
+    displayTimerSec: 1.6,
+    label: baseName,
+    colorHex,
+  };
+}
 
 /**
  * Object-pooled Combat FX, Decals, Dash Afterimages, Ambient Particles & Game Feel ("Juice") system:
@@ -68,6 +121,7 @@ export class CombatFxManager {
   public totalDamagePopupsSpawned = 0;
   public totalDecalsSpawned = 0;
   public totalAfterimagesSpawned = 0;
+  public activeReactionBanner: CoalescedReactionBannerState | null = null;
 
   constructor(
     scene: Phaser.Scene,
@@ -117,19 +171,19 @@ export class CombatFxManager {
       if (biome === 2) {
         amb.sprite.setTexture('fx_ice_shard');
         amb.sprite.setTint(hexToNum(PALETTE.ICE_WHITE));
-        amb.sprite.setBlendMode(Phaser.BlendModes.NORMAL);
+        amb.sprite.setBlendMode('NORMAL');
         amb.vx = 16 + (i % 5) * 4;
         amb.vy = 22 + (i % 5) * 4;
       } else if (biome === 3) {
         amb.sprite.setTexture('fx_ember_mote');
         amb.sprite.setTint(hexToNum(i % 2 === 0 ? PALETTE.FLAME_ORANGE : PALETTE.SOLAR_GOLD));
-        amb.sprite.setBlendMode(Phaser.BlendModes.ADD);
+        amb.sprite.setBlendMode('ADD');
         amb.vx = 10 + (i % 5) * 3;
         amb.vy = -(22 + (i % 5) * 5);
       } else {
         amb.sprite.setTexture('fx_ambient_leaf');
         amb.sprite.clearTint();
-        amb.sprite.setBlendMode(Phaser.BlendModes.NORMAL);
+        amb.sprite.setBlendMode('NORMAL');
         amb.vx = 16 + (i % 5) * 4;
         amb.vy = 14 + (i % 4) * 3;
       }
@@ -451,68 +505,33 @@ export class CombatFxManager {
       meta?.colorHex ?? PALETTE.SOLAR_GOLD,
     );
 
-    // Count nearby active large popups to stagger vertical height and prevent overlap
-    let nearbyCount = 0;
-    for (let i = 0; i < this.damagePool.length; i++) {
-      const existing = this.damagePool[i]!;
-      if (
-        existing.active &&
-        existing.baseScale >= 1.1 &&
-        Math.abs(existing.x - params.x) < 110 &&
-        Math.abs(existing.y - (params.y - 48)) < 64
-      ) {
-        nearbyCount += 1;
-      }
+    this.totalDamagePopupsSpawned += 1;
+    this.activeReactionBanner = coalesceElementalReaction(
+      this.activeReactionBanner,
+      params.reaction,
+      params.damage,
+      params.isTeamCombo,
+      0.4,
+    );
+  }
+
+  public tickReactionBanner(dtSec: number): void {
+    if (!this.activeReactionBanner) return;
+    this.activeReactionBanner.windowTimerSec = Math.max(
+      0,
+      this.activeReactionBanner.windowTimerSec - dtSec,
+    );
+    this.activeReactionBanner.displayTimerSec = Math.max(
+      0,
+      this.activeReactionBanner.displayTimerSec - dtSec,
+    );
+    if (this.activeReactionBanner.displayTimerSec <= 0) {
+      this.activeReactionBanner = null;
     }
-    const yStagger = nearbyCount * 22;
+  }
 
-    const rxSlot = this.acquireDamageSlot();
-    if (rxSlot) {
-      this.totalDamagePopupsSpawned += 1;
-      rxSlot.active = true;
-      rxSlot.age = 0;
-      rxSlot.ttl = 1.05;
-      rxSlot.x = params.x;
-      rxSlot.y = params.y - 40 - yStagger;
-      rxSlot.vx = 0;
-      rxSlot.vy = -68;
-      rxSlot.baseScale = 1.18;
-
-      const rxText = i18n.getReactionText(params.reaction);
-      const label = `${(rxText.name || meta?.nameVi || params.reaction).toUpperCase()}! +${params.damage}`;
-      rxSlot.text.setText(label);
-      rxSlot.text.setColor(meta?.colorHex ?? PALETTE.SOLAR_GOLD);
-      rxSlot.text.setPosition(rxSlot.x, rxSlot.y);
-      rxSlot.text.setScale(rxSlot.baseScale * 1.2);
-      rxSlot.text.setAlpha(1);
-      rxSlot.text.setVisible(true);
-      rxSlot.text.setActive(true);
-    }
-
-    if (params.isTeamCombo) {
-      const comboSlot = this.acquireDamageSlot();
-      if (comboSlot) {
-        this.totalDamagePopupsSpawned += 1;
-        comboSlot.active = true;
-        comboSlot.age = 0;
-        comboSlot.ttl = 1.25;
-        comboSlot.x = params.x;
-        comboSlot.y = params.y - 64 - yStagger;
-        comboSlot.vx = 0;
-        comboSlot.vy = -74;
-        comboSlot.baseScale = 1.26;
-
-        const comboLabel =
-          i18n.getLocale() === 'en' ? '⚡ TEAM COMBO! +15 EN' : '⚡ ĐỒNG ĐỘI COMBO! +15 NL';
-        comboSlot.text.setText(comboLabel);
-        comboSlot.text.setColor(PALETTE.SOLAR_GOLD);
-        comboSlot.text.setPosition(comboSlot.x, comboSlot.y);
-        comboSlot.text.setScale(comboSlot.baseScale * 1.2);
-        comboSlot.text.setAlpha(1);
-        comboSlot.text.setVisible(true);
-        comboSlot.text.setActive(true);
-      }
-    }
+  public getActiveReactionBanner(): Readonly<CoalescedReactionBannerState> | null {
+    return this.activeReactionBanner;
   }
 
   public spawnDamagePopup(params: {
@@ -525,7 +544,8 @@ export class CombatFxManager {
     element?: ElementType;
   }): void {
     if (!graphicsSettings.getState().showDamageNumbers) return;
-    const slot = this.acquireDamageSlot();
+    const cellRes = resolveSpatialPopupCellSlot(this.damagePool, params.x, params.y, 120, 3);
+    const slot = this.acquireDamageSlot(params.x, params.y);
     if (!slot) return;
 
     this.totalDamagePopupsSpawned += 1;
@@ -535,10 +555,13 @@ export class CombatFxManager {
     slot.active = true;
     slot.age = 0;
     slot.ttl = params.isCrit ? 0.78 : 0.62;
-    slot.x = params.x + fanLane * 8 + (getClientFreezeRandom()() - 0.5) * 4;
-    slot.y = params.y - 16 - Math.abs(fanLane) * 4;
-    slot.vx = fanLane * 18 + (getClientFreezeRandom()() - 0.5) * 10;
-    slot.vy = (params.isCrit ? -78 : -58) - (fanIdx % 2) * 10;
+    slot.originX = params.x;
+    slot.originY = params.y;
+    slot.cellSlotIndex = cellRes.slotIndex;
+    slot.x = params.x + fanLane * 6 + (getClientFreezeRandom()() - 0.5) * 4;
+    slot.y = params.y - 16 - cellRes.staggerOffsetY;
+    slot.vx = fanLane * 14 + (getClientFreezeRandom()() - 0.5) * 8;
+    slot.vy = (params.isCrit ? -72 : -54) - (fanIdx % 2) * 8;
     slot.baseScale = params.isCrit ? 1.32 : 1.0;
 
     let color: string = PALETTE.BONE_WHITE;
@@ -562,7 +585,7 @@ export class CombatFxManager {
     slot.text.setText(label);
     slot.text.setColor(color);
     slot.text.setPosition(slot.x, slot.y);
-    slot.text.setScale(slot.baseScale * 1.25);
+    slot.text.setScale(computePopupScalePop(0, slot.ttl, slot.baseScale));
     slot.text.setAlpha(1);
     slot.text.setVisible(true);
     slot.text.setActive(true);
@@ -871,7 +894,7 @@ export class CombatFxManager {
     return acquireParticleSlot.call(this);
   }
 
-  public acquireDamageSlot(): PooledDamageText | null {
-    return acquireDamageSlot.call(this);
+  public acquireDamageSlot(targetX?: number, targetY?: number): PooledDamageText | null {
+    return acquireDamageSlot.call(this, targetX, targetY);
   }
 }

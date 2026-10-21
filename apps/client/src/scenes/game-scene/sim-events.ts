@@ -99,6 +99,11 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
           enemyHitSfxY = ev.y;
         } else {
           this.playerRig?.triggerHitFlash(0.16);
+          if (Math.hypot(ev.knockbackX, ev.knockbackY) > 0.01) {
+            this.triggerPlayerHitDirectionIndicator(Math.atan2(-ev.knockbackY, -ev.knockbackX));
+          } else {
+            this.triggerPlayerHitDirectionIndicator(-Math.PI * 0.5);
+          }
           zzfx.play('player_hurt', ev.x, this.camFocusX, ev.y, this.camFocusY);
         }
         break;
@@ -326,6 +331,7 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
         break;
       }
       case 'room_cleared': {
+        this.triggerRoomClearedBanner();
         zzfx.play('door_open');
         break;
       }

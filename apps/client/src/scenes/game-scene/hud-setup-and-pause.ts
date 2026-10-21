@@ -3,6 +3,7 @@ import {
   MAX_WEAPON_SLOTS,
   VIETNAMESE_VERIFICATION_STRING,
   WEAPONS,
+  WORLD_VIEW_HEIGHT,
   WORLD_VIEW_WIDTH,
 } from '@ashen-pact/shared';
 import { hexToNum, PALETTE } from '../../art/palette.js';
@@ -10,9 +11,11 @@ import { TextureBaker } from '../../art/texture-baker.js';
 import { musicManager } from '../../audio/music-synth.js';
 import { zzfx } from '../../audio/zzfx.js';
 import { isEffectiveDebugUiEnabled } from '../../core/debug-flag.js';
+import { drawStyledPanel } from '../../ui/components/hud-primitives.js';
 import { initGlobalDebugState } from '../../ui/debug-overlay.js';
-import { graphicsSettings } from '../../ui/graphics-settings.js';
+import { clampUiScale, graphicsSettings } from '../../ui/graphics-settings.js';
 import { ModalOverlayManager } from '../../ui/settings-modal.js';
+import { computeUiTextResolution, createUiTextStyle, UI_THEME } from '../../ui/theme.js';
 import { type GameScene } from '../GameScene.js';
 
 export function syncHudDebugVisibility(scene: GameScene): void {
@@ -25,18 +28,49 @@ export function syncHudDebugVisibility(scene: GameScene): void {
     : isEn
       ? 'WASD: Move · Mouse: Shoot/Skill · Shift: Dash · E: Interact · Tab: Map'
       : 'WASD: Chạy · Chuột: Bắn/Kỹ năng · Shift: Dash · E: Tương tác · Tab: Bản đồ';
-  if (scene.statusText && scene.statusText.text !== nextStatus) {
-    scene.statusText.setText(nextStatus);
+
+  if (scene.statusText) {
+    if (scene.statusText.text !== nextStatus) {
+      scene.statusText.setText(nextStatus);
+    }
+    if (scene.statusText.visible !== showDebug) {
+      scene.statusText.setVisible(showDebug);
+    }
   }
-  for (const btn of [scene.elementBtnText, scene.qualityBtnText, scene.galleryBtnText]) {
+
+  if (scene.statsLineText && scene.statsLineText.visible !== showDebug) {
+    scene.statsLineText.setVisible(showDebug);
+  }
+
+  for (const btn of [
+    scene.elementBtnText,
+    scene.qualityBtnText,
+    scene.galleryBtnText,
+    scene.menuBtnText,
+    scene.pauseBtnText,
+  ]) {
     if (!btn) continue;
     if (btn.visible !== showDebug) {
       btn.setVisible(showDebug);
-      if (showDebug) {
+      if (showDebug && btn !== scene.pauseBtnText) {
         btn.setInteractive({ useHandCursor: true });
-      } else {
+      } else if (!showDebug) {
         btn.disableInteractive();
       }
+    }
+  }
+
+  if (scene.pauseBtnBg && scene.pauseBtnBg.visible !== showDebug) {
+    scene.pauseBtnBg.setVisible(showDebug);
+  }
+  if (scene.pauseBtnHit) {
+    if (scene.pauseBtnHit.visible !== showDebug) {
+      scene.pauseBtnHit.setVisible(showDebug);
+    }
+    if (showDebug) {
+      scene.pauseBtnHit.setInteractive({ useHandCursor: true });
+    } else {
+      scene.pauseBtnHit.disableInteractive();
     }
   }
 }
@@ -44,36 +78,45 @@ export function syncHudDebugVisibility(scene: GameScene): void {
 export function applyHudEdgeAnchors(scene: GameScene): void {
   const padX = scene.hudPadX;
   const padY = scene.hudPadY;
+  const uiScale = clampUiScale(graphicsSettings.getState().uiScale);
+  scene.currentHudUiScale = uiScale;
 
-  if (scene.hudTopBarBg) {
-    scene.hudTopBarBg.clear();
-    scene.hudTopBarBg.fillStyle(hexToNum(PALETTE.INK_DARK), 0.72);
-    scene.hudTopBarBg.fillRect(-padX, -padY, WORLD_VIEW_WIDTH + padX * 2, 66);
-    scene.hudTopBarBg.lineStyle(1.5, hexToNum(PALETTE.SLATE_MID), 0.75);
-    scene.hudTopBarBg.lineBetween(-padX, 66 - padY, WORLD_VIEW_WIDTH + padX, 66 - padY);
-  }
+  // Normal gameplay has no full-width top/bottom dark bars so arena lighting breathes to the edges
+  scene.hudTopBarBg?.clear();
+  scene.hudBottomBarBg?.clear();
 
-  if (scene.hudBottomBarBg) {
-    scene.hudBottomBarBg.clear();
-    scene.hudBottomBarBg.fillStyle(hexToNum(PALETTE.INK_DARK), 0.78);
-    scene.hudBottomBarBg.fillRect(-padX, 482 + padY, WORLD_VIEW_WIDTH + padX * 2, 58);
-    scene.hudBottomBarBg.lineStyle(1.5, hexToNum(PALETTE.SLATE_MID), 0.8);
-    scene.hudBottomBarBg.lineBetween(-padX, 482 + padY, WORLD_VIEW_WIDTH + padX, 482 + padY);
-  }
+  scene.hudTopLeftContainer?.setPosition(-padX, -padY).setScale(uiScale);
+  scene.coopHudContainer?.setPosition(-padX, -padY + Math.round(92 * uiScale)).setScale(uiScale);
+  scene.hudTopCenterContainer?.setPosition(WORLD_VIEW_WIDTH * 0.5, -padY).setScale(uiScale);
+  scene.hudTopRightContainer?.setPosition(WORLD_VIEW_WIDTH + padX, -padY).setScale(uiScale);
+  scene.hudBottomRightContainer
+    ?.setPosition(WORLD_VIEW_WIDTH + padX, WORLD_VIEW_HEIGHT + padY)
+    .setScale(uiScale);
+  scene.hudBottomCenterContainer
+    ?.setPosition(WORLD_VIEW_WIDTH * 0.5, WORLD_VIEW_HEIGHT + padY)
+    .setScale(uiScale);
+  scene.hubPreviewContainer
+    ?.setPosition(-padX, WORLD_VIEW_HEIGHT + padY)
+    .setScale(uiScale);
 
-  scene.hudTopLeftContainer?.setPosition(-padX, -padY);
-  scene.hudTopCenterContainer?.setPosition(0, -padY);
-  scene.hudTopRightContainer?.setPosition(padX, -padY);
-  scene.hudBottomCenterContainer?.setPosition(0, padY);
-  scene.coopHudContainer?.setPosition(-padX, -padY);
-  scene.hubPreviewContainer?.setPosition(-padX, padY);
+  // Screen-perimeter offscreen arrows and screen-centered hit arcs remain on unscaled HudScene root
+  scene.offscreenArrowGraphics?.setPosition(0, 0).setScale(1);
+  scene.playerHitArcGraphics?.setPosition(0, 0).setScale(1);
+
   scene.lastMinimapHash = '';
+  scene.lastHudWeaponHash = '';
+  scene.lastHudHp = -1;
+  scene.lastCoopHudHash = '';
 }
 
 export function buildVectorHudImpl(this: GameScene): void {
   const ui = this.uiScene;
-  const textRes = TextureBaker.getBakeScale();
-  const invBake = 1 / textRes;
+  const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
+  const zoom = ui.cameras?.main?.zoom || 2;
+  const uiScale = clampUiScale(graphicsSettings.getState().uiScale);
+  this.currentHudUiScale = uiScale;
+  const textRes = computeUiTextResolution(dpr, zoom, uiScale);
+  const invBake = 1 / TextureBaker.getBakeScale();
 
   this.hudContainer = ui.add.container(0, 0).setDepth(2000);
 
@@ -82,76 +125,129 @@ export function buildVectorHudImpl(this: GameScene): void {
   this.hudTopLeftContainer = ui.add.container(0, 0);
   this.hudTopCenterContainer = ui.add.container(0, 0);
   this.hudTopRightContainer = ui.add.container(0, 0);
+  this.hudBottomRightContainer = ui.add.container(0, 0);
   this.hudBottomCenterContainer = ui.add.container(0, 0);
 
-  // 1. Top-Left HUD Bars & Stats
+  // 1. Top-Left Player Status Card (Portrait + 3 Segmented Bars + Gold Coin Pill + Status Line)
   this.hudBarsGraphics = ui.add.graphics();
   this.hudTopLeftContainer.add(this.hudBarsGraphics);
 
-  const makeBarText = (x: number, y: number, initText: string) => {
-    const t = ui.add.text(x, y, initText, {
-      fontFamily: '"Be Vietnam Pro", sans-serif',
-      fontSize: '11px',
-      fontStyle: '800',
-      color: PALETTE.BONE_WHITE,
-      stroke: PALETTE.INK_DARK,
-      strokeThickness: 3,
-      resolution: textRes,
-    });
+  const makeStatLabel = (x: number, y: number, initText: string, color: string = PALETTE.BONE_WHITE) => {
+    const t = ui.add
+      .text(
+        x,
+        y,
+        initText,
+        createUiTextStyle({
+          fontPxAt1080p: 13,
+          weight: 800,
+          color,
+          resolution: textRes,
+        }),
+      )
+      .setOrigin(0, 0.5);
     this.textObjects.push(t);
     this.hudTopLeftContainer?.add(t);
     return t;
   };
 
-  this.hpLabelText = makeBarText(28, 15, 'HP 8/8');
-  this.armorLabelText = makeBarText(162, 15, 'GIÁP 6/6');
-  this.energyLabelText = makeBarText(296, 15, 'NL 150/150');
+  this.playerClassLabelText = makeStatLabel(20, 68, 'Thiết Vệ', PALETTE.SILVER_BRIGHT);
+  this.hpLabelText = makeStatLabel(168, 21, '8/8', PALETTE.BONE_WHITE);
+  this.armorLabelText = makeStatLabel(168, 34.5, '6/6', PALETTE.SILVER_BRIGHT);
+  this.energyLabelText = makeStatLabel(168, 48, '150/150', PALETTE.CYAN_FROST);
 
+  this.goldLabelText = ui.add
+    .text(
+      134,
+      68,
+      '0 Vàng',
+      createUiTextStyle({
+        fontPxAt1080p: 14,
+        weight: 800,
+        color: UI_THEME.status.goldBrightHex,
+        resolution: textRes,
+      }),
+    )
+    .setOrigin(0, 0.5);
+  this.textObjects.push(this.goldLabelText);
+  this.hudTopLeftContainer.add(this.goldLabelText);
+
+  this.statusLineText = ui.add
+    .text(
+      14,
+      90,
+      '',
+      createUiTextStyle({
+        fontPxAt1080p: 13,
+        weight: 700,
+        color: PALETTE.CYAN_FROST,
+        resolution: textRes,
+      }),
+    )
+    .setOrigin(0, 0.5)
+    .setVisible(false);
+  this.textObjects.push(this.statusLineText);
+  this.hudTopLeftContainer.add(this.statusLineText);
+
+  // Debug-only telemetry & keybind reminder lines (visible only when ?debug=1)
   this.statsLineText = ui.add.text(
-    432,
-    16.5,
+    224,
+    12,
     isEffectiveDebugUiEnabled(this.coopMode !== 'solo')
       ? `DPS: 0.0 · Đợt 1 | ${VIETNAMESE_VERIFICATION_STRING}`
-      : 'Tầng 1/2 (Khởi Đầu) · Vàng 0 · Đợt 1 · Dash Sẵn Sàng · KN Sẵn Sàng',
-    {
-      fontFamily: '"Be Vietnam Pro", sans-serif',
-      fontSize: '9px',
-      fontStyle: '700',
+      : 'Tầng 1/2 (Khởi Đầu) · Vàng 0 · Đợt 1',
+    createUiTextStyle({
+      fontPxAt1080p: 13,
+      weight: 700,
       color: PALETTE.SOLAR_GOLD,
-      stroke: PALETTE.INK_DARK,
-      strokeThickness: 2.5,
       resolution: textRes,
-    },
+    }),
   );
   this.textObjects.push(this.statsLineText);
   this.hudTopLeftContainer.add(this.statsLineText);
 
   this.statusText = ui.add.text(
-    24,
-    44,
+    224,
+    26,
     'WASD: Chạy · Chuột: Bắn/Khiên · Shift: Dash · R: Ng.Tố · G: Đồ Họa · F1-F7: Debug',
-    {
-      fontFamily: '"Be Vietnam Pro", sans-serif',
-      fontSize: '10.5px',
-      fontStyle: '600',
+    createUiTextStyle({
+      fontPxAt1080p: 13,
+      weight: 600,
       color: PALETTE.CYAN_FROST,
       resolution: textRes,
-    },
+    }),
   );
   this.textObjects.push(this.statusText);
   this.hudTopLeftContainer.add(this.statusText);
 
-  // 2. Top-Right HUD Buttons & Invite Panel
-  this.elementBtnText = ui.add
-    .text(490, 42, '[R] Ng.Tố: Vật Lý', {
-      fontFamily: '"Be Vietnam Pro", sans-serif',
-      fontSize: '10.5px',
-      fontStyle: '700',
-      color: PALETTE.LIME_GLOW,
-      stroke: PALETTE.INK_DARK,
-      strokeThickness: 3,
+  // 2. Top-Right Minimap, Floor/Biome Badge, Invite Panel & Debug Toolbar
+  this.minimapGraphics = ui.add.graphics();
+  this.minimapTitleText = ui.add.text(
+    -164,
+    124,
+    'Tầng 1-1 · Rừng Cổ Mục Nát',
+    createUiTextStyle({
+      fontPxAt1080p: 13,
+      weight: 700,
+      color: PALETTE.BONE_WHITE,
       resolution: textRes,
-    })
+    }),
+  );
+  this.textObjects.push(this.minimapTitleText);
+  this.hudTopRightContainer.add([this.minimapGraphics, this.minimapTitleText]);
+
+  this.elementBtnText = ui.add
+    .text(
+      -460,
+      40,
+      '[R] Ng.Tố: Vật Lý',
+      createUiTextStyle({
+        fontPxAt1080p: 13,
+        weight: 700,
+        color: PALETTE.LIME_GLOW,
+        resolution: textRes,
+      }),
+    )
     .setInteractive({ useHandCursor: true });
   this.elementBtnText.on('pointerdown', () => {
     if (!isEffectiveDebugUiEnabled(this.coopMode !== 'solo')) return;
@@ -162,15 +258,17 @@ export function buildVectorHudImpl(this: GameScene): void {
   this.hudTopRightContainer.add(this.elementBtnText);
 
   this.qualityBtnText = ui.add
-    .text(658, 42, '[G] Đồ Họa: CAO', {
-      fontFamily: '"Be Vietnam Pro", sans-serif',
-      fontSize: '10.5px',
-      fontStyle: '700',
-      color: PALETTE.VOLT_YELLOW,
-      stroke: PALETTE.INK_DARK,
-      strokeThickness: 3,
-      resolution: textRes,
-    })
+    .text(
+      -346,
+      40,
+      '[G] Đồ Họa: CAO',
+      createUiTextStyle({
+        fontPxAt1080p: 13,
+        weight: 700,
+        color: PALETTE.VOLT_YELLOW,
+        resolution: textRes,
+      }),
+    )
     .setInteractive({ useHandCursor: true });
   this.qualityBtnText.on('pointerdown', () => {
     if (!isEffectiveDebugUiEnabled(this.coopMode !== 'solo')) return;
@@ -180,15 +278,17 @@ export function buildVectorHudImpl(this: GameScene): void {
   this.hudTopRightContainer.add(this.qualityBtnText);
 
   const galleryBtn = ui.add
-    .text(772, 42, '[Art Gallery]', {
-      fontFamily: '"Be Vietnam Pro", sans-serif',
-      fontSize: '11px',
-      fontStyle: '700',
-      color: PALETTE.SOLAR_GOLD,
-      stroke: PALETTE.INK_DARK,
-      strokeThickness: 3,
-      resolution: textRes,
-    })
+    .text(
+      -256,
+      40,
+      '[Art Gallery]',
+      createUiTextStyle({
+        fontPxAt1080p: 13,
+        weight: 700,
+        color: PALETTE.SOLAR_GOLD,
+        resolution: textRes,
+      }),
+    )
     .setInteractive({ useHandCursor: true });
   galleryBtn.on('pointerdown', () => {
     if (!isEffectiveDebugUiEnabled(this.coopMode !== 'solo')) return;
@@ -199,15 +299,17 @@ export function buildVectorHudImpl(this: GameScene): void {
   this.hudTopRightContainer.add(galleryBtn);
 
   const menuBtn = ui.add
-    .text(868, 42, i18n.t('ui.hud.menuBtn'), {
-      fontFamily: '"Be Vietnam Pro", sans-serif',
-      fontSize: '11.5px',
-      fontStyle: '700',
-      color: PALETTE.CYAN_FROST,
-      stroke: PALETTE.INK_DARK,
-      strokeThickness: 3,
-      resolution: textRes,
-    })
+    .text(
+      -184,
+      140,
+      i18n.t('ui.hud.menuBtn'),
+      createUiTextStyle({
+        fontPxAt1080p: 13,
+        weight: 700,
+        color: PALETTE.CYAN_FROST,
+        resolution: textRes,
+      }),
+    )
     .setInteractive({ useHandCursor: true });
   menuBtn.on('pointerdown', () => this.scene.start('MenuScene'));
   this.menuBtnText = menuBtn;
@@ -217,226 +319,309 @@ export function buildVectorHudImpl(this: GameScene): void {
   this.invitePanelContainer = ui.add.container(0, 0);
   this.hudTopRightContainer.add(this.invitePanelContainer);
 
-  // 3. Bottom-Center Weapon & Skill Bar (y: 482, h: 50)
-  const slotW = 166;
-  const slotH = 44;
-  const startX = 148;
-  const barY = 486;
-
-  const sim = this.transport.getSim();
-  for (let idx = 0; idx < MAX_WEAPON_SLOTS; idx++) {
-    const weaponId = sim.player.weaponSlots[idx] ?? 'knight_sword';
-    const wDef = WEAPONS[weaponId] ?? WEAPONS.knight_sword!;
-    const sx = startX + idx * (slotW + 8);
-
-    const slotBg = ui.add.graphics();
-    this.weaponSlotBgs.push(slotBg);
-    this.hudBottomCenterContainer.add(slotBg);
-
-    const icon = ui.add.sprite(
-      sx + 26,
-      barY + slotH / 2,
-      TextureBaker.getWeaponTextureKey(weaponId),
-    );
-    icon.setScale(invBake * 0.82);
-    this.weaponIconSprites.push(icon);
-    this.hudBottomCenterContainer.add(icon);
-
-    const nameTxt = ui.add.text(
-      sx + 48,
-      barY + 7,
-      `[${idx + 1}] ${i18n.weaponName(weaponId, wDef.nameVi)}`,
-      {
-        fontFamily: '"Be Vietnam Pro", sans-serif',
-        fontSize: '10px',
-        fontStyle: '700',
-        color: PALETTE.BONE_WHITE,
-        stroke: PALETTE.INK_DARK,
-        strokeThickness: 2.5,
-        resolution: textRes,
-      },
-    );
-    this.weaponNameTexts.push(nameTxt);
-    this.textObjects.push(nameTxt);
-    this.hudBottomCenterContainer.add(nameTxt);
-
-    const metaTxt = ui.add.text(
-      sx + 48,
-      barY + 24,
-      `DMG ${wDef.damage}${wDef.pelletCount > 1 ? `×${wDef.pelletCount}` : ''} · ${i18n.t('ui.hud.energy')} ${wDef.energyCost}`,
-      {
-        fontFamily: '"Be Vietnam Pro", sans-serif',
-        fontSize: '9.5px',
-        color: PALETTE.SILVER_BRIGHT,
-        resolution: textRes,
-      },
-    );
-    this.weaponMetaTexts.push(metaTxt);
-    this.textObjects.push(metaTxt);
-    this.hudBottomCenterContainer.add(metaTxt);
-
-    const hit = ui.add
-      .rectangle(sx + slotW / 2, barY + slotH / 2, slotW, slotH, 0x000000, 0)
-      .setInteractive({ useHandCursor: true });
-    hit.on('pointerdown', () => {
-      this.queuedWeaponSlot = idx;
-    });
-    this.hudBottomCenterContainer.add(hit);
-  }
-
-  // Bottom Skill [Space/RMB] & Dash [Shift] Cooldown Cards + [Esc] Pause Card
+  // 3. Bottom-Right Weapon Slot Cards & Circular Skill/Dash Cooldown Widgets
   this.abilityHudGraphics = ui.add.graphics();
-  this.hudBottomCenterContainer.add(this.abilityHudGraphics);
+  this.hudBottomRightContainer.add(this.abilityHudGraphics);
 
   this.skillCdText = ui.add
-    .text(45, barY + 29, i18n.t('ui.hud.ready'), {
-      fontFamily: '"Be Vietnam Pro", sans-serif',
-      fontSize: '9.5px',
-      fontStyle: '800',
-      color: PALETTE.LIME_GLOW,
-      stroke: PALETTE.INK_DARK,
-      strokeThickness: 2.5,
-      resolution: textRes,
-    })
-    .setOrigin(0.5);
+    .text(
+      -344,
+      -15,
+      i18n.t('ui.hud.ready'),
+      createUiTextStyle({
+        fontPxAt1080p: 13,
+        weight: 800,
+        color: PALETTE.LIME_GLOW,
+        resolution: textRes,
+      }),
+    )
+    .setOrigin(0.5, 0.5);
   this.textObjects.push(this.skillCdText);
-  this.hudBottomCenterContainer.add(this.skillCdText);
+  this.hudBottomRightContainer.add(this.skillCdText);
 
   const skillLabel = ui.add
-    .text(45, barY + 12, i18n.getLocale() === 'en' ? '⚡Skill [Space]' : '⚡KN [Space]', {
-      fontFamily: '"Be Vietnam Pro", sans-serif',
-      fontSize: '8.5px',
-      fontStyle: '700',
-      color: PALETTE.BONE_WHITE,
-      stroke: PALETTE.INK_DARK,
-      strokeThickness: 2,
-      resolution: textRes,
-    })
-    .setOrigin(0.5);
+    .text(
+      -344,
+      -52,
+      'Space',
+      createUiTextStyle({
+        fontPxAt1080p: 13,
+        weight: 700,
+        color: PALETTE.BONE_WHITE,
+        resolution: textRes,
+      }),
+    )
+    .setOrigin(0.5, 0.5);
   this.skillLabelText = skillLabel;
   this.textObjects.push(skillLabel);
-  this.hudBottomCenterContainer.add(skillLabel);
+  this.hudBottomRightContainer.add(skillLabel);
 
   const skillHit = ui.add
-    .rectangle(45, barY + slotH / 2, 62, slotH, 0x000000, 0)
+    .rectangle(-344, -32, 38, 44, 0x000000, 0)
     .setInteractive({ useHandCursor: true });
   skillHit.on('pointerdown', () => {
     this.skillQueued = true;
   });
-  this.hudBottomCenterContainer.add(skillHit);
+  this.hudBottomRightContainer.add(skillHit);
 
   this.dashCdText = ui.add
-    .text(111, barY + 29, i18n.t('ui.hud.ready'), {
-      fontFamily: '"Be Vietnam Pro", sans-serif',
-      fontSize: '9.5px',
-      fontStyle: '800',
-      color: PALETTE.CYAN_FROST,
-      stroke: PALETTE.INK_DARK,
-      strokeThickness: 2.5,
-      resolution: textRes,
-    })
-    .setOrigin(0.5);
+    .text(
+      -300,
+      -15,
+      i18n.t('ui.hud.ready'),
+      createUiTextStyle({
+        fontPxAt1080p: 13,
+        weight: 800,
+        color: PALETTE.CYAN_FROST,
+        resolution: textRes,
+      }),
+    )
+    .setOrigin(0.5, 0.5);
   this.textObjects.push(this.dashCdText);
-  this.hudBottomCenterContainer.add(this.dashCdText);
+  this.hudBottomRightContainer.add(this.dashCdText);
 
   const dashLabel = ui.add
-    .text(111, barY + 12, '💨Dash [Shift]', {
-      fontFamily: '"Be Vietnam Pro", sans-serif',
-      fontSize: '8.5px',
-      fontStyle: '700',
-      color: PALETTE.BONE_WHITE,
-      stroke: PALETTE.INK_DARK,
-      strokeThickness: 2,
-      resolution: textRes,
-    })
-    .setOrigin(0.5);
+    .text(
+      -300,
+      -52,
+      'Shift',
+      createUiTextStyle({
+        fontPxAt1080p: 13,
+        weight: 700,
+        color: PALETTE.BONE_WHITE,
+        resolution: textRes,
+      }),
+    )
+    .setOrigin(0.5, 0.5);
+  this.dashLabelText = dashLabel;
   this.textObjects.push(dashLabel);
-  this.hudBottomCenterContainer.add(dashLabel);
+  this.hudBottomRightContainer.add(dashLabel);
 
   const dashHit = ui.add
-    .rectangle(111, barY + slotH / 2, 62, slotH, 0x000000, 0)
+    .rectangle(-300, -32, 38, 44, 0x000000, 0)
     .setInteractive({ useHandCursor: true });
   dashHit.on('pointerdown', () => {
     this.dashQueued = true;
   });
-  this.hudBottomCenterContainer.add(dashHit);
+  this.hudBottomRightContainer.add(dashHit);
 
+  // 2 Weapon Cards in Bottom-Right Cluster
+  const sim = this.transport.getSim();
+  this.weaponSlotBgs.length = 0;
+  this.weaponIconSprites.length = 0;
+  this.weaponNameTexts.length = 0;
+  this.weaponMetaTexts.length = 0;
+  this.weaponKeyTexts.length = 0;
+
+  for (let idx = 0; idx < MAX_WEAPON_SLOTS; idx++) {
+    const weaponId = sim.player.weaponSlots[idx] ?? 'knight_sword';
+    const wDef = WEAPONS[weaponId] ?? WEAPONS.knight_sword!;
+    const cardX = idx === 0 ? -274 : -124;
+
+    const slotBg = ui.add.graphics();
+    this.weaponSlotBgs.push(slotBg);
+    this.hudBottomRightContainer.add(slotBg);
+
+    const icon = ui.add.sprite(
+      cardX + 20,
+      -31,
+      TextureBaker.getWeaponTextureKey(weaponId),
+    );
+    icon.setScale(invBake * 0.78);
+    this.weaponIconSprites.push(icon);
+    this.hudBottomRightContainer.add(icon);
+
+    const nameTxt = ui.add
+      .text(
+        cardX + 36,
+        -40,
+        i18n.weaponName(weaponId, wDef.nameVi),
+        createUiTextStyle({
+          fontPxAt1080p: 14,
+          weight: 800,
+          color: PALETTE.BONE_WHITE,
+          resolution: textRes,
+        }),
+      )
+      .setOrigin(0, 0.5);
+    this.weaponNameTexts.push(nameTxt);
+    this.textObjects.push(nameTxt);
+    this.hudBottomRightContainer.add(nameTxt);
+
+    const metaTxt = ui.add
+      .text(
+        cardX + 36,
+        -22,
+        `ST ${wDef.damage} · NL ${wDef.energyCost}`,
+        createUiTextStyle({
+          fontPxAt1080p: 13,
+          weight: 600,
+          color: PALETTE.SILVER_BRIGHT,
+          resolution: textRes,
+        }),
+      )
+      .setOrigin(0, 0.5);
+    this.weaponMetaTexts.push(metaTxt);
+    this.textObjects.push(metaTxt);
+    this.hudBottomRightContainer.add(metaTxt);
+
+    const keyTxt = ui.add
+      .text(
+        cardX + 12,
+        -46,
+        `${idx + 1}`,
+        createUiTextStyle({
+          fontPxAt1080p: 13,
+          weight: 800,
+          color: PALETTE.SOLAR_GOLD,
+          resolution: textRes,
+        }),
+      )
+      .setOrigin(0.5, 0.5);
+    this.weaponKeyTexts.push(keyTxt);
+    this.textObjects.push(keyTxt);
+    this.hudBottomRightContainer.add(keyTxt);
+
+    const hit = ui.add
+      .rectangle(cardX + 68, -31, 136, 44, 0x000000, 0)
+      .setInteractive({ useHandCursor: true });
+    hit.on('pointerdown', () => {
+      this.queuedWeaponSlot = idx;
+    });
+    this.hudBottomRightContainer.add(hit);
+  }
+
+  // Debug-only [Esc] Pause Button
   const pauseBtnBg = ui.add.graphics();
-  pauseBtnBg.fillStyle(hexToNum(PALETTE.SLATE_DARK), 0.92);
-  pauseBtnBg.lineStyle(2, hexToNum(PALETTE.SOLAR_GOLD), 0.95);
-  pauseBtnBg.fillRoundedRect(848, barY, 98, slotH, 8);
-  pauseBtnBg.strokeRoundedRect(848, barY, 98, slotH, 8);
-  this.hudBottomCenterContainer.add(pauseBtnBg);
+  drawStyledPanel(pauseBtnBg, -92, -96, 80, 32, {
+    fillColor: UI_THEME.panelBgDark,
+    fillAlpha: 0.92,
+    borderColor: hexToNum(PALETTE.SOLAR_GOLD),
+    radius: UI_THEME.panelRadius.sm,
+  });
+  this.pauseBtnBg = pauseBtnBg;
+  this.hudBottomRightContainer.add(pauseBtnBg);
 
   const pauseBtnText = ui.add
     .text(
-      897,
-      barY + slotH / 2,
-      i18n.getLocale() === 'en' ? '⚙ [Esc]\nPause' : '⚙ [Esc]\nTạm Dừng',
-      {
-        fontFamily: '"Be Vietnam Pro", sans-serif',
-        fontSize: '9.5px',
-        fontStyle: '800',
+      -52,
+      -80,
+      i18n.getLocale() === 'en' ? '⚙ [Esc] Pause' : '⚙ [Esc] Dừng',
+      createUiTextStyle({
+        fontPxAt1080p: 13,
+        weight: 800,
         color: PALETTE.SOLAR_GOLD,
-        stroke: PALETTE.INK_DARK,
-        strokeThickness: 2.5,
         align: 'center',
         resolution: textRes,
-      },
+      }),
     )
-    .setOrigin(0.5);
+    .setOrigin(0.5, 0.5);
   this.pauseBtnText = pauseBtnText;
   this.textObjects.push(pauseBtnText);
-  this.hudBottomCenterContainer.add(pauseBtnText);
+  this.hudBottomRightContainer.add(pauseBtnText);
 
   const pauseBtnHit = ui.add
-    .rectangle(897, barY + slotH / 2, 98, slotH, 0x000000, 0)
+    .rectangle(-52, -80, 80, 32, 0x000000, 0)
     .setInteractive({ useHandCursor: true });
   pauseBtnHit.on('pointerdown', () => {
     zzfx.play('ui_click');
     this.togglePauseModal();
   });
-  this.hudBottomCenterContainer.add(pauseBtnHit);
+  this.pauseBtnHit = pauseBtnHit;
+  this.hudBottomRightContainer.add(pauseBtnHit);
 
+  // 4. Bottom-Center Context Prompt Zone (Downed / Revive Banner + Weapon Ground Drop Comparison Card)
+  this.downedBannerGraphics = ui.add.graphics();
+  this.downedBannerText = ui.add
+    .text(
+      0,
+      -34,
+      '',
+      createUiTextStyle({
+        fontPxAt1080p: 14,
+        weight: 800,
+        color: PALETTE.BONE_WHITE,
+        resolution: textRes,
+      }),
+    )
+    .setOrigin(0, 0.5)
+    .setVisible(false);
+  this.textObjects.push(this.downedBannerText);
   this.weaponCompareContainer = ui.add.container(0, 0);
-  this.hudBottomCenterContainer.add(this.weaponCompareContainer);
+  this.hudBottomCenterContainer.add([
+    this.downedBannerGraphics,
+    this.downedBannerText,
+    this.weaponCompareContainer,
+  ]);
 
-  // 4. Top-Center Boss HP Bar (Phase 1 / Phase 2 / Phase 3 with 66% & 33% markers)
+  // 5. Top-Center Boss HP Bar, Wave/Room Banner & Coalesced Reaction Banner
   this.bossBarGraphics = ui.add.graphics();
-  this.hudTopCenterContainer.add(this.bossBarGraphics);
-
   this.bossTitleText = ui.add
-    .text(480, 76, '', {
-      fontFamily: '"Be Vietnam Pro", sans-serif',
-      fontSize: '12px',
-      fontStyle: '800',
-      color: PALETTE.SOLAR_GOLD,
-      stroke: PALETTE.INK_DEEP,
-      strokeThickness: 3.5,
-      resolution: textRes,
-    })
-    .setOrigin(0.5, 0)
+    .text(
+      0,
+      19,
+      '',
+      createUiTextStyle({
+        fontPxAt1080p: 15,
+        weight: 800,
+        color: PALETTE.SOLAR_GOLD,
+        stroke: PALETTE.INK_DEEP,
+        strokeThickness: 3,
+        resolution: textRes,
+      }),
+    )
+    .setOrigin(0.5, 0.5)
     .setVisible(false);
   this.textObjects.push(this.bossTitleText);
-  this.hudTopCenterContainer.add(this.bossTitleText);
 
-  // 5. Top-Right Minimap & Fog of War Overlay
-  this.minimapGraphics = ui.add.graphics();
-  this.minimapTitleText = ui.add.text(784, 76, 'T1/2 · Khởi Đầu [Tab]', {
-    fontFamily: '"Be Vietnam Pro", sans-serif',
-    fontSize: '9.5px',
-    fontStyle: '700',
-    color: PALETTE.SOLAR_GOLD,
-    stroke: PALETTE.INK_DARK,
-    strokeThickness: 2.5,
-    resolution: textRes,
-  });
-  this.textObjects.push(this.minimapTitleText);
+  this.waveBannerGraphics = ui.add.graphics();
+  this.waveBannerText = ui.add
+    .text(
+      0,
+      20,
+      '',
+      createUiTextStyle({
+        fontPxAt1080p: 16,
+        weight: 800,
+        color: PALETTE.SOLAR_GOLD,
+        resolution: textRes,
+      }),
+    )
+    .setOrigin(0.5, 0.5)
+    .setVisible(false);
+  this.textObjects.push(this.waveBannerText);
 
-  // 6. Co-op Teammate HUD Container (left side), Hub Preview, Off-Screen Arrows & Emote Wheel
+  this.reactionBannerGraphics = ui.add.graphics();
+  this.reactionBannerText = ui.add
+    .text(
+      0,
+      46,
+      '',
+      createUiTextStyle({
+        fontPxAt1080p: 16,
+        weight: 800,
+        color: PALETTE.CYAN_FROST,
+        resolution: textRes,
+      }),
+    )
+    .setOrigin(0.5, 0.5)
+    .setVisible(false);
+  this.textObjects.push(this.reactionBannerText);
+
+  this.hudTopCenterContainer.add([
+    this.bossBarGraphics,
+    this.bossTitleText,
+    this.waveBannerGraphics,
+    this.waveBannerText,
+    this.reactionBannerGraphics,
+    this.reactionBannerText,
+  ]);
+
+  // 6. Co-op Teammate HUD Container (left side below player card), Hub Preview, Unscaled Off-Screen Arrows / Hit Arc & Emote Wheel
   this.coopHudContainer = ui.add.container(0, 0);
   this.hubPreviewContainer = ui.add.container(0, 0);
   this.offscreenArrowGraphics = ui.add.graphics();
+  this.playerHitArcGraphics = ui.add.graphics();
   this.emoteWheelContainer = ui.add.container(0, 0);
 
   // 7. Modal Container, Pause Overlay Container & Iris Transition Graphics
@@ -447,15 +632,15 @@ export function buildVectorHudImpl(this: GameScene): void {
   this.hudContainer.add([
     this.hudTopBarBg,
     this.hudBottomBarBg,
+    this.playerHitArcGraphics,
+    this.offscreenArrowGraphics,
     this.hudTopLeftContainer,
+    this.coopHudContainer,
     this.hudTopCenterContainer,
     this.hudTopRightContainer,
+    this.hudBottomRightContainer,
     this.hudBottomCenterContainer,
-    this.minimapGraphics,
-    this.minimapTitleText,
-    this.coopHudContainer,
     this.hubPreviewContainer,
-    this.offscreenArrowGraphics,
     this.emoteWheelContainer,
     this.modalContainer,
     this.pauseContainer,
@@ -475,6 +660,7 @@ export function buildVectorHudImpl(this: GameScene): void {
 
 export function invalidateAllHudCachesImpl(this: GameScene): void {
   this.lastHudHp = -1;
+  this.lastHudGold = -1;
   this.lastHudWeaponHash = '';
   this.lastHudElement = '';
   this.lastHudQuality = '';
@@ -489,9 +675,11 @@ export function invalidateAllHudCachesImpl(this: GameScene): void {
   this.lastRunState = '';
   const isEn = i18n.getLocale() === 'en';
   syncHudDebugVisibility(this);
+  applyHudEdgeAnchors(this);
   this.menuBtnText?.setText(i18n.t('ui.hud.menuBtn'));
-  this.skillLabelText?.setText(isEn ? '⚡Skill [Space]' : '⚡KN [Space]');
-  this.pauseBtnText?.setText(isEn ? '⚙ [Esc]\nPause' : '⚙ [Esc]\nTạm Dừng');
+  this.skillLabelText?.setText('Space');
+  this.dashLabelText?.setText('Shift');
+  this.pauseBtnText?.setText(isEn ? '⚙ [Esc] Pause' : '⚙ [Esc] Dừng');
 }
 
 export function togglePauseModalImpl(this: GameScene, forceState?: boolean): void {
@@ -517,7 +705,11 @@ export function rebuildPauseModalImpl(this: GameScene): void {
     return;
   }
   this.pauseContainer.setVisible(true);
-  const textRes = TextureBaker.getBakeScale();
+  const textRes = computeUiTextResolution(
+    typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1,
+    ui.cameras?.main?.zoom || 2,
+    graphicsSettings.getState().uiScale,
+  );
 
   const blocker = ui.add
     .rectangle(480, 270, 2400, 1600, hexToNum(PALETTE.INK_DARK), 0.78)
@@ -530,22 +722,30 @@ export function rebuildPauseModalImpl(this: GameScene): void {
   const cardY = 270 - cardH / 2;
 
   const panel = ui.add.graphics();
-  panel.fillStyle(hexToNum(PALETTE.SLATE_DARK), 0.98);
-  panel.lineStyle(3, hexToNum(PALETTE.SOLAR_GOLD), 1);
-  panel.fillRoundedRect(cardX, cardY, cardW, cardH, 12);
-  panel.strokeRoundedRect(cardX, cardY, cardW, cardH, 12);
+  drawStyledPanel(panel, cardX, cardY, cardW, cardH, {
+    fillColor: UI_THEME.panelBgDark,
+    fillAlpha: 0.96,
+    borderColor: hexToNum(PALETTE.SOLAR_GOLD),
+    borderWidth: 2.2,
+    radius: UI_THEME.panelRadius.lg,
+    accentColor: hexToNum(PALETTE.SOLAR_GOLD),
+    accentSide: 'top',
+  });
   this.pauseContainer.add(panel);
 
   const title = ui.add
-    .text(480, cardY + 30, i18n.t('ui.pause.title'), {
-      fontFamily: '"Be Vietnam Pro", sans-serif',
-      fontSize: '20px',
-      fontStyle: '800',
-      color: PALETTE.SOLAR_GOLD,
-      stroke: PALETTE.INK_DARK,
-      strokeThickness: 4,
-      resolution: textRes,
-    })
+    .text(
+      480,
+      cardY + 30,
+      i18n.t('ui.pause.title'),
+      createUiTextStyle({
+        fontPxAt1080p: 28,
+        weight: 800,
+        color: PALETTE.SOLAR_GOLD,
+        strokeThickness: 3.5,
+        resolution: textRes,
+      }),
+    )
     .setOrigin(0.5);
   this.pauseContainer.add(title);
 
@@ -554,15 +754,12 @@ export function rebuildPauseModalImpl(this: GameScene): void {
       480,
       cardY + 58,
       this.coopMode === 'solo' ? i18n.t('ui.pause.soloNotice') : i18n.t('ui.pause.coopNotice'),
-      {
-        fontFamily: '"Be Vietnam Pro", sans-serif',
-        fontSize: '11px',
-        fontStyle: '700',
+      createUiTextStyle({
+        fontPxAt1080p: 16,
+        weight: 700,
         color: this.coopMode === 'solo' ? PALETTE.CYAN_FROST : PALETTE.FLAME_ORANGE,
-        stroke: PALETTE.INK_DARK,
-        strokeThickness: 2.5,
         resolution: textRes,
-      },
+      }),
     )
     .setOrigin(0.5);
   this.pauseContainer.add(notice);
@@ -621,23 +818,28 @@ export function rebuildPauseModalImpl(this: GameScene): void {
     const btnBg = ui.add.graphics();
     const draw = (hover: boolean) => {
       btnBg.clear();
-      btnBg.fillStyle(hexToNum(hover ? PALETTE.SOLAR_GOLD : act.color), 1);
-      btnBg.lineStyle(2, hexToNum(PALETTE.INK_DARK), 1);
-      btnBg.fillRoundedRect(480 - bw / 2, by - bh / 2, bw, bh, 7);
-      btnBg.strokeRoundedRect(480 - bw / 2, by - bh / 2, bw, bh, 7);
+      drawStyledPanel(btnBg, 480 - bw / 2, by - bh / 2, bw, bh, {
+        fillColor: hexToNum(hover ? PALETTE.SOLAR_GOLD : act.color),
+        fillAlpha: 0.96,
+        borderColor: UI_THEME.inkDark,
+        borderWidth: 1.8,
+        radius: UI_THEME.panelRadius.sm,
+      });
     };
     draw(false);
 
     const txt = ui.add
-      .text(480, by, act.label, {
-        fontFamily: '"Be Vietnam Pro", sans-serif',
-        fontSize: '12.5px',
-        fontStyle: '800',
-        color: PALETTE.BONE_WHITE,
-        stroke: PALETTE.INK_DARK,
-        strokeThickness: 2.5,
-        resolution: textRes,
-      })
+      .text(
+        480,
+        by,
+        act.label,
+        createUiTextStyle({
+          fontPxAt1080p: 18,
+          weight: 800,
+          color: PALETTE.BONE_WHITE,
+          resolution: textRes,
+        }),
+      )
       .setOrigin(0.5);
 
     const hit = ui.add

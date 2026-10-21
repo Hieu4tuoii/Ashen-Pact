@@ -36,7 +36,18 @@ import type { BiomeArchitectureLiveLayer } from '../world/biome-architecture.js'
 import type { HudScene } from './HudScene.js';
 import { applyCameraViewportImpl, buildArenaTilesImpl, createImpl, drawSourceKeyToCtxImpl, getStructureTextureKeyImpl, rebuildAllTileCellsToCompositeImpl, renderTileCellToCompositeImpl, setStressTestModeImpl, syncArenaTilesWithMapRevisionImpl, triggerIrisTransitionImpl, updateCameraWithLookaheadAndShakeImpl, updateIrisTransitionImpl } from './game-scene/arena-tiles.js';
 import { resolveEnemyStatusTintImpl, resolvePlayerStatusTintImpl, syncEnemyRigsImpl, syncProjectilesAndPickupsImpl, syncPropsImpl, syncSimulatedPlayersImpl, updatePlayerOverheadUiImpl } from './game-scene/entity-sync.js';
-import { updateBossHudImpl, updateCoopTeammateHudImpl, updateMinimapHudImpl, updateOffscreenTeammateArrowsImpl, updateVectorHudImpl } from './game-scene/hud-combat-and-coop.js';
+import {
+  renderViDiacriticsShowcaseImpl,
+  triggerPlayerHitDirectionIndicatorImpl,
+  triggerRoomClearedBannerImpl,
+  triggerWaveBannerImpl,
+  updateBossHudImpl,
+  updateCoopTeammateHudImpl,
+  updateMinimapHudImpl,
+  updateOffscreenTeammateArrowsImpl,
+  updateTopCenterBannersAndQolImpl,
+  updateVectorHudImpl,
+} from './game-scene/hud-combat-and-coop.js';
 import { updateEmoteWheelHudImpl, updateHubCharacterSkillPreviewImpl, updateHubInvitePanelImpl, updateWeaponComparisonCardImpl } from './game-scene/hud-hub-and-cards.js';
 import { updateDebugStateImpl, updateModalHudImpl } from './game-scene/hud-modals-and-debug.js';
 import { buildVectorHudImpl, invalidateAllHudCachesImpl, rebuildPauseModalImpl, togglePauseModalImpl } from './game-scene/hud-setup-and-pause.js';
@@ -245,10 +256,12 @@ export class GameScene extends Phaser.Scene {
   public textObjects: Phaser.GameObjects.Text[] = [];
 
   // Cached HUD state to avoid redundant per-frame Canvas2D text uploads
+  public currentHudUiScale = 1.0;
   public lastHudLocale = '';
   public lastHudHp = -1;
   public lastHudArmor = -1;
   public lastHudEnergy = -1;
+  public lastHudGold = -1;
   public lastHudCharacterId = '';
   public lastHudWeaponHash = '';
   public lastHudElement = '';
@@ -274,6 +287,14 @@ export class GameScene extends Phaser.Scene {
   public lastBlizzardPhase3 = false;
   public irisTransitionProgress = 0.0;
   public irisTransitionDir: -1 | 0 | 1 = 0;
+  public playerHitIndicatorTimer = 0;
+  public playerHitIndicatorAngleRad = 0;
+  public hudBannerTimer = 0;
+  public hudBannerTextStr = '';
+  public hudBannerAccentColor = 0xfacc15;
+  public lastBannerRoomId = -1;
+  public lastBannerWaveNumber = -1;
+  public lastBannerRoomCleared = false;
 
   public telegraphGraphics!: Phaser.GameObjects.Graphics;
   public hitboxGraphics!: Phaser.GameObjects.Graphics;
@@ -288,6 +309,7 @@ export class GameScene extends Phaser.Scene {
   public hudTopLeftContainer?: Phaser.GameObjects.Container;
   public hudTopCenterContainer?: Phaser.GameObjects.Container;
   public hudTopRightContainer?: Phaser.GameObjects.Container;
+  public hudBottomRightContainer?: Phaser.GameObjects.Container;
   public hudBottomCenterContainer?: Phaser.GameObjects.Container;
   public get uiScene(): Phaser.Scene {
     return this.hudScene ?? this;
@@ -298,13 +320,22 @@ export class GameScene extends Phaser.Scene {
   public skillCdText!: Phaser.GameObjects.Text;
   public dashCdText!: Phaser.GameObjects.Text;
   public skillLabelText?: Phaser.GameObjects.Text;
+  public dashLabelText?: Phaser.GameObjects.Text;
+  public pauseBtnBg?: Phaser.GameObjects.Graphics;
   public pauseBtnText?: Phaser.GameObjects.Text;
+  public pauseBtnHit?: Phaser.GameObjects.Rectangle;
   public menuBtnText?: Phaser.GameObjects.Text;
   public hubGuideTexts: Phaser.GameObjects.Text[] = [];
   public minimapGraphics!: Phaser.GameObjects.Graphics;
   public minimapTitleText!: Phaser.GameObjects.Text;
   public bossBarGraphics!: Phaser.GameObjects.Graphics;
   public bossTitleText!: Phaser.GameObjects.Text;
+  public waveBannerGraphics?: Phaser.GameObjects.Graphics;
+  public waveBannerText?: Phaser.GameObjects.Text;
+  public reactionBannerGraphics?: Phaser.GameObjects.Graphics;
+  public reactionBannerText?: Phaser.GameObjects.Text;
+  public downedBannerGraphics?: Phaser.GameObjects.Graphics;
+  public downedBannerText?: Phaser.GameObjects.Text;
   public coopHudContainer!: Phaser.GameObjects.Container;
   public invitePanelContainer!: Phaser.GameObjects.Container;
   public hubPreviewContainer!: Phaser.GameObjects.Container;
@@ -314,10 +345,15 @@ export class GameScene extends Phaser.Scene {
   public irisGraphics!: Phaser.GameObjects.Graphics;
   public settingsModal?: ModalOverlayManager;
   public offscreenArrowGraphics!: Phaser.GameObjects.Graphics;
+  public playerHitArcGraphics?: Phaser.GameObjects.Graphics;
+  public viDiacriticsContainer?: Phaser.GameObjects.Container;
   public modalContainer!: Phaser.GameObjects.Container;
+  public playerClassLabelText?: Phaser.GameObjects.Text;
   public hpLabelText!: Phaser.GameObjects.Text;
   public armorLabelText!: Phaser.GameObjects.Text;
   public energyLabelText!: Phaser.GameObjects.Text;
+  public goldLabelText?: Phaser.GameObjects.Text;
+  public statusLineText?: Phaser.GameObjects.Text;
   public statsLineText!: Phaser.GameObjects.Text;
   public statusText?: Phaser.GameObjects.Text;
   public qualityBtnText?: Phaser.GameObjects.Text;
@@ -328,6 +364,7 @@ export class GameScene extends Phaser.Scene {
   public weaponIconSprites: Phaser.GameObjects.Sprite[] = [];
   public weaponNameTexts: Phaser.GameObjects.Text[] = [];
   public weaponMetaTexts: Phaser.GameObjects.Text[] = [];
+  public weaponKeyTexts: Phaser.GameObjects.Text[] = [];
 
   public debugOverlay?: DebugOverlay;
   public room?: ColyseusRoom;
@@ -865,6 +902,11 @@ export class GameScene extends Phaser.Scene {
   public updateOffscreenTeammateArrows(): void { updateOffscreenTeammateArrowsImpl.call(this); }
   public updateMinimapHud(): void { updateMinimapHudImpl.call(this); }
   public updateBossHud(): void { updateBossHudImpl.call(this); }
+  public updateTopCenterBannersAndQol(dtSec: number): void { updateTopCenterBannersAndQolImpl.call(this, dtSec); }
+  public triggerPlayerHitDirectionIndicator(angleRad: number): void { triggerPlayerHitDirectionIndicatorImpl.call(this, angleRad); }
+  public triggerWaveBanner(wave: number, maxWaves = 3): void { triggerWaveBannerImpl.call(this, wave, maxWaves); }
+  public triggerRoomClearedBanner(): void { triggerRoomClearedBannerImpl.call(this); }
+  public renderViDiacriticsShowcase(): void { renderViDiacriticsShowcaseImpl.call(this); }
   public updateModalHud(): void { updateModalHudImpl.call(this); }
   public updateDebugState(playerRenderX: number, playerRenderY: number): void { updateDebugStateImpl.call(this, playerRenderX, playerRenderY); }
 }

@@ -1,28 +1,90 @@
 import {
   CHARACTERS,
   clamp,
-  type DungeonRoomNode,
   type ElementType,
-  ENEMIES,
   i18n,
   PLAYER_SLOT_COLORS,
   WEAPON_RARITY_COLORS,
   WEAPONS,
-  WORLD_VIEW_HEIGHT,
-  WORLD_VIEW_WIDTH,
 } from '@ashen-pact/shared';
 import { hexToNum, PALETTE } from '../../art/palette.js';
 import { TextureBaker } from '../../art/texture-baker.js';
 import { isEffectiveDebugUiEnabled } from '../../core/debug-flag.js';
+import {
+  drawCircularCooldown,
+  drawKeyChip,
+  drawMiniCharacterPortrait,
+  drawSegmentedBar,
+  drawStyledPanel,
+  drawVectorHudIcon,
+} from '../../ui/components/hud-primitives.js';
 import { initGlobalDebugState } from '../../ui/debug-overlay.js';
-import { graphicsSettings } from '../../ui/graphics-settings.js';
+import { clampUiScale, graphicsSettings } from '../../ui/graphics-settings.js';
+import {
+  computeUiTextResolution,
+  createUiTextStyle,
+  getBiomeUiAccent,
+  UI_THEME,
+} from '../../ui/theme.js';
 import { type GameScene } from '../GameScene.js';
-import { syncHudDebugVisibility } from './hud-setup-and-pause.js';
+import { applyHudEdgeAnchors, syncHudDebugVisibility } from './hud-setup-and-pause.js';
+
+export {
+  renderViDiacriticsShowcaseImpl,
+  shouldShowOffscreenEnemyArrows,
+  triggerPlayerHitDirectionIndicatorImpl,
+  triggerRoomClearedBannerImpl,
+  triggerWaveBannerImpl,
+  updateBossHudImpl,
+  updateMinimapHudImpl,
+  updateOffscreenTeammateArrowsImpl,
+  updateTopCenterBannersAndQolImpl,
+} from './hud-qol-and-minimap.js';
+
+function buildActivePlayerStatusString(
+  p: ReturnType<GameScene['transport']['getSim']>['player'],
+  isEn: boolean,
+): string {
+  let out = '';
+  let count = 0;
+
+  const appendChip = (chip: string) => {
+    if (count >= 4) return;
+    out = count === 0 ? chip : `${out} · ${chip}`;
+    count += 1;
+  };
+
+  if (p.characterId === 'elementalist') {
+    const nextElem: ElementType =
+      p.activeImbueElement === 'burn'
+        ? 'chill'
+        : p.activeImbueElement === 'chill'
+          ? 'shock'
+          : 'burn';
+    appendChip(
+      `${i18n.elementShortName(p.activeImbueElement)}→${i18n.elementShortName(nextElem)}`,
+    );
+  }
+  if (p.burnTimer > 0) appendChip(isEn ? 'Burn' : 'Bỏng');
+  if (p.chillTimer > 0) appendChip(isEn ? 'Chill' : 'Lạnh');
+  if ((p.encasedInIceTimer ?? 0) > 0) appendChip(isEn ? 'Frozen' : 'Đóng Băng');
+  if (p.shockTimer > 0) appendChip(isEn ? 'Shock' : 'Điện Giật');
+  if (p.poisonTimer > 0) appendChip(isEn ? 'Poison' : 'Trúng Độc');
+
+  return out;
+}
 
 export function updateVectorHudImpl(this: GameScene): void {
   const sim = this.transport.getSim();
   const p = sim.player;
   const curLocale = i18n.getLocale();
+  const gState = graphicsSettings.getState();
+  const targetUiScale = clampUiScale(gState.uiScale);
+
+  if (Math.abs(targetUiScale - this.currentHudUiScale) > 0.001) {
+    applyHudEdgeAnchors(this);
+  }
+
   if (curLocale !== this.lastHudLocale) {
     this.lastHudLocale = curLocale;
     this.invalidateAllHudCaches();
@@ -34,204 +96,211 @@ export function updateVectorHudImpl(this: GameScene): void {
   const trailingAnimating =
     Math.abs(this.trailingHpRatio - hpRatio) > 0.004 ||
     Math.abs(this.trailingArmorRatio - armorRatio) > 0.004;
-  const lowHpPulse = p.hp > 0 && p.hp <= 2 && sim.tick % 10 === 0;
+  const lowHpAlert = p.hp > 0 && hpRatio <= 0.3;
+  const lowHpPulse = lowHpAlert && Math.floor(sim.tick / 10) % 2 === 0;
+  const curBiomeKey = sim.inHub ? 0 : sim.currentBiome;
 
   if (
     p.hp !== this.lastHudHp ||
     p.armor !== this.lastHudArmor ||
     p.energy !== this.lastHudEnergy ||
+    p.gold !== this.lastHudGold ||
     p.characterId !== this.lastHudCharacterId ||
     trailingAnimating ||
-    lowHpPulse
+    lowHpAlert
   ) {
     this.lastHudHp = p.hp;
     this.lastHudArmor = p.armor;
     this.lastHudEnergy = p.energy;
+    this.lastHudGold = p.gold;
     this.lastHudCharacterId = p.characterId;
 
     const g = this.hudBarsGraphics;
     g.clear();
 
-    const drawStatBar = (
-      x: number,
-      y: number,
-      w: number,
-      h: number,
-      ratio: number,
-      trailingRatio: number,
-      fillHex: string,
-      trailingHex: string,
-      borderHex: string,
-    ) => {
-      g.fillStyle(hexToNum(PALETTE.INK_DEEP), 0.95);
-      g.lineStyle(2, hexToNum(borderHex), 1);
-      g.fillRoundedRect(x, y, w, h, 5);
-      if (trailingRatio > ratio + 0.003) {
-        g.fillStyle(hexToNum(trailingHex), 0.85);
-        g.fillRoundedRect(
-          x + 2,
-          y + 2,
-          Math.max(4, (w - 4) * clamp(trailingRatio, 0, 1)),
-          h - 4,
-          3.5,
-        );
-      }
-      if (ratio > 0) {
-        g.fillStyle(hexToNum(fillHex), 1);
-        g.fillRoundedRect(x + 2, y + 2, Math.max(4, (w - 4) * clamp(ratio, 0, 1)), h - 4, 3.5);
-      }
-      g.strokeRoundedRect(x, y, w, h, 5);
-    };
+    const biomeAccent = getBiomeUiAccent(curBiomeKey);
+    const slotHex = PLAYER_SLOT_COLORS[p.slot] ?? PALETTE.CYAN_FROST;
 
-    const hpBorder =
-      p.hp > 0 && p.hp <= 2 && Math.floor(sim.tick / 10) % 2 === 0
-        ? PALETTE.CRIMSON_BRIGHT
-        : PALETTE.INK_DARK;
+    // Main Top-Left Player Status Card
+    drawStyledPanel(g, 12, 10, 204, 72, {
+      fillColor: UI_THEME.panelBg,
+      fillAlpha: 0.85,
+      borderColor: lowHpPulse ? UI_THEME.status.hp : UI_THEME.panelBorder,
+      borderWidth: lowHpPulse ? 1.8 : 1.4,
+      radius: UI_THEME.panelRadius.md,
+      accentColor: biomeAccent.accentNum,
+      accentSide: 'left',
+    });
 
-    // HP, Armor, Energy bars with smooth trailing damage bars
-    drawStatBar(
-      22,
-      13,
-      124,
-      20,
-      hpRatio,
-      this.trailingHpRatio,
-      PALETTE.RUBY_CORE,
-      PALETTE.SOLAR_GOLD,
-      hpBorder,
-    );
-    drawStatBar(
-      156,
-      13,
-      124,
-      20,
-      armorRatio,
-      this.trailingArmorRatio,
-      PALETTE.STEEL_LIGHT,
-      PALETTE.CRIMSON_BRIGHT,
-      PALETTE.INK_DARK,
-    );
-    drawStatBar(
-      290,
-      13,
-      136,
-      20,
-      p.energy / Math.max(1, p.maxEnergy),
-      p.energy / Math.max(1, p.maxEnergy),
-      PALETTE.AZURE_CORE,
-      PALETTE.AZURE_CORE,
-      PALETTE.INK_DARK,
-    );
+    // Procedural Class Mini Portrait
+    drawMiniCharacterPortrait(g, p.characterId, 34, 36, 15, slotHex);
+
+    // 1. Segmented HP Bar + Heart Vector Icon
+    drawVectorHudIcon(g, 'heart', 58, 21, 4.2, UI_THEME.status.hp);
+    drawSegmentedBar(g, {
+      x: 66,
+      y: 17,
+      width: 96,
+      height: 8,
+      current: p.hp,
+      max: p.maxHp,
+      trailingRatio: this.trailingHpRatio,
+      maxSegments: Math.min(10, Math.max(1, p.maxHp)),
+      gap: 1.5,
+      fillColor: UI_THEME.status.hp,
+      fillDarkColor: UI_THEME.status.hpDark,
+      trailColor: UI_THEME.status.hpTrail,
+      pulseAlert: lowHpPulse,
+    });
+
+    // 2. Segmented Armor Bar + Shield Vector Icon
+    drawVectorHudIcon(g, 'shield', 58, 34.5, 4.2, UI_THEME.status.armor);
+    drawSegmentedBar(g, {
+      x: 66,
+      y: 30.5,
+      width: 96,
+      height: 7.5,
+      current: p.armor,
+      max: Math.max(1, p.maxArmor),
+      trailingRatio: this.trailingArmorRatio,
+      maxSegments: Math.min(8, Math.max(1, p.maxArmor)),
+      gap: 1.5,
+      fillColor: UI_THEME.status.armor,
+      fillDarkColor: UI_THEME.status.armorDark,
+      trailColor: UI_THEME.status.armorTrail,
+    });
+
+    // 3. Segmented Energy Bar + Bolt Vector Icon
+    drawVectorHudIcon(g, 'bolt', 58, 48, 4.2, UI_THEME.status.energy);
+    drawSegmentedBar(g, {
+      x: 66,
+      y: 44,
+      width: 96,
+      height: 7.5,
+      current: p.energy,
+      max: Math.max(1, p.maxEnergy),
+      maxSegments: 6,
+      gap: 1.5,
+      fillColor: UI_THEME.status.energy,
+      fillDarkColor: UI_THEME.status.energyDark,
+    });
+
+    // 4. Bottom Footer Strip inside Card: Class Name + Gold Coin Pill
+    g.fillStyle(UI_THEME.panelBgDark, 0.9);
+    g.fillRoundedRect(114, 58, 94, 17, 4);
+    g.lineStyle(1, UI_THEME.status.goldDark, 0.78);
+    g.strokeRoundedRect(114, 58, 94, 17, 4);
+    drawVectorHudIcon(g, 'coin', 124, 66.5, 4.5, UI_THEME.status.gold);
 
     const charDef = CHARACTERS[p.characterId] ?? CHARACTERS.vanguard;
     const charName = i18n.charName(p.characterId, charDef.nameVi);
-    this.hpLabelText.setText(`${charName} · ${i18n.t('ui.hud.hp')} ${p.hp}/${p.maxHp}`);
-    this.armorLabelText.setText(`${i18n.t('ui.hud.armor')} ${p.armor}/${p.maxArmor}`);
-    this.energyLabelText.setText(`${i18n.t('ui.hud.energy')} ${p.energy}/${p.maxEnergy}`);
+    this.playerClassLabelText?.setText(`P${p.slot} · ${charName}`);
+    this.hpLabelText.setText(`${p.hp}/${p.maxHp}`);
+    this.armorLabelText.setText(`${p.armor}/${p.maxArmor}`);
+    this.energyLabelText.setText(`${p.energy}/${p.maxEnergy}`);
+
+    const goldLabel = curLocale === 'en' ? `${p.gold} Gold` : `${p.gold} Vàng`;
+    if (this.goldLabelText && this.goldLabelText.text !== goldLabel) {
+      this.goldLabelText.setText(goldLabel);
+    }
   }
 
-  // Update Bottom-Left Skill [Space] & Dash [Shift] Cooldown Sweep Cards
+  // Active status effects / Elementalist imbue chip line below player card
+  if (this.statusLineText) {
+    const statusChipStr = buildActivePlayerStatusString(p, curLocale === 'en');
+    if (statusChipStr.length > 0) {
+      if (this.statusLineText.text !== statusChipStr) {
+        this.statusLineText.setText(statusChipStr);
+      }
+      if (!this.statusLineText.visible) {
+        this.statusLineText.setVisible(true);
+      }
+    } else if (this.statusLineText.visible) {
+      this.statusLineText.setVisible(false);
+    }
+  }
+
+  // Update Bottom-Right Circular Skill [Space] & Dash [Shift] Cooldown Widgets
   if (this.abilityHudGraphics) {
     const ag = this.abilityHudGraphics;
     ag.clear();
-    const barY = 486;
-    const cardW = 62;
-    const cardH = 44;
+    const showHints = gState.showKeyHints;
 
     const cDef = CHARACTERS[p.characterId] ?? CHARACTERS.vanguard;
     const skillMaxCd = Math.max(0.5, cDef.skill.cooldownSec);
-    const skillReadyRatio =
-      p.skillActiveTimer > 0 ? 1 : clamp(1 - p.skillCooldownTimer / skillMaxCd, 0, 1);
-    const skillBorder =
-      p.skillActiveTimer > 0
-        ? PALETTE.SOLAR_GOLD
-        : p.skillCooldownTimer <= 0
-          ? PALETTE.LIME_GLOW
-          : PALETTE.INK_DARK;
+    const skillGeo = drawCircularCooldown(ag, {
+      cx: -344,
+      cy: -32,
+      radius: 16,
+      remainingSec: p.skillCooldownTimer,
+      totalSec: skillMaxCd,
+      activeSec: p.skillActiveTimer,
+      accentColor: 0x4ade80,
+      iconKind: 'skill',
+    });
 
-    ag.fillStyle(hexToNum(PALETTE.SLATE_DARK), 0.92);
-    ag.fillRoundedRect(14, barY, cardW, cardH, 7);
-    if (skillReadyRatio > 0) {
-      const fillH = (cardH - 4) * skillReadyRatio;
-      ag.fillStyle(
-        hexToNum(p.skillActiveTimer > 0 ? PALETTE.SOLAR_GOLD : PALETTE.FOREST_SHADE),
-        p.skillCooldownTimer <= 0 ? 0.55 : 0.35,
-      );
-      ag.fillRoundedRect(16, barY + cardH - 2 - fillH, cardW - 4, fillH, 5);
+    const dashGeo = drawCircularCooldown(ag, {
+      cx: -300,
+      cy: -32,
+      radius: 16,
+      remainingSec: p.dashCooldownTimer,
+      totalSec: 1.2,
+      activeSec: p.dashTimer,
+      accentColor: 0x38bdf8,
+      iconKind: 'dash',
+    });
+
+    if (showHints) {
+      drawKeyChip(ag, -358, -56, 'Space', { active: skillGeo.isReady || skillGeo.isActive });
+      drawKeyChip(ag, -313, -56, 'Shift', { active: dashGeo.isReady || dashGeo.isActive });
     }
-    ag.lineStyle(2, hexToNum(skillBorder), 1);
-    ag.strokeRoundedRect(14, barY, cardW, cardH, 7);
 
-    const dashMaxCd = 1.2;
-    const dashReadyRatio = clamp(1 - p.dashCooldownTimer / dashMaxCd, 0, 1);
-    const dashBorder = p.dashCooldownTimer <= 0 ? PALETTE.CYAN_FROST : PALETTE.INK_DARK;
-
-    ag.fillStyle(hexToNum(PALETTE.SLATE_DARK), 0.92);
-    ag.fillRoundedRect(80, barY, cardW, cardH, 7);
-    if (dashReadyRatio > 0) {
-      const fillH = (cardH - 4) * dashReadyRatio;
-      ag.fillStyle(hexToNum(PALETTE.COBALT_SHADE), p.dashCooldownTimer <= 0 ? 0.55 : 0.35);
-      ag.fillRoundedRect(82, barY + cardH - 2 - fillH, cardW - 4, fillH, 5);
+    if (this.skillLabelText && this.skillLabelText.visible !== showHints) {
+      this.skillLabelText.setVisible(showHints);
     }
-    ag.lineStyle(2, hexToNum(dashBorder), 1);
-    ag.strokeRoundedRect(80, barY, cardW, cardH, 7);
+    if (this.dashLabelText && this.dashLabelText.visible !== showHints) {
+      this.dashLabelText.setVisible(showHints);
+    }
 
     if (this.skillCdText) {
       const skTxt =
         p.skillActiveTimer > 0
           ? `${p.skillActiveTimer.toFixed(1)}s`
-          : p.skillCooldownTimer <= 0
-            ? i18n.t('ui.hud.ready')
-            : `${p.skillCooldownTimer.toFixed(1)}s`;
+          : skillGeo.isReady
+            ? curLocale === 'en'
+              ? 'RDY'
+              : 'SẴN'
+            : skillGeo.cooldownText;
       if (this.skillCdText.text !== skTxt) this.skillCdText.setText(skTxt);
       this.skillCdText.setColor(
         p.skillActiveTimer > 0
           ? PALETTE.SOLAR_GOLD
-          : p.skillCooldownTimer <= 0
+          : skillGeo.isReady
             ? PALETTE.LIME_GLOW
-            : PALETTE.ASH_GRAY,
+            : PALETTE.BONE_WHITE,
       );
     }
     if (this.dashCdText) {
-      const dTxt =
-        p.dashCooldownTimer <= 0 ? i18n.t('ui.hud.ready') : `${p.dashCooldownTimer.toFixed(1)}s`;
+      const dTxt = dashGeo.isReady
+        ? curLocale === 'en'
+          ? 'RDY'
+          : 'SẴN'
+        : dashGeo.cooldownText;
       if (this.dashCdText.text !== dTxt) this.dashCdText.setText(dTxt);
-      this.dashCdText.setColor(p.dashCooldownTimer <= 0 ? PALETTE.CYAN_FROST : PALETTE.ASH_GRAY);
+      this.dashCdText.setColor(dashGeo.isReady ? PALETTE.CYAN_FROST : PALETTE.BONE_WHITE);
     }
   }
 
+  // Update statsLineText (kept up to date for debug verification; visible only when ?debug=1)
   if (sim.tick % 12 === 0 || sim.inHub || !this.lastHudStatsText) {
     const dps = sim.getRollingDps();
     const room = sim.getCurrentRoom();
     const roomLabel = sim.inHub ? i18n.t('ui.hud.hub') : i18n.roomTypeName(room.type);
-    const dashReady =
-      p.dashCooldownTimer <= 0 ? i18n.t('ui.hud.ready') : `${p.dashCooldownTimer.toFixed(1)}s`;
-    const skillReady =
-      p.skillActiveTimer > 0
-        ? `${i18n.t('ui.hud.active')} (${p.skillActiveTimer.toFixed(1)}s)`
-        : p.skillCooldownTimer <= 0
-          ? i18n.t('ui.hud.ready')
-          : `${p.skillCooldownTimer.toFixed(1)}s`;
-
-    const nextElem: ElementType =
-      p.activeImbueElement === 'burn'
-        ? 'chill'
-        : p.activeImbueElement === 'chill'
-          ? 'shock'
-          : 'burn';
-    const cycleTag =
-      p.characterId === 'elementalist'
-        ? ` · ${i18n.t('ui.hud.cycle')}: ${i18n.elementShortName(p.activeImbueElement)}→${i18n.elementShortName(nextElem)}`
-        : '';
-    const comboTag =
-      sim.teamComboCount > 0 ? ` · ${i18n.t('ui.hud.teamCombo')}: ${sim.teamComboCount}` : '';
-    const skShort = curLocale === 'en' ? 'Skill' : 'KN';
-
     const showDebug = isEffectiveDebugUiEnabled(this.coopMode !== 'solo');
     const dpsSegment = showDebug ? ` · DPS ${dps.toFixed(1)}` : '';
     const nextStats = sim.inHub
       ? i18n.t('ui.hud.hubStatsHint', { count: sim.getActivePlayerCount() })
-      : `${i18n.t('ui.hud.floor')} ${sim.currentFloor}/${sim.campaignMaxFloors} (${roomLabel})${dpsSegment} · ${i18n.t('ui.hud.gold')} ${p.gold} · ${i18n.t('ui.hud.wave')} ${sim.waveNumber} · Dash ${dashReady} · ${skShort} ${skillReady}${cycleTag}${comboTag}`;
+      : `${i18n.t('ui.hud.floor')} ${sim.currentFloor}/${sim.campaignMaxFloors} (${roomLabel})${dpsSegment} · ${i18n.t('ui.hud.gold')} ${p.gold} · ${i18n.t('ui.hud.wave')} ${sim.waveNumber}`;
     const statsCacheKey = `${showDebug ? '1' : '0'}:${nextStats}`;
     if (statsCacheKey !== this.lastHudStatsText) {
       this.lastHudStatsText = statsCacheKey;
@@ -247,7 +316,7 @@ export function updateVectorHudImpl(this: GameScene): void {
     );
   }
 
-  const q = graphicsSettings.getState().quality;
+  const q = gState.quality;
   const qKey = `${q}:${curLocale}`;
   if (this.qualityBtnText && qKey !== this.lastHudQuality) {
     this.lastHudQuality = qKey;
@@ -260,73 +329,112 @@ export function updateVectorHudImpl(this: GameScene): void {
     this.qualityBtnText.setText(`${i18n.t('ui.hud.qualityBtn')}: ${qLabel}`);
   }
 
-  // Update 2-slot Weapon Bar when active slot or equipped weapons change
-  const weaponHash = `${p.activeWeaponSlot}:${p.weaponSlots.join(',')}:${curLocale}`;
+  // Update Bottom-Right 2-slot Weapon Cards (Active Enlarged & Highlighted, Inactive Compact & Dimmed)
+  const weaponHash = `${p.activeWeaponSlot}:${p.weaponSlots.join(',')}:${curLocale}:${gState.showKeyHints ? 1 : 0}`;
   if (weaponHash !== this.lastHudWeaponHash) {
     this.lastHudWeaponHash = weaponHash;
-    const slotW = 166;
-    const slotH = 44;
-    const startX = 148;
-    const barY = 486;
     const invBake = 1 / TextureBaker.getBakeScale();
     const dmgPrefix = curLocale === 'en' ? 'DMG' : 'ST';
-    const nrgPrefix = i18n.t('ui.hud.energy');
+    const nrgPrefix = curLocale === 'en' ? 'EN' : 'NL';
+    const showHints = gState.showKeyHints;
+
+    const activeW = 148;
+    const activeH = 44;
+    const inactiveW = 116;
+    const inactiveH = 38;
+    const gap = 6;
+    const rightMargin = -12;
 
     this.weaponSlotBgs.forEach((slotBg, idx) => {
       const wId = p.weaponSlots[idx];
       const wDef = wId ? WEAPONS[wId] : undefined;
       const isSelected = idx === p.activeWeaponSlot && Boolean(wDef);
-      const sx = startX + idx * (slotW + 8);
+
+      const slot0W = p.activeWeaponSlot === 0 ? activeW : inactiveW;
+      const slot1W = p.activeWeaponSlot === 1 ? activeW : inactiveW;
+      const totalClusterW = slot0W + gap + slot1W;
+      const clusterStartX = rightMargin - totalClusterW;
+
+      const cardW = isSelected ? activeW : inactiveW;
+      const cardH = isSelected ? activeH : inactiveH;
+      const sx = idx === 0 ? clusterStartX : clusterStartX + slot0W + gap;
+      const sy = isSelected ? -10 - activeH : -10 - inactiveH;
+
       const icon = this.weaponIconSprites[idx];
       const nameTxt = this.weaponNameTexts[idx];
       const metaTxt = this.weaponMetaTexts[idx];
+      const keyTxt = this.weaponKeyTexts[idx];
 
       slotBg.clear();
       if (wId && wDef) {
         const rarityHex = WEAPON_RARITY_COLORS[wDef.rarity];
-        slotBg.fillStyle(
-          hexToNum(isSelected ? PALETTE.SLATE_MID : PALETTE.SLATE_DARK),
-          isSelected ? 0.96 : 0.86,
-        );
-        slotBg.lineStyle(
-          isSelected ? 2.5 : 2,
-          hexToNum(isSelected ? PALETTE.SOLAR_GOLD : rarityHex),
-          1,
-        );
-        slotBg.fillRoundedRect(sx, barY, slotW, slotH, 8);
-        slotBg.strokeRoundedRect(sx, barY, slotW, slotH, 8);
+        const rarityNum = hexToNum(rarityHex);
+        drawStyledPanel(slotBg, sx, sy, cardW, cardH, {
+          fillColor: isSelected ? UI_THEME.panelBgElevated : UI_THEME.panelBgDark,
+          fillAlpha: isSelected ? 0.94 : 0.78,
+          borderColor: isSelected ? hexToNum(PALETTE.SOLAR_GOLD) : rarityNum,
+          borderWidth: isSelected ? 2 : 1.2,
+          radius: UI_THEME.panelRadius.md,
+          accentColor: rarityNum,
+          accentSide: 'left',
+        });
+
+        if (showHints) {
+          const chip = drawKeyChip(slotBg, sx + cardW - 18, sy + 4, `${idx + 1}`, {
+            active: isSelected,
+          });
+          if (keyTxt) {
+            keyTxt.setVisible(true);
+            keyTxt.setPosition(sx + cardW - 18 + chip.width * 0.5, sy + 4 + chip.height * 0.5);
+            keyTxt.setColor(isSelected ? PALETTE.SOLAR_GOLD : PALETTE.SILVER_BRIGHT);
+          }
+        } else if (keyTxt) {
+          keyTxt.setVisible(false);
+        }
 
         if (icon) {
           icon.setVisible(true);
           icon.setTexture(TextureBaker.getWeaponTextureKey(wId));
-          icon.setScale(invBake * 0.82);
+          icon.setPosition(sx + 18, sy + cardH * 0.5);
+          icon.setScale(invBake * (isSelected ? 0.82 : 0.66));
+          icon.setAlpha(isSelected ? 1 : 0.78);
         }
         if (nameTxt) {
-          nameTxt.setText(`[${idx + 1}] ${i18n.weaponName(wId, wDef.nameVi)}`);
-          nameTxt.setColor(rarityHex);
+          const rawName = i18n.weaponName(wId, wDef.nameVi);
+          const displayName =
+            !isSelected && rawName.length > 12 ? `${rawName.slice(0, 11)}…` : rawName;
+          nameTxt.setText(displayName);
+          nameTxt.setPosition(sx + 34, sy + (isSelected ? 13 : 11));
+          nameTxt.setColor(isSelected ? rarityHex : PALETTE.SILVER_BRIGHT);
+          nameTxt.setAlpha(isSelected ? 1 : 0.85);
         }
         if (metaTxt) {
           metaTxt.setText(
             `${dmgPrefix} ${wDef.damage}${wDef.pelletCount > 1 ? `×${wDef.pelletCount}` : ''} · ${nrgPrefix} ${wDef.energyCost}`,
           );
-          metaTxt.setColor(PALETTE.SILVER_BRIGHT);
+          metaTxt.setPosition(sx + 34, sy + (isSelected ? 30 : 26));
+          metaTxt.setColor(isSelected ? PALETTE.BONE_WHITE : PALETTE.STEEL_LIGHT);
+          metaTxt.setAlpha(isSelected ? 1 : 0.8);
         }
       } else {
-        slotBg.fillStyle(hexToNum(PALETTE.INK_DARK), 0.68);
-        slotBg.lineStyle(1.5, hexToNum(PALETTE.SLATE_MID), 0.6);
-        slotBg.fillRoundedRect(sx, barY, slotW, slotH, 8);
-        slotBg.strokeRoundedRect(sx, barY, slotW, slotH, 8);
-
-        if (icon) {
-          icon.setVisible(false);
-        }
+        drawStyledPanel(slotBg, sx, sy, cardW, cardH, {
+          fillColor: UI_THEME.panelBgDark,
+          fillAlpha: 0.65,
+          borderColor: UI_THEME.panelBorder,
+          borderWidth: 1,
+          radius: UI_THEME.panelRadius.md,
+        });
+        if (icon) icon.setVisible(false);
+        if (keyTxt) keyTxt.setVisible(false);
         if (nameTxt) {
-          nameTxt.setText(`[${idx + 1}] ${curLocale === 'en' ? 'Empty Slot' : 'Ô Trống'}`);
-          nameTxt.setColor(PALETTE.ASH_GRAY);
+          nameTxt.setText(curLocale === 'en' ? 'Empty Slot' : 'Ô Trống');
+          nameTxt.setPosition(sx + 12, sy + 12);
+          nameTxt.setColor(PALETTE.STEEL_LIGHT);
         }
         if (metaTxt) {
-          metaTxt.setText(curLocale === 'en' ? 'Press [E] to equip' : 'Nhấn [E] để nhặt');
-          metaTxt.setColor(PALETTE.ASH_GRAY);
+          metaTxt.setText(curLocale === 'en' ? '[E] Equip' : '[E] Nhặt');
+          metaTxt.setPosition(sx + 12, sy + 26);
+          metaTxt.setColor(PALETTE.STEEL_LIGHT);
         }
       }
     });
@@ -335,6 +443,7 @@ export function updateVectorHudImpl(this: GameScene): void {
   if (!sim.stressTestActive) {
     this.updateMinimapHud();
     this.updateBossHud();
+    this.updateTopCenterBannersAndQol(1 / 60);
     this.updateCoopTeammateHud();
     this.updateHubInvitePanel();
     this.updateHubCharacterSkillPreview();
@@ -360,9 +469,9 @@ export function updateCoopTeammateHudImpl(this: GameScene): void {
       : remotes
           .map(
             (r) =>
-              `${r.id}:${r.slot}:${r.displayName}:${r.characterId}:${r.hp}:${r.maxHp}:${r.armor}:${r.lifeState}:${r.ready ? 1 : 0}:${Math.ceil(r.skillCooldownTimer)}:${r.pingMs}`,
+              `${r.id}:${r.slot}:${r.displayName}:${r.characterId}:${r.hp}:${r.maxHp}:${r.armor}:${r.lifeState}:${Math.round(r.reviveProgress * 20)}:${Math.ceil((r as { bleedoutTimer?: number }).bleedoutTimer ?? r.downedTimer)}:${r.ready ? 1 : 0}:${Math.ceil(r.skillCooldownTimer)}:${r.pingMs}`,
           )
-          .join('|') + `:${localHighPing}:${i18n.getLocale()}`;
+          .join('|') + `:${localHighPing}:${i18n.getLocale()}:${this.currentHudUiScale}`;
 
   if (hash === this.lastCoopHudHash) return;
   this.lastCoopHudHash = hash;
@@ -370,408 +479,125 @@ export function updateCoopTeammateHudImpl(this: GameScene): void {
   this.coopHudContainer.removeAll(true);
   if (!hash) return;
 
-  const textRes = TextureBaker.getBakeScale();
-  const cardW = 224;
-  const cardH = 40;
-  const startX = 14;
-  const startY = 74;
+  const textRes = computeUiTextResolution(
+    typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1,
+    ui.cameras?.main?.zoom || 2,
+    this.currentHudUiScale || 1,
+  );
+  const cardW = 198;
+  const cardH = 38;
+  const startX = 12;
+  const startY = 0;
 
   remotes.forEach((cp, idx) => {
     const cy = startY + idx * (cardH + 5);
     const slotHex = PLAYER_SLOT_COLORS[cp.slot];
-    const charDef = CHARACTERS[cp.characterId] ?? CHARACTERS.vanguard;
-    const charName = i18n.charName(cp.characterId, charDef.nameVi);
+    const slotNum = hexToNum(slotHex);
     const playerPing = Math.max(1, Math.round(cp.pingMs || (telemetry?.rttMs ?? 8)));
     const isHighPing = playerPing > 100;
     const skillReady = cp.skillCooldownTimer <= 0;
+    const isDowned = cp.lifeState === 'downed';
 
     const bg = ui.add.graphics();
-    bg.fillStyle(hexToNum(PALETTE.INK_DEEP), 0.88);
-    bg.lineStyle(2, hexToNum(cp.lifeState === 'downed' ? PALETTE.CRIMSON_BRIGHT : slotHex), 1);
-    bg.fillRoundedRect(startX, cy, cardW, cardH, 6);
-    bg.strokeRoundedRect(startX, cy, cardW, cardH, 6);
+    drawStyledPanel(bg, startX, cy, cardW, cardH, {
+      fillColor: isDowned ? 0x2a1218 : UI_THEME.panelBg,
+      fillAlpha: 0.84,
+      borderColor: isDowned ? UI_THEME.status.hp : slotNum,
+      borderWidth: isDowned ? 1.6 : 1.2,
+      radius: UI_THEME.panelRadius.sm,
+      accentColor: isDowned ? UI_THEME.status.hp : slotNum,
+      accentSide: 'left',
+    });
 
-    // Mini HP bar
-    const hpRatio = clamp(cp.hp / Math.max(1, cp.maxHp), 0, 1);
-    bg.fillStyle(hexToNum(PALETTE.SLATE_DARK), 1);
-    bg.fillRect(startX + 8, cy + 21, 96, 7);
-    bg.fillStyle(
-      hexToNum(
-        cp.lifeState === 'downed'
-          ? PALETTE.CRIMSON_BRIGHT
-          : cp.lifeState === 'ghost'
-            ? PALETTE.CYAN_FROST
-            : PALETTE.RUBY_CORE,
-      ),
-      1,
-    );
-    bg.fillRect(startX + 8, cy + 21, Math.max(2, 96 * hpRatio), 7);
+    drawMiniCharacterPortrait(bg, cp.characterId, startX + 16, cy + 19, 10.5, slotHex);
 
-    // Mini Armor bar
-    const armorRatio = clamp(cp.armor / Math.max(1, cp.maxArmor), 0, 1);
-    bg.fillStyle(hexToNum(PALETTE.SLATE_DARK), 1);
-    bg.fillRect(startX + 8, cy + 30, 96, 4);
-    if (armorRatio > 0) {
-      bg.fillStyle(hexToNum(PALETTE.STEEL_LIGHT), 1);
-      bg.fillRect(startX + 8, cy + 30, Math.max(2, 96 * armorRatio), 4);
-    }
+    // Segmented Mini HP / Revive bar
+    drawSegmentedBar(bg, {
+      x: startX + 31,
+      y: cy + 20,
+      width: 78,
+      height: 6,
+      current: isDowned ? Math.max(1, Math.round(cp.reviveProgress * 8)) : cp.hp,
+      max: isDowned ? 8 : Math.max(1, cp.maxHp),
+      maxSegments: 6,
+      gap: 1,
+      fillColor: isDowned ? 0x4ade80 : UI_THEME.status.hp,
+      fillDarkColor: isDowned ? 0x15803d : UI_THEME.status.hpDark,
+      pulseAlert: isDowned,
+    });
+
+    // Segmented Mini Armor bar
+    drawSegmentedBar(bg, {
+      x: startX + 31,
+      y: cy + 28,
+      width: 78,
+      height: 4.5,
+      current: cp.armor,
+      max: Math.max(1, cp.maxArmor),
+      maxSegments: 4,
+      gap: 1,
+      fillColor: UI_THEME.status.armor,
+      fillDarkColor: UI_THEME.status.armorDark,
+    });
 
     this.coopHudContainer.add(bg);
 
-    const skillTag = skillReady ? '[Q✓]' : `[Q ${Math.ceil(cp.skillCooldownTimer)}s]`;
-    const stateTag =
-      cp.lifeState === 'downed'
-        ? i18n.t('ui.hud.downed')
-        : cp.lifeState === 'ghost'
-            ? i18n.t('ui.hud.ghost')
-            : sim.inHub && cp.ready
-              ? `${i18n.t('ui.hud.readyShort')} · ${skillTag}`
-              : `HP ${cp.hp}/${cp.maxHp} · ${skillTag}`;
+    const cpBleedout = (cp as { bleedoutTimer?: number }).bleedoutTimer ?? cp.downedTimer;
+    const skillTag = skillReady ? 'KN✓' : `${Math.ceil(cp.skillCooldownTimer)}s`;
+    const stateTag = isDowned
+      ? cp.reviveProgress > 0.01
+        ? `Cứu ${Math.round(cp.reviveProgress * 100)}%`
+        : `${i18n.t('ui.hud.downed')} ${Math.ceil(cpBleedout)}s`
+      : cp.lifeState === 'ghost'
+        ? i18n.t('ui.hud.ghost')
+        : `${cp.hp}/${cp.maxHp} · ${skillTag}`;
 
-    const title = ui.add.text(
-      startX + 8,
-      cy + 4,
-      `[P${cp.slot}] ${cp.displayName} (${charName})`,
-      {
-        fontFamily: '"Be Vietnam Pro", sans-serif',
-        fontSize: '9.5px',
-        fontStyle: '800',
-        color: slotHex,
-        stroke: PALETTE.INK_DARK,
-        strokeThickness: 2.5,
-        resolution: textRes,
-      },
-    );
+    const title = ui.add
+      .text(
+        startX + 31,
+        cy + 10,
+        `P${cp.slot} ${cp.displayName}`,
+        createUiTextStyle({
+          fontPxAt1080p: 13,
+          weight: 800,
+          color: slotHex,
+          resolution: textRes,
+        }),
+      )
+      .setOrigin(0, 0.5);
+
     const pingText = ui.add
-      .text(startX + cardW - 7, cy + 4, `${isHighPing ? '⚠' : ''}${playerPing}ms`, {
-        fontFamily: '"Be Vietnam Pro", monospace',
-        fontSize: '9px',
-        fontStyle: '800',
-        color: isHighPing ? PALETTE.SOLAR_GOLD : PALETTE.SILVER_BRIGHT,
-        stroke: PALETTE.INK_DARK,
-        strokeThickness: 2.5,
-        resolution: textRes,
-      })
-      .setOrigin(1, 0);
-    const sub = ui.add.text(startX + 110, cy + 20, stateTag, {
-      fontFamily: '"Be Vietnam Pro", sans-serif',
-      fontSize: '8.8px',
-      fontStyle: '700',
-      color:
-        cp.lifeState === 'downed'
-          ? PALETTE.CRIMSON_BRIGHT
-          : skillReady
-            ? PALETTE.LIME_GLOW
-            : PALETTE.BONE_WHITE,
-      stroke: PALETTE.INK_DARK,
-      strokeThickness: 2,
-      resolution: textRes,
-    });
+      .text(
+        startX + cardW - 6,
+        cy + 10,
+        `${isHighPing ? '⚠' : ''}${playerPing}ms`,
+        createUiTextStyle({
+          fontPxAt1080p: 13,
+          weight: 700,
+          color: isHighPing ? PALETTE.SOLAR_GOLD : PALETTE.SILVER_BRIGHT,
+          resolution: textRes,
+        }),
+      )
+      .setOrigin(1, 0.5);
+
+    const sub = ui.add
+      .text(
+        startX + 114,
+        cy + 25,
+        stateTag,
+        createUiTextStyle({
+          fontPxAt1080p: 13,
+          weight: 700,
+          color: isDowned
+            ? PALETTE.CRIMSON_BRIGHT
+            : skillReady
+              ? PALETTE.LIME_GLOW
+              : PALETTE.BONE_WHITE,
+          resolution: textRes,
+        }),
+      )
+      .setOrigin(0, 0.5);
+
     this.coopHudContainer.add([title, pingText, sub]);
   });
-}
-
-export function updateOffscreenTeammateArrowsImpl(this: GameScene): void {
-  const g = this.offscreenArrowGraphics;
-  g.clear();
-
-  const sim = this.transport.getSim();
-  if (sim.stressTestActive || sim.simulatedPlayers.length === 0) return;
-
-  const cam = this.cameras.main;
-  const view = cam.worldView;
-  if (!view || view.width <= 0) return;
-
-  const minX = -this.hudPadX + 26;
-  const maxX = WORLD_VIEW_WIDTH + this.hudPadX - 26;
-  const minY = -this.hudPadY + 74;
-  const maxY = WORLD_VIEW_HEIGHT + this.hudPadY - 68;
-
-  for (let i = 0; i < sim.simulatedPlayers.length; i++) {
-    const cp = sim.simulatedPlayers[i]!;
-    if (cp.id === sim.player.id) continue;
-
-    const pos = this.transport.getInterpolatedSimPlayerPos(cp, this.entityPosScratch);
-
-    if (
-      pos.x >= view.x &&
-      pos.x <= view.x + view.width &&
-      pos.y >= view.y &&
-      pos.y <= view.y + view.height
-    ) {
-      continue;
-    }
-
-    const relX = pos.x - cam.midPoint.x + WORLD_VIEW_WIDTH * 0.5;
-    const relY = pos.y - cam.midPoint.y + WORLD_VIEW_HEIGHT * 0.5;
-    const ax = clamp(relX, minX, maxX);
-    const ay = clamp(relY, minY, maxY);
-    const angle = Math.atan2(relY - WORLD_VIEW_HEIGHT * 0.5, relX - WORLD_VIEW_WIDTH * 0.5);
-
-    const col = hexToNum(
-      cp.lifeState === 'downed' ? PALETTE.CRIMSON_BRIGHT : PLAYER_SLOT_COLORS[cp.slot],
-    );
-    const tipX = ax + Math.cos(angle) * 10;
-    const tipY = ay + Math.sin(angle) * 10;
-    const leftX = ax + Math.cos(angle + 2.4) * 9;
-    const leftY = ay + Math.sin(angle + 2.4) * 9;
-    const rightX = ax + Math.cos(angle - 2.4) * 9;
-    const rightY = ay + Math.sin(angle - 2.4) * 9;
-
-    g.fillStyle(col, 0.95);
-    g.lineStyle(2, hexToNum(PALETTE.INK_DARK), 1);
-    g.beginPath();
-    g.moveTo(tipX, tipY);
-    g.lineTo(leftX, leftY);
-    g.lineTo(rightX, rightY);
-    g.closePath();
-    g.fillPath();
-    g.strokePath();
-  }
-}
-
-export function updateMinimapHudImpl(this: GameScene): void {
-  const sim = this.transport.getSim();
-  const room = sim.getCurrentRoom();
-  const minimapHash = `${sim.inHub ? 'hub' : sim.currentFloor}:${sim.currentRoomId}:${this.fullMapOpen ? 1 : 0}:${sim.secretWallBroken ? 1 : 0}:${room.cleared ? 1 : 0}:${sim.runStats.roomsCleared}:${sim.pings.length}:${i18n.getLocale()}:${this.hudPadX}:${this.hudPadY}`;
-  if (minimapHash === this.lastMinimapHash) return;
-  this.lastMinimapHash = minimapHash;
-
-  const g = this.minimapGraphics;
-  g.clear();
-
-  const roomTypeStr = sim.inHub ? i18n.roomTypeLabel('hub') : i18n.roomTypeLabel(room.type);
-  const titleStr = this.fullMapOpen
-    ? i18n.t('ui.minimap.fullTitle', {
-        floor: sim.currentFloor,
-        max: sim.campaignMaxFloors,
-        roomType: roomTypeStr,
-      })
-    : sim.inHub
-      ? i18n.t('ui.minimap.hubMini')
-      : i18n.t('ui.minimap.floorMini', {
-          floor: sim.currentFloor,
-          max: sim.campaignMaxFloors,
-          roomType: roomTypeStr,
-        });
-  if (this.minimapTitleText.text !== titleStr) {
-    this.minimapTitleText.setText(titleStr);
-  }
-
-  const rooms = sim.dungeon.rooms;
-  let minGx = 99;
-  let maxGx = -99;
-  let minGy = 99;
-  let maxGy = -99;
-  for (let i = 0; i < rooms.length; i++) {
-    const r = rooms[i]!;
-    if (r.gx < minGx) minGx = r.gx;
-    if (r.gx > maxGx) maxGx = r.gx;
-    if (r.gy < minGy) minGy = r.gy;
-    if (r.gy > maxGy) maxGy = r.gy;
-  }
-
-  const spanX = Math.max(1, maxGx - minGx + 1);
-  const spanY = Math.max(1, maxGy - minGy + 1);
-
-  const panelX = this.fullMapOpen ? 260 : 776 + this.hudPadX;
-  const panelY = this.fullMapOpen ? 105 : 72 - this.hudPadY;
-  const panelW = this.fullMapOpen ? 440 : 172;
-  const panelH = this.fullMapOpen ? 310 : 108;
-
-  this.minimapTitleText.setPosition(panelX + 8, panelY + 4);
-
-  g.fillStyle(hexToNum(PALETTE.INK_DEEP), this.fullMapOpen ? 0.94 : 0.84);
-  g.lineStyle(2, hexToNum(PALETTE.INK_DARK), 1);
-  g.fillRoundedRect(panelX, panelY, panelW, panelH, 7);
-  g.strokeRoundedRect(panelX, panelY, panelW, panelH, 7);
-
-  const cellStep = this.fullMapOpen
-    ? Math.min(54, Math.floor((panelW - 60) / spanX), Math.floor((panelH - 64) / spanY))
-    : Math.min(24, Math.floor((panelW - 24) / spanX), Math.floor((panelH - 32) / spanY));
-  const nodeW = Math.floor(cellStep * 0.72);
-  const nodeH = Math.floor(cellStep * 0.62);
-
-  const originX = panelX + (panelW - (spanX - 1) * cellStep) * 0.5;
-  const originY = panelY + 14 + (panelH - 18 - (spanY - 1) * cellStep) * 0.5;
-
-  const isVisitedOrCleared = (rm: DungeonRoomNode) =>
-    rm.discovery === 'visited' || rm.discovery === 'cleared';
-
-  // 1. Corridors between discovered / adjacent rooms
-  for (let i = 0; i < rooms.length; i++) {
-    const r = rooms[i]!;
-    if (!isVisitedOrCleared(r)) continue;
-    const cx = originX + (r.gx - minGx) * cellStep;
-    const cy = originY + (r.gy - minGy) * cellStep;
-
-    for (const targetId of Object.values(r.connections)) {
-      if (targetId === undefined) continue;
-      const target = rooms.find((rm) => rm.id === targetId);
-      if (!target) continue;
-      if (target.type === 'secret' && !r.secretWallBroken && !isVisitedOrCleared(target)) {
-        continue;
-      }
-
-      const tx = originX + (target.gx - minGx) * cellStep;
-      const ty = originY + (target.gy - minGy) * cellStep;
-      g.lineStyle(2, hexToNum(PALETTE.ASH_GRAY), 0.75);
-      g.beginPath();
-      g.moveTo(cx, cy);
-      g.lineTo(tx, ty);
-      g.strokePath();
-    }
-  }
-
-  // 2. Room Nodes (Fog of War: visited/cleared rooms vs adjacent mystery rooms)
-  const adjacentIds = new Set<number>();
-  for (let i = 0; i < rooms.length; i++) {
-    const r = rooms[i]!;
-    if (!isVisitedOrCleared(r)) continue;
-    for (const tid of Object.values(r.connections)) {
-      if (typeof tid === 'number') adjacentIds.add(tid);
-    }
-  }
-
-  for (let i = 0; i < rooms.length; i++) {
-    const r = rooms[i]!;
-    const discovered = isVisitedOrCleared(r);
-    const isVisible =
-      discovered ||
-      r.discovery === 'discovered' ||
-      (adjacentIds.has(r.id) && (r.type !== 'secret' || room.secretWallBroken));
-    if (!isVisible) continue;
-
-    const cx = originX + (r.gx - minGx) * cellStep;
-    const cy = originY + (r.gy - minGy) * cellStep;
-
-    let fillHex: string = PALETTE.SLATE_MID;
-    if (!discovered) {
-      fillHex = PALETTE.SLATE_DARK;
-    } else if (r.type === 'boss') {
-      fillHex = PALETTE.RUBY_CORE;
-    } else if (r.type === 'portal') {
-      fillHex = PALETTE.ELECTRIC_VIOLET;
-    } else if (r.type === 'treasure' || r.type === 'merchant') {
-      fillHex = PALETTE.SOLAR_GOLD;
-    } else if (r.type === 'shrine') {
-      fillHex = PALETTE.CYAN_FROST;
-    } else if (r.type === 'secret') {
-      fillHex = PALETTE.TOXIC_PURPLE;
-    } else if (r.cleared) {
-      fillHex = PALETTE.GOBLIN_GREEN;
-    }
-
-    const isCurrent = r.id === sim.currentRoomId;
-    g.fillStyle(hexToNum(fillHex), discovered ? 0.95 : 0.45);
-    g.lineStyle(
-      isCurrent ? 2.5 : 1.5,
-      hexToNum(isCurrent ? PALETTE.BONE_WHITE : PALETTE.INK_DARK),
-      1,
-    );
-    g.fillRoundedRect(cx - nodeW / 2, cy - nodeH / 2, nodeW, nodeH, 3);
-    g.strokeRoundedRect(cx - nodeW / 2, cy - nodeH / 2, nodeW, nodeH, 3);
-
-    if (isCurrent) {
-      g.fillStyle(hexToNum(PALETTE.SOLAR_GOLD), 1);
-      g.fillCircle(cx, cy, this.fullMapOpen ? 4.5 : 2.8);
-    }
-  }
-}
-
-export function updateBossHudImpl(this: GameScene): void {
-  const sim = this.transport.getSim();
-  const boss = sim.getActiveBoss();
-  const stunActive = boss && boss.aiState === 'stunned' && boss.stateTimer > 0 ? 1 : 0;
-  const coreWin = Math.ceil(sim.titanCoreWindowTimer);
-  const trailKey = Math.round(this.trailingBossHpRatio * 200);
-  const bossHash =
-    !boss || this.fullMapOpen || sim.runState !== 'playing'
-      ? ''
-      : `${boss.defId}:${boss.id}:${boss.hp}:${boss.maxHp}:${boss.bossPhase}:${stunActive}:${coreWin}:${trailKey}:${i18n.getLocale()}`;
-  if (bossHash === this.lastBossHudHash) return;
-  this.lastBossHudHash = bossHash;
-
-  const g = this.bossBarGraphics;
-  g.clear();
-
-  if (!boss || this.fullMapOpen || sim.runState !== 'playing') {
-    this.bossTitleText.setVisible(false);
-    return;
-  }
-
-  this.bossTitleText.setVisible(true);
-  const bossDef = ENEMIES[boss.defId];
-  const bossName = i18n
-    .enemyName(boss.defId, bossDef?.nameVi ?? 'Mục Vương Nấm Độc')
-    .toUpperCase();
-  const statusSuffix =
-    boss.aiState === 'stunned' && boss.stateTimer > 0
-      ? i18n.t('ui.boss.stunned')
-      : sim.titanCoreWindowTimer > 0
-        ? i18n.t('ui.boss.breakCores', {
-            sec: Math.ceil(sim.titanCoreWindowTimer),
-          })
-        : '';
-  const titleStr = i18n.t('ui.boss.titleFormat', {
-    name: bossName,
-    phase: boss.bossPhase,
-    hp: boss.hp,
-    maxHp: boss.maxHp,
-    suffix: statusSuffix,
-  });
-  if (this.bossTitleText.text !== titleStr) {
-    this.bossTitleText.setText(titleStr);
-  }
-
-  const bx = 260;
-  const by = 94;
-  const bw = 440;
-  const bh = 16;
-  const ratio = clamp(boss.hp / boss.maxHp, 0, 1);
-
-  g.fillStyle(hexToNum(PALETTE.INK_DEEP), 0.94);
-  g.lineStyle(2.5, hexToNum(PALETTE.INK_DARK), 1);
-  g.fillRoundedRect(bx, by, bw, bh, 5);
-
-  if (this.trailingBossHpRatio > ratio + 0.003) {
-    g.fillStyle(hexToNum(PALETTE.SOLAR_GOLD), 0.85);
-    g.fillRoundedRect(
-      bx + 2,
-      by + 2,
-      Math.max(4, (bw - 4) * clamp(this.trailingBossHpRatio, 0, 1)),
-      bh - 4,
-      3.5,
-    );
-  }
-
-  const fillHex =
-    boss.defId === 'kryssa_ice_queen'
-      ? boss.bossPhase === 3
-        ? PALETTE.AZURE_CORE
-        : PALETTE.CYAN_FROST
-      : boss.defId === 'forge_titan'
-        ? boss.bossPhase === 3
-          ? PALETTE.MAGMA_RED
-          : PALETTE.FLAME_ORANGE
-        : boss.bossPhase === 3
-          ? PALETTE.TOXIC_PURPLE
-          : boss.bossPhase === 2
-            ? PALETTE.FLAME_ORANGE
-            : PALETTE.RUBY_CORE;
-  if (ratio > 0) {
-    g.fillStyle(hexToNum(fillHex), 1);
-    g.fillRoundedRect(bx + 2, by + 2, Math.max(4, (bw - 4) * ratio), bh - 4, 3.5);
-  }
-  g.strokeRoundedRect(bx, by, bw, bh, 5);
-
-  // Phase threshold notch markers at 66% and 33%
-  for (const mark of [0.33, 0.66]) {
-    const mx = bx + bw * mark;
-    g.lineStyle(2, hexToNum(PALETTE.SOLAR_GOLD), 0.95);
-    g.beginPath();
-    g.moveTo(mx, by);
-    g.lineTo(mx, by + bh);
-    g.strokePath();
-  }
 }
