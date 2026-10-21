@@ -33,9 +33,14 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
             playerShotFxTriggered = true;
             const shootSfx = resolveWeaponShootSfx(ev.weaponId);
             const isShotgun = shootSfx === 'shoot_shotgun';
-            const spawnedProj = sim.projectiles.find((b) => b.id === ev.projectileId);
-            const isTeammate =
-              spawnedProj?.ownerId !== undefined && spawnedProj.ownerId !== sim.player.id;
+            let isTeammate = false;
+            for (let pi = sim.projectiles.length - 1; pi >= 0; pi--) {
+              const b = sim.projectiles[pi]!;
+              if (b.id === ev.projectileId) {
+                isTeammate = b.ownerId !== undefined && b.ownerId !== sim.player.id;
+                break;
+              }
+            }
             if (!isStress || sim.tick % 3 === 0) {
               this.fx.spawnMuzzleFlashAndCasing(ev.x, ev.y, ev.angle, isShotgun, isTeammate);
             }

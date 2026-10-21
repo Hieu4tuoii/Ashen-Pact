@@ -491,7 +491,9 @@ export function activateParticle(
   p.sprite.setRotation(config.alignToVelocity ? Math.atan2(vy, vx) : (config.rotation ?? 0));
   p.sprite.setScale(config.startScale, config.startScale * scaleRatioY);
   p.sprite.setAlpha(startAlpha);
-  p.sprite.setDepth(depth);
+  if (p.sprite.depth !== depth) {
+    p.sprite.setDepth(depth);
+  }
   p.sprite.setVisible(true);
 
   if (p.shadowSprite) {

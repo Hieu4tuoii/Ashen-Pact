@@ -476,10 +476,14 @@ export function syncProjectilesAndPickupsImpl(this: GameScene): void {
       entry.sprite.setScale(projScale);
     }
 
-    entry.sprite.setDepth(spec.depth);
-    entry.sprite.setBlendMode(
-      spec.blendMode === 'ADD' ? Phaser.BlendModes.ADD : Phaser.BlendModes.NORMAL,
-    );
+    if (entry.sprite.depth !== spec.depth) {
+      entry.sprite.setDepth(spec.depth);
+    }
+    const targetBlendMode =
+      spec.blendMode === 'ADD' ? Phaser.BlendModes.ADD : Phaser.BlendModes.NORMAL;
+    if (entry.sprite.blendMode !== targetBlendMode) {
+      entry.sprite.setBlendMode(targetBlendMode);
+    }
 
     const pos = this.transport.getInterpolatedProjectilePos(b, this.entityPosScratch);
     const inView =
