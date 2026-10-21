@@ -107,7 +107,7 @@
 | P8 | Cổng dịch chuyển & cổng qua phòng | Cổng đẹp, sáng ảo diệu | [x] |
 | P9a | Design system, HUD trong game | UI/UX hiện đại (HUD) | [x] |
 | P9b | Menu, Hub, modal, Pause, Settings, kết quả | UI/UX hiện đại (Screens/Modals) | [x] |
-| P10a | Nhân vật Cutout 2.0 & Quái Full Rig: animation, shading 2 lớp & rim-light | Chi tiết, mượt, đẹp (Rig) | [ ] |
+| P10a | Nhân vật Cutout 2.0 & Quái Full Rig: animation, shading 2 lớp & rim-light | Chi tiết, mượt, đẹp (Rig) | [x] |
 | P10b | FX, Phản Ứng Nguyên Tố & Hạt Môi Trường Trong Trẻo | Chi tiết, mượt, đẹp (FX) | [ ] |
 | P11 | Harness thật + độ khó + kịch tính | Khó và kịch tính hơn | [ ] |
 | P12 | Hồi quy, hiệu năng, release v0.2.0 | Chất lượng sản phẩm | [ ] |
