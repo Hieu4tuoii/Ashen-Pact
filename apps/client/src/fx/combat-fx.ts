@@ -545,7 +545,16 @@ export class CombatFxManager {
   }): void {
     if (!graphicsSettings.getState().showDamageNumbers) return;
     const cellRes = resolveSpatialPopupCellSlot(this.damagePool, params.x, params.y, 120, 3);
-    const slot = this.acquireDamageSlot(params.x, params.y);
+    if (cellRes.activeInCell >= 3 && cellRes.evictIndex !== null) {
+      const oldest = this.damagePool[cellRes.evictIndex];
+      if (!oldest || oldest.age < 0.48) {
+        return;
+      }
+    }
+    const slot =
+      cellRes.evictIndex !== null
+        ? (this.damagePool[cellRes.evictIndex] ?? null)
+        : this.acquireDamageSlot();
     if (!slot) return;
 
     this.totalDamagePopupsSpawned += 1;
@@ -582,8 +591,12 @@ export class CombatFxManager {
       color = PALETTE.LIME_GLOW;
     }
 
-    slot.text.setText(label);
-    slot.text.setColor(color);
+    if (slot.text.style.color !== color) {
+      slot.text.setColor(color);
+    }
+    if (slot.text.text !== label) {
+      slot.text.setText(label);
+    }
     slot.text.setPosition(slot.x, slot.y);
     slot.text.setScale(computePopupScalePop(0, slot.ttl, slot.baseScale));
     slot.text.setAlpha(1);

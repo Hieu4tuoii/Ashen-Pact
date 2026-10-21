@@ -249,7 +249,9 @@ export function refreshResolution(
   }
   const popupRes = Math.min(2, bakeScale);
   for (const item of this.damagePool) {
-    item.text.setResolution(popupRes);
+    if (item.text.style.resolution !== popupRes) {
+      item.text.setResolution(popupRes);
+    }
   }
 }
 
@@ -496,7 +498,7 @@ export function resolveSpatialPopupCellSlot(
   let oldestAge = -1;
   let evictIndex: number | null = null;
   let evictedSlotIndex: number | undefined;
-  const usedSlots = new Set<number>();
+  let usedSlotsMask = 0;
 
   for (let i = 0; i < pool.length; i += 1) {
     const item = pool[i]!;
@@ -505,8 +507,8 @@ export function resolveSpatialPopupCellSlot(
     const iy = item.originY ?? item.y;
     if (Math.floor(ix / safeCell) === cellX && Math.floor(iy / safeCell) === cellY) {
       activeInCell += 1;
-      if (item.cellSlotIndex !== undefined) {
-        usedSlots.add(item.cellSlotIndex);
+      if (item.cellSlotIndex !== undefined && item.cellSlotIndex >= 0 && item.cellSlotIndex < 16) {
+        usedSlotsMask |= 1 << item.cellSlotIndex;
       }
       if (item.age > oldestAge) {
         oldestAge = item.age;
@@ -521,7 +523,7 @@ export function resolveSpatialPopupCellSlot(
     slotIndex = evictedSlotIndex;
   } else {
     for (let s = 0; s < maxPerCell; s += 1) {
-      if (!usedSlots.has(s)) {
+      if ((usedSlotsMask & (1 << s)) === 0) {
         slotIndex = s;
         break;
       }

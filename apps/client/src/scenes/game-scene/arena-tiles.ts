@@ -714,11 +714,12 @@ export function applyCameraViewportImpl(this: GameScene): void {
       this.crosshairSprite.setTexture('ui_crosshair');
       this.crosshairSprite.setScale(invBake);
     }
+    const hudTextRes = Math.min(4, newScale);
     for (const txt of this.textObjects) {
-      txt.setResolution(newScale);
+      txt.setResolution(hudTextRes);
     }
     for (const txt of this.pingVisuals.values()) {
-      txt.setResolution(newScale);
+      txt.setResolution(hudTextRes);
     }
     this.destroyPortalAndDoorVisuals();
     for (const sprite of this.chestSprites.values()) {
@@ -773,6 +774,7 @@ export function applyCameraViewportImpl(this: GameScene): void {
   if (this.hudContainer) {
     applyHudEdgeAnchors(this);
   }
+  this.debugOverlay?.resetSamples();
 }
 
 export function updateIrisTransitionImpl(this: GameScene, dtSec: number): void {

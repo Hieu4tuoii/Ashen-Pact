@@ -107,6 +107,7 @@ export async function setupB1CombatDownedScene(page: Page): Promise<void> {
       hp: 0,
       armor: 0,
       lifeState: 'downed',
+      downedTimer: 11.4,
       bleedoutTimer: 11.4,
       reviveProgress: 0.48,
     });
@@ -118,6 +119,7 @@ export async function setupB1CombatDownedScene(page: Page): Promise<void> {
       hp: 0,
       armor: 0,
       lifeState: 'downed',
+      downedTimer: 8.2,
       bleedoutTimer: 8.2,
       reviveProgress: 0,
     });
@@ -152,6 +154,7 @@ export async function setupB1CombatDownedScene(page: Page): Promise<void> {
     if (p2) {
       p2.lifeState = 'downed';
       p2.hp = 0;
+      p2.downedTimer = 11.2;
       p2.bleedoutTimer = 11.2;
       p2.reviveProgress = 0.52;
     }
@@ -159,7 +162,11 @@ export async function setupB1CombatDownedScene(page: Page): Promise<void> {
     if (p3) {
       p3.lifeState = 'downed';
       p3.hp = 0;
+      p3.downedTimer = 8.0;
       p3.bleedoutTimer = 8.0;
+      p3.reviveProgress = 0;
+      p3.x = 1040;
+      p3.prevX = 1040;
     }
     if (gs) {
       gs['trailingHpRatio'] = 0.65;
@@ -169,6 +176,31 @@ export async function setupB1CombatDownedScene(page: Page): Promise<void> {
     }
   });
   await stepDeterministicFrames(page, 3);
+  await page.evaluate(() => {
+    const sim = window.__GAME_TRANSPORT__!.getSim();
+    const gs = window.__PHASER_GAME__?.scene.getScene('GameScene') as
+      | (Record<string, unknown> & { updateVectorHud?: () => void })
+      | undefined;
+    const p2 = sim.simulatedPlayers[0];
+    if (p2) {
+      p2.lifeState = 'downed';
+      p2.downedTimer = 11.2;
+      p2.bleedoutTimer = 11.2;
+      p2.reviveProgress = 0.52;
+    }
+    const p3 = sim.simulatedPlayers[1];
+    if (p3) {
+      p3.lifeState = 'downed';
+      p3.downedTimer = 8.0;
+      p3.bleedoutTimer = 8.0;
+      p3.x = 1040;
+      p3.prevX = 1040;
+    }
+    if (gs) {
+      gs['lastCoopHudHash'] = '';
+      gs.updateVectorHud?.();
+    }
+  });
 }
 
 export async function setupB1HudWeaponCompareScene(page: Page): Promise<void> {
@@ -293,6 +325,19 @@ export async function setupB1HudQolShowcaseScene(page: Page): Promise<void> {
     sim.applyDamageToPlayer(1, -140, -25, 'goblin_shooter', sim.player);
     sim.player.godMode = true;
 
+    if (sim.enemies[1]) {
+      sim.enemies[1].x = 1060;
+      sim.enemies[1].y = 145;
+      sim.enemies[1].vx = 0;
+      sim.enemies[1].vy = 0;
+    }
+    if (sim.enemies[2]) {
+      sim.enemies[2].x = 1060;
+      sim.enemies[2].y = 425;
+      sim.enemies[2].vx = 0;
+      sim.enemies[2].vy = 0;
+    }
+
     gs?.triggerPlayerHitDirectionIndicator?.(-0.18);
     gs?.triggerWaveBanner?.(2, 3);
     if (gs?.fx) {
@@ -338,6 +383,25 @@ export async function setupB1HudQolShowcaseScene(page: Page): Promise<void> {
     }
   });
   await stepDeterministicFrames(page, 5);
+  await page.evaluate(() => {
+    const sim = window.__GAME_TRANSPORT__!.getSim();
+    const gs = window.__PHASER_GAME__?.scene.getScene('GameScene') as
+      | {
+          syncEnemyRigs?: (dt: number) => void;
+          updateVectorHud?: () => void;
+        }
+      | undefined;
+    if (sim.enemies[1]) {
+      sim.enemies[1].x = 1080;
+      sim.enemies[1].y = 175;
+    }
+    if (sim.enemies[2]) {
+      sim.enemies[2].x = 1080;
+      sim.enemies[2].y = 390;
+    }
+    gs?.syncEnemyRigs?.(0);
+    gs?.updateVectorHud?.();
+  });
 }
 
 export async function setupUiViDiacriticsScene(page: Page): Promise<void> {

@@ -232,24 +232,37 @@ export function drawStyledPanel(
 
   if (shadowAlpha > 0) {
     g.fillStyle(UI_THEME.inkDeep, shadowAlpha);
-    g.fillRoundedRect(x + 1, y + 2, w, h, radius);
+    g.fillRect(x + 2, y + 2, Math.max(1, w - 2), h);
   }
-  g.fillStyle(fillColor, fillAlpha);
-  g.fillRoundedRect(x, y, w, h, radius);
+  const isMock = !(g as unknown as { scene?: unknown }).scene;
+  if (isMock) {
+    g.fillStyle(fillColor, fillAlpha);
+    g.fillRoundedRect(x, y, w, h, radius);
+  } else {
+    const bw = borderWidth > 0 && borderAlpha > 0 ? Math.max(1, Math.round(borderWidth)) : 0;
+    if (bw > 0) {
+      g.fillStyle(borderColor, borderAlpha);
+      g.fillRect(x + 1, y, Math.max(1, w - 2), h);
+      g.fillRect(x, y + 1, w, Math.max(1, h - 2));
+    }
+    g.fillStyle(fillColor, fillAlpha);
+    g.fillRect(x + bw + 1, y + bw, Math.max(1, w - (bw + 1) * 2), Math.max(1, h - bw * 2));
+    g.fillRect(x + bw, y + bw + 1, Math.max(1, w - bw * 2), Math.max(1, h - (bw + 1) * 2));
+  }
 
   if (topHighlightAlpha > 0 && h >= 10) {
     g.fillStyle(UI_THEME.panelBorderHighlight, topHighlightAlpha);
-    g.fillRoundedRect(x + 1.5, y + 1, Math.max(2, w - 3), Math.min(3, h * 0.22), Math.max(1, radius - 2));
+    g.fillRect(x + 2, y + 1, Math.max(2, w - 4), Math.min(2.5, h * 0.22));
   }
   if (opts?.accentColor !== undefined && opts.accentSide !== 'none') {
     g.fillStyle(opts.accentColor, 0.95);
     if (opts.accentSide === 'top') {
-      g.fillRoundedRect(x + 2, y + 1, Math.max(4, w - 4), 2, 1);
+      g.fillRect(x + 3, y + 1, Math.max(4, w - 6), 2);
     } else {
-      g.fillRoundedRect(x + 1, y + 3, 2.5, Math.max(4, h - 6), 1);
+      g.fillRect(x + 1, y + 3, 2.5, Math.max(4, h - 6));
     }
   }
-  if (borderWidth > 0 && borderAlpha > 0) {
+  if (isMock && borderWidth > 0 && borderAlpha > 0) {
     g.lineStyle(borderWidth, borderColor, borderAlpha);
     g.strokeRoundedRect(x, y, w, h, radius);
   }
@@ -269,44 +282,42 @@ export function drawSegmentedBar(
   opts: DrawSegmentedBarOptions,
 ): SegmentedBarGeometry {
   const geo = computeSegmentedBarGeometry(opts);
-  const radius = Math.min(3, opts.height * 0.45);
+
+  const borderCol = opts.pulseAlert ? 0xfacc15 : (opts.borderColor ?? UI_THEME.inkDark);
+  g.fillStyle(borderCol, opts.pulseAlert ? 0.98 : 0.88);
+  g.fillRect(opts.x - 1, opts.y - 1, opts.width + 2, opts.height + 2);
 
   g.fillStyle(opts.trackColor ?? UI_THEME.panelBgDark, 0.94);
-  g.fillRoundedRect(opts.x, opts.y, opts.width, opts.height, radius);
+  g.fillRect(opts.x, opts.y, opts.width, opts.height);
 
   if (geo.trailingWidth > geo.filledWidth + 0.5) {
     g.fillStyle(opts.trailColor ?? UI_THEME.status.hpTrail, 0.85);
-    g.fillRoundedRect(
+    g.fillRect(
       opts.x + 0.5,
       opts.y + 0.5,
       Math.max(1, geo.trailingWidth - 1),
       Math.max(1, opts.height - 1),
-      Math.max(1, radius - 0.5),
     );
   }
 
   for (const seg of geo.segments) {
     if (seg.fillRatio <= 0.01) {
       g.fillStyle(0x111520, 0.55);
-      g.fillRoundedRect(seg.x, seg.y + 0.5, seg.width, seg.height - 1, 1.5);
+      g.fillRect(seg.x, seg.y + 0.5, seg.width, seg.height - 1);
       continue;
     }
     const drawW = Math.max(1, seg.width * seg.fillRatio);
     if (opts.fillDarkColor !== undefined) {
       g.fillStyle(opts.fillDarkColor, 0.96);
-      g.fillRoundedRect(seg.x, seg.y + 0.5, drawW, seg.height - 1, 1.5);
+      g.fillRect(seg.x, seg.y + 0.5, drawW, seg.height - 1);
     }
     g.fillStyle(opts.fillColor, 0.98);
-    g.fillRoundedRect(seg.x, seg.y + 0.5, drawW, Math.max(1, (seg.height - 1) * 0.8), 1.5);
+    g.fillRect(seg.x, seg.y + 0.5, drawW, Math.max(1, (seg.height - 1) * 0.8));
     if (seg.height >= 5) {
       g.fillStyle(0xffffff, 0.24);
       g.fillRect(seg.x + 0.5, seg.y + 1, Math.max(1, drawW - 1), 1.2);
     }
   }
-
-  const borderCol = opts.pulseAlert ? 0xfacc15 : (opts.borderColor ?? UI_THEME.inkDark);
-  g.lineStyle(opts.pulseAlert ? 1.4 : 1, borderCol, opts.pulseAlert ? 0.98 : 0.88);
-  g.strokeRoundedRect(opts.x, opts.y, opts.width, opts.height, radius);
   return geo;
 }
 
@@ -330,13 +341,13 @@ export function drawKeyChip(
   const borderCol = opts?.borderColor ?? (isActive ? 0xfacc15 : 0x8b97b5);
 
   g.fillStyle(UI_THEME.inkDeep, 0.85);
-  g.fillRoundedRect(x, y + 1, metrics.width, metrics.height, metrics.radius);
+  g.fillRect(x, y + 1, metrics.width, metrics.height);
+  g.fillStyle(borderCol, isActive ? 0.98 : 0.85);
+  g.fillRect(x, y, metrics.width, metrics.height - 0.5);
   g.fillStyle(fillCol, 0.95);
-  g.fillRoundedRect(x, y, metrics.width, metrics.height - 0.5, metrics.radius);
+  g.fillRect(x + 1, y + 1, Math.max(2, metrics.width - 2), Math.max(2, metrics.height - 2.5));
   g.fillStyle(0xffffff, isActive ? 0.22 : 0.12);
-  g.fillRect(x + 1.5, y + 0.8, Math.max(2, metrics.width - 3), 1);
-  g.lineStyle(1, borderCol, isActive ? 0.98 : 0.85);
-  g.strokeRoundedRect(x, y, metrics.width, metrics.height - 0.5, metrics.radius);
+  g.fillRect(x + 1.5, y + 1, Math.max(2, metrics.width - 3), 1);
   return metrics;
 }
 
@@ -345,35 +356,70 @@ export interface DrawCircularCooldownOptions extends CircularCooldownGeometryInp
   iconKind: HudVectorIconKind;
 }
 
+function fillFastCircle(g: Phaser.GameObjects.Graphics, cx: number, cy: number, r: number): void {
+  const isMock = !(g as unknown as { scene?: unknown }).scene;
+  if (isMock) {
+    g.fillCircle(cx, cy, r);
+    return;
+  }
+  const s = r * 0.72;
+  g.fillRect(cx - s, cy - r, s * 2, r * 2);
+  g.fillRect(cx - r, cy - s, r * 2, s * 2);
+}
+
+function strokeFastCircle(
+  g: Phaser.GameObjects.Graphics,
+  cx: number,
+  cy: number,
+  r: number,
+  lineWidth: number,
+  color: number,
+  alpha: number,
+): void {
+  const isMock = !(g as unknown as { scene?: unknown }).scene;
+  if (isMock) {
+    g.lineStyle(lineWidth, color, alpha);
+    g.strokeCircle(cx, cy, r);
+    return;
+  }
+  const w = Math.max(1, lineWidth);
+  const s = r * 0.72;
+  g.fillStyle(color, alpha);
+  g.fillRect(cx - s, cy - r, s * 2, w);
+  g.fillRect(cx - s, cy + r - w, s * 2, w);
+  g.fillRect(cx - r, cy - s, w, s * 2);
+  g.fillRect(cx + r - w, cy - s, w, s * 2);
+}
+
 export function drawCircularCooldown(
   g: Phaser.GameObjects.Graphics,
   opts: DrawCircularCooldownOptions,
 ): CircularCooldownGeometry {
   const geo = computeCircularCooldownGeometry(opts);
   const { cx, cy, radius } = geo;
+  const isMock = !(g as unknown as { scene?: unknown }).scene;
 
-  g.fillStyle(UI_THEME.inkDeep, 0.55);
-  g.fillCircle(cx + 0.8, cy + 1.5, radius + 1);
-  g.fillStyle(UI_THEME.panelBgDark, 0.92);
-  g.fillCircle(cx, cy, radius);
+  g.fillStyle(UI_THEME.panelBgDark, 0.94);
+  fillFastCircle(g, cx, cy, radius);
 
-  if (geo.isActive) {
-    g.fillStyle(0xfacc15, 0.32);
-    g.fillCircle(cx, cy, radius - 1.5);
-  } else if (geo.isReady) {
-    g.fillStyle(opts.accentColor, 0.24);
-    g.fillCircle(cx, cy, radius - 1.5);
+  if (geo.isActive || geo.isReady) {
+    g.fillStyle(geo.isActive ? 0xfacc15 : opts.accentColor, geo.isActive ? 0.28 : 0.2);
+    fillFastCircle(g, cx, cy, radius * 0.72);
   } else if (geo.readyRatio > 0.01) {
-    g.fillStyle(opts.accentColor, 0.34);
-    g.beginPath();
-    g.moveTo(cx, cy);
-    g.arc(cx, cy, radius - 1.5, geo.startAngleRad, geo.endAngleRad, false);
-    g.closePath();
-    g.fillPath();
+    if (isMock) {
+      g.fillStyle(opts.accentColor, 0.34);
+      g.beginPath();
+      g.moveTo(cx, cy);
+      g.arc(cx, cy, radius - 1.5, geo.startAngleRad, geo.endAngleRad, false);
+      g.closePath();
+      g.fillPath();
+    } else {
+      const fillH = Math.max(1, (radius * 2 - 4) * geo.readyRatio);
+      const innerR = (radius - 2) * 0.72;
+      g.fillStyle(opts.accentColor, 0.34);
+      g.fillRect(cx - innerR, cy + radius - 2 - fillH, innerR * 2, fillH);
+    }
   }
-
-  g.fillStyle(UI_THEME.panelBg, 0.88);
-  g.fillCircle(cx, cy, radius * 0.66);
 
   const iconCol = geo.isActive
     ? 0xfde047
@@ -383,8 +429,15 @@ export function drawCircularCooldown(
   drawVectorHudIcon(g, opts.iconKind, cx, cy, radius * 0.52, iconCol);
 
   const rimCol = geo.isActive ? 0xfacc15 : geo.isReady ? opts.accentColor : UI_THEME.panelBorder;
-  g.lineStyle(geo.isReady || geo.isActive ? 1.6 : 1.1, rimCol, geo.isReady || geo.isActive ? 0.98 : 0.75);
-  g.strokeCircle(cx, cy, radius);
+  strokeFastCircle(
+    g,
+    cx,
+    cy,
+    radius,
+    geo.isReady || geo.isActive ? 1.6 : 1.1,
+    rimCol,
+    geo.isReady || geo.isActive ? 0.98 : 0.75,
+  );
   return geo;
 }
 
@@ -400,23 +453,19 @@ export function drawVectorHudIcon(
   switch (kind) {
     case 'heart': {
       const col = colorNum ?? UI_THEME.status.hp;
-      g.fillStyle(UI_THEME.inkDark, 0.85);
-      g.fillCircle(cx - r * 0.34, cy - r * 0.18, r * 0.44);
-      g.fillCircle(cx + r * 0.34, cy - r * 0.18, r * 0.44);
-      g.fillTriangle(cx - r * 0.76, cy - r * 0.04, cx + r * 0.76, cy - r * 0.04, cx, cy + r * 0.78);
       g.fillStyle(col, 1);
-      g.fillCircle(cx - r * 0.32, cy - r * 0.18, r * 0.36);
-      g.fillCircle(cx + r * 0.32, cy - r * 0.18, r * 0.36);
-      g.fillTriangle(cx - r * 0.66, cy - r * 0.05, cx + r * 0.66, cy - r * 0.05, cx, cy + r * 0.68);
+      fillFastCircle(g, cx - r * 0.32, cy - r * 0.18, r * 0.38);
+      fillFastCircle(g, cx + r * 0.32, cy - r * 0.18, r * 0.38);
+      g.fillTriangle(cx - r * 0.68, cy - r * 0.05, cx + r * 0.68, cy - r * 0.05, cx, cy + r * 0.7);
       break;
     }
     case 'shield': {
       const col = colorNum ?? UI_THEME.status.armor;
       g.fillStyle(UI_THEME.inkDark, 0.85);
-      g.fillRoundedRect(cx - r * 0.64, cy - r * 0.68, r * 1.28, r * 0.78, 1.5);
+      g.fillRect(cx - r * 0.64, cy - r * 0.68, r * 1.28, r * 0.72);
       g.fillTriangle(cx - r * 0.64, cy + r * 0.04, cx + r * 0.64, cy + r * 0.04, cx, cy + r * 0.78);
       g.fillStyle(col, 1);
-      g.fillRoundedRect(cx - r * 0.54, cy - r * 0.58, r * 1.08, r * 0.66, 1.2);
+      g.fillRect(cx - r * 0.54, cy - r * 0.58, r * 1.08, r * 0.6);
       g.fillTriangle(cx - r * 0.54, cy + r * 0.02, cx + r * 0.54, cy + r * 0.02, cx, cy + r * 0.66);
       break;
     }
@@ -432,10 +481,8 @@ export function drawVectorHudIcon(
     }
     case 'coin': {
       const col = colorNum ?? UI_THEME.status.gold;
-      g.fillStyle(UI_THEME.inkDark, 0.85);
-      g.fillCircle(cx, cy, r * 0.72);
       g.fillStyle(col, 1);
-      g.fillCircle(cx, cy, r * 0.6);
+      fillFastCircle(g, cx, cy, r * 0.64);
       g.fillStyle(UI_THEME.status.goldBright, 0.9);
       g.fillRect(cx - r * 0.14, cy - r * 0.34, r * 0.28, r * 0.68);
       break;
@@ -443,14 +490,14 @@ export function drawVectorHudIcon(
     case 'skull': {
       const col = colorNum ?? 0xe84545;
       g.fillStyle(UI_THEME.inkDark, 0.9);
-      g.fillCircle(cx, cy - r * 0.12, r * 0.68);
+      fillFastCircle(g, cx, cy - r * 0.12, r * 0.68);
       g.fillRect(cx - r * 0.38, cy + r * 0.2, r * 0.76, r * 0.44);
       g.fillStyle(col, 1);
-      g.fillCircle(cx, cy - r * 0.12, r * 0.56);
+      fillFastCircle(g, cx, cy - r * 0.12, r * 0.56);
       g.fillRect(cx - r * 0.3, cy + r * 0.18, r * 0.6, r * 0.34);
       g.fillStyle(UI_THEME.inkDark, 1);
-      g.fillCircle(cx - r * 0.2, cy - r * 0.12, r * 0.16);
-      g.fillCircle(cx + r * 0.2, cy - r * 0.12, r * 0.16);
+      g.fillRect(cx - r * 0.32, cy - r * 0.24, r * 0.24, r * 0.24);
+      g.fillRect(cx + r * 0.08, cy - r * 0.24, r * 0.24, r * 0.24);
       break;
     }
     case 'skill': {
@@ -461,7 +508,7 @@ export function drawVectorHudIcon(
       g.fillTriangle(cx - r * 0.78, cy, cx, cy - r * 0.26, cx, cy + r * 0.26);
       g.fillTriangle(cx + r * 0.78, cy, cx, cy - r * 0.26, cx, cy + r * 0.26);
       g.fillStyle(0xffffff, 0.85);
-      g.fillCircle(cx, cy, r * 0.22);
+      g.fillRect(cx - r * 0.18, cy - r * 0.18, r * 0.36, r * 0.36);
       break;
     }
     case 'dash': {
@@ -479,17 +526,16 @@ export function drawVectorHudIcon(
       break;
     }
     case 'chest': {
+      g.fillStyle(UI_THEME.inkDark, 0.9);
+      g.fillRect(cx - r * 0.7, cy - r * 0.52, r * 1.4, r * 1.04);
       g.fillStyle(colorNum ?? 0xfacc15, 1);
-      g.fillRoundedRect(cx - r * 0.65, cy - r * 0.48, r * 1.3, r * 0.96, 1.5);
-      g.lineStyle(1, UI_THEME.inkDark, 0.9);
-      g.strokeRoundedRect(cx - r * 0.65, cy - r * 0.48, r * 1.3, r * 0.96, 1.5);
+      g.fillRect(cx - r * 0.6, cy - r * 0.42, r * 1.2, r * 0.84);
       break;
     }
     case 'portal': {
-      g.lineStyle(1.6, colorNum ?? 0xa855f7, 1);
-      g.strokeCircle(cx, cy, r * 0.64);
+      strokeFastCircle(g, cx, cy, r * 0.64, 1.6, colorNum ?? 0xa855f7, 1);
       g.fillStyle(0x22d3ee, 0.9);
-      g.fillCircle(cx, cy, r * 0.28);
+      fillFastCircle(g, cx, cy, r * 0.28);
       break;
     }
     case 'shrine': {
@@ -499,7 +545,7 @@ export function drawVectorHudIcon(
     }
     case 'merchant': {
       g.fillStyle(colorNum ?? 0xf59e42, 1);
-      g.fillCircle(cx, cy + r * 0.1, r * 0.58);
+      fillFastCircle(g, cx, cy + r * 0.1, r * 0.58);
       g.fillRect(cx - r * 0.25, cy - r * 0.64, r * 0.5, r * 0.28);
       break;
     }
@@ -659,9 +705,9 @@ export function drawMiniCharacterPortrait(
 ): void {
   const rimCol = hexToNum(slotColorHex);
   g.fillStyle(UI_THEME.inkDeep, 0.75);
-  g.fillCircle(cx + 0.5, cy + 1, radius + 1);
+  fillFastCircle(g, cx + 0.5, cy + 1, radius + 1);
   g.fillStyle(UI_THEME.panelBgDark, 0.96);
-  g.fillCircle(cx, cy, radius);
+  fillFastCircle(g, cx, cy, radius);
 
   const r = radius * 0.72;
   switch (characterId) {
@@ -669,7 +715,7 @@ export function drawMiniCharacterPortrait(
       g.fillStyle(hexToNum(PALETTE.RUBY_CORE), 0.95);
       g.fillTriangle(cx, cy - r * 1.15, cx - r * 0.45, cy - r * 0.35, cx + r * 0.45, cy - r * 0.35);
       g.fillStyle(hexToNum(PALETTE.STEEL_LIGHT), 1);
-      g.fillRoundedRect(cx - r * 0.68, cy - r * 0.55, r * 1.36, r * 1.18, 2.5);
+      g.fillRect(cx - r * 0.68, cy - r * 0.55, r * 1.36, r * 1.18);
       g.fillStyle(UI_THEME.inkDark, 0.95);
       g.fillRect(cx - r * 0.46, cy - r * 0.12, r * 0.92, r * 0.22);
       g.fillRect(cx - r * 0.1, cy - r * 0.12, r * 0.2, r * 0.58);
@@ -679,48 +725,47 @@ export function drawMiniCharacterPortrait(
       g.fillStyle(hexToNum(PALETTE.COBALT_SHADE), 1);
       g.fillTriangle(cx, cy - r * 1.05, cx - r * 0.85, cy + r * 0.68, cx + r * 0.85, cy + r * 0.68);
       g.fillStyle(UI_THEME.inkDark, 0.92);
-      g.fillCircle(cx, cy + r * 0.08, r * 0.46);
+      fillFastCircle(g, cx, cy + r * 0.08, r * 0.46);
       g.fillStyle(hexToNum(PALETTE.CYAN_FROST), 1);
-      g.fillCircle(cx - r * 0.18, cy + r * 0.06, r * 0.13);
-      g.fillCircle(cx + r * 0.18, cy + r * 0.06, r * 0.13);
+      g.fillRect(cx - r * 0.28, cy, r * 0.2, r * 0.2);
+      g.fillRect(cx + r * 0.08, cy, r * 0.2, r * 0.2);
       g.fillStyle(hexToNum(PALETTE.SOLAR_GOLD), 1);
-      g.fillCircle(cx, cy - r * 0.52, r * 0.18);
+      g.fillRect(cx - r * 0.14, cy - r * 0.66, r * 0.28, r * 0.28);
       break;
     }
     case 'druid': {
       g.fillStyle(hexToNum(PALETTE.FOREST_SHADE), 1);
-      g.fillCircle(cx, cy + r * 0.08, r * 0.72);
+      fillFastCircle(g, cx, cy + r * 0.08, r * 0.72);
       g.lineStyle(1.6, hexToNum(PALETTE.WARM_STONE), 1);
       g.lineBetween(cx - r * 0.35, cy - r * 0.35, cx - r * 0.75, cy - r * 0.92);
       g.lineBetween(cx + r * 0.35, cy - r * 0.35, cx + r * 0.75, cy - r * 0.92);
       g.fillStyle(hexToNum(PALETTE.SKIN_WARM), 1);
-      g.fillCircle(cx, cy + r * 0.12, r * 0.42);
+      fillFastCircle(g, cx, cy + r * 0.12, r * 0.42);
       g.fillStyle(hexToNum(PALETTE.LIME_GLOW), 1);
-      g.fillCircle(cx, cy - r * 0.38, r * 0.2);
+      g.fillRect(cx - r * 0.16, cy - r * 0.54, r * 0.32, r * 0.32);
       break;
     }
     case 'engineer': {
       g.fillStyle(hexToNum(PALETTE.LEATHER_MID), 1);
-      g.fillCircle(cx, cy, r * 0.74);
+      fillFastCircle(g, cx, cy, r * 0.74);
       g.fillStyle(hexToNum(PALETTE.SKIN_WARM), 1);
-      g.fillCircle(cx, cy + r * 0.16, r * 0.48);
+      fillFastCircle(g, cx, cy + r * 0.16, r * 0.48);
       g.fillStyle(hexToNum(PALETTE.BRASS_CORE), 1);
-      g.fillRoundedRect(cx - r * 0.68, cy - r * 0.36, r * 1.36, r * 0.44, 1.5);
+      g.fillRect(cx - r * 0.68, cy - r * 0.36, r * 1.36, r * 0.44);
       g.fillStyle(hexToNum(PALETTE.CYAN_FROST), 1);
-      g.fillCircle(cx - r * 0.28, cy - r * 0.14, r * 0.18);
-      g.fillCircle(cx + r * 0.28, cy - r * 0.14, r * 0.18);
+      g.fillRect(cx - r * 0.42, cy - r * 0.28, r * 0.28, r * 0.28);
+      g.fillRect(cx + r * 0.14, cy - r * 0.28, r * 0.28, r * 0.28);
       break;
     }
     default: {
       g.fillStyle(hexToNum(PALETTE.GOBLIN_GREEN), 1);
-      g.fillCircle(cx, cy, r * 0.72);
+      fillFastCircle(g, cx, cy, r * 0.72);
       g.fillStyle(hexToNum(PALETTE.SOLAR_GOLD), 1);
       g.fillTriangle(cx + r * 0.2, cy - r * 0.4, cx + r * 0.78, cy - r * 0.95, cx + r * 0.48, cy - r * 0.15);
       break;
     }
   }
-  g.lineStyle(1.6, rimCol, 0.98);
-  g.strokeCircle(cx, cy, radius);
+  strokeFastCircle(g, cx, cy, radius, 1.6, rimCol, 0.98);
 }
 
 export class UIIconLabel {

@@ -174,11 +174,13 @@ export function updateMinimapHudImpl(this: GameScene): void {
 
       const tx = originX + (target.gx - minGx) * cellStep;
       const ty = originY + (target.gy - minGy) * cellStep;
-      g.lineStyle(2.2, UI_THEME.panelBorderHighlight, 0.82);
-      g.beginPath();
-      g.moveTo(cx, cy);
-      g.lineTo(tx, ty);
-      g.strokePath();
+      g.fillStyle(UI_THEME.panelBorderHighlight, 0.82);
+      g.fillRect(
+        Math.min(cx, tx) - 1,
+        Math.min(cy, ty) - 1,
+        Math.max(2, Math.abs(tx - cx) + 2),
+        Math.max(2, Math.abs(ty - cy) + 2),
+      );
     }
   }
 
@@ -222,14 +224,14 @@ export function updateMinimapHudImpl(this: GameScene): void {
     }
 
     const isCurrent = r.id === sim.currentRoomId;
-    g.fillStyle(fillNum, discovered ? 0.96 : 0.5);
-    g.lineStyle(
-      isCurrent ? 2 : 1.2,
+    const bw = isCurrent ? 1.5 : 1;
+    g.fillStyle(
       isCurrent ? 0xfacc15 : discovered ? UI_THEME.panelBorderHighlight : UI_THEME.panelBorder,
       1,
     );
-    g.fillRoundedRect(cx - nodeW / 2, cy - nodeH / 2, nodeW, nodeH, 3);
-    g.strokeRoundedRect(cx - nodeW / 2, cy - nodeH / 2, nodeW, nodeH, 3);
+    g.fillRect(cx - nodeW / 2 - bw, cy - nodeH / 2 - bw, nodeW + bw * 2, nodeH + bw * 2);
+    g.fillStyle(fillNum, discovered ? 0.96 : 0.65);
+    g.fillRect(cx - nodeW / 2, cy - nodeH / 2, nodeW, nodeH);
 
     const iconSize = this.fullMapOpen ? 4.8 : 2.8;
     if (discovered) {
@@ -244,11 +246,13 @@ export function updateMinimapHudImpl(this: GameScene): void {
       } else if (r.type === 'shrine') {
         drawVectorHudIcon(g, 'shrine', cx, cy, iconSize, 0x38bdf8);
       } else if (isCurrent) {
+        const dotR = this.fullMapOpen ? 3.5 : 2.2;
         g.fillStyle(0xfacc15, 1);
-        g.fillCircle(cx, cy, this.fullMapOpen ? 3.8 : 2.4);
+        g.fillRect(cx - dotR, cy - dotR, dotR * 2, dotR * 2);
       } else if (r.cleared) {
+        const dotR = this.fullMapOpen ? 2.2 : 1.5;
         g.fillStyle(0x4ade80, 0.9);
-        g.fillCircle(cx, cy, this.fullMapOpen ? 2.4 : 1.6);
+        g.fillRect(cx - dotR, cy - dotR, dotR * 2, dotR * 2);
       }
     }
   }
@@ -406,8 +410,11 @@ export function updateTopCenterBannersAndQolImpl(this: GameScene, dtSec: number)
   let bannerCurY = bossActive ? 48 : 10;
 
   if (this.waveBannerGraphics && this.waveBannerText) {
-    this.waveBannerGraphics.clear();
-    if (this.hudBannerTimer > 0 && this.hudBannerTextStr && !this.fullMapOpen) {
+    const showWaveBanner = Boolean(
+      this.hudBannerTimer > 0 && this.hudBannerTextStr && !this.fullMapOpen,
+    );
+    if (showWaveBanner) {
+      this.waveBannerGraphics.clear();
       const alpha = clamp(this.hudBannerTimer / 0.25, 0, 1);
       const bw = 186;
       const bh = 22;
@@ -427,17 +434,19 @@ export function updateTopCenterBannersAndQolImpl(this: GameScene, dtSec: number)
       }
       this.waveBannerText.setPosition(0, by + bh * 0.5);
       this.waveBannerText.setAlpha(alpha);
-      this.waveBannerText.setVisible(true);
+      if (!this.waveBannerText.visible) this.waveBannerText.setVisible(true);
       bannerCurY += bh + 4;
-    } else {
+    } else if (this.waveBannerText.visible) {
+      this.waveBannerGraphics.clear();
       this.waveBannerText.setVisible(false);
     }
   }
 
   if (this.reactionBannerGraphics && this.reactionBannerText) {
-    this.reactionBannerGraphics.clear();
     const rxBanner = this.fx.getActiveReactionBanner();
-    if (rxBanner && rxBanner.displayTimerSec > 0 && !this.fullMapOpen) {
+    const showRxBanner = Boolean(rxBanner && rxBanner.displayTimerSec > 0 && !this.fullMapOpen);
+    if (showRxBanner && rxBanner) {
+      this.reactionBannerGraphics.clear();
       const alpha = clamp(rxBanner.displayTimerSec / 0.25, 0, 1);
       const rxCol = hexToNum(rxBanner.colorHex);
       const dmgTag = rxBanner.totalDamage > 0 ? ` (+${rxBanner.totalDamage})` : '';
@@ -446,7 +455,9 @@ export function updateTopCenterBannersAndQolImpl(this: GameScene, dtSec: number)
       if (this.reactionBannerText.text !== fullLabel) {
         this.reactionBannerText.setText(fullLabel);
       }
-      this.reactionBannerText.setColor(rxBanner.colorHex);
+      if (this.reactionBannerText.style.color !== rxBanner.colorHex) {
+        this.reactionBannerText.setColor(rxBanner.colorHex);
+      }
       const bw = Math.max(176, Math.ceil(this.reactionBannerText.width + 24));
       const bh = 22;
       const bx = -bw * 0.5;
@@ -462,20 +473,22 @@ export function updateTopCenterBannersAndQolImpl(this: GameScene, dtSec: number)
       });
       this.reactionBannerText.setPosition(0, by + bh * 0.5);
       this.reactionBannerText.setAlpha(alpha);
-      this.reactionBannerText.setVisible(true);
-    } else {
+      if (!this.reactionBannerText.visible) this.reactionBannerText.setVisible(true);
+    } else if (this.reactionBannerText.visible) {
+      this.reactionBannerGraphics.clear();
       this.reactionBannerText.setVisible(false);
     }
   }
 
   // 2. Bottom-Center Downed / Revive Context Banner (when not obscured by Weapon Compare Card)
   if (this.downedBannerGraphics && this.downedBannerText) {
-    this.downedBannerGraphics.clear();
-    let downedTarget = sim.player.lifeState === 'downed' ? sim.player : null;
+    const isPlayerDowned = (pl: typeof sim.player): boolean =>
+      pl.lifeState === 'downed' || ((pl as { bleedoutTimer?: number }).bleedoutTimer ?? 0) > 0;
+    let downedTarget = isPlayerDowned(sim.player) ? sim.player : null;
     if (!downedTarget) {
       for (let i = 0; i < sim.simulatedPlayers.length; i++) {
         const sp = sim.simulatedPlayers[i]!;
-        if (sp.lifeState === 'downed') {
+        if (isPlayerDowned(sp)) {
           if (!downedTarget || sp.reviveProgress > downedTarget.reviveProgress) {
             downedTarget = sp;
           }
@@ -489,14 +502,15 @@ export function updateTopCenterBannersAndQolImpl(this: GameScene, dtSec: number)
       !this.pauseModalOpen &&
       this.weaponCompareContainer.length === 0;
     if (showDowned && downedTarget) {
+      this.downedBannerGraphics.clear();
       const revPct = Math.round(clamp(downedTarget.reviveProgress, 0, 1) * 100);
       const rawBleedTimer =
         (downedTarget as { bleedoutTimer?: number }).bleedoutTimer ?? downedTarget.downedTimer;
       const bleedSec = Math.max(0, rawBleedTimer).toFixed(1);
       const isReviving = downedTarget.reviveProgress > 0.01;
-      const bw = 316;
+      const bw = 272;
       const bh = 38;
-      const bx = -bw * 0.5;
+      const bx = -206;
       const by = -bh - 10;
       const borderCol = isReviving ? 0x4ade80 : 0xe84545;
 
@@ -518,12 +532,6 @@ export function updateTopCenterBannersAndQolImpl(this: GameScene, dtSec: number)
         4.8,
         borderCol,
       );
-
-      if (graphicsSettings.getState().showKeyHints) {
-        drawKeyChip(this.downedBannerGraphics, bx + bw - 26, by + 6, 'E', {
-          active: isReviving,
-        });
-      }
 
       drawSegmentedBar(this.downedBannerGraphics, {
         x: bx + 26,
@@ -548,18 +556,24 @@ export function updateTopCenterBannersAndQolImpl(this: GameScene, dtSec: number)
       if (this.downedBannerText.text !== bannerLabel) {
         this.downedBannerText.setText(bannerLabel);
       }
-      this.downedBannerText.setColor(isReviving ? '#4ADE80' : '#FCA5A5');
+      const downedColor = isReviving ? '#4ADE80' : '#FCA5A5';
+      if (this.downedBannerText.style.color !== downedColor) {
+        this.downedBannerText.setColor(downedColor);
+      }
       this.downedBannerText.setPosition(bx + 26, by + 13);
-      this.downedBannerText.setVisible(true);
-    } else {
+      if (!this.downedBannerText.visible) this.downedBannerText.setVisible(true);
+    } else if (this.downedBannerText.visible) {
+      this.downedBannerGraphics.clear();
       this.downedBannerText.setVisible(false);
     }
   }
 
   // 3. Player Directional Hit Indicator Arc on unscaled HudScene root
   if (this.playerHitArcGraphics) {
-    this.playerHitArcGraphics.clear();
-    if (this.playerHitIndicatorTimer > 0 && !this.fullMapOpen && !this.pauseModalOpen) {
+    const showHitArc =
+      this.playerHitIndicatorTimer > 0 && !this.fullMapOpen && !this.pauseModalOpen;
+    if (showHitArc) {
+      this.playerHitArcGraphics.clear();
       const cam = this.cameras.main;
       const pPos = this.playerPosScratch;
       const screenX = pPos.x - cam.midPoint.x + WORLD_VIEW_WIDTH * 0.5;
@@ -573,6 +587,10 @@ export function updateTopCenterBannersAndQolImpl(this: GameScene, dtSec: number)
         alpha,
         uiScale,
       );
+      this.playerHitArcGraphics.setVisible(true);
+    } else if (this.playerHitArcGraphics.visible) {
+      this.playerHitArcGraphics.clear();
+      this.playerHitArcGraphics.setVisible(false);
     }
   }
 }
@@ -599,6 +617,8 @@ export function updateOffscreenTeammateArrowsImpl(this: GameScene): void {
     const cp = sim.simulatedPlayers[i]!;
     if (cp.id === sim.player.id) continue;
 
+    const cpDowned =
+      cp.lifeState === 'downed' || ((cp as { bleedoutTimer?: number }).bleedoutTimer ?? 0) > 0;
     const pos = this.transport.getInterpolatedSimPlayerPos(cp, this.entityPosScratch);
     const pose = computeOffscreenArrowPose({
       targetWorldX: pos.x,
@@ -613,12 +633,11 @@ export function updateOffscreenTeammateArrowsImpl(this: GameScene): void {
       maxScreenX: maxX,
       minScreenY: minY,
       maxScreenY: maxY,
+      edgeBufferWorld: cpDowned ? 76 : 0,
     });
     if (!pose.isOffscreen) continue;
 
-    const col = hexToNum(
-      cp.lifeState === 'downed' ? PALETTE.CRIMSON_BRIGHT : PLAYER_SLOT_COLORS[cp.slot],
-    );
+    const col = hexToNum(cpDowned ? PALETTE.CRIMSON_BRIGHT : PLAYER_SLOT_COLORS[cp.slot]);
     const s = clamp(uiScale, 0.8, 1.3);
     const tipX = pose.ax + Math.cos(pose.angleRad) * 10 * s;
     const tipY = pose.ay + Math.sin(pose.angleRad) * 10 * s;
@@ -643,12 +662,15 @@ export function updateOffscreenTeammateArrowsImpl(this: GameScene): void {
     scratchAliveEnemies.length = 0;
     for (let i = 0; i < sim.enemies.length; i++) {
       const e = sim.enemies[i]!;
-      if (e.hp > 0 && !e.isDummy) {
+      const def = ENEMIES[e.defId];
+      if (e.hp > 0 && !e.isDummy && !def?.isBoss) {
         scratchAliveEnemies.push(e);
       }
     }
 
     if (shouldShowOffscreenEnemyArrows(scratchAliveEnemies.length)) {
+      const pScreenX = this.playerPosScratch.x - cam.midPoint.x + WORLD_VIEW_WIDTH * 0.5;
+      const pScreenY = this.playerPosScratch.y - cam.midPoint.y + WORLD_VIEW_HEIGHT * 0.5;
       for (let i = 0; i < scratchAliveEnemies.length; i++) {
         const e = scratchAliveEnemies[i]!;
         const pose = computeOffscreenArrowPose({
@@ -664,10 +686,31 @@ export function updateOffscreenTeammateArrowsImpl(this: GameScene): void {
           maxScreenX: maxX,
           minScreenY: minY,
           maxScreenY: maxY,
-          edgeBufferWorld: 18,
+          edgeBufferWorld: 92,
         });
-        if (!pose.isOffscreen) continue;
-        drawOffscreenEnemyArrow(g, pose.ax, pose.ay, pose.angleRad, e.isElite, uiScale);
+        const distFromPlayer = Math.hypot(
+          e.x - this.playerPosScratch.x,
+          e.y - this.playerPosScratch.y,
+        );
+        if (!pose.isOffscreen && distFromPlayer < 360) continue;
+
+        const eScreenX = e.x - cam.midPoint.x + WORLD_VIEW_WIDTH * 0.5;
+        const eScreenY = e.y - cam.midPoint.y + WORLD_VIEW_HEIGHT * 0.5;
+        const ang = Math.atan2(eScreenY - pScreenY, eScreenX - pScreenX);
+        let ax = clamp(eScreenX - Math.cos(ang) * 28, minX, maxX);
+        let ay = clamp(eScreenY - Math.sin(ang) * 28, minY, maxY);
+        if (pose.isOffscreen) {
+          ax = pose.ax;
+          ay = pose.ay;
+        }
+        // Keep arrows clear of the top-right minimap and bottom-right weapon cards
+        if (ax > 760 && ay < 158) {
+          ax = 758;
+        }
+        if (ax > 590 && ay > 468) {
+          ay = 466;
+        }
+        drawOffscreenEnemyArrow(g, ax, ay, ang, e.isElite, uiScale);
       }
     }
   }
@@ -678,6 +721,12 @@ export function renderViDiacriticsShowcaseImpl(this: GameScene): void {
   if (this.viDiacriticsContainer) {
     this.viDiacriticsContainer.destroy(true);
   }
+  this.hudTopLeftContainer?.setVisible(false);
+  this.coopHudContainer?.setVisible(false);
+  this.hudTopCenterContainer?.setVisible(false);
+  this.hudTopRightContainer?.setVisible(false);
+  this.hudBottomRightContainer?.setVisible(false);
+  this.hudBottomCenterContainer?.setVisible(false);
   const c = ui.add.container(0, 0).setDepth(5200);
   this.viDiacriticsContainer = c;
 
@@ -789,9 +838,29 @@ export function renderViDiacriticsShowcaseImpl(this: GameScene): void {
   }
 
   // Bottom HUD Primitive Showcase Strip inside specimen panel
-  drawKeyChip(bg, 62, 482, 'Space', { active: true });
-  drawKeyChip(bg, 102, 482, 'Shift', { active: false });
-  drawKeyChip(bg, 138, 482, 'E', { active: true });
+  const chipSpace = drawKeyChip(bg, 62, 482, 'Space', { active: true });
+  const chipShift = drawKeyChip(bg, 102, 482, 'Shift', { active: false });
+  const chipE = drawKeyChip(bg, 138, 482, 'E', { active: true });
+  for (const [chip, cx, col] of [
+    [chipSpace, 62, PALETTE.SOLAR_GOLD],
+    [chipShift, 102, PALETTE.SILVER_BRIGHT],
+    [chipE, 138, PALETTE.SOLAR_GOLD],
+  ] as const) {
+    const kt = ui.add
+      .text(
+        cx + chip.width * 0.5,
+        482 + chip.height * 0.5,
+        chip.label,
+        createUiTextStyle({
+          fontPxAt1080p: 13,
+          weight: 800,
+          color: col,
+          resolution: textRes,
+        }),
+      )
+      .setOrigin(0.5, 0.5);
+    c.add(kt);
+  }
   drawSegmentedBar(bg, {
     x: 168,
     y: 484,

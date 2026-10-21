@@ -105,7 +105,7 @@
 | P6 | Đèn/glow vật thể tương tác | Nguồn sáng cho rương/đuốc/cổng/vật phẩm | [x] |
 | P7 | Nhãn theo khoảng cách, prompt [E] | Gần mới hiện [E] tên | [x] |
 | P8 | Cổng dịch chuyển & cổng qua phòng | Cổng đẹp, sáng ảo diệu | [x] |
-| P9a | Design system, HUD trong game | UI/UX hiện đại (HUD) | [ ] |
+| P9a | Design system, HUD trong game | UI/UX hiện đại (HUD) | [x] |
 | P9b | Menu, Hub, modal, Pause, Settings, kết quả | UI/UX hiện đại (Screens/Modals) | [ ] |
 | P10a | Nhân vật Cutout 2.0 & Quái Full Rig: animation, shading 2 lớp & rim-light | Chi tiết, mượt, đẹp (Rig) | [ ] |
 | P10b | FX, Phản Ứng Nguyên Tố & Hạt Môi Trường Trong Trẻo | Chi tiết, mượt, đẹp (FX) | [ ] |

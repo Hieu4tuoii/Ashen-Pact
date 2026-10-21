@@ -63,10 +63,8 @@ export function syncHudDebugVisibility(scene: GameScene): void {
   if (scene.pauseBtnBg && scene.pauseBtnBg.visible !== showDebug) {
     scene.pauseBtnBg.setVisible(showDebug);
   }
-  if (scene.pauseBtnHit) {
-    if (scene.pauseBtnHit.visible !== showDebug) {
-      scene.pauseBtnHit.setVisible(showDebug);
-    }
+  if (scene.pauseBtnHit && scene.pauseBtnHit.visible !== showDebug) {
+    scene.pauseBtnHit.setVisible(showDebug);
     if (showDebug) {
       scene.pauseBtnHit.setInteractive({ useHandCursor: true });
     } else {
@@ -86,7 +84,7 @@ export function applyHudEdgeAnchors(scene: GameScene): void {
   scene.hudBottomBarBg?.clear();
 
   scene.hudTopLeftContainer?.setPosition(-padX, -padY).setScale(uiScale);
-  scene.coopHudContainer?.setPosition(-padX, -padY + Math.round(92 * uiScale)).setScale(uiScale);
+  scene.coopHudContainer?.setPosition(-padX, -padY + Math.round(102 * uiScale)).setScale(uiScale);
   scene.hudTopCenterContainer?.setPosition(WORLD_VIEW_WIDTH * 0.5, -padY).setScale(uiScale);
   scene.hudTopRightContainer?.setPosition(WORLD_VIEW_WIDTH + padX, -padY).setScale(uiScale);
   scene.hudBottomRightContainer
@@ -105,6 +103,8 @@ export function applyHudEdgeAnchors(scene: GameScene): void {
 
   scene.lastMinimapHash = '';
   scene.lastHudWeaponHash = '';
+  scene.lastAbilityHudHash = '';
+  scene.lastHudBarsExtraHash = '';
   scene.lastHudHp = -1;
   scene.lastCoopHudHash = '';
 }
@@ -174,8 +174,8 @@ export function buildVectorHudImpl(this: GameScene): void {
 
   this.statusLineText = ui.add
     .text(
-      14,
-      90,
+      20,
+      92,
       '',
       createUiTextStyle({
         fontPxAt1080p: 13,
@@ -325,7 +325,7 @@ export function buildVectorHudImpl(this: GameScene): void {
 
   this.skillCdText = ui.add
     .text(
-      -344,
+      -352,
       -15,
       i18n.t('ui.hud.ready'),
       createUiTextStyle({
@@ -341,7 +341,7 @@ export function buildVectorHudImpl(this: GameScene): void {
 
   const skillLabel = ui.add
     .text(
-      -344,
+      -352,
       -52,
       'Space',
       createUiTextStyle({
@@ -357,7 +357,7 @@ export function buildVectorHudImpl(this: GameScene): void {
   this.hudBottomRightContainer.add(skillLabel);
 
   const skillHit = ui.add
-    .rectangle(-344, -32, 38, 44, 0x000000, 0)
+    .rectangle(-352, -32, 38, 44, 0x000000, 0)
     .setInteractive({ useHandCursor: true });
   skillHit.on('pointerdown', () => {
     this.skillQueued = true;
@@ -366,7 +366,7 @@ export function buildVectorHudImpl(this: GameScene): void {
 
   this.dashCdText = ui.add
     .text(
-      -300,
+      -308,
       -15,
       i18n.t('ui.hud.ready'),
       createUiTextStyle({
@@ -382,7 +382,7 @@ export function buildVectorHudImpl(this: GameScene): void {
 
   const dashLabel = ui.add
     .text(
-      -300,
+      -308,
       -52,
       'Shift',
       createUiTextStyle({
@@ -398,7 +398,7 @@ export function buildVectorHudImpl(this: GameScene): void {
   this.hudBottomRightContainer.add(dashLabel);
 
   const dashHit = ui.add
-    .rectangle(-300, -32, 38, 44, 0x000000, 0)
+    .rectangle(-308, -32, 38, 44, 0x000000, 0)
     .setInteractive({ useHandCursor: true });
   dashHit.on('pointerdown', () => {
     this.dashQueued = true;
@@ -661,6 +661,8 @@ export function buildVectorHudImpl(this: GameScene): void {
 export function invalidateAllHudCachesImpl(this: GameScene): void {
   this.lastHudHp = -1;
   this.lastHudGold = -1;
+  this.lastHudBarsExtraHash = '';
+  this.lastAbilityHudHash = '';
   this.lastHudWeaponHash = '';
   this.lastHudElement = '';
   this.lastHudQuality = '';

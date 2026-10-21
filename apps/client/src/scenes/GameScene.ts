@@ -263,6 +263,8 @@ export class GameScene extends Phaser.Scene {
   public lastHudEnergy = -1;
   public lastHudGold = -1;
   public lastHudCharacterId = '';
+  public lastHudBarsExtraHash = '';
+  public lastAbilityHudHash = '';
   public lastHudWeaponHash = '';
   public lastHudElement = '';
   public lastHudQuality = '';

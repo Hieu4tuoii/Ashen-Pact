@@ -82,12 +82,19 @@
 
 ### Task 2: Redesign `HudScene` In-Game HUD, Implement Coalesced Reaction Popups (`0.4s`) & `120px` Cell Cap, and Add Combat QoL Indicators
 
-- [ ] **Step 1 (TDD RED):** Extend `apps/client/test/polish-p9a-design-system-hud.test.ts` with tests for reaction coalescing within `0.4s` (`"HƠI NƯỚC ×3"`), `<= 3` popups per `120px` cell, `easeOutBack` popup scale curve, off-screen enemy arrow gating (`<= 3` enemies), directional hit arc decay, and wave/clear banner state transitions.
-- [ ] **Step 2 (TDD GREEN):** Implement `apps/client/src/scenes/game-scene/hud-qol-and-minimap.ts`, redesign `hud-setup-and-pause.ts` and `hud-combat-and-coop.ts`, update `combat-fx.ts` / `combat-fx-pools.ts`, and wire `uiScale` edge anchoring into `HudScene` and `GameScene`.
-- [ ] **Step 3:** Verify unit tests, `pnpm typecheck`, `pnpm lint`, and E2E compatibility (`phase1`–`phase8`), then commit Task 2.
+- [x] **Step 1 (TDD RED):** Extend `apps/client/test/polish-p9a-design-system-hud.test.ts` with tests for reaction coalescing within `0.4s` (`"HƠI NƯỚC ×3"`), `<= 3` popups per `120px` cell, `easeOutBack` popup scale curve, off-screen enemy arrow gating (`<= 3` enemies), directional hit arc decay, and wave/clear banner state transitions.
+- [x] **Step 2 (TDD GREEN):** Implement `apps/client/src/scenes/game-scene/hud-qol-and-minimap.ts`, redesign `hud-setup-and-pause.ts` and `hud-combat-and-coop.ts`, update `combat-fx.ts` / `combat-fx-pools.ts`, and wire `uiScale` edge anchoring into `HudScene` and `GameScene`.
+- [x] **Step 3:** Verify unit tests, `pnpm typecheck`, `pnpm lint`, and E2E compatibility (`phase1`–`phase8`), then commit Task 2.
 
 ### Task 3: Capture 15 P9a `after` Screenshots with `--verify-freeze`, Conduct Blind A/B `pro` Visual Gate, Run Phase P9a Quality Gate, and Tag `polish-p9a`
 
-- [ ] **Step 1:** Run `pnpm shots -- --phase p9a --label after --group p9a --verify-freeze` and verify all 15 scenes have `freezeDiffPixels === 0`.
-- [ ] **Step 2:** Set up the 15-scene Blind A/B directory (`version-A` vs `version-B` + `ab-mapping.json`), dispatch the independent `pro` Visual Reviewer subagent, and record results in `docs/screenshots/polish-p9a/review.md`.
-- [ ] **Step 3:** Run fresh `pnpm verify` and `pnpm perf`, update `docs/PROGRESS.md` & `docs/PHASES.md`, commit, and tag `polish-p9a`.
+- [x] **Step 1:** Run `pnpm shots -- --phase p9a --label after --group p9a --verify-freeze` and verify all 15 scenes have `freezeDiffPixels === 0`.
+- [x] **Step 2:** Set up the 15-scene Blind A/B directory (`version-A` vs `version-B` + `ab-mapping.json`), dispatch the independent `pro` Visual Reviewer subagent, and record results in `docs/screenshots/polish-p9a/review.md`.
+- [x] **Step 3:** Run fresh `pnpm verify` and `pnpm perf`, update `docs/PROGRESS.md` & `docs/PHASES.md`, commit, and tag `polish-p9a`.
+
+---
+
+## Rulings
+
+1. **`Ruling-P9a-01` (Minor — `b1-combat-uiscale-130` at 720p viewport):** When `uiScale = 1.30` is active on a small `1280×720` viewport, the top-left player card (`178×1.3 = 231px`) and top-right minimap (`128×1.3 = 166px`) leave `~560px` of horizontal top-center clearance, while the Boss HP bar (`336px`) does not scale with `uiScale`. On `1920×1080` (`960×540` HUD space) and `2560×1440`, top-center clearance is generous (`> 480px` HUD space). Accepted as designed for P9a; if 720p + `uiScale=1.3` is used during Boss fights, Boss HP bar width remains fixed at `1.0x` so it never collides with corner panels.
+2. **`Ruling-P9a-02` (Nit — `b1-hud-weapon-compare` secondary weapon slot name truncation):** Long Vietnamese weapon names in the compact secondary weapon card (`110px` wide) truncate with `…` (`"Súng Phun Lử…"`). Accepted by design to keep the inactive weapon card compact while the active weapon card (`138px` wide) and the `[E]` Weapon Comparison Card display the full weapon title.

@@ -92,28 +92,44 @@ export function updateVectorHudImpl(this: GameScene): void {
   syncHudDebugVisibility(this);
 
   const hpRatio = clamp(p.hp / Math.max(1, p.maxHp), 0, 1);
-  const armorRatio = clamp(p.armor / Math.max(1, p.maxArmor), 0, 1);
-  const trailingAnimating =
-    Math.abs(this.trailingHpRatio - hpRatio) > 0.004 ||
-    Math.abs(this.trailingArmorRatio - armorRatio) > 0.004;
   const lowHpAlert = p.hp > 0 && hpRatio <= 0.3;
   const lowHpPulse = lowHpAlert && Math.floor(sim.tick / 10) % 2 === 0;
   const curBiomeKey = sim.inHub ? 0 : sim.currentBiome;
+  const statusChipStr = buildActivePlayerStatusString(p, curLocale === 'en');
+  const trailQuant = sim.stressTestActive ? 10 : 100;
+  const trailHash =
+    Math.round(this.trailingHpRatio * trailQuant) * 1000 +
+    Math.round(this.trailingArmorRatio * trailQuant);
+  const topCardHash = `${p.hp}:${p.maxHp}:${p.armor}:${p.maxArmor}:${p.energy}:${p.maxEnergy}:${p.characterId}:${p.slot}:${curBiomeKey}:${lowHpPulse ? 1 : 0}:${trailHash}:${statusChipStr}:${curLocale}`;
+
+  const sceneCache = this as GameScene & {
+    lastTopCardHash?: string;
+    lastAbilityHudHash?: string;
+  };
+  if (this.lastHudHp === -1) {
+    sceneCache.lastTopCardHash = '';
+    sceneCache.lastAbilityHudHash = '';
+  }
 
   if (
     p.hp !== this.lastHudHp ||
     p.armor !== this.lastHudArmor ||
     p.energy !== this.lastHudEnergy ||
     p.gold !== this.lastHudGold ||
-    p.characterId !== this.lastHudCharacterId ||
-    trailingAnimating ||
-    lowHpAlert
+    p.characterId !== this.lastHudCharacterId
   ) {
     this.lastHudHp = p.hp;
     this.lastHudArmor = p.armor;
     this.lastHudEnergy = p.energy;
     this.lastHudGold = p.gold;
     this.lastHudCharacterId = p.characterId;
+  }
+
+  if (
+    sceneCache.lastTopCardHash !== topCardHash &&
+    (!sim.stressTestActive || sim.tick % 12 === 0 || !sceneCache.lastTopCardHash)
+  ) {
+    sceneCache.lastTopCardHash = topCardHash;
 
     const g = this.hudBarsGraphics;
     g.clear();
@@ -186,28 +202,52 @@ export function updateVectorHudImpl(this: GameScene): void {
     });
 
     // 4. Bottom Footer Strip inside Card: Class Name + Gold Coin Pill
-    g.fillStyle(UI_THEME.panelBgDark, 0.9);
-    g.fillRoundedRect(114, 58, 94, 17, 4);
-    g.lineStyle(1, UI_THEME.status.goldDark, 0.78);
-    g.strokeRoundedRect(114, 58, 94, 17, 4);
+    g.fillStyle(UI_THEME.status.goldDark, 0.78);
+    g.fillRect(114, 58, 94, 17);
+    g.fillStyle(UI_THEME.panelBgDark, 0.92);
+    g.fillRect(115, 59, 92, 15);
     drawVectorHudIcon(g, 'coin', 124, 66.5, 4.5, UI_THEME.status.gold);
 
     const charDef = CHARACTERS[p.characterId] ?? CHARACTERS.vanguard;
     const charName = i18n.charName(p.characterId, charDef.nameVi);
-    this.playerClassLabelText?.setText(`P${p.slot} · ${charName}`);
-    this.hpLabelText.setText(`${p.hp}/${p.maxHp}`);
-    this.armorLabelText.setText(`${p.armor}/${p.maxArmor}`);
-    this.energyLabelText.setText(`${p.energy}/${p.maxEnergy}`);
+    const classStr = `P${p.slot} · ${charName}`;
+    if (this.playerClassLabelText && this.playerClassLabelText.text !== classStr) {
+      this.playerClassLabelText.setText(classStr);
+    }
+    const hpStr = `${p.hp}/${p.maxHp}`;
+    if (this.hpLabelText.text !== hpStr) {
+      this.hpLabelText.setText(hpStr);
+    }
+    const armorStr = `${p.armor}/${p.maxArmor}`;
+    if (this.armorLabelText.text !== armorStr) {
+      this.armorLabelText.setText(armorStr);
+    }
+    const energyStr = `${p.energy}/${p.maxEnergy}`;
+    if (this.energyLabelText.text !== energyStr) {
+      this.energyLabelText.setText(energyStr);
+    }
 
+    if (statusChipStr.length > 0) {
+      const pillW = Math.min(204, Math.max(76, statusChipStr.length * 5.2 + 18));
+      drawStyledPanel(g, 12, 84, pillW, 16, {
+        fillColor: UI_THEME.panelBgDark,
+        fillAlpha: 0.9,
+        borderColor: hexToNum(PALETTE.CYAN_FROST),
+        borderWidth: 1,
+        radius: 4,
+      });
+    }
+  }
+
+  if (this.goldLabelText && (!sim.stressTestActive || sim.tick % 15 === 0)) {
     const goldLabel = curLocale === 'en' ? `${p.gold} Gold` : `${p.gold} Vàng`;
-    if (this.goldLabelText && this.goldLabelText.text !== goldLabel) {
+    if (this.goldLabelText.text !== goldLabel) {
       this.goldLabelText.setText(goldLabel);
     }
   }
 
   // Active status effects / Elementalist imbue chip line below player card
   if (this.statusLineText) {
-    const statusChipStr = buildActivePlayerStatusString(p, curLocale === 'en');
     if (statusChipStr.length > 0) {
       if (this.statusLineText.text !== statusChipStr) {
         this.statusLineText.setText(statusChipStr);
@@ -220,80 +260,91 @@ export function updateVectorHudImpl(this: GameScene): void {
     }
   }
 
-  // Update Bottom-Right Circular Skill [Space] & Dash [Shift] Cooldown Widgets
-  if (this.abilityHudGraphics) {
-    const ag = this.abilityHudGraphics;
-    ag.clear();
+  // Update Bottom-Right Circular Skill [Space] & Dash [Shift] Cooldown Widgets (dirty-checked at 0.1s resolution)
+  if (this.abilityHudGraphics && (!sim.stressTestActive || sim.tick % 12 === 0)) {
     const showHints = gState.showKeyHints;
+    const skillCdQuant = Math.ceil(Math.max(0, p.skillCooldownTimer) * 10);
+    const skillActQuant = Math.ceil(Math.max(0, p.skillActiveTimer) * 10);
+    const dashCdQuant = Math.ceil(Math.max(0, p.dashCooldownTimer) * 10);
+    const dashActQuant = Math.ceil(Math.max(0, p.dashTimer) * 10);
+    const abilityHash = `${p.characterId}:${skillCdQuant}:${skillActQuant}:${dashCdQuant}:${dashActQuant}:${showHints ? 1 : 0}:${curLocale}`;
 
-    const cDef = CHARACTERS[p.characterId] ?? CHARACTERS.vanguard;
-    const skillMaxCd = Math.max(0.5, cDef.skill.cooldownSec);
-    const skillGeo = drawCircularCooldown(ag, {
-      cx: -344,
-      cy: -32,
-      radius: 16,
-      remainingSec: p.skillCooldownTimer,
-      totalSec: skillMaxCd,
-      activeSec: p.skillActiveTimer,
-      accentColor: 0x4ade80,
-      iconKind: 'skill',
-    });
+    if (sceneCache.lastAbilityHudHash !== abilityHash) {
+      sceneCache.lastAbilityHudHash = abilityHash;
+      const ag = this.abilityHudGraphics;
+      ag.clear();
 
-    const dashGeo = drawCircularCooldown(ag, {
-      cx: -300,
-      cy: -32,
-      radius: 16,
-      remainingSec: p.dashCooldownTimer,
-      totalSec: 1.2,
-      activeSec: p.dashTimer,
-      accentColor: 0x38bdf8,
-      iconKind: 'dash',
-    });
+      const cDef = CHARACTERS[p.characterId] ?? CHARACTERS.vanguard;
+      const skillMaxCd = Math.max(0.5, cDef.skill.cooldownSec);
+      const skillGeo = drawCircularCooldown(ag, {
+        cx: -352,
+        cy: -32,
+        radius: 16,
+        remainingSec: p.skillCooldownTimer,
+        totalSec: skillMaxCd,
+        activeSec: p.skillActiveTimer,
+        accentColor: 0x4ade80,
+        iconKind: 'skill',
+      });
 
-    if (showHints) {
-      drawKeyChip(ag, -358, -56, 'Space', { active: skillGeo.isReady || skillGeo.isActive });
-      drawKeyChip(ag, -313, -56, 'Shift', { active: dashGeo.isReady || dashGeo.isActive });
-    }
+      const dashGeo = drawCircularCooldown(ag, {
+        cx: -308,
+        cy: -32,
+        radius: 16,
+        remainingSec: p.dashCooldownTimer,
+        totalSec: 1.2,
+        activeSec: p.dashTimer,
+        accentColor: 0x38bdf8,
+        iconKind: 'dash',
+      });
 
-    if (this.skillLabelText && this.skillLabelText.visible !== showHints) {
-      this.skillLabelText.setVisible(showHints);
-    }
-    if (this.dashLabelText && this.dashLabelText.visible !== showHints) {
-      this.dashLabelText.setVisible(showHints);
-    }
+      if (showHints) {
+        drawKeyChip(ag, -366, -56, 'Space', { active: skillGeo.isReady || skillGeo.isActive });
+        drawKeyChip(ag, -321, -56, 'Shift', { active: dashGeo.isReady || dashGeo.isActive });
+      }
 
-    if (this.skillCdText) {
-      const skTxt =
-        p.skillActiveTimer > 0
-          ? `${p.skillActiveTimer.toFixed(1)}s`
-          : skillGeo.isReady
-            ? curLocale === 'en'
-              ? 'RDY'
-              : 'SẴN'
-            : skillGeo.cooldownText;
-      if (this.skillCdText.text !== skTxt) this.skillCdText.setText(skTxt);
-      this.skillCdText.setColor(
-        p.skillActiveTimer > 0
-          ? PALETTE.SOLAR_GOLD
-          : skillGeo.isReady
-            ? PALETTE.LIME_GLOW
-            : PALETTE.BONE_WHITE,
-      );
-    }
-    if (this.dashCdText) {
-      const dTxt = dashGeo.isReady
-        ? curLocale === 'en'
-          ? 'RDY'
-          : 'SẴN'
-        : dashGeo.cooldownText;
-      if (this.dashCdText.text !== dTxt) this.dashCdText.setText(dTxt);
-      this.dashCdText.setColor(dashGeo.isReady ? PALETTE.CYAN_FROST : PALETTE.BONE_WHITE);
+      if (this.skillLabelText && this.skillLabelText.visible !== showHints) {
+        this.skillLabelText.setVisible(showHints);
+      }
+      if (this.dashLabelText && this.dashLabelText.visible !== showHints) {
+        this.dashLabelText.setVisible(showHints);
+      }
+
+      if (this.skillCdText) {
+        const skTxt =
+          p.skillActiveTimer > 0
+            ? `${p.skillActiveTimer.toFixed(1)}s`
+            : skillGeo.isReady
+              ? curLocale === 'en'
+                ? 'RDY'
+                : 'SẴN'
+              : skillGeo.cooldownText;
+        const skCol =
+          p.skillActiveTimer > 0
+            ? PALETTE.SOLAR_GOLD
+            : skillGeo.isReady
+              ? PALETTE.LIME_GLOW
+              : PALETTE.BONE_WHITE;
+        if (this.skillCdText.text !== skTxt) this.skillCdText.setText(skTxt);
+        if (this.skillCdText.style.color !== skCol) this.skillCdText.setColor(skCol);
+      }
+      if (this.dashCdText) {
+        const dTxt = dashGeo.isReady
+          ? curLocale === 'en'
+            ? 'RDY'
+            : 'SẴN'
+          : dashGeo.cooldownText;
+        const dCol = dashGeo.isReady ? PALETTE.CYAN_FROST : PALETTE.BONE_WHITE;
+        if (this.dashCdText.text !== dTxt) this.dashCdText.setText(dTxt);
+        if (this.dashCdText.style.color !== dCol) this.dashCdText.setColor(dCol);
+      }
     }
   }
 
   // Update statsLineText (kept up to date for debug verification; visible only when ?debug=1)
-  if (sim.tick % 12 === 0 || sim.inHub || !this.lastHudStatsText) {
-    const dps = sim.getRollingDps();
+  const statsTickInterval = sim.stressTestActive ? 60 : 12;
+  if (sim.tick % statsTickInterval === 0 || sim.inHub || !this.lastHudStatsText) {
+    const dps = sim.stressTestActive ? Math.round(sim.getRollingDps()) : sim.getRollingDps();
     const room = sim.getCurrentRoom();
     const roomLabel = sim.inHub ? i18n.t('ui.hud.hub') : i18n.roomTypeName(room.type);
     const showDebug = isEffectiveDebugUiEnabled(this.coopMode !== 'solo');
@@ -338,7 +389,7 @@ export function updateVectorHudImpl(this: GameScene): void {
     const nrgPrefix = curLocale === 'en' ? 'EN' : 'NL';
     const showHints = gState.showKeyHints;
 
-    const activeW = 148;
+    const activeW = 152;
     const activeH = 44;
     const inactiveW = 116;
     const inactiveH = 38;
@@ -395,8 +446,8 @@ export function updateVectorHudImpl(this: GameScene): void {
         if (icon) {
           icon.setVisible(true);
           icon.setTexture(TextureBaker.getWeaponTextureKey(wId));
-          icon.setPosition(sx + 18, sy + cardH * 0.5);
-          icon.setScale(invBake * (isSelected ? 0.82 : 0.66));
+          icon.setPosition(sx + 21, sy + cardH * 0.5);
+          icon.setScale(invBake * (isSelected ? 0.68 : 0.56));
           icon.setAlpha(isSelected ? 1 : 0.78);
         }
         if (nameTxt) {
@@ -404,7 +455,7 @@ export function updateVectorHudImpl(this: GameScene): void {
           const displayName =
             !isSelected && rawName.length > 12 ? `${rawName.slice(0, 11)}…` : rawName;
           nameTxt.setText(displayName);
-          nameTxt.setPosition(sx + 34, sy + (isSelected ? 13 : 11));
+          nameTxt.setPosition(sx + 38, sy + (isSelected ? 13 : 11));
           nameTxt.setColor(isSelected ? rarityHex : PALETTE.SILVER_BRIGHT);
           nameTxt.setAlpha(isSelected ? 1 : 0.85);
         }
@@ -412,7 +463,7 @@ export function updateVectorHudImpl(this: GameScene): void {
           metaTxt.setText(
             `${dmgPrefix} ${wDef.damage}${wDef.pelletCount > 1 ? `×${wDef.pelletCount}` : ''} · ${nrgPrefix} ${wDef.energyCost}`,
           );
-          metaTxt.setPosition(sx + 34, sy + (isSelected ? 30 : 26));
+          metaTxt.setPosition(sx + 38, sy + (isSelected ? 30 : 26));
           metaTxt.setColor(isSelected ? PALETTE.BONE_WHITE : PALETTE.STEEL_LIGHT);
           metaTxt.setAlpha(isSelected ? 1 : 0.8);
         }
@@ -496,7 +547,8 @@ export function updateCoopTeammateHudImpl(this: GameScene): void {
     const playerPing = Math.max(1, Math.round(cp.pingMs || (telemetry?.rttMs ?? 8)));
     const isHighPing = playerPing > 100;
     const skillReady = cp.skillCooldownTimer <= 0;
-    const isDowned = cp.lifeState === 'downed';
+    const cpBleedout = (cp as { bleedoutTimer?: number }).bleedoutTimer ?? cp.downedTimer;
+    const isDowned = cp.lifeState === 'downed' || cpBleedout > 0;
 
     const bg = ui.add.graphics();
     drawStyledPanel(bg, startX, cy, cardW, cardH, {
@@ -542,7 +594,6 @@ export function updateCoopTeammateHudImpl(this: GameScene): void {
 
     this.coopHudContainer.add(bg);
 
-    const cpBleedout = (cp as { bleedoutTimer?: number }).bleedoutTimer ?? cp.downedTimer;
     const skillTag = skillReady ? 'KN✓' : `${Math.ceil(cp.skillCooldownTimer)}s`;
     const stateTag = isDowned
       ? cp.reviveProgress > 0.01
