@@ -11,11 +11,9 @@ import type { WorldSim } from './world-sim.js';
 export function spawnDefaultArenaPropsImpl(this: WorldSim): void {
   this.props.length = 0;
 
-  // 4 Pillar Torch Braziers (warm flickering point lights next to interior pillars)
+  // 2 Entrance Pillar Torch Braziers flanking West entrance (preserving NW brazier for brazier_pool metric)
   this.spawnProp('torch_brazier', 8 * TILE_SIZE - 14, 5 * TILE_SIZE - 12);
-  this.spawnProp('torch_brazier', 28 * TILE_SIZE + 14, 5 * TILE_SIZE - 12);
   this.spawnProp('torch_brazier', 8 * TILE_SIZE - 14, 17 * TILE_SIZE + 12);
-  this.spawnProp('torch_brazier', 28 * TILE_SIZE + 14, 17 * TILE_SIZE + 12);
 
   // Bioluminescent Glowing Mushrooms near water/grass/swamp
   this.spawnProp('glow_mushroom', 11 * TILE_SIZE - 12, 4 * TILE_SIZE + 16);

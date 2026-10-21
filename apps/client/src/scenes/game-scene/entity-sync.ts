@@ -333,6 +333,7 @@ export function syncPropsImpl(this: GameScene, dtSec: number): void {
       const shadow = this.add.sprite(prop.x, prop.y + 9, 'prop_shadow');
       shadow.setScale(invBake);
       shadow.setDepth(18);
+      shadow.setVisible(prop.kind !== 'torch_brazier');
 
       const sprite = this.add.sprite(prop.x, prop.y, TextureBaker.getPropTextureKey(prop.kind));
       sprite.setScale(invBake);

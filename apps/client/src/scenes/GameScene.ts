@@ -26,6 +26,7 @@ import type { LightingPipeline } from '../fx/lighting-pipeline.js';
 import type { DebugOverlay } from '../ui/debug-overlay.js';
 import type { GraphicsQualityTier } from '../ui/graphics-settings.js';
 import type { ModalOverlayManager } from '../ui/settings-modal.js';
+import type { BiomeArchitectureLiveLayer } from '../world/biome-architecture.js';
 import type { HudScene } from './HudScene.js';
 import { applyCameraViewportImpl, buildArenaTilesImpl, createImpl, drawSourceKeyToCtxImpl, getStructureTextureKeyImpl, rebuildAllTileCellsToCompositeImpl, renderTileCellToCompositeImpl, setStressTestModeImpl, syncArenaTilesWithMapRevisionImpl, triggerIrisTransitionImpl, updateCameraWithLookaheadAndShakeImpl, updateIrisTransitionImpl } from './game-scene/arena-tiles.js';
 import { resolveEnemyStatusTintImpl, resolvePlayerStatusTintImpl, syncEnemyRigsImpl, syncProjectilesAndPickupsImpl, syncPropsImpl, syncSimulatedPlayersImpl, updatePlayerOverheadUiImpl } from './game-scene/entity-sync.js';
@@ -195,6 +196,7 @@ export class GameScene extends Phaser.Scene {
   public mapTileVisuals: ArenaTileVisual[] = [];
   public arenaGroundTex?: Phaser.Textures.CanvasTexture;
   public arenaGroundSprite?: Phaser.GameObjects.Image;
+  public biomeArchLive?: BiomeArchitectureLiveLayer;
   public readonly tileCompositeScale = 2;
   public lastMapRevision = -1;
   public lastRenderedBiome: 0 | 1 | 2 | 3 = 1;
@@ -700,6 +702,12 @@ export class GameScene extends Phaser.Scene {
       map: sim.map,
       trauma: sim.runState === 'playing' && !isSoloPaused ? this.fx.getTrauma() : 0,
       inHub: sim.inHub,
+    });
+    this.biomeArchLive?.update({
+      dtSec: animDt,
+      map: sim.map,
+      props: sim.props,
+      lightingEnabled: this.lighting.isLightmapVisible(),
     });
 
     // 10. Update Procedural Crosshair at Mouse HUD Position

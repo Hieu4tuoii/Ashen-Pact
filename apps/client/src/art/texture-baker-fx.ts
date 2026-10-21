@@ -365,7 +365,18 @@ export function bakeProjectilesAndFx(scene: Phaser.Scene, scale: number): void {
     }
   });
 
-  // 12. Ambient Forest Leaf & Mist & Shards
+  // 12. Ambient Forest Leaf, Un-outlined Ember Mote, Mist & Shards
+  bakeCustomCanvas(scene, 'fx_ember_mote', 8, 8, scale, (ctx) => {
+    const grad = ctx.createRadialGradient(0, 0, 0.3, 0, 0, 1.7);
+    grad.addColorStop(0, 'rgba(255, 255, 255, 1)');
+    grad.addColorStop(0.65, 'rgba(255, 210, 122, 0.85)');
+    grad.addColorStop(1, 'rgba(249, 115, 22, 0)');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(0, 0, 1.7, 0, Math.PI * 2);
+    ctx.fill();
+  });
+
   bakeCustomCanvas(scene, 'fx_ambient_leaf', 14, 14, scale, (ctx) => {
     outlined(
       ctx,

@@ -6,7 +6,7 @@ import {
   i18n,
   type PropKind,
 } from '@ashen-pact/shared';
-import type Phaser from 'phaser';
+import Phaser from 'phaser';
 import { hexToNum, PALETTE, PLAYER_SLOT_COLORS } from '../art/palette.js';
 import { RIG_DEFS_BY_ID } from '../art/rig-defs.js';
 import { TextureBaker } from '../art/texture-baker.js';
@@ -117,16 +117,19 @@ export class CombatFxManager {
       if (biome === 2) {
         amb.sprite.setTexture('fx_ice_shard');
         amb.sprite.setTint(hexToNum(PALETTE.ICE_WHITE));
+        amb.sprite.setBlendMode(Phaser.BlendModes.NORMAL);
         amb.vx = 16 + (i % 5) * 4;
         amb.vy = 22 + (i % 5) * 4;
       } else if (biome === 3) {
-        amb.sprite.setTexture('fx_spark');
+        amb.sprite.setTexture('fx_ember_mote');
         amb.sprite.setTint(hexToNum(i % 2 === 0 ? PALETTE.FLAME_ORANGE : PALETTE.SOLAR_GOLD));
-        amb.vx = 16 + (i % 5) * 4;
-        amb.vy = -(18 + (i % 5) * 4);
+        amb.sprite.setBlendMode(Phaser.BlendModes.ADD);
+        amb.vx = 10 + (i % 5) * 3;
+        amb.vy = -(22 + (i % 5) * 5);
       } else {
         amb.sprite.setTexture('fx_ambient_leaf');
         amb.sprite.clearTint();
+        amb.sprite.setBlendMode(Phaser.BlendModes.NORMAL);
         amb.vx = 16 + (i % 5) * 4;
         amb.vy = 14 + (i % 4) * 3;
       }

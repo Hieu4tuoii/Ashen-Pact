@@ -29,6 +29,7 @@ import { LightingPipeline } from '../../fx/lighting-pipeline.js';
 import { DebugOverlay, initGlobalDebugState } from '../../ui/debug-overlay.js';
 import { type GraphicsQualityTier, graphicsSettings } from '../../ui/graphics-settings.js';
 import {
+  BiomeArchitectureLiveLayer,
   buildRoomArchitecturePlan,
   computeTileDistToWall,
   renderBiomeArchitectureToComposite,
@@ -263,6 +264,8 @@ export function createImpl(this: GameScene): void {
     this.input.off('pointerdown', onPointerDown);
     this.input.keyboard?.off('keydown', unlockAudio);
     this.lighting?.destroy();
+    this.biomeArchLive?.destroy();
+    this.biomeArchLive = undefined;
     this.settingsModal?.destroy();
     this.hudScene?.detachGameScene();
     this.hudScene = undefined;
@@ -466,6 +469,7 @@ export function rebuildAllTileCellsToCompositeImpl(this: GameScene): void {
       effectiveBiome,
       `${sim.dungeon.seed}_${sim.currentFloor}_${sim.currentRoomId}`,
     );
+    this.biomeArchLive?.setPlan(plan);
     renderBiomeArchitectureToComposite(
       groundCtx,
       sim.map,
@@ -492,6 +496,10 @@ export function buildArenaTilesImpl(this: GameScene): void {
 
   this.arenaGroundTex =
     this.textures.createCanvas('arena_ground_composite', compW, compH) ?? undefined;
+
+  if (!this.biomeArchLive) {
+    this.biomeArchLive = new BiomeArchitectureLiveLayer(this);
+  }
 
   for (let ty = 0; ty < map.rows; ty++) {
     for (let tx = 0; tx < map.cols; tx++) {

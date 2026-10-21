@@ -297,8 +297,9 @@ export async function setupB1CombatState(page: Page, lowQuality = false): Promis
   await stepDeterministicFrames(page, 5);
 }
 
-export async function setupB2CombatState(page: Page): Promise<void> {
-  await page.evaluate(() => {
+export async function setupB2CombatState(page: Page, lowQuality = false): Promise<void> {
+  await page.evaluate((isLow) => {
+    if (isLow) window.__GAME_SET_QUALITY__?.('low');
     const sim = window.__GAME_TRANSPORT__!.getSim();
     const combatRoom = sim.dungeon.rooms.find((r) => r.type === 'combat') ?? sim.dungeon.rooms[0]!;
     sim.enterRoom(combatRoom.id);
@@ -313,7 +314,7 @@ export async function setupB2CombatState(page: Page): Promise<void> {
       sim.spawnEnemy('snow_spirit', 680, 370, true),
     ];
     for (const e of spawned) e.hp = e.maxHp = 900;
-  });
+  }, lowQuality);
   await lockCameraAndIrisToPlayer(page);
   await stepDeterministicFrames(page, 40);
   await page.evaluate(() => {

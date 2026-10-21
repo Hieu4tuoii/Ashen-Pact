@@ -236,7 +236,7 @@ export function refreshResolution(
       this.currentBiome === 2
         ? 'fx_ice_shard'
         : this.currentBiome === 3
-          ? 'fx_spark'
+          ? 'fx_ember_mote'
           : 'fx_ambient_leaf';
     amb.sprite.setTexture(tex);
     amb.baseScale = invBake * (0.75 + (i % 3) * 0.15);

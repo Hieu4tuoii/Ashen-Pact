@@ -360,9 +360,21 @@ export const VISUAL_SCENES: readonly VisualSceneDef[] = [
     captureUnlit: true,
     sampleRects: ENVIRONMENT_SAMPLE_RECTS,
   }),
-  makeScene('b2-combat', 'Biome 2 Frozen Depths combat room', BIOME2_GAME_URL, 'GameScene', setupB2CombatState, {
+  makeScene('b2-combat', 'Biome 2 Frozen Depths combat room', BIOME2_GAME_URL, 'GameScene', (p) => setupB2CombatState(p, false), {
     captureUnlit: true,
     sampleRects: ENVIRONMENT_SAMPLE_RECTS,
+  }),
+  makeScene('b2-chest', 'Biome 2 treasure room with player near chest', BIOME2_GAME_URL, 'GameScene', async (page) => {
+    await page.evaluate(() => {
+      const sim = window.__GAME_TRANSPORT__!.getSim();
+      const room = sim.dungeon.rooms.find((r) => r.type === 'treasure')!;
+      sim.enterRoom(room.id);
+      const chest = sim.chests[0]!;
+      sim.player.x = chest.x;
+      sim.player.y = chest.y + 28;
+    });
+    await lockCameraAndIrisToPlayer(page);
+    await stepDeterministicFrames(page, 45);
   }),
   makeScene('b3-start-room', 'Biome 3 Molten Forge start room', BIOME3_GAME_URL, 'GameScene', setupStartRoomScene, {
     captureUnlit: true,
@@ -371,6 +383,18 @@ export const VISUAL_SCENES: readonly VisualSceneDef[] = [
   makeScene('b3-combat', 'Biome 3 Molten Forge combat room with enemy bullets near braziers', BIOME3_GAME_URL, 'GameScene', (p) => setupB3CombatState(p, false), {
     captureUnlit: true,
     sampleRects: ENVIRONMENT_SAMPLE_RECTS,
+  }),
+  makeScene('b3-chest', 'Biome 3 treasure room with player near chest', BIOME3_GAME_URL, 'GameScene', async (page) => {
+    await page.evaluate(() => {
+      const sim = window.__GAME_TRANSPORT__!.getSim();
+      const room = sim.dungeon.rooms.find((r) => r.type === 'treasure')!;
+      sim.enterRoom(room.id);
+      const chest = sim.chests[0]!;
+      sim.player.x = chest.x;
+      sim.player.y = chest.y + 28;
+    });
+    await lockCameraAndIrisToPlayer(page);
+    await stepDeterministicFrames(page, 45);
   }),
   makeScene('b3-combat-grayscale', 'Grayscale conversion of b3-combat', BIOME3_GAME_URL, 'GameScene', (p) => setupB3CombatState(p, false), {
     grayscaleFrom: 'b3-combat',
@@ -405,12 +429,30 @@ export const VISUAL_SCENES: readonly VisualSceneDef[] = [
     sampleRects: ENVIRONMENT_SAMPLE_RECTS,
   }),
   makeScene('boss-b3', 'Biome 3 Boss Titan Lò Rèn (Phase 2 with Energy Cores & Shockwave)', BIOME3_GAME_URL, 'GameScene', (p) => setupBossScene(p, 6, 2, true)),
-  makeScene('boss-b1-phase3', 'Biome 1 Boss Mục Vương Phase 3 with creeping poison border', DEFAULT_GAME_URL, 'GameScene', (p) => setupBossScene(p, 2, 3)),
+  makeScene('boss-b1-phase3', 'Biome 1 Boss Mục Vương Phase 3 with creeping poison border', DEFAULT_GAME_URL, 'GameScene', (p) => setupBossScene(p, 2, 3), {
+    captureUnlit: true,
+    sampleRects: ENVIRONMENT_SAMPLE_RECTS.map((r) =>
+      r.name === 'corner_tl'
+        ? { ...r, x: 324, y: 420 }
+        : r.name === 'corner_bl'
+          ? { ...r, x: 324, y: 740 }
+          : r,
+    ),
+  }),
   makeScene('boss-b2-blizzard', 'Biome 2 Boss Kryssa Phase 3 with Blizzard Veil', BIOME2_GAME_URL, 'GameScene', (p) => setupBossScene(p, 4, 3), {
     captureUnlit: true,
     sampleRects: ENVIRONMENT_SAMPLE_RECTS,
   }),
-  makeScene('boss-b3-phase3', 'Biome 3 Boss Forge Titan Phase 3 with molten lava border', BIOME3_GAME_URL, 'GameScene', (p) => setupBossScene(p, 6, 3)),
+  makeScene('boss-b3-phase3', 'Biome 3 Boss Forge Titan Phase 3 with molten lava border', BIOME3_GAME_URL, 'GameScene', (p) => setupBossScene(p, 6, 3), {
+    captureUnlit: true,
+    sampleRects: ENVIRONMENT_SAMPLE_RECTS.map((r) =>
+      r.name === 'corner_tl'
+        ? { ...r, x: 324, y: 420 }
+        : r.name === 'corner_bl'
+          ? { ...r, x: 324, y: 740 }
+          : r,
+    ),
+  }),
 
   // 6. Co-op & Stress
   makeScene('coop-4p-combat', '4-player Co-op combat with skills and teammate HUD', DEFAULT_GAME_URL, 'GameScene', async (page) => {
@@ -548,6 +590,10 @@ export const VISUAL_SCENES: readonly VisualSceneDef[] = [
   makeScene('hub-solo-ultrawide', 'Hub solo at 2560x1080', DEFAULT_HUB_URL, 'GameScene', setupHubSoloScene, { viewport: { width: 2560, height: 1080 } }),
   makeScene('hub-solo-1280x1024', 'Hub solo at 1280x1024', DEFAULT_HUB_URL, 'GameScene', setupHubSoloScene, { viewport: { width: 1280, height: 1024 } }),
   makeScene('b1-combat-low', 'Biome 1 combat at Low quality', DEFAULT_GAME_URL, 'GameScene', (p) => setupB1CombatState(p, true), {
+    captureUnlit: true,
+    sampleRects: ENVIRONMENT_SAMPLE_RECTS,
+  }),
+  makeScene('b2-combat-low', 'Biome 2 combat at Low quality', BIOME2_GAME_URL, 'GameScene', (p) => setupB2CombatState(p, true), {
     captureUnlit: true,
     sampleRects: ENVIRONMENT_SAMPLE_RECTS,
   }),

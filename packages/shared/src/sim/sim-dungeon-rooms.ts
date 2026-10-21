@@ -272,10 +272,16 @@ export function populateRoomContentsImpl(this: WorldSim, room: DungeonRoomNode):
       break;
     }
     case 'combat': {
+      const firstCombatRoom = this.dungeon.rooms.find((r) => r.type === 'combat');
+      const isPrimaryCombat = !firstCombatRoom || firstCombatRoom.id === room.id;
+      const keepFourthBrazier =
+        isPrimaryCombat || (Math.abs(Number(this.dungeon.seed) + room.id) & 1) === 0;
       this.spawnProp('torch_brazier', 8 * TILE_SIZE - 14, 5 * TILE_SIZE - 12);
       this.spawnProp('torch_brazier', 28 * TILE_SIZE + 14, 5 * TILE_SIZE - 12);
       this.spawnProp('torch_brazier', 8 * TILE_SIZE - 14, 17 * TILE_SIZE + 12);
-      this.spawnProp('torch_brazier', 28 * TILE_SIZE + 14, 17 * TILE_SIZE + 12);
+      if (keepFourthBrazier) {
+        this.spawnProp('torch_brazier', 28 * TILE_SIZE + 14, 17 * TILE_SIZE + 12);
+      }
       this.spawnProp('glow_mushroom', 11 * TILE_SIZE - 12, 4 * TILE_SIZE + 16);
       this.spawnProp('glow_mushroom', 25 * TILE_SIZE + 12, 17 * TILE_SIZE + 16);
       this.spawnProp('explosive_barrel', 15 * TILE_SIZE + 16, 6 * TILE_SIZE + 16);
@@ -429,8 +435,6 @@ export function populateRoomContentsImpl(this: WorldSim, room: DungeonRoomNode):
     case 'portal': {
       this.spawnProp('torch_brazier', cx - 130, cy - 90);
       this.spawnProp('torch_brazier', cx + 130, cy - 90);
-      this.spawnProp('torch_brazier', cx - 130, cy + 90);
-      this.spawnProp('torch_brazier', cx + 130, cy + 90);
       this.portalX = cx;
       this.portalY = cy;
     this.doorTransitionCooldown = Math.max(this.doorTransitionCooldown, 0.75);
@@ -445,8 +449,10 @@ export function populateRoomContentsImpl(this: WorldSim, room: DungeonRoomNode):
     }
     case 'boss': {
       this.spawnProp('torch_brazier', 6 * TILE_SIZE, 4 * TILE_SIZE);
+      this.spawnProp('torch_brazier', 18 * TILE_SIZE, 4 * TILE_SIZE);
       this.spawnProp('torch_brazier', 30 * TILE_SIZE, 4 * TILE_SIZE);
       this.spawnProp('torch_brazier', 6 * TILE_SIZE, 18 * TILE_SIZE);
+      this.spawnProp('torch_brazier', 18 * TILE_SIZE, 18 * TILE_SIZE);
       this.spawnProp('torch_brazier', 30 * TILE_SIZE, 18 * TILE_SIZE);
       if (this.currentBiome === 2) {
         this.spawnProp('crystal_pillar', 11 * TILE_SIZE + 16, 6 * TILE_SIZE + 16);
