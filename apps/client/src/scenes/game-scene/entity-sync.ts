@@ -16,6 +16,7 @@ import { TextureBaker } from '../../art/texture-baker.js';
 import { getVisualQueryConfig } from '../../core/visual-query.js';
 import { graphicsSettings } from '../../ui/graphics-settings.js';
 import { type GameScene, RIG_FOOT_OFFSET_Y } from '../GameScene.js';
+import { resolvePlayerNameplateSpec } from './interact-prompt.js';
 
 export function updatePlayerOverheadUiImpl(
   this: GameScene,
@@ -27,48 +28,30 @@ export function updatePlayerOverheadUiImpl(
   emoteBg?: Phaser.GameObjects.Graphics,
 ): void {
   const sim = this.transport.getSim();
-  const showName =
-    !sim.stressTestActive &&
-    (this.coopMode !== 'solo' ||
-      sim.inHub ||
-      sim.getActivePlayerCount() > 1 ||
-      p.lifeState !== 'alive');
-
   const view = this.cameras.main.worldView;
   const safeTopY = (view && view.width > 0 ? view.y : 0) + 84;
-  const placeBelow = y - 26 < safeTopY;
-  const nameY = placeBelow ? y + 24 : y - 26;
-  const emoteY = placeBelow ? y + 42 : Math.max(safeTopY + 12, y - 44);
+  const spec = resolvePlayerNameplateSpec({
+    player: p,
+    localPlayerId: sim.player.id,
+    x,
+    y,
+    inHub: sim.inHub,
+    stressTestActive: sim.stressTestActive,
+    safeTopY,
+  });
 
   if (nameLabel) {
-    if (!showName) {
+    if (!spec.visible) {
       nameLabel.setVisible(false);
     } else {
       nameLabel.setVisible(true);
-      let statusSuffix = '';
-      if (p.lifeState === 'downed') {
-        const revPct = Math.round(p.reviveProgress * 100);
-        statusSuffix =
-          revPct > 0
-            ? ` · ${i18n.t('ui.hud.reviving')} ${revPct}%`
-            : ` · ${i18n.t('ui.hud.downed')} (${Math.ceil(p.downedTimer)}s) ${i18n.t('ui.hud.holdEToRevive')}`;
-      } else if (p.lifeState === 'ghost') {
-        statusSuffix = ` · ${i18n.t('ui.hud.ghost')}`;
-      } else if (sim.inHub && p.ready) {
-        statusSuffix = ' · ✓';
+      if (nameLabel.text !== spec.text) {
+        nameLabel.setText(spec.text);
       }
-      const labelStr = `[P${p.slot}] ${p.displayName}${statusSuffix}`;
-      if (nameLabel.text !== labelStr) {
-        nameLabel.setText(labelStr);
-      }
-      const slotCol =
-        p.lifeState === 'downed'
-          ? PALETTE.CRIMSON_BRIGHT
-          : p.lifeState === 'ghost'
-            ? PALETTE.CYAN_FROST
-            : PLAYER_SLOT_COLORS[p.slot];
-      nameLabel.setColor(slotCol);
-      nameLabel.setPosition(x, nameY);
+      nameLabel.setColor(spec.color);
+      nameLabel.setAlpha(spec.alpha);
+      nameLabel.setScale(spec.worldScale);
+      nameLabel.setPosition(spec.x, spec.y);
     }
   }
 
@@ -80,13 +63,13 @@ export function updatePlayerOverheadUiImpl(
         emoteLabel.setText(emoteStr);
       }
       emoteLabel.setVisible(true);
-      emoteLabel.setPosition(x, emoteY);
+      emoteLabel.setPosition(x, spec.emoteY);
       const bw = Math.max(76, emoteStr.length * 6.5 + 16);
       const bh = 20;
       emoteBg.fillStyle(hexToNum(PALETTE.SLATE_DARK), 0.94);
       emoteBg.lineStyle(2, hexToNum(PLAYER_SLOT_COLORS[p.slot]), 1);
-      emoteBg.fillRoundedRect(x - bw / 2, emoteY - bh / 2, bw, bh, 6);
-      emoteBg.strokeRoundedRect(x - bw / 2, emoteY - bh / 2, bw, bh, 6);
+      emoteBg.fillRoundedRect(x - bw / 2, spec.emoteY - bh / 2, bw, bh, 6);
+      emoteBg.strokeRoundedRect(x - bw / 2, spec.emoteY - bh / 2, bw, bh, 6);
     } else {
       emoteLabel.setVisible(false);
     }
@@ -161,14 +144,16 @@ export function syncSimulatedPlayersImpl(this: GameScene, dtSec: number): void {
         const nameLabel = this.add
           .text(cp.x, cp.y - 26, '', {
             fontFamily: '"Be Vietnam Pro", sans-serif',
-            fontSize: '10px',
+            fontSize: '11.5px',
             fontStyle: '800',
             color: PLAYER_SLOT_COLORS[cp.slot],
             stroke: PALETTE.INK_DEEP,
             strokeThickness: 3,
-            resolution: textRes,
+            resolution: textRes * 2,
           })
           .setOrigin(0.5, 0.5)
+          .setScale(0.5)
+          .setAlpha(0.75)
           .setDepth(48);
 
         const emoteBg = this.add.graphics().setDepth(49);

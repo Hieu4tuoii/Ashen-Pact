@@ -1,7 +1,9 @@
 import {
   CHARACTERS,
   clamp,
+  findInteractTarget,
   i18n,
+  INTERACT_HYSTERESIS,
   PLAYER_SLOT_COLORS,
   WEAPON_RARITY_COLORS,
 } from '@ashen-pact/shared';
@@ -11,12 +13,15 @@ import { PALETTE } from '../../art/palette.js';
 import { MERCHANT_RIG_DEF, RIG_DEFS_BY_ID, VANGUARD_RIG_DEF } from '../../art/rig-defs.js';
 import { TextureBaker } from '../../art/texture-baker.js';
 import { getVisualQueryConfig } from '../../core/visual-query.js';
-import {
-  resolveCurrentInteractHighlightTarget,
-  resolveInteractableVisualGlowSpec,
-} from '../../fx/lighting-config.js';
+import { resolveInteractableVisualGlowSpec } from '../../fx/lighting-config.js';
 import { initGlobalDebugState } from '../../ui/debug-overlay.js';
 import { type GameScene, RIG_FOOT_OFFSET_Y } from '../GameScene.js';
+import {
+  resolveDoorLabelState,
+  resolveHubGuideVisibility,
+  resolveInteractPromptSpec,
+  syncWorldInteractPromptPill,
+} from './interact-prompt.js';
 
 export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
   const sim = this.transport.getSim();
@@ -27,8 +32,39 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
     ? 1.0
     : (this.lighting?.getElapsedSec() ?? 1.0);
 
+  const debug = initGlobalDebugState();
+  const target = findInteractTarget(sim, sim.player.id, {
+    currentTargetKey: this.interactPromptState.currentTargetKey,
+    hysteresis: INTERACT_HYSTERESIS,
+  });
+  this.currentInteractTarget = target;
+
   // 0. Hub 5 Character Statues & Natural Hub Guidance Signs (Doanh Trại)
-  const previewOpen = initGlobalDebugState().hubPreviewCharacterId !== null;
+  const previewOpen =
+    sim.inHub &&
+    !this.fullMapOpen &&
+    !debug.overlayVisible &&
+    target?.kind === 'hub_statue';
+  debug.hubPreviewCharacterId = previewOpen ? target.statue.characterId : null;
+
+  const modalOrMapOpen =
+    this.fullMapOpen ||
+    this.pauseModalOpen ||
+    (this.settingsModal?.isOpen() ?? false) ||
+    debug.overlayVisible;
+  const weaponComparisonVisible =
+    sim.runState === 'playing' &&
+    !modalOrMapOpen &&
+    !previewOpen &&
+    target?.kind === 'world_item' &&
+    target.item.kind === 'weapon' &&
+    Boolean(target.item.weaponId);
+  debug.weaponComparisonVisible = weaponComparisonVisible;
+  debug.comparedWeaponId =
+    weaponComparisonVisible && target?.kind === 'world_item'
+      ? (target.item.weaponId ?? null)
+      : null;
+
   if (sim.inHub && sim.hubStatues.length > 0) {
     for (let i = 0; i < sim.hubStatues.length; i++) {
       const st = sim.hubStatues[i]!;
@@ -49,7 +85,7 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
         glowSprite.setBlendMode(Phaser.BlendModes.ADD);
 
         const label = this.add
-          .text(st.x, st.y - 30, `[E] ${charTxt.name}`, {
+          .text(st.x, st.y - 30, charTxt.name, {
             fontFamily: '"Be Vietnam Pro", sans-serif',
             fontSize: '10.5px',
             fontStyle: '800',
@@ -59,10 +95,11 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
             resolution: textRes,
           })
           .setOrigin(0.5, 0.5)
-          .setDepth(46);
+          .setDepth(46)
+          .setVisible(false);
 
         const subLabel = this.add
-          .text(st.x, st.y + 23, `HP ${cDef.hp} · ${i18n.t('ui.hud.armor')} ${cDef.armor}`, {
+          .text(st.x, st.y + 23, '', {
             fontFamily: '"Be Vietnam Pro", sans-serif',
             fontSize: '8.5px',
             fontStyle: '700',
@@ -73,7 +110,8 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
             resolution: textRes,
           })
           .setOrigin(0.5, 0.5)
-          .setDepth(46);
+          .setDepth(46)
+          .setVisible(false);
 
         entry = { rig, glowSprite, label, subLabel };
         this.hubStatueRigs.set(st.characterId, entry);
@@ -93,24 +131,12 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
         entry.glowSprite.setVisible(false);
       }
 
-      const isSelectedByLocal = sim.player.characterId === st.characterId;
-      const isInspecting = Math.hypot(sim.player.x - st.x, sim.player.y - st.y) <= 72;
-      entry.label.setColor(isSelectedByLocal ? PALETTE.LIME_GLOW : PALETTE.SOLAR_GOLD);
-      const selTag = i18n.getLocale() === 'en' ? 'Selected' : 'Đang Chọn';
-      entry.label.setText(
-        isSelectedByLocal ? `★ ${charTxt.name} (${selTag})` : `[E] ${charTxt.name}`,
-      );
-      const nextSub = `HP ${cDef.hp} · ${i18n.t('ui.hud.armor')} ${cDef.armor}`;
-      if (entry.subLabel.text !== nextSub) {
-        entry.subLabel.setText(nextSub);
-      }
-      entry.subLabel.setVisible(
-        !isInspecting && !(previewOpen && st.y > sim.map.height * 0.5 - 120),
-      );
+      entry.label.setVisible(false);
+      entry.subLabel.setVisible(false);
       entry.rig.update(dtSec);
     }
 
-    // Natural Hub Guidance Signs (Statues Arc, Weapon Rack, Training Dummy live DPS)
+    // Natural Hub Guidance Signs (Statues Arc, Weapon Rack, Training Dummy live DPS) — visible only within <= 200u
     const isEn = i18n.getLocale() === 'en';
     const hubCx = sim.map.width * 0.5;
     const hubCy = sim.map.height * 0.5;
@@ -123,14 +149,14 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
       y: number;
       text: string;
       color: string;
-      visible: boolean;
+      blocked: boolean;
     }[] = [
       {
         x: hubCx - 125,
         y: hubCy - 142,
         text: i18n.t('ui.hubGuide.statuesSign'),
         color: PALETTE.CYAN_FROST,
-        visible: !previewOpen,
+        blocked: previewOpen,
       },
       {
         x: hubCx - 258,
@@ -139,7 +165,7 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
           ? '⚔ PRACTICE WEAPON RACK — Press [E] to Test & Compare'
           : '⚔ KỆ VŨ KHÍ THỬ NGHIỆM — Nhấn [E] Nhặt Thử & So Sánh',
         color: PALETTE.SOLAR_GOLD,
-        visible: !previewOpen,
+        blocked: previewOpen,
       },
       {
         x: dummySignX,
@@ -148,7 +174,7 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
           ? `🎯 Training Dummy · DPS: ${sim.getRollingDps().toFixed(1)}`
           : `🎯 Bù Nhìn Tập Bắn · DPS: ${sim.getRollingDps().toFixed(1)}`,
         color: PALETTE.LIME_GLOW,
-        visible: !dummyBlockedByInvite,
+        blocked: dummyBlockedByInvite,
       },
     ];
 
@@ -174,7 +200,15 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
         gTxt.setColor(spec.color);
         gTxt.setPosition(spec.x, spec.y);
       }
-      gTxt.setVisible(spec.visible);
+      const guideVis = resolveHubGuideVisibility(
+        sim.player.x,
+        sim.player.y,
+        spec.x,
+        spec.y,
+        spec.blocked,
+      );
+      gTxt.setAlpha(guideVis.alpha);
+      gTxt.setVisible(guideVis.visible);
     }
   } else {
     if (this.hubStatueRigs.size > 0) {
@@ -260,8 +294,14 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
       : i18n.getLocale() === 'en'
         ? 'Room'
         : 'Phòng';
-    const labelStr = isOpen ? `→ ${roomLabel}` : `🔒 ${roomLabel}`;
-    const labelColor = isOpen ? PALETTE.LIME_GLOW : PALETTE.CRIMSON_BRIGHT;
+    const isActiveInteractDoor = target?.kind === 'door' && target.door.dir === door.dir;
+    const doorLabelState = resolveDoorLabelState(
+      door,
+      sim.player.x,
+      sim.player.y,
+      roomLabel,
+      isActiveInteractDoor,
+    );
 
     let entry = this.doorSprites.get(key);
     if (!entry) {
@@ -278,11 +318,11 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
 
       const originX = door.dir === 'E' ? 1 : door.dir === 'W' ? 0 : 0.5;
       const label = this.add
-        .text(door.x, door.y, labelStr, {
+        .text(door.x, door.y, doorLabelState.text, {
           fontFamily: '"Be Vietnam Pro", sans-serif',
           fontSize: '10px',
           fontStyle: '800',
-          color: labelColor,
+          color: doorLabelState.colorHex,
           stroke: PALETTE.INK_DEEP,
           strokeThickness: 3,
           resolution: textRes,
@@ -296,9 +336,9 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
       if (entry.sprite.texture.key !== tex) {
         entry.sprite.setTexture(tex);
       }
-      if (entry.label.text !== labelStr) {
-        entry.label.setText(labelStr);
-        entry.label.setColor(labelColor);
+      if (doorLabelState.visible && entry.label.text !== doorLabelState.text) {
+        entry.label.setText(doorLabelState.text);
+        entry.label.setColor(doorLabelState.colorHex);
       }
     }
 
@@ -318,19 +358,34 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
       entry.glowSprite.setVisible(false);
     }
 
-    const rawLabelX = door.dir === 'W' ? door.x + 22 : door.dir === 'E' ? door.x - 22 : door.x;
-    const rawLabelY =
-      door.dir === 'N'
-        ? door.y + 30
-        : door.dir === 'S'
-          ? door.y - 24
+    if (doorLabelState.visible) {
+      const originX =
+        doorLabelState.mode === 'lock_icon_only'
+          ? 0.5
           : door.dir === 'E'
-            ? Math.max(door.y - 24, hasView ? view.y + 194 : door.y - 24)
-            : door.y - 24;
-    entry.label.setPosition(
-      clamp(rawLabelX, safeLeftX, safeRightX),
-      clamp(rawLabelY, safeTopY, safeBottomY),
-    );
+            ? 1
+            : door.dir === 'W'
+              ? 0
+              : 0.5;
+      entry.label.setOrigin(originX, 0.5);
+      entry.label.setAlpha(doorLabelState.alpha);
+      entry.label.setVisible(true);
+      const rawLabelX = door.dir === 'W' ? door.x + 22 : door.dir === 'E' ? door.x - 22 : door.x;
+      const rawLabelY =
+        door.dir === 'N'
+          ? door.y + 30
+          : door.dir === 'S'
+            ? door.y - 24
+            : door.dir === 'E'
+              ? Math.max(door.y - 24, hasView ? view.y + 194 : door.y - 24)
+              : door.y - 24;
+      entry.label.setPosition(
+        clamp(rawLabelX, safeLeftX, safeRightX),
+        clamp(rawLabelY, safeTopY, safeBottomY),
+      );
+    } else {
+      entry.label.setVisible(false);
+    }
   }
 
   for (const [key, entry] of this.doorSprites.entries()) {
@@ -434,26 +489,8 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
   }
 
   // 3. World Items (Dropped Weapons & Merchant Shop Items, instanced per player unless shared)
-  let comparedWeaponItemId = -1;
-  let bestWeaponDist = 64;
-  if (sim.runState === 'playing' && !this.fullMapOpen) {
-    for (let i = 0; i < sim.worldItems.length; i++) {
-      const it = sim.worldItems[i]!;
-      if (it.pickedUp || it.kind !== 'weapon' || !it.weaponId) continue;
-      if (
-        it.ownerPlayerId !== undefined &&
-        it.ownerPlayerId !== 0 &&
-        it.ownerPlayerId !== sim.player.id
-      ) {
-        continue;
-      }
-      const d = Math.hypot(sim.player.x - it.x, sim.player.y - it.y);
-      if (d <= bestWeaponDist) {
-        bestWeaponDist = d;
-        comparedWeaponItemId = it.id;
-      }
-    }
-  }
+  let activeWorldItemRenderX: number | null = null;
+  let activeWorldItemRenderY: number | null = null;
 
   this.activeWorldItemIds.clear();
   for (let i = 0; i < sim.worldItems.length; i++) {
@@ -471,16 +508,6 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
       it.kind === 'weapon' && it.weaponId
         ? TextureBaker.getWeaponTextureKey(it.weaponId)
         : 'item_health_potion';
-    const itemName =
-      it.kind === 'weapon' && it.weaponId
-        ? i18n.weaponName(it.weaponId, it.nameVi)
-        : i18n.getLocale() === 'en'
-          ? `Health Potion (+${it.healAmount || 3} HP)`
-          : it.nameVi;
-    const labelText =
-      it.costGold > 0
-        ? `[E] ${itemName} · ${it.costGold} ${i18n.t('ui.hud.gold')}`
-        : `[E] ${itemName}`;
 
     let entry = this.worldItemSprites.get(it.id);
     if (!entry) {
@@ -504,7 +531,7 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
       sprite.setDepth(32);
 
       const label = this.add
-        .text(it.x, it.y - 24, labelText, {
+        .text(it.x, it.y - 24, '', {
           fontFamily: '"Be Vietnam Pro", sans-serif',
           fontSize: '10px',
           fontStyle: '800',
@@ -514,17 +541,13 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
           resolution: textRes,
         })
         .setOrigin(0.5, 0.5)
-        .setDepth(46);
+        .setDepth(46)
+        .setVisible(false);
 
       entry = { sprite, glowSprite, beamSprite, shopMatSprite, label };
       this.worldItemSprites.set(it.id, entry);
-    } else {
-      if (entry.sprite.texture.key !== tex) {
-        entry.sprite.setTexture(tex);
-      }
-      if (entry.label.text !== labelText) {
-        entry.label.setText(labelText);
-      }
+    } else if (entry.sprite.texture.key !== tex) {
+      entry.sprite.setTexture(tex);
     }
 
     let renderX = it.x;
@@ -593,13 +616,11 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
     }
 
     entry.sprite.setPosition(renderX, renderY + arcOffsetY);
-    entry.label.setPosition(renderX, renderY - 24 + arcOffsetY * 0.5);
-    const distToPlayer = Math.hypot(sim.player.x - renderX, sim.player.y - renderY);
-    entry.label.setVisible(
-      distToPlayer <= 72 &&
-        !(sim.inHub && previewOpen) &&
-        it.id !== comparedWeaponItemId,
-    );
+    entry.label.setVisible(false);
+    if (target?.kind === 'world_item' && target.item.id === it.id) {
+      activeWorldItemRenderX = renderX;
+      activeWorldItemRenderY = renderY + arcOffsetY;
+    }
   }
 
   for (const [id, entry] of this.worldItemSprites.entries()) {
@@ -690,14 +711,6 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
       if (entry.sprite && entry.sprite.texture.key !== shrineTex) {
         entry.sprite.setTexture(shrineTex);
       }
-      const shrineTxt = npc.interacted
-        ? i18n.t('ui.hud.shrineUsed')
-        : i18n.t('ui.hud.shrineActive');
-      if (entry.label.text !== shrineTxt) {
-        entry.label.setText(shrineTxt);
-        entry.label.setColor(npc.interacted ? PALETTE.ASH_GRAY : PALETTE.CYAN_FROST);
-      }
-      entry.label.setPosition(npc.x, npc.y - 42);
 
       const sGlow = resolveInteractableVisualGlowSpec({
         kind: 'shrine',
@@ -716,8 +729,7 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
       }
     }
 
-    const npcDist = Math.hypot(sim.player.x - npc.x, sim.player.y - npc.y);
-    entry.label.setVisible(npcDist <= 72);
+    entry.label.setVisible(false);
   }
 
   for (const [id, entry] of this.npcVisuals.entries()) {
@@ -741,27 +753,6 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
       this.portalGlowSprite.setDepth(35);
       this.portalGlowSprite.setBlendMode(Phaser.BlendModes.ADD);
     }
-    const portalText = sim.inHub
-      ? sim.areAllPlayersReady()
-        ? i18n.t('ui.hud.portalHubReady')
-        : i18n.t('ui.hud.portalHubWait')
-      : i18n.t('ui.hud.portalNextFloor');
-    if (!this.portalLabel) {
-      this.portalLabel = this.add
-        .text(sim.portalX, sim.portalY - 38, portalText, {
-          fontFamily: '"Be Vietnam Pro", sans-serif',
-          fontSize: '11px',
-          fontStyle: '800',
-          color: PALETTE.ELECTRIC_VIOLET,
-          stroke: PALETTE.INK_DEEP,
-          strokeThickness: 3.5,
-          resolution: textRes,
-        })
-        .setOrigin(0.5, 0.5)
-        .setDepth(46);
-    } else if (this.portalLabel.text !== portalText) {
-      this.portalLabel.setText(portalText);
-    }
     this.portalSprite.setVisible(true);
     this.portalSprite.setPosition(sim.portalX, sim.portalY);
     this.portalSprite.setScale(invBake * (1 + Math.sin(visualTimeSec * 6.0) * 0.06));
@@ -784,62 +775,52 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
       this.portalGlowSprite.setVisible(false);
     }
 
-    const portalDist = Math.hypot(sim.player.x - sim.portalX, sim.player.y - sim.portalY);
-    this.portalLabel.setVisible(
-      portalDist <= 72 &&
-        !(sim.inHub && initGlobalDebugState().hubPreviewCharacterId !== null),
-    );
-    this.portalLabel.setPosition(sim.portalX, sim.portalY - 38);
+    this.portalLabel?.setVisible(false);
   } else {
     this.portalSprite?.setVisible(false);
     this.portalGlowSprite?.setVisible(false);
     this.portalLabel?.setVisible(false);
   }
 
-  // 6. Current [E] Target Luminous Outline Highlight (viền sáng)
+  // 6. Current [E] Target Luminous Outline Highlight (viền sáng) & Single Rounded-Pill [E] Prompt
+  const promptSpec = resolveInteractPromptSpec(sim, target, {
+    weaponComparisonVisible,
+  });
+  if (
+    promptSpec &&
+    promptSpec.kind === 'world_item' &&
+    activeWorldItemRenderX !== null &&
+    activeWorldItemRenderY !== null
+  ) {
+    promptSpec.targetX = activeWorldItemRenderX;
+    promptSpec.targetY = activeWorldItemRenderY;
+    promptSpec.x = activeWorldItemRenderX;
+    promptSpec.y = activeWorldItemRenderY - 26;
+  }
+
   const hg = this.interactHighlightGraphics;
   if (hg) {
     hg.clear();
-    const hasEngineer = sim
-      .getAllPlayers()
-      .some((pl) => pl.characterId === 'engineer' && pl.lifeState === 'alive');
-    const target = resolveCurrentInteractHighlightTarget({
-      playerX: sim.player.x,
-      playerY: sim.player.y,
-      playerId: sim.player.id,
-      weaponPickupLockTimer: sim.player.weaponPickupLockTimer ?? 0,
-      hasEngineerInParty: hasEngineer,
-      inHub: sim.inHub,
-      hubReady: sim.areAllPlayersReady(),
-      biome: sim.currentBiome,
-      hubStatues: sim.hubStatues,
-      props: sim.props,
-      chests: sim.chests,
-      worldItems: sim.worldItems,
-      npcEntities: sim.npcEntities,
-      portalActive: sim.portalActive,
-      portalX: sim.portalX,
-      portalY: sim.portalY,
-      doors: sim.doors,
-    });
-    if (target) {
+    if (promptSpec) {
       const pulse = 0.5 + 0.5 * Math.sin(visualTimeSec * 5.2);
-      const rx = target.radiusX + pulse * 1.5;
-      const ry = target.radiusY + pulse * 1.2;
-      const cx = target.x;
-      const cy = target.y;
+      const rx = promptSpec.highlightRadiusX + pulse * 1.5;
+      const ry = promptSpec.highlightRadiusY + pulse * 1.2;
+      const cx = promptSpec.targetX;
+      const cy = promptSpec.targetY;
       // Outer colored luminous halo ring
-      hg.lineStyle(3.6, target.colorNum, 0.34 + 0.04 * pulse);
+      hg.lineStyle(3.6, promptSpec.colorNum, 0.34 + 0.04 * pulse);
       hg.strokeEllipse(cx, cy, rx * 2, ry * 2);
       // Inner crisp ivory-white outline contour (viền sáng)
       hg.lineStyle(1.8, 0xfffdf5, 0.8 + 0.08 * pulse);
       hg.strokeEllipse(cx, cy, (rx - 1.5) * 2, (ry - 1.2) * 2);
       // 4 cardinal accent ticks around the contour
-      hg.lineStyle(2.0, target.colorNum, 0.72);
+      hg.lineStyle(2.0, promptSpec.colorNum, 0.72);
       hg.lineBetween(cx - rx - 4, cy, cx - rx + 2, cy);
       hg.lineBetween(cx + rx - 2, cy, cx + rx + 4, cy);
       hg.lineBetween(cx, cy - ry - 4, cx, cy - ry + 2);
       hg.lineBetween(cx, cy + ry - 2, cx, cy + ry + 4);
     }
   }
+
+  syncWorldInteractPromptPill(this, dtSec, promptSpec, debug.overlayVisible);
 }

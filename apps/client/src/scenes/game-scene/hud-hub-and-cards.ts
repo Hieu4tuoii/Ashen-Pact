@@ -1,8 +1,10 @@
 import {
   CHARACTERS,
   type CharacterId,
+  findInteractTarget,
   generateQrMatrix,
   i18n,
+  INTERACT_HYSTERESIS,
   PLAYER_SLOT_COLORS,
   type QuickEmoteId,
   WEAPON_RARITY_COLORS,
@@ -302,19 +304,16 @@ export function updateHubCharacterSkillPreviewImpl(this: GameScene): void {
   const ui = this.uiScene;
   const sim = this.transport.getSim();
   const debug = initGlobalDebugState();
-  let nearestCharId: CharacterId | null = null;
-  let bestDist = 72;
-
-  if (sim.inHub && !this.fullMapOpen && !debug.overlayVisible) {
-    for (let i = 0; i < sim.hubStatues.length; i++) {
-      const st = sim.hubStatues[i]!;
-      const d = Math.hypot(sim.player.x - st.x, sim.player.y - st.y);
-      if (d <= bestDist) {
-        bestDist = d;
-        nearestCharId = st.characterId;
-      }
-    }
-  }
+  const target =
+    this.currentInteractTarget ??
+    findInteractTarget(sim, sim.player.id, {
+      currentTargetKey: this.interactPromptState.currentTargetKey,
+      hysteresis: INTERACT_HYSTERESIS,
+    });
+  const nearestCharId: CharacterId | null =
+    sim.inHub && !this.fullMapOpen && !debug.overlayVisible && target?.kind === 'hub_statue'
+      ? target.statue.characterId
+      : null;
 
   debug.hubPreviewCharacterId = nearestCharId;
   const isEquipped = nearestCharId === sim.player.characterId;
@@ -417,34 +416,24 @@ export function updateWeaponComparisonCardImpl(this: GameScene): void {
   const ui = this.uiScene;
   const sim = this.transport.getSim();
   const debug = initGlobalDebugState();
-  let nearestWeaponItem: (typeof sim.worldItems)[number] | null = null;
-  let bestDist = 64;
-
-  if (
+  const target =
+    this.currentInteractTarget ??
+    findInteractTarget(sim, sim.player.id, {
+      currentTargetKey: this.interactPromptState.currentTargetKey,
+      hysteresis: INTERACT_HYSTERESIS,
+    });
+  const nearestWeaponItem =
     sim.runState === 'playing' &&
     !this.fullMapOpen &&
     !this.pauseModalOpen &&
     !(this.settingsModal?.isOpen() ?? false) &&
     !debug.overlayVisible &&
-    debug.hubPreviewCharacterId === null
-  ) {
-    for (let i = 0; i < sim.worldItems.length; i++) {
-      const it = sim.worldItems[i]!;
-      if (it.pickedUp || it.kind !== 'weapon' || !it.weaponId) continue;
-      if (
-        it.ownerPlayerId !== undefined &&
-        it.ownerPlayerId !== 0 &&
-        it.ownerPlayerId !== sim.player.id
-      ) {
-        continue;
-      }
-      const d = Math.hypot(sim.player.x - it.x, sim.player.y - it.y);
-      if (d <= bestDist) {
-        bestDist = d;
-        nearestWeaponItem = it;
-      }
-    }
-  }
+    debug.hubPreviewCharacterId === null &&
+    target?.kind === 'world_item' &&
+    target.item.kind === 'weapon' &&
+    target.item.weaponId
+      ? target.item
+      : null;
 
   const dropWId = nearestWeaponItem?.weaponId ?? null;
   debug.weaponComparisonVisible = dropWId !== null;
@@ -463,6 +452,7 @@ export function updateWeaponComparisonCardImpl(this: GameScene): void {
   const wDrop = WEAPONS[dropWId] ?? WEAPONS.rusty_pistol!;
   const wCurr = WEAPONS[currWId] ?? WEAPONS.rusty_pistol!;
   const textRes = TextureBaker.getBakeScale();
+  const isEn = i18n.getLocale() === 'en';
   const px = 230;
   const py = 356;
   const pw = 500;
@@ -493,18 +483,14 @@ export function updateWeaponComparisonCardImpl(this: GameScene): void {
 
   const dropName = i18n.weaponName(wDrop.id, wDrop.nameVi);
   const currName = i18n.weaponName(wCurr.id, wCurr.nameVi);
-  const costSuffix =
-    nearestWeaponItem.costGold > 0
-      ? ` (${nearestWeaponItem.costGold} ${i18n.t('ui.hud.gold')})`
-      : '';
 
   const header = ui.add.text(
     px + 12,
     py + 7,
-    `★ ${dropName.toUpperCase()}${costSuffix}  ⇄  ${currName}   ·   DPS ~${dropDps} (${fmtDelta(dpsDiff)})`,
+    `★ ${dropName.toUpperCase()}  ⇄  ${currName}  ·  DPS ~${dropDps} (${fmtDelta(dpsDiff)})`,
     {
       fontFamily: '"Be Vietnam Pro", sans-serif',
-      fontSize: '9.8px',
+      fontSize: '9.3px',
       fontStyle: '800',
       color: WEAPON_RARITY_COLORS[wDrop.rarity],
       stroke: PALETTE.INK_DARK,
@@ -514,8 +500,89 @@ export function updateWeaponComparisonCardImpl(this: GameScene): void {
   );
   this.weaponCompareContainer.add(header);
 
+  // Merged [E] prompt pill badge at top-right of the Weapon Comparison Card (Spec 3.3 deduplication)
+  const costGold = Math.max(0, nearestWeaponItem.costGold ?? 0);
+  const isPriced = costGold > 0;
+  const actionLabel = isPriced
+    ? isEn
+      ? 'Buy'
+      : 'Mua'
+    : i18n.t('ui.hud.weaponCompareSwap');
+  const keyTxt = ui.add
+    .text(0, 0, 'E', {
+      fontFamily: '"Be Vietnam Pro", sans-serif',
+      fontSize: '8.5px',
+      fontStyle: '800',
+      color: PALETTE.SOLAR_GOLD,
+      stroke: PALETTE.INK_DARK,
+      strokeThickness: 2,
+      resolution: textRes,
+    })
+    .setOrigin(0.5, 0.5);
+  const actionTxt = ui.add
+    .text(0, 0, actionLabel, {
+      fontFamily: '"Be Vietnam Pro", sans-serif',
+      fontSize: '8.5px',
+      fontStyle: '800',
+      color: PALETTE.BONE_WHITE,
+      stroke: PALETTE.INK_DARK,
+      strokeThickness: 2,
+      resolution: textRes,
+    })
+    .setOrigin(0, 0.5);
+  const priceTxt = isPriced
+    ? ui.add
+        .text(0, 0, `${costGold} ${i18n.t('ui.hud.gold')}`, {
+          fontFamily: '"Be Vietnam Pro", sans-serif',
+          fontSize: '8.6px',
+          fontStyle: '800',
+          color: '#FACC15',
+          stroke: PALETTE.INK_DARK,
+          strokeThickness: 2,
+          resolution: textRes,
+        })
+        .setOrigin(0, 0.5)
+    : null;
+
+  const chipW = 13;
+  const chipH = 13;
+  const pillH = 18;
+  const coinBlockW = priceTxt ? 6 + 9 + 4 + priceTxt.width : 0;
+  const pillW = Math.ceil(5 + chipW + 5 + actionTxt.width + coinBlockW + 6);
+  const pillX = px + pw - 10 - pillW;
+  const pillY = py + 5;
+  const pillCy = pillY + pillH * 0.5;
+
+  bg.fillStyle(hexToNum(PALETTE.SLATE_DARK), 0.96);
+  bg.lineStyle(1.5, hexToNum(WEAPON_RARITY_COLORS[wDrop.rarity]), 0.95);
+  bg.fillRoundedRect(pillX, pillY, pillW, pillH, 5);
+  bg.strokeRoundedRect(pillX, pillY, pillW, pillH, 5);
+
+  const chipX = pillX + 5;
+  bg.fillStyle(hexToNum(PALETTE.SLATE_MID), 0.98);
+  bg.lineStyle(1.2, hexToNum(PALETTE.SOLAR_GOLD), 0.98);
+  bg.fillRoundedRect(chipX, pillCy - chipH * 0.5, chipW, chipH, 3);
+  bg.strokeRoundedRect(chipX, pillCy - chipH * 0.5, chipW, chipH, 3);
+  keyTxt.setPosition(chipX + chipW * 0.5, pillCy);
+
+  const actionX = chipX + chipW + 5;
+  actionTxt.setPosition(actionX, pillCy);
+  this.weaponCompareContainer.add([keyTxt, actionTxt]);
+
+  if (priceTxt) {
+    const coinCx = actionX + actionTxt.width + 6 + 4.2;
+    bg.fillStyle(0xfacc15, 1);
+    bg.fillCircle(coinCx, pillCy, 4.2);
+    bg.lineStyle(1, 0xf59e42, 1);
+    bg.strokeCircle(coinCx, pillCy, 4.2);
+    bg.lineStyle(1, 0xfffbeb, 0.9);
+    bg.lineBetween(coinCx, pillCy - 2, coinCx, pillCy + 2);
+    priceTxt.setPosition(coinCx + 4.2 + 4, pillCy);
+    this.weaponCompareContainer.add(priceTxt);
+  }
+
   const statsLine1 = `${i18n.t('ui.hud.weaponCompareDmg')}: ${wDrop.damage}${wDrop.pelletCount > 1 ? `×${wDrop.pelletCount}` : ''} (${fmtDelta(dmgDiff)})   ·   ${i18n.t('ui.hud.weaponCompareFireRate')}: ${wDrop.fireRate}/s (${fmtDelta(rateDiff)})   ·   ${i18n.t('ui.hud.weaponCompareEnergy')}: ${wDrop.energyCost} (${fmtDelta(nrgDiff, true)})`;
-  const statsLine2 = `${i18n.t('ui.hud.weaponCompareCrit')}: ${Math.round(wDrop.critChance * 100)}%   ·   ${i18n.t('ui.tooltip.element')}: ${i18n.elementName(wDrop.element)}   ·   [E] ${i18n.t('ui.hud.weaponCompareSwap')}`;
+  const statsLine2 = `${i18n.t('ui.hud.weaponCompareCrit')}: ${Math.round(wDrop.critChance * 100)}%   ·   ${i18n.t('ui.tooltip.element')}: ${i18n.elementName(wDrop.element)}   ·   ${i18n.getRarityLabel(wDrop.rarity)}`;
   const descLine = `${i18n.getWeaponText(wDrop.id).desc}`;
 
   const body = ui.add.text(px + 12, py + 26, [statsLine1, statsLine2, descLine].join('\n'), {

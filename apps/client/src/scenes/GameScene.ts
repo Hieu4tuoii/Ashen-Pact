@@ -2,6 +2,7 @@ import {
   clamp,
   i18n,
   INPUT_BUTTON,
+  type InteractTargetResult,
   LocalTransport,
   NetworkTransport,
   type PropKind,
@@ -39,6 +40,11 @@ import { updateEmoteWheelHudImpl, updateHubCharacterSkillPreviewImpl, updateHubI
 import { updateDebugStateImpl, updateModalHudImpl } from './game-scene/hud-modals-and-debug.js';
 import { buildVectorHudImpl, invalidateAllHudCachesImpl, rebuildPauseModalImpl, togglePauseModalImpl } from './game-scene/hud-setup-and-pause.js';
 import { bindCoopRoomHandlersImpl, connectCoopRoomImpl, connectHelloRoomImpl, fetchHostLanInfoImpl, forceCoopReconnectImpl, getResolvedWsUrlImpl, setupKeyboardBindingsImpl, updateHostInviteUrlImpl } from './game-scene/input-and-network.js';
+import {
+  createInteractPromptFadeState,
+  type InteractPromptFadeState,
+  type InteractPromptPillVisuals,
+} from './game-scene/interact-prompt.js';
 import { syncRoomEntitiesImpl } from './game-scene/room-entities-sync.js';
 import { processSimEventsImpl } from './game-scene/sim-events.js';
 import { drawEnemyHealthAndStatusBarImpl, renderHitboxesIfEnabledImpl, renderTelegraphsAndShieldImpl } from './game-scene/telegraphs-and-overlays.js';
@@ -193,6 +199,9 @@ export class GameScene extends Phaser.Scene {
   public portalGlowSprite?: Phaser.GameObjects.Image;
   public portalLabel?: Phaser.GameObjects.Text;
   public interactHighlightGraphics!: Phaser.GameObjects.Graphics;
+  public interactPromptState: InteractPromptFadeState = createInteractPromptFadeState();
+  public currentInteractTarget: InteractTargetResult | null = null;
+  public interactPromptVisuals?: InteractPromptPillVisuals;
 
   public readonly activeEnemyIds = new Set<number>();
   public readonly activeSimPlayerIds = new Set<number>();

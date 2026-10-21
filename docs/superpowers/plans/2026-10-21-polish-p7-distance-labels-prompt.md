@@ -77,9 +77,9 @@
 
 ### Task 2: Implement Single-Pill `[E]` Prompt (`120–150ms` Fade + `8u` Hysteresis), Weapon Card Deduplication, Hub Guidance Signs (`<= 200u`), Door Lock/Proximity Labels (`<= 120u`), and Player Nameplates
 
-- [ ] **Step 1 (TDD RED):** Create `apps/client/test/polish-p7-labels-and-prompt.test.ts` covering single-target `[E]` prompt formatting (chests, weapons, priced shop items with coin icon, shrines, portals, Hub statues, mechanisms, doors), `120–150ms` fade alpha progression, `8u` hysteresis target retention, weapon comparison card deduplication, door lock/proximity label states (`<= 120u`), Hub guidance sign distance gating (`<= 200u`), and local vs teammate nameplate rules. Run Vitest to record the RED failure.
-- [ ] **Step 2 (TDD GREEN):** Implement the client label & prompt helpers and integrate them into `lighting-config.ts`, `GameScene.ts`, `room-entities-sync.ts`, `hud-hub-and-cards.ts`, and `entity-sync.ts` (all files `< 1000` lines, zero per-frame allocations).
-- [ ] **Step 3:** Verify `npx vitest run apps/client/test/polish-p7-labels-and-prompt.test.ts`, `pnpm typecheck`, `pnpm lint`, and `pnpm test` all pass. Commit Task 2 changes.
+- [x] **Step 1 (TDD RED):** Create `apps/client/test/polish-p7-interact-prompt.test.ts` covering single-target `[E]` prompt formatting (chests, weapons, priced shop items with coin icon, shrines, portals, Hub statues, mechanisms, doors), `120–150ms` fade alpha progression, `8u` hysteresis target retention, weapon comparison card deduplication, door lock/proximity label states (`<= 120u`), Hub guidance sign distance gating (`<= 200u`), and local vs teammate nameplate rules. Run Vitest to record the RED failure.
+- [x] **Step 2 (TDD GREEN):** Implement the client label & prompt helpers in `apps/client/src/scenes/game-scene/interact-prompt.ts` and integrate them into `GameScene.ts`, `arena-tiles.ts`, `room-entities-sync.ts`, `hud-hub-and-cards.ts`, and `entity-sync.ts` (all files `< 1000` lines, zero per-frame allocations).
+- [x] **Step 3:** Verify `npx vitest run apps/client/test/polish-p7-interact-prompt.test.ts`, `pnpm typecheck`, `pnpm lint`, and `pnpm test` all pass. Commit Task 2 changes.
 
 ### Task 3: Capture P7 `after` Screenshots with `--verify-freeze`, Conduct Blind A/B `pro` Visual Gate, Run Phase P7 Quality Gate, and Tag `polish-p7`
 

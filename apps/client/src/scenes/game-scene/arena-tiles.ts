@@ -38,6 +38,7 @@ import {
 import { type ArenaTileVisual, type GameScene, RIG_FOOT_OFFSET_Y } from '../GameScene.js';
 import type { HudScene } from '../HudScene.js';
 import { applyHudEdgeAnchors } from './hud-setup-and-pause.js';
+import { createInteractPromptFadeState } from './interact-prompt.js';
 
 export function syncGameSceneTestHooks(scene: GameScene): void {
   if (typeof window === 'undefined') return;
@@ -120,6 +121,9 @@ export function createImpl(this: GameScene): void {
   this.portalSprite = undefined;
   this.portalGlowSprite = undefined;
   this.portalLabel = undefined;
+  this.interactPromptState = createInteractPromptFadeState();
+  this.currentInteractTarget = null;
+  this.interactPromptVisuals = undefined;
   this.localNameLabel = undefined;
   this.localEmoteLabel = undefined;
   this.localEmoteBg = undefined;
