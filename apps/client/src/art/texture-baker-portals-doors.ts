@@ -526,4 +526,52 @@ export function bakePortalsAndDoors(scene: Phaser.Scene, scale: number): void {
       ctx.stroke();
     });
   }
+
+  // 9. Portal Spiral Particle Mote ('portal_particle_mote', 16x16)
+  // Ivory-white glowing diamond/comet mote tinted dynamically per portal mode
+  bakeCustomCanvas(scene, 'portal_particle_mote', 16, 16, scale, (ctx) => {
+    const grad = ctx.createRadialGradient(0, 0, 0.5, 0, 0, 7.0);
+    grad.addColorStop(0, 'rgba(255, 255, 255, 1.0)');
+    grad.addColorStop(0.45, 'rgba(255, 255, 255, 0.78)');
+    grad.addColorStop(1, 'rgba(255, 255, 255, 0.0)');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(0, 0, 7.0, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.moveTo(0, -4.8);
+    ctx.lineTo(2.6, 0);
+    ctx.lineTo(0, 4.8);
+    ctx.lineTo(-2.6, 0);
+    ctx.closePath();
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fill();
+  });
+
+  // 10. Door Rune Lamp & Unlock Spark ('door_unlock_spark', 16x16)
+  // Crisp 4-point star spark with soft radial halo for door rune-lamps & unlock dissolve burst
+  bakeCustomCanvas(scene, 'door_unlock_spark', 16, 16, scale, (ctx) => {
+    const grad = ctx.createRadialGradient(0, 0, 0.5, 0, 0, 7.0);
+    grad.addColorStop(0, 'rgba(255, 255, 255, 1.0)');
+    grad.addColorStop(0.5, 'rgba(255, 255, 255, 0.68)');
+    grad.addColorStop(1, 'rgba(255, 255, 255, 0.0)');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(0, 0, 7.0, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.moveTo(0, -5.8);
+    ctx.lineTo(1.6, -1.6);
+    ctx.lineTo(5.8, 0);
+    ctx.lineTo(1.6, 1.6);
+    ctx.lineTo(0, 5.8);
+    ctx.lineTo(-1.6, 1.6);
+    ctx.lineTo(-5.8, 0);
+    ctx.lineTo(-1.6, -1.6);
+    ctx.closePath();
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fill();
+  });
 }

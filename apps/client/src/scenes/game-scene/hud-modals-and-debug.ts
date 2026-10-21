@@ -17,7 +17,6 @@ import { type GameScene } from '../GameScene.js';
 export function updateModalHudImpl(this: GameScene): void {
   const ui = this.uiScene;
   const sim = this.transport.getSim();
-  this.modalContainer.setVisible(!this.portalAnimState.enterActive);
   if (sim.runState === 'playing' || sim.runState === 'buff_choice') {
     this.resultDismissed = false;
   }

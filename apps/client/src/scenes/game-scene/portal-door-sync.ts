@@ -6,6 +6,7 @@ import {
 import Phaser from 'phaser';
 import { ENV_PALETTE, PALETTE } from '../../art/palette.js';
 import { TextureBaker } from '../../art/texture-baker.js';
+import { zzfx } from '../../audio/zzfx.js';
 import { resolveInteractableVisualGlowSpec } from '../../fx/lighting-config.js';
 import {
   computeDoorMotePose,
@@ -17,10 +18,17 @@ import {
   DOOR_COMBAT_LOCKUP_DURATION_SEC,
   DOOR_UNLOCK_DISSOLVE_DURATION_SEC,
   type DoorAnimState,
+  type DoorAnimStepResult,
   type DoorShaderSprite,
+  type DoorVisualState,
   ensurePortalAndDoorPipelinesRegistered,
   PORTAL_VORTEX_PIPELINE_KEY,
+  type PortalAnimStepResult,
+  type PortalDoorParticlePose,
   type PortalShaderSprite,
+  type PortalVisualState,
+  type ResolveDoorVisualStateParams,
+  type ResolvePortalVisualStateParams,
   resolveDoorVisualState,
   resolvePortalVisualState,
   stepDoorAnimState,
@@ -55,7 +63,53 @@ export interface DoorVisualEntry {
   glowSprite: Phaser.GameObjects.Image;
   label: Phaser.GameObjects.Text;
   animState: DoorAnimState;
+  cachedRoomLabel: string;
+  cachedLocale: string;
+  cachedTargetRoomType: string;
 }
+
+const portalAnimParamsScratch = {
+  dtSec: 0,
+  roomKey: '',
+  portalActive: false,
+  inHub: false,
+};
+const portalAnimStepScratch = {} as PortalAnimStepResult;
+const portalVisParamsScratch: ResolvePortalVisualStateParams = {
+  inHub: false,
+  hubReady: false,
+  portalActive: false,
+  roomType: 'start',
+  quality: 'high',
+  elapsedSec: 1.0,
+  burstProgress: 0,
+};
+const portalVisScratch = {} as PortalVisualState;
+
+const doorAnimParamsScratch = {
+  dtSec: 0,
+  locked: false,
+};
+const doorAnimStepScratch = {} as DoorAnimStepResult;
+const doorVisParamsScratch: ResolveDoorVisualStateParams = {
+  dir: 'N',
+  locked: false,
+  biome: 1,
+  inHub: false,
+  quality: 'high',
+  lockupProgress: 1,
+  dissolveProgress: 0,
+  elapsedSec: 1.0,
+};
+const doorVisScratch = {} as DoorVisualState;
+const particlePoseScratch: PortalDoorParticlePose = {
+  x: 0,
+  y: 0,
+  scaleX: 1,
+  scaleY: 1,
+  rotation: 0,
+  alpha: 1,
+};
 
 function getOrCreatePortalVisualGroup(scene: GameScene, x: number, y: number): PortalVisualGroup {
   if (scene.portalVisualGroup) {
@@ -157,30 +211,22 @@ export function syncPortalVisualsImpl(this: GameScene, animDtSec: number): void 
   }
   const animTimeSec = this.portalDoorAnimClockSec;
 
-  const currentRoom = sim.getCurrentRoom();
-  const roomKey = sim.inHub ? 'hub' : `${sim.currentFloor}_${sim.currentRoomId}`;
-  const hubReady = sim.inHub ? sim.areAllPlayersReady() : false;
+  const initialRoomKey = sim.inHub ? 'hub' : `${sim.currentFloor}_${sim.currentRoomId}`;
 
-  const animStep = stepPortalAnimState(this.portalAnimState, {
-    dtSec: animDtSec,
-    roomKey,
-    portalActive: sim.portalActive,
-    inHub: sim.inHub,
-  });
+  const shouldCommit = this.portalAnimState.pendingPortalCommit;
+  portalAnimParamsScratch.dtSec = animDtSec;
+  portalAnimParamsScratch.roomKey = initialRoomKey;
+  portalAnimParamsScratch.portalActive = sim.portalActive;
+  portalAnimParamsScratch.inHub = sim.inHub;
+  const animStep = stepPortalAnimState(
+    this.portalAnimState,
+    portalAnimParamsScratch,
+    portalAnimStepScratch,
+  );
   const isBursting = animStep.burstProgress > 0 && animStep.burstProgress < 1;
 
-  if (animStep.burstTriggered) {
-    this.lighting?.spawnTransientLight(
-      sim.portalX,
-      sim.portalY,
-      210,
-      PALETTE.CYAN_FROST,
-      0.95,
-      0.55,
-    );
-  }
-
   if (animStep.enterCompleted) {
+    this.portalAnimState.pendingPortalCommit = false;
     if (this.playerRig) {
       this.playerRig.container.setScale(1, 1);
       this.playerRig.container.setRotation(0);
@@ -190,18 +236,40 @@ export function syncPortalVisualsImpl(this: GameScene, animDtSec: number): void 
       this.portalVisualGroup.playerTransformApplied = false;
     }
     this.triggerIrisTransition('close');
+    if (shouldCommit) {
+      sim.interactWithNearest();
+      this.syncArenaTilesWithMapRevision();
+      this.processSimEvents(this.transport.consumeEvents());
+      this.portalAnimState.lastRoomKey = sim.inHub
+        ? 'hub'
+        : `${sim.currentFloor}_${sim.currentRoomId}`;
+      this.portalAnimState.wasPortalActive = sim.portalActive;
+    }
     this.lastRunState = '';
   }
 
-  const portalVis = resolvePortalVisualState({
-    inHub: sim.inHub,
-    hubReady,
-    portalActive: sim.portalActive || animStep.enterActive,
-    roomType: currentRoom.type,
-    quality,
-    elapsedSec: animTimeSec,
-    burstProgress: isBursting ? animStep.burstProgress : undefined,
-  });
+  const currentRoom = sim.getCurrentRoom();
+  const hubReady = sim.inHub ? sim.areAllPlayersReady() : false;
+  portalVisParamsScratch.inHub = sim.inHub;
+  portalVisParamsScratch.hubReady = hubReady;
+  portalVisParamsScratch.portalActive = sim.portalActive || animStep.enterActive;
+  portalVisParamsScratch.roomType = currentRoom.type;
+  portalVisParamsScratch.quality = quality;
+  portalVisParamsScratch.elapsedSec = animTimeSec;
+  portalVisParamsScratch.burstProgress = isBursting ? animStep.burstProgress : 0;
+  const portalVis = resolvePortalVisualState(portalVisParamsScratch, portalVisScratch);
+
+  if (animStep.burstTriggered) {
+    zzfx.play('door_open');
+    this.lighting?.spawnTransientLight(
+      sim.portalX,
+      sim.portalY,
+      210,
+      portalVis.coreColorHex,
+      1.0,
+      0.45,
+    );
+  }
 
   if (!portalVis.visible && !animStep.enterActive) {
     if (this.portalVisualGroup) {
@@ -286,6 +354,7 @@ export function syncPortalVisualsImpl(this: GameScene, animDtSec: number): void 
         portalVis.spinSpeedRadPerSec,
         px,
         py,
+        particlePoseScratch,
       );
       sp.setPosition(pose.x, pose.y);
       sp.setScale(invBake * pose.scaleX, invBake * pose.scaleY);
@@ -301,7 +370,14 @@ export function syncPortalVisualsImpl(this: GameScene, animDtSec: number): void 
   for (let i = 0; i < group.energyRays.length; i++) {
     const ray = group.energyRays[i]!;
     if (i < portalVis.rayCount) {
-      const pose = computePortalEnergyRayPose(i, portalVis.rayCount, animTimeSec, px, py);
+      const pose = computePortalEnergyRayPose(
+        i,
+        portalVis.rayCount,
+        animTimeSec,
+        px,
+        py,
+        particlePoseScratch,
+      );
       ray.setPosition(pose.x, pose.y);
       ray.setScale(invBake * pose.scaleX, invBake * pose.scaleY);
       ray.setTint(i % 2 === 0 ? portalVis.coreColorNum : portalVis.outerColorNum);
@@ -400,6 +476,15 @@ export function syncDoorVisualsImpl(
   const lightingEnabled = this.lighting?.isLightmapVisible() ?? true;
   const quality = graphicsSettings.getState().quality;
   const animTimeSec = this.portalDoorAnimClockSec;
+  const locale = i18n.getLocale();
+
+  const currentDoorRoomKey = sim.inHub ? 'hub' : `${sim.currentFloor}_${sim.currentRoomId}`;
+  const isNewCombatRoomTransition =
+    !sim.inHub &&
+    this.lastDoorRoomKey !== '' &&
+    this.lastDoorRoomKey !== 'hub' &&
+    this.lastDoorRoomKey !== currentDoorRoomKey;
+  this.lastDoorRoomKey = currentDoorRoomKey;
 
   const view = this.cameras.main.worldView;
   const hasView = view && view.width > 0;
@@ -409,37 +494,29 @@ export function syncDoorVisualsImpl(
   const safeLeftX = hasView ? view.x + 18 : 18;
   const safeRightX = hasView ? view.x + view.width - 18 : 942;
 
+  let playLockupSfx = false;
   this.activeDoorKeys.clear();
   for (let i = 0; i < sim.doors.length; i++) {
     const door = sim.doors[i]!;
     const key = `${sim.currentFloor}_${sim.currentRoomId}_${door.dir}`;
     this.activeDoorKeys.add(key);
 
-    const targetRoom = sim.dungeon.rooms.find((r) => r.id === door.targetRoomId);
-    const roomLabel = targetRoom
-      ? i18n.roomTypeName(targetRoom.type)
-      : i18n.getLocale() === 'en'
-        ? 'Room'
-        : 'Phòng';
-    const isActiveInteractDoor = target?.kind === 'door' && target.door.dir === door.dir;
-    const doorLabelState = resolveDoorLabelState(
-      door,
-      sim.player.x,
-      sim.player.y,
-      roomLabel,
-      isActiveInteractDoor,
-    );
-
     let entry = this.doorSprites.get(key);
     if (!entry) {
       const animState = createDoorAnimState(door.locked);
-      const initVis = resolveDoorVisualState({
-        dir: door.dir,
-        locked: door.locked,
-        biome: sim.currentBiome,
-        inHub: sim.inHub,
-        quality,
-      });
+      if (isNewCombatRoomTransition && door.locked) {
+        triggerDoorCombatLockupState(animState);
+      }
+
+      doorVisParamsScratch.dir = door.dir;
+      doorVisParamsScratch.locked = door.locked;
+      doorVisParamsScratch.biome = sim.currentBiome;
+      doorVisParamsScratch.inHub = sim.inHub;
+      doorVisParamsScratch.quality = quality;
+      doorVisParamsScratch.lockupProgress = door.locked ? 1 : 0;
+      doorVisParamsScratch.dissolveProgress = door.locked ? 0 : 1;
+      doorVisParamsScratch.elapsedSec = animTimeSec;
+      const initVis = resolveDoorVisualState(doorVisParamsScratch, doorVisScratch);
 
       const openArchSprite = this.add.sprite(door.x, door.y, initVis.openArchTextureKey);
       openArchSprite.setScale(invBake);
@@ -474,13 +551,14 @@ export function syncDoorVisualsImpl(
       glowSprite.setDepth(35);
       glowSprite.setBlendMode(Phaser.BlendModes.ADD);
 
+      const cachedRoomLabel = i18n.roomTypeName(door.targetRoomType);
       const originX = door.dir === 'E' ? 1 : door.dir === 'W' ? 0 : 0.5;
       const label = this.add
-        .text(door.x, door.y, doorLabelState.text, {
+        .text(door.x, door.y, '', {
           fontFamily: '"Be Vietnam Pro", sans-serif',
           fontSize: '10px',
           fontStyle: '800',
-          color: doorLabelState.colorHex,
+          color: PALETTE.LIME_GLOW,
           stroke: PALETTE.INK_DEEP,
           strokeThickness: 3,
           resolution: textRes,
@@ -497,14 +575,40 @@ export function syncDoorVisualsImpl(
         glowSprite,
         label,
         animState,
+        cachedRoomLabel,
+        cachedLocale: locale,
+        cachedTargetRoomType: door.targetRoomType,
       };
       this.doorSprites.set(key, entry);
+    } else if (
+      entry.cachedLocale !== locale ||
+      entry.cachedTargetRoomType !== door.targetRoomType
+    ) {
+      entry.cachedRoomLabel = i18n.roomTypeName(door.targetRoomType);
+      entry.cachedLocale = locale;
+      entry.cachedTargetRoomType = door.targetRoomType;
     }
 
-    const doorStep = stepDoorAnimState(entry.animState, {
-      dtSec: animDtSec,
-      locked: door.locked,
-    });
+    const isActiveInteractDoor = target?.kind === 'door' && target.door.dir === door.dir;
+    const doorLabelState = resolveDoorLabelState(
+      door,
+      sim.player.x,
+      sim.player.y,
+      entry.cachedRoomLabel,
+      isActiveInteractDoor,
+    );
+
+    doorAnimParamsScratch.dtSec = animDtSec;
+    doorAnimParamsScratch.locked = door.locked;
+    const doorStep = stepDoorAnimState(
+      entry.animState,
+      doorAnimParamsScratch,
+      doorAnimStepScratch,
+    );
+    if (doorStep.emitLockupSound) {
+      playLockupSfx = true;
+      this.lighting?.spawnTransientLight(door.x, door.y, 96, PALETTE.CRIMSON_BRIGHT, 0.8, 0.28);
+    }
     if (doorStep.emitUnlockSparks) {
       this.lighting?.spawnTransientLight(
         door.x,
@@ -516,15 +620,15 @@ export function syncDoorVisualsImpl(
       );
     }
 
-    const doorVis = resolveDoorVisualState({
-      dir: door.dir,
-      locked: door.locked,
-      biome: sim.currentBiome,
-      inHub: sim.inHub,
-      quality,
-      lockupProgress: doorStep.lockupProgress,
-      dissolveProgress: doorStep.dissolveProgress,
-    });
+    doorVisParamsScratch.dir = door.dir;
+    doorVisParamsScratch.locked = door.locked;
+    doorVisParamsScratch.biome = sim.currentBiome;
+    doorVisParamsScratch.inHub = sim.inHub;
+    doorVisParamsScratch.quality = quality;
+    doorVisParamsScratch.lockupProgress = doorStep.lockupProgress;
+    doorVisParamsScratch.dissolveProgress = doorStep.dissolveProgress;
+    doorVisParamsScratch.elapsedSec = animTimeSec;
+    const doorVis = resolveDoorVisualState(doorVisParamsScratch, doorVisScratch);
 
     if (entry.frameSprite.texture.key !== doorVis.frameTextureKey) {
       entry.frameSprite.setTexture(doorVis.frameTextureKey);
@@ -591,6 +695,7 @@ export function syncDoorVisualsImpl(
           doorStep.dissolveActive,
           doorStep.dissolveProgress,
           animTimeSec,
+          particlePoseScratch,
         );
         const moteTex =
           door.locked || doorStep.dissolveActive ? 'door_unlock_spark' : 'fx_sparkle_mote';
@@ -674,6 +779,10 @@ export function syncDoorVisualsImpl(
     }
   }
 
+  if (playLockupSfx) {
+    zzfx.play('door_lock');
+  }
+
   for (const [key, entry] of this.doorSprites.entries()) {
     if (!this.activeDoorKeys.has(key)) {
       destroyDoorVisualEntry(entry);
@@ -694,26 +803,24 @@ function destroyDoorVisualEntry(entry: DoorVisualEntry): void {
 }
 
 export function triggerPortalActivationBurstImpl(this: GameScene): void {
-  const sim = this.transport.getSim();
   triggerPortalActivationBurstState(this.portalAnimState);
-  this.lighting?.spawnTransientLight(
-    sim.portalX,
-    sim.portalY,
-    210,
-    PALETTE.CYAN_FROST,
-    0.95,
-    0.55,
-  );
 }
 
-export function triggerPortalEnterSequenceImpl(this: GameScene): void {
+export function triggerPortalEnterSequenceImpl(
+  this: GameScene,
+  commitOnComplete = false,
+): void {
   const sim = this.transport.getSim();
+  if (commitOnComplete) {
+    zzfx.play('portal_enter');
+  }
   triggerPortalEnterSequenceState(
     this.portalAnimState,
     sim.player.x,
     sim.player.y,
     sim.portalX,
     sim.portalY,
+    commitOnComplete,
   );
   this.lighting?.spawnTransientLight(
     sim.portalX,
@@ -726,33 +833,14 @@ export function triggerPortalEnterSequenceImpl(this: GameScene): void {
 }
 
 export function triggerDoorUnlockTransitionImpl(this: GameScene): void {
-  const sim = this.transport.getSim();
   for (const entry of this.doorSprites.values()) {
     triggerDoorUnlockDissolveState(entry.animState);
-  }
-  for (let i = 0; i < sim.doors.length; i++) {
-    const d = sim.doors[i]!;
-    this.lighting?.spawnTransientLight(
-      d.x,
-      d.y,
-      110,
-      ENV_PALETTE[sim.inHub ? 0 : sim.currentBiome].accent,
-      0.85,
-      0.35,
-    );
   }
 }
 
 export function triggerDoorCombatLockupImpl(this: GameScene): void {
-  const sim = this.transport.getSim();
   for (const entry of this.doorSprites.values()) {
     triggerDoorCombatLockupState(entry.animState);
-  }
-  for (let i = 0; i < sim.doors.length; i++) {
-    const d = sim.doors[i]!;
-    if (d.locked) {
-      this.lighting?.spawnTransientLight(d.x, d.y, 96, PALETTE.CRIMSON_BRIGHT, 0.8, 0.28);
-    }
   }
 }
 
@@ -760,10 +848,10 @@ export function resetPortalAndDoorTestStateImpl(this: GameScene): void {
   const sim = this.transport.getSim();
   this.portalDoorAnimClockSec = 0;
   this.portalAnimState = createPortalAnimState();
-  this.portalAnimState.lastRoomKey = sim.inHub
-    ? 'hub'
-    : `${sim.currentFloor}_${sim.currentRoomId}`;
+  const roomKey = sim.inHub ? 'hub' : `${sim.currentFloor}_${sim.currentRoomId}`;
+  this.portalAnimState.lastRoomKey = roomKey;
   this.portalAnimState.wasPortalActive = sim.portalActive;
+  this.lastDoorRoomKey = roomKey;
   if (this.portalVisualGroup?.playerTransformApplied && this.playerRig) {
     this.playerRig.container.setScale(1, 1);
     this.playerRig.container.setRotation(0);
@@ -800,6 +888,7 @@ export function destroyPortalAndDoorVisualsImpl(this: GameScene): void {
   }
   this.portalSprite = undefined;
   this.portalGlowSprite = undefined;
+  this.lastDoorRoomKey = '';
   for (const entry of this.doorSprites.values()) {
     destroyDoorVisualEntry(entry);
   }

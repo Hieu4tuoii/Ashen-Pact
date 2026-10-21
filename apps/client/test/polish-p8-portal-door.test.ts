@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type Phaser from 'phaser';
+import { bakePortalsAndDoors } from '../src/art/texture-baker-portals-doors.js';
 import {
   type InteractableLightEntry,
   populateInteractableLightsScratch,
@@ -538,6 +539,145 @@ describe('Phase P8 — Portals & Room Doors Visual State & Animation Resolvers',
       const unlockSpark = computeDoorMotePose(2, 'ew', 400, 100, false, true, 0.4, 1.0);
       expect(unlockSpark.alpha).toBeGreaterThan(0.2);
       expect(Math.hypot(unlockSpark.x - 400, unlockSpark.y - 100)).toBeGreaterThan(4);
+    });
+
+    it('reuses caller-supplied out scratch objects without allocating new objects', () => {
+      const portalVisOut = resolvePortalVisualState({
+        inHub: false,
+        hubReady: false,
+        portalActive: true,
+        roomType: 'portal',
+        quality: 'high',
+        elapsedSec: 0,
+      });
+      const portalVisReused = resolvePortalVisualState(
+        {
+          inHub: true,
+          hubReady: true,
+          portalActive: true,
+          roomType: 'start',
+          quality: 'medium',
+          elapsedSec: 2.0,
+        },
+        portalVisOut,
+      );
+      expect(portalVisReused).toBe(portalVisOut);
+      expect(portalVisReused.mode).toBe('hub_ready');
+
+      const portalAnim = createPortalAnimState();
+      const portalStepOut = stepPortalAnimState(portalAnim, {
+        dtSec: 0.016,
+        roomKey: '1_0',
+        portalActive: false,
+        inHub: false,
+      });
+      const portalStepReused = stepPortalAnimState(
+        portalAnim,
+        {
+          dtSec: 0.016,
+          roomKey: '1_0',
+          portalActive: true,
+          inHub: false,
+        },
+        portalStepOut,
+      );
+      expect(portalStepReused).toBe(portalStepOut);
+      expect(portalStepReused.burstTriggered).toBe(true);
+
+      const doorVisOut = resolveDoorVisualState({
+        dir: 'N',
+        locked: true,
+        biome: 1,
+        quality: 'high',
+      });
+      const doorVisReused = resolveDoorVisualState(
+        {
+          dir: 'E',
+          locked: false,
+          biome: 2,
+          quality: 'medium',
+        },
+        doorVisOut,
+      );
+      expect(doorVisReused).toBe(doorVisOut);
+      expect(doorVisReused.orientation).toBe('ew');
+
+      const doorAnim = createDoorAnimState(true);
+      const doorStepOut = stepDoorAnimState(doorAnim, { dtSec: 0.016, locked: true });
+      const doorStepReused = stepDoorAnimState(
+        doorAnim,
+        { dtSec: 0.016, locked: false },
+        doorStepOut,
+      );
+      expect(doorStepReused).toBe(doorStepOut);
+      expect(doorStepReused.emitUnlockSparks).toBe(true);
+
+      const poseOut = { x: 0, y: 0, scaleX: 1, scaleY: 1, rotation: 0, alpha: 1 };
+      expect(computePortalSpiralParticlePose(0, 8, 1.0, 2.0, 100, 100, poseOut)).toBe(poseOut);
+      expect(computePortalEnergyRayPose(0, 4, 1.0, 100, 100, poseOut)).toBe(poseOut);
+      expect(computeDoorMotePose(0, 'ns', 100, 100, true, false, 0, 1.0, poseOut)).toBe(poseOut);
+    });
+
+    it('bakes all required portal and door textures including portal_particle_mote and door_unlock_spark', () => {
+      const bakedKeys = new Set<string>();
+      const noopGradient = { addColorStop: () => {} };
+      const mockCtx = new Proxy(
+        {
+          createLinearGradient: () => noopGradient,
+          createRadialGradient: () => noopGradient,
+        },
+        {
+          get(target, prop) {
+            if (prop in target) return (target as Record<string | symbol, unknown>)[prop];
+            return () => {};
+          },
+          set() {
+            return true;
+          },
+        },
+      ) as unknown as CanvasRenderingContext2D;
+      const mockScene = {
+        textures: {
+          exists: (key: string) => bakedKeys.has(key),
+          remove: (key: string) => bakedKeys.delete(key),
+          addCanvas: (key: string) => {
+            bakedKeys.add(key);
+          },
+          createCanvas: (key: string) => {
+            bakedKeys.add(key);
+            return {
+              context: mockCtx,
+              refresh: () => {},
+            };
+          },
+        },
+      } as unknown as Phaser.Scene;
+
+      const prevDoc = (globalThis as { document?: unknown }).document;
+      (globalThis as { document?: unknown }).document = {
+        createElement: () => ({
+          width: 0,
+          height: 0,
+          getContext: () => mockCtx,
+        }),
+      };
+      try {
+        bakePortalsAndDoors(mockScene, 1);
+      } finally {
+        (globalThis as { document?: unknown }).document = prevDoc;
+      }
+
+      expect(bakedKeys.has('portal_pedestal_base')).toBe(true);
+      expect(bakedKeys.has('portal_pedestal_runes')).toBe(true);
+      expect(bakedKeys.has('portal_vortex_disc')).toBe(true);
+      expect(bakedKeys.has('portal_vortex_core')).toBe(true);
+      expect(bakedKeys.has('portal_energy_ray')).toBe(true);
+      expect(bakedKeys.has('portal_particle_mote')).toBe(true);
+      expect(bakedKeys.has('door_unlock_spark')).toBe(true);
+      expect(bakedKeys.has('door_barrier_ns')).toBe(true);
+      expect(bakedKeys.has('door_barrier_ew')).toBe(true);
+      expect(bakedKeys.has('door_open_arch_ns')).toBe(true);
+      expect(bakedKeys.has('door_open_arch_ew')).toBe(true);
     });
   });
 });

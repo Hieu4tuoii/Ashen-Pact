@@ -85,40 +85,101 @@ function hexToRgbTuple(hex: string): readonly [number, number, number] {
   return [((num >> 16) & 0xff) / 255, ((num >> 8) & 0xff) / 255, (num & 0xff) / 255] as const;
 }
 
-interface PortalPreset {
-  visible: boolean;
-  mode: PortalVisualMode;
-  useShader: boolean;
-  outerColorHex: string;
-  coreColorHex: string;
-  rimColorHex: string;
-  runeTintNum: number;
-  runeAlpha: number;
-  spinSpeedRadPerSec: number;
-  coreSpinSpeedRadPerSec: number;
-  activityLevel: number;
-  pulseIntensity: number;
-  burstProgress: number;
-  vortexAlpha: number;
-  vortexScale: number;
-  particleCount: number;
-  rayCount: number;
+interface PortalColorDef {
+  readonly outerColorHex: string;
+  readonly outerColorNum: number;
+  readonly outerRgb: readonly [number, number, number];
+  readonly coreColorHex: string;
+  readonly coreColorNum: number;
+  readonly coreRgb: readonly [number, number, number];
+  readonly rimColorHex: string;
+  readonly rimColorNum: number;
+  readonly rimRgb: readonly [number, number, number];
+  readonly runeTintNum: number;
 }
 
-function buildPortalState(p: PortalPreset): PortalVisualState {
+function makePortalColorDef(
+  outerColorHex: string,
+  coreColorHex: string,
+  rimColorHex: string,
+  runeTintNum: number,
+): PortalColorDef {
   return {
-    ...p,
-    outerColorNum: hexToNum(p.outerColorHex),
-    outerRgb: hexToRgbTuple(p.outerColorHex),
-    coreColorNum: hexToNum(p.coreColorHex),
-    coreRgb: hexToRgbTuple(p.coreColorHex),
-    rimColorNum: hexToNum(p.rimColorHex),
-    rimRgb: hexToRgbTuple(p.rimColorHex),
+    outerColorHex,
+    outerColorNum: hexToNum(outerColorHex),
+    outerRgb: hexToRgbTuple(outerColorHex),
+    coreColorHex,
+    coreColorNum: hexToNum(coreColorHex),
+    coreRgb: hexToRgbTuple(coreColorHex),
+    rimColorHex,
+    rimColorNum: hexToNum(rimColorHex),
+    rimRgb: hexToRgbTuple(rimColorHex),
+    runeTintNum,
   };
+}
+
+const PORTAL_COLOR_DEFS: Record<PortalVisualMode, PortalColorDef> = {
+  hidden: makePortalColorDef('#4C3D63', '#6D5B87', '#7E6B9B', 0x7e6b9b),
+  dungeon_inactive: makePortalColorDef('#4C3D63', '#6D5B87', '#7E6B9B', 0x7e6b9b),
+  dungeon_active: makePortalColorDef('#A855F7', '#22D3EE', '#CFFAFE', 0xc084fc),
+  hub_waiting: makePortalColorDef('#64748B', '#38BDF8', '#94A3B8', 0x7dd3fc),
+  hub_ready: makePortalColorDef('#F59E42', '#FEF08A', '#FACC15', 0xfacc15),
+};
+
+const BIOME_ACCENT_NUMS: Record<0 | 1 | 2 | 3, number> = {
+  0: hexToNum(ENV_PALETTE[0].accent),
+  1: hexToNum(ENV_PALETTE[1].accent),
+  2: hexToNum(ENV_PALETTE[2].accent),
+  3: hexToNum(ENV_PALETTE[3].accent),
+};
+
+function writePortalState(
+  out: PortalVisualState | undefined,
+  visible: boolean,
+  mode: PortalVisualMode,
+  useShader: boolean,
+  runeAlpha: number,
+  spinSpeedRadPerSec: number,
+  coreSpinSpeedRadPerSec: number,
+  activityLevel: number,
+  pulseIntensity: number,
+  burstProgress: number,
+  vortexAlpha: number,
+  vortexScale: number,
+  particleCount: number,
+  rayCount: number,
+): PortalVisualState {
+  const col = PORTAL_COLOR_DEFS[mode];
+  const target = out ?? ({} as PortalVisualState);
+  target.visible = visible;
+  target.mode = mode;
+  target.useShader = useShader;
+  target.outerColorHex = col.outerColorHex;
+  target.outerColorNum = col.outerColorNum;
+  target.outerRgb = col.outerRgb;
+  target.coreColorHex = col.coreColorHex;
+  target.coreColorNum = col.coreColorNum;
+  target.coreRgb = col.coreRgb;
+  target.rimColorHex = col.rimColorHex;
+  target.rimColorNum = col.rimColorNum;
+  target.rimRgb = col.rimRgb;
+  target.runeTintNum = col.runeTintNum;
+  target.runeAlpha = runeAlpha;
+  target.spinSpeedRadPerSec = spinSpeedRadPerSec;
+  target.coreSpinSpeedRadPerSec = coreSpinSpeedRadPerSec;
+  target.activityLevel = activityLevel;
+  target.pulseIntensity = pulseIntensity;
+  target.burstProgress = burstProgress;
+  target.vortexAlpha = vortexAlpha;
+  target.vortexScale = vortexScale;
+  target.particleCount = particleCount;
+  target.rayCount = rayCount;
+  return target;
 }
 
 export function resolvePortalVisualState(
   params: ResolvePortalVisualStateParams,
+  out?: PortalVisualState,
 ): PortalVisualState {
   const {
     inHub,
@@ -136,109 +197,79 @@ export function resolvePortalVisualState(
   const activeRays = quality === 'low' ? 0 : 4;
 
   if (!inHub && !portalActive && roomType !== 'portal') {
-    return buildPortalState({
-      visible: false,
-      mode: 'hidden',
-      useShader: false,
-      outerColorHex: '#4C3D63',
-      coreColorHex: '#6D5B87',
-      rimColorHex: '#7E6B9B',
-      runeTintNum: 0x7e6b9b,
-      runeAlpha: 0,
-      spinSpeedRadPerSec: 0,
-      coreSpinSpeedRadPerSec: 0,
-      activityLevel: 0,
-      pulseIntensity: 0,
-      burstProgress: 0,
-      vortexAlpha: 0,
-      vortexScale: 0,
-      particleCount: 0,
-      rayCount: 0,
-    });
+    return writePortalState(out, false, 'hidden', false, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
   }
   if (inHub && hubReady) {
-    return buildPortalState({
-      visible: true,
-      mode: 'hub_ready',
+    return writePortalState(
+      out,
+      true,
+      'hub_ready',
       useShader,
-      outerColorHex: '#F59E42',
-      coreColorHex: '#FEF08A',
-      rimColorHex: '#FACC15',
-      runeTintNum: 0xfacc15,
-      runeAlpha: clamp(0.88 + 0.1 * pulseWave, 0.78, 1.0),
-      spinSpeedRadPerSec: 2.8,
-      coreSpinSpeedRadPerSec: -4.1,
-      activityLevel: 1.0,
-      pulseIntensity: pulseWave,
-      burstProgress: clampedBurst,
-      vortexAlpha: 0.98,
-      vortexScale: 1.02 + 0.04 * Math.sin(elapsedSec * 4.2),
-      particleCount: activeParticles,
-      rayCount: activeRays,
-    });
+      clamp(0.88 + 0.1 * pulseWave, 0.78, 1.0),
+      2.8,
+      -4.1,
+      1.0,
+      pulseWave,
+      clampedBurst,
+      0.98,
+      1.02 + 0.04 * Math.sin(elapsedSec * 4.2),
+      activeParticles,
+      activeRays,
+    );
   }
   if (inHub) {
-    return buildPortalState({
-      visible: true,
-      mode: 'hub_waiting',
+    return writePortalState(
+      out,
+      true,
+      'hub_waiting',
       useShader,
-      outerColorHex: '#64748B',
-      coreColorHex: '#38BDF8',
-      rimColorHex: '#94A3B8',
-      runeTintNum: 0x7dd3fc,
-      runeAlpha: clamp(0.62 + 0.12 * pulseWave, 0.52, 0.78),
-      spinSpeedRadPerSec: 1.4,
-      coreSpinSpeedRadPerSec: -2.1,
-      activityLevel: 0.68,
-      pulseIntensity: pulseWave * 0.75,
-      burstProgress: clampedBurst,
-      vortexAlpha: 0.84,
-      vortexScale: 0.96 + 0.025 * Math.sin(elapsedSec * 2.8),
-      particleCount: quality === 'low' ? 0 : 6,
-      rayCount: quality === 'low' ? 0 : 2,
-    });
+      clamp(0.62 + 0.12 * pulseWave, 0.52, 0.78),
+      1.4,
+      -2.1,
+      0.68,
+      pulseWave * 0.75,
+      clampedBurst,
+      0.84,
+      0.96 + 0.025 * Math.sin(elapsedSec * 2.8),
+      quality === 'low' ? 0 : 6,
+      quality === 'low' ? 0 : 2,
+    );
   }
   if (portalActive) {
     const burstBoost = clampedBurst > 0 ? Math.sin(clampedBurst * Math.PI) * 0.18 : 0;
-    return buildPortalState({
-      visible: true,
-      mode: 'dungeon_active',
+    return writePortalState(
+      out,
+      true,
+      'dungeon_active',
       useShader,
-      outerColorHex: '#A855F7',
-      coreColorHex: '#22D3EE',
-      rimColorHex: '#CFFAFE',
-      runeTintNum: 0xc084fc,
-      runeAlpha: clamp(0.86 + 0.12 * pulseWave, 0.76, 1.0),
-      spinSpeedRadPerSec: 2.6,
-      coreSpinSpeedRadPerSec: -3.8,
-      activityLevel: 1.0,
-      pulseIntensity: pulseWave,
-      burstProgress: clampedBurst,
-      vortexAlpha: 0.96,
-      vortexScale: 1.0 + 0.045 * Math.sin(elapsedSec * 4.0) + burstBoost,
-      particleCount: activeParticles,
-      rayCount: activeRays,
-    });
+      clamp(0.86 + 0.12 * pulseWave, 0.76, 1.0),
+      2.6,
+      -3.8,
+      1.0,
+      pulseWave,
+      clampedBurst,
+      0.96,
+      1.0 + 0.045 * Math.sin(elapsedSec * 4.0) + burstBoost,
+      activeParticles,
+      activeRays,
+    );
   }
-  return buildPortalState({
-    visible: true,
-    mode: 'dungeon_inactive',
+  return writePortalState(
+    out,
+    true,
+    'dungeon_inactive',
     useShader,
-    outerColorHex: '#4C3D63',
-    coreColorHex: '#6D5B87',
-    rimColorHex: '#7E6B9B',
-    runeTintNum: 0x7e6b9b,
-    runeAlpha: clamp(0.36 + 0.08 * pulseWave, 0.28, 0.48),
-    spinSpeedRadPerSec: 0.65,
-    coreSpinSpeedRadPerSec: -0.95,
-    activityLevel: 0.35,
-    pulseIntensity: pulseWave * 0.35,
-    burstProgress: 0,
-    vortexAlpha: 0.62,
-    vortexScale: 0.91 + 0.015 * Math.sin(elapsedSec * 1.8),
-    particleCount: quality === 'low' ? 0 : 4,
-    rayCount: 0,
-  });
+    clamp(0.36 + 0.08 * pulseWave, 0.28, 0.48),
+    0.65,
+    -0.95,
+    0.35,
+    pulseWave * 0.35,
+    0,
+    0.62,
+    0.91 + 0.015 * Math.sin(elapsedSec * 1.8),
+    quality === 'low' ? 0 : 4,
+    0,
+  );
 }
 
 export interface PortalAnimState {
@@ -249,6 +280,7 @@ export interface PortalAnimState {
   pendingBurstTrigger: boolean;
   enterTimerSec: number;
   enterActive: boolean;
+  pendingPortalCommit: boolean;
   enterStartX: number;
   enterStartY: number;
   enterTargetX: number;
@@ -282,6 +314,7 @@ export function createPortalAnimState(): PortalAnimState {
     pendingBurstTrigger: false,
     enterTimerSec: 0,
     enterActive: false,
+    pendingPortalCommit: false,
     enterStartX: 0,
     enterStartY: 0,
     enterTargetX: 0,
@@ -301,9 +334,11 @@ export function triggerPortalEnterSequenceState(
   startY: number,
   targetX: number,
   targetY: number,
+  commitOnComplete = false,
 ): void {
   state.enterActive = true;
   state.enterTimerSec = 0;
+  state.pendingPortalCommit = commitOnComplete;
   state.enterStartX = startX;
   state.enterStartY = startY;
   state.enterTargetX = targetX;
@@ -313,14 +348,21 @@ export function triggerPortalEnterSequenceState(
 export function stepPortalAnimState(
   state: PortalAnimState,
   params: { dtSec: number; roomKey: string; portalActive: boolean; inHub: boolean },
+  out?: PortalAnimStepResult,
 ): PortalAnimStepResult {
   const { dtSec, roomKey, portalActive, inHub } = params;
   const safeDt = Math.max(0, dtSec);
   let burstTriggered = false;
 
   if (state.lastRoomKey !== roomKey) {
+    const isInitialRoom = state.lastRoomKey === '';
     state.lastRoomKey = roomKey;
     state.wasPortalActive = portalActive;
+    if (!isInitialRoom) {
+      state.enterActive = false;
+      state.enterTimerSec = 0;
+      state.pendingPortalCommit = false;
+    }
     if (!state.pendingBurstTrigger) {
       state.burstActive = false;
       state.burstTimerSec = 0;
@@ -390,29 +432,32 @@ export function stepPortalAnimState(
       (state.enterTargetY - state.enterStartY) * pullT -
       Math.sin(enterProgress * Math.PI) * 9;
     playerScaleX = Math.max(0.12, 1 - enterProgress * 0.86);
-    playerScaleY = Math.max(0.18, 1 + Math.sin(enterProgress * Math.PI) * 0.56 - enterProgress * 0.42);
+    playerScaleY = Math.max(
+      0.18,
+      1 + Math.sin(enterProgress * Math.PI) * 0.56 - enterProgress * 0.42,
+    );
     playerRotationRad = enterProgress * enterProgress * Math.PI * 2.6;
     playerAlpha = clamp(1 - Math.max(0, (enterProgress - 0.52) / 0.48), 0.08, 1);
     enterFlashAlpha = clamp(Math.sin(enterProgress * Math.PI) * 0.9, 0, 0.9);
   }
 
-  return {
-    burstTriggered,
-    burstProgress,
-    shockwaveRadius,
-    shockwaveAlpha,
-    flashAlpha,
-    enterActive,
-    enterCompleted,
-    enterProgress,
-    playerX,
-    playerY,
-    playerScaleX,
-    playerScaleY,
-    playerRotationRad,
-    playerAlpha,
-    enterFlashAlpha,
-  };
+  const target = out ?? ({} as PortalAnimStepResult);
+  target.burstTriggered = burstTriggered;
+  target.burstProgress = burstProgress;
+  target.shockwaveRadius = shockwaveRadius;
+  target.shockwaveAlpha = shockwaveAlpha;
+  target.flashAlpha = flashAlpha;
+  target.enterActive = enterActive;
+  target.enterCompleted = enterCompleted;
+  target.enterProgress = enterProgress;
+  target.playerX = playerX;
+  target.playerY = playerY;
+  target.playerScaleX = playerScaleX;
+  target.playerScaleY = playerScaleY;
+  target.playerRotationRad = playerRotationRad;
+  target.playerAlpha = playerAlpha;
+  target.enterFlashAlpha = enterFlashAlpha;
+  return target;
 }
 
 export interface ResolveDoorVisualStateParams {
@@ -448,7 +493,10 @@ export interface DoorVisualState {
   dustParticleCount: number;
 }
 
-export function resolveDoorVisualState(params: ResolveDoorVisualStateParams): DoorVisualState {
+export function resolveDoorVisualState(
+  params: ResolveDoorVisualStateParams,
+  out?: DoorVisualState,
+): DoorVisualState {
   const {
     dir,
     locked,
@@ -461,38 +509,51 @@ export function resolveDoorVisualState(params: ResolveDoorVisualStateParams): Do
   } = params;
   const effectiveBiome: 0 | 1 | 2 | 3 = inHub ? 0 : biome;
   const orientation: 'ns' | 'ew' = dir === 'N' || dir === 'S' ? 'ns' : 'ew';
+  const isVertical = orientation === 'ew';
   const useShader = quality !== 'low';
   const clampedDissolve = clamp(dissolveProgress, 0, 1);
   const clampedLockup = clamp(lockupProgress, 0, 1);
   const isDissolving = !locked && clampedDissolve < 1;
   const pulse = 0.5 + 0.5 * Math.sin(elapsedSec * 3.4);
-  const accentNum = hexToNum(ENV_PALETTE[effectiveBiome].accent);
+  const accentNum = BIOME_ACCENT_NUMS[effectiveBiome];
+  const frameTextureKey = `door_frame_${orientation}_${effectiveBiome}`;
+  const barrierTextureKey = `door_barrier_${orientation}`;
+  const openArchTextureKey = `door_open_arch_${orientation}`;
+  const barrierVisible = locked || isDissolving;
+  const barrierAlpha = locked
+    ? clamp(0.84 + 0.08 * pulse, 0.72, 0.95) * (useShader ? 1 : clampedLockup)
+    : clamp(1 - clampedDissolve, 0, 1) * 0.9;
+  const openArchVisible = !locked && (!isDissolving || clampedDissolve > 0.2);
+  const openArchAlpha = !locked
+    ? clamp((isDissolving ? (clampedDissolve - 0.2) / 0.8 : 1) * (0.66 + 0.1 * pulse), 0, 0.82)
+    : 0;
+  const lampColorNum = locked ? 0xef4444 : accentNum;
+  const lampAlpha = locked ? clamp(0.78 + 0.16 * pulse, 0.65, 0.96) : 0.72;
+  const effDissolve = locked ? 0 : clampedDissolve;
+  const effLockup = locked ? clampedLockup : 1;
+  const dustParticleCount = locked && quality !== 'low' ? 4 : 0;
 
-  return {
-    dir,
-    orientation,
-    isVertical: orientation === 'ew',
-    frameTextureKey: `door_frame_${orientation}_${effectiveBiome}`,
-    barrierTextureKey: `door_barrier_${orientation}`,
-    openArchTextureKey: `door_open_arch_${orientation}`,
-    frameRotationRad: 0,
-    barrierRotationRad: 0,
-    useShader,
-    barrierVisible: locked || isDissolving,
-    barrierAlpha: locked
-      ? clamp(0.84 + 0.08 * pulse, 0.72, 0.95) * (useShader ? 1 : clampedLockup)
-      : clamp(1 - clampedDissolve, 0, 1) * 0.9,
-    openArchVisible: !locked && (!isDissolving || clampedDissolve > 0.2),
-    openArchAlpha: !locked
-      ? clamp((isDissolving ? (clampedDissolve - 0.2) / 0.8 : 1) * (0.66 + 0.1 * pulse), 0, 0.82)
-      : 0,
-    openArchTintNum: accentNum,
-    lampColorNum: locked ? 0xef4444 : accentNum,
-    lampAlpha: locked ? clamp(0.78 + 0.16 * pulse, 0.65, 0.96) : 0.72,
-    dissolveProgress: locked ? 0 : clampedDissolve,
-    lockupProgress: locked ? clampedLockup : 1,
-    dustParticleCount: locked && quality !== 'low' ? 4 : 0,
-  };
+  const target = out ?? ({} as DoorVisualState);
+  target.dir = dir;
+  target.orientation = orientation;
+  target.isVertical = isVertical;
+  target.frameTextureKey = frameTextureKey;
+  target.barrierTextureKey = barrierTextureKey;
+  target.openArchTextureKey = openArchTextureKey;
+  target.frameRotationRad = 0;
+  target.barrierRotationRad = 0;
+  target.useShader = useShader;
+  target.barrierVisible = barrierVisible;
+  target.barrierAlpha = barrierAlpha;
+  target.openArchVisible = openArchVisible;
+  target.openArchAlpha = openArchAlpha;
+  target.openArchTintNum = accentNum;
+  target.lampColorNum = lampColorNum;
+  target.lampAlpha = lampAlpha;
+  target.dissolveProgress = effDissolve;
+  target.lockupProgress = effLockup;
+  target.dustParticleCount = dustParticleCount;
+  return target;
 }
 
 export interface DoorAnimState {
@@ -545,6 +606,7 @@ export function triggerDoorCombatLockupState(state: DoorAnimState): void {
 export function stepDoorAnimState(
   state: DoorAnimState,
   params: { dtSec: number; locked: boolean },
+  out?: DoorAnimStepResult,
 ): DoorAnimStepResult {
   const { dtSec, locked } = params;
   const safeDt = Math.max(0, dtSec);
@@ -580,14 +642,14 @@ export function stepDoorAnimState(
     }
   }
 
-  return {
-    dissolveActive: state.dissolveActive,
-    dissolveProgress,
-    emitUnlockSparks,
-    lockupActive: state.lockupActive,
-    lockupProgress,
-    emitLockupSound,
-  };
+  const target = out ?? ({} as DoorAnimStepResult);
+  target.dissolveActive = state.dissolveActive;
+  target.dissolveProgress = dissolveProgress;
+  target.emitUnlockSparks = emitUnlockSparks;
+  target.lockupActive = state.lockupActive;
+  target.lockupProgress = lockupProgress;
+  target.emitLockupSound = emitLockupSound;
+  return target;
 }
 
 export const PORTAL_VORTEX_FRAG = [
@@ -750,6 +812,25 @@ export interface PortalDoorParticlePose {
   alpha: number;
 }
 
+function writeParticlePose(
+  out: PortalDoorParticlePose | undefined,
+  x: number,
+  y: number,
+  scaleX: number,
+  scaleY: number,
+  rotation: number,
+  alpha: number,
+): PortalDoorParticlePose {
+  const target = out ?? ({} as PortalDoorParticlePose);
+  target.x = x;
+  target.y = y;
+  target.scaleX = scaleX;
+  target.scaleY = scaleY;
+  target.rotation = rotation;
+  target.alpha = alpha;
+  return target;
+}
+
 export function computePortalSpiralParticlePose(
   index: number,
   count: number,
@@ -757,6 +838,7 @@ export function computePortalSpiralParticlePose(
   spinSpeedRadPerSec: number,
   portalX: number,
   portalY: number,
+  out?: PortalDoorParticlePose,
 ): PortalDoorParticlePose {
   const safeCount = Math.max(1, count);
   const u = (((elapsedSec * 0.75 + index / safeCount) % 1) + 1) % 1;
@@ -764,14 +846,15 @@ export function computePortalSpiralParticlePose(
   const angle =
     (index / safeCount) * Math.PI * 2 + elapsedSec * spinSpeedRadPerSec * 1.15 + u * 2.8;
   const scale = clamp(0.45 + (1 - u) * 0.65, 0.35, 1.15);
-  return {
-    x: portalX + Math.cos(angle) * radius,
-    y: portalY + Math.sin(angle) * radius * 0.88,
-    scaleX: scale,
-    scaleY: scale,
-    rotation: angle + Math.PI * 0.5,
-    alpha: clamp(Math.sin(u * Math.PI) * 0.88, 0.08, 0.9),
-  };
+  return writeParticlePose(
+    out,
+    portalX + Math.cos(angle) * radius,
+    portalY + Math.sin(angle) * radius * 0.88,
+    scale,
+    scale,
+    angle + Math.PI * 0.5,
+    clamp(Math.sin(u * Math.PI) * 0.88, 0.08, 0.9),
+  );
 }
 
 export function computePortalEnergyRayPose(
@@ -780,20 +863,22 @@ export function computePortalEnergyRayPose(
   elapsedSec: number,
   portalX: number,
   portalY: number,
+  out?: PortalDoorParticlePose,
 ): PortalDoorParticlePose {
   const safeCount = Math.max(1, count);
   const phase = (((elapsedSec * 0.85 + index / safeCount) % 1) + 1) % 1;
   const offsetX =
     (index - (safeCount - 1) * 0.5) * 14 + Math.sin(elapsedSec * 2.1 + index * 1.7) * 3;
   const sinPhase = Math.sin(phase * Math.PI);
-  return {
-    x: portalX + offsetX,
-    y: portalY + 2 - phase * 34,
-    scaleX: 0.75 + 0.25 * sinPhase,
-    scaleY: 0.65 + 0.55 * sinPhase,
-    rotation: 0,
-    alpha: clamp(sinPhase * 0.72, 0.06, 0.75),
-  };
+  return writeParticlePose(
+    out,
+    portalX + offsetX,
+    portalY + 2 - phase * 34,
+    0.75 + 0.25 * sinPhase,
+    0.65 + 0.55 * sinPhase,
+    0,
+    clamp(sinPhase * 0.72, 0.06, 0.75),
+  );
 }
 
 export function computeDoorMotePose(
@@ -805,19 +890,21 @@ export function computeDoorMotePose(
   dissolveActive: boolean,
   dissolveProgress: number,
   elapsedSec: number,
+  out?: PortalDoorParticlePose,
 ): PortalDoorParticlePose {
   if (dissolveActive) {
     const angle = (index / 4) * Math.PI * 2 + 0.4 + dissolveProgress * 1.2;
     const dist = 8 + dissolveProgress * 28;
     const scale = clamp(1.15 - dissolveProgress * 0.65, 0.35, 1.2);
-    return {
-      x: doorX + Math.cos(angle) * dist,
-      y: doorY + Math.sin(angle) * dist,
-      scaleX: scale,
-      scaleY: scale,
-      rotation: angle,
-      alpha: clamp((1 - dissolveProgress) * 0.95, 0.05, 0.95),
-    };
+    return writeParticlePose(
+      out,
+      doorX + Math.cos(angle) * dist,
+      doorY + Math.sin(angle) * dist,
+      scale,
+      scale,
+      angle,
+      clamp((1 - dissolveProgress) * 0.95, 0.05, 0.95),
+    );
   }
   if (locked) {
     if (index < 2) {
@@ -826,27 +913,29 @@ export function computeDoorMotePose(
       const dy = orientation === 'ns' ? -2 : sign * 24;
       const pulse = Math.sin(elapsedSec * 4.2 + index * 1.5);
       const scale = 0.85 + 0.15 * pulse;
-      return {
-        x: doorX + dx,
-        y: doorY + dy,
-        scaleX: scale,
-        scaleY: scale,
-        rotation: elapsedSec * 1.2,
-        alpha: clamp(0.78 + 0.14 * pulse, 0.62, 0.94),
-      };
+      return writeParticlePose(
+        out,
+        doorX + dx,
+        doorY + dy,
+        scale,
+        scale,
+        elapsedSec * 1.2,
+        clamp(0.78 + 0.14 * pulse, 0.62, 0.94),
+      );
     }
     const barOffset = (index === 2 ? -10 : 10) + Math.sin(elapsedSec * 2.8 + index) * 4;
     const dx = orientation === 'ns' ? barOffset : 0;
     const dy = orientation === 'ns' ? 0 : barOffset;
     const scale = 0.65 + 0.1 * Math.sin(elapsedSec * 3.4 + index);
-    return {
-      x: doorX + dx,
-      y: doorY + dy,
-      scaleX: scale,
-      scaleY: scale,
-      rotation: -elapsedSec * 1.5,
-      alpha: clamp(0.48 + 0.18 * Math.sin(elapsedSec * 3.1 + index), 0.25, 0.7),
-    };
+    return writeParticlePose(
+      out,
+      doorX + dx,
+      doorY + dy,
+      scale,
+      scale,
+      -elapsedSec * 1.5,
+      clamp(0.48 + 0.18 * Math.sin(elapsedSec * 3.1 + index), 0.25, 0.7),
+    );
   }
   const phase = (((elapsedSec * 0.55 + index * 0.25) % 1) + 1) % 1;
   const spread = (index - 1.5) * 11;
@@ -855,12 +944,13 @@ export function computeDoorMotePose(
   const dy = orientation === 'ns' ? drift : spread;
   const sinPhase = Math.sin(phase * Math.PI);
   const scale = 0.55 + 0.35 * sinPhase;
-  return {
-    x: doorX + dx,
-    y: doorY + dy,
-    scaleX: scale,
-    scaleY: scale,
-    rotation: elapsedSec * 0.9 + index,
-    alpha: clamp(sinPhase * 0.62, 0.08, 0.65),
-  };
+  return writeParticlePose(
+    out,
+    doorX + dx,
+    doorY + dy,
+    scale,
+    scale,
+    elapsedSec * 0.9 + index,
+    clamp(sinPhase * 0.62, 0.08, 0.65),
+  );
 }

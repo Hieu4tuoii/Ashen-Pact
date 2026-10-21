@@ -207,6 +207,7 @@ export class GameScene extends Phaser.Scene {
   public portalVisualGroup?: PortalVisualGroup;
   public portalAnimState: PortalAnimState = createPortalAnimState();
   public portalDoorAnimClockSec = 0;
+  public lastDoorRoomKey = '';
   public interactHighlightGraphics!: Phaser.GameObjects.Graphics;
   public interactPromptState: InteractPromptFadeState = createInteractPromptFadeState();
   public currentInteractTarget: InteractTargetResult | null = null;
@@ -542,6 +543,22 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
+    if (this.portalAnimState.enterActive) {
+      moveX = 0;
+      moveY = 0;
+      buttons = 0;
+    } else if (
+      !isSoloPaused &&
+      (buttons & INPUT_BUTTON.INTERACT) !== 0 &&
+      this.coopMode === 'solo' &&
+      this.currentInteractTarget?.kind === 'portal' &&
+      sim.portalActive &&
+      (!sim.inHub || sim.areAllPlayersReady())
+    ) {
+      buttons &= ~INPUT_BUTTON.INTERACT;
+      this.triggerPortalEnterSequence(true);
+    }
+
     if (!isSoloPaused) {
       this.inputSeq += 1;
       this.transport.sendInput({
@@ -829,7 +846,7 @@ export class GameScene extends Phaser.Scene {
   public syncPortalVisuals(dtSec: number): void { syncPortalVisualsImpl.call(this, dtSec); }
   public syncDoorVisuals(dtSec: number, target: InteractTargetResult | null): void { syncDoorVisualsImpl.call(this, dtSec, target); }
   public triggerPortalActivationBurst(): void { triggerPortalActivationBurstImpl.call(this); }
-  public triggerPortalEnterSequence(): void { triggerPortalEnterSequenceImpl.call(this); }
+  public triggerPortalEnterSequence(commitOnComplete = false): void { triggerPortalEnterSequenceImpl.call(this, commitOnComplete); }
   public triggerDoorUnlockTransition(): void { triggerDoorUnlockTransitionImpl.call(this); }
   public triggerDoorCombatLockup(): void { triggerDoorCombatLockupImpl.call(this); }
   public resetPortalAndDoorTestState(): void { resetPortalAndDoorTestStateImpl.call(this); }

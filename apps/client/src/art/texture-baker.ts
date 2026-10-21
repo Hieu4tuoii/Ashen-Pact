@@ -139,7 +139,9 @@ export class TextureBaker {
       scene.textures.exists('fx_light_radial') &&
       scene.textures.exists('chest_closed_legendary') &&
       scene.textures.exists('portal_pedestal_base') &&
+      scene.textures.exists('portal_particle_mote') &&
       scene.textures.exists('door_frame_ns_0') &&
+      scene.textures.exists('door_unlock_spark') &&
       scene.textures.exists('biome_tile_0_0')
     ) {
       this.currentBakeScale = targetScale;

@@ -125,6 +125,7 @@ export function createImpl(this: GameScene): void {
   this.portalVisualGroup = undefined;
   this.portalAnimState = createPortalAnimState();
   this.portalDoorAnimClockSec = 0;
+  this.lastDoorRoomKey = '';
   this.interactPromptState = createInteractPromptFadeState();
   this.currentInteractTarget = null;
   this.interactPromptVisuals = undefined;
@@ -708,12 +709,7 @@ export function applyCameraViewportImpl(this: GameScene): void {
     for (const txt of this.pingVisuals.values()) {
       txt.setResolution(newScale);
     }
-    for (const entry of this.doorSprites.values()) {
-      entry.sprite.destroy();
-      entry.glowSprite.destroy();
-      entry.label.destroy();
-    }
-    this.doorSprites.clear();
+    this.destroyPortalAndDoorVisuals();
     for (const sprite of this.chestSprites.values()) {
       sprite.destroy();
     }
@@ -741,14 +737,6 @@ export function applyCameraViewportImpl(this: GameScene): void {
       entry.label.destroy();
     }
     this.npcVisuals.clear();
-    if (this.portalSprite) {
-      this.portalSprite.destroy();
-      this.portalSprite = undefined;
-    }
-    if (this.portalGlowSprite) {
-      this.portalGlowSprite.destroy();
-      this.portalGlowSprite = undefined;
-    }
     if (this.portalLabel) {
       this.portalLabel.destroy();
       this.portalLabel = undefined;
