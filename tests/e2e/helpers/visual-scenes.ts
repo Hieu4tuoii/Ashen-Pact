@@ -75,6 +75,17 @@ export const VISUAL_SCENES: readonly VisualSceneDef[] = [
     captureUnlit: true,
     sampleRects: HUB_SAMPLE_RECTS,
   }),
+  makeScene('hub-portal-ready', 'Hub courtyard with player Ready near warm gold departure portal', DEFAULT_HUB_URL, 'GameScene', async (page) => {
+    await page.evaluate(() => {
+      const sim = window.__GAME_TRANSPORT__!.getSim();
+      sim.enterHub();
+      sim.togglePlayerReady(sim.player.id, true);
+      sim.player.x = sim.portalX - 52;
+      sim.player.y = sim.portalY;
+    });
+    await lockCameraAndIrisToPlayer(page);
+    await stepDeterministicFrames(page, 45);
+  }),
   makeScene('hub-coop-2p', 'Hub courtyard with 2 Co-op players and LAN Invite QR panel', DEFAULT_HUB_URL, 'GameScene', async (page) => {
     await page.evaluate(() => {
       const sim = window.__GAME_TRANSPORT__!.getSim();
@@ -334,6 +345,128 @@ export const VISUAL_SCENES: readonly VisualSceneDef[] = [
     await lockCameraAndIrisToPlayer(page);
     await stepDeterministicFrames(page, 45);
   }),
+  makeScene('b1-door-ns-locked', 'Biome 1 locked North/South stone archway door during combat', DEFAULT_GAME_URL, 'GameScene', async (page) => {
+    await page.evaluate(() => {
+      const sim = window.__GAME_TRANSPORT__!.getSim();
+      const nsRoom =
+        sim.dungeon.rooms.find(
+          (r) =>
+            r.type === 'combat' &&
+            (r.connections.N !== undefined || r.connections.S !== undefined),
+        ) ??
+        sim.dungeon.rooms.find(
+          (r) => r.connections.N !== undefined || r.connections.S !== undefined,
+        ) ??
+        sim.dungeon.rooms[0]!;
+      sim.enterRoom(nsRoom.id);
+      sim.enemies.length = 0;
+      const keeper = sim.spawnEnemy('thorn_turret', 680, 270, true);
+      keeper.hp = 9999;
+      keeper.maxHp = 9999;
+      sim.rebuildCurrentRoomDoors();
+      const nsDoor = sim.doors.find((d) => d.dir === 'N' || d.dir === 'S') ?? sim.doors[0]!;
+      sim.player.godMode = true;
+      const dx = nsDoor.dir === 'E' ? -48 : nsDoor.dir === 'W' ? 48 : 0;
+      const dy = nsDoor.dir === 'S' ? -48 : nsDoor.dir === 'N' ? 48 : 0;
+      sim.player.x = nsDoor.x + dx;
+      sim.player.y = nsDoor.y + dy;
+    });
+    await lockCameraAndIrisToPlayer(page);
+    await stepDeterministicFrames(page, 45);
+  }),
+  makeScene('b1-door-ns-open', 'Biome 1 unlocked North/South stone archway door after room clear', DEFAULT_GAME_URL, 'GameScene', async (page) => {
+    await page.evaluate(() => {
+      const sim = window.__GAME_TRANSPORT__!.getSim();
+      const nsRoom =
+        sim.dungeon.rooms.find(
+          (r) =>
+            r.type === 'combat' &&
+            (r.connections.N !== undefined || r.connections.S !== undefined),
+        ) ??
+        sim.dungeon.rooms.find(
+          (r) => r.connections.N !== undefined || r.connections.S !== undefined,
+        ) ??
+        sim.dungeon.rooms[0]!;
+      sim.enterRoom(nsRoom.id);
+      sim.skipCurrentRoomWaves();
+      sim.consumeEvents();
+      sim.enemies.length = 0;
+      sim.secretWallBroken = true;
+      sim.rebuildCurrentRoomDoors();
+      const nsDoor = sim.doors.find((d) => d.dir === 'N' || d.dir === 'S') ?? sim.doors[0]!;
+      const dx = nsDoor.dir === 'E' ? -48 : nsDoor.dir === 'W' ? 48 : 0;
+      const dy = nsDoor.dir === 'S' ? -48 : nsDoor.dir === 'N' ? 48 : 0;
+      sim.player.x = nsDoor.x + dx;
+      sim.player.y = nsDoor.y + dy;
+    });
+    await lockCameraAndIrisToPlayer(page);
+    await stepDeterministicFrames(page, 45);
+  }),
+  makeScene('b1-door-unlock', 'Biome 1 combat room capturing 380ms door unlock dissolve animation', DEFAULT_GAME_URL, 'GameScene', async (page) => {
+    await page.evaluate(() => {
+      const sim = window.__GAME_TRANSPORT__!.getSim();
+      const combatRoom = sim.dungeon.rooms.find((r) => r.type === 'combat') ?? sim.dungeon.rooms[0]!;
+      sim.enterRoom(combatRoom.id);
+      sim.enemies.length = 0;
+      const keeper = sim.spawnEnemy('thorn_turret', 680, 270, true);
+      keeper.hp = 9999;
+      keeper.maxHp = 9999;
+      sim.rebuildCurrentRoomDoors();
+      const door = sim.doors[0];
+      sim.player.godMode = true;
+      if (door) {
+        const dx = door.dir === 'E' ? -48 : door.dir === 'W' ? 48 : 0;
+        const dy = door.dir === 'S' ? -48 : door.dir === 'N' ? 48 : 0;
+        sim.player.x = door.x + dx;
+        sim.player.y = door.y + dy;
+      }
+    });
+    await lockCameraAndIrisToPlayer(page);
+    await stepDeterministicFrames(page, 42);
+    await page.evaluate(() => {
+      const sim = window.__GAME_TRANSPORT__!.getSim();
+      sim.skipCurrentRoomWaves();
+      sim.consumeEvents();
+      sim.enemies.length = 0;
+      sim.rebuildCurrentRoomDoors();
+      (
+        window.__PHASER_GAME__?.scene.getScene('GameScene') as
+          | { triggerDoorUnlockTransition?: () => void }
+          | undefined
+      )?.triggerDoorUnlockTransition?.();
+    });
+    await stepDeterministicFrames(page, 2);
+  }, { captureStrip: true, stripFramesPerStep: 3 }),
+  makeScene('b1-door-lockup', 'Biome 1 combat room capturing 250ms door barrier lock-up animation', DEFAULT_GAME_URL, 'GameScene', async (page) => {
+    await page.evaluate(() => {
+      const sim = window.__GAME_TRANSPORT__!.getSim();
+      const combatRoom = sim.dungeon.rooms.find((r) => r.type === 'combat') ?? sim.dungeon.rooms[0]!;
+      sim.enterRoom(combatRoom.id);
+      sim.enemies.length = 0;
+      const keeper = sim.spawnEnemy('thorn_turret', 680, 270, true);
+      keeper.hp = 9999;
+      keeper.maxHp = 9999;
+      sim.rebuildCurrentRoomDoors();
+      const door = sim.doors[0];
+      sim.player.godMode = true;
+      if (door) {
+        const dx = door.dir === 'E' ? -48 : door.dir === 'W' ? 48 : 0;
+        const dy = door.dir === 'S' ? -48 : door.dir === 'N' ? 48 : 0;
+        sim.player.x = door.x + dx;
+        sim.player.y = door.y + dy;
+      }
+    });
+    await lockCameraAndIrisToPlayer(page);
+    await stepDeterministicFrames(page, 42);
+    await page.evaluate(() => {
+      (
+        window.__PHASER_GAME__?.scene.getScene('GameScene') as
+          | { triggerDoorCombatLockup?: () => void }
+          | undefined
+      )?.triggerDoorCombatLockup?.();
+    });
+    await stepDeterministicFrames(page, 2);
+  }, { captureStrip: true, stripFramesPerStep: 2 }),
   makeScene('b1-portal-inactive', 'Biome 1 portal room before clearing final guard wave', DEFAULT_GAME_URL, 'GameScene', async (page) => {
     await page.evaluate(() => {
       const sim = window.__GAME_TRANSPORT__!.getSim();
@@ -364,7 +497,63 @@ export const VISUAL_SCENES: readonly VisualSceneDef[] = [
     });
     await lockCameraAndIrisToPlayer(page);
     await stepDeterministicFrames(page, 45);
-  }, { captureStrip: true }),
+  }, { captureStrip: true, stripFramesPerStep: 5 }),
+  makeScene('b1-portal-burst', 'Biome 1 portal room capturing 0.72s portal activation burst', DEFAULT_GAME_URL, 'GameScene', async (page) => {
+    await page.evaluate(() => {
+      const sim = window.__GAME_TRANSPORT__!.getSim();
+      const portalRoom = sim.dungeon.rooms.find((r) => r.type === 'portal')!;
+      sim.enterRoom(portalRoom.id);
+      sim.enemies.length = 0;
+      const guard = sim.spawnEnemy('thorn_turret', 720, 270, true);
+      guard.hp = 9999;
+      guard.maxHp = 9999;
+      sim.portalActive = false;
+      sim.player.godMode = true;
+      sim.player.x = sim.portalX - 64;
+      sim.player.y = sim.portalY;
+    });
+    await lockCameraAndIrisToPlayer(page);
+    await stepDeterministicFrames(page, 40);
+    await page.evaluate(() => {
+      const sim = window.__GAME_TRANSPORT__!.getSim();
+      sim.skipCurrentRoomWaves();
+      sim.consumeEvents();
+      sim.enemies.length = 0;
+      sim.portalActive = true;
+      (
+        window.__PHASER_GAME__?.scene.getScene('GameScene') as
+          | { triggerPortalActivationBurst?: () => void }
+          | undefined
+      )?.triggerPortalActivationBurst?.();
+    });
+    await stepDeterministicFrames(page, 3);
+  }, { captureStrip: true, stripFramesPerStep: 5 }),
+  makeScene('b1-portal-enter', 'Biome 1 active portal room capturing 0.30s player-enter stretch/spiral sequence', DEFAULT_GAME_URL, 'GameScene', async (page) => {
+    await page.evaluate(() => {
+      const sim = window.__GAME_TRANSPORT__!.getSim();
+      const portalRoom = sim.dungeon.rooms.find((r) => r.type === 'portal')!;
+      sim.enterRoom(portalRoom.id);
+      sim.skipCurrentRoomWaves();
+      sim.consumeEvents();
+      sim.enemies.length = 0;
+      sim.portalActive = true;
+      sim.player.x = sim.portalX - 28;
+      sim.player.y = sim.portalY;
+    });
+    await lockCameraAndIrisToPlayer(page);
+    await stepDeterministicFrames(page, 42);
+    await page.evaluate(() => {
+      const gs = window.__PHASER_GAME__?.scene.getScene('GameScene') as
+        | { triggerPortalEnterSequence?: () => void }
+        | undefined;
+      if (gs?.triggerPortalEnterSequence) {
+        gs.triggerPortalEnterSequence();
+      } else {
+        window.__GAME_TRANSPORT__!.getSim().interactWithNearest();
+      }
+    });
+    await stepDeterministicFrames(page, 2);
+  }, { captureStrip: true, stripFramesPerStep: 3 }),
   makeScene('b1-dark-interactables', 'Biome 1 interactables outside torch light from far away', DEFAULT_GAME_URL, 'GameScene', async (page) => {
     await page.evaluate(() => {
       const sim = window.__GAME_TRANSPORT__!.getSim();
@@ -682,6 +871,32 @@ export const VISUAL_SCENES: readonly VisualSceneDef[] = [
       sim.portalActive = true;
       sim.player.x = sim.portalX - 48;
       sim.player.y = sim.portalY;
+    });
+    await lockCameraAndIrisToPlayer(page);
+    await stepDeterministicFrames(page, 45);
+  }),
+  makeScene('b1-door-locked-low', 'Biome 1 locked door at Low quality', DEFAULT_GAME_URL, 'GameScene', async (page) => {
+    await page.evaluate(() => {
+      window.__GAME_SET_QUALITY__?.('low');
+      const sim = window.__GAME_TRANSPORT__!.getSim();
+      const combatRoom = sim.dungeon.rooms.find((r) => r.type === 'combat') ?? sim.dungeon.rooms[0]!;
+      sim.enterRoom(combatRoom.id);
+      sim.enemies.length = 0;
+      const keeper = sim.spawnEnemy('thorn_turret', 680, 270, true);
+      keeper.hp = 9999;
+      keeper.maxHp = 9999;
+      sim.rebuildCurrentRoomDoors();
+      const door = sim.doors[0];
+      sim.player.godMode = true;
+      if (door) {
+        const dx = door.dir === 'E' ? -48 : door.dir === 'W' ? 48 : 0;
+        const dy = door.dir === 'S' ? -48 : door.dir === 'N' ? 48 : 0;
+        sim.player.x = door.x + dx;
+        sim.player.y = door.y + dy;
+      } else {
+        sim.player.x = 180;
+        sim.player.y = 270;
+      }
     });
     await lockCameraAndIrisToPlayer(page);
     await stepDeterministicFrames(page, 45);
