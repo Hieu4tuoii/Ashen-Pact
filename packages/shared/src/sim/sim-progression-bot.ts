@@ -10,7 +10,7 @@ import type { WorldSim } from './world-sim.js';
 
 export function activateShrineImpl(this: WorldSim, shrine: SimNpcState, actor: SimPlayerState = this.player): boolean {
   if (shrine.kind !== 'shrine' || shrine.interacted || actor.lifeState !== 'alive') return false;
-  const costGold = shrine.costGold ?? 25;
+  const costGold = shrine.costGold ?? 40;
   if (actor.gold >= costGold) {
     actor.gold -= costGold;
   } else if (actor.hp > shrine.costHp) {
@@ -24,7 +24,7 @@ export function activateShrineImpl(this: WorldSim, shrine: SimNpcState, actor: S
   room.shrineUsed = true;
 
   for (const p of this.getAllPlayers()) {
-    p.maxEnergy += 30;
+    p.maxEnergy += 15;
     p.energy = p.maxEnergy;
     p.armor = p.maxArmor;
   }
@@ -35,24 +35,10 @@ export function activateShrineImpl(this: WorldSim, shrine: SimNpcState, actor: S
     this.applyBuffEffects(blessingId);
   }
 
-  const blessedWepId = this.rollRandomWeaponByRarities(['epic', 'legendary']);
-  const blessedWep = WEAPONS[blessedWepId]!;
-  this.spawnWorldItem({
-    kind: 'weapon',
-    weaponId: blessedWep.id,
-    rarity: blessedWep.rarity,
-    nameVi: blessedWep.nameVi,
-    costGold: 0,
-    healAmount: 0,
-    x: shrine.x,
-    y: shrine.y + 62,
-  });
-  this.roomItemsByRoomId.set(room.id, [...this.worldItems]);
-
   const buffDef = blessingId ? FLOOR_BUFFS[blessingId] : undefined;
   shrine.dialogueVi = buffDef
-    ? `Phước lành Cổ Ngữ: ${buffDef.nameVi} & ${blessedWep.nameVi}!`
-    : `Phước lành Cổ Ngữ: +30 Năng Lượng & ${blessedWep.nameVi}!`;
+    ? `Phước lành Cổ Ngữ: ${buffDef.nameVi} (+15 Năng Lượng tối đa)!`
+    : 'Phước lành Cổ Ngữ: +15 Năng Lượng tối đa!';
   this.events.push({
     kind: 'shrine_blessing',
     x: shrine.x,
@@ -342,8 +328,8 @@ export function updateCurrentRoomProgressionImpl(this: WorldSim, dtSec: number):
           }
         }
         const waveTotal = Math.max(1, room.currentWaveSpawnedCount ?? 4);
-        const lowRemaining = currentWaveAlive <= Math.floor(waveTotal * 0.25);
-        const timeExpired = this.waveElapsedSec >= 12.0;
+        const lowRemaining = currentWaveAlive <= Math.max(2, Math.ceil(waveTotal * 0.3));
+        const timeExpired = this.waveElapsedSec >= 9.5;
         const minOverlapSec = 1.5;
         if (
           activeWaves.size < 2 &&

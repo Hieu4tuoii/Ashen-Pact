@@ -1,8 +1,8 @@
-import { BIOME1_COMBAT_ENEMIES, BIOME2_COMBAT_ENEMIES, BIOME3_COMBAT_ENEMIES, ELITE_MODIFIERS } from '../data/enemies.js';
+import { BIOME1_COMBAT_ENEMIES, BIOME2_COMBAT_ENEMIES, BIOME3_COMBAT_ENEMIES, ELITE_MODIFIERS, ENEMIES } from '../data/enemies.js';
 import type { CardinalDir, EliteModifier, WeaponRarity } from '../data/types.js';
 import { MAX_WEAPON_SLOTS, WEAPONS } from '../data/weapons.js';
 import { COOP_SCALING } from '../data/scaling.js';
-import { clamp } from '../math/vec2.js';
+import { clamp, distance } from '../math/vec2.js';
 import { TILE_SIZE } from '../protocol/messages.js';
 import { type DungeonRoomNode, OPPOSITE_DIR } from './dungeon-gen.js';
 import type { SimChestState, SimWorldItemState, SimPlayerState } from './world-sim-types.js';
@@ -376,11 +376,13 @@ export function populateRoomContentsImpl(this: WorldSim, room: DungeonRoomNode):
             item.pickedUp = offer.purchased;
           }
         } else {
+          const localFloor: 1 | 2 = this.currentFloor % 2 === 1 ? 1 : 2;
+          const floorScale = 1 + (localFloor - 1) * 0.25;
           this.spawnWorldItem({
             kind: 'health_potion',
             rarity: 'uncommon',
             nameVi: 'Bình Máu Cổ Ngữ (+4 HP)',
-            costGold: 25,
+            costGold: Math.round(30 * floorScale),
             healAmount: 4,
             x: cx - 165,
             y: cy + 12,
@@ -392,7 +394,7 @@ export function populateRoomContentsImpl(this: WorldSim, room: DungeonRoomNode):
             weaponId: rareWep.id,
             rarity: rareWep.rarity,
             nameVi: rareWep.nameVi,
-            costGold: 40,
+            costGold: Math.round(55 * floorScale),
             healAmount: 0,
             x: cx,
             y: cy + 34,
@@ -404,7 +406,7 @@ export function populateRoomContentsImpl(this: WorldSim, room: DungeonRoomNode):
             weaponId: epicWep.id,
             rarity: epicWep.rarity,
             nameVi: epicWep.nameVi,
-            costGold: 60,
+            costGold: Math.round(85 * floorScale),
             healAmount: 0,
             x: cx + 165,
             y: cy + 12,
@@ -424,13 +426,13 @@ export function populateRoomContentsImpl(this: WorldSim, room: DungeonRoomNode):
         nameVi: 'Tượng Thần Cổ Đại',
         dialogueVi: room.shrineUsed
           ? 'Tượng thần đã ban phước lành cổ ngữ.'
-          : 'Dâng 25 Xu hoặc 2 Máu [E] để nhận Phước Lành & Thần Khí',
+          : 'Dâng 40 Xu hoặc 2 Máu [E] để nhận Phước Lành (+15 Năng Lượng tối đa)',
         x: cx,
         y: cy - 18,
         radius: 22,
         interacted: room.shrineUsed,
         costHp: 2,
-        costGold: 25,
+        costGold: 40,
       });
       break;
     }
@@ -492,16 +494,69 @@ export function spawnNextRoomWaveImpl(this: WorldSim): void {
   this.waveNumber += 1;
   this.waveElapsedSec = 0;
 
-  const cx = this.map.width * 0.64;
+  const cx = this.map.width * 0.5;
   const cy = this.map.height * 0.5;
   const offsets: readonly [number, number][] = [
-    [-90, -110],
-    [90, -110],
-    [130, 0],
-    [-80, 110],
-    [90, 110],
-    [0, -135],
+    [-240, -165],
+    [240, -165],
+    [240, 165],
+    [-240, 165],
+    [0, -180],
+    [260, 0],
+    [0, 180],
+    [-260, 0],
+    [-160, -115],
+    [160, -115],
+    [160, 115],
+    [-160, 115],
   ];
+
+  const alivePlayers = this.getAllPlayers().filter((pl) => pl.lifeState === 'alive' && pl.hp > 0);
+  const selectSpawnPos = (i: number, defId: string, isElite: boolean): { x: number; y: number } => {
+    const def = ENEMIES[defId];
+    const radius = def ? (isElite ? Math.round(def.radius * 1.25) : def.radius) : 14;
+    const jitterX = ((i % 3) - 1) * 10;
+    const jitterY = ((Math.floor(i / 3) % 3) - 1) * 10;
+
+    const qualifying: { x: number; y: number; minPlayerDist: number }[] = [];
+    let bestFallback: { x: number; y: number; minPlayerDist: number } | null = null;
+
+    for (let c = 0; c < offsets.length; c++) {
+      const [ox, oy] = offsets[c]!;
+      const rawX = clamp(
+        cx + ox + jitterX,
+        TILE_SIZE * 2.5,
+        this.map.width - TILE_SIZE * 2.5,
+      );
+      const rawY = clamp(
+        cy + oy + jitterY,
+        TILE_SIZE * 2.5,
+        this.map.height - TILE_SIZE * 2.5,
+      );
+      const resolved = this.map.resolveCircleCollision(rawX, rawY, radius);
+      let minPlayerDist = Infinity;
+      for (let pIdx = 0; pIdx < alivePlayers.length; pIdx++) {
+        const pl = alivePlayers[pIdx]!;
+        const d = distance(resolved.x, resolved.y, pl.x, pl.y);
+        if (d < minPlayerDist) {
+          minPlayerDist = d;
+        }
+      }
+      const cand = { x: resolved.x, y: resolved.y, minPlayerDist };
+      if (!bestFallback || minPlayerDist > bestFallback.minPlayerDist) {
+        bestFallback = cand;
+      }
+      if (minPlayerDist >= 140) {
+        qualifying.push(cand);
+      }
+    }
+
+    if (qualifying.length > 0) {
+      const pick = qualifying[(i + room.wavesSpawned * 2 + room.id) % qualifying.length]!;
+      return { x: pick.x, y: pick.y };
+    }
+    return bestFallback ? { x: bestFallback.x, y: bestFallback.y } : { x: cx + 180, y: cy };
+  };
 
   let spawnedCount = 0;
   const waveDef = room.waves[room.wavesSpawned - 1];
@@ -517,11 +572,11 @@ export function spawnNextRoomWaveImpl(this: WorldSim): void {
         : Math.max(2, Math.round(waveDef.enemies.length * ratio));
     for (let i = 0; i < effectiveCount; i++) {
       const entry = waveDef.enemies[i % waveDef.enemies.length]!;
-      const [ox, oy] = offsets[i % offsets.length]!;
       const eliteMod: EliteModifier | null = entry.isElite
         ? (entry.eliteModifier ?? ELITE_MODIFIERS[(room.id + i) % ELITE_MODIFIERS.length]!)
         : null;
-      const spawned = this.spawnEnemy(entry.defId, cx + ox, cy + oy, false, eliteMod);
+      const pos = selectSpawnPos(i, entry.defId, eliteMod !== null);
+      const spawned = this.spawnEnemy(entry.defId, pos.x, pos.y, false, eliteMod);
       spawned.waveIndex = room.wavesSpawned;
       spawnedCount += 1;
     }
@@ -532,16 +587,16 @@ export function spawnNextRoomWaveImpl(this: WorldSim): void {
         : this.currentBiome === 3
           ? BIOME3_COMBAT_ENEMIES
           : BIOME1_COMBAT_ENEMIES;
-    const count = this.currentFloor % 2 === 1 ? 4 : 5;
+    const count = this.currentFloor % 2 === 1 ? 7 : 8;
     for (let i = 0; i < count; i++) {
       const defId = combatPool[(room.id + room.wavesSpawned * 2 + i) % combatPool.length]!;
-      const [ox, oy] = offsets[i % offsets.length]!;
       const isEliteSlot =
         i === count - 1 && (room.wavesSpawned >= room.wavesTotal || room.type === 'portal');
       const eliteMod: EliteModifier | null = isEliteSlot
         ? ELITE_MODIFIERS[(room.id + this.currentFloor + i) % ELITE_MODIFIERS.length]!
         : null;
-      const spawned = this.spawnEnemy(defId, cx + ox, cy + oy, false, eliteMod);
+      const pos = selectSpawnPos(i, defId, eliteMod !== null);
+      const spawned = this.spawnEnemy(defId, pos.x, pos.y, false, eliteMod);
       spawned.waveIndex = room.wavesSpawned;
       spawnedCount += 1;
     }
@@ -589,8 +644,10 @@ export function onRoomClearedImpl(this: WorldSim, room: DungeonRoomNode): void {
   }
 
   if (room.type === 'combat') {
-    const rarity = room.chestRarity ?? this.rollChestRarity(0);
-    this.spawnChest(cx, cy, rarity, room.chestWeaponId ?? undefined);
+    if (room.isChallenge || this.rng.chance(0.45)) {
+      const rarity = room.chestRarity ?? this.rollChestRarity(0);
+      this.spawnChest(cx, cy, rarity, room.chestWeaponId ?? undefined);
+    }
   } else if (room.type === 'portal') {
     this.portalActive = true;
     this.portalX = cx;
@@ -657,6 +714,9 @@ export function openChestImpl(this: WorldSim, chest: SimChestState): boolean {
         ownerPlayerId: p.id,
       });
 
+      const totalGold = this.rng.nextInt(6, 10);
+      const gold1 = Math.floor(totalGold / 2);
+      const gold2 = totalGold - gold1;
       for (let i = 0; i < 3; i++) {
         const ang = -Math.PI * 0.5 + (i - 1) * 0.6 + pIdx * 0.25;
         this.pickups.push(
@@ -667,7 +727,7 @@ export function openChestImpl(this: WorldSim, chest: SimChestState): boolean {
             y: chest.y,
             vx: Math.cos(ang) * 95,
             vy: Math.sin(ang) * 95,
-            amount: i === 1 ? 15 : 10,
+            amount: i === 1 ? 10 : i === 0 ? gold1 : gold2,
             ttlSec: 20,
             ownerPlayerId: p.id,
           }),
@@ -689,6 +749,9 @@ export function openChestImpl(this: WorldSim, chest: SimChestState): boolean {
       droppedAtTick: this.tick,
     });
 
+    const totalGold = this.rng.nextInt(6, 10);
+    const gold1 = Math.floor(totalGold / 2);
+    const gold2 = totalGold - gold1;
     for (let i = 0; i < 3; i++) {
       const ang = -Math.PI * 0.5 + (i - 1) * 0.6;
       this.pickups.push(
@@ -699,7 +762,7 @@ export function openChestImpl(this: WorldSim, chest: SimChestState): boolean {
           y: chest.y,
           vx: Math.cos(ang) * 95,
           vy: Math.sin(ang) * 95,
-          amount: i === 1 ? 15 : 10,
+          amount: i === 1 ? 10 : i === 0 ? gold1 : gold2,
           ttlSec: 20,
         }),
       );

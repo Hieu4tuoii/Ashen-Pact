@@ -160,17 +160,23 @@ export function updateSinglePlayerStateImpl(this: WorldSim,
   if (p.grassRustleCooldown > 0)
     p.grassRustleCooldown = Math.max(0, p.grassRustleCooldown - dtSec);
 
-  if (p.energy < p.maxEnergy) {
+  if (p.energyRegenDelayTimer > 0) {
+    const nextEnergyDelay = p.energyRegenDelayTimer - dtSec;
+    p.energyRegenDelayTimer = nextEnergyDelay < 1e-6 ? 0 : nextEnergyDelay;
+  } else if (p.energy < p.maxEnergy) {
     const regenMult = this.activeBuffIds.includes('arcane_wellspring') ? 1.5 : 1.0;
-    this.energyRegenAccum += dtSec * 3.5 * regenMult;
-    if (this.energyRegenAccum >= 1) {
-      const gain = Math.floor(this.energyRegenAccum);
-      this.energyRegenAccum -= gain;
+    p.energyRegenAccum += dtSec * 1.5 * regenMult;
+    if (p.energyRegenAccum + 1e-6 >= 1) {
+      const gain = Math.floor(p.energyRegenAccum + 1e-6);
+      p.energyRegenAccum = Math.max(0, p.energyRegenAccum - gain);
       p.energy = Math.min(p.maxEnergy, p.energy + gain);
     }
   }
+  if (p.energy >= p.maxEnergy) {
+    p.energyRegenAccum = 0;
+  }
 
-  // Engineer passive: allies within 4 tiles (128u) regenerate armor 30% faster!
+  // Engineer passive: allies within 4 tiles (128u) regenerate armor 15% faster!
   let hasNearbyEngineer = p.characterId === 'engineer' && p.lifeState === 'alive';
   if (!hasNearbyEngineer && !this.stressTestActive) {
     if (
@@ -193,16 +199,17 @@ export function updateSinglePlayerStateImpl(this: WorldSim,
       }
     }
   }
-  const armorRegenRate = p.armorRegenPerSec * (hasNearbyEngineer ? 1.3 : 1.0);
+  const armorRegenRate = p.armorRegenPerSec * (hasNearbyEngineer ? 1.15 : 1.0);
 
   if (p.armorRegenTimer > 0) {
-    p.armorRegenTimer = Math.max(0, p.armorRegenTimer - dtSec);
+    const nextArmorDelay = p.armorRegenTimer - dtSec;
+    p.armorRegenTimer = nextArmorDelay < 1e-6 ? 0 : nextArmorDelay;
     p.armorRegenAccum = 0;
   } else if (p.armor < p.maxArmor && p.hp > 0) {
     p.armorRegenAccum += dtSec * armorRegenRate;
-    if (p.armorRegenAccum >= 1) {
-      const pts = Math.floor(p.armorRegenAccum);
-      p.armorRegenAccum -= pts;
+    if (p.armorRegenAccum + 1e-6 >= 1) {
+      const pts = Math.floor(p.armorRegenAccum + 1e-6);
+      p.armorRegenAccum = Math.max(0, p.armorRegenAccum - pts);
       p.armor = Math.min(p.maxArmor, p.armor + pts);
     }
   }
@@ -235,7 +242,7 @@ export function updateSinglePlayerStateImpl(this: WorldSim,
 
   if (triggerDash && p.dashCooldownTimer <= 0 && p.dashTimer <= 0) {
     const dashCd = this.activeBuffIds.includes('gale_reflex')
-      ? DASH_COOLDOWN_SEC * 0.75
+      ? DASH_COOLDOWN_SEC * 0.82
       : DASH_COOLDOWN_SEC;
     p.dashTimer = DASH_DURATION_SEC;
     p.invulnerableTimer = Math.max(p.invulnerableTimer, DASH_IFRAME_SEC);
@@ -462,7 +469,7 @@ export function updatePlayerSurfaceAndStatusImpl(this: WorldSim, p: SimPlayerSta
     p.dashTimer <= 0
   ) {
     p.surfaceTickTimer += dtSec;
-    if (p.surfaceTickTimer >= 0.75) {
+    if (p.surfaceTickTimer >= 0.35) {
       p.surfaceTickTimer = 0;
       p.burnTimer = Math.max(p.burnTimer, 1.6);
     }
@@ -517,7 +524,11 @@ export function tryFireActiveWeaponImpl(this: WorldSim, p: SimPlayerState = this
   const hasEaglePrecision = this.activeBuffIds.includes('eagle_precision');
   const hasRicochetMastery = this.activeBuffIds.includes('ricochet_mastery');
 
-  p.energy = Math.max(0, p.energy - cost);
+  if (cost > 0) {
+    p.energy = Math.max(0, p.energy - cost);
+    p.energyRegenDelayTimer = 2.0;
+    p.energyRegenAccum = 0;
+  }
   const effectiveFireRate = w.fireRate * (hasGaleReflex ? 1.22 : 1);
   p.fireCooldownTimer = 1 / effectiveFireRate;
   p.recoilTimer = 0.12;

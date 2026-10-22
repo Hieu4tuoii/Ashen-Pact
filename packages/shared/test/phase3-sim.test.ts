@@ -312,13 +312,13 @@ describe('Phase 3 Weapons, Enemies, Elites & Boss Mục Vương', () => {
     const treasureRoom = sim.dungeon.rooms.find((r) => r.type === 'treasure')!;
     const shrineRoom = sim.dungeon.rooms.find((r) => r.type === 'shrine')!;
 
-    // 1. Enter Merchant room, buy Armor Upgrade (+2 maxArmor), leave and re-enter -> remains purchased
+    // 1. Enter Merchant room, buy Armor Upgrade (+2 maxArmor, cost 65 Gold), leave and re-enter -> remains purchased
     sim.enterRoom(merchantRoom.id);
     expect(sim.worldItems.length).toBe(3);
     const armorOffer = sim.worldItems.find((it) => it.kind === 'armor_upgrade')!;
     expect(armorOffer).toBeDefined();
     const prevMaxArmor = sim.player.maxArmor;
-    sim.player.gold = 100;
+    sim.player.gold = 120;
     expect(sim.pickupOrBuyWorldItem(armorOffer)).toBe(true);
     expect(sim.player.maxArmor).toBe(prevMaxArmor + 2);
     expect(sim.player.gold).toBe(55);
@@ -342,16 +342,18 @@ describe('Phase 3 Weapons, Enemies, Elites & Boss Mục Vương', () => {
     expect(sim.worldItems.length).toBe(1);
     expect(sim.worldItems[0]!.weaponId).toBe(droppedWepId);
 
-    // 3. Shrine exchanges 25 Gold when player has gold, grants floor buff + weapon drop
+    // 3. Shrine exchanges 40 Gold when player has gold, grants floor buff + +15 maxEnergy (no free weapon drop)
     sim.enterRoom(shrineRoom.id);
     const shrine = sim.npcEntities.find((n) => n.kind === 'shrine')!;
     const goldBefore = sim.player.gold;
     const hpBefore = sim.player.hp;
+    const maxEnergyBefore = sim.player.maxEnergy;
     expect(sim.activateShrine(shrine)).toBe(true);
-    expect(sim.player.gold).toBe(goldBefore - 25);
+    expect(sim.player.gold).toBe(goldBefore - 40);
     expect(sim.player.hp).toBe(hpBefore);
+    expect(sim.player.maxEnergy).toBe(maxEnergyBefore + 15);
     expect(sim.activeBuffIds.length).toBeGreaterThanOrEqual(1);
-    expect(sim.worldItems.length).toBe(1);
+    expect(sim.worldItems.length).toBe(0);
   });
 
   it('applies eagle_precision, ricochet_mastery, gale_reflex, vanguard_fortress, and vanguard_charge buffs accurately', () => {
@@ -443,4 +445,3 @@ describe('Phase 3 Weapons, Enemies, Elites & Boss Mục Vương', () => {
     expect(sim.player.x).toBeGreaterThan(startX + 60);
   });
 });
-

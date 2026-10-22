@@ -165,8 +165,8 @@ describe('Phase 1 — Player Movement, Acceleration, Dash i-frames & LocalTransp
     // Damage during dash i-frames is completely ignored
     const damaged = sim.applyDamageToPlayer(3, Math.PI, 150);
     expect(damaged).toBe(false);
-    expect(sim.player.armor).toBe(6);
-    expect(sim.player.hp).toBe(8);
+    expect(sim.player.armor).toBe(5);
+    expect(sim.player.hp).toBe(6);
   });
 });
 
@@ -180,28 +180,28 @@ describe('Phase 1 — HP, Armor Regen (Thiết Vệ 2.0s), Knockback & 4 Sample 
       autoRespawnWaves: false,
     });
 
-    // Hit for 4 damage -> Armor drops from 6 to 2, HP stays 8
+    // Hit for 4 damage -> Armor drops from 5 to 1, HP stays 6
     expect(sim.applyDamageToPlayer(4, 0, 120)).toBe(true);
-    expect(sim.player.armor).toBe(2);
-    expect(sim.player.hp).toBe(8);
+    expect(sim.player.armor).toBe(1);
+    expect(sim.player.hp).toBe(6);
     expect(sim.player.kbVx).toBeGreaterThan(0);
 
-    // Wait 1.5s -> Armor still 2 (delay is 2.0s)
+    // Wait 1.5s -> Armor still 1 (delay is 4.5s)
     for (let i = 0; i < 90; i++) {
       sim.step(SIM_STEP_SEC);
     }
-    expect(sim.player.armor).toBe(2);
+    expect(sim.player.armor).toBe(1);
 
-    // Wait another 3.0s (total 4.5s > 3.3s delay + 1.0s regen) -> Armor regenerates to 3
-    for (let i = 0; i < 180; i++) {
+    // Wait another 4.6s (total 6.1s > 4.5s delay + 1.54s regen @ 0.65/s) -> Armor regenerates to 2
+    for (let i = 0; i < 276; i++) {
       sim.step(SIM_STEP_SEC);
     }
-    expect(sim.player.armor).toBe(3);
+    expect(sim.player.armor).toBe(2);
 
-    // Hit for 5 damage -> absorbs remaining 3 Armor and deals 2 HP damage (HP 8 -> 6)
+    // Hit for 5 damage -> absorbs remaining 2 Armor and deals 3 HP damage (HP 6 -> 3)
     expect(sim.applyDamageToPlayer(5, 0, 100)).toBe(true);
     expect(sim.player.armor).toBe(0);
-    expect(sim.player.hp).toBe(6);
+    expect(sim.player.hp).toBe(3);
   });
 
   it('cycles all 4 sample weapons, destroys enemy bullets with Knight Sword (+ Shield synergy), and reuses pooled projectiles', () => {

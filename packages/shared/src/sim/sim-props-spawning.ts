@@ -665,30 +665,34 @@ export function damagePropImpl(this: WorldSim, prop: SimPropState, amount: numbe
     });
 
     const ang = this.rng.nextFloat(-Math.PI, Math.PI);
-    this.pickups.push(
-      this.acquirePickup({
-        id: ++this.nextEntityId,
-        kind: 'gold',
-        x: prop.x,
-        y: prop.y,
-        vx: Math.cos(ang) * 75,
-        vy: Math.sin(ang) * 75,
-        amount: 4,
-        ttlSec: 12,
-      }),
-    );
-    this.pickups.push(
-      this.acquirePickup({
-        id: ++this.nextEntityId,
-        kind: 'energy',
-        x: prop.x,
-        y: prop.y,
-        vx: -Math.cos(ang) * 75,
-        vy: -Math.sin(ang) * 75,
-        amount: 6,
-        ttlSec: 12,
-      }),
-    );
+    if (this.rng.chance(0.15)) {
+      this.pickups.push(
+        this.acquirePickup({
+          id: ++this.nextEntityId,
+          kind: 'gold',
+          x: prop.x,
+          y: prop.y,
+          vx: Math.cos(ang) * 75,
+          vy: Math.sin(ang) * 75,
+          amount: this.rng.nextInt(1, 2),
+          ttlSec: 12,
+        }),
+      );
+    }
+    if (this.rng.chance(0.2)) {
+      this.pickups.push(
+        this.acquirePickup({
+          id: ++this.nextEntityId,
+          kind: 'energy',
+          x: prop.x,
+          y: prop.y,
+          vx: -Math.cos(ang) * 75,
+          vy: -Math.sin(ang) * 75,
+          amount: 5,
+          ttlSec: 12,
+        }),
+      );
+    }
   }
 }
 

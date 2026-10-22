@@ -71,10 +71,12 @@ describe('Phase 2 — Destructible Props & Chain-Reaction Explosive Barrels', ()
       autoRespawnWaves: false,
     });
 
-    // 1. Destructible wooden crate drops gold + energy when broken
-    const crate = sim.spawnProp('wooden_crate', 300, 300);
-    sim.damageProp(crate, 25, 'none');
-    expect(crate.hp).toBe(0);
+    // 1. Destructible wooden crates drop gold (15% chance) + energy (20% chance) when broken
+    for (let i = 0; i < 20; i++) {
+      const crate = sim.spawnProp('wooden_crate', 300, 300);
+      sim.damageProp(crate, 25, 'none');
+      expect(crate.hp).toBe(0);
+    }
     expect(sim.pickups.some((p) => p.kind === 'gold')).toBe(true);
     expect(sim.pickups.some((p) => p.kind === 'energy')).toBe(true);
 

@@ -74,8 +74,8 @@ export const ALL_CHARACTER_IDS: readonly CharacterId[] = [
 
 export const PLAYER_RADIUS = 13;
 export const DASH_DURATION_SEC = 0.22;
-export const DASH_IFRAME_SEC = 0.2;
-export const DASH_COOLDOWN_SEC = 1.2;
+export const DASH_IFRAME_SEC = 0.16;
+export const DASH_COOLDOWN_SEC = 1.85;
 export const DASH_SPEED_MULTIPLIER = 2.6;
 export const ENEMY_SPAWN_WARMUP_SEC = 0.8;
 export const SPORE_EXPLOSION_RADIUS = 68;
@@ -335,6 +335,8 @@ export interface SimPlayerState {
   armorRegenPerSec: number;
   armorRegenTimer: number;
   armorRegenAccum: number;
+  energyRegenDelayTimer: number;
+  energyRegenAccum: number;
   dashTimer: number;
   dashCooldownTimer: number;
   dashDirX: number;

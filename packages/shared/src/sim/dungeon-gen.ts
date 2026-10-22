@@ -410,6 +410,7 @@ export function generateDungeonFloor(
     } else if (room.type === 'merchant') {
       room.waves = [];
       room.wavesTotal = 0;
+      const floorScale = 1 + (localFloor - 1) * 0.25;
       const shopRarity: WeaponRarity = localFloor === 2 ? 'epic' : 'rare';
       const shopWeaponId = rollWeaponForRarity(rng, shopRarity, biome);
       const wDef = WEAPONS[shopWeaponId]!;
@@ -419,7 +420,7 @@ export function generateDungeonFloor(
           kind: 'health_potion',
           nameVi: 'Bình Máu Rừng Cổ (+3 HP)',
           descriptionVi: 'Hồi phục ngay 3 HP cho người chơi.',
-          costGold: 25,
+          costGold: Math.round(30 * floorScale),
           purchased: false,
         },
         {
@@ -427,7 +428,7 @@ export function generateDungeonFloor(
           kind: 'weapon',
           nameVi: wDef.nameVi,
           descriptionVi: `Vũ khí ${wDef.rarity.toUpperCase()} · DMG ${wDef.damage}`,
-          costGold: localFloor === 2 ? 60 : 40,
+          costGold: Math.round((shopRarity === 'epic' ? 85 : 55) * floorScale),
           weaponId: shopWeaponId,
           rarity: shopRarity,
           purchased: false,
@@ -437,7 +438,7 @@ export function generateDungeonFloor(
           kind: 'armor_upgrade',
           nameVi: 'Giáp Cổ Ngữ (+2 Giáp)',
           descriptionVi: 'Tăng +2 Giáp tối đa và hồi đầy Giáp.',
-          costGold: 45,
+          costGold: Math.round(65 * floorScale),
           purchased: false,
         },
       ];
@@ -464,7 +465,7 @@ export function generateDungeonFloor(
         room.chestWeaponId = rollWeaponForRarity(challengeRng, room.chestRarity, biome);
       } else {
         combatRoomIndex += 1;
-        const waveCount = 4;
+        const waveCount = localFloor === 1 && combatRoomIndex === 1 ? 2 : 3;
         room.waves = generateRoomWaves(
           rng,
           waveCount,
@@ -540,7 +541,7 @@ function generateRoomWaves(
         : BIOME1_COMBAT_ENEMIES;
 
   for (let w = 1; w <= waveCount; w++) {
-    const baseEnemyCount = Math.min(7, 5 + Math.floor((w + floorNumber - 1) / 2));
+    const baseEnemyCount = Math.min(11, 7 + Math.floor((w + floorNumber) * 0.8));
     const enemyCount =
       playerCount === 1
         ? baseEnemyCount
@@ -572,6 +573,30 @@ function generateRoomWaves(
       const nonTurret = enemies.find((e) => e.defId !== 'thorn_turret') ?? enemies[0]!;
       nonTurret.isElite = true;
       nonTurret.eliteModifier = rng.pick(ELITE_MODIFIERS);
+    }
+
+    // On deeper floors (floor 2 or Biome 2-3), final wave of Elite/Challenge or Portal room spawns 2 Elites + 2 escort enemies
+    if (
+      (floorNumber >= 2 || biome >= 2) &&
+      (guaranteeEliteOnFinalWave || guaranteeEliteEveryWave) &&
+      w === waveCount
+    ) {
+      let currentElites = enemies.filter((e) => e.isElite).length;
+      for (let i = 0; i < enemies.length && currentElites < 2; i++) {
+        const cand = enemies[i]!;
+        if (!cand.isElite && cand.defId !== 'thorn_turret') {
+          cand.isElite = true;
+          cand.eliteModifier = rng.pick(ELITE_MODIFIERS);
+          currentElites += 1;
+        }
+      }
+      for (let esc = 0; esc < 2; esc++) {
+        enemies.push({
+          defId: enemyPool[(roomDifficultyIndex + w + esc) % enemyPool.length]!,
+          isElite: false,
+          eliteModifier: null,
+        });
+      }
     }
 
     waves.push({

@@ -489,8 +489,32 @@ export function handleEnemyKilledImpl(
   }
 
   const isCoop = allPlayers.length > 1;
-  const dropMult = enemy.isBoss ? 6 : enemy.isElite ? 3 : 1;
-  for (let k = 0; k < 2 * dropMult; k++) {
+  const isSummonedSplit =
+    enemy.defId === 'mini_slime' ||
+    enemy.defId === 'kryssa_clone' ||
+    enemy.defId === 'spore_guardian';
+
+  let energyOrbCount = 0;
+  let energyOrbAmount = 6;
+  if (enemy.defId === 'kryssa_clone' || enemy.defId === 'spore_guardian') {
+    energyOrbCount = 0;
+  } else if (enemy.defId === 'mini_slime') {
+    if (this.rng.chance(0.25)) {
+      energyOrbCount = 1;
+      energyOrbAmount = 4;
+    }
+  } else if (enemy.isBoss) {
+    energyOrbCount = 5;
+    energyOrbAmount = 8;
+  } else if (enemy.isElite) {
+    energyOrbCount = 2;
+    energyOrbAmount = 8;
+  } else if (this.rng.chance(0.55)) {
+    energyOrbCount = 1;
+    energyOrbAmount = 6;
+  }
+
+  for (let k = 0; k < energyOrbCount; k++) {
     const ang = this.rng.nextFloat(-Math.PI, Math.PI);
     const spd = this.rng.nextFloat(60, 130);
     for (let pIdx = 0; pIdx < allPlayers.length; pIdx++) {
@@ -504,7 +528,7 @@ export function handleEnemyKilledImpl(
           y: enemy.y,
           vx: Math.cos(instAng) * spd,
           vy: Math.sin(instAng) * spd,
-          amount: 8,
+          amount: energyOrbAmount,
           ttlSec: 14,
           ownerPlayerId: isCoop ? pl.id : undefined,
         }),
@@ -551,24 +575,43 @@ export function handleEnemyKilledImpl(
     );
   }
 
-  for (let k = 0; k < dropMult; k++) {
-    const coinAng = this.rng.nextFloat(-Math.PI, Math.PI);
-    for (let pIdx = 0; pIdx < allPlayers.length; pIdx++) {
-      const pl = allPlayers[pIdx]!;
-      const instAng = coinAng + pIdx * 0.45;
-      this.pickups.push(
-        this.acquirePickup({
-          id: ++this.nextEntityId,
-          kind: 'gold',
-          x: enemy.x,
-          y: enemy.y,
-          vx: Math.cos(instAng) * 90,
-          vy: Math.sin(instAng) * 90,
-          amount: 5,
-          ttlSec: 14,
-          ownerPlayerId: isCoop ? pl.id : undefined,
-        }),
-      );
+  if (!isSummonedSplit) {
+    const goldDrops: number[] = [];
+    if (enemy.isBoss) {
+      const totalGold = this.rng.nextInt(20, 25);
+      const baseAmt = Math.floor(totalGold / 5);
+      const rem = totalGold % 5;
+      for (let k = 0; k < 5; k++) {
+        goldDrops.push(baseAmt + (k < rem ? 1 : 0));
+      }
+    } else if (enemy.isElite) {
+      const totalGold = this.rng.nextInt(6, 9);
+      const half = Math.floor(totalGold / 2);
+      goldDrops.push(half, totalGold - half);
+    } else if (this.rng.chance(0.6)) {
+      goldDrops.push(this.rng.nextInt(1, 2));
+    }
+
+    for (let k = 0; k < goldDrops.length; k++) {
+      const coinAmt = goldDrops[k]!;
+      const coinAng = this.rng.nextFloat(-Math.PI, Math.PI);
+      for (let pIdx = 0; pIdx < allPlayers.length; pIdx++) {
+        const pl = allPlayers[pIdx]!;
+        const instAng = coinAng + pIdx * 0.45;
+        this.pickups.push(
+          this.acquirePickup({
+            id: ++this.nextEntityId,
+            kind: 'gold',
+            x: enemy.x,
+            y: enemy.y,
+            vx: Math.cos(instAng) * 90,
+            vy: Math.sin(instAng) * 90,
+            amount: coinAmt,
+            ttlSec: 14,
+            ownerPlayerId: isCoop ? pl.id : undefined,
+          }),
+        );
+      }
     }
   }
 }
@@ -867,7 +910,7 @@ export function applyDamageToPlayerImpl(
     p.armorRegenAccum = 0;
   }
   p.hurtFlashTimer = 0.16;
-  p.invulnerableTimer = isDotTick ? Math.max(p.invulnerableTimer, 0.3) : 0.6;
+  p.invulnerableTimer = isDotTick ? Math.max(p.invulnerableTimer, 0.3) : 0.35;
 
   const kbX = Math.cos(hitAngleRad) * knockback * 0.7;
   const kbY = Math.sin(hitAngleRad) * knockback * 0.7;
@@ -894,7 +937,7 @@ export function applyDamageToPlayerImpl(
   });
 
   if (p.hp <= 0) {
-    if (this.autoRevivePlayer) {
+    if (this.inHub || this.autoRevivePlayer) {
       p.hp = p.maxHp;
       p.armor = p.maxArmor;
       p.invulnerableTimer = 1.2;

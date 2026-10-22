@@ -90,19 +90,19 @@ describe('Phase P11 — Step 2: Data-Driven Difficulty Levers, Boss Drama & Pres
     const challenge2 = floor2.rooms.find((r) => r.isChallenge)!;
     expect(challenge2.chestRarity).toBe('legendary');
 
-    // Shop prices tightened
+    // Shop prices tightened and scaled by floorScale (1 + (localFloor - 1) * 0.25)
     const shop1 = floor1.rooms.find((r) => r.type === 'merchant')!;
     const byKind1 = Object.fromEntries(shop1.shopOffers.map((it) => [it.kind, it.costGold]));
-    expect(byKind1.health_potion).toBe(25);
-    expect(byKind1.weapon).toBe(40);
-    expect(byKind1.armor_upgrade).toBe(45);
+    expect(byKind1.health_potion).toBe(30);
+    expect(byKind1.weapon).toBe(55);
+    expect(byKind1.armor_upgrade).toBe(65);
 
     const shop2 = floor2.rooms.find((r) => r.type === 'merchant')!;
     const byKind2 = Object.fromEntries(shop2.shopOffers.map((it) => [it.kind, it.costGold]));
-    expect(byKind2.weapon).toBe(60);
+    expect(byKind2.weapon).toBe(Math.round(85 * 1.25));
   });
 
-  it('triggers overlapping wave early when <= 25% of current wave remains or after 12s (capped at 2 active waves)', () => {
+  it('triggers overlapping wave early when <= 30% of current wave remains or after 9.5s (capped at 2 active waves)', () => {
     const sim = new WorldSim({
       seed: 2026,
       spawnInitialWave: false,
@@ -120,7 +120,7 @@ describe('Phase P11 — Step 2: Data-Driven Difficulty Levers, Boss Drama & Pres
       sim.step(SIM_STEP_SEC);
     }
 
-    // Kill all but 1 enemy (1 / 4 = 25% <= 25%)
+    // Kill all but 1 enemy (<= 30%)
     for (let i = 1; i < wave1Enemies.length; i++) {
       const e = wave1Enemies[i]!;
       sim.applyDamageToEnemy(e, e.hp + 999, false, 'none', 0, 0);
@@ -190,12 +190,12 @@ describe('Phase P11 — Step 2: Data-Driven Difficulty Levers, Boss Drama & Pres
     }
   });
 
-  it('tightens armorRegenDelaySec (+0.5s) and revives downed co-op allies at 35% HP on room clear', () => {
-    expect(CHARACTERS.vanguard.armorRegenDelaySec).toBeCloseTo(3.3, 2);
-    expect(CHARACTERS.ranger.armorRegenDelaySec).toBeCloseTo(4.0, 2);
-    expect(CHARACTERS.elementalist.armorRegenDelaySec).toBeCloseTo(4.0, 2);
-    expect(CHARACTERS.druid.armorRegenDelaySec).toBeCloseTo(4.0, 2);
-    expect(CHARACTERS.engineer.armorRegenDelaySec).toBeCloseTo(4.0, 2);
+  it('tightens armorRegenDelaySec (4.5s Vanguard / 5.2s others) and revives downed co-op allies at 35% HP on room clear', () => {
+    expect(CHARACTERS.vanguard.armorRegenDelaySec).toBeCloseTo(4.5, 2);
+    expect(CHARACTERS.ranger.armorRegenDelaySec).toBeCloseTo(5.2, 2);
+    expect(CHARACTERS.elementalist.armorRegenDelaySec).toBeCloseTo(5.2, 2);
+    expect(CHARACTERS.druid.armorRegenDelaySec).toBeCloseTo(5.2, 2);
+    expect(CHARACTERS.engineer.armorRegenDelaySec).toBeCloseTo(5.2, 2);
 
     const sim = new WorldSim({
       seed: 4040,
@@ -211,11 +211,13 @@ describe('Phase P11 — Step 2: Data-Driven Difficulty Levers, Boss Drama & Pres
     p2.lifeState = 'ghost';
     p2.hp = 0;
 
-    // Force final wave and kill all enemies to trigger room clear
+    // Force final wave and kill all enemies (including split mini_slimes) to trigger room clear
     combatRoom.wavesSpawned = combatRoom.wavesTotal;
-    for (const e of [...sim.enemies]) {
-      if (!e.isDummy) {
-        sim.applyDamageToEnemy(e, e.hp + 9999, false, 'none', 0, 0);
+    for (let pass = 0; pass < 2; pass++) {
+      for (const e of [...sim.enemies]) {
+        if (!e.isDummy && e.hp > 0) {
+          sim.applyDamageToEnemy(e, e.hp + 9999, false, 'none', 0, 0);
+        }
       }
     }
     sim.step(SIM_STEP_SEC);

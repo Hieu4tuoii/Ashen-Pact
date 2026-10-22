@@ -213,6 +213,7 @@ export function createImpl(this: GameScene): void {
       includeTrainingDummy: true,
       includeProps: true,
       autoRespawnWaves: false,
+      autoRevivePlayer: false,
     });
     if (allowShortcuts && searchParams.get('hub') === '1') {
       this.transport.getSim().enterHub();

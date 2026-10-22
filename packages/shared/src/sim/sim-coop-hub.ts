@@ -45,6 +45,8 @@ export function createPlayerStateImpl(this: WorldSim,
     armorRegenPerSec: cDef.armorRegenPerSec,
     armorRegenTimer: 0,
     armorRegenAccum: 0,
+    energyRegenDelayTimer: 0,
+    energyRegenAccum: 0,
     dashTimer: 0,
     dashCooldownTimer: 0,
     dashDirX: 1,
@@ -348,6 +350,8 @@ export function applyCharacterToPlayerStateImpl(this: WorldSim,
   p.moveSpeed = cDef.moveSpeed;
   p.armorRegenDelaySec = cDef.armorRegenDelaySec;
   p.armorRegenPerSec = cDef.armorRegenPerSec;
+  p.energyRegenDelayTimer = 0;
+  p.energyRegenAccum = 0;
   p.weaponSlots = [cDef.starterWeaponId, 'rusty_pistol'].slice(0, MAX_WEAPON_SLOTS);
   p.activeWeaponSlot = 0;
   p.weaponPickupLockTimer = 0;
