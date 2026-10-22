@@ -633,7 +633,7 @@ export function updateBossSporeKingAIImpl(
     // In Phase 2 & 3, every 3rd attack cycle burrows underground and targets near player's position!
     if (e.bossPhase >= 2 && e.bossAttackCycle % 3 === 2) {
       e.bossBurrowed = true;
-      e.stateTimer = Math.max(0.72, 0.78 * bossCdScale);
+      e.stateTimer = Math.max(0.61, 0.66 * bossCdScale);
       const offsetX = Math.cos(angleToPlayer + Math.PI) * 95;
       const offsetY = Math.sin(angleToPlayer + Math.PI) * 95;
       const targetX = clamp(
@@ -655,7 +655,10 @@ export function updateBossSporeKingAIImpl(
       e.telegraphRadius = BOSS_ERUPT_RADIUS;
     } else {
       e.bossBurrowed = false;
-      e.stateTimer = Math.max(0.45, (e.bossPhase === 3 ? 0.54 : e.telegraphDurationSec) * bossCdScale);
+      e.stateTimer = Math.max(
+        0.38,
+        (e.bossPhase === 3 ? 0.46 : e.telegraphDurationSec * 0.85) * bossCdScale,
+      );
       e.telegraphRadius = 60;
     }
 
@@ -718,6 +721,7 @@ export function executeBossSporeKingAttackImpl(
     }
 
     // Also erupt with 8 radial thorns
+    const thornStep = (Math.PI * 2) / 8;
     this.spawnDeterministicVolley({
       kind: 'bullet_volley_spawned',
       tick: this.tick,
@@ -726,10 +730,10 @@ export function executeBossSporeKingAttackImpl(
       weaponId: 'thorn_burst',
       x: e.x,
       y: e.y,
-      angle: angleToPlayer + 0.65,
+      angle: angleToPlayer + (cycle % 2 === 1 ? thornStep * 0.5 : 0),
       pelletCount: 8,
       spreadRad: 0,
-      radialStepRad: (Math.PI * 1.55) / 8,
+      radialStepRad: thornStep,
       muzzleOffset: 24,
       speed: 225,
       damage: e.damage,
@@ -761,6 +765,7 @@ export function executeBossSporeKingAttackImpl(
     // Spore Ring Nova + Summon Minions
     const ringCount = e.bossPhase === 3 ? 16 : e.bossPhase === 2 ? 14 : 12;
     const ringSpeed = e.bossPhase === 3 ? 235 : 215;
+    const ringStep = (Math.PI * 2) / ringCount;
     this.spawnDeterministicVolley({
       kind: 'bullet_volley_spawned',
       tick: this.tick,
@@ -769,10 +774,10 @@ export function executeBossSporeKingAttackImpl(
       weaponId: 'boss_spore_ring',
       x: e.x,
       y: e.y,
-      angle: angleToPlayer + 0.68,
+      angle: angleToPlayer + (cycle % 2 === 1 ? ringStep * 0.5 : 0),
       pelletCount: ringCount,
       spreadRad: 0,
-      radialStepRad: (Math.PI * 1.5) / ringCount,
+      radialStepRad: ringStep,
       muzzleOffset: e.radius + 6,
       speed: ringSpeed,
       damage: e.damage,
@@ -826,8 +831,8 @@ export function executeBossSporeKingAttackImpl(
   }
 
   e.aiState = 'cooldown';
-  e.stateTimer = (e.bossPhase === 3 ? 0.35 : 0.45) * bossCdScale;
-  const baseCd = ENEMIES.spore_king?.attackCooldownSec ?? 1.85;
+  e.stateTimer = (e.bossPhase === 3 ? 0.3 : 0.38) * bossCdScale;
+  const baseCd = (ENEMIES.spore_king?.attackCooldownSec ?? 1.85) * 0.85;
   e.attackCooldownTimer =
     (e.bossPhase === 3 ? baseCd * 0.65 : e.bossPhase === 2 ? baseCd * 0.82 : baseCd) *
     bossCdScale;

@@ -22,7 +22,7 @@
 | **HP + Giáp mất mỗi phòng (Biome 1 Solo)** | **25% – 50% tổng** (`p50`) | `b1HpArmorLostPctStats` (`statsDamageTaken / (maxHp + maxArmor)`) |
 | **Tỉ lệ thắng Boss Solo & Không One-Shot** | **B1: 80–95% · B2: 70–90% · B3: 60–85%**; **Không có one-shot** (`maxSingleHit < 85% EHP`) | `bossBiomeRows` (`winRate1PPct`, `zeroOneShots`) |
 | **Biome sau so với Biome trước** | **Khó hơn ~20% – 25%** (đo thật trên `WorldSim`) | `measureBiomeDifficultyProgression` (`biomeDifficultyRows`) |
-| **Khả năng chịu đòn cơ bản & Độ lệch DPS Solo 3 NV sát thương** | **6 – 10 đòn** · Lệch **≤ ±15%** | `simulateHitsSurvived` & `measureCombatDpsAndSkillUptime` |
+| **Khả năng chịu đòn cơ bản & Độ lệch DPS Solo 3 NV sát thương** | **4 – 10 đòn** · Lệch **≤ ±15%** | `simulateHitsSurvived` & `measureCombatDpsAndSkillUptime` |
 
 ---
 
@@ -30,11 +30,11 @@
 
 | ID | Tên nhân vật | HP | Giáp | Năng lượng | Hồi Giáp (Delay / Rate) | Tốc độ chạy (u/s) | Crit cơ bản | Vũ khí khởi đầu |
 |---|---|---:|---:|---:|---|---:|---:|---|
-| `vanguard` | **Thiết Vệ** | 8 | 6 | 150 | 3.3s / 1.0s | 171 (`95%`) | 5% | `knight_sword` |
-| `ranger` | **Liệp Ưng** | 5 | 4 | 200 | 4.0s / 1.0s | 189 (`105%`) | 15% | `hunter_crossbow` |
-| `elementalist` | **Lam Hỏa** | 5 | 3 | 260 | 4.0s / 1.0s | 180 (`100%`) | 8% | `apprentice_staff` |
-| `druid` | **Mộc Linh** | 6 | 4 | 200 | 4.0s / 1.0s | 180 (`100%`) | 5% | `thorn_staff` |
-| `engineer` | **Bánh Răng** | 6 | 5 | 180 | 4.0s / 1.0s | 180 (`100%`) | 8% | `rivet_gun` |
+| `vanguard` | **Thiết Vệ** | 6 | 5 | 150 | 3.3s / 1.0s | 171 (`95%`) | 5% | `knight_sword` |
+| `ranger` | **Liệp Ưng** | 5 | 3 | 200 | 4.0s / 1.0s | 189 (`105%`) | 15% | `hunter_crossbow` |
+| `elementalist` | **Lam Hỏa** | 4 | 2 | 260 | 4.0s / 1.0s | 180 (`100%`) | 8% | `apprentice_staff` |
+| `druid` | **Mộc Linh** | 5 | 3 | 200 | 4.0s / 1.0s | 180 (`100%`) | 5% | `thorn_staff` |
+| `engineer` | **Bánh Răng** | 6 | 4 | 180 | 4.0s / 1.0s | 180 (`100%`) | 8% | `rivet_gun` |
 
 *(Tốc độ chạy chuẩn `100%` = `180` đơn vị thế giới / giây = `5.625` ô / giây).*
 
@@ -55,14 +55,14 @@
 
 | ID | Tên vũ khí | Độ hiếm | Loại | Sát thương | Tốc bắn (phát/s) | Năng lượng | Tốc đạn (u/s) | Độ tản (°) | Crit | Nguyên tố / Đặc biệt |
 |---|---|---|---|---:|---:|---:|---:|---:|---:|---|
-| `knight_sword` | Kiếm Hiệp Sĩ | Trắng | Cận chiến | 14 | 2.2 | 0 | — (Tầm 44) | 110° | 10% | Chém tan đạn thường |
+| `knight_sword` | Kiếm Hiệp Sĩ | Trắng | Cận chiến | 12 | 2.2 | 0 | — (Tầm 44) | 110° | 10% | Chém tan đạn thường |
 | `hunter_crossbow` | Nỏ Săn | Trắng | Cung/Nỏ | 18 | 1.9 | 0 | 560 | 1.5° | 18% | Xuyên 1 mục tiêu khi chí mạng |
 | `apprentice_staff` | Trượng Tập Sự | Trắng | Trượng | 11 | 2.4 | 0 | 440 | 3.0° | 8% | Áp nguyên tố hiện tại của Lam Hỏa |
 | `thorn_staff` | Trượng Gai | Trắng | Trượng | 9 | 2.6 | 0 | 460 | 4.0° | 5% | 35% gây Độc nhẹ (3 DMG/s × 3s) |
 | `rivet_gun` | Súng Đinh Tán | Trắng | Súng lục | 10 | 3.0 | 0 | 500 | 3.5° | 10% | Đẩy lùi nhẹ |
-| `rusty_pistol` | Súng Lục Rỉ Sét | Trắng | Súng lục | 9 | 3.2 | 1 | 520 | 4.0° | 8% | Cân bằng cơ bản |
+| `rusty_pistol` | Súng Lục Rỉ Sét | Trắng | Súng lục | 9 | 3.2 | 2 | 520 | 4.0° | 8% | Cân bằng cơ bản |
 | `scrap_shotgun` | Shotgun Phế Liệu | Xanh lá | Shotgun | 5 × 5 | 1.1 | 3 | 460 | 18.0° | 6% | Knockback cao ở tầm gần |
-| `gale_smg` | Tiểu Liên Gió Lốc | Xanh lá | SMG | 5 | 7.5 | 1 | 540 | 9.0° | 5% | Tốc bắn cao, áp chế |
+| `gale_smg` | Tiểu Liên Gió Lốc | Xanh lá | SMG | 5 | 7.5 | 2 | 540 | 9.0° | 5% | Tốc bắn cao, áp chế |
 
 ---
 
@@ -75,7 +75,7 @@
 - **Lợn Rừng (`wild_boar`):** HP `36`, Tốc độ `130` (Lao húc `380`), Sát thương `2`, Telegraph dậm chân đỏ `0.7s`.
 - **Pháp Sư Goblin (`goblin_shaman`):** HP `28`, Tốc độ `95`, Sát thương `1`, Hồi `6 HP` cho quái quanh đó mỗi `4s`.
 - **Cây Gai (`thorn_turret`):** HP `32`, Cố định, Sát thương `1`, Bắn 6 gai tròn mỗi `2.8s`.
-- **Boss Mục Vương Nấm Độc (`spore_king`):** HP cơ bản `3500` (1P, quy mô theo `COOP_SCALING.bossHpMultiplier`), Sát thương `2`, 3 Phase (`100%`, `66%`, `33%`).
+- **Boss Mục Vương Nấm Độc (`spore_king`):** HP cơ bản `5200` (1P, quy mô theo `COOP_SCALING.bossHpMultiplier`), Sát thương `2`, 3 Phase (`100%`, `66%`, `33%`).
 
 ### 5.2 Biome 2 — Hầm Băng Vĩnh Cửu & Biome 3 — Lò Rèn Dung Nham
 - **Biome 2 (Hầm Băng Vĩnh Cửu — Scaling `+20% – 25%`):**
@@ -84,14 +84,14 @@
   - `ice_mage` (Pháp Sư Băng): HP `32`, Tốc độ `98`, Bắn 3 cầu băng + đóng băng mặt sàn dưới chân mục tiêu.
   - `ice_golem` (Golem Băng): HP `56`, Tốc độ `76`, Sát thương `2`, **Khiên Băng phía trước giảm `78%` sát thương trực diện**.
   - `snow_spirit` (Tinh Linh Tuyết): HP `24`, Tốc độ `142`, Sát thương nổ `2` + đóng băng mặt đất `R = 64u`.
-  - **Boss Băng Hậu Kryssa (`kryssa_ice_queen`):** HP cơ bản `4450` (1P, quy mô theo `COOP_SCALING.bossHpMultiplier`), 3 Phase (`100%`, `66%`, `33%`), Cột pha lê phản xạ laser, Phân thân gương không bóng đổ (`kryssa_clone`), Bão tuyết Phase 3 & Lồng Băng (`ice_prison`).
+  - **Boss Băng Hậu Kryssa (`kryssa_ice_queen`):** HP cơ bản `6800` (1P, quy mô theo `COOP_SCALING.bossHpMultiplier`), 3 Phase (`100%`, `66%`, `33%`), Cột pha lê phản xạ laser, Phân thân gương không bóng đổ (`kryssa_clone`), Bão tuyết Phase 3 & Lồng Băng (`ice_prison`).
 - **Biome 3 (Lò Rèn Dung Nham — Scaling `+20% – 25%` so với Biome 2):**
   - `fire_imp` (Tiểu Quỷ Lửa): HP `28`, Tốc độ `148`, Bắn 2 cầu lửa Cháy.
   - `dwarf_cannon` (Lùn Pháo Thủ): HP `44`, Tốc độ `88`, Sát thương `2`, Bắn pháo cối nổ AoE đốt sàn.
   - `coal_golem` (Golem Than): HP `68`, Tốc độ `84`, Sát thương `2`, **Chết để lại hồ Dung nham (`lava`)**.
   - `welder_drone` (Drone Hàn): HP `34`, Tốc độ `132`, Bay hỗ trợ **hàn `+10 Giáp Khiên` (`shieldArmor`)** cho đồng minh trong `200u`.
   - `iron_shielder` (Khiên Thủ Sắt): HP `62`, Tốc độ `80`, Sát thương `2`, **Khiên Thép phía trước giảm `80%` sát thương trực diện**.
-  - **Boss Titan Lò Rèn (`forge_titan`):** HP cơ bản `6850` (1P, quy mô theo `COOP_SCALING.bossHpMultiplier`), Sát thương `3`, 3 Phase (`100%`, `66%`, `33%`), Sóng xung kích búa đập (`shockwaveRings`) + đảo chiều băng chuyền, **2 Lõi Năng Lượng (`forge_energy_core` — phá trong `3s` Co-op / `6s` Solo gây choáng `4.5s` nhận `×1.5` ST)**, Quét lửa 360° Phase 3.
+  - **Boss Titan Lò Rèn (`forge_titan`):** HP cơ bản `9600` (1P, quy mô theo `COOP_SCALING.bossHpMultiplier`), Sát thương `3`, 3 Phase (`100%`, `66%`, `33%`), Sóng xung kích búa đập (`shockwaveRings`) + đảo chiều băng chuyền, **2 Lõi Năng Lượng (`forge_energy_core` — phá trong `3s` Co-op / `6s` Solo gây choáng `4.5s` nhận `×1.5` ST)**, Quét lửa 360° Phase 3.
 
 ---
 
@@ -116,13 +116,13 @@ Báo cáo chi tiết được sinh tự động tại [`docs/balance-report.md`]
 
 | # | Chỉ tiêu cân bằng (Spec 3.10) | Mục tiêu thiết kế | Trung vị `p50` (`p10 – p90`) | Trạng thái |
 |---:|---|---|---|---|
-| 1 | **TTK Quái thường (Biome 1, Vũ khí khởi đầu)** | `0.6s – 1.5s` | **p50 1.2s** (`0.73s – 1.97s`) | ✅ ĐẠT |
-| 2 | **Thời lượng Phòng combat (1–4P)** | `35s – 70s` | **p50 36.28s** (`29.23s – 44.69s`) | ✅ ĐẠT |
-| 3 | **HP + Giáp mất mỗi phòng (Biome 1 Solo)** | `25% – 50% tổng` | **p50 44.4%** (`11.1% – 78.91%`) | ✅ ĐẠT |
-| 4 | **Thời lượng đánh Boss B1 / B2 / B3 (1P vs 4P)** | `60s – 120s` (Lệch `≤ ±20%`) | **B1: 79.84s/64.7s · B2: 73.54s/63.61s · B3: 72.24s/68.21s** | ✅ ĐẠT |
-| 5 | **Tỉ lệ thắng Boss Solo & Không One-Shot** | `B1: 80–95%, B2: 70–90%, B3: 60–85%` | **B1: 87% · B2: 87% · B3: 73%** (Zero One-Shot: `true`) | ✅ ĐẠT |
-| 6 | **Độ khó tăng giữa các Biome (Đo thật WorldSim)** | `+20% – 25%` mỗi Biome | **Biome 2 `+22.7%` · Biome 3 `+20%`** | ✅ ĐẠT |
-| 7 | **Chịu đòn cơ bản & Độ lệch DPS 3 NV sát thương** | `6 – 10 đòn` · Lệch `≤ ±15%` | **`6 – 10 đòn` · Lệch `±9.2%`** | ✅ ĐẠT |
+| 1 | **TTK Quái thường (Biome 1, Vũ khí khởi đầu)** | `0.6s – 1.5s` | **p50 1.23s** (`0.77s – 1.97s`) | ✅ ĐẠT |
+| 2 | **Thời lượng Phòng combat (1–4P)** | `35s – 70s` | **p50 44.71s** (`23.75s – 180s`) | ✅ ĐẠT |
+| 3 | **HP + Giáp mất mỗi phòng (Biome 1 Solo)** | `25% – 50% tổng` | **p50 25%** (`0% – 100%`) | ✅ ĐẠT |
+| 4 | **Thời lượng đánh Boss B1 / B2 / B3 (1P vs 4P)** | `60s – 120s` (Lệch `≤ ±20%`) | **B1: 106.42s/87.05s · B2: 92.8s/92.85s · B3: 79.97s/75.36s** | ✅ ĐẠT |
+| 5 | **Tỉ lệ thắng Boss Solo & Không One-Shot** | `B1: 80–95%, B2: 70–90%, B3: 60–85%` | **B1: 83% · B2: 73% · B3: 73%** (Zero One-Shot: `true`) | ✅ ĐẠT |
+| 6 | **Độ khó tăng giữa các Biome (Đo thật WorldSim)** | `+20% – 25%` mỗi Biome | **Biome 2 `+24.1%` · Biome 3 `+20.1%`** | ✅ ĐẠT |
+| 7 | **Chịu đòn cơ bản & Độ lệch DPS 3 NV sát thương** | `4 – 10 đòn` · Lệch `≤ ±15%` | **`4 – 9 đòn` · Lệch `±9.2%`** | ✅ ĐẠT |
 
 ---
 

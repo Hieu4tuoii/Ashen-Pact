@@ -252,22 +252,22 @@ describe('Phase P11 — Step 2: Data-Driven Difficulty Levers, Boss Drama & Pres
     expect(boss.frozenTimer).toBeCloseTo(0.15, 2);
     boss.frozenTimer = 0;
 
-    // 2. Phase transition at <= 66% HP: 1.2s invulnerable, clears bullets within 280u, queues signature opener
+    // 2. Phase transition at <= 66% HP: 1.2s invulnerable, clears enemy bullets within 140px of player, queues signature opener
     sim.projectiles.push(
       sim.acquireProjectile({
         id: 99001,
-        ownerId: sim.player.id,
-        x: boss.x + 80,
-        y: boss.y,
-        vx: 100,
+        ownerId: boss.id,
+        x: sim.player.x + 80,
+        y: sim.player.y,
+        vx: -100,
         vy: 0,
         radius: 6,
         damage: 4,
         ttlSec: 2,
         isCrit: false,
-        team: 'player',
-        weaponId: 'hunter_crossbow',
-        angle: 0,
+        team: 'enemy',
+        weaponId: 'boss_spore_ring',
+        angle: Math.PI,
         knockback: 0,
         pierceRemaining: 0,
         bounceRemaining: 0,

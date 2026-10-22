@@ -476,7 +476,10 @@ export function updateBossForgeTitanAIImpl(
   );
   if (e.attackCooldownTimer <= 0 && !hasCloseShockwave) {
     e.aiState = 'telegraph';
-    e.stateTimer = Math.max(0.45, (e.bossPhase === 3 ? 0.54 : e.telegraphDurationSec) * bossCdScale);
+    e.stateTimer = Math.max(
+      0.38,
+      (e.bossPhase === 3 ? 0.46 : e.telegraphDurationSec * 0.85) * bossCdScale,
+    );
     e.telegraphAngle = angleToPlayer;
     e.telegraphRadius = 72;
     e.vx = 0;
@@ -540,6 +543,8 @@ export function executeBossForgeTitanAttackImpl(
   // 2. Magma Barrage Volley
   if (cycle % 2 === 1 || e.bossPhase === 3) {
     const barrageCount = e.bossPhase === 3 ? 12 : e.bossPhase === 2 ? 10 : 8;
+    const barrageStep = (Math.PI * 2) / barrageCount;
+    const barrageParity = (e.bossPhase === 3 ? cycle : Math.floor(cycle / 2)) % 2;
     this.spawnDeterministicVolley({
       kind: 'bullet_volley_spawned',
       tick: this.tick,
@@ -548,10 +553,10 @@ export function executeBossForgeTitanAttackImpl(
       weaponId: 'titan_magma_barrage',
       x: e.x,
       y: e.y,
-      angle: angleToPlayer + 0.74,
+      angle: angleToPlayer + (barrageParity === 1 ? barrageStep * 0.5 : 0),
       pelletCount: barrageCount,
       spreadRad: 0,
-      radialStepRad: (Math.PI * 1.49) / barrageCount,
+      radialStepRad: barrageStep,
       muzzleOffset: e.radius + 8,
       speed: 215,
       damage: e.damage,
@@ -569,6 +574,8 @@ export function executeBossForgeTitanAttackImpl(
 
   // 3. Phase 3 Overheat: 360-degree Rotating Flame Sweep
   if (e.bossPhase === 3 && cycle % 2 === 1) {
+    const sweepStep = (Math.PI * 2) / 8;
+    const sweepParity = Math.floor(cycle / 2) % 2;
     this.spawnDeterministicVolley({
       kind: 'bullet_volley_spawned',
       tick: this.tick,
@@ -577,10 +584,10 @@ export function executeBossForgeTitanAttackImpl(
       weaponId: 'titan_flame_sweep',
       x: e.x,
       y: e.y,
-      angle: angleToPlayer + 0.74,
-      pelletCount: 6,
+      angle: angleToPlayer + (sweepParity === 1 ? sweepStep * 0.5 : 0),
+      pelletCount: 8,
       spreadRad: 0,
-      radialStepRad: (Math.PI * 1.48) / 6,
+      radialStepRad: sweepStep,
       muzzleOffset: e.radius + 10,
       speed: 225,
       damage: e.damage,
@@ -597,8 +604,8 @@ export function executeBossForgeTitanAttackImpl(
   }
 
   e.aiState = 'cooldown';
-  e.stateTimer = (e.bossPhase === 3 ? 0.35 : 0.45) * bossCdScale;
-  const baseCd = ENEMIES.forge_titan?.attackCooldownSec ?? 1.9;
+  e.stateTimer = (e.bossPhase === 3 ? 0.3 : 0.38) * bossCdScale;
+  const baseCd = (ENEMIES.forge_titan?.attackCooldownSec ?? 1.9) * 0.85;
   e.attackCooldownTimer =
     (e.bossPhase === 3 ? baseCd * 0.65 : e.bossPhase === 2 ? baseCd * 0.82 : baseCd) *
     bossCdScale;

@@ -718,11 +718,15 @@ export function applyDotDamageToEnemyImpl(
   }
 }
 
-function clearBossNearbyProjectiles(sim: WorldSim, cx: number, cy: number, radius: number): void {
+function clearBossNearbyProjectiles(sim: WorldSim, bossX: number, bossY: number, radius = 140): void {
+  const players = sim.getAllPlayers();
   let writeIdx = 0;
   for (let i = 0; i < sim.projectiles.length; i++) {
     const b = sim.projectiles[i]!;
-    if (distance(cx, cy, b.x, b.y) <= radius) {
+    const nearAlivePlayer =
+      b.team === 'enemy' &&
+      players.some((pl) => pl.lifeState === 'alive' && distance(pl.x, pl.y, b.x, b.y) <= radius);
+    if (nearAlivePlayer) {
       b.ttlSec = 0;
       b.hitEntityIds.length = 0;
       sim.projectilePool.push(b);
@@ -732,36 +736,32 @@ function clearBossNearbyProjectiles(sim: WorldSim, cx: number, cy: number, radiu
   }
   sim.projectiles.length = writeIdx;
 
-  // Drop phase-break sustain orbs (Life Seed + Energy) right at active players so orbit isn't interrupted
-  const players = sim.getAllPlayers();
-  const isCoop = players.length > 1;
-  for (let i = 0; i < players.length; i++) {
-    const pl = players[i]!;
-    if (pl.lifeState !== 'alive') continue;
-    sim.pickups.push(
-      sim.acquirePickup({
-        id: ++sim.nextEntityId,
-        kind: 'life_seed',
-        x: pl.x,
-        y: pl.y,
-        vx: 0,
-        vy: 0,
-        amount: 2,
-        ttlSec: 22,
-        ownerPlayerId: isCoop ? pl.id : undefined,
-      }),
-    );
+  // Drop phase-break sustain orbs (1 Life Seed + 2 Energy orbs) around Boss position with outward scatter velocity
+  const baseAng = sim.rng.nextFloat(-Math.PI, Math.PI);
+  sim.pickups.push(
+    sim.acquirePickup({
+      id: ++sim.nextEntityId,
+      kind: 'life_seed',
+      x: bossX,
+      y: bossY,
+      vx: Math.cos(baseAng) * 85,
+      vy: Math.sin(baseAng) * 85,
+      amount: 1,
+      ttlSec: 22,
+    }),
+  );
+  for (let k = 0; k < 2; k++) {
+    const eAng = baseAng + ((k + 1) * (Math.PI * 2)) / 3;
     sim.pickups.push(
       sim.acquirePickup({
         id: ++sim.nextEntityId,
         kind: 'energy',
-        x: pl.x,
-        y: pl.y,
-        vx: 0,
-        vy: 0,
-        amount: 24,
+        x: bossX,
+        y: bossY,
+        vx: Math.cos(eAng) * 95,
+        vy: Math.sin(eAng) * 95,
+        amount: 8,
         ttlSec: 22,
-        ownerPlayerId: isCoop ? pl.id : undefined,
       }),
     );
   }
@@ -781,7 +781,7 @@ export function checkBossPhaseTransitionsImpl(this: WorldSim, e: SimEnemyState):
     e.vx = 0;
     e.vy = 0;
     e.bossBurrowed = false;
-    clearBossNearbyProjectiles(this, e.x, e.y, 280);
+    clearBossNearbyProjectiles(this, e.x, e.y, 140);
     if (e.defId === 'kryssa_ice_queen') {
       this.spawnKryssaMirrorClones(e);
     } else if (e.defId === 'forge_titan') {
@@ -814,7 +814,7 @@ export function checkBossPhaseTransitionsImpl(this: WorldSim, e: SimEnemyState):
     e.vx = 0;
     e.vy = 0;
     e.bossBurrowed = false;
-    clearBossNearbyProjectiles(this, e.x, e.y, 280);
+    clearBossNearbyProjectiles(this, e.x, e.y, 140);
     if (e.defId === 'kryssa_ice_queen') {
       this.blizzardVeilActive = true;
       this.map.applyBossPhase3BlizzardBorder();

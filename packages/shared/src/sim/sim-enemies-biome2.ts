@@ -583,7 +583,10 @@ export function updateBossKryssaAIImpl(
 
   if (e.attackCooldownTimer <= 0) {
     e.aiState = 'telegraph';
-    e.stateTimer = Math.max(0.45, (e.bossPhase === 3 ? 0.5 : e.telegraphDurationSec) * bossCdScale);
+    e.stateTimer = Math.max(
+      0.38,
+      (e.bossPhase === 3 ? 0.42 : e.telegraphDurationSec * 0.85) * bossCdScale,
+    );
     e.telegraphAngle = angleToPlayer;
     e.telegraphRadius = 56;
     e.vx = 0;
@@ -653,6 +656,8 @@ export function executeBossKryssaAttackImpl(
   // 2. Alternate cycle: Radial Frost Crystal Nova
   if (cycle % 2 === 1) {
     const ringCount = e.bossPhase === 3 ? 14 : 10;
+    const ringStep = (Math.PI * 2) / ringCount;
+    const novaParity = Math.floor(cycle / 2) % 2;
     this.spawnDeterministicVolley({
       kind: 'bullet_volley_spawned',
       tick: this.tick,
@@ -661,12 +666,12 @@ export function executeBossKryssaAttackImpl(
       weaponId: 'kryssa_frost_nova',
       x: e.x,
       y: e.y,
-      angle: angleToPlayer + 0.58,
+      angle: angleToPlayer + (novaParity === 1 ? ringStep * 0.5 : 0),
       pelletCount: ringCount,
       spreadRad: 0,
-      radialStepRad: (Math.PI * 1.58) / ringCount,
+      radialStepRad: ringStep,
       muzzleOffset: e.radius + 6,
-      speed: 220,
+      speed: 250,
       damage: e.damage,
       radius: 5.5,
       knockback: 90,
@@ -696,8 +701,8 @@ export function executeBossKryssaAttackImpl(
   }
 
   e.aiState = 'cooldown';
-  e.stateTimer = (e.bossPhase === 3 ? 0.34 : 0.44) * bossCdScale;
-  const baseCd = ENEMIES.kryssa_ice_queen?.attackCooldownSec ?? 1.75;
+  e.stateTimer = (e.bossPhase === 3 ? 0.29 : 0.37) * bossCdScale;
+  const baseCd = (ENEMIES.kryssa_ice_queen?.attackCooldownSec ?? 1.75) * 0.85;
   e.attackCooldownTimer =
     (e.bossPhase === 3 ? baseCd * 0.66 : e.bossPhase === 2 ? baseCd * 0.82 : baseCd) *
     bossCdScale;

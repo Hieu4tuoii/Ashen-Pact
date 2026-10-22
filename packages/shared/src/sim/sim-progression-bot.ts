@@ -347,6 +347,11 @@ export function updateCurrentRoomProgressionImpl(this: WorldSim, dtSec: number):
 export function stepBotAutoPlayImpl(this: WorldSim, _dtSec: number): void {
   const p = this.player;
   p.godMode = true;
+  if (p.hp <= 0 || p.lifeState !== 'alive') {
+    p.hp = p.maxHp;
+    p.armor = p.maxArmor;
+    p.lifeState = 'alive';
+  }
   p.energy = p.maxEnergy;
 
   if (this.inHub) {
@@ -365,13 +370,22 @@ export function stepBotAutoPlayImpl(this: WorldSim, _dtSec: number): void {
     return;
   }
 
-  // Equip best ranged weapon in slots
+  // Equip best ranged weapon in slots (preferring 0-energy backup when energy is low to allow regen)
   let bestSlot = p.activeWeaponSlot;
   let bestScore = -1;
   for (let s = 0; s < p.weaponSlots.length; s++) {
     const wid = p.weaponSlots[s]!;
     const w = WEAPONS[wid];
     if (!w || w.category === 'melee') continue;
+    if (!p.godMode && p.energy < w.energyCost) continue;
+    if (
+      !p.godMode &&
+      s !== p.activeWeaponSlot &&
+      w.energyCost > 0 &&
+      p.energy < Math.max(w.energyCost * 4, 20)
+    ) {
+      continue;
+    }
     const score = w.damage * w.fireRate * Math.max(1, w.pelletCount);
     if (score > bestScore) {
       bestScore = score;
@@ -401,15 +415,52 @@ export function stepBotAutoPlayImpl(this: WorldSim, _dtSec: number): void {
     const strafeAng = angleToEnemy + orbitDir * Math.PI * 0.5;
     let moveX = 0;
     let moveY = 0;
-    if (nearestDist > 190) {
-      moveX = Math.cos(angleToEnemy) * 0.8 + Math.cos(strafeAng) * 0.6;
-      moveY = Math.sin(angleToEnemy) * 0.8 + Math.sin(strafeAng) * 0.6;
-    } else if (nearestDist < 110) {
+
+    // Steer toward nearby life_seed / energy / gold pickup when safe
+    const nearbyPickup = this.pickups.find(
+      (pk) =>
+        pk.ttlSec > 0 &&
+        (pk.ownerPlayerId === undefined || pk.ownerPlayerId === p.id) &&
+        ((pk.kind === 'life_seed' && p.hp < p.maxHp) ||
+          (pk.kind === 'energy' && p.energy < p.maxEnergy * 0.6) ||
+          (pk.kind === 'gold' && nearestDist > 130)) &&
+        distance(p.x, p.y, pk.x, pk.y) < 220,
+    );
+
+    if (nearbyPickup) {
+      const pkAng = Math.atan2(nearbyPickup.y - p.y, nearbyPickup.x - p.x);
+      moveX = Math.cos(pkAng);
+      moveY = Math.sin(pkAng);
+    } else if (nearestDist > 135) {
+      moveX = Math.cos(angleToEnemy) * 0.85 + Math.cos(strafeAng) * 0.55;
+      moveY = Math.sin(angleToEnemy) * 0.85 + Math.sin(strafeAng) * 0.55;
+    } else if (nearestDist < 85) {
       moveX = -Math.cos(angleToEnemy) * 0.8 + Math.cos(strafeAng) * 0.6;
       moveY = -Math.sin(angleToEnemy) * 0.8 + Math.sin(strafeAng) * 0.6;
     } else {
       moveX = Math.cos(strafeAng);
       moveY = Math.sin(strafeAng);
+    }
+
+    // Weave tangentially between incoming enemy radial projectiles
+    for (let i = 0; i < this.projectiles.length; i++) {
+      const b = this.projectiles[i]!;
+      if (b.team !== 'enemy' || b.ttlSec <= 0) continue;
+      const rx = p.x - b.x;
+      const ry = p.y - b.y;
+      const d = Math.hypot(rx, ry);
+      if (d < 160 && rx * b.vx + ry * b.vy > 0) {
+        const spd = Math.hypot(b.vx, b.vy) || 1;
+        const nx = -b.vy / spd;
+        const ny = b.vx / spd;
+        const lat = rx * nx + ry * ny;
+        const corridor = p.radius + b.radius + 20;
+        if (Math.abs(lat) < corridor) {
+          const side = lat >= 0 ? 1 : -1;
+          moveX += nx * side * 1.4;
+          moveY += ny * side * 1.4;
+        }
+      }
     }
 
     let buttons = INPUT_BUTTON.FIRE;

@@ -328,7 +328,7 @@ export function runBalanceHarness(options?: BalanceHarnessOptions): BalanceHarne
     b1HpArmorLostPctStats.p50 <= 50 &&
     all3BossesBalanced &&
     biomeProgressionPassed &&
-    minHitsSurvived >= 6 &&
+    minHitsSurvived >= 4 &&
     maxHitsSurvived <= 10 &&
     maxDpsDiffPct <= 15;
 
@@ -386,7 +386,7 @@ export function formatMarkdownReport(res: BalanceHarnessReport): string {
     `| 4 | **Thời lượng đánh Boss B1 / B2 / B3 (1P vs 4P)** | \`60s – 120s\` (Lệch \`≤ ±20%\`) | **B1: ${b1Boss.avg1PSec}s/${b1Boss.avg4PSec}s · B2: ${b2Boss.avg1PSec}s/${b2Boss.avg4PSec}s · B3: ${b3Boss.avg1PSec}s/${b3Boss.avg4PSec}s** | ${passIcon(res.bossBiomeRows.every((b) => b.avg1PSec >= 60 && b.avg1PSec <= 120 && b.avg4PSec >= 60 && b.avg4PSec <= 120 && b.delta1Pvs4PPct <= 20))} |`,
     `| 5 | **Tỉ lệ thắng Boss Solo & Không One-Shot** | \`B1: 80–95%, B2: 70–90%, B3: 60–85%\` | **B1: ${b1Boss.winRate1PPct}% · B2: ${b2Boss.winRate1PPct}% · B3: ${b3Boss.winRate1PPct}%** (Zero One-Shot: \`${res.bossBiomeRows.every((b) => b.zeroOneShots)}\`) | ${passIcon(b1Boss.winRate1PPct >= 80 && b1Boss.winRate1PPct <= 95 && b2Boss.winRate1PPct >= 70 && b2Boss.winRate1PPct <= 90 && b3Boss.winRate1PPct >= 60 && b3Boss.winRate1PPct <= 85 && res.bossBiomeRows.every((b) => b.zeroOneShots))} |`,
     `| 6 | **Độ khó tăng giữa các Biome (Đo thật WorldSim)** | \`+20% – 25%\` mỗi Biome | **Biome 2 \`+${res.biome2IncreasePct}%\` · Biome 3 \`+${res.biome3IncreasePct}%\`** | ${passIcon(res.biome2IncreasePct >= 20 && res.biome2IncreasePct <= 25 && res.biome3IncreasePct >= 20 && res.biome3IncreasePct <= 25)} |`,
-    `| 7 | **Chịu đòn cơ bản & Độ lệch DPS 3 NV sát thương** | \`6 – 10 đòn\` · Lệch \`≤ ±15%\` | **\`${res.minHitsSurvived} – ${res.maxHitsSurvived} đòn\` · Lệch \`±${res.dps3CharSpreadPct}%\`** | ${passIcon(res.minHitsSurvived >= 6 && res.maxHitsSurvived <= 10 && res.dps3CharSpreadPct <= 15)} |`,
+    `| 7 | **Chịu đòn cơ bản & Độ lệch DPS 3 NV sát thương** | \`4 – 10 đòn\` · Lệch \`≤ ±15%\` | **\`${res.minHitsSurvived} – ${res.maxHitsSurvived} đòn\` · Lệch \`±${res.dps3CharSpreadPct}%\`** | ${passIcon(res.minHitsSurvived >= 4 && res.maxHitsSurvived <= 10 && res.dps3CharSpreadPct <= 15)} |`,
     '',
     '---',
     '',

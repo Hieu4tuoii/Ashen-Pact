@@ -369,57 +369,49 @@ export function handleEnemyKilledImpl(
         });
       }
     }
-    const isCoopCore = allPlayers.length > 1;
-    for (let pIdx = 0; pIdx < allPlayers.length; pIdx++) {
-      const pl = allPlayers[pIdx]!;
-      if (pl.lifeState !== 'alive') continue;
-      this.pickups.push(
-        this.acquirePickup({
-          id: ++this.nextEntityId,
-          kind: 'life_seed',
-          x: pl.x,
-          y: pl.y,
-          vx: 0,
-          vy: 0,
-          amount: 1,
-          ttlSec: 18,
-          ownerPlayerId: isCoopCore ? pl.id : undefined,
-        }),
-      );
-      this.pickups.push(
-        this.acquirePickup({
-          id: ++this.nextEntityId,
-          kind: 'energy',
-          x: pl.x,
-          y: pl.y,
-          vx: 0,
-          vy: 0,
-          amount: 20,
-          ttlSec: 18,
-          ownerPlayerId: isCoopCore ? pl.id : undefined,
-        }),
-      );
-    }
+    const coreSeedAng = this.rng.nextFloat(-Math.PI, Math.PI);
+    const coreEnergyAng = coreSeedAng + Math.PI;
+    this.pickups.push(
+      this.acquirePickup({
+        id: ++this.nextEntityId,
+        kind: 'life_seed',
+        x: enemy.x,
+        y: enemy.y,
+        vx: Math.cos(coreSeedAng) * 65,
+        vy: Math.sin(coreSeedAng) * 65,
+        amount: 2,
+        ttlSec: 18,
+      }),
+    );
+    this.pickups.push(
+      this.acquirePickup({
+        id: ++this.nextEntityId,
+        kind: 'energy',
+        x: enemy.x,
+        y: enemy.y,
+        vx: Math.cos(coreEnergyAng) * 75,
+        vy: Math.sin(coreEnergyAng) * 75,
+        amount: 12,
+        ttlSec: 18,
+      }),
+    );
     return;
   }
 
-  // Boss add killed during active Boss encounter drops a sustain seed for active players
+  // Boss add killed during active Boss encounter has a 25% chance to drop 1 life_seed at (enemy.x, enemy.y)
   if (!enemy.isBoss && !this.stressTestActive && this.getActiveBoss() !== null) {
-    const isCoopAdd = allPlayers.length > 1;
-    for (let pIdx = 0; pIdx < allPlayers.length; pIdx++) {
-      const pl = allPlayers[pIdx]!;
-      if (pl.lifeState !== 'alive') continue;
+    if (this.rng.chance(0.25)) {
+      const addSeedAng = this.rng.nextFloat(-Math.PI, Math.PI);
       this.pickups.push(
         this.acquirePickup({
           id: ++this.nextEntityId,
           kind: 'life_seed',
-          x: pl.x,
-          y: pl.y,
-          vx: 0,
-          vy: 0,
+          x: enemy.x,
+          y: enemy.y,
+          vx: Math.cos(addSeedAng) * 70,
+          vy: Math.sin(addSeedAng) * 70,
           amount: 1,
           ttlSec: 18,
-          ownerPlayerId: isCoopAdd ? pl.id : undefined,
         }),
       );
     }

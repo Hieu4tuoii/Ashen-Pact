@@ -122,8 +122,23 @@ function nextBrainFloat(brain: BotBrainState): number {
   return (brain.rngState >>> 0) / 0x100000000;
 }
 
+function hasLineOfSight(sim: WorldSim, x1: number, y1: number, x2: number, y2: number): boolean {
+  const steps = 4;
+  for (let s = 1; s < steps; s++) {
+    const t = s / steps;
+    const px = x1 + (x2 - x1) * t;
+    const py = y1 + (y2 - y1) * t;
+    const tx = Math.floor(px / 32);
+    const ty = Math.floor(py / 32);
+    if (sim.map.isSolidTile(tx, ty)) {
+      return false;
+    }
+  }
+  return true;
+}
+
 function selectTargetEnemy(sim: WorldSim, player: SimPlayerState): SimEnemyState | null {
-  // Priority 1: Critical boss mechanics (Ice Prison rescue, Forge Titan Energy Cores, Spore Guardian)
+  // Priority 1: Critical boss mechanics (Ice Prison rescue, Forge Titan Energy Cores, Spore Guardian, Kryssa Clones)
   let bestPriority: SimEnemyState | null = null;
   let bestPriorityDist = Infinity;
   let bestGeneral: SimEnemyState | null = null;
@@ -136,7 +151,8 @@ function selectTargetEnemy(sim: WorldSim, player: SimPlayerState): SimEnemyState
     if (
       e.defId === 'ice_prison' ||
       e.defId === 'forge_energy_core' ||
-      e.defId === 'spore_guardian'
+      e.defId === 'spore_guardian' ||
+      e.defId === 'kryssa_clone'
     ) {
       if (dist < bestPriorityDist) {
         bestPriorityDist = dist;
@@ -145,16 +161,19 @@ function selectTargetEnemy(sim: WorldSim, player: SimPlayerState): SimEnemyState
       continue;
     }
 
-    // Prefer nearby dangerous enemies (bombers, shamans, elites) or the boss
+    // Prefer nearby dangerous enemies (bombers, shamans, close adds) or the boss
+    const losPenalty = hasLineOfSight(sim, player.x, player.y, e.x, e.y) ? 0 : 95;
     const roleBias =
       e.defId === 'spore_bomber' || e.defId === 'snow_spirit'
-        ? -75
+        ? -85
         : e.defId === 'goblin_shaman' || e.defId === 'welder_drone'
-          ? -55
-          : e.isBoss
-            ? -35
-            : 0;
-    const score = dist + roleBias;
+          ? -60
+          : !e.isBoss && dist < 170
+            ? -55
+            : e.isBoss
+              ? -35
+              : 0;
+    const score = dist + roleBias + losPenalty;
     if (score < bestGeneralScore) {
       bestGeneralScore = score;
       bestGeneral = e;
@@ -209,71 +228,140 @@ export function stepHonestPlayerBot(
 
   // Detect highest-priority active threat (enemy telegraph, expanding shockwave ring, or close incoming projectile)
   let detectedThreatKey = 0;
+  let imminentDashThreat = false;
+  let nearbyBulletCount = 0;
   let threatX = player.x;
   let threatY = player.y;
   let evadeVecX = 0;
   let evadeVecY = 0;
 
-  // 1) Enemy telegraphs within danger radius
+  // 1) Enemy telegraphs within danger radius (or Boss burrow telegraph)
   for (let i = 0; i < sim.enemies.length; i++) {
     const e = sim.enemies[i]!;
     if (e.hp <= 0 || e.isDummy) continue;
     const dist = Math.hypot(e.x - player.x, e.y - player.y);
-    const dangerRange = e.isBoss ? 240 : 185;
-    if (e.aiState === 'telegraph' && dist <= dangerRange) {
-      detectedThreatKey = e.id * 31 + 1;
-      threatX = e.x;
-      threatY = e.y;
-      const awayAng = Math.atan2(player.y - e.y, player.x - e.x);
-      evadeVecX += Math.cos(awayAng + brain.orbitSign * 0.7) * 1.45;
-      evadeVecY += Math.sin(awayAng + brain.orbitSign * 0.7) * 1.45;
-      break;
+    if (e.aiState === 'telegraph') {
+      if (!e.isBoss && dist <= 185) {
+        detectedThreatKey = e.id * 31 + 1;
+        imminentDashThreat = true;
+        threatX = e.x;
+        threatY = e.y;
+        const awayAng = Math.atan2(player.y - e.y, player.x - e.x);
+        evadeVecX += Math.cos(awayAng + brain.orbitSign * 0.65) * 1.55;
+        evadeVecY += Math.sin(awayAng + brain.orbitSign * 0.65) * 1.55;
+        break;
+      }
+      if (e.isBoss && e.bossBurrowed && dist <= 155) {
+        detectedThreatKey = e.id * 31 + 1 + (e.bossAttackCycle % 17) * 997;
+        imminentDashThreat = dist <= 120;
+        threatX = e.x;
+        threatY = e.y;
+        const awayAng = Math.atan2(player.y - e.y, player.x - e.x);
+        evadeVecX += Math.cos(awayAng) * 1.85;
+        evadeVecY += Math.sin(awayAng) * 1.85;
+        break;
+      }
     }
   }
 
-  // 2) Shockwave rings approaching player
+  // 2) Shockwave rings approaching player (Dash through ring with i-frames when within pass-through window)
   for (let i = 0; i < sim.shockwaveRings.length; i++) {
     const ring = sim.shockwaveRings[i]!;
+    if (ring.hitPlayerIds.includes(player.id)) continue;
     const dRing = Math.hypot(player.x - ring.x, player.y - ring.y);
-    if (dRing >= ring.radius - 14 && dRing <= ring.radius + ring.thickness + 46) {
+    if (dRing >= ring.radius - 14 && dRing <= ring.radius + ring.thickness + 175) {
       if (detectedThreatKey === 0) {
         detectedThreatKey = ring.id * 31 + 2;
         threatX = ring.x;
         threatY = ring.y;
       }
-      const awayAng = Math.atan2(player.y - ring.y, player.x - ring.x);
-      evadeVecX += Math.cos(awayAng) * 1.35;
-      evadeVecY += Math.sin(awayAng) * 1.35;
+      if (dRing <= ring.radius + ring.thickness + 62) {
+        imminentDashThreat = true;
+        const towardAng = Math.atan2(ring.y - player.y, ring.x - player.x);
+        evadeVecX += Math.cos(towardAng) * 1.45;
+        evadeVecY += Math.sin(towardAng) * 1.45;
+      }
+      break;
     }
   }
 
-  // 3) Incoming enemy projectiles heading toward player
+  // 3) Incoming enemy projectiles heading toward player (weave into radial gaps; sidestep tight fans!)
+  let minBulletAbsLat = Infinity;
+  let hasPosLat = false;
+  let hasNegLat = false;
   for (let i = 0; i < sim.projectiles.length; i++) {
     const b = sim.projectiles[i]!;
     if (b.team !== 'enemy' || b.ttlSec <= 0) continue;
-    const dx = player.x - b.x;
-    const dy = player.y - b.y;
-    const d = Math.hypot(dx, dy);
-    if (d < 92 && dx * b.vx + dy * b.vy > 0) {
-      if (detectedThreatKey === 0 && d < 64) {
-        detectedThreatKey = b.id * 31 + 3;
+    const rx = player.x - b.x;
+    const ry = player.y - b.y;
+    const d = Math.hypot(rx, ry);
+    if (d > 235) continue;
+
+    const spd = Math.hypot(b.vx, b.vy) || 1;
+    const ux = b.vx / spd;
+    const uy = b.vy / spd;
+    const along = rx * ux + ry * uy;
+    if (along <= -8) continue;
+
+    const nx = -uy;
+    const ny = ux;
+    const lat = rx * nx + ry * ny;
+    const absLat = Math.abs(lat);
+    const corridor = player.radius + b.radius + 20;
+    if (absLat < corridor && along < 205) {
+      if (lat >= 0) hasPosLat = true;
+      else hasNegLat = true;
+    }
+  }
+
+  for (let i = 0; i < sim.projectiles.length; i++) {
+    const b = sim.projectiles[i]!;
+    if (b.team !== 'enemy' || b.ttlSec <= 0) continue;
+    const rx = player.x - b.x;
+    const ry = player.y - b.y;
+    const d = Math.hypot(rx, ry);
+    if (d > 235) continue;
+
+    const spd = Math.hypot(b.vx, b.vy) || 1;
+    const ux = b.vx / spd;
+    const uy = b.vy / spd;
+    const along = rx * ux + ry * uy;
+    if (along <= -8) continue;
+
+    nearbyBulletCount += 1;
+    const nx = -uy;
+    const ny = ux;
+    const lat = rx * nx + ry * ny;
+    const absLat = Math.abs(lat);
+    if (along < 195 && absLat < minBulletAbsLat) {
+      minBulletAbsLat = absLat;
+    }
+    const corridor = player.radius + b.radius + 20;
+
+    if (absLat < corridor && along < 205) {
+      if (detectedThreatKey === 0) {
+        detectedThreatKey = (b.ownerId || 1) * 31 + 3;
         threatX = b.x;
         threatY = b.y;
       }
-      const spd = Math.hypot(b.vx, b.vy) || 1;
-      const px = -b.vy / spd;
-      const py = b.vx / spd;
-      const side = dx * px + dy * py >= 0 ? 1 : -1;
-      evadeVecX += px * side * 1.5;
-      evadeVecY += py * side * 1.5;
+      if (d < 54 && absLat < player.radius + b.radius + 5) {
+        imminentDashThreat = true;
+      }
+      const side = hasPosLat && hasNegLat ? brain.orbitSign : lat >= 0 ? 1 : -1;
+      const urgency = ((corridor - absLat) / corridor) * (2.1 + (205 - along) / 110);
+      evadeVecX += nx * side * urgency;
+      evadeVecY += ny * side * urgency;
     }
   }
 
   // Update threat reaction timer (human reaction delay: 250ms)
   if (detectedThreatKey !== 0) {
     if (brain.activeThreatKey !== detectedThreatKey) {
+      const wasAlreadyTracking = brain.activeThreatKey !== 0 && brain.threatSeenTimerSec > 0;
       brain.activeThreatKey = detectedThreatKey;
-      brain.threatSeenTimerSec = dtSec;
+      brain.threatSeenTimerSec = wasAlreadyTracking
+        ? brain.threatSeenTimerSec + dtSec
+        : dtSec;
       brain.threatDodgeApproved = nextBrainFloat(brain) < profile.dashDodgeProbability;
       brain.threatDashConsumed = false;
     } else {
@@ -323,7 +411,7 @@ export function stepHonestPlayerBot(
 
   const aimAngle = trueAimAngle + brain.currentAimErrorRad;
 
-  // Weapon slot selection: swap to slot 1 if slot 0 weapon lacks energy (or vice versa)
+  // Weapon slot selection: swap to slot 1 if slot 0 weapon lacks energy, and wait for meaningful recovery before swapping back
   let weaponSlotSelect: number | null = null;
   const slot0Id = player.weaponSlots[0];
   const slot1Id = player.weaponSlots[1];
@@ -341,7 +429,7 @@ export function stepHonestPlayerBot(
     player.activeWeaponSlot === 1 &&
     slot0Wep &&
     slot0Wep.energyCost > 0 &&
-    player.energy >= Math.max(slot0Wep.energyCost * 3, player.maxEnergy * 0.35)
+    player.energy >= Math.max(slot0Wep.energyCost * 2, 8)
   ) {
     weaponSlotSelect = 0;
   }
@@ -349,72 +437,141 @@ export function stepHonestPlayerBot(
   const effectiveWep =
     weaponSlotSelect === 0 ? slot0Wep : weaponSlotSelect === 1 ? slot1Wep : activeWep;
   const isMelee = effectiveWep?.category === 'melee';
+  const activeBoss = sim.getActiveBoss();
+  const fightingBoss = activeBoss !== undefined;
   const desiredDist = isMelee
     ? player.characterId === 'vanguard' && player.skillActiveTimer > 0
-      ? 135
-      : 38
-    : player.characterId === 'ranger'
-      ? 215
-      : player.characterId === 'druid'
-        ? 135
-        : 175;
+      ? 145
+      : fightingBoss
+        ? 64
+        : 38
+    : fightingBoss
+      ? player.characterId === 'ranger'
+        ? 235
+        : 215
+      : player.characterId === 'ranger'
+        ? 215
+        : player.characterId === 'druid'
+          ? 145
+          : 180;
 
   let moveX = 0;
   let moveY = 0;
 
-  // Check if a downed teammate needs reviving nearby or a life_seed/energy pickup is close
+  // Check if a downed teammate needs reviving nearby or a life_seed/energy pickup is safely reachable
   const downedAlly = sim
     .getAllPlayers()
     .find((ally) => ally.id !== player.id && ally.lifeState === 'downed');
-  const urgentPickup = sim.pickups.find(
-    (pk) =>
-      (pk.kind === 'life_seed' && player.hp < player.maxHp) ||
-      (pk.kind === 'energy' && player.energy < player.maxEnergy * 0.45),
-  );
 
-  if (downedAlly && Math.hypot(downedAlly.x - player.x, downedAlly.y - player.y) < 260) {
+  let bestPickup: { x: number; y: number; dist: number } | null = null;
+  for (let i = 0; i < sim.pickups.length; i++) {
+    const pk = sim.pickups[i]!;
+    if (pk.ttlSec <= 0) continue;
+    if (pk.ownerPlayerId !== undefined && pk.ownerPlayerId !== player.id) continue;
+    if (activeBoss && Math.hypot(pk.x - activeBoss.x, pk.y - activeBoss.y) < 92) continue;
+    const wantsSeed =
+      pk.kind === 'life_seed' && player.hp <= Math.max(3, Math.floor(player.maxHp * 0.75));
+    const wantsEnergy = pk.kind === 'energy' && player.energy <= 28;
+    if (!wantsSeed && !wantsEnergy) continue;
+    const dPk = Math.hypot(pk.x - player.x, pk.y - player.y);
+    if (dPk < 210 && (!bestPickup || dPk < bestPickup.dist)) {
+      bestPickup = { x: pk.x, y: pk.y, dist: dPk };
+    }
+  }
+
+  const cx = sim.map.width * 0.5;
+  const cy = sim.map.height * 0.5;
+  const nearWall =
+    player.x < 155 ||
+    player.x > sim.map.width - 155 ||
+    player.y < 145 ||
+    player.y > sim.map.height - 145;
+
+  if (downedAlly && Math.hypot(downedAlly.x - player.x, downedAlly.y - player.y) < 280) {
     const allyAng = Math.atan2(downedAlly.y - player.y, downedAlly.x - player.x);
     const dAlly = Math.hypot(downedAlly.x - player.x, downedAlly.y - player.y);
     if (dAlly > 24) {
       moveX = Math.cos(allyAng);
       moveY = Math.sin(allyAng);
     }
-  } else if (urgentPickup && Math.hypot(urgentPickup.x - player.x, urgentPickup.y - player.y) < 180) {
-    const pkAng = Math.atan2(urgentPickup.y - player.y, urgentPickup.x - player.x);
+  } else if (bestPickup && !imminentDashThreat) {
+    const pkAng = Math.atan2(bestPickup.y - player.y, bestPickup.x - player.x);
     moveX = Math.cos(pkAng);
     moveY = Math.sin(pkAng);
   } else if (target) {
     const dist = Math.hypot(target.x - player.x, target.y - player.y);
+    const hasLos = hasLineOfSight(sim, player.x, player.y, target.x, target.y);
+    if (nearWall) {
+      const orb1Ang = trueAimAngle + Math.PI * 0.5;
+      const orb2Ang = trueAimAngle - Math.PI * 0.5;
+      const d1 = Math.hypot(
+        player.x + Math.cos(orb1Ang) * 65 - cx,
+        player.y + Math.sin(orb1Ang) * 65 - cy,
+      );
+      const d2 = Math.hypot(
+        player.x + Math.cos(orb2Ang) * 65 - cx,
+        player.y + Math.sin(orb2Ang) * 65 - cy,
+      );
+      brain.orbitSign = d1 <= d2 ? 1 : -1;
+    }
     const orbitAng = trueAimAngle + brain.orbitSign * Math.PI * 0.5;
-    moveX = Math.cos(orbitAng) * 0.75;
-    moveY = Math.sin(orbitAng) * 0.75;
+    const inSafeBulletGap =
+      nearbyBulletCount > 0 && fightingBoss && hasLos && !nearWall && minBulletAbsLat >= player.radius + 18;
+    const orbitScale = !hasLos
+      ? 1.15
+      : inSafeBulletGap
+        ? 0
+        : nearbyBulletCount > 0 && fightingBoss
+          ? 0.12
+          : 0.72;
+    moveX = Math.cos(orbitAng) * orbitScale;
+    moveY = Math.sin(orbitAng) * orbitScale;
 
-    if (dist > desiredDist + 22) {
+    const effDesiredDist = !hasLos ? Math.min(desiredDist, 95) : desiredDist;
+    if (dist > effDesiredDist + 24 && !inSafeBulletGap) {
       moveX += Math.cos(trueAimAngle) * 0.95;
       moveY += Math.sin(trueAimAngle) * 0.95;
-    } else if (dist < desiredDist - 22) {
-      moveX -= Math.cos(trueAimAngle) * 1.1;
-      moveY -= Math.sin(trueAimAngle) * 1.1;
+    } else if (dist < effDesiredDist - 22 && (!inSafeBulletGap || dist < 135)) {
+      if (nearWall) {
+        const toCenterAng = Math.atan2(cy - player.y, cx - player.x);
+        moveX += Math.cos(toCenterAng) * 1.15 + Math.cos(orbitAng) * 0.75;
+        moveY += Math.sin(toCenterAng) * 1.15 + Math.sin(orbitAng) * 0.75;
+      } else {
+        moveX -= Math.cos(trueAimAngle) * 1.1;
+        moveY -= Math.sin(trueAimAngle) * 1.1;
+      }
     }
   }
 
   // Apply evasive vector once reactionDelaySec has elapsed
-  if (reactionReady) {
+  if (reactionReady && (evadeVecX !== 0 || evadeVecY !== 0)) {
     moveX += evadeVecX;
     moveY += evadeVecY;
-    if (moveX === 0 && moveY === 0) {
-      const awayThreat = Math.atan2(player.y - threatY, player.x - threatX);
-      moveX = Math.cos(awayThreat);
-      moveY = Math.sin(awayThreat);
-    }
+  }
+
+  // Avoid hazardous floor surfaces (lava, burning_oil, burning_grass, poison_swamp, chasm)
+  const curSurf = sim.map.getSurfaceAtWorld(player.x, player.y);
+  const lookSurf = sim.map.getSurfaceAtWorld(player.x + moveX * 34, player.y + moveY * 34);
+  if (
+    curSurf === 'lava' ||
+    curSurf === 'burning_oil' ||
+    curSurf === 'burning_grass' ||
+    curSurf === 'poison_swamp' ||
+    curSurf === 'chasm' ||
+    lookSurf === 'lava' ||
+    lookSurf === 'chasm'
+  ) {
+    const toCenterAng = Math.atan2(sim.map.height * 0.5 - player.y, sim.map.width * 0.5 - player.x);
+    moveX += Math.cos(toCenterAng) * 1.35;
+    moveY += Math.sin(toCenterAng) * 1.35;
   }
 
   // Keep away from outer room walls / hazard borders
   const margin = 96;
-  if (player.x < margin) moveX += 0.9;
-  if (player.x > sim.map.width - margin) moveX -= 0.9;
-  if (player.y < margin) moveY += 0.9;
-  if (player.y > sim.map.height - margin) moveY -= 0.9;
+  if (player.x < margin) moveX += 0.95;
+  if (player.x > sim.map.width - margin) moveX -= 0.95;
+  if (player.y < margin) moveY += 0.95;
+  if (player.y > sim.map.height - margin) moveY -= 0.95;
 
   const moveLen = Math.hypot(moveX, moveY);
   if (moveLen > 1e-4) {
@@ -429,15 +586,21 @@ export function stepHonestPlayerBot(
     target &&
     player.skillCooldownTimer <= 0 &&
     player.skillActiveTimer <= 0 &&
-    (player.characterId !== 'druid' || player.hp < player.maxHp || downedAlly !== undefined || target.isBoss)
+    (player.characterId !== 'druid' ||
+      player.hp < player.maxHp ||
+      downedAlly !== undefined ||
+      target.isBoss)
   ) {
     buttons |= INPUT_BUTTON.SKILL;
   }
 
-  // Execute Dash dodge only after reactionDelaySec and if the deterministic 65% roll succeeded
+  // Execute Dash dodge only after reactionDelaySec, when threat is imminent, and if the deterministic 65% roll succeeded
   if (
     player.dashCooldownTimer <= 0 &&
-    ((reactionReady && brain.threatDodgeApproved && !brain.threatDashConsumed) ||
+    ((reactionReady &&
+      imminentDashThreat &&
+      brain.threatDodgeApproved &&
+      !brain.threatDashConsumed) ||
       (player.encasedInIceTimer ?? 0) > 0)
   ) {
     buttons |= INPUT_BUTTON.DASH;

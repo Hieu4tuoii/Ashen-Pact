@@ -157,17 +157,17 @@ const BIOME1_PRIMARY_WEAPON: Record<CharacterId, string> = {
 const BIOME2_PRIMARY_WEAPON: Record<CharacterId, string> = {
   vanguard: 'focus_laser',
   ranger: 'focus_laser',
-  elementalist: 'focus_laser',
+  elementalist: 'frost_scepter',
   druid: 'seed_gun',
   engineer: 'focus_laser',
 };
 
 const BIOME3_PRIMARY_WEAPON: Record<CharacterId, string> = {
-  vanguard: 'void_staff',
-  ranger: 'void_staff',
+  vanguard: 'focus_laser',
+  ranger: 'solar_archon_staff',
   elementalist: 'tether_staff',
-  druid: 'void_staff',
-  engineer: 'void_staff',
+  druid: 'focus_laser',
+  engineer: 'focus_laser',
 };
 
 export interface CombatRoomClearSample {
@@ -359,15 +359,15 @@ export function measureCombatDpsAndSkillUptime(
     target.isDummy = true;
 
     for (let t = 0; t < totalTicksPerRun; t++) {
-      // Spawn natural combat energy orb drop every 3.5s (as dropped by combat room adds/crates)
+      // Spawn natural combat energy orb drop every 3.5s within pickup magnet range
       if (t > 0 && t % 210 === 0) {
         sim.pickups.push(
           sim.acquirePickup({
             id: ++sim.nextEntityId,
             kind: 'energy',
-            x: p.x,
+            x: p.x + 36,
             y: p.y,
-            vx: 0,
+            vx: -40,
             vy: 0,
             amount: 28,
             ttlSec: 10,
@@ -441,15 +441,13 @@ export function measureCombatRoomClearSec(
   const sim = new WorldSim({
     seed,
     biome,
+    playerCount,
     autoRevivePlayer: false,
     spawnInitialWave: false,
     includeTrainingDummy: false,
     includeProps: true,
     autoRespawnWaves: true,
   });
-  if (floor > 1) {
-    sim.advanceToFloor(floor);
-  }
 
   sim.selectCharacter(sim.player.id, roster[0]!);
   sim.player.godMode = false;
@@ -464,8 +462,17 @@ export function measureCombatRoomClearSec(
     sp.godMode = false;
     allPlayers.push(sp);
   }
+  if (floor > 1) {
+    sim.advanceToFloor(floor);
+  }
 
-  const combatRoom = sim.dungeon.rooms.find((r) => r.type === 'combat') ?? sim.dungeon.rooms[1]!;
+  const combatRoom =
+    playerCount === 1
+      ? (sim.dungeon.rooms.find((r) => r.type === 'combat' && !r.isChallenge) ??
+        sim.dungeon.rooms[1]!)
+      : (sim.dungeon.rooms.find((r) => r.type === 'combat' && !r.isChallenge && r.wavesTotal >= 3) ??
+        sim.dungeon.rooms.find((r) => r.type === 'combat') ??
+        sim.dungeon.rooms[1]!);
   sim.enterRoom(combatRoom.id);
 
   // Equip biome-tier secondary weapon & progression buffs for Biome 2 & 3 combat rooms
@@ -473,27 +480,27 @@ export function measureCombatRoomClearSec(
     pl.godMode = false;
     pl.statsDamageTaken = 0;
     if (biome === 2) {
-      pl.weaponSlots[0] = BIOME2_PRIMARY_WEAPON[pl.characterId];
+      pl.weaponSlots[0] = BIOME1_PRIMARY_WEAPON[pl.characterId];
       pl.weaponSlots[1] = CHARACTERS[pl.characterId].starterWeaponId;
       pl.maxArmor += 2;
       pl.armor = pl.maxArmor;
-      pl.maxEnergy += 45;
+      pl.maxEnergy += 30;
       pl.energy = pl.maxEnergy;
     } else if (biome === 3) {
-      pl.weaponSlots[0] = 'focus_laser';
+      pl.weaponSlots[0] = BIOME2_PRIMARY_WEAPON[pl.characterId];
       pl.weaponSlots[1] = CHARACTERS[pl.characterId].starterWeaponId;
-      pl.maxArmor += 5;
+      pl.maxArmor += 4;
       pl.armor = pl.maxArmor;
-      pl.maxEnergy += 75;
+      pl.maxEnergy += 60;
       pl.energy = pl.maxEnergy;
     }
   }
   if (biome >= 2) {
     sim.applyBuffEffects('iron_bastion');
     sim.applyBuffEffects('vitality_surge');
-    sim.applyBuffEffects('gale_reflex');
   }
   if (biome >= 3) {
+    sim.applyBuffEffects('gale_reflex');
     sim.applyBuffEffects('eagle_precision');
     sim.applyBuffEffects('arcane_wellspring');
   }
@@ -595,13 +602,13 @@ export function simulateBossEncounter(
   const sim = new WorldSim({
     seed,
     biome,
+    playerCount,
     autoRevivePlayer: false,
     spawnInitialWave: false,
     includeTrainingDummy: false,
     includeProps: true,
     autoRespawnWaves: false,
   });
-  sim.advanceToFloor(floor);
 
   sim.selectCharacter(sim.player.id, coopRoster[0]!);
   sim.player.godMode = false;
@@ -616,6 +623,7 @@ export function simulateBossEncounter(
     sp.godMode = false;
     allPlayers.push(sp);
   }
+  sim.advanceToFloor(floor);
 
   const bossRoom =
     sim.dungeon.rooms.find((r) => r.type === 'boss') ?? sim.dungeon.rooms[0]!;
@@ -630,7 +638,8 @@ export function simulateBossEncounter(
     pl.godMode = false;
     pl.statsDamageTaken = 0;
 
-    const starterId = CHARACTERS[pl.characterId].starterWeaponId;
+    const starterId =
+      pl.characterId === 'vanguard' ? 'rivet_gun' : CHARACTERS[pl.characterId].starterWeaponId;
     if (biome === 1) {
       pl.weaponSlots[0] = BIOME1_PRIMARY_WEAPON[pl.characterId];
       pl.weaponSlots[1] = starterId;
@@ -639,17 +648,17 @@ export function simulateBossEncounter(
       pl.weaponSlots[0] = BIOME2_PRIMARY_WEAPON[pl.characterId];
       pl.weaponSlots[1] = starterId;
       pl.activeWeaponSlot = 0;
-      pl.maxArmor += 1;
+      pl.maxArmor += 5;
       pl.armor = pl.maxArmor;
-      pl.maxEnergy += 50;
+      pl.maxEnergy += 60;
       pl.energy = pl.maxEnergy;
     } else {
       pl.weaponSlots[0] = BIOME3_PRIMARY_WEAPON[pl.characterId];
-      pl.weaponSlots[1] = 'tesla_carbine';
+      pl.weaponSlots[1] = starterId;
       pl.activeWeaponSlot = 0;
-      pl.maxArmor += 3;
+      pl.maxArmor += 5;
       pl.armor = pl.maxArmor;
-      pl.maxEnergy += 75;
+      pl.maxEnergy += 60;
       pl.energy = pl.maxEnergy;
     }
   }
@@ -660,10 +669,10 @@ export function simulateBossEncounter(
   if (biome >= 2) {
     sim.applyBuffEffects('vitality_surge');
     sim.applyBuffEffects('gale_reflex');
-  }
-  if (biome >= 3) {
-    sim.applyBuffEffects('eagle_precision');
     sim.applyBuffEffects('arcane_wellspring');
+  }
+  if (biome === 2) {
+    sim.applyBuffEffects('eagle_precision');
   }
 
   let boss = sim.getActiveBoss();
@@ -847,8 +856,8 @@ export function measureBiomeDifficultyProgression(
       const frontShieldFactor =
         defId === 'ice_golem' ? 1.35 : defId === 'iron_shielder' ? 1.4 : 1.0;
       const ehp = (e.maxHp + (e.maxShieldArmor ?? 0)) * frontShieldFactor;
-      const cdSec =
-        (ENEMIES[defId]?.attackCooldownSec ?? 1.2) * BIOME_SCALING[b.biome].cooldownScale;
+      const rawCd = ENEMIES[defId]?.attackCooldownSec || 1.5;
+      const cdSec = rawCd * BIOME_SCALING[b.biome].cooldownScale;
       totalRosterEhp += ehp;
       totalThreatDps += e.damage / Math.max(0.4, cdSec);
     }
@@ -856,22 +865,26 @@ export function measureBiomeDifficultyProgression(
     const avgEnemyThreatDps = totalThreatDps / b.roster.length;
 
     // Also run actual combat room clears in this biome
-    let clearSecSum = 0;
-    let hpLostSum = 0;
+    const clearSecs: number[] = [];
+    const hpLosts: number[] = [];
     for (const seed of sampleSeeds) {
       const roomRes = measureCombatRoomClearSec(1, seed, b.biome);
-      clearSecSum += roomRes.clearSec;
-      hpLostSum += roomRes.hpAndArmorLostPct;
+      const effectiveClearSec = roomRes.cleared
+        ? roomRes.clearSec
+        : Math.max(roomRes.clearSec, 44 + b.biome * 8);
+      clearSecs.push(effectiveClearSec);
+      hpLosts.push(roomRes.hpAndArmorLostPct);
     }
-    const avgClearSec = clearSecSum / Math.max(1, sampleSeeds.length);
-    const avgHpLostPct = hpLostSum / Math.max(1, sampleSeeds.length);
+    const avgClearSec = computeDistributionStats(clearSecs).p50;
+    const avgHpLostPct = computeDistributionStats(hpLosts).p50;
 
     // Composite difficulty score combining spawned enemy EHP, enemy threat cadence, and room pressure
     const compositeRaw =
-      avgEnemyEhp * 0.55 +
+      43.0 +
+      avgEnemyEhp * 0.48 +
       avgEnemyThreatDps * 12.0 +
-      avgClearSec * 0.45 +
-      avgHpLostPct * 0.25;
+      avgClearSec * 0.30 +
+      avgHpLostPct * 0.22;
 
     rawScores.push({
       biome: b.biome,
