@@ -10,35 +10,35 @@
 
 Bản cập nhật lớn **`v0.2.0` ("Polish & Depth")** nâng cấp toàn diện **12 hạng mục cốt lõi (Phases P0 → P12)** từ hệ thống ánh sáng, kiến trúc chiều sâu 3D giả lập, cổng dịch chuyển shader, giao diện `HudScene` tách biệt, hoạt ảnh nhân vật/quái vật `Cutout 2.0`, hiệu ứng chiến đấu `BlendMode.ADD` cho tới độ sâu chiến thuật và cân bằng thực chiến 60Hz:
 
-### 1.1 Tầm Nhìn Trong Trẻo & Ánh Sáng Không Sương Mù Đen (`Phase P2`)
-- **Loại bỏ hoàn toàn lớp sương mù tối gây mỏi mắt:** Nâng nền ánh sáng môi trường (`ambientRgb`) ở tất cả các Biome và Sảnh Doanh Trại lên mức sáng rõ (`>= 0.72` mỗi kênh RGB), thu nhỏ `vignetteStrength` (`<= 0.16`) và tắt hoàn toàn lớp phủ tối toàn màn hình trong **Bão Tuyết Phase 3 của Băng Hậu Kryssa**, thay bằng hiệu ứng hạt gió tuyết chéo tốc độ cao và tinh thể băng ở rìa màn hình để người chơi luôn nhìn rõ 100% đạn và cảnh báo trên sàn.
+### 1.1 Tầm Nhìn Trong Trẻo & Ánh Sáng Không Sương Mù Đen (`Phase P3`)
+- **Loại bỏ hoàn toàn lớp sương mù tối gây mỏi mắt:** Nâng nền ánh sáng môi trường (`ambientRgb`) ở tất cả các Biome và Sảnh Doanh Trại lên mức sáng rõ (`~0.84–0.90`), tắt hoàn toàn `vignetteStrength = 0.0`, xóa hạt sương mù `fx_ambient_mist`, bổ sung vũng sáng ấm `BlendMode.ADD` (`+8 ΔL*`) cho chậu lửa và tắt hoàn toàn lớp phủ tối toàn màn hình trong **Bão Tuyết Phase 3 của Băng Hậu Kryssa**, thay bằng hiệu ứng hạt gió tuyết chéo tốc độ cao và tinh thể băng ở rìa màn hình để người chơi luôn nhìn rõ 100% đạn và cảnh báo trên sàn.
 
-### 1.2 Kiến Trúc Chiều Sâu 3D Hybrid & Bản Sắc 3 Biome (`Phase P3 & P4`)
-- **Chiều sâu 2.5D / 3D Hybrid rõ nét:** Tường có mặt đứng phía nam (`wall_face` cao `18u` có gờ đá, vết nứt và chân tường tối), bóng đổ sàn hướng Đông-Nam (`ao_mask`), trụ `2×2` đúc khối 3 tầng (`đế + thân + mũ trụ`) và viền phát sáng động cho các ô mặt đất nguy hiểm (dung nham, đầm độc, nước nhiễm điện).
+### 1.2 Kiến Trúc Chiều Sâu 3D Hybrid & Bản Sắc 3 Biome (`Phase P4 & P5`)
+- **Chiều sâu 2.5D / 3D Hybrid rõ nét:** Mặt sàn phân vùng *"Chi tiết ven tường, Tĩnh lặng giữa tâm"* (`ΔL* <= 8` ở vùng chiến đấu trung tâm), tường 3 lớp (`Top Cap` + `South Cliff Face 12–14u` + `AO/Cast Shadow` hướng `+45°`), trụ đá có rãnh đổ bóng dài và viền kiến trúc cho các ô mặt đất nguyên tố (đầm độc bờ rêu + đá bước chân ở B1, băng trơn vát cạnh ở B2, kênh dung nham âm sàn ở B3).
 - **Bản sắc kiến trúc động riêng cho từng khu vực:**
-  - **Sảnh Doanh Trại (Hub):** Sàn lát đá ấm áp, thảm đỏ dẫn tới Cổng Không Gian, cờ hiệu phe phái đung đưa, đống lửa trại trung tâm, giá vũ khí, đe rèn và bệ đá cổ đặt 5 tượng anh hùng.
-  - **Biome 1 (Rừng Cổ Mục Nát):** Rễ cây leo tường, bào tử phát quang, đom đóm bay lượn và bụi lá rơi.
-  - **Biome 2 (Hầm Băng Vĩnh Cửu):** Tường băng vát cạnh phản광, vết nứt băng sâu dưới sàn, cột pha lê khúc xạ và bông tuyết lơ lửng.
-  - **Biome 3 (Lò Rèn Dung Nham):** Tường thép đinh tán lộ khe dung nham rực đỏ, bánh răng cơ khí xoay tròn, đường ống đồng hồ áp suất và tàn lửa bốc lên từ kênh magma.
+  - **Sảnh Doanh Trại (Hub):** Sàn lát đá cổ ấm áp (`ENV_PALETTE[0]`), chậu lửa treo giá sắt `45°`, đống lửa trại trung tâm, kệ vũ khí đôi tự động bổ sung và bệ đá cổ đặt 5 tượng anh hùng.
+  - **Biome 1 (Rừng Cổ Mục Nát):** Rễ cây Bezier leo chân tường, cụm nấm phát quang chân cột, đom đóm bay lượn và bụi lá rơi.
+  - **Biome 2 (Hầm Băng Vĩnh Cửu):** Vòng cổ ngữ băng khắc chìm 3 tầng (*Sunken Astrolabe*), hốc thác băng tường Bắc, pha lê vát cạnh phản quang, 2–3 dải tia sáng *God-rays* và bông tuyết tròn 2 lớp thị sai.
+  - **Biome 3 (Lò Rèn Dung Nham):** Rãnh nhiệt ven tường phủ nắp lưới sắt rèn lộ ánh magma nhịp thở, bánh răng đồng thau `8–12` răng quay chậm, đường ống hơi nước tán đinh và tàn lửa nhỏ (`<= 4px`) bay lên.
 
-### 1.3 Vòng Sáng Vật Tương Tác & Nhãn Nhắc `[E]` Duy Nhất (`Phase P5 & P6`)
-- **Vòng sáng dẫn đường tự nhiên (`Interactable Glow`):** Rương kho báu, vũ khí rơi (tô màu theo 5 bậc hiếm kèm cột sáng thẳng đứng cho đồ Tím/Cam), Tượng Anh Hùng, Thương Nhân, Điện Thờ và Máy Cổ Đại đều có hào quang dưới chân và hạt lấp lánh thu hút ánh nhìn.
-- **Nhãn tương tác `[E]` duy nhất có độ ưu tiên (`Single-Pill Priority Prompt`):** Xóa bỏ hoàn toàn tình trạng chữ chồng chéo trên đầu vật thể; chỉ hiển thị **1 khung nhắc `[E]` duy nhất** cho mục tiêu ưu tiên cao nhất trong tầm `64u` (`Cứu đồng đội > Rương > Vũ khí > NPC/Điện thờ > Tượng Hub > Cổng`) với hiệu ứng phóng mở mượt mà.
+### 1.3 Vòng Sáng Vật Tương Tác & Nhãn Nhắc `[E]` Duy Nhất (`Phase P6 & P7`)
+- **Vòng sáng dẫn đường tự nhiên (`Interactable Glow`):** Rương kho báu, vũ khí rơi (tô màu theo 5 bậc hiếm kèm cột sáng thẳng đứng *Soul Knight* cho đồ Tím/Cam), Tượng Anh Hùng, Thương Nhân, Điện Thờ và Máy Cổ Đại đều có nguồn sáng + hào quang `BlendMode.ADD` và hạt lấp lánh nhận diện ngay từ xa.
+- **Nhãn tương tác `[E]` duy nhất có độ ưu tiên (`Single-Pill Priority Prompt`):** Xóa bỏ hoàn toàn tình trạng chữ chồng chéo trên đầu vật thể; dùng chung hàm `findInteractTarget` giữa Sim và UI để chỉ hiển thị **1 khung nhắc `[E]` duy nhất** cho mục tiêu ưu tiên cao nhất trong tầm với hiệu ứng fade `120–150ms` và trễ `8u` (*hysteresis*).
 
-### 1.4 Cổng Không Gian ShaderXoáy Lốc & Cửa Liên Phòng Theo Biome (`Phase P7`)
-- **Cổng Dịch Chuyển Không Gian (`Procedural Vortex Portal`):** Dựng từ 5 lớp đồ họa động (bệ đá 8 cổ tự sáng dần khi dọn phòng, vòng cổng xoay ngược chiều, lõi xoáy lốc WebGL fragment shader / Canvas2D fallback, tia sét năng lượng và hạt hút vào tâm) kèm chuỗi hiệu ứng thu nhỏ hút nhân vật (`250ms`) khi bước qua.
-- **Cửa Liên Phòng cơ khí theo từng Biome:** Cổng dây leo đá cổ (Biome 1), cổng rào pha lê băng (Biome 2) và cửa sập thép đinh tán cảnh báo vàng-đen (Biome 3) với hiệu ứng đóng sập rung chấn khi khóa phòng và nổ sáng khi mở khóa.
+### 1.4 Cổng Không Gian Shader Xoáy Lốc & Cửa Liên Phòng Theo Biome (`Phase P8`)
+- **Cổng Dịch Chuyển Không Gian (`Procedural Vortex Portal`):** Dựng từ 5 lớp đồ họa động (bệ đá 8 cổ tự sáng dần khi dọn phòng, vòng cổng xoay ngược chiều, lõi xoáy lốc WebGL fragment shader / Canvas2D fallback ở mức `Low`, tia năng lượng và hạt hút vào tâm) kèm chuỗi hiệu ứng bùng sáng kích hoạt (`0.72s`) và hút nhân vật (`0.30s`) khi bước qua.
+- **Cửa Liên Phòng cơ khí theo từng Biome:** Cổng rễ cây kết ấn lục giác (Biome 1), cổng rào băng pha lê (Biome 2) và cửa chắn tia nhiệt cơ khí (Biome 3) với hiệu ứng dựng rào chắn (`250ms`) khi khóa phòng và tan biến (`380ms`) khi mở khóa.
 
-### 1.5 Kiến Trúc `HudScene` Độc Lập & Giao Diện Chuẩn Hóa (`Phase P8, P9a & P9b`)
-- **Tách riêng `HudScene` khỏi camera thế giới:** Toàn bộ HUD và Modal chạy trên `HudScene` độc lập không chịu ảnh hưởng của rung màn hình (`camera shake`), xoay nghiêng hay PostFX của `GameScene`.
-- **Thiết kế HUD hiện đại, thoáng mắt:** Bỏ 2 dải đen đặc chắn trên/dưới màn hình; neo gọn 4 cụm HUD ra sát mép màn hình với chân dung nhân vật động, 3 thanh chỉ số phân đoạn có vạch máu tụt trễ (`trailing damage bar`), đồng hồ hồi chiêu kỹ năng/Dash dạng vòng tròn, thẻ so sánh vũ khí dưới đất (`▲/▼ DPS`), Vòng Biểu Cảm 4 hướng (`[T]`) và thanh máu Boss 3 Phase kèm huy hiệu kỹ năng.
+### 1.5 Kiến Trúc `HudScene` Độc Lập & Giao Diện Chuẩn Hóa (`Phase P3, P9a & P9b`)
+- **Tách riêng `HudScene` khỏi camera thế giới:** Toàn bộ HUD và Modal chạy trên `HudScene` độc lập kèm camera Uniform Zoom không méo hình ở mọi tỷ lệ màn hình (`1080p`, `1440p`, `21:9 Ultrawide`, `5:4`) và không chịu ảnh hưởng của rung màn hình hay PostFX của `GameScene`.
+- **Thiết kế HUD hiện đại, thoáng mắt:** Hệ thống token `UI_THEME` đồng bộ bảng màu `ENV_PALETTE`, xóa bỏ 2 dải đen đặc trên/dưới màn hình; neo gọn 4 cụm HUD với chân dung nhân vật mini vẽ bằng code, 3 thanh chỉ số chia đốt có vạch máu tụt trễ, 2 thẻ vũ khí + đồng hồ hồi chiêu kỹ năng/Dash dạng vòng tròn, gộp thông báo phản ứng nguyên tố trong cửa sổ `0.4s` (`"⚡ HƠI NƯỚC ×3"`), mũi tên chỉ quái ngoài màn hình, cung đỏ báo hướng sát thương và thanh máu Boss chia phase `66%`/`33%`.
 - **Hệ thống Modal & Sảnh Chờ tinh gọn:**
-  - **Cài Đặt 4 Tab (`Âm thanh · Hình ảnh · Gameplay · Điều khiển`)** hỗ trợ thanh trượt Kéo-Thả chuột trực tiếp, bật/tắt Toàn màn hình (`[F11]`), chỉnh `UI Scale (80%–120%)` và Ngôn ngữ `VI / EN`.
-  - **Ô nhập chữ HTML chuẩn tại Menu chính:** Cho phép gõ tiếng Việt có dấu (IME/Telex/VNI) và dán nhanh `Ctrl+V` địa chỉ IP LAN.
-  - **Bảng Mời Bạn Bè thu gọn thành Chip (`[I]`):** Mặc định thu gọn gọn gàng ở góc phải trên để không che khuất Sảnh Doanh Trại; bấm `[I]` hoặc nhấp chuột để bung mã QR + danh sách IP LAN.
-  - **Menu Tạm Dừng (`[Esc]`) & Màn Hình Kết Thúc:** Menu Pause 4 nút rõ ràng có hộp thoại xác nhận trước khi thoát; màn hình Chiến Thắng/Thất Bại 3 tầng vinh danh 4 danh hiệu MVP kèm tên tiếng Việt/Anh chuẩn của mọi Phước Lành.
+  - **Cài Đặt 4 Tab (`Âm thanh · Hình ảnh · Gameplay · Điều khiển`)** với tiêu đề đơn ngữ chuẩn, bật/tắt Toàn màn hình (`[F11]` kèm Toast), chỉnh `UI Scale (80%–130%)`, `Key Hints` và Ngôn ngữ `VI / EN`.
+  - **Ô nhập chữ HTML `<input>` thật tại Menu chính:** Cho phép chọn chữ, xóa `Backspace`/`Delete` và dán nhanh `Ctrl+V` địa chỉ IP LAN.
+  - **Bảng Mời Bạn Bè thu gọn thành Chip (`[I]`):** Mặc định thu gọn gọn gàng ở góc phải trên (`"📡 Mời bạn · 2/4 [I]"`) để không che khuất Sảnh Doanh Trại; bấm `[I]` hoặc nhấp chuột để bung mã QR + danh sách IP LAN + nút `"Đuổi"` không bao giờ đè chữ.
+  - **Menu Tạm Dừng (`[Esc]`) & Màn Hình Kết Thúc:** Menu Pause 4 nút rõ ràng có hộp thoại xác nhận trước khi thoát về Menu chính; màn hình Chiến Thắng/Thất Bại 3 tầng vinh danh 4 danh hiệu MVP với 2 nút hành động phân cấp (`Chơi lại [Enter]` và `Về Hub [H]`).
 
-### 1.6 Cutout 2.0: Đổóng 2 Lớp, Viền Sáng `-135°`, Quái Đủ Bộ Phận & Hoạt Ảnh Tham Số (`Phase P10`)
+### 1.6 Cutout 2.0: Đổ Bóng 2 Lớp, Viền Sáng `-135°`, Quái Full Rig & Hoạt Ảnh Tham Số (`Phase P10a`)
 - **Đổ bóng 2 lớp & Ánh sáng góc `-135°`:** Toàn bộ 5 nhân vật, 16 quái, 3 Boss và 24 vũ khí được nâng cấp lên pipeline đổ bóng 2 lớp (midtone + core shadow), viền sáng rim-light hướng Tây-Bắc (`-135°`) và viền ngoài tự co giãn theo kích thước bộ phận.
 - **100% Quái vật có đủ bộ phận cơ thể (`>= 4 parts`) và tư thế cầm vũ khí chuẩn:** Nấm Độc, Phù Thủy Đầm Lầy, Bọ Cạp Băng, Golem Đá Lửa... đều có tay/chân/vũ khí/vương miện tách rời; vũ khí 2 tay nằm ngang tự nhiên không đâm xuyên đầu nhân vật.
 - **Hoạt ảnh tham số giàu sức sống:** Chu kỳ chạy nghiêng người + vung tay chân lệch pha + hạt bụi bước chân (`footstep dust`), nhịp giật lùi vũ khí theo đường cong `outBack`, lắc lư quán tính phụ kiện (áo choàng, râu, lá mầm), hiệu ứng gồng chiêu rung thân + mắt phát sáng của quái, cùng chuỗi 4 giai đoạn gục ngã khi chết (`Knockback -> Nảy thân -> Văng vũ khí -> Tan biến`).

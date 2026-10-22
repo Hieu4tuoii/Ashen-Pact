@@ -110,6 +110,6 @@
 | P10a | Nhân vật Cutout 2.0 & Quái Full Rig: animation, shading 2 lớp & rim-light | Chi tiết, mượt, đẹp (Rig) | [x] |
 | P10b | FX, Phản Ứng Nguyên Tố & Hạt Môi Trường Trong Trẻo | Chi tiết, mượt, đẹp (FX) | [x] |
 | P11 | Harness thật + độ khó + kịch tính | Khó và kịch tính hơn | [x] |
-| P12 | Hồi quy, hiệu năng, release v0.2.0 | Chất lượng sản phẩm | [ ] |
+| P12 | Hồi quy, hiệu năng, release v0.2.0 | Chất lượng sản phẩm | [x] |
 
 
