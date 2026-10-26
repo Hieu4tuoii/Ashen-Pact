@@ -16,8 +16,6 @@ export function activateCharacterSkillImpl(this: WorldSim, p: SimPlayerState): v
       const bonusDur = this.activeBuffIds.includes('vanguard_fortress') ? 1.5 : 0;
       p.skillActiveTimer = skillDef.durationSec + bonusDur;
       p.skillCooldownTimer = skillDef.cooldownSec;
-      p.energyRegenDelayTimer = 2.0;
-      p.energyRegenAccum = 0;
       p.shieldStoredBullets = 0;
       if (this.activeBuffIds.includes('vanguard_fortress')) {
         p.armor = Math.min(p.maxArmor, p.armor + 2);
@@ -36,8 +34,6 @@ export function activateCharacterSkillImpl(this: WorldSim, p: SimPlayerState): v
 
   if (p.skillCooldownTimer > 0) return;
   p.skillCooldownTimer = skillDef.cooldownSec;
-  p.energyRegenDelayTimer = 2.0;
-  p.energyRegenAccum = 0;
   p.skillActiveTimer =
     p.characterId === 'ranger'
       ? 3.8

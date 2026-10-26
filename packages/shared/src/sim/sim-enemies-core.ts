@@ -815,25 +815,18 @@ function clearBossNearbyProjectiles(sim: WorldSim, bossX: number, bossY: number,
   }
   sim.projectiles.length = writeIdx;
 
-  // Reward all alive players with a substantial phase-transition energy burst so they never starve mid-boss fight
+  // Reward all alive players with an instant cadence refill / heat vent on boss phase transition
   for (let pIdx = 0; pIdx < players.length; pIdx++) {
     const pl = players[pIdx]!;
     if (pl.lifeState !== 'alive') continue;
-    const bonusEnergy = Math.max(130, Math.round(pl.maxEnergy * 0.7));
-    const prevEnergy = pl.energy;
-    pl.energy = Math.min(pl.maxEnergy, pl.energy + bonusEnergy);
-    pl.energyRegenDelayTimer = 0;
-    const actualGained = Math.max(1, pl.energy - prevEnergy);
-    sim.events.push({
-      kind: 'pickup_collected',
-      pickupKind: 'energy',
-      amount: actualGained,
-      x: pl.x,
-      y: pl.y,
-    });
+    pl.clipAmmo = pl.clipMax;
+    pl.reloadTimer = 0;
+    pl.reloadLockout = false;
+    pl.weaponHeat = 0;
+    pl.overheatLockTimer = 0;
   }
 
-  // Drop phase-break sustain orbs (1 Life Seed + 2 Energy orbs) around Boss position with outward scatter velocity
+  // Drop phase-break sustain orb (1 Life Seed) around Boss position with outward scatter velocity
   const baseAng = sim.rng.nextFloat(-Math.PI, Math.PI);
   sim.pickups.push(
     sim.acquirePickup({
@@ -847,21 +840,6 @@ function clearBossNearbyProjectiles(sim: WorldSim, bossX: number, bossY: number,
       ttlSec: 22,
     }),
   );
-  for (let k = 0; k < 2; k++) {
-    const eAng = baseAng + ((k + 1) * (Math.PI * 2)) / 3;
-    sim.pickups.push(
-      sim.acquirePickup({
-        id: ++sim.nextEntityId,
-        kind: 'energy',
-        x: bossX,
-        y: bossY,
-        vx: Math.cos(eAng) * 95,
-        vy: Math.sin(eAng) * 95,
-        amount: 8,
-        ttlSec: 22,
-      }),
-    );
-  }
 }
 
 export function checkBossPhaseTransitionsImpl(this: WorldSim, e: SimEnemyState): void {

@@ -186,14 +186,14 @@ describe('Phase 1 — HP, Armor Regen (Thiết Vệ 2.0s), Knockback & 4 Sample 
     expect(sim.player.hp).toBe(6);
     expect(sim.player.kbVx).toBeGreaterThan(0);
 
-    // Wait 1.5s -> Armor still 1 (delay is 4.5s)
+    // Wait 1.5s -> Armor still 1 (delay is 3.0s for Vanguard per Spec Rev 4)
     for (let i = 0; i < 90; i++) {
       sim.step(SIM_STEP_SEC);
     }
     expect(sim.player.armor).toBe(1);
 
-    // Wait another 4.6s (total 6.1s > 4.5s delay + 1.54s regen @ 0.65/s) -> Armor regenerates to 2
-    for (let i = 0; i < 276; i++) {
+    // Wait another 3.1s (total 4.6s > 3.0s delay + 1.54s regen @ 0.65/s) -> Armor regenerates to 2
+    for (let i = 0; i < 186; i++) {
       sim.step(SIM_STEP_SEC);
     }
     expect(sim.player.armor).toBe(2);
@@ -215,9 +215,9 @@ describe('Phase 1 — HP, Armor Regen (Thiết Vệ 2.0s), Knockback & 4 Sample 
     expect(sim.player.weaponSlots).toEqual([...PHASE1_SAMPLE_WEAPONS]);
     const target = sim.spawnEnemy('goblin_shooter', sim.player.x + 36, sim.player.y, true);
 
-    // Activate Thiết Vệ's Ruby Shield Wall and lower energy slightly to verify +1 energy gain on sword deflection
+    // Activate Thiết Vệ's Ruby Shield Wall to verify shield bullet storage & bonus damage on sword deflection
     sim.player.skillActiveTimer = 3.0;
-    sim.player.energy = 100;
+    sim.player.vanguardShieldBonusAdd = 0;
 
     // Spawn an incoming enemy bullet right in front of the player
     sim.projectiles.push({
@@ -261,10 +261,9 @@ describe('Phase 1 — HP, Armor Regen (Thiết Vệ 2.0s), Knockback & 4 Sample 
     expect(target.kbVx).toBeGreaterThan(0);
     expect(sim.projectiles.filter((b) => b.team === 'enemy')).toHaveLength(0);
     expect(sim.player.shieldStoredBullets).toBe(1);
-    expect(sim.player.energy).toBe(101);
+    expect(sim.player.vanguardShieldBonusAdd).toBeCloseTo(0.15, 5);
 
-    // 2. Equip Scrap Shotgun into slot 1 -> fires 5 pellets, costs 3 energy, and reuses pooled projectile object
-    const energyBefore = sim.player.energy;
+    // 2. Equip Scrap Shotgun into slot 1 -> fires 5 pellets and reuses pooled projectile object
     sim.player.weaponSlots[1] = 'scrap_shotgun';
     sim.player.fireCooldownTimer = 0;
     sim.setPlayerInput({
@@ -279,7 +278,7 @@ describe('Phase 1 — HP, Armor Regen (Thiết Vệ 2.0s), Knockback & 4 Sample 
     sim.step(SIM_STEP_SEC);
 
     expect(sim.getActiveWeaponId()).toBe('scrap_shotgun');
-    expect(sim.player.energy).toBe(energyBefore - 3);
+    expect(sim.player.vanguardShieldBonusAdd).toBe(0);
     const playerPellets = sim.projectiles.filter((b) => b.team === 'player');
     expect(playerPellets).toHaveLength(5);
     expect(playerPellets.some((b) => b === deflectedBulletRef)).toBe(true);

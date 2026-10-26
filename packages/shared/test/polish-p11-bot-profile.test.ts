@@ -35,7 +35,6 @@ describe('Phase P11 — Locked Average Player Bot Profile & Honest Simulation Pr
     expect(AVERAGE_PLAYER_BOT_PROFILE.dashDodgeProbability).toBeLessThanOrEqual(0.7);
 
     expect(AVERAGE_PLAYER_BOT_PROFILE.godMode).toBe(false);
-    expect(AVERAGE_PLAYER_BOT_PROFILE.infiniteEnergy).toBe(false);
     expect(AVERAGE_PLAYER_BOT_PROFILE.seeds.length).toBe(30);
 
     const uniqueSeeds = new Set(AVERAGE_PLAYER_BOT_PROFILE.seeds);
@@ -65,7 +64,7 @@ describe('Phase P11 — Locked Average Player Bot Profile & Honest Simulation Pr
     });
   });
 
-  it('never enables godMode or infinite energy and swaps to 0-energy backup weapon when energy is depleted', () => {
+  it('never enables godMode and swaps to backup weapon when active weapon is locked out by reload/overheat', () => {
     const sim = new WorldSim({
       seed: 10101,
       spawnInitialWave: false,
@@ -79,7 +78,7 @@ describe('Phase P11 — Locked Average Player Bot Profile & Honest Simulation Pr
     p.y = 270;
     p.weaponSlots = ['solar_archon_staff', 'hunter_crossbow'];
     p.activeWeaponSlot = 0;
-    p.energy = 2; // Below solar_archon_staff energyCost
+    p.overheatLockTimer = 1.5;
 
     const enemy = sim.spawnEnemy('goblin_shooter', 500, 270, true);
     enemy.hp = 500;
@@ -96,9 +95,8 @@ describe('Phase P11 — Locked Average Player Bot Profile & Honest Simulation Pr
     );
 
     expect(p.godMode).toBe(false);
-    expect(p.energy).toBeLessThanOrEqual(2);
     expect(pkt.weaponSlotSelect).toBe(1);
-    expect(WEAPONS[p.weaponSlots[1]!]!.energyCost).toBe(0);
+    expect(WEAPONS[p.weaponSlots[1]!]!.cadenceKind).toBe('CLIP_RELOAD');
   });
 
   it('enforces reactionDelaySec (250ms) before reacting to a new threat and rolls dashDodgeProbability (65%) deterministically', () => {

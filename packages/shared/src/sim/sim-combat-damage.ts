@@ -239,7 +239,12 @@ export function triggerElementalReactionImpl(
     for (let i = 0; i < allPlayers.length; i++) {
       const pl = allPlayers[i]!;
       if (pl.id === primerPlayerId || pl.id === triggerPlayerId) {
-        pl.energy = Math.min(pl.maxEnergy, pl.energy + 15);
+        pl.elementalConvergenceTimer = 3.0;
+        pl.clipAmmo = pl.clipMax;
+        pl.reloadTimer = 0;
+        pl.reloadLockout = false;
+        pl.weaponHeat = 0;
+        pl.overheatLockTimer = 0;
         pl.statsTeamCombos = (pl.statsTeamCombos ?? 0) + 1;
       }
     }
@@ -256,6 +261,7 @@ export function triggerElementalReactionImpl(
       isTeamCombo,
       primerPlayerId,
       triggerPlayerId,
+      convergenceDurationSec: isTeamCombo ? 3.0 : undefined,
     });
     this.events.push({
       kind: 'hit_stop',
@@ -370,7 +376,6 @@ export function handleEnemyKilledImpl(
       }
     }
     const coreSeedAng = this.rng.nextFloat(-Math.PI, Math.PI);
-    const coreEnergyAng = coreSeedAng + Math.PI;
     this.pickups.push(
       this.acquirePickup({
         id: ++this.nextEntityId,
@@ -380,18 +385,6 @@ export function handleEnemyKilledImpl(
         vx: Math.cos(coreSeedAng) * 65,
         vy: Math.sin(coreSeedAng) * 65,
         amount: 2,
-        ttlSec: 18,
-      }),
-    );
-    this.pickups.push(
-      this.acquirePickup({
-        id: ++this.nextEntityId,
-        kind: 'energy',
-        x: enemy.x,
-        y: enemy.y,
-        vx: Math.cos(coreEnergyAng) * 75,
-        vy: Math.sin(coreEnergyAng) * 75,
-        amount: 12,
         ttlSec: 18,
       }),
     );
@@ -486,49 +479,7 @@ export function handleEnemyKilledImpl(
     enemy.defId === 'kryssa_clone' ||
     enemy.defId === 'spore_guardian';
 
-  let energyOrbCount = 0;
-  let energyOrbAmount = 6;
-  if (enemy.defId === 'kryssa_clone' || enemy.defId === 'spore_guardian') {
-    energyOrbCount = 0;
-  } else if (enemy.defId === 'mini_slime') {
-    if (this.rng.chance(0.25)) {
-      energyOrbCount = 1;
-      energyOrbAmount = 4;
-    }
-  } else if (enemy.isBoss) {
-    energyOrbCount = 5;
-    energyOrbAmount = 8;
-  } else if (enemy.isElite) {
-    energyOrbCount = 2;
-    energyOrbAmount = 8;
-  } else if (this.rng.chance(0.55)) {
-    energyOrbCount = 1;
-    energyOrbAmount = 6;
-  }
-
-  for (let k = 0; k < energyOrbCount; k++) {
-    const ang = this.rng.nextFloat(-Math.PI, Math.PI);
-    const spd = this.rng.nextFloat(60, 130);
-    for (let pIdx = 0; pIdx < allPlayers.length; pIdx++) {
-      const pl = allPlayers[pIdx]!;
-      const instAng = ang + pIdx * 0.45;
-      this.pickups.push(
-        this.acquirePickup({
-          id: ++this.nextEntityId,
-          kind: 'energy',
-          x: enemy.x,
-          y: enemy.y,
-          vx: Math.cos(instAng) * spd,
-          vy: Math.sin(instAng) * spd,
-          amount: energyOrbAmount,
-          ttlSec: 14,
-          ownerPlayerId: isCoop ? pl.id : undefined,
-        }),
-      );
-    }
-  }
-
-  // Ranger Co-op Synergy: Marked enemies drop bonus team energy orbs on death!
+  // Ranger Skill (Mũi Tên Săn Mồi): Killing a Marked enemy spawns a Prey Emblem (Huy Hiệu Con Mồi)
   if (enemy.markedTimer > 0) {
     for (let pIdx = 0; pIdx < allPlayers.length; pIdx++) {
       const pl = allPlayers[pIdx]!;
@@ -536,12 +487,12 @@ export function handleEnemyKilledImpl(
       this.pickups.push(
         this.acquirePickup({
           id: ++this.nextEntityId,
-          kind: 'energy',
+          kind: 'prey_emblem',
           x: enemy.x,
           y: enemy.y,
           vx: Math.cos(instAng) * 95,
           vy: Math.sin(instAng) * 95,
-          amount: 16,
+          amount: 1,
           ttlSec: 14,
           ownerPlayerId: isCoop ? pl.id : undefined,
         }),

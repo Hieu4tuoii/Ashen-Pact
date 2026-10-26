@@ -359,22 +359,6 @@ export function measureCombatDpsAndSkillUptime(
     target.isDummy = true;
 
     for (let t = 0; t < totalTicksPerRun; t++) {
-      // Spawn natural combat energy orb drop every 3.5s within pickup magnet range
-      if (t > 0 && t % 210 === 0) {
-        sim.pickups.push(
-          sim.acquirePickup({
-            id: ++sim.nextEntityId,
-            kind: 'energy',
-            x: p.x + 36,
-            y: p.y,
-            vx: -40,
-            vy: 0,
-            amount: 28,
-            ttlSec: 10,
-          }),
-        );
-      }
-
       const distPref = isMelee
         ? p.characterId === 'vanguard' && p.skillActiveTimer > 0
           ? 140
@@ -484,15 +468,11 @@ export function measureCombatRoomClearSec(
       pl.weaponSlots[1] = CHARACTERS[pl.characterId].starterWeaponId;
       pl.maxArmor += 2;
       pl.armor = pl.maxArmor;
-      pl.maxEnergy += 30;
-      pl.energy = pl.maxEnergy;
     } else if (biome === 3) {
       pl.weaponSlots[0] = BIOME2_PRIMARY_WEAPON[pl.characterId];
       pl.weaponSlots[1] = CHARACTERS[pl.characterId].starterWeaponId;
       pl.maxArmor += 4;
       pl.armor = pl.maxArmor;
-      pl.maxEnergy += 60;
-      pl.energy = pl.maxEnergy;
     }
   }
   if (biome >= 2) {
@@ -650,16 +630,12 @@ export function simulateBossEncounter(
       pl.activeWeaponSlot = 0;
       pl.maxArmor += 5;
       pl.armor = pl.maxArmor;
-      pl.maxEnergy += 60;
-      pl.energy = pl.maxEnergy;
     } else {
       pl.weaponSlots[0] = BIOME3_PRIMARY_WEAPON[pl.characterId];
       pl.weaponSlots[1] = starterId;
       pl.activeWeaponSlot = 0;
       pl.maxArmor += 5;
       pl.armor = pl.maxArmor;
-      pl.maxEnergy += 60;
-      pl.energy = pl.maxEnergy;
     }
   }
   sim.applyBuffEffects('iron_bastion');

@@ -127,7 +127,6 @@ export class WorldSim {
     damage: number;
   }[] = [];
   public doorTransitionCooldown = 0;
-  public energyRegenAccum = 0;
   public readonly queryEnemyScratch: SimEnemyState[] = [];
   public readonly queryBulletScratch: SimProjectileState[] = [];
   public readonly projectilePool: SimProjectileState[] = [];

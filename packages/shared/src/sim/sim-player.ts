@@ -159,26 +159,10 @@ export function updateSinglePlayerStateImpl(this: WorldSim,
   if (p.skillCooldownTimer > 0) p.skillCooldownTimer = Math.max(0, p.skillCooldownTimer - dtSec);
   if (p.grassRustleCooldown > 0)
     p.grassRustleCooldown = Math.max(0, p.grassRustleCooldown - dtSec);
-
-  const activeBossInRoom = !this.stressTestActive && this.getActiveBoss() !== null;
-  if (activeBossInRoom && p.energyRegenDelayTimer > 1.0) {
-    p.energyRegenDelayTimer = 1.0;
-  }
-  if (p.energyRegenDelayTimer > 0) {
-    const nextEnergyDelay = p.energyRegenDelayTimer - dtSec;
-    p.energyRegenDelayTimer = nextEnergyDelay < 1e-6 ? 0 : nextEnergyDelay;
-  } else if (p.energy < p.maxEnergy) {
-    const regenMult = this.activeBuffIds.includes('arcane_wellspring') ? 1.5 : 1.0;
-    const baseRegenRate = activeBossInRoom ? 3.5 : 1.5;
-    p.energyRegenAccum += dtSec * baseRegenRate * regenMult;
-    if (p.energyRegenAccum + 1e-6 >= 1) {
-      const gain = Math.floor(p.energyRegenAccum + 1e-6);
-      p.energyRegenAccum = Math.max(0, p.energyRegenAccum - gain);
-      p.energy = Math.min(p.maxEnergy, p.energy + gain);
-    }
-  }
-  if (p.energy >= p.maxEnergy) {
-    p.energyRegenAccum = 0;
+  const hadConvergenceBeforeTick = p.elementalConvergenceTimer > 0;
+  if (p.elementalConvergenceTimer > 0) {
+    const nextConv = p.elementalConvergenceTimer - dtSec;
+    p.elementalConvergenceTimer = nextConv < 1e-6 ? 0 : nextConv;
   }
 
   // Engineer passive: allies within 4 tiles (128u) regenerate armor 15% faster!
@@ -287,8 +271,8 @@ export function updateSinglePlayerStateImpl(this: WorldSim,
     }
   }
 
-  // Surface speed & friction modifiers (oil slows by 15%, ice reduces traction)
-  let speedMult = 1.0;
+  // Surface speed & friction modifiers (oil slows by 15%, ice reduces traction; Elemental Convergence grants +20% speed)
+  let speedMult = hadConvergenceBeforeTick || p.elementalConvergenceTimer > 0 ? 1.2 : 1.0;
   if (surf === 'oil' || surf === 'poison_swamp') speedMult *= 0.85;
   if (p.chillTimer > 0) speedMult *= 0.7;
 
@@ -520,21 +504,15 @@ export function tryFireActiveWeaponImpl(this: WorldSim, p: SimPlayerState = this
   const w = WEAPONS[weaponId];
   if (!w) return;
 
-  const cost = p.godMode ? 0 : w.energyCost;
-  if (p.energy < cost) {
-    return;
-  }
-
   const hasGaleReflex = this.activeBuffIds.includes('gale_reflex');
   const hasEaglePrecision = this.activeBuffIds.includes('eagle_precision');
   const hasRicochetMastery = this.activeBuffIds.includes('ricochet_mastery');
 
-  if (cost > 0) {
-    p.energy = Math.max(0, p.energy - cost);
-    p.energyRegenDelayTimer = 2.0;
-    p.energyRegenAccum = 0;
-  }
-  const effectiveFireRate = w.fireRate * (hasGaleReflex ? 1.22 : 1);
+  const vanguardBonusMult = 1 + (p.vanguardShieldBonusAdd ?? 0);
+  p.vanguardShieldBonusAdd = 0;
+
+  const convergenceMult = p.elementalConvergenceTimer > 0 ? 1.2 : 1.0;
+  const effectiveFireRate = w.fireRate * (hasGaleReflex ? 1.22 : 1) * convergenceMult;
   p.fireCooldownTimer = 1 / effectiveFireRate;
   p.recoilTimer = 0.12;
   const shotElement: ElementType =
@@ -568,7 +546,12 @@ export function tryFireActiveWeaponImpl(this: WorldSim, p: SimPlayerState = this
           const shieldActive = p.characterId === 'vanguard' && p.skillActiveTimer > 0;
           if (shieldActive) {
             p.shieldStoredBullets += 1;
-            p.energy = Math.min(p.maxEnergy, p.energy + 1);
+            if (w.cadenceKind === 'HEAT_VENT') {
+              p.weaponHeat = Math.max(0, p.weaponHeat - 15);
+            } else if (p.clipMax > 0) {
+              p.clipAmmo = Math.min(p.clipMax, p.clipAmmo + 1);
+            }
+            p.vanguardShieldBonusAdd = Math.min(0.75, (p.vanguardShieldBonusAdd ?? 0) + 0.15);
           }
           this.events.push({
             kind: 'projectile_impact',
@@ -586,7 +569,9 @@ export function tryFireActiveWeaponImpl(this: WorldSim, p: SimPlayerState = this
     }
 
     // Hit props in melee cone
-    const baseMeleeDmg = hasEaglePrecision ? Math.round(w.damage * 1.2) : w.damage;
+    const baseMeleeDmg = Math.round(
+      (hasEaglePrecision ? Math.round(w.damage * 1.2) : w.damage) * vanguardBonusMult,
+    );
     for (let i = 0; i < this.props.length; i++) {
       const prop = this.props[i]!;
       if (!prop.destructible || prop.hp <= 0) continue;
@@ -734,7 +719,9 @@ export function tryFireActiveWeaponImpl(this: WorldSim, p: SimPlayerState = this
   const spawnY = p.y + Math.sin(p.aimAngle) * muzzleDist;
   const baseCrit = CHARACTERS[p.characterId]?.baseCritChance ?? 0.05;
   const rawWeaponDmg = hasEaglePrecision ? Math.round(w.damage * 1.2) : w.damage;
-  const baseDmg = shieldBoost ? Math.round(rawWeaponDmg * 1.3) : rawWeaponDmg;
+  const baseDmg = Math.round(
+    (shieldBoost ? Math.round(rawWeaponDmg * 1.3) : rawWeaponDmg) * vanguardBonusMult,
+  );
   const critChance = clamp(baseCrit + w.critChance + (hasEaglePrecision ? 0.18 : 0), 0, 1);
 
   // Co-op Weapon: Trượng Liên Kết (tether_staff) links player with nearest ally or summon/anchor!

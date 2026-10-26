@@ -327,16 +327,12 @@ export interface SimPlayerState {
   maxHp: number;
   armor: number;
   maxArmor: number;
-  energy: number;
-  maxEnergy: number;
   gold: number;
   moveSpeed: number;
   armorRegenDelaySec: number;
   armorRegenPerSec: number;
   armorRegenTimer: number;
   armorRegenAccum: number;
-  energyRegenDelayTimer: number;
-  energyRegenAccum: number;
   dashTimer: number;
   dashCooldownTimer: number;
   dashDirX: number;
@@ -348,6 +344,21 @@ export interface SimPlayerState {
   weaponPickupLockTimer?: number;
   fireCooldownTimer: number;
   recoilTimer: number;
+  // Ashen Pact 2.0 Active Weapon Cadence & Replacement Mechanics
+  clipAmmo: number;
+  clipMax: number;
+  reloadTimer: number;
+  reloadDuration: number;
+  reloadLockout: boolean;
+  overclockedNextShot: boolean;
+  weaponHeat: number;
+  overheatLockTimer: number;
+  meleeComboStep: 0 | 1 | 2;
+  meleeComboResetTimer: number;
+  meleeParryWindowTimer: number;
+  holsterReloadTimers: number[];
+  vanguardShieldBonusAdd: number;
+  elementalConvergenceTimer: number;
   skillActiveTimer: number;
   skillCooldownTimer: number;
   shieldStoredBullets: number;
@@ -485,7 +496,7 @@ export interface SimProjectileState {
 
 export interface SimPickupState {
   id: number;
-  kind: 'energy' | 'gold' | 'life_seed';
+  kind: 'gold' | 'life_seed' | 'prey_emblem';
   prevX: number;
   prevY: number;
   x: number;

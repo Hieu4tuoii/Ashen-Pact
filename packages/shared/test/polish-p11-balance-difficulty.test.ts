@@ -190,8 +190,8 @@ describe('Phase P11 — Step 2: Data-Driven Difficulty Levers, Boss Drama & Pres
     }
   });
 
-  it('tightens armorRegenDelaySec (4.5s Vanguard / 5.2s others) and revives downed co-op allies at 35% HP on room clear', () => {
-    expect(CHARACTERS.vanguard.armorRegenDelaySec).toBeCloseTo(4.5, 2);
+  it('tightens armorRegenDelaySec (3.0s Vanguard / 5.2s others) and revives downed co-op allies at 35% HP on room clear', () => {
+    expect(CHARACTERS.vanguard.armorRegenDelaySec).toBeCloseTo(3.0, 2);
     expect(CHARACTERS.ranger.armorRegenDelaySec).toBeCloseTo(5.2, 2);
     expect(CHARACTERS.elementalist.armorRegenDelaySec).toBeCloseTo(5.2, 2);
     expect(CHARACTERS.druid.armorRegenDelaySec).toBeCloseTo(5.2, 2);

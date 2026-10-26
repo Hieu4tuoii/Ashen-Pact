@@ -10,15 +10,15 @@ export const CHARACTERS: Record<CharacterId, CharacterStatsDef> = {
     titleVi: 'Tank / Bảo Hộ Tuyến Đầu',
     hp: 6,
     armor: 5,
-    energy: 150,
-    armorRegenDelaySec: 4.5,
+    armorRegenDelaySec: 3.0,
     armorRegenPerSec: 0.65,
     moveSpeed: Math.round(BASE_MOVE_SPEED * 0.95),
     speedMultiplierPct: 95,
     baseCritChance: 0.05,
     starterWeaponId: 'knight_sword',
     passiveNameVi: 'Ý Chí Thép',
-    passiveDescriptionVi: 'Giáp hồi sau 2s; mỗi viên đạn chặn bằng kỹ năng hồi 1 năng lượng.',
+    passiveDescriptionVi:
+      'Giáp hồi sau 3.0s; mỗi đạn địch bị khiên chặn nạp 1 viên đạn (hoặc -15% Nhiệt) và +15% ST cho đòn kế tiếp (tối đa +75%).',
     skill: {
       id: 'ruby_shield_wall',
       nameVi: 'Tường Khiên Hồng Ngọc',
@@ -50,7 +50,6 @@ export const CHARACTERS: Record<CharacterId, CharacterStatsDef> = {
     titleVi: 'Sát Thương / Đánh Dấu',
     hp: 5,
     armor: 3,
-    energy: 200,
     armorRegenDelaySec: 5.2,
     armorRegenPerSec: 0.65,
     moveSpeed: Math.round(BASE_MOVE_SPEED * 1.05),
@@ -66,9 +65,9 @@ export const CHARACTERS: Record<CharacterId, CharacterStatsDef> = {
       cooldownSec: 7,
       durationSec: 6,
       descriptionVi:
-        'Lộn lùi (i-frame) và bắn mũi tên xuyên thấu đánh dấu quái trong 6s: nhận +25% sát thương từ mọi nguồn, lộ diện xuyên tường và rơi cầu năng lượng khi chết.',
+        'Lộn lùi (i-frame) và bắn mũi tên xuyên thấu đánh dấu quái trong 6s: nhận +25% sát thương từ mọi nguồn, lộ diện xuyên tường và rơi Huy Hiệu Săn Mồi khi bị hạ.',
       synergyVi:
-        'Mục tiêu bị Đánh Dấu nhận +25% sát thương từ cả đội, lộ diện xuyên sương mù, bị Trụ Tesla ưu tiên khóa mục tiêu và rơi cầu năng lượng khi bị hạ.',
+        'Mục tiêu bị Đánh Dấu nhận +25% sát thương từ cả đội, bị Trụ Tesla ưu tiên khóa mục tiêu và rơi Huy Hiệu Săn Mồi (nạp đầy băng cường hóa / xả sạch nhiệt và -2.0s hồi chiêu).',
       upgrades: [
         {
           id: 'ranger_arrow_volley',
@@ -91,7 +90,6 @@ export const CHARACTERS: Record<CharacterId, CharacterStatsDef> = {
     titleVi: 'Khống Chế / Phản Ứng Nguyên Tố',
     hp: 4,
     armor: 2,
-    energy: 260,
     armorRegenDelaySec: 5.2,
     armorRegenPerSec: 0.65,
     moveSpeed: BASE_MOVE_SPEED,
@@ -110,7 +108,7 @@ export const CHARACTERS: Record<CharacterId, CharacterStatsDef> = {
       descriptionVi:
         'Ném quả cầu nổ thành vùng nguyên tố 5s. Đạn đồng minh bay qua vùng được tẩm nguyên tố đó.',
       synergyVi:
-        'Đạn đồng minh bay qua vùng nguyên tố được tẩm nguyên tố đó, dễ dàng kích hoạt Đồng Đội Combo (+15 Năng lượng cho cả 2 người chơi).',
+        'Đạn đồng minh bay qua vùng nguyên tố được tẩm nguyên tố đó, dễ dàng kích hoạt Đồng Đội Combo (Hội Tụ Nguyên Tố 3.0s: làm mới băng đạn/nhiệt và +20% tốc độ cho cả 2 người chơi).',
       upgrades: [
         {
           id: 'elementalist_vortex',
@@ -132,7 +130,6 @@ export const CHARACTERS: Record<CharacterId, CharacterStatsDef> = {
     titleVi: 'Hỗ Trợ / Hồi Phục',
     hp: 5,
     armor: 3,
-    energy: 200,
     armorRegenDelaySec: 5.2,
     armorRegenPerSec: 0.65,
     moveSpeed: BASE_MOVE_SPEED,
@@ -173,7 +170,6 @@ export const CHARACTERS: Record<CharacterId, CharacterStatsDef> = {
     titleVi: 'Tiện Ích / Trụ Pháo',
     hp: 6,
     armor: 4,
-    energy: 180,
     armorRegenDelaySec: 5.2,
     armorRegenPerSec: 0.65,
     moveSpeed: BASE_MOVE_SPEED,

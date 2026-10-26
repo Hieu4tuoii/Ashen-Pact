@@ -24,9 +24,12 @@ export function activateShrineImpl(this: WorldSim, shrine: SimNpcState, actor: S
   room.shrineUsed = true;
 
   for (const p of this.getAllPlayers()) {
-    p.maxEnergy += 15;
-    p.energy = p.maxEnergy;
     p.armor = p.maxArmor;
+    p.clipAmmo = p.clipMax;
+    p.reloadTimer = 0;
+    p.reloadLockout = false;
+    p.weaponHeat = 0;
+    p.overheatLockTimer = 0;
   }
 
   // Also grant the room's shrineBlessingId buff if available
@@ -37,8 +40,8 @@ export function activateShrineImpl(this: WorldSim, shrine: SimNpcState, actor: S
 
   const buffDef = blessingId ? FLOOR_BUFFS[blessingId] : undefined;
   shrine.dialogueVi = buffDef
-    ? `Phước lành Cổ Ngữ: ${buffDef.nameVi} (+15 Năng Lượng tối đa)!`
-    : 'Phước lành Cổ Ngữ: +15 Năng Lượng tối đa!';
+    ? `Phước lành Cổ Ngữ: ${buffDef.nameVi} (Hồi đầy Giáp & Đạn)!`
+    : 'Phước lành Cổ Ngữ: Hồi đầy Giáp & Đạn!';
   this.events.push({
     kind: 'shrine_blessing',
     x: shrine.x,
@@ -117,9 +120,6 @@ export function applyBuffEffectsImpl(this: WorldSim, buffId: BuffId): void {
       p.maxArmor += 2;
       p.armor = p.maxArmor;
       p.armorRegenDelaySec = Math.max(0.8, p.armorRegenDelaySec - 0.5);
-    } else if (buffId === 'arcane_wellspring') {
-      p.maxEnergy += 60;
-      p.energy = p.maxEnergy;
     } else if (buffId === 'gale_reflex') {
       p.moveSpeed = Math.round(p.moveSpeed * 1.2);
     }
@@ -352,7 +352,8 @@ export function stepBotAutoPlayImpl(this: WorldSim, _dtSec: number): void {
     p.armor = p.maxArmor;
     p.lifeState = 'alive';
   }
-  p.energy = p.maxEnergy;
+  p.clipAmmo = p.clipMax;
+  p.weaponHeat = 0;
 
   if (this.inHub) {
     for (const ally of this.getAllPlayers()) {
@@ -370,22 +371,13 @@ export function stepBotAutoPlayImpl(this: WorldSim, _dtSec: number): void {
     return;
   }
 
-  // Equip best ranged weapon in slots (preferring 0-energy backup when energy is low to allow regen)
+  // Equip best ranged weapon in slots
   let bestSlot = p.activeWeaponSlot;
   let bestScore = -1;
   for (let s = 0; s < p.weaponSlots.length; s++) {
     const wid = p.weaponSlots[s]!;
     const w = WEAPONS[wid];
     if (!w || w.category === 'melee') continue;
-    if (!p.godMode && p.energy < w.energyCost) continue;
-    if (
-      !p.godMode &&
-      s !== p.activeWeaponSlot &&
-      w.energyCost > 0 &&
-      p.energy < Math.max(w.energyCost * 4, 20)
-    ) {
-      continue;
-    }
     const score = w.damage * w.fireRate * Math.max(1, w.pelletCount);
     if (score > bestScore) {
       bestScore = score;
@@ -416,13 +408,13 @@ export function stepBotAutoPlayImpl(this: WorldSim, _dtSec: number): void {
     let moveX = 0;
     let moveY = 0;
 
-    // Steer toward nearby life_seed / energy / gold pickup when safe
+    // Steer toward nearby life_seed / prey_emblem / gold pickup when safe
     const nearbyPickup = this.pickups.find(
       (pk) =>
         pk.ttlSec > 0 &&
         (pk.ownerPlayerId === undefined || pk.ownerPlayerId === p.id) &&
         ((pk.kind === 'life_seed' && p.hp < p.maxHp) ||
-          (pk.kind === 'energy' && p.energy < p.maxEnergy * 0.6) ||
+          pk.kind === 'prey_emblem' ||
           (pk.kind === 'gold' && nearestDist > 130)) &&
         distance(p.x, p.y, pk.x, pk.y) < 220,
     );
@@ -485,7 +477,8 @@ export function stepBotAutoPlayImpl(this: WorldSim, _dtSec: number): void {
     for (let i = 0; i < this.simulatedPlayers.length; i++) {
       const sp = this.simulatedPlayers[i]!;
       sp.godMode = true;
-      sp.energy = sp.maxEnergy;
+      sp.clipAmmo = sp.clipMax;
+      sp.weaponHeat = 0;
       const spAng = Math.atan2(nearestEnemy.y - sp.y, nearestEnemy.x - sp.x);
       const spDist = distance(sp.x, sp.y, nearestEnemy.x, nearestEnemy.y);
       const spStrafe = spAng + (i % 2 === 0 ? 1 : -1) * Math.PI * 0.5;
@@ -790,11 +783,14 @@ export function updatePickupsImpl(this: WorldSim, dtSec: number): void {
 
     if (closestPlayer && closestDist <= closestPlayer.radius + 10) {
       pk.ttlSec = 0;
-      if (pk.kind === 'energy') {
-        closestPlayer.energy = Math.min(
-          closestPlayer.maxEnergy,
-          closestPlayer.energy + pk.amount,
-        );
+      if (pk.kind === 'prey_emblem') {
+        closestPlayer.clipAmmo = closestPlayer.clipMax;
+        closestPlayer.reloadTimer = 0;
+        closestPlayer.reloadLockout = false;
+        closestPlayer.overclockedNextShot = true;
+        closestPlayer.weaponHeat = 0;
+        closestPlayer.overheatLockTimer = 0;
+        closestPlayer.skillCooldownTimer = Math.max(0, closestPlayer.skillCooldownTimer - 2.0);
       } else if (pk.kind === 'life_seed') {
         if (closestPlayer.hp < closestPlayer.maxHp) {
           closestPlayer.hp = Math.min(closestPlayer.maxHp, closestPlayer.hp + pk.amount);

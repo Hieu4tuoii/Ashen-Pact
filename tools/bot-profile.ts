@@ -17,8 +17,6 @@ export interface AveragePlayerBotProfile {
   readonly dashDodgeProbability: 0.65;
   /** Strictly false — no invulnerability cheats */
   readonly godMode: false;
-  /** Strictly false — no infinite energy cheats */
-  readonly infiniteEnergy: false;
   /** 30 deterministic run seeds for median (p50) and p10/p90 reporting */
   readonly seeds: readonly number[];
 }
@@ -40,7 +38,6 @@ export const AVERAGE_PLAYER_BOT_PROFILE: AveragePlayerBotProfile = Object.freeze
   reactionDelaySec: 0.25,
   dashDodgeProbability: 0.65,
   godMode: false,
-  infiniteEnergy: false,
   seeds: LOCKED_30_SEEDS,
 });
 
@@ -411,7 +408,7 @@ export function stepHonestPlayerBot(
 
   const aimAngle = trueAimAngle + brain.currentAimErrorRad;
 
-  // Weapon slot selection: swap to slot 1 if slot 0 weapon lacks energy, and wait for meaningful recovery before swapping back
+  // Weapon slot selection: swap to slot 1 if slot 0 weapon is locked out by reload/overheat
   let weaponSlotSelect: number | null = null;
   const slot0Id = player.weaponSlots[0];
   const slot1Id = player.weaponSlots[1];
@@ -419,17 +416,18 @@ export function stepHonestPlayerBot(
   const slot1Wep = slot1Id ? WEAPONS[slot1Id] : undefined;
   const activeWep = player.activeWeaponSlot === 0 ? slot0Wep : slot1Wep;
 
-  if (activeWep && player.energy < activeWep.energyCost) {
+  if (activeWep && (player.reloadLockout || player.overheatLockTimer > 0)) {
     const otherSlot = player.activeWeaponSlot === 0 ? 1 : 0;
     const otherWep = otherSlot === 0 ? slot0Wep : slot1Wep;
-    if (otherWep && player.energy >= otherWep.energyCost) {
+    if (otherWep) {
       weaponSlotSelect = otherSlot;
     }
   } else if (
     player.activeWeaponSlot === 1 &&
     slot0Wep &&
-    slot0Wep.energyCost > 0 &&
-    player.energy >= Math.max(slot0Wep.energyCost * 2, 8)
+    !player.reloadLockout &&
+    player.overheatLockTimer <= 0 &&
+    (player.holsterReloadTimers?.[0] ?? 0) <= 0
   ) {
     weaponSlotSelect = 0;
   }
@@ -458,7 +456,7 @@ export function stepHonestPlayerBot(
   let moveX = 0;
   let moveY = 0;
 
-  // Check if a downed teammate needs reviving nearby or a life_seed/energy pickup is safely reachable
+  // Check if a downed teammate needs reviving nearby or a life_seed/prey_emblem pickup is safely reachable
   const downedAlly = sim
     .getAllPlayers()
     .find((ally) => ally.id !== player.id && ally.lifeState === 'downed');
@@ -471,8 +469,8 @@ export function stepHonestPlayerBot(
     if (activeBoss && Math.hypot(pk.x - activeBoss.x, pk.y - activeBoss.y) < 92) continue;
     const wantsSeed =
       pk.kind === 'life_seed' && player.hp <= Math.max(3, Math.floor(player.maxHp * 0.75));
-    const wantsEnergy = pk.kind === 'energy' && player.energy <= 28;
-    if (!wantsSeed && !wantsEnergy) continue;
+    const wantsEmblem = pk.kind === 'prey_emblem';
+    if (!wantsSeed && !wantsEmblem) continue;
     const dPk = Math.hypot(pk.x - player.x, pk.y - player.y);
     if (dPk < 210 && (!bestPickup || dPk < bestPickup.dist)) {
       bestPickup = { x: pk.x, y: pk.y, dist: dPk };

@@ -759,20 +759,6 @@ export function damagePropImpl(this: WorldSim, prop: SimPropState, amount: numbe
         }),
       );
     }
-    if (this.rng.chance(0.2)) {
-      this.pickups.push(
-        this.acquirePickup({
-          id: ++this.nextEntityId,
-          kind: 'energy',
-          x: prop.x,
-          y: prop.y,
-          vx: -Math.cos(ang) * 75,
-          vy: -Math.sin(ang) * 75,
-          amount: 5,
-          ttlSec: 12,
-        }),
-      );
-    }
   }
 }
 
@@ -829,17 +815,17 @@ export function detonateExplosiveBarrelImpl(this: WorldSim, barrel: SimPropState
               x: wallCx,
               y: wallCy,
             });
-            for (let k = 0; k < 3; k++) {
-              const ang = Math.PI * 0.25 + k * (Math.PI * 0.25);
+            for (let k = 0; k < 2; k++) {
+              const ang = Math.PI * 0.25 + k * (Math.PI * 0.5);
               this.pickups.push(
                 this.acquirePickup({
                   id: ++this.nextEntityId,
-                  kind: k === 1 ? 'energy' : 'gold',
+                  kind: 'gold',
                   x: wallCx,
                   y: wallCy + 10,
                   vx: Math.cos(ang) * 75,
                   vy: Math.sin(ang) * 75,
-                  amount: k === 1 ? 15 : 10,
+                  amount: 10,
                   ttlSec: 15,
                 }),
               );

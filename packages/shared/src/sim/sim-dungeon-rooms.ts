@@ -744,17 +744,17 @@ export function openChestImpl(this: WorldSim, chest: SimChestState): boolean {
       const totalGold = this.rng.nextInt(6, 10);
       const gold1 = Math.floor(totalGold / 2);
       const gold2 = totalGold - gold1;
-      for (let i = 0; i < 3; i++) {
-        const ang = -Math.PI * 0.5 + (i - 1) * 0.6 + pIdx * 0.25;
+      for (let i = 0; i < 2; i++) {
+        const ang = -Math.PI * 0.5 + (i === 0 ? -0.5 : 0.5) + pIdx * 0.25;
         this.pickups.push(
           this.acquirePickup({
             id: ++this.nextEntityId,
-            kind: i === 1 ? 'energy' : 'gold',
+            kind: 'gold',
             x: chest.x,
             y: chest.y,
             vx: Math.cos(ang) * 95,
             vy: Math.sin(ang) * 95,
-            amount: i === 1 ? 10 : i === 0 ? gold1 : gold2,
+            amount: i === 0 ? gold1 : gold2,
             ttlSec: 20,
             ownerPlayerId: p.id,
           }),
@@ -779,17 +779,17 @@ export function openChestImpl(this: WorldSim, chest: SimChestState): boolean {
     const totalGold = this.rng.nextInt(6, 10);
     const gold1 = Math.floor(totalGold / 2);
     const gold2 = totalGold - gold1;
-    for (let i = 0; i < 3; i++) {
-      const ang = -Math.PI * 0.5 + (i - 1) * 0.6;
+    for (let i = 0; i < 2; i++) {
+      const ang = -Math.PI * 0.5 + (i === 0 ? -0.5 : 0.5);
       this.pickups.push(
         this.acquirePickup({
           id: ++this.nextEntityId,
-          kind: i === 1 ? 'energy' : 'gold',
+          kind: 'gold',
           x: chest.x,
           y: chest.y,
           vx: Math.cos(ang) * 95,
           vy: Math.sin(ang) * 95,
-          amount: i === 1 ? 10 : i === 0 ? gold1 : gold2,
+          amount: i === 0 ? gold1 : gold2,
           ttlSec: 20,
         }),
       );

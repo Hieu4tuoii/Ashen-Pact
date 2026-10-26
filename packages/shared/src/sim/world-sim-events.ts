@@ -102,7 +102,7 @@ export type SimEvent =
     }
   | {
       kind: 'pickup_collected';
-      pickupKind: 'energy' | 'gold' | 'life_seed';
+      pickupKind: 'gold' | 'life_seed' | 'prey_emblem';
       amount: number;
       x: number;
       y: number;
@@ -167,6 +167,7 @@ export type SimEvent =
       isTeamCombo: boolean;
       primerPlayerId: number;
       triggerPlayerId: number;
+      convergenceDurationSec?: number;
     }
   | {
       kind: 'summon_spawned';
@@ -368,5 +369,4 @@ export interface CoPlayerInputEntry {
   prevButtons: number;
   latchedButtons: number;
   latchedWeaponSlot: number | null;
-  energyRegenAccum: number;
 }

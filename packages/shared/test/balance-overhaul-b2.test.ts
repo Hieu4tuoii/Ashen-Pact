@@ -125,23 +125,17 @@ describe('Phase B2 — Boss Overhaul (HP, True 360° Radial Patterns, Cooldowns,
     const boss = sim.spawnEnemy('forge_titan', 620, 320, true);
     expect(boss.hp).toBeGreaterThan(0);
 
-    // 1. Destroying forge_energy_core drops 1 life_seed (amount: 2) and 1 energy (amount: 12) at (core.x, core.y)
+    // 1. Destroying forge_energy_core drops 1 life_seed (amount: 2) at (core.x, core.y)
     sim.pickups.length = 0;
     const core = sim.spawnEnemy('forge_energy_core', 520, 280, true);
     sim.applyDamageToEnemy(core, 9999, false, 'none', 0, 0);
-    expect(sim.pickups).toHaveLength(2);
+    expect(sim.pickups).toHaveLength(1);
     const coreLifeSeed = sim.pickups.find((pk) => pk.kind === 'life_seed')!;
-    const coreEnergy = sim.pickups.find((pk) => pk.kind === 'energy')!;
     expect(coreLifeSeed).toBeDefined();
     expect(coreLifeSeed.amount).toBe(2);
     expect(coreLifeSeed.x).toBe(520);
     expect(coreLifeSeed.y).toBe(280);
     expect(Math.hypot(coreLifeSeed.vx, coreLifeSeed.vy)).toBeGreaterThan(0);
-    expect(coreEnergy).toBeDefined();
-    expect(coreEnergy.amount).toBe(12);
-    expect(coreEnergy.x).toBe(520);
-    expect(coreEnergy.y).toBe(280);
-    expect(Math.hypot(coreEnergy.vx, coreEnergy.vy)).toBeGreaterThan(0);
 
     // 2. Killing boss adds never spawns pickups at (p.x, p.y) and drops life_seed at (add.x, add.y) with ~25% chance
     let lifeSeedDrops = 0;
@@ -236,19 +230,12 @@ describe('Phase B2 — Boss Overhaul (HP, True 360° Radial Patterns, Cooldowns,
     expect(sim.projectiles.map((b) => b.id)).toEqual([88002]);
 
     const lifeSeeds = sim.pickups.filter((pk) => pk.kind === 'life_seed');
-    const energyOrbs = sim.pickups.filter((pk) => pk.kind === 'energy');
+    const energyOrbs = sim.pickups.filter((pk) => (pk.kind as string) === 'energy');
     expect(lifeSeeds).toHaveLength(1);
     expect(lifeSeeds[0]!.amount).toBe(1);
     expect(lifeSeeds[0]!.x).toBe(boss.x);
     expect(lifeSeeds[0]!.y).toBe(boss.y);
     expect(Math.hypot(lifeSeeds[0]!.vx, lifeSeeds[0]!.vy)).toBeGreaterThan(0);
-
-    expect(energyOrbs).toHaveLength(2);
-    for (const orb of energyOrbs) {
-      expect(orb.amount).toBe(8);
-      expect(orb.x).toBe(boss.x);
-      expect(orb.y).toBe(boss.y);
-      expect(Math.hypot(orb.vx, orb.vy)).toBeGreaterThan(0);
-    }
+    expect(energyOrbs).toHaveLength(0);
   });
 });

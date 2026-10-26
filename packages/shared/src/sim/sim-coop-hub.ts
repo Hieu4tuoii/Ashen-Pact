@@ -17,6 +17,7 @@ export function createPlayerStateImpl(this: WorldSim,
 ): SimPlayerState {
   const cDef = CHARACTERS[characterId] ?? CHARACTERS.vanguard;
   const starterWeapons = [cDef.starterWeaponId, 'rusty_pistol'].slice(0, MAX_WEAPON_SLOTS);
+  const starterWep = WEAPONS[starterWeapons[0] ?? 'knight_sword'];
   return {
     id,
     slot,
@@ -37,16 +38,12 @@ export function createPlayerStateImpl(this: WorldSim,
     maxHp: cDef.hp,
     armor: cDef.armor,
     maxArmor: cDef.armor,
-    energy: cDef.energy,
-    maxEnergy: cDef.energy,
     gold: 0,
     moveSpeed: cDef.moveSpeed,
     armorRegenDelaySec: cDef.armorRegenDelaySec,
     armorRegenPerSec: cDef.armorRegenPerSec,
     armorRegenTimer: 0,
     armorRegenAccum: 0,
-    energyRegenDelayTimer: 0,
-    energyRegenAccum: 0,
     dashTimer: 0,
     dashCooldownTimer: 0,
     dashDirX: 1,
@@ -58,6 +55,20 @@ export function createPlayerStateImpl(this: WorldSim,
     weaponPickupLockTimer: 0,
     fireCooldownTimer: 0,
     recoilTimer: 0,
+    clipAmmo: starterWep?.clipSize ?? 0,
+    clipMax: starterWep?.clipSize ?? 0,
+    reloadTimer: 0,
+    reloadDuration: starterWep?.reloadDurationSec ?? 0,
+    reloadLockout: false,
+    overclockedNextShot: false,
+    weaponHeat: 0,
+    overheatLockTimer: 0,
+    meleeComboStep: 0,
+    meleeComboResetTimer: 0,
+    meleeParryWindowTimer: 0,
+    holsterReloadTimers: [0, 0],
+    vanguardShieldBonusAdd: 0,
+    elementalConvergenceTimer: 0,
     skillActiveTimer: 0,
     skillCooldownTimer: 0,
     shieldStoredBullets: 0,
@@ -207,7 +218,6 @@ export function addCoopPlayerImpl(this: WorldSim,
     prevButtons: 0,
     latchedButtons: 0,
     latchedWeaponSlot: null,
-    energyRegenAccum: 0,
   });
   return state;
 }
@@ -303,7 +313,6 @@ export function setCoopPlayerInputImpl(this: WorldSim, playerId: number, input: 
       prevButtons: 0,
       latchedButtons: 0,
       latchedWeaponSlot: null,
-      energyRegenAccum: 0,
     };
     this.coopPlayerInputs.set(playerId, entry);
   }
@@ -345,16 +354,27 @@ export function applyCharacterToPlayerStateImpl(this: WorldSim,
   p.hp = cDef.hp;
   p.maxArmor = cDef.armor;
   p.armor = cDef.armor;
-  p.maxEnergy = cDef.energy;
-  p.energy = cDef.energy;
   p.moveSpeed = cDef.moveSpeed;
   p.armorRegenDelaySec = cDef.armorRegenDelaySec;
   p.armorRegenPerSec = cDef.armorRegenPerSec;
-  p.energyRegenDelayTimer = 0;
-  p.energyRegenAccum = 0;
   p.weaponSlots = [cDef.starterWeaponId, 'rusty_pistol'].slice(0, MAX_WEAPON_SLOTS);
   p.activeWeaponSlot = 0;
   p.weaponPickupLockTimer = 0;
+  const starterWep = WEAPONS[p.weaponSlots[0] ?? 'knight_sword'];
+  p.clipAmmo = starterWep?.clipSize ?? 0;
+  p.clipMax = starterWep?.clipSize ?? 0;
+  p.reloadTimer = 0;
+  p.reloadDuration = starterWep?.reloadDurationSec ?? 0;
+  p.reloadLockout = false;
+  p.overclockedNextShot = false;
+  p.weaponHeat = 0;
+  p.overheatLockTimer = 0;
+  p.meleeComboStep = 0;
+  p.meleeComboResetTimer = 0;
+  p.meleeParryWindowTimer = 0;
+  p.holsterReloadTimers = [0, 0];
+  p.vanguardShieldBonusAdd = 0;
+  p.elementalConvergenceTimer = 0;
   p.skillActiveTimer = 0;
   p.skillCooldownTimer = 0;
   p.activeImbueElement = characterId === 'elementalist' ? 'burn' : 'none';
@@ -511,7 +531,17 @@ export function enterHubImpl(this: WorldSim): void {
     p.lifeState = 'alive';
     p.hp = p.maxHp;
     p.armor = p.maxArmor;
-    p.energy = p.maxEnergy;
+    const activeWep = WEAPONS[p.weaponSlots[p.activeWeaponSlot] ?? p.weaponSlots[0] ?? 'knight_sword'];
+    p.clipMax = activeWep?.clipSize ?? 0;
+    p.clipAmmo = p.clipMax;
+    p.reloadTimer = 0;
+    p.reloadDuration = activeWep?.reloadDurationSec ?? 0;
+    p.reloadLockout = false;
+    p.overclockedNextShot = false;
+    p.weaponHeat = 0;
+    p.overheatLockTimer = 0;
+    p.vanguardShieldBonusAdd = 0;
+    p.elementalConvergenceTimer = 0;
     p.ready = false;
   }
 }
@@ -556,7 +586,17 @@ export function startDungeonRunFromHubImpl(this: WorldSim): void {
     p.reviverPlayerId = null;
     p.hp = p.maxHp;
     p.armor = p.maxArmor;
-    p.energy = p.maxEnergy;
+    const activeWep = WEAPONS[p.weaponSlots[p.activeWeaponSlot] ?? p.weaponSlots[0] ?? 'knight_sword'];
+    p.clipMax = activeWep?.clipSize ?? 0;
+    p.clipAmmo = p.clipMax;
+    p.reloadTimer = 0;
+    p.reloadDuration = activeWep?.reloadDurationSec ?? 0;
+    p.reloadLockout = false;
+    p.overclockedNextShot = false;
+    p.weaponHeat = 0;
+    p.overheatLockTimer = 0;
+    p.vanguardShieldBonusAdd = 0;
+    p.elementalConvergenceTimer = 0;
     p.ready = false;
     p.currentRoomId = this.currentRoomId;
     p.statsDamageDealt = 0;
@@ -751,6 +791,7 @@ export function updateCoopDownedAndReviveImpl(this: WorldSim, dtSec: number): vo
   const allPlayers = this.getAllPlayers();
   for (let i = 0; i < allPlayers.length; i++) {
     const downed = allPlayers[i]!;
+    if (downed.lifeState !== 'alive' && downed.lifeState !== 'downed') continue;
     if (downed.lifeState !== 'downed') continue;
 
     // Find an alive teammate within 64 units holding INTERACT (E) or standing within 46 units

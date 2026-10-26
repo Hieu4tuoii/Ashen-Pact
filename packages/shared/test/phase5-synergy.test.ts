@@ -417,10 +417,8 @@ describe('Phase 5 — 5 Playable Characters, Skills, 10 Upgrades & Co-op Synergi
     const pElem = sim.addCoopPlayer(2, 'elementalist', 'Lam Hỏa P2', 2);
     const pVan = sim.addCoopPlayer(3, 'vanguard', 'Thiết Vệ P3', 3);
     const pDruid = sim.addCoopPlayer(4, 'druid', 'Mộc Linh P4', 4);
-
-    pEng.energy = 80;
-    pElem.energy = 80;
-    pDruid.energy = 80;
+    void pElem;
+    void pDruid;
 
     // Vanguard stands between the Turret (x=400) and the Enemy (x=540) with Shield Wall active
     pVan.x = 460;
@@ -492,12 +490,12 @@ describe('Phase 5 — 5 Playable Characters, Skills, 10 Upgrades & Co-op Synergi
     expect(target3.hp).toBeLessThan(600);
     expect(sim.runStats.elementalReactions).toBeGreaterThanOrEqual(2);
     expect(sim.teamComboCount).toBeGreaterThanOrEqual(1);
-    expect(pEng.energy).toBeGreaterThan(80);
+    expect(pEng.elementalConvergenceTimer).toBeGreaterThan(0);
   });
 });
 
-describe('Phase 5 — All 6 Elemental Reactions & Co-op Team Combo (+15 Energy)', () => {
-  it('triggers all 6 elemental reactions (vaporize, shatter, superconduct, toxic_blast, paralysis, overload) cleanly without manual timer hacks and awards +15 Energy to both players on Team Combo', () => {
+describe('Phase 5 — All 6 Elemental Reactions & Co-op Team Combo (Hội Tụ Nguyên Tố)', () => {
+  it('triggers all 6 elemental reactions (vaporize, shatter, superconduct, toxic_blast, paralysis, overload) cleanly without manual timer hacks and awards Elemental Convergence to both players on Team Combo', () => {
     const sim = new WorldSim({
       seed: 5010,
       spawnInitialWave: false,
@@ -508,8 +506,8 @@ describe('Phase 5 — All 6 Elemental Reactions & Co-op Team Combo (+15 Energy)'
 
     const p1 = sim.player;
     const p2 = sim.addCoopPlayer(2, 'elementalist', 'Lam Hỏa P2', 2);
-    p1.energy = 50;
-    p2.energy = 60;
+    p1.clipAmmo = 1;
+    p2.weaponHeat = 65;
 
     const target = sim.spawnEnemy('spore_king', 500, 300, true);
     target.hp = 5000;
@@ -526,8 +524,10 @@ describe('Phase 5 — All 6 Elemental Reactions & Co-op Team Combo (+15 Energy)'
     expect(target.steamBlindTimer).toBeGreaterThan(2.0);
     expect(neighbor.steamBlindTimer).toBeGreaterThan(2.0);
     expect(sim.teamComboCount).toBe(1);
-    expect(p1.energy).toBe(65); // +15 Energy!
-    expect(p2.energy).toBe(75); // +15 Energy!
+    expect(p1.elementalConvergenceTimer).toBeCloseTo(3.0, 2);
+    expect(p2.elementalConvergenceTimer).toBeCloseTo(3.0, 2);
+    expect(p1.clipAmmo).toBe(p1.clipMax);
+    expect(p2.weaponHeat).toBe(0);
 
     // 2. Shatter (Vỡ Băng: P2 freezes with 3 Chill stacks + P1 heavy hit) -> Team Combo #2!
     sim.applyDamageToEnemy(target, 10, false, 'chill', 0, 0, false, p2.id);

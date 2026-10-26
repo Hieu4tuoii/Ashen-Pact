@@ -71,14 +71,14 @@ describe('Phase 2 — Destructible Props & Chain-Reaction Explosive Barrels', ()
       autoRespawnWaves: false,
     });
 
-    // 1. Destructible wooden crates drop gold (15% chance) + energy (20% chance) when broken
+    // 1. Destructible wooden crates drop gold (15% chance) when broken (no energy pickups in AP2)
     for (let i = 0; i < 20; i++) {
       const crate = sim.spawnProp('wooden_crate', 300, 300);
       sim.damageProp(crate, 25, 'none');
       expect(crate.hp).toBe(0);
     }
     expect(sim.pickups.some((p) => p.kind === 'gold')).toBe(true);
-    expect(sim.pickups.some((p) => p.kind === 'energy')).toBe(true);
+    expect(sim.pickups.every((p) => (p.kind as string) !== 'energy')).toBe(true);
 
     // 2. Chain reaction between two explosive barrels near the north cracked wall (18, 0) and an oil tile (18, 2)
     sim.map.setSurface(18, 2, 'oil', 0, true);

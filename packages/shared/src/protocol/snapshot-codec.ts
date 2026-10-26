@@ -42,8 +42,16 @@ export interface QuantizedPlayerSnap {
   maxHp: number;
   armor: number;
   maxArmor: number;
-  energy: number;
-  maxEnergy: number;
+  clipAmmo: number;
+  clipMax: number;
+  heat10: number;
+  reload100: number;
+  reloadDur100: number;
+  overclock: boolean;
+  overheat100: number;
+  comboStep: 0 | 1 | 2;
+  vgBonus100: number;
+  conv10: number;
   gold: number;
   dashTimer100: number;
   dashCd100: number;
@@ -148,7 +156,7 @@ export interface QuantizedWorldSnapshot {
   npcEntities: SimNpcState[];
   pickups: Array<{
     id: number;
-    kind: 'energy' | 'gold' | 'life_seed';
+    kind: 'gold' | 'life_seed' | 'prey_emblem';
     qx: number;
     qy: number;
     amount: number;
@@ -215,8 +223,16 @@ export function encodeWorldSnapshot(
     maxHp: p.maxHp,
     armor: p.armor,
     maxArmor: p.maxArmor,
-    energy: p.energy,
-    maxEnergy: p.maxEnergy,
+    clipAmmo: p.clipAmmo,
+    clipMax: p.clipMax,
+    heat10: Math.round(p.weaponHeat * 10),
+    reload100: Math.round(p.reloadTimer * 100),
+    reloadDur100: Math.round(p.reloadDuration * 100),
+    overclock: p.overclockedNextShot,
+    overheat100: Math.round(p.overheatLockTimer * 100),
+    comboStep: p.meleeComboStep,
+    vgBonus100: Math.round(p.vanguardShieldBonusAdd * 100),
+    conv10: Math.round(p.elementalConvergenceTimer * 10),
     gold: p.gold,
     dashTimer100: Math.round(p.dashTimer * 100),
     dashCd100: Math.round(p.dashCooldownTimer * 100),

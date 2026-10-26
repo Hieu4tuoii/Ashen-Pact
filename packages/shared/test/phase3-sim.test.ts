@@ -57,7 +57,6 @@ describe('Phase 3 Weapons, Enemies, Elites & Boss Mục Vương', () => {
       sim.player.weaponSlots[0] = weaponId;
       sim.equipWeaponSlot(0);
       sim.player.fireCooldownTimer = 0;
-      sim.player.energy = sim.player.maxEnergy;
       expect(sim.getActiveWeaponId()).toBe(weaponId);
 
       sim.setPlayerInput({
@@ -188,7 +187,6 @@ describe('Phase 3 Weapons, Enemies, Elites & Boss Mục Vương', () => {
 
     // Damage boss below 66% -> Phase 2
     for (let i = 0; i < 2400 && boss!.hp > boss!.maxHp * 0.62; i++) {
-      sim.player.energy = sim.player.maxEnergy;
       const aimAngle = Math.atan2(boss!.y - sim.player.y, boss!.x - sim.player.x);
       sim.setPlayerInput({
         seq: seq++,
@@ -205,7 +203,6 @@ describe('Phase 3 Weapons, Enemies, Elites & Boss Mục Vương', () => {
 
     // Wait out burrow if burrowed, then damage below 33% -> Phase 3
     for (let i = 0; i < 2400 && boss!.hp > boss!.maxHp * 0.28; i++) {
-      sim.player.energy = sim.player.maxEnergy;
       const aimAngle = Math.atan2(boss!.y - sim.player.y, boss!.x - sim.player.x);
       sim.setPlayerInput({
         seq: seq++,
@@ -224,7 +221,6 @@ describe('Phase 3 Weapons, Enemies, Elites & Boss Mục Vương', () => {
 
     // Finish off Boss -> Victory & Legendary chest
     for (let i = 0; i < 3600 && boss!.hp > 0; i++) {
-      sim.player.energy = sim.player.maxEnergy;
       const aimAngle = Math.atan2(boss!.y - sim.player.y, boss!.x - sim.player.x);
       sim.setPlayerInput({
         seq: seq++,
@@ -347,16 +343,16 @@ describe('Phase 3 Weapons, Enemies, Elites & Boss Mục Vương', () => {
     expect(sim.worldItems.length).toBe(1);
     expect(sim.worldItems[0]!.weaponId).toBe(droppedWepId);
 
-    // 3. Shrine exchanges 40 Gold when player has gold, grants floor buff + +15 maxEnergy (no free weapon drop)
+    // 3. Shrine exchanges 40 Gold when player has gold, grants floor buff + restores Armor/Ammo (no free weapon drop)
     sim.enterRoom(shrineRoom.id);
     const shrine = sim.npcEntities.find((n) => n.kind === 'shrine')!;
     const goldBefore = sim.player.gold;
     const hpBefore = sim.player.hp;
-    const maxEnergyBefore = sim.player.maxEnergy;
+    sim.player.armor = 1;
     expect(sim.activateShrine(shrine)).toBe(true);
     expect(sim.player.gold).toBe(goldBefore - 40);
     expect(sim.player.hp).toBe(hpBefore);
-    expect(sim.player.maxEnergy).toBe(maxEnergyBefore + 15);
+    expect(sim.player.armor).toBe(sim.player.maxArmor);
     expect(sim.activeBuffIds.length).toBeGreaterThanOrEqual(1);
     expect(sim.worldItems.length).toBe(0);
   });

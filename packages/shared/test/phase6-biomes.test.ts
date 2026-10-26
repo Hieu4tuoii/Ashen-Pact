@@ -79,9 +79,8 @@ describe('Phase 6 — Biomes 2 & 3, 24 Weapons, Co-op Mechanics & Bosses Kryssa 
     expect(p2.hp).toBeGreaterThan(initialP2Hp);
     expect(target.poisonTimer).toBeGreaterThan(0);
 
-    // 2. Tether Staff links P1 and P2 with an energy beam that shocks enemies crossing the line
+    // 2. Tether Staff links P1 and P2 with an arc beam that shocks enemies crossing the line
     p1.weaponSlots[0] = 'tether_staff';
-    p1.energy = p1.maxEnergy;
     p1.fireCooldownTimer = 0;
     p1.x = 300;
     p1.y = 320;
@@ -419,7 +418,6 @@ describe('Phase 6 — Biomes 2 & 3, 24 Weapons, Co-op Mechanics & Bosses Kryssa 
     });
     sim.player.weaponSlots = ['thunder_hammer'];
     sim.player.activeWeaponSlot = 0;
-    sim.player.energy = sim.player.maxEnergy;
 
     sim.setPlayerInput({
       seq: 1,

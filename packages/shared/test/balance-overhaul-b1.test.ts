@@ -39,17 +39,16 @@ describe('Phase B1 — Combat & Economy Balance Overhaul', () => {
     expect(hubSim.player.armor).toBe(hubSim.player.maxArmor);
   });
 
-  it('B1.2: enforces 2.0s energy regen delay, 1.5/s passive regen rate, 0-cost rusty_pistol, and updated energy orb drops', () => {
-    // 1. Weapon energy costs
-    expect(WEAPONS.rusty_pistol!.energyCost).toBe(0);
-    expect(WEAPONS.knight_sword!.energyCost).toBe(0);
-    expect(WEAPONS.scrap_shotgun!.energyCost).toBe(3);
-    expect(WEAPONS.gale_smg!.energyCost).toBeGreaterThanOrEqual(2);
-    expect(WEAPONS.venom_smg!.energyCost).toBeGreaterThanOrEqual(2);
-    expect(WEAPONS.solar_archon_staff!.energyCost).toBeGreaterThanOrEqual(4);
-    expect(WEAPONS.magma_cannon!.energyCost).toBeGreaterThanOrEqual(5);
+  it('B1.2: enforces AP2 weapon cadence metadata and zero energy orb drops', () => {
+    // 1. Weapon cadence metadata replaces legacy energyCost
+    expect(WEAPONS.rusty_pistol!.cadenceKind).toBe('CLIP_RELOAD');
+    expect(WEAPONS.knight_sword!.cadenceKind).toBe('MELEE_COMBO');
+    expect(WEAPONS.scrap_shotgun!.cadenceKind).toBe('CLIP_RELOAD');
+    expect(WEAPONS.gale_smg!.cadenceKind).toBe('HEAT_VENT');
+    expect(WEAPONS.venom_smg!.cadenceKind).toBe('CLIP_RELOAD');
+    expect(WEAPONS.solar_archon_staff!.cadenceKind).toBe('HEAT_VENT');
+    expect(WEAPONS.magma_cannon!.cadenceKind).toBe('CLIP_RELOAD');
 
-    // 2. 2.0s energy regen delay & 1.5/s rate
     const sim = new WorldSim({
       seed: 1003,
       spawnInitialWave: false,
@@ -57,91 +56,20 @@ describe('Phase B1 — Combat & Economy Balance Overhaul', () => {
       includeProps: false,
       autoRespawnWaves: false,
     });
-    const p = sim.player;
-    p.weaponSlots[0] = 'scrap_shotgun'; // costs 3 energy
-    p.activeWeaponSlot = 0;
-    const startEnergy = p.energy;
 
-    sim.setPlayerInput({
-      seq: 1,
-      tick: 1,
-      moveX: 0,
-      moveY: 0,
-      aimAngle: 0,
-      buttons: INPUT_BUTTON.FIRE,
-    });
-    sim.step(SIM_STEP_SEC);
-    expect(p.energy).toBe(startEnergy - 3);
-    expect(p.energyRegenDelayTimer).toBeCloseTo(2.0, 2);
-
-    // Release fire and step for 1.95s (117 ticks) -> still in delay, no energy regenerated
-    sim.setPlayerInput({
-      seq: 2,
-      tick: 2,
-      moveX: 0,
-      moveY: 0,
-      aimAngle: 0,
-      buttons: 0,
-    });
-    for (let i = 0; i < 117; i++) {
-      sim.step(SIM_STEP_SEC);
-    }
-    expect(p.energy).toBe(startEnergy - 3);
-
-    // Step 3 more ticks to finish 2.0s delay + 120 ticks (2.0s of regen at 1.5/s = +3 energy)
-    for (let i = 0; i < 123; i++) {
-      sim.step(SIM_STEP_SEC);
-    }
-    expect(p.energy).toBe(startEnergy);
-
-    // 3. Energy orb drop tables
-    // Summoned/split enemies: kryssa_clone & spore_guardian drop 0 energy
+    // 2. No enemies or chests ever drop energy pickups
     sim.pickups.length = 0;
     const clone = sim.spawnEnemy('kryssa_clone', 400, 300, true);
     sim.applyDamageToEnemy(clone, 999, false, 'none', 0, 0);
     const guardian = sim.spawnEnemy('spore_guardian', 420, 300, true);
     sim.applyDamageToEnemy(guardian, 999, false, 'none', 0, 0);
-    expect(sim.pickups.filter((pk) => pk.kind === 'energy')).toHaveLength(0);
-
-    // Elite drops 2 orbs x 8 energy = 16 total
-    sim.pickups.length = 0;
     const elite = sim.spawnEnemy('goblin_shooter', 400, 300, true, 'fast');
     sim.applyDamageToEnemy(elite, 9999, false, 'none', 0, 0);
-    const eliteEnergyOrbs = sim.pickups.filter((pk) => pk.kind === 'energy');
-    expect(eliteEnergyOrbs).toHaveLength(2);
-    expect(eliteEnergyOrbs.reduce((s, o) => s + o.amount, 0)).toBe(16);
-
-    // Boss drops 5 orbs x 8 energy = 40 total
-    sim.pickups.length = 0;
     const boss = sim.spawnEnemy('spore_king', 400, 300, true);
     sim.applyDamageToEnemy(boss, 99999, false, 'none', 0, 0);
-    const bossEnergyOrbs = sim.pickups.filter((pk) => pk.kind === 'energy');
-    expect(bossEnergyOrbs).toHaveLength(5);
-    expect(bossEnergyOrbs.reduce((s, o) => s + o.amount, 0)).toBe(40);
-
-    // Normal enemy: ~55% chance to drop 1 orb x 6 energy
-    let normalDropCount = 0;
-    for (let i = 0; i < 200; i++) {
-      sim.pickups.length = 0;
-      const norm = sim.spawnEnemy('goblin_shooter', 400, 300, true);
-      sim.applyDamageToEnemy(norm, 999, false, 'none', 0, 0);
-      const orbs = sim.pickups.filter((pk) => pk.kind === 'energy');
-      if (orbs.length > 0) {
-        expect(orbs).toHaveLength(1);
-        expect(orbs[0]!.amount).toBe(6);
-        normalDropCount += 1;
-      }
-    }
-    expect(normalDropCount).toBeGreaterThanOrEqual(85);
-    expect(normalDropCount).toBeLessThanOrEqual(135);
-
-    // Chest drops 1 orb x 10 energy
-    sim.pickups.length = 0;
     const chest = sim.spawnChest(400, 300, 'rare', 'tesla_carbine');
     sim.openChest(chest);
-    const chestEnergyOrbs = sim.pickups.filter((pk) => pk.kind === 'energy');
-    expect(chestEnergyOrbs).toHaveLength(1);
-    expect(chestEnergyOrbs[0]!.amount).toBe(10);
+    expect(sim.pickups.filter((pk) => (pk.kind as string) === 'energy')).toHaveLength(0);
   });
 
   it('B1.3: enforces reduced gold drop tables and scaled Merchant & Shrine prices', () => {
@@ -223,7 +151,7 @@ describe('Phase B1 — Combat & Economy Balance Overhaul', () => {
   it('B1.4: updates Character HP/Armor/Regen, Dash cooldown/i-frame, 0.35s hit i-frame, Knight Sword stats, and 0.35s lava tick', () => {
     expect(CHARACTERS.vanguard.hp).toBe(6);
     expect(CHARACTERS.vanguard.armor).toBe(5);
-    expect(CHARACTERS.vanguard.armorRegenDelaySec).toBeCloseTo(4.5, 2);
+    expect(CHARACTERS.vanguard.armorRegenDelaySec).toBeCloseTo(3.0, 2);
     expect(CHARACTERS.vanguard.armorRegenPerSec).toBeCloseTo(0.65, 2);
 
     expect(CHARACTERS.engineer.hp).toBe(6);
@@ -355,7 +283,7 @@ describe('Phase B1 — Combat & Economy Balance Overhaul', () => {
     expect(combatRoom.wavesSpawned).toBe(2);
   });
 
-  it('B1.6: Shrine grants +15 maxEnergy without dropping a free weapon, and normal combat rooms spawn chests with ~45% probability', () => {
+  it('B1.6: Shrine restores armor & weapon clip/heat without dropping a free weapon, and normal combat rooms spawn chests with ~45% probability', () => {
     const sim = new WorldSim({
       seed: 6060,
       spawnInitialWave: false,
@@ -366,14 +294,15 @@ describe('Phase B1 — Combat & Economy Balance Overhaul', () => {
     sim.enterRoom(shrineRoom.id);
     const shrine = sim.npcEntities.find((n) => n.kind === 'shrine')!;
 
-    const prevMaxEnergy = sim.player.maxEnergy;
-    const buffEnergyBonus = shrineRoom.shrineBlessingId === 'arcane_wellspring' ? 60 : 0;
+    sim.player.armor = 1;
+    sim.player.clipAmmo = 0;
     sim.player.gold = 50;
     sim.player.x = shrine.x;
     sim.player.y = shrine.y;
     expect(sim.interactWithNearest()).toBe(true);
     expect(sim.player.gold).toBe(10); // 50 - 40 = 10
-    expect(sim.player.maxEnergy).toBe(prevMaxEnergy + 15 + buffEnergyBonus);
+    expect(sim.player.armor).toBe(sim.player.maxArmor);
+    expect(sim.player.clipAmmo).toBe(sim.player.clipMax);
     expect(sim.worldItems.filter((it) => it.kind === 'weapon')).toHaveLength(0);
 
     // Normal combat room chest chance ~45% vs Challenge room 100%

@@ -16,6 +16,8 @@ export type WeaponCategory =
   | 'launcher'
   | 'coop_special';
 
+export type WeaponCadenceKind = 'CLIP_RELOAD' | 'HEAT_VENT' | 'MELEE_COMBO';
+
 export type PlayerSlot = 1 | 2 | 3 | 4;
 
 export type ElementalReactionId =
@@ -51,7 +53,6 @@ export interface CharacterStatsDef {
   titleVi: string;
   hp: number;
   armor: number;
-  energy: number;
   armorRegenDelaySec: number;
   armorRegenPerSec: number;
   moveSpeed: number;
@@ -72,7 +73,11 @@ export interface WeaponStatsDef {
   damage: number;
   pelletCount: number;
   fireRate: number;
-  energyCost: number;
+  cadenceKind: WeaponCadenceKind;
+  clipSize: number;
+  reloadDurationSec: number;
+  heatPerShot: number;
+  procCoefficient: number;
   projectileSpeed: number;
   spreadDeg: number;
   critChance: number;

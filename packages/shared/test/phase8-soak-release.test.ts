@@ -100,7 +100,6 @@ describe('Phase 8 — 20-Minute Co-op Soak Test (72,000 Ticks @ 60Hz)', () => {
       const target = sim.enemies.find((e) => !e.isDummy && e.hp > 0);
       for (let idx = 0; idx < players.length; idx++) {
         const pl = players[idx]!;
-        pl.energy = pl.maxEnergy;
         const aimAngle = target
           ? Math.atan2(target.y - pl.y, target.x - pl.x)
           : (tick * 0.04 + idx * 1.5) % (Math.PI * 2);

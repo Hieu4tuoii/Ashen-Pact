@@ -89,7 +89,7 @@ describe('Bugfixes: Enemy Obstacle Spawning, Boss Phase Energy Reward, & Solo Pr
     }
   });
 
-  it('Adjustment 2: rewards generous player energy on each Boss phase transition so players do not run out of energy mid-boss fight', () => {
+  it('Adjustment 2: drops a sustain life_seed orb on each Boss phase transition without spawning legacy energy pickups', () => {
     const sim = new WorldSim({
       seed: 2002,
       spawnInitialWave: false,
@@ -101,8 +101,6 @@ describe('Bugfixes: Enemy Obstacle Spawning, Boss Phase Energy Reward, & Solo Pr
     const p1 = sim.player;
     p1.x = 240;
     p1.y = 320;
-    p1.energy = 12;
-    p1.energyRegenDelayTimer = 2.0;
 
     const boss = sim.spawnEnemy('spore_king', 640, 320, true);
     expect(boss.bossPhase).toBe(1);
@@ -110,16 +108,14 @@ describe('Bugfixes: Enemy Obstacle Spawning, Boss Phase Energy Reward, & Solo Pr
     // Transition Phase 1 -> Phase 2 (<= 66% HP)
     sim.applyDamageToEnemy(boss, Math.ceil(boss.maxHp * 0.36), false, 'none', 0, 0, false, p1.id);
     expect(boss.bossPhase).toBe(2);
-    expect(p1.energy).toBeGreaterThanOrEqual(130);
-    expect(p1.energyRegenDelayTimer).toBe(0);
+    expect(sim.pickups.filter((pk) => pk.kind === 'life_seed').length).toBeGreaterThanOrEqual(1);
+    expect(sim.pickups.filter((pk) => (pk.kind as string) === 'energy')).toHaveLength(0);
 
-    // Spend energy during Phase 2, then transition Phase 2 -> Phase 3 (<= 33% HP)
-    p1.energy = 18;
-    p1.energyRegenDelayTimer = 2.0;
+    // Transition Phase 2 -> Phase 3 (<= 33% HP)
     sim.applyDamageToEnemy(boss, Math.ceil(boss.maxHp * 0.35), false, 'none', 0, 0, false, p1.id);
     expect(boss.bossPhase).toBe(3);
-    expect(p1.energy).toBeGreaterThanOrEqual(130);
-    expect(p1.energyRegenDelayTimer).toBe(0);
+    expect(sim.pickups.filter((pk) => pk.kind === 'life_seed').length).toBeGreaterThanOrEqual(2);
+    expect(sim.pickups.filter((pk) => (pk.kind as string) === 'energy')).toHaveLength(0);
   });
 
   it('Bug 3: allows Solo player to smoothly push the block onto the pressure plate without lateral slip or overshooting, and syncs puzzle state over NetworkTransport', () => {

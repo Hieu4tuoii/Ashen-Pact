@@ -1,4 +1,5 @@
 import { BIOME_SCALING } from '../data/scaling.js';
+import { WEAPONS } from '../data/weapons.js';
 import { angleDiff, circleVsCircle, distance } from '../math/vec2.js';
 import { TILE_SIZE } from '../protocol/messages.js';
 import type { SimProjectileState, BulletVolleySpawnEvent } from './world-sim-types.js';
@@ -523,7 +524,15 @@ export function updateProjectilesImpl(this: WorldSim, dtSec: number): void {
             if (Math.abs(angleDiff(angleFromPlayer, pl.aimAngle)) <= halfShieldArc) {
               b.ttlSec = 0;
               pl.shieldStoredBullets += 1;
-              pl.energy = Math.min(pl.maxEnergy, pl.energy + 1);
+              const activeWepId =
+                pl.weaponSlots[pl.activeWeaponSlot] ?? pl.weaponSlots[0] ?? 'knight_sword';
+              const activeWep = WEAPONS[activeWepId];
+              if (activeWep?.cadenceKind === 'HEAT_VENT') {
+                pl.weaponHeat = Math.max(0, pl.weaponHeat - 15);
+              } else if (pl.clipMax > 0) {
+                pl.clipAmmo = Math.min(pl.clipMax, pl.clipAmmo + 1);
+              }
+              pl.vanguardShieldBonusAdd = Math.min(0.75, (pl.vanguardShieldBonusAdd ?? 0) + 0.15);
               this.events.push({
                 kind: 'projectile_impact',
                 x: b.x,
