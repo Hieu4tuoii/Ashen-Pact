@@ -211,7 +211,7 @@ test.describe('Phase P9b — Menus, Hub Invite Panel, Modals, Pause Confirm & 4-
     expect(modalAudit.victoryTexts.some((t) => t.includes('Menu Chính'))).toBe(false);
     expect(modalAudit.victoryTexts.some((t) => t.includes('Đóng Bảng'))).toBe(false);
     expect(modalAudit.victoryTexts.some((t) => t.includes('bountiful_vitality'))).toBe(false);
-    expect(modalAudit.victoryTexts.some((t) => t.includes('Trái Tim Cổ Thụ'))).toBe(true);
+    expect(modalAudit.victoryTexts.some((t) => t.includes('Pháo Đài Phản Xạ'))).toBe(true);
 
     // 5. Pause Modal -> "Về Menu" Confirmation Dialog -> Cancel stays in match -> Confirm exits to MenuScene
     await page.keyboard.press('Escape');

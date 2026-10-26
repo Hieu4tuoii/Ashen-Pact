@@ -230,9 +230,12 @@ export function setupKeyboardBindingsImpl(this: GameScene): void {
     this.transport.getSim().cycleImbueElement();
     zzfx.play('weapon_swap');
   };
-  this.keys.R.on('down', (event?: KeyboardEvent) => {
+  let lastAltREvent: KeyboardEvent | undefined;
+  this.keys.R.on('down', (keyObj?: Phaser.Input.Keyboard.Key, event?: KeyboardEvent) => {
     this.reloadVentQueued = true;
-    if (event?.altKey) {
+    const domEvent = event ?? keyObj?.originalEvent;
+    if ((domEvent?.altKey || keyObj?.altKey) && domEvent !== lastAltREvent) {
+      lastAltREvent = domEvent;
       cycleElement();
     }
   });
