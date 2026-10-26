@@ -246,12 +246,14 @@ export function triggerElementalReactionImpl(
     for (let i = 0; i < allPlayers.length; i++) {
       const pl = allPlayers[i]!;
       if (pl.id === primerPlayerId || pl.id === triggerPlayerId) {
+        if (pl.elementalConvergenceTimer <= 0) {
+          pl.clipAmmo = pl.clipMax;
+          pl.reloadTimer = 0;
+          pl.reloadLockout = false;
+          pl.weaponHeat = 0;
+          pl.overheatLockTimer = 0;
+        }
         pl.elementalConvergenceTimer = 3.0;
-        pl.clipAmmo = pl.clipMax;
-        pl.reloadTimer = 0;
-        pl.reloadLockout = false;
-        pl.weaponHeat = 0;
-        pl.overheatLockTimer = 0;
         pl.statsTeamCombos = (pl.statsTeamCombos ?? 0) + 1;
       }
     }
@@ -710,6 +712,7 @@ export function applyElementStatusToEnemyImpl(
         enemy.burnTickTimer = 0.5;
       }
       enemy.burnTimer = 3.0;
+      enemy.burnStacks = 1;
       if (!this.stressTestActive) {
         this.events.push({
           kind: 'status_applied',

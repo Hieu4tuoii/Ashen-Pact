@@ -5,7 +5,6 @@ import { distance, distanceSq } from '../math/vec2.js';
 import { BIOME_SCALING, COOP_SCALING } from '../data/scaling.js';
 import { type PlayerInputPacket, TILE_SIZE } from '../protocol/messages.js';
 import type { DungeonRoomNode } from './dungeon-gen.js';
-import { syncActiveWeaponCadenceState } from './sim-coop-hub.js';
 import {
   collapseRottenTotemPillar,
   detonateVolatileSporePod,
@@ -14,6 +13,7 @@ import {
   triggerMossTablePollenArmorBurst,
   updateSlidingPropsImpl,
 } from './sim-tactical-physics.js';
+import { switchPlayerWeaponSlot } from './sim-weapon-cadence.js';
 import { PHASE1_SAMPLE_ENEMIES, ELEMENT_CYCLE_ORDER, ENEMY_SPAWN_WARMUP_SEC, SPORE_EXPLOSION_RADIUS, BARREL_EXPLOSION_RADIUS, BOSS_ERUPT_RADIUS, MAX_TACTICAL_PROPS_PER_ROOM, type PropKind, type SimPropState, type SimChestState, type SimWorldItemState, type SimEnemyState } from './world-sim-types.js';
 import type { WorldSim } from './world-sim.js';
 
@@ -278,27 +278,7 @@ export function getActiveWeaponIdImpl(this: WorldSim): string {
 }
 
 export function equipWeaponSlotImpl(this: WorldSim, slotIndex: number): void {
-  if (slotIndex >= 0 && slotIndex < this.player.weaponSlots.length) {
-    if (this.player.activeWeaponSlot !== slotIndex) {
-      this.player.activeWeaponSlot = slotIndex;
-      this.player.fireCooldownTimer = Math.min(this.player.fireCooldownTimer, 0.08);
-      syncActiveWeaponCadenceState(this.player);
-      this.events.push({
-        kind: 'weapon_swapped',
-        playerId: this.player.id,
-        weaponId: this.getActiveWeaponId(),
-        slot: slotIndex,
-      });
-    } else {
-      const wep = WEAPONS[this.getActiveWeaponId()];
-      if (
-        this.player.clipMax !== (wep?.clipSize ?? 0) ||
-        this.player.reloadDuration !== (wep?.reloadDurationSec ?? 0)
-      ) {
-        syncActiveWeaponCadenceState(this.player);
-      }
-    }
-  }
+  switchPlayerWeaponSlot(this, this.player, slotIndex);
 }
 
 export function cycleWeaponImpl(this: WorldSim, direction = 1): void {

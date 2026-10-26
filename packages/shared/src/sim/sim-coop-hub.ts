@@ -8,19 +8,33 @@ import { PLAYER_RADIUS, REVIVE_HOLD_DURATION_SEC, DRUID_REVIVE_HOLD_DURATION_SEC
 import type { WorldSim } from './world-sim.js';
 
 export function syncActiveWeaponCadenceState(p: SimPlayerState): void {
-  const activeWepId = p.weaponSlots[p.activeWeaponSlot] ?? p.weaponSlots[0] ?? 'knight_sword';
+  const slot = p.activeWeaponSlot ?? 0;
+  const activeWepId = p.weaponSlots[slot] ?? p.weaponSlots[0] ?? 'knight_sword';
   const wep = WEAPONS[activeWepId];
   p.clipMax = wep?.clipSize ?? 0;
   p.clipAmmo = p.clipMax;
+  if (!Array.isArray(p.weaponSlotClipAmmo)) {
+    p.weaponSlotClipAmmo = [p.clipMax, 0];
+  } else {
+    p.weaponSlotClipAmmo[slot] = p.clipMax;
+  }
+  if (!Array.isArray(p.weaponSlotHeat)) {
+    p.weaponSlotHeat = [0, 0];
+  } else {
+    p.weaponSlotHeat[slot] = 0;
+  }
   p.reloadTimer = 0;
   p.reloadDuration = wep?.reloadDurationSec ?? 0;
   p.reloadLockout = false;
   p.overclockedNextShot = false;
   p.weaponHeat = 0;
   p.overheatLockTimer = 0;
+  p.ventCooldownTimer = 0;
   p.meleeComboStep = 0;
   p.meleeComboResetTimer = 0;
   p.meleeParryWindowTimer = 0;
+  p.bonusBounceCurrentClip = 0;
+  p.parriedCountCurrentWindow = 0;
 }
 
 export function createPlayerStateImpl(this: WorldSim,
@@ -79,10 +93,17 @@ export function createPlayerStateImpl(this: WorldSim,
     overclockedNextShot: false,
     weaponHeat: 0,
     overheatLockTimer: 0,
+    ventCooldownTimer: 0,
     meleeComboStep: 0,
     meleeComboResetTimer: 0,
     meleeParryWindowTimer: 0,
     holsterReloadTimers: [0, 0],
+    weaponSlotClipAmmo: [starterWep?.clipSize ?? 0, -1],
+    weaponSlotHeat: [0, 0],
+    staffShotCounter: 0,
+    apprenticeStaffShotCount: 0,
+    bonusBounceCurrentClip: 0,
+    parriedCountCurrentWindow: 0,
     vanguardShieldBonusAdd: 0,
     elementalConvergenceTimer: 0,
     pollenSpeedBoostTimer: 0,

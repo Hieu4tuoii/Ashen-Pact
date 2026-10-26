@@ -7,9 +7,9 @@ export const WEAPONS: Record<string, WeaponStatsDef> = {
     nameEn: 'Knight Sword',
     rarity: 'common',
     category: 'melee',
-    damage: 14,
+    damage: 12,
     pelletCount: 1,
-    fireRate: 1.75,
+    fireRate: 2.1,
     cadenceKind: 'MELEE_COMBO',
     clipSize: 0,
     reloadDurationSec: 0,
@@ -20,9 +20,14 @@ export const WEAPONS: Record<string, WeaponStatsDef> = {
     critChance: 0.1,
     pierceCount: 99,
     bounceCount: 0,
-    knockback: 160,
+    knockback: 150,
     element: 'none',
     destroysEnemyBullets: true,
+    comboHits: 3,
+    comboRecoverySec: 0.25,
+    range: 56,
+    comboDamages: [12, 14, 24],
+    comboKnockbacks: [150, 180, 260],
   },
   hunter_crossbow: {
     id: 'hunter_crossbow',
@@ -55,7 +60,7 @@ export const WEAPONS: Record<string, WeaponStatsDef> = {
     category: 'staff',
     damage: 11,
     pelletCount: 1,
-    fireRate: 2.4,
+    fireRate: 2.6,
     cadenceKind: 'HEAT_VENT',
     clipSize: 0,
     reloadDurationSec: 0,
@@ -99,9 +104,9 @@ export const WEAPONS: Record<string, WeaponStatsDef> = {
     nameEn: 'Rivet Gun',
     rarity: 'common',
     category: 'pistol',
-    damage: 10,
+    damage: 9,
     pelletCount: 1,
-    fireRate: 3.0,
+    fireRate: 3.4,
     cadenceKind: 'CLIP_RELOAD',
     clipSize: 6,
     reloadDurationSec: 0.9,
@@ -115,6 +120,8 @@ export const WEAPONS: Record<string, WeaponStatsDef> = {
     knockback: 95,
     element: 'none',
     destroysEnemyBullets: false,
+    finaleDamage: 15,
+    finaleElement: 'shock',
   },
   scrap_shotgun: {
     id: 'scrap_shotgun',
@@ -168,7 +175,7 @@ export const WEAPONS: Record<string, WeaponStatsDef> = {
     nameEn: 'Tesla Carbine',
     rarity: 'rare',
     category: 'rifle',
-    damage: 11,
+    damage: 12,
     pelletCount: 1,
     fireRate: 3.4,
     cadenceKind: 'CLIP_RELOAD',
@@ -180,7 +187,7 @@ export const WEAPONS: Record<string, WeaponStatsDef> = {
     spreadDeg: 2.0,
     critChance: 0.12,
     pierceCount: 1,
-    bounceCount: 0,
+    bounceCount: 2,
     knockback: 75,
     element: 'shock',
     destroysEnemyBullets: false,
@@ -442,6 +449,20 @@ export const PHASE6_WEAPON_IDS: readonly string[] = [
 ];
 
 export const ALL_WEAPON_IDS: readonly string[] = Object.keys(WEAPONS);
+
+for (const w of Object.values(WEAPONS)) {
+  w.baseDamage ??= w.damage;
+  w.cooldownSec ??= w.fireRate > 0 ? 1 / w.fireRate : 0;
+  w.reloadSec ??= w.reloadDurationSec;
+  w.procCoeff ??= w.procCoefficient;
+  w.pierce ??= w.pierceCount;
+  w.bounce ??= w.bounceCount;
+  if (w.cadenceKind === 'MELEE_COMBO') {
+    w.comboHits ??= 3;
+    w.comboRecoverySec ??= 0.25;
+    w.range ??= 56;
+  }
+}
 
 export const MAX_WEAPON_SLOTS = 2;
 

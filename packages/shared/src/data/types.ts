@@ -71,21 +71,34 @@ export interface WeaponStatsDef {
   rarity: WeaponRarity;
   category: WeaponCategory;
   damage: number;
+  baseDamage?: number;
   pelletCount: number;
   fireRate: number;
+  cooldownSec?: number;
   cadenceKind: WeaponCadenceKind;
   clipSize: number;
   reloadDurationSec: number;
+  reloadSec?: number;
   heatPerShot: number;
   procCoefficient: number;
+  procCoeff?: number;
   projectileSpeed: number;
   spreadDeg: number;
   critChance: number;
   pierceCount: number;
+  pierce?: number;
   bounceCount: number;
+  bounce?: number;
   knockback: number;
   element: ElementType;
   destroysEnemyBullets: boolean;
+  comboHits?: number;
+  comboRecoverySec?: number;
+  range?: number;
+  comboDamages?: readonly [number, number, number];
+  comboKnockbacks?: readonly [number, number, number];
+  finaleDamage?: number;
+  finaleElement?: ElementType;
 }
 
 export type EnemyRole =

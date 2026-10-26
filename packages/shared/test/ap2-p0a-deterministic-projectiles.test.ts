@@ -371,9 +371,10 @@ describe('AP2 P0A.4 — RELOAD_VENT Input, Deterministic Projectile IDs, Zero-Ru
       includeProps: false,
     });
 
-    // 9a. Melee swing with knight_sword (destroysEnemyBullets = true)
+    // 9a. Melee swing with knight_sword (Hit 3 Parry Deflect destroys/deflects enemy bullets)
     sim.player.weaponSlots = ['knight_sword'];
     sim.player.activeWeaponSlot = 0;
+    sim.player.meleeComboStep = 2;
     sim.player.x = 300;
     sim.player.y = 260;
     sim.player.aimAngle = 0;

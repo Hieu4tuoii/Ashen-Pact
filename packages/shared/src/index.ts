@@ -17,5 +17,7 @@ export * from './sim/arena-room-archetypes.js';
 export * from './sim/dungeon-gen.js';
 export * from './sim/interact-target.js';
 export * from './sim/sim-tactical-physics.js';
+export * from './sim/sim-weapon-cadence.js';
+export * from './sim/sim-weapon-specials.js';
 export * from './sim/world-sim.js';
 export * from './i18n/index.js';

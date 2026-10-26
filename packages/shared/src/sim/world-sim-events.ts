@@ -385,6 +385,20 @@ export type SimEvent =
       y: number;
       isElite: boolean;
       damage: number;
+    }
+  | {
+      kind: 'perfect_reload';
+      playerId: number;
+      weaponId: string;
+      x: number;
+      y: number;
+    }
+  | {
+      kind: 'tactical_vent';
+      playerId: number;
+      weaponId: string;
+      x: number;
+      y: number;
     };
 
 export interface WorldSimOptions {

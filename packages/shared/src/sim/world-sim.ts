@@ -5,7 +5,7 @@ import { SpatialHashGrid } from '../math/spatial-hash.js';
 import type { PlayerInputPacket, QuickEmoteId } from '../protocol/messages.js';
 import { ArenaMap, type RoomArchetypeId, type SurfaceKind } from './arena-map.js';
 import { type DungeonFloorGraph, type DungeonRoomNode, generateDungeonFloor } from './dungeon-gen.js';
-import { PHASE1_SAMPLE_ENEMIES, hasPlayerBlessing, type PropKind, type SimPropState, type SimSummonState, type SimSkillZoneState, type SimPressurePlateState, type SimPushBlockState, type SimShockwaveRingState, type SimTetherBeamState, type SimDoorState, type SimChestState, type SimWorldItemState, type SimNpcState, type SimHubStatue, type SimPingMarker, type RunSummaryStats, type MvpAwardEntry, type SimPlayerState, type SimEnemyState, type SimProjectileState, type SimPickupState, type BulletVolleySpawnEvent } from './world-sim-types.js';
+import { PHASE1_SAMPLE_ENEMIES, hasPlayerBlessing, type PropKind, type SimPropState, type SimSummonState, type SimSkillZoneState, type SimPressurePlateState, type SimPushBlockState, type SimShockwaveRingState, type SimTetherBeamState, type SimMagneticRivetState, type SimDoorState, type SimChestState, type SimWorldItemState, type SimNpcState, type SimHubStatue, type SimPingMarker, type RunSummaryStats, type MvpAwardEntry, type SimPlayerState, type SimEnemyState, type SimProjectileState, type SimPickupState, type BulletVolleySpawnEvent } from './world-sim-types.js';
 import type { SimEvent, WorldSimOptions, CoPlayerInputEntry } from './world-sim-events.js';
 import { createPlayerStateImpl, getAllPlayersImpl, getActivePlayerCountImpl, setPlayerCountOverrideImpl, getPlayerByIdImpl, getPlayerBySlotImpl, addCoopPlayerImpl, removeCoopPlayerImpl, setCoopPlayerInputImpl, applyCharacterToPlayerStateImpl, selectCharacterImpl, togglePlayerReadyImpl, areAllPlayersReadyImpl, enterHubImpl, startDungeonRunFromHubImpl, triggerPingImpl, triggerEmoteImpl, spawnDroppedWeaponImpl, dropActiveWeaponImpl, updateCoopDownedAndReviveImpl } from './sim-coop-hub.js';
 import { spawnDefaultArenaPropsImpl, spawnPropImpl, cycleImbueElementImpl, setImbueElementImpl, configureStressTestImpl, topUpStressTestProjectilesImpl, setPlayerInputImpl, getActiveWeaponIdImpl, equipWeaponSlotImpl, cycleWeaponImpl, spawnTrainingDummyImpl, spawnEnemyImpl, spawnBossGuardianMushroomsImpl, hasActiveBossGuardiansImpl, spawnSampleWaveImpl, getCurrentRoomImpl, hasActiveCombatEnemiesImpl, getActiveBossImpl, rollChestRarityImpl, rollRandomWeaponByRaritiesImpl, spawnChestImpl, spawnWorldItemImpl, resolvePropMovementCollisionImpl, updatePropsImpl, damagePropImpl, detonateExplosiveBarrelImpl, applyElementAtWorldPointImpl } from './sim-props-spawning.js';
@@ -20,10 +20,13 @@ import { updateFireImpAIImpl, updateDwarfCannonAIImpl, updateCoalGolemAIImpl, up
 import { spawnDeterministicVolleyImpl, spawnSeedGunLifeBlossomImpl, triggerLauncherProjectileExplosionImpl, updateProjectilesImpl, stepClientProjectilesCosmeticImpl, acquireProjectileImpl } from './sim-projectiles.js';
 import { applyDamageToEnemyImpl, triggerElementalReactionImpl, handleEnemyKilledImpl, applyElementStatusToEnemyImpl, applyDamageToPlayerImpl } from './sim-combat-damage.js';
 import { flipCoverPropImpl, kickPropImpl, updateSlidingPropsImpl } from './sim-tactical-physics.js';
+import { updateMagneticRivets } from './sim-weapon-specials.js';
 
 export * from './world-sim-types.js';
 export * from './world-sim-events.js';
 export * from './sim-tactical-physics.js';
+export * from './sim-weapon-cadence.js';
+export * from './sim-weapon-specials.js';
 
 export class WorldSim {
   public readonly rng: SeededRandom;
@@ -53,6 +56,13 @@ export class WorldSim {
   public coopPuzzleCompleted = false;
   public shockwaveRings: SimShockwaveRingState[] = [];
   public tetherBeams: SimTetherBeamState[] = [];
+  public magneticRivets: SimMagneticRivetState[] = [];
+  public get activeRivets(): SimMagneticRivetState[] {
+    return this.magneticRivets;
+  }
+  public set activeRivets(v: SimMagneticRivetState[]) {
+    this.magneticRivets = v;
+  }
   public blizzardVeilActive = false;
   public titanCoreWindowTimer = 0;
   public titanFirstCoreBrokenId = 0;
@@ -198,9 +208,50 @@ export class WorldSim {
   }
 
   /**
-   * Executes a single 60Hz deterministic simulation tick (dtSec = 1/60).
+   * Executes a single 60Hz deterministic simulation tick (dtSec = 1/60),
+   * or accepts a player input command object and advances one tick.
    */
-  public step(dtSec: number): void {
+  public step(
+    dtOrCmd:
+      | number
+      | {
+          seq?: number;
+          tick?: number;
+          clientTick?: number;
+          moveX: number;
+          moveY: number;
+          aimX?: number;
+          aimY?: number;
+          aimAngle?: number;
+          buttons: number;
+          weaponSlotSelect?: number | null;
+          loadoutSlot?: number | null;
+        } = 1 / 60,
+  ): void {
+    let dtSec = 1 / 60;
+    if (typeof dtOrCmd === 'number') {
+      dtSec = dtOrCmd;
+    } else if (dtOrCmd && typeof dtOrCmd === 'object') {
+      const aimAngle =
+        typeof dtOrCmd.aimAngle === 'number'
+          ? dtOrCmd.aimAngle
+          : typeof dtOrCmd.aimX === 'number' && typeof dtOrCmd.aimY === 'number'
+            ? Math.atan2(dtOrCmd.aimY - this.player.y, dtOrCmd.aimX - this.player.x)
+            : this.player.aimAngle;
+      if (typeof dtOrCmd.aimX === 'number' && typeof dtOrCmd.aimY === 'number') {
+        this.player.aimWorldX = dtOrCmd.aimX;
+        this.player.aimWorldY = dtOrCmd.aimY;
+      }
+      this.setPlayerInput({
+        seq: dtOrCmd.seq ?? this.tick + 1,
+        tick: dtOrCmd.tick ?? dtOrCmd.clientTick ?? this.tick + 1,
+        moveX: dtOrCmd.moveX,
+        moveY: dtOrCmd.moveY,
+        aimAngle,
+        buttons: dtOrCmd.buttons,
+        weaponSlotSelect: dtOrCmd.weaponSlotSelect ?? dtOrCmd.loadoutSlot ?? null,
+      });
+    }
     this.tick += 1;
     this.runStats.ticksElapsed += 1;
     if (this.doorTransitionCooldown > 0) {
@@ -280,6 +331,9 @@ export class WorldSim {
 
     // 8. Update Projectiles & Collisions
     this.updateProjectiles(dtSec);
+    if (!this.stressTestActive) {
+      updateMagneticRivets(this, dtSec);
+    }
 
     // 9. Update Pickups (Magnet & Collection)
     this.updatePickups(dtSec);
@@ -339,6 +393,10 @@ export class WorldSim {
       this.eventsBufferA.length = 0;
     }
     return current;
+  }
+
+  public drainEvents(): SimEvent[] {
+    return this.consumeEvents();
   }
 
   public createPlayerState(id: number, slot: 1 | 2 | 3 | 4, characterId: CharacterId, x: number, y: number, displayName?: string): SimPlayerState  { return createPlayerStateImpl.call(this, id, slot, characterId, x, y, displayName); }

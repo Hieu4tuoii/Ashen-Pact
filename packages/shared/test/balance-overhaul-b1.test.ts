@@ -177,7 +177,7 @@ describe('Phase B1 — Combat & Economy Balance Overhaul', () => {
     expect(DASH_IFRAME_SEC).toBeCloseTo(0.16, 3);
     expect(DASH_COOLDOWN_SEC).toBeCloseTo(1.85, 3);
 
-    expect(WEAPONS.knight_sword!.fireRate).toBeCloseTo(1.75, 3);
+    expect(WEAPONS.knight_sword!.fireRate).toBeCloseTo(2.1, 3);
     expect(WEAPONS.knight_sword!.spreadDeg).toBe(85);
 
     const sim = new WorldSim({

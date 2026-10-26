@@ -1,18 +1,30 @@
-import { CHARACTERS } from '../data/characters.js';
-import type { ElementType } from '../data/types.js';
-import { WEAPONS } from '../data/weapons.js';
-import { approach, clamp, distance, isCircleInCone } from '../math/vec2.js';
+import type { ElementType, WeaponStatsDef } from '../data/types.js';
+import { approach, distance, isCircleInCone } from '../math/vec2.js';
 import { INPUT_BUTTON, type PlayerInputPacket, TILE_SIZE } from '../protocol/messages.js';
 import type { SurfaceKind } from './arena-map.js';
 import { findNearestWalkablePoint } from './arena-room-archetypes.js';
-import { syncActiveWeaponCadenceState } from './sim-coop-hub.js';
 import {
   BIOME1_POLLEN_SPEED_MULTIPLIER,
   triggerGrassPollenSpeedBoost,
   triggerMeleeKickProps,
 } from './sim-tactical-physics.js';
-import { DASH_DURATION_SEC, DASH_IFRAME_SEC, DASH_COOLDOWN_SEC, DASH_SPEED_MULTIPLIER, MELEE_RANGE, type SimPlayerState } from './world-sim-types.js';
+import {
+  switchPlayerWeaponSlot,
+  tryFireActiveWeaponImpl,
+  updatePlayerWeaponCadence,
+} from './sim-weapon-cadence.js';
+import {
+  DASH_COOLDOWN_SEC,
+  DASH_DURATION_SEC,
+  DASH_IFRAME_SEC,
+  DASH_SPEED_MULTIPLIER,
+  MAX_DEPLOYABLES_PER_PLAYER,
+  type SimPlayerState,
+  type SimProjectileState,
+} from './world-sim-types.js';
 import type { WorldSim } from './world-sim.js';
+
+export { tryFireActiveWeaponImpl };
 
 export function updatePlayerImpl(this: WorldSim, dtSec: number): void {
   const inp = this.currentInput;
@@ -129,30 +141,14 @@ export function updateSinglePlayerStateImpl(this: WorldSim,
   ) {
     if (p.id === this.player.id) {
       this.equipWeaponSlot(selectedSlot);
-    } else if (p.activeWeaponSlot !== selectedSlot) {
-      p.activeWeaponSlot = selectedSlot;
-      p.fireCooldownTimer = Math.min(p.fireCooldownTimer, 0.08);
-      syncActiveWeaponCadenceState(p);
-      this.events.push({
-        kind: 'weapon_swapped',
-        playerId: p.id,
-        weaponId: p.weaponSlots[selectedSlot]!,
-        slot: selectedSlot,
-      });
+    } else {
+      switchPlayerWeaponSlot(this, p, selectedSlot);
     }
   } else if (justPressed & INPUT_BUTTON.SWAP) {
     if (p.id === this.player.id) {
       this.cycleWeapon(1);
     } else if (p.weaponSlots.length > 1) {
-      p.activeWeaponSlot = (p.activeWeaponSlot + 1) % p.weaponSlots.length;
-      p.fireCooldownTimer = Math.min(p.fireCooldownTimer, 0.08);
-      syncActiveWeaponCadenceState(p);
-      this.events.push({
-        kind: 'weapon_swapped',
-        playerId: p.id,
-        weaponId: p.weaponSlots[p.activeWeaponSlot]!,
-        slot: p.activeWeaponSlot,
-      });
+      switchPlayerWeaponSlot(this, p, (p.activeWeaponSlot + 1) % p.weaponSlots.length);
     }
   }
 
@@ -177,23 +173,7 @@ export function updateSinglePlayerStateImpl(this: WorldSim,
     const nextPollen = (p.pollenSpeedBoostTimer ?? 0) - dtSec;
     p.pollenSpeedBoostTimer = nextPollen < 1e-6 ? 0 : nextPollen;
   }
-  if (justPressed & INPUT_BUTTON.RELOAD_VENT) {
-    if (p.reloadTimer > 0 && p.reloadDuration > 0 && !p.reloadLockout) {
-      const progress = 1 - p.reloadTimer / p.reloadDuration;
-      if (progress >= 0.45 && progress <= 0.7) {
-        p.clipAmmo = p.clipMax;
-        p.reloadTimer = 0;
-        p.reloadLockout = false;
-        p.overclockedNextShot = true;
-        triggerGrassPollenSpeedBoost(this, p);
-      } else {
-        p.reloadLockout = true;
-      }
-    } else if (p.reloadTimer <= 0 && p.clipMax > 0 && p.clipAmmo < p.clipMax) {
-      p.reloadTimer = p.reloadDuration > 0 ? p.reloadDuration : 1.0;
-      p.reloadLockout = false;
-    }
-  }
+  updatePlayerWeaponCadence(this, p, justPressed, inp.buttons, dtSec);
 
   // Engineer passive: allies within 4 tiles (128u) regenerate armor 15% faster!
   let hasNearbyEngineer = p.characterId === 'engineer' && p.lifeState === 'alive';
@@ -521,324 +501,316 @@ export function updatePlayerSurfaceAndStatusImpl(this: WorldSim, p: SimPlayerSta
   }
 }
 
-export function tryFireActiveWeaponImpl(this: WorldSim, p: SimPlayerState = this.player): void {
-  const weaponId = p.weaponSlots[p.activeWeaponSlot] ?? p.weaponSlots[0] ?? 'knight_sword';
-  const w = WEAPONS[weaponId];
-  if (!w) return;
+export function spawnSeedGunLifeBlossomImpl(
+  this: WorldSim,
+  ownerId: number,
+  x: number,
+  y: number,
+): void {
+  if (this.stressTestActive) return;
+  const ownerSummons = this.summons.filter(
+    (s) => s.ownerPlayerId === ownerId && s.hp > 0 && s.ttlSec > 0,
+  );
+  if (ownerSummons.length >= MAX_DEPLOYABLES_PER_PLAYER) {
+    ownerSummons[0]!.ttlSec = 0;
+  }
+  const blossoms = this.summons.filter(
+    (s) => s.ownerPlayerId === ownerId && s.kind === 'life_blossom' && s.hp > 0 && s.ttlSec > 0,
+  );
+  if (blossoms.length >= 3) {
+    blossoms[0]!.ttlSec = 0;
+  }
+  const col = this.map.resolveCircleCollision(x, y, 14);
+  this.summons.push({
+    id: ++this.nextPuzzleEntityId,
+    ownerPlayerId: ownerId,
+    kind: 'life_blossom',
+    nameVi: 'Hoa Sinh Mệnh',
+    x: col.x,
+    y: col.y,
+    radius: 14,
+    auraRadius: 92,
+    hp: 30,
+    maxHp: 30,
+    ttlSec: 6.5,
+    maxTtlSec: 6.5,
+    tickTimer: 0.4,
+    healsRemaining: 4,
+    charge: 0,
+    poisonRoots: false,
+    selfDestruct: false,
+    rootedEnemyIds: [],
+  });
+}
 
-  const vanguardBonusMult = 1 + (p.vanguardShieldBonusAdd ?? 0);
-  p.vanguardShieldBonusAdd = 0;
+export function triggerLauncherProjectileExplosionImpl(
+  this: WorldSim,
+  b: SimProjectileState,
+  x: number,
+  y: number,
+): void {
+  if (this.stressTestActive) return;
+  const blastR = b.explosionRadius && b.explosionRadius > 0 ? b.explosionRadius : 64;
+  if (b.element === 'burn') {
+    this.map.igniteSurfaceInRadius(x, y, blastR);
+  }
+  this.events.push({
+    kind: 'explosion',
+    x,
+    y,
+    radius: blastR,
+    damage: b.damage,
+    sourceDefId: b.weaponId,
+  });
 
-  const convergenceMult = p.elementalConvergenceTimer > 0 ? 1.2 : 1.0;
-  const effectiveFireRate = w.fireRate * convergenceMult;
-  p.fireCooldownTimer = 1 / effectiveFireRate;
-  p.recoilTimer = 0.12;
-  const shotElement: ElementType =
-    p.activeImbueElement !== 'none' ? p.activeImbueElement : w.element;
-
-  if (w.category === 'melee') {
-    const arcRad = (w.spreadDeg * Math.PI) / 180;
-    const halfArc = arcRad / 2;
-    const meleeRange =
-      w.id === 'thunder_hammer'
-        ? MELEE_RANGE + 20
-        : w.id === 'berserker_axe'
-          ? MELEE_RANGE + 10
-          : MELEE_RANGE;
-    let bulletsDestroyed = 0;
-
-    if (w.destroysEnemyBullets) {
-      this.rebuildEnemyBulletSpatialGrid();
-      const nearbyBullets = this.bulletSpatialGrid.queryCircle(
-        p.x,
-        p.y,
-        meleeRange + 12,
-        this.queryBulletScratch,
-      );
-      const destroyedIds: number[] = [];
-      for (let i = 0; i < nearbyBullets.length; i++) {
-        const b = nearbyBullets[i]!;
-        if (b.team !== 'enemy' || b.ttlSec <= 0) continue;
-        if (isCircleInCone(p.x, p.y, p.aimAngle, halfArc, meleeRange + 8, b)) {
-          b.ttlSec = 0;
-          bulletsDestroyed += 1;
-          destroyedIds.push(b.id);
-          const shieldActive = p.characterId === 'vanguard' && p.skillActiveTimer > 0;
-          if (shieldActive) {
-            p.shieldStoredBullets += 1;
-            if (w.cadenceKind === 'HEAT_VENT') {
-              p.weaponHeat = Math.max(0, p.weaponHeat - 15);
-            } else if (p.clipMax > 0) {
-              p.clipAmmo = Math.min(p.clipMax, p.clipAmmo + 1);
-            }
-            p.vanguardShieldBonusAdd = Math.min(0.75, (p.vanguardShieldBonusAdd ?? 0) + 0.15);
-          }
-          this.events.push({
-            kind: 'projectile_impact',
-            x: b.x,
-            y: b.y,
-            angle: p.aimAngle,
-            team: 'enemy',
-            hitWall: false,
-            destroyedByMelee: true,
-            blockedByShield: shieldActive,
-            isCrit: false,
-          });
-        }
-      }
-      if (destroyedIds.length > 0 && !this.stressTestActive) {
-        this.events.push({
-          kind: 'projectiles_destroyed',
-          ids: destroyedIds,
-        });
-      }
-    }
-
-    // Hit props in melee cone (kickable props launch as projectiles first!)
-    const baseMeleeDmg = Math.round(w.damage * vanguardBonusMult);
-    triggerMeleeKickProps(this, p, halfArc, meleeRange + 6, p.aimAngle);
-    for (let i = 0; i < this.props.length; i++) {
-      const prop = this.props[i]!;
-      if (!prop.destructible || prop.hp <= 0 || prop.coverState === 'sliding') continue;
-      if (isCircleInCone(p.x, p.y, p.aimAngle, halfArc, meleeRange + 6, prop)) {
-        prop.fallAngle = p.aimAngle;
-        this.damageProp(prop, baseMeleeDmg, shotElement);
-      }
-    }
-
-    // Hit enemies in melee cone
-    const baseCrit = CHARACTERS[p.characterId]?.baseCritChance ?? 0.05;
-    const critChance = clamp(baseCrit + w.critChance, 0, 1);
-    let hitAny = false;
-    let anyCrit = false;
-    const meleeEnemyCount = this.enemies.length;
-    for (let i = 0; i < meleeEnemyCount; i++) {
+  if (b.team === 'player') {
+    const isFullBlastWeapon =
+      b.weaponId === 'apprentice_staff' || b.weaponId === 'knight_sword_parry';
+    const blastDmg = isFullBlastWeapon ? b.damage : Math.max(6, Math.round(b.damage * 0.65));
+    for (let i = 0; i < this.enemies.length; i++) {
       const e = this.enemies[i]!;
+      if (
+        e.hp <= 0 ||
+        e.aiState === 'spawning' ||
+        e.bossBurrowed ||
+        b.hitEntityIds.includes(e.id)
+      ) {
+        continue;
+      }
+      if (distance(x, y, e.x, e.y) <= blastR + e.radius) {
+        const ang = Math.atan2(e.y - y, e.x - x);
+        this.applyDamageToEnemy(e, blastDmg, false, b.element, ang, 160, true, b.ownerId);
+      }
+    }
+  } else {
+    const allPlayers = this.getAllPlayers();
+    for (let i = 0; i < allPlayers.length; i++) {
+      const pl = allPlayers[i]!;
+      if (pl.lifeState !== 'alive') continue;
+      if (distance(x, y, pl.x, pl.y) <= blastR + pl.radius) {
+        const ang = Math.atan2(pl.y - y, pl.x - x);
+        this.applyDamageToPlayer(b.damage, ang, 180, b.weaponId, pl);
+      }
+    }
+  }
+}
+
+export function resolveMeleeConeHitsAndSynergies(
+  sim: WorldSim,
+  p: SimPlayerState,
+  w: WeaponStatsDef,
+  arcRad: number,
+  halfArc: number,
+  meleeRange: number,
+  baseMeleeDmg: number,
+  stepKnockback: number,
+  critChance: number,
+  shotElement: ElementType,
+  shotFlags: number,
+  bulletsDestroyed: number,
+): void {
+  triggerMeleeKickProps(sim, p, halfArc, meleeRange + 6, p.aimAngle);
+  for (let i = 0; i < sim.props.length; i++) {
+    const prop = sim.props[i]!;
+    if (!prop.destructible || prop.hp <= 0 || prop.coverState === 'sliding') continue;
+    if (isCircleInCone(p.x, p.y, p.aimAngle, halfArc, meleeRange + 6, prop)) {
+      prop.fallAngle = p.aimAngle;
+      sim.damageProp(prop, baseMeleeDmg, shotElement);
+    }
+  }
+
+  let hitAny = false;
+  let anyCrit = false;
+  const meleeEnemyCount = sim.enemies.length;
+  for (let i = 0; i < meleeEnemyCount; i++) {
+    const e = sim.enemies[i]!;
+    if (e.hp <= 0 || e.aiState === 'spawning') continue;
+    if (isCircleInCone(p.x, p.y, p.aimAngle, halfArc, meleeRange, e)) {
+      const isCrit = sim.rng.chance(critChance);
+      const dmg = isCrit ? Math.round(baseMeleeDmg * 1.5) : baseMeleeDmg;
+      const hitAngle = Math.atan2(e.y - p.y, e.x - p.x);
+      sim.applyDamageToEnemy(e, dmg, isCrit, shotElement, hitAngle, stepKnockback, true, p.id);
+      hitAny = true;
+      if (isCrit) anyCrit = true;
+    }
+  }
+
+  if (w.id === 'thunder_hammer') {
+    sim.spawnDeterministicVolley({
+      kind: 'bullet_volley_spawned',
+      tick: sim.tick,
+      ownerId: p.id,
+      team: 'player',
+      weaponId: w.id,
+      x: p.x + Math.cos(p.aimAngle) * 18,
+      y: p.y + Math.sin(p.aimAngle) * 18,
+      angle: p.aimAngle,
+      pelletCount: 3,
+      spreadRad: 0.42,
+      speed: w.projectileSpeed || 540,
+      damage: Math.round(baseMeleeDmg * 0.75),
+      radius: 6,
+      knockback: stepKnockback * 0.7,
+      pierceCount: 2,
+      bounceCount: 0,
+      ttlSec: 0.85,
+      element: 'shock',
+      critChance,
+      amplifiedByShield: false,
+      seed: sim.rng.nextUint32(),
+      shotFlags,
+      flags: shotFlags,
+    });
+  }
+
+  const isVanguardSwordWave = p.characterId === 'vanguard' && p.skillActiveTimer > 0;
+  if (isVanguardSwordWave) {
+    const waveHalfArc = (32 * Math.PI) / 180;
+    const waveRange = 200;
+    let waveElement: ElementType = shotElement;
+    let waveSecondaryElement: ElementType = 'none';
+    let waveImbueOwnerId = p.id;
+    let waveDmgMult = 1.15;
+
+    for (let zIdx = 0; zIdx < sim.skillZones.length; zIdx++) {
+      const z = sim.skillZones[zIdx]!;
+      if (z.ttlSec <= 0) continue;
+      if (isCircleInCone(p.x, p.y, p.aimAngle, waveHalfArc, waveRange, z)) {
+        waveDmgMult *= 1.15;
+        waveImbueOwnerId = z.ownerPlayerId;
+        if (waveElement === 'none') {
+          waveElement = z.element;
+          if (z.secondaryElement && z.secondaryElement !== 'none') {
+            waveSecondaryElement = z.secondaryElement;
+          }
+        } else {
+          waveSecondaryElement = z.element;
+        }
+        break;
+      }
+    }
+
+    const waveEnemyCount = sim.enemies.length;
+    for (let i = 0; i < waveEnemyCount; i++) {
+      const e = sim.enemies[i]!;
       if (e.hp <= 0 || e.aiState === 'spawning') continue;
-      if (isCircleInCone(p.x, p.y, p.aimAngle, halfArc, meleeRange, e)) {
-        const isCrit = this.rng.chance(critChance);
-        const dmg = isCrit ? Math.round(baseMeleeDmg * 1.5) : baseMeleeDmg;
+      if (
+        !isCircleInCone(p.x, p.y, p.aimAngle, halfArc, meleeRange, e) &&
+        isCircleInCone(p.x, p.y, p.aimAngle, waveHalfArc, waveRange, e)
+      ) {
+        const isCrit = sim.rng.chance(critChance);
+        const rawWaveDmg = Math.round(baseMeleeDmg * waveDmgMult);
+        const dmg = isCrit ? Math.round(rawWaveDmg * 1.5) : rawWaveDmg;
         const hitAngle = Math.atan2(e.y - p.y, e.x - p.x);
-        this.applyDamageToEnemy(e, dmg, isCrit, shotElement, hitAngle, w.knockback, true, p.id);
+        if (waveSecondaryElement !== 'none') {
+          sim.applyElementStatusToEnemy(e, waveSecondaryElement, dmg, waveImbueOwnerId);
+        }
+        const effectiveAttackerId =
+          waveImbueOwnerId !== p.id && e.lastElementOwnerId === p.id ? waveImbueOwnerId : p.id;
+        sim.applyDamageToEnemy(
+          e,
+          dmg,
+          isCrit,
+          waveElement,
+          hitAngle,
+          stepKnockback * 0.85,
+          true,
+          effectiveAttackerId,
+        );
         hitAny = true;
         if (isCrit) anyCrit = true;
       }
     }
-
-    // Legendary Thunder Hammer launches 3 piercing lightning bolts forward on each swing!
-    if (w.id === 'thunder_hammer') {
-      this.spawnDeterministicVolley({
-        kind: 'bullet_volley_spawned',
-        tick: this.tick,
-        ownerId: p.id,
-        team: 'player',
-        weaponId: w.id,
-        x: p.x + Math.cos(p.aimAngle) * 18,
-        y: p.y + Math.sin(p.aimAngle) * 18,
-        angle: p.aimAngle,
-        pelletCount: 3,
-        spreadRad: 0.42,
-        speed: w.projectileSpeed || 540,
-        damage: Math.round(baseMeleeDmg * 0.75),
-        radius: 6,
-        knockback: w.knockback * 0.7,
-        pierceCount: 2,
-        bounceCount: 0,
-        ttlSec: 0.85,
-        element: 'shock',
-        critChance,
-        amplifiedByShield: false,
-        seed: this.rng.nextUint32(),
-      });
-    }
-
-    // Vanguard Shield Wall Synergy: Melee swings while Tường Khiên Hồng Ngọc is active launch a 200u Ruby Sword Wave!
-    const isVanguardSwordWave = p.characterId === 'vanguard' && p.skillActiveTimer > 0;
-    if (isVanguardSwordWave) {
-      const waveHalfArc = (32 * Math.PI) / 180;
-      const waveRange = 200;
-      let waveElement: ElementType = shotElement;
-      let waveSecondaryElement: ElementType = 'none';
-      let waveImbueOwnerId = p.id;
-      let waveDmgMult = 1.15;
-
-      // If the 200u Ruby Sword Wave passes through an Elementalist Skill Zone, imbue +15% damage & element!
-      for (let zIdx = 0; zIdx < this.skillZones.length; zIdx++) {
-        const z = this.skillZones[zIdx]!;
-        if (z.ttlSec <= 0) continue;
-        if (isCircleInCone(p.x, p.y, p.aimAngle, waveHalfArc, waveRange, z)) {
-          waveDmgMult *= 1.15;
-          waveImbueOwnerId = z.ownerPlayerId;
-          if (waveElement === 'none') {
-            waveElement = z.element;
-            if (z.secondaryElement && z.secondaryElement !== 'none') {
-              waveSecondaryElement = z.secondaryElement;
-            }
-          } else {
-            waveSecondaryElement = z.element;
-          }
-          break;
-        }
-      }
-
-      const waveEnemyCount = this.enemies.length;
-      for (let i = 0; i < waveEnemyCount; i++) {
-        const e = this.enemies[i]!;
-        if (e.hp <= 0 || e.aiState === 'spawning') continue;
-        // Enemies already hit in the inner meleeRange cone don't take double damage, only enemies in (meleeRange..200u]
-        if (
-          !isCircleInCone(p.x, p.y, p.aimAngle, halfArc, meleeRange, e) &&
-          isCircleInCone(p.x, p.y, p.aimAngle, waveHalfArc, waveRange, e)
-        ) {
-          const isCrit = this.rng.chance(critChance);
-          const rawWaveDmg = Math.round(baseMeleeDmg * waveDmgMult);
-          const dmg = isCrit ? Math.round(rawWaveDmg * 1.5) : rawWaveDmg;
-          const hitAngle = Math.atan2(e.y - p.y, e.x - p.x);
-          if (waveSecondaryElement !== 'none') {
-            this.applyElementStatusToEnemy(e, waveSecondaryElement, dmg, waveImbueOwnerId);
-          }
-          const effectiveAttackerId =
-            waveImbueOwnerId !== p.id && e.lastElementOwnerId === p.id ? waveImbueOwnerId : p.id;
-          this.applyDamageToEnemy(
-            e,
-            dmg,
-            isCrit,
-            waveElement,
-            hitAngle,
-            w.knockback * 0.85,
-            true,
-            effectiveAttackerId,
-          );
-          hitAny = true;
-          if (isCrit) anyCrit = true;
-        }
-      }
-    }
-
-    this.events.push({
-      kind: 'melee_swing',
-      playerId: p.id,
-      weaponId: w.id,
-      x: p.x,
-      y: p.y,
-      angle: p.aimAngle,
-      arcRad,
-      range: isVanguardSwordWave ? 200 : meleeRange,
-      bulletsDestroyed,
-    });
-
-    if (hitAny) {
-      this.events.push({
-        kind: 'hit_stop',
-        durationMs: anyCrit ? 50 : 35,
-        trauma: anyCrit ? 0.36 : 0.24,
-      });
-    }
-    return;
   }
 
-  const pellets = Math.max(1, w.pelletCount);
-  const spreadRad = (w.spreadDeg * Math.PI) / 180;
-  const shieldBoost = p.characterId === 'vanguard' && p.skillActiveTimer > 0;
-  const muzzleDist = 18;
-  const spawnX = p.x + Math.cos(p.aimAngle) * muzzleDist;
-  const spawnY = p.y + Math.sin(p.aimAngle) * muzzleDist;
-  const baseCrit = CHARACTERS[p.characterId]?.baseCritChance ?? 0.05;
-  const rawWeaponDmg = w.damage;
-  const baseDmg = Math.round(
-    (shieldBoost ? Math.round(rawWeaponDmg * 1.3) : rawWeaponDmg) * vanguardBonusMult,
-  );
-  const critChance = clamp(baseCrit + w.critChance, 0, 1);
-
-  // Co-op Weapon: Trượng Liên Kết (tether_staff) links player with nearest ally or summon/anchor!
-  if (w.id === 'tether_staff') {
-    const allPlayers = this.getAllPlayers();
-    let bestAlly: SimPlayerState | null = null;
-    let bestDist = Infinity;
-    for (let i = 0; i < allPlayers.length; i++) {
-      const cand = allPlayers[i]!;
-      if (cand.id === p.id || cand.lifeState !== 'alive') continue;
-      const d = distance(p.x, p.y, cand.x, cand.y);
-      if (d < bestDist) {
-        bestDist = d;
-        bestAlly = cand;
-      }
-    }
-
-    let targetKind: 'player' | 'summon' = 'player';
-    let targetEntityId = 0;
-    let x2 = p.x + Math.cos(p.aimAngle) * 165;
-    let y2 = p.y + Math.sin(p.aimAngle) * 165;
-
-    if (bestAlly) {
-      targetKind = 'player';
-      targetEntityId = bestAlly.id;
-      x2 = bestAlly.x;
-      y2 = bestAlly.y;
-    } else {
-      const activeSummon = this.summons.find((s) => s.hp > 0 && s.ttlSec > 0);
-      if (activeSummon) {
-        targetKind = 'summon';
-        targetEntityId = activeSummon.id;
-        x2 = activeSummon.x;
-        y2 = activeSummon.y;
-      } else {
-        targetKind = 'summon';
-        targetEntityId = 0;
-        const col = this.map.resolveCircleCollision(x2, y2, 10);
-        x2 = col.x;
-        y2 = col.y;
-      }
-    }
-
-    const existingBeam = this.tetherBeams.find((b) => b.ownerPlayerId === p.id);
-    if (existingBeam) {
-      existingBeam.targetKind = targetKind;
-      existingBeam.targetEntityId = targetEntityId;
-      existingBeam.x1 = p.x;
-      existingBeam.y1 = p.y;
-      existingBeam.x2 = x2;
-      existingBeam.y2 = y2;
-      existingBeam.ttlSec = 3.2;
-      existingBeam.damage = Math.max(8, Math.round(baseDmg * 0.85));
-    } else {
-      this.tetherBeams.push({
-        id: ++this.nextPuzzleEntityId,
-        ownerPlayerId: p.id,
-        targetEntityId,
-        targetKind,
-        x1: p.x,
-        y1: p.y,
-        x2,
-        y2,
-        ttlSec: 3.2,
-        tickTimer: 0.1,
-        damage: Math.max(8, Math.round(baseDmg * 0.85)),
-      });
-    }
-  }
-
-  this.spawnDeterministicVolley({
-    kind: 'bullet_volley_spawned',
-    tick: this.tick,
-    ownerId: p.id,
-    team: 'player',
+  sim.events.push({
+    kind: 'melee_swing',
+    playerId: p.id,
     weaponId: w.id,
-    x: spawnX,
-    y: spawnY,
+    x: p.x,
+    y: p.y,
     angle: p.aimAngle,
-    pelletCount: pellets,
-    spreadRad,
-    speed: w.projectileSpeed,
-    damage: baseDmg,
-    radius: w.category === 'shotgun' ? 4.5 : w.category === 'launcher' ? 7 : 5,
-    knockback: w.knockback,
-    pierceCount: w.pierceCount + (shieldBoost ? 1 : 0),
-    bounceCount: w.bounceCount,
-    ttlSec: w.category === 'shotgun' ? 0.55 : w.category === 'laser' ? 1.0 : 1.4,
-    element: shotElement,
-    critChance,
-    amplifiedByShield: shieldBoost,
-    seed: this.rng.nextUint32(),
+    arcRad,
+    range: isVanguardSwordWave ? 200 : meleeRange,
+    bulletsDestroyed,
   });
+
+  if (hitAny) {
+    sim.events.push({
+      kind: 'hit_stop',
+      durationMs: anyCrit ? 50 : 35,
+      trauma: anyCrit ? 0.36 : 0.24,
+    });
+  }
+}
+
+export function upsertTetherStaffBeam(
+  sim: WorldSim,
+  p: SimPlayerState,
+  baseDmg: number,
+): void {
+  const allPlayers = sim.getAllPlayers();
+  let bestAlly: SimPlayerState | null = null;
+  let bestDist = Infinity;
+  for (let i = 0; i < allPlayers.length; i++) {
+    const cand = allPlayers[i]!;
+    if (cand.id === p.id || cand.lifeState !== 'alive') continue;
+    const d = distance(p.x, p.y, cand.x, cand.y);
+    if (d < bestDist) {
+      bestDist = d;
+      bestAlly = cand;
+    }
+  }
+
+  let targetKind: 'player' | 'summon' = 'player';
+  let targetEntityId = 0;
+  let x2 = p.x + Math.cos(p.aimAngle) * 165;
+  let y2 = p.y + Math.sin(p.aimAngle) * 165;
+
+  if (bestAlly) {
+    targetKind = 'player';
+    targetEntityId = bestAlly.id;
+    x2 = bestAlly.x;
+    y2 = bestAlly.y;
+  } else {
+    const activeSummon = sim.summons.find((s) => s.hp > 0 && s.ttlSec > 0);
+    if (activeSummon) {
+      targetKind = 'summon';
+      targetEntityId = activeSummon.id;
+      x2 = activeSummon.x;
+      y2 = activeSummon.y;
+    } else {
+      targetKind = 'summon';
+      targetEntityId = 0;
+      const col = sim.map.resolveCircleCollision(x2, y2, 10);
+      x2 = col.x;
+      y2 = col.y;
+    }
+  }
+
+  const existingBeam = sim.tetherBeams.find((b) => b.ownerPlayerId === p.id);
+  if (existingBeam) {
+    existingBeam.targetKind = targetKind;
+    existingBeam.targetEntityId = targetEntityId;
+    existingBeam.x1 = p.x;
+    existingBeam.y1 = p.y;
+    existingBeam.x2 = x2;
+    existingBeam.y2 = y2;
+    existingBeam.ttlSec = 3.2;
+    existingBeam.damage = Math.max(8, Math.round(baseDmg * 0.85));
+  } else {
+    sim.tetherBeams.push({
+      id: ++sim.nextPuzzleEntityId,
+      ownerPlayerId: p.id,
+      targetEntityId,
+      targetKind,
+      x1: p.x,
+      y1: p.y,
+      x2,
+      y2,
+      ttlSec: 3.2,
+      tickTimer: 0.1,
+      damage: Math.max(8, Math.round(baseDmg * 0.85)),
+    });
+  }
 }

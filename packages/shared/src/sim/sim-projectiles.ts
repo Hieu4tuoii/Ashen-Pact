@@ -3,18 +3,32 @@ import { WEAPONS } from '../data/weapons.js';
 import { angleDiff, circleVsCircle, distance } from '../math/vec2.js';
 import { SHOT_FLAG, TILE_SIZE } from '../protocol/messages.js';
 import {
+  spawnSeedGunLifeBlossomImpl,
+  triggerLauncherProjectileExplosionImpl,
+} from './sim-player.js';
+import {
+  detonatePlayerMagneticRivets,
+  plantMagneticRivet,
+  triggerTeslaFinaleChainLightning,
+  tryTeslaSmartWallBounce,
+} from './sim-weapon-specials.js';
+import {
   type BulletVolleySpawnEvent,
-  MAX_DEPLOYABLES_PER_PLAYER,
   MAX_ENEMY_PROJECTILES,
   MAX_PLAYER_PROJECTILES,
   type SimProjectileState,
 } from './world-sim-types.js';
 import type { WorldSim } from './world-sim.js';
 
+export { spawnSeedGunLifeBlossomImpl, triggerLauncherProjectileExplosionImpl };
+
 export function spawnDeterministicVolleyImpl(this: WorldSim, ev: BulletVolleySpawnEvent, emitEvents = true): void {
   if (ev.eventId === undefined || ev.eventId <= 0) {
     ev.eventId = this.nextVolleyEventId++;
   }
+  const resolvedFlags = ev.shotFlags ?? ev.flags ?? 0;
+  ev.shotFlags = resolvedFlags;
+  ev.flags = resolvedFlags;
   this.volleyRng.setState(ev.seed || 0x6d2b79f5);
   const volleyRng = this.volleyRng;
   let pellets = Math.max(1, ev.pelletCount);
@@ -120,6 +134,8 @@ export function spawnDeterministicVolleyImpl(this: WorldSim, ev: BulletVolleySpa
       shotFlags: ev.shotFlags ?? 0,
       splitGeneration: 0,
       awaitingServerRedirectTimer: 0,
+      explosionRadius: ev.explosionRadius,
+      guaranteedElementalProc: ev.guaranteedElementalProc,
     });
 
     this.projectiles.push(proj);
@@ -138,89 +154,8 @@ export function spawnDeterministicVolleyImpl(this: WorldSim, ev: BulletVolleySpa
   }
 }
 
-export function spawnSeedGunLifeBlossomImpl(this: WorldSim, ownerId: number, x: number, y: number): void {
-  if (this.stressTestActive) return;
-  const ownerSummons = this.summons.filter(
-    (s) => s.ownerPlayerId === ownerId && s.hp > 0 && s.ttlSec > 0,
-  );
-  if (ownerSummons.length >= MAX_DEPLOYABLES_PER_PLAYER) {
-    ownerSummons[0]!.ttlSec = 0;
-  }
-  const blossoms = this.summons.filter(
-    (s) => s.ownerPlayerId === ownerId && s.kind === 'life_blossom' && s.hp > 0 && s.ttlSec > 0,
-  );
-  if (blossoms.length >= 3) {
-    blossoms[0]!.ttlSec = 0;
-  }
-  const col = this.map.resolveCircleCollision(x, y, 14);
-  this.summons.push({
-    id: ++this.nextPuzzleEntityId,
-    ownerPlayerId: ownerId,
-    kind: 'life_blossom',
-    nameVi: 'Hoa Sinh Mệnh',
-    x: col.x,
-    y: col.y,
-    radius: 14,
-    auraRadius: 92,
-    hp: 30,
-    maxHp: 30,
-    ttlSec: 6.5,
-    maxTtlSec: 6.5,
-    tickTimer: 0.4,
-    healsRemaining: 4,
-    charge: 0,
-    poisonRoots: false,
-    selfDestruct: false,
-    rootedEnemyIds: [],
-  });
-}
-
-export function triggerLauncherProjectileExplosionImpl(this: WorldSim, b: SimProjectileState, x: number, y: number): void {
-  if (this.stressTestActive) return;
-  const blastR = 64;
-  if (b.element === 'burn') {
-    this.map.igniteSurfaceInRadius(x, y, blastR);
-  }
-  this.events.push({
-    kind: 'explosion',
-    x,
-    y,
-    radius: blastR,
-    damage: b.damage,
-    sourceDefId: b.weaponId,
-  });
-
-  if (b.team === 'player') {
-    const blastDmg = Math.max(6, Math.round(b.damage * 0.65));
-    for (let i = 0; i < this.enemies.length; i++) {
-      const e = this.enemies[i]!;
-      if (
-        e.hp <= 0 ||
-        e.aiState === 'spawning' ||
-        e.bossBurrowed ||
-        b.hitEntityIds.includes(e.id)
-      ) {
-        continue;
-      }
-      if (distance(x, y, e.x, e.y) <= blastR + e.radius) {
-        const ang = Math.atan2(e.y - y, e.x - x);
-        this.applyDamageToEnemy(e, blastDmg, false, b.element, ang, 160, true, b.ownerId);
-      }
-    }
-  } else {
-    const allPlayers = this.getAllPlayers();
-    for (let i = 0; i < allPlayers.length; i++) {
-      const pl = allPlayers[i]!;
-      if (pl.lifeState !== 'alive') continue;
-      if (distance(x, y, pl.x, pl.y) <= blastR + pl.radius) {
-        const ang = Math.atan2(pl.y - y, pl.x - x);
-        this.applyDamageToPlayer(b.damage, ang, 180, b.weaponId, pl);
-      }
-    }
-  }
-}
-
 export function updateProjectilesImpl(this: WorldSim, dtSec: number): void {
+  this.rebuildEnemySpatialGrid();
   const allPlayers = this.getAllPlayers();
   let stressImpactEventsThisTick = 0;
   const midFlightDestroyedIds: number[] = [];
@@ -239,7 +174,8 @@ export function updateProjectilesImpl(this: WorldSim, dtSec: number): void {
       } else if (
         b.weaponId === 'frag_launcher' ||
         b.weaponId === 'magma_cannon' ||
-        b.weaponId === 'dwarf_mortar'
+        b.weaponId === 'dwarf_mortar' ||
+        (b.explosionRadius ?? 0) > 0
       ) {
         this.triggerLauncherProjectileExplosion(b, b.x, b.y);
       }
@@ -283,6 +219,20 @@ export function updateProjectilesImpl(this: WorldSim, dtSec: number): void {
         }
       }
 
+      if (
+        b.team === 'player' &&
+        tryTeslaSmartWallBounce(
+          this,
+          b,
+          wallHit.resolvedX,
+          wallHit.resolvedY,
+          wallHit.normalX,
+          wallHit.normalY,
+        )
+      ) {
+        continue;
+      }
+
       if (b.bounceRemaining > 0) {
         b.bounceRemaining -= 1;
         b.x = wallHit.resolvedX;
@@ -295,12 +245,19 @@ export function updateProjectilesImpl(this: WorldSim, dtSec: number): void {
         if (b.element !== 'none') {
           this.applyElementAtWorldPoint(wallHit.resolvedX, wallHit.resolvedY, b.element, 24);
         }
+        if (b.team === 'player' && b.weaponId === 'rivet_gun') {
+          plantMagneticRivet(this, b.ownerId, wallHit.resolvedX, wallHit.resolvedY, null, null);
+          if (((b.shotFlags ?? 0) & SHOT_FLAG.FINALE_SHOT) !== 0) {
+            detonatePlayerMagneticRivets(this, b.ownerId, false);
+          }
+        }
         if (b.weaponId === 'seed_gun') {
           this.spawnSeedGunLifeBlossom(b.ownerId, wallHit.resolvedX, wallHit.resolvedY);
         } else if (
           b.weaponId === 'frag_launcher' ||
           b.weaponId === 'magma_cannon' ||
-          b.weaponId === 'dwarf_mortar'
+          b.weaponId === 'dwarf_mortar' ||
+          (b.explosionRadius ?? 0) > 0
         ) {
           this.triggerLauncherProjectileExplosion(b, wallHit.resolvedX, wallHit.resolvedY);
         }
@@ -333,6 +290,7 @@ export function updateProjectilesImpl(this: WorldSim, dtSec: number): void {
         if (prop.kind === 'crystal_pillar' && circleVsCircle(b, prop)) {
           if (!b.hitEntityIds.includes(prop.id)) {
             b.hitEntityIds.push(prop.id);
+            b.passedThroughCoverOrPrism = true;
             prop.hitFlashTimer = 0.16;
             const spd = Math.hypot(b.vx, b.vy) || 350;
             const nearestPl = this.findNearestAlivePlayer(prop.x, prop.y);
@@ -350,7 +308,12 @@ export function updateProjectilesImpl(this: WorldSim, dtSec: number): void {
           continue;
         }
         if (!prop.destructible || prop.coverState === 'sliding') continue;
-        if (prop.blocksEnemyProjectiles && b.team === 'player') continue;
+        if (prop.blocksEnemyProjectiles && b.team === 'player') {
+          if (circleVsCircle(b, prop)) {
+            b.passedThroughCoverOrPrism = true;
+          }
+          continue;
+        }
         if (
           b.team === 'enemy' &&
           prop.coverState === 'flipped' &&
@@ -364,6 +327,12 @@ export function updateProjectilesImpl(this: WorldSim, dtSec: number): void {
         if (circleVsCircle(b, prop)) {
           prop.fallAngle = b.angle;
           this.damageProp(prop, b.damage, b.element);
+          if (b.team === 'player' && b.weaponId === 'rivet_gun') {
+            plantMagneticRivet(this, b.ownerId, b.x, b.y, null, prop.id);
+            if (((b.shotFlags ?? 0) & SHOT_FLAG.FINALE_SHOT) !== 0) {
+              detonatePlayerMagneticRivets(this, b.ownerId, false);
+            }
+          }
           b.ttlSec = 0;
           hitProp = true;
           this.events.push({
@@ -520,14 +489,32 @@ export function updateProjectilesImpl(this: WorldSim, dtSec: number): void {
             b.knockback,
             b.weaponId === 'predator_arrow' ||
               b.weaponId === 'ruby_sword_wave' ||
+              b.weaponId === 'knight_sword_wave' ||
               b.weaponId === 'frag_launcher' ||
               b.weaponId === 'magma_cannon',
             effectiveAttackerId,
           );
 
+          if (b.weaponId === 'rivet_gun') {
+            plantMagneticRivet(this, b.ownerId, enemy.x, enemy.y, enemy.id, null);
+            if (((b.shotFlags ?? 0) & SHOT_FLAG.FINALE_SHOT) !== 0) {
+              detonatePlayerMagneticRivets(this, b.ownerId, false);
+            }
+          } else if (
+            b.weaponId === 'tesla_carbine' &&
+            ((b.shotFlags ?? 0) & SHOT_FLAG.FINALE_SHOT) !== 0 &&
+            b.hitEntityIds.length === 1
+          ) {
+            triggerTeslaFinaleChainLightning(this, b, enemy);
+          }
+
           if (b.weaponId === 'seed_gun') {
             this.spawnSeedGunLifeBlossom(b.ownerId, enemy.x, enemy.y);
-          } else if (b.weaponId === 'frag_launcher' || b.weaponId === 'magma_cannon') {
+          } else if (
+            b.weaponId === 'frag_launcher' ||
+            b.weaponId === 'magma_cannon' ||
+            (b.explosionRadius ?? 0) > 0
+          ) {
             this.triggerLauncherProjectileExplosion(b, enemy.x, enemy.y);
           }
 
@@ -571,37 +558,44 @@ export function updateProjectilesImpl(this: WorldSim, dtSec: number): void {
         if (pl.characterId === 'vanguard' && pl.skillActiveTimer > 0) {
           const hasFortress = pl.blessingIds.includes('vanguard_bastion_prism');
           const shieldRadius = hasFortress ? 32 : 38;
+          const halfShieldArc = hasFortress ? Math.PI : (60 * Math.PI) / 180;
           const dToPlayer = distance(b.x, b.y, pl.x, pl.y);
-          if (dToPlayer <= shieldRadius + b.radius && dToPlayer >= pl.radius * 0.5) {
-            const angleFromPlayer = Math.atan2(b.y - pl.y, b.x - pl.x);
-            const halfShieldArc = hasFortress ? Math.PI : (60 * Math.PI) / 180;
-            if (Math.abs(angleDiff(angleFromPlayer, pl.aimAngle)) <= halfShieldArc) {
-              b.ttlSec = 0;
-              midFlightDestroyedIds.push(b.id);
-              pl.shieldStoredBullets += 1;
-              const activeWepId =
-                pl.weaponSlots[pl.activeWeaponSlot] ?? pl.weaponSlots[0] ?? 'knight_sword';
-              const activeWep = WEAPONS[activeWepId];
-              if (activeWep?.cadenceKind === 'HEAT_VENT') {
-                pl.weaponHeat = Math.max(0, pl.weaponHeat - 15);
-              } else if (pl.clipMax > 0) {
-                pl.clipAmmo = Math.min(pl.clipMax, pl.clipAmmo + 1);
-              }
-              pl.vanguardShieldBonusAdd = Math.min(0.75, (pl.vanguardShieldBonusAdd ?? 0) + 0.15);
-              this.events.push({
-                kind: 'projectile_impact',
-                x: b.x,
-                y: b.y,
-                angle: b.angle,
-                team: 'enemy',
-                hitWall: false,
-                destroyedByMelee: false,
-                blockedByShield: true,
-                isCrit: false,
-              });
-              blockedByAnyShield = true;
-              break;
+          const dToPrev = distance(b.x, b.y, pl.prevX, pl.prevY);
+          const inCurrCone =
+            dToPlayer <= shieldRadius + b.radius &&
+            dToPlayer >= pl.radius * 0.5 &&
+            Math.abs(angleDiff(Math.atan2(b.y - pl.y, b.x - pl.x), pl.aimAngle)) <= halfShieldArc;
+          const inPrevCone =
+            dToPrev <= shieldRadius + b.radius &&
+            dToPrev >= pl.radius * 0.5 &&
+            Math.abs(angleDiff(Math.atan2(b.y - pl.prevY, b.x - pl.prevX), pl.aimAngle)) <=
+              halfShieldArc;
+          if (inCurrCone || inPrevCone) {
+            b.ttlSec = 0;
+            midFlightDestroyedIds.push(b.id);
+            pl.shieldStoredBullets += 1;
+            const activeWepId =
+              pl.weaponSlots[pl.activeWeaponSlot] ?? pl.weaponSlots[0] ?? 'knight_sword';
+            const activeWep = WEAPONS[activeWepId];
+            if (activeWep?.cadenceKind === 'HEAT_VENT') {
+              pl.weaponHeat = Math.max(0, pl.weaponHeat - 15);
+            } else if (pl.clipMax > 0) {
+              pl.clipAmmo = Math.min(pl.clipMax, pl.clipAmmo + 1);
             }
+            pl.vanguardShieldBonusAdd = Math.min(0.75, (pl.vanguardShieldBonusAdd ?? 0) + 0.15);
+            this.events.push({
+              kind: 'projectile_impact',
+              x: b.x,
+              y: b.y,
+              angle: b.angle,
+              team: 'enemy',
+              hitWall: false,
+              destroyedByMelee: false,
+              blockedByShield: true,
+              isCrit: false,
+            });
+            blockedByAnyShield = true;
+            break;
           }
         }
       }
@@ -966,6 +960,10 @@ export function acquireProjectileImpl(this: WorldSim,
     pooled.imbuedElement = init.imbuedElement;
     pooled.imbuedSecondaryElement = init.imbuedSecondaryElement;
     pooled.imbuedOwnerId = init.imbuedOwnerId;
+    pooled.explosionRadius = init.explosionRadius;
+    pooled.passedThroughCoverOrPrism = init.passedThroughCoverOrPrism;
+    pooled.parryDeflected = init.parryDeflected;
+    pooled.guaranteedElementalProc = init.guaranteedElementalProc;
     pooled.hitEntityIds.length = 0;
     return pooled;
   }

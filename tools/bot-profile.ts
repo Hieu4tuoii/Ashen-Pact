@@ -427,7 +427,8 @@ export function stepHonestPlayerBot(
     slot0Wep &&
     !player.reloadLockout &&
     player.overheatLockTimer <= 0 &&
-    (player.holsterReloadTimers?.[0] ?? 0) <= 0
+    ((player.holsterReloadTimers?.[0] ?? 0) <= 0 ||
+      (player.holsterReloadTimers?.[0] ?? 0) >= 2.0)
   ) {
     weaponSlotSelect = 0;
   }
@@ -578,6 +579,14 @@ export function stepHonestPlayerBot(
   }
 
   let buttons = target ? INPUT_BUTTON.FIRE : 0;
+
+  // Trigger Perfect Reload [R] when reload progress enters the [0.45, 0.70] sweet spot
+  if (player.reloadTimer > 0 && player.reloadDuration > 0 && !player.reloadLockout) {
+    const progress = 1 - player.reloadTimer / player.reloadDuration;
+    if (progress >= 0.48 && progress <= 0.68) {
+      buttons |= INPUT_BUTTON.RELOAD_VENT;
+    }
+  }
 
   // Use active skill tactically when off cooldown
   if (

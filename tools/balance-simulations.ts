@@ -148,10 +148,10 @@ export const CHARACTER_SIGNATURE_BUFF: Record<CharacterId, string> = {
 
 const BIOME1_PRIMARY_WEAPON: Record<CharacterId, string> = {
   vanguard: 'tesla_carbine',
-  ranger: 'tesla_carbine',
+  ranger: 'focus_laser',
   elementalist: 'apprentice_staff',
-  druid: 'focus_laser',
-  engineer: 'tesla_carbine',
+  druid: 'seed_gun',
+  engineer: 'rivet_gun',
 };
 
 const BIOME2_PRIMARY_WEAPON: Record<CharacterId, string> = {
@@ -378,6 +378,10 @@ export function measureCombatDpsAndSkillUptime(
       target.attackCooldownTimer = 99;
 
       const canCastSkill = p.skillCooldownTimer <= 0 && p.skillActiveTimer <= 0;
+      const reloadProgress =
+        p.reloadTimer > 0 && p.reloadDuration > 0 ? 1 - p.reloadTimer / p.reloadDuration : 0;
+      const canPerfectReload =
+        !p.reloadLockout && reloadProgress >= 0.48 && reloadProgress <= 0.68;
 
       sim.setPlayerInput({
         seq: t + 1,
@@ -385,7 +389,10 @@ export function measureCombatDpsAndSkillUptime(
         moveX: 0,
         moveY: 0,
         aimAngle: 0,
-        buttons: INPUT_BUTTON.FIRE | (canCastSkill ? INPUT_BUTTON.SKILL : 0),
+        buttons:
+          INPUT_BUTTON.FIRE |
+          (canCastSkill ? INPUT_BUTTON.SKILL : 0) |
+          (canPerfectReload ? INPUT_BUTTON.RELOAD_VENT : 0),
       });
       sim.step(SIM_STEP_SEC);
 

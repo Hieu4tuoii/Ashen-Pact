@@ -236,6 +236,19 @@ export interface SimTetherBeamState {
   tickTimer: number;
 }
 
+export interface SimMagneticRivetState {
+  id: number;
+  ownerPlayerId: number;
+  x: number;
+  y: number;
+  attachedEnemyId: number | null;
+  attachedTargetId?: number | null;
+  attachedPropId: number | null;
+  offsetX: number;
+  offsetY: number;
+  ttlSec: number;
+}
+
 export interface SimDoorState {
   dir: CardinalDir;
   targetRoomId: number;
@@ -391,10 +404,20 @@ export interface SimPlayerState {
   overclockedNextShot: boolean;
   weaponHeat: number;
   overheatLockTimer: number;
+  ventCooldownTimer: number;
   meleeComboStep: 0 | 1 | 2;
   meleeComboResetTimer: number;
   meleeParryWindowTimer: number;
   holsterReloadTimers: number[];
+  weaponSlotClipAmmo: number[];
+  weaponSlotHeat: number[];
+  staffShotCounter: number;
+  apprenticeStaffShotCount?: number;
+  bonusBounceCurrentClip: number;
+  parriedCountCurrentWindow: number;
+  aimWorldX?: number;
+  aimWorldY?: number;
+  critChance?: number;
   vanguardShieldBonusAdd: number;
   elementalConvergenceTimer: number;
   pollenSpeedBoostTimer: number;
@@ -476,6 +499,7 @@ export interface SimEnemyState {
   // Phase 2 Elemental & Surface states
   burnTimer: number;
   burnTickTimer: number;
+  burnStacks?: number;
   chillTimer: number;
   chillStacks: number;
   frozenTimer: number;
@@ -548,6 +572,10 @@ export interface SimProjectileState {
   imbuedElement?: ElementType;
   imbuedSecondaryElement?: ElementType;
   imbuedOwnerId?: number;
+  explosionRadius?: number;
+  passedThroughCoverOrPrism?: boolean;
+  parryDeflected?: boolean;
+  guaranteedElementalProc?: boolean;
   hitEntityIds: number[];
 }
 
@@ -592,7 +620,10 @@ export interface BulletVolleySpawnEvent {
   amplifiedByShield: boolean;
   seed: number;
   shotFlags?: number;
+  flags?: number;
   replacedProjectileId?: number;
+  explosionRadius?: number;
+  guaranteedElementalProc?: boolean;
 }
 
 
