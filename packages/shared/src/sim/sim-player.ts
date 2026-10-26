@@ -4,6 +4,7 @@ import { WEAPONS } from '../data/weapons.js';
 import { approach, clamp, distance, isCircleInCone } from '../math/vec2.js';
 import { INPUT_BUTTON, type PlayerInputPacket, TILE_SIZE } from '../protocol/messages.js';
 import type { SurfaceKind } from './arena-map.js';
+import { findNearestWalkablePoint } from './arena-room-archetypes.js';
 import { syncActiveWeaponCadenceState } from './sim-coop-hub.js';
 import { DASH_DURATION_SEC, DASH_IFRAME_SEC, DASH_COOLDOWN_SEC, DASH_SPEED_MULTIPLIER, MELEE_RANGE, type SimPlayerState } from './world-sim-types.js';
 import type { WorldSim } from './world-sim.js';
@@ -302,32 +303,22 @@ export function updateSinglePlayerStateImpl(this: WorldSim,
   if (Math.abs(p.kbVy) < 1) p.kbVy = 0;
 
   const conveyorVx = surf === 'conveyor' ? this.map.conveyorDirection * 62 : 0;
-  const prevSafeX = p.x;
-  const prevSafeY = p.y;
   const nextX = p.x + (p.vx + p.kbVx + conveyorVx) * dtSec;
   const nextY = p.y + (p.vy + p.kbVy) * dtSec;
-  const col = this.map.resolveCircleCollision(nextX, nextY, p.radius);
+  const col = this.map.resolveCircleCollision(
+    nextX,
+    nextY,
+    p.radius,
+    p.dashTimer > 0 || surf === 'chasm',
+  );
   p.x = col.x;
   p.y = col.y;
   this.resolvePropMovementCollision(p);
 
-  // Chasm hazard (Biome 2): walking onto a chasm tile without dashing pushes back to safe ledge and deals 1 damage
-  const nextSurf = this.map.getSurfaceAtWorld(p.x, p.y);
-  if (
-    surf !== 'chasm' &&
-    nextSurf === 'chasm' &&
-    p.dashTimer <= 0 &&
-    !this.botAutoPlayActive &&
-    !this.stressTestActive
-  ) {
-    const chasmCenterX = Math.floor(p.x / TILE_SIZE) * TILE_SIZE + TILE_SIZE * 0.5;
-    const chasmCenterY = Math.floor(p.y / TILE_SIZE) * TILE_SIZE + TILE_SIZE * 0.5;
-    const pushAng = Math.atan2(prevSafeY - chasmCenterY, prevSafeX - chasmCenterX);
-    p.x = prevSafeX;
-    p.y = prevSafeY;
-    this.applyDamageToPlayer(1, pushAng, 60, 'chasm', p);
-    p.kbVx = 0;
-    p.kbVy = 0;
+  if (p.dashTimer <= 0 && this.map.getSurfaceAtWorld(p.x, p.y) === 'chasm') {
+    const safePt = findNearestWalkablePoint(this.map, p.x, p.y, p.radius);
+    p.x = safePt.x;
+    p.y = safePt.y;
   }
 
   if (surf === 'grass' && Math.hypot(p.vx, p.vy) > 25 && p.grassRustleCooldown <= 0) {

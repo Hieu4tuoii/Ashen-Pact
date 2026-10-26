@@ -1,7 +1,38 @@
 import { SeededRandom } from '../core/prng.js';
-import type { RoomType } from '../data/types.js';
+import type { CardinalDir, RoomType } from '../data/types.js';
 import { TILE_SIZE } from '../protocol/messages.js';
 import { type AABB, clamp, resolveCircleVsAABB } from '../math/vec2.js';
+import {
+  type RoomArchetypeId,
+  type RoomLayoutOptions,
+  type RoomLayoutResult,
+  type RoomPropAnchor,
+  configureRoomLayout as configureArchetypeRoomLayout,
+  selectCombatRoomArchetype,
+} from './arena-room-archetypes.js';
+
+export {
+  ALL_ROOM_ARCHETYPES,
+  DOOR_TILES,
+  DOOR_VESTIBULE_RECTS,
+  P0B_COMBAT_ARCHETYPES,
+  PHASE0B_ROOM_ARCHETYPES,
+  type RoomArchetypeId,
+  type RoomLayoutOptions,
+  type RoomLayoutResult,
+  type RoomPropAnchor,
+  type RoomPropAnchorRole,
+  areActiveDoorsConnectedBfs,
+  configureRoomLayout,
+  findNearestWalkablePoint,
+  findNextWalkableWaypoint,
+  isInDoorClearanceZone,
+  isInDoorVestibule,
+  isWalkableTileForBfs,
+  selectBiome1RoomArchetype,
+  selectCombatRoomArchetype,
+  spawnCombatRoomArchetypeProps,
+} from './arena-room-archetypes.js';
 
 export type TileKind = 'floor' | 'wall' | 'pillar' | 'cracked_wall';
 
@@ -56,6 +87,10 @@ export class ArenaMap {
   public biome: 1 | 2 | 3;
   public conveyorDirection: 1 | -1 = 1;
   public mapRevision = 1;
+  public roomArchetype?: RoomArchetypeId;
+  public propAnchors: RoomPropAnchor[] = [];
+  public lastLayoutResult: RoomLayoutResult | null = null;
+  public lastRoomLayout: RoomLayoutResult | null = null;
 
   constructor(config: ArenaMapConfig = {}) {
     this.cols = config.cols ?? 36;
@@ -87,11 +122,31 @@ export class ArenaMap {
   }
 
   public configureRoomLayout(
-    roomType: RoomType,
-    roomSeed: number,
+    roomTypeOrOpts: RoomType | RoomLayoutOptions,
+    roomSeed = 1,
     secretWallBroken = false,
     biome: 1 | 2 | 3 = this.biome,
-  ): void {
+    archetype?: RoomArchetypeId,
+    activeDoorSides?: readonly CardinalDir[],
+  ): RoomLayoutResult | void {
+    if (typeof roomTypeOrOpts === 'object' && roomTypeOrOpts !== null) {
+      return configureArchetypeRoomLayout(this, roomTypeOrOpts);
+    }
+    const roomType = roomTypeOrOpts;
+    if (roomType === 'combat') {
+      return configureArchetypeRoomLayout(this, {
+        roomSeed,
+        archetype: archetype ?? selectCombatRoomArchetype(roomSeed),
+        biome,
+        activeDoorSides,
+        secretWallBroken,
+      });
+    }
+
+    this.roomArchetype = undefined;
+    this.propAnchors = [];
+    this.lastLayoutResult = null;
+    this.lastRoomLayout = null;
     this.biome = biome;
     this.conveyorDirection = 1;
     const count = this.cols * this.rows;
@@ -147,44 +202,7 @@ export class ArenaMap {
       }
     };
 
-    if (roomType === 'combat') {
-      const layoutStyle = roomSeed % 3;
-      if (layoutStyle === 0) {
-        placePillar2x2(9, 5);
-        placePillar2x2(25, 5);
-        placePillar2x2(9, 15);
-        placePillar2x2(25, 15);
-      } else if (layoutStyle === 1) {
-        placePillar2x2(12, 6);
-        placePillar2x2(22, 6);
-        placePillar2x2(12, 14);
-        placePillar2x2(22, 14);
-      } else {
-        placePillar2x2(10, 6);
-        placePillar2x2(24, 6);
-        placePillar2x2(10, 14);
-        placePillar2x2(24, 14);
-      }
-      if (biome === 2) {
-        // Biome 2 Frozen Depths tactical surfaces (ice sheets, freezing water, chasm pits)
-        this.fillSurfaceRect(13, 3, 5, 3, 'ice');
-        this.fillSurfaceRect(19, 3, 4, 3, 'water');
-        this.fillSurfaceRect(13, 16, 5, 3, 'ice');
-        this.fillSurfaceRect(2, 2, 2, 1, 'chasm');
-      } else if (biome === 3) {
-        // Biome 3 Molten Forge tactical surfaces (conveyor belts, molten lava, oil slicks)
-        this.fillSurfaceRect(12, 4, 12, 2, 'conveyor');
-        this.fillSurfaceRect(12, 16, 12, 2, 'conveyor');
-        this.fillSurfaceRect(5, 8, 3, 3, 'lava');
-        this.fillSurfaceRect(28, 11, 3, 3, 'oil');
-      } else {
-        // Biome 1 tactical surfaces (water, grass, poison_swamp, oil)
-        this.fillSurfaceRect(13, 3, 4, 3, 'water');
-        this.fillSurfaceRect(19, 3, 4, 3, 'grass');
-        this.fillSurfaceRect(13, 16, 4, 3, 'poison_swamp');
-        this.fillSurfaceRect(19, 16, 4, 3, 'oil');
-      }
-    } else if (roomType === 'boss') {
+    if (roomType === 'boss') {
       // Wide open Boss Arena with 4 corner cover pillars
       placePillar2x2(7, 4);
       placePillar2x2(27, 4);
@@ -426,6 +444,14 @@ export class ArenaMap {
   public getSurface(tx: number, ty: number): SurfaceKind {
     if (tx < 0 || ty < 0 || tx >= this.cols || ty >= this.rows) return 'none';
     return this.surfaces[ty * this.cols + tx] ?? 'none';
+  }
+
+  public getSurfaceAtTile(tx: number, ty: number): SurfaceKind {
+    return this.getSurface(tx, ty);
+  }
+
+  public isChasmTile(tx: number, ty: number): boolean {
+    return this.getSurface(tx, ty) === 'chasm';
   }
 
   public getSurfaceAtWorld(x: number, y: number): SurfaceKind {
@@ -714,15 +740,33 @@ export class ArenaMap {
     hitTy: -1,
   };
 
+  public isWalkableTile(tx: number, ty: number): boolean {
+    if (tx <= 0 || ty <= 0 || tx >= this.cols - 1 || ty >= this.rows - 1) return false;
+    return !this.isSolidTile(tx, ty) && this.getSurface(tx, ty) !== 'chasm';
+  }
+
+  private isBlockingTile(tx: number, ty: number, ignoreChasm: boolean): boolean {
+    if (this.isSolidTile(tx, ty)) return true;
+    return !ignoreChasm && this.getSurface(tx, ty) === 'chasm';
+  }
+
+  private isColumnBlocking(tx: number, minTy: number, maxTy: number, ignoreChasm: boolean): boolean {
+    for (let y = minTy; y <= maxTy; y++) {
+      if (!this.isBlockingTile(tx, y, ignoreChasm)) return false;
+    }
+    return true;
+  }
+
   /**
-   * Resolves circle vs nearby solid tile-AABBs so entities slide smoothly along walls and pillars
-   * without snagging on internal seams between adjacent tiles.
+   * Resolves circle vs nearby solid tile-AABBs (and chasm tiles when ignoreChasm=false)
+   * so entities slide smoothly along walls, pillars, and chasm ledges without snagging on internal seams.
    * Clamps to outer map bounds [radius..width-radius] so broken cracked_wall tiles on the border are passable.
    */
   public resolveCircleCollision(
     x: number,
     y: number,
     radius: number,
+    ignoreChasm = false,
   ): { x: number; y: number; collided: boolean; normalX: number; normalY: number } {
     const curTx = clamp(Math.floor(x / TILE_SIZE), 0, this.cols - 1);
     const curTy = clamp(Math.floor(y / TILE_SIZE), 0, this.rows - 1);
@@ -750,17 +794,37 @@ export class ArenaMap {
       const pMaxTy = Math.min(this.rows - 1, Math.floor((currY + radius) / TILE_SIZE) + 2);
       for (let ty = pMinTy; ty <= pMaxTy; ty++) {
         for (let tx = pMinTx; tx <= pMaxTx; tx++) {
-          if (!this.isSolidTile(tx, ty)) continue;
+          if (!this.isBlockingTile(tx, ty, ignoreChasm)) continue;
           let bMinTx = tx;
           let bMaxTx = tx;
           let bMinTy = ty;
           let bMaxTy = ty;
           const isInterior = tx > 0 && tx < this.cols - 1 && ty > 0 && ty < this.rows - 1;
           if (isInterior) {
-            while (bMinTx > 1 && this.isSolidTile(bMinTx - 1, ty)) bMinTx -= 1;
-            while (bMaxTx < this.cols - 2 && this.isSolidTile(bMaxTx + 1, ty)) bMaxTx += 1;
-            while (bMinTy > 1 && this.isSolidTile(tx, bMinTy - 1)) bMinTy -= 1;
-            while (bMaxTy < this.rows - 2 && this.isSolidTile(tx, bMaxTy + 1)) bMaxTy += 1;
+            if (!this.roomArchetype) {
+              while (bMinTx > 1 && this.isBlockingTile(bMinTx - 1, ty, ignoreChasm)) bMinTx -= 1;
+              while (bMaxTx < this.cols - 2 && this.isBlockingTile(bMaxTx + 1, ty, ignoreChasm)) {
+                bMaxTx += 1;
+              }
+              while (bMinTy > 1 && this.isBlockingTile(tx, bMinTy - 1, ignoreChasm)) bMinTy -= 1;
+              while (bMaxTy < this.rows - 2 && this.isBlockingTile(tx, bMaxTy + 1, ignoreChasm)) {
+                bMaxTy += 1;
+              }
+            } else {
+              while (bMinTy > 1 && this.isBlockingTile(tx, bMinTy - 1, ignoreChasm)) bMinTy -= 1;
+              while (bMaxTy < this.rows - 2 && this.isBlockingTile(tx, bMaxTy + 1, ignoreChasm)) {
+                bMaxTy += 1;
+              }
+              while (bMinTx > 1 && this.isColumnBlocking(bMinTx - 1, bMinTy, bMaxTy, ignoreChasm)) {
+                bMinTx -= 1;
+              }
+              while (
+                bMaxTx < this.cols - 2 &&
+                this.isColumnBlocking(bMaxTx + 1, bMinTy, bMaxTy, ignoreChasm)
+              ) {
+                bMaxTx += 1;
+              }
+            }
           }
           const minX = bMinTx * TILE_SIZE;
           const minY = bMinTy * TILE_SIZE;

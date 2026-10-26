@@ -3,7 +3,7 @@ import { BIOME2_COMBAT_ENEMIES, BIOME3_COMBAT_ENEMIES } from '../data/enemies.js
 import type { BlessingId, BuffId, CardinalDir, CharacterId, ElementalReactionId, EliteModifier, ElementType, WeaponRarity } from '../data/types.js';
 import { SpatialHashGrid } from '../math/spatial-hash.js';
 import type { PlayerInputPacket, QuickEmoteId } from '../protocol/messages.js';
-import { ArenaMap, type SurfaceKind } from './arena-map.js';
+import { ArenaMap, type RoomArchetypeId, type SurfaceKind } from './arena-map.js';
 import { type DungeonFloorGraph, type DungeonRoomNode, generateDungeonFloor } from './dungeon-gen.js';
 import { PHASE1_SAMPLE_ENEMIES, hasPlayerBlessing, type PropKind, type SimPropState, type SimSummonState, type SimSkillZoneState, type SimPressurePlateState, type SimPushBlockState, type SimShockwaveRingState, type SimTetherBeamState, type SimDoorState, type SimChestState, type SimWorldItemState, type SimNpcState, type SimHubStatue, type SimPingMarker, type RunSummaryStats, type MvpAwardEntry, type SimPlayerState, type SimEnemyState, type SimProjectileState, type SimPickupState, type BulletVolleySpawnEvent } from './world-sim-types.js';
 import type { SimEvent, WorldSimOptions, CoPlayerInputEntry } from './world-sim-events.js';
@@ -71,6 +71,7 @@ export class WorldSim {
   public currentFloor: 1 | 2 | 3 | 4 | 5 | 6 = 1;
   public dungeon: DungeonFloorGraph;
   public currentRoomId = 0;
+  public roomArchetype?: RoomArchetypeId;
   public secretWallBroken = false;
   public doors: SimDoorState[] = [];
   public chests: SimChestState[] = [];

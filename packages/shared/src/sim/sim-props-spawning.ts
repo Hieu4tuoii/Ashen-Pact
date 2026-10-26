@@ -97,11 +97,21 @@ export function spawnPropImpl(this: WorldSim, kind: PropKind, x: number, y: numb
       break;
   }
 
+  let finalX = x;
+  let finalY = y;
+  const pTx = Math.floor(finalX / TILE_SIZE);
+  const pTy = Math.floor(finalY / TILE_SIZE);
+  if (this.map.isSolidTile(pTx, pTy) || this.map.getSurface(pTx, pTy) === 'chasm') {
+    const col = this.map.resolveCircleCollision(finalX, finalY, radius, false);
+    finalX = col.x;
+    finalY = col.y;
+  }
+
   const prop: SimPropState = {
     id: ++this.nextEntityId,
     kind,
-    x,
-    y,
+    x: finalX,
+    y: finalY,
     radius,
     hp,
     maxHp: hp,
@@ -396,7 +406,7 @@ export function spawnEnemyImpl(this: WorldSim,
       const cy = this.rng.nextFloat(TILE_SIZE * 3, this.map.height - TILE_SIZE * 3);
       const dSq = distanceSq(cx, cy, this.player.x, this.player.y);
       const hit = this.map.checkProjectileWallHit(cx, cy, radius + 6);
-      if (dSq >= 150 * 150 && !hit.hit) {
+      if (dSq >= 150 * 150 && !hit.hit && this.map.getSurfaceAtWorld(cx, cy) !== 'chasm') {
         spawnX = cx;
         spawnY = cy;
         break;
@@ -452,6 +462,7 @@ export function spawnEnemyImpl(this: WorldSim,
     // Fallback ring search if squeezed between multiple closely-spaced props and walls
     const isOverlappingObstacle = (px: number, py: number): boolean => {
       if (this.map.checkProjectileWallHit(px, py, safePos.radius).hit) return true;
+      if (this.map.getSurfaceAtWorld(px, py) === 'chasm') return true;
       for (let i = 0; i < this.props.length; i++) {
         const prop = this.props[i]!;
         if (prop.hp <= 0 || (!prop.blocksMovement && prop.kind !== 'ancient_mechanism')) continue;
@@ -670,10 +681,19 @@ export function spawnChestImpl(this: WorldSim,
     preselectedWeaponId && WEAPONS[preselectedWeaponId]
       ? preselectedWeaponId
       : this.rollRandomWeaponByRarities([rarity]);
+  let finalX = x;
+  let finalY = y;
+  const cTx = Math.floor(finalX / TILE_SIZE);
+  const cTy = Math.floor(finalY / TILE_SIZE);
+  if (this.map.isSolidTile(cTx, cTy) || this.map.getSurface(cTx, cTy) === 'chasm') {
+    const col = this.map.resolveCircleCollision(finalX, finalY, 18, false);
+    finalX = col.x;
+    finalY = col.y;
+  }
   const chest: SimChestState = {
     id: ++this.nextEntityId,
-    x,
-    y,
+    x: finalX,
+    y: finalY,
     radius: 18,
     rarity,
     opened: false,
@@ -686,8 +706,19 @@ export function spawnChestImpl(this: WorldSim,
 export function spawnWorldItemImpl(this: WorldSim,
   init: Omit<SimWorldItemState, 'id' | 'radius' | 'pickedUp'>,
 ): SimWorldItemState {
+  let finalX = init.x;
+  let finalY = init.y;
+  const iTx = Math.floor(finalX / TILE_SIZE);
+  const iTy = Math.floor(finalY / TILE_SIZE);
+  if (this.map.isSolidTile(iTx, iTy) || this.map.getSurface(iTx, iTy) === 'chasm') {
+    const col = this.map.resolveCircleCollision(finalX, finalY, 15, false);
+    finalX = col.x;
+    finalY = col.y;
+  }
   const item: SimWorldItemState = {
     ...init,
+    x: finalX,
+    y: finalY,
     id: ++this.nextEntityId,
     radius: 15,
     pickedUp: false,

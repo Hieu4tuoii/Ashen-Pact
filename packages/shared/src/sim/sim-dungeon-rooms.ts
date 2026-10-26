@@ -5,6 +5,7 @@ import { COOP_SCALING } from '../data/scaling.js';
 import { clamp, distance } from '../math/vec2.js';
 import { TILE_SIZE } from '../protocol/messages.js';
 import { type DungeonRoomNode, OPPOSITE_DIR } from './dungeon-gen.js';
+import { findNearestWalkablePoint, selectCombatRoomArchetype, spawnCombatRoomArchetypeProps } from './arena-room-archetypes.js';
 import { syncActiveWeaponCadenceState } from './sim-coop-hub.js';
 import type { SimChestState, SimWorldItemState, SimPlayerState } from './world-sim-types.js';
 import type { WorldSim } from './world-sim.js';
@@ -122,13 +123,32 @@ export function enterRoomImpl(this: WorldSim, roomId: number, entryDir?: Cardina
     this.secretWallBroken = true;
   }
 
-  const roomSeed = Number(this.dungeon.seed) + roomId * 997 + this.currentFloor * 7919;
-  this.map.configureRoomLayout(
-    targetRoom.type,
-    roomSeed,
-    this.secretWallBroken,
-    this.currentBiome,
-  );
+  const baseSeedNum = Number.isFinite(Number(this.dungeon.seed))
+    ? Number(this.dungeon.seed)
+    : targetRoom.surfaceLayoutSeed;
+  const roomSeed = baseSeedNum + roomId * 997 + this.currentFloor * 7919;
+  const activeDoorSides = Object.keys(targetRoom.connections) as CardinalDir[];
+  if (targetRoom.type === 'combat') {
+    const archetype = targetRoom.roomArchetype ?? selectCombatRoomArchetype(roomSeed);
+    targetRoom.roomArchetype = archetype;
+    this.roomArchetype = archetype;
+    this.map.configureRoomLayout(
+      targetRoom.type,
+      roomSeed,
+      this.secretWallBroken,
+      this.currentBiome,
+      archetype,
+      activeDoorSides,
+    );
+  } else {
+    this.roomArchetype = undefined;
+    this.map.configureRoomLayout(
+      targetRoom.type,
+      roomSeed,
+      this.secretWallBroken,
+      this.currentBiome,
+    );
+  }
 
   // Position player(s) near the entrance door (opposite of entryDir)
   let spawnX = this.map.width * 0.35;
@@ -275,23 +295,7 @@ export function populateRoomContentsImpl(this: WorldSim, room: DungeonRoomNode):
       break;
     }
     case 'combat': {
-      const firstCombatRoom = this.dungeon.rooms.find((r) => r.type === 'combat');
-      const isPrimaryCombat = !firstCombatRoom || firstCombatRoom.id === room.id;
-      const keepFourthBrazier =
-        isPrimaryCombat || (Math.abs(Number(this.dungeon.seed) + room.id) & 1) === 0;
-      this.spawnProp('torch_brazier', 8 * TILE_SIZE - 14, 5 * TILE_SIZE - 12);
-      this.spawnProp('torch_brazier', 28 * TILE_SIZE + 14, 5 * TILE_SIZE - 12);
-      this.spawnProp('torch_brazier', 8 * TILE_SIZE - 14, 17 * TILE_SIZE + 12);
-      if (keepFourthBrazier) {
-        this.spawnProp('torch_brazier', 28 * TILE_SIZE + 14, 17 * TILE_SIZE + 12);
-      }
-      this.spawnProp('glow_mushroom', 11 * TILE_SIZE - 12, 4 * TILE_SIZE + 16);
-      this.spawnProp('glow_mushroom', 25 * TILE_SIZE + 12, 17 * TILE_SIZE + 16);
-      this.spawnProp('explosive_barrel', 15 * TILE_SIZE + 16, 6 * TILE_SIZE + 16);
-      this.spawnProp('explosive_barrel', 21 * TILE_SIZE + 16, 15 * TILE_SIZE + 16);
-      this.spawnProp('wooden_crate', 6 * TILE_SIZE + 16, 5 * TILE_SIZE + 16);
-      this.spawnProp('clay_vase', 29 * TILE_SIZE + 16, 16 * TILE_SIZE + 16);
-      this.spawnProp('ancient_mechanism', 15 * TILE_SIZE + 16, 11 * TILE_SIZE + 16);
+      spawnCombatRoomArchetypeProps(this, room);
 
       if (!room.cleared) {
         room.wavesSpawned = 0;
@@ -564,7 +568,10 @@ export function spawnNextRoomWaveImpl(this: WorldSim): void {
         candX = reCol.x;
         candY = reCol.y;
       }
-      if (this.map.checkProjectileWallHit(candX, candY, radius - 0.5).hit) {
+      if (
+        this.map.checkProjectileWallHit(candX, candY, radius - 0.5).hit ||
+        this.map.getSurfaceAtWorld(candX, candY) === 'chasm'
+      ) {
         continue;
       }
       let minPlayerDist = Infinity;
@@ -679,7 +686,8 @@ export function onRoomClearedImpl(this: WorldSim, room: DungeonRoomNode): void {
   if (room.type === 'combat') {
     if (room.isChallenge || this.rng.chance(0.45)) {
       const rarity = room.chestRarity ?? this.rollChestRarity(0);
-      this.spawnChest(cx, cy, rarity, room.chestWeaponId ?? undefined);
+      const chestPos = findNearestWalkablePoint(this.map, cx, cy, 18);
+      this.spawnChest(chestPos.x, chestPos.y, rarity, room.chestWeaponId ?? undefined);
     }
   } else if (room.type === 'portal') {
     this.portalActive = true;

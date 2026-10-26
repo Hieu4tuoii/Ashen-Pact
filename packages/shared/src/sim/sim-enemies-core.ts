@@ -599,9 +599,13 @@ export function updateEnemiesImpl(this: WorldSim, dtSec: number): void {
         ? this.map.conveyorDirection * 58
         : 0;
 
+    const kbSpeed = Math.hypot(e.kbVx, e.kbVy);
     const nextX = e.x + (e.vx + e.kbVx + sepX + conveyorPushX) * dtSec;
     const nextY = e.y + (e.vy + e.kbVy + sepY) * dtSec;
-    let col = this.map.resolveCircleCollision(nextX, nextY, e.radius);
+    const ignoreChasm = Boolean(
+      e.isBoss || ENEMIES[e.defId]?.flying || kbSpeed >= 25 || surf === 'chasm',
+    );
+    let col = this.map.resolveCircleCollision(nextX, nextY, e.radius, ignoreChasm);
     e.x = col.x;
     e.y = col.y;
     if (!this.stressTestActive && e.defId !== 'ice_prison') {
@@ -619,7 +623,7 @@ export function updateEnemiesImpl(this: WorldSim, dtSec: number): void {
           e.y += (dy / d) * (minDist - d);
         }
       }
-      const postPropCol = this.map.resolveCircleCollision(e.x, e.y, e.radius);
+      const postPropCol = this.map.resolveCircleCollision(e.x, e.y, e.radius, ignoreChasm);
       e.x = postPropCol.x;
       e.y = postPropCol.y;
       if (postPropCol.collided) {

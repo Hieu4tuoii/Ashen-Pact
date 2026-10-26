@@ -14,6 +14,7 @@ import type {
   WeaponRarity,
 } from '../data/types.js';
 import { PHASE3_WEAPON_IDS, WEAPONS } from '../data/weapons.js';
+import { type RoomArchetypeId, selectCombatRoomArchetype } from './arena-room-archetypes.js';
 
 export const OPPOSITE_DIR: Record<CardinalDir, CardinalDir> = {
   N: 'S',
@@ -73,6 +74,7 @@ export interface DungeonRoomNode {
   shrineBlessingId?: string;
   shrineUsed: boolean;
   surfaceLayoutSeed: number;
+  roomArchetype?: RoomArchetypeId;
   isChallenge?: boolean;
   currentWaveSpawnedCount?: number;
 }
@@ -448,6 +450,10 @@ export function generateDungeonFloor(
       const buffKeys = Object.keys(FLOOR_BUFFS);
       room.shrineBlessingId = rng.pick(buffKeys);
     } else if (room.type === 'combat') {
+      const globalFloor = (biome - 1) * 2 + localFloor;
+      const baseNumSeed = Number.isFinite(Number(seed)) ? Number(seed) : room.surfaceLayoutSeed;
+      const roomSeed = baseNumSeed + room.id * 997 + globalFloor * 7919;
+      room.roomArchetype = selectCombatRoomArchetype(roomSeed);
       if (room.isChallenge) {
         room.nameVi = 'Phòng Thử Thách';
         room.waves = generateRoomWaves(

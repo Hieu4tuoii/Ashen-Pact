@@ -15,6 +15,9 @@ import type {
 import { ALL_WEAPON_IDS, MAX_WEAPON_SLOTS, PHASE6_WEAPON_IDS, estimateWeaponDps } from '../data/weapons.js';
 import { clamp } from '../math/vec2.js';
 import type { QuickEmoteId } from '../protocol/messages.js';
+import type { RoomArchetypeId } from './arena-room-archetypes.js';
+
+export type { RoomArchetypeId };
 
 export const PHASE1_SAMPLE_WEAPONS = [
   'knight_sword',
