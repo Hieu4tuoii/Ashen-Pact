@@ -225,8 +225,12 @@ export function setupKeyboardBindingsImpl(this: GameScene): void {
   });
 
   // R: Active Reload / Thermal Vent (INPUT_BUTTON.RELOAD_VENT); Alt+R or F6: Cycle Elemental Imbue (Debug)
+  let lastCycleElementAt = -1000;
   const cycleElement = () => {
     if (!isEffectiveDebugUiEnabled(this.coopMode !== 'solo')) return;
+    const now = performance.now();
+    if (now - lastCycleElementAt < 60) return;
+    lastCycleElementAt = now;
     this.transport.getSim().cycleImbueElement();
     zzfx.play('weapon_swap');
   };
