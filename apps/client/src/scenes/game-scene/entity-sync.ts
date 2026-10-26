@@ -374,13 +374,14 @@ export function syncPropsImpl(this: GameScene, dtSec: number): void {
     this.activePropIds.add(prop.id);
 
     let pv = this.propVisuals.get(prop.id);
+    const targetTex = TextureBaker.getPropTextureKey(prop.kind, prop.coverState);
     if (!pv) {
       const shadow = this.add.sprite(prop.x, prop.y + 9, 'prop_shadow');
       shadow.setScale(invBake);
       shadow.setDepth(18);
       shadow.setVisible(prop.kind !== 'torch_brazier');
 
-      const sprite = this.add.sprite(prop.x, prop.y, TextureBaker.getPropTextureKey(prop.kind));
+      const sprite = this.add.sprite(prop.x, prop.y, targetTex);
       sprite.setScale(invBake);
       sprite.setDepth(22);
 
@@ -393,6 +394,12 @@ export function syncPropsImpl(this: GameScene, dtSec: number): void {
         isFlashed: false,
       };
       this.propVisuals.set(prop.id, pv);
+    } else {
+      pv.sprite.setPosition(prop.x, prop.y);
+      pv.shadow.setPosition(prop.x, prop.y + 9);
+      if (pv.sprite.texture.key !== targetTex) {
+        pv.sprite.setTexture(targetTex);
+      }
     }
 
     if (prop.hp < pv.lastHp || prop.hitFlashTimer > 0) {
@@ -468,12 +475,12 @@ export function syncProjectilesAndPickupsImpl(this: GameScene): void {
         const sprite = this.add.sprite(b.x, b.y, tex);
         entry = { sprite, textureKey: tex };
       }
-      entry.sprite.setScale(projScale);
+      entry.sprite.setScale(projScale * (spec.scale ?? 1));
       this.projectileSprites.set(b.id, entry);
     } else if (entry.textureKey !== tex) {
       entry.textureKey = tex;
       entry.sprite.setTexture(tex);
-      entry.sprite.setScale(projScale);
+      entry.sprite.setScale(projScale * (spec.scale ?? 1));
     }
 
     if (entry.sprite.depth !== spec.depth) {

@@ -6,6 +6,18 @@ import {
 } from '@ashen-pact/shared';
 import { PALETTE } from '../../art/palette.js';
 import { resolveWeaponShootSfx, zzfx } from '../../audio/zzfx.js';
+import {
+  spawnChasmRingOutVfx,
+  spawnCoverFlipMicroBlankVfx,
+  spawnKnightSwordParryDeflectVfx,
+  spawnPropDashKickVfx,
+  spawnRivetDetonationWebVfx,
+  spawnTacticalVentVfx,
+  spawnTotemCollapseLaneVfx,
+  spawnTriElementalBeamVfx,
+  spawnWallSlamVfx,
+  triggerMicroBarFeedbackOnScene,
+} from '../../fx/combat-fx-weapons-v2.js';
 import { type GameScene, RIG_FOOT_OFFSET_Y } from '../GameScene.js';
 import { triggerP11WaveBanner } from './p11-drama-hud.js';
 import { recordChestOpenedAnim } from './room-entities-sync.js';
@@ -31,6 +43,12 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
     switch (ev.kind) {
       case 'projectile_spawned': {
         if (ev.team === 'player') {
+          if (ev.weaponId === 'knight_sword_parry' && !isStress) {
+            spawnKnightSwordParryDeflectVfx(this, this.fx, ev.x, ev.y, ev.angle);
+            if (allowStressSfx) {
+              zzfx.play('bullet_deflect', ev.x, this.camFocusX, ev.y, this.camFocusY);
+            }
+          }
           if (!playerShotFxTriggered) {
             playerShotFxTriggered = true;
             const shootSfx = resolveWeaponShootSfx(ev.weaponId);
@@ -216,7 +234,26 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
       }
       case 'explosion': {
         const isBarrel = ev.sourceDefId === 'explosive_barrel';
-        const colorHex = isBarrel ? PALETTE.FLAME_ORANGE : PALETTE.TOXIC_PURPLE;
+        const isSporePod = ev.sourceDefId === 'volatile_spore_pod';
+        const isTriStaff = ev.sourceDefId === 'apprentice_staff';
+        const colorHex = isBarrel
+          ? PALETTE.FLAME_ORANGE
+          : isSporePod
+            ? PALETTE.LIME_GLOW
+            : isTriStaff
+              ? PALETTE.SOLAR_GOLD
+              : PALETTE.TOXIC_PURPLE;
+        if (isTriStaff && !isStress) {
+          spawnTriElementalBeamVfx(
+            this,
+            this.fx,
+            sim.player.x,
+            sim.player.y,
+            ev.x,
+            ev.y,
+            ev.radius,
+          );
+        }
         this.fx.spawnExplosionBurst(ev.x, ev.y, ev.radius, colorHex);
         this.lighting.spawnTransientLight(ev.x, ev.y, ev.radius * 2.2, colorHex, 1.0, 0.38);
         if (allowStressSfx) {
@@ -225,6 +262,9 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
         break;
       }
       case 'prop_destroyed': {
+        if (ev.propKind === 'rotten_totem_pillar' && !isStress) {
+          spawnTotemCollapseLaneVfx(this, this.fx, ev.x, ev.y, sim.player.aimAngle);
+        }
         this.fx.spawnPropBreakBurst(ev.propKind, ev.x, ev.y);
         if (ev.propKind !== 'explosive_barrel' && allowStressSfx) {
           zzfx.play('prop_break', ev.x, this.camFocusX, ev.y, this.camFocusY);
@@ -567,6 +607,70 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
       case 'hit_stop': {
         maxHitStopMs = Math.max(maxHitStopMs, ev.durationMs);
         maxHitStopTrauma = Math.max(maxHitStopTrauma, ev.trauma);
+        break;
+      }
+      case 'cover_flipped': {
+        if (!isStress) {
+          spawnCoverFlipMicroBlankVfx(this, this.fx, ev.x, ev.y, ev.radius);
+        }
+        if (allowStressSfx) {
+          zzfx.play('flip_cover', ev.x, this.camFocusX, ev.y, this.camFocusY);
+        }
+        break;
+      }
+      case 'prop_kicked': {
+        if (!isStress) {
+          spawnPropDashKickVfx(this, this.fx, ev.x, ev.y, ev.vx, ev.vy);
+        }
+        if (allowStressSfx) {
+          zzfx.play('swing_heavy', ev.x, this.camFocusX, ev.y, this.camFocusY);
+        }
+        break;
+      }
+      case 'wall_slam': {
+        if (!isStress) {
+          spawnWallSlamVfx(this, this.fx, ev.x, ev.y, i18n.getLocale());
+        }
+        if (allowStressSfx) {
+          zzfx.play('wall_slam', ev.x, this.camFocusX, ev.y, this.camFocusY);
+        }
+        break;
+      }
+      case 'ring_out': {
+        if (!isStress) {
+          spawnChasmRingOutVfx(this, this.fx, ev.x, ev.y, i18n.getLocale());
+        }
+        if (allowStressSfx) {
+          zzfx.play('explosion', ev.x, this.camFocusX, ev.y, this.camFocusY);
+        }
+        break;
+      }
+      case 'perfect_reload': {
+        if (!isStress) {
+          triggerMicroBarFeedbackOnScene(
+            this,
+            this.fx,
+            'perfect_reload',
+            ev.x,
+            ev.y,
+            i18n.getLocale(),
+          );
+          if (ev.weaponId === 'rivet_gun') {
+            spawnRivetDetonationWebVfx(this, this.fx);
+          }
+        }
+        if (allowStressSfx) {
+          zzfx.play('perfect_reload', ev.x, this.camFocusX, ev.y, this.camFocusY);
+        }
+        break;
+      }
+      case 'tactical_vent': {
+        if (!isStress) {
+          spawnTacticalVentVfx(this, this.fx, ev.x, ev.y, i18n.getLocale());
+        }
+        if (allowStressSfx) {
+          zzfx.play('tactical_vent', ev.x, this.camFocusX, ev.y, this.camFocusY);
+        }
         break;
       }
     }

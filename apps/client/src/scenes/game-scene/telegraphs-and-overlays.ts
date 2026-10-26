@@ -2,6 +2,7 @@ import {
   clamp,
   ENEMIES,
   ENEMY_SPAWN_WARMUP_SEC,
+  i18n,
   PLAYER_SLOT_COLORS,
   type SimEnemyState,
 } from '@ashen-pact/shared';
@@ -11,8 +12,10 @@ import {
   computeBossKillFlashAlpha,
   computeEnemySpawnCircleSpec,
 } from '../../fx/combat-fx.js';
+import { updateAndDrawWeaponV2Overlays } from '../../fx/combat-fx-weapons-v2.js';
 import { initGlobalDebugState } from '../../ui/debug-overlay.js';
-import { type GameScene } from '../GameScene.js';
+import { type GameScene, RIG_FOOT_OFFSET_Y } from '../GameScene.js';
+import { drawFootMicroReloadBar } from './hud-micro-reload-bar.js';
 import { drawP11DramaWorldOverlays } from './p11-drama-hud.js';
 
 export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, playerY: number): void {
@@ -645,6 +648,29 @@ export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, 
 
   // 4. Phase P11 Drama World Overlays (Boss Phase Transition Invuln/Roar, Boss Soft Enrage Aura, Vengeful Rings, Overlapping Wave Circles)
   drawP11DramaWorldOverlays(this);
+
+  // 5. Phase P0B Weapon V2 & Tactical Overlays + 32x5px Foot Micro-Reload Bar
+  if (!isStress) {
+    const v2Flash = updateAndDrawWeaponV2Overlays(
+      this,
+      g,
+      this.fx,
+      p,
+      sim.magneticRivets ?? [],
+      1 / 60,
+      sim.tick / 60,
+      i18n.getLocale(),
+    );
+    drawFootMicroReloadBar(
+      g,
+      playerX,
+      playerY + RIG_FOOT_OFFSET_Y + 6,
+      p,
+      undefined,
+      v2Flash.flashColor,
+      v2Flash.flashAlpha,
+    );
+  }
 }
 
 export function drawEnemyHealthAndStatusBarImpl(

@@ -294,6 +294,157 @@ export function bakeProps(scene: Phaser.Scene, scale: number): void {
     ctx.stroke();
   });
 
+  // 5e. Ashen Pact 2.0 Biome 1 Tactical Props (moss_table 3 states, volatile_spore_pod, rotten_totem_pillar)
+  bakeCustomCanvas(scene, 'prop_moss_table', 40, 36, scale, (ctx) => {
+    outlined(
+      ctx,
+      {
+        fill: PALETTE.SLATE_MID,
+        shade: PALETTE.SLATE_DARK,
+        highlight: PALETTE.WARM_STONE,
+        outlineWidth: 2.4,
+      },
+      (c) => traceRoundedRect(c, -16, -12, 32, 24, 4),
+      { cx: 0, cy: 0, rx: 16, ry: 12 },
+    );
+    ctx.fillStyle = PALETTE.GOBLIN_GREEN;
+    ctx.beginPath();
+    ctx.arc(-10, -7, 4.5, 0, Math.PI * 2);
+    ctx.arc(9, 6, 3.8, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = PALETTE.LIME_GLOW;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(-12, -5);
+    ctx.lineTo(-4, -2);
+    ctx.stroke();
+  });
+
+  bakeCustomCanvas(scene, 'prop_moss_table_flipped', 42, 40, scale, (ctx) => {
+    // Upright thick stone barricade with -135 deg top-left rim highlight & glowing moss veins
+    outlined(
+      ctx,
+      {
+        fill: PALETTE.SLATE_DARK,
+        shade: PALETTE.INK_DARK,
+        highlight: PALETTE.WARM_STONE,
+        outlineWidth: 2.6,
+      },
+      (c) => traceRoundedRect(c, -17, -15, 34, 30, 3.5),
+      { cx: 0, cy: 0, rx: 17, ry: 15 },
+    );
+    ctx.fillStyle = PALETTE.WARM_STONE;
+    ctx.fillRect(-15, -13.5, 30, 4);
+    ctx.strokeStyle = PALETTE.LIME_GLOW;
+    ctx.lineWidth = 1.8;
+    ctx.beginPath();
+    ctx.moveTo(-11, -6);
+    ctx.lineTo(-3, 2);
+    ctx.lineTo(7, -4);
+    ctx.moveTo(-5, 7);
+    ctx.lineTo(9, 9);
+    ctx.stroke();
+  });
+
+  bakeCustomCanvas(scene, 'prop_moss_table_sliding', 42, 38, scale, (ctx) => {
+    ctx.save();
+    ctx.rotate(-0.14);
+    outlined(
+      ctx,
+      {
+        fill: PALETTE.SLATE_MID,
+        shade: PALETTE.SLATE_DARK,
+        highlight: PALETTE.BONE_WHITE,
+        outlineWidth: 2.5,
+      },
+      (c) => traceRoundedRect(c, -16, -13, 32, 26, 3.5),
+      { cx: 0, cy: 0, rx: 16, ry: 13 },
+    );
+    ctx.strokeStyle = PALETTE.LIME_GLOW;
+    ctx.lineWidth = 1.8;
+    ctx.beginPath();
+    ctx.moveTo(-10, -4);
+    ctx.lineTo(10, 4);
+    ctx.stroke();
+    ctx.restore();
+  });
+
+  bakeCustomCanvas(scene, 'prop_volatile_spore_pod', 38, 38, scale, (ctx) => {
+    outlined(
+      ctx,
+      {
+        fill: PALETTE.GOBLIN_GREEN,
+        shade: PALETTE.FOREST_SHADE,
+        highlight: PALETTE.LIME_GLOW,
+        outlineWidth: 2.4,
+      },
+      (c) => {
+        c.beginPath();
+        c.arc(0, 1, 13.5, 0, Math.PI * 2);
+        c.closePath();
+      },
+      { cx: 0, cy: 1, rx: 13.5, ry: 13.5 },
+    );
+    for (const [px, py, pr] of [
+      [-5, -4, 4.2],
+      [6, -2, 3.6],
+      [-1, 6, 3.8],
+    ] as const) {
+      ctx.beginPath();
+      ctx.arc(px, py, pr, 0, Math.PI * 2);
+      ctx.fillStyle = PALETTE.LIME_GLOW;
+      ctx.fill();
+      ctx.lineWidth = 1.4;
+      ctx.strokeStyle = PALETTE.INK_DARK;
+      ctx.stroke();
+    }
+  });
+
+  bakeCustomCanvas(scene, 'prop_rotten_totem_pillar', 40, 48, scale, (ctx) => {
+    outlined(
+      ctx,
+      {
+        fill: PALETTE.LEATHER_MID,
+        shade: PALETTE.LEATHER_DARK,
+        highlight: PALETTE.WARM_STONE,
+        outlineWidth: 2.5,
+      },
+      (c) => traceRoundedRect(c, -12, -20, 24, 40, 4.5),
+      { cx: 0, cy: 0, rx: 12, ry: 20 },
+    );
+    ctx.fillStyle = PALETTE.LIME_GLOW;
+    ctx.fillRect(-7, -11, 4.5, 3.5);
+    ctx.fillRect(2.5, -11, 4.5, 3.5);
+    ctx.strokeStyle = PALETTE.GOBLIN_GREEN;
+    ctx.lineWidth = 2.0;
+    ctx.beginPath();
+    ctx.moveTo(-11, 4);
+    ctx.lineTo(11, -2);
+    ctx.moveTo(-9, 12);
+    ctx.lineTo(9, 9);
+    ctx.stroke();
+  });
+
+  bakeCustomCanvas(scene, 'prop_rotten_totem_pillar_fallen', 48, 36, scale, (ctx) => {
+    outlined(
+      ctx,
+      {
+        fill: PALETTE.LEATHER_DARK,
+        shade: PALETTE.INK_DARK,
+        highlight: PALETTE.LEATHER_MID,
+        outlineWidth: 2.2,
+      },
+      (c) => traceRoundedRect(c, -19, -9, 38, 18, 4),
+      { cx: 0, cy: 0, rx: 19, ry: 9 },
+    );
+    ctx.strokeStyle = PALETTE.LIME_GLOW;
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    ctx.moveTo(-12, -3);
+    ctx.lineTo(10, 4);
+    ctx.stroke();
+  });
+
   // 6. Phase 3 Treasure Chests (5 Rarities, Closed & Open)
   const chestRarities: readonly [string, PaletteHex, PaletteHex, PaletteHex][] = [
     ['common', PALETTE.STEEL_LIGHT, PALETTE.STEEL_DARK, PALETTE.BONE_WHITE],

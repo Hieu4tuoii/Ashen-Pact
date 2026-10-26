@@ -22,6 +22,7 @@ export const BAKED_FX_TEXTURE_KEYS = [
   'proj_player_shock',
   'proj_player_poison',
   'proj_player_pellet',
+  'proj_knight_sword_wave',
   'proj_enemy_orb',
   'proj_stress_orb',
   'proj_stress_enemy',
@@ -175,6 +176,26 @@ export function bakeProjectilesAndFx(scene: Phaser.Scene, scale: number): void {
     ctx.arc(0, 0, ENEMY_BULLET_VISUAL_SPEC.coreRadius, 0, Math.PI * 2);
     ctx.fillStyle = ENEMY_BULLET_VISUAL_SPEC.core;
     ctx.fill();
+  });
+
+  // 3a. Knight Sword Hit 3 Crescent Wave Projectile (240px range crescent slash wave)
+  bakeCustomCanvas(scene, 'proj_knight_sword_wave', 36, 30, scale, (ctx) => {
+    outlined(
+      ctx,
+      {
+        fill: PALETTE.SOLAR_GOLD,
+        shade: PALETTE.FLAME_ORANGE,
+        highlight: PALETTE.BONE_WHITE,
+        outlineWidth: 2.0,
+      },
+      (c) => {
+        c.beginPath();
+        c.arc(-4, 0, 13, -Math.PI * 0.44, Math.PI * 0.44, false);
+        c.arc(-8, 0, 10, Math.PI * 0.4, -Math.PI * 0.4, true);
+        c.closePath();
+      },
+      { cx: 3, cy: 0, rx: 10, ry: 12 },
+    );
   });
 
   // 3b. Native 1080p Stress Projectile textures (2x native scale, distinct silhouettes for enemy vs player)

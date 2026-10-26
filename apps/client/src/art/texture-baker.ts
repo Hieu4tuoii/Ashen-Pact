@@ -82,7 +82,28 @@ export class TextureBaker {
     return `surface_${surface}`;
   }
 
-  public static getPropTextureKey(kind: PropKind): string {
+  public static getPropTextureKey(
+    kind: PropKind,
+    coverState?: 'low' | 'flipped' | 'sliding' | 'fallen',
+  ): string {
+    if (kind === 'moss_table') {
+      if (coverState === 'flipped') return 'prop_moss_table_flipped';
+      if (coverState === 'sliding') return 'prop_moss_table_sliding';
+      return 'prop_moss_table';
+    }
+    if (kind === 'rotten_totem_pillar' && coverState === 'fallen') {
+      return 'prop_rotten_totem_pillar_fallen';
+    }
+    if (kind === 'glacial_barricade') {
+      return coverState === 'flipped' ? 'prop_moss_table_flipped' : 'prop_crystal_pillar';
+    }
+    if (kind === 'sliding_ice_block') return 'prop_push_block';
+    if (kind === 'cryo_prism_pillar') return 'prop_crystal_pillar';
+    if (kind === 'forge_blast_shield') {
+      return coverState === 'flipped' ? 'prop_moss_table_flipped' : 'prop_moss_table';
+    }
+    if (kind === 'pneumatic_press') return 'prop_ancient_mechanism';
+    if (kind === 'slag_crucible') return 'prop_explosive_barrel';
     return `prop_${kind}`;
   }
 
@@ -432,8 +453,9 @@ export class TextureBaker {
     dy: number,
     cellPx: number,
     variant = 0,
+    biome: 0 | 1 | 2 | 3 = 1,
   ): void {
-    drawSurfaceTile(ctx, surface, surfaceMask, dx, dy, cellPx, variant);
+    drawSurfaceTile(ctx, surface, surfaceMask, dx, dy, cellPx, variant, biome);
   }
 
   public static bakeProps(scene: Phaser.Scene, scale: number): void {

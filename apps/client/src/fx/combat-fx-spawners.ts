@@ -66,34 +66,57 @@ export function coalesceElementalReaction(
 
 export interface ProjectileRenderSpec {
   textureKey: string;
+  texture: string;
   tint: number;
   blendMode: 'NORMAL' | 'ADD';
   depth: number;
   alpha: number;
+  scale: number;
 }
 
-export function resolveProjectileRenderSpec(params: {
-  team: 'player' | 'enemy';
-  element?: ElementType;
-  weaponId?: string;
-  biome?: 1 | 2 | 3;
-  isStress?: boolean;
-  isTeammate?: boolean;
-  teammateFxOpacity?: number;
-}): ProjectileRenderSpec {
+export function resolveProjectileRenderSpec(
+  paramsOrWeaponId:
+    | string
+    | {
+        team: 'player' | 'enemy';
+        element?: ElementType;
+        weaponId?: string;
+        biome?: 1 | 2 | 3;
+        isStress?: boolean;
+        isTeammate?: boolean;
+        teammateFxOpacity?: number;
+      },
+): ProjectileRenderSpec {
+  const params =
+    typeof paramsOrWeaponId === 'string'
+      ? { team: 'player' as const, weaponId: paramsOrWeaponId }
+      : paramsOrWeaponId;
+
   if (params.team === 'enemy') {
+    const textureKey = params.isStress ? 'proj_stress_enemy' : 'proj_enemy_orb';
     return {
-      textureKey: params.isStress ? 'proj_stress_enemy' : 'proj_enemy_orb',
+      textureKey,
+      texture: textureKey,
       tint: 0xffffff,
       blendMode: 'NORMAL',
       depth: 60,
       alpha: 1.0,
+      scale: 1.0,
     };
   }
 
   let textureKey = 'proj_player_bolt';
   let tint = 0xffffff;
-  if (params.isStress) {
+  let scale = 1.0;
+  if (params.weaponId === 'knight_sword_wave' && !params.isStress) {
+    textureKey = 'proj_knight_sword_wave';
+    tint = 0xfef08a;
+    scale = 1.35;
+  } else if (params.weaponId === 'knight_sword_parry' && !params.isStress) {
+    textureKey = 'proj_player_bolt';
+    tint = 0xfef08a;
+    scale = 1.2;
+  } else if (params.isStress) {
     textureKey = 'proj_stress_player';
     if (params.element === 'burn') tint = 0xfb923c;
     else if (params.element === 'chill') tint = 0x38bdf8;
@@ -114,7 +137,7 @@ export function resolveProjectileRenderSpec(params: {
   }
 
   const alpha = params.isTeammate ? clamp(params.teammateFxOpacity ?? 0.6, 0.25, 1.0) : 1.0;
-  return { textureKey, tint, blendMode: 'ADD', depth: 42, alpha };
+  return { textureKey, texture: textureKey, tint, blendMode: 'ADD', depth: 42, alpha, scale };
 }
 
 const ADDITIVE_FX_DEPTH_BY_KEY: Readonly<Record<string, number>> = {

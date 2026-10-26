@@ -59,7 +59,11 @@ export type SfxId =
   | 'ui_hover'
   | 'ui_click'
   | 'ui_victory'
-  | 'ui_defeat';
+  | 'ui_defeat'
+  | 'perfect_reload'
+  | 'tactical_vent'
+  | 'flip_cover'
+  | 'wall_slam';
 
 export interface ZzfxPreset {
   volume: number;
@@ -652,6 +656,46 @@ export const SFX_PRESETS: Record<SfxId, ZzfxPreset> = {
     noise: 0.18,
     wave: 'sawtooth',
     minIntervalMs: 200,
+  },
+  perfect_reload: {
+    volume: 0.28,
+    freq: 760,
+    slide: 420,
+    attackSec: 0.003,
+    decaySec: 0.16,
+    noise: 0.06,
+    wave: 'triangle',
+    minIntervalMs: 50,
+  },
+  tactical_vent: {
+    volume: 0.3,
+    freq: 420,
+    slide: -240,
+    attackSec: 0.004,
+    decaySec: 0.22,
+    noise: 0.55,
+    wave: 'sawtooth',
+    minIntervalMs: 55,
+  },
+  flip_cover: {
+    volume: 0.32,
+    freq: 155,
+    slide: -75,
+    attackSec: 0.005,
+    decaySec: 0.2,
+    noise: 0.42,
+    wave: 'square',
+    minIntervalMs: 60,
+  },
+  wall_slam: {
+    volume: 0.36,
+    freq: 120,
+    slide: -65,
+    attackSec: 0.003,
+    decaySec: 0.24,
+    noise: 0.58,
+    wave: 'sawtooth',
+    minIntervalMs: 55,
   },
 };
 

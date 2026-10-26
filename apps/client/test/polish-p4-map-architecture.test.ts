@@ -104,7 +104,7 @@ describe('Phase P4 — Hybrid Map Architecture, ENV_PALETTE & Biome 1 Golden Roo
     // Second ring perimeter floor tile has distToWall === 2
     expect(computeTileDistToWall(map, 2, 5)).toBe(2);
     // Center Arena floor tile far from walls and pillars has distToWall > 2
-    expect(computeTileDistToWall(map, 17, 10)).toBeGreaterThan(2);
+    expect(computeTileDistToWall(map, 10, 10)).toBeGreaterThan(2);
 
     let grateAtDist1Count = 0;
     for (let ty = 1; ty < map.rows - 1; ty++) {

@@ -15,6 +15,10 @@ import { dampLerp } from '../../art/easing.js';
 import { hexToNum, PALETTE } from '../../art/palette.js';
 import { VANGUARD_RIG_DEF } from '../../art/rig-defs.js';
 import { TextureBaker } from '../../art/texture-baker.js';
+import {
+  drawBridgeOverChasmOverlay,
+  isBridgeFloorTileOverChasm,
+} from '../../art/texture-baker-surfaces.js';
 import { musicManager } from '../../audio/music-synth.js';
 import { zzfx } from '../../audio/zzfx.js';
 import {
@@ -461,6 +465,17 @@ export function renderTileCellToCompositeImpl(this: GameScene, tile: ArenaTileVi
         dy,
         cellPx,
         tile.variant,
+        effectiveBiome,
+      );
+    } else if (sim && isBridgeFloorTileOverChasm(sim.map, tile.tx, tile.ty)) {
+      drawBridgeOverChasmOverlay(
+        groundCtx,
+        dx,
+        dy,
+        cellPx,
+        sim.map.getSurface(tile.tx, tile.ty - 1) === 'chasm',
+        sim.map.getSurface(tile.tx, tile.ty + 1) === 'chasm',
+        effectiveBiome,
       );
     }
     if (tile.aoMask > 0) {

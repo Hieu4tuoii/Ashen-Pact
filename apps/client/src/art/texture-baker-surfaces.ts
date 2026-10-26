@@ -232,22 +232,27 @@ export function bakeSurfaces(scene: Phaser.Scene, scale: number): void {
     ctx.stroke();
   });
 
-  // 11. Chasm (Biome 2 Frozen Abyss Pit)
+  // 11. Chasm (Biome 1 Deep Root Abyss + Biome 2/3 variants)
   bakeCustomCanvas(scene, 'surface_chasm', 32, 32, scale, (ctx) => {
     outlined(
       ctx,
       {
-        fill: '#11131A',
+        fill: '#09070d',
         shade: PALETTE.INK_DARK,
-        highlight: '#1D2230',
+        highlight: '#2B3731',
         outlineWidth: 2.0,
       },
       (c) => traceRoundedRect(c, -14.5, -14.5, 29, 29, 4),
       { cx: 0, cy: 0, rx: 14, ry: 14 },
     );
-    ctx.strokeStyle = '#1D2230';
-    ctx.lineWidth = 1.5;
-    ctx.strokeRect(-10, -10, 20, 20);
+    ctx.strokeStyle = '#4D382B';
+    ctx.lineWidth = 1.8;
+    ctx.beginPath();
+    ctx.moveTo(-12, -13);
+    ctx.quadraticCurveTo(-6, -7, -2, -9);
+    ctx.moveTo(11, 13);
+    ctx.quadraticCurveTo(5, 7, 1, 10);
+    ctx.stroke();
   });
 
   // 12. Conveyor Belt (Biome 3 Molten Forge Mechanical Belt)
@@ -302,6 +307,7 @@ export function drawSurfaceTile(
   dy: number,
   cellPx: number,
   variant = 0,
+  biome: 0 | 1 | 2 | 3 = 1,
 ): void {
   const scale = cellPx / 32;
   const hasN = (surfaceMask & AUTOTILE_NORTH) !== 0;
@@ -378,10 +384,22 @@ export function drawSurfaceTile(
       detailColor = '#4E5666';
       break;
     case 'chasm':
-      fill = '#11131A';
-      outerBank = '#7F6559';
-      innerLip = '#3B2D29';
-      detailColor = '#1C202E';
+      if (biome === 2) {
+        fill = '#09131c';
+        outerBank = '#6F949E';
+        innerLip = '#345462';
+        detailColor = '#22D3EE';
+      } else if (biome === 3) {
+        fill = '#120807';
+        outerBank = '#7F6559';
+        innerLip = '#3B2D29';
+        detailColor = '#8A342B';
+      } else {
+        fill = '#09070d';
+        outerBank = '#627468';
+        innerLip = '#2B3731';
+        detailColor = '#4D382B';
+      }
       break;
     case 'ash':
       fill = '#332E36';
@@ -537,9 +555,43 @@ export function drawSurfaceTile(
       break;
     }
     case 'chasm': {
+      ctx.fillStyle = '#050408';
+      ctx.fillRect(5, 5, 22, 22);
       ctx.strokeStyle = detailColor;
       ctx.lineWidth = 1.4;
       ctx.strokeRect(7, 7, 18, 18);
+      if (biome <= 1) {
+        // Biome 1 Deep Root Abyss: gnarled roots clinging to exposed cliff edges
+        ctx.strokeStyle = '#4D382B';
+        ctx.lineWidth = 1.8;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        if (!hasN) {
+          ctx.moveTo(8 + ox, 3);
+          ctx.quadraticCurveTo(11, 9, 9, 13);
+          ctx.moveTo(22 - ox, 3);
+          ctx.quadraticCurveTo(19, 8, 21, 12);
+        }
+        if (!hasS) {
+          ctx.moveTo(10 - ox, 29);
+          ctx.quadraticCurveTo(13, 23, 11, 19);
+        }
+        if (!hasW) {
+          ctx.moveTo(3, 10 + oy);
+          ctx.quadraticCurveTo(9, 13, 12, 11);
+        }
+        if (!hasE) {
+          ctx.moveTo(29, 20 - oy);
+          ctx.quadraticCurveTo(23, 17, 20, 19);
+        }
+        ctx.stroke();
+        ctx.strokeStyle = '#3D5235';
+        ctx.lineWidth = 1.1;
+        ctx.beginPath();
+        ctx.moveTo(11 + ox, 11 + oy);
+        ctx.lineTo(15 + ox, 14 + oy);
+        ctx.stroke();
+      }
       break;
     }
     case 'ash':
@@ -598,10 +650,10 @@ export function drawSurfaceTile(
     );
     ctx.stroke();
   } else {
-    // P3: Beveled 4u basalt stone conduit curb (#7F6559 top cap / #3B2D29 inner wall)
-    const curbTop = '#7F6559';
-    const curbFront = '#3B2D29';
-    const curbJoint = '#1F1614';
+    // P3: Beveled 4u stone conduit curb / chasm cliff lip
+    const curbTop = surface === 'chasm' ? outerBank : '#7F6559';
+    const curbFront = surface === 'chasm' ? innerLip : '#3B2D29';
+    const curbJoint = surface === 'chasm' ? '#16201C' : '#1F1614';
 
     if (!hasN) {
       ctx.fillStyle = curbTop;
@@ -776,4 +828,103 @@ function traceOrganicShorelineLayer(
 
 function maskHas(mask: number, bit: number): boolean {
   return (mask & bit) !== 0;
+}
+
+export interface BridgeTileLookup {
+  cols?: number;
+  rows?: number;
+  width?: number;
+  height?: number;
+  getTile?: (tx: number, ty: number) => string;
+  getSurface?: (tx: number, ty: number) => string;
+  tiles?: ReadonlyArray<{ kind: string; surface: string } | string>;
+}
+
+function readLookupCell(
+  grid: BridgeTileLookup,
+  tx: number,
+  ty: number,
+): { kind: string; surface: string } | null {
+  const cols = grid.cols ?? grid.width ?? 0;
+  const rows = grid.rows ?? grid.height ?? 0;
+  if (tx < 0 || ty < 0 || tx >= cols || ty >= rows) return null;
+  if (typeof grid.getTile === 'function' && typeof grid.getSurface === 'function') {
+    return { kind: grid.getTile(tx, ty), surface: grid.getSurface(tx, ty) };
+  }
+  if (grid.tiles) {
+    const raw = grid.tiles[ty * cols + tx];
+    if (raw && typeof raw === 'object') return raw;
+  }
+  return null;
+}
+
+export function isBridgeFloorTileOverChasm(
+  grid: BridgeTileLookup,
+  tx: number,
+  ty: number,
+): boolean {
+  const cell = readLookupCell(grid, tx, ty);
+  if (!cell || cell.kind !== 'floor' || cell.surface !== 'none') return false;
+  const n1 = readLookupCell(grid, tx, ty - 1);
+  const s1 = readLookupCell(grid, tx, ty + 1);
+  const w1 = readLookupCell(grid, tx - 1, ty);
+  const e1 = readLookupCell(grid, tx + 1, ty);
+  if (
+    n1?.surface === 'chasm' ||
+    s1?.surface === 'chasm' ||
+    w1?.surface === 'chasm' ||
+    e1?.surface === 'chasm'
+  ) {
+    return true;
+  }
+  const n2 = readLookupCell(grid, tx, ty - 2);
+  const s2 = readLookupCell(grid, tx, ty + 2);
+  return n2?.surface === 'chasm' && s2?.surface === 'chasm';
+}
+
+export function drawBridgeOverChasmOverlay(
+  ctx: CanvasRenderingContext2D,
+  dx: number,
+  dy: number,
+  cellPx: number,
+  hasChasmN: boolean,
+  hasChasmS: boolean,
+  biome: 0 | 1 | 2 | 3 = 1,
+): void {
+  const scale = cellPx / 32;
+  ctx.save();
+  ctx.translate(dx, dy);
+  ctx.scale(scale, scale);
+
+  const plankFill = biome === 2 ? '#4A6E7A' : biome === 3 ? '#5E463F' : '#524033';
+  const plankSeam = biome === 2 ? '#2B4652' : biome === 3 ? '#2B1E1B' : '#2E221B';
+  const railTop = biome === 2 ? '#7CA6B2' : biome === 3 ? '#8C6C5E' : '#6E5A49';
+
+  ctx.fillStyle = plankFill;
+  ctx.globalAlpha = 0.42;
+  ctx.fillRect(0, 2, 32, 28);
+  ctx.globalAlpha = 0.85;
+  ctx.strokeStyle = plankSeam;
+  ctx.lineWidth = 1.2;
+  for (const px of [8, 16, 24]) {
+    ctx.beginPath();
+    ctx.moveTo(px, 1);
+    ctx.lineTo(px, 31);
+    ctx.stroke();
+  }
+  if (hasChasmN) {
+    ctx.fillStyle = railTop;
+    ctx.fillRect(0, 0, 32, 3.2);
+    ctx.strokeStyle = PALETTE.INK_DARK;
+    ctx.lineWidth = 1.2;
+    ctx.strokeRect(0.5, 0.5, 31, 2.6);
+  }
+  if (hasChasmS) {
+    ctx.fillStyle = railTop;
+    ctx.fillRect(0, 28.8, 32, 3.2);
+    ctx.strokeStyle = PALETTE.INK_DARK;
+    ctx.lineWidth = 1.2;
+    ctx.strokeRect(0.5, 28.9, 31, 2.6);
+  }
+  ctx.restore();
 }
