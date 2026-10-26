@@ -876,3 +876,18 @@
   - **VSync Stress Combat FPS:** `60.05 FPS` (mục tiêu `>= 58`)
 - **Ảnh chụp `before` cho Phase P0A:** Đã lưu tại `docs/screenshots/ap2-p0a/before/` (`hub-solo`, `b1-start-room`, `b1-combat`, `coop-4p-combat`, `b1-hud-weapon-compare`, `b1-dark-interactables`).
 
+
+
+---
+
+## 4. Giai Đoạn Đại Tu Toàn Diện: Ashen Pact 2.0 (`v0.2.1` → `v2.0.0`)
+
+### 4.0 Khởi Động Chiến Dịch & Baseline (`v0.2.1` / `f26d4b7`)
+- **Worktree cô lập:** `.worktrees/overhaul-v2.0` (nhánh `overhaul/v2.0`, commit đặc tả `c28820a`).
+- **Baseline Unit & Typecheck (`v0.2.1`):** `pnpm typecheck` PASS, `pnpm lint` PASS, `pnpm test` (`32/32` test suites, `226/226` unit tests) PASS, `pnpm build` PASS.
+- **Baseline Hiệu Năng GPU Thật (`pnpm perf` — `ANGLE (AMD, AMD Radeon(TM) Graphics (0x0000164C) Direct3D11 vs_5_0 ps_5_0, D3D11)`):**
+  - VSync Normal Combat (`1080p High`): **`60.00 FPS`** (`>= 60`)
+  - VSync Stress Combat (`4P+80E+600B`): **`60.05 FPS`** (`>= 58`)
+  - Uncapped Normal (`1080p High`): **`p50 = 5.3ms` / `p95 = 6.6ms`** (`<= 11.0ms`, `eqFPS = 186.19`)
+  - Uncapped Stress (`4P+80E+600B`): **`p50 = 8.0ms` / `p95 = 9.9ms`** (`<= 15.0ms`, `eqFPS = 122.85`)
+- **Baseline Ảnh Trước Đại Tu (`docs/screenshots/ap2-p0a/before/`):** Đã chụp 6 cảnh chuẩn (`hub-solo`, `b1-start-room`, `b1-combat`, `coop-4p-combat`, `b1-hud-weapon-compare`, `b1-dark-interactables`).
