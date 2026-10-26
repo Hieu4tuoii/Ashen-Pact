@@ -155,8 +155,8 @@
 ---
 
 ### Task 6 (`P0A.6`): Visual Gate & Phase Gate `P0A`
-- [ ] Chụp `pnpm shots -- --phase ap2-p0a --label after --scenes hub-solo,b1-start-room,b1-combat,coop-4p-combat,b1-hud-weapon-compare,b1-dark-interactables`.
-- [ ] Chạy `npx tsx tools/visual-metrics.ts --dir docs/screenshots/ap2-p0a/after`.
-- [ ] Triệu hồi **Visual Reviewer độc lập (`research`, `Model: 'pro'`)** kiểm tra trực tiếp các ảnh `.png` tại `docs/screenshots/ap2-p0a/after/`: xác nhận thanh Energy đã biến mất hoàn toàn, HUD Băng đạn/Nhiệt độ/Combo mới rõ nét, không chồng lấp chữ tiếng Việt, và ô vũ khí hiển thị đúng 1 vũ khí khởi đầu ở Ô 1 và Ô 2 trống khi bắt đầu. Lưu báo cáo vào `docs/screenshots/ap2-p0a/review-1.md`.
-- [ ] Chạy `pnpm verify` (`typecheck && lint && test && build && e2e`) và `pnpm perf` đạt 100%.
-- [ ] Cập nhật `docs/PROGRESS.md`, `docs/PHASES.md`, `task.md`, commit trên nhánh `overhaul/v2.0` và gắn tag `ap2-p0a`.
+- [x] Chụp `pnpm shots -- --phase ap2-p0a --label after --scenes hub-solo,b1-start-room,b1-combat,coop-4p-combat,b1-hud-weapon-compare,b1-dark-interactables`.
+- [x] Chạy `npx tsx tools/visual-metrics.ts --dir docs/screenshots/ap2-p0a/after`.
+- [x] Triệu hồi **Visual Reviewer độc lập (`research`, `Model: 'pro'`)** kiểm tra trực tiếp các ảnh `.png` tại `docs/screenshots/ap2-p0a/after/`: xác nhận thanh Energy đã biến mất hoàn toàn, HUD Băng đạn/Nhiệt độ/Combo mới rõ nét, không chồng lấp chữ tiếng Việt, và ô vũ khí hiển thị đúng 1 vũ khí khởi đầu ở Ô 1 và Ô 2 trống khi bắt đầu. Lưu báo cáo vào `docs/screenshots/ap2-p0a/review-1.md`.
+- [x] Chạy `pnpm verify` (`typecheck && lint && test && build && e2e`) và `pnpm perf` đạt 100%.
+- [x] Cập nhật `docs/PROGRESS.md`, `docs/PHASES.md`, `task.md`, commit trên nhánh `overhaul/v2.0` và gắn tag `ap2-p0a`.

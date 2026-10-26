@@ -891,3 +891,23 @@
   - Uncapped Normal (`1080p High`): **`p50 = 5.3ms` / `p95 = 6.6ms`** (`<= 11.0ms`, `eqFPS = 186.19`)
   - Uncapped Stress (`4P+80E+600B`): **`p50 = 8.0ms` / `p95 = 9.9ms`** (`<= 15.0ms`, `eqFPS = 122.85`)
 - **Baseline Ảnh Trước Đại Tu (`docs/screenshots/ap2-p0a/before/`):** Đã chụp 6 cảnh chuẩn (`hub-solo`, `b1-start-room`, `b1-combat`, `coop-4p-combat`, `b1-hud-weapon-compare`, `b1-dark-interactables`).
+
+### 4.1 Phase P0A — Hạ Tầng Nền, The Purge, Per-Player State & Đồng Bộ Đạn Tất Định 60Hz (`ap2-p0a`) (Hoàn thành ✅)
+- **Commits:** `be8b01d` (`P0A.1`), `792eafc` (`P0A.2`), `a45311c` (`P0A.3`), `1fad985` & `c450b76` (`P0A.4`), `2efc689` & `0219390` (`P0A.5`), `fb5bf51` (`P0A.6`).
+- **Hạng mục đã thực hiện:**
+  1. **Cắt bỏ Thanh Năng Lượng (`energy`) & Định nghĩa Metadata Nhịp Vũ Khí (`P0A.1`):**
+     - Xóa sạch `energy`, `maxEnergy`, `energyRegen`, `energyCost`, và pickup `kind: 'energy'` trên toàn bộ sim, protocol và HUD; bổ sung pickup `kind: 'prey_emblem'` (`Huy Hiệu Săn Mồi`).
+     - Bổ sung metadata nhịp cho toàn bộ vũ khí (`cadenceKind: 'CLIP_RELOAD' | 'HEAT_VENT' | 'MELEE_COMBO'`, `clipSize`, `reloadDurationSec`, `heatPerShot`, `comboHits`, `comboRecoverySec`, `procCoefficient`) và các trường trạng thái nhịp trên `SimPlayerState`.
+     - Cập nhật Nội tại **Thiết Vệ (`vanguard`)** (`armorRegenDelaySec = 3.0s`, mỗi viên đạn địch bị khiên chặn nạp `+1` viên đạn hoặc `-15%` Nhiệt và cộng `+15%` Additive DMG cho đòn kế tiếp, tối đa `+75%`), **Liệp Ưng (`ranger`)** (hạ mục tiêu bị đánh dấu rơi `prey_emblem` nạp đầy băng + bật `overclockedNextShot` + xóa nhiệt + giảm `2.0s` hồi chiêu), và **Đồng Đội Combo (`Team Elemental Reaction`)** (2 người chơi khác nhau kích nổ phản ứng nguyên tố trong `3.0s` nhận `elementalConvergenceTimer = 3.0s`: làm mới đầy băng/nhiệt, tăng `+20%` tốc chạy & `+20%` tốc bắn).
+  2. **The Purge (`24 -> 18` Vũ khí độc bản), Xóa 6 Thẻ Stat-Sticks & Khởi tạo 1 Vũ khí ở Ô 1 (`P0A.2`):**
+     - Xóa 6 vũ khí trùng lặp cơ chế (`rusty_pistol`, `dual_pistols`, `venom_smg`, `frost_bow`, `frost_scepter`, `dragon_breath_shotgun`) và 6 thẻ cộng chỉ số phẳng (`vitality_surge`, `iron_bastion`, `arcane_wellspring`, `eagle_precision`, `gale_reflex`, `ricochet_mastery` cũ).
+     - Khởi tạo mọi nhân vật tại `createPlayerStateImpl` và `applyCharacterToPlayerStateImpl` với đúng **1 Vũ khí Khởi đầu ở Ô 1 (`starterWeapons = [cDef.starterWeaponId]`)**, Ô 2 để trống (`Ô Trống [E] Nhặt`).
+  3. **Tách Biệt Build & Kinh Tế Theo Từng Người Chơi (`Per-Player Build State & Instanced Gold` — `P0A.3`):**
+     - Loại bỏ `worldSim.activeBuffIds` và `pendingBuffChoices` toàn cục; mỗi `SimPlayerState` sở hữu riêng `blessingIds`, `weaponMutators`, `duoBoonIds`, `activePactId`, `pactOriginalWeaponId`, `awakenedRelicIds`, `buffChoices`, và `gold` (Instanced Gold khi rơi vàng/mở rương/dọn phòng và khi mua đồ ở Thương Nhân), đồng bộ đầy đủ qua `snapshot-codec.ts`, `network-transport.ts` và `CoopRoom.ts` (`select_buff` theo `meta.playerId`).
+  4. **Giao Thức `INPUT_BUTTON.RELOAD_VENT` (`[R]`), Định Danh Đạn Tất Định (`deterministicId`), `SHOT_FLAG`, `Zero-Rubberband Client Hold` & Ngân Sách Thực Thể 60Hz (`P0A.4`):**
+     - Bổ sung `INPUT_BUTTON.RELOAD_VENT = 1 << 8`, `SHOT_FLAG` (`FINALE_SHOT`, `OVERCLOCKED_SHOT`, `DYNAMIC_BOUNCE`), mã định danh đạn tất định 16-bit `deterministicId = ((ev.eventId & 0x3fffff) << 6) | (i & 0x3f)`, cơ chế `Zero-Rubberband Client Hold` (`awaitingServerRedirectTimer = 0.12s`), sự kiện mạng ưu tiên `projectiles_destroyed` (nâng giới hạn gói `snapshot-codec.ts` lên `64` sự kiện), và khóa cứng trần Object Pool (`MAX_PLAYER_PROJECTILES = 240`, `MAX_ENEMY_PROJECTILES = 160`, `MAX_TACTICAL_PROPS_PER_ROOM = 16`, `MAX_DEPLOYABLES_PER_PLAYER = 8`).
+  5. **Cập Nhật HUD Nhịp Vũ Khí & Kiểm Định Toàn Diện (`P0A.5` & `P0A.6`):**
+     - Thay thế thanh Energy cũ trên HUD góc trên-trái, thẻ vũ khí góc dưới-phải và bảng so sánh vũ khí bằng thanh Nhịp Vũ Khí (`CLIP_RELOAD` / `HEAT_VENT` / `MELEE_COMBO`) song ngữ Việt – Anh.
+     - **Visual Gate (`docs/screenshots/ap2-p0a/review-1.md` & `after/metrics.json`):** Independent `pro` Visual Reviewer chấm **`9.35 / 10` — PASS** (`0` Blocker, `0` Major, `0` Minor).
+     - **Quality Gate (`pnpm verify`):** `typecheck` PASS, `lint` PASS, `37/37` Vitest suites (`256/256` unit tests) PASS, `build` PASS, `15/15` Playwright E2E specs PASS.
+     - **Performance Gate (`pnpm perf` trên `AMD Radeon(TM) Graphics Direct3D11`):** VSync Normal **`60.00 FPS`**, VSync Stress **`60.05 FPS`**, Uncapped Normal **`p50 = 5.3ms` / `p95 = 6.8ms`** (`eqFPS = 182.21`), Uncapped Stress **`p50 = 8.2ms` / `p95 = 10.535ms`** (`eqFPS = 116.67`).
