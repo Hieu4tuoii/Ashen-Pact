@@ -6,6 +6,10 @@ import type { PropKind, SummonKind, PingMarkerKind, BulletVolleySpawnEvent } fro
 export type SimEvent =
   | BulletVolleySpawnEvent
   | {
+      kind: 'projectiles_destroyed';
+      ids: number[];
+    }
+  | {
       kind: 'projectile_spawned';
       projectileId: number;
       weaponId: string;

@@ -101,6 +101,11 @@ export const DOWNED_BLEEDOUT_SEC = 20.0;
 export const REVIVE_HOLD_DURATION_SEC = 2.5;
 export const DRUID_REVIVE_HOLD_DURATION_SEC = 1.25;
 
+export const MAX_PLAYER_PROJECTILES = 240;
+export const MAX_ENEMY_PROJECTILES = 160;
+export const MAX_TACTICAL_PROPS_PER_ROOM = 16;
+export const MAX_DEPLOYABLES_PER_PLAYER = 8;
+
 export type EnemyAIState =
   'spawning' | 'idle' | 'move' | 'telegraph' | 'attack' | 'cooldown' | 'stunned';
 
@@ -508,6 +513,9 @@ export interface SimProjectileState {
   ttlSec: number;
   element: ElementType;
   amplifiedByShield: boolean;
+  shotFlags?: number;
+  splitGeneration?: 0 | 1;
+  awaitingServerRedirectTimer?: number;
   imbuedByZone?: boolean;
   imbuedElement?: ElementType;
   imbuedSecondaryElement?: ElementType;
@@ -532,6 +540,7 @@ export interface SimPickupState {
 
 export interface BulletVolleySpawnEvent {
   kind: 'bullet_volley_spawned';
+  eventId?: number;
   tick: number;
   ownerId: number;
   team: 'player' | 'enemy';
@@ -554,6 +563,8 @@ export interface BulletVolleySpawnEvent {
   critChance: number;
   amplifiedByShield: boolean;
   seed: number;
+  shotFlags?: number;
+  replacedProjectileId?: number;
 }
 
 

@@ -1,11 +1,19 @@
 import { BIOME_SCALING } from '../data/scaling.js';
 import { WEAPONS } from '../data/weapons.js';
 import { angleDiff, circleVsCircle, distance } from '../math/vec2.js';
-import { TILE_SIZE } from '../protocol/messages.js';
-import type { SimProjectileState, BulletVolleySpawnEvent } from './world-sim-types.js';
+import { SHOT_FLAG, TILE_SIZE } from '../protocol/messages.js';
+import {
+  type BulletVolleySpawnEvent,
+  MAX_ENEMY_PROJECTILES,
+  MAX_PLAYER_PROJECTILES,
+  type SimProjectileState,
+} from './world-sim-types.js';
 import type { WorldSim } from './world-sim.js';
 
 export function spawnDeterministicVolleyImpl(this: WorldSim, ev: BulletVolleySpawnEvent, emitEvents = true): void {
+  if (ev.eventId === undefined || ev.eventId <= 0) {
+    ev.eventId = this.nextVolleyEventId++;
+  }
   this.volleyRng.setState(ev.seed || 0x6d2b79f5);
   const volleyRng = this.volleyRng;
   let pellets = Math.max(1, ev.pelletCount);
@@ -32,6 +40,8 @@ export function spawnDeterministicVolleyImpl(this: WorldSim, ev: BulletVolleySpa
   if (emitEvents && !this.stressTestActive) {
     this.events.push(ev);
   }
+
+  const teamCap = ev.team === 'player' ? MAX_PLAYER_PROJECTILES : MAX_ENEMY_PROJECTILES;
 
   for (let i = 0; i < pellets; i++) {
     let shotAngle = ev.angle;
@@ -66,8 +76,29 @@ export function spawnDeterministicVolleyImpl(this: WorldSim, ev: BulletVolleySpa
       }
     }
 
+    if (!this.stressTestActive) {
+      let teamCount = 0;
+      let oldestTeamIdx = -1;
+      for (let pIdx = 0; pIdx < this.projectiles.length; pIdx++) {
+        if (this.projectiles[pIdx]!.team === ev.team) {
+          if (oldestTeamIdx === -1) oldestTeamIdx = pIdx;
+          teamCount++;
+        }
+      }
+      if (teamCount >= teamCap && oldestTeamIdx >= 0) {
+        const [evicted] = this.projectiles.splice(oldestTeamIdx, 1);
+        if (evicted) {
+          evicted.ttlSec = 0;
+          evicted.hitEntityIds.length = 0;
+          this.projectilePool.push(evicted);
+        }
+      }
+    }
+
+    const deterministicId = (((ev.eventId ?? 1) & 0x3fffff) << 6) | (i & 0x3f);
+
     const proj = this.acquireProjectile({
-      id: ++this.nextEntityId,
+      id: deterministicId,
       ownerId: ev.ownerId,
       team: ev.team,
       weaponId: ev.weaponId,
@@ -85,6 +116,9 @@ export function spawnDeterministicVolleyImpl(this: WorldSim, ev: BulletVolleySpa
       ttlSec: ev.ttlSec,
       element: ev.element,
       amplifiedByShield: ev.amplifiedByShield,
+      shotFlags: ev.shotFlags ?? 0,
+      splitGeneration: 0,
+      awaitingServerRedirectTimer: 0,
     });
 
     this.projectiles.push(proj);
@@ -647,6 +681,15 @@ export function stepClientProjectilesCosmeticImpl(this: WorldSim, dtSec: number)
 
     b.prevX = b.x;
     b.prevY = b.y;
+
+    if ((b.awaitingServerRedirectTimer ?? 0) > 0) {
+      b.awaitingServerRedirectTimer = Math.max(0, (b.awaitingServerRedirectTimer ?? 0) - dtSec);
+      if (b.awaitingServerRedirectTimer <= 0) {
+        b.ttlSec = 0;
+      }
+      continue;
+    }
+
     b.ttlSec -= dtSec;
     if (b.ttlSec <= 0) continue;
 
@@ -656,6 +699,14 @@ export function stepClientProjectilesCosmeticImpl(this: WorldSim, dtSec: number)
     // 1. Wall / Pillar collision & ricochet bounce
     const wallHit = this.map.checkProjectileWallHit(b.x, b.y, b.radius);
     if (wallHit.hit) {
+      if (((b.shotFlags ?? 0) & SHOT_FLAG.DYNAMIC_BOUNCE) !== 0) {
+        b.x = wallHit.resolvedX;
+        b.y = wallHit.resolvedY;
+        b.vx = 0;
+        b.vy = 0;
+        b.awaitingServerRedirectTimer = 0.12;
+        continue;
+      }
       if (b.bounceRemaining > 0) {
         b.bounceRemaining -= 1;
         b.x = wallHit.resolvedX;
@@ -686,8 +737,26 @@ export function stepClientProjectilesCosmeticImpl(this: WorldSim, dtSec: number)
       let hitProp = false;
       for (let k = 0; k < this.props.length; k++) {
         const prop = this.props[k]!;
-        if (!prop.destructible || prop.hp <= 0) continue;
+        if (prop.hp <= 0) continue;
+        if (prop.kind === 'crystal_pillar' && circleVsCircle(b, prop)) {
+          if (((b.shotFlags ?? 0) & SHOT_FLAG.DYNAMIC_BOUNCE) !== 0) {
+            b.vx = 0;
+            b.vy = 0;
+            b.awaitingServerRedirectTimer = 0.12;
+            hitProp = true;
+            break;
+          }
+          continue;
+        }
+        if (!prop.destructible) continue;
         if (circleVsCircle(b, prop)) {
+          if (((b.shotFlags ?? 0) & SHOT_FLAG.DYNAMIC_BOUNCE) !== 0) {
+            b.vx = 0;
+            b.vy = 0;
+            b.awaitingServerRedirectTimer = 0.12;
+            hitProp = true;
+            break;
+          }
           prop.hitFlashTimer = Math.max(prop.hitFlashTimer, 0.1);
           b.ttlSec = 0;
           hitProp = true;
@@ -841,6 +910,9 @@ export function acquireProjectileImpl(this: WorldSim,
     pooled.ttlSec = init.ttlSec;
     pooled.element = init.element;
     pooled.amplifiedByShield = init.amplifiedByShield;
+    pooled.shotFlags = init.shotFlags ?? 0;
+    pooled.splitGeneration = init.splitGeneration ?? 0;
+    pooled.awaitingServerRedirectTimer = init.awaitingServerRedirectTimer ?? 0;
     pooled.imbuedByZone = init.imbuedByZone;
     pooled.imbuedElement = init.imbuedElement;
     pooled.imbuedSecondaryElement = init.imbuedSecondaryElement;

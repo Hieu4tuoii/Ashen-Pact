@@ -636,6 +636,20 @@ export class NetworkTransport implements ITransport {
 
     for (const ev of snapshot.events) {
       if (ev.kind === 'bullet_volley_spawned') {
+        if (ev.replacedProjectileId !== undefined) {
+          let writeIdx = 0;
+          for (let i = 0; i < this.sim.projectiles.length; i++) {
+            const p = this.sim.projectiles[i]!;
+            if (p.id === ev.replacedProjectileId) {
+              p.ttlSec = 0;
+              p.hitEntityIds.length = 0;
+              this.sim.projectilePool.push(p);
+            } else {
+              this.sim.projectiles[writeIdx++] = p;
+            }
+          }
+          this.sim.projectiles.length = writeIdx;
+        }
         this.sim.spawnDeterministicVolley(ev, false);
         this.pendingEvents.push({
           kind: 'projectile_spawned',
@@ -646,6 +660,22 @@ export class NetworkTransport implements ITransport {
           y: ev.y,
           angle: ev.angle,
         });
+      } else if (ev.kind === 'projectiles_destroyed') {
+        if (ev.ids.length > 0) {
+          const idSet = new Set(ev.ids);
+          let writeIdx = 0;
+          for (let i = 0; i < this.sim.projectiles.length; i++) {
+            const p = this.sim.projectiles[i]!;
+            if (idSet.has(p.id)) {
+              p.ttlSec = 0;
+              p.hitEntityIds.length = 0;
+              this.sim.projectilePool.push(p);
+            } else {
+              this.sim.projectiles[writeIdx++] = p;
+            }
+          }
+          this.sim.projectiles.length = writeIdx;
+        }
       } else {
         this.pendingEvents.push(ev);
       }

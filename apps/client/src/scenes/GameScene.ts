@@ -382,6 +382,7 @@ export class GameScene extends Phaser.Scene {
   public dashQueued = false;
   public skillQueued = false;
   public interactQueued = false;
+  public reloadVentQueued = false;
   public dropWeaponQueued = false;
   public readyToggleQueued = false;
   public pingQueued: { x: number; y: number } | null = null;
@@ -488,6 +489,7 @@ export class GameScene extends Phaser.Scene {
       if (this.keys.SPACE.isDown) buttons |= INPUT_BUTTON.SKILL;
       if (this.keys.Q.isDown) buttons |= INPUT_BUTTON.SWAP;
       if (this.keys.E.isDown) buttons |= INPUT_BUTTON.INTERACT;
+      if (this.keys.R.isDown) buttons |= INPUT_BUTTON.RELOAD_VENT;
     }
 
     if (this.dashQueued) {
@@ -505,6 +507,10 @@ export class GameScene extends Phaser.Scene {
     if (this.interactQueued) {
       if (!isModalOrPaused) buttons |= INPUT_BUTTON.INTERACT;
       this.interactQueued = false;
+    }
+    if (this.reloadVentQueued) {
+      if (!isModalOrPaused) buttons |= INPUT_BUTTON.RELOAD_VENT;
+      this.reloadVentQueued = false;
     }
 
     if (this.dropWeaponQueued) {

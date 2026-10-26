@@ -340,13 +340,23 @@ export function encodeWorldSnapshot(
     cleared: r.cleared,
   }));
 
-  const netEvents = events
-    .filter(
-      (ev) =>
-        ev.kind !== 'projectile_spawned' &&
-        (ev.kind !== 'projectile_impact' || ev.destroyedByMelee || ev.blockedByShield),
-    )
-    .slice(0, 32);
+  const priorityEvents: SimEvent[] = [];
+  const otherEvents: SimEvent[] = [];
+  for (let i = 0; i < events.length; i++) {
+    const ev = events[i]!;
+    if (
+      ev.kind === 'projectile_spawned' ||
+      (ev.kind === 'projectile_impact' && !ev.destroyedByMelee && !ev.blockedByShield)
+    ) {
+      continue;
+    }
+    if (ev.kind === 'bullet_volley_spawned' || ev.kind === 'projectiles_destroyed') {
+      priorityEvents.push(ev);
+    } else {
+      otherEvents.push(ev);
+    }
+  }
+  const netEvents = [...priorityEvents, ...otherEvents].slice(0, 64);
 
   return {
     tick: sim.tick,

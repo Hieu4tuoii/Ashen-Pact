@@ -18,6 +18,13 @@ export const INPUT_BUTTON = {
   PING: 1 << 5,
   DROP_WEAPON: 1 << 6,
   READY: 1 << 7,
+  RELOAD_VENT: 1 << 8,
+} as const;
+
+export const SHOT_FLAG = {
+  FINALE_SHOT: 1 << 0,
+  OVERCLOCKED_SHOT: 1 << 1,
+  DYNAMIC_BOUNCE: 1 << 2,
 } as const;
 
 export type QuickEmoteId = 1 | 2 | 3 | 4;
@@ -84,6 +91,8 @@ export interface BulletVolleySpawnNetEvent {
   seed: number;
   element: string;
   amplifiedByShield: boolean;
+  shotFlags?: number;
+  replacedProjectileId?: number;
 }
 
 /**

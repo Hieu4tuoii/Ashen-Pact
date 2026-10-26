@@ -95,6 +95,7 @@ export class WorldSim {
   };
 
   public nextEntityId = 100;
+  public nextVolleyEventId = 1;
   public eventsBufferA: SimEvent[] = [];
   public eventsBufferB: SimEvent[] = [];
   public activeEventsBuffer: 'A' | 'B' = 'A';
