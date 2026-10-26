@@ -127,6 +127,10 @@ export function applyDamageToEnemyImpl(
     enemy.hp = Math.max(0, enemy.hp - dmg);
   }
   enemy.hitFlashTimer = 0.12;
+  enemy.lastHitDmg = dmg;
+  if (attackerPlayerId > 0) {
+    enemy.lastHitPlayerId = attackerPlayerId;
+  }
   this.recordDamageHistory(dmg);
   this.runStats.damageDealt += dmg;
   const attackerPl =

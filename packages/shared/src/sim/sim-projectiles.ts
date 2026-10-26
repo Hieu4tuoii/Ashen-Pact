@@ -349,7 +349,18 @@ export function updateProjectilesImpl(this: WorldSim, dtSec: number): void {
           }
           continue;
         }
-        if (!prop.destructible) continue;
+        if (!prop.destructible || prop.coverState === 'sliding') continue;
+        if (prop.blocksEnemyProjectiles && b.team === 'player') continue;
+        if (
+          b.team === 'enemy' &&
+          prop.coverState === 'flipped' &&
+          (prop.microBlankTimer ?? 0) > 0 &&
+          distance(b.x, b.y, prop.x, prop.y) <= 56 + b.radius
+        ) {
+          b.ttlSec = 0;
+          hitProp = true;
+          break;
+        }
         if (circleVsCircle(b, prop)) {
           this.damageProp(prop, b.damage, b.element);
           b.ttlSec = 0;
@@ -765,7 +776,18 @@ export function stepClientProjectilesCosmeticImpl(this: WorldSim, dtSec: number)
           }
           continue;
         }
-        if (!prop.destructible) continue;
+        if (!prop.destructible || prop.coverState === 'sliding') continue;
+        if (prop.blocksEnemyProjectiles && b.team === 'player') continue;
+        if (
+          b.team === 'enemy' &&
+          prop.coverState === 'flipped' &&
+          (prop.microBlankTimer ?? 0) > 0 &&
+          distance(b.x, b.y, prop.x, prop.y) <= 56 + b.radius
+        ) {
+          b.ttlSec = 0;
+          hitProp = true;
+          break;
+        }
         if (circleVsCircle(b, prop)) {
           if (((b.shotFlags ?? 0) & SHOT_FLAG.DYNAMIC_BOUNCE) !== 0) {
             b.vx = 0;
@@ -905,28 +927,37 @@ export function stepClientProjectilesCosmeticImpl(this: WorldSim, dtSec: number)
 export function acquireProjectileImpl(this: WorldSim,
   init: Omit<SimProjectileState, 'prevX' | 'prevY' | 'hitEntityIds'>,
 ): SimProjectileState {
+  const legacyInit = init as Omit<SimProjectileState, 'prevX' | 'prevY' | 'hitEntityIds'> & {
+    ttl?: number;
+    pierce?: number;
+    bounces?: number;
+  };
+  const resolvedTtl = init.ttlSec ?? legacyInit.ttl ?? 1.2;
+  const resolvedPierce = init.pierceRemaining ?? legacyInit.pierce ?? 0;
+  const resolvedBounce = init.bounceRemaining ?? legacyInit.bounces ?? 0;
+  const resolvedAngle = init.angle ?? Math.atan2(init.vy ?? 0, init.vx ?? 0);
   const pooled = this.projectilePool.pop();
   if (pooled) {
     pooled.id = init.id;
     pooled.ownerId = init.ownerId;
     pooled.team = init.team;
-    pooled.weaponId = init.weaponId;
+    pooled.weaponId = init.weaponId ?? 'rivet_gun';
     pooled.prevX = init.x;
     pooled.prevY = init.y;
     pooled.x = init.x;
     pooled.y = init.y;
     pooled.vx = init.vx;
     pooled.vy = init.vy;
-    pooled.angle = init.angle;
+    pooled.angle = resolvedAngle;
     pooled.radius = init.radius;
     pooled.damage = init.damage;
-    pooled.isCrit = init.isCrit;
-    pooled.knockback = init.knockback;
-    pooled.pierceRemaining = init.pierceRemaining;
-    pooled.bounceRemaining = init.bounceRemaining;
-    pooled.ttlSec = init.ttlSec;
-    pooled.element = init.element;
-    pooled.amplifiedByShield = init.amplifiedByShield;
+    pooled.isCrit = init.isCrit ?? false;
+    pooled.knockback = init.knockback ?? 0;
+    pooled.pierceRemaining = resolvedPierce;
+    pooled.bounceRemaining = resolvedBounce;
+    pooled.ttlSec = resolvedTtl;
+    pooled.element = init.element ?? 'none';
+    pooled.amplifiedByShield = init.amplifiedByShield ?? false;
     pooled.shotFlags = init.shotFlags ?? 0;
     pooled.splitGeneration = init.splitGeneration ?? 0;
     pooled.awaitingServerRedirectTimer = init.awaitingServerRedirectTimer ?? 0;
@@ -939,6 +970,13 @@ export function acquireProjectileImpl(this: WorldSim,
   }
   return {
     ...init,
+    weaponId: init.weaponId ?? 'rivet_gun',
+    angle: resolvedAngle,
+    knockback: init.knockback ?? 0,
+    pierceRemaining: resolvedPierce,
+    bounceRemaining: resolvedBounce,
+    ttlSec: resolvedTtl,
+    amplifiedByShield: init.amplifiedByShield ?? false,
     prevX: init.x,
     prevY: init.y,
     hitEntityIds: [],

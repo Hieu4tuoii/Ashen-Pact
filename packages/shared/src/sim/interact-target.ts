@@ -1,15 +1,19 @@
 import { distance } from '../math/vec2.js';
+import { isFlippableBarricadeProp } from './sim-tactical-physics.js';
 import type {
   SimChestState,
   SimDoorState,
   SimHubStatue,
   SimNpcState,
+  SimPlayerState,
   SimPropState,
   SimWorldItemState,
 } from './world-sim-types.js';
 import type { WorldSim } from './world-sim.js';
 
 export const INTERACT_RANGE = 64;
+export const REVIVE_INTERACT_RANGE = 52;
+export const FLIP_COVER_INTERACT_RANGE = 52;
 export const INTERACT_HYSTERESIS = 8;
 
 export const INTERACT_RANGE_OFFSETS = {
@@ -32,9 +36,28 @@ export const INTERACT_PRIORITY_ORDER = [
   'door',
 ] as const;
 
-export type InteractTargetKind = (typeof INTERACT_PRIORITY_ORDER)[number];
+export type InteractTargetKind =
+  | 'revive'
+  | 'flip_cover'
+  | (typeof INTERACT_PRIORITY_ORDER)[number];
 
 export type InteractTargetResult =
+  | {
+      kind: 'revive';
+      key: string;
+      x: number;
+      y: number;
+      distance: number;
+      player: SimPlayerState;
+    }
+  | {
+      kind: 'flip_cover';
+      key: string;
+      x: number;
+      y: number;
+      distance: number;
+      prop: SimPropState;
+    }
   | {
       kind: 'hub_statue';
       key: string;
@@ -118,6 +141,71 @@ export function findInteractTarget(
   const currentKey = options?.currentTargetKey ?? null;
   const hysteresis = options?.hysteresis ?? INTERACT_HYSTERESIS;
   const requireAffordable = options?.requireAffordable ?? false;
+
+  // Priority 1: Downed Ally Revive (r <= 52px)
+  {
+    let bestAlly: SimPlayerState | null = null;
+    let bestDist = Infinity;
+    let bestKey = '';
+
+    const allPlayers = sim.getAllPlayers();
+    for (let i = 0; i < allPlayers.length; i++) {
+      const ally = allPlayers[i]!;
+      if (ally.id === actor.id || ally.lifeState !== 'downed') continue;
+      const key = `revive:${ally.id}`;
+      const maxRange = REVIVE_INTERACT_RANGE + (currentKey === key ? hysteresis : 0);
+      const d = distance(actor.x, actor.y, ally.x, ally.y);
+      if (d <= maxRange && d < bestDist) {
+        bestDist = d;
+        bestAlly = ally;
+        bestKey = key;
+      }
+    }
+
+    if (bestAlly) {
+      return {
+        kind: 'revive',
+        key: bestKey,
+        x: bestAlly.x,
+        y: bestAlly.y,
+        distance: bestDist,
+        player: bestAlly,
+      };
+    }
+  }
+
+  // Priority 2: Flippable Barricade in 'low' state (r <= 52px)
+  {
+    let bestProp: SimPropState | null = null;
+    let bestDist = Infinity;
+    let bestKey = '';
+
+    for (let i = 0; i < sim.props.length; i++) {
+      const prop = sim.props[i]!;
+      if (prop.hp <= 0 || prop.coverState !== 'low' || !isFlippableBarricadeProp(prop.kind)) {
+        continue;
+      }
+      const key = `flip_cover:${prop.id}`;
+      const maxRange = FLIP_COVER_INTERACT_RANGE + (currentKey === key ? hysteresis : 0);
+      const d = distance(actor.x, actor.y, prop.x, prop.y);
+      if (d <= maxRange && d < bestDist) {
+        bestDist = d;
+        bestProp = prop;
+        bestKey = key;
+      }
+    }
+
+    if (bestProp) {
+      return {
+        kind: 'flip_cover',
+        key: bestKey,
+        x: bestProp.x,
+        y: bestProp.y,
+        distance: bestDist,
+        prop: bestProp,
+      };
+    }
+  }
 
   // 0. Hub Character Statues
   if (sim.inHub) {

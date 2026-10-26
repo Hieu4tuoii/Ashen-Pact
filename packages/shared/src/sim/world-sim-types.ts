@@ -110,7 +110,7 @@ export const MAX_TACTICAL_PROPS_PER_ROOM = 16;
 export const MAX_DEPLOYABLES_PER_PLAYER = 8;
 
 export type EnemyAIState =
-  'spawning' | 'idle' | 'move' | 'telegraph' | 'attack' | 'cooldown' | 'stunned';
+  'spawning' | 'idle' | 'move' | 'chase' | 'telegraph' | 'attack' | 'cooldown' | 'stunned';
 
 export type PropKind =
   | 'wooden_crate'
@@ -119,7 +119,16 @@ export type PropKind =
   | 'torch_brazier'
   | 'glow_mushroom'
   | 'ancient_mechanism'
-  | 'crystal_pillar';
+  | 'crystal_pillar'
+  | 'moss_table'
+  | 'volatile_spore_pod'
+  | 'rotten_totem_pillar'
+  | 'glacial_barricade'
+  | 'sliding_ice_block'
+  | 'cryo_prism_pillar'
+  | 'forge_blast_shield'
+  | 'pneumatic_press'
+  | 'slag_crucible';
 
 export interface SimPropState {
   id: number;
@@ -137,6 +146,15 @@ export interface SimPropState {
   hitFlashTimer: number;
   fuseTimer: number;
   repaired?: boolean;
+  coverState?: 'low' | 'flipped' | 'sliding' | 'fallen';
+  blocksEnemyProjectiles?: boolean;
+  vx?: number;
+  vy?: number;
+  slideOwnerPlayerId?: number;
+  hitEnemyIds?: number[];
+  fallAngle?: number;
+  microBlankTimer?: number;
+  bouncesRemaining?: number;
 }
 
 export type SummonKind = 'sacred_tree' | 'tesla_turret' | 'ancient_turret' | 'life_blossom';
@@ -493,6 +511,12 @@ export interface SimEnemyState {
   bossFreezeDrTimer?: number;
   bossFreezeCountWindow?: number;
   bossEnrageLevel?: number;
+  // Ashen Pact 2.0 Tactical Physics states
+  stunTimer: number;
+  lastHitDmg: number;
+  lastHitPlayerId?: number;
+  wallSlamCooldownTimer: number;
+  bossStaggerAccum?: number;
 }
 
 export interface SimProjectileState {

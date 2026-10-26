@@ -19,9 +19,11 @@ import { updateFrostBatAIImpl, updateBabyYetiAIImpl, updateIceMageAIImpl, update
 import { updateFireImpAIImpl, updateDwarfCannonAIImpl, updateCoalGolemAIImpl, updateWelderDroneAIImpl, updateIronShielderAIImpl, spawnForgeTitanEnergyCoresImpl, updateBossForgeTitanAIImpl, executeBossForgeTitanAttackImpl, computeMvpAwardsImpl } from './sim-enemies-biome3.js';
 import { spawnDeterministicVolleyImpl, spawnSeedGunLifeBlossomImpl, triggerLauncherProjectileExplosionImpl, updateProjectilesImpl, stepClientProjectilesCosmeticImpl, acquireProjectileImpl } from './sim-projectiles.js';
 import { applyDamageToEnemyImpl, triggerElementalReactionImpl, handleEnemyKilledImpl, applyElementStatusToEnemyImpl, applyDamageToPlayerImpl } from './sim-combat-damage.js';
+import { flipCoverPropImpl, kickPropImpl, updateSlidingPropsImpl } from './sim-tactical-physics.js';
 
 export * from './world-sim-types.js';
 export * from './world-sim-events.js';
+export * from './sim-tactical-physics.js';
 
 export class WorldSim {
   public readonly rng: SeededRandom;
@@ -415,6 +417,10 @@ export class WorldSim {
   public updateCoopDownedAndRevive(dtSec: number): void  { return updateCoopDownedAndReviveImpl.call(this, dtSec); }
   public updatePlayerSurfaceAndStatus(p: SimPlayerState, surf: SurfaceKind, dtSec: number): void  { return updatePlayerSurfaceAndStatusImpl.call(this, p, surf, dtSec); }
   public resolvePropMovementCollision(entity: { x: number; y: number; radius: number }): void  { return resolvePropMovementCollisionImpl.call(this, entity); }
+  public flipCoverProp(prop: SimPropState, actor: SimPlayerState = this.player): boolean { return flipCoverPropImpl.call(this, prop, actor); }
+  public kickProp(prop: SimPropState, actor: SimPlayerState = this.player, customAngle?: number): boolean { return kickPropImpl.call(this, prop, actor, customAngle); }
+  public updateSlidingProps(dtSec: number): void { return updateSlidingPropsImpl.call(this, dtSec); }
+  public releaseProjectileToPool(proj: SimProjectileState): void { proj.ttlSec = 0; proj.hitEntityIds.length = 0; this.projectilePool.push(proj); }
   public updateProps(dtSec: number): void  { return updatePropsImpl.call(this, dtSec); }
   public damageProp(prop: SimPropState, amount: number, element: ElementType = 'none'): void  { return damagePropImpl.call(this, prop, amount, element); }
   public detonateExplosiveBarrel(barrel: SimPropState): void  { return detonateExplosiveBarrelImpl.call(this, barrel); }

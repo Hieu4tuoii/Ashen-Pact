@@ -3,6 +3,7 @@ import type { ElementType } from '../data/types.js';
 import { approach, clamp, distance, distanceSq } from '../math/vec2.js';
 import { BIOME_SCALING, COOP_SCALING } from '../data/scaling.js';
 import type { SurfaceKind } from './arena-map.js';
+import { resolveEnemyChasmRingOut, triggerEnemyWallSlam } from './sim-tactical-physics.js';
 import type { SimPlayerState, SimEnemyState } from './world-sim-types.js';
 import type { WorldSim } from './world-sim.js';
 
@@ -389,8 +390,15 @@ export function updateEnemiesImpl(this: WorldSim, dtSec: number): void {
     if (e.steamBlindTimer > 0) {
       e.steamBlindTimer = Math.max(0, e.steamBlindTimer - dtSec);
     }
+    if ((e.wallSlamCooldownTimer ?? 0) > 0) {
+      e.wallSlamCooldownTimer = Math.max(0, (e.wallSlamCooldownTimer ?? 0) - dtSec);
+    }
+    if ((e.stunTimer ?? 0) > 0) {
+      e.stunTimer = Math.max(0, (e.stunTimer ?? 0) - dtSec);
+    }
 
-    // Decay knockback
+    // Decay knockback (preserving pre-decay speed for Wall-Slam threshold checks)
+    const preDecayKbSpeed = Math.hypot(e.kbVx, e.kbVy);
     const kbDecay = Math.exp(-12 * dtSec);
     e.kbVx *= kbDecay;
     e.kbVy *= kbDecay;
@@ -450,16 +458,18 @@ export function updateEnemiesImpl(this: WorldSim, dtSec: number): void {
       }
     }
 
-    // Frozen enemies cannot move or execute AI
+    // Frozen enemies cannot move or execute AI (unless currently flying under high knockback >= 120)
     if (e.frozenTimer > 0) {
       e.vx = 0;
       e.vy = 0;
       e.frozenTimer = Math.max(0, e.frozenTimer - dtSec);
-      continue;
+      if (preDecayKbSpeed < 120) {
+        continue;
+      }
     }
 
     // Elite Regen modifier: regenerates 4 HP/sec if not poisoned
-    if (e.isElite && e.eliteModifier === 'regen' && e.hp < e.maxHp && e.poisonTimer <= 0) {
+    if (e.isElite && e.eliteModifier === 'regen' && e.hp < e.maxHp && e.poisonTimer <= 0 && e.frozenTimer <= 0) {
       e.regenAccum += dtSec * 4;
       if (e.regenAccum >= 1) {
         const healPts = Math.floor(e.regenAccum);
@@ -486,15 +496,24 @@ export function updateEnemiesImpl(this: WorldSim, dtSec: number): void {
       }
     }
 
-    if (e.aiState === 'stunned') {
+    if (e.frozenTimer > 0) {
+      e.vx = 0;
+      e.vy = 0;
+    } else if (e.aiState === 'stunned') {
       e.vx = 0;
       e.vy = 0;
       e.stateTimer -= dtSec;
-      if (e.stateTimer <= 0) {
+      if (e.stateTimer <= 0 && (e.stunTimer ?? 0) <= 0) {
         e.aiState = 'cooldown';
         e.stateTimer = 0.6;
       }
+    } else if ((e.stunTimer ?? 0) > 0 && !e.isBoss) {
+      e.vx = 0;
+      e.vy = 0;
     } else {
+      if (e.aiState === 'chase') {
+        e.aiState = 'move';
+      }
       const dx = targetX - e.x;
       const dy = targetY - e.y;
       const distToPlayer = Math.hypot(dx, dy);
@@ -629,6 +648,15 @@ export function updateEnemiesImpl(this: WorldSim, dtSec: number): void {
       if (postPropCol.collided) {
         col = postPropCol;
       }
+    }
+
+    if (col.collided && preDecayKbSpeed >= 120 && (e.wallSlamCooldownTimer ?? 0) <= 0) {
+      triggerEnemyWallSlam(this, e, undefined, preDecayKbSpeed);
+      if (e.hp <= 0) continue;
+    }
+
+    if (resolveEnemyChasmRingOut(this, e)) {
+      if (e.hp <= 0) continue;
     }
 
     if (surf === 'grass' && Math.hypot(e.vx, e.vy) > 25 && e.grassRustleCooldown <= 0) {

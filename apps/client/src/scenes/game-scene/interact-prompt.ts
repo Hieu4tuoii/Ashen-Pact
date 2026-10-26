@@ -113,6 +113,52 @@ export function resolveInteractPromptSpec(
   const isEn = locale === 'en';
 
   switch (target.kind) {
+    case 'revive': {
+      const colorHex = '#FACC15';
+      const titleText = isEn ? `Revive ${target.player.displayName}` : `Cứu ${target.player.displayName}`;
+      return {
+        key: target.key,
+        kind: 'revive',
+        x: target.x,
+        y: target.y - 26,
+        targetX: target.x,
+        targetY: target.y,
+        highlightRadiusX: 22,
+        highlightRadiusY: 18,
+        keycapText: 'E',
+        titleText,
+        colorHex,
+        colorNum: hexToNum(colorHex),
+        costGold: 0,
+        hasCoinIcon: false,
+        priceText: '',
+        suppressedByWeaponCard: false,
+      };
+    }
+
+    case 'flip_cover': {
+      const colorHex = '#38BDF8';
+      const titleText = isEn ? 'Flip Cover' : 'Lật Bàn Chắn';
+      return {
+        key: target.key,
+        kind: 'flip_cover',
+        x: target.x,
+        y: target.y - 24,
+        targetX: target.x,
+        targetY: target.y,
+        highlightRadiusX: 22,
+        highlightRadiusY: 18,
+        keycapText: 'E',
+        titleText,
+        colorHex,
+        colorNum: hexToNum(colorHex),
+        costGold: 0,
+        hasCoinIcon: false,
+        priceText: '',
+        suppressedByWeaponCard: false,
+      };
+    }
+
     case 'chest': {
       const colorHex = WEAPON_RARITY_COLORS[target.chest.rarity];
       const titleText = isEn

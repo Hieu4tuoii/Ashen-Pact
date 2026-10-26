@@ -6,6 +6,7 @@ import { INPUT_BUTTON, type PlayerInputPacket, TILE_SIZE } from '../protocol/mes
 import type { SurfaceKind } from './arena-map.js';
 import { findNearestWalkablePoint } from './arena-room-archetypes.js';
 import { syncActiveWeaponCadenceState } from './sim-coop-hub.js';
+import { triggerMeleeKickProps } from './sim-tactical-physics.js';
 import { DASH_DURATION_SEC, DASH_IFRAME_SEC, DASH_COOLDOWN_SEC, DASH_SPEED_MULTIPLIER, MELEE_RANGE, type SimPlayerState } from './world-sim-types.js';
 import type { WorldSim } from './world-sim.js';
 
@@ -564,11 +565,12 @@ export function tryFireActiveWeaponImpl(this: WorldSim, p: SimPlayerState = this
       }
     }
 
-    // Hit props in melee cone
+    // Hit props in melee cone (kickable props launch as projectiles first!)
     const baseMeleeDmg = Math.round(w.damage * vanguardBonusMult);
+    triggerMeleeKickProps(this, p, halfArc, meleeRange + 6, p.aimAngle);
     for (let i = 0; i < this.props.length; i++) {
       const prop = this.props[i]!;
-      if (!prop.destructible || prop.hp <= 0) continue;
+      if (!prop.destructible || prop.hp <= 0 || prop.coverState === 'sliding') continue;
       if (isCircleInCone(p.x, p.y, p.aimAngle, halfArc, meleeRange + 6, prop)) {
         this.damageProp(prop, baseMeleeDmg, shotElement);
       }

@@ -2,6 +2,7 @@ import { CHARACTERS } from '../data/characters.js';
 import type { ElementType } from '../data/types.js';
 import { angleDiff, clamp, distance, isCircleInCone } from '../math/vec2.js';
 import { TILE_SIZE } from '../protocol/messages.js';
+import { triggerMeleeKickProps } from './sim-tactical-physics.js';
 import { ELEMENTALIST_ROTATION_ORDER, MAX_DEPLOYABLES_PER_PLAYER, type SimSummonState, type SimPlayerState, type SimEnemyState } from './world-sim-types.js';
 import type { WorldSim } from './world-sim.js';
 
@@ -772,6 +773,8 @@ export function releaseVanguardShieldShockwaveImpl(this: WorldSim, p: SimPlayerS
     p.activeImbueElement !== 'none' ? p.activeImbueElement : hasChargeUpgrade ? 'burn' : 'none';
   const halfArc = hasFortressUpgrade ? Math.PI : (65 * Math.PI) / 180;
   const range = hasChargeUpgrade ? 165 : hasFortressUpgrade ? 150 : 135;
+
+  triggerMeleeKickProps(this, p, halfArc, range, p.aimAngle);
 
   const shockEnemyCount = this.enemies.length;
   for (let i = 0; i < shockEnemyCount; i++) {

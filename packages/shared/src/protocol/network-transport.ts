@@ -389,6 +389,7 @@ export class NetworkTransport implements ITransport {
           const col = this.sim.map.resolveCircleCollision(nextX, nextY, pState.radius);
           pState.x = col.x;
           pState.y = col.y;
+          this.sim.resolvePropMovementCollision(pState);
         }
         pState.prevX = pState.x;
         pState.prevY = pState.y;
@@ -537,6 +538,9 @@ export class NetworkTransport implements ITransport {
         surfaceTickTimer: 0,
         grassRustleCooldown: 0,
         strafeSign: 1,
+        stunTimer: 0,
+        lastHitDmg: 0,
+        wallSlamCooldownTimer: 0,
       };
     });
 
@@ -742,6 +746,8 @@ export class NetworkTransport implements ITransport {
       const len = Math.hypot(inp.moveX, inp.moveY);
       const dirX = len > 0.01 ? inp.moveX / len : Math.cos(inp.aimAngle);
       const dirY = len > 0.01 ? inp.moveY / len : Math.sin(inp.aimAngle);
+      localPlayer.dashDirX = dirX;
+      localPlayer.dashDirY = dirY;
       localPlayer.vx = dirX * 520;
       localPlayer.vy = dirY * 520;
     } else if (localPlayer.dashTimer <= 0) {
@@ -763,6 +769,7 @@ export class NetworkTransport implements ITransport {
     const col = this.sim.map.resolveCircleCollision(nextX, nextY, localPlayer.radius);
     localPlayer.x = col.x;
     localPlayer.y = col.y;
+    this.sim.resolvePropMovementCollision(localPlayer);
     if (!this.sim.stressTestActive) {
       this.sim.updatePhase6Mechanics(dtSec);
     }

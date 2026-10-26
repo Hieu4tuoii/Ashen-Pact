@@ -6,6 +6,11 @@ import { BIOME_SCALING, COOP_SCALING } from '../data/scaling.js';
 import { type PlayerInputPacket, TILE_SIZE } from '../protocol/messages.js';
 import type { DungeonRoomNode } from './dungeon-gen.js';
 import { syncActiveWeaponCadenceState } from './sim-coop-hub.js';
+import {
+  getTacticalPropSpawnSpec,
+  resolvePropMovementCollision,
+  updateSlidingPropsImpl,
+} from './sim-tactical-physics.js';
 import { PHASE1_SAMPLE_ENEMIES, ELEMENT_CYCLE_ORDER, ENEMY_SPAWN_WARMUP_SEC, SPORE_EXPLOSION_RADIUS, BARREL_EXPLOSION_RADIUS, BOSS_ERUPT_RADIUS, MAX_TACTICAL_PROPS_PER_ROOM, type PropKind, type SimPropState, type SimChestState, type SimWorldItemState, type SimEnemyState } from './world-sim-types.js';
 import type { WorldSim } from './world-sim.js';
 
@@ -97,6 +102,17 @@ export function spawnPropImpl(this: WorldSim, kind: PropKind, x: number, y: numb
       break;
   }
 
+  const tacticalSpec = getTacticalPropSpawnSpec(kind);
+  if (tacticalSpec) {
+    radius = tacticalSpec.radius;
+    hp = tacticalSpec.hp;
+    destructible = tacticalSpec.destructible;
+    explosive = tacticalSpec.explosive;
+    blocksMovement = tacticalSpec.blocksMovement;
+    lightRadius = tacticalSpec.lightRadius;
+    lightColorHex = tacticalSpec.lightColorHex;
+  }
+
   let finalX = x;
   let finalY = y;
   const pTx = Math.floor(finalX / TILE_SIZE);
@@ -123,6 +139,9 @@ export function spawnPropImpl(this: WorldSim, kind: PropKind, x: number, y: numb
     hitFlashTimer: 0,
     fuseTimer: 0,
     repaired: false,
+    coverState: tacticalSpec?.coverState,
+    blocksEnemyProjectiles: tacticalSpec?.blocksEnemyProjectiles,
+    bouncesRemaining: tacticalSpec?.bouncesRemaining,
   };
   if (!this.stressTestActive && this.props.length >= MAX_TACTICAL_PROPS_PER_ROOM) {
     const destructibleIdx = this.props.findIndex((p) => p.destructible);
@@ -352,6 +371,9 @@ export function spawnTrainingDummyImpl(this: WorldSim, x: number, y: number): Si
     bossFreezeDrTimer: 0,
     bossFreezeCountWindow: 0,
     bossEnrageLevel: 0,
+    stunTimer: 0,
+    lastHitDmg: 0,
+    wallSlamCooldownTimer: 0,
   };
   this.enemies.push(dummy);
   return dummy;
@@ -414,7 +436,9 @@ export function spawnEnemyImpl(this: WorldSim,
     }
   }
 
-  const resolved = this.map.resolveCircleCollision(spawnX, spawnY, radius);
+  const explicitNonChasmPos =
+    x !== undefined && y !== undefined && this.map.getSurfaceAtWorld(spawnX, spawnY) !== 'chasm';
+  const resolved = this.map.resolveCircleCollision(spawnX, spawnY, radius, explicitNonChasmPos);
   const safePos = { x: resolved.x, y: resolved.y, radius };
   if (defId !== 'ice_prison' && !this.stressTestActive) {
     for (let iter = 0; iter < 3; iter++) {
@@ -454,7 +478,7 @@ export function spawnEnemyImpl(this: WorldSim,
           }
         }
       }
-      const wallCol = this.map.resolveCircleCollision(safePos.x, safePos.y, safePos.radius);
+      const wallCol = this.map.resolveCircleCollision(safePos.x, safePos.y, safePos.radius, explicitNonChasmPos);
       safePos.x = wallCol.x;
       safePos.y = wallCol.y;
     }
@@ -565,6 +589,9 @@ export function spawnEnemyImpl(this: WorldSim,
     bossFreezeDrTimer: 0,
     bossFreezeCountWindow: 0,
     bossEnrageLevel: 0,
+    stunTimer: 0,
+    lastHitDmg: 0,
+    wallSlamCooldownTimer: 0,
   };
 
   this.enemies.push(enemy);
@@ -728,23 +755,11 @@ export function spawnWorldItemImpl(this: WorldSim,
 }
 
 export function resolvePropMovementCollisionImpl(this: WorldSim, entity: { x: number; y: number; radius: number }): void {
-  for (let i = 0; i < this.props.length; i++) {
-    const prop = this.props[i]!;
-    if (prop.hp <= 0 || !prop.blocksMovement) continue;
-    const dx = entity.x - prop.x;
-    const dy = entity.y - prop.y;
-    const minDist = entity.radius + prop.radius;
-    const dSq = dx * dx + dy * dy;
-    if (dSq < minDist * minDist && dSq > 1e-6) {
-      const d = Math.sqrt(dSq);
-      const push = minDist - d;
-      entity.x += (dx / d) * push;
-      entity.y += (dy / d) * push;
-    }
-  }
+  resolvePropMovementCollision(this, entity);
 }
 
 export function updatePropsImpl(this: WorldSim, dtSec: number): void {
+  updateSlidingPropsImpl.call(this, dtSec);
   for (let i = 0; i < this.props.length; i++) {
     const prop = this.props[i]!;
     if (prop.hp <= 0) continue;

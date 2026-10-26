@@ -5,6 +5,7 @@ import { approach, distance } from '../math/vec2.js';
 import { INPUT_BUTTON } from '../protocol/messages.js';
 import { generateDungeonFloor } from './dungeon-gen.js';
 import { findInteractTarget } from './interact-target.js';
+import { flipCoverProp } from './sim-tactical-physics.js';
 import { lerpSpeed, type SimSummonState, type SimDoorState, type SimNpcState, type SimPlayerState, type SimEnemyState, type SimPickupState } from './world-sim-types.js';
 import type { WorldSim } from './world-sim.js';
 
@@ -228,6 +229,14 @@ export function interactWithNearestImpl(this: WorldSim, actor: SimPlayerState = 
   if (!target) return false;
 
   switch (target.kind) {
+    case 'revive': {
+      target.player.reviverPlayerId = p.id;
+      return true;
+    }
+
+    case 'flip_cover':
+      return flipCoverProp(this, target.prop, p);
+
     case 'hub_statue':
       return this.selectCharacter(p.id, target.statue.characterId);
 

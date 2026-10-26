@@ -351,6 +351,40 @@ export type SimEvent =
       x: number;
       y: number;
       delaySec: number;
+    }
+  | {
+      kind: 'cover_flipped';
+      propId: number;
+      playerId: number;
+      x: number;
+      y: number;
+      radius: number;
+      bulletsCleared: number;
+    }
+  | {
+      kind: 'prop_kicked';
+      propId: number;
+      playerId: number;
+      x: number;
+      y: number;
+      vx: number;
+      vy: number;
+    }
+  | {
+      kind: 'wall_slam';
+      enemyId: number;
+      x: number;
+      y: number;
+      damage: number;
+      shattered: boolean;
+    }
+  | {
+      kind: 'ring_out';
+      enemyId: number;
+      x: number;
+      y: number;
+      isElite: boolean;
+      damage: number;
     };
 
 export interface WorldSimOptions {
