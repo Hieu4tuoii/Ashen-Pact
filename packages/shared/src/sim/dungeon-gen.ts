@@ -139,7 +139,7 @@ export function rollWeaponForRarity(
   if (matching.length > 0) {
     return rng.pick(matching).id;
   }
-  return 'frost_scepter';
+  return 'tesla_carbine';
 }
 
 /**

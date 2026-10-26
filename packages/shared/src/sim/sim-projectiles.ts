@@ -346,7 +346,7 @@ export function updateProjectilesImpl(this: WorldSim, dtSec: number): void {
           const dToVanguard = distance(b.x, b.y, pl.x, pl.y);
           if (dToVanguard <= 42 + b.radius) {
             const angFromVanguard = Math.atan2(b.y - pl.y, b.x - pl.x);
-            const halfShieldArc = this.activeBuffIds.includes('vanguard_fortress')
+            const halfShieldArc = this.activeBuffIds.includes('vanguard_bastion_prism')
               ? Math.PI
               : (65 * Math.PI) / 180;
             if (Math.abs(angleDiff(angFromVanguard, pl.aimAngle)) <= halfShieldArc) {
@@ -511,7 +511,7 @@ export function updateProjectilesImpl(this: WorldSim, dtSec: number): void {
     } else {
       // 4. Enemy projectile vs Vanguard Shield, Druid Sacred Tree, or any alive Player
       let blockedByAnyShield = false;
-      const hasFortress = this.activeBuffIds.includes('vanguard_fortress');
+      const hasFortress = this.activeBuffIds.includes('vanguard_bastion_prism');
       for (let pIdx = 0; pIdx < allPlayers.length; pIdx++) {
         const pl = allPlayers[pIdx]!;
         if (pl.lifeState !== 'alive') continue;
@@ -757,7 +757,7 @@ export function stepClientProjectilesCosmeticImpl(this: WorldSim, dtSec: number)
           const dToPlayer = distance(b.x, b.y, pl.x, pl.y);
           if (dToPlayer <= shieldRadius + b.radius && dToPlayer >= pl.radius * 0.5) {
             const angleFromPlayer = Math.atan2(b.y - pl.y, b.x - pl.x);
-            const halfShieldArc = this.activeBuffIds.includes('vanguard_fortress')
+            const halfShieldArc = this.activeBuffIds.includes('vanguard_bastion_prism')
               ? Math.PI
               : (60 * Math.PI) / 180;
             if (Math.abs(angleDiff(angleFromPlayer, pl.aimAngle)) <= halfShieldArc) {

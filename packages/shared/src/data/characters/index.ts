@@ -31,8 +31,8 @@ export const CHARACTERS: Record<CharacterId, CharacterStatsDef> = {
         'Đạn đồng minh và Trụ Tesla bắn xuyên qua khiên từ phía sau được +30% sát thương và +1 xuyên mục tiêu.',
       upgrades: [
         {
-          id: 'vanguard_fortress',
-          nameVi: 'Pháo Đài',
+          id: 'vanguard_bastion_prism',
+          nameVi: 'Pháo Đài Phản Xạ',
           descriptionVi: 'Khiên bao phủ 360° quanh bản thân với bán kính nhỏ hơn.',
         },
         {
@@ -116,8 +116,8 @@ export const CHARACTERS: Record<CharacterId, CharacterStatsDef> = {
           descriptionVi: 'Vùng nguyên tố hút quái xung quanh vào tâm.',
         },
         {
-          id: 'elementalist_dual',
-          nameVi: 'Song Nguyên Tố',
+          id: 'elementalist_twin_orbit',
+          nameVi: 'Song Tinh Cắt Không Gian',
           descriptionVi: 'Vùng chứa đồng thời 2 nguyên tố, kích hoạt phản ứng ngay lập tức.',
         },
       ],

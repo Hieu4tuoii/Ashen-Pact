@@ -390,58 +390,10 @@ export const ELITE_MODIFIER_LABELS_VI: Record<EliteModifier, string> = {
 };
 
 export const FLOOR_BUFFS: Record<string, BuffDef> = {
-  vitality_surge: {
-    id: 'vitality_surge',
-    nameVi: 'Trái Tim Cổ Thụ',
-    nameEn: 'Ancient Heart',
-    descriptionVi: '+3 HP tối đa và hồi phục toàn bộ HP ngay lập tức.',
-    category: 'general',
-    accentColor: '#E84545',
-  },
-  iron_bastion: {
-    id: 'iron_bastion',
-    nameVi: 'Giáp Thép Nguyên Bản',
-    nameEn: 'Primeval Steel Armor',
-    descriptionVi: '+2 Giáp tối đa và giảm 0.5s thời gian chờ hồi Giáp.',
-    category: 'general',
-    accentColor: '#8B97B5',
-  },
-  arcane_wellspring: {
-    id: 'arcane_wellspring',
-    nameVi: 'Suối Nguồn Năng Lượng',
-    nameEn: 'Arcane Wellspring',
-    descriptionVi: '+60 Năng lượng tối đa và tăng 50% tốc độ tự hồi Năng lượng.',
-    category: 'general',
-    accentColor: '#3B82F6',
-  },
-  eagle_precision: {
-    id: 'eagle_precision',
-    nameVi: 'Nhãn Quan Sắc Bén',
-    nameEn: 'Razor Sight',
-    descriptionVi: '+18% Tỉ lệ chí mạng và +20% Sát thương vũ khí.',
-    category: 'general',
-    accentColor: '#FACC15',
-  },
-  gale_reflex: {
-    id: 'gale_reflex',
-    nameVi: 'Cuồng Phong Trợ Lực',
-    nameEn: 'Gale Reflex',
-    descriptionVi: '+20% Tốc độ di chuyển và +22% Tốc độ bắn.',
-    category: 'general',
-    accentColor: '#22D3EE',
-  },
-  ricochet_mastery: {
-    id: 'ricochet_mastery',
-    nameVi: 'Đạn Đạo Nảy Tường',
-    nameEn: 'Ricochet Mastery',
-    descriptionVi: 'Mọi đạn tầm xa được +1 lần nảy tường và +1 xuyên thấu.',
-    category: 'general',
-    accentColor: '#A855F7',
-  },
-  vanguard_fortress: {
-    id: 'vanguard_fortress',
-    nameVi: 'Nâng Cấp: Pháo Đài 360°',
-    nameEn: 'Fortress 360',
+  vanguard_bastion_prism: {
+    id: 'vanguard_bastion_prism',
+    nameVi: 'Nâng Cấp: Pháo Đài Phản Xạ',
+    nameEn: 'Bastion Prism',
     descriptionVi:
       'Tường Khiên Hồng Ngọc bao bọc toàn diện 360° quanh Thiết Vệ và tăng sát thương phản kích.',
     category: 'skill_upgrade',
@@ -487,10 +439,10 @@ export const FLOOR_BUFFS: Record<string, BuffDef> = {
     characterId: 'elementalist',
     accentColor: '#60A5FA',
   },
-  elementalist_dual: {
-    id: 'elementalist_dual',
-    nameVi: 'Nâng Cấp: Song Nguyên Tố',
-    nameEn: 'Dual Element',
+  elementalist_twin_orbit: {
+    id: 'elementalist_twin_orbit',
+    nameVi: 'Nâng Cấp: Song Tinh Cắt Không Gian',
+    nameEn: 'Twin Orbit',
     descriptionVi:
       'Vùng Cầu Nguyên Tố mang đồng thời cả 2 nguyên tố hiện tại và kế tiếp, kích hoạt phản ứng ngay lập tức.',
     category: 'skill_upgrade',

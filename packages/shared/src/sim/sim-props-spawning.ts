@@ -5,6 +5,7 @@ import { distance, distanceSq } from '../math/vec2.js';
 import { BIOME_SCALING, COOP_SCALING } from '../data/scaling.js';
 import { type PlayerInputPacket, TILE_SIZE } from '../protocol/messages.js';
 import type { DungeonRoomNode } from './dungeon-gen.js';
+import { syncActiveWeaponCadenceState } from './sim-coop-hub.js';
 import { PHASE1_SAMPLE_ENEMIES, ELEMENT_CYCLE_ORDER, ENEMY_SPAWN_WARMUP_SEC, SPORE_EXPLOSION_RADIUS, BARREL_EXPLOSION_RADIUS, BOSS_ERUPT_RADIUS, type PropKind, type SimPropState, type SimChestState, type SimWorldItemState, type SimEnemyState } from './world-sim-types.js';
 import type { WorldSim } from './world-sim.js';
 
@@ -154,8 +155,8 @@ export function configureStressTestImpl(this: WorldSim, active: boolean): void {
     this.createPlayerState(3, 3, 'elementalist', this.map.width * 0.45, this.map.height * 0.65),
     this.createPlayerState(4, 4, 'engineer', this.map.width * 0.6, this.map.height * 0.5),
   ];
-  this.simulatedPlayers[0]!.weaponSlots = ['hunter_crossbow', 'rusty_pistol'];
-  this.simulatedPlayers[0]!.activeWeaponSlot = 1; // Rusty Pistol
+  this.simulatedPlayers[0]!.weaponSlots = ['hunter_crossbow', 'rivet_gun'];
+  this.simulatedPlayers[0]!.activeWeaponSlot = 1; // Rivet Gun
   this.simulatedPlayers[0]!.activeImbueElement = 'chill';
   this.simulatedPlayers[1]!.weaponSlots = ['apprentice_staff', 'scrap_shotgun'];
   this.simulatedPlayers[1]!.activeWeaponSlot = 1; // Scrap Shotgun
@@ -245,12 +246,21 @@ export function equipWeaponSlotImpl(this: WorldSim, slotIndex: number): void {
     if (this.player.activeWeaponSlot !== slotIndex) {
       this.player.activeWeaponSlot = slotIndex;
       this.player.fireCooldownTimer = Math.min(this.player.fireCooldownTimer, 0.08);
+      syncActiveWeaponCadenceState(this.player);
       this.events.push({
         kind: 'weapon_swapped',
         playerId: this.player.id,
         weaponId: this.getActiveWeaponId(),
         slot: slotIndex,
       });
+    } else {
+      const wep = WEAPONS[this.getActiveWeaponId()];
+      if (
+        this.player.clipMax !== (wep?.clipSize ?? 0) ||
+        this.player.reloadDuration !== (wep?.reloadDurationSec ?? 0)
+      ) {
+        syncActiveWeaponCadenceState(this.player);
+      }
     }
   }
 }

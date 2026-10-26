@@ -7,6 +7,22 @@ import { generateDungeonFloor } from './dungeon-gen.js';
 import { PLAYER_RADIUS, REVIVE_HOLD_DURATION_SEC, DRUID_REVIVE_HOLD_DURATION_SEC, type SimWorldItemState, type PingMarkerKind, type SimPingMarker, type SimPlayerState } from './world-sim-types.js';
 import type { WorldSim } from './world-sim.js';
 
+export function syncActiveWeaponCadenceState(p: SimPlayerState): void {
+  const activeWepId = p.weaponSlots[p.activeWeaponSlot] ?? p.weaponSlots[0] ?? 'knight_sword';
+  const wep = WEAPONS[activeWepId];
+  p.clipMax = wep?.clipSize ?? 0;
+  p.clipAmmo = p.clipMax;
+  p.reloadTimer = 0;
+  p.reloadDuration = wep?.reloadDurationSec ?? 0;
+  p.reloadLockout = false;
+  p.overclockedNextShot = false;
+  p.weaponHeat = 0;
+  p.overheatLockTimer = 0;
+  p.meleeComboStep = 0;
+  p.meleeComboResetTimer = 0;
+  p.meleeParryWindowTimer = 0;
+}
+
 export function createPlayerStateImpl(this: WorldSim,
   id: number,
   slot: 1 | 2 | 3 | 4,
@@ -16,7 +32,7 @@ export function createPlayerStateImpl(this: WorldSim,
   displayName?: string,
 ): SimPlayerState {
   const cDef = CHARACTERS[characterId] ?? CHARACTERS.vanguard;
-  const starterWeapons = [cDef.starterWeaponId, 'rusty_pistol'].slice(0, MAX_WEAPON_SLOTS);
+  const starterWeapons = [cDef.starterWeaponId];
   const starterWep = WEAPONS[starterWeapons[0] ?? 'knight_sword'];
   return {
     id,
@@ -357,21 +373,11 @@ export function applyCharacterToPlayerStateImpl(this: WorldSim,
   p.moveSpeed = cDef.moveSpeed;
   p.armorRegenDelaySec = cDef.armorRegenDelaySec;
   p.armorRegenPerSec = cDef.armorRegenPerSec;
-  p.weaponSlots = [cDef.starterWeaponId, 'rusty_pistol'].slice(0, MAX_WEAPON_SLOTS);
+  const starterWeapons = [cDef.starterWeaponId];
+  p.weaponSlots = starterWeapons;
   p.activeWeaponSlot = 0;
   p.weaponPickupLockTimer = 0;
-  const starterWep = WEAPONS[p.weaponSlots[0] ?? 'knight_sword'];
-  p.clipAmmo = starterWep?.clipSize ?? 0;
-  p.clipMax = starterWep?.clipSize ?? 0;
-  p.reloadTimer = 0;
-  p.reloadDuration = starterWep?.reloadDurationSec ?? 0;
-  p.reloadLockout = false;
-  p.overclockedNextShot = false;
-  p.weaponHeat = 0;
-  p.overheatLockTimer = 0;
-  p.meleeComboStep = 0;
-  p.meleeComboResetTimer = 0;
-  p.meleeParryWindowTimer = 0;
+  syncActiveWeaponCadenceState(p);
   p.holsterReloadTimers = [0, 0];
   p.vanguardShieldBonusAdd = 0;
   p.elementalConvergenceTimer = 0;
@@ -477,9 +483,9 @@ export function enterHubImpl(this: WorldSim): void {
   // Weapon Test Rack (West side — 2x2 staggered grid so [E] labels never overlap)
   const rackWeapons = [
     'hunter_crossbow',
-    'frost_scepter',
+    'apprentice_staff',
     'tesla_carbine',
-    'dragon_breath_shotgun',
+    'scrap_shotgun',
   ] as const;
   const rackOffsets: readonly [number, number][] = [
     [-320, 48],
@@ -773,6 +779,7 @@ export function dropActiveWeaponImpl(this: WorldSim, playerId = this.player.id):
 
   p.weaponSlots.splice(activeIdx, 1);
   p.activeWeaponSlot = Math.min(activeIdx, p.weaponSlots.length - 1);
+  syncActiveWeaponCadenceState(p);
 
   const dropX = p.x + Math.cos(p.aimAngle) * 28;
   const dropY = p.y + Math.sin(p.aimAngle) * 28;
@@ -791,7 +798,6 @@ export function updateCoopDownedAndReviveImpl(this: WorldSim, dtSec: number): vo
   const allPlayers = this.getAllPlayers();
   for (let i = 0; i < allPlayers.length; i++) {
     const downed = allPlayers[i]!;
-    if (downed.lifeState !== 'alive' && downed.lifeState !== 'downed') continue;
     if (downed.lifeState !== 'downed') continue;
 
     // Find an alive teammate within 64 units holding INTERACT (E) or standing within 46 units

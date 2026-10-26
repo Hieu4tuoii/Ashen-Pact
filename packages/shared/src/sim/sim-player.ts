@@ -4,6 +4,7 @@ import { WEAPONS } from '../data/weapons.js';
 import { approach, clamp, distance, isCircleInCone } from '../math/vec2.js';
 import { INPUT_BUTTON, type PlayerInputPacket, TILE_SIZE } from '../protocol/messages.js';
 import type { SurfaceKind } from './arena-map.js';
+import { syncActiveWeaponCadenceState } from './sim-coop-hub.js';
 import { DASH_DURATION_SEC, DASH_IFRAME_SEC, DASH_COOLDOWN_SEC, DASH_SPEED_MULTIPLIER, MELEE_RANGE, type SimPlayerState } from './world-sim-types.js';
 import type { WorldSim } from './world-sim.js';
 
@@ -125,6 +126,7 @@ export function updateSinglePlayerStateImpl(this: WorldSim,
     } else if (p.activeWeaponSlot !== selectedSlot) {
       p.activeWeaponSlot = selectedSlot;
       p.fireCooldownTimer = Math.min(p.fireCooldownTimer, 0.08);
+      syncActiveWeaponCadenceState(p);
       this.events.push({
         kind: 'weapon_swapped',
         playerId: p.id,
@@ -138,6 +140,7 @@ export function updateSinglePlayerStateImpl(this: WorldSim,
     } else if (p.weaponSlots.length > 1) {
       p.activeWeaponSlot = (p.activeWeaponSlot + 1) % p.weaponSlots.length;
       p.fireCooldownTimer = Math.min(p.fireCooldownTimer, 0.08);
+      syncActiveWeaponCadenceState(p);
       this.events.push({
         kind: 'weapon_swapped',
         playerId: p.id,
@@ -230,9 +233,7 @@ export function updateSinglePlayerStateImpl(this: WorldSim,
     (this.stressTestActive && p.dashCooldownTimer <= 0 && this.tick % 90 === 0);
 
   if (triggerDash && p.dashCooldownTimer <= 0 && p.dashTimer <= 0) {
-    const dashCd = this.activeBuffIds.includes('gale_reflex')
-      ? DASH_COOLDOWN_SEC * 0.82
-      : DASH_COOLDOWN_SEC;
+    const dashCd = DASH_COOLDOWN_SEC;
     p.dashTimer = DASH_DURATION_SEC;
     p.invulnerableTimer = Math.max(p.invulnerableTimer, DASH_IFRAME_SEC);
     p.dashCooldownTimer = dashCd;
@@ -504,15 +505,11 @@ export function tryFireActiveWeaponImpl(this: WorldSim, p: SimPlayerState = this
   const w = WEAPONS[weaponId];
   if (!w) return;
 
-  const hasGaleReflex = this.activeBuffIds.includes('gale_reflex');
-  const hasEaglePrecision = this.activeBuffIds.includes('eagle_precision');
-  const hasRicochetMastery = this.activeBuffIds.includes('ricochet_mastery');
-
   const vanguardBonusMult = 1 + (p.vanguardShieldBonusAdd ?? 0);
   p.vanguardShieldBonusAdd = 0;
 
   const convergenceMult = p.elementalConvergenceTimer > 0 ? 1.2 : 1.0;
-  const effectiveFireRate = w.fireRate * (hasGaleReflex ? 1.22 : 1) * convergenceMult;
+  const effectiveFireRate = w.fireRate * convergenceMult;
   p.fireCooldownTimer = 1 / effectiveFireRate;
   p.recoilTimer = 0.12;
   const shotElement: ElementType =
@@ -569,9 +566,7 @@ export function tryFireActiveWeaponImpl(this: WorldSim, p: SimPlayerState = this
     }
 
     // Hit props in melee cone
-    const baseMeleeDmg = Math.round(
-      (hasEaglePrecision ? Math.round(w.damage * 1.2) : w.damage) * vanguardBonusMult,
-    );
+    const baseMeleeDmg = Math.round(w.damage * vanguardBonusMult);
     for (let i = 0; i < this.props.length; i++) {
       const prop = this.props[i]!;
       if (!prop.destructible || prop.hp <= 0) continue;
@@ -582,7 +577,7 @@ export function tryFireActiveWeaponImpl(this: WorldSim, p: SimPlayerState = this
 
     // Hit enemies in melee cone
     const baseCrit = CHARACTERS[p.characterId]?.baseCritChance ?? 0.05;
-    const critChance = clamp(baseCrit + w.critChance + (hasEaglePrecision ? 0.18 : 0), 0, 1);
+    const critChance = clamp(baseCrit + w.critChance, 0, 1);
     let hitAny = false;
     let anyCrit = false;
     const meleeEnemyCount = this.enemies.length;
@@ -718,11 +713,11 @@ export function tryFireActiveWeaponImpl(this: WorldSim, p: SimPlayerState = this
   const spawnX = p.x + Math.cos(p.aimAngle) * muzzleDist;
   const spawnY = p.y + Math.sin(p.aimAngle) * muzzleDist;
   const baseCrit = CHARACTERS[p.characterId]?.baseCritChance ?? 0.05;
-  const rawWeaponDmg = hasEaglePrecision ? Math.round(w.damage * 1.2) : w.damage;
+  const rawWeaponDmg = w.damage;
   const baseDmg = Math.round(
     (shieldBoost ? Math.round(rawWeaponDmg * 1.3) : rawWeaponDmg) * vanguardBonusMult,
   );
-  const critChance = clamp(baseCrit + w.critChance + (hasEaglePrecision ? 0.18 : 0), 0, 1);
+  const critChance = clamp(baseCrit + w.critChance, 0, 1);
 
   // Co-op Weapon: Trượng Liên Kết (tether_staff) links player with nearest ally or summon/anchor!
   if (w.id === 'tether_staff') {
@@ -807,8 +802,8 @@ export function tryFireActiveWeaponImpl(this: WorldSim, p: SimPlayerState = this
     damage: baseDmg,
     radius: w.category === 'shotgun' ? 4.5 : w.category === 'launcher' ? 7 : 5,
     knockback: w.knockback,
-    pierceCount: w.pierceCount + (shieldBoost ? 1 : 0) + (hasRicochetMastery ? 1 : 0),
-    bounceCount: w.bounceCount + (hasRicochetMastery ? 1 : 0),
+    pierceCount: w.pierceCount + (shieldBoost ? 1 : 0),
+    bounceCount: w.bounceCount,
     ttlSec: w.category === 'shotgun' ? 0.55 : w.category === 'laser' ? 1.0 : 1.4,
     element: shotElement,
     critChance,

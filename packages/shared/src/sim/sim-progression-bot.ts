@@ -112,18 +112,6 @@ export function applyBuffEffectsImpl(this: WorldSim, buffId: BuffId): void {
   const def = FLOOR_BUFFS[buffId];
   if (!def || this.activeBuffIds.includes(buffId)) return;
   this.activeBuffIds.push(buffId);
-  for (const p of this.getAllPlayers()) {
-    if (buffId === 'vitality_surge') {
-      p.maxHp += 3;
-      p.hp = p.maxHp;
-    } else if (buffId === 'iron_bastion') {
-      p.maxArmor += 2;
-      p.armor = p.maxArmor;
-      p.armorRegenDelaySec = Math.max(0.8, p.armorRegenDelaySec - 0.5);
-    } else if (buffId === 'gale_reflex') {
-      p.moveSpeed = Math.round(p.moveSpeed * 1.2);
-    }
-  }
   this.events.push({
     kind: 'buff_selected',
     buffId,

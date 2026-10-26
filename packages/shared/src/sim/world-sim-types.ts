@@ -6,7 +6,7 @@ import type { QuickEmoteId } from '../protocol/messages.js';
 
 export const PHASE1_SAMPLE_WEAPONS = [
   'knight_sword',
-  'rusty_pistol',
+  'rivet_gun',
 ] as const;
 
 export type Phase1WeaponId = (typeof PHASE1_SAMPLE_WEAPONS)[number];

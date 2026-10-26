@@ -5,6 +5,7 @@ import { COOP_SCALING } from '../data/scaling.js';
 import { clamp, distance } from '../math/vec2.js';
 import { TILE_SIZE } from '../protocol/messages.js';
 import { type DungeonRoomNode, OPPOSITE_DIR } from './dungeon-gen.js';
+import { syncActiveWeaponCadenceState } from './sim-coop-hub.js';
 import type { SimChestState, SimWorldItemState, SimPlayerState } from './world-sim-types.js';
 import type { WorldSim } from './world-sim.js';
 
@@ -688,7 +689,7 @@ export function onRoomClearedImpl(this: WorldSim, room: DungeonRoomNode): void {
     this.blizzardVeilActive = false;
     const defaultLegWep =
       this.currentBiome === 2
-        ? 'frost_scepter'
+        ? 'solar_archon_staff'
         : this.currentBiome === 3
           ? 'thunder_hammer'
           : 'solar_archon_staff';
@@ -964,6 +965,7 @@ export function pickupOrBuyWorldItemImpl(this: WorldSim,
         slot: activeIdx,
       });
     }
+    syncActiveWeaponCadenceState(collector);
     if (!this.inHub) {
       this.roomItemsByRoomId.set(room.id, [...this.worldItems]);
     }

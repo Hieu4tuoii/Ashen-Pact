@@ -457,4 +457,75 @@ describe('AP2 P0A.1 — Energy Purge, Weapon Cadence Metadata & Replacement Mech
     expect(cp.vanguardShieldBonusAdd).toBeCloseTo(0.45, 2);
     expect(cp.elementalConvergenceTimer).toBeCloseTo(2.4, 1);
   });
+
+  it('syncs clipMax, clipAmmo, and reloadDuration when Vanguard equips or picks up a CLIP_RELOAD weapon (rivet_gun) and blocks enemy bullets', () => {
+    const sim = new WorldSim({
+      seed: 108,
+      spawnInitialWave: false,
+      includeTrainingDummy: false,
+      includeProps: false,
+      autoRespawnWaves: false,
+    });
+    sim.selectCharacter(sim.player.id, 'vanguard');
+    const p = sim.player;
+    p.weaponSlots = ['knight_sword'];
+    p.activeWeaponSlot = 0;
+    p.x = 300;
+    p.y = 300;
+    p.aimAngle = 0;
+
+    // Initially wielding knight_sword (MELEE_COMBO -> clipMax = 0)
+    expect(p.clipMax).toBe(0);
+    expect(p.reloadDuration).toBe(0);
+
+    // Pick up rivet_gun (CLIP_RELOAD, clipSize = 6, reloadDurationSec = 0.90) from world item
+    const item = sim.spawnWorldItem({
+      kind: 'weapon',
+      weaponId: 'rivet_gun',
+      rarity: 'common',
+      nameVi: WEAPONS.rivet_gun!.nameVi,
+      costGold: 0,
+      healAmount: 0,
+      x: p.x,
+      y: p.y,
+    });
+    expect(sim.pickupOrBuyWorldItem(item, p)).toBe(true);
+    expect(p.clipMax).toBe(6);
+    expect(p.clipAmmo).toBe(6);
+    expect(p.reloadDuration).toBeCloseTo(0.9, 5);
+
+    // Spend 2 rounds -> clipAmmo = 4, then block an enemy bullet with Tường Khiên Hồng Ngọc -> refills to 5 (up to 6)
+    p.clipAmmo = 4;
+    p.skillActiveTimer = 3.0;
+    const bullet = sim.acquireProjectile({
+      id: ++sim.nextEntityId,
+      ownerId: 999,
+      team: 'enemy',
+      weaponId: 'goblin_bow',
+      x: p.x + 28,
+      y: p.y,
+      vx: -180,
+      vy: 0,
+      angle: Math.PI,
+      radius: 5,
+      damage: 2,
+      isCrit: false,
+      knockback: 20,
+      pierceRemaining: 0,
+      bounceRemaining: 0,
+      ttlSec: 1.5,
+      element: 'none',
+      amplifiedByShield: false,
+    });
+    sim.projectiles.push(bullet);
+    sim.updateProjectiles(1 / 60);
+    expect(p.clipAmmo).toBe(5);
+
+    // Swapping back to slot 0 (knight_sword) and then slot 1 (rivet_gun) via equipWeaponSlot syncs clipMax properly
+    sim.equipWeaponSlot(0);
+    expect(p.clipMax).toBe(0);
+    sim.equipWeaponSlot(1);
+    expect(p.clipMax).toBe(6);
+    expect(p.reloadDuration).toBeCloseTo(0.9, 5);
+  });
 });

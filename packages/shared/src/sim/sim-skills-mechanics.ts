@@ -13,11 +13,11 @@ export function activateCharacterSkillImpl(this: WorldSim, p: SimPlayerState): v
     if (p.skillActiveTimer > 0) {
       this.releaseVanguardShieldShockwave(p);
     } else if (p.skillCooldownTimer <= 0) {
-      const bonusDur = this.activeBuffIds.includes('vanguard_fortress') ? 1.5 : 0;
+      const bonusDur = this.activeBuffIds.includes('vanguard_bastion_prism') ? 1.5 : 0;
       p.skillActiveTimer = skillDef.durationSec + bonusDur;
       p.skillCooldownTimer = skillDef.cooldownSec;
       p.shieldStoredBullets = 0;
-      if (this.activeBuffIds.includes('vanguard_fortress')) {
+      if (this.activeBuffIds.includes('vanguard_bastion_prism')) {
         p.armor = Math.min(p.maxArmor, p.armor + 2);
       }
       this.events.push({
@@ -93,7 +93,7 @@ export function activateCharacterSkillImpl(this: WorldSim, p: SimPlayerState): v
     p.activeImbueElement = nextEl;
 
     const hasVortex = this.activeBuffIds.includes('elementalist_vortex');
-    const hasDual = this.activeBuffIds.includes('elementalist_dual');
+    const hasDual = this.activeBuffIds.includes('elementalist_twin_orbit');
     const secondaryEl: ElementType = hasDual ? nextEl : 'none';
 
     const orbX = clamp(
@@ -511,7 +511,7 @@ export function updateSkillZonesAndSummonsImpl(this: WorldSim, dtSec: number): v
                 continue;
               }
               if (distToZapLine(pl.x, pl.y) <= 44) {
-                const halfShieldArc = this.activeBuffIds.includes('vanguard_fortress')
+                const halfShieldArc = this.activeBuffIds.includes('vanguard_bastion_prism')
                   ? Math.PI
                   : (65 * Math.PI) / 180;
                 if (Math.abs(angleDiff(ang, pl.aimAngle)) <= halfShieldArc) {
@@ -723,7 +723,7 @@ export function releaseVanguardShieldShockwaveImpl(this: WorldSim, p: SimPlayerS
   );
   p.shieldStoredBullets = 0;
 
-  const hasFortressUpgrade = this.activeBuffIds.includes('vanguard_fortress');
+  const hasFortressUpgrade = this.activeBuffIds.includes('vanguard_bastion_prism');
   const hasChargeUpgrade = this.activeBuffIds.includes('vanguard_charge');
   if (hasChargeUpgrade) {
     const stepDist = 11;
