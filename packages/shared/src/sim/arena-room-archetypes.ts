@@ -273,7 +273,22 @@ function setPillarRect(map: ArenaMap, startTx: number, startTy: number, w: numbe
   }
 }
 
+function getBiomeTacticalPropKinds(biome: 1 | 2 | 3): {
+  barricade: PropKind;
+  hazard: PropKind;
+  pillarToy: PropKind;
+} {
+  if (biome === 2) {
+    return { barricade: 'glacial_barricade', hazard: 'sliding_ice_block', pillarToy: 'cryo_prism_pillar' };
+  }
+  if (biome === 3) {
+    return { barricade: 'forge_blast_shield', hazard: 'slag_crucible', pillarToy: 'pneumatic_press' };
+  }
+  return { barricade: 'moss_table', hazard: 'volatile_spore_pod', pillarToy: 'rotten_totem_pillar' };
+}
+
 function buildTwinBridgesGeometry(map: ArenaMap, biome: 1 | 2 | 3, flipX: boolean, flipY: boolean): BaseAnchorSpec[] {
+  const kinds = getBiomeTacticalPropKinds(biome);
   setPillarRect(map, 8, 3, 2, 1);
   setPillarRect(map, 26, 18, 2, 1);
   for (let ty = 1; ty <= map.rows - 2; ty++) {
@@ -297,12 +312,12 @@ function buildTwinBridgesGeometry(map: ArenaMap, biome: 1 | 2 | 3, flipX: boolea
   map.fillSurfaceRect(flipX ? 28 : 4, botY, 4, 2, westBotSurf);
   map.fillSurfaceRect(flipX ? 4 : 28, botY, 4, 2, eastBotSurf);
   return [
-    { id: 'tb_barricade_w_n', role: 'barricade', propKind: 'wooden_crate', tx: 11, ty: 6 },
-    { id: 'tb_barricade_e_s', role: 'barricade', propKind: 'wooden_crate', tx: 24, ty: 15 },
-    { id: 'tb_hazard_w', role: 'hazard', propKind: 'explosive_barrel', tx: 11, ty: 14 },
-    { id: 'tb_hazard_e', role: 'hazard', propKind: 'explosive_barrel', tx: 24, ty: 7 },
-    { id: 'tb_pillar_w', role: 'pillar_toy', propKind: 'clay_vase', tx: 6, ty: 10 },
-    { id: 'tb_pillar_e', role: 'pillar_toy', propKind: 'clay_vase', tx: 29, ty: 11 },
+    { id: 'tb_barricade_w_n', role: 'barricade', propKind: kinds.barricade, tx: 11, ty: 6 },
+    { id: 'tb_barricade_e_s', role: 'barricade', propKind: kinds.barricade, tx: 24, ty: 15 },
+    { id: 'tb_hazard_w', role: 'hazard', propKind: kinds.hazard, tx: 11, ty: 14 },
+    { id: 'tb_hazard_e', role: 'hazard', propKind: kinds.hazard, tx: 24, ty: 7 },
+    { id: 'tb_pillar_w', role: 'pillar_toy', propKind: kinds.pillarToy, tx: 6, ty: 10 },
+    { id: 'tb_pillar_e', role: 'pillar_toy', propKind: kinds.pillarToy, tx: 29, ty: 11 },
     { id: 'tb_accent_nw', role: 'accent', propKind: 'glow_mushroom', tx: 6, ty: 5 },
     { id: 'tb_accent_se', role: 'accent', propKind: 'glow_mushroom', tx: 29, ty: 16 },
     { id: 'tb_mech', role: 'mechanism', propKind: 'ancient_mechanism', tx: 10, ty: 11 },
@@ -310,6 +325,7 @@ function buildTwinBridgesGeometry(map: ArenaMap, biome: 1 | 2 | 3, flipX: boolea
 }
 
 function buildGauntletChokepointGeometry(map: ArenaMap, biome: 1 | 2 | 3, flipX: boolean, flipY: boolean): BaseAnchorSpec[] {
+  const kinds = getBiomeTacticalPropKinds(biome);
   setPillarRect(map, 9, 4, 3, 3);
   setPillarRect(map, 8, 5, 1, 2);
   setPillarRect(map, 24, 4, 3, 3);
@@ -337,12 +353,12 @@ function buildGauntletChokepointGeometry(map: ArenaMap, biome: 1 | 2 | 3, flipX:
     map.fillSurfaceRect(19, 17, 4, 2, 'oil');
   }
   return [
-    { id: 'gc_barricade_w', role: 'barricade', propKind: 'wooden_crate', tx: 6, ty: 10 },
-    { id: 'gc_barricade_e', role: 'barricade', propKind: 'wooden_crate', tx: 29, ty: 11 },
-    { id: 'gc_hazard_nw', role: 'hazard', propKind: 'explosive_barrel', tx: 15, ty: 6 },
-    { id: 'gc_hazard_se', role: 'hazard', propKind: 'explosive_barrel', tx: 20, ty: 15 },
-    { id: 'gc_pillar_sw', role: 'pillar_toy', propKind: 'clay_vase', tx: 6, ty: 15 },
-    { id: 'gc_pillar_ne', role: 'pillar_toy', propKind: 'clay_vase', tx: 29, ty: 6 },
+    { id: 'gc_barricade_w', role: 'barricade', propKind: kinds.barricade, tx: 6, ty: 10 },
+    { id: 'gc_barricade_e', role: 'barricade', propKind: kinds.barricade, tx: 29, ty: 11 },
+    { id: 'gc_hazard_nw', role: 'hazard', propKind: kinds.hazard, tx: 15, ty: 6 },
+    { id: 'gc_hazard_se', role: 'hazard', propKind: kinds.hazard, tx: 20, ty: 15 },
+    { id: 'gc_pillar_sw', role: 'pillar_toy', propKind: kinds.pillarToy, tx: 6, ty: 15 },
+    { id: 'gc_pillar_ne', role: 'pillar_toy', propKind: kinds.pillarToy, tx: 29, ty: 6 },
     { id: 'gc_accent_nw', role: 'accent', propKind: 'glow_mushroom', tx: 5, ty: 5 },
     { id: 'gc_accent_se', role: 'accent', propKind: 'glow_mushroom', tx: 30, ty: 16 },
     { id: 'gc_mech', role: 'mechanism', propKind: 'ancient_mechanism', tx: 15, ty: 11 },
@@ -350,6 +366,7 @@ function buildGauntletChokepointGeometry(map: ArenaMap, biome: 1 | 2 | 3, flipX:
 }
 
 function buildCentralBastionGeometry(map: ArenaMap, biome: 1 | 2 | 3, flipX: boolean, flipY: boolean): BaseAnchorSpec[] {
+  const kinds = getBiomeTacticalPropKinds(biome);
   setPillarRect(map, 8, 3, 2, 1);
   setPillarRect(map, 26, 18, 2, 1);
   for (let ty = 8; ty <= 13; ty++) {
@@ -379,14 +396,14 @@ function buildCentralBastionGeometry(map: ArenaMap, biome: 1 | 2 | 3, flipX: boo
     map.fillSurfaceRect(20, 16, 4, 3, 'oil');
   }
   return [
-    { id: 'cb_barricade_w', role: 'barricade', propKind: 'wooden_crate', tx: 12, ty: 10 },
-    { id: 'cb_barricade_e', role: 'barricade', propKind: 'wooden_crate', tx: 23, ty: 11 },
-    { id: 'cb_barricade_n', role: 'barricade', propKind: 'clay_vase', tx: 17, ty: 6 },
-    { id: 'cb_barricade_s', role: 'barricade', propKind: 'clay_vase', tx: 18, ty: 15 },
-    { id: 'cb_hazard_nw', role: 'hazard', propKind: 'explosive_barrel', tx: 11, ty: 6 },
-    { id: 'cb_hazard_se', role: 'hazard', propKind: 'explosive_barrel', tx: 24, ty: 15 },
-    { id: 'cb_accent_sw', role: 'accent', propKind: 'glow_mushroom', tx: 6, ty: 15 },
-    { id: 'cb_accent_ne', role: 'accent', propKind: 'glow_mushroom', tx: 29, ty: 6 },
+    { id: 'cb_barricade_w', role: 'barricade', propKind: kinds.barricade, tx: 12, ty: 10 },
+    { id: 'cb_barricade_e', role: 'barricade', propKind: kinds.barricade, tx: 23, ty: 11 },
+    { id: 'cb_barricade_n', role: 'barricade', propKind: kinds.barricade, tx: 17, ty: 6 },
+    { id: 'cb_barricade_s', role: 'barricade', propKind: kinds.barricade, tx: 18, ty: 15 },
+    { id: 'cb_hazard_nw', role: 'hazard', propKind: kinds.hazard, tx: 11, ty: 6 },
+    { id: 'cb_hazard_se', role: 'hazard', propKind: kinds.hazard, tx: 24, ty: 15 },
+    { id: 'cb_pillar_sw', role: 'pillar_toy', propKind: kinds.pillarToy, tx: 6, ty: 15 },
+    { id: 'cb_pillar_ne', role: 'pillar_toy', propKind: kinds.pillarToy, tx: 29, ty: 6 },
     { id: 'cb_mech', role: 'mechanism', propKind: 'ancient_mechanism', tx: 17, ty: 10 },
   ];
 }

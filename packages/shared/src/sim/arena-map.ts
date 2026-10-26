@@ -91,6 +91,7 @@ export class ArenaMap {
   public propAnchors: RoomPropAnchor[] = [];
   public lastLayoutResult: RoomLayoutResult | null = null;
   public lastRoomLayout: RoomLayoutResult | null = null;
+  public isBossRoom = false;
 
   constructor(config: ArenaMapConfig = {}) {
     this.cols = config.cols ?? 36;
@@ -130,9 +131,11 @@ export class ArenaMap {
     activeDoorSides?: readonly CardinalDir[],
   ): RoomLayoutResult | void {
     if (typeof roomTypeOrOpts === 'object' && roomTypeOrOpts !== null) {
+      this.isBossRoom = false;
       return configureArchetypeRoomLayout(this, roomTypeOrOpts);
     }
     const roomType = roomTypeOrOpts;
+    this.isBossRoom = roomType === 'boss';
     if (roomType === 'combat') {
       return configureArchetypeRoomLayout(this, {
         roomSeed,
@@ -580,11 +583,12 @@ export class ArenaMap {
         const cy = ty * TILE_SIZE + TILE_SIZE / 2;
         if (Math.hypot(cx - worldX, cy - worldY) > radius + TILE_SIZE * 0.65) continue;
 
-        const s = this.getSurface(tx, ty);
+        const idx = ty * this.cols + tx;
+        const s = this.surfaces[idx]!;
         if (s === 'oil') {
           this.setSurface(tx, ty, 'burning_oil', 5.0, false);
           changed += 1;
-        } else if (s === 'grass') {
+        } else if (s === 'grass' || (s === 'poison_swamp' && !this.isBossRoom)) {
           this.setSurface(tx, ty, 'burning_grass', 3.5, false);
           changed += 1;
         } else if (s === 'ice') {
@@ -653,15 +657,24 @@ export class ArenaMap {
         const timer = this.surfaceTimers[idx]!;
 
         if (surf === 'burning_oil' || surf === 'burning_grass') {
-          // Spread fire to cardinal neighbors after burning for at least 0.25s
+          // Spread fire to cardinal neighbors at 320 px/s (~10 tiles/s = 0.10s per tile)
           const maxDur = surf === 'burning_oil' ? 5.0 : 3.5;
-          if (maxDur - timer >= 0.25) {
+          const spreadThresholdSec = this.isBossRoom ? 0.25 : TILE_SIZE / 320;
+          const elapsedBurn = this.isBossRoom
+            ? maxDur - timer
+            : maxDur - Math.max(0, timer - dtSec);
+          if (elapsedBurn + 1e-6 >= spreadThresholdSec) {
             for (let k = 0; k < ArenaMap.CARDINAL_OFFSETS.length; k++) {
               const [dx, dy] = ArenaMap.CARDINAL_OFFSETS[k]!;
-              const nIdx = (ty + dy) * this.cols + (tx + dx);
+              const nTx = tx + dx;
+              const nTy = ty + dy;
+              const nIdx = nTy * this.cols + nTx;
               const nSurf = this.surfaces[nIdx];
-              if (nSurf === 'oil') this.toIgniteOil.push(nIdx);
-              else if (nSurf === 'grass') this.toIgniteGrass.push(nIdx);
+              if (nSurf === 'oil') {
+                this.toIgniteOil.push(nIdx);
+              } else if (nSurf === 'grass' || (nSurf === 'poison_swamp' && !this.isBossRoom)) {
+                this.toIgniteGrass.push(nIdx);
+              }
             }
           }
         }
@@ -698,7 +711,7 @@ export class ArenaMap {
     }
     for (let i = 0; i < this.toIgniteGrass.length; i++) {
       const idx = this.toIgniteGrass[i]!;
-      if (this.surfaces[idx] === 'grass') {
+      if (this.surfaces[idx] === 'grass' || (this.surfaces[idx] === 'poison_swamp' && !this.isBossRoom)) {
         this.surfaces[idx] = 'burning_grass';
         this.surfaceTimers[idx] = 3.5;
         this.mapRevision += 1;

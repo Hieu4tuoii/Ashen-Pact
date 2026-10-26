@@ -362,6 +362,7 @@ export function updateProjectilesImpl(this: WorldSim, dtSec: number): void {
           break;
         }
         if (circleVsCircle(b, prop)) {
+          prop.fallAngle = b.angle;
           this.damageProp(prop, b.damage, b.element);
           b.ttlSec = 0;
           hitProp = true;

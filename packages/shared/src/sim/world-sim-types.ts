@@ -397,6 +397,7 @@ export interface SimPlayerState {
   holsterReloadTimers: number[];
   vanguardShieldBonusAdd: number;
   elementalConvergenceTimer: number;
+  pollenSpeedBoostTimer: number;
   // Ashen Pact 2.0 Per-Player Build State
   blessingIds: BlessingId[];
   weaponMutators: Record<number, WeaponMutatorId[]>;

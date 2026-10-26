@@ -18,6 +18,14 @@ export const SLIDING_PROP_ENEMY_STUN_SEC = 1.0;
 export const WALL_SLAM_SPEED_THRESHOLD = 120;
 export const WALL_SLAM_COOLDOWN_SEC = 0.35;
 export const WALL_SLAM_STUN_SEC = 0.4;
+export const BIOME1_POLLEN_SPEED_BOOST_DURATION_SEC = 2.0;
+export const BIOME1_POLLEN_SPEED_MULTIPLIER = 1.25;
+export const MOSS_TABLE_POLLEN_ARMOR_RADIUS = 72;
+export const VOLATILE_SPORE_POD_BLAST_RADIUS = 96;
+export const VOLATILE_SPORE_POD_ROOT_SEC = 1.2;
+export const ROTTEN_TOTEM_FALL_LENGTH = 160;
+export const ROTTEN_TOTEM_FALL_WIDTH = 56;
+export const ROTTEN_TOTEM_STUN_SEC = 1.5;
 
 export function isFlippableBarricadeProp(kind: PropKind): boolean {
   return kind === 'moss_table' || kind === 'glacial_barricade' || kind === 'forge_blast_shield';
@@ -57,14 +65,15 @@ export function getTacticalPropSpawnSpec(kind: PropKind): TacticalPropSpawnSpec 
   }
   switch (kind) {
     case 'volatile_spore_pod':
-      return { radius: 14, hp: 16, destructible: true, explosive: true, blocksMovement: true, lightRadius: 80, lightColorHex: '#84CC16' };
+      return { radius: 16, hp: 25, destructible: true, explosive: true, blocksMovement: true, lightRadius: 80, lightColorHex: '#84CC16' };
     case 'sliding_ice_block':
       return { radius: 16, hp: 40, destructible: true, explosive: false, blocksMovement: true, lightRadius: 65, lightColorHex: '#38BDF8', bouncesRemaining: 2 };
     case 'slag_crucible':
       return { radius: 15, hp: 20, destructible: true, explosive: true, blocksMovement: true, lightRadius: 95, lightColorHex: '#F97316' };
     case 'rotten_totem_pillar':
+      return { radius: 20, hp: 45, destructible: true, explosive: false, blocksMovement: true, lightRadius: 90, lightColorHex: '#A3E635' };
     case 'cryo_prism_pillar':
-      return { radius: 18, hp: 80, destructible: true, explosive: false, blocksMovement: true, lightRadius: 90, lightColorHex: kind === 'cryo_prism_pillar' ? '#67E8F9' : '#A3E635' };
+      return { radius: 18, hp: 80, destructible: true, explosive: false, blocksMovement: true, lightRadius: 90, lightColorHex: '#67E8F9' };
     case 'pneumatic_press':
       return { radius: 20, hp: 9999, destructible: false, explosive: false, blocksMovement: true, lightRadius: 70, lightColorHex: '#FB923C' };
     default:
@@ -76,10 +85,7 @@ export function computeFloorScalingMultiplier(globalFloor: number): number {
   return 1 + 0.22 * (Math.max(1, globalFloor || 1) - 1);
 }
 
-export function computeKickSlideDamage(
-  enemy: Pick<SimEnemyState, 'maxHp' | 'isElite' | 'isBoss'>,
-  globalFloor: number,
-): number {
+export function computeKickSlideDamage(enemy: Pick<SimEnemyState, 'maxHp' | 'isElite' | 'isBoss'>, globalFloor: number): number {
   const floorMult = computeFloorScalingMultiplier(globalFloor);
   const alphaKick = enemy.isBoss ? 0.015 : enemy.isElite ? 0.05 : 0.10;
   return Math.round(20 * floorMult + alphaKick * enemy.maxHp);
@@ -91,16 +97,102 @@ export function computeWallSlamDamage(
 ): number {
   const floorMult = computeFloorScalingMultiplier(globalFloor);
   const alphaSlam = enemy.isBoss ? 0.01 : enemy.isElite ? 0.04 : 0.08;
-  const lastHitDmg = Math.max(0, enemy.lastHitDmg ?? 0);
-  return Math.round(14 * floorMult + 0.30 * lastHitDmg + alphaSlam * enemy.maxHp);
+  return Math.round(14 * floorMult + 0.30 * Math.max(0, enemy.lastHitDmg ?? 0) + alphaSlam * enemy.maxHp);
 }
 
-export function clearEnemyProjectilesAroundProp(
-  sim: WorldSim,
-  x: number,
-  y: number,
-  radius: number,
-): number {
+export function computeHazardDamage(enemy: Pick<SimEnemyState, 'maxHp' | 'isBoss'>, globalFloor: number, baseHazardDmg = 28): number {
+  if (enemy.isBoss) return Math.round(0.06 * enemy.maxHp);
+  return Math.round(baseHazardDmg * computeFloorScalingMultiplier(globalFloor) + 0.20 * enemy.maxHp);
+}
+
+export function triggerGrassPollenSpeedBoost(sim: WorldSim, player: SimPlayerState = sim.player): boolean {
+  if (sim.map.isBossRoom || sim.map.getSurfaceAtWorld(player.x, player.y) !== 'grass') return false;
+  player.pollenSpeedBoostTimer = BIOME1_POLLEN_SPEED_BOOST_DURATION_SEC;
+  if (!sim.stressTestActive) sim.events.push({ kind: 'grass_rustle', x: player.x, y: player.y });
+  return true;
+}
+
+export function triggerMossTablePollenArmorBurst(sim: WorldSim, prop: SimPropState): number {
+  let healedCount = 0;
+  for (const pl of sim.getAllPlayers()) {
+    if (pl.lifeState !== 'alive' || pl.hp <= 0) continue;
+    if (distance(prop.x, prop.y, pl.x, pl.y) <= MOSS_TABLE_POLLEN_ARMOR_RADIUS + pl.radius) {
+      pl.armor = Math.min(pl.maxArmor, pl.armor + 1);
+      healedCount++;
+    }
+  }
+  return healedCount;
+}
+
+export function detonateVolatileSporePod(sim: WorldSim, pod: SimPropState): void {
+  if (pod.hp <= 0 && !pod.explosive) return;
+  pod.hp = 0;
+  pod.fuseTimer = 0;
+  pod.explosive = false;
+
+  const ownerId = pod.slideOwnerPlayerId ?? sim.player.id;
+  sim.events.push({ kind: 'prop_destroyed', propId: pod.id, propKind: pod.kind, x: pod.x, y: pod.y });
+  sim.events.push({ kind: 'explosion', x: pod.x, y: pod.y, radius: VOLATILE_SPORE_POD_BLAST_RADIUS, damage: 12, sourceDefId: 'volatile_spore_pod' });
+
+  for (let i = 0; i < sim.enemies.length; i++) {
+    const e = sim.enemies[i]!;
+    if (e.hp <= 0 || e.aiState === 'spawning') continue;
+    if (distance(pod.x, pod.y, e.x, e.y) <= VOLATILE_SPORE_POD_BLAST_RADIUS + e.radius) {
+      e.rootedTimer = Math.max(e.rootedTimer, VOLATILE_SPORE_POD_ROOT_SEC);
+      e.vx = 0; e.vy = 0;
+      sim.events.push({ kind: 'status_applied', targetId: e.id, status: 'rooted', x: e.x, y: e.y });
+      sim.applyElementStatusToEnemy(e, 'poison', 12, ownerId);
+      if (e.hp > 0 && e.poisonTimer <= 0) {
+        e.poisonTimer = 4.0; e.poisonStacks = Math.max(1, e.poisonStacks); e.poisonTickTimer = 0.6;
+      }
+    }
+  }
+}
+
+export function collapseRottenTotemPillar(sim: WorldSim, pillar: SimPropState, fallAngle?: number, attackerId = sim.player.id): boolean {
+  if (pillar.coverState === 'fallen') return false;
+  const resolvedAngle =
+    fallAngle ??
+    pillar.fallAngle ??
+    (distance(pillar.x, pillar.y, sim.player.x, sim.player.y) > 0.001
+      ? Math.atan2(pillar.y - sim.player.y, pillar.x - sim.player.x)
+      : sim.player.aimAngle);
+
+  pillar.hp = 0; pillar.destructible = false; pillar.blocksMovement = false; pillar.blocksEnemyProjectiles = false;
+  pillar.coverState = 'fallen'; pillar.fallAngle = resolvedAngle;
+  sim.events.push({ kind: 'prop_destroyed', propId: pillar.id, propKind: pillar.kind, x: pillar.x, y: pillar.y });
+
+  const dirX = Math.cos(resolvedAngle);
+  const dirY = Math.sin(resolvedAngle);
+  const halfWidth = ROTTEN_TOTEM_FALL_WIDTH * 0.5;
+
+  for (let i = 0; i < sim.enemies.length; i++) {
+    const e = sim.enemies[i]!;
+    if (e.hp <= 0 || e.isDummy) continue;
+    const relX = e.x - pillar.x;
+    const relY = e.y - pillar.y;
+    const along = relX * dirX + relY * dirY;
+    const signedPerp = -relX * dirY + relY * dirX;
+    const clampedAlong = Math.max(0, Math.min(ROTTEN_TOTEM_FALL_LENGTH, along));
+    const clampedPerp = Math.max(-halfWidth, Math.min(halfWidth, signedPerp));
+    if (along >= 0 && Math.hypot(along - clampedAlong, signedPerp - clampedPerp) <= e.radius) {
+      const dmg = computeHazardDamage(e, sim.currentFloor, 28);
+      e.hp = Math.max(0, e.hp - dmg); e.hitFlashTimer = 0.14; e.lastHitDmg = dmg;
+      e.stunTimer = Math.max(e.stunTimer ?? 0, ROTTEN_TOTEM_STUN_SEC);
+      e.aiState = 'stunned'; e.stateTimer = Math.max(e.stateTimer, ROTTEN_TOTEM_STUN_SEC);
+      e.vx = 0; e.vy = 0;
+      sim.events.push({
+        kind: 'damage_dealt', targetId: e.id, targetKind: 'enemy', x: e.x, y: e.y,
+        amount: dmg, isCrit: false, hitArmor: false, element: 'none', knockbackX: 0, knockbackY: 0,
+      });
+      sim.checkBossPhaseTransitions(e);
+      if (e.hp <= 0) sim.handleEnemyKilled(e, attackerId);
+    }
+  }
+  return true;
+}
+
+export function clearEnemyProjectilesAroundProp(sim: WorldSim, x: number, y: number, radius: number): number {
   const destroyedIds: number[] = [];
   for (let i = sim.projectiles.length - 1; i >= 0; i--) {
     const proj = sim.projectiles[i]!;
@@ -111,36 +203,18 @@ export function clearEnemyProjectilesAroundProp(
       sim.releaseProjectileToPool(proj);
     }
   }
-  if (destroyedIds.length > 0) {
-    sim.events.push({ kind: 'projectiles_destroyed', ids: destroyedIds });
-  }
+  if (destroyedIds.length > 0) sim.events.push({ kind: 'projectiles_destroyed', ids: destroyedIds });
   return destroyedIds.length;
 }
 
-export function flipCoverProp(
-  sim: WorldSim,
-  prop: SimPropState,
-  actor: SimPlayerState = sim.player,
-): boolean {
-  if (prop.hp <= 0 || !isFlippableBarricadeProp(prop.kind) || prop.coverState !== 'low') {
-    return false;
-  }
+export function flipCoverProp(sim: WorldSim, prop: SimPropState, actor: SimPlayerState = sim.player): boolean {
+  if (prop.hp <= 0 || !isFlippableBarricadeProp(prop.kind) || prop.coverState !== 'low') return false;
 
   const flippedHp = getFlippedBarricadeHp(prop.kind);
-  prop.coverState = 'flipped';
-  prop.blocksMovement = true;
-  prop.blocksEnemyProjectiles = true;
-  prop.destructible = true;
-  prop.hp = flippedHp;
-  prop.maxHp = flippedHp;
-  prop.microBlankTimer = FLIP_COVER_MICRO_BLANK_DURATION_SEC;
+  prop.coverState = 'flipped'; prop.blocksMovement = true; prop.blocksEnemyProjectiles = true; prop.destructible = true;
+  prop.hp = flippedHp; prop.maxHp = flippedHp; prop.microBlankTimer = FLIP_COVER_MICRO_BLANK_DURATION_SEC;
 
-  const bulletsCleared = clearEnemyProjectilesAroundProp(
-    sim,
-    prop.x,
-    prop.y,
-    FLIP_COVER_MICRO_BLANK_RADIUS,
-  );
+  const bulletsCleared = clearEnemyProjectilesAroundProp(sim, prop.x, prop.y, FLIP_COVER_MICRO_BLANK_RADIUS);
 
   for (const e of sim.enemies) {
     if (e.hp <= 0) continue;
@@ -159,88 +233,42 @@ export function flipCoverProp(
   }
 
   sim.events.push({
-    kind: 'cover_flipped',
-    propId: prop.id,
-    playerId: actor.id,
-    x: prop.x,
-    y: prop.y,
-    radius: FLIP_COVER_MICRO_BLANK_RADIUS,
-    bulletsCleared,
+    kind: 'cover_flipped', propId: prop.id, playerId: actor.id, x: prop.x, y: prop.y,
+    radius: FLIP_COVER_MICRO_BLANK_RADIUS, bulletsCleared,
   });
-
   return true;
 }
 
-export function flipCoverPropImpl(
-  this: WorldSim,
-  prop: SimPropState,
-  actor: SimPlayerState = this.player,
-): boolean {
+export function flipCoverPropImpl(this: WorldSim, prop: SimPropState, actor: SimPlayerState = this.player): boolean {
   return flipCoverProp(this, prop, actor);
 }
 
-export function kickProp(
-  sim: WorldSim,
-  prop: SimPropState,
-  actor: SimPlayerState = sim.player,
-  customAngle?: number,
-): boolean {
+export function kickProp(sim: WorldSim, prop: SimPropState, actor: SimPlayerState = sim.player, customAngle?: number): boolean {
   if (!isKickableProp(prop)) return false;
-
   const slideAngle = customAngle ?? actor.aimAngle;
-  const speed =
-    prop.kind === 'sliding_ice_block' ? SLIDING_ICE_BLOCK_SPEED : SLIDING_PROP_DEFAULT_SPEED;
+  const speed = prop.kind === 'sliding_ice_block' ? SLIDING_ICE_BLOCK_SPEED : SLIDING_PROP_DEFAULT_SPEED;
 
-  prop.coverState = 'sliding';
-  prop.blocksMovement = false;
-  prop.blocksEnemyProjectiles = false;
-  prop.vx = Math.cos(slideAngle) * speed;
-  prop.vy = Math.sin(slideAngle) * speed;
-  prop.slideOwnerPlayerId = actor.id;
-  prop.hitEnemyIds = [];
-  if (prop.kind === 'sliding_ice_block' && prop.bouncesRemaining === undefined) {
-    prop.bouncesRemaining = 2;
-  }
+  prop.coverState = 'sliding'; prop.blocksMovement = false; prop.blocksEnemyProjectiles = false;
+  prop.vx = Math.cos(slideAngle) * speed; prop.vy = Math.sin(slideAngle) * speed;
+  prop.slideOwnerPlayerId = actor.id; prop.hitEnemyIds = [];
+  if (prop.kind === 'sliding_ice_block' && prop.bouncesRemaining === undefined) prop.bouncesRemaining = 2;
 
-  sim.events.push({
-    kind: 'prop_kicked',
-    propId: prop.id,
-    playerId: actor.id,
-    x: prop.x,
-    y: prop.y,
-    vx: prop.vx,
-    vy: prop.vy,
-  });
-
+  sim.events.push({ kind: 'prop_kicked', propId: prop.id, playerId: actor.id, x: prop.x, y: prop.y, vx: prop.vx, vy: prop.vy });
   return true;
 }
 
-export function kickPropImpl(
-  this: WorldSim,
-  prop: SimPropState,
-  actor: SimPlayerState = this.player,
-  customAngle?: number,
-): boolean {
+export function kickPropImpl(this: WorldSim, prop: SimPropState, actor: SimPlayerState = this.player, customAngle?: number): boolean {
   return kickProp(this, prop, actor, customAngle);
 }
 
-export function triggerMeleeKickProps(
-  sim: WorldSim,
-  player: SimPlayerState,
-  halfArc: number,
-  range: number,
-  attackAngle = player.aimAngle,
-): number {
+export function triggerMeleeKickProps(sim: WorldSim, player: SimPlayerState, halfArc: number, range: number, attackAngle = player.aimAngle): number {
   let kickedCount = 0;
   for (const prop of sim.props) {
     if (!isKickableProp(prop)) continue;
     const dist = distance(player.x, player.y, prop.x, prop.y);
     if (dist > range + prop.radius) continue;
     const angToProp = Math.atan2(prop.y - player.y, prop.x - player.x);
-    if (
-      dist <= player.radius + prop.radius + 8 ||
-      Math.abs(angleDiff(attackAngle, angToProp)) <= halfArc
-    ) {
+    if (dist <= player.radius + prop.radius + 8 || Math.abs(angleDiff(attackAngle, angToProp)) <= halfArc) {
       if (kickProp(sim, prop, player, attackAngle)) kickedCount++;
     }
   }
@@ -255,10 +283,7 @@ function isEnemyEntity(entity: { x: number; y: number; radius: number }): entity
   return 'defId' in entity && 'aiState' in entity && 'kbVx' in entity;
 }
 
-export function resolvePropMovementCollision(
-  sim: WorldSim,
-  entity: { x: number; y: number; radius: number },
-): void {
+export function resolvePropMovementCollision(sim: WorldSim, entity: { x: number; y: number; radius: number }): void {
   const asPlayer = isPlayerEntity(entity) ? entity : null;
   const asEnemy = isEnemyEntity(entity) ? entity : null;
 
@@ -280,18 +305,9 @@ export function resolvePropMovementCollision(
         const toPropLen = Math.max(0.0001, dist);
         const toPropX = (prop.x - asPlayer.x) / toPropLen;
         const toPropY = (prop.y - asPlayer.y) / toPropLen;
-
-        let dashDirX = asPlayer.dashDirX;
-        let dashDirY = asPlayer.dashDirY;
-        const dashLen = Math.hypot(dashDirX, dashDirY);
-        if (dashLen > 0.0001) {
-          dashDirX /= dashLen;
-          dashDirY /= dashLen;
-        } else {
-          dashDirX = Math.cos(asPlayer.aimAngle);
-          dashDirY = Math.sin(asPlayer.aimAngle);
-        }
-
+        const dashLen = Math.hypot(asPlayer.dashDirX, asPlayer.dashDirY);
+        const dashDirX = dashLen > 0.0001 ? asPlayer.dashDirX / dashLen : Math.cos(asPlayer.aimAngle);
+        const dashDirY = dashLen > 0.0001 ? asPlayer.dashDirY / dashLen : Math.sin(asPlayer.aimAngle);
         if (dashDirX * toPropX + dashDirY * toPropY >= DASH_KICK_DOT_THRESHOLD) {
           kickProp(sim, prop, asPlayer, asPlayer.aimAngle);
           continue;
@@ -319,21 +335,11 @@ export function resolvePropMovementCollision(
   }
 }
 
-export function resolvePropMovementCollisionImpl(
-  this: WorldSim,
-  entity: { x: number; y: number; radius: number },
-): void {
+export function resolvePropMovementCollisionImpl(this: WorldSim, entity: { x: number; y: number; radius: number }): void {
   resolvePropMovementCollision(this, entity);
 }
 
-function pointToSegmentDist(
-  px: number,
-  py: number,
-  x1: number,
-  y1: number,
-  x2: number,
-  y2: number,
-): number {
+function pointToSegmentDist(px: number, py: number, x1: number, y1: number, x2: number, y2: number): number {
   const vx = x2 - x1;
   const vy = y2 - y1;
   const lenSq = vx * vx + vy * vy;
@@ -343,6 +349,10 @@ function pointToSegmentDist(
 }
 
 function destroyTacticalProp(sim: WorldSim, prop: SimPropState): void {
+  if (prop.kind === 'volatile_spore_pod') {
+    detonateVolatileSporePod(sim, prop);
+    return;
+  }
   prop.destructible = true;
   if (prop.hp <= 0) prop.hp = 1;
   sim.damageProp(prop, prop.hp + 999, prop.explosive ? 'burn' : 'none');
@@ -376,6 +386,7 @@ export function updateSlidingPropsImpl(this: WorldSim, dtSec: number): void {
     const ownerId = prop.slideOwnerPlayerId ?? this.player.id;
     if (!prop.hitEnemyIds) prop.hitEnemyIds = [];
 
+    let detonatedOnEnemy = false;
     for (const e of this.enemies) {
       if (e.hp <= 0 || prop.hitEnemyIds.includes(e.id)) continue;
       if (pointToSegmentDist(e.x, e.y, oldX, oldY, nextX, nextY) <= prop.radius + e.radius) {
@@ -389,14 +400,23 @@ export function updateSlidingPropsImpl(this: WorldSim, dtSec: number): void {
           e.aiState = 'stunned';
           e.stateTimer = Math.max(e.stateTimer, SLIDING_PROP_ENEMY_STUN_SEC);
         }
+        if (prop.kind === 'volatile_spore_pod') {
+          prop.x = e.x;
+          prop.y = e.y;
+          detonateVolatileSporePod(this, prop);
+          detonatedOnEnemy = true;
+          break;
+        }
       }
     }
+    if (detonatedOnEnemy) continue;
 
     let hitPropObstacle = false;
     for (const other of this.props) {
       if (other.id === prop.id || other.hp <= 0 || !other.blocksMovement) continue;
       if (pointToSegmentDist(other.x, other.y, oldX, oldY, nextX, nextY) <= prop.radius + other.radius) {
         hitPropObstacle = true;
+        if (other.kind === 'rotten_totem_pillar') collapseRottenTotemPillar(this, other, slideAngle, ownerId);
         break;
       }
     }
@@ -421,15 +441,17 @@ export function updateSlidingPropsImpl(this: WorldSim, dtSec: number): void {
   }
 }
 
-export function triggerEnemyWallSlam(
-  sim: WorldSim,
-  e: SimEnemyState,
-  hitProp?: SimPropState,
-  preStepKbSpeed?: number,
-): boolean {
+export function triggerEnemyWallSlam(sim: WorldSim, e: SimEnemyState, hitProp?: SimPropState, preStepKbSpeed?: number): boolean {
   if (e.hp <= 0 || e.isDummy) return false;
   const kbSpeed = Math.max(Math.hypot(e.kbVx, e.kbVy), preStepKbSpeed ?? 0);
-  if (kbSpeed < WALL_SLAM_SPEED_THRESHOLD || (e.wallSlamCooldownTimer ?? 0) > 0) return false;
+  if (kbSpeed < WALL_SLAM_SPEED_THRESHOLD || (e.wallSlamCooldownTimer ?? 0) <= 0 === false) return false;
+
+  const slamImpactAngle =
+    Math.hypot(e.kbVx, e.kbVy) > 0.001
+      ? Math.atan2(e.kbVy, e.kbVx)
+      : hitProp
+        ? Math.atan2(hitProp.y - e.y, hitProp.x - e.x)
+        : 0;
 
   e.wallSlamCooldownTimer = e.isBoss ? 2.5 : WALL_SLAM_COOLDOWN_SEC;
   const slamDmg = computeWallSlamDamage(e, sim.currentFloor);
@@ -439,26 +461,19 @@ export function triggerEnemyWallSlam(
     e.bossStaggerAccum = (e.bossStaggerAccum ?? 0) + 1;
   } else {
     e.stunTimer = Math.max(e.stunTimer ?? 0, WALL_SLAM_STUN_SEC);
-    e.aiState = 'stunned';
-    e.stateTimer = Math.max(e.stateTimer, WALL_SLAM_STUN_SEC);
-    e.vx = 0;
-    e.vy = 0;
+    e.aiState = 'stunned'; e.stateTimer = Math.max(e.stateTimer, WALL_SLAM_STUN_SEC);
+    e.vx = 0; e.vy = 0;
   }
 
   let shattered = false;
   if (e.frozenTimer > 0) {
-    shattered = true;
-    e.frozenTimer = 0;
-    e.chillTimer = 0;
-    e.chillStacks = 0;
+    shattered = true; e.frozenTimer = 0; e.chillTimer = 0; e.chillStacks = 0;
     sim.events.push({ kind: 'status_applied', targetId: e.id, status: 'shatter', x: e.x, y: e.y });
   }
 
   if (!e.bossBurrowed && !(e.isBoss && (e.bossPhaseTransitionTimer ?? 0) > 0)) {
-    const effectiveSlamDmg =
-      e.isBoss && sim.hasActiveBossGuardians() ? Math.max(1, Math.round(slamDmg * 0.35)) : slamDmg;
-    e.hp = Math.max(0, e.hp - effectiveSlamDmg);
-    e.hitFlashTimer = 0.12;
+    const effectiveSlamDmg = e.isBoss && sim.hasActiveBossGuardians() ? Math.max(1, Math.round(slamDmg * 0.35)) : slamDmg;
+    e.hp = Math.max(0, e.hp - effectiveSlamDmg); e.hitFlashTimer = 0.12;
     sim.events.push({
       kind: 'damage_dealt', targetId: e.id, targetKind: 'enemy', x: e.x, y: e.y,
       amount: effectiveSlamDmg, isCrit: false, hitArmor: false, element: 'none', knockbackX: 0, knockbackY: 0,
@@ -467,13 +482,14 @@ export function triggerEnemyWallSlam(
 
   sim.events.push({ kind: 'wall_slam', enemyId: e.id, x: e.x, y: e.y, damage: slamDmg, shattered });
   if (shattered && e.hp > 0) {
-    const shatterReactionDmg = Math.max(18, Math.round(slamDmg * 1.35));
-    sim.triggerElementalReaction(e, 'shatter', shatterReactionDmg, e.lastElementOwnerId || attackerId, attackerId);
+    sim.triggerElementalReaction(e, 'shatter', Math.max(18, Math.round(slamDmg * 1.35)), e.lastElementOwnerId || attackerId, attackerId);
   }
   if (e.hp <= 0) sim.handleEnemyKilled(e, attackerId);
-  if (hitProp && hitProp.destructible && hitProp.hp > 0) sim.damageProp(hitProp, 25, 'none');
-  e.kbVx *= 0.25;
-  e.kbVy *= 0.25;
+  if (hitProp && hitProp.destructible && hitProp.hp > 0) {
+    if (hitProp.kind === 'rotten_totem_pillar') collapseRottenTotemPillar(sim, hitProp, slamImpactAngle, attackerId);
+    else sim.damageProp(hitProp, 25, 'none');
+  }
+  e.kbVx *= 0.25; e.kbVy *= 0.25;
   return true;
 }
 
@@ -487,37 +503,22 @@ export function resolveEnemyChasmRingOut(sim: WorldSim, e: SimEnemyState): boole
 
   if (e.isElite) {
     const ringOutDmg = Math.max(1, Math.round(0.30 * e.maxHp));
-    e.hp = Math.max(0, e.hp - ringOutDmg);
-    e.hitFlashTimer = 0.14;
-    e.x = safePt.x;
-    e.y = safePt.y;
-    e.prevX = safePt.x;
-    e.prevY = safePt.y;
-    e.kbVx = 0;
-    e.kbVy = 0;
-    e.vx = 0;
-    e.vy = 0;
-    e.stunTimer = Math.max(e.stunTimer ?? 0, 1.0);
-    e.aiState = 'stunned';
-    e.stateTimer = Math.max(e.stateTimer, 1.0);
+    e.hp = Math.max(0, e.hp - ringOutDmg); e.hitFlashTimer = 0.14;
+    e.x = safePt.x; e.y = safePt.y; e.prevX = safePt.x; e.prevY = safePt.y;
+    e.kbVx = 0; e.kbVy = 0; e.vx = 0; e.vy = 0;
+    e.stunTimer = Math.max(e.stunTimer ?? 0, 1.0); e.aiState = 'stunned'; e.stateTimer = Math.max(e.stateTimer, 1.0);
     sim.events.push({ kind: 'ring_out', enemyId: e.id, x: safePt.x, y: safePt.y, isElite: true, damage: ringOutDmg });
     if (e.hp <= 0) sim.handleEnemyKilled(e, attackerId);
     return true;
   }
 
   const ringOutDmg = e.hp;
-  const chasmX = e.x;
-  const chasmY = e.y;
+  const chasmX = e.x; const chasmY = e.y;
   const pickupsBefore = sim.pickups.length;
   const worldItemsBefore = sim.worldItems.length;
 
-  e.hp = 0;
-  e.kbVx = 0;
-  e.kbVy = 0;
-  e.vx = 0;
-  e.vy = 0;
-  e.x = safePt.x;
-  e.y = safePt.y;
+  e.hp = 0; e.kbVx = 0; e.kbVy = 0; e.vx = 0; e.vy = 0;
+  e.x = safePt.x; e.y = safePt.y;
 
   sim.events.push({ kind: 'ring_out', enemyId: e.id, x: chasmX, y: chasmY, isElite: false, damage: ringOutDmg });
   sim.handleEnemyKilled(e, attackerId);
@@ -533,7 +534,6 @@ export function resolveEnemyChasmRingOut(sim: WorldSim, e: SimEnemyState): boole
     wi.x = wPt.x; wi.y = wPt.y; wi.fromX = wPt.x; wi.fromY = wPt.y;
   }
 
-  e.x = chasmX;
-  e.y = chasmY;
+  e.x = chasmX; e.y = chasmY;
   return true;
 }

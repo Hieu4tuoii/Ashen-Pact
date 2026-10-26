@@ -744,7 +744,7 @@ export function updateEnemyStatusAndSurfaceImpl(
 
   if (e.burnTimer > 0) {
     e.burnTimer = Math.max(0, e.burnTimer - dtSec);
-    if (!this.stressTestActive && (surf === 'oil' || surf === 'grass')) {
+    if (!this.stressTestActive && (surf === 'oil' || surf === 'grass' || (surf === 'poison_swamp' && !this.map.isBossRoom))) {
       this.map.igniteSurfaceInRadius(e.x, e.y, 18);
     }
     e.burnTickTimer -= dtSec;

@@ -4,6 +4,7 @@ import { MAX_WEAPON_SLOTS, WEAPONS, estimateWeaponDps } from '../data/weapons.js
 import { approach, distance } from '../math/vec2.js';
 import { INPUT_BUTTON } from '../protocol/messages.js';
 import { generateDungeonFloor } from './dungeon-gen.js';
+import { findNextWalkableWaypoint } from './arena-room-archetypes.js';
 import { findInteractTarget } from './interact-target.js';
 import { flipCoverProp } from './sim-tactical-physics.js';
 import { lerpSpeed, type SimSummonState, type SimDoorState, type SimNpcState, type SimPlayerState, type SimEnemyState, type SimPickupState } from './world-sim-types.js';
@@ -456,18 +457,34 @@ export function stepBotAutoPlayImpl(this: WorldSim, _dtSec: number): void {
     );
 
     if (nearbyPickup) {
-      const pkAng = Math.atan2(nearbyPickup.y - p.y, nearbyPickup.x - p.x);
+      const wp = findNextWalkableWaypoint(this.map, p.x, p.y, nearbyPickup.x, nearbyPickup.y);
+      const pkAng = Math.atan2(wp.y - p.y, wp.x - p.x);
       moveX = Math.cos(pkAng);
       moveY = Math.sin(pkAng);
     } else if (nearestDist > 135) {
-      moveX = Math.cos(angleToEnemy) * 0.85 + Math.cos(strafeAng) * 0.55;
-      moveY = Math.sin(angleToEnemy) * 0.85 + Math.sin(strafeAng) * 0.55;
+      const wp = findNextWalkableWaypoint(this.map, p.x, p.y, nearestEnemy.x, nearestEnemy.y);
+      const wpAng = Math.atan2(wp.y - p.y, wp.x - p.x);
+      moveX = Math.cos(wpAng) * 0.85 + Math.cos(strafeAng) * 0.55;
+      moveY = Math.sin(wpAng) * 0.85 + Math.sin(strafeAng) * 0.55;
     } else if (nearestDist < 85) {
       moveX = -Math.cos(angleToEnemy) * 0.8 + Math.cos(strafeAng) * 0.6;
       moveY = -Math.sin(angleToEnemy) * 0.8 + Math.sin(strafeAng) * 0.6;
     } else {
       moveX = Math.cos(strafeAng);
       moveY = Math.sin(strafeAng);
+    }
+
+    for (let i = 0; i < this.props.length; i++) {
+      const prop = this.props[i]!;
+      if (prop.hp <= 0 || !prop.blocksMovement) continue;
+      const dx = prop.x - p.x;
+      const dy = prop.y - p.y;
+      const d = Math.hypot(dx, dy);
+      if (d <= p.radius + prop.radius + 24 && dx * moveX + dy * moveY > 0) {
+        const side = dx * moveY - dy * moveX >= 0 ? -1 : 1;
+        moveX += -moveY * side * 1.25;
+        moveY += moveX * side * 1.25;
+      }
     }
 
     // Weave tangentially between incoming enemy radial projectiles
@@ -533,6 +550,43 @@ export function stepBotAutoPlayImpl(this: WorldSim, _dtSec: number): void {
     return;
   }
 
+  const steerBotToPoint = (tx: number, ty: number): void => {
+    const wp = findNextWalkableWaypoint(this.map, p.x, p.y, tx, ty);
+    const baseAng = Math.atan2(wp.y - p.y, wp.x - p.x);
+    let moveX = Math.cos(baseAng);
+    let moveY = Math.sin(baseAng);
+    let aimAngle = baseAng;
+    let buttons = 0;
+
+    for (let i = 0; i < this.props.length; i++) {
+      const prop = this.props[i]!;
+      if (prop.hp <= 0 || !prop.blocksMovement) continue;
+      const dx = prop.x - p.x;
+      const dy = prop.y - p.y;
+      const d = Math.hypot(dx, dy);
+      if (d <= p.radius + prop.radius + 26 && dx * moveX + dy * moveY > 0) {
+        const side = dx * moveY - dy * moveX >= 0 ? -1 : 1;
+        const perpX = -moveY * side;
+        const perpY = moveX * side;
+        moveX += perpX * 1.35;
+        moveY += perpY * 1.35;
+        if (prop.destructible) {
+          aimAngle = Math.atan2(dy, dx);
+          buttons |= INPUT_BUTTON.FIRE;
+        }
+      }
+    }
+
+    this.setPlayerInput({
+      seq: this.tick,
+      tick: this.tick,
+      moveX,
+      moveY,
+      aimAngle,
+      buttons,
+    });
+  };
+
   // 2. Open unopened chests in current room
   const unopenedChest = this.chests.find((c) => !c.opened);
   if (unopenedChest) {
@@ -540,15 +594,7 @@ export function stepBotAutoPlayImpl(this: WorldSim, _dtSec: number): void {
     if (d <= 56) {
       this.openChest(unopenedChest);
     } else {
-      const ang = Math.atan2(unopenedChest.y - p.y, unopenedChest.x - p.x);
-      this.setPlayerInput({
-        seq: this.tick,
-        tick: this.tick,
-        moveX: Math.cos(ang),
-        moveY: Math.sin(ang),
-        aimAngle: ang,
-        buttons: INPUT_BUTTON.INTERACT,
-      });
+      steerBotToPoint(unopenedChest.x, unopenedChest.y);
     }
     return;
   }
@@ -595,15 +641,7 @@ export function stepBotAutoPlayImpl(this: WorldSim, _dtSec: number): void {
       }
       this.pickupOrBuyWorldItem(freeItem, p);
     } else {
-      const ang = Math.atan2(freeItem.y - p.y, freeItem.x - p.x);
-      this.setPlayerInput({
-        seq: this.tick,
-        tick: this.tick,
-        moveX: Math.cos(ang),
-        moveY: Math.sin(ang),
-        aimAngle: ang,
-        buttons: INPUT_BUTTON.INTERACT,
-      });
+      steerBotToPoint(freeItem.x, freeItem.y);
     }
     return;
   }
@@ -615,15 +653,7 @@ export function stepBotAutoPlayImpl(this: WorldSim, _dtSec: number): void {
     if (d <= 58) {
       this.activateShrine(unusedShrine, p);
     } else {
-      const ang = Math.atan2(unusedShrine.y - p.y, unusedShrine.x - p.x);
-      this.setPlayerInput({
-        seq: this.tick,
-        tick: this.tick,
-        moveX: Math.cos(ang),
-        moveY: Math.sin(ang),
-        aimAngle: ang,
-        buttons: INPUT_BUTTON.INTERACT,
-      });
+      steerBotToPoint(unusedShrine.x, unusedShrine.y);
     }
     return;
   }
@@ -634,15 +664,7 @@ export function stepBotAutoPlayImpl(this: WorldSim, _dtSec: number): void {
     if (d <= 58) {
       this.enterPortal();
     } else {
-      const ang = Math.atan2(this.portalY - p.y, this.portalX - p.x);
-      this.setPlayerInput({
-        seq: this.tick,
-        tick: this.tick,
-        moveX: Math.cos(ang),
-        moveY: Math.sin(ang),
-        aimAngle: ang,
-        buttons: INPUT_BUTTON.INTERACT,
-      });
+      steerBotToPoint(this.portalX, this.portalY);
     }
     return;
   }
@@ -654,35 +676,7 @@ export function stepBotAutoPlayImpl(this: WorldSim, _dtSec: number): void {
     if (d <= 60) {
       this.enterRoom(nextDoor.targetRoomId, nextDoor.dir);
     } else {
-      const cx = this.map.width * 0.5;
-      const cy = this.map.height * 0.5;
-      // Route through the central cross corridor if far from axis to avoid corner pillars
-      let tx = nextDoor.x;
-      let ty = nextDoor.y;
-      if (
-        (nextDoor.dir === 'N' || nextDoor.dir === 'S') &&
-        Math.abs(p.x - nextDoor.x) > 90 &&
-        Math.abs(p.y - cy) > 70
-      ) {
-        tx = cx;
-        ty = cy;
-      } else if (
-        (nextDoor.dir === 'E' || nextDoor.dir === 'W') &&
-        Math.abs(p.y - nextDoor.y) > 90 &&
-        Math.abs(p.x - cx) > 70
-      ) {
-        tx = cx;
-        ty = cy;
-      }
-      const ang = Math.atan2(ty - p.y, tx - p.x);
-      this.setPlayerInput({
-        seq: this.tick,
-        tick: this.tick,
-        moveX: Math.cos(ang),
-        moveY: Math.sin(ang),
-        aimAngle: ang,
-        buttons: INPUT_BUTTON.INTERACT,
-      });
+      steerBotToPoint(nextDoor.x, nextDoor.y);
     }
   }
 }

@@ -6,7 +6,11 @@ import { INPUT_BUTTON, type PlayerInputPacket, TILE_SIZE } from '../protocol/mes
 import type { SurfaceKind } from './arena-map.js';
 import { findNearestWalkablePoint } from './arena-room-archetypes.js';
 import { syncActiveWeaponCadenceState } from './sim-coop-hub.js';
-import { triggerMeleeKickProps } from './sim-tactical-physics.js';
+import {
+  BIOME1_POLLEN_SPEED_MULTIPLIER,
+  triggerGrassPollenSpeedBoost,
+  triggerMeleeKickProps,
+} from './sim-tactical-physics.js';
 import { DASH_DURATION_SEC, DASH_IFRAME_SEC, DASH_COOLDOWN_SEC, DASH_SPEED_MULTIPLIER, MELEE_RANGE, type SimPlayerState } from './world-sim-types.js';
 import type { WorldSim } from './world-sim.js';
 
@@ -169,6 +173,27 @@ export function updateSinglePlayerStateImpl(this: WorldSim,
     const nextConv = p.elementalConvergenceTimer - dtSec;
     p.elementalConvergenceTimer = nextConv < 1e-6 ? 0 : nextConv;
   }
+  if ((p.pollenSpeedBoostTimer ?? 0) > 0) {
+    const nextPollen = (p.pollenSpeedBoostTimer ?? 0) - dtSec;
+    p.pollenSpeedBoostTimer = nextPollen < 1e-6 ? 0 : nextPollen;
+  }
+  if (justPressed & INPUT_BUTTON.RELOAD_VENT) {
+    if (p.reloadTimer > 0 && p.reloadDuration > 0 && !p.reloadLockout) {
+      const progress = 1 - p.reloadTimer / p.reloadDuration;
+      if (progress >= 0.45 && progress <= 0.7) {
+        p.clipAmmo = p.clipMax;
+        p.reloadTimer = 0;
+        p.reloadLockout = false;
+        p.overclockedNextShot = true;
+        triggerGrassPollenSpeedBoost(this, p);
+      } else {
+        p.reloadLockout = true;
+      }
+    } else if (p.reloadTimer <= 0 && p.clipMax > 0 && p.clipAmmo < p.clipMax) {
+      p.reloadTimer = p.reloadDuration > 0 ? p.reloadDuration : 1.0;
+      p.reloadLockout = false;
+    }
+  }
 
   // Engineer passive: allies within 4 tiles (128u) regenerate armor 15% faster!
   let hasNearbyEngineer = p.characterId === 'engineer' && p.lifeState === 'alive';
@@ -249,6 +274,9 @@ export function updateSinglePlayerStateImpl(this: WorldSim,
     const dashSpeed = p.moveSpeed * DASH_SPEED_MULTIPLIER;
     p.vx = p.dashDirX * dashSpeed;
     p.vy = p.dashDirY * dashSpeed;
+    if (surf === 'grass') {
+      triggerGrassPollenSpeedBoost(this, p);
+    }
     this.events.push({
       kind: 'dash_started',
       playerId: p.id,
@@ -276,6 +304,7 @@ export function updateSinglePlayerStateImpl(this: WorldSim,
 
   // Surface speed & friction modifiers (oil slows by 15%, ice reduces traction; Elemental Convergence grants +20% speed)
   let speedMult = hadConvergenceBeforeTick || p.elementalConvergenceTimer > 0 ? 1.2 : 1.0;
+  if ((p.pollenSpeedBoostTimer ?? 0) > 0) speedMult *= BIOME1_POLLEN_SPEED_MULTIPLIER;
   if (surf === 'oil' || surf === 'poison_swamp') speedMult *= 0.85;
   if (p.chillTimer > 0) speedMult *= 0.7;
 
@@ -572,6 +601,7 @@ export function tryFireActiveWeaponImpl(this: WorldSim, p: SimPlayerState = this
       const prop = this.props[i]!;
       if (!prop.destructible || prop.hp <= 0 || prop.coverState === 'sliding') continue;
       if (isCircleInCone(p.x, p.y, p.aimAngle, halfArc, meleeRange + 6, prop)) {
+        prop.fallAngle = p.aimAngle;
         this.damageProp(prop, baseMeleeDmg, shotElement);
       }
     }

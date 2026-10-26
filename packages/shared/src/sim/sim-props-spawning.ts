@@ -7,8 +7,11 @@ import { type PlayerInputPacket, TILE_SIZE } from '../protocol/messages.js';
 import type { DungeonRoomNode } from './dungeon-gen.js';
 import { syncActiveWeaponCadenceState } from './sim-coop-hub.js';
 import {
+  collapseRottenTotemPillar,
+  detonateVolatileSporePod,
   getTacticalPropSpawnSpec,
   resolvePropMovementCollision,
+  triggerMossTablePollenArmorBurst,
   updateSlidingPropsImpl,
 } from './sim-tactical-physics.js';
 import { PHASE1_SAMPLE_ENEMIES, ELEMENT_CYCLE_ORDER, ENEMY_SPAWN_WARMUP_SEC, SPORE_EXPLOSION_RADIUS, BARREL_EXPLOSION_RADIUS, BOSS_ERUPT_RADIUS, MAX_TACTICAL_PROPS_PER_ROOM, type PropKind, type SimPropState, type SimChestState, type SimWorldItemState, type SimEnemyState } from './world-sim-types.js';
@@ -790,12 +793,29 @@ export function damagePropImpl(this: WorldSim, prop: SimPropState, amount: numbe
   prop.hp = Math.max(0, prop.hp - amount);
   prop.hitFlashTimer = 0.1;
 
+  if (prop.kind === 'volatile_spore_pod') {
+    if (prop.hp <= 0) {
+      detonateVolatileSporePod(this, prop);
+    }
+    return;
+  }
+
+  if (prop.kind === 'rotten_totem_pillar') {
+    if (prop.hp <= 0) {
+      collapseRottenTotemPillar(this, prop, prop.fallAngle);
+    }
+    return;
+  }
+
   if (prop.explosive && (prop.hp <= 0 || element === 'burn')) {
     this.detonateExplosiveBarrel(prop);
     return;
   }
 
   if (prop.hp <= 0) {
+    if (prop.kind === 'moss_table') {
+      triggerMossTablePollenArmorBurst(this, prop);
+    }
     this.events.push({
       kind: 'prop_destroyed',
       propId: prop.id,
