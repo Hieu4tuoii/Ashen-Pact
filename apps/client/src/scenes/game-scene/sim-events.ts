@@ -347,7 +347,7 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
           this.fx.spawnFloatingAlert(
             ev.x,
             ev.y,
-            isEn ? '🎯 -1.5s CD & FULL CLIP' : '🎯 -1.5s CD & ĐẦY ĐẠN',
+            isEn ? '🎯 -2.0s CD & OVERCLOCK!' : '🎯 -2.0s CD & ĐẦY ĐẠN!',
           );
         }
         if (allowStressSfx) {

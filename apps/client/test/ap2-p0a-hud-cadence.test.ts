@@ -135,11 +135,14 @@ describe('P0A.5 — HUD Weapon Cadence Bar & Labels (CLIP_RELOAD / HEAT_VENT / M
     const sim = new WorldSim(42);
     const p = sim.player;
     const fillColors: number[] = [];
+    const fillRects: Array<{ x: number; y: number; w: number; h: number }> = [];
     const mockGraphics = {
       fillStyle: (color: number) => {
         fillColors.push(color);
       },
-      fillRect: () => {},
+      fillRect: (x: number, y: number, w: number, h: number) => {
+        fillRects.push({ x, y, w, h });
+      },
     } as unknown as Phaser.GameObjects.Graphics;
 
     const clipWeapon = Object.values(WEAPONS).find((w) => w.cadenceKind === 'CLIP_RELOAD')!;
@@ -150,6 +153,19 @@ describe('P0A.5 — HUD Weapon Cadence Bar & Labels (CLIP_RELOAD / HEAT_VENT / M
     drawHudWeaponCadenceBar(mockGraphics, p, clipWeapon);
     expect(fillColors).toContain(0xf97316); // Finale shot segment
     expect(fillColors).toContain(0xfacc15); // Normal bullet segment
+
+    // Reloading Golden Window (45% - 70% => x + width * 0.45, width * 0.25)
+    fillColors.length = 0;
+    fillRects.length = 0;
+    p.reloadTimer = (clipWeapon.reloadDurationSec || 1.2) * 0.45; // 55% progress (inside 45% - 70% Golden Window)
+    drawHudWeaponCadenceBar(mockGraphics, p, clipWeapon, 66, 44, 96, 7.5);
+    expect(fillRects).toContainEqual({
+      x: 66 + 96 * 0.45,
+      y: 44.5,
+      w: 96 * 0.25,
+      h: 6.5,
+    });
+    expect(fillColors[fillColors.length - 1]).toBe(0x38bdf8);
 
     fillColors.length = 0;
     const heatWeapon = Object.values(WEAPONS).find((w) => w.cadenceKind === 'HEAT_VENT')!;

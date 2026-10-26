@@ -148,7 +148,7 @@
       "ping": "Z / Middle Click : Contextual Ping (Enemy, Loot, Revive)",
       "emote": "Hold T (+ Mouse or 1-4) : Open quick team Emote Wheel",
       "pause": "Esc : Pause & Settings",
-      "reactionsTip": "⚡ 6 Elemental Reactions: Vaporize (Burn+Chill), Shatter (Frozen+Heavy Hit), Superconduct (Shock+Chill), Toxic Blast (Burn+Poison), Paralysis (Shock+Poison), Overload (Burn+Shock). 2-player cross-trigger = Elemental Convergence (+20% move & fire speed for 4s, -0.5s skill CD)!",
+      "reactionsTip": "⚡ 6 Elemental Reactions: Vaporize (Burn+Chill), Shatter (Frozen+Heavy Hit), Superconduct (Shock+Chill), Toxic Blast (Burn+Poison), Paralysis (Shock+Poison), Overload (Burn+Shock). 2-player cross-trigger = Elemental Convergence (+20% move & fire speed for 3.0s, instant reload/vent)!",
       "close": "Close Guide [Esc]"
     },
     "credits": {
@@ -317,7 +317,7 @@
       "name": "Vanguard",
       "title": "Tank / Frontline Protector",
       "passiveName": "Iron Will",
-      "passiveDesc": "Armor regenerates after 3.0s out of combat; breaking Armor triggers Steel Counter (+25% damage for 3s).",
+      "passiveDesc": "Armor regenerates faster (3.0s delay); each enemy projectile blocked by Ruby Shield Wall reloads 1 round (or vents 15% Heat) and grants +15% damage to the next attack (up to +75%).",
       "skillName": "Ruby Shield Wall",
       "skillDesc": "Deploys a 120° energy shield blocking and storing enemy bullets before releasing a shockwave. Allied bullets fired through the shield gain +30% damage and +1 pierce.",
       "synergy": "Allied and Tesla Turret shots passing through the shield gain +30% damage and +1 target pierce."
@@ -328,8 +328,8 @@
       "passiveName": "Eagle Eye",
       "passiveDesc": "Damage scales with distance to target (up to +30%); +10% base Crit Chance.",
       "skillName": "Predator Arrow",
-      "skillDesc": "Backflips (i-frames) while firing a piercing arrow that Marks enemies for 6s: +25% damage taken from ALL sources, revealed through fog, and drops a Prey Emblem (-1.5s skill CD, instant reload/vent) on death.",
-      "synergy": "Marked targets take +25% damage from the whole team, are prioritized by Tesla Turrets, and drop a Prey Emblem (-1.5s skill CD & instant reload/vent) on death."
+      "skillDesc": "Backflips (i-frames) while firing a piercing arrow that Marks enemies for 6s: +25% damage taken from ALL sources, revealed through fog, and drops a Prey Emblem (-2.0s skill CD, instant Overclocked reload/0% Heat) on death.",
+      "synergy": "Marked targets take +25% damage from the whole team, are prioritized by Tesla Turrets, and drop a Prey Emblem (-2.0s skill CD, instant Overclocked reload/0% Heat) on death."
     },
     "elementalist": {
       "name": "Elementalist",
@@ -338,7 +338,7 @@
       "passiveDesc": "Rotates Fire → Ice → Lightning after each skill cast; primary attacks apply the active element.",
       "skillName": "Elemental Orb",
       "skillDesc": "Launches an orb that expands into a 5s Elemental Zone. Allied bullets flying through the zone are imbued with its element.",
-      "synergy": "Allied bullets passing through the zone adopt its element, triggering Elemental Convergence (+20% move & fire speed for 4s and -0.5s skill CD for both players)."
+      "synergy": "Allies triggering Elemental Reactions on your primed target activate Elemental Convergence for 3.0s (+20% move & fire speed, instant full reload/0% Heat for both players)."
     },
     "druid": {
       "name": "Druid",

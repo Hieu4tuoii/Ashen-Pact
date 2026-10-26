@@ -180,11 +180,11 @@ export function drawHudWeaponCadenceBar(
   if (reloadTimer > 0) {
     const totalReload = Math.max(0.1, wDef.reloadDurationSec || 1.2);
     const progress = clamp(1 - reloadTimer / totalReload, 0, 1);
-    // Sweet-spot window (55% - 75%) marker
+    // Sweet-spot window (45% - 70%) marker
     g.fillStyle(0x38bdf8, 0.28);
-    g.fillRect(x + width * 0.55, y + 0.5, width * 0.2, height - 1);
+    g.fillRect(x + width * 0.45, y + 0.5, width * 0.25, height - 1);
     const fillW = Math.max(1, progress * width);
-    const inSweet = progress >= 0.55 && progress <= 0.75;
+    const inSweet = progress >= 0.45 && progress <= 0.7;
     g.fillStyle(inSweet ? 0x38bdf8 : 0xf59e0b, 0.96);
     g.fillRect(x, y + 0.5, fillW, height - 1);
     return;
