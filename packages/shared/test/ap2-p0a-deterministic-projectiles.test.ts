@@ -334,4 +334,122 @@ describe('AP2 P0A.4 — RELOAD_VENT Input, Deterministic Projectile IDs, Zero-Ru
       expect(activeEnemyProjsAfter.some((p) => p.id === oldEnemyId)).toBe(false);
     }
   });
+
+  it('8. enforces MAX_TACTICAL_PROPS_PER_ROOM (16) and MAX_DEPLOYABLES_PER_PLAYER (8)', () => {
+    const sim = new WorldSim({
+      seed: 4007,
+      spawnInitialWave: false,
+      includeTrainingDummy: false,
+      includeProps: false,
+    });
+    sim.addCoopPlayer(2, 'engineer', 'P2', 2);
+
+    // Spawn 20 props -> capped at MAX_TACTICAL_PROPS_PER_ROOM (16)
+    for (let i = 0; i < 20; i++) {
+      sim.spawnProp('wooden_crate', 100 + i * 20, 200);
+    }
+    expect(sim.props).toHaveLength(MAX_TACTICAL_PROPS_PER_ROOM);
+
+    // Spawn 10 deployables for player 1 and 2 for player 2 -> P1 capped at 8, P2 untouched at 2
+    for (let i = 0; i < 10; i++) {
+      sim.spawnSeedGunLifeBlossom(1, 200 + i * 15, 260);
+    }
+    for (let i = 0; i < 2; i++) {
+      sim.spawnSeedGunLifeBlossom(2, 200 + i * 15, 320);
+    }
+    const p1Summons = sim.summons.filter((s) => s.ownerPlayerId === 1 && s.ttlSec > 0 && s.hp > 0);
+    const p2Summons = sim.summons.filter((s) => s.ownerPlayerId === 2 && s.ttlSec > 0 && s.hp > 0);
+    expect(p1Summons.length).toBeLessThanOrEqual(MAX_DEPLOYABLES_PER_PLAYER);
+    expect(p2Summons).toHaveLength(2);
+  });
+
+  it('9. emits projectiles_destroyed event when enemy bullets are destroyed mid-flight by melee, Vanguard shield, or boss phase transition', () => {
+    const sim = new WorldSim({
+      seed: 4008,
+      spawnInitialWave: false,
+      includeTrainingDummy: false,
+      includeProps: false,
+    });
+
+    // 9a. Melee swing with knight_sword (destroysEnemyBullets = true)
+    sim.player.weaponSlots = ['knight_sword'];
+    sim.player.activeWeaponSlot = 0;
+    sim.player.x = 300;
+    sim.player.y = 260;
+    sim.player.aimAngle = 0;
+
+    const enemyVolley1 = makeVolleyEvent({
+      team: 'enemy',
+      ownerId: 99,
+      weaponId: 'goblin_bow',
+      x: 325,
+      y: 260,
+      angle: Math.PI,
+      pelletCount: 2,
+      spreadRad: 0.05,
+    });
+    sim.spawnDeterministicVolley(enemyVolley1, true);
+    const meleeTargetIds = sim.projectiles.map((p) => p.id);
+    sim.consumeEvents();
+
+    sim.tryFireActiveWeapon(sim.player);
+    const meleeEvents = sim.consumeEvents();
+    const meleeDestroyedEv = meleeEvents.find((e) => e.kind === 'projectiles_destroyed');
+    expect(meleeDestroyedEv).toBeDefined();
+    if (meleeDestroyedEv?.kind === 'projectiles_destroyed') {
+      expect(meleeDestroyedEv.ids).toEqual(expect.arrayContaining(meleeTargetIds));
+    }
+
+    // 9b. Vanguard shield blocking enemy projectile
+    sim.projectiles.length = 0;
+    sim.player.characterId = 'vanguard';
+    sim.player.skillActiveTimer = 2.0;
+    sim.player.aimAngle = 0;
+    const enemyVolley2 = makeVolleyEvent({
+      team: 'enemy',
+      ownerId: 99,
+      weaponId: 'goblin_bow',
+      x: 332,
+      y: 260,
+      angle: Math.PI,
+      speed: 300,
+      pelletCount: 1,
+    });
+    sim.spawnDeterministicVolley(enemyVolley2, true);
+    const shieldTargetId = sim.projectiles[0]!.id;
+    sim.consumeEvents();
+
+    sim.updateProjectiles(1 / 60);
+    const shieldEvents = sim.consumeEvents();
+    const shieldDestroyedEv = shieldEvents.find((e) => e.kind === 'projectiles_destroyed');
+    expect(shieldDestroyedEv).toBeDefined();
+    if (shieldDestroyedEv?.kind === 'projectiles_destroyed') {
+      expect(shieldDestroyedEv.ids).toContain(shieldTargetId);
+    }
+
+    // 9c. Boss phase transition clearing nearby enemy projectiles
+    sim.player.skillActiveTimer = 0;
+    const boss = sim.spawnEnemy('spore_king', 460, 260, true);
+    const enemyVolley3 = makeVolleyEvent({
+      team: 'enemy',
+      ownerId: boss.id,
+      weaponId: 'spore_shot',
+      x: sim.player.x + 40,
+      y: sim.player.y,
+      angle: Math.PI,
+      pelletCount: 1,
+    });
+    sim.spawnDeterministicVolley(enemyVolley3, true);
+    const bossBulletId = sim.projectiles[0]!.id;
+    sim.consumeEvents();
+
+    boss.hp = Math.floor(boss.maxHp * 0.6);
+    sim.checkBossPhaseTransitions(boss);
+    const bossEvents = sim.consumeEvents();
+    const bossDestroyedEv = bossEvents.find((e) => e.kind === 'projectiles_destroyed');
+    expect(bossDestroyedEv).toBeDefined();
+    if (bossDestroyedEv?.kind === 'projectiles_destroyed') {
+      expect(bossDestroyedEv.ids).toContain(bossBulletId);
+    }
+  });
 });

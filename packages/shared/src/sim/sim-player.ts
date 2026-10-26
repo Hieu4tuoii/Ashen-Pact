@@ -534,12 +534,14 @@ export function tryFireActiveWeaponImpl(this: WorldSim, p: SimPlayerState = this
         meleeRange + 12,
         this.queryBulletScratch,
       );
+      const destroyedIds: number[] = [];
       for (let i = 0; i < nearbyBullets.length; i++) {
         const b = nearbyBullets[i]!;
         if (b.team !== 'enemy' || b.ttlSec <= 0) continue;
         if (isCircleInCone(p.x, p.y, p.aimAngle, halfArc, meleeRange + 8, b)) {
           b.ttlSec = 0;
           bulletsDestroyed += 1;
+          destroyedIds.push(b.id);
           const shieldActive = p.characterId === 'vanguard' && p.skillActiveTimer > 0;
           if (shieldActive) {
             p.shieldStoredBullets += 1;
@@ -562,6 +564,12 @@ export function tryFireActiveWeaponImpl(this: WorldSim, p: SimPlayerState = this
             isCrit: false,
           });
         }
+      }
+      if (destroyedIds.length > 0 && !this.stressTestActive) {
+        this.events.push({
+          kind: 'projectiles_destroyed',
+          ids: destroyedIds,
+        });
       }
     }
 

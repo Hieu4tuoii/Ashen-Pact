@@ -6,7 +6,7 @@ import { BIOME_SCALING, COOP_SCALING } from '../data/scaling.js';
 import { type PlayerInputPacket, TILE_SIZE } from '../protocol/messages.js';
 import type { DungeonRoomNode } from './dungeon-gen.js';
 import { syncActiveWeaponCadenceState } from './sim-coop-hub.js';
-import { PHASE1_SAMPLE_ENEMIES, ELEMENT_CYCLE_ORDER, ENEMY_SPAWN_WARMUP_SEC, SPORE_EXPLOSION_RADIUS, BARREL_EXPLOSION_RADIUS, BOSS_ERUPT_RADIUS, type PropKind, type SimPropState, type SimChestState, type SimWorldItemState, type SimEnemyState } from './world-sim-types.js';
+import { PHASE1_SAMPLE_ENEMIES, ELEMENT_CYCLE_ORDER, ENEMY_SPAWN_WARMUP_SEC, SPORE_EXPLOSION_RADIUS, BARREL_EXPLOSION_RADIUS, BOSS_ERUPT_RADIUS, MAX_TACTICAL_PROPS_PER_ROOM, type PropKind, type SimPropState, type SimChestState, type SimWorldItemState, type SimEnemyState } from './world-sim-types.js';
 import type { WorldSim } from './world-sim.js';
 
 export function spawnDefaultArenaPropsImpl(this: WorldSim): void {
@@ -114,6 +114,10 @@ export function spawnPropImpl(this: WorldSim, kind: PropKind, x: number, y: numb
     fuseTimer: 0,
     repaired: false,
   };
+  if (!this.stressTestActive && this.props.length >= MAX_TACTICAL_PROPS_PER_ROOM) {
+    const destructibleIdx = this.props.findIndex((p) => p.destructible);
+    this.props.splice(destructibleIdx >= 0 ? destructibleIdx : 0, 1);
+  }
   this.props.push(prop);
   return prop;
 }

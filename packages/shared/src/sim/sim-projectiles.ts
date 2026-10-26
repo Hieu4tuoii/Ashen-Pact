@@ -4,6 +4,7 @@ import { angleDiff, circleVsCircle, distance } from '../math/vec2.js';
 import { SHOT_FLAG, TILE_SIZE } from '../protocol/messages.js';
 import {
   type BulletVolleySpawnEvent,
+  MAX_DEPLOYABLES_PER_PLAYER,
   MAX_ENEMY_PROJECTILES,
   MAX_PLAYER_PROJECTILES,
   type SimProjectileState,
@@ -139,8 +140,14 @@ export function spawnDeterministicVolleyImpl(this: WorldSim, ev: BulletVolleySpa
 
 export function spawnSeedGunLifeBlossomImpl(this: WorldSim, ownerId: number, x: number, y: number): void {
   if (this.stressTestActive) return;
+  const ownerSummons = this.summons.filter(
+    (s) => s.ownerPlayerId === ownerId && s.hp > 0 && s.ttlSec > 0,
+  );
+  if (ownerSummons.length >= MAX_DEPLOYABLES_PER_PLAYER) {
+    ownerSummons[0]!.ttlSec = 0;
+  }
   const blossoms = this.summons.filter(
-    (s) => s.kind === 'life_blossom' && s.hp > 0 && s.ttlSec > 0,
+    (s) => s.ownerPlayerId === ownerId && s.kind === 'life_blossom' && s.hp > 0 && s.ttlSec > 0,
   );
   if (blossoms.length >= 3) {
     blossoms[0]!.ttlSec = 0;
@@ -216,6 +223,7 @@ export function triggerLauncherProjectileExplosionImpl(this: WorldSim, b: SimPro
 export function updateProjectilesImpl(this: WorldSim, dtSec: number): void {
   const allPlayers = this.getAllPlayers();
   let stressImpactEventsThisTick = 0;
+  const midFlightDestroyedIds: number[] = [];
 
   for (let i = 0; i < this.projectiles.length; i++) {
     const b = this.projectiles[i]!;
@@ -557,6 +565,7 @@ export function updateProjectilesImpl(this: WorldSim, dtSec: number): void {
             const halfShieldArc = hasFortress ? Math.PI : (60 * Math.PI) / 180;
             if (Math.abs(angleDiff(angleFromPlayer, pl.aimAngle)) <= halfShieldArc) {
               b.ttlSec = 0;
+              midFlightDestroyedIds.push(b.id);
               pl.shieldStoredBullets += 1;
               const activeWepId =
                 pl.weaponSlots[pl.activeWeaponSlot] ?? pl.weaponSlots[0] ?? 'knight_sword';
@@ -598,6 +607,7 @@ export function updateProjectilesImpl(this: WorldSim, dtSec: number): void {
           ) {
             if (circleVsCircle(b, sum)) {
               b.ttlSec = 0;
+              midFlightDestroyedIds.push(b.id);
               sum.hp = Math.max(0, sum.hp - b.damage * (sum.kind === 'tesla_turret' ? 3 : 1));
               this.events.push({
                 kind: 'projectile_impact',
@@ -654,6 +664,13 @@ export function updateProjectilesImpl(this: WorldSim, dtSec: number): void {
         }
       }
     }
+  }
+
+  if (midFlightDestroyedIds.length > 0 && !this.stressTestActive) {
+    this.events.push({
+      kind: 'projectiles_destroyed',
+      ids: midFlightDestroyedIds,
+    });
   }
 
   let projWriteIdx = 0;

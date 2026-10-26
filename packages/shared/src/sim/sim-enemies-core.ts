@@ -799,6 +799,7 @@ export function applyDotDamageToEnemyImpl(
 
 function clearBossNearbyProjectiles(sim: WorldSim, bossX: number, bossY: number, radius = 140): void {
   const players = sim.getAllPlayers();
+  const destroyedIds: number[] = [];
   let writeIdx = 0;
   for (let i = 0; i < sim.projectiles.length; i++) {
     const b = sim.projectiles[i]!;
@@ -806,6 +807,7 @@ function clearBossNearbyProjectiles(sim: WorldSim, bossX: number, bossY: number,
       b.team === 'enemy' &&
       players.some((pl) => pl.lifeState === 'alive' && distance(pl.x, pl.y, b.x, b.y) <= radius);
     if (nearAlivePlayer) {
+      destroyedIds.push(b.id);
       b.ttlSec = 0;
       b.hitEntityIds.length = 0;
       sim.projectilePool.push(b);
@@ -814,6 +816,12 @@ function clearBossNearbyProjectiles(sim: WorldSim, bossX: number, bossY: number,
     }
   }
   sim.projectiles.length = writeIdx;
+  if (destroyedIds.length > 0 && !sim.stressTestActive) {
+    sim.events.push({
+      kind: 'projectiles_destroyed',
+      ids: destroyedIds,
+    });
+  }
 
   // Reward all alive players with an instant cadence refill / heat vent on boss phase transition
   for (let pIdx = 0; pIdx < players.length; pIdx++) {

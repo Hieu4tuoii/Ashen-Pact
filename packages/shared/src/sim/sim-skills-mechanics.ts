@@ -2,7 +2,7 @@ import { CHARACTERS } from '../data/characters.js';
 import type { ElementType } from '../data/types.js';
 import { angleDiff, clamp, distance, isCircleInCone } from '../math/vec2.js';
 import { TILE_SIZE } from '../protocol/messages.js';
-import { ELEMENTALIST_ROTATION_ORDER, type SimSummonState, type SimPlayerState, type SimEnemyState } from './world-sim-types.js';
+import { ELEMENTALIST_ROTATION_ORDER, MAX_DEPLOYABLES_PER_PLAYER, type SimSummonState, type SimPlayerState, type SimEnemyState } from './world-sim-types.js';
 import type { WorldSim } from './world-sim.js';
 
 export function activateCharacterSkillImpl(this: WorldSim, p: SimPlayerState): void {
@@ -264,6 +264,12 @@ export function activateCharacterSkillImpl(this: WorldSim, p: SimPlayerState): v
         selfDestruct: false,
         rootedEnemyIds: rootedIds,
       };
+      const ownerSummons = this.summons.filter(
+        (s) => s.ownerPlayerId === p.id && s.hp > 0 && s.ttlSec > 0,
+      );
+      if (ownerSummons.length >= MAX_DEPLOYABLES_PER_PLAYER) {
+        ownerSummons[0]!.ttlSec = 0;
+      }
       this.summons.push(tree);
       this.events.push({
         kind: 'summon_spawned',
@@ -324,6 +330,12 @@ export function activateCharacterSkillImpl(this: WorldSim, p: SimPlayerState): v
         selfDestruct: hasSelfDestruct,
         rootedEnemyIds: [],
       };
+      const ownerSummons = this.summons.filter(
+        (s) => s.ownerPlayerId === p.id && s.hp > 0 && s.ttlSec > 0,
+      );
+      if (ownerSummons.length >= MAX_DEPLOYABLES_PER_PLAYER) {
+        ownerSummons[0]!.ttlSec = 0;
+      }
       this.summons.push(turret);
       this.events.push({
         kind: 'summon_spawned',
@@ -662,6 +674,7 @@ export function triggerTeslaEmpBlastImpl(this: WorldSim, turret: SimSummonState)
   let bulletsCleared = 0;
 
   // 1. Clear all enemy bullets around the turret
+  const destroyedIds: number[] = [];
   for (let i = 0; i < this.projectiles.length; i++) {
     const b = this.projectiles[i]!;
     if (
@@ -671,7 +684,14 @@ export function triggerTeslaEmpBlastImpl(this: WorldSim, turret: SimSummonState)
     ) {
       b.ttlSec = 0;
       bulletsCleared += 1;
+      destroyedIds.push(b.id);
     }
+  }
+  if (destroyedIds.length > 0 && !this.stressTestActive) {
+    this.events.push({
+      kind: 'projectiles_destroyed',
+      ids: destroyedIds,
+    });
   }
 
   // 2. Stun and deal shock damage to all enemies in EMP radius
