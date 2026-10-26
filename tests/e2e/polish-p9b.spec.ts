@@ -189,7 +189,7 @@ test.describe('Phase P9b — Menus, Hub Invite Panel, Modals, Pause Confirm & 4-
         .filter((t): t is string => typeof t === 'string');
 
       // Switch to Victory screen with legacy buff aliases
-      sim.activeBuffIds = ['bountiful_vitality' as never, 'swift_wind' as never];
+      sim.player.blessingIds = ['bountiful_vitality' as never, 'swift_wind' as never];
       sim.runState = 'victory';
       gs?.updateModalHud?.();
       const victoryTexts = (gs?.modalContainer?.list ?? [])

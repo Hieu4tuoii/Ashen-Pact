@@ -322,19 +322,24 @@ export function populateRoomContentsImpl(this: WorldSim, room: DungeonRoomNode):
         const rarity: WeaponRarity =
           room.chestRarity ?? (this.rng.chance(0.45) ? 'legendary' : 'epic');
         this.spawnChest(cx, cy - 10, rarity, room.chestWeaponId ?? undefined);
-        for (let i = 0; i < 3; i++) {
-          this.pickups.push(
-            this.acquirePickup({
-              id: ++this.nextEntityId,
-              kind: 'gold',
-              x: cx + (i - 1) * 36,
-              y: cy + 36,
-              vx: 0,
-              vy: 0,
-              amount: 12,
-              ttlSec: 60,
-            }),
-          );
+        const allPlayers = this.getAllPlayers();
+        const isCoop = allPlayers.length > 1;
+        for (const pl of allPlayers) {
+          for (let i = 0; i < 3; i++) {
+            this.pickups.push(
+              this.acquirePickup({
+                id: ++this.nextEntityId,
+                kind: 'gold',
+                x: cx + (i - 1) * 36,
+                y: cy + 36,
+                vx: 0,
+                vy: 0,
+                amount: 12,
+                ttlSec: 60,
+                ownerPlayerId: isCoop ? pl.id : undefined,
+              }),
+            );
+          }
         }
       }
       break;

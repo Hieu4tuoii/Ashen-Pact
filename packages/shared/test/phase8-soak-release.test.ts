@@ -53,12 +53,10 @@ describe('Phase 8 — 20-Minute Co-op Soak Test (72,000 Ticks @ 60Hz)', () => {
     p4.weaponSlots[0] = 'tesla_carbine';
     p4.weaponSlots[1] = 'magma_cannon';
 
-    sim.activeBuffIds.push(
-      'vanguard_bastion_prism',
-      'ranger_arrow_volley',
-      'elementalist_twin_orbit',
-      'engineer_twin_turrets',
-    );
+    p1.blessingIds.push('vanguard_bastion_prism');
+    p2.blessingIds.push('ranger_arrow_volley');
+    p3.blessingIds.push('elementalist_twin_orbit');
+    p4.blessingIds.push('engineer_twin_turrets');
 
     const TOTAL_TICKS = 72_000; // 20 minutes * 60 seconds * 60 Hz
     const SEGMENT_TICKS = 18_000; // 5-minute checkpoints

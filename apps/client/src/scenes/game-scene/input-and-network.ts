@@ -159,10 +159,14 @@ export function setupKeyboardBindingsImpl(this: GameScene): void {
   });
   this.keys.ONE.on('down', () => {
     const sim = this.transport.getSim();
-    if (sim.runState === 'buff_choice' && sim.pendingBuffChoices[0]) {
-      sim.selectFloorBuff(sim.pendingBuffChoices[0]);
+    const lp = this.transport.getLocalPlayerState();
+    const choice0 = lp.buffChoices[0];
+    if (sim.runState === 'buff_choice' && choice0) {
       if (this.room && this.coopMode !== 'solo') {
-        this.room.send('select_buff', { buffId: sim.pendingBuffChoices[0] });
+        lp.buffChoices = [];
+        this.room.send('select_buff', { buffId: choice0 });
+      } else {
+        sim.selectFloorBuff(choice0, lp.id);
       }
     } else if (this.keys?.T.isDown || this.emoteWheelOpen) {
       this.queuedEmote = 1;
@@ -175,10 +179,14 @@ export function setupKeyboardBindingsImpl(this: GameScene): void {
   });
   this.keys.TWO.on('down', () => {
     const sim = this.transport.getSim();
-    if (sim.runState === 'buff_choice' && sim.pendingBuffChoices[1]) {
-      sim.selectFloorBuff(sim.pendingBuffChoices[1]);
+    const lp = this.transport.getLocalPlayerState();
+    const choice1 = lp.buffChoices[1];
+    if (sim.runState === 'buff_choice' && choice1) {
       if (this.room && this.coopMode !== 'solo') {
-        this.room.send('select_buff', { buffId: sim.pendingBuffChoices[1] });
+        lp.buffChoices = [];
+        this.room.send('select_buff', { buffId: choice1 });
+      } else {
+        sim.selectFloorBuff(choice1, lp.id);
       }
     } else if (this.keys?.T.isDown || this.emoteWheelOpen) {
       this.queuedEmote = 2;
@@ -191,10 +199,14 @@ export function setupKeyboardBindingsImpl(this: GameScene): void {
   });
   this.keys.THREE.on('down', () => {
     const sim = this.transport.getSim();
-    if (sim.runState === 'buff_choice' && sim.pendingBuffChoices[2]) {
-      sim.selectFloorBuff(sim.pendingBuffChoices[2]);
+    const lp = this.transport.getLocalPlayerState();
+    const choice2 = lp.buffChoices[2];
+    if (sim.runState === 'buff_choice' && choice2) {
       if (this.room && this.coopMode !== 'solo') {
-        this.room.send('select_buff', { buffId: sim.pendingBuffChoices[2] });
+        lp.buffChoices = [];
+        this.room.send('select_buff', { buffId: choice2 });
+      } else {
+        sim.selectFloorBuff(choice2, lp.id);
       }
     } else if (this.keys?.T.isDown || this.emoteWheelOpen) {
       this.queuedEmote = 3;
@@ -212,13 +224,18 @@ export function setupKeyboardBindingsImpl(this: GameScene): void {
     }
   });
 
-  // R or F6: Cycle Elemental Imbue (None -> Burn -> Chill -> Shock -> Poison)
+  // R: Active Reload / Thermal Vent (INPUT_BUTTON.RELOAD_VENT); Alt+R or F6: Cycle Elemental Imbue (Debug)
   const cycleElement = () => {
     if (!isEffectiveDebugUiEnabled(this.coopMode !== 'solo')) return;
     this.transport.getSim().cycleImbueElement();
     zzfx.play('weapon_swap');
   };
-  this.keys.R.on('down', cycleElement);
+  this.keys.R.on('down', (event?: KeyboardEvent) => {
+    this.reloadVentQueued = true;
+    if (event?.altKey) {
+      cycleElement();
+    }
+  });
   this.keys.F6.on('down', cycleElement);
 
   // G: Cycle Graphics Quality Preset (High -> Medium -> Low -> High)

@@ -609,8 +609,8 @@ export function simulateBossEncounter(
 
   // Equip realistic campaign progression loadouts reached by the end of Biome 1 / 2 / 3
   const leadSigBuff = CHARACTER_SIGNATURE_BUFF[allPlayers[0]!.characterId] as BuffId | undefined;
-  if (leadSigBuff && !sim.activeBuffIds.includes(leadSigBuff)) {
-    sim.applyBuffEffects(leadSigBuff);
+  if (leadSigBuff && !allPlayers[0]!.blessingIds.includes(leadSigBuff)) {
+    sim.applyBuffEffects(leadSigBuff, allPlayers[0]!.id);
   }
   for (const pl of allPlayers) {
     pl.godMode = false;

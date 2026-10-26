@@ -160,10 +160,13 @@ export function applyDamageToEnemyImpl(
   }
 
   // Ranger Upgrade 2 (Chuỗi Con Mồi / ranger_prey_chain): Marked target propagates 30% damage to nearby enemies
+  const markOwner =
+    enemy.markedByPlayerId > 0 ? this.getPlayerById(enemy.markedByPlayerId) : attackerPl;
   if (
     !isChainDamage &&
     enemy.markedTimer > 0 &&
-    this.activeBuffIds.includes('ranger_prey_chain')
+    ((markOwner && markOwner.blessingIds.includes('ranger_prey_chain')) ||
+      attackerPl.blessingIds.includes('ranger_prey_chain'))
   ) {
     const chainAmt = Math.max(1, Math.round(dmg * 0.3));
     let chained = 0;

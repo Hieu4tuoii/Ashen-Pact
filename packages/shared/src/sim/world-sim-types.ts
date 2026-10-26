@@ -1,5 +1,17 @@
 import { ALL_BOSS_IDS } from '../data/enemies.js';
-import type { CardinalDir, CharacterId, EliteModifier, ElementType, RoomType, WeaponRarity } from '../data/types.js';
+import type {
+  AshenPactId,
+  AshenRelicId,
+  BlessingId,
+  CardinalDir,
+  CharacterId,
+  DuoBoonId,
+  EliteModifier,
+  ElementType,
+  RoomType,
+  WeaponMutatorId,
+  WeaponRarity,
+} from '../data/types.js';
 import { ALL_WEAPON_IDS, MAX_WEAPON_SLOTS, PHASE6_WEAPON_IDS, estimateWeaponDps } from '../data/weapons.js';
 import { clamp } from '../math/vec2.js';
 import type { QuickEmoteId } from '../protocol/messages.js';
@@ -359,6 +371,15 @@ export interface SimPlayerState {
   holsterReloadTimers: number[];
   vanguardShieldBonusAdd: number;
   elementalConvergenceTimer: number;
+  // Ashen Pact 2.0 Per-Player Build State
+  blessingIds: BlessingId[];
+  weaponMutators: Record<number, WeaponMutatorId[]>;
+  duoBoonIds: DuoBoonId[];
+  activePactId: AshenPactId | null;
+  pactOriginalWeaponId: string | null;
+  awakenedRelicIds: AshenRelicId[];
+  buffChoices: BlessingId[];
+  weaponUpgradeLevels?: Record<number, number>;
   skillActiveTimer: number;
   skillCooldownTimer: number;
   shieldStoredBullets: number;
@@ -535,6 +556,13 @@ export interface BulletVolleySpawnEvent {
   seed: number;
 }
 
+
+export function hasPlayerBlessing(
+  p: SimPlayerState | undefined | null,
+  id: BlessingId,
+): boolean {
+  return Boolean(p && Array.isArray(p.blessingIds) && p.blessingIds.includes(id));
+}
 
 export function lerpSpeed(dist: number, maxRange: number, maxSpeed: number): number {
   const t = 1 - clamp(dist / maxRange, 0, 1);

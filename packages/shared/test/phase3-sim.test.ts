@@ -283,12 +283,12 @@ describe('Phase 3 Weapons, Enemies, Elites & Boss Mục Vương', () => {
     sim.player.y = sim.portalY;
     expect(sim.interactWithNearest()).toBe(true);
     expect(sim.runState).toBe('buff_choice');
-    expect(sim.pendingBuffChoices.length).toBe(3);
+    expect(sim.player.buffChoices.length).toBe(3);
 
-    const chosenBuff = sim.pendingBuffChoices[0]!;
+    const chosenBuff = sim.player.buffChoices[0]!;
     expect(sim.selectFloorBuff(chosenBuff)).toBe(true);
     expect(sim.currentFloor).toBe(2);
-    expect(sim.activeBuffIds).toContain(chosenBuff);
+    expect(sim.player.blessingIds).toContain(chosenBuff);
   });
 
   it('auto-plays a full Floor 1 -> Buff Selection -> Floor 2 + Boss Mục Vương run via botAutoPlayActive', () => {
@@ -353,7 +353,7 @@ describe('Phase 3 Weapons, Enemies, Elites & Boss Mục Vương', () => {
     expect(sim.player.gold).toBe(goldBefore - 40);
     expect(sim.player.hp).toBe(hpBefore);
     expect(sim.player.armor).toBe(sim.player.maxArmor);
-    expect(sim.activeBuffIds.length).toBeGreaterThanOrEqual(1);
+    expect(sim.player.blessingIds.length).toBeGreaterThanOrEqual(1);
     expect(sim.worldItems.length).toBe(0);
   });
 

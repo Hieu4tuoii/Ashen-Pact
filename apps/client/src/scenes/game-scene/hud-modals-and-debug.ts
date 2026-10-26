@@ -180,7 +180,12 @@ export function updateModalHudImpl(this: GameScene): void {
           )
           .join('|')}`
       : '';
-  const modalKey = `${sim.runState}:${sim.pendingBuffChoices.join(',')}:${this.buffHoveredIdx ?? -1}:${this.resultDismissed}:${i18n.getLocale()}:${statsSig}`;
+  const allPlayers = sim.getAllPlayers();
+  const partyCount = Math.max(1, allPlayers.length);
+  const readyCount = allPlayers.filter((pl) => pl.buffChoices.length === 0).length;
+  const localPlayer = this.transport.getLocalPlayerState();
+  const pendingBuffChoices = localPlayer.buffChoices ?? [];
+  const modalKey = `${sim.runState}:${pendingBuffChoices.join(',')}:${readyCount}:${partyCount}:${this.buffHoveredIdx ?? -1}:${this.resultDismissed}:${i18n.getLocale()}:${statsSig}`;
   if (modalKey === this.lastRunState) return;
   const prevRunState = this.lastRunState.split(':')[0];
   this.lastRunState = modalKey;
@@ -229,9 +234,14 @@ export function updateModalHudImpl(this: GameScene): void {
       .setOrigin(0.5, 0);
     this.modalContainer.add(header);
 
-    const subtitleStr = isEn
-      ? `Floor ${sim.currentFloor} Cleared · Select 1 Blessing to Empower Your Pact`
-      : `Hoàn Thành Tầng ${sim.currentFloor} · Chọn 1 Phước Lành Cường Hóa Đội Hình`;
+    const subtitleStr =
+      pendingBuffChoices.length === 0
+        ? isEn
+          ? `✓ Blessing Selected — Waiting for party (${readyCount}/${partyCount})...`
+          : `✓ Đã chọn Phước Lành — Đang chờ đồng đội (${readyCount}/${partyCount})...`
+        : isEn
+          ? `Floor ${sim.currentFloor} Cleared · Select 1 Blessing to Empower Your Pact`
+          : `Hoàn Thành Tầng ${sim.currentFloor} · Chọn 1 Phước Lành Cường Hóa Đội Hình`;
     const subHeader = ui.add
       .text(480, modalY + 38, subtitleStr, {
         fontFamily: '"Be Vietnam Pro", sans-serif',
@@ -245,7 +255,7 @@ export function updateModalHudImpl(this: GameScene): void {
       .setOrigin(0.5, 0);
     this.modalContainer.add(subHeader);
 
-    sim.pendingBuffChoices.forEach((buffId: BuffId, idx: number) => {
+    pendingBuffChoices.forEach((buffId: BuffId, idx: number) => {
       const bDef = FLOOR_BUFFS[buffId];
       if (!bDef) return;
       const buffTxt = i18n.getBuffText(buffId, bDef.nameVi, bDef.descriptionVi);
@@ -380,9 +390,11 @@ export function updateModalHudImpl(this: GameScene): void {
         }
       });
       hit.on('pointerdown', () => {
-        sim.selectFloorBuff(buffId);
         if (this.room && this.coopMode !== 'solo') {
+          localPlayer.buffChoices = [];
           this.room.send('select_buff', { buffId });
+        } else {
+          sim.selectFloorBuff(buffId, localPlayer.id);
         }
         zzfx.play('skill_cast');
       });
@@ -390,7 +402,6 @@ export function updateModalHudImpl(this: GameScene): void {
     });
 
     // Bottom Co-op pick status & countdown bar
-    const partyCount = Math.max(1, sim.getAllPlayers().length);
     const statusFooterG = ui.add.graphics();
     drawStyledPanel(statusFooterG, modalX + 24, modalY + modalH - 42, modalW - 48, 28, {
       fillColor: UI_THEME.panelBg,
@@ -400,15 +411,22 @@ export function updateModalHudImpl(this: GameScene): void {
       radius: 6,
     });
     // Progress track inside status footer
+    const readyRatio = Math.min(1, Math.max(0, readyCount / Math.max(1, partyCount)));
     statusFooterG.fillStyle(0x121620, 0.9);
     statusFooterG.fillRoundedRect(modalX + modalW - 168, modalY + modalH - 33, 128, 10, 4);
     statusFooterG.fillStyle(hexToNum(PALETTE.SOLAR_GOLD), 0.9);
-    statusFooterG.fillRoundedRect(modalX + modalW - 167, modalY + modalH - 32, 96, 8, 3);
+    statusFooterG.fillRoundedRect(
+      modalX + modalW - 167,
+      modalY + modalH - 32,
+      Math.max(4, Math.round(126 * readyRatio)),
+      8,
+      3,
+    );
     this.modalContainer.add(statusFooterG);
 
     const statusBarStr = isEn
-      ? `⏱ Auto-Pick: 25s  ·  Party Selection: 0/${partyCount} Ready  ·  Hotkeys [1] [2] [3]`
-      : `⏱ Tự chọn sau: 25s  ·  Đồng đội đã chọn: 0/${partyCount}  ·  Phím tắt [1] [2] [3]`;
+      ? `⏱ Auto-Pick: 25s  ·  Party Selection: ${readyCount}/${partyCount} Ready  ·  Hotkeys [1] [2] [3]`
+      : `⏱ Tự chọn sau: 25s  ·  Đồng đội đã chọn: ${readyCount}/${partyCount}  ·  Phím tắt [1] [2] [3]`;
     const statusBarTxt = ui.add
       .text(modalX + 38, modalY + modalH - 28, statusBarStr, {
         fontFamily: '"Be Vietnam Pro", sans-serif',
@@ -512,8 +530,8 @@ export function updateModalHudImpl(this: GameScene): void {
     this.modalContainer.add(summaryCardG);
 
     const buffNames =
-      sim.activeBuffIds.length > 0
-        ? sim.activeBuffIds
+      localPlayer.blessingIds.length > 0
+        ? localPlayer.blessingIds
             .map((b: BuffId) => resolveLocalizedBuffText(b, isEn ? 'en' : 'vi').name)
             .join(', ')
         : i18n.t('ui.result.none');
@@ -873,7 +891,7 @@ export function updateDebugStateImpl(
   debug.bossMaxHp = boss ? boss.maxHp : 0;
   debug.fullMapOpen = this.fullMapOpen;
   debug.botAutoPlayActive = sim.botAutoPlayActive;
-  debug.activeBuffs = sim.activeBuffIds;
+  debug.activeBuffs = p.blessingIds;
 
   // Phase 4 Co-op & Network telemetry
   debug.coopMode = this.coopMode;

@@ -83,7 +83,7 @@ describe('Phase 5 — 5 Playable Characters, Skills, 10 Upgrades & Co-op Synergi
     expect(p2Bullets[0]!.pierceRemaining).toBeGreaterThanOrEqual(1);
 
     // Enable both Vanguard upgrades (Pháo Đài Phản Xạ + Xung Phong) and trigger shockwave release on enemy
-    sim.activeBuffIds.push('vanguard_bastion_prism', 'vanguard_charge');
+    p1.blessingIds.push('vanguard_bastion_prism', 'vanguard_charge');
     const target = sim.spawnEnemy('wild_boar', 490, 300, true);
     target.hp = 200;
     target.maxHp = 200;
@@ -153,7 +153,7 @@ describe('Phase 5 — 5 Playable Characters, Skills, 10 Upgrades & Co-op Synergi
     sim.enemies.length = 0;
 
     // Upgrade 1 (Mưa Tên 5 arrows) + Upgrade 2 (Chuỗi Con Mồi 30% chain damage)
-    sim.activeBuffIds.push('ranger_arrow_volley', 'ranger_prey_chain');
+    p1.blessingIds.push('ranger_arrow_volley', 'ranger_prey_chain');
     const markTarget = sim.spawnEnemy('wild_boar', 410, 300, true);
     markTarget.hp = 500;
     markTarget.maxHp = 500;
@@ -204,7 +204,7 @@ describe('Phase 5 — 5 Playable Characters, Skills, 10 Upgrades & Co-op Synergi
     p1.aimAngle = 0;
     expect(p1.activeImbueElement).toBe('burn');
 
-    sim.activeBuffIds.push('elementalist_vortex', 'elementalist_twin_orbit');
+    p1.blessingIds.push('elementalist_vortex', 'elementalist_twin_orbit');
     const enemy = sim.spawnEnemy('wild_boar', 470, 315, true);
     enemy.hp = 300;
     enemy.maxHp = 300;
@@ -262,7 +262,7 @@ describe('Phase 5 — 5 Playable Characters, Skills, 10 Upgrades & Co-op Synergi
     p2.lifeState = 'downed';
     p2.downedTimer = 15;
 
-    sim.activeBuffIds.push('druid_poison_roots', 'druid_sacred_grove');
+    p1.blessingIds.push('druid_poison_roots', 'druid_sacred_grove');
     const enemy = sim.spawnEnemy('wild_boar', 415, 305, true);
     enemy.hp = 200;
 
@@ -330,7 +330,7 @@ describe('Phase 5 — 5 Playable Characters, Skills, 10 Upgrades & Co-op Synergi
     expect(sim.summons.some((s) => s.kind === 'ancient_turret')).toBe(true);
 
     // 2. Deploy Twin Turrets with Self-Destruct
-    sim.activeBuffIds.push('engineer_twin_turrets', 'engineer_self_destruct');
+    p1.blessingIds.push('engineer_twin_turrets', 'engineer_self_destruct');
     sim.setPlayerInput({
       seq: 2,
       tick: 2,

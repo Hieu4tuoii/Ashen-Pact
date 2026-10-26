@@ -1,11 +1,11 @@
 import { SeededRandom } from '../core/prng.js';
 import { BIOME2_COMBAT_ENEMIES, BIOME3_COMBAT_ENEMIES } from '../data/enemies.js';
-import type { BuffId, CardinalDir, CharacterId, ElementalReactionId, EliteModifier, ElementType, WeaponRarity } from '../data/types.js';
+import type { BlessingId, BuffId, CardinalDir, CharacterId, ElementalReactionId, EliteModifier, ElementType, WeaponRarity } from '../data/types.js';
 import { SpatialHashGrid } from '../math/spatial-hash.js';
 import type { PlayerInputPacket, QuickEmoteId } from '../protocol/messages.js';
 import { ArenaMap, type SurfaceKind } from './arena-map.js';
 import { type DungeonFloorGraph, type DungeonRoomNode, generateDungeonFloor } from './dungeon-gen.js';
-import { PHASE1_SAMPLE_ENEMIES, type PropKind, type SimPropState, type SimSummonState, type SimSkillZoneState, type SimPressurePlateState, type SimPushBlockState, type SimShockwaveRingState, type SimTetherBeamState, type SimDoorState, type SimChestState, type SimWorldItemState, type SimNpcState, type SimHubStatue, type SimPingMarker, type RunSummaryStats, type MvpAwardEntry, type SimPlayerState, type SimEnemyState, type SimProjectileState, type SimPickupState, type BulletVolleySpawnEvent } from './world-sim-types.js';
+import { PHASE1_SAMPLE_ENEMIES, hasPlayerBlessing, type PropKind, type SimPropState, type SimSummonState, type SimSkillZoneState, type SimPressurePlateState, type SimPushBlockState, type SimShockwaveRingState, type SimTetherBeamState, type SimDoorState, type SimChestState, type SimWorldItemState, type SimNpcState, type SimHubStatue, type SimPingMarker, type RunSummaryStats, type MvpAwardEntry, type SimPlayerState, type SimEnemyState, type SimProjectileState, type SimPickupState, type BulletVolleySpawnEvent } from './world-sim-types.js';
 import type { SimEvent, WorldSimOptions, CoPlayerInputEntry } from './world-sim-events.js';
 import { createPlayerStateImpl, getAllPlayersImpl, getActivePlayerCountImpl, setPlayerCountOverrideImpl, getPlayerByIdImpl, getPlayerBySlotImpl, addCoopPlayerImpl, removeCoopPlayerImpl, setCoopPlayerInputImpl, applyCharacterToPlayerStateImpl, selectCharacterImpl, togglePlayerReadyImpl, areAllPlayersReadyImpl, enterHubImpl, startDungeonRunFromHubImpl, triggerPingImpl, triggerEmoteImpl, spawnDroppedWeaponImpl, dropActiveWeaponImpl, updateCoopDownedAndReviveImpl } from './sim-coop-hub.js';
 import { spawnDefaultArenaPropsImpl, spawnPropImpl, cycleImbueElementImpl, setImbueElementImpl, configureStressTestImpl, topUpStressTestProjectilesImpl, setPlayerInputImpl, getActiveWeaponIdImpl, equipWeaponSlotImpl, cycleWeaponImpl, spawnTrainingDummyImpl, spawnEnemyImpl, spawnBossGuardianMushroomsImpl, hasActiveBossGuardiansImpl, spawnSampleWaveImpl, getCurrentRoomImpl, hasActiveCombatEnemiesImpl, getActiveBossImpl, rollChestRarityImpl, rollRandomWeaponByRaritiesImpl, spawnChestImpl, spawnWorldItemImpl, resolvePropMovementCollisionImpl, updatePropsImpl, damagePropImpl, detonateExplosiveBarrelImpl, applyElementAtWorldPointImpl } from './sim-props-spawning.js';
@@ -80,8 +80,6 @@ export class WorldSim {
   public portalX = 0;
   public portalY = 0;
   public runState: 'playing' | 'buff_choice' | 'victory' | 'defeat' = 'playing';
-  public activeBuffIds: BuffId[] = [];
-  public pendingBuffChoices: BuffId[] = [];
   public runStats: RunSummaryStats = {
     kills: 0,
     elitesKilled: 0,
@@ -391,8 +389,9 @@ export class WorldSim {
   public activateShrine(shrine: SimNpcState, actor: SimPlayerState = this.player): boolean  { return activateShrineImpl.call(this, shrine, actor); }
   public enterPortal(): boolean  { return enterPortalImpl.call(this); }
   public rollPendingBuffChoices(): void  { return rollPendingBuffChoicesImpl.call(this); }
-  public applyBuffEffects(buffId: BuffId): void  { return applyBuffEffectsImpl.call(this, buffId); }
-  public selectFloorBuff(buffId: BuffId): boolean  { return selectFloorBuffImpl.call(this, buffId); }
+  public hasPlayerBlessing(p: SimPlayerState, id: BlessingId): boolean { return hasPlayerBlessing(p, id); }
+  public applyBuffEffects(buffId: BuffId, playerId = this.player.id): void  { return applyBuffEffectsImpl.call(this, buffId, playerId); }
+  public selectFloorBuff(buffId: BuffId, playerId = this.player.id): boolean  { return selectFloorBuffImpl.call(this, buffId, playerId); }
   public advanceToFloor(floorNumber: 1 | 2 | 3 | 4 | 5 | 6): void  { return advanceToFloorImpl.call(this, floorNumber); }
   public advanceToBiome(biome: 1 | 2 | 3): void  { return advanceToBiomeImpl.call(this, biome); }
   public skipCurrentRoomWaves(): void  { return skipCurrentRoomWavesImpl.call(this); }

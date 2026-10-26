@@ -229,8 +229,6 @@ export class NetworkTransport implements ITransport {
     }
     this.sim.currentRoomId = snapshot.currentRoomId;
     this.sim.secretWallBroken = snapshot.secretWallBroken;
-    this.sim.activeBuffIds = [...snapshot.activeBuffIds];
-    this.sim.pendingBuffChoices = [...snapshot.pendingBuffChoices];
 
     if (roomChanged) {
       this.remotePlayerSamples.clear();
@@ -336,6 +334,22 @@ export class NetworkTransport implements ITransport {
       pState.shieldStoredBullets = ps.shieldBullets;
       pState.activeWeaponSlot = ps.activeSlot;
       pState.weaponSlots = [...ps.weaponSlots];
+      pState.blessingIds = ps.blessings ? [...ps.blessings] : [];
+      pState.weaponMutators = {
+        0: ps.mutators?.[0] ? [...ps.mutators[0]] : [],
+        1: ps.mutators?.[1] ? [...ps.mutators[1]] : [],
+      };
+      pState.duoBoonIds = ps.duoBoons ? [...ps.duoBoons] : [];
+      pState.activePactId = ps.pact ?? null;
+      pState.pactOriginalWeaponId = ps.pactOrigWep ?? null;
+      pState.awakenedRelicIds = ps.relics ? [...ps.relics] : [];
+      pState.buffChoices = ps.buffChoices ? [...ps.buffChoices] : [];
+      if (ps.wepLevels) {
+        pState.weaponUpgradeLevels = {
+          0: ps.wepLevels[0] ?? 0,
+          1: ps.wepLevels[1] ?? 0,
+        };
+      }
       pState.fireCooldownTimer = ps.fireCd100 / 100;
       pState.activeImbueElement = ps.imbue;
       pState.lastProcessedSeq = ps.lastSeq;

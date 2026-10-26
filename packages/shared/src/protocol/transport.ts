@@ -21,6 +21,7 @@ export interface ITransport {
   sendInput(input: PlayerInputPacket): void;
   step(deltaMs: number): { ticksExecuted: number; alpha: number; tick: number };
   getSim(): WorldSim;
+  getLocalPlayerState(): SimPlayerState;
   getInterpolationAlpha(): number;
   getInterpolatedPlayerPos(out?: InterpolatedEntityPos): InterpolatedEntityPos;
   getInterpolatedSimPlayerPos(
@@ -105,6 +106,10 @@ export class LocalTransport implements ITransport {
   }
 
   public getPlayer(): SimPlayerState {
+    return this.sim.player;
+  }
+
+  public getLocalPlayerState(): SimPlayerState {
     return this.sim.player;
   }
 

@@ -195,9 +195,10 @@ export class CoopRoom extends Room<CoopRoomState> {
       }
     });
 
-    this.onMessage('select_buff', (_client, payload: { buffId?: BuffId }) => {
-      if (payload?.buffId && this.sim.runState === 'buff_choice') {
-        this.sim.selectFloorBuff(payload.buffId);
+    this.onMessage('select_buff', (client, payload: { buffId?: BuffId }) => {
+      const meta = this.playersBySession.get(client.sessionId);
+      if (meta && payload?.buffId && this.sim.runState === 'buff_choice') {
+        this.sim.selectFloorBuff(payload.buffId, meta.playerId);
         this.broadcastImmediateSnapshot();
       }
     });

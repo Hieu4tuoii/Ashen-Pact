@@ -322,7 +322,7 @@ test.describe('Phase 3 — Dungeon, Vòng Lặp Lượt Chơi & Biome 1 Hoàn Ch
       transport.step(16.6667);
       return {
         runState: sim.runState,
-        choices: [...sim.pendingBuffChoices],
+        choices: [...sim.player.buffChoices],
       };
     });
 

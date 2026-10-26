@@ -85,6 +85,14 @@ export function createPlayerStateImpl(this: WorldSim,
     holsterReloadTimers: [0, 0],
     vanguardShieldBonusAdd: 0,
     elementalConvergenceTimer: 0,
+    blessingIds: [],
+    weaponMutators: { 0: [], 1: [] },
+    duoBoonIds: [],
+    activePactId: null,
+    pactOriginalWeaponId: null,
+    awakenedRelicIds: [],
+    buffChoices: [],
+    weaponUpgradeLevels: { 0: 0, 1: 0 },
     skillActiveTimer: 0,
     skillCooldownTimer: 0,
     shieldStoredBullets: 0,
@@ -293,6 +301,15 @@ export function removeCoopPlayerImpl(this: WorldSim, playerId: number): boolean 
           x: p.x,
           y: p.y,
         });
+      }
+    }
+  } else if (!this.inHub && this.runState === 'buff_choice') {
+    const remaining = this.getAllPlayers();
+    if (remaining.length > 0 && remaining.every((p) => p.buffChoices.length === 0)) {
+      if (this.currentFloor < 6) {
+        this.advanceToFloor((this.currentFloor + 1) as 1 | 2 | 3 | 4 | 5 | 6);
+      } else {
+        this.runState = 'playing';
       }
     }
   }
@@ -548,6 +565,7 @@ export function enterHubImpl(this: WorldSim): void {
     p.overheatLockTimer = 0;
     p.vanguardShieldBonusAdd = 0;
     p.elementalConvergenceTimer = 0;
+    p.buffChoices = [];
     p.ready = false;
   }
 }
@@ -560,8 +578,6 @@ export function startDungeonRunFromHubImpl(this: WorldSim): void {
   this.map.biome = 1;
   this.runState = 'playing';
   this.teamComboCount = 0;
-  this.activeBuffIds = [];
-  this.pendingBuffChoices = [];
   this.runStats = {
     floorReached: 1,
     roomsCleared: 0,
@@ -603,6 +619,14 @@ export function startDungeonRunFromHubImpl(this: WorldSim): void {
     p.overheatLockTimer = 0;
     p.vanguardShieldBonusAdd = 0;
     p.elementalConvergenceTimer = 0;
+    p.blessingIds = [];
+    p.weaponMutators = { 0: [], 1: [] };
+    p.duoBoonIds = [];
+    p.activePactId = null;
+    p.pactOriginalWeaponId = null;
+    p.awakenedRelicIds = [];
+    p.buffChoices = [];
+    p.weaponUpgradeLevels = { 0: 0, 1: 0 };
     p.ready = false;
     p.currentRoomId = this.currentRoomId;
     p.statsDamageDealt = 0;

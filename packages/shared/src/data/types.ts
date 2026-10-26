@@ -113,7 +113,33 @@ export type RoomDiscoveryState = 'hidden' | 'discovered' | 'visited' | 'cleared'
 
 export type CardinalDir = 'N' | 'E' | 'S' | 'W';
 
-export type BuffId =
+export type ActionBlessingId =
+  | 'table_tech_rocket'
+  | 'table_tech_blank_nova'
+  | 'table_tech_prism_split'
+  | 'table_tech_billiard_master'
+  | 'table_tech_toxic_shrapnel'
+  | 'table_tech_magnet_snare'
+  | 'dash_tidal_ram'
+  | 'dash_venom_wake'
+  | 'dash_flame_shackle'
+  | 'dash_reload_acrobat'
+  | 'dash_thunder_decoy'
+  | 'dash_phase_blade'
+  | 'reload_tediore_chuck'
+  | 'reload_frost_nova'
+  | 'reload_magnet_vortex'
+  | 'reload_repulsor_shock'
+  | 'reload_caustic_pod'
+  | 'reload_holster_surge'
+  | 'bullet_split_bounce'
+  | 'bullet_ricochet_boom'
+  | 'bullet_heavy_pinball'
+  | 'bullet_coop_arc_relay'
+  | 'bullet_wall_tether'
+  | 'bullet_orbit_return';
+
+export type SkillUpgradeId =
   | 'vanguard_bastion_prism'
   | 'vanguard_charge'
   | 'ranger_arrow_volley'
@@ -125,8 +151,48 @@ export type BuffId =
   | 'engineer_twin_turrets'
   | 'engineer_self_destruct';
 
+export type BlessingId = ActionBlessingId | SkillUpgradeId;
+
+export type BuffId = BlessingId;
+
+export type WeaponMutatorId =
+  | 'mutator_finale_jolt'
+  | 'mutator_gravity_singularity'
+  | 'mutator_shockwave_edge'
+  | 'mutator_chain_harpoon'
+  | 'mutator_prism_splitter'
+  | 'mutator_thermal_meltdown'
+  | 'mutator_holo_decoy_gun'
+  | 'mutator_cluster_mortar'
+  | 'mutator_boomerang_core'
+  | 'mutator_elemental_infusion';
+
+export type DuoBoonId =
+  | 'duo_superheated_cyclone'
+  | 'duo_cryo_shatter_spires'
+  | 'duo_superconduct_rail'
+  | 'duo_napalm_chain_plague'
+  | 'duo_plasma_overload_star'
+  | 'duo_magnetic_bastion_ring';
+
+export type AshenPactId =
+  | 'pact_soul_chain'
+  | 'pact_shattered_glass'
+  | 'pact_searing_trigger'
+  | 'pact_volatile_arsenal'
+  | 'pact_ashen_hunted'
+  | 'pact_ricochet_vow';
+
+export type AshenRelicId =
+  | 'relic_blood_oath_tether'
+  | 'relic_black_crystal_heart'
+  | 'relic_perpetual_core'
+  | 'relic_master_forge_seal'
+  | 'relic_executioner_scythe'
+  | 'relic_ancient_geometry_eye';
+
 export interface BuffDef {
-  id: BuffId;
+  id: BlessingId;
   nameVi: string;
   nameEn: string;
   descriptionVi: string;

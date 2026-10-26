@@ -488,7 +488,7 @@ describe('Phase 6 — Biomes 2 & 3, 18 Weapons, Co-op Mechanics & Bosses Kryssa 
     sim.player.y = sim.portalY;
     expect(sim.enterPortal()).toBe(true);
     expect(sim.runState).toBe('buff_choice');
-    expect(sim.selectFloorBuff(sim.pendingBuffChoices[0]!)).toBe(true);
+    expect(sim.selectFloorBuff(sim.player.buffChoices[0]!)).toBe(true);
     expect(sim.currentFloor).toBe(3);
     expect(sim.currentBiome).toBe(2);
     expect(sim.runState).toBe('playing');
@@ -505,7 +505,7 @@ describe('Phase 6 — Biomes 2 & 3, 18 Weapons, Co-op Mechanics & Bosses Kryssa 
     sim.player.x = sim.portalX;
     sim.player.y = sim.portalY;
     expect(sim.enterPortal()).toBe(true);
-    expect(sim.selectFloorBuff(sim.pendingBuffChoices[0]!)).toBe(true);
+    expect(sim.selectFloorBuff(sim.player.buffChoices[0]!)).toBe(true);
     expect(sim.currentFloor).toBe(5);
     expect(sim.currentBiome).toBe(3);
 

@@ -573,7 +573,7 @@ export async function setupRunResultModalScene(
     sim.teamComboCount = 9;
     sim.currentBiome = 3;
     sim.currentFloor = 6;
-    sim.activeBuffIds = ['bountiful_vitality', 'swift_wind'];
+    sim.player.blessingIds = ['table_tech_rocket', 'dash_tidal_ram'];
     sim.runState = runResult;
   }, state);
   await lockCameraAndIrisToPlayer(page);

@@ -13,11 +13,11 @@ export function activateCharacterSkillImpl(this: WorldSim, p: SimPlayerState): v
     if (p.skillActiveTimer > 0) {
       this.releaseVanguardShieldShockwave(p);
     } else if (p.skillCooldownTimer <= 0) {
-      const bonusDur = this.activeBuffIds.includes('vanguard_bastion_prism') ? 1.5 : 0;
+      const bonusDur = p.blessingIds.includes('vanguard_bastion_prism') ? 1.5 : 0;
       p.skillActiveTimer = skillDef.durationSec + bonusDur;
       p.skillCooldownTimer = skillDef.cooldownSec;
       p.shieldStoredBullets = 0;
-      if (this.activeBuffIds.includes('vanguard_bastion_prism')) {
+      if (p.blessingIds.includes('vanguard_bastion_prism')) {
         p.armor = Math.min(p.maxArmor, p.armor + 2);
       }
       this.events.push({
@@ -53,7 +53,7 @@ export function activateCharacterSkillImpl(this: WorldSim, p: SimPlayerState): v
 
   if (p.characterId === 'ranger') {
     // Predator Arrow: backflip i-frame + high-damage piercing arrow (or 5-arrow fan with ranger_arrow_volley)
-    const hasVolley = this.activeBuffIds.includes('ranger_arrow_volley');
+    const hasVolley = p.blessingIds.includes('ranger_arrow_volley');
     p.dashTimer = 0.16;
     p.invulnerableTimer = Math.max(p.invulnerableTimer, 0.35);
     p.dashDirX = -Math.cos(p.aimAngle);
@@ -92,8 +92,8 @@ export function activateCharacterSkillImpl(this: WorldSim, p: SimPlayerState): v
     const nextEl = cycle[(curIdx + 1) % cycle.length] ?? 'chill';
     p.activeImbueElement = nextEl;
 
-    const hasVortex = this.activeBuffIds.includes('elementalist_vortex');
-    const hasDual = this.activeBuffIds.includes('elementalist_twin_orbit');
+    const hasVortex = p.blessingIds.includes('elementalist_vortex');
+    const hasDual = p.blessingIds.includes('elementalist_twin_orbit');
     const secondaryEl: ElementType = hasDual ? nextEl : 'none';
 
     const orbX = clamp(
@@ -143,8 +143,8 @@ export function activateCharacterSkillImpl(this: WorldSim, p: SimPlayerState): v
   if (p.characterId === 'druid') {
     // Sacred Tree: plant 1 tree (or 2 with druid_sacred_grove).
     // Planting on a downed teammate revives them immediately with 2 HP (cooldown x2).
-    const hasPoisonRoots = this.activeBuffIds.includes('druid_poison_roots');
-    const hasSacredGrove = this.activeBuffIds.includes('druid_sacred_grove');
+    const hasPoisonRoots = p.blessingIds.includes('druid_poison_roots');
+    const hasSacredGrove = p.blessingIds.includes('druid_sacred_grove');
 
     let targetX = clamp(
       p.x + Math.cos(p.aimAngle) * 80,
@@ -279,8 +279,8 @@ export function activateCharacterSkillImpl(this: WorldSim, p: SimPlayerState): v
 
   if (p.characterId === 'engineer') {
     // Tesla Turret: deploy 1 turret (or up to 2 parallel turrets with engineer_twin_turrets)
-    const hasTwinTurrets = this.activeBuffIds.includes('engineer_twin_turrets');
-    const hasSelfDestruct = this.activeBuffIds.includes('engineer_self_destruct');
+    const hasTwinTurrets = p.blessingIds.includes('engineer_twin_turrets');
+    const hasSelfDestruct = p.blessingIds.includes('engineer_self_destruct');
     const maxTurrets = hasTwinTurrets ? 2 : 1;
 
     const existingTurrets = this.summons.filter(
@@ -511,7 +511,7 @@ export function updateSkillZonesAndSummonsImpl(this: WorldSim, dtSec: number): v
                 continue;
               }
               if (distToZapLine(pl.x, pl.y) <= 44) {
-                const halfShieldArc = this.activeBuffIds.includes('vanguard_bastion_prism')
+                const halfShieldArc = pl.blessingIds.includes('vanguard_bastion_prism')
                   ? Math.PI
                   : (65 * Math.PI) / 180;
                 if (Math.abs(angleDiff(ang, pl.aimAngle)) <= halfShieldArc) {
@@ -723,8 +723,8 @@ export function releaseVanguardShieldShockwaveImpl(this: WorldSim, p: SimPlayerS
   );
   p.shieldStoredBullets = 0;
 
-  const hasFortressUpgrade = this.activeBuffIds.includes('vanguard_bastion_prism');
-  const hasChargeUpgrade = this.activeBuffIds.includes('vanguard_charge');
+  const hasFortressUpgrade = p.blessingIds.includes('vanguard_bastion_prism');
+  const hasChargeUpgrade = p.blessingIds.includes('vanguard_charge');
   if (hasChargeUpgrade) {
     const stepDist = 11;
     const dirX = Math.cos(p.aimAngle);

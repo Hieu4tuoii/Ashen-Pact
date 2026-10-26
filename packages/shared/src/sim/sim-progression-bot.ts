@@ -34,8 +34,8 @@ export function activateShrineImpl(this: WorldSim, shrine: SimNpcState, actor: S
 
   // Also grant the room's shrineBlessingId buff if available
   const blessingId = room.shrineBlessingId as BuffId | null;
-  if (blessingId && FLOOR_BUFFS[blessingId] && !this.activeBuffIds.includes(blessingId)) {
-    this.applyBuffEffects(blessingId);
+  if (blessingId && FLOOR_BUFFS[blessingId] && !actor.blessingIds.includes(blessingId)) {
+    this.applyBuffEffects(blessingId, actor.id);
   }
 
   const buffDef = blessingId ? FLOOR_BUFFS[blessingId] : undefined;
@@ -78,73 +78,98 @@ export function enterPortalImpl(this: WorldSim): boolean {
 }
 
 export function rollPendingBuffChoicesImpl(this: WorldSim): void {
-  const activeCharIds = new Set(this.getAllPlayers().map((p) => p.characterId));
-  const available: BuffId[] = FLOOR_BUFF_LIST.filter(
-    (b) =>
-      !this.activeBuffIds.includes(b.id) &&
-      (b.category === 'general' ||
-        (b.characterId !== undefined && activeCharIds.has(b.characterId))),
-  ).map((b) => b.id);
-  const choices: BuffId[] = [];
+  for (const p of this.getAllPlayers()) {
+    const available: BuffId[] = FLOOR_BUFF_LIST.filter(
+      (b) =>
+        !p.blessingIds.includes(b.id) &&
+        (b.category === 'general' || b.characterId === p.characterId),
+    ).map((b) => b.id);
+    const choices: BuffId[] = [];
 
-  // Ensure at least 1 character skill upgrade for the active party is offered on floor transition
-  const skillUpgrades = available.filter((id) => {
-    const def = FLOOR_BUFFS[id];
-    return (
-      def?.category === 'skill_upgrade' && def.characterId && activeCharIds.has(def.characterId)
-    );
-  });
-  if (skillUpgrades.length > 0) {
-    const pickedSkill = this.rng.pick(skillUpgrades);
-    choices.push(pickedSkill);
-  }
-
-  const rest = available.filter((id) => !choices.includes(id));
-  while (choices.length < 3 && rest.length > 0) {
-    const idx = this.rng.nextInt(0, rest.length - 1);
-    choices.push(rest[idx]!);
-    rest.splice(idx, 1);
-  }
-  if (choices.length < 3) {
-    const fallback = FLOOR_BUFF_LIST.map((b) => b.id).filter(
-      (id) => !this.activeBuffIds.includes(id) && !choices.includes(id),
-    );
-    while (choices.length < 3 && fallback.length > 0) {
-      const idx = this.rng.nextInt(0, fallback.length - 1);
-      choices.push(fallback[idx]!);
-      fallback.splice(idx, 1);
+    // Ensure at least 1 character skill upgrade for this player's characterId is offered on floor transition
+    const skillUpgrades = available.filter((id) => {
+      const def = FLOOR_BUFFS[id];
+      return def?.category === 'skill_upgrade' && def.characterId === p.characterId;
+    });
+    if (skillUpgrades.length > 0) {
+      const pickedSkill = this.rng.pick(skillUpgrades);
+      choices.push(pickedSkill);
     }
+
+    const rest = available.filter((id) => !choices.includes(id));
+    while (choices.length < 3 && rest.length > 0) {
+      const idx = this.rng.nextInt(0, rest.length - 1);
+      choices.push(rest[idx]!);
+      rest.splice(idx, 1);
+    }
+    if (choices.length < 3) {
+      const fallback = FLOOR_BUFF_LIST.map((b) => b.id).filter(
+        (id) => !p.blessingIds.includes(id) && !choices.includes(id),
+      );
+      while (choices.length < 3 && fallback.length > 0) {
+        const idx = this.rng.nextInt(0, fallback.length - 1);
+        choices.push(fallback[idx]!);
+        fallback.splice(idx, 1);
+      }
+    }
+    p.buffChoices = choices;
   }
-  this.pendingBuffChoices = choices;
 }
 
-export function applyBuffEffectsImpl(this: WorldSim, buffId: BuffId): void {
+export function applyBuffEffectsImpl(
+  this: WorldSim,
+  buffId: BuffId,
+  playerId = this.player.id,
+): void {
   const def = FLOOR_BUFFS[buffId];
-  if (!def || this.activeBuffIds.includes(buffId)) return;
-  this.activeBuffIds.push(buffId);
+  const p = this.getPlayerById(playerId) ?? this.player;
+  if (!p || p.blessingIds.includes(buffId)) return;
+  p.blessingIds.push(buffId);
   this.events.push({
     kind: 'buff_selected',
     buffId,
-    nameVi: def.nameVi,
+    nameVi: def?.nameVi ?? buffId,
   });
 }
 
-export function selectFloorBuffImpl(this: WorldSim, buffId: BuffId): boolean {
-  const def = FLOOR_BUFFS[buffId];
-  if (!def) return false;
+export function selectFloorBuffImpl(
+  this: WorldSim,
+  buffId: BuffId,
+  playerId = this.player.id,
+): boolean {
+  if (!buffId) return false;
+  const p = this.getPlayerById(playerId) ?? this.player;
+  if (!p) return false;
+  if (p.buffChoices.length > 0 && !p.buffChoices.includes(buffId) && !FLOOR_BUFFS[buffId]) {
+    return false;
+  }
 
-  this.applyBuffEffects(buffId);
+  this.applyBuffEffects(buffId, p.id);
+  p.buffChoices = [];
 
-  this.pendingBuffChoices = [];
-  if (this.currentFloor < 6) {
-    this.advanceToFloor((this.currentFloor + 1) as 1 | 2 | 3 | 4 | 5 | 6);
-  } else {
-    this.runState = 'playing';
+  if (!this.coopModeActive && p.id === this.player.id) {
+    for (const sp of this.simulatedPlayers) {
+      if (sp.buffChoices.length > 0) {
+        this.applyBuffEffects(sp.buffChoices[0]!, sp.id);
+        sp.buffChoices = [];
+      }
+    }
+  }
+
+  if (this.getAllPlayers().every((pl) => pl.buffChoices.length === 0)) {
+    if (this.currentFloor < 6) {
+      this.advanceToFloor((this.currentFloor + 1) as 1 | 2 | 3 | 4 | 5 | 6);
+    } else {
+      this.runState = 'playing';
+    }
   }
   return true;
 }
 
 export function advanceToFloorImpl(this: WorldSim, floorNumber: 1 | 2 | 3 | 4 | 5 | 6): void {
+  for (const pl of this.getAllPlayers()) {
+    pl.buffChoices = [];
+  }
   this.currentFloor = floorNumber;
   this.currentBiome = floorNumber <= 2 ? 1 : floorNumber <= 4 ? 2 : 3;
   if (floorNumber > 2) {
@@ -361,8 +386,12 @@ export function stepBotAutoPlayImpl(this: WorldSim, _dtSec: number): void {
     return;
   }
 
-  if (this.runState === 'buff_choice' && this.pendingBuffChoices.length > 0) {
-    this.selectFloorBuff(this.pendingBuffChoices[0]!);
+  if (this.runState === 'buff_choice') {
+    for (const pl of this.getAllPlayers()) {
+      if (pl.buffChoices.length > 0) {
+        this.selectFloorBuff(pl.buffChoices[0]!, pl.id);
+      }
+    }
     return;
   }
   if (this.runState === 'victory' || this.runState === 'defeat') {

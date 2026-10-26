@@ -95,14 +95,10 @@ test.describe('Phase 5 — 5 Playable Characters, Skills & 10 Upgrades, 6 Elemen
       p4.skillActiveTimer = 3.8;
 
       // Enable skill upgrades for rich visual verification
-      sim.activeBuffIds.push(
-        'elementalist_vortex',
-        'elementalist_twin_orbit',
-        'druid_poison_roots',
-        'druid_sacred_grove',
-        'engineer_twin_turrets',
-        'vanguard_bastion_prism',
-      );
+      p1.blessingIds.push('elementalist_vortex', 'elementalist_twin_orbit');
+      p2.blessingIds.push('druid_poison_roots', 'druid_sacred_grove');
+      p3.blessingIds.push('engineer_twin_turrets');
+      p4.blessingIds.push('vanguard_bastion_prism');
 
       // Spawn high-HP enemies well-separated so Marks, Roots, Elemental Zones & Team Combo popups never overlap
       const bossTarget = sim.spawnEnemy('wild_boar', 635, 420, true, 'shield');

@@ -1,4 +1,13 @@
-import type { BuffId, CharacterId, EliteModifier, ElementType } from '../data/types.js';
+import type {
+  AshenPactId,
+  AshenRelicId,
+  BlessingId,
+  CharacterId,
+  DuoBoonId,
+  EliteModifier,
+  ElementType,
+  WeaponMutatorId,
+} from '../data/types.js';
 import type { SurfaceKind } from '../sim/arena-map.js';
 import type {
   EnemyAIState,
@@ -60,6 +69,14 @@ export interface QuantizedPlayerSnap {
   shieldBullets: number;
   activeSlot: number;
   weaponSlots: string[];
+  blessings: BlessingId[];
+  mutators: Record<number, WeaponMutatorId[]>;
+  duoBoons: DuoBoonId[];
+  pact: AshenPactId | null;
+  pactOrigWep: string | null;
+  relics: AshenRelicId[];
+  buffChoices: BlessingId[];
+  wepLevels?: Record<number, number>;
   fireCd100: number;
   imbue: ElementType;
   lastSeq: number;
@@ -145,8 +162,6 @@ export interface QuantizedWorldSnapshot {
   portalActive: boolean;
   portalX: number;
   portalY: number;
-  activeBuffIds: BuffId[];
-  pendingBuffChoices: BuffId[];
   players: QuantizedPlayerSnap[];
   enemies: QuantizedEnemySnap[];
   projectiles: QuantizedProjectileTuple[];
@@ -241,6 +256,20 @@ export function encodeWorldSnapshot(
     shieldBullets: p.shieldStoredBullets,
     activeSlot: p.activeWeaponSlot,
     weaponSlots: [...p.weaponSlots],
+    blessings: [...p.blessingIds],
+    mutators: {
+      0: [...(p.weaponMutators?.[0] ?? [])],
+      1: [...(p.weaponMutators?.[1] ?? [])],
+    },
+    duoBoons: [...p.duoBoonIds],
+    pact: p.activePactId,
+    pactOrigWep: p.pactOriginalWeaponId,
+    relics: [...p.awakenedRelicIds],
+    buffChoices: [...p.buffChoices],
+    wepLevels: {
+      0: p.weaponUpgradeLevels?.[0] ?? 0,
+      1: p.weaponUpgradeLevels?.[1] ?? 0,
+    },
     fireCd100: Math.round(p.fireCooldownTimer * 100),
     imbue: p.activeImbueElement,
     lastSeq: p.lastProcessedSeq,
@@ -334,8 +363,6 @@ export function encodeWorldSnapshot(
     portalActive: sim.portalActive,
     portalX: sim.portalX,
     portalY: sim.portalY,
-    activeBuffIds: [...sim.activeBuffIds],
-    pendingBuffChoices: [...sim.pendingBuffChoices],
     players,
     enemies,
     projectiles,
