@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-22T11:19:05.576Z",
+  "generatedAt": "2026-10-26T17:27:43.025Z",
   "viewport": {
     "width": 1920,
     "height": 1080
@@ -12,39 +12,39 @@
   },
   "uncapped": {
     "normalCombat": {
-      "sampleCount": 2730,
-      "durationMs": 20001.7,
-      "meanMs": 7.327,
-      "p50Ms": 6.7,
-      "p95Ms": 10.9,
-      "p99Ms": 13.3,
-      "minMs": 0.6,
-      "maxMs": 78.6,
-      "avgFpsEquivalent": 136.49,
-      "heapStartMb": 138.93,
-      "heapEndMb": 139.83,
-      "heapDeltaMb": 0.91
+      "sampleCount": 3724,
+      "durationMs": 20001.2,
+      "meanMs": 5.371,
+      "p50Ms": 5.3,
+      "p95Ms": 6.6,
+      "p99Ms": 7.4,
+      "minMs": 2.5,
+      "maxMs": 41.1,
+      "avgFpsEquivalent": 186.19,
+      "heapStartMb": 144.52,
+      "heapEndMb": 148.28,
+      "heapDeltaMb": 3.76
     },
     "stressCombat": {
-      "sampleCount": 1917,
-      "durationMs": 20004.1,
-      "meanMs": 10.435,
-      "p50Ms": 9.6,
-      "p95Ms": 15.72,
-      "p99Ms": 29.384,
-      "minMs": 0.4,
-      "maxMs": 35.6,
-      "avgFpsEquivalent": 95.83,
-      "heapStartMb": 157.3,
-      "heapEndMb": 179.9,
-      "heapDeltaMb": 22.6
+      "sampleCount": 2458,
+      "durationMs": 20008.1,
+      "meanMs": 8.14,
+      "p50Ms": 8,
+      "p95Ms": 9.9,
+      "p99Ms": 11.1,
+      "minMs": 0.6,
+      "maxMs": 25.5,
+      "avgFpsEquivalent": 122.85,
+      "heapStartMb": 173.02,
+      "heapEndMb": 184.82,
+      "heapDeltaMb": 11.8
     }
   },
   "vsync": {
-    "normalCombatFps": 59.7,
+    "normalCombatFps": 60,
     "stressCombatFps": 60.05,
     "normalCombatP95Ms": 17,
-    "stressCombatP95Ms": 16.9
+    "stressCombatP95Ms": 17
   },
   "targets": {
     "uncappedNormalP50MaxMs": 6,

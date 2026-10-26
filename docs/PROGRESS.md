@@ -860,3 +860,19 @@
      - **Whole-Branch `pro` Code Review (`a0b98584-9817-4125-b53e-b2ce7ec2b024`):** **APPROVED FOR v0.2.0 RELEASE & MERGE** (`0` Critical, `0` Important; toàn bộ `142` file thay đổi đều `< 1000` dòng, cao nhất là `settings-modal.ts` `988` dòng; phân loại và đóng toàn bộ 14 hạng mục tồn đọng từ các ledger P0 → P11).
      - **Full Quality Gate (`pnpm verify`):** `typecheck` PASS, `lint` PASS, `29/29` Vitest suites (`212/212` unit & soak tests) PASS, `build` PASS, `15/15` Playwright E2E specs PASS.
      - **Hardware GPU Performance Gate (`pnpm perf` trên `AMD Radeon(TM) Graphics Direct3D11`):** VSync Normal Combat **`59.95 FPS`**, VSync Stress Combat (`4P+80E+600B`) **`60.05 FPS`** (`>= 58`), Uncapped Normal **`p50 = 5.6ms` / `p95 = 8.0ms`** (`<= 11.0ms`, `eqFPS = 168.35`), Uncapped Stress **`p50 = 8.5ms` / `p95 = 11.2ms`** (`<= 15.0ms`, `eqFPS = 113.81`).
+
+---
+
+## 4. Nhật Ký Đại Tu Ashen Pact 2.0 — Tactical Arena Overhaul (`v0.2.1` → `v2.0.0`)
+
+### 4.0 Khởi Động & Baseline Trước Đại Tu (`overhaul/v2.0` @ `f26d4b7`)
+- **Worktree cô lập:** `.worktrees/overhaul-v2.0` (nhánh `overhaul/v2.0` tách từ `main` tại `f26d4b7 v0.2.1`).
+- **Tài liệu đặc tả gốc:** `docs/superpowers/specs/2026-10-26-ashen-pact-2.0-overhaul-design.md` (Rev 4) & `master-promt-v3.md`.
+- **Baseline Hiệu Năng GPU (`docs/perf-baseline.json`):**
+  - **GPU Renderer:** `ANGLE (AMD, AMD Radeon(TM) Graphics (0x0000164C) Direct3D11 vs_5_0 ps_5_0, D3D11)`
+  - **Uncapped Normal (`1080p High`):** `p50 = 5.3ms` (`<= 6.0ms`), `p95 = 6.6ms` (`<= 11.0ms`), `eqFPS = 186.19`
+  - **Uncapped Stress (`4P+80E+600B`):** `p50 = 8.0ms` (`<= 10.0ms`), `p95 = 9.9ms` (`<= 15.0ms`), `eqFPS = 122.85`
+  - **VSync Normal Combat FPS:** `60.00 FPS` (mục tiêu `>= 60`)
+  - **VSync Stress Combat FPS:** `60.05 FPS` (mục tiêu `>= 58`)
+- **Ảnh chụp `before` cho Phase P0A:** Đã lưu tại `docs/screenshots/ap2-p0a/before/` (`hub-solo`, `b1-start-room`, `b1-combat`, `coop-4p-combat`, `b1-hud-weapon-compare`, `b1-dark-interactables`).
+

@@ -112,4 +112,26 @@
 | P11 | Harness thật + độ khó + kịch tính | Khó và kịch tính hơn | [x] |
 | P12 | Hồi quy, hiệu năng, release v0.2.0 | Chất lượng sản phẩm | [x] |
 
+---
+
+## Giai đoạn Đại Tu Ashen Pact 2.0 — Tactical Arena Overhaul (`v0.2.1` → `v2.0.0`)
+
+| Phase | Tag | Nội dung | Trạng thái |
+|---|---|---|---|
+| P0A | `ap2-p0a` | Nền tảng Dữ liệu, Giao thức Mạng 30Hz, Xóa Năng Lượng & Dọn Dẹp 18 Vũ Khí | [ ] |
+| P0B | `ap2-p0b` | Lát Cắt Dọc Core Fun: 3 Archetype Phòng, Vật Lý Chiến Thuật, Biome 1 & 4 Vũ Khí Chuẩn (Playtest Gate 1) | [ ] |
+| P1A | `ap2-p1a` | Đại Tu Vũ Khí Đợt 1 (7 Vũ Khí: Nỏ, Trượng Gai, Shotgun, SMG, Súng Lựu, Súng Hạt Giống, Trượng Xích) | [ ] |
+| P1B | `ap2-p1b` | Đại Tu Vũ Khí Đợt 2 (7 Vũ Khí Còn Lại) & Pipeline Sát Thương 3 Nhóm (3-Bucket Damage Cap) | [ ] |
+| P1C | `ap2-p1c` | 3 Archetype Phòng Còn Lại & Hệ Sinh Thái Biome 2 (Băng) + Biome 3 (Lò Rèn) | [ ] |
+| P1D | `ap2-p1d` | 16 Phước Lành Hành Động Cốt Lõi (Core Action Blessings) & 10 Nâng Cấp Kỹ Năng Nhân Vật | [ ] |
+| P2A | `ap2-p2a` | Đồ Thị Tầng Động (Odd/Even), Tường Nứt Bí Mật, Đe Thợ Rèn Daedalus & Phân Rã Vũ Khí | [ ] |
+| P2B | `ap2-p2b` | Khế Ước Tro Tàn (Ashen Pacts: 1 Điện Thờ / Biome, Thử Thách Trọn Biome & 6 Thánh Vật Thức Tỉnh) | [ ] |
+| P3A | `ap2-p3a` | Ngắm Đón Đầu Có Giới Hạn (`±28°`) & 12 Quái Tương Tác Địa Hình Qua 3 Biome | [ ] |
+| P3B | `ap2-p3b` | 3 Boss Phá Giáp Tương Tác 1–2 Bước, Tiếp Tế Giữa Trận & Thanh Choáng `bossStaggerAccum` | [ ] |
+| P3C | `ap2-p3c` | Hồ Sơ Bot Mô Phỏng Người Thật, Cân Bằng `pnpm balance` & Playtest Gate 2 | [ ] |
+| P4A | `ap2-p4a` | Mở Rộng Chiều Sâu Đợt 1: 8 Phước Lành Hành Động Nâng Cao & 4 Đột Biến Vũ Khí Mở Rộng | [ ] |
+| P4B | `ap2-p4b` | Mở Rộng Chiều Sâu Đợt 2: 6 Duo Boons Nguyên Tố & Đấu Trường Bí Mật 20 Giây | [ ] |
+| P5 | `v2.0.0` | Kiểm Chứng Hồi Quy Toàn Diện, Hiệu Năng 60Hz 4P, Đóng Gói `v2.0.0` & Hoàn Tất Nhánh | [ ] |
+
+
 
