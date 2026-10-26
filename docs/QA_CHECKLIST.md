@@ -1,6 +1,6 @@
-# ✅ BÁO CÁO NGHIỆM THU BUG BASH & CHECKLIST QA TOÀN DIỆN (`QA_CHECKLIST.md`) — ASHEN PACT `v0.2.0`
+# ✅ BÁO CÁO NGHIỆM THU BUG BASH & CHECKLIST QA TOÀN DIỆN (`QA_CHECKLIST.md`) — ASHEN PACT `v0.2.1`
 
-> Tài liệu này ghi lại kết quả rà soát và kiểm định tự động + trực quan toàn bộ 8 nhóm danh mục QA trước khi đóng gói bản phát hành `v0.2.0` (*"Polish & Depth"*).
+> Tài liệu này ghi lại kết quả rà soát và kiểm định tự động + trực quan toàn bộ 8 nhóm danh mục QA trước khi đóng gói bản phát hành `v0.2.1` (*"Polish & Depth"*).
 
 ---
 
@@ -82,11 +82,11 @@
 
 ---
 
-## 8.7 Trình Bày `HudScene`, Bản Phát Hành Windows `v0.2.0` & Hoàn Thiện
+## 8.7 Trình Bày `HudScene`, Bản Phát Hành Windows `v0.2.1` & Hoàn Thiện
 
 | # | Hạng mục kiểm tra | Trạng thái | Phương pháp & Bằng chứng kiểm chứng |
 |---:|---|:---:|---|
 | 1 | Hiển thị trọn vẹn dấu tiếng Việt (`"Tiếng Việt: ắ ằ ẳ ẵ ặ ầ ẩ ẫ ậ ỡ ự ữ ỹ Đ đ"`) sắc nét trên `HudScene` độc lập ở cả 1080p và 1440p; đồng bộ 100% 450+ khóa đa ngôn ngữ `vi` / `en` | ✅ PASS | `tests/e2e/polish-p8.spec.ts`, `polish-p9a.spec.ts`, `polish-p9b.spec.ts` |
 | 2 | Màn hình Kết thúc lượt chơi 3 tầng hiển thị đầy đủ thống kê đội, tên Phước Lành đã dịch chuẩn, **Bảng thống kê chi tiết từng người chơi**, **4 Danh hiệu MVP** và 2 nút hành động phân cấp (`Chơi lại [Enter]` / `Về Hub [H]`) | ✅ PASS | `tests/e2e/polish-p9b.spec.ts` & `tests/e2e/phase7.spec.ts` |
-| 3 | Đóng gói bản phát hành sạch vào `release/AshenPact-v0.2.0-win-x64/` và `release/AshenPact-v0.2.0-win-x64.zip` qua `pnpm package:release` (gồm `AshenPact-Host.exe`, `start-host.bat`, `start-host-debug.bat`, `allow-firewall-port-2567.bat`, `runtime/node.exe`, `server-bundle.cjs`, `client/`, `README.md`, `CREDITS.md`, `RELEASE_NOTES.md`) | ✅ PASS | `tools/package-release.ts`, `packages/shared/test/polish-p12-release-version.test.ts` & `tests/e2e/phase8.spec.ts` |
-| 4 | Chạy thực tế bản phát hành `v0.2.0` từ thư mục sạch → Host khởi động in `ASHEN PACT v0.2.0` + IP LAN + Mã QR ASCII ra Console, 2 Client (Chromium + Edge) kết nối qua **IP LAN thực của máy**, vào Hub, khởi hành và vượt trọn 1 tầng Dungeon + hạ Boss | ✅ PASS | `tests/e2e/phase8.spec.ts` & `docs/screenshots/phase-8/` |
+| 3 | Đóng gói bản phát hành sạch vào `release/AshenPact-v0.2.1-win-x64/` và `release/AshenPact-v0.2.1-win-x64.zip` qua `pnpm package:release` (gồm `AshenPact-Host.exe`, `start-host.bat`, `start-host-debug.bat`, `allow-firewall-port-2567.bat`, `runtime/node.exe`, `server-bundle.cjs`, `client/`, `README.md`, `CREDITS.md`, `RELEASE_NOTES.md`) | ✅ PASS | `tools/package-release.ts`, `packages/shared/test/polish-p12-release-version.test.ts` & `tests/e2e/phase8.spec.ts` |
+| 4 | Chạy thực tế bản phát hành `v0.2.1` từ thư mục sạch → Host khởi động in `ASHEN PACT v0.2.1` + IP LAN + Mã QR ASCII ra Console, 2 Client (Chromium + Edge) kết nối qua **IP LAN thực của máy**, vào Hub, khởi hành và vượt trọn 1 tầng Dungeon + hạ Boss | ✅ PASS | `tests/e2e/phase8.spec.ts` & `docs/screenshots/phase-8/` |

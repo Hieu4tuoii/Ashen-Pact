@@ -304,15 +304,15 @@ describe('Phase B1 — Combat & Economy Balance Overhaul', () => {
     expect(sim.player.burnTimer).toBeGreaterThan(0);
   });
 
-  it('B1.5: spawns 7-11 enemies per wave across 2-3 waves at perimeter/quadrant points >= 140px from player and overlaps waves at 9.5s', () => {
+  it('B1.5: spawns 4-6 enemies per wave across 2-3 waves at perimeter/quadrant points >= 140px from player and overlaps waves at 9.5s', () => {
     const floor1 = generateDungeonFloor(5050, 1, 1, 1);
     const normalCombatRooms = floor1.rooms.filter((r) => r.type === 'combat' && !r.isChallenge);
     for (const r of normalCombatRooms) {
       expect(r.wavesTotal).toBeGreaterThanOrEqual(2);
       expect(r.wavesTotal).toBeLessThanOrEqual(3);
       for (const w of r.waves) {
-        expect(w.enemies.length).toBeGreaterThanOrEqual(7);
-        expect(w.enemies.length).toBeLessThanOrEqual(11);
+        expect(w.enemies.length).toBeGreaterThanOrEqual(4);
+        expect(w.enemies.length).toBeLessThanOrEqual(6);
       }
     }
 
@@ -321,7 +321,8 @@ describe('Phase B1 — Combat & Economy Balance Overhaul', () => {
     const challenge2 = floor2.rooms.find((r) => r.isChallenge)!;
     const finalWave = challenge2.waves[challenge2.waves.length - 1]!;
     expect(finalWave.enemies.filter((e) => e.isElite).length).toBeGreaterThanOrEqual(2);
-    expect(finalWave.enemies.length).toBeGreaterThanOrEqual(9);
+    expect(finalWave.enemies.length).toBeGreaterThanOrEqual(5);
+    expect(finalWave.enemies.length).toBeLessThanOrEqual(7);
 
     // Spawn positions are distributed across quadrants and >= 140px from alive player
     const sim = new WorldSim({
@@ -334,7 +335,8 @@ describe('Phase B1 — Combat & Economy Balance Overhaul', () => {
     sim.enterRoom(combatRoom.id);
 
     const wave1 = sim.enemies.filter((e) => !e.isDummy && e.waveIndex === 1);
-    expect(wave1.length).toBeGreaterThanOrEqual(7);
+    expect(wave1.length).toBeGreaterThanOrEqual(4);
+    expect(wave1.length).toBeLessThanOrEqual(6);
     const cx = sim.map.width * 0.5;
     let leftHalfCount = 0;
     let rightHalfCount = 0;
@@ -365,12 +367,13 @@ describe('Phase B1 — Combat & Economy Balance Overhaul', () => {
     const shrine = sim.npcEntities.find((n) => n.kind === 'shrine')!;
 
     const prevMaxEnergy = sim.player.maxEnergy;
+    const buffEnergyBonus = shrineRoom.shrineBlessingId === 'arcane_wellspring' ? 60 : 0;
     sim.player.gold = 50;
     sim.player.x = shrine.x;
     sim.player.y = shrine.y;
     expect(sim.interactWithNearest()).toBe(true);
     expect(sim.player.gold).toBe(10); // 50 - 40 = 10
-    expect(sim.player.maxEnergy).toBe(prevMaxEnergy + 15);
+    expect(sim.player.maxEnergy).toBe(prevMaxEnergy + 15 + buffEnergyBonus);
     expect(sim.worldItems.filter((it) => it.kind === 'weapon')).toHaveLength(0);
 
     // Normal combat room chest chance ~45% vs Challenge room 100%

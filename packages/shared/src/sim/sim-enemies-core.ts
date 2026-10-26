@@ -12,30 +12,87 @@ export function updatePhase6MechanicsImpl(this: WorldSim, dtSec: number): void {
   // 1. Pushable stone blocks (Solo alternative for 2-player pressure plates)
   for (let i = 0; i < this.pushBlocks.length; i++) {
     const block = this.pushBlocks[i]!;
+
+    // Check if the block is already within capture range of a pressure plate
+    let lockedPlate: { x: number; y: number } | null = null;
+    for (let k = 0; k < this.pressurePlates.length; k++) {
+      const plate = this.pressurePlates[k]!;
+      if (distance(block.x, block.y, plate.x, plate.y) <= 22) {
+        lockedPlate = plate;
+        break;
+      }
+    }
+
+    if (lockedPlate) {
+      // Once seated onto a pressure plate, snap firmly onto the plate center and lock in place
+      block.x = approach(block.x, lockedPlate.x, 320 * dtSec);
+      block.y = approach(block.y, lockedPlate.y, 320 * dtSec);
+      continue;
+    }
+
     for (let pIdx = 0; pIdx < allPlayers.length; pIdx++) {
       const pl = allPlayers[pIdx]!;
       if (pl.lifeState !== 'alive') continue;
       const dx = block.x - pl.x;
       const dy = block.y - pl.y;
       const d = Math.hypot(dx, dy);
-      const minDist = pl.radius + block.radius + 2;
+      const minDist = pl.radius + block.radius + 4;
       if (d > 0.001 && d < minDist) {
-        const push = (minDist - d) * 1.15;
+        let dirX = dx / d;
+        let dirY = dy / d;
+
+        // Blend with player velocity direction to prevent circle-on-circle lateral slip
+        const vLen = Math.hypot(pl.vx, pl.vy);
+        if (vLen > 10) {
+          const vxN = pl.vx / vLen;
+          const vyN = pl.vy / vLen;
+          if (vxN * dirX + vyN * dirY > -0.25) {
+            dirX = dirX * 0.3 + vxN * 0.7;
+            dirY = dirY * 0.3 + vyN * 0.7;
+          }
+        }
+
+        // Magnetic guidance toward the nearest unpressed pressure plate within 160u
+        let nearestPlate: { x: number; y: number } | null = null;
+        let nearestPlateDist = 160;
+        for (let k = 0; k < this.pressurePlates.length; k++) {
+          const plate = this.pressurePlates[k]!;
+          const pd = distance(block.x, block.y, plate.x, plate.y);
+          if (pd < nearestPlateDist) {
+            nearestPlateDist = pd;
+            nearestPlate = plate;
+          }
+        }
+        if (nearestPlate && nearestPlateDist > 0.5) {
+          const toPlateX = (nearestPlate.x - block.x) / nearestPlateDist;
+          const toPlateY = (nearestPlate.y - block.y) / nearestPlateDist;
+          if (dirX * toPlateX + dirY * toPlateY > -0.35) {
+            dirX = dirX * 0.4 + toPlateX * 0.6;
+            dirY = dirY * 0.4 + toPlateY * 0.6;
+          }
+        }
+
+        const dirLen = Math.hypot(dirX, dirY) || 1;
+        dirX /= dirLen;
+        dirY /= dirLen;
+
+        const push = Math.max((minDist - d) * 1.25, Math.min(vLen, 220) * dtSec);
         const col = this.map.resolveCircleCollision(
-          block.x + (dx / d) * push,
-          block.y + (dy / d) * push,
+          block.x + dirX * push,
+          block.y + dirY * push,
           block.radius,
         );
         block.x = col.x;
         block.y = col.y;
       }
     }
-    // Snap gently onto a nearby pressure plate center if pushed within 18u
+
+    // Snap onto a nearby pressure plate center if pushed within 26u
     for (let k = 0; k < this.pressurePlates.length; k++) {
       const plate = this.pressurePlates[k]!;
-      if (distance(block.x, block.y, plate.x, plate.y) <= 18) {
-        block.x = approach(block.x, plate.x, 80 * dtSec);
-        block.y = approach(block.y, plate.y, 80 * dtSec);
+      if (distance(block.x, block.y, plate.x, plate.y) <= 26) {
+        block.x = approach(block.x, plate.x, 260 * dtSec);
+        block.y = approach(block.y, plate.y, 260 * dtSec);
       }
     }
   }
@@ -544,9 +601,31 @@ export function updateEnemiesImpl(this: WorldSim, dtSec: number): void {
 
     const nextX = e.x + (e.vx + e.kbVx + sepX + conveyorPushX) * dtSec;
     const nextY = e.y + (e.vy + e.kbVy + sepY) * dtSec;
-    const col = this.map.resolveCircleCollision(nextX, nextY, e.radius);
+    let col = this.map.resolveCircleCollision(nextX, nextY, e.radius);
     e.x = col.x;
     e.y = col.y;
+    if (!this.stressTestActive && e.defId !== 'ice_prison') {
+      this.resolvePropMovementCollision(e);
+      for (let pIdx = 0; pIdx < this.props.length; pIdx++) {
+        const prop = this.props[pIdx]!;
+        if (prop.hp <= 0 || prop.kind !== 'ancient_mechanism') continue;
+        const dx = e.x - prop.x;
+        const dy = e.y - prop.y;
+        const minDist = e.radius + prop.radius;
+        const dSq = dx * dx + dy * dy;
+        if (dSq < minDist * minDist && dSq > 1e-6) {
+          const d = Math.sqrt(dSq);
+          e.x += (dx / d) * (minDist - d);
+          e.y += (dy / d) * (minDist - d);
+        }
+      }
+      const postPropCol = this.map.resolveCircleCollision(e.x, e.y, e.radius);
+      e.x = postPropCol.x;
+      e.y = postPropCol.y;
+      if (postPropCol.collided) {
+        col = postPropCol;
+      }
+    }
 
     if (surf === 'grass' && Math.hypot(e.vx, e.vy) > 25 && e.grassRustleCooldown <= 0) {
       e.grassRustleCooldown = 0.35;
@@ -735,6 +814,24 @@ function clearBossNearbyProjectiles(sim: WorldSim, bossX: number, bossY: number,
     }
   }
   sim.projectiles.length = writeIdx;
+
+  // Reward all alive players with a substantial phase-transition energy burst so they never starve mid-boss fight
+  for (let pIdx = 0; pIdx < players.length; pIdx++) {
+    const pl = players[pIdx]!;
+    if (pl.lifeState !== 'alive') continue;
+    const bonusEnergy = Math.max(130, Math.round(pl.maxEnergy * 0.7));
+    const prevEnergy = pl.energy;
+    pl.energy = Math.min(pl.maxEnergy, pl.energy + bonusEnergy);
+    pl.energyRegenDelayTimer = 0;
+    const actualGained = Math.max(1, pl.energy - prevEnergy);
+    sim.events.push({
+      kind: 'pickup_collected',
+      pickupKind: 'energy',
+      amount: actualGained,
+      x: pl.x,
+      y: pl.y,
+    });
+  }
 
   // Drop phase-break sustain orbs (1 Life Seed + 2 Energy orbs) around Boss position with outward scatter velocity
   const baseAng = sim.rng.nextFloat(-Math.PI, Math.PI);

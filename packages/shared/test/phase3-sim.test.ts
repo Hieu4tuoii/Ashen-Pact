@@ -160,7 +160,12 @@ describe('Phase 3 Weapons, Enemies, Elites & Boss Mục Vương', () => {
   });
 
   it('runs Boss Mục Vương Nấm Độc through Phase 1 -> Phase 2 -> Phase 3 -> Victory', () => {
-    const sim = new WorldSim({ seed: 7777, spawnInitialWave: false, includeTrainingDummy: false });
+    const sim = new WorldSim({
+      seed: 7777,
+      campaignMaxFloors: 2,
+      spawnInitialWave: false,
+      includeTrainingDummy: false,
+    });
     sim.player.godMode = true;
     sim.advanceToFloor(2);
     const bossRoom = sim.dungeon.rooms.find((r) => r.type === 'boss');
@@ -291,7 +296,7 @@ describe('Phase 3 Weapons, Enemies, Elites & Boss Mục Vương', () => {
   });
 
   it('auto-plays a full Floor 1 -> Buff Selection -> Floor 2 + Boss Mục Vương run via botAutoPlayActive', () => {
-    const sim = new WorldSim({ seed: 202603, autoRespawnWaves: false });
+    const sim = new WorldSim({ seed: 202603, campaignMaxFloors: 2, autoRespawnWaves: false });
     sim.botAutoPlayActive = true;
     // Equip a strong ranged weapon for fast deterministic bot clear
     sim.player.weaponSlots[1] = 'solar_archon_staff';

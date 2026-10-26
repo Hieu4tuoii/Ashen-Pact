@@ -6,9 +6,9 @@ import { packageRelease } from '../../tools/package-release.js';
 
 const SCREENSHOT_DIR = path.resolve(process.cwd(), 'docs/screenshots/phase-8');
 const POLISH_P1_AFTER_DIR = path.resolve(process.cwd(), 'docs/screenshots/polish-p1/after');
-const RELEASE_DIR = path.resolve(process.cwd(), 'release/AshenPact-v0.2.0-win-x64');
+const RELEASE_DIR = path.resolve(process.cwd(), 'release/AshenPact-v0.2.1-win-x64');
 const RELEASE_EXE = path.join(RELEASE_DIR, 'AshenPact-Host.exe');
-const RELEASE_ZIP = path.resolve(process.cwd(), 'release/AshenPact-v0.2.0-win-x64.zip');
+const RELEASE_ZIP = path.resolve(process.cwd(), 'release/AshenPact-v0.2.1-win-x64.zip');
 const RELEASE_PORT = 2578;
 const NO_DEBUG_PORT = RELEASE_PORT + 1;
 
@@ -20,8 +20,8 @@ test.beforeAll(() => {
   packageRelease({ skipBuild: false });
 });
 
-test.describe('Phase 8 — Standalone Windows Release Package (v0.2.0), Real LAN IP Co-op & Cross-Browser Verification', () => {
-  test('stages AshenPact-v0.2.0-win-x64 into a clean path with spaces & Vietnamese Unicode, launches AshenPact-Host.exe with --debug, connects Chromium + Edge over real LAN IPv4, and verifies full Co-op Dungeon + Boss Victory stats', async ({
+test.describe('Phase 8 — Standalone Windows Release Package (v0.2.1), Real LAN IP Co-op & Cross-Browser Verification', () => {
+  test('stages AshenPact-v0.2.1-win-x64 into a clean path with spaces & Vietnamese Unicode, launches AshenPact-Host.exe with --debug, connects Chromium + Edge over real LAN IPv4, and verifies full Co-op Dungeon + Boss Victory stats', async ({
     browser,
   }) => {
     test.setTimeout(90000);
@@ -83,7 +83,7 @@ test.describe('Phase 8 — Standalone Windows Release Package (v0.2.0), Real LAN
       });
 
       // Verify console banner printed LAN IP and Unicode half-block QR Code
-      expect(consoleStdout).toContain('ASHEN PACT v0.2.0');
+      expect(consoleStdout).toContain('ASHEN PACT v0.2.1');
       expect(consoleStdout).toContain(`:${RELEASE_PORT}`);
       expect(consoleStdout).toContain('█');
       expect(consoleStdout).toContain('▀');
@@ -137,7 +137,7 @@ test.describe('Phase 8 — Standalone Windows Release Package (v0.2.0), Real LAN
         port: number;
         debugAllowed: boolean;
       };
-      expect(hostInfo.version).toBe('0.2.0');
+      expect(hostInfo.version).toBe('0.2.1');
       expect(hostInfo.port).toBe(RELEASE_PORT);
       expect(hostInfo.debugAllowed).toBe(true);
       expect(hostInfo.primaryLanIp).toBeTruthy();
@@ -157,7 +157,7 @@ test.describe('Phase 8 — Standalone Windows Release Package (v0.2.0), Real LAN
         { timeout: 15000 },
       );
 
-      await pageClient2.goto(`${lanBaseUrl}/?name=${encodeURIComponent('Đồng Đội Edge P2')}&debug=1`);
+      await pageClient2.goto(`${lanBaseUrl}/?coop=join&name=${encodeURIComponent('Đồng Đội Edge P2')}&debug=1`);
       for (const p of pages) {
         await p.waitForFunction(
           () =>

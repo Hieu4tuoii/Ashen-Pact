@@ -341,7 +341,7 @@ export function computeCameraShakeOffset(
   this.trauma = Math.max(0, this.trauma - dtSec * 2.1);
   const shakeIntensity = graphicsSettings.getState().screenShakeIntensity;
   const shakePower = this.trauma * this.trauma * shakeIntensity;
-  const maxOffset = 11;
+  const maxOffset = 5.5;
 
   const nx =
     Math.sin(this.shakeTime * 43.0) * 0.55 +

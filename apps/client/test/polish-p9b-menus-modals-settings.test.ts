@@ -4,7 +4,9 @@ import {
   getResultScreenButtonSpecs,
   resolveLocalizedBuffText,
 } from '../src/scenes/game-scene/hud-modals-and-debug.js';
-import { graphicsSettings } from '../src/ui/graphics-settings.js';
+import { computeCameraShakeOffset } from '../src/fx/combat-fx-pools.js';
+import type { CombatFxManager } from '../src/fx/combat-fx.js';
+import { DEFAULT_GRAPHICS_SETTINGS, graphicsSettings } from '../src/ui/graphics-settings.js';
 import {
   applyMenuInputEdit,
   computeMenuInputOverlayRect,
@@ -169,7 +171,16 @@ describe('Phase P9b — Menus, Hub Invite Panel, Modals, Pause Confirm & 4-Tab S
     expect(viTabs.map((t) => t.id)).toEqual(['audio', 'video', 'gameplay', 'controls']);
 
     graphicsSettings.resetDefaults();
+    expect(DEFAULT_GRAPHICS_SETTINGS.screenShakeIntensity).toBe(0.4);
+    expect(graphicsSettings.getState().screenShakeIntensity).toBe(0.4);
     expect(graphicsSettings.getState().uiScale).toBe(1.0);
+
+    // Verify camera shake maxOffset is halved (5.5 instead of 11)
+    graphicsSettings.setScreenShakeIntensity(1.0);
+    const mockFx = { trauma: 1.0, shakeTime: 0 } as unknown as CombatFxManager;
+    const shake = computeCameraShakeOffset.call(mockFx, 0);
+    const expectedNx = Math.cos(1.3) * 0.3 + Math.sin(2.7) * 0.15;
+    expect(shake.offsetX).toBeCloseTo(expectedNx * 5.5, 4);
     expect(graphicsSettings.getState().showKeyHints).toBe(true);
 
     graphicsSettings.setUiScale(1.25);

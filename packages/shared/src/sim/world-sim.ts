@@ -45,7 +45,7 @@ export class WorldSim {
 
   // Phase 6 Biomes 2 & 3, Co-op Pressure Plates, Shockwave Rings & Tether Beams
   public currentBiome: 1 | 2 | 3 = 1;
-  public campaignMaxFloors: 2 | 6 = 2;
+  public campaignMaxFloors: 2 | 6 = 6;
   public pressurePlates: SimPressurePlateState[] = [];
   public pushBlocks: SimPushBlockState[] = [];
   public coopPuzzleCompleted = false;
@@ -150,7 +150,7 @@ export class WorldSim {
       this.coopPlayerCountOverride = options.playerCount;
     }
     this.currentBiome = options.biome ?? options.mapConfig?.biome ?? 1;
-    this.campaignMaxFloors = options.campaignMaxFloors ?? (this.currentBiome > 1 ? 6 : 2);
+    this.campaignMaxFloors = options.campaignMaxFloors ?? 6;
     this.currentFloor = this.currentBiome === 1 ? 1 : this.currentBiome === 2 ? 3 : 5;
 
     const spawnWave = options.startInHub ? false : (options.spawnInitialWave ?? true);

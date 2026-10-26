@@ -160,12 +160,17 @@ export function updateSinglePlayerStateImpl(this: WorldSim,
   if (p.grassRustleCooldown > 0)
     p.grassRustleCooldown = Math.max(0, p.grassRustleCooldown - dtSec);
 
+  const activeBossInRoom = !this.stressTestActive && this.getActiveBoss() !== null;
+  if (activeBossInRoom && p.energyRegenDelayTimer > 1.0) {
+    p.energyRegenDelayTimer = 1.0;
+  }
   if (p.energyRegenDelayTimer > 0) {
     const nextEnergyDelay = p.energyRegenDelayTimer - dtSec;
     p.energyRegenDelayTimer = nextEnergyDelay < 1e-6 ? 0 : nextEnergyDelay;
   } else if (p.energy < p.maxEnergy) {
     const regenMult = this.activeBuffIds.includes('arcane_wellspring') ? 1.5 : 1.0;
-    p.energyRegenAccum += dtSec * 1.5 * regenMult;
+    const baseRegenRate = activeBossInRoom ? 3.5 : 1.5;
+    p.energyRegenAccum += dtSec * baseRegenRate * regenMult;
     if (p.energyRegenAccum + 1e-6 >= 1) {
       const gain = Math.floor(p.energyRegenAccum + 1e-6);
       p.energyRegenAccum = Math.max(0, p.energyRegenAccum - gain);

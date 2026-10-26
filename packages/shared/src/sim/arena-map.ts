@@ -741,21 +741,31 @@ export class ArenaMap {
     let normalX = currX !== x ? Math.sign(currX - x) : 0;
     let normalY = currY !== y ? Math.sign(currY - y) : 0;
 
-    const minTx = Math.max(0, Math.floor((currX - radius) / TILE_SIZE) - 1);
-    const maxTx = Math.min(this.cols - 1, Math.floor((currX + radius) / TILE_SIZE) + 1);
-    const minTy = Math.max(0, Math.floor((currY - radius) / TILE_SIZE) - 1);
-    const maxTy = Math.min(this.rows - 1, Math.floor((currY + radius) / TILE_SIZE) + 1);
-
     // Pass 1: Resolve cardinal face overlaps first so sliding across tile seams never snags on internal corners
     // Pass 2: Resolve any remaining true outer-corner overlaps
     for (let pass = 0; pass < 2; pass++) {
-      for (let ty = minTy; ty <= maxTy; ty++) {
-        for (let tx = minTx; tx <= maxTx; tx++) {
+      const pMinTx = Math.max(0, Math.floor((currX - radius) / TILE_SIZE) - 2);
+      const pMaxTx = Math.min(this.cols - 1, Math.floor((currX + radius) / TILE_SIZE) + 2);
+      const pMinTy = Math.max(0, Math.floor((currY - radius) / TILE_SIZE) - 2);
+      const pMaxTy = Math.min(this.rows - 1, Math.floor((currY + radius) / TILE_SIZE) + 2);
+      for (let ty = pMinTy; ty <= pMaxTy; ty++) {
+        for (let tx = pMinTx; tx <= pMaxTx; tx++) {
           if (!this.isSolidTile(tx, ty)) continue;
-          const minX = tx * TILE_SIZE;
-          const minY = ty * TILE_SIZE;
-          const maxX = minX + TILE_SIZE;
-          const maxY = minY + TILE_SIZE;
+          let bMinTx = tx;
+          let bMaxTx = tx;
+          let bMinTy = ty;
+          let bMaxTy = ty;
+          const isInterior = tx > 0 && tx < this.cols - 1 && ty > 0 && ty < this.rows - 1;
+          if (isInterior) {
+            while (bMinTx > 1 && this.isSolidTile(bMinTx - 1, ty)) bMinTx -= 1;
+            while (bMaxTx < this.cols - 2 && this.isSolidTile(bMaxTx + 1, ty)) bMaxTx += 1;
+            while (bMinTy > 1 && this.isSolidTile(tx, bMinTy - 1)) bMinTy -= 1;
+            while (bMaxTy < this.rows - 2 && this.isSolidTile(tx, bMaxTy + 1)) bMaxTy += 1;
+          }
+          const minX = bMinTx * TILE_SIZE;
+          const minY = bMinTy * TILE_SIZE;
+          const maxX = (bMaxTx + 1) * TILE_SIZE;
+          const maxY = (bMaxTy + 1) * TILE_SIZE;
 
           const isCardinalFace =
             (currX >= minX && currX <= maxX) || (currY >= minY && currY <= maxY);

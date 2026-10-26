@@ -8,7 +8,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ROOT_DIR = path.resolve(__dirname, '..');
 const RELEASE_ROOT = path.join(ROOT_DIR, 'release');
-const RELEASE_NAME = 'AshenPact-v0.2.0-win-x64';
+const RELEASE_NAME = 'AshenPact-v0.2.1-win-x64';
 const RELEASE_DIR = path.join(RELEASE_ROOT, RELEASE_NAME);
 const RELEASE_ZIP = path.join(RELEASE_ROOT, `${RELEASE_NAME}.zip`);
 
@@ -196,7 +196,7 @@ internal static class Program
         try
         {
             Console.OutputEncoding = Encoding.UTF8;
-            Console.Title = "Ashen Pact v0.2.0 - Co-op LAN Host Server";
+            Console.Title = "Ashen Pact v0.2.1 - Co-op LAN Host Server";
         }
         catch
         {
@@ -313,7 +313,7 @@ function writeBatchScripts(releaseDir: string): void {
   const startHostBat = [
     '@echo off',
     'chcp 65001 >nul',
-    'title Ashen Pact v0.2.0 - Co-op LAN Host Server',
+    'title Ashen Pact v0.2.1 - Co-op LAN Host Server',
     'cd /d "%~dp0"',
     'if exist "%~dp0AshenPact-Host.exe" (',
     '  "%~dp0AshenPact-Host.exe" --host %*',
@@ -333,7 +333,7 @@ function writeBatchScripts(releaseDir: string): void {
     'chcp 65001 >nul',
     'title Ashen Pact - Mo Cong Windows Firewall (TCP 2567-2576)',
     'echo ==================================================================',
-    'echo   ASHEN PACT v0.2.0 - CAU HINH WINDOWS DEFENDER FIREWALL (LAN)',
+    'echo   ASHEN PACT v0.2.1 - CAU HINH WINDOWS DEFENDER FIREWALL (LAN)',
     'echo ==================================================================',
     'net session >nul 2>&1',
     'if %ERRORLEVEL% neq 0 (',
@@ -365,7 +365,7 @@ function writeBatchScripts(releaseDir: string): void {
   const startHostDebugBat = [
     '@echo off',
     'chcp 65001 >nul',
-    'title Ashen Pact v0.2.0 - Co-op LAN Host Server (DEBUG MODE)',
+    'title Ashen Pact v0.2.1 - Co-op LAN Host Server (DEBUG MODE)',
     'cd /d "%~dp0"',
     'if exist "%~dp0AshenPact-Host.exe" (',
     '  "%~dp0AshenPact-Host.exe" --host --debug %*',
@@ -469,7 +469,7 @@ export function packageRelease(options?: { skipBuild?: boolean; skipZip?: boolea
   }
 
   console.log('==================================================================');
-  console.log('  ✅ ĐÓNG GÓI BẢN PHÁT HÀNH HOÀN TẤT (ASHEN PACT v0.2.0 WIN-X64)');
+  console.log('  ✅ ĐÓNG GÓI BẢN PHÁT HÀNH HOÀN TẤT (ASHEN PACT v0.2.1 WIN-X64)');
   console.log(`  📁 Thư mục: ${RELEASE_DIR}`);
   console.log(`  📦 File nén: ${RELEASE_ZIP}`);
   console.log(`  🚀 Thực thi: ${hostExePath}`);

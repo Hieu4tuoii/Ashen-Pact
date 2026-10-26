@@ -300,8 +300,8 @@ export function populateRoomContentsImpl(this: WorldSim, room: DungeonRoomNode):
       break;
     }
     case 'treasure': {
-      this.spawnProp('torch_brazier', cx - 110, cy - 80);
-      this.spawnProp('torch_brazier', cx + 110, cy - 80);
+      this.spawnProp('torch_brazier', cx - 175, cy - 80);
+      this.spawnProp('torch_brazier', cx + 175, cy - 80);
       this.spawnProp('glow_mushroom', cx - 110, cy + 80);
       this.spawnProp('glow_mushroom', cx + 110, cy + 80);
       if (!hasSavedState && !room.chestOpened) {
@@ -534,15 +534,42 @@ export function spawnNextRoomWaveImpl(this: WorldSim): void {
         this.map.height - TILE_SIZE * 2.5,
       );
       const resolved = this.map.resolveCircleCollision(rawX, rawY, radius);
+      let candX = resolved.x;
+      let candY = resolved.y;
+      for (let iter = 0; iter < 2; iter++) {
+        for (let pIdx = 0; pIdx < this.props.length; pIdx++) {
+          const prop = this.props[pIdx]!;
+          if (prop.hp <= 0 || (!prop.blocksMovement && prop.kind !== 'ancient_mechanism')) continue;
+          const dx = candX - prop.x;
+          const dy = candY - prop.y;
+          const minDist = radius + prop.radius + 6;
+          const dSq = dx * dx + dy * dy;
+          if (dSq < minDist * minDist) {
+            if (dSq > 1e-6) {
+              const d = Math.sqrt(dSq);
+              candX += (dx / d) * (minDist - d);
+              candY += (dy / d) * (minDist - d);
+            } else {
+              candX += minDist;
+            }
+          }
+        }
+        const reCol = this.map.resolveCircleCollision(candX, candY, radius);
+        candX = reCol.x;
+        candY = reCol.y;
+      }
+      if (this.map.checkProjectileWallHit(candX, candY, radius - 0.5).hit) {
+        continue;
+      }
       let minPlayerDist = Infinity;
       for (let pIdx = 0; pIdx < alivePlayers.length; pIdx++) {
         const pl = alivePlayers[pIdx]!;
-        const d = distance(resolved.x, resolved.y, pl.x, pl.y);
+        const d = distance(candX, candY, pl.x, pl.y);
         if (d < minPlayerDist) {
           minPlayerDist = d;
         }
       }
-      const cand = { x: resolved.x, y: resolved.y, minPlayerDist };
+      const cand = { x: candX, y: candY, minPlayerDist };
       if (!bestFallback || minPlayerDist > bestFallback.minPlayerDist) {
         bestFallback = cand;
       }
@@ -587,7 +614,7 @@ export function spawnNextRoomWaveImpl(this: WorldSim): void {
         : this.currentBiome === 3
           ? BIOME3_COMBAT_ENEMIES
           : BIOME1_COMBAT_ENEMIES;
-    const count = this.currentFloor % 2 === 1 ? 7 : 8;
+    const count = 4;
     for (let i = 0; i < count; i++) {
       const defId = combatPool[(room.id + room.wavesSpawned * 2 + i) % combatPool.length]!;
       const isEliteSlot =

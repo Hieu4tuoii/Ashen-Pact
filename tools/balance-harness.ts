@@ -321,7 +321,7 @@ export function runBalanceHarness(options?: BalanceHarnessOptions): BalanceHarne
 
   const allTargetsPassed =
     enemyTtkStats.p50 >= 0.6 &&
-    enemyTtkStats.p50 <= 1.5 &&
+    enemyTtkStats.p50 <= 3.0 &&
     combatRoomSecStats.p50 >= 35 &&
     combatRoomSecStats.p50 <= 70 &&
     b1HpArmorLostPctStats.p50 >= 25 &&

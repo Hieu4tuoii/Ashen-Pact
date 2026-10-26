@@ -328,7 +328,7 @@ export function updateCurrentRoomProgressionImpl(this: WorldSim, dtSec: number):
           }
         }
         const waveTotal = Math.max(1, room.currentWaveSpawnedCount ?? 4);
-        const lowRemaining = currentWaveAlive <= Math.max(2, Math.ceil(waveTotal * 0.3));
+        const lowRemaining = currentWaveAlive <= Math.max(1, Math.floor(waveTotal * 0.3));
         const timeExpired = this.waveElapsedSec >= 9.5;
         const minOverlapSec = 1.5;
         if (

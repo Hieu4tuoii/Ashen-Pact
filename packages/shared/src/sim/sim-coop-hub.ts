@@ -521,6 +521,7 @@ export function startDungeonRunFromHubImpl(this: WorldSim): void {
   this.hubStatues.length = 0;
   this.currentFloor = 1;
   this.currentBiome = 1;
+  this.map.biome = 1;
   this.runState = 'playing';
   this.teamComboCount = 0;
   this.activeBuffIds = [];

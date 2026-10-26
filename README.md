@@ -1,6 +1,6 @@
-# 🔥 ASHEN PACT (`v0.2.0`) — Game Co-op Vượt Ải Mạng LAN (1–4 Người)
+# 🔥 ASHEN PACT (`v0.2.1`) — Game Co-op Vượt Ải Mạng LAN (1–4 Người)
 
-> **Ashen Pact (`v0.2.0` — *"Polish & Depth"*)** là tựa game hành động bắn súng vượt ải góc nhìn từ trên xuống (*Top-Down Action Roguelite Shooter*) lấy cảm hứng từ *Soul Knight*, hỗ trợ **chơi đơn (Solo)** và **phối hợp mạng nội bộ Wi-Fi / LAN từ 2 đến 4 người chơi** ngay trên trình duyệt mà **không cần cài đặt trên máy bạn bè, không cần kết nối Internet**.
+> **Ashen Pact (`v0.2.1` — *"Polish & Depth"*)** là tựa game hành động bắn súng vượt ải góc nhìn từ trên xuống (*Top-Down Action Roguelite Shooter*) lấy cảm hứng từ *Soul Knight*, hỗ trợ **chơi đơn (Solo)** và **phối hợp mạng nội bộ Wi-Fi / LAN từ 2 đến 4 người chơi** ngay trên trình duyệt mà **không cần cài đặt trên máy bạn bè, không cần kết nối Internet**.
 >
 > **Điểm đặc biệt:** 100% hình ảnh nhân vật, quái vật, trùm (Boss), 24 vũ khí, kiến trúc 3D hybrid, cổng dịch chuyển shader, ánh sáng động và toàn bộ 47 hiệu ứng âm thanh / 7 bản nhạc nền đều được **vẽ và tổng hợp trực tiếp bằng mã nguồn (Procedural Vector Art Cutout 2.0 & Web Audio Synth)**.
 
@@ -9,7 +9,7 @@
 ## 🚀 1. Cách Chơi Ngay Bản Phát Hành (Dành Cho Người Chơi Phổ Thông)
 
 ### Bước 1: Người làm Chủ Phòng (Host) khởi động game
-1. Giải nén file **`AshenPact-v0.2.0-win-x64.zip`** ra một thư mục bất kỳ trên máy tính Windows.
+1. Giải nén file **`AshenPact-v0.2.1-win-x64.zip`** ra một thư mục bất kỳ trên máy tính Windows.
 2. Nhấp đúp chuột vào **`AshenPact-Host.exe`** (hoặc chạy file dự phòng **`start-host.bat`**).
 3. Một cửa sổ màn hình đen (Console) sẽ hiện lên:
    - Tự động khởi chạy máy chủ game tại cổng `2567` (nếu cổng `2567` đang bận, game tự động chuyển sang cổng kế tiếp `2568`, `2569`...).
@@ -155,7 +155,7 @@ pnpm perf
 # 6. Chạy toàn bộ cổng kiểm định chất lượng (Typecheck + ESLint + Vitest Unit/Soak Tests + Build + Playwright E2E)
 pnpm verify
 
-# 7. Đóng gói bản phát hành Windows hoàn chỉnh vào release/AshenPact-v0.2.0-win-x64/ và file .zip
+# 7. Đóng gói bản phát hành Windows hoàn chỉnh vào release/AshenPact-v0.2.1-win-x64/ và file .zip
 pnpm package:release
 ```
 

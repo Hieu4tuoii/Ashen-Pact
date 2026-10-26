@@ -8,7 +8,9 @@ import type {
   SimHubStatue,
   SimNpcState,
   SimPingMarker,
+  SimPressurePlateState,
   SimPropState,
+  SimPushBlockState,
   SimSkillZoneState,
   SimSummonState,
   SimWorldItemState,
@@ -156,6 +158,9 @@ export interface QuantizedWorldSnapshot {
   hubStatues: SimHubStatue[];
   summons?: SimSummonState[];
   skillZones?: SimSkillZoneState[];
+  pressurePlates?: SimPressurePlateState[];
+  pushBlocks?: SimPushBlockState[];
+  coopPuzzleCompleted?: boolean;
   teamComboCount?: number;
   runStats?: {
     floorReached: number;
@@ -327,6 +332,9 @@ export function encodeWorldSnapshot(
     hubStatues: sim.hubStatues.map((st) => ({ ...st })),
     summons: sim.summons.map((s) => ({ ...s })),
     skillZones: sim.skillZones.map((z) => ({ ...z })),
+    pressurePlates: sim.pressurePlates.map((p) => ({ ...p })),
+    pushBlocks: sim.pushBlocks.map((b) => ({ ...b })),
+    coopPuzzleCompleted: sim.coopPuzzleCompleted,
     teamComboCount: sim.teamComboCount,
     runStats: { ...sim.runStats },
     surfaces,

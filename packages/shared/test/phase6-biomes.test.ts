@@ -454,5 +454,70 @@ describe('Phase 6 — Biomes 2 & 3, 24 Weapons, Co-op Mechanics & Bosses Kryssa 
     expect(sim.player.encasedInIceTimer).toBe(0);
     expect(sim.blizzardVeilActive).toBe(false);
   });
+
+  it('defaults campaignMaxFloors to 6 in Solo/Hub runs so defeating Floor 2 Boss (Màn 1) advances to Biome 2 instead of ending in early victory', () => {
+    const sim = new WorldSim({
+      seed: 607,
+      spawnInitialWave: true,
+      includeTrainingDummy: false,
+    });
+
+    // Default campaign must be 6 floors (3 biomes x 2 floors)
+    expect(sim.campaignMaxFloors).toBe(6);
+    expect(sim.currentFloor).toBe(1);
+    expect(sim.currentBiome).toBe(1);
+
+    // Advance to Floor 2 (Biome 1 Boss floor) and enter Boss room
+    sim.advanceToFloor(2);
+    const bossRoom2 = sim.dungeon.rooms.find((r) => r.type === 'boss')!;
+    sim.enterRoom(bossRoom2.id);
+    for (let i = 0; i < 60; i++) {
+      sim.step(SIM_STEP_SEC);
+    }
+    const sporeKing = sim.enemies.find((e) => e.defId === 'spore_king')!;
+    expect(sporeKing).toBeDefined();
+
+    // Defeat Boss Mục Vương on Floor 2 -> must NOT trigger victory yet!
+    sim.applyDamageToEnemy(sporeKing, 99999, true, 'burn', 0, 0, true, sim.player.id);
+    sim.skipCurrentRoomWaves();
+
+    expect(bossRoom2.cleared).toBe(true);
+    expect(sim.portalActive).toBe(true);
+    expect(sim.runState).toBe('playing');
+
+    // Enter portal on Floor 2 -> choose buff -> advance to Floor 3 (Biome 2)
+    sim.player.x = sim.portalX;
+    sim.player.y = sim.portalY;
+    expect(sim.enterPortal()).toBe(true);
+    expect(sim.runState).toBe('buff_choice');
+    expect(sim.selectFloorBuff(sim.pendingBuffChoices[0]!)).toBe(true);
+    expect(sim.currentFloor).toBe(3);
+    expect(sim.currentBiome).toBe(2);
+    expect(sim.runState).toBe('playing');
+
+    // Advance to Floor 4 (Biome 2 Boss floor), defeat Kryssa -> still playing, then portal to Floor 5 (Biome 3)
+    sim.advanceToFloor(4);
+    const bossRoom4 = sim.dungeon.rooms.find((r) => r.type === 'boss')!;
+    sim.enterRoom(bossRoom4.id);
+    sim.skipCurrentRoomWaves();
+    expect(bossRoom4.cleared).toBe(true);
+    expect(sim.portalActive).toBe(true);
+    expect(sim.runState).toBe('playing');
+
+    sim.player.x = sim.portalX;
+    sim.player.y = sim.portalY;
+    expect(sim.enterPortal()).toBe(true);
+    expect(sim.selectFloorBuff(sim.pendingBuffChoices[0]!)).toBe(true);
+    expect(sim.currentFloor).toBe(5);
+    expect(sim.currentBiome).toBe(3);
+
+    // Advance to Floor 6 (Biome 3 Final Boss floor), defeat Forge Titan -> NOW victory triggers!
+    sim.advanceToFloor(6);
+    const bossRoom6 = sim.dungeon.rooms.find((r) => r.type === 'boss')!;
+    sim.enterRoom(bossRoom6.id);
+    sim.skipCurrentRoomWaves();
+    expect(bossRoom6.cleared).toBe(true);
+    expect(sim.runState).toBe('victory');
+  });
 });
 

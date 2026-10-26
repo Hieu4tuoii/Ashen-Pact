@@ -541,7 +541,10 @@ function generateRoomWaves(
         : BIOME1_COMBAT_ENEMIES;
 
   for (let w = 1; w <= waveCount; w++) {
-    const baseEnemyCount = Math.min(11, 7 + Math.floor((w + floorNumber) * 0.8));
+    const baseEnemyCount = Math.max(
+      4,
+      Math.round(Math.min(11, 7 + Math.floor((w + floorNumber) * 0.8)) * 0.5),
+    );
     const enemyCount =
       playerCount === 1
         ? baseEnemyCount
@@ -590,7 +593,7 @@ function generateRoomWaves(
           currentElites += 1;
         }
       }
-      for (let esc = 0; esc < 2; esc++) {
+      for (let esc = 0; esc < 1; esc++) {
         enemies.push({
           defId: enemyPool[(roomDifficultyIndex + w + esc) % enemyPool.length]!,
           isElite: false,

@@ -586,6 +586,18 @@ export class NetworkTransport implements ITransport {
     if (snapshot.skillZones) {
       this.sim.skillZones = snapshot.skillZones.map((z) => ({ ...z }));
     }
+    if (snapshot.pressurePlates) {
+      this.sim.pressurePlates = snapshot.pressurePlates.map((p) => ({ ...p }));
+    }
+    if (snapshot.pushBlocks) {
+      this.sim.pushBlocks = snapshot.pushBlocks.map((b) => ({ ...b }));
+    }
+    if (snapshot.coopPuzzleCompleted !== undefined) {
+      this.sim.coopPuzzleCompleted = snapshot.coopPuzzleCompleted;
+      if (snapshot.coopPuzzleCompleted) {
+        this.sim.completedPuzzleRoomIds.add(this.sim.currentRoomId);
+      }
+    }
     if (snapshot.teamComboCount !== undefined) {
       this.sim.teamComboCount = snapshot.teamComboCount;
     }
@@ -699,6 +711,9 @@ export class NetworkTransport implements ITransport {
     const col = this.sim.map.resolveCircleCollision(nextX, nextY, localPlayer.radius);
     localPlayer.x = col.x;
     localPlayer.y = col.y;
+    if (!this.sim.stressTestActive) {
+      this.sim.updatePhase6Mechanics(dtSec);
+    }
 
     // Deterministically simulate projectiles on client (wall bounce + immediate cosmetic enemy hit prediction)
     this.sim.stepClientProjectilesCosmetic(dtSec);

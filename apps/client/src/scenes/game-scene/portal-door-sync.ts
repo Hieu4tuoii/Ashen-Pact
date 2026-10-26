@@ -238,7 +238,14 @@ export function syncPortalVisualsImpl(this: GameScene, animDtSec: number): void 
     }
     this.triggerIrisTransition('close');
     if (shouldCommit) {
-      sim.interactWithNearest();
+      if (sim.inHub) {
+        sim.player.ready = true;
+        if (sim.areAllPlayersReady() || sim.player.slot === 1) {
+          sim.startDungeonRunFromHub();
+        }
+      } else {
+        sim.enterPortal();
+      }
       this.syncArenaTilesWithMapRevision();
       this.processSimEvents(this.transport.consumeEvents());
       this.portalAnimState.lastRoomKey = sim.inHub

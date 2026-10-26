@@ -64,7 +64,7 @@ export interface GraphicsSettingsState {
 export const DEFAULT_GRAPHICS_SETTINGS: GraphicsSettingsState = {
   quality: 'high',
   autoQuality: true,
-  screenShakeIntensity: 1.0,
+  screenShakeIntensity: 0.4,
   showDamageNumbers: true,
   teammateFxOpacity: 0.7,
   masterVolume: 0.85,

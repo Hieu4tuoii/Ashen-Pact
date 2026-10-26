@@ -38,8 +38,8 @@ export class PreloadScene extends Phaser.Scene {
       const galleryParam = params.get('gallery');
       const allowSceneShortcuts = isDebugUiEnabled() || isTestHooksEnabled();
 
-      const locPort = window.location.port;
-      const isHostServerPort = Boolean(locPort && locPort !== '5173' && locPort !== '4173');
+
+
 
       if (requestedScene === 'gallery' || requestedScene === 'artgallery' || galleryParam === '1') {
         if (allowSceneShortcuts) {
@@ -52,8 +52,8 @@ export class PreloadScene extends Phaser.Scene {
       } else if (
         coopParam === 'host' ||
         coopParam === 'join' ||
-        joinRoomId ||
-        isHostServerPort
+        joinRoomId
+
       ) {
         this.scene.start('GameScene', {
           coopMode: coopParam === 'host' ? 'host' : 'join',

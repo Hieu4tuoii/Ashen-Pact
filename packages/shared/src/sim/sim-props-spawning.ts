@@ -391,22 +391,102 @@ export function spawnEnemyImpl(this: WorldSim,
   }
 
   const resolved = this.map.resolveCircleCollision(spawnX, spawnY, radius);
+  const safePos = { x: resolved.x, y: resolved.y, radius };
+  if (defId !== 'ice_prison' && !this.stressTestActive) {
+    for (let iter = 0; iter < 3; iter++) {
+      for (let i = 0; i < this.props.length; i++) {
+        const prop = this.props[i]!;
+        if (prop.hp <= 0 || (!prop.blocksMovement && prop.kind !== 'ancient_mechanism')) continue;
+        const dx = safePos.x - prop.x;
+        const dy = safePos.y - prop.y;
+        const minDist = safePos.radius + prop.radius + 4;
+        const dSq = dx * dx + dy * dy;
+        if (dSq < minDist * minDist) {
+          if (dSq > 1e-6) {
+            const d = Math.sqrt(dSq);
+            const push = minDist - d;
+            safePos.x += (dx / d) * push;
+            safePos.y += (dy / d) * push;
+          } else {
+            const awayY = safePos.y >= this.map.height * 0.5 ? -1 : 1;
+            safePos.y += awayY * minDist;
+          }
+        }
+      }
+      for (let i = 0; i < this.chests.length; i++) {
+        const chest = this.chests[i]!;
+        const dx = safePos.x - chest.x;
+        const dy = safePos.y - chest.y;
+        const minDist = safePos.radius + chest.radius + 4;
+        const dSq = dx * dx + dy * dy;
+        if (dSq < minDist * minDist) {
+          if (dSq > 1e-6) {
+            const d = Math.sqrt(dSq);
+            const push = minDist - d;
+            safePos.x += (dx / d) * push;
+            safePos.y += (dy / d) * push;
+          } else {
+            safePos.x += minDist;
+          }
+        }
+      }
+      const wallCol = this.map.resolveCircleCollision(safePos.x, safePos.y, safePos.radius);
+      safePos.x = wallCol.x;
+      safePos.y = wallCol.y;
+    }
+
+    // Fallback ring search if squeezed between multiple closely-spaced props and walls
+    const isOverlappingObstacle = (px: number, py: number): boolean => {
+      if (this.map.checkProjectileWallHit(px, py, safePos.radius).hit) return true;
+      for (let i = 0; i < this.props.length; i++) {
+        const prop = this.props[i]!;
+        if (prop.hp <= 0 || (!prop.blocksMovement && prop.kind !== 'ancient_mechanism')) continue;
+        if (distance(px, py, prop.x, prop.y) < safePos.radius + prop.radius) return true;
+      }
+      for (let i = 0; i < this.chests.length; i++) {
+        const chest = this.chests[i]!;
+        if (distance(px, py, chest.x, chest.y) < safePos.radius + chest.radius) return true;
+      }
+      return false;
+    };
+
+    if (isOverlappingObstacle(safePos.x, safePos.y)) {
+      let foundClear = false;
+      for (let ring = 1; ring <= 4 && !foundClear; ring++) {
+        const distR = ring * 36;
+        for (let dir = 0; dir < 8; dir++) {
+          const ang = (dir * Math.PI) / 4;
+          const col = this.map.resolveCircleCollision(
+            spawnX + Math.cos(ang) * distR,
+            spawnY + Math.sin(ang) * distR,
+            safePos.radius,
+          );
+          if (!isOverlappingObstacle(col.x, col.y)) {
+            safePos.x = col.x;
+            safePos.y = col.y;
+            foundClear = true;
+            break;
+          }
+        }
+      }
+    }
+  }
   const enemy: SimEnemyState = {
     id: ++this.nextEntityId,
     defId: def.id,
     nameVi,
     role: def.role,
     isDummy: false,
-    prevX: resolved.x,
-    prevY: resolved.y,
-    x: resolved.x,
-    y: resolved.y,
+    prevX: safePos.x,
+    prevY: safePos.y,
+    x: safePos.x,
+    y: safePos.y,
     vx: 0,
     vy: 0,
     kbVx: 0,
     kbVy: 0,
     radius,
-    aimAngle: Math.atan2(this.player.y - resolved.y, this.player.x - resolved.x),
+    aimAngle: Math.atan2(this.player.y - safePos.y, this.player.x - safePos.x),
     hp: baseHp,
     maxHp: baseHp,
     moveSpeed,
@@ -444,8 +524,8 @@ export function spawnEnemyImpl(this: WorldSim,
     isBoss: Boolean(def.isBoss),
     bossPhase: 1,
     bossBurrowed: false,
-    bossTargetX: resolved.x,
-    bossTargetY: resolved.y,
+    bossTargetX: safePos.x,
+    bossTargetY: safePos.y,
     bossAttackCycle: 0,
     markedTimer: 0,
     markedByPlayerId: 0,

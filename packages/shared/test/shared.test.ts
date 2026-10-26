@@ -115,7 +115,11 @@ describe('Data-Driven Tables & Vietnamese String', () => {
   });
 
   it('defines Biome 1 enemies and Co-op scaling tiers 1..4', () => {
-    expect(ENEMIES.goblin_shooter?.hp).toBe(24);
+    expect(ENEMIES.goblin_shooter?.hp).toBe(48);
+    expect(ENEMIES.green_slime?.hp).toBe(40);
+    expect(ENEMIES.wild_boar?.hp).toBe(72);
+    expect(ENEMIES.frost_bat?.hp).toBe(44);
+    expect(ENEMIES.fire_imp?.hp).toBe(56);
     expect(COOP_SCALING[1].enemyHpMultiplier).toBe(1.0);
     expect(COOP_SCALING[4].enemyHpMultiplier).toBe(2.9);
     expect(VIETNAMESE_VERIFICATION_STRING).toContain('ắ ằ ẳ ẵ ặ');

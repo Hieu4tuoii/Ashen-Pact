@@ -595,7 +595,7 @@ export class GameScene extends Phaser.Scene {
       this.coopMode === 'solo' &&
       this.currentInteractTarget?.kind === 'portal' &&
       sim.portalActive &&
-      (!sim.inHub || sim.areAllPlayersReady())
+      (!sim.inHub || sim.areAllPlayersReady() || sim.player.slot === 1)
     ) {
       buttons &= ~INPUT_BUTTON.INTERACT;
       this.triggerPortalEnterSequence(true);

@@ -1,14 +1,20 @@
-# 📜 GHI CHÚ PHÁT HÀNH (RELEASE NOTES) — ASHEN PACT `v0.2.0` ("Polish & Depth")
+# 📜 GHI CHÚ PHÁT HÀNH (RELEASE NOTES) — ASHEN PACT `v0.2.1` ("Polish & Depth")
 
-- **Phiên bản:** `v0.2.0` (*"Polish & Depth" — Comprehensive Visual, Architectural, UI/UX & Combat Balance Overhaul*)
-- **Nền tảng phát hành:** Windows 10/11 64-bit (`AshenPact-v0.2.0-win-x64`) & Web Browser (Chromium / Chrome / Edge / Firefox)
+- **Phiên bản:** `v0.2.1` (*"Polish & Depth" — Comprehensive Visual, Architectural, UI/UX & Combat Balance Overhaul*)
+- **Nền tảng phát hành:** Windows 10/11 64-bit (`AshenPact-v0.2.1-win-x64`) & Web Browser (Chromium / Chrome / Edge / Firefox)
 - **Chế độ chơi:** Chơi đơn (*Solo*) & Phối hợp mạng nội bộ (*Co-op LAN / Wi-Fi 2–4 người chơi*)
 
 ---
 
-## 🚀 1. Điểm Mới Nổi Bật Trong Bản Cập Nhật `v0.2.0` ("Polish & Depth")
+## 🚀 1. Điểm Mới Nổi Bật Trong Bản Cập Nhật `v0.2.1` ("Polish & Depth")
 
-Bản cập nhật lớn **`v0.2.0` ("Polish & Depth")** nâng cấp toàn diện **12 hạng mục cốt lõi (Phases P0 → P12)** từ hệ thống ánh sáng, kiến trúc chiều sâu 3D giả lập, cổng dịch chuyển shader, giao diện `HudScene` tách biệt, hoạt ảnh nhân vật/quái vật `Cutout 2.0`, hiệu ứng chiến đấu `BlendMode.ADD` cho tới độ sâu chiến thuật và cân bằng thực chiến 60Hz:
+Bản cập nhật lớn **`v0.2.1` ("Polish & Depth")** nâng cấp toàn diện **12 hạng mục cốt lõi (Phases P0 → P12)** từ hệ thống ánh sáng, kiến trúc chiều sâu 3D giả lập, cổng dịch chuyển shader, giao diện `HudScene` tách biệt, hoạt ảnh nhân vật/quái vật `Cutout 2.0`, hiệu ứng chiến đấu `BlendMode.ADD` cho tới độ sâu chiến thuật và cân bằng thực chiến 60Hz:
+
+### 1.0 Cập Nhật Mới Trong `v0.2.1` (Cân Bằng B1/B2, Chiến Dịch 6 Tầng, Thưởng NL Boss, Chống Kẹt Quái & Câu Đố Đẩy Thùng)
+- **Chiến dịch 6 Tầng xuyên suốt 3 Biome & Cân bằng B1/B2:** Mở cổng không gian ở các tầng lẻ (`1, 3, 5`) và sau khi hạ Boss ở các tầng chẵn (`2, 4`), hoàn thành trọn vẹn chiến dịch sau khi hạ Titan Lò Rèn ở Tầng 6; tinh chỉnh nhịp độ sinh tồn, kinh tế và cân bằng Boss (`Phase B1 & B2`).
+- **Chống kẹt quái tuyệt đối trong trụ đá `2×2` và vật cản:** Gộp các ô tường/trụ liền kề trong `resolveCircleCollision` để xóa bỏ khe kẹt giữa trụ `2×2`, kiểm tra và đẩy vị trí spawn/di chuyển của quái ra ngoài mọi vật cản (`props`, `ancient_mechanism`, `chests`) kèm vòng tìm kiếm 8 hướng dự phòng.
+- **Thưởng lớn Năng lượng mỗi khi Boss chuyển giai đoạn (`Phase 1 → 2 → 3`):** Hồi ngay tối thiểu `70% Max NL` (`>= 130 NL`), xóa thời gian chờ hồi năng lượng và tăng tốc độ hồi năng lượng tự nhiên (`3.5 NL/s`, thời gian chờ tối đa `1.0s`) trong suốt trận đánh Boss.
+- **Đẩy khối đá câu đố 2 Tấm Áp Lực mượt mà (Solo & Co-op LAN):** Dời chậu lửa trang trí khỏi đường đẩy trong phòng Kho Báu, hỗ trợ lực hút dẫn hướng tự động giúp đẩy thẳng khối đá từ mọi góc và khóa cố định trên tấm áp lực, đồng bộ thời gian thực qua `NetworkTransport`.
 
 ### 1.1 Tầm Nhìn Trong Trẻo & Ánh Sáng Không Sương Mù Đen (`Phase P3`)
 - **Loại bỏ hoàn toàn lớp sương mù tối gây mỏi mắt:** Nâng nền ánh sáng môi trường (`ambientRgb`) ở tất cả các Biome và Sảnh Doanh Trại lên mức sáng rõ (`~0.84–0.90`), tắt hoàn toàn `vignetteStrength = 0.0`, xóa hạt sương mù `fx_ambient_mist`, bổ sung vũng sáng ấm `BlendMode.ADD` (`+8 ΔL*`) cho chậu lửa và tắt hoàn toàn lớp phủ tối toàn màn hình trong **Bão Tuyết Phase 3 của Băng Hậu Kryssa**, thay bằng hiệu ứng hạt gió tuyết chéo tốc độ cao và tinh thể băng ở rìa màn hình để người chơi luôn nhìn rõ 100% đạn và cảnh báo trên sàn.
@@ -69,7 +75,7 @@ Bản cập nhật lớn **`v0.2.0` ("Polish & Depth")** nâng cấp toàn diệ
 
 ---
 
-## 📊 3. Kết Quả Kiểm Định Chất Lượng & Hiệu Năng (`v0.2.0`)
+## 📊 3. Kết Quả Kiểm Định Chất Lượng & Hiệu Năng (`v0.2.1`)
 
 - **Cân bằng định lượng (`pnpm balance`):** Đạt **8/8 chỉ tiêu cân bằng** qua **1.795 lượt mô phỏng 60Hz thực tế trên 30 locked seeds** (TTK quái khởi đầu `1.18s`; phòng chiến đấu TB `36.3s`; cả 3 Boss đạt `55.6s – 66.2s` ở 1P–4P với độ lệch 1P vs 4P `≤ 9.2%`; tỉ lệ thắng Solo hoàn thành chiến dịch đạt `53.3% – 66.7%` cho cả 5 nhân vật; không có buff hay vũ khí nào vượt ngưỡng thống trị).
 - **Soak Test 20 phút (`72.000` ticks @ 60Hz):** 4 người chơi Co-op giao tranh liên tục qua 3 Biome và 3 Boss — không rò rỉ bộ nhớ, thời gian xử lý mỗi tick giữ vững `< 0.25 ms/tick`.
