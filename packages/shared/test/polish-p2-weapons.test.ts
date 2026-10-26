@@ -13,9 +13,9 @@ import {
 } from '../src/index.js';
 
 describe('Phase P2 — 2-Slot Weapon System, Dropped Weapons, Pickup Lock & Hub Rack', () => {
-  it('1. enforces MAX_WEAPON_SLOTS === 2 and starts all 5 characters with [starterWeaponId, rusty_pistol]', () => {
+  it('1. enforces MAX_WEAPON_SLOTS === 2 and starts all 5 characters with [starterWeaponId]', () => {
     expect(MAX_WEAPON_SLOTS).toBe(2);
-    expect(PHASE1_SAMPLE_WEAPONS).toEqual(['knight_sword', 'rusty_pistol']);
+    expect(PHASE1_SAMPLE_WEAPONS).toEqual(['knight_sword', 'rivet_gun']);
     expect(estimateWeaponDps('knight_sword')).toBeGreaterThan(0);
     expect(estimateWeaponDps('unknown_weapon')).toBe(0);
 
@@ -24,13 +24,13 @@ describe('Phase P2 — 2-Slot Weapon System, Dropped Weapons, Pickup Lock & Hub 
       spawnInitialWave: false,
       includeTrainingDummy: false,
     });
-    expect(sim.player.weaponSlots).toEqual(['knight_sword', 'rusty_pistol']);
+    expect(sim.player.weaponSlots).toEqual(['knight_sword']);
 
     for (const charId of ALL_CHARACTER_IDS) {
       sim.selectCharacter(sim.player.id, charId, true);
       const expectedStarter = CHARACTERS[charId].starterWeaponId;
-      expect(sim.player.weaponSlots).toEqual([expectedStarter, 'rusty_pistol']);
-      expect(sim.player.weaponSlots).toHaveLength(MAX_WEAPON_SLOTS);
+      expect(sim.player.weaponSlots).toEqual([expectedStarter]);
+      expect(sim.player.weaponSlots).toHaveLength(1);
     }
   });
 
@@ -40,9 +40,10 @@ describe('Phase P2 — 2-Slot Weapon System, Dropped Weapons, Pickup Lock & Hub 
       spawnInitialWave: false,
       includeTrainingDummy: false,
     });
+    sim.player.weaponSlots = ['knight_sword', 'rivet_gun'];
     sim.consumeEvents();
 
-    expect(sim.player.weaponSlots).toEqual(['knight_sword', 'rusty_pistol']);
+    expect(sim.player.weaponSlots).toEqual(['knight_sword', 'rivet_gun']);
     sim.equipWeaponSlot(1);
     sim.consumeEvents();
 
@@ -65,7 +66,7 @@ describe('Phase P2 — 2-Slot Weapon System, Dropped Weapons, Pickup Lock & Hub 
     expect(groundItem.pickedUp).toBe(true);
     expect(sim.worldItems.includes(groundItem)).toBe(false);
 
-    const droppedPistol = sim.worldItems.find((it) => it.weaponId === 'rusty_pistol');
+    const droppedPistol = sim.worldItems.find((it) => it.weaponId === 'rivet_gun');
     expect(droppedPistol).toBeDefined();
     expect(droppedPistol!.costGold).toBe(0);
     expect(droppedPistol!.ownerPlayerId).toBeUndefined();
@@ -79,7 +80,7 @@ describe('Phase P2 — 2-Slot Weapon System, Dropped Weapons, Pickup Lock & Hub 
     expect(dropEvt).toBeDefined();
     if (dropEvt && dropEvt.kind === 'weapon_dropped') {
       expect(dropEvt.playerId).toBe(sim.player.id);
-      expect(dropEvt.weaponId).toBe('rusty_pistol');
+      expect(dropEvt.weaponId).toBe('rivet_gun');
       expect(dropEvt.x).toBe(320);
       expect(dropEvt.y).toBe(240);
     }
@@ -107,7 +108,8 @@ describe('Phase P2 — 2-Slot Weapon System, Dropped Weapons, Pickup Lock & Hub 
     const cost = weaponItem.costGold;
 
     sim.player.gold = cost + 20;
-    sim.player.activeWeaponSlot = 1; // rusty_pistol
+    sim.player.weaponSlots = ['knight_sword', 'rivet_gun'];
+    sim.player.activeWeaponSlot = 1; // rivet_gun
 
     const bought = sim.pickupOrBuyWorldItem(weaponItem, sim.player);
     expect(bought).toBe(true);
@@ -120,7 +122,7 @@ describe('Phase P2 — 2-Slot Weapon System, Dropped Weapons, Pickup Lock & Hub 
     }
 
     const droppedOld = sim.worldItems.find(
-      (it) => !it.pickedUp && it.weaponId === 'rusty_pistol' && it.costGold === 0,
+      (it) => !it.pickedUp && it.weaponId === 'rivet_gun' && it.costGold === 0,
     );
     expect(droppedOld).toBeDefined();
     expect(droppedOld!.ownerPlayerId).toBeUndefined();
@@ -149,10 +151,11 @@ describe('Phase P2 — 2-Slot Weapon System, Dropped Weapons, Pickup Lock & Hub 
       y: p1.y,
     });
 
+    p1.weaponSlots = ['knight_sword', 'rivet_gun'];
     p1.activeWeaponSlot = 1;
     expect(sim.pickupOrBuyWorldItem(item, p1)).toBe(true);
 
-    const dropped = sim.worldItems.find((it) => it.weaponId === 'rusty_pistol')!;
+    const dropped = sim.worldItems.find((it) => it.weaponId === 'rivet_gun')!;
     expect(dropped).toBeDefined();
 
     // Within < 18 ticks (e.g. 5 ticks), P1 cannot re-pickup the dropped weapon directly or via interactWithNearest
@@ -168,7 +171,7 @@ describe('Phase P2 — 2-Slot Weapon System, Dropped Weapons, Pickup Lock & Hub 
     p2.x = dropped.x;
     p2.y = dropped.y;
     expect(sim.pickupOrBuyWorldItem(dropped, p2)).toBe(true);
-    expect(p2.weaponSlots[1]).toBe('rusty_pistol');
+    expect(p2.weaponSlots[1]).toBe('rivet_gun');
 
     // Now P2 dropped 'gale_smg' at dropped.x, dropped.y; test P2 waiting >= 18 ticks to pick it back up
     const droppedByP2 = sim.worldItems.find((it) => it.weaponId === 'gale_smg')!;
@@ -199,12 +202,13 @@ describe('Phase P2 — 2-Slot Weapon System, Dropped Weapons, Pickup Lock & Hub 
     // P2 cannot pick up P1's instanced chest drop directly
     expect(sim.pickupOrBuyWorldItem(p1Instanced, p2)).toBe(false);
 
-    // P1 (full 2/2) picks up P1's instanced chest weapon -> P1's old weapon ('rusty_pistol') drops as a SHARED worldItem
+    // P1 (full 2/2) picks up P1's instanced chest weapon -> P1's old weapon ('rivet_gun') drops as a SHARED worldItem
+    p1.weaponSlots = ['knight_sword', 'rivet_gun'];
     p1.activeWeaponSlot = 1;
     expect(sim.pickupOrBuyWorldItem(p1Instanced, p1)).toBe(true);
 
     const sharedOldWeapon = sim.worldItems.find(
-      (it) => it.weaponId === 'rusty_pistol' && !it.pickedUp,
+      (it) => it.weaponId === 'rivet_gun' && !it.pickedUp,
     );
     expect(sharedOldWeapon).toBeDefined();
     expect(sharedOldWeapon!.ownerPlayerId).toBeUndefined();
@@ -213,7 +217,7 @@ describe('Phase P2 — 2-Slot Weapon System, Dropped Weapons, Pickup Lock & Hub 
     p2.weaponSlots = ['apprentice_staff', 'gale_smg'];
     p2.activeWeaponSlot = 1;
     expect(sim.pickupOrBuyWorldItem(sharedOldWeapon!, p2)).toBe(true);
-    expect(p2.weaponSlots[1]).toBe('rusty_pistol');
+    expect(p2.weaponSlots[1]).toBe('rivet_gun');
   });
 
   it('6. keeps worldItems count and snapshot byte size bounded across 200 consecutive weapon swaps', () => {
@@ -234,6 +238,7 @@ describe('Phase P2 — 2-Slot Weapon System, Dropped Weapons, Pickup Lock & Hub 
       y: sim.player.y,
     });
 
+    sim.player.weaponSlots = ['knight_sword', 'rivet_gun'];
     sim.player.activeWeaponSlot = 1;
     let bytesAfterFirstSwap = 0;
     let jsonLenAfterFirstSwap = 0;
@@ -272,6 +277,8 @@ describe('Phase P2 — 2-Slot Weapon System, Dropped Weapons, Pickup Lock & Hub 
       includeTrainingDummy: false,
     });
     expect(sim.currentRoomId).toBe(0);
+    sim.player.weaponSlots = ['knight_sword', 'rivet_gun'];
+    sim.player.activeWeaponSlot = 1;
 
     const dropped = sim.dropActiveWeapon(sim.player.id);
     expect(dropped).not.toBeNull();
@@ -329,7 +336,7 @@ describe('Phase P2 — 2-Slot Weapon System, Dropped Weapons, Pickup Lock & Hub 
     sim.player.activeWeaponSlot = 1;
 
     // Spawn a low-DPS pistol right at player position and a weapon dropped by player
-    const pistolDef = WEAPONS.rusty_pistol!;
+    const pistolDef = WEAPONS.rivet_gun!;
     sim.spawnWorldItem({
       kind: 'weapon',
       weaponId: pistolDef.id,
@@ -367,10 +374,11 @@ describe('Phase P2 — 2-Slot Weapon System, Dropped Weapons, Pickup Lock & Hub 
     sim.worldItems.length = 0;
     sim.player.x = 400;
     sim.player.y = 460;
+    sim.player.weaponSlots = ['knight_sword', 'rivet_gun'];
     sim.player.activeWeaponSlot = 1;
 
     // Spawn a farther weapon first in worldItems array (58u away, <= 64u interactRange)
-    const scepterDef = WEAPONS.frost_scepter!;
+    const scepterDef = WEAPONS.apprentice_staff!;
     sim.spawnWorldItem({
       kind: 'weapon',
       weaponId: scepterDef.id,
@@ -383,7 +391,7 @@ describe('Phase P2 — 2-Slot Weapon System, Dropped Weapons, Pickup Lock & Hub 
     });
 
     // Spawn a closer weapon second in worldItems array (18u away, <= 64u interactRange)
-    const shotgunDef = WEAPONS.dragon_breath_shotgun!;
+    const shotgunDef = WEAPONS.scrap_shotgun!;
     sim.spawnWorldItem({
       kind: 'weapon',
       weaponId: shotgunDef.id,
@@ -396,6 +404,6 @@ describe('Phase P2 — 2-Slot Weapon System, Dropped Weapons, Pickup Lock & Hub 
     });
 
     expect(sim.interactWithNearest(sim.player)).toBe(true);
-    expect(sim.player.weaponSlots[1]).toBe('dragon_breath_shotgun');
+    expect(sim.player.weaponSlots[1]).toBe('scrap_shotgun');
   });
 });

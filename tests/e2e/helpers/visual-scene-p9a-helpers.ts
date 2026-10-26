@@ -295,9 +295,9 @@ export async function setupB1HudWeaponCompareScene(page: Page): Promise<void> {
     sim.worldItems.length = 0;
     sim.spawnWorldItem({
       kind: 'weapon',
-      weaponId: 'dragon_breath_shotgun',
+      weaponId: 'scrap_shotgun',
       rarity: 'epic',
-      nameVi: 'Shotgun Hỏa Long',
+      nameVi: 'Shotgun Phế Liệu',
       costGold: 0,
       healAmount: 0,
       x: 500,

@@ -1,6 +1,6 @@
 import { CHARACTERS } from '../data/characters.js';
 import type { CharacterId } from '../data/types.js';
-import { MAX_WEAPON_SLOTS, WEAPONS } from '../data/weapons.js';
+import { WEAPONS } from '../data/weapons.js';
 import { clamp, distance } from '../math/vec2.js';
 import { INPUT_BUTTON, PLAYER_SLOT_COLORS, type PlayerInputPacket, QUICK_EMOTES_VI, type QuickEmoteId, TILE_SIZE } from '../protocol/messages.js';
 import { generateDungeonFloor } from './dungeon-gen.js';

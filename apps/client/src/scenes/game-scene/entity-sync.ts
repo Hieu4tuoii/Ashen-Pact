@@ -129,7 +129,7 @@ export function syncSimulatedPlayersImpl(this: GameScene, dtSec: number): void {
       const pos = this.transport.getInterpolatedSimPlayerPos(sp, this.entityPosScratch);
       rig.container.setPosition(pos.x, pos.y + RIG_FOOT_OFFSET_Y);
       rig.setAimAngle(sp.aimAngle);
-      const spWeaponId = sp.weaponSlots[sp.activeWeaponSlot] ?? 'rusty_pistol';
+      const spWeaponId = sp.weaponSlots[sp.activeWeaponSlot] ?? 'knight_sword';
       rig.setEquippedWeapon(spWeaponId);
       rig.setMoveVelocity(sp.vx, sp.vy);
       rig.setAnimState('run');
@@ -195,7 +195,7 @@ export function syncSimulatedPlayersImpl(this: GameScene, dtSec: number): void {
       entry.rig.setReviveProgress(cp.reviveProgress ?? 0);
       entry.rig.container.setPosition(pos.x, pos.y + RIG_FOOT_OFFSET_Y);
       entry.rig.setAimAngle(cp.aimAngle);
-      const cpWeaponId = cp.weaponSlots[cp.activeWeaponSlot] ?? 'rusty_pistol';
+      const cpWeaponId = cp.weaponSlots[cp.activeWeaponSlot] ?? 'knight_sword';
       entry.rig.setEquippedWeapon(cpWeaponId);
       entry.rig.setDashActive(cp.dashTimer > 0);
       entry.rig.setMoveVelocity(cp.vx, cp.vy);

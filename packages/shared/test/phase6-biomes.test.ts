@@ -14,11 +14,11 @@ import {
   WorldSim,
 } from '../src/index.js';
 
-describe('Phase 6 — Biomes 2 & 3, 24 Weapons, Co-op Mechanics & Bosses Kryssa / Forge Titan', () => {
-  it('defines 24 weapons across 5 rarities while preserving Phase 3 14-weapon compatibility', () => {
-    expect(PHASE3_WEAPON_IDS).toHaveLength(14);
-    expect(PHASE6_WEAPON_IDS).toHaveLength(10);
-    expect(ALL_WEAPON_IDS).toHaveLength(24);
+describe('Phase 6 — Biomes 2 & 3, 18 Weapons, Co-op Mechanics & Bosses Kryssa / Forge Titan', () => {
+  it('defines 18 weapons across 5 rarities while preserving Phase 3 10-weapon compatibility', () => {
+    expect(PHASE3_WEAPON_IDS).toHaveLength(10);
+    expect(PHASE6_WEAPON_IDS).toHaveLength(8);
+    expect(ALL_WEAPON_IDS).toHaveLength(18);
 
     const rarities = new Set<string>();
     for (const id of ALL_WEAPON_IDS) {

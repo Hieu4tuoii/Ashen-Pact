@@ -196,17 +196,17 @@ test.describe('Phase 4 — Co-op LAN Authoritative, Prediction/Interpolation, Hu
       await pg.waitForTimeout(50);
     };
 
-    // P1 (starts full 2/2: knight_sword + rusty_pistol) walks to frost_scepter (381, 400) and equips it
+    // P1 walks to apprentice_staff (381, 400) and equips it into Slot 2 (2/2)
     await walkPlayerTo(page1, 396, 400, 14);
     await page1.keyboard.press('KeyE');
     await page1.waitForFunction(
       () =>
-        window.__GAME_TRANSPORT__?.getSim().player.weaponSlots.includes('frost_scepter') === true,
+        window.__GAME_TRANSPORT__?.getSim().player.weaponSlots.includes('apprentice_staff') === true,
       null,
       { timeout: 5000 },
     );
 
-    // Wait for 0.3s weaponPickupLockTimer to expire, walk to (398, 475) near dragon_breath_shotgun (381, 470), aim East, and press E while full (2/2)
+    // Wait for 0.3s weaponPickupLockTimer to expire, walk to (398, 475) near scrap_shotgun (381, 470), aim East, and press E while full (2/2)
     await page1.waitForTimeout(360);
     await walkPlayerTo(page1, 398, 475, 12);
     await page1.mouse.move(1450, 540);
@@ -216,12 +216,12 @@ test.describe('Phase 4 — Co-op LAN Authoritative, Prediction/Interpolation, Hu
       () =>
         window.__GAME_TRANSPORT__
           ?.getSim()
-          .player.weaponSlots.includes('dragon_breath_shotgun') === true,
+          .player.weaponSlots.includes('scrap_shotgun') === true,
       null,
       { timeout: 5000 },
     );
 
-    // Verify P1 replaced frost_scepter with dragon_breath_shotgun and P2 sees the dropped frost_scepter on the ground
+    // Verify P1 replaced apprentice_staff with scrap_shotgun and P2 sees the dropped apprentice_staff on the ground
     await page2.waitForFunction(
       () =>
         window.__GAME_TRANSPORT__
@@ -230,7 +230,7 @@ test.describe('Phase 4 — Co-op LAN Authoritative, Prediction/Interpolation, Hu
             (it) =>
               !it.pickedUp &&
               !it.isHubRackItem &&
-              it.weaponId === 'frost_scepter' &&
+              it.weaponId === 'apprentice_staff' &&
               it.droppedByPlayerId === 1,
           ) === true,
       null,
@@ -244,19 +244,19 @@ test.describe('Phase 4 — Co-op LAN Authoritative, Prediction/Interpolation, Hu
           (w) =>
             !w.pickedUp &&
             !w.isHubRackItem &&
-            w.weaponId === 'frost_scepter' &&
+            w.weaponId === 'apprentice_staff' &&
             w.droppedByPlayerId === 1,
         )!;
       return { x: it.x, y: it.y };
     });
 
-    // Wait for 0.25s drop toss arc to finish, then P2 walks to the East side of the dropped frost_scepter (away from the rack item at x=381) and presses E to pick it up
+    // Wait for 0.25s drop toss arc to finish, then P2 walks to the East side of the dropped apprentice_staff (away from the rack item at x=381) and presses E to pick it up
     await page2.waitForTimeout(300);
     await walkPlayerTo(page2, droppedPos.x + 18, droppedPos.y, 12);
     await page2.keyboard.press('KeyE');
     await page2.waitForFunction(
       () =>
-        window.__GAME_TRANSPORT__?.getSim().player.weaponSlots.includes('frost_scepter') === true,
+        window.__GAME_TRANSPORT__?.getSim().player.weaponSlots.includes('apprentice_staff') === true,
       null,
       { timeout: 5000 },
     );

@@ -2,12 +2,13 @@ import { describe, expect, it } from 'vitest';
 import {
   ALL_WEAPON_IDS,
   CHARACTERS,
-   type CharacterId,
+  type CharacterId,
   FLOOR_BUFFS,
   FLOOR_BUFF_LIST,
   PHASE1_SAMPLE_WEAPONS,
   WEAPONS,
   WorldSim,
+  i18n,
 } from '../src/index.js';
 
 const EXPECTED_18_WEAPONS = [
@@ -86,6 +87,20 @@ describe('AP2 P0A.2 — Purge 6 Clone Weapons, 6 Stat-Sticks & Starter Weapon Sl
     const elementalistUpgradeIds = CHARACTERS.elementalist.skill.upgrades.map((u) => u.id);
     expect(elementalistUpgradeIds).toContain('elementalist_twin_orbit');
     expect(elementalistUpgradeIds).not.toContain('elementalist_dual');
+
+    i18n.setLocale('vi');
+    for (const purgedWep of PURGED_6_CLONE_WEAPONS) {
+      expect(i18n.weaponName(purgedWep, 'Fallback')).toBe('Fallback');
+    }
+    for (const keptWep of EXPECTED_18_WEAPONS) {
+      expect(i18n.weaponName(keptWep, 'Fallback')).not.toBe('Fallback');
+    }
+    expect(i18n.getBuffText('vanguard_bastion_prism').name).toContain('Pháo Đài Phản Xạ');
+    expect(i18n.getBuffText('elementalist_twin_orbit').name).toContain('Song Tinh Cắt Không Gian');
+    i18n.setLocale('en');
+    expect(i18n.getBuffText('vanguard_bastion_prism').name).toContain('Bastion Prism');
+    expect(i18n.getBuffText('elementalist_twin_orbit').name).toContain('Twin Orbit');
+    i18n.setLocale('vi');
   });
 
   it('initializes player weaponSlots with exactly 1 starter weapon in both createPlayerState and applyCharacterToPlayerState', () => {

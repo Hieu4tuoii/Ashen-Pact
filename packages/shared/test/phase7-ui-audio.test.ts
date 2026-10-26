@@ -42,7 +42,7 @@ describe('Phase 7 — i18n Localization & MVP Awards & Armor Break Events', () =
       'CHIẾN THẮNG! CHINH PHỤC RỪNG MỤC CỔ ĐẠI',
     );
     expect(i18n.charName('vanguard', 'Fallback')).toBe('Thiết Vệ');
-    expect(i18n.weaponName('rusty_pistol', 'Fallback')).toBe('Súng Lục Rỉ Sét');
+    expect(i18n.weaponName('rivet_gun', 'Fallback')).toBe('Súng Đinh Tán');
     expect(i18n.biomeName(2)).toBe('Hầm Băng Vĩnh Cửu');
     expect(i18n.roomTypeLabel('hub')).toBe('Doanh Trại');
     expect(i18n.roomTypeLabel('combat')).toBe('Giao Chiến');
@@ -70,7 +70,7 @@ describe('Phase 7 — i18n Localization & MVP Awards & Armor Break Events', () =
       'VICTORY! CONQUERED ANCIENT ROTWOOD',
     );
     expect(i18n.charName('vanguard', 'Fallback')).toBe('Vanguard');
-    expect(i18n.weaponName('rusty_pistol', 'Fallback')).toBe('Rusty Pistol');
+    expect(i18n.weaponName('rivet_gun', 'Fallback')).toBe('Rivet Gun');
     expect(i18n.biomeName(2)).toBe('Frozen Depths');
     expect(i18n.roomTypeLabel('hub')).toBe('Campfire Hub');
     expect(i18n.roomTypeLabel('combat')).toBe('Combat');

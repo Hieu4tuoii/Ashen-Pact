@@ -105,6 +105,16 @@ export function rollPendingBuffChoicesImpl(this: WorldSim): void {
     choices.push(rest[idx]!);
     rest.splice(idx, 1);
   }
+  if (choices.length < 3) {
+    const fallback = FLOOR_BUFF_LIST.map((b) => b.id).filter(
+      (id) => !this.activeBuffIds.includes(id) && !choices.includes(id),
+    );
+    while (choices.length < 3 && fallback.length > 0) {
+      const idx = this.rng.nextInt(0, fallback.length - 1);
+      choices.push(fallback[idx]!);
+      fallback.splice(idx, 1);
+    }
+  }
   this.pendingBuffChoices = choices;
 }
 

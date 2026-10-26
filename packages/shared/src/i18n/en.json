@@ -378,11 +378,7 @@
     },
     "rivet_gun": {
       "name": "Rivet Gun",
-      "desc": "Reliable sidearm firing heated steel rivets at 0 Energy cost."
-    },
-    "rusty_pistol": {
-      "name": "Rusty Pistol",
-      "desc": "Balanced semi-automatic pistol with low energy consumption."
+      "desc": "Reliable sidearm firing heated steel rivets with steady accuracy."
     },
     "scrap_shotgun": {
       "name": "Scrap Shotgun",
@@ -392,21 +388,9 @@
       "name": "Gale SMG",
       "desc": "Rapid-fire submachine gun ideal for suppressing swarms."
     },
-    "frost_scepter": {
-      "name": "Frost Scepter",
-      "desc": "Fires cryo orbs that chill and freeze enemies solid."
-    },
     "tesla_carbine": {
       "name": "Tesla Carbine",
       "desc": "Piercing electro-rifle that arcs chain lightning between foes."
-    },
-    "venom_smg": {
-      "name": "Scorpion Venom SMG",
-      "desc": "High-rate submachine gun coated in corrosive venom."
-    },
-    "dragon_breath_shotgun": {
-      "name": "Dragon Breath Shotgun",
-      "desc": "Unleashes 6 incendiary pellets that ignite enemies and oil."
     },
     "emerald_cleaver": {
       "name": "Emerald Great-Cleaver",
@@ -415,14 +399,6 @@
     "solar_archon_staff": {
       "name": "Solar Archon Staff",
       "desc": "Fires 3 bouncing solar fireballs that ricochet across walls."
-    },
-    "dual_pistols": {
-      "name": "Dual Pistols",
-      "desc": "Twin-linked pistols firing two parallel rounds per trigger pull."
-    },
-    "frost_bow": {
-      "name": "Frostbite Bow",
-      "desc": "Piercing cryo-arrows that rapidly stack Chill."
     },
     "frag_launcher": {
       "name": "Frag Grenade Launcher",
@@ -458,32 +434,8 @@
     }
   },
   "buffs": {
-    "vitality_surge": {
-      "name": "Ancient Heart",
-      "desc": "+3 Max HP and immediately restores full HP."
-    },
-    "iron_bastion": {
-      "name": "Primeval Steel Armor",
-      "desc": "+2 Max Armor and reduces Armor regen delay by 0.5s."
-    },
-    "arcane_wellspring": {
-      "name": "Arcane Wellspring",
-      "desc": "+60 Max Energy and +50% passive Energy regeneration."
-    },
-    "eagle_precision": {
-      "name": "Razor Sight",
-      "desc": "+18% Critical Chance and +20% Weapon Damage."
-    },
-    "gale_reflex": {
-      "name": "Gale Reflex",
-      "desc": "+20% Move Speed and +22% Fire Rate."
-    },
-    "ricochet_mastery": {
-      "name": "Ricochet Mastery",
-      "desc": "All ranged projectiles gain +1 Wall Bounce and +1 Pierce."
-    },
-    "vanguard_fortress": {
-      "name": "Upgrade: Fortress 360°",
+    "vanguard_bastion_prism": {
+      "name": "Upgrade: Bastion Prism",
       "desc": "Ruby Shield Wall surrounds Vanguard in a full 360° dome and boosts counter damage."
     },
     "vanguard_charge": {
@@ -502,8 +454,8 @@
       "name": "Upgrade: Elemental Vortex",
       "desc": "Elemental Orb zone pulls surrounding enemies toward its center."
     },
-    "elementalist_dual": {
-      "name": "Upgrade: Dual Element",
+    "elementalist_twin_orbit": {
+      "name": "Upgrade: Twin Orbit",
       "desc": "Elemental Orb zone carries both current and next elements, triggering reactions immediately."
     },
     "druid_poison_roots": {

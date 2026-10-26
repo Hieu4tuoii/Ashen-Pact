@@ -620,8 +620,8 @@ export function updateWeaponComparisonCardImpl(this: GameScene): void {
   this.weaponCompareContainer.removeAll(true);
   if (!dropWId || !nearestWeaponItem) return;
 
-  const wDrop = WEAPONS[dropWId] ?? WEAPONS.rusty_pistol!;
-  const wCurr = WEAPONS[currWId] ?? WEAPONS.rusty_pistol!;
+  const wDrop = WEAPONS[dropWId] ?? WEAPONS.knight_sword!;
+  const wCurr = WEAPONS[currWId] ?? WEAPONS.knight_sword!;
   const textRes = computeUiTextResolution(
     typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1,
     ui.cameras?.main?.zoom || 2,

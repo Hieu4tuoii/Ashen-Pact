@@ -53,7 +53,7 @@ test.describe('Phase 6 — Biomes 2 & 3 (Frozen Depths & Molten Forge), 24 Weapo
       p1.y = 260;
       p1.aimAngle = 0;
       p1.weaponSlots[0] = 'berserker_axe';
-      p1.weaponSlots[1] = 'frost_bow';
+      p1.weaponSlots[1] = 'hunter_crossbow';
 
       const p2 = sim.addCoopPlayer(2, 'ranger', 'Ưng Nhãn P2', 2);
       p2.godMode = true;
@@ -131,7 +131,7 @@ test.describe('Phase 6 — Biomes 2 & 3 (Frozen Depths & Molten Forge), 24 Weapo
       p1.y = 330;
       p1.aimAngle = 0;
       p1.weaponSlots[0] = 'berserker_axe';
-      p1.weaponSlots[1] = 'frost_bow';
+      p1.weaponSlots[1] = 'hunter_crossbow';
 
       const p2 = sim.getPlayerById(2) ?? sim.addCoopPlayer(2, 'ranger', 'Ưng Nhãn P2', 2);
       p2.godMode = true;

@@ -104,7 +104,10 @@ test.describe('Phase 1 — Core Gameplay & Game Feel (Solo, Phòng Thử Nghiệ
     expect(dashState.vx).toBeGreaterThan(300);
     expect(dashState.invulnerableTimer).toBeGreaterThan(0);
 
-    // 4. Verify cycling 2 starter weapon slots (knight_sword, rusty_pistol)
+    // 4. Verify cycling 2 starter weapon slots (knight_sword, rivet_gun)
+    await page.evaluate(() => {
+      window.__GAME_TRANSPORT__!.getSim().player.weaponSlots = ['knight_sword', 'rivet_gun'];
+    });
     for (let slot = 0; slot < PHASE1_SAMPLE_WEAPONS.length; slot++) {
       await page.keyboard.press(`Digit${slot + 1}`);
       await page.waitForTimeout(80);
@@ -112,7 +115,7 @@ test.describe('Phase 1 — Core Gameplay & Game Feel (Solo, Phòng Thử Nghiệ
       expect(activeId).toBe(PHASE1_SAMPLE_WEAPONS[slot]);
     }
 
-    // 5. Set up a rich combat & hit-feel showcase scene (equip Scrap Shotgun into slot 2 while full -> drops rusty_pistol, then fire into enemies -> flash + spark + sfx + damage popup + knockback)
+    // 5. Set up a rich combat & hit-feel showcase scene (equip Scrap Shotgun into slot 2 while full -> drops rivet_gun, then fire into enemies -> flash + spark + sfx + damage popup + knockback)
     const combatStats = await page.evaluate(() => {
       const transport = window.__GAME_TRANSPORT__!;
       const sim = transport.getSim();
@@ -120,7 +123,6 @@ test.describe('Phase 1 — Core Gameplay & Game Feel (Solo, Phòng Thử Nghiệ
       sim.player.y = 350;
       sim.player.prevX = 420;
       sim.player.prevY = 350;
-      sim.player.energy = sim.player.maxEnergy;
       sim.equipWeaponSlot(1);
       const shotgunItem = sim.spawnWorldItem({
         kind: 'weapon',
@@ -133,8 +135,8 @@ test.describe('Phase 1 — Core Gameplay & Game Feel (Solo, Phòng Thử Nghiệ
         y: sim.player.y,
       });
       sim.pickupOrBuyWorldItem(shotgunItem, sim.player);
-      const droppedRustyPistol = sim.worldItems.some(
-        (it) => !it.pickedUp && it.weaponId === 'rusty_pistol' && it.droppedByPlayerId === sim.player.id,
+      const droppedRivetGun = sim.worldItems.some(
+        (it) => !it.pickedUp && it.weaponId === 'rivet_gun' && it.droppedByPlayerId === sim.player.id,
       );
 
       // Spawn all 3 sample enemies right in front of the player
@@ -148,11 +150,11 @@ test.describe('Phase 1 — Core Gameplay & Game Feel (Solo, Phòng Thử Nghiệ
         boarId: b.id,
         sporeId: s.id,
         activeWeaponId: sim.getActiveWeaponId(),
-        droppedRustyPistol,
+        droppedRivetGun,
       };
     });
     expect(combatStats.activeWeaponId).toBe('scrap_shotgun');
-    expect(combatStats.droppedRustyPistol).toBe(true);
+    expect(combatStats.droppedRivetGun).toBe(true);
 
     // Ensure slot 2 (Scrap Shotgun) is active, aim at enemies, and fire!
     await page.keyboard.press('Digit2');

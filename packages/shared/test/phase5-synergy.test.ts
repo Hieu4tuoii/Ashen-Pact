@@ -82,8 +82,8 @@ describe('Phase 5 — 5 Playable Characters, Skills, 10 Upgrades & Co-op Synergi
     expect(p2Bullets[0]!.amplifiedByShield).toBe(true);
     expect(p2Bullets[0]!.pierceRemaining).toBeGreaterThanOrEqual(1);
 
-    // Enable both Vanguard upgrades (Pháo Đài 360 + Xung Phong) and trigger shockwave release on enemy
-    sim.activeBuffIds.push('vanguard_fortress', 'vanguard_charge');
+    // Enable both Vanguard upgrades (Pháo Đài Phản Xạ + Xung Phong) and trigger shockwave release on enemy
+    sim.activeBuffIds.push('vanguard_bastion_prism', 'vanguard_charge');
     const target = sim.spawnEnemy('wild_boar', 490, 300, true);
     target.hp = 200;
     target.maxHp = 200;
@@ -204,7 +204,7 @@ describe('Phase 5 — 5 Playable Characters, Skills, 10 Upgrades & Co-op Synergi
     p1.aimAngle = 0;
     expect(p1.activeImbueElement).toBe('burn');
 
-    sim.activeBuffIds.push('elementalist_vortex', 'elementalist_dual');
+    sim.activeBuffIds.push('elementalist_vortex', 'elementalist_twin_orbit');
     const enemy = sim.spawnEnemy('wild_boar', 470, 315, true);
     enemy.hp = 300;
     enemy.maxHp = 300;

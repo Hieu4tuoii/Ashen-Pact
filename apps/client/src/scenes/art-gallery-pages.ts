@@ -206,7 +206,7 @@ export function buildPage3WeaponsAndProps(
   const textRes = TextureBaker.getBakeScale();
   const invBake = 1 / textRes;
 
-  // 1. Weapons Panel (24 Weapons across 5 Rarities + Co-op Seed Gun & Tether Staff)
+  // 1. Weapons Panel (18 Weapons across 5 Rarities + Co-op Seed Gun & Tether Staff)
   const wepPanel = this.add.graphics();
   wepPanel.fillStyle(hexToNum(PALETTE.SLATE_DARK), 0.94);
   wepPanel.lineStyle(2, hexToNum(PALETTE.INK_DARK), 1);
@@ -217,7 +217,7 @@ export function buildPage3WeaponsAndProps(
   const wepHeader = this.add.text(
     28,
     80,
-    'KHO VŨ KHÍ PROCEDURAL (24 MÓN · 5 ĐỘ HIẾM · SÚNG HẠT GIỐNG & TRƯỢNG LIÊN KẾT CO-OP)',
+    'KHO VŨ KHÍ PROCEDURAL (18 MÓN · 5 ĐỘ HIẾM · SÚNG HẠT GIỐNG & TRƯỢNG LIÊN KẾT CO-OP)',
     {
       fontFamily: '"Be Vietnam Pro", sans-serif',
       fontSize: '12px',
@@ -269,7 +269,7 @@ export function buildPage3WeaponsAndProps(
     parent.add(wName);
 
     const wMeta = this.add
-      .text(wx + cardW / 2, wy + 59, `ST ${wDef.damage} · NL ${wDef.energyCost}`, {
+      .text(wx + cardW / 2, wy + 59, `ST ${wDef.damage} · TĐ ${wDef.fireRate}/s`, {
         fontFamily: '"Be Vietnam Pro", sans-serif',
         fontSize: '8px',
         color: PALETTE.SILVER_BRIGHT,
@@ -431,7 +431,7 @@ export function buildPage4CharactersAndSynergy(
     const tRole = this.add.text(
       cx + 9,
       cy + 24,
-      `${cDef.titleVi}\nHP ${cDef.hp} · Giáp ${cDef.armor} · NL ${cDef.energy} · Tốc ${cDef.moveSpeed}`,
+      `${cDef.titleVi}\nHP ${cDef.hp} · Giáp ${cDef.armor} · Tốc ${cDef.moveSpeed}`,
       {
         fontFamily: '"Be Vietnam Pro", sans-serif',
         fontSize: '8px',

@@ -157,7 +157,7 @@ export class ArtGalleryScene extends Phaser.Scene {
     this.createSmallButton(512, 37, 82, 28, '2. Biome 1', PALETTE.GOBLIN_GREEN, () => {
       this.setGalleryPage(2);
     });
-    this.createSmallButton(600, 37, 86, 28, '3. 24 Vũ Khí', PALETTE.ELECTRIC_VIOLET, () => {
+    this.createSmallButton(600, 37, 86, 28, '3. 18 Vũ Khí', PALETTE.ELECTRIC_VIOLET, () => {
       this.setGalleryPage(3);
     });
     this.createSmallButton(692, 37, 82, 28, '4. 5 Nhân Vật', PALETTE.RUBY_CORE, () => {

@@ -41,11 +41,11 @@ describe('Phase B1 — Combat & Economy Balance Overhaul', () => {
 
   it('B1.2: enforces AP2 weapon cadence metadata and zero energy orb drops', () => {
     // 1. Weapon cadence metadata replaces legacy energyCost
-    expect(WEAPONS.rusty_pistol!.cadenceKind).toBe('CLIP_RELOAD');
+    expect(WEAPONS.rivet_gun!.cadenceKind).toBe('CLIP_RELOAD');
     expect(WEAPONS.knight_sword!.cadenceKind).toBe('MELEE_COMBO');
     expect(WEAPONS.scrap_shotgun!.cadenceKind).toBe('CLIP_RELOAD');
     expect(WEAPONS.gale_smg!.cadenceKind).toBe('HEAT_VENT');
-    expect(WEAPONS.venom_smg!.cadenceKind).toBe('CLIP_RELOAD');
+    expect(WEAPONS.tesla_carbine!.cadenceKind).toBe('CLIP_RELOAD');
     expect(WEAPONS.solar_archon_staff!.cadenceKind).toBe('HEAT_VENT');
     expect(WEAPONS.magma_cannon!.cadenceKind).toBe('CLIP_RELOAD');
 
@@ -192,8 +192,7 @@ describe('Phase B1 — Combat & Economy Balance Overhaul', () => {
     sim.applyDamageToPlayer(1, 0, 50);
     expect(sim.player.invulnerableTimer).toBeCloseTo(0.35, 3);
 
-    // Gale reflex dash cooldown multiplier is 0.82
-    sim.activeBuffIds.push('gale_reflex');
+    // Dash cooldown is DASH_COOLDOWN_SEC
     sim.player.dashCooldownTimer = 0;
     sim.player.dashTimer = 0;
     sim.setPlayerInput({
@@ -205,7 +204,7 @@ describe('Phase B1 — Combat & Economy Balance Overhaul', () => {
       buttons: INPUT_BUTTON.DASH,
     });
     sim.step(SIM_STEP_SEC);
-    expect(sim.player.dashCooldownTimer).toBeCloseTo(DASH_COOLDOWN_SEC * 0.82, 3);
+    expect(sim.player.dashCooldownTimer).toBeCloseTo(DASH_COOLDOWN_SEC, 3);
 
     // Lava surface triggers burn after 0.35s (22 ticks = 0.366s)
     sim.player.dashTimer = 0;

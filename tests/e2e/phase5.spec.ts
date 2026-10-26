@@ -97,11 +97,11 @@ test.describe('Phase 5 — 5 Playable Characters, Skills & 10 Upgrades, 6 Elemen
       // Enable skill upgrades for rich visual verification
       sim.activeBuffIds.push(
         'elementalist_vortex',
-        'elementalist_dual',
+        'elementalist_twin_orbit',
         'druid_poison_roots',
         'druid_sacred_grove',
         'engineer_twin_turrets',
-        'vanguard_fortress',
+        'vanguard_bastion_prism',
       );
 
       // Spawn high-HP enemies well-separated so Marks, Roots, Elemental Zones & Team Combo popups never overlap

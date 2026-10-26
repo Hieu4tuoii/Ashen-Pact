@@ -113,7 +113,7 @@ export class TextureBaker {
         this.bakeRig(scene, rig, targetScale);
       }
     }
-    for (const wKey of ['knight_sword', 'hunter_bow', 'rusty_pistol'] as const) {
+    for (const wKey of ['knight_sword', 'hunter_crossbow', 'rivet_gun'] as const) {
       const wDef = WEAPON_VECTOR_DEFS[wKey];
       if (wDef) this.bakeWeapon(scene, wDef, targetScale);
     }

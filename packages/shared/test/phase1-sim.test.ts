@@ -212,7 +212,8 @@ describe('Phase 1 — HP, Armor Regen (Thiết Vệ 2.0s), Knockback & 4 Sample 
       autoRespawnWaves: false,
     });
 
-    expect(sim.player.weaponSlots).toEqual([...PHASE1_SAMPLE_WEAPONS]);
+    expect(PHASE1_SAMPLE_WEAPONS).toEqual(['knight_sword', 'rivet_gun']);
+    expect(sim.player.weaponSlots).toEqual(['knight_sword']);
     const target = sim.spawnEnemy('goblin_shooter', sim.player.x + 36, sim.player.y, true);
 
     // Activate Thiết Vệ's Ruby Shield Wall to verify shield bullet storage & bonus damage on sword deflection

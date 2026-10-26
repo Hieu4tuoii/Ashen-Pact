@@ -562,7 +562,7 @@ export async function setupP10bChestOpenScene(page: Page): Promise<void> {
     const cx = sim.map.width * 0.5;
     const cy = sim.map.height * 0.5;
     sim.spawnChest(cx - 28, cy - 12, 'legendary', 'solar_archon_staff');
-    sim.spawnChest(cx + 42, cy + 16, 'epic', 'dragon_breath_shotgun');
+    sim.spawnChest(cx + 42, cy + 16, 'epic', 'scrap_shotgun');
 
     Object.assign(sim.player, {
       godMode: true,

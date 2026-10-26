@@ -378,11 +378,7 @@
     },
     "rivet_gun": {
       "name": "Súng Đinh Tán",
-      "desc": "Súng cơ khí bắn đinh tán ổn định, không tốn năng lượng."
-    },
-    "rusty_pistol": {
-      "name": "Súng Lục Rỉ Sét",
-      "desc": "Súng lục bán tự động gọn nhẹ, tiêu hao ít năng lượng."
+      "desc": "Súng cơ khí bắn đinh tán ổn định, sát thương chuẩn xác."
     },
     "scrap_shotgun": {
       "name": "Shotgun Phế Liệu",
@@ -392,21 +388,9 @@
       "name": "Tiểu Liên Gió Lốc",
       "desc": "Tốc độ bắn cực nhanh, áp chế đám đông hiệu quả."
     },
-    "frost_scepter": {
-      "name": "Quyền Trượng Băng Giá",
-      "desc": "Phóng cầu băng làm chậm và đóng băng mục tiêu."
-    },
     "tesla_carbine": {
       "name": "Súng Điện Từ Tesla",
       "desc": "Đạn điện xuyên thấu kích hoạt chuỗi sét giật lan."
-    },
-    "venom_smg": {
-      "name": "Tiểu Liên Bọ Cạp",
-      "desc": "Súng tiểu liên tốc bắn cao tẩm nọc độc ăn mòn."
-    },
-    "dragon_breath_shotgun": {
-      "name": "Shotgun Hỏa Long",
-      "desc": "Phun 6 viên đạn lửa thiêu đốt mặt đất và kẻ địch."
     },
     "emerald_cleaver": {
       "name": "Đại Đao Lục Bảo",
@@ -415,14 +399,6 @@
     "solar_archon_staff": {
       "name": "Trượng Thái Dương",
       "desc": "Phóng 3 quả cầu lửa mặt trời nảy tường liên hoàn."
-    },
-    "dual_pistols": {
-      "name": "Súng Lục Đôi",
-      "desc": "Bắn song song 2 viên đạn nhịp độ nhanh."
-    },
-    "frost_bow": {
-      "name": "Cung Băng Giá",
-      "desc": "Mũi tên băng xuyên thấu gây trạng thái Lạnh sâu."
     },
     "frag_launcher": {
       "name": "Súng Phóng Lựu Mảnh",
@@ -458,32 +434,8 @@
     }
   },
   "buffs": {
-    "vitality_surge": {
-      "name": "Trái Tim Cổ Thụ",
-      "desc": "+3 HP tối đa và hồi phục toàn bộ HP ngay lập tức."
-    },
-    "iron_bastion": {
-      "name": "Giáp Thép Nguyên Bản",
-      "desc": "+2 Giáp tối đa và giảm 0.5s thời gian chờ hồi Giáp."
-    },
-    "arcane_wellspring": {
-      "name": "Suối Nguồn Năng Lượng",
-      "desc": "+60 Năng lượng tối đa và tăng 50% tốc độ tự hồi Năng lượng."
-    },
-    "eagle_precision": {
-      "name": "Nhãn Quan Sắc Bén",
-      "desc": "+18% Tỉ lệ chí mạng và +20% Sát thương vũ khí."
-    },
-    "gale_reflex": {
-      "name": "Cuồng Phong Trợ Lực",
-      "desc": "+20% Tốc độ di chuyển và +22% Tốc độ bắn."
-    },
-    "ricochet_mastery": {
-      "name": "Đạn Đạo Nảy Tường",
-      "desc": "Mọi đạn tầm xa được +1 lần nảy tường và +1 xuyên thấu."
-    },
-    "vanguard_fortress": {
-      "name": "Nâng Cấp: Pháo Đài 360°",
+    "vanguard_bastion_prism": {
+      "name": "Nâng Cấp: Pháo Đài Phản Xạ",
       "desc": "Tường Khiên Hồng Ngọc bao bọc toàn diện 360° quanh Thiết Vệ và tăng sát thương phản kích."
     },
     "vanguard_charge": {
@@ -502,8 +454,8 @@
       "name": "Nâng Cấp: Hố Đen Nguyên Tố",
       "desc": "Vùng Cầu Nguyên Tố tạo lực hút kéo mọi quái vật xung quanh về tâm vùng nổ."
     },
-    "elementalist_dual": {
-      "name": "Nâng Cấp: Song Nguyên Tố",
+    "elementalist_twin_orbit": {
+      "name": "Nâng Cấp: Song Tinh Cắt Không Gian",
       "desc": "Vùng Cầu Nguyên Tố mang đồng thời cả 2 nguyên tố hiện tại và kế tiếp, kích hoạt phản ứng ngay lập tức."
     },
     "druid_poison_roots": {

@@ -139,13 +139,13 @@ describe('Phase P9b — Menus, Hub Invite Panel, Modals, Pause Confirm & 4-Tab S
   it('resolves localized buff names (including legacy aliases) and defines 2 hierarchical Result Screen buttons (Play Again + Return to Hub)', () => {
     const vitVi = resolveLocalizedBuffText('bountiful_vitality', 'vi');
     const vitEn = resolveLocalizedBuffText('bountiful_vitality', 'en');
-    expect(vitVi.name).toBe('Trái Tim Cổ Thụ');
-    expect(vitEn.name).toBe('Ancient Heart');
+    expect(vitVi.name).toBe('Nâng Cấp: Pháo Đài Phản Xạ');
+    expect(vitEn.name).toBe('Upgrade: Bastion Prism');
 
     const windVi = resolveLocalizedBuffText('swift_wind', 'vi');
     const windEn = resolveLocalizedBuffText('swift_wind', 'en');
-    expect(windVi.name).toBe('Cuồng Phong Trợ Lực');
-    expect(windEn.name).toBe('Gale Reflex');
+    expect(windVi.name).toBe('Nâng Cấp: Song Tinh Cắt Không Gian');
+    expect(windEn.name).toBe('Upgrade: Twin Orbit');
 
     const viBtns = getResultScreenButtonSpecs('vi');
     const enBtns = getResultScreenButtonSpecs('en');

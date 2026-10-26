@@ -183,11 +183,11 @@ function selectTargetEnemy(sim: WorldSim, player: SimPlayerState): SimEnemyState
 /**
  * Steps a single player using the locked Average Player Bot Profile.
  * Enforces:
- * - No godMode, no infiniteEnergy
+ * - No godMode
  * - 250ms reactionDelaySec before responding to new enemy telegraphs / shockwaves / incoming projectiles
  * - 65% dashDodgeProbability rolled deterministically once per threat
  * - 70% aimAccuracy (70% on-target, 30% angular dispersion)
- * - Weapon slot swapping when active weapon lacks energy
+ * - Weapon slot swapping when active weapon is locked out by reload or overheat
  */
 export function stepHonestPlayerBot(
   sim: WorldSim,

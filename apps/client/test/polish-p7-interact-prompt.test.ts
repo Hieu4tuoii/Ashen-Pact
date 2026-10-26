@@ -254,9 +254,9 @@ describe('Phase P7 — Single-Pill [E] Prompt, Fade + Hysteresis, Door Labels, H
     const sim = createCleanSim('p7-weapon-dedup');
     const weaponItem = sim.spawnWorldItem({
       kind: 'weapon',
-      weaponId: 'dragon_breath_shotgun',
+      weaponId: 'scrap_shotgun',
       rarity: 'epic',
-      nameVi: 'Shotgun Hỏa Long',
+      nameVi: 'Shotgun Phế Liệu',
       costGold: 42,
       healAmount: 0,
       x: 510,

@@ -41,8 +41,8 @@ describe('Phase 3 Dungeon Generation & Connectivity', () => {
 });
 
 describe('Phase 3 Weapons, Enemies, Elites & Boss Mục Vương', () => {
-  it('defines 14 weapons across all 5 rarities and allows firing each', () => {
-    expect(PHASE3_WEAPON_IDS.length).toBe(14);
+  it('defines 10 Phase 3 weapons across all 5 rarities and allows firing each', () => {
+    expect(PHASE3_WEAPON_IDS.length).toBe(10);
     const rarities = new Set(PHASE3_WEAPON_IDS.map((id) => WEAPONS[id]!.rarity));
     expect(rarities.has('common')).toBe(true);
     expect(rarities.has('uncommon')).toBe(true);
@@ -357,20 +357,16 @@ describe('Phase 3 Weapons, Enemies, Elites & Boss Mục Vương', () => {
     expect(sim.worldItems.length).toBe(0);
   });
 
-  it('applies eagle_precision, ricochet_mastery, gale_reflex, vanguard_fortress, and vanguard_charge buffs accurately', () => {
+  it('applies vanguard_bastion_prism and vanguard_charge buffs accurately', () => {
     const sim = new WorldSim({
       seed: 4242,
       spawnInitialWave: false,
       includeTrainingDummy: false,
       includeProps: false,
     });
-    sim.player.weaponSlots = ['rusty_pistol'];
-    sim.player.activeWeaponSlot = 0;
+    sim.player.weaponSlots = ['rivet_gun'];
+    sim.equipWeaponSlot(0);
 
-    // 1. Apply gale_reflex, eagle_precision, ricochet_mastery
-    sim.selectFloorBuff('gale_reflex');
-    sim.selectFloorBuff('eagle_precision');
-    sim.selectFloorBuff('ricochet_mastery');
     sim.advanceToFloor(1);
     sim.enemies.length = 0;
     sim.props.length = 0;
@@ -388,15 +384,13 @@ describe('Phase 3 Weapons, Enemies, Elites & Boss Mục Vương', () => {
 
     expect(sim.projectiles.length).toBe(1);
     const bullet = sim.projectiles[0]!;
-    const baseWep = WEAPONS.rusty_pistol!;
-    expect(bullet.pierceRemaining).toBe(baseWep.pierceCount + 1);
-    expect(bullet.bounceRemaining).toBe(baseWep.bounceCount + 1);
-    expect(bullet.damage).toBeGreaterThanOrEqual(Math.round(baseWep.damage * 1.2));
-    // gale_reflex reduces fireCooldownTimer by 1.22x fireRate
-    expect(sim.player.fireCooldownTimer).toBeLessThan(1 / baseWep.fireRate);
+    const baseWep = WEAPONS.rivet_gun!;
+    expect(bullet.pierceRemaining).toBe(baseWep.pierceCount);
+    expect(bullet.bounceRemaining).toBe(baseWep.bounceCount);
+    expect(bullet.damage).toBeGreaterThanOrEqual(baseWep.damage);
 
-    // 2. Test vanguard_fortress 360-degree shield block from behind player
-    sim.selectFloorBuff('vanguard_fortress');
+    // 2. Test vanguard_bastion_prism 360-degree shield block from behind player
+    sim.selectFloorBuff('vanguard_bastion_prism');
     sim.player.aimAngle = 0; // aiming East
     sim.player.skillActiveTimer = 2.0;
     const storedBefore = sim.player.shieldStoredBullets;

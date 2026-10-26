@@ -605,8 +605,8 @@ export const VISUAL_SCENES: readonly VisualSceneDef[] = [
       sim.player.x = 260;
       sim.player.y = 270;
       sim.spawnChest(555, 205, 'epic', 'arc_lightning_rifle');
-      sim.spawnWorldItem({ kind: 'weapon', weaponId: 'dragon_breath_shotgun', rarity: 'legendary', nameVi: 'Shotgun Hỏa Long', costGold: 0, healAmount: 0, x: 555, y: 280 });
-      sim.spawnWorldItem({ kind: 'weapon', weaponId: 'frost_bow', rarity: 'rare', nameVi: 'Cung Băng Giá', costGold: 55, healAmount: 0, x: 555, y: 355, offerId: 1 });
+      sim.spawnWorldItem({ kind: 'weapon', weaponId: 'magma_cannon', rarity: 'legendary', nameVi: 'Pháo Dung Nham', costGold: 0, healAmount: 0, x: 555, y: 280 });
+      sim.spawnWorldItem({ kind: 'weapon', weaponId: 'hunter_crossbow', rarity: 'rare', nameVi: 'Nỏ Săn', costGold: 55, healAmount: 0, x: 555, y: 355, offerId: 1 });
       sim.npcEntities.push({ id: ++sim.nextEntityId, kind: 'shrine', nameVi: 'Điện Thờ Cổ Đại', dialogueVi: 'Hiến tế máu đổi lấy phước lành.', x: 650, y: 225, radius: 20, interacted: false, costHp: 2 });
       sim.portalActive = true;
       sim.portalX = 650;

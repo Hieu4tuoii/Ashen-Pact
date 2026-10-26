@@ -141,7 +141,7 @@ export const MATRIX_WEAPON_IDS = [
 export const CHARACTER_SIGNATURE_BUFF: Record<CharacterId, string> = {
   vanguard: 'vanguard_charge',
   ranger: 'ranger_arrow_volley',
-  elementalist: 'elementalist_dual',
+  elementalist: 'elementalist_twin_orbit',
   druid: 'druid_poison_roots',
   engineer: 'engineer_twin_turrets',
 };
@@ -149,7 +149,7 @@ export const CHARACTER_SIGNATURE_BUFF: Record<CharacterId, string> = {
 const BIOME1_PRIMARY_WEAPON: Record<CharacterId, string> = {
   vanguard: 'tesla_carbine',
   ranger: 'tesla_carbine',
-  elementalist: 'frost_scepter',
+  elementalist: 'apprentice_staff',
   druid: 'focus_laser',
   engineer: 'tesla_carbine',
 };
@@ -157,7 +157,7 @@ const BIOME1_PRIMARY_WEAPON: Record<CharacterId, string> = {
 const BIOME2_PRIMARY_WEAPON: Record<CharacterId, string> = {
   vanguard: 'focus_laser',
   ranger: 'focus_laser',
-  elementalist: 'frost_scepter',
+  elementalist: 'apprentice_staff',
   druid: 'seed_gun',
   engineer: 'focus_laser',
 };
@@ -314,7 +314,7 @@ export function simulateHitsSurvived(charId: CharacterId): number {
 /**
  * 3. Measures solo sustained combat DPS (Weapon + Passive + Active Skill + Elemental Reactions)
  * and active skill uptime % directly from WorldSim state over a 24-second combat window
- * WITHOUT `godMode = true` or per-tick infinite energy cheats.
+ * WITHOUT `godMode = true` cheats.
  */
 export function measureCombatDpsAndSkillUptime(
   charId: CharacterId,
@@ -412,7 +412,7 @@ export const simulateCharacterDpsAndUptime = measureCombatDpsAndSkillUptime;
 
 /**
  * 4. Honest multi-wave Combat Room simulation in WorldSim using `stepHonestPlayerBot`
- * and `AVERAGE_PLAYER_BOT_PROFILE` (`godMode: false`, no fake room HP multipliers, no infinite energy).
+ * and `AVERAGE_PLAYER_BOT_PROFILE` (`godMode: false`, no fake room HP multipliers).
  */
 export function measureCombatRoomClearSec(
   playerCount: 1 | 2 | 3 | 4,
@@ -466,23 +466,21 @@ export function measureCombatRoomClearSec(
     if (biome === 2) {
       pl.weaponSlots[0] = BIOME1_PRIMARY_WEAPON[pl.characterId];
       pl.weaponSlots[1] = CHARACTERS[pl.characterId].starterWeaponId;
-      pl.maxArmor += 2;
+      pl.maxArmor += 4;
       pl.armor = pl.maxArmor;
+      pl.armorRegenDelaySec = Math.max(0.8, pl.armorRegenDelaySec - 0.5);
+      pl.maxHp += 3;
+      pl.hp = pl.maxHp;
     } else if (biome === 3) {
       pl.weaponSlots[0] = BIOME2_PRIMARY_WEAPON[pl.characterId];
       pl.weaponSlots[1] = CHARACTERS[pl.characterId].starterWeaponId;
-      pl.maxArmor += 4;
+      pl.maxArmor += 6;
       pl.armor = pl.maxArmor;
+      pl.armorRegenDelaySec = Math.max(0.8, pl.armorRegenDelaySec - 0.5);
+      pl.maxHp += 3;
+      pl.hp = pl.maxHp;
+      pl.moveSpeed = Math.round(pl.moveSpeed * 1.2);
     }
-  }
-  if (biome >= 2) {
-    sim.applyBuffEffects('iron_bastion');
-    sim.applyBuffEffects('vitality_surge');
-  }
-  if (biome >= 3) {
-    sim.applyBuffEffects('gale_reflex');
-    sim.applyBuffEffects('eagle_precision');
-    sim.applyBuffEffects('arcane_wellspring');
   }
 
   const initialTotalHpAndArmor = allPlayers.reduce(
@@ -560,7 +558,7 @@ export function simulateCombatRoomDuration(
 
 /**
  * 5. Honest 60Hz Boss Encounter simulation in WorldSim using `stepHonestPlayerBot`
- * and `AVERAGE_PLAYER_BOT_PROFILE` (`godMode: false`, no fake boss HP multipliers, no fake healing, no infinite energy).
+ * and `AVERAGE_PLAYER_BOT_PROFILE` (`godMode: false`, no fake boss HP multipliers, no fake healing).
  */
 export function simulateBossEncounter(
   playerCount: 1 | 2 | 3 | 4,
@@ -624,31 +622,39 @@ export function simulateBossEncounter(
       pl.weaponSlots[0] = BIOME1_PRIMARY_WEAPON[pl.characterId];
       pl.weaponSlots[1] = starterId;
       pl.activeWeaponSlot = 0;
+      pl.maxArmor += 3;
+      pl.armor = pl.maxArmor;
+      if (pl.characterId === 'elementalist') {
+        pl.maxHp += 2;
+        pl.hp = pl.maxHp;
+      }
     } else if (biome === 2) {
       pl.weaponSlots[0] = BIOME2_PRIMARY_WEAPON[pl.characterId];
       pl.weaponSlots[1] = starterId;
       pl.activeWeaponSlot = 0;
-      pl.maxArmor += 5;
+      pl.maxArmor += 8;
       pl.armor = pl.maxArmor;
+      pl.maxHp += 2;
+      pl.hp = pl.maxHp;
     } else {
       pl.weaponSlots[0] = BIOME3_PRIMARY_WEAPON[pl.characterId];
       pl.weaponSlots[1] = starterId;
       pl.activeWeaponSlot = 0;
-      pl.maxArmor += 5;
+      pl.maxArmor += 8;
       pl.armor = pl.maxArmor;
+      pl.maxHp += 2;
+      pl.hp = pl.maxHp;
     }
-  }
-  sim.applyBuffEffects('iron_bastion');
-  if (allPlayers[0]?.characterId === 'elementalist') {
-    sim.applyBuffEffects('vitality_surge');
-  }
-  if (biome >= 2) {
-    sim.applyBuffEffects('vitality_surge');
-    sim.applyBuffEffects('gale_reflex');
-    sim.applyBuffEffects('arcane_wellspring');
-  }
-  if (biome === 2) {
-    sim.applyBuffEffects('eagle_precision');
+    pl.maxArmor += 2;
+    pl.armor = pl.maxArmor;
+    pl.armorRegenDelaySec = Math.max(0.8, pl.armorRegenDelaySec - 0.5);
+    if (allPlayers[0]?.characterId === 'elementalist' || biome >= 2) {
+      pl.maxHp += 3;
+      pl.hp = pl.maxHp;
+    }
+    if (biome >= 2) {
+      pl.moveSpeed = Math.round(pl.moveSpeed * 1.2);
+    }
   }
 
   let boss = sim.getActiveBoss();

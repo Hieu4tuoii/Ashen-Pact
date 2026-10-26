@@ -97,12 +97,12 @@ export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, 
 
     if (pl.skillActiveTimer > 0) {
       if (pl.characterId === 'vanguard') {
-        const halfArc = sim.activeBuffIds.includes('vanguard_fortress')
+        const halfArc = sim.activeBuffIds.includes('vanguard_bastion_prism')
           ? Math.PI
           : (60 * Math.PI) / 180;
         const startA = pl.aimAngle - halfArc;
         const endA = pl.aimAngle + halfArc;
-        const r = sim.activeBuffIds.includes('vanguard_fortress') ? 32 : 38;
+        const r = sim.activeBuffIds.includes('vanguard_bastion_prism') ? 32 : 38;
 
         g.lineStyle(7, hexToNum(PALETTE.INK_DARK), 0.85);
         g.beginPath();

@@ -153,9 +153,9 @@ test.describe('Phase 7 — UI/UX & Âm Thanh Hoàn Thiện (Polished HUD, Modals
       // Spawn a high-rarity weapon right next to P1 (dist <= 64u) to trigger Weapon Comparison Tooltip
       sim.spawnWorldItem({
         kind: 'weapon',
-        weaponId: 'dragon_breath_shotgun',
+        weaponId: 'scrap_shotgun',
         rarity: 'epic',
-        nameVi: 'Shotgun Hỏa Long',
+        nameVi: 'Shotgun Phế Liệu',
         costGold: 0,
         healAmount: 0,
         x: p1.x + 48,
@@ -197,7 +197,7 @@ test.describe('Phase 7 — UI/UX & Âm Thanh Hoàn Thiện (Polished HUD, Modals
     }));
     expect(trailingState.trailingHpRatio).toBeGreaterThanOrEqual(trailingState.hpRatio);
     expect(trailingState.sfxPlayedCount).toBeGreaterThan(0);
-    expect(trailingState.comparedWeaponId).toBe('dragon_breath_shotgun');
+    expect(trailingState.comparedWeaponId).toBe('scrap_shotgun');
 
     // Capture HUD + Weapon Comparison Tooltip screenshot before opening Pause modal
     await page.screenshot({

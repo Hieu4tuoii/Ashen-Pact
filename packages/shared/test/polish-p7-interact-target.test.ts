@@ -42,8 +42,8 @@ describe('Phase P7 — Shared findInteractTarget & Behavioral Equivalence', () =
     sim.player.y = 300;
 
     // Chest A is pushed first at distance 58u, Chest B is pushed second at distance 22u
-    const chestFarther = sim.spawnChest(458, 300, 'common', 'rusty_pistol');
-    const chestCloser = sim.spawnChest(422, 300, 'epic', 'dragon_breath_shotgun');
+    const chestFarther = sim.spawnChest(458, 300, 'common', 'rivet_gun');
+    const chestCloser = sim.spawnChest(422, 300, 'epic', 'scrap_shotgun');
 
     const target = findInteractTarget(sim, sim.player.id);
     expect(target).not.toBeNull();
@@ -148,7 +148,7 @@ describe('Phase P7 — Shared findInteractTarget & Behavioral Equivalence', () =
       x: 520,
       y: 300,
     });
-    const chest = sim.spawnChest(555, 300, 'rare', 'frost_bow');
+    const chest = sim.spawnChest(555, 300, 'rare', 'hunter_crossbow');
 
     // 1. Chest wins at 55u despite world_item/shrine/portal/door being closer
     expect(findInteractTarget(sim)?.key).toBe(`chest:${chest.id}`);
@@ -190,9 +190,9 @@ describe('Phase P7 — Shared findInteractTarget & Behavioral Equivalence', () =
 
     const p2Item = sim.spawnWorldItem({
       kind: 'weapon',
-      weaponId: 'frost_bow',
+      weaponId: 'hunter_crossbow',
       rarity: 'rare',
-      nameVi: 'Cung Băng Giá',
+      nameVi: 'Nỏ Săn',
       costGold: 0,
       healAmount: 0,
       x: 410,
@@ -219,7 +219,7 @@ describe('Phase P7 — Shared findInteractTarget & Behavioral Equivalence', () =
     sim.player.y = 300;
 
     // Place chest at 69u (> 64u base range, <= 64u + 8u hysteresis = 72u)
-    const chest = sim.spawnChest(469, 300, 'epic', 'dragon_breath_shotgun');
+    const chest = sim.spawnChest(469, 300, 'epic', 'scrap_shotgun');
     const chestKey = `chest:${chest.id}`;
 
     // Without currentTargetKey, 69u is outside 64u range
@@ -305,7 +305,7 @@ describe('Phase P7 — Shared findInteractTarget & Behavioral Equivalence', () =
             p.x + Math.cos(ang) * dist,
             p.y + Math.sin(ang) * dist,
             'rare',
-            'frost_bow',
+            'hunter_crossbow',
           );
           ch.opened = rng.next() < 0.25;
         }

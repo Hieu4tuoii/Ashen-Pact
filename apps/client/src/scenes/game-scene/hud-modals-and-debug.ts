@@ -29,8 +29,8 @@ export interface ResultScreenButtonSpec {
 }
 
 const LEGACY_BUFF_ALIASES: Readonly<Record<string, BuffId>> = {
-  bountiful_vitality: 'vitality_surge',
-  swift_wind: 'gale_reflex',
+  bountiful_vitality: 'vanguard_bastion_prism',
+  swift_wind: 'elementalist_twin_orbit',
 };
 
 /**
@@ -110,45 +110,11 @@ function getBuffVisualMeta(
       iconKind: bDef.characterId,
     };
   }
-  switch (buffId) {
-    case 'vitality_surge':
-      return {
-        borderHex: PALETTE.LIME_GLOW,
-        badgeText: isEn ? '❤ VITALITY BLESSING' : '❤ PHƯỚC LÀNH SINH LỰC',
-        iconKind: 'heart',
-      };
-    case 'iron_bastion':
-      return {
-        borderHex: PALETTE.CYAN_FROST,
-        badgeText: isEn ? '🛡 BASTION BLESSING' : '🛡 PHƯỚC LÀNH HỘ GIÁP',
-        iconKind: 'shield',
-      };
-    case 'arcane_wellspring':
-      return {
-        borderHex: PALETTE.AZURE_CORE,
-        badgeText: isEn ? '⚡ ARCANE BLESSING' : '⚡ SUỐI NGUỒN NĂNG LƯỢNG',
-        iconKind: 'bolt',
-      };
-    case 'eagle_precision':
-      return {
-        borderHex: PALETTE.FLAME_ORANGE,
-        badgeText: isEn ? '🎯 PRECISION BLESSING' : '🎯 NHÃN QUAN CHÍ MẠNG',
-        iconKind: 'crosshair',
-      };
-    case 'gale_reflex':
-      return {
-        borderHex: PALETTE.LIME_GLOW,
-        badgeText: isEn ? '🌪 GALE BLESSING' : '🌪 PHƯỚC LÀNH CUỒNG PHONG',
-        iconKind: 'wing',
-      };
-    case 'ricochet_mastery':
-    default:
-      return {
-        borderHex: PALETTE.ELECTRIC_VIOLET,
-        badgeText: isEn ? '✦ RICOCHET BLESSING' : '✦ BẬC THẦY NẢY TƯỜNG',
-        iconKind: 'ricochet',
-      };
-  }
+  return {
+    borderHex: PALETTE.ELECTRIC_VIOLET,
+    badgeText: isEn ? '✦ BLESSING' : '✦ PHƯỚC LÀNH',
+    iconKind: 'ricochet',
+  };
 }
 
 function drawBuffEmblemIcon(
@@ -551,7 +517,7 @@ export function updateModalHudImpl(this: GameScene): void {
             .map((b: BuffId) => resolveLocalizedBuffText(b, isEn ? 'en' : 'vi').name)
             .join(', ')
         : i18n.t('ui.result.none');
-    const activeWDef = WEAPONS[sim.getActiveWeaponId()] ?? WEAPONS.rusty_pistol!;
+    const activeWDef = WEAPONS[sim.getActiveWeaponId()] ?? WEAPONS.knight_sword!;
     const summaryLines = [
       i18n.t('ui.result.roomsCleared', { count: sim.runStats.roomsCleared }),
       i18n.t('ui.result.enemiesKilled', {

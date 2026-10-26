@@ -49,14 +49,14 @@ describe('Phase 8 — 20-Minute Co-op Soak Test (72,000 Ticks @ 60Hz)', () => {
     p2.weaponSlots[0] = 'hunter_crossbow';
     p2.weaponSlots[1] = 'falcon_sniper';
     p3.weaponSlots[0] = 'tether_staff';
-    p3.weaponSlots[1] = 'frost_scepter';
+    p3.weaponSlots[1] = 'apprentice_staff';
     p4.weaponSlots[0] = 'tesla_carbine';
     p4.weaponSlots[1] = 'magma_cannon';
 
     sim.activeBuffIds.push(
-      'vanguard_fortress',
+      'vanguard_bastion_prism',
       'ranger_arrow_volley',
-      'elementalist_dual',
+      'elementalist_twin_orbit',
       'engineer_twin_turrets',
     );
 
