@@ -350,8 +350,8 @@ export function populateInteractableLightsScratch(
         continue;
       }
       const colorNum =
-        pk.kind === 'gold' ? 0xfacc15 : pk.kind === 'energy' ? 0x38bdf8 : 0x4ade80;
-      const radius = pk.kind === 'gold' ? 26 : pk.kind === 'energy' ? 28 : 30;
+        pk.kind === 'gold' ? 0xfacc15 : pk.kind === 'prey_emblem' ? 0x38bdf8 : 0x4ade80;
+      const radius = pk.kind === 'gold' ? 26 : pk.kind === 'prey_emblem' ? 28 : 30;
       writeEntry('pickup', pk.x, pk.y, radius, colorNum, 0.25);
     }
   }

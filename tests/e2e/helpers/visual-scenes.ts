@@ -613,7 +613,7 @@ export const VISUAL_SCENES: readonly VisualSceneDef[] = [
       sim.portalY = 335;
       sim.pickups.push(
         sim.acquirePickup({ id: ++sim.nextEntityId, kind: 'gold', x: 605, y: 250, vx: 0, vy: 0, amount: 12, ttlSec: 30 }),
-        sim.acquirePickup({ id: ++sim.nextEntityId, kind: 'energy', x: 615, y: 258, vx: 0, vy: 0, amount: 10, ttlSec: 30 }),
+        sim.acquirePickup({ id: ++sim.nextEntityId, kind: 'prey_emblem', x: 615, y: 258, vx: 0, vy: 0, amount: 1, ttlSec: 30 }),
         sim.acquirePickup({ id: ++sim.nextEntityId, kind: 'life_seed', x: 602, y: 264, vx: 0, vy: 0, amount: 2, ttlSec: 30 }),
       );
     });

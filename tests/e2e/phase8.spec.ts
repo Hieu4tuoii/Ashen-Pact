@@ -233,13 +233,13 @@ test.describe('Phase 8 — Standalone Windows Release Package (v0.2.1), Real LAN
       });
       await pageHost.keyboard.press('F1');
 
-      // Clear Combat room & Portal room on Floor 1 -> Advance to Floor 2 Boss Room -> Defeat Boss!
+      // Clear Combat room & Portal room on Floor 1 -> Advance to Floor 6 Boss Room -> Defeat Boss!
       await pageHost.evaluate(() => {
         window.__GAME_COOP_SEND__?.('debug_cmd', { cmd: 'skip_waves' });
-        window.__GAME_COOP_SEND__?.('debug_cmd', { cmd: 'advance_floor', floor: 2 });
+        window.__GAME_COOP_SEND__?.('debug_cmd', { cmd: 'advance_floor', floor: 6 });
       });
 
-      await pageHost.waitForFunction(() => window.__GAME_DEBUG__?.currentFloor === 2, null, {
+      await pageHost.waitForFunction(() => window.__GAME_DEBUG__?.currentFloor === 6, null, {
         timeout: 10000,
       });
 

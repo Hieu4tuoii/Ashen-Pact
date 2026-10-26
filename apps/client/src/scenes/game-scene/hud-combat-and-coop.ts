@@ -27,6 +27,10 @@ import {
   UI_THEME,
 } from '../../ui/theme.js';
 import { type GameScene } from '../GameScene.js';
+import {
+  drawHudWeaponCadenceBar,
+  formatWeaponCadenceHudLabel,
+} from './hud-micro-reload-bar.js';
 import { applyHudEdgeAnchors, syncHudDebugVisibility } from './hud-setup-and-pause.js';
 
 export {
@@ -100,7 +104,10 @@ export function updateVectorHudImpl(this: GameScene): void {
   const trailHash =
     Math.round(this.trailingHpRatio * trailQuant) * 1000 +
     Math.round(this.trailingArmorRatio * trailQuant);
-  const topCardHash = `${p.hp}:${p.maxHp}:${p.armor}:${p.maxArmor}:${p.energy}:${p.maxEnergy}:${p.characterId}:${p.slot}:${curBiomeKey}:${lowHpPulse ? 1 : 0}:${trailHash}:${statusChipStr}:${curLocale}`;
+  const activeWId = p.weaponSlots[p.activeWeaponSlot] ?? p.weaponSlots[0] ?? 'knight_sword';
+  const activeWDef = WEAPONS[activeWId] ?? WEAPONS.knight_sword!;
+  const cadenceStateHash = `${activeWId}:${p.clipAmmo}:${p.clipMax}:${Math.round(p.weaponHeat)}:${Math.round((p.reloadTimer ?? 0) * 20)}:${p.overclockedNextShot ? 1 : 0}:${Math.round((p.overheatLockTimer ?? 0) * 10)}:${p.meleeComboStep ?? 0}`;
+  const topCardHash = `${p.hp}:${p.maxHp}:${p.armor}:${p.maxArmor}:${cadenceStateHash}:${p.characterId}:${p.slot}:${curBiomeKey}:${lowHpPulse ? 1 : 0}:${trailHash}:${statusChipStr}:${curLocale}`;
 
   const sceneCache = this as GameScene & {
     lastTopCardHash?: string;
@@ -114,13 +121,13 @@ export function updateVectorHudImpl(this: GameScene): void {
   if (
     p.hp !== this.lastHudHp ||
     p.armor !== this.lastHudArmor ||
-    p.energy !== this.lastHudEnergy ||
+    p.clipAmmo !== this.lastHudEnergy ||
     p.gold !== this.lastHudGold ||
     p.characterId !== this.lastHudCharacterId
   ) {
     this.lastHudHp = p.hp;
     this.lastHudArmor = p.armor;
-    this.lastHudEnergy = p.energy;
+    this.lastHudEnergy = p.clipAmmo;
     this.lastHudGold = p.gold;
     this.lastHudCharacterId = p.characterId;
   }
@@ -186,20 +193,18 @@ export function updateVectorHudImpl(this: GameScene): void {
       trailColor: UI_THEME.status.armorTrail,
     });
 
-    // 3. Segmented Energy Bar + Bolt Vector Icon
-    drawVectorHudIcon(g, 'bolt', 58, 48, 4.2, UI_THEME.status.energy);
-    drawSegmentedBar(g, {
-      x: 66,
-      y: 44,
-      width: 96,
-      height: 7.5,
-      current: p.energy,
-      max: Math.max(1, p.maxEnergy),
-      maxSegments: 6,
-      gap: 1.5,
-      fillColor: UI_THEME.status.energy,
-      fillDarkColor: UI_THEME.status.energyDark,
-    });
+    // 3. Weapon Cadence Bar (CLIP_RELOAD / HEAT_VENT / MELEE_COMBO) + Vector Icon
+    drawVectorHudIcon(
+      g,
+      activeWDef.cadenceKind === 'MELEE_COMBO' ? 'sword' : 'bolt',
+      58,
+      48,
+      4.2,
+      activeWDef.cadenceKind === 'HEAT_VENT' && (p.overheatLockTimer ?? 0) > 0
+        ? UI_THEME.status.hp
+        : UI_THEME.status.energy,
+    );
+    drawHudWeaponCadenceBar(g, p, activeWDef, 66, 44, 96, 7.5);
 
     // 4. Bottom Footer Strip inside Card: Class Name + Gold Coin Pill
     g.fillStyle(UI_THEME.status.goldDark, 0.78);
@@ -222,7 +227,12 @@ export function updateVectorHudImpl(this: GameScene): void {
     if (this.armorLabelText.text !== armorStr) {
       this.armorLabelText.setText(armorStr);
     }
-    const energyStr = `${p.energy}/${p.maxEnergy}`;
+    const cadenceLabel = formatWeaponCadenceHudLabel(
+      p,
+      activeWDef,
+      curLocale === 'en' ? 'en' : 'vi',
+    );
+    const energyStr = cadenceLabel.barText;
     if (this.energyLabelText.text !== energyStr) {
       this.energyLabelText.setText(energyStr);
     }
@@ -381,12 +391,10 @@ export function updateVectorHudImpl(this: GameScene): void {
   }
 
   // Update Bottom-Right 2-slot Weapon Cards (Active Enlarged & Highlighted, Inactive Compact & Dimmed)
-  const weaponHash = `${p.activeWeaponSlot}:${p.weaponSlots.join(',')}:${curLocale}:${gState.showKeyHints ? 1 : 0}`;
+  const weaponHash = `${p.activeWeaponSlot}:${p.weaponSlots.join(',')}:${cadenceStateHash}:${curLocale}:${gState.showKeyHints ? 1 : 0}`;
   if (weaponHash !== this.lastHudWeaponHash) {
     this.lastHudWeaponHash = weaponHash;
     const invBake = 1 / TextureBaker.getBakeScale();
-    const dmgPrefix = curLocale === 'en' ? 'DMG' : 'ST';
-    const nrgPrefix = curLocale === 'en' ? 'EN' : 'NL';
     const showHints = gState.showKeyHints;
 
     const activeW = 152;
@@ -461,7 +469,7 @@ export function updateVectorHudImpl(this: GameScene): void {
         }
         if (metaTxt) {
           metaTxt.setText(
-            `${dmgPrefix} ${wDef.damage}${wDef.pelletCount > 1 ? `×${wDef.pelletCount}` : ''} · ${nrgPrefix} ${wDef.energyCost}`,
+            formatWeaponCadenceHudLabel(p, wDef, curLocale === 'en' ? 'en' : 'vi').cardMetaText,
           );
           metaTxt.setPosition(sx + 38, sy + (isSelected ? 30 : 26));
           metaTxt.setColor(isSelected ? PALETTE.BONE_WHITE : PALETTE.STEEL_LIGHT);

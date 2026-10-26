@@ -532,7 +532,7 @@ export function syncProjectilesAndPickupsImpl(this: GameScene): void {
 
     let entry = this.pickupSprites.get(pk.id);
     const tex =
-      pk.kind === 'energy'
+      pk.kind === 'prey_emblem'
         ? 'fx_pickup_energy'
         : pk.kind === 'life_seed'
           ? 'fx_ambient_leaf'
@@ -576,7 +576,7 @@ export function syncProjectilesAndPickupsImpl(this: GameScene): void {
 
     if (showPickupGlow) {
       const glowCol =
-        pk.kind === 'gold' ? 0xfacc15 : pk.kind === 'energy' ? 0x38bdf8 : 0x4ade80;
+        pk.kind === 'gold' ? 0xfacc15 : pk.kind === 'prey_emblem' ? 0x38bdf8 : 0x4ade80;
       entry.glowSprite.setPosition(pos.x, pos.y + bobY);
       entry.glowSprite.setDisplaySize(28, 22);
       entry.glowSprite.setTint(glowCol);

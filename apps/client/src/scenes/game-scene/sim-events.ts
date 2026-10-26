@@ -1,5 +1,6 @@
 import {
   ELEMENTAL_REACTIONS,
+  i18n,
   type SimEvent,
   WEAPON_RARITY_COLORS,
 } from '@ashen-pact/shared';
@@ -341,6 +342,14 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
         break;
       }
       case 'pickup_collected': {
+        if (ev.pickupKind === 'prey_emblem' && !isStress) {
+          const isEn = i18n.getLocale() === 'en';
+          this.fx.spawnFloatingAlert(
+            ev.x,
+            ev.y,
+            isEn ? '🎯 -1.5s CD & FULL CLIP' : '🎯 -1.5s CD & ĐẦY ĐẠN',
+          );
+        }
         if (allowStressSfx) {
           zzfx.play('pickup', ev.x, this.camFocusX, ev.y, this.camFocusY);
         }
@@ -507,6 +516,14 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
             zzfx.play(rSfx, ev.x, this.camFocusX, ev.y, this.camFocusY);
             if (ev.isTeamCombo) {
               zzfx.play('team_combo', ev.x, this.camFocusX, ev.y, this.camFocusY);
+              const isEn = i18n.getLocale() === 'en';
+              this.fx.spawnFloatingAlert(
+                ev.x,
+                ev.y - 14,
+                isEn
+                  ? '⚡ ELEMENTAL CONVERGENCE! +20% SPD'
+                  : '⚡ HỘI TỤ NGUYÊN TỐ! +20% TỐC ĐỘ',
+              );
             }
           }
         }

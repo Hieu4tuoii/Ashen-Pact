@@ -9,7 +9,7 @@ test.beforeAll(() => {
 });
 
 test.describe('Phase 5 — 5 Playable Characters, Skills & 10 Upgrades, 6 Elemental Reactions & Co-op Team Combo', () => {
-  test('verifies Hub 5-character statues + Skill/Synergy Preview panel, Art Gallery Page 4 (5 Characters), and Co-op Elemental Reactions + Team Combo (+15 Energy) in combat', async ({
+  test('verifies Hub 5-character statues + Skill/Synergy Preview panel, Art Gallery Page 4 (5 Characters), and Co-op Elemental Reactions + Team Combo (Elemental Convergence) in combat', async ({
     page,
   }) => {
     test.setTimeout(60000);
@@ -185,8 +185,8 @@ test.describe('Phase 5 — 5 Playable Characters, Skills & 10 Upgrades, 6 Elemen
       );
 
       // Trigger Co-op Team Combo Elemental Reactions (P1 primed Burn, P3 triggers Overload & P2 triggers Vaporize!)
-      p1.energy = 100;
-      p3.energy = 100;
+      p1.weaponHeat = 65;
+      p3.clipAmmo = 1;
       sim.applyDamageToEnemy(bossTarget, 22, true, 'shock', 0, 0, true, p3.id);
       sim.applyDamageToEnemy(enemy2, 20, true, 'chill', 0, 0, false, p2.id);
     });
@@ -200,14 +200,14 @@ test.describe('Phase 5 — 5 Playable Characters, Skills & 10 Upgrades, 6 Elemen
         elementalReactions: sim.runStats.elementalReactions,
         summonCount: sim.summons.length,
         zoneCount: sim.skillZones.length,
-        p1Energy: sim.player.energy,
+        p1ConvergenceTimer: sim.player.elementalConvergenceTimer,
       };
     });
     expect(combatCheck.teamComboCount).toBeGreaterThanOrEqual(2);
     expect(combatCheck.elementalReactions).toBeGreaterThanOrEqual(2);
     expect(combatCheck.summonCount).toBeGreaterThanOrEqual(2);
     expect(combatCheck.zoneCount).toBeGreaterThanOrEqual(1);
-    expect(combatCheck.p1Energy).toBeGreaterThan(100); // +15 Energy from Team Combo!
+    expect(combatCheck.p1ConvergenceTimer).toBeGreaterThan(0); // Elemental Convergence from Team Combo!
 
     await page.screenshot({
       path: path.join(SCREENSHOT_DIR, 'combat-elemental-reactions-team-combo-1080p.png'),

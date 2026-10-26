@@ -351,6 +351,7 @@ test.describe('Phase 3 — Dungeon, Vòng Lặp Lượt Chơi & Biome 1 Hoàn Ch
     const bossPhase1 = await page.evaluate(() => {
       const transport = window.__GAME_TRANSPORT__!;
       const sim = transport.getSim();
+      sim.campaignMaxFloors = 2;
       const bossRoom = sim.dungeon.rooms.find((r) => r.type === 'boss')!;
       sim.enterRoom(bossRoom.id);
 

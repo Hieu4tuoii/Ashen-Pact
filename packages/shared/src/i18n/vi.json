@@ -35,7 +35,7 @@
       "holdEToRevive": "[Giữ E]",
       "cycle": "Chu Kỳ",
       "teamCombo": "Combo Đội",
-      "elementBtn": "[R] Ng.Tố",
+      "elementBtn": "[Alt+R] Ng.Tố",
       "qualityBtn": "[G] Đồ Họa",
       "settingsBtn": "[Esc] Cài Đặt",
       "galleryBtn": "[Art Gallery]",
@@ -148,7 +148,7 @@
       "ping": "Z / Chuột Giữa : Ping Ngữ Cảnh (Kẻ Địch, Vũ Khí, Cứu Bồ)",
       "emote": "Giữ T (+ Chuột hoặc 1-4) : Mở vòng biểu cảm nhanh cùng đồng đội",
       "pause": "Esc : Tạm Dừng & Cài Đặt",
-      "reactionsTip": "⚡ 6 Phản Ứng Nguyên Tố: Hơi Nước (Lửa+Băng), Vỡ Băng (Đóng Băng+Đòn nặng), Siêu Dẫn (Sét+Băng), Nổ Độc (Lửa+Độc), Tê Liệt (Sét+Độc), Quá Tải (Lửa+Sét). Phối hợp 2 người = Đồng Đội Combo (+15 NL)!",
+      "reactionsTip": "⚡ 6 Phản Ứng Nguyên Tố: Hơi Nước (Lửa+Băng), Vỡ Băng (Đóng Băng+Đòn nặng), Siêu Dẫn (Sét+Băng), Nổ Độc (Lửa+Độc), Tê Liệt (Sét+Độc), Quá Tải (Lửa+Sét). Phối hợp 2 người = Hội Tụ Nguyên Tố (+20% tốc chạy & tốc bắn 4s, -0.5s hồi chiêu)!",
       "close": "Đóng Hướng Dẫn [Esc]"
     },
     "credits": {
@@ -317,7 +317,7 @@
       "name": "Thiết Vệ",
       "title": "Tank / Bảo Hộ Tuyến Đầu",
       "passiveName": "Ý Chí Thép",
-      "passiveDesc": "Giáp hồi sau 2s; mỗi viên đạn chặn bằng kỹ năng hồi 1 năng lượng.",
+      "passiveDesc": "Giáp tự động hồi sau 3.0s không nhận sát thương; khi vỡ giáp kích hoạt Phản Công Thép (+25% sát thương trong 3s).",
       "skillName": "Tường Khiên Hồng Ngọc",
       "skillDesc": "Dựng khiên cung 120° chặn và tích trữ đạn địch rồi phóng ngược sóng xung kích. Đạn đồng minh bắn qua khiên từ phía sau được +30% sát thương và xuyên mục tiêu.",
       "synergy": "Đạn đồng minh và Trụ Tesla bắn xuyên qua khiên từ phía sau được +30% sát thương và +1 xuyên mục tiêu."
@@ -328,8 +328,8 @@
       "passiveName": "Mắt Ưng",
       "passiveDesc": "Sát thương tăng theo khoảng cách tới mục tiêu (tối đa +30%); +10% Crit.",
       "skillName": "Mũi Tên Săn Mồi",
-      "skillDesc": "Lộn lùi (i-frame) và bắn mũi tên xuyên thấu đánh dấu quái trong 6s: nhận +25% sát thương từ mọi nguồn, lộ diện xuyên tường và rơi cầu năng lượng khi chết.",
-      "synergy": "Mục tiêu bị Đánh Dấu nhận +25% sát thương từ cả đội, lộ diện xuyên sương mù, bị Trụ Tesla ưu tiên khóa mục tiêu và rơi cầu năng lượng khi bị hạ."
+      "skillDesc": "Lộn lùi (i-frame) và bắn mũi tên xuyên thấu đánh dấu quái trong 6s: nhận +25% sát thương từ mọi nguồn, lộ diện xuyên tường và rơi Huy Hiệu Săn Mồi (-1.5s hồi chiêu, nạp đầy băng/xả nhiệt) khi chết.",
+      "synergy": "Mục tiêu bị Đánh Dấu nhận +25% sát thương từ cả đội, lộ diện xuyên sương mù, bị Trụ Tesla ưu tiên khóa mục tiêu và rơi Huy Hiệu Săn Mồi (-1.5s hồi chiêu & nạp đầy băng) khi bị hạ."
     },
     "elementalist": {
       "name": "Lam Hỏa",
@@ -338,7 +338,7 @@
       "passiveDesc": "Xoay vòng Lửa → Băng → Sét sau mỗi lần dùng kỹ năng; đạn thường áp nguyên tố hiện hành.",
       "skillName": "Cầu Nguyên Tố",
       "skillDesc": "Ném quả cầu nổ thành vùng nguyên tố 5s. Đạn đồng minh bay qua vùng được tẩm nguyên tố đó.",
-      "synergy": "Đạn đồng minh bay qua vùng nguyên tố được tẩm nguyên tố đó, dễ dàng kích hoạt Đồng Đội Combo (+15 Năng lượng cho cả 2 người chơi)."
+      "synergy": "Đạn đồng minh bay qua vùng nguyên tố được tẩm nguyên tố đó, dễ dàng kích hoạt Hội Tụ Nguyên Tố (+20% tốc chạy & tốc bắn trong 4s, giảm 0.5s hồi chiêu cho cả đội)."
     },
     "druid": {
       "name": "Mộc Linh",

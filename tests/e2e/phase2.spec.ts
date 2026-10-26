@@ -99,8 +99,8 @@ test.describe('Phase 2 — Pipeline Hình Ảnh & Tương Tác Map', () => {
     await page.waitForTimeout(90);
     await page.keyboard.up('D');
 
-    // Cycle elemental imbue with R key
-    await page.keyboard.press('KeyR');
+    // Cycle elemental imbue with Alt+R key
+    await page.keyboard.press('Alt+KeyR');
     await page.waitForTimeout(50);
     const imbueAfterR = await page.evaluate(() => window.__GAME_DEBUG__.activeImbueElement);
     expect(imbueAfterR).toBe('burn');

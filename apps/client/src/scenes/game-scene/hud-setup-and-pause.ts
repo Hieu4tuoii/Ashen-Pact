@@ -17,14 +17,15 @@ import { clampUiScale, graphicsSettings } from '../../ui/graphics-settings.js';
 import { ModalOverlayManager } from '../../ui/settings-modal.js';
 import { computeUiTextResolution, createUiTextStyle, UI_THEME } from '../../ui/theme.js';
 import { type GameScene } from '../GameScene.js';
+import { formatWeaponCadenceHudLabel } from './hud-micro-reload-bar.js';
 
 export function syncHudDebugVisibility(scene: GameScene): void {
   const showDebug = isEffectiveDebugUiEnabled(scene.coopMode !== 'solo');
   const isEn = i18n.getLocale() === 'en';
   const nextStatus = showDebug
     ? isEn
-      ? 'WASD: Move · Mouse: Shoot/Skill · Shift: Dash · R: Elem · G: Quality · F1-F7: Debug'
-      : 'WASD: Chạy · Chuột: Bắn/Khiên · Shift: Dash · R: Ng.Tố · G: Đồ Họa · F1-F7: Debug'
+      ? 'WASD: Move · Mouse: Shoot/Skill · Shift: Dash · R: Reload/Vent · G: Quality · F1-F7: Debug'
+      : 'WASD: Chạy · Chuột: Bắn/Khiên · Shift: Dash · R: Nạp/Xả · G: Đồ Họa · F1-F7: Debug'
     : isEn
       ? 'WASD: Move · Mouse: Shoot/Skill · Shift: Dash · E: Interact · Tab: Map'
       : 'WASD: Chạy · Chuột: Bắn/Kỹ năng · Shift: Dash · E: Tương tác · Tab: Bản đồ';
@@ -154,7 +155,7 @@ export function buildVectorHudImpl(this: GameScene): void {
   this.playerClassLabelText = makeStatLabel(20, 68, 'Thiết Vệ', PALETTE.SILVER_BRIGHT);
   this.hpLabelText = makeStatLabel(168, 21, '8/8', PALETTE.BONE_WHITE);
   this.armorLabelText = makeStatLabel(168, 34.5, '6/6', PALETTE.SILVER_BRIGHT);
-  this.energyLabelText = makeStatLabel(168, 48, '150/150', PALETTE.CYAN_FROST);
+  this.energyLabelText = makeStatLabel(168, 48, '8/8', PALETTE.CYAN_FROST);
 
   this.goldLabelText = ui.add
     .text(
@@ -209,7 +210,7 @@ export function buildVectorHudImpl(this: GameScene): void {
   this.statusText = ui.add.text(
     224,
     26,
-    'WASD: Chạy · Chuột: Bắn/Khiên · Shift: Dash · R: Ng.Tố · G: Đồ Họa · F1-F7: Debug',
+    'WASD: Chạy · Chuột: Bắn/Khiên · Shift: Dash · R: Nạp/Xả · G: Đồ Họa · F1-F7: Debug',
     createUiTextStyle({
       fontPxAt1080p: 13,
       weight: 600,
@@ -240,7 +241,7 @@ export function buildVectorHudImpl(this: GameScene): void {
     .text(
       -460,
       40,
-      '[R] Ng.Tố: Vật Lý',
+      '[Alt+R] Ng.Tố: Vật Lý',
       createUiTextStyle({
         fontPxAt1080p: 13,
         weight: 700,
@@ -452,7 +453,11 @@ export function buildVectorHudImpl(this: GameScene): void {
       .text(
         cardX + 36,
         -22,
-        `ST ${wDef.damage} · NL ${wDef.energyCost}`,
+        formatWeaponCadenceHudLabel(
+          this.transport.getSim().player,
+          wDef,
+          i18n.getLocale() === 'en' ? 'en' : 'vi',
+        ).cardMetaText,
         createUiTextStyle({
           fontPxAt1080p: 13,
           weight: 600,

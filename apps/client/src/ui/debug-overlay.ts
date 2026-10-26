@@ -39,8 +39,9 @@ export interface GameDebugState {
   playerMaxHp: number;
   playerArmor: number;
   playerMaxArmor: number;
-  playerEnergy: number;
-  playerMaxEnergy: number;
+  playerClipAmmo: number;
+  playerClipMax: number;
+  playerWeaponHeat: number;
   activeWeaponId: string;
   activeWeaponSlot: number;
   godMode: boolean;
@@ -202,8 +203,9 @@ export function initGlobalDebugState(): GameDebugState {
     playerMaxHp: 8,
     playerArmor: 6,
     playerMaxArmor: 6,
-    playerEnergy: 150,
-    playerMaxEnergy: 150,
+    playerClipAmmo: 8,
+    playerClipMax: 8,
+    playerWeaponHeat: 0,
     activeWeaponId: 'knight_sword',
     activeWeaponSlot: 0,
     godMode: false,

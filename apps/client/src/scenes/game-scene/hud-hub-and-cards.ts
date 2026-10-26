@@ -20,6 +20,7 @@ import { initGlobalDebugState } from '../../ui/debug-overlay.js';
 import { graphicsSettings } from '../../ui/graphics-settings.js';
 import { computeUiTextResolution, createUiTextStyle, UI_THEME } from '../../ui/theme.js';
 import { type GameScene } from '../GameScene.js';
+import { formatWeaponCadenceHudLabel } from './hud-micro-reload-bar.js';
 
 export function formatHubInvitePlayerRowText(
   slot: number,
@@ -538,7 +539,7 @@ export function updateHubCharacterSkillPreviewImpl(this: GameScene): void {
     .text(
       px + pw - 12,
       py + 7,
-      `[${statusBadge}] · HP ${cDef.hp} · ${i18n.t('ui.hud.armor')} ${cDef.armor} · ${i18n.t('ui.hud.energy')} ${cDef.energy} · ${spdLabel} ${cDef.moveSpeed}`,
+      `[${statusBadge}] · HP ${cDef.hp} · ${i18n.t('ui.hud.armor')} ${cDef.armor} · ${spdLabel} ${cDef.moveSpeed}`,
       createUiTextStyle({
         fontPxAt1080p: 13,
         weight: 700,
@@ -654,14 +655,13 @@ export function updateWeaponComparisonCardImpl(this: GameScene): void {
   const currTotalDmg = wCurr.damage * Math.max(1, wCurr.pelletCount);
   const dmgDiff = dropTotalDmg - currTotalDmg;
   const rateDiff = Math.round((wDrop.fireRate - wCurr.fireRate) * 10) / 10;
-  const nrgDiff = wDrop.energyCost - wCurr.energyCost;
   const dropDps = Math.round(dropTotalDmg * wDrop.fireRate * (1 + wDrop.critChance * 0.5));
   const currDps = Math.round(currTotalDmg * wCurr.fireRate * (1 + wCurr.critChance * 0.5));
   const dpsDiff = dropDps - currDps;
 
-  const fmtDelta = (diff: number, invertGood = false) => {
+  const fmtDelta = (diff: number) => {
     if (Math.abs(diff) < 0.05) return '(=)';
-    const isGood = invertGood ? diff < 0 : diff > 0;
+    const isGood = diff > 0;
     const sign = diff > 0 ? '+' : '';
     return isGood ? `▲${sign}${diff}` : `▼${sign}${diff}`;
   };
@@ -760,7 +760,12 @@ export function updateWeaponComparisonCardImpl(this: GameScene): void {
     this.weaponCompareContainer.add(priceTxt);
   }
 
-  const statsLine1 = `${i18n.t('ui.hud.weaponCompareDmg')}: ${wDrop.damage}${wDrop.pelletCount > 1 ? `×${wDrop.pelletCount}` : ''} (${fmtDelta(dmgDiff)}) · ${i18n.t('ui.hud.weaponCompareFireRate')}: ${wDrop.fireRate}/s (${fmtDelta(rateDiff)}) · ${i18n.t('ui.hud.weaponCompareEnergy')}: ${wDrop.energyCost} (${fmtDelta(nrgDiff, true)})`;
+  const dropCadenceStat = formatWeaponCadenceHudLabel(
+    sim.player,
+    wDrop,
+    isEn ? 'en' : 'vi',
+  ).compareStatText;
+  const statsLine1 = `${i18n.t('ui.hud.weaponCompareDmg')}: ${wDrop.damage}${wDrop.pelletCount > 1 ? `×${wDrop.pelletCount}` : ''} (${fmtDelta(dmgDiff)}) · ${i18n.t('ui.hud.weaponCompareFireRate')}: ${wDrop.fireRate}/s (${fmtDelta(rateDiff)}) · ${dropCadenceStat}`;
   const statsLine2 = `${i18n.t('ui.hud.weaponCompareCrit')}: ${Math.round(wDrop.critChance * 100)}% · ${i18n.t('ui.tooltip.element')}: ${i18n.elementName(wDrop.element)} · ${i18n.getRarityLabel(wDrop.rarity)}`;
   const descLine = `${i18n.getWeaponText(wDrop.id).desc}`;
 

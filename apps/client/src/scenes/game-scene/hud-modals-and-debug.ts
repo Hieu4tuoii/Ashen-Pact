@@ -839,8 +839,9 @@ export function updateDebugStateImpl(
   debug.playerMaxHp = p.maxHp;
   debug.playerArmor = p.armor;
   debug.playerMaxArmor = p.maxArmor;
-  debug.playerEnergy = p.energy;
-  debug.playerMaxEnergy = p.maxEnergy;
+  debug.playerClipAmmo = p.clipAmmo;
+  debug.playerClipMax = p.clipMax;
+  debug.playerWeaponHeat = Math.round(p.weaponHeat);
   debug.playerSlot = p.slot;
   debug.activeWeaponId = sim.getActiveWeaponId();
   debug.activeWeaponSlot = p.activeWeaponSlot;

@@ -77,7 +77,7 @@ test.describe('Phase 4 — Co-op LAN Authoritative, Prediction/Interpolation, Hu
     ];
     for (const item of joinQueue) {
       const targetUrl = item.directRootUrl
-        ? `${lanBaseUrl}/?name=${encodeURIComponent(item.name)}`
+        ? `${lanBaseUrl}/?coop=join&name=${encodeURIComponent(item.name)}`
         : `${lanBaseUrl}/?join=${roomId}&name=${encodeURIComponent(item.name)}&server=${hostInfo.primaryLanIp}:${hostInfo.port}`;
       await item.page.goto(targetUrl);
       await item.page.waitForFunction(

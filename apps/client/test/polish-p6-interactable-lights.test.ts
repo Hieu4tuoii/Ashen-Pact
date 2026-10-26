@@ -27,9 +27,9 @@ describe('Phase P6 — Interactable Lights, Glow Sprites, Rarity Beams & [E] Hig
     const scratch: InteractableLightEntry[] = [];
     const pickups = Array.from({ length: 30 }, (_, idx) => ({
       id: 1000 + idx,
-      kind: (idx % 3 === 0 ? 'gold' : idx % 3 === 1 ? 'energy' : 'life_seed') as
+      kind: (idx % 3 === 0 ? 'gold' : idx % 3 === 1 ? 'prey_emblem' : 'life_seed') as
         | 'gold'
-        | 'energy'
+        | 'prey_emblem'
         | 'life_seed',
       prevX: 400 + idx * 4,
       prevY: 260,
@@ -416,7 +416,7 @@ describe('Phase P6 — Interactable Lights, Glow Sprites, Rarity Beams & [E] Hig
       },
       {
         id: 2,
-        kind: 'energy' as const,
+        kind: 'prey_emblem' as const,
         prevX: 120,
         prevY: 100,
         x: 120,
