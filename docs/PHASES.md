@@ -1,137 +1,137 @@
-# DANH SÁCH KIỂM TRA CÁC PHASE (PHASES.md) — ASHEN PACT
+# DANH SÃCH KIá»‚M TRA CÃC PHASE (PHASES.md) â€” ASHEN PACT
 
-> Quy tắc: Mỗi phase chỉ được đánh dấu hoàn thành `[x]` khi đạt 100% Definition of Done (DoD) chung và riêng, `pnpm verify` xanh, 0 console error/warning, FPS đạt mục tiêu và có đầy đủ screenshot tại `docs/screenshots/phase-N/`.
+> Quy táº¯c: Má»—i phase chá»‰ Ä‘Æ°á»£c Ä‘Ã¡nh dáº¥u hoÃ n thÃ nh `[x]` khi Ä‘áº¡t 100% Definition of Done (DoD) chung vÃ  riÃªng, `pnpm verify` xanh, 0 console error/warning, FPS Ä‘áº¡t má»¥c tiÃªu vÃ  cÃ³ Ä‘áº§y Ä‘á»§ screenshot táº¡i `docs/screenshots/phase-N/`.
 
-## DoD Chung Cho Mọi Phase
+## DoD Chung Cho Má»i Phase
 - [x] `pnpm verify` (`typecheck` + `lint` + `test` + `build` + `e2e` smoke) xanh 100%
-- [x] 0 lỗi / warning trong console trình duyệt khi chạy E2E
-- [x] FPS mục tiêu đạt (~60 FPS, đo qua `window.__GAME_DEBUG__`)
-- [x] Screenshot lưu tại `docs/screenshots/phase-N/` và đã tự review bằng mắt theo `ART_GUIDE.md`
-- [x] Cập nhật `docs/PROGRESS.md` và `docs/PHASES.md`
+- [x] 0 lá»—i / warning trong console trÃ¬nh duyá»‡t khi cháº¡y E2E
+- [x] FPS má»¥c tiÃªu Ä‘áº¡t (~60 FPS, Ä‘o qua `window.__GAME_DEBUG__`)
+- [x] Screenshot lÆ°u táº¡i `docs/screenshots/phase-N/` vÃ  Ä‘Ã£ tá»± review báº±ng máº¯t theo `ART_GUIDE.md`
+- [x] Cáº­p nháº­t `docs/PROGRESS.md` vÃ  `docs/PHASES.md`
 - [x] `git commit` (Conventional Commits) + `git tag phase-N`
 
 ---
 
-## Phase 0 — Nền móng & Thiết kế (Hoàn thành ✅)
+## Phase 0 â€” Ná»n mÃ³ng & Thiáº¿t káº¿ (HoÃ n thÃ nh âœ…)
 - [x] Init git, monorepo (`pnpm` workspaces), TypeScript `strict`, ESLint/Prettier, Vitest, Playwright, scripts `dev/build/test/e2e/verify`.
-- [x] Viết đầy đủ `docs/GDD.md`, `docs/TECH.md`, `docs/ART_GUIDE.md`, `docs/BALANCE.md`, `docs/PHASES.md`, `docs/PROGRESS.md`, `CREDITS.md`.
-- [x] Dựng nền móng thư viện vẽ `apps/client/src/art/` (palette 42 màu, primitives, `outlined()`, bake texture theo DPR, rig cutout + animation tham số) và scene `ArtGallery`; vẽ **1 nhân vật mẫu (Thiết Vệ) + 1 quái mẫu (Goblin Xạ Thủ)** với animation `idle` / `run` để chốt style.
-- [x] Khung client Phaser (scene `Boot`, `Preload`, `Menu`, `Game`, `ArtGallery`), khung server Colyseus "hello room", package `packages/shared` với PRNG + fixed timestep loop + debug overlay `F1` + `window.__GAME_DEBUG__`.
-- [x] **DoD riêng Phase 0:**
-  - [x] `pnpm dev` chạy được client + server
-  - [x] Scene trống / Game / ArtGallery đạt ~60 FPS (`60.2 FPS` / `16.61 ms`)
+- [x] Viáº¿t Ä‘áº§y Ä‘á»§ `docs/GDD.md`, `docs/TECH.md`, `docs/ART_GUIDE.md`, `docs/BALANCE.md`, `docs/PHASES.md`, `docs/PROGRESS.md`, `CREDITS.md`.
+- [x] Dá»±ng ná»n mÃ³ng thÆ° viá»‡n váº½ `apps/client/src/art/` (palette 42 mÃ u, primitives, `outlined()`, bake texture theo DPR, rig cutout + animation tham sá»‘) vÃ  scene `ArtGallery`; váº½ **1 nhÃ¢n váº­t máº«u (Thiáº¿t Vá»‡) + 1 quÃ¡i máº«u (Goblin Xáº¡ Thá»§)** vá»›i animation `idle` / `run` Ä‘á»ƒ chá»‘t style.
+- [x] Khung client Phaser (scene `Boot`, `Preload`, `Menu`, `Game`, `ArtGallery`), khung server Colyseus "hello room", package `packages/shared` vá»›i PRNG + fixed timestep loop + debug overlay `F1` + `window.__GAME_DEBUG__`.
+- [x] **DoD riÃªng Phase 0:**
+  - [x] `pnpm dev` cháº¡y Ä‘Æ°á»£c client + server
+  - [x] Scene trá»‘ng / Game / ArtGallery Ä‘áº¡t ~60 FPS (`60.2 FPS` / `16.61 ms`)
   - [x] Test E2E smoke pass (0 console errors/warnings)
-  - [x] Render đúng chuỗi tiếng Việt có dấu: `"Tiếng Việt: ắ ằ ẳ ẵ ặ ầ ẩ ẫ ậ ỡ ự ữ ỹ Đ đ"`
-  - [x] Screenshot `ArtGallery` ở 1080p và 1440p cho thấy nhân vật/quái mẫu nét sắc, không răng cưa, không mờ, đúng `ART_GUIDE.md`
+  - [x] Render Ä‘Ãºng chuá»—i tiáº¿ng Viá»‡t cÃ³ dáº¥u: `"Tiáº¿ng Viá»‡t: áº¯ áº± áº³ áºµ áº· áº§ áº© áº« áº­ á»¡ á»± á»¯ á»¹ Ä Ä‘"`
+  - [x] Screenshot `ArtGallery` á»Ÿ 1080p vÃ  1440p cho tháº¥y nhÃ¢n váº­t/quÃ¡i máº«u nÃ©t sáº¯c, khÃ´ng rÄƒng cÆ°a, khÃ´ng má», Ä‘Ãºng `ART_GUIDE.md`
 
 ---
 
-## Phase 1 — Core Gameplay & Game Feel (Solo, Phòng Thử Nghiệm) (Hoàn thành ✅)
+## Phase 1 â€” Core Gameplay & Game Feel (Solo, PhÃ²ng Thá»­ Nghiá»‡m) (HoÃ n thÃ nh âœ…)
 - [x] Simulation trong `packages/shared` + `LocalTransport`; render interpolation.
-- [x] Di chuyển có gia tốc, dash i-frame, ngắm chuột, camera lookahead, crosshair vẽ bằng code.
-- [x] Nhân vật Thiết Vệ (animation cơ bản), 4 vũ khí mẫu (súng lục, shotgun, SMG, kiếm), đạn + va chạm tile + spatial hash grid.
-- [x] 3 quái mẫu (bắn xa, lao húc, nổ) với AI cơ bản + telegraph.
-- [x] HP/Giáp/Năng lượng, damage, knockback, hit flash, hit-stop, screen shake, số damage, SFX cơ bản (ZzFX).
-- [x] **DoD riêng Phase 1:** Phản hồi input < 1 frame, không giật camera, chuyển động mượt ở 60/144Hz, bắn trúng có đủ flash + spark + âm + số damage + knockback; unit test cho damage/giáp/va chạm.
+- [x] Di chuyá»ƒn cÃ³ gia tá»‘c, dash i-frame, ngáº¯m chuá»™t, camera lookahead, crosshair váº½ báº±ng code.
+- [x] NhÃ¢n váº­t Thiáº¿t Vá»‡ (animation cÆ¡ báº£n), 4 vÅ© khÃ­ máº«u (sÃºng lá»¥c, shotgun, SMG, kiáº¿m), Ä‘áº¡n + va cháº¡m tile + spatial hash grid.
+- [x] 3 quÃ¡i máº«u (báº¯n xa, lao hÃºc, ná»•) vá»›i AI cÆ¡ báº£n + telegraph.
+- [x] HP/GiÃ¡p/NÄƒng lÆ°á»£ng, damage, knockback, hit flash, hit-stop, screen shake, sá»‘ damage, SFX cÆ¡ báº£n (ZzFX).
+- [x] **DoD riÃªng Phase 1:** Pháº£n há»“i input < 1 frame, khÃ´ng giáº­t camera, chuyá»ƒn Ä‘á»™ng mÆ°á»£t á»Ÿ 60/144Hz, báº¯n trÃºng cÃ³ Ä‘á»§ flash + spark + Ã¢m + sá»‘ damage + knockback; unit test cho damage/giÃ¡p/va cháº¡m.
 
 ---
 
-## Phase 2 — Pipeline Hình Ảnh & Tương Tác Map (Hoàn thành ✅)
-- [x] Tilemap vẽ bằng code (bake tile + biến thể theo seed) + autotile, tường có chiều sâu/bóng; hệ ánh sáng lightmap + bloom + vignette + color grading.
-- [x] Hệ particle (pool), decal bền, bóng đổ, ambient (lá/sương), afterimage dash.
-- [x] Đồ vỡ được, thùng nổ, bề mặt nước/dầu/cỏ/đầm độc/dung nham/băng, trạng thái nguyên tố cơ bản (Cháy/Lạnh/Sét/Độc) + tương tác bề mặt.
-- [x] Cài đặt chất lượng đồ họa + auto quality.
-- [x] **DoD riêng Phase 2:** Stress test (4 người chơi giả lập + 80 quái + 600 đạn + particle) giữ ≥ 60 FPS ở 1080p High, không rò rỉ bộ nhớ (3 phút); screenshot ánh sáng động.
+## Phase 2 â€” Pipeline HÃ¬nh áº¢nh & TÆ°Æ¡ng TÃ¡c Map (HoÃ n thÃ nh âœ…)
+- [x] Tilemap váº½ báº±ng code (bake tile + biáº¿n thá»ƒ theo seed) + autotile, tÆ°á»ng cÃ³ chiá»u sÃ¢u/bÃ³ng; há»‡ Ã¡nh sÃ¡ng lightmap + bloom + vignette + color grading.
+- [x] Há»‡ particle (pool), decal bá»n, bÃ³ng Ä‘á»•, ambient (lÃ¡/sÆ°Æ¡ng), afterimage dash.
+- [x] Äá»“ vá»¡ Ä‘Æ°á»£c, thÃ¹ng ná»•, bá» máº·t nÆ°á»›c/dáº§u/cá»/Ä‘áº§m Ä‘á»™c/dung nham/bÄƒng, tráº¡ng thÃ¡i nguyÃªn tá»‘ cÆ¡ báº£n (ChÃ¡y/Láº¡nh/SÃ©t/Äá»™c) + tÆ°Æ¡ng tÃ¡c bá» máº·t.
+- [x] CÃ i Ä‘áº·t cháº¥t lÆ°á»£ng Ä‘á»“ há»a + auto quality.
+- [x] **DoD riÃªng Phase 2:** Stress test (4 ngÆ°á»i chÆ¡i giáº£ láº­p + 80 quÃ¡i + 600 Ä‘áº¡n + particle) giá»¯ â‰¥ 60 FPS á»Ÿ 1080p High, khÃ´ng rÃ² rá»‰ bá»™ nhá»› (3 phÃºt); screenshot Ã¡nh sÃ¡ng Ä‘á»™ng.
 
 ---
 
-## Phase 3 — Dungeon, Vòng Lặp Lượt Chơi & Biome 1 Hoàn Chỉnh (Vertical Slice Solo) (Hoàn thành ✅)
-- [x] Sinh tầng procedural theo seed (đảm bảo liên thông — có unit test), các loại phòng, cửa khóa + đợt quái + vòng triệu hồi, minimap + fog of war, dịch chuyển giữa tầng.
-- [x] Vũ khí ~12 cái (14 vũ khí đủ 5 bậc hiếm), rương theo độ hiếm, xu + thương nhân + tượng thần, phòng bí mật, buff giữa tầng.
-- [x] Toàn bộ quái + Elite biome 1, Boss Mục Vương đầy đủ 3 phase, màn hình thắng/thua/kết quả.
-- [x] Thay toàn bộ placeholder bằng hình vẽ code hoàn chỉnh cho mọi entity/tile/icon của biome 1; cập nhật `ArtGallery`.
-- [x] **DoD riêng Phase 3:** Chơi trọn biome 1 solo không lỗi; E2E bot tự đi qua 1 tầng bằng debug mà không crash; screenshot từng loại phòng + boss.
+## Phase 3 â€” Dungeon, VÃ²ng Láº·p LÆ°á»£t ChÆ¡i & Biome 1 HoÃ n Chá»‰nh (Vertical Slice Solo) (HoÃ n thÃ nh âœ…)
+- [x] Sinh táº§ng procedural theo seed (Ä‘áº£m báº£o liÃªn thÃ´ng â€” cÃ³ unit test), cÃ¡c loáº¡i phÃ²ng, cá»­a khÃ³a + Ä‘á»£t quÃ¡i + vÃ²ng triá»‡u há»“i, minimap + fog of war, dá»‹ch chuyá»ƒn giá»¯a táº§ng.
+- [x] VÅ© khÃ­ ~12 cÃ¡i (14 vÅ© khÃ­ Ä‘á»§ 5 báº­c hiáº¿m), rÆ°Æ¡ng theo Ä‘á»™ hiáº¿m, xu + thÆ°Æ¡ng nhÃ¢n + tÆ°á»£ng tháº§n, phÃ²ng bÃ­ máº­t, buff giá»¯a táº§ng.
+- [x] ToÃ n bá»™ quÃ¡i + Elite biome 1, Boss Má»¥c VÆ°Æ¡ng Ä‘áº§y Ä‘á»§ 3 phase, mÃ n hÃ¬nh tháº¯ng/thua/káº¿t quáº£.
+- [x] Thay toÃ n bá»™ placeholder báº±ng hÃ¬nh váº½ code hoÃ n chá»‰nh cho má»i entity/tile/icon cá»§a biome 1; cáº­p nháº­t `ArtGallery`.
+- [x] **DoD riÃªng Phase 3:** ChÆ¡i trá»n biome 1 solo khÃ´ng lá»—i; E2E bot tá»± Ä‘i qua 1 táº§ng báº±ng debug mÃ  khÃ´ng crash; screenshot tá»«ng loáº¡i phÃ²ng + boss.
 
 ---
 
-## Phase 4 — Co-op LAN (Hoàn thành ✅)
-- [x] Host server (Colyseus) chạy sim authoritative + phục vụ client tĩnh cùng cổng, `NetworkTransport`, prediction + reconciliation, interpolation thích ứng, đạn tất định, giả lập mạng wifi.
-- [x] Lệnh `pnpm host`, hiển thị IP LAN + mã QR + nút sao chép link trong Hub; ô nhập IP thủ công ở menu.
-- [x] Hub nhiều người, chọn nhân vật, sẵn sàng, reconnect, xử lý Host thoát.
-- [x] Scaling theo số người, gục/hồi sinh/linh hồn, loot instanced, ping + emote, dịch chuyển người ở ngoài vào phòng chiến đấu, màu định danh người chơi.
-- [x] **DoD riêng Phase 4:** E2E với 4 client kết nối qua địa chỉ IP LAN của máy, cùng vào Hub, qua 1 tầng; mượt dưới profile "wifi tệ"; băng thông ≤ ~30 KB/s/client; Host ≥ 60 FPS; unit test scaling; checklist test tay trên 2+ máy thật trong `PROGRESS.md`.
+## Phase 4 â€” Co-op LAN (HoÃ n thÃ nh âœ…)
+- [x] Host server (Colyseus) cháº¡y sim authoritative + phá»¥c vá»¥ client tÄ©nh cÃ¹ng cá»•ng, `NetworkTransport`, prediction + reconciliation, interpolation thÃ­ch á»©ng, Ä‘áº¡n táº¥t Ä‘á»‹nh, giáº£ láº­p máº¡ng wifi.
+- [x] Lá»‡nh `pnpm host`, hiá»ƒn thá»‹ IP LAN + mÃ£ QR + nÃºt sao chÃ©p link trong Hub; Ã´ nháº­p IP thá»§ cÃ´ng á»Ÿ menu.
+- [x] Hub nhiá»u ngÆ°á»i, chá»n nhÃ¢n váº­t, sáºµn sÃ ng, reconnect, xá»­ lÃ½ Host thoÃ¡t.
+- [x] Scaling theo sá»‘ ngÆ°á»i, gá»¥c/há»“i sinh/linh há»“n, loot instanced, ping + emote, dá»‹ch chuyá»ƒn ngÆ°á»i á»Ÿ ngoÃ i vÃ o phÃ²ng chiáº¿n Ä‘áº¥u, mÃ u Ä‘á»‹nh danh ngÆ°á»i chÆ¡i.
+- [x] **DoD riÃªng Phase 4:** E2E vá»›i 4 client káº¿t ná»‘i qua Ä‘á»‹a chá»‰ IP LAN cá»§a mÃ¡y, cÃ¹ng vÃ o Hub, qua 1 táº§ng; mÆ°á»£t dÆ°á»›i profile "wifi tá»‡"; bÄƒng thÃ´ng â‰¤ ~30 KB/s/client; Host â‰¥ 60 FPS; unit test scaling; checklist test tay trÃªn 2+ mÃ¡y tháº­t trong `PROGRESS.md`.
 
 ---
 
-## Phase 5 — 5 Nhân Vật, Hệ Nguyên Tố & Synergy (Hoàn thành ✅)
-- [x] Hoàn thiện đủ 5 nhân vật (animation riêng, VFX skill, SFX riêng), 2 nâng cấp mỗi skill, phản ứng nguyên tố đầy đủ + Team Combo, preview kỹ năng ở Hub.
-- [x] Balance harness headless xuất `docs/balance-report.md`.
-- [x] **DoD riêng Phase 5:** Đạt mọi mục tiêu mục 7.4; unit test từng phản ứng nguyên tố; mỗi nhân vật solo qua được boss biome 1 trong harness; test co-op 2 và 4 người.
+## Phase 5 â€” 5 NhÃ¢n Váº­t, Há»‡ NguyÃªn Tá»‘ & Synergy (HoÃ n thÃ nh âœ…)
+- [x] HoÃ n thiá»‡n Ä‘á»§ 5 nhÃ¢n váº­t (animation riÃªng, VFX skill, SFX riÃªng), 2 nÃ¢ng cáº¥p má»—i skill, pháº£n á»©ng nguyÃªn tá»‘ Ä‘áº§y Ä‘á»§ + Team Combo, preview ká»¹ nÄƒng á»Ÿ Hub.
+- [x] Balance harness headless xuáº¥t `docs/balance-report.md`.
+- [x] **DoD riÃªng Phase 5:** Äáº¡t má»i má»¥c tiÃªu má»¥c 7.4; unit test tá»«ng pháº£n á»©ng nguyÃªn tá»‘; má»—i nhÃ¢n váº­t solo qua Ä‘Æ°á»£c boss biome 1 trong harness; test co-op 2 vÃ  4 ngÆ°á»i.
 
 ---
 
-## Phase 6 — Biome 2 & 3 + Boss (Hoàn thành ✅)
-- [x] Tileset vẽ bằng code, ánh sáng, ambient, quái, Elite, cơ chế map riêng (băng trơn, băng chuyền, máy sửa được), nâng tổng vũ khí lên ~24.
-- [x] Boss Băng Hậu Kryssa và Titan Lò Rèn đầy đủ phase + cơ chế co-op + biến thể theo số người.
-- [x] **DoD riêng Phase 6:** Chơi trọn 3 biome solo và 4 người (bot/debug) không crash; boss TTK đạt mục tiêu theo harness; stress test ở biome 3 ≥ 60 FPS.
+## Phase 6 â€” Biome 2 & 3 + Boss (HoÃ n thÃ nh âœ…)
+- [x] Tileset váº½ báº±ng code, Ã¡nh sÃ¡ng, ambient, quÃ¡i, Elite, cÆ¡ cháº¿ map riÃªng (bÄƒng trÆ¡n, bÄƒng chuyá»n, mÃ¡y sá»­a Ä‘Æ°á»£c), nÃ¢ng tá»•ng vÅ© khÃ­ lÃªn ~24.
+- [x] Boss BÄƒng Háº­u Kryssa vÃ  Titan LÃ² RÃ¨n Ä‘áº§y Ä‘á»§ phase + cÆ¡ cháº¿ co-op + biáº¿n thá»ƒ theo sá»‘ ngÆ°á»i.
+- [x] **DoD riÃªng Phase 6:** ChÆ¡i trá»n 3 biome solo vÃ  4 ngÆ°á»i (bot/debug) khÃ´ng crash; boss TTK Ä‘áº¡t má»¥c tiÃªu theo harness; stress test á»Ÿ biome 3 â‰¥ 60 FPS.
 
 ---
 
-## Phase 7 — UI/UX & Âm Thanh Hoàn Thiện (Hoàn thành ✅)
-- [x] Menu chính động, HUD hoàn chỉnh, Settings đầy đủ, màn hình kết quả + MVP, chuyển cảnh, tooltip/hướng dẫn, i18n `vi`/`en`.
-- [x] Bộ SFX đầy đủ, nhạc động khám phá/chiến đấu/boss, âm thanh định vị, voice limit.
-- [x] **DoD riêng Phase 7:** Mọi luồng UI đi được bằng chuột không kẹt; không có chuỗi chưa dịch; mọi hành động gameplay đều có âm thanh; screenshot tất cả màn hình UI.
+## Phase 7 â€” UI/UX & Ã‚m Thanh HoÃ n Thiá»‡n (HoÃ n thÃ nh âœ…)
+- [x] Menu chÃ­nh Ä‘á»™ng, HUD hoÃ n chá»‰nh, Settings Ä‘áº§y Ä‘á»§, mÃ n hÃ¬nh káº¿t quáº£ + MVP, chuyá»ƒn cáº£nh, tooltip/hÆ°á»›ng dáº«n, i18n `vi`/`en`.
+- [x] Bá»™ SFX Ä‘áº§y Ä‘á»§, nháº¡c Ä‘á»™ng khÃ¡m phÃ¡/chiáº¿n Ä‘áº¥u/boss, Ã¢m thanh Ä‘á»‹nh vá»‹, voice limit.
+- [x] **DoD riÃªng Phase 7:** Má»i luá»“ng UI Ä‘i Ä‘Æ°á»£c báº±ng chuá»™t khÃ´ng káº¹t; khÃ´ng cÃ³ chuá»—i chÆ°a dá»‹ch; má»i hÃ nh Ä‘á»™ng gameplay Ä‘á»u cÃ³ Ã¢m thanh; screenshot táº¥t cáº£ mÃ n hÃ¬nh UI.
 
 ---
 
-## Phase 8 — Cân Bằng Cuối, Hiệu Năng, QA & Bản Phát Hành (Hoàn thành ✅)
-- [x] Chạy lại harness + điều chỉnh; soak test 20 phút; kiểm tra Chrome/Edge/Firefox.
+## Phase 8 â€” CÃ¢n Báº±ng Cuá»‘i, Hiá»‡u NÄƒng, QA & Báº£n PhÃ¡t HÃ nh (HoÃ n thÃ nh âœ…)
+- [x] Cháº¡y láº¡i harness + Ä‘iá»u chá»‰nh; soak test 20 phÃºt; kiá»ƒm tra Chrome/Edge/Firefox.
 - [x] Bug bash theo checklist (`docs/QA_CHECKLIST.md`).
-- [x] Build production + đóng gói Host app cho Windows (`AshenPact-Host.exe` + `start-host.bat` + `allow-firewall-port-2567.bat`), thư mục release zip sạch (`release/AshenPact-v0.1.0-win-x64.zip`).
-- [x] `README.md` tiếng Việt + hướng dẫn Windows Firewall + AP Isolation, `CREDITS.md` đầy đủ, `docs/RELEASE_NOTES.md`, `git tag phase-8` & `git tag v0.1.0`.
+- [x] Build production + Ä‘Ã³ng gÃ³i Host app cho Windows (`AshenPact-Host.exe` + `start-host.bat` + `allow-firewall-port-2567.bat`), thÆ° má»¥c release zip sáº¡ch (`release/AshenPact-v0.1.0-win-x64.zip`).
+- [x] `README.md` tiáº¿ng Viá»‡t + hÆ°á»›ng dáº«n Windows Firewall + AP Isolation, `CREDITS.md` Ä‘áº§y Ä‘á»§, `docs/RELEASE_NOTES.md`, `git tag phase-8` & `git tag v0.1.0`.
 
 ---
 
-## Giai đoạn Polish v0.2.0
+## Giai Ä‘oáº¡n Polish v0.2.0
 
-| Phase | Nội dung | Yêu cầu gốc | Trạng thái |
+| Phase | Ná»™i dung | YÃªu cáº§u gá»‘c | Tráº¡ng thÃ¡i |
 |---|---|---|---|
-| P0 | Hạ tầng chụp ảnh/metrics/reviewer + baseline | Kiểm chứng bằng hình ảnh | [x] |
-| P1 | Chế độ debug, dọn UI debug | Ẩn debug trong .exe | [x] |
-| P2 | Vũ khí 2 ô + rơi vũ khí | 2 vũ khí, đổi thì rơi | [x] |
-| P3 | Nền ánh sáng, PostFX, `HudScene`, camera không méo | Map dễ nhìn, ánh sáng | [x] |
-| P4 | **Phòng chuẩn B1** (vertical slice) → Palette ENV, sàn, tường, surface cho mọi biome | Map đẹp, giảm tương phản | [x] |
-| P5 | Trang trí biome còn lại, chậu lửa | Map đẹp, nguồn sáng đuốc | [x] |
-| P6 | Đèn/glow vật thể tương tác | Nguồn sáng cho rương/đuốc/cổng/vật phẩm | [x] |
-| P7 | Nhãn theo khoảng cách, prompt [E] | Gần mới hiện [E] tên | [x] |
-| P8 | Cổng dịch chuyển & cổng qua phòng | Cổng đẹp, sáng ảo diệu | [x] |
-| P9a | Design system, HUD trong game | UI/UX hiện đại (HUD) | [x] |
-| P9b | Menu, Hub, modal, Pause, Settings, kết quả | UI/UX hiện đại (Screens/Modals) | [x] |
-| P10a | Nhân vật Cutout 2.0 & Quái Full Rig: animation, shading 2 lớp & rim-light | Chi tiết, mượt, đẹp (Rig) | [x] |
-| P10b | FX, Phản Ứng Nguyên Tố & Hạt Môi Trường Trong Trẻo | Chi tiết, mượt, đẹp (FX) | [x] |
-| P11 | Harness thật + độ khó + kịch tính | Khó và kịch tính hơn | [x] |
-| P12 | Hồi quy, hiệu năng, release v0.2.0 | Chất lượng sản phẩm | [x] |
+| P0 | Háº¡ táº§ng chá»¥p áº£nh/metrics/reviewer + baseline | Kiá»ƒm chá»©ng báº±ng hÃ¬nh áº£nh | [x] |
+| P1 | Cháº¿ Ä‘á»™ debug, dá»n UI debug | áº¨n debug trong .exe | [x] |
+| P2 | VÅ© khÃ­ 2 Ã´ + rÆ¡i vÅ© khÃ­ | 2 vÅ© khÃ­, Ä‘á»•i thÃ¬ rÆ¡i | [x] |
+| P3 | Ná»n Ã¡nh sÃ¡ng, PostFX, `HudScene`, camera khÃ´ng mÃ©o | Map dá»… nhÃ¬n, Ã¡nh sÃ¡ng | [x] |
+| P4 | **PhÃ²ng chuáº©n B1** (vertical slice) â†’ Palette ENV, sÃ n, tÆ°á»ng, surface cho má»i biome | Map Ä‘áº¹p, giáº£m tÆ°Æ¡ng pháº£n | [x] |
+| P5 | Trang trÃ­ biome cÃ²n láº¡i, cháº­u lá»­a | Map Ä‘áº¹p, nguá»“n sÃ¡ng Ä‘uá»‘c | [x] |
+| P6 | ÄÃ¨n/glow váº­t thá»ƒ tÆ°Æ¡ng tÃ¡c | Nguá»“n sÃ¡ng cho rÆ°Æ¡ng/Ä‘uá»‘c/cá»•ng/váº­t pháº©m | [x] |
+| P7 | NhÃ£n theo khoáº£ng cÃ¡ch, prompt [E] | Gáº§n má»›i hiá»‡n [E] tÃªn | [x] |
+| P8 | Cá»•ng dá»‹ch chuyá»ƒn & cá»•ng qua phÃ²ng | Cá»•ng Ä‘áº¹p, sÃ¡ng áº£o diá»‡u | [x] |
+| P9a | Design system, HUD trong game | UI/UX hiá»‡n Ä‘áº¡i (HUD) | [x] |
+| P9b | Menu, Hub, modal, Pause, Settings, káº¿t quáº£ | UI/UX hiá»‡n Ä‘áº¡i (Screens/Modals) | [x] |
+| P10a | NhÃ¢n váº­t Cutout 2.0 & QuÃ¡i Full Rig: animation, shading 2 lá»›p & rim-light | Chi tiáº¿t, mÆ°á»£t, Ä‘áº¹p (Rig) | [x] |
+| P10b | FX, Pháº£n á»¨ng NguyÃªn Tá»‘ & Háº¡t MÃ´i TrÆ°á»ng Trong Tráº»o | Chi tiáº¿t, mÆ°á»£t, Ä‘áº¹p (FX) | [x] |
+| P11 | Harness tháº­t + Ä‘á»™ khÃ³ + ká»‹ch tÃ­nh | KhÃ³ vÃ  ká»‹ch tÃ­nh hÆ¡n | [x] |
+| P12 | Há»“i quy, hiá»‡u nÄƒng, release v0.2.0 | Cháº¥t lÆ°á»£ng sáº£n pháº©m | [x] |
 
 ---
 
-## Giai đoạn Đại Tu Ashen Pact 2.0 — Tactical Arena Overhaul (`v0.2.1` → `v2.0.0`)
+## Giai Ä‘oáº¡n Äáº¡i Tu Ashen Pact 2.0 â€” Tactical Arena Overhaul (`v0.2.1` â†’ `v2.0.0`)
 
-| Phase | Tag | Nội dung | Trạng thái |
+| Phase | Tag | Ná»™i dung | Tráº¡ng thÃ¡i |
 |---|---|---|---|
-| P0A | `ap2-p0a` | Nền tảng Dữ liệu, Giao thức Mạng 30Hz, Xóa Năng Lượng & Dọn Dẹp 18 Vũ Khí | [x] |
-| P0B | `ap2-p0b` | Lát Cắt Dọc Core Fun: 3 Archetype Phòng, Vật Lý Chiến Thuật, Biome 1 & 4 Vũ Khí Chuẩn (Playtest Gate 1) | [x] |
-| P1A | `ap2-p1a` | Đại Tu Vũ Khí Đợt 1 (7 Vũ Khí: Nỏ, Trượng Gai, Shotgun, SMG, Súng Lựu, Súng Hạt Giống, Trượng Xích) | [x] |
-| P1B | `ap2-p1b` | Đại Tu Vũ Khí Đợt 2 (7 Vũ Khí Còn Lại) & Pipeline Sát Thương 3 Nhóm (3-Bucket Damage Cap) | [x] |
-| P1C | `ap2-p1c` | 3 Archetype Phòng Còn Lại & Hệ Sinh Thái Biome 2 (Băng) + Biome 3 (Lò Rèn) | [x] |
-| P1D | `ap2-p1d` | 16 Phước Lành Hành Động Cốt Lõi (Core Action Blessings) & 10 Nâng Cấp Kỹ Năng Nhân Vật | [ ] |
-| P2A | `ap2-p2a` | Đồ Thị Tầng Động (Odd/Even), Tường Nứt Bí Mật, Đe Thợ Rèn Daedalus & Phân Rã Vũ Khí | [ ] |
-| P2B | `ap2-p2b` | Khế Ước Tro Tàn (Ashen Pacts: 1 Điện Thờ / Biome, Thử Thách Trọn Biome & 6 Thánh Vật Thức Tỉnh) | [ ] |
-| P3A | `ap2-p3a` | Ngắm Đón Đầu Có Giới Hạn (`±28°`) & 12 Quái Tương Tác Địa Hình Qua 3 Biome | [ ] |
-| P3B | `ap2-p3b` | 3 Boss Phá Giáp Tương Tác 1–2 Bước, Tiếp Tế Giữa Trận & Thanh Choáng `bossStaggerAccum` | [ ] |
-| P3C | `ap2-p3c` | Hồ Sơ Bot Mô Phỏng Người Thật, Cân Bằng `pnpm balance` & Playtest Gate 2 | [ ] |
-| P4A | `ap2-p4a` | Mở Rộng Chiều Sâu Đợt 1: 8 Phước Lành Hành Động Nâng Cao & 4 Đột Biến Vũ Khí Mở Rộng | [ ] |
-| P4B | `ap2-p4b` | Mở Rộng Chiều Sâu Đợt 2: 6 Duo Boons Nguyên Tố & Đấu Trường Bí Mật 20 Giây | [ ] |
-| P5 | `v2.0.0` | Kiểm Chứng Hồi Quy Toàn Diện, Hiệu Năng 60Hz 4P, Đóng Gói `v2.0.0` & Hoàn Tất Nhánh | [ ] |
+| P0A | `ap2-p0a` | Ná»n táº£ng Dá»¯ liá»‡u, Giao thá»©c Máº¡ng 30Hz, XÃ³a NÄƒng LÆ°á»£ng & Dá»n Dáº¹p 18 VÅ© KhÃ­ | [x] |
+| P0B | `ap2-p0b` | LÃ¡t Cáº¯t Dá»c Core Fun: 3 Archetype PhÃ²ng, Váº­t LÃ½ Chiáº¿n Thuáº­t, Biome 1 & 4 VÅ© KhÃ­ Chuáº©n (Playtest Gate 1) | [x] |
+| P1A | `ap2-p1a` | Äáº¡i Tu VÅ© KhÃ­ Äá»£t 1 (7 VÅ© KhÃ­: Ná», TrÆ°á»£ng Gai, Shotgun, SMG, SÃºng Lá»±u, SÃºng Háº¡t Giá»‘ng, TrÆ°á»£ng XÃ­ch) | [x] |
+| P1B | `ap2-p1b` | Äáº¡i Tu VÅ© KhÃ­ Äá»£t 2 (7 VÅ© KhÃ­ CÃ²n Láº¡i) & Pipeline SÃ¡t ThÆ°Æ¡ng 3 NhÃ³m (3-Bucket Damage Cap) | [x] |
+| P1C | `ap2-p1c` | 3 Archetype PhÃ²ng CÃ²n Láº¡i & Há»‡ Sinh ThÃ¡i Biome 2 (BÄƒng) + Biome 3 (LÃ² RÃ¨n) | [x] |
+| P1D | `ap2-p1d` | 16 PhÆ°á»›c LÃ nh HÃ nh Äá»™ng Cá»‘t LÃµi (Core Action Blessings) & 10 NÃ¢ng Cáº¥p Ká»¹ NÄƒng NhÃ¢n Váº­t | [ ] |
+| P2A | `ap2-p2a` | Äá»“ Thá»‹ Táº§ng Äá»™ng (Odd/Even), TÆ°á»ng Ná»©t BÃ­ Máº­t, Äe Thá»£ RÃ¨n Daedalus & PhÃ¢n RÃ£ VÅ© KhÃ­ | [ ] |
+| P2B | `ap2-p2b` | Kháº¿ Æ¯á»›c Tro TÃ n (Ashen Pacts: 1 Äiá»‡n Thá» / Biome, Thá»­ ThÃ¡ch Trá»n Biome & 6 ThÃ¡nh Váº­t Thá»©c Tá»‰nh) | [ ] |
+| P3A | `ap2-p3a` | Ngáº¯m ÄÃ³n Äáº§u CÃ³ Giá»›i Háº¡n (`Â±28Â°`) & 12 QuÃ¡i TÆ°Æ¡ng TÃ¡c Äá»‹a HÃ¬nh Qua 3 Biome | [ ] |
+| P3B | `ap2-p3b` | 3 Boss PhÃ¡ GiÃ¡p TÆ°Æ¡ng TÃ¡c 1â€“2 BÆ°á»›c, Tiáº¿p Táº¿ Giá»¯a Tráº­n & Thanh ChoÃ¡ng `bossStaggerAccum` | [ ] |
+| P3C | `ap2-p3c` | Há»“ SÆ¡ Bot MÃ´ Phá»ng NgÆ°á»i Tháº­t, CÃ¢n Báº±ng `pnpm balance` & Playtest Gate 2 | [ ] |
+| P4A | `ap2-p4a` | Má»Ÿ Rá»™ng Chiá»u SÃ¢u Äá»£t 1: 8 PhÆ°á»›c LÃ nh HÃ nh Äá»™ng NÃ¢ng Cao & 4 Äá»™t Biáº¿n VÅ© KhÃ­ Má»Ÿ Rá»™ng | [ ] |
+| P4B | `ap2-p4b` | Má»Ÿ Rá»™ng Chiá»u SÃ¢u Äá»£t 2: 6 Duo Boons NguyÃªn Tá»‘ & Äáº¥u TrÆ°á»ng BÃ­ Máº­t 20 GiÃ¢y | [ ] |
+| P5 | `v2.0.0` | Kiá»ƒm Chá»©ng Há»“i Quy ToÃ n Diá»‡n, Hiá»‡u NÄƒng 60Hz 4P, ÄÃ³ng GÃ³i `v2.0.0` & HoÃ n Táº¥t NhÃ¡nh | [ ] |
 
 
 
@@ -139,21 +139,21 @@
 
 ---
 
-## Giai đoạn Đại Tu Toàn Diện: Ashen Pact 2.0 (`v0.2.1` → `v2.0.0`)
+## Giai Ä‘oáº¡n Äáº¡i Tu ToÃ n Diá»‡n: Ashen Pact 2.0 (`v0.2.1` â†’ `v2.0.0`)
 
-| Phase | Tag | Nội dung trọng tâm | Gate đặc biệt | Trạng thái |
+| Phase | Tag | Ná»™i dung trá»ng tÃ¢m | Gate Ä‘áº·c biá»‡t | Tráº¡ng thÃ¡i |
 |---|---|---|---|---|
-| **P0A** | `ap2-p0a` | **Hạ tầng Nền, The Purge, Per-Player State & Đồng bộ Đạn Tất định 60Hz:** Cắt bỏ Energy, cắt 6 vũ khí clone (`24→18`) & 6 thẻ cộng số chay, migration save `starterWeapons` sang danh sách `18` vũ khí, tách build/vàng theo từng người chơi, `INPUT_BUTTON.RELOAD_VENT` (`[R]`), `deterministicId` đạn 16-bit, ngân sách thực thể 60Hz | `pnpm verify` + `pnpm perf` | [x] |
-| **P0B** | `ap2-p0b` | **Vertical Slice Độ Vui: 3 Archetype Phòng, Vật lý `Flip Cover + Kick + Wall-Slam + Ring-Out` & 4 Vũ khí Đại diện:** Cài đặt `TWIN_BRIDGES`, `GAUNTLET_CHOKEPOINT`, `CENTRAL_BASTION` (có Mirror + Prop Jitter), cơ chế Lật bàn `[E]` + Đá bàn + Đập tường + Rơi vực, 3 vật thể Biome 1, `Micro-Bar 32×5px` dưới chân nhân vật, và 4 vũ khí đại diện cho 4 hệ nhịp (`rivet_gun` Active Reload, `apprentice_staff` Heat/Vent, `knight_sword` 3-Hit Combo + Parry, `tesla_carbine` Tether) | **Playtest Gate 1 (Kiểm chứng Độ Vui Cốt Lõi: PASS 4/4)** + Visual Gate (`10.0 / 10.0 PASS` + Engine 2.6 `5/5 Gates`) | [x] |
-| **P1A** | `ap2-p1a` | **Kho Vũ Khí Độc Bản Đợt 1 (7 Vũ khí: Starter, Uncommon & Rare):** `hunter_crossbow`, `thorn_staff`, `scrap_shotgun`, `gale_smg`, `frag_launcher`, `seed_gun`, `tether_staff` + Procedural VFX & Audio riêng cho từng khẩu | Visual Gate (`10.0 / 10.0 PASS`) + Engine 2.6 (`8/12F` Strip + `1:1 ROI` + `5/5 Gates`) | [x] |
-| **P1B** | `ap2-p1b` | **Kho Vũ Khí Độc Bản Đợt 2 (7 Vũ khí: Rare, Epic & Legendary) & 3-Bucket Damage Pipeline:** `focus_laser`, `void_staff`, `emerald_cleaver`, `berserker_axe`, `solar_archon_staff`, `magma_cannon`, `thunder_hammer` + Công thức 3-Bucket chống nổ số nhân | Visual Gate (`9.40 / 10.0 PASS` + Engine 2.6 `5/5 Gates`) + Damage Audit Test (`4,608` combinations PASS) | [x] |
-| **P1C** | `ap2-p1c` | **Mở Rộng 3 Archetype Phòng Mới & Hệ Sinh Thái Tương Tác Biome 2 (Hầm Băng) + Biome 3 (Lò Rèn):** `CROSSFIRE_CONVEYORS`, `PRISM_LABYRINTH`, `CRUMBLING_PILLAR_RING` + 6 vật thể tương tác Biome 2 & 3 (`glacial_barricade`, `sliding_ice_block`, `cryo_prism_pillar`, `forge_blast_shield`, `pneumatic_press`, `slag_crucible`) | Visual Gate (`9.50 / 10.0 PASS`) + Engine 2.6 (`8/12F` Strip + `1:1 ROI` + `5/5 Gates`) | [x] |
-| **P1D** | `ap2-p1d` | **Hệ Thống 26 Thẻ Nâng Cấp Cốt Lõi (16 Action Blessings + 10 Character Skill Upgrades):** Thay thế hệ thẻ cũ bằng 16 Phước lành Hành động cốt lõi (4 nhóm × 4 thẻ core) + nâng cấp 10 thẻ Kỹ năng nhân vật tương tác trực tiếp với bàn chắn/nhịp súng/địa hình | Visual Gate + Engine 2.6 (`8/12F` Strip + `1:1 ROI`) + UI Card Review | [ ] |
-| **P2A** | `ap2-p2a` | **Đồ Thị Phòng Động, Phòng Bí Mật Nứt Tường, Đe Rèn Cổ Đại (6 Core Mutators) & Phân Rã Súng (`Hold [X] 0.5s`):** Chuyển `treasure` thành `Xưởng Rèn Kho Báu`, cài 6 Bản độ Búa Rèn cốt lõi thay đổi hình học đạn, cơ chế giữ `[X]` 0.5s tách súng lấy mảnh rèn & nâng cấp Thương Nhân | Visual Gate + Engine 2.6 (`8/12F` Strip + `1:1 ROI`) + Economy Test | [ ] |
-| **P2B** | `ap2-p2b` | **Hệ Thống "Khế Ước Tro Tàn" (`1 Tế Đàn / Biome — Full-Biome Trial`) & 6 Di Vật Thức Tỉnh:** Tế đàn xuất hiện ở Tầng Lẻ (`1, 3, 5`), chịu lời nguyền xuyên suốt 2 tầng của Biome và thức tỉnh thành Di Vật Vĩnh Viễn sau khi hạ Boss ở Tầng Chẵn (`2, 4, 6`) + Kẻ săn đuổi `Bóng Ma Đao Phủ` | Visual Gate + Engine 2.6 (`8/12F` Strip + `1:1 ROI`) | [ ] |
-| **P3A** | `ap2-p3a` | **Đại Tu AI Quái (`Bounded Predictive Lead Aiming`) & 12 Hành Vi Quái Tương Tác Địa Hình:** Ngắm đón đầu có giới hạn (`leadFactor`, `maxLeadAngleRad = 22°`, tia chỉ ngắm `0.35s`, sai số ngẫu nhiên) + 12 hành vi quái tương tác vật thể qua 3 Biome | Visual Gate + Engine 2.6 (`8/12F` Strip + `1:1 ROI`) | [ ] |
-| **P3B** | `ap2-p3b` | **Thiết Kế Lại 3 Boss Phá Giáp Trực Quan (1–2 Bước), `Boss Supply Drop` & `bossStaggerAccum`:** Cơ chế Phá Giáp 1–2 bước (dùng vật thể phòng **hoặc** đầy thanh Chấn Động `bossStaggerAccum` từ Active Reload/Parry/Skill), Tiếp tế phòng Boss mỗi `18s`, cùng chuỗi chiêu mới cho `spore_king`, `kryssa_ice_queen`, `forge_titan` | Visual Gate + Engine 2.6 (`8/12F` Strip + `1:1 ROI`) | [ ] |
-| **P3C** | `ap2-p3c` | **Nâng Cấp Bot AI Thực Tế (`Human-Like Bot Profile`), Cân Bằng Tự Động (`pnpm balance`) & Playtest Gate 2:** Dạy Bot dùng Active Reload (65% thành công), Vent (ở 80% nhiệt), Lật bàn & Đá bàn, giải cơ chế Boss; chạy `pnpm balance` tinh chỉnh thông số đạt chuẩn TTK/Win-rate | **Playtest Gate 2 (`pnpm balance` 100% PASS)** | [ ] |
-| **P4A** | `ap2-p4a` | **Mở Rộng Chiều Sâu Đợt 1: 8 Phước Lành Hành Động Nâng Cao & 4 Bản Độ Búa Rèn Mở Rộng:** Hoàn thiện đủ `24` Action Blessings (6 thẻ/nhóm) và `10` Weapon Mutators (`orbital_barrel`, `split_prism`, `shockwave_stock`, `tether_capacitor`) | Visual Gate | [ ] |
-| **P4B** | `ap2-p4b` | **Mở Rộng Chiều Sâu Đợt 2: 6 Phước Lành Giao Thoa (`Elemental Duo Boons`) & Đấu Trường Bí Mật 20 Giây:** Mở khóa 6 thẻ Giao thoa Nguyên tố khi 2 nguyên tố kích hoạt >= 5 lần + nâng cấp Phòng Bí Mật thành thử thách 20 giây nhận Rương Sử Thi & Tế đàn tẩy thẻ | Visual Gate | [ ] |
-| **P5** | `ap2-p5` | **Tổng Duyệt Hồi Quy Toàn Diện, Hiệu Năng 60Hz 4P, Đóng Gói `v2.0.0` & Kết Thúc Nhánh:** Chụp toàn bộ danh mục cảnh cũ + mới, Holistic `pro` Visual Gate, Soak Test 20 phút 4P, cập nhật toàn bộ `docs/*.md` & `README.md`, nâng phiên bản `2.0.0`, đóng gói `AshenPact-v2.0.0-win-x64.zip` | Holistic Visual Gate (`>= 8.5/10`) + Release Gate | [ ] |
+| **P0A** | `ap2-p0a` | **Háº¡ táº§ng Ná»n, The Purge, Per-Player State & Äá»“ng bá»™ Äáº¡n Táº¥t Ä‘á»‹nh 60Hz:** Cáº¯t bá» Energy, cáº¯t 6 vÅ© khÃ­ clone (`24â†’18`) & 6 tháº» cá»™ng sá»‘ chay, migration save `starterWeapons` sang danh sÃ¡ch `18` vÅ© khÃ­, tÃ¡ch build/vÃ ng theo tá»«ng ngÆ°á»i chÆ¡i, `INPUT_BUTTON.RELOAD_VENT` (`[R]`), `deterministicId` Ä‘áº¡n 16-bit, ngÃ¢n sÃ¡ch thá»±c thá»ƒ 60Hz | `pnpm verify` + `pnpm perf` | [x] |
+| **P0B** | `ap2-p0b` | **Vertical Slice Äá»™ Vui: 3 Archetype PhÃ²ng, Váº­t lÃ½ `Flip Cover + Kick + Wall-Slam + Ring-Out` & 4 VÅ© khÃ­ Äáº¡i diá»‡n:** CÃ i Ä‘áº·t `TWIN_BRIDGES`, `GAUNTLET_CHOKEPOINT`, `CENTRAL_BASTION` (cÃ³ Mirror + Prop Jitter), cÆ¡ cháº¿ Láº­t bÃ n `[E]` + ÄÃ¡ bÃ n + Äáº­p tÆ°á»ng + RÆ¡i vá»±c, 3 váº­t thá»ƒ Biome 1, `Micro-Bar 32Ã—5px` dÆ°á»›i chÃ¢n nhÃ¢n váº­t, vÃ  4 vÅ© khÃ­ Ä‘áº¡i diá»‡n cho 4 há»‡ nhá»‹p (`rivet_gun` Active Reload, `apprentice_staff` Heat/Vent, `knight_sword` 3-Hit Combo + Parry, `tesla_carbine` Tether) | **Playtest Gate 1 (Kiá»ƒm chá»©ng Äá»™ Vui Cá»‘t LÃµi: PASS 4/4)** + Visual Gate (`10.0 / 10.0 PASS` + Engine 2.6 `5/5 Gates`) | [x] |
+| **P1A** | `ap2-p1a` | **Kho VÅ© KhÃ­ Äá»™c Báº£n Äá»£t 1 (7 VÅ© khÃ­: Starter, Uncommon & Rare):** `hunter_crossbow`, `thorn_staff`, `scrap_shotgun`, `gale_smg`, `frag_launcher`, `seed_gun`, `tether_staff` + Procedural VFX & Audio riÃªng cho tá»«ng kháº©u | Visual Gate (`10.0 / 10.0 PASS`) + Engine 2.6 (`8/12F` Strip + `1:1 ROI` + `5/5 Gates`) | [x] |
+| **P1B** | `ap2-p1b` | **Kho VÅ© KhÃ­ Äá»™c Báº£n Äá»£t 2 (7 VÅ© khÃ­: Rare, Epic & Legendary) & 3-Bucket Damage Pipeline:** `focus_laser`, `void_staff`, `emerald_cleaver`, `berserker_axe`, `solar_archon_staff`, `magma_cannon`, `thunder_hammer` + CÃ´ng thá»©c 3-Bucket chá»‘ng ná»• sá»‘ nhÃ¢n | Visual Gate (`9.40 / 10.0 PASS` + Engine 2.6 `5/5 Gates`) + Damage Audit Test (`4,608` combinations PASS) | [x] |
+| **P1C** | `ap2-p1c` | **Má»Ÿ Rá»™ng 3 Archetype PhÃ²ng Má»›i & Há»‡ Sinh ThÃ¡i TÆ°Æ¡ng TÃ¡c Biome 2 (Háº§m BÄƒng) + Biome 3 (LÃ² RÃ¨n):** `CROSSFIRE_CONVEYORS`, `PRISM_LABYRINTH`, `CRUMBLING_PILLAR_RING` + 6 váº­t thá»ƒ tÆ°Æ¡ng tÃ¡c Biome 2 & 3 (`glacial_barricade`, `sliding_ice_block`, `cryo_prism_pillar`, `forge_blast_shield`, `pneumatic_press`, `slag_crucible`) | Visual Gate (`9.50 / 10.0 PASS`) + Engine 2.6 (`8/12F` Strip + `1:1 ROI` + `5/5 Gates`) | [x] |
+| **P1D** | `ap2-p1d` | **Há»‡ Thá»‘ng 26 Tháº» NÃ¢ng Cáº¥p Cá»‘t LÃµi (16 Action Blessings + 10 Character Skill Upgrades):** Thay tháº¿ há»‡ tháº» cÅ© báº±ng 16 PhÆ°á»›c lÃ nh HÃ nh Ä‘á»™ng cá»‘t lÃµi (4 nhÃ³m Ã— 4 tháº» core) + nÃ¢ng cáº¥p 10 tháº» Ká»¹ nÄƒng nhÃ¢n váº­t tÆ°Æ¡ng tÃ¡c trá»±c tiáº¿p vá»›i bÃ n cháº¯n/nhá»‹p sÃºng/Ä‘á»‹a hÃ¬nh | Visual Gate + Engine 2.6 (`8/12F` Strip + `1:1 ROI`) + UI Card Review | [ ] |
+| **P2A** | `ap2-p2a` | **Äá»“ Thá»‹ PhÃ²ng Äá»™ng, PhÃ²ng BÃ­ Máº­t Ná»©t TÆ°á»ng, Äe RÃ¨n Cá»• Äáº¡i (6 Core Mutators) & PhÃ¢n RÃ£ SÃºng (`Hold [X] 0.5s`):** Chuyá»ƒn `treasure` thÃ nh `XÆ°á»Ÿng RÃ¨n Kho BÃ¡u`, cÃ i 6 Báº£n Ä‘á»™ BÃºa RÃ¨n cá»‘t lÃµi thay Ä‘á»•i hÃ¬nh há»c Ä‘áº¡n, cÆ¡ cháº¿ giá»¯ `[X]` 0.5s tÃ¡ch sÃºng láº¥y máº£nh rÃ¨n & nÃ¢ng cáº¥p ThÆ°Æ¡ng NhÃ¢n | Visual Gate + Engine 2.6 (`8/12F` Strip + `1:1 ROI`) + Economy Test | [ ] |
+| **P2B** | `ap2-p2b` | **Há»‡ Thá»‘ng "Kháº¿ Æ¯á»›c Tro TÃ n" (`1 Táº¿ ÄÃ n / Biome â€” Full-Biome Trial`) & 6 Di Váº­t Thá»©c Tá»‰nh:** Táº¿ Ä‘Ã n xuáº¥t hiá»‡n á»Ÿ Táº§ng Láº» (`1, 3, 5`), chá»‹u lá»i nguyá»n xuyÃªn suá»‘t 2 táº§ng cá»§a Biome vÃ  thá»©c tá»‰nh thÃ nh Di Váº­t VÄ©nh Viá»…n sau khi háº¡ Boss á»Ÿ Táº§ng Cháºµn (`2, 4, 6`) + Káº» sÄƒn Ä‘uá»•i `BÃ³ng Ma Äao Phá»§` | Visual Gate + Engine 2.6 (`8/12F` Strip + `1:1 ROI`) | [ ] |
+| **P3A** | `ap2-p3a` | **Äáº¡i Tu AI QuÃ¡i (`Bounded Predictive Lead Aiming`) & 12 HÃ nh Vi QuÃ¡i TÆ°Æ¡ng TÃ¡c Äá»‹a HÃ¬nh:** Ngáº¯m Ä‘Ã³n Ä‘áº§u cÃ³ giá»›i háº¡n (`leadFactor`, `maxLeadAngleRad = 22Â°`, tia chá»‰ ngáº¯m `0.35s`, sai sá»‘ ngáº«u nhiÃªn) + 12 hÃ nh vi quÃ¡i tÆ°Æ¡ng tÃ¡c váº­t thá»ƒ qua 3 Biome | Visual Gate + Engine 2.6 (`8/12F` Strip + `1:1 ROI`) | [ ] |
+| **P3B** | `ap2-p3b` | **Thiáº¿t Káº¿ Láº¡i 3 Boss PhÃ¡ GiÃ¡p Trá»±c Quan (1â€“2 BÆ°á»›c), `Boss Supply Drop` & `bossStaggerAccum`:** CÆ¡ cháº¿ PhÃ¡ GiÃ¡p 1â€“2 bÆ°á»›c (dÃ¹ng váº­t thá»ƒ phÃ²ng **hoáº·c** Ä‘áº§y thanh Cháº¥n Äá»™ng `bossStaggerAccum` tá»« Active Reload/Parry/Skill), Tiáº¿p táº¿ phÃ²ng Boss má»—i `18s`, cÃ¹ng chuá»—i chiÃªu má»›i cho `spore_king`, `kryssa_ice_queen`, `forge_titan` | Visual Gate + Engine 2.6 (`8/12F` Strip + `1:1 ROI`) | [ ] |
+| **P3C** | `ap2-p3c` | **NÃ¢ng Cáº¥p Bot AI Thá»±c Táº¿ (`Human-Like Bot Profile`), CÃ¢n Báº±ng Tá»± Äá»™ng (`pnpm balance`) & Playtest Gate 2:** Dáº¡y Bot dÃ¹ng Active Reload (65% thÃ nh cÃ´ng), Vent (á»Ÿ 80% nhiá»‡t), Láº­t bÃ n & ÄÃ¡ bÃ n, giáº£i cÆ¡ cháº¿ Boss; cháº¡y `pnpm balance` tinh chá»‰nh thÃ´ng sá»‘ Ä‘áº¡t chuáº©n TTK/Win-rate | **Playtest Gate 2 (`pnpm balance` 100% PASS)** | [ ] |
+| **P4A** | `ap2-p4a` | **Má»Ÿ Rá»™ng Chiá»u SÃ¢u Äá»£t 1: 8 PhÆ°á»›c LÃ nh HÃ nh Äá»™ng NÃ¢ng Cao & 4 Báº£n Äá»™ BÃºa RÃ¨n Má»Ÿ Rá»™ng:** HoÃ n thiá»‡n Ä‘á»§ `24` Action Blessings (6 tháº»/nhÃ³m) vÃ  `10` Weapon Mutators (`orbital_barrel`, `split_prism`, `shockwave_stock`, `tether_capacitor`) | Visual Gate | [ ] |
+| **P4B** | `ap2-p4b` | **Má»Ÿ Rá»™ng Chiá»u SÃ¢u Äá»£t 2: 6 PhÆ°á»›c LÃ nh Giao Thoa (`Elemental Duo Boons`) & Äáº¥u TrÆ°á»ng BÃ­ Máº­t 20 GiÃ¢y:** Má»Ÿ khÃ³a 6 tháº» Giao thoa NguyÃªn tá»‘ khi 2 nguyÃªn tá»‘ kÃ­ch hoáº¡t >= 5 láº§n + nÃ¢ng cáº¥p PhÃ²ng BÃ­ Máº­t thÃ nh thá»­ thÃ¡ch 20 giÃ¢y nháº­n RÆ°Æ¡ng Sá»­ Thi & Táº¿ Ä‘Ã n táº©y tháº» | Visual Gate | [ ] |
+| **P5** | `ap2-p5` | **Tá»•ng Duyá»‡t Há»“i Quy ToÃ n Diá»‡n, Hiá»‡u NÄƒng 60Hz 4P, ÄÃ³ng GÃ³i `v2.0.0` & Káº¿t ThÃºc NhÃ¡nh:** Chá»¥p toÃ n bá»™ danh má»¥c cáº£nh cÅ© + má»›i, Holistic `pro` Visual Gate, Soak Test 20 phÃºt 4P, cáº­p nháº­t toÃ n bá»™ `docs/*.md` & `README.md`, nÃ¢ng phiÃªn báº£n `2.0.0`, Ä‘Ã³ng gÃ³i `AshenPact-v2.0.0-win-x64.zip` | Holistic Visual Gate (`>= 8.5/10`) + Release Gate | [ ] |
