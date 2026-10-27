@@ -200,18 +200,18 @@ describe('P0B.2 — Global Tactical Physics Laws (Flip Cover [E], Dash/Melee-Kic
       expect(table.hp).toBe(60);
       expect(table.maxHp).toBe(60);
 
-      // Check HP of glacial_barricade (80) and forge_blast_shield (100) when flipped
+      // Check HP of glacial_barricade (65) and forge_blast_shield (85) when flipped
       sim.player.x = 200;
       sim.player.y = 170;
       sim.interactWithNearest(sim.player);
       expect(barricade.coverState).toBe('flipped');
-      expect(barricade.hp).toBe(80);
+      expect(barricade.hp).toBe(65);
 
       sim.player.x = 200;
       sim.player.y = 230;
       sim.interactWithNearest(sim.player);
       expect(shield.coverState).toBe('flipped');
-      expect(shield.hp).toBe(100);
+      expect(shield.hp).toBe(85);
 
       // Enemy bullet inside 56px was immediately destroyed; player bullet was NOT destroyed
       expect(sim.projectiles.some((b) => b.id === enemyBulletInside.id)).toBe(false);

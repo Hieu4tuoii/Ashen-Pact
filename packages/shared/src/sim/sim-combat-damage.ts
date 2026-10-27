@@ -153,7 +153,8 @@ export function applyDamageToEnemyImpl(
     enemy.defId === 'spore_guardian' ||
     enemy.defId === 'ice_prison' ||
     enemy.defId === 'forge_energy_core';
-  const kbMult = enemy.isDummy ? 0.15 : isImmobileTarget ? 0 : enemy.isBoss ? 0.2 : 1.0;
+  const baseKbMult = enemy.isDummy ? 0.15 : isImmobileTarget ? 0 : enemy.isBoss ? 0.2 : 1.0;
+  const kbMult = baseKbMult * (this.map.getSurfaceAtWorld(enemy.x, enemy.y) === 'ice' ? 1.5 : 1.0);
   const kbX = Math.cos(hitAngleRad) * knockback * kbMult;
   const kbY = Math.sin(hitAngleRad) * knockback * kbMult;
   enemy.kbVx += kbX;

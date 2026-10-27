@@ -145,6 +145,7 @@ export function spawnPropImpl(this: WorldSim, kind: PropKind, x: number, y: numb
     coverState: tacticalSpec?.coverState,
     blocksEnemyProjectiles: tacticalSpec?.blocksEnemyProjectiles,
     bouncesRemaining: tacticalSpec?.bouncesRemaining,
+    ttlSec: tacticalSpec?.ttlSec,
   };
   if (!this.stressTestActive && this.props.length >= MAX_TACTICAL_PROPS_PER_ROOM) {
     const destructibleIdx = this.props.findIndex((p) => p.destructible);

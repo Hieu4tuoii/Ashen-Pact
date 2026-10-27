@@ -124,6 +124,7 @@ export type PropKind =
   | 'volatile_spore_pod'
   | 'rotten_totem_pillar'
   | 'glacial_barricade'
+  | 'glacial_spike'
   | 'sliding_ice_block'
   | 'cryo_prism_pillar'
   | 'forge_blast_shield'
@@ -155,6 +156,10 @@ export interface SimPropState {
   fallAngle?: number;
   microBlankTimer?: number;
   bouncesRemaining?: number;
+  ttlSec?: number;
+  iceSpeedBoostApplied?: boolean;
+  pressState?: 'idle' | 'windup' | 'cooldown';
+  pressTimer?: number;
 }
 
 export type SummonKind = 'sacred_tree' | 'tesla_turret' | 'ancient_turret' | 'life_blossom';

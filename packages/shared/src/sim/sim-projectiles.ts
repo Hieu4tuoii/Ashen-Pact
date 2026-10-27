@@ -4,6 +4,7 @@ import { angleDiff, circleVsCircle, distance } from '../math/vec2.js';
 import { SHOT_FLAG, TILE_SIZE } from '../protocol/messages.js';
 import { clampBounceCount, clampPelletsPerTrigger } from './sim-damage-pipeline.js';
 import { spawnSeedGunLifeBlossomImpl, triggerLauncherProjectileExplosionImpl } from './sim-player.js';
+import { refractProjectileThroughCryoPrism } from './sim-tactical-physics-p1c.js';
 import {
   canApplyFragSubmunitionHit,
   copyLegendaryVolleyFieldsToProjectile,
@@ -280,6 +281,13 @@ export function updateProjectilesImpl(this: WorldSim, dtSec: number): void {
           continue;
         }
         if (!prop.destructible || prop.coverState === 'sliding') continue;
+        if (prop.kind === 'cryo_prism_pillar' && b.team === 'player' && circleVsCircle(b, prop)) {
+          if (refractProjectileThroughCryoPrism(this, b, prop) && b.ttlSec <= 0) {
+            hitProp = true;
+            break;
+          }
+          continue;
+        }
         if (prop.blocksEnemyProjectiles && b.team === 'player') {
           if (circleVsCircle(b, prop)) {
             b.passedThroughCoverOrPrism = true;

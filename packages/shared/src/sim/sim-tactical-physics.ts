@@ -5,8 +5,23 @@ import {
   findNearestWalkablePoint,
   getConveyorVelocityAtWorld,
 } from './arena-room-archetypes.js';
+import {
+  BIOME2_ICE_INERTIA_MULT,
+  refractProjectileThroughCryoPrism,
+  shatterGlacialBarricade,
+  triggerBiome2WallSlamCryoPulse,
+  updateP1CTacticalProps,
+} from './sim-tactical-physics-p1c.js';
 import type { WorldSim } from './world-sim.js';
 import type { PropKind, SimEnemyState, SimPlayerState, SimPropState } from './world-sim-types.js';
+
+export {
+  BIOME2_ICE_INERTIA_MULT,
+  refractProjectileThroughCryoPrism,
+  shatterGlacialBarricade,
+  triggerBiome2WallSlamCryoPulse,
+  updateP1CTacticalProps,
+};
 
 export const FLIPPABLE_BARRICADE_KINDS: readonly PropKind[] = ['moss_table', 'glacial_barricade', 'forge_blast_shield'] as const;
 export const CIRCULAR_KICKABLE_TOY_KINDS: readonly PropKind[] = ['explosive_barrel', 'volatile_spore_pod', 'sliding_ice_block', 'slag_crucible'] as const;
@@ -45,8 +60,8 @@ export function isKickableProp(prop: Pick<SimPropState, 'kind' | 'coverState' | 
 }
 
 export function getFlippedBarricadeHp(kind: PropKind): number {
-  if (kind === 'glacial_barricade') return 80;
-  if (kind === 'forge_blast_shield') return 100;
+  if (kind === 'glacial_barricade') return 65;
+  if (kind === 'forge_blast_shield') return 85;
   return 60;
 }
 
@@ -61,6 +76,7 @@ export interface TacticalPropSpawnSpec {
   coverState?: 'low' | 'flipped' | 'sliding' | 'fallen';
   blocksEnemyProjectiles?: boolean;
   bouncesRemaining?: number;
+  ttlSec?: number;
 }
 
 export function getTacticalPropSpawnSpec(kind: PropKind): TacticalPropSpawnSpec | null {
@@ -70,8 +86,10 @@ export function getTacticalPropSpawnSpec(kind: PropKind): TacticalPropSpawnSpec 
   switch (kind) {
     case 'volatile_spore_pod':
       return { radius: 16, hp: 25, destructible: true, explosive: true, blocksMovement: true, lightRadius: 80, lightColorHex: '#84CC16' };
+    case 'glacial_spike':
+      return { radius: 14, hp: 45, destructible: true, explosive: false, blocksMovement: true, lightRadius: 55, lightColorHex: '#38BDF8', blocksEnemyProjectiles: true, ttlSec: 4.0 };
     case 'sliding_ice_block':
-      return { radius: 16, hp: 40, destructible: true, explosive: false, blocksMovement: true, lightRadius: 65, lightColorHex: '#38BDF8', bouncesRemaining: 2 };
+      return { radius: 16, hp: 40, destructible: true, explosive: false, blocksMovement: true, lightRadius: 65, lightColorHex: '#38BDF8', bouncesRemaining: 1 };
     case 'slag_crucible':
       return { radius: 15, hp: 20, destructible: true, explosive: true, blocksMovement: true, lightRadius: 95, lightColorHex: '#F97316' };
     case 'rotten_totem_pillar':
@@ -251,12 +269,17 @@ export function flipCoverPropImpl(this: WorldSim, prop: SimPropState, actor: Sim
 export function kickProp(sim: WorldSim, prop: SimPropState, actor: SimPlayerState = sim.player, customAngle?: number): boolean {
   if (!isKickableProp(prop)) return false;
   const slideAngle = customAngle ?? actor.aimAngle;
-  const speed = prop.kind === 'sliding_ice_block' ? SLIDING_ICE_BLOCK_SPEED : SLIDING_PROP_DEFAULT_SPEED;
+  const baseSpeed = prop.kind === 'sliding_ice_block' ? SLIDING_ICE_BLOCK_SPEED : SLIDING_PROP_DEFAULT_SPEED;
+  const onIce =
+    sim.map.getSurfaceAtWorld(prop.x, prop.y) === 'ice' ||
+    sim.map.getSurfaceAtWorld(actor.x, actor.y) === 'ice';
+  const speed = onIce ? baseSpeed * BIOME2_ICE_INERTIA_MULT : baseSpeed;
 
   prop.coverState = 'sliding'; prop.blocksMovement = false; prop.blocksEnemyProjectiles = false;
   prop.vx = Math.cos(slideAngle) * speed; prop.vy = Math.sin(slideAngle) * speed;
+  prop.iceSpeedBoostApplied = onIce;
   prop.slideOwnerPlayerId = actor.id; prop.hitEnemyIds = [];
-  if (prop.kind === 'sliding_ice_block' && prop.bouncesRemaining === undefined) prop.bouncesRemaining = 2;
+  if (prop.kind === 'sliding_ice_block' && prop.bouncesRemaining === undefined) prop.bouncesRemaining = 1;
 
   sim.events.push({ kind: 'prop_kicked', propId: prop.id, playerId: actor.id, x: prop.x, y: prop.y, vx: prop.vx, vy: prop.vy });
   return true;
@@ -361,12 +384,22 @@ function destroyTacticalProp(sim: WorldSim, prop: SimPropState): void {
     detonateVolatileSporePod(sim, prop);
     return;
   }
+  if (prop.kind === 'glacial_barricade') {
+    shatterGlacialBarricade(
+      sim,
+      prop,
+      Math.atan2(prop.vy ?? 0, prop.vx ?? 1),
+      prop.slideOwnerPlayerId ?? sim.player.id,
+    );
+    return;
+  }
   prop.destructible = true;
   if (prop.hp <= 0) prop.hp = 1;
   sim.damageProp(prop, prop.hp + 999, prop.explosive ? 'burn' : 'none');
 }
 
 export function updateSlidingPropsImpl(this: WorldSim, dtSec: number): void {
+  updateP1CTacticalProps(this, dtSec);
   for (let i = 0; i < this.props.length; i++) {
     const prop = this.props[i]!;
     if (prop.hp <= 0) continue;
@@ -377,6 +410,12 @@ export function updateSlidingPropsImpl(this: WorldSim, dtSec: number): void {
     }
 
     if (prop.coverState !== 'sliding') continue;
+
+    if (!prop.iceSpeedBoostApplied && this.map.getSurfaceAtWorld(prop.x, prop.y) === 'ice') {
+      prop.vx = (prop.vx ?? 0) * BIOME2_ICE_INERTIA_MULT;
+      prop.vy = (prop.vy ?? 0) * BIOME2_ICE_INERTIA_MULT;
+      prop.iceSpeedBoostApplied = true;
+    }
 
     const vx = prop.vx ?? 0;
     const vy = prop.vy ?? 0;
@@ -401,9 +440,13 @@ export function updateSlidingPropsImpl(this: WorldSim, dtSec: number): void {
       if (pointToSegmentDist(e.x, e.y, oldX, oldY, nextX, nextY) <= prop.radius + e.radius) {
         prop.hitEnemyIds.push(e.id);
         const dmg = computeKickSlideDamage(e, this.currentFloor);
-        this.applyDamageToEnemy(e, dmg, false, 'none', slideAngle, SLIDING_PROP_ENEMY_KB_SPEED, true, ownerId);
-        e.kbVx = Math.cos(slideAngle) * SLIDING_PROP_ENEMY_KB_SPEED;
-        e.kbVy = Math.sin(slideAngle) * SLIDING_PROP_ENEMY_KB_SPEED;
+        const kbSpeed =
+          this.map.getSurfaceAtWorld(e.x, e.y) === 'ice'
+            ? SLIDING_PROP_ENEMY_KB_SPEED * BIOME2_ICE_INERTIA_MULT
+            : SLIDING_PROP_ENEMY_KB_SPEED;
+        this.applyDamageToEnemy(e, dmg, false, 'none', slideAngle, kbSpeed, true, ownerId);
+        e.kbVx = Math.cos(slideAngle) * kbSpeed;
+        e.kbVy = Math.sin(slideAngle) * kbSpeed;
         e.stunTimer = Math.max(e.stunTimer ?? 0, SLIDING_PROP_ENEMY_STUN_SEC);
         if (!e.isBoss && e.hp > 0) {
           e.aiState = 'stunned';
@@ -413,6 +456,13 @@ export function updateSlidingPropsImpl(this: WorldSim, dtSec: number): void {
           prop.x = e.x;
           prop.y = e.y;
           detonateVolatileSporePod(this, prop);
+          detonatedOnEnemy = true;
+          break;
+        }
+        if (prop.kind === 'glacial_barricade') {
+          prop.x = e.x;
+          prop.y = e.y;
+          shatterGlacialBarricade(this, prop, slideAngle, ownerId);
           detonatedOnEnemy = true;
           break;
         }
@@ -438,6 +488,7 @@ export function updateSlidingPropsImpl(this: WorldSim, dtSec: number): void {
     if (col.collided || hitPropObstacle) {
       if ((prop.bouncesRemaining ?? 0) > 0) {
         prop.bouncesRemaining = (prop.bouncesRemaining ?? 0) - 1;
+        prop.hitEnemyIds = [];
         if (Math.abs(col.normalX) > 0.1) prop.vx = -vx;
         if (Math.abs(col.normalY) > 0.1) prop.vy = -vy;
         if (Math.abs(col.normalX) <= 0.1 && Math.abs(col.normalY) <= 0.1) {
@@ -491,6 +542,7 @@ export function triggerEnemyWallSlam(sim: WorldSim, e: SimEnemyState, hitProp?: 
   }
 
   sim.events.push({ kind: 'wall_slam', enemyId: e.id, x: e.x, y: e.y, damage: slamDmg, shattered });
+  triggerBiome2WallSlamCryoPulse(sim, e, attackerId);
   if (shattered && e.hp > 0) {
     sim.triggerElementalReaction(e, 'shatter', Math.max(18, Math.round(slamDmg * 1.35)), e.lastElementOwnerId || attackerId, attackerId);
   }
