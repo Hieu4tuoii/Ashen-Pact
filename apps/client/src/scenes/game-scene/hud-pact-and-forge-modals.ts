@@ -568,26 +568,39 @@ export function drawWorldWeaponSalvageRing(
     return;
   }
 
-  const radius = 22;
+  const radius = 24;
   const startAngle = -Math.PI / 2;
   const endAngle = startAngle + Math.PI * 2 * state.progress;
 
-  g.lineStyle(4.5, 0x090d16, 0.88);
+  g.fillStyle(NUM_SOLAR_GOLD, 0.12 + state.progress * 0.22);
+  g.fillCircle(ix, iy, 14 + state.progress * 10);
+  g.lineStyle(5, 0x090d16, 0.9);
   g.strokeCircle(ix, iy, radius);
-  g.lineStyle(5.5, NUM_FLAME_ORANGE, 0.42);
+  g.lineStyle(6.5, NUM_FLAME_ORANGE, 0.55);
   g.beginPath();
   g.arc(ix, iy, radius, startAngle, endAngle, false);
   g.strokePath();
-  g.lineStyle(3, NUM_SOLAR_GOLD, 0.98);
+  g.lineStyle(3.5, NUM_SOLAR_GOLD, 0.98);
   g.beginPath();
   g.arc(ix, iy, radius, startAngle, endAngle, false);
   g.strokePath();
 
-  for (let i = 0; i < 4; i++) {
-    const sparkAngle = clockSec * 8 + (i * Math.PI) / 2;
-    const sparkDist = (1 - state.progress * 0.75) * 20;
-    g.fillStyle(i % 2 === 0 ? NUM_SOLAR_GOLD : NUM_BONE_WHITE, 0.92);
-    g.fillCircle(ix + Math.cos(sparkAngle) * sparkDist, iy + Math.sin(sparkAngle) * sparkDist, 2.2);
+  const barW = 42;
+  const barH = 6;
+  const barX = ix - barW * 0.5;
+  const barY = iy + 27;
+  g.fillStyle(0x090d16, 0.92);
+  g.fillRect(barX - 1, barY - 1, barW + 2, barH + 2);
+  g.fillStyle(NUM_FLAME_ORANGE, 0.95);
+  g.fillRect(barX, barY, Math.max(4, Math.round(barW * state.progress)), barH);
+  g.fillStyle(NUM_SOLAR_GOLD, 0.95);
+  g.fillRect(barX, barY, Math.max(4, Math.round(barW * state.progress)), 3);
+
+  for (let i = 0; i < 6; i++) {
+    const sparkAngle = clockSec * 8 + state.progress * Math.PI * 3 + (i * Math.PI) / 3;
+    const sparkDist = (1 - state.progress * 0.68) * 26;
+    g.fillStyle(i % 2 === 0 ? NUM_SOLAR_GOLD : NUM_BONE_WHITE, 0.95);
+    g.fillCircle(ix + Math.cos(sparkAngle) * sparkDist, iy + Math.sin(sparkAngle) * sparkDist, 2.6);
   }
 }
 

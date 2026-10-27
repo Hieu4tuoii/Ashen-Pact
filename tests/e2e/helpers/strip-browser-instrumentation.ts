@@ -19,6 +19,7 @@ export interface WhitelistInputSpec {
   dash?: boolean;
   interact?: boolean;
   reloadVent?: boolean;
+  dropWeapon?: boolean;
   skill?: boolean;
   swapWeapon?: boolean;
   weaponSlotSelect?: number | null;
@@ -110,7 +111,7 @@ export async function installSceneStripInstrumentation(page: Page): Promise<void
         num(p.x), num(p.y), num(p.vx), num(p.vy), num(p.kbVx), num(p.kbVy),
         num(p.hp), num(p.armor), num(p.clipAmmo), num(p.reloadTimer), num(p.reloadDuration),
         num(p.weaponHeat), num(p.overheatLockTimer), num(p.meleeComboStep), num(p.fireCooldownTimer), num(p.dashTimer), num(p.aimAngle),
-        num(p.solarOrbitAngle),
+        num(p.solarOrbitAngle), num(p.salvageHoldTimer), num(p.gold),
       ].join(',');
       const ePart = (sim.enemies ?? [])
         .filter((e) => Number(e.hp ?? 0) > 0)
@@ -488,6 +489,7 @@ export async function installSceneStripInstrumentation(page: Page): Promise<void
           }
           let buttons = Number(pkt.buttons ?? 0);
           if (activeCmd.fire) buttons |= 1 << 0;
+          if (activeCmd.dropWeapon) buttons |= 1 << 6;
           if (activeCmd.firstTickPending) {
             if (activeCmd.skill) buttons |= 1 << 1;
             if (activeCmd.dash) buttons |= 1 << 2;

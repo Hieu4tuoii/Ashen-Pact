@@ -145,6 +145,12 @@ export const SCENE_GROUPS: Readonly<Record<string, readonly string[]>> = {
     'ap2-skill-vanguard-prism',
     'ap2-skill-elementalist-twin',
   ],
+  'ap2-p2a': [
+    'ap2-treasure-forge-workshop',
+    'ap2-modal-daedalus-mutator',
+    'ap2-weapon-salvage-hold',
+    'ap2-secret-wall-crack-break',
+  ],
 };
 
 export interface ShotsCliOptions {

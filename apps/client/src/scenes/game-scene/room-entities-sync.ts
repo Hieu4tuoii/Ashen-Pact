@@ -34,6 +34,7 @@ export {
 };
 import { initGlobalDebugState } from '../../ui/debug-overlay.js';
 import { type GameScene, RIG_FOOT_OFFSET_Y } from '../GameScene.js';
+import { drawWorldWeaponSalvageRing } from './hud-pact-and-forge-modals.js';
 import {
   resolveHubGuideVisibility,
   resolveInteractPromptSpec,
@@ -757,6 +758,7 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
       hg.lineBetween(cx, cy - ry - 4, cx, cy - ry + 2);
       hg.lineBetween(cx, cy + ry - 2, cx, cy + ry + 4);
     }
+    drawWorldWeaponSalvageRing(hg, sim, sim.player, visualTimeSec);
   }
 
   syncWorldInteractPromptPill(this, dtSec, promptSpec, debug.overlayVisible);

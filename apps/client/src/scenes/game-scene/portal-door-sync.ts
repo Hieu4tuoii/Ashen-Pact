@@ -637,6 +637,16 @@ export function syncDoorVisualsImpl(
     doorVisParamsScratch.dissolveProgress = doorStep.dissolveProgress;
     doorVisParamsScratch.elapsedSec = animTimeSec;
     const doorVis = resolveDoorVisualState(doorVisParamsScratch, doorVisScratch);
+    if (door.isSecretPassage && door.locked && !sim.secretWallBroken && !sim.getCurrentRoom().secretWallBroken) {
+      entry.frameSprite.setVisible(false);
+      entry.openArchSprite.setVisible(false);
+      entry.barrierSprite.setVisible(false);
+      entry.glowSprite.setVisible(false);
+      entry.label.setVisible(false);
+      for (let m = 0; m < entry.moteSprites.length; m++) entry.moteSprites[m]!.setVisible(false);
+      continue;
+    }
+    entry.frameSprite.setVisible(true);
 
     if (entry.frameSprite.texture.key !== doorVis.frameTextureKey) {
       entry.frameSprite.setTexture(doorVis.frameTextureKey);
