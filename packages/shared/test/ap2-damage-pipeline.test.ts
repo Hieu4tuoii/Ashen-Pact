@@ -251,6 +251,7 @@ describe('AP2 Phase P1B.4 — 3-Bucket Damage Pipeline & Anti-Explosion Property
     const bossFlags = [false, true];
 
     let combinationsChecked = 0;
+    let violations = 0;
 
     for (const baseDamage of baseDamages) {
       for (const upgradeLevel of upgradeLevels) {
@@ -265,7 +266,7 @@ describe('AP2 Phase P1B.4 — 3-Bucket Damage Pipeline & Anti-Explosion Property
                         for (const shatter of shatterFlags) {
                           for (const isBoss of bossFlags) {
                             combinationsChecked += 1;
-                            const breakdown = evaluateThreeBucketDamageBreakdown({
+                            const input = {
                               baseDamage,
                               upgradeLevel,
                               additive: {
@@ -283,48 +284,34 @@ describe('AP2 Phase P1B.4 — 3-Bucket Damage Pipeline & Anti-Explosion Property
                               vulnerability: vuln,
                               shatter,
                               isBoss,
-                            });
+                            };
+                            const breakdown = evaluateThreeBucketDamageBreakdown(input);
 
-                            expect(breakdown.upgradeMult).toBeLessThanOrEqual(1.6 + 1e-9);
-                            expect(breakdown.additiveMult).toBeLessThanOrEqual(
-                              ADDITIVE_POOL_HARD_CAP_MULT + 1e-9,
-                            );
-                            expect(breakdown.vulnMult).toBeLessThanOrEqual(
-                              ENEMY_VULN_HARD_CAP_MULT + 1e-9,
-                            );
-
-                            if (isBoss) {
-                              expect(breakdown.reactionMult).toBeLessThanOrEqual(
-                                SHATTER_BOSS_CAP_MULT + 1e-9,
-                              );
-                              expect(breakdown.totalMultiplier).toBeLessThanOrEqual(
-                                BOSS_SINGLE_HIT_MAX_MULT + 1e-9,
-                              );
-                              expect(breakdown.finalDamage).toBeLessThanOrEqual(
-                                Math.round(baseDamage * BOSS_SINGLE_HIT_MAX_MULT),
-                              );
+                            if (breakdown.upgradeMult > 1.6 + 1e-9) violations += 1;
+                            if (breakdown.additiveMult > ADDITIVE_POOL_HARD_CAP_MULT + 1e-9) {
+                              violations += 1;
+                            }
+                            if (breakdown.vulnMult > ENEMY_VULN_HARD_CAP_MULT + 1e-9) {
+                              violations += 1;
                             }
 
-                            const directDmg = computeThreeBucketDamage({
-                              baseDamage,
-                              upgradeLevel,
-                              additive: {
-                                finaleShot,
-                                overclockedShot,
-                                overheatOrange,
-                                bounceCount,
-                                shieldBonusAdd,
-                                zoneImbued: extraAdd > 0,
-                                prismSplit: extraAdd > 1.0,
-                                pactBonusAdd: extraAdd * 0.5,
-                                relicBonusAdd: extraAdd * 0.5,
-                              },
-                              isCrit,
-                              vulnerability: vuln,
-                              shatter,
-                              isBoss,
-                            });
-                            expect(directDmg).toBe(breakdown.finalDamage);
+                            if (isBoss) {
+                              if (breakdown.reactionMult > SHATTER_BOSS_CAP_MULT + 1e-9) {
+                                violations += 1;
+                              }
+                              if (breakdown.totalMultiplier > BOSS_SINGLE_HIT_MAX_MULT + 1e-9) {
+                                violations += 1;
+                              }
+                              if (
+                                breakdown.finalDamage >
+                                Math.round(baseDamage * BOSS_SINGLE_HIT_MAX_MULT)
+                              ) {
+                                violations += 1;
+                              }
+                            }
+
+                            const directDmg = computeThreeBucketDamage(input);
+                            if (directDmg !== breakdown.finalDamage) violations += 1;
                           }
                         }
                       }
@@ -338,6 +325,7 @@ describe('AP2 Phase P1B.4 — 3-Bucket Damage Pipeline & Anti-Explosion Property
       }
     }
 
+    expect(violations).toBe(0);
     expect(combinationsChecked).toBeGreaterThanOrEqual(4_000);
   });
 
