@@ -609,34 +609,27 @@ export function updateSkillZonesAndSummonsImpl(this: WorldSim, dtSec: number): v
         }
       } else if (s.kind === 'life_blossom') {
         s.tickTimer -= dtSec;
-        if (s.tickTimer <= 0) {
-          s.tickTimer = 1.1;
-          if (s.healsRemaining > 0) {
-            let healedAny = false;
-            for (const ally of this.getAllPlayers()) {
-              if (
-                ally.lifeState === 'alive' &&
-                distance(s.x, s.y, ally.x, ally.y) <= s.auraRadius
-              ) {
-                if (ally.hp < ally.maxHp) {
-                  ally.hp = Math.min(ally.maxHp, ally.hp + 1);
-                  healedAny = true;
-                } else if (ally.armor < ally.maxArmor) {
-                  ally.armor = Math.min(ally.maxArmor, ally.armor + 1);
-                  healedAny = true;
-                }
-              }
-            }
-            if (healedAny) {
-              s.healsRemaining -= 1;
-            }
+        if (s.tickTimer <= 1e-6) {
+          s.tickTimer += 1.0;
+          if (s.tickTimer <= 0) {
+            s.tickTimer = 1.0;
           }
           for (let j = 0; j < this.enemies.length; j++) {
             const e = this.enemies[j]!;
             if (e.hp <= 0 || e.aiState === 'spawning' || e.bossBurrowed) continue;
             if (distance(s.x, s.y, e.x, e.y) <= s.auraRadius + e.radius) {
               const ang = Math.atan2(e.y - s.y, e.x - s.x);
-              this.applyDamageToEnemy(e, 7, false, 'poison', ang, 25, false, s.ownerPlayerId);
+              e.poisonTimer = Math.max(e.poisonTimer, 1.2);
+              if (e.poisonStacks <= 0) {
+                e.poisonTickTimer = Math.max(e.poisonTickTimer, 2.0);
+              }
+              e.lastElementOwnerId = s.ownerPlayerId;
+              e.lastElementApplied = 'poison';
+              this.applyDamageToEnemy(e, 6, false, 'none', ang, 25, false, s.ownerPlayerId, true);
+              const lastEv = this.events[this.events.length - 1];
+              if (lastEv && lastEv.kind === 'damage_dealt' && lastEv.targetId === e.id) {
+                lastEv.element = 'poison';
+              }
             }
           }
         }

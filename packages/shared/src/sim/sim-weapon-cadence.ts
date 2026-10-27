@@ -24,6 +24,8 @@ import {
   triggerGaleSmgTacticalVent,
   triggerHunterCrossbowBarbedRip,
   triggerScrapShotgunPerfectReload,
+  triggerSeedGunHarvestBloom,
+  triggerTetherStaffTacticalVent,
 } from './sim-weapon-specials.js';
 import {
   ELEMENTALIST_ROTATION_ORDER,
@@ -268,6 +270,8 @@ export function updatePlayerWeaponCadence(
             detonateParasiticThorns(sim, p.id);
           } else if (w?.id === 'scrap_shotgun') {
             triggerScrapShotgunPerfectReload(sim, p);
+          } else if (w?.id === 'seed_gun') {
+            triggerSeedGunHarvestBloom(sim, p);
           }
         } else {
           p.reloadLockout = true;
@@ -295,6 +299,8 @@ export function updatePlayerWeaponCadence(
           triggerApprenticeStaffTacticalVent(sim, p);
         } else if (w.id === 'gale_smg') {
           triggerGaleSmgTacticalVent(sim, p);
+        } else if (w.id === 'tether_staff') {
+          triggerTetherStaffTacticalVent(sim, p);
         }
       }
     } else if (p.reloadTimer <= 0 && p.clipMax > 0 && p.clipAmmo < p.clipMax) {
@@ -588,6 +594,7 @@ export function tryFireActiveWeaponImpl(
 
   if (w.id === 'tether_staff') {
     upsertTetherStaffBeam(this, p, baseDmg);
+    return;
   }
 
   this.spawnDeterministicVolley({

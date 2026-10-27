@@ -222,11 +222,13 @@ export interface SimShockwaveRingState {
   hitPlayerIds: number[];
 }
 
+export type TetherAnchorKind = 'player' | 'summon' | 'prop' | 'enemy' | 'point';
+
 export interface SimTetherBeamState {
   id: number;
   ownerPlayerId: number;
   targetEntityId: number;
-  targetKind: 'player' | 'summon';
+  targetKind: TetherAnchorKind;
   x1: number;
   y1: number;
   x2: number;
@@ -427,6 +429,8 @@ export interface SimPlayerState {
   vanguardShieldBonusAdd: number;
   elementalConvergenceTimer: number;
   pollenSpeedBoostTimer: number;
+  seedGunHealIcdTimer?: number;
+  seedGunRoomHealsUsed?: number;
   // Ashen Pact 2.0 Per-Player Build State
   blessingIds: BlessingId[];
   weaponMutators: Record<number, WeaponMutatorId[]>;
@@ -532,6 +536,7 @@ export interface SimEnemyState {
   markedByPlayerId: number;
   superconductTimer: number;
   rootedTimer: number;
+  rootTimer?: number;
   steamBlindTimer: number;
   lastElementOwnerId: number;
   lastElementApplied: ElementType;

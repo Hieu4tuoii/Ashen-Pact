@@ -117,6 +117,7 @@ export function enterRoomImpl(this: WorldSim, roomId: number, entryDir?: Cardina
   for (const pl of this.getAllPlayers()) {
     pl.encasedInIceTimer = 0;
     pl.icePrisonId = 0;
+    pl.seedGunRoomHealsUsed = 0;
   }
 
   if (this.map.getTile(18, 0) !== 'cracked_wall') {

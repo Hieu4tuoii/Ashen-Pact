@@ -3,17 +3,23 @@ import { distance, isCircleInCone } from '../math/vec2.js';
 import { INPUT_BUTTON, SHOT_FLAG } from '../protocol/messages.js';
 import { resolveEnemyChasmRingOut } from './sim-tactical-physics.js';
 import {
+  pointToSegmentDist,
+  triggerSeedGunHarvestBloom,
+} from './sim-weapon-specials-rare.js';
+import {
   detonatePlayerMagneticRivets,
   plantMagneticRivet,
   triggerTeslaFinaleChainLightning,
 } from './sim-weapon-specials.js';
-import type {
-  BulletVolleySpawnEvent,
-  SimEnemyState,
-  SimPlayerState,
-  SimProjectileState,
+import {
+  type BulletVolleySpawnEvent,
+  type SimEnemyState,
+  type SimPlayerState,
+  type SimProjectileState,
 } from './world-sim-types.js';
 import type { WorldSim } from './world-sim.js';
+
+export * from './sim-weapon-specials-rare.js';
 
 export const CROSSBOW_MAX_STUCK_ARROWS = 4;
 export const CROSSBOW_RIP_DMG_PER_ARROW = 6;
@@ -41,24 +47,6 @@ export const FRAG_LAUNCHER_AIRBURST_RADIUS = 104;
 export const FRAG_LAUNCHER_SUB_COUNT = 5;
 export const FRAG_LAUNCHER_SUB_DMG = 6;
 export const FRAG_LAUNCHER_MAX_SUB_HITS_PER_TARGET = 2;
-
-function pointToSegmentDist(
-  px: number,
-  py: number,
-  x1: number,
-  y1: number,
-  x2: number,
-  y2: number,
-): number {
-  const dx = x2 - x1;
-  const dy = y2 - y1;
-  const lenSq = dx * dx + dy * dy;
-  if (lenSq <= 1e-6) {
-    return distance(px, py, x1, y1);
-  }
-  const t = Math.max(0, Math.min(1, ((px - x1) * dx + (py - y1) * dy) / lenSq));
-  return distance(px, py, x1 + t * dx, y1 + t * dy);
-}
 
 /**
  * Hunter Crossbow (Nỏ Săn Hàn Thiết):
@@ -270,6 +258,10 @@ export function handleProjectileExpiredWeaponSpecials(
 
   if (b.weaponId === 'seed_gun') {
     sim.spawnSeedGunLifeBlossom(b.ownerId, b.x, b.y);
+    if (((b.shotFlags ?? 0) & SHOT_FLAG.FINALE_SHOT) !== 0 && !b.finaleResolved) {
+      b.finaleResolved = true;
+      triggerSeedGunHarvestBloom(sim, b.ownerId);
+    }
   } else if (
     b.weaponId === 'frag_launcher' ||
     b.weaponId === 'magma_cannon' ||
@@ -303,6 +295,10 @@ export function handleProjectileWallHitWeaponSpecials(
 
   if (b.weaponId === 'seed_gun') {
     sim.spawnSeedGunLifeBlossom(b.ownerId, hitX, hitY);
+    if (((b.shotFlags ?? 0) & SHOT_FLAG.FINALE_SHOT) !== 0 && !b.finaleResolved) {
+      b.finaleResolved = true;
+      triggerSeedGunHarvestBloom(sim, b.ownerId);
+    }
   } else if (
     b.weaponId === 'frag_launcher' ||
     b.weaponId === 'magma_cannon' ||
@@ -365,6 +361,10 @@ export function handleProjectileEnemyHitWeaponSpecials(
 
   if (b.weaponId === 'seed_gun') {
     sim.spawnSeedGunLifeBlossom(b.ownerId, enemy.x, enemy.y);
+    if (isFinale && !b.finaleResolved) {
+      b.finaleResolved = true;
+      triggerSeedGunHarvestBloom(sim, b.ownerId);
+    }
   } else if (
     b.weaponId === 'frag_launcher' ||
     b.weaponId === 'magma_cannon' ||
@@ -638,5 +638,6 @@ export function resolvePlayerProjectileHitDamageAndAngle(
   const hitAngle = b.airburstBypassShield ? enemy.aimAngle : b.angle;
   return { damage, hitAngle };
 }
+
 
 

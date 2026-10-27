@@ -16,13 +16,14 @@ import {
 import {
   FRAG_LAUNCHER_MAIN_BLAST_RADIUS,
   spawnFragLauncherSubmunitions,
+  spawnSeedGunLifeBud,
+  upsertTetherStaffBeamImpl,
 } from './sim-weapon-specials.js';
 import {
   DASH_COOLDOWN_SEC,
   DASH_DURATION_SEC,
   DASH_IFRAME_SEC,
   DASH_SPEED_MULTIPLIER,
-  MAX_DEPLOYABLES_PER_PLAYER,
   type SimPlayerState,
   type SimProjectileState,
 } from './world-sim-types.js';
@@ -176,6 +177,10 @@ export function updateSinglePlayerStateImpl(this: WorldSim,
   if ((p.pollenSpeedBoostTimer ?? 0) > 0) {
     const nextPollen = (p.pollenSpeedBoostTimer ?? 0) - dtSec;
     p.pollenSpeedBoostTimer = nextPollen < 1e-6 ? 0 : nextPollen;
+  }
+  if ((p.seedGunHealIcdTimer ?? 0) > 0) {
+    const nextSeedIcd = (p.seedGunHealIcdTimer ?? 0) - dtSec;
+    p.seedGunHealIcdTimer = nextSeedIcd < 1e-6 ? 0 : nextSeedIcd;
   }
   updatePlayerWeaponCadence(this, p, justPressed, inp.buttons, dtSec);
 
@@ -519,40 +524,7 @@ export function spawnSeedGunLifeBlossomImpl(
   x: number,
   y: number,
 ): void {
-  if (this.stressTestActive) return;
-  const ownerSummons = this.summons.filter(
-    (s) => s.ownerPlayerId === ownerId && s.hp > 0 && s.ttlSec > 0,
-  );
-  if (ownerSummons.length >= MAX_DEPLOYABLES_PER_PLAYER) {
-    ownerSummons[0]!.ttlSec = 0;
-  }
-  const blossoms = this.summons.filter(
-    (s) => s.ownerPlayerId === ownerId && s.kind === 'life_blossom' && s.hp > 0 && s.ttlSec > 0,
-  );
-  if (blossoms.length >= 3) {
-    blossoms[0]!.ttlSec = 0;
-  }
-  const col = this.map.resolveCircleCollision(x, y, 14);
-  this.summons.push({
-    id: ++this.nextPuzzleEntityId,
-    ownerPlayerId: ownerId,
-    kind: 'life_blossom',
-    nameVi: 'Hoa Sinh Mệnh',
-    x: col.x,
-    y: col.y,
-    radius: 14,
-    auraRadius: 92,
-    hp: 30,
-    maxHp: 30,
-    ttlSec: 6.5,
-    maxTtlSec: 6.5,
-    tickTimer: 0.4,
-    healsRemaining: 4,
-    charge: 0,
-    poisonRoots: false,
-    selfDestruct: false,
-    rootedEnemyIds: [],
-  });
+  spawnSeedGunLifeBud(this, ownerId, x, y);
 }
 
 export function triggerLauncherProjectileExplosionImpl(
@@ -772,68 +744,5 @@ export function upsertTetherStaffBeam(
   p: SimPlayerState,
   baseDmg: number,
 ): void {
-  const allPlayers = sim.getAllPlayers();
-  let bestAlly: SimPlayerState | null = null;
-  let bestDist = Infinity;
-  for (let i = 0; i < allPlayers.length; i++) {
-    const cand = allPlayers[i]!;
-    if (cand.id === p.id || cand.lifeState !== 'alive') continue;
-    const d = distance(p.x, p.y, cand.x, cand.y);
-    if (d < bestDist) {
-      bestDist = d;
-      bestAlly = cand;
-    }
-  }
-
-  let targetKind: 'player' | 'summon' = 'player';
-  let targetEntityId = 0;
-  let x2 = p.x + Math.cos(p.aimAngle) * 165;
-  let y2 = p.y + Math.sin(p.aimAngle) * 165;
-
-  if (bestAlly) {
-    targetKind = 'player';
-    targetEntityId = bestAlly.id;
-    x2 = bestAlly.x;
-    y2 = bestAlly.y;
-  } else {
-    const activeSummon = sim.summons.find((s) => s.hp > 0 && s.ttlSec > 0);
-    if (activeSummon) {
-      targetKind = 'summon';
-      targetEntityId = activeSummon.id;
-      x2 = activeSummon.x;
-      y2 = activeSummon.y;
-    } else {
-      targetKind = 'summon';
-      targetEntityId = 0;
-      const col = sim.map.resolveCircleCollision(x2, y2, 10);
-      x2 = col.x;
-      y2 = col.y;
-    }
-  }
-
-  const existingBeam = sim.tetherBeams.find((b) => b.ownerPlayerId === p.id);
-  if (existingBeam) {
-    existingBeam.targetKind = targetKind;
-    existingBeam.targetEntityId = targetEntityId;
-    existingBeam.x1 = p.x;
-    existingBeam.y1 = p.y;
-    existingBeam.x2 = x2;
-    existingBeam.y2 = y2;
-    existingBeam.ttlSec = 3.2;
-    existingBeam.damage = Math.max(8, Math.round(baseDmg * 0.85));
-  } else {
-    sim.tetherBeams.push({
-      id: ++sim.nextPuzzleEntityId,
-      ownerPlayerId: p.id,
-      targetEntityId,
-      targetKind,
-      x1: p.x,
-      y1: p.y,
-      x2,
-      y2,
-      ttlSec: 3.2,
-      tickTimer: 0.1,
-      damage: Math.max(8, Math.round(baseDmg * 0.85)),
-    });
-  }
+  upsertTetherStaffBeamImpl(sim, p, baseDmg);
 }

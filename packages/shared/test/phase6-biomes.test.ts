@@ -12,6 +12,7 @@ import {
   TILE_SIZE,
   WEAPONS,
   WorldSim,
+  triggerSeedGunHarvestBloom,
 } from '../src/index.js';
 
 describe('Phase 6 — Biomes 2 & 3, 18 Weapons, Co-op Mechanics & Bosses Kryssa / Forge Titan', () => {
@@ -76,8 +77,9 @@ describe('Phase 6 — Biomes 2 & 3, 18 Weapons, Co-op Mechanics & Bosses Kryssa 
 
     const blossom = sim.summons.find((s) => s.kind === 'life_blossom');
     expect(blossom).toBeDefined();
-    expect(p2.hp).toBeGreaterThan(initialP2Hp);
     expect(target.poisonTimer).toBeGreaterThan(0);
+    triggerSeedGunHarvestBloom(sim, p1);
+    expect(p2.hp).toBeGreaterThan(initialP2Hp);
 
     // 2. Tether Staff links P1 and P2 with an arc beam that shocks enemies crossing the line
     p1.weaponSlots[0] = 'tether_staff';

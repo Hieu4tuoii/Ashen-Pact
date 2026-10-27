@@ -80,6 +80,7 @@ export interface WeaponStatsDef {
   reloadDurationSec: number;
   reloadSec?: number;
   heatPerShot: number;
+  heatPerSec?: number;
   procCoefficient: number;
   procCoeff?: number;
   submunitionProcCoefficient?: number;

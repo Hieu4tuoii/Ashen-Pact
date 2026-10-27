@@ -1,9 +1,10 @@
 import { ENEMIES } from '../data/enemies.js';
 import type { ElementType } from '../data/types.js';
-import { approach, clamp, distance, distanceSq } from '../math/vec2.js';
+import { approach, distance, distanceSq } from '../math/vec2.js';
 import { BIOME_SCALING, COOP_SCALING } from '../data/scaling.js';
 import type { SurfaceKind } from './arena-map.js';
 import { resolveEnemyChasmRingOut, triggerEnemyWallSlam } from './sim-tactical-physics.js';
+import { updateTetherStaffBeams } from './sim-weapon-specials.js';
 import type { SimPlayerState, SimEnemyState } from './world-sim-types.js';
 import type { WorldSim } from './world-sim.js';
 
@@ -194,73 +195,8 @@ export function updatePhase6MechanicsImpl(this: WorldSim, dtSec: number): void {
     this.shockwaveRings.length = ringWrite;
   }
 
-  // 4. Co-op Weapon Tether Beams (tether_staff: electric/fire beam linking 2 players or player + summon)
-  if (this.tetherBeams.length > 0) {
-    let beamWrite = 0;
-    for (let i = 0; i < this.tetherBeams.length; i++) {
-      const beam = this.tetherBeams[i]!;
-      beam.ttlSec -= dtSec;
-      if (beam.ttlSec <= 0) continue;
-
-      const owner = this.getPlayerById(beam.ownerPlayerId);
-      if (!owner || owner.lifeState !== 'alive') continue;
-      beam.x1 = owner.x;
-      beam.y1 = owner.y;
-
-      if (beam.targetKind === 'player') {
-        const targetPl = this.getPlayerById(beam.targetEntityId);
-        if (targetPl && targetPl.lifeState === 'alive') {
-          beam.x2 = targetPl.x;
-          beam.y2 = targetPl.y;
-        }
-      } else {
-        const targetSum = this.summons.find(
-          (s) => s.id === beam.targetEntityId && s.hp > 0 && s.ttlSec > 0,
-        );
-        if (targetSum) {
-          beam.x2 = targetSum.x;
-          beam.y2 = targetSum.y;
-        }
-      }
-
-      beam.tickTimer -= dtSec;
-      if (beam.tickTimer <= 0) {
-        beam.tickTimer = 0.25;
-        const segDx = beam.x2 - beam.x1;
-        const segDy = beam.y2 - beam.y1;
-        const segLenSq = segDx * segDx + segDy * segDy;
-        for (let j = 0; j < this.enemies.length; j++) {
-          const e = this.enemies[j]!;
-          if (e.hp <= 0 || e.aiState === 'spawning' || e.bossBurrowed) continue;
-          const t =
-            segLenSq > 0
-              ? clamp(((e.x - beam.x1) * segDx + (e.y - beam.y1) * segDy) / segLenSq, 0, 1)
-              : 0;
-          const distToBeam = distance(e.x, e.y, beam.x1 + t * segDx, beam.y1 + t * segDy);
-          if (distToBeam <= e.radius + 14) {
-            const hitAng = Math.atan2(segDy, segDx) + Math.PI * 0.5;
-            this.applyDamageToEnemy(
-              e,
-              beam.damage,
-              false,
-              'shock',
-              hitAng,
-              40,
-              false,
-              beam.ownerPlayerId,
-            );
-            if (e.hp > 0) {
-              e.burnTimer = Math.max(e.burnTimer, 2.0);
-              e.shockTimer = Math.max(e.shockTimer, 1.2);
-            }
-          }
-        }
-      }
-
-      this.tetherBeams[beamWrite++] = beam;
-    }
-    this.tetherBeams.length = beamWrite;
-  }
+  // 4. Co-op Weapon Tether Beams (tether_staff: High-Voltage Cutting Beam linking player to anchor)
+  updateTetherStaffBeams(this, dtSec);
 
   // 5. Boss Forge Titan Phase 2 Dual Energy Core synchronization window (3s Co-op / 6s Solo)
   if (this.titanCoreWindowTimer > 0) {
@@ -386,6 +322,7 @@ export function updateEnemiesImpl(this: WorldSim, dtSec: number): void {
     }
     if (e.rootedTimer > 0) {
       e.rootedTimer = Math.max(0, e.rootedTimer - dtSec);
+      e.rootTimer = e.rootedTimer;
     }
     if (e.steamBlindTimer > 0) {
       e.steamBlindTimer = Math.max(0, e.steamBlindTimer - dtSec);
