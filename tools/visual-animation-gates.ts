@@ -191,6 +191,10 @@ const PHYSICS_DISPLACEMENT_SCENE_PATTERNS = [
   'solar-supernova',
   'magma-geysers',
   'hammer-thunder',
+  'glacial-kick',
+  'pneumatic-press',
+  'blast-shield',
+  'crumbling-pillar',
 ];
 
 export function isPhysicsDisplacementScene(sceneId: string): boolean {

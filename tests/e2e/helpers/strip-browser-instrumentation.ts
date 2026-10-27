@@ -118,7 +118,7 @@ export async function installSceneStripInstrumentation(page: Page): Promise<void
         .join(';');
       const prPart = (sim.props ?? [])
         .filter((pr) => Number(pr.hp ?? 0) > 0)
-        .map((pr) => [pr.id, num(pr.x), num(pr.y), num(pr.vx), num(pr.vy), num(pr.hp), String(pr.coverState ?? '')].join(':'))
+        .map((pr) => [pr.id, num(pr.x), num(pr.y), num(pr.vx), num(pr.vy), num(pr.hp), String(pr.coverState ?? ''), String(pr.pressState ?? ''), num(pr.pressTimer)].join(':'))
         .join(';');
       const bPart = (sim.projectiles ?? [])
         .filter((b) => Number(b.ttlSec ?? 0) > 0)

@@ -132,7 +132,7 @@ export function shatterGlacialBarricade(
       sim.events.push({
         kind: 'status_applied',
         targetId: e.id,
-        status: 'freeze',
+        status: 'frozen',
         x: e.x,
         y: e.y,
       });
@@ -228,8 +228,10 @@ export function refractProjectileThroughCryoPrism(
     const origTtl = Math.max(b.ttlSec, 1.35);
     b.ttlSec = 0;
 
+    const shotFlags = (b.shotFlags ?? 0) | SHOT_FLAG.DYNAMIC_BOUNCE;
     sim.spawnDeterministicVolley({
       kind: 'bullet_volley_spawned',
+      tick: sim.tick,
       eventId: sim.nextVolleyEventId++,
       ownerId: b.ownerId,
       team: 'player',
@@ -248,10 +250,11 @@ export function refractProjectileThroughCryoPrism(
       pierceCount: b.pierceRemaining,
       bounceCount: Math.min(4, Math.max(1, b.bounceRemaining)),
       element: 'chill',
+      amplifiedByShield: Boolean(b.amplifiedByShield),
       seed: ((sim.tick + 1) * 2654435761) >>> 0,
-      shotFlags: (b.shotFlags ?? 0) | SHOT_FLAG.DYNAMIC_BOUNCE,
+      shotFlags,
+      flags: shotFlags,
       replacedProjectileId: b.id,
-      procCoefficient: b.procCoefficient,
     });
 
     const rayAngles = [

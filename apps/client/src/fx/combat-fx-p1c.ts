@@ -52,7 +52,7 @@ export function spawnGlacialShatterSpikesVfx(
     ttlSec: 0.45,
     maxTtlSec: 0.45,
   });
-  fx?.spawnElementalBurst('shatter', x, y, GLACIAL_BARRICADE_SHATTER_RADIUS);
+  fx?.spawnExplosionBurst(x, y, GLACIAL_BARRICADE_SHATTER_RADIUS, PALETTE.CYAN_FROST);
 }
 
 export function spawnPrismRefractFlashVfx(
@@ -92,7 +92,7 @@ export function spawnPneumaticPressSlamVfx(
     ttlSec: 0.48,
     maxTtlSec: 0.48,
   });
-  fx?.spawnExplosion(x, y, PNEUMATIC_PRESS_CRUSH_RADIUS * 0.85);
+  fx?.spawnExplosionBurst(x, y, PNEUMATIC_PRESS_CRUSH_RADIUS * 0.85, PALETTE.FLAME_ORANGE);
 }
 
 export function spawnSlagLavaCarpetVfx(
@@ -115,7 +115,7 @@ export function spawnSlagLavaCarpetVfx(
     ttlSec: 0.55,
     maxTtlSec: 0.55,
   });
-  fx?.spawnExplosion(x, y, 56);
+  fx?.spawnExplosionBurst(x, y, 56, PALETTE.FLAME_ORANGE);
 }
 
 export function handleP1CSimEvent(
@@ -128,11 +128,12 @@ export function handleP1CSimEvent(
   if (ev.kind === 'explosion') {
     if (ev.sourceDefId === 'glacial_barricade') {
       if (!isStress) {
-        spawnGlacialShatterSpikesVfx(scene, scene.fx, ev.x, ev.y, sim.player.aimAngle);
+        const pAim = sim.player?.aimAngle ?? 0;
+        spawnGlacialShatterSpikesVfx(scene, scene.fx, ev.x, ev.y, pAim);
         scene.lighting?.spawnTransientLight(ev.x, ev.y, 130, PALETTE.CYAN_FROST, 0.9, 0.28);
       }
       if (allowStressSfx) {
-        zzfx.play('shatter_ice', ev.x, scene.camFocusX, ev.y, scene.camFocusY);
+        zzfx.play('shatter', ev.x, scene.camFocusX, ev.y, scene.camFocusY);
       }
       return true;
     }
@@ -142,21 +143,24 @@ export function handleP1CSimEvent(
         scene.lighting?.spawnTransientLight(ev.x, ev.y, 150, PALETTE.FLAME_ORANGE, 0.95, 0.32);
       }
       if (allowStressSfx) {
-        zzfx.play('hammer_slam', ev.x, scene.camFocusX, ev.y, scene.camFocusY);
+        zzfx.play('wall_slam', ev.x, scene.camFocusX, ev.y, scene.camFocusY);
       }
       return true;
     }
     if (ev.sourceDefId === 'slag_crucible') {
       if (!isStress) {
+        const px = sim.player?.x ?? ev.x;
+        const py = sim.player?.y ?? ev.y;
+        const pAim = sim.player?.aimAngle ?? 0;
         const spillAngle =
-          Math.hypot(ev.x - sim.player.x, ev.y - sim.player.y) > 1
-            ? Math.atan2(ev.y - sim.player.y, ev.x - sim.player.x)
-            : sim.player.aimAngle;
+          Math.hypot(ev.x - px, ev.y - py) > 1
+            ? Math.atan2(ev.y - py, ev.x - px)
+            : pAim;
         spawnSlagLavaCarpetVfx(scene, scene.fx, ev.x, ev.y, spillAngle);
         scene.lighting?.spawnTransientLight(ev.x, ev.y, 160, PALETTE.FLAME_ORANGE, 0.92, 0.35);
       }
       if (allowStressSfx) {
-        zzfx.play('barrel_explosion', ev.x, scene.camFocusX, ev.y, scene.camFocusY);
+        zzfx.play('explosion', ev.x, scene.camFocusX, ev.y, scene.camFocusY);
       }
       return true;
     }
@@ -189,8 +193,8 @@ export function drawP1CActiveOverlays(
   if (!sim || sim.stressTestActive) return;
 
   // 1. Conveyor Reversal Warning Chevrons (1.2s flashing indicator before 8.0s factory reversal)
-  const warnTimer = sim.map.conveyorWarningTimer ?? 0;
-  if (warnTimer > 0) {
+  const warnTimer = sim.map?.conveyorWarningTimer ?? 0;
+  if (warnTimer > 0 && sim.map) {
     const flashOn = Math.floor(clockSec * 10) % 2 === 0;
     const alpha = flashOn ? 0.88 : 0.35;
     const col = flashOn ? 0xfacc15 : 0xf97316;
@@ -213,8 +217,9 @@ export function drawP1CActiveOverlays(
   }
 
   // 2. Active P1C Props Overlays (pneumatic_press sensor/windup, forge_blast_shield 88px fire wave, sliding_ice_block wake)
-  for (let i = 0; i < sim.props.length; i++) {
-    const prop = sim.props[i]!;
+  const props = sim.props ?? [];
+  for (let i = 0; i < props.length; i++) {
+    const prop = props[i]!;
     if (prop.hp <= 0) continue;
 
     if (prop.kind === 'pneumatic_press') {
