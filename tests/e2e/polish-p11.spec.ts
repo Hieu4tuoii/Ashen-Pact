@@ -79,9 +79,11 @@ test.describe('Phase P11 — Balance, Data-Driven Difficulty Levers, Boss Drama 
     expect(dungeonCheck!.hasChallengeRoom).toBe(true);
     expect(dungeonCheck!.challengeWavesTotal).toBe(3);
     expect(dungeonCheck!.challengeChestRarity).toBe('epic');
-    expect(dungeonCheck!.shopPrices.health_potion).toBe(30);
-    expect([55, 85]).toContain(dungeonCheck!.shopPrices.weapon);
-    expect(dungeonCheck!.shopPrices.armor_upgrade).toBe(65);
+    expect(dungeonCheck!.shopPrices.health_potion).toBe(32);
+    expect(dungeonCheck!.shopPrices.weapon).toBe(55);
+    expect(dungeonCheck!.shopPrices.armor_upgrade).toBe(32);
+    expect(dungeonCheck!.shopPrices.blessing_scroll).toBe(68);
+    expect(dungeonCheck!.shopPrices.weapon_upgrade).toBe(75);
 
     // 2. Enter Challenge Room -> verify Wave Banner ("PHÒNG THỬ THÁCH — ĐỢT 1/3"), Remaining Enemies Pill & Overlapping Wave 2
     const waveDramaCheck = await page.evaluate(() => {
