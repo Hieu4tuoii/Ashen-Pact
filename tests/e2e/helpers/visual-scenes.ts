@@ -44,12 +44,14 @@ import { AP2_P0B_SCENE_IDS, AP2_P0B_VISUAL_SCENES } from './visual-scene-ap2-p0.
 import { AP2_P1A_SCENE_IDS, AP2_P1A_VISUAL_SCENES } from './visual-scene-ap2-p1.js';
 import { AP2_P1B_SCENE_IDS, AP2_P1B_VISUAL_SCENES } from './visual-scene-ap2-p1b.js';
 import { AP2_P1C_SCENE_IDS, AP2_P1C_VISUAL_SCENES } from './visual-scene-ap2-p1c.js';
+import { AP2_P1D_SCENE_IDS, AP2_P1D_VISUAL_SCENES } from './visual-scene-ap2-p1d.js';
 
 export {
   AP2_P0B_SCENE_IDS,
   AP2_P1A_SCENE_IDS,
   AP2_P1B_SCENE_IDS,
   AP2_P1C_SCENE_IDS,
+  AP2_P1D_SCENE_IDS,
   DEFAULT_FREEZE_MASK_RECTS,
   ENVIRONMENT_SAMPLE_RECTS,
   HUB_SAMPLE_RECTS,
@@ -949,4 +951,7 @@ export const VISUAL_SCENES: readonly VisualSceneDef[] = [
 
   // 17. Phase AP2-P1C Biomes 2 & 3 Archetypes & Interactive Props Visual Scenes
   ...AP2_P1C_VISUAL_SCENES,
+
+  // 18. Phase AP2-P1D Core Blessings & Character Skill Upgrades Visual Scenes
+  ...AP2_P1D_VISUAL_SCENES,
 ];

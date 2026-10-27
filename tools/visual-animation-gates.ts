@@ -196,6 +196,11 @@ const PHYSICS_DISPLACEMENT_SCENE_PATTERNS = [
   'blast-shield',
   'crumbling-pillar',
   'prism-refract',
+  'blessing-table-rocket',
+  'blessing-prism-split',
+  'blessing-tediore-chuck',
+  'skill-vanguard-prism',
+  'skill-elementalist-twin',
 ];
 
 export function isPhysicsDisplacementScene(sceneId: string): boolean {

@@ -136,6 +136,15 @@ export const SCENE_GROUPS: Readonly<Record<string, readonly string[]>> = {
     'ap2-b3-blast-shield-wave',
     'ap2-crumbling-pillar-ring',
   ],
+  'ap2-p1d': [
+    'ap2-modal-blessing-vi',
+    'ap2-modal-blessing-en',
+    'ap2-blessing-table-rocket',
+    'ap2-blessing-prism-split',
+    'ap2-blessing-tediore-chuck',
+    'ap2-skill-vanguard-prism',
+    'ap2-skill-elementalist-twin',
+  ],
 };
 
 export interface ShotsCliOptions {
