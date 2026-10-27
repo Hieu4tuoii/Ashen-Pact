@@ -14,6 +14,10 @@ import {
   updatePlayerWeaponCadence,
 } from './sim-weapon-cadence.js';
 import {
+  FRAG_LAUNCHER_MAIN_BLAST_RADIUS,
+  spawnFragLauncherSubmunitions,
+} from './sim-weapon-specials.js';
+import {
   DASH_COOLDOWN_SEC,
   DASH_DURATION_SEC,
   DASH_IFRAME_SEC,
@@ -284,6 +288,14 @@ export function updateSinglePlayerStateImpl(this: WorldSim,
 
   // Surface speed & friction modifiers (oil slows by 15%, ice reduces traction; Elemental Convergence grants +20% speed)
   let speedMult = hadConvergenceBeforeTick || p.elementalConvergenceTimer > 0 ? 1.2 : 1.0;
+  const activeWepId = p.weaponSlots[p.activeWeaponSlot ?? 0] ?? p.weaponSlots[0] ?? 'knight_sword';
+  if (
+    activeWepId === 'gale_smg' &&
+    (inp.buttons & INPUT_BUTTON.FIRE) !== 0 &&
+    p.overheatLockTimer <= 0
+  ) {
+    speedMult *= 1.15;
+  }
   if ((p.pollenSpeedBoostTimer ?? 0) > 0) speedMult *= BIOME1_POLLEN_SPEED_MULTIPLIER;
   if (surf === 'oil' || surf === 'poison_swamp') speedMult *= 0.85;
   if (p.chillTimer > 0) speedMult *= 0.7;
@@ -549,8 +561,14 @@ export function triggerLauncherProjectileExplosionImpl(
   x: number,
   y: number,
 ): void {
-  if (this.stressTestActive) return;
-  const blastR = b.explosionRadius && b.explosionRadius > 0 ? b.explosionRadius : 64;
+  if (this.stressTestActive || b.finaleResolved) return;
+  b.finaleResolved = true;
+  const blastR =
+    b.explosionRadius && b.explosionRadius > 0
+      ? b.explosionRadius
+      : b.weaponId === 'frag_launcher'
+        ? FRAG_LAUNCHER_MAIN_BLAST_RADIUS
+        : 64;
   if (b.element === 'burn') {
     this.map.igniteSurfaceInRadius(x, y, blastR);
   }
@@ -565,7 +583,9 @@ export function triggerLauncherProjectileExplosionImpl(
 
   if (b.team === 'player') {
     const isFullBlastWeapon =
-      b.weaponId === 'apprentice_staff' || b.weaponId === 'knight_sword_parry';
+      b.weaponId === 'apprentice_staff' ||
+      b.weaponId === 'knight_sword_parry' ||
+      b.weaponId === 'frag_launcher';
     const blastDmg = isFullBlastWeapon ? b.damage : Math.max(6, Math.round(b.damage * 0.65));
     for (let i = 0; i < this.enemies.length; i++) {
       const e = this.enemies[i]!;
@@ -578,9 +598,12 @@ export function triggerLauncherProjectileExplosionImpl(
         continue;
       }
       if (distance(x, y, e.x, e.y) <= blastR + e.radius) {
-        const ang = Math.atan2(e.y - y, e.x - x);
+        const ang = b.airburstBypassShield ? e.aimAngle : Math.atan2(e.y - y, e.x - x);
         this.applyDamageToEnemy(e, blastDmg, false, b.element, ang, 160, true, b.ownerId);
       }
+    }
+    if (b.weaponId === 'frag_launcher') {
+      spawnFragLauncherSubmunitions(this, b, x, y);
     }
   } else {
     const allPlayers = this.getAllPlayers();

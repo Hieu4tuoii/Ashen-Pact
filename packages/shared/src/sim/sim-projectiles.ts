@@ -7,12 +7,14 @@ import {
   triggerLauncherProjectileExplosionImpl,
 } from './sim-player.js';
 import {
+  canApplyFragSubmunitionHit,
   detonatePlayerMagneticRivets,
   handlePlayerProjectileEnemyHitWeaponSpecials,
   handleProjectileExpiredWeaponSpecials,
   handleProjectileWallHitWeaponSpecials,
   plantMagneticRivet,
-   tryTeslaSmartWallBounce,
+  resolvePlayerProjectileHitDamageAndAngle,
+  tryTeslaSmartWallBounce,
 } from './sim-weapon-specials.js';
 import {
   type BulletVolleySpawnEvent,
@@ -138,6 +140,11 @@ export function spawnDeterministicVolleyImpl(this: WorldSim, ev: BulletVolleySpa
       awaitingServerRedirectTimer: 0,
       explosionRadius: ev.explosionRadius,
       guaranteedElementalProc: ev.guaranteedElementalProc,
+      originX: ev.originX,
+      originY: ev.originY,
+      armedForAirburst: ev.armedForAirburst,
+      airburstBypassShield: ev.airburstBypassShield,
+      parentExplosionId: ev.parentExplosionId,
     });
 
     this.projectiles.push(proj);
@@ -233,6 +240,9 @@ export function updateProjectilesImpl(this: WorldSim, dtSec: number): void {
         if (wallHit.normalX !== 0) b.vx = -b.vx;
         if (wallHit.normalY !== 0) b.vy = -b.vy;
         b.angle = Math.atan2(b.vy, b.vx);
+        if (b.weaponId === 'frag_launcher') {
+          b.ttlSec = Math.min(b.ttlSec, 0.22);
+        }
       } else {
         b.ttlSec = 0;
         if (b.element !== 'none') {
@@ -418,6 +428,9 @@ export function updateProjectilesImpl(this: WorldSim, dtSec: number): void {
 
         if (circleVsCircle(b, enemy)) {
           b.hitEntityIds.push(enemy.id);
+          if (!canApplyFragSubmunitionHit(b, enemy)) {
+            continue;
+          }
 
           // Predator Arrow skill marks the target for 6s (+25% damage from all sources)
           if (b.weaponId === 'predator_arrow') {
@@ -458,12 +471,17 @@ export function updateProjectilesImpl(this: WorldSim, dtSec: number): void {
               ? b.imbuedOwnerId
               : b.ownerId;
 
+          const { damage: hitDmg, hitAngle } = resolvePlayerProjectileHitDamageAndAngle(
+            this,
+            b,
+            enemy,
+          );
           this.applyDamageToEnemy(
             enemy,
-            b.damage,
+            hitDmg,
             b.isCrit,
             b.element,
-            b.angle,
+            hitAngle,
             b.knockback,
             b.weaponId === 'predator_arrow' ||
               b.weaponId === 'ruby_sword_wave' ||
@@ -694,6 +712,9 @@ export function stepClientProjectilesCosmeticImpl(this: WorldSim, dtSec: number)
         if (wallHit.normalX !== 0) b.vx = -b.vx;
         if (wallHit.normalY !== 0) b.vy = -b.vy;
         b.angle = Math.atan2(b.vy, b.vx);
+        if (b.weaponId === 'frag_launcher') {
+          b.ttlSec = Math.min(b.ttlSec, 0.22);
+        }
       } else {
         b.ttlSec = 0;
         this.events.push({
@@ -922,6 +943,11 @@ export function acquireProjectileImpl(this: WorldSim,
     pooled.parryDeflected = init.parryDeflected;
     pooled.guaranteedElementalProc = init.guaranteedElementalProc;
     pooled.finaleResolved = false;
+    pooled.originX = init.originX;
+    pooled.originY = init.originY;
+    pooled.armedForAirburst = init.armedForAirburst;
+    pooled.airburstBypassShield = init.airburstBypassShield;
+    pooled.parentExplosionId = init.parentExplosionId;
     pooled.hitEntityIds.length = 0;
     return pooled;
   }

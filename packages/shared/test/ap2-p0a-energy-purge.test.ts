@@ -94,7 +94,7 @@ describe('AP2 P0A.1 — Energy Purge, Weapon Cadence Metadata & Replacement Mech
         clipSize: 3,
         reloadDurationSec: 1.1,
         heatPerShot: 0,
-        procCoefficient: 0.85,
+        procCoefficient: 0.65,
       },
       tesla_carbine: {
         cadenceKind: 'CLIP_RELOAD',

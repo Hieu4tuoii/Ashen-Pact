@@ -82,6 +82,7 @@ export interface WeaponStatsDef {
   heatPerShot: number;
   procCoefficient: number;
   procCoeff?: number;
+  submunitionProcCoefficient?: number;
   projectileSpeed: number;
   spreadDeg: number;
   critChance: number;

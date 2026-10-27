@@ -10,12 +10,20 @@ import {
 } from './sim-player.js';
 import { triggerGrassPollenSpeedBoost } from './sim-tactical-physics.js';
 import {
+  FRAG_LAUNCHER_MAIN_BLAST_RADIUS,
+  GALE_SMG_MAX_FIRE_RATE,
+  GALE_SMG_MIN_FIRE_RATE,
+  GALE_SMG_SPINUP_DURATION_SEC,
+  checkAndTriggerFragLauncherAirburst,
   detonateParasiticThorns,
   detonatePlayerMagneticRivets,
   processMeleeParryDeflect,
+  spawnGaleSmgWindBlade,
   spawnKnightSwordCrescentWave,
   triggerApprenticeStaffTacticalVent,
+  triggerGaleSmgTacticalVent,
   triggerHunterCrossbowBarbedRip,
+  triggerScrapShotgunPerfectReload,
 } from './sim-weapon-specials.js';
 import {
   ELEMENTALIST_ROTATION_ORDER,
@@ -258,6 +266,8 @@ export function updatePlayerWeaponCadence(
             triggerHunterCrossbowBarbedRip(sim, p.id);
           } else if (w?.id === 'thorn_staff') {
             detonateParasiticThorns(sim, p.id);
+          } else if (w?.id === 'scrap_shotgun') {
+            triggerScrapShotgunPerfectReload(sim, p);
           }
         } else {
           p.reloadLockout = true;
@@ -283,6 +293,8 @@ export function updatePlayerWeaponCadence(
         });
         if (w.id === 'apprentice_staff') {
           triggerApprenticeStaffTacticalVent(sim, p);
+        } else if (w.id === 'gale_smg') {
+          triggerGaleSmgTacticalVent(sim, p);
         }
       }
     } else if (p.reloadTimer <= 0 && p.clipMax > 0 && p.clipAmmo < p.clipMax) {
@@ -355,6 +367,7 @@ export function updatePlayerWeaponCadence(
     p.fireHoldTimer = 0;
     p.crossbowChargeTimer = 0;
   }
+  checkAndTriggerFragLauncherAirburst(sim, p, buttons);
 }
 
 export function tryFireActiveWeaponImpl(
@@ -395,6 +408,7 @@ export function tryFireActiveWeaponImpl(
 
   let fireRateMult = p.elementalConvergenceTimer > 0 ? 1.2 : 1.0;
   let isFinaleShot = false;
+  let inOrangeZoneBeforeShot = false;
 
   if (w.cadenceKind === 'CLIP_RELOAD') {
     if (p.overclockedNextShot) {
@@ -423,6 +437,7 @@ export function tryFireActiveWeaponImpl(
     }
   } else if (w.cadenceKind === 'HEAT_VENT') {
     if (p.weaponHeat >= HEAT_ORANGE_MIN && p.weaponHeat <= HEAT_ORANGE_MAX) {
+      inOrangeZoneBeforeShot = true;
       fireRateMult *= 1.25;
       additiveDmgBonus += 0.25;
     }
@@ -435,12 +450,22 @@ export function tryFireActiveWeaponImpl(
     }
   }
 
-  const effectiveFireRate = Math.max(0.2, w.fireRate * fireRateMult);
+  const spinUpT =
+    w.id === 'gale_smg' ? clamp((p.fireHoldTimer ?? 0) / GALE_SMG_SPINUP_DURATION_SEC, 0, 1) : 0;
+  const baseFireRate =
+    w.id === 'gale_smg'
+      ? GALE_SMG_MIN_FIRE_RATE + (GALE_SMG_MAX_FIRE_RATE - GALE_SMG_MIN_FIRE_RATE) * spinUpT
+      : w.fireRate;
+  const effectiveFireRate = Math.max(0.2, baseFireRate * fireRateMult);
   p.fireCooldownTimer = 1 / effectiveFireRate;
   p.recoilTimer = 0.12;
 
   let shotElement: ElementType =
-    p.activeImbueElement !== 'none' ? p.activeImbueElement : w.element;
+    p.activeImbueElement !== 'none'
+      ? p.activeImbueElement
+      : w.id === 'scrap_shotgun' && isFinaleShot
+        ? 'burn'
+        : w.element;
 
   if (w.category === 'melee') {
     const comboStep = p.meleeComboStep ?? 0;
@@ -551,10 +576,15 @@ export function tryFireActiveWeaponImpl(
   } else if (w.id === 'tesla_carbine') {
     shotFlags |= SHOT_FLAG.DYNAMIC_BOUNCE;
     bounceCount = w.bounceCount + (p.bonusBounceCurrentClip ?? 0);
+  } else if (w.id === 'frag_launcher') {
+    explosionRadius = FRAG_LAUNCHER_MAIN_BLAST_RADIUS;
   }
 
   const shieldAdjustedDmg = shieldBoost ? Math.round(rawWeaponDmg * 1.3) : rawWeaponDmg;
-  const baseDmg = Math.max(1, Math.round(shieldAdjustedDmg * (1 + additiveDmgBonus)));
+  const baseDmg =
+    w.id === 'gale_smg'
+      ? Math.max(1, Number((shieldAdjustedDmg * (1 + additiveDmgBonus)).toFixed(2)))
+      : Math.max(1, Math.round(shieldAdjustedDmg * (1 + additiveDmgBonus)));
 
   if (w.id === 'tether_staff') {
     upsertTetherStaffBeam(this, p, baseDmg);
@@ -586,5 +616,20 @@ export function tryFireActiveWeaponImpl(
     flags: shotFlags,
     explosionRadius,
     guaranteedElementalProc: isFinaleShot,
+    originX: p.x,
+    originY: p.y,
+    armedForAirburst: w.id === 'frag_launcher' && (this.currentInput.buttons & INPUT_BUTTON.FIRE) !== 0,
   });
+
+  if (w.id === 'gale_smg') {
+    if (inOrangeZoneBeforeShot) {
+      const nextCount = (p.galeOrangeShotCounter ?? 0) + 1;
+      p.galeOrangeShotCounter = nextCount;
+      if (nextCount % 6 === 0) {
+        spawnGaleSmgWindBlade(this, p, shotElement, critChance, shotFlags);
+      }
+    } else {
+      p.galeOrangeShotCounter = 0;
+    }
+  }
 }

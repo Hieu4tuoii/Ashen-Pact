@@ -413,6 +413,7 @@ export interface SimPlayerState {
   weaponSlotHeat: number[];
   staffShotCounter: number;
   apprenticeStaffShotCount?: number;
+  galeOrangeShotCounter?: number;
   bonusBounceCurrentClip: number;
   parriedCountCurrentWindow: number;
   fireHoldTimer?: number;
@@ -550,6 +551,7 @@ export interface SimEnemyState {
   stuckArrows?: number;
   parasiticThorns?: number;
   slowTimer?: number;
+  submunitionHitsByExplosion?: Record<number, number>;
 }
 
 export interface SimProjectileState {
@@ -585,6 +587,11 @@ export interface SimProjectileState {
   parryDeflected?: boolean;
   guaranteedElementalProc?: boolean;
   finaleResolved?: boolean;
+  originX?: number;
+  originY?: number;
+  armedForAirburst?: boolean;
+  airburstBypassShield?: boolean;
+  parentExplosionId?: number;
   hitEntityIds: number[];
 }
 
@@ -633,6 +640,11 @@ export interface BulletVolleySpawnEvent {
   replacedProjectileId?: number;
   explosionRadius?: number;
   guaranteedElementalProc?: boolean;
+  originX?: number;
+  originY?: number;
+  armedForAirburst?: boolean;
+  airburstBypassShield?: boolean;
+  parentExplosionId?: number;
 }
 
 

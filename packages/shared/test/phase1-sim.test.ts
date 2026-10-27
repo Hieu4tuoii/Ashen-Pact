@@ -281,7 +281,7 @@ describe('Phase 1 — HP, Armor Regen (Thiết Vệ 2.0s), Knockback & 4 Sample 
     expect(sim.getActiveWeaponId()).toBe('scrap_shotgun');
     expect(sim.player.vanguardShieldBonusAdd).toBe(0);
     const playerPellets = sim.projectiles.filter((b) => b.team === 'player');
-    expect(playerPellets).toHaveLength(5);
+    expect(playerPellets).toHaveLength(6);
     expect(playerPellets.some((b) => b === deflectedBulletRef)).toBe(true);
   });
 });
