@@ -646,6 +646,7 @@ export interface SimProjectileState {
   amplifiedByShield: boolean;
   shotFlags?: number;
   splitGeneration?: 0 | 1;
+  prismBonusAdd?: number;
   awaitingServerRedirectTimer?: number;
   imbuedByZone?: boolean;
   imbuedElement?: ElementType;

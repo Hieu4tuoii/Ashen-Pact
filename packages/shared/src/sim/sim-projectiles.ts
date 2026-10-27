@@ -925,6 +925,7 @@ export function acquireProjectileImpl(this: WorldSim,
     pooled.amplifiedByShield = init.amplifiedByShield ?? false;
     pooled.shotFlags = init.shotFlags ?? 0;
     pooled.splitGeneration = init.splitGeneration ?? 0;
+    pooled.prismBonusAdd = init.prismBonusAdd ?? 0;
     pooled.awaitingServerRedirectTimer = init.awaitingServerRedirectTimer ?? 0;
     pooled.imbuedByZone = init.imbuedByZone;
     pooled.imbuedElement = init.imbuedElement;

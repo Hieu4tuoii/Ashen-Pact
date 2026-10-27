@@ -15,13 +15,16 @@ import {
   clampPelletsPerTrigger,
   computeAdditiveBonusSum,
   computeAdditivePoolMultiplier,
+  computeAdditivePoolSum,
   computeEnemyVulnerabilityMultiplier,
   computeReactionMultiplier,
+  computeReactionShatterMultiplier,
   computeThreeBucketDamage,
   computeUpgradeMultiplier,
   evaluateThreeBucketDamageBreakdown,
   resolveProjectileSplitInSim,
   scaleBlessingDamage,
+  trySplitProjectile,
 } from '../src/index.js';
 
 describe('AP2 Phase P1B.4 — 3-Bucket Damage Pipeline & Anti-Explosion Property-Based Audit', () => {
@@ -60,7 +63,7 @@ describe('AP2 Phase P1B.4 — 3-Bucket Damage Pipeline & Anti-Explosion Property
     expect(computeAdditivePoolMultiplier(10.0)).toBeCloseTo(3.8, 5);
 
     // Structured input sum check
-    const sum = computeAdditiveBonusSum({
+    const sum = computeAdditivePoolSum({
       finaleShot: true, // +0.50
       overclockedShot: true, // +0.45
       overheatOrange: true, // +0.25
@@ -71,9 +74,22 @@ describe('AP2 Phase P1B.4 — 3-Bucket Damage Pipeline & Anti-Explosion Property
       pactBonusAdd: 0.5, // +0.50
       relicBonusAdd: 0.4, // +0.40
     });
+    expect(computeAdditiveBonusSum({ finaleShot: true })).toBeCloseTo(0.5, 5);
     expect(sum).toBeCloseTo(4.6, 5);
     expect(computeAdditivePoolMultiplier(sum)).toBeLessThanOrEqual(3.8);
     expect(computeAdditivePoolMultiplier(sum)).toBeCloseTo(2.8 + 0.35 * (4.6 - 1.8), 5);
+
+    // Exhaustive sweep across S in [-0.9, 20.0]
+    for (let step = -90; step <= 2000; step++) {
+      const s = Number((step / 100).toFixed(2));
+      const m = computeAdditivePoolMultiplier(s);
+      expect(m).toBeLessThanOrEqual(3.8);
+      if (s <= 1.8) {
+        expect(m).toBeCloseTo(Math.max(0.1, 1 + s), 5);
+      } else {
+        expect(m).toBeCloseTo(Math.min(3.8, 2.8 + 0.35 * (s - 1.8)), 5);
+      }
+    }
   });
 
   it('enforces Enemy Vulnerability Bucket Cap (<= 1.75x) and Reaction Shatter Caps (2.0x regular/Elite, 1.35x Boss)', () => {
@@ -107,6 +123,9 @@ describe('AP2 Phase P1B.4 — 3-Bucket Damage Pipeline & Anti-Explosion Property
     expect(computeReactionMultiplier('none', false)).toBe(1.0);
     expect(computeReactionMultiplier('shatter', false)).toBe(2.0);
     expect(computeReactionMultiplier('shatter', true)).toBe(1.35);
+    expect(computeReactionShatterMultiplier(false, false)).toBe(1.0);
+    expect(computeReactionShatterMultiplier(true, false)).toBe(2.0);
+    expect(computeReactionShatterMultiplier(true, true)).toBe(1.35);
   });
 
   it('enforces splitGeneration (0 -> 1 max), MAX_PELLETS_PER_TRIGGER = 9, and MAX_BOUNCE_COUNT = 4 without recursive bullet explosion', () => {
@@ -185,7 +204,7 @@ describe('AP2 Phase P1B.4 — 3-Bucket Damage Pipeline & Anti-Explosion Property
     expect(rootProj.splitGeneration).toBe(0);
 
     // Passing through first splitter (e.g. cryo_prism_pillar / table_tech_prism_split) spawns split children with splitGeneration = 1
-    const firstSplit = resolveProjectileSplitInSim(sim, rootProj, 2, 0.35);
+    const firstSplit = trySplitProjectile(sim, rootProj, 2, 0.35);
     expect(firstSplit.didSplit).toBe(true);
     expect(firstSplit.spawnedProjectiles.length).toBe(2);
     for (const child of firstSplit.spawnedProjectiles) {
@@ -193,21 +212,24 @@ describe('AP2 Phase P1B.4 — 3-Bucket Damage Pipeline & Anti-Explosion Property
     }
 
     // Passing ANY splitGeneration === 1 projectile through a second splitter MUST NEVER spawn children;
-    // instead it only grants +20% Additive Damage and +1 bounceRemaining (clamped to MAX_BOUNCE_COUNT = 4)
+    // instead it only grants +20% Additive Damage (prismBonusAdd += 0.20) and +1 bounceRemaining (clamped to MAX_BOUNCE_COUNT = 4)
     const childProj = firstSplit.spawnedProjectiles[0]!;
     const dmgBeforeSecondPrism = childProj.damage;
     const bounceBeforeSecondPrism = childProj.bounceRemaining;
+    const prismBonusBefore = childProj.prismBonusAdd ?? 0;
     const countBeforeSecondPrism = sim.projectiles.length;
 
-    const secondSplit = resolveProjectileSplitInSim(sim, childProj, 3, 0.4);
+    const secondSplit = trySplitProjectile(sim, childProj, 3, 0.4);
     expect(secondSplit.didSplit).toBe(false);
     expect(secondSplit.spawnedProjectiles.length).toBe(0);
     expect(sim.projectiles.length).toBe(countBeforeSecondPrism);
     expect(childProj.splitGeneration).toBe(1);
+    expect(childProj.prismBonusAdd).toBeCloseTo(prismBonusBefore + 0.2, 5);
     expect(childProj.damage).toBe(Math.round(dmgBeforeSecondPrism * 1.2));
     expect(childProj.bounceRemaining).toBe(
       Math.min(MAX_BOUNCE_COUNT, bounceBeforeSecondPrism + 1),
     );
+    expect(resolveProjectileSplitInSim(sim, childProj, 2, 0.35).didSplit).toBe(false);
   });
 
   it('exhaustively audits 4,608+ combinations of all 3 buckets to prove M_AdditivePool <= 3.80, M_EnemyVuln <= 1.75, and Boss Single-Hit <= 18.0x Base Damage', () => {

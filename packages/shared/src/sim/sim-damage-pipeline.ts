@@ -74,7 +74,7 @@ export function computeUpgradeMultiplier(upgradeLevel: number): number {
   return 1 + 0.2 * lvl;
 }
 
-export function computeAdditiveBonusSum(input: number | AdditiveDamageBonusInput): number {
+export function computeAdditivePoolSum(input: number | AdditiveDamageBonusInput): number {
   if (typeof input === 'number') {
     return Number.isFinite(input) ? input : 0;
   }
@@ -105,10 +105,12 @@ export function computeAdditiveBonusSum(input: number | AdditiveDamageBonusInput
   return finale + overclock + overheat + bounceBonus + shield + zone + prism + pact + relic + other;
 }
 
+export const computeAdditiveBonusSum = computeAdditivePoolSum;
+
 export function computeAdditivePoolMultiplier(
   sOrInput: number | AdditiveDamageBonusInput,
 ): number {
-  const s = computeAdditiveBonusSum(sOrInput);
+  const s = computeAdditivePoolSum(sOrInput);
   if (s <= ADDITIVE_POOL_SOFT_CAP_THRESHOLD) {
     return Math.min(ADDITIVE_POOL_HARD_CAP_MULT, Math.max(0.1, 1 + s));
   }
@@ -144,14 +146,21 @@ export function computeEnemyVulnerabilityMultiplier(
   return clamp(1 + sum, 0.1, ENEMY_VULN_HARD_CAP_MULT);
 }
 
+export function computeReactionShatterMultiplier(
+  shatterOrReaction: boolean | 'none' | 'shatter' | string | undefined,
+  isBoss = false,
+): number {
+  if (shatterOrReaction === true || shatterOrReaction === 'shatter') {
+    return isBoss ? SHATTER_BOSS_CAP_MULT : SHATTER_REGULAR_MULT;
+  }
+  return 1.0;
+}
+
 export function computeReactionMultiplier(
   reaction: 'none' | 'shatter' | string | undefined,
   isBoss = false,
 ): number {
-  if (reaction === 'shatter') {
-    return isBoss ? SHATTER_BOSS_CAP_MULT : SHATTER_REGULAR_MULT;
-  }
-  return 1.0;
+  return computeReactionShatterMultiplier(reaction, isBoss);
 }
 
 export function evaluateThreeBucketDamageBreakdown(
@@ -208,6 +217,7 @@ export function resolveProjectileSplitInSim(
   const currentGen = proj.splitGeneration ?? 0;
   if (currentGen >= MAX_SPLIT_GENERATION) {
     proj.splitGeneration = MAX_SPLIT_GENERATION;
+    proj.prismBonusAdd = Number(((proj.prismBonusAdd ?? 0) + 0.2).toFixed(4));
     proj.damage = Math.max(1, Math.round(proj.damage * 1.2));
     proj.bounceRemaining = clampBounceCount((proj.bounceRemaining ?? 0) + 1);
     return { didSplit: false, spawnedProjectiles: [] };
@@ -249,6 +259,7 @@ export function resolveProjectileSplitInSim(
   for (let i = startIdx; i < sim.projectiles.length; i++) {
     const child = sim.projectiles[i]!;
     child.splitGeneration = MAX_SPLIT_GENERATION;
+    child.prismBonusAdd = proj.prismBonusAdd ?? 0;
     child.passedThroughCoverOrPrism = true;
     for (let h = 0; h < proj.hitEntityIds.length; h++) {
       const hid = proj.hitEntityIds[h]!;
@@ -261,3 +272,5 @@ export function resolveProjectileSplitInSim(
 
   return { didSplit: true, spawnedProjectiles };
 }
+
+export const trySplitProjectile = resolveProjectileSplitInSim;
