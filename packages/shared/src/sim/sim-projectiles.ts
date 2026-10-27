@@ -2,6 +2,7 @@ import { BIOME_SCALING } from '../data/scaling.js';
 import { WEAPONS } from '../data/weapons.js';
 import { angleDiff, circleVsCircle, distance } from '../math/vec2.js';
 import { SHOT_FLAG, TILE_SIZE } from '../protocol/messages.js';
+import { clampBounceCount, clampPelletsPerTrigger } from './sim-damage-pipeline.js';
 import { spawnSeedGunLifeBlossomImpl, triggerLauncherProjectileExplosionImpl } from './sim-player.js';
 import {
   canApplyFragSubmunitionHit,
@@ -36,7 +37,7 @@ export function spawnDeterministicVolleyImpl(this: WorldSim, ev: BulletVolleySpa
   ev.flags = resolvedFlags;
   this.volleyRng.setState(ev.seed || 0x6d2b79f5);
   const volleyRng = this.volleyRng;
-  let pellets = Math.max(1, ev.pelletCount);
+  let pellets = ev.team === 'player' ? clampPelletsPerTrigger(ev.pelletCount) : Math.max(1, ev.pelletCount);
   let spreadRad = ev.spreadRad;
   let radialStepRad = ev.radialStepRad;
   let speed = ev.speed;
@@ -121,7 +122,9 @@ export function spawnDeterministicVolleyImpl(this: WorldSim, ev: BulletVolleySpa
       id: deterministicId, ownerId: ev.ownerId, team: ev.team, weaponId: ev.weaponId,
       x: bx, y: by, vx: Math.cos(shotAngle) * speed, vy: Math.sin(shotAngle) * speed, angle: shotAngle,
       radius: ev.radius, damage: finalDmg, isCrit, knockback: ev.knockback,
-      pierceRemaining: ev.pierceCount, bounceRemaining: ev.bounceCount, ttlSec: ev.ttlSec,
+      pierceRemaining: ev.pierceCount,
+      bounceRemaining: ev.team === 'player' ? clampBounceCount(ev.bounceCount) : ev.bounceCount,
+      ttlSec: ev.ttlSec,
       element: ev.element, amplifiedByShield: ev.amplifiedByShield, shotFlags: ev.shotFlags ?? 0,
       splitGeneration: 0, awaitingServerRedirectTimer: 0, explosionRadius: ev.explosionRadius,
       guaranteedElementalProc: ev.guaranteedElementalProc, originX: ev.originX, originY: ev.originY,

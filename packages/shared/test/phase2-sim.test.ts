@@ -132,10 +132,10 @@ describe('Phase 2 — 4 Elemental Statuses (Burn, Chill -> Freeze -> Shatter, Sh
     expect(boar.chillStacks).toBe(0);
     expect(boar.frozenTimer).toBeCloseTo(1.5, 2);
 
-    // Heavy attack against frozen enemy -> 3x Shatter damage (10 * 3 = 30) and clears frozenTimer
+    // Heavy attack against frozen enemy -> 2x Shatter damage (10 * 2 = 20) and clears frozenTimer
     const hpBeforeShatter = boar.hp;
     sim.applyDamageToEnemy(boar, 10, false, 'none', 0, 0, true);
-    expect(hpBeforeShatter - boar.hp).toBe(30);
+    expect(hpBeforeShatter - boar.hp).toBe(20);
     expect(boar.frozenTimer).toBe(0);
 
     // 2. Shock chains lightning to nearby enemies within 115u

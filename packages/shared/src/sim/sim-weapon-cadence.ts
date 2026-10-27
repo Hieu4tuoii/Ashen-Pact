@@ -4,6 +4,7 @@ import { WEAPONS } from '../data/weapons.js';
 import { clamp } from '../math/vec2.js';
 import { INPUT_BUTTON, SHOT_FLAG } from '../protocol/messages.js';
 import { syncActiveWeaponCadenceState } from './sim-coop-hub.js';
+import { computeAdditivePoolMultiplier } from './sim-damage-pipeline.js';
 import {
   resolveMeleeConeHitsAndSynergies,
   upsertTetherStaffBeam,
@@ -510,7 +511,10 @@ export function tryFireActiveWeaponImpl(
       w.comboDamages?.[comboStep] ??
       (comboStep === 2 ? Math.round(w.damage * 1.7) : comboStep === 1 ? Math.round(w.damage * 1.15) : w.damage);
     const stepKnockback = w.comboKnockbacks?.[comboStep] ?? w.knockback;
-    const baseMeleeDmg = Math.max(1, Math.round(stepBaseDmg * (1 + additiveDmgBonus)));
+    const baseMeleeDmg = Math.max(
+      1,
+      Math.round(stepBaseDmg * computeAdditivePoolMultiplier(additiveDmgBonus)),
+    );
     const baseCrit = p.critChance ?? CHARACTERS[p.characterId]?.baseCritChance ?? 0.05;
     const critChance = clamp(baseCrit + w.critChance, 0, 1);
     let bulletsDestroyed = 0;
@@ -663,10 +667,11 @@ export function tryFireActiveWeaponImpl(
   }
 
   const shieldAdjustedDmg = shieldBoost ? Math.round(rawWeaponDmg * 1.3) : rawWeaponDmg;
+  const additiveMult = computeAdditivePoolMultiplier(additiveDmgBonus);
   const baseDmg =
     w.id === 'gale_smg'
-      ? Math.max(1, Number((shieldAdjustedDmg * (1 + additiveDmgBonus)).toFixed(2)))
-      : Math.max(1, Math.round(shieldAdjustedDmg * (1 + additiveDmgBonus)));
+      ? Math.max(1, Number((shieldAdjustedDmg * additiveMult).toFixed(2)))
+      : Math.max(1, Math.round(shieldAdjustedDmg * additiveMult));
 
   if (w.id === 'tether_staff') {
     upsertTetherStaffBeam(this, p, baseDmg);

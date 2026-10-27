@@ -2,6 +2,11 @@ import { ENEMIES } from '../data/enemies.js';
 import type { ElementalReactionId, ElementType } from '../data/types.js';
 import { angleDiff, distance } from '../math/vec2.js';
 import { TILE_SIZE } from '../protocol/messages.js';
+import {
+  BOSS_SINGLE_HIT_MAX_MULT,
+  computeEnemyVulnerabilityMultiplier,
+  computeReactionMultiplier,
+} from './sim-damage-pipeline.js';
 import type { SimPlayerState, SimEnemyState } from './world-sim-types.js';
 import type { WorldSim } from './world-sim.js';
 
@@ -63,25 +68,20 @@ export function applyDamageToEnemyImpl(
     }
   }
 
-  // Boss Forge Titan takes 1.5x damage while stunned/overloaded from dual energy core destruction!
-  if (enemy.defId === 'forge_titan' && enemy.aiState === 'stunned') {
-    finalAmount *= 1.5;
-  }
+  // Enemy Vulnerability Bucket (hard-capped at 1.75x):
+  // - Boss Forge Titan Overload Stun (+50%)
+  // - Ranger Mark (+25%)
+  // - Superconduct (+30% isolated, capped at 1.75x combined)
+  finalAmount *= computeEnemyVulnerabilityMultiplier({
+    marked: enemy.markedTimer > 0 ? 0.25 : 0,
+    superconduct: enemy.superconductTimer > 0 ? 0.3 : 0,
+    extraVulnAdd: enemy.defId === 'forge_titan' && enemy.aiState === 'stunned' ? 0.5 : 0,
+  });
 
-  // Ranger Mark (+25% damage from all sources)
-  if (enemy.markedTimer > 0) {
-    finalAmount *= 1.25;
-  }
-
-  // Superconduct (+30% damage from all sources / -30% defense)
-  if (enemy.superconductTimer > 0) {
-    finalAmount *= 1.3;
-  }
-
-  // Section 6.2: Đóng Băng + đòn nặng (cận chiến/nổ/crit) -> Vỡ Băng (Shatter): Sát thương x3 + mảnh băng văng AoE!
+  // Section 6.2 & AP2 2.3: Freeze + heavy/crit -> Shatter (2.0x on regular/Elite, 1.35x cap on Boss)
   let triggeredShatter = false;
   if ((enemy.frozenTimer > 0 || enemy.chillStacks >= 2) && (isHeavyAttack || isCrit)) {
-    finalAmount = finalAmount * 3;
+    finalAmount *= computeReactionMultiplier('shatter', enemy.isBoss);
     finalCrit = true;
     triggeredShatter = true;
     const primerId = enemy.lastElementOwnerId;
@@ -108,6 +108,9 @@ export function applyDamageToEnemyImpl(
     );
   }
 
+  if (enemy.isBoss) {
+    finalAmount = Math.min(finalAmount, amount * BOSS_SINGLE_HIT_MAX_MULT);
+  }
   const dmg = Math.max(1, Math.round(finalAmount));
   let hitArmor = hitFrontShield;
   if (this.stressTestActive && enemy.hp <= dmg + 20) {
