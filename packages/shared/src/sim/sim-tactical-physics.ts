@@ -1,6 +1,10 @@
 import { ENEMIES } from '../data/enemies.js';
 import { angleDiff, distance } from '../math/vec2.js';
-import { findNearestWalkablePoint } from './arena-room-archetypes.js';
+import {
+  clearCollapsedPillarFootprintOnMap,
+  findNearestWalkablePoint,
+  getConveyorVelocityAtWorld,
+} from './arena-room-archetypes.js';
 import type { WorldSim } from './world-sim.js';
 import type { PropKind, SimEnemyState, SimPlayerState, SimPropState } from './world-sim-types.js';
 
@@ -160,6 +164,7 @@ export function collapseRottenTotemPillar(sim: WorldSim, pillar: SimPropState, f
 
   pillar.hp = 0; pillar.destructible = false; pillar.blocksMovement = false; pillar.blocksEnemyProjectiles = false;
   pillar.coverState = 'fallen'; pillar.fallAngle = resolvedAngle;
+  clearCollapsedPillarFootprintOnMap(sim.map, pillar.x, pillar.y);
   sim.events.push({ kind: 'prop_destroyed', propId: pillar.id, propKind: pillar.kind, x: pillar.x, y: pillar.y });
 
   const dirX = Math.cos(resolvedAngle);
@@ -383,7 +388,8 @@ export function updateSlidingPropsImpl(this: WorldSim, dtSec: number): void {
 
     const oldX = prop.x;
     const oldY = prop.y;
-    const nextX = oldX + vx * dtSec;
+    const convVx = getConveyorVelocityAtWorld(this.map, prop.x, prop.y);
+    const nextX = oldX + (vx + convVx) * dtSec;
     const nextY = oldY + vy * dtSec;
     const slideAngle = Math.atan2(vy, vx);
     const ownerId = prop.slideOwnerPlayerId ?? this.player.id;
@@ -417,7 +423,8 @@ export function updateSlidingPropsImpl(this: WorldSim, dtSec: number): void {
     let hitPropObstacle = false;
     for (const other of this.props) {
       if (other.id === prop.id || other.hp <= 0 || !other.blocksMovement) continue;
-      if (pointToSegmentDist(other.x, other.y, oldX, oldY, nextX, nextY) <= prop.radius + other.radius) {
+      const hitRadius = other.kind === 'rotten_totem_pillar' ? prop.radius + Math.max(other.radius, 36) : prop.radius + other.radius;
+      if (pointToSegmentDist(other.x, other.y, oldX, oldY, nextX, nextY) <= hitRadius) {
         hitPropObstacle = true;
         if (other.kind === 'rotten_totem_pillar') collapseRottenTotemPillar(this, other, slideAngle, ownerId);
         break;

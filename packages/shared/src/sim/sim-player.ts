@@ -2,7 +2,7 @@ import type { ElementType, WeaponStatsDef } from '../data/types.js';
 import { approach, distance, isCircleInCone } from '../math/vec2.js';
 import { INPUT_BUTTON, type PlayerInputPacket, TILE_SIZE } from '../protocol/messages.js';
 import type { SurfaceKind } from './arena-map.js';
-import { findNearestWalkablePoint } from './arena-room-archetypes.js';
+import { findNearestWalkablePoint, getConveyorVelocityAtWorld } from './arena-room-archetypes.js';
 import {
   BIOME1_POLLEN_SPEED_MULTIPLIER,
   triggerGrassPollenSpeedBoost,
@@ -334,7 +334,7 @@ export function updateSinglePlayerStateImpl(this: WorldSim,
   if (Math.abs(p.kbVx) < 1) p.kbVx = 0;
   if (Math.abs(p.kbVy) < 1) p.kbVy = 0;
 
-  const conveyorVx = surf === 'conveyor' ? this.map.conveyorDirection * 62 : 0;
+  const conveyorVx = getConveyorVelocityAtWorld(this.map, p.x, p.y);
   const nextX = p.x + (p.vx + p.kbVx + conveyorVx) * dtSec;
   const nextY = p.y + (p.vy + p.kbVy) * dtSec;
   const col = this.map.resolveCircleCollision(

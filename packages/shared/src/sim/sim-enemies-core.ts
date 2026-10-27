@@ -3,6 +3,7 @@ import type { ElementType } from '../data/types.js';
 import { approach, distance, distanceSq } from '../math/vec2.js';
 import { BIOME_SCALING, COOP_SCALING } from '../data/scaling.js';
 import type { SurfaceKind } from './arena-map.js';
+import { getConveyorVelocityAtWorld } from './arena-room-archetypes.js';
 import { resolveEnemyChasmRingOut, triggerEnemyWallSlam } from './sim-tactical-physics.js';
 import { updateLegendaryWeaponHazards } from './sim-weapon-specials-p1b-legendary.js';
 import { updateFlameFissures, updateTetherStaffBeams } from './sim-weapon-specials.js';
@@ -561,7 +562,7 @@ export function updateEnemiesImpl(this: WorldSim, dtSec: number): void {
 
     const conveyorPushX =
       surf === 'conveyor' && !isStationaryDef && !e.isBoss && !ENEMIES[e.defId]?.flying
-        ? this.map.conveyorDirection * 58
+        ? getConveyorVelocityAtWorld(this.map, e.x, e.y)
         : 0;
 
     const kbSpeed = Math.hypot(e.kbVx, e.kbVy);
@@ -602,7 +603,20 @@ export function updateEnemiesImpl(this: WorldSim, dtSec: number): void {
     }
 
     if (!this.stressTestActive && wallCollided && preDecayKbSpeed >= 120 && (e.wallSlamCooldownTimer ?? 0) <= 0) {
-      triggerEnemyWallSlam(this, e, undefined, preDecayKbSpeed);
+      let nearbyRingPillar: (typeof this.props)[number] | undefined;
+      for (let pIdx = 0; pIdx < this.props.length; pIdx++) {
+        const p = this.props[pIdx]!;
+        if (
+          p.hp > 0 &&
+          p.kind === 'rotten_totem_pillar' &&
+          p.coverState !== 'fallen' &&
+          distance(e.x, e.y, p.x, p.y) <= e.radius + 48
+        ) {
+          nearbyRingPillar = p;
+          break;
+        }
+      }
+      triggerEnemyWallSlam(this, e, nearbyRingPillar, preDecayKbSpeed);
       if (e.hp <= 0) continue;
     }
 

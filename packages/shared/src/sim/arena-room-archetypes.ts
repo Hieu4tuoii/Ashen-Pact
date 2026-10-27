@@ -2,9 +2,25 @@ import { SeededRandom } from '../core/prng.js';
 import type { CardinalDir } from '../data/types.js';
 import { TILE_SIZE } from '../protocol/messages.js';
 import type { ArenaMap, SurfaceKind } from './arena-map.js';
+import {
+  buildCrossfireConveyorsGeometry,
+  buildCrumblingPillarRingGeometry,
+  buildPrismLabyrinthGeometry,
+  clearCollapsedPillarFootprintOnMap,
+  CONVEYOR_BELT_SPEED,
+  CRUMBLING_RING_PILLAR_RECTS,
+  getConveyorVelocityAtWorld,
+} from './arena-room-archetypes-p1c.js';
 import type { DungeonRoomNode } from './dungeon-gen.js';
 import type { PropKind } from './world-sim-types.js';
 import type { WorldSim } from './world-sim.js';
+
+export {
+  clearCollapsedPillarFootprintOnMap,
+  CONVEYOR_BELT_SPEED,
+  CRUMBLING_RING_PILLAR_RECTS,
+  getConveyorVelocityAtWorld,
+};
 
 export type RoomArchetypeId =
   | 'TWIN_BRIDGES'
@@ -90,6 +106,9 @@ interface BaseAnchorSpec {
   propKind: PropKind;
   tx: number;
   ty: number;
+  exactX?: number;
+  exactY?: number;
+  noJitter?: boolean;
 }
 
 const DEFAULT_DOORS: readonly CardinalDir[] = ['N', 'S', 'E', 'W'] as const;
@@ -429,6 +448,23 @@ function resolveJitteredPropAnchors(
   };
   for (let i = 0; i < baseSpecs.length; i++) {
     const spec = baseSpecs[i]!;
+    if (spec.noJitter) {
+      anchors.push({
+        id: spec.id,
+        slotIndex: i,
+        role: spec.role,
+        propKind: spec.propKind,
+        baseTx: spec.tx,
+        baseTy: spec.ty,
+        tx: spec.tx,
+        ty: spec.ty,
+        jitterDx: 0,
+        jitterDy: 0,
+        x: spec.exactX ?? spec.tx * TILE_SIZE + TILE_SIZE * 0.5,
+        y: spec.exactY ?? spec.ty * TILE_SIZE + TILE_SIZE * 0.5,
+      });
+      continue;
+    }
     const mirroredTx = flipX ? map.cols - 1 - spec.tx : spec.tx;
     const mirroredTy = flipY ? map.rows - 1 - spec.ty : spec.ty;
     const startOffsetIdx = rng.nextInt(0, JITTER_OFFSETS.length - 2);
@@ -518,7 +554,13 @@ export function configureRoomLayout(
       ? buildTwinBridgesGeometry(map, biome, flipX, flipY)
       : archetype === 'CENTRAL_BASTION'
         ? buildCentralBastionGeometry(map, biome, flipX, flipY)
-        : buildGauntletChokepointGeometry(map, biome, flipX, flipY);
+        : archetype === 'CROSSFIRE_CONVEYORS'
+          ? buildCrossfireConveyorsGeometry(map, biome, flipX, flipY)
+          : archetype === 'PRISM_LABYRINTH'
+            ? buildPrismLabyrinthGeometry(map, biome, flipX, flipY)
+            : archetype === 'CRUMBLING_PILLAR_RING'
+              ? buildCrumblingPillarRingGeometry(map, biome, flipX, flipY)
+              : buildGauntletChokepointGeometry(map, biome, flipX, flipY);
   for (const dir of new Set<CardinalDir>([...DEFAULT_DOORS, ...activeDoorSides])) {
     const rect = DOOR_VESTIBULE_RECTS[dir];
     for (let ty = rect.minTy; ty <= rect.maxTy; ty++) {

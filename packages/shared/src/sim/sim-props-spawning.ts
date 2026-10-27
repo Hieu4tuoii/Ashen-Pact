@@ -120,7 +120,7 @@ export function spawnPropImpl(this: WorldSim, kind: PropKind, x: number, y: numb
   let finalY = y;
   const pTx = Math.floor(finalX / TILE_SIZE);
   const pTy = Math.floor(finalY / TILE_SIZE);
-  if (this.map.isSolidTile(pTx, pTy) || this.map.getSurface(pTx, pTy) === 'chasm') {
+  if (!(kind === 'rotten_totem_pillar' && this.map.roomArchetype === 'CRUMBLING_PILLAR_RING') && (this.map.isSolidTile(pTx, pTy) || this.map.getSurface(pTx, pTy) === 'chasm')) {
     const col = this.map.resolveCircleCollision(finalX, finalY, radius, false);
     finalX = col.x;
     finalY = col.y;
