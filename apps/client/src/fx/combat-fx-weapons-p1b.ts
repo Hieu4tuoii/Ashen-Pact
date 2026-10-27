@@ -47,20 +47,18 @@ export interface Batch2SceneContext {
   camFocusY: number;
 }
 
-function strokeSeg(
-  g: Phaser.GameObjects.Graphics,
-  w: number,
-  col: number,
-  a: number,
-  x1: number,
-  y1: number,
-  x2: number,
-  y2: number,
-): void {
+function strokeSeg(g: Phaser.GameObjects.Graphics, w: number, col: number, a: number, x1: number, y1: number, x2: number, y2: number): void {
   g.lineStyle(w, col, a);
   g.beginPath();
   g.moveTo(x1, y1);
   g.lineTo(x2, y2);
+  g.strokePath();
+}
+
+function strokeArc(g: Phaser.GameObjects.Graphics, w: number, col: number, a: number, x: number, y: number, r: number, a0: number, a1: number): void {
+  g.lineStyle(w, col, a);
+  g.beginPath();
+  g.arc(x, y, r, a0, a1, false);
   g.strokePath();
 }
 
@@ -104,18 +102,8 @@ export function handleBatch2WeaponSimEvent(
             maxTtlSec: 0.18,
           });
         }
-        fx?.spawnHitSparks(ev.x2, ev.y2, Math.atan2(ev.y2 - ev.y1, ev.x2 - ev.x1), {
-          element: 'burn',
-          count: 4,
-        });
-        scene.lighting?.spawnTransientLight(
-          (ev.x1 + ev.x2) * 0.5,
-          (ev.y1 + ev.y2) * 0.5,
-          150,
-          PALETTE.FLAME_ORANGE,
-          0.95,
-          0.18,
-        );
+        fx?.spawnHitSparks(ev.x2, ev.y2, Math.atan2(ev.y2 - ev.y1, ev.x2 - ev.x1), { element: 'burn', count: 4 });
+        scene.lighting?.spawnTransientLight((ev.x1 + ev.x2) * 0.5, (ev.y1 + ev.y2) * 0.5, 150, PALETTE.FLAME_ORANGE, 0.95, 0.18);
         scene.lighting?.spawnTransientLight(ev.x2, ev.y2, 130, PALETTE.SOLAR_GOLD, 0.9, 0.18);
       }
       if (allowStressSfx) zzfx.play('focus_laser_hum', ev.x2, scene.camFocusX, ev.y2, scene.camFocusY);
@@ -137,11 +125,7 @@ export function handleBatch2WeaponSimEvent(
         });
         const midX = (ev.x1 + ev.x2) * 0.5;
         const midY = (ev.y1 + ev.y2) * 0.5;
-        fx?.spawnHitSparks(midX, midY, Math.atan2(ev.y2 - ev.y1, ev.x2 - ev.x1), {
-          isCrit: true,
-          element: 'burn',
-          count: 10,
-        });
+        fx?.spawnHitSparks(midX, midY, Math.atan2(ev.y2 - ev.y1, ev.x2 - ev.x1), { isCrit: true, element: 'burn', count: 10 });
         fx?.spawnFloatingAlert(ev.x1, ev.y1 - 28, ev.alertTextVi || 'RAILGUN XẢ ÁP!', '#FACC15');
         scene.lighting?.spawnTransientLight(ev.x1, ev.y1, 180, PALETTE.SOLAR_GOLD, 1.0, 0.45);
         scene.lighting?.spawnTransientLight(midX, midY, 210, PALETTE.FLAME_ORANGE, 1.0, 0.45);
@@ -172,18 +156,8 @@ export function handleBatch2WeaponSimEvent(
     }
 
     case 'melee_swing': {
-      if (
-        !isStress &&
-        (ev.weaponId === 'emerald_cleaver' ||
-          ev.weaponId === 'berserker_axe' ||
-          ev.weaponId === 'thunder_hammer')
-      ) {
-        const arcColor =
-          ev.weaponId === 'emerald_cleaver'
-            ? 0x10b981
-            : ev.weaponId === 'berserker_axe'
-              ? 0xef4444
-              : 0x38bdf8;
+      if (!isStress && (ev.weaponId === 'emerald_cleaver' || ev.weaponId === 'berserker_axe' || ev.weaponId === 'thunder_hammer')) {
+        const arcColor = ev.weaponId === 'emerald_cleaver' ? 0x10b981 : ev.weaponId === 'berserker_axe' ? 0xef4444 : 0x38bdf8;
         pushP1BShape(state, {
           kind: 'emerald_cleave_arc',
           x: ev.x,
@@ -195,6 +169,16 @@ export function handleBatch2WeaponSimEvent(
           ttlSec: 0.28,
           maxTtlSec: 0.28,
         });
+      }
+      if (ev.weaponId === 'emerald_cleaver' && (sim.player.meleeComboStep ?? 0) === 0 && allowStressSfx) {
+        zzfx.play('emerald_boomerang', ev.x, scene.camFocusX, ev.y, scene.camFocusY);
+      }
+      return false;
+    }
+
+    case 'bullet_volley_spawned': {
+      if (ev.weaponId === 'emerald_cleaver_boomerang' && allowStressSfx) {
+        zzfx.play('emerald_boomerang', ev.x, scene.camFocusX, ev.y, scene.camFocusY);
       }
       return false;
     }
@@ -264,10 +248,7 @@ export function handleBatch2WeaponSimEvent(
 
     case 'magma_geyser_eruption': {
       if (!isStress) {
-        const geysers =
-          ev.geysers && ev.geysers.length > 0
-            ? ev.geysers
-            : [{ x: sim.player.x + 80, y: sim.player.y, radius: 56, damage: 22 }];
+        const geysers = ev.geysers && ev.geysers.length > 0 ? ev.geysers : [{ x: sim.player.x + 80, y: sim.player.y, radius: 56, damage: 22 }];
         for (let i = 0; i < geysers.length; i += 1) {
           const gy = geysers[i]!;
           pushP1BShape(state, {
@@ -461,14 +442,8 @@ export function drawBatch2ActiveWeaponOverlays(
       }
       g.lineStyle(3.2, 0x141019, 0.95);
       g.strokeCircle(b.x, b.y, 26);
-      g.lineStyle(4.2, 0x10b981, 0.96);
-      g.beginPath();
-      g.arc(b.x, b.y, 24, spinAng, spinAng + Math.PI * 1.35, false);
-      g.strokePath();
-      g.lineStyle(2.2, 0xa7f3d0, 0.98);
-      g.beginPath();
-      g.arc(b.x, b.y, 20, spinAng + 0.2, spinAng + Math.PI * 1.15, false);
-      g.strokePath();
+      strokeArc(g, 4.2, 0x10b981, 0.96, b.x, b.y, 24, spinAng, spinAng + Math.PI * 1.35);
+      strokeArc(g, 2.2, 0xa7f3d0, 0.98, b.x, b.y, 20, spinAng + 0.2, spinAng + Math.PI * 1.15);
     } else if (b.weaponId === 'magma_cannon') {
       const r = b.radius || 20;
       g.fillStyle(0x141019, 0.98);
@@ -543,18 +518,11 @@ export function drawBatch2TransientShape(
       const ang = s.angle ?? 0;
       const half = (67.5 * Math.PI) / 180;
       const r = s.radius * (0.75 + progress * 0.3);
-      g.lineStyle(10 * (1 - progress * 0.4), 0x141019, alpha * 0.9);
-      g.beginPath();
-      g.arc(s.x, s.y, r, ang - half, ang + half, false);
-      g.strokePath();
-      g.lineStyle(6.5 * (1 - progress * 0.35), 0x10b981, alpha * 0.96);
-      g.beginPath();
-      g.arc(s.x, s.y, r, ang - half, ang + half, false);
-      g.strokePath();
-      g.lineStyle(2.8, 0xa7f3d0, alpha);
-      g.beginPath();
-      g.arc(s.x, s.y, r - 4, ang - half * 0.85, ang + half * 0.85, false);
-      g.strokePath();
+      const mainColor = s.color || 0x10b981;
+      const coreColor = mainColor === 0xef4444 ? 0xfacc15 : mainColor === 0x38bdf8 ? 0xfef08a : 0xa7f3d0;
+      strokeArc(g, 10 * (1 - progress * 0.4), 0x141019, alpha * 0.9, s.x, s.y, r, ang - half, ang + half);
+      strokeArc(g, 6.5 * (1 - progress * 0.35), mainColor, alpha * 0.96, s.x, s.y, r, ang - half, ang + half);
+      strokeArc(g, 2.8, coreColor, alpha, s.x, s.y, r - 4, ang - half * 0.85, ang + half * 0.85);
       return true;
     }
 
