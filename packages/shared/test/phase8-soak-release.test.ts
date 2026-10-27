@@ -65,7 +65,8 @@ describe('Phase 8 — 20-Minute Co-op Soak Test (72,000 Ticks @ 60Hz)', () => {
     const heapCheckpointsMb: number[] = [];
 
     const bosses = ['spore_king', 'kryssa_ice_queen', 'forge_titan'] as const;
-    let segStartMs = performance.now();
+    let segSimElapsedMs = 0;
+    let entityCapViolations = 0;
 
     for (let tick = 1; tick <= TOTAL_TICKS; tick++) {
       // Every 12,000 ticks (3.33 simulated minutes), rotate biome and spawn a fresh Boss + Elite wave
@@ -130,20 +131,25 @@ describe('Phase 8 — 20-Minute Co-op Soak Test (72,000 Ticks @ 60Hz)', () => {
         }
       }
 
+      const tickStart = performance.now();
       sim.step(SIM_STEP_SEC);
       // Consume events every tick just as LocalTransport / CoopRoom does so event queue stays clean
       sim.consumeEvents();
+      segSimElapsedMs += performance.now() - tickStart;
 
       // Verify entity bounds never explode
-      expect(sim.enemies.length).toBeLessThanOrEqual(45);
-      expect(sim.projectiles.length).toBeLessThanOrEqual(240);
-      expect(sim.pickups.length).toBeLessThanOrEqual(200);
-      expect(sim.summons.length).toBeLessThanOrEqual(16);
-      expect(sim.skillZones.length).toBeLessThanOrEqual(16);
+      if (
+        sim.enemies.length > 45 ||
+        sim.projectiles.length > 240 ||
+        sim.pickups.length > 200 ||
+        sim.summons.length > 16 ||
+        sim.skillZones.length > 16
+      ) {
+        entityCapViolations += 1;
+      }
 
       if (tick % SEGMENT_TICKS === 0) {
-        const elapsedMs = performance.now() - segStartMs;
-        segmentAvgTickMs.push(elapsedMs / SEGMENT_TICKS);
+        segmentAvgTickMs.push(segSimElapsedMs / SEGMENT_TICKS);
         segmentEntityCounts.push(
           sim.enemies.length +
             sim.projectiles.length +
@@ -152,12 +158,13 @@ describe('Phase 8 — 20-Minute Co-op Soak Test (72,000 Ticks @ 60Hz)', () => {
             sim.skillZones.length,
         );
         heapCheckpointsMb.push(process.memoryUsage().heapUsed / (1024 * 1024));
-        segStartMs = performance.now();
+        segSimElapsedMs = 0;
       }
     }
 
-    // 1. All 4 checkpoints completed (72,000 ticks = 20 minutes simulated time)
+    // 1. All 4 checkpoints completed (72,000 ticks = 20 minutes simulated time) with zero entity cap violations
     expect(sim.tick).toBe(TOTAL_TICKS);
+    expect(entityCapViolations).toBe(0);
     expect(segmentAvgTickMs.length).toBe(4);
 
     // 2. Average tick time stays well below 0.5ms (budget is 16.67ms at 60Hz) and does not degrade in the final 5 minutes
