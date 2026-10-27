@@ -256,7 +256,7 @@ describe('Phase 3 Weapons, Enemies, Elites & Boss Mục Vương', () => {
     // Merchant room purchase
     const merchantRoom = sim.dungeon.rooms.find((r) => r.type === 'merchant')!;
     sim.enterRoom(merchantRoom.id);
-    expect(sim.worldItems.length).toBe(3);
+    expect(sim.worldItems.length).toBe(5);
     sim.player.gold = 200;
     const shopItem = sim.worldItems[0]!;
     sim.player.x = shopItem.x;
@@ -313,16 +313,16 @@ describe('Phase 3 Weapons, Enemies, Elites & Boss Mục Vương', () => {
     const treasureRoom = sim.dungeon.rooms.find((r) => r.type === 'treasure')!;
     const shrineRoom = sim.dungeon.rooms.find((r) => r.type === 'shrine')!;
 
-    // 1. Enter Merchant room, buy Armor Upgrade (+2 maxArmor, cost 65 Gold), leave and re-enter -> remains purchased
+    // 1. Enter Merchant room, buy Armor Upgrade (+2 maxArmor, cost 32 Gold), leave and re-enter -> remains purchased
     sim.enterRoom(merchantRoom.id);
-    expect(sim.worldItems.length).toBe(3);
+    expect(sim.worldItems.length).toBe(5);
     const armorOffer = sim.worldItems.find((it) => it.kind === 'armor_upgrade')!;
     expect(armorOffer).toBeDefined();
     const prevMaxArmor = sim.player.maxArmor;
     sim.player.gold = 120;
     expect(sim.pickupOrBuyWorldItem(armorOffer)).toBe(true);
     expect(sim.player.maxArmor).toBe(prevMaxArmor + 2);
-    expect(sim.player.gold).toBe(55);
+    expect(sim.player.gold).toBe(88);
 
     const initialOfferIds = sim.worldItems.map((it) => it.id);
     sim.enterRoom(0);

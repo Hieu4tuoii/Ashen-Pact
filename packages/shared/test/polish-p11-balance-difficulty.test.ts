@@ -90,16 +90,16 @@ describe('Phase P11 — Step 2: Data-Driven Difficulty Levers, Boss Drama & Pres
     const challenge2 = floor2.rooms.find((r) => r.isChallenge)!;
     expect(challenge2.chestRarity).toBe('legendary');
 
-    // Shop prices tightened and scaled by floorScale (1 + (localFloor - 1) * 0.25)
+    // Shop prices standardized by Spec Rev 4 (Cost = round(base * (1 + 0.10 * (globalFloor - 1))))
     const shop1 = floor1.rooms.find((r) => r.type === 'merchant')!;
     const byKind1 = Object.fromEntries(shop1.shopOffers.map((it) => [it.kind, it.costGold]));
-    expect(byKind1.health_potion).toBe(30);
+    expect(byKind1.health_potion).toBe(32);
     expect(byKind1.weapon).toBe(55);
-    expect(byKind1.armor_upgrade).toBe(65);
+    expect(byKind1.armor_upgrade).toBe(32);
 
     const shop2 = floor2.rooms.find((r) => r.type === 'merchant')!;
     const byKind2 = Object.fromEntries(shop2.shopOffers.map((it) => [it.kind, it.costGold]));
-    expect(byKind2.weapon).toBe(Math.round(85 * 1.25));
+    expect(byKind2.weapon).toBe(61);
   });
 
   it('triggers overlapping wave early when <= 30% of current wave remains or after 9.5s (capped at 2 active waves)', () => {

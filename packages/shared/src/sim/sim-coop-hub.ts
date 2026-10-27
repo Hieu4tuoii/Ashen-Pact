@@ -123,6 +123,9 @@ export function createPlayerStateImpl(this: WorldSim,
     awakenedRelicIds: [],
     buffChoices: [],
     weaponUpgradeLevels: { 0: 0, 1: 0 },
+    salvageHoldTimer: 0,
+    salvageTargetItemId: 0,
+    tookDamageInCurrentRoom: false,
     skillActiveTimer: 0,
     skillCooldownTimer: 0,
     shieldStoredBullets: 0,
@@ -658,6 +661,9 @@ export function startDungeonRunFromHubImpl(this: WorldSim): void {
     p.awakenedRelicIds = [];
     p.buffChoices = [];
     p.weaponUpgradeLevels = { 0: 0, 1: 0 };
+    p.salvageHoldTimer = 0;
+    p.salvageTargetItemId = 0;
+    p.tookDamageInCurrentRoom = false;
     p.ready = false;
     p.currentRoomId = this.currentRoomId;
     p.statsDamageDealt = 0;

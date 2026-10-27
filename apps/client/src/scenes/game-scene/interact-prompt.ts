@@ -194,9 +194,19 @@ export function resolveInteractPromptSpec(
             ? isEn
               ? `Health Potion (+${it.healAmount || 3} HP)`
               : it.nameVi
-            : isEn
-              ? 'Iron Armor Plate (+2 Max Armor)'
-              : it.nameVi;
+            : it.kind === 'armor_upgrade'
+              ? isEn
+                ? 'Iron Armor Plate (+2 Max Armor)'
+                : it.nameVi
+              : it.kind === 'blessing_scroll'
+                ? isEn
+                  ? 'Action Blessing Scroll'
+                  : it.nameVi
+                : it.kind === 'weapon_upgrade'
+                  ? isEn
+                    ? 'Weapon Upgrade Stone (+1 Lv)'
+                    : it.nameVi
+                  : it.nameVi;
       const costGold = Math.max(0, it.costGold ?? 0);
       const hasCoinIcon = costGold > 0;
       const goldUnit = isEn ? 'Gold' : i18n.t('ui.hud.gold');
@@ -304,7 +314,7 @@ export function resolveInteractPromptSpec(
     case 'upgrade_anvil': {
       const colorHex = PALETTE.SOLAR_GOLD;
       const titleText = isEn ? 'Upgrade Anvil (+1 Lv)' : 'Đe Nâng Cấp (+1 Cấp)';
-      const costGold = target.npc.costGold ?? 35;
+      const costGold = target.npc.costGold ?? 0;
       const priceText = costGold > 0 ? (isEn ? `${costGold} Gold` : `${costGold} Xu`) : '';
       return {
         key: target.key,

@@ -10,7 +10,12 @@ import { WEAPONS } from '../data/weapons.js';
 import { COOP_SCALING } from '../data/scaling.js';
 import { clamp, distance } from '../math/vec2.js';
 import { TILE_SIZE } from '../protocol/messages.js';
-import { type DungeonRoomNode, OPPOSITE_DIR } from './dungeon-gen.js';
+import {
+  type DungeonRoomNode,
+  MERCHANT_BASE_PRICES,
+  OPPOSITE_DIR,
+  computeMerchantOfferCost,
+} from './dungeon-gen.js';
 import {
   findNearestWalkablePoint,
   selectCombatRoomArchetype,
@@ -141,6 +146,9 @@ export function enterRoomImpl(this: WorldSim, roomId: number, entryDir?: Cardina
     pl.encasedInIceTimer = 0;
     pl.icePrisonId = 0;
     pl.seedGunRoomHealsUsed = 0;
+    pl.salvageHoldTimer = 0;
+    pl.salvageTargetItemId = 0;
+    pl.tookDamageInCurrentRoom = false;
   }
 
   const isWallBroken = Boolean(
@@ -325,9 +333,11 @@ export function populateRoomContentsImpl(this: WorldSim, room: DungeonRoomNode):
       });
       if (!hasSavedState) {
         const positions: readonly [number, number][] = [
-          [cx - 165, cy + 12],
-          [cx, cy + 34],
-          [cx + 165, cy + 12],
+          [cx - 190, cy + 8],
+          [cx - 95, cy + 28],
+          [cx, cy + 40],
+          [cx + 95, cy + 28],
+          [cx + 190, cy + 8],
         ];
         if (room.shopOffers.length > 0) {
           for (let i = 0; i < room.shopOffers.length; i++) {
@@ -336,10 +346,18 @@ export function populateRoomContentsImpl(this: WorldSim, room: DungeonRoomNode):
             const item = this.spawnWorldItem({
               kind: offer.kind,
               weaponId: offer.weaponId,
-              rarity: offer.rarity ?? (offer.kind === 'armor_upgrade' ? 'rare' : 'uncommon'),
+              rarity:
+                offer.rarity ??
+                (offer.kind === 'weapon_upgrade'
+                  ? 'legendary'
+                  : offer.kind === 'blessing_scroll'
+                    ? 'epic'
+                    : offer.kind === 'armor_upgrade'
+                      ? 'rare'
+                      : 'uncommon'),
               nameVi: offer.nameVi,
               costGold: offer.costGold,
-              healAmount: offer.kind === 'health_potion' ? 4 : 0,
+              healAmount: offer.kind === 'health_potion' ? 3 : 0,
               x: ox,
               y: oy,
               offerId: offer.id,
@@ -347,16 +365,15 @@ export function populateRoomContentsImpl(this: WorldSim, room: DungeonRoomNode):
             item.pickedUp = offer.purchased;
           }
         } else {
-          const localFloor: 1 | 2 = this.currentFloor % 2 === 1 ? 1 : 2;
-          const floorScale = 1 + (localFloor - 1) * 0.25;
+          const globalFloor = this.currentFloor;
           this.spawnWorldItem({
             kind: 'health_potion',
             rarity: 'uncommon',
-            nameVi: 'Bình Máu Cổ Ngữ (+4 HP)',
-            costGold: Math.round(30 * floorScale),
-            healAmount: 4,
-            x: cx - 165,
-            y: cy + 12,
+            nameVi: 'Bình Máu Cổ Ngữ (+3 HP)',
+            costGold: computeMerchantOfferCost(MERCHANT_BASE_PRICES.health_potion, globalFloor),
+            healAmount: 3,
+            x: cx - 190,
+            y: cy + 8,
           });
           const rareWepId = this.rollRandomWeaponByRarities(['uncommon', 'rare']);
           const rareWep = WEAPONS[rareWepId]!;
@@ -365,22 +382,37 @@ export function populateRoomContentsImpl(this: WorldSim, room: DungeonRoomNode):
             weaponId: rareWep.id,
             rarity: rareWep.rarity,
             nameVi: rareWep.nameVi,
-            costGold: Math.round(55 * floorScale),
+            costGold: computeMerchantOfferCost(MERCHANT_BASE_PRICES.weapon, globalFloor),
+            healAmount: 0,
+            x: cx - 95,
+            y: cy + 28,
+          });
+          this.spawnWorldItem({
+            kind: 'armor_upgrade',
+            rarity: 'rare',
+            nameVi: 'Giáp Cổ Ngữ (+2 Giáp)',
+            costGold: computeMerchantOfferCost(MERCHANT_BASE_PRICES.armor_upgrade, globalFloor),
             healAmount: 0,
             x: cx,
-            y: cy + 34,
+            y: cy + 40,
           });
-          const epicWepId = this.rollRandomWeaponByRarities(['epic', 'legendary']);
-          const epicWep = WEAPONS[epicWepId]!;
           this.spawnWorldItem({
-            kind: 'weapon',
-            weaponId: epicWep.id,
-            rarity: epicWep.rarity,
-            nameVi: epicWep.nameVi,
-            costGold: Math.round(85 * floorScale),
+            kind: 'blessing_scroll',
+            rarity: 'epic',
+            nameVi: 'Thẻ Phước Lành Hành Động',
+            costGold: computeMerchantOfferCost(MERCHANT_BASE_PRICES.blessing_scroll, globalFloor),
             healAmount: 0,
-            x: cx + 165,
-            y: cy + 12,
+            x: cx + 95,
+            y: cy + 28,
+          });
+          this.spawnWorldItem({
+            kind: 'weapon_upgrade',
+            rarity: 'legendary',
+            nameVi: 'Đá Tinh Luyện Vũ Khí (+1 Cấp)',
+            costGold: computeMerchantOfferCost(MERCHANT_BASE_PRICES.weapon_upgrade, globalFloor),
+            healAmount: 0,
+            x: cx + 190,
+            y: cy + 8,
           });
         }
       }
@@ -623,6 +655,24 @@ export function onRoomClearedImpl(this: WorldSim, room: DungeonRoomNode): void {
   const cy = this.map.height * 0.5;
 
   const allPlayers = this.getAllPlayers();
+  const isCombatRoom =
+    room.type === 'combat' || room.type === 'portal' || room.type === 'boss';
+  if (isCombatRoom) {
+    for (const p of allPlayers) {
+      if (p.lifeState === 'alive' && p.hp > 0 && !p.tookDamageInCurrentRoom) {
+        p.gold += 10;
+        this.runStats.goldEarned += 10;
+        this.events.push({
+          kind: 'flawless_room_cleared',
+          playerId: p.id,
+          goldBonus: 10,
+          labelVi: '+10 VÀNG HOÀN HẢO!',
+          x: p.x,
+          y: p.y,
+        });
+      }
+    }
+  }
   for (const p of allPlayers) {
     p.encasedInIceTimer = 0;
     p.icePrisonId = 0;

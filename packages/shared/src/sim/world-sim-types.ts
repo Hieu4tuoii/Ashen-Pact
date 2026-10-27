@@ -347,7 +347,7 @@ export interface SimChestState {
 
 export interface SimWorldItemState {
   id: number;
-  kind: 'weapon' | 'health_potion' | 'armor_upgrade';
+  kind: 'weapon' | 'health_potion' | 'armor_upgrade' | 'blessing_scroll' | 'weapon_upgrade';
   weaponId?: string;
   rarity: WeaponRarity;
   nameVi: string;
@@ -531,6 +531,9 @@ export interface SimPlayerState {
   buffChoices: BlessingId[];
   mutatorChoices?: WeaponMutatorId[];
   weaponUpgradeLevels?: Record<number, number>;
+  salvageHoldTimer?: number;
+  salvageTargetItemId?: number;
+  tookDamageInCurrentRoom?: boolean;
   skillActiveTimer: number;
   skillCooldownTimer: number;
   shieldStoredBullets: number;

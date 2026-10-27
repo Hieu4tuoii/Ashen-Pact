@@ -15,6 +15,12 @@ import {
   triggerMeleeKickProps,
 } from './sim-tactical-physics.js';
 import {
+  WEAPON_SALVAGE_HOLD_SEC,
+  WEAPON_SALVAGE_MAX_DIST,
+  findSalvageableWeaponNearPlayer,
+  salvageWorldWeaponItem,
+} from './sim-secret-and-workshop.js';
+import {
   switchPlayerWeaponSlot,
   tryFireActiveWeaponImpl,
   updatePlayerWeaponCadence,
@@ -83,8 +89,27 @@ export function updateSinglePlayerStateImpl(this: WorldSim,
     }
   }
 
-  if (justPressed & INPUT_BUTTON.DROP_WEAPON) {
-    this.dropActiveWeapon(p.id);
+  const salvageTarget = findSalvageableWeaponNearPlayer(this, p, WEAPON_SALVAGE_MAX_DIST);
+  if (salvageTarget) {
+    if ((inp.buttons & INPUT_BUTTON.DROP_WEAPON) !== 0) {
+      if (p.salvageTargetItemId !== salvageTarget.id) {
+        p.salvageTargetItemId = salvageTarget.id;
+        p.salvageHoldTimer = 0;
+      }
+      p.salvageHoldTimer = (p.salvageHoldTimer ?? 0) + dtSec;
+      if (p.salvageHoldTimer + 1e-6 >= WEAPON_SALVAGE_HOLD_SEC) {
+        salvageWorldWeaponItem(this, p, salvageTarget);
+      }
+    } else {
+      p.salvageHoldTimer = 0;
+      p.salvageTargetItemId = 0;
+    }
+  } else {
+    p.salvageHoldTimer = 0;
+    p.salvageTargetItemId = 0;
+    if (justPressed & INPUT_BUTTON.DROP_WEAPON) {
+      this.dropActiveWeapon(p.id);
+    }
   }
 
   // Downed or Ghost players can only move slowly (crawl/float) and Ping/Emote

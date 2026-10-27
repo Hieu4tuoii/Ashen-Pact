@@ -41,9 +41,22 @@ export interface DungeonWaveDef {
   enemies: DungeonEnemySpawnDef[];
 }
 
+export const MERCHANT_BASE_PRICES = {
+  health_potion: 32,
+  armor_upgrade: 32,
+  weapon: 55,
+  blessing_scroll: 68,
+  weapon_upgrade: 75,
+} as const;
+
+export function computeMerchantOfferCost(baseCost: number, globalFloor: number): number {
+  const clampedFloor = Math.max(1, Math.min(6, Math.round(globalFloor || 1)));
+  return Math.round(baseCost * (1 + 0.1 * (clampedFloor - 1)));
+}
+
 export interface ShopOfferDef {
   id: string;
-  kind: 'health_potion' | 'weapon' | 'armor_upgrade';
+  kind: 'health_potion' | 'weapon' | 'armor_upgrade' | 'blessing_scroll' | 'weapon_upgrade';
   nameVi: string;
   descriptionVi: string;
   costGold: number;
@@ -51,6 +64,8 @@ export interface ShopOfferDef {
   rarity?: WeaponRarity;
   purchased: boolean;
 }
+
+export type DungeonShopOffer = ShopOfferDef;
 
 export interface DungeonRoomNode {
   id: number;
@@ -471,7 +486,7 @@ export function generateDungeonFloor(
     } else if (room.type === 'merchant') {
       room.waves = [];
       room.wavesTotal = 0;
-      const floorScale = 1 + (localFloor - 1) * 0.25;
+      const globalFloor = (biome - 1) * 2 + localFloor;
       const shopRarity: WeaponRarity = localFloor === 2 ? 'epic' : 'rare';
       const shopWeaponId = rollWeaponForRarity(rng, shopRarity, biome);
       const wDef = WEAPONS[shopWeaponId]!;
@@ -480,8 +495,9 @@ export function generateDungeonFloor(
           id: 'offer_potion',
           kind: 'health_potion',
           nameVi: 'Bình Máu Rừng Cổ (+3 HP)',
-          descriptionVi: 'Hồi phục ngay 3 HP cho người chơi.',
-          costGold: Math.round(30 * floorScale),
+          descriptionVi: 'Hồi phục ngay 3 HP và 2 Giáp cho người chơi.',
+          costGold: computeMerchantOfferCost(MERCHANT_BASE_PRICES.health_potion, globalFloor),
+          rarity: 'uncommon',
           purchased: false,
         },
         {
@@ -489,7 +505,7 @@ export function generateDungeonFloor(
           kind: 'weapon',
           nameVi: wDef.nameVi,
           descriptionVi: `Vũ khí ${wDef.rarity.toUpperCase()} · DMG ${wDef.damage}`,
-          costGold: Math.round((shopRarity === 'epic' ? 85 : 55) * floorScale),
+          costGold: computeMerchantOfferCost(MERCHANT_BASE_PRICES.weapon, globalFloor),
           weaponId: shopWeaponId,
           rarity: shopRarity,
           purchased: false,
@@ -499,7 +515,26 @@ export function generateDungeonFloor(
           kind: 'armor_upgrade',
           nameVi: 'Giáp Cổ Ngữ (+2 Giáp)',
           descriptionVi: 'Tăng +2 Giáp tối đa và hồi đầy Giáp.',
-          costGold: Math.round(65 * floorScale),
+          costGold: computeMerchantOfferCost(MERCHANT_BASE_PRICES.armor_upgrade, globalFloor),
+          rarity: 'rare',
+          purchased: false,
+        },
+        {
+          id: 'offer_blessing_scroll',
+          kind: 'blessing_scroll',
+          nameVi: 'Thẻ Phước Lành Hành Động',
+          descriptionVi: 'Ban ngay 1 Phước Lành Hành Động mới.',
+          costGold: computeMerchantOfferCost(MERCHANT_BASE_PRICES.blessing_scroll, globalFloor),
+          rarity: 'epic',
+          purchased: false,
+        },
+        {
+          id: 'offer_weapon_upgrade',
+          kind: 'weapon_upgrade',
+          nameVi: 'Đá Tinh Luyện Vũ Khí (+1 Cấp)',
+          descriptionVi: 'Tăng +1 Cấp (+20% Base DMG) cho vũ khí đang cầm.',
+          costGold: computeMerchantOfferCost(MERCHANT_BASE_PRICES.weapon_upgrade, globalFloor),
+          rarity: 'legendary',
           purchased: false,
         },
       ];

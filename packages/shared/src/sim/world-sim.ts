@@ -30,6 +30,7 @@ export * from './sim-tactical-physics.js';
 export * from './sim-weapon-cadence.js';
 export * from './sim-weapon-specials.js';
 export * from './sim-weapon-mutators.js';
+export * from './sim-secret-and-workshop.js';
 
 export class WorldSim {
   public readonly rng: SeededRandom;

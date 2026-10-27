@@ -1,3 +1,4 @@
+import { FLOOR_BUFF_LIST } from '../data/enemies.js';
 import type { WeaponRarity } from '../data/types.js';
 import { MAX_WEAPON_SLOTS, WEAPONS } from '../data/weapons.js';
 import { clamp, distance } from '../math/vec2.js';
@@ -8,6 +9,88 @@ import { syncActiveWeaponCadenceState } from './sim-coop-hub.js';
 import { isFlippableBarricadeProp, isCircularKickableToyProp } from './sim-tactical-physics.js';
 import type { PropKind, SimChestState, SimPlayerState, SimWorldItemState } from './world-sim-types.js';
 import type { WorldSim } from './world-sim.js';
+
+export const WEAPON_SALVAGE_HOLD_SEC = 0.5;
+export const WEAPON_SALVAGE_MAX_DIST = 48;
+
+export const WEAPON_SALVAGE_GOLD: Record<WeaponRarity, number> = {
+  common: 10,
+  uncommon: 15,
+  rare: 22,
+  epic: 30,
+  legendary: 45,
+};
+
+export function findSalvageableWeaponNearPlayer(
+  sim: WorldSim,
+  p: SimPlayerState,
+  maxDist = WEAPON_SALVAGE_MAX_DIST,
+): SimWorldItemState | undefined {
+  if (
+    sim.inHub ||
+    p.lifeState !== 'alive' ||
+    sim.enemies.some((e) => !e.isDummy && e.hp > 0)
+  ) {
+    return undefined;
+  }
+  let bestItem: SimWorldItemState | undefined;
+  let bestDist = maxDist;
+  for (let i = 0; i < sim.worldItems.length; i++) {
+    const item = sim.worldItems[i]!;
+    if (
+      item.kind !== 'weapon' ||
+      item.pickedUp ||
+      item.costGold > 0 ||
+      item.isHubRackItem
+    ) {
+      continue;
+    }
+    if (
+      item.ownerPlayerId !== undefined &&
+      item.ownerPlayerId !== 0 &&
+      item.ownerPlayerId !== p.id
+    ) {
+      continue;
+    }
+    const d = distance(p.x, p.y, item.x, item.y);
+    if (d <= bestDist) {
+      bestDist = d;
+      bestItem = item;
+    }
+  }
+  return bestItem;
+}
+
+export function salvageWorldWeaponItem(
+  sim: WorldSim,
+  p: SimPlayerState,
+  salvageTarget: SimWorldItemState,
+): number {
+  salvageTarget.pickedUp = true;
+  const idx = sim.worldItems.indexOf(salvageTarget);
+  if (idx >= 0) {
+    sim.worldItems.splice(idx, 1);
+  }
+  if (!sim.inHub) {
+    sim.roomItemsByRoomId.set(sim.currentRoomId, [...sim.worldItems]);
+  }
+  const goldEarned = WEAPON_SALVAGE_GOLD[salvageTarget.rarity] ?? 10;
+  p.gold += goldEarned;
+  sim.runStats.goldEarned += goldEarned;
+  p.salvageHoldTimer = 0;
+  p.salvageTargetItemId = 0;
+  sim.events.push({
+    kind: 'weapon_salvaged',
+    playerId: p.id,
+    itemId: salvageTarget.id,
+    weaponId: salvageTarget.weaponId ?? 'knight_sword',
+    rarity: salvageTarget.rarity,
+    goldEarned,
+    x: salvageTarget.x,
+    y: salvageTarget.y,
+  });
+  return goldEarned;
+}
 
 export function spawnCoopPressurePlatePuzzleImpl(this: WorldSim, roomId = this.currentRoomId): void {
   const cx = this.map.width * 0.5;
@@ -255,6 +338,13 @@ export function pickupOrBuyWorldItemImpl(
     }
   }
 
+  if (item.kind === 'weapon_upgrade') {
+    const slot = collector.activeWeaponSlot ?? 0;
+    if ((collector.weaponUpgradeLevels?.[slot] ?? 0) >= 3) {
+      return false;
+    }
+  }
+
   if (item.costGold > 0) {
     if (collector.gold >= item.costGold) {
       collector.gold -= item.costGold;
@@ -313,6 +403,37 @@ export function pickupOrBuyWorldItemImpl(
   if (item.kind === 'armor_upgrade') {
     collector.maxArmor += 2;
     collector.armor = collector.maxArmor;
+    if (!this.inHub) {
+      this.roomItemsByRoomId.set(room.id, [...this.worldItems]);
+    }
+    return true;
+  }
+
+  if (item.kind === 'blessing_scroll') {
+    const available = FLOOR_BUFF_LIST.filter(
+      (b) =>
+        !collector.blessingIds.includes(b.id) &&
+        (b.category === 'general' || b.characterId === collector.characterId),
+    ).map((b) => b.id);
+    const pool =
+      available.length > 0
+        ? available
+        : FLOOR_BUFF_LIST.filter((b) => !collector.blessingIds.includes(b.id)).map((b) => b.id);
+    if (pool.length > 0) {
+      const chosen = this.rng.pick(pool);
+      this.applyBuffEffects(chosen, collector.id);
+    }
+    if (!this.inHub) {
+      this.roomItemsByRoomId.set(room.id, [...this.worldItems]);
+    }
+    return true;
+  }
+
+  if (item.kind === 'weapon_upgrade') {
+    const slot = collector.activeWeaponSlot ?? 0;
+    collector.weaponUpgradeLevels ??= { 0: 0, 1: 0 };
+    const current = collector.weaponUpgradeLevels[slot] ?? 0;
+    collector.weaponUpgradeLevels[slot] = Math.min(3, current + 1);
     if (!this.inHub) {
       this.roomItemsByRoomId.set(room.id, [...this.worldItems]);
     }

@@ -129,6 +129,24 @@ export type SimEvent =
       y: number;
     }
   | {
+      kind: 'weapon_salvaged';
+      playerId: number;
+      itemId: number;
+      weaponId: string;
+      rarity: WeaponRarity;
+      goldEarned: number;
+      x: number;
+      y: number;
+    }
+  | {
+      kind: 'flawless_room_cleared';
+      playerId: number;
+      goldBonus: number;
+      labelVi: string;
+      x: number;
+      y: number;
+    }
+  | {
       kind: 'hit_stop';
       durationMs: number;
       trauma: number;

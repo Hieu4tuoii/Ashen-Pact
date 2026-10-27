@@ -351,6 +351,8 @@ export class NetworkTransport implements ITransport {
           1: ps.wepLevels[1] ?? 0,
         };
       }
+      pState.salvageHoldTimer = (ps.salvage100 ?? 0) / 100;
+      pState.salvageTargetItemId = ps.salvageItemId ?? 0;
       pState.fireCooldownTimer = ps.fireCd100 / 100;
       pState.activeImbueElement = ps.imbue;
       pState.lastProcessedSeq = ps.lastSeq;

@@ -836,12 +836,16 @@ export function applyDamageToPlayerImpl(
 
   const dmg = Math.max(1, Math.round(rawDamage));
   const prevArmor = p.armor;
+  const prevHp = p.hp;
   const armorAbsorbed = Math.min(p.armor, dmg);
   const hpDamage = dmg - armorAbsorbed;
 
   p.armor -= armorAbsorbed;
   p.hp = Math.max(0, p.hp - hpDamage);
   p.statsDamageTaken = (p.statsDamageTaken ?? 0) + dmg;
+  if ((prevArmor > p.armor || prevHp > p.hp) && !this.inHub && !this.getCurrentRoom().cleared) {
+    p.tookDamageInCurrentRoom = true;
+  }
 
   if (prevArmor > 0 && p.armor === 0) {
     this.events.push({

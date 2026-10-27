@@ -80,6 +80,8 @@ export interface QuantizedPlayerSnap {
   buffChoices: BlessingId[];
   mutatorChoices?: WeaponMutatorId[];
   wepLevels?: Record<number, number>;
+  salvage100?: number;
+  salvageItemId?: number;
   fireCd100: number;
   imbue: ElementType;
   lastSeq: number;
@@ -278,6 +280,8 @@ export function encodeWorldSnapshot(
       0: p.weaponUpgradeLevels?.[0] ?? 0,
       1: p.weaponUpgradeLevels?.[1] ?? 0,
     },
+    salvage100: Math.round((p.salvageHoldTimer ?? 0) * 100),
+    salvageItemId: p.salvageTargetItemId ?? 0,
     fireCd100: Math.round(p.fireCooldownTimer * 100),
     imbue: p.activeImbueElement,
     lastSeq: p.lastProcessedSeq,

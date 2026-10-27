@@ -125,20 +125,24 @@ describe('Phase B1 — Combat & Economy Balance Overhaul', () => {
       expect(goldTotal).toBeLessThanOrEqual(10);
     }
 
-    // 5. Merchant prices on Floor 1 vs Floor 2
+    // 5. Merchant prices on Floor 1 vs Floor 2 (Spec Rev 4 Section 5.2.B)
     const floor1 = generateDungeonFloor(4242, 1, 1, 1);
     const shop1 = floor1.rooms.find((r) => r.type === 'merchant')!;
     const byKind1 = Object.fromEntries(shop1.shopOffers.map((it) => [it.kind, it.costGold]));
-    expect(byKind1.health_potion).toBe(30);
+    expect(byKind1.health_potion).toBe(32);
+    expect(byKind1.armor_upgrade).toBe(32);
     expect(byKind1.weapon).toBe(55);
-    expect(byKind1.armor_upgrade).toBe(65);
+    expect(byKind1.blessing_scroll).toBe(68);
+    expect(byKind1.weapon_upgrade).toBe(75);
 
     const floor2 = generateDungeonFloor(4242, 2, 1, 1);
     const shop2 = floor2.rooms.find((r) => r.type === 'merchant')!;
     const byKind2 = Object.fromEntries(shop2.shopOffers.map((it) => [it.kind, it.costGold]));
-    expect(byKind2.health_potion).toBe(38);
-    expect(byKind2.weapon).toBe(106);
-    expect(byKind2.armor_upgrade).toBe(81);
+    expect(byKind2.health_potion).toBe(35);
+    expect(byKind2.armor_upgrade).toBe(35);
+    expect(byKind2.weapon).toBe(61);
+    expect(byKind2.blessing_scroll).toBe(75);
+    expect(byKind2.weapon_upgrade).toBe(83);
 
     // 6. Shrine costs 40 Gold
     const shrineRoom = sim.dungeon.rooms.find((r) => r.type === 'shrine')!;
