@@ -9,7 +9,11 @@ import {
   resolveMeleeConeHitsAndSynergies,
   upsertTetherStaffBeam,
 } from './sim-player.js';
-import { triggerGrassPollenSpeedBoost } from './sim-tactical-physics.js';
+import {
+  BIOME3_HEAT_GAIN_MULT,
+  triggerBiome3TacticalVentPulse,
+  triggerGrassPollenSpeedBoost,
+} from './sim-tactical-physics.js';
 import {
   FRAG_LAUNCHER_MAIN_BLAST_RADIUS,
   GALE_SMG_MAX_FIRE_RATE,
@@ -291,6 +295,7 @@ export function updatePlayerWeaponCadence(
         p.ventCooldownTimer = TACTICAL_VENT_COOLDOWN_SEC;
         p.fireCooldownTimer = Math.max(p.fireCooldownTimer, TACTICAL_VENT_COOLDOWN_SEC);
         triggerGrassPollenSpeedBoost(sim, p);
+        triggerBiome3TacticalVentPulse(sim, p);
         sim.events.push({
           kind: 'tactical_vent',
           playerId: p.id,
@@ -472,7 +477,10 @@ export function tryFireActiveWeaponImpl(
       fireRateMult *= 1.25;
       additiveDmgBonus += 0.25;
     }
-    p.weaponHeat = Math.min(100, p.weaponHeat + (w.heatPerShot || 0));
+    const heatGain =
+      (w.heatPerShot || 0) *
+      (this.map.biome === 3 || this.currentBiome === 3 ? BIOME3_HEAT_GAIN_MULT : 1.0);
+    p.weaponHeat = Math.min(100, p.weaponHeat + heatGain);
     if (Array.isArray(p.weaponSlotHeat)) {
       p.weaponSlotHeat[slot] = p.weaponHeat;
     }

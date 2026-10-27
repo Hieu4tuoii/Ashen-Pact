@@ -10,6 +10,7 @@ import {
   detonateVolatileSporePod,
   getTacticalPropSpawnSpec,
   resolvePropMovementCollision,
+  spillSlagCrucibleLavaCarpet,
   triggerMossTablePollenArmorBurst,
   updateSlidingPropsImpl,
 } from './sim-tactical-physics.js';
@@ -790,6 +791,13 @@ export function damagePropImpl(this: WorldSim, prop: SimPropState, amount: numbe
   if (prop.kind === 'rotten_totem_pillar') {
     if (prop.hp <= 0) {
       collapseRottenTotemPillar(this, prop, prop.fallAngle);
+    }
+    return;
+  }
+
+  if (prop.kind === 'slag_crucible') {
+    if (prop.hp <= 0 || element === 'burn') {
+      spillSlagCrucibleLavaCarpet(this, prop, prop.fallAngle);
     }
     return;
   }

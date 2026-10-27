@@ -534,6 +534,8 @@ export function configureRoomLayout(
   const flipY = (roomSeed & 2) !== 0;
   map.biome = biome;
   map.conveyorDirection = 1;
+  map.conveyorCycleTimer = 0;
+  map.conveyorWarningTimer = 0;
   map.roomArchetype = archetype;
   const count = map.cols * map.rows;
   const rng = new SeededRandom(roomSeed).fork('room_combat');

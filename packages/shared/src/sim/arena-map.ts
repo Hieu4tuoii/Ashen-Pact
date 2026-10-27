@@ -86,6 +86,8 @@ export class ArenaMap {
   public readonly solidBoxes: AABB[];
   public biome: 1 | 2 | 3;
   public conveyorDirection: 1 | -1 = 1;
+  public conveyorCycleTimer = 0;
+  public conveyorWarningTimer = 0;
   public mapRevision = 1;
   public roomArchetype?: RoomArchetypeId;
   public propAnchors: RoomPropAnchor[] = [];
@@ -152,6 +154,8 @@ export class ArenaMap {
     this.lastRoomLayout = null;
     this.biome = biome;
     this.conveyorDirection = 1;
+    this.conveyorCycleTimer = 0;
+    this.conveyorWarningTimer = 0;
     const count = this.cols * this.rows;
     const rng = new SeededRandom(roomSeed).fork(`room_${roomType}`);
     for (let i = 0; i < count; i++) {

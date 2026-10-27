@@ -6,20 +6,28 @@ import {
   getConveyorVelocityAtWorld,
 } from './arena-room-archetypes.js';
 import {
+  applyForgeBlastShieldFireWave,
   BIOME2_ICE_INERTIA_MULT,
+  BIOME3_HEAT_GAIN_MULT,
   refractProjectileThroughCryoPrism,
   shatterGlacialBarricade,
+  spillSlagCrucibleLavaCarpet,
   triggerBiome2WallSlamCryoPulse,
+  triggerBiome3TacticalVentPulse,
   updateP1CTacticalProps,
 } from './sim-tactical-physics-p1c.js';
 import type { WorldSim } from './world-sim.js';
 import type { PropKind, SimEnemyState, SimPlayerState, SimPropState } from './world-sim-types.js';
 
 export {
+  applyForgeBlastShieldFireWave,
   BIOME2_ICE_INERTIA_MULT,
+  BIOME3_HEAT_GAIN_MULT,
   refractProjectileThroughCryoPrism,
   shatterGlacialBarricade,
+  spillSlagCrucibleLavaCarpet,
   triggerBiome2WallSlamCryoPulse,
+  triggerBiome3TacticalVentPulse,
   updateP1CTacticalProps,
 };
 
@@ -393,6 +401,15 @@ function destroyTacticalProp(sim: WorldSim, prop: SimPropState): void {
     );
     return;
   }
+  if (prop.kind === 'slag_crucible') {
+    spillSlagCrucibleLavaCarpet(
+      sim,
+      prop,
+      Math.atan2(prop.vy ?? 0, prop.vx ?? 1),
+      prop.slideOwnerPlayerId ?? sim.player.id,
+    );
+    return;
+  }
   prop.destructible = true;
   if (prop.hp <= 0) prop.hp = 1;
   sim.damageProp(prop, prop.hp + 999, prop.explosive ? 'burn' : 'none');
@@ -433,6 +450,9 @@ export function updateSlidingPropsImpl(this: WorldSim, dtSec: number): void {
     const slideAngle = Math.atan2(vy, vx);
     const ownerId = prop.slideOwnerPlayerId ?? this.player.id;
     if (!prop.hitEnemyIds) prop.hitEnemyIds = [];
+    if (prop.kind === 'forge_blast_shield') {
+      applyForgeBlastShieldFireWave(this, prop, oldX, oldY, nextX, nextY, slideAngle, ownerId);
+    }
 
     let detonatedOnEnemy = false;
     for (const e of this.enemies) {
@@ -463,6 +483,13 @@ export function updateSlidingPropsImpl(this: WorldSim, dtSec: number): void {
           prop.x = e.x;
           prop.y = e.y;
           shatterGlacialBarricade(this, prop, slideAngle, ownerId);
+          detonatedOnEnemy = true;
+          break;
+        }
+        if (prop.kind === 'slag_crucible') {
+          prop.x = e.x;
+          prop.y = e.y;
+          spillSlagCrucibleLavaCarpet(this, prop, slideAngle, ownerId);
           detonatedOnEnemy = true;
           break;
         }
