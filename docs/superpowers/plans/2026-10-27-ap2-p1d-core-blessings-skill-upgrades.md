@@ -44,8 +44,8 @@
 ## Task 4 (`P1D.4`): Cập Nhật Giao Diện Modal Chọn Phước Lành (`Per-Player`) & VFX Cho 26 Thẻ
 - [ ] Cập nhật `hud-modals-and-debug.ts`, `combat-fx-weapons-v2.ts`, `vi.json`, `en.json` hiển thị rõ Nhóm Phước Lành (`[Chắn Chiến]`, `[Lướt Chiến]`, `[Nhịp Nạp]`, `[Đạn Đạo]`, `[Tuyệt Kỹ Class]`), biểu tượng nguyên tố, mô tả súc tích không tràn khung và dải icon Phước lành cá nhân trên HUD.
 
-## Task 5 (`P1D.5`): Xây Dựng Cảnh Chụp Modal Phước Lành & Strip 8-Frame Cho Các Phước Lành Tiêu Biểu
-- [ ] Bổ sung 7 cảnh (`ap2-modal-blessing-vi`, `ap2-modal-blessing-en`, `ap2-blessing-table-rocket` strip, `ap2-blessing-prism-split` strip, `ap2-blessing-tediore-chuck` strip, `ap2-skill-vanguard-prism` strip, `ap2-skill-elementalist-twin` strip) vào `visual-scene-ap2-p1.ts` + `tools/run-shots.ts`.
+## Task 5 (`P1D.5`): Xây Dựng Cảnh Chụp Modal Phước Lành & Strip Engine 2.6 (`8 / 12 Frames`) Cho Các Phước Lành Tiêu Biểu
+- [ ] Bổ sung 7 cảnh theo chuẩn **Engine 2.6** (`ap2-modal-blessing-vi`, `ap2-modal-blessing-en`, `ap2-blessing-table-rocket` strip, `ap2-blessing-prism-split` strip, `ap2-blessing-tediore-chuck` strip, `ap2-skill-vanguard-prism` strip, `ap2-skill-elementalist-twin` strip; `F1 = windup_hold`, `apexEvent` thật từ `WorldSim`, `0` external state mutations, 100% actor containment) vào `visual-scene-ap2-p1d.ts` + `tools/run-shots.ts`.
 
-## Task 6 (`P1D.6`): Visual Gate & Phase Gate `P1D`
-- [ ] Chạy `pnpm shots -- --phase ap2-p1d --label after --group ap2-p1d`, chấm qua Visual Reviewer (`pro` `>= 8.0/10`), chạy `pnpm verify` & `pnpm perf`, commit và tag `ap2-p1d`.
+## Task 6 (`P1D.6`): Visual Gate (Engine 2.6 `HARD_ASSERT` + `--verify-freeze`) & Phase Gate `P1D`
+- [ ] Chạy `pnpm shots --phase ap2-p1d --label after --group ap2-p1d --verify-freeze` ở chế độ `HARD_ASSERT` (`5/5` cổng animation PASS + `freezeDiffRatio = 0.0000`, `traceHashMatched = true`), chấm qua Visual Reviewer (`pro` `>= 8.0/10` trên `<scene>.png`, `<scene>-roi-*.png`, `<scene>-strip.png`, `<scene>-telemetry-summary.md`), chạy `pnpm verify` & `pnpm perf`, commit và tag `ap2-p1d`.

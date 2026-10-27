@@ -26,8 +26,8 @@
 ## Task 3 (`P4B.3`): Giao Diện Thẻ Duo Boon (Viền Kim Cương Đôi), Đồng Hồ Đếm Ngược 20s & VFX 6 Duo Boons
 - [ ] Vẽ khung thẻ Duo Boon có 2 biểu tượng nguyên tố giao nhau trên Modal chọn Phước lành, đồng hồ đếm ngược `20.0s` cho thử thách Bí Mật, và VFX cho 6 Duo Boons.
 
-## Task 4 (`P4B.4`): Xây Dựng Cảnh Chụp & Strip 8-Frame Cho 6 Duo Boons & Đấu Trường Bí Mật 20s (`visual-scene-ap2-p4.ts`)
-- [ ] Bổ sung 5 cảnh: `ap2-modal-duo-boon-card`, `ap2-duo-magnetic-bastion-ring` (strip), `ap2-duo-superheated-cyclone` (strip), `ap2-duo-plasma-overload-star` (strip), `ap2-secret-arena-20s-trial` (strip).
+## Task 4 (`P4B.4`): Xây Dựng Cảnh Chụp & Strip Engine 2.6 (`8 / 12 Frames`) Cho 6 Duo Boons & Đấu Trường Bí Mật 20s (`visual-scene-ap2-p4.ts`)
+- [ ] Bổ sung 5 cảnh theo chuẩn **Engine 2.6**: `ap2-modal-duo-boon-card`, `ap2-duo-magnetic-bastion-ring` (strip), `ap2-duo-superheated-cyclone` (strip), `ap2-duo-plasma-overload-star` (strip), `ap2-secret-arena-20s-trial` (strip).
 
-## Task 5 (`P4B.5`): Visual Gate & Phase Gate `P4B`
-- [ ] Chạy `pnpm shots -- --phase ap2-p4b --label after --group ap2-p4b`, chấm qua Visual Reviewer (`pro` `>= 8.0/10`), chạy `pnpm verify` & `pnpm perf`, commit và tag `ap2-p4b`.
+## Task 5 (`P4B.5`): Visual Gate (Engine 2.6 `HARD_ASSERT` + `--verify-freeze`) & Phase Gate `P4B`
+- [ ] Chạy `pnpm shots --phase ap2-p4b --label after --group ap2-p4b --verify-freeze` ở chế độ `HARD_ASSERT`, chấm qua Visual Reviewer (`pro` `>= 8.0/10` trên `<scene>.png`, `<scene>-roi-*.png`, `<scene>-strip.png`, `<scene>-telemetry-summary.md`), chạy `pnpm verify` & `pnpm perf`, commit và tag `ap2-p4b`.

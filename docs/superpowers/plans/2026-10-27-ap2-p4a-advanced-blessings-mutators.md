@@ -29,9 +29,9 @@
 - [ ] `mutator_elemental_infusion`: vũ khí đang cầm nhận thêm Nguyên tố thứ hai từ vũ khí ở ô còn lại mỗi khi bắn `Finale Shot` hoặc `Overclocked Shot`.
 - [ ] Viết unit test TDD `packages/shared/test/ap2-p4a-expanded-mutators.test.ts`.
 
-## Task 4 (`P4A.4`): Procedural VFX & Cảnh Chụp Strip 8-Frame Cho `Phase P4A` (`visual-scene-ap2-p4.ts`)
+## Task 4 (`P4A.4`): Procedural VFX & Cảnh Chụp Strip Engine 2.6 (`8 / 12 Frames`) Cho `Phase P4A` (`visual-scene-ap2-p4.ts`)
 - [ ] Vẽ Tượng Bóng Sét `dash_thunder_decoy`, 2 Cọc Điện Cao Thế & dây sét `bullet_wall_tether`, đạn vòng cung hồi quy `bullet_orbit_return`, và Bóng Pháo Ảnh `mutator_holo_decoy_gun`.
-- [ ] Tạo 4 cảnh strip 8 frame trong `tests/e2e/helpers/visual-scene-ap2-p4.ts`: `ap2-p4a-wall-tether-pylons`, `ap2-p4a-orbit-return-bullets`, `ap2-p4a-thunder-decoy-dash`, `ap2-p4a-holo-decoy-mutator`.
+- [ ] Tạo 4 cảnh strip theo chuẩn **Engine 2.6** trong `tests/e2e/helpers/visual-scene-ap2-p4.ts`: `ap2-p4a-wall-tether-pylons`, `ap2-p4a-orbit-return-bullets`, `ap2-p4a-thunder-decoy-dash`, `ap2-p4a-holo-decoy-mutator`.
 
-## Task 5 (`P4A.5`): Visual Gate & Phase Gate `P4A`
-- [ ] Chạy `pnpm shots -- --phase ap2-p4a --label after --group ap2-p4a`, chấm qua Visual Reviewer (`pro` `>= 8.0/10`), chạy `pnpm verify` & `pnpm perf`, commit và tag `ap2-p4a`.
+## Task 5 (`P4A.5`): Visual Gate (Engine 2.6 `HARD_ASSERT` + `--verify-freeze`) & Phase Gate `P4A`
+- [ ] Chạy `pnpm shots --phase ap2-p4a --label after --group ap2-p4a --verify-freeze` ở chế độ `HARD_ASSERT`, chấm qua Visual Reviewer (`pro` `>= 8.0/10` trên `<scene>.png`, `<scene>-roi-*.png`, `<scene>-strip.png`, `<scene>-telemetry-summary.md`), chạy `pnpm verify` & `pnpm perf`, commit và tag `ap2-p4a`.

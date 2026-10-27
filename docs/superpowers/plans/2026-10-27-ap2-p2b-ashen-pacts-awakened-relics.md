@@ -26,8 +26,8 @@
 ## Task 4 (`P2B.4`): Giao Diện Modal Tế Đàn Khế Ước, Huy Hiệu Lời Nguyền/Di Vật Trên HUD & Rig/VFX `Bóng Ma Đao Phủ`
 - [ ] Mở rộng `hud-pact-and-forge-modals.ts`, vẽ Rig Cutout 2.0 cho `ashen_executioner`, dây xích linh hồn và tia laser Huyết Thệ.
 
-## Task 5 (`P2B.5`): Xây Dựng Cảnh Chụp Kiểm Chứng Tế Đàn Khế Ước, Bóng Ma Đao Phủ & Di Vật Thức Tỉnh (`visual-scene-ap2-p2.ts`)
-- [ ] Bổ sung 6 cảnh (`ap2-shrine-ashen-altar`, `ap2-modal-ashen-pact-vi`, `ap2-modal-ashen-pact-en`, `ap2-pact-soul-chain-stretch` strip, `ap2-pact-ashen-executioner` strip, `ap2-relic-awakening-banner` strip) vào `visual-scene-ap2-p2.ts`.
+## Task 5 (`P2B.5`): Xây Dựng Cảnh Chụp Kiểm Chứng Tế Đàn Khế Ước, Bóng Ma Đao Phủ & Di Vật Thức Tỉnh Theo Engine 2.6 (`visual-scene-ap2-p2.ts`)
+- [ ] Bổ sung 6 cảnh theo chuẩn **Engine 2.6** (`ap2-shrine-ashen-altar`, `ap2-modal-ashen-pact-vi`, `ap2-modal-ashen-pact-en`, `ap2-pact-soul-chain-stretch` strip, `ap2-pact-ashen-executioner` strip, `ap2-relic-awakening-banner` strip) vào `visual-scene-ap2-p2.ts`.
 
-## Task 6 (`P2B.6`): Visual Gate & Phase Gate `P2B`
-- [ ] Chạy `pnpm shots -- --phase ap2-p2b --label after --group ap2-p2b`, chấm qua Visual Reviewer (`pro` `>= 8.0/10`), chạy `pnpm verify` & `pnpm perf`, commit và tag `ap2-p2b`.
+## Task 6 (`P2B.6`): Visual Gate (Engine 2.6 `HARD_ASSERT` + `--verify-freeze`) & Phase Gate `P2B`
+- [ ] Chạy `pnpm shots --phase ap2-p2b --label after --group ap2-p2b --verify-freeze` ở chế độ `HARD_ASSERT`, chấm qua Visual Reviewer (`pro` `>= 8.0/10` trên `<scene>.png`, `<scene>-roi-*.png`, `<scene>-strip.png`, `<scene>-telemetry-summary.md`), chạy `pnpm verify` & `pnpm perf`, commit và tag `ap2-p2b`.

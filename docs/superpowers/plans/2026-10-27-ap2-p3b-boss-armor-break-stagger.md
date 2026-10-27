@@ -29,9 +29,9 @@
 - [ ] Phá Giáp 1 Bước: `Dash-Kick` bất kỳ `forge_blast_shield`, Lõi Năng Lượng, Bom Lò Than hoặc `slag_crucible` nào tông trúng Titan (hoặc kích hoạt `pneumatic_press` dập xuống khi Titan bước qua giữa phòng) làm Giáp Nhiệt Hạch quá tải phát nổ, gây `6% MaxHP` sát thương chuẩn và Choáng Phá Giáp trong `4.0s` (`+40% EnemyVuln`).
 - [ ] Viết unit test TDD `packages/shared/test/ap2-p3b-boss3-forge-titan.test.ts`.
 
-## Task 5 (`P3B.5`): Giao Diện HUD Boss (Khiên Giáp + Thanh Stagger + Gợi Ý Phá Giáp) & Cảnh Chụp Strip 8-Frame Cho 3 Boss (`visual-scene-ap2-p3.ts`)
+## Task 5 (`P3B.5`): Giao Diện HUD Boss (Khiên Giáp + Thanh Stagger + Gợi Ý Phá Giáp) & Cảnh Chụp Strip Engine 2.6 (`8 / 12 Frames`) Cho 3 Boss (`visual-scene-ap2-p3.ts`)
 - [ ] Trên thanh máu Boss, hiển thị lớp khung giáp bọc ngoài kèm dòng gợi ý chiến thuật ngắn gọn (`"SÚT BÀN ĐÁ / BÀO TỬ PHÁ GIÁP!"`, `"LẬT PHIẾN BĂNG CHẶN LASER & SÚT PHÁ KHIÊN!"`, `"SÚT KHIÊN THÉP / LÕI NĂNG LƯỢNG HOẶC DẬP BÚA MÁY!"`).
-- [ ] Tạo 4 cảnh strip 8 frame: `ap2-boss-supply-drop`, `ap2-boss1-armor-break`, `ap2-boss2-armor-break`, `ap2-boss3-armor-break`.
+- [ ] Tạo 4 cảnh strip theo chuẩn **Engine 2.6**: `ap2-boss-supply-drop`, `ap2-boss1-armor-break`, `ap2-boss2-armor-break`, `ap2-boss3-armor-break`.
 
-## Task 6 (`P3B.6`): Visual Gate & Phase Gate `P3B`
-- [ ] Chạy `pnpm shots -- --phase ap2-p3b --label after --group ap2-p3b`, chấm qua Visual Reviewer (`pro` `>= 8.0/10`), chạy `pnpm verify` & `pnpm perf`, commit và tag `ap2-p3b`.
+## Task 6 (`P3B.6`): Visual Gate (Engine 2.6 `HARD_ASSERT` + `--verify-freeze`) & Phase Gate `P3B`
+- [ ] Chạy `pnpm shots --phase ap2-p3b --label after --group ap2-p3b --verify-freeze` ở chế độ `HARD_ASSERT`, chấm qua Visual Reviewer (`pro` `>= 8.0/10` trên `<scene>.png`, `<scene>-roi-*.png`, `<scene>-strip.png`, `<scene>-telemetry-summary.md`), chạy `pnpm verify` & `pnpm perf`, commit và tag `ap2-p3b`.

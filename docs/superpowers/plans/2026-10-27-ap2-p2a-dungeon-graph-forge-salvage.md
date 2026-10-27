@@ -28,8 +28,8 @@
 ## Task 4 (`P2A.4`): Giao Diện Modal Đe Rèn Cổ Đại, Vòng Tiến Độ Giữ `[X]` Phân Rã Súng & Bake Texture Đe Rèn / Tường Nứt
 - [ ] Tạo `apps/client/src/scenes/game-scene/hud-pact-and-forge-modals.ts` vẽ Modal chọn `Weapon Mutator`, thanh tiến độ giữ `[X] 0.5s Phân Rã` trên prompt tương tác, và bake texture `daedalus_anvil` + `cracked_secret_wall`.
 
-## Task 5 (`P2A.5`): Xây Dựng Cảnh Chụp Kiểm Chứng Đe Rèn, Tường Nứt & Phân Rã Súng (`visual-scene-ap2-p2.ts`)
-- [ ] Tạo `tests/e2e/helpers/visual-scene-ap2-p2.ts` với 4 cảnh: `ap2-treasure-forge-workshop`, `ap2-modal-daedalus-mutator`, `ap2-weapon-salvage-hold` (strip 8 frame), `ap2-secret-wall-crack-break` (strip 8 frame).
+## Task 5 (`P2A.5`): Xây Dựng Cảnh Chụp Kiểm Chứng Đe Rèn, Tường Nứt & Phân Rã Súng Theo Engine 2.6 (`visual-scene-ap2-p2.ts`)
+- [ ] Tạo `tests/e2e/helpers/visual-scene-ap2-p2.ts` với 4 cảnh theo chuẩn **Engine 2.6**: `ap2-treasure-forge-workshop`, `ap2-modal-daedalus-mutator`, `ap2-weapon-salvage-hold` (strip `8 frames`, `heroFrameIndex: 4`, `apexEvent` thật), `ap2-secret-wall-crack-break` (strip `8 frames`, `heroFrameIndex: 4`, `apexEvent` thật).
 
-## Task 6 (`P2A.6`): Visual Gate & Phase Gate `P2A`
-- [ ] Chạy `pnpm shots -- --phase ap2-p2a --label after --group ap2-p2a`, chấm qua Visual Reviewer (`pro` `>= 8.0/10`), chạy `pnpm verify` & `pnpm perf`, commit và tag `ap2-p2a`.
+## Task 6 (`P2A.6`): Visual Gate (Engine 2.6 `HARD_ASSERT` + `--verify-freeze`) & Phase Gate `P2A`
+- [ ] Chạy `pnpm shots --phase ap2-p2a --label after --group ap2-p2a --verify-freeze` ở chế độ `HARD_ASSERT`, chấm qua Visual Reviewer (`pro` `>= 8.0/10` trên `<scene>.png`, `<scene>-roi-*.png`, `<scene>-strip.png`, `<scene>-telemetry-summary.md`), chạy `pnpm verify` & `pnpm perf`, commit và tag `ap2-p2a`.

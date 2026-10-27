@@ -34,8 +34,8 @@
 ## Task 4 (`P1C.4`): Bake Texture Procedural & VFX Cho Archetypes + Props Biome 2 & Biome 3
 - [ ] Vẽ 3 trạng thái `'low' | 'flipped' | 'sliding'` cho `glacial_barricade` và `forge_blast_shield`, 3 cọc nhũ băng nhọn, `sliding_ice_block`, `cryo_prism_pillar`, `pneumatic_press`, `slag_crucible`, và băng chuyền `conveyor` có đèn mũi tên cảnh báo đảo chiều `1.2s`.
 
-## Task 5 (`P1C.5`): Xây Dựng Cảnh Chụp & Strip 8-Frame Cho Biome 2 & Biome 3 (`visual-scene-ap2-p1.ts`)
-- [ ] Tạo 7 cảnh chụp tĩnh & strip (`ap2-b2-prism-labyrinth`, `ap2-b2-glacial-kick-spikes` strip, `ap2-b2-prism-refract` strip, `ap2-b3-crossfire-conveyors`, `ap2-b3-pneumatic-press-crush` strip, `ap2-b3-blast-shield-wave` strip, `ap2-crumbling-pillar-ring` strip), có ghi đè `sampleRects.floor_center` cho các phòng có tường/búa máy ở tâm.
+## Task 5 (`P1C.5`): Xây Dựng Cảnh Chụp & Strip Engine 2.6 (`8 / 12 Frames`) Cho Biome 2 & Biome 3 (`visual-scene-ap2-p1c.ts`)
+- [ ] Tạo 7 cảnh chụp tĩnh & strip theo chuẩn **Engine 2.6** (`ap2-b2-prism-labyrinth`, `ap2-b2-glacial-kick-spikes` strip, `ap2-b2-prism-refract` strip, `ap2-b3-crossfire-conveyors`, `ap2-b3-pneumatic-press-crush` strip, `ap2-b3-blast-shield-wave` strip, `ap2-crumbling-pillar-ring` strip), có ghi đè `sampleRects.floor_center` cho các phòng có tường/búa máy ở tâm, `F1 = windup_hold`, `apexEvent` thật từ `WorldSim`, `0` external state mutations, 100% actor containment trong `640×360` ROI.
 
-## Task 6 (`P1C.6`): Visual Gate & Phase Gate `P1C`
-- [ ] Chạy `pnpm shots -- --phase ap2-p1c --label after --group ap2-p1c` + `visual-metrics.ts`, chấm qua Visual Reviewer (`pro` `>= 8.0/10`), chạy `pnpm verify` & `pnpm perf`, commit và tag `ap2-p1c`.
+## Task 6 (`P1C.6`): Visual Gate (Engine 2.6 `HARD_ASSERT` + `--verify-freeze`) & Phase Gate `P1C`
+- [ ] Chạy `pnpm shots --phase ap2-p1c --label after --group ap2-p1c --verify-freeze` ở chế độ `HARD_ASSERT` (`5/5` cổng animation PASS + `freezeDiffRatio = 0.0000`, `traceHashMatched = true`), chấm qua Visual Reviewer (`pro` `>= 8.0/10` trên `<scene>.png`, `<scene>-roi-*.png`, `<scene>-strip.png`, `<scene>-telemetry-summary.md`), chạy `pnpm verify` & `pnpm perf`, commit và tag `ap2-p1c`.

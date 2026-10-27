@@ -39,8 +39,8 @@
 - [ ] `welder_drone`: khi bị bắn hạ sẽ rơi xuống phát nổ xung EMP (`r=110px`) làm choáng toàn bộ quái máy móc xung quanh trong `1.5s`.
 - [ ] Viết unit test TDD `packages/shared/test/ap2-p3a-biome3-enemies.test.ts`.
 
-## Task 5 (`P3A.5`): Xây Dựng Cảnh Chụp & Strip 8-Frame Cho AI Quái Tương Tác Địa Hình (`tests/e2e/helpers/visual-scene-ap2-p3.ts`)
-- [ ] Tạo 6 cảnh trong `visual-scene-ap2-p3.ts`: `ap2-ai-lead-aim-telegraph`, `ap2-ai-boar-pillar-crash` (strip), `ap2-ai-spore-bomber-kick` (strip), `ap2-ai-yeti-iceblock-counter` (strip), `ap2-ai-shielder-shock-arc` (strip), `ap2-ai-dwarf-mortar-lob` (strip).
+## Task 5 (`P3A.5`): Xây Dựng Cảnh Chụp & Strip Engine 2.6 (`8 / 12 Frames`) Cho AI Quái Tương Tác Địa Hình (`tests/e2e/helpers/visual-scene-ap2-p3.ts`)
+- [ ] Tạo 6 cảnh theo chuẩn **Engine 2.6** trong `visual-scene-ap2-p3.ts`: `ap2-ai-lead-aim-telegraph`, `ap2-ai-boar-pillar-crash` (strip), `ap2-ai-spore-bomber-kick` (strip), `ap2-ai-yeti-iceblock-counter` (strip), `ap2-ai-shielder-shock-arc` (strip), `ap2-ai-dwarf-mortar-lob` (strip).
 
-## Task 6 (`P3A.6`): Visual Gate & Phase Gate `P3A`
-- [ ] Chạy `pnpm shots -- --phase ap2-p3a --label after --group ap2-p3a`, chấm qua Visual Reviewer (`pro` `>= 8.0/10`), chạy `pnpm verify` & `pnpm perf`, commit và tag `ap2-p3a`.
+## Task 6 (`P3A.6`): Visual Gate (Engine 2.6 `HARD_ASSERT` + `--verify-freeze`) & Phase Gate `P3A`
+- [ ] Chạy `pnpm shots --phase ap2-p3a --label after --group ap2-p3a --verify-freeze` ở chế độ `HARD_ASSERT`, chấm qua Visual Reviewer (`pro` `>= 8.0/10` trên `<scene>.png`, `<scene>-roi-*.png`, `<scene>-strip.png`, `<scene>-telemetry-summary.md`), chạy `pnpm verify` & `pnpm perf`, commit và tag `ap2-p3a`.

@@ -6,8 +6,8 @@
 
 ---
 
-## Task 1 (`P5.1`): Chụp Toàn Bộ Danh Mục Cảnh (`v0.2.0` + `Ashen Pact 2.0`) & Tổng Duyệt Holistic Visual Gate (`Model: pro` `>= 8.5/10`)
-- [ ] Chạy `pnpm shots -- --phase ap2-p5 --label final` chụp toàn bộ danh mục cảnh và chạy `tools/visual-metrics.ts`.
+## Task 1 (`P5.1`): Chụp Toàn Bộ Danh Mục Cảnh (`v0.2.0` + `Ashen Pact 2.0` Theo Engine 2.6 `HARD_ASSERT`) & Tổng Duyệt Holistic Visual Gate (`Model: pro` `>= 8.5/10`)
+- [ ] Chạy `pnpm shots --phase ap2-p5 --label final --verify-freeze` ở chế độ `HARD_ASSERT` chụp toàn bộ danh mục cảnh (kèm `<scene>-roi-*.png`, `<scene>-strip.png`, `<scene>-telemetry-summary.md`) và chạy `tools/visual-metrics.ts`.
 - [ ] Triệu hồi Holistic Visual Reviewer (`research`, model `pro`) chấm tổng thể toàn bộ bộ ảnh `final` (mọi tiêu chí trong Rubric 10 Tiêu Chí đạt `>= 8.5 / 10`, `0 blocker`, `0 major`).
 
 ## Task 2 (`P5.2`): Kiểm Toán Cân Bằng Cuối Cùng (`pnpm balance`) & Kiểm Toán Hiệu Năng / Soak Test 60Hz 4P (`pnpm perf`)
