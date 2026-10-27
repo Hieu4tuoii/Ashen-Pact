@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:subagent-driven-development` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Hoàn thiện đủ **24/24 Phước Lành Hành Động** (8 thẻ nâng cao đánh dấu Phase 4) và **10/10 Bản Độ Búa Rèn (`Daedalus Weapon Mutators #7–#10`)** để tối đa hóa khả năng phối đồ (synergy), kèm VFX procedural và bộ cảnh chụp strip 8-frame (`ap2-p4a`).
+**Goal:** Hoàn thiện đủ **24/24 Phước Lành Hành Động** (8 thẻ nâng cao đánh dấu Phase 4) và **10/10 Bản Độ Búa Rèn (`Daedalus Weapon Mutators #7–#10`)** để tối đa hóa khả năng phối đồ (synergy), kèm VFX procedural và bộ cảnh chụp strip chuẩn **Engine 2.6 (`8/12 frames` + `1:1 ROI` + `HARD_ASSERT`)** (`ap2-p4a`).
 
 **Architecture:** Mở rộng `packages/shared/src/data/blessings.ts`, `sim-blessings.ts`, `data/ashen-pacts.ts`, `sim-ashen-pacts.ts`, `combat-fx-weapons-v2.ts`, và tạo `tests/e2e/helpers/visual-scene-ap2-p4.ts` (`< 650 dòng`).
 

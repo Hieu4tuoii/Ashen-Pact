@@ -2,11 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:subagent-driven-development` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Hoàn thiện đủ **6/6 Archetype hình học phòng chiến thuật** với 3 Archetype mới (`CROSSFIRE_CONVEYORS`, `PRISM_LABYRINTH`, `CRUMBLING_PILLAR_RING`) và toàn bộ **Luật Sinh Tồn + 6 Vật Thể Tương Tác Địa Hình của Biome 2 (`Hầm Băng Vĩnh Cửu`: `glacial_barricade`, `sliding_ice_block`, `cryo_prism_pillar`) & Biome 3 (`Lò Rèn Dung Nham`: `forge_blast_shield`, `pneumatic_press`, `slag_crucible`)**, kèm Texture Baker procedural, VFX và bộ cảnh chụp/strip 8-frame (`ap2-p1c`).
+**Goal:** Hoàn thiện đủ **6/6 Archetype hình học phòng chiến thuật** với 3 Archetype mới (`CROSSFIRE_CONVEYORS`, `PRISM_LABYRINTH`, `CRUMBLING_PILLAR_RING`) và toàn bộ **Luật Sinh Tồn + 6 Vật Thể Tương Tác Địa Hình của Biome 2 (`Hầm Băng Vĩnh Cửu`: `glacial_barricade`, `sliding_ice_block`, `cryo_prism_pillar`) & Biome 3 (`Lò Rèn Dung Nham`: `forge_blast_shield`, `pneumatic_press`, `slag_crucible`)**, kèm Texture Baker procedural, VFX và bộ cảnh chụp/strip chuẩn **Engine 2.6 (`8/12 frames` + `1:1 ROI` + `HARD_ASSERT`)** (`ap2-p1c`).
 
 **Architecture:** Mở rộng `packages/shared/src/sim/arena-room-archetypes.ts`, `sim-tactical-physics.ts`, `sim-props-spawning.ts`, `texture-baker-props.ts`, `texture-baker-surfaces.ts`, `room-entities-sync.ts`, và `tests/e2e/helpers/visual-scene-ap2-p1.ts`.
 
-**Tech Stack:** TypeScript 5.x, Vitest, Phaser 3, Colyseus 60Hz deterministic simulation, Playwright visual verification (`pnpm shots`, `tools/visual-metrics.ts`).
+**Tech Stack:** TypeScript 5.x, Vitest, Phaser 3, Colyseus 60Hz deterministic simulation, Playwright visual verification (`pnpm shots`, `tools/visual-metrics.ts`, `tools/visual-animation-gates.ts`, `tools/visual-strip-renderer.ts` — Engine 2.6 `HARD_ASSERT`).
 
 ---
 

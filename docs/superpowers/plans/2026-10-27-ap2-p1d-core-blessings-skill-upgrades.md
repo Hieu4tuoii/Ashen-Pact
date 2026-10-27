@@ -2,11 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:subagent-driven-development` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Thay thế hoàn toàn các buff cộng chỉ số cũ bằng **26 Thẻ Nâng Cấp Cốt Lõi** (16 Phước Lành Hành Động cốt lõi thuộc 4 nhóm `Barricade / Table Techs`, `Dash Techs`, `Reload, Vent & Finisher Techs`, `Geometry & Co-op Bullet Mods` + 10 Thẻ Nâng Cấp Kỹ Năng Nhân Vật), lưu trữ độc lập theo từng người chơi (`Per-Player`), kèm giao diện Modal chọn Phước lành song ngữ Việt/Anh, VFX và bộ cảnh chụp/strip 8-frame (`ap2-p1d`).
+**Goal:** Thay thế hoàn toàn các buff cộng chỉ số cũ bằng **26 Thẻ Nâng Cấp Cốt Lõi** (16 Phước Lành Hành Động cốt lõi thuộc 4 nhóm `Barricade / Table Techs`, `Dash Techs`, `Reload, Vent & Finisher Techs`, `Geometry & Co-op Bullet Mods` + 10 Thẻ Nâng Cấp Kỹ Năng Nhân Vật), lưu trữ độc lập theo từng người chơi (`Per-Player`), kèm giao diện Modal chọn Phước lành song ngữ Việt/Anh, VFX và bộ cảnh chụp/strip chuẩn **Engine 2.6 (`8/12 frames` + `1:1 ROI` + `HARD_ASSERT`)** (`ap2-p1d`).
 
 **Architecture:** Tạo mới `packages/shared/src/data/blessings.ts` (`< 500 dòng`) và `packages/shared/src/sim/sim-blessings.ts` (`< 650 dòng`), kết nối vào `sim-tactical-physics.ts`, `sim-player.ts`, `sim-weapon-cadence.ts`, `sim-skills-mechanics.ts`, `sim-projectiles.ts`, `hud-modals-and-debug.ts`, `combat-fx-weapons-v2.ts`, `visual-scene-ap2-p1.ts`.
 
-**Tech Stack:** TypeScript 5.x, Vitest, Phaser 3, Colyseus 60Hz deterministic simulation, Playwright visual verification (`pnpm shots`, `tools/visual-metrics.ts`).
+**Tech Stack:** TypeScript 5.x, Vitest, Phaser 3, Colyseus 60Hz deterministic simulation, Playwright visual verification (`pnpm shots`, `tools/visual-metrics.ts`, `tools/visual-animation-gates.ts`, `tools/visual-strip-renderer.ts` — Engine 2.6 `HARD_ASSERT`).
 
 ---
 
