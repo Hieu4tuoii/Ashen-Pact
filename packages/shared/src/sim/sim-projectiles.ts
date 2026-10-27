@@ -15,6 +15,7 @@ import {
   plantMagneticRivet,
   resolvePlayerProjectileHitDamageAndAngle,
   tryTeslaSmartWallBounce,
+  updateEmeraldCleaverBoomerang,
   updateVoidStaffOrbInFlight,
 } from './sim-weapon-specials.js';
 import {
@@ -181,6 +182,11 @@ export function updateProjectilesImpl(this: WorldSim, dtSec: number): void {
         this.applyElementAtWorldPoint(b.x, b.y, b.element, 20);
       }
       handleProjectileExpiredWeaponSpecials(this, b);
+      continue;
+    }
+
+    if (b.weaponId === 'emerald_cleaver_boomerang') {
+      updateEmeraldCleaverBoomerang(this, b, dtSec);
       continue;
     }
 

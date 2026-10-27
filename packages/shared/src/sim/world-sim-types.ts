@@ -251,6 +251,23 @@ export interface SimMagneticRivetState {
   ttlSec: number;
 }
 
+export interface SimFlameFissureState {
+  id: number;
+  ownerPlayerId: number;
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  angle: number;
+  length: number;
+  width: number;
+  ttlSec: number;
+  maxTtlSec: number;
+  tickTimer: number;
+  ticksElapsed: number;
+  damage: number;
+}
+
 export interface SimDoorState {
   dir: CardinalDir;
   targetRoomId: number;
@@ -410,6 +427,8 @@ export interface SimPlayerState {
   meleeComboStep: 0 | 1 | 2;
   meleeComboResetTimer: number;
   meleeParryWindowTimer: number;
+  berserkerBloodlustStacks?: number;
+  berserkerBloodlustTimer?: number;
   holsterReloadTimers: number[];
   weaponSlotClipAmmo: number[];
   weaponSlotHeat: number[];
@@ -525,6 +544,7 @@ export interface SimEnemyState {
   eliteModifier: EliteModifier | null;
   shieldArmor: number;
   maxShieldArmor: number;
+  shieldBrokenTimer?: number;
   regenAccum: number;
   isBoss: boolean;
   bossPhase: 1 | 2 | 3;
@@ -603,6 +623,9 @@ export interface SimProjectileState {
   voidPulseTimer?: number;
   armedForReleaseImplosion?: boolean;
   firedWhileHoldingFire?: boolean;
+  boomerangPhase?: 'outbound' | 'spinning' | 'returning';
+  boomerangSpinTicks?: number;
+  boomerangDeflectedCount?: number;
   hitEntityIds: number[];
 }
 
@@ -661,6 +684,9 @@ export interface BulletVolleySpawnEvent {
   voidPulseTimer?: number;
   armedForReleaseImplosion?: boolean;
   firedWhileHoldingFire?: boolean;
+  boomerangPhase?: 'outbound' | 'spinning' | 'returning';
+  boomerangSpinTicks?: number;
+  boomerangDeflectedCount?: number;
 }
 
 

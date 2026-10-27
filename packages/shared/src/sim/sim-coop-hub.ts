@@ -99,6 +99,8 @@ export function createPlayerStateImpl(this: WorldSim,
     meleeComboStep: 0,
     meleeComboResetTimer: 0,
     meleeParryWindowTimer: 0,
+    berserkerBloodlustStacks: 0,
+    berserkerBloodlustTimer: 0,
     holsterReloadTimers: [0, 0],
     weaponSlotClipAmmo: [starterWep?.clipSize ?? 0, -1],
     weaponSlotHeat: [0, 0],
@@ -488,6 +490,7 @@ export function enterHubImpl(this: WorldSim): void {
   this.npcEntities.length = 0;
   this.doors.length = 0;
   this.hubStatues.length = 0;
+  this.flameFissures.length = 0;
 
   this.map.configureRoomLayout('start', Number(this.baseSeed), false);
   this.map.clearInteriorForHub();

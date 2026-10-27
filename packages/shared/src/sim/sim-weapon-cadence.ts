@@ -14,15 +14,19 @@ import {
   GALE_SMG_MAX_FIRE_RATE,
   GALE_SMG_MIN_FIRE_RATE,
   GALE_SMG_SPINUP_DURATION_SEC,
+  applyBerserkerAxeHitBloodlust,
+  applySafeMeleeLunge,
   checkAndTriggerFragLauncherAirburst,
   checkAndTriggerVoidStaffImplosion,
   detonateParasiticThorns,
   detonatePlayerMagneticRivets,
   fireFocusLaserHitscanBeam,
   processMeleeParryDeflect,
+  spawnEmeraldCleaverBoomerang,
   spawnGaleSmgWindBlade,
   spawnKnightSwordCrescentWave,
   triggerApprenticeStaffTacticalVent,
+  triggerBerserkerGuillotineFinisher,
   triggerFocusLaserRailgunVent,
   triggerGaleSmgTacticalVent,
   triggerHunterCrossbowBarbedRip,
@@ -153,21 +157,8 @@ export function switchPlayerWeaponSlot(
 
 function applyMeleeLunge(sim: WorldSim, p: SimPlayerState, lungeDist: number): void {
   if (sim.stressTestActive) return;
-  const steps = 4;
-  const stepDist = lungeDist / steps;
-  const cos = Math.cos(p.aimAngle);
-  const sin = Math.sin(p.aimAngle);
-  for (let s = 0; s < steps; s += 1) {
-    const candX = p.x + cos * stepDist;
-    const candY = p.y + sin * stepDist;
-    if (sim.map.getSurfaceAtWorld(candX, candY) === 'chasm') {
-      break;
-    }
-    const col = sim.map.resolveCircleCollision(candX, candY, p.radius, true);
-    p.x = col.x;
-    p.y = col.y;
-    sim.resolvePropMovementCollision(p);
-  }
+  applySafeMeleeLunge(sim, p, lungeDist);
+  sim.resolvePropMovementCollision(p);
 }
 
 export function updatePlayerWeaponCadence(
@@ -370,6 +361,15 @@ export function updatePlayerWeaponCadence(
       p.meleeComboResetTimer = nextReset;
     }
   }
+  if ((p.berserkerBloodlustTimer ?? 0) > 0) {
+    const nextBloodlust = (p.berserkerBloodlustTimer ?? 0) - dtSec;
+    if (nextBloodlust <= 1e-6) {
+      p.berserkerBloodlustTimer = 0;
+      p.berserkerBloodlustStacks = 0;
+    } else {
+      p.berserkerBloodlustTimer = nextBloodlust;
+    }
+  }
 
   if ((buttons & INPUT_BUTTON.FIRE) !== 0 && p.reloadTimer <= 0) {
     p.fireHoldTimer = (p.fireHoldTimer ?? 0) + dtSec;
@@ -493,9 +493,7 @@ export function tryFireActiveWeaponImpl(
     const meleeRange =
       w.id === 'thunder_hammer'
         ? MELEE_RANGE + 20
-        : w.id === 'berserker_axe'
-          ? MELEE_RANGE + 10
-          : (w.range ?? MELEE_RANGE);
+        : (w.range ?? (w.id === 'berserker_axe' ? MELEE_RANGE + 10 : MELEE_RANGE));
 
     const stepBaseDmg =
       w.comboDamages?.[comboStep] ??
@@ -514,17 +512,41 @@ export function tryFireActiveWeaponImpl(
       p.fireCooldownTimer += w.comboRecoverySec ?? 0.25;
       p.meleeComboStep = 0;
       p.meleeComboResetTimer = 0;
-      p.meleeParryWindowTimer = MELEE_PARRY_WINDOW_SEC;
-      p.parriedCountCurrentWindow = 0;
-      bulletsDestroyed += processMeleeParryDeflect(this, p);
-      if (w.id === 'knight_sword') {
-        spawnKnightSwordCrescentWave(this, p, baseMeleeDmg, critChance, shotElement, shotFlags);
+      if (w.id === 'berserker_axe') {
+        triggerBerserkerGuillotineFinisher(this, p, halfArc, meleeRange, baseMeleeDmg);
+      } else {
+        p.meleeParryWindowTimer = MELEE_PARRY_WINDOW_SEC;
+        p.parriedCountCurrentWindow = 0;
+        bulletsDestroyed += processMeleeParryDeflect(this, p);
+        if (w.id === 'knight_sword') {
+          spawnKnightSwordCrescentWave(this, p, baseMeleeDmg, critChance, shotElement, shotFlags);
+        }
       }
     }
 
-    resolveMeleeConeHitsAndSynergies(
+    const hitAny = resolveMeleeConeHitsAndSynergies(
       this, p, w, arcRad, halfArc, meleeRange, baseMeleeDmg, stepKnockback, critChance, shotElement, shotFlags, bulletsDestroyed,
     );
+    if (comboStep === 2 && w.id === 'emerald_cleaver') {
+      spawnEmeraldCleaverBoomerang(
+        this,
+        p,
+        baseMeleeDmg,
+        critChance,
+        shotElement,
+        shotFlags,
+      );
+    }
+    if (w.id === 'berserker_axe') {
+      applyBerserkerAxeHitBloodlust(
+        p,
+        hitAny,
+        w.fireRate,
+        fireRateMult,
+        comboStep === 2,
+        w.comboRecoverySec ?? 0.25,
+      );
+    }
     return;
   }
 

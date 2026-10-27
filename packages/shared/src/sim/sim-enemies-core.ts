@@ -4,7 +4,7 @@ import { approach, distance, distanceSq } from '../math/vec2.js';
 import { BIOME_SCALING, COOP_SCALING } from '../data/scaling.js';
 import type { SurfaceKind } from './arena-map.js';
 import { resolveEnemyChasmRingOut, triggerEnemyWallSlam } from './sim-tactical-physics.js';
-import { updateTetherStaffBeams } from './sim-weapon-specials.js';
+import { updateFlameFissures, updateTetherStaffBeams } from './sim-weapon-specials.js';
 import type { SimPlayerState, SimEnemyState } from './world-sim-types.js';
 import type { WorldSim } from './world-sim.js';
 
@@ -197,6 +197,7 @@ export function updatePhase6MechanicsImpl(this: WorldSim, dtSec: number): void {
 
   // 4. Co-op Weapon Tether Beams (tether_staff: High-Voltage Cutting Beam linking player to anchor)
   updateTetherStaffBeams(this, dtSec);
+  updateFlameFissures(this, dtSec);
 
   // 5. Boss Forge Titan Phase 2 Dual Energy Core synchronization window (3s Co-op / 6s Solo)
   if (this.titanCoreWindowTimer > 0) {
@@ -319,6 +320,9 @@ export function updateEnemiesImpl(this: WorldSim, dtSec: number): void {
     }
     if (e.superconductTimer > 0) {
       e.superconductTimer = Math.max(0, e.superconductTimer - dtSec);
+    }
+    if ((e.shieldBrokenTimer ?? 0) > 0) {
+      e.shieldBrokenTimer = Math.max(0, (e.shieldBrokenTimer ?? 0) - dtSec);
     }
     if (e.rootedTimer > 0) {
       e.rootedTimer = Math.max(0, e.rootedTimer - dtSec);

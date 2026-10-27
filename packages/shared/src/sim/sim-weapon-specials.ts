@@ -406,6 +406,16 @@ export function processMeleeParryDeflect(sim: WorldSim, p: SimPlayerState): numb
       kind: 'projectiles_destroyed',
       ids: deflectedIds,
     });
+    sim.events.push({
+      kind: 'melee_parry_deflect',
+      playerId: p.id,
+      weaponId: activeWepId,
+      x: p.x,
+      y: p.y,
+      angle: p.aimAngle,
+      deflectedCount: deflectedIds.length,
+      ids: deflectedIds,
+    });
   }
 
   return deflectedIds.length;

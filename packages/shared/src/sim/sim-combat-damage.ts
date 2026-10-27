@@ -50,7 +50,12 @@ export function applyDamageToEnemyImpl(
   // Frontal attacks within a 150-degree forward cone are heavily reduced unless flanked from behind or frozen/stunned!
   let hitFrontShield = false;
   const frontShieldReduction = ENEMIES[enemy.defId]?.frontShieldReduction ?? 0;
-  if (frontShieldReduction > 0 && enemy.frozenTimer <= 0 && enemy.aiState !== 'stunned') {
+  if (
+    frontShieldReduction > 0 &&
+    enemy.frozenTimer <= 0 &&
+    enemy.aiState !== 'stunned' &&
+    (enemy.shieldBrokenTimer ?? 0) <= 0
+  ) {
     const incomingFromAngle = hitAngleRad + Math.PI;
     if (Math.abs(angleDiff(incomingFromAngle, enemy.aimAngle)) <= (75 * Math.PI) / 180) {
       finalAmount = Math.max(1, finalAmount * (1 - frontShieldReduction));

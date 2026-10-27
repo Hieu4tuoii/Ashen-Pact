@@ -603,7 +603,7 @@ export function resolveMeleeConeHitsAndSynergies(
   shotElement: ElementType,
   shotFlags: number,
   bulletsDestroyed: number,
-): void {
+): boolean {
   triggerMeleeKickProps(sim, p, halfArc, meleeRange + 6, p.aimAngle);
   for (let i = 0; i < sim.props.length; i++) {
     const prop = sim.props[i]!;
@@ -737,6 +737,7 @@ export function resolveMeleeConeHitsAndSynergies(
       trauma: anyCrit ? 0.36 : 0.24,
     });
   }
+  return hitAny;
 }
 
 export function upsertTetherStaffBeam(

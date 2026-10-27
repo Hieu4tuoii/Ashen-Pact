@@ -105,6 +105,7 @@ export function enterRoomImpl(this: WorldSim, roomId: number, entryDir?: Cardina
   this.pushBlocks.length = 0;
   this.shockwaveRings.length = 0;
   this.tetherBeams.length = 0;
+  this.flameFissures.length = 0;
   this.blizzardVeilActive = false;
   this.titanCoreWindowTimer = 0;
   this.titanFirstCoreBrokenId = 0;

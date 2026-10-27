@@ -654,5 +654,4 @@ export function resolvePlayerProjectileHitDamageAndAngle(
   return _hitDmgAngleScratch;
 }
 
-
-
+export * from './sim-weapon-specials-p1b-melee.js';

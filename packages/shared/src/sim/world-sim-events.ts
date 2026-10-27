@@ -457,6 +457,29 @@ export type SimEvent =
       swallowedBullets: number;
       triggeredByRelease: boolean;
       alertTextVi?: string;
+    }
+  | {
+      kind: 'melee_parry_deflect';
+      playerId: number;
+      weaponId: string;
+      x: number;
+      y: number;
+      angle: number;
+      deflectedCount: number;
+      ids: number[];
+    }
+  | {
+      kind: 'berserker_guillotine_slam';
+      playerId: number;
+      x: number;
+      y: number;
+      x2: number;
+      y2: number;
+      angle: number;
+      length: number;
+      width: number;
+      damage: number;
+      alertTextVi: string;
     };
 
 export interface WorldSimOptions {
