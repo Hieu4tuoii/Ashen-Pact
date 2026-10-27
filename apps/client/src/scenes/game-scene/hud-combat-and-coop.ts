@@ -10,6 +10,7 @@ import {
 import { hexToNum, PALETTE } from '../../art/palette.js';
 import { TextureBaker } from '../../art/texture-baker.js';
 import { isEffectiveDebugUiEnabled } from '../../core/debug-flag.js';
+import { drawPlayerBlessingChipsHud } from '../../ui/blessing-card-visuals.js';
 import {
   drawCircularCooldown,
   drawKeyChip,
@@ -107,7 +108,8 @@ export function updateVectorHudImpl(this: GameScene): void {
   const activeWId = p.weaponSlots[p.activeWeaponSlot] ?? p.weaponSlots[0] ?? 'knight_sword';
   const activeWDef = WEAPONS[activeWId] ?? WEAPONS.knight_sword!;
   const cadenceStateHash = `${activeWId}:${p.clipAmmo}:${p.clipMax}:${Math.round(p.weaponHeat)}:${Math.round((p.reloadTimer ?? 0) * 20)}:${p.overclockedNextShot ? 1 : 0}:${Math.round((p.overheatLockTimer ?? 0) * 10)}:${p.meleeComboStep ?? 0}`;
-  const topCardHash = `${p.hp}:${p.maxHp}:${p.armor}:${p.maxArmor}:${cadenceStateHash}:${p.characterId}:${p.slot}:${curBiomeKey}:${lowHpPulse ? 1 : 0}:${trailHash}:${statusChipStr}:${curLocale}`;
+  const blessingsSig = (p.blessingIds ?? []).join(',');
+  const topCardHash = `${p.hp}:${p.maxHp}:${p.armor}:${p.maxArmor}:${cadenceStateHash}:${p.characterId}:${p.slot}:${curBiomeKey}:${lowHpPulse ? 1 : 0}:${trailHash}:${statusChipStr}:${blessingsSig}:${curLocale}`;
 
   const sceneCache = this as GameScene & {
     lastTopCardHash?: string;
@@ -247,6 +249,7 @@ export function updateVectorHudImpl(this: GameScene): void {
         radius: 4,
       });
     }
+    drawPlayerBlessingChipsHud(this, g, p, 12, statusChipStr.length > 0 ? 102 : 85);
   }
 
   if (this.goldLabelText && (!sim.stressTestActive || sim.tick % 15 === 0)) {

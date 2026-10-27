@@ -500,43 +500,43 @@
     },
     "vanguard_bastion_prism": {
       "name": "Upgrade: Bastion Prism",
-      "desc": "Ruby Shield Wall surrounds Vanguard in a full 360° dome and boosts counter damage."
+      "desc": "Widens Ruby Shield Wall: enemy bullets hitting the shield reflect as Fire bolts (20 DMG), and primary allied bullets fired through split into 2 rays."
     },
     "vanguard_charge": {
       "name": "Upgrade: Shield Charge",
-      "desc": "Reactivating Ruby Shield Wall dashes forward, knocking back and stunning enemies."
+      "desc": "Reactivating Ruby Shield Wall charges 130px forward, ramming enemies into walls (triggering Wall-Slam) and releasing a heavy shockwave."
     },
     "ranger_arrow_volley": {
       "name": "Upgrade: Arrow Volley",
-      "desc": "Predator Arrow splits into a 5-arrow piercing fan, marking multiple targets."
+      "desc": "Predator Arrow fires a 5-arrow piercing fan; arrows striking walls detonate in a micro-blast that Marks all nearby enemies."
     },
     "ranger_prey_chain": {
       "name": "Upgrade: Prey Chain",
-      "desc": "30% of damage dealt to a Marked target chains to other Marked enemies nearby."
+      "desc": "Marked targets within 220px are linked by crimson chains, sharing 35% of damage taken and pulling linked foes along when knocked back."
     },
     "elementalist_vortex": {
       "name": "Upgrade: Elemental Vortex",
-      "desc": "Elemental Orb zone pulls surrounding enemies toward its center."
+      "desc": "Elemental Orb zone generates a gravitational vortex pulling enemies and rolling props within 150px toward its center."
     },
     "elementalist_twin_orbit": {
       "name": "Upgrade: Twin Orbit",
-      "desc": "Elemental Orb zone carries both current and next elements, triggering reactions immediately."
+      "desc": "Deploys twin Elemental Zones (current and next element) linked by a Reaction Cutting Beam (24 DMG/s) that triggers reactions immediately."
     },
     "druid_poison_roots": {
       "name": "Upgrade: Poison Roots",
-      "desc": "Sacred Tree roots deal periodic damage and inflict Poison on enemies in range."
+      "desc": "Every 1.8s, Sacred Tree lashes briar roots that yank enemies in range into the nearest wall (Wall-Slam) while applying Poison."
     },
     "druid_sacred_grove": {
       "name": "Upgrade: Sacred Grove",
-      "desc": "Each skill cast plants 2 Sacred Trees simultaneously for wider healing and rooting."
+      "desc": "Plants 2 Sacred Trees simultaneously; allied bullets fired through a Sacred Tree canopy gain +1 Smart Bounce."
     },
     "engineer_twin_turrets": {
       "name": "Upgrade: Twin Turrets",
-      "desc": "Allows up to 2 Tesla Turrets to operate simultaneously on the battlefield."
+      "desc": "Allows 2 Tesla Turrets active at once, automatically linking them with a Lightning Laser Fence that slows enemies by 50%."
     },
     "engineer_self_destruct": {
       "name": "Upgrade: Overload Self-Destruct",
-      "desc": "When expiring or destroyed, Tesla Turret charges the nearest foe and explodes."
+      "desc": "Reactivating Skill or turret expiry turns Tesla Turret into a kamikaze bot that charges the densest enemy cluster and explodes for 45 Fire+Shock DMG (r=130px)."
     }
   },
   "enemies": {

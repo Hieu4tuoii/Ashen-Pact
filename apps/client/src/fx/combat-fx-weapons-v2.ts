@@ -31,10 +31,16 @@ import {
   drawP1CActiveOverlays,
   drawP1CTransientShape,
 } from './combat-fx-p1c.js';
+import {
+  type P1DBlessingVfxKind,
+  drawP1DBlessingActiveOverlays,
+  drawP1DTransientShape,
+} from './combat-fx-blessings-p1d.js';
 
 export * from './combat-fx-weapons-p1a.js';
 export * from './combat-fx-weapons-p1b.js';
 export * from './combat-fx-p1c.js';
+export * from './combat-fx-blessings-p1d.js';
 
 export interface MagneticRivetPoint {
   id: number;
@@ -190,7 +196,8 @@ export interface TransientWeaponV2Shape {
     | 'totem_lane'
     | Batch1WeaponVfxKind
     | Batch2WeaponVfxKind
-    | P1CTacticalVfxKind;
+    | P1CTacticalVfxKind
+    | P1DBlessingVfxKind;
   x: number;
   y: number;
   x2?: number;
@@ -537,6 +544,7 @@ export function updateAndDrawWeaponV2Overlays(
   drawBatch1ActiveProjectiles(g, state.syncedProjectiles, player, clockSec);
   drawBatch2ActiveWeaponOverlays(g, state.syncedSim, player, clockSec);
   drawP1CActiveOverlays(g, state.syncedSim, clockSec);
+  drawP1DBlessingActiveOverlays(g, state.syncedSim, clockSec);
 
   // 2. Update & draw transient weapon v2 / tactical shapes
   for (let i = state.shapes.length - 1; i >= 0; i -= 1) {
@@ -556,6 +564,9 @@ export function updateAndDrawWeaponV2Overlays(
       continue;
     }
     if (drawP1CTransientShape(g, s, progress, alpha)) {
+      continue;
+    }
+    if (drawP1DTransientShape(g, s, progress, alpha)) {
       continue;
     }
 

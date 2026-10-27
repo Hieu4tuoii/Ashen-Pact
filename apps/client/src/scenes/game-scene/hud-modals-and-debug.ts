@@ -1,22 +1,34 @@
 import {
   type BuffId,
   CHARACTERS,
-  FLOOR_BUFFS,
   i18n,
   PLAYER_SLOT_COLORS,
   type SupportedLocale,
   WEAPONS,
 } from '@ashen-pact/shared';
-import type Phaser from 'phaser';
 import { hexToNum, PALETTE } from '../../art/palette.js';
 import { TextureBaker } from '../../art/texture-baker.js';
 import { musicManager } from '../../audio/music-synth.js';
 import { zzfx } from '../../audio/zzfx.js';
-import { drawKeyChip, drawStyledPanel } from '../../ui/components/hud-primitives.js';
+import {
+  drawBuffEmblemIcon,
+  drawPlayerBlessingChipsHud,
+  getBuffVisualMeta,
+  renderBlessingChoiceCards,
+  resolveLocalizedBuffText,
+} from '../../ui/blessing-card-visuals.js';
+import { drawStyledPanel } from '../../ui/components/hud-primitives.js';
 import { initGlobalDebugState } from '../../ui/debug-overlay.js';
 import { graphicsSettings } from '../../ui/graphics-settings.js';
 import { UI_THEME } from '../../ui/theme.js';
 import { type GameScene } from '../GameScene.js';
+
+export {
+  drawBuffEmblemIcon,
+  drawPlayerBlessingChipsHud,
+  getBuffVisualMeta,
+  resolveLocalizedBuffText,
+};
 
 export interface ResultScreenButtonSpec {
   id: 'replay' | 'returnHub';
@@ -26,45 +38,6 @@ export interface ResultScreenButtonSpec {
   w: number;
   h: number;
   label: string;
-}
-
-const LEGACY_BUFF_ALIASES: Readonly<Record<string, BuffId>> = {
-  bountiful_vitality: 'vanguard_bastion_prism',
-  swift_wind: 'elementalist_twin_orbit',
-};
-
-/**
- * Resolves a BuffId (or legacy alias) to its localized display name and description,
- * ensuring raw snake_case IDs never appear in Victory/Defeat summaries.
- */
-export function resolveLocalizedBuffText(
-  rawBuffId: BuffId | string,
-  locale: SupportedLocale = i18n.getLocale(),
-): { name: string; desc: string } {
-  const prevLocale = i18n.getLocale();
-  if (prevLocale !== locale) {
-    i18n.setLocale(locale);
-  }
-  try {
-    const canonicalId = (LEGACY_BUFF_ALIASES[String(rawBuffId)] ?? rawBuffId) as BuffId;
-    const def = FLOOR_BUFFS[canonicalId];
-    if (def) {
-      return i18n.getBuffText(canonicalId, def.nameVi, def.descriptionVi);
-    }
-    const lookedUp = i18n.getBuffText(canonicalId);
-    if (lookedUp.name !== String(canonicalId)) {
-      return lookedUp;
-    }
-    const humanized = String(rawBuffId)
-      .split('_')
-      .map((w) => (w ? w[0]!.toUpperCase() + w.slice(1) : ''))
-      .join(' ');
-    return { name: humanized, desc: '' };
-  } finally {
-    if (prevLocale !== locale) {
-      i18n.setLocale(prevLocale);
-    }
-  }
 }
 
 /**
@@ -98,69 +71,6 @@ export function getResultScreenButtonSpecs(
   ];
 }
 
-function getBuffVisualMeta(
-  buffId: BuffId,
-  isEn: boolean,
-): { borderHex: string; badgeText: string; iconKind: string } {
-  const bDef = FLOOR_BUFFS[buffId];
-  if (bDef?.characterId) {
-    return {
-      borderHex: PALETTE.SOLAR_GOLD,
-      badgeText: isEn ? '★ SKILL UPGRADE' : '★ NÂNG CẤP KỸ NĂNG',
-      iconKind: bDef.characterId,
-    };
-  }
-  return {
-    borderHex: PALETTE.ELECTRIC_VIOLET,
-    badgeText: isEn ? '✦ BLESSING' : '✦ PHƯỚC LÀNH',
-    iconKind: 'ricochet',
-  };
-}
-
-function drawBuffEmblemIcon(
-  g: Phaser.GameObjects.Graphics,
-  iconKind: string,
-  cx: number,
-  cy: number,
-  accentHex: string,
-): void {
-  const accentNum = hexToNum(accentHex);
-  g.fillStyle(UI_THEME.panelBgDark, 0.96);
-  g.fillCircle(cx, cy, 18);
-  g.lineStyle(2, accentNum, 0.95);
-  g.strokeCircle(cx, cy, 18);
-  g.fillStyle(accentNum, 0.16);
-  g.fillCircle(cx, cy, 14);
-
-  g.fillStyle(accentNum, 1);
-  g.lineStyle(2, accentNum, 1);
-  if (iconKind === 'heart') {
-    g.fillCircle(cx - 4.5, cy - 2.5, 5);
-    g.fillCircle(cx + 4.5, cy - 2.5, 5);
-    g.fillTriangle(cx - 9.2, cy - 0.5, cx + 9.2, cy - 0.5, cx, cy + 9.5);
-  } else if (iconKind === 'shield' || iconKind === 'vanguard') {
-    g.fillTriangle(cx - 8, cy - 6, cx + 8, cy - 6, cx, cy + 10);
-    g.fillRect(cx - 8, cy - 8, 16, 4);
-  } else if (iconKind === 'bolt' || iconKind === 'elementalist') {
-    g.fillTriangle(cx + 2, cy - 10, cx - 6, cy + 1, cx + 1, cy + 1);
-    g.fillTriangle(cx - 1, cy - 1, cx + 6, cy - 1, cx - 2, cy + 10);
-  } else if (iconKind === 'crosshair' || iconKind === 'ranger') {
-    g.strokeCircle(cx, cy, 7.5);
-    g.fillCircle(cx, cy, 2.5);
-    g.lineBetween(cx - 11, cy, cx - 5, cy);
-    g.lineBetween(cx + 5, cy, cx + 11, cy);
-    g.lineBetween(cx, cy - 11, cx, cy - 5);
-    g.lineBetween(cx, cy + 5, cx, cy + 11);
-  } else if (iconKind === 'wing' || iconKind === 'druid') {
-    g.fillCircle(cx, cy + 2, 6);
-    g.fillTriangle(cx - 6, cy + 2, cx + 6, cy + 2, cx, cy - 9);
-  } else {
-    // Engineer / Ricochet star emblem
-    g.fillTriangle(cx, cy - 9, cx - 7, cy + 5, cx + 7, cy + 5);
-    g.fillTriangle(cx, cy + 9, cx - 7, cy - 5, cx + 7, cy - 5);
-  }
-}
-
 export function updateModalHudImpl(this: GameScene): void {
   const ui = this.uiScene;
   const sim = this.transport.getSim();
@@ -185,7 +95,8 @@ export function updateModalHudImpl(this: GameScene): void {
   const readyCount = allPlayers.filter((pl) => pl.buffChoices.length === 0).length;
   const localPlayer = this.transport.getLocalPlayerState();
   const pendingBuffChoices = localPlayer.buffChoices ?? [];
-  const modalKey = `${sim.runState}:${pendingBuffChoices.join(',')}:${readyCount}:${partyCount}:${this.buffHoveredIdx ?? -1}:${this.resultDismissed}:${i18n.getLocale()}:${statsSig}`;
+  const ownedSig = (localPlayer.blessingIds ?? []).join(',');
+  const modalKey = `${sim.runState}:${pendingBuffChoices.join(',')}:${ownedSig}:${readyCount}:${partyCount}:${this.buffHoveredIdx ?? -1}:${this.resultDismissed}:${i18n.getLocale()}:${statsSig}`;
   if (modalKey === this.lastRunState) return;
   const prevRunState = this.lastRunState.split(':')[0];
   this.lastRunState = modalKey;
@@ -219,10 +130,11 @@ export function updateModalHudImpl(this: GameScene): void {
       accentColor: hexToNum(PALETTE.SOLAR_GOLD),
       accentSide: 'top',
     });
+    drawPlayerBlessingChipsHud(this, bg, localPlayer, modalX + 18, modalY + 14);
     this.modalContainer.add(bg);
 
     const header = ui.add
-      .text(480, modalY + 16, i18n.t('modal.buffChoiceTitle'), {
+      .text(480, modalY + 14, i18n.t('modal.buffChoiceTitle'), {
         fontFamily: '"Be Vietnam Pro", sans-serif',
         fontSize: '15px',
         fontStyle: '800',
@@ -234,16 +146,17 @@ export function updateModalHudImpl(this: GameScene): void {
       .setOrigin(0.5, 0);
     this.modalContainer.add(header);
 
+    const ownedCount = localPlayer.blessingIds?.length ?? 0;
     const subtitleStr =
       pendingBuffChoices.length === 0
         ? isEn
-          ? `✓ Blessing Selected — Waiting for party (${readyCount}/${partyCount})...`
-          : `✓ Đã chọn Phước Lành — Đang chờ đồng đội (${readyCount}/${partyCount})...`
+          ? `✓ Blessing Selected — Waiting for party (${readyCount}/${partyCount}) · Owned: ${ownedCount}`
+          : `✓ Đã chọn Phước Lành — Chờ đồng đội (${readyCount}/${partyCount}) · Đang sở hữu: ${ownedCount}`
         : isEn
-          ? `Floor ${sim.currentFloor} Cleared · Select 1 Blessing to Empower Your Pact`
-          : `Hoàn Thành Tầng ${sim.currentFloor} · Chọn 1 Phước Lành Cường Hóa Đội Hình`;
+          ? `Floor ${sim.currentFloor} Cleared · Select 1 Personal Blessing (Owned: ${ownedCount})`
+          : `Hoàn Thành Tầng ${sim.currentFloor} · Chọn 1 Phước Lành Cá Nhân (Đang có: ${ownedCount})`;
     const subHeader = ui.add
-      .text(480, modalY + 38, subtitleStr, {
+      .text(480, modalY + 36, subtitleStr, {
         fontFamily: '"Be Vietnam Pro", sans-serif',
         fontSize: '11px',
         fontStyle: '700',
@@ -255,151 +168,7 @@ export function updateModalHudImpl(this: GameScene): void {
       .setOrigin(0.5, 0);
     this.modalContainer.add(subHeader);
 
-    pendingBuffChoices.forEach((buffId: BuffId, idx: number) => {
-      const bDef = FLOOR_BUFFS[buffId];
-      if (!bDef) return;
-      const buffTxt = i18n.getBuffText(buffId, bDef.nameVi, bDef.descriptionVi);
-      const meta = getBuffVisualMeta(buffId, isEn);
-      const isHovered = this.buffHoveredIdx === idx;
-
-      const cardW = 212;
-      const cardH = 248;
-      const cardX = 148 + idx * 226;
-      const cardY = (isHovered ? 144 : 149);
-
-      const cardG = ui.add.graphics();
-      drawStyledPanel(cardG, cardX, cardY, cardW, cardH, {
-        fillColor: isHovered ? UI_THEME.panelBgElevated : UI_THEME.panelBg,
-        fillAlpha: 0.97,
-        borderColor: hexToNum(isHovered ? PALETTE.SOLAR_GOLD : meta.borderHex),
-        borderWidth: isHovered ? 2.6 : 2.0,
-        radius: UI_THEME.panelRadius.md,
-        accentColor: hexToNum(meta.borderHex),
-        accentSide: 'top',
-      });
-
-      // Category / Rarity Pill at top of card
-      drawStyledPanel(cardG, cardX + 14, cardY + 12, cardW - 28, 18, {
-        fillColor: UI_THEME.panelBgDark,
-        fillAlpha: 0.92,
-        borderColor: hexToNum(meta.borderHex),
-        borderWidth: 1.2,
-        radius: 4,
-      });
-
-      // Procedural Vector Emblem Icon
-      drawBuffEmblemIcon(cardG, meta.iconKind, cardX + cardW / 2, cardY + 56, meta.borderHex);
-
-      // Divider line above description
-      cardG.lineStyle(1, hexToNum(meta.borderHex), 0.3);
-      cardG.lineBetween(cardX + 18, cardY + 114, cardX + cardW - 18, cardY + 114);
-
-      // Bottom hotkey footer bar inside card
-      const footerY = cardY + cardH - 34;
-      drawStyledPanel(cardG, cardX + 12, footerY, cardW - 24, 24, {
-        fillColor: UI_THEME.panelBgDark,
-        fillAlpha: 0.95,
-        borderColor: hexToNum(isHovered ? PALETTE.SOLAR_GOLD : meta.borderHex),
-        borderWidth: 1.3,
-        radius: 5,
-      });
-      const chipMetrics = drawKeyChip(cardG, cardX + 22, footerY + 5, `${idx + 1}`, {
-        active: true,
-      });
-      this.modalContainer.add(cardG);
-
-      const badgeTxt = ui.add
-        .text(cardX + cardW / 2, cardY + 21, meta.badgeText, {
-          fontFamily: '"Be Vietnam Pro", sans-serif',
-          fontSize: '9.5px',
-          fontStyle: '800',
-          color: meta.borderHex,
-          stroke: PALETTE.INK_DARK,
-          strokeThickness: 2.2,
-          resolution: textRes,
-        })
-        .setOrigin(0.5, 0.5);
-
-      const title = ui.add
-        .text(cardX + cardW / 2, cardY + 82, buffTxt.name, {
-          fontFamily: '"Be Vietnam Pro", sans-serif',
-          fontSize: '13px',
-          fontStyle: '800',
-          color: PALETTE.SOLAR_GOLD,
-          stroke: PALETTE.INK_DARK,
-          strokeThickness: 3,
-          align: 'center',
-          wordWrap: { width: cardW - 20 },
-          resolution: textRes,
-        })
-        .setOrigin(0.5, 0);
-
-      const desc = ui.add
-        .text(cardX + cardW / 2, cardY + 122, buffTxt.desc, {
-          fontFamily: '"Be Vietnam Pro", sans-serif',
-          fontSize: '11px',
-          fontStyle: '600',
-          color: PALETTE.BONE_WHITE,
-          stroke: PALETTE.INK_DARK,
-          strokeThickness: 2.4,
-          align: 'center',
-          wordWrap: { width: cardW - 24 },
-          resolution: textRes,
-        })
-        .setOrigin(0.5, 0);
-
-      const keyNumTxt = ui.add
-        .text(cardX + 22 + chipMetrics.width * 0.5, footerY + 12, `${idx + 1}`, {
-          fontFamily: '"JetBrains Mono", monospace',
-          fontSize: '10.5px',
-          fontStyle: '800',
-          color: PALETTE.SOLAR_GOLD,
-          stroke: PALETTE.INK_DARK,
-          strokeThickness: 2,
-          resolution: textRes,
-        })
-        .setOrigin(0.5, 0.5);
-
-      const selectActionStr = isEn ? `Press [${idx + 1}] Select` : `Nhấn [${idx + 1}] Chọn`;
-      const selectTxt = ui.add
-        .text(cardX + cardW / 2 + 10, footerY + 12, selectActionStr, {
-          fontFamily: '"Be Vietnam Pro", sans-serif',
-          fontSize: '10.5px',
-          fontStyle: '800',
-          color: isHovered ? PALETTE.SOLAR_GOLD : PALETTE.BONE_WHITE,
-          stroke: PALETTE.INK_DARK,
-          strokeThickness: 2.2,
-          resolution: textRes,
-        })
-        .setOrigin(0.5, 0.5);
-
-      this.modalContainer.add([badgeTxt, title, desc, keyNumTxt, selectTxt]);
-
-      const hit = ui.add
-        .rectangle(cardX + cardW / 2, cardY + cardH / 2, cardW, cardH, 0x000000, 0)
-        .setInteractive({ useHandCursor: true });
-      hit.on('pointerover', () => {
-        if (this.buffHoveredIdx !== idx) {
-          this.buffHoveredIdx = idx;
-          zzfx.play('ui_hover');
-        }
-      });
-      hit.on('pointerout', () => {
-        if (this.buffHoveredIdx === idx) {
-          this.buffHoveredIdx = null;
-        }
-      });
-      hit.on('pointerdown', () => {
-        if (this.room && this.coopMode !== 'solo') {
-          localPlayer.buffChoices = [];
-          this.room.send('select_buff', { buffId });
-        } else {
-          sim.selectFloorBuff(buffId, localPlayer.id);
-        }
-        zzfx.play('skill_cast');
-      });
-      this.modalContainer.add(hit);
-    });
+    renderBlessingChoiceCards(this, pendingBuffChoices, isEn, textRes);
 
     // Bottom Co-op pick status & countdown bar
     const statusFooterG = ui.add.graphics();
@@ -410,7 +179,6 @@ export function updateModalHudImpl(this: GameScene): void {
       borderWidth: 1.2,
       radius: 6,
     });
-    // Progress track inside status footer
     const readyRatio = Math.min(1, Math.max(0, readyCount / Math.max(1, partyCount)));
     statusFooterG.fillStyle(0x121620, 0.9);
     statusFooterG.fillRoundedRect(modalX + modalW - 168, modalY + modalH - 33, 128, 10, 4);

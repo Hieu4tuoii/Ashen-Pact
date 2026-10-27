@@ -500,43 +500,43 @@
     },
     "vanguard_bastion_prism": {
       "name": "Nâng Cấp: Pháo Đài Phản Xạ",
-      "desc": "Tường Khiên Hồng Ngọc bao bọc toàn diện 360° quanh Thiết Vệ và tăng sát thương phản kích."
+      "desc": "Khiên mở rộng 160°/bao bọc bảo hộ: đạn địch chạm khiên bật ngược thành đạn Lửa (20 ST); đạn đồng minh bắn qua khiên tách làm 2 tia."
     },
     "vanguard_charge": {
       "name": "Nâng Cấp: Xung Phong Khiên",
-      "desc": "Tái kích hoạt Tường Khiên sẽ lao mạnh về phía trước, hất văng và gây sát thương lớn cho quái."
+      "desc": "Tái kích hoạt Tường Khiên lao mạnh về phía trước 130px, húc văng cả hàng quái đập vào tường (Wall-Slam) và phóng sóng xung kích."
     },
     "ranger_arrow_volley": {
-      "name": "Nâng Cấp: Mưa Tên",
-      "desc": "Mũi Tên Săn Mồi tách thành 5 mũi tên hình quạt xuyên thấu, đánh dấu nhiều mục tiêu cùng lúc."
+      "name": "Nâng Cấp: Mưa Tên Khóa Góc",
+      "desc": "Mũi Tên Săn Mồi phóng 5 mũi tên hình quạt xuyên thấu; mũi tên cắm vào tường phát nổ nhỏ và Đánh Dấu toàn bộ quái quanh điểm cắm."
     },
     "ranger_prey_chain": {
-      "name": "Nâng Cấp: Chuỗi Con Mồi",
-      "desc": "30% sát thương gây lên mục tiêu bị đánh dấu sẽ tự động lan sang các mục tiêu bị đánh dấu khác."
+      "name": "Nâng Cấp: Dây Xích Con Mồi",
+      "desc": "Các mục tiêu bị Đánh Dấu trong 220px nối dây xích đỏ: chia sẻ 35% sát thương nhận vào và kéo cả đám bay theo khi bị đẩy lùi."
     },
     "elementalist_vortex": {
       "name": "Nâng Cấp: Hố Đen Nguyên Tố",
-      "desc": "Vùng Cầu Nguyên Tố tạo lực hút kéo mọi quái vật xung quanh về tâm vùng nổ."
+      "desc": "Vùng Cầu Nguyên Tố tạo lực xoáy hút quái vật và các vật thể lăn (Thùng Nổ/Bào Tử) trong 150px gom vào tâm vùng nổ."
     },
     "elementalist_twin_orbit": {
       "name": "Nâng Cấp: Song Tinh Cắt Không Gian",
-      "desc": "Vùng Cầu Nguyên Tố mang đồng thời cả 2 nguyên tố hiện tại và kế tiếp, kích hoạt phản ứng ngay lập tức."
+      "desc": "Ném ra 2 vùng nguyên tố (hiện tại & kế tiếp) nối ở giữa bằng Tia Cắt Phản Ứng (24 ST/s), kích hoạt phản ứng nguyên tố ngay lập tức."
     },
     "druid_poison_roots": {
-      "name": "Nâng Cấp: Rễ Gai Độc",
-      "desc": "Rễ của Cây Thiêng quất sát thương định kỳ và áp trạng thái Độc lên mọi quái vật trong vùng."
+      "name": "Nâng Cấp: Rễ Gai Quất Tường",
+      "desc": "Cứ mỗi 1.8s, Cây Thiêng phóng rễ gai quấn lấy quái trong vùng và quật chúng vào bức tường gần nhất (Wall-Slam) kèm độc tố."
     },
     "druid_sacred_grove": {
-      "name": "Nâng Cấp: Rừng Thiêng",
-      "desc": "Mỗi lần dùng kỹ năng sẽ trồng đồng thời 2 Cây Thiêng tạo thành trận địa hồi phục và trói chân."
+      "name": "Nâng Cấp: Rừng Thiêng Cộng Sinh",
+      "desc": "Trồng 2 Cây Thiêng cùng lúc; đạn của cả đội bắn xuyên qua tán Cây Thiêng được cường hóa +1 lần nảy thông minh."
     },
     "engineer_twin_turrets": {
-      "name": "Nâng Cấp: Trụ Kép",
-      "desc": "Cho phép duy trì tối đa 2 Trụ Tesla hoạt động song song trên chiến trường."
+      "name": "Nâng Cấp: Trụ Kép Giao Thoa",
+      "desc": "Đặt 2 Trụ Tesla hoạt động song song; giữa 2 trụ tự động căng Hàng Rào Laser Sét làm chậm 50% kẻ địch đi cắt ngang."
     },
     "engineer_self_destruct": {
-      "name": "Nâng Cấp: Tự Hủy Quá Tải",
-      "desc": "Khi hết thời gian tồn tại hoặc bị phá hủy, Trụ Tesla phát nổ lớn gây sát thương diện rộng."
+      "name": "Nâng Cấp: Quá Tải Lò Phản Ứng",
+      "desc": "Tái kích hoạt kỹ năng hoặc khi hết giờ biến Trụ Tesla thành Robot Cảm Tử lao vào cụm quái đông nhất, nổ 45 ST Lửa + Sét (r=130px)."
     }
   },
   "enemies": {

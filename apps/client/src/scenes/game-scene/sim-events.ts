@@ -30,6 +30,7 @@ import {
   triggerMicroBarFeedbackOnScene,
   handleBatch2WeaponSimEvent,
   handleP1CSimEvent,
+  spawnP1DBlessingEventFx,
 } from '../../fx/combat-fx-weapons-v2.js';
 import { type GameScene, RIG_FOOT_OFFSET_Y } from '../GameScene.js';
 import { triggerP11WaveBanner } from './p11-drama-hud.js';
@@ -53,6 +54,7 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
 
   for (let i = 0; i < events.length; i++) {
     const ev = events[i]!;
+    if (spawnP1DBlessingEventFx(this, ev, sim, isStress, allowStressSfx)) continue;
     if (handleP1CSimEvent(this, ev, sim, isStress, allowStressSfx)) continue;
     if (handleBatch2WeaponSimEvent(this, ev, sim, isStress, allowStressSfx)) continue;
     switch (ev.kind) {
