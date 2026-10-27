@@ -45,6 +45,7 @@ interface Ap2P1BArenaInitConfig {
   pillarBox?: readonly [number, number, number, number];
   props?: ReadonlyArray<readonly [PropKind, number, number, boolean?]>;
   enemies?: ReadonlyArray<readonly [EnemyTypeId, number, number, ('shield' | undefined)?]>;
+  enemyBullets?: ReadonlyArray<readonly [number, number, number, number?]>;
   dummyEnemies?: boolean;
   rebuildDoors?: boolean;
 }
@@ -127,7 +128,6 @@ async function initAp2P1BArena(
       vx: 0,
       vy: 0,
       aimAngle: c.aimAngle ?? 0,
-      ...(c.playerPatch ?? {}),
     });
     for (const [typeId, ex, ey, eliteMod] of c.enemies ?? []) {
       Object.assign(sim.spawnEnemy(typeId, ex, ey, true, eliteMod), {
@@ -148,6 +148,39 @@ async function initAp2P1BArena(
   }, cfg);
   await lockCameraAndIrisToPlayer(page);
   await stepDeterministicFrames(page, warmupFrames);
+  if (cfg.playerPatch || cfg.enemyBullets) {
+    await page.evaluate((c) => {
+      const sim = window.__GAME_TRANSPORT__!.getSim();
+      if (c.playerPatch) Object.assign(sim.player, c.playerPatch);
+      const ownerId = sim.enemies[0]?.id ?? 200;
+      for (const [id, x, y, vx] of c.enemyBullets ?? []) {
+        sim.projectiles.push(
+          sim.acquireProjectile({
+            id,
+            ownerId,
+            team: 'enemy',
+            isEnemy: true,
+            x,
+            y,
+            vx: vx ?? -115,
+            vy: 0,
+            radius: 5.5,
+            damage: 2,
+            colorHex: '#E84545',
+            ttlSec: 3.5,
+            pierceCount: 0,
+            bounceCount: 0,
+            homingStrength: 0,
+            explosionRadius: 0,
+            isCrit: false,
+            element: 'none',
+            knockback: 30,
+          }),
+        );
+      }
+    }, cfg);
+    await stepDeterministicFrames(page, 1);
+  }
   await markPostWarmupStart(page);
 }
 
@@ -175,10 +208,7 @@ export async function setupAp2WepLaserRailgunScene(page: Page): Promise<void> {
       ['wild_boar', 488, 270, 'shield'],
       ['goblin_shaman', 468, 300],
     ],
-  });
-  await page.evaluate(() => {
-    const sim = window.__GAME_TRANSPORT__!.getSim();
-    Object.assign(sim.player, {
+    playerPatch: {
       weaponSlots: ['focus_laser', 'rivet_gun'],
       activeWeaponSlot: 0,
       weaponHeat: 68,
@@ -186,41 +216,13 @@ export async function setupAp2WepLaserRailgunScene(page: Page): Promise<void> {
       overheatLockTimer: 0,
       fireCooldownTimer: 0,
       reloadTimer: 0,
-    });
-    const ownerId = sim.enemies[0]?.id ?? 200;
-    const bullets: ReadonlyArray<readonly [number, number, number]> = [
-      [99101, 412, 262],
-      [99102, 418, 270],
-      [99103, 412, 278],
-    ];
-    for (const [id, x, y] of bullets) {
-      sim.projectiles.push(
-        sim.acquireProjectile({
-          id,
-          ownerId,
-          team: 'enemy',
-          isEnemy: true,
-          x,
-          y,
-          vx: -110,
-          vy: 0,
-          radius: 5.5,
-          damage: 2,
-          colorHex: '#E84545',
-          ttlSec: 3.5,
-          pierceCount: 0,
-          bounceCount: 0,
-          homingStrength: 0,
-          explosionRadius: 0,
-          isCrit: false,
-          element: 'none',
-          knockback: 30,
-        }),
-      );
-    }
+    },
+    enemyBullets: [
+      [99101, 412, 262, -110],
+      [99102, 418, 270, -110],
+      [99103, 412, 278, -110],
+    ],
   });
-  await stepDeterministicFrames(page, 1);
-  await markPostWarmupStart(page);
 }
 
 /** 2. ap2-wep-cleaver-boomerang (12-frame strip) */
@@ -239,10 +241,7 @@ export async function setupAp2WepCleaverBoomerangScene(page: Page): Promise<void
       ['wild_boar', 432, 270, 'shield'],
       ['goblin_shaman', 404, 292],
     ],
-  });
-  await page.evaluate(() => {
-    const sim = window.__GAME_TRANSPORT__!.getSim();
-    Object.assign(sim.player, {
+    playerPatch: {
       weaponSlots: ['emerald_cleaver', 'rivet_gun'],
       activeWeaponSlot: 0,
       meleeComboStep: 0,
@@ -250,41 +249,13 @@ export async function setupAp2WepCleaverBoomerangScene(page: Page): Promise<void
       fireCooldownTimer: 0,
       reloadTimer: 0,
       weaponHeat: 0,
-    });
-    const ownerId = sim.enemies[0]?.id ?? 200;
-    const bullets: ReadonlyArray<readonly [number, number, number]> = [
-      [99201, 562, 258],
-      [99202, 570, 270],
-      [99203, 562, 282],
-    ];
-    for (const [id, x, y] of bullets) {
-      sim.projectiles.push(
-        sim.acquireProjectile({
-          id,
-          ownerId,
-          team: 'enemy',
-          isEnemy: true,
-          x,
-          y,
-          vx: -120,
-          vy: 0,
-          radius: 5.5,
-          damage: 2,
-          colorHex: '#E84545',
-          ttlSec: 3.5,
-          pierceCount: 0,
-          bounceCount: 0,
-          homingStrength: 0,
-          explosionRadius: 0,
-          isCrit: false,
-          element: 'none',
-          knockback: 30,
-        }),
-      );
-    }
+    },
+    enemyBullets: [
+      [99201, 562, 258, -120],
+      [99202, 570, 270, -120],
+      [99203, 562, 282, -120],
+    ],
   });
-  await stepDeterministicFrames(page, 1);
-  await markPostWarmupStart(page);
 }
 
 /** 3. ap2-wep-void-implosion (8-frame strip) */
@@ -302,10 +273,7 @@ export async function setupAp2WepVoidImplosionScene(page: Page): Promise<void> {
       ['wild_boar', 462, 270, 'shield'],
       ['goblin_shaman', 446, 300],
     ],
-  });
-  await page.evaluate(() => {
-    const sim = window.__GAME_TRANSPORT__!.getSim();
-    Object.assign(sim.player, {
+    playerPatch: {
       weaponSlots: ['void_staff', 'apprentice_staff'],
       activeWeaponSlot: 0,
       clipMax: 2,
@@ -313,41 +281,13 @@ export async function setupAp2WepVoidImplosionScene(page: Page): Promise<void> {
       reloadDuration: 1.05,
       reloadTimer: 0,
       fireCooldownTimer: 0,
-    });
-    const ownerId = sim.enemies[0]?.id ?? 200;
-    const bullets: ReadonlyArray<readonly [number, number, number]> = [
-      [99301, 434, 256],
-      [99302, 444, 270],
-      [99303, 434, 284],
-    ];
-    for (const [id, x, y] of bullets) {
-      sim.projectiles.push(
-        sim.acquireProjectile({
-          id,
-          ownerId,
-          team: 'enemy',
-          isEnemy: true,
-          x,
-          y,
-          vx: -110,
-          vy: 0,
-          radius: 5.5,
-          damage: 2,
-          colorHex: '#E84545',
-          ttlSec: 3.5,
-          pierceCount: 0,
-          bounceCount: 0,
-          homingStrength: 0,
-          explosionRadius: 0,
-          isCrit: false,
-          element: 'none',
-          knockback: 30,
-        }),
-      );
-    }
+    },
+    enemyBullets: [
+      [99301, 434, 256, -110],
+      [99302, 444, 270, -110],
+      [99303, 434, 284, -110],
+    ],
   });
-  await stepDeterministicFrames(page, 1);
-  await markPostWarmupStart(page);
 }
 
 /** 4. ap2-wep-axe-guillotine (12-frame strip) */
@@ -366,10 +306,7 @@ export async function setupAp2WepAxeGuillotineScene(page: Page): Promise<void> {
       ['wild_boar', 462, 270, 'shield'],
       ['goblin_shaman', 474, 294],
     ],
-  });
-  await page.evaluate(() => {
-    const sim = window.__GAME_TRANSPORT__!.getSim();
-    Object.assign(sim.player, {
+    playerPatch: {
       weaponSlots: ['berserker_axe', 'rivet_gun'],
       activeWeaponSlot: 0,
       armor: 0,
@@ -380,41 +317,13 @@ export async function setupAp2WepAxeGuillotineScene(page: Page): Promise<void> {
       fireCooldownTimer: 0,
       reloadTimer: 0,
       weaponHeat: 0,
-    });
-    const ownerId = sim.enemies[0]?.id ?? 200;
-    const bullets: ReadonlyArray<readonly [number, number, number]> = [
-      [99401, 560, 258],
-      [99402, 568, 270],
-      [99403, 560, 282],
-    ];
-    for (const [id, x, y] of bullets) {
-      sim.projectiles.push(
-        sim.acquireProjectile({
-          id,
-          ownerId,
-          team: 'enemy',
-          isEnemy: true,
-          x,
-          y,
-          vx: -115,
-          vy: 0,
-          radius: 5.5,
-          damage: 2,
-          colorHex: '#E84545',
-          ttlSec: 3.5,
-          pierceCount: 0,
-          bounceCount: 0,
-          homingStrength: 0,
-          explosionRadius: 0,
-          isCrit: false,
-          element: 'none',
-          knockback: 30,
-        }),
-      );
-    }
+    },
+    enemyBullets: [
+      [99401, 560, 258, -115],
+      [99402, 568, 270, -115],
+      [99403, 560, 282, -115],
+    ],
   });
-  await stepDeterministicFrames(page, 1);
-  await markPostWarmupStart(page);
 }
 
 /** 5. ap2-wep-solar-supernova (8-frame strip + unlit) */
@@ -437,10 +346,7 @@ export async function setupAp2WepSolarSupernovaScene(page: Page): Promise<void> 
       ['wild_boar', 548, 266, 'shield'],
       ['goblin_shaman', 532, 292],
     ],
-  });
-  await page.evaluate(() => {
-    const sim = window.__GAME_TRANSPORT__!.getSim();
-    Object.assign(sim.player, {
+    playerPatch: {
       weaponSlots: ['solar_archon_staff', 'apprentice_staff'],
       activeWeaponSlot: 0,
       weaponHeat: 68,
@@ -449,41 +355,13 @@ export async function setupAp2WepSolarSupernovaScene(page: Page): Promise<void> 
       fireCooldownTimer: 0,
       aimWorldX: 540,
       aimWorldY: 266,
-    });
-    const ownerId = sim.enemies[0]?.id ?? 200;
-    const bullets: ReadonlyArray<readonly [number, number, number]> = [
-      [99501, 560, 256],
-      [99502, 568, 266],
-      [99503, 560, 276],
-    ];
-    for (const [id, x, y] of bullets) {
-      sim.projectiles.push(
-        sim.acquireProjectile({
-          id,
-          ownerId,
-          team: 'enemy',
-          isEnemy: true,
-          x,
-          y,
-          vx: -80,
-          vy: 0,
-          radius: 5.5,
-          damage: 2,
-          colorHex: '#E84545',
-          ttlSec: 3.5,
-          pierceCount: 0,
-          bounceCount: 0,
-          homingStrength: 0,
-          explosionRadius: 0,
-          isCrit: false,
-          element: 'none',
-          knockback: 30,
-        }),
-      );
-    }
+    },
+    enemyBullets: [
+      [99501, 560, 256, -80],
+      [99502, 568, 266, -80],
+      [99503, 560, 276, -80],
+    ],
   });
-  await stepDeterministicFrames(page, 1);
-  await markPostWarmupStart(page);
 }
 
 /** 6. ap2-wep-magma-geysers (8-frame strip) */
@@ -502,10 +380,7 @@ export async function setupAp2WepMagmaGeysersScene(page: Page): Promise<void> {
       ['wild_boar', 432, 270, 'shield'],
       ['goblin_shaman', 420, 286],
     ],
-  });
-  await page.evaluate(() => {
-    const sim = window.__GAME_TRANSPORT__!.getSim();
-    Object.assign(sim.player, {
+    playerPatch: {
       weaponSlots: ['magma_cannon', 'knight_sword'],
       activeWeaponSlot: 0,
       clipMax: 3,
@@ -514,10 +389,8 @@ export async function setupAp2WepMagmaGeysersScene(page: Page): Promise<void> {
       reloadTimer: 0,
       reloadLockout: false,
       fireCooldownTimer: 0,
-    });
+    },
   });
-  await stepDeterministicFrames(page, 1);
-  await markPostWarmupStart(page);
 }
 
 /** 7. ap2-wep-hammer-thunder (12-frame strip) */
@@ -536,10 +409,7 @@ export async function setupAp2WepHammerThunderScene(page: Page): Promise<void> {
       ['wild_boar', 436, 270, 'shield'],
       ['goblin_shaman', 452, 294],
     ],
-  });
-  await page.evaluate(() => {
-    const sim = window.__GAME_TRANSPORT__!.getSim();
-    Object.assign(sim.player, {
+    playerPatch: {
       weaponSlots: ['thunder_hammer', 'rivet_gun'],
       activeWeaponSlot: 0,
       elementalConvergenceTimer: 10,
@@ -548,41 +418,13 @@ export async function setupAp2WepHammerThunderScene(page: Page): Promise<void> {
       fireCooldownTimer: 0,
       reloadTimer: 0,
       weaponHeat: 0,
-    });
-    const ownerId = sim.enemies[0]?.id ?? 200;
-    const bullets: ReadonlyArray<readonly [number, number, number]> = [
-      [99701, 566, 258],
-      [99702, 574, 270],
-      [99703, 566, 282],
-    ];
-    for (const [id, x, y] of bullets) {
-      sim.projectiles.push(
-        sim.acquireProjectile({
-          id,
-          ownerId,
-          team: 'enemy',
-          isEnemy: true,
-          x,
-          y,
-          vx: -115,
-          vy: 0,
-          radius: 5.5,
-          damage: 2,
-          colorHex: '#E84545',
-          ttlSec: 3.5,
-          pierceCount: 0,
-          bounceCount: 0,
-          homingStrength: 0,
-          explosionRadius: 0,
-          isCrit: false,
-          element: 'none',
-          knockback: 30,
-        }),
-      );
-    }
+    },
+    enemyBullets: [
+      [99701, 566, 258, -115],
+      [99702, 574, 270, -115],
+      [99703, 566, 282, -115],
+    ],
   });
-  await stepDeterministicFrames(page, 1);
-  await markPostWarmupStart(page);
 }
 
 const ap2P1BScene = (
@@ -702,11 +544,7 @@ export const AP2_P1B_VISUAL_SCENES: readonly VisualSceneDef[] = [
         },
         { stepCount: 3, stage: 'active', label: 'EAT BULLETS' },
         { stepCount: 3, stage: 'active', label: 'SUCTION PULL' },
-        {
-          stepCount: 2,
-          stage: 'apex',
-          label: 'IMPLOSION!',
-        },
+        { stepCount: 2, stage: 'apex', label: 'IMPLOSION!' },
         { stepCount: 3, stage: 'sub_impact', label: 'GRAVITY SLAM' },
         { stepCount: 4, stage: 'settled', label: 'POISON NOVA' },
         { stepCount: 4, stage: 'settled', label: 'SETTLED' },

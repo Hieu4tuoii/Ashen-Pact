@@ -241,6 +241,9 @@ function isImmobileMagmaTarget(enemy: SimEnemyState): boolean {
 
 export function appendMagmaTrailSegment(sim: WorldSim, ownerPlayerId: number, x1: number, y1: number, x2: number, y2: number): void {
   if (distance(x1, y1, x2, y2) < 2) return;
+  if (sim.magmaTrails.length >= 48) {
+    sim.magmaTrails.shift();
+  }
   const seg: SimMagmaTrailSegmentState = {
     id: ++sim.nextEntityId, ownerPlayerId, x1, y1, x2, y2, width: MAGMA_TRAIL_WIDTH,
     ttlSec: MAGMA_TRAIL_DURATION_SEC, maxTtlSec: MAGMA_TRAIL_DURATION_SEC, tickTimer: 0.5, ticksElapsed: 0, damage: MAGMA_TRAIL_TICK_DMG,
@@ -509,31 +512,40 @@ export function triggerThunderHammerFinisher(
   return deflectedCount;
 }
 
-export function updateLegendaryWeaponHazards(sim: WorldSim, dtSec: number): void {
-  for (let i = sim.solarFireZones.length - 1; i >= 0; i--) {
-    const z = sim.solarFireZones[i]!;
-    z.ttlSec -= dtSec;
-    z.tickTimer -= dtSec;
-    z.ticksElapsed += 1;
+const _magmaTickHitEnemyIds = new Set<number>();
 
-    if (z.ticksElapsed > 0 && z.ticksElapsed % SOLAR_FIRE_ZONE_TICK_TICKS === 0) {
-      z.tickTimer = 0.5;
-      for (let j = 0; j < sim.enemies.length; j++) {
-        const enemy = sim.enemies[j]!;
-        if (enemy.hp <= 0 || enemy.aiState === 'spawning' || enemy.bossBurrowed) continue;
-        if (distance(z.x, z.y, enemy.x, enemy.y) <= z.radius + enemy.radius) {
-          if (enemy.burnTimer <= 0) enemy.burnTickTimer = 0.5;
-          enemy.burnTimer = Math.max(enemy.burnTimer, 3.0);
-          sim.applyDotDamageToEnemy(enemy, z.damage, 'burn');
+export function updateLegendaryWeaponHazards(sim: WorldSim, dtSec: number): void {
+  if (sim.solarFireZones.length > 0) {
+    let writeIdx = 0;
+    for (let i = 0; i < sim.solarFireZones.length; i++) {
+      const z = sim.solarFireZones[i]!;
+      z.ttlSec -= dtSec;
+      z.tickTimer -= dtSec;
+      z.ticksElapsed += 1;
+
+      if (z.ticksElapsed > 0 && z.ticksElapsed % SOLAR_FIRE_ZONE_TICK_TICKS === 0) {
+        z.tickTimer = 0.5;
+        for (let j = 0; j < sim.enemies.length; j++) {
+          const enemy = sim.enemies[j]!;
+          if (enemy.hp <= 0 || enemy.aiState === 'spawning' || enemy.bossBurrowed) continue;
+          if (distance(z.x, z.y, enemy.x, enemy.y) <= z.radius + enemy.radius) {
+            if (enemy.burnTimer <= 0) enemy.burnTickTimer = 0.5;
+            enemy.burnTimer = Math.max(enemy.burnTimer, 3.0);
+            sim.applyDotDamageToEnemy(enemy, z.damage, 'burn');
+          }
         }
       }
+      if (z.ttlSec > 1e-6 && z.ticksElapsed < 210) {
+        sim.solarFireZones[writeIdx++] = z;
+      }
     }
-    if (z.ttlSec <= 1e-6 || z.ticksElapsed >= 210) sim.solarFireZones.splice(i, 1);
+    sim.solarFireZones.length = writeIdx;
   }
 
   if (sim.magmaTrails.length > 0) {
-    const magmaTickHitEnemyIds = new Set<number>();
-    for (let i = sim.magmaTrails.length - 1; i >= 0; i--) {
+    _magmaTickHitEnemyIds.clear();
+    let writeIdx = 0;
+    for (let i = 0; i < sim.magmaTrails.length; i++) {
       const seg = sim.magmaTrails[i]!;
       seg.ttlSec -= dtSec;
       seg.tickTimer -= dtSec;
@@ -544,40 +556,49 @@ export function updateLegendaryWeaponHazards(sim: WorldSim, dtSec: number): void
         const halfWidth = seg.width * 0.5;
         for (let j = 0; j < sim.enemies.length; j++) {
           const enemy = sim.enemies[j]!;
-          if (enemy.hp <= 0 || enemy.aiState === 'spawning' || enemy.bossBurrowed || magmaTickHitEnemyIds.has(enemy.id)) continue;
+          if (enemy.hp <= 0 || enemy.aiState === 'spawning' || enemy.bossBurrowed || _magmaTickHitEnemyIds.has(enemy.id)) continue;
           if (pointToSegmentDist(enemy.x, enemy.y, seg.x1, seg.y1, seg.x2, seg.y2) <= halfWidth + enemy.radius) {
-            magmaTickHitEnemyIds.add(enemy.id);
+            _magmaTickHitEnemyIds.add(enemy.id);
             if (enemy.burnTimer <= 0) enemy.burnTickTimer = 0.5;
             enemy.burnTimer = Math.max(enemy.burnTimer, 3.0);
             sim.applyDotDamageToEnemy(enemy, seg.damage, 'burn');
           }
         }
       }
-      if (seg.ttlSec <= 1e-6 || seg.ticksElapsed >= 210) sim.magmaTrails.splice(i, 1);
+      if (seg.ttlSec > 1e-6 && seg.ticksElapsed < 210) {
+        sim.magmaTrails[writeIdx++] = seg;
+      }
     }
+    sim.magmaTrails.length = writeIdx;
   }
 
-  for (let i = sim.lightningPillars.length - 1; i >= 0; i--) {
-    const pillar = sim.lightningPillars[i]!;
-    pillar.ttlSec -= dtSec;
-    pillar.tickTimer -= dtSec;
-    pillar.ticksElapsed += 1;
+  if (sim.lightningPillars.length > 0) {
+    let writeIdx = 0;
+    for (let i = 0; i < sim.lightningPillars.length; i++) {
+      const pillar = sim.lightningPillars[i]!;
+      pillar.ttlSec -= dtSec;
+      pillar.tickTimer -= dtSec;
+      pillar.ticksElapsed += 1;
 
-    if (pillar.ticksElapsed > 0 && pillar.ticksElapsed % THUNDER_HAMMER_PILLAR_PULSE_TICKS === 0) {
-      pillar.tickTimer = 0.5;
-      for (let j = 0; j < sim.enemies.length; j++) {
-        const enemy = sim.enemies[j]!;
-        if (enemy.hp <= 0 || enemy.aiState === 'spawning' || enemy.bossBurrowed) continue;
-        if (distance(pillar.x, pillar.y, enemy.x, enemy.y) <= pillar.radius + enemy.radius) {
-          enemy.shockTimer = Math.max(enemy.shockTimer, 3.0);
-          sim.applyDotDamageToEnemy(enemy, pillar.damage, 'shock');
-          if (!sim.stressTestActive) {
-            sim.events.push({ kind: 'chain_lightning', fromX: pillar.x, fromY: pillar.y, toX: enemy.x, toY: enemy.y });
+      if (pillar.ticksElapsed > 0 && pillar.ticksElapsed % THUNDER_HAMMER_PILLAR_PULSE_TICKS === 0) {
+        pillar.tickTimer = 0.5;
+        for (let j = 0; j < sim.enemies.length; j++) {
+          const enemy = sim.enemies[j]!;
+          if (enemy.hp <= 0 || enemy.aiState === 'spawning' || enemy.bossBurrowed) continue;
+          if (distance(pillar.x, pillar.y, enemy.x, enemy.y) <= pillar.radius + enemy.radius) {
+            enemy.shockTimer = Math.max(enemy.shockTimer, 3.0);
+            sim.applyDotDamageToEnemy(enemy, pillar.damage, 'shock');
+            if (!sim.stressTestActive) {
+              sim.events.push({ kind: 'chain_lightning', fromX: pillar.x, fromY: pillar.y, toX: enemy.x, toY: enemy.y });
+            }
           }
         }
       }
+      if (pillar.ttlSec > 1e-6 && pillar.ticksElapsed < 180) {
+        sim.lightningPillars[writeIdx++] = pillar;
+      }
     }
-    if (pillar.ttlSec <= 1e-6 || pillar.ticksElapsed >= 180) sim.lightningPillars.splice(i, 1);
+    sim.lightningPillars.length = writeIdx;
   }
 }
 
