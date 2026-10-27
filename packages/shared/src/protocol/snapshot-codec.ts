@@ -15,6 +15,7 @@ import type {
   SimChestState,
   SimEvent,
   SimHubStatue,
+  SimMagneticRivetState,
   SimNpcState,
   SimPingMarker,
   SimPressurePlateState,
@@ -22,6 +23,7 @@ import type {
   SimPushBlockState,
   SimSkillZoneState,
   SimSummonState,
+  SimTetherBeamState,
   SimWorldItemState,
   WorldSim,
 } from '../sim/world-sim.js';
@@ -119,6 +121,8 @@ export interface QuantizedEnemySnap {
   sc10?: number;
   root10?: number;
   blind10?: number;
+  stuckArrows?: number;
+  parasiticThorns?: number;
 }
 
 /**
@@ -183,6 +187,8 @@ export interface QuantizedWorldSnapshot {
   skillZones?: SimSkillZoneState[];
   pressurePlates?: SimPressurePlateState[];
   pushBlocks?: SimPushBlockState[];
+  tetherBeams?: SimTetherBeamState[];
+  magneticRivets?: SimMagneticRivetState[];
   coopPuzzleCompleted?: boolean;
   teamComboCount?: number;
   runStats?: {
@@ -312,6 +318,8 @@ export function encodeWorldSnapshot(
     sc10: Math.round(e.superconductTimer * 10),
     root10: Math.round(e.rootedTimer * 10),
     blind10: Math.round(e.steamBlindTimer * 10),
+    stuckArrows: e.stuckArrows ?? 0,
+    parasiticThorns: e.parasiticThorns ?? 0,
   }));
 
   // Projectiles are spawned deterministically via bullet_volley_spawned events and simulated locally by clients
@@ -387,6 +395,8 @@ export function encodeWorldSnapshot(
     skillZones: sim.skillZones.map((z) => ({ ...z })),
     pressurePlates: sim.pressurePlates.map((p) => ({ ...p })),
     pushBlocks: sim.pushBlocks.map((b) => ({ ...b })),
+    tetherBeams: sim.tetherBeams.map((tb) => ({ ...tb })),
+    magneticRivets: sim.magneticRivets.map((mr) => ({ ...mr })),
     coopPuzzleCompleted: sim.coopPuzzleCompleted,
     teamComboCount: sim.teamComboCount,
     runStats: { ...sim.runStats },

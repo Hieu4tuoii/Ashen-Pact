@@ -14,7 +14,24 @@ import { MERCHANT_RIG_DEF, RIG_DEFS_BY_ID, VANGUARD_RIG_DEF } from '../../art/ri
 import { TextureBaker } from '../../art/texture-baker.js';
 import { getVisualQueryConfig } from '../../core/visual-query.js';
 import { computeChestOpenBounce, computeWorldItemArcPose } from '../../fx/combat-fx.js';
+import {
+  drawEnemyBatch1Indicators,
+  drawEnemyEmbeddedArrows,
+  drawEnemyParasiticThorns,
+  drawSeedGunLifeBlossom,
+  drawTetherStaffBeams,
+  syncBatch1WeaponRoomEntities,
+} from '../../fx/combat-fx-weapons-v2.js';
 import { resolveInteractableVisualGlowSpec } from '../../fx/lighting-config.js';
+
+export {
+  drawEnemyBatch1Indicators,
+  drawEnemyEmbeddedArrows,
+  drawEnemyParasiticThorns,
+  drawSeedGunLifeBlossom,
+  drawTetherStaffBeams,
+  syncBatch1WeaponRoomEntities,
+};
 import { initGlobalDebugState } from '../../ui/debug-overlay.js';
 import { type GameScene, RIG_FOOT_OFFSET_Y } from '../GameScene.js';
 import {
@@ -33,6 +50,7 @@ export function recordChestOpenedAnim(chestId: number, simTick: number): void {
 
 export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
   const sim = this.transport.getSim();
+  syncBatch1WeaponRoomEntities(this, sim);
   const textRes = TextureBaker.getBakeScale();
   const invBake = 1 / textRes;
   const lightingEnabled = this.lighting?.isLightmapVisible() ?? true;

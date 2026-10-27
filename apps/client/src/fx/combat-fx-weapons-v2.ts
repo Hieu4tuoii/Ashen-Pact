@@ -1,8 +1,12 @@
 import {
   RIVET_WEB_MAX_LINK_DIST,
   clamp,
+  type SimEnemyState,
   type SimMagneticRivetState,
   type SimPlayerState,
+  type SimProjectileState,
+  type SimSummonState,
+  type SimTetherBeamState,
 } from '@ashen-pact/shared';
 import type Phaser from 'phaser';
 import type { SfxId } from '../audio/zzfx.js';
@@ -11,6 +15,13 @@ import {
   resolveMicroBarFeedbackSpec,
 } from '../scenes/game-scene/hud-micro-reload-bar.js';
 import type { CombatFxManager } from './combat-fx.js';
+import {
+  type Batch1WeaponVfxKind,
+  drawBatch1ActiveProjectiles,
+  drawBatch1TransientShape,
+} from './combat-fx-weapons-p1a.js';
+
+export * from './combat-fx-weapons-p1a.js';
 
 export interface MagneticRivetPoint {
   id: number;
@@ -163,13 +174,17 @@ export interface TransientWeaponV2Shape {
     | 'parry_flash'
     | 'wall_cracks'
     | 'ring_out_vortex'
-    | 'totem_lane';
+    | 'totem_lane'
+    | Batch1WeaponVfxKind;
   x: number;
   y: number;
   x2?: number;
   y2?: number;
   radius: number;
   angle?: number;
+  count?: number;
+  isFinale?: boolean;
+  isAirburst?: boolean;
   color: number;
   ttlSec: number;
   maxTtlSec: number;
@@ -178,6 +193,11 @@ export interface TransientWeaponV2Shape {
 export interface WeaponV2OverlayState {
   shapes: TransientWeaponV2Shape[];
   lastRivetSnapshot: MagneticRivetPoint[];
+  lastTetherSnapshot: SimTetherBeamState[];
+  syncedEnemies: ReadonlyArray<SimEnemyState>;
+  syncedProjectiles: ReadonlyArray<SimProjectileState>;
+  syncedSummons: ReadonlyArray<SimSummonState>;
+  syncedTetherBeams: ReadonlyArray<SimTetherBeamState>;
   microBarFlashColor: number | null;
   microBarFlashTimerSec: number;
   microBarFlashDurationSec: number;
@@ -192,6 +212,11 @@ export function getWeaponV2OverlayState(sceneKey: object): WeaponV2OverlayState 
     state = {
       shapes: [],
       lastRivetSnapshot: [],
+      lastTetherSnapshot: [],
+      syncedEnemies: [],
+      syncedProjectiles: [],
+      syncedSummons: [],
+      syncedTetherBeams: [],
       microBarFlashColor: null,
       microBarFlashTimerSec: 0,
       microBarFlashDurationSec: 0.28,
@@ -492,6 +517,9 @@ export function updateAndDrawWeaponV2Overlays(
     }
   }
 
+  // 1b. Draw active Batch-1 projectile procedural overlays & Gale SMG spin-up wind ribbons
+  drawBatch1ActiveProjectiles(g, state.syncedProjectiles, player, clockSec);
+
   // 2. Update & draw transient weapon v2 / tactical shapes
   for (let i = state.shapes.length - 1; i >= 0; i -= 1) {
     const s = state.shapes[i]!;
@@ -502,6 +530,10 @@ export function updateAndDrawWeaponV2Overlays(
     }
     const progress = clamp(1 - s.ttlSec / Math.max(0.01, s.maxTtlSec), 0, 1);
     const alpha = clamp(1 - progress, 0.05, 1);
+
+    if (drawBatch1TransientShape(g, s, progress, alpha, clockSec, i)) {
+      continue;
+    }
 
     if (s.kind === 'rivet_arc' && s.x2 !== undefined && s.y2 !== undefined) {
       const midX = (s.x + s.x2) * 0.5 + Math.sin(clockSec * 40 + i) * 7;

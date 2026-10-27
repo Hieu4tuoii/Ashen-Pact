@@ -541,6 +541,8 @@ export class NetworkTransport implements ITransport {
         stunTimer: 0,
         lastHitDmg: 0,
         wallSlamCooldownTimer: 0,
+        stuckArrows: es.stuckArrows ?? 0,
+        parasiticThorns: es.parasiticThorns ?? 0,
       };
     });
 
@@ -617,6 +619,12 @@ export class NetworkTransport implements ITransport {
     }
     if (snapshot.pushBlocks) {
       this.sim.pushBlocks = snapshot.pushBlocks.map((b) => ({ ...b }));
+    }
+    if (snapshot.tetherBeams) {
+      this.sim.tetherBeams = snapshot.tetherBeams.map((tb) => ({ ...tb }));
+    }
+    if (snapshot.magneticRivets) {
+      this.sim.magneticRivets = snapshot.magneticRivets.map((mr) => ({ ...mr }));
     }
     if (snapshot.coopPuzzleCompleted !== undefined) {
       this.sim.coopPuzzleCompleted = snapshot.coopPuzzleCompleted;

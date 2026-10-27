@@ -116,6 +116,26 @@ export function resolveProjectileRenderSpec(
     textureKey = 'proj_player_bolt';
     tint = 0xfef08a;
     scale = 1.2;
+  } else if (params.weaponId === 'gale_smg_wind_blade' && !params.isStress) {
+    textureKey = 'proj_knight_sword_wave';
+    tint = 0x2dd4bf;
+    scale = 1.28;
+  } else if (params.weaponId === 'frag_launcher_sub' && !params.isStress) {
+    textureKey = 'proj_player_pellet';
+    tint = 0xf97316;
+    scale = 1.15;
+  } else if (params.weaponId === 'frag_launcher' && !params.isStress) {
+    textureKey = 'proj_player_burn';
+    tint = 0xfacc15;
+    scale = 1.25;
+  } else if (params.weaponId === 'thorn_staff' && !params.isStress) {
+    textureKey = 'proj_player_poison';
+    tint = 0x4ade80;
+    scale = 1.2;
+  } else if (params.weaponId === 'seed_gun' && !params.isStress) {
+    textureKey = 'proj_player_poison';
+    tint = 0x86efac;
+    scale = 1.12;
   } else if (params.isStress) {
     textureKey = 'proj_stress_player';
     if (params.element === 'burn') tint = 0xfb923c;

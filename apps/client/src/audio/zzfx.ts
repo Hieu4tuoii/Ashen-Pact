@@ -1,5 +1,8 @@
 import { clamp, WEAPONS } from '@ashen-pact/shared';
 import { graphicsSettings } from '../ui/graphics-settings';
+import { WEAPON_V2_SFX_PRESETS, type WeaponV2SfxId } from './zzfx-weapons-v2.js';
+
+export { WEAPON_V2_SFX_PRESETS, type WeaponV2SfxId };
 
 export type SfxId =
   | 'shoot_pistol'
@@ -60,10 +63,7 @@ export type SfxId =
   | 'ui_click'
   | 'ui_victory'
   | 'ui_defeat'
-  | 'perfect_reload'
-  | 'tactical_vent'
-  | 'flip_cover'
-  | 'wall_slam';
+  | WeaponV2SfxId;
 
 export interface ZzfxPreset {
   volume: number;
@@ -657,49 +657,13 @@ export const SFX_PRESETS: Record<SfxId, ZzfxPreset> = {
     wave: 'sawtooth',
     minIntervalMs: 200,
   },
-  perfect_reload: {
-    volume: 0.28,
-    freq: 760,
-    slide: 420,
-    attackSec: 0.003,
-    decaySec: 0.16,
-    noise: 0.06,
-    wave: 'triangle',
-    minIntervalMs: 50,
-  },
-  tactical_vent: {
-    volume: 0.3,
-    freq: 420,
-    slide: -240,
-    attackSec: 0.004,
-    decaySec: 0.22,
-    noise: 0.55,
-    wave: 'sawtooth',
-    minIntervalMs: 55,
-  },
-  flip_cover: {
-    volume: 0.32,
-    freq: 155,
-    slide: -75,
-    attackSec: 0.005,
-    decaySec: 0.2,
-    noise: 0.42,
-    wave: 'square',
-    minIntervalMs: 60,
-  },
-  wall_slam: {
-    volume: 0.36,
-    freq: 120,
-    slide: -65,
-    attackSec: 0.003,
-    decaySec: 0.24,
-    noise: 0.58,
-    wave: 'sawtooth',
-    minIntervalMs: 55,
-  },
+  ...WEAPON_V2_SFX_PRESETS,
 };
 
 export function resolveWeaponShootSfx(weaponId: string): SfxId {
+  if (weaponId === 'thorn_staff') return 'thorn_whip';
+  if (weaponId === 'gale_smg_wind_blade') return 'gale_wind_blade';
+  if (weaponId === 'frag_launcher_sub') return 'frag_airburst';
   const w = WEAPONS[weaponId];
   if (!w) return 'shoot_pistol';
   switch (w.category) {

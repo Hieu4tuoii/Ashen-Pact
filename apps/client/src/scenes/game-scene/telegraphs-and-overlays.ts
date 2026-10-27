@@ -12,7 +12,13 @@ import {
   computeBossKillFlashAlpha,
   computeEnemySpawnCircleSpec,
 } from '../../fx/combat-fx.js';
-import { updateAndDrawWeaponV2Overlays } from '../../fx/combat-fx-weapons-v2.js';
+import {
+  drawEnemyBatch1Indicators,
+  drawSeedGunLifeBlossom,
+  drawTetherStaffBeams,
+  syncBatch1WeaponRoomEntities,
+  updateAndDrawWeaponV2Overlays,
+} from '../../fx/combat-fx-weapons-v2.js';
 import { initGlobalDebugState } from '../../ui/debug-overlay.js';
 import { type GameScene, RIG_FOOT_OFFSET_Y } from '../GameScene.js';
 import { drawFootMicroReloadBar } from './hud-micro-reload-bar.js';
@@ -181,19 +187,8 @@ export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, 
       g.lineStyle(2.5, hexToNum(PALETTE.INK_DARK), 1);
       g.strokeCircle(sum.x, sum.y - 8, 16);
     } else if (sum.kind === 'life_blossom') {
-      // Phase 6 Co-op Weapon: Súng Hạt Giống (seed_gun) blooming Life Blossom
-      const pulse = Math.sin(sim.tick * 0.18 + sum.id) * 2.5;
-      g.fillStyle(hexToNum(PALETTE.MINT_LIGHT), 0.14);
-      g.fillCircle(sum.x, sum.y, sum.auraRadius + pulse);
-      g.lineStyle(2, hexToNum(PALETTE.LIME_GLOW), 0.85);
-      g.strokeCircle(sum.x, sum.y, sum.auraRadius + pulse);
-
-      g.fillStyle(hexToNum(PALETTE.INK_DARK), 0.95);
-      g.fillCircle(sum.x, sum.y, 14);
-      g.fillStyle(hexToNum(PALETTE.LIME_GLOW), 0.95);
-      g.fillCircle(sum.x, sum.y, 11);
-      g.fillStyle(hexToNum(PALETTE.SOLAR_GOLD), 1);
-      g.fillCircle(sum.x, sum.y, 5);
+      // Phase P1A Weapon: Súng Phóng Hạt Sinh Mệnh (seed_gun) blooming Life Bud & r=88px Toxic Spore Aura
+      drawSeedGunLifeBlossom(g, sum, sim.tick / 60);
     } else {
       // Tesla Turret / Ancient Turret
       const isAncient = sum.kind === 'ancient_turret';
@@ -295,22 +290,8 @@ export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, 
     g.fillCircle(blk.x, blk.y, 5);
   }
 
-  // 1e. Phase 6 Co-op Tether Staff Energy Beams (tether_staff)
-  for (let i = 0; i < sim.tetherBeams.length; i++) {
-    const beam = sim.tetherBeams[i]!;
-    if (beam.ttlSec <= 0) continue;
-    g.lineStyle(7, hexToNum(PALETTE.ELECTRIC_VIOLET), 0.45);
-    g.beginPath();
-    g.moveTo(beam.x1, beam.y1);
-    g.lineTo(beam.x2, beam.y2);
-    g.strokePath();
-
-    g.lineStyle(3.2, hexToNum(PALETTE.CYAN_FROST), 0.95);
-    g.beginPath();
-    g.moveTo(beam.x1, beam.y1);
-    g.lineTo(beam.x2, beam.y2);
-    g.strokePath();
-  }
+  // 1e. Phase P1A Tether Staff Energy Beams & Anchor Nodes (tether_staff)
+  drawTetherStaffBeams(g, sim.tetherBeams, sim.tick / 60);
 
   // 1f. Phase 6 Boss Forge Titan Expanding Shockwave Rings (Dash through with i-frames!)
   for (let i = 0; i < sim.shockwaveRings.length; i++) {
@@ -504,6 +485,11 @@ export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, 
       g.strokePath();
     }
 
+    // Phase P1A Batch-1 Embedded Arrows (hunter_crossbow) & Parasitic Thorns (thorn_staff)
+    if (!isStress) {
+      drawEnemyBatch1Indicators(g, pos.x, pos.y, e, playerX, playerY, sim.tick / 60);
+    }
+
     // Enemy Attack Telegraphs (Section 3.7: high readability red warning before damage)
     if (e.aiState === 'telegraph' && (!isStress || telegraphsDrawn < 4)) {
       telegraphsDrawn += 1;
@@ -649,8 +635,9 @@ export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, 
   // 4. Phase P11 Drama World Overlays (Boss Phase Transition Invuln/Roar, Boss Soft Enrage Aura, Vengeful Rings, Overlapping Wave Circles)
   drawP11DramaWorldOverlays(this);
 
-  // 5. Phase P0B Weapon V2 & Tactical Overlays + 32x5px Foot Micro-Reload Bar
+  // 5. Phase P0B & P1A Weapon V2 / Tactical Overlays + 32x5px Foot Micro-Reload Bar
   if (!isStress) {
+    syncBatch1WeaponRoomEntities(this, sim);
     const v2Flash = updateAndDrawWeaponV2Overlays(
       this,
       g,

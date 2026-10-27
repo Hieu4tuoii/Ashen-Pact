@@ -1,5 +1,6 @@
 import {
   ELEMENTAL_REACTIONS,
+  SHOT_FLAG,
   i18n,
   type SimEvent,
   WEAPON_RARITY_COLORS,
@@ -9,10 +10,20 @@ import { resolveWeaponShootSfx, zzfx } from '../../audio/zzfx.js';
 import {
   spawnChasmRingOutVfx,
   spawnCoverFlipMicroBlankVfx,
+  spawnCrossbowBarbedRipVfx,
+  spawnFragLauncherAirburstVfx,
+  spawnGaleCycloneVentVfx,
+  spawnGaleWindBladeVfx,
   spawnKnightSwordParryDeflectVfx,
   spawnPropDashKickVfx,
   spawnRivetDetonationWebVfx,
+  spawnScrapShotgunBlastVfx,
+  spawnScrapShotgunShellEjectVfx,
+  spawnSeedGunHarvestBloomVfx,
   spawnTacticalVentVfx,
+  spawnTetherElectromagneticYankVfx,
+  spawnThornBloomVfx,
+  spawnThornStaffWhipVfx,
   spawnTotemCollapseLaneVfx,
   spawnTriElementalBeamVfx,
   spawnWallSlamVfx,
@@ -43,24 +54,38 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
     switch (ev.kind) {
       case 'projectile_spawned': {
         if (ev.team === 'player') {
+          let spawnedProj = undefined;
+          for (let pi = sim.projectiles.length - 1; pi >= 0; pi--) {
+            const b = sim.projectiles[pi]!;
+            if (b.id === ev.projectileId) {
+              spawnedProj = b;
+              break;
+            }
+          }
+          const isFinale = ((spawnedProj?.shotFlags ?? 0) & SHOT_FLAG.FINALE_SHOT) !== 0;
+
           if (ev.weaponId === 'knight_sword_parry' && !isStress) {
             spawnKnightSwordParryDeflectVfx(this, this.fx, ev.x, ev.y, ev.angle);
             if (allowStressSfx) {
               zzfx.play('bullet_deflect', ev.x, this.camFocusX, ev.y, this.camFocusY);
             }
+          } else if (ev.weaponId === 'thorn_staff' && !isStress) {
+            spawnThornStaffWhipVfx(this, this.fx, ev.x, ev.y, ev.angle, isFinale);
+          } else if (ev.weaponId === 'gale_smg_wind_blade' && !isStress) {
+            spawnGaleWindBladeVfx(this, this.fx, ev.x, ev.y, ev.angle);
+            if (allowStressSfx) {
+              zzfx.play('gale_wind_blade', ev.x, this.camFocusX, ev.y, this.camFocusY);
+            }
           }
           if (!playerShotFxTriggered) {
             playerShotFxTriggered = true;
+            if (ev.weaponId === 'scrap_shotgun' && !isStress) {
+              spawnScrapShotgunBlastVfx(this, this.fx, ev.x, ev.y, ev.angle, isFinale);
+            }
             const shootSfx = resolveWeaponShootSfx(ev.weaponId);
             const isShotgun = shootSfx === 'shoot_shotgun';
-            let isTeammate = false;
-            for (let pi = sim.projectiles.length - 1; pi >= 0; pi--) {
-              const b = sim.projectiles[pi]!;
-              if (b.id === ev.projectileId) {
-                isTeammate = b.ownerId !== undefined && b.ownerId !== sim.player.id;
-                break;
-              }
-            }
+            const isTeammate =
+              spawnedProj?.ownerId !== undefined && spawnedProj.ownerId !== sim.player.id;
             if (!isStress || sim.tick % 3 === 0) {
               this.fx.spawnMuzzleFlashAndCasing(ev.x, ev.y, ev.angle, isShotgun, isTeammate);
             }
@@ -236,28 +261,92 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
         const isBarrel = ev.sourceDefId === 'explosive_barrel';
         const isSporePod = ev.sourceDefId === 'volatile_spore_pod';
         const isTriStaff = ev.sourceDefId === 'apprentice_staff';
-        const colorHex = isBarrel
-          ? PALETTE.FLAME_ORANGE
-          : isSporePod
-            ? PALETTE.LIME_GLOW
-            : isTriStaff
-              ? PALETTE.SOLAR_GOLD
-              : PALETTE.TOXIC_PURPLE;
-        if (isTriStaff && !isStress) {
-          spawnTriElementalBeamVfx(
-            this,
-            this.fx,
-            sim.player.x,
-            sim.player.y,
-            ev.x,
-            ev.y,
-            ev.radius,
-          );
+        const isGaleCyclone = ev.sourceDefId === 'gale_smg';
+        const isFragLauncher = ev.sourceDefId === 'frag_launcher';
+        const isSeedGun = ev.sourceDefId === 'seed_gun';
+        const isTetherStaff = ev.sourceDefId === 'tether_staff';
+        const colorHex =
+          isBarrel || isFragLauncher
+            ? PALETTE.FLAME_ORANGE
+            : isSporePod || isSeedGun
+              ? PALETTE.LIME_GLOW
+              : isGaleCyclone
+                ? PALETTE.CYAN_FROST
+                : isTetherStaff
+                  ? PALETTE.ELECTRIC_VIOLET
+                  : isTriStaff
+                    ? PALETTE.SOLAR_GOLD
+                    : PALETTE.TOXIC_PURPLE;
+        if (!isStress) {
+          if (isTriStaff) {
+            spawnTriElementalBeamVfx(
+              this,
+              this.fx,
+              sim.player.x,
+              sim.player.y,
+              ev.x,
+              ev.y,
+              ev.radius,
+            );
+          } else if (isGaleCyclone) {
+            spawnGaleCycloneVentVfx(this, this.fx, ev.x, ev.y, ev.radius, i18n.getLocale());
+          } else if (isFragLauncher) {
+            spawnFragLauncherAirburstVfx(
+              this,
+              this.fx,
+              ev.x,
+              ev.y,
+              ev.radius,
+              ev.radius >= 100,
+              i18n.getLocale(),
+            );
+          } else if (isSeedGun) {
+            const releasedHealingMist =
+              events.some(
+                (other) =>
+                  (other.kind === 'status_applied' && other.status === 'rooted') ||
+                  (other.kind === 'damage_dealt' && other.targetKind === 'enemy'),
+              ) ||
+              sim.enemies.some(
+                (e) => e.hp > 0 && Math.hypot(e.x - ev.x, e.y - ev.y) <= ev.radius + e.radius,
+              );
+            spawnSeedGunHarvestBloomVfx(
+              this,
+              this.fx,
+              ev.x,
+              ev.y,
+              ev.radius,
+              releasedHealingMist,
+              sim.player.x,
+              sim.player.y,
+              i18n.getLocale(),
+            );
+          } else if (isTetherStaff) {
+            spawnTetherElectromagneticYankVfx(
+              this,
+              this.fx,
+              sim.player.x,
+              sim.player.y,
+              ev.x,
+              ev.y,
+              ev.radius,
+              i18n.getLocale(),
+            );
+          }
         }
         this.fx.spawnExplosionBurst(ev.x, ev.y, ev.radius, colorHex);
         this.lighting.spawnTransientLight(ev.x, ev.y, ev.radius * 2.2, colorHex, 1.0, 0.38);
         if (allowStressSfx) {
-          zzfx.play('explosion', ev.x, this.camFocusX, ev.y, this.camFocusY);
+          const explosionSfx = isGaleCyclone
+            ? 'gale_cyclone_vent'
+            : isFragLauncher && ev.radius >= 100
+              ? 'frag_airburst'
+              : isSeedGun
+                ? 'seed_harvest_bloom'
+                : isTetherStaff
+                  ? 'tether_em_yank'
+                  : 'explosion';
+          zzfx.play(explosionSfx, ev.x, this.camFocusX, ev.y, this.camFocusY);
         }
         break;
       }
@@ -659,10 +748,22 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
           );
           if (ev.weaponId === 'rivet_gun') {
             spawnRivetDetonationWebVfx(this, this.fx);
+          } else if (ev.weaponId === 'scrap_shotgun') {
+            spawnScrapShotgunShellEjectVfx(
+              this,
+              this.fx,
+              ev.x,
+              ev.y,
+              sim.player.aimAngle,
+              i18n.getLocale(),
+            );
           }
         }
         if (allowStressSfx) {
           zzfx.play('perfect_reload', ev.x, this.camFocusX, ev.y, this.camFocusY);
+          if (ev.weaponId === 'scrap_shotgun') {
+            zzfx.play('scrap_shell_eject', ev.x, this.camFocusX, ev.y, this.camFocusY);
+          }
         }
         break;
       }
@@ -672,6 +773,52 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
         }
         if (allowStressSfx) {
           zzfx.play('tactical_vent', ev.x, this.camFocusX, ev.y, this.camFocusY);
+        }
+        break;
+      }
+      case 'crossbow_rip': {
+        const rx = ev.x ?? sim.player.x;
+        const ry = ev.y ?? sim.player.y;
+        if (!isStress) {
+          const targets = ev.targetIds
+            .map((id) => sim.enemies.find((e) => e.id === id))
+            .filter((e): e is NonNullable<typeof e> => Boolean(e))
+            .map((e) => ({ x: e.x, y: e.y }));
+          spawnCrossbowBarbedRipVfx(
+            this,
+            this.fx,
+            rx,
+            ry,
+            targets,
+            ev.totalArrows ?? 1,
+            i18n.getLocale(),
+          );
+        }
+        if (allowStressSfx) {
+          zzfx.play('crossbow_rip', rx, this.camFocusX, ry, this.camFocusY);
+        }
+        break;
+      }
+      case 'thorn_bloom': {
+        const bx = ev.x ?? sim.player.x;
+        const by = ev.y ?? sim.player.y;
+        if (!isStress) {
+          const targets = ev.targetIds
+            .map((id) => sim.enemies.find((e) => e.id === id))
+            .filter((e): e is NonNullable<typeof e> => Boolean(e))
+            .map((e) => ({ x: e.x, y: e.y }));
+          spawnThornBloomVfx(
+            this,
+            this.fx,
+            bx,
+            by,
+            targets,
+            ev.totalThorns ?? 1,
+            i18n.getLocale(),
+          );
+        }
+        if (allowStressSfx) {
+          zzfx.play('thorn_bloom', bx, this.camFocusX, by, this.camFocusY);
         }
         break;
       }
