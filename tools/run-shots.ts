@@ -109,6 +109,15 @@ export const SCENE_GROUPS: Readonly<Record<string, readonly string[]>> = {
     'ap2-melee-combo3-parry',
     'ap2-tesla-smart-bounce',
   ],
+  'ap2-p1a': [
+    'ap2-wep-crossbow-rip',
+    'ap2-wep-thorn-pull',
+    'ap2-wep-shotgun-wallslam',
+    'ap2-wep-gale-vent',
+    'ap2-wep-frag-airburst',
+    'ap2-wep-seed-bloom',
+    'ap2-wep-tether-pull',
+  ],
 };
 
 export interface ShotsCliOptions {

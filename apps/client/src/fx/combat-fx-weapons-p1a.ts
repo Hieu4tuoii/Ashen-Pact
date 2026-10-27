@@ -61,7 +61,7 @@ export function spawnCrossbowBarbedRipVfx(
   }
   const label =
     locale === 'en' ? `BARBED RIP! ×${totalArrows}` : `RÚT TÊN! ×${totalArrows}`;
-  fx?.spawnFloatingAlert(playerX, playerY - 10, label, '#38BDF8');
+  fx?.spawnFloatingAlert(playerX, playerY - 28, label, '#38BDF8');
 }
 
 export function spawnThornStaffWhipVfx(
@@ -126,7 +126,7 @@ export function spawnThornBloomVfx(
   }
   const label =
     locale === 'en' ? `THORN BLOOM! ×${totalThorns}` : `NỞ GAI ĐỘC! ×${totalThorns}`;
-  fx?.spawnFloatingAlert(playerX, playerY - 10, label, '#4ADE80');
+  fx?.spawnFloatingAlert(playerX, playerY - 28, label, '#4ADE80');
 }
 
 export function spawnScrapShotgunBlastVfx(
@@ -184,7 +184,7 @@ export function spawnScrapShotgunShellEjectVfx(
   });
   fx?.spawnFloatingAlert(
     x,
-    y - 12,
+    y - 28,
     locale === 'en' ? 'HOT SHELLS!' : 'VỎ ĐẠN NÓNG!',
     '#F97316',
   );
@@ -237,7 +237,7 @@ export function spawnGaleCycloneVentVfx(
   fx?.spawnHitSparks(x, y, 0, { isCrit: true, element: 'chill', count: 10 });
   fx?.spawnFloatingAlert(
     x,
-    y - 12,
+    y - 28,
     locale === 'en' ? 'CYCLONE VENT!' : 'LỐC XOÁY!',
     '#2DD4BF',
   );
@@ -268,7 +268,7 @@ export function spawnFragLauncherAirburstVfx(
   if (isAirburst) {
     fx?.spawnFloatingAlert(
       x,
-      y - 10,
+      y - 38,
       locale === 'en' ? 'AIRBURST!' : 'NỔ TRÊN KHÔNG!',
       '#FACC15',
     );
@@ -313,7 +313,7 @@ export function spawnSeedGunHarvestBloomVfx(
     });
     fx?.spawnFloatingAlert(
       playerX,
-      playerY - 12,
+      playerY - 28,
       locale === 'en' ? '✚ HEALING MIST!' : '✚ SƯƠNG HỒI PHỤC!',
       '#2DD4BF',
     );
@@ -352,7 +352,7 @@ export function spawnTetherElectromagneticYankVfx(
   fx?.spawnHitSparks(ax, ay, 0, { isCrit: true, element: 'shock', count: 10 });
   fx?.spawnFloatingAlert(
     ax,
-    ay - 12,
+    ay - 38,
     locale === 'en' ? '⚡ EM YANK NOVA!' : '⚡ XUNG KÉO ĐIỆN TỪ!',
     '#C084FC',
   );

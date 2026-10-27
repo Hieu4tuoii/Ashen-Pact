@@ -637,6 +637,8 @@ export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, 
 
   // 5. Phase P0B & P1A Weapon V2 / Tactical Overlays + 32x5px Foot Micro-Reload Bar
   if (!isStress) {
+    const isSoloPaused =
+      (this.pauseModalOpen || (this.settingsModal?.isOpen() ?? false)) && this.coopMode === 'solo';
     syncBatch1WeaponRoomEntities(this, sim);
     const v2Flash = updateAndDrawWeaponV2Overlays(
       this,
@@ -644,7 +646,7 @@ export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, 
       this.fx,
       p,
       sim.magneticRivets ?? [],
-      1 / 60,
+      isSoloPaused ? 0 : 1 / 60,
       sim.tick / 60,
       i18n.getLocale(),
     );
