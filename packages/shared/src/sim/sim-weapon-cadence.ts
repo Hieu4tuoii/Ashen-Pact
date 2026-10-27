@@ -5,6 +5,13 @@ import { clamp } from '../math/vec2.js';
 import { INPUT_BUTTON, SHOT_FLAG } from '../protocol/messages.js';
 import { syncActiveWeaponCadenceState } from './sim-coop-hub.js';
 import {
+  BLACK_CRYSTAL_ADDITIVE_BONUS,
+  applySearingTriggerOnMissedReload,
+  applySearingTriggerOnOverheat,
+  consumeBlackCrystalEmpowermentForShot,
+  onPlayerReloadVentOrMeleeFinisherAshenRelics,
+} from './sim-ashen-pacts.js';
+import {
   ACROBAT_VENT_ORANGE_MAX,
   ACROBAT_VENT_ORANGE_MIN,
   triggerReloadVentOrFinisherBlessings,
@@ -306,8 +313,10 @@ export function updatePlayerWeaponCadence(
           triggerReloadVentOrFinisherBlessings(sim, p, 'perfect_reload', {
             shotsFired: shotsFiredBeforeReload,
           });
+          onPlayerReloadVentOrMeleeFinisherAshenRelics(sim, p, 'perfect_reload', true);
         } else {
           p.reloadLockout = true;
+          applySearingTriggerOnMissedReload(p);
         }
       }
     } else if (w?.cadenceKind === 'HEAT_VENT') {
@@ -354,6 +363,7 @@ export function updatePlayerWeaponCadence(
         triggerReloadVentOrFinisherBlessings(sim, p, 'tactical_vent', {
           shotsFired: shotsFiredFromVent,
         });
+        onPlayerReloadVentOrMeleeFinisherAshenRelics(sim, p, 'tactical_vent', true);
       }
     } else if (p.reloadTimer <= 0 && p.clipMax > 0 && p.clipAmmo < p.clipMax) {
       const dur =
@@ -485,7 +495,9 @@ export function tryFireActiveWeaponImpl(
 
   let shotFlags = 0;
   const shieldBonusBeforeShot = p.vanguardShieldBonusAdd ?? 0;
-  let additiveDmgBonus = shieldBonusBeforeShot;
+  const wasBlackCrystalEmpowered = consumeBlackCrystalEmpowermentForShot(p);
+  let additiveDmgBonus =
+    shieldBonusBeforeShot + (wasBlackCrystalEmpowered ? BLACK_CRYSTAL_ADDITIVE_BONUS : 0);
   p.vanguardShieldBonusAdd = 0;
   const heatBeforeShot = p.weaponHeat;
 
@@ -541,6 +553,7 @@ export function tryFireActiveWeaponImpl(
     }
     if (p.weaponHeat >= 100) {
       p.overheatLockTimer = OVERHEAT_LOCK_DURATION_SEC;
+      applySearingTriggerOnOverheat(p);
     }
   }
 
@@ -614,13 +627,14 @@ export function tryFireActiveWeaponImpl(
     }
 
     const hitAny = resolveMeleeConeHitsAndSynergies(
-      this, p, w, arcRad, halfArc, meleeRange, baseMeleeDmg, stepKnockback, critChance, shotElement, shotFlags, bulletsDestroyed, finisherHitEnemyIds,
+      this, p, w, arcRad, halfArc, meleeRange, baseMeleeDmg, stepKnockback, critChance, shotElement, shotFlags, bulletsDestroyed, finisherHitEnemyIds, wasBlackCrystalEmpowered,
     );
     if (comboStep === 2) {
       triggerReloadVentOrFinisherBlessings(this, p, 'melee_finisher', {
         hitAny,
         bulletsDestroyed,
       });
+      onPlayerReloadVentOrMeleeFinisherAshenRelics(this, p, 'melee_finisher', hitAny);
     }
     if (comboStep === 2 && w.id === 'emerald_cleaver') {
       spawnEmeraldCleaverBoomerang(
@@ -754,7 +768,7 @@ export function tryFireActiveWeaponImpl(
       heatBeforeShot,
       critChance,
       shotElement,
-      shieldBonusBeforeShot,
+      shieldBonusBeforeShot + (wasBlackCrystalEmpowered ? BLACK_CRYSTAL_ADDITIVE_BONUS : 0),
     );
     return;
   }
@@ -788,8 +802,9 @@ export function tryFireActiveWeaponImpl(
   const chainHarpoonShot =
     hasActiveWeaponMutator(p, 'mutator_chain_harpoon') && empoweredForMutator;
   const bypassFrontShield =
-    hasActiveWeaponMutator(p, 'mutator_thermal_meltdown') &&
-    (empoweredForMutator || inOrangeZoneBeforeShot);
+    wasBlackCrystalEmpowered ||
+    (hasActiveWeaponMutator(p, 'mutator_thermal_meltdown') &&
+      (empoweredForMutator || inOrangeZoneBeforeShot));
 
   this.spawnDeterministicVolley({
     kind: 'bullet_volley_spawned',

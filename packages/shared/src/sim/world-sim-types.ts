@@ -531,6 +531,12 @@ export interface SimPlayerState {
   buffChoices: BlessingId[];
   mutatorChoices?: WeaponMutatorId[];
   pactChoices?: AshenPactId[];
+  soulChainTargetId?: number | null;
+  soulChainTargetKind?: 'player' | 'enemy' | null;
+  soulChainStretchTimer?: number;
+  bloodOathTickTimer?: number;
+  shatteredGlassArmorReduction?: number;
+  blackCrystalEmpoweredNextShot?: boolean;
   weaponUpgradeLevels?: Record<number, number>;
   salvageHoldTimer?: number;
   salvageTargetItemId?: number;

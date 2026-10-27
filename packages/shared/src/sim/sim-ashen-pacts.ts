@@ -4,13 +4,47 @@ import {
   ASHEN_RELICS,
   PACT_TO_RELIC_ID,
   RELIC_TO_PACT_ID,
+  scaleRelicDamage,
 } from '../data/ashen-pacts.js';
 import type { AshenPactId, AshenRelicId } from '../data/types.js';
+import { clamp, distance } from '../math/vec2.js';
 import type { DungeonRoomNode } from './dungeon-gen.js';
 import type { WorldSim } from './world-sim.js';
-import type { SimNpcState, SimPlayerState } from './world-sim-types.js';
+import type { SimEnemyState, SimNpcState, SimPlayerState } from './world-sim-types.js';
 
 export const MAX_AWAKENED_RELICS_PER_RUN = 3;
+
+export const SOUL_CHAIN_MAX_DIST = 260;
+export const SOUL_CHAIN_DRAIN_INTERVAL_SEC = 2.5;
+export const BLOOD_OATH_BASE_DPS = 22;
+export const BLOOD_OATH_TICK_INTERVAL_SEC = 0.25;
+export const BLOOD_OATH_BEAM_HALF_WIDTH = 14;
+
+export const SHATTERED_GLASS_MOVE_SPEED_MULT = 1.2;
+export const BLACK_CRYSTAL_REGEN_DELAY_PENALTY_SEC = 0.8;
+export const BLACK_CRYSTAL_ADDITIVE_BONUS = 0.65;
+
+export const SEARING_TRIGGER_EXTRA_LOCKOUT_SEC = 0.4;
+export const PERPETUAL_CORE_WINDOW_EXPAND_RATIO = 0.25;
+export const PERPETUAL_CORE_ROCKET_COUNT = 3;
+export const PERPETUAL_CORE_ROCKET_BASE_DMG = 20;
+export const PERPETUAL_CORE_ROCKET_SPEED = 540;
+
+function pointToSegmentDist(
+  px: number,
+  py: number,
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+): number {
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const lenSq = dx * dx + dy * dy;
+  if (lenSq <= 1e-8) return distance(px, py, x1, y1);
+  const t = clamp(((px - x1) * dx + (py - y1) * dy) / lenSq, 0, 1);
+  return distance(px, py, x1 + t * dx, y1 + t * dy);
+}
 
 export function hasPlayerActivePact(
   p: SimPlayerState | undefined | null,
@@ -151,6 +185,17 @@ export function selectAshenPactImpl(
   p.activePactId = pactIdOrDecline;
   p.pactChoices = [];
 
+  if (pactIdOrDecline === 'pact_soul_chain') {
+    p.soulChainTargetId = null;
+    p.soulChainTargetKind = null;
+    p.soulChainStretchTimer = 0;
+  } else if (pactIdOrDecline === 'pact_shattered_glass') {
+    const reducedMax = Math.max(1, Math.floor(p.maxArmor * 0.5));
+    p.shatteredGlassArmorReduction = p.maxArmor - reducedMax;
+    p.maxArmor = reducedMax;
+    p.armor = Math.min(p.armor, p.maxArmor);
+  }
+
   sim.events.push({
     kind: 'pact_signed',
     playerId: p.id,
@@ -171,6 +216,19 @@ export function purifyAshenPactsOnBossDefeated(sim: WorldSim): number {
     const pactId = p.activePactId;
     const relicId = PACT_TO_RELIC_ID[pactId];
     p.activePactId = null;
+
+    if (pactId === 'pact_soul_chain') {
+      p.soulChainStretchTimer = 0;
+      p.bloodOathTickTimer = 0;
+    } else if (pactId === 'pact_shattered_glass') {
+      p.maxArmor += p.shatteredGlassArmorReduction ?? 0;
+      p.shatteredGlassArmorReduction = 0;
+      p.armor = p.maxArmor;
+      p.armorRegenDelaySec = Number(
+        (p.armorRegenDelaySec + BLACK_CRYSTAL_REGEN_DELAY_PENALTY_SEC).toFixed(2),
+      );
+    }
+
     if (relicId && !p.awakenedRelicIds.includes(relicId)) {
       p.awakenedRelicIds.push(relicId);
     }
@@ -187,4 +245,269 @@ export function purifyAshenPactsOnBossDefeated(sim: WorldSim): number {
     purifiedCount += 1;
   }
   return purifiedCount;
+}
+
+export function getAshenPactMoveSpeedMultiplier(p: SimPlayerState): number {
+  return hasPlayerActivePact(p, 'pact_shattered_glass') ? SHATTERED_GLASS_MOVE_SPEED_MULT : 1.0;
+}
+
+export function applySearingTriggerOnMissedReload(p: SimPlayerState): void {
+  if (!hasPlayerActivePact(p, 'pact_searing_trigger')) return;
+  p.armor = Math.max(0, p.armor - 1);
+  p.armorRegenTimer = p.armorRegenDelaySec;
+  p.armorRegenAccum = 0;
+  p.reloadTimer += SEARING_TRIGGER_EXTRA_LOCKOUT_SEC;
+  p.reloadDuration += SEARING_TRIGGER_EXTRA_LOCKOUT_SEC;
+  p.fireCooldownTimer = Math.max(p.fireCooldownTimer, SEARING_TRIGGER_EXTRA_LOCKOUT_SEC);
+}
+
+export function applySearingTriggerOnOverheat(p: SimPlayerState): void {
+  if (!hasPlayerActivePact(p, 'pact_searing_trigger')) return;
+  p.armor = Math.max(0, p.armor - 1);
+  p.armorRegenTimer = p.armorRegenDelaySec;
+  p.armorRegenAccum = 0;
+  p.overheatLockTimer += SEARING_TRIGGER_EXTRA_LOCKOUT_SEC;
+  p.fireCooldownTimer = Math.max(p.fireCooldownTimer, SEARING_TRIGGER_EXTRA_LOCKOUT_SEC);
+}
+
+export function consumeBlackCrystalEmpowermentForShot(p: SimPlayerState): boolean {
+  if (!p.blackCrystalEmpoweredNextShot) return false;
+  p.blackCrystalEmpoweredNextShot = false;
+  return true;
+}
+
+export function spawnPerpetualCoreAshenRockets(sim: WorldSim, p: SimPlayerState): number {
+  const rocketDmg = scaleRelicDamage(PERPETUAL_CORE_ROCKET_BASE_DMG, sim.currentFloor);
+  const aliveEnemies: SimEnemyState[] = [];
+  for (let i = 0; i < sim.enemies.length; i++) {
+    const e = sim.enemies[i]!;
+    if (!e.isDummy && e.hp > 0 && !e.bossBurrowed) {
+      aliveEnemies.push(e);
+    }
+  }
+  aliveEnemies.sort((a, b) => distance(p.x, p.y, a.x, a.y) - distance(p.x, p.y, b.x, b.y));
+
+  const nearest = aliveEnemies[0];
+  const baseAngle = nearest
+    ? Math.atan2(nearest.y - p.y, nearest.x - p.x)
+    : p.aimAngle;
+  const prevIds = new Set(sim.projectiles.map((pr) => pr.id));
+
+  sim.spawnDeterministicVolley({
+    kind: 'bullet_volley_spawned',
+    tick: sim.tick,
+    eventId: sim.nextVolleyEventId++,
+    ownerId: p.id,
+    team: 'player',
+    weaponId: 'relic_perpetual_core_rocket',
+    x: p.x,
+    y: p.y,
+    angle: baseAngle,
+    pelletCount: PERPETUAL_CORE_ROCKET_COUNT,
+    spreadRad: 0.28,
+    speed: PERPETUAL_CORE_ROCKET_SPEED,
+    damage: rocketDmg,
+    radius: 7,
+    knockback: 140,
+    pierceCount: 0,
+    bounceCount: 0,
+    ttlSec: 1.8,
+    element: 'burn',
+    critChance: 0,
+    amplifiedByShield: false,
+    seed: sim.rng.nextUint32(),
+    guaranteedElementalProc: true,
+    originX: p.x,
+    originY: p.y,
+  });
+
+  let spawnedIdx = 0;
+  for (let i = 0; i < sim.projectiles.length; i++) {
+    const proj = sim.projectiles[i]!;
+    if (!prevIds.has(proj.id)) {
+      if (aliveEnemies.length > 0) {
+        const target = aliveEnemies[spawnedIdx % aliveEnemies.length]!;
+        const fanOffset =
+          aliveEnemies.length === 1 ? (spawnedIdx - 1) * 0.06 : 0;
+        const ang = Math.atan2(target.y - p.y, target.x - p.x) + fanOffset;
+        proj.angle = ang;
+        proj.vx = Math.cos(ang) * PERPETUAL_CORE_ROCKET_SPEED;
+        proj.vy = Math.sin(ang) * PERPETUAL_CORE_ROCKET_SPEED;
+      } else {
+        const fanAng = p.aimAngle + (spawnedIdx - 1) * 0.2;
+        proj.angle = fanAng;
+        proj.vx = Math.cos(fanAng) * PERPETUAL_CORE_ROCKET_SPEED;
+        proj.vy = Math.sin(fanAng) * PERPETUAL_CORE_ROCKET_SPEED;
+      }
+      spawnedIdx += 1;
+    }
+  }
+  return spawnedIdx;
+}
+
+export function onPlayerReloadVentOrMeleeFinisherAshenRelics(
+  sim: WorldSim,
+  p: SimPlayerState,
+  triggerKind: 'perfect_reload' | 'tactical_vent' | 'melee_finisher',
+  hitAnyEnemy = true,
+): void {
+  if (hasPlayerAwakenedRelic(p, 'relic_black_crystal_heart')) {
+    p.blackCrystalEmpoweredNextShot = true;
+  }
+  if (hasPlayerAwakenedRelic(p, 'relic_perpetual_core')) {
+    if (triggerKind !== 'melee_finisher' || hitAnyEnemy) {
+      spawnPerpetualCoreAshenRockets(sim, p);
+    }
+  }
+}
+
+export function updatePlayerAshenPactAndRelicPassives(
+  sim: WorldSim,
+  p: SimPlayerState,
+  dtSec: number,
+): void {
+  if (p.lifeState !== 'alive' || p.hp <= 0) return;
+
+  const allPlayers = sim.getAllPlayers();
+
+  // 1. Full-Biome Trial: pact_soul_chain
+  if (hasPlayerActivePact(p, 'pact_soul_chain')) {
+    let targetX = 0;
+    let targetY = 0;
+    let targetId: number | null = null;
+    let targetKind: 'player' | 'enemy' | null = null;
+    let bestAllyDist = Infinity;
+
+    for (let i = 0; i < allPlayers.length; i++) {
+      const other = allPlayers[i]!;
+      if (other.id === p.id || other.lifeState !== 'alive') continue;
+      const d = distance(p.x, p.y, other.x, other.y);
+      if (d < bestAllyDist) {
+        bestAllyDist = d;
+        targetX = other.x;
+        targetY = other.y;
+        targetId = other.id;
+        targetKind = 'player';
+      }
+    }
+
+    if (targetId === null) {
+      let bestMaxHp = -1;
+      let bestEnemyDist = Infinity;
+      for (let i = 0; i < sim.enemies.length; i++) {
+        const e = sim.enemies[i]!;
+        if (e.isDummy || e.hp <= 0 || e.bossBurrowed) continue;
+        const d = distance(p.x, p.y, e.x, e.y);
+        if (e.maxHp > bestMaxHp || (e.maxHp === bestMaxHp && d < bestEnemyDist)) {
+          bestMaxHp = e.maxHp;
+          bestEnemyDist = d;
+          targetX = e.x;
+          targetY = e.y;
+          targetId = e.id;
+          targetKind = 'enemy';
+        }
+      }
+    }
+
+    p.soulChainTargetId = targetId;
+    p.soulChainTargetKind = targetKind;
+
+    if (targetId !== null) {
+      const dist = distance(p.x, p.y, targetX, targetY);
+      if (dist > SOUL_CHAIN_MAX_DIST) {
+        p.soulChainStretchTimer = (p.soulChainStretchTimer ?? 0) + dtSec;
+        while (p.soulChainStretchTimer + 1e-6 >= SOUL_CHAIN_DRAIN_INTERVAL_SEC) {
+          p.soulChainStretchTimer = Math.max(
+            0,
+            p.soulChainStretchTimer - SOUL_CHAIN_DRAIN_INTERVAL_SEC,
+          );
+          p.armor = Math.max(0, p.armor - 1);
+          p.armorRegenTimer = p.armorRegenDelaySec;
+          p.armorRegenAccum = 0;
+        }
+      } else {
+        p.soulChainStretchTimer = 0;
+      }
+    } else {
+      p.soulChainStretchTimer = 0;
+    }
+  }
+
+  // 2. Awakened Relic: relic_blood_oath_tether
+  if (hasPlayerAwakenedRelic(p, 'relic_blood_oath_tether')) {
+    p.soulChainStretchTimer = 0;
+    let tetherX = 0;
+    let tetherY = 0;
+    let tetherId: number | null = null;
+    let tetherKind: 'player' | 'enemy' | null = null;
+    let bestAllyDist = SOUL_CHAIN_MAX_DIST;
+
+    for (let i = 0; i < allPlayers.length; i++) {
+      const other = allPlayers[i]!;
+      if (other.id === p.id || other.lifeState !== 'alive') continue;
+      const d = distance(p.x, p.y, other.x, other.y);
+      if (d <= bestAllyDist) {
+        bestAllyDist = d;
+        tetherX = other.x;
+        tetherY = other.y;
+        tetherId = other.id;
+        tetherKind = 'player';
+      }
+    }
+
+    if (tetherId === null) {
+      let bestEnemyDist = SOUL_CHAIN_MAX_DIST;
+      for (let i = 0; i < sim.enemies.length; i++) {
+        const e = sim.enemies[i]!;
+        if (e.isDummy || e.hp <= 0 || e.bossBurrowed) continue;
+        const d = distance(p.x, p.y, e.x, e.y);
+        if (d <= bestEnemyDist) {
+          bestEnemyDist = d;
+          tetherX = e.x;
+          tetherY = e.y;
+          tetherId = e.id;
+          tetherKind = 'enemy';
+        }
+      }
+    }
+
+    if (!hasPlayerActivePact(p, 'pact_soul_chain')) {
+      p.soulChainTargetId = tetherId;
+      p.soulChainTargetKind = tetherKind;
+    }
+
+    if (tetherId !== null) {
+      p.bloodOathTickTimer = (p.bloodOathTickTimer ?? 0) + dtSec;
+      while (p.bloodOathTickTimer + 1e-6 >= BLOOD_OATH_TICK_INTERVAL_SEC) {
+        p.bloodOathTickTimer = Math.max(0, p.bloodOathTickTimer - BLOOD_OATH_TICK_INTERVAL_SEC);
+        const scaledDps = scaleRelicDamage(BLOOD_OATH_BASE_DPS, sim.currentFloor);
+        const tickDmg = Math.max(1, Math.round(scaledDps * BLOOD_OATH_TICK_INTERVAL_SEC));
+        for (let i = 0; i < sim.enemies.length; i++) {
+          const e = sim.enemies[i]!;
+          if (e.hp <= 0 || e.bossBurrowed) continue;
+          if (
+            pointToSegmentDist(e.x, e.y, p.x, p.y, tetherX, tetherY) <=
+            e.radius + BLOOD_OATH_BEAM_HALF_WIDTH
+          ) {
+            sim.applyDamageToEnemy(e, tickDmg, false, 'burn', e.aimAngle, 20, false, p.id, true);
+            if (e.hp > 0) {
+              e.burnTimer = Math.max(e.burnTimer, 2.0);
+              e.shockTimer = Math.max(e.shockTimer, 0.8);
+              if (!sim.stressTestActive) {
+                sim.events.push({
+                  kind: 'status_applied',
+                  targetId: e.id,
+                  status: 'shock',
+                  x: e.x,
+                  y: e.y,
+                });
+              }
+            }
+          }
+        }
+      }
+    } else {
+      p.bloodOathTickTimer = 0;
+    }
+  }
 }

@@ -7,6 +7,10 @@ import {
 } from '../data/weapon-mutators.js';
 import { WEAPONS } from '../data/weapons.js';
 import type { DungeonRoomNode } from './dungeon-gen.js';
+import {
+  PERPETUAL_CORE_WINDOW_EXPAND_RATIO,
+  hasPlayerAwakenedRelic,
+} from './sim-ashen-pacts.js';
 import { ACROBAT_RELOAD_WINDOW_MAX, ACROBAT_RELOAD_WINDOW_MIN } from './sim-blessings.js';
 import { computeAdditivePoolMultiplier, computeUpgradeMultiplier } from './sim-damage-pipeline.js';
 import { triggerEnemyWallSlam } from './sim-tactical-physics.js';
@@ -48,12 +52,21 @@ export function getClipReloadGoldenWindow(p: SimPlayerState): { min: number; max
     min = Math.min(min, 0.38);
     max = Math.max(max, 0.77);
   }
+  if (hasPlayerAwakenedRelic(p, 'relic_perpetual_core')) {
+    const halfExpand = (max - min) * (PERPETUAL_CORE_WINDOW_EXPAND_RATIO * 0.5);
+    min = Math.max(0.05, min - halfExpand);
+    max = Math.min(0.95, max + halfExpand);
+  }
   return { min, max };
 }
 
 export function getHeatVentOrangeZone(p: SimPlayerState): { min: number; max: number } {
-  const min = hasActiveWeaponMutator(p, 'mutator_thermal_meltdown') ? 50 : 65;
-  return { min, max: 95 };
+  let min = hasActiveWeaponMutator(p, 'mutator_thermal_meltdown') ? 50 : 65;
+  const max = 95;
+  if (hasPlayerAwakenedRelic(p, 'relic_perpetual_core')) {
+    min = Math.max(25, min - (max - min) * PERPETUAL_CORE_WINDOW_EXPAND_RATIO);
+  }
+  return { min, max };
 }
 
 export function populateTreasureForgeWorkshop(

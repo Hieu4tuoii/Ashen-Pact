@@ -134,7 +134,13 @@ export function updateTableTechRocketProjectilesInFlight(
   b: SimProjectileState,
   dtSec: number,
 ): void {
-  if (b.team !== 'player' || b.weaponId !== 'table_tech_rocket' || b.ttlSec <= 0) return;
+  if (
+    b.team !== 'player' ||
+    (b.weaponId !== 'table_tech_rocket' && b.weaponId !== 'relic_perpetual_core_rocket') ||
+    b.ttlSec <= 0
+  ) {
+    return;
+  }
   const target = findNearestAliveCombatEnemy(sim, b.x, b.y);
   if (!target) return;
 

@@ -63,7 +63,7 @@ export function applyBulletModBlessingsOnVolleySpawn(sim: WorldSim, ev: BulletVo
   const isNonBouncingSpecial =
     ev.weaponId === 'void_staff' || ev.weaponId === 'emerald_cleaver_boomerang' ||
     ev.weaponId === 'reload_tediore_chuck' || ev.weaponId === 'table_tech_rocket' ||
-    ev.weaponId === 'vanguard_bastion_prism';
+    ev.weaponId === 'relic_perpetual_core_rocket' || ev.weaponId === 'vanguard_bastion_prism';
   if (hasPlayerBlessing(owner, 'bullet_split_bounce') && !isNonBouncingSpecial) {
     ev.bounceCount = clampBounceCount((ev.bounceCount ?? 0) + 1);
     const nextFlags = (ev.shotFlags ?? ev.flags ?? 0) | SHOT_FLAG.DYNAMIC_BOUNCE;

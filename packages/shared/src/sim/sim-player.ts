@@ -4,6 +4,10 @@ import { INPUT_BUTTON, type PlayerInputPacket, TILE_SIZE } from '../protocol/mes
 import type { SurfaceKind } from './arena-map.js';
 import { findNearestWalkablePoint, getConveyorVelocityAtWorld } from './arena-room-archetypes.js';
 import {
+  getAshenPactMoveSpeedMultiplier,
+  updatePlayerAshenPactAndRelicPassives,
+} from './sim-ashen-pacts.js';
+import {
   onPlayerDashStarted,
   onPlayerDashStep,
   tickPlayerDashAndReloadBlessingTimers,
@@ -262,6 +266,7 @@ export function updateSinglePlayerStateImpl(this: WorldSim,
       p.armor = Math.min(p.maxArmor, p.armor + pts);
     }
   }
+  updatePlayerAshenPactAndRelicPassives(this, p, dtSec);
 
   // Surface under player
   const surf = this.map.getSurfaceAtWorld(p.x, p.y);
@@ -334,7 +339,9 @@ export function updateSinglePlayerStateImpl(this: WorldSim,
   }
 
   // Surface speed & friction modifiers (oil slows by 15%, ice reduces traction; Elemental Convergence grants +20% speed)
-  let speedMult = hadConvergenceBeforeTick || p.elementalConvergenceTimer > 0 ? 1.2 : 1.0;
+  let speedMult =
+    (hadConvergenceBeforeTick || p.elementalConvergenceTimer > 0 ? 1.2 : 1.0) *
+    getAshenPactMoveSpeedMultiplier(p);
   const activeWepId = p.weaponSlots[p.activeWeaponSlot ?? 0] ?? p.weaponSlots[0] ?? 'knight_sword';
   if (
     activeWepId === 'gale_smg' &&
@@ -654,6 +661,7 @@ export function resolveMeleeConeHitsAndSynergies(
   shotFlags: number,
   bulletsDestroyed: number,
   alreadyHitEnemyIds?: Set<number>,
+  bypassFrontShield = false,
 ): boolean {
   tryTriggerCoopArcRelayForMelee(sim, p, meleeRange);
   triggerMeleeKickProps(sim, p, halfArc, meleeRange + 6, p.aimAngle);
@@ -676,7 +684,7 @@ export function resolveMeleeConeHitsAndSynergies(
     if (isCircleInCone(p.x, p.y, p.aimAngle, halfArc, meleeRange, e)) {
       const isCrit = sim.rng.chance(critChance);
       const dmg = isCrit ? Math.round(baseMeleeDmg * 1.5) : baseMeleeDmg;
-      const hitAngle = Math.atan2(e.y - p.y, e.x - p.x);
+      const hitAngle = bypassFrontShield ? e.aimAngle : Math.atan2(e.y - p.y, e.x - p.x);
       sim.applyDamageToEnemy(e, dmg, isCrit, shotElement, hitAngle, stepKnockback, true, p.id);
       swingHitEnemyIds.add(e.id);
       hitAny = true;
