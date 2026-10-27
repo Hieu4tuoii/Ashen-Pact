@@ -95,15 +95,22 @@ export class TextureBaker {
       return 'prop_rotten_totem_pillar_fallen';
     }
     if (kind === 'glacial_barricade') {
-      return coverState === 'flipped' ? 'prop_moss_table_flipped' : 'prop_crystal_pillar';
+      if (coverState === 'flipped') return 'prop_glacial_barricade_flipped';
+      if (coverState === 'sliding') return 'prop_glacial_barricade_sliding';
+      return 'prop_glacial_barricade';
     }
-    if (kind === 'sliding_ice_block') return 'prop_push_block';
-    if (kind === 'cryo_prism_pillar') return 'prop_crystal_pillar';
+    if (kind === 'glacial_spike') return 'prop_glacial_spike';
+    if (kind === 'sliding_ice_block') return 'prop_sliding_ice_block';
+    if (kind === 'cryo_prism_pillar') return 'prop_cryo_prism_pillar';
     if (kind === 'forge_blast_shield') {
-      return coverState === 'flipped' ? 'prop_moss_table_flipped' : 'prop_moss_table';
+      if (coverState === 'flipped') return 'prop_forge_blast_shield_flipped';
+      if (coverState === 'sliding') return 'prop_forge_blast_shield_sliding';
+      return 'prop_forge_blast_shield';
     }
-    if (kind === 'pneumatic_press') return 'prop_ancient_mechanism';
-    if (kind === 'slag_crucible') return 'prop_explosive_barrel';
+    if (kind === 'pneumatic_press') {
+      return coverState === 'fallen' ? 'prop_pneumatic_press_slammed' : 'prop_pneumatic_press';
+    }
+    if (kind === 'slag_crucible') return 'prop_slag_crucible';
     return `prop_${kind}`;
   }
 

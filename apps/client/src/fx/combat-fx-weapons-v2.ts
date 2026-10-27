@@ -26,9 +26,15 @@ import {
   drawBatch2ActiveWeaponOverlays,
   drawBatch2TransientShape,
 } from './combat-fx-weapons-p1b.js';
+import {
+  type P1CTacticalVfxKind,
+  drawP1CActiveOverlays,
+  drawP1CTransientShape,
+} from './combat-fx-p1c.js';
 
 export * from './combat-fx-weapons-p1a.js';
 export * from './combat-fx-weapons-p1b.js';
+export * from './combat-fx-p1c.js';
 
 export interface MagneticRivetPoint {
   id: number;
@@ -183,7 +189,8 @@ export interface TransientWeaponV2Shape {
     | 'ring_out_vortex'
     | 'totem_lane'
     | Batch1WeaponVfxKind
-    | Batch2WeaponVfxKind;
+    | Batch2WeaponVfxKind
+    | P1CTacticalVfxKind;
   x: number;
   y: number;
   x2?: number;
@@ -529,6 +536,7 @@ export function updateAndDrawWeaponV2Overlays(
   // 1b. Draw active Batch-1 projectile procedural overlays & Gale SMG spin-up wind ribbons
   drawBatch1ActiveProjectiles(g, state.syncedProjectiles, player, clockSec);
   drawBatch2ActiveWeaponOverlays(g, state.syncedSim, player, clockSec);
+  drawP1CActiveOverlays(g, state.syncedSim, clockSec);
 
   // 2. Update & draw transient weapon v2 / tactical shapes
   for (let i = state.shapes.length - 1; i >= 0; i -= 1) {
@@ -545,6 +553,9 @@ export function updateAndDrawWeaponV2Overlays(
       continue;
     }
     if (drawBatch2TransientShape(g, s, progress, alpha, clockSec, i)) {
+      continue;
+    }
+    if (drawP1CTransientShape(g, s, progress, alpha)) {
       continue;
     }
 

@@ -2,8 +2,10 @@ import type Phaser from 'phaser';
 import { PALETTE, type PaletteHex } from './palette.js';
 import { outlined, tracePolygon, traceRoundedRect } from './primitives.js';
 import { bakeCustomCanvas } from './texture-baker-canvas.js';
+import { bakeP1CProps } from './texture-baker-props-p1c.js';
 
 export function bakeProps(scene: Phaser.Scene, scale: number): void {
+  bakeP1CProps(scene, scale);
   // 1. Wooden Crate
   bakeCustomCanvas(scene, 'prop_wooden_crate', 36, 36, scale, (ctx) => {
     outlined(

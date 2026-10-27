@@ -374,7 +374,13 @@ export function syncPropsImpl(this: GameScene, dtSec: number): void {
     this.activePropIds.add(prop.id);
 
     let pv = this.propVisuals.get(prop.id);
-    const targetTex = TextureBaker.getPropTextureKey(prop.kind, prop.coverState);
+    const effectiveCoverState =
+      prop.kind === 'pneumatic_press' &&
+      prop.pressState === 'cooldown' &&
+      (prop.pressTimer ?? 0) >= 3.2
+        ? 'fallen'
+        : prop.coverState;
+    const targetTex = TextureBaker.getPropTextureKey(prop.kind, effectiveCoverState);
     if (!pv) {
       const shadow = this.add.sprite(prop.x, prop.y + 9, 'prop_shadow');
       shadow.setScale(invBake);
