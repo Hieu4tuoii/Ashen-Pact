@@ -7,7 +7,11 @@ import {
   computeEnemyVulnerabilityMultiplier,
   computeReactionMultiplier,
 } from './sim-damage-pipeline.js';
-import type { SimPlayerState, SimEnemyState } from './world-sim-types.js';
+import {
+  BULLET_HEAVY_PINBALL_KB_MULT,
+  propagateRangerPreyChainDamageAndKnockback,
+} from './sim-blessings.js';
+import { hasPlayerBlessing, type SimPlayerState, type SimEnemyState } from './world-sim-types.js';
 import type { WorldSim } from './world-sim.js';
 
 export function applyDamageToEnemyImpl(
@@ -154,7 +158,14 @@ export function applyDamageToEnemyImpl(
     enemy.defId === 'ice_prison' ||
     enemy.defId === 'forge_energy_core';
   const baseKbMult = enemy.isDummy ? 0.15 : isImmobileTarget ? 0 : enemy.isBoss ? 0.2 : 1.0;
-  const kbMult = baseKbMult * (this.map.getSurfaceAtWorld(enemy.x, enemy.y) === 'ice' ? 1.5 : 1.0);
+  const pinballKbMult =
+    !isChainDamage && hasPlayerBlessing(attackerPl, 'bullet_heavy_pinball')
+      ? BULLET_HEAVY_PINBALL_KB_MULT
+      : 1.0;
+  const kbMult =
+    baseKbMult *
+    pinballKbMult *
+    (this.map.getSurfaceAtWorld(enemy.x, enemy.y) === 'ice' ? 1.5 : 1.0);
   const kbX = Math.cos(hitAngleRad) * knockback * kbMult;
   const kbY = Math.sin(hitAngleRad) * knockback * kbMult;
   enemy.kbVx += kbX;
@@ -172,38 +183,18 @@ export function applyDamageToEnemyImpl(
     }
   }
 
-  // Ranger Upgrade 2 (Chuỗi Con Mồi / ranger_prey_chain): Marked target propagates 30% damage to nearby enemies
-  const markOwner =
-    enemy.markedByPlayerId > 0 ? this.getPlayerById(enemy.markedByPlayerId) : attackerPl;
-  if (
-    !isChainDamage &&
-    enemy.markedTimer > 0 &&
-    ((markOwner && markOwner.blessingIds.includes('ranger_prey_chain')) ||
-      attackerPl.blessingIds.includes('ranger_prey_chain'))
-  ) {
-    const chainAmt = Math.max(1, Math.round(dmg * 0.3));
-    let chained = 0;
-    for (let i = 0; i < this.enemies.length && chained < 3; i++) {
-      const other = this.enemies[i]!;
-      if (other.id === enemy.id || other.hp <= 0 || other.aiState === 'spawning') continue;
-      if (other.markedTimer > 0 || distance(enemy.x, enemy.y, other.x, other.y) <= 220) {
-        chained += 1;
-        other.markedTimer = Math.max(other.markedTimer, 4.0);
-        other.markedByPlayerId = enemy.markedByPlayerId || attackerPlayerId;
-        this.applyDamageToEnemy(
-          other,
-          chainAmt,
-          false,
-          'none',
-          hitAngleRad,
-          40,
-          false,
-          attackerPlayerId,
-          true,
-        );
-      }
-    }
-  }
+  // Ranger Upgrade 2 (Chuỗi Con Mồi / ranger_prey_chain): Marked target propagates 35% damage & knockback to nearby enemies
+  propagateRangerPreyChainDamageAndKnockback(
+    this,
+    enemy,
+    dmg,
+    hitAngleRad,
+    kbX,
+    kbY,
+    attackerPlayerId,
+    attackerPl,
+    isChainDamage,
+  );
 
   // Apply Elemental Status & check Elemental Reactions
   if (element !== 'none') {

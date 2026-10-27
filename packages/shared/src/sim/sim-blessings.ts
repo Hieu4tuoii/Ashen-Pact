@@ -557,3 +557,4 @@ export function triggerBossStaggerBurst(
 }
 
 export * from './sim-blessings-dash-reload.js';
+export * from './sim-blessings-bullet-skills.js';

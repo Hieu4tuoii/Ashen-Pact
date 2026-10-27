@@ -1,10 +1,196 @@
 import { CHARACTERS } from '../data/characters.js';
+import { scaleBlessingDamage } from '../data/blessings.js';
 import type { ElementType } from '../data/types.js';
 import { angleDiff, clamp, distance, isCircleInCone } from '../math/vec2.js';
 import { TILE_SIZE } from '../protocol/messages.js';
-import { triggerMeleeKickProps } from './sim-tactical-physics.js';
-import { ELEMENTALIST_ROTATION_ORDER, MAX_DEPLOYABLES_PER_PLAYER, type SimSummonState, type SimPlayerState, type SimEnemyState } from './world-sim-types.js';
+import {
+  spawnElementalistOrbSkillZones,
+  updateElementalistVortexPropsAndTwinBeam,
+} from './sim-blessings.js';
+import { triggerEnemyWallSlam, triggerMeleeKickProps } from './sim-tactical-physics.js';
+import { ELEMENTALIST_ROTATION_ORDER, hasPlayerBlessing, MAX_DEPLOYABLES_PER_PLAYER, type SimSummonState, type SimPlayerState, type SimEnemyState, type SimPropState } from './world-sim-types.js';
 import type { WorldSim } from './world-sim.js';
+
+function pointToSegmentDist(px: number, py: number, x1: number, y1: number, x2: number, y2: number): number {
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const lenSq = dx * dx + dy * dy;
+  if (lenSq <= 1e-8) return distance(px, py, x1, y1);
+  const t = clamp(((px - x1) * dx + (py - y1) * dy) / lenSq, 0, 1);
+  return distance(px, py, x1 + t * dx, y1 + t * dy);
+}
+
+function findNearestWallOrObstacleForEnemy(sim: WorldSim, e: SimEnemyState): { x: number; y: number; prop?: SimPropState } {
+  let bestX = e.x + 64;
+  let bestY = e.y;
+  let bestDist = Infinity;
+  let bestProp: SimPropState | undefined;
+
+  for (let i = 0; i < sim.props.length; i++) {
+    const prop = sim.props[i]!;
+    if (prop.hp <= 0 || (prop.coverState !== 'flipped' && !prop.blocksMovement)) continue;
+    const d = distance(e.x, e.y, prop.x, prop.y) - prop.radius;
+    if (d < bestDist) {
+      bestDist = d;
+      bestX = prop.x;
+      bestY = prop.y;
+      bestProp = prop;
+    }
+  }
+  const centerTx = Math.floor(e.x / TILE_SIZE);
+  const centerTy = Math.floor(e.y / TILE_SIZE);
+  for (let ty = centerTy - 8; ty <= centerTy + 8; ty++) {
+    for (let tx = centerTx - 8; tx <= centerTx + 8; tx++) {
+      if (tx < 0 || ty < 0 || tx >= sim.map.cols || ty >= sim.map.rows) continue;
+      const tile = sim.map.getTile(tx, ty);
+      if (tile !== 'wall' && tile !== 'pillar') continue;
+      const wx = (tx + 0.5) * TILE_SIZE;
+      const wy = (ty + 0.5) * TILE_SIZE;
+      const d = distance(e.x, e.y, wx, wy);
+      if (d < bestDist) {
+        bestDist = d;
+        bestX = wx;
+        bestY = wy;
+        bestProp = undefined;
+      }
+    }
+  }
+  return { x: bestX, y: bestY, prop: bestProp };
+}
+
+function lashDruidPoisonRootsIntoWall(sim: WorldSim, ownerId: number, e: SimEnemyState): void {
+  if (e.hp <= 0 || e.isDummy || e.aiState === 'spawning' || e.bossBurrowed) return;
+  const obstacle = findNearestWallOrObstacleForEnemy(sim, e);
+  const lashAngle = Math.atan2(obstacle.y - e.y, obstacle.x - e.x);
+  const rootDmg = scaleBlessingDamage(14, sim.currentFloor);
+  const kbSpeed = 240;
+
+  e.lastHitPlayerId = ownerId;
+  e.poisonTimer = Math.max(e.poisonTimer, 4.0);
+  e.poisonStacks = Math.max(1, e.poisonStacks);
+  sim.applyDamageToEnemy(e, rootDmg, false, 'poison', lashAngle, kbSpeed, true, ownerId);
+  if (e.hp <= 0 || e.isBoss) return;
+
+  e.kbVx = Math.cos(lashAngle) * kbSpeed;
+  e.kbVy = Math.sin(lashAngle) * kbSpeed;
+  const col = sim.map.resolveCircleCollision(
+    obstacle.x - Math.cos(lashAngle) * (e.radius + 2),
+    obstacle.y - Math.sin(lashAngle) * (e.radius + 2),
+    e.radius,
+    true,
+  );
+  e.x = col.x;
+  e.y = col.y;
+  e.wallSlamCooldownTimer = 0;
+  triggerEnemyWallSlam(sim, e, obstacle.prop, kbSpeed);
+  e.rootedTimer = Math.max(e.rootedTimer, 1.5);
+}
+
+function updateEngineerTwinTurretLaserFences(sim: WorldSim, dtSec: number): void {
+  if (sim.summons.length < 2) return;
+
+  for (let i = 0; i < sim.summons.length; i++) {
+    const t1 = sim.summons[i]!;
+    if (t1.kind !== 'tesla_turret' || t1.hp <= 0 || t1.ttlSec <= 0) continue;
+    for (let j = i + 1; j < sim.summons.length; j++) {
+      const t2 = sim.summons[j]!;
+      if (t2.kind !== 'tesla_turret' || t2.hp <= 0 || t2.ttlSec <= 0 || t1.ownerPlayerId !== t2.ownerPlayerId) continue;
+
+      t1.fenceTickTimer = (t1.fenceTickTimer ?? 0) - dtSec;
+      const fireTick = (t1.fenceTickTimer ?? 0) <= 0;
+      if (fireTick) t1.fenceTickTimer = 0.45;
+
+      const minX = Math.min(t1.x, t2.x) - 36;
+      const maxX = Math.max(t1.x, t2.x) + 36;
+      const minY = Math.min(t1.y, t2.y) - 36;
+      const maxY = Math.max(t1.y, t2.y) + 36;
+      const fenceDmg = fireTick ? scaleBlessingDamage(10, sim.currentFloor) : 0;
+      const fenceAng = fireTick ? Math.atan2(t2.y - t1.y, t2.x - t1.x) : 0;
+      for (let k = 0; k < sim.enemies.length; k++) {
+        const e = sim.enemies[k]!;
+        if (e.hp <= 0 || e.isDummy || e.aiState === 'spawning' || e.bossBurrowed) continue;
+        if (e.x < minX || e.x > maxX || e.y < minY || e.y > maxY) continue;
+        if (pointToSegmentDist(e.x, e.y, t1.x, t1.y, t2.x, t2.y) <= e.radius + 18) {
+          e.chillTimer = Math.max(e.chillTimer, 1.5);
+          e.slowTimer = Math.max(e.slowTimer ?? 0, 1.5);
+          e.fenceSlow50Timer = Math.max(e.fenceSlow50Timer ?? 0, 0.5);
+          if (fireTick) {
+            sim.events.push({ kind: 'chain_lightning', fromX: t1.x, fromY: t1.y, toX: t2.x, toY: t2.y });
+            sim.applyDamageToEnemy(e, fenceDmg, false, 'shock', fenceAng, 35, false, t1.ownerPlayerId);
+          }
+        }
+      }
+    }
+  }
+}
+
+function triggerEngineerTurretSelfDestruct(sim: WorldSim, turret: SimSummonState): void {
+  if (!turret.selfDestruct) return;
+  turret.selfDestruct = false;
+  turret.ttlSec = 0;
+  turret.hp = 0;
+
+  let bestTarget: SimEnemyState | null = null;
+  let bestClusterCount = -1;
+  let bestDist = Infinity;
+  for (let i = 0; i < sim.enemies.length; i++) {
+    const cand = sim.enemies[i]!;
+    if (cand.hp <= 0 || cand.isDummy || cand.aiState === 'spawning' || cand.bossBurrowed) continue;
+    const d = distance(turret.x, turret.y, cand.x, cand.y);
+    if (d > 180) continue;
+    let neighbors = 0;
+    for (let j = 0; j < sim.enemies.length; j++) {
+      const other = sim.enemies[j]!;
+      if (other.hp > 0 && !other.isDummy && distance(cand.x, cand.y, other.x, other.y) <= 130) neighbors += 1;
+    }
+    if (neighbors > bestClusterCount || (neighbors === bestClusterCount && d < bestDist)) {
+      bestClusterCount = neighbors;
+      bestDist = d;
+      bestTarget = cand;
+    }
+  }
+  if (bestTarget) {
+    turret.x = bestTarget.x;
+    turret.y = bestTarget.y;
+  }
+
+  const blastR = 130;
+  const blastDmg = scaleBlessingDamage(45, sim.currentFloor);
+  sim.events.push({
+    kind: 'explosion', x: turret.x, y: turret.y, radius: blastR,
+    damage: blastDmg, sourceDefId: 'tesla_turret_self_destruct',
+  });
+
+  for (let j = 0; j < sim.enemies.length; j++) {
+    const e = sim.enemies[j]!;
+    if (e.hp <= 0 || e.aiState === 'spawning' || e.bossBurrowed) continue;
+    if (distance(turret.x, turret.y, e.x, e.y) <= blastR + e.radius) {
+      const ang = distance(turret.x, turret.y, e.x, e.y) > 1e-4 ? Math.atan2(e.y - turret.y, e.x - turret.x) : 0;
+      sim.applyDamageToEnemy(e, blastDmg, true, 'burn', ang, 240, true, turret.ownerPlayerId);
+      if (e.hp > 0) {
+        sim.applyElementStatusToEnemy(e, 'shock', blastDmg, turret.ownerPlayerId);
+        e.burnTimer = Math.max(e.burnTimer, 2.5);
+        e.shockTimer = Math.max(e.shockTimer, 0.6);
+      }
+    }
+  }
+}
+
+function tryReactivateEngineerSelfDestruct(sim: WorldSim, p: SimPlayerState): boolean {
+  if (p.characterId !== 'engineer' || !hasPlayerBlessing(p, 'engineer_self_destruct')) return false;
+  if (p.skillCooldownTimer <= 0 && p.skillActiveTimer <= 0) return false;
+  const activeTurrets = sim.summons.filter(
+    (s) => s.kind === 'tesla_turret' && s.ownerPlayerId === p.id && s.hp > 0 && s.ttlSec > 0,
+  );
+  if (activeTurrets.length === 0) return false;
+
+  for (const t of activeTurrets) {
+    t.selfDestruct = true;
+    triggerEngineerTurretSelfDestruct(sim, t);
+  }
+  p.skillActiveTimer = 0;
+  return true;
+}
 
 export function activateCharacterSkillImpl(this: WorldSim, p: SimPlayerState): void {
   const cDef = CHARACTERS[p.characterId] ?? CHARACTERS.vanguard;
@@ -33,6 +219,7 @@ export function activateCharacterSkillImpl(this: WorldSim, p: SimPlayerState): v
     return;
   }
 
+  if (tryReactivateEngineerSelfDestruct(this, p)) return;
   if (p.skillCooldownTimer > 0) return;
   p.skillCooldownTimer = skillDef.cooldownSec;
   p.skillActiveTimer =
@@ -93,51 +280,7 @@ export function activateCharacterSkillImpl(this: WorldSim, p: SimPlayerState): v
     const nextEl = cycle[(curIdx + 1) % cycle.length] ?? 'chill';
     p.activeImbueElement = nextEl;
 
-    const hasVortex = p.blessingIds.includes('elementalist_vortex');
-    const hasDual = p.blessingIds.includes('elementalist_twin_orbit');
-    const secondaryEl: ElementType = hasDual ? nextEl : 'none';
-
-    const orbX = clamp(
-      p.x + Math.cos(p.aimAngle) * 115,
-      TILE_SIZE * 2,
-      this.map.width - TILE_SIZE * 2,
-    );
-    const orbY = clamp(
-      p.y + Math.sin(p.aimAngle) * 115,
-      TILE_SIZE * 2,
-      this.map.height - TILE_SIZE * 2,
-    );
-    const zoneRadius = 76;
-
-    this.skillZones.push({
-      id: ++this.nextEntityId,
-      ownerPlayerId: p.id,
-      x: orbX,
-      y: orbY,
-      radius: zoneRadius,
-      ttlSec: skillDef.durationSec,
-      maxTtlSec: skillDef.durationSec,
-      tickTimer: 0.45,
-      element: orbEl,
-      secondaryElement: secondaryEl,
-      vortex: hasVortex,
-    });
-
-    this.applyElementAtWorldPoint(orbX, orbY, orbEl, 58);
-    if (secondaryEl !== 'none') {
-      this.applyElementAtWorldPoint(orbX, orbY, secondaryEl, 48);
-    }
-
-    for (let i = 0; i < this.enemies.length; i++) {
-      const e = this.enemies[i]!;
-      if (e.hp > 0 && distance(orbX, orbY, e.x, e.y) <= zoneRadius + e.radius) {
-        const hitAng = Math.atan2(e.y - orbY, e.x - orbX);
-        this.applyDamageToEnemy(e, 18, true, orbEl, hitAng, 140, true, p.id);
-        if (e.hp > 0 && secondaryEl !== 'none') {
-          this.applyDamageToEnemy(e, 10, false, secondaryEl, hitAng, 60, false, p.id);
-        }
-      }
-    }
+    spawnElementalistOrbSkillZones(this, p, orbEl, nextEl, skillDef.durationSec);
     return;
   }
 
@@ -221,16 +364,7 @@ export function activateCharacterSkillImpl(this: WorldSim, p: SimPlayerState): v
             y: e.y,
           });
           if (hasPoisonRoots) {
-            this.applyDamageToEnemy(
-              e,
-              10,
-              false,
-              'poison',
-              Math.atan2(e.y - resolved.y, e.x - resolved.x),
-              60,
-              false,
-              p.id,
-            );
+            lashDruidPoisonRootsIntoWall(this, p.id, e);
           }
         }
       }
@@ -258,10 +392,11 @@ export function activateCharacterSkillImpl(this: WorldSim, p: SimPlayerState): v
         maxHp: hasSacredGrove ? 36 : 48,
         ttlSec: skillDef.durationSec,
         maxTtlSec: skillDef.durationSec,
-        tickTimer: 2.0,
+        tickTimer: hasPoisonRoots ? 1.8 : 2.0,
         healsRemaining: 2,
         charge: 0,
         poisonRoots: hasPoisonRoots,
+        sacredGrove: hasSacredGrove,
         selfDestruct: false,
         rootedEnemyIds: rootedIds,
       };
@@ -366,7 +501,7 @@ export function updateSkillZonesAndSummonsImpl(this: WorldSim, dtSec: number): v
     if (z.ttlSec <= 0) continue;
 
     if (z.vortex) {
-      const pullRadius = z.maxTtlSec <= 1.0 ? z.radius : z.radius + 60;
+      const pullRadius = z.maxTtlSec <= 1.0 ? z.radius : Math.max(150, z.radius + 60);
       const basePullSpeed = z.maxTtlSec <= 1.0 ? 175 : 95;
       for (let j = 0; j < this.enemies.length; j++) {
         const e = this.enemies[j]!;
@@ -392,7 +527,8 @@ export function updateSkillZonesAndSummonsImpl(this: WorldSim, dtSec: number): v
     }
 
     z.tickTimer -= dtSec;
-    if (z.tickTimer <= 0) {
+    const didTickThisStep = z.tickTimer <= 0;
+    if (didTickThisStep) {
       z.tickTimer = 0.5;
       this.applyElementAtWorldPoint(z.x, z.y, z.element, z.radius * 0.65);
       for (let j = 0; j < this.enemies.length; j++) {
@@ -416,6 +552,7 @@ export function updateSkillZonesAndSummonsImpl(this: WorldSim, dtSec: number): v
         }
       }
     }
+    updateElementalistVortexPropsAndTwinBeam(this, z, dtSec, didTickThisStep);
 
     this.skillZones[zoneWrite++] = z;
   }
@@ -451,7 +588,7 @@ export function updateSkillZonesAndSummonsImpl(this: WorldSim, dtSec: number): v
 
         s.tickTimer -= dtSec;
         if (s.tickTimer <= 0) {
-          s.tickTimer = 2.0;
+          s.tickTimer = s.poisonRoots ? 1.8 : 2.0;
           if (s.healsRemaining > 0) {
             s.healsRemaining -= 1;
             for (const ally of this.getAllPlayers()) {
@@ -468,8 +605,7 @@ export function updateSkillZonesAndSummonsImpl(this: WorldSim, dtSec: number): v
               const e = this.enemies[j]!;
               if (e.hp <= 0 || e.aiState === 'spawning' || e.bossBurrowed) continue;
               if (distance(s.x, s.y, e.x, e.y) <= s.auraRadius + e.radius) {
-                const ang = Math.atan2(e.y - s.y, e.x - s.x);
-                this.applyDamageToEnemy(e, 9, false, 'poison', ang, 35, false, s.ownerPlayerId);
+                lashDruidPoisonRootsIntoWall(this, s.ownerPlayerId, e);
               }
             }
           }
@@ -640,27 +776,12 @@ export function updateSkillZonesAndSummonsImpl(this: WorldSim, dtSec: number): v
     } else {
       // Summon expired or destroyed: check Engineer's Self-Destruct upgrade!
       if (s.kind === 'tesla_turret' && s.selfDestruct) {
-        const blastR = 120;
-        this.events.push({
-          kind: 'explosion',
-          x: s.x,
-          y: s.y,
-          radius: blastR,
-          damage: 30,
-          sourceDefId: 'tesla_turret_self_destruct',
-        });
-        for (let j = 0; j < this.enemies.length; j++) {
-          const e = this.enemies[j]!;
-          if (e.hp <= 0 || e.aiState === 'spawning' || e.bossBurrowed) continue;
-          if (distance(s.x, s.y, e.x, e.y) <= blastR + e.radius) {
-            const ang = Math.atan2(e.y - s.y, e.x - s.x);
-            this.applyDamageToEnemy(e, 30, true, 'burn', ang, 240, true, s.ownerPlayerId);
-          }
-        }
+        triggerEngineerTurretSelfDestruct(this, s);
       }
     }
   }
   this.summons.length = summonWrite;
+  updateEngineerTwinTurretLaserFences(this, dtSec);
 }
 
 export function triggerTeslaEmpBlastImpl(this: WorldSim, turret: SimSummonState): void {
@@ -732,33 +853,23 @@ export function releaseVanguardShieldShockwaveImpl(this: WorldSim, p: SimPlayerS
   const skillDef = CHARACTERS.vanguard.skill;
   const stored = p.shieldStoredBullets;
   p.skillActiveTimer = 0;
-  p.skillCooldownTimer = Math.max(
-    p.skillCooldownTimer,
-    skillDef.cooldownSec - skillDef.durationSec,
-  );
+  p.skillCooldownTimer = Math.max(p.skillCooldownTimer, skillDef.cooldownSec - skillDef.durationSec);
   p.shieldStoredBullets = 0;
 
-  const hasFortressUpgrade = p.blessingIds.includes('vanguard_bastion_prism');
-  const hasChargeUpgrade = p.blessingIds.includes('vanguard_charge');
+  const hasFortressUpgrade = hasPlayerBlessing(p, 'vanguard_bastion_prism');
+  const hasChargeUpgrade = hasPlayerBlessing(p, 'vanguard_charge');
+  const startX = p.x;
+  const startY = p.y;
+  const dirX = Math.cos(p.aimAngle);
+  const dirY = Math.sin(p.aimAngle);
+
   if (hasChargeUpgrade) {
-    const stepDist = 11;
-    const dirX = Math.cos(p.aimAngle);
-    const dirY = Math.sin(p.aimAngle);
-    for (let s = 0; s < 10; s++) {
-      const nextX = p.x + dirX * stepDist;
-      const nextY = p.y + dirY * stepDist;
-      const resolved = this.map.resolveCircleCollision(nextX, nextY, p.radius);
+    for (let s = 0; s < 13; s++) {
+      const resolved = this.map.resolveCircleCollision(p.x + dirX * 10, p.y + dirY * 10, p.radius);
       p.x = resolved.x;
       p.y = resolved.y;
     }
-    this.events.push({
-      kind: 'dash_started',
-      playerId: p.id,
-      x: p.x,
-      y: p.y,
-      dirX,
-      dirY,
-    });
+    this.events.push({ kind: 'dash_started', playerId: p.id, x: p.x, y: p.y, dirX, dirY });
   }
 
   const baseShockDmg = 12 + stored * 4 + (hasFortressUpgrade ? 8 : 0);
@@ -770,12 +881,13 @@ export function releaseVanguardShieldShockwaveImpl(this: WorldSim, p: SimPlayerS
 
   triggerMeleeKickProps(this, p, halfArc, range, p.aimAngle);
 
-  const shockEnemyCount = this.enemies.length;
-  for (let i = 0; i < shockEnemyCount; i++) {
+  for (let i = 0; i < this.enemies.length; i++) {
     const e = this.enemies[i]!;
     if (e.hp <= 0 || e.aiState === 'spawning') continue;
-    if (isCircleInCone(p.x, p.y, p.aimAngle, halfArc, range, e)) {
-      const angleToEnemy = Math.atan2(e.y - p.y, e.x - p.x);
+    const hitInChargeCorridor =
+      hasChargeUpgrade && pointToSegmentDist(e.x, e.y, startX, startY, p.x, p.y) <= p.radius + e.radius + 24;
+    if (hitInChargeCorridor || isCircleInCone(p.x, p.y, p.aimAngle, halfArc, range, e)) {
+      const angleToEnemy = hitInChargeCorridor ? p.aimAngle : Math.atan2(e.y - p.y, e.x - p.x);
       if (hasChargeUpgrade) {
         if (e.isBoss) {
           if (!(e.bossPhase >= 3 && e.aiState === 'telegraph')) {
@@ -798,30 +910,28 @@ export function releaseVanguardShieldShockwaveImpl(this: WorldSim, p: SimPlayerS
         }
       }
       this.applyDamageToEnemy(
-        e,
-        shockwaveDamage,
-        stored >= 2 || hasChargeUpgrade || hasFortressUpgrade,
-        shockElement,
-        angleToEnemy,
-        hasChargeUpgrade ? 340 : 260,
-        true,
-        p.id,
+        e, shockwaveDamage, stored >= 2 || hasChargeUpgrade || hasFortressUpgrade,
+        shockElement, angleToEnemy, hasChargeUpgrade ? 340 : 260, true, p.id,
       );
+      if (hasChargeUpgrade && e.hp > 0 && !e.isBoss) {
+        e.kbVx = dirX * 340;
+        e.kbVy = dirY * 340;
+        for (let step = 0; step < 9; step++) {
+          const col = this.map.resolveCircleCollision(e.x + dirX * 10, e.y + dirY * 10, e.radius, true);
+          e.x = col.x;
+          e.y = col.y;
+          if (col.collided) {
+            triggerEnemyWallSlam(this, e, undefined, 340);
+            break;
+          }
+        }
+      }
     }
   }
 
   this.events.push({
-    kind: 'shield_shockwave',
-    playerId: p.id,
-    x: p.x,
-    y: p.y,
-    angle: p.aimAngle,
-    storedBullets: stored,
-    damage: shockwaveDamage,
+    kind: 'shield_shockwave', playerId: p.id, x: p.x, y: p.y,
+    angle: p.aimAngle, storedBullets: stored, damage: shockwaveDamage,
   });
-  this.events.push({
-    kind: 'hit_stop',
-    durationMs: 40,
-    trauma: 0.35,
-  });
+  this.events.push({ kind: 'hit_stop', durationMs: 40, trauma: 0.35 });
 }

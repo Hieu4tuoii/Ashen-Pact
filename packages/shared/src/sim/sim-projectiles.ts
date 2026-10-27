@@ -1,9 +1,16 @@
 import { BIOME_SCALING } from '../data/scaling.js';
-import { WEAPONS } from '../data/weapons.js';
 import { angleDiff, circleVsCircle, distance } from '../math/vec2.js';
 import { SHOT_FLAG, TILE_SIZE } from '../protocol/messages.js';
 import { clampBounceCount, clampPelletsPerTrigger } from './sim-damage-pipeline.js';
-import { refractProjectileThroughPrismBarricade, updateTableTechRocketProjectilesInFlight } from './sim-blessings.js';
+import {
+  applyBulletModBlessingsOnVolleySpawn,
+  applyPlayerProjectileMidFlightSynergiesAndBlessings,
+  handlePlayerProjectileBarricadeHitBlessings,
+  handlePlayerProjectileWallHitBlessingsAndSkills,
+  refractProjectileThroughPrismBarricade,
+  tryBlockOrReflectEnemyProjectileByVanguardShield,
+  updateTableTechRocketProjectilesInFlight,
+} from './sim-blessings.js';
 import { spawnSeedGunLifeBlossomImpl, triggerLauncherProjectileExplosionImpl } from './sim-player.js';
 import { refractProjectileThroughCryoPrism } from './sim-tactical-physics-p1c.js';
 import {
@@ -34,6 +41,7 @@ export function spawnDeterministicVolleyImpl(this: WorldSim, ev: BulletVolleySpa
   if (ev.eventId === undefined || ev.eventId <= 0) {
     ev.eventId = this.nextVolleyEventId++;
   }
+  applyBulletModBlessingsOnVolleySpawn(this, ev);
   const resolvedFlags = ev.shotFlags ?? ev.flags ?? 0;
   ev.shotFlags = resolvedFlags;
   ev.flags = resolvedFlags;
@@ -169,6 +177,8 @@ export function updateProjectilesImpl(this: WorldSim, dtSec: number): void {
     }
 
     updateTableTechRocketProjectilesInFlight(this, b, dtSec);
+    b.prevX = b.x;
+    b.prevY = b.y;
     b.x += b.vx * dtSec;
     b.y += b.vy * dtSec;
     if (updateLegendaryProjectileInFlight(this, b, dtSec)) continue;
@@ -204,6 +214,19 @@ export function updateProjectilesImpl(this: WorldSim, dtSec: number): void {
             y: wallHit.hitTy * TILE_SIZE + 16,
           });
         }
+      }
+
+      if (
+        handlePlayerProjectileWallHitBlessingsAndSkills(
+          this,
+          b,
+          wallHit.resolvedX,
+          wallHit.resolvedY,
+          wallHit.normalX,
+          wallHit.normalY,
+        )
+      ) {
+        continue;
       }
 
       if (
@@ -292,6 +315,10 @@ export function updateProjectilesImpl(this: WorldSim, dtSec: number): void {
         }
         if (prop.blocksEnemyProjectiles && b.team === 'player') {
           if (circleVsCircle(b, prop)) {
+            if (handlePlayerProjectileBarricadeHitBlessings(this, b, prop) && b.ttlSec <= 0) {
+              hitProp = true;
+              break;
+            }
             if (refractProjectileThroughPrismBarricade(this, b, prop) && b.ttlSec <= 0) {
               hitProp = true;
               break;
@@ -342,76 +369,8 @@ export function updateProjectilesImpl(this: WorldSim, dtSec: number): void {
 
     // 3. Player projectile vs Allies/Synergies & Enemies
     if (b.team === 'player') {
-      // 3a. Vanguard Shield Co-op Synergy: Ally bullets passing through active Vanguard shield get +30% damage & +1 pierce
-      if (!b.amplifiedByShield) {
-        for (let pIdx = 0; pIdx < allPlayers.length; pIdx++) {
-          const pl = allPlayers[pIdx]!;
-          if (
-            pl.lifeState !== 'alive' ||
-            pl.characterId !== 'vanguard' ||
-            pl.skillActiveTimer <= 0
-          ) {
-            continue;
-          }
-          const dToVanguard = distance(b.x, b.y, pl.x, pl.y);
-          if (dToVanguard <= 42 + b.radius) {
-            const angFromVanguard = Math.atan2(b.y - pl.y, b.x - pl.x);
-            const halfShieldArc = pl.blessingIds.includes('vanguard_bastion_prism')
-              ? Math.PI
-              : (65 * Math.PI) / 180;
-            if (Math.abs(angleDiff(angFromVanguard, pl.aimAngle)) <= halfShieldArc) {
-              b.amplifiedByShield = true;
-              b.damage = Math.round(b.damage * 1.3);
-              b.pierceRemaining += 1;
-              break;
-            }
-          }
-        }
-      }
-
-      // 3b. Elementalist Skill Zone Synergy: Bullets passing through an Elemental Orb Zone get imbued + 15% damage
-      if (this.skillZones.length > 0) {
-        for (let zIdx = 0; zIdx < this.skillZones.length; zIdx++) {
-          const z = this.skillZones[zIdx]!;
-          if (z.ttlSec <= 0 || b.hitEntityIds.includes(z.id)) continue;
-          if (distance(b.x, b.y, z.x, z.y) <= z.radius) {
-            b.hitEntityIds.push(z.id);
-            b.imbuedByZone = true;
-            b.imbuedOwnerId = z.ownerPlayerId;
-            if (b.element === 'none') {
-              b.element = z.element;
-              if (z.secondaryElement && z.secondaryElement !== 'none') {
-                b.imbuedSecondaryElement = z.secondaryElement;
-              }
-            } else {
-              b.imbuedElement = z.element;
-              if (z.secondaryElement && z.secondaryElement !== 'none') {
-                b.imbuedSecondaryElement = z.secondaryElement;
-              }
-            }
-            b.damage = Math.round(b.damage * 1.15);
-          }
-        }
-      }
-
-      // 3c. Engineer Tesla Turret Co-op Synergy: Shooting a Tesla Turret charges its EMP!
-      if (
-        this.summons.length > 0 &&
-        b.weaponId !== 'tesla_turret' &&
-        b.weaponId !== 'ancient_turret'
-      ) {
-        for (let sIdx = 0; sIdx < this.summons.length; sIdx++) {
-          const sum = this.summons[sIdx]!;
-          if (sum.kind !== 'tesla_turret' || sum.hp <= 0 || sum.ttlSec <= 0) continue;
-          if (b.hitEntityIds.includes(sum.id)) continue;
-          if (distance(b.x, b.y, sum.x, sum.y) <= sum.radius + b.radius + 6) {
-            b.hitEntityIds.push(sum.id);
-            sum.charge = Math.min(100, sum.charge + (b.element !== 'none' ? 50 : 35));
-            if (sum.charge >= 100) {
-              this.triggerTeslaEmpBlast(sum);
-            }
-          }
-        }
+      if (applyPlayerProjectileMidFlightSynergiesAndBlessings(this, b, allPlayers)) {
+        continue;
       }
 
       if (b.weaponId === 'void_staff') {
@@ -530,55 +489,9 @@ export function updateProjectilesImpl(this: WorldSim, dtSec: number): void {
       }
     } else {
       // 4. Enemy projectile vs Vanguard Shield, Druid Sacred Tree, or any alive Player
-      let blockedByAnyShield = false;
-      for (let pIdx = 0; pIdx < allPlayers.length; pIdx++) {
-        const pl = allPlayers[pIdx]!;
-        if (pl.lifeState !== 'alive') continue;
-        if (pl.characterId === 'vanguard' && pl.skillActiveTimer > 0) {
-          const hasFortress = pl.blessingIds.includes('vanguard_bastion_prism');
-          const shieldRadius = hasFortress ? 32 : 38;
-          const halfShieldArc = hasFortress ? Math.PI : (60 * Math.PI) / 180;
-          const dToPlayer = distance(b.x, b.y, pl.x, pl.y);
-          const dToPrev = distance(b.x, b.y, pl.prevX, pl.prevY);
-          const inCurrCone =
-            dToPlayer <= shieldRadius + b.radius &&
-            dToPlayer >= pl.radius * 0.5 &&
-            Math.abs(angleDiff(Math.atan2(b.y - pl.y, b.x - pl.x), pl.aimAngle)) <= halfShieldArc;
-          const inPrevCone =
-            dToPrev <= shieldRadius + b.radius &&
-            dToPrev >= pl.radius * 0.5 &&
-            Math.abs(angleDiff(Math.atan2(b.y - pl.prevY, b.x - pl.prevX), pl.aimAngle)) <=
-              halfShieldArc;
-          if (inCurrCone || inPrevCone) {
-            b.ttlSec = 0;
-            midFlightDestroyedIds.push(b.id);
-            pl.shieldStoredBullets += 1;
-            const activeWepId =
-              pl.weaponSlots[pl.activeWeaponSlot] ?? pl.weaponSlots[0] ?? 'knight_sword';
-            const activeWep = WEAPONS[activeWepId];
-            if (activeWep?.cadenceKind === 'HEAT_VENT') {
-              pl.weaponHeat = Math.max(0, pl.weaponHeat - 15);
-            } else if (pl.clipMax > 0) {
-              pl.clipAmmo = Math.min(pl.clipMax, pl.clipAmmo + 1);
-            }
-            pl.vanguardShieldBonusAdd = Math.min(0.75, (pl.vanguardShieldBonusAdd ?? 0) + 0.15);
-            this.events.push({
-              kind: 'projectile_impact',
-              x: b.x,
-              y: b.y,
-              angle: b.angle,
-              team: 'enemy',
-              hitWall: false,
-              destroyedByMelee: false,
-              blockedByShield: true,
-              isCrit: false,
-            });
-            blockedByAnyShield = true;
-            break;
-          }
-        }
+      if (tryBlockOrReflectEnemyProjectileByVanguardShield(this, b, allPlayers, midFlightDestroyedIds)) {
+        continue;
       }
-      if (blockedByAnyShield) continue;
 
       // Check Sacred Tree blocking enemy projectiles
       if (this.summons.length > 0) {
@@ -929,6 +842,7 @@ export function acquireProjectileImpl(this: WorldSim,
     pooled.bounceRemaining = resolvedBounce; pooled.ttlSec = resolvedTtl;
     pooled.element = init.element ?? 'none'; pooled.amplifiedByShield = init.amplifiedByShield ?? false;
     pooled.shotFlags = init.shotFlags ?? 0; pooled.splitGeneration = init.splitGeneration ?? 0;
+    pooled.procCoefficient = init.procCoefficient ?? 1.0; pooled.heavyPinballApplied = init.heavyPinballApplied ?? false;
     pooled.prismBonusAdd = init.prismBonusAdd ?? 0;
     pooled.awaitingServerRedirectTimer = init.awaitingServerRedirectTimer ?? 0;
     pooled.imbuedByZone = init.imbuedByZone; pooled.imbuedElement = init.imbuedElement;

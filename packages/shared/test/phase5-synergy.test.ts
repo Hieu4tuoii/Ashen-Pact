@@ -220,7 +220,7 @@ describe('Phase 5 — 5 Playable Characters, Skills, 10 Upgrades & Co-op Synergi
     });
     sim.step(SIM_STEP_SEC);
     expect(p1.activeImbueElement).toBe('chill');
-    expect(sim.skillZones.length).toBe(1);
+    expect(sim.skillZones.length).toBe(2);
     expect(sim.skillZones[0]!.vortex).toBe(true);
     expect(sim.skillZones[0]!.secondaryElement).toBe('chill');
 

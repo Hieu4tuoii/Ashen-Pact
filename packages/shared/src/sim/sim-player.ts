@@ -7,6 +7,7 @@ import {
   onPlayerDashStarted,
   onPlayerDashStep,
   tickPlayerDashAndReloadBlessingTimers,
+  tryTriggerCoopArcRelayForMelee,
 } from './sim-blessings.js';
 import {
   BIOME1_POLLEN_SPEED_MULTIPLIER,
@@ -629,6 +630,7 @@ export function resolveMeleeConeHitsAndSynergies(
   bulletsDestroyed: number,
   alreadyHitEnemyIds?: Set<number>,
 ): boolean {
+  tryTriggerCoopArcRelayForMelee(sim, p, meleeRange);
   triggerMeleeKickProps(sim, p, halfArc, meleeRange + 6, p.aimAngle);
   for (let i = 0; i < sim.props.length; i++) {
     const prop = sim.props[i]!;

@@ -9,6 +9,7 @@ import {
   applyFlipCoverTableTechBlessings,
   applyKickPropTableTechBlessings,
   detonateRocketChargedBarricade,
+  onEnemyWallSlamHeavyPinball,
   onPlayerDashKickProp,
   TABLE_TECH_BILLIARD_SLAM_DMG_MULT,
   triggerBossStaggerBurst,
@@ -632,7 +633,11 @@ export function triggerEnemyWallSlam(sim: WorldSim, e: SimEnemyState, hitProp?: 
     if (hitProp.kind === 'rotten_totem_pillar') collapseRottenTotemPillar(sim, hitProp, slamImpactAngle, attackerId);
     else sim.damageProp(hitProp, 25, 'none');
   }
-  e.kbVx *= 0.25; e.kbVy *= 0.25;
+  const preSlamVx = Math.cos(slamImpactAngle) * kbSpeed;
+  const preSlamVy = Math.sin(slamImpactAngle) * kbSpeed;
+  if (!onEnemyWallSlamHeavyPinball(sim, attacker, e, preSlamVx, preSlamVy)) {
+    e.kbVx *= 0.25; e.kbVy *= 0.25;
+  }
   return true;
 }
 

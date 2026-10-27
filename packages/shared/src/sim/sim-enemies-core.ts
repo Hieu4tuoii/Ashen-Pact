@@ -4,6 +4,7 @@ import { approach, distance, distanceSq } from '../math/vec2.js';
 import { BIOME_SCALING, COOP_SCALING } from '../data/scaling.js';
 import type { SurfaceKind } from './arena-map.js';
 import { getConveyorVelocityAtWorld } from './arena-room-archetypes.js';
+import { updateEnemyHeavyPinballAndTimers } from './sim-blessings.js';
 import { resolveEnemyChasmRingOut, triggerEnemyWallSlam } from './sim-tactical-physics.js';
 import { updateLegendaryWeaponHazards } from './sim-weapon-specials-p1b-legendary.js';
 import { updateFlameFissures, updateTetherStaffBeams } from './sim-weapon-specials.js';
@@ -526,9 +527,10 @@ export function updateEnemiesImpl(this: WorldSim, dtSec: number): void {
       e.kbVy = 0;
     }
 
-    // Apply Chill (-30%) and Oil (-15%) movement speed modifiers
+    // Apply Chill (-30% or -50% laser fence) and Oil (-15%) movement speed modifiers
     let speedMult = 1.0;
-    if (e.chillTimer > 0 || (e.slowTimer ?? 0) > 0) speedMult *= 0.7;
+    if ((e.fenceSlow50Timer ?? 0) > 0) speedMult *= 0.5;
+    else if (e.chillTimer > 0 || (e.slowTimer ?? 0) > 0) speedMult *= 0.7;
     if ((surf === 'oil' || surf === 'poison_swamp') && !e.isBoss && !ENEMIES[e.defId]?.flying) {
       speedMult *= 0.85;
     }
@@ -619,6 +621,9 @@ export function updateEnemiesImpl(this: WorldSim, dtSec: number): void {
       triggerEnemyWallSlam(this, e, nearbyRingPillar, preDecayKbSpeed);
       if (e.hp <= 0) continue;
     }
+
+    updateEnemyHeavyPinballAndTimers(this, e, dtSec);
+    if (e.hp <= 0) continue;
 
     if (!this.stressTestActive && resolveEnemyChasmRingOut(this, e)) {
       if (e.hp <= 0) continue;

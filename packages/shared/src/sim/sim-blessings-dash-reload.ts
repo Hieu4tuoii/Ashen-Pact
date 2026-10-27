@@ -3,6 +3,7 @@ import { WEAPONS } from '../data/weapons.js';
 import { angleDiff, clamp, distance } from '../math/vec2.js';
 import { SHOT_FLAG, TILE_SIZE } from '../protocol/messages.js';
 import { findNearestWalkablePoint } from './arena-room-archetypes.js';
+import { tickPlayerBulletModBlessingTimers } from './sim-blessings-bullet-skills.js';
 import {
   clearEnemyProjectilesAroundProp,
   triggerEnemyWallSlam,
@@ -83,6 +84,7 @@ export interface ReloadVentFinisherOptions {
 }
 
 export function tickPlayerDashAndReloadBlessingTimers(p: SimPlayerState, dtSec: number): void {
+  tickPlayerBulletModBlessingTimers(p, dtSec);
   if ((p.dashTidalRamIcdTimer ?? 0) > 0) {
     const next = (p.dashTidalRamIcdTimer ?? 0) - dtSec;
     p.dashTidalRamIcdTimer = next <= 1e-6 ? 0 : next;

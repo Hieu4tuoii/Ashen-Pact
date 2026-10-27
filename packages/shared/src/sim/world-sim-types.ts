@@ -186,6 +186,8 @@ export interface SimSummonState {
   charge: number;
   poisonRoots: boolean;
   selfDestruct: boolean;
+  sacredGrove?: boolean;
+  fenceTickTimer?: number;
   rootedEnemyIds: number[];
 }
 
@@ -201,6 +203,8 @@ export interface SimSkillZoneState {
   element: ElementType;
   secondaryElement: ElementType;
   vortex: boolean;
+  linkedZoneId?: number;
+  isTwinSecondary?: boolean;
 }
 
 export interface SimPressurePlateState {
@@ -511,6 +515,8 @@ export interface SimPlayerState {
   dashFlameShackleEnemyIds?: number[];
   acrobatExpandedWindow?: boolean;
   reloadBlessingIcdTimer?: number;
+  ricochetBoomIcdTimer?: number;
+  coopArcRelayIcdTimer?: number;
   // Ashen Pact 2.0 Per-Player Build State
   blessingIds: BlessingId[];
   weaponMutators: Record<number, WeaponMutatorId[]>;
@@ -636,6 +642,10 @@ export interface SimEnemyState {
   bossStaggerAccum?: number;
   tidalRamByPlayerId?: number;
   tidalRamTimer?: number;
+  pinballReboundTimer?: number;
+  pinballAttackerId?: number;
+  pinballHitEnemyIds?: number[];
+  fenceSlow50Timer?: number;
   stuckArrows?: number;
   parasiticThorns?: number;
   slowTimer?: number;
@@ -666,6 +676,8 @@ export interface SimProjectileState {
   shotFlags?: number;
   splitGeneration?: 0 | 1;
   prismBonusAdd?: number;
+  procCoefficient?: number;
+  heavyPinballApplied?: boolean;
   awaitingServerRedirectTimer?: number;
   imbuedByZone?: boolean;
   imbuedElement?: ElementType;
