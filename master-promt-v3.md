@@ -38,6 +38,23 @@ Tôi sẽ **không cần nhắc nhở từng bước**: bạn phải tự thiế
 5. **Khôi phục ngữ cảnh sau khi nén (Context Compaction / Phiên mới):**
    - Nếu phiên làm việc bị nén context hoặc khởi động lại, đọc theo đúng thứ tự: **Task Artifact (`task.md`)** → `docs/PROGRESS.md` → `docs/superpowers/specs/2026-10-26-ashen-pact-2.0-overhaul-design.md` → file Plan của phase hiện tại trong `docs/superpowers/plans/` → sổ cái tiến độ SDD (`.superpowers/sdd/<plan>/progress.md`) → `git log -n 10 --oneline`.
    - **Tin sổ cái ledger và `git log` hơn trí nhớ:** Task nào đã ghi `Task N: complete` và đã có commit hợp lệ thì không làm lại.
+   - **TRẠNG THÁI HẠ TẦNG KIỂM ĐỊNH HIỆN TẠI (ĐÃ NÂNG CẤP & KHÓA `HARD_ASSERT` — ENGINE 2.6):**
+     - Chiến dịch trên nhánh `overhaul/v2.0` (`.worktrees/overhaul-v2.0`) đã hoàn thành nghiệm thu **`Phase P0A`**, **`Phase P0B`**, **`Phase P1A`**, và vừa hoàn tất nâng cấp toàn diện **Animation & Moment Verification Engine 2.6** (khóa mặc định ở chế độ `HARD_ASSERT`, đạt `9.41 / 10` Visual Gate, `12/12` unit test âm tính/dương tính trong `visual-metrics.test.ts`, và `14/14` cảnh strip `P0B + P1A` đạt `5/5` cổng định lượng + `diffPixels = 0`, `traceHashMatched = true`). Phase tiếp theo cần triển khai là **`Phase P1B`**.
+     - **Sự khác biệt bắt buộc của quy trình chụp & validate mới (`Engine 2.6`) so với cách cũ:**
+       1. **Câu lệnh CLI duy nhất cho mỗi Phase (`tự động chạy cả metrics + 5 cổng HARD_ASSERT + freeze check`):**
+          ```bash
+          pnpm shots -- --phase ap2-<phase> --label after --group ap2-<phase> --verify-freeze
+          ```
+          *(Hoặc truyền `--scenes <scene1,scene2,...> --verify-freeze`).* Lệnh `pnpm shots` nay **tự động gọi `analyzeDirectory()` và `evaluateAnimationGates(..., 'HARD_ASSERT')`** ngay sau khi chụp; nếu bất kỳ cảnh nào trượt 1 trong 5 cổng chuyển động hoặc lệch `--verify-freeze` (`diffPixels > 0` hoặc `traceHashMatched === false`), lệnh sẽ **báo lỗi đỏ và fail ngay lập tức**. (Chỉ dùng `npx tsx tools/visual-metrics.ts --dir <path>` khi muốn phân tích lại một thư mục ảnh đã chụp sẵn mà không mở trình duyệt).
+       2. **Tạo tác sinh ra tự động cho mỗi cảnh có `captureStrip: true`:**
+          - `<scene>.png` (và `<scene>-unlit.png` nếu có): **Tự động trích xuất tại đúng `heroFrameIndex` (`★ HERO`: `F5` cho strip 8F, `F10` cho strip 12F)**, tuyệt đối không còn lấy `F1`.
+          - `<scene>-roi-1.png`, `<scene>-roi-2.png` (và `<scene>-roi-3.png` nếu 12F): **Tấm Cận Cảnh `1:1 Native Pixel` (`1280×760 < 1536px`)** ghép lưới `2×2` vùng cắt `640×360` cố định (`Fixed Union ROI`) kèm thanh tiêu đề `20px` tách rời phía trên — đây là **tệp ảnh chính** bắt buộc đưa cho Visual Reviewer (`Model: pro`) đọc để soi sắc nét từng pixel gốc.
+          - `<scene>-strip.png`: Tấm Tổng Quan Toàn Màn Hình (`1920×580` lưới `4×2` cho 8F hoặc `1920×870` lưới `4×3` cho 12F) có vẽ khung đứt nét vàng đánh dấu `roiRect` (thay thế hoàn toàn dải ngang `15360×1080` cũ).
+          - `<scene>-telemetry-summary.md` & `<scene>-telemetry.json`: Bảng kiểm toán 5 Cổng định lượng, sự kiện `apexEvent`, bảng dịch chuyển thực thể và chuỗi `simTick / stateHash` từng frame.
+          - `metrics.json`: Tích hợp cả chỉ số trắc quang (`CIE L*`, `ΔL*`, `cornerRetentionRatio`, `brazierLightPoolDeltaL`) lẫn kết quả `animationGates` (`5/5` cổng) và `freezeDiffs`.
+       3. **Quy chuẩn viết kịch bản cảnh mới (`visual-scene-ap2-p1.ts` cho `P1B/P1C/P1D`, `visual-scene-ap2-p2.ts`, `visual-scene-ap2-p3.ts`, `visual-scene-ap2-p4.ts`):**
+          - Khai báo đầy đủ `frameCount: 8 | 12`, `heroFrameIndex` (`4` cho 8F Mẫu A; `9` cho 12F Mẫu B), `stripSchedule: StripKeyframeStep[]` (`F1` bắt buộc `stage: 'windup_hold', stepCount: 0`; chỉ duy nhất frame tại `heroFrameIndex` mang `stage: 'apex'`), `apexEvent: ApexEventSpec`, và `actionRoi: ActionRoiConfig`.
+          - Trong `beforeStep`, **chỉ sử dụng Whitelist Input API** import từ `./visual-scene-helpers` (`triggerFireWeapon`, `triggerReloadVent`, `triggerInteract`, `triggerDash`, `queueStepInput`). Tuyệt đối cấm gán trực tiếp `x, y, vx, vy, hp, timer` hay monkey-patch hàm sync sau `F1` (Cổng 2 `State Integrity Gate` sẽ phát hiện `externalStateMutations > 0` và chặn ngay).
 
 ---
 
@@ -66,12 +83,14 @@ Tôi sẽ **không cần nhắc nhở từng bước**: bạn phải tự thiế
        2. **Architecture & Code Quality:** Có giữ tính tất định (deterministic RNG), đồng bộ mạng 60Hz, không cấp phát rác (zero-alloc trong vòng lặp nóng), và mọi file đều `< 1000 dòng` không?
      - Nếu Task Reviewer phát hiện lỗi: chạy vòng lặp sửa lỗi (fix loop, tối đa 5 vòng) qua Implementer cho đến khi đạt chuẩn, sau đó mới ghi `Task N: complete` vào sổ cái ledger.
 
-3. **Bước 3 — Cổng Kiểm Chứng Hình Ảnh Thực Tế (Visual Gate — Mục `0.4`):**
+3. **Bước 3 — Cổng Kiểm Chứng Hình Ảnh Thực Tế (Visual Gate — Mục `0.4`, Chuẩn Engine 2.6 `HARD_ASSERT`):**
    - Sau khi toàn bộ các task code của phase hoàn tất:
-     1. Chạy `pnpm shots -- --phase ap2-<phase> --label after --scenes <danh-sách-cảnh-của-phase>` để chụp ảnh tĩnh `1920×1080` (`.png`), ảnh không đèn (`-unlit.png` cho các cảnh map), và **ảnh ghép chuỗi chuyển động 8 khung hình (`-strip.png`)** cho các cơ chế động.
-     2. Chạy `npx tsx tools/visual-metrics.ts --dir docs/screenshots/ap2-<phase>/after` để xuất `metrics.json` kiểm tra độ sáng `CIE L*`, độ tương phản vùng tâm `ΔL* ≤ 8`, toàn sàn `ΔL* ≤ 14`, độ bão hòa `HSL S`, tỷ lệ giữ sáng 4 góc màn hình `≥ 82%` và độ nổi vũng sáng chậu lửa `ΔL* >= +8`.
-     3. Triệu hồi **Visual Reviewer độc lập (`research`, model `pro`)** với context hoàn toàn sạch để chấm điểm trực tiếp trên các file ảnh `.png` và `-strip.png` theo **Rubric 10 Tiêu Chí (Mục `6`)**.
-     4. Nếu có bất kỳ lỗi `blocker` hoặc `major` nào trên ảnh thực tế, hoặc điểm tiêu chí mục tiêu `< 8/10`: gom toàn bộ lỗi thành một **fix dispatch** giao cho Implementer sửa code → chụp lại ảnh `after` → chạy lại `visual-metrics` → gọi Visual Reviewer mới kiểm tra lại (tối đa 4 vòng). **Controller tuyệt đối không tự sửa code hay cãi Reviewer để lách cổng.**
+     1. Chạy `pnpm shots -- --phase ap2-<phase> --label after --group ap2-<phase> --verify-freeze` (hoặc `--scenes <danh-sách-cảnh-của-phase> --verify-freeze`) để tự động thực hiện trọn gói:
+        - Chụp ảnh đại diện `1920×1080` (`.png` và `-unlit.png`, trích xuất tự động tại đúng `heroFrameIndex` `★ HERO`), **các tấm cận cảnh `1:1 Native Pixel` (`<scene>-roi-1.png`, `<scene>-roi-2.png`[, `<scene>-roi-3.png`], `1280×760`)**, **tấm tổng quan (`<scene>-strip.png`, `1920×580` / `1920×870`)**, cùng bộ hồ sơ `<scene>-telemetry-summary.md` & `<scene>-telemetry.json`.
+        - Kiểm chứng tất định 2 lần chạy (`--verify-freeze`: `diffPixels === 0`, `traceHashMatched === true`).
+        - Xuất `metrics.json` kiểm tra đồng thời các chỉ số trắc quang (`CIE L*`, vùng tâm `ΔL* ≤ 8`, toàn sàn `ΔL* ≤ 14`, `HSL S`, giữ sáng 4 góc `≥ 82%`, vũng sáng chậu lửa `ΔL* >= +8`) **VÀ tự động khóa 5 Cổng Định Lượng Chuyển Động (`evaluateAnimationGates` ở chế độ `HARD_ASSERT`)**.
+     2. Triệu hồi **Visual Reviewer độc lập (`research`, model `pro`)** với context hoàn toàn sạch để đọc trực tiếp `<scene>-telemetry-summary.md`, **các tấm cận cảnh `1:1 Native Pixel` (`<scene>-roi-1.png`, `<scene>-roi-2.png`[, `<scene>-roi-3.png`])**, `<scene>-strip.png`, `<scene>.png` và `metrics.json`, trả lời **5 câu hỏi kiểm toán chuyển động (`5 Stage-Based Audit Questions`)** và chấm điểm theo **Rubric 10 Tiêu Chí (Mục `6`)**.
+     3. Nếu có bất kỳ lỗi `blocker` hoặc `major` nào trên ảnh thực tế, hoặc điểm tiêu chí mục tiêu `< 8/10`: gom toàn bộ lỗi thành một **fix dispatch** giao cho Implementer sửa code → chạy lại `pnpm shots -- ... --verify-freeze` → gọi Visual Reviewer mới kiểm tra lại (tối đa 4 vòng). **Controller tuyệt đối không tự sửa code hay cãi Reviewer để lách cổng.**
 
 4. **Bước 4 — Cổng Nghiệm Thu Cuối Phase (Phase Gate — Skill `verification-before-completion`):**
    - Chạy lại **ngay tại thời điểm đó** (không dùng kết quả cũ):
@@ -106,10 +125,10 @@ Một Phase chỉ được phép đánh dấu hoàn thành khi thỏa mãn đồ
 5. **Kỷ Luật Kiến Trúc Module Hóa (`< 1000 dòng / file`):**
    - **Không một file `.ts` nào trong toàn bộ dự án được vượt quá `1000 dòng`.**
    - Nhiều file hiện tại đã ở mức `850–976 dòng` (xem bảng cảnh báo ở mục `0.5`). Bắt buộc phải tách các hệ thống mới của Ashen Pact 2.0 sang các module chuyên biệt theo đúng bản đồ kiến trúc ở mục `0.5`.
-6. **Bảo Toàn Chuẩn Thẩm Mỹ Golden Room v0.2.0 & Kiểm Chứng Hình Ảnh (Visual Gate):**
-   - Mọi cảnh chụp `after` và ảnh ghép chuyển động `-strip.png` đã lưu đầy đủ tại `docs/screenshots/ap2-<phase>/after/`.
-   - `metrics.json` đạt chuẩn: vùng tâm phòng `ΔL* ≤ 8`, toàn sàn `ΔL* ≤ 14`, tương phản sàn với `INK_DARK` `≥ 22`, giữ sáng 4 góc màn hình `≥ 82%`, vũng sáng chậu lửa `ΔL* >= +8`.
-   - Báo cáo của Visual Reviewer độc lập (`docs/screenshots/ap2-<phase>/review-<iteration>.md`) đạt **`0 blocker`, `0 major`, tất cả tiêu chí liên quan đến phase đạt `≥ 8.0/10`**, và không tiêu chí nào tụt quá 1 điểm so với `before`.
+6. **Bảo Toàn Chuẩn Thẩm Mỹ Golden Room v0.2.0 & Kiểm Chứng Hình Ảnh / Chuyển Động (Visual Gate — Engine 2.6 `HARD_ASSERT`):**
+   - Mọi cảnh chụp `after` (`.png`, `-unlit.png` trích xuất tại `★ HERO`), các tấm cận cảnh `1:1 Native Pixel` (`-roi-1.png`, `-roi-2.png`[, `-roi-3.png`]), ảnh tổng quan `-strip.png` và hồ sơ `-telemetry-summary.md` đã lưu đầy đủ tại `docs/screenshots/ap2-<phase>/after/`.
+   - `metrics.json` đạt chuẩn đồng thời cả 3 nhóm: (a) Trắc quang môi trường (vùng tâm phòng `ΔL* ≤ 8`, toàn sàn `ΔL* ≤ 14`, tương phản sàn với `INK_DARK` `≥ 22`, giữ sáng 4 góc màn hình `≥ 82%`, vũng sáng chậu lửa `ΔL* >= +8`); (b) **5/5 Cổng Kiểm Định Chuyển Động (`evaluateAnimationGates` `HARD_ASSERT` PASS 100%: `apexEvent` khớp `★ HERO`, `externalStateMutations === 0`, `nonNumericAlertOverlapCount === 0`, `minActorContainmentRatio === 1.0`, `maxNetWorldPx >= 18px`)**; (c) Kiểm chứng tất định `--verify-freeze` (`diffPixels === 0`, `traceHashMatched === true`).
+   - Báo cáo của Visual Reviewer độc lập (`docs/screenshots/ap2-<phase>/review-<iteration>.md`) trả lời đầy đủ 5 câu hỏi `Stage-Based Audit Questions`, đạt **`0 blocker`, `0 major`, tất cả tiêu chí liên quan đến phase đạt `≥ 8.0/10`**, và không tiêu chí nào tụt quá 1 điểm so với `before`.
 7. **Song Ngữ Việt – Anh (`i18n`) & Hiển Thị Tiếng Việt Chuẩn Xác:**
    - Mọi chuỗi văn bản mới (tên & mô tả 18 Vũ khí, 24 Phước lành Hành động, 10 Nâng cấp Kỹ năng, 10 Bản độ Búa Rèn, 6 Duo Boons, 6 Khế ước Tro Tàn & 6 Di vật Thức tỉnh, thông báo phá giáp Boss, prompt `[E] Lật Chắn`, `[X] Giữ 0.5s Phân Rã`, `ĐẬP TƯỜNG!`, `RING-OUT!`, `NẠP HOÀN HẢO!`, `XẢ ÁP!`) đều phải có mặt đồng thời trong `apps/client/src/i18n/locales/vi.json` và `en.json`.
    - Unit test đồng bộ khóa i18n phải pass 100%; chữ tiếng Việt có dấu chồng (`Ở`, `Ữ`, `Ặ`, `Ễ`) có `line-height >= 1.3`, không bao giờ bị cắt dấu hoặc tràn khung.
@@ -207,7 +226,7 @@ Do đó, dự án sử dụng trực tiếp và mở rộng hạ tầng kiểm c
    | **Thanh UI `Micro-Bar 32×5px` dưới chân nhân vật, HUD Băng Đạn/Nhiệt Độ & Huy Hiệu Khế Ước/Mutator** | `apps/client/src/scenes/game-scene/hud-micro-reload-bar.ts` | `hud-combat-and-coop.ts`, `entity-sync.ts` |
    | **Modal Tế Đàn Khế Ước Tro Tàn, Modal Đe Rèn Cổ Đại (`Weapon Mutators`) & Vòng Giữ `[X]` Phân Rã Vũ Khí** | `apps/client/src/scenes/game-scene/hud-pact-and-forge-modals.ts` | `hud-modals-and-debug.ts`, `interact-prompt.ts` |
    | **VFX Vũ Khí Mới & Vật Thể Chiến Thuật (`Micro-Blank`, `Wall-Slam`, Đinh tán, Dây gai, Mặt trời, Cọc điện)** | `apps/client/src/fx/combat-fx-weapons-v2.ts` | `combat-fx-spawners.ts`, `room-entities-sync.ts` |
-   | **Cảnh Chụp Kiểm Chứng Hình Ảnh Ashen Pact 2.0 (`P0A` → `P5`)** | `tests/e2e/helpers/visual-scene-ap2-p0.ts`<br>`tests/e2e/helpers/visual-scene-ap2-p1.ts`<br>`tests/e2e/helpers/visual-scene-ap2-p2.ts`<br>`tests/e2e/helpers/visual-scene-ap2-p3.ts`<br>`tests/e2e/helpers/visual-scene-ap2-p4.ts` | `tests/e2e/helpers/visual-scenes.ts`, `tools/run-shots.ts` |
+   | **Cảnh Chụp Kiểm Chứng Hình Ảnh & Hạ Tầng Engine 2.6 (`P0A` → `P5`)** | `tests/e2e/helpers/visual-scene-ap2-p0.ts`<br>`tests/e2e/helpers/visual-scene-ap2-p1.ts`<br>`tests/e2e/helpers/visual-scene-ap2-p2.ts`<br>`tests/e2e/helpers/visual-scene-ap2-p3.ts`<br>`tests/e2e/helpers/visual-scene-ap2-p4.ts`<br>`tests/e2e/helpers/visual-strip-harness.ts`<br>`tests/e2e/helpers/strip-browser-instrumentation.ts`<br>`tools/visual-animation-gates.ts`<br>`tools/visual-strip-renderer.ts` | `tests/e2e/helpers/visual-scenes.ts`, `tests/e2e/helpers/visual-scene-helpers.ts`, `tools/run-shots.ts`, `tools/visual-metrics.ts` |
 
 ---
 
@@ -568,7 +587,7 @@ $$M_{\text{floor}}(F) = 1 + 0.22 \times (F - 1) \quad (\text{Tầng 1: } 1.00\ti
     6. `ap2-chasm-ring-out` (`captureStrip: true`, 8 frame): Trên cầu `TWIN_BRIDGES`, người chơi đẩy quái bộ binh rơi xuống vực `chasm` hiện chữ `RING-OUT!` và bắn vọt vàng ngược lên mặt cầu.
     7. `ap2-microbar-perfect-reload` (`captureStrip: true`, 8 frame): Nhân vật cầm `rivet_gun` bắn viên cuối `Finale Shot` rồi bấm `[R]` ngay trong Khung Vàng `45%–70%` trên thanh `Micro-Bar 32×5px`, kích nổ lưới hồ quang điện nối 6 đinh tán.
     8. `ap2-heat-vent-staff` (`captureStrip: true`, 8 frame): Nhân vật cầm `apprentice_staff` ở vùng Nhiệt Cam `80%`, nhấn `[R]` `Tactical Vent` xóa đạn sát thân và phóng Tia Tam Giác Nguyên Tố nổ tại con trỏ.
-    9. `ap2-melee-combo3-parry` (`captureStrip: true`, 8 frame): Nhân vật `vanguard` cầm `knight_sword` (không hiện Micro-Bar) vung Đòn 3 phóng Lưỡi Kiếm Khí `240px` qua bên kia vực `TWIN_BRIDGES` đồng thời `Parry Deflect` đánh bật 3 viên đạn địch bay ngược lại.
+    9. `ap2-melee-combo3-parry` (`captureStrip: true`, 12 frame `4+4+4`, `heroFrameIndex: 9`): Nhân vật `vanguard` cầm `knight_sword` (không hiện Micro-Bar) vung đủ 3 nhịp Combo, tại Đòn 3 (`F10 ★ HERO`) phóng Lưỡi Kiếm Khí `240px` qua bên kia vực `TWIN_BRIDGES` đồng thời `Parry Deflect` đánh bật 3 viên đạn địch bay ngược lại.
     10. `ap2-tesla-smart-bounce` (`captureStrip: true`, 8 frame): Nhân vật cầm `tesla_carbine` bắn xuyên qua Bia Chắn / quái đầu tiên, viên đạn chạm tường trong `GAUNTLET_CHOKEPOINT` tự động bẻ góc `Smart Bounce` tìm quái khuất sau góc chữ L.
 
 - **`Task P0B.7` — Visual Gate, Phase Gate `P0B` & Báo Cáo Kiểm Chứng `Playtest Gate 1`:**
@@ -679,9 +698,9 @@ $$M_{\text{floor}}(F) = 1 + 0.22 \times (F - 1) \quad (\text{Tầng 1: } 1.00\ti
        - Đạn `splitGeneration === 1` không bao giờ sinh thêm đạn con khi qua vật tách đạn thứ 2.
        - Tổng hệ số nhân 1 đòn đơn lẻ trên Boss không bao giờ vượt quá `18.0×` sát thương gốc.
 
-- **`Task P1B.5` — Procedural VFX Cho 7 Vũ Khí Đợt 2 & Bộ Cảnh Chụp Strip 8-Frame (`visual-scene-ap2-p1.ts`):**
+- **`Task P1B.5` — Procedural VFX Cho 7 Vũ Khí Đợt 2 & Bộ Cảnh Chụp Strip Chuẩn Engine 2.6 (`visual-scene-ap2-p1.ts`):**
   - Vẽ quả cầu hút đen & vòng co rút Implosion của `void_staff`; đao xoay Boomerang `emerald_cleaver`; vệt nứt lửa Đoạn Đầu Đài `berserker_axe`; 3 vệ tinh Mặt Trời xoay quanh & vụ nổ Siêu Tân Tinh của `solar_archon_staff`; tia Railgun `[R]` của `focus_laser`; khối nham thạch lăn & 4 vòi dung nham của `magma_cannon`; cột thu lôi Đòn 3 của `thunder_hammer`.
-  - Tạo 7 cảnh strip 8 frame (`ap2-wep-laser-railgun`, `ap2-wep-cleaver-boomerang`, `ap2-wep-void-implosion`, `ap2-wep-axe-guillotine`, `ap2-wep-solar-supernova`, `ap2-wep-magma-geysers`, `ap2-wep-hammer-thunder`) và cập nhật trang `ArtGalleryScene` hiển thị đúng 18 vũ khí độc bản.
+  - Tạo 7 cảnh strip chuẩn **Engine 2.6** (`stripSchedule` 4 Hồi 8-frame hoặc 3 Nhịp 12-frame cho vũ khí `MELEE_COMBO`, khai báo `heroFrameIndex`, `apexEvent` thật từ `WorldSim`, kích hoạt bằng Whitelist Input API, vượt qua `5/5` cổng `HARD_ASSERT`): `ap2-wep-laser-railgun`, `ap2-wep-cleaver-boomerang`, `ap2-wep-void-implosion`, `ap2-wep-axe-guillotine`, `ap2-wep-solar-supernova`, `ap2-wep-magma-geysers`, `ap2-wep-hammer-thunder`, và cập nhật trang `ArtGalleryScene` hiển thị đúng 18 vũ khí độc bản.
 
 - **`Task P1B.6` — Visual Gate & Phase Gate `P1B`:**
   - Chạy `pnpm shots -- --phase ap2-p1b --label after --group ap2-p1b`, chấm qua Visual Reviewer (`pro` `≥ 8.0/10`), chạy `pnpm verify` & `pnpm perf`. Tag `ap2-p1b`.
@@ -1145,7 +1164,7 @@ Ngoài các cảnh hồi quy nền tảng đã có từ `v0.2.0` (`menu`, `hub-s
 1. **Nhóm Hình Học 6 Archetype Phòng & Vực Sâu `Chasm` (Chụp cả Lit và `-unlit.png` kèm `sampleRects` đo `metrics.json`):**
    - `ap2-b1-twin-bridges`, `ap2-b1-gauntlet-chokepoint`, `ap2-b1-central-bastion`
    - `ap2-b2-prism-labyrinth`, `ap2-b3-crossfire-conveyors`, `ap2-crumbling-pillar-ring`
-2. **Nhóm Vật Lý Địa Hình Cốt Lõi (Chụp kèm `-strip.png` 8 khung hình):**
+2. **Nhóm Vật Lý Địa Hình Cốt Lõi (Chụp kèm `-roi-*.png` `1:1 Native Pixel`, `-strip.png`, `-telemetry-summary.md` theo chuẩn Engine 2.6 `HARD_ASSERT`):**
    - `ap2-flip-cover-microblank` (Lật bàn `[E]` `'low' -> 'flipped'` + sóng trắng `Micro-Blank` xóa đạn địch)
    - `ap2-dash-kick-wall-slam` (Lướt `Shift` sút bàn `520 px/s` đập quái vào tường hiện `ĐẬP TƯỜNG!`)
    - `ap2-chasm-ring-out` (Đẩy quái bộ binh rơi xuống vực `chasm` hiện `RING-OUT!` và bắn vọt vàng lên cầu)
@@ -1153,12 +1172,12 @@ Ngoài các cảnh hồi quy nền tảng đã có từ `v0.2.0` (`menu`, `hub-s
    - `ap2-b2-prism-refract` (Bắn đạn vào Lăng Kính Pha Lê tách 3 tia quạt)
    - `ap2-b3-pneumatic-press-crush` (Đèn cảnh báo băng chuyền đảo chiều + Búa Máy dập nghiền quái)
    - `ap2-b3-blast-shield-wave` (Sút Tấm Chắn Thép phóng kèm Cơn Sóng Lửa `88px`)
-3. **Nhóm Nhịp Vũ Khí (`Micro-Bar [R]` & `MELEE_COMBO` 3 Đòn) + 18 Vũ Khí Độc Bản (Chụp kèm `-strip.png` 8 khung hình):**
+3. **Nhóm Nhịp Vũ Khí (`Micro-Bar [R]` & `MELEE_COMBO` 3 Đòn) + 18 Vũ Khí Độc Bản (Chụp kèm `-roi-*.png` `1:1 Native Pixel`, `-strip.png`, `-telemetry-summary.md` theo chuẩn Engine 2.6 `HARD_ASSERT`):**
    - `ap2-microbar-perfect-reload` (`rivet_gun` bấm `[R]` trong Khung Vàng `45%–70%` nổ lưới hồ quang đinh tán)
    - `ap2-heat-vent-staff` (`apprentice_staff` nhấn `[R]` vùng Nhiệt Cam `65%–95%` phóng Tia Tam Giác Nguyên Tố)
-   - `ap2-melee-combo3-parry` (`knight_sword` Đòn 3 phóng Kiếm Khí `240px` + `Parry Deflect` đánh bật 3 viên đạn địch)
+   - `ap2-melee-combo3-parry` (12-frame `4+4+4`, `knight_sword` Đòn 3 tại `F10 ★ HERO` phóng Kiếm Khí `240px` + `Parry Deflect` đánh bật 3 viên đạn địch)
    - `ap2-tesla-smart-bounce` (`tesla_carbine` nảy tường thông minh tìm quái sau góc chữ L)
-   - 14 strip 8 khung hình của 14 vũ khí còn lại (`ap2-wep-crossbow-rip`, `ap2-wep-thorn-pull`, `ap2-wep-shotgun-wallslam`, `ap2-wep-gale-vent`, `ap2-wep-frag-airburst`, `ap2-wep-seed-bloom`, `ap2-wep-tether-pull`, `ap2-wep-laser-railgun`, `ap2-wep-cleaver-boomerang`, `ap2-wep-void-implosion`, `ap2-wep-axe-guillotine`, `ap2-wep-solar-supernova`, `ap2-wep-magma-geysers`, `ap2-wep-hammer-thunder`).
+   - 14 strip `8/12-frame` của 14 vũ khí còn lại (`ap2-wep-crossbow-rip`, `ap2-wep-thorn-pull`, `ap2-wep-shotgun-wallslam`, `ap2-wep-gale-vent`, `ap2-wep-frag-airburst`, `ap2-wep-seed-bloom`, `ap2-wep-tether-pull`, `ap2-wep-laser-railgun`, `ap2-wep-cleaver-boomerang`, `ap2-wep-void-implosion`, `ap2-wep-axe-guillotine`, `ap2-wep-solar-supernova`, `ap2-wep-magma-geysers`, `ap2-wep-hammer-thunder`).
 4. **Nhóm Hệ Thống Nâng Cấp, Đe Rèn, Khế Ước Tro Tàn & Phân Rã Súng:**
    - `ap2-modal-blessing-vi`, `ap2-modal-blessing-en`, `ap2-modal-duo-boon-card`
    - `ap2-treasure-forge-workshop`, `ap2-modal-daedalus-mutator`
@@ -1177,7 +1196,7 @@ Ngoài các cảnh hồi quy nền tảng đã có từ `v0.2.0` (`menu`, `hub-s
 
 ## 6. RUBRIC 10 TIÊU CHÍ CHO VISUAL REVIEWER ĐỘC LẬP (`MODEL: PRO`)
 
-Mỗi lần chạy Visual Gate, subagent **Visual Reviewer (`research`, model `pro`)** phải đọc trực tiếp các file ảnh `.png`, `-strip.png` và `metrics.json`, chấm điểm khắt khe trên thang `1–10` cho **10 tiêu chí** sau:
+Mỗi lần chạy Visual Gate, subagent **Visual Reviewer (`research`, model `pro`)** phải đọc trực tiếp các file ảnh `.png`, **các tấm cận cảnh `1:1 Native Pixel` (`-roi-1.png`, `-roi-2.png`[, `-roi-3.png`])**, `-strip.png`, `-telemetry-summary.md` và `metrics.json`, trả lời **5 câu hỏi kiểm toán chuyển động (`5 Stage-Based Audit Questions` ở Mục `0.4`)** và chấm điểm khắt khe trên thang `1–10` cho **10 tiêu chí** sau:
 
 1. **Hình Học Phòng Chiến Thuật & Ranh Giới Vực Sâu (`Tactical Room Geometry & Chasm Clarity`):**
    - Bố cục 6 Archetype (`TWIN_BRIDGES`, `GAUNTLET_CHOKEPOINT`, `CENTRAL_BASTION`, `CROSSFIRE_CONVEYORS`, `PRISM_LABYRINTH`, `CRUMBLING_PILLAR_RING`) rõ ràng, mạch lạc; vực sâu `chasm` trong `TWIN_BRIDGES` nối khít vào tường Bắc/Nam (có nhánh chữ Y ôm sảnh cửa), nhìn biết ngay là vực không đi bộ qua được, trong khi 2 cây cầu rộng 3 ô nổi bật rõ là lối đi; vùng sàn chiến đấu vẫn giữ chuẩn Golden Room (`ΔL* <= 8` ở tâm, `<= 14` toàn sàn).
@@ -1204,7 +1223,8 @@ Mỗi lần chạy Visual Gate, subagent **Visual Reviewer (`research`, model `p
 
 ## 7. NHỮNG ĐIỀU CẤM TUYỆT ĐỐI (`HARD PROHIBITIONS`)
 
-- ❌ **Cấm đánh giá giao diện, hình học phòng, VFX hay HUD qua đọc code** mà không chụp ảnh thực tế (`pnpm shots`) + ghép strip 8 frame (`-strip.png`) + chấm điểm qua **Visual Reviewer độc lập (`model: pro`)**.
+- ❌ **Cấm đánh giá giao diện, hình học phòng, VFX hay HUD qua đọc code** mà không chụp ảnh thực tế (`pnpm shots`) + xuất tấm cận cảnh `1:1 Native Pixel` (`-roi-*.png`) + kiểm định 5 cổng `evaluateAnimationGates (HARD_ASSERT)` + chấm điểm qua **Visual Reviewer độc lập (`model: pro`)**.
+- ❌ **Cấm dồn đỉnh điểm vào `F1` (`Climax-at-Frame-1`), cấm monkey-patch hàm sync của `GameScene` để bắn lặp sự kiện ở giữa strip, và cấm can thiệp trực tiếp tọa độ/trạng thái thực thể bên ngoài `WorldSim.step()` sau `F1`.**
 - ❌ **Cấm giữ lại bất kỳ tàn dư nào của Thanh Năng Lượng (`energy`), 6 vũ khí clone, 6 thẻ cộng chỉ số phẳng, hay mảng buff toàn cục `worldSim.activeBuffIds`.**
 - ❌ **Cấm dùng Chuột Trái để kích hoạt `Perfect Reload`** hoặc gán hành động Phân Rã Vũ Khí vào phím `[R]`. Phím `[R]` chỉ làm đúng 1 việc là `Perfect Reload / Tactical Vent`; Phân rã súng bắt buộc là giữ phím `DROP_WEAPON` (`[X]`) `0.5s` ngoài giao tranh.
 - ❌ **Cấm hiển thị thanh Micro-Bar trên vũ khí cận chiến (`MELEE_COMBO`)** hoặc cho Đòn 1, Đòn 2 cận chiến xóa/phản đạn địch (chỉ có **Đòn thứ 3** mới có `Parry Deflect` trong `0.18s`).
