@@ -357,6 +357,9 @@ export function spawnTrainingDummyImpl(this: WorldSim, x: number, y: number): Si
     stunTimer: 0,
     lastHitDmg: 0,
     wallSlamCooldownTimer: 0,
+    stuckArrows: 0,
+    parasiticThorns: 0,
+    slowTimer: 0,
   };
   this.enemies.push(dummy);
   return dummy;
@@ -575,6 +578,9 @@ export function spawnEnemyImpl(this: WorldSim,
     stunTimer: 0,
     lastHitDmg: 0,
     wallSlamCooldownTimer: 0,
+    stuckArrows: 0,
+    parasiticThorns: 0,
+    slowTimer: 0,
   };
 
   this.enemies.push(enemy);

@@ -32,7 +32,7 @@ export function applyDamageToEnemyImpl(
   let finalCrit = isCrit;
 
   // Ranger Passive (Mắt Ưng): Damage increases with distance to target (up to +30%)
-  if (attackerPlayerId > 0) {
+  if (attackerPlayerId > 0 && !isChainDamage) {
     const attacker = this.getPlayerById(attackerPlayerId);
     if (attacker && attacker.characterId === 'ranger') {
       const distToTarget = distance(attacker.x, attacker.y, enemy.x, enemy.y);

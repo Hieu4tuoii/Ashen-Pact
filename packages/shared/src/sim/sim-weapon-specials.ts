@@ -576,3 +576,5 @@ export function tryTeslaSmartWallBounce(
   }
   return true;
 }
+
+export * from './sim-weapon-specials-p1a.js';

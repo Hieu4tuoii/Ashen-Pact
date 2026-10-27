@@ -396,6 +396,9 @@ export function updateEnemiesImpl(this: WorldSim, dtSec: number): void {
     if ((e.stunTimer ?? 0) > 0) {
       e.stunTimer = Math.max(0, (e.stunTimer ?? 0) - dtSec);
     }
+    if ((e.slowTimer ?? 0) > 0) {
+      e.slowTimer = Math.max(0, (e.slowTimer ?? 0) - dtSec);
+    }
 
     // Decay knockback (preserving pre-decay speed for Wall-Slam threshold checks)
     const preDecayKbSpeed = Math.hypot(e.kbVx, e.kbVy);
@@ -581,7 +584,7 @@ export function updateEnemiesImpl(this: WorldSim, dtSec: number): void {
 
     // Apply Chill (-30%) and Oil (-15%) movement speed modifiers
     let speedMult = 1.0;
-    if (e.chillTimer > 0) speedMult *= 0.7;
+    if (e.chillTimer > 0 || (e.slowTimer ?? 0) > 0) speedMult *= 0.7;
     if ((surf === 'oil' || surf === 'poison_swamp') && !e.isBoss && !ENEMIES[e.defId]?.flying) {
       speedMult *= 0.85;
     }

@@ -399,6 +399,22 @@ export type SimEvent =
       weaponId: string;
       x: number;
       y: number;
+    }
+  | {
+      kind: 'crossbow_rip';
+      playerId: number;
+      targetIds: number[];
+      totalArrows: number;
+      x?: number;
+      y?: number;
+    }
+  | {
+      kind: 'thorn_bloom';
+      playerId: number;
+      targetIds: number[];
+      totalThorns: number;
+      x?: number;
+      y?: number;
     };
 
 export interface WorldSimOptions {

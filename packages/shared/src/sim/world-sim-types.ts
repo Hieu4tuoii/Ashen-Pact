@@ -415,6 +415,11 @@ export interface SimPlayerState {
   apprenticeStaffShotCount?: number;
   bonusBounceCurrentClip: number;
   parriedCountCurrentWindow: number;
+  fireHoldTimer?: number;
+  fireHoldDurationSec?: number;
+  crossbowChargeTimer?: number;
+  crossbowChargeSec?: number;
+  weaponHoldTimer?: number;
   aimWorldX?: number;
   aimWorldY?: number;
   critChance?: number;
@@ -542,6 +547,9 @@ export interface SimEnemyState {
   lastHitPlayerId?: number;
   wallSlamCooldownTimer: number;
   bossStaggerAccum?: number;
+  stuckArrows?: number;
+  parasiticThorns?: number;
+  slowTimer?: number;
 }
 
 export interface SimProjectileState {
@@ -576,6 +584,7 @@ export interface SimProjectileState {
   passedThroughCoverOrPrism?: boolean;
   parryDeflected?: boolean;
   guaranteedElementalProc?: boolean;
+  finaleResolved?: boolean;
   hitEntityIds: number[];
 }
 

@@ -35,6 +35,8 @@ export function syncActiveWeaponCadenceState(p: SimPlayerState): void {
   p.meleeParryWindowTimer = 0;
   p.bonusBounceCurrentClip = 0;
   p.parriedCountCurrentWindow = 0;
+  p.fireHoldTimer = 0;
+  p.crossbowChargeTimer = 0;
 }
 
 export function createPlayerStateImpl(this: WorldSim,
@@ -104,6 +106,8 @@ export function createPlayerStateImpl(this: WorldSim,
     apprenticeStaffShotCount: 0,
     bonusBounceCurrentClip: 0,
     parriedCountCurrentWindow: 0,
+    fireHoldTimer: 0,
+    crossbowChargeTimer: 0,
     vanguardShieldBonusAdd: 0,
     elementalConvergenceTimer: 0,
     pollenSpeedBoostTimer: 0,

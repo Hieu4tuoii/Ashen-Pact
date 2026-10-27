@@ -99,6 +99,10 @@ export interface WeaponStatsDef {
   comboKnockbacks?: readonly [number, number, number];
   finaleDamage?: number;
   finaleElement?: ElementType;
+  chargedDamage?: number;
+  chargedHoldSec?: number;
+  chargedPierceCount?: number;
+  chargedKnockback?: number;
 }
 
 export type EnemyRole =

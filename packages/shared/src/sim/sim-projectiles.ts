@@ -8,9 +8,11 @@ import {
 } from './sim-player.js';
 import {
   detonatePlayerMagneticRivets,
+  handlePlayerProjectileEnemyHitWeaponSpecials,
+  handleProjectileExpiredWeaponSpecials,
+  handleProjectileWallHitWeaponSpecials,
   plantMagneticRivet,
-  triggerTeslaFinaleChainLightning,
-  tryTeslaSmartWallBounce,
+   tryTeslaSmartWallBounce,
 } from './sim-weapon-specials.js';
 import {
   type BulletVolleySpawnEvent,
@@ -169,16 +171,7 @@ export function updateProjectilesImpl(this: WorldSim, dtSec: number): void {
       if (b.element !== 'none') {
         this.applyElementAtWorldPoint(b.x, b.y, b.element, 20);
       }
-      if (b.weaponId === 'seed_gun') {
-        this.spawnSeedGunLifeBlossom(b.ownerId, b.x, b.y);
-      } else if (
-        b.weaponId === 'frag_launcher' ||
-        b.weaponId === 'magma_cannon' ||
-        b.weaponId === 'dwarf_mortar' ||
-        (b.explosionRadius ?? 0) > 0
-      ) {
-        this.triggerLauncherProjectileExplosion(b, b.x, b.y);
-      }
+      handleProjectileExpiredWeaponSpecials(this, b);
       continue;
     }
 
@@ -245,22 +238,7 @@ export function updateProjectilesImpl(this: WorldSim, dtSec: number): void {
         if (b.element !== 'none') {
           this.applyElementAtWorldPoint(wallHit.resolvedX, wallHit.resolvedY, b.element, 24);
         }
-        if (b.team === 'player' && b.weaponId === 'rivet_gun') {
-          plantMagneticRivet(this, b.ownerId, wallHit.resolvedX, wallHit.resolvedY, null, null);
-          if (((b.shotFlags ?? 0) & SHOT_FLAG.FINALE_SHOT) !== 0) {
-            detonatePlayerMagneticRivets(this, b.ownerId, false);
-          }
-        }
-        if (b.weaponId === 'seed_gun') {
-          this.spawnSeedGunLifeBlossom(b.ownerId, wallHit.resolvedX, wallHit.resolvedY);
-        } else if (
-          b.weaponId === 'frag_launcher' ||
-          b.weaponId === 'magma_cannon' ||
-          b.weaponId === 'dwarf_mortar' ||
-          (b.explosionRadius ?? 0) > 0
-        ) {
-          this.triggerLauncherProjectileExplosion(b, wallHit.resolvedX, wallHit.resolvedY);
-        }
+        handleProjectileWallHitWeaponSpecials(this, b, wallHit.resolvedX, wallHit.resolvedY);
         if (!this.stressTestActive || stressImpactEventsThisTick < 3) {
           stressImpactEventsThisTick += 1;
           this.events.push({
@@ -495,28 +473,7 @@ export function updateProjectilesImpl(this: WorldSim, dtSec: number): void {
             effectiveAttackerId,
           );
 
-          if (b.weaponId === 'rivet_gun') {
-            plantMagneticRivet(this, b.ownerId, enemy.x, enemy.y, enemy.id, null);
-            if (((b.shotFlags ?? 0) & SHOT_FLAG.FINALE_SHOT) !== 0) {
-              detonatePlayerMagneticRivets(this, b.ownerId, false);
-            }
-          } else if (
-            b.weaponId === 'tesla_carbine' &&
-            ((b.shotFlags ?? 0) & SHOT_FLAG.FINALE_SHOT) !== 0 &&
-            b.hitEntityIds.length === 1
-          ) {
-            triggerTeslaFinaleChainLightning(this, b, enemy);
-          }
-
-          if (b.weaponId === 'seed_gun') {
-            this.spawnSeedGunLifeBlossom(b.ownerId, enemy.x, enemy.y);
-          } else if (
-            b.weaponId === 'frag_launcher' ||
-            b.weaponId === 'magma_cannon' ||
-            (b.explosionRadius ?? 0) > 0
-          ) {
-            this.triggerLauncherProjectileExplosion(b, enemy.x, enemy.y);
-          }
+          handlePlayerProjectileEnemyHitWeaponSpecials(this, b, enemy);
 
           if (!this.stressTestActive || stressImpactEventsThisTick < 4) {
             stressImpactEventsThisTick += 1;
@@ -964,6 +921,7 @@ export function acquireProjectileImpl(this: WorldSim,
     pooled.passedThroughCoverOrPrism = init.passedThroughCoverOrPrism;
     pooled.parryDeflected = init.parryDeflected;
     pooled.guaranteedElementalProc = init.guaranteedElementalProc;
+    pooled.finaleResolved = false;
     pooled.hitEntityIds.length = 0;
     return pooled;
   }

@@ -10,10 +10,12 @@ import {
 } from './sim-player.js';
 import { triggerGrassPollenSpeedBoost } from './sim-tactical-physics.js';
 import {
+  detonateParasiticThorns,
   detonatePlayerMagneticRivets,
   processMeleeParryDeflect,
   spawnKnightSwordCrescentWave,
   triggerApprenticeStaffTacticalVent,
+  triggerHunterCrossbowBarbedRip,
 } from './sim-weapon-specials.js';
 import {
   ELEMENTALIST_ROTATION_ORDER,
@@ -115,6 +117,8 @@ export function switchPlayerWeaponSlot(
     p.meleeParryWindowTimer = 0;
     p.bonusBounceCurrentClip = 0;
     p.parriedCountCurrentWindow = 0;
+    p.fireHoldTimer = 0;
+    p.crossbowChargeTimer = 0;
     p.holsterReloadTimers[slotIndex] = 0;
 
     sim.events.push({
@@ -250,6 +254,10 @@ export function updatePlayerWeaponCadence(
             detonatePlayerMagneticRivets(sim, p.id, true);
           } else if (w?.id === 'tesla_carbine') {
             p.bonusBounceCurrentClip = 1;
+          } else if (w?.id === 'hunter_crossbow') {
+            triggerHunterCrossbowBarbedRip(sim, p.id);
+          } else if (w?.id === 'thorn_staff') {
+            detonateParasiticThorns(sim, p.id);
           }
         } else {
           p.reloadLockout = true;
@@ -338,6 +346,14 @@ export function updatePlayerWeaponCadence(
     } else {
       p.meleeComboResetTimer = nextReset;
     }
+  }
+
+  if ((buttons & INPUT_BUTTON.FIRE) !== 0 && p.reloadTimer <= 0) {
+    p.fireHoldTimer = (p.fireHoldTimer ?? 0) + dtSec;
+    p.crossbowChargeTimer = (p.crossbowChargeTimer ?? 0) + dtSec;
+  } else {
+    p.fireHoldTimer = 0;
+    p.crossbowChargeTimer = 0;
   }
 }
 
@@ -472,18 +488,45 @@ export function tryFireActiveWeaponImpl(
   const pellets = Math.max(1, w.pelletCount);
   const spreadRad = (w.spreadDeg * Math.PI) / 180;
   const shieldBoost = p.characterId === 'vanguard' && p.skillActiveTimer > 0;
-  const muzzleDist = 18;
+  const muzzleDist = w.id === 'thorn_staff' ? 0 : 18;
   const spawnX = p.x + Math.cos(p.aimAngle) * muzzleDist;
   const spawnY = p.y + Math.sin(p.aimAngle) * muzzleDist;
   const baseCrit = typeof p.critChance === 'number' ? p.critChance : (CHARACTERS[p.characterId]?.baseCritChance ?? 0.05);
   const critChance = typeof p.critChance === 'number' && p.critChance === 0 ? 0 : clamp(baseCrit + w.critChance, 0, 1);
 
   let rawWeaponDmg = w.damage;
-  let projRadius = w.category === 'shotgun' ? 4.5 : w.category === 'launcher' ? 7 : 5;
+  let projRadius =
+    w.id === 'thorn_staff' ? 12 : w.category === 'shotgun' ? 4.5 : w.category === 'launcher' ? 7 : 5;
   let explosionRadius: number | undefined;
   let bounceCount = w.bounceCount;
+  let pierceCount = w.pierceCount;
+  let knockback = w.knockback;
+  const projTtl =
+    w.id === 'thorn_staff'
+      ? 0.205
+      : w.category === 'shotgun'
+        ? 0.55
+        : w.category === 'laser'
+          ? 1.0
+          : 1.4;
 
-  if (w.id === 'rivet_gun' && isFinaleShot) {
+  if (w.id === 'hunter_crossbow') {
+    const holdSec = Math.max(p.crossbowChargeTimer ?? 0, p.fireHoldTimer ?? 0);
+    if (holdSec >= (w.chargedHoldSec ?? 0.35)) {
+      rawWeaponDmg = w.chargedDamage ?? 22;
+      pierceCount = Math.max(2, w.chargedPierceCount ?? 2);
+      knockback = w.chargedKnockback ?? 220;
+    }
+    if (isFinaleShot) {
+      additiveDmgBonus = Math.max(0, additiveDmgBonus - 0.5);
+    }
+    p.crossbowChargeTimer = 0;
+    p.fireHoldTimer = 0;
+  } else if (w.id === 'thorn_staff' && isFinaleShot) {
+    rawWeaponDmg = w.finaleDamage ?? 17;
+    additiveDmgBonus = Math.max(0, additiveDmgBonus - 0.5);
+    knockback = 0;
+  } else if (w.id === 'rivet_gun' && isFinaleShot) {
     // Rivet Gun Finale Shot (6th round) deals 15 base damage and triggers the electric rivet web on impact
     rawWeaponDmg = w.finaleDamage ?? 15;
     additiveDmgBonus = Math.max(0, additiveDmgBonus - 0.5);
@@ -531,10 +574,10 @@ export function tryFireActiveWeaponImpl(
     speed: w.projectileSpeed,
     damage: baseDmg,
     radius: projRadius,
-    knockback: w.knockback,
-    pierceCount: w.pierceCount + (shieldBoost ? 1 : 0),
+    knockback,
+    pierceCount: pierceCount + (shieldBoost ? 1 : 0),
     bounceCount,
-    ttlSec: w.category === 'shotgun' ? 0.55 : w.category === 'laser' ? 1.0 : 1.4,
+    ttlSec: projTtl,
     element: shotElement,
     critChance,
     amplifiedByShield: shieldBoost,

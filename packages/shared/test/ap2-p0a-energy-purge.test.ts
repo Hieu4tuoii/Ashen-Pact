@@ -288,7 +288,7 @@ describe('AP2 P0A.1 — Energy Purge, Weapon Cadence Metadata & Replacement Mech
 
     // Now fire ranged weapon and verify vanguardShieldBonusAdd (+75%) amplifies damage and resets to 0
     p.skillActiveTimer = 0; // turn off shield +30% boost to isolate vanguardShieldBonusAdd
-    p.weaponSlots[0] = 'hunter_crossbow'; // base damage 18
+    p.weaponSlots[0] = 'hunter_crossbow';
     p.fireCooldownTimer = 0;
     sim.tryFireActiveWeapon(p);
 
@@ -296,7 +296,7 @@ describe('AP2 P0A.1 — Energy Purge, Weapon Cadence Metadata & Replacement Mech
     const volleyEv = sim.events.find((e) => e.kind === 'bullet_volley_spawned');
     expect(volleyEv).toBeDefined();
     if (volleyEv && volleyEv.kind === 'bullet_volley_spawned') {
-      expect(volleyEv.damage).toBe(Math.round(18 * 1.75));
+      expect(volleyEv.damage).toBe(Math.round(WEAPONS.hunter_crossbow!.damage * 1.75));
     }
   });
 
