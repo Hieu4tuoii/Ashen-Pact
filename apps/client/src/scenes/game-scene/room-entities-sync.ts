@@ -442,7 +442,11 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
     const tex =
       it.kind === 'weapon' && it.weaponId
         ? TextureBaker.getWeaponTextureKey(it.weaponId)
-        : 'item_health_potion';
+        : it.kind === 'blessing_scroll'
+          ? 'item_blessing_scroll'
+          : it.kind === 'weapon_upgrade'
+            ? 'item_weapon_upgrade'
+            : 'item_health_potion';
 
     let entry = this.worldItemSprites.get(it.id);
     if (!entry) {
@@ -597,16 +601,23 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
           .setDepth(46);
         entry = { rig, glowSprite, label };
       } else {
-        const shrineTex = npc.interacted ? 'prop_shrine_statue_used' : 'prop_shrine_statue';
-        const sprite = this.add.sprite(npc.x, npc.y, shrineTex);
+        const npcTex =
+          npc.kind === 'daedalus_anvil'
+            ? 'prop_daedalus_anvil'
+            : npc.kind === 'upgrade_anvil'
+              ? 'prop_upgrade_anvil'
+              : npc.interacted
+                ? 'prop_shrine_statue_used'
+                : 'prop_shrine_statue';
+        const sprite = this.add.sprite(npc.x, npc.y, npcTex);
         sprite.setScale(invBake);
         sprite.setDepth(24);
         const label = this.add
-          .text(npc.x, npc.y - 42, i18n.t('ui.hud.shrineActive'), {
+          .text(npc.x, npc.y - 36, i18n.t('ui.hud.shrineActive'), {
             fontFamily: '"Be Vietnam Pro", sans-serif',
             fontSize: '11px',
             fontStyle: '800',
-            color: PALETTE.CYAN_FROST,
+            color: npc.kind === 'daedalus_anvil' ? PALETTE.SOLAR_GOLD : PALETTE.CYAN_FROST,
             stroke: PALETTE.INK_DEEP,
             strokeThickness: 3,
             resolution: textRes,
@@ -638,15 +649,31 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
         }
       }
     }
-    if (npc.kind === 'shrine') {
-      const shrineTex = npc.interacted ? 'prop_shrine_statue_used' : 'prop_shrine_statue';
-      if (entry.sprite && entry.sprite.texture.key !== shrineTex) {
-        entry.sprite.setTexture(shrineTex);
+    if (
+      npc.kind === 'shrine' ||
+      npc.kind === 'daedalus_anvil' ||
+      npc.kind === 'upgrade_anvil'
+    ) {
+      const usedByLocal =
+        npc.interacted || (npc.usedByPlayerIds?.includes(sim.player.id) ?? false);
+      const npcTex =
+        npc.kind === 'daedalus_anvil'
+          ? 'prop_daedalus_anvil'
+          : npc.kind === 'upgrade_anvil'
+            ? 'prop_upgrade_anvil'
+            : usedByLocal
+              ? 'prop_shrine_statue_used'
+              : 'prop_shrine_statue';
+      if (entry.sprite) {
+        if (entry.sprite.texture.key !== npcTex) {
+          entry.sprite.setTexture(npcTex);
+        }
+        entry.sprite.setAlpha(usedByLocal ? 0.65 : 1);
       }
 
       const sGlow = resolveInteractableVisualGlowSpec({
-        kind: 'shrine',
-        interacted: npc.interacted,
+        kind: npc.kind,
+        interacted: usedByLocal,
         elapsedSec: visualTimeSec,
         id: npc.id,
       });
@@ -661,7 +688,25 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
       }
     }
 
-    entry.label.setVisible(false);
+    if (
+      (npc.kind === 'daedalus_anvil' || npc.kind === 'upgrade_anvil') &&
+      target?.kind !== npc.kind &&
+      !(npc.usedByPlayerIds?.includes(sim.player.id) ?? false)
+    ) {
+      const isEn = i18n.getLocale() === 'en';
+      const anvilTitle =
+        npc.kind === 'daedalus_anvil'
+          ? isEn
+            ? 'Ancient Daedalus Anvil'
+            : 'Đe Rèn Cổ Đại'
+          : isEn
+            ? 'Upgrade Anvil (+1)'
+            : 'Đe Nâng Cấp (+1)';
+      if (entry.label.text !== anvilTitle) entry.label.setText(anvilTitle);
+      entry.label.setVisible(true);
+    } else {
+      entry.label.setVisible(false);
+    }
   }
 
   for (const [id, entry] of this.npcVisuals.entries()) {

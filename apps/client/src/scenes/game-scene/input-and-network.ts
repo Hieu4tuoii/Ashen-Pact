@@ -161,6 +161,7 @@ export function setupKeyboardBindingsImpl(this: GameScene): void {
     const sim = this.transport.getSim();
     const lp = this.transport.getLocalPlayerState();
     const choice0 = lp.buffChoices[0];
+    const mutChoice0 = lp.mutatorChoices?.[0];
     if (sim.runState === 'buff_choice' && choice0) {
       if (this.room && this.coopMode !== 'solo') {
         lp.buffChoices = [];
@@ -168,6 +169,11 @@ export function setupKeyboardBindingsImpl(this: GameScene): void {
       } else {
         sim.selectFloorBuff(choice0, lp.id);
       }
+    } else if (sim.runState === 'playing' && mutChoice0) {
+      sim.selectWeaponMutator(mutChoice0, lp.id);
+      this.room?.send('select_mutator', { mutatorId: mutChoice0 });
+      this.buffHoveredIdx = null;
+      this.lastRunState = '';
     } else if (this.keys?.T.isDown || this.emoteWheelOpen) {
       this.queuedEmote = 1;
       this.emoteWheelOpen = false;
@@ -181,6 +187,7 @@ export function setupKeyboardBindingsImpl(this: GameScene): void {
     const sim = this.transport.getSim();
     const lp = this.transport.getLocalPlayerState();
     const choice1 = lp.buffChoices[1];
+    const mutChoice1 = lp.mutatorChoices?.[1];
     if (sim.runState === 'buff_choice' && choice1) {
       if (this.room && this.coopMode !== 'solo') {
         lp.buffChoices = [];
@@ -188,6 +195,11 @@ export function setupKeyboardBindingsImpl(this: GameScene): void {
       } else {
         sim.selectFloorBuff(choice1, lp.id);
       }
+    } else if (sim.runState === 'playing' && mutChoice1) {
+      sim.selectWeaponMutator(mutChoice1, lp.id);
+      this.room?.send('select_mutator', { mutatorId: mutChoice1 });
+      this.buffHoveredIdx = null;
+      this.lastRunState = '';
     } else if (this.keys?.T.isDown || this.emoteWheelOpen) {
       this.queuedEmote = 2;
       this.emoteWheelOpen = false;

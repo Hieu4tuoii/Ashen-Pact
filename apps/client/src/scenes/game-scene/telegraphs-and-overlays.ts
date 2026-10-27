@@ -22,6 +22,7 @@ import {
 import { initGlobalDebugState } from '../../ui/debug-overlay.js';
 import { type GameScene, RIG_FOOT_OFFSET_Y } from '../GameScene.js';
 import { drawFootMicroReloadBar } from './hud-micro-reload-bar.js';
+import { drawWorldWeaponSalvageRing } from './hud-pact-and-forge-modals.js';
 import { drawP11DramaWorldOverlays } from './p11-drama-hud.js';
 
 export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, playerY: number): void {
@@ -43,6 +44,9 @@ export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, 
   const hudSafeBottom = hasView ? view.y + view.height - 62 : 478;
 
   // 0a. Hub Campfire & Statue Pedestals (Doanh Trại)
+  if (!isStress) {
+    drawWorldWeaponSalvageRing(g, sim, p, sim.tick / 60);
+  }
   if (sim.inHub) {
     for (let i = 0; i < sim.hubStatues.length; i++) {
       const st = sim.hubStatues[i]!;

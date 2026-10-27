@@ -490,6 +490,7 @@ export class GameScene extends Phaser.Scene {
       if (this.keys.Q.isDown) buttons |= INPUT_BUTTON.SWAP;
       if (this.keys.E.isDown) buttons |= INPUT_BUTTON.INTERACT;
       if (this.keys.R.isDown) buttons |= INPUT_BUTTON.RELOAD_VENT;
+      if (this.keys.X.isDown) buttons |= INPUT_BUTTON.DROP_WEAPON;
     }
 
     if (this.dashQueued) {
@@ -573,6 +574,7 @@ export class GameScene extends Phaser.Scene {
       isClickingInvitePanel ||
       suppressFireForEmoteWheel ||
       isModalOrPaused ||
+      (this.transport.getLocalPlayerState().mutatorChoices?.length ?? 0) > 0 ||
       sim.runState !== 'playing';
     if (pointer.leftButtonDown() && !isClickingHud) {
       buttons |= INPUT_BUTTON.FIRE;

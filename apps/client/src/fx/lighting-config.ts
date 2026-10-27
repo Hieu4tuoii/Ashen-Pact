@@ -391,7 +391,7 @@ export type ResolveInteractableGlowInput =
       elapsedSec?: number;
     }
   | {
-      kind: 'shrine';
+      kind: 'shrine' | 'daedalus_anvil' | 'upgrade_anvil';
       interacted: boolean;
       elapsedSec?: number;
       id?: number;
@@ -594,13 +594,21 @@ export function resolveInteractableVisualGlowSpec(
       };
     }
 
-    case 'shrine': {
+    case 'shrine':
+    case 'daedalus_anvil':
+    case 'upgrade_anvil': {
+      const colorNum =
+        input.kind === 'daedalus_anvil'
+          ? 0xfacc15
+          : input.kind === 'upgrade_anvil'
+            ? 0x38bdf8
+            : 0x22d3ee;
       if (input.interacted) {
         return {
           glowAlpha: 0,
           glowRadiusX: 0,
           glowRadiusY: 0,
-          colorNum: 0x22d3ee,
+          colorNum,
           hasRarityBeam: false,
           beamColorNum: 0,
           beamHeight: 0,
@@ -615,7 +623,7 @@ export function resolveInteractableVisualGlowSpec(
         glowAlpha: clamp(0.32 + 0.03 * pulse, 0.26, 0.38),
         glowRadiusX: 52,
         glowRadiusY: 44,
-        colorNum: 0x22d3ee,
+        colorNum,
         hasRarityBeam: false,
         beamColorNum: 0,
         beamHeight: 0,
@@ -688,6 +696,8 @@ export interface InteractHighlightTarget {
     | 'chest'
     | 'world_item'
     | 'shrine'
+    | 'daedalus_anvil'
+    | 'upgrade_anvil'
     | 'portal'
     | 'door'
     | 'merchant';
@@ -842,22 +852,32 @@ export function resolveCurrentInteractHighlightTarget(
     };
   }
 
-  // 3. Unused Ancient Shrine (<= 72u)
+  // 3. Unused Ancient Shrine / Forge Anvils (<= 72u)
   for (let i = 0; i < npcEntities.length; i++) {
     const npc = npcEntities[i]!;
+    const usedByPlayer =
+      playerId !== undefined && Array.isArray(npc.usedByPlayerIds)
+        ? npc.usedByPlayerIds.includes(playerId)
+        : false;
     if (
-      npc.kind === 'shrine' &&
+      (npc.kind === 'shrine' || npc.kind === 'daedalus_anvil' || npc.kind === 'upgrade_anvil') &&
       !npc.interacted &&
+      !usedByPlayer &&
       Math.hypot(playerX - npc.x, playerY - npc.y) <= interactRange + 8
     ) {
       return {
-        kind: 'shrine',
+        kind: npc.kind,
         id: npc.id,
         x: npc.x,
         y: npc.y,
         radiusX: 24,
         radiusY: 28,
-        colorNum: 0x22d3ee,
+        colorNum:
+          npc.kind === 'daedalus_anvil'
+            ? 0xfacc15
+            : npc.kind === 'upgrade_anvil'
+              ? 0x38bdf8
+              : 0x22d3ee,
       };
     }
   }

@@ -32,6 +32,10 @@ import {
   drawHudWeaponCadenceBar,
   formatWeaponCadenceHudLabel,
 } from './hud-micro-reload-bar.js';
+import {
+  drawWeaponSlotMutatorGems,
+  formatWeaponCardSlotTitle,
+} from './hud-pact-and-forge-modals.js';
 import { applyHudEdgeAnchors, syncHudDebugVisibility } from './hud-setup-and-pause.js';
 
 export {
@@ -394,7 +398,9 @@ export function updateVectorHudImpl(this: GameScene): void {
   }
 
   // Update Bottom-Right 2-slot Weapon Cards (Active Enlarged & Highlighted, Inactive Compact & Dimmed)
-  const weaponHash = `${p.activeWeaponSlot}:${p.weaponSlots.join(',')}:${cadenceStateHash}:${curLocale}:${gState.showKeyHints ? 1 : 0}`;
+  const upgSig = `${p.weaponUpgradeLevels?.[0] ?? 0},${p.weaponUpgradeLevels?.[1] ?? 0}`;
+  const mutSig = `${(p.weaponMutators?.[0] ?? []).join('+')}|${(p.weaponMutators?.[1] ?? []).join('+')}`;
+  const weaponHash = `${p.activeWeaponSlot}:${p.weaponSlots.join(',')}:${upgSig}:${mutSig}:${cadenceStateHash}:${curLocale}:${gState.showKeyHints ? 1 : 0}`;
   if (weaponHash !== this.lastHudWeaponHash) {
     this.lastHudWeaponHash = weaponHash;
     const invBake = 1 / TextureBaker.getBakeScale();
@@ -463,13 +469,23 @@ export function updateVectorHudImpl(this: GameScene): void {
         }
         if (nameTxt) {
           const rawName = i18n.weaponName(wId, wDef.nameVi);
-          const displayName =
-            !isSelected && rawName.length > 12 ? `${rawName.slice(0, 11)}…` : rawName;
+          const upgLv = p.weaponUpgradeLevels?.[idx] ?? 0;
+          const displayName = formatWeaponCardSlotTitle(rawName, upgLv, isSelected);
           nameTxt.setText(displayName);
           nameTxt.setPosition(sx + 38, sy + (isSelected ? 13 : 11));
           nameTxt.setColor(isSelected ? rarityHex : PALETTE.SILVER_BRIGHT);
           nameTxt.setAlpha(isSelected ? 1 : 0.85);
         }
+        drawWeaponSlotMutatorGems(
+          slotBg,
+          sx,
+          sy,
+          cardW,
+          cardH,
+          p.weaponMutators?.[idx] ?? [],
+          p.weaponUpgradeLevels?.[idx] ?? 0,
+          isSelected,
+        );
         if (metaTxt) {
           metaTxt.setText(
             formatWeaponCadenceHudLabel(p, wDef, curLocale === 'en' ? 'en' : 'vi').cardMetaText,

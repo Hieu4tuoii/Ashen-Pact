@@ -322,4 +322,189 @@ export function bakeP1CProps(scene: Phaser.Scene, scale: number): void {
       { cx: 0, cy: 0, rx: 8.5, ry: 8.5 },
     );
   });
+
+  // 8. P2A Daedalus Anvil (`prop_daedalus_anvil`) — Ancient Golden-Rune Forge Anvil + Hammer
+  bakeCustomCanvas(scene, 'prop_daedalus_anvil', 48, 46, scale, (ctx) => {
+    // Stone & brass base pedestal
+    outlined(
+      ctx,
+      {
+        fill: PALETTE.SLATE_DARK,
+        shade: PALETTE.INK_DARK,
+        highlight: PALETTE.BRASS_CORE,
+        outlineWidth: 2.5,
+      },
+      (c) => traceRoundedRect(c, -18, 5, 36, 13, 4),
+      { cx: 0, cy: 11, rx: 18, ry: 7 },
+    );
+    // Anvil waist column
+    outlined(
+      ctx,
+      {
+        fill: PALETTE.STEEL_DARK,
+        shade: PALETTE.INK_DARK,
+        highlight: PALETTE.STEEL_LIGHT,
+        outlineWidth: 2.2,
+      },
+      (c) => traceRoundedRect(c, -10, -4, 20, 12, 3),
+      { cx: 0, cy: 2, rx: 10, ry: 6 },
+    );
+    // Horned anvil top table
+    outlined(
+      ctx,
+      {
+        fill: PALETTE.STEEL_LIGHT,
+        shade: PALETTE.STEEL_DARK,
+        highlight: PALETTE.SOLAR_GOLD,
+        outlineWidth: 2.6,
+      },
+      (c) =>
+        tracePolygon(c, [
+          { x: -21, y: -8 },
+          { x: -11, y: -13 },
+          { x: 14, y: -13 },
+          { x: 20, y: -9 },
+          { x: 14, y: -3 },
+          { x: -12, y: -3 },
+        ]),
+      { cx: 0, cy: -8, rx: 20, ry: 6 },
+    );
+    // Glowing Daedalus solar-gold rune fissure across anvil waist & face
+    ctx.strokeStyle = PALETTE.FLAME_ORANGE;
+    ctx.lineWidth = 2.6;
+    ctx.beginPath();
+    ctx.moveTo(-9, -8);
+    ctx.lineTo(8, -8);
+    ctx.moveTo(0, -8);
+    ctx.lineTo(0, 9);
+    ctx.stroke();
+    ctx.strokeStyle = PALETTE.SOLAR_GOLD;
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.moveTo(-8, -8);
+    ctx.lineTo(7, -8);
+    ctx.moveTo(0, -8);
+    ctx.lineTo(0, 8);
+    ctx.stroke();
+    // Resting golden forge hammer on top
+    ctx.save();
+    ctx.translate(2, -14);
+    ctx.rotate(-0.28);
+    outlined(
+      ctx,
+      {
+        fill: PALETTE.LEATHER_MID,
+        shade: PALETTE.LEATHER_DARK,
+        highlight: PALETTE.COPPER_LIGHT,
+        outlineWidth: 1.8,
+      },
+      (c) => traceRoundedRect(c, -2, -1, 13, 3.5, 1.5),
+      { cx: 4, cy: 0, rx: 6, ry: 2 },
+    );
+    outlined(
+      ctx,
+      {
+        fill: PALETTE.SOLAR_GOLD,
+        shade: PALETTE.FLAME_ORANGE,
+        highlight: PALETTE.BONE_WHITE,
+        outlineWidth: 2.0,
+      },
+      (c) => traceRoundedRect(c, -7, -4.5, 8, 9, 2),
+      { cx: -3, cy: 0, rx: 4, ry: 4.5 },
+    );
+    ctx.restore();
+  });
+
+  // 9. P2A Upgrade Anvil (`prop_upgrade_anvil`) — Tempered Cyan-Frost Whetstone Anvil
+  bakeCustomCanvas(scene, 'prop_upgrade_anvil', 48, 46, scale, (ctx) => {
+    outlined(
+      ctx,
+      {
+        fill: PALETTE.SLATE_DARK,
+        shade: PALETTE.INK_DARK,
+        highlight: PALETTE.STEEL_LIGHT,
+        outlineWidth: 2.5,
+      },
+      (c) => traceRoundedRect(c, -17, 5, 34, 13, 4),
+      { cx: 0, cy: 11, rx: 17, ry: 7 },
+    );
+    outlined(
+      ctx,
+      {
+        fill: PALETTE.STEEL_DARK,
+        shade: PALETTE.SLATE_DARK,
+        highlight: PALETTE.CYAN_FROST,
+        outlineWidth: 2.4,
+      },
+      (c) =>
+        tracePolygon(c, [
+          { x: -19, y: -7 },
+          { x: -10, y: -12 },
+          { x: 13, y: -12 },
+          { x: 18, y: -7 },
+          { x: 12, y: -2 },
+          { x: -11, y: -2 },
+        ]),
+      { cx: 0, cy: -7, rx: 18, ry: 6 },
+    );
+    // Glowing cyan whetstone crystal bar on top
+    outlined(
+      ctx,
+      {
+        fill: PALETTE.CYAN_FROST,
+        shade: PALETTE.AZURE_CORE,
+        highlight: PALETTE.BONE_WHITE,
+        outlineWidth: 1.8,
+      },
+      (c) => traceRoundedRect(c, -8, -15, 16, 5, 2),
+      { cx: 0, cy: -12.5, rx: 8, ry: 3 },
+    );
+  });
+
+  // 10. Merchant Shop Icons: `item_blessing_scroll` & `item_weapon_upgrade`
+  bakeCustomCanvas(scene, 'item_blessing_scroll', 30, 30, scale, (ctx) => {
+    outlined(
+      ctx,
+      {
+        fill: '#E2D5B5',
+        shade: '#B89F72',
+        highlight: PALETTE.BONE_WHITE,
+        outlineWidth: 2.2,
+      },
+      (c) => traceRoundedRect(c, -9, -11, 18, 22, 4),
+      { cx: 0, cy: 0, rx: 9, ry: 11 },
+    );
+    ctx.fillStyle = PALETTE.CRIMSON_BRIGHT;
+    ctx.beginPath();
+    ctx.arc(0, 1, 4.2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = PALETTE.SOLAR_GOLD;
+    ctx.lineWidth = 1.4;
+    ctx.stroke();
+  });
+
+  bakeCustomCanvas(scene, 'item_weapon_upgrade', 30, 30, scale, (ctx) => {
+    outlined(
+      ctx,
+      {
+        fill: PALETTE.CYAN_FROST,
+        shade: PALETTE.AZURE_CORE,
+        highlight: PALETTE.BONE_WHITE,
+        outlineWidth: 2.2,
+      },
+      (c) =>
+        tracePolygon(c, [
+          { x: 0, y: -12 },
+          { x: 10, y: -3 },
+          { x: 6, y: 11 },
+          { x: -6, y: 11 },
+          { x: -10, y: -3 },
+        ]),
+      { cx: 0, cy: 0, rx: 10, ry: 11 },
+    );
+    ctx.fillStyle = PALETTE.SOLAR_GOLD;
+    ctx.beginPath();
+    ctx.arc(0, -1, 3.2, 0, Math.PI * 2);
+    ctx.fill();
+  });
 }

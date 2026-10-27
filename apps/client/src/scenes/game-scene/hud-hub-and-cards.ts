@@ -21,6 +21,7 @@ import { graphicsSettings } from '../../ui/graphics-settings.js';
 import { computeUiTextResolution, createUiTextStyle, UI_THEME } from '../../ui/theme.js';
 import { type GameScene } from '../GameScene.js';
 import { formatWeaponCadenceHudLabel } from './hud-micro-reload-bar.js';
+import { renderWeaponCompareSalvageBar } from './hud-pact-and-forge-modals.js';
 
 export function formatHubInvitePlayerRowText(
   slot: number,
@@ -612,8 +613,9 @@ export function updateWeaponComparisonCardImpl(this: GameScene): void {
 
   const currWId = sim.getActiveWeaponId();
   const showHints = graphicsSettings.getState().showKeyHints;
+  const salvagePct = Math.round((sim.player.salvageHoldTimer ?? 0) * 100);
   const hash = dropWId
-    ? `${dropWId}:${currWId}:${nearestWeaponItem?.costGold ?? 0}:${i18n.getLocale()}:${showHints ? 1 : 0}:${this.currentHudUiScale}`
+    ? `${dropWId}:${currWId}:${nearestWeaponItem?.costGold ?? 0}:${salvagePct}:${sim.inHub ? 1 : 0}:${i18n.getLocale()}:${showHints ? 1 : 0}:${this.currentHudUiScale}`
     : '';
   if (hash === this.lastWeaponCompareHash) return;
   this.lastWeaponCompareHash = hash;
@@ -782,18 +784,21 @@ export function updateWeaponComparisonCardImpl(this: GameScene): void {
     }),
   );
 
-  const tipText = ui.add.text(
-    px + 12,
-    py + ph - 18,
-    i18n.t('ui.tooltip.firstPickupHint'),
-    createUiTextStyle({
-      fontPxAt1080p: 13,
-      weight: 700,
-      color: PALETTE.CYAN_FROST,
-      resolution: textRes,
-    }),
-  );
-  this.weaponCompareContainer.add([body, tipText]);
+  this.weaponCompareContainer.add(body);
+  if (!renderWeaponCompareSalvageBar(this, bg, sim, sim.player, px, py, pw, ph, isEn, textRes)) {
+    const tipText = ui.add.text(
+      px + 12,
+      py + ph - 18,
+      i18n.t('ui.tooltip.firstPickupHint'),
+      createUiTextStyle({
+        fontPxAt1080p: 13,
+        weight: 700,
+        color: PALETTE.CYAN_FROST,
+        resolution: textRes,
+      }),
+    );
+    this.weaponCompareContainer.add(tipText);
+  }
 }
 
 export function updateEmoteWheelHudImpl(this: GameScene): void {

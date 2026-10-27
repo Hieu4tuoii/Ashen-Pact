@@ -516,21 +516,38 @@ export function bakeCrackedWallTile(
   );
 
   // Glowing secret fracture fissures indicating destructible wall
-  ctx.beginPath();
-  ctx.moveTo(8, 5);
-  ctx.lineTo(15, 12);
-  ctx.lineTo(12, 20);
-  ctx.lineTo(21, 25);
-  ctx.moveTo(15, 12);
-  ctx.lineTo(24, 9);
-  ctx.lineWidth = 3.2;
+  const traceFissureCracks = (c: CanvasRenderingContext2D) => {
+    c.beginPath();
+    c.moveTo(7, 5);
+    c.lineTo(15, 12);
+    c.lineTo(12, 20);
+    c.lineTo(22, 25);
+    c.moveTo(15, 12);
+    c.lineTo(25, 8);
+    c.moveTo(12, 20);
+    c.lineTo(6, 24);
+  };
+  traceFissureCracks(ctx);
+  ctx.lineWidth = 3.8;
   ctx.strokeStyle = PALETTE.INK_DARK;
   ctx.lineCap = 'round';
   ctx.stroke();
 
-  ctx.lineWidth = 1.4;
+  traceFissureCracks(ctx);
+  ctx.lineWidth = 2.4;
+  ctx.strokeStyle = PALETTE.FLAME_ORANGE;
+  ctx.stroke();
+
+  traceFissureCracks(ctx);
+  ctx.lineWidth = 1.2;
   ctx.strokeStyle = PALETTE.SOLAR_GOLD;
   ctx.stroke();
+
+  ctx.fillStyle = PALETTE.BONE_WHITE;
+  ctx.beginPath();
+  ctx.arc(15, 12, 1.4, 0, Math.PI * 2);
+  ctx.arc(12, 20, 1.2, 0, Math.PI * 2);
+  ctx.fill();
 
   ctx.restore();
   registerCanvasTexture(scene, key, canvas);

@@ -171,7 +171,8 @@ export class TextureBaker {
       scene.textures.exists('portal_particle_mote') &&
       scene.textures.exists('door_frame_ns_0') &&
       scene.textures.exists('door_unlock_spark') &&
-      scene.textures.exists('biome_tile_0_0')
+      scene.textures.exists('biome_tile_0_0') &&
+      scene.textures.exists('prop_daedalus_anvil')
     ) {
       this.currentBakeScale = targetScale;
       return this.currentBakeScale;
