@@ -16,7 +16,10 @@ import {
   zzfx,
   type SfxId,
 } from '../src/audio/zzfx';
-import { resolveProjectileRenderSpec } from '../src/fx/combat-fx-spawners';
+import {
+  resolveProjectileRenderSpec,
+  spawnFloatingAlertImpl,
+} from '../src/fx/combat-fx-spawners';
 import {
   drawBatch1ActiveProjectiles,
   drawEnemyBatch1Indicators,
@@ -471,6 +474,55 @@ describe('AP2-P1A.4 — Procedural VFX, Entity Indicators, Deployable/Tether Ren
       expect(snap.tetherBeams).toHaveLength(1);
       expect(snap.tetherBeams?.[0]?.targetKind).toBe('enemy');
       expect(snap.tetherBeams?.[0]?.targetId).toBe(501);
+    });
+
+    it('deduplicates identical floating alerts within 72px and enforces >= 24px vertical spacing between distinct alerts', () => {
+      const makeSlot = () => ({
+        active: false,
+        x: 0,
+        y: 0,
+        originX: 0,
+        originY: 0,
+        vx: 0,
+        vy: 0,
+        age: 0,
+        ttl: 0.65,
+        baseScale: 1,
+        text: {
+          text: '',
+          setText(v: string) {
+            this.text = v;
+          },
+          setColor: vi.fn(),
+          setPosition: vi.fn(),
+          setScale: vi.fn(),
+          setAlpha: vi.fn(),
+          setVisible: vi.fn(),
+          setActive: vi.fn(),
+        },
+      });
+      const pool = [makeSlot(), makeSlot(), makeSlot(), makeSlot()];
+      const mockManager = {
+        damagePool: pool,
+        totalDamagePopupsSpawned: 0,
+        acquireDamageSlot() {
+          return pool.find((s) => !s.active) ?? null;
+        },
+      };
+
+      // 1. Spawn "HOÀN HẢO!" at player (416, 264)
+      spawnFloatingAlertImpl.call(mockManager as never, 416, 264, 'HOÀN HẢO!', '#FACC15');
+      expect(mockManager.totalDamagePopupsSpawned).toBe(1);
+      expect(pool[0]!.y).toBe(228);
+
+      // 2. Spawn first "ĐẬP TƯỜNG!" nearby at (496, 246) -> shifted vertically >= 24px above "HOÀN HẢO!"
+      spawnFloatingAlertImpl.call(mockManager as never, 496, 246, 'ĐẬP TƯỜNG!', '#F97316');
+      expect(mockManager.totalDamagePopupsSpawned).toBe(2);
+      expect(pool[0]!.y - pool[1]!.y).toBeGreaterThanOrEqual(24);
+
+      // 3. Spawn duplicate "ĐẬP TƯỜNG!" at (496, 268) within 72px and age < 0.25s -> deduplicated!
+      spawnFloatingAlertImpl.call(mockManager as never, 496, 268, 'ĐẬP TƯỜNG!', '#F97316');
+      expect(mockManager.totalDamagePopupsSpawned).toBe(2);
     });
   });
 });

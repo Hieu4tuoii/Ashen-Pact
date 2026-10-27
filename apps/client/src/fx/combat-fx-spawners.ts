@@ -920,3 +920,70 @@ export function spawnExplosionBurstImpl(
   }
 }
 
+export function spawnFloatingAlertImpl(
+  this: CombatFxManager,
+  x: number,
+  y: number,
+  label: string,
+  colorHex: string = PALETTE.CYAN_FROST,
+): void {
+  let targetX = x;
+  let targetY = y - 36;
+
+  // 1. Deduplicate identical floating alerts spawned recently (< 0.25s) within 72px
+  for (let i = 0; i < this.damagePool.length; i++) {
+    const other = this.damagePool[i]!;
+    if (!other.active || other.age >= other.ttl) continue;
+    if (other.text.text === label && other.age < 0.25) {
+      const origDist = Math.hypot((other.originX ?? other.x) - x, (other.originY ?? y) - y);
+      const currDist = Math.hypot(other.x - targetX, other.y - targetY);
+      if (origDist < 72 || currDist < 72) {
+        return;
+      }
+    }
+  }
+
+  // 2. Enforce vertical separation (>= 24px) & horizontal clearance against active alerts
+  for (let pass = 0; pass < 4; pass++) {
+    let shifted = false;
+    for (let i = 0; i < this.damagePool.length; i++) {
+      const other = this.damagePool[i]!;
+      if (!other.active || other.age >= other.ttl) continue;
+      if (/^-?\d+!?$/.test(other.text.text)) continue;
+      const dx = targetX - other.x;
+      const dy = targetY - other.y;
+      if (Math.abs(dx) < 108 && Math.abs(dy) < 23) {
+        targetY = other.y - 24;
+        if (Math.abs(dx) >= 20 && targetX === x) {
+          targetX += dx >= 0 ? 16 : -16;
+        }
+        shifted = true;
+      }
+    }
+    if (!shifted) break;
+  }
+
+  const slot = this.acquireDamageSlot();
+  if (!slot) return;
+  this.totalDamagePopupsSpawned += 1;
+  slot.active = true;
+  slot.age = 0;
+  slot.ttl = 0.65;
+  slot.originX = x;
+  slot.originY = y;
+  slot.x = targetX;
+  slot.y = targetY;
+  slot.vx = 0;
+  slot.vy = -52;
+  slot.baseScale = 1.18;
+
+  slot.text.setText(label);
+  slot.text.setColor(colorHex);
+  slot.text.setPosition(slot.x, slot.y);
+  slot.text.setScale(slot.baseScale * 1.2);
+  slot.text.setAlpha(1);
+  slot.text.setVisible(true);
+  slot.text.setActive(true);
+}
+
+

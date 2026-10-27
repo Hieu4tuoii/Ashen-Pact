@@ -39,6 +39,7 @@ import {
   type CoalescedReactionBannerState,
   spawnElementalReactionFxImpl,
   spawnExplosionBurstImpl,
+  spawnFloatingAlertImpl,
   spawnHitSparksImpl,
   spawnMuzzleFlashAndCasingImpl,
 } from './combat-fx-spawners.js';
@@ -159,25 +160,7 @@ export class CombatFxManager {
     label: string,
     colorHex: string = PALETTE.CYAN_FROST,
   ): void {
-    const slot = this.acquireDamageSlot();
-    if (!slot) return;
-    this.totalDamagePopupsSpawned += 1;
-    slot.active = true;
-    slot.age = 0;
-    slot.ttl = 0.65;
-    slot.x = x;
-    slot.y = y - 36;
-    slot.vx = 0;
-    slot.vy = -52;
-    slot.baseScale = 1.18;
-
-    slot.text.setText(label);
-    slot.text.setColor(colorHex);
-    slot.text.setPosition(slot.x, slot.y);
-    slot.text.setScale(slot.baseScale * 1.2);
-    slot.text.setAlpha(1);
-    slot.text.setVisible(true);
-    slot.text.setActive(true);
+    spawnFloatingAlertImpl.call(this, x, y, label, colorHex);
   }
 
   public spawnFrostBreath(x: number, y: number, facingSign: number): void {
