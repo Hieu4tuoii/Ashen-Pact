@@ -415,6 +415,48 @@ export type SimEvent =
       totalThorns: number;
       x?: number;
       y?: number;
+    }
+  | {
+      kind: 'focus_laser_beam';
+      playerId: number;
+      x1: number;
+      y1: number;
+      x2: number;
+      y2: number;
+      angle: number;
+      width: number;
+      damage: number;
+      heat: number;
+      refractedRays?: Array<{
+        x1: number;
+        y1: number;
+        x2: number;
+        y2: number;
+        angle: number;
+      }>;
+    }
+  | {
+      kind: 'focus_laser_railgun';
+      playerId: number;
+      x1: number;
+      y1: number;
+      x2: number;
+      y2: number;
+      angle: number;
+      width: number;
+      damage: number;
+      alertTextVi: string;
+    }
+  | {
+      kind: 'void_implosion';
+      playerId: number;
+      x: number;
+      y: number;
+      radius: number;
+      damage: number;
+      swallowedBullets: number;
+      triggeredByRelease: boolean;
+      alertTextVi?: string;
     };
 
 export interface WorldSimOptions {

@@ -6,6 +6,7 @@ import {
   pointToSegmentDist,
   triggerSeedGunHarvestBloom,
 } from './sim-weapon-specials-rare.js';
+import { triggerVoidStaffImplosion } from './sim-weapon-specials-p1b-ranged.js';
 import {
   detonatePlayerMagneticRivets,
   plantMagneticRivet,
@@ -20,6 +21,7 @@ import {
 import type { WorldSim } from './world-sim.js';
 
 export * from './sim-weapon-specials-rare.js';
+export * from './sim-weapon-specials-p1b-ranged.js';
 
 export const CROSSBOW_MAX_STUCK_ARROWS = 4;
 export const CROSSBOW_RIP_DMG_PER_ARROW = 6;
@@ -256,6 +258,11 @@ export function handleProjectileExpiredWeaponSpecials(
     }
   }
 
+  if (b.weaponId === 'void_staff') {
+    triggerVoidStaffImplosion(sim, b, b.x, b.y, false);
+    return;
+  }
+
   if (b.weaponId === 'seed_gun') {
     sim.spawnSeedGunLifeBlossom(b.ownerId, b.x, b.y);
     if (((b.shotFlags ?? 0) & SHOT_FLAG.FINALE_SHOT) !== 0 && !b.finaleResolved) {
@@ -291,6 +298,11 @@ export function handleProjectileWallHitWeaponSpecials(
     } else if (b.weaponId === 'thorn_staff' && isFinale) {
       resolveThornStaffFinalePullAndBloom(sim, b);
     }
+  }
+
+  if (b.weaponId === 'void_staff') {
+    triggerVoidStaffImplosion(sim, b, hitX, hitY, false);
+    return;
   }
 
   if (b.weaponId === 'seed_gun') {

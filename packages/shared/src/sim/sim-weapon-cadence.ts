@@ -15,12 +15,15 @@ import {
   GALE_SMG_MIN_FIRE_RATE,
   GALE_SMG_SPINUP_DURATION_SEC,
   checkAndTriggerFragLauncherAirburst,
+  checkAndTriggerVoidStaffImplosion,
   detonateParasiticThorns,
   detonatePlayerMagneticRivets,
+  fireFocusLaserHitscanBeam,
   processMeleeParryDeflect,
   spawnGaleSmgWindBlade,
   spawnKnightSwordCrescentWave,
   triggerApprenticeStaffTacticalVent,
+  triggerFocusLaserRailgunVent,
   triggerGaleSmgTacticalVent,
   triggerHunterCrossbowBarbedRip,
   triggerScrapShotgunPerfectReload,
@@ -301,6 +304,8 @@ export function updatePlayerWeaponCadence(
           triggerGaleSmgTacticalVent(sim, p);
         } else if (w.id === 'tether_staff') {
           triggerTetherStaffTacticalVent(sim, p);
+        } else if (w.id === 'focus_laser') {
+          triggerFocusLaserRailgunVent(sim, p);
         }
       }
     } else if (p.reloadTimer <= 0 && p.clipMax > 0 && p.clipAmmo < p.clipMax) {
@@ -373,8 +378,12 @@ export function updatePlayerWeaponCadence(
     p.fireHoldTimer = 0;
     p.crossbowChargeTimer = 0;
   }
+  p.lastButtons = buttons;
   if (activeWepId === 'frag_launcher' || otherWepId === 'frag_launcher') {
     checkAndTriggerFragLauncherAirburst(sim, p, buttons);
+  }
+  if (activeWepId === 'void_staff' || otherWepId === 'void_staff') {
+    checkAndTriggerVoidStaffImplosion(sim, p, buttons);
   }
 }
 
@@ -411,8 +420,10 @@ export function tryFireActiveWeaponImpl(
   }
 
   let shotFlags = 0;
-  let additiveDmgBonus = p.vanguardShieldBonusAdd ?? 0;
+  const shieldBonusBeforeShot = p.vanguardShieldBonusAdd ?? 0;
+  let additiveDmgBonus = shieldBonusBeforeShot;
   p.vanguardShieldBonusAdd = 0;
+  const heatBeforeShot = p.weaponHeat;
 
   let fireRateMult = p.elementalConvergenceTimer > 0 ? 1.2 : 1.0;
   let isFinaleShot = false;
@@ -529,7 +540,13 @@ export function tryFireActiveWeaponImpl(
 
   let rawWeaponDmg = w.damage;
   let projRadius =
-    w.id === 'thorn_staff' ? 12 : w.category === 'shotgun' ? 4.5 : w.category === 'launcher' ? 7 : 5;
+    w.id === 'thorn_staff' || w.id === 'void_staff'
+      ? 12
+      : w.category === 'shotgun'
+        ? 4.5
+        : w.category === 'launcher'
+          ? 7
+          : 5;
   let explosionRadius: number | undefined;
   let bounceCount = w.bounceCount;
   let pierceCount = w.pierceCount;
@@ -537,11 +554,13 @@ export function tryFireActiveWeaponImpl(
   const projTtl =
     w.id === 'thorn_staff'
       ? 0.205
-      : w.category === 'shotgun'
-        ? 0.55
-        : w.category === 'laser'
-          ? 1.0
-          : 1.4;
+      : w.id === 'void_staff'
+        ? (w.range ?? 360) / w.projectileSpeed
+        : w.category === 'shotgun'
+          ? 0.55
+          : w.category === 'laser'
+            ? 1.0
+            : 1.4;
 
   if (w.id === 'hunter_crossbow') {
     const holdSec = Math.max(p.crossbowChargeTimer ?? 0, p.fireHoldTimer ?? 0);
@@ -586,6 +605,20 @@ export function tryFireActiveWeaponImpl(
     bounceCount = w.bounceCount + (p.bonusBounceCurrentClip ?? 0);
   } else if (w.id === 'frag_launcher') {
     explosionRadius = FRAG_LAUNCHER_MAIN_BLAST_RADIUS;
+  } else if (w.id === 'void_staff' && isFinaleShot) {
+    additiveDmgBonus = Math.max(0, additiveDmgBonus - 0.5);
+  }
+
+  if (w.id === 'focus_laser') {
+    fireFocusLaserHitscanBeam(
+      this,
+      p,
+      heatBeforeShot,
+      critChance,
+      shotElement,
+      shieldBonusBeforeShot,
+    );
+    return;
   }
 
   const shieldAdjustedDmg = shieldBoost ? Math.round(rawWeaponDmg * 1.3) : rawWeaponDmg;
@@ -628,6 +661,8 @@ export function tryFireActiveWeaponImpl(
     originX: p.x,
     originY: p.y,
     armedForAirburst: w.id === 'frag_launcher' && (this.currentInput.buttons & INPUT_BUTTON.FIRE) !== 0,
+    firedWhileHoldingFire:
+      w.id === 'void_staff' && (((p.lastButtons ?? this.currentInput.buttons) & INPUT_BUTTON.FIRE) !== 0),
   });
 
   if (w.id === 'gale_smg') {

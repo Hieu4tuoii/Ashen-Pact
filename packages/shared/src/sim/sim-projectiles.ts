@@ -15,6 +15,7 @@ import {
   plantMagneticRivet,
   resolvePlayerProjectileHitDamageAndAngle,
   tryTeslaSmartWallBounce,
+  updateVoidStaffOrbInFlight,
 } from './sim-weapon-specials.js';
 import {
   type BulletVolleySpawnEvent,
@@ -145,6 +146,7 @@ export function spawnDeterministicVolleyImpl(this: WorldSim, ev: BulletVolleySpa
       armedForAirburst: ev.armedForAirburst,
       airburstBypassShield: ev.airburstBypassShield,
       parentExplosionId: ev.parentExplosionId,
+      firedWhileHoldingFire: ev.firedWhileHoldingFire,
     });
 
     this.projectiles.push(proj);
@@ -315,6 +317,7 @@ export function updateProjectilesImpl(this: WorldSim, dtSec: number): void {
         if (circleVsCircle(b, prop)) {
           prop.fallAngle = b.angle;
           this.damageProp(prop, b.damage, b.element);
+          if (b.weaponId === 'void_staff') continue;
           if (b.team === 'player' && b.weaponId === 'rivet_gun') {
             plantMagneticRivet(this, b.ownerId, b.x, b.y, null, prop.id);
             if (((b.shotFlags ?? 0) & SHOT_FLAG.FINALE_SHOT) !== 0) {
@@ -413,6 +416,11 @@ export function updateProjectilesImpl(this: WorldSim, dtSec: number): void {
             }
           }
         }
+      }
+
+      if (b.weaponId === 'void_staff') {
+        updateVoidStaffOrbInFlight(this, b, dtSec);
+        continue;
       }
 
       const candidates = this.enemySpatialGrid.queryCircle(
@@ -792,6 +800,8 @@ export function stepClientProjectilesCosmeticImpl(this: WorldSim, dtSec: number)
 
     // 3. Player projectile vs Enemy cosmetic hit prediction
     if (b.team === 'player') {
+      if (b.weaponId === 'void_staff') continue;
+
       const candidates = this.enemySpatialGrid.queryCircle(
         b.x,
         b.y,
@@ -948,6 +958,11 @@ export function acquireProjectileImpl(this: WorldSim,
     pooled.armedForAirburst = init.armedForAirburst;
     pooled.airburstBypassShield = init.airburstBypassShield;
     pooled.parentExplosionId = init.parentExplosionId;
+    pooled.swallowedBullets = init.swallowedBullets ?? 0;
+    pooled.voidOrbFlightTicks = init.voidOrbFlightTicks ?? 0;
+    pooled.voidPulseTimer = init.voidPulseTimer ?? 0;
+    pooled.armedForReleaseImplosion = init.armedForReleaseImplosion ?? false;
+    pooled.firedWhileHoldingFire = init.firedWhileHoldingFire ?? false;
     pooled.hitEntityIds.length = 0;
     return pooled;
   }

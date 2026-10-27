@@ -423,6 +423,7 @@ export interface SimPlayerState {
   crossbowChargeTimer?: number;
   crossbowChargeSec?: number;
   weaponHoldTimer?: number;
+  lastButtons?: number;
   aimWorldX?: number;
   aimWorldY?: number;
   critChance?: number;
@@ -597,6 +598,11 @@ export interface SimProjectileState {
   armedForAirburst?: boolean;
   airburstBypassShield?: boolean;
   parentExplosionId?: number;
+  swallowedBullets?: number;
+  voidOrbFlightTicks?: number;
+  voidPulseTimer?: number;
+  armedForReleaseImplosion?: boolean;
+  firedWhileHoldingFire?: boolean;
   hitEntityIds: number[];
 }
 
@@ -650,6 +656,11 @@ export interface BulletVolleySpawnEvent {
   armedForAirburst?: boolean;
   airburstBypassShield?: boolean;
   parentExplosionId?: number;
+  swallowedBullets?: number;
+  voidOrbFlightTicks?: number;
+  voidPulseTimer?: number;
+  armedForReleaseImplosion?: boolean;
+  firedWhileHoldingFire?: boolean;
 }
 
 

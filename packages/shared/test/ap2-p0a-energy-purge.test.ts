@@ -121,7 +121,7 @@ describe('AP2 P0A.1 — Energy Purge, Weapon Cadence Metadata & Replacement Mech
         cadenceKind: 'HEAT_VENT',
         clipSize: 0,
         reloadDurationSec: 0,
-        heatPerShot: 3.5,
+        heatPerShot: 4.5,
         procCoefficient: 0.25,
       },
       emerald_cleaver: {
