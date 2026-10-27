@@ -5,12 +5,12 @@ Bạn là **AI Agent kiêm Lead Game Architect / Senior Gameplay & Network Syste
 Dự án **Ashen Pact** đã hoàn thành giai đoạn nền tảng `v0.1.0` (`master-promt.md`) và giai đoạn nâng cấp thẩm mỹ/độ khó `v0.2.0 – v0.2.1` (`master-promt-v2.md`, hiện tại ở commit `f26d4b7`). Giai đoạn này là cuộc **Đại Tu Toàn Diện Lối Chơi & Hệ Thống (Ashen Pact 2.0 Master Overhaul)** bám sát 100% theo tài liệu đặc tả đã qua 2 vòng Hội đồng Phản biện Đỏ (Red Team) & Kiểm toán Toán học:
 👉 **Tài liệu Spec gốc (Nguồn chân lý tối cao):** `docs/superpowers/specs/2026-10-26-ashen-pact-2.0-overhaul-design.md` (Rev 4).
 
-Tôi sẽ **không cần nhắc nhở từng bước**: bạn phải tự thiết lập môi trường từ đầu đến cuối, tự lập kế hoạch chi tiết trước mỗi phase, tự điều phối các subagent thực thi theo TDD, **tự kiểm chứng giao diện và cơ chế thực tế qua ảnh chụp màn hình + ảnh strip chuyển động 8 khung hình + Visual Reviewer độc lập**, và tự sửa lỗi cho đến khi từng phase đạt độ hoàn thiện tuyệt đối trước khi chuyển sang phase tiếp theo. Đây là nhiệm vụ dài hơi, nặng và quan trọng nhất của dự án — **không giới hạn thời gian, chỉ quan tâm đến chất lượng đầu ra hoàn hảo ở từng phase**.
+Tôi sẽ **không cần nhắc nhở từng bước**: bạn phải tự thiết lập môi trường từ đầu đến cuối, tự lập kế hoạch chi tiết trước mỗi phase, tự điều phối các subagent thực thi theo TDD, **tự kiểm chứng giao diện và cơ chế thực tế qua ảnh chụp màn hình (`★ HERO`) + tấm cận cảnh `1:1 Native Pixel` (`-roi-*.png`) + ảnh strip chuyển động `8/12` khung hình (`-strip.png`) + 5 cổng định lượng `evaluateAnimationGates (HARD_ASSERT)` + Visual Reviewer độc lập**, và tự sửa lỗi cho đến khi từng phase đạt độ hoàn thiện tuyệt đối trước khi chuyển sang phase tiếp theo. Đây là nhiệm vụ dài hơi, nặng và quan trọng nhất của dự án — **không giới hạn thời gian, chỉ quan tâm đến chất lượng đầu ra hoàn hảo ở từng phase**.
 
 > **QUY TRÌNH THỰC THI: SUPERPOWERS.** Toàn bộ đợt đại tu này vận hành theo bộ skill superpowers (`using-superpowers` → `writing-plans` → `subagent-driven-development` → `test-driven-development` → `systematic-debugging` → `verification-before-completion` → `requesting-code-review` → `finishing-a-development-branch`). Prompt này cùng với `docs/superpowers/specs/2026-10-26-ashen-pact-2.0-overhaul-design.md` **là đặc tả thiết kế đã được tôi phê duyệt**. Ở đâu prompt này hoặc Spec Rev 4 khác với mặc định của skill, **prompt này và Spec Rev 4 thắng** (theo nguyên tắc *"user instructions take precedence"*). Xem bản đồ ánh xạ skill chi tiết tại mục `0.7`.
 
 > **IMPORTANT — BÀI HỌC XƯƠNG MÁU TỪ CÁC GIAI ĐOẠN TRƯỚC (CẤM TÁI PHẠM):**
-> 1. **Cấm đánh giá giao diện, hình học phòng, VFX hay HUD chỉ bằng cách đọc code:** Trong các phiên bản trước, việc tự kết luận *"đã kiểm tra code, hiển thị tốt"* từng để lọt hàng loạt lỗi nghiêm trọng (chữ tiếng Việt chồng chéo hoặc mất dấu, thanh UI đè lên bóng/tên nhân vật, vật thể trang trí trông giống hệt bẫy gây sát thương, màu sắc lệch tông, góc phòng bị tối). Từ nay **tuyệt đối cấm tự khen**. Mọi thay đổi liên quan đến Hình học phòng (Room Archetypes, vực sâu `chasm`, cầu đôi), Vật thể tương tác (`moss_table`, `glacial_barricade`, `forge_blast_shield` ở 3 trạng thái `'low' | 'flipped' | 'sliding'`, Đồ chơi Biome), Vũ khí & VFX, Thanh **Micro-Bar `32×5px`** dưới chân nhân vật, HUD Băng đạn/Nhiệt độ, hay Modal (`Tế Đàn Khế Ước`, `Đe Rèn Cổ Đại`) đều **bắt buộc phải chụp ảnh thực tế (`1920×1080`) + ảnh strip chuyển động 8 frame (`-strip.png`) từ game đang chạy thật**, đo bằng `tools/visual-metrics.ts`, và chấm điểm ẩn danh (blind A/B hoặc đối chiếu chuẩn Golden Room v0.2.0) bởi **Visual Reviewer độc lập (`research`, model `pro`)** theo mục `0.4` & `6`.
+> 1. **Cấm đánh giá giao diện, hình học phòng, VFX hay HUD chỉ bằng cách đọc code:** Trong các phiên bản trước, việc tự kết luận *"đã kiểm tra code, hiển thị tốt"* từng để lọt hàng loạt lỗi nghiêm trọng (chữ tiếng Việt chồng chéo hoặc mất dấu, thanh UI đè lên bóng/tên nhân vật, vật thể trang trí trông giống hệt bẫy gây sát thương, màu sắc lệch tông, góc phòng bị tối). Từ nay **tuyệt đối cấm tự khen**. Mọi thay đổi liên quan đến Hình học phòng (Room Archetypes, vực sâu `chasm`, cầu đôi), Vật thể tương tác (`moss_table`, `glacial_barricade`, `forge_blast_shield` ở 3 trạng thái `'low' | 'flipped' | 'sliding'`, Đồ chơi Biome), Vũ khí & VFX, Thanh **Micro-Bar `32×5px`** dưới chân nhân vật, HUD Băng đạn/Nhiệt độ, hay Modal (`Tế Đàn Khế Ước`, `Đe Rèn Cổ Đại`) đều **bắt buộc phải chạy `pnpm shots -- ... --verify-freeze` từ game đang chạy thật** để xuất ảnh đại diện `1920×1080` tại `★ HERO`, tấm cận cảnh `1:1 Native Pixel` (`-roi-*.png`, `1280×760`), ảnh tổng quan `8/12` frame (`-strip.png`), bảng `-telemetry-summary.md`, `metrics.json` (tự động khóa `5/5` cổng `evaluateAnimationGates` `HARD_ASSERT`), và chấm điểm bởi **Visual Reviewer độc lập (`research`, model `pro`)** theo mục `0.4` & `6`.
 > 2. **Cấm làm hỏng chuẩn thẩm mỹ Golden Room v0.2.0 đã khóa:** Mọi phòng mới, prop mới, VFX mới của Ashen Pact 2.0 phải kế thừa trọn vẹn chuẩn thị giác đã đạt ở `v0.2.0`: **Tầm nhìn toàn màn hình trong trẻo 100% (Full-Screen Clear Visibility — không sương mù `fx_ambient_mist`, không fog-of-war, `vignetteStrength = 0.0`)**, bảng màu `ENV` trầm tĩnh, vùng tâm phòng phẳng dịu (`ΔL* ≤ 8`), nguồn sáng chính `-135°` (trên-trái) đổ bóng về dưới-phải (`+45°`), nhân vật Cutout 2.0 có rim-light `-135°`, và đạn địch luôn giữ lõi trắng + thân `#E84545` + viền `INK_DARK` `1.5u` nổi bật nhất màn hình.
 > 3. **Cấm dùng hệ số giả hoặc bot bất tử trong cân bằng (`pnpm balance`):** Mọi kết luận cân bằng ở Phase `P3C` và `P5` phải đến từ mô phỏng thật 100% với **Profile Bot Mô Phỏng Người Chơi Thật** (`Perfect Reload [R] = 50%`, `Dash-Kick = 40%`, không `godMode`, không nhân máu giả).
 
@@ -38,23 +38,14 @@ Tôi sẽ **không cần nhắc nhở từng bước**: bạn phải tự thiế
 5. **Khôi phục ngữ cảnh sau khi nén (Context Compaction / Phiên mới):**
    - Nếu phiên làm việc bị nén context hoặc khởi động lại, đọc theo đúng thứ tự: **Task Artifact (`task.md`)** → `docs/PROGRESS.md` → `docs/superpowers/specs/2026-10-26-ashen-pact-2.0-overhaul-design.md` → file Plan của phase hiện tại trong `docs/superpowers/plans/` → sổ cái tiến độ SDD (`.superpowers/sdd/<plan>/progress.md`) → `git log -n 10 --oneline`.
    - **Tin sổ cái ledger và `git log` hơn trí nhớ:** Task nào đã ghi `Task N: complete` và đã có commit hợp lệ thì không làm lại.
-   - **TRẠNG THÁI HẠ TẦNG KIỂM ĐỊNH HIỆN TẠI (ĐÃ NÂNG CẤP & KHÓA `HARD_ASSERT` — ENGINE 2.6):**
-     - Chiến dịch trên nhánh `overhaul/v2.0` (`.worktrees/overhaul-v2.0`) đã hoàn thành nghiệm thu **`Phase P0A`**, **`Phase P0B`**, **`Phase P1A`**, và vừa hoàn tất nâng cấp toàn diện **Animation & Moment Verification Engine 2.6** (khóa mặc định ở chế độ `HARD_ASSERT`, đạt `9.41 / 10` Visual Gate, `12/12` unit test âm tính/dương tính trong `visual-metrics.test.ts`, và `14/14` cảnh strip `P0B + P1A` đạt `5/5` cổng định lượng + `diffPixels = 0`, `traceHashMatched = true`). Phase tiếp theo cần triển khai là **`Phase P1B`**.
-     - **Sự khác biệt bắt buộc của quy trình chụp & validate mới (`Engine 2.6`) so với cách cũ:**
-       1. **Câu lệnh CLI duy nhất cho mỗi Phase (`tự động chạy cả metrics + 5 cổng HARD_ASSERT + freeze check`):**
-          ```bash
-          pnpm shots -- --phase ap2-<phase> --label after --group ap2-<phase> --verify-freeze
-          ```
-          *(Hoặc truyền `--scenes <scene1,scene2,...> --verify-freeze`).* Lệnh `pnpm shots` nay **tự động gọi `analyzeDirectory()` và `evaluateAnimationGates(..., 'HARD_ASSERT')`** ngay sau khi chụp; nếu bất kỳ cảnh nào trượt 1 trong 5 cổng chuyển động hoặc lệch `--verify-freeze` (`diffPixels > 0` hoặc `traceHashMatched === false`), lệnh sẽ **báo lỗi đỏ và fail ngay lập tức**. (Chỉ dùng `npx tsx tools/visual-metrics.ts --dir <path>` khi muốn phân tích lại một thư mục ảnh đã chụp sẵn mà không mở trình duyệt).
-       2. **Tạo tác sinh ra tự động cho mỗi cảnh có `captureStrip: true`:**
-          - `<scene>.png` (và `<scene>-unlit.png` nếu có): **Tự động trích xuất tại đúng `heroFrameIndex` (`★ HERO`: `F5` cho strip 8F, `F10` cho strip 12F)**, tuyệt đối không còn lấy `F1`.
-          - `<scene>-roi-1.png`, `<scene>-roi-2.png` (và `<scene>-roi-3.png` nếu 12F): **Tấm Cận Cảnh `1:1 Native Pixel` (`1280×760 < 1536px`)** ghép lưới `2×2` vùng cắt `640×360` cố định (`Fixed Union ROI`) kèm thanh tiêu đề `20px` tách rời phía trên — đây là **tệp ảnh chính** bắt buộc đưa cho Visual Reviewer (`Model: pro`) đọc để soi sắc nét từng pixel gốc.
-          - `<scene>-strip.png`: Tấm Tổng Quan Toàn Màn Hình (`1920×580` lưới `4×2` cho 8F hoặc `1920×870` lưới `4×3` cho 12F) có vẽ khung đứt nét vàng đánh dấu `roiRect` (thay thế hoàn toàn dải ngang `15360×1080` cũ).
-          - `<scene>-telemetry-summary.md` & `<scene>-telemetry.json`: Bảng kiểm toán 5 Cổng định lượng, sự kiện `apexEvent`, bảng dịch chuyển thực thể và chuỗi `simTick / stateHash` từng frame.
-          - `metrics.json`: Tích hợp cả chỉ số trắc quang (`CIE L*`, `ΔL*`, `cornerRetentionRatio`, `brazierLightPoolDeltaL`) lẫn kết quả `animationGates` (`5/5` cổng) và `freezeDiffs`.
-       3. **Quy chuẩn viết kịch bản cảnh mới (`visual-scene-ap2-p1.ts` cho `P1B/P1C/P1D`, `visual-scene-ap2-p2.ts`, `visual-scene-ap2-p3.ts`, `visual-scene-ap2-p4.ts`):**
-          - Khai báo đầy đủ `frameCount: 8 | 12`, `heroFrameIndex` (`4` cho 8F Mẫu A; `9` cho 12F Mẫu B), `stripSchedule: StripKeyframeStep[]` (`F1` bắt buộc `stage: 'windup_hold', stepCount: 0`; chỉ duy nhất frame tại `heroFrameIndex` mang `stage: 'apex'`), `apexEvent: ApexEventSpec`, và `actionRoi: ActionRoiConfig`.
-          - Trong `beforeStep`, **chỉ sử dụng Whitelist Input API** import từ `./visual-scene-helpers` (`triggerFireWeapon`, `triggerReloadVent`, `triggerInteract`, `triggerDash`, `queueStepInput`). Tuyệt đối cấm gán trực tiếp `x, y, vx, vy, hp, timer` hay monkey-patch hàm sync sau `F1` (Cổng 2 `State Integrity Gate` sẽ phát hiện `externalStateMutations > 0` và chặn ngay).
+   - **Tiến độ & Chuẩn Kiểm Định Engine 2.6 (`HARD_ASSERT`) Đang Vận Hành:**
+     - Nhánh `overhaul/v2.0` (`.worktrees/overhaul-v2.0`) đã hoàn tất nghiệm thu **`Phase P0A`**, **`Phase P0B`**, **`Phase P1A`** và vận hành thống nhất trên **Animation & Moment Verification Engine 2.6 (`HARD_ASSERT`)** (`12/12` unit test trong `visual-metrics.test.ts`, `14/14` cảnh strip đạt `5/5` cổng định lượng + `diffPixels = 0`, `traceHashMatched = true`). Khi tiếp tục chiến dịch, bắt đầu ngay từ **`Phase P1B`**.
+     - **Lệnh CLI chuẩn duy nhất để chụp & kiểm định ở mọi Phase:**
+       ```bash
+       pnpm shots -- --phase ap2-<phase> --label after --group ap2-<phase> --verify-freeze
+       ```
+       *(Hoặc `--scenes <scene1,scene2,...> --verify-freeze`).* Lệnh này tự động chụp bộ tạo tác (`.png` / `-unlit.png` trích xuất tại `heroFrameIndex` `★ HERO`, tấm cận cảnh `1:1 Native Pixel` `-roi-1.png` / `-roi-2.png`[, `-roi-3.png`], tấm tổng quan `-strip.png`, `-telemetry-summary.md`, `-telemetry.json`), kiểm tra tất định 2 lần chạy (`diffPixels === 0`, `traceHashMatched === true`), tính chỉ số trắc quang vào `metrics.json` và **tự động thực thi `evaluateAnimationGates(..., 'HARD_ASSERT')`** (fail ngay nếu trượt bất kỳ cổng nào trong 5 cổng).
+     - **Chuẩn khai báo kịch bản cảnh strip trong `visual-scene-ap2-*.ts`:** Khai báo `frameCount: 8 | 12`, `heroFrameIndex` (`4` cho 8F Mẫu A; `9` cho 12F Mẫu B), `stripSchedule: StripKeyframeStep[]` (`F1` luôn là `stage: 'windup_hold', stepCount: 0`; chỉ duy nhất frame tại `heroFrameIndex` mang `stage: 'apex'`), `apexEvent: ApexEventSpec`, `actionRoi: ActionRoiConfig`, và chỉ kích hoạt hành động qua **Whitelist Input API** trong `./visual-scene-helpers` (`triggerFireWeapon`, `triggerReloadVent`, `triggerInteract`, `triggerDash`, `queueStepInput`).
 
 ---
 
@@ -186,7 +177,7 @@ Do đó, dự án sử dụng trực tiếp và mở rộng hạ tầng kiểm c
    - **Controller (bạn):** Lập kế hoạch từng phase, chuẩn bị `task-brief`, điều phối Implementer / Task Reviewer / Visual Reviewer, cập nhật sổ cái ledger & `PROGRESS.md`, chạy lệnh kiểm định ở cổng Phase Gate (`pnpm verify`, `pnpm shots`, `pnpm perf`, `pnpm balance`). **Controller không tự ý viết/sửa code sản phẩm trong phiên chính** — mọi thay đổi code đều đi qua Implementer và được Task Reviewer kiểm tra.
    - **Implementer (`self`):** Tạo mới cho từng task con. Làm việc nghiêm ngặt theo TDD (`RED → GREEN → REFACTOR`). Không tự gọi subagent con.
    - **Task Reviewer (`research` hoặc `self` chỉ đọc diff):** Kiểm tra tính tuân thủ Spec Rev 4, toán học, đồng bộ mạng và giới hạn `< 1000 dòng/file` sau mỗi task.
-   - **Visual Reviewer (`research`, model `pro`):** Đọc trực tiếp file ảnh `.png` / `-strip.png` và `metrics.json`, chấm điểm khách quan theo Rubric 10 tiêu chí.
+   - **Visual Reviewer (`research`, model `pro`):** Đọc trực tiếp `<scene>-telemetry-summary.md`, các tấm cận cảnh `1:1 Native Pixel` (`-roi-1.png`, `-roi-2.png`[, `-roi-3.png`]), `-strip.png`, `.png` và `metrics.json`, trả lời 5 câu hỏi `Stage-Based Audit Questions` và chấm điểm khách quan theo Rubric 10 tiêu chí.
    - **Quy tắc chạy song song:** Chỉ chạy **1 Implementer duy nhất tại một thời điểm** để tránh xung đột ghi file. Cho phép chạy song song các tác vụ chỉ đọc (nghiên cứu file, Task Reviewer, Visual Reviewer).
    - **Chọn Model khi gọi `invoke_subagent`:**
      - Implementer cho task dữ liệu/i18n/hằng số đơn giản: `'flash'` hoặc `'inherit'`.
@@ -408,15 +399,15 @@ $$M_{\text{floor}}(F) = 1 + 0.22 \times (F - 1) \quad (\text{Tầng 1: } 1.00\ti
 | Mã Phase | Tag Git | Tên Phase & Trọng Tâm Triển Khai | Số Task Con | Mục Spec Rev 4 Tham Chiếu | Cổng Kiểm Chứng Đặc Biệt |
 |---|---|---|---:|---|---|
 | **`P0A`** | `ap2-p0a` | **Hạ Tầng Nền, The Purge, Per-Player State & Đồng Bộ Đạn Tất Định 60Hz** | `6 Tasks` | Phần 1 (`1.1–1.3`), Phần 3 (`3.1`), Phần 4 (`4.1`), Phần 7 (`7.1–7.2`) | Unit test 100% + HUD Băng đạn/Nhiệt độ |
-| **`P0B`** | `ap2-p0b` | **Vertical Slice Độ Vui: 3 Archetype Phòng, Vật Lý `Flip Cover [E] + Dash-Kick + Wall-Slam + Ring-Out` & 4 Vũ Khí Đại Diện** | `7 Tasks` | Phần 2 (`2.1–2.3` Biome 1), Phần 3 (`3.2–3.3`), Phần 7 (`7.3`), Phần 8 (`0B`) | **Visual Gate + Playtest Gate 1** |
-| **`P1A`** | `ap2-p1a` | **Kho Vũ Khí Độc Bản Đợt 1 (7 Vũ Khí: Starter, Uncommon & Rare) + VFX/Audio** | `6 Tasks` | Phần 3 (`3.2–3.3`: Vũ khí #2, #4, #6, #7, #8, #10, #11), Phần 7 (`7.3`) | Visual Gate (7 Strip 8-frame vũ khí) |
-| **`P1B`** | `ap2-p1b` | **Kho Vũ Khí Độc Bản Đợt 2 (7 Vũ Khí: Rare, Epic & Legendary) & 3-Bucket Damage Pipeline** | `6 Tasks` | Phần 3 (`3.3`: Vũ khí #12–#18), Phần 4 (`4.6` Toán chống nổ số) | Visual Gate (7 Strip 8-frame) + Property Test Boss `<= 18x` |
-| **`P1C`** | `ap2-p1c` | **Mở Rộng 3 Archetype Phòng Mới & Hệ Sinh Thái Tương Tác Biome 2 (Hầm Băng) + Biome 3 (Lò Rèn)** | `6 Tasks` | Phần 2 (`2.1` Archetype 4–6, `2.3` Biome 2 & 3), Phần 7 (`7.3`) | Visual Gate Map & Props B2/B3 (`metrics.json`) |
-| **`P1D`** | `ap2-p1d` | **Hệ Thống 26 Thẻ Nâng Cấp Cốt Lõi (16 Action Blessings + 10 Character Skill Upgrades)** | `6 Tasks` | Phần 4 (`4.1–4.3`) | Visual Gate Modal Phước lành & Strip Kỹ năng |
-| **`P2A`** | `ap2-p2a` | **Đồ Thị Phòng Động, Phòng Bí Mật Nứt Tường, Đe Rèn Cổ Đại (`6 Core Mutators`) & Phân Rã Súng (`Weapon Salvage`)** | `6 Tasks` | Phần 1 (`1.1` #4–5), Phần 4 (`4.4`), Phần 5 (`5.2`) | Connectivity 1000 seeds + Visual Gate Đe Rèn/Salvage |
-| **`P2B`** | `ap2-p2b` | **Hệ Thống "Khế Ước Tro Tàn" (`1 Tế Đàn / Biome — Full-Biome Trial`) & 6 Di Vật Thức Tỉnh** | `6 Tasks` | Phần 5 (`5.1`) | Visual Gate Tế Đàn, Dây Xích, Đao Phủ & Di Vật |
-| **`P3A`** | `ap2-p3a` | **Đại Tu AI Quái (`Bounded Predictive Lead Aiming`) & 12 Hành Vi Quái Tương Tác Địa Hình** | `6 Tasks` | Phần 6 (`6.1–6.2`) | Visual Gate Tia ngắm đón đầu `0.35s` & AI Props |
-| **`P3B`** | `ap2-p3b` | **Thiết Kế Lại 3 Boss Phá Giáp Trực Quan (`1–2 Bước`), `Boss Supply Drop` & `bossStaggerAccum`** | `6 Tasks` | Phần 2 (`2.2` Boss Stagger/Supply), Phần 6 (`6.3`) | Visual Gate Strip Phá giáp 3 Boss |
+| **`P0B`** | `ap2-p0b` | **Vertical Slice Độ Vui: 3 Archetype Phòng, Vật Lý `Flip Cover [E] + Dash-Kick + Wall-Slam + Ring-Out` & 4 Vũ Khí Đại Diện** | `7 Tasks` | Phần 2 (`2.1–2.3` Biome 1), Phần 3 (`3.2–3.3`), Phần 7 (`7.3`), Phần 8 (`0B`) | **Visual Gate (Engine 2.6 `8/12F` + `1:1 ROI`) + Playtest Gate 1** |
+| **`P1A`** | `ap2-p1a` | **Kho Vũ Khí Độc Bản Đợt 1 (7 Vũ Khí: Starter, Uncommon & Rare) + VFX/Audio** | `6 Tasks` | Phần 3 (`3.2–3.3`: Vũ khí #2, #4, #6, #7, #8, #10, #11), Phần 7 (`7.3`) | Visual Gate (7 Strip `8/12F` Engine 2.6 + `1:1 ROI`) |
+| **`P1B`** | `ap2-p1b` | **Kho Vũ Khí Độc Bản Đợt 2 (7 Vũ Khí: Rare, Epic & Legendary) & 3-Bucket Damage Pipeline** | `6 Tasks` | Phần 3 (`3.3`: Vũ khí #12–#18), Phần 4 (`4.6` Toán chống nổ số) | Visual Gate (7 Strip `8/12F` Engine 2.6 + `1:1 ROI`) + Property Test Boss `<= 18x` |
+| **`P1C`** | `ap2-p1c` | **Mở Rộng 3 Archetype Phòng Mới & Hệ Sinh Thái Tương Tác Biome 2 (Hầm Băng) + Biome 3 (Lò Rèn)** | `6 Tasks` | Phần 2 (`2.1` Archetype 4–6, `2.3` Biome 2 & 3), Phần 7 (`7.3`) | Visual Gate Map & Strip Props B2/B3 (Engine 2.6 + `metrics.json`) |
+| **`P1D`** | `ap2-p1d` | **Hệ Thống 26 Thẻ Nâng Cấp Cốt Lõi (16 Action Blessings + 10 Character Skill Upgrades)** | `6 Tasks` | Phần 4 (`4.1–4.3`) | Visual Gate Modal Phước lành & Strip Kỹ năng (Engine 2.6) |
+| **`P2A`** | `ap2-p2a` | **Đồ Thị Phòng Động, Phòng Bí Mật Nứt Tường, Đe Rèn Cổ Đại (`6 Core Mutators`) & Phân Rã Súng (`Weapon Salvage`)** | `6 Tasks` | Phần 1 (`1.1` #4–5), Phần 4 (`4.4`), Phần 5 (`5.2`) | Connectivity 1000 seeds + Visual Gate Đe Rèn/Salvage (Engine 2.6) |
+| **`P2B`** | `ap2-p2b` | **Hệ Thống "Khế Ước Tro Tàn" (`1 Tế Đàn / Biome — Full-Biome Trial`) & 6 Di Vật Thức Tỉnh** | `6 Tasks` | Phần 5 (`5.1`) | Visual Gate Tế Đàn, Dây Xích, Đao Phủ & Di Vật (Engine 2.6) |
+| **`P3A`** | `ap2-p3a` | **Đại Tu AI Quái (`Bounded Predictive Lead Aiming`) & 12 Hành Vi Quái Tương Tác Địa Hình** | `6 Tasks` | Phần 6 (`6.1–6.2`) | Visual Gate Tia ngắm đón đầu `0.35s` & Strip AI Props (Engine 2.6) |
+| **`P3B`** | `ap2-p3b` | **Thiết Kế Lại 3 Boss Phá Giáp Trực Quan (`1–2 Bước`), `Boss Supply Drop` & `bossStaggerAccum`** | `6 Tasks` | Phần 2 (`2.2` Boss Stagger/Supply), Phần 6 (`6.3`) | Visual Gate Strip Phá giáp 3 Boss (Engine 2.6) |
 | **`P3C`** | `ap2-p3c` | **Nâng Cấp Bot AI Thực Tế (`Human-Like Bot Profile`), Cân Bằng Tự Động (`pnpm balance`) & Playtest Gate 2** | `5 Tasks` | Phần 3 (`3.3` Target DPS), Phần 8 (`Phase 3`) | **`pnpm balance` (30 runs/class) + Playtest Gate 2** |
 | **`P4A`** | `ap2-p4a` | **Mở Rộng Chiều Sâu Đợt 1: 8 Phước Lành Hành Động Nâng Cao & 4 Bản Độ Búa Rèn Mở Rộng** | `5 Tasks` | Phần 4 (`4.2` Phase 4 cards, `4.4` Mutators #7–#10) | Visual Gate Cọc Điện, Quỹ Đạo Hồi Quy, Pháo Ảnh |
 | **`P4B`** | `ap2-p4b` | **Mở Rộng Chiều Sâu Đợt 2: 6 Phước Lành Giao Thoa (`Elemental Duo Boons`) & Đấu Trường Bí Mật 20 Giây** | `5 Tasks` | Phần 4 (`4.5` Duo Boons), Phần 5 (`5.2` Secret 20s) | Visual Gate 6 Duo Boons & Đấu Trường 20s |
@@ -575,7 +566,7 @@ $$M_{\text{floor}}(F) = 1 + 0.22 \times (F - 1) \quad (\text{Tầng 1: } 1.00\ti
        - Vẽ đinh tán cắm & tia hồ quang nối đinh của `rivet_gun`; tia tam giác nguyên tố của `apprentice_staff`; lưỡi kiếm khí bán nguyệt `240px` & tia lóe trắng `Parry Deflect` của `knight_sword`; vòng sóng trắng `Micro-Blank` (`r=56px`) khi lật bàn `[E]`; vệt gió `Dash-Kick`; vệt nứt chấn động + chữ `ĐẬP TƯỜNG!` (`Wall-Slam`) & `RING-OUT!`.
        - Thêm 4 âm thanh tổng hợp ZzFX trong `zzfx.ts`: tiếng *"Ching!"* kim khí trong trẻo khi `Perfect Reload`, tiếng xả hơi áp suất khi `Tactical Vent`, tiếng lật bàn đá nặng, và tiếng va đập chấn động `Wall-Slam`.
 
-- **`Task P0B.6` — Xây Dựng Bộ Cảnh Chụp Kiểm Chứng Hình Ảnh & Strip 8-Frame Cho `Phase P0B` (`tests/e2e/helpers/visual-scene-ap2-p0.ts`):**
+- **`Task P0B.6` — Xây Dựng Bộ Cảnh Chụp Kiểm Chứng Hình Ảnh & Strip `8/12-Frame` Chuẩn Engine 2.6 Cho `Phase P0B` (`tests/e2e/helpers/visual-scene-ap2-p0.ts`):**
   - **Files:** Tạo mới `tests/e2e/helpers/visual-scene-ap2-p0.ts`, đăng ký nhóm cảnh `ap2-p0b` vào `tests/e2e/helpers/visual-scenes.ts` và `tools/run-shots.ts`.
   - **Lưu ý kỹ thuật bắt buộc về `sampleRects` (`floor_center`) cho `tools/visual-metrics.ts`:** Trong `tests/e2e/helpers/visual-scene-helpers.ts:33`, hằng số `ENVIRONMENT_SAMPLE_RECTS` mặc định đặt vùng đo `floor_center` tại `{ x: 832, y: 664, width: 128, height: 96 }` (ngay chính giữa phòng `tx: 15..20`). Với các phòng mà vùng chính giữa là vực sâu `chasm` (`ap2-b1-twin-bridges`) hoặc tường công sự trung tâm (`ap2-b1-central-bastion`), khi định nghĩa scene **bắt buộc phải truyền `sampleRects: ENVIRONMENT_SAMPLE_RECTS.map(...)` ghi đè tọa độ `floor_center` sang vùng sàn đi bộ thông thoáng ở nửa Tây hoặc nửa Đông của phòng** (tương tự cách `b1-poison-swamp` và `b3-lava-surface` trong `visual-scenes.ts:646,712` đang làm) để `visual-metrics.ts` đo đúng độ đồng nhất mặt sàn (`centerDeltaL <= 8`, `contrastWithInkDark >= 22`) mà không đo nhầm vào vực sâu/tường đá.
   - **Danh sách cảnh chụp bắt buộc của `Phase P0B`:**
@@ -591,8 +582,8 @@ $$M_{\text{floor}}(F) = 1 + 0.22 \times (F - 1) \quad (\text{Tầng 1: } 1.00\ti
     10. `ap2-tesla-smart-bounce` (`captureStrip: true`, 8 frame): Nhân vật cầm `tesla_carbine` bắn xuyên qua Bia Chắn / quái đầu tiên, viên đạn chạm tường trong `GAUNTLET_CHOKEPOINT` tự động bẻ góc `Smart Bounce` tìm quái khuất sau góc chữ L.
 
 - **`Task P0B.7` — Visual Gate, Phase Gate `P0B` & Báo Cáo Kiểm Chứng `Playtest Gate 1`:**
-  - Chạy `pnpm shots -- --phase ap2-p0b --label after --group ap2-p0b` và `visual-metrics.ts`.
-  - Triệu hồi Visual Reviewer (`pro`) chấm toàn bộ 10 cảnh và strip chuyển động trên. Sửa triệt để mọi lỗi `blocker`/`major` cho đến khi đạt `≥ 8.0/10`.
+  - Chạy `pnpm shots -- --phase ap2-p0b --label after --group ap2-p0b --verify-freeze` (tự động xuất `.png`, `-roi-*.png`, `-strip.png`, `-telemetry-summary.md`, `metrics.json` và kiểm định `5/5` cổng `HARD_ASSERT`).
+  - Triệu hồi Visual Reviewer (`pro`) đọc trực tiếp `-telemetry-summary.md`, `-roi-*.png`, `-strip.png` và chấm toàn bộ 10 cảnh. Sửa triệt để mọi lỗi `blocker`/`major` cho đến khi đạt `≥ 8.0/10`.
   - Chạy `pnpm verify` (kèm bài test đồng bộ mạng 4P cho `tesla_carbine` Smart Bounce và `knight_sword` Parry Deflect) & `pnpm perf`.
   - Tag `ap2-p0b`, xuất báo cáo **Human Playtest Gate 1** trong `docs/PROGRESS.md` đối chiếu đủ 4 câu hỏi nghiệm thu ở Mục 8 (`Phase 0B`) của Spec Rev 4.
 
@@ -642,11 +633,11 @@ $$M_{\text{floor}}(F) = 1 + 0.22 \times (F - 1) \quad (\text{Tầng 1: } 1.00\ti
 - **`Task P1A.4` — Procedural VFX & Audio Cho 7 Vũ Khí Đợt 1 (`apps/client/src/fx/combat-fx-weapons-v2.ts` & `room-entities-sync.ts`):**
   - Vẽ mũi tên cắm trên thân quái & tia giật rút tên của `hunter_crossbow`; dây gai vươn quất `240px` & nụ gai ký sinh nở bung của `thorn_staff`; chùm phế liệu nóng đỏ & vỏ đạn văng của `scrap_shotgun`; lưỡi gió & lốc xoáy `[R]` của `gale_smg`; vòng nổ trên không `Airburst` của `frag_launcher`; tái sử dụng và nâng cấp `life_blossom` của `seed_gun` và `tetherBeams` + xung kéo `[R]` của `tether_staff`.
 
-- **`Task P1A.5` — Xây Dựng Cảnh Chụp & Strip 8-Frame Cho 7 Vũ Khí Đợt 1 (`tests/e2e/helpers/visual-scene-ap2-p1.ts`):**
-  - Tạo 7 cảnh strip chuyển động 8 frame (`ap2-wep-crossbow-rip`, `ap2-wep-thorn-pull`, `ap2-wep-shotgun-wallslam`, `ap2-wep-gale-vent`, `ap2-wep-frag-airburst`, `ap2-wep-seed-bloom`, `ap2-wep-tether-pull`).
+- **`Task P1A.5` — Xây Dựng Cảnh Chụp & Strip `8/12-Frame` Chuẩn Engine 2.6 Cho 7 Vũ Khí Đợt 1 (`tests/e2e/helpers/visual-scene-ap2-p1.ts`):**
+  - Tạo 7 cảnh strip chuyển động chuẩn Engine 2.6 (`stripSchedule`, `heroFrameIndex`, `apexEvent`, Whitelist Input API, vượt qua `5/5` cổng `HARD_ASSERT`): `ap2-wep-crossbow-rip`, `ap2-wep-thorn-pull`, `ap2-wep-shotgun-wallslam`, `ap2-wep-gale-vent`, `ap2-wep-frag-airburst`, `ap2-wep-seed-bloom`, `ap2-wep-tether-pull`.
 
 - **`Task P1A.6` — Visual Gate & Phase Gate `P1A`:**
-  - Chạy `pnpm shots -- --phase ap2-p1a --label after --group ap2-p1a`, chấm qua Visual Reviewer (`pro` `≥ 8.0/10`), chạy `pnpm verify` & `pnpm perf`. Tag `ap2-p1a`.
+  - Chạy `pnpm shots -- --phase ap2-p1a --label after --group ap2-p1a --verify-freeze`, chấm qua Visual Reviewer (`pro` `≥ 8.0/10` trên `-roi-*.png`, `-strip.png` & `-telemetry-summary.md`), chạy `pnpm verify` & `pnpm perf`. Tag `ap2-p1a`.
 
 ---
 
@@ -703,7 +694,7 @@ $$M_{\text{floor}}(F) = 1 + 0.22 \times (F - 1) \quad (\text{Tầng 1: } 1.00\ti
   - Tạo 7 cảnh strip chuẩn **Engine 2.6** (`stripSchedule` 4 Hồi 8-frame hoặc 3 Nhịp 12-frame cho vũ khí `MELEE_COMBO`, khai báo `heroFrameIndex`, `apexEvent` thật từ `WorldSim`, kích hoạt bằng Whitelist Input API, vượt qua `5/5` cổng `HARD_ASSERT`): `ap2-wep-laser-railgun`, `ap2-wep-cleaver-boomerang`, `ap2-wep-void-implosion`, `ap2-wep-axe-guillotine`, `ap2-wep-solar-supernova`, `ap2-wep-magma-geysers`, `ap2-wep-hammer-thunder`, và cập nhật trang `ArtGalleryScene` hiển thị đúng 18 vũ khí độc bản.
 
 - **`Task P1B.6` — Visual Gate & Phase Gate `P1B`:**
-  - Chạy `pnpm shots -- --phase ap2-p1b --label after --group ap2-p1b`, chấm qua Visual Reviewer (`pro` `≥ 8.0/10`), chạy `pnpm verify` & `pnpm perf`. Tag `ap2-p1b`.
+  - Chạy `pnpm shots -- --phase ap2-p1b --label after --group ap2-p1b --verify-freeze`, chấm qua Visual Reviewer (`pro` `≥ 8.0/10` trên `-roi-*.png`, `-strip.png` & `-telemetry-summary.md`), chạy `pnpm verify` & `pnpm perf`. Tag `ap2-p1b`.
 
 ---
 
@@ -746,12 +737,12 @@ $$M_{\text{floor}}(F) = 1 + 0.22 \times (F - 1) \quad (\text{Tầng 1: } 1.00\ti
   - Vẽ 3 trạng thái `'low' | 'flipped' | 'sliding'` cho `glacial_barricade` (băng pha lê vát cạnh) và `forge_blast_shield` (thép tán đinh viền đồng thau nóng đỏ).
   - Vẽ 3 cọc nhũ băng nhọn đóng xuống sàn, `sliding_ice_block`, `cryo_prism_pillar` (lăng kính phát quang cyan khúc xạ tia), `pneumatic_press` (khung búa máy công nghiệp có vòng cảm biến + piston dập xuống), `slag_crucible` (nồi gang nung xỉ đỏ rực), và đèn mũi tên cảnh báo đảo chiều `1.2s` trên `conveyor`.
 
-- **`Task P1C.5` — Xây Dựng Cảnh Chụp & Strip 8-Frame Cho Biome 2 & Biome 3 (`visual-scene-ap2-p1.ts`):**
-  - Tạo các cảnh chụp tĩnh & strip (`ap2-b2-prism-labyrinth`, `ap2-b2-glacial-kick-spikes` strip, `ap2-b2-prism-refract` strip, `ap2-b3-crossfire-conveyors`, `ap2-b3-pneumatic-press-crush` strip, `ap2-b3-blast-shield-wave` strip, `ap2-crumbling-pillar-ring` strip).
+- **`Task P1C.5` — Xây Dựng Cảnh Chụp & Strip Chuẩn Engine 2.6 Cho Biome 2 & Biome 3 (`visual-scene-ap2-p1.ts`):**
+  - Tạo các cảnh chụp tĩnh & strip chuẩn Engine 2.6 (`stripSchedule`, `heroFrameIndex`, `apexEvent`, Whitelist Input API): `ap2-b2-prism-labyrinth`, `ap2-b2-glacial-kick-spikes` (strip), `ap2-b2-prism-refract` (strip), `ap2-b3-crossfire-conveyors`, `ap2-b3-pneumatic-press-crush` (strip), `ap2-b3-blast-shield-wave` (strip), `ap2-crumbling-pillar-ring` (strip).
   - Đo `metrics.json` cho các phòng mới ở Biome 2 và Biome 3 để đảm bảo giữ nguyên chuẩn Golden Room (`ΔL*` vùng tâm `<= 8`, không vật thể trang trí nào gây nhầm lẫn với prop thật). **Lưu ý:** Với các cảnh có tường chắn so le hoặc búa máy/băng chuyền nằm ngay trung tâm phòng (`ap2-b2-prism-labyrinth`, `ap2-b3-crossfire-conveyors`, `ap2-b3-pneumatic-press-crush`), bắt buộc truyền `sampleRects` tùy chỉnh đặt `floor_center` vào vùng sàn đi bộ thông thoáng để không đo trùng lên tường chắn/búa máy.
 
 - **`Task P1C.6` — Visual Gate & Phase Gate `P1C`:**
-  - Chạy `pnpm shots -- --phase ap2-p1c --label after --group ap2-p1c` + `visual-metrics.ts`, chấm qua Visual Reviewer (`pro` `≥ 8.0/10`), chạy `pnpm verify` & `pnpm perf`. Tag `ap2-p1c`.
+  - Chạy `pnpm shots -- --phase ap2-p1c --label after --group ap2-p1c --verify-freeze`, chấm qua Visual Reviewer (`pro` `≥ 8.0/10` trên `-roi-*.png`, `-strip.png` & `-telemetry-summary.md`), chạy `pnpm verify` & `pnpm perf`. Tag `ap2-p1c`.
 
 ---
 
@@ -803,11 +794,11 @@ $$M_{\text{floor}}(F) = 1 + 0.22 \times (F - 1) \quad (\text{Tầng 1: } 1.00\ti
 - **`Task P1D.4` — Cập Nhật Giao Diện Modal Chọn Phước Lành (`Per-Player`) & VFX Cho 26 Thẻ (`hud-modals-and-debug.ts`, `combat-fx-weapons-v2.ts`, `vi.json`, `en.json`):**
   - Hiển thị rõ Nhóm Phước Lành (`[Chắn Chiến]`, `[Lướt Chiến]`, `[Nhịp Nạp]`, `[Đạn Đạo]`, `[Tuyệt Kỹ Class]`), biểu tượng nguyên tố, mô tả súc tích không tràn khung ở cả tiếng Việt và tiếng Anh, và dải icon Phước lành cá nhân trên HUD.
 
-- **`Task P1D.5` — Xây Dựng Cảnh Chụp Modal Phước Lành & Strip 8-Frame Cho Các Phước Lành Tiêu Biểu (`visual-scene-ap2-p1.ts`):**
-  - Tạo các cảnh `ap2-modal-blessing-vi`, `ap2-modal-blessing-en`, `ap2-blessing-table-rocket` (strip), `ap2-blessing-prism-split` (strip), `ap2-blessing-tediore-chuck` (strip), `ap2-skill-vanguard-prism` (strip), `ap2-skill-elementalist-twin` (strip).
+- **`Task P1D.5` — Xây Dựng Cảnh Chụp Modal Phước Lành & Strip Chuẩn Engine 2.6 Cho Các Phước Lành Tiêu Biểu (`visual-scene-ap2-p1.ts`):**
+  - Tạo các cảnh `ap2-modal-blessing-vi`, `ap2-modal-blessing-en`, `ap2-blessing-table-rocket` (strip Engine 2.6), `ap2-blessing-prism-split` (strip Engine 2.6), `ap2-blessing-tediore-chuck` (strip Engine 2.6), `ap2-skill-vanguard-prism` (strip Engine 2.6), `ap2-skill-elementalist-twin` (strip Engine 2.6).
 
 - **`Task P1D.6` — Visual Gate & Phase Gate `P1D`:**
-  - Chạy `pnpm shots -- --phase ap2-p1d --label after --group ap2-p1d`, chấm qua Visual Reviewer (`pro` `≥ 8.0/10`), chạy `pnpm verify` & `pnpm perf`. Tag `ap2-p1d`.
+  - Chạy `pnpm shots -- --phase ap2-p1d --label after --group ap2-p1d --verify-freeze`, chấm qua Visual Reviewer (`pro` `≥ 8.0/10` trên `-roi-*.png`, `-strip.png` & `-telemetry-summary.md`), chạy `pnpm verify` & `pnpm perf`. Tag `ap2-p1d`.
 
 ---
 
@@ -858,11 +849,11 @@ $$M_{\text{floor}}(F) = 1 + 0.22 \times (F - 1) \quad (\text{Tầng 1: } 1.00\ti
   - Trên prompt tương tác vũ khí dưới đất (ngoài giao tranh), hiển thị dòng phụ `[E] Nhặt · Giữ [X] 0.5s Phân Rã (+15G)` kèm thanh tiến độ điền đầy mượt mà khi người chơi đang giữ phím `[X]`.
   - Bake texture procedural cho **Đe Rèn Cổ Đại (`daedalus_anvil`)** có búa rèn phát quang rune vàng cam và **Tường Nứt Bí Mật (`cracked_secret_wall`)** có khe sáng lấp lánh nhẹ.
 
-- **`Task P2A.5` — Xây Dựng Cảnh Chụp Kiểm Chứng Đe Rèn, Tường Nứt & Phân Rã Súng (`tests/e2e/helpers/visual-scene-ap2-p2.ts`):**
-  - Tạo các cảnh `ap2-treasure-forge-workshop`, `ap2-modal-daedalus-mutator`, `ap2-weapon-salvage-hold` (strip 8 frame giữ `[X]` phân rã súng bung hạt vàng), `ap2-secret-wall-crack-break` (strip 8 frame `Dash-Kick` thùng nổ phá vỡ tường nứt mở phòng Bí Mật).
+- **`Task P2A.5` — Xây Dựng Cảnh Chụp Kiểm Chứng Đe Rèn, Tường Nứt & Phân Rã Súng Chuẩn Engine 2.6 (`tests/e2e/helpers/visual-scene-ap2-p2.ts`):**
+  - Tạo các cảnh `ap2-treasure-forge-workshop`, `ap2-modal-daedalus-mutator`, `ap2-weapon-salvage-hold` (strip Engine 2.6 giữ `[X]` phân rã súng bung hạt vàng), `ap2-secret-wall-crack-break` (strip Engine 2.6 `Dash-Kick` thùng nổ phá vỡ tường nứt mở phòng Bí Mật).
 
 - **`Task P2A.6` — Visual Gate & Phase Gate `P2A`:**
-  - Chạy `pnpm shots -- --phase ap2-p2a --label after --group ap2-p2a`, chấm qua Visual Reviewer (`pro` `≥ 8.0/10`), chạy `pnpm verify` & `pnpm perf`. Tag `ap2-p2a`.
+  - Chạy `pnpm shots -- --phase ap2-p2a --label after --group ap2-p2a --verify-freeze`, chấm qua Visual Reviewer (`pro` `≥ 8.0/10` trên `-roi-*.png`, `-strip.png` & `-telemetry-summary.md`), chạy `pnpm verify` & `pnpm perf`. Tag `ap2-p2a`.
 
 ---
 
@@ -908,11 +899,11 @@ $$M_{\text{floor}}(F) = 1 + 0.22 \times (F - 1) \quad (\text{Tầng 1: } 1.00\ti
   - Thiết kế Modal Tế Đàn Khế Ước Tro Tàn mang phong cách Hắc Ám Trang Trọng (hiển thị rõ 2 nửa trên mỗi thẻ: **Lời Nguyền Suốt Biome [Đỏ]** và **Di Vật Thức Tỉnh Sau Khi Hạ Boss [Vàng Hoàng Kim]**).
   - Vẽ Rig Cutout 2.0 cho `Bóng Ma Đao Phủ (Ashen Executioner)` cầm lưỡi hái lửa đen, dây xích linh hồn `pact_soul_chain` (chuyển sang đỏ nhấp nháy khi căng quá `260px`) và tia laser Huyết Thệ.
 
-- **`Task P2B.5` — Xây Dựng Cảnh Chụp Kiểm Chứng Tế Đàn Khế Ước, Bóng Ma Đao Phủ & Di Vật Thức Tỉnh (`visual-scene-ap2-p2.ts`):**
-  - Tạo các cảnh `ap2-shrine-ashen-altar`, `ap2-modal-ashen-pact-vi`, `ap2-modal-ashen-pact-en`, `ap2-pact-soul-chain-stretch` (strip), `ap2-pact-ashen-executioner` (strip), `ap2-relic-awakening-banner` (strip).
+- **`Task P2B.5` — Xây Dựng Cảnh Chụp Kiểm Chứng Tế Đàn Khế Ước, Bóng Ma Đao Phủ & Di Vật Thức Tỉnh Chuẩn Engine 2.6 (`visual-scene-ap2-p2.ts`):**
+  - Tạo các cảnh `ap2-shrine-ashen-altar`, `ap2-modal-ashen-pact-vi`, `ap2-modal-ashen-pact-en`, `ap2-pact-soul-chain-stretch` (strip Engine 2.6), `ap2-pact-ashen-executioner` (strip Engine 2.6), `ap2-relic-awakening-banner` (strip Engine 2.6).
 
 - **`Task P2B.6` — Visual Gate & Phase Gate `P2B`:**
-  - Chạy `pnpm shots -- --phase ap2-p2b --label after --group ap2-p2b`, chấm qua Visual Reviewer (`pro` `≥ 8.0/10`), chạy `pnpm verify` & `pnpm perf`. Tag `ap2-p2b`.
+  - Chạy `pnpm shots -- --phase ap2-p2b --label after --group ap2-p2b --verify-freeze`, chấm qua Visual Reviewer (`pro` `≥ 8.0/10` trên `-roi-*.png`, `-strip.png` & `-telemetry-summary.md`), chạy `pnpm verify` & `pnpm perf`. Tag `ap2-p2b`.
 
 ---
 
@@ -954,11 +945,11 @@ $$M_{\text{floor}}(F) = 1 + 0.22 \times (F - 1) \quad (\text{Tầng 1: } 1.00\ti
     3. **`dwarf_cannon`:** Bắn đạn cối cầu vồng (`Lobbed Mortar`) vượt qua vật chắn thấp, rơi xuống vòng chỉ thị đỏ trên sàn sau `0.85s`.
     4. **`welder_drone`:** Khi bị bắn hạ sẽ rơi xuống phát nổ **xung EMP (`r=110px`)** làm choáng toàn bộ quái máy móc xung quanh trong `1.5s`.
 
-- **`Task P3A.5` — Xây Dựng Cảnh Chụp & Strip 8-Frame Cho AI Quái Tương Tác Địa Hình (`tests/e2e/helpers/visual-scene-ap2-p3.ts`):**
-  - Tạo các cảnh `ap2-ai-lead-aim-telegraph`, `ap2-ai-boar-pillar-crash` (strip), `ap2-ai-spore-bomber-kick` (strip), `ap2-ai-yeti-iceblock-counter` (strip), `ap2-ai-shielder-shock-arc` (strip), `ap2-ai-dwarf-mortar-lob` (strip).
+- **`Task P3A.5` — Xây Dựng Cảnh Chụp & Strip Chuẩn Engine 2.6 Cho AI Quái Tương Tác Địa Hình (`tests/e2e/helpers/visual-scene-ap2-p3.ts`):**
+  - Tạo các cảnh `ap2-ai-lead-aim-telegraph`, `ap2-ai-boar-pillar-crash` (strip Engine 2.6), `ap2-ai-spore-bomber-kick` (strip Engine 2.6), `ap2-ai-yeti-iceblock-counter` (strip Engine 2.6), `ap2-ai-shielder-shock-arc` (strip Engine 2.6), `ap2-ai-dwarf-mortar-lob` (strip Engine 2.6).
 
 - **`Task P3A.6` — Visual Gate & Phase Gate `P3A`:**
-  - Chạy `pnpm shots -- --phase ap2-p3a --label after --group ap2-p3a`, chấm qua Visual Reviewer (`pro` `≥ 8.0/10`), chạy `pnpm verify` & `pnpm perf`. Tag `ap2-p3a`.
+  - Chạy `pnpm shots -- --phase ap2-p3a --label after --group ap2-p3a --verify-freeze`, chấm qua Visual Reviewer (`pro` `≥ 8.0/10` trên `-roi-*.png`, `-strip.png` & `-telemetry-summary.md`), chạy `pnpm verify` & `pnpm perf`. Tag `ap2-p3a`.
 
 ---
 
@@ -997,12 +988,12 @@ $$M_{\text{floor}}(F) = 1 + 0.22 \times (F - 1) \quad (\text{Tầng 1: } 1.00\ti
     - **Phá Giáp Trực Quan (1 Bước):** Người chơi chỉ cần **`Dash-Kick` bất kỳ Tấm Chắn Thép (`forge_blast_shield`), Lõi Năng Lượng, Bom Lò Than hoặc Nồi Nung Xỉ (`slag_crucible`) nào tông trúng Titan** (hoặc kích hoạt **Búa Máy `pneumatic_press`** dập xuống khi Titan bước qua giữa phòng):
       - Giáp Nhiệt Hạch quá tải phát nổ, gây **`6% MaxHP` sát thương chuẩn** và làm Titan **Choáng Phá Giáp trong `4.0s` (`+40% EnemyVuln`)**!
 
-- **`Task P3B.5` — Giao Diện HUD Boss (Khiên Giáp + Thanh Stagger + Gợi Ý Phá Giáp) & Cảnh Chụp Strip 8-Frame Cho 3 Boss (`visual-scene-ap2-p3.ts`):**
+- **`Task P3B.5` — Giao Diện HUD Boss (Khiên Giáp + Thanh Stagger + Gợi Ý Phá Giáp) & Cảnh Chụp Strip Chuẩn Engine 2.6 Cho 3 Boss (`visual-scene-ap2-p3.ts`):**
   - Trên thanh máu Boss, khi Boss đang bật Vỏ Bào Tử / Khiên Băng / Giáp Nhiệt Hạch, hiển thị lớp khung giáp bọc ngoài kèm dòng gợi ý chiến thuật ngắn gọn (`"SÚT BÀN ĐÁ / BÀO TỬ PHÁ GIÁP!"`, `"LẬT PHIẾN BĂNG CHẶN LASER & SÚT PHÁ KHIÊN!"`, `"SÚT KHIÊN THÉP / LÕI NĂNG LƯỢNG HOẶC DẬP BÚA MÁY!"`).
-  - Tạo 4 cảnh strip 8 frame: `ap2-boss-supply-drop`, `ap2-boss1-armor-break` (strip sút túi bào tử vỡ giáp Mục Vương), `ap2-boss2-armor-break` (strip lật phiến băng chặn laser & sút vỡ khiên Kryssa), `ap2-boss3-armor-break` (strip sút tấm chắn thép / dập búa máy phá giáp Titan).
+  - Tạo 4 cảnh strip chuẩn Engine 2.6: `ap2-boss-supply-drop`, `ap2-boss1-armor-break` (strip sút túi bào tử vỡ giáp Mục Vương), `ap2-boss2-armor-break` (strip lật phiến băng chặn laser & sút vỡ khiên Kryssa), `ap2-boss3-armor-break` (strip sút tấm chắn thép / dập búa máy phá giáp Titan).
 
 - **`Task P3B.6` — Visual Gate & Phase Gate `P3B`:**
-  - Chạy `pnpm shots -- --phase ap2-p3b --label after --group ap2-p3b`, chấm qua Visual Reviewer (`pro` `≥ 8.0/10`), chạy `pnpm verify` & `pnpm perf`. Tag `ap2-p3b`.
+  - Chạy `pnpm shots -- --phase ap2-p3b --label after --group ap2-p3b --verify-freeze`, chấm qua Visual Reviewer (`pro` `≥ 8.0/10` trên `-roi-*.png`, `-strip.png` & `-telemetry-summary.md`), chạy `pnpm verify` & `pnpm perf`. Tag `ap2-p3b`.
 
 ---
 
@@ -1069,12 +1060,12 @@ $$M_{\text{floor}}(F) = 1 + 0.22 \times (F - 1) \quad (\text{Tầng 1: } 1.00\ti
     3. **`mutator_boomerang_core`:** Khi `Perfect Reload / Vent [R]`, phóng lưỡi cưa năng lượng xoay `200px` rồi thu về (`base 32 DMG`).
     4. **`mutator_elemental_infusion`:** Vũ khí đang cầm nhận thêm **Nguyên tố thứ hai từ vũ khí ở ô còn lại** mỗi khi bắn `Finale Shot` hoặc `Overclocked Shot` (giúp tự kích hoạt Phản ứng Nguyên tố bằng 1 khẩu súng!).
 
-- **`Task P4A.4` — Procedural VFX & Cảnh Chụp Strip 8-Frame Cho `Phase P4A` (`combat-fx-weapons-v2.ts` & `visual-scene-ap2-p4.ts`):**
+- **`Task P4A.4` — Procedural VFX & Cảnh Chụp Strip Chuẩn Engine 2.6 Cho `Phase P4A` (`combat-fx-weapons-v2.ts` & `visual-scene-ap2-p4.ts`):**
   - Vẽ Tượng Bóng Sét `dash_thunder_decoy`, 2 Cọc Điện Cao Thế & dây sét `bullet_wall_tether`, đạn vòng cung hồi quy `bullet_orbit_return`, và Bóng Pháo Ảnh `mutator_holo_decoy_gun`.
-  - Tạo các cảnh chụp strip 8 frame: `ap2-p4a-wall-tether-pylons`, `ap2-p4a-orbit-return-bullets`, `ap2-p4a-thunder-decoy-dash`, `ap2-p4a-holo-decoy-mutator`.
+  - Tạo các cảnh chụp strip chuẩn Engine 2.6: `ap2-p4a-wall-tether-pylons`, `ap2-p4a-orbit-return-bullets`, `ap2-p4a-thunder-decoy-dash`, `ap2-p4a-holo-decoy-mutator`.
 
 - **`Task P4A.5` — Visual Gate & Phase Gate `P4A`:**
-  - Chạy `pnpm shots -- --phase ap2-p4a --label after --group ap2-p4a`, chấm qua Visual Reviewer (`pro` `≥ 8.0/10`), chạy `pnpm verify` & `pnpm perf`. Tag `ap2-p4a`.
+  - Chạy `pnpm shots -- --phase ap2-p4a --label after --group ap2-p4a --verify-freeze`, chấm qua Visual Reviewer (`pro` `≥ 8.0/10` trên `-roi-*.png`, `-strip.png` & `-telemetry-summary.md`), chạy `pnpm verify` & `pnpm perf`. Tag `ap2-p4a`.
 
 ---
 
@@ -1106,11 +1097,11 @@ $$M_{\text{floor}}(F) = 1 + 0.22 \times (F - 1) \quad (\text{Tầng 1: } 1.00\ti
   - Vẽ khung thẻ Duo Boon đặc biệt có 2 biểu tượng nguyên tố giao nhau trên Modal chọn Phước lành.
   - Vẽ VFX cho Lốc Xoáy Nước Sôi, 4 Cột Băng Nhọn, Quả Cầu Lửa-Điện nảy tường, và Lưới Hồ Quang Điện nối giữa các tấm Bia Chắn đã lật (`duo_magnetic_bastion_ring`).
 
-- **`Task P4B.4` — Xây Dựng Cảnh Chụp & Strip 8-Frame Cho 6 Duo Boons & Đấu Trường Bí Mật 20s (`visual-scene-ap2-p4.ts`):**
-  - Tạo các cảnh: `ap2-modal-duo-boon-card`, `ap2-duo-magnetic-bastion-ring` (strip), `ap2-duo-superheated-cyclone` (strip), `ap2-duo-plasma-overload-star` (strip), `ap2-secret-arena-20s-trial` (strip).
+- **`Task P4B.4` — Xây Dựng Cảnh Chụp & Strip Chuẩn Engine 2.6 Cho 6 Duo Boons & Đấu Trường Bí Mật 20s (`visual-scene-ap2-p4.ts`):**
+  - Tạo các cảnh: `ap2-modal-duo-boon-card`, `ap2-duo-magnetic-bastion-ring` (strip Engine 2.6), `ap2-duo-superheated-cyclone` (strip Engine 2.6), `ap2-duo-plasma-overload-star` (strip Engine 2.6), `ap2-secret-arena-20s-trial` (strip Engine 2.6).
 
 - **`Task P4B.5` — Visual Gate & Phase Gate `P4B`:**
-  - Chạy `pnpm shots -- --phase ap2-p4b --label after --group ap2-p4b`, chấm qua Visual Reviewer (`pro` `≥ 8.0/10`), chạy `pnpm verify` & `pnpm perf`. Tag `ap2-p4b`.
+  - Chạy `pnpm shots -- --phase ap2-p4b --label after --group ap2-p4b --verify-freeze`, chấm qua Visual Reviewer (`pro` `≥ 8.0/10` trên `-roi-*.png`, `-strip.png` & `-telemetry-summary.md`), chạy `pnpm verify` & `pnpm perf`. Tag `ap2-p4b`.
 
 ---
 
@@ -1120,8 +1111,7 @@ $$M_{\text{floor}}(F) = 1 + 0.22 \times (F - 1) \quad (\text{Tầng 1: } 1.00\ti
 
 #### Danh sách Task con của `Phase P5`:
 - **`Task P5.1` — Chụp Toàn Bộ Danh Mục Cảnh (`v0.2.0` + `Ashen Pact 2.0`) & Tổng Duyệt Holistic Visual Gate (`Model: pro`):**
-  - Chạy `pnpm shots -- --phase ap2-p5 --label final` chụp toàn bộ danh mục cảnh ở Mục `5` (bao gồm cả độ phân giải `1440p`, `2560×1080` ultrawide, `1280×1024`, chất lượng `Low`, ngôn ngữ `vi` và `en`).
-  - Chạy `tools/visual-metrics.ts` trên toàn bộ các cảnh môi trường.
+  - Chạy `pnpm shots -- --phase ap2-p5 --label final --verify-freeze` chụp toàn bộ danh mục cảnh ở Mục `5` (bao gồm cả độ phân giải `1440p`, `2560×1080` ultrawide, `1280×1024`, chất lượng `Low`, ngôn ngữ `vi` và `en`), tự động xuất `metrics.json`, `-roi-*.png`, `-strip.png`, `-telemetry-summary.md` và kiểm định `5/5` cổng `HARD_ASSERT`.
   - Triệu hồi **Holistic Visual Reviewer (`research`, model `pro`)** chấm tổng thể toàn bộ bộ ảnh `final`: yêu cầu **mọi tiêu chí trong Rubric 10 Tiêu Chí (Mục `6`) đều đạt `≥ 8.5 / 10`**, `0 blocker`, `0 major`. Nếu còn bất kỳ điểm nào `< 8.5` hoặc còn lỗi `minor (deferred)` trong các sổ cái ledger từ `P0A` → `P4B`, thực hiện một vòng fix dứt điểm và chụp kiểm tra lại.
 
 - **`Task P5.2` — Kiểm Toán Cân Bằng Cuối Cùng (`pnpm balance`) & Kiểm Toán Hiệu Năng / Soak Test 60Hz 4P (`pnpm perf`):**
@@ -1178,13 +1168,13 @@ Ngoài các cảnh hồi quy nền tảng đã có từ `v0.2.0` (`menu`, `hub-s
    - `ap2-melee-combo3-parry` (12-frame `4+4+4`, `knight_sword` Đòn 3 tại `F10 ★ HERO` phóng Kiếm Khí `240px` + `Parry Deflect` đánh bật 3 viên đạn địch)
    - `ap2-tesla-smart-bounce` (`tesla_carbine` nảy tường thông minh tìm quái sau góc chữ L)
    - 14 strip `8/12-frame` của 14 vũ khí còn lại (`ap2-wep-crossbow-rip`, `ap2-wep-thorn-pull`, `ap2-wep-shotgun-wallslam`, `ap2-wep-gale-vent`, `ap2-wep-frag-airburst`, `ap2-wep-seed-bloom`, `ap2-wep-tether-pull`, `ap2-wep-laser-railgun`, `ap2-wep-cleaver-boomerang`, `ap2-wep-void-implosion`, `ap2-wep-axe-guillotine`, `ap2-wep-solar-supernova`, `ap2-wep-magma-geysers`, `ap2-wep-hammer-thunder`).
-4. **Nhóm Hệ Thống Nâng Cấp, Đe Rèn, Khế Ước Tro Tàn & Phân Rã Súng:**
+4. **Nhóm Hệ Thống Nâng Cấp, Đe Rèn, Khế Ước Tro Tàn & Phân Rã Súng (Chụp tĩnh + `-roi-*.png`, `-strip.png`, `-telemetry-summary.md` chuẩn Engine 2.6 `HARD_ASSERT` cho các cảnh strip):**
    - `ap2-modal-blessing-vi`, `ap2-modal-blessing-en`, `ap2-modal-duo-boon-card`
    - `ap2-treasure-forge-workshop`, `ap2-modal-daedalus-mutator`
    - `ap2-weapon-salvage-hold` (strip giữ `[X]` `0.5s` phân rã súng thành vàng)
    - `ap2-secret-wall-crack-break` (strip phá tường nứt mở phòng Bí Mật) & `ap2-secret-arena-20s-trial`
    - `ap2-shrine-ashen-altar`, `ap2-modal-ashen-pact-vi`, `ap2-modal-ashen-pact-en`, `ap2-pact-soul-chain-stretch` (strip), `ap2-pact-ashen-executioner` (strip), `ap2-relic-awakening-banner` (strip).
-5. **Nhóm AI Quái Đón Đầu & Phá Giáp 1–2 Bước Của 3 Boss (Chụp kèm `-strip.png` 8 khung hình):**
+5. **Nhóm AI Quái Đón Đầu & Phá Giáp 1–2 Bước Của 3 Boss (Chụp kèm `-roi-*.png` `1:1 Native Pixel`, `-strip.png`, `-telemetry-summary.md` theo chuẩn Engine 2.6 `HARD_ASSERT`):**
    - `ap2-ai-lead-aim-telegraph` (Đường chỉ ngắm đỏ cam `0.35s` đón đầu hướng di chuyển)
    - `ap2-ai-boar-pillar-crash`, `ap2-ai-spore-bomber-kick`, `ap2-ai-yeti-iceblock-counter`, `ap2-ai-shielder-shock-arc`
    - `ap2-boss-supply-drop` (Thả tiếp tế Bia Chắn & Đồ Chơi Biome mỗi `18s`)
@@ -1205,7 +1195,7 @@ Mỗi lần chạy Visual Gate, subagent **Visual Reviewer (`research`, model `p
 3. **Thanh `Micro-Bar 32×5px` Dưới Chân Nhân Vật & Phản Hồi Nhịp `[R]` (`Active Reload / Vent Readability`):**
    - Thanh Micro-Bar đặt gọn gàng dưới chân nhân vật (không đè lên nhân vật hay chữ tên đồng đội), **Khung Vàng (`45%–70%`)** của `CLIP_RELOAD` và **Vùng Cam (`65%–95%`)** của `HEAT_VENT` nổi bật sắc nét trên mọi màu sàn Biome 1/2/3; hiệu ứng lóe sáng khi bấm trúng `[R]` rõ ràng; **tuyệt đối không hiện Micro-Bar khi cầm vũ khí cận chiến (`MELEE_COMBO`)**.
 4. **Cảm Giác Lực Va Đập Vật Lý (`Dash-Kick`, `Wall-Slam`, `Chasm Ring-Out` & `Parry Deflect` Strips):**
-   - Trên ảnh strip 8 khung hình, chuỗi chuyển động lật bàn xóa đạn (`Micro-Blank` `r=56px`), sút bàn trượt đi (`Dash-Kick`), quái văng đập tường (`ĐẬP TƯỜNG!`), rơi xuống vực (`RING-OUT!`), và Đòn 3 cận chiến đánh bật đạn địch (`Parry Deflect`) thể hiện rõ quỹ đạo, vệt gió, tia chấn động và popup chữ không chồng chéo.
+   - Trên các tấm cận cảnh `1:1 Native Pixel` (`-roi-1.png`, `-roi-2.png`[, `-roi-3.png`]) và tấm tổng quan `-strip.png` (`8/12` khung hình), chuỗi chuyển động lật bàn xóa đạn (`Micro-Blank` `r=56px`), sút bàn trượt đi (`Dash-Kick`), quái văng đập tường (`ĐẬP TƯỜNG!`), rơi xuống vực (`RING-OUT!`), và Đòn 3 cận chiến đánh bật đạn địch (`Parry Deflect` tại `F10 ★ HERO`) thể hiện rõ quỹ đạo, vệt gió, tia chấn động và popup chữ không chồng chéo.
 5. **Bản Sắc Thị Giác Của 18 Vũ Khí Độc Bản (`Weapon Visual Identity & VFX`):**
    - Mỗi vũ khí trong 18 món đều có hình thái đạn và VFX tuyệt kỹ riêng biệt, đẹp mắt (đinh tán nối hồ quang, dây gai kéo quái, rút mũi tên, tia tam giác, lựu đạn nổ trên không, hố đen hút đạn, đao boomerang, 3 mặt trời xoay quanh, nham cầu phun vòi dung nham, cột sét Mjolnir...) dùng `BlendMode.ADD` trong trẻo.
 6. **Thứ Tự Nổi Bật Thị Giác & Khả Năng Đọc Đạn Địch (`Combat Readability & Bullet Contrast`):**
@@ -1246,6 +1236,6 @@ Mỗi lần chạy Visual Gate, subagent **Visual Reviewer (`research`, model `p
 1. Gọi ngay skill `using-superpowers`, đọc `references/antigravity-tools.md` và thông báo ngắn gọn: *"Đang kích hoạt quy trình Superpowers để thực thi chiến dịch Đại Tu Toàn Diện Ashen Pact 2.0 (Phase P0A → P5)"*.
 2. Thực hiện trọn vẹn phần **Khởi động `0.1`**: đọc tài liệu đặc tả `docs/superpowers/specs/2026-10-26-ashen-pact-2.0-overhaul-design.md`, thiết lập worktree/nhánh `overhaul/v2.0`, chạy baseline `pnpm verify` & `pnpm perf`, cập nhật `docs/PHASES.md`, `docs/PROGRESS.md` và khởi tạo **Task Artifact (`task.md`)** chứa đầy đủ 14 Phase & 82 Task con.
 3. Chạy tuần tự từng Phase từ **`Phase P0A` đến `Phase P5`** theo đúng vòng lặp khép kín ở Mục `0.2`:
-   `writing-plans` $\to$ `subagent-driven-development` (TDD) $\to$ **Visual Gate (`pnpm shots` + `visual-metrics` + Visual Reviewer `pro`)** $\to$ **Phase Gate (`verification-before-completion`: `pnpm verify` + `pnpm perf`)** $\to$ Commit & `git tag ap2-<phase>`.
-4. Sau mỗi Phase, in báo cáo tổng kết ngắn gọn, rõ ràng (đường dẫn plan, các task con đã hoàn tất, output mới chạy của `pnpm verify` & `pnpm perf`, đường dẫn cặp ảnh `before → after` & `-strip.png`, bảng điểm 10 tiêu chí của Visual Reviewer, các `Ruling:` đã ra) rồi **lập tức chuyển sang Phase tiếp theo**.
+   `writing-plans` $\to$ `subagent-driven-development` (TDD) $\to$ **Visual Gate (`pnpm shots -- ... --verify-freeze` + `evaluateAnimationGates HARD_ASSERT` + Visual Reviewer `pro`)** $\to$ **Phase Gate (`verification-before-completion`: `pnpm verify` + `pnpm perf`)** $\to$ Commit & `git tag ap2-<phase>`.
+4. Sau mỗi Phase, in báo cáo tổng kết ngắn gọn, rõ ràng (đường dẫn plan, các task con đã hoàn tất, output mới chạy của `pnpm verify` & `pnpm perf`, đường dẫn bộ ảnh `before → after`, `-roi-*.png`, `-strip.png` & `-telemetry-summary.md`, bảng điểm 10 tiêu chí của Visual Reviewer, các `Ruling:` đã ra) rồi **lập tức chuyển sang Phase tiếp theo**.
 5. Kết thúc ở cuối `Phase P5` bằng tổng duyệt toàn nhánh (`requesting-code-review`, model `pro`) và trình menu 3 lựa chọn của `finishing-a-development-branch`.
