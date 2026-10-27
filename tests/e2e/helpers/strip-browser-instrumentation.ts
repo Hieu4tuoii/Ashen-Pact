@@ -78,6 +78,10 @@ export async function installSceneStripInstrumentation(page: Page): Promise<void
       projectiles: Array<Record<string, unknown>>;
       magneticRivets: Array<Record<string, unknown>>;
       summons: Array<Record<string, unknown>>;
+      flameFissures?: Array<Record<string, unknown>>;
+      solarFireZones?: Array<Record<string, unknown>>;
+      magmaTrails?: Array<Record<string, unknown>>;
+      lightningPillars?: Array<Record<string, unknown>>;
       consumeEvents?: () => Array<Record<string, unknown>>;
     };
 
@@ -105,7 +109,8 @@ export async function installSceneStripInstrumentation(page: Page): Promise<void
       const pPart = [
         num(p.x), num(p.y), num(p.vx), num(p.vy), num(p.kbVx), num(p.kbVy),
         num(p.hp), num(p.armor), num(p.clipAmmo), num(p.reloadTimer), num(p.reloadDuration),
-        num(p.weaponHeat), num(p.overheatLockTimer), num(p.meleeComboStep), num(p.dashTimer), num(p.aimAngle),
+        num(p.weaponHeat), num(p.overheatLockTimer), num(p.meleeComboStep), num(p.fireCooldownTimer), num(p.dashTimer), num(p.aimAngle),
+        num(p.solarOrbitAngle),
       ].join(',');
       const ePart = (sim.enemies ?? [])
         .filter((e) => Number(e.hp ?? 0) > 0)
@@ -124,7 +129,13 @@ export async function installSceneStripInstrumentation(page: Page): Promise<void
         .filter((s) => Number(s.hp ?? 0) > 0 && Number(s.ttlSec ?? 0) > 0)
         .map((s) => [s.id, num(s.x), num(s.y), num(s.hp), num(s.ttlSec)].join(':'))
         .join(';');
-      return `P[${pPart}]|E[${ePart}]|PR[${prPart}]|B[${bPart}]|R[${rPart}]|S[${sPart}]`;
+      const hPart = [
+        (sim.flameFissures ?? []).map((f) => `${String(f.id)}:${num(f.ttlSec)}`).join(','),
+        (sim.solarFireZones ?? []).map((z) => `${String(z.id)}:${num(z.ttlSec)}`).join(','),
+        (sim.magmaTrails ?? []).map((m) => `${String(m.id)}:${num(m.ttlSec)}`).join(','),
+        (sim.lightningPillars ?? []).map((l) => `${String(l.id)}:${num(l.ttlSec)}`).join(','),
+      ].join('/');
+      return `P[${pPart}]|E[${ePart}]|PR[${prPart}]|B[${bPart}]|R[${rPart}]|S[${sPart}]|H[${hPart}]`;
     };
 
     const collectKeyframeTrace: BrowserStripHarnessState['collectKeyframeTrace'] = (

@@ -6,14 +6,15 @@ import {
   type SimProjectileState,
   type SimSummonState,
   type SimTetherBeamState,
+  type WorldSim,
 } from '@ashen-pact/shared';
 import type Phaser from 'phaser';
 import { hexToNum, PALETTE } from '../art/palette.js';
 import { getWeaponV2OverlayState } from './combat-fx-weapons-v2.js';
 
 /**
- * Syncs Batch-1 weapon room entities (enemies with stuckArrows/parasiticThorns,
- * active projectiles, life_blossom summons, and tetherBeams) into the scene overlay state.
+ * Syncs Batch-1 & Batch-2 weapon room entities (enemies with stuckArrows/parasiticThorns,
+ * active projectiles, life_blossom summons, tetherBeams, and live WorldSim reference) into the scene overlay state.
  */
 export function syncBatch1WeaponRoomEntities(
   sceneKey: object,
@@ -25,6 +26,7 @@ export function syncBatch1WeaponRoomEntities(
   },
 ): void {
   const state = getWeaponV2OverlayState(sceneKey);
+  state.syncedSim = sim as WorldSim;
   state.syncedEnemies = sim.enemies;
   state.syncedProjectiles = sim.projectiles;
   state.syncedSummons = sim.summons;

@@ -118,6 +118,15 @@ export const SCENE_GROUPS: Readonly<Record<string, readonly string[]>> = {
     'ap2-wep-seed-bloom',
     'ap2-wep-tether-pull',
   ],
+  'ap2-p1b': [
+    'ap2-wep-laser-railgun',
+    'ap2-wep-cleaver-boomerang',
+    'ap2-wep-void-implosion',
+    'ap2-wep-axe-guillotine',
+    'ap2-wep-solar-supernova',
+    'ap2-wep-magma-geysers',
+    'ap2-wep-hammer-thunder',
+  ],
 };
 
 export interface ShotsCliOptions {

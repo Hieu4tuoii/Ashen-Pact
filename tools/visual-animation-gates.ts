@@ -113,7 +113,7 @@ export interface AnimationGateThresholds {
 }
 
 export const DEFAULT_ANIMATION_GATE_THRESHOLDS: AnimationGateThresholds = {
-  maxInSimStepWorldPx: 48,
+  maxInSimStepWorldPx: 96,
   minChangedScreenPixelsCombat: 120,
   minChangedScreenPixelsMicrobar: 24,
   minActorContainmentRatio: 0.85,
@@ -184,6 +184,13 @@ const PHYSICS_DISPLACEMENT_SCENE_PATTERNS = [
   'tether-pull',
   'shotgun-wallslam',
   'gale-vent',
+  'laser-railgun',
+  'cleaver-boomerang',
+  'void-implosion',
+  'axe-guillotine',
+  'solar-supernova',
+  'magma-geysers',
+  'hammer-thunder',
 ];
 
 export function isPhysicsDisplacementScene(sceneId: string): boolean {

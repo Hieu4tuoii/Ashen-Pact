@@ -7,6 +7,7 @@ import {
   type SimProjectileState,
   type SimSummonState,
   type SimTetherBeamState,
+  type WorldSim,
 } from '@ashen-pact/shared';
 import type Phaser from 'phaser';
 import type { SfxId } from '../audio/zzfx.js';
@@ -20,8 +21,14 @@ import {
   drawBatch1ActiveProjectiles,
   drawBatch1TransientShape,
 } from './combat-fx-weapons-p1a.js';
+import {
+  type Batch2WeaponVfxKind,
+  drawBatch2ActiveWeaponOverlays,
+  drawBatch2TransientShape,
+} from './combat-fx-weapons-p1b.js';
 
 export * from './combat-fx-weapons-p1a.js';
+export * from './combat-fx-weapons-p1b.js';
 
 export interface MagneticRivetPoint {
   id: number;
@@ -175,7 +182,8 @@ export interface TransientWeaponV2Shape {
     | 'wall_cracks'
     | 'ring_out_vortex'
     | 'totem_lane'
-    | Batch1WeaponVfxKind;
+    | Batch1WeaponVfxKind
+    | Batch2WeaponVfxKind;
   x: number;
   y: number;
   x2?: number;
@@ -194,6 +202,7 @@ export interface WeaponV2OverlayState {
   shapes: TransientWeaponV2Shape[];
   lastRivetSnapshot: MagneticRivetPoint[];
   lastTetherSnapshot: SimTetherBeamState[];
+  syncedSim?: WorldSim;
   syncedEnemies: ReadonlyArray<SimEnemyState>;
   syncedProjectiles: ReadonlyArray<SimProjectileState>;
   syncedSummons: ReadonlyArray<SimSummonState>;
@@ -519,6 +528,7 @@ export function updateAndDrawWeaponV2Overlays(
 
   // 1b. Draw active Batch-1 projectile procedural overlays & Gale SMG spin-up wind ribbons
   drawBatch1ActiveProjectiles(g, state.syncedProjectiles, player, clockSec);
+  drawBatch2ActiveWeaponOverlays(g, state.syncedSim, player, clockSec);
 
   // 2. Update & draw transient weapon v2 / tactical shapes
   for (let i = state.shapes.length - 1; i >= 0; i -= 1) {
@@ -532,6 +542,9 @@ export function updateAndDrawWeaponV2Overlays(
     const alpha = clamp(1 - progress, 0.05, 1);
 
     if (drawBatch1TransientShape(g, s, progress, alpha, clockSec, i)) {
+      continue;
+    }
+    if (drawBatch2TransientShape(g, s, progress, alpha, clockSec, i)) {
       continue;
     }
 

@@ -13,7 +13,15 @@ export type WeaponV2SfxId =
   | 'gale_cyclone_vent'
   | 'frag_airburst'
   | 'seed_harvest_bloom'
-  | 'tether_em_yank';
+  | 'tether_em_yank'
+  | 'focus_laser_hum'
+  | 'focus_laser_railgun'
+  | 'void_implosion'
+  | 'emerald_boomerang'
+  | 'berserker_guillotine'
+  | 'solar_supernova'
+  | 'magma_geyser'
+  | 'thunder_pillar';
 
 export const WEAPON_V2_SFX_PRESETS: Record<WeaponV2SfxId, ZzfxPreset> = {
   perfect_reload: {
@@ -143,6 +151,86 @@ export const WEAPON_V2_SFX_PRESETS: Record<WeaponV2SfxId, ZzfxPreset> = {
     attackSec: 0.003,
     decaySec: 0.26,
     noise: 0.52,
+    wave: 'sawtooth',
+    minIntervalMs: 55,
+  },
+  focus_laser_hum: {
+    volume: 0.24,
+    freq: 580,
+    slide: 140,
+    attackSec: 0.004,
+    decaySec: 0.14,
+    noise: 0.18,
+    wave: 'sawtooth',
+    minIntervalMs: 65,
+  },
+  focus_laser_railgun: {
+    volume: 0.38,
+    freq: 920,
+    slide: -640,
+    attackSec: 0.002,
+    decaySec: 0.32,
+    noise: 0.62,
+    wave: 'sawtooth',
+    minIntervalMs: 55,
+  },
+  void_implosion: {
+    volume: 0.38,
+    freq: 210,
+    slide: -140,
+    attackSec: 0.004,
+    decaySec: 0.34,
+    noise: 0.72,
+    wave: 'square',
+    minIntervalMs: 55,
+  },
+  emerald_boomerang: {
+    volume: 0.32,
+    freq: 480,
+    slide: 260,
+    attackSec: 0.004,
+    decaySec: 0.22,
+    noise: 0.34,
+    wave: 'triangle',
+    minIntervalMs: 45,
+  },
+  berserker_guillotine: {
+    volume: 0.39,
+    freq: 145,
+    slide: -85,
+    attackSec: 0.002,
+    decaySec: 0.32,
+    noise: 0.76,
+    wave: 'sawtooth',
+    minIntervalMs: 55,
+  },
+  solar_supernova: {
+    volume: 0.4,
+    freq: 680,
+    slide: -420,
+    attackSec: 0.003,
+    decaySec: 0.36,
+    noise: 0.68,
+    wave: 'sawtooth',
+    minIntervalMs: 60,
+  },
+  magma_geyser: {
+    volume: 0.37,
+    freq: 165,
+    slide: -95,
+    attackSec: 0.003,
+    decaySec: 0.3,
+    noise: 0.74,
+    wave: 'sawtooth',
+    minIntervalMs: 50,
+  },
+  thunder_pillar: {
+    volume: 0.4,
+    freq: 780,
+    slide: -560,
+    attackSec: 0.002,
+    decaySec: 0.34,
+    noise: 0.78,
     wave: 'sawtooth',
     minIntervalMs: 55,
   },

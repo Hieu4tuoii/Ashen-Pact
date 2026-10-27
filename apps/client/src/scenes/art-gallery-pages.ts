@@ -231,16 +231,22 @@ export function buildPage3WeaponsAndProps(
   this.textObjects.push(wepHeader);
   parent.add(wepHeader);
 
-  const cardW = 109;
+  const cardW = 146;
   const cardH = 68;
   ALL_WEAPON_IDS.forEach((wId, idx) => {
     const wDef = WEAPONS[wId];
     if (!wDef) return;
-    const col = idx % 8;
-    const row = Math.floor(idx / 8);
-    const wx = 26 + col * (cardW + 5);
+    const col = idx % 6;
+    const row = Math.floor(idx / 6);
+    const wx = 26 + col * (cardW + 6);
     const wy = 104 + row * (cardH + 5);
     const rarityHex = WEAPON_RARITY_COLORS[wDef.rarity];
+    const cadLabel =
+      wDef.cadenceKind === 'CLIP_RELOAD'
+        ? 'NẠP'
+        : wDef.cadenceKind === 'HEAT_VENT'
+          ? 'NHIỆT'
+          : 'COMBO';
 
     const cg = this.add.graphics();
     cg.fillStyle(hexToNum(PALETTE.INK_DEEP), 0.9);
@@ -269,7 +275,7 @@ export function buildPage3WeaponsAndProps(
     parent.add(wName);
 
     const wMeta = this.add
-      .text(wx + cardW / 2, wy + 59, `ST ${wDef.damage} · TĐ ${wDef.fireRate}/s`, {
+      .text(wx + cardW / 2, wy + 59, `${cadLabel} · ST ${wDef.damage} · ${wDef.fireRate}/s`, {
         fontFamily: '"Be Vietnam Pro", sans-serif',
         fontSize: '8px',
         color: PALETTE.SILVER_BRIGHT,
