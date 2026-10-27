@@ -195,6 +195,7 @@ const PHYSICS_DISPLACEMENT_SCENE_PATTERNS = [
   'pneumatic-press',
   'blast-shield',
   'crumbling-pillar',
+  'prism-refract',
 ];
 
 export function isPhysicsDisplacementScene(sceneId: string): boolean {

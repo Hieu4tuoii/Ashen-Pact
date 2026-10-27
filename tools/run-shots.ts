@@ -127,6 +127,15 @@ export const SCENE_GROUPS: Readonly<Record<string, readonly string[]>> = {
     'ap2-wep-magma-geysers',
     'ap2-wep-hammer-thunder',
   ],
+  'ap2-p1c': [
+    'ap2-b2-prism-labyrinth',
+    'ap2-b2-glacial-kick-spikes',
+    'ap2-b2-prism-refract',
+    'ap2-b3-crossfire-conveyors',
+    'ap2-b3-pneumatic-press-crush',
+    'ap2-b3-blast-shield-wave',
+    'ap2-crumbling-pillar-ring',
+  ],
 };
 
 export interface ShotsCliOptions {
