@@ -8,6 +8,7 @@ import {
 import { P10A_SCENE_GROUP } from './visual-scene-p10a-helpers.js';
 import { P10B_SCENE_GROUP } from './visual-scene-p10b-helpers.js';
 import { P11_SCENE_IDS } from './visual-scene-p11-helpers.js';
+import { AP2_P0B_SCENE_IDS } from './visual-scene-ap2-p0.js';
 
 export const SCENE_GROUPS: Readonly<Record<string, readonly string[]>> = {
   p9a: [
@@ -55,6 +56,7 @@ export const SCENE_GROUPS: Readonly<Record<string, readonly string[]>> = {
   p10a: P10A_SCENE_GROUP,
   p10b: P10B_SCENE_GROUP,
   p11: P11_SCENE_IDS,
+  'ap2-p0b': AP2_P0B_SCENE_IDS,
 };
 
 export async function setupHubCoop2pExpandedScene(page: Page): Promise<void> {

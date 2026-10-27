@@ -263,7 +263,9 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
       }
       case 'prop_destroyed': {
         if (ev.propKind === 'rotten_totem_pillar' && !isStress) {
-          spawnTotemCollapseLaneVfx(this, this.fx, ev.x, ev.y, sim.player.aimAngle);
+          const fallenAngle =
+            sim.props.find((p) => p.id === ev.propId)?.fallAngle ?? sim.player.aimAngle;
+          spawnTotemCollapseLaneVfx(this, this.fx, ev.x, ev.y, fallenAngle);
         }
         this.fx.spawnPropBreakBurst(ev.propKind, ev.x, ev.y);
         if (ev.propKind !== 'explosive_barrel' && allowStressSfx) {

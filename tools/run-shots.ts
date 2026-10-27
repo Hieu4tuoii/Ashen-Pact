@@ -97,6 +97,18 @@ export const SCENE_GROUPS: Readonly<Record<string, readonly string[]>> = {
     'b2-combat',
     'b3-combat',
   ],
+  'ap2-p0b': [
+    'ap2-b1-twin-bridges',
+    'ap2-b1-gauntlet-chokepoint',
+    'ap2-b1-central-bastion',
+    'ap2-flip-cover-microblank',
+    'ap2-dash-kick-wall-slam',
+    'ap2-chasm-ring-out',
+    'ap2-microbar-perfect-reload',
+    'ap2-heat-vent-staff',
+    'ap2-melee-combo3-parry',
+    'ap2-tesla-smart-bounce',
+  ],
 };
 
 export interface ShotsCliOptions {

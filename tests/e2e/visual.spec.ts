@@ -137,7 +137,7 @@ test.describe('@visual Deterministic Visual Scene Catalog', () => {
     const shotDir = path.resolve(
       process.cwd(),
       'docs/screenshots',
-      `polish-${phase}`,
+      phase.startsWith('ap2-') || phase.startsWith('polish-') || phase.startsWith('phase-') ? phase : `polish-${phase}`,
       label,
     );
     fs.mkdirSync(shotDir, { recursive: true });

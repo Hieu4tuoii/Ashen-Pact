@@ -40,8 +40,10 @@ import {
 import { P10A_VISUAL_SCENES } from './visual-scene-p10a-helpers.js';
 import { P10B_VISUAL_SCENES } from './visual-scene-p10b-helpers.js';
 import { P11_SCENE_IDS, P11_VISUAL_SCENES } from './visual-scene-p11-helpers.js';
+import { AP2_P0B_SCENE_IDS, AP2_P0B_VISUAL_SCENES } from './visual-scene-ap2-p0.js';
 
 export {
+  AP2_P0B_SCENE_IDS,
   DEFAULT_FREEZE_MASK_RECTS,
   ENVIRONMENT_SAMPLE_RECTS,
   HUB_SAMPLE_RECTS,
@@ -929,4 +931,7 @@ export const VISUAL_SCENES: readonly VisualSceneDef[] = [
 
   // 13. Phase P11 Boss Phase Transition, Enrage & Wave Overlap Scenes
   ...P11_VISUAL_SCENES,
+
+  // 14. Phase AP2-P0B Vertical Slice Tactical Loop Scenes
+  ...AP2_P0B_VISUAL_SCENES,
 ];

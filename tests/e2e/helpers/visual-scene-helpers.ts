@@ -8,6 +8,7 @@ export interface VisualSceneDef {
   expectedScene: 'MenuScene' | 'GameScene' | 'ArtGalleryScene';
   viewport?: { width: number; height: number };
   captureUnlit?: boolean;
+  includeUnlit?: boolean;
   captureStrip?: boolean;
   stripFramesPerStep?: number;
   grayscaleFrom?: string;
@@ -636,6 +637,7 @@ export function makeScene(
       VisualSceneDef,
       | 'viewport'
       | 'captureUnlit'
+      | 'includeUnlit'
       | 'captureStrip'
       | 'stripFramesPerStep'
       | 'grayscaleFrom'
@@ -643,6 +645,7 @@ export function makeScene(
     >
   >,
 ): VisualSceneDef {
+  const unlit = opts?.captureUnlit ?? opts?.includeUnlit;
   return {
     id,
     description,
@@ -650,6 +653,7 @@ export function makeScene(
     expectedScene,
     freezeMaskRects: DEFAULT_FREEZE_MASK_RECTS,
     ...opts,
+    ...(unlit !== undefined ? { captureUnlit: unlit, includeUnlit: unlit } : {}),
     setup,
   };
 }
