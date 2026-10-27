@@ -24,6 +24,7 @@ import { updateMagneticRivets } from './sim-weapon-specials.js';
 
 export * from './world-sim-types.js';
 export * from './world-sim-events.js';
+export * from './sim-blessings.js';
 export * from './sim-tactical-physics.js';
 export * from './sim-weapon-cadence.js';
 export * from './sim-weapon-specials.js';

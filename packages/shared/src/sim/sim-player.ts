@@ -187,6 +187,10 @@ export function updateSinglePlayerStateImpl(this: WorldSim,
     const nextSeedIcd = (p.seedGunHealIcdTimer ?? 0) - dtSec;
     p.seedGunHealIcdTimer = nextSeedIcd < 1e-6 ? 0 : nextSeedIcd;
   }
+  if ((p.tableTechRocketIcdTimer ?? 0) > 0) {
+    const nextRocketIcd = (p.tableTechRocketIcdTimer ?? 0) - dtSec;
+    p.tableTechRocketIcdTimer = nextRocketIcd < 1e-6 ? 0 : nextRocketIcd;
+  }
   updatePlayerWeaponCadence(this, p, justPressed, inp.buttons, dtSec);
 
   // Engineer passive: allies within 4 tiles (128u) regenerate armor 15% faster!

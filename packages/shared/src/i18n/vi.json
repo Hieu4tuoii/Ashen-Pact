@@ -434,6 +434,70 @@
     }
   },
   "buffs": {
+    "table_tech_rocket": {
+      "name": "Chắn Chiến Hỏa Tiễn",
+      "desc": "Lật Chắn [E] hoặc Đập Tường phóng 2 Tên Lửa Tầm Nhiệt (26 ST Lửa/quả). Dash-Kick biến tấm chắn thành Đầu Đạn Phản Lực nổ 60 ST Lửa (r=104px)."
+    },
+    "table_tech_blank_nova": {
+      "name": "Chắn Chiến Hàn Băng Xung",
+      "desc": "Lật Chắn [E] hoặc kích nổ Đập Tường mở rộng vòng xóa đạn thành r=160px và Đóng Băng 1.5s mọi kẻ địch trong vùng."
+    },
+    "table_tech_prism_split": {
+      "name": "Chắn Chiến Lăng Kính",
+      "desc": "Tấm chắn bạn lật tỏa hào quang xanh: đạn gốc bắn xuyên qua tách làm 2 tia (±12°, +20% ST, tẩm Sét). Đập Tường phóng 2 tia lăng kính Sét."
+    },
+    "table_tech_billiard_master": {
+      "name": "Cao Thủ Bi-a Chiến Trường",
+      "desc": "Tấm chắn, thùng nổ và khối băng do bạn sút đi tăng +35% vận tốc, nảy qua tường tối đa 3 lần như bi-a và tăng +40% ST Đập Tường."
+    },
+    "dash_tidal_ram": {
+      "name": "Cú Lướt Sóng Ngầm Đập Tường",
+      "desc": "Lướt (Dash) bọc sóng băng húc văng quái trên đường (20 ST Băng, KB=280). Nếu quái bị húc Đập Tường, hồi 60% hồi chiêu Lướt (ICD 1.2s)."
+    },
+    "dash_venom_wake": {
+      "name": "Vệt Lướt Thủy Ngân Độc",
+      "desc": "Lướt để lại dải Đầm Thủy Ngân Độc (3.5s). Nếu lướt cắt qua quái hoặc Dash-Kick, lập tức Nạp 50% Băng đạn / Giảm 40% Nhiệt."
+    },
+    "dash_flame_shackle": {
+      "name": "Xích Lửa Quật Tường",
+      "desc": "Khi Lướt qua gần kẻ địch (trong 88px), phóng sợi xích lửa kéo giật con quái đập thẳng vào tường hoặc Bia Chắn gần nhất (24 ST Lửa + Đập Tường)."
+    },
+    "dash_reload_acrobat": {
+      "name": "Nhào Lộn Trợ Nạp",
+      "desc": "Lướt khi đang Nạp đạn hoặc có Nhiệt >= 50% tua nhanh 40% tiến độ nạp / hạ 35% Nhiệt và mở rộng Khung Vàng [R] kế tiếp gấp rưỡi (35%–80%)."
+    },
+    "reload_tediore_chuck": {
+      "name": "Băng Đạn Quăng Nổ",
+      "desc": "Khi Perfect Reload / Tactical Vent [R] hoặc Đòn 3 Cận chiến trúng đích, ném vỏ băng đạn / lõi nhiệt về con trỏ, nổ (18 + 4 × đạn đã bắn) ST Lửa."
+    },
+    "reload_frost_nova": {
+      "name": "Vòng Hàn Khí Thay Đạn",
+      "desc": "Perfect Reload / Tactical Vent [R] hoặc Đòn 3 Cận chiến trúng đích phóng vòng băng (r=110px, 22 ST Băng), áp 2 tầng Lạnh và xóa đạn địch sát người."
+    },
+    "reload_magnet_vortex": {
+      "name": "Xung Từ Trường Gom Quái",
+      "desc": "Perfect Reload / Tactical Vent [R] hoặc Đòn 3 Cận chiến trúng đích bắn mỏ neo từ trường về trước 140px, hút gom quái xung quanh chụm lại trong 0.8s."
+    },
+    "reload_repulsor_shock": {
+      "name": "Xung Chấn Đẩy Lùi Đập Tường",
+      "desc": "Perfect Reload / Tactical Vent [R] hoặc Đòn 3 Cận chiến trúng đích phóng sóng xung kích nón 140° (r=165px), hất văng quái dính nguyên tố Đập Tường."
+    },
+    "bullet_split_bounce": {
+      "name": "Đạn Phân Thân Nảy Tường",
+      "desc": "Đạn nhận +1 lần nảy tường. Khi đạn gốc chạm tường hoặc Bia Chắn lần đầu, tách đôi thành 2 viên đạn con (mỗi viên gây 70% ST gốc) bay góc chữ V."
+    },
+    "bullet_ricochet_boom": {
+      "name": "Đạn Nảy Nổ Địa Chấn",
+      "desc": "Mỗi khi đạn nảy qua tường hoặc vật chắn, tại điểm va chạm nổ Xung Lửa (24 ST × procCoeff, r=64px, KB=200) hất văng quái đứng gần tường."
+    },
+    "bullet_heavy_pinball": {
+      "name": "Đạn Bi Sắt Đẩy Lùi",
+      "desc": "Đạn và đòn đánh tăng +50% Lực Đẩy Lùi. Kẻ địch bị Đập Tường nảy bật ngược lại, va vào quái khác sẽ làm cả hai cùng Choáng 0.8s."
+    },
+    "bullet_coop_arc_relay": {
+      "name": "Trạm Tiếp Sóng Đồng Minh",
+      "desc": "Khi đạn hoặc nhát chém đi ngang qua Đồng Đội, Summon hoặc Bia Chắn Đã Lật (trong 56px), thực thể đó phóng tia Sét (20 ST × procCoeff) vào quái gần nhất."
+    },
     "vanguard_bastion_prism": {
       "name": "Nâng Cấp: Pháo Đài Phản Xạ",
       "desc": "Tường Khiên Hồng Ngọc bao bọc toàn diện 360° quanh Thiết Vệ và tăng sát thương phản kích."

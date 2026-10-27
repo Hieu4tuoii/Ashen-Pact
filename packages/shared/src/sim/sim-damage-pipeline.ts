@@ -1,6 +1,9 @@
+import { scaleBlessingDamage } from '../data/blessings.js';
 import { clamp } from '../math/vec2.js';
 import type { BulletVolleySpawnEvent, SimProjectileState } from './world-sim-types.js';
 import type { WorldSim } from './world-sim.js';
+
+export { scaleBlessingDamage };
 
 export const MAX_SPLIT_GENERATION = 1 as const;
 export const MAX_PELLETS_PER_TRIGGER = 9 as const;
@@ -194,11 +197,6 @@ export function evaluateThreeBucketDamageBreakdown(
 
 export function computeThreeBucketDamage(params: ThreeBucketDamageParams): number {
   return evaluateThreeBucketDamageBreakdown(params).finalDamage;
-}
-
-export function scaleBlessingDamage(baseDmg: number, globalFloor: number): number {
-  const floor = Math.max(1, Math.round(Number.isFinite(globalFloor) ? globalFloor : 1));
-  return Math.max(1, Math.round(baseDmg * (1 + 0.22 * (floor - 1))));
 }
 
 /**

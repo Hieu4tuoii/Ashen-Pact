@@ -434,6 +434,70 @@
     }
   },
   "buffs": {
+    "table_tech_rocket": {
+      "name": "Rocket Barricade",
+      "desc": "Flipping Cover [E] or Wall-Slamming fires 2 Homing Rockets (26 Fire DMG each). Dash-Kicking a barricade launches a 620 px/s Rocket Payload exploding for 60 Fire DMG (r=104px)."
+    },
+    "table_tech_blank_nova": {
+      "name": "Frost Blank Nova",
+      "desc": "Flipping Cover [E] or triggering a Wall-Slam expands the bullet-clearing pulse to r=160px and Freezes all enemies in range for 1.5s."
+    },
+    "table_tech_prism_split": {
+      "name": "Prism Barricade",
+      "desc": "Barricades you flip radiate a prism aura: primary bullets fired through split into 2 Shock rays (±12°, +20% Additive DMG). Wall-Slams fire 2 Shock prism rays."
+    },
+    "table_tech_billiard_master": {
+      "name": "Battlefield Billiard Master",
+      "desc": "Barricades, barrels, and ice blocks you kick gain +35% speed, ricochet off walls up to 3 times, and deal +40% Wall-Slam damage (+1 extra Boss Stagger)."
+    },
+    "dash_tidal_ram": {
+      "name": "Tidal Wall-Ram Dash",
+      "desc": "Dashing shrouds you in a Frost wave that rams foes (20 Ice DMG, KB=280). Triggering a Wall-Slam refunds 60% Dash cooldown (1.2s ICD)."
+    },
+    "dash_venom_wake": {
+      "name": "Venom Mercury Wake",
+      "desc": "Dashing leaves a 3.5s Venom Wake. Dashing through an enemy or Dash-Kicking a prop immediately reloads 50% clip ammo or vents 40% Heat."
+    },
+    "dash_flame_shackle": {
+      "name": "Flame Wall-Shackle",
+      "desc": "Dashing near an enemy (within 88px) lashes a flame chain that yanks it into the nearest wall or barricade (24 Fire DMG + instant Wall-Slam)."
+    },
+    "dash_reload_acrobat": {
+      "name": "Acrobatic Reload Dash",
+      "desc": "Dashing while reloading or at >= 50% Heat advances reload by 40% / cools 35% Heat and widens the next [R] Perfect Reload window to 35%–80%."
+    },
+    "reload_tediore_chuck": {
+      "name": "Volatile Magazine Chuck",
+      "desc": "On Perfect Reload, Tactical Vent [R], or 3rd Melee hit/parry, hurls a volatile magazine toward the cursor exploding for (18 + 4 × rounds spent) Fire DMG."
+    },
+    "reload_frost_nova": {
+      "name": "Reload Frost Nova",
+      "desc": "On Perfect Reload, Tactical Vent [R], or 3rd Melee hit/parry, pulses a Frost Nova (r=110px, 22 Ice DMG) applying 2 Chill stacks and clearing nearby bullets."
+    },
+    "reload_magnet_vortex": {
+      "name": "Magnetic Reload Vortex",
+      "desc": "On Perfect Reload, Tactical Vent [R], or 3rd Melee hit/parry, fires a magnetic anchor 140px ahead that pulls surrounding enemies together for 0.8s."
+    },
+    "reload_repulsor_shock": {
+      "name": "Repulsor Shockwave",
+      "desc": "On Perfect Reload, Tactical Vent [R], or 3rd Melee hit/parry, unleashes a 140° repulsor cone (r=165px) blasting status-afflicted foes into walls (KB=260)."
+    },
+    "bullet_split_bounce": {
+      "name": "Split-Bounce Rounds",
+      "desc": "Projectiles gain +1 wall bounce. On their first wall or barricade bounce, primary projectiles split into 2 child rounds (70% DMG each) in a V-pattern."
+    },
+    "bullet_ricochet_boom": {
+      "name": "Seismic Ricochet Rounds",
+      "desc": "Whenever a projectile bounces off a wall or barricade, it triggers a Seismic Fire Blast (24 DMG × procCoeff, r=64px, KB=200) knocking nearby foes away."
+    },
+    "bullet_heavy_pinball": {
+      "name": "Heavy Pinball Rounds",
+      "desc": "Attacks gain +50% Knockback. Enemies Wall-Slammed ricochet backward like pinballs, stunning both enemies for 0.8s if they collide with another foe."
+    },
+    "bullet_coop_arc_relay": {
+      "name": "Co-op Arc Relay",
+      "desc": "When your shots or swings pass within 56px of an Ally, Summon, or Flipped Barricade, that entity zaps the nearest enemy with a Lightning Arc (20 DMG × procCoeff)."
+    },
     "vanguard_bastion_prism": {
       "name": "Upgrade: Bastion Prism",
       "desc": "Ruby Shield Wall surrounds Vanguard in a full 360° dome and boosts counter damage."

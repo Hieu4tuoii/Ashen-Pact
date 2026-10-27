@@ -210,14 +210,30 @@ export type AshenRelicId =
   | 'relic_executioner_scythe'
   | 'relic_ancient_geometry_eye';
 
+export type BlessingGroup =
+  | 'table_tech'
+  | 'dash_tech'
+  | 'reload_tech'
+  | 'bullet_mod'
+  | 'skill_upgrade';
+
 export interface BuffDef {
   id: BlessingId;
   nameVi: string;
   nameEn: string;
   descriptionVi: string;
+  descriptionEn?: string;
   category: 'general' | 'skill_upgrade';
+  blessingGroup?: BlessingGroup;
+  element?: ElementType;
   characterId?: CharacterId;
   accentColor: string;
+}
+
+export interface BlessingDef extends BuffDef {
+  descriptionEn: string;
+  blessingGroup: BlessingGroup;
+  element: ElementType;
 }
 
 export interface EnemyStatsDef {

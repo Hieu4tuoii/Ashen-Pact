@@ -651,7 +651,16 @@ export function tryFireActiveWeaponImpl(
   } else if (w.id === 'tesla_carbine') {
     shotFlags |= SHOT_FLAG.DYNAMIC_BOUNCE;
     bounceCount = w.bounceCount + (p.bonusBounceCurrentClip ?? 0);
-  } else if (w.id === 'frag_launcher') {
+  }
+  if (
+    p.blessingIds.includes('table_tech_prism_split') ||
+    p.blessingIds.includes('bullet_split_bounce') ||
+    p.blessingIds.includes('bullet_orbit_return') ||
+    this.props.some((pr) => pr.hp > 0 && (pr.kind === 'cryo_prism_pillar' || pr.prismAuraActive))
+  ) {
+    shotFlags |= SHOT_FLAG.DYNAMIC_BOUNCE;
+  }
+  if (w.id === 'frag_launcher') {
     explosionRadius = FRAG_LAUNCHER_MAIN_BLAST_RADIUS;
   } else if (w.id === 'void_staff' && isFinaleShot) {
     additiveDmgBonus = Math.max(0, additiveDmgBonus - 0.5);

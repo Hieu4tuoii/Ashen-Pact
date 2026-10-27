@@ -155,6 +155,10 @@ export interface SimPropState {
   hitEnemyIds?: number[];
   fallAngle?: number;
   microBlankTimer?: number;
+  microBlankRadius?: number;
+  flippedByPlayerId?: number;
+  prismAuraActive?: boolean;
+  rocketCharged?: boolean;
   bouncesRemaining?: number;
   ttlSec?: number;
   iceSpeedBoostApplied?: boolean;
@@ -499,6 +503,8 @@ export interface SimPlayerState {
   pollenSpeedBoostTimer: number;
   seedGunHealIcdTimer?: number;
   seedGunRoomHealsUsed?: number;
+  tableTechRocketIcdTimer?: number;
+  lastTableTechSlamTick?: number;
   // Ashen Pact 2.0 Per-Player Build State
   blessingIds: BlessingId[];
   weaponMutators: Record<number, WeaponMutatorId[]>;

@@ -6,6 +6,14 @@ import {
   getConveyorVelocityAtWorld,
 } from './arena-room-archetypes.js';
 import {
+  applyFlipCoverTableTechBlessings,
+  applyKickPropTableTechBlessings,
+  detonateRocketChargedBarricade,
+  TABLE_TECH_BILLIARD_SLAM_DMG_MULT,
+  triggerBossStaggerBurst,
+  triggerTableTechOnWallSlamOrStagger,
+} from './sim-blessings.js';
+import {
   applyForgeBlastShieldFireWave,
   BIOME2_ICE_INERTIA_MULT,
   BIOME3_HEAT_GAIN_MULT,
@@ -258,6 +266,7 @@ export function flipCoverProp(sim: WorldSim, prop: SimPropState, actor: SimPlaye
   prop.hp = flippedHp; prop.maxHp = flippedHp; prop.microBlankTimer = FLIP_COVER_MICRO_BLANK_DURATION_SEC;
 
   const bulletsCleared = clearEnemyProjectilesAroundProp(sim, prop.x, prop.y, FLIP_COVER_MICRO_BLANK_RADIUS);
+  const { blankRadius, extraBulletsCleared } = applyFlipCoverTableTechBlessings(sim, prop, actor);
 
   for (const e of sim.enemies) {
     if (e.hp <= 0) continue;
@@ -277,7 +286,7 @@ export function flipCoverProp(sim: WorldSim, prop: SimPropState, actor: SimPlaye
 
   sim.events.push({
     kind: 'cover_flipped', propId: prop.id, playerId: actor.id, x: prop.x, y: prop.y,
-    radius: FLIP_COVER_MICRO_BLANK_RADIUS, bulletsCleared,
+    radius: blankRadius, bulletsCleared: bulletsCleared + extraBulletsCleared,
   });
   return true;
 }
@@ -293,7 +302,8 @@ export function kickProp(sim: WorldSim, prop: SimPropState, actor: SimPlayerStat
   const onIce =
     sim.map.getSurfaceAtWorld(prop.x, prop.y) === 'ice' ||
     sim.map.getSurfaceAtWorld(actor.x, actor.y) === 'ice';
-  const speed = onIce ? baseSpeed * BIOME2_ICE_INERTIA_MULT : baseSpeed;
+  if (prop.kind === 'sliding_ice_block' && prop.bouncesRemaining === undefined) prop.bouncesRemaining = 1;
+  const speed = applyKickPropTableTechBlessings(sim, prop, actor, baseSpeed, onIce);
 
   if (prop.kind === 'slag_crucible') {
     const vx = Math.cos(slideAngle) * speed;
@@ -307,7 +317,6 @@ export function kickProp(sim: WorldSim, prop: SimPropState, actor: SimPlayerStat
   prop.vx = Math.cos(slideAngle) * speed; prop.vy = Math.sin(slideAngle) * speed;
   prop.iceSpeedBoostApplied = onIce;
   prop.slideOwnerPlayerId = actor.id; prop.hitEnemyIds = [];
-  if (prop.kind === 'sliding_ice_block' && prop.bouncesRemaining === undefined) prop.bouncesRemaining = 1;
 
   sim.events.push({ kind: 'prop_kicked', propId: prop.id, playerId: actor.id, x: prop.x, y: prop.y, vx: prop.vx, vy: prop.vy });
   return true;
@@ -408,6 +417,10 @@ function pointToSegmentDist(px: number, py: number, x1: number, y1: number, x2: 
 }
 
 function destroyTacticalProp(sim: WorldSim, prop: SimPropState): void {
+  if (prop.rocketCharged) {
+    detonateRocketChargedBarricade(sim, prop, prop.slideOwnerPlayerId ?? sim.player.id);
+    return;
+  }
   if (prop.kind === 'volatile_spore_pod') {
     detonateVolatileSporePod(sim, prop);
     return;
@@ -443,7 +456,12 @@ export function updateSlidingPropsImpl(this: WorldSim, dtSec: number): void {
 
     if ((prop.microBlankTimer ?? 0) > 0 && prop.coverState === 'flipped') {
       prop.microBlankTimer = Math.max(0, (prop.microBlankTimer ?? 0) - dtSec);
-      clearEnemyProjectilesAroundProp(this, prop.x, prop.y, FLIP_COVER_MICRO_BLANK_RADIUS);
+      clearEnemyProjectilesAroundProp(
+        this,
+        prop.x,
+        prop.y,
+        prop.microBlankRadius ?? FLIP_COVER_MICRO_BLANK_RADIUS,
+      );
     }
 
     if (prop.coverState !== 'sliding') continue;
@@ -491,6 +509,13 @@ export function updateSlidingPropsImpl(this: WorldSim, dtSec: number): void {
         if (!e.isBoss && e.hp > 0) {
           e.aiState = 'stunned';
           e.stateTimer = Math.max(e.stateTimer, SLIDING_PROP_ENEMY_STUN_SEC);
+        }
+        if (prop.rocketCharged) {
+          prop.x = e.x;
+          prop.y = e.y;
+          detonateRocketChargedBarricade(this, prop, ownerId);
+          detonatedOnEnemy = true;
+          break;
         }
         if (prop.kind === 'volatile_spore_pod') {
           prop.x = e.x;
@@ -562,11 +587,14 @@ export function triggerEnemyWallSlam(sim: WorldSim, e: SimEnemyState, hitProp?: 
         : 0;
 
   e.wallSlamCooldownTimer = e.isBoss ? 2.5 : WALL_SLAM_COOLDOWN_SEC;
-  const slamDmg = computeWallSlamDamage(e, sim.currentFloor);
   const attackerId = e.lastHitPlayerId ?? sim.player.id;
+  const attacker = sim.getPlayerById(attackerId) ?? sim.player;
+  const hasBilliardMaster = attacker.blessingIds.includes('table_tech_billiard_master');
+  const rawSlamDmg = computeWallSlamDamage(e, sim.currentFloor);
+  const slamDmg = hasBilliardMaster ? Math.round(rawSlamDmg * TABLE_TECH_BILLIARD_SLAM_DMG_MULT) : rawSlamDmg;
 
   if (e.isBoss) {
-    e.bossStaggerAccum = (e.bossStaggerAccum ?? 0) + 1;
+    e.bossStaggerAccum = (e.bossStaggerAccum ?? 0) + (hasBilliardMaster ? 2 : 1);
   } else {
     e.stunTimer = Math.max(e.stunTimer ?? 0, WALL_SLAM_STUN_SEC);
     e.aiState = 'stunned'; e.stateTimer = Math.max(e.stateTimer, WALL_SLAM_STUN_SEC);
@@ -590,6 +618,10 @@ export function triggerEnemyWallSlam(sim: WorldSim, e: SimEnemyState, hitProp?: 
 
   sim.events.push({ kind: 'wall_slam', enemyId: e.id, x: e.x, y: e.y, damage: slamDmg, shattered });
   triggerBiome2WallSlamCryoPulse(sim, e, attackerId);
+  triggerTableTechOnWallSlamOrStagger(sim, attacker, e.x, e.y, shattered ? e.id : undefined, e.id);
+  if (e.isBoss && (e.bossStaggerAccum ?? 0) >= 100 && e.hp > 0) {
+    triggerBossStaggerBurst(sim, e, attackerId);
+  }
   if (shattered && e.hp > 0) {
     sim.triggerElementalReaction(e, 'shatter', Math.max(18, Math.round(slamDmg * 1.35)), e.lastElementOwnerId || attackerId, attackerId);
   }

@@ -1,3 +1,4 @@
+import { BLESSINGS, BLESSING_LIST } from './blessings.js';
 import type { BuffDef, EliteModifier, EnemyStatsDef } from './types.js';
 
 export const ENEMIES: Record<string, EnemyStatsDef> = {
@@ -389,108 +390,9 @@ export const ELITE_MODIFIER_LABELS_VI: Record<EliteModifier, string> = {
   vengeful: 'Tinh Anh · Báo Oán',
 };
 
-export const FLOOR_BUFFS: Record<string, BuffDef> = {
-  vanguard_bastion_prism: {
-    id: 'vanguard_bastion_prism',
-    nameVi: 'Nâng Cấp: Pháo Đài Phản Xạ',
-    nameEn: 'Bastion Prism',
-    descriptionVi:
-      'Tường Khiên Hồng Ngọc bao bọc toàn diện 360° quanh Thiết Vệ và tăng sát thương phản kích.',
-    category: 'skill_upgrade',
-    characterId: 'vanguard',
-    accentColor: '#F97316',
-  },
-  vanguard_charge: {
-    id: 'vanguard_charge',
-    nameVi: 'Nâng Cấp: Xung Phong Khiên',
-    nameEn: 'Shield Charge',
-    descriptionVi:
-      'Tái kích hoạt Tường Khiên sẽ lao mạnh về phía trước, hất văng và gây sát thương lớn cho quái.',
-    category: 'skill_upgrade',
-    characterId: 'vanguard',
-    accentColor: '#84CC16',
-  },
-  ranger_arrow_volley: {
-    id: 'ranger_arrow_volley',
-    nameVi: 'Nâng Cấp: Mưa Tên',
-    nameEn: 'Arrow Volley',
-    descriptionVi:
-      'Mũi Tên Săn Mồi tách thành 5 mũi tên hình quạt xuyên thấu, đánh dấu nhiều mục tiêu cùng lúc.',
-    category: 'skill_upgrade',
-    characterId: 'ranger',
-    accentColor: '#10B981',
-  },
-  ranger_prey_chain: {
-    id: 'ranger_prey_chain',
-    nameVi: 'Nâng Cấp: Chuỗi Con Mồi',
-    nameEn: 'Prey Chain',
-    descriptionVi:
-      '30% sát thương gây lên mục tiêu bị đánh dấu sẽ tự động lan sang các mục tiêu bị đánh dấu khác.',
-    category: 'skill_upgrade',
-    characterId: 'ranger',
-    accentColor: '#34D399',
-  },
-  elementalist_vortex: {
-    id: 'elementalist_vortex',
-    nameVi: 'Nâng Cấp: Hố Đen Nguyên Tố',
-    nameEn: 'Elemental Vortex',
-    descriptionVi: 'Vùng Cầu Nguyên Tố tạo lực hút kéo mọi quái vật xung quanh về tâm vùng nổ.',
-    category: 'skill_upgrade',
-    characterId: 'elementalist',
-    accentColor: '#60A5FA',
-  },
-  elementalist_twin_orbit: {
-    id: 'elementalist_twin_orbit',
-    nameVi: 'Nâng Cấp: Song Tinh Cắt Không Gian',
-    nameEn: 'Twin Orbit',
-    descriptionVi:
-      'Vùng Cầu Nguyên Tố mang đồng thời cả 2 nguyên tố hiện tại và kế tiếp, kích hoạt phản ứng ngay lập tức.',
-    category: 'skill_upgrade',
-    characterId: 'elementalist',
-    accentColor: '#C084FC',
-  },
-  druid_poison_roots: {
-    id: 'druid_poison_roots',
-    nameVi: 'Nâng Cấp: Rễ Gai Độc',
-    nameEn: 'Poison Roots',
-    descriptionVi:
-      'Rễ của Cây Thiêng quất sát thương định kỳ và áp trạng thái Độc lên mọi quái vật trong vùng.',
-    category: 'skill_upgrade',
-    characterId: 'druid',
-    accentColor: '#4ADE80',
-  },
-  druid_sacred_grove: {
-    id: 'druid_sacred_grove',
-    nameVi: 'Nâng Cấp: Rừng Thiêng',
-    nameEn: 'Sacred Grove',
-    descriptionVi:
-      'Mỗi lần dùng kỹ năng sẽ trồng đồng thời 2 Cây Thiêng tạo thành trận địa hồi phục và trói chân.',
-    category: 'skill_upgrade',
-    characterId: 'druid',
-    accentColor: '#2DD4BF',
-  },
-  engineer_twin_turrets: {
-    id: 'engineer_twin_turrets',
-    nameVi: 'Nâng Cấp: Trụ Kép',
-    nameEn: 'Twin Turrets',
-    descriptionVi: 'Cho phép duy trì tối đa 2 Trụ Tesla hoạt động song song trên chiến trường.',
-    category: 'skill_upgrade',
-    characterId: 'engineer',
-    accentColor: '#F59E0B',
-  },
-  engineer_self_destruct: {
-    id: 'engineer_self_destruct',
-    nameVi: 'Nâng Cấp: Tự Hủy Quá Tải',
-    nameEn: 'Overload Self-Destruct',
-    descriptionVi:
-      'Khi hết thời gian tồn tại hoặc bị phá hủy, Trụ Tesla phát nổ lớn gây sát thương diện rộng.',
-    category: 'skill_upgrade',
-    characterId: 'engineer',
-    accentColor: '#EF4444',
-  },
-};
+export const FLOOR_BUFFS: Record<string, BuffDef> = BLESSINGS;
 
-export const FLOOR_BUFF_LIST: readonly BuffDef[] = Object.values(FLOOR_BUFFS);
+export const FLOOR_BUFF_LIST: readonly BuffDef[] = BLESSING_LIST;
 
 export const ELEMENTAL_REACTIONS: Record<
   import('./types.js').ElementalReactionId,

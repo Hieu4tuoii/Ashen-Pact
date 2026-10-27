@@ -3,6 +3,7 @@ import { WEAPONS } from '../data/weapons.js';
 import { angleDiff, circleVsCircle, distance } from '../math/vec2.js';
 import { SHOT_FLAG, TILE_SIZE } from '../protocol/messages.js';
 import { clampBounceCount, clampPelletsPerTrigger } from './sim-damage-pipeline.js';
+import { refractProjectileThroughPrismBarricade, updateTableTechRocketProjectilesInFlight } from './sim-blessings.js';
 import { spawnSeedGunLifeBlossomImpl, triggerLauncherProjectileExplosionImpl } from './sim-player.js';
 import { refractProjectileThroughCryoPrism } from './sim-tactical-physics-p1c.js';
 import {
@@ -167,6 +168,7 @@ export function updateProjectilesImpl(this: WorldSim, dtSec: number): void {
       continue;
     }
 
+    updateTableTechRocketProjectilesInFlight(this, b, dtSec);
     b.x += b.vx * dtSec;
     b.y += b.vy * dtSec;
     if (updateLegendaryProjectileInFlight(this, b, dtSec)) continue;
@@ -290,6 +292,10 @@ export function updateProjectilesImpl(this: WorldSim, dtSec: number): void {
         }
         if (prop.blocksEnemyProjectiles && b.team === 'player') {
           if (circleVsCircle(b, prop)) {
+            if (refractProjectileThroughPrismBarricade(this, b, prop) && b.ttlSec <= 0) {
+              hitProp = true;
+              break;
+            }
             b.passedThroughCoverOrPrism = true;
           }
           continue;
@@ -298,7 +304,7 @@ export function updateProjectilesImpl(this: WorldSim, dtSec: number): void {
           b.team === 'enemy' &&
           prop.coverState === 'flipped' &&
           (prop.microBlankTimer ?? 0) > 0 &&
-          distance(b.x, b.y, prop.x, prop.y) <= 56 + b.radius
+          distance(b.x, b.y, prop.x, prop.y) <= (prop.microBlankRadius ?? 56) + b.radius
         ) {
           b.ttlSec = 0;
           hitProp = true;
@@ -748,16 +754,19 @@ export function stepClientProjectilesCosmeticImpl(this: WorldSim, dtSec: number)
           continue;
         }
         if (!prop.destructible || prop.coverState === 'sliding') continue;
-        if (prop.blocksEnemyProjectiles && b.team === 'player') continue;
+        if (prop.blocksEnemyProjectiles && b.team === 'player') {
+          if (prop.prismAuraActive && circleVsCircle(b, prop) && ((b.shotFlags ?? 0) & SHOT_FLAG.DYNAMIC_BOUNCE) !== 0) {
+            b.vx = 0; b.vy = 0; b.awaitingServerRedirectTimer = 0.12; hitProp = true; break;
+          }
+          continue;
+        }
         if (
           b.team === 'enemy' &&
           prop.coverState === 'flipped' &&
           (prop.microBlankTimer ?? 0) > 0 &&
-          distance(b.x, b.y, prop.x, prop.y) <= 56 + b.radius
+          distance(b.x, b.y, prop.x, prop.y) <= (prop.microBlankRadius ?? 56) + b.radius
         ) {
-          b.ttlSec = 0;
-          hitProp = true;
-          break;
+          b.ttlSec = 0; hitProp = true; break;
         }
         if (circleVsCircle(b, prop)) {
           if (((b.shotFlags ?? 0) & SHOT_FLAG.DYNAMIC_BOUNCE) !== 0) {
@@ -911,56 +920,32 @@ export function acquireProjectileImpl(this: WorldSim,
   const resolvedAngle = init.angle ?? Math.atan2(init.vy ?? 0, init.vx ?? 0);
   const pooled = this.projectilePool.pop();
   if (pooled) {
-    pooled.id = init.id;
-    pooled.ownerId = init.ownerId;
-    pooled.team = init.team;
+    pooled.id = init.id; pooled.ownerId = init.ownerId; pooled.team = init.team;
     pooled.weaponId = init.weaponId ?? 'rivet_gun';
-    pooled.prevX = init.x;
-    pooled.prevY = init.y;
-    pooled.x = init.x;
-    pooled.y = init.y;
-    pooled.vx = init.vx;
-    pooled.vy = init.vy;
-    pooled.angle = resolvedAngle;
-    pooled.radius = init.radius;
-    pooled.damage = init.damage;
-    pooled.isCrit = init.isCrit ?? false;
-    pooled.knockback = init.knockback ?? 0;
-    pooled.pierceRemaining = resolvedPierce;
-    pooled.bounceRemaining = resolvedBounce;
-    pooled.ttlSec = resolvedTtl;
-    pooled.element = init.element ?? 'none';
-    pooled.amplifiedByShield = init.amplifiedByShield ?? false;
-    pooled.shotFlags = init.shotFlags ?? 0;
-    pooled.splitGeneration = init.splitGeneration ?? 0;
+    pooled.prevX = init.x; pooled.prevY = init.y; pooled.x = init.x; pooled.y = init.y;
+    pooled.vx = init.vx; pooled.vy = init.vy; pooled.angle = resolvedAngle;
+    pooled.radius = init.radius; pooled.damage = init.damage; pooled.isCrit = init.isCrit ?? false;
+    pooled.knockback = init.knockback ?? 0; pooled.pierceRemaining = resolvedPierce;
+    pooled.bounceRemaining = resolvedBounce; pooled.ttlSec = resolvedTtl;
+    pooled.element = init.element ?? 'none'; pooled.amplifiedByShield = init.amplifiedByShield ?? false;
+    pooled.shotFlags = init.shotFlags ?? 0; pooled.splitGeneration = init.splitGeneration ?? 0;
     pooled.prismBonusAdd = init.prismBonusAdd ?? 0;
     pooled.awaitingServerRedirectTimer = init.awaitingServerRedirectTimer ?? 0;
-    pooled.imbuedByZone = init.imbuedByZone;
-    pooled.imbuedElement = init.imbuedElement;
-    pooled.imbuedSecondaryElement = init.imbuedSecondaryElement;
-    pooled.imbuedOwnerId = init.imbuedOwnerId;
+    pooled.imbuedByZone = init.imbuedByZone; pooled.imbuedElement = init.imbuedElement;
+    pooled.imbuedSecondaryElement = init.imbuedSecondaryElement; pooled.imbuedOwnerId = init.imbuedOwnerId;
     pooled.explosionRadius = init.explosionRadius;
     pooled.passedThroughCoverOrPrism = init.passedThroughCoverOrPrism;
-    pooled.parryDeflected = init.parryDeflected;
-    pooled.guaranteedElementalProc = init.guaranteedElementalProc;
-    pooled.finaleResolved = false;
-    pooled.originX = init.originX;
-    pooled.originY = init.originY;
-    pooled.armedForAirburst = init.armedForAirburst;
-    pooled.airburstBypassShield = init.airburstBypassShield;
-    pooled.parentExplosionId = init.parentExplosionId;
-    pooled.swallowedBullets = init.swallowedBullets ?? 0;
-    pooled.voidOrbFlightTicks = init.voidOrbFlightTicks ?? 0;
-    pooled.voidPulseTimer = init.voidPulseTimer ?? 0;
+    pooled.parryDeflected = init.parryDeflected; pooled.guaranteedElementalProc = init.guaranteedElementalProc;
+    pooled.finaleResolved = false; pooled.originX = init.originX; pooled.originY = init.originY;
+    pooled.armedForAirburst = init.armedForAirburst; pooled.airburstBypassShield = init.airburstBypassShield;
+    pooled.parentExplosionId = init.parentExplosionId; pooled.swallowedBullets = init.swallowedBullets ?? 0;
+    pooled.voidOrbFlightTicks = init.voidOrbFlightTicks ?? 0; pooled.voidPulseTimer = init.voidPulseTimer ?? 0;
     pooled.armedForReleaseImplosion = init.armedForReleaseImplosion ?? false;
     pooled.firedWhileHoldingFire = init.firedWhileHoldingFire ?? false;
-    pooled.convergeTargetX = init.convergeTargetX;
-    pooled.convergeTargetY = init.convergeTargetY;
-    pooled.solarRayIndex = init.solarRayIndex;
-    pooled.solarConvergeBurstTriggered = false;
+    pooled.convergeTargetX = init.convergeTargetX; pooled.convergeTargetY = init.convergeTargetY;
+    pooled.solarRayIndex = init.solarRayIndex; pooled.solarConvergeBurstTriggered = false;
     pooled.hasExplicitAimTarget = init.hasExplicitAimTarget;
-    pooled.trailLastX = init.originX ?? init.x;
-    pooled.trailLastY = init.originY ?? init.y;
+    pooled.trailLastX = init.originX ?? init.x; pooled.trailLastY = init.originY ?? init.y;
     pooled.hitEntityIds.length = 0;
     return pooled;
   }
