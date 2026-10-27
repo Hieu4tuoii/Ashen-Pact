@@ -480,6 +480,56 @@ export type SimEvent =
       width: number;
       damage: number;
       alertTextVi: string;
+    }
+  | {
+      kind: 'solar_converge_burst';
+      playerId: number;
+      x: number;
+      y: number;
+      radius: number;
+      damage: number;
+      rayIndex?: number;
+    }
+  | {
+      kind: 'solar_supernova';
+      playerId: number;
+      x: number;
+      y: number;
+      radius: number;
+      damage: number;
+      zoneRadius: number;
+      zoneDurationSec: number;
+      bulletsCleared: number;
+      alertTextVi: string;
+    }
+  | {
+      kind: 'magma_geyser_eruption';
+      playerId: number;
+      geysers: Array<{
+        x: number;
+        y: number;
+        radius: number;
+        damage: number;
+      }>;
+      damage: number;
+      radius: number;
+      alertTextVi: string;
+    }
+  | {
+      kind: 'thunder_hammer_pillar';
+      playerId: number;
+      x: number;
+      y: number;
+      radius: number;
+      damage: number;
+      strikes: Array<{
+        x: number;
+        y: number;
+        radius: number;
+        damage: number;
+      }>;
+      deflectedCount: number;
+      alertTextVi: string;
     };
 
 export interface WorldSimOptions {

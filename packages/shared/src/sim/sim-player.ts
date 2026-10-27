@@ -46,6 +46,11 @@ export function updateSinglePlayerStateImpl(this: WorldSim,
   dtSec: number,
 ): void {
   p.aimAngle = inp.aimAngle;
+  const aimInp = inp as PlayerInputPacket & { aimWorldX?: number; aimWorldY?: number };
+  if (typeof aimInp.aimWorldX === 'number' && typeof aimInp.aimWorldY === 'number') {
+    p.aimWorldX = aimInp.aimWorldX;
+    p.aimWorldY = aimInp.aimWorldY;
+  }
 
   if (p.emoteTimer > 0) {
     p.emoteTimer = Math.max(0, p.emoteTimer - dtSec);
@@ -603,6 +608,7 @@ export function resolveMeleeConeHitsAndSynergies(
   shotElement: ElementType,
   shotFlags: number,
   bulletsDestroyed: number,
+  alreadyHitEnemyIds?: Set<number>,
 ): boolean {
   triggerMeleeKickProps(sim, p, halfArc, meleeRange + 6, p.aimAngle);
   for (let i = 0; i < sim.props.length; i++) {
@@ -614,23 +620,26 @@ export function resolveMeleeConeHitsAndSynergies(
     }
   }
 
-  let hitAny = false;
+  const swingHitEnemyIds = alreadyHitEnemyIds ?? new Set<number>();
+  let hitAny = swingHitEnemyIds.size > 0;
   let anyCrit = false;
   const meleeEnemyCount = sim.enemies.length;
   for (let i = 0; i < meleeEnemyCount; i++) {
     const e = sim.enemies[i]!;
-    if (e.hp <= 0 || e.aiState === 'spawning') continue;
+    if (e.hp <= 0 || e.aiState === 'spawning' || swingHitEnemyIds.has(e.id)) continue;
     if (isCircleInCone(p.x, p.y, p.aimAngle, halfArc, meleeRange, e)) {
       const isCrit = sim.rng.chance(critChance);
       const dmg = isCrit ? Math.round(baseMeleeDmg * 1.5) : baseMeleeDmg;
       const hitAngle = Math.atan2(e.y - p.y, e.x - p.x);
       sim.applyDamageToEnemy(e, dmg, isCrit, shotElement, hitAngle, stepKnockback, true, p.id);
+      swingHitEnemyIds.add(e.id);
       hitAny = true;
       if (isCrit) anyCrit = true;
     }
   }
 
   if (w.id === 'thunder_hammer') {
+    const startIdx = sim.projectiles.length;
     sim.spawnDeterministicVolley({
       kind: 'bullet_volley_spawned',
       tick: sim.tick,
@@ -656,6 +665,18 @@ export function resolveMeleeConeHitsAndSynergies(
       shotFlags,
       flags: shotFlags,
     });
+    for (let bIdx = startIdx; bIdx < sim.projectiles.length; bIdx++) {
+      const bolt = sim.projectiles[bIdx]!;
+      for (const hitId of swingHitEnemyIds) {
+        if (!bolt.hitEntityIds.includes(hitId)) bolt.hitEntityIds.push(hitId);
+      }
+      for (let eIdx = 0; eIdx < meleeEnemyCount; eIdx++) {
+        const e = sim.enemies[eIdx]!;
+        if (distance(p.x, p.y, e.x, e.y) <= meleeRange + e.radius + 16 && !bolt.hitEntityIds.includes(e.id)) {
+          bolt.hitEntityIds.push(e.id);
+        }
+      }
+    }
   }
 
   const isVanguardSwordWave = p.characterId === 'vanguard' && p.skillActiveTimer > 0;

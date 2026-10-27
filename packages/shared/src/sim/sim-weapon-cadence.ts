@@ -14,6 +14,7 @@ import {
   GALE_SMG_MAX_FIRE_RATE,
   GALE_SMG_MIN_FIRE_RATE,
   GALE_SMG_SPINUP_DURATION_SEC,
+  MAGMA_BOULDER_RADIUS,
   applyBerserkerAxeHitBloodlust,
   applySafeMeleeLunge,
   checkAndTriggerFragLauncherAirburst,
@@ -25,14 +26,19 @@ import {
   spawnEmeraldCleaverBoomerang,
   spawnGaleSmgWindBlade,
   spawnKnightSwordCrescentWave,
+  spawnSolarArchonConvergingVolley,
   triggerApprenticeStaffTacticalVent,
   triggerBerserkerGuillotineFinisher,
   triggerFocusLaserRailgunVent,
   triggerGaleSmgTacticalVent,
   triggerHunterCrossbowBarbedRip,
+  triggerMagmaCannonGeyserEruption,
   triggerScrapShotgunPerfectReload,
   triggerSeedGunHarvestBloom,
+  triggerSolarArchonSupernovaVent,
   triggerTetherStaffTacticalVent,
+  triggerThunderHammerFinisher,
+  updateSolarArchonMiniSunsForPlayer,
 } from './sim-weapon-specials.js';
 import {
   ELEMENTALIST_ROTATION_ORDER,
@@ -266,6 +272,8 @@ export function updatePlayerWeaponCadence(
             triggerScrapShotgunPerfectReload(sim, p);
           } else if (w?.id === 'seed_gun') {
             triggerSeedGunHarvestBloom(sim, p);
+          } else if (w?.id === 'magma_cannon') {
+            triggerMagmaCannonGeyserEruption(sim, p);
           }
         } else {
           p.reloadLockout = true;
@@ -297,6 +305,8 @@ export function updatePlayerWeaponCadence(
           triggerTetherStaffTacticalVent(sim, p);
         } else if (w.id === 'focus_laser') {
           triggerFocusLaserRailgunVent(sim, p);
+        } else if (w.id === 'solar_archon_staff') {
+          triggerSolarArchonSupernovaVent(sim, p);
         }
       }
     } else if (p.reloadTimer <= 0 && p.clipMax > 0 && p.clipAmmo < p.clipMax) {
@@ -385,6 +395,7 @@ export function updatePlayerWeaponCadence(
   if (activeWepId === 'void_staff' || otherWepId === 'void_staff') {
     checkAndTriggerVoidStaffImplosion(sim, p, buttons);
   }
+  updateSolarArchonMiniSunsForPlayer(sim, p, dtSec);
 }
 
 export function tryFireActiveWeaponImpl(
@@ -504,6 +515,7 @@ export function tryFireActiveWeaponImpl(
     const critChance = clamp(baseCrit + w.critChance, 0, 1);
     let bulletsDestroyed = 0;
 
+    const finisherHitEnemyIds = new Set<number>();
     if (comboStep === 0 || comboStep === 1) {
       applyMeleeLunge(this, p, MELEE_LUNGE_DISTANCE);
       p.meleeComboStep = (comboStep + 1) as 0 | 1 | 2;
@@ -513,7 +525,9 @@ export function tryFireActiveWeaponImpl(
       p.meleeComboStep = 0;
       p.meleeComboResetTimer = 0;
       if (w.id === 'berserker_axe') {
-        triggerBerserkerGuillotineFinisher(this, p, halfArc, meleeRange, baseMeleeDmg);
+        bulletsDestroyed += triggerBerserkerGuillotineFinisher(this, p, halfArc, meleeRange, baseMeleeDmg);
+      } else if (w.id === 'thunder_hammer') {
+        bulletsDestroyed += triggerThunderHammerFinisher(this, p, baseMeleeDmg, finisherHitEnemyIds);
       } else {
         p.meleeParryWindowTimer = MELEE_PARRY_WINDOW_SEC;
         p.parriedCountCurrentWindow = 0;
@@ -525,7 +539,7 @@ export function tryFireActiveWeaponImpl(
     }
 
     const hitAny = resolveMeleeConeHitsAndSynergies(
-      this, p, w, arcRad, halfArc, meleeRange, baseMeleeDmg, stepKnockback, critChance, shotElement, shotFlags, bulletsDestroyed,
+      this, p, w, arcRad, halfArc, meleeRange, baseMeleeDmg, stepKnockback, critChance, shotElement, shotFlags, bulletsDestroyed, finisherHitEnemyIds,
     );
     if (comboStep === 2 && w.id === 'emerald_cleaver') {
       spawnEmeraldCleaverBoomerang(
@@ -629,6 +643,11 @@ export function tryFireActiveWeaponImpl(
     explosionRadius = FRAG_LAUNCHER_MAIN_BLAST_RADIUS;
   } else if (w.id === 'void_staff' && isFinaleShot) {
     additiveDmgBonus = Math.max(0, additiveDmgBonus - 0.5);
+  } else if (w.id === 'magma_cannon') {
+    projRadius = MAGMA_BOULDER_RADIUS;
+    if (isFinaleShot) {
+      additiveDmgBonus = Math.max(0, additiveDmgBonus - 0.5);
+    }
   }
 
   if (w.id === 'focus_laser') {
@@ -651,6 +670,10 @@ export function tryFireActiveWeaponImpl(
 
   if (w.id === 'tether_staff') {
     upsertTetherStaffBeam(this, p, baseDmg);
+    return;
+  }
+  if (w.id === 'solar_archon_staff') {
+    spawnSolarArchonConvergingVolley(this, p, baseDmg, critChance, shotElement, shieldBoost, shotFlags);
     return;
   }
 
@@ -686,6 +709,10 @@ export function tryFireActiveWeaponImpl(
     firedWhileHoldingFire:
       w.id === 'void_staff' && (((p.lastButtons ?? this.currentInput.buttons) & INPUT_BUTTON.FIRE) !== 0),
   });
+
+  if (w.id === 'magma_cannon' && isFinaleShot) {
+    triggerMagmaCannonGeyserEruption(this, p);
+  }
 
   if (w.id === 'gale_smg') {
     if (inOrangeZoneBeforeShot) {

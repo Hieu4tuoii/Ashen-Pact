@@ -588,3 +588,4 @@ export function tryTeslaSmartWallBounce(
 }
 
 export * from './sim-weapon-specials-p1a.js';
+export * from './sim-weapon-specials-p1b-legendary.js';

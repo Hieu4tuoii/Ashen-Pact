@@ -8,6 +8,10 @@ import {
 } from './sim-weapon-specials-rare.js';
 import { triggerVoidStaffImplosion } from './sim-weapon-specials-p1b-ranged.js';
 import {
+  finalizeMagmaCannonBoulderOnStop,
+  triggerSolarConvergeBurst,
+} from './sim-weapon-specials-p1b-legendary.js';
+import {
   detonatePlayerMagneticRivets,
   plantMagneticRivet,
   triggerTeslaFinaleChainLightning,
@@ -262,6 +266,10 @@ export function handleProjectileExpiredWeaponSpecials(
     triggerVoidStaffImplosion(sim, b, b.x, b.y, false);
     return;
   }
+  if (b.weaponId === 'solar_archon_staff') {
+    triggerSolarConvergeBurst(sim, b, b.x, b.y);
+    return;
+  }
 
   if (b.weaponId === 'seed_gun') {
     sim.spawnSeedGunLifeBlossom(b.ownerId, b.x, b.y);
@@ -275,6 +283,9 @@ export function handleProjectileExpiredWeaponSpecials(
     b.weaponId === 'dwarf_mortar' ||
     (b.explosionRadius ?? 0) > 0
   ) {
+    if (b.weaponId === 'magma_cannon') {
+      finalizeMagmaCannonBoulderOnStop(sim, b, b.x, b.y);
+    }
     sim.triggerLauncherProjectileExplosion(b, b.x, b.y);
   }
 }
@@ -304,6 +315,10 @@ export function handleProjectileWallHitWeaponSpecials(
     triggerVoidStaffImplosion(sim, b, hitX, hitY, false);
     return;
   }
+  if (b.weaponId === 'solar_archon_staff') {
+    triggerSolarConvergeBurst(sim, b, hitX, hitY);
+    return;
+  }
 
   if (b.weaponId === 'seed_gun') {
     sim.spawnSeedGunLifeBlossom(b.ownerId, hitX, hitY);
@@ -317,6 +332,9 @@ export function handleProjectileWallHitWeaponSpecials(
     b.weaponId === 'dwarf_mortar' ||
     (b.explosionRadius ?? 0) > 0
   ) {
+    if (b.weaponId === 'magma_cannon') {
+      finalizeMagmaCannonBoulderOnStop(sim, b, hitX, hitY);
+    }
     sim.triggerLauncherProjectileExplosion(b, hitX, hitY);
   }
 }
@@ -379,7 +397,6 @@ export function handleProjectileEnemyHitWeaponSpecials(
     }
   } else if (
     b.weaponId === 'frag_launcher' ||
-    b.weaponId === 'magma_cannon' ||
     (b.explosionRadius ?? 0) > 0
   ) {
     sim.triggerLauncherProjectileExplosion(b, enemy.x, enemy.y);
@@ -655,3 +672,4 @@ export function resolvePlayerProjectileHitDamageAndAngle(
 }
 
 export * from './sim-weapon-specials-p1b-melee.js';
+export * from './sim-weapon-specials-p1b-legendary.js';

@@ -268,6 +268,47 @@ export interface SimFlameFissureState {
   damage: number;
 }
 
+export interface SimSolarFireZoneState {
+  id: number;
+  ownerPlayerId: number;
+  x: number;
+  y: number;
+  radius: number;
+  ttlSec: number;
+  maxTtlSec: number;
+  tickTimer: number;
+  ticksElapsed: number;
+  damage: number;
+}
+
+export interface SimMagmaTrailSegmentState {
+  id: number;
+  ownerPlayerId: number;
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  width: number;
+  ttlSec: number;
+  maxTtlSec: number;
+  tickTimer: number;
+  ticksElapsed: number;
+  damage: number;
+}
+
+export interface SimLightningPillarState {
+  id: number;
+  ownerPlayerId: number;
+  x: number;
+  y: number;
+  radius: number;
+  ttlSec: number;
+  maxTtlSec: number;
+  tickTimer: number;
+  ticksElapsed: number;
+  damage: number;
+}
+
 export interface SimDoorState {
   dir: CardinalDir;
   targetRoomId: number;
@@ -429,6 +470,8 @@ export interface SimPlayerState {
   meleeParryWindowTimer: number;
   berserkerBloodlustStacks?: number;
   berserkerBloodlustTimer?: number;
+  solarOrbitAngle?: number;
+  solarOrbHitTickByEnemy?: Record<string, number>;
   holsterReloadTimers: number[];
   weaponSlotClipAmmo: number[];
   weaponSlotHeat: number[];
@@ -626,6 +669,13 @@ export interface SimProjectileState {
   boomerangPhase?: 'outbound' | 'spinning' | 'returning';
   boomerangSpinTicks?: number;
   boomerangDeflectedCount?: number;
+  convergeTargetX?: number;
+  convergeTargetY?: number;
+  solarRayIndex?: number;
+  solarConvergeBurstTriggered?: boolean;
+  hasExplicitAimTarget?: boolean;
+  trailLastX?: number;
+  trailLastY?: number;
   hitEntityIds: number[];
 }
 
@@ -687,6 +737,10 @@ export interface BulletVolleySpawnEvent {
   boomerangPhase?: 'outbound' | 'spinning' | 'returning';
   boomerangSpinTicks?: number;
   boomerangDeflectedCount?: number;
+  convergeTargetX?: number;
+  convergeTargetY?: number;
+  solarRayIndex?: number;
+  hasExplicitAimTarget?: boolean;
 }
 
 

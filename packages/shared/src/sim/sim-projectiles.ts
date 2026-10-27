@@ -2,12 +2,10 @@ import { BIOME_SCALING } from '../data/scaling.js';
 import { WEAPONS } from '../data/weapons.js';
 import { angleDiff, circleVsCircle, distance } from '../math/vec2.js';
 import { SHOT_FLAG, TILE_SIZE } from '../protocol/messages.js';
-import {
-  spawnSeedGunLifeBlossomImpl,
-  triggerLauncherProjectileExplosionImpl,
-} from './sim-player.js';
+import { spawnSeedGunLifeBlossomImpl, triggerLauncherProjectileExplosionImpl } from './sim-player.js';
 import {
   canApplyFragSubmunitionHit,
+  copyLegendaryVolleyFieldsToProjectile,
   detonatePlayerMagneticRivets,
   handlePlayerProjectileEnemyHitWeaponSpecials,
   handleProjectileExpiredWeaponSpecials,
@@ -16,6 +14,7 @@ import {
   resolvePlayerProjectileHitDamageAndAngle,
   tryTeslaSmartWallBounce,
   updateEmeraldCleaverBoomerang,
+  updateLegendaryProjectileInFlight,
   updateVoidStaffOrbInFlight,
 } from './sim-weapon-specials.js';
 import {
@@ -119,48 +118,22 @@ export function spawnDeterministicVolleyImpl(this: WorldSim, ev: BulletVolleySpa
     const deterministicId = (((ev.eventId ?? 1) & 0x3fffff) << 6) | (i & 0x3f);
 
     const proj = this.acquireProjectile({
-      id: deterministicId,
-      ownerId: ev.ownerId,
-      team: ev.team,
-      weaponId: ev.weaponId,
-      x: bx,
-      y: by,
-      vx: Math.cos(shotAngle) * speed,
-      vy: Math.sin(shotAngle) * speed,
-      angle: shotAngle,
-      radius: ev.radius,
-      damage: finalDmg,
-      isCrit,
-      knockback: ev.knockback,
-      pierceRemaining: ev.pierceCount,
-      bounceRemaining: ev.bounceCount,
-      ttlSec: ev.ttlSec,
-      element: ev.element,
-      amplifiedByShield: ev.amplifiedByShield,
-      shotFlags: ev.shotFlags ?? 0,
-      splitGeneration: 0,
-      awaitingServerRedirectTimer: 0,
-      explosionRadius: ev.explosionRadius,
-      guaranteedElementalProc: ev.guaranteedElementalProc,
-      originX: ev.originX,
-      originY: ev.originY,
-      armedForAirburst: ev.armedForAirburst,
-      airburstBypassShield: ev.airburstBypassShield,
-      parentExplosionId: ev.parentExplosionId,
-      firedWhileHoldingFire: ev.firedWhileHoldingFire,
+      id: deterministicId, ownerId: ev.ownerId, team: ev.team, weaponId: ev.weaponId,
+      x: bx, y: by, vx: Math.cos(shotAngle) * speed, vy: Math.sin(shotAngle) * speed, angle: shotAngle,
+      radius: ev.radius, damage: finalDmg, isCrit, knockback: ev.knockback,
+      pierceRemaining: ev.pierceCount, bounceRemaining: ev.bounceCount, ttlSec: ev.ttlSec,
+      element: ev.element, amplifiedByShield: ev.amplifiedByShield, shotFlags: ev.shotFlags ?? 0,
+      splitGeneration: 0, awaitingServerRedirectTimer: 0, explosionRadius: ev.explosionRadius,
+      guaranteedElementalProc: ev.guaranteedElementalProc, originX: ev.originX, originY: ev.originY,
+      armedForAirburst: ev.armedForAirburst, airburstBypassShield: ev.airburstBypassShield,
+      parentExplosionId: ev.parentExplosionId, firedWhileHoldingFire: ev.firedWhileHoldingFire,
     });
-
+    copyLegendaryVolleyFieldsToProjectile(ev, proj);
     this.projectiles.push(proj);
 
     if (emitEvents && !this.stressTestActive) {
       this.events.push({
-        kind: 'projectile_spawned',
-        projectileId: proj.id,
-        weaponId: ev.weaponId,
-        team: ev.team,
-        x: bx,
-        y: by,
-        angle: shotAngle,
+        kind: 'projectile_spawned', projectileId: proj.id, weaponId: ev.weaponId, team: ev.team, x: bx, y: by, angle: shotAngle,
       });
     }
   }
@@ -192,7 +165,7 @@ export function updateProjectilesImpl(this: WorldSim, dtSec: number): void {
 
     b.x += b.vx * dtSec;
     b.y += b.vy * dtSec;
-
+    if (updateLegendaryProjectileInFlight(this, b, dtSec)) continue;
     // Elemental projectiles flying over interactive surfaces can ignite/freeze/electrify them!
     if (!this.stressTestActive && b.element !== 'none') {
       const surfUnder = this.map.getSurfaceAtWorld(b.x, b.y);
@@ -969,6 +942,13 @@ export function acquireProjectileImpl(this: WorldSim,
     pooled.voidPulseTimer = init.voidPulseTimer ?? 0;
     pooled.armedForReleaseImplosion = init.armedForReleaseImplosion ?? false;
     pooled.firedWhileHoldingFire = init.firedWhileHoldingFire ?? false;
+    pooled.convergeTargetX = init.convergeTargetX;
+    pooled.convergeTargetY = init.convergeTargetY;
+    pooled.solarRayIndex = init.solarRayIndex;
+    pooled.solarConvergeBurstTriggered = false;
+    pooled.hasExplicitAimTarget = init.hasExplicitAimTarget;
+    pooled.trailLastX = init.originX ?? init.x;
+    pooled.trailLastY = init.originY ?? init.y;
     pooled.hitEntityIds.length = 0;
     return pooled;
   }
