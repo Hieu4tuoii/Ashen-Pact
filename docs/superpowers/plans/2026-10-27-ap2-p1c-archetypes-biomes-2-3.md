@@ -1,41 +1,125 @@
-# Ashen Pact 2.0 — Phase P1C: Mở Rộng 3 Archetype Phòng Mới & Hệ Sinh Thái Tương Tác Biome 2 + Biome 3 (`ap2-p1c`) Implementation Plan
+# Ashen Pact 2.0 — Phase P1C Implementation Plan: 3 Remaining Room Archetypes & Biome 2 + Biome 3 Interactive Ecosystems
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:subagent-driven-development` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:subagent-driven-development` (recommended) or `superpowers:executing-plans` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Hoàn thiện đủ **6/6 Archetype hình học phòng chiến thuật** với 3 Archetype mới (`CROSSFIRE_CONVEYORS`, `PRISM_LABYRINTH`, `CRUMBLING_PILLAR_RING`) và toàn bộ **Luật Sinh Tồn + 6 Vật Thể Tương Tác Địa Hình của Biome 2 (`Hầm Băng Vĩnh Cửu`: `glacial_barricade`, `sliding_ice_block`, `cryo_prism_pillar`) & Biome 3 (`Lò Rèn Dung Nham`: `forge_blast_shield`, `pneumatic_press`, `slag_crucible`)**, kèm Texture Baker procedural, VFX và bộ cảnh chụp/strip chuẩn **Engine 2.6 (`8/12 frames` + `1:1 ROI` + `HARD_ASSERT`)** (`ap2-p1c`).
+**Goal:** Implement the remaining 3 Tactical Room Archetypes (`CROSSFIRE_CONVEYORS`, `PRISM_LABYRINTH`, `CRUMBLING_PILLAR_RING`) and the complete Biome 2 (Frozen Depths) & Biome 3 (Molten Forge) survival laws, 6 interactive props (`glacial_barricade`, `sliding_ice_block`, `cryo_prism_pillar`, `forge_blast_shield`, `pneumatic_press`, `slag_crucible`), procedural textures/VFX, and Engine 2.6 visual verification scenes.
 
-**Architecture:** Mở rộng `packages/shared/src/sim/arena-room-archetypes.ts`, `sim-tactical-physics.ts`, `sim-props-spawning.ts`, `texture-baker-props.ts`, `texture-baker-surfaces.ts`, `room-entities-sync.ts`, và `tests/e2e/helpers/visual-scene-ap2-p1.ts`.
-
-**Tech Stack:** TypeScript 5.x, Vitest, Phaser 3, Colyseus 60Hz deterministic simulation, Playwright visual verification (`pnpm shots`, `tools/visual-metrics.ts`, `tools/visual-animation-gates.ts`, `tools/visual-strip-renderer.ts` — Engine 2.6 `HARD_ASSERT`).
+**Architecture:**
+- Keep all `.ts` files strictly `< 1000 lines` by placing new P1C room geometry in `packages/shared/src/sim/arena-room-archetypes-p1c.ts`, new Biome 2 & Biome 3 laws/props in `packages/shared/src/sim/sim-tactical-physics-p1c.ts`, new procedural prop textures in `apps/client/src/art/texture-baker-props-p1c.ts`, new P1C combat VFX in `apps/client/src/fx/combat-fx-p1c.ts`, and new Engine 2.6 visual scenes in `tests/e2e/helpers/visual-scene-ap2-p1c.ts`.
+- All simulation logic uses `WorldSim.rng` (zero `Math.random()`) and deterministic 60Hz tick timers.
 
 ---
 
-## Task 1 (`P1C.1`): Cài Đặt 3 Archetype Phòng Chiến Thuật Tiếp Theo (`CROSSFIRE_CONVEYORS`, `PRISM_LABYRINTH`, `CRUMBLING_PILLAR_RING`)
-- [ ] `CROSSFIRE_CONVEYORS`: 2 làn Băng Chuyền / Luồng Gió / Dòng Chảy rộng 3 ô chạy song song (`ty: 6..8` chảy sang Đông, `ty: 13..15` chảy sang Tây), cuốn người chơi, quái vật và các Vật Chắn đang trượt đi với vận tốc `110 px/s`.
-- [ ] `PRISM_LABYRINTH`: 5 bức tường chắn so le (`2×4` ô) bố trí dạng bàn cờ khắp phòng, xen kẽ là các `cryo_prism_pillar` / `rotten_totem_pillar` / `pneumatic_press`.
-- [ ] `CRUMBLING_PILLAR_RING`: 6 cây cột lớn (`2×2` ô) xếp thành hình lục giác quanh tâm phòng, kèm 4 Bia Chắn nằm giữa các khe cột; cột bị bắn gãy hoặc `Wall-Slam` sập xuống đè vùng dài `160px` và mở thông dần không gian phòng.
-- [ ] Đảm bảo `FlipX/FlipY`, `Prop Jitter ±1..2`, `Door Clearance Guarantee` và BFS liên thông 100% trên 500 `roomSeed`.
-- [ ] Viết unit test TDD `packages/shared/test/ap2-p1c-room-archetypes-2.test.ts`.
+## Task 1 (`P1C.1`): 3 Remaining Room Archetypes (`CROSSFIRE_CONVEYORS`, `PRISM_LABYRINTH`, `CRUMBLING_PILLAR_RING`)
 
-## Task 2 (`P1C.2`): Cài Đặt Quy Luật Sinh Tồn & 3 Vật Thể Tương Tác Biome 2 (`glacial_barricade`, `sliding_ice_block`, `cryo_prism_pillar`)
-- [ ] Luật Biome 2 (`Quán Tính Băng Vĩnh Cửu`): trên mặt băng (`ice`), lực `Knockback` lên quái và khoảng cách/vận tốc trượt của vật thể (`Dash-Kick`) tăng `+50%`; mọi đòn `Wall-Slam` trong Biome 2 tự động phát xung áp `1 tầng Chill` (`r=64px`).
-- [ ] `glacial_barricade` (`65 HP`): lật bằng `[E]`; khi `Dash-Kick` sút trượt đi đâm trúng quái/tường, vỡ tung và đóng cọc **3 Nhũ Băng Nhọn** xuống sàn ($\text{Dmg}_{\text{Hazard}}$ + Đóng Băng `1.5s`, tồn tại `4.0s` làm cột chắn đạn, tuân thủ trần `MAX_TACTICAL_PROPS_PER_ROOM = 16`).
-- [ ] `sliding_ice_block`: sút trượt xuyên phòng (`600 px/s`), nảy qua tường `1 lần` như bi-a, húc văng cả hàng quái.
-- [ ] `cryo_prism_pillar`: bắn đạn (`splitGeneration === 0`) vào Lăng Kính khúc xạ tách làm **3 tia hình quạt (`splitGeneration = 1`, `+20% Additive DMG`, tẩm `Chill`, gắn `SHOT_FLAG.DYNAMIC_BOUNCE`)** hướng về cụm quái đông nhất.
-- [ ] Viết unit test TDD `packages/shared/test/ap2-p1c-biome2-props.test.ts`.
+**Files:**
+- Create: `packages/shared/src/sim/arena-room-archetypes-p1c.ts`
+- Modify: `packages/shared/src/sim/arena-room-archetypes.ts`
+- Modify: `packages/shared/src/sim/arena-map.ts`
+- Test: `packages/shared/test/ap2-p1c-room-archetypes.test.ts`
 
-## Task 3 (`P1C.3`): Cài Đặt Quy Luật Sinh Tồn & 3 Vật Thể Tương Tác Biome 3 (`forge_blast_shield`, `pneumatic_press`, `slag_crucible`)
-- [ ] Luật Biome 3 (`Nhịp Đập Lò Nung`): các dải `conveyor` tự động đảo chiều đồng bộ mỗi `8.0s` (có `conveyorWarningTimer = 1.2s` nhấp nháy đèn mũi tên cảnh báo trước khi đổi chiều); trong Biome 3, vũ khí `HEAT_VENT` tăng nhiệt nhanh hơn `+15%` nhưng Xung Xả Áp `[R]` (`Tactical Vent`) có bán kính rộng gấp rưỡi (`r=110px`).
-- [ ] `forge_blast_shield` (`85 HP`): lật bằng `[E]`; khi `Dash-Kick` sút đi, lao dọc sàn và phóng kèm **Cơn Sóng Lửa rộng `88px`**.
-- [ ] `pneumatic_press` (`Cooldown = 4.0s`): khi người chơi `Dash-Kick` vật chắn / quái trượt vào khung búa (hoặc quái/Boss bước vào tâm cảm biến), dập xuống sau `0.35s` gây $\text{Dmg}_{\text{Hazard}}$ nghiền quái & phá giáp Boss (`0` sát thương lên người chơi, chỉ đẩy nhẹ ra mép).
-- [ ] `slag_crucible`: khi `Dash-Kick` hoặc bắn vỡ, đổ tràn **Thảm Dung Nham dài `192px`** thiêu đốt hàng quái.
-- [ ] Viết unit test TDD `packages/shared/test/ap2-p1c-biome3-props.test.ts`.
+- [ ] **Step 1: Write failing unit tests in `packages/shared/test/ap2-p1c-room-archetypes.test.ts`**
+  - Verify `CROSSFIRE_CONVEYORS` builds two 3-tile-wide parallel conveyor/current lanes (`ty: 6..8` flowing East `+1`, `ty: 13..15` flowing West `-1`, mirrored under `flipX`/`flipY`) that push players, enemies, and sliding props at `110 px/s`.
+  - Verify `PRISM_LABYRINTH` places 5 staggered `2×4` cover walls in a checkerboard layout, interleaved with biome-specific `pillar_toy` (`cryo_prism_pillar` / `rotten_totem_pillar` / `pneumatic_press`), barricades, and hazards.
+  - Verify `CRUMBLING_PILLAR_RING` places 6 hexagonal ring pillars (`2×2` tiles each, linked to destructible/collapsing pillar props) around the room center with 4 barricades in the gaps; when a ring pillar is destroyed by gunfire or `Wall-Slam`, it collapses along a `160×56px` zone (`computeHazardDamage` + `1.5s` stun) and clears its `2×2` solid pillar tiles to `'floor'`, updating `rebuildSolidBoxes()` and `mapRevision`.
+  - Audit 500 consecutive seeds across all 6 archetypes (`ALL_ROOM_ARCHETYPES`) and Biomes 1–3 for `flipX`/`flipY`, `Prop Jitter ±1..2`, `Door Clearance Guarantee` (`3×3`), and `areActiveDoorsConnectedBfs === true`.
 
-## Task 4 (`P1C.4`): Bake Texture Procedural & VFX Cho Archetypes + Props Biome 2 & Biome 3
-- [ ] Vẽ 3 trạng thái `'low' | 'flipped' | 'sliding'` cho `glacial_barricade` và `forge_blast_shield`, 3 cọc nhũ băng nhọn, `sliding_ice_block`, `cryo_prism_pillar`, `pneumatic_press`, `slag_crucible`, và băng chuyền `conveyor` có đèn mũi tên cảnh báo đảo chiều `1.2s`.
+- [ ] **Step 2: Implement `arena-room-archetypes-p1c.ts` and wire into `arena-room-archetypes.ts` & `arena-map.ts`**
+  - Implement `buildCrossfireConveyorsGeometry`, `buildPrismLabyrinthGeometry`, `buildCrumblingPillarRingGeometry`, and `collapseCrumblingRingPillar`.
+  - Update `selectCombatRoomArchetype(roomSeed, roomIndex, biome)` to select from all 6 archetypes (`ALL_ROOM_ARCHETYPES`).
+  - Run `pnpm --filter @ashen-pact/shared test` and confirm all tests pass.
 
-## Task 5 (`P1C.5`): Xây Dựng Cảnh Chụp & Strip Engine 2.6 (`8 / 12 Frames`) Cho Biome 2 & Biome 3 (`visual-scene-ap2-p1c.ts`)
-- [ ] Tạo 7 cảnh chụp tĩnh & strip theo chuẩn **Engine 2.6** (`ap2-b2-prism-labyrinth`, `ap2-b2-glacial-kick-spikes` strip, `ap2-b2-prism-refract` strip, `ap2-b3-crossfire-conveyors`, `ap2-b3-pneumatic-press-crush` strip, `ap2-b3-blast-shield-wave` strip, `ap2-crumbling-pillar-ring` strip), có ghi đè `sampleRects.floor_center` cho các phòng có tường/búa máy ở tâm, `F1 = windup_hold`, `apexEvent` thật từ `WorldSim`, `0` external state mutations, 100% actor containment trong `640×360` ROI.
+---
 
-## Task 6 (`P1C.6`): Visual Gate (Engine 2.6 `HARD_ASSERT` + `--verify-freeze`) & Phase Gate `P1C`
-- [ ] Chạy `pnpm shots --phase ap2-p1c --label after --group ap2-p1c --verify-freeze` ở chế độ `HARD_ASSERT` (`5/5` cổng animation PASS + `freezeDiffRatio = 0.0000`, `traceHashMatched = true`), chấm qua Visual Reviewer (`pro` `>= 8.0/10` trên `<scene>.png`, `<scene>-roi-*.png`, `<scene>-strip.png`, `<scene>-telemetry-summary.md`), chạy `pnpm verify` & `pnpm perf`, commit và tag `ap2-p1c`.
+## Task 2 (`P1C.2`): Biome 2 Survival Law ("Quán Tính Băng Vĩnh Cửu") & 3 Biome 2 Interactive Props
+
+**Files:**
+- Create: `packages/shared/src/sim/sim-tactical-physics-p1c.ts`
+- Modify: `packages/shared/src/sim/sim-tactical-physics.ts`
+- Modify: `packages/shared/src/sim/sim-projectiles.ts`
+- Modify: `packages/shared/src/sim/world-sim-types.ts`
+- Test: `packages/shared/test/ap2-p1c-biome2-ecosystem.test.ts`
+
+- [ ] **Step 1: Write failing unit tests in `packages/shared/test/ap2-p1c-biome2-ecosystem.test.ts`**
+  - **Biome 2 Law ("Quán Tính Băng Vĩnh Cửu"):**
+    1. On `'ice'` surface, enemy knockback velocity and sliding prop velocity (`Dash-Kick` / `Melee-Kick`) increase by `+50%` (`×1.50`).
+    2. Every `Wall-Slam` in Biome 2 pulses a `r = 64px` cryo wave applying 1 stack of `Chill` to enemies within `r = 64px`.
+  - **3 Biome 2 Props:**
+    1. `glacial_barricade`: `[E]` flips to `'flipped'` with `65 HP`. When `Dash-Kick`ed into an enemy or wall, it shatters and spawns 3 Ice Spike pillars (`glacial_spike`, `ttlSec = 4.0s`, `blocksMovement = true`, `blocksEnemyProjectiles = true`, obeying `MAX_TACTICAL_PROPS_PER_ROOM = 16`), dealing $\text{Dmg}_{\text{Hazard}}$ and freezing enemies (`frozenTimer = 1.5s`) in `r = 72px`.
+    2. `sliding_ice_block`: `Dash-Kick` / `Melee-Kick` launches at `600 px/s` (`900 px/s` on `'ice'`), bounces `1` time off a wall like a billiard ball (`bouncesRemaining = 1` on kick), and knocks back / stuns a line of enemies.
+    3. `cryo_prism_pillar`: When a player projectile (`splitGeneration === 0`) hits `cryo_prism_pillar`, it refracts into 3 fan rays (`splitGeneration = 1`, `+20% Additive DMG`, `'chill'` element, `SHOT_FLAG.DYNAMIC_BOUNCE`) aimed toward the densest enemy cluster. A `splitGeneration === 1` projectile hitting a second prism never spawns children (only gains `+20% Additive DMG` and `+1 bounceRemaining`, clamped to `4`).
+
+- [ ] **Step 2: Implement Biome 2 laws & props in `sim-tactical-physics-p1c.ts` and wire into `sim-tactical-physics.ts` & `sim-projectiles.ts`**
+  - Run `pnpm --filter @ashen-pact/shared test` and confirm all tests pass.
+
+---
+
+## Task 3 (`P1C.3`): Biome 3 Survival Law ("Nhịp Đập Lò Nung") & 3 Biome 3 Interactive Props
+
+**Files:**
+- Modify: `packages/shared/src/sim/sim-tactical-physics-p1c.ts`
+- Modify: `packages/shared/src/sim/sim-tactical-physics.ts`
+- Modify: `packages/shared/src/sim/sim-weapon-cadence.ts`
+- Modify: `packages/shared/src/sim/sim-props-spawning.ts`
+- Test: `packages/shared/test/ap2-p1c-biome3-ecosystem.test.ts`
+
+- [ ] **Step 1: Write failing unit tests in `packages/shared/test/ap2-p1c-biome3-ecosystem.test.ts`**
+  - **Biome 3 Law ("Nhịp Đập Lò Nung"):**
+    1. `conveyor` belts reverse direction synchronously every `8.0s` (`conveyorCycleTimer`), activating `conveyorWarningTimer = 1.2s` before reversal.
+    2. In Biome 3, `HEAT_VENT` weapons gain heat `+15%` faster (`×1.15`), and `[R]` `Tactical Vent` clears enemy bullets / pulses in a `1.5×` wider radius (`r = 110px`).
+  - **3 Biome 3 Props:**
+    1. `forge_blast_shield`: `[E]` flips to `'flipped'` with `85 HP`. When `Dash-Kick`ed, it slides across the floor and projects an `88px`-wide Fire Wave (`forge_fire_wave`) dealing Burn + $\text{Dmg}_{\text{KickSlide}}$ and igniting `oil`/`grass` along the `88px` corridor.
+    2. `pneumatic_press`: Placed in rooms/conveyors (`Cooldown = 4.0s`). When a player `Dash-Kick`s a prop/enemy into the press frame or an enemy/Boss enters its sensor (`r = 56px`), it winds up for `0.35s` and slams down, dealing $\text{Dmg}_{\text{Hazard}}$ to enemies, applying Boss Armor Break (`bossArmorBreakTimer = 5.0s`, `+1 bossStaggerAccum`), and pushing players safely to the rim with `0` player damage.
+    3. `slag_crucible`: When `Dash-Kick`ed or shot to `0 HP`, spills a `192px`-long Molten Lava Carpet (`lava` tiles + magma trail hazard) burning a row of enemies.
+
+- [ ] **Step 2: Implement Biome 3 laws & props in `sim-tactical-physics-p1c.ts` and wire into `sim-weapon-cadence.ts` & `sim-props-spawning.ts`**
+  - Run `pnpm --filter @ashen-pact/shared test` and confirm all tests pass.
+
+---
+
+## Task 4 (`P1C.4`): Procedural Textures & VFX for Biome 2 & Biome 3 Props + Archetypes
+
+**Files:**
+- Create: `apps/client/src/art/texture-baker-props-p1c.ts`
+- Create: `apps/client/src/fx/combat-fx-p1c.ts`
+- Modify: `apps/client/src/art/texture-baker-props.ts`
+- Modify: `apps/client/src/art/texture-baker.ts`
+- Modify: `apps/client/src/fx/combat-fx-weapons-v2.ts`
+- Modify: `apps/client/src/scenes/game-scene/sim-events.ts`
+- Test: `apps/client/test/ap2-p1c-props-fx.test.ts`
+
+- [ ] **Step 1: Bake procedural textures for all Biome 2 & Biome 3 props and states**
+  - Bake `'low' | 'flipped' | 'sliding'` textures for `glacial_barricade` and `forge_blast_shield`.
+  - Bake `prop_glacial_spike`, `prop_sliding_ice_block`, `prop_cryo_prism_pillar`, `prop_pneumatic_press` + `prop_pneumatic_press_slammed`, `prop_slag_crucible`, and `prop_crumbling_pillar` + `prop_crumbling_pillar_fallen`.
+  - Render `conveyorWarningTimer` (`1.2s`) flashing warning chevrons on conveyor tiles and P1C SimEvent VFX (`glacial_shatter_spikes`, `prism_refract_flash`, `forge_fire_wave`, `pneumatic_press_slam`, `slag_lava_carpet`, `pillar_collapse_dust`).
+
+- [ ] **Step 2: Write unit tests in `apps/client/test/ap2-p1c-props-fx.test.ts` and verify all client & shared tests pass.**
+
+---
+
+## Task 5 (`P1C.5`): Engine 2.6 Visual Scenes & Strips for Biome 2 & Biome 3 (`ap2-p1c`)
+
+**Files:**
+- Create: `tests/e2e/helpers/visual-scene-ap2-p1c.ts`
+- Modify: `tests/e2e/helpers/visual-scenes.ts`
+- Modify: `tools/run-shots.ts`
+- Modify: `tools/visual-animation-gates.ts`
+
+- [ ] **Step 1: Build the 7 `ap2-p1c` scenes in `tests/e2e/helpers/visual-scene-ap2-p1c.ts`**
+  1. `ap2-b2-prism-labyrinth` (Biome 2 `PRISM_LABYRINTH` static + `-unlit.png`, custom `sampleRects` placing `floor_center` on walkable floor)
+  2. `ap2-b2-glacial-kick-spikes` (`8-frame` strip, `heroFrameIndex = 4`: `[E]` flip `glacial_barricade` -> `Dash-Kick` shatters into 3 Ice Spikes freezing enemies)
+  3. `ap2-b2-prism-refract` (`8-frame` strip, `heroFrameIndex = 4`: shoot `cryo_prism_pillar` -> 3 fan rays refract into enemy pack)
+  4. `ap2-b3-crossfire-conveyors` (Biome 3 `CROSSFIRE_CONVEYORS` static + `-unlit.png`, custom `sampleRects` placing `floor_center` on walkable floor)
+  5. `ap2-b3-pneumatic-press-crush` (`8-frame` strip, `heroFrameIndex = 4`, custom `sampleRects`: `Dash-Kick` into `pneumatic_press` sensor -> `0.35s` windup -> Piston slam crush)
+  6. `ap2-b3-blast-shield-wave` (`8-frame` strip, `heroFrameIndex = 4`: `[E]` flip `forge_blast_shield` -> `Dash-Kick` projects `88px` Fire Wave)
+  7. `ap2-crumbling-pillar-ring` (`8-frame` strip, `heroFrameIndex = 4`: `CRUMBLING_PILLAR_RING` hexagonal pillar collapses from `Wall-Slam` / gunfire, crushing `160px` lane)
+
+- [ ] **Step 2: Run `pnpm shots -- --phase ap2-p1c --label after --group ap2-p1c --verify-freeze` and verify 5/5 Engine 2.6 gates + Golden Room `metrics.json` pass.**
+
+---
+
+## Task 6 (`P1C.6`): Visual Gate (`pro`), Whole-Phase Code Review (`pro`), `pnpm verify`, `pnpm perf` & Tag `ap2-p1c`
+
+- [ ] **Step 1: Dispatch `pro` Visual Reviewer & `pro` Code Reviewer subagents.**
+- [ ] **Step 2: Run `pnpm verify` and `pnpm perf`.**
+- [ ] **Step 3: Update `docs/PHASES.md`, `docs/PROGRESS.md`, commit, and tag `ap2-p1c`.**
