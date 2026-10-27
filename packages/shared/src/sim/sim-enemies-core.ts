@@ -624,10 +624,13 @@ export function updateEnemiesImpl(this: WorldSim, dtSec: number): void {
     const ignoreChasm = Boolean(
       e.isBoss || ENEMIES[e.defId]?.flying || kbSpeed >= 25 || surf === 'chasm',
     );
-    let col = this.map.resolveCircleCollision(nextX, nextY, e.radius, ignoreChasm);
+    const col = this.map.resolveCircleCollision(nextX, nextY, e.radius, ignoreChasm);
+    let wallCollided = col.collided;
     e.x = col.x;
     e.y = col.y;
-    if (!this.stressTestActive && e.defId !== 'ice_prison') {
+    if (!this.stressTestActive && e.defId !== 'ice_prison' && this.props.length > 0) {
+      const prePropX = e.x;
+      const prePropY = e.y;
       this.resolvePropMovementCollision(e);
       for (let pIdx = 0; pIdx < this.props.length; pIdx++) {
         const prop = this.props[pIdx]!;
@@ -642,20 +645,22 @@ export function updateEnemiesImpl(this: WorldSim, dtSec: number): void {
           e.y += (dy / d) * (minDist - d);
         }
       }
-      const postPropCol = this.map.resolveCircleCollision(e.x, e.y, e.radius, ignoreChasm);
-      e.x = postPropCol.x;
-      e.y = postPropCol.y;
-      if (postPropCol.collided) {
-        col = postPropCol;
+      if (e.x !== prePropX || e.y !== prePropY) {
+        const postPropCol = this.map.resolveCircleCollision(e.x, e.y, e.radius, ignoreChasm);
+        e.x = postPropCol.x;
+        e.y = postPropCol.y;
+        if (postPropCol.collided) {
+          wallCollided = true;
+        }
       }
     }
 
-    if (col.collided && preDecayKbSpeed >= 120 && (e.wallSlamCooldownTimer ?? 0) <= 0) {
+    if (!this.stressTestActive && wallCollided && preDecayKbSpeed >= 120 && (e.wallSlamCooldownTimer ?? 0) <= 0) {
       triggerEnemyWallSlam(this, e, undefined, preDecayKbSpeed);
       if (e.hp <= 0) continue;
     }
 
-    if (resolveEnemyChasmRingOut(this, e)) {
+    if (!this.stressTestActive && resolveEnemyChasmRingOut(this, e)) {
       if (e.hp <= 0) continue;
     }
 
@@ -669,7 +674,7 @@ export function updateEnemiesImpl(this: WorldSim, dtSec: number): void {
     if (
       (e.defId === 'wild_boar' || e.defId === 'baby_yeti') &&
       e.aiState === 'attack' &&
-      col.collided
+      wallCollided
     ) {
       e.aiState = 'stunned';
       e.stateTimer = 0.5;

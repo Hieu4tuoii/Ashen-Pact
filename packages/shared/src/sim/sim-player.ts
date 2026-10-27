@@ -323,15 +323,15 @@ export function updateSinglePlayerStateImpl(this: WorldSim,
   );
   p.x = col.x;
   p.y = col.y;
-  this.resolvePropMovementCollision(p);
+  if (!this.stressTestActive) this.resolvePropMovementCollision(p);
 
-  if (p.dashTimer <= 0 && this.map.getSurfaceAtWorld(p.x, p.y) === 'chasm') {
+  if (!this.stressTestActive && p.dashTimer <= 0 && this.map.getSurfaceAtWorld(p.x, p.y) === 'chasm') {
     const safePt = findNearestWalkablePoint(this.map, p.x, p.y, p.radius);
     p.x = safePt.x;
     p.y = safePt.y;
   }
 
-  if (surf === 'grass' && Math.hypot(p.vx, p.vy) > 25 && p.grassRustleCooldown <= 0) {
+  if (!this.stressTestActive && surf === 'grass' && Math.hypot(p.vx, p.vy) > 25 && p.grassRustleCooldown <= 0) {
     p.grassRustleCooldown = 0.22;
     this.events.push({ kind: 'grass_rustle', x: p.x, y: p.y });
   }

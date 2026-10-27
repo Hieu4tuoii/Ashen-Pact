@@ -119,7 +119,7 @@
 | Phase | Tag | Nội dung | Trạng thái |
 |---|---|---|---|
 | P0A | `ap2-p0a` | Nền tảng Dữ liệu, Giao thức Mạng 30Hz, Xóa Năng Lượng & Dọn Dẹp 18 Vũ Khí | [x] |
-| P0B | `ap2-p0b` | Lát Cắt Dọc Core Fun: 3 Archetype Phòng, Vật Lý Chiến Thuật, Biome 1 & 4 Vũ Khí Chuẩn (Playtest Gate 1) | [ ] |
+| P0B | `ap2-p0b` | Lát Cắt Dọc Core Fun: 3 Archetype Phòng, Vật Lý Chiến Thuật, Biome 1 & 4 Vũ Khí Chuẩn (Playtest Gate 1) | [x] |
 | P1A | `ap2-p1a` | Đại Tu Vũ Khí Đợt 1 (7 Vũ Khí: Nỏ, Trượng Gai, Shotgun, SMG, Súng Lựu, Súng Hạt Giống, Trượng Xích) | [ ] |
 | P1B | `ap2-p1b` | Đại Tu Vũ Khí Đợt 2 (7 Vũ Khí Còn Lại) & Pipeline Sát Thương 3 Nhóm (3-Bucket Damage Cap) | [ ] |
 | P1C | `ap2-p1c` | 3 Archetype Phòng Còn Lại & Hệ Sinh Thái Biome 2 (Băng) + Biome 3 (Lò Rèn) | [ ] |
@@ -144,7 +144,7 @@
 | Phase | Tag | Nội dung trọng tâm | Gate đặc biệt | Trạng thái |
 |---|---|---|---|---|
 | **P0A** | `ap2-p0a` | **Hạ tầng Nền, The Purge, Per-Player State & Đồng bộ Đạn Tất định 60Hz:** Cắt bỏ Energy, cắt 6 vũ khí clone (`24→18`) & 6 thẻ cộng số chay, migration save `starterWeapons` sang danh sách `18` vũ khí, tách build/vàng theo từng người chơi, `INPUT_BUTTON.RELOAD_VENT` (`[R]`), `deterministicId` đạn 16-bit, ngân sách thực thể 60Hz | `pnpm verify` + `pnpm perf` | [x] |
-| **P0B** | `ap2-p0b` | **Vertical Slice Độ Vui: 3 Archetype Phòng, Vật lý `Flip Cover + Kick + Wall-Slam + Ring-Out` & 4 Vũ khí Đại diện:** Cài đặt `TWIN_BRIDGES`, `GAUNTLET_CHOKEPOINT`, `CENTRAL_BASTION` (có Mirror + Prop Jitter), cơ chế Lật bàn `[E]` + Đá bàn + Đập tường + Rơi vực, 3 vật thể Biome 1, `Micro-Bar 32×5px` dưới chân nhân vật, và 4 vũ khí đại diện cho 4 hệ nhịp (`rivet_gun` Active Reload, `apprentice_staff` Heat/Vent, `knight_sword` 3-Hit Combo + Parry, `tesla_carbine` Tether) | **Playtest Gate 1 (Kiểm chứng Độ Vui Cốt Lõi)** + Visual Gate | [ ] |
+| **P0B** | `ap2-p0b` | **Vertical Slice Độ Vui: 3 Archetype Phòng, Vật lý `Flip Cover + Kick + Wall-Slam + Ring-Out` & 4 Vũ khí Đại diện:** Cài đặt `TWIN_BRIDGES`, `GAUNTLET_CHOKEPOINT`, `CENTRAL_BASTION` (có Mirror + Prop Jitter), cơ chế Lật bàn `[E]` + Đá bàn + Đập tường + Rơi vực, 3 vật thể Biome 1, `Micro-Bar 32×5px` dưới chân nhân vật, và 4 vũ khí đại diện cho 4 hệ nhịp (`rivet_gun` Active Reload, `apprentice_staff` Heat/Vent, `knight_sword` 3-Hit Combo + Parry, `tesla_carbine` Tether) | **Playtest Gate 1 (Kiểm chứng Độ Vui Cốt Lõi: PASS 4/4)** + Visual Gate (`10.0 / 10.0 PASS`) | [x] |
 | **P1A** | `ap2-p1a` | **Kho Vũ Khí Độc Bản Đợt 1 (7 Vũ khí: Starter, Uncommon & Rare):** `hunter_crossbow`, `thorn_staff`, `scrap_shotgun`, `gale_smg`, `frag_launcher`, `seed_gun`, `tether_staff` + Procedural VFX & Audio riêng cho từng khẩu | Visual Gate + Strip 8-frame | [ ] |
 | **P1B** | `ap2-p1b` | **Kho Vũ Khí Độc Bản Đợt 2 (7 Vũ khí: Rare, Epic & Legendary) & 3-Bucket Damage Pipeline:** `focus_laser`, `void_staff`, `emerald_cleaver`, `berserker_axe`, `solar_archon_staff`, `magma_cannon`, `thunder_hammer` + Công thức 3-Bucket chống nổ số nhân | Visual Gate + Damage Audit Test | [ ] |
 | **P1C** | `ap2-p1c` | **Mở Rộng 3 Archetype Phòng Mới & Hệ Sinh Thái Tương Tác Biome 2 (Hầm Băng) + Biome 3 (Lò Rèn):** `CROSSFIRE_CONVEYORS`, `PRISM_LABYRINTH`, `CRUMBLING_PILLAR_RING` + 6 vật thể tương tác Biome 2 & 3 (`glacial_barricade`, `sliding_ice_block`, `cryo_prism_pillar`, `forge_blast_shield`, `pneumatic_press`, `slag_crucible`) | Visual Gate + Strip 8-frame | [ ] |

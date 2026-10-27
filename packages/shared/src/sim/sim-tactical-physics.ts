@@ -284,17 +284,20 @@ function isEnemyEntity(entity: { x: number; y: number; radius: number }): entity
 }
 
 export function resolvePropMovementCollision(sim: WorldSim, entity: { x: number; y: number; radius: number }): void {
+  if (sim.props.length === 0) return;
   const asPlayer = isPlayerEntity(entity) ? entity : null;
-  const asEnemy = isEnemyEntity(entity) ? entity : null;
+  const asEnemy = asPlayer ? null : isEnemyEntity(entity) ? entity : null;
 
-  for (const prop of sim.props) {
+  for (let i = 0; i < sim.props.length; i++) {
+    const prop = sim.props[i]!;
     if (prop.hp <= 0 || prop.coverState === 'sliding' || prop.coverState === 'fallen') continue;
 
     const dx = entity.x - prop.x;
     const dy = entity.y - prop.y;
-    const dist = Math.hypot(dx, dy);
     const minDist = entity.radius + prop.radius;
-    if (dist >= minDist) continue;
+    const distSq = dx * dx + dy * dy;
+    if (distSq >= minDist * minDist) continue;
+    const dist = Math.sqrt(distSq);
 
     if (asPlayer && asPlayer.dashTimer > 0) {
       if (isCircularKickableToyProp(prop.kind)) {
@@ -495,8 +498,9 @@ export function triggerEnemyWallSlam(sim: WorldSim, e: SimEnemyState, hitProp?: 
 
 export function resolveEnemyChasmRingOut(sim: WorldSim, e: SimEnemyState): boolean {
   if (e.hp <= 0 || e.isDummy || e.isBoss) return false;
+  if (sim.map.getSurfaceAtWorld(e.x, e.y) !== 'chasm') return false;
   const def = ENEMIES[e.defId];
-  if (def?.flying || sim.map.getSurfaceAtWorld(e.x, e.y) !== 'chasm') return false;
+  if (def?.flying) return false;
 
   const safePt = findNearestWalkablePoint(sim.map, e.x, e.y, e.radius);
   const attackerId = e.lastHitPlayerId ?? sim.player.id;
