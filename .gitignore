@@ -14,3 +14,7 @@ release/
 
 .worktrees/
 .superpowers/
+
+# Animation Verification Engine 2.6 transient artifacts
+docs/screenshots/**/*-roi-*.png
+docs/screenshots/**/*-telemetry.json

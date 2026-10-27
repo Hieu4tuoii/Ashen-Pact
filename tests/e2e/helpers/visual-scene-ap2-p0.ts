@@ -5,7 +5,12 @@ import {
   ENVIRONMENT_SAMPLE_RECTS,
   lockCameraAndIrisToPlayer,
   makeScene,
+  markPostWarmupStart,
   stepDeterministicFrames,
+  triggerDash,
+  triggerFireWeapon,
+  triggerInteract,
+  triggerReloadVent,
   type SampleRect,
   type VisualSceneDef,
 } from './visual-scene-helpers.js';
@@ -106,6 +111,7 @@ async function initAp2Arena(page: Page, cfg: Ap2ArenaInitConfig, warmupFrames = 
   }, cfg);
   await lockCameraAndIrisToPlayer(page);
   await stepDeterministicFrames(page, warmupFrames);
+  await markPostWarmupStart(page);
 }
 
 async function spawnEnemyBullets(
@@ -118,7 +124,7 @@ async function spawnEnemyBullets(
     for (const [id, x, y, vx, vy] of list) {
       sim.projectiles.push(
         sim.acquireProjectile({
-          id, ownerId, isEnemy: true, x, y, vx, vy, radius: 5.5, damage: 2,
+          id, ownerId, team: 'enemy', isEnemy: true, x, y, vx, vy, radius: 5.5, damage: 2,
           colorHex: '#E84545', ttlSec: 2.0, pierceCount: 0, bounceCount: 0,
           homingStrength: 0, explosionRadius: 0, isCrit: false, element: 'none', knockback: 40,
         }),
@@ -215,68 +221,67 @@ export async function setupAp2FlipCoverMicroblankScene(page: Page): Promise<void
     playerY: 270,
     props: [
       ['moss_table', 405, 270],
-      ['moss_table', 390, 345],
     ],
     enemies: [
-      ['goblin_shooter', 575, 235],
-      ['thorn_turret', 605, 270],
-      ['goblin_shooter', 575, 305],
+      ['goblin_shooter', 515, 238],
+      ['thorn_turret', 530, 270],
+      ['goblin_shooter', 515, 302],
     ],
   });
   await spawnEnemyBullets(page, [
-    [97001, 428, 254, -210, 0], [97002, 436, 270, -210, 0],
-    [97003, 428, 286, -210, 0], [97004, 445, 262, -210, 0],
-    [97020, 482, 256, -240, -8], [97021, 496, 270, -240, 0],
-    [97022, 482, 284, -240, 8], [97023, 524, 260, -240, -5],
-    [97024, 538, 270, -240, 0], [97025, 524, 280, -240, 5],
-    [97026, 564, 265, -240, -4], [97027, 564, 275, -240, 4],
+    [97001, 456, 254, -180, 0],
+    [97002, 464, 270, -180, 0],
+    [97003, 456, 286, -180, 0],
+    [97004, 472, 262, -180, 0],
+    [97005, 472, 278, -180, 0],
+    [97020, 496, 256, -180, -6],
+    [97021, 504, 270, -180, 0],
+    [97022, 496, 284, -180, 6],
+    [97023, 514, 262, -180, -4],
+    [97024, 514, 278, -180, 4],
   ]);
-  await page.evaluate(() => {
-    const sim = window.__GAME_TRANSPORT__!.getSim();
-    const table = sim.props.find((p) => p.kind === 'moss_table' && p.coverState === 'low')!;
-    sim.flipCoverProp(table, sim.player);
-  });
   await stepDeterministicFrames(page, 1);
+  await markPostWarmupStart(page);
 }
 
-/** 5. ap2-dash-kick-wall-slam (8-frame strip) */
+/** 5. ap2-dash-kick-wall-slam (8-frame strip — Engine 2.6 Pilot 1) */
 export async function setupAp2DashKickWallSlamScene(page: Page): Promise<void> {
   await initAp2Arena(page, {
     archetype: 'GAUNTLET_CHOKEPOINT',
     roomSeed: 1336,
-    playerX: 382,
-    playerY: 255,
-    dummyEnemies: false,
+    playerX: 618,
+    playerY: 195,
+    aimAngle: 0,
+    playerFields: {
+      armor: 2,
+      maxArmor: 5,
+    },
     props: [
-      ['moss_table', 688, 195, true],
-      ['moss_table', 415, 255, true],
+      ['moss_table', 650, 195, true],
     ],
     enemies: [
-      ['goblin_shooter', 748, 195],
-      ['wild_boar', 515, 255],
-      ['goblin_shaman', 595, 255],
+      ['wild_boar', 746, 195],
+      ['goblin_shooter', 716, 152],
+      ['goblin_shaman', 716, 236],
     ],
   });
   await page.evaluate(() => {
     const sim = window.__GAME_TRANSPORT__!.getSim();
-    sim.player.armor = 2;
-    sim.player.maxArmor = 5;
-    const e1 = sim.enemies[0];
-    if (e1) Object.assign(e1, { x: 752, y: 195, kbVx: 320, kbVy: 0, lastHitDmg: 28 });
-    const tables = sim.props.filter((p) => p.kind === 'moss_table');
-    if (tables[0]) {
-      Object.assign(tables[0], { x: 736, y: 195 });
-      sim.kickProp(tables[0], sim.player, 0);
-    }
-    if (tables[1]) {
-      Object.assign(sim.player, { dashTimer: 0.16, dashDirX: 1, dashDirY: 0 });
-      sim.events.push({
-        kind: 'dash_started', playerId: sim.player.id, x: sim.player.x, y: sim.player.y, dirX: 1, dirY: 0,
+    for (const e of sim.enemies) {
+      Object.assign(e, {
+        isDummy: false,
+        moveSpeed: 0,
+        attackCooldownTimer: 99,
+        aiState: 'stunned',
+        stateTimer: 5.0,
+        stunTimer: 5.0,
+        vx: 0,
+        vy: 0,
       });
-      sim.kickProp(tables[1], sim.player, 0);
     }
   });
-  await stepDeterministicFrames(page, 2);
+  await stepDeterministicFrames(page, 1);
+  await markPostWarmupStart(page);
 }
 
 /** 6. ap2-chasm-ring-out (8-frame strip) */
@@ -284,183 +289,191 @@ export async function setupAp2ChasmRingOutScene(page: Page): Promise<void> {
   await initAp2Arena(page, {
     archetype: 'TWIN_BRIDGES',
     roomSeed: 1338,
-    playerX: 520,
-    playerY: 218,
-    aimAngle: Math.PI * 0.45,
-    dummyEnemies: false,
-    props: [['moss_table', 11 * 32 + 16, 6 * 32 + 16]],
+    characterId: 'vanguard',
+    playerX: 556,
+    playerY: 204,
+    aimAngle: Math.PI * 0.5,
     enemies: [
-      ['goblin_shooter', 548, 252],
-      ['green_slime', 585, 224],
-      ['goblin_shaman', 625, 206],
+      ['goblin_shooter', 556, 238],
+      ['green_slime', 536, 234],
+      ['goblin_shaman', 576, 235, 'shield'],
     ],
   });
   await page.evaluate(() => {
     const sim = window.__GAME_TRANSPORT__!.getSim();
-    for (const e of sim.enemies) Object.assign(e, { aiState: 'stunned', stateTimer: 2.0 });
-    const [e1, e2, e3] = sim.enemies;
-    if (e1) Object.assign(e1, { x: 548, y: 258, kbVx: 20, kbVy: 240 });
-    if (e2) Object.assign(e2, { x: 585, y: 232, kbVx: 15, kbVy: 210 });
-    if (e3) Object.assign(e3, { x: 625, y: 212, kbVx: 10, kbVy: 195 });
-    for (let i = 0; i < 4; i++) {
-      sim.pickups.push(
-        sim.acquirePickup({
-          id: 97400 + i, kind: i === 3 ? 'prey_emblem' : 'gold',
-          x: 540 + i * 16, y: 236 - (i % 2) * 10, vx: (i - 1.5) * 45, vy: -95 - i * 15,
-          amount: 10, ttlSec: 20,
-        }),
-      );
-    }
-  });
-  await stepDeterministicFrames(page, 2);
-}
-
-/** 7. ap2-microbar-perfect-reload (8-frame strip) */
-export async function setupAp2MicrobarPerfectReloadScene(page: Page): Promise<void> {
-  await initAp2Arena(page, {
-    characterId: 'engineer',
-    playerX: 340,
-    playerY: 270,
-    enemies: [
-      ['goblin_shooter', 505, 220],
-      ['wild_boar', 545, 270, 'shield'],
-      ['spore_bomber', 505, 320],
-    ],
-  });
-  await page.evaluate(() => {
-    const sim = window.__GAME_TRANSPORT__!.getSim();
-    const gs = window.__PHASER_GAME__?.scene.getScene('GameScene') as
-      | { syncProjectilesAndPickups?: () => void; __ap2PerfectReloadHookInstalled?: boolean }
-      | undefined;
     Object.assign(sim.player, {
-      weaponSlots: ['rivet_gun', 'tesla_carbine'] as [WeaponDefId, WeaponDefId],
-      activeWeaponSlot: 0, clipMax: 6, clipAmmo: 1, reloadDuration: 1.15, reloadTimer: 0, reloadLockout: false,
+      weaponSlots: ['knight_sword', 'rivet_gun'] as [WeaponDefId, WeaponDefId],
+      activeWeaponSlot: 0,
+      meleeComboStep: 2,
+      meleeComboResetTimer: 0.85,
+      fireCooldownTimer: 0,
     });
-    const [e1, e2, e3] = sim.enemies;
-    const rivetCoords: Array<[number, number, number | null]> = [
-      [485, 220, e1?.id ?? null], [525, 215, e1?.id ?? null],
-      [540, 265, e2?.id ?? null], [555, 280, e2?.id ?? null],
-      [525, 322, e3?.id ?? null], [485, 315, e3?.id ?? null],
-    ];
-    sim.magneticRivets = rivetCoords.map(([rx, ry, targetId], idx) => ({
-      id: 98100 + idx, ownerPlayerId: sim.player.id, x: rx, y: ry,
-      attachedEnemyId: targetId, attachedTargetId: targetId, attachedPropId: null,
-      offsetX: 0, offsetY: 0, ttlSec: 12.0,
-    }));
-    sim.tryFireActiveWeapon(sim.player);
-    sim.player.reloadDuration = 1.15;
-    sim.player.reloadTimer = 1.15 * 0.5;
-    sim.player.reloadLockout = false;
-    sim.events.push(
-      { kind: 'perfect_reload', playerId: sim.player.id, weaponId: 'rivet_gun', x: sim.player.x, y: sim.player.y },
-      { kind: 'chain_lightning', fromX: 485, fromY: 220, toX: 545, toY: 270 },
-      { kind: 'chain_lightning', fromX: 545, fromY: 270, toX: 505, toY: 320 },
-    );
-    if (gs && !gs.__ap2PerfectReloadHookInstalled && gs.syncProjectilesAndPickups) {
-      gs.__ap2PerfectReloadHookInstalled = true;
-      let stepIdx = 0;
-      const origSync = gs.syncProjectilesAndPickups.bind(gs);
-      gs.syncProjectilesAndPickups = () => {
-        stepIdx += 1;
-        if (stepIdx === 6 && sim.player.reloadTimer > 0) {
-          (gs as unknown as { reloadVentQueued?: boolean }).reloadVentQueued = true;
-        }
-        origSync();
-      };
+    for (const e of sim.enemies) {
+      Object.assign(e, {
+        isDummy: false,
+        moveSpeed: 0,
+        attackCooldownTimer: 99,
+        aiState: 'stunned',
+        stateTimer: 5.0,
+        stunTimer: 5.0,
+        vx: 0,
+        vy: 0,
+      });
     }
   });
   await stepDeterministicFrames(page, 1);
+  await markPostWarmupStart(page);
+}
+
+/** 7. ap2-microbar-perfect-reload (8-frame strip — Engine 2.6 Pilot 2) */
+export async function setupAp2MicrobarPerfectReloadScene(page: Page): Promise<void> {
+  await initAp2Arena(page, {
+    characterId: 'engineer',
+    playerX: 356,
+    playerY: 270,
+    aimAngle: 0,
+    enemies: [
+      ['goblin_shooter', 480, 236],
+      ['wild_boar', 510, 270, 'shield'],
+      ['spore_bomber', 480, 304],
+    ],
+  });
+  await page.evaluate(() => {
+    const sim = window.__GAME_TRANSPORT__!.getSim();
+    Object.assign(sim.player, {
+      weaponSlots: ['rivet_gun', 'tesla_carbine'] as [WeaponDefId, WeaponDefId],
+      activeWeaponSlot: 0,
+      clipMax: 6,
+      clipAmmo: 1,
+      reloadDuration: 0.6,
+      reloadTimer: 0,
+      reloadLockout: false,
+      fireCooldownTimer: 0,
+    });
+    const [e1, e2, e3] = sim.enemies;
+    const rivetCoords: Array<[number, number, number | null]> = [
+      [468, 236, e1?.id ?? null],
+      [492, 232, e1?.id ?? null],
+      [502, 265, e2?.id ?? null],
+      [518, 276, e2?.id ?? null],
+      [492, 306, e3?.id ?? null],
+      [468, 300, e3?.id ?? null],
+    ];
+    sim.magneticRivets = rivetCoords.map(([rx, ry, targetId], idx) => ({
+      id: 98100 + idx,
+      ownerPlayerId: sim.player.id,
+      x: rx,
+      y: ry,
+      attachedEnemyId: targetId,
+      attachedTargetId: targetId,
+      attachedPropId: null,
+      offsetX: 0,
+      offsetY: 0,
+      ttlSec: 12.0,
+    }));
+  });
+  await stepDeterministicFrames(page, 1);
+  await markPostWarmupStart(page);
 }
 
 /** 8. ap2-heat-vent-staff (8-frame strip) */
 export async function setupAp2HeatVentStaffScene(page: Page): Promise<void> {
   await initAp2Arena(page, {
     characterId: 'elementalist',
-    playerX: 340,
+    playerX: 356,
     playerY: 270,
+    aimAngle: 0,
     enemies: [
-      ['goblin_shooter', 525, 235],
-      ['wild_boar', 545, 270, 'shield'],
-      ['goblin_shaman', 525, 305],
+      ['goblin_shooter', 485, 238],
+      ['wild_boar', 505, 270, 'shield'],
+      ['goblin_shaman', 485, 302],
     ],
   });
   await spawnEnemyBullets(page, [
-    [98300, 395, 245, -150, 0],
-    [98301, 402, 270, -150, 0],
-    [98302, 395, 295, -150, 0],
+    [98300, 418, 250, -150, 0],
+    [98301, 424, 270, -150, 0],
+    [98302, 418, 290, -150, 0],
   ]);
   await page.evaluate(() => {
     const sim = window.__GAME_TRANSPORT__!.getSim();
-    const gs = window.__PHASER_GAME__?.scene.getScene('GameScene') as
-      | { syncProjectilesAndPickups?: () => void; __ap2HeatVentHookInstalled?: boolean }
-      | undefined;
     Object.assign(sim.player, {
-      aimWorldX: 535, aimWorldY: 270,
+      aimWorldX: 495,
+      aimWorldY: 270,
       weaponSlots: ['apprentice_staff', 'rivet_gun'] as [WeaponDefId, WeaponDefId],
-      activeWeaponSlot: 0, weaponHeat: 80, weaponSlotHeat: [80, 0] as [number, number],
-      overheatLockTimer: 0, staffShotCounter: 2, apprenticeStaffShotCount: 2,
+      activeWeaponSlot: 0,
+      weaponHeat: 66,
+      weaponSlotHeat: [66, 0] as [number, number],
+      overheatLockTimer: 0,
+      ventCooldownTimer: 0,
+      fireCooldownTimer: 0,
+      staffShotCounter: 2,
+      apprenticeStaffShotCount: 2,
     });
-    sim.tryFireActiveWeapon(sim.player);
-    sim.player.weaponHeat = 80;
-    sim.player.weaponSlotHeat = [80, 0];
-    sim.player.overheatLockTimer = 0;
-    sim.events.push(
-      { kind: 'tactical_vent', playerId: sim.player.id, weaponId: 'apprentice_staff', x: sim.player.x, y: sim.player.y },
-      { kind: 'explosion', x: 535, y: 270, radius: 72, damage: 22, sourceDefId: 'apprentice_staff' },
-    );
-    if (gs && !gs.__ap2HeatVentHookInstalled && gs.syncProjectilesAndPickups) {
-      gs.__ap2HeatVentHookInstalled = true;
-      let stepIdx = 0;
-      const origSync = gs.syncProjectilesAndPickups.bind(gs);
-      gs.syncProjectilesAndPickups = () => {
-        stepIdx += 1;
-        if (stepIdx < 4) {
-          sim.player.weaponHeat = 80;
-          sim.player.weaponSlotHeat = [80, 0];
-        } else if (stepIdx === 4) {
-          (gs as unknown as { reloadVentQueued?: boolean }).reloadVentQueued = true;
-        }
-        origSync();
-      };
-    }
   });
   await stepDeterministicFrames(page, 1);
+  await markPostWarmupStart(page);
 }
 
-/** 9. ap2-melee-combo3-parry (8-frame strip) */
+/** 9. ap2-melee-combo3-parry (12-frame strip — Engine 2.6 Pilot 3) */
 export async function setupAp2MeleeCombo3ParryScene(page: Page): Promise<void> {
   await initAp2Arena(page, {
     archetype: 'TWIN_BRIDGES',
     roomSeed: 1338,
     characterId: 'vanguard',
-    playerX: 454,
-    playerY: 316,
+    playerX: 300,
+    playerY: 204,
+    aimAngle: 0,
     enemies: [
-      ['goblin_shooter', 665, 292],
-      ['thorn_turret', 672, 316],
-      ['goblin_shaman', 665, 340],
+      ['goblin_shooter', 435, 186],
+      ['thorn_turret', 445, 204],
+      ['goblin_shaman', 435, 222],
     ],
   });
-  await spawnEnemyBullets(page, [
-    [98500, 486, 300, -210, 0],
-    [98501, 494, 316, -210, 0],
-    [98502, 486, 332, -210, 0],
-  ]);
   await page.evaluate(() => {
     const sim = window.__GAME_TRANSPORT__!.getSim();
     Object.assign(sim.player, {
       weaponSlots: ['knight_sword', 'rivet_gun'] as [WeaponDefId, WeaponDefId],
-      activeWeaponSlot: 0, meleeComboStep: 2, meleeComboResetTimer: 0.8, reloadTimer: 0, weaponHeat: 0,
+      activeWeaponSlot: 0,
+      meleeComboStep: 0,
+      meleeComboResetTimer: 0,
+      fireCooldownTimer: 0,
+      reloadTimer: 0,
+      weaponHeat: 0,
     });
-    sim.tryFireActiveWeapon(sim.player);
-    sim.player.meleeComboStep = 2;
-    sim.player.meleeComboResetTimer = 0.9;
-    const gs = window.__PHASER_GAME__?.scene.getScene('GameScene') as
-      | { fx?: { spawnFloatingAlert: (x: number, y: number, t: string, c?: string) => void } }
-      | undefined;
-    gs?.fx?.spawnFloatingAlert(sim.player.x + 24, sim.player.y - 18, 'PARRY ×3!', '#FEF08A');
+    const ownerId = sim.enemies[0]?.id ?? 200;
+    const bullets: ReadonlyArray<readonly [number, number, number, number, number]> = [
+      [98500, 508, 192, -120, 0],
+      [98501, 514, 204, -120, 0],
+      [98502, 508, 216, -120, 0],
+    ];
+    for (const [id, x, y, vx, vy] of bullets) {
+      sim.projectiles.push(
+        sim.acquireProjectile({
+          id,
+          ownerId,
+          team: 'enemy',
+          isEnemy: true,
+          x,
+          y,
+          vx,
+          vy,
+          radius: 5.5,
+          damage: 2,
+          colorHex: '#E84545',
+          ttlSec: 3.5,
+          pierceCount: 0,
+          bounceCount: 0,
+          homingStrength: 0,
+          explosionRadius: 0,
+          isCrit: false,
+          element: 'none',
+          knockback: 40,
+        }),
+      );
+    }
   });
-  await stepDeterministicFrames(page, 2);
+  await stepDeterministicFrames(page, 1);
+  await markPostWarmupStart(page);
 }
 
 /** 10. ap2-tesla-smart-bounce (8-frame strip) */
@@ -469,19 +482,20 @@ export async function setupAp2TeslaSmartBounceScene(page: Page): Promise<void> {
     archetype: 'GAUNTLET_CHOKEPOINT',
     roomSeed: 1336,
     characterId: 'ranger',
-    playerX: 330,
+    playerX: 350,
     playerY: 272,
-    props: [['moss_table', 400, 272, true]],
+    aimAngle: 0,
+    props: [['moss_table', 392, 272, true]],
     enemies: [
-      ['goblin_shooter', 456, 272],
-      ['goblin_shaman', 548, 185],
-      ['spore_bomber', 605, 165],
+      ['goblin_shooter', 442, 272],
+      ['goblin_shaman', 475, 206],
+      ['spore_bomber', 505, 196],
     ],
   });
   await page.evaluate(() => {
     const sim = window.__GAME_TRANSPORT__!.getSim();
     for (let ty = 8; ty <= 9; ty++) {
-      for (let tx = 16; tx <= 17; tx++) {
+      for (let tx = 15; tx <= 16; tx++) {
         sim.map.tiles[ty * sim.map.cols + tx] = 'pillar';
       }
     }
@@ -489,50 +503,15 @@ export async function setupAp2TeslaSmartBounceScene(page: Page): Promise<void> {
     sim.map.mapRevision += 1;
     Object.assign(sim.player, {
       weaponSlots: ['tesla_carbine', 'rivet_gun'] as [WeaponDefId, WeaponDefId],
-      activeWeaponSlot: 0, clipMax: 12, clipAmmo: 10, bonusBounceCurrentClip: 1,
+      activeWeaponSlot: 0,
+      clipMax: 12,
+      clipAmmo: 1,
+      bonusBounceCurrentClip: 1,
+      fireCooldownTimer: 0,
     });
   });
   await stepDeterministicFrames(page, 2);
-
-  await page.evaluate(() => {
-    const sim = window.__GAME_TRANSPORT__!.getSim();
-    const gs = window.__PHASER_GAME__?.scene.getScene('GameScene') as
-      | {
-          fx?: {
-            spawnChainLightningArc: (x1: number, y1: number, x2: number, y2: number) => void;
-            spawnFloatingAlert: (x: number, y: number, t: string, c?: string) => void;
-          };
-          syncProjectilesAndPickups?: () => void;
-          __ap2TeslaBounceHookInstalled?: boolean;
-        }
-      | undefined;
-    sim.tryFireActiveWeapon(sim.player);
-    for (let s = 0; s < 6; s++) sim.step(1000 / 60);
-    sim.player.fireCooldownTimer = 0;
-    sim.tryFireActiveWeapon(sim.player);
-
-    gs?.fx?.spawnChainLightningArc(456, 272, 507, 272);
-    gs?.fx?.spawnChainLightningArc(507, 272, 548, 185);
-    gs?.fx?.spawnChainLightningArc(548, 185, 605, 165);
-    gs?.fx?.spawnFloatingAlert(507, 248, '⚡ SMART BOUNCE +35%!', '#38BDF8');
-
-    if (gs && !gs.__ap2TeslaBounceHookInstalled && gs.syncProjectilesAndPickups) {
-      gs.__ap2TeslaBounceHookInstalled = true;
-      let stepIdx = 0;
-      const origSync = gs.syncProjectilesAndPickups.bind(gs);
-      gs.syncProjectilesAndPickups = () => {
-        stepIdx += 1;
-        if (stepIdx % 4 === 0) {
-          sim.player.fireCooldownTimer = 0;
-          sim.player.clipAmmo = Math.max(2, sim.player.clipAmmo);
-          sim.tryFireActiveWeapon(sim.player);
-          gs.fx?.spawnChainLightningArc(507, 272, 548, 185);
-        }
-        origSync();
-      };
-    }
-  });
-  await stepDeterministicFrames(page, 1);
+  await markPostWarmupStart(page);
 }
 
 const ENV_SCENES: ReadonlyArray<
@@ -543,21 +522,253 @@ const ENV_SCENES: ReadonlyArray<
   ['ap2-b1-central-bastion', 'Biome 1 CENTRAL_BASTION tactical room with central fortress and 4 moss_table barricades', setupAp2B1CentralBastionScene, CENTRAL_BASTION_SAMPLE_RECTS],
 ];
 
-const STRIP_SCENES: ReadonlyArray<readonly [string, string, (page: Page) => Promise<void>]> = [
-  ['ap2-flip-cover-microblank', 'Player flipping moss_table with [E] emitting r=56px Micro-Blank wave clearing enemy bullets', setupAp2FlipCoverMicroblankScene],
-  ['ap2-dash-kick-wall-slam', 'Player Dash-Kicking flipped moss_table at 520 px/s into enemies triggering Wall-Slam', setupAp2DashKickWallSlamScene],
-  ['ap2-chasm-ring-out', 'Player knocking infantry enemies off TWIN_BRIDGES into chasm with RING-OUT! callout', setupAp2ChasmRingOutScene],
-  ['ap2-microbar-perfect-reload', 'Player firing rivet_gun Finale Shot and hitting [R] in Golden Window on 32x5px Micro-Bar', setupAp2MicrobarPerfectReloadScene],
-  ['ap2-heat-vent-staff', 'Player at 80% Orange Heat on apprentice_staff pressing [R] Tactical Vent and firing beam', setupAp2HeatVentStaffScene],
-  ['ap2-melee-combo3-parry', 'Vanguard wielding knight_sword swinging Combo Hit 3 Crescent Wave and Parry Deflecting bullets', setupAp2MeleeCombo3ParryScene],
-  ['ap2-tesla-smart-bounce', 'Player firing tesla_carbine through flipped moss_table and Smart Bouncing around L-corner', setupAp2TeslaSmartBounceScene],
-];
-
 export const AP2_P0B_VISUAL_SCENES: readonly VisualSceneDef[] = [
   ...ENV_SCENES.map(([id, desc, setup, sampleRects]) =>
     makeScene(id, desc, DEFAULT_GAME_URL, 'GameScene', setup, { includeUnlit: true, sampleRects }),
   ),
-  ...STRIP_SCENES.map(([id, desc, setup]) =>
-    makeScene(id, desc, DEFAULT_GAME_URL, 'GameScene', setup, { captureStrip: true, stripFramesPerStep: 2 }),
+  makeScene(
+    'ap2-flip-cover-microblank',
+    'Player flipping moss_table with [E] emitting r=56px Micro-Blank wave clearing enemy bullets',
+    DEFAULT_GAME_URL,
+    'GameScene',
+    setupAp2FlipCoverMicroblankScene,
+    {
+      captureStrip: true,
+      frameCount: 8,
+      heroFrameIndex: 4,
+      apexEvent: {
+        simEventKind: 'cover_flipped',
+        simEventPredicate: (ev) => Number(ev['bulletsCleared'] ?? 0) > 0,
+      },
+      stripSchedule: [
+        { stepCount: 0, stage: 'windup_hold', label: 'VOLLEY IN' },
+        { stepCount: 2, stage: 'active', label: 'CLOSE IN 1' },
+        { stepCount: 2, stage: 'active', label: 'CLOSE IN 2' },
+        { stepCount: 2, stage: 'active', label: 'DANGER ZONE' },
+        {
+          stepCount: 2,
+          stage: 'apex',
+          label: 'FLIP [E]!',
+          beforeStep: (page) => triggerInteract(page),
+        },
+        { stepCount: 3, stage: 'sub_impact', label: 'MICRO-BLANK' },
+        { stepCount: 4, stage: 'settled', label: 'COVER BLOCK' },
+        { stepCount: 4, stage: 'settled', label: 'SAFE COVER' },
+      ],
+    },
+  ),
+  makeScene(
+    'ap2-dash-kick-wall-slam',
+    'Player Dash-Kicking flipped moss_table at 520 px/s into enemies triggering Wall-Slam',
+    DEFAULT_GAME_URL,
+    'GameScene',
+    setupAp2DashKickWallSlamScene,
+    {
+      captureStrip: true,
+      frameCount: 8,
+      heroFrameIndex: 4,
+      apexEvent: { simEventKind: 'wall_slam' },
+      stripSchedule: [
+        { stepCount: 0, stage: 'windup_hold', label: 'WINDUP' },
+        {
+          stepCount: 2,
+          stage: 'trigger',
+          label: 'DASH KICK',
+          beforeStep: (page) => triggerDash(page, 1, 0, 0),
+        },
+        { stepCount: 3, stage: 'active', label: 'SLIDE HIT 1' },
+        { stepCount: 3, stage: 'active', label: 'SLIDE HIT 2' },
+        { stepCount: 2, stage: 'apex', label: 'WALL SLAM!' },
+        { stepCount: 3, stage: 'sub_impact', label: 'SHOCKWAVE' },
+        { stepCount: 4, stage: 'settled', label: 'STUNNED' },
+        { stepCount: 4, stage: 'settled', label: 'SETTLED' },
+      ],
+    },
+  ),
+  makeScene(
+    'ap2-chasm-ring-out',
+    'Player knocking infantry enemies off TWIN_BRIDGES into chasm with RING-OUT! callout',
+    DEFAULT_GAME_URL,
+    'GameScene',
+    setupAp2ChasmRingOutScene,
+    {
+      captureStrip: true,
+      frameCount: 8,
+      heroFrameIndex: 4,
+      apexEvent: { simEventKind: 'ring_out', occurrence: 'last' },
+      actionRoi: {
+        mode: 'auto_bounds',
+        includeProjectiles: 'none',
+      },
+      stripSchedule: [
+        { stepCount: 0, stage: 'windup_hold', label: 'LEDGE WINDUP' },
+        {
+          stepCount: 2,
+          stage: 'trigger',
+          label: 'HEAVY SLASH',
+          beforeStep: (page) => triggerFireWeapon(page, Math.PI * 0.5, 1),
+        },
+        { stepCount: 2, stage: 'active', label: 'WAVE PUSH' },
+        { stepCount: 2, stage: 'sub_impact', label: 'RING-OUT 1' },
+        { stepCount: 1, stage: 'apex', label: 'RING-OUT!' },
+        { stepCount: 3, stage: 'sub_impact', label: 'LOOT FOUNTAIN' },
+        { stepCount: 4, stage: 'settled', label: 'ELITE STUNNED' },
+        { stepCount: 4, stage: 'settled', label: 'SETTLED' },
+      ],
+    },
+  ),
+  makeScene(
+    'ap2-microbar-perfect-reload',
+    'Player firing rivet_gun Finale Shot and hitting [R] in Golden Window on 32x5px Micro-Bar',
+    DEFAULT_GAME_URL,
+    'GameScene',
+    setupAp2MicrobarPerfectReloadScene,
+    {
+      captureStrip: true,
+      frameCount: 8,
+      heroFrameIndex: 4,
+      apexEvent: { simEventKind: 'perfect_reload' },
+      actionRoi: {
+        mode: 'auto_bounds',
+        sceneCategory: 'microbar_ui',
+        includeProjectiles: 'none',
+      },
+      stripSchedule: [
+        { stepCount: 0, stage: 'windup_hold', label: 'LAST ROUND' },
+        {
+          stepCount: 2,
+          stage: 'trigger',
+          label: 'FIRE FINALE',
+          beforeStep: (page) => triggerFireWeapon(page, 0, 1),
+        },
+        { stepCount: 8, stage: 'active', label: 'RELOAD 25%' },
+        { stepCount: 9, stage: 'active', label: 'GOLD ZONE 50%' },
+        {
+          stepCount: 2,
+          stage: 'apex',
+          label: 'PERFECT [R]!',
+          beforeStep: (page) => triggerReloadVent(page),
+        },
+        { stepCount: 3, stage: 'sub_impact', label: 'RIVET WEB' },
+        { stepCount: 4, stage: 'settled', label: 'OVERCLOCKED' },
+        { stepCount: 4, stage: 'settled', label: 'SETTLED' },
+      ],
+    },
+  ),
+  makeScene(
+    'ap2-heat-vent-staff',
+    'Player at 80% Orange Heat on apprentice_staff pressing [R] Tactical Vent and firing beam',
+    DEFAULT_GAME_URL,
+    'GameScene',
+    setupAp2HeatVentStaffScene,
+    {
+      captureStrip: true,
+      frameCount: 8,
+      heroFrameIndex: 4,
+      apexEvent: { simEventKind: 'tactical_vent' },
+      actionRoi: {
+        mode: 'auto_bounds',
+        sceneCategory: 'microbar_ui',
+        includeProjectiles: 'none',
+      },
+      stripSchedule: [
+        { stepCount: 0, stage: 'windup_hold', label: 'HEAT 66%' },
+        {
+          stepCount: 2,
+          stage: 'trigger',
+          label: '3RD SHOT BEAM',
+          beforeStep: (page) => triggerFireWeapon(page, 0, 1),
+        },
+        { stepCount: 3, stage: 'active', label: 'ORANGE 80%' },
+        { stepCount: 3, stage: 'active', label: 'BULLETS IN' },
+        {
+          stepCount: 2,
+          stage: 'apex',
+          label: 'VENT [R]!',
+          beforeStep: (page) => triggerReloadVent(page),
+        },
+        { stepCount: 3, stage: 'sub_impact', label: 'TRI-BLAST' },
+        { stepCount: 4, stage: 'settled', label: 'COOLED 0%' },
+        { stepCount: 4, stage: 'settled', label: 'SETTLED' },
+      ],
+    },
+  ),
+  makeScene(
+    'ap2-melee-combo3-parry',
+    'Vanguard wielding knight_sword swinging 3-hit combo, Crescent Wave and Parry Deflecting 3 bullets',
+    DEFAULT_GAME_URL,
+    'GameScene',
+    setupAp2MeleeCombo3ParryScene,
+    {
+      captureStrip: true,
+      frameCount: 12,
+      heroFrameIndex: 9,
+      apexEvent: {
+        simEventKind: 'melee_swing',
+        simEventPredicate: (ev) => Number(ev['bulletsDestroyed'] ?? 0) >= 3,
+      },
+      stripSchedule: [
+        { stepCount: 0, stage: 'windup_hold', label: 'COMBO READY' },
+        {
+          stepCount: 2,
+          stage: 'trigger',
+          label: 'HIT 1 SLASH',
+          beforeStep: (page) => triggerFireWeapon(page, 0, 1),
+        },
+        { stepCount: 14, stage: 'active', label: 'HIT 1 ARC' },
+        { stepCount: 15, stage: 'sub_impact', label: 'STEP 1 DONE' },
+        {
+          stepCount: 2,
+          stage: 'trigger',
+          label: 'HIT 2 LUNGE',
+          beforeStep: (page) => triggerFireWeapon(page, 0, 1),
+        },
+        { stepCount: 10, stage: 'active', label: 'HIT 2 ARC' },
+        { stepCount: 10, stage: 'sub_impact', label: 'STEP 2 DONE' },
+        { stepCount: 4, stage: 'windup_hold', label: 'WINDUP HIT 3' },
+        { stepCount: 5, stage: 'active', label: 'BULLETS IN' },
+        {
+          stepCount: 2,
+          stage: 'apex',
+          label: 'PARRY X3!',
+          beforeStep: (page) => triggerFireWeapon(page, 0, 1),
+        },
+        { stepCount: 4, stage: 'sub_impact', label: 'WAVE CRASH' },
+        { stepCount: 6, stage: 'settled', label: 'SETTLED' },
+      ],
+    },
+  ),
+  makeScene(
+    'ap2-tesla-smart-bounce',
+    'Player firing tesla_carbine through flipped moss_table and Smart Bouncing around L-corner',
+    DEFAULT_GAME_URL,
+    'GameScene',
+    setupAp2TeslaSmartBounceScene,
+    {
+      captureStrip: true,
+      frameCount: 8,
+      heroFrameIndex: 4,
+      apexEvent: {
+        simEventKind: ['bullet_volley_spawned', 'chain_lightning'],
+        simEventPredicate: (ev) =>
+          ev['kind'] === 'chain_lightning' || typeof ev['replacedProjectileId'] === 'number',
+        occurrence: 'last',
+      },
+      stripSchedule: [
+        { stepCount: 0, stage: 'windup_hold', label: 'AIM COVER' },
+        {
+          stepCount: 2,
+          stage: 'trigger',
+          label: 'FIRE TESLA',
+          beforeStep: (page) => triggerFireWeapon(page, 0, 1),
+        },
+        { stepCount: 3, stage: 'active', label: 'PASS COVER' },
+        { stepCount: 3, stage: 'sub_impact', label: 'PIERCE HIT 1' },
+        { stepCount: 3, stage: 'apex', label: 'SMART BOUNCE!' },
+        { stepCount: 3, stage: 'active', label: 'CORNER SEEK' },
+        { stepCount: 4, stage: 'sub_impact', label: 'CHAIN ARC!' },
+        { stepCount: 4, stage: 'settled', label: 'SETTLED' },
+      ],
+    },
   ),
 ];

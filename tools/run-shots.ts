@@ -126,6 +126,7 @@ export interface ShotsCliOptions {
   group?: string;
   scenes?: string;
   verifyFreeze: boolean;
+  gateMode?: 'WARN_ONLY' | 'HARD_ASSERT';
 }
 
 export function parseShotsArgs(argv: string[]): ShotsCliOptions {
@@ -134,6 +135,7 @@ export function parseShotsArgs(argv: string[]): ShotsCliOptions {
   let group: string | undefined;
   let scenes: string | undefined;
   let verifyFreeze = false;
+  let gateMode: 'WARN_ONLY' | 'HARD_ASSERT' | undefined;
 
   const args = argv.filter((arg) => arg !== '--');
 
@@ -161,6 +163,12 @@ export function parseShotsArgs(argv: string[]): ShotsCliOptions {
       scenes = arg.slice('--scenes='.length).replace(/\s+/g, ',');
     } else if (arg === '--verify-freeze') {
       verifyFreeze = true;
+    } else if (arg === '--gate-mode' && args[i + 1]) {
+      const gm = args[++i]!;
+      gateMode = gm === 'HARD_ASSERT' ? 'HARD_ASSERT' : 'WARN_ONLY';
+    } else if (arg.startsWith('--gate-mode=')) {
+      const gm = arg.slice('--gate-mode='.length);
+      gateMode = gm === 'HARD_ASSERT' ? 'HARD_ASSERT' : 'WARN_ONLY';
     }
   }
 
@@ -180,6 +188,7 @@ export function parseShotsArgs(argv: string[]): ShotsCliOptions {
     ...(group ? { group } : {}),
     ...(scenes ? { scenes } : {}),
     verifyFreeze,
+    ...(gateMode ? { gateMode } : {}),
   };
 }
 
@@ -187,7 +196,7 @@ export function runShotsCli(argv: string[] = process.argv.slice(2)): void {
   const options = parseShotsArgs(argv);
 
   console.log(
-    `[shots] Running visual capture: phase=${options.phase}, label=${options.label}, group=${options.group ?? 'none'}, scenes=${options.scenes ?? 'ALL'}, verifyFreeze=${options.verifyFreeze}`,
+    `[shots] Running visual capture: phase=${options.phase}, label=${options.label}, group=${options.group ?? 'none'}, scenes=${options.scenes ?? 'ALL'}, verifyFreeze=${options.verifyFreeze}, gateMode=${options.gateMode ?? 'HARD_ASSERT'}`,
   );
 
   const env: NodeJS.ProcessEnv = {
@@ -196,6 +205,7 @@ export function runShotsCli(argv: string[] = process.argv.slice(2)): void {
     ASHEN_SHOTS_LABEL: options.label,
     ASHEN_SHOTS_SCENES: options.scenes ?? '',
     ASHEN_VERIFY_FREEZE: options.verifyFreeze ? '1' : '0',
+    ...(options.gateMode ? { ASHEN_ANIM_GATE_MODE: options.gateMode } : {}),
   };
 
   const result = spawnSync('npx playwright test tests/e2e/visual.spec.ts', {

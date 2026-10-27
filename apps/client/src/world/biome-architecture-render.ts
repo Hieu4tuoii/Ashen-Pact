@@ -5,7 +5,7 @@ import {
 } from '@ashen-pact/shared';
 import type Phaser from 'phaser';
 import { ENV_PALETTE, hexToNum, PALETTE } from '../art/palette.js';
-import { getVisualQueryConfig } from '../core/visual-query.js';
+import { getFreezeVisualTimeSec, getVisualQueryConfig } from '../core/visual-query.js';
 import { graphicsSettings } from '../ui/graphics-settings.js';
 import {
   computeTileDistToWall,
@@ -684,7 +684,7 @@ export class BiomeArchitectureLiveLayer {
     const isLow = quality === 'low';
 
     if (getVisualQueryConfig().freeze) {
-      this.elapsedSec = 1.0;
+      this.elapsedSec = getFreezeVisualTimeSec(this.elapsedSec);
     } else if (!isLow) {
       this.elapsedSec += dtSec;
     }

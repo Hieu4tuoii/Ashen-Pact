@@ -5,9 +5,15 @@ import {
   comparePngBuffers,
   computeSceneEnvironmentSummary,
   convertPngBufferToGrayscale,
+  evaluateAnimationGates,
+  renderOverviewGridStrip,
+  renderRoiSheets1to1,
+  resolveActionRoiRects,
   srgbToCieL,
   srgbToHslSaturation,
   stitchPngBuffersHorizontal,
+  type AnimationGatesInput,
+  type KeyframeTraceRecord,
 } from '../../../tools/visual-metrics.js';
 
 function makeTestPng(
@@ -128,5 +134,258 @@ describe('visual-metrics color math & PNG analyzers', () => {
     expect(summary.centerDeltaL).toBe(5);
     expect(summary.floorDeltaL).toBe(37 - 26); // max(p95L) - min(p5L) = 11
     expect(summary.brazierToFloorDeltaL).toBeCloseTo(38 - 29, 3);
+  });
+});
+
+function makeValidBaselineGatesInput(): AnimationGatesInput {
+  const stages = [
+    'windup_hold',
+    'windup_hold',
+    'trigger',
+    'active',
+    'apex',
+    'sub_impact',
+    'settled',
+    'settled',
+  ] as const;
+
+  const keyframes: KeyframeTraceRecord[] = stages.map((stage, idx) => ({
+    frameIndex: idx,
+    frameLabel: `F${idx + 1}`,
+    stage,
+    simTick: 10 + idx * 2,
+    deltaTicks: idx === 0 ? 0 : 2,
+    rafStepsTaken: idx === 0 ? 0 : 2,
+    hitStopActive: false,
+    maxInSimStepWorldPx: idx === 0 ? 0 : 8.5,
+    stateChangedInStep: idx > 0,
+    changedScreenPixels: idx === 0 ? 0 : 1200,
+    roiRect: { x: 480, y: 260, width: 640, height: 360 },
+    roiWorldCenter: { x: 400, y: 220 },
+    playerStateSummary: 'alive | clip:5/6',
+    targetDeltaPosSummary: `dx:${idx * 8}px`,
+    actors: [
+      {
+        actorKey: 'player',
+        kind: 'player',
+        defIdOrKind: 'vanguard',
+        worldX: 360 + idx * 2,
+        worldY: 220,
+        hp: 6,
+        alive: true,
+        inChasm: false,
+        visible: true,
+        screenBounds: { x: 600, y: 360, width: 48, height: 56 },
+      },
+      {
+        actorKey: 'enemy:201',
+        kind: 'enemy',
+        defIdOrKind: 'goblin_shooter',
+        worldX: 420 + idx * 8,
+        worldY: 220,
+        hp: 50,
+        alive: true,
+        inChasm: false,
+        visible: true,
+        screenBounds: { x: 720 + idx * 16, y: 360, width: 44, height: 52 },
+      },
+    ],
+    alerts:
+      idx === 4
+        ? [
+            {
+              label: 'ĐẬP TƯỜNG!',
+              isNumericOnly: false,
+              age: 0.05,
+              ttl: 0.8,
+              screenBounds: { x: 760, y: 310, width: 110, height: 22 },
+            },
+          ]
+        : [],
+    minFrameActorContainmentRatio: 1.0,
+  }));
+
+  return {
+    sceneId: 'ap2-dash-kick-wall-slam',
+    frameCount: 8,
+    heroFrameIndex: 4,
+    apexEventSpec: {
+      simEventKind: 'wall_slam',
+      toleranceTicks: 2,
+    },
+    emittedSimEvents: [
+      {
+        simTick: 18,
+        rafStep: 8,
+        frameIndex: 4,
+        simEventKind: 'wall_slam',
+        eventPayload: { enemyId: 201, damage: 42 },
+        x: 452,
+        y: 220,
+      },
+    ],
+    externalStateMutations: [],
+    keyframes,
+    requiresNetDisplacement: true,
+  };
+}
+
+describe('Animation & Moment Verification Engine 2.6 — 5 Negative Fixtures', () => {
+  it('passes all 5 gates on a clean baseline trace', () => {
+    const input = makeValidBaselineGatesInput();
+    const res = evaluateAnimationGates(input, 'HARD_ASSERT');
+    expect(res.passed).toBe(true);
+    expect(res.failedGates).toEqual([]);
+  });
+
+  it('fixture-gate1-premature-or-missed-apex: fails Gate 1 when apexEvent fires at F1 or drifts > toleranceTicks from heroFrameIndex', () => {
+    const prematureInput = makeValidBaselineGatesInput();
+    prematureInput.emittedSimEvents = [
+      {
+        simTick: 10,
+        rafStep: 0,
+        frameIndex: 0, // F1 premature climax!
+        simEventKind: 'wall_slam',
+      },
+      ...prematureInput.emittedSimEvents,
+    ];
+    expect(() => evaluateAnimationGates(prematureInput, 'HARD_ASSERT', { throwOnFail: true })).toThrow(
+      /Gate 1/i,
+    );
+
+    const driftedInput = makeValidBaselineGatesInput();
+    driftedInput.emittedSimEvents = [
+      {
+        simTick: 25, // Hero frame is at tick 18 -> delta = 7 > 2 ticks
+        rafStep: 15,
+        frameIndex: 7,
+        simEventKind: 'wall_slam',
+      },
+    ];
+    const driftedRes = evaluateAnimationGates(driftedInput, 'WARN_ONLY');
+    expect(driftedRes.gates.gate1ApexEvent.passed).toBe(false);
+    expect(driftedRes.failedGates).toContain('gate1ApexEvent');
+  });
+
+  it('fixture-gate2-external-state-mutation: fails Gate 2 when script mutates enemy.x or player.weaponHeat outside transport.step()', () => {
+    const mutatedInput = makeValidBaselineGatesInput();
+    mutatedInput.externalStateMutations = [
+      {
+        stepFromFrame: 2,
+        simTick: 14,
+        entityKey: 'enemy:201',
+        field: 'x',
+        afterPrevStepValue: 436,
+        beforeNextStepValue: 451,
+      },
+    ];
+    expect(() => evaluateAnimationGates(mutatedInput, 'HARD_ASSERT', { throwOnFail: true })).toThrow(
+      /Gate 2/i,
+    );
+    const res = evaluateAnimationGates(mutatedInput, 'WARN_ONLY');
+    expect(res.gates.gate2StateIntegrityAndVelocity.passed).toBe(false);
+  });
+
+  it('fixture-gate3-frozen-active-step: fails Gate 3 when target stage is active, !hitStopActive, and state/pixels are frozen', () => {
+    const frozenInput = makeValidBaselineGatesInput();
+    frozenInput.keyframes[3] = {
+      ...frozenInput.keyframes[3]!,
+      stage: 'active',
+      hitStopActive: false,
+      stateChangedInStep: false,
+      changedScreenPixels: 0,
+    };
+    expect(() => evaluateAnimationGates(frozenInput, 'HARD_ASSERT', { throwOnFail: true })).toThrow(
+      /Gate 3/i,
+    );
+    const res = evaluateAnimationGates(frozenInput, 'WARN_ONLY');
+    expect(res.gates.gate3StageActivityAndPixelDiff.passed).toBe(false);
+  });
+
+  it('fixture-gate4-alert-overlap-and-clipped-actor: fails Gate 4 when two non-numeric alerts overlap or a live actor is clipped (containment = 0.5)', () => {
+    const overlapInput = makeValidBaselineGatesInput();
+    overlapInput.keyframes[4]!.alerts = [
+      {
+        label: 'ĐẬP TƯỜNG!',
+        isNumericOnly: false,
+        age: 0.05,
+        ttl: 0.8,
+        screenBounds: { x: 760, y: 310, width: 110, height: 22 },
+      },
+      {
+        label: 'CHOÁNG!',
+        isNumericOnly: false,
+        age: 0.05,
+        ttl: 0.8,
+        screenBounds: { x: 780, y: 318, width: 90, height: 22 },
+      },
+    ];
+    expect(() => evaluateAnimationGates(overlapInput, 'HARD_ASSERT', { throwOnFail: true })).toThrow(
+      /Gate 4/i,
+    );
+
+    const clippedInput = makeValidBaselineGatesInput();
+    // Place enemy half outside the right edge of roiRect (480 + 640 = 1120)
+    clippedInput.keyframes[5]!.actors[1]!.screenBounds = {
+      x: 1098,
+      y: 360,
+      width: 44,
+      height: 52,
+    };
+    clippedInput.keyframes[5]!.minFrameActorContainmentRatio = 0.5;
+    const clippedRes = evaluateAnimationGates(clippedInput, 'WARN_ONLY');
+    expect(clippedRes.gates.gate4AlertOverlapAndContainment.passed).toBe(false);
+  });
+
+  it('fixture-gate5-insufficient-net-displacement: fails Gate 5 when physics scene actor only jitters in place (maxNetWorldDisplacementPx = 3)', () => {
+    const jitterInput = makeValidBaselineGatesInput();
+    for (let k = 0; k < jitterInput.keyframes.length; k++) {
+      const kf = jitterInput.keyframes[k]!;
+      kf.actors[0]!.worldX = 360 + (k % 2);
+      kf.actors[1]!.worldX = 420 + (k % 2) * 3;
+      kf.actors[1]!.worldY = 220;
+    }
+    jitterInput.emittedSimEvents = [
+      {
+        simTick: 18,
+        rafStep: 8,
+        frameIndex: 4,
+        simEventKind: 'wall_slam',
+        eventPayload: { enemyId: 201, damage: 42 },
+        x: 423,
+        y: 220,
+      },
+    ];
+    expect(() => evaluateAnimationGates(jitterInput, 'HARD_ASSERT', { throwOnFail: true })).toThrow(
+      /Gate 5/i,
+    );
+    const res = evaluateAnimationGates(jitterInput, 'WARN_ONLY');
+    expect(res.gates.gate5NetDisplacement.passed).toBe(false);
+    expect(res.gates.gate5NetDisplacement.maxNetWorldDisplacementPx).toBeLessThanOrEqual(3);
+  });
+
+  it('resolves Fixed Union ROI and renders 1280x760 1:1 ROI sheets + 1920x580 / 1920x870 overview strips', () => {
+    const input = makeValidBaselineGatesInput();
+    const { roiMode, roiRects } = resolveActionRoiRects(input.keyframes, undefined, 64, 48);
+    expect(roiMode).toBe('level1_fixed_all');
+    expect(roiRects).toHaveLength(8);
+
+    // Create 8 small synthetic 1920x1080 buffers only when testing exact dimensions;
+    // here we use 640x360 ROI on a 640x360 buffer for fast unit test verification
+    const fastFrames = Array.from({ length: 8 }, (_, idx) =>
+      makeTestPng(640, 360, () => [20 + idx * 10, 40, 60, 255]),
+    );
+    for (const kf of input.keyframes) {
+      kf.roiRect = { x: 0, y: 0, width: 640, height: 360 };
+    }
+    const roiSheets = renderRoiSheets1to1(fastFrames, input.keyframes, 4, 'level1_fixed_all');
+    expect(roiSheets).toHaveLength(2);
+    const sheet1 = PNG.sync.read(roiSheets[0]!);
+    expect(sheet1.width).toBe(1280);
+    expect(sheet1.height).toBe(760);
+
+    const overview8 = PNG.sync.read(renderOverviewGridStrip(fastFrames, input.keyframes, 4));
+    expect(overview8.width).toBe(1920);
+    expect(overview8.height).toBe(580);
   });
 });

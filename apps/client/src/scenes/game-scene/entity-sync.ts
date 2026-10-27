@@ -18,7 +18,7 @@ import {
 import { hexToNum, PALETTE } from '../../art/palette.js';
 import { RIG_DEFS_BY_ID, VANGUARD_RIG_DEF } from '../../art/rig-defs.js';
 import { TextureBaker } from '../../art/texture-baker.js';
-import { getVisualQueryConfig } from '../../core/visual-query.js';
+import { getFreezeVisualTimeSec } from '../../core/visual-query.js';
 import { resolveProjectileRenderSpec } from '../../fx/combat-fx.js';
 import { graphicsSettings } from '../../ui/graphics-settings.js';
 import { type GameScene, RIG_FOOT_OFFSET_Y } from '../GameScene.js';
@@ -518,9 +518,7 @@ export function syncProjectilesAndPickupsImpl(this: GameScene): void {
   }
 
   // 2. Pickups (Energy & Gold, object-pooled Sprites, instanced per player)
-  const visualTimeSec = getVisualQueryConfig().freeze
-    ? 1.0
-    : (this.lighting?.getElapsedSec() ?? 1.0);
+  const visualTimeSec = getFreezeVisualTimeSec(this.lighting?.getElapsedSec() ?? 1.0);
   const showPickupGlow =
     !sim.stressTestActive &&
     graphicsSettings.getState().quality === 'high' &&

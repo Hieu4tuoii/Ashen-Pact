@@ -30,6 +30,7 @@ import {
   type PooledLightningArc,
   type PooledParticle,
   refreshResolution,
+  resolveActivePopupOverlaps,
   resolveSpatialPopupCellSlot,
   update,
 } from './combat-fx-pools.js';
@@ -649,6 +650,7 @@ export class CombatFxManager {
     slot.text.setAlpha(1);
     slot.text.setVisible(true);
     slot.text.setActive(true);
+    resolveActivePopupOverlaps(this.damagePool);
   }
 
   public spawnMuzzleFlashAndCasing(

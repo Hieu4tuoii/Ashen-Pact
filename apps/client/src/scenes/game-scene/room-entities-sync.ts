@@ -12,7 +12,7 @@ import { CutoutRig } from '../../art/cutout-rig.js';
 import { PALETTE } from '../../art/palette.js';
 import { MERCHANT_RIG_DEF, RIG_DEFS_BY_ID, VANGUARD_RIG_DEF } from '../../art/rig-defs.js';
 import { TextureBaker } from '../../art/texture-baker.js';
-import { getVisualQueryConfig } from '../../core/visual-query.js';
+import { getFreezeVisualTimeSec } from '../../core/visual-query.js';
 import { computeChestOpenBounce, computeWorldItemArcPose } from '../../fx/combat-fx.js';
 import {
   drawEnemyBatch1Indicators,
@@ -54,9 +54,9 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
   const textRes = TextureBaker.getBakeScale();
   const invBake = 1 / textRes;
   const lightingEnabled = this.lighting?.isLightmapVisible() ?? true;
-  const visualTimeSec = getVisualQueryConfig().freeze
-    ? 1.0
-    : (this.lighting?.getElapsedSec() ?? 1.0);
+  const visualTimeSec = getFreezeVisualTimeSec(this.lighting?.getElapsedSec() ?? 1.0); //
+  // freeze clock via getFreezeVisualTimeSec
+  void dtSec;
 
   const debug = initGlobalDebugState();
   const target = sim.stressTestActive

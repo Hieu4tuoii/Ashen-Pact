@@ -1,5 +1,49 @@
 import type { Page } from '@playwright/test';
 import type { SampleRect } from '../../../tools/visual-metrics.js';
+import {
+  type ActionRoiConfig,
+  type AnimationGateMode,
+  type AnimationGateReport,
+  type ApexEventSpec,
+  type CapturedAnimatedSceneResult,
+  captureAnimatedStripAndHeroScene,
+  installSceneStripInstrumentation,
+  markPostWarmupStart,
+  markPostWarmupStartTick,
+  queueStepInput,
+  type SceneAnimationTelemetry,
+  type StripCaptureSceneOpts,
+  type StripKeyframeStep,
+  type StripStageKind,
+  triggerDash,
+  triggerFireWeapon,
+  triggerInteract,
+  triggerReloadVent,
+  type WhitelistInputSpec,
+} from './visual-strip-harness.js';
+
+export {
+  type ActionRoiConfig,
+  type AnimationGateMode,
+  type AnimationGateReport,
+  type ApexEventSpec,
+  type CapturedAnimatedSceneResult,
+  captureAnimatedStripAndHeroScene,
+  installSceneStripInstrumentation,
+  markPostWarmupStart,
+  markPostWarmupStartTick,
+  queueStepInput,
+  type SampleRect,
+  type SceneAnimationTelemetry,
+  type StripCaptureSceneOpts,
+  type StripKeyframeStep,
+  type StripStageKind,
+  triggerDash,
+  triggerFireWeapon,
+  triggerInteract,
+  triggerReloadVent,
+  type WhitelistInputSpec,
+};
 
 export interface VisualSceneDef {
   id: string;
@@ -10,7 +54,13 @@ export interface VisualSceneDef {
   captureUnlit?: boolean;
   includeUnlit?: boolean;
   captureStrip?: boolean;
+  frameCount?: 8 | 12;
   stripFramesPerStep?: number;
+  stripSchedule?: readonly (number | StripKeyframeStep)[];
+  heroFrameIndex?: number;
+  apexEvent?: ApexEventSpec;
+  actionRoi?: ActionRoiConfig;
+  assertApexFlash?: boolean;
   grayscaleFrom?: string;
   sampleRects?: SampleRect[];
   freezeMaskRects?: SampleRect[];
@@ -114,6 +164,21 @@ export async function installDeterministicRafGate(page: Page): Promise<void> {
           if (gateActive && remainingSteps > 0) {
             remainingSteps -= 1;
           }
+          const w = window as unknown as {
+            __CAPTURE_STRIP_ACTIVE__?: boolean;
+            __STRIP_STEP_TICKS__?: number;
+            __PHASER_GAME__?: {
+              scene?: {
+                getScene?: (k: string) => { pauseModalOpen?: boolean } | undefined;
+              };
+            };
+          };
+          if (w.__CAPTURE_STRIP_ACTIVE__ === true) {
+            const gs = w.__PHASER_GAME__?.scene?.getScene?.('GameScene');
+            if (!gs?.pauseModalOpen) {
+              w.__STRIP_STEP_TICKS__ = (w.__STRIP_STEP_TICKS__ ?? 0) + 1;
+            }
+          }
           syntheticTime += 16.6667;
           const cbs = pendingCallbacks.splice(0, pendingCallbacks.length);
           for (const cb of cbs) {
@@ -174,11 +239,15 @@ export async function setSceneLightingAndRenderStaticFrame(
 ): Promise<void> {
   await page.evaluate(async (lightOn) => {
     window.__GAME_SET_LIGHTING__?.(lightOn);
+    const w = window as unknown as { __STRIP_STEP_TICKS__?: number };
     const gs = window.__PHASER_GAME__?.scene.getScene('GameScene') as
       | Record<string, unknown>
       | undefined;
     const stepFn = (window as unknown as RafGateWindow).__STEP_RAF_FRAMES__;
     if (gs && stepFn) {
+      const fx = gs['fx'] as Record<string, unknown> | undefined;
+      const cam = (gs['cameras'] as { main?: { scrollX: number; scrollY: number } } | undefined)
+        ?.main;
       const snap = {
         pauseModalOpen: gs['pauseModalOpen'],
         coopMode: gs['coopMode'],
@@ -187,11 +256,41 @@ export async function setSceneLightingAndRenderStaticFrame(
         trailingHpRatio: gs['trailingHpRatio'],
         trailingArmorRatio: gs['trailingArmorRatio'],
         trailingBossHpRatio: gs['trailingBossHpRatio'],
+        lastShakeX: gs['lastShakeX'],
+        lastShakeY: gs['lastShakeY'],
       };
+      const fxSnap = fx
+        ? {
+            trauma: fx['trauma'],
+            shakeTime: fx['shakeTime'],
+            hitStopRemainingMs: fx['hitStopRemainingMs'],
+          }
+        : null;
+      const camSnap = cam ? { scrollX: cam.scrollX, scrollY: cam.scrollY } : null;
+      const stripTicksSnap = w.__STRIP_STEP_TICKS__;
+      const hasOwnUpdateCam = Object.prototype.hasOwnProperty.call(
+        gs,
+        'updateCameraWithLookaheadAndShake',
+      );
+      const origUpdateCam = gs['updateCameraWithLookaheadAndShake'];
+      gs['updateCameraWithLookaheadAndShake'] = () => {};
       gs['pauseModalOpen'] = true;
       gs['coopMode'] = 'solo';
       await stepFn(2);
       Object.assign(gs, snap);
+      if (fx && fxSnap) {
+        Object.assign(fx, fxSnap);
+      }
+      if (cam && camSnap) {
+        cam.scrollX = camSnap.scrollX;
+        cam.scrollY = camSnap.scrollY;
+      }
+      w.__STRIP_STEP_TICKS__ = stripTicksSnap;
+      if (hasOwnUpdateCam) {
+        gs['updateCameraWithLookaheadAndShake'] = origUpdateCam;
+      } else {
+        delete gs['updateCameraWithLookaheadAndShake'];
+      }
     } else if (stepFn) {
       await stepFn(2);
     }
@@ -639,7 +738,13 @@ export function makeScene(
       | 'captureUnlit'
       | 'includeUnlit'
       | 'captureStrip'
+      | 'frameCount'
       | 'stripFramesPerStep'
+      | 'stripSchedule'
+      | 'heroFrameIndex'
+      | 'apexEvent'
+      | 'actionRoi'
+      | 'assertApexFlash'
       | 'grayscaleFrom'
       | 'sampleRects'
     >

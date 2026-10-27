@@ -72,3 +72,14 @@ export function getClientFreezeRandom(forceFreeze?: boolean): () => number {
   const isFreeze = forceFreeze ?? getVisualQueryConfig().freeze;
   return isFreeze ? boundFreezeNext : Math.random;
 }
+
+export function getFreezeVisualTimeSec(liveElapsedSec: number): number {
+  if (!getVisualQueryConfig().freeze) {
+    return liveElapsedSec;
+  }
+  const stripStepTicks =
+    typeof window !== 'undefined'
+      ? Number((window as unknown as { __STRIP_STEP_TICKS__?: number }).__STRIP_STEP_TICKS__ ?? 0)
+      : 0;
+  return 1.0 + (Number.isFinite(stripStepTicks) ? stripStepTicks : 0) * (1 / 60);
+}

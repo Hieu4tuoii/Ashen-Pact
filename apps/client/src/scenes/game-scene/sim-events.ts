@@ -124,6 +124,9 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
         const swingSfx = resolveWeaponShootSfx(ev.weaponId);
         zzfx.play(swingSfx, ev.x, this.camFocusX, ev.y, this.camFocusY);
         if (ev.bulletsDestroyed > 0) {
+          if (!isStress) {
+            this.fx.spawnFloatingAlert(ev.x + 18, ev.y - 14, ev.bulletsDestroyed > 1 ? `PARRY ×${ev.bulletsDestroyed}!` : 'PARRY!', '#FEF08A');
+          }
           zzfx.play('bullet_deflect', ev.x, this.camFocusX, ev.y, this.camFocusY);
         }
         break;

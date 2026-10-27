@@ -11,7 +11,11 @@ import { TextureBaker } from '../art/texture-baker.js';
 import { getClientFreezeRandom } from '../core/visual-query.js';
 import { graphicsSettings } from '../ui/graphics-settings.js';
 import type { CombatFxManager } from './combat-fx.js';
-import type { PooledAmbientParticle, PooledParticle } from './combat-fx-pools.js';
+import {
+  type PooledAmbientParticle,
+  type PooledParticle,
+  resolveActivePopupOverlaps,
+} from './combat-fx-pools.js';
 
 export type FxEaseCurve = 'linear' | 'easeOutCubic' | 'easeOutBack';
 
@@ -943,17 +947,16 @@ export function spawnFloatingAlertImpl(
     }
   }
 
-  // 2. Enforce vertical separation (>= 24px) & horizontal clearance against active alerts
+  // 2. Enforce vertical separation (>= 26px) & horizontal clearance against active alerts & damage popups
   for (let pass = 0; pass < 4; pass++) {
     let shifted = false;
     for (let i = 0; i < this.damagePool.length; i++) {
       const other = this.damagePool[i]!;
       if (!other.active || other.age >= other.ttl) continue;
-      if (/^-?\d+!?$/.test(other.text.text)) continue;
       const dx = targetX - other.x;
       const dy = targetY - other.y;
-      if (Math.abs(dx) < 108 && Math.abs(dy) < 23) {
-        targetY = other.y - 24;
+      if (Math.abs(dx) < 108 && Math.abs(dy) < 26) {
+        targetY = other.y - 26;
         if (Math.abs(dx) >= 20 && targetX === x) {
           targetX += dx >= 0 ? 16 : -16;
         }
@@ -974,7 +977,7 @@ export function spawnFloatingAlertImpl(
   slot.x = targetX;
   slot.y = targetY;
   slot.vx = 0;
-  slot.vy = -52;
+  slot.vy = -56;
   slot.baseScale = 1.18;
 
   slot.text.setText(label);
@@ -984,6 +987,7 @@ export function spawnFloatingAlertImpl(
   slot.text.setAlpha(1);
   slot.text.setVisible(true);
   slot.text.setActive(true);
+  resolveActivePopupOverlaps(this.damagePool);
 }
 
 

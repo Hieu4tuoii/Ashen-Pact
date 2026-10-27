@@ -128,22 +128,30 @@ Một Phase chỉ được phép đánh dấu hoàn thành khi thỏa mãn đồ
 
 Do đó, dự án sử dụng trực tiếp và mở rộng hạ tầng kiểm chứng hình ảnh đã có sẵn trong codebase (`tools/run-shots.ts`, `tests/e2e/visual.spec.ts`, `tests/e2e/helpers/visual-scenes.ts`, `tools/visual-metrics.ts`) theo quy trình bắt buộc sau:
 
-1. **Mở rộng Danh mục Cảnh chụp Tất định (`tests/e2e/helpers/visual-scenes.ts` & các file helper con):**
-   - Vì `tests/e2e/helpers/visual-scenes.ts` hiện đã có **932 dòng** (sát ngưỡng 1000 dòng), **tuyệt đối không nhồi thêm code trực tiếp vào file này**. Hãy tạo các file helper cảnh chụp mới theo từng nhóm Phase (ví dụ: `tests/e2e/helpers/visual-scene-ap2-p0.ts`, `visual-scene-ap2-p1.ts`, `visual-scene-ap2-p2.ts`, `visual-scene-ap2-p3.ts`, `visual-scene-ap2-p4.ts`) rồi import mảng cảnh vào `VISUAL_SCENES` và `SCENE_GROUPS` trong `visual-scenes.ts` / `tools/run-shots.ts`.
-   - Mọi cảnh chụp đều chạy với `?seed=12345&freeze=1&debug=0&testHooks=1` (cố định mọi RNG client, thời gian bước 1/60s tất định, giao diện đúng chuẩn bản phát hành nhưng vẫn mở hook dựng cảnh).
-   - **Bắt buộc sử dụng `captureStrip: true` (ghép ngang 8 khung hình liên tiếp thành `<scene>-strip.png`)** cho mọi cơ chế có tính nhịp điệu và chuyển động vật lý:
-     - Canh nhịp `[R]` trên Micro-Bar (`Perfect Reload` lóe sáng vàng & `Tactical Vent` xả xung nhiệt).
-     - Chuỗi `Nhấn [E] lật bàn ('low' -> 'flipped' + vòng xóa đạn Micro-Blank) -> Lướt Shift Dash-Kick sút bàn trượt đi ('sliding') -> Đập quái vào tường (Wall-Slam) hoặc đẩy rơi xuống vực (Ring-Out)`.
-     - Chuỗi Combo Cận chiến 3 đòn (`Đòn 1 -> Đòn 2 Lunge -> Đòn 3 Tuyệt kỹ + Parry Deflect đánh bật 3 viên đạn địch`).
-     - Cơ chế đặc trưng của 18 vũ khí, 24 Phước lành, 6 Khế ước và **Phá giáp 1–2 bước của 3 Boss**.
+1. **Mở rộng Danh mục Cảnh chụp Tất định & Hệ thống Kiểm Định Chuyển Động (`Animation & Moment Verification Engine 2.6`):**
+   - Vì `tests/e2e/helpers/visual-scenes.ts` đã sát ngưỡng 1000 dòng, **tuyệt đối không nhồi thêm code trực tiếp vào file này**. Tạo các file helper cảnh chụp theo từng nhóm Phase (`tests/e2e/helpers/visual-scene-ap2-p0.ts`, `visual-scene-ap2-p1.ts`, `visual-scene-ap2-p2.ts`, `visual-scene-ap2-p3.ts`, `visual-scene-ap2-p4.ts`) kết hợp với `tests/e2e/helpers/visual-strip-harness.ts`, `tools/visual-animation-gates.ts` và `tools/visual-strip-renderer.ts` (giữ mọi file `< 1000 dòng`).
+   - Mọi cảnh chụp chạy với `?seed=1337&freeze=1&debug=0&testHooks=1`; đồng hồ thời gian thị giác trong chế độ `freeze` tăng tất định theo bước strip thông qua `getFreezeVisualTimeSec(liveElapsedSec)` (`1.0 + window.__STRIP_STEP_TICKS__ * (1/60)`).
+   - **Cấu trúc Strip Chuẩn Engine 2.6 (`captureStrip: true`):**
+     - **Tách biệt `F1` (`windup_hold`) và `★ HERO` (`heroFrameIndex`):** `F1` bắt buộc là trạng thái chuẩn bị (`stage: 'windup_hold'`, chưa nổ sự kiện cao trào). Khoảnh khắc đỉnh điểm duy nhất (`stage: 'apex'`) đặt tại `heroFrameIndex` (`4` tức `F5` cho strip 8 frame Mẫu A; `9` tức `F10` cho strip 12 frame Mẫu B `MELEE_COMBO` 3 đòn) và được chứng thực bằng `apexEvent` thật phát ra từ `WorldSim`. Ảnh tĩnh `<scene>.png` và `<scene>-unlit.png` được trích xuất trực tiếp tại đúng `heroFrameIndex`.
+     - **Cấm làm giả chuyển động (`Zero Fake Animation`):** Trong `setup` không được bắn trước hiệu ứng cao trào; sau `F1`, `beforeStep` chỉ được dùng Whitelist Input API (`queueStepInput`, `triggerReloadVent`, `triggerInteract`, `triggerDash`, `triggerFireWeapon`). Cấm monkey-patch `gs.syncProjectilesAndPickups` hoặc `sim.step`, cấm dùng `Object.assign` sửa tọa độ/vận tốc/máu/timer bên ngoài `transport.step()`.
+     - **Bộ 3 Đầu Ra Hình Ảnh + Telemetry cho mỗi cảnh Strip:**
+       1. **Các tấm Cận Cảnh `1:1 Native Pixel` (`<scene>-roi-1.png`, `<scene>-roi-2.png`[, `<scene>-roi-3.png`], kích thước `1280×760 < 1536px`):** Lưới `2×2` (4 frame/tấm), mỗi ô `640×380` gồm **thanh tiêu đề `640×20` tách rời ở trên** (`#141019`, viền vàng `3px` tại frame `★ HERO`) và vùng cắt hành động **`640×360` giữ nguyên `1:1` từng pixel gốc** để AI Reviewer (`Model: pro`) soi sắc nét `Micro-Bar 32×5px`, khớp xoay `CutoutRig`, quỹ đạo đạn và chữ nổi mà không bị nén.
+       2. **Tấm Tổng Quan Toàn Màn Hình (`<scene>-strip.png`, kích thước `1920×580` cho 8 frame `4×2` hoặc `1920×870` cho 12 frame `4×3`):** Mỗi ô `480×290` (`20px` header + `480×270` ảnh thu nhỏ `4:1`) có vẽ khung viền vàng đứt nét đánh dấu vị trí `roiRect`.
+       3. **Bảng Tóm Tắt Telemetry (`<scene>-telemetry-summary.md`) & Kết quả 5 Cổng Định Lượng (`evaluateAnimationGates` trong `metrics.json`):** Tự động kiểm tra **Cổng 1 (`Apex Event Gate`)**, **Cổng 2 (`State Integrity Gate`)**, **Cổng 3 (`Stage-Aware Activity Gate`)**, **Cổng 4 (`Floating Text Hygiene Gate`)**, và **Cổng 5 (`ROI Containment & Physical Displacement Gate`)**.
 
 2. **Chấm Điểm Độc Lập Bởi Visual Reviewer (`invoke_subagent` loại `research`, `Model: 'pro'`):**
    - Ở mỗi Visual Gate, Controller khởi tạo một **subagent `research` mới hoàn toàn (`Model: 'pro'`)**.
-   - Cung cấp cho Visual Reviewer **dưới dạng đường dẫn file** (để subagent tự dùng công cụ `read_file` xem ảnh PNG trực tiếp):
-     - Mục tiêu của Phase hiện tại và đặc tả tương ứng trong `docs/superpowers/specs/2026-10-26-ashen-pact-2.0-overhaul-design.md` + `docs/ART_GUIDE.md`.
-     - File `metrics.json` vừa xuất từ `tools/visual-metrics.ts`.
-     - Ảnh phòng chuẩn v0.2.0 (`docs/screenshots/polish-p4/golden-room/b1-combat.png` nếu có, hoặc ảnh `before` của cảnh đó) làm mốc tham chiếu chất lượng.
-     - Toàn bộ ảnh `.png` và `-strip.png` của Phase hiện tại (với các cảnh so sánh trực tiếp trước/sau, copy sang tên ẩn danh `version-A` / `version-B` để chống thiên vị).
+   - Cung cấp cho Visual Reviewer **dưới dạng đường dẫn file** (để subagent tự dùng công cụ `read_file` mở đọc trực tiếp theo đúng thứ tự):
+     1. File tóm tắt `<scene>-telemetry-summary.md` của từng cảnh strip (kiểm tra kết quả 5 Cổng định lượng và tiến trình `simTick / stateHash`).
+     2. Các tấm cận cảnh `1:1 Native Pixel` `<scene>-roi-1.png`, `<scene>-roi-2.png` (và `<scene>-roi-3.png` nếu 12 frame).
+     3. Tấm tổng quan `<scene>-strip.png` và ảnh đại diện `<scene>.png` / `<scene>-unlit.png` (trích xuất tại `★ HERO`).
+     4. File `metrics.json` và tài liệu đặc tả `docs/superpowers/specs/2026-10-26-ashen-pact-2.0-overhaul-design.md` + `docs/ART_GUIDE.md`.
+   - Bên cạnh **Rubric 10 Tiêu Chí (Mục `6`)**, đối với mọi cảnh có `captureStrip: true`, Visual Reviewer bắt buộc trả lời **5 câu hỏi kiểm toán chuyển động (`5 Stage-Based Audit Questions`)**:
+     - *(Q1 - Tương phản trước/sau kích hoạt)*: So sánh `F1` (`windup_hold`) với frame `trigger` trên `roi-1.png`: hành động khởi phát có tạo thay đổi tư thế/vật thể rõ ràng không?
+     - *(Q2 - Tính liên tục quỹ đạo)*: Trên các frame `active`, hướng di chuyển của đạn, vật thể trượt hoặc khớp tay nhân vật có mượt và khớp hướng ngắm không?
+     - *(Q3 - Khoảnh khắc cao trào `★ HERO`)*: Tại ô có khung viền vàng `★ HERO` (`F5` hoặc `F10`), hiệu ứng đỉnh điểm (`ĐẬP TƯỜNG!`, `NẠP HOÀN HẢO!`, `PARRY ×3!`, nổ đinh tán, kéo dây gai...) có bùng nổ đúng vị trí va chạm và khớp với `apexEvent` trong `<scene>-telemetry-summary.md` không?
+     - *(Q4 - Dư chấn & kết thúc)*: Trên các frame `sub_impact` / `settled`, hiệu ứng có tan dần tự nhiên và trạng thái sau va chạm (bàn vỡ, quái mất máu/văng lùi, băng đạn đầy) có hợp lý không?
+     - *(Q5 - Sạch sẽ thị giác)*: Chữ nổi trên `roi-1.png` / `roi-2.png` có sắc nét, không đè lên nhau và không bị cắt mất dấu tiếng Việt ở mép vùng cắt không?
    - Visual Reviewer chấm điểm từ `1–10` trên **Rubric 10 Tiêu Chí (Mục `6`)**, liệt kê từng lỗi phát hiện được kèm tọa độ/vùng ước lượng trên ảnh và phân loại mức độ:
      - **`blocker`:** Sai cơ chế hiển thị (ví dụ: thanh Energy cũ vẫn còn; Micro-Bar hiện trên vũ khí cận chiến; vực `chasm` trong `TWIN_BRIDGES` không cắt đôi phòng; chữ đè lên nhau không đọc được; đạn địch bị hiệu ứng súng che khuất; vật cản thực tế lệch với hình vẽ).
      - **`major`:** Khó đọc trong giao tranh nhanh (ví dụ: Khung Vàng `45%–70%` trên Micro-Bar quá nhỏ/mờ; bàn `'low'` và `'flipped'` khó phân biệt; tia chỉ ngắm đón đầu `0.35s` của quái quá mờ; chỉ số `metrics.json` trượt ngưỡng `ΔL*`).

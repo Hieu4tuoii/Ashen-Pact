@@ -3,6 +3,35 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import pixelmatch from 'pixelmatch';
 import { PNG } from 'pngjs';
+export {
+  type ActionRoiConfig,
+  type AnimationGatesEvaluationResult,
+  type AnimationGatesInput,
+  type AnimationGateThresholds,
+  type ApexEventSpec,
+  computeActorContainmentRatio,
+  computeCroppedRoiPixelDiff,
+  computeRectIntersectionArea,
+  cropPngSubRect,
+  DEFAULT_ANIMATION_GATE_THRESHOLDS,
+  type EmittedSimEventRecord,
+  evaluateAnimationGates,
+  type ExternalStateMutationRecord,
+  type FloatingAlertBoundsRecord,
+  formatTelemetrySummaryMarkdown,
+  isPhysicsDisplacementScene,
+  type KeyframeTraceRecord,
+  resolveActionRoiRects,
+  type RoiResolutionMode,
+  type ScreenRect,
+  type StripStageKind,
+  type TrackedActorBoundsRecord,
+} from './visual-animation-gates.js';
+export {
+  drawBitmapString,
+  renderOverviewGridStrip,
+  renderRoiSheets1to1,
+} from './visual-strip-renderer.js';
 
 export interface SampleRect {
   name: string;

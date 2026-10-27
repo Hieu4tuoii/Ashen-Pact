@@ -6,14 +6,18 @@ import {
   type VisualSceneDef,
   installDeterministicRafGate,
   setSceneLightingAndRenderStaticFrame,
-  stepDeterministicFrames,
 } from './helpers/visual-scenes.js';
+import {
+  type CapturedAnimatedSceneResult,
+  captureAnimatedStripAndHeroScene,
+  installSceneStripInstrumentation,
+} from './helpers/visual-strip-harness.js';
 import {
   analyzePngBufferRegions,
   comparePngBuffers,
   computeSceneEnvironmentSummary,
   convertPngBufferToGrayscale,
-  stitchPngBuffersHorizontal,
+  type AnimationGatesEvaluationResult,
   type RegionMetrics,
   type SceneEnvironmentSummary,
   type SceneManifestEntry,
@@ -23,9 +27,10 @@ interface CapturedSceneBuffers {
   litBuffer: Buffer;
   unlitBuffer?: Buffer;
   stripBuffer?: Buffer;
+  animResult?: CapturedAnimatedSceneResult;
 }
 
-async function captureSingleScene(
+async function captureSingleSceneOnce(
   page: Page,
   scene: VisualSceneDef,
   capturedBuffers: Map<string, Buffer>,
@@ -39,6 +44,20 @@ async function captureSingleScene(
       litBuffer: convertPngBufferToGrayscale(sourceBuffer),
     };
   }
+
+  await page
+    .evaluate(() => {
+      const win = window as unknown as {
+        __PHASER_GAME__?: { destroy?: (removeCanvas: boolean) => void };
+      };
+      try {
+        win.__PHASER_GAME__?.destroy?.(true);
+        win.__PHASER_GAME__ = undefined;
+      } catch {
+        // Ignore teardown errors
+      }
+    })
+    .catch(() => {});
 
   await page.goto(scene.url);
   await page.waitForFunction(
@@ -57,7 +76,34 @@ async function captureSingleScene(
   // Move mouse cursor to deterministic viewport center
   await page.mouse.move(Math.floor(viewport.width / 2), Math.floor(viewport.height / 2));
 
+  if (scene.captureStrip && scene.expectedScene === 'GameScene') {
+    await installSceneStripInstrumentation(page);
+  }
+
   await scene.setup(page);
+
+  if (scene.captureStrip) {
+    const animResult = await captureAnimatedStripAndHeroScene(page, {
+      id: scene.id,
+      captureUnlit: scene.captureUnlit,
+      grayscaleFrom: scene.grayscaleFrom,
+      frameCount: scene.frameCount,
+      stripFramesPerStep: scene.stripFramesPerStep,
+      stripSchedule: scene.stripSchedule,
+      heroFrameIndex: scene.heroFrameIndex,
+      apexEvent: scene.apexEvent,
+      actionRoi: scene.actionRoi,
+      assertApexFlash: scene.assertApexFlash,
+      setSceneLightingAndRenderStaticFrame,
+    });
+    await page.keyboard.up('KeyT');
+    return {
+      litBuffer: animResult.litBuffer,
+      unlitBuffer: animResult.unlitBuffer,
+      stripBuffer: animResult.stripBuffer,
+      animResult,
+    };
+  }
 
   const rawLitBuffer = await page.screenshot({ type: 'png' });
   const litBuffer = scene.grayscaleFrom
@@ -71,24 +117,28 @@ async function captureSingleScene(
     await setSceneLightingAndRenderStaticFrame(page, true);
   }
 
-  let stripBuffer: Buffer | undefined;
-  if (scene.captureStrip) {
-    const stripFrames: Buffer[] = [litBuffer];
-    for (let i = 1; i < 8; i++) {
-      await stepDeterministicFrames(page, scene.stripFramesPerStep ?? 5);
-      const frameBuf = await page.screenshot({ type: 'png' });
-      stripFrames.push(frameBuf);
-    }
-    stripBuffer = stitchPngBuffersHorizontal(stripFrames);
-  }
-
   await page.keyboard.up('KeyT');
 
   return {
     litBuffer,
     unlitBuffer,
-    stripBuffer,
   };
+}
+
+async function captureSingleScene(
+  page: Page,
+  scene: VisualSceneDef,
+  capturedBuffers: Map<string, Buffer>,
+): Promise<CapturedSceneBuffers> {
+  try {
+    return await captureSingleSceneOnce(page, scene, capturedBuffers);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes('Execution context was destroyed') || msg.includes('Target closed')) {
+      return await captureSingleSceneOnce(page, scene, capturedBuffers);
+    }
+    throw err;
+  }
 }
 
 test.describe('@visual Deterministic Visual Scene Catalog', () => {
@@ -137,7 +187,9 @@ test.describe('@visual Deterministic Visual Scene Catalog', () => {
     const shotDir = path.resolve(
       process.cwd(),
       'docs/screenshots',
-      phase.startsWith('ap2-') || phase.startsWith('polish-') || phase.startsWith('phase-') ? phase : `polish-${phase}`,
+      phase.startsWith('ap2-') || phase.startsWith('polish-') || phase.startsWith('phase-')
+        ? phase
+        : `polish-${phase}`,
       label,
     );
     fs.mkdirSync(shotDir, { recursive: true });
@@ -145,6 +197,7 @@ test.describe('@visual Deterministic Visual Scene Catalog', () => {
     await installDeterministicRafGate(page);
 
     const capturedPass1 = new Map<string, Buffer>();
+    const capturedAnimPass1 = new Map<string, CapturedAnimatedSceneResult>();
     const manifestEntries: SceneManifestEntry[] = [];
     const metricsOutput: Record<
       string,
@@ -152,17 +205,22 @@ test.describe('@visual Deterministic Visual Scene Catalog', () => {
         lit?: Record<string, RegionMetrics>;
         unlit?: Record<string, RegionMetrics>;
         summary?: SceneEnvironmentSummary;
+        animationGates?: AnimationGatesEvaluationResult;
       }
     > = {};
 
     for (const scene of selectedScenes) {
-      const { litBuffer, unlitBuffer, stripBuffer } = await captureSingleScene(
+      const { litBuffer, unlitBuffer, stripBuffer, animResult } = await captureSingleScene(
         page,
         scene,
         capturedPass1,
       );
 
       capturedPass1.set(scene.id, litBuffer);
+      if (animResult) {
+        capturedAnimPass1.set(scene.id, animResult);
+      }
+
       const litFilename = `${scene.id}.png`;
       fs.writeFileSync(path.join(shotDir, litFilename), litBuffer);
 
@@ -184,6 +242,52 @@ test.describe('@visual Deterministic Visual Scene Catalog', () => {
         fs.writeFileSync(path.join(shotDir, stripFilename), stripBuffer);
       }
 
+      if (animResult) {
+        for (const sheet of animResult.roiSheets) {
+          fs.writeFileSync(
+            path.join(shotDir, `${scene.id}-roi-${sheet.sheetIndex}.png`),
+            sheet.pngBuffer,
+          );
+        }
+        fs.writeFileSync(
+          path.join(shotDir, `${scene.id}-telemetry-summary.md`),
+          animResult.telemetrySummaryMd,
+          'utf8',
+        );
+        fs.writeFileSync(
+          path.join(shotDir, `${scene.id}-telemetry.json`),
+          JSON.stringify(
+            {
+              roiMode: animResult.roiMode,
+              telemetryInput: animResult.telemetryInput,
+              gateReport: animResult.gateReport,
+            },
+            null,
+            2,
+          ),
+          'utf8',
+        );
+
+        metricsOutput[scene.id] = {
+          ...(metricsOutput[scene.id] ?? {}),
+          animationGates: animResult.gateReport,
+        };
+
+        if (animResult.gateReport.mode === 'HARD_ASSERT') {
+          expect(
+            animResult.gateReport.passed,
+            `Animation Gates failed for scene "${scene.id}": ${animResult.gateReport.failedGates.join(' | ')}`,
+          ).toBe(true);
+        } else if (
+          animResult.gateReport.failedGates.length > 0 ||
+          animResult.gateReport.warnings.length > 0
+        ) {
+          process.stdout.write(
+            `[WARN_ONLY][${scene.id}] failedGates=${animResult.gateReport.failedGates.join(',')} | ${animResult.gateReport.warnings.join(' | ')}\n`,
+          );
+        }
+      }
+
       if (scene.sampleRects && scene.sampleRects.length > 0) {
         const litRegions = analyzePngBufferRegions(litBuffer, scene.sampleRects);
         const unlitRegions = unlitBuffer
@@ -195,6 +299,7 @@ test.describe('@visual Deterministic Visual Scene Catalog', () => {
         );
 
         metricsOutput[scene.id] = {
+          ...(metricsOutput[scene.id] ?? {}),
           lit: litRegions,
           ...(unlitRegions ? { unlit: unlitRegions } : {}),
           summary,
@@ -218,7 +323,13 @@ test.describe('@visual Deterministic Visual Scene Catalog', () => {
 
     const freezeDiffs: Record<
       string,
-      { diffPixels: number; totalPixels: number; diffRatio: number }
+      {
+        diffPixels: number;
+        totalPixels: number;
+        diffRatio: number;
+        roiDiffRatios?: Record<string, number>;
+        traceHashMatched?: boolean;
+      }
     > = {};
 
     const metricsPath = path.join(shotDir, 'metrics.json');
@@ -257,10 +368,48 @@ test.describe('@visual Deterministic Visual Scene Catalog', () => {
           scene.freezeMaskRects,
         );
 
+        const roiDiffRatios: Record<string, number> = {};
+        let traceHashMatched: boolean | undefined;
+
+        const pass1Anim = capturedAnimPass1.get(scene.id);
+        if (pass1Anim && pass2.animResult) {
+          traceHashMatched =
+            pass1Anim.perTickTraceHash === pass2.animResult.perTickTraceHash;
+          expect(
+            traceHashMatched,
+            `Freeze determinism perTickTrace mismatch for strip scene "${scene.id}"`,
+          ).toBe(true);
+
+          for (let sIdx = 0; sIdx < pass1Anim.roiSheets.length; sIdx += 1) {
+            const s1 = pass1Anim.roiSheets[sIdx]!;
+            const s2 = pass2.animResult.roiSheets[sIdx];
+            expect(s2, `Pass 2 ROI sheet ${s1.sheetIndex} missing for ${scene.id}`).toBeDefined();
+            const roiDiff = comparePngBuffers(s1.pngBuffer, s2!.pngBuffer);
+            const roiKey = `roi-${s1.sheetIndex}`;
+            roiDiffRatios[roiKey] = roiDiff.diffRatio;
+            if (roiDiff.diffRatio >= 0.005) {
+              fs.writeFileSync(
+                path.join(shotDir, `${scene.id}-${roiKey}-freeze-pass2.png`),
+                s2!.pngBuffer,
+              );
+              fs.writeFileSync(
+                path.join(shotDir, `${scene.id}-${roiKey}-freeze-diff.png`),
+                roiDiff.diffPngBuffer,
+              );
+            }
+            expect(
+              roiDiff.diffRatio,
+              `Freeze determinism failed for "${scene.id}" ${roiKey}: diffRatio=${(roiDiff.diffRatio * 100).toFixed(4)}% exceeds 0.5% threshold`,
+            ).toBeLessThan(0.005);
+          }
+        }
+
         freezeDiffs[scene.id] = {
           diffPixels: diff.diffPixels,
           totalPixels: diff.totalPixels,
           diffRatio: diff.diffRatio,
+          ...(Object.keys(roiDiffRatios).length > 0 ? { roiDiffRatios } : {}),
+          ...(traceHashMatched !== undefined ? { traceHashMatched } : {}),
         };
 
         if (diff.diffRatio >= 0.005) {

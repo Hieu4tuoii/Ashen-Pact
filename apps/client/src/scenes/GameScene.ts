@@ -22,7 +22,7 @@ import { RIG_DEFS_BY_ID, VANGUARD_RIG_DEF } from '../art/rig-defs.js';
 import { TextureBaker } from '../art/texture-baker.js';
 import { musicManager } from '../audio/music-synth.js';
 import { zzfx } from '../audio/zzfx.js';
-import { getVisualQueryConfig } from '../core/visual-query.js';
+import { getFreezeVisualTimeSec, getVisualQueryConfig } from '../core/visual-query.js';
 import type { CombatFxManager } from '../fx/combat-fx.js';
 import {
   type InteractableLightEntry,
@@ -827,7 +827,7 @@ export class GameScene extends Phaser.Scene {
       const qualityTier = graphicsSettings.getState().quality;
       populateInteractableLightsScratch(this.interactableLightsScratch, {
         tier: qualityTier,
-        elapsedSec: getVisualQueryConfig().freeze ? 1.0 : this.lighting.getElapsedSec(),
+        elapsedSec: getFreezeVisualTimeSec(this.lighting.getElapsedSec()),
         simTick: sim.tick,
         biome: sim.currentBiome,
         inHub: sim.inHub,

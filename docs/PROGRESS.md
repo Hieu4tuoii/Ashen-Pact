@@ -975,3 +975,20 @@
        - **VSync Stress Combat (`4P+80E+600B`):** **`59.95 FPS`** (ngưỡng `>= 58 FPS`)
        - **Uncapped Normal (`1080p High`):** **`p50 = 6.3ms`** (`<= 12.0ms`), **`p95 = 9.2ms`** (`<= 16.6ms`), `eqFPS = 152.91`
        - **Uncapped Stress (`4P+80E+600B`):** **`p50 = 9.0ms`** (`<= 12.0ms`), **`p95 = 11.4ms`** (`<= 16.6ms`), `eqFPS = 109.78`, **`heapGrowthMB = 3.92 MB`** (`<= 15.0 MB`)
+
+### 4.3.1 Nâng Cấp Hệ Thống Kiểm Định Chuyển Động — Animation & Moment Verification Engine 2.6 (Hoàn thành ✅)
+- **Hạng mục đã thực hiện:**
+  1. **Kiến trúc Timeline 2 Mẫu Nhịp (`8F` hero `F5` / `12F` hero `F10`), `Apex Event` & Bộ Đệm Sự Kiện Kép (`visual-scene-helpers.ts`, `strip-browser-instrumentation.ts`, `visual-strip-harness.ts`):**
+     - Tách hoàn toàn `F1` (`windup_hold`) khỏi khung hình cao trào (`heroFrameIndex = 4` cho 8F và `9` cho 12F, gắn `stage: 'apex'`), xác thực khoảnh khắc cao trào từ nhật ký sự kiện thật của `WorldSim` (`apexEvent`).
+     - Hỗ trợ 2 chế độ bước `stepMode: 'sim_ticks' | 'raf_frames'`, tự động vượt qua các frame `Hit-Stop` khi chạy `sim_ticks`, giữ nguyên 100% logic `hitStopTimer` và `trauma` thật trong `GameScene.ts`, khóa cứng `camera.scrollX / scrollY` khi chụp đối chiếu `lit` vs `unlit`.
+  2. **Kết Xuất Sắc Nét `1:1 Native Pixel` (`1280×760`) + Dải Tổng Quan (`1920×580` / `1920×870`) (`visual-strip-renderer.ts`):**
+     - Xuất bộ tấm cận cảnh `<scene>-roi-1.png`, `<scene>-roi-2.png` (và `roi-3.png` cho 12F) kích thước `1280×760` (`< 1536px` — giữ nguyên `1:1` từng pixel gốc trên Vision Encoder của AI Reviewer `pro`) dùng `Fixed Union ROI` (`640×360`) cố định xuyên suốt strip, thanh tiêu đề `20px` tách biệt phía trên vùng ảnh để không che chữ nổi.
+  3. **5 Cổng Kiểm Định Định Lượng (`visual-animation-gates.ts`) & 5 Negative Fixtures (`visual-metrics.test.ts`):**
+     - **Cổng 1 (`Apex Event Gate`):** Chặn lỗi nổ sớm trước `F1` (`preF1Clean`) và chứng thực `apexEvent` rơi đúng cửa sổ `heroFrameIndex`.
+     - **Cổng 2 (`State Integrity & Velocity Gate`):** Snapshot nội tại trước/sau `transport.step()` để chặn tuyệt đối sửa tọa độ/máu/timer bên ngoài vật lý thật (`externalStateMutations === 0`) và kiểm tra dịch chuyển mỗi tick (`<= 48px`).
+     - **Cổng 3 (`Stage-Aware Activity & Pixel Diff Gate`):** Chặn đứng hình ở các bước hành động (`changedScreenPixels >= 120` hoặc `hitStopActive`).
+     - **Cổng 4 (`Floating Alert Overlap & 100% Actor Containment Gate`):** Lấy `getBounds()` thực tế từ Phaser để đảm bảo `0` cặp chữ cảnh báo không phải số đè nhau (`nonNumericAlertOverlapCount === 0`) và `100%` thực thể hành động nằm gọn trong vùng cắt ROI `640×360`.
+     - **Cổng 5 (`Net World Displacement Gate`):** Đảm bảo dịch chuyển thực tế `maxNetWorldPx >= 18px` cho các cơ chế dịch chuyển/đẩy lùi/kéo/đạn bay.
+  4. **Đồng Bộ Tất Định Tuyệt Đối Khi `freeze` (`diffPixels = 0`, `traceHashMatched = true`) & Di Trú 14 Cảnh `P0B` + `P1A`:**
+     - Khắc phục triệt để các nguồn trôi frame khi `freeze` bằng `getVisualTimeMs(this.scene)` / `isVisualFreezeActive(this.scene)` trong `lighting-pipeline.ts`, `biome-architecture-render.ts`, `entity-sync.ts`, `room-entities-sync.ts`, `sim-events.ts`, `combat-fx.ts`, `combat-fx-pools.ts`, `combat-fx-spawners.ts`.
+     - Toàn bộ `14/14` cảnh strip (`7` cảnh `P0B` + `7` cảnh `P1A`) vượt qua `5/5` Cổng ở chế độ `HARD_ASSERT` kèm `--verify-freeze` với `diffPixels = 0` (`diffRatio = 0.0000`) và `traceHashMatched = true`.
