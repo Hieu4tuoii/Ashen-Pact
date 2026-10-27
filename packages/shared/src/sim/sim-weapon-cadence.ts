@@ -4,6 +4,13 @@ import { WEAPONS } from '../data/weapons.js';
 import { clamp } from '../math/vec2.js';
 import { INPUT_BUTTON, SHOT_FLAG } from '../protocol/messages.js';
 import { syncActiveWeaponCadenceState } from './sim-coop-hub.js';
+import {
+  ACROBAT_RELOAD_WINDOW_MAX,
+  ACROBAT_RELOAD_WINDOW_MIN,
+  ACROBAT_VENT_ORANGE_MAX,
+  ACROBAT_VENT_ORANGE_MIN,
+  triggerReloadVentOrFinisherBlessings,
+} from './sim-blessings.js';
 import { computeAdditivePoolMultiplier } from './sim-damage-pipeline.js';
 import {
   resolveMeleeConeHitsAndSynergies,
@@ -248,11 +255,20 @@ export function updatePlayerWeaponCadence(
     if (p.reloadTimer > 0 && p.reloadDuration > 0) {
       if (!p.reloadLockout) {
         const progress = 1 - p.reloadTimer / p.reloadDuration;
-        if (
-          progress >= PERFECT_RELOAD_WINDOW_MIN &&
-          progress <= PERFECT_RELOAD_WINDOW_MAX
-        ) {
-          p.clipAmmo = p.clipMax > 0 ? p.clipMax : (w?.clipSize ?? 6);
+        const winMin = p.acrobatExpandedWindow
+          ? ACROBAT_RELOAD_WINDOW_MIN
+          : PERFECT_RELOAD_WINDOW_MIN;
+        const winMax = p.acrobatExpandedWindow
+          ? ACROBAT_RELOAD_WINDOW_MAX
+          : PERFECT_RELOAD_WINDOW_MAX;
+        p.acrobatExpandedWindow = false;
+        if (progress >= winMin && progress <= winMax) {
+          const fullClip = p.clipMax > 0 ? p.clipMax : (w?.clipSize ?? 6);
+          const shotsFiredBeforeReload = Math.max(
+            1,
+            fullClip > p.clipAmmo ? fullClip - p.clipAmmo : fullClip,
+          );
+          p.clipAmmo = fullClip;
           p.weaponSlotClipAmmo[slot] = p.clipAmmo;
           p.reloadTimer = 0;
           p.reloadLockout = false;
@@ -280,16 +296,23 @@ export function updatePlayerWeaponCadence(
           } else if (w?.id === 'magma_cannon') {
             triggerMagmaCannonGeyserEruption(sim, p);
           }
+          triggerReloadVentOrFinisherBlessings(sim, p, 'perfect_reload', {
+            shotsFired: shotsFiredBeforeReload,
+          });
         } else {
           p.reloadLockout = true;
         }
       }
     } else if (w?.cadenceKind === 'HEAT_VENT') {
+      const orangeMin = p.acrobatExpandedWindow ? ACROBAT_VENT_ORANGE_MIN : HEAT_ORANGE_MIN;
+      const orangeMax = p.acrobatExpandedWindow ? ACROBAT_VENT_ORANGE_MAX : HEAT_ORANGE_MAX;
+      p.acrobatExpandedWindow = false;
       if (
         p.overheatLockTimer <= 0 &&
-        p.weaponHeat >= HEAT_ORANGE_MIN &&
-        p.weaponHeat <= HEAT_ORANGE_MAX
+        p.weaponHeat >= orangeMin &&
+        p.weaponHeat <= orangeMax
       ) {
+        const shotsFiredFromVent = Math.max(1, Math.round(p.weaponHeat / 15));
         p.weaponHeat = 0;
         p.weaponSlotHeat[slot] = 0;
         p.ventCooldownTimer = TACTICAL_VENT_COOLDOWN_SEC;
@@ -314,6 +337,9 @@ export function updatePlayerWeaponCadence(
         } else if (w.id === 'solar_archon_staff') {
           triggerSolarArchonSupernovaVent(sim, p);
         }
+        triggerReloadVentOrFinisherBlessings(sim, p, 'tactical_vent', {
+          shotsFired: shotsFiredFromVent,
+        });
       }
     } else if (p.reloadTimer <= 0 && p.clipMax > 0 && p.clipAmmo < p.clipMax) {
       const dur =
@@ -337,6 +363,7 @@ export function updatePlayerWeaponCadence(
     if (nextReload <= 1e-6) {
       p.reloadTimer = 0;
       p.reloadLockout = false;
+      p.acrobatExpandedWindow = false;
       p.clipAmmo = p.clipMax;
       p.weaponSlotClipAmmo[slot] = p.clipAmmo;
       p.bonusBounceCurrentClip = 0;
@@ -364,7 +391,13 @@ export function updatePlayerWeaponCadence(
 
   // 5. Advance MELEE_COMBO parry window & combo reset timer
   if (p.meleeParryWindowTimer > 0) {
-    processMeleeParryDeflect(sim, p);
+    const deflectedNow = processMeleeParryDeflect(sim, p);
+    if (deflectedNow > 0) {
+      triggerReloadVentOrFinisherBlessings(sim, p, 'melee_finisher', {
+        hitAny: false,
+        bulletsDestroyed: deflectedNow,
+      });
+    }
     const nextParry = p.meleeParryWindowTimer - dtSec;
     p.meleeParryWindowTimer = nextParry <= 1e-6 ? 0 : nextParry;
   }
@@ -553,6 +586,12 @@ export function tryFireActiveWeaponImpl(
     const hitAny = resolveMeleeConeHitsAndSynergies(
       this, p, w, arcRad, halfArc, meleeRange, baseMeleeDmg, stepKnockback, critChance, shotElement, shotFlags, bulletsDestroyed, finisherHitEnemyIds,
     );
+    if (comboStep === 2) {
+      triggerReloadVentOrFinisherBlessings(this, p, 'melee_finisher', {
+        hitAny,
+        bulletsDestroyed,
+      });
+    }
     if (comboStep === 2 && w.id === 'emerald_cleaver') {
       spawnEmeraldCleaverBoomerang(
         this,

@@ -4,6 +4,11 @@ import { INPUT_BUTTON, type PlayerInputPacket, TILE_SIZE } from '../protocol/mes
 import type { SurfaceKind } from './arena-map.js';
 import { findNearestWalkablePoint, getConveyorVelocityAtWorld } from './arena-room-archetypes.js';
 import {
+  onPlayerDashStarted,
+  onPlayerDashStep,
+  tickPlayerDashAndReloadBlessingTimers,
+} from './sim-blessings.js';
+import {
   BIOME1_POLLEN_SPEED_MULTIPLIER,
   triggerGrassPollenSpeedBoost,
   triggerMeleeKickProps,
@@ -191,6 +196,7 @@ export function updateSinglePlayerStateImpl(this: WorldSim,
     const nextRocketIcd = (p.tableTechRocketIcdTimer ?? 0) - dtSec;
     p.tableTechRocketIcdTimer = nextRocketIcd < 1e-6 ? 0 : nextRocketIcd;
   }
+  tickPlayerDashAndReloadBlessingTimers(p, dtSec);
   updatePlayerWeaponCadence(this, p, justPressed, inp.buttons, dtSec);
 
   // Engineer passive: allies within 4 tiles (128u) regenerate armor 15% faster!
@@ -275,6 +281,7 @@ export function updateSinglePlayerStateImpl(this: WorldSim,
     if (surf === 'grass') {
       triggerGrassPollenSpeedBoost(this, p);
     }
+    onPlayerDashStarted(this, p);
     this.events.push({
       kind: 'dash_started',
       playerId: p.id,
@@ -314,6 +321,10 @@ export function updateSinglePlayerStateImpl(this: WorldSim,
   if (surf === 'oil' || surf === 'poison_swamp') speedMult *= 0.85;
   if (p.chillTimer > 0) speedMult *= 0.7;
 
+  const wasDashingThisStep = p.dashTimer > 0;
+  const preMoveX = p.x;
+  const preMoveY = p.y;
+
   if (p.dashTimer > 0) {
     p.dashTimer = Math.max(0, p.dashTimer - dtSec);
     const dashSpeed = p.moveSpeed * DASH_SPEED_MULTIPLIER;
@@ -345,11 +356,14 @@ export function updateSinglePlayerStateImpl(this: WorldSim,
     nextX,
     nextY,
     p.radius,
-    p.dashTimer > 0 || surf === 'chasm',
+    wasDashingThisStep || p.dashTimer > 0 || surf === 'chasm',
   );
   p.x = col.x;
   p.y = col.y;
   if (!this.stressTestActive) this.resolvePropMovementCollision(p);
+  if (wasDashingThisStep) {
+    onPlayerDashStep(this, p, preMoveX, preMoveY);
+  }
 
   if (!this.stressTestActive && p.dashTimer <= 0 && this.map.getSurfaceAtWorld(p.x, p.y) === 'chasm') {
     const safePt = findNearestWalkablePoint(this.map, p.x, p.y, p.radius);
@@ -566,7 +580,8 @@ export function triggerLauncherProjectileExplosionImpl(
     const isFullBlastWeapon =
       b.weaponId === 'apprentice_staff' ||
       b.weaponId === 'knight_sword_parry' ||
-      b.weaponId === 'frag_launcher';
+      b.weaponId === 'frag_launcher' ||
+      b.weaponId === 'reload_tediore_chuck';
     const blastDmg = isFullBlastWeapon ? b.damage : Math.max(6, Math.round(b.damage * 0.65));
     for (let i = 0; i < this.enemies.length; i++) {
       const e = this.enemies[i]!;

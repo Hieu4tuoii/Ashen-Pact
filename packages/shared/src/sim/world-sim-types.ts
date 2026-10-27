@@ -505,6 +505,12 @@ export interface SimPlayerState {
   seedGunRoomHealsUsed?: number;
   tableTechRocketIcdTimer?: number;
   lastTableTechSlamTick?: number;
+  dashHitEnemyIds?: number[];
+  dashTidalRamIcdTimer?: number;
+  dashVenomWakeTriggeredThisDash?: boolean;
+  dashFlameShackleEnemyIds?: number[];
+  acrobatExpandedWindow?: boolean;
+  reloadBlessingIcdTimer?: number;
   // Ashen Pact 2.0 Per-Player Build State
   blessingIds: BlessingId[];
   weaponMutators: Record<number, WeaponMutatorId[]>;
@@ -628,6 +634,8 @@ export interface SimEnemyState {
   lastHitPlayerId?: number;
   wallSlamCooldownTimer: number;
   bossStaggerAccum?: number;
+  tidalRamByPlayerId?: number;
+  tidalRamTimer?: number;
   stuckArrows?: number;
   parasiticThorns?: number;
   slowTimer?: number;

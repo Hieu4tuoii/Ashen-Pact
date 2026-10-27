@@ -366,7 +366,8 @@ export function updateSkillZonesAndSummonsImpl(this: WorldSim, dtSec: number): v
     if (z.ttlSec <= 0) continue;
 
     if (z.vortex) {
-      const pullRadius = z.radius + 60;
+      const pullRadius = z.maxTtlSec <= 1.0 ? z.radius : z.radius + 60;
+      const basePullSpeed = z.maxTtlSec <= 1.0 ? 175 : 95;
       for (let j = 0; j < this.enemies.length; j++) {
         const e = this.enemies[j]!;
         if (
@@ -380,7 +381,7 @@ export function updateSkillZonesAndSummonsImpl(this: WorldSim, dtSec: number): v
         }
         const d = distance(z.x, z.y, e.x, e.y);
         if (d > 10 && d <= pullRadius) {
-          const pullStrength = (e.isBoss ? 38 : 95) * dtSec;
+          const pullStrength = (e.isBoss ? 38 : basePullSpeed) * dtSec;
           const nx = e.x + ((z.x - e.x) / d) * pullStrength;
           const ny = e.y + ((z.y - e.y) / d) * pullStrength;
           const col = this.map.resolveCircleCollision(nx, ny, e.radius);

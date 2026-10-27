@@ -9,6 +9,7 @@ import {
   applyFlipCoverTableTechBlessings,
   applyKickPropTableTechBlessings,
   detonateRocketChargedBarricade,
+  onPlayerDashKickProp,
   TABLE_TECH_BILLIARD_SLAM_DMG_MULT,
   triggerBossStaggerBurst,
   triggerTableTechOnWallSlamOrStagger,
@@ -304,6 +305,7 @@ export function kickProp(sim: WorldSim, prop: SimPropState, actor: SimPlayerStat
     sim.map.getSurfaceAtWorld(actor.x, actor.y) === 'ice';
   if (prop.kind === 'sliding_ice_block' && prop.bouncesRemaining === undefined) prop.bouncesRemaining = 1;
   const speed = applyKickPropTableTechBlessings(sim, prop, actor, baseSpeed, onIce);
+  onPlayerDashKickProp(sim, actor);
 
   if (prop.kind === 'slag_crucible') {
     const vx = Math.cos(slideAngle) * speed;

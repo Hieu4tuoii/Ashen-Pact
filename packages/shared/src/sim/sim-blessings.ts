@@ -1,6 +1,7 @@
 import { scaleBlessingDamage } from '../data/blessings.js';
 import { angleDiff, distance } from '../math/vec2.js';
 import { SHOT_FLAG } from '../protocol/messages.js';
+import { onEnemyWallSlamDashBlessings } from './sim-blessings-dash-reload.js';
 import { clampBounceCount } from './sim-damage-pipeline.js';
 import {
   BIOME2_ICE_INERTIA_MULT,
@@ -496,6 +497,12 @@ export function triggerTableTechOnWallSlamOrStagger(
   if (hasPlayerBlessing(actor, 'table_tech_prism_split')) {
     spawnTableTechPrismSlamRays(sim, actor, x, y, slammedEnemyId);
   }
+  if (slammedEnemyId !== undefined) {
+    const slammedEnemy = sim.enemies.find((en) => en.id === slammedEnemyId);
+    if (slammedEnemy) {
+      onEnemyWallSlamDashBlessings(sim, actor, slammedEnemy);
+    }
+  }
 }
 
 export function triggerBossStaggerBurst(
@@ -548,3 +555,5 @@ export function triggerBossStaggerBurst(
   }
   return true;
 }
+
+export * from './sim-blessings-dash-reload.js';
