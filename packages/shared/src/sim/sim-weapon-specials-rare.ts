@@ -42,6 +42,21 @@ export function pointToSegmentDist(
   return distance(px, py, x1 + t * dx, y1 + t * dy);
 }
 
+const _ownerBudScratch: SimSummonState[] = [];
+const _hitEnemyIdsScratch = new Set<number>();
+const _tetherAnchorScratch = { valid: false, x: 0, y: 0 };
+const _tetherSelectScratch: {
+  targetKind: TetherAnchorKind;
+  targetEntityId: number;
+  x2: number;
+  y2: number;
+} = {
+  targetKind: 'point',
+  targetEntityId: 0,
+  x2: 0,
+  y2: 0,
+};
+
 /**
  * Seed Gun (Súng Phóng Hạt Sinh Mệnh):
  * Plants 1 Life Bud (life_blossom, max 4 active per player — replacing oldest on 5th)
@@ -55,28 +70,39 @@ export function spawnSeedGunLifeBud(
 ): SimSummonState | null {
   if (sim.stressTestActive) return null;
 
-  const ownerBudIndices: number[] = [];
+  let budCount = 0;
+  let oldestBudIdx = -1;
   for (let i = 0; i < sim.summons.length; i++) {
     const s = sim.summons[i]!;
     if (s.ownerPlayerId === ownerId && s.kind === 'life_blossom' && s.hp > 0 && s.ttlSec > 0) {
-      ownerBudIndices.push(i);
+      if (oldestBudIdx === -1) oldestBudIdx = i;
+      budCount += 1;
     }
   }
-  while (ownerBudIndices.length >= SEED_GUN_MAX_BUDS_PER_PLAYER) {
-    const oldestIdx = ownerBudIndices.shift()!;
-    sim.summons.splice(oldestIdx, 1);
-    for (let k = 0; k < ownerBudIndices.length; k++) {
-      if (ownerBudIndices[k]! > oldestIdx) {
-        ownerBudIndices[k]! -= 1;
+  while (budCount >= SEED_GUN_MAX_BUDS_PER_PLAYER && oldestBudIdx !== -1) {
+    sim.summons.splice(oldestBudIdx, 1);
+    budCount -= 1;
+    oldestBudIdx = -1;
+    for (let i = 0; i < sim.summons.length; i++) {
+      const s = sim.summons[i]!;
+      if (s.ownerPlayerId === ownerId && s.kind === 'life_blossom' && s.hp > 0 && s.ttlSec > 0) {
+        oldestBudIdx = i;
+        break;
       }
     }
   }
 
-  const ownerSummons = sim.summons.filter(
-    (s) => s.ownerPlayerId === ownerId && s.hp > 0 && s.ttlSec > 0,
-  );
-  if (ownerSummons.length >= MAX_DEPLOYABLES_PER_PLAYER) {
-    ownerSummons[0]!.ttlSec = 0;
+  let ownerActiveCount = 0;
+  let oldestOwnerSummon: SimSummonState | null = null;
+  for (let i = 0; i < sim.summons.length; i++) {
+    const s = sim.summons[i]!;
+    if (s.ownerPlayerId === ownerId && s.hp > 0 && s.ttlSec > 0) {
+      if (!oldestOwnerSummon) oldestOwnerSummon = s;
+      ownerActiveCount += 1;
+    }
+  }
+  if (ownerActiveCount >= MAX_DEPLOYABLES_PER_PLAYER && oldestOwnerSummon) {
+    oldestOwnerSummon.ttlSec = 0;
   }
 
   const col = sim.map.resolveCircleCollision(x, y, 14);
@@ -118,17 +144,22 @@ export function triggerSeedGunHarvestBloom(
     typeof pOrPlayerId === 'number'
       ? (sim.getPlayerById(pOrPlayerId) ?? sim.player)
       : pOrPlayerId;
-  const buds = sim.summons.filter(
-    (s) => s.ownerPlayerId === owner.id && s.kind === 'life_blossom' && s.hp > 0 && s.ttlSec > 0,
-  );
-  if (buds.length === 0) return 0;
+  _ownerBudScratch.length = 0;
+  for (let i = 0; i < sim.summons.length; i++) {
+    const s = sim.summons[i]!;
+    if (s.ownerPlayerId === owner.id && s.kind === 'life_blossom' && s.hp > 0 && s.ttlSec > 0) {
+      _ownerBudScratch.push(s);
+    }
+  }
+  const budLen = _ownerBudScratch.length;
+  if (budLen === 0) return 0;
 
   let hitLivingEnemyCount = 0;
-  const hitEnemyIds = new Set<number>();
+  _hitEnemyIdsScratch.clear();
   const rootDur = SEED_GUN_HARVEST_BLOOM_ROOT_SEC + 1 / 60 + 1e-6;
 
-  for (let bIdx = 0; bIdx < buds.length; bIdx++) {
-    const bud = buds[bIdx]!;
+  for (let bIdx = 0; bIdx < budLen; bIdx++) {
+    const bud = _ownerBudScratch[bIdx]!;
     bud.ttlSec = 0;
     bud.hp = 0;
 
@@ -149,12 +180,12 @@ export function triggerSeedGunHarvestBloom(
         enemy.hp <= 0 ||
         enemy.aiState === 'spawning' ||
         enemy.bossBurrowed ||
-        hitEnemyIds.has(enemy.id)
+        _hitEnemyIdsScratch.has(enemy.id)
       ) {
         continue;
       }
       if (distance(bud.x, bud.y, enemy.x, enemy.y) <= SEED_GUN_BUD_RADIUS + enemy.radius) {
-        hitEnemyIds.add(enemy.id);
+        _hitEnemyIdsScratch.add(enemy.id);
         hitLivingEnemyCount += 1;
         const hitAng = Math.atan2(enemy.y - bud.y, enemy.x - bud.x);
         enemy.rootedTimer = Math.max(enemy.rootedTimer, rootDur);
@@ -185,9 +216,15 @@ export function triggerSeedGunHarvestBloom(
     }
   }
 
-  sim.summons = sim.summons.filter(
-    (s) => !(s.ownerPlayerId === owner.id && s.kind === 'life_blossom' && s.ttlSec <= 0),
-  );
+  let sumWrite = 0;
+  for (let i = 0; i < sim.summons.length; i++) {
+    const s = sim.summons[i]!;
+    if (s.ownerPlayerId === owner.id && s.kind === 'life_blossom' && s.ttlSec <= 0) {
+      continue;
+    }
+    sim.summons[sumWrite++] = s;
+  }
+  sim.summons.length = sumWrite;
 
   // Strict Anti-Exploit Rule: Healing Mist ONLY triggers when hitting >= 1 living enemy!
   if (hitLivingEnemyCount >= 1) {
@@ -195,9 +232,14 @@ export function triggerSeedGunHarvestBloom(
     for (let i = 0; i < allPlayers.length; i++) {
       const ally = allPlayers[i]!;
       if (ally.lifeState !== 'alive') continue;
-      const nearBud = buds.some(
-        (b) => distance(b.x, b.y, ally.x, ally.y) <= SEED_GUN_BUD_RADIUS + 92,
-      );
+      let nearBud = false;
+      for (let bIdx = 0; bIdx < budLen; bIdx++) {
+        const b = _ownerBudScratch[bIdx]!;
+        if (distance(b.x, b.y, ally.x, ally.y) <= SEED_GUN_BUD_RADIUS + 92) {
+          nearBud = true;
+          break;
+        }
+      }
       if (
         ally.id !== owner.id &&
         !nearBud &&
@@ -218,7 +260,8 @@ export function triggerSeedGunHarvestBloom(
     }
   }
 
-  return buds.length;
+  _ownerBudScratch.length = 0;
+  return budLen;
 }
 
 function resolveTetherAnchorCoords(
@@ -229,59 +272,76 @@ function resolveTetherAnchorCoords(
   fallbackX: number,
   fallbackY: number,
 ): { valid: boolean; x: number; y: number } {
+  _tetherAnchorScratch.valid = false;
+  _tetherAnchorScratch.x = fallbackX;
+  _tetherAnchorScratch.y = fallbackY;
   if (targetKind === 'player') {
     const pl = sim.getPlayerById(targetEntityId);
     if (pl && pl.id !== p.id && pl.lifeState === 'alive') {
-      return {
-        valid: distance(p.x, p.y, pl.x, pl.y) <= TETHER_STAFF_MAX_RANGE,
-        x: pl.x,
-        y: pl.y,
-      };
+      _tetherAnchorScratch.valid = distance(p.x, p.y, pl.x, pl.y) <= TETHER_STAFF_MAX_RANGE;
+      _tetherAnchorScratch.x = pl.x;
+      _tetherAnchorScratch.y = pl.y;
     }
-    return { valid: false, x: fallbackX, y: fallbackY };
+    return _tetherAnchorScratch;
   }
   if (targetKind === 'summon') {
-    const sum = sim.summons.find(
-      (s) => s.id === targetEntityId && s.hp > 0 && s.ttlSec > 0,
-    );
-    if (sum) {
-      return {
-        valid: distance(p.x, p.y, sum.x, sum.y) <= TETHER_STAFF_MAX_RANGE,
-        x: sum.x,
-        y: sum.y,
-      };
+    for (let i = 0; i < sim.summons.length; i++) {
+      const s = sim.summons[i]!;
+      if (s.id === targetEntityId && s.hp > 0 && s.ttlSec > 0) {
+        _tetherAnchorScratch.valid = distance(p.x, p.y, s.x, s.y) <= TETHER_STAFF_MAX_RANGE;
+        _tetherAnchorScratch.x = s.x;
+        _tetherAnchorScratch.y = s.y;
+        return _tetherAnchorScratch;
+      }
     }
-    return { valid: false, x: fallbackX, y: fallbackY };
+    return _tetherAnchorScratch;
   }
   if (targetKind === 'prop') {
-    const pr = sim.props.find((prop) => prop.id === targetEntityId && prop.hp > 0);
-    if (pr) {
-      return {
-        valid: distance(p.x, p.y, pr.x, pr.y) <= TETHER_STAFF_MAX_RANGE,
-        x: pr.x,
-        y: pr.y,
-      };
+    for (let i = 0; i < sim.props.length; i++) {
+      const pr = sim.props[i]!;
+      if (pr.id === targetEntityId && pr.hp > 0) {
+        _tetherAnchorScratch.valid = distance(p.x, p.y, pr.x, pr.y) <= TETHER_STAFF_MAX_RANGE;
+        _tetherAnchorScratch.x = pr.x;
+        _tetherAnchorScratch.y = pr.y;
+        return _tetherAnchorScratch;
+      }
     }
-    return { valid: false, x: fallbackX, y: fallbackY };
+    return _tetherAnchorScratch;
   }
   if (targetKind === 'enemy') {
-    const en = sim.enemies.find(
-      (e) =>
-        e.id === targetEntityId &&
-        e.hp > 0 &&
-        e.aiState !== 'spawning' &&
-        !e.bossBurrowed,
-    );
-    if (en) {
-      return {
-        valid: distance(p.x, p.y, en.x, en.y) <= TETHER_STAFF_MAX_RANGE,
-        x: en.x,
-        y: en.y,
-      };
+    for (let i = 0; i < sim.enemies.length; i++) {
+      const en = sim.enemies[i]!;
+      if (
+        en.id === targetEntityId &&
+        en.hp > 0 &&
+        en.aiState !== 'spawning' &&
+        !en.bossBurrowed
+      ) {
+        _tetherAnchorScratch.valid = distance(p.x, p.y, en.x, en.y) <= TETHER_STAFF_MAX_RANGE;
+        _tetherAnchorScratch.x = en.x;
+        _tetherAnchorScratch.y = en.y;
+        return _tetherAnchorScratch;
+      }
     }
-    return { valid: false, x: fallbackX, y: fallbackY };
+    return _tetherAnchorScratch;
   }
-  return { valid: false, x: fallbackX, y: fallbackY };
+  return _tetherAnchorScratch;
+}
+
+function isInTetherConeOrRange(
+  px: number,
+  py: number,
+  aimAngle: number,
+  halfArc: number,
+  x: number,
+  y: number,
+  requireCone: boolean,
+): boolean {
+  const d = distance(px, py, x, y);
+  if (d > TETHER_STAFF_MAX_RANGE) return false;
+  if (!requireCone || d <= 1e-4) return true;
+  const ang = Math.atan2(y - py, x - px);
+  return Math.abs(angleDiff(ang, aimAngle)) <= halfArc;
 }
 
 function selectTetherAnchorTarget(
@@ -289,23 +349,17 @@ function selectTetherAnchorTarget(
   p: SimPlayerState,
 ): { targetKind: TetherAnchorKind; targetEntityId: number; x2: number; y2: number } {
   const halfArc = Math.PI / 3;
-  const inConeOrRange = (x: number, y: number, requireCone: boolean): boolean => {
-    const d = distance(p.x, p.y, x, y);
-    if (d > TETHER_STAFF_MAX_RANGE) return false;
-    if (!requireCone || d <= 1e-4) return true;
-    const ang = Math.atan2(y - p.y, x - p.x);
-    return Math.abs(angleDiff(ang, p.aimAngle)) <= halfArc;
-  };
 
   // 1. Teammate (SimPlayerState)
   const allPlayers = sim.getAllPlayers();
-  for (const requireCone of [true, false]) {
+  for (let pass = 0; pass < 2; pass++) {
+    const requireCone = pass === 0;
     let bestAlly: SimPlayerState | null = null;
     let bestDist = Infinity;
     for (let i = 0; i < allPlayers.length; i++) {
       const cand = allPlayers[i]!;
       if (cand.id === p.id || cand.lifeState !== 'alive') continue;
-      if (!inConeOrRange(cand.x, cand.y, requireCone)) continue;
+      if (!isInTetherConeOrRange(p.x, p.y, p.aimAngle, halfArc, cand.x, cand.y, requireCone)) continue;
       const d = distance(p.x, p.y, cand.x, cand.y);
       if (d < bestDist) {
         bestDist = d;
@@ -313,23 +367,23 @@ function selectTetherAnchorTarget(
       }
     }
     if (bestAlly) {
-      return {
-        targetKind: 'player',
-        targetEntityId: bestAlly.id,
-        x2: bestAlly.x,
-        y2: bestAlly.y,
-      };
+      _tetherSelectScratch.targetKind = 'player';
+      _tetherSelectScratch.targetEntityId = bestAlly.id;
+      _tetherSelectScratch.x2 = bestAlly.x;
+      _tetherSelectScratch.y2 = bestAlly.y;
+      return _tetherSelectScratch;
     }
   }
 
   // 2. Summon (SimSummonState)
-  for (const requireCone of [true, false]) {
+  for (let pass = 0; pass < 2; pass++) {
+    const requireCone = pass === 0;
     let bestSum: SimSummonState | null = null;
     let bestDist = Infinity;
     for (let i = 0; i < sim.summons.length; i++) {
       const s = sim.summons[i]!;
       if (s.hp <= 0 || s.ttlSec <= 0) continue;
-      if (!inConeOrRange(s.x, s.y, requireCone)) continue;
+      if (!isInTetherConeOrRange(p.x, p.y, p.aimAngle, halfArc, s.x, s.y, requireCone)) continue;
       const d = distance(p.x, p.y, s.x, s.y);
       if (d < bestDist) {
         bestDist = d;
@@ -337,23 +391,23 @@ function selectTetherAnchorTarget(
       }
     }
     if (bestSum) {
-      return {
-        targetKind: 'summon',
-        targetEntityId: bestSum.id,
-        x2: bestSum.x,
-        y2: bestSum.y,
-      };
+      _tetherSelectScratch.targetKind = 'summon';
+      _tetherSelectScratch.targetEntityId = bestSum.id;
+      _tetherSelectScratch.x2 = bestSum.x;
+      _tetherSelectScratch.y2 = bestSum.y;
+      return _tetherSelectScratch;
     }
   }
 
   // 3. Flipped / Interactive Cover Prop (SimPropState)
-  for (const requireCone of [true, false]) {
+  for (let pass = 0; pass < 2; pass++) {
+    const requireCone = pass === 0;
     let bestProp = null;
     let bestScore = Infinity;
     for (let i = 0; i < sim.props.length; i++) {
       const pr = sim.props[i]!;
       if (pr.hp <= 0) continue;
-      if (!inConeOrRange(pr.x, pr.y, requireCone)) continue;
+      if (!isInTetherConeOrRange(p.x, p.y, p.aimAngle, halfArc, pr.x, pr.y, requireCone)) continue;
       const d = distance(p.x, p.y, pr.x, pr.y);
       const priorityBonus = pr.coverState === 'flipped' ? -1000 : 0;
       if (d + priorityBonus < bestScore) {
@@ -362,23 +416,23 @@ function selectTetherAnchorTarget(
       }
     }
     if (bestProp) {
-      return {
-        targetKind: 'prop',
-        targetEntityId: bestProp.id,
-        x2: bestProp.x,
-        y2: bestProp.y,
-      };
+      _tetherSelectScratch.targetKind = 'prop';
+      _tetherSelectScratch.targetEntityId = bestProp.id;
+      _tetherSelectScratch.x2 = bestProp.x;
+      _tetherSelectScratch.y2 = bestProp.y;
+      return _tetherSelectScratch;
     }
   }
 
   // 4. First Enemy along aim cone / within 280px
-  for (const requireCone of [true, false]) {
+  for (let pass = 0; pass < 2; pass++) {
+    const requireCone = pass === 0;
     let bestEnemy: SimEnemyState | null = null;
     let bestDist = Infinity;
     for (let i = 0; i < sim.enemies.length; i++) {
       const e = sim.enemies[i]!;
       if (e.hp <= 0 || e.aiState === 'spawning' || e.bossBurrowed) continue;
-      if (!inConeOrRange(e.x, e.y, requireCone)) continue;
+      if (!isInTetherConeOrRange(p.x, p.y, p.aimAngle, halfArc, e.x, e.y, requireCone)) continue;
       const d = distance(p.x, p.y, e.x, e.y);
       if (d < bestDist) {
         bestDist = d;
@@ -386,12 +440,11 @@ function selectTetherAnchorTarget(
       }
     }
     if (bestEnemy) {
-      return {
-        targetKind: 'enemy',
-        targetEntityId: bestEnemy.id,
-        x2: bestEnemy.x,
-        y2: bestEnemy.y,
-      };
+      _tetherSelectScratch.targetKind = 'enemy';
+      _tetherSelectScratch.targetEntityId = bestEnemy.id;
+      _tetherSelectScratch.x2 = bestEnemy.x;
+      _tetherSelectScratch.y2 = bestEnemy.y;
+      return _tetherSelectScratch;
     }
   }
 
@@ -400,12 +453,11 @@ function selectTetherAnchorTarget(
     p.y + Math.sin(p.aimAngle) * TETHER_STAFF_MAX_RANGE,
     10,
   );
-  return {
-    targetKind: 'point',
-    targetEntityId: 0,
-    x2: col.x,
-    y2: col.y,
-  };
+  _tetherSelectScratch.targetKind = 'point';
+  _tetherSelectScratch.targetEntityId = 0;
+  _tetherSelectScratch.x2 = col.x;
+  _tetherSelectScratch.y2 = col.y;
+  return _tetherSelectScratch;
 }
 
 function applyTetherShockDamage(

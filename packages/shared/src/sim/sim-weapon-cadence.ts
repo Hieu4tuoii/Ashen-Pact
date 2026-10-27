@@ -373,7 +373,9 @@ export function updatePlayerWeaponCadence(
     p.fireHoldTimer = 0;
     p.crossbowChargeTimer = 0;
   }
-  checkAndTriggerFragLauncherAirburst(sim, p, buttons);
+  if (activeWepId === 'frag_launcher' || otherWepId === 'frag_launcher') {
+    checkAndTriggerFragLauncherAirburst(sim, p, buttons);
+  }
 }
 
 export function tryFireActiveWeaponImpl(

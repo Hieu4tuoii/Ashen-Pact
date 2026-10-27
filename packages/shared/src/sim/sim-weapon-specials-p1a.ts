@@ -621,6 +621,8 @@ export function canApplyFragSubmunitionHit(
   return true;
 }
 
+const _hitDmgAngleScratch = { damage: 0, hitAngle: 0 };
+
 export function resolvePlayerProjectileHitDamageAndAngle(
   sim: WorldSim,
   b: SimProjectileState,
@@ -635,8 +637,9 @@ export function resolvePlayerProjectileHitDamageAndAngle(
       damage = Math.round(b.damage * SCRAP_SHOTGUN_POINT_BLANK_MULT);
     }
   }
-  const hitAngle = b.airburstBypassShield ? enemy.aimAngle : b.angle;
-  return { damage, hitAngle };
+  _hitDmgAngleScratch.damage = damage;
+  _hitDmgAngleScratch.hitAngle = b.airburstBypassShield ? enemy.aimAngle : b.angle;
+  return _hitDmgAngleScratch;
 }
 
 
