@@ -459,9 +459,11 @@ describe('AP2-P1B.5 — Procedural VFX for 7 Batch-2 Weapons, ArtGallery 18 Weap
       expect(g.fillCircle).toHaveBeenCalledWith(420, 270, 110);
       expect(g.strokeCircle).toHaveBeenCalledWith(410, 270, 110);
       expect(g.strokeCircle).toHaveBeenCalledWith(450, 270, 64);
+
+      const gArc = makeMockGraphics();
       expect(
         drawBatch2TransientShape(
-          g as never,
+          gArc as never,
           {
             kind: 'emerald_cleave_arc',
             x: 340,
@@ -478,6 +480,54 @@ describe('AP2-P1B.5 — Procedural VFX for 7 Batch-2 Weapons, ArtGallery 18 Weap
           0,
         ),
       ).toBe(true);
+      expect(gArc.lineStyle).toHaveBeenCalledWith(expect.any(Number), 0xef4444, expect.any(Number));
+      expect(gArc.lineStyle).toHaveBeenCalledWith(expect.any(Number), 0xfacc15, expect.any(Number));
+
+      const gThunderArc = makeMockGraphics();
+      expect(
+        drawBatch2TransientShape(
+          gThunderArc as never,
+          {
+            kind: 'emerald_cleave_arc',
+            x: 340,
+            y: 270,
+            radius: 78,
+            angle: 0,
+            color: 0x38bdf8,
+            ttlSec: 0.2,
+            maxTtlSec: 0.28,
+          },
+          0.3,
+          0.9,
+          0.5,
+          0,
+        ),
+      ).toBe(true);
+      expect(gThunderArc.lineStyle).toHaveBeenCalledWith(expect.any(Number), 0x38bdf8, expect.any(Number));
+      expect(gThunderArc.lineStyle).toHaveBeenCalledWith(expect.any(Number), 0xfef08a, expect.any(Number));
+
+      const playSpy = vi.spyOn(zzfx, 'play');
+      const mockScene = makeMockScene();
+      sim.player.meleeComboStep = 0;
+      handleBatch2WeaponSimEvent(
+        mockScene as never,
+        {
+          kind: 'melee_swing',
+          playerId: sim.player.id,
+          weaponId: 'emerald_cleaver',
+          x: 340,
+          y: 270,
+          angle: 0,
+          arcRad: 2.35,
+          range: 74,
+          bulletsDestroyed: 0,
+        },
+        sim,
+        false,
+        true,
+      );
+      expect(playSpy).toHaveBeenCalledWith('emerald_boomerang', 340, 356, 270, 270);
+      playSpy.mockRestore();
     });
   });
 
