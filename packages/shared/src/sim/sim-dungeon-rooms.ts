@@ -23,6 +23,7 @@ import {
   populateSecretRoomContents,
   spawnCoopPressurePlatePuzzleImpl,
 } from './sim-secret-and-workshop.js';
+import { populateTreasureForgeWorkshop } from './sim-weapon-mutators.js';
 import type { WorldSim } from './world-sim.js';
 
 export { openChestImpl, pickupOrBuyWorldItemImpl, spawnCoopPressurePlatePuzzleImpl };
@@ -301,11 +302,7 @@ export function populateRoomContentsImpl(this: WorldSim, room: DungeonRoomNode):
       this.spawnProp('torch_brazier', cx + 175, cy - 80);
       this.spawnProp('glow_mushroom', cx - 110, cy + 80);
       this.spawnProp('glow_mushroom', cx + 110, cy + 80);
-      if (!hasSavedState && !room.chestOpened) {
-        const rarity = room.chestRarity ?? this.rollChestRarity(1);
-        this.spawnChest(cx, cy, rarity, room.chestWeaponId ?? undefined);
-      }
-      this.spawnCoopPressurePlatePuzzle(room.id);
+      populateTreasureForgeWorkshop(this, room, hasSavedState);
       break;
     }
     case 'secret': {

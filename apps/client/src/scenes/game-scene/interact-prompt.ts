@@ -278,6 +278,54 @@ export function resolveInteractPromptSpec(
       };
     }
 
+    case 'daedalus_anvil': {
+      const colorHex = PALETTE.SOLAR_GOLD;
+      const titleText = isEn ? 'Daedalus Anvil (Mutator)' : 'Đe Rèn Daedalus (Độ Cơ Học)';
+      return {
+        key: target.key,
+        kind: 'daedalus_anvil',
+        x: target.x,
+        y: target.y - 32,
+        targetX: target.x,
+        targetY: target.y,
+        highlightRadiusX: 24,
+        highlightRadiusY: 24,
+        keycapText: 'E',
+        titleText,
+        colorHex,
+        colorNum: hexToNum(colorHex),
+        costGold: 0,
+        hasCoinIcon: false,
+        priceText: '',
+        suppressedByWeaponCard: false,
+      };
+    }
+
+    case 'upgrade_anvil': {
+      const colorHex = PALETTE.SOLAR_GOLD;
+      const titleText = isEn ? 'Upgrade Anvil (+1 Lv)' : 'Đe Nâng Cấp (+1 Cấp)';
+      const costGold = target.npc.costGold ?? 35;
+      const priceText = costGold > 0 ? (isEn ? `${costGold} Gold` : `${costGold} Xu`) : '';
+      return {
+        key: target.key,
+        kind: 'upgrade_anvil',
+        x: target.x,
+        y: target.y - 32,
+        targetX: target.x,
+        targetY: target.y,
+        highlightRadiusX: 24,
+        highlightRadiusY: 24,
+        keycapText: 'E',
+        titleText,
+        colorHex,
+        colorNum: hexToNum(colorHex),
+        costGold,
+        hasCoinIcon: costGold > 0,
+        priceText,
+        suppressedByWeaponCard: false,
+      };
+    }
+
     case 'shrine': {
       const colorHex = PALETTE.CYAN_FROST;
       const titleText = isEn ? 'Ancient Shrine' : 'Điện Thờ Cổ Đại';

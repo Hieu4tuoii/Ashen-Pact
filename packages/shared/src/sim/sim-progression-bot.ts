@@ -7,6 +7,7 @@ import { generateDungeonFloor } from './dungeon-gen.js';
 import { findNextWalkableWaypoint } from './arena-room-archetypes.js';
 import { findInteractTarget } from './interact-target.js';
 import { flipCoverProp } from './sim-tactical-physics.js';
+import { activateDaedalusAnvilImpl, activateUpgradeAnvilImpl } from './sim-weapon-mutators.js';
 import { lerpSpeed, type SimSummonState, type SimDoorState, type SimNpcState, type SimPlayerState, type SimEnemyState, type SimPickupState } from './world-sim-types.js';
 import type { WorldSim } from './world-sim.js';
 
@@ -224,8 +225,13 @@ export function skipCurrentRoomWavesImpl(this: WorldSim): void {
   }
 }
 
-export function interactWithNearestImpl(this: WorldSim, actor: SimPlayerState = this.player): boolean {
-  if (actor.lifeState !== 'alive') return false;
+export function interactWithNearestImpl(
+  this: WorldSim,
+  actorOrId: SimPlayerState | number = this.player,
+): boolean {
+  const actor =
+    typeof actorOrId === 'number' ? (this.getPlayerById(actorOrId) ?? this.player) : actorOrId;
+  if (!actor || actor.lifeState !== 'alive') return false;
   const p = actor;
   const target = findInteractTarget(this, p.id);
   if (!target) return false;
@@ -293,6 +299,12 @@ export function interactWithNearestImpl(this: WorldSim, actor: SimPlayerState = 
 
     case 'shrine':
       return this.activateShrine(target.npc, p);
+
+    case 'daedalus_anvil':
+      return activateDaedalusAnvilImpl(this, target.npc, p);
+
+    case 'upgrade_anvil':
+      return activateUpgradeAnvilImpl(this, target.npc, p);
 
     case 'portal':
       if (this.inHub) {

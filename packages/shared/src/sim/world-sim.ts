@@ -1,6 +1,6 @@
 import { SeededRandom } from '../core/prng.js';
 import { BIOME2_COMBAT_ENEMIES, BIOME3_COMBAT_ENEMIES } from '../data/enemies.js';
-import type { BlessingId, BuffId, CardinalDir, CharacterId, ElementalReactionId, EliteModifier, ElementType, WeaponRarity } from '../data/types.js';
+import type { BlessingId, BuffId, CardinalDir, CharacterId, ElementalReactionId, EliteModifier, ElementType, WeaponMutatorId, WeaponRarity } from '../data/types.js';
 import { SpatialHashGrid } from '../math/spatial-hash.js';
 import type { PlayerInputPacket, QuickEmoteId } from '../protocol/messages.js';
 import { ArenaMap, type RoomArchetypeId, type SurfaceKind } from './arena-map.js';
@@ -21,6 +21,7 @@ import { spawnDeterministicVolleyImpl, spawnSeedGunLifeBlossomImpl, triggerLaunc
 import { applyDamageToEnemyImpl, triggerElementalReactionImpl, handleEnemyKilledImpl, applyElementStatusToEnemyImpl, applyDamageToPlayerImpl } from './sim-combat-damage.js';
 import { flipCoverPropImpl, kickPropImpl, updateSlidingPropsImpl } from './sim-tactical-physics.js';
 import { updateMagneticRivets } from './sim-weapon-specials.js';
+import { selectWeaponMutatorImpl, updateGravitySingularities } from './sim-weapon-mutators.js';
 
 export * from './world-sim-types.js';
 export * from './world-sim-events.js';
@@ -28,6 +29,7 @@ export * from './sim-blessings.js';
 export * from './sim-tactical-physics.js';
 export * from './sim-weapon-cadence.js';
 export * from './sim-weapon-specials.js';
+export * from './sim-weapon-mutators.js';
 
 export class WorldSim {
   public readonly rng: SeededRandom;
@@ -338,6 +340,7 @@ export class WorldSim {
     this.updateProjectiles(dtSec);
     if (!this.stressTestActive) {
       updateMagneticRivets(this, dtSec);
+      updateGravitySingularities(this, dtSec);
     }
 
     // 9. Update Pickups (Magnet & Collection)
@@ -459,10 +462,11 @@ export class WorldSim {
   public hasPlayerBlessing(p: SimPlayerState, id: BlessingId): boolean { return hasPlayerBlessing(p, id); }
   public applyBuffEffects(buffId: BuffId, playerId = this.player.id): void  { return applyBuffEffectsImpl.call(this, buffId, playerId); }
   public selectFloorBuff(buffId: BuffId, playerId = this.player.id): boolean  { return selectFloorBuffImpl.call(this, buffId, playerId); }
+  public selectWeaponMutator(mutatorId: WeaponMutatorId, playerId = this.player.id): boolean  { return selectWeaponMutatorImpl(this, mutatorId, playerId); }
   public advanceToFloor(floorNumber: 1 | 2 | 3 | 4 | 5 | 6): void  { return advanceToFloorImpl.call(this, floorNumber); }
   public advanceToBiome(biome: 1 | 2 | 3): void  { return advanceToBiomeImpl.call(this, biome); }
   public skipCurrentRoomWaves(): void  { return skipCurrentRoomWavesImpl.call(this); }
-  public interactWithNearest(actor: SimPlayerState = this.player): boolean  { return interactWithNearestImpl.call(this, actor); }
+  public interactWithNearest(actor: SimPlayerState | number = this.player): boolean  { return interactWithNearestImpl.call(this, actor); }
   public updateCurrentRoomProgression(dtSec: number): void  { return updateCurrentRoomProgressionImpl.call(this, dtSec); }
   public stepBotAutoPlay(_dtSec: number): void  { return stepBotAutoPlayImpl.call(this, _dtSec); }
   public findNextBotDoor(): SimDoorState | null  { return findNextBotDoorImpl.call(this); }

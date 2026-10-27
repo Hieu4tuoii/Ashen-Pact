@@ -344,6 +344,7 @@ export class NetworkTransport implements ITransport {
       pState.pactOriginalWeaponId = ps.pactOrigWep ?? null;
       pState.awakenedRelicIds = ps.relics ? [...ps.relics] : [];
       pState.buffChoices = ps.buffChoices ? [...ps.buffChoices] : [];
+      pState.mutatorChoices = ps.mutatorChoices ? [...ps.mutatorChoices] : [];
       if (ps.wepLevels) {
         pState.weaponUpgradeLevels = {
           0: ps.wepLevels[0] ?? 0,

@@ -128,6 +128,7 @@ describe('Bugfixes: Enemy Obstacle Spawning, Boss Phase Energy Reward, & Solo Pr
     const treasureRoom = sim.dungeon.rooms.find((r) => r.type === 'treasure')!;
     expect(treasureRoom).toBeDefined();
     sim.enterRoom(treasureRoom.id);
+    sim.spawnCoopPressurePlatePuzzle(treasureRoom.id);
 
     expect(sim.pressurePlates).toHaveLength(2);
     expect(sim.pushBlocks).toHaveLength(1);

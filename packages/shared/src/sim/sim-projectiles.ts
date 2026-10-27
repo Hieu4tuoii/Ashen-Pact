@@ -27,6 +27,7 @@ import {
   updateLegendaryProjectileInFlight,
   updateVoidStaffOrbInFlight,
 } from './sim-weapon-specials.js';
+import { applyChainHarpoonOnHit, applyGravitySingularityOnHit } from './sim-weapon-mutators.js';
 import {
   type BulletVolleySpawnEvent,
   MAX_ENEMY_PROJECTILES,
@@ -140,6 +141,9 @@ export function spawnDeterministicVolleyImpl(this: WorldSim, ev: BulletVolleySpa
       guaranteedElementalProc: ev.guaranteedElementalProc, originX: ev.originX, originY: ev.originY,
       armedForAirburst: ev.armedForAirburst, airburstBypassShield: ev.airburstBypassShield,
       parentExplosionId: ev.parentExplosionId, firedWhileHoldingFire: ev.firedWhileHoldingFire,
+      gravitySingularityShot: ev.gravitySingularityShot,
+      chainHarpoonShot: ev.chainHarpoonShot,
+      bypassFrontShield: ev.bypassFrontShield,
     });
     copyLegendaryVolleyFieldsToProjectile(ev, proj);
     this.projectiles.push(proj);
@@ -455,6 +459,12 @@ export function updateProjectilesImpl(this: WorldSim, dtSec: number): void {
           );
 
           handlePlayerProjectileEnemyHitWeaponSpecials(this, b, enemy);
+          if (b.gravitySingularityShot) {
+            applyGravitySingularityOnHit(this, b, enemy);
+          }
+          if (b.chainHarpoonShot) {
+            applyChainHarpoonOnHit(this, b, enemy);
+          }
 
           if (!this.stressTestActive || stressImpactEventsThisTick < 4) {
             stressImpactEventsThisTick += 1;
@@ -859,6 +869,9 @@ export function acquireProjectileImpl(this: WorldSim,
     pooled.convergeTargetX = init.convergeTargetX; pooled.convergeTargetY = init.convergeTargetY;
     pooled.solarRayIndex = init.solarRayIndex; pooled.solarConvergeBurstTriggered = false;
     pooled.hasExplicitAimTarget = init.hasExplicitAimTarget;
+    pooled.gravitySingularityShot = init.gravitySingularityShot;
+    pooled.chainHarpoonShot = init.chainHarpoonShot;
+    pooled.bypassFrontShield = init.bypassFrontShield;
     pooled.trailLastX = init.originX ?? init.x; pooled.trailLastY = init.originY ?? init.y;
     pooled.hitEntityIds.length = 0;
     return pooled;

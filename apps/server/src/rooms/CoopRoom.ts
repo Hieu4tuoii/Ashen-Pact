@@ -8,6 +8,7 @@ import {
   type PlayerInputPacket,
   SIM_STEP_MS,
   type SimEvent,
+  type WeaponMutatorId,
   WorldSim,
   encodeWorldSnapshot,
 } from '@ashen-pact/shared';
@@ -191,6 +192,15 @@ export class CoopRoom extends Room<CoopRoomState> {
           this.removePlayerMeta(otherMeta);
           this.broadcastImmediateSnapshot();
           break;
+        }
+      }
+    });
+
+    this.onMessage('select_mutator', (client, payload: { mutatorId?: WeaponMutatorId }) => {
+      const meta = this.playersBySession.get(client.sessionId);
+      if (meta && payload?.mutatorId) {
+        if (this.sim.selectWeaponMutator(payload.mutatorId, meta.playerId)) {
+          this.broadcastImmediateSnapshot();
         }
       }
     });

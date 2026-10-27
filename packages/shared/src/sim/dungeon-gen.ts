@@ -77,6 +77,7 @@ export interface DungeonRoomNode {
   roomArchetype?: RoomArchetypeId;
   isChallenge?: boolean;
   currentWaveSpawnedCount?: number;
+  anvilUsedByPlayerIds?: number[];
 }
 
 export interface DungeonFloorGraph {

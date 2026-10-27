@@ -5,13 +5,23 @@ import { clamp } from '../math/vec2.js';
 import { INPUT_BUTTON, SHOT_FLAG } from '../protocol/messages.js';
 import { syncActiveWeaponCadenceState } from './sim-coop-hub.js';
 import {
-  ACROBAT_RELOAD_WINDOW_MAX,
-  ACROBAT_RELOAD_WINDOW_MIN,
   ACROBAT_VENT_ORANGE_MAX,
   ACROBAT_VENT_ORANGE_MIN,
   triggerReloadVentOrFinisherBlessings,
 } from './sim-blessings.js';
-import { computeAdditivePoolMultiplier } from './sim-damage-pipeline.js';
+import {
+  clampPelletsPerTrigger,
+  computeAdditivePoolMultiplier,
+  computeUpgradeMultiplier,
+} from './sim-damage-pipeline.js';
+import {
+  applyFinaleJoltSafeRecoil,
+  getClipReloadGoldenWindow,
+  getHeatVentOrangeZone,
+  hasActiveWeaponMutator,
+  spawnShockwaveEdgeBlade,
+  triggerFinaleJoltVentBurst,
+} from './sim-weapon-mutators.js';
 import {
   resolveMeleeConeHitsAndSynergies,
   upsertTetherStaffBeam,
@@ -212,9 +222,11 @@ export function updatePlayerWeaponCadence(
       if (p.reloadDuration <= 0 && w.reloadDurationSec > 0) {
         p.reloadDuration = w.reloadDurationSec;
       }
-    } else if (p.reloadTimer <= 0) {
+    } else {
       p.clipMax = 0;
       p.clipAmmo = 0;
+      p.reloadTimer = 0;
+      p.reloadDuration = 0;
     }
   }
 
@@ -255,12 +267,7 @@ export function updatePlayerWeaponCadence(
     if (p.reloadTimer > 0 && p.reloadDuration > 0) {
       if (!p.reloadLockout) {
         const progress = 1 - p.reloadTimer / p.reloadDuration;
-        const winMin = p.acrobatExpandedWindow
-          ? ACROBAT_RELOAD_WINDOW_MIN
-          : PERFECT_RELOAD_WINDOW_MIN;
-        const winMax = p.acrobatExpandedWindow
-          ? ACROBAT_RELOAD_WINDOW_MAX
-          : PERFECT_RELOAD_WINDOW_MAX;
+        const { min: winMin, max: winMax } = getClipReloadGoldenWindow(p);
         p.acrobatExpandedWindow = false;
         if (progress >= winMin && progress <= winMax) {
           const fullClip = p.clipMax > 0 ? p.clipMax : (w?.clipSize ?? 6);
@@ -304,8 +311,13 @@ export function updatePlayerWeaponCadence(
         }
       }
     } else if (w?.cadenceKind === 'HEAT_VENT') {
-      const orangeMin = p.acrobatExpandedWindow ? ACROBAT_VENT_ORANGE_MIN : HEAT_ORANGE_MIN;
-      const orangeMax = p.acrobatExpandedWindow ? ACROBAT_VENT_ORANGE_MAX : HEAT_ORANGE_MAX;
+      const { min: baseOrangeMin, max: baseOrangeMax } = getHeatVentOrangeZone(p);
+      const orangeMin = p.acrobatExpandedWindow
+        ? Math.min(ACROBAT_VENT_ORANGE_MIN, baseOrangeMin)
+        : baseOrangeMin;
+      const orangeMax = p.acrobatExpandedWindow
+        ? Math.max(ACROBAT_VENT_ORANGE_MAX, baseOrangeMax)
+        : baseOrangeMax;
       p.acrobatExpandedWindow = false;
       if (
         p.overheatLockTimer <= 0 &&
@@ -315,6 +327,7 @@ export function updatePlayerWeaponCadence(
         const shotsFiredFromVent = Math.max(1, Math.round(p.weaponHeat / 15));
         p.weaponHeat = 0;
         p.weaponSlotHeat[slot] = 0;
+        p.ventEmpoweredNextShot = true;
         p.ventCooldownTimer = TACTICAL_VENT_COOLDOWN_SEC;
         p.fireCooldownTimer = Math.max(p.fireCooldownTimer, TACTICAL_VENT_COOLDOWN_SEC);
         triggerGrassPollenSpeedBoost(sim, p);
@@ -337,6 +350,7 @@ export function updatePlayerWeaponCadence(
         } else if (w.id === 'solar_archon_staff') {
           triggerSolarArchonSupernovaVent(sim, p);
         }
+        triggerFinaleJoltVentBurst(sim, p, w.id);
         triggerReloadVentOrFinisherBlessings(sim, p, 'tactical_vent', {
           shotsFired: shotsFiredFromVent,
         });
@@ -476,12 +490,19 @@ export function tryFireActiveWeaponImpl(
   const heatBeforeShot = p.weaponHeat;
 
   let fireRateMult = p.elementalConvergenceTimer > 0 ? 1.2 : 1.0;
+  if (hasActiveWeaponMutator(p, 'mutator_finale_jolt')) {
+    fireRateMult *= 1.2;
+  }
   let isFinaleShot = false;
+  let wasOverclocked = false;
+  const wasVentEmpowered = Boolean(p.ventEmpoweredNextShot);
+  p.ventEmpoweredNextShot = false;
   let inOrangeZoneBeforeShot = false;
 
   if (w.cadenceKind === 'CLIP_RELOAD') {
     if (p.overclockedNextShot) {
       p.overclockedNextShot = false;
+      wasOverclocked = true;
       shotFlags |= SHOT_FLAG.OVERCLOCKED_SHOT;
       additiveDmgBonus += 0.45;
     }
@@ -505,7 +526,8 @@ export function tryFireActiveWeaponImpl(
       p.reloadLockout = false;
     }
   } else if (w.cadenceKind === 'HEAT_VENT') {
-    if (p.weaponHeat >= HEAT_ORANGE_MIN && p.weaponHeat <= HEAT_ORANGE_MAX) {
+    const { min: orangeMin, max: orangeMax } = getHeatVentOrangeZone(p);
+    if (p.weaponHeat >= orangeMin && p.weaponHeat <= orangeMax) {
       inOrangeZoneBeforeShot = true;
       fireRateMult *= 1.25;
       additiveDmgBonus += 0.25;
@@ -531,6 +553,7 @@ export function tryFireActiveWeaponImpl(
   const effectiveFireRate = Math.max(0.2, baseFireRate * fireRateMult);
   p.fireCooldownTimer = 1 / effectiveFireRate;
   p.recoilTimer = 0.12;
+  const upgradeMult = computeUpgradeMultiplier(p.weaponUpgradeLevels?.[slot] ?? 0);
 
   let shotElement: ElementType =
     p.activeImbueElement !== 'none'
@@ -543,10 +566,13 @@ export function tryFireActiveWeaponImpl(
     const comboStep = p.meleeComboStep ?? 0;
     const arcRad = (w.spreadDeg * Math.PI) / 180;
     const halfArc = arcRad / 2;
-    const meleeRange =
+    const rawMeleeRange =
       w.id === 'thunder_hammer'
         ? MELEE_RANGE + 20
         : (w.range ?? (w.id === 'berserker_axe' ? MELEE_RANGE + 10 : MELEE_RANGE));
+    const meleeRange = hasActiveWeaponMutator(p, 'mutator_shockwave_edge')
+      ? Math.round(rawMeleeRange * 1.3)
+      : rawMeleeRange;
 
     const stepBaseDmg =
       w.comboDamages?.[comboStep] ??
@@ -554,11 +580,15 @@ export function tryFireActiveWeaponImpl(
     const stepKnockback = w.comboKnockbacks?.[comboStep] ?? w.knockback;
     const baseMeleeDmg = Math.max(
       1,
-      Math.round(stepBaseDmg * computeAdditivePoolMultiplier(additiveDmgBonus)),
+      Math.round(stepBaseDmg * upgradeMult * computeAdditivePoolMultiplier(additiveDmgBonus)),
     );
     const baseCrit = p.critChance ?? CHARACTERS[p.characterId]?.baseCritChance ?? 0.05;
     const critChance = clamp(baseCrit + w.critChance, 0, 1);
     let bulletsDestroyed = 0;
+
+    if (hasActiveWeaponMutator(p, 'mutator_shockwave_edge')) {
+      spawnShockwaveEdgeBlade(this, p, w, baseMeleeDmg, shotElement, critChance);
+    }
 
     const finisherHitEnemyIds = new Set<number>();
     if (comboStep === 0 || comboStep === 1) {
@@ -616,8 +646,15 @@ export function tryFireActiveWeaponImpl(
   }
 
   // Ranged weapons
-  const pellets = Math.max(1, w.pelletCount);
-  const spreadRad = (w.spreadDeg * Math.PI) / 180;
+  let pellets = Math.max(1, w.pelletCount);
+  let spreadRad = (w.spreadDeg * Math.PI) / 180;
+  const finaleJoltBurst =
+    hasActiveWeaponMutator(p, 'mutator_finale_jolt') && (isFinaleShot || wasVentEmpowered);
+  if (finaleJoltBurst) {
+    additiveDmgBonus += 0.4;
+    pellets = Math.max(3, pellets);
+    spreadRad = Math.max(spreadRad, 0.2);
+  }
   const shieldBoost = p.characterId === 'vanguard' && p.skillActiveTimer > 0;
   const muzzleDist = w.id === 'thorn_staff' ? 0 : 18;
   const spawnX = p.x + Math.cos(p.aimAngle) * muzzleDist;
@@ -722,12 +759,19 @@ export function tryFireActiveWeaponImpl(
     return;
   }
 
-  const shieldAdjustedDmg = shieldBoost ? Math.round(rawWeaponDmg * 1.3) : rawWeaponDmg;
+  const shieldAdjustedDmg =
+    (shieldBoost ? Math.round(rawWeaponDmg * 1.3) : rawWeaponDmg) * upgradeMult;
   const additiveMult = computeAdditivePoolMultiplier(additiveDmgBonus);
-  const baseDmg =
+  let baseDmg =
     w.id === 'gale_smg'
       ? Math.max(1, Number((shieldAdjustedDmg * additiveMult).toFixed(2)))
       : Math.max(1, Math.round(shieldAdjustedDmg * additiveMult));
+
+  if (hasActiveWeaponMutator(p, 'mutator_prism_splitter')) {
+    baseDmg = Math.max(1, Math.round(baseDmg * 0.8));
+    pellets = clampPelletsPerTrigger(Math.max(3, pellets * 3));
+    spreadRad = Math.max(spreadRad, 0.22);
+  }
 
   if (w.id === 'tether_staff') {
     upsertTetherStaffBeam(this, p, baseDmg);
@@ -737,6 +781,15 @@ export function tryFireActiveWeaponImpl(
     spawnSolarArchonConvergingVolley(this, p, baseDmg, critChance, shotElement, shieldBoost, shotFlags);
     return;
   }
+
+  const empoweredForMutator = isFinaleShot || wasOverclocked || wasVentEmpowered;
+  const gravitySingularityShot =
+    hasActiveWeaponMutator(p, 'mutator_gravity_singularity') && empoweredForMutator;
+  const chainHarpoonShot =
+    hasActiveWeaponMutator(p, 'mutator_chain_harpoon') && empoweredForMutator;
+  const bypassFrontShield =
+    hasActiveWeaponMutator(p, 'mutator_thermal_meltdown') &&
+    (empoweredForMutator || inOrangeZoneBeforeShot);
 
   this.spawnDeterministicVolley({
     kind: 'bullet_volley_spawned',
@@ -769,7 +822,14 @@ export function tryFireActiveWeaponImpl(
     armedForAirburst: w.id === 'frag_launcher' && (this.currentInput.buttons & INPUT_BUTTON.FIRE) !== 0,
     firedWhileHoldingFire:
       w.id === 'void_staff' && (((p.lastButtons ?? this.currentInput.buttons) & INPUT_BUTTON.FIRE) !== 0),
+    gravitySingularityShot: gravitySingularityShot || undefined,
+    chainHarpoonShot: chainHarpoonShot || undefined,
+    bypassFrontShield: bypassFrontShield || undefined,
   });
+
+  if (finaleJoltBurst) {
+    applyFinaleJoltSafeRecoil(this, p, p.aimAngle, 48);
+  }
 
   if (w.id === 'magma_cannon' && isFinaleShot) {
     triggerMagmaCannonGeyserEruption(this, p);

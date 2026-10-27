@@ -367,11 +367,14 @@ describe('Phase 6 — Biomes 2 & 3, 18 Weapons, Co-op Mechanics & Bosses Kryssa 
       includeTrainingDummy: false,
     });
 
-    // Enter Treasure Room where Co-op Dual Pressure Plates & Solo Push Block spawn
+    // Enter Treasure Room where Forge Workshop (1 chest + Daedalus Anvil on Floor 1) spawns
     const treasureRoom = sim.dungeon.rooms.find((r) => r.type === 'treasure')!;
     expect(treasureRoom).toBeDefined();
     sim.enterRoom(treasureRoom.id);
+    expect(sim.chests).toHaveLength(1);
+    expect(sim.npcEntities.some((n) => n.kind === 'daedalus_anvil')).toBe(true);
 
+    sim.spawnCoopPressurePlatePuzzle(treasureRoom.id);
     expect(sim.pressurePlates).toHaveLength(2);
     expect(sim.pushBlocks.length).toBeGreaterThanOrEqual(1);
     expect(sim.coopPuzzleCompleted).toBe(false);

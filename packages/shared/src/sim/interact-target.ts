@@ -1,5 +1,6 @@
 import { distance } from '../math/vec2.js';
 import { isFlippableBarricadeProp } from './sim-tactical-physics.js';
+import { hasPlayerUsedAnvil } from './sim-weapon-mutators.js';
 import type {
   SimChestState,
   SimDoorState,
@@ -39,6 +40,8 @@ export const INTERACT_PRIORITY_ORDER = [
 export type InteractTargetKind =
   | 'revive'
   | 'flip_cover'
+  | 'daedalus_anvil'
+  | 'upgrade_anvil'
   | (typeof INTERACT_PRIORITY_ORDER)[number];
 
 export type InteractTargetResult =
@@ -92,6 +95,14 @@ export type InteractTargetResult =
     }
   | {
       kind: 'shrine';
+      key: string;
+      x: number;
+      y: number;
+      distance: number;
+      npc: SimNpcState;
+    }
+  | {
+      kind: 'daedalus_anvil' | 'upgrade_anvil';
       key: string;
       x: number;
       y: number;
@@ -361,40 +372,57 @@ export function findInteractTarget(
     }
   }
 
-  // 4. Ancient Shrine
+  // 4. Ancient Shrine & Treasure Forge Anvils
   {
     const baseRange = INTERACT_RANGE + INTERACT_RANGE_OFFSETS.shrine;
-    let bestShrine: SimNpcState | null = null;
+    const room = sim.getCurrentRoom();
+    let bestNpc: SimNpcState | null = null;
     let bestDist = Infinity;
     let bestKey = '';
 
     for (let i = 0; i < sim.npcEntities.length; i++) {
       const npc = sim.npcEntities[i]!;
-      if (npc.kind !== 'shrine' || npc.interacted) continue;
-      if (requireAffordable) {
-        const costGold = npc.costGold ?? 25;
-        if (!actor.godMode && actor.gold < costGold && actor.hp <= npc.costHp) {
-          continue;
+      if (npc.kind === 'shrine') {
+        if (npc.interacted) continue;
+        if (requireAffordable) {
+          const costGold = npc.costGold ?? 25;
+          if (!actor.godMode && actor.gold < costGold && actor.hp <= npc.costHp) {
+            continue;
+          }
         }
+      } else if (npc.kind === 'daedalus_anvil' || npc.kind === 'upgrade_anvil') {
+        if (hasPlayerUsedAnvil(npc, room, actor.id)) continue;
+      } else {
+        continue;
       }
-      const key = `shrine:${npc.id}`;
+      const key = `${npc.kind}:${npc.id}`;
       const maxRange = baseRange + (currentKey === key ? hysteresis : 0);
       const d = distance(actor.x, actor.y, npc.x, npc.y);
       if (d <= maxRange && d < bestDist) {
         bestDist = d;
-        bestShrine = npc;
+        bestNpc = npc;
         bestKey = key;
       }
     }
 
-    if (bestShrine) {
+    if (bestNpc) {
+      if (bestNpc.kind === 'daedalus_anvil' || bestNpc.kind === 'upgrade_anvil') {
+        return {
+          kind: bestNpc.kind,
+          key: bestKey,
+          x: bestNpc.x,
+          y: bestNpc.y,
+          distance: bestDist,
+          npc: bestNpc,
+        };
+      }
       return {
         kind: 'shrine',
         key: bestKey,
-        x: bestShrine.x,
-        y: bestShrine.y,
+        x: bestNpc.x,
+        y: bestNpc.y,
         distance: bestDist,
-        npc: bestShrine,
+        npc: bestNpc,
       };
     }
   }

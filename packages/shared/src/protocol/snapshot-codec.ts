@@ -78,6 +78,7 @@ export interface QuantizedPlayerSnap {
   pactOrigWep: string | null;
   relics: AshenRelicId[];
   buffChoices: BlessingId[];
+  mutatorChoices?: WeaponMutatorId[];
   wepLevels?: Record<number, number>;
   fireCd100: number;
   imbue: ElementType;
@@ -272,6 +273,7 @@ export function encodeWorldSnapshot(
     pactOrigWep: p.pactOriginalWeaponId,
     relics: [...p.awakenedRelicIds],
     buffChoices: [...p.buffChoices],
+    mutatorChoices: p.mutatorChoices ? [...p.mutatorChoices] : undefined,
     wepLevels: {
       0: p.weaponUpgradeLevels?.[0] ?? 0,
       1: p.weaponUpgradeLevels?.[1] ?? 0,

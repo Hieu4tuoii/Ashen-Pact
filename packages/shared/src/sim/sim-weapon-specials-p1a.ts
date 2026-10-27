@@ -667,7 +667,8 @@ export function resolvePlayerProjectileHitDamageAndAngle(
     }
   }
   _hitDmgAngleScratch.damage = damage;
-  _hitDmgAngleScratch.hitAngle = b.airburstBypassShield ? enemy.aimAngle : b.angle;
+  _hitDmgAngleScratch.hitAngle =
+    b.airburstBypassShield || b.bypassFrontShield ? enemy.aimAngle : b.angle;
   return _hitDmgAngleScratch;
 }
 

@@ -129,7 +129,9 @@ export type PropKind =
   | 'cryo_prism_pillar'
   | 'forge_blast_shield'
   | 'pneumatic_press'
-  | 'slag_crucible';
+  | 'slag_crucible'
+  | 'daedalus_anvil'
+  | 'upgrade_anvil';
 
 export interface SimPropState {
   id: number;
@@ -367,7 +369,7 @@ export interface SimWorldItemState {
 
 export interface SimNpcState {
   id: number;
-  kind: 'merchant' | 'shrine';
+  kind: 'merchant' | 'shrine' | 'daedalus_anvil' | 'upgrade_anvil';
   nameVi: string;
   dialogueVi: string;
   x: number;
@@ -376,6 +378,7 @@ export interface SimNpcState {
   interacted: boolean;
   costHp: number;
   costGold?: number;
+  usedByPlayerIds?: number[];
 }
 
 export interface SimHubStatue {
@@ -475,6 +478,7 @@ export interface SimPlayerState {
   reloadDuration: number;
   reloadLockout: boolean;
   overclockedNextShot: boolean;
+  ventEmpoweredNextShot?: boolean;
   weaponHeat: number;
   overheatLockTimer: number;
   ventCooldownTimer: number;
@@ -525,6 +529,7 @@ export interface SimPlayerState {
   pactOriginalWeaponId: string | null;
   awakenedRelicIds: AshenRelicId[];
   buffChoices: BlessingId[];
+  mutatorChoices?: WeaponMutatorId[];
   weaponUpgradeLevels?: Record<number, number>;
   skillActiveTimer: number;
   skillCooldownTimer: number;
@@ -650,6 +655,8 @@ export interface SimEnemyState {
   parasiticThorns?: number;
   slowTimer?: number;
   submunitionHitsByExplosion?: Record<number, number>;
+  gravitySingularityTimer?: number;
+  gravitySingularityOwnerId?: number;
 }
 
 export interface SimProjectileState {
@@ -708,6 +715,9 @@ export interface SimProjectileState {
   hasExplicitAimTarget?: boolean;
   trailLastX?: number;
   trailLastY?: number;
+  gravitySingularityShot?: boolean;
+  chainHarpoonShot?: boolean;
+  bypassFrontShield?: boolean;
   hitEntityIds: number[];
 }
 
@@ -773,6 +783,9 @@ export interface BulletVolleySpawnEvent {
   convergeTargetY?: number;
   solarRayIndex?: number;
   hasExplicitAimTarget?: boolean;
+  gravitySingularityShot?: boolean;
+  chainHarpoonShot?: boolean;
+  bypassFrontShield?: boolean;
 }
 
 
