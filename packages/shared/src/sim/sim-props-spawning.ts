@@ -12,6 +12,7 @@ import {
   resolvePropMovementCollision,
   spillSlagCrucibleLavaCarpet,
   triggerMossTablePollenArmorBurst,
+  tryBreakCrackedWallNearImpact,
   updateSlidingPropsImpl,
 } from './sim-tactical-physics.js';
 import { switchPlayerWeaponSlot } from './sim-weapon-cadence.js';
@@ -31,9 +32,7 @@ export function spawnDefaultArenaPropsImpl(this: WorldSim): void {
   this.spawnProp('glow_mushroom', 11 * TILE_SIZE - 12, 17 * TILE_SIZE + 16);
   this.spawnProp('glow_mushroom', 4 * TILE_SIZE + 16, 11 * TILE_SIZE);
 
-  // Explosive Barrels (near oil slick and near north cracked secret wall for chain reaction!)
-  this.spawnProp('explosive_barrel', 17 * TILE_SIZE + 16, 2 * TILE_SIZE + 10);
-  this.spawnProp('explosive_barrel', 18 * TILE_SIZE + 28, 2 * TILE_SIZE + 22);
+  // Explosive Barrel near SE oil/lava tactical zone
   this.spawnProp('explosive_barrel', 21 * TILE_SIZE + 16, 16 * TILE_SIZE + 16);
 
   // Destructible Wooden Crates & Clay Vases
@@ -878,51 +877,7 @@ export function detonateExplosiveBarrelImpl(this: WorldSim, barrel: SimPropState
   this.map.igniteSurfaceInRadius(barrel.x, barrel.y, blastR);
 
   // 2. Break any cracked secret walls within blast radius
-  const minTx = Math.max(0, Math.floor((barrel.x - blastR) / TILE_SIZE));
-  const maxTx = Math.min(this.map.cols - 1, Math.floor((barrel.x + blastR) / TILE_SIZE));
-  const minTy = Math.max(0, Math.floor((barrel.y - blastR) / TILE_SIZE));
-  const maxTy = Math.min(this.map.rows - 1, Math.floor((barrel.y + blastR) / TILE_SIZE));
-  for (let ty = minTy; ty <= maxTy; ty++) {
-    for (let tx = minTx; tx <= maxTx; tx++) {
-      if (this.map.getTile(tx, ty) === 'cracked_wall') {
-        const wallCx = tx * TILE_SIZE + TILE_SIZE / 2;
-        const wallCy = ty * TILE_SIZE + TILE_SIZE / 2;
-        if (distance(barrel.x, barrel.y, wallCx, wallCy) <= blastR + TILE_SIZE * 0.7) {
-          if (this.map.destroyCrackedWall(tx, ty)) {
-            this.secretWallBroken = true;
-            this.rebuildCurrentRoomDoors();
-            this.events.push({
-              kind: 'cracked_wall_broken',
-              tx,
-              ty,
-              x: wallCx,
-              y: wallCy,
-            });
-            const allPlayers = this.getAllPlayers();
-            const isCoop = allPlayers.length > 1;
-            for (const pl of allPlayers) {
-              for (let k = 0; k < 2; k++) {
-                const ang = Math.PI * 0.25 + k * (Math.PI * 0.5);
-                this.pickups.push(
-                  this.acquirePickup({
-                    id: ++this.nextEntityId,
-                    kind: 'gold',
-                    x: wallCx,
-                    y: wallCy + 10,
-                    vx: Math.cos(ang) * 75,
-                    vy: Math.sin(ang) * 75,
-                    amount: 10,
-                    ttlSec: 15,
-                    ownerPlayerId: isCoop ? pl.id : undefined,
-                  }),
-                );
-              }
-            }
-          }
-        }
-      }
-    }
-  }
+  tryBreakCrackedWallNearImpact(this, barrel.x, barrel.y, blastR);
 
   // 3. Damage enemies in blast radius (+ apply burn or shatter frozen enemies!)
   const blastEnemyCount = this.enemies.length;

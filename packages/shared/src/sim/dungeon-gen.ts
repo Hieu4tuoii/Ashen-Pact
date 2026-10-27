@@ -200,32 +200,21 @@ export function generateDungeonFloor(
   const startNode = createEmptyNode(0, 3, 3, 'start');
   startNode.discovery = 'cleared';
   startNode.cleared = true;
-  startNode.secretWallDir = 'N';
   rooms.push(startNode);
   gridMap.set(coordKey(3, 3), 0);
 
-  // 2. Place Secret Room at (3, 2) (id = 1, directly North of Start behind cracked_wall at (18, 0))
-  const secretNode = createEmptyNode(1, 3, 2, 'secret');
-  secretNode.cleared = true;
-  secretNode.discovery = 'hidden';
-  rooms.push(secretNode);
-  gridMap.set(coordKey(3, 2), 1);
-  linkRooms(0, 1, 'N');
-
-  // 3. Grow 7 main-branch rooms from Start using E, S, W and subsequent cardinal expansions (total = 9 rooms)
-  const targetTotalRooms = 9;
+  // 2. Grow 7 main-branch rooms from Start using cardinal expansions (ids 1..7, total = 8 main rooms)
+  const targetMainRooms = 8;
   const expandableIds: number[] = [0];
   const allDirs: readonly CardinalDir[] = ['E', 'S', 'W', 'N'];
 
-  while (rooms.length < targetTotalRooms) {
+  while (rooms.length < targetMainRooms) {
     const parentId = rng.pick(expandableIds);
     const parent = rooms[parentId]!;
 
-    // Shuffle directions deterministically
     const candidateDirs: CardinalDir[] = [];
     for (let i = 0; i < allDirs.length; i++) {
       const d = allDirs[i]!;
-      if (parentId === 0 && d === 'N') continue; // North of Start is reserved for Secret Room
       const nx = parent.gx + DIR_OFFSET[d].dx;
       const ny = parent.gy + DIR_OFFSET[d].dy;
       if (nx < 0 || nx > 6 || ny < 0 || ny > 6) continue;
@@ -235,13 +224,10 @@ export function generateDungeonFloor(
     }
 
     if (candidateDirs.length === 0) {
-      // Fallback: find any existing non-secret node with an open neighbor
       let foundFallback = false;
       for (let rId = 0; rId < rooms.length; rId++) {
-        if (rId === 1) continue;
         const rNode = rooms[rId]!;
         for (const d of allDirs) {
-          if (rId === 0 && d === 'N') continue;
           const nx = rNode.gx + DIR_OFFSET[d].dx;
           const ny = rNode.gy + DIR_OFFSET[d].dy;
           if (nx >= 0 && nx <= 6 && ny >= 0 && ny <= 6 && !gridMap.has(coordKey(nx, ny))) {
@@ -272,10 +258,9 @@ export function generateDungeonFloor(
     expandableIds.push(newId);
   }
 
-  // 4. Compute BFS distance from Start Room (ignoring secret room edge for main progression depth)
-  const visited = new Set<number>([0, 1]);
+  // 3. Compute BFS distance from Start Room
+  const visited = new Set<number>([0]);
   const queue: number[] = [0];
-  rooms[1]!.distanceFromStart = 1;
 
   while (queue.length > 0) {
     const curId = queue.shift()!;
@@ -290,32 +275,44 @@ export function generateDungeonFloor(
     }
   }
 
-  // Ensure start room's immediate non-secret neighbors are 'discovered' in Fog of War
-  for (const d of ['E', 'S', 'W'] as const) {
+  // Ensure start room's immediate neighbors are 'discovered' in Fog of War
+  for (const d of allDirs) {
     const nId = startNode.connections[d];
     if (nId !== undefined && rooms[nId]) {
       rooms[nId]!.discovery = 'discovered';
     }
   }
 
-  // 5. Assign room types among non-start, non-secret rooms (ids 2..rooms.length-1)
+  // 4. Assign room types among non-start main rooms (ids 1..7)
   const mainRoomIds = rooms
-    .filter((r) => r.id >= 2)
+    .filter((r) => r.id >= 1)
     .sort((a, b) => b.distanceFromStart - a.distanceFromStart || b.id - a.id)
     .map((r) => r.id);
 
-  // Farthest room is Exit ('portal' on Floor 1, 'boss' on Floor 2)
+  // Farthest room is Exit ('portal' on Odd floors, 'boss' on Even floors)
   const exitRoomId = mainRoomIds[0]!;
   const exitRoom = rooms[exitRoomId]!;
   exitRoom.type = localFloor === 1 ? 'portal' : 'boss';
   exitRoom.nameVi =
     exitRoom.type === 'boss' ? BIOME_BOSS_ROOM_NAMES_VI[biome] : ROOM_TYPE_NAMES_VI[exitRoom.type];
 
-  // Remaining rooms for special rooms + combat rooms
   const remainingIds = mainRoomIds.slice(1);
-  // Keep at least one immediate neighbor of start (distanceFromStart === 1) as a combat room
-  const startNeighborId = remainingIds.find((id) => rooms[id]?.distanceFromStart === 1);
-  const poolForSpecials = remainingIds.filter((id) => id !== startNeighborId);
+  let poolSourceIds = remainingIds;
+
+  if (localFloor === 1) {
+    // Odd Floor (1, 3, 5): strictly 1 shrine at distanceFromStart === 1
+    const dist1Ids = remainingIds.filter((id) => rooms[id]?.distanceFromStart === 1);
+    const shrineRoomId = rng.pick(dist1Ids);
+    const shrineRoom = rooms[shrineRoomId]!;
+    shrineRoom.type = 'shrine';
+    shrineRoom.nameVi = ROOM_TYPE_NAMES_VI.shrine;
+    shrineRoom.cleared = true;
+    shrineRoom.discovery = 'discovered';
+    poolSourceIds = remainingIds.filter((id) => id !== shrineRoomId);
+  }
+
+  const startNeighborId = poolSourceIds.find((id) => rooms[id]?.distanceFromStart === 1);
+  const poolForSpecials = poolSourceIds.filter((id) => id !== startNeighborId);
   for (let i = poolForSpecials.length - 1; i > 0; i--) {
     const j = rng.nextInt(0, i);
     const tmp = poolForSpecials[i]!;
@@ -325,7 +322,7 @@ export function generateDungeonFloor(
   const orderedIds =
     startNeighborId !== undefined ? [...poolForSpecials, startNeighborId] : poolForSpecials;
 
-  const specialTypes: RoomType[] = ['treasure', 'merchant', 'shrine'];
+  const specialTypes: RoomType[] = ['treasure', 'merchant'];
   for (let i = 0; i < specialTypes.length && i < orderedIds.length; i++) {
     const rId = orderedIds[i]!;
     const sType = specialTypes[i]!;
@@ -335,7 +332,7 @@ export function generateDungeonFloor(
     room.cleared = true; // Non-combat special rooms don't lock doors
   }
 
-  // Remaining rooms stay 'combat'
+  // Remaining rooms stay 'combat' (3 on Odd floors, 4 on Even floors)
   for (let i = specialTypes.length; i < orderedIds.length; i++) {
     const rId = orderedIds[i]!;
     const room = rooms[rId]!;
@@ -344,25 +341,86 @@ export function generateDungeonFloor(
     room.cleared = false;
   }
 
-  // 5b. Attach 1 Challenge Combat Room (id = 9) using a forked RNG so rooms 0..8 layout is 100% preserved
+  const getOpenDirsForNode = (node: DungeonRoomNode): CardinalDir[] =>
+    allDirs.filter((d) => {
+      const nx = node.gx + DIR_OFFSET[d].dx;
+      const ny = node.gy + DIR_OFFSET[d].dy;
+      return nx >= 0 && nx <= 6 && ny >= 0 && ny <= 6 && !gridMap.has(coordKey(nx, ny));
+    });
+
+  // 5a. Attach Dynamic Secret Room (id = 8) to an open cardinal edge of treasure, merchant, or branch-end combat
+  const secretRng = rng.fork('dynamic_secret_room');
+  const primarySecretParents = rooms
+    .filter(
+      (r) =>
+        r.type === 'treasure' ||
+        r.type === 'merchant' ||
+        (r.type === 'combat' && Object.keys(r.connections).length === 1),
+    )
+    .map((r) => r.id);
+  for (let i = primarySecretParents.length - 1; i > 0; i--) {
+    const j = secretRng.nextInt(0, i);
+    const tmp = primarySecretParents[i]!;
+    primarySecretParents[i] = primarySecretParents[j]!;
+    primarySecretParents[j] = tmp;
+  }
+  const secretCandidateParentIds = [
+    ...primarySecretParents,
+    ...rooms
+      .filter((r) => r.type === 'combat' && !primarySecretParents.includes(r.id))
+      .map((r) => r.id),
+    ...rooms.filter((r) => r.type === 'shrine').map((r) => r.id),
+    0,
+  ];
+
+  let secretRoomId = 8;
+  let secretParentId = -1;
+  for (const pId of secretCandidateParentIds) {
+    const parent = rooms[pId];
+    if (!parent || parent.type === 'portal' || parent.type === 'boss') continue;
+    const openDirs = getOpenDirsForNode(parent);
+    if (openDirs.length === 0) continue;
+    const chosenDir = secretRng.pick(openDirs);
+    const nx = parent.gx + DIR_OFFSET[chosenDir].dx;
+    const ny = parent.gy + DIR_OFFSET[chosenDir].dy;
+    secretRoomId = rooms.length;
+    secretParentId = pId;
+    const secretNode = createEmptyNode(secretRoomId, nx, ny, 'secret');
+    secretNode.cleared = true;
+    secretNode.discovery = 'hidden';
+    secretNode.distanceFromStart = parent.distanceFromStart + 1;
+    parent.secretWallDir = chosenDir;
+    secretNode.secretWallDir = OPPOSITE_DIR[chosenDir];
+    rooms.push(secretNode);
+    gridMap.set(coordKey(nx, ny), secretRoomId);
+    linkRooms(pId, secretRoomId, chosenDir);
+    break;
+  }
+
+  // 5b. Attach 1 Challenge Combat Room (id = 9) using a forked RNG
   const challengeRng = rng.fork('challenge_combat_room');
-  const firstCombatId = rooms.find((r) => r.type === 'combat')?.id ?? -1;
+  const firstCombatId =
+    rooms.find((r) => r.type === 'combat' && r.id !== secretParentId)?.id ?? -1;
   const preferredParentIds = [
     ...rooms
-      .filter((r) => r.type === 'shrine' || r.type === 'merchant' || r.type === 'treasure')
+      .filter(
+        (r) =>
+          (r.type === 'shrine' || r.type === 'merchant' || r.type === 'treasure') &&
+          r.id !== secretParentId,
+      )
       .map((r) => r.id),
-    ...rooms.filter((r) => r.type === 'combat' && r.id !== firstCombatId).map((r) => r.id),
-    ...rooms.filter((r) => r.id !== 1).map((r) => r.id),
+    ...rooms
+      .filter((r) => r.type === 'combat' && r.id !== firstCombatId && r.id !== secretParentId)
+      .map((r) => r.id),
+    ...rooms
+      .filter((r) => r.type !== 'secret' && r.id !== secretParentId && r.id !== exitRoomId)
+      .map((r) => r.id),
+    ...rooms.filter((r) => r.type !== 'secret' && r.id !== secretParentId).map((r) => r.id),
   ];
   for (const pId of preferredParentIds) {
     const parent = rooms[pId];
     if (!parent) continue;
-    const openDirs = allDirs.filter((d) => {
-      if (pId === 0 && d === 'N') return false;
-      const nx = parent.gx + DIR_OFFSET[d].dx;
-      const ny = parent.gy + DIR_OFFSET[d].dy;
-      return nx >= 0 && nx <= 6 && ny >= 0 && ny <= 6 && !gridMap.has(coordKey(nx, ny));
-    });
+    const openDirs = getOpenDirsForNode(parent);
     if (openDirs.length === 0) continue;
     const chosenDir = challengeRng.pick(openDirs);
     const nx = parent.gx + DIR_OFFSET[chosenDir].dx;
@@ -400,7 +458,7 @@ export function generateDungeonFloor(
     if (room.type === 'secret') {
       room.waves = [];
       room.wavesTotal = 0;
-      room.chestRarity = localFloor === 2 ? 'legendary' : 'epic';
+      room.chestRarity = localFloor === 2 ? 'epic' : rng.chance(0.5) ? 'epic' : 'rare';
       room.chestWeaponId = rollWeaponForRarity(rng, room.chestRarity, biome);
     } else if (room.type === 'treasure') {
       room.waves = [];
@@ -523,7 +581,7 @@ export function generateDungeonFloor(
     rooms,
     startRoomId: 0,
     exitRoomId,
-    secretRoomId: 1,
+    secretRoomId,
   };
 }
 
@@ -619,7 +677,7 @@ function generateRoomWaves(
 
 /**
  * Verifies that a generated DungeonFloorGraph is 100% connected via cardinal links,
- * has bidirectional doors, and includes all required room types.
+ * has bidirectional doors, and includes all required room types for Odd/Even floors.
  */
 export function verifyDungeonConnectivity(floor: DungeonFloorGraph): {
   valid: boolean;
@@ -655,19 +713,40 @@ export function verifyDungeonConnectivity(floor: DungeonFloorGraph): {
   }
 
   const typesPresent = new Set(floor.rooms.map((r) => r.type));
-  const expectedExitType: RoomType = floor.floorNumber === 1 ? 'portal' : 'boss';
+  const isOddFloor = floor.floorNumber === 1;
+  const expectedExitType: RoomType = isOddFloor ? 'portal' : 'boss';
+  const shrineRooms = floor.rooms.filter((r) => r.type === 'shrine');
+  const shrineValid = isOddFloor
+    ? shrineRooms.length === 1 && shrineRooms[0]!.distanceFromStart === 1
+    : shrineRooms.length === 0;
+
+  const secretRoom = floor.rooms[floor.secretRoomId];
+  let secretWallValid = false;
+  if (secretRoom && secretRoom.type === 'secret' && secretRoom.secretWallDir) {
+    const parentId = secretRoom.connections[secretRoom.secretWallDir];
+    const parentRoom = parentId !== undefined ? floor.rooms[parentId] : undefined;
+    if (
+      parentRoom &&
+      parentRoom.secretWallDir === OPPOSITE_DIR[secretRoom.secretWallDir] &&
+      parentRoom.connections[parentRoom.secretWallDir] === secretRoom.id
+    ) {
+      secretWallValid = true;
+    }
+  }
+
   const hasAllRoomTypes =
     typesPresent.has('start') &&
     typesPresent.has('combat') &&
     typesPresent.has('treasure') &&
     typesPresent.has('merchant') &&
-    typesPresent.has('shrine') &&
     typesPresent.has('secret') &&
-    typesPresent.has(expectedExitType);
+    typesPresent.has(expectedExitType) &&
+    shrineValid &&
+    secretWallValid;
 
   const valid =
     visited.size === floor.rooms.length &&
-    floor.rooms.length >= 7 &&
+    floor.rooms.length >= 9 &&
     floor.rooms.length <= 10 &&
     hasAllRoomTypes &&
     bidirectionalLinks;

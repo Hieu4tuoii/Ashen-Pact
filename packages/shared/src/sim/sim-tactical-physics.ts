@@ -1,5 +1,6 @@
 import { ENEMIES } from '../data/enemies.js';
 import { angleDiff, distance } from '../math/vec2.js';
+import { TILE_SIZE } from '../protocol/messages.js';
 import {
   clearCollapsedPillarFootprintOnMap,
   findNearestWalkablePoint,
@@ -176,6 +177,82 @@ export function triggerMossTablePollenArmorBurst(sim: WorldSim, prop: SimPropSta
   return healedCount;
 }
 
+export function tryBreakCrackedWallNearImpact(
+  sim: WorldSim,
+  impactX: number,
+  impactY: number,
+  radius = 56,
+): boolean {
+  const minTx = Math.max(0, Math.floor((impactX - radius - TILE_SIZE) / TILE_SIZE));
+  const maxTx = Math.min(sim.map.cols - 1, Math.floor((impactX + radius + TILE_SIZE) / TILE_SIZE));
+  const minTy = Math.max(0, Math.floor((impactY - radius - TILE_SIZE) / TILE_SIZE));
+  const maxTy = Math.min(sim.map.rows - 1, Math.floor((impactY + radius + TILE_SIZE) / TILE_SIZE));
+  let brokenAny = false;
+
+  for (let ty = minTy; ty <= maxTy; ty++) {
+    for (let tx = minTx; tx <= maxTx; tx++) {
+      if (sim.map.getTile(tx, ty) !== 'cracked_wall') continue;
+      const wallCx = tx * TILE_SIZE + TILE_SIZE * 0.5;
+      const wallCy = ty * TILE_SIZE + TILE_SIZE * 0.5;
+      if (distance(impactX, impactY, wallCx, wallCy) <= radius + 28) {
+        if (sim.map.destroyCrackedWall(tx, ty)) {
+          brokenAny = true;
+          sim.secretWallBroken = true;
+          const room = sim.getCurrentRoom();
+          room.secretWallBroken = true;
+          for (const adjId of Object.values(room.connections)) {
+            if (adjId !== undefined) {
+              const adjRoom = sim.dungeon.rooms[adjId];
+              if (adjRoom && (adjRoom.type === 'secret' || room.type === 'secret')) {
+                adjRoom.secretWallBroken = true;
+                if (adjRoom.type === 'secret' && adjRoom.discovery === 'hidden') {
+                  adjRoom.discovery = 'discovered';
+                }
+              }
+            }
+          }
+          const secretRoom = sim.dungeon.rooms[sim.dungeon.secretRoomId];
+          if (secretRoom && room.secretWallDir && room.connections[room.secretWallDir] === secretRoom.id) {
+            secretRoom.secretWallBroken = true;
+            if (secretRoom.discovery === 'hidden') {
+              secretRoom.discovery = 'discovered';
+            }
+          }
+          sim.rebuildCurrentRoomDoors();
+          sim.events.push({
+            kind: 'cracked_wall_broken',
+            tx,
+            ty,
+            x: wallCx,
+            y: wallCy,
+          });
+          const allPlayers = sim.getAllPlayers();
+          const isCoop = allPlayers.length > 1;
+          for (const pl of allPlayers) {
+            for (let k = 0; k < 2; k++) {
+              const ang = Math.PI * 0.25 + k * (Math.PI * 0.5);
+              sim.pickups.push(
+                sim.acquirePickup({
+                  id: ++sim.nextEntityId,
+                  kind: 'gold',
+                  x: wallCx,
+                  y: wallCy + 10,
+                  vx: Math.cos(ang) * 75,
+                  vy: Math.sin(ang) * 75,
+                  amount: 10,
+                  ttlSec: 15,
+                  ownerPlayerId: isCoop ? pl.id : undefined,
+                }),
+              );
+            }
+          }
+        }
+      }
+    }
+  }
+  return brokenAny;
+}
+
 export function detonateVolatileSporePod(sim: WorldSim, pod: SimPropState): void {
   if (pod.hp <= 0 && !pod.explosive) return;
   pod.hp = 0;
@@ -185,6 +262,7 @@ export function detonateVolatileSporePod(sim: WorldSim, pod: SimPropState): void
   const ownerId = pod.slideOwnerPlayerId ?? sim.player.id;
   sim.events.push({ kind: 'prop_destroyed', propId: pod.id, propKind: pod.kind, x: pod.x, y: pod.y });
   sim.events.push({ kind: 'explosion', x: pod.x, y: pod.y, radius: VOLATILE_SPORE_POD_BLAST_RADIUS, damage: 12, sourceDefId: 'volatile_spore_pod' });
+  tryBreakCrackedWallNearImpact(sim, pod.x, pod.y, VOLATILE_SPORE_POD_BLAST_RADIUS);
 
   for (let i = 0; i < sim.enemies.length; i++) {
     const e = sim.enemies[i]!;
@@ -420,6 +498,7 @@ function pointToSegmentDist(px: number, py: number, x1: number, y1: number, x2: 
 }
 
 function destroyTacticalProp(sim: WorldSim, prop: SimPropState): void {
+  tryBreakCrackedWallNearImpact(sim, prop.x, prop.y, Math.max(64, prop.radius + 48));
   if (prop.rocketCharged) {
     detonateRocketChargedBarricade(sim, prop, prop.slideOwnerPlayerId ?? sim.player.id);
     return;
@@ -561,6 +640,7 @@ export function updateSlidingPropsImpl(this: WorldSim, dtSec: number): void {
     prop.y = col.y;
 
     if (col.collided || hitPropObstacle) {
+      tryBreakCrackedWallNearImpact(this, nextX, nextY, Math.max(64, prop.radius + 48));
       if ((prop.bouncesRemaining ?? 0) > 0) {
         prop.bouncesRemaining = (prop.bouncesRemaining ?? 0) - 1;
         prop.hitEnemyIds = [];
@@ -620,6 +700,7 @@ export function triggerEnemyWallSlam(sim: WorldSim, e: SimEnemyState, hitProp?: 
   }
 
   sim.events.push({ kind: 'wall_slam', enemyId: e.id, x: e.x, y: e.y, damage: slamDmg, shattered });
+  tryBreakCrackedWallNearImpact(sim, e.x, e.y, Math.max(64, e.radius + 48));
   triggerBiome2WallSlamCryoPulse(sim, e, attackerId);
   triggerTableTechOnWallSlamOrStagger(sim, attacker, e.x, e.y, shattered ? e.id : undefined, e.id);
   if (e.isBoss && (e.bossStaggerAccum ?? 0) >= 100 && e.hp > 0) {

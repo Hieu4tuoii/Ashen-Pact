@@ -184,6 +184,7 @@ export function advanceToFloorImpl(this: WorldSim, floorNumber: 1 | 2 | 3 | 4 | 
   this.roomItemsByRoomId.clear();
   this.initializedRoomIds.clear();
   this.completedPuzzleRoomIds.clear();
+  this.secretWallBroken = false;
   const floorInBiome: 1 | 2 = floorNumber % 2 === 1 ? 1 : 2;
   this.dungeon = generateDungeonFloor(
     this.baseSeed,
@@ -310,7 +311,13 @@ export function interactWithNearestImpl(this: WorldSim, actor: SimPlayerState = 
 
 export function updateCurrentRoomProgressionImpl(this: WorldSim, dtSec: number): void {
   const room = this.getCurrentRoom();
-  if (room.type === 'start' && this.map.getTile(18, 0) !== 'cracked_wall') {
+  if (room.secretWallDir) {
+    const cw = this.map.getCrackedWallTileForDir(room.secretWallDir);
+    if (this.map.getTile(cw.tx, cw.ty) === 'floor') {
+      this.secretWallBroken = true;
+      room.secretWallBroken = true;
+    }
+  } else if (room.type === 'start' && this.map.getTile(18, 0) === 'floor') {
     this.secretWallBroken = true;
   }
 
@@ -320,7 +327,11 @@ export function updateCurrentRoomProgressionImpl(this: WorldSim, dtSec: number):
   for (let i = 0; i < this.doors.length; i++) {
     const d = this.doors[i]!;
     if (d.isSecretPassage) {
-      d.locked = !this.secretWallBroken || hasCombatEnemies || wavesRemaining;
+      const targetRoom = this.dungeon.rooms[d.targetRoomId];
+      const isWallBroken = Boolean(
+        room.secretWallBroken || targetRoom?.secretWallBroken || this.secretWallBroken,
+      );
+      d.locked = !isWallBroken || hasCombatEnemies || wavesRemaining;
     } else {
       d.locked = hasCombatEnemies || wavesRemaining;
     }

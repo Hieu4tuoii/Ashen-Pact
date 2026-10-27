@@ -11,28 +11,7 @@ import {
   selectCombatRoomArchetype,
 } from './arena-room-archetypes.js';
 
-export {
-  ALL_ROOM_ARCHETYPES,
-  DOOR_TILES,
-  DOOR_VESTIBULE_RECTS,
-  P0B_COMBAT_ARCHETYPES,
-  PHASE0B_ROOM_ARCHETYPES,
-  type RoomArchetypeId,
-  type RoomLayoutOptions,
-  type RoomLayoutResult,
-  type RoomPropAnchor,
-  type RoomPropAnchorRole,
-  areActiveDoorsConnectedBfs,
-  configureRoomLayout,
-  findNearestWalkablePoint,
-  findNextWalkableWaypoint,
-  isInDoorClearanceZone,
-  isInDoorVestibule,
-  isWalkableTileForBfs,
-  selectBiome1RoomArchetype,
-  selectCombatRoomArchetype,
-  spawnCombatRoomArchetypeProps,
-} from './arena-room-archetypes.js';
+export { ALL_ROOM_ARCHETYPES, DOOR_TILES, DOOR_VESTIBULE_RECTS, P0B_COMBAT_ARCHETYPES, PHASE0B_ROOM_ARCHETYPES, type RoomArchetypeId, type RoomLayoutOptions, type RoomLayoutResult, type RoomPropAnchor, type RoomPropAnchorRole, areActiveDoorsConnectedBfs, configureRoomLayout, findNearestWalkablePoint, findNextWalkableWaypoint, isInDoorClearanceZone, isInDoorVestibule, isWalkableTileForBfs, selectBiome1RoomArchetype, selectCombatRoomArchetype, spawnCombatRoomArchetypeProps } from './arena-room-archetypes.js';
 
 export type TileKind = 'floor' | 'wall' | 'pillar' | 'cracked_wall';
 
@@ -441,6 +420,28 @@ export class ArenaMap {
     if (this.isSolidTile(tx - 1, ty)) mask |= WALL_AO_WEST;
     if (this.isSolidTile(tx - 1, ty - 1)) mask |= WALL_AO_NORTH_WEST;
     return mask;
+  }
+
+  public getCrackedWallTileForDir(dir: CardinalDir): { tx: number; ty: number } {
+    if (dir === 'N') return { tx: Math.floor(this.cols / 2), ty: 0 };
+    if (dir === 'S') return { tx: Math.floor(this.cols / 2), ty: this.rows - 1 };
+    if (dir === 'W') return { tx: 0, ty: Math.floor(this.rows / 2) };
+    return { tx: this.cols - 1, ty: Math.floor(this.rows / 2) };
+  }
+
+  public placeCrackedSecretWall(dir?: CardinalDir, broken = false): { tx: number; ty: number } | null {
+    const midX = Math.floor(this.cols / 2);
+    if (this.getTile(midX, 0) === 'cracked_wall' && dir !== 'N') {
+      this.setTile(midX, 0, 'wall');
+    }
+    if (!dir) {
+      this.rebuildSolidBoxes();
+      return null;
+    }
+    const { tx, ty } = this.getCrackedWallTileForDir(dir);
+    this.setTile(tx, ty, broken ? 'floor' : 'cracked_wall');
+    this.rebuildSolidBoxes();
+    return { tx, ty };
   }
 
   public destroyCrackedWall(tx: number, ty: number): boolean {

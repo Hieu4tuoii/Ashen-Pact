@@ -1,14 +1,31 @@
-import { BIOME1_COMBAT_ENEMIES, BIOME2_COMBAT_ENEMIES, BIOME3_COMBAT_ENEMIES, ELITE_MODIFIERS, ENEMIES } from '../data/enemies.js';
-import type { CardinalDir, EliteModifier, WeaponRarity } from '../data/types.js';
-import { MAX_WEAPON_SLOTS, WEAPONS } from '../data/weapons.js';
+import {
+  BIOME1_COMBAT_ENEMIES,
+  BIOME2_COMBAT_ENEMIES,
+  BIOME3_COMBAT_ENEMIES,
+  ELITE_MODIFIERS,
+  ENEMIES,
+} from '../data/enemies.js';
+import type { CardinalDir, EliteModifier } from '../data/types.js';
+import { WEAPONS } from '../data/weapons.js';
 import { COOP_SCALING } from '../data/scaling.js';
 import { clamp, distance } from '../math/vec2.js';
 import { TILE_SIZE } from '../protocol/messages.js';
 import { type DungeonRoomNode, OPPOSITE_DIR } from './dungeon-gen.js';
-import { findNearestWalkablePoint, selectCombatRoomArchetype, spawnCombatRoomArchetypeProps } from './arena-room-archetypes.js';
-import { syncActiveWeaponCadenceState } from './sim-coop-hub.js';
-import type { SimChestState, SimWorldItemState, SimPlayerState } from './world-sim-types.js';
+import {
+  findNearestWalkablePoint,
+  selectCombatRoomArchetype,
+  spawnCombatRoomArchetypeProps,
+} from './arena-room-archetypes.js';
+import {
+  ensureSecretWallKickableProp,
+  openChestImpl,
+  pickupOrBuyWorldItemImpl,
+  populateSecretRoomContents,
+  spawnCoopPressurePlatePuzzleImpl,
+} from './sim-secret-and-workshop.js';
 import type { WorldSim } from './world-sim.js';
+
+export { openChestImpl, pickupOrBuyWorldItemImpl, spawnCoopPressurePlatePuzzleImpl };
 
 export function rebuildCurrentRoomDoorsImpl(this: WorldSim): void {
   this.doors.length = 0;
@@ -40,11 +57,12 @@ export function rebuildCurrentRoomDoorsImpl(this: WorldSim): void {
       y = 11 * TILE_SIZE + 16;
     }
 
-    const isSecretPassage =
-      (room.type === 'start' && targetRoom.type === 'secret') ||
-      (room.type === 'secret' && targetRoom.type === 'start');
+    const isSecretPassage = room.type === 'secret' || targetRoom.type === 'secret';
+    const isWallBroken = Boolean(
+      room.secretWallBroken || targetRoom.secretWallBroken || this.secretWallBroken,
+    );
     const locked = isSecretPassage
-      ? !this.secretWallBroken || hasCombat
+      ? !isWallBroken || hasCombat
       : hasCombat || (!room.cleared && room.type !== 'start');
 
     this.doors.push({
@@ -105,7 +123,10 @@ export function enterRoomImpl(this: WorldSim, roomId: number, entryDir?: Cardina
   this.pushBlocks.length = 0;
   this.shockwaveRings.length = 0;
   this.tetherBeams.length = 0;
-  this.flameFissures.length = 0; this.solarFireZones.length = 0; this.magmaTrails.length = 0; this.lightningPillars.length = 0;
+  this.flameFissures.length = 0;
+  this.solarFireZones.length = 0;
+  this.magmaTrails.length = 0;
+  this.lightningPillars.length = 0;
   this.blizzardVeilActive = false;
   this.titanCoreWindowTimer = 0;
   this.titanFirstCoreBrokenId = 0;
@@ -121,10 +142,9 @@ export function enterRoomImpl(this: WorldSim, roomId: number, entryDir?: Cardina
     pl.seedGunRoomHealsUsed = 0;
   }
 
-  if (this.map.getTile(18, 0) !== 'cracked_wall') {
-    this.secretWallBroken = true;
-  }
-
+  const isWallBroken = Boolean(
+    targetRoom.secretWallBroken || this.secretWallBroken || targetRoom.type === 'secret',
+  );
   const baseSeedNum = Number.isFinite(Number(this.dungeon.seed))
     ? Number(this.dungeon.seed)
     : targetRoom.surfaceLayoutSeed;
@@ -137,7 +157,7 @@ export function enterRoomImpl(this: WorldSim, roomId: number, entryDir?: Cardina
     this.map.configureRoomLayout(
       targetRoom.type,
       roomSeed,
-      this.secretWallBroken,
+      isWallBroken,
       this.currentBiome,
       archetype,
       activeDoorSides,
@@ -147,10 +167,11 @@ export function enterRoomImpl(this: WorldSim, roomId: number, entryDir?: Cardina
     this.map.configureRoomLayout(
       targetRoom.type,
       roomSeed,
-      this.secretWallBroken,
+      isWallBroken,
       this.currentBiome,
     );
   }
+  this.map.placeCrackedSecretWall(targetRoom.secretWallDir, isWallBroken);
 
   // Position player(s) near the entrance door (opposite of entryDir)
   let spawnX = this.map.width * 0.35;
@@ -242,37 +263,6 @@ export function enterRoomImpl(this: WorldSim, roomId: number, entryDir?: Cardina
   return true;
 }
 
-export function spawnCoopPressurePlatePuzzleImpl(this: WorldSim, roomId = this.currentRoomId): void {
-  const cx = this.map.width * 0.5;
-  const cy = this.map.height * 0.5;
-  this.coopPuzzleCompleted = this.completedPuzzleRoomIds.has(roomId);
-  this.pressurePlates = [
-    {
-      id: ++this.nextPuzzleEntityId,
-      x: cx - 110,
-      y: cy - 118,
-      radius: 20,
-      pressed: this.coopPuzzleCompleted,
-    },
-    {
-      id: ++this.nextPuzzleEntityId,
-      x: cx + 110,
-      y: cy - 118,
-      radius: 20,
-      pressed: this.coopPuzzleCompleted,
-    },
-  ];
-  this.pushBlocks = [];
-  if (this.getActivePlayerCount() === 1) {
-    this.pushBlocks.push({
-      id: ++this.nextPuzzleEntityId,
-      x: cx + 110,
-      y: this.coopPuzzleCompleted ? cy - 118 : cy - 58,
-      radius: 15,
-    });
-  }
-}
-
 export function populateRoomContentsImpl(this: WorldSim, room: DungeonRoomNode): void {
   const cx = this.map.width * 0.5;
   const cy = this.map.height * 0.5;
@@ -319,35 +309,7 @@ export function populateRoomContentsImpl(this: WorldSim, room: DungeonRoomNode):
       break;
     }
     case 'secret': {
-      this.secretWallBroken = true;
-      this.spawnProp('glow_mushroom', cx - 95, cy - 65);
-      this.spawnProp('glow_mushroom', cx + 95, cy - 65);
-      this.spawnProp('clay_vase', cx - 80, cy + 65);
-      this.spawnProp('clay_vase', cx + 80, cy + 65);
-      if (!hasSavedState && !room.chestOpened) {
-        const rarity: WeaponRarity =
-          room.chestRarity ?? (this.rng.chance(0.45) ? 'legendary' : 'epic');
-        this.spawnChest(cx, cy - 10, rarity, room.chestWeaponId ?? undefined);
-        const allPlayers = this.getAllPlayers();
-        const isCoop = allPlayers.length > 1;
-        for (const pl of allPlayers) {
-          for (let i = 0; i < 3; i++) {
-            this.pickups.push(
-              this.acquirePickup({
-                id: ++this.nextEntityId,
-                kind: 'gold',
-                x: cx + (i - 1) * 36,
-                y: cy + 36,
-                vx: 0,
-                vy: 0,
-                amount: 12,
-                ttlSec: 60,
-                ownerPlayerId: isCoop ? pl.id : undefined,
-              }),
-            );
-          }
-        }
-      }
+      populateSecretRoomContents(this, room, hasSavedState);
       break;
     }
     case 'merchant': {
@@ -453,7 +415,7 @@ export function populateRoomContentsImpl(this: WorldSim, room: DungeonRoomNode):
       this.spawnProp('torch_brazier', cx + 130, cy - 90);
       this.portalX = cx;
       this.portalY = cy;
-    this.doorTransitionCooldown = Math.max(this.doorTransitionCooldown, 0.75);
+      this.doorTransitionCooldown = Math.max(this.doorTransitionCooldown, 0.75);
       if (!room.cleared) {
         room.wavesSpawned = 0;
         room.wavesTotal = Math.max(1, room.waves.length || room.wavesTotal);
@@ -481,7 +443,7 @@ export function populateRoomContentsImpl(this: WorldSim, room: DungeonRoomNode):
       }
       this.portalX = cx;
       this.portalY = cy;
-    this.doorTransitionCooldown = Math.max(this.doorTransitionCooldown, 0.75);
+      this.doorTransitionCooldown = Math.max(this.doorTransitionCooldown, 0.75);
       if (!room.cleared) {
         room.wavesSpawned = 1;
         room.wavesTotal = 1;
@@ -498,6 +460,7 @@ export function populateRoomContentsImpl(this: WorldSim, room: DungeonRoomNode):
       break;
     }
   }
+  ensureSecretWallKickableProp(this, room);
 }
 
 export function spawnNextRoomWaveImpl(this: WorldSim): void {
@@ -662,7 +625,6 @@ export function onRoomClearedImpl(this: WorldSim, room: DungeonRoomNode): void {
   const cx = this.map.width * 0.5;
   const cy = this.map.height * 0.5;
 
-  // Phase 4 Co-op (tightened in P11): Revive all Soul Ghosts & Downed teammates at 35% HP when a room is cleared!
   const allPlayers = this.getAllPlayers();
   for (const p of allPlayers) {
     p.encasedInIceTimer = 0;
@@ -722,272 +684,4 @@ export function onRoomClearedImpl(this: WorldSim, room: DungeonRoomNode): void {
     roomId: room.id,
     roomType: room.type,
   });
-}
-
-export function openChestImpl(this: WorldSim, chest: SimChestState): boolean {
-  if (chest.opened) return false;
-  chest.opened = true;
-  const room = this.getCurrentRoom();
-  room.chestOpened = true;
-  this.runStats.chestsOpened += 1;
-
-  const wep = WEAPONS[chest.droppedWeaponId] ?? WEAPONS.gale_smg!;
-  const allPlayers = this.getAllPlayers();
-
-  if (allPlayers.length > 1) {
-    // Phase 4 Co-op Instanced Loot: each player receives their own weapon drop & orbs!
-    for (let pIdx = 0; pIdx < allPlayers.length; pIdx++) {
-      const p = allPlayers[pIdx]!;
-      const instancedWepId =
-        pIdx === 0 ? wep.id : this.rollRandomWeaponByRarities([chest.rarity, wep.rarity]);
-      const instancedWep = WEAPONS[instancedWepId] ?? wep;
-      const offsetX = (pIdx - (allPlayers.length - 1) * 0.5) * 34;
-      this.spawnWorldItem({
-        kind: 'weapon',
-        weaponId: instancedWep.id,
-        rarity: instancedWep.rarity,
-        nameVi: instancedWep.nameVi,
-        costGold: 0,
-        healAmount: 0,
-        x: chest.x + offsetX,
-        y: chest.y + 28,
-        fromX: chest.x,
-        fromY: chest.y - 6,
-        droppedAtTick: this.tick,
-        ownerPlayerId: p.id,
-      });
-
-      const totalGold = this.rng.nextInt(6, 10);
-      const gold1 = Math.floor(totalGold / 2);
-      const gold2 = totalGold - gold1;
-      for (let i = 0; i < 2; i++) {
-        const ang = -Math.PI * 0.5 + (i === 0 ? -0.5 : 0.5) + pIdx * 0.25;
-        this.pickups.push(
-          this.acquirePickup({
-            id: ++this.nextEntityId,
-            kind: 'gold',
-            x: chest.x,
-            y: chest.y,
-            vx: Math.cos(ang) * 95,
-            vy: Math.sin(ang) * 95,
-            amount: i === 0 ? gold1 : gold2,
-            ttlSec: 20,
-            ownerPlayerId: p.id,
-          }),
-        );
-      }
-    }
-  } else {
-    this.spawnWorldItem({
-      kind: 'weapon',
-      weaponId: wep.id,
-      rarity: wep.rarity,
-      nameVi: wep.nameVi,
-      costGold: 0,
-      healAmount: 0,
-      x: chest.x,
-      y: chest.y + 28,
-      fromX: chest.x,
-      fromY: chest.y - 6,
-      droppedAtTick: this.tick,
-    });
-
-    const totalGold = this.rng.nextInt(6, 10);
-    const gold1 = Math.floor(totalGold / 2);
-    const gold2 = totalGold - gold1;
-    for (let i = 0; i < 2; i++) {
-      const ang = -Math.PI * 0.5 + (i === 0 ? -0.5 : 0.5);
-      this.pickups.push(
-        this.acquirePickup({
-          id: ++this.nextEntityId,
-          kind: 'gold',
-          x: chest.x,
-          y: chest.y,
-          vx: Math.cos(ang) * 95,
-          vy: Math.sin(ang) * 95,
-          amount: i === 0 ? gold1 : gold2,
-          ttlSec: 20,
-        }),
-      );
-    }
-  }
-
-  this.roomChestsByRoomId.set(room.id, [...this.chests]);
-  this.roomItemsByRoomId.set(room.id, [...this.worldItems]);
-
-  this.events.push({
-    kind: 'chest_opened',
-    chestId: chest.id,
-    rarity: chest.rarity,
-    weaponId: wep.id,
-    x: chest.x,
-    y: chest.y,
-  });
-  return true;
-}
-
-export function pickupOrBuyWorldItemImpl(this: WorldSim,
-  item: SimWorldItemState,
-  collector: SimPlayerState = this.player,
-): boolean {
-  if (item.pickedUp || collector.lifeState !== 'alive') return false;
-  // Enforce Instanced Loot ownership if ownerPlayerId is set
-  if (
-    item.ownerPlayerId !== undefined &&
-    item.ownerPlayerId !== 0 &&
-    item.ownerPlayerId !== collector.id
-  ) {
-    return false;
-  }
-
-  if (item.kind === 'weapon') {
-    const lockActive = (collector.weaponPickupLockTimer ?? 0) > 0;
-    const droppedRecentlyByCollector =
-      item.droppedByPlayerId === collector.id &&
-      (lockActive ||
-        (item.droppedAtTick !== undefined && this.tick - item.droppedAtTick < 18));
-    if (droppedRecentlyByCollector || (lockActive && item.isHubRackItem)) {
-      return false;
-    }
-  }
-
-  if (item.costGold > 0) {
-    if (collector.gold >= item.costGold) {
-      collector.gold -= item.costGold;
-    } else if (!collector.godMode) {
-      return false;
-    } else {
-      collector.gold = 0;
-    }
-    this.events.push({
-      kind: 'item_purchased',
-      itemId: item.id,
-      nameVi: item.nameVi,
-      costGold: item.costGold,
-      x: item.x,
-      y: item.y,
-    });
-  }
-
-  item.pickedUp = true;
-  const room = this.getCurrentRoom();
-  if (item.offerId) {
-    const offer = room.shopOffers.find((o) => o.id === item.offerId);
-    if (offer) offer.purchased = true;
-  } else {
-    const idx = this.worldItems.indexOf(item);
-    if (idx >= 0) {
-      this.worldItems.splice(idx, 1);
-    }
-  }
-
-  if (this.inHub && item.isHubRackItem && item.weaponId) {
-    this.spawnWorldItem({
-      kind: 'weapon',
-      weaponId: item.weaponId,
-      rarity: item.rarity,
-      nameVi: item.nameVi,
-      costGold: 0,
-      healAmount: 0,
-      x: item.x,
-      y: item.y,
-      isHubRackItem: true,
-      droppedByPlayerId: collector.id,
-      droppedAtTick: this.tick,
-    });
-  }
-
-  if (item.kind === 'health_potion') {
-    collector.hp = Math.min(collector.maxHp, collector.hp + item.healAmount);
-    collector.armor = Math.min(collector.maxArmor, collector.armor + 2);
-    if (!this.inHub) {
-      this.roomItemsByRoomId.set(room.id, [...this.worldItems]);
-    }
-    return true;
-  }
-
-  if (item.kind === 'armor_upgrade') {
-    collector.maxArmor += 2;
-    collector.armor = collector.maxArmor;
-    if (!this.inHub) {
-      this.roomItemsByRoomId.set(room.id, [...this.worldItems]);
-    }
-    return true;
-  }
-
-  if (item.kind === 'weapon' && item.weaponId && WEAPONS[item.weaponId]) {
-    collector.weaponPickupLockTimer = 0.3;
-    const existingIdx = collector.weaponSlots.indexOf(item.weaponId);
-    if (existingIdx >= 0) {
-      if (collector.id === this.player.id) {
-        this.equipWeaponSlot(existingIdx);
-      } else if (collector.activeWeaponSlot !== existingIdx) {
-        collector.activeWeaponSlot = existingIdx;
-        this.events.push({
-          kind: 'weapon_swapped',
-          playerId: collector.id,
-          weaponId: item.weaponId,
-          slot: existingIdx,
-        });
-      }
-    } else if (collector.weaponSlots.length < MAX_WEAPON_SLOTS) {
-      collector.weaponSlots.push(item.weaponId);
-      const newSlot = collector.weaponSlots.length - 1;
-      if (collector.id === this.player.id) {
-        this.equipWeaponSlot(newSlot);
-      } else {
-        collector.activeWeaponSlot = newSlot;
-        this.events.push({
-          kind: 'weapon_swapped',
-          playerId: collector.id,
-          weaponId: item.weaponId,
-          slot: newSlot,
-        });
-      }
-    } else {
-      const activeIdx = clamp(collector.activeWeaponSlot, 0, collector.weaponSlots.length - 1);
-      const oldWeaponId = collector.weaponSlots[activeIdx]!;
-      if (this.inHub && item.isHubRackItem) {
-        const dropPos = this.map.resolveCircleCollision(
-          collector.x + Math.cos(collector.aimAngle) * 28,
-          collector.y + Math.sin(collector.aimAngle) * 28,
-          15,
-        );
-        this.spawnDroppedWeapon(
-          oldWeaponId,
-          dropPos.x,
-          dropPos.y,
-          collector.id,
-          collector.x,
-          collector.y,
-        );
-      } else {
-        this.spawnDroppedWeapon(
-          oldWeaponId,
-          item.x,
-          item.y,
-          collector.id,
-          collector.x,
-          collector.y,
-        );
-      }
-      collector.weaponSlots[activeIdx] = item.weaponId;
-      collector.activeWeaponSlot = activeIdx;
-      this.events.push({
-        kind: 'weapon_swapped',
-        playerId: collector.id,
-        weaponId: item.weaponId,
-        slot: activeIdx,
-      });
-    }
-    syncActiveWeaponCadenceState(collector);
-    if (!this.inHub) {
-      this.roomItemsByRoomId.set(room.id, [...this.worldItems]);
-    }
-    return true;
-  }
-  if (!this.inHub) {
-    this.roomItemsByRoomId.set(room.id, [...this.worldItems]);
-  }
-  return false;
 }
