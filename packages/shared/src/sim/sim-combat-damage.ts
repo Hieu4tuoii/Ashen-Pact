@@ -2,6 +2,7 @@ import { ENEMIES } from '../data/enemies.js';
 import type { ElementalReactionId, ElementType } from '../data/types.js';
 import { angleDiff, distance } from '../math/vec2.js';
 import { TILE_SIZE } from '../protocol/messages.js';
+import { purifyAshenPactsOnBossDefeated } from './sim-ashen-pacts.js';
 import {
   BOSS_SINGLE_HIT_MAX_MULT,
   computeEnemyVulnerabilityMultiplier,
@@ -419,8 +420,9 @@ export function handleEnemyKilledImpl(
     }
   }
 
-  // When a Boss dies, also clean up any active boss clones/cores/prisons
+  // When a Boss dies, also clean up any active boss clones/cores/prisons and purify Ashen Pacts
   if (enemy.isBoss) {
+    purifyAshenPactsOnBossDefeated(this);
     this.blizzardVeilActive = false;
     for (let i = 0; i < this.enemies.length; i++) {
       const m = this.enemies[i]!;

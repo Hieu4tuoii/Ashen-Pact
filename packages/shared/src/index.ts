@@ -9,6 +9,7 @@ export * from './data/characters.js';
 export * from './data/enemies.js';
 export * from './data/weapons.js';
 export * from './data/weapon-mutators.js';
+export * from './data/ashen-pacts.js';
 export * from './data/scaling.js';
 export * from './protocol/messages.js';
 export * from './protocol/wifi-sim.js';

@@ -1,4 +1,5 @@
 import { distance } from '../math/vec2.js';
+import { hasPlayerUsedAshenAltar } from './sim-ashen-pacts.js';
 import { isFlippableBarricadeProp } from './sim-tactical-physics.js';
 import { hasPlayerUsedAnvil } from './sim-weapon-mutators.js';
 import type {
@@ -383,10 +384,10 @@ export function findInteractTarget(
     for (let i = 0; i < sim.npcEntities.length; i++) {
       const npc = sim.npcEntities[i]!;
       if (npc.kind === 'shrine') {
-        if (npc.interacted) continue;
+        if (hasPlayerUsedAshenAltar(npc, room, actor.id) || actor.activePactId !== null) continue;
         if (requireAffordable) {
-          const costGold = npc.costGold ?? 25;
-          if (!actor.godMode && actor.gold < costGold && actor.hp <= npc.costHp) {
+          const costGold = npc.costGold ?? 0;
+          if (costGold > 0 && !actor.godMode && actor.gold < costGold && actor.hp <= npc.costHp) {
             continue;
           }
         }

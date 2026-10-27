@@ -1,6 +1,6 @@
 import { SeededRandom } from '../core/prng.js';
 import { BIOME2_COMBAT_ENEMIES, BIOME3_COMBAT_ENEMIES } from '../data/enemies.js';
-import type { BlessingId, BuffId, CardinalDir, CharacterId, ElementalReactionId, EliteModifier, ElementType, WeaponMutatorId, WeaponRarity } from '../data/types.js';
+import type { AshenPactId, BlessingId, BuffId, CardinalDir, CharacterId, ElementalReactionId, EliteModifier, ElementType, WeaponMutatorId, WeaponRarity } from '../data/types.js';
 import { SpatialHashGrid } from '../math/spatial-hash.js';
 import type { PlayerInputPacket, QuickEmoteId } from '../protocol/messages.js';
 import { ArenaMap, type RoomArchetypeId, type SurfaceKind } from './arena-map.js';
@@ -22,6 +22,7 @@ import { applyDamageToEnemyImpl, triggerElementalReactionImpl, handleEnemyKilled
 import { flipCoverPropImpl, kickPropImpl, updateSlidingPropsImpl } from './sim-tactical-physics.js';
 import { updateMagneticRivets } from './sim-weapon-specials.js';
 import { selectWeaponMutatorImpl, updateGravitySingularities } from './sim-weapon-mutators.js';
+import { purifyAshenPactsOnBossDefeated, selectAshenPactImpl } from './sim-ashen-pacts.js';
 
 export * from './world-sim-types.js';
 export * from './world-sim-events.js';
@@ -30,6 +31,7 @@ export * from './sim-tactical-physics.js';
 export * from './sim-weapon-cadence.js';
 export * from './sim-weapon-specials.js';
 export * from './sim-weapon-mutators.js';
+export * from './sim-ashen-pacts.js';
 export * from './sim-secret-and-workshop.js';
 
 export class WorldSim {
@@ -464,6 +466,8 @@ export class WorldSim {
   public applyBuffEffects(buffId: BuffId, playerId = this.player.id): void  { return applyBuffEffectsImpl.call(this, buffId, playerId); }
   public selectFloorBuff(buffId: BuffId, playerId = this.player.id): boolean  { return selectFloorBuffImpl.call(this, buffId, playerId); }
   public selectWeaponMutator(mutatorId: WeaponMutatorId, playerId = this.player.id): boolean  { return selectWeaponMutatorImpl(this, mutatorId, playerId); }
+  public selectAshenPact(pactIdOrDecline: AshenPactId | 'decline', playerId = this.player.id): boolean  { return selectAshenPactImpl(this, pactIdOrDecline, playerId); }
+  public onBossDefeated(): number  { return purifyAshenPactsOnBossDefeated(this); }
   public advanceToFloor(floorNumber: 1 | 2 | 3 | 4 | 5 | 6): void  { return advanceToFloorImpl.call(this, floorNumber); }
   public advanceToBiome(biome: 1 | 2 | 3): void  { return advanceToBiomeImpl.call(this, biome); }
   public skipCurrentRoomWaves(): void  { return skipCurrentRoomWavesImpl.call(this); }

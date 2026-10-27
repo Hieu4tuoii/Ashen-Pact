@@ -28,6 +28,7 @@ import {
   populateSecretRoomContents,
   spawnCoopPressurePlatePuzzleImpl,
 } from './sim-secret-and-workshop.js';
+import { purifyAshenPactsOnBossDefeated } from './sim-ashen-pacts.js';
 import { populateTreasureForgeWorkshop } from './sim-weapon-mutators.js';
 import type { WorldSim } from './world-sim.js';
 
@@ -423,19 +424,22 @@ export function populateRoomContentsImpl(this: WorldSim, room: DungeonRoomNode):
       this.spawnProp('glow_mushroom', cx + 110, cy - 75);
       this.spawnProp('torch_brazier', cx - 110, cy + 75);
       this.spawnProp('torch_brazier', cx + 110, cy + 75);
+      const usedIds = room.shrineUsedByPlayerIds ? [...room.shrineUsedByPlayerIds] : [];
+      room.shrineUsedByPlayerIds = usedIds;
       this.npcEntities.push({
         id: ++this.nextEntityId,
         kind: 'shrine',
-        nameVi: 'Tượng Thần Cổ Đại',
+        nameVi: 'Tế Đàn Khế Ước Tro Tàn',
         dialogueVi: room.shrineUsed
-          ? 'Tượng thần đã ban phước lành cổ ngữ.'
-          : 'Dâng 40 Xu hoặc 2 Máu [E] để nhận Phước Lành (+15 Năng Lượng tối đa)',
+          ? 'Tế Đàn Khế Ước đã khắc ấn cổ ngữ.'
+          : '[E] KÝ KHẾ ƯỚC TRO TÀN (THỬ THÁCH SUỐT BIOME)',
         x: cx,
         y: cy - 18,
         radius: 22,
         interacted: room.shrineUsed,
-        costHp: 2,
-        costGold: 40,
+        costHp: 0,
+        costGold: 0,
+        usedByPlayerIds: usedIds,
       });
       break;
     }
@@ -706,6 +710,7 @@ export function onRoomClearedImpl(this: WorldSim, room: DungeonRoomNode): void {
     this.portalY = cy;
     this.doorTransitionCooldown = Math.max(this.doorTransitionCooldown, 0.75);
   } else if (room.type === 'boss') {
+    purifyAshenPactsOnBossDefeated(this);
     this.portalActive = true;
     this.portalX = cx;
     this.portalY = cy;

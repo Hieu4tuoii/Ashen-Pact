@@ -162,6 +162,7 @@ export function setupKeyboardBindingsImpl(this: GameScene): void {
     const lp = this.transport.getLocalPlayerState();
     const choice0 = lp.buffChoices[0];
     const mutChoice0 = lp.mutatorChoices?.[0];
+    const pactChoice0 = lp.pactChoices?.[0];
     if (sim.runState === 'buff_choice' && choice0) {
       if (this.room && this.coopMode !== 'solo') {
         lp.buffChoices = [];
@@ -169,6 +170,11 @@ export function setupKeyboardBindingsImpl(this: GameScene): void {
       } else {
         sim.selectFloorBuff(choice0, lp.id);
       }
+    } else if (sim.runState === 'playing' && pactChoice0) {
+      sim.selectAshenPact(pactChoice0, lp.id);
+      this.room?.send('select_pact', { pactId: pactChoice0 });
+      this.buffHoveredIdx = null;
+      this.lastRunState = '';
     } else if (sim.runState === 'playing' && mutChoice0) {
       sim.selectWeaponMutator(mutChoice0, lp.id);
       this.room?.send('select_mutator', { mutatorId: mutChoice0 });
@@ -188,6 +194,7 @@ export function setupKeyboardBindingsImpl(this: GameScene): void {
     const lp = this.transport.getLocalPlayerState();
     const choice1 = lp.buffChoices[1];
     const mutChoice1 = lp.mutatorChoices?.[1];
+    const pactChoice1 = lp.pactChoices?.[1];
     if (sim.runState === 'buff_choice' && choice1) {
       if (this.room && this.coopMode !== 'solo') {
         lp.buffChoices = [];
@@ -195,6 +202,11 @@ export function setupKeyboardBindingsImpl(this: GameScene): void {
       } else {
         sim.selectFloorBuff(choice1, lp.id);
       }
+    } else if (sim.runState === 'playing' && pactChoice1) {
+      sim.selectAshenPact(pactChoice1, lp.id);
+      this.room?.send('select_pact', { pactId: pactChoice1 });
+      this.buffHoveredIdx = null;
+      this.lastRunState = '';
     } else if (sim.runState === 'playing' && mutChoice1) {
       sim.selectWeaponMutator(mutChoice1, lp.id);
       this.room?.send('select_mutator', { mutatorId: mutChoice1 });
@@ -213,6 +225,7 @@ export function setupKeyboardBindingsImpl(this: GameScene): void {
     const sim = this.transport.getSim();
     const lp = this.transport.getLocalPlayerState();
     const choice2 = lp.buffChoices[2];
+    const hasOpenPactChoices = (lp.pactChoices?.length ?? 0) > 0;
     if (sim.runState === 'buff_choice' && choice2) {
       if (this.room && this.coopMode !== 'solo') {
         lp.buffChoices = [];
@@ -220,6 +233,11 @@ export function setupKeyboardBindingsImpl(this: GameScene): void {
       } else {
         sim.selectFloorBuff(choice2, lp.id);
       }
+    } else if (sim.runState === 'playing' && hasOpenPactChoices) {
+      sim.selectAshenPact('decline', lp.id);
+      this.room?.send('select_pact', { pactId: 'decline' });
+      this.buffHoveredIdx = null;
+      this.lastRunState = '';
     } else if (this.keys?.T.isDown || this.emoteWheelOpen) {
       this.queuedEmote = 3;
       this.emoteWheelOpen = false;
@@ -455,6 +473,11 @@ export function bindCoopRoomHandlersImpl(this: GameScene, room: ColyseusRoom): v
     this.networkTransport.setOnSendInput((msg) => {
       if (this.room === room) {
         room.send('input', msg);
+      }
+    });
+    this.networkTransport.setOnSendMessage((type, payload) => {
+      if (this.room === room) {
+        room.send(type, payload);
       }
     });
   }

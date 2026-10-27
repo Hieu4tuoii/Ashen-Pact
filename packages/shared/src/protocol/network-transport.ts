@@ -1,5 +1,6 @@
 import { FixedTimestepLoop } from '../core/fixed-timestep.js';
 import { ENEMIES } from '../data/enemies.js';
+import type { AshenPactId } from '../data/types.js';
 import { clamp, lerp } from '../math/vec2.js';
 import { type SimEnemyState, type SimEvent, type SimPickupState, type SimPlayerState, type SimProjectileState, WorldSim, type WorldSimOptions } from '../sim/world-sim.js';
 import { INPUT_BUTTON, type PlayerInputPacket, dequantizeAngle, dequantizeCoord } from './messages.js';
@@ -21,6 +22,7 @@ export interface NetworkTransportOptions extends WorldSimOptions {
   localPlayerSlot?: 1 | 2 | 3 | 4;
   localPlayerId?: number;
   onSendInput?: (packet: PlayerInputPacket) => void;
+  onSendMessage?: (type: string, payload: unknown) => void;
   wifiProfile?: WifiProfileId;
 }
 
@@ -50,6 +52,7 @@ export class NetworkTransport implements ITransport {
   private readonly loop: FixedTimestepLoop;
   private readonly wifiSim: WifiSimulator;
   private onSendInputCallback?: (packet: PlayerInputPacket) => void;
+  private onSendMessageCallback?: (type: string, payload: unknown) => void;
 
   private localPlayerId = 1;
   private localPlayerSlot: 1 | 2 | 3 | 4 = 1;
@@ -99,6 +102,7 @@ export class NetworkTransport implements ITransport {
     this.localPlayerId = options.localPlayerId ?? 1;
     this.localPlayerSlot = options.localPlayerSlot ?? 1;
     this.onSendInputCallback = options.onSendInput;
+    this.onSendMessageCallback = options.onSendMessage;
     this.wifiSim = new WifiSimulator(options.wifiProfile ?? 'off');
   }
 
@@ -125,6 +129,21 @@ export class NetworkTransport implements ITransport {
 
   public setOnSendInput(cb: (packet: PlayerInputPacket) => void): void {
     this.onSendInputCallback = cb;
+  }
+
+  public setOnSendMessage(cb: (type: string, payload: unknown) => void): void {
+    this.onSendMessageCallback = cb;
+  }
+
+  public selectAshenPact(
+    pactIdOrDecline: AshenPactId | 'decline',
+    playerId = this.localPlayerId,
+  ): boolean {
+    const ok = this.sim.selectAshenPact(pactIdOrDecline, playerId);
+    if (ok) {
+      this.onSendMessageCallback?.('select_pact', { pactId: pactIdOrDecline });
+    }
+    return ok;
   }
 
   public setWifiProfile(profile: WifiProfileId): void {
@@ -345,6 +364,7 @@ export class NetworkTransport implements ITransport {
       pState.awakenedRelicIds = ps.relics ? [...ps.relics] : [];
       pState.buffChoices = ps.buffChoices ? [...ps.buffChoices] : [];
       pState.mutatorChoices = ps.mutatorChoices ? [...ps.mutatorChoices] : [];
+      pState.pactChoices = ps.pactChoices ? [...ps.pactChoices] : [];
       if (ps.wepLevels) {
         pState.weaponUpgradeLevels = {
           0: ps.wepLevels[0] ?? 0,

@@ -1,4 +1,4 @@
-import type { BuffId, CharacterId, ElementalReactionId, ElementType, RoomType, WeaponRarity } from '../data/types.js';
+import type { AshenPactId, AshenRelicId, BuffId, CharacterId, ElementalReactionId, ElementType, RoomType, WeaponRarity } from '../data/types.js';
 import type { PlayerInputPacket, QuickEmoteId } from '../protocol/messages.js';
 import type { ArenaMapConfig, SurfaceKind } from './arena-map.js';
 import type { PropKind, SummonKind, PingMarkerKind, BulletVolleySpawnEvent } from './world-sim-types.js';
@@ -269,6 +269,23 @@ export type SimEvent =
       x: number;
       y: number;
       rewardTextVi: string;
+    }
+  | {
+      kind: 'pact_signed';
+      playerId: number;
+      pactId: AshenPactId;
+      nameVi: string;
+      x: number;
+      y: number;
+    }
+  | {
+      kind: 'relic_awakened';
+      playerId: number;
+      pactId: AshenPactId;
+      relicId: AshenRelicId;
+      nameVi: string;
+      x: number;
+      y: number;
     }
   | {
       kind: 'portal_entered';

@@ -122,6 +122,7 @@ export function createPlayerStateImpl(this: WorldSim,
     pactOriginalWeaponId: null,
     awakenedRelicIds: [],
     buffChoices: [],
+    pactChoices: [],
     weaponUpgradeLevels: { 0: 0, 1: 0 },
     salvageHoldTimer: 0,
     salvageTargetItemId: 0,
@@ -600,6 +601,7 @@ export function enterHubImpl(this: WorldSim): void {
     p.vanguardShieldBonusAdd = 0;
     p.elementalConvergenceTimer = 0;
     p.buffChoices = [];
+    p.pactChoices = [];
     p.ready = false;
   }
 }
@@ -660,6 +662,7 @@ export function startDungeonRunFromHubImpl(this: WorldSim): void {
     p.pactOriginalWeaponId = null;
     p.awakenedRelicIds = [];
     p.buffChoices = [];
+    p.pactChoices = [];
     p.weaponUpgradeLevels = { 0: 0, 1: 0 };
     p.salvageHoldTimer = 0;
     p.salvageTargetItemId = 0;

@@ -1,4 +1,5 @@
 import { FixedTimestepLoop } from '../core/fixed-timestep.js';
+import type { AshenPactId } from '../data/types.js';
 import { lerp } from '../math/vec2.js';
 import { INPUT_BUTTON, type PlayerInputPacket } from './messages.js';
 import {
@@ -37,8 +38,11 @@ export interface ITransport {
     pickup: SimPickupState,
     out?: InterpolatedEntityPos,
   ): InterpolatedEntityPos;
+  selectAshenPact(pactIdOrDecline: AshenPactId | 'decline', playerId?: number): boolean;
   consumeEvents(): SimEvent[];
 }
+
+export type SimTransport = ITransport;
 
 /**
  * LocalTransport runs the authoritative 60Hz WorldSim directly in the client browser for Solo mode.
@@ -183,6 +187,13 @@ export class LocalTransport implements ITransport {
       return out;
     }
     return { x, y };
+  }
+
+  public selectAshenPact(
+    pactIdOrDecline: AshenPactId | 'decline',
+    playerId = this.sim.player.id,
+  ): boolean {
+    return this.sim.selectAshenPact(pactIdOrDecline, playerId);
   }
 
   public consumeEvents(): SimEvent[] {

@@ -343,17 +343,20 @@ describe('Phase 3 Weapons, Enemies, Elites & Boss Mục Vương', () => {
     expect(sim.worldItems.length).toBe(1);
     expect(sim.worldItems[0]!.weaponId).toBe(droppedWepId);
 
-    // 3. Shrine exchanges 40 Gold when player has gold, grants floor buff + restores Armor/Ammo (no free weapon drop)
+    // 3. Ashen Pact Altar (Shrine) costs 0 Gold, restores Armor/Ammo, and offers 2 Ashen Pacts (no free weapon drop)
     sim.enterRoom(shrineRoom.id);
     const shrine = sim.npcEntities.find((n) => n.kind === 'shrine')!;
     const goldBefore = sim.player.gold;
     const hpBefore = sim.player.hp;
     sim.player.armor = 1;
+    expect(shrine.costGold).toBe(0);
     expect(sim.activateShrine(shrine)).toBe(true);
-    expect(sim.player.gold).toBe(goldBefore - 40);
+    expect(sim.player.gold).toBe(goldBefore);
     expect(sim.player.hp).toBe(hpBefore);
     expect(sim.player.armor).toBe(sim.player.maxArmor);
-    expect(sim.player.blessingIds.length).toBeGreaterThanOrEqual(1);
+    expect(sim.player.pactChoices).toHaveLength(2);
+    expect(sim.selectAshenPact(sim.player.pactChoices![0]!)).toBe(true);
+    expect(sim.player.activePactId).not.toBeNull();
     expect(sim.worldItems.length).toBe(0);
   });
 

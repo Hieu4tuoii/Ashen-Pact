@@ -93,6 +93,7 @@ export interface DungeonRoomNode {
   isChallenge?: boolean;
   currentWaveSpawnedCount?: number;
   anvilUsedByPlayerIds?: number[];
+  shrineUsedByPlayerIds?: number[];
 }
 
 export interface DungeonFloorGraph {

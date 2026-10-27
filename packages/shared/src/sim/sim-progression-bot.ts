@@ -6,52 +6,14 @@ import { INPUT_BUTTON } from '../protocol/messages.js';
 import { generateDungeonFloor } from './dungeon-gen.js';
 import { findNextWalkableWaypoint } from './arena-room-archetypes.js';
 import { findInteractTarget } from './interact-target.js';
+import { activateAshenPactAltarImpl } from './sim-ashen-pacts.js';
 import { flipCoverProp } from './sim-tactical-physics.js';
 import { activateDaedalusAnvilImpl, activateUpgradeAnvilImpl } from './sim-weapon-mutators.js';
 import { lerpSpeed, type SimSummonState, type SimDoorState, type SimNpcState, type SimPlayerState, type SimEnemyState, type SimPickupState } from './world-sim-types.js';
 import type { WorldSim } from './world-sim.js';
 
 export function activateShrineImpl(this: WorldSim, shrine: SimNpcState, actor: SimPlayerState = this.player): boolean {
-  if (shrine.kind !== 'shrine' || shrine.interacted || actor.lifeState !== 'alive') return false;
-  const costGold = shrine.costGold ?? 40;
-  if (actor.gold >= costGold) {
-    actor.gold -= costGold;
-  } else if (actor.hp > shrine.costHp) {
-    actor.hp -= shrine.costHp;
-  } else if (!actor.godMode) {
-    return false;
-  }
-
-  shrine.interacted = true;
-  const room = this.getCurrentRoom();
-  room.shrineUsed = true;
-
-  for (const p of this.getAllPlayers()) {
-    p.armor = p.maxArmor;
-    p.clipAmmo = p.clipMax;
-    p.reloadTimer = 0;
-    p.reloadLockout = false;
-    p.weaponHeat = 0;
-    p.overheatLockTimer = 0;
-  }
-
-  // Also grant the room's shrineBlessingId buff if available
-  const blessingId = room.shrineBlessingId as BuffId | null;
-  if (blessingId && FLOOR_BUFFS[blessingId] && !actor.blessingIds.includes(blessingId)) {
-    this.applyBuffEffects(blessingId, actor.id);
-  }
-
-  const buffDef = blessingId ? FLOOR_BUFFS[blessingId] : undefined;
-  shrine.dialogueVi = buffDef
-    ? `Phước lành Cổ Ngữ: ${buffDef.nameVi} (Hồi đầy Giáp & Đạn)!`
-    : 'Phước lành Cổ Ngữ: Hồi đầy Giáp & Đạn!';
-  this.events.push({
-    kind: 'shrine_blessing',
-    x: shrine.x,
-    y: shrine.y,
-    rewardTextVi: shrine.dialogueVi,
-  });
-  return true;
+  return activateAshenPactAltarImpl(this, shrine, actor);
 }
 
 export function enterPortalImpl(this: WorldSim): boolean {
@@ -172,6 +134,7 @@ export function selectFloorBuffImpl(
 export function advanceToFloorImpl(this: WorldSim, floorNumber: 1 | 2 | 3 | 4 | 5 | 6): void {
   for (const pl of this.getAllPlayers()) {
     pl.buffChoices = [];
+    pl.pactChoices = [];
   }
   this.currentFloor = floorNumber;
   this.currentBiome = floorNumber <= 2 ? 1 : floorNumber <= 4 ? 2 : 3;
@@ -430,6 +393,12 @@ export function stepBotAutoPlayImpl(this: WorldSim, _dtSec: number): void {
   if (this.runState === 'victory' || this.runState === 'defeat') {
     return;
   }
+  for (const pl of this.getAllPlayers()) {
+    if (pl.pactChoices && pl.pactChoices.length > 0) {
+      const choice = pl.hp <= 2 ? 'decline' : pl.pactChoices[0]!;
+      this.selectAshenPact(choice, pl.id);
+    }
+  }
 
   // Equip best ranged weapon in slots
   let bestSlot = p.activeWeaponSlot;
@@ -670,11 +639,21 @@ export function stepBotAutoPlayImpl(this: WorldSim, _dtSec: number): void {
   }
 
   // 4. Activate Shrine if present
-  const unusedShrine = this.npcEntities.find((n) => n.kind === 'shrine' && !n.interacted);
+  const unusedShrine = this.npcEntities.find(
+    (n) =>
+      n.kind === 'shrine' &&
+      !n.interacted &&
+      !n.usedByPlayerIds?.includes(p.id) &&
+      p.activePactId === null,
+  );
   if (unusedShrine) {
     const d = distance(p.x, p.y, unusedShrine.x, unusedShrine.y);
     if (d <= 58) {
       this.activateShrine(unusedShrine, p);
+      if (p.pactChoices && p.pactChoices.length > 0) {
+        const choice = p.hp <= 2 ? 'decline' : p.pactChoices[0]!;
+        this.selectAshenPact(choice, p.id);
+      }
     } else {
       steerBotToPoint(unusedShrine.x, unusedShrine.y);
     }

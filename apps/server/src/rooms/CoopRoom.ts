@@ -2,6 +2,7 @@ import { Room, type Client } from '@colyseus/core';
 import { Schema, type } from '@colyseus/schema';
 import {
   ALL_CHARACTER_IDS,
+  type AshenPactId,
   type BuffId,
   type CharacterId,
   FixedTimestepLoop,
@@ -200,6 +201,15 @@ export class CoopRoom extends Room<CoopRoomState> {
       const meta = this.playersBySession.get(client.sessionId);
       if (meta && payload?.mutatorId) {
         if (this.sim.selectWeaponMutator(payload.mutatorId, meta.playerId)) {
+          this.broadcastImmediateSnapshot();
+        }
+      }
+    });
+
+    this.onMessage('select_pact', (client, payload: { pactId?: AshenPactId | 'decline' }) => {
+      const meta = this.playersBySession.get(client.sessionId);
+      if (meta && payload?.pactId) {
+        if (this.sim.selectAshenPact(payload.pactId, meta.playerId)) {
           this.broadcastImmediateSnapshot();
         }
       }

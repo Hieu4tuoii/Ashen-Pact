@@ -530,6 +530,7 @@ export interface SimPlayerState {
   awakenedRelicIds: AshenRelicId[];
   buffChoices: BlessingId[];
   mutatorChoices?: WeaponMutatorId[];
+  pactChoices?: AshenPactId[];
   weaponUpgradeLevels?: Record<number, number>;
   salvageHoldTimer?: number;
   salvageTargetItemId?: number;

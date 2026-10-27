@@ -144,12 +144,14 @@ describe('Phase B1 — Combat & Economy Balance Overhaul', () => {
     expect(byKind2.blessing_scroll).toBe(75);
     expect(byKind2.weapon_upgrade).toBe(83);
 
-    // 6. Shrine costs 40 Gold
+    // 6. Ashen Pact Altar (Shrine) costs 0 Gold and offers 2 Ashen Pact choices
     const shrineRoom = sim.dungeon.rooms.find((r) => r.type === 'shrine')!;
     sim.enterRoom(shrineRoom.id);
     const shrine = sim.npcEntities.find((n) => n.kind === 'shrine')!;
-    expect(shrine.costGold).toBe(40);
-    expect(shrine.dialogueVi).toContain('40 Xu');
+    expect(shrine.costGold).toBe(0);
+    expect(shrine.nameVi).toContain('Tế Đàn Khế Ước');
+    expect(sim.activateShrine(shrine)).toBe(true);
+    expect(sim.player.pactChoices).toHaveLength(2);
   });
 
   it('B1.4: updates Character HP/Armor/Regen, Dash cooldown/i-frame, 0.35s hit i-frame, Knight Sword stats, and 0.35s lava tick', () => {
@@ -303,9 +305,12 @@ describe('Phase B1 — Combat & Economy Balance Overhaul', () => {
     sim.player.x = shrine.x;
     sim.player.y = shrine.y;
     expect(sim.interactWithNearest()).toBe(true);
-    expect(sim.player.gold).toBe(10); // 50 - 40 = 10
+    expect(sim.player.gold).toBe(50);
+    expect(sim.player.pactChoices).toHaveLength(2);
     expect(sim.player.armor).toBe(sim.player.maxArmor);
     expect(sim.player.clipAmmo).toBe(sim.player.clipMax);
+
+
     expect(sim.worldItems.filter((it) => it.kind === 'weapon')).toHaveLength(0);
 
     // Normal combat room chest chance ~45% vs Challenge room 100%
