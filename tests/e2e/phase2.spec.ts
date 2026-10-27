@@ -191,7 +191,7 @@ test.describe('Phase 2 — Pipeline Hình Ảnh & Tương Tác Map', () => {
     });
 
     expect(reactionResults.wasFrozen).toBe(true);
-    expect(reactionResults.shatterDamageDealt).toBe(60); // 20 base * 3x shatter multiplier
+    expect(reactionResults.shatterDamageDealt).toBe(40); // 20 base * 2.0x shatter multiplier (3-Bucket Damage Pipeline)
     expect(reactionResults.healedWhilePoisoned).toBe(0);
     expect(reactionResults.waterEnemy2Shocked).toBe(true);
     expect(reactionResults.crackedBefore).toBe('cracked_wall');
