@@ -141,6 +141,16 @@ export function shatterGlacialBarricade(
     }
   }
 
+  // Compact any already-destroyed props (including this shattered barricade) before spawning 3 spikes
+  let writeIdx = 0;
+  for (let i = 0; i < sim.props.length; i++) {
+    const p = sim.props[i]!;
+    if (p.hp > 0) {
+      sim.props[writeIdx++] = p;
+    }
+  }
+  sim.props.length = writeIdx;
+
   const backX = -Math.cos(slideAngle) * 20;
   const backY = -Math.sin(slideAngle) * 20;
   const perpX = -Math.sin(slideAngle);
@@ -150,9 +160,11 @@ export function shatterGlacialBarricade(
     const sx = barricade.x + backX + perpX * offset;
     const sy = barricade.y + backY + perpY * offset;
     const spike = sim.spawnProp('glacial_spike', sx, sy);
-    spike.ttlSec = GLACIAL_SPIKE_TTL_SEC;
-    spike.blocksMovement = true;
-    spike.blocksEnemyProjectiles = true;
+    if (spike.kind === 'glacial_spike') {
+      spike.ttlSec = GLACIAL_SPIKE_TTL_SEC;
+      spike.blocksMovement = true;
+      spike.blocksEnemyProjectiles = true;
+    }
   }
 }
 
@@ -229,7 +241,7 @@ export function refractProjectileThroughCryoPrism(
       spreadRad: CRYO_PRISM_FAN_SPREAD_RAD,
       speed,
       damage: boostedDamage,
-      critChance: b.isCrit ? 1 : 0,
+      critChance: 0,
       knockback: b.knockback,
       radius: b.radius,
       ttlSec: origTtl,
@@ -256,6 +268,7 @@ export function refractProjectileThroughCryoPrism(
         child.angle = exactAng;
         child.vx = Math.cos(exactAng) * speed;
         child.vy = Math.sin(exactAng) * speed;
+        child.isCrit = b.isCrit;
         child.splitGeneration = 1;
         child.passedThroughCoverOrPrism = true;
         child.hitEntityIds.push(prism.id);
@@ -531,24 +544,22 @@ function triggerPneumaticPressSlam(sim: WorldSim, press: SimPropState): void {
 export function updateP1CTacticalProps(sim: WorldSim, dtSec: number): void {
   // 1. Biome 3 Factory Conveyor Cycle (8.0s period, 1.2s warning before reversal)
   if (
-    sim.map.biome === 3 ||
-    sim.currentBiome === 3 ||
-    sim.map.roomArchetype === 'CROSSFIRE_CONVEYORS'
+    !sim.stressTestActive &&
+    (sim.map.biome === 3 ||
+      sim.currentBiome === 3 ||
+      sim.map.roomArchetype === 'CROSSFIRE_CONVEYORS')
   ) {
-    sim.map.conveyorCycleTimer = (sim.map.conveyorCycleTimer ?? 0) + dtSec;
-    if (sim.map.conveyorCycleTimer >= CONVEYOR_CYCLE_PERIOD_SEC) {
-      sim.map.conveyorCycleTimer -= CONVEYOR_CYCLE_PERIOD_SEC;
-      sim.map.conveyorWarningTimer = 0;
+    const cycleNext = (sim.map.conveyorCycleTimer ?? 0) + dtSec;
+    if (cycleNext >= CONVEYOR_CYCLE_PERIOD_SEC) {
+      const remainder = cycleNext - CONVEYOR_CYCLE_PERIOD_SEC;
       sim.map.reverseConveyorDirection();
-    } else if (
-      sim.map.conveyorCycleTimer >=
-      CONVEYOR_CYCLE_PERIOD_SEC - CONVEYOR_WARNING_LEAD_SEC
-    ) {
-      sim.map.conveyorWarningTimer = Math.max(
-        0.01,
-        CONVEYOR_CYCLE_PERIOD_SEC - sim.map.conveyorCycleTimer,
-      );
+      sim.map.conveyorCycleTimer = remainder;
+      sim.map.conveyorWarningTimer = 0;
+    } else if (cycleNext >= CONVEYOR_CYCLE_PERIOD_SEC - CONVEYOR_WARNING_LEAD_SEC) {
+      sim.map.conveyorCycleTimer = cycleNext;
+      sim.map.conveyorWarningTimer = Math.max(0.01, CONVEYOR_CYCLE_PERIOD_SEC - cycleNext);
     } else {
+      sim.map.conveyorCycleTimer = cycleNext;
       sim.map.conveyorWarningTimer = 0;
     }
   }

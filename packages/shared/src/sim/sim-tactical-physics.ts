@@ -283,6 +283,14 @@ export function kickProp(sim: WorldSim, prop: SimPropState, actor: SimPlayerStat
     sim.map.getSurfaceAtWorld(actor.x, actor.y) === 'ice';
   const speed = onIce ? baseSpeed * BIOME2_ICE_INERTIA_MULT : baseSpeed;
 
+  if (prop.kind === 'slag_crucible') {
+    const vx = Math.cos(slideAngle) * speed;
+    const vy = Math.sin(slideAngle) * speed;
+    sim.events.push({ kind: 'prop_kicked', propId: prop.id, playerId: actor.id, x: prop.x, y: prop.y, vx, vy });
+    spillSlagCrucibleLavaCarpet(sim, prop, slideAngle, actor.id);
+    return true;
+  }
+
   prop.coverState = 'sliding'; prop.blocksMovement = false; prop.blocksEnemyProjectiles = false;
   prop.vx = Math.cos(slideAngle) * speed; prop.vy = Math.sin(slideAngle) * speed;
   prop.iceSpeedBoostApplied = onIce;

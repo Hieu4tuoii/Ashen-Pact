@@ -208,5 +208,16 @@ describe('AP2 Phase P1C.3 — Biome 3 Survival Law ("Nhịp Đập Lò Nung") & 
       }
     }
     expect(lavaTileCount).toBeGreaterThanOrEqual(4);
+
+    // Also verify Dash-Kicking a slag_crucible immediately spills the 192px Molten Lava Carpet along the kick angle
+    const crucible2 = sim.spawnProp('slag_crucible', 320, 224); // ty = 7
+    const rowEnemy3 = sim.spawnEnemy('goblin_shooter', 440, 224, true);
+    rowEnemy3.hp = 400;
+    rowEnemy3.maxHp = 400;
+    sim.kickProp(crucible2, sim.player, 0);
+    expect(crucible2.hp).toBe(0);
+    expect(rowEnemy3.hp).toBeLessThan(400);
+    expect(rowEnemy3.burnTimer).toBeGreaterThan(0);
+    expect(sim.map.getSurface(13, 7)).toBe('lava');
   });
 });

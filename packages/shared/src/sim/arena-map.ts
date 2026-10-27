@@ -120,6 +120,8 @@ export class ArenaMap {
 
   public reverseConveyorDirection(): 1 | -1 {
     this.conveyorDirection = this.conveyorDirection === 1 ? -1 : 1;
+    this.conveyorCycleTimer = 0;
+    this.conveyorWarningTimer = 0;
     this.mapRevision += 1;
     return this.conveyorDirection;
   }

@@ -253,5 +253,43 @@ describe('AP2 Phase P1C.2 — Biome 2 Survival Law ("Quán Tính Băng Vĩnh C�
     expect(sim.projectiles.length).toBe(1);
     expect(gen1Bullet.damage).toBe(72);
     expect(gen1Bullet.bounceRemaining).toBe(2);
+
+    // Also verify a critical projectile (isCrit = true) refracting through prism does NOT double-multiply 1.5x crit damage
+    const prism3 = sim.spawnProp('cryo_prism_pillar', 520, 420);
+    sim.projectiles.length = 0;
+    sim.spawnDeterministicVolley({
+      kind: 'bullet_volley_spawned',
+      eventId: sim.nextVolleyEventId++,
+      ownerId: sim.player.id,
+      team: 'player',
+      weaponId: 'hunter_crossbow',
+      x: 485,
+      y: 420,
+      angle: 0,
+      pelletCount: 1,
+      spreadRad: 0,
+      speed: 600,
+      damage: 100,
+      critChance: 1, // 100 * 1.5 = 150 crit damage
+      knockback: 40,
+      radius: 5,
+      ttlSec: 1.5,
+      pierceCount: 1,
+      bounceCount: 0,
+      element: 'none',
+      seed: 1003,
+    });
+    expect(sim.projectiles[0]!.damage).toBe(100);
+    expect(sim.projectiles[0]!.isCrit).toBe(true);
+    for (let t = 0; t < 10; t++) {
+      sim.step(SIM_STEP_SEC);
+      if (sim.projectiles.length >= 3) break;
+    }
+    expect(sim.projectiles.length).toBe(3);
+    for (const r of sim.projectiles) {
+      expect(r.isCrit).toBe(true);
+      expect(r.damage).toBe(120); // 100 * 1.20 (+20%), preserving isCrit
+    }
+    void prism3;
   });
 });
