@@ -15,6 +15,7 @@ import {
   BULLET_HEAVY_PINBALL_KB_MULT,
   propagateRangerPreyChainDamageAndKnockback,
 } from './sim-blessings.js';
+import { addBossStaggerAccum } from './sim-boss-armor-break.js';
 import {
   ICE_GOLEM_FRONT_CONE_RAD,
   IRON_SHIELDER_FRONT_CONE_RAD,
@@ -38,6 +39,8 @@ export function applyDamageToEnemyImpl(
   isHeavyAttack = false,
   attackerPlayerId = this.player.id,
   isChainDamage = false,
+  procCoefficient = 1.0,
+  isKickedPropHit = false,
 ): void {
   if (enemy.defId === 'ashen_executioner') {
     enemy.hp = enemy.maxHp;
@@ -194,6 +197,9 @@ export function applyDamageToEnemyImpl(
   const kbY = Math.sin(hitAngleRad) * knockback * kbMult;
   enemy.kbVx += kbX;
   enemy.kbVy += kbY;
+  if (enemy.isBoss && enemy.hp > 0 && !isChainDamage && (isKickedPropHit || knockback > 0)) {
+    addBossStaggerAccum(this, enemy, knockback, procCoefficient, isKickedPropHit, attackerPl);
+  }
 
   // Shatter ice shards splash damage to nearby enemies within 85u
   if (triggeredShatter && !isChainDamage) {
@@ -750,19 +756,11 @@ export function applyElementStatusToEnemyImpl(
 
   switch (element) {
     case 'burn': {
-      if (enemy.burnTimer <= 0) {
-        enemy.burnTickTimer = 0.5;
-      }
+      if (enemy.burnTimer <= 0) enemy.burnTickTimer = 0.5;
       enemy.burnTimer = 3.0;
       enemy.burnStacks = 1;
       if (!this.stressTestActive) {
-        this.events.push({
-          kind: 'status_applied',
-          targetId: enemy.id,
-          status: 'burn',
-          x: enemy.x,
-          y: enemy.y,
-        });
+        this.events.push({ kind: 'status_applied', targetId: enemy.id, status: 'burn', x: enemy.x, y: enemy.y });
       }
       break;
     }
@@ -774,9 +772,7 @@ export function applyElementStatusToEnemyImpl(
           enemy.chillStacks = 0;
           enemy.chillTimer = 0;
           if (enemy.isBoss) {
-            if ((enemy.bossFreezeDrTimer ?? 0) <= 0) {
-              enemy.bossFreezeCountWindow = 0;
-            }
+            if ((enemy.bossFreezeDrTimer ?? 0) <= 0) enemy.bossFreezeCountWindow = 0;
             enemy.bossFreezeDrTimer = 8.0;
             const count = enemy.bossFreezeCountWindow ?? 0;
             enemy.frozenTimer = count === 0 ? 0.6 : count === 1 ? 0.3 : 0.15;
@@ -787,22 +783,10 @@ export function applyElementStatusToEnemyImpl(
           enemy.vx = 0;
           enemy.vy = 0;
           if (!this.stressTestActive) {
-            this.events.push({
-              kind: 'status_applied',
-              targetId: enemy.id,
-              status: 'frozen',
-              x: enemy.x,
-              y: enemy.y,
-            });
+            this.events.push({ kind: 'status_applied', targetId: enemy.id, status: 'frozen', x: enemy.x, y: enemy.y });
           }
         } else if (!this.stressTestActive) {
-          this.events.push({
-            kind: 'status_applied',
-            targetId: enemy.id,
-            status: 'chill',
-            x: enemy.x,
-            y: enemy.y,
-          });
+          this.events.push({ kind: 'status_applied', targetId: enemy.id, status: 'chill', x: enemy.x, y: enemy.y });
         }
       }
       break;
@@ -810,53 +794,31 @@ export function applyElementStatusToEnemyImpl(
     case 'shock': {
       enemy.shockTimer = 0.6;
       if (!this.stressTestActive) {
-        this.events.push({
-          kind: 'status_applied',
-          targetId: enemy.id,
-          status: 'shock',
-          x: enemy.x,
-          y: enemy.y,
-        });
+        this.events.push({ kind: 'status_applied', targetId: enemy.id, status: 'shock', x: enemy.x, y: enemy.y });
       }
-      // Chain lightning to up to 2 nearby enemies within 115 units
       const maxChains = 2;
       const chainDmg = Math.max(2, Math.round(hitDamage * 0.5));
       let chained = 0;
       for (let i = 0; i < this.enemies.length && chained < maxChains; i++) {
         const other = this.enemies[i]!;
         if (other.id === enemy.id || other.hp <= 0 || other.aiState === 'spawning') continue;
-        const d = distance(enemy.x, enemy.y, other.x, other.y);
-        if (d <= 115) {
+        if (distance(enemy.x, enemy.y, other.x, other.y) <= 115) {
           chained += 1;
           other.shockTimer = 0.5;
           this.applyDotDamageToEnemy(other, chainDmg, 'shock');
           if (!this.stressTestActive) {
-            this.events.push({
-              kind: 'chain_lightning',
-              fromX: enemy.x,
-              fromY: enemy.y,
-              toX: other.x,
-              toY: other.y,
-            });
+            this.events.push({ kind: 'chain_lightning', fromX: enemy.x, fromY: enemy.y, toX: other.x, toY: other.y });
           }
         }
       }
       break;
     }
     case 'poison': {
-      if (enemy.poisonTimer <= 0) {
-        enemy.poisonTickTimer = 0.6;
-      }
+      if (enemy.poisonTimer <= 0) enemy.poisonTickTimer = 0.6;
       enemy.poisonStacks = Math.min(3, enemy.poisonStacks + 1);
       enemy.poisonTimer = 4.0;
       if (!this.stressTestActive) {
-        this.events.push({
-          kind: 'status_applied',
-          targetId: enemy.id,
-          status: 'poison',
-          x: enemy.x,
-          y: enemy.y,
-        });
+        this.events.push({ kind: 'status_applied', targetId: enemy.id, status: 'poison', x: enemy.x, y: enemy.y });
       }
       break;
     }

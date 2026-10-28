@@ -5,7 +5,7 @@ import { SpatialHashGrid } from '../math/spatial-hash.js';
 import type { PlayerInputPacket, QuickEmoteId } from '../protocol/messages.js';
 import { ArenaMap, type RoomArchetypeId, type SurfaceKind } from './arena-map.js';
 import { type DungeonFloorGraph, type DungeonRoomNode, generateDungeonFloor } from './dungeon-gen.js';
-import { PHASE1_SAMPLE_ENEMIES, hasPlayerBlessing, type PropKind, type SimPropState, type SimSummonState, type SimSkillZoneState, type SimPressurePlateState, type SimPushBlockState, type SimShockwaveRingState, type SimTetherBeamState, type SimMagneticRivetState, type SimFlameFissureState, type SimSolarFireZoneState, type SimMagmaTrailSegmentState, type SimLightningPillarState, type SimDoorState, type SimChestState, type SimWorldItemState, type SimNpcState, type SimHubStatue, type SimPingMarker, type RunSummaryStats, type MvpAwardEntry, type SimPlayerState, type SimEnemyState, type SimProjectileState, type SimPickupState, type BulletVolleySpawnEvent, type SimPendingMortarStrike, type SimEmpBlastVisualRing } from './world-sim-types.js';
+import { PHASE1_SAMPLE_ENEMIES, hasPlayerBlessing, type PropKind, type SimPropState, type SimSummonState, type SimSkillZoneState, type SimPressurePlateState, type SimPushBlockState, type SimShockwaveRingState, type SimTetherBeamState, type SimMagneticRivetState, type SimFlameFissureState, type SimSolarFireZoneState, type SimMagmaTrailSegmentState, type SimLightningPillarState, type SimDoorState, type SimChestState, type SimWorldItemState, type SimNpcState, type SimHubStatue, type SimPingMarker, type RunSummaryStats, type MvpAwardEntry, type SimPlayerState, type SimEnemyState, type SimProjectileState, type SimPickupState, type BulletVolleySpawnEvent, type SimPendingMortarStrike, type SimEmpBlastVisualRing, type SimPendingBossSupplyDrop } from './world-sim-types.js';
 import type { SimEvent, WorldSimOptions, CoPlayerInputEntry } from './world-sim-events.js';
 import { createPlayerStateImpl, getAllPlayersImpl, getActivePlayerCountImpl, setPlayerCountOverrideImpl, getPlayerByIdImpl, getPlayerBySlotImpl, addCoopPlayerImpl, removeCoopPlayerImpl, setCoopPlayerInputImpl, applyCharacterToPlayerStateImpl, selectCharacterImpl, togglePlayerReadyImpl, areAllPlayersReadyImpl, enterHubImpl, startDungeonRunFromHubImpl, triggerPingImpl, triggerEmoteImpl, spawnDroppedWeaponImpl, dropActiveWeaponImpl, updateCoopDownedAndReviveImpl } from './sim-coop-hub.js';
 import { spawnDefaultArenaPropsImpl, spawnPropImpl, cycleImbueElementImpl, setImbueElementImpl, configureStressTestImpl, topUpStressTestProjectilesImpl, setPlayerInputImpl, getActiveWeaponIdImpl, equipWeaponSlotImpl, cycleWeaponImpl, spawnTrainingDummyImpl, spawnEnemyImpl, spawnBossGuardianMushroomsImpl, hasActiveBossGuardiansImpl, spawnSampleWaveImpl, getCurrentRoomImpl, hasActiveCombatEnemiesImpl, getActiveBossImpl, rollChestRarityImpl, rollRandomWeaponByRaritiesImpl, spawnChestImpl, spawnWorldItemImpl, resolvePropMovementCollisionImpl, updatePropsImpl, damagePropImpl, detonateExplosiveBarrelImpl, applyElementAtWorldPointImpl } from './sim-props-spawning.js';
@@ -33,6 +33,7 @@ export * from './sim-weapon-specials.js';
 export * from './sim-weapon-mutators.js';
 export * from './sim-ashen-pacts.js';
 export * from './sim-secret-and-workshop.js';
+export * from './sim-boss-armor-break.js';
 
 export class WorldSim {
   public readonly rng: SeededRandom;
@@ -150,6 +151,7 @@ export class WorldSim {
   }[] = [];
   public pendingMortarStrikes: SimPendingMortarStrike[] = [];
   public empBlastVisualRings: SimEmpBlastVisualRing[] = [];
+  public pendingBossSupplyDrops: SimPendingBossSupplyDrop[] = [];
   public get PendingMortarStrikes(): SimPendingMortarStrike[] { return this.pendingMortarStrikes; }
   public set PendingMortarStrikes(v: SimPendingMortarStrike[]) { this.pendingMortarStrikes = v; }
   public get hazardZones(): SimPendingMortarStrike[] { return this.pendingMortarStrikes; }
@@ -556,7 +558,7 @@ export class WorldSim {
   public updateProjectiles(dtSec: number): void  { return updateProjectilesImpl.call(this, dtSec); }
   public stepClientProjectilesCosmetic(dtSec: number): void  { return stepClientProjectilesCosmeticImpl.call(this, dtSec); }
   public applyElementAtWorldPoint(x: number, y: number, element: ElementType, radius = 24): void  { return applyElementAtWorldPointImpl.call(this, x, y, element, radius); }
-  public applyDamageToEnemy(enemy: SimEnemyState, amount: number, isCrit: boolean, element: ElementType, hitAngleRad: number, knockback: number, isHeavyAttack = false, attackerPlayerId = this.player.id, isChainDamage = false): void  { return applyDamageToEnemyImpl.call(this, enemy, amount, isCrit, element, hitAngleRad, knockback, isHeavyAttack, attackerPlayerId, isChainDamage); }
+  public applyDamageToEnemy(enemy: SimEnemyState, amount: number, isCrit: boolean, element: ElementType, hitAngleRad: number, knockback: number, isHeavyAttack = false, attackerPlayerId = this.player.id, isChainDamage = false, procCoefficient = 1.0, isKickedPropHit = false): void  { return applyDamageToEnemyImpl.call(this, enemy, amount, isCrit, element, hitAngleRad, knockback, isHeavyAttack, attackerPlayerId, isChainDamage, procCoefficient, isKickedPropHit); }
   public triggerElementalReaction(enemy: SimEnemyState, reaction: ElementalReactionId, damage: number, primerPlayerId: number, triggerPlayerId: number): void  { return triggerElementalReactionImpl.call(this, enemy, reaction, damage, primerPlayerId, triggerPlayerId); }
   public handleEnemyKilled(enemy: SimEnemyState, killerPlayerId = this.player.id): void  { return handleEnemyKilledImpl.call(this, enemy, killerPlayerId); }
   public applyElementStatusToEnemy(enemy: SimEnemyState, element: ElementType, hitDamage: number, attackerPlayerId = this.player.id): void  { return applyElementStatusToEnemyImpl.call(this, enemy, element, hitDamage, attackerPlayerId); }

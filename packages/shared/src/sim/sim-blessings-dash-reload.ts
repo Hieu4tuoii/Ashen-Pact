@@ -214,6 +214,7 @@ export function onEnemyWallSlamDashBlessings(
   if (!hasPlayerBlessing(attacker, 'dash_tidal_ram')) return false;
   if ((attacker.dashTidalRamIcdTimer ?? 0) > 0) return false;
   const rammedByAttacker =
+    e.isBoss ||
     e.tidalRamByPlayerId === attacker.id ||
     Boolean(attacker.dashHitEnemyIds && attacker.dashHitEnemyIds.includes(e.id));
   if (!rammedByAttacker) return false;

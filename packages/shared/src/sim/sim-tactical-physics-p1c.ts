@@ -1,6 +1,7 @@
 import { distance } from '../math/vec2.js';
 import { SHOT_FLAG, TILE_SIZE } from '../protocol/messages.js';
 import { applyRicochetVowTacticalPropBonus } from './sim-ashen-pacts.js';
+import { addBossStaggerAccum } from './sim-boss-armor-break.js';
 import { shatterIceGolemArmor } from './sim-enemies-tactical-ai.js';
 import {
   computeHazardDamage,
@@ -367,13 +368,17 @@ export function applyForgeBlastShieldFireWave(
         SLIDING_PROP_ENEMY_KB_SPEED,
         true,
         ownerId,
+        false,
+        1.0,
+        true,
       );
       if (e.hp > 0) {
         e.burnTimer = Math.max(e.burnTimer, 3.0);
         sim.applyElementStatusToEnemy(e, 'burn', dmg, ownerId);
       }
-      e.kbVx = Math.cos(slideAngle) * SLIDING_PROP_ENEMY_KB_SPEED;
-      e.kbVy = Math.sin(slideAngle) * SLIDING_PROP_ENEMY_KB_SPEED;
+      const waveKb = e.isBoss ? SLIDING_PROP_ENEMY_KB_SPEED * 0.2 : SLIDING_PROP_ENEMY_KB_SPEED;
+      e.kbVx = Math.cos(slideAngle) * waveKb;
+      e.kbVy = Math.sin(slideAngle) * waveKb;
       e.stunTimer = Math.max(e.stunTimer ?? 0, SLIDING_PROP_ENEMY_STUN_SEC);
       if (!e.isBoss && e.hp > 0) {
         e.aiState = 'stunned';
@@ -469,6 +474,9 @@ export function spillSlagCrucibleLavaCarpet(
         knockbackY: 0,
       });
       if (e.hp > 0) {
+        if (e.isBoss && Boolean(crucible.kickedByPlayerId || spillAngle !== undefined)) {
+          addBossStaggerAccum(sim, e, 0, 1.0, true, carpetOwner);
+        }
         sim.applyElementStatusToEnemy(e, 'burn', dmg, ownerId);
       } else {
         sim.handleEnemyKilled(e, ownerId);

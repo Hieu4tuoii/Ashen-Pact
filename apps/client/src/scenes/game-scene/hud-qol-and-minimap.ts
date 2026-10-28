@@ -28,6 +28,7 @@ import {
   UI_THEME,
 } from '../../ui/theme.js';
 import type { GameScene } from '../GameScene.js';
+import { drawBossStaggerBarHud } from './hud-combat-and-coop.js';
 import {
   computeMusicIntensityBoost,
   computeWaveBannerSpec,
@@ -292,10 +293,12 @@ export function updateBossHudImpl(this: GameScene): void {
     : 0;
   const coreWin = Math.ceil(sim.titanCoreWindowTimer);
   const trailKey = Math.round(this.trailingBossHpRatio * 200);
+  const staggerKey = boss ? Math.round(boss.bossStaggerAccum ?? 0) : 0;
+  const staggerCdKey = boss && (boss.bossStaggerCooldownTimer ?? 0) > 0 ? 1 : 0;
   const bossHash =
     !boss || this.fullMapOpen || sim.runState !== 'playing'
       ? ''
-      : `${boss.defId}:${boss.id}:${boss.hp}:${boss.maxHp}:${boss.bossPhase}:${stunActive}:${transActive}:${enrageLvl}:${coreWin}:${trailKey}:${i18n.getLocale()}`;
+      : `${boss.defId}:${boss.id}:${boss.hp}:${boss.maxHp}:${boss.bossPhase}:${stunActive}:${transActive}:${enrageLvl}:${coreWin}:${trailKey}:${staggerKey}:${staggerCdKey}:${i18n.getLocale()}`;
   if (bossHash === this.lastBossHudHash) return;
   this.lastBossHudHash = bossHash;
 
@@ -342,7 +345,7 @@ export function updateBossHudImpl(this: GameScene): void {
 
   // Local coordinates inside hudTopCenterContainer (anchored at x = 480, y = -padY)
   const panelW = 348;
-  const panelH = 36;
+  const panelH = 42;
   const panelX = -panelW * 0.5;
   const panelY = 8;
 
@@ -367,14 +370,14 @@ export function updateBossHudImpl(this: GameScene): void {
     accentSide: 'top',
   });
 
-  drawVectorHudIcon(g, 'skull', panelX + 14, panelY + 18, 5.5, phaseAccent);
+  drawVectorHudIcon(g, 'skull', panelX + 14, panelY + 20, 5.5, phaseAccent);
   this.bossTitleText.setOrigin(0.5, 0.5);
   this.bossTitleText.setPosition(8, panelY + 11);
 
   const bx = panelX + 26;
-  const by = panelY + 21;
+  const by = panelY + 20;
   const bw = panelW - 36;
-  const bh = 9.5;
+  const bh = 9.0;
 
   const fillCol =
     boss.defId === 'kryssa_ice_queen'
@@ -412,6 +415,9 @@ export function updateBossHudImpl(this: GameScene): void {
     g.lineTo(mx, by + bh + 1);
     g.strokePath();
   }
+
+  // P3B.1 Orange-Gold Boss Stagger Bar right beneath the Boss HP bar
+  drawBossStaggerBarHud(g, boss, bx, by + bh + 3, bw);
 }
 
 export function updateTopCenterBannersAndQolImpl(this: GameScene, dtSec: number): void {

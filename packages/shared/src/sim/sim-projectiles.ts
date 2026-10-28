@@ -517,6 +517,9 @@ export function updateProjectilesImpl(this: WorldSim, dtSec: number): void {
               b.weaponId === 'frag_launcher' ||
               b.weaponId === 'magma_cannon',
             effectiveAttackerId,
+            false,
+            b.procCoefficient ?? 1.0,
+            false,
           );
 
           handlePlayerProjectileEnemyHitWeaponSpecials(this, b, enemy);

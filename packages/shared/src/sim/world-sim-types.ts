@@ -671,6 +671,8 @@ export interface SimEnemyState {
   lastHitPlayerId?: number;
   wallSlamCooldownTimer: number;
   bossStaggerAccum?: number;
+  bossStaggerCooldownTimer?: number;
+  supplyDropTimer?: number;
   tidalRamByPlayerId?: number;
   tidalRamTimer?: number;
   pinballReboundTimer?: number;
@@ -723,6 +725,16 @@ export interface SimEmpBlastVisualRing {
   radius: number;
   timer: number;
   maxTimer: number;
+}
+
+export interface SimPendingBossSupplyDrop {
+  id: number;
+  x: number;
+  y: number;
+  propKind: PropKind;
+  timer: number;
+  maxTimer: number;
+  radius: number;
 }
 
 export interface SimProjectileState {

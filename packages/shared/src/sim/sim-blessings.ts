@@ -193,7 +193,20 @@ export function detonateRocketChargedBarricade(
         distance(prop.x, prop.y, e.x, e.y) > 1e-4
           ? Math.atan2(e.y - prop.y, e.x - prop.x)
           : 0;
-      sim.applyDamageToEnemy(e, blastDmg, false, 'burn', hitAng, 220, true, ownerId);
+      const alreadySlideHit = Boolean(prop.hitEnemyIds?.includes(e.id));
+      sim.applyDamageToEnemy(
+        e,
+        blastDmg,
+        false,
+        'burn',
+        hitAng,
+        220,
+        true,
+        ownerId,
+        false,
+        alreadySlideHit ? 0 : 1.0,
+        !alreadySlideHit && Boolean(prop.kickedByPlayerId || prop.slideOwnerPlayerId),
+      );
       if (e.hp > 0) {
         e.burnTimer = Math.max(e.burnTimer, 3.0);
         sim.applyElementStatusToEnemy(e, 'burn', blastDmg, ownerId);
@@ -518,11 +531,13 @@ export function triggerBossStaggerBurst(
 ): boolean {
   if (!boss.isBoss || boss.hp <= 0) return false;
   boss.bossStaggerAccum = 0;
+  boss.bossStaggerCooldownTimer = 6.0;
   boss.stunTimer = Math.max(boss.stunTimer ?? 0, 0.5);
   boss.aiState = 'stunned';
   boss.stateTimer = Math.max(boss.stateTimer, 0.5);
   boss.vx = 0;
   boss.vy = 0;
+  boss.lastCombatText = 'WALL-SLAM!';
 
   const attacker = sim.getPlayerById(attackerPlayerId) ?? sim.player;
   const rawSlam = computeWallSlamDamage(boss, sim.currentFloor);

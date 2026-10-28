@@ -9,7 +9,6 @@ import {
 import {
   applyRicochetVowOrGeometryEyeWallSlamBonus,
   applyRicochetVowTacticalPropBonus,
-  tryTriggerExecutionerScytheSlash,
 } from './sim-ashen-pacts.js';
 import {
   applyFlipCoverTableTechBlessings,
@@ -18,24 +17,13 @@ import {
   onEnemyWallSlamHeavyPinball,
   onPlayerDashKickProp,
   TABLE_TECH_BILLIARD_SLAM_DMG_MULT,
-  triggerBossStaggerBurst,
-  triggerTableTechOnWallSlamOrStagger,
 } from './sim-blessings.js';
+import { onEnemyWallSlammed, triggerBossInPlaceWallSlam } from './sim-boss-armor-break.js';
 import {
   applyForgeBlastShieldFireWave,
   BIOME2_ICE_INERTIA_MULT,
-  BIOME3_HEAT_GAIN_MULT,
-  CRYO_PRISM_FAN_SPREAD_RAD,
-  FORGE_BLAST_SHIELD_WAVE_HALF_WIDTH,
-  GLACIAL_BARRICADE_SHATTER_RADIUS,
-  PNEUMATIC_PRESS_CRUSH_RADIUS,
-  PNEUMATIC_PRESS_SENSOR_RADIUS,
-  refractProjectileThroughCryoPrism,
   shatterGlacialBarricade,
-  SLAG_CRUCIBLE_CARPET_LENGTH,
   spillSlagCrucibleLavaCarpet,
-  triggerBiome2WallSlamCryoPulse,
-  triggerBiome3TacticalVentPulse,
   updateP1CTacticalProps,
 } from './sim-tactical-physics-p1c.js';
 import {
@@ -54,23 +42,7 @@ import {
 import type { WorldSim } from './world-sim.js';
 import type { PropKind, SimEnemyState, SimPlayerState, SimPropState } from './world-sim-types.js';
 
-export {
-  applyForgeBlastShieldFireWave,
-  BIOME2_ICE_INERTIA_MULT,
-  BIOME3_HEAT_GAIN_MULT,
-  CRYO_PRISM_FAN_SPREAD_RAD,
-  FORGE_BLAST_SHIELD_WAVE_HALF_WIDTH,
-  GLACIAL_BARRICADE_SHATTER_RADIUS,
-  PNEUMATIC_PRESS_CRUSH_RADIUS,
-  PNEUMATIC_PRESS_SENSOR_RADIUS,
-  refractProjectileThroughCryoPrism,
-  shatterGlacialBarricade,
-  SLAG_CRUCIBLE_CARPET_LENGTH,
-  spillSlagCrucibleLavaCarpet,
-  triggerBiome2WallSlamCryoPulse,
-  triggerBiome3TacticalVentPulse,
-  updateP1CTacticalProps,
-};
+export * from './sim-tactical-physics-p1c.js';
 
 export const FLIPPABLE_BARRICADE_KINDS: readonly PropKind[] = ['moss_table', 'glacial_barricade', 'forge_blast_shield'] as const;
 export const CIRCULAR_KICKABLE_TOY_KINDS: readonly PropKind[] = ['explosive_barrel', 'volatile_spore_pod', 'sliding_ice_block', 'slag_crucible', 'coal_bomb'] as const;
@@ -687,6 +659,9 @@ export function updateSlidingPropsImpl(this: WorldSim, dtSec: number): void {
           kbSpeed,
           true,
           ownerId,
+          false,
+          1.0,
+          true,
         );
         if (
           e.defId === 'ice_golem' &&
@@ -695,47 +670,38 @@ export function updateSlidingPropsImpl(this: WorldSim, dtSec: number): void {
         ) {
           shatterIceGolemArmor(this, e, ownerId);
         }
-        e.kbVx = Math.cos(slideAngle) * kbSpeed;
-        e.kbVy = Math.sin(slideAngle) * kbSpeed;
-        e.stunTimer = Math.max(e.stunTimer ?? 0, SLIDING_PROP_ENEMY_STUN_SEC);
+        const appliedKb = e.isBoss ? kbSpeed * 0.2 : kbSpeed;
+        e.kbVx = Math.cos(slideAngle) * appliedKb;
+        e.kbVy = Math.sin(slideAngle) * appliedKb;
+        e.stunTimer = Math.max(e.stunTimer ?? 0, e.isBoss ? 0.5 : SLIDING_PROP_ENEMY_STUN_SEC);
         if (!e.isBoss && e.hp > 0) {
           e.aiState = 'stunned';
           e.stateTimer = Math.max(e.stateTimer, SLIDING_PROP_ENEMY_STUN_SEC);
         }
         if (prop.rocketCharged) {
-          prop.x = e.x;
-          prop.y = e.y;
+          prop.x = e.x; prop.y = e.y;
           detonateRocketChargedBarricade(this, prop, ownerId);
-          detonatedOnEnemy = true;
-          break;
+          detonatedOnEnemy = true; break;
         }
         if (prop.kind === 'volatile_spore_pod') {
-          prop.x = e.x;
-          prop.y = e.y;
+          prop.x = e.x; prop.y = e.y;
           detonateVolatileSporePod(this, prop);
-          detonatedOnEnemy = true;
-          break;
+          detonatedOnEnemy = true; break;
         }
         if (prop.kind === 'glacial_barricade') {
-          prop.x = e.x;
-          prop.y = e.y;
+          prop.x = e.x; prop.y = e.y;
           shatterGlacialBarricade(this, prop, slideAngle, ownerId);
-          detonatedOnEnemy = true;
-          break;
+          detonatedOnEnemy = true; break;
         }
         if (prop.kind === 'slag_crucible') {
-          prop.x = e.x;
-          prop.y = e.y;
+          prop.x = e.x; prop.y = e.y;
           spillSlagCrucibleLavaCarpet(this, prop, slideAngle, ownerId);
-          detonatedOnEnemy = true;
-          break;
+          detonatedOnEnemy = true; break;
         }
         if (prop.kind === 'coal_bomb') {
-          prop.x = e.x;
-          prop.y = e.y;
+          prop.x = e.x; prop.y = e.y;
           detonateCoalBomb(this, prop);
-          detonatedOnEnemy = true;
-          break;
+          detonatedOnEnemy = true; break;
         }
       }
     }
@@ -802,7 +768,9 @@ export function triggerEnemyWallSlam(sim: WorldSim, e: SimEnemyState, hitProp?: 
   const slamDmg = applyRicochetVowOrGeometryEyeWallSlamBonus(attacker, billiardSlamDmg);
 
   if (e.isBoss) {
-    e.bossStaggerAccum = (e.bossStaggerAccum ?? 0) + (hasBilliardMaster ? 2 : 1);
+    if ((e.bossStaggerCooldownTimer ?? 0) <= 0) {
+      e.bossStaggerAccum = (e.bossStaggerAccum ?? 0) + (hasBilliardMaster ? 2 : 1);
+    }
   } else {
     e.stunTimer = Math.max(e.stunTimer ?? 0, WALL_SLAM_STUN_SEC);
     e.aiState = 'stunned'; e.stateTimer = Math.max(e.stateTimer, WALL_SLAM_STUN_SEC);
@@ -824,20 +792,12 @@ export function triggerEnemyWallSlam(sim: WorldSim, e: SimEnemyState, hitProp?: 
     });
   }
 
-  if (e.defId === 'ice_golem' && e.hp > 0) {
-    shatterIceGolemArmor(sim, e, attackerId);
-  }
+  if (e.defId === 'ice_golem' && e.hp > 0) shatterIceGolemArmor(sim, e, attackerId);
   sim.events.push({ kind: 'wall_slam', enemyId: e.id, x: e.x, y: e.y, damage: slamDmg, shattered });
   tryBreakCrackedWallNearImpact(sim, e.x, e.y, Math.max(64, e.radius + 48));
-  triggerBiome2WallSlamCryoPulse(sim, e, attackerId);
-  triggerTableTechOnWallSlamOrStagger(sim, attacker, e.x, e.y, shattered ? e.id : undefined, e.id);
-  tryTriggerExecutionerScytheSlash(sim, attacker, e.x, e.y);
-  if (e.isBoss && (e.bossStaggerAccum ?? 0) >= 100 && e.hp > 0) {
-    triggerBossStaggerBurst(sim, e, attackerId);
-  }
-  if (shattered && e.hp > 0) {
-    sim.triggerElementalReaction(e, 'shatter', Math.max(18, Math.round(slamDmg * 1.35)), e.lastElementOwnerId || attackerId, attackerId);
-  }
+  onEnemyWallSlammed(sim, e, attacker, shattered);
+  if (e.isBoss && (e.bossStaggerAccum ?? 0) >= 100 && e.hp > 0) triggerBossInPlaceWallSlam(sim, e, attacker);
+  if (shattered && e.hp > 0) sim.triggerElementalReaction(e, 'shatter', Math.max(18, Math.round(slamDmg * 1.35)), e.lastElementOwnerId || attackerId, attackerId);
   if (e.hp <= 0) sim.handleEnemyKilled(e, attackerId);
   if (hitProp && hitProp.destructible && hitProp.hp > 0) {
     if (hitProp.kind === 'rotten_totem_pillar') collapseRottenTotemPillar(sim, hitProp, slamImpactAngle, attackerId);
@@ -845,9 +805,7 @@ export function triggerEnemyWallSlam(sim: WorldSim, e: SimEnemyState, hitProp?: 
   }
   const preSlamVx = Math.cos(slamImpactAngle) * kbSpeed;
   const preSlamVy = Math.sin(slamImpactAngle) * kbSpeed;
-  if (!onEnemyWallSlamHeavyPinball(sim, attacker, e, preSlamVx, preSlamVy)) {
-    e.kbVx *= 0.25; e.kbVy *= 0.25;
-  }
+  if (!onEnemyWallSlamHeavyPinball(sim, attacker, e, preSlamVx, preSlamVy)) { e.kbVx *= 0.25; e.kbVy *= 0.25; }
   return true;
 }
 

@@ -452,7 +452,20 @@ export function detonateCoalBomb(sim: WorldSim, bomb: SimPropState): number {
     if (distance(bomb.x, bomb.y, e.x, e.y) <= COAL_BOMB_BLAST_RADIUS + e.radius) {
       const hpBefore = e.hp;
       const pushAng = Math.atan2(e.y - bomb.y, e.x - bomb.x);
-      sim.applyDamageToEnemy(e, COAL_BOMB_BLAST_DAMAGE, true, 'burn', pushAng, 240, true, ownerId);
+      const alreadySlideHit = Boolean(bomb.hitEnemyIds?.includes(e.id));
+      sim.applyDamageToEnemy(
+        e,
+        COAL_BOMB_BLAST_DAMAGE,
+        true,
+        'burn',
+        pushAng,
+        240,
+        true,
+        ownerId,
+        false,
+        alreadySlideHit ? 0 : 1.0,
+        !alreadySlideHit && Boolean(bomb.kickedByPlayerId || bomb.slideOwnerPlayerId),
+      );
       const dealt = hpBefore - e.hp;
       if (e.hp > 0 && dealt < COAL_BOMB_BLAST_DAMAGE) {
         const extra = COAL_BOMB_BLAST_DAMAGE - dealt;

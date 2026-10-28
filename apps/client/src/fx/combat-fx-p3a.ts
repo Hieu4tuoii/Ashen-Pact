@@ -326,4 +326,30 @@ export function drawP3APredictiveSightlinesAndOverlays(
       g.strokeCircle(ring.x, ring.y, curR);
     }
   }
+
+  // 9. P3B.1 Boss Supply Drop 0.6s golden target rings (`pendingBossSupplyDrops`)
+  if (sim.pendingBossSupplyDrops && sim.pendingBossSupplyDrops.length > 0) {
+    const amber = 0xf59e0b; // #F59E0B
+    const gold = 0xfbbf24; // #FBBF24
+    for (let dIdx = 0; dIdx < sim.pendingBossSupplyDrops.length; dIdx++) {
+      const drop = sim.pendingBossSupplyDrops[dIdx]!;
+      const maxT = drop.maxTimer || 0.6;
+      const progress = clamp(1 - drop.timer / maxT, 0, 1);
+      const r = drop.radius || 26;
+
+      g.fillStyle(amber, 0.14 + 0.2 * progress);
+      g.fillCircle(drop.x, drop.y, r);
+      g.lineStyle(2.4, gold, 0.9);
+      g.strokeCircle(drop.x, drop.y, r);
+
+      const innerR = Math.max(4, r * (1 - 0.72 * progress));
+      g.lineStyle(1.8, amber, 0.85);
+      g.strokeCircle(drop.x, drop.y, innerR);
+
+      // Vertical drop shadow indicator descending onto target center
+      const dropHeightOffset = (1 - progress) * 48;
+      g.fillStyle(gold, 0.92);
+      g.fillCircle(drop.x, drop.y - dropHeightOffset, 4.5);
+    }
+  }
 }

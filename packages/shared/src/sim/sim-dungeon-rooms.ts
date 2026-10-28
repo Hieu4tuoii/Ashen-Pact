@@ -148,6 +148,7 @@ export function enterRoomImpl(this: WorldSim, roomId: number, entryDir?: Cardina
   this.pendingVengefulRings.length = 0;
   this.pendingMortarStrikes.length = 0;
   this.empBlastVisualRings.length = 0;
+  this.pendingBossSupplyDrops.length = 0;
   this.doorTransitionCooldown = 0.55;
 
   for (const pl of this.getAllPlayers()) {

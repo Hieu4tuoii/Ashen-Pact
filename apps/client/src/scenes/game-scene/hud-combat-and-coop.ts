@@ -1,12 +1,15 @@
 import {
+  BOSS_STAGGER_MAX,
   CHARACTERS,
   clamp,
   type ElementType,
   i18n,
   PLAYER_SLOT_COLORS,
+  type SimEnemyState,
   WEAPON_RARITY_COLORS,
   WEAPONS,
 } from '@ashen-pact/shared';
+import type Phaser from 'phaser';
 import { hexToNum, PALETTE } from '../../art/palette.js';
 import { TextureBaker } from '../../art/texture-baker.js';
 import { isEffectiveDebugUiEnabled } from '../../core/debug-flag.js';
@@ -683,4 +686,49 @@ export function updateCoopTeammateHudImpl(this: GameScene): void {
 
     this.coopHudContainer.add([title, pingText, sub]);
   });
+}
+
+export const BOSS_STAGGER_BAR_COLOR = 0xf59e0b; // #F59E0B Amber-Orange
+export const BOSS_STAGGER_BAR_HIGHLIGHT = 0xfbbf24; // #FBBF24 Warm Gold
+
+/**
+ * Renders the P3B.1 Boss Stagger Bar (`bossStaggerAccum / 100`, #F59E0B / #FBBF24)
+ * right beneath the Boss HP bar in the top-center Boss HUD panel.
+ */
+export function drawBossStaggerBarHud(
+  g: Phaser.GameObjects.Graphics,
+  boss: SimEnemyState,
+  bx: number,
+  staggerY: number,
+  bw: number,
+): void {
+  const staggerH = 4.5;
+  const accum = clamp(boss.bossStaggerAccum ?? 0, 0, BOSS_STAGGER_MAX);
+  const ratio = clamp(accum / BOSS_STAGGER_MAX, 0, 1);
+  const onCooldown = (boss.bossStaggerCooldownTimer ?? 0) > 0;
+
+  // Track background & border
+  g.fillStyle(UI_THEME.inkDark, 0.92);
+  g.fillRect(bx, staggerY, bw, staggerH);
+  g.lineStyle(1, onCooldown ? 0x64748b : BOSS_STAGGER_BAR_COLOR, 0.78);
+  g.strokeRect(bx, staggerY, bw, staggerH);
+
+  // Orange-gold fill (#F59E0B base + #FBBF24 highlight strip)
+  if (ratio > 0) {
+    const fillW = Math.max(2, (bw - 2) * ratio);
+    g.fillStyle(onCooldown ? 0x94a3b8 : BOSS_STAGGER_BAR_COLOR, 0.95);
+    g.fillRect(bx + 1, staggerY + 1, fillW, staggerH - 2);
+    g.fillStyle(onCooldown ? 0xcbd5e1 : BOSS_STAGGER_BAR_HIGHLIGHT, 0.95);
+    g.fillRect(bx + 1, staggerY + 1, fillW, Math.max(1, (staggerH - 2) * 0.45));
+  }
+
+  // 25% / 50% / 75% stagger notch ticks
+  for (const notch of [0.25, 0.5, 0.75]) {
+    const nx = bx + bw * notch;
+    g.lineStyle(1, UI_THEME.inkDark, 0.85);
+    g.beginPath();
+    g.moveTo(nx, staggerY);
+    g.lineTo(nx, staggerY + staggerH);
+    g.strokePath();
+  }
 }

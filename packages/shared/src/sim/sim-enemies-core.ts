@@ -9,6 +9,10 @@ import {
   updateAshenExecutionerAI,
 } from './sim-ashen-pacts.js';
 import { updateEnemyHeavyPinballAndTimers } from './sim-blessings.js';
+import {
+  stepBossSupplyDropsAndStagger,
+  triggerBossPhaseSupplyDrop,
+} from './sim-boss-armor-break.js';
 import { resolveEnemyChasmRingOut, triggerEnemyWallSlam } from './sim-tactical-physics.js';
 import { stepPendingMortarStrikes } from './sim-enemies-tactical-ai.js';
 import { updateLegendaryWeaponHazards } from './sim-weapon-specials-p1b-legendary.js';
@@ -17,6 +21,7 @@ import type { SimPlayerState, SimEnemyState } from './world-sim-types.js';
 import type { WorldSim } from './world-sim.js';
 
 export * from './sim-enemies-tactical-ai.js';
+export * from './sim-boss-armor-break.js';
 
 const EMPTY_PLAYERS: readonly SimPlayerState[] = [];
 
@@ -322,6 +327,7 @@ export function updateEnemiesImpl(this: WorldSim, dtSec: number): void {
 
   syncAshenExecutionerInRoom(this);
   stepPendingMortarStrikes(this, dtSec);
+  stepBossSupplyDropsAndStagger(this, dtSec);
   let hasAliveProps = false;
   let hasAncientMechanism = false;
   if (!this.stressTestActive) {
@@ -855,7 +861,12 @@ export function applyDotDamageToEnemyImpl(
   }
 }
 
-function clearBossNearbyProjectiles(sim: WorldSim, bossX: number, bossY: number, radius = 140): void {
+export function clearBossNearbyProjectiles(
+  sim: WorldSim,
+  bossX: number,
+  bossY: number,
+  radius = 140,
+): void {
   const players = sim.getAllPlayers();
   const destroyedIds: number[] = [];
   let writeIdx = 0;
@@ -875,13 +886,8 @@ function clearBossNearbyProjectiles(sim: WorldSim, bossX: number, bossY: number,
   }
   sim.projectiles.length = writeIdx;
   if (destroyedIds.length > 0 && !sim.stressTestActive) {
-    sim.events.push({
-      kind: 'projectiles_destroyed',
-      ids: destroyedIds,
-    });
+    sim.events.push({ kind: 'projectiles_destroyed', ids: destroyedIds });
   }
-
-  // Reward all alive players with an instant cadence refill / heat vent on boss phase transition
   for (let pIdx = 0; pIdx < players.length; pIdx++) {
     const pl = players[pIdx]!;
     if (pl.lifeState !== 'alive') continue;
@@ -891,8 +897,6 @@ function clearBossNearbyProjectiles(sim: WorldSim, bossX: number, bossY: number,
     pl.weaponHeat = 0;
     pl.overheatLockTimer = 0;
   }
-
-  // Drop phase-break sustain orb (1 Life Seed) around Boss position with outward scatter velocity
   const baseAng = sim.rng.nextFloat(-Math.PI, Math.PI);
   sim.pickups.push(
     sim.acquirePickup({
@@ -923,26 +927,12 @@ export function checkBossPhaseTransitionsImpl(this: WorldSim, e: SimEnemyState):
     e.vy = 0;
     e.bossBurrowed = false;
     clearBossNearbyProjectiles(this, e.x, e.y, 140);
-    if (e.defId === 'kryssa_ice_queen') {
-      this.spawnKryssaMirrorClones(e);
-    } else if (e.defId === 'forge_titan') {
-      this.spawnForgeTitanEnergyCores(e);
-    }
-    if (this.getActivePlayerCount() >= 3 && e.defId !== 'spore_king') {
-      this.spawnBossGuardianMushrooms();
-    }
-    this.events.push({
-      kind: 'boss_phase_changed',
-      enemyId: e.id,
-      phase: 2,
-      x: e.x,
-      y: e.y,
-    });
-    this.events.push({
-      kind: 'hit_stop',
-      durationMs: 90,
-      trauma: 0.72,
-    });
+    triggerBossPhaseSupplyDrop(this, e);
+    if (e.defId === 'kryssa_ice_queen') this.spawnKryssaMirrorClones(e);
+    else if (e.defId === 'forge_titan') this.spawnForgeTitanEnergyCores(e);
+    if (this.getActivePlayerCount() >= 3 && e.defId !== 'spore_king') this.spawnBossGuardianMushrooms();
+    this.events.push({ kind: 'boss_phase_changed', enemyId: e.id, phase: 2, x: e.x, y: e.y });
+    this.events.push({ kind: 'hit_stop', durationMs: 90, trauma: 0.72 });
   }
 
   if (hpRatio <= 0.33 && e.bossPhase < 3) {
@@ -956,28 +946,17 @@ export function checkBossPhaseTransitionsImpl(this: WorldSim, e: SimEnemyState):
     e.vy = 0;
     e.bossBurrowed = false;
     clearBossNearbyProjectiles(this, e.x, e.y, 140);
+    triggerBossPhaseSupplyDrop(this, e);
     if (e.defId === 'kryssa_ice_queen') {
       this.blizzardVeilActive = true;
       this.map.applyBossPhase3BlizzardBorder();
-      if (this.getActivePlayerCount() >= 3) {
-        this.spawnBossGuardianMushrooms();
-      }
+      if (this.getActivePlayerCount() >= 3) this.spawnBossGuardianMushrooms();
     } else if (e.defId === 'forge_titan') {
       this.map.applyBossPhase3LavaBorder();
     } else {
       this.map.applyBossPhase3ToxicBorder();
     }
-    this.events.push({
-      kind: 'boss_phase_changed',
-      enemyId: e.id,
-      phase: 3,
-      x: e.x,
-      y: e.y,
-    });
-    this.events.push({
-      kind: 'hit_stop',
-      durationMs: 110,
-      trauma: 0.85,
-    });
+    this.events.push({ kind: 'boss_phase_changed', enemyId: e.id, phase: 3, x: e.x, y: e.y });
+    this.events.push({ kind: 'hit_stop', durationMs: 110, trauma: 0.85 });
   }
 }
