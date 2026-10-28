@@ -26,5 +26,6 @@ export * from './sim/sim-enemies-tactical-ai.js';
 export * from './sim/sim-weapon-cadence.js';
 export * from './sim/sim-weapon-specials.js';
 export * from './sim/sim-boss-armor-break.js';
+export * from './sim/sim-bot-tactical-helpers.js';
 export * from './sim/world-sim.js';
 export * from './i18n/index.js';

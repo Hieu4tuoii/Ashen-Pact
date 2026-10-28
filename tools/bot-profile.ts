@@ -1,10 +1,16 @@
 import {
+  type BotTacticalCadenceState,
   INPUT_BUTTON,
   type PlayerInputPacket,
   type SimEnemyState,
   type SimPlayerState,
   WEAPONS,
   type WorldSim,
+  computeBossArmorBreakInput,
+  computeTacticalCoverKickInput,
+  createBotTacticalCadenceState,
+  stepBotOutOfCombatRoomActions,
+  stepBotReloadVentCadence,
 } from '../packages/shared/src/index.js';
 
 export interface AveragePlayerBotProfile {
@@ -15,6 +21,12 @@ export interface AveragePlayerBotProfile {
   readonly reactionDelaySec: 0.25;
   /** Probability in [0.60, 0.70] of executing a Dash dodge against a detected threat */
   readonly dashDodgeProbability: 0.65;
+  /** Probability (50%) of hitting the golden reload / orange vent window on each reload/vent cycle */
+  readonly perfectReloadSuccessRate: 0.5;
+  /** Probability (40%) of flipping [E] and Dash-Kicking nearby cover/toys when under fire */
+  readonly tacticalCoverKickProbability: 0.4;
+  /** Target time window in seconds [3.0, 6.0] to break Boss armor shell using cover/biome toys */
+  readonly bossArmorBreakWindowSec: readonly [3.0, 6.0];
   /** Strictly false — no invulnerability cheats */
   readonly godMode: false;
   /** 30 deterministic run seeds for median (p50) and p10/p90 reporting */
@@ -27,6 +39,8 @@ const LOCKED_30_SEEDS: readonly number[] = Object.freeze([
   2121, 2222, 2323, 2424, 2525, 2626, 2727, 2828, 2929, 3030,
 ]);
 
+const LOCKED_BOSS_ARMOR_BREAK_WINDOW_SEC: readonly [3.0, 6.0] = Object.freeze([3.0, 6.0] as const);
+
 /**
  * Locked "Average Player" Bot Profile (Spec Section 3.10 Step 1).
  * Committed and frozen BEFORE Step 2 balance tuning so gameplay numbers must adapt to the bot,
@@ -37,6 +51,9 @@ export const AVERAGE_PLAYER_BOT_PROFILE: AveragePlayerBotProfile = Object.freeze
   aimAccuracy: 0.7,
   reactionDelaySec: 0.25,
   dashDodgeProbability: 0.65,
+  perfectReloadSuccessRate: 0.5,
+  tacticalCoverKickProbability: 0.4,
+  bossArmorBreakWindowSec: LOCKED_BOSS_ARMOR_BREAK_WINDOW_SEC,
   godMode: false,
   seeds: LOCKED_30_SEEDS,
 });
@@ -80,7 +97,7 @@ export function computeDistributionStats(values: readonly number[]): Distributio
   };
 }
 
-export interface BotBrainState {
+export interface BotBrainState extends BotTacticalCadenceState {
   playerId: number;
   rngState: number;
   activeThreatKey: number;
@@ -106,6 +123,7 @@ export function createBotBrainState(playerId: number, seed: number): BotBrainSta
     currentAimErrorRad: 0,
     orbitSign: playerId % 2 === 0 ? -1 : 1,
     strafeSwapTimer: 1.8,
+    ...createBotTacticalCadenceState(),
   };
 }
 
@@ -579,14 +597,59 @@ export function stepHonestPlayerBot(
   }
 
   let buttons = target ? INPUT_BUTTON.FIRE : 0;
+  let finalAimAngle = aimAngle;
 
-  // Trigger Perfect Reload [R] when reload progress enters the [0.45, 0.70] sweet spot
-  if (player.reloadTimer > 0 && player.reloadDuration > 0 && !player.reloadLockout) {
-    const progress = 1 - player.reloadTimer / player.reloadDuration;
-    if (progress >= 0.48 && progress <= 0.68) {
-      buttons |= INPUT_BUTTON.RELOAD_VENT;
+  // Out of combat: handle chests, ground weapons, weapon salvage [X], anvils, shrine, and merchant
+  if (!target && nearbyBulletCount === 0 && detectedThreatKey === 0 && !sim.inHub) {
+    let outOfCombatInput: PlayerInputPacket | null = null;
+    const handled = stepBotOutOfCombatRoomActions(
+      sim,
+      player,
+      (tx, ty) => {
+        const dx = tx - player.x;
+        const dy = ty - player.y;
+        const d = Math.hypot(dx, dy) || 1;
+        outOfCombatInput = {
+          seq,
+          tick: sim.tick + 1,
+          moveX: dx / d,
+          moveY: dy / d,
+          aimAngle: Math.atan2(dy, dx),
+          buttons: 0,
+          weaponSlotSelect,
+        };
+      },
+      (override) => {
+        outOfCombatInput = {
+          seq,
+          tick: sim.tick + 1,
+          moveX: override.moveX,
+          moveY: override.moveY,
+          aimAngle: override.aimAngle,
+          buttons: override.buttons,
+          weaponSlotSelect,
+        };
+      },
+    );
+    if (handled) {
+      return (
+        outOfCombatInput ?? {
+          seq,
+          tick: sim.tick + 1,
+          moveX: 0,
+          moveY: 0,
+          aimAngle: player.aimAngle,
+          buttons: 0,
+          weaponSlotSelect,
+        }
+      );
     }
   }
+
+  // Trigger Perfect Reload / Tactical Vent [R] with profile.perfectReloadSuccessRate (50%) rolled once per cycle
+  buttons |= stepBotReloadVentCadence(player, brain, profile.perfectReloadSuccessRate, () =>
+    nextBrainFloat(brain),
+  );
 
   // Use active skill tactically when off cooldown
   if (
@@ -601,17 +664,50 @@ export function stepHonestPlayerBot(
     buttons |= INPUT_BUTTON.SKILL;
   }
 
-  // Execute Dash dodge only after reactionDelaySec, when threat is imminent, and if the deterministic 65% roll succeeded
-  if (
-    player.dashCooldownTimer <= 0 &&
-    ((reactionReady &&
-      imminentDashThreat &&
-      brain.threatDodgeApproved &&
-      !brain.threatDashConsumed) ||
-      (player.encasedInIceTimer ?? 0) > 0)
-  ) {
-    buttons |= INPUT_BUTTON.DASH;
-    brain.threatDashConsumed = true;
+  // Boss Armor Break priority: when Boss has active armor shell, steer to barricade / biome toy and Dash-Kick within [3.0, 6.0]s
+  const bossArmorBreakAction = computeBossArmorBreakInput(
+    sim,
+    player,
+    activeBoss,
+    dtSec,
+    brain,
+    profile.reactionDelaySec,
+    profile.bossArmorBreakWindowSec,
+  );
+  if (bossArmorBreakAction) {
+    moveX = bossArmorBreakAction.moveX;
+    moveY = bossArmorBreakAction.moveY;
+    finalAimAngle = bossArmorBreakAction.aimAngle;
+    buttons = (buttons & ~INPUT_BUTTON.SKILL) | bossArmorBreakAction.buttons;
+  } else {
+    // Tactical Cover Flip [E] & Dash-Kick (40% probability when under fire near cover/toys)
+    const coverKickAction = computeTacticalCoverKickInput(
+      sim,
+      player,
+      target,
+      nearbyBulletCount,
+      detectedThreatKey,
+      brain,
+      profile.tacticalCoverKickProbability,
+      () => nextBrainFloat(brain),
+    );
+    if (coverKickAction) {
+      moveX = coverKickAction.moveX;
+      moveY = coverKickAction.moveY;
+      finalAimAngle = coverKickAction.aimAngle;
+      buttons = (buttons & ~INPUT_BUTTON.SKILL) | coverKickAction.buttons;
+    } else if (
+      player.dashCooldownTimer <= 0 &&
+      ((reactionReady &&
+        imminentDashThreat &&
+        brain.threatDodgeApproved &&
+        !brain.threatDashConsumed) ||
+        (player.encasedInIceTimer ?? 0) > 0)
+    ) {
+      // Execute Dash dodge only after reactionDelaySec, when threat is imminent, and if the deterministic 65% roll succeeded
+      buttons |= INPUT_BUTTON.DASH;
+      brain.threatDashConsumed = true;
+    }
   }
 
   return {
@@ -619,7 +715,7 @@ export function stepHonestPlayerBot(
     tick: sim.tick + 1,
     moveX,
     moveY,
-    aimAngle,
+    aimAngle: finalAimAngle,
     buttons,
     weaponSlotSelect,
   };

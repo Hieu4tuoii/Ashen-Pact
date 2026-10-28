@@ -1,6 +1,6 @@
 import { FLOOR_BUFFS, FLOOR_BUFF_LIST } from '../data/enemies.js';
-import type { BuffId, CardinalDir } from '../data/types.js';
-import { MAX_WEAPON_SLOTS, WEAPONS, estimateWeaponDps } from '../data/weapons.js';
+import type { BuffId, CardinalDir, WeaponMutatorId } from '../data/types.js';
+import { WEAPONS } from '../data/weapons.js';
 import { approach, distance } from '../math/vec2.js';
 import { INPUT_BUTTON } from '../protocol/messages.js';
 import { generateDungeonFloor } from './dungeon-gen.js';
@@ -10,10 +10,49 @@ import {
   activateAshenPactAltarImpl,
   tryKeepVolatileMorphedWeaponOnInteract,
 } from './sim-ashen-pacts.js';
+import {
+  type BotTacticalCadenceState,
+  computeBossArmorBreakInput,
+  computeTacticalCoverKickInput,
+  createBotTacticalCadenceState,
+  stepBotOutOfCombatRoomActions,
+  stepBotReloadVentCadence,
+} from './sim-bot-tactical-helpers.js';
 import { flipCoverProp } from './sim-tactical-physics.js';
 import { activateDaedalusAnvilImpl, activateUpgradeAnvilImpl } from './sim-weapon-mutators.js';
 import { lerpSpeed, type SimSummonState, type SimDoorState, type SimNpcState, type SimPlayerState, type SimEnemyState, type SimPickupState } from './world-sim-types.js';
 import type { WorldSim } from './world-sim.js';
+
+const autoBotTacticalMap = new WeakMap<
+  SimPlayerState,
+  { state: BotTacticalCadenceState; rng: number }
+>();
+
+function getAutoBotTacticalEntry(
+  p: SimPlayerState,
+  baseSeed: string | number,
+): { state: BotTacticalCadenceState; nextFloat: () => number } {
+  let entry = autoBotTacticalMap.get(p);
+  if (!entry) {
+    const seedNum = typeof baseSeed === 'number' ? baseSeed : 1337;
+    const initRng = ((seedNum ^ Math.imul(p.id + 1, 0x9e3779b9)) >>> 0) || 0x2468ace1;
+    entry = { state: createBotTacticalCadenceState(), rng: initRng };
+    autoBotTacticalMap.set(p, entry);
+  }
+  const ref = entry;
+  return {
+    state: ref.state,
+    nextFloat: () => {
+      let x = ref.rng >>> 0;
+      if (x === 0) x = 0x6d2b79f5;
+      x ^= x << 13;
+      x ^= x >>> 17;
+      x ^= x << 5;
+      ref.rng = x >>> 0;
+      return (ref.rng >>> 0) / 0x100000000;
+    },
+  };
+}
 
 export function activateShrineImpl(this: WorldSim, shrine: SimNpcState, actor: SimPlayerState = this.player): boolean {
   return activateAshenPactAltarImpl(this, shrine, actor);
@@ -370,16 +409,13 @@ export function updateCurrentRoomProgressionImpl(this: WorldSim, dtSec: number):
   }
 }
 
-export function stepBotAutoPlayImpl(this: WorldSim, _dtSec: number): void {
+export function stepBotAutoPlayImpl(this: WorldSim, dtSec: number): void {
   const p = this.player;
-  p.godMode = true;
-  if (p.hp <= 0 || p.lifeState !== 'alive') {
+  if (this.autoRevivePlayer && (p.hp <= 0 || p.lifeState !== 'alive')) {
     p.hp = p.maxHp;
     p.armor = p.maxArmor;
     p.lifeState = 'alive';
   }
-  p.clipAmmo = p.clipMax;
-  p.weaponHeat = 0;
 
   if (this.inHub) {
     for (const ally of this.getAllPlayers()) {
@@ -401,27 +437,38 @@ export function stepBotAutoPlayImpl(this: WorldSim, _dtSec: number): void {
     return;
   }
   for (const pl of this.getAllPlayers()) {
+    const mutChoices =
+      pl.mutatorChoices ??
+      (pl as SimPlayerState & { pendingMutatorChoices?: WeaponMutatorId[] }).pendingMutatorChoices;
+    if (mutChoices && mutChoices.length > 0) {
+      this.selectWeaponMutator(mutChoices[0]!, pl.id);
+    }
     if (pl.pactChoices && pl.pactChoices.length > 0) {
       const choice = pl.hp <= 2 ? 'decline' : pl.pactChoices[0]!;
       this.selectAshenPact(choice, pl.id);
     }
   }
 
-  // Equip best ranged weapon in slots
-  let bestSlot = p.activeWeaponSlot;
-  let bestScore = -1;
-  for (let s = 0; s < p.weaponSlots.length; s++) {
-    const wid = p.weaponSlots[s]!;
-    const w = WEAPONS[wid];
-    if (!w || w.category === 'melee') continue;
-    const score = w.damage * w.fireRate * Math.max(1, w.pelletCount);
-    if (score > bestScore) {
-      bestScore = score;
-      bestSlot = s;
+  // Equip best ranged weapon in slots (or swap when active weapon is locked out by reload/overheat)
+  if ((p.reloadLockout || p.overheatLockTimer > 0) && p.weaponSlots.length > 1) {
+    const altSlot = p.activeWeaponSlot === 0 ? 1 : 0;
+    this.equipWeaponSlot(altSlot);
+  } else {
+    let bestSlot = p.activeWeaponSlot;
+    let bestScore = -1;
+    for (let s = 0; s < p.weaponSlots.length; s++) {
+      const wid = p.weaponSlots[s]!;
+      const w = WEAPONS[wid];
+      if (!w || w.category === 'melee') continue;
+      const score = w.damage * w.fireRate * Math.max(1, w.pelletCount);
+      if (score > bestScore) {
+        bestScore = score;
+        bestSlot = s;
+      }
     }
-  }
-  if (bestSlot !== p.activeWeaponSlot) {
-    this.equipWeaponSlot(bestSlot);
+    if (bestSlot !== p.activeWeaponSlot && !p.reloadLockout && p.overheatLockTimer <= 0) {
+      this.equipWeaponSlot(bestSlot);
+    }
   }
 
   // 1. Fight active non-dummy enemies
@@ -437,12 +484,16 @@ export function stepBotAutoPlayImpl(this: WorldSim, _dtSec: number): void {
     }
   }
 
+  const botTactical = getAutoBotTacticalEntry(p, this.baseSeed);
+
   if (nearestEnemy) {
+    const activeBoss = this.getActiveBoss();
     const angleToEnemy = Math.atan2(nearestEnemy.y - p.y, nearestEnemy.x - p.x);
     const orbitDir = Math.sin(this.tick * 0.025) >= 0 ? 1 : -1;
     const strafeAng = angleToEnemy + orbitDir * Math.PI * 0.5;
     let moveX = 0;
     let moveY = 0;
+    let aimAngle = angleToEnemy;
 
     // Steer toward nearby life_seed / prey_emblem / gold pickup when safe
     const nearbyPickup = this.pickups.find(
@@ -487,6 +538,8 @@ export function stepBotAutoPlayImpl(this: WorldSim, _dtSec: number): void {
     }
 
     // Weave tangentially between incoming enemy radial projectiles
+    let nearbyBulletCount = 0;
+    let detectedThreatKey = 0;
     for (let i = 0; i < this.projectiles.length; i++) {
       const b = this.projectiles[i]!;
       if (b.team !== 'enemy' || b.ttlSec <= 0) continue;
@@ -494,6 +547,8 @@ export function stepBotAutoPlayImpl(this: WorldSim, _dtSec: number): void {
       const ry = p.y - b.y;
       const d = Math.hypot(rx, ry);
       if (d < 160 && rx * b.vx + ry * b.vy > 0) {
+        nearbyBulletCount += 1;
+        if (detectedThreatKey === 0) detectedThreatKey = (b.ownerId || 1) * 31 + 3;
         const spd = Math.hypot(b.vx, b.vy) || 1;
         const nx = -b.vy / spd;
         const ny = b.vx / spd;
@@ -508,11 +563,45 @@ export function stepBotAutoPlayImpl(this: WorldSim, _dtSec: number): void {
     }
 
     let buttons = INPUT_BUTTON.FIRE;
+    buttons |= stepBotReloadVentCadence(p, botTactical.state, 0.5, botTactical.nextFloat);
+
     if (p.skillCooldownTimer <= 0 && p.skillActiveTimer <= 0) {
       buttons |= INPUT_BUTTON.SKILL;
     }
-    if (p.dashCooldownTimer <= 0 && nearestDist < 105) {
-      buttons |= INPUT_BUTTON.DASH;
+
+    const bossBreakAction = computeBossArmorBreakInput(
+      this,
+      p,
+      activeBoss,
+      dtSec,
+      botTactical.state,
+      0.25,
+      [3.0, 6.0],
+    );
+    if (bossBreakAction) {
+      moveX = bossBreakAction.moveX;
+      moveY = bossBreakAction.moveY;
+      aimAngle = bossBreakAction.aimAngle;
+      buttons = (buttons & ~INPUT_BUTTON.SKILL) | bossBreakAction.buttons;
+    } else {
+      const coverKickAction = computeTacticalCoverKickInput(
+        this,
+        p,
+        nearestEnemy,
+        nearbyBulletCount,
+        detectedThreatKey,
+        botTactical.state,
+        0.4,
+        botTactical.nextFloat,
+      );
+      if (coverKickAction) {
+        moveX = coverKickAction.moveX;
+        moveY = coverKickAction.moveY;
+        aimAngle = coverKickAction.aimAngle;
+        buttons = (buttons & ~INPUT_BUTTON.SKILL) | coverKickAction.buttons;
+      } else if (p.dashCooldownTimer <= 0 && nearestDist < 105) {
+        buttons |= INPUT_BUTTON.DASH;
+      }
     }
 
     this.setPlayerInput({
@@ -520,7 +609,7 @@ export function stepBotAutoPlayImpl(this: WorldSim, _dtSec: number): void {
       tick: this.tick,
       moveX,
       moveY,
-      aimAngle: angleToEnemy,
+      aimAngle,
       buttons,
       weaponSlotSelect: null,
     });
@@ -528,9 +617,13 @@ export function stepBotAutoPlayImpl(this: WorldSim, _dtSec: number): void {
     // Also drive co-op teammates in botAutoPlay mode so all 4 players fight together!
     for (let i = 0; i < this.simulatedPlayers.length; i++) {
       const sp = this.simulatedPlayers[i]!;
-      sp.godMode = true;
-      sp.clipAmmo = sp.clipMax;
-      sp.weaponHeat = 0;
+      if (this.autoRevivePlayer && (sp.hp <= 0 || sp.lifeState !== 'alive')) {
+        sp.hp = sp.maxHp;
+        sp.armor = sp.maxArmor;
+        sp.lifeState = 'alive';
+      }
+      const spTactical = getAutoBotTacticalEntry(sp, this.baseSeed);
+      const spReloadBtn = stepBotReloadVentCadence(sp, spTactical.state, 0.5, spTactical.nextFloat);
       const spAng = Math.atan2(nearestEnemy.y - sp.y, nearestEnemy.x - sp.x);
       const spDist = distance(sp.x, sp.y, nearestEnemy.x, nearestEnemy.y);
       const spStrafe = spAng + (i % 2 === 0 ? 1 : -1) * Math.PI * 0.5;
@@ -542,7 +635,10 @@ export function stepBotAutoPlayImpl(this: WorldSim, _dtSec: number): void {
         moveX: spMoveX,
         moveY: spMoveY,
         aimAngle: spAng,
-        buttons: INPUT_BUTTON.FIRE | (sp.skillCooldownTimer <= 0 ? INPUT_BUTTON.SKILL : 0),
+        buttons:
+          INPUT_BUTTON.FIRE |
+          spReloadBtn |
+          (sp.skillCooldownTimer <= 0 ? INPUT_BUTTON.SKILL : 0),
         weaponSlotSelect: null,
       });
     }
@@ -586,84 +682,8 @@ export function stepBotAutoPlayImpl(this: WorldSim, _dtSec: number): void {
     });
   };
 
-  // 2. Open unopened chests in current room
-  const unopenedChest = this.chests.find((c) => !c.opened);
-  if (unopenedChest) {
-    const d = distance(p.x, p.y, unopenedChest.x, unopenedChest.y);
-    if (d <= 56) {
-      this.openChest(unopenedChest);
-    } else {
-      steerBotToPoint(unopenedChest.x, unopenedChest.y);
-    }
-    return;
-  }
-
-  // 3. Pick up free weapons on the ground (belonging to P1 or shared)
-  const freeItem = this.worldItems.find((it) => {
-    if (
-      it.pickedUp ||
-      it.costGold !== 0 ||
-      (it.ownerPlayerId !== undefined && it.ownerPlayerId !== 0 && it.ownerPlayerId !== p.id)
-    ) {
-      return false;
-    }
-    if (it.kind !== 'weapon' || !it.weaponId || p.weaponSlots.includes(it.weaponId)) {
-      return false;
-    }
-    if (
-      it.droppedByPlayerId === p.id &&
-      it.droppedAtTick !== undefined &&
-      this.tick - it.droppedAtTick < 600
-    ) {
-      return false;
-    }
-    if (p.weaponSlots.length >= MAX_WEAPON_SLOTS) {
-      const wDef = WEAPONS[it.weaponId];
-      if (!wDef) return false;
-      const candDps = estimateWeaponDps(it.weaponId);
-      if (wDef.category === 'melee') {
-        const slot0Def = WEAPONS[p.weaponSlots[0] ?? ''];
-        return slot0Def?.category === 'melee' && candDps > estimateWeaponDps(p.weaponSlots[0]!);
-      }
-      const rangedSlotIdx = p.weaponSlots.length > 1 ? 1 : 0;
-      return candDps > estimateWeaponDps(p.weaponSlots[rangedSlotIdx]!);
-    }
-    return true;
-  });
-  if (freeItem) {
-    const d = distance(p.x, p.y, freeItem.x, freeItem.y);
-    if (d <= 56) {
-      if (p.weaponSlots.length >= MAX_WEAPON_SLOTS && freeItem.weaponId) {
-        const wDef = WEAPONS[freeItem.weaponId];
-        const targetSlot = wDef?.category === 'melee' ? 0 : Math.min(1, p.weaponSlots.length - 1);
-        this.equipWeaponSlot(targetSlot);
-      }
-      this.pickupOrBuyWorldItem(freeItem, p);
-    } else {
-      steerBotToPoint(freeItem.x, freeItem.y);
-    }
-    return;
-  }
-
-  // 4. Activate Shrine if present
-  const unusedShrine = this.npcEntities.find(
-    (n) =>
-      n.kind === 'shrine' &&
-      !n.interacted &&
-      !n.usedByPlayerIds?.includes(p.id) &&
-      p.activePactId === null,
-  );
-  if (unusedShrine) {
-    const d = distance(p.x, p.y, unusedShrine.x, unusedShrine.y);
-    if (d <= 58) {
-      this.activateShrine(unusedShrine, p);
-      if (p.pactChoices && p.pactChoices.length > 0) {
-        const choice = p.hp <= 2 ? 'decline' : p.pactChoices[0]!;
-        this.selectAshenPact(choice, p.id);
-      }
-    } else {
-      steerBotToPoint(unusedShrine.x, unusedShrine.y);
-    }
+  // 2–4. Out-of-combat room actions (chests, free weapons, weapon salvage [X], anvils, shrine, merchant)
+  if (stepBotOutOfCombatRoomActions(this, p, steerBotToPoint)) {
     return;
   }
 

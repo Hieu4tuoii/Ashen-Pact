@@ -34,6 +34,7 @@ export * from './sim-weapon-mutators.js';
 export * from './sim-ashen-pacts.js';
 export * from './sim-secret-and-workshop.js';
 export * from './sim-boss-armor-break.js';
+export * from './sim-bot-tactical-helpers.js';
 
 export class WorldSim {
   public readonly rng: SeededRandom;
