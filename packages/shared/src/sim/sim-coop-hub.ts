@@ -495,6 +495,8 @@ export function enterHubImpl(this: WorldSim): void {
   this.doors.length = 0;
   this.hubStatues.length = 0;
   this.flameFissures.length = 0;
+  this.pendingMortarStrikes.length = 0;
+  this.empBlastVisualRings.length = 0;
 
   this.map.configureRoomLayout('start', Number(this.baseSeed), false);
   this.map.clearInteriorForHub();

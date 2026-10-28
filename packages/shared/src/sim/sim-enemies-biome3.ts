@@ -3,6 +3,7 @@ import { angleDiff, circleVsCircle, clamp, distance } from '../math/vec2.js';
 import { COOP_SCALING } from '../data/scaling.js';
 import { TILE_SIZE } from '../protocol/messages.js';
 import {
+  fireDwarfCannonLobbedMortar,
   resolveEnemyAimTarget,
   stepEnemyTelegraphSightline,
   updateEnemyPredictiveSightline,
@@ -96,36 +97,37 @@ export function updateDwarfCannonAIImpl(
 ): void {
   const cdMult =
     (e.isElite && e.eliteModifier === 'fast' ? 0.72 : 1.0) * this.getEnemyCooldownScale(false);
+  const aimTarget = resolveEnemyAimTarget(this, e);
   if (e.aiState === 'telegraph') {
-    e.vx = 0;
-    e.vy = 0;
-    e.aimAngle = e.telegraphAngle;
-    e.stateTimer -= dtSec;
-    if (e.stateTimer <= 0) {
-      if (!this.stressTestActive || this.projectiles.length < 660) {
-        this.spawnDeterministicVolley({
-          kind: 'bullet_volley_spawned',
-          tick: this.tick,
-          ownerId: e.id,
-          team: 'enemy',
-          weaponId: 'dwarf_mortar',
-          x: e.x + Math.cos(e.telegraphAngle) * 18,
-          y: e.y + Math.sin(e.telegraphAngle) * 18,
-          angle: e.telegraphAngle,
-          pelletCount: 1,
-          spreadRad: 0.08,
-          speed: 255,
-          damage: e.damage,
-          radius: 7.5,
-          knockback: 150,
-          pierceCount: 0,
-          bounceCount: 0,
-          ttlSec: 1.5,
-          element: 'burn',
-          critChance: 0,
-          amplifiedByShield: false,
-          seed: this.rng.nextUint32(),
-        });
+    if (stepEnemyTelegraphSightline(this, e, aimTarget, 255, dtSec)) {
+      if (this.stressTestActive) {
+        if (this.projectiles.length < 660) {
+          this.spawnDeterministicVolley({
+            kind: 'bullet_volley_spawned',
+            tick: this.tick,
+            ownerId: e.id,
+            team: 'enemy',
+            weaponId: 'dwarf_mortar',
+            x: e.x + Math.cos(e.telegraphAngle) * 18,
+            y: e.y + Math.sin(e.telegraphAngle) * 18,
+            angle: e.telegraphAngle,
+            pelletCount: 1,
+            spreadRad: 0.08,
+            speed: 255,
+            damage: e.damage,
+            radius: 7.5,
+            knockback: 150,
+            pierceCount: 0,
+            bounceCount: 0,
+            ttlSec: 1.5,
+            element: 'burn',
+            critChance: 0,
+            amplifiedByShield: false,
+            seed: this.rng.nextUint32(),
+          });
+        }
+      } else {
+        fireDwarfCannonLobbedMortar(this, e, aimTarget);
       }
       e.aiState = 'cooldown';
       e.stateTimer = 0.5;
@@ -146,8 +148,9 @@ export function updateDwarfCannonAIImpl(
   if (e.attackCooldownTimer <= 0 && distToPlayer <= 400) {
     e.aiState = 'telegraph';
     e.stateTimer = e.telegraphDurationSec;
-    e.telegraphAngle = angleToPlayer;
-    e.telegraphRadius = 48;
+    e.leadSightlineActive = false;
+    e.telegraphAngle = updateEnemyPredictiveSightline(this, e, aimTarget, 255);
+    e.telegraphRadius = 56;
     e.vx = 0;
     e.vy = 0;
     if (!this.stressTestActive) {
@@ -159,7 +162,7 @@ export function updateDwarfCannonAIImpl(
         y: e.y,
         angle: e.telegraphAngle,
         durationSec: e.telegraphDurationSec,
-        radius: 48,
+        radius: 56,
       });
     }
     return;

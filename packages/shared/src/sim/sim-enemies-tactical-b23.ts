@@ -2,6 +2,7 @@ import { angleDiff, distance } from '../math/vec2.js';
 import {
   MAX_TACTICAL_PROPS_PER_ROOM,
   type SimEnemyState,
+  type SimPendingMortarStrike,
   type SimPlayerState,
   type SimProjectileState,
   type SimPropState,
@@ -21,6 +22,31 @@ export const ICE_GOLEM_FRONT_CONE_RAD = 1.15;
 export const ICE_GOLEM_SHIELD_BROKEN_SEC = 8.0;
 export const ICE_GOLEM_SHATTER_STUN_SEC = 1.2;
 export const ICE_GOLEM_SHATTER_DAMAGE = 70;
+
+export const COAL_BOMB_HP = 50;
+export const COAL_BOMB_RADIUS = 18;
+export const COAL_BOMB_FUSE_SEC = 2.0;
+export const COAL_BOMB_KICK_SPEED = 560;
+export const COAL_BOMB_BLAST_RADIUS = 96;
+export const COAL_BOMB_BLAST_DAMAGE = 85;
+
+export const IRON_SHIELDER_FRONT_CONE_RAD = 1.15;
+export const IRON_SHIELDER_ARC_RADIUS = 160;
+export const IRON_SHIELDER_CLOSE_ARC_RADIUS = 120;
+export const IRON_SHIELDER_ARC_HALF_ANGLE_RAD = (65 * Math.PI) / 180;
+export const IRON_SHIELDER_ARC_DAMAGE = 45;
+export const IRON_SHIELDER_ARC_STUN_SEC = 1.4;
+export const IRON_SHIELDER_SELF_STUN_SEC = 1.0;
+export const IRON_SHIELDER_SHIELD_BROKEN_SEC = 3.0;
+
+export const DWARF_MORTAR_RADIUS = 56;
+export const DWARF_MORTAR_FLIGHT_SEC = 0.85;
+export const DWARF_MORTAR_SPEED_REF = 255;
+
+export const WELDER_DRONE_EMP_RADIUS = 110;
+export const WELDER_DRONE_EMP_DAMAGE = 35;
+export const WELDER_DRONE_EMP_STUN_SEC = 1.5;
+export const WELDER_DRONE_EMP_SHIELD_BROKEN_SEC = 5.0;
 
 function pointToSegDist(px: number, py: number, x1: number, y1: number, x2: number, y2: number): number {
   const vx = x2 - x1;
@@ -349,4 +375,353 @@ export function shatterIceGolemArmor(
   sim.triggerElementalReaction(e, 'shatter', shatterDmg, e.lastElementOwnerId || attackerId, attackerId);
   if (e.hp <= 0) sim.handleEnemyKilled(e, attackerId);
   return true;
+}
+
+/**
+ * Biome 3 `coal_golem`: Drops an intact `coal_bomb` tactical prop (`fuseTimer = 2.0s`, `radius = 18`)
+ * at `(e.x, e.y)` when killed so the player can Dash-Kick or melee-kick it at 560 px/s into enemy ranks.
+ */
+export function spawnCoalBombOnDeath(sim: WorldSim, e: SimEnemyState): SimPropState | null {
+  if (e.defId !== 'coal_golem' || e.coalBombSpawned || sim.stressTestActive) return null;
+  e.coalBombSpawned = true;
+
+  if (sim.props.length >= MAX_TACTICAL_PROPS_PER_ROOM) {
+    const brokenIdx = sim.props.findIndex((p) => p.hp <= 0 || p.state === 'broken');
+    if (brokenIdx >= 0) sim.props.splice(brokenIdx, 1);
+  }
+
+  const bomb = sim.spawnProp('coal_bomb', e.x, e.y);
+  bomb.x = e.x; bomb.y = e.y;
+  bomb.radius = COAL_BOMB_RADIUS;
+  bomb.hp = COAL_BOMB_HP; bomb.maxHp = COAL_BOMB_HP;
+  bomb.fuseTimer = COAL_BOMB_FUSE_SEC;
+  bomb.state = 'intact'; bomb.coverState = undefined;
+  bomb.destructible = true; bomb.explosive = true; bomb.blocksMovement = true;
+  bomb.enemyPushed = false;
+  return bomb;
+}
+
+export function detonateCoalBomb(sim: WorldSim, bomb: SimPropState): number {
+  if (bomb.kind !== 'coal_bomb' || (bomb.hp <= 0 && bomb.fuseTimer <= 0 && !bomb.explosive)) {
+    return 0;
+  }
+  bomb.hp = 0;
+  bomb.fuseTimer = 0;
+  bomb.explosive = false;
+  bomb.state = 'broken';
+  bomb.blocksMovement = false;
+  bomb.destructible = false;
+  bomb.lastCombatText = 'COAL BOMB BLAST!';
+
+  const ownerId = bomb.slideOwnerPlayerId ?? bomb.kickedByPlayerId ?? sim.player.id;
+  sim.events.push({ kind: 'prop_destroyed', propId: bomb.id, propKind: bomb.kind, x: bomb.x, y: bomb.y });
+  sim.events.push({
+    kind: 'explosion', x: bomb.x, y: bomb.y,
+    radius: COAL_BOMB_BLAST_RADIUS, damage: COAL_BOMB_BLAST_DAMAGE, sourceDefId: 'coal_bomb',
+  });
+  sim.events.push({ kind: 'hit_stop', durationMs: 40, trauma: 0.4 });
+  sim.map.igniteSurfaceInRadius(bomb.x, bomb.y, COAL_BOMB_BLAST_RADIUS);
+
+  let hitCount = 0;
+  for (let i = 0; i < sim.enemies.length; i++) {
+    const e = sim.enemies[i]!;
+    if (e.hp <= 0 || e.isDummy || e.defId === 'ashen_executioner' || e.aiState === 'spawning') continue;
+    if (distance(bomb.x, bomb.y, e.x, e.y) <= COAL_BOMB_BLAST_RADIUS + e.radius) {
+      const hpBefore = e.hp;
+      const pushAng = Math.atan2(e.y - bomb.y, e.x - bomb.x);
+      sim.applyDamageToEnemy(e, COAL_BOMB_BLAST_DAMAGE, true, 'burn', pushAng, 240, true, ownerId);
+      const dealt = hpBefore - e.hp;
+      if (e.hp > 0 && dealt < COAL_BOMB_BLAST_DAMAGE) {
+        const extra = COAL_BOMB_BLAST_DAMAGE - dealt;
+        e.hp = Math.max(0, e.hp - extra);
+        if (e.hp <= 0) sim.handleEnemyKilled(e, ownerId);
+      }
+      if (e.hp > 0) {
+        e.burnTimer = Math.max(e.burnTimer, 3.0);
+        e.burnStacks = Math.max(1, e.burnStacks ?? 1);
+        if (e.burnTickTimer <= 0) e.burnTickTimer = 0.5;
+      }
+      e.lastCombatText = 'COAL BOMB BLAST!';
+      hitCount += 1;
+    }
+  }
+  return hitCount;
+}
+
+export function stepCoalBombsAndDetonate(sim: WorldSim, dtSec: number): number {
+  let detonated = 0;
+  for (let i = 0; i < sim.props.length; i++) {
+    const prop = sim.props[i]!;
+    if (prop.kind !== 'coal_bomb' || prop.hp <= 0) continue;
+    if (prop.fuseTimer > 0) {
+      prop.fuseTimer -= dtSec;
+      if (prop.fuseTimer <= 1e-6) {
+        detonateCoalBomb(sim, prop);
+        detonated += 1;
+      }
+    }
+  }
+  return detonated;
+}
+
+/**
+ * Biome 3 `iron_shielder`: When hit on the frontal iron shield by a `shock` attack,
+ * conducts electricity and discharges a lightning arc cone behind the shield (`r = 160px`, `±65°`
+ * behind `aimAngle + Math.PI` and within `120px` around `iron_shielder`), dealing >= 45 Shock damage
+ * and stunning (`stunTimer >= 1.4s`, `aiState = 'stunned'`) all enemies hiding behind the shield.
+ */
+export function triggerIronShielderShockArc(
+  sim: WorldSim,
+  shielder: SimEnemyState,
+  attackerId = sim.player.id,
+): number {
+  if (shielder.defId !== 'iron_shielder') return 0;
+
+  const backAngle = shielder.aimAngle + Math.PI;
+  shielder.stunTimer = Math.max(shielder.stunTimer ?? 0, IRON_SHIELDER_SELF_STUN_SEC);
+  shielder.aiState = 'stunned';
+  shielder.stateTimer = Math.max(shielder.stateTimer, IRON_SHIELDER_SELF_STUN_SEC);
+  shielder.shieldBrokenTimer = Math.max(shielder.shieldBrokenTimer ?? 0, IRON_SHIELDER_SHIELD_BROKEN_SEC);
+  shielder.vx = 0; shielder.vy = 0;
+  shielder.lastCombatText = 'SHIELD SHOCK ARC!';
+  shielder.shockArcVisualTimer = 0.45;
+  shielder.shockArcVisualAngle = backAngle;
+
+  let arcHitCount = 0;
+  for (let i = 0; i < sim.enemies.length; i++) {
+    const other = sim.enemies[i]!;
+    if (
+      other.id === shielder.id ||
+      other.hp <= 0 ||
+      other.isDummy ||
+      other.defId === 'ashen_executioner' ||
+      other.aiState === 'spawning'
+    ) {
+      continue;
+    }
+    const d = distance(shielder.x, shielder.y, other.x, other.y);
+    const ang = Math.atan2(other.y - shielder.y, other.x - shielder.x);
+    const inRearCone =
+      d <= IRON_SHIELDER_ARC_RADIUS + other.radius &&
+      Math.abs(angleDiff(ang, backAngle)) <= IRON_SHIELDER_ARC_HALF_ANGLE_RAD;
+    const inCloseRadius = d <= IRON_SHIELDER_CLOSE_ARC_RADIUS + other.radius;
+    if (!inRearCone && !inCloseRadius) continue;
+
+    other.hp = Math.max(0, other.hp - IRON_SHIELDER_ARC_DAMAGE);
+    other.hitFlashTimer = 0.16;
+    other.lastHitDmg = Math.max(other.lastHitDmg ?? 0, IRON_SHIELDER_ARC_DAMAGE);
+    other.shockTimer = Math.max(other.shockTimer, IRON_SHIELDER_ARC_STUN_SEC);
+    other.stunTimer = Math.max(other.stunTimer ?? 0, IRON_SHIELDER_ARC_STUN_SEC);
+    if (!other.isBoss) {
+      other.aiState = 'stunned';
+      other.stateTimer = Math.max(other.stateTimer, IRON_SHIELDER_ARC_STUN_SEC);
+      other.vx = 0; other.vy = 0;
+    }
+    other.lastCombatText = 'SHIELD SHOCK ARC!';
+
+    sim.events.push({
+      kind: 'chain_lightning',
+      fromX: shielder.x, fromY: shielder.y, toX: other.x, toY: other.y,
+    });
+    sim.events.push({
+      kind: 'damage_dealt', targetId: other.id, targetKind: 'enemy', x: other.x, y: other.y,
+      amount: IRON_SHIELDER_ARC_DAMAGE, isCrit: true, hitArmor: false, element: 'shock',
+      knockbackX: 0, knockbackY: 0,
+    });
+    sim.events.push({
+      kind: 'status_applied', targetId: other.id, status: 'shock', x: other.x, y: other.y,
+    });
+    if (other.hp <= 0) sim.handleEnemyKilled(other, attackerId);
+    arcHitCount += 1;
+  }
+  return arcHitCount;
+}
+
+/**
+ * Biome 3 `dwarf_cannon`: Fires a `Lobbed Mortar` arcing over low/flipped cover,
+ * creating a red floor target indicator (`r = 56px`, `timer = 0.85s`) at the predictive target position.
+ */
+export function fireDwarfCannonLobbedMortar(
+  sim: WorldSim,
+  e: SimEnemyState,
+  targetPlayer: Pick<SimPlayerState, 'x' | 'y' | 'vx' | 'vy'>,
+): SimPendingMortarStrike {
+  const distToTarget = Math.hypot(targetPlayer.x - e.x, targetPlayer.y - e.y);
+  const timeToHit = Math.min(0.65, distToTarget / DWARF_MORTAR_SPEED_REF);
+  const leadFactor = e.isBoss || e.isElite ? 0.65 : 0.35;
+  const predDx = targetPlayer.x + (targetPlayer.vx ?? 0) * timeToHit * leadFactor - e.x;
+  const predDy = targetPlayer.y + (targetPlayer.vy ?? 0) * timeToHit * leadFactor - e.y;
+  const predDist = Math.hypot(predDx, predDy);
+  const directAngle = Math.atan2(targetPlayer.y - e.y, targetPlayer.x - e.x);
+  const rawLeadAngle = Math.atan2(predDy, predDx);
+  const maxLeadRad = (28 * Math.PI) / 180;
+  const clampedLeadAngle =
+    e.leadSightlineAngle ??
+    directAngle + Math.max(-maxLeadRad, Math.min(maxLeadRad, angleDiff(rawLeadAngle, directAngle)));
+
+  const rawX = e.x + Math.cos(clampedLeadAngle) * predDist;
+  const rawY = e.y + Math.sin(clampedLeadAngle) * predDist;
+  const col = sim.map.resolveCircleCollision(rawX, rawY, 16, true);
+
+  const strike: SimPendingMortarStrike = {
+    id: ++sim.nextEntityId,
+    ownerId: e.id,
+    x: col.x,
+    y: col.y,
+    radius: DWARF_MORTAR_RADIUS,
+    timer: DWARF_MORTAR_FLIGHT_SEC,
+    maxTimer: DWARF_MORTAR_FLIGHT_SEC,
+    startX: e.x,
+    startY: e.y,
+    damage: Math.max(2, e.damage),
+  };
+  sim.pendingMortarStrikes.push(strike);
+  return strike;
+}
+
+export function stepPendingMortarStrikes(sim: WorldSim, dtSec: number): number {
+  if (sim.empBlastVisualRings.length > 0) {
+    let empWrite = 0;
+    for (let i = 0; i < sim.empBlastVisualRings.length; i++) {
+      const ring = sim.empBlastVisualRings[i]!;
+      ring.timer -= dtSec;
+      if (ring.timer > 1e-6) {
+        sim.empBlastVisualRings[empWrite++] = ring;
+      }
+    }
+    sim.empBlastVisualRings.length = empWrite;
+  }
+
+  for (let i = 0; i < sim.enemies.length; i++) {
+    const e = sim.enemies[i]!;
+    if ((e.shockArcVisualTimer ?? 0) > 0) {
+      e.shockArcVisualTimer = Math.max(0, (e.shockArcVisualTimer ?? 0) - dtSec);
+    }
+  }
+
+  if (sim.pendingMortarStrikes.length === 0) return 0;
+
+  let detonatedCount = 0;
+  let writeIdx = 0;
+  let allPlayers: SimPlayerState[] | null = null;
+
+  for (let i = 0; i < sim.pendingMortarStrikes.length; i++) {
+    const strike = sim.pendingMortarStrikes[i]!;
+    strike.timer -= dtSec;
+    if (strike.timer > 1e-6) {
+      sim.pendingMortarStrikes[writeIdx++] = strike;
+      continue;
+    }
+
+    detonatedCount += 1;
+    sim.map.igniteSurfaceInRadius(strike.x, strike.y, Math.min(48, strike.radius));
+    if (!sim.stressTestActive) {
+      sim.events.push({
+        kind: 'explosion',
+        x: strike.x,
+        y: strike.y,
+        radius: strike.radius,
+        damage: strike.damage,
+        sourceDefId: 'dwarf_mortar',
+      });
+    }
+
+    allPlayers ??= sim.getAllPlayers();
+    for (let pIdx = 0; pIdx < allPlayers.length; pIdx++) {
+      const pl = allPlayers[pIdx]!;
+      if (pl.lifeState !== 'alive' || pl.hp <= 0) continue;
+      if (distance(strike.x, strike.y, pl.x, pl.y) <= strike.radius + pl.radius) {
+        const pushAng = Math.atan2(pl.y - strike.y, pl.x - strike.x);
+        const damaged = sim.applyDamageToPlayer(strike.damage, pushAng, 160, 'dwarf_mortar', pl);
+        if (damaged) {
+          pl.burnTimer = Math.max(pl.burnTimer, 1.8);
+        }
+      }
+    }
+  }
+
+  sim.pendingMortarStrikes.length = writeIdx;
+  return detonatedCount;
+}
+
+/**
+ * Biome 3 `welder_drone`: Crashes on death and triggers an `EMP Blast` (`r = 110px`),
+ * stripping `shieldArmor` (`shieldArmor = 0`, `shieldBrokenTimer >= 5.0`), dealing >= 35 shock damage,
+ * and stunning (`stunTimer >= 1.5s`, `aiState = 'stunned'`) all nearby enemies within 110px.
+ */
+export function triggerWelderDroneEmpBlastOnDeath(
+  sim: WorldSim,
+  drone: SimEnemyState,
+  killerPlayerId = sim.player.id,
+): number {
+  if (drone.defId !== 'welder_drone' || drone.empBlastTriggered || sim.stressTestActive) return 0;
+  drone.empBlastTriggered = true;
+  drone.lastCombatText = 'EMP BLAST!';
+
+  sim.empBlastVisualRings.push({
+    id: ++sim.nextEntityId,
+    x: drone.x,
+    y: drone.y,
+    radius: WELDER_DRONE_EMP_RADIUS,
+    timer: 0.45,
+    maxTimer: 0.45,
+  });
+  sim.events.push({
+    kind: 'emp_blast',
+    x: drone.x,
+    y: drone.y,
+    radius: WELDER_DRONE_EMP_RADIUS,
+    bulletsCleared: 0,
+  });
+
+  let stunnedCount = 0;
+  for (let i = 0; i < sim.enemies.length; i++) {
+    const other = sim.enemies[i]!;
+    if (
+      other.id === drone.id ||
+      other.hp <= 0 ||
+      other.isDummy ||
+      other.defId === 'ashen_executioner' ||
+      other.aiState === 'spawning'
+    ) {
+      continue;
+    }
+    if (distance(drone.x, drone.y, other.x, other.y) <= WELDER_DRONE_EMP_RADIUS + other.radius) {
+      if (other.shieldArmor > 0) {
+        other.shieldArmor = 0;
+        sim.events.push({
+          kind: 'armor_broken',
+          targetKind: 'enemy',
+          targetId: other.id,
+          x: other.x,
+          y: other.y,
+        });
+      }
+      other.shieldArmor = 0;
+      other.shieldBrokenTimer = Math.max(other.shieldBrokenTimer ?? 0, WELDER_DRONE_EMP_SHIELD_BROKEN_SEC);
+      other.hp = Math.max(0, other.hp - WELDER_DRONE_EMP_DAMAGE);
+      other.hitFlashTimer = 0.16;
+      other.lastHitDmg = Math.max(other.lastHitDmg ?? 0, WELDER_DRONE_EMP_DAMAGE);
+      other.shockTimer = Math.max(other.shockTimer, WELDER_DRONE_EMP_STUN_SEC);
+      other.stunTimer = Math.max(other.stunTimer ?? 0, WELDER_DRONE_EMP_STUN_SEC);
+      if (!other.isBoss) {
+        other.aiState = 'stunned';
+        other.stateTimer = Math.max(other.stateTimer, WELDER_DRONE_EMP_STUN_SEC);
+        other.vx = 0; other.vy = 0;
+      }
+      other.lastCombatText = 'EMP BLAST!';
+
+      sim.events.push({
+        kind: 'damage_dealt', targetId: other.id, targetKind: 'enemy', x: other.x, y: other.y,
+        amount: WELDER_DRONE_EMP_DAMAGE, isCrit: false, hitArmor: false, element: 'shock',
+        knockbackX: 0, knockbackY: 0,
+      });
+      sim.events.push({
+        kind: 'status_applied', targetId: other.id, status: 'shock', x: other.x, y: other.y,
+      });
+      if (other.hp <= 0) sim.handleEnemyKilled(other, killerPlayerId);
+      stunnedCount += 1;
+    }
+  }
+  return stunnedCount;
 }

@@ -131,6 +131,7 @@ export type PropKind =
   | 'forge_blast_shield'
   | 'pneumatic_press'
   | 'slag_crucible'
+  | 'coal_bomb'
   | 'daedalus_anvil'
   | 'upgrade_anvil';
 
@@ -692,7 +693,33 @@ export interface SimEnemyState {
   kickedVelX?: number;
   kickedVelY?: number;
   crystallizedIceBlockSpawned?: boolean;
+  coalBombSpawned?: boolean;
+  empBlastTriggered?: boolean;
+  shockArcVisualTimer?: number;
+  shockArcVisualAngle?: number;
   lastCombatText?: string;
+}
+
+export interface SimPendingMortarStrike {
+  id: number;
+  ownerId: number;
+  x: number;
+  y: number;
+  radius: number;
+  timer: number;
+  maxTimer: number;
+  startX: number;
+  startY: number;
+  damage: number;
+}
+
+export interface SimEmpBlastVisualRing {
+  id: number;
+  x: number;
+  y: number;
+  radius: number;
+  timer: number;
+  maxTimer: number;
 }
 
 export interface SimProjectileState {

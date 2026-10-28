@@ -39,11 +39,14 @@ import {
   updateP1CTacticalProps,
 } from './sim-tactical-physics-p1c.js';
 import {
+  COAL_BOMB_KICK_SPEED,
   COUNTER_ICE_KICK_MIN_DAMAGE,
   checkWildBoarPillarCrash,
   counterDeflectEnemySlidingIceBlock,
+  detonateCoalBomb,
   kickSporeBomber,
   shatterIceGolemArmor,
+  stepCoalBombsAndDetonate,
   stepEnemyPushedIceBlockCollisions,
   triggerShamanTotemBacklash,
   tryBabyYetiPushIceBlock,
@@ -70,7 +73,7 @@ export {
 };
 
 export const FLIPPABLE_BARRICADE_KINDS: readonly PropKind[] = ['moss_table', 'glacial_barricade', 'forge_blast_shield'] as const;
-export const CIRCULAR_KICKABLE_TOY_KINDS: readonly PropKind[] = ['explosive_barrel', 'volatile_spore_pod', 'sliding_ice_block', 'slag_crucible'] as const;
+export const CIRCULAR_KICKABLE_TOY_KINDS: readonly PropKind[] = ['explosive_barrel', 'volatile_spore_pod', 'sliding_ice_block', 'slag_crucible', 'coal_bomb'] as const;
 export const FLIP_COVER_MICRO_BLANK_RADIUS = 56;
 export const FLIP_COVER_MICRO_BLANK_DURATION_SEC = 0.15;
 export const FLIP_COVER_KNOCKBACK_RADIUS = 64;
@@ -97,7 +100,13 @@ export function isFlippableBarricadeProp(kind: PropKind): boolean {
 }
 
 export function isCircularKickableToyProp(kind: PropKind): boolean {
-  return kind === 'explosive_barrel' || kind === 'volatile_spore_pod' || kind === 'sliding_ice_block' || kind === 'slag_crucible';
+  return (
+    kind === 'explosive_barrel' ||
+    kind === 'volatile_spore_pod' ||
+    kind === 'sliding_ice_block' ||
+    kind === 'slag_crucible' ||
+    kind === 'coal_bomb'
+  );
 }
 
 export function isKickableProp(prop: Pick<SimPropState, 'kind' | 'coverState' | 'hp'>): boolean {
@@ -138,6 +147,8 @@ export function getTacticalPropSpawnSpec(kind: PropKind): TacticalPropSpawnSpec 
       return { radius: 16, hp: 40, destructible: true, explosive: false, blocksMovement: true, lightRadius: 65, lightColorHex: '#38BDF8', bouncesRemaining: 1 };
     case 'slag_crucible':
       return { radius: 15, hp: 20, destructible: true, explosive: true, blocksMovement: true, lightRadius: 95, lightColorHex: '#F97316' };
+    case 'coal_bomb':
+      return { radius: 18, hp: 50, destructible: true, explosive: true, blocksMovement: true, lightRadius: 90, lightColorHex: '#F97316' };
     case 'rotten_totem_pillar':
       return { radius: 20, hp: 45, destructible: true, explosive: false, blocksMovement: true, lightRadius: 90, lightColorHex: '#A3E635' };
     case 'shaman_totem':
@@ -374,7 +385,12 @@ export function flipCoverPropImpl(this: WorldSim, prop: SimPropState, actor: Sim
 export function kickProp(sim: WorldSim, prop: SimPropState, actor: SimPlayerState = sim.player, customAngle?: number): boolean {
   if (!isKickableProp(prop)) return false;
   const slideAngle = customAngle ?? actor.aimAngle;
-  const baseSpeed = prop.kind === 'sliding_ice_block' ? SLIDING_ICE_BLOCK_SPEED : SLIDING_PROP_DEFAULT_SPEED;
+  const baseSpeed =
+    prop.kind === 'sliding_ice_block'
+      ? SLIDING_ICE_BLOCK_SPEED
+      : prop.kind === 'coal_bomb'
+        ? COAL_BOMB_KICK_SPEED
+        : SLIDING_PROP_DEFAULT_SPEED;
   const onIce =
     sim.map.getSurfaceAtWorld(prop.x, prop.y) === 'ice' ||
     sim.map.getSurfaceAtWorld(actor.x, actor.y) === 'ice';
@@ -581,6 +597,10 @@ function destroyTacticalProp(sim: WorldSim, prop: SimPropState): void {
     );
     return;
   }
+  if (prop.kind === 'coal_bomb') {
+    detonateCoalBomb(sim, prop);
+    return;
+  }
   prop.destructible = true;
   if (prop.hp <= 0) prop.hp = 1;
   sim.damageProp(prop, prop.hp + 999, prop.explosive ? 'burn' : 'none');
@@ -588,6 +608,7 @@ function destroyTacticalProp(sim: WorldSim, prop: SimPropState): void {
 
 export function updateSlidingPropsImpl(this: WorldSim, dtSec: number): void {
   updateP1CTacticalProps(this, dtSec);
+  stepCoalBombsAndDetonate(this, dtSec);
   for (let i = 0; i < this.props.length; i++) {
     const prop = this.props[i]!;
     if (prop.hp <= 0) continue;
@@ -706,6 +727,13 @@ export function updateSlidingPropsImpl(this: WorldSim, dtSec: number): void {
           prop.x = e.x;
           prop.y = e.y;
           spillSlagCrucibleLavaCarpet(this, prop, slideAngle, ownerId);
+          detonatedOnEnemy = true;
+          break;
+        }
+        if (prop.kind === 'coal_bomb') {
+          prop.x = e.x;
+          prop.y = e.y;
+          detonateCoalBomb(this, prop);
           detonatedOnEnemy = true;
           break;
         }

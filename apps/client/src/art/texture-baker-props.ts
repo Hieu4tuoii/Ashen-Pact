@@ -793,4 +793,37 @@ export function bakeProps(scene: Phaser.Scene, scale: number): void {
       { cx: 0, cy: -4, rx: 6, ry: 6 },
     );
   });
+
+  bakeCustomCanvas(scene, 'prop_coal_bomb', 40, 40, scale, (ctx) => {
+    outlined(
+      ctx,
+      {
+        fill: PALETTE.FORGE_DARK,
+        shade: PALETTE.INK_DARK,
+        highlight: PALETTE.STEEL_DARK,
+        outlineWidth: 2.5,
+      },
+      (c) => {
+        c.beginPath();
+        c.arc(0, 1, 14, 0, Math.PI * 2);
+        c.closePath();
+      },
+      { cx: 0, cy: 1, rx: 14, ry: 14 },
+    );
+    outlined(
+      ctx,
+      {
+        fill: PALETTE.FLAME_ORANGE,
+        shade: PALETTE.MAGMA_RED,
+        highlight: PALETTE.SOLAR_GOLD,
+        outlineWidth: 1.8,
+      },
+      (c) => {
+        c.beginPath();
+        c.arc(0, 1, 6.5, 0, Math.PI * 2);
+        c.closePath();
+      },
+      { cx: 0, cy: 1, rx: 6.5, ry: 6.5 },
+    );
+  });
 }

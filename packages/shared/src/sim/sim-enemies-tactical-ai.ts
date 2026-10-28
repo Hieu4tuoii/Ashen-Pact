@@ -221,6 +221,8 @@ export function raycastSightlineDistance(
   return maxDist;
 }
 
+const COVER_POINT_SCRATCH = { x: 0, y: 0 };
+
 /**
  * Biome 1 `goblin_shooter` terrain cover seeker:
  * 1) Finds nearest intact `moss_table` within 220px and computes a cover position on the opposite side from `targetPlayer`.
@@ -252,10 +254,9 @@ export function findGoblinShooterCoverPoint(
   if (bestProp) {
     const awayAngle = Math.atan2(bestProp.y - targetPlayer.y, bestProp.x - targetPlayer.x);
     const offset = bestProp.radius + e.radius + 4;
-    return {
-      x: bestProp.x + Math.cos(awayAngle) * offset,
-      y: bestProp.y + Math.sin(awayAngle) * offset,
-    };
+    COVER_POINT_SCRATCH.x = bestProp.x + Math.cos(awayAngle) * offset;
+    COVER_POINT_SCRATCH.y = bestProp.y + Math.sin(awayAngle) * offset;
+    return COVER_POINT_SCRATCH;
   }
 
   const centerTx = Math.floor(e.x / TILE_SIZE);
@@ -287,7 +288,9 @@ export function findGoblinShooterCoverPoint(
   }
 
   if (foundGrass) {
-    return { x: bestGrassX, y: bestGrassY };
+    COVER_POINT_SCRATCH.x = bestGrassX;
+    COVER_POINT_SCRATCH.y = bestGrassY;
+    return COVER_POINT_SCRATCH;
   }
   return null;
 }

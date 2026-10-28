@@ -1,4 +1,9 @@
 import {
+  COAL_BOMB_BLAST_RADIUS,
+  COAL_BOMB_FUSE_SEC,
+  DWARF_MORTAR_FLIGHT_SEC,
+  IRON_SHIELDER_ARC_HALF_ANGLE_RAD,
+  IRON_SHIELDER_ARC_RADIUS,
   SHAMAN_TOTEM_LINK_RADIUS,
   SIGHTLINE_TELEGRAPH_WINDOW_SEC,
   clamp,
@@ -200,6 +205,125 @@ export function drawP3APredictiveSightlinesAndOverlays(
           g.strokePath();
         }
       }
+    }
+  }
+
+  // 6. Biome 3 Coal Golem (`coal_bomb`) fuse countdown ring & blast danger circle (r=96px)
+  if (sim.props.length > 0) {
+    const flameColor = hexToNum(PALETTE.FLAME_ORANGE);
+    const magmaColor = hexToNum(PALETTE.MAGMA_RED);
+    const goldColor = hexToNum(PALETTE.SOLAR_GOLD);
+    for (let pIdx = 0; pIdx < sim.props.length; pIdx++) {
+      const prop = sim.props[pIdx]!;
+      if (prop.kind !== 'coal_bomb' || prop.hp <= 0 || prop.state === 'broken') continue;
+      const fuseLeft = clamp(prop.fuseTimer ?? COAL_BOMB_FUSE_SEC, 0, COAL_BOMB_FUSE_SEC);
+      const progress = 1 - fuseLeft / COAL_BOMB_FUSE_SEC;
+
+      g.fillStyle(magmaColor, 0.12 + 0.16 * progress);
+      g.fillCircle(prop.x, prop.y, COAL_BOMB_BLAST_RADIUS);
+      g.lineStyle(2.0, flameColor, 0.45 + 0.4 * progress);
+      g.strokeCircle(prop.x, prop.y, COAL_BOMB_BLAST_RADIUS);
+
+      g.lineStyle(3.2, goldColor, 0.92);
+      g.beginPath();
+      g.arc(
+        prop.x,
+        prop.y,
+        (prop.radius || 18) + 5,
+        -Math.PI * 0.5,
+        -Math.PI * 0.5 + Math.PI * 2 * (1 - progress),
+        false,
+      );
+      g.strokePath();
+    }
+  }
+
+  // 7. Biome 3 Dwarf Cannon (`pendingMortarStrikes`) r=56px red floor target indicator & parabolic shell arc
+  if (sim.pendingMortarStrikes.length > 0) {
+    const crimson = hexToNum(PALETTE.CRIMSON_BRIGHT);
+    const flame = hexToNum(PALETTE.FLAME_ORANGE);
+    const bone = hexToNum(PALETTE.BONE_WHITE);
+    for (let mIdx = 0; mIdx < sim.pendingMortarStrikes.length; mIdx++) {
+      const strike = sim.pendingMortarStrikes[mIdx]!;
+      const total = strike.maxTimer || DWARF_MORTAR_FLIGHT_SEC;
+      const t = clamp(1 - strike.timer / total, 0, 1);
+
+      // Red floor target indicator (r = 56px)
+      g.fillStyle(crimson, 0.16 + 0.22 * t);
+      g.fillCircle(strike.x, strike.y, strike.radius);
+      g.lineStyle(2.6, crimson, 0.88);
+      g.strokeCircle(strike.x, strike.y, strike.radius);
+      g.lineStyle(1.8, flame, 0.78);
+      g.strokeCircle(strike.x, strike.y, Math.max(6, strike.radius * (1 - t)));
+
+      // Parabolic lobbed shell trajectory arc over cover
+      if (!isStress) {
+        const arcPeak = 76;
+        g.lineStyle(2.0, flame, 0.52);
+        g.beginPath();
+        const steps = 10;
+        for (let s = 0; s <= steps; s++) {
+          const u = s / steps;
+          const ax = strike.startX + (strike.x - strike.startX) * u;
+          const ay =
+            strike.startY +
+            (strike.y - strike.startY) * u -
+            4 * arcPeak * u * (1 - u);
+          if (s === 0) g.moveTo(ax, ay);
+          else g.lineTo(ax, ay);
+        }
+        g.strokePath();
+
+        const shellX = strike.startX + (strike.x - strike.startX) * t;
+        const shellY =
+          strike.startY +
+          (strike.y - strike.startY) * t -
+          4 * arcPeak * t * (1 - t);
+        g.fillStyle(crimson, 0.95);
+        g.fillCircle(shellX, shellY, 6.5);
+        g.fillStyle(bone, 0.95);
+        g.fillCircle(shellX, shellY, 2.8);
+      }
+    }
+  }
+
+  // 8. Biome 3 Iron Shielder rear lightning arc cone & Welder Drone EMP blast pulse ring
+  const cyanColor = hexToNum(PALETTE.CYAN_FROST);
+  const voltColor = hexToNum(PALETTE.VOLT_YELLOW);
+  for (let eIdx = 0; eIdx < sim.enemies.length; eIdx++) {
+    const e = sim.enemies[eIdx]!;
+    const timer = e.shockArcVisualTimer ?? 0;
+    if (e.hp <= 0 || timer <= 0) continue;
+    const rearAngle = e.shockArcVisualAngle ?? e.aimAngle + Math.PI;
+    const alpha = clamp(timer / 0.38, 0, 1);
+
+    g.fillStyle(cyanColor, 0.24 * alpha);
+    g.lineStyle(2.4, voltColor, 0.9 * alpha);
+    g.beginPath();
+    g.moveTo(e.x, e.y);
+    g.arc(
+      e.x,
+      e.y,
+      IRON_SHIELDER_ARC_RADIUS,
+      rearAngle - IRON_SHIELDER_ARC_HALF_ANGLE_RAD,
+      rearAngle + IRON_SHIELDER_ARC_HALF_ANGLE_RAD,
+      false,
+    );
+    g.closePath();
+    g.fillPath();
+    g.strokePath();
+  }
+
+  if (sim.empBlastVisualRings.length > 0) {
+    for (let rIdx = 0; rIdx < sim.empBlastVisualRings.length; rIdx++) {
+      const ring = sim.empBlastVisualRings[rIdx]!;
+      const p = clamp(1 - ring.timer / (ring.maxTimer || 0.42), 0, 1);
+      const curR = ring.radius * (0.25 + 0.75 * p);
+      const alpha = 1 - p;
+      g.fillStyle(cyanColor, 0.2 * alpha);
+      g.fillCircle(ring.x, ring.y, curR);
+      g.lineStyle(3.0, voltColor, 0.92 * alpha);
+      g.strokeCircle(ring.x, ring.y, curR);
     }
   }
 }

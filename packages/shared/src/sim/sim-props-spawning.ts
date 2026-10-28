@@ -5,7 +5,10 @@ import { distance, distanceSq } from '../math/vec2.js';
 import { BIOME_SCALING, COOP_SCALING } from '../data/scaling.js';
 import { type PlayerInputPacket, TILE_SIZE } from '../protocol/messages.js';
 import type { DungeonRoomNode } from './dungeon-gen.js';
-import { triggerShamanTotemBacklash } from './sim-enemies-tactical-ai.js';
+import {
+  detonateCoalBomb,
+  triggerShamanTotemBacklash,
+} from './sim-enemies-tactical-ai.js';
 import {
   collapseRottenTotemPillar,
   detonateVolatileSporePod,
@@ -150,7 +153,8 @@ export function spawnPropImpl(this: WorldSim, kind: PropKind, x: number, y: numb
     ttlSec: tacticalSpec?.ttlSec,
   };
   if (!this.stressTestActive && this.props.length >= MAX_TACTICAL_PROPS_PER_ROOM) {
-    const destructibleIdx = this.props.findIndex((p) => p.destructible);
+    const brokenIdx = this.props.findIndex((p) => p.hp <= 0 || p.state === 'broken');
+    const destructibleIdx = brokenIdx >= 0 ? brokenIdx : this.props.findIndex((p) => p.destructible);
     this.props.splice(destructibleIdx >= 0 ? destructibleIdx : 0, 1);
   }
   this.props.push(prop);
@@ -759,7 +763,7 @@ export function updatePropsImpl(this: WorldSim, dtSec: number): void {
     if (prop.hitFlashTimer > 0) {
       prop.hitFlashTimer = Math.max(0, prop.hitFlashTimer - dtSec);
     }
-    if (prop.fuseTimer > 0) {
+    if (prop.fuseTimer > 0 && prop.kind !== 'coal_bomb') {
       prop.fuseTimer -= dtSec;
       if (prop.fuseTimer <= 0) {
         this.detonateExplosiveBarrel(prop);
@@ -807,6 +811,13 @@ export function damagePropImpl(this: WorldSim, prop: SimPropState, amount: numbe
   if (prop.kind === 'slag_crucible') {
     if (prop.hp <= 0 || element === 'burn') {
       spillSlagCrucibleLavaCarpet(this, prop, prop.fallAngle);
+    }
+    return;
+  }
+
+  if (prop.kind === 'coal_bomb') {
+    if (prop.hp <= 0 || element === 'burn') {
+      detonateCoalBomb(this, prop);
     }
     return;
   }

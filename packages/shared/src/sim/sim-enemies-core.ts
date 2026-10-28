@@ -10,6 +10,7 @@ import {
 } from './sim-ashen-pacts.js';
 import { updateEnemyHeavyPinballAndTimers } from './sim-blessings.js';
 import { resolveEnemyChasmRingOut, triggerEnemyWallSlam } from './sim-tactical-physics.js';
+import { stepPendingMortarStrikes } from './sim-enemies-tactical-ai.js';
 import { updateLegendaryWeaponHazards } from './sim-weapon-specials-p1b-legendary.js';
 import { updateFlameFissures, updateTetherStaffBeams } from './sim-weapon-specials.js';
 import type { SimPlayerState, SimEnemyState } from './world-sim-types.js';
@@ -320,6 +321,7 @@ export function updateEnemiesImpl(this: WorldSim, dtSec: number): void {
   }
 
   syncAshenExecutionerInRoom(this);
+  stepPendingMortarStrikes(this, dtSec);
   let hasAliveProps = false;
   if (!this.stressTestActive) {
     for (let pIdx = 0; pIdx < this.props.length; pIdx++) {

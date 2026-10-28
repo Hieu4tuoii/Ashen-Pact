@@ -5,7 +5,7 @@ import { SpatialHashGrid } from '../math/spatial-hash.js';
 import type { PlayerInputPacket, QuickEmoteId } from '../protocol/messages.js';
 import { ArenaMap, type RoomArchetypeId, type SurfaceKind } from './arena-map.js';
 import { type DungeonFloorGraph, type DungeonRoomNode, generateDungeonFloor } from './dungeon-gen.js';
-import { PHASE1_SAMPLE_ENEMIES, hasPlayerBlessing, type PropKind, type SimPropState, type SimSummonState, type SimSkillZoneState, type SimPressurePlateState, type SimPushBlockState, type SimShockwaveRingState, type SimTetherBeamState, type SimMagneticRivetState, type SimFlameFissureState, type SimSolarFireZoneState, type SimMagmaTrailSegmentState, type SimLightningPillarState, type SimDoorState, type SimChestState, type SimWorldItemState, type SimNpcState, type SimHubStatue, type SimPingMarker, type RunSummaryStats, type MvpAwardEntry, type SimPlayerState, type SimEnemyState, type SimProjectileState, type SimPickupState, type BulletVolleySpawnEvent } from './world-sim-types.js';
+import { PHASE1_SAMPLE_ENEMIES, hasPlayerBlessing, type PropKind, type SimPropState, type SimSummonState, type SimSkillZoneState, type SimPressurePlateState, type SimPushBlockState, type SimShockwaveRingState, type SimTetherBeamState, type SimMagneticRivetState, type SimFlameFissureState, type SimSolarFireZoneState, type SimMagmaTrailSegmentState, type SimLightningPillarState, type SimDoorState, type SimChestState, type SimWorldItemState, type SimNpcState, type SimHubStatue, type SimPingMarker, type RunSummaryStats, type MvpAwardEntry, type SimPlayerState, type SimEnemyState, type SimProjectileState, type SimPickupState, type BulletVolleySpawnEvent, type SimPendingMortarStrike, type SimEmpBlastVisualRing } from './world-sim-types.js';
 import type { SimEvent, WorldSimOptions, CoPlayerInputEntry } from './world-sim-events.js';
 import { createPlayerStateImpl, getAllPlayersImpl, getActivePlayerCountImpl, setPlayerCountOverrideImpl, getPlayerByIdImpl, getPlayerBySlotImpl, addCoopPlayerImpl, removeCoopPlayerImpl, setCoopPlayerInputImpl, applyCharacterToPlayerStateImpl, selectCharacterImpl, togglePlayerReadyImpl, areAllPlayersReadyImpl, enterHubImpl, startDungeonRunFromHubImpl, triggerPingImpl, triggerEmoteImpl, spawnDroppedWeaponImpl, dropActiveWeaponImpl, updateCoopDownedAndReviveImpl } from './sim-coop-hub.js';
 import { spawnDefaultArenaPropsImpl, spawnPropImpl, cycleImbueElementImpl, setImbueElementImpl, configureStressTestImpl, topUpStressTestProjectilesImpl, setPlayerInputImpl, getActiveWeaponIdImpl, equipWeaponSlotImpl, cycleWeaponImpl, spawnTrainingDummyImpl, spawnEnemyImpl, spawnBossGuardianMushroomsImpl, hasActiveBossGuardiansImpl, spawnSampleWaveImpl, getCurrentRoomImpl, hasActiveCombatEnemiesImpl, getActiveBossImpl, rollChestRarityImpl, rollRandomWeaponByRaritiesImpl, spawnChestImpl, spawnWorldItemImpl, resolvePropMovementCollisionImpl, updatePropsImpl, damagePropImpl, detonateExplosiveBarrelImpl, applyElementAtWorldPointImpl } from './sim-props-spawning.js';
@@ -148,6 +148,14 @@ export class WorldSim {
     timerSec: number;
     damage: number;
   }[] = [];
+  public pendingMortarStrikes: SimPendingMortarStrike[] = [];
+  public empBlastVisualRings: SimEmpBlastVisualRing[] = [];
+  public get PendingMortarStrikes(): SimPendingMortarStrike[] { return this.pendingMortarStrikes; }
+  public set PendingMortarStrikes(v: SimPendingMortarStrike[]) { this.pendingMortarStrikes = v; }
+  public get hazardZones(): SimPendingMortarStrike[] { return this.pendingMortarStrikes; }
+  public set hazardZones(v: SimPendingMortarStrike[]) { this.pendingMortarStrikes = v; }
+  public get HazardZones(): SimPendingMortarStrike[] { return this.pendingMortarStrikes; }
+  public set HazardZones(v: SimPendingMortarStrike[]) { this.pendingMortarStrikes = v; }
   public doorTransitionCooldown = 0;
   public readonly queryEnemyScratch: SimEnemyState[] = [];
   public readonly queryBulletScratch: SimProjectileState[] = [];

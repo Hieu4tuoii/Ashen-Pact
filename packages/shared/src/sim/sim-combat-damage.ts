@@ -17,8 +17,12 @@ import {
 } from './sim-blessings.js';
 import {
   ICE_GOLEM_FRONT_CONE_RAD,
+  IRON_SHIELDER_FRONT_CONE_RAD,
   getShamanTotemDamageMultiplier,
+  spawnCoalBombOnDeath,
   spawnSnowSpiritIceBlockOnDeath,
+  triggerIronShielderShockArc,
+  triggerWelderDroneEmpBlastOnDeath,
 } from './sim-enemies-tactical-ai.js';
 import { hasPlayerBlessing, type SimPlayerState, type SimEnemyState } from './world-sim-types.js';
 import type { WorldSim } from './world-sim.js';
@@ -81,7 +85,11 @@ export function applyDamageToEnemyImpl(
   ) {
     const incomingFromAngle = hitAngleRad + Math.PI;
     const coneHalfRad =
-      enemy.defId === 'ice_golem' ? ICE_GOLEM_FRONT_CONE_RAD : (75 * Math.PI) / 180;
+      enemy.defId === 'ice_golem'
+        ? ICE_GOLEM_FRONT_CONE_RAD
+        : enemy.defId === 'iron_shielder'
+          ? IRON_SHIELDER_FRONT_CONE_RAD
+          : (75 * Math.PI) / 180;
     if (Math.abs(angleDiff(incomingFromAngle, enemy.aimAngle)) < coneHalfRad) {
       finalAmount = Math.max(1, finalAmount * (1 - frontShieldReduction));
       hitFrontShield = true;
@@ -216,6 +224,13 @@ export function applyDamageToEnemyImpl(
   if (element !== 'none') {
     this.applyElementStatusToEnemy(enemy, element, dmg, attackerPlayerId);
   }
+  if (
+    enemy.defId === 'iron_shielder' &&
+    element === 'shock' &&
+    (hitFrontShield || Math.abs(angleDiff(hitAngleRad, enemy.aimAngle)) < IRON_SHIELDER_FRONT_CONE_RAD)
+  ) {
+    triggerIronShielderShockArc(this, enemy, attackerPlayerId);
+  }
 
   if (!this.stressTestActive || this.tick % 4 === 0) {
     this.events.push({
@@ -346,7 +361,7 @@ export function handleEnemyKilledImpl(
     return;
   }
 
-  // Biome 3 Coal Golem leaves a burning lava/fire pool on death!
+  // Biome 3 Coal Golem leaves a burning lava/fire pool and drops a 2.0s coal_bomb on death!
   if (enemy.defId === 'coal_golem' && !this.stressTestActive) {
     const tx = Math.floor(enemy.x / TILE_SIZE);
     const ty = Math.floor(enemy.y / TILE_SIZE);
@@ -364,6 +379,12 @@ export function handleEnemyKilledImpl(
       }
     }
     this.events.push({ kind: 'surface_triggered', surface: 'lava', x: enemy.x, y: enemy.y });
+    spawnCoalBombOnDeath(this, enemy);
+  }
+
+  // Biome 3 Welder Drone crashes on death and triggers a r=110px EMP Blast!
+  if (enemy.defId === 'welder_drone' && !this.stressTestActive) {
+    triggerWelderDroneEmpBlastOnDeath(this, enemy, killerPlayerId);
   }
 
   // Biome 3 Boss Forge Titan Energy Core destroyed -> check 3s Co-op / 6s Solo sync window!
