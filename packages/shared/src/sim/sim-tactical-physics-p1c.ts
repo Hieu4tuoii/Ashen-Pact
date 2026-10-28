@@ -1,7 +1,12 @@
 import { distance } from '../math/vec2.js';
 import { SHOT_FLAG, TILE_SIZE } from '../protocol/messages.js';
 import { applyRicochetVowTacticalPropBonus } from './sim-ashen-pacts.js';
-import { addBossStaggerAccum } from './sim-boss-armor-break.js';
+import {
+  FORGE_TITAN_ARMOR_BREAK_STUN_SEC,
+  addBossStaggerAccum,
+  triggerBossArmorBreak,
+  tryBreakBossArmorWithKickedProp,
+} from './sim-boss-armor-break.js';
 import { shatterIceGolemArmor } from './sim-enemies-tactical-ai.js';
 import {
   computeHazardDamage,
@@ -363,6 +368,26 @@ export function applyForgeBlastShieldFireWave(
     if (e.hp <= 0 || e.defId === 'ashen_executioner' || prop.hitEnemyIds.includes(e.id)) continue;
     if (segDist(e.x, e.y, oldX, oldY, nextX, nextY) <= FORGE_BLAST_SHIELD_WAVE_HALF_WIDTH + e.radius) {
       prop.hitEnemyIds.push(e.id);
+      if (tryBreakBossArmorWithKickedProp(sim, e, prop, ownerId)) {
+        e.burnTimer = Math.max(e.burnTimer, 3.0);
+        if (e.burnTickTimer <= 0) e.burnTickTimer = 0.5;
+        prop.x = e.x;
+        prop.y = e.y;
+        prop.hp = 0;
+        prop.destructible = false;
+        prop.blocksMovement = false;
+        prop.blocksEnemyProjectiles = false;
+        prop.state = 'broken';
+        prop.coverState = 'fallen';
+        sim.events.push({
+          kind: 'prop_destroyed',
+          propId: prop.id,
+          propKind: prop.kind,
+          x: e.x,
+          y: e.y,
+        });
+        return;
+      }
       const dmg = applyRicochetVowTacticalPropBonus(
         waveOwner,
         computeKickSlideDamage(e, sim.currentFloor),
@@ -460,6 +485,19 @@ export function spillSlagCrucibleLavaCarpet(
     const e = sim.enemies[i]!;
     if (e.hp <= 0 || e.isDummy || e.defId === 'ashen_executioner' || e.aiState === 'spawning') continue;
     if (segDist(e.x, e.y, crucible.x, crucible.y, endX, endY) <= 28 + e.radius) {
+      if (
+        Boolean(crucible.kickedByPlayerId || spillAngle !== undefined) &&
+        tryBreakBossArmorWithKickedProp(sim, e, crucible, ownerId)
+      ) {
+        e.burnTimer = Math.max(e.burnTimer, 3.5);
+        if (e.burnTickTimer <= 0) e.burnTickTimer = 0.5;
+        continue;
+      }
+      if (e.bossArmorBreakTriggeredTick === sim.tick) {
+        e.burnTimer = Math.max(e.burnTimer, 3.5);
+        if (e.burnTickTimer <= 0) e.burnTickTimer = 0.5;
+        continue;
+      }
       const dmg = applyRicochetVowTacticalPropBonus(
         carpetOwner,
         computeHazardDamage(e, sim.currentFloor, 26),
@@ -517,6 +555,20 @@ function triggerPneumaticPressSlam(sim: WorldSim, press: SimPropState): void {
     const e = sim.enemies[i]!;
     if (e.hp <= 0 || e.isDummy || e.aiState === 'spawning') continue;
     if (distance(press.x, press.y, e.x, e.y) <= PNEUMATIC_PRESS_CRUSH_RADIUS + e.radius) {
+      if (e.isBoss && (e.defId === 'forge_titan' || e.bossArmorShellActive)) {
+        e.bossStaggerAccum = (e.bossStaggerAccum ?? 0) + 1;
+        if (e.shieldArmor > 0) {
+          e.shieldArmor = 0;
+        }
+        triggerBossArmorBreak(
+          sim,
+          e,
+          sim.player.id,
+          e.defId === 'forge_titan' ? FORGE_TITAN_ARMOR_BREAK_STUN_SEC : undefined,
+          e.defId === 'forge_titan' ? 'THERMAL ARMOR OVERLOAD!' : undefined,
+        );
+        continue;
+      }
       const dmg = computeHazardDamage(e, sim.currentFloor, 36);
       e.hp = Math.max(0, e.hp - dmg);
       e.hitFlashTimer = 0.18;

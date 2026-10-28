@@ -1,4 +1,5 @@
 import { angleDiff, distance } from '../math/vec2.js';
+import { tryBreakBossArmorWithKickedProp } from './sim-boss-armor-break.js';
 import {
   MAX_TACTICAL_PROPS_PER_ROOM,
   type SimEnemyState,
@@ -450,6 +451,22 @@ export function detonateCoalBomb(sim: WorldSim, bomb: SimPropState): number {
     const e = sim.enemies[i]!;
     if (e.hp <= 0 || e.isDummy || e.defId === 'ashen_executioner' || e.aiState === 'spawning') continue;
     if (distance(bomb.x, bomb.y, e.x, e.y) <= COAL_BOMB_BLAST_RADIUS + e.radius) {
+      if (
+        e.defId === 'forge_titan' &&
+        e.bossArmorBreakTriggeredTick !== sim.tick &&
+        Boolean(bomb.kickedByPlayerId || bomb.slideOwnerPlayerId)
+      ) {
+        tryBreakBossArmorWithKickedProp(sim, e, bomb, ownerId);
+      }
+      if (e.bossArmorBreakTriggeredTick === sim.tick) {
+        if (e.hp > 0) {
+          e.burnTimer = Math.max(e.burnTimer, 3.0);
+          e.burnStacks = Math.max(1, e.burnStacks ?? 1);
+          if (e.burnTickTimer <= 0) e.burnTickTimer = 0.5;
+        }
+        hitCount += 1;
+        continue;
+      }
       const hpBefore = e.hp;
       const pushAng = Math.atan2(e.y - bomb.y, e.x - bomb.x);
       const alreadySlideHit = Boolean(bomb.hitEnemyIds?.includes(e.id));

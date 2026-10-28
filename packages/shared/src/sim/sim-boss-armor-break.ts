@@ -38,6 +38,9 @@ export const SPORE_KING_ARMOR_REDUCTION = 0.7;
 export const SPORE_KING_ARMOR_BREAK_STUN_SEC = 3.5;
 export const KRYSSA_ARMOR_REDUCTION = 0.75;
 export const KRYSSA_ARMOR_BREAK_STUN_SEC = 3.0;
+export const FORGE_TITAN_ARMOR_REDUCTION = 0.75;
+export const FORGE_TITAN_ARMOR_BREAK_STUN_SEC = 4.0;
+export const FORGE_TITAN_BOSS_COAL_BOMB_FUSE_SEC = 3.5;
 export const BOSS_ARMOR_BREAK_VULN_BONUS = 0.4;
 export const BOSS_ARMOR_BREAK_HAZARD_RATIO = 0.06;
 export const SPORE_KING_CHARGE_SPEED = 360;
@@ -270,6 +273,9 @@ export function stepBossSupplyDropsAndStagger(sim: WorldSim, dtSec: number): voi
           }
         }
         const landed = sim.spawnProp(drop.propKind, drop.x, drop.y);
+        if (landed.kind === 'coal_bomb') {
+          landed.fuseTimer = FORGE_TITAN_BOSS_COAL_BOMB_FUSE_SEC;
+        }
         landed.lastCombatText = 'SUPPLY DROP!';
         if (activeBoss) {
           activeBoss.lastCombatText = 'SUPPLY DROP!';
@@ -325,10 +331,53 @@ export function getBossArmorBreakVulnBonus(
   return BOSS_ARMOR_BREAK_VULN_BONUS;
 }
 
+function spawnForgeTitanBossCoalBombs(sim: WorldSim, boss: SimEnemyState): number {
+  let existingBombs = 0;
+  for (let i = 0; i < sim.props.length; i++) {
+    const p = sim.props[i]!;
+    if (p.kind === 'coal_bomb' && p.hp > 0 && p.state !== 'broken') {
+      p.fuseTimer = Math.max(p.fuseTimer, FORGE_TITAN_BOSS_COAL_BOMB_FUSE_SEC);
+      existingBombs += 1;
+    }
+  }
+  const targetBombs = 2;
+  let spawned = 0;
+  const offsets = [-84, 84] as const;
+  for (let i = existingBombs; i < targetBombs; i++) {
+    const dx = offsets[i % offsets.length]!;
+    const rawX = Math.max(
+      TILE_SIZE * 2.5,
+      Math.min(sim.map.width - TILE_SIZE * 2.5, boss.x + dx),
+    );
+    const rawY = Math.max(
+      TILE_SIZE * 2.5,
+      Math.min(sim.map.height - TILE_SIZE * 2.5, boss.y),
+    );
+    const col = sim.map.resolveCircleCollision(rawX, rawY, 18, false);
+    const bomb = sim.spawnProp('coal_bomb', col.x, col.y);
+    bomb.fuseTimer = FORGE_TITAN_BOSS_COAL_BOMB_FUSE_SEC;
+    bomb.hp = 50;
+    bomb.maxHp = 50;
+    bomb.radius = 18;
+    bomb.state = 'intact';
+    bomb.coverState = undefined;
+    bomb.destructible = true;
+    bomb.explosive = true;
+    bomb.blocksMovement = true;
+    bomb.enemyPushed = false;
+    spawned += 1;
+  }
+  return spawned;
+}
+
 export function activateBossArmorShell(
   sim: WorldSim,
   boss: SimEnemyState,
-  reduction = boss.defId === 'spore_king' ? SPORE_KING_ARMOR_REDUCTION : KRYSSA_ARMOR_REDUCTION,
+  reduction = boss.defId === 'spore_king'
+    ? SPORE_KING_ARMOR_REDUCTION
+    : boss.defId === 'forge_titan'
+      ? FORGE_TITAN_ARMOR_REDUCTION
+      : KRYSSA_ARMOR_REDUCTION,
 ): void {
   if (!boss.isBoss || boss.hp <= 0) return;
 
@@ -360,6 +409,18 @@ export function activateBossArmorShell(
     boss.vx = 0;
     boss.vy = 0;
     boss.lastCombatText = 'GLACIAL SHIELD!';
+  } else if (boss.defId === 'forge_titan') {
+    boss.aiState = 'telegraph';
+    boss.stateTimer = Math.max(0.45, boss.telegraphDurationSec || 0.55);
+    boss.leadSightlineActive = false;
+    boss.telegraphAngle = angleToTarget;
+    boss.aimAngle = angleToTarget;
+    boss.telegraphRadius = 72;
+    boss.bossBurrowed = false;
+    boss.vx = 0;
+    boss.vy = 0;
+    boss.lastCombatText = 'THERMONUCLEAR ARMOR!';
+    spawnForgeTitanBossCoalBombs(sim, boss);
   }
 }
 
@@ -381,7 +442,9 @@ export function triggerBossArmorBreak(
   attackerPlayerId = sim.player.id,
   stunDurationSec = boss.defId === 'kryssa_ice_queen'
     ? KRYSSA_ARMOR_BREAK_STUN_SEC
-    : SPORE_KING_ARMOR_BREAK_STUN_SEC,
+    : boss.defId === 'forge_titan'
+      ? FORGE_TITAN_ARMOR_BREAK_STUN_SEC
+      : SPORE_KING_ARMOR_BREAK_STUN_SEC,
   combatText?: string,
 ): number {
   if (!boss.isBoss || boss.hp <= 0) return 0;
@@ -513,6 +576,33 @@ export function tryBreakBossArmorWithKickedProp(
       attackerPlayerId,
       KRYSSA_ARMOR_BREAK_STUN_SEC,
       'CRYO SHIELD SHATTERED!',
+    );
+    return true;
+  }
+
+  if (boss.defId === 'forge_titan') {
+    const isForgeTitanBreakProp =
+      prop.kind === 'forge_blast_shield' ||
+      prop.kind === 'coal_bomb' ||
+      prop.kind === 'slag_crucible';
+    if (!isForgeTitanBreakProp) return false;
+
+    if ((boss.bossStaggerCooldownTimer ?? 0) <= 0) {
+      const nextStagger = (boss.bossStaggerAccum ?? 0) + BOSS_STAGGER_PROP_KICK_BONUS;
+      if (nextStagger >= BOSS_STAGGER_MAX) {
+        boss.bossStaggerAccum = 0;
+        boss.bossStaggerCooldownTimer = BOSS_STAGGER_COOLDOWN_SEC;
+        onEnemyWallSlammed(sim, boss, attackerPlayerId, false);
+      } else {
+        boss.bossStaggerAccum = nextStagger;
+      }
+    }
+    triggerBossArmorBreak(
+      sim,
+      boss,
+      attackerPlayerId,
+      FORGE_TITAN_ARMOR_BREAK_STUN_SEC,
+      'THERMAL ARMOR OVERLOAD!',
     );
     return true;
   }

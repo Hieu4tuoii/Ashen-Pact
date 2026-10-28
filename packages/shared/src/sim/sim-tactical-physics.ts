@@ -666,6 +666,7 @@ export function updateSlidingPropsImpl(this: WorldSim, dtSec: number): void {
     if (!prop.hitEnemyIds) prop.hitEnemyIds = [];
     if (prop.kind === 'forge_blast_shield') {
       applyForgeBlastShieldFireWave(this, prop, oldX, oldY, nextX, nextY, slideAngle, ownerId);
+      if (prop.hp <= 0) continue;
     }
 
     let detonatedOnEnemy = false;
@@ -689,7 +690,21 @@ export function updateSlidingPropsImpl(this: WorldSim, dtSec: number): void {
             shatterGlacialBarricade(this, prop, slideAngle, ownerId);
             detonatedOnEnemy = true; break;
           }
-          if (prop.kind === 'moss_table' || prop.kind === 'sliding_ice_block') {
+          if (prop.kind === 'coal_bomb') {
+            prop.x = e.x; prop.y = e.y;
+            detonateCoalBomb(this, prop);
+            detonatedOnEnemy = true; break;
+          }
+          if (prop.kind === 'slag_crucible') {
+            prop.x = e.x; prop.y = e.y;
+            spillSlagCrucibleLavaCarpet(this, prop, slideAngle, ownerId);
+            detonatedOnEnemy = true; break;
+          }
+          if (
+            prop.kind === 'moss_table' ||
+            prop.kind === 'sliding_ice_block' ||
+            prop.kind === 'forge_blast_shield'
+          ) {
             prop.x = e.x; prop.y = e.y;
             destroyTacticalProp(this, prop);
             detonatedOnEnemy = true; break;

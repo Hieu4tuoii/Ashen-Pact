@@ -420,14 +420,17 @@ export function handleEnemyKilledImpl(
       this.titanFirstCoreBrokenId = 0;
       const titan = this.enemies.find((m) => m.defId === 'forge_titan' && m.hp > 0);
       if (titan) {
+        const overloadSelfDmg = Math.max(25, Math.round(titan.maxHp * 0.08));
+        titan.hp = Math.max(1, titan.hp - overloadSelfDmg);
+        this.checkBossPhaseTransitions(titan);
+        titan.bossArmorShellActive = false;
+        titan.bossArmorShellReduction = 0;
+        titan.bossPhaseTransitionTimer = 0;
         titan.aiState = 'stunned';
         titan.stateTimer = 4.5;
         titan.superconductTimer = 6.0;
         titan.vx = 0;
         titan.vy = 0;
-        const overloadSelfDmg = Math.max(25, Math.round(titan.maxHp * 0.08));
-        titan.hp = Math.max(1, titan.hp - overloadSelfDmg);
-        this.checkBossPhaseTransitions(titan);
         this.events.push({
           kind: 'emp_blast',
           x: titan.x,
