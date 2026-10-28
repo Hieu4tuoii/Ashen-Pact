@@ -9,10 +9,14 @@ import {
   type BossBalanceRow,
   CHARACTER_LIST,
   type CharacterBalanceRow,
+  type ClassCoopRunRow,
   type CoopScalingRow,
   type CoopSynergyTeamRow,
   MATRIX_WEAPON_IDS,
+  type WeaponCadenceBalanceRow,
   type WeaponMatrixRow,
+  measureAll5ClassesCoopRuns,
+  measureAll18WeaponsDps,
   measureBiomeDifficultyProgression,
   measureCombatDpsAndSkillUptime,
   measureCombatRoomClearSec,
@@ -20,7 +24,11 @@ import {
   simulateHitsSurvived,
   simulateStarterWeaponTtkSamples,
 } from './balance-simulations.js';
-import { AVERAGE_PLAYER_BOT_PROFILE, computeDistributionStats } from './bot-profile.js';
+import {
+  AVERAGE_PLAYER_BOT_PROFILE,
+  type DistributionStats,
+  computeDistributionStats,
+} from './bot-profile.js';
 
 export * from './balance-simulations.js';
 export * from './bot-profile.js';
@@ -40,6 +48,18 @@ export function runBalanceHarness(options?: BalanceHarnessOptions): BalanceHarne
   // 1. Character starter TTK, survivability, sustained DPS, skill uptime & solo boss
   const charRows: CharacterBalanceRow[] = [];
   const allEnemyTtkSamples: number[] = [];
+  const soloBossByChar = new Map<
+    CharacterId,
+    {
+      avgSec: number;
+      winRatePct: number;
+      reactionsTriggered: number;
+      teamCombos: number;
+      durationStats: DistributionStats;
+      maxSingleHitFraction: number;
+      zeroOneShots: boolean;
+    }
+  >();
 
   for (const cid of CHARACTER_LIST) {
     const cDef = CHARACTERS[cid];
@@ -55,6 +75,7 @@ export function runBalanceHarness(options?: BalanceHarnessOptions): BalanceHarne
     totalSims += seeds.length;
 
     const bossSolo = simulateBossFight(1, cid, seeds, undefined, 'spore_king');
+    soloBossByChar.set(cid, bossSolo);
     totalSims += seeds.length;
 
     charRows.push({
@@ -98,7 +119,9 @@ export function runBalanceHarness(options?: BalanceHarnessOptions): BalanceHarne
   let coopDownedEvents = 0;
   let coopRoomsSimulated = 0;
 
-  let b1Boss1PRes = simulateBossFight(1, 'ranger', seeds, undefined, 'spore_king');
+  let b1Boss1PRes =
+    soloBossByChar.get('ranger') ??
+    simulateBossFight(1, 'ranger', seeds, undefined, 'spore_king');
   let b1Boss4PRes = b1Boss1PRes;
 
   for (const pCount of [1, 2, 3, 4] as const) {
@@ -255,6 +278,18 @@ export function runBalanceHarness(options?: BalanceHarnessOptions): BalanceHarne
   const biomes = measureBiomeDifficultyProgression(seeds);
   totalSims += Math.min(seeds.length, 10) * 3;
 
+  // 7. All 18 Unique Weapons Normal DPS vs Active [R] / Finisher DPS (Phase P3C / Spec 3.3)
+  const weaponDpsMeasurement = measureAll18WeaponsDps(seeds);
+  const weaponCadenceRows: WeaponCadenceBalanceRow[] = weaponDpsMeasurement.rows;
+  const starterWeaponDpsSpreadPct = weaponDpsMeasurement.starterWeaponDpsSpreadPct;
+  totalSims += weaponDpsMeasurement.simulationsRun;
+
+  // 8. All 5 Classes across Solo 1P, Co-op 2P & Co-op 4P (Phase P3C)
+  const classCoopMeasurement = measureAll5ClassesCoopRuns(seeds, soloBossByChar);
+  const classCoopRows: ClassCoopRunRow[] = classCoopMeasurement.rows;
+  const classWinRateSpreadPct = classCoopMeasurement.classWinRateSpreadPct;
+  totalSims += classCoopMeasurement.simulationsRun;
+
   const avgEnemyTtkSec = enemyTtkStats.p50;
   const minEnemyTtkSec = enemyTtkStats.p10;
   const maxEnemyTtkSec = enemyTtkStats.p90;
@@ -361,6 +396,10 @@ export function runBalanceHarness(options?: BalanceHarnessOptions): BalanceHarne
     coopSynergyRows,
     biomes,
     bosses,
+    weaponCadenceRows,
+    starterWeaponDpsSpreadPct,
+    classCoopRows,
+    classWinRateSpreadPct,
     allTargetsPassed,
   };
 }
@@ -387,6 +426,8 @@ export function formatMarkdownReport(res: BalanceHarnessReport): string {
     `| 5 | **Tỉ lệ thắng Boss Solo & Không One-Shot** | \`B1: 80–95%, B2: 70–90%, B3: 60–85%\` | **B1: ${b1Boss.winRate1PPct}% · B2: ${b2Boss.winRate1PPct}% · B3: ${b3Boss.winRate1PPct}%** (Zero One-Shot: \`${res.bossBiomeRows.every((b) => b.zeroOneShots)}\`) | ${passIcon(b1Boss.winRate1PPct >= 80 && b1Boss.winRate1PPct <= 95 && b2Boss.winRate1PPct >= 70 && b2Boss.winRate1PPct <= 90 && b3Boss.winRate1PPct >= 60 && b3Boss.winRate1PPct <= 85 && res.bossBiomeRows.every((b) => b.zeroOneShots))} |`,
     `| 6 | **Độ khó tăng giữa các Biome (Đo thật WorldSim)** | \`+20% – 25%\` mỗi Biome | **Biome 2 \`+${res.biome2IncreasePct}%\` · Biome 3 \`+${res.biome3IncreasePct}%\`** | ${passIcon(res.biome2IncreasePct >= 20 && res.biome2IncreasePct <= 25 && res.biome3IncreasePct >= 20 && res.biome3IncreasePct <= 25)} |`,
     `| 7 | **Chịu đòn cơ bản & Độ lệch DPS 3 NV sát thương** | \`4 – 10 đòn\` · Lệch \`≤ ±15%\` | **\`${res.minHitsSurvived} – ${res.maxHitsSurvived} đòn\` · Lệch \`±${res.dps3CharSpreadPct}%\`** | ${passIcon(res.minHitsSurvived >= 4 && res.maxHitsSurvived <= 10 && res.dps3CharSpreadPct <= 15)} |`,
+    `| 8 | **Độ lệch DPS 5 Vũ khí Khởi đầu & Active \`[R]\` 18 Vũ khí** | Lệch \`< 5.0%\` · \`Active > Normal\` | **Lệch \`±${res.starterWeaponDpsSpreadPct}%\` · 18/18 \`Active > Normal\`** | ${passIcon(res.starterWeaponDpsSpreadPct < 5 && res.weaponCadenceRows.every((w) => w.activeDps > w.normalDps))} |`,
+    `| 9 | **Độ lệch Tỉ lệ thắng 5 Class (1P / 2P / 4P × ${res.seedsUsed.length} seeds)** | Lệch \`≤ ±6.0%\` | **Lệch \`±${res.classWinRateSpreadPct}%\`** | ${passIcon(res.classWinRateSpreadPct <= 6)} |`,
     '',
     '---',
     '',
@@ -452,7 +493,33 @@ export function formatMarkdownReport(res: BalanceHarnessReport): string {
         `| **Biome ${b.biome}** | ${b.nameVi} | \`${b.measuredWaveEhp}\` | \`${b.measuredRoomClearSec}s\` | \`${b.measuredHpArmorLostPct}%\` | \`×${b.difficultyIndex.toFixed(2)}\` | ${b.biome === 1 ? 'Cơ sở (Baseline)' : `**+${b.stepIncreasePct.toFixed(1)}%**`} |`,
     ),
     '',
-    `## 7. Kết Luận Kiểm Chứng: ${res.allTargetsPassed ? '✅ ĐẠT 100% TẤT CẢ MỤC TIÊU CÂN BẰNG SPEC 3.10' : '❌ CHƯA ĐẠT (CẦN TUNE DATA Ở BƯỚC 2)'}`,
+    '---',
+    '',
+    '## 7. Cân Bằng 18 Vũ Khí Độc Bản: DPS Thường vs DPS Active `[R]` / Tuyệt Kỹ (Spec 3.3)',
+    '',
+    `> Độ lệch DPS giữa **5 Vũ khí Khởi đầu** (\`knight_sword\`, \`hunter_crossbow\`, \`apprentice_staff\`, \`thorn_staff\`, \`rivet_gun\`): **\`±${res.starterWeaponDpsSpreadPct}%\`** (Mục tiêu \`< 5.0%\` — ${passIcon(res.starterWeaponDpsSpreadPct < 5)}).`,
+    '',
+    '| # | Vũ khí | Độ hiếm | Nhịp (`Cadence`) | DPS Thường (Target) | DPS Active `[R]` (Target) | Tăng khi Active `[R]` | Trạng thái |',
+    '|---:|---|---|---|---:|---:|---:|:---:|',
+    ...res.weaponCadenceRows.map(
+      (w, idx) =>
+        `| ${idx + 1} | **${w.nameVi}** (\`${w.weaponId}\`)${w.isStarter ? ' ⭐' : ''} | \`${w.rarity}\` | \`${w.cadenceKind}\` | **${w.normalDps} DPS** (\`~${w.targetNormalDps}\`) | **${w.activeDps} DPS** (\`~${w.targetActiveDps}\`) | **+${w.activeGainPct}%** | ${passIcon(w.activeDps > w.normalDps)} |`,
+    ),
+    '',
+    '---',
+    '',
+    `## 8. Thống Kê 5 Class Qua 1P / 2P / 4P (${res.seedsUsed.length} Seeds / Chế Độ — Human-Like Bot Profile)`,
+    '',
+    `> Độ lệch Tỉ lệ thắng (\`Winrate Spread\`) giữa 5 Class: **\`±${res.classWinRateSpreadPct}%\`** (Mục tiêu \`≤ ±6.0%\` — ${passIcon(res.classWinRateSpreadPct <= 6)}).`,
+    '',
+    '| Nhân vật (Class) | Vai trò | Số lượt / Mode | Winrate `1P` (`p50` TG) | Winrate `2P` (`p50` TG) | Winrate `4P` (`p50` TG) | Winrate Tổng Hợp |',
+    '|---|---|---:|---|---|---|---:|',
+    ...res.classCoopRows.map(
+      (c) =>
+        `| **${c.nameVi}** (\`${c.characterId}\`) | ${c.roleVi} | \`${c.runsPerMode}\` (\`Σ=${c.totalRuns}\`) | **${c.winRate1PPct}%** (\`${c.avgClearSec1P}s\`) | **${c.winRate2PPct}%** (\`${c.avgClearSec2P}s\`) | **${c.winRate4PPct}%** (\`${c.avgClearSec4P}s\`) | **${c.overallWinRatePct}%** |`,
+    ),
+    '',
+    `## 9. Kết Luận Kiểm Chứng: ${res.allTargetsPassed ? '✅ ĐẠT 100% TẤT CẢ MỤC TIÊU CÂN BẰNG SPEC 3.10' : '❌ CHƯA ĐẠT (CẦN TUNE DATA Ở BƯỚC 2)'}`,
     '',
   ];
 

@@ -226,9 +226,17 @@ describe('Phase P11 — Locked Average Player Bot Profile & Honest Simulation Pr
       'utf8',
     );
 
+    const simP3cSrc = fs.readFileSync(
+      path.resolve(testDir, '../../../tools/balance-simulations-p3c.ts'),
+      'utf8',
+    );
+
     expect(simSrc).not.toContain('encounterScale');
     expect(simSrc).not.toContain('roomFactor');
     expect(simSrc).not.toMatch(/\.godMode\s*=\s*true/);
+    expect(simP3cSrc).not.toContain('encounterScale');
+    expect(simP3cSrc).not.toContain('roomFactor');
+    expect(simP3cSrc).not.toMatch(/\.godMode\s*=\s*true/);
     expect(harnessSrc).not.toContain('1.5625');
 
     const roomSample = measureCombatRoomClearSec(1, 101, 1);
@@ -250,6 +258,23 @@ describe('Phase P11 — Locked Average Player Bot Profile & Honest Simulation Pr
     expect(smokeReport.enemyTtkStats.p50).toBeGreaterThan(0);
     expect(smokeReport.combatRoomSecStats.p50).toBeGreaterThan(0);
     expect(smokeReport.bossBiomeRows.length).toBe(3);
-    expect(formatMarkdownReport(smokeReport)).toContain('AVERAGE_PLAYER_BOT_PROFILE');
+    expect(smokeReport.weaponCadenceRows.length).toBe(18);
+    for (const wRow of smokeReport.weaponCadenceRows) {
+      expect(wRow.normalDps).toBeGreaterThan(0);
+      expect(wRow.activeDps).toBeGreaterThan(wRow.normalDps);
+      expect(wRow.activeGainPct).toBeGreaterThan(0);
+    }
+    expect(smokeReport.starterWeaponDpsSpreadPct).toBeGreaterThanOrEqual(0);
+    expect(smokeReport.classCoopRows.length).toBe(5);
+    for (const cRow of smokeReport.classCoopRows) {
+      expect(cRow.runsPerMode).toBe(2);
+      expect(cRow.avgClearSec1P).toBeGreaterThan(0);
+      expect(cRow.avgClearSec2P).toBeGreaterThan(0);
+      expect(cRow.avgClearSec4P).toBeGreaterThan(0);
+    }
+    const md = formatMarkdownReport(smokeReport);
+    expect(md).toContain('AVERAGE_PLAYER_BOT_PROFILE');
+    expect(md).toContain('Cân Bằng 18 Vũ Khí Độc Bản');
+    expect(md).toContain('Thống Kê 5 Class Qua 1P / 2P / 4P');
   });
 });

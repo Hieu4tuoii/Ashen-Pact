@@ -20,6 +20,10 @@ import {
   createBotBrainState,
   stepHonestPlayerBot,
 } from './bot-profile.js';
+import type {
+  ClassCoopRunRow,
+  WeaponCadenceBalanceRow,
+} from './balance-simulations-p3c.js';
 
 export interface CharacterBalanceRow {
   characterId: CharacterId;
@@ -117,6 +121,10 @@ export interface BalanceHarnessReport {
   coopSynergyRows: CoopSynergyTeamRow[];
   biomes: BiomeProgressionRow[];
   bosses: BossBalanceRow[];
+  weaponCadenceRows: WeaponCadenceBalanceRow[];
+  starterWeaponDpsSpreadPct: number;
+  classCoopRows: ClassCoopRunRow[];
+  classWinRateSpreadPct: number;
   allTargetsPassed: boolean;
 }
 
@@ -417,6 +425,9 @@ export function measureCombatDpsAndSkillUptime(
 
 export const simulateCharacterDpsAndUptime = measureCombatDpsAndSkillUptime;
 
+const _combatRoomCache = new Map<string, CombatRoomClearSample>();
+const _bossEncounterCache = new Map<string, BossEncounterSample>();
+
 /**
  * 4. Honest multi-wave Combat Room simulation in WorldSim using `stepHonestPlayerBot`
  * and `AVERAGE_PLAYER_BOT_PROFILE` (`godMode: false`, no fake room HP multipliers).
@@ -426,6 +437,11 @@ export function measureCombatRoomClearSec(
   seed: number,
   biome: 1 | 2 | 3 = 1,
 ): CombatRoomClearSample {
+  const cacheKey = `${playerCount}|${seed}|${biome}|${BIOME_SCALING[biome].hpMultiplier}`;
+  const cached = _combatRoomCache.get(cacheKey);
+  if (cached) {
+    return { ...cached };
+  }
   const roster: readonly CharacterId[] = ['ranger', 'elementalist', 'engineer', 'druid'];
   const floor = biome === 1 ? 1 : biome === 2 ? 3 : 5;
 
@@ -543,12 +559,14 @@ export function measureCombatRoomClearSec(
       clamp((totalDamageTaken / Math.max(1, initialTotalHpAndArmor)) * 100, 0, 100) * 10,
     ) / 10;
 
-  return {
+  const result: CombatRoomClearSample = {
     clearSec: Math.round(ticks * SIM_STEP_SEC * 100) / 100,
     hpAndArmorLostPct,
     downedCount,
     cleared: combatRoom.cleared,
   };
+  _combatRoomCache.set(cacheKey, result);
+  return { ...result };
 }
 
 export function simulateCombatRoomDuration(
@@ -580,6 +598,15 @@ export function simulateBossEncounter(
     'engineer',
     'druid',
   ];
+  const activeRosterKey = Array.from(
+    { length: playerCount },
+    (_, idx) => coopRoster[idx % coopRoster.length]!,
+  ).join(',');
+  const cacheKey = `${playerCount}|${activeRosterKey}|${bossId}|${seed}|${ENEMIES[bossId]?.hp ?? 0}`;
+  const cached = _bossEncounterCache.get(cacheKey);
+  if (cached) {
+    return { ...cached };
+  }
   const biome: 1 | 2 | 3 =
     bossId === 'spore_king' ? 1 : bossId === 'kryssa_ice_queen' ? 2 : 3;
   const floor = biome === 1 ? 2 : biome === 2 ? 4 : 6;
@@ -723,7 +750,7 @@ export function simulateBossEncounter(
     }
   }
 
-  return {
+  const sampleResult: BossEncounterSample = {
     won: boss.hp <= 0,
     durationSec: Math.round(ticks * SIM_STEP_SEC * 100) / 100,
     elementalReactions: sim.runStats.elementalReactions,
@@ -731,6 +758,8 @@ export function simulateBossEncounter(
     maxSingleHitFraction: Math.round(maxSingleHitFraction * 1000) / 1000,
     downedCount,
   };
+  _bossEncounterCache.set(cacheKey, sampleResult);
+  return { ...sampleResult };
 }
 
 export function simulateBossFight(
@@ -910,3 +939,5 @@ export function measureBiomeDifficultyProgression(
 
   return rows;
 }
+
+export * from './balance-simulations-p3c.js';
