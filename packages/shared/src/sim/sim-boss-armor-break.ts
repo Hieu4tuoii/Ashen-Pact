@@ -36,10 +36,28 @@ export const BOSS_STAGGER_FLINCH_SEC = 0.5;
 
 export const SPORE_KING_ARMOR_REDUCTION = 0.7;
 export const SPORE_KING_ARMOR_BREAK_STUN_SEC = 3.5;
+export const KRYSSA_ARMOR_REDUCTION = 0.75;
+export const KRYSSA_ARMOR_BREAK_STUN_SEC = 3.0;
 export const BOSS_ARMOR_BREAK_VULN_BONUS = 0.4;
 export const BOSS_ARMOR_BREAK_HAZARD_RATIO = 0.06;
 export const SPORE_KING_CHARGE_SPEED = 360;
 export const SPORE_KING_CHARGE_DURATION_SEC = 0.65;
+
+export function tryChargeGlacialBarricadeWithCryoLaser(
+  prop: SimPropState,
+  weaponId?: string,
+): boolean {
+  if (
+    prop.kind === 'glacial_barricade' &&
+    prop.coverState === 'flipped' &&
+    (weaponId === 'kryssa_ice_beam' || weaponId === 'kryssa_frost_nova')
+  ) {
+    prop.cryoChargedByLaser = true;
+    prop.lastCombatText = 'CRYO CHARGED!';
+    return true;
+  }
+  return false;
+}
 
 export function isBossBiomeToyProp(kind: PropKind): boolean {
   return (
@@ -310,7 +328,7 @@ export function getBossArmorBreakVulnBonus(
 export function activateBossArmorShell(
   sim: WorldSim,
   boss: SimEnemyState,
-  reduction = boss.defId === 'spore_king' ? SPORE_KING_ARMOR_REDUCTION : 0.75,
+  reduction = boss.defId === 'spore_king' ? SPORE_KING_ARMOR_REDUCTION : KRYSSA_ARMOR_REDUCTION,
 ): void {
   if (!boss.isBoss || boss.hp <= 0) return;
 
@@ -331,6 +349,17 @@ export function activateBossArmorShell(
     boss.vx = 0;
     boss.vy = 0;
     boss.lastCombatText = 'SPORE CARAPACE!';
+  } else if (boss.defId === 'kryssa_ice_queen') {
+    boss.aiState = 'telegraph';
+    boss.stateTimer = Math.max(0.42, boss.telegraphDurationSec || 0.55);
+    boss.leadSightlineActive = false;
+    boss.telegraphAngle = angleToTarget;
+    boss.aimAngle = angleToTarget;
+    boss.telegraphRadius = 56;
+    boss.bossBurrowed = false;
+    boss.vx = 0;
+    boss.vy = 0;
+    boss.lastCombatText = 'GLACIAL SHIELD!';
   }
 }
 
@@ -350,7 +379,9 @@ export function triggerBossArmorBreak(
   sim: WorldSim,
   boss: SimEnemyState,
   attackerPlayerId = sim.player.id,
-  stunDurationSec = SPORE_KING_ARMOR_BREAK_STUN_SEC,
+  stunDurationSec = boss.defId === 'kryssa_ice_queen'
+    ? KRYSSA_ARMOR_BREAK_STUN_SEC
+    : SPORE_KING_ARMOR_BREAK_STUN_SEC,
   combatText?: string,
 ): number {
   if (!boss.isBoss || boss.hp <= 0) return 0;
@@ -374,7 +405,7 @@ export function triggerBossArmorBreak(
   boss.bossArmorBreakTriggeredTick = sim.tick;
   boss.stunTimer = Math.max(boss.stunTimer ?? 0, stunDurationSec);
   boss.aiState = 'stunned';
-  boss.stateTimer = Math.max(boss.stateTimer ?? 0, stunDurationSec);
+  boss.stateTimer = stunDurationSec;
   boss.bossArmorBreakVulnTimer = Math.max(boss.bossArmorBreakVulnTimer ?? 0, stunDurationSec);
   boss.vx = 0;
   boss.vy = 0;
@@ -457,6 +488,31 @@ export function tryBreakBossArmorWithKickedProp(
       attackerPlayerId,
       SPORE_KING_ARMOR_BREAK_STUN_SEC,
       'SPORE SHELL SHATTERED!',
+    );
+    return true;
+  }
+
+  if (boss.defId === 'kryssa_ice_queen') {
+    const isKryssaBreakProp =
+      prop.kind === 'sliding_ice_block' || prop.kind === 'glacial_barricade';
+    if (!isKryssaBreakProp) return false;
+
+    if ((boss.bossStaggerCooldownTimer ?? 0) <= 0) {
+      const nextStagger = (boss.bossStaggerAccum ?? 0) + BOSS_STAGGER_PROP_KICK_BONUS;
+      if (nextStagger >= BOSS_STAGGER_MAX) {
+        boss.bossStaggerAccum = 0;
+        boss.bossStaggerCooldownTimer = BOSS_STAGGER_COOLDOWN_SEC;
+        onEnemyWallSlammed(sim, boss, attackerPlayerId, false);
+      } else {
+        boss.bossStaggerAccum = nextStagger;
+      }
+    }
+    triggerBossArmorBreak(
+      sim,
+      boss,
+      attackerPlayerId,
+      KRYSSA_ARMOR_BREAK_STUN_SEC,
+      'CRYO SHIELD SHATTERED!',
     );
     return true;
   }

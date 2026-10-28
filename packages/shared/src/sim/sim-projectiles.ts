@@ -13,6 +13,7 @@ import {
 } from './sim-blessings.js';
 import { spawnSeedGunLifeBlossomImpl, triggerLauncherProjectileExplosionImpl } from './sim-player.js';
 import { refractEnemyProjectileThroughCryoPrism } from './sim-enemies-tactical-ai.js';
+import { tryChargeGlacialBarricadeWithCryoLaser } from './sim-boss-armor-break.js';
 import { refractProjectileThroughCryoPrism } from './sim-tactical-physics-p1c.js';
 import {
   canApplyFragSubmunitionHit,
@@ -382,12 +383,14 @@ export function updateProjectilesImpl(this: WorldSim, dtSec: number): void {
           (prop.microBlankTimer ?? 0) > 0 &&
           distance(b.x, b.y, prop.x, prop.y) <= (prop.microBlankRadius ?? 56) + b.radius
         ) {
+          tryChargeGlacialBarricadeWithCryoLaser(prop, b.weaponId);
           b.ttlSec = 0;
           hitProp = true;
           break;
         }
         if (circleVsCircle(b, prop)) {
           prop.fallAngle = b.angle;
+          if (b.team === 'enemy') tryChargeGlacialBarricadeWithCryoLaser(prop, b.weaponId);
           this.damageProp(prop, b.damage, b.element);
           if (b.weaponId === 'void_staff') continue;
           if (b.team === 'player' && b.weaponId === 'rivet_gun') {

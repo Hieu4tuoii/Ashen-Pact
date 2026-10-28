@@ -23,6 +23,7 @@ import {
   onEnemyWallSlammed,
   triggerBossInPlaceWallSlam,
   tryBreakBossArmorWithKickedProp,
+  tryChargeGlacialBarricadeWithCryoLaser,
 } from './sim-boss-armor-break.js';
 import {
   applyForgeBlastShieldFireWave,
@@ -309,12 +310,19 @@ export function collapseRottenTotemPillar(sim: WorldSim, pillar: SimPropState, f
   return true;
 }
 
-export function clearEnemyProjectilesAroundProp(sim: WorldSim, x: number, y: number, radius: number): number {
+export function clearEnemyProjectilesAroundProp(
+  sim: WorldSim,
+  x: number,
+  y: number,
+  radius: number,
+  prop?: SimPropState,
+): number {
   const destroyedIds: number[] = [];
   for (let i = sim.projectiles.length - 1; i >= 0; i--) {
     const proj = sim.projectiles[i]!;
     if (proj.team !== 'enemy') continue;
     if (distance(proj.x, proj.y, x, y) <= radius + proj.radius) {
+      if (prop) tryChargeGlacialBarricadeWithCryoLaser(prop, proj.weaponId);
       destroyedIds.push(proj.id);
       sim.projectiles.splice(i, 1);
       sim.releaseProjectileToPool(proj);
@@ -331,7 +339,7 @@ export function flipCoverProp(sim: WorldSim, prop: SimPropState, actor: SimPlaye
   prop.coverState = 'flipped'; prop.state = 'flipped'; prop.blocksMovement = true; prop.blocksEnemyProjectiles = true; prop.destructible = true;
   prop.hp = flippedHp; prop.maxHp = flippedHp; prop.microBlankTimer = FLIP_COVER_MICRO_BLANK_DURATION_SEC;
 
-  const bulletsCleared = clearEnemyProjectilesAroundProp(sim, prop.x, prop.y, FLIP_COVER_MICRO_BLANK_RADIUS);
+  const bulletsCleared = clearEnemyProjectilesAroundProp(sim, prop.x, prop.y, FLIP_COVER_MICRO_BLANK_RADIUS, prop);
   const { blankRadius, extraBulletsCleared } = applyFlipCoverTableTechBlessings(sim, prop, actor);
 
   for (const e of sim.enemies) {
@@ -420,7 +428,9 @@ export function triggerMeleeKickProps(sim: WorldSim, player: SimPlayerState, hal
     const canOneStepBossKick =
       activeBossShell &&
       prop.coverState === 'low' &&
-      (prop.kind === 'moss_table' || prop.kind === 'forge_blast_shield');
+      (prop.kind === 'moss_table' ||
+        prop.kind === 'glacial_barricade' ||
+        prop.kind === 'forge_blast_shield');
     if (!isKickableProp(prop) && !canOneStepBossKick) continue;
     const dist = distance(player.x, player.y, prop.x, prop.y);
     if (dist > range + prop.radius) continue;
@@ -498,7 +508,9 @@ export function resolvePropMovementCollision(sim: WorldSim, entity: { x: number;
         isFlippableBarricadeProp(prop.kind) &&
         (prop.coverState === 'flipped' ||
           (prop.coverState === 'low' &&
-            (prop.kind === 'moss_table' || prop.kind === 'forge_blast_shield') &&
+            (prop.kind === 'moss_table' ||
+              prop.kind === 'glacial_barricade' ||
+              prop.kind === 'forge_blast_shield') &&
             Boolean(sim.getActiveBoss()?.bossArmorShellActive)))
       ) {
         const toPropLen = Math.max(0.0001, dist);
@@ -617,6 +629,7 @@ export function updateSlidingPropsImpl(this: WorldSim, dtSec: number): void {
         prop.x,
         prop.y,
         prop.microBlankRadius ?? FLIP_COVER_MICRO_BLANK_RADIUS,
+        prop,
       );
     }
 
@@ -671,7 +684,12 @@ export function updateSlidingPropsImpl(this: WorldSim, dtSec: number): void {
             detonateVolatileSporePod(this, prop);
             detonatedOnEnemy = true; break;
           }
-          if (prop.kind === 'moss_table') {
+          if (prop.kind === 'glacial_barricade') {
+            prop.x = e.x; prop.y = e.y;
+            shatterGlacialBarricade(this, prop, slideAngle, ownerId);
+            detonatedOnEnemy = true; break;
+          }
+          if (prop.kind === 'moss_table' || prop.kind === 'sliding_ice_block') {
             prop.x = e.x; prop.y = e.y;
             destroyTacticalProp(this, prop);
             detonatedOnEnemy = true; break;

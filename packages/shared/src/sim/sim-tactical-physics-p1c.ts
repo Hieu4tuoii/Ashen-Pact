@@ -107,7 +107,15 @@ export function shatterGlacialBarricade(
   const owner = sim.getPlayerById(ownerId) ?? sim.player;
   for (let i = 0; i < sim.enemies.length; i++) {
     const e = sim.enemies[i]!;
-    if (e.hp <= 0 || e.isDummy || e.defId === 'ashen_executioner' || e.aiState === 'spawning') continue;
+    if (
+      e.hp <= 0 ||
+      e.isDummy ||
+      e.defId === 'ashen_executioner' ||
+      e.aiState === 'spawning' ||
+      e.bossArmorBreakTriggeredTick === sim.tick
+    ) {
+      continue;
+    }
     if (distance(barricade.x, barricade.y, e.x, e.y) <= GLACIAL_BARRICADE_SHATTER_RADIUS + e.radius) {
       const dmg = applyRicochetVowTacticalPropBonus(
         owner,

@@ -167,6 +167,7 @@ export interface SimPropState {
   flippedByPlayerId?: number;
   prismAuraActive?: boolean;
   rocketCharged?: boolean;
+  cryoChargedByLaser?: boolean;
   bouncesRemaining?: number;
   ttlSec?: number;
   iceSpeedBoostApplied?: boolean;

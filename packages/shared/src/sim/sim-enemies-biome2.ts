@@ -626,7 +626,7 @@ export function executeBossKryssaAttackImpl(
   const bossCdScale = this.getEnemyCooldownScale(true);
 
   // 1. Refracting Ice Laser Volley (bounces off crystal pillars & walls!)
-  const beamCount = e.bossPhase === 3 ? 5 : e.bossPhase === 2 ? 4 : 3;
+  const beamCount = e.bossPhase === 3 || e.bossArmorShellActive ? 5 : e.bossPhase === 2 ? 4 : 3;
   this.spawnDeterministicVolley({
     kind: 'bullet_volley_spawned',
     tick: this.tick,
@@ -637,7 +637,7 @@ export function executeBossKryssaAttackImpl(
     y: e.y,
     angle: angleToPlayer,
     pelletCount: beamCount,
-    spreadRad: cycle % 2 === 0 ? 0.38 : 0.18,
+    spreadRad: e.bossArmorShellActive ? 0.1 : cycle % 2 === 0 ? 0.38 : 0.18,
     muzzleOffset: e.radius + 8,
     speed: 250,
     damage: e.damage + (cycle % 3 === 0 ? 1 : 0),

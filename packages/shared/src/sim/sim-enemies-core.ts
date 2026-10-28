@@ -10,6 +10,7 @@ import {
 } from './sim-ashen-pacts.js';
 import { updateEnemyHeavyPinballAndTimers } from './sim-blessings.js';
 import {
+  KRYSSA_ARMOR_REDUCTION,
   SPORE_KING_ARMOR_REDUCTION,
   activateBossArmorShell,
   stepBossSupplyDropsAndStagger,
@@ -464,7 +465,7 @@ export function updateEnemiesImpl(this: WorldSim, dtSec: number): void {
     if (e.frozenTimer > 0) {
       e.vx = 0;
       e.vy = 0;
-      e.frozenTimer = Math.max(0, e.frozenTimer - dtSec);
+      if (e.bossArmorBreakTriggeredTick !== this.tick) e.frozenTimer = Math.max(0, e.frozenTimer - dtSec);
       if (preDecayKbSpeed < 120) {
         continue;
       }
@@ -933,6 +934,7 @@ export function checkBossPhaseTransitionsImpl(this: WorldSim, e: SimEnemyState):
     e.bossBurrowed = false;
     clearBossNearbyProjectiles(this, e.x, e.y, 140);
     if (e.defId === 'spore_king') activateBossArmorShell(this, e, SPORE_KING_ARMOR_REDUCTION);
+    else if (e.defId === 'kryssa_ice_queen') activateBossArmorShell(this, e, KRYSSA_ARMOR_REDUCTION);
     else triggerBossPhaseSupplyDrop(this, e);
     if (e.defId === 'kryssa_ice_queen') this.spawnKryssaMirrorClones(e);
     else if (e.defId === 'forge_titan') this.spawnForgeTitanEnergyCores(e);
@@ -954,6 +956,7 @@ export function checkBossPhaseTransitionsImpl(this: WorldSim, e: SimEnemyState):
     e.bossBurrowed = false;
     clearBossNearbyProjectiles(this, e.x, e.y, 140);
     if (e.defId === 'spore_king') activateBossArmorShell(this, e, SPORE_KING_ARMOR_REDUCTION);
+    else if (e.defId === 'kryssa_ice_queen') activateBossArmorShell(this, e, KRYSSA_ARMOR_REDUCTION);
     else triggerBossPhaseSupplyDrop(this, e);
     if (e.defId === 'kryssa_ice_queen') {
       this.blizzardVeilActive = true;
