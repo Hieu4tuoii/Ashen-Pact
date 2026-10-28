@@ -159,6 +159,14 @@ export const SCENE_GROUPS: Readonly<Record<string, readonly string[]>> = {
     'ap2-pact-ashen-executioner',
     'ap2-relic-awakening-banner',
   ],
+  'ap2-p3a': [
+    'ap2-ai-lead-aim-telegraph',
+    'ap2-ai-boar-pillar-crash',
+    'ap2-ai-spore-bomber-kick',
+    'ap2-ai-yeti-iceblock-counter',
+    'ap2-ai-shielder-shock-arc',
+    'ap2-ai-dwarf-mortar-lob',
+  ],
 };
 
 export interface ShotsCliOptions {

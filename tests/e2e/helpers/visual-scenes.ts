@@ -27,10 +27,9 @@ import {
   type VisualSceneDef,
 } from './visual-scene-helpers.js';
 import {
+  P9A_HUD_QOL_SCENES,
   SCENE_GROUPS,
   setupB1CombatDownedScene,
-  setupB1HudQolShowcaseScene,
-  setupB1HudWeaponCompareScene,
   setupCoop4pCombatScene,
   setupGameSettingsScene,
   setupHubCoop2pExpandedScene,
@@ -51,6 +50,7 @@ import {
   AP2_P2B_SCENE_IDS,
   AP2_P2B_VISUAL_SCENES,
 } from './visual-scene-ap2-p2.js';
+import { AP2_P3A_SCENE_IDS, AP2_P3A_VISUAL_SCENES } from './visual-scene-ap2-p3.js';
 
 export {
   AP2_P0B_SCENE_IDS,
@@ -60,6 +60,7 @@ export {
   AP2_P1D_SCENE_IDS,
   AP2_P2A_SCENE_IDS,
   AP2_P2B_SCENE_IDS,
+  AP2_P3A_SCENE_IDS,
   DEFAULT_FREEZE_MASK_RECTS,
   ENVIRONMENT_SAMPLE_RECTS,
   HUB_SAMPLE_RECTS,
@@ -932,12 +933,7 @@ export const VISUAL_SCENES: readonly VisualSceneDef[] = [
   makeScene('game-settings-en', 'In-game Settings modal open in English locale', DEFAULT_GAME_URL, 'GameScene', (p) => setupGameSettingsScene(p, true)),
 
   // 10. Phase P9a HUD & QoL Scenes
-  makeScene('b1-boss-p1', 'Biome 1 Boss Mục Vương Nấm Độc (Phase 1 HUD)', DEFAULT_GAME_URL, 'GameScene', (p) => setupBossScene(p, 2, 1)),
-  makeScene('b1-boss-p3', 'Biome 1 Boss Mục Vương Phase 3 HUD with creeping poison border', DEFAULT_GAME_URL, 'GameScene', (p) => setupBossScene(p, 2, 3)),
-  makeScene('b1-hud-weapon-compare', 'Biome 1 HUD with Weapon Comparison Card and active cooldowns', DEFAULT_GAME_URL, 'GameScene', setupB1HudWeaponCompareScene),
-  makeScene('b1-combat-uiscale-80', 'Biome 1 combat HUD scaled at 80% (?uiScale=0.8)', `${DEFAULT_GAME_URL}&uiScale=0.8`, 'GameScene', (p) => setupB1CombatState(p, false)),
-  makeScene('b1-combat-uiscale-130', 'Biome 1 combat HUD scaled at 130% (?uiScale=1.3)', `${DEFAULT_GAME_URL}&uiScale=1.3`, 'GameScene', (p) => setupB1CombatState(p, false)),
-  makeScene('b1-hud-qol-showcase', 'Biome 1 combat QoL showcase with off-screen enemy arrows, directional hit arc, wave banner, coalesced reaction popup, and damage numbers', DEFAULT_GAME_URL, 'GameScene', setupB1HudQolShowcaseScene),
+  ...P9A_HUD_QOL_SCENES,
 
   // 11. Phase P10a Cutout 2.0 & Full-Rig Enemies Showcase Scenes
   ...P10A_VISUAL_SCENES,
@@ -964,4 +960,5 @@ export const VISUAL_SCENES: readonly VisualSceneDef[] = [
   ...AP2_P1D_VISUAL_SCENES,
   ...AP2_P2A_VISUAL_SCENES,
   ...AP2_P2B_VISUAL_SCENES,
+  ...AP2_P3A_VISUAL_SCENES,
 ];

@@ -1,9 +1,14 @@
 import type { Page } from '@playwright/test';
 import {
+  DEFAULT_GAME_URL,
   lockCameraAndIrisToPlayer,
+  makeScene,
+  setupB1CombatState,
+  setupBossScene,
   setupStartRoomScene,
   stepDeterministicFrames,
   switchGameSceneToEnglish,
+  type VisualSceneDef,
 } from './visual-scene-helpers.js';
 import { P10A_SCENE_GROUP } from './visual-scene-p10a-helpers.js';
 import { P10B_SCENE_GROUP } from './visual-scene-p10b-helpers.js';
@@ -14,6 +19,7 @@ import { AP2_P1B_SCENE_IDS } from './visual-scene-ap2-p1b.js';
 import { AP2_P1C_SCENE_IDS } from './visual-scene-ap2-p1c.js';
 import { AP2_P1D_SCENE_IDS } from './visual-scene-ap2-p1d.js';
 import { AP2_P2A_SCENE_IDS, AP2_P2B_SCENE_IDS } from './visual-scene-ap2-p2.js';
+import { AP2_P3A_SCENE_IDS } from './visual-scene-ap2-p3.js';
 
 export const SCENE_GROUPS: Readonly<Record<string, readonly string[]>> = {
   p9a: [
@@ -68,6 +74,7 @@ export const SCENE_GROUPS: Readonly<Record<string, readonly string[]>> = {
   'ap2-p1d': AP2_P1D_SCENE_IDS,
   'ap2-p2a': AP2_P2A_SCENE_IDS,
   'ap2-p2b': AP2_P2B_SCENE_IDS,
+  'ap2-p3a': AP2_P3A_SCENE_IDS,
 };
 
 export async function setupHubCoop2pExpandedScene(page: Page): Promise<void> {
@@ -596,3 +603,12 @@ export async function setupUiViDiacriticsScene(page: Page): Promise<void> {
   });
   await stepDeterministicFrames(page, 2);
 }
+
+export const P9A_HUD_QOL_SCENES: readonly VisualSceneDef[] = [
+  makeScene('b1-boss-p1', 'Biome 1 Boss Mục Vương Nấm Độc (Phase 1 HUD)', DEFAULT_GAME_URL, 'GameScene', (p) => setupBossScene(p, 2, 1)),
+  makeScene('b1-boss-p3', 'Biome 1 Boss Mục Vương Phase 3 HUD with creeping poison border', DEFAULT_GAME_URL, 'GameScene', (p) => setupBossScene(p, 2, 3)),
+  makeScene('b1-hud-weapon-compare', 'Biome 1 HUD with Weapon Comparison Card and active cooldowns', DEFAULT_GAME_URL, 'GameScene', setupB1HudWeaponCompareScene),
+  makeScene('b1-combat-uiscale-80', 'Biome 1 combat HUD scaled at 80% (?uiScale=0.8)', `${DEFAULT_GAME_URL}&uiScale=0.8`, 'GameScene', (p) => setupB1CombatState(p, false)),
+  makeScene('b1-combat-uiscale-130', 'Biome 1 combat HUD scaled at 130% (?uiScale=1.3)', `${DEFAULT_GAME_URL}&uiScale=1.3`, 'GameScene', (p) => setupB1CombatState(p, false)),
+  makeScene('b1-hud-qol-showcase', 'Biome 1 combat QoL showcase with off-screen enemy arrows, directional hit arc, wave banner, coalesced reaction popup, and damage numbers', DEFAULT_GAME_URL, 'GameScene', setupB1HudQolShowcaseScene),
+];
