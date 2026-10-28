@@ -65,9 +65,23 @@ export function spawnSnowSpiritIceBlockOnDeath(sim: WorldSim, e: SimEnemyState):
   if (e.defId !== 'snow_spirit' || e.crystallizedIceBlockSpawned || sim.stressTestActive) return null;
   e.crystallizedIceBlockSpawned = true;
 
-  if (sim.props.length >= MAX_TACTICAL_PROPS_PER_ROOM) {
-    const brokenIdx = sim.props.findIndex((p) => p.hp <= 0 || p.state === 'broken');
-    if (brokenIdx >= 0) sim.props.splice(brokenIdx, 1);
+  let activeIceBlocks = 0;
+  let oldestIceIdx = -1;
+  for (let i = 0; i < sim.props.length; i++) {
+    const p = sim.props[i]!;
+    if (p.kind === 'sliding_ice_block' && p.hp > 0 && p.state !== 'broken') {
+      if (oldestIceIdx < 0) oldestIceIdx = i;
+      activeIceBlocks += 1;
+    }
+  }
+  if (activeIceBlocks >= 4 && oldestIceIdx >= 0) {
+    sim.props.splice(oldestIceIdx, 1);
+  } else if (sim.props.length >= MAX_TACTICAL_PROPS_PER_ROOM) {
+    const evictIdx = sim.props.findIndex(
+      (p) => p.hp <= 0 || p.state === 'broken' || p.kind === 'sliding_ice_block' || p.kind === 'shaman_totem',
+    );
+    if (evictIdx >= 0) sim.props.splice(evictIdx, 1);
+    else return null;
   }
 
   const block = sim.spawnProp('sliding_ice_block', e.x, e.y);
@@ -87,12 +101,12 @@ export function spawnSnowSpiritIceBlockOnDeath(sim: WorldSim, e: SimEnemyState):
 export function tryBabyYetiPushIceBlock(
   sim: WorldSim,
   e: SimEnemyState,
-  targetPlayer: Pick<SimPlayerState, 'x' | 'y'>,
+  targetPlayer?: Pick<SimPlayerState, 'x' | 'y'>,
 ): boolean {
-  if (e.defId !== 'baby_yeti' || e.hp <= 0) return false;
+  if (e.defId !== 'baby_yeti' || e.hp <= 0 || sim.props.length === 0) return false;
 
   let bestBlock: SimPropState | null = null;
-  let bestDist = BABY_YETI_ICE_BLOCK_SEARCH_RADIUS;
+  let bestDistSq = BABY_YETI_ICE_BLOCK_SEARCH_RADIUS * BABY_YETI_ICE_BLOCK_SEARCH_RADIUS;
   for (let i = 0; i < sim.props.length; i++) {
     const prop = sim.props[i]!;
     if (
@@ -105,16 +119,20 @@ export function tryBabyYetiPushIceBlock(
     ) {
       continue;
     }
-    const d = distance(e.x, e.y, prop.x, prop.y);
-    if (d <= bestDist) {
-      bestDist = d;
+    const dx = prop.x - e.x;
+    const dy = prop.y - e.y;
+    const dSq = dx * dx + dy * dy;
+    if (dSq <= bestDistSq) {
+      bestDistSq = dSq;
       bestBlock = prop;
     }
   }
   if (!bestBlock) return false;
 
-  if (bestDist <= e.radius + bestBlock.radius + 16) {
-    const aim = Math.atan2(targetPlayer.y - bestBlock.y, targetPlayer.x - bestBlock.x);
+  const pushContactR = e.radius + bestBlock.radius + 16;
+  if (bestDistSq <= pushContactR * pushContactR) {
+    const resolvedTarget = targetPlayer ?? sim.findNearestAlivePlayer(e.x, e.y);
+    const aim = Math.atan2(resolvedTarget.y - bestBlock.y, resolvedTarget.x - bestBlock.x);
     bestBlock.state = 'sliding'; bestBlock.coverState = 'sliding';
     bestBlock.blocksMovement = false; bestBlock.blocksEnemyProjectiles = false;
     bestBlock.vx = Math.cos(aim) * BABY_YETI_PUSH_SPEED;
@@ -232,14 +250,16 @@ export function findIceMageTargetPrism(
   requireUnblocked = false,
 ): SimPropState | null {
   let bestPrism: SimPropState | null = null;
-  let bestDist = ICE_MAGE_PRISM_SEARCH_RADIUS;
+  let bestDistSq = ICE_MAGE_PRISM_SEARCH_RADIUS * ICE_MAGE_PRISM_SEARCH_RADIUS;
   for (let i = 0; i < sim.props.length; i++) {
     const p = sim.props[i]!;
     if (p.kind !== 'cryo_prism_pillar' || p.hp <= 0 || p.state === 'broken') continue;
-    const d = distance(e.x, e.y, p.x, p.y);
-    if (d <= bestDist) {
+    const dx = p.x - e.x;
+    const dy = p.y - e.y;
+    const dSq = dx * dx + dy * dy;
+    if (dSq <= bestDistSq) {
       if (requireUnblocked && isPrismLineBlockedByFlippedBarricade(sim, e.x, e.y, p)) continue;
-      bestDist = d;
+      bestDistSq = dSq;
       bestPrism = p;
     }
   }
@@ -386,8 +406,11 @@ export function spawnCoalBombOnDeath(sim: WorldSim, e: SimEnemyState): SimPropSt
   e.coalBombSpawned = true;
 
   if (sim.props.length >= MAX_TACTICAL_PROPS_PER_ROOM) {
-    const brokenIdx = sim.props.findIndex((p) => p.hp <= 0 || p.state === 'broken');
+    const brokenIdx = sim.props.findIndex(
+      (p) => p.hp <= 0 || p.state === 'broken' || p.kind === 'coal_bomb' || p.kind === 'sliding_ice_block',
+    );
     if (brokenIdx >= 0) sim.props.splice(brokenIdx, 1);
+    else return null;
   }
 
   const bomb = sim.spawnProp('coal_bomb', e.x, e.y);
@@ -592,13 +615,6 @@ export function stepPendingMortarStrikes(sim: WorldSim, dtSec: number): number {
     sim.empBlastVisualRings.length = empWrite;
   }
 
-  for (let i = 0; i < sim.enemies.length; i++) {
-    const e = sim.enemies[i]!;
-    if ((e.shockArcVisualTimer ?? 0) > 0) {
-      e.shockArcVisualTimer = Math.max(0, (e.shockArcVisualTimer ?? 0) - dtSec);
-    }
-  }
-
   if (sim.pendingMortarStrikes.length === 0) return 0;
 
   let detonatedCount = 0;
@@ -630,8 +646,11 @@ export function stepPendingMortarStrikes(sim: WorldSim, dtSec: number): number {
     for (let pIdx = 0; pIdx < allPlayers.length; pIdx++) {
       const pl = allPlayers[pIdx]!;
       if (pl.lifeState !== 'alive' || pl.hp <= 0) continue;
-      if (distance(strike.x, strike.y, pl.x, pl.y) <= strike.radius + pl.radius) {
-        const pushAng = Math.atan2(pl.y - strike.y, pl.x - strike.x);
+      const dx = pl.x - strike.x;
+      const dy = pl.y - strike.y;
+      const hitR = strike.radius + pl.radius;
+      if (dx * dx + dy * dy <= hitR * hitR) {
+        const pushAng = Math.atan2(dy, dx);
         const damaged = sim.applyDamageToPlayer(strike.damage, pushAng, 160, 'dwarf_mortar', pl);
         if (damaged) {
           pl.burnTimer = Math.max(pl.burnTimer, 1.8);

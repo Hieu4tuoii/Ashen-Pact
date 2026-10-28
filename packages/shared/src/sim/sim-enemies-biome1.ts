@@ -86,13 +86,27 @@ export function updateGoblinShooterAIImpl(
     return;
   }
 
-  if (!this.stressTestActive && Math.hypot(e.kbVx, e.kbVy) < 10) {
-    const coverPt = findGoblinShooterCoverPoint(this, e, aimTarget);
-    if (coverPt && distance(e.x, e.y, coverPt.x, coverPt.y) > 8) {
-      const angToCover = Math.atan2(coverPt.y - e.y, coverPt.x - e.x);
-      e.vx = Math.cos(angToCover) * e.moveSpeed;
-      e.vy = Math.sin(angToCover) * e.moveSpeed;
-      return;
+  if (!this.stressTestActive && e.kbVx * e.kbVx + e.kbVy * e.kbVy < 100) {
+    if (e.cachedCoverTick === undefined || (this.tick + e.id) % 15 === 0) {
+      const coverPt = findGoblinShooterCoverPoint(this, e, aimTarget);
+      e.cachedCoverTick = this.tick;
+      if (coverPt) {
+        e.cachedCoverX = coverPt.x;
+        e.cachedCoverY = coverPt.y;
+      } else {
+        e.cachedCoverX = undefined;
+        e.cachedCoverY = undefined;
+      }
+    }
+    if (e.cachedCoverX !== undefined && e.cachedCoverY !== undefined) {
+      const dx = e.cachedCoverX - e.x;
+      const dy = e.cachedCoverY - e.y;
+      if (dx * dx + dy * dy > 64) {
+        const angToCover = Math.atan2(dy, dx);
+        e.vx = Math.cos(angToCover) * e.moveSpeed;
+        e.vy = Math.sin(angToCover) * e.moveSpeed;
+        return;
+      }
     }
   }
 

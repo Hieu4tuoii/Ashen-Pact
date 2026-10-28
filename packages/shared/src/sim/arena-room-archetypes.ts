@@ -121,6 +121,8 @@ const JITTER_OFFSETS: readonly [number, number][] = [
 ];
 
 const bfsVisitedScratch = new Uint8Array(36 * 22);
+const bfsVisitStampScratch = new Int32Array(36 * 22);
+let nextBfsVisitStamp = 1;
 const bfsQueueXScratch = new Int16Array(36 * 22);
 const bfsQueueYScratch = new Int16Array(36 * 22);
 const bfsParentScratch = new Int16Array(36 * 22);
@@ -144,7 +146,8 @@ export const isInDoorClearanceZone = isInDoorVestibule;
 
 export function isWalkableTileForBfs(map: ArenaMap, tx: number, ty: number): boolean {
   if (tx <= 0 || ty <= 0 || tx >= map.cols - 1 || ty >= map.rows - 1) return false;
-  return !map.isSolidTile(tx, ty) && map.getSurface(tx, ty) !== 'chasm';
+  const idx = ty * map.cols + tx;
+  return map.tiles[idx] === 'floor' && map.surfaces[idx] !== 'chasm';
 }
 
 export function areActiveDoorsConnectedBfs(
@@ -229,26 +232,34 @@ export function findNextWalkableWaypoint(
   toX: number,
   toY: number,
 ): { x: number; y: number } {
-  const sTx = Math.max(1, Math.min(map.cols - 2, Math.floor(fromX / TILE_SIZE)));
-  const sTy = Math.max(1, Math.min(map.rows - 2, Math.floor(fromY / TILE_SIZE)));
-  const gTx = Math.max(1, Math.min(map.cols - 2, Math.floor(toX / TILE_SIZE)));
-  const gTy = Math.max(1, Math.min(map.rows - 2, Math.floor(toY / TILE_SIZE)));
+  const cols = map.cols;
+  const rows = map.rows;
+  const sTx = Math.max(1, Math.min(cols - 2, Math.floor(fromX / TILE_SIZE)));
+  const sTy = Math.max(1, Math.min(rows - 2, Math.floor(fromY / TILE_SIZE)));
+  const gTx = Math.max(1, Math.min(cols - 2, Math.floor(toX / TILE_SIZE)));
+  const gTy = Math.max(1, Math.min(rows - 2, Math.floor(toY / TILE_SIZE)));
   if (sTx === gTx && sTy === gTy) return { x: toX, y: toY };
-  const total = map.cols * map.rows;
-  bfsVisitedScratch.fill(0, 0, total);
-  bfsParentScratch.fill(-1, 0, total);
-  const startIdx = sTy * map.cols + sTx;
-  const goalIdx = gTy * map.cols + gTx;
+  let stamp = ++nextBfsVisitStamp;
+  if (stamp >= 0x7ffffff0) {
+    bfsVisitStampScratch.fill(0);
+    nextBfsVisitStamp = 1;
+    stamp = 1;
+  }
+  const tiles = map.tiles;
+  const surfaces = map.surfaces;
+  const startIdx = sTy * cols + sTx;
+  const goalIdx = gTy * cols + gTx;
   let head = 0;
   let tail = 1;
-  bfsVisitedScratch[startIdx] = 1;
+  bfsVisitStampScratch[startIdx] = stamp;
+  bfsParentScratch[startIdx] = -1;
   bfsQueueXScratch[0] = sTx;
   bfsQueueYScratch[0] = sTy;
   let found = false;
   while (head < tail) {
     const cx = bfsQueueXScratch[head]!;
     const cy = bfsQueueYScratch[head]!;
-    const cIdx = cy * map.cols + cx;
+    const cIdx = cy * cols + cx;
     head += 1;
     if (cIdx === goalIdx) {
       found = true;
@@ -257,10 +268,11 @@ export function findNextWalkableWaypoint(
     for (let k = 0; k < 4; k++) {
       const nx = cx + CARDINAL_DIRS[k]![0];
       const ny = cy + CARDINAL_DIRS[k]![1];
-      if (!isWalkableTileForBfs(map, nx, ny) && !(nx === gTx && ny === gTy)) continue;
-      const nIdx = ny * map.cols + nx;
-      if (bfsVisitedScratch[nIdx]) continue;
-      bfsVisitedScratch[nIdx] = 1;
+      if (nx <= 0 || ny <= 0 || nx >= cols - 1 || ny >= rows - 1) continue;
+      const nIdx = ny * cols + nx;
+      if (bfsVisitStampScratch[nIdx] === stamp) continue;
+      if ((tiles[nIdx] !== 'floor' || surfaces[nIdx] === 'chasm') && nIdx !== goalIdx) continue;
+      bfsVisitStampScratch[nIdx] = stamp;
       bfsParentScratch[nIdx] = cIdx;
       bfsQueueXScratch[tail] = nx;
       bfsQueueYScratch[tail] = ny;
@@ -274,7 +286,7 @@ export function findNextWalkableWaypoint(
     cur = p;
     if (bfsParentScratch[p] === startIdx) break;
   }
-  return { x: (cur % map.cols) * TILE_SIZE + TILE_SIZE * 0.5, y: Math.floor(cur / map.cols) * TILE_SIZE + TILE_SIZE * 0.5 };
+  return { x: (cur % cols) * TILE_SIZE + TILE_SIZE * 0.5, y: Math.floor(cur / cols) * TILE_SIZE + TILE_SIZE * 0.5 };
 }
 
 function setPillarRect(map: ArenaMap, startTx: number, startTy: number, w: number, h: number): void {

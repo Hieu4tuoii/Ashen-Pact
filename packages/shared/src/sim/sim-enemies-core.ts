@@ -323,11 +323,13 @@ export function updateEnemiesImpl(this: WorldSim, dtSec: number): void {
   syncAshenExecutionerInRoom(this);
   stepPendingMortarStrikes(this, dtSec);
   let hasAliveProps = false;
+  let hasAncientMechanism = false;
   if (!this.stressTestActive) {
     for (let pIdx = 0; pIdx < this.props.length; pIdx++) {
-      if (this.props[pIdx]!.hp > 0) {
+      const pr = this.props[pIdx]!;
+      if (pr.hp > 0) {
         hasAliveProps = true;
-        break;
+        if (pr.kind === 'ancient_mechanism') hasAncientMechanism = true;
       }
     }
   }
@@ -342,6 +344,9 @@ export function updateEnemiesImpl(this: WorldSim, dtSec: number): void {
 
     if (e.hitFlashTimer > 0) {
       e.hitFlashTimer = Math.max(0, e.hitFlashTimer - dtSec);
+    }
+    if ((e.shockArcVisualTimer ?? 0) > 0) {
+      e.shockArcVisualTimer = Math.max(0, (e.shockArcVisualTimer ?? 0) - dtSec);
     }
     if (e.attackCooldownTimer > 0) {
       e.attackCooldownTimer = Math.max(0, e.attackCooldownTimer - dtSec);
@@ -624,17 +629,19 @@ export function updateEnemiesImpl(this: WorldSim, dtSec: number): void {
       const prePropX = e.x;
       const prePropY = e.y;
       this.resolvePropMovementCollision(e);
-      for (let pIdx = 0; pIdx < this.props.length; pIdx++) {
-        const prop = this.props[pIdx]!;
-        if (prop.hp <= 0 || prop.kind !== 'ancient_mechanism') continue;
-        const dx = e.x - prop.x;
-        const dy = e.y - prop.y;
-        const minDist = e.radius + prop.radius;
-        const dSq = dx * dx + dy * dy;
-        if (dSq < minDist * minDist && dSq > 1e-6) {
-          const d = Math.sqrt(dSq);
-          e.x += (dx / d) * (minDist - d);
-          e.y += (dy / d) * (minDist - d);
+      if (hasAncientMechanism) {
+        for (let pIdx = 0; pIdx < this.props.length; pIdx++) {
+          const prop = this.props[pIdx]!;
+          if (prop.hp <= 0 || prop.kind !== 'ancient_mechanism') continue;
+          const dx = e.x - prop.x;
+          const dy = e.y - prop.y;
+          const minDist = e.radius + prop.radius;
+          const dSq = dx * dx + dy * dy;
+          if (dSq < minDist * minDist && dSq > 1e-6) {
+            const d = Math.sqrt(dSq);
+            e.x += (dx / d) * (minDist - d);
+            e.y += (dy / d) * (minDist - d);
+          }
         }
       }
       if (e.x !== prePropX || e.y !== prePropY) {

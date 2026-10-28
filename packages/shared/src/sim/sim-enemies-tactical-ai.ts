@@ -234,7 +234,7 @@ export function findGoblinShooterCoverPoint(
   targetPlayer: Pick<SimPlayerState, 'x' | 'y'>,
 ): { x: number; y: number } | null {
   let bestProp: SimPropState | null = null;
-  let bestPropDist = GOBLIN_SHOOTER_COVER_SEARCH_RADIUS;
+  let bestPropDistSq = GOBLIN_SHOOTER_COVER_SEARCH_RADIUS * GOBLIN_SHOOTER_COVER_SEARCH_RADIUS;
   for (let i = 0; i < sim.props.length; i++) {
     const prop = sim.props[i]!;
     if (
@@ -245,9 +245,11 @@ export function findGoblinShooterCoverPoint(
     ) {
       continue;
     }
-    const d = distance(e.x, e.y, prop.x, prop.y);
-    if (d <= bestPropDist) {
-      bestPropDist = d;
+    const dx = prop.x - e.x;
+    const dy = prop.y - e.y;
+    const dSq = dx * dx + dy * dy;
+    if (dSq <= bestPropDistSq) {
+      bestPropDistSq = dSq;
       bestProp = prop;
     }
   }
@@ -259,27 +261,36 @@ export function findGoblinShooterCoverPoint(
     return COVER_POINT_SCRATCH;
   }
 
+  if (sim.map.biome !== 1) return null;
+
+  const cols = sim.map.cols;
+  const surfaces = sim.map.surfaces;
   const centerTx = Math.floor(e.x / TILE_SIZE);
   const centerTy = Math.floor(e.y / TILE_SIZE);
   const tileRadius = Math.ceil(GOBLIN_SHOOTER_COVER_SEARCH_RADIUS / TILE_SIZE);
   let bestGrassX = 0;
   let bestGrassY = 0;
-  let bestGrassDist = GOBLIN_SHOOTER_COVER_SEARCH_RADIUS;
+  let bestGrassDistSq = GOBLIN_SHOOTER_COVER_SEARCH_RADIUS * GOBLIN_SHOOTER_COVER_SEARCH_RADIUS;
   let foundGrass = false;
 
   const minTy = Math.max(1, centerTy - tileRadius);
   const maxTy = Math.min(sim.map.rows - 2, centerTy + tileRadius);
   const minTx = Math.max(1, centerTx - tileRadius);
-  const maxTx = Math.min(sim.map.cols - 2, centerTx + tileRadius);
+  const maxTx = Math.min(cols - 2, centerTx + tileRadius);
 
   for (let ty = minTy; ty <= maxTy; ty++) {
+    const rowOffset = ty * cols;
+    const wy = ty * TILE_SIZE + TILE_SIZE * 0.5;
+    const dy = wy - e.y;
+    const dySq = dy * dy;
+    if (dySq > bestGrassDistSq) continue;
     for (let tx = minTx; tx <= maxTx; tx++) {
-      if (sim.map.getSurface(tx, ty) !== 'grass') continue;
+      if (surfaces[rowOffset + tx] !== 'grass') continue;
       const wx = tx * TILE_SIZE + TILE_SIZE * 0.5;
-      const wy = ty * TILE_SIZE + TILE_SIZE * 0.5;
-      const d = distance(e.x, e.y, wx, wy);
-      if (d <= bestGrassDist) {
-        bestGrassDist = d;
+      const dx = wx - e.x;
+      const dSq = dx * dx + dySq;
+      if (dSq <= bestGrassDistSq) {
+        bestGrassDistSq = dSq;
         bestGrassX = wx;
         bestGrassY = wy;
         foundGrass = true;
@@ -527,16 +538,30 @@ export function stepKickedSporeBomber(
  * Biome 1 `goblin_shaman`: Plants a Ward Totem (`shaman_totem`) tactical prop near the shaman if none is currently active for it.
  */
 export function spawnShamanTotem(sim: WorldSim, shaman: SimEnemyState): SimPropState | null {
+  let activeTotemCount = 0;
+  let oldestTotemIdx = -1;
+  const linkRSq = SHAMAN_TOTEM_LINK_RADIUS * SHAMAN_TOTEM_LINK_RADIUS;
   for (let i = 0; i < sim.props.length; i++) {
     const p = sim.props[i]!;
-    if (
-      p.kind === 'shaman_totem' &&
-      p.hp > 0 &&
-      p.state !== 'broken' &&
-      (p.linkedShamanId === shaman.id || distance(p.x, p.y, shaman.x, shaman.y) <= SHAMAN_TOTEM_LINK_RADIUS)
-    ) {
-      return p;
+    if (p.kind === 'shaman_totem' && p.hp > 0 && p.state !== 'broken') {
+      const dx = p.x - shaman.x;
+      const dy = p.y - shaman.y;
+      if (p.linkedShamanId === shaman.id || dx * dx + dy * dy <= linkRSq) {
+        return p;
+      }
+      if (oldestTotemIdx < 0) oldestTotemIdx = i;
+      activeTotemCount += 1;
     }
+  }
+
+  if (activeTotemCount >= 2 && oldestTotemIdx >= 0) {
+    sim.props.splice(oldestTotemIdx, 1);
+  } else if (sim.props.length >= 16) {
+    const evictIdx = sim.props.findIndex(
+      (p) => p.hp <= 0 || p.state === 'broken' || p.kind === 'sliding_ice_block' || p.kind === 'shaman_totem',
+    );
+    if (evictIdx >= 0) sim.props.splice(evictIdx, 1);
+    else return null;
   }
 
   const spawnAngle = shaman.aimAngle || 0;
@@ -558,11 +583,15 @@ export function getShamanTotemDamageMultiplier(
   sim: Pick<WorldSim, 'props'>,
   enemy: Pick<SimEnemyState, 'x' | 'y' | 'radius' | 'isBoss' | 'hp'>,
 ): number {
-  if (enemy.isBoss || enemy.hp <= 0) return 1.0;
+  if (enemy.isBoss || enemy.hp <= 0 || sim.props.length === 0) return 1.0;
+  const maxR = SHAMAN_TOTEM_LINK_RADIUS + enemy.radius;
+  const maxRSq = maxR * maxR;
   for (let i = 0; i < sim.props.length; i++) {
     const prop = sim.props[i]!;
     if (prop.kind !== 'shaman_totem' || prop.hp <= 0 || prop.state === 'broken') continue;
-    if (distance(prop.x, prop.y, enemy.x, enemy.y) <= SHAMAN_TOTEM_LINK_RADIUS + enemy.radius) {
+    const dx = prop.x - enemy.x;
+    const dy = prop.y - enemy.y;
+    if (dx * dx + dy * dy <= maxRSq) {
       return SHAMAN_TOTEM_DMG_MULT;
     }
   }

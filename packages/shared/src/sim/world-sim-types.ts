@@ -688,6 +688,9 @@ export interface SimEnemyState {
   // Phase 3A Predictive Lead Aiming & Sightline Telegraph states
   leadSightlineActive?: boolean;
   leadSightlineAngle?: number;
+  cachedCoverX?: number;
+  cachedCoverY?: number;
+  cachedCoverTick?: number;
   kickedSporeBomber?: boolean;
   kickedByPlayerId?: number;
   kickedVelX?: number;

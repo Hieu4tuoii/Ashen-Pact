@@ -524,6 +524,11 @@ export class ArenaMap {
     }
   }
 
+  private readonly electrifyQueueX: number[] = [];
+  private readonly electrifyQueueY: number[] = [];
+  private electrifyVisited = new Uint32Array(1024);
+  private electrifyStamp = 1;
+
   /**
    * Flood-fills connected water/electrified_water tiles starting from (startTx, startTy)
    * into electrified_water for durationSec. Returns the number of tiles electrified.
@@ -532,35 +537,44 @@ export class ArenaMap {
     const startSurf = this.getSurface(startTx, startTy);
     if (startSurf !== 'water' && startSurf !== 'electrified_water') return 0;
 
-    const queueX: number[] = [startTx];
-    const queueY: number[] = [startTy];
-    const visited = new Set<number>();
+    if (this.electrifyVisited.length < this.cols * this.rows) {
+      this.electrifyVisited = new Uint32Array(this.cols * this.rows);
+    }
+    let stamp = (this.electrifyStamp + 1) >>> 0;
+    if (stamp === 0) {
+      stamp = 1;
+      this.electrifyVisited.fill(0);
+    }
+    this.electrifyStamp = stamp;
+
+    const queueX = this.electrifyQueueX;
+    const queueY = this.electrifyQueueY;
+    queueX.length = 0;
+    queueY.length = 0;
+    queueX.push(startTx);
+    queueY.push(startTy);
     let count = 0;
 
     while (queueX.length > 0) {
       const tx = queueX.pop()!;
       const ty = queueY.pop()!;
       const idx = ty * this.cols + tx;
-      if (visited.has(idx)) continue;
-      visited.add(idx);
-
-      const s = this.getSurface(tx, ty);
+      if (this.electrifyVisited[idx] === stamp) continue;
+      this.electrifyVisited[idx] = stamp;
+      const s = this.surfaces[idx];
       if (s !== 'water' && s !== 'electrified_water') continue;
 
       this.setSurface(tx, ty, 'electrified_water', durationSec, false);
       count += 1;
 
-      const dirs: readonly [number, number][] = [
-        [1, 0],
-        [-1, 0],
-        [0, 1],
-        [0, -1],
-      ];
-      for (const [dx, dy] of dirs) {
+      for (let k = 0; k < ArenaMap.CARDINAL_OFFSETS.length; k++) {
+        const [dx, dy] = ArenaMap.CARDINAL_OFFSETS[k]!;
         const nx = tx + dx;
         const ny = ty + dy;
         if (nx >= 0 && ny >= 0 && nx < this.cols && ny < this.rows) {
-          const ns = this.getSurface(nx, ny);
+          const nIdx = ny * this.cols + nx;
+          if (this.electrifyVisited[nIdx] === stamp) continue;
+          const ns = this.surfaces[nIdx];
           if (ns === 'water' || ns === 'electrified_water') {
             queueX.push(nx);
             queueY.push(ny);
@@ -582,16 +596,21 @@ export class ArenaMap {
     const maxTx = Math.min(this.cols - 2, Math.floor((worldX + radius) / TILE_SIZE));
     const minTy = Math.max(1, Math.floor((worldY - radius) / TILE_SIZE));
     const maxTy = Math.min(this.rows - 2, Math.floor((worldY + radius) / TILE_SIZE));
+    const maxDist = radius + TILE_SIZE * 0.65;
+    const maxDistSq = maxDist * maxDist;
 
     let changed = 0;
     for (let ty = minTy; ty <= maxTy; ty++) {
+      const rowOffset = ty * this.cols;
+      const dy = ty * TILE_SIZE + TILE_SIZE / 2 - worldY;
+      const dySq = dy * dy;
+      if (dySq > maxDistSq) continue;
       for (let tx = minTx; tx <= maxTx; tx++) {
-        const cx = tx * TILE_SIZE + TILE_SIZE / 2;
-        const cy = ty * TILE_SIZE + TILE_SIZE / 2;
-        if (Math.hypot(cx - worldX, cy - worldY) > radius + TILE_SIZE * 0.65) continue;
+        const s = this.surfaces[rowOffset + tx]!;
+        if (s !== 'oil' && s !== 'grass' && s !== 'poison_swamp' && s !== 'ice') continue;
+        const dx = tx * TILE_SIZE + TILE_SIZE / 2 - worldX;
+        if (dx * dx + dySq > maxDistSq) continue;
 
-        const idx = ty * this.cols + tx;
-        const s = this.surfaces[idx]!;
         if (s === 'oil') {
           this.setSurface(tx, ty, 'burning_oil', 5.0, false);
           changed += 1;
@@ -617,15 +636,21 @@ export class ArenaMap {
     const maxTx = Math.min(this.cols - 2, Math.floor((worldX + radius) / TILE_SIZE));
     const minTy = Math.max(1, Math.floor((worldY - radius) / TILE_SIZE));
     const maxTy = Math.min(this.rows - 2, Math.floor((worldY + radius) / TILE_SIZE));
+    const maxDist = radius + TILE_SIZE * 0.65;
+    const maxDistSq = maxDist * maxDist;
 
     let changed = 0;
     for (let ty = minTy; ty <= maxTy; ty++) {
+      const rowOffset = ty * this.cols;
+      const dy = ty * TILE_SIZE + TILE_SIZE / 2 - worldY;
+      const dySq = dy * dy;
+      if (dySq > maxDistSq) continue;
       for (let tx = minTx; tx <= maxTx; tx++) {
-        const cx = tx * TILE_SIZE + TILE_SIZE / 2;
-        const cy = ty * TILE_SIZE + TILE_SIZE / 2;
-        if (Math.hypot(cx - worldX, cy - worldY) > radius + TILE_SIZE * 0.65) continue;
+        const s = this.surfaces[rowOffset + tx]!;
+        if (s !== 'water' && s !== 'electrified_water' && s !== 'burning_oil' && s !== 'burning_grass') continue;
+        const dx = tx * TILE_SIZE + TILE_SIZE / 2 - worldX;
+        if (dx * dx + dySq > maxDistSq) continue;
 
-        const s = this.getSurface(tx, ty);
         if (s === 'water' || s === 'electrified_water') {
           this.setSurface(tx, ty, 'ice', 6.0, false);
           changed += 1;
@@ -834,10 +859,10 @@ export class ArenaMap {
 
     // Pass 1: cardinal face overlaps; Pass 2: remaining outer-corner overlaps
     for (let pass = 0; pass < 2; pass++) {
-      const pMinTx = Math.max(0, Math.floor((currX - radius) / TILE_SIZE) - 2);
-      const pMaxTx = Math.min(this.cols - 1, Math.floor((currX + radius) / TILE_SIZE) + 2);
-      const pMinTy = Math.max(0, Math.floor((currY - radius) / TILE_SIZE) - 2);
-      const pMaxTy = Math.min(this.rows - 1, Math.floor((currY + radius) / TILE_SIZE) + 2);
+      const pMinTx = Math.max(0, Math.floor((currX - radius) / TILE_SIZE));
+      const pMaxTx = Math.min(this.cols - 1, Math.floor((currX + radius) / TILE_SIZE));
+      const pMinTy = Math.max(0, Math.floor((currY - radius) / TILE_SIZE));
+      const pMaxTy = Math.min(this.rows - 1, Math.floor((currY + radius) / TILE_SIZE));
       for (let ty = pMinTy; ty <= pMaxTy; ty++) {
         for (let tx = pMinTx; tx <= pMaxTx; tx++) {
           if (!this.isBlockingTile(tx, ty, ignoreChasm)) continue;

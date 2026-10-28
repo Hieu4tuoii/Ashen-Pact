@@ -94,27 +94,32 @@ export function updateSinglePlayerStateImpl(this: WorldSim,
     }
   }
 
-  const salvageTarget = findSalvageableWeaponNearPlayer(this, p, WEAPON_SALVAGE_MAX_DIST);
-  if (salvageTarget) {
-    if ((inp.buttons & INPUT_BUTTON.DROP_WEAPON) !== 0) {
-      if (p.salvageTargetItemId !== salvageTarget.id) {
-        p.salvageTargetItemId = salvageTarget.id;
+  if (((inp.buttons | justPressed) & INPUT_BUTTON.DROP_WEAPON) !== 0) {
+    const salvageTarget = findSalvageableWeaponNearPlayer(this, p, WEAPON_SALVAGE_MAX_DIST);
+    if (salvageTarget) {
+      if ((inp.buttons & INPUT_BUTTON.DROP_WEAPON) !== 0) {
+        if (p.salvageTargetItemId !== salvageTarget.id) {
+          p.salvageTargetItemId = salvageTarget.id;
+          p.salvageHoldTimer = 0;
+        }
+        p.salvageHoldTimer = (p.salvageHoldTimer ?? 0) + dtSec;
+        if (p.salvageHoldTimer + 1e-6 >= WEAPON_SALVAGE_HOLD_SEC) {
+          salvageWorldWeaponItem(this, p, salvageTarget);
+        }
+      } else {
         p.salvageHoldTimer = 0;
-      }
-      p.salvageHoldTimer = (p.salvageHoldTimer ?? 0) + dtSec;
-      if (p.salvageHoldTimer + 1e-6 >= WEAPON_SALVAGE_HOLD_SEC) {
-        salvageWorldWeaponItem(this, p, salvageTarget);
+        p.salvageTargetItemId = 0;
       }
     } else {
       p.salvageHoldTimer = 0;
       p.salvageTargetItemId = 0;
+      if (justPressed & INPUT_BUTTON.DROP_WEAPON) {
+        this.dropActiveWeapon(p.id);
+      }
     }
-  } else {
+  } else if (p.salvageHoldTimer || p.salvageTargetItemId) {
     p.salvageHoldTimer = 0;
     p.salvageTargetItemId = 0;
-    if (justPressed & INPUT_BUTTON.DROP_WEAPON) {
-      this.dropActiveWeapon(p.id);
-    }
   }
 
   // Downed or Ghost players can only move slowly (crawl/float) and Ping/Emote
@@ -438,12 +443,13 @@ export function updateSinglePlayerStateImpl(this: WorldSim,
     !this.inHub &&
     !this.stressTestActive &&
     this.doorTransitionCooldown <= 0 &&
-    !this.hasActiveCombatEnemies()
+    (dirX !== 0 || dirY !== 0) &&
+    this.doors.length > 0
   ) {
     for (let i = 0; i < this.doors.length; i++) {
       const door = this.doors[i]!;
       if (door.locked) continue;
-      if (distance(p.x, p.y, door.x, door.y) <= 44) {
+      if (distance(p.x, p.y, door.x, door.y) <= 44 && !this.hasActiveCombatEnemies()) {
         const movingIntoDoor =
           (door.dir === 'N' && dirY < -0.3) ||
           (door.dir === 'S' && dirY > 0.3) ||

@@ -378,17 +378,27 @@ export function tryTriggerCoopArcRelayForMelee(sim: WorldSim, p: SimPlayerState,
 }
 
 export function applyPlayerProjectileMidFlightSynergiesAndBlessings(
-  sim: WorldSim, b: SimProjectileState, allPlayers: SimPlayerState[],
+  sim: WorldSim,
+  b: SimProjectileState,
+  allPlayers: SimPlayerState[],
+  hasArcRelayBlessing = true,
+  hasActiveVanguardShield = true,
 ): boolean {
-  tryTriggerCoopArcRelayForProjectile(sim, b, allPlayers);
+  if (hasArcRelayBlessing) {
+    tryTriggerCoopArcRelayForProjectile(sim, b, allPlayers);
+  }
 
   // 1. Vanguard Shield Co-op Synergy & vanguard_bastion_prism ally bullet split
-  if (!b.amplifiedByShield && b.weaponId !== 'vanguard_bastion_prism') {
+  if (hasActiveVanguardShield && !b.amplifiedByShield && b.weaponId !== 'vanguard_bastion_prism') {
+    const shieldMaxR = 42 + b.radius;
+    const shieldMaxRSq = shieldMaxR * shieldMaxR;
     for (let pIdx = 0; pIdx < allPlayers.length; pIdx++) {
       const pl = allPlayers[pIdx]!;
       if (pl.lifeState !== 'alive' || pl.characterId !== 'vanguard' || pl.skillActiveTimer <= 0) continue;
-      if (distance(b.x, b.y, pl.x, pl.y) <= 42 + b.radius) {
-        const angFromVanguard = Math.atan2(b.y - pl.y, b.x - pl.x);
+      const dx = b.x - pl.x;
+      const dy = b.y - pl.y;
+      if (dx * dx + dy * dy <= shieldMaxRSq) {
+        const angFromVanguard = Math.atan2(dy, dx);
         const hasBastionPrism = hasPlayerBlessing(pl, 'vanguard_bastion_prism');
         const halfShieldArc = hasBastionPrism ? Math.PI : (65 * Math.PI) / 180;
         if (Math.abs(angleDiff(angFromVanguard, pl.aimAngle)) <= halfShieldArc) {
@@ -417,8 +427,10 @@ export function applyPlayerProjectileMidFlightSynergiesAndBlessings(
   // 2. Elementalist Skill Zone Synergy
   for (let zIdx = 0; zIdx < sim.skillZones.length; zIdx++) {
     const z = sim.skillZones[zIdx]!;
-    if (z.ttlSec <= 0 || b.hitEntityIds.includes(z.id)) continue;
-    if (distance(b.x, b.y, z.x, z.y) <= z.radius) {
+    if (z.ttlSec <= 0) continue;
+    const zdx = b.x - z.x;
+    const zdy = b.y - z.y;
+    if (zdx * zdx + zdy * zdy <= z.radius * z.radius && !b.hitEntityIds.includes(z.id)) {
       b.hitEntityIds.push(z.id);
       b.imbuedByZone = true;
       b.imbuedOwnerId = z.ownerPlayerId;
@@ -436,16 +448,19 @@ export function applyPlayerProjectileMidFlightSynergiesAndBlessings(
   // 3. Engineer Tesla Turret Co-op Synergy & Druid Sacred Grove Canopy (+1 Smart Bounce)
   for (let sIdx = 0; sIdx < sim.summons.length; sIdx++) {
     const sum = sim.summons[sIdx]!;
-    if (sum.hp <= 0 || sum.ttlSec <= 0 || b.hitEntityIds.includes(sum.id)) continue;
-    if (
-      sum.kind === 'tesla_turret' && b.weaponId !== 'tesla_turret' && b.weaponId !== 'ancient_turret' &&
-      distance(b.x, b.y, sum.x, sum.y) <= sum.radius + b.radius + 6
-    ) {
-      b.hitEntityIds.push(sum.id);
-      sum.charge = Math.min(100, sum.charge + (b.element !== 'none' ? 50 : 35));
-      if (sum.charge >= 100) sim.triggerTeslaEmpBlast(sum);
+    if (sum.hp <= 0 || sum.ttlSec <= 0) continue;
+    const sdx = b.x - sum.x;
+    const sdy = b.y - sum.y;
+    const sDistSq = sdx * sdx + sdy * sdy;
+    if (sum.kind === 'tesla_turret' && b.weaponId !== 'tesla_turret' && b.weaponId !== 'ancient_turret') {
+      const hitR = sum.radius + b.radius + 6;
+      if (sDistSq <= hitR * hitR && !b.hitEntityIds.includes(sum.id)) {
+        b.hitEntityIds.push(sum.id);
+        sum.charge = Math.min(100, sum.charge + (b.element !== 'none' ? 50 : 35));
+        if (sum.charge >= 100) sim.triggerTeslaEmpBlast(sum);
+      }
     } else if (sum.kind === 'sacred_tree' && !b.passedThroughCoverOrPrism && sum.sacredGrove) {
-      if (distance(b.x, b.y, sum.x, sum.y) <= sum.auraRadius) {
+      if (sDistSq <= sum.auraRadius * sum.auraRadius && !b.hitEntityIds.includes(sum.id)) {
         b.hitEntityIds.push(sum.id);
         b.bounceRemaining = clampBounceCount((b.bounceRemaining ?? 0) + 1);
         b.passedThroughCoverOrPrism = true;
@@ -459,20 +474,31 @@ export function applyPlayerProjectileMidFlightSynergiesAndBlessings(
 export function tryBlockOrReflectEnemyProjectileByVanguardShield(
   sim: WorldSim, b: SimProjectileState, allPlayers: SimPlayerState[], midFlightDestroyedIds: number[],
 ): boolean {
+  const outerMaxR = 38 + b.radius;
+  const outerMaxRSq = outerMaxR * outerMaxR;
   for (let pIdx = 0; pIdx < allPlayers.length; pIdx++) {
     const pl = allPlayers[pIdx]!;
     if (pl.lifeState !== 'alive' || pl.characterId !== 'vanguard' || pl.skillActiveTimer <= 0) continue;
+    const dx = b.x - pl.x;
+    const dy = b.y - pl.y;
+    const pdx = b.x - pl.prevX;
+    const pdy = b.y - pl.prevY;
+    const dToPlayerSq = dx * dx + dy * dy;
+    const dToPrevSq = pdx * pdx + pdy * pdy;
+    if (dToPlayerSq > outerMaxRSq && dToPrevSq > outerMaxRSq) continue;
     const hasFortress = hasPlayerBlessing(pl, 'vanguard_bastion_prism');
     const shieldRadius = hasFortress ? 34 : 38;
+    const maxR = shieldRadius + b.radius;
+    const maxRSq = maxR * maxR;
+    const minR = pl.radius * 0.5;
+    const minRSq = minR * minR;
     const halfShieldArc = hasFortress ? Math.PI : (60 * Math.PI) / 180;
-    const dToPlayer = distance(b.x, b.y, pl.x, pl.y);
-    const dToPrev = distance(b.x, b.y, pl.prevX, pl.prevY);
     const inCurrCone =
-      dToPlayer <= shieldRadius + b.radius && dToPlayer >= pl.radius * 0.5 &&
-      Math.abs(angleDiff(Math.atan2(b.y - pl.y, b.x - pl.x), pl.aimAngle)) <= halfShieldArc;
+      dToPlayerSq <= maxRSq && dToPlayerSq >= minRSq &&
+      Math.abs(angleDiff(Math.atan2(dy, dx), pl.aimAngle)) <= halfShieldArc;
     const inPrevCone =
-      dToPrev <= shieldRadius + b.radius && dToPrev >= pl.radius * 0.5 &&
-      Math.abs(angleDiff(Math.atan2(b.y - pl.prevY, b.x - pl.prevX), pl.aimAngle)) <= halfShieldArc;
+      dToPrevSq <= maxRSq && dToPrevSq >= minRSq &&
+      Math.abs(angleDiff(Math.atan2(pdy, pdx), pl.aimAngle)) <= halfShieldArc;
     if (inCurrCone || inPrevCone) {
       b.ttlSec = 0;
       midFlightDestroyedIds.push(b.id);

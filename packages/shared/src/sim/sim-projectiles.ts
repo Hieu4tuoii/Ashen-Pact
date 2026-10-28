@@ -420,7 +420,13 @@ export function updateProjectilesImpl(this: WorldSim, dtSec: number): void {
     if (b.team === 'player') {
       if (
         hasMidFlightSynergy &&
-        applyPlayerProjectileMidFlightSynergiesAndBlessings(this, b, allPlayers)
+        applyPlayerProjectileMidFlightSynergiesAndBlessings(
+          this,
+          b,
+          allPlayers,
+          hasArcRelayBlessing,
+          hasActiveVanguardShield,
+        )
       ) {
         continue;
       }

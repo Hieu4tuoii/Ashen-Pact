@@ -154,7 +154,7 @@ export function updateBabyYetiAIImpl(
   }
 
   e.aimAngle = angleToPlayer;
-  if (!this.stressTestActive && tryBabyYetiPushIceBlock(this, e, this.findNearestAlivePlayer(e.x, e.y))) {
+  if (!this.stressTestActive && this.props.length > 0 && tryBabyYetiPushIceBlock(this, e)) {
     return;
   }
   if (e.attackCooldownTimer <= 0 && distToPlayer <= 180) {
