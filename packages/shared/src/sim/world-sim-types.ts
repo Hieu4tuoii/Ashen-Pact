@@ -537,6 +537,11 @@ export interface SimPlayerState {
   bloodOathTickTimer?: number;
   shatteredGlassArmorReduction?: number;
   blackCrystalEmpoweredNextShot?: boolean;
+  pactVolatileSlot?: number;
+  volatileArsenalBossTimer?: number;
+  pactKeepMorphedWeaponId?: string | null;
+  pactKeepMorphedTimer?: number;
+  executionerScytheIcdTimer?: number;
   weaponUpgradeLevels?: Record<number, number>;
   salvageHoldTimer?: number;
   salvageTargetItemId?: number;
@@ -667,6 +672,8 @@ export interface SimEnemyState {
   submunitionHitsByExplosion?: Record<number, number>;
   gravitySingularityTimer?: number;
   gravitySingularityOwnerId?: number;
+  executionerTargetPlayerId?: number;
+  executionerTargetSwitchTimer?: number;
 }
 
 export interface SimProjectileState {
@@ -728,6 +735,7 @@ export interface SimProjectileState {
   gravitySingularityShot?: boolean;
   chainHarpoonShot?: boolean;
   bypassFrontShield?: boolean;
+  bouncesDone?: number;
   hitEntityIds: number[];
 }
 
@@ -796,6 +804,7 @@ export interface BulletVolleySpawnEvent {
   gravitySingularityShot?: boolean;
   chainHarpoonShot?: boolean;
   bypassFrontShield?: boolean;
+  bouncesDone?: number;
 }
 
 

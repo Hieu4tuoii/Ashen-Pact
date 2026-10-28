@@ -6,7 +6,10 @@ import { INPUT_BUTTON } from '../protocol/messages.js';
 import { generateDungeonFloor } from './dungeon-gen.js';
 import { findNextWalkableWaypoint } from './arena-room-archetypes.js';
 import { findInteractTarget } from './interact-target.js';
-import { activateAshenPactAltarImpl } from './sim-ashen-pacts.js';
+import {
+  activateAshenPactAltarImpl,
+  tryKeepVolatileMorphedWeaponOnInteract,
+} from './sim-ashen-pacts.js';
 import { flipCoverProp } from './sim-tactical-physics.js';
 import { activateDaedalusAnvilImpl, activateUpgradeAnvilImpl } from './sim-weapon-mutators.js';
 import { lerpSpeed, type SimSummonState, type SimDoorState, type SimNpcState, type SimPlayerState, type SimEnemyState, type SimPickupState } from './world-sim-types.js';
@@ -173,14 +176,16 @@ export function skipCurrentRoomWavesImpl(this: WorldSim): void {
   const allPlayers = this.getAllPlayers();
   for (let i = 0; i < this.enemies.length; i++) {
     const e = this.enemies[i]!;
-    if (!e.isDummy && e.hp > 0) {
+    if (!e.isDummy && e.defId !== 'ashen_executioner' && e.hp > 0) {
       e.shieldArmor = 0;
       e.bossBurrowed = false;
       const creditPlayer = allPlayers[i % Math.max(1, allPlayers.length)] ?? this.player;
       this.applyDamageToEnemy(e, e.hp * 4, true, 'burn', e.aimAngle, 0, true, creditPlayer.id);
     }
   }
-  this.enemies = this.enemies.filter((e) => e.isDummy || e.hp > 0);
+  this.enemies = this.enemies.filter(
+    (e) => (e.isDummy || e.hp > 0) && e.defId !== 'ashen_executioner',
+  );
   if (!room.cleared) {
     this.onRoomCleared(room);
   } else {
@@ -197,7 +202,9 @@ export function interactWithNearestImpl(
   if (!actor || actor.lifeState !== 'alive') return false;
   const p = actor;
   const target = findInteractTarget(this, p.id);
-  if (!target) return false;
+  if (!target) {
+    return tryKeepVolatileMorphedWeaponOnInteract(p);
+  }
 
   switch (target.kind) {
     case 'revive': {
@@ -339,7 +346,7 @@ export function updateCurrentRoomProgressionImpl(this: WorldSim, dtSec: number):
         let currentWaveAlive = 0;
         for (let i = 0; i < this.enemies.length; i++) {
           const e = this.enemies[i]!;
-          if (e.isDummy || e.hp <= 0) continue;
+          if (e.isDummy || e.defId === 'ashen_executioner' || e.hp <= 0) continue;
           const wIdx = e.waveIndex ?? 1;
           activeWaves.add(wIdx);
           if (wIdx === room.wavesSpawned) {
@@ -422,7 +429,7 @@ export function stepBotAutoPlayImpl(this: WorldSim, _dtSec: number): void {
   let nearestDist = Infinity;
   for (let i = 0; i < this.enemies.length; i++) {
     const e = this.enemies[i]!;
-    if (e.isDummy || e.hp <= 0) continue;
+    if (e.isDummy || e.defId === 'ashen_executioner' || e.hp <= 0) continue;
     const d = distance(p.x, p.y, e.x, e.y);
     if (d < nearestDist) {
       nearestDist = d;

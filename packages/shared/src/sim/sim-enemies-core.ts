@@ -4,6 +4,10 @@ import { approach, distance, distanceSq } from '../math/vec2.js';
 import { BIOME_SCALING, COOP_SCALING } from '../data/scaling.js';
 import type { SurfaceKind } from './arena-map.js';
 import { getConveyorVelocityAtWorld } from './arena-room-archetypes.js';
+import {
+  syncAshenExecutionerInRoom,
+  updateAshenExecutionerAI,
+} from './sim-ashen-pacts.js';
 import { updateEnemyHeavyPinballAndTimers } from './sim-blessings.js';
 import { resolveEnemyChasmRingOut, triggerEnemyWallSlam } from './sim-tactical-physics.js';
 import { updateLegendaryWeaponHazards } from './sim-weapon-specials-p1b-legendary.js';
@@ -296,9 +300,15 @@ export function updateEnemiesImpl(this: WorldSim, dtSec: number): void {
     this.pendingVengefulRings.length = ringWrite;
   }
 
+  syncAshenExecutionerInRoom(this);
+
   for (let i = 0; i < this.enemies.length; i++) {
     const e = this.enemies[i]!;
     if (e.hp <= 0) continue;
+    if (e.defId === 'ashen_executioner') {
+      updateAshenExecutionerAI(this, e, dtSec);
+      continue;
+    }
 
     if (e.hitFlashTimer > 0) {
       e.hitFlashTimer = Math.max(0, e.hitFlashTimer - dtSec);
@@ -753,6 +763,10 @@ export function applyDotDamageToEnemyImpl(
   element: ElementType,
   emitEvent = true,
 ): void {
+  if (enemy.defId === 'ashen_executioner') {
+    enemy.hp = enemy.maxHp;
+    return;
+  }
   if (
     enemy.hp <= 0 ||
     enemy.bossBurrowed ||

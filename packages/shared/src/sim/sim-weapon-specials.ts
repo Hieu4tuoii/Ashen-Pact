@@ -487,10 +487,18 @@ export function tryTeslaSmartWallBounce(
     return false;
   }
 
-  const qualifiesForSmartRedirect =
+  const owner = sim.getPlayerById(b.ownerId) ?? sim.player;
+  const hasGeometryEye = Boolean(
+    owner &&
+      Array.isArray(owner.awakenedRelicIds) &&
+      owner.awakenedRelicIds.includes('relic_ancient_geometry_eye'),
+  );
+  const qualifiesForTeslaBonus =
     b.hitEntityIds.length > 0 || Boolean(b.passedThroughCoverOrPrism);
+  const qualifiesForSmartRedirect = qualifiesForTeslaBonus || hasGeometryEye;
 
   const nextBounceRemaining = b.bounceRemaining - 1;
+  const nextBouncesDone = (b.bouncesDone ?? 0) + 1;
   let nextVx = normalX !== 0 ? -b.vx : b.vx;
   let nextVy = normalY !== 0 ? -b.vy : b.vy;
   let nextAngle = Math.atan2(nextVy, nextVx);
@@ -498,13 +506,15 @@ export function tryTeslaSmartWallBounce(
   const speed = Math.hypot(b.vx, b.vy) || 580;
 
   if (qualifiesForSmartRedirect) {
-    nextDamage = Math.round(b.damage * 1.35);
+    if (qualifiesForTeslaBonus) {
+      nextDamage = Math.round(b.damage * 1.35);
+    }
     let nearestEnemy: SimEnemyState | null = null;
     let nearestDist = Infinity;
 
     for (let i = 0; i < sim.enemies.length; i++) {
       const e = sim.enemies[i]!;
-      if (e.hp <= 0 || e.aiState === 'spawning' || e.bossBurrowed) continue;
+      if (e.hp <= 0 || e.isDummy || e.defId === 'ashen_executioner' || e.aiState === 'spawning' || e.bossBurrowed) continue;
       if (b.hitEntityIds.includes(e.id)) continue;
       const d = distance(resolvedX, resolvedY, e.x, e.y);
       if (d < nearestDist) {
@@ -515,7 +525,7 @@ export function tryTeslaSmartWallBounce(
     if (!nearestEnemy && (b.splitGeneration ?? 0) === 0) {
       for (let i = 0; i < sim.enemies.length; i++) {
         const e = sim.enemies[i]!;
-        if (e.hp <= 0 || e.aiState === 'spawning' || e.bossBurrowed) continue;
+        if (e.hp <= 0 || e.isDummy || e.defId === 'ashen_executioner' || e.aiState === 'spawning' || e.bossBurrowed) continue;
         const d = distance(resolvedX, resolvedY, e.x, e.y);
         if (d < nearestDist) {
           nearestDist = d;
@@ -565,6 +575,7 @@ export function tryTeslaSmartWallBounce(
     knockback: preservedKnockback,
     pierceCount: preservedPierce,
     bounceCount: nextBounceRemaining,
+    bouncesDone: nextBouncesDone,
     ttlSec: preservedTtl,
     element: preservedElement,
     critChance: b.isCrit ? 1 : 0,
@@ -578,7 +589,8 @@ export function tryTeslaSmartWallBounce(
   sim.spawnDeterministicVolley(bounceVolley, true);
   const spawned = sim.projectiles[sim.projectiles.length - 1];
   if (spawned && spawned.weaponId === preservedWeaponId) {
-    spawned.passedThroughCoverOrPrism = qualifiesForSmartRedirect;
+    spawned.passedThroughCoverOrPrism = qualifiesForTeslaBonus;
+    spawned.bouncesDone = nextBouncesDone;
     spawned.splitGeneration = Math.min(1, nextGen) as 0 | 1;
     if (preservedHitIds.length > 0) {
       spawned.hitEntityIds.push(...preservedHitIds);

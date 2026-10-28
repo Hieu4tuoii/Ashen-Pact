@@ -388,11 +388,12 @@ export function spawnEnemyImpl(this: WorldSim,
     : def.hp;
   const biomeHpMult =
     def.isBoss || def.isIllusion || defId === 'spore_guardian' ? 1.0 : biomeTier.hpMultiplier;
-  const hpMult = this.stressTestActive
-    ? 1.0
-    : def.isBoss
-      ? scaling.bossHpMultiplier
-      : scaling.enemyHpMultiplier * biomeHpMult;
+  const hpMult =
+    this.stressTestActive || defId === 'ashen_executioner'
+      ? 1.0
+      : def.isBoss
+        ? scaling.bossHpMultiplier
+        : scaling.enemyHpMultiplier * biomeHpMult;
   const baseHp = Math.max(1, Math.round(rawHp * hpMult));
   const moveSpeed =
     isElite && eliteModifier === 'fast' ? Math.round(def.moveSpeed * 1.38) : def.moveSpeed;
@@ -651,7 +652,7 @@ export function getCurrentRoomImpl(this: WorldSim): DungeonRoomNode {
 export function hasActiveCombatEnemiesImpl(this: WorldSim): boolean {
   for (let i = 0; i < this.enemies.length; i++) {
     const e = this.enemies[i]!;
-    if (!e.isDummy && e.hp > 0) {
+    if (!e.isDummy && e.defId !== 'ashen_executioner' && e.hp > 0) {
       return true;
     }
   }

@@ -59,16 +59,25 @@ export function tickPlayerBulletModBlessingTimers(p: SimPlayerState, dtSec: numb
 export function applyBulletModBlessingsOnVolleySpawn(sim: WorldSim, ev: BulletVolleySpawnEvent): void {
   if (ev.team !== 'player' || ev.replacedProjectileId !== undefined) return;
   const owner = ev.ownerId === sim.player.id ? sim.player : sim.getPlayerById(ev.ownerId);
-  if (!owner || owner.blessingIds.length === 0) return;
+  if (!owner) return;
   const isNonBouncingSpecial =
     ev.weaponId === 'void_staff' || ev.weaponId === 'emerald_cleaver_boomerang' ||
     ev.weaponId === 'reload_tediore_chuck' || ev.weaponId === 'table_tech_rocket' ||
     ev.weaponId === 'relic_perpetual_core_rocket' || ev.weaponId === 'vanguard_bastion_prism';
-  if (hasPlayerBlessing(owner, 'bullet_split_bounce') && !isNonBouncingSpecial) {
-    ev.bounceCount = clampBounceCount((ev.bounceCount ?? 0) + 1);
-    const nextFlags = (ev.shotFlags ?? ev.flags ?? 0) | SHOT_FLAG.DYNAMIC_BOUNCE;
-    ev.shotFlags = nextFlags;
-    ev.flags = nextFlags;
+  const hasRicochetPactOrRelic =
+    owner.activePactId === 'pact_ricochet_vow' ||
+    (Array.isArray(owner.awakenedRelicIds) &&
+      owner.awakenedRelicIds.includes('relic_ancient_geometry_eye'));
+  if (!isNonBouncingSpecial) {
+    let bonusBounces = 0;
+    if (hasPlayerBlessing(owner, 'bullet_split_bounce')) bonusBounces += 1;
+    if (hasRicochetPactOrRelic) bonusBounces += 1;
+    if (bonusBounces > 0) {
+      ev.bounceCount = clampBounceCount((ev.bounceCount ?? 0) + bonusBounces);
+      const nextFlags = (ev.shotFlags ?? ev.flags ?? 0) | SHOT_FLAG.DYNAMIC_BOUNCE;
+      ev.shotFlags = nextFlags;
+      ev.flags = nextFlags;
+    }
   }
 }
 
@@ -146,6 +155,7 @@ function spawnSplitTwinProjectiles(
     child.splitGeneration = 1;
     child.amplifiedByShield = amplifiedByShield;
     child.passedThroughCoverOrPrism = true;
+    child.bouncesDone = (b.bouncesDone ?? 0) + 1;
     child.shotFlags = shotFlags;
     child.procCoefficient = (b.procCoefficient ?? 1.0) * procRatio;
     if (preservedHits) {

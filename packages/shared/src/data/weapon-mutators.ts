@@ -158,3 +158,6 @@ export function getCompatibleCoreMutatorsForWeapon(
     (id) => !attachedSet.has(id) && isMutatorCompatibleWithWeapon(id, weaponId),
   );
 }
+
+export const MAX_MUTATORS_PER_WEAPON = MAX_MUTATORS_PER_WEAPON_SLOT;
+export const getCompatibleWeaponMutators = getCompatibleCoreMutatorsForWeapon;

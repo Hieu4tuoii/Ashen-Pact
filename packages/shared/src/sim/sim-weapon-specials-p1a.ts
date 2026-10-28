@@ -1,6 +1,7 @@
 import type { ElementType } from '../data/types.js';
 import { distance, isCircleInCone } from '../math/vec2.js';
 import { INPUT_BUTTON, SHOT_FLAG } from '../protocol/messages.js';
+import { applyRicochetVowOrGeometryEyeDamageMultiplier } from './sim-ashen-pacts.js';
 import { resolveEnemyChasmRingOut } from './sim-tactical-physics.js';
 import {
   pointToSegmentDist,
@@ -658,14 +659,15 @@ export function resolvePlayerProjectileHitDamageAndAngle(
   enemy: SimEnemyState,
 ): { damage: number; hitAngle: number } {
   let damage = b.damage;
+  const owner = sim.getPlayerById(b.ownerId) ?? sim.player;
   if (b.weaponId === 'scrap_shotgun') {
-    const owner = sim.getPlayerById(b.ownerId) ?? sim.player;
     const origX = b.originX ?? owner.x;
     const origY = b.originY ?? owner.y;
     if (distance(origX, origY, enemy.x, enemy.y) <= SCRAP_SHOTGUN_POINT_BLANK_DIST) {
       damage = Math.round(b.damage * SCRAP_SHOTGUN_POINT_BLANK_MULT);
     }
   }
+  damage = applyRicochetVowOrGeometryEyeDamageMultiplier(owner, damage, b.bouncesDone ?? 0);
   _hitDmgAngleScratch.damage = damage;
   _hitDmgAngleScratch.hitAngle =
     b.airburstBypassShield || b.bypassFrontShield ? enemy.aimAngle : b.angle;

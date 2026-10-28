@@ -573,6 +573,7 @@
       "name": "Molten Forge Titan",
       "subtitle": "Colossus of the Molten Forge"
     },
+    "ashen_executioner": { "name": "Ashen Executioner", "subtitle": "" },
     "training_dummy": { "name": "Training Dummy", "subtitle": "" }
   }
 }

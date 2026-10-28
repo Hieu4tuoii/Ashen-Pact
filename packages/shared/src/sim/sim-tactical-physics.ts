@@ -7,6 +7,11 @@ import {
   getConveyorVelocityAtWorld,
 } from './arena-room-archetypes.js';
 import {
+  applyRicochetVowOrGeometryEyeWallSlamBonus,
+  applyRicochetVowTacticalPropBonus,
+  tryTriggerExecutionerScytheSlash,
+} from './sim-ashen-pacts.js';
+import {
   applyFlipCoverTableTechBlessings,
   applyKickPropTableTechBlessings,
   detonateRocketChargedBarricade,
@@ -297,9 +302,10 @@ export function collapseRottenTotemPillar(sim: WorldSim, pillar: SimPropState, f
   const dirY = Math.sin(resolvedAngle);
   const halfWidth = ROTTEN_TOTEM_FALL_WIDTH * 0.5;
 
+  const attacker = sim.getPlayerById(attackerId) ?? sim.player;
   for (let i = 0; i < sim.enemies.length; i++) {
     const e = sim.enemies[i]!;
-    if (e.hp <= 0 || e.isDummy) continue;
+    if (e.hp <= 0 || e.isDummy || e.defId === 'ashen_executioner') continue;
     const relX = e.x - pillar.x;
     const relY = e.y - pillar.y;
     const along = relX * dirX + relY * dirY;
@@ -307,7 +313,10 @@ export function collapseRottenTotemPillar(sim: WorldSim, pillar: SimPropState, f
     const clampedAlong = Math.max(0, Math.min(ROTTEN_TOTEM_FALL_LENGTH, along));
     const clampedPerp = Math.max(-halfWidth, Math.min(halfWidth, signedPerp));
     if (along >= 0 && Math.hypot(along - clampedAlong, signedPerp - clampedPerp) <= e.radius) {
-      const dmg = computeHazardDamage(e, sim.currentFloor, 28);
+      const dmg = applyRicochetVowTacticalPropBonus(
+        attacker,
+        computeHazardDamage(e, sim.currentFloor, 28),
+      );
       e.hp = Math.max(0, e.hp - dmg); e.hitFlashTimer = 0.14; e.lastHitDmg = dmg;
       e.stunTimer = Math.max(e.stunTimer ?? 0, ROTTEN_TOTEM_STUN_SEC);
       e.aiState = 'stunned'; e.stateTimer = Math.max(e.stateTimer, ROTTEN_TOTEM_STUN_SEC);
@@ -575,11 +584,15 @@ export function updateSlidingPropsImpl(this: WorldSim, dtSec: number): void {
     }
 
     let detonatedOnEnemy = false;
+    const slideOwner = this.getPlayerById(ownerId) ?? this.player;
     for (const e of this.enemies) {
-      if (e.hp <= 0 || prop.hitEnemyIds.includes(e.id)) continue;
+      if (e.hp <= 0 || e.defId === 'ashen_executioner' || prop.hitEnemyIds.includes(e.id)) continue;
       if (pointToSegmentDist(e.x, e.y, oldX, oldY, nextX, nextY) <= prop.radius + e.radius) {
         prop.hitEnemyIds.push(e.id);
-        const dmg = computeKickSlideDamage(e, this.currentFloor);
+        const dmg = applyRicochetVowTacticalPropBonus(
+          slideOwner,
+          computeKickSlideDamage(e, this.currentFloor),
+        );
         const kbSpeed =
           this.map.getSurfaceAtWorld(e.x, e.y) === 'ice'
             ? SLIDING_PROP_ENEMY_KB_SPEED * BIOME2_ICE_INERTIA_MULT
@@ -658,6 +671,10 @@ export function updateSlidingPropsImpl(this: WorldSim, dtSec: number): void {
 }
 
 export function triggerEnemyWallSlam(sim: WorldSim, e: SimEnemyState, hitProp?: SimPropState, preStepKbSpeed?: number): boolean {
+  if (e.defId === 'ashen_executioner') {
+    e.hp = e.maxHp;
+    return false;
+  }
   if (e.hp <= 0 || e.isDummy) return false;
   const kbSpeed = Math.max(Math.hypot(e.kbVx, e.kbVy), preStepKbSpeed ?? 0);
   if (kbSpeed < WALL_SLAM_SPEED_THRESHOLD || (e.wallSlamCooldownTimer ?? 0) <= 0 === false) return false;
@@ -674,7 +691,10 @@ export function triggerEnemyWallSlam(sim: WorldSim, e: SimEnemyState, hitProp?: 
   const attacker = sim.getPlayerById(attackerId) ?? sim.player;
   const hasBilliardMaster = attacker.blessingIds.includes('table_tech_billiard_master');
   const rawSlamDmg = computeWallSlamDamage(e, sim.currentFloor);
-  const slamDmg = hasBilliardMaster ? Math.round(rawSlamDmg * TABLE_TECH_BILLIARD_SLAM_DMG_MULT) : rawSlamDmg;
+  const billiardSlamDmg = hasBilliardMaster
+    ? Math.round(rawSlamDmg * TABLE_TECH_BILLIARD_SLAM_DMG_MULT)
+    : rawSlamDmg;
+  const slamDmg = applyRicochetVowOrGeometryEyeWallSlamBonus(attacker, billiardSlamDmg);
 
   if (e.isBoss) {
     e.bossStaggerAccum = (e.bossStaggerAccum ?? 0) + (hasBilliardMaster ? 2 : 1);
@@ -703,6 +723,7 @@ export function triggerEnemyWallSlam(sim: WorldSim, e: SimEnemyState, hitProp?: 
   tryBreakCrackedWallNearImpact(sim, e.x, e.y, Math.max(64, e.radius + 48));
   triggerBiome2WallSlamCryoPulse(sim, e, attackerId);
   triggerTableTechOnWallSlamOrStagger(sim, attacker, e.x, e.y, shattered ? e.id : undefined, e.id);
+  tryTriggerExecutionerScytheSlash(sim, attacker, e.x, e.y);
   if (e.isBoss && (e.bossStaggerAccum ?? 0) >= 100 && e.hp > 0) {
     triggerBossStaggerBurst(sim, e, attackerId);
   }
@@ -723,7 +744,7 @@ export function triggerEnemyWallSlam(sim: WorldSim, e: SimEnemyState, hitProp?: 
 }
 
 export function resolveEnemyChasmRingOut(sim: WorldSim, e: SimEnemyState): boolean {
-  if (e.hp <= 0 || e.isDummy || e.isBoss) return false;
+  if (e.hp <= 0 || e.isDummy || e.isBoss || e.defId === 'ashen_executioner') return false;
   if (sim.map.getSurfaceAtWorld(e.x, e.y) !== 'chasm') return false;
   const def = ENEMIES[e.defId];
   if (def?.flying) return false;

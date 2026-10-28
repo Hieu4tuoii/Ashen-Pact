@@ -1,5 +1,6 @@
 import { distance } from '../math/vec2.js';
 import { SHOT_FLAG, TILE_SIZE } from '../protocol/messages.js';
+import { applyRicochetVowTacticalPropBonus } from './sim-ashen-pacts.js';
 import {
   computeHazardDamage,
   computeKickSlideDamage,
@@ -101,11 +102,15 @@ export function shatterGlacialBarricade(
     sourceDefId: 'glacial_barricade',
   });
 
+  const owner = sim.getPlayerById(ownerId) ?? sim.player;
   for (let i = 0; i < sim.enemies.length; i++) {
     const e = sim.enemies[i]!;
-    if (e.hp <= 0 || e.isDummy || e.aiState === 'spawning') continue;
+    if (e.hp <= 0 || e.isDummy || e.defId === 'ashen_executioner' || e.aiState === 'spawning') continue;
     if (distance(barricade.x, barricade.y, e.x, e.y) <= GLACIAL_BARRICADE_SHATTER_RADIUS + e.radius) {
-      const dmg = computeHazardDamage(e, sim.currentFloor, 28);
+      const dmg = applyRicochetVowTacticalPropBonus(
+        owner,
+        computeHazardDamage(e, sim.currentFloor, 28),
+      );
       e.hp = Math.max(0, e.hp - dmg);
       e.hitFlashTimer = 0.14;
       e.lastHitDmg = dmg;
@@ -274,6 +279,7 @@ export function refractProjectileThroughCryoPrism(
         child.isCrit = b.isCrit;
         child.splitGeneration = 1;
         child.passedThroughCoverOrPrism = true;
+        child.bouncesDone = (b.bouncesDone ?? 0) + 1;
         child.hitEntityIds.push(prism.id);
       }
     }
@@ -283,6 +289,7 @@ export function refractProjectileThroughCryoPrism(
   b.damage = boostedDamage;
   b.element = 'chill';
   b.bounceRemaining = Math.min(4, (b.bounceRemaining ?? 0) + 1);
+  b.bouncesDone = (b.bouncesDone ?? 0) + 1;
   b.shotFlags = (b.shotFlags ?? 0) | SHOT_FLAG.DYNAMIC_BOUNCE;
   b.angle = clusterAngle;
   b.vx = Math.cos(clusterAngle) * speed;
@@ -337,12 +344,16 @@ export function applyForgeBlastShieldFireWave(
   sim.map.igniteSurfaceInRadius(nextX, nextY, FORGE_BLAST_SHIELD_WAVE_HALF_WIDTH);
   if (!prop.hitEnemyIds) prop.hitEnemyIds = [];
 
+  const waveOwner = sim.getPlayerById(ownerId) ?? sim.player;
   for (let i = 0; i < sim.enemies.length; i++) {
     const e = sim.enemies[i]!;
-    if (e.hp <= 0 || prop.hitEnemyIds.includes(e.id)) continue;
+    if (e.hp <= 0 || e.defId === 'ashen_executioner' || prop.hitEnemyIds.includes(e.id)) continue;
     if (segDist(e.x, e.y, oldX, oldY, nextX, nextY) <= FORGE_BLAST_SHIELD_WAVE_HALF_WIDTH + e.radius) {
       prop.hitEnemyIds.push(e.id);
-      const dmg = computeKickSlideDamage(e, sim.currentFloor);
+      const dmg = applyRicochetVowTacticalPropBonus(
+        waveOwner,
+        computeKickSlideDamage(e, sim.currentFloor),
+      );
       sim.applyDamageToEnemy(
         e,
         dmg,
@@ -427,11 +438,15 @@ export function spillSlagCrucibleLavaCarpet(
   }
 
   // Burn and damage enemies along the 192px x 56px molten corridor
+  const carpetOwner = sim.getPlayerById(ownerId) ?? sim.player;
   for (let i = 0; i < sim.enemies.length; i++) {
     const e = sim.enemies[i]!;
-    if (e.hp <= 0 || e.isDummy || e.aiState === 'spawning') continue;
+    if (e.hp <= 0 || e.isDummy || e.defId === 'ashen_executioner' || e.aiState === 'spawning') continue;
     if (segDist(e.x, e.y, crucible.x, crucible.y, endX, endY) <= 28 + e.radius) {
-      const dmg = computeHazardDamage(e, sim.currentFloor, 26);
+      const dmg = applyRicochetVowTacticalPropBonus(
+        carpetOwner,
+        computeHazardDamage(e, sim.currentFloor, 26),
+      );
       e.hp = Math.max(0, e.hp - dmg);
       e.hitFlashTimer = 0.14;
       e.lastHitDmg = dmg;

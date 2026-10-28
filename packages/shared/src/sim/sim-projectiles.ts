@@ -55,7 +55,7 @@ export function spawnDeterministicVolleyImpl(this: WorldSim, ev: BulletVolleySpa
 
   if (ev.team === 'enemy') {
     const biomeScale = BIOME_SCALING[this.currentBiome] ?? BIOME_SCALING[1];
-    if (ev.weaponId !== 'vengeful_ring') {
+    if (ev.weaponId !== 'vengeful_ring' && ev.weaponId !== 'ashen_executioner_wave') {
       speed = Math.min(390, Math.round(speed * biomeScale.projectileSpeedMultiplier));
     }
     const ownerEnemy = this.enemies.find((e) => e.id === ev.ownerId);
@@ -144,6 +144,7 @@ export function spawnDeterministicVolleyImpl(this: WorldSim, ev: BulletVolleySpa
       gravitySingularityShot: ev.gravitySingularityShot,
       chainHarpoonShot: ev.chainHarpoonShot,
       bypassFrontShield: ev.bypassFrontShield,
+      bouncesDone: ev.bouncesDone ?? 0,
     });
     copyLegendaryVolleyFieldsToProjectile(ev, proj);
     this.projectiles.push(proj);
@@ -201,7 +202,7 @@ export function updateProjectilesImpl(this: WorldSim, dtSec: number): void {
 
     // 1. Check wall/pillar collision
     const wallHit = this.map.checkProjectileWallHit(b.x, b.y, b.radius);
-    if (wallHit.hit) {
+    if (wallHit.hit && b.weaponId !== 'ashen_executioner_wave') {
       if (
         wallHit.hitTx >= 0 &&
         this.map.getTile(wallHit.hitTx, wallHit.hitTy) === 'cracked_wall' &&
@@ -249,6 +250,7 @@ export function updateProjectilesImpl(this: WorldSim, dtSec: number): void {
 
       if (b.bounceRemaining > 0) {
         b.bounceRemaining -= 1;
+        b.bouncesDone = (b.bouncesDone ?? 0) + 1;
         b.x = wallHit.resolvedX;
         b.y = wallHit.resolvedY;
         if (wallHit.normalX !== 0) b.vx = -b.vx;
@@ -293,6 +295,7 @@ export function updateProjectilesImpl(this: WorldSim, dtSec: number): void {
           if (!b.hitEntityIds.includes(prop.id)) {
             b.hitEntityIds.push(prop.id);
             b.passedThroughCoverOrPrism = true;
+            b.bouncesDone = (b.bouncesDone ?? 0) + 1;
             prop.hitFlashTimer = 0.16;
             const spd = Math.hypot(b.vx, b.vy) || 350;
             const nearestPl = this.findNearestAlivePlayer(prop.x, prop.y);
@@ -328,6 +331,7 @@ export function updateProjectilesImpl(this: WorldSim, dtSec: number): void {
               break;
             }
             b.passedThroughCoverOrPrism = true;
+            b.bouncesDone = (b.bouncesDone ?? 0) + 1;
           }
           continue;
         }
@@ -390,7 +394,14 @@ export function updateProjectilesImpl(this: WorldSim, dtSec: number): void {
       );
       for (let j = 0; j < candidates.length; j++) {
         const enemy = candidates[j]!;
-        if (enemy.hp <= 0 || enemy.aiState === 'spawning' || enemy.bossBurrowed) continue;
+        if (
+          enemy.hp <= 0 ||
+          enemy.defId === 'ashen_executioner' ||
+          enemy.aiState === 'spawning' ||
+          enemy.bossBurrowed
+        ) {
+          continue;
+        }
         if (b.hitEntityIds.includes(enemy.id)) continue;
 
         if (circleVsCircle(b, enemy)) {
@@ -538,9 +549,14 @@ export function updateProjectilesImpl(this: WorldSim, dtSec: number): void {
 
       for (let pIdx = 0; pIdx < allPlayers.length; pIdx++) {
         const pl = allPlayers[pIdx]!;
-        if (pl.lifeState !== 'alive') continue;
+        if (pl.lifeState !== 'alive' || b.hitEntityIds.includes(pl.id)) continue;
         if (circleVsCircle(b, pl)) {
-          b.ttlSec = 0;
+          b.hitEntityIds.push(pl.id);
+          if (b.pierceRemaining > 0 && b.weaponId !== 'dwarf_mortar') {
+            b.pierceRemaining -= 1;
+          } else {
+            b.ttlSec = 0;
+          }
           let damaged = false;
           if (b.weaponId === 'dwarf_mortar') {
             damaged = pl.invulnerableTimer <= 0 && !pl.godMode;
@@ -732,7 +748,14 @@ export function stepClientProjectilesCosmeticImpl(this: WorldSim, dtSec: number)
       );
       for (let j = 0; j < candidates.length; j++) {
         const enemy = candidates[j]!;
-        if (enemy.hp <= 0 || enemy.aiState === 'spawning' || enemy.bossBurrowed) continue;
+        if (
+          enemy.hp <= 0 ||
+          enemy.defId === 'ashen_executioner' ||
+          enemy.aiState === 'spawning' ||
+          enemy.bossBurrowed
+        ) {
+          continue;
+        }
         if (b.hitEntityIds.includes(enemy.id)) continue;
 
         if (circleVsCircle(b, enemy)) {
@@ -796,9 +819,14 @@ export function stepClientProjectilesCosmeticImpl(this: WorldSim, dtSec: number)
 
       for (let pIdx = 0; pIdx < allPlayers.length; pIdx++) {
         const pl = allPlayers[pIdx]!;
-        if (pl.lifeState !== 'alive') continue;
+        if (pl.lifeState !== 'alive' || b.hitEntityIds.includes(pl.id)) continue;
         if (circleVsCircle(b, pl)) {
-          b.ttlSec = 0;
+          b.hitEntityIds.push(pl.id);
+          if (b.pierceRemaining > 0 && b.weaponId !== 'dwarf_mortar') {
+            b.pierceRemaining -= 1;
+          } else {
+            b.ttlSec = 0;
+          }
           this.events.push({
             kind: 'projectile_impact',
             x: b.x,
@@ -872,6 +900,7 @@ export function acquireProjectileImpl(this: WorldSim,
     pooled.gravitySingularityShot = init.gravitySingularityShot;
     pooled.chainHarpoonShot = init.chainHarpoonShot;
     pooled.bypassFrontShield = init.bypassFrontShield;
+    pooled.bouncesDone = init.bouncesDone ?? 0;
     pooled.trailLastX = init.originX ?? init.x; pooled.trailLastY = init.originY ?? init.y;
     pooled.hitEntityIds.length = 0;
     return pooled;
@@ -883,6 +912,7 @@ export function acquireProjectileImpl(this: WorldSim,
     knockback: init.knockback ?? 0,
     pierceRemaining: resolvedPierce,
     bounceRemaining: resolvedBounce,
+    bouncesDone: init.bouncesDone ?? 0,
     ttlSec: resolvedTtl,
     amplifiedByShield: init.amplifiedByShield ?? false,
     prevX: init.x,

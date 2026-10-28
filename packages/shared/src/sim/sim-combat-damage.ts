@@ -2,7 +2,10 @@ import { ENEMIES } from '../data/enemies.js';
 import type { ElementalReactionId, ElementType } from '../data/types.js';
 import { angleDiff, distance } from '../math/vec2.js';
 import { TILE_SIZE } from '../protocol/messages.js';
-import { purifyAshenPactsOnBossDefeated } from './sim-ashen-pacts.js';
+import {
+  despawnAshenExecutioners,
+  purifyAshenPactsOnBossDefeated,
+} from './sim-ashen-pacts.js';
 import {
   BOSS_SINGLE_HIT_MAX_MULT,
   computeEnemyVulnerabilityMultiplier,
@@ -27,6 +30,10 @@ export function applyDamageToEnemyImpl(
   attackerPlayerId = this.player.id,
   isChainDamage = false,
 ): void {
+  if (enemy.defId === 'ashen_executioner') {
+    enemy.hp = enemy.maxHp;
+    return;
+  }
   if (
     enemy.hp <= 0 ||
     enemy.bossBurrowed ||
@@ -567,6 +574,9 @@ export function handleEnemyKilledImpl(
         );
       }
     }
+  }
+  if (!this.hasActiveCombatEnemies()) {
+    despawnAshenExecutioners(this);
   }
 }
 

@@ -452,7 +452,7 @@ export class WorldSim {
   public spawnCoopPressurePlatePuzzle(roomId = this.currentRoomId): void  { return spawnCoopPressurePlatePuzzleImpl.call(this, roomId); }
   public populateRoomContents(room: DungeonRoomNode): void  { return populateRoomContentsImpl.call(this, room); }
   public spawnNextRoomWave(): void  { return spawnNextRoomWaveImpl.call(this); }
-  public onRoomCleared(room: DungeonRoomNode): void  { return onRoomClearedImpl.call(this, room); }
+  public onRoomCleared(room: DungeonRoomNode = this.getCurrentRoom()): void  { return onRoomClearedImpl.call(this, room); }
   public rollChestRarity(bonusTier = 0): WeaponRarity  { return rollChestRarityImpl.call(this, bonusTier); }
   public rollRandomWeaponByRarities(allowedRarities: readonly WeaponRarity[]): string  { return rollRandomWeaponByRaritiesImpl.call(this, allowedRarities); }
   public spawnChest(x: number, y: number, rarity: WeaponRarity, preselectedWeaponId?: string): SimChestState  { return spawnChestImpl.call(this, x, y, rarity, preselectedWeaponId); }

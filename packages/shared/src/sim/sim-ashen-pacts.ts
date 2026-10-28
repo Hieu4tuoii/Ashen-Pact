@@ -9,8 +9,63 @@ import {
 import type { AshenPactId, AshenRelicId } from '../data/types.js';
 import { clamp, distance } from '../math/vec2.js';
 import type { DungeonRoomNode } from './dungeon-gen.js';
+import {
+  ASHEN_EXECUTIONER_BASE_SPEED,
+  ASHEN_EXECUTIONER_COOP_SPEED_MULT,
+  ASHEN_EXECUTIONER_TARGET_SWITCH_SEC,
+  ASHEN_EXECUTIONER_TELEGRAPH_SEC,
+  ASHEN_EXECUTIONER_WAVE_COOLDOWN_SEC,
+  ASHEN_EXECUTIONER_WAVE_DAMAGE,
+  ASHEN_EXECUTIONER_WAVE_SPEED,
+  EXECUTIONER_SCYTHE_BASE_DAMAGE,
+  EXECUTIONER_SCYTHE_EXECUTE_THRESHOLD,
+  EXECUTIONER_SCYTHE_ICD_SEC,
+  EXECUTIONER_SCYTHE_RADIUS,
+  VOLATILE_ARSENAL_BOSS_MORPH_INTERVAL_SEC,
+  VOLATILE_ARSENAL_KEEP_MORPHED_WINDOW_SEC,
+  applyRicochetVowOrGeometryEyeDamageMultiplier,
+  applyRicochetVowOrGeometryEyeWallSlamBonus,
+  applyRicochetVowTacticalPropBonus,
+  despawnAshenExecutioners,
+  getVolatileArsenalRarityPool,
+  morphAllVolatileArsenalPlayers,
+  morphPlayerVolatileArsenalWeapon,
+  purifyVolatileArsenalIntoMasterForgeSeal,
+  syncAshenExecutionerInRoom,
+  tryKeepVolatileMorphedWeaponOnInteract,
+  tryTriggerExecutionerScytheSlash,
+  updateAshenExecutionerAI,
+} from './sim-ashen-pacts-combat.js';
 import type { WorldSim } from './world-sim.js';
 import type { SimEnemyState, SimNpcState, SimPlayerState } from './world-sim-types.js';
+
+export {
+  ASHEN_EXECUTIONER_BASE_SPEED,
+  ASHEN_EXECUTIONER_COOP_SPEED_MULT,
+  ASHEN_EXECUTIONER_TARGET_SWITCH_SEC,
+  ASHEN_EXECUTIONER_TELEGRAPH_SEC,
+  ASHEN_EXECUTIONER_WAVE_COOLDOWN_SEC,
+  ASHEN_EXECUTIONER_WAVE_DAMAGE,
+  ASHEN_EXECUTIONER_WAVE_SPEED,
+  EXECUTIONER_SCYTHE_BASE_DAMAGE,
+  EXECUTIONER_SCYTHE_EXECUTE_THRESHOLD,
+  EXECUTIONER_SCYTHE_ICD_SEC,
+  EXECUTIONER_SCYTHE_RADIUS,
+  VOLATILE_ARSENAL_BOSS_MORPH_INTERVAL_SEC,
+  VOLATILE_ARSENAL_KEEP_MORPHED_WINDOW_SEC,
+  applyRicochetVowOrGeometryEyeDamageMultiplier,
+  applyRicochetVowOrGeometryEyeWallSlamBonus,
+  applyRicochetVowTacticalPropBonus,
+  despawnAshenExecutioners,
+  getVolatileArsenalRarityPool,
+  morphAllVolatileArsenalPlayers,
+  morphPlayerVolatileArsenalWeapon,
+  purifyVolatileArsenalIntoMasterForgeSeal,
+  syncAshenExecutionerInRoom,
+  tryKeepVolatileMorphedWeaponOnInteract,
+  tryTriggerExecutionerScytheSlash,
+  updateAshenExecutionerAI,
+};
 
 export const MAX_AWAKENED_RELICS_PER_RUN = 3;
 
@@ -194,6 +249,15 @@ export function selectAshenPactImpl(
     p.shatteredGlassArmorReduction = p.maxArmor - reducedMax;
     p.maxArmor = reducedMax;
     p.armor = Math.min(p.armor, p.maxArmor);
+  } else if (pactIdOrDecline === 'pact_volatile_arsenal') {
+    const slot = p.activeWeaponSlot ?? 0;
+    p.pactVolatileSlot = slot;
+    p.pactOriginalWeaponId = p.weaponSlots[slot] ?? p.weaponSlots[0] ?? 'rivet_gun';
+    p.volatileArsenalBossTimer = 0;
+    p.pactKeepMorphedWeaponId = null;
+    p.pactKeepMorphedTimer = 0;
+  } else if (pactIdOrDecline === 'pact_ashen_hunted') {
+    syncAshenExecutionerInRoom(sim);
   }
 
   sim.events.push({
@@ -227,6 +291,11 @@ export function purifyAshenPactsOnBossDefeated(sim: WorldSim): number {
       p.armorRegenDelaySec = Number(
         (p.armorRegenDelaySec + BLACK_CRYSTAL_REGEN_DELAY_PENALTY_SEC).toFixed(2),
       );
+    } else if (pactId === 'pact_volatile_arsenal') {
+      purifyVolatileArsenalIntoMasterForgeSeal(sim, p);
+    } else if (pactId === 'pact_ashen_hunted') {
+      p.executionerScytheIcdTimer = 0;
+      despawnAshenExecutioners(sim);
     }
 
     if (relicId && !p.awakenedRelicIds.includes(relicId)) {
@@ -368,6 +437,34 @@ export function updatePlayerAshenPactAndRelicPassives(
 ): void {
   if (p.lifeState !== 'alive' || p.hp <= 0) return;
 
+  if ((p.pactKeepMorphedTimer ?? 0) > 0) {
+    p.pactKeepMorphedTimer = Math.max(0, (p.pactKeepMorphedTimer ?? 0) - dtSec);
+    if (p.pactKeepMorphedTimer <= 0) {
+      p.pactKeepMorphedWeaponId = null;
+    }
+  }
+  if ((p.executionerScytheIcdTimer ?? 0) > 0) {
+    p.executionerScytheIcdTimer = Math.max(0, (p.executionerScytheIcdTimer ?? 0) - dtSec);
+  }
+
+  if (hasPlayerActivePact(p, 'pact_volatile_arsenal')) {
+    const room = sim.getCurrentRoom();
+    const inBossFight =
+      (room && room.type === 'boss' && !room.cleared) || sim.getActiveBoss() !== null;
+    if (inBossFight) {
+      p.volatileArsenalBossTimer = (p.volatileArsenalBossTimer ?? 0) + dtSec;
+      while (p.volatileArsenalBossTimer + 1e-6 >= VOLATILE_ARSENAL_BOSS_MORPH_INTERVAL_SEC) {
+        p.volatileArsenalBossTimer = Math.max(
+          0,
+          p.volatileArsenalBossTimer - VOLATILE_ARSENAL_BOSS_MORPH_INTERVAL_SEC,
+        );
+        morphPlayerVolatileArsenalWeapon(sim, p);
+      }
+    } else {
+      p.volatileArsenalBossTimer = 0;
+    }
+  }
+
   const allPlayers = sim.getAllPlayers();
 
   // 1. Full-Biome Trial: pact_soul_chain
@@ -396,7 +493,7 @@ export function updatePlayerAshenPactAndRelicPassives(
       let bestEnemyDist = Infinity;
       for (let i = 0; i < sim.enemies.length; i++) {
         const e = sim.enemies[i]!;
-        if (e.isDummy || e.hp <= 0 || e.bossBurrowed) continue;
+        if (e.isDummy || e.defId === 'ashen_executioner' || e.hp <= 0 || e.bossBurrowed) continue;
         const d = distance(p.x, p.y, e.x, e.y);
         if (e.maxHp > bestMaxHp || (e.maxHp === bestMaxHp && d < bestEnemyDist)) {
           bestMaxHp = e.maxHp;
@@ -459,7 +556,7 @@ export function updatePlayerAshenPactAndRelicPassives(
       let bestEnemyDist = SOUL_CHAIN_MAX_DIST;
       for (let i = 0; i < sim.enemies.length; i++) {
         const e = sim.enemies[i]!;
-        if (e.isDummy || e.hp <= 0 || e.bossBurrowed) continue;
+        if (e.isDummy || e.defId === 'ashen_executioner' || e.hp <= 0 || e.bossBurrowed) continue;
         const d = distance(p.x, p.y, e.x, e.y);
         if (d <= bestEnemyDist) {
           bestEnemyDist = d;
@@ -484,7 +581,7 @@ export function updatePlayerAshenPactAndRelicPassives(
         const tickDmg = Math.max(1, Math.round(scaledDps * BLOOD_OATH_TICK_INTERVAL_SEC));
         for (let i = 0; i < sim.enemies.length; i++) {
           const e = sim.enemies[i]!;
-          if (e.hp <= 0 || e.bossBurrowed) continue;
+          if (e.hp <= 0 || e.defId === 'ashen_executioner' || e.bossBurrowed) continue;
           if (
             pointToSegmentDist(e.x, e.y, p.x, p.y, tetherX, tetherY) <=
             e.radius + BLOOD_OATH_BEAM_HALF_WIDTH

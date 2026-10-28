@@ -28,7 +28,12 @@ import {
   populateSecretRoomContents,
   spawnCoopPressurePlatePuzzleImpl,
 } from './sim-secret-and-workshop.js';
-import { purifyAshenPactsOnBossDefeated } from './sim-ashen-pacts.js';
+import {
+  despawnAshenExecutioners,
+  morphAllVolatileArsenalPlayers,
+  purifyAshenPactsOnBossDefeated,
+  syncAshenExecutionerInRoom,
+} from './sim-ashen-pacts.js';
 import { populateTreasureForgeWorkshop } from './sim-weapon-mutators.js';
 import type { WorldSim } from './world-sim.js';
 
@@ -487,6 +492,7 @@ export function populateRoomContentsImpl(this: WorldSim, room: DungeonRoomNode):
               ? 'forge_titan'
               : 'spore_king';
         this.spawnEnemy(bossDefId, this.map.width * 0.68, cy, false);
+        syncAshenExecutionerInRoom(this);
       } else {
         this.portalActive = true;
       }
@@ -501,6 +507,9 @@ export function spawnNextRoomWaveImpl(this: WorldSim): void {
   room.wavesSpawned += 1;
   this.waveNumber += 1;
   this.waveElapsedSec = 0;
+  if (room.wavesSpawned > 1) {
+    morphAllVolatileArsenalPlayers(this);
+  }
 
   const cx = this.map.width * 0.5;
   const cy = this.map.height * 0.5;
@@ -648,13 +657,21 @@ export function spawnNextRoomWaveImpl(this: WorldSim): void {
     wavesTotal: room.wavesTotal,
     isChallenge: Boolean(room.isChallenge),
   });
+  syncAshenExecutionerInRoom(this);
   this.rebuildCurrentRoomDoors();
 }
 
-export function onRoomClearedImpl(this: WorldSim, room: DungeonRoomNode): void {
+export function onRoomClearedImpl(
+  this: WorldSim,
+  room: DungeonRoomNode = this.getCurrentRoom(),
+): void {
   room.cleared = true;
   room.discovery = 'cleared';
   this.runStats.roomsCleared += 1;
+  despawnAshenExecutioners(this);
+  if (room.type !== 'boss') {
+    morphAllVolatileArsenalPlayers(this);
+  }
   const cx = this.map.width * 0.5;
   const cy = this.map.height * 0.5;
 

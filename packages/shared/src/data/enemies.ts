@@ -334,6 +334,20 @@ export const ENEMIES: Record<string, EnemyStatsDef> = {
     attackCooldownSec: 1.9,
     isBoss: true,
   },
+  ashen_executioner: {
+    id: 'ashen_executioner',
+    nameVi: 'Bóng Ma Đao Phủ',
+    nameEn: 'Ashen Executioner',
+    biome: 1,
+    role: 'stalker',
+    hp: 9999,
+    moveSpeed: 98,
+    damage: 2,
+    radius: 16,
+    telegraphSec: 0.45,
+    attackCooldownSec: 2.4,
+    flying: true,
+  },
 };
 
 export const BIOME1_COMBAT_ENEMIES = [
@@ -371,6 +385,8 @@ export type Biome2EnemyId =
 
 export type Biome3EnemyId =
   (typeof BIOME3_COMBAT_ENEMIES)[number] | 'forge_energy_core' | 'forge_titan';
+
+export type EnemyId = Biome1EnemyId | Biome2EnemyId | Biome3EnemyId | 'ashen_executioner';
 
 export const ELITE_MODIFIERS: readonly EliteModifier[] = [
   'fast',

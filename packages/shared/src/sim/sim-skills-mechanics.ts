@@ -7,6 +7,7 @@ import {
   spawnElementalistOrbSkillZones,
   updateElementalistVortexPropsAndTwinBeam,
 } from './sim-blessings.js';
+import { tryTriggerExecutionerScytheSlash } from './sim-ashen-pacts.js';
 import { triggerEnemyWallSlam, triggerMeleeKickProps } from './sim-tactical-physics.js';
 import { ELEMENTALIST_ROTATION_ORDER, hasPlayerBlessing, MAX_DEPLOYABLES_PER_PLAYER, type SimSummonState, type SimPlayerState, type SimEnemyState, type SimPropState } from './world-sim-types.js';
 import type { WorldSim } from './world-sim.js';
@@ -199,6 +200,7 @@ export function activateCharacterSkillImpl(this: WorldSim, p: SimPlayerState): v
   if (p.characterId === 'vanguard') {
     if (p.skillActiveTimer > 0) {
       this.releaseVanguardShieldShockwave(p);
+      tryTriggerExecutionerScytheSlash(this, p);
     } else if (p.skillCooldownTimer <= 0) {
       const bonusDur = p.blessingIds.includes('vanguard_bastion_prism') ? 1.5 : 0;
       p.skillActiveTimer = skillDef.durationSec + bonusDur;
@@ -215,11 +217,15 @@ export function activateCharacterSkillImpl(this: WorldSim, p: SimPlayerState): v
         y: p.y,
         angle: p.aimAngle,
       });
+      tryTriggerExecutionerScytheSlash(this, p);
     }
     return;
   }
 
-  if (tryReactivateEngineerSelfDestruct(this, p)) return;
+  if (tryReactivateEngineerSelfDestruct(this, p)) {
+    tryTriggerExecutionerScytheSlash(this, p);
+    return;
+  }
   if (p.skillCooldownTimer > 0) return;
   p.skillCooldownTimer = skillDef.cooldownSec;
   p.skillActiveTimer =
@@ -238,6 +244,7 @@ export function activateCharacterSkillImpl(this: WorldSim, p: SimPlayerState): v
     y: p.y,
     angle: p.aimAngle,
   });
+  tryTriggerExecutionerScytheSlash(this, p);
 
   if (p.characterId === 'ranger') {
     // Predator Arrow: backflip i-frame + high-damage piercing arrow (or 5-arrow fan with ranger_arrow_volley)

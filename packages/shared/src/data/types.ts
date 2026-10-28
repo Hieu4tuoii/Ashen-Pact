@@ -115,6 +115,7 @@ export type EnemyRole =
   | 'turret'
   | 'splitter'
   | 'shielder'
+  | 'stalker'
   | 'boss';
 
 export type EliteModifier =

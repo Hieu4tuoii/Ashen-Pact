@@ -121,6 +121,7 @@ export const RIG_DEFS_BY_ID: Record<string, EntityRigDef> = {
   iron_shielder: IRON_SHIELDER_RIG_DEF,
   forge_energy_core: FORGE_ENERGY_CORE_RIG_DEF,
   forge_titan: FORGE_TITAN_RIG_DEF,
+  ashen_executioner: KRYSSA_CLONE_RIG_DEF,
   merchant: MERCHANT_RIG_DEF,
   training_dummy: TRAINING_DUMMY_RIG_DEF,
 };
