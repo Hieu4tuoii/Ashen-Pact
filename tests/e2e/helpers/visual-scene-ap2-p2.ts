@@ -10,6 +10,13 @@ import {
   triggerDash,
   type VisualSceneDef,
 } from './visual-scene-helpers.js';
+import {
+  AP2_P2B_SCENE_GROUP,
+  AP2_P2B_SCENE_IDS,
+  AP2_P2B_VISUAL_SCENES,
+} from './visual-scene-ap2-p2b.js';
+
+export { AP2_P2B_SCENE_GROUP, AP2_P2B_SCENE_IDS, AP2_P2B_VISUAL_SCENES };
 
 export const AP2_P2A_SCENE_IDS: readonly string[] = [
   'ap2-treasure-forge-workshop',

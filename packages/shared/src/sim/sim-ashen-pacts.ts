@@ -518,9 +518,25 @@ export function updatePlayerAshenPactAndRelicPassives(
             0,
             p.soulChainStretchTimer - SOUL_CHAIN_DRAIN_INTERVAL_SEC,
           );
+          const prevArmor = p.armor;
           p.armor = Math.max(0, p.armor - 1);
           p.armorRegenTimer = p.armorRegenDelaySec;
           p.armorRegenAccum = 0;
+          if (prevArmor > p.armor && !sim.stressTestActive) {
+            sim.events.push({
+              kind: 'damage_dealt',
+              targetId: p.id,
+              targetKind: 'player',
+              x: p.x,
+              y: p.y,
+              amount: 1,
+              isCrit: false,
+              hitArmor: true,
+              element: 'none',
+              knockbackX: 0,
+              knockbackY: 0,
+            });
+          }
         }
       } else {
         p.soulChainStretchTimer = 0;

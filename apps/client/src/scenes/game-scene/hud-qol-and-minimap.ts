@@ -472,8 +472,11 @@ export function updateTopCenterBannersAndQolImpl(this: GameScene, dtSec: number)
     );
     if (showWaveBanner) {
       this.waveBannerGraphics.clear();
+      if (this.waveBannerText.text !== this.hudBannerTextStr) {
+        this.waveBannerText.setText(this.hudBannerTextStr);
+      }
       const alpha = clamp(this.hudBannerTimer / 0.25, 0, 1);
-      const bw = 186;
+      const bw = Math.max(186, Math.ceil(this.waveBannerText.width + 28));
       const bh = 22;
       const bx = -bw * 0.5;
       const by = bannerCurY;
@@ -486,9 +489,6 @@ export function updateTopCenterBannersAndQolImpl(this: GameScene, dtSec: number)
         accentColor: this.hudBannerAccentColor,
         accentSide: 'top',
       });
-      if (this.waveBannerText.text !== this.hudBannerTextStr) {
-        this.waveBannerText.setText(this.hudBannerTextStr);
-      }
       this.waveBannerText.setPosition(0, by + bh * 0.5);
       this.waveBannerText.setAlpha(alpha);
       if (!this.waveBannerText.visible) this.waveBannerText.setVisible(true);

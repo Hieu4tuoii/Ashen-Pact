@@ -151,6 +151,14 @@ export const SCENE_GROUPS: Readonly<Record<string, readonly string[]>> = {
     'ap2-weapon-salvage-hold',
     'ap2-secret-wall-crack-break',
   ],
+  'ap2-p2b': [
+    'ap2-shrine-ashen-altar',
+    'ap2-modal-ashen-pact-vi',
+    'ap2-modal-ashen-pact-en',
+    'ap2-pact-soul-chain-stretch',
+    'ap2-pact-ashen-executioner',
+    'ap2-relic-awakening-banner',
+  ],
 };
 
 export interface ShotsCliOptions {

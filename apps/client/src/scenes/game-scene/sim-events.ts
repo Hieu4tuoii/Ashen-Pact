@@ -524,7 +524,13 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
         break;
       }
       case 'room_cleared': {
-        this.triggerRoomClearedBanner();
+        if (
+          this.hudBannerTimer <= 0 ||
+          (!this.hudBannerTextStr?.includes('KHẾ ƯỚC') &&
+            !this.hudBannerTextStr?.includes('PACT PURIFIED'))
+        ) {
+          this.triggerRoomClearedBanner();
+        }
         zzfx.play('door_open');
         break;
       }
