@@ -10,6 +10,8 @@ import {
 } from './sim-ashen-pacts.js';
 import { updateEnemyHeavyPinballAndTimers } from './sim-blessings.js';
 import {
+  SPORE_KING_ARMOR_REDUCTION,
+  activateBossArmorShell,
   stepBossSupplyDropsAndStagger,
   triggerBossPhaseSupplyDrop,
 } from './sim-boss-armor-break.js';
@@ -389,7 +391,7 @@ export function updateEnemiesImpl(this: WorldSim, dtSec: number): void {
     if ((e.wallSlamCooldownTimer ?? 0) > 0) {
       e.wallSlamCooldownTimer = Math.max(0, (e.wallSlamCooldownTimer ?? 0) - dtSec);
     }
-    if ((e.stunTimer ?? 0) > 0) {
+    if ((e.stunTimer ?? 0) > 0 && e.bossArmorBreakTriggeredTick !== this.tick) {
       e.stunTimer = Math.max(0, (e.stunTimer ?? 0) - dtSec);
     }
     if ((e.slowTimer ?? 0) > 0) {
@@ -503,7 +505,9 @@ export function updateEnemiesImpl(this: WorldSim, dtSec: number): void {
     } else if (e.aiState === 'stunned') {
       e.vx = 0;
       e.vy = 0;
-      e.stateTimer -= dtSec;
+      if (e.bossArmorBreakTriggeredTick !== this.tick) {
+        e.stateTimer -= dtSec;
+      }
       if (e.stateTimer <= 0 && (e.stunTimer ?? 0) <= 0) {
         e.aiState = 'cooldown';
         e.stateTimer = 0.6;
@@ -918,6 +922,7 @@ export function checkBossPhaseTransitionsImpl(this: WorldSim, e: SimEnemyState):
 
   if (hpRatio <= 0.66 && e.bossPhase === 1) {
     e.bossPhase = 2;
+    e.bossArmorPhase66Triggered = true;
     e.bossPhaseTransitionTimer = 1.2;
     e.attackCooldownTimer = 0;
     e.aiState = 'telegraph';
@@ -927,7 +932,8 @@ export function checkBossPhaseTransitionsImpl(this: WorldSim, e: SimEnemyState):
     e.vy = 0;
     e.bossBurrowed = false;
     clearBossNearbyProjectiles(this, e.x, e.y, 140);
-    triggerBossPhaseSupplyDrop(this, e);
+    if (e.defId === 'spore_king') activateBossArmorShell(this, e, SPORE_KING_ARMOR_REDUCTION);
+    else triggerBossPhaseSupplyDrop(this, e);
     if (e.defId === 'kryssa_ice_queen') this.spawnKryssaMirrorClones(e);
     else if (e.defId === 'forge_titan') this.spawnForgeTitanEnergyCores(e);
     if (this.getActivePlayerCount() >= 3 && e.defId !== 'spore_king') this.spawnBossGuardianMushrooms();
@@ -937,6 +943,7 @@ export function checkBossPhaseTransitionsImpl(this: WorldSim, e: SimEnemyState):
 
   if (hpRatio <= 0.33 && e.bossPhase < 3) {
     e.bossPhase = 3;
+    e.bossArmorPhase33Triggered = true;
     e.bossPhaseTransitionTimer = 1.2;
     e.attackCooldownTimer = 0;
     e.aiState = 'telegraph';
@@ -946,7 +953,8 @@ export function checkBossPhaseTransitionsImpl(this: WorldSim, e: SimEnemyState):
     e.vy = 0;
     e.bossBurrowed = false;
     clearBossNearbyProjectiles(this, e.x, e.y, 140);
-    triggerBossPhaseSupplyDrop(this, e);
+    if (e.defId === 'spore_king') activateBossArmorShell(this, e, SPORE_KING_ARMOR_REDUCTION);
+    else triggerBossPhaseSupplyDrop(this, e);
     if (e.defId === 'kryssa_ice_queen') {
       this.blizzardVeilActive = true;
       this.map.applyBossPhase3BlizzardBorder();

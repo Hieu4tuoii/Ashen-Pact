@@ -673,6 +673,12 @@ export interface SimEnemyState {
   bossStaggerAccum?: number;
   bossStaggerCooldownTimer?: number;
   supplyDropTimer?: number;
+  bossArmorShellActive?: boolean;
+  bossArmorShellReduction?: number;
+  bossArmorBreakVulnTimer?: number;
+  bossArmorPhase66Triggered?: boolean;
+  bossArmorPhase33Triggered?: boolean;
+  bossArmorBreakTriggeredTick?: number;
   tidalRamByPlayerId?: number;
   tidalRamTimer?: number;
   pinballReboundTimer?: number;

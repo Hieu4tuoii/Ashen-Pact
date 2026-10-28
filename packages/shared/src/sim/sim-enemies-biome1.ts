@@ -3,6 +3,11 @@ import { circleVsCircle, clamp, distance } from '../math/vec2.js';
 import { COOP_SCALING } from '../data/scaling.js';
 import { TILE_SIZE } from '../protocol/messages.js';
 import {
+  SPORE_KING_CHARGE_DURATION_SEC,
+  SPORE_KING_CHARGE_SPEED,
+  checkSporeKingPillarCrash,
+} from './sim-boss-armor-break.js';
+import {
   GOBLIN_SHOOTER_ARROW_SPEED,
   KICKED_SPORE_EXPLOSION_DAMAGE,
   KICKED_SPORE_EXPLOSION_RADIUS,
@@ -650,6 +655,35 @@ export function updateBossSporeKingAIImpl(
   e.aimAngle = angleToPlayer;
   const bossCdScale = this.getEnemyCooldownScale(true);
 
+  if (e.aiState === 'attack') {
+    e.vx = Math.cos(e.telegraphAngle) * SPORE_KING_CHARGE_SPEED;
+    e.vy = Math.sin(e.telegraphAngle) * SPORE_KING_CHARGE_SPEED;
+    if (!this.stressTestActive && checkSporeKingPillarCrash(this, e)) {
+      return;
+    }
+    e.stateTimer -= dtSec;
+    const allPlayers = this.getAllPlayers();
+    for (let i = 0; i < allPlayers.length; i++) {
+      const pl = allPlayers[i]!;
+      if (pl.lifeState !== 'alive') continue;
+      if (circleVsCircle(e, pl)) {
+        this.applyDamageToPlayer(e.damage, e.telegraphAngle, 250, e.defId, pl);
+        e.aiState = 'cooldown';
+        e.stateTimer = (e.bossPhase === 3 ? 0.3 : 0.38) * bossCdScale;
+        e.vx = 0;
+        e.vy = 0;
+        return;
+      }
+    }
+    if (e.stateTimer <= 0) {
+      e.aiState = 'cooldown';
+      e.stateTimer = (e.bossPhase === 3 ? 0.3 : 0.38) * bossCdScale;
+      e.vx = 0;
+      e.vy = 0;
+    }
+    return;
+  }
+
   if (e.aiState === 'telegraph') {
     if (e.bossBurrowed) {
       e.vx = 0;
@@ -889,10 +923,19 @@ export function executeBossSporeKingAttackImpl(
     }
   }
 
-  e.aiState = 'cooldown';
-  e.stateTimer = (e.bossPhase === 3 ? 0.3 : 0.38) * bossCdScale;
   const baseCd = (ENEMIES.spore_king?.attackCooldownSec ?? 1.85) * 0.85;
   e.attackCooldownTimer =
     (e.bossPhase === 3 ? baseCd * 0.65 : e.bossPhase === 2 ? baseCd * 0.82 : baseCd) *
     bossCdScale;
+  if (e.bossArmorShellActive) {
+    e.aiState = 'attack';
+    e.stateTimer = SPORE_KING_CHARGE_DURATION_SEC;
+    e.telegraphAngle = angleToPlayer;
+    e.vx = Math.cos(angleToPlayer) * SPORE_KING_CHARGE_SPEED;
+    e.vy = Math.sin(angleToPlayer) * SPORE_KING_CHARGE_SPEED;
+    checkSporeKingPillarCrash(this, e);
+    return;
+  }
+  e.aiState = 'cooldown';
+  e.stateTimer = (e.bossPhase === 3 ? 0.3 : 0.38) * bossCdScale;
 }

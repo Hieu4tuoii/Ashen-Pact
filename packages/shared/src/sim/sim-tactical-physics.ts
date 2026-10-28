@@ -18,7 +18,12 @@ import {
   onPlayerDashKickProp,
   TABLE_TECH_BILLIARD_SLAM_DMG_MULT,
 } from './sim-blessings.js';
-import { onEnemyWallSlammed, triggerBossInPlaceWallSlam } from './sim-boss-armor-break.js';
+import {
+  checkSporeKingPillarCrash,
+  onEnemyWallSlammed,
+  triggerBossInPlaceWallSlam,
+  tryBreakBossArmorWithKickedProp,
+} from './sim-boss-armor-break.js';
 import {
   applyForgeBlastShieldFireWave,
   BIOME2_ICE_INERTIA_MULT,
@@ -246,7 +251,9 @@ export function detonateVolatileSporePod(sim: WorldSim, pod: SimPropState): void
       e.rootedTimer = Math.max(e.rootedTimer, VOLATILE_SPORE_POD_ROOT_SEC);
       e.vx = 0; e.vy = 0;
       sim.events.push({ kind: 'status_applied', targetId: e.id, status: 'rooted', x: e.x, y: e.y });
-      sim.applyElementStatusToEnemy(e, 'poison', 12, ownerId);
+      if (e.bossArmorBreakTriggeredTick !== sim.tick) {
+        sim.applyElementStatusToEnemy(e, 'poison', 12, ownerId);
+      }
       if (e.hp > 0 && e.poisonTimer <= 0) {
         e.poisonTimer = 4.0; e.poisonStacks = Math.max(1, e.poisonStacks); e.poisonTickTimer = 0.6;
       }
@@ -355,6 +362,10 @@ export function flipCoverPropImpl(this: WorldSim, prop: SimPropState, actor: Sim
 }
 
 export function kickProp(sim: WorldSim, prop: SimPropState, actor: SimPlayerState = sim.player, customAngle?: number): boolean {
+  if (prop.hp > 0 && prop.coverState === 'low' && isFlippableBarricadeProp(prop.kind)) {
+    prop.coverState = 'flipped';
+    prop.state = 'flipped';
+  }
   if (!isKickableProp(prop)) return false;
   const slideAngle = customAngle ?? actor.aimAngle;
   const baseSpeed =
@@ -394,6 +405,7 @@ export function kickPropImpl(this: WorldSim, prop: SimPropState, actor: SimPlaye
 
 export function triggerMeleeKickProps(sim: WorldSim, player: SimPlayerState, halfArc: number, range: number, attackAngle = player.aimAngle): number {
   let kickedCount = 0;
+  const activeBossShell = Boolean(sim.getActiveBoss()?.bossArmorShellActive);
   for (const prop of sim.props) {
     if (prop.kind === 'sliding_ice_block' && prop.enemyPushed && prop.hp > 0) {
       const dist = distance(player.x, player.y, prop.x, prop.y);
@@ -405,7 +417,11 @@ export function triggerMeleeKickProps(sim: WorldSim, player: SimPlayerState, hal
       }
       continue;
     }
-    if (!isKickableProp(prop)) continue;
+    const canOneStepBossKick =
+      activeBossShell &&
+      prop.coverState === 'low' &&
+      (prop.kind === 'moss_table' || prop.kind === 'forge_blast_shield');
+    if (!isKickableProp(prop) && !canOneStepBossKick) continue;
     const dist = distance(player.x, player.y, prop.x, prop.y);
     if (dist > range + prop.radius) continue;
     const angToProp = Math.atan2(prop.y - player.y, prop.x - player.x);
@@ -478,7 +494,13 @@ export function resolvePropMovementCollision(sim: WorldSim, entity: { x: number;
         kickProp(sim, prop, asPlayer, asPlayer.aimAngle);
         continue;
       }
-      if (isFlippableBarricadeProp(prop.kind) && prop.coverState === 'flipped') {
+      if (
+        isFlippableBarricadeProp(prop.kind) &&
+        (prop.coverState === 'flipped' ||
+          (prop.coverState === 'low' &&
+            (prop.kind === 'moss_table' || prop.kind === 'forge_blast_shield') &&
+            Boolean(sim.getActiveBoss()?.bossArmorShellActive)))
+      ) {
         const toPropLen = Math.max(0.0001, dist);
         const toPropX = (prop.x - asPlayer.x) / toPropLen;
         const toPropY = (prop.y - asPlayer.y) / toPropLen;
@@ -510,6 +532,9 @@ export function resolvePropMovementCollision(sim: WorldSim, entity: { x: number;
         prop.kind === 'rotten_totem_pillar'
       ) {
         if (checkWildBoarPillarCrash(sim, asEnemy)) continue;
+      }
+      if (asEnemy.defId === 'spore_king' && prop.kind === 'rotten_totem_pillar') {
+        if (checkSporeKingPillarCrash(sim, asEnemy)) continue;
       }
       const kbSpeed = Math.hypot(asEnemy.kbVx, asEnemy.kbVy);
       if (kbSpeed >= WALL_SLAM_SPEED_THRESHOLD && (asEnemy.wallSlamCooldownTimer ?? 0) <= 0) {
@@ -636,6 +661,23 @@ export function updateSlidingPropsImpl(this: WorldSim, dtSec: number): void {
       if (e.hp <= 0 || e.defId === 'ashen_executioner' || prop.hitEnemyIds.includes(e.id)) continue;
       if (pointToSegmentDist(e.x, e.y, oldX, oldY, nextX, nextY) <= prop.radius + e.radius) {
         prop.hitEnemyIds.push(e.id);
+        const kbSpeed =
+          this.map.getSurfaceAtWorld(e.x, e.y) === 'ice'
+            ? SLIDING_PROP_ENEMY_KB_SPEED * BIOME2_ICE_INERTIA_MULT
+            : SLIDING_PROP_ENEMY_KB_SPEED;
+        if (tryBreakBossArmorWithKickedProp(this, e, prop, ownerId)) {
+          if (prop.kind === 'volatile_spore_pod') {
+            prop.x = e.x; prop.y = e.y;
+            detonateVolatileSporePod(this, prop);
+            detonatedOnEnemy = true; break;
+          }
+          if (prop.kind === 'moss_table') {
+            prop.x = e.x; prop.y = e.y;
+            destroyTacticalProp(this, prop);
+            detonatedOnEnemy = true; break;
+          }
+          continue;
+        }
         const baseSlideDmg = applyRicochetVowTacticalPropBonus(
           slideOwner,
           computeKickSlideDamage(e, this.currentFloor),
@@ -646,10 +688,6 @@ export function updateSlidingPropsImpl(this: WorldSim, dtSec: number): void {
         if (prop.counterDeflected) {
           e.frozenTimer = Math.max(e.frozenTimer, 1.2);
         }
-        const kbSpeed =
-          this.map.getSurfaceAtWorld(e.x, e.y) === 'ice'
-            ? SLIDING_PROP_ENEMY_KB_SPEED * BIOME2_ICE_INERTIA_MULT
-            : SLIDING_PROP_ENEMY_KB_SPEED;
         this.applyDamageToEnemy(
           e,
           dmg,

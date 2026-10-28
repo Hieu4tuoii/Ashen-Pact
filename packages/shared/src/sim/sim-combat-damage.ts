@@ -15,7 +15,11 @@ import {
   BULLET_HEAVY_PINBALL_KB_MULT,
   propagateRangerPreyChainDamageAndKnockback,
 } from './sim-blessings.js';
-import { addBossStaggerAccum } from './sim-boss-armor-break.js';
+import {
+  addBossStaggerAccum,
+  getBossArmorBreakVulnBonus,
+  getBossArmorShellDamageMultiplier,
+} from './sim-boss-armor-break.js';
 import {
   ICE_GOLEM_FRONT_CONE_RAD,
   IRON_SHIELDER_FRONT_CONE_RAD,
@@ -75,6 +79,9 @@ export function applyDamageToEnemyImpl(
     finalAmount = Math.max(1, finalAmount * 0.35);
   }
   finalAmount *= getShamanTotemDamageMultiplier(this, enemy);
+  if (amount < enemy.maxHp * 0.3) {
+    finalAmount *= getBossArmorShellDamageMultiplier(enemy);
+  }
 
   // Biome 2 & 3 Front Shield Mechanic (ice_golem & iron_shielder):
   // Frontal attacks within a 150-degree forward cone are heavily reduced unless flanked from behind or frozen/stunned!
@@ -100,13 +107,20 @@ export function applyDamageToEnemyImpl(
   }
 
   // Enemy Vulnerability Bucket (hard-capped at 1.75x):
+  // - Boss Armor Break Stun (+40%)
   // - Boss Forge Titan Overload Stun (+50%)
   // - Ranger Mark (+25%)
   // - Superconduct (+30% isolated, capped at 1.75x combined)
   finalAmount *= computeEnemyVulnerabilityMultiplier({
     marked: enemy.markedTimer > 0 ? 0.25 : 0,
     superconduct: enemy.superconductTimer > 0 ? 0.3 : 0,
-    extraVulnAdd: enemy.defId === 'forge_titan' && enemy.aiState === 'stunned' ? 0.5 : 0,
+    bossArmorBreak: getBossArmorBreakVulnBonus(enemy),
+    extraVulnAdd:
+      enemy.defId === 'forge_titan' &&
+      enemy.aiState === 'stunned' &&
+      (enemy.bossArmorBreakVulnTimer ?? 0) <= 0
+        ? 0.5
+        : 0,
   });
 
   // Section 6.2 & AP2 2.3: Freeze + heavy/crit -> Shatter (2.0x on regular/Elite, 1.35x cap on Boss)
@@ -143,7 +157,7 @@ export function applyDamageToEnemyImpl(
     finalAmount = Math.min(finalAmount, amount * BOSS_SINGLE_HIT_MAX_MULT);
   }
   const dmg = Math.max(1, Math.round(finalAmount));
-  let hitArmor = hitFrontShield;
+  let hitArmor = hitFrontShield || Boolean(enemy.isBoss && enemy.bossArmorShellActive);
   if (this.stressTestActive && enemy.hp <= dmg + 20) {
     enemy.hp = enemy.maxHp;
   } else if (enemy.shieldArmor > 0) {

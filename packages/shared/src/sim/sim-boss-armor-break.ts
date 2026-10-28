@@ -9,12 +9,17 @@ import {
   triggerTableTechOnWallSlamOrStagger,
 } from './sim-blessings.js';
 import { triggerBiome2WallSlamCryoPulse } from './sim-tactical-physics-p1c.js';
-import { computeWallSlamDamage, isFlippableBarricadeProp } from './sim-tactical-physics.js';
+import {
+  collapseRottenTotemPillar,
+  computeWallSlamDamage,
+  isFlippableBarricadeProp,
+} from './sim-tactical-physics.js';
 import {
   hasPlayerBlessing,
   type PropKind,
   type SimEnemyState,
   type SimPlayerState,
+  type SimPropState,
 } from './world-sim-types.js';
 import type { WorldSim } from './world-sim.js';
 
@@ -28,6 +33,13 @@ export const BOSS_STAGGER_MAX = 100;
 export const BOSS_STAGGER_PROP_KICK_BONUS = 50;
 export const BOSS_STAGGER_COOLDOWN_SEC = 6.0;
 export const BOSS_STAGGER_FLINCH_SEC = 0.5;
+
+export const SPORE_KING_ARMOR_REDUCTION = 0.7;
+export const SPORE_KING_ARMOR_BREAK_STUN_SEC = 3.5;
+export const BOSS_ARMOR_BREAK_VULN_BONUS = 0.4;
+export const BOSS_ARMOR_BREAK_HAZARD_RATIO = 0.06;
+export const SPORE_KING_CHARGE_SPEED = 360;
+export const SPORE_KING_CHARGE_DURATION_SEC = 0.65;
 
 export function isBossBiomeToyProp(kind: PropKind): boolean {
   return (
@@ -249,8 +261,6 @@ export function stepBossSupplyDropsAndStagger(sim: WorldSim, dtSec: number): voi
     sim.pendingBossSupplyDrops.length = writeIdx;
   }
 
-  if (sim.stressTestActive || sim.inHub) return;
-
   for (let i = 0; i < sim.enemies.length; i++) {
     const e = sim.enemies[i]!;
     if (!e.isBoss || e.hp <= 0) continue;
@@ -260,6 +270,13 @@ export function stepBossSupplyDropsAndStagger(sim: WorldSim, dtSec: number): voi
       e.bossStaggerCooldownTimer = nextCd <= 1e-6 ? 0 : nextCd;
     }
 
+    if ((e.bossArmorBreakVulnTimer ?? 0) > 0 && e.bossArmorBreakTriggeredTick !== sim.tick) {
+      const nextVuln = (e.bossArmorBreakVulnTimer ?? 0) - dtSec;
+      e.bossArmorBreakVulnTimer = nextVuln <= 1e-6 ? 0 : nextVuln;
+    }
+
+    if (sim.stressTestActive || sim.inHub) continue;
+
     if (e.supplyDropTimer === undefined) {
       e.supplyDropTimer = BOSS_SUPPLY_DROP_INTERVAL_SEC;
     }
@@ -268,6 +285,52 @@ export function stepBossSupplyDropsAndStagger(sim: WorldSim, dtSec: number): voi
       e.supplyDropTimer = BOSS_SUPPLY_DROP_INTERVAL_SEC;
       triggerBossPhaseSupplyDrop(sim, e);
     }
+  }
+}
+
+export function getBossArmorShellDamageMultiplier(
+  enemy: Pick<SimEnemyState, 'isBoss' | 'bossArmorShellActive' | 'bossArmorShellReduction'>,
+): number {
+  if (!enemy.isBoss || !enemy.bossArmorShellActive) {
+    return 1.0;
+  }
+  const reduction = enemy.bossArmorShellReduction ?? SPORE_KING_ARMOR_REDUCTION;
+  return Math.max(0.05, Number((1 - reduction).toFixed(4)));
+}
+
+export function getBossArmorBreakVulnBonus(
+  enemy: Pick<SimEnemyState, 'isBoss' | 'bossArmorBreakVulnTimer'>,
+): number {
+  if (!enemy.isBoss || (enemy.bossArmorBreakVulnTimer ?? 0) <= 0) {
+    return 0;
+  }
+  return BOSS_ARMOR_BREAK_VULN_BONUS;
+}
+
+export function activateBossArmorShell(
+  sim: WorldSim,
+  boss: SimEnemyState,
+  reduction = boss.defId === 'spore_king' ? SPORE_KING_ARMOR_REDUCTION : 0.75,
+): void {
+  if (!boss.isBoss || boss.hp <= 0) return;
+
+  boss.bossArmorShellActive = true;
+  boss.bossArmorShellReduction = reduction;
+  boss.bossArmorBreakVulnTimer = 0;
+
+  triggerBossPhaseSupplyDrop(sim, boss);
+
+  const target = sim.findNearestAlivePlayer(boss.x, boss.y);
+  const angleToTarget = Math.atan2(target.y - boss.y, target.x - boss.x);
+  if (boss.defId === 'spore_king') {
+    boss.aiState = 'telegraph';
+    boss.stateTimer = Math.max(0.55, boss.telegraphDurationSec || 0.65);
+    boss.telegraphAngle = angleToTarget;
+    boss.aimAngle = angleToTarget;
+    boss.bossBurrowed = false;
+    boss.vx = 0;
+    boss.vy = 0;
+    boss.lastCombatText = 'SPORE CARAPACE!';
   }
 }
 
@@ -281,6 +344,170 @@ function resolveAttackerPlayer(
   }
   const pid = typeof attacker === 'number' ? attacker : (enemy.lastHitPlayerId ?? sim.player.id);
   return sim.getPlayerById(pid) ?? sim.player;
+}
+
+export function triggerBossArmorBreak(
+  sim: WorldSim,
+  boss: SimEnemyState,
+  attackerPlayerId = sim.player.id,
+  stunDurationSec = SPORE_KING_ARMOR_BREAK_STUN_SEC,
+  combatText?: string,
+): number {
+  if (!boss.isBoss || boss.hp <= 0) return 0;
+
+  const attackerPl = resolveAttackerPlayer(sim, boss, attackerPlayerId);
+  const hazardDmg = Math.max(1, Math.round(BOSS_ARMOR_BREAK_HAZARD_RATIO * boss.maxHp));
+  boss.hp = Math.max(0, boss.hp - hazardDmg);
+  boss.hitFlashTimer = 0.18;
+  boss.lastHitDmg = hazardDmg;
+  boss.lastHitPlayerId = attackerPl.id;
+  sim.recordDamageHistory(hazardDmg);
+  sim.runStats.damageDealt += hazardDmg;
+  attackerPl.statsDamageDealt = (attackerPl.statsDamageDealt ?? 0) + hazardDmg;
+
+  sim.checkBossPhaseTransitions(boss);
+
+  boss.bossArmorShellActive = false;
+  boss.bossArmorShellReduction = 0;
+  boss.bossPhaseTransitionTimer = 0;
+  boss.bossBurrowed = false;
+  boss.bossArmorBreakTriggeredTick = sim.tick;
+  boss.stunTimer = Math.max(boss.stunTimer ?? 0, stunDurationSec);
+  boss.aiState = 'stunned';
+  boss.stateTimer = Math.max(boss.stateTimer ?? 0, stunDurationSec);
+  boss.bossArmorBreakVulnTimer = Math.max(boss.bossArmorBreakVulnTimer ?? 0, stunDurationSec);
+  boss.vx = 0;
+  boss.vy = 0;
+  boss.kbVx = 0;
+  boss.kbVy = 0;
+  if (boss.defId === 'kryssa_ice_queen') {
+    boss.frozenTimer = Math.max(boss.frozenTimer, stunDurationSec);
+  }
+
+  const defaultText =
+    boss.defId === 'spore_king'
+      ? 'SPORE SHELL SHATTERED!'
+      : boss.defId === 'kryssa_ice_queen'
+        ? 'CRYO SHIELD SHATTERED!'
+        : boss.defId === 'forge_titan'
+          ? 'THERMAL ARMOR OVERLOAD!'
+          : 'ARMOR BROKEN!';
+  boss.lastCombatText =
+    combatText && combatText !== 'ARMOR BROKEN!' ? combatText : defaultText;
+
+  sim.events.push({
+    kind: 'damage_dealt',
+    targetId: boss.id,
+    targetKind: 'enemy',
+    x: boss.x,
+    y: boss.y,
+    amount: hazardDmg,
+    isCrit: true,
+    hitArmor: false,
+    element: 'none',
+    knockbackX: 0,
+    knockbackY: 0,
+  });
+  sim.events.push({
+    kind: 'armor_broken',
+    targetKind: 'enemy',
+    targetId: boss.id,
+    x: boss.x,
+    y: boss.y,
+  });
+  sim.events.push({
+    kind: 'hit_stop',
+    durationMs: 75,
+    trauma: 0.65,
+  });
+
+  if (boss.hp <= 0 && !boss.isDummy) {
+    sim.handleEnemyKilled(boss, attackerPl.id);
+  }
+  return hazardDmg;
+}
+
+export function tryBreakBossArmorWithKickedProp(
+  sim: WorldSim,
+  boss: SimEnemyState,
+  prop: Pick<SimPropState, 'kind'>,
+  attackerPlayerId = sim.player.id,
+): boolean {
+  if (!boss.isBoss || boss.hp <= 0) return false;
+
+  if (boss.defId === 'spore_king') {
+    const isSporeKingBreakProp =
+      prop.kind === 'volatile_spore_pod' ||
+      (prop.kind === 'moss_table' && Boolean(boss.bossArmorShellActive || boss.bossPhase >= 2));
+    if (!isSporeKingBreakProp) return false;
+
+    if ((boss.bossStaggerCooldownTimer ?? 0) <= 0) {
+      const nextStagger = (boss.bossStaggerAccum ?? 0) + BOSS_STAGGER_PROP_KICK_BONUS;
+      if (nextStagger >= BOSS_STAGGER_MAX) {
+        boss.bossStaggerAccum = 0;
+        boss.bossStaggerCooldownTimer = BOSS_STAGGER_COOLDOWN_SEC;
+        onEnemyWallSlammed(sim, boss, attackerPlayerId, false);
+      } else {
+        boss.bossStaggerAccum = nextStagger;
+      }
+    }
+    triggerBossArmorBreak(
+      sim,
+      boss,
+      attackerPlayerId,
+      SPORE_KING_ARMOR_BREAK_STUN_SEC,
+      'SPORE SHELL SHATTERED!',
+    );
+    return true;
+  }
+
+  return false;
+}
+
+export function checkSporeKingPillarCrash(sim: WorldSim, boss: SimEnemyState): boolean {
+  if (boss.defId !== 'spore_king' || boss.hp <= 0) return false;
+  if (
+    boss.aiState !== 'attack' &&
+    !boss.bossArmorShellActive &&
+    Math.hypot(boss.vx, boss.vy) < 120
+  ) {
+    return false;
+  }
+
+  for (let i = 0; i < sim.props.length; i++) {
+    const prop = sim.props[i]!;
+    if (
+      prop.kind !== 'rotten_totem_pillar' ||
+      prop.hp <= 0 ||
+      prop.coverState === 'fallen' ||
+      prop.state === 'broken'
+    ) {
+      continue;
+    }
+    if (distance(boss.x, boss.y, prop.x, prop.y) <= boss.radius + prop.radius + 10) {
+      const fallAngle =
+        Math.hypot(boss.vx, boss.vy) > 1 ? Math.atan2(boss.vy, boss.vx) : boss.telegraphAngle;
+      const hpBefore = boss.hp;
+      collapseRottenTotemPillar(sim, prop, fallAngle, sim.player.id);
+      prop.state = 'broken';
+      prop.coverState = 'fallen';
+      prop.hp = 0;
+      if (boss.hp === hpBefore || boss.bossArmorShellActive) {
+        if (boss.hp !== hpBefore) {
+          boss.hp = hpBefore;
+        }
+        triggerBossArmorBreak(
+          sim,
+          boss,
+          sim.player.id,
+          SPORE_KING_ARMOR_BREAK_STUN_SEC,
+          'SPORE SHELL SHATTERED!',
+        );
+      }
+      return true;
+    }
+  }
+  return false;
 }
 
 export function onEnemyWallSlammed(
@@ -312,6 +539,14 @@ export function triggerBossInPlaceWallSlam(
   const attackerPlayer = resolveAttackerPlayer(sim, boss, attacker);
   boss.bossStaggerAccum = 0;
   boss.bossStaggerCooldownTimer = BOSS_STAGGER_COOLDOWN_SEC;
+  if (boss.bossArmorShellActive) {
+    boss.bossArmorShellActive = false;
+    boss.bossArmorShellReduction = 0;
+    boss.bossArmorBreakVulnTimer = Math.max(
+      boss.bossArmorBreakVulnTimer ?? 0,
+      SPORE_KING_ARMOR_BREAK_STUN_SEC,
+    );
+  }
   boss.stunTimer = Math.max(boss.stunTimer ?? 0, BOSS_STAGGER_FLINCH_SEC);
   boss.aiState = 'stunned';
   boss.stateTimer = Math.max(boss.stateTimer, BOSS_STAGGER_FLINCH_SEC);
