@@ -108,7 +108,7 @@ export function spawnDeterministicVolleyImpl(this: WorldSim, ev: BulletVolleySpa
       }
     }
 
-    if (!this.stressTestActive) {
+    if (!this.stressTestActive && this.projectiles.length >= teamCap) {
       let teamCount = 0;
       let oldestTeamIdx = -1;
       for (let pIdx = 0; pIdx < this.projectiles.length; pIdx++) {
@@ -157,11 +157,39 @@ export function spawnDeterministicVolleyImpl(this: WorldSim, ev: BulletVolleySpa
   }
 }
 
+const midFlightDestroyedScratch: number[] = [];
+
 export function updateProjectilesImpl(this: WorldSim, dtSec: number): void {
+  if (this.projectiles.length === 0) return;
   this.rebuildEnemySpatialGrid();
   const allPlayers = this.getAllPlayers();
   let stressImpactEventsThisTick = 0;
-  const midFlightDestroyedIds: number[] = [];
+  midFlightDestroyedScratch.length = 0;
+  let hasAliveProps = false;
+  let hasActiveVanguardShield = false;
+  let hasArcRelayBlessing = false;
+  if (!this.stressTestActive) {
+    for (let k = 0; k < this.props.length; k++) {
+      if (this.props[k]!.hp > 0) {
+        hasAliveProps = true;
+        break;
+      }
+    }
+    for (let pIdx = 0; pIdx < allPlayers.length; pIdx++) {
+      const pl = allPlayers[pIdx]!;
+      if (pl.lifeState === 'alive' && pl.characterId === 'vanguard' && pl.skillActiveTimer > 0) {
+        hasActiveVanguardShield = true;
+      }
+      if (pl.blessingIds.length > 0 && pl.blessingIds.includes('bullet_coop_arc_relay')) {
+        hasArcRelayBlessing = true;
+      }
+    }
+  }
+  const hasMidFlightSynergy =
+    hasActiveVanguardShield ||
+    hasArcRelayBlessing ||
+    this.skillZones.length > 0 ||
+    this.summons.length > 0;
 
   for (let i = 0; i < this.projectiles.length; i++) {
     const b = this.projectiles[i]!;
@@ -181,14 +209,19 @@ export function updateProjectilesImpl(this: WorldSim, dtSec: number): void {
       continue;
     }
 
-    updateTableTechRocketProjectilesInFlight(this, b, dtSec);
+    if (b.weaponId === 'table_tech_rocket') {
+      updateTableTechRocketProjectilesInFlight(this, b, dtSec);
+    }
     b.prevX = b.x;
     b.prevY = b.y;
     b.x += b.vx * dtSec;
     b.y += b.vy * dtSec;
     if (updateLegendaryProjectileInFlight(this, b, dtSec)) continue;
     // Elemental projectiles flying over interactive surfaces can ignite/freeze/electrify them!
-    if (!this.stressTestActive && b.element !== 'none') {
+    if (
+      !this.stressTestActive &&
+      (b.element === 'burn' || b.element === 'chill' || b.element === 'shock')
+    ) {
       const surfUnder = this.map.getSurfaceAtWorld(b.x, b.y);
       if (
         (b.element === 'burn' &&
@@ -285,7 +318,7 @@ export function updateProjectilesImpl(this: WorldSim, dtSec: number): void {
     }
 
     // 2. Check destructible / refractive props collision
-    if (!this.stressTestActive && this.props.length > 0) {
+    if (hasAliveProps) {
       let hitProp = false;
       for (let k = 0; k < this.props.length; k++) {
         const prop = this.props[k]!;
@@ -377,7 +410,10 @@ export function updateProjectilesImpl(this: WorldSim, dtSec: number): void {
 
     // 3. Player projectile vs Allies/Synergies & Enemies
     if (b.team === 'player') {
-      if (applyPlayerProjectileMidFlightSynergiesAndBlessings(this, b, allPlayers)) {
+      if (
+        hasMidFlightSynergy &&
+        applyPlayerProjectileMidFlightSynergiesAndBlessings(this, b, allPlayers)
+      ) {
         continue;
       }
 
@@ -510,7 +546,10 @@ export function updateProjectilesImpl(this: WorldSim, dtSec: number): void {
       }
     } else {
       // 4. Enemy projectile vs Vanguard Shield, Druid Sacred Tree, or any alive Player
-      if (tryBlockOrReflectEnemyProjectileByVanguardShield(this, b, allPlayers, midFlightDestroyedIds)) {
+      if (
+        hasActiveVanguardShield &&
+        tryBlockOrReflectEnemyProjectileByVanguardShield(this, b, allPlayers, midFlightDestroyedScratch)
+      ) {
         continue;
       }
 
@@ -526,7 +565,7 @@ export function updateProjectilesImpl(this: WorldSim, dtSec: number): void {
           ) {
             if (circleVsCircle(b, sum)) {
               b.ttlSec = 0;
-              midFlightDestroyedIds.push(b.id);
+              midFlightDestroyedScratch.push(b.id);
               sum.hp = Math.max(0, sum.hp - b.damage * (sum.kind === 'tesla_turret' ? 3 : 1));
               this.events.push({
                 kind: 'projectile_impact',
@@ -590,10 +629,10 @@ export function updateProjectilesImpl(this: WorldSim, dtSec: number): void {
     }
   }
 
-  if (midFlightDestroyedIds.length > 0 && !this.stressTestActive) {
+  if (midFlightDestroyedScratch.length > 0 && !this.stressTestActive) {
     this.events.push({
       kind: 'projectiles_destroyed',
-      ids: midFlightDestroyedIds,
+      ids: midFlightDestroyedScratch.slice(),
     });
   }
 

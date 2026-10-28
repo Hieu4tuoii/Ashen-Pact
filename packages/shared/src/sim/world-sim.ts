@@ -329,25 +329,30 @@ export class WorldSim {
 
     // 5.5 Update Phase 5 Skill Zones & Summons + Phase 6 Mechanics
     if (!this.stressTestActive) {
-      this.updateSkillZonesAndSummons(dtSec);
+      if (this.skillZones.length > 0 || this.summons.length > 0) {
+        this.updateSkillZonesAndSummons(dtSec);
+      }
       this.updatePhase6Mechanics(dtSec);
     }
 
     // 6. Update Enemies, Elemental Status DoTs & AI
     this.updateEnemies(dtSec);
 
-    // 7. Rebuild enemy spatial grid after enemy movement for projectile collision checks
-    this.rebuildEnemySpatialGrid();
-
-    // 8. Update Projectiles & Collisions
-    this.updateProjectiles(dtSec);
+    // 7. Update Projectiles & Collisions (rebuilds enemy spatial grid internally)
+    if (this.projectiles.length > 0) {
+      this.updateProjectiles(dtSec);
+    }
     if (!this.stressTestActive) {
-      updateMagneticRivets(this, dtSec);
+      if (this.magneticRivets.length > 0) {
+        updateMagneticRivets(this, dtSec);
+      }
       updateGravitySingularities(this, dtSec);
     }
 
     // 9. Update Pickups (Magnet & Collection)
-    this.updatePickups(dtSec);
+    if (this.pickups.length > 0) {
+      this.updatePickups(dtSec);
+    }
 
     // 10. Stress Test top-up or Dungeon Room / Wave progression
     if (this.stressTestActive) {

@@ -15,8 +15,15 @@ import { updateFlameFissures, updateTetherStaffBeams } from './sim-weapon-specia
 import type { SimPlayerState, SimEnemyState } from './world-sim-types.js';
 import type { WorldSim } from './world-sim.js';
 
+const EMPTY_PLAYERS: readonly SimPlayerState[] = [];
+
 export function updatePhase6MechanicsImpl(this: WorldSim, dtSec: number): void {
-  const allPlayers = this.getAllPlayers();
+  const allPlayers =
+    this.pushBlocks.length > 0 ||
+    this.pressurePlates.length > 0 ||
+    this.shockwaveRings.length > 0
+      ? this.getAllPlayers()
+      : EMPTY_PLAYERS;
 
   // 1. Pushable stone blocks (Solo alternative for 2-player pressure plates)
   for (let i = 0; i < this.pushBlocks.length; i++) {
@@ -203,9 +210,19 @@ export function updatePhase6MechanicsImpl(this: WorldSim, dtSec: number): void {
   }
 
   // 4. Co-op Weapon Tether Beams (tether_staff: High-Voltage Cutting Beam linking player to anchor)
-  updateTetherStaffBeams(this, dtSec);
-  updateFlameFissures(this, dtSec);
-  updateLegendaryWeaponHazards(this, dtSec);
+  if (this.tetherBeams.length > 0) {
+    updateTetherStaffBeams(this, dtSec);
+  }
+  if (this.flameFissures.length > 0) {
+    updateFlameFissures(this, dtSec);
+  }
+  if (
+    this.solarFireZones.length > 0 ||
+    this.magmaTrails.length > 0 ||
+    this.lightningPillars.length > 0
+  ) {
+    updateLegendaryWeaponHazards(this, dtSec);
+  }
 
   // 5. Boss Forge Titan Phase 2 Dual Energy Core synchronization window (3s Co-op / 6s Solo)
   if (this.titanCoreWindowTimer > 0) {
@@ -301,6 +318,15 @@ export function updateEnemiesImpl(this: WorldSim, dtSec: number): void {
   }
 
   syncAshenExecutionerInRoom(this);
+  let hasAliveProps = false;
+  if (!this.stressTestActive) {
+    for (let pIdx = 0; pIdx < this.props.length; pIdx++) {
+      if (this.props[pIdx]!.hp > 0) {
+        hasAliveProps = true;
+        break;
+      }
+    }
+  }
 
   for (let i = 0; i < this.enemies.length; i++) {
     const e = this.enemies[i]!;
@@ -548,23 +574,24 @@ export function updateEnemiesImpl(this: WorldSim, dtSec: number): void {
     e.vy *= speedMult;
 
     // Soft separation between nearby enemies
-    const nearby = this.enemySpatialGrid.queryCircle(
-      e.x,
-      e.y,
-      e.radius + 18,
-      this.queryEnemyScratch,
-    );
     let sepX = 0;
     let sepY = 0;
     if (!isStationaryDef && !e.bossBurrowed && e.rootedTimer <= 0) {
+      const nearby = this.enemySpatialGrid.queryCircle(
+        e.x,
+        e.y,
+        e.radius + 18,
+        this.queryEnemyScratch,
+      );
       for (let j = 0; j < nearby.length; j++) {
         const other = nearby[j]!;
         if (other.id === e.id || other.hp <= 0) continue;
         const odx = e.x - other.x;
         const ody = e.y - other.y;
-        const d = Math.hypot(odx, ody);
         const minSep = e.radius + other.radius + 4;
-        if (d > 0.001 && d < minSep) {
+        const dSq = odx * odx + ody * ody;
+        if (dSq > 1e-6 && dSq < minSep * minSep) {
+          const d = Math.sqrt(dSq);
           const push = ((minSep - d) / minSep) * 90;
           sepX += (odx / d) * push;
           sepY += (ody / d) * push;
@@ -587,7 +614,7 @@ export function updateEnemiesImpl(this: WorldSim, dtSec: number): void {
     let wallCollided = col.collided;
     e.x = col.x;
     e.y = col.y;
-    if (!this.stressTestActive && e.defId !== 'ice_prison' && this.props.length > 0) {
+    if (hasAliveProps && e.defId !== 'ice_prison') {
       const prePropX = e.x;
       const prePropY = e.y;
       this.resolvePropMovementCollision(e);
@@ -616,16 +643,18 @@ export function updateEnemiesImpl(this: WorldSim, dtSec: number): void {
 
     if (!this.stressTestActive && wallCollided && preDecayKbSpeed >= 120 && (e.wallSlamCooldownTimer ?? 0) <= 0) {
       let nearbyRingPillar: (typeof this.props)[number] | undefined;
-      for (let pIdx = 0; pIdx < this.props.length; pIdx++) {
-        const p = this.props[pIdx]!;
-        if (
-          p.hp > 0 &&
-          p.kind === 'rotten_totem_pillar' &&
-          p.coverState !== 'fallen' &&
-          distance(e.x, e.y, p.x, p.y) <= e.radius + 48
-        ) {
-          nearbyRingPillar = p;
-          break;
+      if (hasAliveProps) {
+        for (let pIdx = 0; pIdx < this.props.length; pIdx++) {
+          const p = this.props[pIdx]!;
+          if (
+            p.hp > 0 &&
+            p.kind === 'rotten_totem_pillar' &&
+            p.coverState !== 'fallen' &&
+            distance(e.x, e.y, p.x, p.y) <= e.radius + 48
+          ) {
+            nearbyRingPillar = p;
+            break;
+          }
         }
       }
       triggerEnemyWallSlam(this, e, nearbyRingPillar, preDecayKbSpeed);
