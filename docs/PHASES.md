@@ -1,4 +1,4 @@
-﻿# DANH SÃCH KIá»‚M TRA CÃC PHASE (PHASES.md) â€” ASHEN PACT
+# DANH SÃCH KIá»‚M TRA CÃC PHASE (PHASES.md) â€” ASHEN PACT
 
 > Quy táº¯c: Má»—i phase chá»‰ Ä‘Æ°á»£c Ä‘Ã¡nh dáº¥u hoÃ n thÃ nh `[x]` khi Ä‘áº¡t 100% Definition of Done (DoD) chung vÃ  riÃªng, `pnpm verify` xanh, 0 console error/warning, FPS Ä‘áº¡t má»¥c tiÃªu vÃ  cÃ³ Ä‘áº§y Ä‘á»§ screenshot táº¡i `docs/screenshots/phase-N/`.
 
