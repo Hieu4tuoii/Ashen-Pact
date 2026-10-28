@@ -393,8 +393,8 @@ export class ArenaMap {
   }
 
   public isSolidTile(tx: number, ty: number): boolean {
-    const t = this.getTile(tx, ty);
-    return t === 'wall' || t === 'pillar' || t === 'cracked_wall';
+    if (tx < 0 || ty < 0 || tx >= this.cols || ty >= this.rows) return true;
+    return this.tiles[ty * this.cols + tx] !== 'floor';
   }
 
   /**
@@ -658,10 +658,12 @@ export class ArenaMap {
     this.toIgniteGrass.length = 0;
 
     for (let ty = 1; ty < this.rows - 1; ty++) {
+      const rowOffset = ty * this.cols;
       for (let tx = 1; tx < this.cols - 1; tx++) {
-        const idx = ty * this.cols + tx;
-        const surf = this.surfaces[idx]!;
+        const idx = rowOffset + tx;
         const timer = this.surfaceTimers[idx]!;
+        const surf = this.surfaces[idx]!;
+        if (timer <= 0 && surf !== 'burning_oil' && surf !== 'burning_grass') continue;
 
         if (surf === 'burning_oil' || surf === 'burning_grass') {
           // Spread fire to cardinal neighbors at 320 px/s (~10 tiles/s = 0.10s per tile)
@@ -766,8 +768,10 @@ export class ArenaMap {
   }
 
   private isBlockingTile(tx: number, ty: number, ignoreChasm: boolean): boolean {
-    if (this.isSolidTile(tx, ty)) return true;
-    return !ignoreChasm && this.getSurface(tx, ty) === 'chasm';
+    if (tx < 0 || ty < 0 || tx >= this.cols || ty >= this.rows) return true;
+    const idx = ty * this.cols + tx;
+    if (this.tiles[idx] !== 'floor') return true;
+    return !ignoreChasm && this.surfaces[idx] === 'chasm';
   }
 
   private isColumnBlocking(tx: number, minTy: number, maxTy: number, ignoreChasm: boolean): boolean {
@@ -805,8 +809,30 @@ export class ArenaMap {
     let normalX = currX !== x ? Math.sign(currX - x) : 0;
     let normalY = currY !== y ? Math.sign(currY - y) : 0;
 
-    // Pass 1: Resolve cardinal face overlaps first so sliding across tile seams never snags on internal corners
-    // Pass 2: Resolve any remaining true outer-corner overlaps
+    const oMinTx = Math.max(0, Math.floor((currX - radius) / TILE_SIZE));
+    const oMaxTx = Math.min(this.cols - 1, Math.floor((currX + radius) / TILE_SIZE));
+    const oMinTy = Math.max(0, Math.floor((currY - radius) / TILE_SIZE));
+    const oMaxTy = Math.min(this.rows - 1, Math.floor((currY + radius) / TILE_SIZE));
+    let hasNearbyBlocking = false;
+    for (let ty = oMinTy; ty <= oMaxTy && !hasNearbyBlocking; ty++) {
+      for (let tx = oMinTx; tx <= oMaxTx; tx++) {
+        if (this.isBlockingTile(tx, ty, ignoreChasm)) {
+          hasNearbyBlocking = true;
+          break;
+        }
+      }
+    }
+    if (!hasNearbyBlocking) {
+      const out = this.circleResOut;
+      out.x = currX;
+      out.y = currY;
+      out.collided = collided;
+      out.normalX = normalX;
+      out.normalY = normalY;
+      return out;
+    }
+
+    // Pass 1: cardinal face overlaps; Pass 2: remaining outer-corner overlaps
     for (let pass = 0; pass < 2; pass++) {
       const pMinTx = Math.max(0, Math.floor((currX - radius) / TILE_SIZE) - 2);
       const pMaxTx = Math.min(this.cols - 1, Math.floor((currX + radius) / TILE_SIZE) + 2);
@@ -883,22 +909,11 @@ export class ArenaMap {
     return out;
   }
 
-  /**
-   * Checks if a projectile circle hits any solid wall or pillar tile.
-   */
   public checkProjectileWallHit(
     x: number,
     y: number,
     radius: number,
-  ): {
-    hit: boolean;
-    normalX: number;
-    normalY: number;
-    resolvedX: number;
-    resolvedY: number;
-    hitTx: number;
-    hitTy: number;
-  } {
+  ): { hit: boolean; normalX: number; normalY: number; resolvedX: number; resolvedY: number; hitTx: number; hitTy: number } {
     const out = this.wallHitOut;
     const minTx = Math.max(0, Math.floor((x - radius) / TILE_SIZE));
     const maxTx = Math.min(this.cols - 1, Math.floor((x + radius) / TILE_SIZE));
@@ -906,8 +921,9 @@ export class ArenaMap {
     const maxTy = Math.min(this.rows - 1, Math.floor((y + radius) / TILE_SIZE));
 
     for (let ty = minTy; ty <= maxTy; ty++) {
+      const rowOffset = ty * this.cols;
       for (let tx = minTx; tx <= maxTx; tx++) {
-        if (!this.isSolidTile(tx, ty)) continue;
+        if (this.tiles[rowOffset + tx] === 'floor') continue;
         this.scratchBox.minX = tx * TILE_SIZE;
         this.scratchBox.minY = ty * TILE_SIZE;
         this.scratchBox.maxX = (tx + 1) * TILE_SIZE;
@@ -927,30 +943,15 @@ export class ArenaMap {
       }
     }
 
-    if (
-      x - radius <= 0 ||
-      x + radius >= this.width ||
-      y - radius <= 0 ||
-      y + radius >= this.height
-    ) {
+    if (x - radius <= 0 || x + radius >= this.width || y - radius <= 0 || y + radius >= this.height) {
       let nx = 0;
       let ny = 0;
       let hitTx = clamp(Math.floor(x / TILE_SIZE), 0, this.cols - 1);
       let hitTy = clamp(Math.floor(y / TILE_SIZE), 0, this.rows - 1);
-      if (x - radius <= 0) {
-        nx = 1;
-        hitTx = 0;
-      } else if (x + radius >= this.width) {
-        nx = -1;
-        hitTx = this.cols - 1;
-      }
-      if (y - radius <= 0) {
-        ny = 1;
-        hitTy = 0;
-      } else if (y + radius >= this.height) {
-        ny = -1;
-        hitTy = this.rows - 1;
-      }
+      if (x - radius <= 0) { nx = 1; hitTx = 0; }
+      else if (x + radius >= this.width) { nx = -1; hitTx = this.cols - 1; }
+      if (y - radius <= 0) { ny = 1; hitTy = 0; }
+      else if (y + radius >= this.height) { ny = -1; hitTy = this.rows - 1; }
       out.hit = true;
       out.normalX = nx;
       out.normalY = ny;
