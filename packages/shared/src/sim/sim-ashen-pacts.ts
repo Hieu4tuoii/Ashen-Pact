@@ -465,6 +465,13 @@ export function updatePlayerAshenPactAndRelicPassives(
     }
   }
 
+  if (
+    !hasPlayerActivePact(p, 'pact_soul_chain') &&
+    !hasPlayerAwakenedRelic(p, 'relic_blood_oath_tether')
+  ) {
+    return;
+  }
+
   const allPlayers = sim.getAllPlayers();
 
   // 1. Full-Biome Trial: pact_soul_chain

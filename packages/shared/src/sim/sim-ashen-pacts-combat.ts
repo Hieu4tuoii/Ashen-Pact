@@ -115,6 +115,30 @@ export function despawnAshenExecutioners(sim: WorldSim): void {
 }
 
 export function syncAshenExecutionerInRoom(sim: WorldSim): SimEnemyState | null {
+  let anyHunted =
+    sim.player.lifeState === 'alive' &&
+    sim.player.hp > 0 &&
+    sim.player.activePactId === 'pact_ashen_hunted';
+  if (!anyHunted) {
+    for (let i = 0; i < sim.simulatedPlayers.length; i++) {
+      const sp = sim.simulatedPlayers[i]!;
+      if (sp.lifeState === 'alive' && sp.hp > 0 && sp.activePactId === 'pact_ashen_hunted') {
+        anyHunted = true;
+        break;
+      }
+    }
+  }
+  let hasExistingExec = false;
+  for (let i = 0; i < sim.enemies.length; i++) {
+    if (sim.enemies[i]!.defId === 'ashen_executioner') {
+      hasExistingExec = true;
+      break;
+    }
+  }
+  if (!anyHunted && !hasExistingExec) {
+    return null;
+  }
+
   const room = sim.getCurrentRoom();
   const huntedPlayers = sim
     .getAllPlayers()
