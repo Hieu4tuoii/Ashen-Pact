@@ -192,7 +192,11 @@
     "boss": {
       "stunned": " · ⚡ QUÁ TẢI CHOÁNG (x1.5 ST)!",
       "breakCores": " · [PHÁ 2 LÕI TRONG {sec}s]",
-      "titleFormat": "{name} (Pha {phase}/3) — HP {hp}/{maxHp}{suffix}"
+      "titleFormat": "{name} (Pha {phase}/3) — HP {hp}/{maxHp}{suffix}",
+      "armorBrokenVuln": "✦ VỠ GIÁP! +40% SÁT THƯƠNG NHẬN VÀO",
+      "hintSporeKing": "⚡ SÚT BÀN ĐÁ / BÀO TỬ PHÁ GIÁP!",
+      "hintKryssa": "⚡ LẬT PHIẾN BĂNG CHẶN LASER & SÚT PHÁ KHIÊN!",
+      "hintForgeTitan": "⚡ SÚT KHIÊN THÉP / LÕI NĂNG LƯỢNG HOẶC DẬP BÚA MÁY!"
     },
     "mvp": {
       "sectionTitle": "VINH DANH MVP TRẬN ĐẤU"

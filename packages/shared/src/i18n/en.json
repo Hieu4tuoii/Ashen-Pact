@@ -192,7 +192,11 @@
     "boss": {
       "stunned": " · ⚡ STUN OVERLOAD (x1.5 DMG)!",
       "breakCores": " · [BREAK 2 CORES IN {sec}s]",
-      "titleFormat": "{name} (Phase {phase}/3) — HP {hp}/{maxHp}{suffix}"
+      "titleFormat": "{name} (Phase {phase}/3) — HP {hp}/{maxHp}{suffix}",
+      "armorBrokenVuln": "✦ ARMOR BROKEN! +40% DAMAGE TAKEN",
+      "hintSporeKing": "⚡ KICK MOSS TABLE / SPORE POD TO BREAK ARMOR!",
+      "hintKryssa": "⚡ FLIP ICE BARRICADE TO BLOCK LASER & KICK TO SHATTER!",
+      "hintForgeTitan": "⚡ KICK BLAST SHIELD / COAL CORE OR CRUSH WITH PRESS!"
     },
     "mvp": {
       "sectionTitle": "MATCH MVP HONORS"

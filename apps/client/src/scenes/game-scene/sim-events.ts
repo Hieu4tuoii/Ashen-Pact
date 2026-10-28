@@ -197,6 +197,12 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
             count: 8,
           });
           this.lighting.spawnTransientLight(ev.x, ev.y, 110, PALETTE.SOLAR_GOLD, 0.9, 0.25);
+          if (ev.targetKind === 'enemy') {
+            const brokenBoss = sim.enemies.find((e) => e.id === ev.targetId && e.isBoss);
+            if (brokenBoss) {
+              this.fx.spawnExplosionBurst(ev.x, ev.y, 82, PALETTE.SOLAR_GOLD);
+            }
+          }
         }
         if (allowStressSfx) {
           zzfx.play('armor_break', ev.x, this.camFocusX, ev.y, this.camFocusY);

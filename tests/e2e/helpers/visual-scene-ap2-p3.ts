@@ -632,3 +632,13 @@ export const AP2_P3A_VISUAL_SCENES: readonly VisualSceneDef[] = [
     },
   ),
 ];
+
+export {
+  AP2_P3B_SCENE_GROUP,
+  AP2_P3B_SCENE_IDS,
+  AP2_P3B_VISUAL_SCENES,
+  setupAp2Boss1ArmorBreakScene,
+  setupAp2Boss2ArmorBreakScene,
+  setupAp2Boss3ArmorBreakScene,
+  setupAp2BossSupplyDropScene,
+} from './visual-scene-ap2-p3b.js';

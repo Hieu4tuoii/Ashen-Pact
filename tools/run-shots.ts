@@ -167,6 +167,12 @@ export const SCENE_GROUPS: Readonly<Record<string, readonly string[]>> = {
     'ap2-ai-shielder-shock-arc',
     'ap2-ai-dwarf-mortar-lob',
   ],
+  'ap2-p3b': [
+    'ap2-boss-supply-drop',
+    'ap2-boss1-armor-break',
+    'ap2-boss2-armor-break',
+    'ap2-boss3-armor-break',
+  ],
 };
 
 export interface ShotsCliOptions {

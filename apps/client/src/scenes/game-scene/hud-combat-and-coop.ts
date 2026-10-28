@@ -691,6 +691,14 @@ export function updateCoopTeammateHudImpl(this: GameScene): void {
 export const BOSS_STAGGER_BAR_COLOR = 0xf59e0b; // #F59E0B Amber-Orange
 export const BOSS_STAGGER_BAR_HIGHLIGHT = 0xfbbf24; // #FBBF24 Warm Gold
 
+type BossHudExtScene = GameScene & {
+  bossHintText?: Phaser.GameObjects.Text;
+};
+
+export function isBossHudHintBannerVisible(scene: GameScene): boolean {
+  return Boolean((scene as BossHudExtScene).bossHintText?.visible);
+}
+
 /**
  * Renders the P3B.1 Boss Stagger Bar (`bossStaggerAccum / 100`, #F59E0B / #FBBF24)
  * right beneath the Boss HP bar in the top-center Boss HUD panel.
@@ -702,7 +710,7 @@ export function drawBossStaggerBarHud(
   staggerY: number,
   bw: number,
 ): void {
-  const staggerH = 4.5;
+  const staggerH = 5.0;
   const accum = clamp(boss.bossStaggerAccum ?? 0, 0, BOSS_STAGGER_MAX);
   const ratio = clamp(accum / BOSS_STAGGER_MAX, 0, 1);
   const onCooldown = (boss.bossStaggerCooldownTimer ?? 0) > 0;
@@ -710,15 +718,15 @@ export function drawBossStaggerBarHud(
   // Track background & border
   g.fillStyle(UI_THEME.inkDark, 0.92);
   g.fillRect(bx, staggerY, bw, staggerH);
-  g.lineStyle(1, onCooldown ? 0x64748b : BOSS_STAGGER_BAR_COLOR, 0.78);
+  g.lineStyle(1.1, onCooldown ? 0x64748b : BOSS_STAGGER_BAR_COLOR, 0.85);
   g.strokeRect(bx, staggerY, bw, staggerH);
 
   // Orange-gold fill (#F59E0B base + #FBBF24 highlight strip)
   if (ratio > 0) {
     const fillW = Math.max(2, (bw - 2) * ratio);
-    g.fillStyle(onCooldown ? 0x94a3b8 : BOSS_STAGGER_BAR_COLOR, 0.95);
+    g.fillStyle(onCooldown ? 0x94a3b8 : BOSS_STAGGER_BAR_COLOR, 0.96);
     g.fillRect(bx + 1, staggerY + 1, fillW, staggerH - 2);
-    g.fillStyle(onCooldown ? 0xcbd5e1 : BOSS_STAGGER_BAR_HIGHLIGHT, 0.95);
+    g.fillStyle(onCooldown ? 0xcbd5e1 : BOSS_STAGGER_BAR_HIGHLIGHT, 0.96);
     g.fillRect(bx + 1, staggerY + 1, fillW, Math.max(1, (staggerH - 2) * 0.45));
   }
 
@@ -731,4 +739,139 @@ export function drawBossStaggerBarHud(
     g.lineTo(nx, staggerY + staggerH);
     g.strokePath();
   }
+}
+
+/**
+ * Renders the P3B.5 Reinforced Boss Armor Shell Frame & non-overlapping Tactical Hint /
+ * Armor Broken Vulnerability Banner directly underneath the Boss HUD panel.
+ */
+export function drawBossArmorFrameAndTacticalHintHud(
+  scene: GameScene,
+  g: Phaser.GameObjects.Graphics,
+  boss: SimEnemyState | null,
+  panelX: number,
+  panelY: number,
+  panelW: number,
+  panelH: number,
+  bx: number,
+  by: number,
+  bw: number,
+  bh: number,
+): void {
+  const ext = scene as BossHudExtScene;
+  if (!boss) {
+    ext.bossHintText?.setVisible(false);
+    return;
+  }
+
+  const shellActive = boss.bossArmorShellActive === true;
+  const vulnActive = !shellActive && (boss.bossArmorBreakVulnTimer ?? 0) > 0;
+  if (!shellActive && !vulnActive) {
+    ext.bossHintText?.setVisible(false);
+    return;
+  }
+
+  let frameColor = 0xfbbf24;
+  let textColor: string = PALETTE.SOLAR_GOLD;
+  let bannerText = '';
+
+  if (shellActive) {
+    if (boss.defId === 'spore_king') {
+      frameColor = 0x4ade80; // Spore Green
+      textColor = '#86EFAC';
+      bannerText = i18n.t('ui.boss.hintSporeKing');
+    } else if (boss.defId === 'kryssa_ice_queen') {
+      frameColor = 0x38bdf8; // Glacial Cyan
+      textColor = '#7DD3FC';
+      bannerText = i18n.t('ui.boss.hintKryssa');
+    } else {
+      frameColor = 0xf97316; // Thermonuclear Orange-Red
+      textColor = '#FDBA74';
+      bannerText = i18n.t('ui.boss.hintForgeTitan');
+    }
+
+    // Reinforced armor plating frame around Boss HP bar & panel border
+    g.lineStyle(2.2, frameColor, 0.96);
+    g.strokeRect(bx - 2, by - 2, bw + 4, bh + 4);
+    g.lineStyle(1.4, frameColor, 0.72);
+    g.strokeRoundedRect(panelX - 1.5, panelY - 1.5, panelW + 3, panelH + 3, UI_THEME.panelRadius.md);
+
+    // Armored diagonal plating ribs across the HP bar
+    for (const mark of [0.18, 0.38, 0.58, 0.78]) {
+      const rx = bx + bw * mark;
+      g.lineStyle(1.6, frameColor, 0.85);
+      g.beginPath();
+      g.moveTo(rx - 3, by + bh + 1);
+      g.lineTo(rx + 3, by - 1);
+      g.strokePath();
+    }
+  } else {
+    frameColor = 0xfbbf24;
+    textColor = PALETTE.SOLAR_GOLD;
+    bannerText = i18n.t('ui.boss.armorBrokenVuln');
+
+    // Shattered armor vulnerability frame around Boss HP bar
+    g.lineStyle(2.0, 0xfbbf24, 0.95);
+    g.strokeRect(bx - 2, by - 2, bw + 4, bh + 4);
+    for (const mark of [0.22, 0.5, 0.78]) {
+      const cx = bx + bw * mark;
+      g.lineStyle(1.8, 0xef4444, 0.92);
+      g.beginPath();
+      g.moveTo(cx - 2, by - 3);
+      g.lineTo(cx + 2, by + bh + 3);
+      g.strokePath();
+    }
+  }
+
+  const ui = scene.uiScene;
+  if (!ui) return;
+
+  if (!ext.bossHintText) {
+    const textRes = computeUiTextResolution(
+      ui.scale.width || 1920,
+      ui.scale.height || 1080,
+      scene.currentHudUiScale || graphicsSettings.getState().uiScale,
+    );
+    const t = ui.add
+      .text(
+        0,
+        panelY + panelH + 12,
+        bannerText,
+        createUiTextStyle({
+          fontPxAt1080p: 13,
+          weight: 800,
+          color: textColor,
+          stroke: PALETTE.INK_DEEP,
+          strokeThickness: 2.5,
+          resolution: textRes,
+        }),
+      )
+      .setOrigin(0.5, 0.5);
+    ext.bossHintText = t;
+    scene.textObjects.push(t);
+    scene.hudTopCenterContainer?.add(t);
+  }
+
+  if (ext.bossHintText.text !== bannerText) {
+    ext.bossHintText.setText(bannerText);
+  }
+  ext.bossHintText.setColor(textColor);
+
+  const hintY = panelY + panelH + 3;
+  const hintH = 19;
+  const hintW = Math.max(256, Math.ceil(ext.bossHintText.width + 24));
+  const hintX = -hintW * 0.5;
+
+  drawStyledPanel(g, hintX, hintY, hintW, hintH, {
+    fillColor: UI_THEME.panelBgDark,
+    fillAlpha: 0.94,
+    borderColor: frameColor,
+    borderWidth: 1.5,
+    radius: UI_THEME.panelRadius.sm,
+    accentColor: frameColor,
+    accentSide: 'left',
+  });
+
+  ext.bossHintText.setPosition(0, hintY + hintH * 0.5);
+  ext.bossHintText.setVisible(true);
 }

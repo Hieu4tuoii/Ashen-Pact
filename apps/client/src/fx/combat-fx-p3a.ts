@@ -327,29 +327,184 @@ export function drawP3APredictiveSightlinesAndOverlays(
     }
   }
 
-  // 9. P3B.1 Boss Supply Drop 0.6s golden target rings (`pendingBossSupplyDrops`)
-  if (sim.pendingBossSupplyDrops && sim.pendingBossSupplyDrops.length > 0) {
+  // 9. P3B.1 Boss Supply Drop 0.6s golden target rings (`pendingBossSupplyDrops`) & landing burst
+  let tracker = supplyDropTrackerBySim.get(sim);
+  if (!tracker) {
+    tracker = { prevDrops: [], landedRings: [], lastAlertTick: -1 };
+    supplyDropTrackerBySim.set(sim, tracker);
+  }
+  const curDrops = sim.pendingBossSupplyDrops ?? [];
+  if (tracker.prevDrops.length > 0 && curDrops.length === 0 && sim.tick > tracker.lastAlertTick) {
+    tracker.lastAlertTick = sim.tick;
+    tracker.landedRings = tracker.prevDrops.map((d) => ({
+      x: d.x,
+      y: d.y,
+      bornTick: sim.tick,
+    }));
+    const activeBoss = sim.enemies.find((e) => e.isBoss && e.hp > 0);
+    const alertX = activeBoss ? activeBoss.x : tracker.prevDrops[0]!.x;
+    const alertY = activeBoss ? activeBoss.y - 44 : tracker.prevDrops[0]!.y - 28;
+    scene.fx?.spawnFloatingAlert(alertX, alertY, 'SUPPLY DROP!', '#FBBF24');
+  }
+  if (curDrops.length > 0) {
+    tracker.prevDrops = curDrops.map((d) => ({ x: d.x, y: d.y }));
     const amber = 0xf59e0b; // #F59E0B
     const gold = 0xfbbf24; // #FBBF24
-    for (let dIdx = 0; dIdx < sim.pendingBossSupplyDrops.length; dIdx++) {
-      const drop = sim.pendingBossSupplyDrops[dIdx]!;
+    for (let dIdx = 0; dIdx < curDrops.length; dIdx++) {
+      const drop = curDrops[dIdx]!;
       const maxT = drop.maxTimer || 0.6;
       const progress = clamp(1 - drop.timer / maxT, 0, 1);
       const r = drop.radius || 26;
 
-      g.fillStyle(amber, 0.14 + 0.2 * progress);
+      g.fillStyle(amber, 0.16 + 0.24 * progress);
       g.fillCircle(drop.x, drop.y, r);
-      g.lineStyle(2.4, gold, 0.9);
+      g.lineStyle(2.5, gold, 0.94);
       g.strokeCircle(drop.x, drop.y, r);
 
       const innerR = Math.max(4, r * (1 - 0.72 * progress));
-      g.lineStyle(1.8, amber, 0.85);
+      g.lineStyle(1.9, amber, 0.88);
       g.strokeCircle(drop.x, drop.y, innerR);
 
-      // Vertical drop shadow indicator descending onto target center
-      const dropHeightOffset = (1 - progress) * 48;
-      g.fillStyle(gold, 0.92);
-      g.fillCircle(drop.x, drop.y - dropHeightOffset, 4.5);
+      // Vertical beacon beam & descending crate pod
+      const dropHeightOffset = (1 - progress) * 54;
+      g.lineStyle(2.0, gold, 0.45 + 0.35 * progress);
+      g.beginPath();
+      g.moveTo(drop.x, drop.y - dropHeightOffset);
+      g.lineTo(drop.x, drop.y);
+      g.strokePath();
+      g.fillStyle(gold, 0.96);
+      g.fillRect(drop.x - 5.5, drop.y - dropHeightOffset - 5.5, 11, 11);
+      g.lineStyle(1.4, 0xfffbeb, 0.95);
+      g.strokeRect(drop.x - 5.5, drop.y - dropHeightOffset - 5.5, 11, 11);
+    }
+  } else {
+    tracker.prevDrops = [];
+  }
+
+  if (tracker.landedRings.length > 0) {
+    const gold = 0xfbbf24;
+    const amber = 0xf59e0b;
+    for (let lIdx = tracker.landedRings.length - 1; lIdx >= 0; lIdx--) {
+      const lr = tracker.landedRings[lIdx]!;
+      const ageTicks = sim.tick - lr.bornTick;
+      if (ageTicks < 0 || ageTicks > 14) {
+        tracker.landedRings.splice(lIdx, 1);
+        continue;
+      }
+      const p = clamp(ageTicks / 14, 0, 1);
+      const rad = 16 + p * 34;
+      const alpha = 1 - p;
+      g.fillStyle(gold, 0.25 * alpha);
+      g.fillCircle(lr.x, lr.y, rad * 0.75);
+      g.lineStyle(2.8, gold, 0.95 * alpha);
+      g.strokeCircle(lr.x, lr.y, rad);
+      g.lineStyle(1.8, amber, 0.8 * alpha);
+      g.strokeCircle(lr.x, lr.y, rad * 0.6);
+    }
+  }
+
+  // 10. P3B.2–P3B.4 Boss Reinforced Armor Shell Aura & Shattered Armor Vulnerability Ring
+  for (let bIdx = 0; bIdx < sim.enemies.length; bIdx++) {
+    const boss = sim.enemies[bIdx]!;
+    if (!boss.isBoss || boss.hp <= 0) continue;
+    const bPos = scene.transport
+      ? scene.transport.getInterpolatedEnemyPos(boss, scene.entityPosScratch)
+      : boss;
+    const bx = bPos.x;
+    const by = bPos.y;
+    const br = (boss.radius || 32) + 12;
+
+    if (boss.bossArmorShellActive === true) {
+      const shellCol =
+        boss.defId === 'spore_king'
+          ? 0x4ade80
+          : boss.defId === 'kryssa_ice_queen'
+            ? 0x38bdf8
+            : 0xf97316;
+      const coreCol =
+        boss.defId === 'spore_king'
+          ? 0xbbf7d0
+          : boss.defId === 'kryssa_ice_queen'
+            ? 0xe0f2fe
+            : 0xfef08a;
+
+      g.fillStyle(shellCol, 0.16);
+      g.fillCircle(bx, by, br);
+      g.lineStyle(3.2, shellCol, 0.92);
+      g.strokeCircle(bx, by, br);
+      g.lineStyle(1.6, coreCol, 0.85);
+      g.strokeCircle(bx, by, br - 4.5);
+
+      // 6 rotating armor barrier nodes around the boss
+      const rotBase = sim.tick * 0.05;
+      for (let k = 0; k < 6; k++) {
+        const ang = rotBase + (k * Math.PI) / 3;
+        const nx = bx + Math.cos(ang) * br;
+        const ny = by + Math.sin(ang) * br;
+        g.fillStyle(coreCol, 0.95);
+        g.fillCircle(nx, ny, 3.8);
+      }
+    } else if ((boss.bossArmorBreakVulnTimer ?? 0) > 0) {
+      const vulnCol = 0xfbbf24;
+      const crackCol = 0xef4444;
+      g.fillStyle(vulnCol, 0.14);
+      g.fillCircle(bx, by, br + 4);
+      g.lineStyle(2.6, vulnCol, 0.92);
+      g.strokeCircle(bx, by, br + 2);
+
+      // Radial shattered armor floor cracks & shard triangles
+      for (let k = 0; k < 8; k++) {
+        const ang = (k * Math.PI) / 4 + 0.2;
+        const x1 = bx + Math.cos(ang) * (br - 6);
+        const y1 = by + Math.sin(ang) * (br - 6);
+        const x2 = bx + Math.cos(ang) * (br + 14);
+        const y2 = by + Math.sin(ang) * (br + 14);
+        g.lineStyle(2.2, k % 2 === 0 ? vulnCol : crackCol, 0.9);
+        g.beginPath();
+        g.moveTo(x1, y1);
+        g.lineTo(x2, y2);
+        g.strokePath();
+      }
+    }
+  }
+
+  // 11. P3B.3 Cryo-Charged Glacial Barricade Halo & Kicked Prop Kinetic Slipstream
+  for (let pIdx = 0; pIdx < sim.props.length; pIdx++) {
+    const prop = sim.props[pIdx]!;
+    if (prop.hp <= 0) continue;
+    const pr = (prop.radius || 20) + 7;
+
+    if (prop.cryoChargedByLaser === true) {
+      g.fillStyle(0x38bdf8, 0.26);
+      g.fillCircle(prop.x, prop.y, pr + 4);
+      g.lineStyle(2.8, 0x38bdf8, 0.95);
+      g.strokeCircle(prop.x, prop.y, pr + 2);
+      g.lineStyle(1.8, 0xe0f2fe, 0.95);
+      g.strokeCircle(prop.x, prop.y, pr - 2);
+    }
+
+    const kvx = prop.coverState === 'sliding' ? (prop.vx ?? 0) : 0;
+    const kvy = prop.coverState === 'sliding' ? (prop.vy ?? 0) : 0;
+    const kSpd = Math.hypot(kvx, kvy);
+    if (kSpd > 40) {
+      const nx = kvx / kSpd;
+      const ny = kvy / kSpd;
+      const wakeCol = prop.cryoChargedByLaser ? 0x38bdf8 : 0xfbbf24;
+      g.lineStyle(3.0, wakeCol, 0.88);
+      g.beginPath();
+      g.moveTo(prop.x - nx * 8, prop.y - ny * 8);
+      g.lineTo(prop.x - nx * 36, prop.y - ny * 36);
+      g.strokePath();
+      g.lineStyle(2.2, 0xfffbeb, 0.92);
+      g.strokeCircle(prop.x, prop.y, pr);
     }
   }
 }
+
+interface SupplyDropTrackState {
+  prevDrops: Array<{ x: number; y: number }>;
+  landedRings: Array<{ x: number; y: number; bornTick: number }>;
+  lastAlertTick: number;
+}
+
+const supplyDropTrackerBySim = new WeakMap<WorldSim, SupplyDropTrackState>();

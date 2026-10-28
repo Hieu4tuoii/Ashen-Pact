@@ -28,7 +28,11 @@ import {
   UI_THEME,
 } from '../../ui/theme.js';
 import type { GameScene } from '../GameScene.js';
-import { drawBossStaggerBarHud } from './hud-combat-and-coop.js';
+import {
+  drawBossArmorFrameAndTacticalHintHud,
+  drawBossStaggerBarHud,
+  isBossHudHintBannerVisible,
+} from './hud-combat-and-coop.js';
 import {
   computeMusicIntensityBoost,
   computeWaveBannerSpec,
@@ -295,10 +299,12 @@ export function updateBossHudImpl(this: GameScene): void {
   const trailKey = Math.round(this.trailingBossHpRatio * 200);
   const staggerKey = boss ? Math.round(boss.bossStaggerAccum ?? 0) : 0;
   const staggerCdKey = boss && (boss.bossStaggerCooldownTimer ?? 0) > 0 ? 1 : 0;
+  const armorShellKey = boss?.bossArmorShellActive ? 1 : 0;
+  const armorVulnKey = boss && (boss.bossArmorBreakVulnTimer ?? 0) > 0 ? 1 : 0;
   const bossHash =
     !boss || this.fullMapOpen || sim.runState !== 'playing'
       ? ''
-      : `${boss.defId}:${boss.id}:${boss.hp}:${boss.maxHp}:${boss.bossPhase}:${stunActive}:${transActive}:${enrageLvl}:${coreWin}:${trailKey}:${staggerKey}:${staggerCdKey}:${i18n.getLocale()}`;
+      : `${boss.defId}:${boss.id}:${boss.hp}:${boss.maxHp}:${boss.bossPhase}:${stunActive}:${transActive}:${enrageLvl}:${coreWin}:${trailKey}:${staggerKey}:${staggerCdKey}:${armorShellKey}:${armorVulnKey}:${i18n.getLocale()}`;
   if (bossHash === this.lastBossHudHash) return;
   this.lastBossHudHash = bossHash;
 
@@ -307,6 +313,7 @@ export function updateBossHudImpl(this: GameScene): void {
 
   if (!boss || this.fullMapOpen || sim.runState !== 'playing') {
     this.bossTitleText.setVisible(false);
+    drawBossArmorFrameAndTacticalHintHud(this, g, null, 0, 0, 0, 0, 0, 0, 0, 0);
     return;
   }
 
@@ -316,6 +323,11 @@ export function updateBossHudImpl(this: GameScene): void {
     .enemyName(boss.defId, bossDef?.nameVi ?? 'Mục Vương Nấm Độc')
     .toUpperCase();
   const isEn = i18n.getLocale() === 'en';
+  const shellBadge = boss.bossArmorShellActive
+    ? boss.defId === 'spore_king'
+      ? ' · [-70% DMG]'
+      : ' · [-75% DMG]'
+    : '';
   const statusSuffix =
     transActive > 0
       ? isEn
@@ -325,13 +337,15 @@ export function updateBossHudImpl(this: GameScene): void {
         ? isEn
           ? ` [ENRAGE ×${enrageLvl}]`
           : ` [CUỒNG NỘ ×${enrageLvl}]`
-        : boss.aiState === 'stunned' && boss.stateTimer > 0
-          ? i18n.t('ui.boss.stunned')
-          : sim.titanCoreWindowTimer > 0
-            ? i18n.t('ui.boss.breakCores', {
-                sec: Math.ceil(sim.titanCoreWindowTimer),
-              })
-            : '';
+        : boss.bossArmorShellActive
+          ? shellBadge
+          : boss.aiState === 'stunned' && boss.stateTimer > 0
+            ? i18n.t('ui.boss.stunned')
+            : sim.titanCoreWindowTimer > 0
+              ? i18n.t('ui.boss.breakCores', {
+                  sec: Math.ceil(sim.titanCoreWindowTimer),
+                })
+              : '';
   const titleStr = i18n.t('ui.boss.titleFormat', {
     name: bossName,
     phase: boss.bossPhase,
@@ -418,6 +432,8 @@ export function updateBossHudImpl(this: GameScene): void {
 
   // P3B.1 Orange-Gold Boss Stagger Bar right beneath the Boss HP bar
   drawBossStaggerBarHud(g, boss, bx, by + bh + 3, bw);
+  // P3B.5 Reinforced Boss Armor Shell Frame & Tactical Hint / Vuln Banner
+  drawBossArmorFrameAndTacticalHintHud(this, g, boss, panelX, panelY, panelW, panelH, bx, by, bw, bh);
 }
 
 export function updateTopCenterBannersAndQolImpl(this: GameScene, dtSec: number): void {
@@ -470,7 +486,7 @@ export function updateTopCenterBannersAndQolImpl(this: GameScene, dtSec: number)
 
   // 1. Top-Center Wave / Room Cleared Banner + Coalesced Reaction Banner
   const bossActive = Boolean(this.bossTitleText?.visible);
-  let bannerCurY = bossActive ? 48 : 10;
+  let bannerCurY = bossActive ? (isBossHudHintBannerVisible(this) ? 75 : 52) : 10;
 
   if (this.waveBannerGraphics && this.waveBannerText) {
     const showWaveBanner = Boolean(
