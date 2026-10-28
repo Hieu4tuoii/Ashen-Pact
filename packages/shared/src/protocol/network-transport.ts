@@ -361,7 +361,13 @@ export class NetworkTransport implements ITransport {
       pState.duoBoonIds = ps.duoBoons ? [...ps.duoBoons] : [];
       pState.activePactId = ps.pact ?? null;
       pState.pactOriginalWeaponId = ps.pactOrigWep ?? null;
+      pState.pactKeepMorphedWeaponId = ps.pactKeepWep ?? null;
+      pState.pactKeepMorphedTimer = (ps.pactKeepTimer10 ?? 0) / 10;
       pState.awakenedRelicIds = ps.relics ? [...ps.relics] : [];
+      pState.soulChainTargetId = ps.soulChainTargetId ?? null;
+      pState.soulChainTargetKind = ps.soulChainTargetKind ?? null;
+      pState.soulChainStretchTimer = ps.soulChainStretchTimer ?? 0;
+      pState.blackCrystalEmpoweredNextShot = Boolean(ps.blackCrystalEmpowered);
       pState.buffChoices = ps.buffChoices ? [...ps.buffChoices] : [];
       pState.mutatorChoices = ps.mutatorChoices ? [...ps.mutatorChoices] : [];
       pState.pactChoices = ps.pactChoices ? [...ps.pactChoices] : [];

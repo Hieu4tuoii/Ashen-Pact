@@ -22,6 +22,7 @@ import { initGlobalDebugState } from '../../ui/debug-overlay.js';
 import { graphicsSettings } from '../../ui/graphics-settings.js';
 import { UI_THEME } from '../../ui/theme.js';
 import { type GameScene } from '../GameScene.js';
+import { renderAshenPactAltarModal } from './hud-ashen-pact-modal.js';
 import { renderDaedalusAnvilModal } from './hud-pact-and-forge-modals.js';
 
 export {
@@ -81,7 +82,12 @@ export function updateModalHudImpl(this: GameScene): void {
   const localPlayer = this.transport.getLocalPlayerState();
   const pendingBuffChoices = localPlayer.buffChoices ?? [];
   const pendingMutatorChoices = localPlayer.mutatorChoices ?? [];
-  if (sim.runState !== 'buff_choice' && pendingMutatorChoices.length === 0) {
+  const pendingPactChoices = localPlayer.pactChoices ?? [];
+  if (
+    sim.runState !== 'buff_choice' &&
+    pendingMutatorChoices.length === 0 &&
+    pendingPactChoices.length === 0
+  ) {
     this.buffHoveredIdx = null;
   }
   const statsSig =
@@ -98,7 +104,7 @@ export function updateModalHudImpl(this: GameScene): void {
   const partyCount = Math.max(1, allPlayers.length);
   const readyCount = allPlayers.filter((pl) => pl.buffChoices.length === 0).length;
   const ownedSig = (localPlayer.blessingIds ?? []).join(',');
-  const modalKey = `${sim.runState}:${pendingBuffChoices.join(',')}:${pendingMutatorChoices.join(',')}:${ownedSig}:${readyCount}:${partyCount}:${this.buffHoveredIdx ?? -1}:${this.resultDismissed}:${i18n.getLocale()}:${statsSig}`;
+  const modalKey = `${sim.runState}:${pendingBuffChoices.join(',')}:${pendingMutatorChoices.join(',')}:${pendingPactChoices.join(',')}:${ownedSig}:${readyCount}:${partyCount}:${this.buffHoveredIdx ?? -1}:${this.resultDismissed}:${i18n.getLocale()}:${statsSig}`;
   if (modalKey === this.lastRunState) return;
   const prevRunState = this.lastRunState.split(':')[0];
   this.lastRunState = modalKey;
@@ -209,6 +215,8 @@ export function updateModalHudImpl(this: GameScene): void {
       })
       .setOrigin(0, 0.5);
     this.modalContainer.add(statusBarTxt);
+  } else if (sim.runState === 'playing' && pendingPactChoices.length > 0) {
+    renderAshenPactAltarModal(this, localPlayer, isEn, textRes);
   } else if (sim.runState === 'playing' && pendingMutatorChoices.length > 0) {
     renderDaedalusAnvilModal(this, localPlayer, isEn, textRes);
   } else if ((sim.runState === 'victory' || sim.runState === 'defeat') && !this.resultDismissed) {

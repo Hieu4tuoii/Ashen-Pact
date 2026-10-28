@@ -5,6 +5,7 @@ import {
   SPORE_BOMBER_RIG_DEF,
 } from './rig-defs-biome1-b.js';
 import {
+  ASHEN_EXECUTIONER_RIG_DEF,
   MERCHANT_RIG_DEF,
   SPORE_KING_RIG_DEF,
   TRAINING_DUMMY_RIG_DEF,
@@ -74,6 +75,7 @@ export {
   TRAINING_DUMMY_RIG_DEF,
   SPORE_KING_RIG_DEF,
   MERCHANT_RIG_DEF,
+  ASHEN_EXECUTIONER_RIG_DEF,
   FROST_BAT_RIG_DEF,
   BABY_YETI_RIG_DEF,
   ICE_MAGE_RIG_DEF,
@@ -121,7 +123,7 @@ export const RIG_DEFS_BY_ID: Record<string, EntityRigDef> = {
   iron_shielder: IRON_SHIELDER_RIG_DEF,
   forge_energy_core: FORGE_ENERGY_CORE_RIG_DEF,
   forge_titan: FORGE_TITAN_RIG_DEF,
-  ashen_executioner: KRYSSA_CLONE_RIG_DEF,
+  ashen_executioner: ASHEN_EXECUTIONER_RIG_DEF,
   merchant: MERCHANT_RIG_DEF,
   training_dummy: TRAINING_DUMMY_RIG_DEF,
 };
@@ -156,6 +158,7 @@ export const ALL_SAMPLE_RIGS: readonly EntityRigDef[] = [
   IRON_SHIELDER_RIG_DEF,
   FORGE_ENERGY_CORE_RIG_DEF,
   FORGE_TITAN_RIG_DEF,
+  ASHEN_EXECUTIONER_RIG_DEF,
   MERCHANT_RIG_DEF,
   TRAINING_DUMMY_RIG_DEF,
 ];

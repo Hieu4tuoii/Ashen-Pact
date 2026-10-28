@@ -28,6 +28,7 @@ import {
   UI_THEME,
 } from '../../ui/theme.js';
 import { type GameScene } from '../GameScene.js';
+import { drawPlayerPactAndRelicHudBadges } from './hud-ashen-pact-modal.js';
 import {
   drawHudWeaponCadenceBar,
   formatWeaponCadenceHudLabel,
@@ -113,7 +114,8 @@ export function updateVectorHudImpl(this: GameScene): void {
   const activeWDef = WEAPONS[activeWId] ?? WEAPONS.knight_sword!;
   const cadenceStateHash = `${activeWId}:${p.clipAmmo}:${p.clipMax}:${Math.round(p.weaponHeat)}:${Math.round((p.reloadTimer ?? 0) * 20)}:${p.overclockedNextShot ? 1 : 0}:${Math.round((p.overheatLockTimer ?? 0) * 10)}:${p.meleeComboStep ?? 0}`;
   const blessingsSig = (p.blessingIds ?? []).join(',');
-  const topCardHash = `${p.hp}:${p.maxHp}:${p.armor}:${p.maxArmor}:${cadenceStateHash}:${p.characterId}:${p.slot}:${curBiomeKey}:${lowHpPulse ? 1 : 0}:${trailHash}:${statusChipStr}:${blessingsSig}:${curLocale}`;
+  const pactRelicSig = `${p.activePactId ?? ''}:${(p.awakenedRelicIds ?? []).join(',')}:${Math.ceil(p.pactKeepMorphedTimer ?? 0)}`;
+  const topCardHash = `${p.hp}:${p.maxHp}:${p.armor}:${p.maxArmor}:${cadenceStateHash}:${p.characterId}:${p.slot}:${curBiomeKey}:${lowHpPulse ? 1 : 0}:${trailHash}:${statusChipStr}:${blessingsSig}:${pactRelicSig}:${curLocale}`;
 
   const sceneCache = this as GameScene & {
     lastTopCardHash?: string;
@@ -253,7 +255,10 @@ export function updateVectorHudImpl(this: GameScene): void {
         radius: 4,
       });
     }
-    drawPlayerBlessingChipsHud(this, g, p, 12, statusChipStr.length > 0 ? 102 : 85);
+    const chipsY = statusChipStr.length > 0 ? 102 : 85;
+    const blessingCount = drawPlayerBlessingChipsHud(this, g, p, 12, chipsY);
+    const pactRelicY = blessingCount > 0 ? chipsY + 18 : chipsY;
+    drawPlayerPactAndRelicHudBadges(this, g, p, 12, pactRelicY, curLocale === 'en');
   }
 
   if (this.goldLabelText && (!sim.stressTestActive || sim.tick % 15 === 0)) {

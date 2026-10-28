@@ -819,3 +819,167 @@ export const MERCHANT_RIG_DEF: EntityRigDef = {
     },
   ],
 };
+
+/**
+ * ASHEN EXECUTIONER (`ashen_executioner` — Bóng Ma Đao Phủ):
+ * Spectral grim executioner with horned hood, glowing crimson-violet core, tattered cloak, and curved Grim Scythe.
+ */
+export const ASHEN_EXECUTIONER_RIG_DEF: EntityRigDef = {
+  id: 'ashen_executioner',
+  nameVi: 'Bóng Ma Đao Phủ (Ashen Executioner)',
+  roleVi: 'Thợ Săn Khế Ước · Bất Tử Cho Tới Khi Dọn Phòng',
+  worldWidth: 38,
+  worldHeight: 46,
+  shadowRx: 17,
+  shadowRy: 7.5,
+  parts: [
+    {
+      id: 'backAccessory',
+      width: 34,
+      height: 36,
+      offsetX: 0,
+      offsetY: -17,
+      originX: 0.5,
+      originY: 0.5,
+      zIndex: 5,
+      shapes: [
+        {
+          kind: 'polygon',
+          points: [
+            { x: -13, y: -12 },
+            { x: 13, y: -12 },
+            { x: 16, y: 15 },
+            { x: 6, y: 11 },
+            { x: 0, y: 16 },
+            { x: -6, y: 11 },
+            { x: -16, y: 15 },
+          ],
+          style: { fill: PALETTE.SLATE_DARK, shade: PALETTE.RUBY_DARK, highlight: PALETTE.TOXIC_PURPLE },
+        },
+      ],
+    },
+    {
+      id: 'legLeft',
+      width: 14,
+      height: 16,
+      offsetX: -6,
+      offsetY: -4,
+      originX: 0.5,
+      originY: 0.2,
+      zIndex: 10,
+      shapes: [
+        {
+          kind: 'polygon',
+          points: [{ x: -4, y: -4 }, { x: 4, y: -4 }, { x: 2, y: 6 }, { x: -3, y: 5 }],
+          style: { fill: PALETTE.TOXIC_PURPLE, shade: PALETTE.SLATE_DARK },
+        },
+      ],
+    },
+    {
+      id: 'legRight',
+      width: 14,
+      height: 16,
+      offsetX: 6,
+      offsetY: -4,
+      originX: 0.5,
+      originY: 0.2,
+      zIndex: 15,
+      shapes: [
+        {
+          kind: 'polygon',
+          points: [{ x: -4, y: -4 }, { x: 4, y: -4 }, { x: 3, y: 5 }, { x: -2, y: 6 }],
+          style: { fill: PALETTE.TOXIC_PURPLE, shade: PALETTE.SLATE_DARK },
+        },
+      ],
+    },
+    {
+      id: 'torso',
+      width: 30,
+      height: 28,
+      offsetX: 0,
+      offsetY: -15,
+      originX: 0.5,
+      originY: 0.55,
+      zIndex: 20,
+      shapes: [
+        {
+          kind: 'roundedRect',
+          x: -11,
+          y: -10,
+          w: 22,
+          h: 20,
+          r: 5,
+          style: { fill: PALETTE.SLATE_DARK, shade: PALETTE.INK_DEEP, highlight: PALETTE.ELECTRIC_VIOLET },
+        },
+        {
+          kind: 'polygon',
+          points: [{ x: 0, y: -6 }, { x: 5, y: 0 }, { x: 0, y: 6 }, { x: -5, y: 0 }],
+          style: { fill: PALETTE.CRIMSON_BRIGHT, shade: PALETTE.RUBY_CORE, highlight: PALETTE.BONE_WHITE },
+        },
+      ],
+    },
+    {
+      id: 'armLeft',
+      width: 14,
+      height: 16,
+      offsetX: -12,
+      offsetY: -16,
+      originX: 0.5,
+      originY: 0.3,
+      zIndex: 25,
+      shapes: [
+        { kind: 'circle', cx: 0, cy: 0, r: 5, style: { fill: PALETTE.SLATE_MID, shade: PALETTE.SLATE_DARK } },
+      ],
+    },
+    {
+      id: 'head',
+      width: 28,
+      height: 28,
+      offsetX: 0,
+      offsetY: -28,
+      originX: 0.5,
+      originY: 0.65,
+      zIndex: 35,
+      shapes: [
+        {
+          kind: 'polygon',
+          points: [{ x: 0, y: -13 }, { x: 11, y: -3 }, { x: 9, y: 9 }, { x: -9, y: 9 }, { x: -11, y: -3 }],
+          style: { fill: PALETTE.SLATE_DARK, shade: PALETTE.RUBY_DARK, highlight: PALETTE.ELECTRIC_VIOLET },
+        },
+        { kind: 'circle', cx: -3.5, cy: 0, r: 2.2, style: { fill: PALETTE.CRIMSON_BRIGHT, highlight: PALETTE.SOLAR_GOLD, outlineWidth: 0 } },
+        { kind: 'circle', cx: 3.5, cy: 0, r: 2.2, style: { fill: PALETTE.CRIMSON_BRIGHT, highlight: PALETTE.SOLAR_GOLD, outlineWidth: 0 } },
+      ],
+    },
+    {
+      id: 'weapon',
+      width: 38,
+      height: 36,
+      offsetX: 13,
+      offsetY: -17,
+      originX: 0.35,
+      originY: 0.65,
+      zIndex: 45,
+      shapes: [
+        { kind: 'roundedRect', x: -8, y: -14, w: 4, h: 28, r: 1.5, style: { fill: PALETTE.SLATE_MID, shade: PALETTE.SLATE_DARK } },
+        {
+          kind: 'polygon',
+          points: [{ x: -6, y: -13 }, { x: 15, y: -11 }, { x: 18, y: -3 }, { x: 6, y: -5 }, { x: -6, y: -7 }],
+          style: { fill: PALETTE.CRIMSON_BRIGHT, shade: PALETTE.RUBY_CORE, highlight: PALETTE.BONE_WHITE },
+        },
+      ],
+    },
+    {
+      id: 'armRight',
+      width: 14,
+      height: 16,
+      offsetX: 12,
+      offsetY: -15,
+      originX: 0.5,
+      originY: 0.3,
+      zIndex: 50,
+      shapes: [
+        { kind: 'circle', cx: 0, cy: 0, r: 5, style: { fill: PALETTE.SLATE_MID, shade: PALETTE.SLATE_DARK } },
+      ],
+    },
+  ],
+};

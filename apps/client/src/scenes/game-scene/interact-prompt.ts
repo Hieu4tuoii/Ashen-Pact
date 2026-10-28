@@ -337,13 +337,40 @@ export function resolveInteractPromptSpec(
     }
 
     case 'shrine': {
-      const colorHex = PALETTE.CYAN_FROST;
-      const titleText = isEn ? 'Ancient Shrine' : 'Điện Thờ Cổ Đại';
-      const costGold = target.npc.costGold ?? 25;
-      const costHp = target.npc.costHp ?? 2;
-      const priceText = isEn
-        ? `${costGold} Gold / ${costHp} HP`
-        : `${costGold} Xu / ${costHp} Máu`;
+      const isLegacyAncientShrine =
+        target.npc.nameVi === 'Điện Thờ Cổ Đại' &&
+        target.npc.costGold === undefined &&
+        (target.npc.costHp ?? 0) > 0;
+      if (isLegacyAncientShrine) {
+        const colorHex = PALETTE.CYAN_FROST;
+        const titleText = isEn ? 'Ancient Shrine' : 'Điện Thờ Cổ Đại';
+        const costGold = target.npc.costGold ?? 25;
+        const costHp = target.npc.costHp ?? 2;
+        const priceText = isEn
+          ? `${costGold} Gold / ${costHp} HP`
+          : `${costGold} Xu / ${costHp} Máu`;
+        return {
+          key: target.key,
+          kind: 'shrine',
+          x: target.x,
+          y: target.y - 35,
+          targetX: target.x,
+          targetY: target.y,
+          highlightRadiusX: 24,
+          highlightRadiusY: 28,
+          keycapText: 'E',
+          titleText,
+          colorHex,
+          colorNum: hexToNum(colorHex),
+          costGold,
+          hasCoinIcon: costGold > 0,
+          priceText,
+          suppressedByWeaponCard: false,
+        };
+      }
+
+      const colorHex = PALETTE.CRIMSON_BRIGHT;
+      const titleText = isEn ? 'Ashen Pact Altar' : 'Tế Đàn Khế Ước Tro Tàn';
       return {
         key: target.key,
         kind: 'shrine',
@@ -357,9 +384,9 @@ export function resolveInteractPromptSpec(
         titleText,
         colorHex,
         colorNum: hexToNum(colorHex),
-        costGold,
-        hasCoinIcon: costGold > 0,
-        priceText,
+        costGold: 0,
+        hasCoinIcon: false,
+        priceText: '',
         suppressedByWeaponCard: false,
       };
     }

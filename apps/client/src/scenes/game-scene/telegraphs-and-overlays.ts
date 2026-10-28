@@ -20,6 +20,7 @@ import {
   updateAndDrawWeaponV2Overlays,
 } from '../../fx/combat-fx-weapons-v2.js';
 import { initGlobalDebugState } from '../../ui/debug-overlay.js';
+import { drawP2BWorldOverlays } from '../../fx/combat-fx-p2b.js';
 import { type GameScene, RIG_FOOT_OFFSET_Y } from '../GameScene.js';
 import { drawFootMicroReloadBar } from './hud-micro-reload-bar.js';
 import { drawWorldWeaponSalvageRing } from './hud-pact-and-forge-modals.js';
@@ -46,6 +47,7 @@ export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, 
   // 0a. Hub Campfire & Statue Pedestals (Doanh Trại)
   if (!isStress) {
     drawWorldWeaponSalvageRing(g, sim, p, sim.tick / 60);
+    drawP2BWorldOverlays(this, g, sim, playerX, playerY);
   }
   if (sim.inHub) {
     for (let i = 0; i < sim.hubStatues.length; i++) {

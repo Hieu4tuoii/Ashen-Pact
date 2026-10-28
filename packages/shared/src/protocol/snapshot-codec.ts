@@ -77,6 +77,12 @@ export interface QuantizedPlayerSnap {
   pact: AshenPactId | null;
   pactOrigWep: string | null;
   relics: AshenRelicId[];
+  soulChainTargetId?: number | null;
+  soulChainTargetKind?: 'player' | 'enemy' | null;
+  soulChainStretchTimer?: number;
+  blackCrystalEmpowered?: boolean;
+  pactKeepWep?: string | null;
+  pactKeepTimer10?: number;
   buffChoices: BlessingId[];
   mutatorChoices?: WeaponMutatorId[];
   pactChoices?: AshenPactId[];
@@ -275,6 +281,14 @@ export function encodeWorldSnapshot(
     pact: p.activePactId,
     pactOrigWep: p.pactOriginalWeaponId,
     relics: [...p.awakenedRelicIds],
+    soulChainTargetId: p.soulChainTargetId ?? null,
+    soulChainTargetKind: p.soulChainTargetKind ?? null,
+    soulChainStretchTimer: p.soulChainStretchTimer
+      ? Number(p.soulChainStretchTimer.toFixed(2))
+      : 0,
+    blackCrystalEmpowered: Boolean(p.blackCrystalEmpoweredNextShot),
+    pactKeepWep: p.pactKeepMorphedWeaponId ?? null,
+    pactKeepTimer10: Math.round((p.pactKeepMorphedTimer ?? 0) * 10),
     buffChoices: [...p.buffChoices],
     mutatorChoices: p.mutatorChoices ? [...p.mutatorChoices] : undefined,
     pactChoices: p.pactChoices ? [...p.pactChoices] : undefined,
@@ -366,7 +380,12 @@ export function encodeWorldSnapshot(
     ) {
       continue;
     }
-    if (ev.kind === 'bullet_volley_spawned' || ev.kind === 'projectiles_destroyed') {
+    if (
+      ev.kind === 'bullet_volley_spawned' ||
+      ev.kind === 'projectiles_destroyed' ||
+      ev.kind === 'pact_signed' ||
+      ev.kind === 'relic_awakened'
+    ) {
       priorityEvents.push(ev);
     } else {
       otherEvents.push(ev);

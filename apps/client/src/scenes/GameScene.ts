@@ -574,7 +574,9 @@ export class GameScene extends Phaser.Scene {
       isClickingInvitePanel ||
       suppressFireForEmoteWheel ||
       isModalOrPaused ||
+      (this.transport.getLocalPlayerState().buffChoices?.length ?? 0) > 0 ||
       (this.transport.getLocalPlayerState().mutatorChoices?.length ?? 0) > 0 ||
+      (this.transport.getLocalPlayerState().pactChoices?.length ?? 0) > 0 ||
       sim.runState !== 'playing';
     if (pointer.leftButtonDown() && !isClickingHud) {
       buttons |= INPUT_BUTTON.FIRE;

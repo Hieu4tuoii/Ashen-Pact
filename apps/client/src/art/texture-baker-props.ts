@@ -532,57 +532,62 @@ export function bakeProps(scene: Phaser.Scene, scale: number): void {
     });
   }
 
-  // 7. Ancient Shrine Statue (Tượng Thần Cổ Đại — Active Cyan & Used Extinguished Slate)
+  // 7. Ashen Pact Altar (Tế Đàn Khế Ước Tro Tàn — Active Crimson-Violet & Used Purified State)
   for (const [key, isUsed] of [
     ['prop_shrine_statue', false],
     ['prop_shrine_statue_used', true],
   ] as const) {
-    bakeCustomCanvas(scene, key, 52, 60, scale, (ctx) => {
+    bakeCustomCanvas(scene, key, 56, 64, scale, (ctx) => {
+      // Dark obsidian altar plinth with gold-crimson trim
       outlined(
         ctx,
         {
-          fill: PALETTE.SLATE_MID,
-          shade: PALETTE.SLATE_DARK,
-          highlight: PALETTE.WARM_STONE,
+          fill: PALETTE.SLATE_DARK,
+          shade: PALETTE.INK_DEEP,
+          highlight: isUsed ? PALETTE.SLATE_MID : PALETTE.RUBY_CORE,
           outlineWidth: 2.5,
         },
-        (c) => traceRoundedRect(c, -18, 8, 36, 14, 4),
-        { cx: 0, cy: 15, rx: 18, ry: 7 },
+        (c) => traceRoundedRect(c, -20, 8, 40, 15, 4),
+        { cx: 0, cy: 15, rx: 20, ry: 7.5 },
       );
+      // Horned obsidian-violet monolith body
       outlined(
         ctx,
         {
-          fill: PALETTE.WARM_STONE,
-          shade: PALETTE.ASH_GRAY,
-          highlight: PALETTE.BONE_WHITE,
+          fill: PALETTE.SLATE_DARK,
+          shade: PALETTE.INK_DARK,
+          highlight: isUsed ? PALETTE.SLATE_MID : PALETTE.ELECTRIC_VIOLET,
           outlineWidth: 2.5,
         },
         (c) =>
           tracePolygon(c, [
-            { x: -12, y: 10 },
-            { x: -15, y: -8 },
-            { x: 0, y: -24 },
-            { x: 15, y: -8 },
-            { x: 12, y: 10 },
+            { x: -13, y: 10 },
+            { x: -17, y: -12 },
+            { x: -9, y: -24 },
+            { x: 0, y: -18 },
+            { x: 9, y: -24 },
+            { x: 17, y: -12 },
+            { x: 13, y: 10 },
           ]),
-        { cx: 0, cy: -7, rx: 15, ry: 17 },
+        { cx: 0, cy: -7, rx: 17, ry: 18 },
       );
+      // Central pact sigil core (glowing crimson-gold when active, calm slate-gold when used)
       outlined(
         ctx,
         {
-          fill: isUsed ? PALETTE.SLATE_DARK : PALETTE.CYAN_FROST,
-          shade: isUsed ? PALETTE.INK_DARK : PALETTE.AZURE_CORE,
-          highlight: isUsed ? PALETTE.ASH_GRAY : PALETTE.ICE_WHITE,
+          fill: isUsed ? PALETTE.SLATE_MID : PALETTE.CRIMSON_BRIGHT,
+          shade: isUsed ? PALETTE.SLATE_DARK : PALETTE.RUBY_CORE,
+          highlight: PALETTE.SOLAR_GOLD,
           outlineWidth: 1.8,
         },
         (c) =>
           tracePolygon(c, [
-            { x: 0, y: -13 },
-            { x: 6, y: -4 },
-            { x: 0, y: 5 },
-            { x: -6, y: -4 },
+            { x: 0, y: -14 },
+            { x: 7, y: -4 },
+            { x: 0, y: 6 },
+            { x: -7, y: -4 },
           ]),
-        { cx: 0, cy: -4, rx: 6, ry: 9 },
+        { cx: 0, cy: -4, rx: 7, ry: 10 },
       );
     });
   }
