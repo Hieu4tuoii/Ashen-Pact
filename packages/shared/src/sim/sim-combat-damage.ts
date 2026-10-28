@@ -15,7 +15,11 @@ import {
   BULLET_HEAVY_PINBALL_KB_MULT,
   propagateRangerPreyChainDamageAndKnockback,
 } from './sim-blessings.js';
-import { getShamanTotemDamageMultiplier } from './sim-enemies-tactical-ai.js';
+import {
+  ICE_GOLEM_FRONT_CONE_RAD,
+  getShamanTotemDamageMultiplier,
+  spawnSnowSpiritIceBlockOnDeath,
+} from './sim-enemies-tactical-ai.js';
 import { hasPlayerBlessing, type SimPlayerState, type SimEnemyState } from './world-sim-types.js';
 import type { WorldSim } from './world-sim.js';
 
@@ -76,7 +80,9 @@ export function applyDamageToEnemyImpl(
     (enemy.shieldBrokenTimer ?? 0) <= 0
   ) {
     const incomingFromAngle = hitAngleRad + Math.PI;
-    if (Math.abs(angleDiff(incomingFromAngle, enemy.aimAngle)) <= (75 * Math.PI) / 180) {
+    const coneHalfRad =
+      enemy.defId === 'ice_golem' ? ICE_GOLEM_FRONT_CONE_RAD : (75 * Math.PI) / 180;
+    if (Math.abs(angleDiff(incomingFromAngle, enemy.aimAngle)) < coneHalfRad) {
       finalAmount = Math.max(1, finalAmount * (1 - frontShieldReduction));
       hitFrontShield = true;
     }
@@ -321,9 +327,10 @@ export function handleEnemyKilledImpl(
     m2.kbVy = 45;
   }
 
-  // Biome 2 Snow Spirit freezes ground on death
+  // Biome 2 Snow Spirit freezes ground and crystallizes into sliding_ice_block on death
   if (enemy.defId === 'snow_spirit' && !this.stressTestActive) {
     this.map.freezeSurfaceInRadius(enemy.x, enemy.y, 52);
+    spawnSnowSpiritIceBlockOnDeath(this, enemy);
   }
 
   // Biome 2 Kryssa Ice Prison destroyed -> rescue trapped player!

@@ -1,6 +1,7 @@
 import { distance } from '../math/vec2.js';
 import { SHOT_FLAG, TILE_SIZE } from '../protocol/messages.js';
 import { applyRicochetVowTacticalPropBonus } from './sim-ashen-pacts.js';
+import { shatterIceGolemArmor } from './sim-enemies-tactical-ai.js';
 import {
   computeHazardDamage,
   computeKickSlideDamage,
@@ -141,6 +142,9 @@ export function shatterGlacialBarricade(
         x: e.x,
         y: e.y,
       });
+      if (e.defId === 'ice_golem' && e.hp > 0) {
+        shatterIceGolemArmor(sim, e, ownerId);
+      }
       sim.checkBossPhaseTransitions(e);
       if (e.hp <= 0) sim.handleEnemyKilled(e, ownerId);
     }

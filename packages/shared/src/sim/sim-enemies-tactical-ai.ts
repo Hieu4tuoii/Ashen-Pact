@@ -4,6 +4,8 @@ import { collapseRottenTotemPillar, computeHazardDamage } from './sim-tactical-p
 import type { SimEnemyState, SimPlayerState, SimPropState } from './world-sim-types.js';
 import type { WorldSim } from './world-sim.js';
 
+export * from './sim-enemies-tactical-b23.js';
+
 export const LEAD_FACTOR_REGULAR = 0.35;
 export const LEAD_FACTOR_ELITE_OR_BOSS = 0.65;
 export const MAX_PREDICTIVE_LEAD_TIME_SEC = 0.65;

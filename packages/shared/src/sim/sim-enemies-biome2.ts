@@ -2,8 +2,12 @@ import { ENEMIES } from '../data/enemies.js';
 import { angleDiff, circleVsCircle, clamp, distance } from '../math/vec2.js';
 import { COOP_SCALING } from '../data/scaling.js';
 import {
+  findIceMageTargetPrism,
+  fireIceMagePrismShotOrVolley,
   resolveEnemyAimTarget,
+  spawnSnowSpiritIceBlockOnDeath,
   stepEnemyTelegraphSightline,
+  tryBabyYetiPushIceBlock,
   updateEnemyPredictiveSightline,
 } from './sim-enemies-tactical-ai.js';
 import type { SimPlayerState, SimEnemyState } from './world-sim-types.js';
@@ -150,6 +154,9 @@ export function updateBabyYetiAIImpl(
   }
 
   e.aimAngle = angleToPlayer;
+  if (!this.stressTestActive && tryBabyYetiPushIceBlock(this, e, this.findNearestAlivePlayer(e.x, e.y))) {
+    return;
+  }
   if (e.attackCooldownTimer <= 0 && distToPlayer <= 180) {
     e.aiState = 'telegraph';
     e.stateTimer = e.telegraphDurationSec;
@@ -186,34 +193,29 @@ export function updateIceMageAIImpl(
   const cdMult =
     (e.isElite && e.eliteModifier === 'fast' ? 0.72 : 1.0) * this.getEnemyCooldownScale(false);
   if (e.aiState === 'telegraph') {
-    if (stepEnemyTelegraphSightline(this, e, resolveEnemyAimTarget(this, e, _targetPlayer), 265, dtSec)) {
+    const aimTarget = resolveEnemyAimTarget(this, e, _targetPlayer);
+    const nearbyPrism = !this.stressTestActive ? findIceMageTargetPrism(this, e, false) : null;
+    if (nearbyPrism) {
+      e.vx = 0;
+      e.vy = 0;
+      e.telegraphAngle = Math.atan2(nearbyPrism.y - e.y, nearbyPrism.x - e.x);
+      e.aimAngle = e.telegraphAngle;
+      e.stateTimer -= dtSec;
+      if (e.stateTimer <= 0) {
+        this.map.freezeSurfaceInRadius(e.x, e.y, 44);
+        fireIceMagePrismShotOrVolley(this, e, aimTarget);
+        e.aiState = 'cooldown';
+        e.stateTimer = 0.4;
+        e.attackCooldownTimer = (ENEMIES.ice_mage?.attackCooldownSec ?? 1.82) * cdMult;
+      }
+      return;
+    }
+    if (stepEnemyTelegraphSightline(this, e, aimTarget, 265, dtSec)) {
       if (!this.stressTestActive) {
         this.map.freezeSurfaceInRadius(e.x, e.y, 44);
       }
       if (!this.stressTestActive || this.projectiles.length < 660) {
-        this.spawnDeterministicVolley({
-          kind: 'bullet_volley_spawned',
-          tick: this.tick,
-          ownerId: e.id,
-          team: 'enemy',
-          weaponId: 'frost_orb',
-          x: e.x + Math.cos(e.telegraphAngle) * 16,
-          y: e.y + Math.sin(e.telegraphAngle) * 16,
-          angle: e.telegraphAngle,
-          pelletCount: 3,
-          spreadRad: 0.96,
-          speed: 265,
-          damage: e.damage,
-          radius: 6,
-          knockback: 85,
-          pierceCount: 0,
-          bounceCount: 0,
-          ttlSec: 2.3,
-          element: 'chill',
-          critChance: 0,
-          amplifiedByShield: false,
-          seed: this.rng.nextUint32(),
-        });
+        fireIceMagePrismShotOrVolley(this, e, aimTarget);
       }
       e.aiState = 'cooldown';
       e.stateTimer = 0.4;
@@ -232,10 +234,15 @@ export function updateIceMageAIImpl(
 
   e.aimAngle = angleToPlayer;
   if (e.attackCooldownTimer <= 0 && distToPlayer <= 390) {
+    const aimTarget = resolveEnemyAimTarget(this, e, _targetPlayer);
+    const nearbyPrism = !this.stressTestActive ? findIceMageTargetPrism(this, e, false) : null;
     e.aiState = 'telegraph';
     e.stateTimer = e.telegraphDurationSec;
     e.leadSightlineActive = false;
-    e.telegraphAngle = updateEnemyPredictiveSightline(this, e, resolveEnemyAimTarget(this, e, _targetPlayer), 265);
+    e.telegraphAngle = nearbyPrism
+      ? Math.atan2(nearbyPrism.y - e.y, nearbyPrism.x - e.x)
+      : updateEnemyPredictiveSightline(this, e, aimTarget, 265);
+    e.aimAngle = e.telegraphAngle;
     e.telegraphRadius = 40;
     e.vx = 0;
     e.vy = 0;
@@ -396,6 +403,7 @@ export function detonateSnowSpiritImpl(this: WorldSim, e: SimEnemyState): void {
   e.hp = 0;
 
   this.map.freezeSurfaceInRadius(e.x, e.y, blastRadius);
+  spawnSnowSpiritIceBlockOnDeath(this, e);
 
   const allPlayers = this.getAllPlayers();
   for (let i = 0; i < allPlayers.length; i++) {

@@ -169,6 +169,11 @@ export interface SimPropState {
   bouncesRemaining?: number;
   ttlSec?: number;
   iceSpeedBoostApplied?: boolean;
+  enemyPushed?: boolean;
+  pushedByEnemyId?: number;
+  kickedByPlayerId?: number;
+  counterDeflected?: boolean;
+  lastCombatText?: string;
   pressState?: 'idle' | 'windup' | 'cooldown';
   pressTimer?: number;
 }
@@ -686,6 +691,8 @@ export interface SimEnemyState {
   kickedByPlayerId?: number;
   kickedVelX?: number;
   kickedVelY?: number;
+  crystallizedIceBlockSpawned?: boolean;
+  lastCombatText?: string;
 }
 
 export interface SimProjectileState {

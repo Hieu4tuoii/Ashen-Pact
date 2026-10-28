@@ -39,9 +39,14 @@ import {
   updateP1CTacticalProps,
 } from './sim-tactical-physics-p1c.js';
 import {
+  COUNTER_ICE_KICK_MIN_DAMAGE,
   checkWildBoarPillarCrash,
+  counterDeflectEnemySlidingIceBlock,
   kickSporeBomber,
+  shatterIceGolemArmor,
+  stepEnemyPushedIceBlockCollisions,
   triggerShamanTotemBacklash,
+  tryBabyYetiPushIceBlock,
 } from './sim-enemies-tactical-ai.js';
 import type { WorldSim } from './world-sim.js';
 import type { PropKind, SimEnemyState, SimPlayerState, SimPropState } from './world-sim-types.js';
@@ -189,12 +194,7 @@ export function triggerMossTablePollenArmorBurst(sim: WorldSim, prop: SimPropSta
   return healedCount;
 }
 
-export function tryBreakCrackedWallNearImpact(
-  sim: WorldSim,
-  impactX: number,
-  impactY: number,
-  radius = 56,
-): boolean {
+export function tryBreakCrackedWallNearImpact(sim: WorldSim, impactX: number, impactY: number, radius = 56): boolean {
   const minTx = Math.max(0, Math.floor((impactX - radius - TILE_SIZE) / TILE_SIZE));
   const maxTx = Math.min(sim.map.cols - 1, Math.floor((impactX + radius + TILE_SIZE) / TILE_SIZE));
   const minTy = Math.max(0, Math.floor((impactY - radius - TILE_SIZE) / TILE_SIZE));
@@ -206,57 +206,37 @@ export function tryBreakCrackedWallNearImpact(
       if (sim.map.getTile(tx, ty) !== 'cracked_wall') continue;
       const wallCx = tx * TILE_SIZE + TILE_SIZE * 0.5;
       const wallCy = ty * TILE_SIZE + TILE_SIZE * 0.5;
-      if (distance(impactX, impactY, wallCx, wallCy) <= radius + 28) {
-        if (sim.map.destroyCrackedWall(tx, ty)) {
-          brokenAny = true;
-          sim.secretWallBroken = true;
-          const room = sim.getCurrentRoom();
-          room.secretWallBroken = true;
-          for (const adjId of Object.values(room.connections)) {
-            if (adjId !== undefined) {
-              const adjRoom = sim.dungeon.rooms[adjId];
-              if (adjRoom && (adjRoom.type === 'secret' || room.type === 'secret')) {
-                adjRoom.secretWallBroken = true;
-                if (adjRoom.type === 'secret' && adjRoom.discovery === 'hidden') {
-                  adjRoom.discovery = 'discovered';
-                }
-              }
+      if (distance(impactX, impactY, wallCx, wallCy) <= radius + 28 && sim.map.destroyCrackedWall(tx, ty)) {
+        brokenAny = true; sim.secretWallBroken = true;
+        const room = sim.getCurrentRoom(); room.secretWallBroken = true;
+        for (const adjId of Object.values(room.connections)) {
+          if (adjId !== undefined) {
+            const adjRoom = sim.dungeon.rooms[adjId];
+            if (adjRoom && (adjRoom.type === 'secret' || room.type === 'secret')) {
+              adjRoom.secretWallBroken = true;
+              if (adjRoom.type === 'secret' && adjRoom.discovery === 'hidden') adjRoom.discovery = 'discovered';
             }
           }
-          const secretRoom = sim.dungeon.rooms[sim.dungeon.secretRoomId];
-          if (secretRoom && room.secretWallDir && room.connections[room.secretWallDir] === secretRoom.id) {
-            secretRoom.secretWallBroken = true;
-            if (secretRoom.discovery === 'hidden') {
-              secretRoom.discovery = 'discovered';
-            }
-          }
-          sim.rebuildCurrentRoomDoors();
-          sim.events.push({
-            kind: 'cracked_wall_broken',
-            tx,
-            ty,
-            x: wallCx,
-            y: wallCy,
-          });
-          const allPlayers = sim.getAllPlayers();
-          const isCoop = allPlayers.length > 1;
-          for (const pl of allPlayers) {
-            for (let k = 0; k < 2; k++) {
-              const ang = Math.PI * 0.25 + k * (Math.PI * 0.5);
-              sim.pickups.push(
-                sim.acquirePickup({
-                  id: ++sim.nextEntityId,
-                  kind: 'gold',
-                  x: wallCx,
-                  y: wallCy + 10,
-                  vx: Math.cos(ang) * 75,
-                  vy: Math.sin(ang) * 75,
-                  amount: 10,
-                  ttlSec: 15,
-                  ownerPlayerId: isCoop ? pl.id : undefined,
-                }),
-              );
-            }
+        }
+        const secretRoom = sim.dungeon.rooms[sim.dungeon.secretRoomId];
+        if (secretRoom && room.secretWallDir && room.connections[room.secretWallDir] === secretRoom.id) {
+          secretRoom.secretWallBroken = true;
+          if (secretRoom.discovery === 'hidden') secretRoom.discovery = 'discovered';
+        }
+        sim.rebuildCurrentRoomDoors();
+        sim.events.push({ kind: 'cracked_wall_broken', tx, ty, x: wallCx, y: wallCy });
+        const allPlayers = sim.getAllPlayers();
+        const isCoop = allPlayers.length > 1;
+        for (const pl of allPlayers) {
+          for (let k = 0; k < 2; k++) {
+            const ang = Math.PI * 0.25 + k * (Math.PI * 0.5);
+            sim.pickups.push(
+              sim.acquirePickup({
+                id: ++sim.nextEntityId, kind: 'gold', x: wallCx, y: wallCy + 10,
+                vx: Math.cos(ang) * 75, vy: Math.sin(ang) * 75,
+                amount: 10, ttlSec: 15, ownerPlayerId: isCoop ? pl.id : undefined,
+              }),
+            );
           }
         }
       }
@@ -358,7 +338,7 @@ export function flipCoverProp(sim: WorldSim, prop: SimPropState, actor: SimPlaye
   if (prop.hp <= 0 || !isFlippableBarricadeProp(prop.kind) || prop.coverState !== 'low') return false;
 
   const flippedHp = getFlippedBarricadeHp(prop.kind);
-  prop.coverState = 'flipped'; prop.blocksMovement = true; prop.blocksEnemyProjectiles = true; prop.destructible = true;
+  prop.coverState = 'flipped'; prop.state = 'flipped'; prop.blocksMovement = true; prop.blocksEnemyProjectiles = true; prop.destructible = true;
   prop.hp = flippedHp; prop.maxHp = flippedHp; prop.microBlankTimer = FLIP_COVER_MICRO_BLANK_DURATION_SEC;
 
   const bulletsCleared = clearEnemyProjectilesAroundProp(sim, prop.x, prop.y, FLIP_COVER_MICRO_BLANK_RADIUS);
@@ -410,9 +390,10 @@ export function kickProp(sim: WorldSim, prop: SimPropState, actor: SimPlayerStat
     return true;
   }
 
-  prop.coverState = 'sliding'; prop.blocksMovement = false; prop.blocksEnemyProjectiles = false;
+  prop.coverState = 'sliding'; prop.state = 'sliding'; prop.blocksMovement = false; prop.blocksEnemyProjectiles = false;
   prop.vx = Math.cos(slideAngle) * speed; prop.vy = Math.sin(slideAngle) * speed;
   prop.iceSpeedBoostApplied = onIce;
+  prop.enemyPushed = false; prop.kickedByPlayerId = actor.id; prop.counterDeflected = false;
   prop.slideOwnerPlayerId = actor.id; prop.hitEnemyIds = [];
 
   sim.events.push({ kind: 'prop_kicked', propId: prop.id, playerId: actor.id, x: prop.x, y: prop.y, vx: prop.vx, vy: prop.vy });
@@ -426,6 +407,16 @@ export function kickPropImpl(this: WorldSim, prop: SimPropState, actor: SimPlaye
 export function triggerMeleeKickProps(sim: WorldSim, player: SimPlayerState, halfArc: number, range: number, attackAngle = player.aimAngle): number {
   let kickedCount = 0;
   for (const prop of sim.props) {
+    if (prop.kind === 'sliding_ice_block' && prop.enemyPushed && prop.hp > 0) {
+      const dist = distance(player.x, player.y, prop.x, prop.y);
+      if (dist <= range + prop.radius + 10) {
+        const angToProp = Math.atan2(prop.y - player.y, prop.x - player.x);
+        if (dist <= player.radius + prop.radius + 12 || Math.abs(angleDiff(attackAngle, angToProp)) <= halfArc + 0.15) {
+          if (counterDeflectEnemySlidingIceBlock(sim, prop, player, attackAngle)) kickedCount++;
+        }
+      }
+      continue;
+    }
     if (!isKickableProp(prop)) continue;
     const dist = distance(player.x, player.y, prop.x, prop.y);
     if (dist > range + prop.radius) continue;
@@ -470,7 +461,18 @@ export function resolvePropMovementCollision(sim: WorldSim, entity: { x: number;
 
   for (let i = 0; i < sim.props.length; i++) {
     const prop = sim.props[i]!;
-    if (prop.hp <= 0 || prop.coverState === 'sliding' || prop.coverState === 'fallen') continue;
+    if (prop.hp <= 0 || prop.coverState === 'fallen') continue;
+    if (
+      asPlayer &&
+      asPlayer.dashTimer > 0 &&
+      prop.kind === 'sliding_ice_block' &&
+      prop.enemyPushed &&
+      distance(asPlayer.x, asPlayer.y, prop.x, prop.y) <= asPlayer.radius + prop.radius + 16
+    ) {
+      counterDeflectEnemySlidingIceBlock(sim, prop, asPlayer, asPlayer.aimAngle);
+      continue;
+    }
+    if (prop.coverState === 'sliding' || prop.state === 'sliding') continue;
 
     const dx = entity.x - prop.x;
     const dy = entity.y - prop.y;
@@ -505,6 +507,15 @@ export function resolvePropMovementCollision(sim: WorldSim, entity: { x: number;
     if (!prop.blocksMovement) continue;
 
     if (asEnemy) {
+      if (
+        asEnemy.defId === 'baby_yeti' &&
+        prop.kind === 'sliding_ice_block' &&
+        !prop.enemyPushed
+      ) {
+        if (tryBabyYetiPushIceBlock(sim, asEnemy, sim.findNearestAlivePlayer(asEnemy.x, asEnemy.y))) {
+          continue;
+        }
+      }
       if (
         asEnemy.defId === 'wild_boar' &&
         asEnemy.aiState === 'attack' &&
@@ -612,6 +623,13 @@ export function updateSlidingPropsImpl(this: WorldSim, dtSec: number): void {
     const convVx = getConveyorVelocityAtWorld(this.map, prop.x, prop.y);
     const nextX = oldX + (vx + convVx) * dtSec;
     const nextY = oldY + vy * dtSec;
+    if (prop.enemyPushed) {
+      const enemyPushOutcome = stepEnemyPushedIceBlockCollisions(this, prop, oldX, oldY, nextX, nextY);
+      if (enemyPushOutcome === 'destroyed') {
+        destroyTacticalProp(this, prop);
+      }
+      continue;
+    }
     const slideAngle = Math.atan2(vy, vx);
     const ownerId = prop.slideOwnerPlayerId ?? this.player.id;
     if (!prop.hitEnemyIds) prop.hitEnemyIds = [];
@@ -625,15 +643,37 @@ export function updateSlidingPropsImpl(this: WorldSim, dtSec: number): void {
       if (e.hp <= 0 || e.defId === 'ashen_executioner' || prop.hitEnemyIds.includes(e.id)) continue;
       if (pointToSegmentDist(e.x, e.y, oldX, oldY, nextX, nextY) <= prop.radius + e.radius) {
         prop.hitEnemyIds.push(e.id);
-        const dmg = applyRicochetVowTacticalPropBonus(
+        const baseSlideDmg = applyRicochetVowTacticalPropBonus(
           slideOwner,
           computeKickSlideDamage(e, this.currentFloor),
         );
+        const dmg = prop.counterDeflected
+          ? Math.max(COUNTER_ICE_KICK_MIN_DAMAGE, baseSlideDmg)
+          : baseSlideDmg;
+        if (prop.counterDeflected) {
+          e.frozenTimer = Math.max(e.frozenTimer, 1.2);
+        }
         const kbSpeed =
           this.map.getSurfaceAtWorld(e.x, e.y) === 'ice'
             ? SLIDING_PROP_ENEMY_KB_SPEED * BIOME2_ICE_INERTIA_MULT
             : SLIDING_PROP_ENEMY_KB_SPEED;
-        this.applyDamageToEnemy(e, dmg, false, 'none', slideAngle, kbSpeed, true, ownerId);
+        this.applyDamageToEnemy(
+          e,
+          dmg,
+          Boolean(prop.counterDeflected),
+          prop.counterDeflected ? 'chill' : 'none',
+          slideAngle,
+          kbSpeed,
+          true,
+          ownerId,
+        );
+        if (
+          e.defId === 'ice_golem' &&
+          (prop.kind === 'sliding_ice_block' || prop.kind === 'glacial_barricade') &&
+          e.hp > 0
+        ) {
+          shatterIceGolemArmor(this, e, ownerId);
+        }
         e.kbVx = Math.cos(slideAngle) * kbSpeed;
         e.kbVy = Math.sin(slideAngle) * kbSpeed;
         e.stunTimer = Math.max(e.stunTimer ?? 0, SLIDING_PROP_ENEMY_STUN_SEC);
@@ -756,6 +796,9 @@ export function triggerEnemyWallSlam(sim: WorldSim, e: SimEnemyState, hitProp?: 
     });
   }
 
+  if (e.defId === 'ice_golem' && e.hp > 0) {
+    shatterIceGolemArmor(sim, e, attackerId);
+  }
   sim.events.push({ kind: 'wall_slam', enemyId: e.id, x: e.x, y: e.y, damage: slamDmg, shattered });
   tryBreakCrackedWallNearImpact(sim, e.x, e.y, Math.max(64, e.radius + 48));
   triggerBiome2WallSlamCryoPulse(sim, e, attackerId);

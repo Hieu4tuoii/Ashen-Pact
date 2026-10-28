@@ -12,6 +12,7 @@ import {
   updateTableTechRocketProjectilesInFlight,
 } from './sim-blessings.js';
 import { spawnSeedGunLifeBlossomImpl, triggerLauncherProjectileExplosionImpl } from './sim-player.js';
+import { refractEnemyProjectileThroughCryoPrism } from './sim-enemies-tactical-ai.js';
 import { refractProjectileThroughCryoPrism } from './sim-tactical-physics-p1c.js';
 import {
   canApplyFragSubmunitionHit,
@@ -346,8 +347,15 @@ export function updateProjectilesImpl(this: WorldSim, dtSec: number): void {
           continue;
         }
         if (!prop.destructible || prop.coverState === 'sliding') continue;
-        if (prop.kind === 'cryo_prism_pillar' && b.team === 'player' && circleVsCircle(b, prop)) {
-          if (refractProjectileThroughCryoPrism(this, b, prop) && b.ttlSec <= 0) {
+        if (prop.kind === 'cryo_prism_pillar' && circleVsCircle(b, prop)) {
+          if (b.team === 'player') {
+            if (refractProjectileThroughCryoPrism(this, b, prop) && b.ttlSec <= 0) {
+              hitProp = true;
+              break;
+            }
+            continue;
+          }
+          if (refractEnemyProjectileThroughCryoPrism(this, b, prop) && b.ttlSec <= 0) {
             hitProp = true;
             break;
           }

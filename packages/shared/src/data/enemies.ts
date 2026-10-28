@@ -177,7 +177,7 @@ export const ENEMIES: Record<string, EnemyStatsDef> = {
     radius: 19,
     telegraphSec: 0.7,
     attackCooldownSec: 2.25,
-    frontShieldReduction: 0.78,
+    frontShieldReduction: 0.75,
   },
   snow_spirit: {
     id: 'snow_spirit',
