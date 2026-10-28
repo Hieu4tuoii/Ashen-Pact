@@ -13,6 +13,7 @@ import {
   tickPlayerDashAndReloadBlessingTimers,
   tryTriggerCoopArcRelayForMelee,
 } from './sim-blessings.js';
+import { kickSporeBomber } from './sim-enemies-tactical-ai.js';
 import {
   BIOME1_POLLEN_SPEED_MULTIPLIER,
   triggerGrassPollenSpeedBoost,
@@ -682,6 +683,12 @@ export function resolveMeleeConeHitsAndSynergies(
     const e = sim.enemies[i]!;
     if (e.hp <= 0 || e.aiState === 'spawning' || swingHitEnemyIds.has(e.id)) continue;
     if (isCircleInCone(p.x, p.y, p.aimAngle, halfArc, meleeRange, e)) {
+      if (e.defId === 'spore_bomber' && e.aiState === 'telegraph') {
+        kickSporeBomber(sim, e, p, p.aimAngle);
+        swingHitEnemyIds.add(e.id);
+        hitAny = true;
+        continue;
+      }
       const isCrit = sim.rng.chance(critChance);
       const dmg = isCrit ? Math.round(baseMeleeDmg * 1.5) : baseMeleeDmg;
       const hitAngle = bypassFrontShield ? e.aimAngle : Math.atan2(e.y - p.y, e.x - p.x);

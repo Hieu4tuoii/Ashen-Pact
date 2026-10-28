@@ -580,7 +580,7 @@ export function updateEnemiesImpl(this: WorldSim, dtSec: number): void {
     // Soft separation between nearby enemies
     let sepX = 0;
     let sepY = 0;
-    if (!isStationaryDef && !e.bossBurrowed && e.rootedTimer <= 0) {
+    if (!isStationaryDef && !e.bossBurrowed && !e.kickedSporeBomber && e.rootedTimer <= 0) {
       const nearby = this.enemySpatialGrid.queryCircle(
         e.x,
         e.y,

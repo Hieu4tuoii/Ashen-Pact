@@ -51,7 +51,7 @@ export const ENEMIES: Record<string, EnemyStatsDef> = {
     moveSpeed: 145,
     damage: 2,
     radius: 12,
-    telegraphSec: 0.6,
+    telegraphSec: 0.65,
     attackCooldownSec: 0,
   },
   wild_boar: {

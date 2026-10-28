@@ -5,6 +5,7 @@ import { distance, distanceSq } from '../math/vec2.js';
 import { BIOME_SCALING, COOP_SCALING } from '../data/scaling.js';
 import { type PlayerInputPacket, TILE_SIZE } from '../protocol/messages.js';
 import type { DungeonRoomNode } from './dungeon-gen.js';
+import { triggerShamanTotemBacklash } from './sim-enemies-tactical-ai.js';
 import {
   collapseRottenTotemPillar,
   detonateVolatileSporePod,
@@ -142,6 +143,7 @@ export function spawnPropImpl(this: WorldSim, kind: PropKind, x: number, y: numb
     hitFlashTimer: 0,
     fuseTimer: 0,
     repaired: false,
+    state: 'intact',
     coverState: tacticalSpec?.coverState,
     blocksEnemyProjectiles: tacticalSpec?.blocksEnemyProjectiles,
     bouncesRemaining: tacticalSpec?.bouncesRemaining,
@@ -795,6 +797,13 @@ export function damagePropImpl(this: WorldSim, prop: SimPropState, amount: numbe
     return;
   }
 
+  if (prop.kind === 'shaman_totem') {
+    if (prop.hp <= 0) {
+      triggerShamanTotemBacklash(this, prop, this.player.id);
+    }
+    return;
+  }
+
   if (prop.kind === 'slag_crucible') {
     if (prop.hp <= 0 || element === 'burn') {
       spillSlagCrucibleLavaCarpet(this, prop, prop.fallAngle);
@@ -808,6 +817,7 @@ export function damagePropImpl(this: WorldSim, prop: SimPropState, amount: numbe
   }
 
   if (prop.hp <= 0) {
+    prop.state = 'broken';
     if (prop.kind === 'moss_table') {
       triggerMossTablePollenArmorBurst(this, prop);
     }

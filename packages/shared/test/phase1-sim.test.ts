@@ -325,14 +325,14 @@ describe('Phase 1 — 3 Sample Enemies (Ranged, Charger, Exploder) AI & Telegrap
       sim.step(SIM_STEP_SEC);
     }
     expect(boar.aiState).toBe('attack');
-    expect(Math.hypot(boar.vx, boar.vy)).toBeCloseTo(380, 0);
+    expect(Math.hypot(boar.vx, boar.vy)).toBeCloseTo(410, 0);
 
     // 3. Spore Bomber telegraph (0.6s) -> AoE explosion
     const bomber = sim.spawnEnemy('spore_bomber', sim.player.x + 36, sim.player.y, true);
     sim.step(SIM_STEP_SEC);
     expect(bomber.aiState).toBe('telegraph');
 
-    for (let i = 0; i < 38; i++) {
+    for (let i = 0; i < 40; i++) {
       sim.step(SIM_STEP_SEC);
     }
     const events = sim.consumeEvents();

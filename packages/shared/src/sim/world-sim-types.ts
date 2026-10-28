@@ -95,7 +95,7 @@ export const DASH_SPEED_MULTIPLIER = 2.6;
 export const ENEMY_SPAWN_WARMUP_SEC = 0.8;
 export const SPORE_EXPLOSION_RADIUS = 68;
 export const BARREL_EXPLOSION_RADIUS = 88;
-export const BOAR_CHARGE_SPEED = 380;
+export const BOAR_CHARGE_SPEED = 410;
 export const BOAR_CHARGE_DURATION_SEC = 0.55;
 export const MELEE_RANGE = 50;
 export const BOSS_ERUPT_RADIUS = 84;
@@ -123,6 +123,7 @@ export type PropKind =
   | 'moss_table'
   | 'volatile_spore_pod'
   | 'rotten_totem_pillar'
+  | 'shaman_totem'
   | 'glacial_barricade'
   | 'glacial_spike'
   | 'sliding_ice_block'
@@ -132,6 +133,8 @@ export type PropKind =
   | 'slag_crucible'
   | 'daedalus_anvil'
   | 'upgrade_anvil';
+
+export type TacticalPropKind = PropKind;
 
 export interface SimPropState {
   id: number;
@@ -149,7 +152,9 @@ export interface SimPropState {
   hitFlashTimer: number;
   fuseTimer: number;
   repaired?: boolean;
+  state?: 'intact' | 'broken' | 'low' | 'flipped' | 'sliding' | 'fallen';
   coverState?: 'low' | 'flipped' | 'sliding' | 'fallen';
+  linkedShamanId?: number;
   blocksEnemyProjectiles?: boolean;
   vx?: number;
   vy?: number;
@@ -677,6 +682,10 @@ export interface SimEnemyState {
   // Phase 3A Predictive Lead Aiming & Sightline Telegraph states
   leadSightlineActive?: boolean;
   leadSightlineAngle?: number;
+  kickedSporeBomber?: boolean;
+  kickedByPlayerId?: number;
+  kickedVelX?: number;
+  kickedVelY?: number;
 }
 
 export interface SimProjectileState {

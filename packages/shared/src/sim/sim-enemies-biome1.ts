@@ -3,8 +3,16 @@ import { circleVsCircle, clamp, distance } from '../math/vec2.js';
 import { COOP_SCALING } from '../data/scaling.js';
 import { TILE_SIZE } from '../protocol/messages.js';
 import {
+  GOBLIN_SHOOTER_ARROW_SPEED,
+  KICKED_SPORE_EXPLOSION_DAMAGE,
+  KICKED_SPORE_EXPLOSION_RADIUS,
+  checkWildBoarPillarCrash,
+  findGoblinShooterCoverPoint,
+  fireGoblinShooterVolley,
   resolveEnemyAimTarget,
+  spawnShamanTotem,
   stepEnemyTelegraphSightline,
+  stepKickedSporeBomber,
   updateEnemyPredictiveSightline,
 } from './sim-enemies-tactical-ai.js';
 import {
@@ -27,36 +35,11 @@ export function updateGoblinShooterAIImpl(
 ): void {
   const cdMult =
     (e.isElite && e.eliteModifier === 'fast' ? 0.72 : 1.0) * this.getEnemyCooldownScale(false);
+  const aimTarget = resolveEnemyAimTarget(this, e);
   if (e.aiState === 'telegraph') {
-    if (stepEnemyTelegraphSightline(this, e, resolveEnemyAimTarget(this, e), 250, dtSec)) {
+    if (stepEnemyTelegraphSightline(this, e, aimTarget, GOBLIN_SHOOTER_ARROW_SPEED, dtSec, 0.35)) {
       if (!this.stressTestActive || this.projectiles.length < 660) {
-        const spreadRad = (15 * Math.PI) / 180;
-        const muzzleX = e.x + Math.cos(e.telegraphAngle) * 14;
-        const muzzleY = e.y + Math.sin(e.telegraphAngle) * 14;
-
-        this.spawnDeterministicVolley({
-          kind: 'bullet_volley_spawned',
-          tick: this.tick,
-          ownerId: e.id,
-          team: 'enemy',
-          weaponId: 'goblin_bow',
-          x: muzzleX,
-          y: muzzleY,
-          angle: e.telegraphAngle,
-          pelletCount: 3,
-          spreadRad,
-          speed: 250,
-          damage: e.damage,
-          radius: 5,
-          knockback: 90,
-          pierceCount: 0,
-          bounceCount: 0,
-          ttlSec: 2.0,
-          element: 'none',
-          critChance: 0,
-          amplifiedByShield: false,
-          seed: this.rng.nextUint32(),
-        });
+        fireGoblinShooterVolley(this, e, aimTarget);
       }
 
       e.aiState = 'cooldown';
@@ -79,7 +62,13 @@ export function updateGoblinShooterAIImpl(
     e.aiState = 'telegraph';
     e.stateTimer = e.telegraphDurationSec;
     e.leadSightlineActive = false;
-    e.telegraphAngle = updateEnemyPredictiveSightline(this, e, resolveEnemyAimTarget(this, e), 250);
+    e.telegraphAngle = updateEnemyPredictiveSightline(
+      this,
+      e,
+      aimTarget,
+      GOBLIN_SHOOTER_ARROW_SPEED,
+      0.35,
+    );
     e.vx = 0;
     e.vy = 0;
     if (!this.stressTestActive) {
@@ -95,6 +84,16 @@ export function updateGoblinShooterAIImpl(
       });
     }
     return;
+  }
+
+  if (!this.stressTestActive && Math.hypot(e.kbVx, e.kbVy) < 10) {
+    const coverPt = findGoblinShooterCoverPoint(this, e, aimTarget);
+    if (coverPt && distance(e.x, e.y, coverPt.x, coverPt.y) > 8) {
+      const angToCover = Math.atan2(coverPt.y - e.y, coverPt.x - e.x);
+      e.vx = Math.cos(angToCover) * e.moveSpeed;
+      e.vy = Math.sin(angToCover) * e.moveSpeed;
+      return;
+    }
   }
 
   let moveDirX = 0;
@@ -141,6 +140,9 @@ export function updateWildBoarAIImpl(
   if (e.aiState === 'attack') {
     e.vx = Math.cos(e.telegraphAngle) * BOAR_CHARGE_SPEED;
     e.vy = Math.sin(e.telegraphAngle) * BOAR_CHARGE_SPEED;
+    if (!this.stressTestActive && checkWildBoarPillarCrash(this, e)) {
+      return;
+    }
     e.stateTimer -= dtSec;
 
     const allPlayers = this.getAllPlayers();
@@ -211,6 +213,10 @@ export function updateSporeBomberAIImpl(
   angleToPlayer: number,
   dtSec: number,
 ): void {
+  if (e.kickedSporeBomber && stepKickedSporeBomber(this, e, dtSec)) {
+    return;
+  }
+
   if (e.aiState === 'telegraph') {
     e.vx = 0;
     e.vy = 0;
@@ -222,7 +228,7 @@ export function updateSporeBomberAIImpl(
   }
 
   e.aimAngle = angleToPlayer;
-  if (distToPlayer <= 52 && !this.stressTestActive) {
+  if (distToPlayer <= 68 && !this.stressTestActive) {
     e.aiState = 'telegraph';
     e.stateTimer = e.telegraphDurationSec;
     e.telegraphAngle = angleToPlayer;
@@ -247,7 +253,8 @@ export function updateSporeBomberAIImpl(
 }
 
 export function detonateSporeBomberImpl(this: WorldSim, e: SimEnemyState): void {
-  const blastRadius = SPORE_EXPLOSION_RADIUS;
+  const wasKicked = Boolean(e.kickedSporeBomber);
+  const blastRadius = wasKicked ? KICKED_SPORE_EXPLOSION_RADIUS : SPORE_EXPLOSION_RADIUS;
   e.hp = 0;
 
   // Leave a toxic poison_swamp puddle at the detonation site!
@@ -261,25 +268,46 @@ export function detonateSporeBomberImpl(this: WorldSim, e: SimEnemyState): void 
     }
   }
 
-  const allPlayers = this.getAllPlayers();
-  for (let i = 0; i < allPlayers.length; i++) {
-    const pl = allPlayers[i]!;
-    if (pl.lifeState !== 'alive') continue;
-    const distP = distance(e.x, e.y, pl.x, pl.y);
-    if (distP <= blastRadius + pl.radius) {
-      const pushAngle = Math.atan2(pl.y - e.y, pl.x - e.x);
-      this.applyDamageToPlayer(e.damage, pushAngle, 230, e.defId, pl);
+  if (!wasKicked) {
+    const allPlayers = this.getAllPlayers();
+    for (let i = 0; i < allPlayers.length; i++) {
+      const pl = allPlayers[i]!;
+      if (pl.lifeState !== 'alive') continue;
+      const distP = distance(e.x, e.y, pl.x, pl.y);
+      if (distP <= blastRadius + pl.radius) {
+        const pushAngle = Math.atan2(pl.y - e.y, pl.x - e.x);
+        this.applyDamageToPlayer(e.damage, pushAngle, 230, e.defId, pl);
+      }
     }
   }
 
+  const attackerId = e.kickedByPlayerId ?? this.player.id;
   for (let i = 0; i < this.enemies.length; i++) {
     const other = this.enemies[i]!;
     if (other.id === e.id || other.hp <= 0) continue;
     const d = distance(e.x, e.y, other.x, other.y);
     if (d <= blastRadius + other.radius) {
       const pushAngle = Math.atan2(other.y - e.y, other.x - e.x);
-      other.kbVx += Math.cos(pushAngle) * 160;
-      other.kbVy += Math.sin(pushAngle) * 160;
+      if (wasKicked) {
+        this.applyDamageToEnemy(
+          other,
+          KICKED_SPORE_EXPLOSION_DAMAGE,
+          true,
+          'poison',
+          pushAngle,
+          240,
+          true,
+          attackerId,
+        );
+        if (other.hp > 0) {
+          other.poisonTimer = Math.max(other.poisonTimer, 4.0);
+          other.poisonStacks = Math.max(2, other.poisonStacks + 1);
+          other.poisonTickTimer = 0.5;
+        }
+      } else {
+        other.kbVx += Math.cos(pushAngle) * 160;
+        other.kbVy += Math.sin(pushAngle) * 160;
+      }
     }
   }
 
@@ -288,7 +316,7 @@ export function detonateSporeBomberImpl(this: WorldSim, e: SimEnemyState): void 
     x: e.x,
     y: e.y,
     radius: blastRadius,
-    damage: e.damage,
+    damage: wasKicked ? KICKED_SPORE_EXPLOSION_DAMAGE : e.damage,
     sourceDefId: e.defId,
   });
   this.events.push({
@@ -403,6 +431,9 @@ export function updateGoblinShamanAIImpl(
     (e.isElite && e.eliteModifier === 'fast' ? 0.72 : 1.0) * this.getEnemyCooldownScale(false);
   if (e.aiState === 'telegraph') {
     if (stepEnemyTelegraphSightline(this, e, resolveEnemyAimTarget(this, e), 245, dtSec)) {
+      if (!this.stressTestActive) {
+        spawnShamanTotem(this, e);
+      }
       // 1. Heal injured allies within SHAMAN_HEAL_RADIUS (220u) if they are NOT poisoned!
       let healedCount = 0;
       for (let i = 0; i < this.enemies.length; i++) {

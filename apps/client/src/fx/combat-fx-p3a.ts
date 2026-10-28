@@ -1,6 +1,8 @@
 import {
+  SHAMAN_TOTEM_LINK_RADIUS,
   SIGHTLINE_TELEGRAPH_WINDOW_SEC,
   clamp,
+  distance,
   raycastSightlineDistance,
   type SimEnemyState,
   type WorldSim,
@@ -172,5 +174,32 @@ export function drawP3APredictiveSightlinesAndOverlays(
     g.fillCircle(spec.endX, spec.endY, 3.2);
     g.fillStyle(spec.coreColor, 0.95);
     g.fillCircle(spec.endX, spec.endY, 1.5);
+  }
+
+  // 5. Biome 1 Goblin Shaman Ward Totem (`shaman_totem`) emerald link tether beams to allies within 220px
+  if (!isStress && sim.props.length > 0) {
+    const outerBeamColor = hexToNum(PALETTE.GOBLIN_GREEN);
+    const coreBeamColor = hexToNum(PALETTE.LIME_GLOW);
+    for (let pIdx = 0; pIdx < sim.props.length; pIdx++) {
+      const prop = sim.props[pIdx]!;
+      if (prop.kind !== 'shaman_totem' || prop.hp <= 0 || prop.state === 'broken') continue;
+      for (let eIdx = 0; eIdx < sim.enemies.length; eIdx++) {
+        const e = sim.enemies[eIdx]!;
+        if (e.hp <= 0 || e.isBoss || e.isDummy) continue;
+        if (distance(prop.x, prop.y, e.x, e.y) <= SHAMAN_TOTEM_LINK_RADIUS + e.radius) {
+          g.lineStyle(3.2, outerBeamColor, 0.55);
+          g.beginPath();
+          g.moveTo(prop.x, prop.y);
+          g.lineTo(e.x, e.y);
+          g.strokePath();
+
+          g.lineStyle(1.4, coreBeamColor, 0.88);
+          g.beginPath();
+          g.moveTo(prop.x, prop.y);
+          g.lineTo(e.x, e.y);
+          g.strokePath();
+        }
+      }
+    }
   }
 }

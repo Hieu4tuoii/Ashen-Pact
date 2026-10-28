@@ -15,6 +15,7 @@ import {
   BULLET_HEAVY_PINBALL_KB_MULT,
   propagateRangerPreyChainDamageAndKnockback,
 } from './sim-blessings.js';
+import { getShamanTotemDamageMultiplier } from './sim-enemies-tactical-ai.js';
 import { hasPlayerBlessing, type SimPlayerState, type SimEnemyState } from './world-sim-types.js';
 import type { WorldSim } from './world-sim.js';
 
@@ -62,6 +63,7 @@ export function applyDamageToEnemyImpl(
   if (enemy.isBoss && this.hasActiveBossGuardians()) {
     finalAmount = Math.max(1, finalAmount * 0.35);
   }
+  finalAmount *= getShamanTotemDamageMultiplier(this, enemy);
 
   // Biome 2 & 3 Front Shield Mechanic (ice_golem & iron_shielder):
   // Frontal attacks within a 150-degree forward cone are heavily reduced unless flanked from behind or frozen/stunned!

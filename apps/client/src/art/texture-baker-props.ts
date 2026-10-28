@@ -764,4 +764,33 @@ export function bakeProps(scene: Phaser.Scene, scale: number): void {
       { cx: 0, cy: -6.5, rx: 3.5, ry: 2.5 },
     );
   });
+
+  bakeCustomCanvas(scene, 'prop_shaman_totem', 36, 44, scale, (ctx) => {
+    outlined(
+      ctx,
+      {
+        fill: PALETTE.FOREST_SHADE,
+        shade: PALETTE.SLATE_DARK,
+        highlight: PALETTE.GOBLIN_GREEN,
+        outlineWidth: 2.4,
+      },
+      (c) => traceRoundedRect(c, -10, -16, 20, 32, 4),
+      { cx: 0, cy: 0, rx: 10, ry: 16 },
+    );
+    outlined(
+      ctx,
+      {
+        fill: PALETTE.LIME_GLOW,
+        shade: PALETTE.GOBLIN_GREEN,
+        highlight: PALETTE.ICE_WHITE,
+        outlineWidth: 2.0,
+      },
+      (c) => {
+        c.beginPath();
+        c.arc(0, -4, 6, 0, Math.PI * 2);
+        c.closePath();
+      },
+      { cx: 0, cy: -4, rx: 6, ry: 6 },
+    );
+  });
 }

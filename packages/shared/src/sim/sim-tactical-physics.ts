@@ -38,6 +38,11 @@ import {
   triggerBiome3TacticalVentPulse,
   updateP1CTacticalProps,
 } from './sim-tactical-physics-p1c.js';
+import {
+  checkWildBoarPillarCrash,
+  kickSporeBomber,
+  triggerShamanTotemBacklash,
+} from './sim-enemies-tactical-ai.js';
 import type { WorldSim } from './world-sim.js';
 import type { PropKind, SimEnemyState, SimPlayerState, SimPropState } from './world-sim-types.js';
 
@@ -130,6 +135,8 @@ export function getTacticalPropSpawnSpec(kind: PropKind): TacticalPropSpawnSpec 
       return { radius: 15, hp: 20, destructible: true, explosive: true, blocksMovement: true, lightRadius: 95, lightColorHex: '#F97316' };
     case 'rotten_totem_pillar':
       return { radius: 20, hp: 45, destructible: true, explosive: false, blocksMovement: true, lightRadius: 90, lightColorHex: '#A3E635' };
+    case 'shaman_totem':
+      return { radius: 18, hp: 65, destructible: true, explosive: false, blocksMovement: true, lightRadius: 85, lightColorHex: '#10B981' };
     case 'cryo_prism_pillar':
       return { radius: 18, hp: 80, destructible: true, explosive: false, blocksMovement: true, lightRadius: 90, lightColorHex: '#67E8F9' };
     case 'pneumatic_press':
@@ -294,7 +301,7 @@ export function collapseRottenTotemPillar(sim: WorldSim, pillar: SimPropState, f
       : sim.player.aimAngle);
 
   pillar.hp = 0; pillar.destructible = false; pillar.blocksMovement = false; pillar.blocksEnemyProjectiles = false;
-  pillar.coverState = 'fallen'; pillar.fallAngle = resolvedAngle;
+  pillar.coverState = 'fallen'; pillar.state = 'broken'; pillar.fallAngle = resolvedAngle;
   clearCollapsedPillarFootprintOnMap(sim.map, pillar.x, pillar.y);
   sim.events.push({ kind: 'prop_destroyed', propId: pillar.id, propKind: pillar.kind, x: pillar.x, y: pillar.y });
 
@@ -439,8 +446,26 @@ function isEnemyEntity(entity: { x: number; y: number; radius: number }): entity
 }
 
 export function resolvePropMovementCollision(sim: WorldSim, entity: { x: number; y: number; radius: number }): void {
-  if (sim.props.length === 0) return;
   const asPlayer = isPlayerEntity(entity) ? entity : null;
+  if (asPlayer && asPlayer.dashTimer > 0) {
+    for (let i = 0; i < sim.enemies.length; i++) {
+      const e = sim.enemies[i]!;
+      if (
+        e.defId === 'spore_bomber' &&
+        e.hp > 0 &&
+        e.aiState === 'telegraph' &&
+        !e.kickedSporeBomber &&
+        distance(asPlayer.x, asPlayer.y, e.x, e.y) <= asPlayer.radius + e.radius + 14
+      ) {
+        const dashAng =
+          Math.hypot(asPlayer.dashDirX, asPlayer.dashDirY) > 0.01
+            ? Math.atan2(asPlayer.dashDirY, asPlayer.dashDirX)
+            : asPlayer.aimAngle;
+        kickSporeBomber(sim, e, asPlayer, dashAng);
+      }
+    }
+  }
+  if (sim.props.length === 0) return;
   const asEnemy = asPlayer ? null : isEnemyEntity(entity) ? entity : null;
 
   for (let i = 0; i < sim.props.length; i++) {
@@ -455,6 +480,10 @@ export function resolvePropMovementCollision(sim: WorldSim, entity: { x: number;
     const dist = Math.sqrt(distSq);
 
     if (asPlayer && asPlayer.dashTimer > 0) {
+      if (prop.kind === 'shaman_totem') {
+        triggerShamanTotemBacklash(sim, prop, asPlayer.id);
+        continue;
+      }
       if (isCircularKickableToyProp(prop.kind)) {
         kickProp(sim, prop, asPlayer, asPlayer.aimAngle);
         continue;
@@ -476,6 +505,13 @@ export function resolvePropMovementCollision(sim: WorldSim, entity: { x: number;
     if (!prop.blocksMovement) continue;
 
     if (asEnemy) {
+      if (
+        asEnemy.defId === 'wild_boar' &&
+        asEnemy.aiState === 'attack' &&
+        prop.kind === 'rotten_totem_pillar'
+      ) {
+        if (checkWildBoarPillarCrash(sim, asEnemy)) continue;
+      }
       const kbSpeed = Math.hypot(asEnemy.kbVx, asEnemy.kbVy);
       if (kbSpeed >= WALL_SLAM_SPEED_THRESHOLD && (asEnemy.wallSlamCooldownTimer ?? 0) <= 0) {
         triggerEnemyWallSlam(sim, asEnemy, prop);
@@ -644,6 +680,7 @@ export function updateSlidingPropsImpl(this: WorldSim, dtSec: number): void {
       if (pointToSegmentDist(other.x, other.y, oldX, oldY, nextX, nextY) <= hitRadius) {
         hitPropObstacle = true;
         if (other.kind === 'rotten_totem_pillar') collapseRottenTotemPillar(this, other, slideAngle, ownerId);
+        else if (other.kind === 'shaman_totem') triggerShamanTotemBacklash(this, other, ownerId);
         break;
       }
     }
