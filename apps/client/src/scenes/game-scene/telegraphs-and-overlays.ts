@@ -21,6 +21,7 @@ import {
 } from '../../fx/combat-fx-weapons-v2.js';
 import { initGlobalDebugState } from '../../ui/debug-overlay.js';
 import { drawP2BWorldOverlays } from '../../fx/combat-fx-p2b.js';
+import { drawP3APredictiveSightlinesAndOverlays } from '../../fx/combat-fx-p3a.js';
 import { type GameScene, RIG_FOOT_OFFSET_Y } from '../GameScene.js';
 import { drawFootMicroReloadBar } from './hud-micro-reload-bar.js';
 import { drawWorldWeaponSalvageRing } from './hud-pact-and-forge-modals.js';
@@ -621,6 +622,9 @@ export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, 
       hpBarsDrawn += 1;
     }
   }
+
+  // 2b. Phase 3A (P3A.1) 0.35s Predictive Sightline Telegraph (#FF5722 outer + #FFF7ED bright core + muzzle diamond reticle)
+  drawP3APredictiveSightlinesAndOverlays(this, g, sim);
 
   // 3. Boss Kill Dramatic Flash Overlay (0.28s additive-feeling golden-white world flash)
   if (this.fx.bossKillFlashTimer > 0) {

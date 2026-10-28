@@ -15,6 +15,8 @@ import { updateFlameFissures, updateTetherStaffBeams } from './sim-weapon-specia
 import type { SimPlayerState, SimEnemyState } from './world-sim-types.js';
 import type { WorldSim } from './world-sim.js';
 
+export * from './sim-enemies-tactical-ai.js';
+
 const EMPTY_PLAYERS: readonly SimPlayerState[] = [];
 
 export function updatePhase6MechanicsImpl(this: WorldSim, dtSec: number): void {
@@ -443,6 +445,7 @@ export function updateEnemiesImpl(this: WorldSim, dtSec: number): void {
     }
 
     // Frozen enemies cannot move or execute AI (unless currently flying under high knockback >= 120)
+    if (e.aiState !== 'telegraph') e.leadSightlineActive = false;
     if (e.frozenTimer > 0) {
       e.vx = 0;
       e.vy = 0;
@@ -480,6 +483,7 @@ export function updateEnemiesImpl(this: WorldSim, dtSec: number): void {
       }
     }
 
+    if (e.aiState !== 'telegraph') e.leadSightlineActive = false;
     if (e.frozenTimer > 0) {
       e.vx = 0;
       e.vy = 0;

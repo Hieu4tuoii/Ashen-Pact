@@ -3,6 +3,11 @@ import { circleVsCircle, clamp, distance } from '../math/vec2.js';
 import { COOP_SCALING } from '../data/scaling.js';
 import { TILE_SIZE } from '../protocol/messages.js';
 import {
+  resolveEnemyAimTarget,
+  stepEnemyTelegraphSightline,
+  updateEnemyPredictiveSightline,
+} from './sim-enemies-tactical-ai.js';
+import {
   SPORE_EXPLOSION_RADIUS,
   BOAR_CHARGE_SPEED,
   BOAR_CHARGE_DURATION_SEC,
@@ -23,11 +28,7 @@ export function updateGoblinShooterAIImpl(
   const cdMult =
     (e.isElite && e.eliteModifier === 'fast' ? 0.72 : 1.0) * this.getEnemyCooldownScale(false);
   if (e.aiState === 'telegraph') {
-    e.vx = 0;
-    e.vy = 0;
-    e.aimAngle = e.telegraphAngle;
-    e.stateTimer -= dtSec;
-    if (e.stateTimer <= 0) {
+    if (stepEnemyTelegraphSightline(this, e, resolveEnemyAimTarget(this, e), 250, dtSec)) {
       if (!this.stressTestActive || this.projectiles.length < 660) {
         const spreadRad = (15 * Math.PI) / 180;
         const muzzleX = e.x + Math.cos(e.telegraphAngle) * 14;
@@ -77,7 +78,8 @@ export function updateGoblinShooterAIImpl(
   if (e.attackCooldownTimer <= 0 && distToPlayer <= 350) {
     e.aiState = 'telegraph';
     e.stateTimer = e.telegraphDurationSec;
-    e.telegraphAngle = angleToPlayer;
+    e.leadSightlineActive = false;
+    e.telegraphAngle = updateEnemyPredictiveSightline(this, e, resolveEnemyAimTarget(this, e), 250);
     e.vx = 0;
     e.vy = 0;
     if (!this.stressTestActive) {
@@ -400,11 +402,7 @@ export function updateGoblinShamanAIImpl(
   const cdMult =
     (e.isElite && e.eliteModifier === 'fast' ? 0.72 : 1.0) * this.getEnemyCooldownScale(false);
   if (e.aiState === 'telegraph') {
-    e.vx = 0;
-    e.vy = 0;
-    e.aimAngle = e.telegraphAngle;
-    e.stateTimer -= dtSec;
-    if (e.stateTimer <= 0) {
+    if (stepEnemyTelegraphSightline(this, e, resolveEnemyAimTarget(this, e), 245, dtSec)) {
       // 1. Heal injured allies within SHAMAN_HEAL_RADIUS (220u) if they are NOT poisoned!
       let healedCount = 0;
       for (let i = 0; i < this.enemies.length; i++) {
@@ -479,7 +477,8 @@ export function updateGoblinShamanAIImpl(
   if (e.attackCooldownTimer <= 0 && distToPlayer <= 380) {
     e.aiState = 'telegraph';
     e.stateTimer = e.telegraphDurationSec;
-    e.telegraphAngle = angleToPlayer;
+    e.leadSightlineActive = false;
+    e.telegraphAngle = updateEnemyPredictiveSightline(this, e, resolveEnemyAimTarget(this, e), 245);
     e.telegraphRadius = 38;
     e.vx = 0;
     e.vy = 0;
@@ -607,10 +606,18 @@ export function updateBossSporeKingAIImpl(
   const bossCdScale = this.getEnemyCooldownScale(true);
 
   if (e.aiState === 'telegraph') {
-    e.vx = 0;
-    e.vy = 0;
-    e.stateTimer -= dtSec;
-    if (e.stateTimer <= 0) {
+    if (e.bossBurrowed) {
+      e.vx = 0;
+      e.vy = 0;
+      e.leadSightlineActive = false;
+      e.stateTimer -= dtSec;
+      if (e.stateTimer <= 0) {
+        this.executeBossSporeKingAttack(e, e.telegraphAngle);
+      }
+      return;
+    }
+    const sporeProjSpeed = e.bossPhase === 3 ? 245 : 215;
+    if (stepEnemyTelegraphSightline(this, e, targetPlayer, sporeProjSpeed, dtSec)) {
       this.executeBossSporeKingAttack(e, e.telegraphAngle);
     }
     return;
@@ -658,6 +665,13 @@ export function updateBossSporeKingAIImpl(
       e.stateTimer = Math.max(
         0.38,
         (e.bossPhase === 3 ? 0.46 : e.telegraphDurationSec * 0.85) * bossCdScale,
+      );
+      e.leadSightlineActive = false;
+      e.telegraphAngle = updateEnemyPredictiveSightline(
+        this,
+        e,
+        targetPlayer,
+        e.bossPhase === 3 ? 245 : 215,
       );
       e.telegraphRadius = 60;
     }

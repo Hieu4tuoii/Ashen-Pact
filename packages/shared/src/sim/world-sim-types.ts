@@ -674,6 +674,9 @@ export interface SimEnemyState {
   gravitySingularityOwnerId?: number;
   executionerTargetPlayerId?: number;
   executionerTargetSwitchTimer?: number;
+  // Phase 3A Predictive Lead Aiming & Sightline Telegraph states
+  leadSightlineActive?: boolean;
+  leadSightlineAngle?: number;
 }
 
 export interface SimProjectileState {

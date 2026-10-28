@@ -2,6 +2,11 @@ import { ENEMIES } from '../data/enemies.js';
 import { angleDiff, circleVsCircle, clamp, distance } from '../math/vec2.js';
 import { COOP_SCALING } from '../data/scaling.js';
 import { TILE_SIZE } from '../protocol/messages.js';
+import {
+  resolveEnemyAimTarget,
+  stepEnemyTelegraphSightline,
+  updateEnemyPredictiveSightline,
+} from './sim-enemies-tactical-ai.js';
 import type { MvpAwardEntry, SimPlayerState, SimEnemyState } from './world-sim-types.js';
 import type { WorldSim } from './world-sim.js';
 
@@ -15,11 +20,7 @@ export function updateFireImpAIImpl(
   const cdMult =
     (e.isElite && e.eliteModifier === 'fast' ? 0.72 : 1.0) * this.getEnemyCooldownScale(false);
   if (e.aiState === 'telegraph') {
-    e.vx = 0;
-    e.vy = 0;
-    e.aimAngle = e.telegraphAngle;
-    e.stateTimer -= dtSec;
-    if (e.stateTimer <= 0) {
+    if (stepEnemyTelegraphSightline(this, e, resolveEnemyAimTarget(this, e), 290, dtSec)) {
       if (!this.stressTestActive || this.projectiles.length < 660) {
         this.spawnDeterministicVolley({
           kind: 'bullet_volley_spawned',
@@ -61,7 +62,8 @@ export function updateFireImpAIImpl(
   if (e.attackCooldownTimer <= 0 && distToPlayer <= 340) {
     e.aiState = 'telegraph';
     e.stateTimer = e.telegraphDurationSec;
-    e.telegraphAngle = angleToPlayer;
+    e.leadSightlineActive = false;
+    e.telegraphAngle = updateEnemyPredictiveSightline(this, e, resolveEnemyAimTarget(this, e), 290);
     e.vx = 0;
     e.vy = 0;
     if (!this.stressTestActive) {
@@ -259,11 +261,7 @@ export function updateWelderDroneAIImpl(
   const cdMult =
     (e.isElite && e.eliteModifier === 'fast' ? 0.72 : 1.0) * this.getEnemyCooldownScale(false);
   if (e.aiState === 'telegraph') {
-    e.vx = 0;
-    e.vy = 0;
-    e.aimAngle = e.telegraphAngle;
-    e.stateTimer -= dtSec;
-    if (e.stateTimer <= 0) {
+    if (stepEnemyTelegraphSightline(this, e, resolveEnemyAimTarget(this, e), 320, dtSec)) {
       // Weld / grant shieldArmor (+10 up to 24) to nearby allies within 200u!
       let weldedCount = 0;
       for (let i = 0; i < this.enemies.length; i++) {
@@ -330,7 +328,8 @@ export function updateWelderDroneAIImpl(
   if (e.attackCooldownTimer <= 0 && distToPlayer <= 360) {
     e.aiState = 'telegraph';
     e.stateTimer = e.telegraphDurationSec;
-    e.telegraphAngle = angleToPlayer;
+    e.leadSightlineActive = false;
+    e.telegraphAngle = updateEnemyPredictiveSightline(this, e, resolveEnemyAimTarget(this, e), 320);
     e.vx = 0;
     e.vy = 0;
     return;
@@ -352,11 +351,7 @@ export function updateIronShielderAIImpl(
   const cdMult =
     (e.isElite && e.eliteModifier === 'fast' ? 0.72 : 1.0) * this.getEnemyCooldownScale(false);
   if (e.aiState === 'telegraph') {
-    e.vx = 0;
-    e.vy = 0;
-    e.aimAngle = e.telegraphAngle;
-    e.stateTimer -= dtSec;
-    if (e.stateTimer <= 0) {
+    if (stepEnemyTelegraphSightline(this, e, resolveEnemyAimTarget(this, e), 270, dtSec)) {
       if (!this.stressTestActive || this.projectiles.length < 660) {
         this.spawnDeterministicVolley({
           kind: 'bullet_volley_spawned',
@@ -405,7 +400,8 @@ export function updateIronShielderAIImpl(
   if (e.attackCooldownTimer <= 0 && distToPlayer <= 310) {
     e.aiState = 'telegraph';
     e.stateTimer = e.telegraphDurationSec;
-    e.telegraphAngle = e.aimAngle;
+    e.leadSightlineActive = false;
+    e.telegraphAngle = updateEnemyPredictiveSightline(this, e, resolveEnemyAimTarget(this, e), 270);
     e.vx = 0;
     e.vy = 0;
     if (!this.stressTestActive) {
@@ -452,10 +448,7 @@ export function updateBossForgeTitanAIImpl(
   const bossCdScale = this.getEnemyCooldownScale(true);
 
   if (e.aiState === 'telegraph') {
-    e.vx = 0;
-    e.vy = 0;
-    e.stateTimer -= dtSec;
-    if (e.stateTimer <= 0) {
+    if (stepEnemyTelegraphSightline(this, e, _targetPlayer, 220, dtSec)) {
       this.executeBossForgeTitanAttack(e, e.telegraphAngle);
     }
     return;
@@ -480,7 +473,8 @@ export function updateBossForgeTitanAIImpl(
       0.38,
       (e.bossPhase === 3 ? 0.46 : e.telegraphDurationSec * 0.85) * bossCdScale,
     );
-    e.telegraphAngle = angleToPlayer;
+    e.leadSightlineActive = false;
+    e.telegraphAngle = updateEnemyPredictiveSightline(this, e, _targetPlayer, 220);
     e.telegraphRadius = 72;
     e.vx = 0;
     e.vy = 0;

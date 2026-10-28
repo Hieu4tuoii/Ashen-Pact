@@ -22,6 +22,7 @@ export * from './sim/interact-target.js';
 export * from './sim/sim-damage-pipeline.js';
 export * from './sim/sim-blessings.js';
 export * from './sim/sim-tactical-physics.js';
+export * from './sim/sim-enemies-tactical-ai.js';
 export * from './sim/sim-weapon-cadence.js';
 export * from './sim/sim-weapon-specials.js';
 export * from './sim/world-sim.js';
