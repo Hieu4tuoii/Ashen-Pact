@@ -401,7 +401,7 @@ export function spawnEnemyImpl(this: WorldSim,
     this.stressTestActive || defId === 'ashen_executioner'
       ? 1.0
       : def.isBoss
-        ? scaling.bossHpMultiplier
+        ? scaling.bossHpMultiplier * (biomeTier.bossHpScale ?? 1.0)
         : scaling.enemyHpMultiplier * biomeHpMult;
   const baseHp = Math.max(1, Math.round(rawHp * hpMult));
   const moveSpeed =

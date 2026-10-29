@@ -15,6 +15,7 @@ import {
   MATRIX_WEAPON_IDS,
   type WeaponCadenceBalanceRow,
   type WeaponMatrixRow,
+  clearBalanceSimulationCaches,
   measureAll5ClassesCoopRuns,
   measureAll18WeaponsDps,
   measureBiomeDifficultyProgression,
@@ -38,6 +39,7 @@ export interface BalanceHarnessOptions {
 }
 
 export function runBalanceHarness(options?: BalanceHarnessOptions): BalanceHarnessReport {
+  clearBalanceSimulationCaches();
   const requestedCount = options?.seedsPerConfig ?? AVERAGE_PLAYER_BOT_PROFILE.seeds.length;
   const seeds = AVERAGE_PLAYER_BOT_PROFILE.seeds.slice(
     0,
@@ -356,7 +358,7 @@ export function runBalanceHarness(options?: BalanceHarnessOptions): BalanceHarne
 
   const allTargetsPassed =
     enemyTtkStats.p50 >= 0.6 &&
-    enemyTtkStats.p50 <= 3.0 &&
+    enemyTtkStats.p50 <= 1.5 &&
     combatRoomSecStats.p50 >= 35 &&
     combatRoomSecStats.p50 <= 70 &&
     b1HpArmorLostPctStats.p50 >= 25 &&
@@ -365,7 +367,11 @@ export function runBalanceHarness(options?: BalanceHarnessOptions): BalanceHarne
     biomeProgressionPassed &&
     minHitsSurvived >= 4 &&
     maxHitsSurvived <= 10 &&
-    maxDpsDiffPct <= 15;
+    maxDpsDiffPct <= 15 &&
+    all5SoloBossWin &&
+    starterWeaponDpsSpreadPct < 5 &&
+    weaponCadenceRows.every((w) => w.activeDps > w.normalDps) &&
+    classWinRateSpreadPct <= 6;
 
   return {
     totalSimulationsRun: totalSims,
@@ -411,7 +417,7 @@ export function formatMarkdownReport(res: BalanceHarnessReport): string {
   const b3Boss = res.bossBiomeRows[2]!;
 
   const lines: string[] = [
-    '# BÁO CÁO MÔ PHỎNG CÂN BẰNG TỰ ĐỘNG (BALANCE REPORT) — ASHEN PACT (v0.2.0 P11)',
+    '# BÁO CÁO MÔ PHỎNG CÂN BẰNG TỰ ĐỘNG (BALANCE REPORT) — ASHEN PACT 2.0 (Phase P3C)',
     '',
     `> Sinh tự động bởi công cụ Headless Balance Harness (\`tools/balance-harness.ts\`) với **${res.totalSimulationsRun} lượt mô phỏng** trên \`WorldSim\` (60Hz cố định) sử dụng hồ sơ bot khóa cứng \`AVERAGE_PLAYER_BOT_PROFILE\` (\`tools/bot-profile.ts\`: \`aimAccuracy = ${AVERAGE_PLAYER_BOT_PROFILE.aimAccuracy * 100}%\`, \`reactionDelaySec = ${AVERAGE_PLAYER_BOT_PROFILE.reactionDelaySec}s\`, \`dashDodgeProbability = ${AVERAGE_PLAYER_BOT_PROFILE.dashDodgeProbability * 100}%\`, \`godMode = false\`, **${res.seedsUsed.length} seeds**).`,
     '',

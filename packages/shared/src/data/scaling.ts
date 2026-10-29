@@ -11,26 +11,26 @@ export const COOP_SCALING: Record<1 | 2 | 3 | 4, CoopScalingTier> = {
   },
   2: {
     playerCount: 2,
-    enemyHpMultiplier: 1.72,
-    waveCountMultiplier: 1.4,
+    enemyHpMultiplier: 1.9,
+    waveCountMultiplier: 1.52,
     eliteChance: 0.15,
-    bossHpMultiplier: 2.05,
+    bossHpMultiplier: 1.92,
     enemyFireRateBonus: 0.08,
   },
   3: {
     playerCount: 3,
-    enemyHpMultiplier: 2.3,
-    waveCountMultiplier: 1.75,
+    enemyHpMultiplier: 2.5,
+    waveCountMultiplier: 1.85,
     eliteChance: 0.2,
-    bossHpMultiplier: 3.25,
+    bossHpMultiplier: 2.95,
     enemyFireRateBonus: 0.16,
   },
   4: {
     playerCount: 4,
     enemyHpMultiplier: 2.9,
-    waveCountMultiplier: 2.05,
+    waveCountMultiplier: 2.15,
     eliteChance: 0.25,
-    bossHpMultiplier: 4.65,
+    bossHpMultiplier: 3.85,
     enemyFireRateBonus: 0.24,
   },
 };
@@ -42,6 +42,7 @@ export interface BiomeScalingTier {
   projectileSpeedMultiplier: number;
   eliteBonusMultiplier: number;
   eliteDamageBonus: number;
+  bossHpScale?: number;
 }
 
 export const BIOME_SCALING: Record<1 | 2 | 3, BiomeScalingTier> = {
@@ -52,21 +53,24 @@ export const BIOME_SCALING: Record<1 | 2 | 3, BiomeScalingTier> = {
     projectileSpeedMultiplier: 1.0,
     eliteBonusMultiplier: 1.0,
     eliteDamageBonus: 1,
+    bossHpScale: 1.5,
   },
   2: {
     biome: 2,
     hpMultiplier: 1.27,
     cooldownScale: 0.91,
     projectileSpeedMultiplier: 1.06,
-    eliteBonusMultiplier: 1.08,
+    eliteBonusMultiplier: 1.06,
     eliteDamageBonus: 1,
+    bossHpScale: 1.05,
   },
   3: {
     biome: 3,
-    hpMultiplier: 1.48,
-    cooldownScale: 0.85,
+    hpMultiplier: 1.35,
+    cooldownScale: 0.87,
     projectileSpeedMultiplier: 1.12,
-    eliteBonusMultiplier: 1.16,
+    eliteBonusMultiplier: 1.12,
     eliteDamageBonus: 2,
+    bossHpScale: 2.08,
   },
 };

@@ -538,6 +538,10 @@ export function tryFireActiveWeaponImpl(
       p.reloadLockout = false;
     }
   } else if (w.cadenceKind === 'HEAT_VENT') {
+    if (wasVentEmpowered) {
+      shotFlags |= SHOT_FLAG.OVERCLOCKED_SHOT;
+      additiveDmgBonus += 0.9;
+    }
     const { min: orangeMin, max: orangeMax } = getHeatVentOrangeZone(p);
     if (p.weaponHeat >= orangeMin && p.weaponHeat <= orangeMax) {
       inOrangeZoneBeforeShot = true;

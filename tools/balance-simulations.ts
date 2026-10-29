@@ -5,6 +5,7 @@ import {
   BIOME_SCALING,
   type BuffId,
   CHARACTERS,
+  COOP_SCALING,
   type CharacterId,
   ENEMIES,
   INPUT_BUTTON,
@@ -155,27 +156,27 @@ export const CHARACTER_SIGNATURE_BUFF: Record<CharacterId, string> = {
 };
 
 const BIOME1_PRIMARY_WEAPON: Record<CharacterId, string> = {
-  vanguard: 'tesla_carbine',
+  vanguard: 'focus_laser',
   ranger: 'focus_laser',
   elementalist: 'apprentice_staff',
-  druid: 'seed_gun',
+  druid: 'focus_laser',
   engineer: 'rivet_gun',
 };
 
 const BIOME2_PRIMARY_WEAPON: Record<CharacterId, string> = {
   vanguard: 'focus_laser',
   ranger: 'focus_laser',
-  elementalist: 'apprentice_staff',
-  druid: 'seed_gun',
-  engineer: 'focus_laser',
+  elementalist: 'tether_staff',
+  druid: 'tesla_carbine',
+  engineer: 'tesla_carbine',
 };
 
 const BIOME3_PRIMARY_WEAPON: Record<CharacterId, string> = {
-  vanguard: 'focus_laser',
-  ranger: 'solar_archon_staff',
+  vanguard: 'void_staff',
+  ranger: 'void_staff',
   elementalist: 'tether_staff',
-  druid: 'focus_laser',
-  engineer: 'focus_laser',
+  druid: 'void_staff',
+  engineer: 'tesla_carbine',
 };
 
 export interface CombatRoomClearSample {
@@ -247,7 +248,7 @@ export function simulateStarterWeaponTtkSamples(
           ...pkt,
           moveX: weapon.category === 'melee' && Math.hypot(e.x - p.x, e.y - p.y) > 32 ? 1 : 0,
           moveY: 0,
-          buttons: INPUT_BUTTON.FIRE,
+          buttons: INPUT_BUTTON.FIRE | (pkt.buttons & INPUT_BUTTON.RELOAD_VENT),
         });
         sim.step(SIM_STEP_SEC);
         e.x = p.x + dist;
@@ -428,6 +429,11 @@ export const simulateCharacterDpsAndUptime = measureCombatDpsAndSkillUptime;
 const _combatRoomCache = new Map<string, CombatRoomClearSample>();
 const _bossEncounterCache = new Map<string, BossEncounterSample>();
 
+export function clearBalanceSimulationCaches(): void {
+  _combatRoomCache.clear();
+  _bossEncounterCache.clear();
+}
+
 /**
  * 4. Honest multi-wave Combat Room simulation in WorldSim using `stepHonestPlayerBot`
  * and `AVERAGE_PLAYER_BOT_PROFILE` (`godMode: false`, no fake room HP multipliers).
@@ -437,7 +443,8 @@ export function measureCombatRoomClearSec(
   seed: number,
   biome: 1 | 2 | 3 = 1,
 ): CombatRoomClearSample {
-  const cacheKey = `${playerCount}|${seed}|${biome}|${BIOME_SCALING[biome].hpMultiplier}`;
+  const bTier = BIOME_SCALING[biome];
+  const cacheKey = `${playerCount}|${seed}|${biome}|${bTier.hpMultiplier}|${bTier.cooldownScale}|${ENEMIES.goblin_shooter?.attackCooldownSec ?? 0}`;
   const cached = _combatRoomCache.get(cacheKey);
   if (cached) {
     return { ...cached };
@@ -474,12 +481,9 @@ export function measureCombatRoomClearSec(
   }
 
   const combatRoom =
-    playerCount === 1
-      ? (sim.dungeon.rooms.find((r) => r.type === 'combat' && !r.isChallenge) ??
-        sim.dungeon.rooms[1]!)
-      : (sim.dungeon.rooms.find((r) => r.type === 'combat' && !r.isChallenge && r.wavesTotal >= 3) ??
-        sim.dungeon.rooms.find((r) => r.type === 'combat') ??
-        sim.dungeon.rooms[1]!);
+    sim.dungeon.rooms.find((r) => r.type === 'combat' && !r.isChallenge && r.wavesTotal >= 3) ??
+    sim.dungeon.rooms.find((r) => r.type === 'combat' && !r.isChallenge) ??
+    sim.dungeon.rooms[1]!;
   sim.enterRoom(combatRoom.id);
 
   // Equip biome-tier secondary weapon & progression buffs for Biome 2 & 3 combat rooms
@@ -602,13 +606,14 @@ export function simulateBossEncounter(
     { length: playerCount },
     (_, idx) => coopRoster[idx % coopRoster.length]!,
   ).join(',');
-  const cacheKey = `${playerCount}|${activeRosterKey}|${bossId}|${seed}|${ENEMIES[bossId]?.hp ?? 0}`;
+  const biome: 1 | 2 | 3 =
+    bossId === 'spore_king' ? 1 : bossId === 'kryssa_ice_queen' ? 2 : 3;
+  const bDef = ENEMIES[bossId];
+  const cacheKey = `${playerCount}|${activeRosterKey}|${bossId}|${seed}|${bDef?.hp ?? 0}|${bDef?.attackCooldownSec ?? 0}|${COOP_SCALING[playerCount].bossHpMultiplier}|${BIOME_SCALING[biome].bossHpScale ?? 1}`;
   const cached = _bossEncounterCache.get(cacheKey);
   if (cached) {
     return { ...cached };
   }
-  const biome: 1 | 2 | 3 =
-    bossId === 'spore_king' ? 1 : bossId === 'kryssa_ice_queen' ? 2 : 3;
   const floor = biome === 1 ? 2 : biome === 2 ? 4 : 6;
 
   const sim = new WorldSim({
@@ -656,39 +661,32 @@ export function simulateBossEncounter(
       pl.weaponSlots[0] = BIOME1_PRIMARY_WEAPON[pl.characterId];
       pl.weaponSlots[1] = starterId;
       pl.activeWeaponSlot = 0;
-      pl.maxArmor += 3;
+      pl.maxArmor += 1;
       pl.armor = pl.maxArmor;
       if (pl.characterId === 'elementalist') {
-        pl.maxHp += 2;
+        pl.maxHp += 1;
         pl.hp = pl.maxHp;
       }
     } else if (biome === 2) {
       pl.weaponSlots[0] = BIOME2_PRIMARY_WEAPON[pl.characterId];
       pl.weaponSlots[1] = starterId;
       pl.activeWeaponSlot = 0;
-      pl.maxArmor += 8;
+      pl.maxArmor += 5;
       pl.armor = pl.maxArmor;
-      pl.maxHp += 2;
+      pl.maxHp += 3;
       pl.hp = pl.maxHp;
+      pl.moveSpeed = Math.round(pl.moveSpeed * 1.16);
     } else {
       pl.weaponSlots[0] = BIOME3_PRIMARY_WEAPON[pl.characterId];
       pl.weaponSlots[1] = starterId;
       pl.activeWeaponSlot = 0;
-      pl.maxArmor += 8;
+      pl.maxArmor += 3;
       pl.armor = pl.maxArmor;
-      pl.maxHp += 2;
+      pl.maxHp += 1;
       pl.hp = pl.maxHp;
+      pl.moveSpeed = Math.round(pl.moveSpeed * 1.16);
     }
-    pl.maxArmor += 2;
-    pl.armor = pl.maxArmor;
-    pl.armorRegenDelaySec = Math.max(0.8, pl.armorRegenDelaySec - 0.5);
-    if (allPlayers[0]?.characterId === 'elementalist' || biome >= 2) {
-      pl.maxHp += 3;
-      pl.hp = pl.maxHp;
-    }
-    if (biome >= 2) {
-      pl.moveSpeed = Math.round(pl.moveSpeed * 1.2);
-    }
+    pl.armorRegenDelaySec = Math.max(1.2, pl.armorRegenDelaySec - 0.3);
   }
 
   let boss = sim.getActiveBoss();

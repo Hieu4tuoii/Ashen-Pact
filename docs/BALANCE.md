@@ -1,136 +1,117 @@
-# BẢNG SỐ LIỆU & MỤC TIÊU CÂN BẰNG (BALANCE.md) — ASHEN PACT
+# BẢNG SỐ LIỆU & MỤC TIÊU CÂN BẰNG (BALANCE.md) — ASHEN PACT 2.0 (Phase P3C)
 
-> Lưu ý: Toàn bộ các chỉ số dưới đây được khai báo dạng data có kiểu tĩnh tại `packages/shared/src/data/` và tuyệt đối không hardcode trong logic simulation.
+> Lưu ý: Toàn bộ các chỉ số dưới đây được khai báo dạng dữ liệu có kiểu tĩnh tại `packages/shared/src/data/` (`weapons.ts`, `enemies.ts`, `scaling.ts`, `characters.ts`) và tuyệt đối không hardcode hệ số giả trong logic mô phỏng.
 
-## 1. Mục Tiêu Cân Bằng Định Lượng & Hồ Sơ Bot Khóa Cứng (Spec Section 3.10 — v0.2.0)
+## 1. Kiến Trúc Cân Bằng Ashen Pact 2.0 & Hồ Sơ Bot Khóa Cứng (Spec Rev 4 — Phase P3C)
 
-### 1.1 Hồ Sơ Bot "Người Chơi Trung Bình" Khóa Cứng (`tools/bot-profile.ts`)
-- **Chính sách chống chỉnh bot cho pass (Anti-Manipulation Policy):** Hồ sơ bot `AVERAGE_PLAYER_BOT_PROFILE` được đóng băng sâu (`Object.freeze`) và commit khóa trước khi cân chỉnh thông số gameplay:
-  - **Độ chính xác ngắm (`aimAccuracy`):** `70%` (`0.70`, nằm trong khoảng `65% – 75%`).
-  - **Độ trễ phản xạ (`reactionDelaySec`):** `250ms` (`0.25s`, nằm trong khoảng `200ms – 300ms`) trước khi né telegraph / vòng xung kích / đạn địch.
-  - **Xác suất Dash né telegraph (`dashDodgeProbability`):** `65%` (`0.65`, nằm trong khoảng `60% – 70%`).
-  - **Không gian lận:** `godMode = false`, `infiniteEnergy = false`, `autoRevivePlayer = false`, không nhân hệ số giả (`encounterScale` / `roomFactor` bị loại bỏ hoàn toàn).
-  - **Tập seed cố định:** `30` seeds độc lập (`101 .. 3030`) cho mỗi cấu hình; báo cáo đồng thời **trung vị (`p50`)** và khoảng phân vị **`p10 – p90`**.
+### 1.1 Đường Ống Sát Thương 3 Nhóm (`3-Bucket Damage Pipeline` — `sim-damage-pipeline.ts`)
+Mọi đòn đánh của người chơi đi qua công thức chuẩn hóa 3 nhóm độc lập để ngăn bùng nổ sát thương cấp số nhân khi chồng nhiều Blessing, Đe Daedalus (`WeaponMutator`) và Khế Ước Tro Tàn (`AshenPact`):
+1. **Nhóm 1 — Sát thương gốc & Cấp cường hóa (`Base × UpgradeMult`):** Sát thương cơ bản của vũ khí nhân với hệ số cường hóa Đe Nâng Cấp (`+20%` mỗi cấp).
+2. **Nhóm 2 — Bể Cộng Gộp (`Additive Pool`):** Toàn bộ bonus sát thương cộng thêm (Phát Cuối `Finale Shot +50%`, `Perfect Reload Overclocked +45%`, `Tactical Vent Empowered +90%`, vùng nhiệt Cam `Orange Zone +25%`, Khiên Thiết Vệ, Blessing, Hắc Tinh) được **cộng tuyến tính vào cùng một bể** có trần bảo vệ.
+3. **Nhóm 3 — Hệ Số Dễ Tổn Thương Mục Tiêu & Chí Mạng (`Target Vulnerability × CritMult`):** Nhân độc lập với trạng thái suy yếu trên mục tiêu (`Boss Armor Break +40%`, `Siêu Dẫn +30%`, `Đánh Dấu Liệp Ưng`) và hệ số chí mạng (`×1.5`). Tỉ lệ kích hoạt hiệu ứng đòn đánh được chuẩn hóa theo `procCoefficient` của từng vũ khí và giới hạn số tia đạn mỗi lần bóp cò (`clampPelletsPerTrigger`).
 
-### 1.2 Bảng Mục Tiêu Cân Bằng Định Lượng (Bot Trung Bình, Solo Trừ Khi Ghi Khác)
-
-| Chỉ tiêu | Giá trị mục tiêu (Spec 3.10) | Phương pháp kiểm chứng (`>= 30` runs / cấu hình) |
-|---|---|---|
-| **Quái thường chết (Vũ khí khởi đầu, Biome 1)** | **0.6s – 1.5s** (`p50`) | `tools/balance-harness.ts` (`enemyTtkStats` `p10 / p50 / p90`) |
-| **Thời gian dọn 1 Phòng combat** | **35s – 70s** (`p50`) | Mô phỏng phòng multi-wave thật trên `WorldSim` (`combatRoomSecStats`) |
-| **Thời gian hạ Boss B1 / B2 / B3** | **60s – 120s** (`p50`); lệch **1P ↔ 4P ≤ ±20%** | Mô phỏng 3 Boss thật trên `WorldSim` (`bossBiomeRows`) |
-| **HP + Giáp mất mỗi phòng (Biome 1 Solo)** | **25% – 50% tổng** (`p50`) | `b1HpArmorLostPctStats` (`statsDamageTaken / (maxHp + maxArmor)`) |
-| **Tỉ lệ thắng Boss Solo & Không One-Shot** | **B1: 80–95% · B2: 70–90% · B3: 60–85%**; **Không có one-shot** (`maxSingleHit < 85% EHP`) | `bossBiomeRows` (`winRate1PPct`, `zeroOneShots`) |
-| **Biome sau so với Biome trước** | **Khó hơn ~20% – 25%** (đo thật trên `WorldSim`) | `measureBiomeDifficultyProgression` (`biomeDifficultyRows`) |
-| **Khả năng chịu đòn cơ bản & Độ lệch DPS Solo 3 NV sát thương** | **4 – 10 đòn** · Lệch **≤ ±15%** | `simulateHitsSurvived` & `measureCombatDpsAndSkillUptime` |
+### 1.2 Hồ Sơ Bot "Người Chơi Trung Bình" Khóa Cứng (`Human-Like Bot Profile` — `tools/bot-profile.ts`)
+- **Chính sách chống gian lận mô phỏng (`Anti-Manipulation Policy`):** Hồ sơ `AVERAGE_PLAYER_BOT_PROFILE` được đóng băng sâu (`Object.freeze`) với `godMode = false`, không nhân hệ số giả (`encounterScale`, `roomFactor` bị cấm bằng unit test):
+  - **Độ chính xác ngắm (`aimAccuracy`):** `70%` (`0.70`).
+  - **Độ trễ phản xạ (`reactionDelaySec`):** `250ms` (`0.25s`) trước khi né telegraph / vòng xung kích / đạn địch.
+  - **Xác suất Dash né telegraph (`dashDodgeProbability`):** `65%` (`0.65`).
+  - **Nhịp Nạp Đạn Hoàn Hảo / Xả Nhiệt Chiến Thuật `[R]` (`perfectReloadSuccessRate`):** `50%` (`0.50`) — gieo xác suất đúng 1 lần mỗi chu kỳ nạp đạn (`45% – 70%` Golden Window) hoặc chu kỳ vùng nhiệt Cam (`65% – 95%` Orange Heat Zone).
+  - **Lật Chắn Chiến Thuật `[E]` + Đá Trượt (`tacticalCoverKickProbability`):** `40%` (`0.40`) — tận dụng bàn đá/lá chắn gần đó để cản đạn và `Dash-Kick` hất văng vào cụm quái.
+  - **Phá Giáp Boss 1–2 Bước (`bossArmorBreakWindowSec`):** `[3.0s, 6.0s]` (`180 – 360 ticks @ 60Hz`) — khi Boss bật Vỏ Giáp ở ngưỡng Phase 2 (`66% HP`) và Phase 3 (`33% HP`), bot di chuyển tới vật cản / đồ chơi địa hình gần nhất (được tiếp tế định kỳ qua **Boss Supply Drop mỗi `18s`**), lật chắn `[E]` nếu cần và `Dash-Kick` phá vỡ giáp Boss (gây `6% MaxHP` sát thương chuẩn, choáng `3.0s – 4.0s` và nhận `+40%` sát thương).
+  - **Tập seed cố định:** `30` seeds độc lập (`101 .. 3030`) cho mỗi cấu hình; báo cáo đồng thời trung vị **`p50`** và khoảng phân vị **`p10 – p90`**.
 
 ---
 
-## 2. Chỉ Số Cơ Bản 5 Nhân Vật
+## 2. Chỉ Số Cơ Bản 5 Nhân Vật (`characters.ts`)
 
-| ID | Tên nhân vật | HP | Giáp | Năng lượng | Hồi Giáp (Delay / Rate) | Tốc độ chạy (u/s) | Crit cơ bản | Vũ khí khởi đầu |
-|---|---|---:|---:|---:|---|---:|---:|---|
-| `vanguard` | **Thiết Vệ** | 6 | 5 | 150 | 3.3s / 1.0s | 171 (`95%`) | 5% | `knight_sword` |
-| `ranger` | **Liệp Ưng** | 5 | 3 | 200 | 4.0s / 1.0s | 189 (`105%`) | 15% | `hunter_crossbow` |
-| `elementalist` | **Lam Hỏa** | 4 | 2 | 260 | 4.0s / 1.0s | 180 (`100%`) | 8% | `apprentice_staff` |
-| `druid` | **Mộc Linh** | 5 | 3 | 200 | 4.0s / 1.0s | 180 (`100%`) | 5% | `thorn_staff` |
-| `engineer` | **Bánh Răng** | 6 | 4 | 180 | 4.0s / 1.0s | 180 (`100%`) | 8% | `rivet_gun` |
-
-*(Tốc độ chạy chuẩn `100%` = `180` đơn vị thế giới / giây = `5.625` ô / giây).*
+| ID | Tên nhân vật | Vai trò | HP | Giáp | Năng lượng | Hồi Giáp Delay | Tốc chạy (u/s) | Crit cơ bản | Vũ khí khởi đầu |
+|---|---|---|---:|---:|---:|---:|---:|---:|---|
+| `vanguard` | **Thiết Vệ** | Tank / Bảo Hộ Tuyến Đầu | 6 | 5 | 150 | `3.0s` | 171 (`95%`) | 5% | `knight_sword` |
+| `ranger` | **Liệp Ưng** | Sát Thương / Đánh Dấu | 5 | 3 | 200 | `5.2s` | 189 (`105%`) | 15% | `hunter_crossbow` |
+| `elementalist` | **Lam Hỏa** | Khống Chế / Phản Ứng Nguyên Tố | 4 | 2 | 260 | `5.2s` | 180 (`100%`) | 8% | `apprentice_staff` |
+| `druid` | **Mộc Linh** | Hỗ Trợ / Hồi Phục | 5 | 3 | 200 | `5.2s` | 180 (`100%`) | 5% | `thorn_staff` |
+| `engineer` | **Bánh Răng** | Tiện Ích / Trụ Pháo | 6 | 4 | 180 | `5.2s` | 180 (`100%`) | 8% | `rivet_gun` |
 
 ---
 
-## 3. Hệ Số Scaling Theo Số Người Chơi & Biome (Co-op & Biome Scaling)
+## 3. Hệ Số Scaling Theo Số Người Chơi & Biome (`scaling.ts`)
 
-| Số người chơi | Hệ số HP Quái | Số lượng Quái / Đợt | Tỉ lệ xuất hiện Elite | Hệ số HP Boss | Tốc bắn Quái | Cơ chế Boss bổ sung |
-|---:|---:|---:|---:|---:|---:|---|
-| **1 người** | `×1.00` | `×1.00` | `10%` (`20%` Challenge) | `×1.00` | `+0%` | Cơ bản |
-| **2 người** | `×1.72` | `×1.40` | `15%` (`25%` Challenge) | `×2.05` | `+8%` | Tốc độ pattern nhanh hơn `+10%` |
-| **3 người** | `×2.30` | `×1.75` | `20%` (`30%` Challenge) | `×3.25` | `+16%` | Thêm đệ tử hộ vệ & pattern phụ |
-| **4 người** | `×2.90` | `×2.05` | `25%` (`35%` Challenge) | `×4.65` | `+24%` | Thêm pattern phụ & đổi mục tiêu liên tục |
+### 3.1 Co-op Scaling (1–4 Người Chơi)
 
----
+| Số người chơi | Hệ số HP Quái (`enemyHpMultiplier`) | Số lượng Quái / Đợt (`waveCountMultiplier`) | Tỉ lệ Elite (`eliteChance`) | Hệ số HP Boss (`bossHpMultiplier`) | Tốc bắn Quái (`enemyFireRateBonus`) |
+|---:|---:|---:|---:|---:|---:|
+| **1P** | `×1.00` | `×1.00` | `10%` | `×1.00` | `+0%` |
+| **2P** | `×1.90` | `×1.52` | `15%` | `×1.92` | `+8%` |
+| **3P** | `×2.50` | `×1.85` | `20%` | `×2.95` | `+16%` |
+| **4P** | `×2.90` | `×2.15` | `25%` | `×3.85` | `+24%` |
 
-## 4. Chỉ Số Baseline Vũ Khí Mẫu & Khởi Đầu
+### 3.2 Biome Scaling (`BIOME_SCALING`)
 
-| ID | Tên vũ khí | Độ hiếm | Loại | Sát thương | Tốc bắn (phát/s) | Năng lượng | Tốc đạn (u/s) | Độ tản (°) | Crit | Nguyên tố / Đặc biệt |
-|---|---|---|---|---:|---:|---:|---:|---:|---:|---|
-| `knight_sword` | Kiếm Hiệp Sĩ | Trắng | Cận chiến | 12 | 2.2 | 0 | — (Tầm 44) | 110° | 10% | Chém tan đạn thường |
-| `hunter_crossbow` | Nỏ Săn | Trắng | Cung/Nỏ | 18 | 1.9 | 0 | 560 | 1.5° | 18% | Xuyên 1 mục tiêu khi chí mạng |
-| `apprentice_staff` | Trượng Tập Sự | Trắng | Trượng | 11 | 2.4 | 0 | 440 | 3.0° | 8% | Áp nguyên tố hiện tại của Lam Hỏa |
-| `thorn_staff` | Trượng Gai | Trắng | Trượng | 9 | 2.6 | 0 | 460 | 4.0° | 5% | 35% gây Độc nhẹ (3 DMG/s × 3s) |
-| `rivet_gun` | Súng Đinh Tán | Trắng | Súng lục | 10 | 3.0 | 0 | 500 | 3.5° | 10% | Đẩy lùi nhẹ |
-| `rusty_pistol` | Súng Lục Rỉ Sét | Trắng | Súng lục | 9 | 3.2 | 2 | 520 | 4.0° | 8% | Cân bằng cơ bản |
-| `scrap_shotgun` | Shotgun Phế Liệu | Xanh lá | Shotgun | 5 × 5 | 1.1 | 3 | 460 | 18.0° | 6% | Knockback cao ở tầm gần |
-| `gale_smg` | Tiểu Liên Gió Lốc | Xanh lá | SMG | 5 | 7.5 | 2 | 540 | 9.0° | 5% | Tốc bắn cao, áp chế |
+| Biome | Hệ số HP Quái (`hpMultiplier`) | Hệ số Cooldown Địch (`cooldownScale`) | Tốc đạn Địch | Hệ số HP Elite | Hệ số EHP Boss (`bossHpScale`) | Bước tăng độ khó thực đo (`WorldSim`) |
+|---:|---:|---:|---:|---:|---:|---:|
+| **Biome 1** | `×1.00` | `×1.00` | `×1.00` | `×1.00` (`+1 DMG`) | `×1.50` | Cơ sở (`×1.00`) |
+| **Biome 2** | `×1.27` | `×0.91` | `×1.06` | `×1.06` (`+1 DMG`) | `×1.05` | **`+24.1%`** (`×1.24`) |
+| **Biome 3** | `×1.35` | `×0.87` | `×1.12` | `×1.12` (`+2 DMG`) | `×2.08` | **`+21.9%`** (`×1.51`) |
 
 ---
 
-## 5. Chỉ Số Baseline Quái & Boss (Biome 1–3)
+## 4. Cân Bằng 18 Vũ Khí Độc Bản: Nhịp Bắn & DPS Thường vs Active `[R]` (`weapons.ts` / Spec 3.3)
 
-### 5.1 Biome 1 — Rừng Cổ Mục Nát
-- **Goblin Xạ Thủ (`goblin_shooter`):** HP `24`, Tốc độ `115`, Sát thương `1`, Bắn chùm 3 viên cách 15°, Telegraph `0.5s`. (TTK với vũ khí khởi đầu ~28 DPS ≈ `0.85s`).
-- **Slime Xanh (`green_slime`):** HP `20`, Tốc độ `105`, Sát thương `1`, Khi chết tách thành 2 Slime Nhỏ (`HP 8`).
-- **Nấm Nổ (`spore_bomber`):** HP `18`, Tốc độ `145`, Sát thương nổ `2` + để lại mây Độc `3s`, Telegraph phồng người `0.6s`.
-- **Lợn Rừng (`wild_boar`):** HP `36`, Tốc độ `130` (Lao húc `380`), Sát thương `2`, Telegraph dậm chân đỏ `0.7s`.
-- **Pháp Sư Goblin (`goblin_shaman`):** HP `28`, Tốc độ `95`, Sát thương `1`, Hồi `6 HP` cho quái quanh đó mỗi `4s`.
-- **Cây Gai (`thorn_turret`):** HP `32`, Cố định, Sát thương `1`, Bắn 6 gai tròn mỗi `2.8s`.
-- **Boss Mục Vương Nấm Độc (`spore_king`):** HP cơ bản `5200` (1P, quy mô theo `COOP_SCALING.bossHpMultiplier`), Sát thương `2`, 3 Phase (`100%`, `66%`, `33%`).
+- **5 Vũ khí Khởi đầu (`⭐`):** Độ lệch DPS Active `[R]` chỉ **`±1.2%`** (`52.9 – 54.1 DPS`, mục tiêu `< 5.0%`).
+- **Toàn bộ 18/18 Vũ khí:** Đều có `activeDps > normalDps` rõ rệt khi người chơi làm chủ nhịp `CLIP_RELOAD` (`[R]` Golden Window + `Finale Shot`), `HEAT_VENT` (`Orange Zone` + `[R]` Tactical Vent) hoặc `MELEE_COMBO` (Đòn 3 Tuyệt Kỹ + `Parry Deflect`).
 
-### 5.2 Biome 2 — Hầm Băng Vĩnh Cửu & Biome 3 — Lò Rèn Dung Nham
-- **Biome 2 (Hầm Băng Vĩnh Cửu — Scaling `+20% – 25%`):**
-  - `frost_bat` (Dơi Băng): HP `22`, Tốc độ `158`, Bay qua vực, Bắn 2 mảnh băng Lạnh.
-  - `baby_yeti` (Yeti Con): HP `42`, Tốc độ `118` (Lao trượt băng `355`), Sát thương `2` + Lạnh.
-  - `ice_mage` (Pháp Sư Băng): HP `32`, Tốc độ `98`, Bắn 3 cầu băng + đóng băng mặt sàn dưới chân mục tiêu.
-  - `ice_golem` (Golem Băng): HP `56`, Tốc độ `76`, Sát thương `2`, **Khiên Băng phía trước giảm `78%` sát thương trực diện**.
-  - `snow_spirit` (Tinh Linh Tuyết): HP `24`, Tốc độ `142`, Sát thương nổ `2` + đóng băng mặt đất `R = 64u`.
-  - **Boss Băng Hậu Kryssa (`kryssa_ice_queen`):** HP cơ bản `6800` (1P, quy mô theo `COOP_SCALING.bossHpMultiplier`), 3 Phase (`100%`, `66%`, `33%`), Cột pha lê phản xạ laser, Phân thân gương không bóng đổ (`kryssa_clone`), Bão tuyết Phase 3 & Lồng Băng (`ice_prison`).
-- **Biome 3 (Lò Rèn Dung Nham — Scaling `+20% – 25%` so với Biome 2):**
-  - `fire_imp` (Tiểu Quỷ Lửa): HP `28`, Tốc độ `148`, Bắn 2 cầu lửa Cháy.
-  - `dwarf_cannon` (Lùn Pháo Thủ): HP `44`, Tốc độ `88`, Sát thương `2`, Bắn pháo cối nổ AoE đốt sàn.
-  - `coal_golem` (Golem Than): HP `68`, Tốc độ `84`, Sát thương `2`, **Chết để lại hồ Dung nham (`lava`)**.
-  - `welder_drone` (Drone Hàn): HP `34`, Tốc độ `132`, Bay hỗ trợ **hàn `+10 Giáp Khiên` (`shieldArmor`)** cho đồng minh trong `200u`.
-  - `iron_shielder` (Khiên Thủ Sắt): HP `62`, Tốc độ `80`, Sát thương `2`, **Khiên Thép phía trước giảm `80%` sát thương trực diện**.
-  - **Boss Titan Lò Rèn (`forge_titan`):** HP cơ bản `9600` (1P, quy mô theo `COOP_SCALING.bossHpMultiplier`), Sát thương `3`, 3 Phase (`100%`, `66%`, `33%`), Sóng xung kích búa đập (`shockwaveRings`) + đảo chiều băng chuyền, **2 Lõi Năng Lượng (`forge_energy_core` — phá trong `3s` Co-op / `6s` Solo gây choáng `4.5s` nhận `×1.5` ST)**, Quét lửa 360° Phase 3.
-
----
-
-## 6. Hệ Thống 6 Phản Ứng Nguyên Tố & Đồng Đội Combo (Phase 5)
-
-| Mã phản ứng | Tên Tiếng Việt | Công thức kết hợp | Hiệu ứng & Sát thương chuẩn |
-|---|---|---|---|
-| `vaporize` | **HƠI NƯỚC** | `Lửa` + `Băng` | Nổ hơi nước gây `×2.0` sát thương đòn kích hoạt + tạo mây hơi nước (`75u`) làm mù quái `3.0s` (bắn lệch góc `~30°`). |
-| `shatter` | **VỠ BĂNG** | `Đóng Băng` + `Đòn Nặng/Chí Mạng` | Phá băng gây `×3.0` sát thương chí mạng + văng mảnh băng AoE (`85u`) gây `110%` sát thương Băng. |
-| `superconduct` | **SIÊU DẪN** | `Sét` + `Băng` | Phá toàn bộ Khiên Chắn của mục tiêu và giảm `30%` phòng thủ (nhận `+30%` sát thương từ mọi nguồn) trong `6.0s`. |
-| `toxic_blast` | **NỔ ĐỘC** | `Lửa` + `Độc` | Kích nổ mây độc AoE (`115u`), gây sát thương Lửa diện rộng và phát tán `5.0s` Độc cho mọi quái xung quanh. |
-| `paralysis` | **TÊ LIỆT** | `Sét` + `Độc` | Xung điện thần kinh làm choáng cứng (`Stun`) mục tiêu trong `1.0s` + sát thương Sét cộng thêm. |
-| `overload` | **QUÁ TẢI** | `Lửa` + `Sét` | Nổ xung kích điện-nhiệt AoE (`110u`), phá Khiên Chắn và hất văng mạnh (`Knockback 280`) mọi quái trong vùng. |
-
-- **Đồng Đội Combo (`Team Combo`):** Khi Người chơi A áp nguyên tố nền (`primerPlayerId`) và Người chơi B (`triggerPlayerId !== primerPlayerId`) kích nổ bất kỳ phản ứng nào trong 6 phản ứng trên, cả A và B lập tức được hồi **+15 Năng lượng**, tăng bộ đếm `Đồng Đội Combo` của tổ đội và phát hiệu ứng chữ nổi + âm thanh riêng.
+| # | Vũ khí | Độ hiếm | Nhịp (`Cadence`) | DPS Thường | DPS Active `[R]` | Tăng khi Active `[R]` | Cơ chế Tuyệt Kỹ / Active `[R]` |
+|---:|---|---|---|---:|---:|---:|---|
+| 1 | **Kiếm Hiệp Sĩ** (`knight_sword`) ⭐ | `common` | `MELEE_COMBO` | `28.4` | **`52.9`** | `+86.3%` | Combo `12 → 14 → 24` + Kiếm Khí Xuyên `240px` & Phản Đạn (`Parry Deflect`) |
+| 2 | **Nỏ Săn** (`hunter_crossbow`) ⭐ | `common` | `CLIP_RELOAD` | `34.8` | **`54.1`** | `+55.5%` | Giữ tụ tên xuyên `22 DMG` + `[R]` Rút Tên Ngạnh (`Barbed Rip`) |
+| 3 | **Trượng Tập Sự** (`apprentice_staff`) ⭐ | `common` | `HEAT_VENT` | `35.2` | **`53.8`** | `+52.8%` | Cầu Nổ phát thứ 3 (`17 DMG`) + `[R]` Tia Tam Nguyên Tố (`22 DMG`) & Phát Cường Hóa |
+| 4 | **Trượng Gai** (`thorn_staff`) ⭐ | `common` | `CLIP_RELOAD` | `40.2` | **`53.7`** | `+33.6%` | Ghim Gai Ký Sinh + Phát Cuối & `[R]` Kích Nổ Gai Độc |
+| 5 | **Súng Đinh Tán** (`rivet_gun`) ⭐ | `common` | `CLIP_RELOAD` | `40.6` | **`53.2`** | `+31.0%` | Cắm Đinh Từ Tính + Phát Cuối & `[R]` Phóng Lưới Điện |
+| 6 | **Shotgun Phế Liệu** (`scrap_shotgun`) | `uncommon` | `CLIP_RELOAD` | `46.3` | **`79.4`** | `+71.5%` | Phát Cuối Đạn Lửa + `[R]` Vỏ Đạn Nổ Nhiệt |
+| 7 | **Tiểu Liên Gió Lốc** (`gale_smg`) | `uncommon` | `HEAT_VENT` | `47.9` | **`67.1`** | `+40.1%` | Tăng tốc Spin-Up + Lưỡi Gió vùng Cam & `[R]` Xung Gió |
+| 8 | **Súng Phóng Lựu Mảnh** (`frag_launcher`) | `uncommon` | `CLIP_RELOAD` | `42.6` | **`53.0`** | `+24.4%` | Giữ-Thả Kích Nổ Trên Không (`Airburst`) vòng qua khiên chắn |
+| 9 | **Súng Điện Từ Tesla** (`tesla_carbine`) | `rare` | `CLIP_RELOAD` | `64.9` | **`77.5`** | `+19.4%` | Nảy tường thông minh (`+35%`) + Phát Cuối Sét Lan 3 mục tiêu & `[R]` `+1` lần nảy |
+| 10 | **Súng Hạt Giống** (`seed_gun`) | `rare` | `CLIP_RELOAD` | `41.0` | **`55.0`** | `+34.1%` | Gieo Mầm Độc + `[R]` Nở Hoa Thu Hoạch (`Harvest Bloom`) |
+| 11 | **Trượng Liên Kết** (`tether_staff`) | `rare` | `HEAT_VENT` | `46.7` | **`57.5`** | `+23.1%` | Tia Khóa Mục Tiêu + `[R]` Xung Quá Tải Liên Kết |
+| 12 | **Súng Tia Hội Tụ** (`focus_laser`) | `rare` | `HEAT_VENT` | `43.2` | **`58.6`** | `+35.6%` | Tia Hội Tụ tăng sát thương theo nhiệt + `[R]` Phát Bắn Railgun |
+| 13 | **Đại Đao Lục Bảo** (`emerald_cleaver`) | `epic` | `MELEE_COMBO` | `56.7` | **`81.9`** | `+44.4%` | Đòn 3 phóng Lưỡi Đao Boomerang khứ hồi + Phản Đạn |
+| 14 | **Trượng Hư Không** (`void_staff`) | `epic` | `CLIP_RELOAD` | `65.3` | **`113.3`** | `+73.5%` | Cầu Hút Đạn Địch + Giữ-Thả Sụp Đổ Hư Không (`Implosion`) |
+| 15 | **Rìu Chiến Berserker** (`berserker_axe`) | `epic` | `MELEE_COMBO` | `79.1` | **`118.4`** | `+49.7%` | Cuồng Huyết tăng tốc chém + Đòn 3 Bổ Đoạn Đầu Đài phá khiên & Khe Lửa |
+| 16 | **Trượng Thái Dương** (`solar_archon_staff`) | `legendary` | `HEAT_VENT` | `114.2` | **`193.3`** | `+69.3%` | Đạn Hội Tụ Tiểu Thái Dương + `[R]` Bùng Nổ Siêu Tân Tinh |
+| 17 | **Pháo Dung Nham** (`magma_cannon`) | `legendary` | `CLIP_RELOAD` | `65.0` | **`90.6`** | `+39.4%` | Đá Lăn Vệt Dung Nham + Phát Cuối Phun Trào Mạch Lửa |
+| 18 | **Búa Lôi Thần** (`thunder_hammer`) | `legendary` | `MELEE_COMBO` | `100.8` | **`109.4`** | `+8.5%` | Tia Sét Kèm Đòn Đập + Đòn 3 Giáng Sét Lôi Thần diện rộng |
 
 ---
 
-## 7. Kết Quả Kiểm Chứng Tự Động (Headless Balance Harness — Phase 8 Baseline → Phase P11)
+## 5. Chỉ Số Quái & 3 Boss Phá Giáp 1–2 Bước (`enemies.ts`)
 
-Báo cáo chi tiết được sinh tự động tại [`docs/balance-report.md`](./balance-report.md) qua lệnh `pnpm balance` (`tools/balance-harness.ts` & `tools/bot-profile.ts`, chạy trên `WorldSim` 60Hz với 30 seeds khóa cứng, tổng **1795 lượt mô phỏng**):
+### 5.1 Quái Thường Theo 3 Biome
+- **Biome 1 — Rừng Cổ Mục Nát:** `goblin_shooter` (`48 HP`, CD `1.32s`), `green_slime` (`40 HP`, CD `1.08s`, tách `mini_slime` `20 HP`), `spore_bomber` (`34 HP`, nổ `2 DMG` — có thể chém/đá bật ngược), `wild_boar` (`72 HP`, CD `1.82s`), `goblin_shaman` (`44 HP`, CD `2.55s`), `thorn_turret` (`50 HP`, CD `1.88s`).
+- **Biome 2 — Hầm Băng Vĩnh Cửu:** `frost_bat` (`44 HP`, bay), `baby_yeti` (`76 HP`, đẩy tảng băng trượt `460 px/s`), `ice_mage` (`58 HP`, khúc xạ 3 tia qua cột lăng kính băng), `ice_golem` (`96 HP`, giáp băng trực diện giảm `75%` — vỡ tức thì khi trúng tảng băng trượt hoặc va tường), `snow_spirit` (`44 HP`, kết tinh thành tảng băng trượt khi nổ).
+- **Biome 3 — Lò Rèn Dung Nham:** `fire_imp` (`56 HP`), `dwarf_cannon` (`80 HP`, pháo cối cầu vồng vượt chắn thấp), `coal_golem` (`112 HP`, rơi bom than `2.0s` có thể `Dash-Kick` `560 px/s`), `welder_drone` (`62 HP`, nổ xung EMP `r=110px` khi bị hạ), `iron_shielder` (`104 HP`, khiên thép trực diện giảm `80%`, dẫn điện hình nón phía sau khi trúng Sét).
 
-| # | Chỉ tiêu cân bằng (Spec 3.10) | Mục tiêu thiết kế | Trung vị `p50` (`p10 – p90`) | Trạng thái |
+### 5.2 Cân Bằng 3 Boss Cuối Màn (`1–2 Step Boss Armor Break` & `Supply Drop 18s`)
+
+| Biome | Boss | HP Cơ Bản (`enemies.ts`) | Thời gian hạ `1P` (`p50`) | Thời gian hạ `4P` (`p50`) | Lệch `1P ↔ 4P` | Winrate Solo (`30 seeds`) | Max Hit / EHP | One-Shot |
+|---:|---|---:|---:|---:|---:|---:|---:|:---:|
+| **Biome 1** | **Mục Vương Nấm Độc** (`spore_king`) | `5200` | **`83.42s`** | **`76.77s`** | **`±8.0%`** | **`90%`** (`80–95%`) | `38%` | `0` (`zeroOneShots`) |
+| **Biome 2** | **Băng Hậu Kryssa** (`kryssa_ice_queen`) | `6800` | **`77.78s`** | **`77.47s`** | **`±0.4%`** | **`90%`** (`70–90%`) | `21%` | `0` (`zeroOneShots`) |
+| **Biome 3** | **Titan Lò Rèn** (`forge_titan`) | `9600` | **`74.41s`** | **`75.89s`** | **`±2.0%`** | **`77%`** (`60–85%`) | `30%` | `0` (`zeroOneShots`) |
+
+---
+
+## 6. Kết Quả Kiểm Chứng Tự Động 9 Chỉ Tiêu (Headless Balance Harness — Phase P3C)
+
+Báo cáo đầy đủ được sinh tự động tại [`docs/balance-report.md`](./balance-report.md) qua lệnh `pnpm balance` (`tools/balance-harness.ts`, chạy **2.239 lượt mô phỏng** trên `WorldSim` 60Hz với `godMode = false` và `30 seeds` khóa cứng):
+
+| # | Chỉ tiêu cân bằng (Spec 3.10 & Phase P3C) | Mục tiêu thiết kế | Kết quả thực đo (`p50`, `p10 – p90`) | Trạng thái |
 |---:|---|---|---|---|
-| 1 | **TTK Quái thường (Biome 1, Vũ khí khởi đầu)** | `0.6s – 1.5s` | **p50 1.23s** (`0.77s – 1.97s`) | ✅ ĐẠT |
-| 2 | **Thời lượng Phòng combat (1–4P)** | `35s – 70s` | **p50 44.71s** (`23.75s – 180s`) | ✅ ĐẠT |
-| 3 | **HP + Giáp mất mỗi phòng (Biome 1 Solo)** | `25% – 50% tổng` | **p50 25%** (`0% – 100%`) | ✅ ĐẠT |
-| 4 | **Thời lượng đánh Boss B1 / B2 / B3 (1P vs 4P)** | `60s – 120s` (Lệch `≤ ±20%`) | **B1: 106.42s/87.05s · B2: 92.8s/92.85s · B3: 79.97s/75.36s** | ✅ ĐẠT |
-| 5 | **Tỉ lệ thắng Boss Solo & Không One-Shot** | `B1: 80–95%, B2: 70–90%, B3: 60–85%` | **B1: 83% · B2: 73% · B3: 73%** (Zero One-Shot: `true`) | ✅ ĐẠT |
-| 6 | **Độ khó tăng giữa các Biome (Đo thật WorldSim)** | `+20% – 25%` mỗi Biome | **Biome 2 `+24.1%` · Biome 3 `+20.1%`** | ✅ ĐẠT |
-| 7 | **Chịu đòn cơ bản & Độ lệch DPS 3 NV sát thương** | `4 – 10 đòn` · Lệch `≤ ±15%` | **`4 – 9 đòn` · Lệch `±9.2%`** | ✅ ĐẠT |
-
----
-
-## 8. Kiểm Chứng Soak Test 20 Phút Thời Gian Mô Phỏng (`72.000` Ticks @ 60Hz)
-
-Kiểm chứng tự động trong `packages/shared/test/phase8-soak-release.test.ts`:
-- **Cấu hình:** 4 người chơi Co-op (`vanguard`, `ranger`, `elementalist`, `engineer`) liên tục giao tranh, tung kỹ năng, kích nổ 6 phản ứng nguyên tố + Đồng Đội Combo, nhặt vật phẩm, vượt nhiều tầng/biome (`1 → 2 → 3`) và chiến đấu với cả 3 Boss trong suốt **72.000 ticks** (`1.200s` = **20 phút** thời gian mô phỏng ở 60Hz).
-- **Kết quả:**
-  - Số lượng thực thể (`enemies`, `projectiles`, `pickups`, `summons`, `skillZones`, `shockwaveRings`, `tetherBeams`) luôn được giới hạn và tái sử dụng qua Object Pool, không phình vô hạn.
-  - Bộ nhớ Heap ổn định suốt 4 chặng (`18k`, `36k`, `54k`, `72k` ticks), không rò rỉ bộ nhớ.
-  - Thời gian xử lý trung bình mỗi tick ổn định (`< 0.25 ms/tick`, thấp hơn `60×` ngân sách `16.67 ms/tick`), không suy giảm ở chặng cuối so với chặng đầu.
+| 1 | **TTK Quái thường (Biome 1, Vũ khí khởi đầu)** | `0.6s – 1.5s` | **p50 1.42s** (`0.92s – 2.33s`) | ✅ ĐẠT |
+| 2 | **Thời lượng Phòng combat (1–4P)** | `35s – 70s` | **p50 36.77s** (`27.3s – 49.27s`) | ✅ ĐẠT |
+| 3 | **HP + Giáp mất mỗi phòng (Biome 1 Solo)** | `25% – 50% tổng` | **p50 25%** (`0% – 88.75%`) | ✅ ĐẠT |
+| 4 | **Thời lượng đánh Boss B1 / B2 / B3 (1P vs 4P)** | `60s – 120s` (Lệch `≤ ±20%`) | **B1: 83.42s/76.77s · B2: 77.78s/77.47s · B3: 74.41s/75.89s** | ✅ ĐẠT |
+| 5 | **Tỉ lệ thắng Boss Solo & Không One-Shot** | `B1: 80–95%, B2: 70–90%, B3: 60–85%` | **B1: 90% · B2: 90% · B3: 77%** (`zeroOneShots: true`) | ✅ ĐẠT |
+| 6 | **Độ khó tăng giữa các Biome (Đo thật WorldSim)** | `+20% – 25%` mỗi Biome | **Biome 2 `+24.1%` · Biome 3 `+21.9%`** | ✅ ĐẠT |
+| 7 | **Chịu đòn cơ bản & Độ lệch DPS 3 NV sát thương** | `4 – 10 đòn` · Lệch `≤ ±15%` | **`4 – 9 đòn` · Lệch `±0.1%`** (`5/5` Class Solo Boss PASS) | ✅ ĐẠT |
+| 8 | **Độ lệch DPS 5 Vũ khí Khởi đầu & Active `[R]` 18 Vũ khí** | Lệch `< 5.0%` · `Active > Normal` | **Lệch `±1.2%` · `18/18 Active > Normal`** | ✅ ĐẠT |
+| 9 | **Độ lệch Tỉ lệ thắng 5 Class (`1P / 2P / 4P × 30 seeds`)** | Lệch `≤ ±6.0%` | **Lệch `±3.8%`** (`93.3% – 99.0%` tổng hợp) | ✅ ĐẠT |

@@ -268,11 +268,11 @@ export function simulateSingleWeaponCadenceDps(
             buttons |= INPUT_BUTTON.RELOAD_VENT;
           }
         } else if (w.cadenceKind === 'HEAT_VENT') {
-          const ventThreshold = weaponId === 'apprentice_staff' ? 80 : 82;
+          const ventThreshold = weaponId === 'apprentice_staff' ? 84 : 82;
           if (
             p.overheatLockTimer <= 0 &&
             p.weaponHeat >= ventThreshold &&
-            p.weaponHeat <= 94 &&
+            p.weaponHeat <= 95 &&
             ((p.lastButtons ?? 0) & INPUT_BUTTON.RELOAD_VENT) === 0
           ) {
             buttons |= INPUT_BUTTON.RELOAD_VENT;
@@ -283,7 +283,7 @@ export function simulateSingleWeaponCadenceDps(
           } else if (!comboParrySpawned && p.fireCooldownTimer <= SIM_STEP_SEC * 1.2) {
             comboParrySpawned = true;
             comboCycleCount += 1;
-            if (comboCycleCount % 2 === 1) {
+            if (comboCycleCount % 3 === 1) {
               // Spawn 1 grazing enemy projectile in the melee parry arc for Parry Deflect
               sim.spawnDeterministicVolley({
                 kind: 'bullet_volley_spawned',
