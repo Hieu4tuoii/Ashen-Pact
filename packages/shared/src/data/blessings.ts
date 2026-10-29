@@ -63,9 +63,21 @@ export const PHASE4_DASH_TECH_BLESSING_IDS = [
   'dash_phase_blade',
 ] as const satisfies readonly ActionBlessingId[];
 
+export const PHASE4_RELOAD_TECH_BLESSING_IDS = [
+  'reload_caustic_pod',
+  'reload_holster_surge',
+] as const satisfies readonly ActionBlessingId[];
+
+export const PHASE4_BULLET_MOD_BLESSING_IDS = [
+  'bullet_wall_tether',
+  'bullet_orbit_return',
+] as const satisfies readonly ActionBlessingId[];
+
 export const PHASE4_ACTION_BLESSING_IDS = [
   ...PHASE4_TABLE_TECH_BLESSING_IDS,
   ...PHASE4_DASH_TECH_BLESSING_IDS,
+  ...PHASE4_RELOAD_TECH_BLESSING_IDS,
+  ...PHASE4_BULLET_MOD_BLESSING_IDS,
 ] as const satisfies readonly ActionBlessingId[];
 
 export const ALL_ACTION_BLESSING_IDS = [
@@ -506,6 +518,62 @@ export const BLESSINGS: Record<string, BlessingDef> = {
     blessingGroup: 'dash_tech',
     element: 'none',
     accentColor: '#E2E8F0',
+  },
+
+  // ---------------------------------------------------------------------------
+  // Phase 4A — Advanced Group 3 (Reload/Vent) & Group 4 (Bullet Geometry)
+  // ---------------------------------------------------------------------------
+  reload_caustic_pod: {
+    id: 'reload_caustic_pod',
+    nameVi: 'Nang Độc Lăn Nảy',
+    nameEn: 'Caustic Rolling Pod',
+    descriptionVi:
+      'Khi Nạp Chuẩn / Xả Nhiệt [R] hoặc bắn Phát Cuối Băng, phóng Quả Nang Bào Tử lăn 120px; bắn trúng hoặc Dash-Kick kích nổ mưa axit (38 ST Độc, +25% ST nhận vào).',
+    descriptionEn:
+      'On Perfect Reload / Vent [R] or Finale Shot, launch a Caustic Spore Pod rolling 120px; shooting or Dash-Kicking it detonates acid rain (38 Poison DMG, +25% enemy vulnerability).',
+    category: 'general',
+    blessingGroup: 'reload_tech',
+    element: 'poison',
+    accentColor: '#84CC16',
+  },
+  reload_holster_surge: {
+    id: 'reload_holster_surge',
+    nameVi: 'Dòng Điện Đổi Súng',
+    nameEn: 'Holster Surge',
+    descriptionVi:
+      'Khi đổi vũ khí bằng [Q] (hồi chiêu 2.0s), phóng 1 tia sét (26 ST Sét) xuyên qua quái trước mặt và nạp đầy ngay vũ khí vừa cất.',
+    descriptionEn:
+      'Swapping weapons with [Q] (2.0s ICD) fires a piercing lightning bolt (26 Shock DMG) ahead and instantly reloads/cools your holstered weapon.',
+    category: 'general',
+    blessingGroup: 'reload_tech',
+    element: 'shock',
+    accentColor: '#38BDF8',
+  },
+  bullet_wall_tether: {
+    id: 'bullet_wall_tether',
+    nameVi: 'Đạn Ghim Tường Giăng Dây',
+    nameEn: 'Wall-Tether Pylons',
+    descriptionVi:
+      'Khi Phát Cuối Băng hoặc Đạn Quá Tải chạm tường, cắm Cọc Điện Cao Thế (4.5s, tối đa 2 cọc/người). Hai cọc căng Dây Cắt Điện (26 ST Sét/giây).',
+    descriptionEn:
+      'When a Finale Shot or Overclocked Shot hits a wall, plant a High-Voltage Pylon (4.5s, max 2/player). Two pylons stretch an Electric Cutter Wire (26 Shock DMG/s).',
+    category: 'general',
+    blessingGroup: 'bullet_mod',
+    element: 'shock',
+    accentColor: '#FACC15',
+  },
+  bullet_orbit_return: {
+    id: 'bullet_orbit_return',
+    nameVi: 'Quỹ Đạo Hồi Quy',
+    nameEn: 'Orbit Return',
+    descriptionVi:
+      'Đạn tầm xa khi bay hết tầm sẽ vòng ngược 180° bay trả về vị trí hiện tại của bạn, gây 45% ST Độc từ sau lưng quái.',
+    descriptionEn:
+      'Ranged projectiles reaching max range curve 180° back toward your current position, dealing 45% Poison DMG from behind enemies.',
+    category: 'general',
+    blessingGroup: 'bullet_mod',
+    element: 'poison',
+    accentColor: '#10B981',
   },
 };
 

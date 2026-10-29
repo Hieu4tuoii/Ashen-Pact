@@ -557,6 +557,22 @@
     "dash_phase_blade": {
       "name": "Lướt Xuyên Kiếm Khí",
       "desc": "Sau mỗi cú Lướt, đòn đánh hoặc phát bắn đầu tiên trong 1.2s phóng kèm Lưỡi Sóng Chấn Động (28 ST) xuyên quái và xóa đạn địch trước mặt."
+    },
+    "reload_caustic_pod": {
+      "name": "Nang Độc Lăn Nảy",
+      "desc": "Khi Nạp Chuẩn / Xả Nhiệt [R] hoặc bắn Phát Cuối Băng, phóng Quả Nang Bào Tử lăn 120px; bắn trúng hoặc Dash-Kick kích nổ mưa axit (38 ST Độc, +25% ST nhận vào)."
+    },
+    "reload_holster_surge": {
+      "name": "Dòng Điện Đổi Súng",
+      "desc": "Khi đổi vũ khí bằng [Q] (hồi chiêu 2.0s), phóng 1 tia sét (26 ST Sét) xuyên qua quái trước mặt và nạp đầy ngay vũ khí vừa cất."
+    },
+    "bullet_wall_tether": {
+      "name": "Đạn Ghim Tường Giăng Dây",
+      "desc": "Khi Phát Cuối Băng hoặc Đạn Quá Tải chạm tường, cắm Cọc Điện Cao Thế (4.5s, tối đa 2 cọc/người). Hai cọc căng Dây Cắt Điện (26 ST Sét/giây)."
+    },
+    "bullet_orbit_return": {
+      "name": "Quỹ Đạo Hồi Quy",
+      "desc": "Đạn tầm xa khi bay hết tầm sẽ vòng ngược 180° bay trả về vị trí hiện tại của bạn, gây 45% ST Độc từ sau lưng quái."
     }
   },
   "enemies": {

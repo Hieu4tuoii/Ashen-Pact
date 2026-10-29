@@ -16,6 +16,8 @@ import {
   ACROBAT_VENT_ORANGE_MIN,
   triggerReloadVentOrFinisherBlessings,
   tryConsumeAndSpawnDashPhaseBlade,
+  trySpawnCausticSporePod,
+  tryTriggerHolsterSurgeOnWeaponSwap,
 } from './sim-blessings.js';
 import {
   clampPelletsPerTrigger,
@@ -180,6 +182,7 @@ export function switchPlayerWeaponSlot(
       weaponId: newWepId,
       slot: slotIndex,
     });
+    tryTriggerHolsterSurgeOnWeaponSwap(sim, p, prevSlot, slotIndex);
   } else {
     const wep = WEAPONS[p.weaponSlots[slotIndex] ?? p.weaponSlots[0] ?? 'knight_sword'];
     if (
@@ -799,6 +802,7 @@ export function tryFireActiveWeaponImpl(
   }
   if (w.id === 'solar_archon_staff') {
     spawnSolarArchonConvergingVolley(this, p, baseDmg, critChance, shotElement, shieldBoost, shotFlags);
+    if (isFinaleShot) trySpawnCausticSporePod(this, p, true);
     return;
   }
 
@@ -847,6 +851,8 @@ export function tryFireActiveWeaponImpl(
     chainHarpoonShot: chainHarpoonShot || undefined,
     bypassFrontShield: bypassFrontShield || undefined,
   });
+
+  if (isFinaleShot) trySpawnCausticSporePod(this, p, true);
 
   if (finaleJoltBurst) {
     applyFinaleJoltSafeRecoil(this, p, p.aimAngle, 48);

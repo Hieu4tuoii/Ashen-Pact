@@ -132,6 +132,7 @@ export type PropKind =
   | 'pneumatic_press'
   | 'slag_crucible'
   | 'coal_bomb'
+  | 'caustic_spore_pod'
   | 'daedalus_anvil'
   | 'upgrade_anvil';
 
@@ -180,6 +181,8 @@ export interface SimPropState {
   pressTimer?: number;
   toxicShrapnelTriggered?: boolean;
   lastDamagedByPlayerId?: number;
+  causticRollRemainingPx?: number;
+  ownerPlayerId?: number;
 }
 
 export type SummonKind =
@@ -545,6 +548,7 @@ export interface SimPlayerState {
   dashPhaseBladeTimer?: number;
   toxicShrapnelIcdTimer?: number;
   holsterSurgeIcdTimer?: number;
+  causticPodFinaleIcdTimer?: number;
   // Ashen Pact 2.0 Per-Player Build State
   blessingIds: BlessingId[];
   weaponMutators: Record<number, WeaponMutatorId[]>;
@@ -818,6 +822,8 @@ export interface SimProjectileState {
   bypassFrontShield?: boolean;
   bouncesDone?: number;
   orbitReturned?: boolean;
+  orbitReturnTicks?: number;
+  clientHeldAtMaxRange?: boolean;
   clusterMortarLob?: boolean;
   secondaryInfusedElement?: ElementType;
   hitEntityIds: number[];
@@ -890,6 +896,8 @@ export interface BulletVolleySpawnEvent {
   bypassFrontShield?: boolean;
   bouncesDone?: number;
   orbitReturned?: boolean;
+  orbitReturnTicks?: number;
+  clientHeldAtMaxRange?: boolean;
   clusterMortarLob?: boolean;
   secondaryInfusedElement?: ElementType;
 }

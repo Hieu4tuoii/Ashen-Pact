@@ -114,6 +114,7 @@ export function applyDamageToEnemyImpl(
   finalAmount *= computeEnemyVulnerabilityMultiplier({
     marked: enemy.markedTimer > 0 ? 0.25 : 0,
     superconduct: enemy.superconductTimer > 0 ? 0.3 : 0,
+    caustic: (enemy.causticVulnTimer ?? 0) > 0 ? 0.25 : 0,
     bossArmorBreak: getBossArmorBreakVulnBonus(enemy),
     extraVulnAdd:
       enemy.defId === 'forge_titan' &&

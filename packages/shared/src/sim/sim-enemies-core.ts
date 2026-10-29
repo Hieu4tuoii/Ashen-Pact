@@ -8,7 +8,7 @@ import {
   syncAshenExecutionerInRoom,
   updateAshenExecutionerAI,
 } from './sim-ashen-pacts.js';
-import { resolveEnemyTargetWithThunderDecoy, updateEnemyHeavyPinballAndTimers } from './sim-blessings.js';
+import { resolveEnemyTargetWithThunderDecoy, stepP4AEnemyBlessingTimers, updateEnemyHeavyPinballAndTimers } from './sim-blessings.js';
 import {
   FORGE_TITAN_ARMOR_REDUCTION,
   KRYSSA_ARMOR_REDUCTION,
@@ -400,6 +400,7 @@ export function updateEnemiesImpl(this: WorldSim, dtSec: number): void {
     if ((e.slowTimer ?? 0) > 0) {
       e.slowTimer = Math.max(0, (e.slowTimer ?? 0) - dtSec);
     }
+    stepP4AEnemyBlessingTimers(e, dtSec);
 
     // Decay knockback (preserving pre-decay speed for Wall-Slam threshold checks)
     const preDecayKbSpeed = Math.hypot(e.kbVx, e.kbVy);

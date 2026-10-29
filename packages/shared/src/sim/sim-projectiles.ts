@@ -5,7 +5,7 @@ import { clampBounceCount, clampPelletsPerTrigger } from './sim-damage-pipeline.
 import {
   applyBulletModBlessingsOnVolleySpawn, clearEnemyBulletsAlongPhaseBlade,
   applyPlayerProjectileMidFlightSynergiesAndBlessings, tryDetonateThunderDecoyOnEnemyBullet,
-  handlePlayerProjectileBarricadeHitBlessings,
+  handlePlayerProjectileBarricadeHitBlessings, shouldCatchReturnedOrbitProjectile, tryHoldClientOrbitReturnAtMaxRange, tryRedirectProjectileOrbitReturnOnExpiry,
   handlePlayerProjectileWallHitBlessingsAndSkills,
   refractProjectileThroughPrismBarricade,
   tryBlockOrReflectEnemyProjectileByVanguardShield,
@@ -146,7 +146,7 @@ export function spawnDeterministicVolleyImpl(this: WorldSim, ev: BulletVolleySpa
       gravitySingularityShot: ev.gravitySingularityShot,
       chainHarpoonShot: ev.chainHarpoonShot,
       bypassFrontShield: ev.bypassFrontShield,
-      bouncesDone: ev.bouncesDone ?? 0, orbitReturned: ev.orbitReturned, clusterMortarLob: ev.clusterMortarLob, secondaryInfusedElement: ev.secondaryInfusedElement,
+      bouncesDone: ev.bouncesDone ?? 0, orbitReturned: Boolean(ev.orbitReturned), clusterMortarLob: ev.clusterMortarLob, secondaryInfusedElement: ev.secondaryInfusedElement,
     });
     copyLegendaryVolleyFieldsToProjectile(ev, proj);
     this.projectiles.push(proj);
@@ -202,7 +202,7 @@ export function updateProjectilesImpl(this: WorldSim, dtSec: number): void {
       if (b.element !== 'none') {
         this.applyElementAtWorldPoint(b.x, b.y, b.element, 20);
       }
-      handleProjectileExpiredWeaponSpecials(this, b);
+      if (!tryRedirectProjectileOrbitReturnOnExpiry(this, b)) handleProjectileExpiredWeaponSpecials(this, b);
       continue;
     }
 
@@ -363,7 +363,7 @@ export function updateProjectilesImpl(this: WorldSim, dtSec: number): void {
           continue;
         }
         if (prop.blocksEnemyProjectiles && b.team === 'player') {
-          if (circleVsCircle(b, prop)) {
+          if (!b.hitEntityIds.includes(prop.id) && circleVsCircle(b, prop)) {
             if (handlePlayerProjectileBarricadeHitBlessings(this, b, prop) && b.ttlSec <= 0) {
               hitProp = true;
               break;
@@ -388,7 +388,7 @@ export function updateProjectilesImpl(this: WorldSim, dtSec: number): void {
           hitProp = true;
           break;
         }
-        if (circleVsCircle(b, prop)) {
+        if (!b.hitEntityIds.includes(prop.id) && circleVsCircle(b, prop)) {
           prop.fallAngle = b.angle;
           if (b.team === 'player') prop.lastDamagedByPlayerId = b.ownerId;
           if (b.team === 'enemy') tryChargeGlacialBarricadeWithCryoLaser(prop, b.weaponId);
@@ -422,6 +422,7 @@ export function updateProjectilesImpl(this: WorldSim, dtSec: number): void {
 
     // 3. Player projectile vs Allies/Synergies & Enemies
     if (b.team === 'player') {
+      if (b.orbitReturned && shouldCatchReturnedOrbitProjectile(this, b, midFlightDestroyedScratch)) continue;
       if (b.weaponId === 'dash_phase_blade') clearEnemyBulletsAlongPhaseBlade(this, b, midFlightDestroyedScratch);
       if (
         hasMidFlightSynergy &&
@@ -694,10 +695,11 @@ export function stepClientProjectilesCosmeticImpl(this: WorldSim, dtSec: number)
     }
 
     b.ttlSec -= dtSec;
-    if (b.ttlSec <= 0) continue;
+    if (b.ttlSec <= 0 && !tryHoldClientOrbitReturnAtMaxRange(this, b)) continue;
 
     b.x += b.vx * dtSec;
     b.y += b.vy * dtSec;
+    if (b.orbitReturned && shouldCatchReturnedOrbitProjectile(this, b)) continue;
 
     // 1. Wall / Pillar collision & ricochet bounce
     const wallHit = this.map.checkProjectileWallHit(b.x, b.y, b.radius);
@@ -769,7 +771,7 @@ export function stepClientProjectilesCosmeticImpl(this: WorldSim, dtSec: number)
         ) {
           b.ttlSec = 0; hitProp = true; break;
         }
-        if (circleVsCircle(b, prop)) {
+        if (!b.hitEntityIds.includes(prop.id) && circleVsCircle(b, prop)) {
           if (((b.shotFlags ?? 0) & SHOT_FLAG.DYNAMIC_BOUNCE) !== 0) {
             b.vx = 0;
             b.vy = 0;
@@ -962,7 +964,7 @@ export function acquireProjectileImpl(this: WorldSim,
     pooled.gravitySingularityShot = init.gravitySingularityShot;
     pooled.chainHarpoonShot = init.chainHarpoonShot;
     pooled.bypassFrontShield = init.bypassFrontShield;
-    pooled.bouncesDone = init.bouncesDone ?? 0; pooled.orbitReturned = init.orbitReturned; pooled.clusterMortarLob = init.clusterMortarLob; pooled.secondaryInfusedElement = init.secondaryInfusedElement;
+    pooled.bouncesDone = init.bouncesDone ?? 0; pooled.orbitReturned = Boolean(init.orbitReturned); pooled.orbitReturnTicks = 0; pooled.clientHeldAtMaxRange = false; pooled.clusterMortarLob = init.clusterMortarLob; pooled.secondaryInfusedElement = init.secondaryInfusedElement;
     pooled.trailLastX = init.originX ?? init.x; pooled.trailLastY = init.originY ?? init.y;
     pooled.hitEntityIds.length = 0;
     return pooled;

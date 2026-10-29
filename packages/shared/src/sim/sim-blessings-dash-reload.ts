@@ -7,6 +7,7 @@ import { tickPlayerBulletModBlessingTimers } from './sim-blessings-bullet-skills
 import {
   stepP4APlayerBlessingTimers,
   triggerP4ADashStartBlessings,
+  trySpawnCausticSporePod,
 } from './sim-blessings-p4a.js';
 import {
   clearEnemyProjectilesAroundProp,
@@ -418,7 +419,8 @@ function hasAnyReloadVentFinisherBlessing(p: SimPlayerState): boolean {
     hasPlayerBlessing(p, 'reload_tediore_chuck') ||
     hasPlayerBlessing(p, 'reload_frost_nova') ||
     hasPlayerBlessing(p, 'reload_magnet_vortex') ||
-    hasPlayerBlessing(p, 'reload_repulsor_shock')
+    hasPlayerBlessing(p, 'reload_repulsor_shock') ||
+    hasPlayerBlessing(p, 'reload_caustic_pod')
   );
 }
 
@@ -603,6 +605,10 @@ export function triggerReloadVentOrFinisherBlessings(
         }
       }
     }
+  }
+
+  if (hasPlayerBlessing(p, 'reload_caustic_pod')) {
+    trySpawnCausticSporePod(sim, p, false);
   }
 
   return true;

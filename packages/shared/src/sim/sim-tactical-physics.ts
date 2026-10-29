@@ -13,9 +13,11 @@ import {
 import {
   applyFlipCoverTableTechBlessings,
   applyKickPropTableTechBlessings,
+  detonateCausticSporePod,
   detonateRocketChargedBarricade,
   onEnemyWallSlamHeavyPinball,
   onPlayerDashKickProp,
+  stepCausticSporePodRoll,
   TABLE_TECH_BILLIARD_SLAM_DMG_MULT,
   triggerTableTechMagnetSnareOnFlip,
   tryTriggerToxicShrapnelOnPropBreak,
@@ -53,7 +55,7 @@ import type { PropKind, SimEnemyState, SimPlayerState, SimPropState } from './wo
 export * from './sim-tactical-physics-p1c.js';
 
 export const FLIPPABLE_BARRICADE_KINDS: readonly PropKind[] = ['moss_table', 'glacial_barricade', 'forge_blast_shield'] as const;
-export const CIRCULAR_KICKABLE_TOY_KINDS: readonly PropKind[] = ['explosive_barrel', 'volatile_spore_pod', 'sliding_ice_block', 'slag_crucible', 'coal_bomb'] as const;
+export const CIRCULAR_KICKABLE_TOY_KINDS: readonly PropKind[] = ['explosive_barrel', 'volatile_spore_pod', 'caustic_spore_pod', 'sliding_ice_block', 'slag_crucible', 'coal_bomb'] as const;
 export const FLIP_COVER_MICRO_BLANK_RADIUS = 56;
 export const FLIP_COVER_MICRO_BLANK_DURATION_SEC = 0.15;
 export const FLIP_COVER_KNOCKBACK_RADIUS = 64;
@@ -83,6 +85,7 @@ export function isCircularKickableToyProp(kind: PropKind): boolean {
   return (
     kind === 'explosive_barrel' ||
     kind === 'volatile_spore_pod' ||
+    kind === 'caustic_spore_pod' ||
     kind === 'sliding_ice_block' ||
     kind === 'slag_crucible' ||
     kind === 'coal_bomb'
@@ -121,6 +124,8 @@ export function getTacticalPropSpawnSpec(kind: PropKind): TacticalPropSpawnSpec 
   switch (kind) {
     case 'volatile_spore_pod':
       return { radius: 16, hp: 25, destructible: true, explosive: true, blocksMovement: true, lightRadius: 80, lightColorHex: '#84CC16' };
+    case 'caustic_spore_pod':
+      return { radius: 14, hp: 1, destructible: true, explosive: true, blocksMovement: false, lightRadius: 72, lightColorHex: '#84CC16', ttlSec: 8.0 };
     case 'glacial_spike':
       return { radius: 14, hp: 45, destructible: true, explosive: false, blocksMovement: true, lightRadius: 55, lightColorHex: '#38BDF8', blocksEnemyProjectiles: true, ttlSec: 4.0 };
     case 'sliding_ice_block':
@@ -402,7 +407,7 @@ export function kickProp(sim: WorldSim, prop: SimPropState, actor: SimPlayerStat
     return true;
   }
 
-  prop.coverState = 'sliding'; prop.state = 'sliding'; prop.blocksMovement = false; prop.blocksEnemyProjectiles = false;
+  prop.coverState = 'sliding'; prop.state = 'sliding'; prop.blocksMovement = false; prop.blocksEnemyProjectiles = false; prop.causticRollRemainingPx = 0;
   prop.vx = Math.cos(slideAngle) * speed; prop.vy = Math.sin(slideAngle) * speed;
   prop.iceSpeedBoostApplied = onIce;
   prop.enemyPushed = false; prop.kickedByPlayerId = actor.id; prop.counterDeflected = false;
@@ -594,6 +599,10 @@ function destroyTacticalProp(sim: WorldSim, prop: SimPropState): void {
     detonateVolatileSporePod(sim, prop);
     return;
   }
+  if (prop.kind === 'caustic_spore_pod') {
+    detonateCausticSporePod(sim, prop);
+    return;
+  }
   if (prop.kind === 'glacial_barricade') {
     shatterGlacialBarricade(
       sim,
@@ -624,6 +633,7 @@ function destroyTacticalProp(sim: WorldSim, prop: SimPropState): void {
 export function updateSlidingPropsImpl(this: WorldSim, dtSec: number): void {
   updateP1CTacticalProps(this, dtSec);
   stepCoalBombsAndDetonate(this, dtSec);
+  stepCausticSporePodRoll(this, dtSec);
   for (let i = 0; i < this.props.length; i++) {
     const prop = this.props[i]!;
     if (prop.hp <= 0) continue;
@@ -689,6 +699,11 @@ export function updateSlidingPropsImpl(this: WorldSim, dtSec: number): void {
           if (prop.kind === 'volatile_spore_pod') {
             prop.x = e.x; prop.y = e.y;
             detonateVolatileSporePod(this, prop);
+            detonatedOnEnemy = true; break;
+          }
+          if (prop.kind === 'caustic_spore_pod') {
+            prop.x = e.x; prop.y = e.y;
+            detonateCausticSporePod(this, prop, ownerId);
             detonatedOnEnemy = true; break;
           }
           if (prop.kind === 'glacial_barricade') {
@@ -763,6 +778,11 @@ export function updateSlidingPropsImpl(this: WorldSim, dtSec: number): void {
         if (prop.kind === 'volatile_spore_pod') {
           prop.x = e.x; prop.y = e.y;
           detonateVolatileSporePod(this, prop);
+          detonatedOnEnemy = true; break;
+        }
+        if (prop.kind === 'caustic_spore_pod') {
+          prop.x = e.x; prop.y = e.y;
+          detonateCausticSporePod(this, prop, ownerId);
           detonatedOnEnemy = true; break;
         }
         if (prop.kind === 'glacial_barricade') {

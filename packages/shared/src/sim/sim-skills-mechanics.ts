@@ -8,6 +8,7 @@ import {
   enforcePlayerDeployableCap,
   spawnElementalistOrbSkillZones,
   updateElementalistVortexPropsAndTwinBeam,
+  updateP4ASummonsAndTethers,
 } from './sim-blessings.js';
 import { tryTriggerExecutionerScytheSlash } from './sim-ashen-pacts.js';
 import { triggerEnemyWallSlam, triggerMeleeKickProps } from './sim-tactical-physics.js';
@@ -783,6 +784,7 @@ export function updateSkillZonesAndSummonsImpl(this: WorldSim, dtSec: number): v
   }
   this.summons.length = summonWrite;
   updateEngineerTwinTurretLaserFences(this, dtSec);
+  updateP4ASummonsAndTethers(this, dtSec);
 }
 
 export function triggerTeslaEmpBlastImpl(this: WorldSim, turret: SimSummonState): void {

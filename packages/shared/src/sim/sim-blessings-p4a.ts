@@ -99,6 +99,10 @@ export function stepP4APlayerBlessingTimers(p: SimPlayerState, dtSec: number): v
     const next = (p.holsterSurgeIcdTimer ?? 0) - dtSec;
     p.holsterSurgeIcdTimer = next <= 1e-6 ? 0 : next;
   }
+  if ((p.causticPodFinaleIcdTimer ?? 0) > 0) {
+    const next = (p.causticPodFinaleIcdTimer ?? 0) - dtSec;
+    p.causticPodFinaleIcdTimer = next <= 1e-6 ? 0 : next;
+  }
 }
 
 function laySafePoisonSwampPuddle(sim: WorldSim, originX: number, originY: number, durationSec = TOXIC_SHRAPNEL_PUDDLE_SEC): void {
@@ -482,3 +486,5 @@ export function clearEnemyBulletsAlongPhaseBlade(sim: WorldSim, b: SimProjectile
   }
   return cleared;
 }
+
+export * from './sim-blessings-p4a-group34.js';

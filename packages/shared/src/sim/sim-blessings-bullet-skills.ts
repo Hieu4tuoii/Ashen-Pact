@@ -5,6 +5,10 @@ import { angleDiff, clamp, distance } from '../math/vec2.js';
 import { SHOT_FLAG, TILE_SIZE } from '../protocol/messages.js';
 import { clampBounceCount } from './sim-damage-pipeline.js';
 import {
+  isEligibleOrbitReturnWeapon,
+  tryPlantWallTetherPylonOnWallHit,
+} from './sim-blessings-p4a.js';
+import {
   isCircularKickableToyProp,
   isFlippableBarricadeProp,
   triggerEnemyWallSlam,
@@ -63,7 +67,9 @@ export function applyBulletModBlessingsOnVolleySpawn(sim: WorldSim, ev: BulletVo
   const isNonBouncingSpecial =
     ev.weaponId === 'void_staff' || ev.weaponId === 'emerald_cleaver_boomerang' ||
     ev.weaponId === 'reload_tediore_chuck' || ev.weaponId === 'table_tech_rocket' ||
-    ev.weaponId === 'relic_perpetual_core_rocket' || ev.weaponId === 'vanguard_bastion_prism' || ev.weaponId === 'dash_phase_blade';
+    ev.weaponId === 'relic_perpetual_core_rocket' || ev.weaponId === 'vanguard_bastion_prism' ||
+    ev.weaponId === 'dash_phase_blade' || ev.weaponId === 'holster_surge_bolt' ||
+    ev.weaponId === 'table_tech_toxic_shrapnel';
   const hasRicochetPactOrRelic =
     owner.activePactId === 'pact_ricochet_vow' ||
     (Array.isArray(owner.awakenedRelicIds) &&
@@ -78,6 +84,11 @@ export function applyBulletModBlessingsOnVolleySpawn(sim: WorldSim, ev: BulletVo
       ev.shotFlags = nextFlags;
       ev.flags = nextFlags;
     }
+  }
+  if (!ev.orbitReturned && hasPlayerBlessing(owner, 'bullet_orbit_return') && isEligibleOrbitReturnWeapon(ev.weaponId)) {
+    const nextFlags = (ev.shotFlags ?? ev.flags ?? 0) | SHOT_FLAG.DYNAMIC_BOUNCE;
+    ev.shotFlags = nextFlags;
+    ev.flags = nextFlags;
   }
 }
 
@@ -224,6 +235,7 @@ export function handlePlayerProjectileWallHitBlessingsAndSkills(
   sim: WorldSim, b: SimProjectileState, resolvedX: number, resolvedY: number, normalX: number, normalY: number,
 ): boolean {
   if (b.team !== 'player') return false;
+  tryPlantWallTetherPylonOnWallHit(sim, b, resolvedX, resolvedY, normalX, normalY);
   if (b.bounceRemaining > 0) {
     triggerBulletRicochetBoom(sim, b, resolvedX, resolvedY);
     const reflectAngle = Math.atan2(normalY !== 0 ? -b.vy : b.vy, normalX !== 0 ? -b.vx : b.vx);

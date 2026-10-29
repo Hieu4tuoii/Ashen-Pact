@@ -5,7 +5,7 @@ import { distance, distanceSq } from '../math/vec2.js';
 import { BIOME_SCALING, COOP_SCALING } from '../data/scaling.js';
 import { type PlayerInputPacket, TILE_SIZE } from '../protocol/messages.js';
 import type { DungeonRoomNode } from './dungeon-gen.js';
-import { tryTriggerToxicShrapnelOnPropBreak } from './sim-blessings.js';
+import { detonateCausticSporePod, tryTriggerToxicShrapnelOnPropBreak } from './sim-blessings.js';
 import {
   detonateCoalBomb,
   triggerShamanTotemBacklash,
@@ -794,6 +794,11 @@ export function damagePropImpl(this: WorldSim, prop: SimPropState, amount: numbe
   prop.hp = Math.max(0, prop.hp - amount);
   prop.hitFlashTimer = 0.1;
   if (prop.hp <= 0 || ((prop.kind === 'slag_crucible' || prop.kind === 'coal_bomb' || prop.explosive) && element === 'burn')) tryTriggerToxicShrapnelOnPropBreak(this, prop);
+
+  if (prop.kind === 'caustic_spore_pod') {
+    if (prop.hp <= 0) detonateCausticSporePod(this, prop);
+    return;
+  }
 
   if (prop.kind === 'volatile_spore_pod') {
     if (prop.hp <= 0) {
