@@ -655,6 +655,7 @@ export function simulateBossEncounter(
     pl.godMode = false;
     pl.statsDamageTaken = 0;
 
+    // Vanguard pairs a ranged backup ('rivet_gun') in slot 1 alongside its Biome primary weapon in slot 0 for Boss kiting/armor-break windows.
     const starterId =
       pl.characterId === 'vanguard' ? 'rivet_gun' : CHARACTERS[pl.characterId].starterWeaponId;
     if (biome === 1) {

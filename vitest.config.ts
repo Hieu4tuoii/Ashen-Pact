@@ -10,5 +10,8 @@ export default defineConfig({
   test: {
     include: ['test/**/*.test.ts', 'packages/**/test/**/*.test.ts', 'apps/**/test/**/*.test.ts'],
     environment: 'node',
+    // Cap worker concurrency to avoid SMT/thermal oversubscription across heavy 60Hz balance/soak suites
+    minWorkers: 1,
+    maxWorkers: 3,
   },
 });
