@@ -17,6 +17,8 @@ import {
   onEnemyWallSlamHeavyPinball,
   onPlayerDashKickProp,
   TABLE_TECH_BILLIARD_SLAM_DMG_MULT,
+  triggerTableTechMagnetSnareOnFlip,
+  tryTriggerToxicShrapnelOnPropBreak,
 } from './sim-blessings.js';
 import {
   checkSporeKingPillarCrash,
@@ -241,6 +243,7 @@ export function detonateVolatileSporePod(sim: WorldSim, pod: SimPropState): void
   pod.explosive = false;
 
   const ownerId = pod.slideOwnerPlayerId ?? sim.player.id;
+  tryTriggerToxicShrapnelOnPropBreak(sim, pod, ownerId);
   sim.events.push({ kind: 'prop_destroyed', propId: pod.id, propKind: pod.kind, x: pod.x, y: pod.y });
   sim.events.push({ kind: 'explosion', x: pod.x, y: pod.y, radius: VOLATILE_SPORE_POD_BLAST_RADIUS, damage: 12, sourceDefId: 'volatile_spore_pod' });
   tryBreakCrackedWallNearImpact(sim, pod.x, pod.y, VOLATILE_SPORE_POD_BLAST_RADIUS);
@@ -273,6 +276,7 @@ export function collapseRottenTotemPillar(sim: WorldSim, pillar: SimPropState, f
 
   pillar.hp = 0; pillar.destructible = false; pillar.blocksMovement = false; pillar.blocksEnemyProjectiles = false;
   pillar.coverState = 'fallen'; pillar.state = 'broken'; pillar.fallAngle = resolvedAngle;
+  tryTriggerToxicShrapnelOnPropBreak(sim, pillar, attackerId);
   clearCollapsedPillarFootprintOnMap(sim.map, pillar.x, pillar.y);
   sim.events.push({ kind: 'prop_destroyed', propId: pillar.id, propKind: pillar.kind, x: pillar.x, y: pillar.y });
 
@@ -357,6 +361,7 @@ export function flipCoverProp(sim: WorldSim, prop: SimPropState, actor: SimPlaye
       }
     }
   }
+  triggerTableTechMagnetSnareOnFlip(sim, prop, actor);
 
   sim.events.push({
     kind: 'cover_flipped', propId: prop.id, playerId: actor.id, x: prop.x, y: prop.y,
@@ -580,6 +585,7 @@ function pointToSegmentDist(px: number, py: number, x1: number, y1: number, x2: 
 
 function destroyTacticalProp(sim: WorldSim, prop: SimPropState): void {
   tryBreakCrackedWallNearImpact(sim, prop.x, prop.y, Math.max(64, prop.radius + 48));
+  tryTriggerToxicShrapnelOnPropBreak(sim, prop, prop.slideOwnerPlayerId);
   if (prop.rocketCharged) {
     detonateRocketChargedBarricade(sim, prop, prop.slideOwnerPlayerId ?? sim.player.id);
     return;
@@ -776,7 +782,7 @@ export function updateSlidingPropsImpl(this: WorldSim, dtSec: number): void {
         }
       }
     }
-    if (detonatedOnEnemy) continue;
+    if (detonatedOnEnemy) { tryTriggerToxicShrapnelOnPropBreak(this, prop, ownerId); continue; }
 
     let hitPropObstacle = false;
     for (const other of this.props) {

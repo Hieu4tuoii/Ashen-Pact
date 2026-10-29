@@ -63,7 +63,7 @@ export function applyBulletModBlessingsOnVolleySpawn(sim: WorldSim, ev: BulletVo
   const isNonBouncingSpecial =
     ev.weaponId === 'void_staff' || ev.weaponId === 'emerald_cleaver_boomerang' ||
     ev.weaponId === 'reload_tediore_chuck' || ev.weaponId === 'table_tech_rocket' ||
-    ev.weaponId === 'relic_perpetual_core_rocket' || ev.weaponId === 'vanguard_bastion_prism';
+    ev.weaponId === 'relic_perpetual_core_rocket' || ev.weaponId === 'vanguard_bastion_prism' || ev.weaponId === 'dash_phase_blade';
   const hasRicochetPactOrRelic =
     owner.activePactId === 'pact_ricochet_vow' ||
     (Array.isArray(owner.awakenedRelicIds) &&

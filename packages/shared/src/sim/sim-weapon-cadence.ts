@@ -15,6 +15,7 @@ import {
   ACROBAT_VENT_ORANGE_MAX,
   ACROBAT_VENT_ORANGE_MIN,
   triggerReloadVentOrFinisherBlessings,
+  tryConsumeAndSpawnDashPhaseBlade,
 } from './sim-blessings.js';
 import {
   clampPelletsPerTrigger,
@@ -579,6 +580,7 @@ export function tryFireActiveWeaponImpl(
         ? 'burn'
         : w.element;
 
+  tryConsumeAndSpawnDashPhaseBlade(this, p);
   if (w.category === 'melee') {
     const comboStep = p.meleeComboStep ?? 0;
     const arcRad = (w.spreadDeg * Math.PI) / 180;

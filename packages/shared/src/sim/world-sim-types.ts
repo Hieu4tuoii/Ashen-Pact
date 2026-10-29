@@ -178,9 +178,18 @@ export interface SimPropState {
   lastCombatText?: string;
   pressState?: 'idle' | 'windup' | 'cooldown';
   pressTimer?: number;
+  toxicShrapnelTriggered?: boolean;
+  lastDamagedByPlayerId?: number;
 }
 
-export type SummonKind = 'sacred_tree' | 'tesla_turret' | 'ancient_turret' | 'life_blossom';
+export type SummonKind =
+  | 'sacred_tree'
+  | 'tesla_turret'
+  | 'ancient_turret'
+  | 'life_blossom'
+  | 'thunder_decoy'
+  | 'wall_tether_pylon'
+  | 'holo_decoy_turret';
 
 export interface SimSummonState {
   id: number;
@@ -533,6 +542,9 @@ export interface SimPlayerState {
   reloadBlessingIcdTimer?: number;
   ricochetBoomIcdTimer?: number;
   coopArcRelayIcdTimer?: number;
+  dashPhaseBladeTimer?: number;
+  toxicShrapnelIcdTimer?: number;
+  holsterSurgeIcdTimer?: number;
   // Ashen Pact 2.0 Per-Player Build State
   blessingIds: BlessingId[];
   weaponMutators: Record<number, WeaponMutatorId[]>;
@@ -709,6 +721,7 @@ export interface SimEnemyState {
   empBlastTriggered?: boolean;
   shockArcVisualTimer?: number;
   shockArcVisualAngle?: number;
+  causticVulnTimer?: number;
   lastCombatText?: string;
 }
 
@@ -804,6 +817,9 @@ export interface SimProjectileState {
   chainHarpoonShot?: boolean;
   bypassFrontShield?: boolean;
   bouncesDone?: number;
+  orbitReturned?: boolean;
+  clusterMortarLob?: boolean;
+  secondaryInfusedElement?: ElementType;
   hitEntityIds: number[];
 }
 
@@ -873,6 +889,9 @@ export interface BulletVolleySpawnEvent {
   chainHarpoonShot?: boolean;
   bypassFrontShield?: boolean;
   bouncesDone?: number;
+  orbitReturned?: boolean;
+  clusterMortarLob?: boolean;
+  secondaryInfusedElement?: ElementType;
 }
 
 

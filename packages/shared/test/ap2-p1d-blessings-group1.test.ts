@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  ALL_BLESSING_IDS,
   ALL_PHASE1_BLESSING_IDS,
   BLESSINGS,
   BLESSING_LIST,
@@ -78,9 +79,9 @@ describe('AP2 Phase P1D.1 — Blessing Data Architecture (26 Phase 1 Cards) & Gr
       'bullet_coop_arc_relay',
     ]);
 
-    expect(BLESSING_LIST).toHaveLength(26);
-    expect(FLOOR_BUFF_LIST).toHaveLength(26);
-    expect(Object.keys(FLOOR_BUFFS)).toHaveLength(26);
+    expect(BLESSING_LIST).toHaveLength(ALL_BLESSING_IDS.length);
+    expect(FLOOR_BUFF_LIST).toHaveLength(ALL_BLESSING_IDS.length);
+    expect(Object.keys(FLOOR_BUFFS)).toHaveLength(ALL_BLESSING_IDS.length);
 
     for (const id of ALL_PHASE1_BLESSING_IDS) {
       const def = BLESSINGS[id];

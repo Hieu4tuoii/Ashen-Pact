@@ -541,6 +541,22 @@
     "engineer_self_destruct": {
       "name": "Upgrade: Overload Self-Destruct",
       "desc": "Reactivating Skill or turret expiry turns Tesla Turret into a kamikaze bot that charges the densest enemy cluster and explodes for 45 Fire+Shock DMG (r=130px)."
+    },
+    "table_tech_toxic_shrapnel": {
+      "name": "Toxic Shrapnel Barricade",
+      "desc": "When a barricade or tactical prop breaks, or on Wall-Slam, fire 8 Toxic Spines in 360° (20 Poison DMG each) and leave a poison puddle."
+    },
+    "table_tech_magnet_snare": {
+      "name": "Magnet Snare Barricade",
+      "desc": "On Flip Cover [E] or Wall-Slam, emit a magnetic pulse pulling up to 4 nearest enemies within 180px in front of the barricade and Stunning them for 0.8s."
+    },
+    "dash_thunder_decoy": {
+      "name": "Thunder Decoy Dash",
+      "desc": "Leave a Thunder Decoy (1.5s) at Dash start taunting enemies within 220px; on expiry or enemy bullet touch, explodes for 36 Shock DMG (r=88px) and clears enemy bullets."
+    },
+    "dash_phase_blade": {
+      "name": "Phase Blade Dash",
+      "desc": "After each Dash, your first attack or shot within 1.2s launches a piercing Phase Shockwave Blade (28 DMG) that clears enemy bullets ahead."
     }
   },
   "enemies": {

@@ -8,7 +8,7 @@ import {
   syncAshenExecutionerInRoom,
   updateAshenExecutionerAI,
 } from './sim-ashen-pacts.js';
-import { updateEnemyHeavyPinballAndTimers } from './sim-blessings.js';
+import { resolveEnemyTargetWithThunderDecoy, updateEnemyHeavyPinballAndTimers } from './sim-blessings.js';
 import {
   FORGE_TITAN_ARMOR_REDUCTION,
   KRYSSA_ARMOR_REDUCTION,
@@ -500,6 +500,7 @@ export function updateEnemiesImpl(this: WorldSim, dtSec: number): void {
         }
       }
     }
+    if (this.summons.length > 0) ({ x: targetX, y: targetY } = resolveEnemyTargetWithThunderDecoy(this, e, targetX, targetY));
 
     if (e.aiState !== 'telegraph') e.leadSightlineActive = false;
     if (e.frozenTimer > 0) {

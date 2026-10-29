@@ -541,6 +541,22 @@
     "engineer_self_destruct": {
       "name": "Nâng Cấp: Quá Tải Lò Phản Ứng",
       "desc": "Tái kích hoạt kỹ năng hoặc khi hết giờ biến Trụ Tesla thành Robot Cảm Tử lao vào cụm quái đông nhất, nổ 45 ST Lửa + Sét (r=130px)."
+    },
+    "table_tech_toxic_shrapnel": {
+      "name": "Chắn Chiến Gai Độc Nổ",
+      "desc": "Khi tấm chắn hoặc đồ chơi chiến thuật vỡ, hoặc khi kích nổ Đập Tường, bắn tung 8 Mũi Gai Độc 360° (20 ST Độc/mũi) và để lại đầm độc."
+    },
+    "table_tech_magnet_snare": {
+      "name": "Chắn Chiến Bẫy Từ Trường",
+      "desc": "Ngay khi Lật Chắn [E] hoặc Đập Tường, phát xung từ trường kéo tối đa 4 kẻ địch gần nhất trong 180px gom vào mặt trước tấm chắn và Choáng 0.8s."
+    },
+    "dash_thunder_decoy": {
+      "name": "Phân Thân Lôi Ảnh",
+      "desc": "Tại vị trí bắt đầu Lướt, để lại Tượng Bóng Sét (1.5s) thu hút quái trong 220px; hết giờ hoặc chạm đạn địch sẽ nổ 36 ST Sét (r=88px) và xóa đạn địch."
+    },
+    "dash_phase_blade": {
+      "name": "Lướt Xuyên Kiếm Khí",
+      "desc": "Sau mỗi cú Lướt, đòn đánh hoặc phát bắn đầu tiên trong 1.2s phóng kèm Lưỡi Sóng Chấn Động (28 ST) xuyên quái và xóa đạn địch trước mặt."
     }
   },
   "enemies": {

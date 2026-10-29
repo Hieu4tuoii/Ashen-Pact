@@ -5,6 +5,10 @@ import { SHOT_FLAG, TILE_SIZE } from '../protocol/messages.js';
 import { findNearestWalkablePoint } from './arena-room-archetypes.js';
 import { tickPlayerBulletModBlessingTimers } from './sim-blessings-bullet-skills.js';
 import {
+  stepP4APlayerBlessingTimers,
+  triggerP4ADashStartBlessings,
+} from './sim-blessings-p4a.js';
+import {
   clearEnemyProjectilesAroundProp,
   triggerEnemyWallSlam,
 } from './sim-tactical-physics.js';
@@ -85,6 +89,7 @@ export interface ReloadVentFinisherOptions {
 
 export function tickPlayerDashAndReloadBlessingTimers(p: SimPlayerState, dtSec: number): void {
   tickPlayerBulletModBlessingTimers(p, dtSec);
+  stepP4APlayerBlessingTimers(p, dtSec);
   if ((p.dashTidalRamIcdTimer ?? 0) > 0) {
     const next = (p.dashTidalRamIcdTimer ?? 0) - dtSec;
     p.dashTidalRamIcdTimer = next <= 1e-6 ? 0 : next;
@@ -126,6 +131,7 @@ export function onPlayerDashStarted(sim: WorldSim, p: SimPlayerState): void {
   if (hasPlayerBlessing(p, 'dash_venom_wake')) {
     layPoisonSwampAtWorldPoint(sim, p.x, p.y);
   }
+  triggerP4ADashStartBlessings(sim, p, p.x, p.y);
 }
 
 export function onPlayerDashStep(

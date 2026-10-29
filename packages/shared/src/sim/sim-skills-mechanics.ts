@@ -4,6 +4,7 @@ import type { ElementType } from '../data/types.js';
 import { angleDiff, clamp, distance, isCircleInCone } from '../math/vec2.js';
 import { TILE_SIZE } from '../protocol/messages.js';
 import {
+  detonateThunderDecoy,
   spawnElementalistOrbSkillZones,
   updateElementalistVortexPropsAndTwinBeam,
 } from './sim-blessings.js';
@@ -784,6 +785,8 @@ export function updateSkillZonesAndSummonsImpl(this: WorldSim, dtSec: number): v
       // Summon expired or destroyed: check Engineer's Self-Destruct upgrade!
       if (s.kind === 'tesla_turret' && s.selfDestruct) {
         triggerEngineerTurretSelfDestruct(this, s);
+      } else if (s.kind === 'thunder_decoy') {
+        detonateThunderDecoy(this, s);
       }
     }
   }

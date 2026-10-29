@@ -53,6 +53,31 @@ export const ALL_PHASE1_BLESSING_IDS = [
   ...SKILL_UPGRADE_BLESSING_IDS,
 ] as const satisfies readonly BlessingId[];
 
+export const PHASE4_TABLE_TECH_BLESSING_IDS = [
+  'table_tech_toxic_shrapnel',
+  'table_tech_magnet_snare',
+] as const satisfies readonly ActionBlessingId[];
+
+export const PHASE4_DASH_TECH_BLESSING_IDS = [
+  'dash_thunder_decoy',
+  'dash_phase_blade',
+] as const satisfies readonly ActionBlessingId[];
+
+export const PHASE4_ACTION_BLESSING_IDS = [
+  ...PHASE4_TABLE_TECH_BLESSING_IDS,
+  ...PHASE4_DASH_TECH_BLESSING_IDS,
+] as const satisfies readonly ActionBlessingId[];
+
+export const ALL_ACTION_BLESSING_IDS = [
+  ...CORE_ACTION_BLESSING_IDS,
+  ...PHASE4_ACTION_BLESSING_IDS,
+] as const satisfies readonly ActionBlessingId[];
+
+export const ALL_BLESSING_IDS = [
+  ...ALL_ACTION_BLESSING_IDS,
+  ...SKILL_UPGRADE_BLESSING_IDS,
+] as const satisfies readonly BlessingId[];
+
 export function scaleBlessingDamage(baseDmg: number, globalFloor: number): number {
   const floor = Math.max(1, Math.round(Number.isFinite(globalFloor) ? globalFloor || 1 : 1));
   return Math.max(1, Math.round(baseDmg * (1 + 0.22 * (floor - 1))));
@@ -425,6 +450,62 @@ export const BLESSINGS: Record<string, BlessingDef> = {
     element: 'burn',
     characterId: 'engineer',
     accentColor: '#EF4444',
+  },
+
+  // ---------------------------------------------------------------------------
+  // Phase 4A — Advanced Group 1 (Barricade) & Group 2 (Dash) Blessings
+  // ---------------------------------------------------------------------------
+  table_tech_toxic_shrapnel: {
+    id: 'table_tech_toxic_shrapnel',
+    nameVi: 'Chắn Chiến Gai Độc Nổ',
+    nameEn: 'Toxic Shrapnel Barricade',
+    descriptionVi:
+      'Khi tấm chắn hoặc đồ chơi chiến thuật vỡ, hoặc khi kích nổ Đập Tường, bắn tung 8 Mũi Gai Độc 360° (20 ST Độc/mũi) và để lại đầm độc.',
+    descriptionEn:
+      'When a barricade or tactical prop breaks, or on Wall-Slam, fire 8 Toxic Spines in 360° (20 Poison DMG each) and leave a poison puddle.',
+    category: 'general',
+    blessingGroup: 'table_tech',
+    element: 'poison',
+    accentColor: '#22C55E',
+  },
+  table_tech_magnet_snare: {
+    id: 'table_tech_magnet_snare',
+    nameVi: 'Chắn Chiến Bẫy Từ Trường',
+    nameEn: 'Magnet Snare Barricade',
+    descriptionVi:
+      'Ngay khi Lật Chắn [E] hoặc Đập Tường, phát xung từ trường kéo tối đa 4 kẻ địch gần nhất trong 180px gom vào mặt trước tấm chắn và Choáng 0.8s.',
+    descriptionEn:
+      'On Flip Cover [E] or Wall-Slam, emit a magnetic pulse pulling up to 4 nearest enemies within 180px in front of the barricade and Stunning them for 0.8s.',
+    category: 'general',
+    blessingGroup: 'table_tech',
+    element: 'shock',
+    accentColor: '#38BDF8',
+  },
+  dash_thunder_decoy: {
+    id: 'dash_thunder_decoy',
+    nameVi: 'Phân Thân Lôi Ảnh',
+    nameEn: 'Thunder Decoy Dash',
+    descriptionVi:
+      'Tại vị trí bắt đầu Lướt, để lại Tượng Bóng Sét (1.5s) thu hút quái trong 220px; hết giờ hoặc chạm đạn địch sẽ nổ 36 ST Sét (r=88px) và xóa đạn địch.',
+    descriptionEn:
+      'Leave a Thunder Decoy (1.5s) at Dash start taunting enemies within 220px; on expiry or enemy bullet touch, explodes for 36 Shock DMG (r=88px) and clears enemy bullets.',
+    category: 'general',
+    blessingGroup: 'dash_tech',
+    element: 'shock',
+    accentColor: '#A855F7',
+  },
+  dash_phase_blade: {
+    id: 'dash_phase_blade',
+    nameVi: 'Lướt Xuyên Kiếm Khí',
+    nameEn: 'Phase Blade Dash',
+    descriptionVi:
+      'Sau mỗi cú Lướt, đòn đánh hoặc phát bắn đầu tiên trong 1.2s phóng kèm Lưỡi Sóng Chấn Động (28 ST) xuyên quái và xóa đạn địch trước mặt.',
+    descriptionEn:
+      'After each Dash, your first attack or shot within 1.2s launches a piercing Phase Shockwave Blade (28 DMG) that clears enemy bullets ahead.',
+    category: 'general',
+    blessingGroup: 'dash_tech',
+    element: 'none',
+    accentColor: '#E2E8F0',
   },
 };
 

@@ -2,6 +2,11 @@ import { scaleBlessingDamage } from '../data/blessings.js';
 import { angleDiff, distance } from '../math/vec2.js';
 import { SHOT_FLAG } from '../protocol/messages.js';
 import { onEnemyWallSlamDashBlessings } from './sim-blessings-dash-reload.js';
+import {
+  triggerTableTechMagnetSnareOnWallSlam,
+  tryTriggerToxicShrapnelOnPropBreak,
+  tryTriggerToxicShrapnelOnWallSlam,
+} from './sim-blessings-p4a.js';
 import { clampBounceCount } from './sim-damage-pipeline.js';
 import {
   BIOME2_ICE_INERTIA_MULT,
@@ -165,6 +170,7 @@ export function detonateRocketChargedBarricade(
   prop.blocksMovement = false;
   prop.blocksEnemyProjectiles = false;
   prop.rocketCharged = false;
+  tryTriggerToxicShrapnelOnPropBreak(sim, prop, ownerId);
 
   const blastDmg = scaleBlessingDamage(TABLE_TECH_ROCKET_BLAST_BASE_DMG, sim.currentFloor);
   sim.map.igniteSurfaceInRadius(prop.x, prop.y, TABLE_TECH_ROCKET_BLAST_RADIUS);
@@ -516,6 +522,8 @@ export function triggerTableTechOnWallSlamOrStagger(
   if (hasPlayerBlessing(actor, 'table_tech_prism_split')) {
     spawnTableTechPrismSlamRays(sim, actor, x, y, slammedEnemyId);
   }
+  tryTriggerToxicShrapnelOnWallSlam(sim, actor, x, y);
+  triggerTableTechMagnetSnareOnWallSlam(sim, actor, x, y, slammedEnemyId);
   if (slammedEnemyId !== undefined) {
     const slammedEnemy = sim.enemies.find((en) => en.id === slammedEnemyId);
     if (slammedEnemy) {
@@ -579,3 +587,4 @@ export function triggerBossStaggerBurst(
 
 export * from './sim-blessings-dash-reload.js';
 export * from './sim-blessings-bullet-skills.js';
+export * from './sim-blessings-p4a.js';
