@@ -259,6 +259,46 @@ describe('AP2 Phase P4A.1 — Advanced Group 1 (Barricade) & Group 2 (Dash) Bles
     expect(p1TotalAfter + 2).toBeLessThanOrEqual(MAX_DEPLOYABLES_PER_PLAYER);
     expect(sim.magneticRivets.some((r) => r.id === oldestRivetId)).toBe(false);
     expect(sim.summons.some((s) => s.id === 900 && s.ownerPlayerId === p2.id)).toBe(true);
+
+    // Bidirectional enforcement: 2 thunder_decoys -> 6 magnetic rivets -> tesla_turret -> life_blossom -> extra rivet
+    const simBi = createCleanArenaSim(8111);
+    const eng = simBi.player;
+    eng.characterId = 'engineer';
+    eng.blessingIds.push('dash_thunder_decoy');
+    const countEngDeployables = (): number =>
+      simBi.summons.filter((s) => s.ownerPlayerId === eng.id).length +
+      simBi.magneticRivets.filter((r) => r.ownerPlayerId === eng.id).length;
+
+    for (let d = 0; d < 2; d++) {
+      simBi.step({ moveX: 0, moveY: 0, aimAngle: 0, buttons: 0 });
+      eng.dashCooldownTimer = 0;
+      eng.dashTimer = 0;
+      eng.x = 260 + d * 48;
+      eng.y = 320;
+      simBi.step({ moveX: 1, moveY: 0, aimAngle: 0, buttons: INPUT_BUTTON.DASH });
+    }
+    expect(simBi.summons.filter((s) => s.kind === 'thunder_decoy')).toHaveLength(2);
+
+    for (let r = 0; r < 6; r++) {
+      plantMagneticRivet(simBi, eng.id, 300 + r * 14, 360, null, null);
+      expect(countEngDeployables()).toBeLessThanOrEqual(MAX_DEPLOYABLES_PER_PLAYER);
+    }
+    expect(countEngDeployables()).toBe(MAX_DEPLOYABLES_PER_PLAYER);
+
+    // Deploying Engineer's tesla_turret at 8/8 must evict oldest deployable and keep total <= 8
+    eng.skillCooldownTimer = 0;
+    eng.dashTimer = 0;
+    simBi.step({ moveX: 0, moveY: 0, aimAngle: 0, buttons: INPUT_BUTTON.SKILL });
+    expect(simBi.summons.some((s) => s.ownerPlayerId === eng.id && s.kind === 'tesla_turret')).toBe(
+      true,
+    );
+    expect(countEngDeployables()).toBeLessThanOrEqual(MAX_DEPLOYABLES_PER_PLAYER);
+
+    // Spawning Seed Gun life_blossom and planting another rivet also respect MAX_DEPLOYABLES_PER_PLAYER = 8
+    simBi.spawnSeedGunLifeBlossom(eng.id, 420, 320);
+    expect(countEngDeployables()).toBeLessThanOrEqual(MAX_DEPLOYABLES_PER_PLAYER);
+    plantMagneticRivet(simBi, eng.id, 440, 360, null, null);
+    expect(countEngDeployables()).toBeLessThanOrEqual(MAX_DEPLOYABLES_PER_PLAYER);
   });
 
   it('implements table_tech_toxic_shrapnel: fires 8 Poison Spines 360° (base 20 Poison DMG) + safe poison_swamp puddle on prop break & Wall-Slam/BossStagger with 0.35s Wall-Slam ICD', () => {
@@ -289,6 +329,7 @@ describe('AP2 Phase P4A.1 — Advanced Group 1 (Barricade) & Group 2 (Dash) Bles
       (b) => b.weaponId === 'table_tech_toxic_shrapnel',
     );
     expect(spines).toHaveLength(8);
+    expect(new Set(spines.map((s) => s.angle.toFixed(3))).size).toBe(8);
     const expectedSpineDmg = scaleBlessingDamage(20, 3);
     for (let i = 0; i < spines.length; i++) {
       const s = spines[i]!;
@@ -342,6 +383,62 @@ describe('AP2 Phase P4A.1 — Advanced Group 1 (Barricade) & Group 2 (Dash) Bles
     expect(
       sim.projectiles.filter((b) => b.weaponId === 'table_tech_toxic_shrapnel'),
     ).toHaveLength(0);
+
+    // 4. Kicking slag_crucible, fuse-detonating coal_bomb, and boss-armor-breaking forge_blast_shield all trigger 8 Poison Spines + poison_swamp
+    sim.projectiles.length = 0;
+    const crucibleTx = 8;
+    const crucibleTy = 14;
+    const crucible = sim.spawnProp(
+      'slag_crucible',
+      crucibleTx * TILE_SIZE + 16,
+      crucibleTy * TILE_SIZE + 16,
+    );
+    expect(sim.kickProp(crucible, p1, 0)).toBe(true);
+    expect(crucible.hp).toBe(0);
+    const crucibleSpines = sim.projectiles.filter(
+      (b) => b.weaponId === 'table_tech_toxic_shrapnel',
+    );
+    expect(crucibleSpines).toHaveLength(8);
+    expect(new Set(crucibleSpines.map((s) => s.angle.toFixed(3))).size).toBe(8);
+    expect(sim.map.getSurface(crucibleTx, crucibleTy)).toBe('poison_swamp');
+
+    sim.projectiles.length = 0;
+    const bombTx = 14;
+    const bombTy = 14;
+    const coalBomb = sim.spawnProp(
+      'coal_bomb',
+      bombTx * TILE_SIZE + 16,
+      bombTy * TILE_SIZE + 16,
+    );
+    coalBomb.fuseTimer = 0.03;
+    coalBomb.kickedByPlayerId = p1.id;
+    sim.step(SIM_STEP_SEC);
+    sim.step(SIM_STEP_SEC);
+    expect(coalBomb.hp).toBe(0);
+    const bombSpines = sim.projectiles.filter(
+      (b) => b.weaponId === 'table_tech_toxic_shrapnel',
+    );
+    expect(bombSpines).toHaveLength(8);
+    expect(sim.map.getSurface(bombTx, bombTy)).toBe('poison_swamp');
+
+    sim.projectiles.length = 0;
+    sim.enemies.length = 0;
+    const titan = sim.spawnEnemy('forge_titan', 16 * TILE_SIZE + 16, 8 * TILE_SIZE + 16, true);
+    titan.isBoss = true;
+    titan.hp = 4000;
+    titan.maxHp = 4000;
+    titan.bossArmorShellActive = true;
+    const shield = sim.spawnProp('forge_blast_shield', 14 * TILE_SIZE + 16, 8 * TILE_SIZE + 16);
+    sim.flipCoverProp(shield, p1);
+    expect(sim.kickProp(shield, p1, 0)).toBe(true);
+    for (let t = 0; t < 15; t++) {
+      sim.step(SIM_STEP_SEC);
+      if (shield.hp <= 0) break;
+    }
+    expect(shield.hp).toBe(0);
+    expect(
+      sim.projectiles.filter((b) => b.weaponId === 'table_tech_toxic_shrapnel'),
+    ).toHaveLength(8);
   });
 
   it('implements table_tech_magnet_snare: runs AFTER Flip Cover pushback to gather up to 4 nearest enemies within 180px in front of barricade with 0.8s Stun + Shock and safe chasm/wall clamping', () => {
@@ -471,8 +568,8 @@ describe('AP2 Phase P4A.1 — Advanced Group 1 (Barricade) & Group 2 (Dash) Bles
     expect(decoy1.maxTtlSec).toBe(1.5);
     expect(decoy1.hp).toBe(999);
 
-    // 2. Taunt within 220px: move player far away to the east (x = 700), place chaser north of decoy (140px away < 220px)
-    for (let t = 0; t < 15; t++) {
+    // 2. Taunt within 220px (movement + ranged telegraph/firing): move player far east (x = 700), place goblin_shooter north of decoy (140px < 220px) with attackCooldownTimer = 0
+    for (let t = 0; t < 6; t++) {
       sim.step({ moveX: 1, moveY: 0, aimAngle: 0, buttons: 0 });
     }
     p1.x = 700;
@@ -480,44 +577,37 @@ describe('AP2 Phase P4A.1 — Advanced Group 1 (Barricade) & Group 2 (Dash) Bles
     const chaser = sim.spawnEnemy('goblin_shooter', startX, startY - 140, true);
     chaser.hp = 500;
     chaser.maxHp = 500;
-    chaser.aiState = 'chase';
-    sim.step({ moveX: 0, moveY: 0, aimAngle: 0, buttons: 0 });
-    // Chaser aims southward (~ +PI/2) at decoy (320, 352) rather than eastward toward player (700, 352)
-    expect(Math.sin(chaser.aimAngle)).toBeGreaterThan(0.85);
-    expect(Math.abs(Math.cos(chaser.aimAngle))).toBeLessThan(0.35);
+    chaser.aiState = 'move';
+    chaser.attackCooldownTimer = 0;
 
-    // 3. Enemy projectile touching decoy triggers immediate explosion (base 36 Shock DMG, r=88px) & clears enemy bullets in r=88px with projectiles_destroyed event
+    // Step through telegraph until goblin_shooter fires its volley at thunder_decoy (NOT at p1 at x=700!)
+    let firedAtDecoy = false;
+    for (let t = 0; t < 45; t++) {
+      p1.x = 700;
+      p1.y = 352;
+      sim.step({ moveX: 0, moveY: 0, aimAngle: 0, buttons: 0 });
+      const enemyArrows = sim.projectiles.filter((b) => b.team === 'enemy');
+      if (enemyArrows.length > 0) {
+        // Arrows must fly southward toward decoy (320, 352), not eastward toward player (700, 352)
+        const leadArrow = enemyArrows[enemyArrows.length - 1]!;
+        expect(Math.sin(leadArrow.angle)).toBeGreaterThan(0.92);
+        expect(Math.abs(Math.cos(leadArrow.angle))).toBeLessThan(0.35);
+        firedAtDecoy = true;
+        break;
+      }
+    }
+    expect(firedAtDecoy).toBe(true);
+
+    // Place victimNear (within r=88px) & victimFar (outside r=88px) plus a nearby enemy bullet in r=88px, then let goblin_shooter's own arrow strike & detonate the decoy!
     const victimNear = sim.spawnEnemy('goblin_shooter', startX + 60, startY, true);
     victimNear.hp = 500;
     victimNear.maxHp = 500;
+    victimNear.attackCooldownTimer = 99;
     const victimFar = sim.spawnEnemy('goblin_shooter', startX - 150, startY, true);
     victimFar.hp = 500;
     victimFar.maxHp = 500;
+    victimFar.attackCooldownTimer = 99;
 
-    // Spawn 2 enemy bullets: 1 touching decoy, 1 nearby within r=88px
-    sim.spawnDeterministicVolley({
-      kind: 'bullet_volley_spawned',
-      tick: sim.tick,
-      ownerId: victimNear.id,
-      team: 'enemy',
-      weaponId: 'goblin_bow',
-      x: startX + 12,
-      y: startY,
-      angle: Math.PI,
-      pelletCount: 1,
-      spreadRad: 0,
-      speed: 200,
-      damage: 12,
-      critChance: 0,
-      knockback: 40,
-      pierceCount: 0,
-      bounceCount: 0,
-      ttlSec: 2.0,
-      radius: 6,
-      element: 'none',
-      amplifiedByShield: false,
-      seed: 12345,
-    });
     sim.spawnDeterministicVolley({
       kind: 'bullet_volley_spawned',
       tick: sim.tick,
@@ -525,11 +615,11 @@ describe('AP2 Phase P4A.1 — Advanced Group 1 (Barricade) & Group 2 (Dash) Bles
       team: 'enemy',
       weaponId: 'goblin_bow',
       x: startX,
-      y: startY + 70,
+      y: startY + 60,
       angle: 0,
       pelletCount: 1,
       spreadRad: 0,
-      speed: 60,
+      speed: 20,
       damage: 12,
       critChance: 0,
       knockback: 40,
@@ -541,30 +631,30 @@ describe('AP2 Phase P4A.1 — Advanced Group 1 (Barricade) & Group 2 (Dash) Bles
       amplifiedByShield: false,
       seed: 12346,
     });
-    const enemyBulletIds = sim.projectiles
-      .filter((b) => b.team === 'enemy')
-      .map((b) => b.id);
-    expect(enemyBulletIds).toHaveLength(2);
+    const nearbyEnemyBulletId = sim.projectiles[sim.projectiles.length - 1]!.id;
     sim.consumeEvents();
 
-    sim.step({ moveX: 0, moveY: 0, aimAngle: 0, buttons: 0 });
-
     const expectedDecoyDmg = scaleBlessingDamage(36, 2);
+    const destroyedIds: number[] = [];
+    for (let t = 0; t < 35; t++) {
+      p1.x = 700;
+      p1.y = 352;
+      sim.step({ moveX: 0, moveY: 0, aimAngle: 0, buttons: 0 });
+      for (const ev of sim.consumeEvents()) {
+        if (ev.kind === 'projectiles_destroyed') {
+          destroyedIds.push(...ev.ids);
+        }
+      }
+      if (sim.summons.filter((s) => s.kind === 'thunder_decoy').length === 0) {
+        break;
+      }
+    }
+
     expect(sim.summons.filter((s) => s.kind === 'thunder_decoy')).toHaveLength(0);
     expect(victimNear.hp).toBe(500 - expectedDecoyDmg);
     expect(victimNear.shockTimer).toBeGreaterThan(0);
     expect(victimFar.hp).toBe(500);
-    expect(sim.projectiles.filter((b) => b.team === 'enemy')).toHaveLength(0);
-
-    const destroyEvents = sim
-      .consumeEvents()
-      .filter((ev) => ev.kind === 'projectiles_destroyed');
-    const destroyedIds = destroyEvents.flatMap((ev) =>
-      ev.kind === 'projectiles_destroyed' ? ev.ids : [],
-    );
-    for (const id of enemyBulletIds) {
-      expect(destroyedIds).toContain(id);
-    }
+    expect(destroyedIds).toContain(nearbyEnemyBulletId);
 
     // 4. Max 2 active decoys per player + expiry detonation after 1.5s
     sim.enemies.length = 0;

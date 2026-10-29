@@ -2,6 +2,7 @@ import type { ElementType } from '../data/types.js';
 import { WEAPONS } from '../data/weapons.js';
 import { angleDiff, distance } from '../math/vec2.js';
 import { SHOT_FLAG } from '../protocol/messages.js';
+import { enforcePlayerDeployableCap } from './sim-blessings-p4a.js';
 import {
   type BulletVolleySpawnEvent,
   ELEMENTALIST_ROTATION_ORDER,
@@ -83,6 +84,7 @@ export function plantMagneticRivet(
     offsetY,
     ttlSec: 12.0,
   };
+  enforcePlayerDeployableCap(sim, ownerPlayerId, 1);
   sim.magneticRivets.push(rivet);
   return rivet;
 }

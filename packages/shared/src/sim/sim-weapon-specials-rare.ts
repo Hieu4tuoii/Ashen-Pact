@@ -1,11 +1,11 @@
 import { angleDiff, clamp, distance } from '../math/vec2.js';
+import { enforcePlayerDeployableCap } from './sim-blessings-p4a.js';
 import { resolveEnemyChasmRingOut } from './sim-tactical-physics.js';
-import {
-  MAX_DEPLOYABLES_PER_PLAYER,
-  type SimEnemyState,
-  type SimPlayerState,
-  type SimSummonState,
-  type TetherAnchorKind,
+import type {
+  SimEnemyState,
+  SimPlayerState,
+  SimSummonState,
+  TetherAnchorKind,
 } from './world-sim-types.js';
 import type { WorldSim } from './world-sim.js';
 
@@ -92,18 +92,7 @@ export function spawnSeedGunLifeBud(
     }
   }
 
-  let ownerActiveCount = 0;
-  let oldestOwnerSummon: SimSummonState | null = null;
-  for (let i = 0; i < sim.summons.length; i++) {
-    const s = sim.summons[i]!;
-    if (s.ownerPlayerId === ownerId && s.hp > 0 && s.ttlSec > 0) {
-      if (!oldestOwnerSummon) oldestOwnerSummon = s;
-      ownerActiveCount += 1;
-    }
-  }
-  if (ownerActiveCount >= MAX_DEPLOYABLES_PER_PLAYER && oldestOwnerSummon) {
-    oldestOwnerSummon.ttlSec = 0;
-  }
+  enforcePlayerDeployableCap(sim, ownerId, 1);
 
   const col = sim.map.resolveCircleCollision(x, y, 14);
   const bud: SimSummonState = {

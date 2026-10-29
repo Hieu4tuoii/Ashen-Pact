@@ -57,6 +57,14 @@ function pointToSegmentDist(px: number, py: number, x1: number, y1: number, x2: 
 }
 
 export function enforcePlayerDeployableCap(sim: WorldSim, playerId: number, slotsNeeded = 1): void {
+  for (let i = sim.summons.length - 1; i >= 0; i--) {
+    const s = sim.summons[i]!;
+    if (s.ownerPlayerId === playerId && (s.hp <= 0 || s.ttlSec <= 0)) sim.summons.splice(i, 1);
+  }
+  for (let i = sim.magneticRivets.length - 1; i >= 0; i--) {
+    const r = sim.magneticRivets[i]!;
+    if (r.ownerPlayerId === playerId && r.ttlSec <= 0) sim.magneticRivets.splice(i, 1);
+  }
   const needed = Math.max(0, Math.floor(slotsNeeded));
   const countOwned = (): number =>
     sim.summons.filter((s) => s.ownerPlayerId === playerId).length +
@@ -360,7 +368,7 @@ export function resolveEnemyTargetWithThunderDecoy(
   defaultTargetX: number,
   defaultTargetY: number,
 ): { x: number; y: number } {
-  if (sim.summons.length === 0) return { x: defaultTargetX, y: defaultTargetY };
+  if (e.isBoss || sim.summons.length === 0) return { x: defaultTargetX, y: defaultTargetY };
   let bestDecoy: SimSummonState | null = null;
   let bestDist = Infinity;
   for (let i = 0; i < sim.summons.length; i++) {

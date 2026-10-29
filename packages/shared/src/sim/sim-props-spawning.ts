@@ -879,7 +879,6 @@ export function detonateExplosiveBarrelImpl(this: WorldSim, barrel: SimPropState
   barrel.hp = 0;
   barrel.fuseTimer = 0;
   barrel.explosive = false; // prevent re-entry
-  tryTriggerToxicShrapnelOnPropBreak(this, barrel);
 
   const blastR = BARREL_EXPLOSION_RADIUS;
 
@@ -906,6 +905,7 @@ export function detonateExplosiveBarrelImpl(this: WorldSim, barrel: SimPropState
 
   // 1. Ignite oil/grass & melt ice in blast radius
   this.map.igniteSurfaceInRadius(barrel.x, barrel.y, blastR);
+  tryTriggerToxicShrapnelOnPropBreak(this, barrel);
 
   // 2. Break any cracked secret walls within blast radius
   tryBreakCrackedWallNearImpact(this, barrel.x, barrel.y, blastR);

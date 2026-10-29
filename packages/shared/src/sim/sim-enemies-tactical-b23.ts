@@ -1,4 +1,5 @@
 import { angleDiff, distance } from '../math/vec2.js';
+import { tryTriggerToxicShrapnelOnPropBreak } from './sim-blessings-p4a.js';
 import { tryBreakBossArmorWithKickedProp } from './sim-boss-armor-break.js';
 import {
   MAX_TACTICAL_PROPS_PER_ROOM,
@@ -445,6 +446,7 @@ export function detonateCoalBomb(sim: WorldSim, bomb: SimPropState): number {
   });
   sim.events.push({ kind: 'hit_stop', durationMs: 40, trauma: 0.4 });
   sim.map.igniteSurfaceInRadius(bomb.x, bomb.y, COAL_BOMB_BLAST_RADIUS);
+  tryTriggerToxicShrapnelOnPropBreak(sim, bomb, ownerId);
 
   let hitCount = 0;
   for (let i = 0; i < sim.enemies.length; i++) {

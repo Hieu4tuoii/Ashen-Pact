@@ -170,10 +170,10 @@ export function detonateRocketChargedBarricade(
   prop.blocksMovement = false;
   prop.blocksEnemyProjectiles = false;
   prop.rocketCharged = false;
-  tryTriggerToxicShrapnelOnPropBreak(sim, prop, ownerId);
 
   const blastDmg = scaleBlessingDamage(TABLE_TECH_ROCKET_BLAST_BASE_DMG, sim.currentFloor);
   sim.map.igniteSurfaceInRadius(prop.x, prop.y, TABLE_TECH_ROCKET_BLAST_RADIUS);
+  tryTriggerToxicShrapnelOnPropBreak(sim, prop, ownerId);
 
   sim.events.push({
     kind: 'prop_destroyed',

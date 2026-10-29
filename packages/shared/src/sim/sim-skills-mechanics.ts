@@ -5,12 +5,13 @@ import { angleDiff, clamp, distance, isCircleInCone } from '../math/vec2.js';
 import { TILE_SIZE } from '../protocol/messages.js';
 import {
   detonateThunderDecoy,
+  enforcePlayerDeployableCap,
   spawnElementalistOrbSkillZones,
   updateElementalistVortexPropsAndTwinBeam,
 } from './sim-blessings.js';
 import { tryTriggerExecutionerScytheSlash } from './sim-ashen-pacts.js';
 import { triggerEnemyWallSlam, triggerMeleeKickProps } from './sim-tactical-physics.js';
-import { ELEMENTALIST_ROTATION_ORDER, hasPlayerBlessing, MAX_DEPLOYABLES_PER_PLAYER, type SimSummonState, type SimPlayerState, type SimEnemyState, type SimPropState } from './world-sim-types.js';
+import { ELEMENTALIST_ROTATION_ORDER, hasPlayerBlessing, type SimSummonState, type SimPlayerState, type SimEnemyState, type SimPropState } from './world-sim-types.js';
 import type { WorldSim } from './world-sim.js';
 
 function pointToSegmentDist(px: number, py: number, x1: number, y1: number, x2: number, y2: number): number {
@@ -408,12 +409,7 @@ export function activateCharacterSkillImpl(this: WorldSim, p: SimPlayerState): v
         selfDestruct: false,
         rootedEnemyIds: rootedIds,
       };
-      const ownerSummons = this.summons.filter(
-        (s) => s.ownerPlayerId === p.id && s.hp > 0 && s.ttlSec > 0,
-      );
-      if (ownerSummons.length >= MAX_DEPLOYABLES_PER_PLAYER) {
-        ownerSummons[0]!.ttlSec = 0;
-      }
+      enforcePlayerDeployableCap(this, p.id, 1);
       this.summons.push(tree);
       this.events.push({
         kind: 'summon_spawned',
@@ -474,12 +470,7 @@ export function activateCharacterSkillImpl(this: WorldSim, p: SimPlayerState): v
         selfDestruct: hasSelfDestruct,
         rootedEnemyIds: [],
       };
-      const ownerSummons = this.summons.filter(
-        (s) => s.ownerPlayerId === p.id && s.hp > 0 && s.ttlSec > 0,
-      );
-      if (ownerSummons.length >= MAX_DEPLOYABLES_PER_PLAYER) {
-        ownerSummons[0]!.ttlSec = 0;
-      }
+      enforcePlayerDeployableCap(this, p.id, 1);
       this.summons.push(turret);
       this.events.push({
         kind: 'summon_spawned',

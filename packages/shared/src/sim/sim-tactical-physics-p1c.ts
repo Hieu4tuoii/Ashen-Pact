@@ -1,6 +1,7 @@
 import { distance } from '../math/vec2.js';
 import { SHOT_FLAG, TILE_SIZE } from '../protocol/messages.js';
 import { applyRicochetVowTacticalPropBonus } from './sim-ashen-pacts.js';
+import { tryTriggerToxicShrapnelOnPropBreak } from './sim-blessings-p4a.js';
 import {
   FORGE_TITAN_ARMOR_BREAK_STUN_SEC,
   addBossStaggerAccum,
@@ -92,6 +93,7 @@ export function shatterGlacialBarricade(
   barricade.destructible = false;
   barricade.blocksMovement = false;
   barricade.blocksEnemyProjectiles = false;
+  tryTriggerToxicShrapnelOnPropBreak(sim, barricade, ownerId);
 
   sim.events.push({
     kind: 'prop_destroyed',
@@ -379,6 +381,7 @@ export function applyForgeBlastShieldFireWave(
         prop.blocksEnemyProjectiles = false;
         prop.state = 'broken';
         prop.coverState = 'fallen';
+        tryTriggerToxicShrapnelOnPropBreak(sim, prop, ownerId);
         sim.events.push({
           kind: 'prop_destroyed',
           propId: prop.id,
@@ -478,6 +481,7 @@ export function spillSlagCrucibleLavaCarpet(
       }
     }
   }
+  tryTriggerToxicShrapnelOnPropBreak(sim, crucible, ownerId);
 
   // Burn and damage enemies along the 192px x 56px molten corridor
   const carpetOwner = sim.getPlayerById(ownerId) ?? sim.player;

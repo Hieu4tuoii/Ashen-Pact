@@ -1,7 +1,8 @@
 import { angleDiff, clamp, distance, normalizeAngle } from '../math/vec2.js';
 import { TILE_SIZE } from '../protocol/messages.js';
+import { THUNDER_DECOY_TAUNT_RADIUS } from './sim-blessings-p4a.js';
 import { collapseRottenTotemPillar, computeHazardDamage } from './sim-tactical-physics.js';
-import type { SimEnemyState, SimPlayerState, SimPropState } from './world-sim-types.js';
+import type { SimEnemyState, SimPlayerState, SimPropState, SimSummonState } from './world-sim-types.js';
 import type { WorldSim } from './world-sim.js';
 
 export * from './sim-enemies-tactical-b23.js';
@@ -72,7 +73,8 @@ const TAUNT_TARGET_SCRATCH: Pick<SimPlayerState, 'x' | 'y' | 'vx' | 'vy'> = {
 };
 
 /**
- * Resolves the effective aim target for an enemy (accounting for Druid's Sacred Tree taunt within 170u).
+ * Resolves the effective aim target for an enemy (prioritizing Thunder Decoy taunt within 220u,
+ * then Druid's Sacred Tree taunt within 170u).
  */
 export function resolveEnemyAimTarget(
   sim: WorldSim,
@@ -80,6 +82,28 @@ export function resolveEnemyAimTarget(
   fallbackPlayer?: SimPlayerState,
 ): Pick<SimPlayerState, 'x' | 'y' | 'vx' | 'vy'> {
   if (!e.isBoss && sim.summons.length > 0) {
+    let bestDecoy: SimSummonState | null = null;
+    let bestDecoyDistSq = Infinity;
+    const decoyRadiusSq = THUNDER_DECOY_TAUNT_RADIUS * THUNDER_DECOY_TAUNT_RADIUS;
+    for (let sIdx = 0; sIdx < sim.summons.length; sIdx++) {
+      const sum = sim.summons[sIdx]!;
+      if (sum.kind === 'thunder_decoy' && sum.hp > 0 && sum.ttlSec > 0) {
+        const dx = sum.x - e.x;
+        const dy = sum.y - e.y;
+        const dSq = dx * dx + dy * dy;
+        if (dSq <= decoyRadiusSq && dSq < bestDecoyDistSq) {
+          bestDecoyDistSq = dSq;
+          bestDecoy = sum;
+        }
+      }
+    }
+    if (bestDecoy) {
+      TAUNT_TARGET_SCRATCH.x = bestDecoy.x;
+      TAUNT_TARGET_SCRATCH.y = bestDecoy.y;
+      TAUNT_TARGET_SCRATCH.vx = 0;
+      TAUNT_TARGET_SCRATCH.vy = 0;
+      return TAUNT_TARGET_SCRATCH;
+    }
     for (let sIdx = 0; sIdx < sim.summons.length; sIdx++) {
       const sum = sim.summons[sIdx]!;
       if (sum.kind === 'sacred_tree' && sum.hp > 0 && sum.ttlSec > 0) {
@@ -88,6 +112,8 @@ export function resolveEnemyAimTarget(
         if (dx * dx + dy * dy <= 170 * 170) {
           TAUNT_TARGET_SCRATCH.x = sum.x;
           TAUNT_TARGET_SCRATCH.y = sum.y;
+          TAUNT_TARGET_SCRATCH.vx = 0;
+          TAUNT_TARGET_SCRATCH.vy = 0;
           return TAUNT_TARGET_SCRATCH;
         }
       }
