@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   ALL_BLESSING_IDS,
   ALL_DUO_BOON_IDS,
@@ -42,6 +42,7 @@ import {
   hasPlayerDuoBoon,
   isDuoBoonId,
   scaleBlessingDamage,
+  setActiveDuoReactionWeaponId,
   viLocale,
 } from '../src/index.js';
 
@@ -954,5 +955,44 @@ describe('AP2 Phase P4B.1 — 6 Elemental Duo Boons, 35% Slot-3 Unlock & 60Hz Sy
     expect(dealt).toBeGreaterThanOrEqual(Math.round(expectedOneSecDmg * 0.75));
     expect(enemyBetweenAB.shockTimer).toBeGreaterThan(0);
     expect(enemyBetweenBFar.hp).toBe(500);
+  });
+
+  it('8b. duo_magnetic_bastion_ring 4P Co-op: attributes arc damage to flipper B when flipper A lacks the boon', () => {
+    const sim = createCleanArenaSim(4409);
+    const p1 = sim.player;
+    p1.duoBoonIds = ['duo_magnetic_bastion_ring'];
+    const p2 = sim.addCoopPlayer(2, 'vanguard', 'P2NoBoon', 2);
+    const p3 = sim.addCoopPlayer(3, 'vanguard', 'P3HasBoon', 3);
+    p3.duoBoonIds = ['duo_magnetic_bastion_ring'];
+    Object.assign(sim.spawnProp('moss_table', 320, 260), { coverState: 'flipped' as const, flippedByPlayerId: p2.id });
+    Object.assign(sim.spawnProp('moss_table', 500, 260), { coverState: 'flipped' as const, flippedByPlayerId: p3.id });
+    const enemy = Object.assign(sim.spawnEnemy('goblin_shooter', 410, 260, true), { hp: 500, maxHp: 500, stunTimer: 10 });
+    stepSim(sim, 0.3);
+    expect(enemy.hp).toBeLessThan(500);
+    expect(enemy.lastHitPlayerId).toBe(p3.id);
+    expect(p3.statsDamageDealt ?? 0).toBeGreaterThan(0);
+    expect(p1.statsDamageDealt ?? 0).toBe(0);
+  });
+
+  it('7b. setActiveDuoReactionWeaponId resets via finally even if projectile damage throws', () => {
+    const sim = createCleanArenaSim(4410);
+    sim.player.duoBoonIds = ['duo_plasma_overload_star'];
+    const e = Object.assign(sim.spawnEnemy('goblin_shooter', 320, 260, true), { hp: 500, maxHp: 500, aiState: 'idle' as const, stateTimer: 10 });
+    sim.projectiles.push({
+      id: 9001, ownerId: sim.player.id, team: 'player', weaponId: 'duo_plasma_overload_star',
+      prevX: 312, prevY: 260, x: 318, y: 260, vx: 420, vy: 0, angle: 0, radius: 8,
+      damage: 30, isCrit: false, knockback: 40, pierceRemaining: 99, bounceRemaining: 3,
+      ttlSec: 2, element: 'shock', amplifiedByShield: false, hitEntityIds: [],
+    });
+    vi.spyOn(sim, 'applyDamageToEnemy').mockImplementationOnce(() => { throw new Error('simulated_hit_throw'); });
+    try {
+      expect(() => sim.step(1 / 60)).toThrow('simulated_hit_throw');
+      sim.projectiles.length = 0;
+      Object.assign(e, { burnTimer: 2.5, lastElementOwnerId: sim.player.id });
+      sim.applyElementStatusToEnemy(e, 'shock', 12, sim.player.id);
+      expect(sim.projectiles.filter((b) => b.weaponId === 'duo_plasma_overload_star')).toHaveLength(1);
+    } finally {
+      setActiveDuoReactionWeaponId(undefined);
+    }
   });
 });

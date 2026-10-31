@@ -660,8 +660,8 @@ export function handleP4BSimEvent(scene: GameScene, ev: SimEvent): boolean {
     });
     if (scene.lighting?.spawnTransientLight) {
       scene.lighting.spawnTransientLight(ev.x, ev.y, 180, PALETTE.ELECTRIC_VIOLET, 0.9, 0.45);
-      zzfx.play('portal_enter', ev.x, scene.camFocusX, ev.y, scene.camFocusY);
     }
+    zzfx.play('portal_enter', ev.x, scene.camFocusX, ev.y, scene.camFocusY);
     return true;
   }
 
@@ -687,14 +687,14 @@ export function handleP4BSimEvent(scene: GameScene, ev: SimEvent): boolean {
         ev.victory ? 1.0 : 0.55,
         ev.victory ? 0.65 : 0.3,
       );
-      zzfx.play(
-        ev.victory ? 'chest_open' : 'ui_click',
-        ev.x,
-        scene.camFocusX,
-        ev.y,
-        scene.camFocusY,
-      );
     }
+    zzfx.play(
+      ev.victory ? 'chest_open' : 'ui_click',
+      ev.x,
+      scene.camFocusX,
+      ev.y,
+      scene.camFocusY,
+    );
     return true;
   }
 

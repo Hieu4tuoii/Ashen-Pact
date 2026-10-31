@@ -486,7 +486,16 @@ export function updateTopCenterBannersAndQolImpl(this: GameScene, dtSec: number)
 
   // 1. Top-Center Wave / Room Cleared Banner + Coalesced Reaction Banner
   const bossActive = Boolean(this.bossTitleText?.visible);
-  let bannerCurY = bossActive ? (isBossHudHintBannerVisible(this) ? 75 : 52) : 10;
+  const secretTrialHudVisible = Boolean(
+    sim.secretTrialActive || (sim.secretTrialBannerTimer ?? 0) > 0,
+  );
+  let bannerCurY = bossActive
+    ? isBossHudHintBannerVisible(this)
+      ? 75
+      : 52
+    : secretTrialHudVisible
+      ? 58
+      : 10;
 
   if (this.waveBannerGraphics && this.waveBannerText) {
     const showWaveBanner = Boolean(

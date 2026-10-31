@@ -516,54 +516,56 @@ export function updateProjectilesImpl(this: WorldSim, dtSec: number): void {
             }
           }
 
+          let effectiveAttackerId = b.ownerId;
+          let hitDmg = 0;
           setActiveDuoReactionWeaponId(b.weaponId);
-          if (b.imbuedByZone) {
-            const zoneOwnerId = b.imbuedOwnerId ?? b.ownerId;
-            if (b.imbuedElement && b.imbuedElement !== 'none') {
-              this.applyElementStatusToEnemy(enemy, b.imbuedElement, b.damage, zoneOwnerId);
+          try {
+            if (b.imbuedByZone) {
+              const zoneOwnerId = b.imbuedOwnerId ?? b.ownerId;
+              if (b.imbuedElement && b.imbuedElement !== 'none') {
+                this.applyElementStatusToEnemy(enemy, b.imbuedElement, b.damage, zoneOwnerId);
+              }
+              if (b.imbuedSecondaryElement && b.imbuedSecondaryElement !== 'none') {
+                this.applyElementStatusToEnemy(
+                  enemy,
+                  b.imbuedSecondaryElement,
+                  b.damage,
+                  zoneOwnerId,
+                );
+              }
             }
-            if (b.imbuedSecondaryElement && b.imbuedSecondaryElement !== 'none') {
-              this.applyElementStatusToEnemy(
-                enemy,
-                b.imbuedSecondaryElement,
-                b.damage,
-                zoneOwnerId,
-              );
-            }
+
+            effectiveAttackerId =
+              b.imbuedByZone &&
+              b.imbuedOwnerId &&
+              !b.imbuedElement &&
+              enemy.lastElementOwnerId === b.ownerId &&
+              b.imbuedOwnerId !== b.ownerId
+                ? b.imbuedOwnerId
+                : b.ownerId;
+
+            const resolvedHit = resolvePlayerProjectileHitDamageAndAngle(this, b, enemy);
+            hitDmg = resolvedHit.damage;
+            this.applyDamageToEnemy(
+              enemy,
+              hitDmg,
+              b.isCrit,
+              b.element,
+              resolvedHit.hitAngle,
+              b.knockback,
+              b.weaponId === 'predator_arrow' ||
+                b.weaponId === 'ruby_sword_wave' ||
+                b.weaponId === 'knight_sword_wave' ||
+                b.weaponId === 'frag_launcher' ||
+                b.weaponId === 'magma_cannon',
+              effectiveAttackerId,
+              false,
+              b.procCoefficient ?? 1.0,
+              false,
+            );
+          } finally {
+            setActiveDuoReactionWeaponId(undefined);
           }
-
-          const effectiveAttackerId =
-            b.imbuedByZone &&
-            b.imbuedOwnerId &&
-            !b.imbuedElement &&
-            enemy.lastElementOwnerId === b.ownerId &&
-            b.imbuedOwnerId !== b.ownerId
-              ? b.imbuedOwnerId
-              : b.ownerId;
-
-          const { damage: hitDmg, hitAngle } = resolvePlayerProjectileHitDamageAndAngle(
-            this,
-            b,
-            enemy,
-          );
-          this.applyDamageToEnemy(
-            enemy,
-            hitDmg,
-            b.isCrit,
-            b.element,
-            hitAngle,
-            b.knockback,
-            b.weaponId === 'predator_arrow' ||
-              b.weaponId === 'ruby_sword_wave' ||
-              b.weaponId === 'knight_sword_wave' ||
-              b.weaponId === 'frag_launcher' ||
-              b.weaponId === 'magma_cannon',
-            effectiveAttackerId,
-            false,
-            b.procCoefficient ?? 1.0,
-            false,
-          );
-          setActiveDuoReactionWeaponId(undefined);
 
           handlePlayerProjectileEnemyHitWeaponSpecials(this, b, enemy);
           applyWeaponMutatorsOnEnemyHit(this, b, enemy, hitDmg, effectiveAttackerId);

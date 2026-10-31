@@ -6,15 +6,31 @@ import {
   type ElementType,
   WorldSim,
 } from '@ashen-pact/shared';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+vi.mock('phaser', () => ({
+  default: {
+    Scene: class {},
+    GameObjects: { Container: class {} },
+    BlendModes: { ADD: 1 },
+    Renderer: { WebGL: { Pipelines: { PostFXPipeline: class {} } } },
+  },
+}));
+vi.mock('../src/scenes/GameScene.js', () => ({ RIG_FOOT_OFFSET_Y: 14 }));
+
+import { PALETTE } from '../src/art/palette.js';
 import { TextureBaker } from '../src/art/texture-baker.js';
+import { zzfx } from '../src/audio/zzfx.js';
+import '../src/fx/combat-fx-weapons-v2.js';
 import {
   drawP4BSummonOverlay,
   handleP4BSimEvent,
   renderP4BDuoAndSecretArenaOverlays,
 } from '../src/fx/combat-fx-p4b.js';
 import { resolveInteractableVisualGlowSpec } from '../src/fx/lighting-config.js';
+import { updateTopCenterBannersAndQolImpl } from '../src/scenes/game-scene/hud-qol-and-minimap.js';
 import { resolveInteractPromptSpec } from '../src/scenes/game-scene/interact-prompt.js';
+import { processSimEventsImpl } from '../src/scenes/game-scene/sim-events.js';
 import {
   drawDuoBoonIntersectingEmblems,
   drawPlayerBlessingChipsHud,
@@ -663,5 +679,162 @@ describe('AP2 Phase P4B.3 — Duo Boon Diamond-Rainbow UI, 20s Secret Arena HUD 
     expect(promptVi!.titleText).not.toContain('ui.interact');
     expect(promptEn!.titleText).toContain('20s Trial Crystal');
     expect(promptEn!.titleText).not.toContain('ui.interact');
+  });
+
+  it('offsets top-center reactionBanner below the 20s Secret Arena countdown HUD panel (Y=58) when no boss is active', () => {
+    const sim = new WorldSim({ seed: 9415, startInHub: false });
+    let rxTextY = -1;
+    const reactionBannerText = {
+      text: '',
+      width: 150,
+      visible: false,
+      style: { color: '' },
+      setText(t: string) {
+        this.text = t;
+      },
+      setColor(c: string) {
+        this.style.color = c;
+      },
+      setPosition(_x: number, y: number) {
+        rxTextY = y;
+      },
+      setAlpha() {},
+      setVisible(v: boolean) {
+        this.visible = v;
+      },
+    };
+    const mockScene = {
+      transport: { getSim: () => sim },
+      currentHudUiScale: 1,
+      lastBannerRoomId: sim.currentRoomId,
+      lastBannerWaveNumber: sim.waveNumber,
+      lastBannerRoomCleared: sim.getCurrentRoom().cleared,
+      hudBannerTimer: 0,
+      playerHitIndicatorTimer: 0,
+      fullMapOpen: false,
+      bossTitleText: { visible: false },
+      reactionBannerGraphics: createMockGraphics(),
+      reactionBannerText,
+      fx: {
+        getActiveReactionBanner: () => ({
+          label: 'VAPORIZE',
+          colorHex: '#38BDF8',
+          totalDamage: 48,
+          displayTimerSec: 0.9,
+          isTeamCombo: false,
+        }),
+      },
+    };
+
+    // Idle Secret Trial -> by = 10 -> text center Y = 10 + 11 = 21
+    sim.secretTrialActive = false;
+    sim.secretTrialBannerTimer = 0;
+    updateTopCenterBannersAndQolImpl.call(mockScene as never, 0.016);
+    expect(rxTextY).toBe(21);
+
+    // Active 20s Secret Trial -> by = 58 -> text center Y = 58 + 11 = 69 (clears Y=8..52 panel)
+    sim.secretTrialActive = true;
+    updateTopCenterBannersAndQolImpl.call(mockScene as never, 0.016);
+    expect(rxTextY).toBe(69);
+
+    // Post-trial Victory/Expired banner timer > 0 -> also stays offset at by = 58 -> Y = 69
+    sim.secretTrialActive = false;
+    sim.secretTrialBannerTimer = 2.5;
+    updateTopCenterBannersAndQolImpl.call(mockScene as never, 0.016);
+    expect(rxTextY).toBe(69);
+  });
+
+  it('maps duo_cryo_shatter_spire and duo_napalm_chain_plague explosion events to CYAN_FROST and FLAME_ORANGE', () => {
+    const sim = new WorldSim({ seed: 9416, startInHub: false });
+    const burstColors: string[] = [];
+    const lightColors: string[] = [];
+    const mockScene = {
+      sim,
+      transport: { getSim: () => sim },
+      camFocusX: 320,
+      camFocusY: 240,
+      fx: {
+        spawnExplosionBurst: (_x: number, _y: number, _r: number, colorHex: string) => {
+          burstColors.push(colorHex);
+        },
+      },
+      lighting: {
+        spawnTransientLight: (_x: number, _y: number, _r: number, colorHex: string) => {
+          lightColors.push(colorHex);
+        },
+      },
+    };
+
+    processSimEventsImpl.call(mockScene as never, [
+      {
+        kind: 'explosion',
+        x: 240,
+        y: 220,
+        radius: 80,
+        damage: 34,
+        sourceDefId: 'duo_cryo_shatter_spire',
+      },
+      {
+        kind: 'explosion',
+        x: 360,
+        y: 260,
+        radius: 110,
+        damage: 32,
+        sourceDefId: 'duo_napalm_chain_plague',
+      },
+    ]);
+
+    expect(burstColors).toEqual([PALETTE.CYAN_FROST, PALETTE.FLAME_ORANGE]);
+    expect(lightColors).toEqual([PALETTE.CYAN_FROST, PALETTE.FLAME_ORANGE]);
+  });
+
+  it('plays secret_trial_started and secret_trial_resolved SFX via zzfx even when scene.lighting is undefined', () => {
+    const sim = new WorldSim({ seed: 9417, startInHub: false });
+    const activeRoomId = sim.currentRoomId;
+    const sceneWithoutLighting = {
+      sim,
+      camFocusX: 320,
+      camFocusY: 240,
+      lighting: undefined,
+    };
+
+    const count0 = zzfx.getPlayedCount();
+    expect(
+      handleP4BSimEvent(sceneWithoutLighting as never, {
+        kind: 'secret_trial_started',
+        roomId: activeRoomId,
+        durationSec: 20,
+        x: 320,
+        y: 240,
+      }),
+    ).toBe(true);
+    expect(zzfx.getPlayedCount()).toBe(count0 + 1);
+    expect(zzfx.getLastPlayedId()).toBe('portal_enter');
+
+    expect(
+      handleP4BSimEvent(sceneWithoutLighting as never, {
+        kind: 'secret_trial_resolved',
+        roomId: activeRoomId,
+        victory: true,
+        bonusGold: 40,
+        x: 320,
+        y: 240,
+      }),
+    ).toBe(true);
+    expect(zzfx.getPlayedCount()).toBe(count0 + 2);
+    expect(zzfx.getLastPlayedId()).toBe('chest_open');
+
+    expect(
+      handleP4BSimEvent(sceneWithoutLighting as never, {
+        kind: 'secret_trial_resolved',
+        roomId: activeRoomId,
+        victory: false,
+        bonusGold: 0,
+        x: 320,
+        y: 240,
+      }),
+    ).toBe(true);
+    expect(zzfx.getPlayedCount()).toBe(count0 + 3);
+    expect(zzfx.getLastPlayedId()).toBe('ui_click');
   });
 });

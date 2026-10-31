@@ -289,12 +289,14 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
         const isFragLauncher = ev.sourceDefId === 'frag_launcher';
         const isSeedGun = ev.sourceDefId === 'seed_gun';
         const isTetherStaff = ev.sourceDefId === 'tether_staff';
+        const isNapalmPlague = ev.sourceDefId === 'duo_napalm_chain_plague';
+        const isCryoSpire = ev.sourceDefId === 'duo_cryo_shatter_spire';
         const colorHex =
-          isBarrel || isFragLauncher
+          isBarrel || isFragLauncher || isNapalmPlague
             ? PALETTE.FLAME_ORANGE
             : isSporePod || isSeedGun
               ? PALETTE.LIME_GLOW
-              : isGaleCyclone
+              : isGaleCyclone || isCryoSpire
                 ? PALETTE.CYAN_FROST
                 : isTetherStaff
                   ? PALETTE.ELECTRIC_VIOLET

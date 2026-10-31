@@ -886,12 +886,12 @@ export function updateDuoBoons(sim: WorldSim, dtSec: number): void {
       if (distance(a.x, a.y, b.x, b.y) > MAGNETIC_BASTION_MAX_DIST) continue;
 
       let ownerId = bastionOwner.id;
-      if (a.flippedByPlayerId) {
-        const plA = sim.getPlayerById(a.flippedByPlayerId);
-        if (hasPlayerDuoBoon(plA, 'duo_magnetic_bastion_ring')) ownerId = plA!.id;
-      } else if (b.flippedByPlayerId) {
-        const plB = sim.getPlayerById(b.flippedByPlayerId);
-        if (hasPlayerDuoBoon(plB, 'duo_magnetic_bastion_ring')) ownerId = plB!.id;
+      const plA = a.flippedByPlayerId ? sim.getPlayerById(a.flippedByPlayerId) : null;
+      const plB = b.flippedByPlayerId ? sim.getPlayerById(b.flippedByPlayerId) : null;
+      if (hasPlayerDuoBoon(plA, 'duo_magnetic_bastion_ring')) {
+        ownerId = plA!.id;
+      } else if (hasPlayerDuoBoon(plB, 'duo_magnetic_bastion_ring')) {
+        ownerId = plB!.id;
       }
       const wireAngle = Math.atan2(b.y - a.y, b.x - a.x);
 
