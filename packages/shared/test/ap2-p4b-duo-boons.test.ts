@@ -604,6 +604,127 @@ describe('AP2 Phase P4B.1 — 6 Elemental Duo Boons, 35% Slot-3 Unlock & 60Hz Sy
     expect(clientSim.enemies[0]!.hp).toBe(enemy.hp);
   });
 
+  it('5b. duo_superconduct_rail regression: never hijacks special skill / non-DYNAMIC_BOUNCE projectiles and never leaks DYNAMIC_BOUNCE to Co-op teammates without the boon', () => {
+    const sim = createCleanArenaSim(4455);
+    const p1 = sim.player;
+    p1.x = 220;
+    p1.y = 260;
+    p1.weaponSlots = ['hunter_crossbow'];
+    p1.activeWeaponSlot = 0;
+    p1.clipAmmo = 4;
+    p1.clipMax = 4;
+    p1.fireCooldownTimer = 0;
+    p1.duoBoonIds = ['duo_superconduct_rail'];
+
+    const p2 = sim.addCoopPlayer(2, 'ranger', 'AllyNoDuo', 2);
+    p2.x = 220;
+    p2.y = 390;
+    p2.weaponSlots = ['hunter_crossbow'];
+    p2.activeWeaponSlot = 0;
+    p2.clipAmmo = 4;
+    p2.clipMax = 4;
+    p2.fireCooldownTimer = 0;
+    p2.duoBoonIds = [];
+    p2.blessingIds = [];
+
+    const scEnemy = sim.spawnEnemy('goblin_shooter', 360, 325, true);
+    scEnemy.hp = 500;
+    scEnemy.maxHp = 500;
+    scEnemy.stunTimer = 10;
+    scEnemy.superconductTimer = 5.0;
+
+    // (A) Special skill projectiles owned by p1 (table_tech_rocket & holster_surge_bolt) MUST NOT get DYNAMIC_BOUNCE or be hijacked
+    for (const specialWeaponId of ['table_tech_rocket', 'holster_surge_bolt'] as const) {
+      sim.spawnDeterministicVolley({
+        kind: 'bullet_volley_spawned',
+        tick: sim.tick,
+        eventId: sim.nextVolleyEventId++,
+        ownerId: p1.id,
+        team: 'player',
+        weaponId: specialWeaponId,
+        x: p1.x,
+        y: p1.y,
+        angle: 0,
+        pelletCount: 1,
+        spreadRad: 0,
+        speed: 520,
+        damage: 26,
+        radius: 8,
+        knockback: 40,
+        pierceCount: 2,
+        bounceCount: 0,
+        ttlSec: 0.6,
+        element: 'shock',
+        critChance: 0,
+        amplifiedByShield: false,
+        seed: 7701,
+      });
+    }
+    const specialProjs = sim.projectiles.filter(
+      (b) => b.weaponId === 'table_tech_rocket' || b.weaponId === 'holster_surge_bolt',
+    );
+    expect(specialProjs).toHaveLength(2);
+    for (const sp of specialProjs) {
+      expect((sp.shotFlags ?? 0) & SHOT_FLAG.DYNAMIC_BOUNCE).toBe(0);
+    }
+
+    // Also spawn a raw projectile with shotFlags = 0 to ensure server requires DYNAMIC_BOUNCE symmetrically with client
+    const rawNoFlag = sim.acquireProjectile({
+      id: ++sim.nextEntityId,
+      ownerId: p1.id,
+      team: 'player',
+      weaponId: 'hunter_crossbow',
+      x: 360,
+      y: 260,
+      vx: 500,
+      vy: 0,
+      angle: 0,
+      speed: 500,
+      damage: 15,
+      radius: 6,
+      knockback: 40,
+      pierceRemaining: 0,
+      bounceRemaining: 0,
+      ttlSec: 0.6,
+      element: 'none',
+      isCrit: false,
+      amplifiedByShield: false,
+      shotFlags: 0,
+    });
+    sim.projectiles.push(rawNoFlag);
+    sim.consumeEvents();
+
+    // Step across the r=100px zone around scEnemy (360, 325 -> dy = 65px <= 100px): zero superconduct redirects!
+    for (let i = 0; i < 16; i++) {
+      sim.step(1 / 60);
+      const redirects = sim
+        .consumeEvents()
+        .filter(
+          (ev): ev is BulletVolleySpawnEvent =>
+            ev.kind === 'bullet_volley_spawned' && Boolean(ev.superconductRailRedirected),
+        );
+      expect(redirects).toHaveLength(0);
+    }
+    expect(rawNoFlag.vy).toBe(0);
+
+    // (B) Co-op teammate p2 (who does NOT own duo_superconduct_rail) fires hunter_crossbow via weapon cadence:
+    // p2's projectile MUST NOT receive SHOT_FLAG.DYNAMIC_BOUNCE!
+    sim.projectiles.length = 0;
+    sim.setCoopPlayerInput(p2.id, {
+      seq: sim.tick + 1,
+      tick: sim.tick + 1,
+      moveX: 0,
+      moveY: 0,
+      aimAngle: Math.PI, // fire straight left into near wall so client wall-hit doesn't stall 0.12s
+      buttons: INPUT_BUTTON.FIRE,
+      weaponSlotSelect: null,
+    });
+    sim.step(1 / 60);
+    const p2Projs = sim.projectiles.filter((b) => b.ownerId === p2.id);
+    expect(p2Projs).toHaveLength(1);
+    expect((p2Projs[0]!.shotFlags ?? 0) & SHOT_FLAG.DYNAMIC_BOUNCE).toBe(0);
+  });
+
   it('6. duo_napalm_chain_plague: Toxic Blast splashes napalmPlagueTimer=5.0s within 160px (+ napalm10 sync) and slaying afflicted cluster chain-detonates once per enemy without infinite recursion (Review Focus #2)', () => {
     expect(NAPALM_PLAGUE_SPREAD_RADIUS).toBe(160);
     expect(NAPALM_PLAGUE_BLAST_RADIUS).toBe(110);

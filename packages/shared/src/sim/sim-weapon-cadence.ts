@@ -24,7 +24,6 @@ import {
   computeAdditivePoolMultiplier,
   computeUpgradeMultiplier,
 } from './sim-damage-pipeline.js';
-import { anyPlayerHasDuoBoon } from './sim-duo-boons.js';
 import {
   applyElementalInfusionOnMeleeFinisher,
   applyFinaleJoltSafeRecoil,
@@ -80,6 +79,7 @@ import {
 import {
   ELEMENTALIST_ROTATION_ORDER,
   MELEE_RANGE,
+  hasPlayerDuoBoon,
   type SimPlayerState,
 } from './world-sim-types.js';
 import type { WorldSim } from './world-sim.js';
@@ -769,7 +769,7 @@ export function tryFireActiveWeaponImpl(
     p.blessingIds.includes('table_tech_prism_split') ||
     p.blessingIds.includes('bullet_split_bounce') ||
     p.blessingIds.includes('bullet_orbit_return') ||
-    anyPlayerHasDuoBoon(this, 'duo_superconduct_rail') !== null ||
+    (w.id !== 'void_staff' && hasPlayerDuoBoon(p, 'duo_superconduct_rail')) ||
     this.props.some((pr) => pr.hp > 0 && (pr.kind === 'cryo_prism_pillar' || pr.prismAuraActive))
   ) {
     shotFlags |= SHOT_FLAG.DYNAMIC_BOUNCE;

@@ -8,7 +8,6 @@ import {
   isEligibleOrbitReturnWeapon,
   tryPlantWallTetherPylonOnWallHit,
 } from './sim-blessings-p4a.js';
-import { anyPlayerHasDuoBoon } from './sim-duo-boons.js';
 import {
   isCircularKickableToyProp,
   isFlippableBarricadeProp,
@@ -17,6 +16,7 @@ import {
 import {
   type BulletVolleySpawnEvent,
   hasPlayerBlessing,
+  hasPlayerDuoBoon,
   type SimEnemyState,
   type SimPlayerState,
   type SimProjectileState,
@@ -91,7 +91,7 @@ export function applyBulletModBlessingsOnVolleySpawn(sim: WorldSim, ev: BulletVo
     ev.shotFlags = nextFlags;
     ev.flags = nextFlags;
   }
-  if (!ev.superconductRailRedirected && !isNonBouncingSpecial && anyPlayerHasDuoBoon(sim, 'duo_superconduct_rail') !== null) {
+  if (!ev.superconductRailRedirected && !isNonBouncingSpecial && hasPlayerDuoBoon(owner, 'duo_superconduct_rail')) {
     const nextFlags = (ev.shotFlags ?? ev.flags ?? 0) | SHOT_FLAG.DYNAMIC_BOUNCE;
     ev.shotFlags = nextFlags;
     ev.flags = nextFlags;

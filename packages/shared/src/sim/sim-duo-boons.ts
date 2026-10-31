@@ -56,6 +56,11 @@ const SUPERCONDUCT_RAIL_EXCLUDED_WEAPONS: ReadonlySet<string> = new Set<string>(
   'void_staff',
   'tediore_chuck',
   'reload_tediore_chuck',
+  'table_tech_rocket',
+  'relic_perpetual_core_rocket',
+  'vanguard_bastion_prism',
+  'holster_surge_bolt',
+  'table_tech_toxic_shrapnel',
   'duo_plasma_overload_star',
 ]);
 
@@ -564,6 +569,7 @@ function findSuperconductMagneticTarget(
 ): SimEnemyState | null {
   if (
     b.team !== 'player' ||
+    ((b.shotFlags ?? 0) & SHOT_FLAG.DYNAMIC_BOUNCE) === 0 ||
     b.superconductRailRedirected ||
     b.ttlSec <= 0 ||
     (b.awaitingServerRedirectTimer ?? 0) > 0 ||
