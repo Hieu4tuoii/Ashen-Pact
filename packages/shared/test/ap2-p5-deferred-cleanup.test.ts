@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   INPUT_BUTTON,
   MAX_DEPLOYABLES_PER_PLAYER,
+  MAX_PLAYER_PROJECTILES,
   SIM_STEP_SEC,
   WorldSim,
   triggerSolarArchonSupernovaVent,
@@ -289,5 +290,62 @@ describe('AP2 P5.1 — Closure of Remaining P1B & P4A Deferred Minors', () => {
     expect(decoy!.hp).toBe(0);
     expect(sim.summons.some((s) => s.id === decoy!.id)).toBe(false);
     expect(sim.projectiles.filter((b) => b.team === 'player')).toHaveLength(0);
+  });
+
+  it('5. solar_archon_staff applies P4A mutators (clusterMortarLob & secondaryInfusedElement) to all 3 converging volley rays at MAX_PLAYER_PROJECTILES = 240 cap', () => {
+    const sim = createCleanSim(5105);
+    const p = sim.player;
+    sim.selectCharacter(p.id, 'elementalist');
+    p.weaponSlots = ['solar_archon_staff', 'tesla_carbine'];
+    sim.equipWeaponSlot(0);
+    p.weaponMutators = {
+      0: ['mutator_cluster_mortar', 'mutator_elemental_infusion'],
+      1: [],
+    };
+    p.x = 240;
+    p.y = 260;
+    p.aimAngle = 0;
+    p.aimWorldX = 480;
+    p.aimWorldY = 260;
+    p.ventEmpoweredNextShot = true;
+    p.weaponHeat = 0;
+    p.overheatLockTimer = 0;
+    p.fireCooldownTimer = 0;
+
+    for (let i = 0; i < MAX_PLAYER_PROJECTILES; i++) {
+      sim.projectiles.push(
+        sim.acquireProjectile({
+          id: 70000 + i,
+          ownerId: p.id,
+          team: 'player',
+          weaponId: 'rivet_gun',
+          x: 100 + (i % 20) * 6,
+          y: 120 + Math.floor(i / 20) * 6,
+          vx: 300,
+          vy: 0,
+          angle: 0,
+          radius: 4,
+          damage: 8,
+          isCrit: false,
+          knockback: 20,
+          pierceRemaining: 0,
+          bounceRemaining: 0,
+          ttlSec: 2.0,
+          element: 'none',
+          amplifiedByShield: false,
+        }),
+      );
+    }
+    expect(sim.projectiles).toHaveLength(MAX_PLAYER_PROJECTILES);
+
+    sim.tryFireActiveWeapon(p);
+
+    expect(sim.projectiles).toHaveLength(MAX_PLAYER_PROJECTILES);
+    const solarRays = sim.projectiles.filter((b) => b.weaponId === 'solar_archon_staff');
+    expect(solarRays).toHaveLength(3);
+    for (const ray of solarRays) {
+      expect(ray.clusterMortarLob).toBe(true);
+      expect(ray.secondaryInfusedElement).toBe('shock');
+    }
   });
 });

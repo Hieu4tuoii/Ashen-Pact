@@ -2,50 +2,24 @@ import { SeededRandom } from '../core/prng.js';
 import type { CardinalDir, RoomType } from '../data/types.js';
 import { TILE_SIZE } from '../protocol/messages.js';
 import { type AABB, clamp, resolveCircleVsAABB } from '../math/vec2.js';
-import {
-  type RoomArchetypeId,
-  type RoomLayoutOptions,
-  type RoomLayoutResult,
-  type RoomPropAnchor,
-  configureRoomLayout as configureArchetypeRoomLayout,
-  selectCombatRoomArchetype,
-} from './arena-room-archetypes.js';
-
+import { type RoomArchetypeId, type RoomLayoutOptions, type RoomLayoutResult, type RoomPropAnchor, configureRoomLayout as configureArchetypeRoomLayout, selectCombatRoomArchetype } from './arena-room-archetypes.js';
 export { ALL_ROOM_ARCHETYPES, DOOR_TILES, DOOR_VESTIBULE_RECTS, P0B_COMBAT_ARCHETYPES, PHASE0B_ROOM_ARCHETYPES, type RoomArchetypeId, type RoomLayoutOptions, type RoomLayoutResult, type RoomPropAnchor, type RoomPropAnchorRole, areActiveDoorsConnectedBfs, configureRoomLayout, findNearestWalkablePoint, findNextWalkableWaypoint, isInDoorClearanceZone, isInDoorVestibule, isWalkableTileForBfs, selectBiome1RoomArchetype, selectCombatRoomArchetype, spawnCombatRoomArchetypeProps } from './arena-room-archetypes.js';
 
 export type TileKind = 'floor' | 'wall' | 'pillar' | 'cracked_wall';
-
 export type SurfaceKind =
-  | 'none'
-  | 'water'
-  | 'electrified_water'
-  | 'oil'
-  | 'burning_oil'
-  | 'grass'
-  | 'burning_grass'
-  | 'ash'
-  | 'poison_swamp'
-  | 'lava'
-  | 'ice'
-  | 'chasm'
-  | 'conveyor';
+  | 'none' | 'water' | 'electrified_water' | 'oil' | 'burning_oil' | 'grass'
+  | 'burning_grass' | 'ash' | 'poison_swamp' | 'lava' | 'ice' | 'chasm' | 'conveyor';
 
 export const AUTOTILE_NORTH = 1;
 export const AUTOTILE_EAST = 2;
 export const AUTOTILE_SOUTH = 4;
 export const AUTOTILE_WEST = 8;
-
 export const WALL_AO_NORTH = 1;
 export const WALL_AO_WEST = 2;
 export const WALL_AO_NORTH_WEST = 4;
 
 export interface ArenaMapConfig {
-  cols?: number;
-  rows?: number;
-  includePillars?: boolean;
-  includeSurfaces?: boolean;
-  seed?: number | string;
-  biome?: 1 | 2 | 3;
+  cols?: number; rows?: number; includePillars?: boolean; includeSurfaces?: boolean; seed?: number | string; biome?: 1 | 2 | 3;
 }
 
 /**

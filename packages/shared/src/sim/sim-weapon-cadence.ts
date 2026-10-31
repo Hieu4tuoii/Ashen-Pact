@@ -816,10 +816,20 @@ export function tryFireActiveWeaponImpl(
     return;
   }
   const empoweredForMutator = isFinaleShot || wasOverclocked || wasVentEmpowered;
+  const clusterMortarLob = hasActiveWeaponMutator(p, 'mutator_cluster_mortar');
+  const secondaryInfusedElement = resolveSecondaryInfusedElementForShot(p, empoweredForMutator);
   if (w.id === 'solar_archon_staff') {
-    const prevProjLen = this.projectiles.length;
-    spawnSolarArchonConvergingVolley(this, p, baseDmg, critChance, shotElement, shieldBoost, shotFlags);
-    applyP4AMutatorsToSpawnedProjectiles(p, empoweredForMutator, this.projectiles, prevProjLen);
+    const spawnedVolley = spawnSolarArchonConvergingVolley(
+      this,
+      p,
+      baseDmg,
+      critChance,
+      shotElement,
+      shieldBoost,
+      shotFlags,
+      { clusterMortarLob: clusterMortarLob || undefined, secondaryInfusedElement },
+    );
+    applyP4AMutatorsToSpawnedProjectiles(p, empoweredForMutator, spawnedVolley);
     if (isFinaleShot) trySpawnCausticSporePod(this, p, true);
     return;
   }
@@ -831,8 +841,6 @@ export function tryFireActiveWeaponImpl(
     wasBlackCrystalEmpowered ||
     (hasActiveWeaponMutator(p, 'mutator_thermal_meltdown') &&
       (empoweredForMutator || inOrangeZoneBeforeShot));
-  const clusterMortarLob = hasActiveWeaponMutator(p, 'mutator_cluster_mortar');
-  const secondaryInfusedElement = resolveSecondaryInfusedElementForShot(p, empoweredForMutator);
 
   this.spawnDeterministicVolley({
     kind: 'bullet_volley_spawned',

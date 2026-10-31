@@ -124,25 +124,37 @@ export function spawnSolarArchonConvergingVolley(
   shotElement: ElementType,
   shieldBoost: boolean,
   shotFlags: number,
-): void {
+  mutatorVolleyFields?: Pick<BulletVolleySpawnEvent, 'clusterMortarLob' | 'secondaryInfusedElement'>,
+): SimProjectileState[] {
   const target = resolveSolarArchonTargetPoint(p, SOLAR_CONVERGE_DEFAULT_DIST);
   const suns = getSolarMiniSunPositions(p);
   const elem: ElementType = shotElement !== 'none' ? shotElement : 'burn';
   const speed = 530;
+  const spawned: SimProjectileState[] = [];
 
   for (let k = 0; k < suns.length; k++) {
     const sun = suns[k]!;
     const rayAngle = Math.atan2(target.y - sun.y, target.x - sun.x);
     const distToTarget = Math.max(24, distance(sun.x, sun.y, target.x, target.y));
-    sim.spawnDeterministicVolley({
+    const volleyEv: BulletVolleySpawnEvent = {
       kind: 'bullet_volley_spawned', tick: sim.tick, ownerId: p.id, team: 'player', weaponId: 'solar_archon_staff',
       x: sun.x, y: sun.y, angle: rayAngle, pelletCount: 1, spreadRad: 0, speed, damage: baseDmg, radius: 6,
       knockback: 140, pierceCount: 99, bounceCount: 2, ttlSec: Math.max(1.2, distToTarget / speed + 0.65),
       element: elem, critChance, amplifiedByShield: shieldBoost, seed: sim.rng.nextUint32(),
       shotFlags, flags: shotFlags, originX: sun.x, originY: sun.y,
       convergeTargetX: target.x, convergeTargetY: target.y, solarRayIndex: k, hasExplicitAimTarget: target.hasExplicitAimTarget,
-    });
+      clusterMortarLob: mutatorVolleyFields?.clusterMortarLob,
+      secondaryInfusedElement: mutatorVolleyFields?.secondaryInfusedElement,
+    };
+    sim.spawnDeterministicVolley(volleyEv);
+    const eventKey = (volleyEv.eventId ?? 1) & 0x3fffff;
+    for (let idx = sim.projectiles.length - 1; idx >= 0; idx--) {
+      const proj = sim.projectiles[idx]!;
+      if ((proj.id >>> 6) !== eventKey) break;
+      spawned.push(proj);
+    }
   }
+  return spawned;
 }
 
 export function triggerSolarConvergeBurst(sim: WorldSim, b: SimProjectileState, burstX = b.x, burstY = b.y): number {

@@ -391,8 +391,8 @@ export function resolveSecondaryInfusedElementForShot(
 export function applyP4AMutatorsToSpawnedProjectiles(
   p: SimPlayerState,
   isEmpoweredShot: boolean,
-  projectiles: SimProjectileState[],
-  startIndex: number,
+  projectiles: readonly SimProjectileState[],
+  startIndex = 0,
 ): void {
   const lob = hasActiveWeaponMutator(p, 'mutator_cluster_mortar');
   const infused = resolveSecondaryInfusedElementForShot(p, isEmpoweredShot);

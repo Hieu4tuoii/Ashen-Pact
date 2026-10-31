@@ -97,6 +97,9 @@ describe('Phase P5.4 / P12 — Release Version v2.0.0, Deferred P9b Ledger & Doc
     expect(qaChecklist).toContain('v2.0.0');
     expect(qaChecklist).toContain('AshenPact-v2.0.0-win-x64');
     expect(qaChecklist).not.toContain('0.1.0');
+    expect(qaChecklist).not.toContain('p5-synergy-boss-soak.test.ts');
+    expect(qaChecklist).toContain('packages/shared/test/ap2-p5-holistic-soak-balance.test.ts');
+    expect(qaChecklist).toContain('ap2-p3c-balance-targets.test.ts');
 
     const rootCredits = readRepoFile('CREDITS.md');
     const docsCredits = readRepoFile('docs/CREDITS.md');

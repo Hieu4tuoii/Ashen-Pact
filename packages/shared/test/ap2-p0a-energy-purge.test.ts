@@ -5,7 +5,9 @@ import {
   NetworkTransport,
   WEAPONS,
   WorldSim,
+  enLocale,
   encodeWorldSnapshot,
+  viLocale,
 } from '../src/index.js';
 
 describe('AP2 P0A.1 — Energy Purge, Weapon Cadence Metadata & Replacement Mechanics', () => {
@@ -18,6 +20,11 @@ describe('AP2 P0A.1 — Energy Purge, Weapon Cadence Metadata & Replacement Mech
     expect(CHARACTERS.ranger.skill.descriptionVi.toLowerCase()).not.toContain('năng lượng');
     expect(CHARACTERS.ranger.skill.synergyVi?.toLowerCase()).not.toContain('năng lượng');
     expect(CHARACTERS.elementalist.skill.synergyVi?.toLowerCase()).not.toContain('năng lượng');
+  });
+
+  it('purges orphaned tooltip.energyCost key from both en.json and vi.json i18n dictionaries', () => {
+    expect('energyCost' in enLocale.ui.tooltip).toBe(false);
+    expect('energyCost' in viLocale.ui.tooltip).toBe(false);
   });
 
   it('purges energyCost from WEAPONS and populates Spec Rev 4 Table 3.3 cadence metadata', () => {
