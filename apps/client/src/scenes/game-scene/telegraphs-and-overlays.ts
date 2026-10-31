@@ -26,6 +26,10 @@ import {
   drawP4ASummonOverlay,
   drawP4ATetherAndProjectileOverlays,
 } from '../../fx/combat-fx-p4a.js';
+import {
+  drawP4BSummonOverlay,
+  renderP4BDuoAndSecretArenaOverlays,
+} from '../../fx/combat-fx-p4b.js';
 import { type GameScene, RIG_FOOT_OFFSET_Y } from '../GameScene.js';
 import { drawFootMicroReloadBar } from './hud-micro-reload-bar.js';
 import { drawWorldWeaponSalvageRing } from './hud-pact-and-forge-modals.js';
@@ -200,7 +204,10 @@ export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, 
     } else if (sum.kind === 'life_blossom') {
       // Phase P1A Weapon: Súng Phóng Hạt Sinh Mệnh (seed_gun) blooming Life Bud & r=88px Toxic Spore Aura
       drawSeedGunLifeBlossom(g, sum, sim.tick / 60);
-    } else if (drawP4ASummonOverlay(this, g, sim, sum)) {
+    } else if (
+      drawP4ASummonOverlay(this, g, sim, sum) ||
+      drawP4BSummonOverlay(this, g, sim, sum)
+    ) {
       continue;
     } else {
       // Tesla Turret / Ancient Turret
@@ -632,6 +639,7 @@ export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, 
   // 2b. Phase 3A (P3A.1) 0.35s Predictive Sightline Telegraph (#FF5722 outer + #FFF7ED bright core + muzzle diamond reticle)
   drawP3APredictiveSightlinesAndOverlays(this, g, sim);
   drawP4ATetherAndProjectileOverlays(this, g, sim);
+  renderP4BDuoAndSecretArenaOverlays(this);
 
   // 3. Boss Kill Dramatic Flash Overlay (0.28s additive-feeling golden-white world flash)
   if (this.fx.bossKillFlashTimer > 0) {

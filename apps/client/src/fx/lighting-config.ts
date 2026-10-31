@@ -391,7 +391,7 @@ export type ResolveInteractableGlowInput =
       elapsedSec?: number;
     }
   | {
-      kind: 'shrine' | 'daedalus_anvil' | 'upgrade_anvil';
+      kind: 'shrine' | 'daedalus_anvil' | 'upgrade_anvil' | 'secret_challenge_crystal';
       interacted: boolean;
       elapsedSec?: number;
       id?: number;
@@ -596,13 +596,16 @@ export function resolveInteractableVisualGlowSpec(
 
     case 'shrine':
     case 'daedalus_anvil':
-    case 'upgrade_anvil': {
+    case 'upgrade_anvil':
+    case 'secret_challenge_crystal': {
       const colorNum =
         input.kind === 'daedalus_anvil'
           ? 0xfacc15
-          : input.kind === 'upgrade_anvil'
-            ? 0x38bdf8
-            : 0x22d3ee;
+          : input.kind === 'secret_challenge_crystal'
+            ? 0xa855f7
+            : input.kind === 'upgrade_anvil'
+              ? 0x38bdf8
+              : 0x22d3ee;
       if (input.interacted) {
         return {
           glowAlpha: 0,
@@ -698,6 +701,7 @@ export interface InteractHighlightTarget {
     | 'shrine'
     | 'daedalus_anvil'
     | 'upgrade_anvil'
+    | 'secret_challenge_crystal'
     | 'portal'
     | 'door'
     | 'merchant';
@@ -860,7 +864,10 @@ export function resolveCurrentInteractHighlightTarget(
         ? npc.usedByPlayerIds.includes(playerId)
         : false;
     if (
-      (npc.kind === 'shrine' || npc.kind === 'daedalus_anvil' || npc.kind === 'upgrade_anvil') &&
+      (npc.kind === 'shrine' ||
+        npc.kind === 'daedalus_anvil' ||
+        npc.kind === 'upgrade_anvil' ||
+        npc.kind === 'secret_challenge_crystal') &&
       !npc.interacted &&
       !usedByPlayer &&
       Math.hypot(playerX - npc.x, playerY - npc.y) <= interactRange + 8
@@ -875,9 +882,11 @@ export function resolveCurrentInteractHighlightTarget(
         colorNum:
           npc.kind === 'daedalus_anvil'
             ? 0xfacc15
-            : npc.kind === 'upgrade_anvil'
-              ? 0x38bdf8
-              : 0x22d3ee,
+            : npc.kind === 'secret_challenge_crystal'
+              ? 0xa855f7
+              : npc.kind === 'upgrade_anvil'
+                ? 0x38bdf8
+                : 0x22d3ee,
       };
     }
   }

@@ -338,9 +338,15 @@ export function resolveInteractPromptSpec(
 
     case 'secret_challenge_crystal': {
       const colorHex = PALETTE.ELECTRIC_VIOLET;
-      const titleText = isEn
-        ? '20s Trial Crystal (Ascend Chest to Legendary)'
-        : 'Tinh Thể Khiêu Chiến 20s (Thăng Hoa Huyền Thoại)';
+      const prevLoc = i18n.getLocale();
+      if (prevLoc !== locale) i18n.setLocale(locale);
+      let rawPrompt = '';
+      try {
+        rawPrompt = i18n.t('ui.interact.secretChallengeCrystal');
+      } finally {
+        if (prevLoc !== locale) i18n.setLocale(prevLoc);
+      }
+      const titleText = rawPrompt.replace(/^\[E\]\s*/i, '');
       return {
         key: target.key,
         kind: 'secret_challenge_crystal',

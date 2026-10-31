@@ -82,6 +82,10 @@ export class TextureBaker {
     return `surface_${surface}`;
   }
 
+  public static getSecretChallengeCrystalTextureKey(interacted: boolean): string {
+    return interacted ? 'prop_secret_challenge_crystal_used' : 'prop_secret_challenge_crystal';
+  }
+
   public static getPropTextureKey(
     kind: PropKind,
     coverState?: 'low' | 'flipped' | 'sliding' | 'fallen',
@@ -173,7 +177,8 @@ export class TextureBaker {
       scene.textures.exists('door_frame_ns_0') &&
       scene.textures.exists('door_unlock_spark') &&
       scene.textures.exists('biome_tile_0_0') &&
-      scene.textures.exists('prop_daedalus_anvil')
+      scene.textures.exists('prop_daedalus_anvil') &&
+      scene.textures.exists('prop_secret_challenge_crystal')
     ) {
       this.currentBakeScale = targetScale;
       return this.currentBakeScale;

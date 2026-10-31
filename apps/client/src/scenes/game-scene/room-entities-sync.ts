@@ -607,9 +607,11 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
             ? 'prop_daedalus_anvil'
             : npc.kind === 'upgrade_anvil'
               ? 'prop_upgrade_anvil'
-              : npc.interacted
-                ? 'prop_shrine_statue_used'
-                : 'prop_shrine_statue';
+              : npc.kind === 'secret_challenge_crystal'
+                ? TextureBaker.getSecretChallengeCrystalTextureKey(npc.interacted)
+                : npc.interacted
+                  ? 'prop_shrine_statue_used'
+                  : 'prop_shrine_statue';
         const sprite = this.add.sprite(npc.x, npc.y, npcTex);
         sprite.setScale(invBake);
         sprite.setDepth(24);
@@ -618,7 +620,10 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
             fontFamily: '"Be Vietnam Pro", sans-serif',
             fontSize: '11px',
             fontStyle: '800',
-            color: npc.kind === 'daedalus_anvil' ? PALETTE.SOLAR_GOLD : PALETTE.CYAN_FROST,
+            color:
+              npc.kind === 'daedalus_anvil' || npc.kind === 'secret_challenge_crystal'
+                ? PALETTE.SOLAR_GOLD
+                : PALETTE.CYAN_FROST,
             stroke: PALETTE.INK_DEEP,
             strokeThickness: 3,
             resolution: textRes,
@@ -653,7 +658,8 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
     if (
       npc.kind === 'shrine' ||
       npc.kind === 'daedalus_anvil' ||
-      npc.kind === 'upgrade_anvil'
+      npc.kind === 'upgrade_anvil' ||
+      npc.kind === 'secret_challenge_crystal'
     ) {
       const usedByLocal =
         npc.interacted || (npc.usedByPlayerIds?.includes(sim.player.id) ?? false);
@@ -662,14 +668,22 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
           ? 'prop_daedalus_anvil'
           : npc.kind === 'upgrade_anvil'
             ? 'prop_upgrade_anvil'
-            : usedByLocal
-              ? 'prop_shrine_statue_used'
-              : 'prop_shrine_statue';
+            : npc.kind === 'secret_challenge_crystal'
+              ? TextureBaker.getSecretChallengeCrystalTextureKey(usedByLocal)
+              : usedByLocal
+                ? 'prop_shrine_statue_used'
+                : 'prop_shrine_statue';
       if (entry.sprite) {
         if (entry.sprite.texture.key !== npcTex) {
           entry.sprite.setTexture(npcTex);
         }
-        entry.sprite.setAlpha(usedByLocal ? 0.65 : 1);
+        if (npc.kind === 'secret_challenge_crystal') {
+          const floatOffsetY = usedByLocal ? 0 : Math.sin(visualTimeSec * 3.0 + npc.id) * 2.5;
+          entry.sprite.setPosition(npc.x, npc.y + floatOffsetY);
+          entry.sprite.setAlpha(usedByLocal ? 0.85 : 1);
+        } else {
+          entry.sprite.setAlpha(usedByLocal ? 0.65 : 1);
+        }
       }
 
       const sGlow = resolveInteractableVisualGlowSpec({
@@ -704,6 +718,19 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
             ? 'Upgrade Anvil (+1)'
             : 'Đe Nâng Cấp (+1)';
       if (entry.label.text !== anvilTitle) entry.label.setText(anvilTitle);
+      entry.label.setVisible(true);
+    } else if (
+      npc.kind === 'secret_challenge_crystal' &&
+      target?.kind !== 'secret_challenge_crystal' &&
+      !sim.secretTrialActive
+    ) {
+      const crystalTitle = npc.interacted
+        ? i18n.t('ui.interact.secretChallengeCrystalUsed')
+        : i18n.getLocale() === 'en'
+          ? '✦ 20s Trial Crystal'
+          : '✦ Tinh Thể Khiêu Chiến';
+      if (entry.label.text !== crystalTitle) entry.label.setText(crystalTitle);
+      entry.label.setColor(npc.interacted ? PALETTE.SILVER_BRIGHT : PALETTE.SOLAR_GOLD);
       entry.label.setVisible(true);
     } else {
       entry.label.setVisible(false);

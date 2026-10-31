@@ -103,7 +103,7 @@ export function updateModalHudImpl(this: GameScene): void {
   const allPlayers = sim.getAllPlayers();
   const partyCount = Math.max(1, allPlayers.length);
   const readyCount = allPlayers.filter((pl) => pl.buffChoices.length === 0).length;
-  const ownedSig = (localPlayer.blessingIds ?? []).join(',');
+  const ownedSig = `${(localPlayer.duoBoonIds ?? []).join(',')}|${(localPlayer.blessingIds ?? []).join(',')}`;
   const modalKey = `${sim.runState}:${pendingBuffChoices.join(',')}:${pendingMutatorChoices.join(',')}:${pendingPactChoices.join(',')}:${ownedSig}:${readyCount}:${partyCount}:${this.buffHoveredIdx ?? -1}:${this.resultDismissed}:${i18n.getLocale()}:${statsSig}`;
   if (modalKey === this.lastRunState) return;
   const prevRunState = this.lastRunState.split(':')[0];
@@ -154,7 +154,8 @@ export function updateModalHudImpl(this: GameScene): void {
       .setOrigin(0.5, 0);
     this.modalContainer.add(header);
 
-    const ownedCount = localPlayer.blessingIds?.length ?? 0;
+    const ownedCount =
+      (localPlayer.blessingIds?.length ?? 0) + (localPlayer.duoBoonIds?.length ?? 0);
     const subtitleStr =
       pendingBuffChoices.length === 0
         ? isEn
@@ -309,9 +310,13 @@ export function updateModalHudImpl(this: GameScene): void {
     });
     this.modalContainer.add(summaryCardG);
 
+    const allOwnedBuffIds: BuffId[] = [
+      ...(localPlayer.duoBoonIds ?? []),
+      ...localPlayer.blessingIds,
+    ];
     const buffNames =
-      localPlayer.blessingIds.length > 0
-        ? localPlayer.blessingIds
+      allOwnedBuffIds.length > 0
+        ? allOwnedBuffIds
             .map((b: BuffId) => resolveLocalizedBuffText(b, isEn ? 'en' : 'vi').name)
             .join(', ')
         : i18n.t('ui.result.none');

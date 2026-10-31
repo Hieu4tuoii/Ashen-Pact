@@ -507,4 +507,131 @@ export function bakeP1CProps(scene: Phaser.Scene, scale: number): void {
     ctx.arc(0, -1, 3.2, 0, Math.PI * 2);
     ctx.fill();
   });
+
+  // 11. Phase 4B Secret Skill Arena Crystal (`prop_secret_challenge_crystal` & `_used`)
+  bakeCustomCanvas(scene, 'prop_secret_challenge_crystal', 48, 56, scale, (ctx) => {
+    // Obsidian octagonal rune pedestal base
+    outlined(
+      ctx,
+      {
+        fill: PALETTE.SLATE_DARK,
+        shade: PALETTE.INK_DARK,
+        highlight: PALETTE.STEEL_LIGHT,
+        outlineWidth: 2.2,
+      },
+      (c) =>
+        tracePolygon(c, [
+          { x: -13, y: 12 },
+          { x: 13, y: 12 },
+          { x: 17, y: 18 },
+          { x: 12, y: 23 },
+          { x: -12, y: 23 },
+          { x: -17, y: 18 },
+        ]),
+      { cx: 0, cy: 17.5, rx: 16, ry: 5.5 },
+    );
+    ctx.strokeStyle = PALETTE.SOLAR_GOLD;
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.moveTo(-9, 17.5);
+    ctx.lineTo(9, 17.5);
+    ctx.stroke();
+
+    // Floating prismatic violet-gold obelisk crystal + 2 side shards
+    for (const side of [-1, 1] as const) {
+      outlined(
+        ctx,
+        {
+          fill: PALETTE.ELECTRIC_VIOLET,
+          shade: '#581C87',
+          highlight: PALETTE.BONE_WHITE,
+          outlineWidth: 1.8,
+        },
+        (c) =>
+          tracePolygon(c, [
+            { x: side * 13, y: -6 },
+            { x: side * 16.5, y: 0 },
+            { x: side * 13.5, y: 7 },
+            { x: side * 10.5, y: 1 },
+          ]),
+        { cx: side * 13.5, cy: 0.5, rx: 3.5, ry: 6.5 },
+      );
+    }
+
+    outlined(
+      ctx,
+      {
+        fill: PALETTE.ELECTRIC_VIOLET,
+        shade: '#4C1D95',
+        highlight: PALETTE.BONE_WHITE,
+        outlineWidth: 2.3,
+      },
+      (c) =>
+        tracePolygon(c, [
+          { x: 0, y: -22 },
+          { x: 10, y: -7 },
+          { x: 7, y: 7 },
+          { x: 0, y: 12 },
+          { x: -7, y: 7 },
+          { x: -10, y: -7 },
+        ]),
+      { cx: 0, cy: -5, rx: 10, ry: 17 },
+    );
+
+    // Faceted Solar Gold diamond core & ridge line
+    ctx.fillStyle = PALETTE.SOLAR_GOLD;
+    ctx.beginPath();
+    ctx.moveTo(0, -12);
+    ctx.lineTo(4.5, -4);
+    ctx.lineTo(0, 4);
+    ctx.lineTo(-4.5, -4);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = PALETTE.BONE_WHITE;
+    ctx.beginPath();
+    ctx.arc(0, -4, 1.8, 0, Math.PI * 2);
+    ctx.fill();
+  });
+
+  bakeCustomCanvas(scene, 'prop_secret_challenge_crystal_used', 48, 56, scale, (ctx) => {
+    // Dormant stone pedestal after the 20s trial has been triggered
+    outlined(
+      ctx,
+      {
+        fill: PALETTE.SLATE_DARK,
+        shade: PALETTE.INK_DARK,
+        highlight: PALETTE.STEEL_DARK,
+        outlineWidth: 2.2,
+      },
+      (c) =>
+        tracePolygon(c, [
+          { x: -13, y: 12 },
+          { x: 13, y: 12 },
+          { x: 17, y: 18 },
+          { x: 12, y: 23 },
+          { x: -12, y: 23 },
+          { x: -17, y: 18 },
+        ]),
+      { cx: 0, cy: 17.5, rx: 16, ry: 5.5 },
+    );
+    // Settled, unlit slate crystal remnant resting on the pedestal
+    outlined(
+      ctx,
+      {
+        fill: PALETTE.STEEL_DARK,
+        shade: PALETTE.INK_DARK,
+        highlight: PALETTE.STEEL_LIGHT,
+        outlineWidth: 2.0,
+      },
+      (c) =>
+        tracePolygon(c, [
+          { x: 0, y: -4 },
+          { x: 7.5, y: 5 },
+          { x: 5.5, y: 13 },
+          { x: -5.5, y: 13 },
+          { x: -7.5, y: 5 },
+        ]),
+      { cx: 0, cy: 5, rx: 7.5, ry: 8.5 },
+    );
+  });
 }
