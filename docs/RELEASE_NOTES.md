@@ -1,11 +1,11 @@
-# 📜 GHI CHÚ PHÁT HÀNH (RELEASE NOTES) — ASHEN PACT
+# 📜 GHI CHÚ PHÁT HÀNH (RELEASE NOTES) — ASHEN PACT `v2.0.0`
 
 ---
 
 ## 🔥 What's New in Ashen Pact `v2.0.0` — *"Tactical Arena Overhaul"*
 
 - **Phiên bản đại tu kiến trúc & lối chơi:** `v2.0.0` (*"Tactical Arena Overhaul" — Complete Combat Cadence, Tactical Environment Physics, Bespoke Arsenal, Per-Player Synergy Depth & 60Hz Deterministic Architecture Overhaul*, `Phases P0A → P5`)
-- **Nền tảng phát hành:** Windows 10/11 64-bit *(gói phát hành ổn định hiện hành `AshenPact-v0.2.1-win-x64` — chuẩn bị nâng phiên bản đóng gói đồng bộ sang `v2.0.0`)* & Web Browser (Chromium / Chrome / Edge / Firefox)
+- **Nền tảng phát hành:** Windows 10/11 64-bit (gói phát hành `AshenPact-v2.0.0-win-x64.zip` / thư mục `AshenPact-v2.0.0-win-x64`, khởi chạy ngay `AshenPact-Host.exe`) & Web Browser (Chromium / Chrome / Edge / Firefox)
 - **Chế độ chơi:** Chơi đơn (*Solo*) & Phối hợp mạng nội bộ (*Co-op LAN / Wi-Fi 2–4 người chơi*, `60Hz Authoritative WorldSim`)
 
 Bản đại tu **`Ashen Pact v2.0.0` ("Tactical Arena Overhaul")** tái thiết toàn diện vòng lặp chiến đấu 3 giây, vật lý địa hình đấu trường, kho vũ khí độc bản, chiều sâu build riêng từng người chơi và kiến trúc mạng tất định 60Hz qua **7 giai đoạn kỹ thuật (`P0A → P5`)**:

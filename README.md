@@ -1,6 +1,6 @@
-# 🔥 ASHEN PACT 2.0 — Game Hành Động Đấu Trường Chiến Thuật Co-op LAN (1–4 Người)
+# 🔥 ASHEN PACT v2.0.0 — Game Hành Động Đấu Trường Chiến Thuật Co-op LAN (1–4 Người)
 
-> **Ashen Pact 2.0 (*"Tactical Arena Overhaul"*, kế thừa nền tảng gói phát hành `v0.2.1`)** là tựa game hành động bắn súng đấu trường chiến thuật góc nhìn từ trên xuống (*Top-Down Tactical Action Roguelite Shooter*), hỗ trợ **chơi đơn (Solo)** và **phối hợp mạng nội bộ Wi-Fi / LAN từ 2 đến 4 người chơi** ngay trên trình duyệt mà **không cần cài đặt trên máy bạn bè, không cần kết nối Internet**.
+> **Ashen Pact 2.0 (`v2.0.0` — *"Tactical Arena Overhaul"*)** là tựa game hành động bắn súng đấu trường chiến thuật góc nhìn từ trên xuống (*Top-Down Tactical Action Roguelite Shooter*), hỗ trợ **chơi đơn (Solo)** và **phối hợp mạng nội bộ Wi-Fi / LAN từ 2 đến 4 người chơi** ngay trên trình duyệt mà **không cần cài đặt trên máy bạn bè, không cần kết nối Internet**.
 >
 > **Điểm đặc biệt:** 100% hình ảnh nhân vật, quái vật, trùm (Boss), **18 vũ khí độc bản** chia làm 3 họ nhịp độ chủ động (`[R]`), 9 đồ chơi địa hình chiến thuật, kiến trúc 3D hybrid, cổng dịch chuyển shader, ánh sáng động và toàn bộ hiệu ứng âm thanh ZzFX / 7 bản nhạc nền đều được **vẽ và tổng hợp trực tiếp bằng mã nguồn (Procedural Vector Art Cutout 2.0 & Web Audio Synth)**.
 
@@ -9,7 +9,7 @@
 ## 🚀 1. Cách Chơi Ngay Bản Phát Hành (Dành Cho Người Chơi Phổ Thông)
 
 ### Bước 1: Người làm Chủ Phòng (Host) khởi động game
-1. Giải nén file gói phát hành hiện hành **`AshenPact-v0.2.1-win-x64.zip`** *(chuẩn bị bump lên `v2.0.0` tại bước đóng gói phát hành cuối)* ra một thư mục bất kỳ trên máy tính Windows.
+1. Giải nén file gói phát hành **`AshenPact-v2.0.0-win-x64.zip`** ra một thư mục bất kỳ trên máy tính Windows.
 2. Nhấp đúp chuột vào **`AshenPact-Host.exe`** (hoặc chạy file dự phòng **`start-host.bat`**).
 3. Một cửa sổ màn hình đen (Console) sẽ hiện lên:
    - Tự động khởi chạy máy chủ game tại cổng `2567` (nếu cổng `2567` đang bận, game tự động chuyển sang cổng kế tiếp `2568`, `2569`...).
@@ -162,7 +162,7 @@ pnpm perf
 # 6. Chạy toàn bộ cổng kiểm định chất lượng (Typecheck + ESLint + Vitest Unit/Soak Tests + Build + Playwright E2E)
 pnpm verify
 
-# 7. Đóng gói bản phát hành Windows hoàn chỉnh vào release/ (hiện hành AshenPact-v0.2.1-win-x64.zip trước bước bump manifest cuối)
+# 7. Đóng gói bản phát hành Windows hoàn chỉnh vào release/AshenPact-v2.0.0-win-x64/ và release/AshenPact-v2.0.0-win-x64.zip
 pnpm package:release
 ```
 

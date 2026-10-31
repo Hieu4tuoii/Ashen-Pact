@@ -226,7 +226,7 @@ export class MenuScene extends Phaser.Scene {
       return t;
     };
 
-    addCenteredText(784, 36, 'v0.2.1 · LAN', '10px', '700', PALETTE.CYAN_FROST, 2, true);
+    addCenteredText(784, 36, 'v2.0.0 · LAN', '10px', '700', PALETTE.CYAN_FROST, 2, true);
     this.titleText = addCenteredText(
       480,
       46,

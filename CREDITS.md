@@ -1,8 +1,8 @@
-# GHI NHẬN BẢN QUYỀN & TÀI NGUYÊN (CREDITS.md) — ASHEN PACT (`v0.2.1`)
+# GHI NHẬN BẢN QUYỀN & TÀI NGUYÊN (CREDITS.md) — ASHEN PACT (`v2.0.0`)
 
 ## 1. Đồ Họa Vector & Âm Thanh Thủ Tục (100% Procedural Code)
 - **Đồ họa 2D Vector & Cutout Rig (`100% Procedural Vector Art`):**
-  - Toàn bộ **5 nhân vật**, **16 loại quái thường + biến thể Tinh Anh (Elite)**, **3 Boss cuối màn**, **24 vũ khí**, **3 bộ gạch nền/tường/trụ autotile theo Biome**, **đồ vật tương tác**, **biểu tượng UI** và **hạt hiệu ứng (Particles/Decals)** đều được vẽ hoàn toàn bằng mã nguồn TypeScript (`apps/client/src/art/`) thông qua pipeline `outlined()` và `TextureBaker` theo độ phân giải thực (`DPR Supersampling`).
+  - Toàn bộ **5 nhân vật**, **16 loại quái thường + biến thể Tinh Anh (Elite)**, **3 Boss cuối màn**, **18 vũ khí độc bản**, **9 đồ chơi địa hình chiến thuật**, **3 bộ gạch nền/tường/trụ autotile theo Biome**, **đồ vật tương tác**, **biểu tượng UI** và **hạt hiệu ứng (Particles/Decals)** đều được vẽ hoàn toàn bằng mã nguồn TypeScript (`apps/client/src/art/`) thông qua pipeline `outlined()` và `TextureBaker` theo độ phân giải thực (`DPR Supersampling`).
   - Không sử dụng bất kỳ tệp hình ảnh bên ngoài nào (`.png`, `.jpg`, `.svg`, sprite sheet có sẵn).
 - **Âm thanh & Nhạc nền (`100% Procedural Web Audio Synthesis`):**
   - Toàn bộ **47 hiệu ứng âm thanh (SFX)** có định vị không gian 2D (`stereo pan` + suy giảm theo khoảng cách) và **7 bản nhạc nền động 2 lớp (`Khám Phá / Chiến Đấu`)** đều được tổng hợp thời gian thực bằng bộ tổng hợp sóng âm Web Audio API (`apps/client/src/audio/zzfx.ts` & `apps/client/src/audio/music-synth.ts`).
@@ -37,4 +37,4 @@
 
 ## 4. Cảm Ơn Đặc Biệt (Inspirations)
 - Lấy cảm hứng về nhịp độ hành động và cơ chế vượt ải co-op từ **Soul Knight** (*ChillyRoom*).
-- Thiết kế, kiến trúc simulation 60Hz, đồ họa procedural vector, âm nhạc tổng hợp và kiểm định tự động được thực hiện trọn vẹn cho dự án **Ashen Pact (`v0.2.1`)**.
+- Thiết kế, kiến trúc simulation 60Hz, đồ họa procedural vector, âm nhạc tổng hợp và kiểm định tự động được thực hiện trọn vẹn cho dự án **Ashen Pact (`v2.0.0`)**.

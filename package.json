@@ -1,6 +1,6 @@
 {
   "name": "ashen-pact",
-  "version": "0.2.1",
+  "version": "2.0.0",
   "private": true,
   "description": "Ashen Pact - Top-down Action Roguelite Co-op LAN Game",
   "type": "module",

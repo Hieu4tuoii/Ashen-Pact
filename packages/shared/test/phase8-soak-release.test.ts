@@ -357,8 +357,8 @@ describe('Phase 8 — QA Bug Bash Edge Cases & Release Artifacts', () => {
     expect(asciiQr).toContain('▀');
     expect(asciiQr).toContain('▄');
 
-    const releaseDir = path.join(ROOT_DIR, 'release/AshenPact-v0.2.1-win-x64');
-    const releaseZip = path.join(ROOT_DIR, 'release/AshenPact-v0.2.1-win-x64.zip');
+    const releaseDir = path.join(ROOT_DIR, 'release/AshenPact-v2.0.0-win-x64');
+    const releaseZip = path.join(ROOT_DIR, 'release/AshenPact-v2.0.0-win-x64.zip');
     if (fs.existsSync(releaseDir)) {
       expect(fs.existsSync(path.join(releaseDir, 'AshenPact-Host.exe'))).toBe(true);
       expect(fs.existsSync(path.join(releaseDir, 'start-host.bat'))).toBe(true);
