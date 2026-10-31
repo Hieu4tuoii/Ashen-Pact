@@ -1,15 +1,15 @@
-# 🔥 ASHEN PACT (`v0.2.1`) — Game Co-op Vượt Ải Mạng LAN (1–4 Người)
+# 🔥 ASHEN PACT 2.0 — Game Hành Động Đấu Trường Chiến Thuật Co-op LAN (1–4 Người)
 
-> **Ashen Pact (`v0.2.1` — *"Polish & Depth"*)** là tựa game hành động bắn súng vượt ải góc nhìn từ trên xuống (*Top-Down Action Roguelite Shooter*) lấy cảm hứng từ *Soul Knight*, hỗ trợ **chơi đơn (Solo)** và **phối hợp mạng nội bộ Wi-Fi / LAN từ 2 đến 4 người chơi** ngay trên trình duyệt mà **không cần cài đặt trên máy bạn bè, không cần kết nối Internet**.
+> **Ashen Pact 2.0 (*"Tactical Arena Overhaul"*, kế thừa nền tảng gói phát hành `v0.2.1`)** là tựa game hành động bắn súng đấu trường chiến thuật góc nhìn từ trên xuống (*Top-Down Tactical Action Roguelite Shooter*), hỗ trợ **chơi đơn (Solo)** và **phối hợp mạng nội bộ Wi-Fi / LAN từ 2 đến 4 người chơi** ngay trên trình duyệt mà **không cần cài đặt trên máy bạn bè, không cần kết nối Internet**.
 >
-> **Điểm đặc biệt:** 100% hình ảnh nhân vật, quái vật, trùm (Boss), 24 vũ khí, kiến trúc 3D hybrid, cổng dịch chuyển shader, ánh sáng động và toàn bộ 47 hiệu ứng âm thanh / 7 bản nhạc nền đều được **vẽ và tổng hợp trực tiếp bằng mã nguồn (Procedural Vector Art Cutout 2.0 & Web Audio Synth)**.
+> **Điểm đặc biệt:** 100% hình ảnh nhân vật, quái vật, trùm (Boss), **18 vũ khí độc bản** chia làm 3 họ nhịp độ chủ động (`[R]`), 9 đồ chơi địa hình chiến thuật, kiến trúc 3D hybrid, cổng dịch chuyển shader, ánh sáng động và toàn bộ hiệu ứng âm thanh ZzFX / 7 bản nhạc nền đều được **vẽ và tổng hợp trực tiếp bằng mã nguồn (Procedural Vector Art Cutout 2.0 & Web Audio Synth)**.
 
 ---
 
 ## 🚀 1. Cách Chơi Ngay Bản Phát Hành (Dành Cho Người Chơi Phổ Thông)
 
 ### Bước 1: Người làm Chủ Phòng (Host) khởi động game
-1. Giải nén file **`AshenPact-v0.2.1-win-x64.zip`** ra một thư mục bất kỳ trên máy tính Windows.
+1. Giải nén file gói phát hành hiện hành **`AshenPact-v0.2.1-win-x64.zip`** *(chuẩn bị bump lên `v2.0.0` tại bước đóng gói phát hành cuối)* ra một thư mục bất kỳ trên máy tính Windows.
 2. Nhấp đúp chuột vào **`AshenPact-Host.exe`** (hoặc chạy file dự phòng **`start-host.bat`**).
 3. Một cửa sổ màn hình đen (Console) sẽ hiện lên:
    - Tự động khởi chạy máy chủ game tại cổng `2567` (nếu cổng `2567` đang bận, game tự động chuyển sang cổng kế tiếp `2568`, `2569`...).
@@ -57,73 +57,80 @@ rồi bấm **Allow access (Cho phép truy cập)**.
 
 ---
 
-## 🎮 3. Điều Khiển Trong Game (Bàn Phím & Chuột)
+## 🎮 3. Điều Khiển Trong Game & Tam Giác Chiến Thuật 3 Giây
+
+> **100% Không Thanh Năng Lượng:** Mọi nhân vật xuất phát với **1 vũ khí đặc trưng ở Ô 1** (Ô 2 trống sẵn để nhặt vũ khí mới). Súng bắn tự do theo băng đạn / nhiệt độ / combo cận chiến; vũ khí cất vào túi tự động nạp đầy sau `2.0s` (`Holster Auto-Reload`).
 
 | Phím / Thao tác | Hành động |
 |---|---|
 | **`W` `A` `S` `D`** hoặc **Phím mũi tên** | Di chuyển 8 hướng (có gia tốc & giảm tốc mượt mà) |
 | **Di chuột** | Ngắm bắn (Camera tự động mở rộng tầm nhìn theo hướng tâm ngắm) |
-| **Chuột trái (Giữ hoặc Nhấp)** | Bắn / Tấn công bằng vũ khí đang cầm |
-| **`Space`** hoặc **Chuột phải** | Kích hoạt **Kỹ năng chủ động** của nhân vật |
-| **`Shift`** | **Lướt (Dash)** — Cho **0.2 giây bất tử (`i-frame`)** để né đạn & sóng xung kích (Hồi chiêu `1.2s`) |
-| **`E`** | **Tương tác:** Chọn tượng nhân vật ở Doanh Trại · Mở rương · Nhặt vũ khí · Mua đồ Thương Nhân · Dâng lễ Điện Thờ · Sửa máy cổ đại · **Giữ `[E]` để cứu đồng đội gục ngã** |
+| **Chuột trái (Nhấp / Giữ / Nhả)** | Bắn / Chém **Combo 3 đòn** (Đòn 3 cận chiến kích hoạt Tuyệt Kỹ + **`Parry Deflect 0.18s`** phản đạn địch) / **Giữ-Nhả** kích nổ trên không (*Airburst* / *Implosion* / *Charged Bolt*) |
+| **`R`** | **Nạp Đạn Hoàn Hảo (*Khung Vàng `45%–70%`*) / Xả Nhiệt Chiến Thuật (*Vùng Cam `65%–95%`*)** trên thanh `Micro-Bar 32×5px` dưới chân nhân vật để cường hóa phát bắn và tung đòn xả áp đặc trưng |
+| **`Space`** hoặc **Chuột phải** | Kích hoạt **Kỹ năng chủ động** của nhân vật (thuần Hồi chiêu, không tốn năng lượng; bấm lại để kích hoạt pha 2 như Xung Phong Khiên / Nổ Trụ) |
+| **`Shift`** | **Lướt (`Dash`) + `Dash-Kick`:** Cho **`0.16s` bất tử (`i-frame`)** né đạn (Hồi chiêu `1.85s`). Lướt tông vào **Bia Chắn đã lật** hoặc **Đồ chơi địa hình** sẽ sút văng vật thể trượt ở **`520–600 px/s`**, kích hoạt **Đập Tường (`Wall-Slam`)**, **Đẩy Rơi Vực (`Chasm Ring-Out`)** và **Phá Giáp Boss**! |
+| **`E`** | **Ưu tiên 1:** Giữ cứu đồng đội gục (`2.5s`, Mộc Linh `1.25s`) · **Ưu tiên 2:** **Lật Bia Chắn Chiến Thuật (`Micro-Blank r=56px` xóa sạch đạn địch xung quanh)** · **Ưu tiên 3:** Mở rương · Nhặt/Mua đồ · **Đe Rèn Cổ Đại (`Daedalus` / `Cường Hóa`)** · **Tế Đàn Khế Ước Tro Tàn** · **Tinh Thể Khiêu Chiến Bí Mật `20s`** · Chọn tượng ở Hub |
 | **`1` · `2`** | Chọn trực tiếp **Ô Vũ Khí 1** / **Ô Vũ Khí 2** (hoặc chọn nhanh Thẻ Phước Lành `1`·`2`·`3` khi qua tầng) |
-| **`Q`** hoặc **Con lăn chuột** | Đổi nhanh qua lại giữa 2 ô vũ khí mang theo |
-| **`X`** | **Vứt vũ khí đang cầm ra đất** (`35u` phía trước) để nhường cho đồng đội (khi đang cầm 2 vũ khí; hoặc tự động rơi vũ khí đang cầm khi nhặt vũ khí mới lúc đầy 2 ô) |
-| **`T` (Giữ)** | Mở **Vòng Biểu Cảm (Radial Emote Wheel)** 4 hướng (`👍 Tuyệt vời!` · `⚡ Sẵn sàng!` · `🆘 Cứu với!` · `🔥 Tập trung!`); bấm nhanh `1`·`2`·`3`·`4` khi đang giữ `T` (hoặc rê chuột/nhấp) để phát biểu cảm |
+| **`Q`** hoặc **Con lăn chuột** | Đổi nhanh qua lại giữa 2 ô vũ khí mang theo (vũ khí cất đi tự nạp lại sau `2.0s`) |
+| **`X`** | **Nhấp nhanh:** Vứt vũ khí đang cầm ra đất nhường cho đồng đội · **Giữ `0.5s` ngoài giao tranh** cạnh vũ khí rơi trên đất: **Phân Rã Vũ Khí (`Weapon Salvage`)** thành Vàng (`10 / 15 / 22 / 30 / 45G` theo độ hiếm) |
+| **`T` (Giữ)** | Mở **Vòng Biểu Cảm (Radial Emote Wheel)** 4 hướng; bấm nhanh `1`·`2`·`3`·`4` khi đang giữ `T` (hoặc rê chuột/nhấp) để phát biểu cảm |
 | **`Z`** hoặc **Chuột giữa** | **Phát tín hiệu Ping thông minh** theo ngữ cảnh (*Tập trung đánh quái / Chỉ vị trí rương & vũ khí / Gọi cứu thương / Chỉ hướng di chuyển*) |
-| **`Tab`** | Bật / Tắt bản đồ tầng phóng to (Minimap) |
-| **`V`** | Bật / Tắt trạng thái **Sẵn Sàng** tại Sảnh Doanh Trại |
-| **`I`** | Mở / Thu gọn bảng **Mời Bạn Bè Co-op LAN** (mặc định thu gọn thành chip góc phải trên ở Doanh Trại; mở ra để xem IP LAN + Mã QR + Sao chép link + Kick) |
-| **`F11`** | Bật / Tắt chế độ **Toàn màn hình (Fullscreen)** kèm thông báo Toast |
-| **`Esc`** | Mở menu **Tạm dừng (Pause)** với 4 nút: Tiếp tục (`[Esc]`), Cài đặt 4 tab (`[O]`), Khởi động lại về Doanh Trại (`[H]`), Về Menu chính có bước xác nhận thoát (`[M]` / `[Enter]`) |
+| **`Tab`** · **`V`** · **`I`** | Bản đồ tầng phóng to (`Tab`) · Sẵn sàng tại Sảnh Doanh Trại (`V`) · Mở/thu gọn bảng **Mời Bạn Bè Co-op LAN** kèm IP + Mã QR (`I`) |
+| **`F11`** · **`Esc`** | Bật/Tắt **Toàn màn hình** (`F11`) · Mở menu **Tạm dừng & Cài đặt 4 tab** (`Esc` / `O`) |
 
 ---
 
-## 🦸 4. Năm Nhân Vật & Phối Hợp Kỹ Năng (Co-op Synergy)
+## 🦸 4. Năm Nhân Vật & Phối Hợp Kỹ Năng (100% Thuần Cooldown, Không Thanh Năng Lượng)
 
 Tại Sảnh Doanh Trại, hãy đi tới bức tượng của từng nhân vật để xem bảng **Preview Kỹ Năng & Synergy** và bấm **`[E]`** để chọn:
 
-| Nhân vật | Vai trò | HP / Giáp / NL | Vũ khí đầu | Nội tại (Passive) | Kỹ năng chủ động (`[Space]` / Chuột phải) & Synergy Co-op |
-|---|---|:---:|---|---|---|
-| 🛡️ **Thiết Vệ** (`vanguard`) | Tank / Bảo hộ tuyến đầu | `8 / 6 / 150` | Kiếm Hiệp Sĩ *(chém tan đạn)* | **Ý Chí Thép:** Giáp tự hồi sớm sau `3.3s` (`4.0s` với nhân vật khác); mỗi viên đạn chặn bằng khiên hồi `+1 NL`. | **Tường Khiên Hồng Ngọc:** Dựng khiên chắn 120° chặn mọi đạn địch và phóng ngược sóng xung kích. **Đạn đồng minh (và Trụ Tesla) bắn xuyên qua khiên từ phía sau được `+30% sát thương` và `+1 xuyên thấu`.** *(Nâng cấp: Pháo Đài 360° · Xung Phong làm choáng)* |
-| 🏹 **Liệp Ưng** (`ranger`) | Sát thương / Đánh dấu | `5 / 4 / 200` | Nỏ Săn | **Mắt Ưng:** Tăng tối đa `+30%` sát thương ở tầm xa và `+10%` chí mạng. | **Mũi Tên Săn Mồi:** Lộn nhào về sau (`i-frame`) và bắn tên xuyên thấu **Đánh Dấu** mục tiêu `6s`: **nhận `+25% sát thương từ cả đội`**, lộ diện rõ ràng, bị Trụ Tesla ưu tiên bắn và rơi thêm năng lượng khi chết. *(Nâng cấp: Mưa Tên · Chuỗi Con Mồi)* |
-| 🔥 **Lam Hỏa** (`elementalist`) | Khống chế / Nguyên tố | `5 / 3 / 260` | Trượng Tập Sự | **Vòng Xoay Nguyên Tố:** Xoay vòng **Lửa → Băng → Sét** sau mỗi lần tung kỹ năng; đạn thường áp nguyên tố hiện hành. | **Cầu Nguyên Tố:** Tạo vùng nguyên tố tồn tại `5s` trên sàn. **Mọi đạn của đồng đội bay qua vùng nguyên tố đều được tẩm nguyên tố đó**, giúp kích nổ phản ứng liên hoàn. *(Nâng cấp: Hố Đen Nguyên Tố · Song Nguyên Tố)* |
-| 🌿 **Mộc Linh** (`druid`) | Hỗ trợ / Hồi phục | `6 / 4 / 200` | Trượng Gai *(Độc)* | **Hạt Giống Sự Sống:** Quái bị hạ có `15%` rơi hạt mầm tự bay về đồng đội ít máu nhất hồi `+1 HP`; cứu đồng đội nhanh gấp đôi (`1.25s`). | **Cây Thiêng Cổ Thụ:** Trồng cây thần hồi máu theo nhịp cho cả đội, phóng rễ trói chân quái `1.5s` và chặn đạn. **Trồng thẳng lên đồng đội đang gục sẽ hồi sinh tức thì với `2 HP`!** *(Nâng cấp: Rễ Gai Độc · Rừng Thiêng)* |
-| ⚙️ **Bánh Răng** (`engineer`) | Tiện ích / Trụ pháo | `6 / 5 / 180` | Súng Đinh Tán | **Thợ Sửa:** Đồng đội trong 4 ô hồi giáp nhanh hơn `+30%`; bấm `[E]` sửa **Cổ Máy Cổ Đại** trên bản đồ thành Trụ chi viện. | **Trụ Pháo Tesla:** Đặt trụ bắn sét dây chuyền. **Đồng đội bắn vào Trụ Tesla sẽ nạp điện tăng tốc bắn; đủ `100%` phát nổ Xung EMP làm choáng quái và xóa sạch đạn địch quanh trụ!** *(Nâng cấp: Trụ Kép · Tự Hủy)* |
+| Nhân vật | Vai trò | HP / Giáp | Hồi chiêu Skill | Vũ khí đầu (Ô 1) | Nội tại (`Passive`) | Kỹ năng chủ động (`[Space]` / Chuột phải) & Synergy Co-op |
+|---|---|:---:|:---:|---|---|---|
+| 🛡️ **Thiết Vệ** (`vanguard`) | Tank / Bảo hộ tuyến đầu | `6 / 5` | `9.0s` *(4s)* | **Kiếm Hiệp Sĩ** *(Kiếm khí + Phản đạn Đòn 3)* | **Ý Chí Thép:** Giáp tự hồi sớm sau `3.0s` (`5.2s` với nhân vật khác); mỗi viên đạn chặn bằng khiên **nạp lại 1 viên đạn (hoặc `-15%` Nhiệt) và `+15%` ST** cho đòn kế tiếp (tối đa `+75%`). | **Tường Khiên Hồng Ngọc:** Dựng khiên cung `120°` chặn đạn địch và phóng ngược sóng xung kích. **Đạn đồng minh và Trụ Tesla bắn xuyên qua khiên từ phía sau được `+30% sát thương` và `+1 xuyên thấu`.** *(Nâng cấp: Pháo Đài Phản Xạ · Xung Phong Khiên)* |
+| 🏹 **Liệp Ưng** (`ranger`) | Sát thương / Đánh dấu | `5 / 3` | `7.0s` *(6s)* | **Nỏ Săn** *(Giữ tụ tên + `[R]` Rút tên ngạnh)* | **Mắt Ưng:** Tăng tối đa `+30%` sát thương ở tầm xa và `+10%` chí mạng (`15%` tổng Crit cơ bản). | **Mũi Tên Săn Mồi:** Lộn nhào về sau (`i-frame`) và bắn tên xuyên thấu **Đánh Dấu** mục tiêu `6s`: **nhận `+25% sát thương từ cả đội`**, bị Trụ Tesla ưu tiên bắn và rơi **Huy Hiệu Săn Mồi** khi chết (nhặt vào nạp đầy đạn cường hóa / xả sạch nhiệt và `-2.0s` hồi chiêu). *(Nâng cấp: Mưa Tên Khóa Góc · Dây Xích Con Mồi)* |
+| 🔥 **Lam Hỏa** (`elementalist`) | Khống chế / Nguyên tố | `4 / 2` | `8.0s` *(5s)* | **Trượng Tập Sự** *(Cầu nổ + `[R]` Tia Tam Nguyên)* | **Vòng Xoay Nguyên Tố:** Xoay vòng **Lửa → Băng → Sét** sau mỗi lần tung kỹ năng; đạn thường áp nguyên tố hiện hành. | **Cầu Nguyên Tố:** Tạo vùng nguyên tố tồn tại `5s` trên sàn. **Mọi đạn của đồng đội bay qua vùng nguyên tố đều được tẩm nguyên tố đó**, dễ dàng châm ngòi Đồng Đội Combo. *(Nâng cấp: Hố Đen Nguyên Tố · Song Tinh Cắt Không Gian)* |
+| 🌿 **Mộc Linh** (`druid`) | Hỗ trợ / Hồi phục | `5 / 3` | `12.0s` *(6s)* | **Trượng Gai** *(Gai ký sinh + Kéo quái)* | **Hạt Giống Sự Sống:** Quái bị hạ có `15%` rơi hạt mầm tự bay về đồng đội ít máu nhất hồi `+1 HP`; cứu đồng đội nhanh gấp đôi (`1.25s`). | **Cây Thiêng:** Trồng cây thần hồi `1 HP / 2s`, phóng rễ trói chân quái `1.5s` và chặn đạn. **Trồng thẳng lên đồng đội đang gục sẽ hồi sinh tức thì với `2 HP`!** *(Nâng cấp: Rễ Gai Quất Tường · Rừng Thiêng Cộng Sinh)* |
+| ⚙️ **Bánh Răng** (`engineer`) | Tiện ích / Trụ pháo | `6 / 4` | `10.0s` *(10s)* | **Súng Đinh Tán** *(Đinh từ tính + `[R]` Lưới điện)* | **Thợ Sửa:** Đồng đội trong 4 ô hồi giáp nhanh hơn `+30%`; bấm `[E]` sửa **Cổ Máy Cổ Đại** trên bản đồ thành Trụ chi viện. | **Trụ Tesla:** Đặt trụ bắn sét dây chuyền. **Đồng đội bắn vào Trụ Tesla sẽ nạp điện tăng tốc bắn; đủ `100%` phát nổ Xung EMP làm choáng quái và xóa sạch đạn địch quanh trụ!** *(Nâng cấp: Trụ Kép Giao Thoa · Quá Tải Lò Phản Ứng)* |
 
 ---
 
-## ⚡ 5. Sáu Phản Ứng Nguyên Tố & Đồng Đội Combo
+## ⚡ 5. Sáu Phản Ứng Nguyên Tố, Phước Lành Giao Thoa (`Duo Boons`) & Đồng Đội Combo
 
 Kết hợp 4 trạng thái nguyên tố (**Cháy 🔥**, **Lạnh/Đóng Băng ❄️**, **Sét ⚡**, **Độc ☠️**) trên mục tiêu sẽ kích nổ **6 Phản Ứng Nguyên Tố**:
 
-1. **💨 HƠI NƯỚC (`Cháy + Lạnh`):** Nổ sát thương gấp đôi (`×2.0`) + tạo đám mây hơi nước làm mù khiến quái bắn lệch hướng trong `3s`.
-2. **💎 VỠ BĂNG (`Đóng Băng + Đòn nặng / Cận chiến / Chí mạng`):** Phá băng gây **sát thương chí mạng `×3.0`** và văng mảnh băng sát thương lan xung quanh.
-3. **⚡ SIÊU DẪN (`Sét + Lạnh`):** Phá vỡ toàn bộ Khiên Chắn và làm mục tiêu **nhận thêm `+30% sát thương` từ mọi nguồn** trong `6s`.
-4. **🧪 NỔ ĐỘC (`Cháy + Độc`):** Kích nổ toàn bộ cộng dồn Độc thành vụ nổ diện rộng và phát tán Độc sang quái lân cận.
-5. **⛓️ TÊ LIỆT (`Sét + Độc`):** Làm **choáng cứng mục tiêu `1.0s`** và ngắt ngay lập tức đòn gồng chiêu (*telegraph*) của quái Tinh Anh / Boss.
+1. **💨 HƠI NƯỚC (`Cháy + Lạnh`):** Nổ sát thương hơi nước + tạo đám mây mù làm quái trong vùng bắn trượt.
+2. **💎 VỠ BĂNG (`Đóng Băng + Đòn nặng / Cận chiến / Chí mạng / Wall-Slam`):** Phá băng gây **sát thương `×2.0`** (`×1.35` trên Boss) và văng mảnh băng sát thương lan xung quanh.
+3. **⚡ SIÊU DẪN (`Sét + Lạnh`):** Phá vỡ toàn bộ Khiên Chắn và làm mục tiêu **nhận thêm `+30% sát thương` từ mọi nguồn** trong `4s`.
+4. **🧪 NỔ ĐỘC (`Cháy + Độc`):** Kích nổ Độc thành vụ nổ Lửa diện rộng và phát tán Độc sang quái lân cận.
+5. **⛓️ TÊ LIỆT (`Sét + Độc`):** Làm **choáng cứng mục tiêu `1.0s`** và ngắt ngay lập tức đòn gồng chiêu (*telegraph*) của quái Tinh Anh.
 6. **💥 QUÁ TẢI (`Cháy + Sét`):** Nổ sóng xung kích điện-nhiệt phá Khiên Chắn và hất văng mạnh toàn bộ quái xung quanh.
 
-> 🤝 **ĐỒNG ĐỘI COMBO (`Team Combo`):** Khi **Người chơi A** gắn nguyên tố nền và **Người chơi B** kích nổ phản ứng nguyên tố, hệ thống lập tức thưởng **`+15 Năng lượng` cho cả hai người** và cộng điểm **Đồng Đội Combo** để xét danh hiệu **MVP Bậc Thầy Nguyên Tố** cuối trận!
+- **💎 6 Phước Lành Giao Thoa (`Elemental Duo Boons` — Thẻ Kim Cương Đôi Cầu Vồng):** Khi sở hữu từ 2 nguyên tố tương ứng qua Vũ khí & Phước lành Hành động (trong bể `24` Phước lành 4 họ + `10` Bản độ Búa rèn Daedalus), ô thẻ thứ 3 khi qua tầng có **`35%` cơ hội** mở khóa `Duo Boon` huyền thoại: *Lốc Xoáy Nước Sôi*, *Tứ Trụ Băng Phá*, *Đường Ray Siêu Dẫn*, *Đại Dịch Nhựa Lửa-Độc*, *Tinh Cầu Quá Tải Plasma* và *Vòng Thành Lũy Điện Từ*!
+- **🤝 ĐỒNG ĐỘI COMBO (`Hội Tụ Nguyên Tố 3.0s`):** Khi **Người chơi A** gắn nguyên tố nền và **Người chơi B** kích nổ phản ứng nguyên tố, cả hai lập tức nhận **Hội Tụ Nguyên Tố trong `3.0s`**: **nạp đầy Băng đạn / xả sạch Nhiệt về `0%`**, nhận **`+20%` Tốc chạy & `+20%` Tốc bắn**, và cộng điểm **Đồng Đội Combo** xét danh hiệu **MVP Bậc Thầy Nguyên Tố** cuối trận!
 
 ---
 
-## 🗺️ 6. Ba Màn Chơi (Biomes), Phòng Thử Thách & Ba Boss Cuối Màn
+## 🗺️ 6. Đấu Trường Chiến Thuật, Khế Ước Tro Tàn, Đấu Trường Bí Mật `20s` & Ba Boss
 
-Một chiến dịch hoàn chỉnh gồm **3 Màn (Biome) × 2 Tầng = 6 Tầng** (mỗi tầng **10 phòng**), bao gồm: Phòng Khởi Đầu, các Phòng Chiến Đấu (với cơ chế tràn đợt *Overlapping Waves* khi còn `≤ 2` quái hoặc sau `14s`), **Phòng Thử Thách (`Challenge Room` — kích hoạt đài huyết chiến vượt 2 đợt quái chồng lấp nhận rương thưởng cam kết bậc Tím `'epic'` / Cam `'legendary'`)**, Phòng Kho Báu (câu đố **2 Tấm Áp Lực Co-op**), Thương Nhân Hắc Ám, Điện Thờ Cổ Đại, Phòng Bí Mật (phá tường nứt) và Phòng Cổng / Boss.
+Chiến dịch gồm **3 Màn (Biome) × 2 Tầng = 6 Tầng** với hệ thống địa hình tương tác sâu sắc:
+- **6 Archetype Phòng Chiến Thuật (`FlipX/FlipY` & `Prop Jitter`):** `TWIN_BRIDGES` (cầu đôi nhánh chữ Y bắc qua vực sâu `chasm` cho phép sút quái **`Chasm Ring-Out`**), `GAUNTLET_CHOKEPOINT`, `CENTRAL_BASTION`, `CROSSFIRE_CONVEYORS`, `PRISM_LABYRINTH`, và `CRUMBLING_PILLAR_RING`.
+- **Xưởng Rèn Kho Báu, Tế Đàn Khế Ước & Đấu Trường Bí Mật `20s`:**
+  - **Xưởng Rèn Kho Báu:** Tầng lẻ (`1, 3, 5`) đặt Rương + **Đe Rèn Daedalus** gắn `Weapon Mutator` (tối đa 2 bản độ/súng); Tầng chẵn (`2, 4, 6`) đặt Rương + **Đe Rèn Cường Hóa** (`+20%` sát thương gốc, tối đa `+3`).
+  - **Tế Đàn Khế Ước Tro Tàn (`1 Tế Đàn / Biome` ở Tầng `1, 3, 5`):** Ký 1 trong 6 lời nguyền sinh tử kéo dài suốt cả Biome; ngay khi hạ Boss Tầng Chẵn (`2, 4, 6`), lời nguyền lập tức thanh tẩy thành **Di Vật Tro Tàn Thức Tỉnh (`Awakened Relic`)** xóa sạch hình phạt!
+  - **Phòng Bí Mật Động & Đấu Trường Kỹ Năng `20 Giây`:** Dùng `Dash-Kick` vật chắn hoặc thuốc nổ phá tường nứt (`cracked_wall`) để tìm Phòng Bí Mật. Kích hoạt **Tinh Thể Khiêu Chiến `[E]`** và quét sạch đội quân Tinh Anh trong **`<= 20.0s`** để nâng cấp rương thành **`100% Huyền Thoại (Legendary)` + `+40 Vàng`**! *(Nếu hết giờ, quái tự tan biến an toàn không soft-lock và bạn vẫn giữ rương `Rare/Epic` + `+30 Vàng` ban đầu).*
 
-Cả 3 Boss đều có cơ chế **Kháng Khống Chế Tăng Dần (`CC Diminishing Returns`: `100% → 50% → 25% → Miễn nhiễm 4s`)**, **Chuyển Pha Bất Tử `1.2s` (`Phase Transition Shield + Roar` xóa sạch hiệu ứng xấu và đẩy lùi người chơi áp sát)** và **Cuồng Nộ Mềm (`Soft Enrage` sau `90s`: `+25%` tốc độ & tốc bắn)**:
+### Ba Màn Chơi, 9 Đồ Chơi Địa Hình & Ba Boss Phá Giáp 1–2 Bước
+Cả 3 Boss đều có **Thanh Chấn Động Phụ (`bossStaggerAccum`)**, **Tiếp Tế Đấu Trường (`Boss Supply Drop` mỗi `18.0s`)** thả thêm Bia Chắn & Đồ Chơi, và cơ chế **Phá Giáp Trực Quan 1–2 Bước ở mốc `66%` / `33%` máu** (`6% MaxHP` sát thương chuẩn + Choáng `3.0–4.0s` + nhận `+40%` sát thương):
 
 1. **Màn 1 (Tầng 1–2) — Rừng Cổ Mục Nát (*Overgrown Ruins*):**
-   - **Địa hình & Kiến trúc:** Cỏ cháy lan, hồ nước dẫn điện, đầm lầy độc, thùng thuốc nổ dây chuyền, rễ cây leo cột đá cổ và đom đóm lập lòe.
-   - **Boss: Mục Vương Nấm Độc (`spore_king`)** — Bắn vòng bào tử xoay tròn, độn thổ trồi lên dưới chân người chơi (P2), bao phủ viền phòng bằng sương độc (P3). Ở chế độ 3–4 người, triệu hồi thêm **2 Nấm Hộ Vệ** tạo khiên bảo vệ Boss đòi hỏi cả đội chia nhau tiêu diệt.
+   - **Đồ chơi địa hình:** **Bàn Đá Rêu Cổ** (`moss_table` — vỡ tỏa phấn hoa `+1 Giáp`), **Túi Bào Tử Căng Phồng** (`volatile_spore_pod` — sút nổ Độc + Trói `1.2s`), **Trụ Đá Mục** (`rotten_totem_pillar` — đâm/bắn gãy đổ đè dải `160×56px`).
+   - **Boss: Mục Vương Nấm Độc (`spore_king`)** — Dựng Vỏ Bào Tử ở `66%` & `33%` HP; **`Dash-Kick` Bàn Đá / Túi Bào Tử đập trúng Mục Vương** (hoặc dụ Boss húc sập Trụ Đá Mục) để phá nát vỏ giáp làm choáng `3.5s`!
 2. **Màn 2 (Tầng 3–4) — Hầm Băng Vĩnh Cửu (*Frozen Depths*):**
-   - **Địa hình & Kiến trúc:** Sàn băng trơn trượt quán tính, hồ nước đóng băng, vực thẳm, 4 cột pha lê phản xạ tia laser và vết nứt băng phát sáng.
-   - **Boss: Băng Hậu Kryssa (`kryssa_ice_queen`)** — Bắn tia laser khúc xạ qua cột pha lê (P1), tạo **Phân Thân Gương** *(mẹo: chỉ bản thật mới có bóng đổ dưới chân!)* (P2), gọi **Bão Tuyết Vĩnh Cửu** quét gió tuyết chéo tốc độ cao kèm viền băng giá lạnh buốt (vẫn giữ tầm nhìn sàn đấu trong trẻo) và nhốt người chơi vào **Lồng Băng Vĩnh Cửu** (đồng đội phải bắn vỡ lồng băng để giải cứu!).
+   - **Đồ chơi địa hình:** **Phiến Băng Cổ Đại** (`glacial_barricade` — sút vỡ đóng 3 Cọc Nhũ Băng), **Khối Băng Trượt** (`sliding_ice_block` — trượt `600 px/s` nảy tường bi-a), **Lăng Kính Pha Lê** (`cryo_prism_pillar` — khúc xạ đạn người chơi thành 3 tia quạt Lạnh `+20%` sát thương).
+   - **Boss: Băng Hậu Kryssa (`kryssa_ice_queen`)** — Khúc xạ tia laser, gọi **Phân Thân Gương** *(chỉ bản thật có bóng đổ dưới chân)*, tạo **Bão Tuyết Vĩnh Cửu** gió tuyết chéo giữ tầm nhìn sàn đấu sáng rõ trong trẻo và nhốt người chơi vào Lồng Băng. Khi ả dựng Khiên Băng Hàn, hãy **lật `[E]` Phiến Băng chắn tia laser rồi `Dash-Kick` Phiến Băng / Khối Băng tông vỡ khiên Kryssa**!
 3. **Màn 3 (Tầng 5–6) — Lò Rèn Dung Nham (*Molten Forge*):**
-   - **Địa hình & Kiến trúc:** Kênh dung nham nóng chảy, băng chuyền cơ khí đẩy thực thể, máy móc cổ đại có thể sửa chữa, đường ống đồng hồ áp suất và bánh răng xoay.
-   - **Boss: Titan Lò Rèn (`forge_titan`)** — Nện đại chùy tạo **Vòng Sóng Xung Kích** lan rộng (dùng `Shift` lướt xuyên qua bằng i-frame) và đảo chiều băng chuyền (P1); lộ **2 Lõi Năng Lượng** hai bên sườn ở P2 *(cả đội phải phối hợp phá hủy cả 2 lõi trong vòng `3 giây` để làm Titan quá tải choáng cứng `4.5s` và nhận `×1.5` sát thương!)*; quá nhiệt quét lửa 360° ở P3.
+   - **Đồ chơi địa hình:** **Tấm Chắn Thép Phản Nhiệt** (`forge_blast_shield` — hấp thụ lửa thành Siêu Nhiệt, sút phóng sóng lửa `88px`), **Búa Máy Cảm Biến** (`pneumatic_press` — dập nghiền quái & giáp Boss sau `0.35s`), **Nồi Nung Xỉ** (`slag_crucible` — đổ thảm dung nham `192px`).
+   - **Boss: Titan Lò Rèn (`forge_titan`)** — Nện sóng xung kích, đảo chiều băng chuyền theo nhịp nhà máy và bật Giáp Nhiệt Hạch; **`Dash-Kick` Tấm Chắn Thép / Nồi Nung Xỉ / Bom Than tông thẳng vào Titan** (hoặc dẫn dụ vào Búa Máy / phá đồng bộ 2 Lõi Năng Lượng) để làm quá tải nổ tung giáp!
 
 ---
 
@@ -145,34 +152,35 @@ pnpm dev
 # 3. Build production và khởi chạy Host Co-op LAN ngay tại cổng 2567
 pnpm host
 
-# 4. Chạy bộ công cụ mô phỏng cân bằng 60Hz thực tế (1,795 lượt sim trên 30 locked seeds -> xuất docs/balance-report.md & .json)
+# 4. Chạy bộ công cụ mô phỏng cân bằng 60Hz thực tế (2.269 lượt sim trên 30 locked seeds -> đạt 10/10 mục tiêu tại docs/balance-report.md)
 pnpm balance
 
-# 5. Chụp bộ ảnh chuẩn hóa 24 cảnh (pnpm shots) & đo hiệu năng FPS / Tick / Bandwidth (pnpm perf)
+# 5. Chụp bộ ảnh chuẩn hóa / dải hoạt ảnh Engine 2.6 (pnpm shots) & đo hiệu năng FPS / Tick / Bandwidth (pnpm perf)
 pnpm shots
 pnpm perf
 
 # 6. Chạy toàn bộ cổng kiểm định chất lượng (Typecheck + ESLint + Vitest Unit/Soak Tests + Build + Playwright E2E)
 pnpm verify
 
-# 7. Đóng gói bản phát hành Windows hoàn chỉnh vào release/AshenPact-v0.2.1-win-x64/ và file .zip
+# 7. Đóng gói bản phát hành Windows hoàn chỉnh vào release/ (hiện hành AshenPact-v0.2.1-win-x64.zip trước bước bump manifest cuối)
 pnpm package:release
 ```
 
 ### Cấu trúc thư mục dự án
 ```text
 ├── apps/
-│   ├── client/          # Giao diện Phaser 3 WebGL (GameScene + HudScene), Cutout 2.0 Art Baker, Hybrid 3D Biome, Lighting/PostFX, ZzFX & Music Synth
-│   └── server/          # Máy chủ Authoritative Colyseus 60Hz + Debug Gate + phục vụ tĩnh & khám phá IP LAN / QR ASCII
+│   ├── client/          # Phaser 3 WebGL (GameScene + HudScene), Cutout 2.0, Micro-Bar, Duo/Pact/Anvil Modals, ZzFX & Music Synth
+│   └── server/          # Máy chủ Authoritative Colyseus 60Hz (meta.playerId isolation) + Debug Gate + IP LAN / QR ASCII
 ├── packages/
-│   └── shared/          # Simulation 60Hz thuần TypeScript, Spatial Hash, dữ liệu cân bằng, Challenge Room, Boss CC DR & i18n
+│   └── shared/          # WorldSim 60Hz mô-đun (<1000 dòng/file), 18 Vũ khí, 24 Blessings, 10 Mutators, 6 Duo Boons, 6 Pacts, 3-Bucket Damage
 ├── tools/
-│   ├── balance-harness.ts   # Công cụ kiểm chứng cân bằng tự động 60Hz WorldSim thực tế
-│   ├── run-shots.ts         # Công cụ chụp 24 ảnh chuẩn hóa & so sánh pixelmatch
-│   ├── run-perf.ts          # Công cụ đo lường FPS, Frame Time p95/p99, Server Tick & Bandwidth
-│   └── package-release.ts   # Công cụ đóng gói AshenPact-Host.exe, batch scripts & gói ZIP phát hành
-├── tests/e2e/           # Bộ kiểm thử tự động Playwright E2E (phase0..phase8 & polish-p1..p11)
-└── docs/                # Tài liệu thiết kế (GDD, TECH, ART_GUIDE, BALANCE, QA_CHECKLIST, RELEASE_NOTES, PROGRESS)
+│   ├── balance-harness.ts         # Kiểm chứng 10/10 chỉ tiêu cân bằng 60Hz (2.269 sims, AVERAGE_PLAYER_BOT_PROFILE)
+│   ├── visual-animation-gates.ts  # Engine 2.6 kiểm chứng dải hoạt ảnh qua 5 cổng toán học HARD_ASSERT
+│   ├── run-shots.ts               # Chụp ảnh chuẩn hóa & contact sheets
+│   ├── run-perf.ts                # Đo lường FPS, Frame Time p95/p99, Server Tick & Bandwidth
+│   └── package-release.ts         # Đóng gói AshenPact-Host.exe, batch scripts & gói ZIP phát hành
+├── tests/e2e/           # Bộ kiểm thử tự động Playwright E2E & đồng bộ Co-op LAN
+└── docs/                # Tài liệu sống (GDD, TECH, ART_GUIDE, BALANCE, QA_CHECKLIST, RELEASE_NOTES)
 ```
 
 ---

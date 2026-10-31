@@ -213,3 +213,42 @@ Bộ tham chiếu chuẩn đã vượt qua Visual Gate Bước A (Env `9.2/10`, 
 - **Không cắt dấu:** line-height ≥ 1.3 và padding trên đủ cho dấu chồng (`Ở`, `Ữ`, `Ặ`); chữ nhỏ nhất trên HUD là 13px tại 1080p.
 - **Độ nét UI:** text/icon trong `HudScene` (scene overlay tạo ở P3 của Polish v0.2.0) render theo `devicePixelRatio × UI scale`, vì không được zoom theo camera thế giới.
 - **Màu panel UI** lấy từ nhóm `ENV` (nền gần `#2D3547`, viền gần `#64708B`, alpha 0.72–0.85) để HUD cùng tông với map.
+
+---
+
+## 7. Ngôn Ngữ Thị Giác Ashen Pact 2.0 (Tactical Props, Cadence Micro-Bar, Duo Boons & Engine 2.6)
+
+Toàn bộ các bất biến của **Golden Room `v0.2.0`** tại Mục 1–6 tiếp tục giữ nguyên hiệu lực 100%. Phiên bản **Ashen Pact 2.0** bổ sung lớp ngôn ngữ thị giác cho hệ thống vật lý địa hình chiến thuật, nhịp súng chủ động `[R]` và giao diện Build chiều sâu:
+
+### 7.1 Bia Chắn Chiến Thuật 3 Trạng Thái, Vực Sâu `Chasm` 3 Lớp & 9 Đồ Chơi Biome (`texture-baker-props.ts`)
+1. **Bia Chắn Chiến Thuật 3 Trạng Thái (`moss_table`, `glacial_barricade`, `forge_blast_shield`):**
+   - **Trạng thái `'low'` (Nằm phẳng — đi & bắn xuyên qua được):** Giảm tương phản nhẹ, bóng đổ sát sàn (`2–3u`), chưa có gờ chắn sáng phía trước để người chơi đọc ngay là chưa dựng công sự.
+   - **Trạng thái `'flipped'` (Đã dựng bằng `[E]` — chặn đạn & chặn di chuyển):** Dựng khối 2.5D rõ nét với mặt đứng tối (`South Face`), **gờ chắn sáng phía trước (`Protective Front Rim` đón key light `-135°`)** và viền `INK_DARK` `2.5u`. Khoảnh khắc lật phát vòng sóng trắng-lam **`Micro-Blank` (`r = 56px`, `0.15s`, `BlendMode.ADD`)** quét tan đạn địch trong tầm; nếu có `table_tech_prism_split`, bia chắn phủ thêm hào quang lăng kính xanh ngọc (`#34D399`).
+   - **Trạng thái `'sliding'` (`Dash-Kick` ở `520 px/s`):** Nghiêng nhẹ theo vector vận tốc, kéo theo vệt gió/bụi trượt (`motion wake`) phía sau và nổ vệt nứt chấn động + tia sáng va đập khi kích hoạt **`Wall-Slam`**.
+2. **Chiều Sâu Vực Thẳm `Chasm` 3 Lớp & Cầu Đôi Chữ Y (`TWIN_BRIDGES`):**
+   - Ô `chasm` ở cả 3 Biome được bake 3 lớp chiều sâu: **(1)** Gờ mép đá/băng/bazan vát cạnh trên cùng, **(2)** Vách đá dựng đứng tối dần theo chiều sâu (`cliff wall`), và **(3)** Đáy vực tối sâu `INK_DEEP` (`#0B090E`) điểm ánh rễ phát quang mờ (B1), sương băng lạnh (B2) hoặc hơi nhiệt đỏ sẫm (B3) ở độ bão hòa thấp để phân biệt tức thì vùng rơi **`Chasm Ring-Out`** với sàn đi được.
+   - Bố cục `TWIN_BRIDGES` nối liền sảnh cửa Bắc/Nam bằng nhánh vực chữ Y và 2 mặt cầu 3 ô có gờ lan can đá đứt đoạn, dẫn hướng thị giác rõ ràng qua 2 nút thắt chiến thuật.
+3. **Silhouette Nhận Diện Tức Thì Của 9 Đồ Chơi Địa Hình:**
+   - **Biome 1:** `moss_table` (bàn phiến đá phủ rêu xanh `#499F54`), `volatile_spore_pod` (nang tròn căng phồng tím-lục `#9333EA` / `#84CC16` nhịp thở), `rotten_totem_pillar` (cột đá khắc totem có vết nứt mục ở chân, khi đổ sập để lại thân cột nằm ngang `160×56px`).
+   - **Biome 2:** `glacial_barricade` (phiến băng vát cạnh `#6F949E` / rim `#CFE8EE`, vỡ mọc 3 cọc `glacial_spike`), `sliding_ice_block` (khối băng vuông bo góc phản quang chéo `#CFFAFE`), `cryo_prism_pillar` (trụ pha lê lục giác phát sáng `#22D3EE` khúc xạ tia đạn thành 3 chùm quạt).
+   - **Biome 3:** `forge_blast_shield` (khiên thép tán đinh viền đồng `#D97706`, chuyển sang rực cam `#F97316` khi hấp thụ lửa thành Siêu Nhiệt), `pneumatic_press` (khung búa máy cơ khí với vòng cảm biến sàn cảnh báo `0.35s` trước khi dập), `slag_crucible` (nồi gang chứa xỉ nóng chảy `#F97316` / `#FDE047`, đổ tràn thảm dung nham `192px`).
+
+### 7.2 Thanh Nhịp Vũ Khí Dưới Chân Nhân Vật — `Cadence Micro-Bar` (`32×5px`)
+Loại bỏ hoàn toàn thanh Energy cũ trên HUD, thay bằng **`Micro-Bar` kích thước `32 × 5px`** (viền `INK_DARK` `1px` sắc nét) neo gọn ngay dưới vòng chân nhân vật để người chơi không bao giờ phải rời mắt khỏi tâm giao tranh:
+- **`CLIP_RELOAD` (Khi đang nạp đạn):** Nền xám đá `#241F2E`, đánh dấu rõ **Khung Vàng (`45% – 70%`, màu `SOLAR_GOLD` `#FACC15`)** (tự động giãn rộng trực quan khi có `dash_reload_acrobat`, `mutator_thermal_meltdown` hoặc `relic_perpetual_core`) cùng vạch chạy trắng ngà `#F4F1EA`. Bấm `[R]` trúng Khung Vàng lóe tia sáng vàng kim + chữ nổi gọn và phủ hào quang `Overclocked` cho phát bắn đầu.
+- **`HEAT_VENT` (Khi tích nhiệt > 0%):** Chuyển màu mượt từ lam mát (`0%–64%`) sang **Vùng Nhiệt Cam (`65% – 95%`, màu `FLAME_ORANGE` `#F97316`)** và nháy đỏ `CRIMSON_BRIGHT` (`#E84545`) khi khóa quá nhiệt `100%`. Bấm `[R]` trong Vùng Cam bung vòng khói hơi nước trắng-cam xả áp quanh chân.
+- **`MELEE_COMBO` (Vũ khí cận chiến):** **Ẩn hoàn toàn `Micro-Bar`** để giữ sàn đấu thoáng sạch; nhịp combo được truyền tải trực tiếp qua vệt chém 3 bước và **ánh chớp trắng-vàng `Parry Deflect` (`0.18s`)** trên lưỡi vũ khí ở Đòn thứ 3.
+
+### 7.3 Thẻ Kim Cương Đôi `Duo Boon`, Modal Khế Ước / Đe Rèn & HUD Tương Tác Mới (`HudScene`)
+1. **Thẻ Phước Lành Giao Thoa — `Prismatic Double-Diamond` (*Kim Cương Đôi Cầu Vồng*):**
+   - Khung thẻ thứ 3 khi xuất hiện `Duo Boon` mang viền chuyển sắc kép theo cặp màu `primaryColor` / `secondaryColor` của 2 nguyên tố thành phần, đỉnh thẻ gắn biểu tượng **Kim Cương Đôi Lồng Nhau** phát sáng nhẹ kèm **2 Huy Hiệu Nguyên Tố (`Dual Element Badges`)** rõ nét.
+2. **Modal Tế Đàn Khế Ước & Banner Di Vật Thức Tỉnh:**
+   - **Tế Đàn Khế Ước Tro Tàn (`shrine` Tầng Lẻ):** Khung modal tông đỏ thẫm / tro tàn (`RUBY_DARK` `#6E1423` + viền `CRIMSON_BRIGHT`), chia rõ 2 nửa trên mỗi thẻ: **Lời Nguyền Suốt Biome** (chữ đỏ cam cảnh báo) và **Di Vật Thức Tỉnh Sau Boss** (chữ vàng kim), kèm nút từ chối an toàn.
+   - **Banner Thức Tỉnh Di Vật (Ngay khi hạ Boss Tầng Chẵn):** Dải banner hoàng kim (`SOLAR_GOLD` `#FACC15` trên nền `#141019`) trượt mượt trên `HudScene` vinh danh sự kiện xóa bỏ lời nguyền và nhận Di Vật vĩnh viễn.
+3. **Modal Đe Rèn Cổ Đại, Vòng Tiến Trình Phân Rã `[X] 0.5s` & HUD Đấu Trường Bí Mật `20.0s`:**
+   - **Xưởng Rèn Kho Báu:** Tầng lẻ mở bảng chọn 1 trong các **Bản Độ Daedalus (`daedalus_anvil`, ánh cam lò rèn `#F97316`)** tương thích với vũ khí đang cầm; Tầng chẵn kích hoạt **Đe Cường Hóa (`upgrade_anvil`, ánh lam `#38BDF8`)** nâng cấp `+1` bậc tinh luyện (`+20% Base DMG`).
+   - **Chỉ Báo Phân Rã Vũ Khí (`[X] 0.50s`):** Khi giữ `[X]` cạnh vũ khí rơi ngoài giao tranh, hiển thị vòng tròn/thanh tiến trình vàng kim `0.50s` ngay trên vật phẩm kèm số Vàng sẽ nhận được; nhả phím sớm hủy mượt mà không mất súng.
+   - **Đồng Hồ Đấu Trường Kỹ Năng Bí Mật (`20.0s`):** Hiển thị hộp đếm ngược `20.0s` sắc nét ở đỉnh `HudScene` kèm số quái thử thách còn lại (chuyển sang nhịp cam/đỏ ở `5.0s` cuối) và thanh phụ **`bossStaggerAccum`** màu vàng hổ phách ngay dưới thanh máu Boss chính.
+
+### 7.4 Chuẩn Kiểm Chứng Dải Hoạt Ảnh Engine 2.6 (`HARD_ASSERT` Contact Sheets)
+Mọi hiệu ứng thị giác và chuyển động vật lý mới của Ashen Pact 2.0 đều bắt buộc xuất ra dải ảnh `8` hoặc `12` khung hình (`tools/visual-strip-renderer.ts`) và vượt qua 5 cổng định lượng `HARD_ASSERT` (`tools/visual-animation-gates.ts`): nhân vật và vật thể tương tác nằm gọn `>= 85%` trong vùng ROI, `0` chồng lấn nhãn chữ cảnh báo phi-số (`ĐẬP TƯỜNG!`, `RING-OUT!`, `PHÁ GIÁP!`, `NẠP CHUẨN!`), không đóng băng frame trong pha hành động và khớp chính xác tick đỉnh điểm `Hero Frame`.

@@ -1,4 +1,68 @@
-# 📜 GHI CHÚ PHÁT HÀNH (RELEASE NOTES) — ASHEN PACT `v0.2.1` ("Polish & Depth")
+# 📜 GHI CHÚ PHÁT HÀNH (RELEASE NOTES) — ASHEN PACT
+
+---
+
+## 🔥 What's New in Ashen Pact `v2.0.0` — *"Tactical Arena Overhaul"*
+
+- **Phiên bản đại tu kiến trúc & lối chơi:** `v2.0.0` (*"Tactical Arena Overhaul" — Complete Combat Cadence, Tactical Environment Physics, Bespoke Arsenal, Per-Player Synergy Depth & 60Hz Deterministic Architecture Overhaul*, `Phases P0A → P5`)
+- **Nền tảng phát hành:** Windows 10/11 64-bit *(gói phát hành ổn định hiện hành `AshenPact-v0.2.1-win-x64` — chuẩn bị nâng phiên bản đóng gói đồng bộ sang `v2.0.0`)* & Web Browser (Chromium / Chrome / Edge / Firefox)
+- **Chế độ chơi:** Chơi đơn (*Solo*) & Phối hợp mạng nội bộ (*Co-op LAN / Wi-Fi 2–4 người chơi*, `60Hz Authoritative WorldSim`)
+
+Bản đại tu **`Ashen Pact v2.0.0` ("Tactical Arena Overhaul")** tái thiết toàn diện vòng lặp chiến đấu 3 giây, vật lý địa hình đấu trường, kho vũ khí độc bản, chiều sâu build riêng từng người chơi và kiến trúc mạng tất định 60Hz qua **7 giai đoạn kỹ thuật (`P0A → P5`)**:
+
+### 1. Vòng Lặp Chiến Đấu Cốt Lõi Mới — Tam Giác Chiến Thuật 3 Giây & `Zero Energy`
+- **Xóa bỏ hoàn toàn thanh Năng Lượng (`100% Zero Energy`):** Vũ khí không còn tiêu hao năng lượng khi bắn; kỹ năng chủ động `[Q / Chuột Phải]` của cả 5 nhân vật vận hành thuần túy theo **Hồi Chiêu (`Cooldown`)**, giải phóng người chơi khỏi tình trạng cạn mana đứng chờ giữa giao tranh.
+- **Khởi đầu 1 Vũ Khí Trấn Phái & `Holster Auto-Reload` (`2.0s`):** Mỗi nhân vật xuất trận với duy nhất **1 vũ khí trấn phái ở Ô 1** (Ô 2 để trống sẵn sàng nhặt vũ khí mới; xóa vĩnh viễn khẩu `rusty_pistol` thừa và 5 vũ khí bản sao cũ). Cất vũ khí `CLIP_RELOAD` vào ô phụ đủ **`2.0s`** sẽ tự động nạp đầy băng đạn (`Holster Auto-Reload`), còn vũ khí `HEAT_VENT` tự nguội ngầm khi cất đi.
+- **3 Họ Nhịp Vũ Khí Chủ Động (`Active Weapon Cadences`) & Thanh `Micro-Bar` `32×5px` dưới chân:**
+  - **`CLIP_RELOAD` (9 vũ khí):** Phát đạn cuối băng kích hoạt **`Finale Shot`** cường hóa; bấm **`[R]`** đúng **Khung Vàng (`45%–70%`)** để **`Perfect Reload`** (nạp tức thì + buff đòn kế tiếp; bấm sai khung bị kẹt cò `Jam 0.35s`).
+  - **`HEAT_VENT` (5 vũ khí):** Duy trì nhiệt trong **Vùng Cam (`65%–95%`)** để nhận sát thương/tốc bắn cộng thêm; bấm **`[R]`** trong Vùng Cam để **`Tactical Vent`** xả xung nhiệt chiến thuật ra xung quanh thay vì để quá nhiệt `100%` (`Overheat Lockout`).
+  - **`MELEE_COMBO` (4 vũ khí):** Chuỗi chém nhịp 3 đòn với **Đòn Kết Liễu thứ 3 (`3rd-Hit Finisher`)** diện rộng và cửa sổ **`Parry Deflect` (`0.18s` đầu đòn vung)** phản xạ ngược đạn địch thành đạn đồng minh gây sát thương cường hóa (ẩn sạch `Micro-Bar` dưới chân khi cầm cận chiến).
+
+### 2. Vật Lý Đấu Trường Chiến Thuật, 6 Archetype Phòng, 3 Quy Luật Biome & 9 Đồ Chơi Địa Hình
+- **Lật Bia Chắn & Sút Trượt Đấu Trường (`Flip Cover & Dash-Kick`):**
+  - **`Flip Cover [E]`:** Dựng bia chắn từ trạng thái `'low'` sang `'flipped'`, phát xung **`Micro-Blank` (`r = 56px`, `0.15s`)** quét sạch đạn địch lân cận và tạo lá chắn che đạn thật (`60 / 65 / 85 HP` theo Biome).
+  - **`Dash-Kick [Shift]`:** Lướt thẳng vào bia chắn đã lật hoặc đồ chơi địa hình để sút trượt (`'sliding'`) ở vận tốc **`520–600 px/s`**, hất văng quái trên đường bay, gây **`Wall-Slam`** (sát thương va đập + làm choáng khi ép quái vào tường/trụ) hoặc phá vỡ tường nứt `cracked_wall`.
+  - **`Chasm Ring-Out`:** Đẩy hoặc sút quái thường không bay rơi xuống vực sâu **`chasm`** để tiêu diệt tức thì (vật phẩm/vàng rơi ra tự động bay về ô sàn an toàn gần nhất, không bao giờ mất loot).
+- **6 Archetype Phòng Chiến Đấu Chiến Thuật:** `TWIN_BRIDGES` (cầu đôi nhánh chữ Y bắc qua vực thẳm `chasm`), `GAUNTLET_CHOKEPOINT`, `CENTRAL_BASTION`, `CROSSFIRE_CONVEYORS`, `PRISM_LABYRINTH` và `CRUMBLING_PILLAR_RING`.
+- **3 Quy Luật Biome & 9 Đồ Chơi Địa Hình Tương Tác (`Biome Toys`):**
+  - **Biome 1 (*Rừng Cổ Mục Nát*):** `moss_table`, `volatile_spore_pod` (bào tử nổ dây chuyền khi trúng đạn/va chạm), `rotten_totem_pillar`.
+  - **Biome 2 (*Hầm Băng Vĩnh Cửu*):** `glacial_barricade`, `sliding_ice_block` (`600 px/s`), `cryo_prism_pillar` (**Lăng Kính Băng** khúc xạ tia/đạn người chơi thành **3 tia** với **`+20%` sát thương**).
+  - **Biome 3 (*Lò Rèn Dung Nham*):** `forge_blast_shield` (hấp thụ đạn lửa để hóa khiên **Superheated** rực đỏ trước khi sút trượt), `pneumatic_press`, `slag_crucible`.
+
+### 3. 18 Vũ Khí Độc Bản, 5 Nhân Vật Cooldown & Giao Thoa Đồng Đội `Elemental Convergence`
+- **Tinh lọc còn 18 Vũ Khí Độc Bản (`5 Common Starters`, `3 Uncommon`, `4 Rare`, `3 Epic`, `3 Legendary`):** Loại bỏ hoàn toàn 6 vũ khí trùng lặp cơ chế, nâng cấp từng vũ khí thành một lối chơi riêng biệt — từ `hunter_crossbow` (*Giữ-Thả xuyên tâm + `[R]` Giật Gai Barbed Rip*), `frag_launcher` (*Giữ-Thả kích nổ trên không Airburst*), `void_staff` (*Hút đạn địch + Giữ-Thả Hố Đen Implosion*), 4 vũ khí cận chiến (`knight_sword`, `emerald_cleaver`, `berserker_axe`, `thunder_hammer`) có `Parry Deflect`, tới `solar_archon_staff` (*Tia hội tụ mặt trời + `[R]` Siêu Tân Tinh Supernova*) và `magma_cannon` (*Tảng dung nham lăn + Finale phun trào*).
+- **5 Nhân Vật Cân Bằng Lại Theo HP/Giáp & Cooldown:** Thiết Vệ (`6 HP / 5 Giáp`, CD `9s`, trễ hồi giáp `3.0s`), Liệp Ưng (`5 HP / 3 Giáp`, CD `7s`), Lam Hỏa (`4 HP / 2 Giáp`, CD `8s`), Mộc Linh (`5 HP / 3 Giáp`, CD `12s`) và Bánh Răng (`6 HP / 4 Giáp`, CD `10s`).
+- **6 Phản Ứng Nguyên Tố & Thưởng Phối Hợp `Elemental Convergence` (`3.0s`):** Khi người chơi A gắn ấn nguyên tố và người chơi B kích nổ phản ứng, cả hai nhận ngay **`3.0s` Giao Thoa Nguyên Tố** — nạp đầy băng đạn / xóa `0%` nhiệt tức thì kèm **`+20%` tốc chạy & tốc bắn** và điểm `Team Combo`.
+
+### 4. Chiều Sâu Build Riêng Từng Người Chơi (`Zero Flat Stat-Sticks`)
+Xóa bỏ 6 buff cộng chỉ số phẳng nhàm chán cũ và tách toàn bộ tiến trình nâng cấp thành **trạng thái riêng biệt cho từng người chơi (`per-player instanced`)**:
+- **`24` Phước Lành Hành Động (`Action Blessings` — 4 họ × 6):** *Table Tech* (cường hóa lật bàn & `Micro-Blank`), *Dash Tech* (biến hóa lướt & `Dash-Kick`), *Reload Tech* (đột biến `Perfect Reload` & `Tactical Vent`) và *Bullet Mod* (biến đổi nảy tường, xuyên thấu, hội tụ đạn).
+- **`10` Nâng Cấp Kỹ Năng Nhân Vật (`Character Skill Upgrades`):** `2` nâng cấp chuyên sâu cho mỗi lớp nhân vật.
+- **`10` Đột Biến Vũ Khí Daedalus (`Daedalus Weapon Mutators`):** Phòng Kho Báu / Xưởng Rèn phân nhánh rõ theo tầng — Tầng lẻ (`1, 3, 5`) đặt **`daedalus_anvil`** cho phép khảm tối đa **`2` Mutators / ô vũ khí** làm thay đổi hình học và hành vi đạn; Tầng chẵn (`2, 4, 6`) đặt **`upgrade_anvil`** cường hóa cấp vũ khí (`+1 → +3`, mỗi cấp `+20% Base DMG`).
+- **`6` Phước Lành Giao Thoa Kép (`Elemental Duo Boons`):** Thẻ **Kim Cương Đôi Cầu Vồng (`Prismatic Double-Diamond`)** xuất hiện với tỉ lệ **`35%` ở ô thẻ thứ 3** khi người chơi sở hữu cặp nguyên tố tương ứng (`duo_superheated_cyclone`, `duo_cryo_shatter_spires`, `duo_superconduct_rail`, `duo_napalm_chain_plague`, `duo_plasma_overload_star`, `duo_magnetic_bastion_ring`).
+- **`6` Khế Ước Tro Tàn (`Ashen Pacts`) → `6` Thánh Vật Thức Tỉnh (`Awakened Relics`):** Mỗi Biome có **1 Tế Đàn Khế Ước** ở Tầng lẻ (`1, 3, 5`) để từng người chơi tự chọn ký lời nguyền đánh đổi mạo hiểm (`pact_soul_chain`, `pact_shattered_glass`, `pact_searing_trigger`, `pact_volatile_arsenal`, `pact_ashen_hunted`, `pact_ricochet_vow`). Ngay khi hạ gục Boss Tầng chẵn (`2, 4, 6`), lời nguyền được thanh tẩy hoàn toàn và thăng hoa thành **Thánh Vật Thức Tỉnh** giữ trọn quyền năng nâng cấp mà không còn bất kỳ hình phạt nào!
+
+### 5. Kinh Tế Chiến Thuật, Phòng Bí Mật Động & Đấu Trường Bí Mật `20.0s`
+- **Phá Tường Nứt & Đấu Trường Kỹ Năng Bí Mật (`20.0s Secret Skill Arena`):** Dùng bia chắn sút trượt, đạn nổ hoặc đòn hạng nặng phá tường nứt `cracked_wall` để mở Phòng Bí Mật. Kích hoạt pha lê thử thách và quét sạch đợt tinh anh trong **`<= 20.0s`** sẽ nâng cấp rương bí mật lên **`100% Huyền Thoại (Legendary)`** (rơi riêng cho từng người chơi) kèm **`+40 Vàng`**. Nếu hết giờ, quái và đạn thử thách tự động tan biến an toàn (`0` sát thương nổ hậu kỳ, `0` soft-lock) và người chơi vẫn nhận trọn rương cơ bản (`Rare / Epic`) cùng `+30 Vàng` tinh thể.
+- **Phân Rã Vũ Khí (`Giữ [X] 0.50s`):** Nhấp nhanh `[X]` để ném chia sẻ vũ khí cho đồng đội; giữ `[X]` trong **`0.50s`** ngoài giao tranh cạnh vũ khí rơi trên sàn để phân rã thành **`10 / 15 / 22 / 30 / 45 Vàng`** theo bậc hiếm.
+- **Thưởng Dọn Phòng Hoàn Hảo (`Flawless Room Bonus`):** Nhận thêm **`+10 Vàng`** mỗi khi dọn sạch phòng giao tranh mà không chịu bất kỳ sát thương nào (`!tookDamageInCurrentRoom`).
+
+### 6. AI Quái Chiến Thuật & Đại Tu 3 Boss (`Visual Armor Break` & `Supply Drop`)
+- **AI Đón Đầu Có Giới Hạn & Tương Tác Địa Hình:** Quái xạ thủ sử dụng **`Bounded Predictive Lead Aiming (±28°)`** kèm tia ngắm cảnh báo **`0.35s`** trước khi khai hỏa, đồng thời phối hợp 12 hành vi tương tác địa hình (ẩn nấp sau bia chắn, né vực `chasm`, kích hoạt bẫy môi trường).
+- **Đại Tu 3 Boss (`spore_king`, `kryssa_ice_queen`, `forge_titan`):**
+  - **`1–2 Step Visual Armor Break`:** Phá vỡ trực quan từng lớp giáp thân thể Boss tại ngưỡng **`66%`** và **`33%` HP**, thay đổi hình thái chiến đấu và mở lộ điểm yếu.
+  - **`Boss Supply Drop` mỗi `18.0s`:** Thả tiếp tế bia chắn / đồ chơi địa hình chiến thuật xuống đấu trường mỗi `18.0s` để người chơi luôn có công cụ `Flip Cover`, `Micro-Blank` và `Dash-Kick` phản công Boss.
+  - **Thanh Choáng Phụ `bossStaggerAccum`:** Tích lũy từ `Wall-Slam`, bia chắn sút trượt, `Parry Deflect` và đòn Kết Liễu để mở cửa sổ chế ngự Boss.
+
+### 7. Kiến Trúc Mạng Tất Định 60Hz, `3-Bucket Damage Pipeline`, Cân Bằng `10/10` & Engine 2.6
+- **Đồng Bộ Mạng 60Hz Không Giật Lùi (`Zero-Rubberband Networking`):** Mở rộng bitmask input 9-bit (`RELOAD_VENT = 1 << 8`), sinh **ID Đạn Tất Định** khớp giữa Client/Server, cờ **`SHOT_FLAG.DYNAMIC_BOUNCE`** kết hợp **`Zero-Rubberband Client Hold` (`0.12s`)** + `projectile_redirect` / `projectiles_destroyed`, cô lập tuyệt đối trạng thái build từng người chơi trong `QuantizedPlayerSnap` kèm xác thực `meta.playerId` tại `CoopRoom`, giới hạn ưu tiên `<= 64` sự kiện/snapshot và ngân sách pool thực thể cứng (`240 / 160 / 16 / 8`), giữ kỷ luật kiến trúc mô-đun `< 1000` dòng/file.
+- **Pipeline Sát Thương 3 Nhóm Có Trần (`3-Bucket Damage Pipeline`):** Ngăn lạm phát cấp số nhân cuối trận bằng trần mềm `2.80x` → trần cứng `3.80x`, trần suy yếu mục tiêu `M_EnemyVuln <= 1.75x`, trần đơn đòn lên Boss `18.0x`, giảm chấn đa tia lên Boss `dampenBossMultiProcDamage`, quy tắc `One-Split Rule` và `MAX_PELLETS_PER_TRIGGER = 9`.
+- **Kiểm Định Cân Bằng Định Lượng `10/10` (`2.269` lượt mô phỏng 60Hz trên 30 locked seeds):** Đạt **10/10 chỉ tiêu PASS** với `AVERAGE_PLAYER_BOT_PROFILE` (`godMode = false`) — Starter TTK `p50 1.42s`, phòng giao tranh 1–4P `p50 36.77s`, độ lệch Boss 1P vs 4P chỉ `±0.8% → ±8.6%`, `zeroOneShots: true`, `18/18` vũ khí đều có `Active DPS > Normal DPS`, độ lệch tỉ lệ thắng 5 nhân vật chỉ `±1.9%` (`95.7%–99.0%`), và Boss cuối Tầng 6 `forge_titan` trụ vững **`Min p50 47.51s`** (`>= 45.0s`) trước tổ hợp full-synergy cuối trận.
+- **Engine Kiểm Định Hoạt Ảnh & Khoảnh Khắc `2.6` (`HARD_ASSERT` 5 Gates):** Tự động kết xuất Contact Sheets và kiểm định cứng 5 cổng chất lượng thị giác (`Rig Continuity`, `Pose Separation`, `VFX Readability`, `Terrain Depth`, `UI Zero-Overlap`).
+
+---
+
+# 📜 LỊCH SỬ PHÁT HÀNH — ASHEN PACT `v0.2.1` ("Polish & Depth")
 
 - **Phiên bản:** `v0.2.1` (*"Polish & Depth" — Comprehensive Visual, Architectural, UI/UX & Combat Balance Overhaul*)
 - **Nền tảng phát hành:** Windows 10/11 64-bit (`AshenPact-v0.2.1-win-x64`) & Web Browser (Chromium / Chrome / Edge / Firefox)
