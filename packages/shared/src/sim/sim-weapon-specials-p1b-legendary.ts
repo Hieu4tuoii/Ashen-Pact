@@ -194,7 +194,7 @@ export function triggerSolarArchonSupernovaVent(sim: WorldSim, pOrPlayerId: SimP
     const b = sim.projectiles[i]!;
     if (b.team !== 'enemy' || b.ttlSec <= 0) continue;
     if (
-      distance(targetX, targetY, b.x, b.y) <= SOLAR_SUPERNOVA_CLEAR_RADIUS + b.radius ||
+      distance(targetX, targetY, b.x, b.y) <= SOLAR_SUPERNOVA_RADIUS + b.radius ||
       distance(p.x, p.y, b.x, b.y) <= SOLAR_SUPERNOVA_CLEAR_RADIUS + b.radius
     ) {
       b.ttlSec = 0;
@@ -449,12 +449,14 @@ export function triggerThunderHammerFinisher(
         sim.spawnDeterministicVolley(deflectVolley, true);
       }
     }
-    if (extraDeflectedIds.length > 0 && !sim.stressTestActive) {
-      sim.events.push({ kind: 'projectiles_destroyed', ids: extraDeflectedIds });
-      sim.events.push({
-        kind: 'melee_parry_deflect', playerId: p.id, weaponId: 'thunder_hammer',
-        x: pillarX, y: pillarY, angle: p.aimAngle, deflectedCount: extraDeflectedIds.length, ids: extraDeflectedIds,
-      });
+    if (extraDeflectedIds.length > 0) {
+      sim.recordDestroyedProjectiles(extraDeflectedIds);
+      if (!sim.stressTestActive) {
+        sim.events.push({
+          kind: 'melee_parry_deflect', playerId: p.id, weaponId: 'thunder_hammer',
+          x: pillarX, y: pillarY, angle: p.aimAngle, deflectedCount: extraDeflectedIds.length, ids: extraDeflectedIds,
+        });
+      }
     }
   }
 

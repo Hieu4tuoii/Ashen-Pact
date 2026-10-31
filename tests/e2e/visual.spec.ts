@@ -6,6 +6,7 @@ import {
   type VisualSceneDef,
   installDeterministicRafGate,
   setSceneLightingAndRenderStaticFrame,
+  stepDeterministicFrames,
 } from './helpers/visual-scenes.js';
 import {
   type CapturedAnimatedSceneResult,
@@ -17,6 +18,7 @@ import {
   comparePngBuffers,
   computeSceneEnvironmentSummary,
   convertPngBufferToGrayscale,
+  stitchPngBuffersHorizontal,
   type AnimationGatesEvaluationResult,
   type RegionMetrics,
   type SceneEnvironmentSummary,
@@ -83,6 +85,39 @@ async function captureSingleSceneOnce(
   await scene.setup(page);
 
   if (scene.captureStrip) {
+    if (scene.expectedScene !== 'GameScene') {
+      const count = scene.frameCount ?? 8;
+      const framesPerStep = scene.stripFramesPerStep ?? 4;
+      const frameBuffers: Buffer[] = [];
+      for (let fIdx = 0; fIdx < count; fIdx += 1) {
+        if (fIdx > 0) {
+          await stepDeterministicFrames(page, framesPerStep);
+        }
+        frameBuffers.push(await page.screenshot({ type: 'png' }));
+      }
+      const heroIdx = Math.min(Math.max(0, scene.heroFrameIndex ?? 0), frameBuffers.length - 1);
+      const rawHero = frameBuffers[heroIdx]!;
+      const litBuffer = scene.grayscaleFrom
+        ? convertPngBufferToGrayscale(rawHero)
+        : rawHero;
+      const stripBuffer = stitchPngBuffersHorizontal(frameBuffers);
+      await page.keyboard.up('KeyT');
+      return {
+        litBuffer,
+        stripBuffer,
+      };
+    }
+
+    const requiresHardAssert =
+      scene.id.startsWith('ap2-') ||
+      scene.stripSchedule !== undefined ||
+      scene.apexEvent !== undefined;
+    const effectiveGateMode: 'WARN_ONLY' | 'HARD_ASSERT' = requiresHardAssert
+      ? process.env['ASHEN_ANIM_GATE_MODE'] === 'WARN_ONLY'
+        ? 'WARN_ONLY'
+        : 'HARD_ASSERT'
+      : 'WARN_ONLY';
+
     const animResult = await captureAnimatedStripAndHeroScene(page, {
       id: scene.id,
       captureUnlit: scene.captureUnlit,
@@ -94,6 +129,7 @@ async function captureSingleSceneOnce(
       apexEvent: scene.apexEvent,
       actionRoi: scene.actionRoi,
       assertApexFlash: scene.assertApexFlash,
+      gateMode: effectiveGateMode,
       setSceneLightingAndRenderStaticFrame,
     });
     await page.keyboard.up('KeyT');
@@ -142,7 +178,7 @@ async function captureSingleScene(
 }
 
 test.describe('@visual Deterministic Visual Scene Catalog', () => {
-  test.setTimeout(900_000);
+  test.setTimeout(2_700_000);
 
   test('captures requested visual scenes, computes metrics, and optionally verifies freeze determinism', async ({
     page,
@@ -197,6 +233,7 @@ test.describe('@visual Deterministic Visual Scene Catalog', () => {
     await installDeterministicRafGate(page);
 
     const capturedPass1 = new Map<string, Buffer>();
+    const capturedStripPass1 = new Map<string, Buffer>();
     const capturedAnimPass1 = new Map<string, CapturedAnimatedSceneResult>();
     const manifestEntries: SceneManifestEntry[] = [];
     const metricsOutput: Record<
@@ -217,6 +254,9 @@ test.describe('@visual Deterministic Visual Scene Catalog', () => {
       );
 
       capturedPass1.set(scene.id, litBuffer);
+      if (stripBuffer) {
+        capturedStripPass1.set(scene.id, stripBuffer);
+      }
       if (animResult) {
         capturedAnimPass1.set(scene.id, animResult);
       }
@@ -372,6 +412,7 @@ test.describe('@visual Deterministic Visual Scene Catalog', () => {
         let traceHashMatched: boolean | undefined;
 
         const pass1Anim = capturedAnimPass1.get(scene.id);
+        const pass1Strip = capturedStripPass1.get(scene.id);
         if (pass1Anim && pass2.animResult) {
           traceHashMatched =
             pass1Anim.perTickTraceHash === pass2.animResult.perTickTraceHash;
@@ -402,6 +443,23 @@ test.describe('@visual Deterministic Visual Scene Catalog', () => {
               `Freeze determinism failed for "${scene.id}" ${roiKey}: diffRatio=${(roiDiff.diffRatio * 100).toFixed(4)}% exceeds 0.5% threshold`,
             ).toBeLessThan(0.005);
           }
+        } else if (pass1Strip && pass2.stripBuffer) {
+          const stripDiff = comparePngBuffers(pass1Strip, pass2.stripBuffer);
+          roiDiffRatios['strip'] = stripDiff.diffRatio;
+          if (stripDiff.diffRatio >= 0.005) {
+            fs.writeFileSync(
+              path.join(shotDir, `${scene.id}-strip-freeze-pass2.png`),
+              pass2.stripBuffer,
+            );
+            fs.writeFileSync(
+              path.join(shotDir, `${scene.id}-strip-freeze-diff.png`),
+              stripDiff.diffPngBuffer,
+            );
+          }
+          expect(
+            stripDiff.diffRatio,
+            `Freeze determinism failed for "${scene.id}" strip: diffRatio=${(stripDiff.diffRatio * 100).toFixed(4)}% exceeds 0.5% threshold`,
+          ).toBeLessThan(0.005);
         }
 
         freezeDiffs[scene.id] = {

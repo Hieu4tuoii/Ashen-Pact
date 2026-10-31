@@ -223,7 +223,7 @@ export const VISUAL_SCENES: readonly VisualSceneDef[] = [
       return {
         overlayVisible: window.__GAME_DEBUG__?.overlayVisible === true,
         overlayContainerVisible: gs?.debugOverlay?.container?.visible === true,
-        elementVisible: gs?.elementBtnText?.visible === true && Boolean(gs.elementBtnText.text.includes('[R] Ng.Tố')),
+        elementVisible: gs?.elementBtnText?.visible === true && Boolean(gs.elementBtnText.text.includes('[Alt+R] Ng.Tố')),
         qualityVisible: gs?.qualityBtnText?.visible === true && Boolean(gs.qualityBtnText.text.includes('[G] Đồ Họa')),
         galleryVisible: gs?.galleryBtnText?.visible === true && gs.galleryBtnText.text === '[Art Gallery]',
         hasDps: Boolean(gs?.statsLineText?.text.includes('DPS')),

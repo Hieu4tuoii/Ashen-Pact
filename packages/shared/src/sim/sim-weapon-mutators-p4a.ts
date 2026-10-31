@@ -91,14 +91,18 @@ export function trySpawnHoloDecoyOnReloadOrVent(
 }
 
 export function updateHoloDecoyTurretSummon(sim: WorldSim, s: SimSummonState, dtSec: number): void {
+  const owner =
+    s.ownerPlayerId === sim.player.id ? sim.player : sim.getPlayerById(s.ownerPlayerId);
+  if (!owner) {
+    s.ttlSec = 0;
+    s.hp = 0;
+    return;
+  }
+
   s.tickTimer -= dtSec;
   if (s.tickTimer > 1e-6) return;
   s.tickTimer += HOLO_DECOY_FIRE_INTERVAL_SEC;
   if (s.tickTimer <= 0) s.tickTimer = HOLO_DECOY_FIRE_INTERVAL_SEC;
-
-  const owner =
-    s.ownerPlayerId === sim.player.id ? sim.player : (sim.getPlayerById(s.ownerPlayerId) ?? sim.player);
-  if (!owner) return;
 
   let aimAngle = owner.aimAngle;
   if (owner.lifeState === 'alive') {

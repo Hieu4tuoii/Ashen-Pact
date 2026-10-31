@@ -16,6 +16,7 @@ import {
   activateAshenPactAltarImpl,
   tryKeepVolatileMorphedWeaponOnInteract,
 } from './sim-ashen-pacts.js';
+import { enforcePlayerDeployableCap } from './sim-blessings-p4a.js';
 import {
   type BotTacticalCadenceState,
   computeBossArmorBreakInput,
@@ -307,6 +308,7 @@ export function interactWithNearestImpl(
         selfDestruct: false,
         rootedEnemyIds: [],
       };
+      enforcePlayerDeployableCap(this, p.id, 1);
       this.summons.push(summon);
       this.events.push({
         kind: 'summon_spawned',
