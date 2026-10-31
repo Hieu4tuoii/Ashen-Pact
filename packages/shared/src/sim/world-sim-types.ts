@@ -736,6 +736,10 @@ export interface SimEnemyState {
   napalmPlagueOwnerId?: number;
   napalmPlagueDetonated?: boolean;
   cryoSpireIcdTimer?: number;
+  lastBossReactionTick?: number;
+  bossDpsWindowStartTick?: number;
+  bossDpsWindowAccum?: number;
+  bossDpsWindowHits?: number;
   lastCombatText?: string;
   secretTrialEnemy?: boolean;
 }

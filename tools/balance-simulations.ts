@@ -21,10 +21,7 @@ import {
   createBotBrainState,
   stepHonestPlayerBot,
 } from './bot-profile.js';
-import type {
-  ClassCoopRunRow,
-  WeaponCadenceBalanceRow,
-} from './balance-simulations-p3c.js';
+import type { ClassCoopRunRow, LateGameSynergyBossRow, WeaponCadenceBalanceRow } from './balance-simulations-p3c.js';
 
 export interface CharacterBalanceRow {
   characterId: CharacterId;
@@ -126,6 +123,8 @@ export interface BalanceHarnessReport {
   starterWeaponDpsSpreadPct: number;
   classCoopRows: ClassCoopRunRow[];
   classWinRateSpreadPct: number;
+  lateGameSynergyBossRows: LateGameSynergyBossRow[];
+  lateGameBossMinAvgSec: number;
   allTargetsPassed: boolean;
 }
 

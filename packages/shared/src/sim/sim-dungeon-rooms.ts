@@ -136,6 +136,7 @@ export function enterRoomImpl(this: WorldSim, roomId: number, entryDir?: Cardina
   this.pushBlocks.length = 0;
   this.shockwaveRings.length = 0;
   this.tetherBeams.length = 0;
+  this.magneticRivets.length = 0;
   this.flameFissures.length = 0;
   this.solarFireZones.length = 0;
   this.magmaTrails.length = 0;

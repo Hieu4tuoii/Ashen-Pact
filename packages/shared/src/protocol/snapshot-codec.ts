@@ -459,3 +459,14 @@ export function estimateSnapshotBytes(snapshot: QuantizedWorldSnapshot): number 
     snapshot.events.length * 14
   );
 }
+
+const snapshotUtf8Decoder = new TextDecoder();
+
+export function decodeWorldSnapshot(payload: string | Uint8Array): QuantizedWorldSnapshot {
+  const json = typeof payload === 'string' ? payload : snapshotUtf8Decoder.decode(payload);
+  const parsed = JSON.parse(json) as QuantizedWorldSnapshot;
+  if (!parsed || typeof parsed.tick !== 'number' || !Array.isArray(parsed.players) || !Array.isArray(parsed.events)) {
+    throw new Error('Invalid QuantizedWorldSnapshot payload');
+  }
+  return parsed;
+}

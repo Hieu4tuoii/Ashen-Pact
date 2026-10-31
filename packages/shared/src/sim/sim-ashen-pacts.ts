@@ -612,15 +612,17 @@ export function updatePlayerAshenPactAndRelicPassives(
             sim.applyDamageToEnemy(e, tickDmg, false, 'burn', e.aimAngle, 20, false, p.id, true);
             if (e.hp > 0) {
               e.burnTimer = Math.max(e.burnTimer, 2.0);
-              e.shockTimer = Math.max(e.shockTimer, 0.8);
-              if (!sim.stressTestActive) {
-                sim.events.push({
-                  kind: 'status_applied',
-                  targetId: e.id,
-                  status: 'shock',
-                  x: e.x,
-                  y: e.y,
-                });
+              if (!e.isBoss || sim.tick % 96 < 12) {
+                e.shockTimer = Math.max(e.shockTimer, 0.8);
+                if (!sim.stressTestActive) {
+                  sim.events.push({
+                    kind: 'status_applied',
+                    targetId: e.id,
+                    status: 'shock',
+                    x: e.x,
+                    y: e.y,
+                  });
+                }
               }
             }
           }

@@ -22,6 +22,7 @@ import {
   triggerTableTechMagnetSnareOnFlip,
   tryTriggerToxicShrapnelOnPropBreak,
 } from './sim-blessings.js';
+import { clampBossPlayerHitDamage } from './sim-damage-pipeline.js';
 import { tryDetonateCryoShatterSpireOnKickOrSlide } from './sim-duo-boons.js';
 import {
   checkSporeKingPillarCrash,
@@ -885,7 +886,8 @@ export function triggerEnemyWallSlam(sim: WorldSim, e: SimEnemyState, hitProp?: 
   }
 
   if (!e.bossBurrowed && !(e.isBoss && (e.bossPhaseTransitionTimer ?? 0) > 0)) {
-    const effectiveSlamDmg = e.isBoss && sim.hasActiveBossGuardians() ? Math.max(1, Math.round(slamDmg * 0.35)) : slamDmg;
+    const rawEffSlam = e.isBoss && sim.hasActiveBossGuardians() ? Math.max(1, Math.round(slamDmg * 0.35)) : slamDmg;
+    const effectiveSlamDmg = e.isBoss ? clampBossPlayerHitDamage(attacker, rawEffSlam) : rawEffSlam;
     e.hp = Math.max(0, e.hp - effectiveSlamDmg); e.hitFlashTimer = 0.12;
     sim.events.push({
       kind: 'damage_dealt', targetId: e.id, targetKind: 'enemy', x: e.x, y: e.y,

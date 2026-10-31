@@ -8,6 +8,7 @@ import {
   TABLE_TECH_BILLIARD_SLAM_DMG_MULT,
   triggerTableTechOnWallSlamOrStagger,
 } from './sim-blessings.js';
+import { clampBossPlayerHitDamage } from './sim-damage-pipeline.js';
 import { triggerBiome2WallSlamCryoPulse } from './sim-tactical-physics-p1c.js';
 import {
   collapseRottenTotemPillar,
@@ -704,7 +705,10 @@ export function triggerBossInPlaceWallSlam(
   const billiardSlam = hasPlayerBlessing(attackerPlayer, 'table_tech_billiard_master')
     ? Math.round(rawSlam * TABLE_TECH_BILLIARD_SLAM_DMG_MULT)
     : rawSlam;
-  const slamDmg = applyRicochetVowOrGeometryEyeWallSlamBonus(attackerPlayer, billiardSlam);
+  const slamDmg = clampBossPlayerHitDamage(
+    attackerPlayer,
+    applyRicochetVowOrGeometryEyeWallSlamBonus(attackerPlayer, billiardSlam),
+  );
 
   let shattered = false;
   if (boss.frozenTimer > 0) {

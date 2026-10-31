@@ -1,22 +1,13 @@
 import {
-  ALL_WEAPON_IDS,
-  CHARACTERS,
-  type CharacterId,
-  INPUT_BUTTON,
-  SIM_STEP_SEC,
-  WEAPONS,
-  type WeaponCadenceKind,
-  type WeaponRarity,
-  WorldSim,
-  equipPlayerWeaponSlot,
+  ALL_WEAPON_IDS, type AshenRelicId, BOSS_SINGLE_HIT_MAX_MULT, type BlessingId,
+  CHARACTERS, type CharacterId, type DuoBoonId, type ElementType, INPUT_BUTTON,
+  SIM_STEP_SEC, WEAPONS, type WeaponCadenceKind, type WeaponMutatorId,
+  type WeaponRarity, WorldSim, equipPlayerWeaponSlot, isMutatorCompatibleWithWeapon,
 } from '../packages/shared/src/index.js';
+import { CHARACTER_LIST, simulateBossFight } from './balance-simulations.js';
 import {
-  CHARACTER_LIST,
-  simulateBossFight,
-} from './balance-simulations.js';
-import {
-  AVERAGE_PLAYER_BOT_PROFILE,
-  type DistributionStats,
+  AVERAGE_PLAYER_BOT_PROFILE, computeDistributionStats, createBotBrainState,
+  type DistributionStats, stepHonestPlayerBot,
 } from './bot-profile.js';
 
 export interface WeaponCadenceBalanceRow {
@@ -558,4 +549,184 @@ export function measureAll5ClassesCoopRuns(
     classWinRateSpreadPct,
     simulationsRun,
   };
+}
+
+export interface LateGameSynergyLoadoutSpec {
+  id: string;
+  labelVi: string;
+  characterId: CharacterId;
+  imbueElement: ElementType;
+  primaryWeaponId: string;
+  secondaryWeaponId: string;
+  mutators: readonly [WeaponMutatorId, WeaponMutatorId];
+  blessings: readonly BlessingId[];
+  duoBoons: readonly [DuoBoonId, DuoBoonId];
+  relics: readonly [AshenRelicId, AshenRelicId];
+}
+
+export interface LateGameSynergyBossRow {
+  loadoutId: string;
+  labelVi: string;
+  characterId: CharacterId;
+  primaryWeaponId: string;
+  runs: number;
+  avgSec: number;
+  durationStats: DistributionStats;
+  winRatePct: number;
+  maxPlayerHitDamage: number;
+  bossSingleHitCapDamage: number;
+  singleHitCapRespected: boolean;
+  maxSingleHitFraction: number;
+  zeroOneShots: boolean;
+  godModeAlwaysFalse: boolean;
+}
+
+export const LATE_GAME_SYNERGY_LOADOUTS: readonly LateGameSynergyLoadoutSpec[] = [
+  {
+    id: 'overload_supernova',
+    labelVi: 'Loadout A — Hỏa + Lôi Quá Tải / Siêu Tân Tinh',
+    characterId: 'elementalist',
+    imbueElement: 'burn',
+    primaryWeaponId: 'solar_archon_staff',
+    secondaryWeaponId: 'tesla_carbine',
+    mutators: ['mutator_finale_jolt', 'mutator_holo_decoy_gun'],
+    blessings: ['table_tech_rocket', 'table_tech_magnet_snare', 'dash_thunder_decoy', 'reload_tediore_chuck', 'bullet_ricochet_boom', 'bullet_wall_tether'],
+    duoBoons: ['duo_plasma_overload_star', 'duo_magnetic_bastion_ring'],
+    relics: ['relic_black_crystal_heart', 'relic_perpetual_core'],
+  },
+  {
+    id: 'cryo_superconduct_ricochet',
+    labelVi: 'Loadout B — Băng + Lôi Siêu Dẫn / Lăng Kính Nảy',
+    characterId: 'ranger',
+    imbueElement: 'chill',
+    primaryWeaponId: 'hunter_crossbow',
+    secondaryWeaponId: 'tesla_carbine',
+    mutators: ['mutator_prism_splitter', 'mutator_boomerang_core'],
+    blessings: ['table_tech_blank_nova', 'table_tech_prism_split', 'dash_tidal_ram', 'reload_frost_nova', 'reload_caustic_pod', 'bullet_split_bounce'],
+    duoBoons: ['duo_cryo_shatter_spires', 'duo_superconduct_rail'],
+    relics: ['relic_ancient_geometry_eye', 'relic_executioner_scythe'],
+  },
+  {
+    id: 'tactical_slam_cyclone',
+    labelVi: 'Loadout C — Hỏa + Độc Xung Kích / Lốc Xoáy Napalm',
+    characterId: 'vanguard',
+    imbueElement: 'burn',
+    primaryWeaponId: 'magma_cannon',
+    secondaryWeaponId: 'seed_gun',
+    mutators: ['mutator_gravity_singularity', 'mutator_elemental_infusion'],
+    blessings: ['table_tech_billiard_master', 'table_tech_toxic_shrapnel', 'dash_venom_wake', 'dash_phase_blade', 'reload_repulsor_shock', 'bullet_heavy_pinball'],
+    duoBoons: ['duo_superheated_cyclone', 'duo_napalm_chain_plague'],
+    relics: ['relic_blood_oath_tether', 'relic_master_forge_seal'],
+  },
+];
+
+export function measureLateGameSynergyFloor6Boss(
+  seeds: readonly number[] = AVERAGE_PLAYER_BOT_PROFILE.seeds,
+  maxSeeds = 10,
+): { rows: LateGameSynergyBossRow[]; minAvgSec: number; simulationsRun: number } {
+  const rawSeeds = seeds.length > 0 ? seeds : AVERAGE_PLAYER_BOT_PROFILE.seeds;
+  const effectiveSeeds = rawSeeds.slice(0, Math.min(rawSeeds.length, maxSeeds));
+  const rows: LateGameSynergyBossRow[] = [];
+  let simulationsRun = 0;
+
+  for (const loadout of LATE_GAME_SYNERGY_LOADOUTS) {
+    for (const mutId of loadout.mutators) {
+      if (!isMutatorCompatibleWithWeapon(mutId, loadout.primaryWeaponId)) {
+        throw new Error(`Incompatible mutator ${mutId} on ${loadout.primaryWeaponId}`);
+      }
+    }
+    const baseDmg = Math.max(WEAPONS[loadout.primaryWeaponId]!.damage, WEAPONS[loadout.secondaryWeaponId]!.damage);
+    const bossSingleHitCapDamage = Math.round(baseDmg * BOSS_SINGLE_HIT_MAX_MULT);
+    const durations: number[] = [];
+    let wins = 0;
+    let maxPlayerHitDamage = 0;
+    let maxSingleHitFraction = 0;
+    let godModeAlwaysFalse = true;
+
+    for (const seed of effectiveSeeds) {
+      simulationsRun += 1;
+      const sim = new WorldSim({
+        seed, biome: 3, playerCount: 1, autoRevivePlayer: false,
+        spawnInitialWave: false, includeTrainingDummy: false, includeProps: true, autoRespawnWaves: false,
+      });
+      sim.selectCharacter(sim.player.id, loadout.characterId);
+      sim.advanceToFloor(6);
+      const bossRoom = sim.dungeon.rooms.find((r) => r.type === 'boss') ?? sim.dungeon.rooms[0]!;
+      sim.enterRoom(bossRoom.id);
+
+      const pl = sim.player;
+      pl.godMode = false;
+      pl.activeImbueElement = loadout.imbueElement;
+      equipPlayerWeaponSlot(pl, 0, loadout.primaryWeaponId);
+      equipPlayerWeaponSlot(pl, 1, loadout.secondaryWeaponId);
+      sim.equipWeaponSlot(0);
+      pl.weaponUpgradeLevels = { 0: 3, 1: 2 };
+      pl.weaponMutators = { 0: [...loadout.mutators], 1: [] };
+      for (const bId of loadout.blessings) sim.applyBuffEffects(bId, pl.id);
+      for (const dId of loadout.duoBoons) sim.applyBuffEffects(dId, pl.id);
+      pl.awakenedRelicIds = [...loadout.relics];
+      pl.maxArmor += 5;
+      pl.armor = pl.maxArmor;
+      pl.maxHp += 3;
+      pl.hp = pl.maxHp;
+      pl.moveSpeed = Math.round(pl.moveSpeed * 1.16);
+      pl.armorRegenDelaySec = Math.max(1.2, pl.armorRegenDelaySec - 0.3);
+      pl.statsDamageTaken = 0;
+      sim.drainEvents();
+
+      let boss = sim.getActiveBoss();
+      if (!boss || boss.defId !== 'forge_titan') {
+        sim.enemies.length = 0;
+        boss = sim.spawnEnemy('forge_titan', sim.map.width * 0.68, sim.map.height * 0.5, false);
+      }
+
+      const brain = createBotBrainState(pl.id, seed);
+      let prevDmgTaken = pl.statsDamageTaken ?? 0;
+      let ticks = 0;
+      const maxTicks = 60 * 180;
+
+      while (boss.hp > 0 && sim.runState !== 'defeat' && pl.lifeState === 'alive' && pl.hp > 0 && ticks < maxTicks) {
+        if (pl.godMode !== false) godModeAlwaysFalse = false;
+        sim.setPlayerInput(stepHonestPlayerBot(sim, pl, brain, AVERAGE_PLAYER_BOT_PROFILE, SIM_STEP_SEC, ticks + 1));
+        sim.step(SIM_STEP_SEC);
+        ticks += 1;
+        if (pl.godMode !== false) godModeAlwaysFalse = false;
+
+        const nowDmg = pl.statsDamageTaken ?? 0;
+        if (nowDmg > prevDmgTaken) {
+          const frac = (nowDmg - prevDmgTaken) / Math.max(1, pl.maxHp + pl.maxArmor);
+          if (frac > maxSingleHitFraction) maxSingleHitFraction = frac;
+        }
+        prevDmgTaken = nowDmg;
+
+        const envBossHazardDmg = Math.round(0.06 * boss.maxHp);
+        const evs = sim.drainEvents();
+        for (let i = 0; i < evs.length; i++) {
+          const ev = evs[i]!;
+          if (ev.kind === 'damage_dealt' && ev.targetKind === 'enemy' && ev.targetId === boss.id) {
+            const isEnvHazard = ev.element === 'none' && ev.knockbackX === 0 && ev.knockbackY === 0 && ev.amount === envBossHazardDmg;
+            if (!isEnvHazard && ev.amount > maxPlayerHitDamage) maxPlayerHitDamage = ev.amount;
+          }
+        }
+      }
+
+      if (boss.hp <= 0) wins += 1;
+      durations.push(Math.round(ticks * SIM_STEP_SEC * 100) / 100);
+    }
+
+    const durationStats = computeDistributionStats(durations);
+    rows.push({
+      loadoutId: loadout.id, labelVi: loadout.labelVi, characterId: loadout.characterId,
+      primaryWeaponId: loadout.primaryWeaponId, runs: effectiveSeeds.length,
+      avgSec: durationStats.p50, durationStats,
+      winRatePct: Math.round((wins / effectiveSeeds.length) * 1000) / 10,
+      maxPlayerHitDamage, bossSingleHitCapDamage,
+      singleHitCapRespected: maxPlayerHitDamage <= bossSingleHitCapDamage,
+      maxSingleHitFraction: Math.round(maxSingleHitFraction * 1000) / 1000,
+      zeroOneShots: maxSingleHitFraction < 0.85, godModeAlwaysFalse,
+    });
+  }
+
+  const minAvgSec = rows.reduce((m, r) => Math.min(m, r.avgSec), Infinity);
+  return { rows, minAvgSec: Number.isFinite(minAvgSec) ? minAvgSec : 0, simulationsRun };
 }

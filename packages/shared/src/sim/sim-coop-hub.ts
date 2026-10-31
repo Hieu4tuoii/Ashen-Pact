@@ -494,7 +494,12 @@ export function enterHubImpl(this: WorldSim): void {
   this.npcEntities.length = 0;
   this.doors.length = 0;
   this.hubStatues.length = 0;
+  this.tetherBeams.length = 0;
+  this.magneticRivets.length = 0;
   this.flameFissures.length = 0;
+  this.solarFireZones.length = 0;
+  this.magmaTrails.length = 0;
+  this.lightningPillars.length = 0;
   this.pendingMortarStrikes.length = 0;
   this.empBlastVisualRings.length = 0;
   this.pendingBossSupplyDrops.length = 0;

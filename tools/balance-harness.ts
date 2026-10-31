@@ -13,6 +13,7 @@ import {
   type CoopScalingRow,
   type CoopSynergyTeamRow,
   MATRIX_WEAPON_IDS,
+  type LateGameSynergyBossRow,
   type WeaponCadenceBalanceRow,
   type WeaponMatrixRow,
   clearBalanceSimulationCaches,
@@ -21,6 +22,7 @@ import {
   measureBiomeDifficultyProgression,
   measureCombatDpsAndSkillUptime,
   measureCombatRoomClearSec,
+  measureLateGameSynergyFloor6Boss,
   simulateBossFight,
   simulateHitsSurvived,
   simulateStarterWeaponTtkSamples,
@@ -292,6 +294,12 @@ export function runBalanceHarness(options?: BalanceHarnessOptions): BalanceHarne
   const classWinRateSpreadPct = classCoopMeasurement.classWinRateSpreadPct;
   totalSims += classCoopMeasurement.simulationsRun;
 
+  // 9. Late-Game Full-Synergy Floor 6 Boss Resilience (Phase P5 — v2.0.0 Final)
+  const lateGameSynergyMeasurement = measureLateGameSynergyFloor6Boss(seeds);
+  const lateGameSynergyBossRows: LateGameSynergyBossRow[] = lateGameSynergyMeasurement.rows;
+  const lateGameBossMinAvgSec = lateGameSynergyMeasurement.minAvgSec;
+  totalSims += lateGameSynergyMeasurement.simulationsRun;
+
   const avgEnemyTtkSec = enemyTtkStats.p50;
   const minEnemyTtkSec = enemyTtkStats.p10;
   const maxEnemyTtkSec = enemyTtkStats.p90;
@@ -356,6 +364,17 @@ export function runBalanceHarness(options?: BalanceHarnessOptions): BalanceHarne
     biome3IncreasePct >= 20 &&
     biome3IncreasePct <= 25;
 
+  const lateGameBossResilient =
+    lateGameSynergyBossRows.length >= 3 &&
+    lateGameSynergyBossRows.every(
+      (r) =>
+        r.avgSec >= 45 &&
+        r.avgSec <= 125 &&
+        r.zeroOneShots &&
+        r.singleHitCapRespected &&
+        r.godModeAlwaysFalse,
+    );
+
   const allTargetsPassed =
     enemyTtkStats.p50 >= 0.6 &&
     enemyTtkStats.p50 <= 1.5 &&
@@ -371,7 +390,8 @@ export function runBalanceHarness(options?: BalanceHarnessOptions): BalanceHarne
     all5SoloBossWin &&
     starterWeaponDpsSpreadPct < 5 &&
     weaponCadenceRows.every((w) => w.activeDps > w.normalDps) &&
-    classWinRateSpreadPct <= 6;
+    classWinRateSpreadPct <= 6 &&
+    lateGameBossResilient;
 
   return {
     totalSimulationsRun: totalSims,
@@ -406,6 +426,8 @@ export function runBalanceHarness(options?: BalanceHarnessOptions): BalanceHarne
     starterWeaponDpsSpreadPct,
     classCoopRows,
     classWinRateSpreadPct,
+    lateGameSynergyBossRows,
+    lateGameBossMinAvgSec,
     allTargetsPassed,
   };
 }
@@ -417,7 +439,7 @@ export function formatMarkdownReport(res: BalanceHarnessReport): string {
   const b3Boss = res.bossBiomeRows[2]!;
 
   const lines: string[] = [
-    '# BÁO CÁO MÔ PHỎNG CÂN BẰNG TỰ ĐỘNG (BALANCE REPORT) — ASHEN PACT 2.0 (Phase P3C)',
+    '# BÁO CÁO MÔ PHỎNG CÂN BẰNG TỰ ĐỘNG (BALANCE REPORT) — ASHEN PACT 2.0 (Phase P5 — v2.0.0 Final)',
     '',
     `> Sinh tự động bởi công cụ Headless Balance Harness (\`tools/balance-harness.ts\`) với **${res.totalSimulationsRun} lượt mô phỏng** trên \`WorldSim\` (60Hz cố định) sử dụng hồ sơ bot khóa cứng \`AVERAGE_PLAYER_BOT_PROFILE\` (\`tools/bot-profile.ts\`: \`aimAccuracy = ${AVERAGE_PLAYER_BOT_PROFILE.aimAccuracy * 100}%\`, \`reactionDelaySec = ${AVERAGE_PLAYER_BOT_PROFILE.reactionDelaySec}s\`, \`dashDodgeProbability = ${AVERAGE_PLAYER_BOT_PROFILE.dashDodgeProbability * 100}%\`, \`godMode = false\`, **${res.seedsUsed.length} seeds**).`,
     '',
@@ -434,6 +456,7 @@ export function formatMarkdownReport(res: BalanceHarnessReport): string {
     `| 7 | **Chịu đòn cơ bản & Độ lệch DPS 3 NV sát thương** | \`4 – 10 đòn\` · Lệch \`≤ ±15%\` | **\`${res.minHitsSurvived} – ${res.maxHitsSurvived} đòn\` · Lệch \`±${res.dps3CharSpreadPct}%\`** | ${passIcon(res.minHitsSurvived >= 4 && res.maxHitsSurvived <= 10 && res.dps3CharSpreadPct <= 15)} |`,
     `| 8 | **Độ lệch DPS 5 Vũ khí Khởi đầu & Active \`[R]\` 18 Vũ khí** | Lệch \`< 5.0%\` · \`Active > Normal\` | **Lệch \`±${res.starterWeaponDpsSpreadPct}%\` · 18/18 \`Active > Normal\`** | ${passIcon(res.starterWeaponDpsSpreadPct < 5 && res.weaponCadenceRows.every((w) => w.activeDps > w.normalDps))} |`,
     `| 9 | **Độ lệch Tỉ lệ thắng 5 Class (1P / 2P / 4P × ${res.seedsUsed.length} seeds)** | Lệch \`≤ ±6.0%\` | **Lệch \`±${res.classWinRateSpreadPct}%\`** | ${passIcon(res.classWinRateSpreadPct <= 6)} |`,
+    `| 10 | **Boss Tầng 6 (\`forge_titan\`) trước Build Cuối Game Đầy Đủ Synergy (\`Mutators + Blessings + Duo Boons + Relics\`)** | \`avgSec >= 45.0s\` (\`zeroOneShots: true\`) | **Min p50 ${res.lateGameBossMinAvgSec}s** (\`${res.lateGameSynergyBossRows.map((r) => `${r.avgSec}s`).join(' / ')}\`) | ${passIcon(res.lateGameSynergyBossRows.every((r) => r.avgSec >= 45 && r.avgSec <= 125 && r.zeroOneShots && r.singleHitCapRespected && r.godModeAlwaysFalse))} |`,
     '',
     '---',
     '',
@@ -525,7 +548,18 @@ export function formatMarkdownReport(res: BalanceHarnessReport): string {
         `| **${c.nameVi}** (\`${c.characterId}\`) | ${c.roleVi} | \`${c.runsPerMode}\` (\`Σ=${c.totalRuns}\`) | **${c.winRate1PPct}%** (\`${c.avgClearSec1P}s\`) | **${c.winRate2PPct}%** (\`${c.avgClearSec2P}s\`) | **${c.winRate4PPct}%** (\`${c.avgClearSec4P}s\`) | **${c.overallWinRatePct}%** |`,
     ),
     '',
-    `## 9. Kết Luận Kiểm Chứng: ${res.allTargetsPassed ? '✅ ĐẠT 100% TẤT CẢ MỤC TIÊU CÂN BẰNG SPEC 3.10' : '❌ CHƯA ĐẠT (CẦN TUNE DATA Ở BƯỚC 2)'}`,
+    '---',
+    '',
+    '## 9. Kiểm Toán Sức Chống Chịu Boss Tầng 6 (`forge_titan`) Trước Build Cuối Game Đầy Đủ Synergy (Phase P5)',
+    '',
+    '| Loadout Synergy Cuối Game (`+3` VK + `2` Mutators + `6` Blessings + `2` Duo Boons + `2` Relics) | Class / Vũ khí chính | `p50` (`p10–p90`) | Winrate | Max Hit / Cap (`18x`) | Max Hit Nhận / EHP | Trạng thái |',
+    '|---|---|---|---:|---:|---:|:---:|',
+    ...res.lateGameSynergyBossRows.map(
+      (r) =>
+        `| **${r.labelVi}** | \`${r.characterId}\` / \`${r.primaryWeaponId}\` | **${r.avgSec}s** (\`${r.durationStats.p10}s–${r.durationStats.p90}s\`) | **${r.winRatePct}%** | \`${r.maxPlayerHitDamage} / ${r.bossSingleHitCapDamage}\` | \`${Math.round(r.maxSingleHitFraction * 100)}%\` | ${passIcon(r.avgSec >= 45 && r.avgSec <= 125 && r.zeroOneShots && r.singleHitCapRespected && r.godModeAlwaysFalse)} |`,
+    ),
+    '',
+    `## 10. Kết Luận Kiểm Chứng: ${res.allTargetsPassed ? '✅ ĐẠT 100% TẤT CẢ MỤC TIÊU CÂN BẰNG SPEC 3.10 & PHASE P5' : '❌ CHƯA ĐẠT (CẦN TUNE DATA Ở BƯỚC 2)'}`,
     '',
   ];
 

@@ -2,6 +2,7 @@ import { scaleBlessingDamage } from '../data/blessings.js';
 import type { DuoBoonId, ElementalReactionId } from '../data/types.js';
 import { angleDiff, clamp, distance } from '../math/vec2.js';
 import { SHOT_FLAG } from '../protocol/messages.js';
+import { enforcePlayerDeployableCap } from './sim-blessings-p4a.js';
 import { isFlippableBarricadeProp } from './sim-tactical-physics.js';
 import {
   MAX_TACTICAL_PROPS_PER_ROOM,
@@ -139,6 +140,7 @@ function spawnSuperheatedCyclone(sim: WorldSim, owner: SimPlayerState, x: number
   }
 
   const col = sim.map.resolveCircleCollision(x, y, 14, true);
+  enforcePlayerDeployableCap(sim, owner.id, 1);
   sim.summons.push({
     id: ++sim.nextEntityId,
     ownerPlayerId: owner.id,
@@ -234,7 +236,7 @@ function spawnCryoShatterSpires(
   enemy: SimEnemyState,
 ): void {
   if ((enemy.cryoSpireIcdTimer ?? 0) > 0) return;
-  enemy.cryoSpireIcdTimer = 0.25;
+  enemy.cryoSpireIcdTimer = enemy.isBoss ? 2.5 : 0.25;
 
   let aliveProps = 0;
   for (let i = 0; i < sim.props.length; i++) {
@@ -544,18 +546,27 @@ export function tryDetonateCryoShatterSpireOnKickOrSlide(
       const hitAng = d > 1e-3 ? Math.atan2(e.y - prop.y, e.x - prop.x) : 0;
       sim.applyDamageToEnemy(e, blastDmg, false, 'chill', hitAng, 165, false, ownerId, true);
       if (e.hp > 0) {
-        const freezeDur = e.isBoss ? 0.6 : CRYO_SHATTER_SPIRE_FREEZE_SEC;
-        e.frozenTimer = Math.max(e.frozenTimer, freezeDur);
-        e.vx = 0;
-        e.vy = 0;
-        if (!sim.stressTestActive) {
-          sim.events.push({
-            kind: 'status_applied',
-            targetId: e.id,
-            status: 'frozen',
-            x: e.x,
-            y: e.y,
-          });
+        let didFreeze = true;
+        if (e.isBoss) {
+          if ((e.bossFreezeDrTimer ?? 0) <= 0) e.bossFreezeCountWindow = 0;
+          const fCount = e.bossFreezeCountWindow ?? 0;
+          if (fCount < 2) {
+            e.bossFreezeDrTimer = 8.0;
+            e.bossFreezeCountWindow = fCount + 1;
+            e.frozenTimer = Math.max(e.frozenTimer, fCount === 0 ? 0.6 : 0.3);
+          } else {
+            e.chillTimer = Math.max(e.chillTimer, 2.0);
+            didFreeze = false;
+          }
+        } else {
+          e.frozenTimer = Math.max(e.frozenTimer, CRYO_SHATTER_SPIRE_FREEZE_SEC);
+        }
+        if (didFreeze) {
+          e.vx = 0;
+          e.vy = 0;
+          if (!sim.stressTestActive) {
+            sim.events.push({ kind: 'status_applied', targetId: e.id, status: 'frozen', x: e.x, y: e.y });
+          }
         }
       }
     }

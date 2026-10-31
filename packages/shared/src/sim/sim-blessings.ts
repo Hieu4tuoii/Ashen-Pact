@@ -7,7 +7,7 @@ import {
   tryTriggerToxicShrapnelOnPropBreak,
   tryTriggerToxicShrapnelOnWallSlam,
 } from './sim-blessings-p4a.js';
-import { clampBounceCount } from './sim-damage-pipeline.js';
+import { clampBossPlayerHitDamage, clampBounceCount } from './sim-damage-pipeline.js';
 import {
   BIOME2_ICE_INERTIA_MULT,
   clearEnemyProjectilesAroundProp,
@@ -549,9 +549,12 @@ export function triggerBossStaggerBurst(
 
   const attacker = sim.getPlayerById(attackerPlayerId) ?? sim.player;
   const rawSlam = computeWallSlamDamage(boss, sim.currentFloor);
-  const slamDmg = hasPlayerBlessing(attacker, 'table_tech_billiard_master')
-    ? Math.round(rawSlam * TABLE_TECH_BILLIARD_SLAM_DMG_MULT)
-    : rawSlam;
+  const slamDmg = clampBossPlayerHitDamage(
+    attacker,
+    hasPlayerBlessing(attacker, 'table_tech_billiard_master')
+      ? Math.round(rawSlam * TABLE_TECH_BILLIARD_SLAM_DMG_MULT)
+      : rawSlam,
+  );
 
   boss.hp = Math.max(0, boss.hp - slamDmg);
   boss.hitFlashTimer = 0.14;

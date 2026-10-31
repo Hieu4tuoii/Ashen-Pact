@@ -9,6 +9,7 @@ import {
   updateAshenExecutionerAI,
 } from './sim-ashen-pacts.js';
 import { resolveEnemyTargetWithThunderDecoy, stepP4AEnemyBlessingTimers, updateEnemyHeavyPinballAndTimers } from './sim-blessings.js';
+import { clampBossPlayerHitDamage, dampenBossMultiProcDamage } from './sim-damage-pipeline.js';
 import {
   FORGE_TITAN_ARMOR_REDUCTION,
   KRYSSA_ARMOR_REDUCTION,
@@ -839,6 +840,10 @@ export function applyDotDamageToEnemyImpl(
   if (enemy.isBoss && this.hasActiveBossGuardians()) {
     effectiveAmount = Math.max(1, Math.round(effectiveAmount * 0.35));
   }
+  const ownerPl = this.getPlayerById(enemy.lastElementOwnerId || this.player.id) ?? this.player;
+  if (enemy.isBoss && !enemy.isDummy && !this.stressTestActive && this.tick > 0 && amount < enemy.maxHp * 0.2) {
+    effectiveAmount = Math.max(1, Math.round(dampenBossMultiProcDamage(this.tick, enemy, clampBossPlayerHitDamage(ownerPl, effectiveAmount))));
+  }
   if (this.stressTestActive && enemy.hp <= effectiveAmount + 20) {
     enemy.hp = enemy.maxHp;
     return;
@@ -846,7 +851,6 @@ export function applyDotDamageToEnemyImpl(
   enemy.hp = Math.max(0, enemy.hp - effectiveAmount);
   this.recordDamageHistory(effectiveAmount);
   this.runStats.damageDealt += effectiveAmount;
-  const ownerPl = this.getPlayerById(enemy.lastElementOwnerId || this.player.id) ?? this.player;
   ownerPl.statsDamageDealt = (ownerPl.statsDamageDealt ?? 0) + effectiveAmount;
   this.checkBossPhaseTransitions(enemy);
 
@@ -857,7 +861,7 @@ export function applyDotDamageToEnemyImpl(
       targetKind: 'enemy',
       x: enemy.x,
       y: enemy.y,
-      amount,
+      amount: effectiveAmount,
       isCrit: false,
       hitArmor: false,
       element,

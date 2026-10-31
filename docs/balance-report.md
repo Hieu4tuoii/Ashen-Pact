@@ -1,6 +1,6 @@
-# BÁO CÁO MÔ PHỎNG CÂN BẰNG TỰ ĐỘNG (BALANCE REPORT) — ASHEN PACT 2.0 (Phase P3C)
+# BÁO CÁO MÔ PHỎNG CÂN BẰNG TỰ ĐỘNG (BALANCE REPORT) — ASHEN PACT 2.0 (Phase P5 — v2.0.0 Final)
 
-> Sinh tự động bởi công cụ Headless Balance Harness (`tools/balance-harness.ts`) với **2239 lượt mô phỏng** trên `WorldSim` (60Hz cố định) sử dụng hồ sơ bot khóa cứng `AVERAGE_PLAYER_BOT_PROFILE` (`tools/bot-profile.ts`: `aimAccuracy = 70%`, `reactionDelaySec = 0.25s`, `dashDodgeProbability = 65%`, `godMode = false`, **30 seeds**).
+> Sinh tự động bởi công cụ Headless Balance Harness (`tools/balance-harness.ts`) với **2269 lượt mô phỏng** trên `WorldSim` (60Hz cố định) sử dụng hồ sơ bot khóa cứng `AVERAGE_PLAYER_BOT_PROFILE` (`tools/bot-profile.ts`: `aimAccuracy = 70%`, `reactionDelaySec = 0.25s`, `dashDodgeProbability = 65%`, `godMode = false`, **30 seeds**).
 
 ## 1. Bảng Tổng Hợp Mục Tiêu Cân Bằng Định Lượng (Spec Section 3.10)
 
@@ -9,12 +9,13 @@
 | 1 | **TTK Quái thường (Biome 1, Vũ khí khởi đầu)** | `0.6s – 1.5s` | **p50 1.42s** (`0.92s – 2.33s`) | ✅ ĐẠT |
 | 2 | **Thời lượng Phòng combat (1–4P)** | `35s – 70s` | **p50 36.77s** (`27.3s – 49.27s`) | ✅ ĐẠT |
 | 3 | **HP + Giáp mất mỗi phòng (Biome 1 Solo)** | `25% – 50% tổng` | **p50 25%** (`0% – 88.75%`) | ✅ ĐẠT |
-| 4 | **Thời lượng đánh Boss B1 / B2 / B3 (1P vs 4P)** | `60s – 120s` (Lệch `≤ ±20%`) | **B1: 83.42s/76.77s · B2: 77.78s/77.47s · B3: 74.41s/75.89s** | ✅ ĐẠT |
-| 5 | **Tỉ lệ thắng Boss Solo & Không One-Shot** | `B1: 80–95%, B2: 70–90%, B3: 60–85%` | **B1: 90% · B2: 90% · B3: 77%** (Zero One-Shot: `true`) | ✅ ĐẠT |
+| 4 | **Thời lượng đánh Boss B1 / B2 / B3 (1P vs 4P)** | `60s – 120s` (Lệch `≤ ±20%`) | **B1: 84.86s/84.17s · B2: 82.3s/88.55s · B3: 75.34s/81.81s** | ✅ ĐẠT |
+| 5 | **Tỉ lệ thắng Boss Solo & Không One-Shot** | `B1: 80–95%, B2: 70–90%, B3: 60–85%` | **B1: 93% · B2: 73% · B3: 73%** (Zero One-Shot: `true`) | ✅ ĐẠT |
 | 6 | **Độ khó tăng giữa các Biome (Đo thật WorldSim)** | `+20% – 25%` mỗi Biome | **Biome 2 `+24.1%` · Biome 3 `+21.9%`** | ✅ ĐẠT |
 | 7 | **Chịu đòn cơ bản & Độ lệch DPS 3 NV sát thương** | `4 – 10 đòn` · Lệch `≤ ±15%` | **`4 – 9 đòn` · Lệch `±0.1%`** | ✅ ĐẠT |
 | 8 | **Độ lệch DPS 5 Vũ khí Khởi đầu & Active `[R]` 18 Vũ khí** | Lệch `< 5.0%` · `Active > Normal` | **Lệch `±1.2%` · 18/18 `Active > Normal`** | ✅ ĐẠT |
-| 9 | **Độ lệch Tỉ lệ thắng 5 Class (1P / 2P / 4P × 30 seeds)** | Lệch `≤ ±6.0%` | **Lệch `±3.8%`** | ✅ ĐẠT |
+| 9 | **Độ lệch Tỉ lệ thắng 5 Class (1P / 2P / 4P × 30 seeds)** | Lệch `≤ ±6.0%` | **Lệch `±1.9%`** | ✅ ĐẠT |
+| 10 | **Boss Tầng 6 (`forge_titan`) trước Build Cuối Game Đầy Đủ Synergy (`Mutators + Blessings + Duo Boons + Relics`)** | `avgSec >= 45.0s` (`zeroOneShots: true`) | **Min p50 47.51s** (`47.51s / 50.47s / 48.2s`) | ✅ ĐẠT |
 
 ---
 
@@ -22,11 +23,11 @@
 
 | Nhân vật | Vai trò | HP / Giáp | Chịu đòn (WorldSim) | TTK Quái thường (p50) | DPS Giao tranh | Uptime Kỹ năng | Solo Boss Biome 1 |
 |---|---|---:|---:|---:|---:|---:|---|
-| **Thiết Vệ** (`vanguard`) | Tank / Bảo Hộ Tuyến Đầu | 6 / 5 | **9 đòn** | **1.23s** | **51.5 DPS** | **50%** | **97% Thắng** (118s) |
-| **Liệp Ưng** (`ranger`) | Sát Thương / Đánh Dấu | 5 / 3 | **6 đòn** | **1.42s** | **90 DPS** | **59.6%** | **90% Thắng** (83.42s) |
-| **Lam Hỏa** (`elementalist`) | Khống Chế / Phản Ứng Nguyên Tố | 4 / 2 | **4 đòn** | **1.17s** | **90 DPS** | **52.5%** | **93% Thắng** (68s) |
-| **Mộc Linh** (`druid`) | Hỗ Trợ / Hồi Phục | 5 / 3 | **8 đòn** | **1.77s** | **62.5 DPS** | **50%** | **83% Thắng** (105.45s) |
-| **Bánh Răng** (`engineer`) | Tiện Ích / Trụ Pháo | 6 / 4 | **9 đòn** | **1.85s** | **90.1 DPS** | **59.9%** | **97% Thắng** (96.49s) |
+| **Thiết Vệ** (`vanguard`) | Tank / Bảo Hộ Tuyến Đầu | 6 / 5 | **9 đòn** | **1.23s** | **51.5 DPS** | **50%** | **97% Thắng** (117.12s) |
+| **Liệp Ưng** (`ranger`) | Sát Thương / Đánh Dấu | 5 / 3 | **6 đòn** | **1.42s** | **90 DPS** | **59.6%** | **93% Thắng** (84.86s) |
+| **Lam Hỏa** (`elementalist`) | Khống Chế / Phản Ứng Nguyên Tố | 4 / 2 | **4 đòn** | **1.17s** | **90 DPS** | **52.5%** | **97% Thắng** (83.65s) |
+| **Mộc Linh** (`druid`) | Hỗ Trợ / Hồi Phục | 5 / 3 | **8 đòn** | **1.77s** | **62.5 DPS** | **50%** | **87% Thắng** (108.02s) |
+| **Bánh Răng** (`engineer`) | Tiện Ích / Trụ Pháo | 6 / 4 | **9 đòn** | **1.85s** | **90.1 DPS** | **59.9%** | **93% Thắng** (105.15s) |
 
 ---
 
@@ -46,18 +47,18 @@
 
 | Số người chơi | Thời lượng Phòng combat `p50` (`p10–p90`) | HP+Giáp mất TB | Tỉ lệ gục / phòng | Thời lượng hạ Boss B1 `p50` (`p10–p90`) | Lệch so với 1P |
 |---:|---|---:|---:|---|---:|
-| **1P** | **34.04s** (`26.45s–52.59s`) | **25%** | **0.03** | **83.42s** (`78s–94.89s`) | **±0%** |
-| **2P** | **35.08s** (`28.08s–47.9s`) | **46.45%** | **0.13** | **67.26s** (`57.34s–74.77s`) | **±19.4%** |
-| **3P** | **38.13s** (`27.26s–49.22s`) | **29.2%** | **0.27** | **74.43s** (`68.57s–79.31s`) | **±10.8%** |
-| **4P** | **37.89s** (`30.58s–47.8s`) | **31.3%** | **0.13** | **76.77s** (`70.88s–84.39s`) | **±8%** |
+| **1P** | **34.04s** (`26.45s–52.59s`) | **25%** | **0.03** | **84.86s** (`78.57s–97.99s`) | **±0%** |
+| **2P** | **35.08s** (`28.08s–47.9s`) | **46.45%** | **0.13** | **71.35s** (`65.42s–79.06s`) | **±15.9%** |
+| **3P** | **38.13s** (`27.26s–49.22s`) | **29.2%** | **0.27** | **78.72s** (`71.34s–85.9s`) | **±7.2%** |
+| **4P** | **37.89s** (`30.58s–47.8s`) | **31.3%** | **0.13** | **84.17s** (`76.15s–92.33s`) | **±0.8%** |
 
 ### Bảng Cân Bằng 3 Boss Cuối Màn (Biome 1, Biome 2, Biome 3)
 
 | Biome | Boss | 1P `p50` (`p10–p90`) | 4P `p50` (`p10–p90`) | Lệch 1P↔4P | Tỉ lệ thắng Solo | Max Hit / EHP | Trạng thái |
 |---:|---|---|---|---:|---:|---:|:---:|
-| **Biome 1** | **Mục Vương Nấm Độc (Biome 1)** (`spore_king`) | **83.42s** (`78s–94.89s`) | **76.77s** (`70.88s–84.39s`) | **±8%** | **90%** | `38%` | ✅ ĐẠT |
-| **Biome 2** | **Băng Hậu Kryssa (Biome 2)** (`kryssa_ice_queen`) | **77.78s** (`68.74s–89.55s`) | **77.47s** (`67.75s–87.17s`) | **±0.4%** | **90%** | `21%` | ✅ ĐẠT |
-| **Biome 3** | **Titan Lò Rèn (Biome 3)** (`forge_titan`) | **74.41s** (`34.62s–89.76s`) | **75.89s** (`71.9s–83.11s`) | **±2%** | **77%** | `30%` | ✅ ĐẠT |
+| **Biome 1** | **Mục Vương Nấm Độc (Biome 1)** (`spore_king`) | **84.86s** (`78.57s–97.99s`) | **84.17s** (`76.15s–92.33s`) | **±0.8%** | **93%** | `38%` | ✅ ĐẠT |
+| **Biome 2** | **Băng Hậu Kryssa (Biome 2)** (`kryssa_ice_queen`) | **82.3s** (`59.1s–92.05s`) | **88.55s** (`79.54s–98.69s`) | **±7.6%** | **73%** | `21%` | ✅ ĐẠT |
+| **Biome 3** | **Titan Lò Rèn (Biome 3)** (`forge_titan`) | **75.34s** (`34.62s–90.98s`) | **81.81s** (`73.68s–89.86s`) | **±8.6%** | **73%** | `30%` | ✅ ĐẠT |
 
 ---
 
@@ -65,11 +66,11 @@
 
 | Đội hình Co-op | Số người | Thời gian hạ Boss (p50) | Phản ứng Nguyên tố | Đồng Đội Combo (+15 NL) | Kết quả |
 |---|---:|---:|---:|---:|:---:|
-| **2P Khiên Lửa (Thiết Vệ + Lam Hỏa)** | 2P | **86.78s** | **162** | **112** | ✅ THẮNG |
-| **2P Săn Độc (Liệp Ưng + Mộc Linh)** | 2P | **93.79s** | **53** | **33** | ✅ THẮNG |
-| **2P Công Nghệ Nguyên Tố (Lam Hỏa + Bánh Răng)** | 2P | **73.79s** | **198** | **80** | ✅ THẮNG |
-| **4P Đội Hình Chuẩn (Thiết Vệ + Liệp Ưng + Lam Hỏa + Mộc Linh)** | 4P | **92.75s** | **236** | **190** | ✅ THẮNG |
-| **4P Đội Hình Phản Ứng Đa Tầng (Thiết Vệ + Lam Hỏa + Mộc Linh + Bánh Răng)** | 4P | **90.42s** | **343** | **295** | ✅ THẮNG |
+| **2P Khiên Lửa (Thiết Vệ + Lam Hỏa)** | 2P | **86.78s** | **165** | **126** | ✅ THẮNG |
+| **2P Săn Độc (Liệp Ưng + Mộc Linh)** | 2P | **93.52s** | **51** | **33** | ✅ THẮNG |
+| **2P Công Nghệ Nguyên Tố (Lam Hỏa + Bánh Răng)** | 2P | **81.21s** | **177** | **99** | ✅ THẮNG |
+| **4P Đội Hình Chuẩn (Thiết Vệ + Liệp Ưng + Lam Hỏa + Mộc Linh)** | 4P | **94.9s** | **239** | **214** | ✅ THẮNG |
+| **4P Đội Hình Phản Ứng Đa Tầng (Thiết Vệ + Lam Hỏa + Mộc Linh + Bánh Răng)** | 4P | **101.45s** | **361** | **336** | ✅ THẮNG |
 
 ---
 
@@ -112,14 +113,24 @@
 
 ## 8. Thống Kê 5 Class Qua 1P / 2P / 4P (30 Seeds / Chế Độ — Human-Like Bot Profile)
 
-> Độ lệch Tỉ lệ thắng (`Winrate Spread`) giữa 5 Class: **`±3.8%`** (Mục tiêu `≤ ±6.0%` — ✅ ĐẠT).
+> Độ lệch Tỉ lệ thắng (`Winrate Spread`) giữa 5 Class: **`±1.9%`** (Mục tiêu `≤ ±6.0%` — ✅ ĐẠT).
 
 | Nhân vật (Class) | Vai trò | Số lượt / Mode | Winrate `1P` (`p50` TG) | Winrate `2P` (`p50` TG) | Winrate `4P` (`p50` TG) | Winrate Tổng Hợp |
 |---|---|---:|---|---|---|---:|
-| **Thiết Vệ** (`vanguard`) | Tank / Bảo Hộ Tuyến Đầu | `30` (`Σ=90`) | **97%** (`118s`) | **100%** (`84.82s`) | **100%** (`89.85s`) | **99%** |
-| **Liệp Ưng** (`ranger`) | Sát Thương / Đánh Dấu | `30` (`Σ=90`) | **90%** (`83.42s`) | **100%** (`92.32s`) | **100%** (`76.77s`) | **96.7%** |
-| **Lam Hỏa** (`elementalist`) | Khống Chế / Phản Ứng Nguyên Tố | `30` (`Σ=90`) | **93%** (`68s`) | **100%** (`75.63s`) | **100%** (`84.68s`) | **97.7%** |
-| **Mộc Linh** (`druid`) | Hỗ Trợ / Hồi Phục | `30` (`Σ=90`) | **83%** (`105.45s`) | **97%** (`89.24s`) | **100%** (`87.88s`) | **93.3%** |
-| **Bánh Răng** (`engineer`) | Tiện Ích / Trụ Pháo | `30` (`Σ=90`) | **97%** (`96.49s`) | **100%** (`81.43s`) | **100%** (`81.13s`) | **99%** |
+| **Thiết Vệ** (`vanguard`) | Tank / Bảo Hộ Tuyến Đầu | `30` (`Σ=90`) | **97%** (`117.12s`) | **100%** (`86.07s`) | **100%** (`98.45s`) | **99%** |
+| **Liệp Ưng** (`ranger`) | Sát Thương / Đánh Dấu | `30` (`Σ=90`) | **93%** (`84.86s`) | **97%** (`91.48s`) | **100%** (`84.17s`) | **96.7%** |
+| **Lam Hỏa** (`elementalist`) | Khống Chế / Phản Ứng Nguyên Tố | `30` (`Σ=90`) | **97%** (`83.65s`) | **100%** (`83.39s`) | **100%** (`93.12s`) | **99%** |
+| **Mộc Linh** (`druid`) | Hỗ Trợ / Hồi Phục | `30` (`Σ=90`) | **87%** (`108.02s`) | **100%** (`90.87s`) | **100%** (`94.17s`) | **95.7%** |
+| **Bánh Răng** (`engineer`) | Tiện Ích / Trụ Pháo | `30` (`Σ=90`) | **93%** (`105.15s`) | **100%** (`82.73s`) | **100%** (`89.87s`) | **97.7%** |
 
-## 9. Kết Luận Kiểm Chứng: ✅ ĐẠT 100% TẤT CẢ MỤC TIÊU CÂN BẰNG SPEC 3.10
+---
+
+## 9. Kiểm Toán Sức Chống Chịu Boss Tầng 6 (`forge_titan`) Trước Build Cuối Game Đầy Đủ Synergy (Phase P5)
+
+| Loadout Synergy Cuối Game (`+3` VK + `2` Mutators + `6` Blessings + `2` Duo Boons + `2` Relics) | Class / Vũ khí chính | `p50` (`p10–p90`) | Winrate | Max Hit / Cap (`18x`) | Max Hit Nhận / EHP | Trạng thái |
+|---|---|---|---:|---:|---:|:---:|
+| **Loadout A — Hỏa + Lôi Quá Tải / Siêu Tân Tinh** | `elementalist` / `solar_archon_staff` | **47.51s** (`44.44s–50.91s`) | **90%** | `262 / 270` | `21%` | ✅ ĐẠT |
+| **Loadout B — Băng + Lôi Siêu Dẫn / Lăng Kính Nảy** | `ranger` / `hunter_crossbow` | **50.47s** (`45.97s–52.56s`) | **70%** | `270 / 270` | `19%` | ✅ ĐẠT |
+| **Loadout C — Hỏa + Độc Xung Kích / Lốc Xoáy Napalm** | `vanguard` / `magma_cannon` | **48.2s** (`41.94s–50.38s`) | **100%** | `370 / 684` | `16%` | ✅ ĐẠT |
+
+## 10. Kết Luận Kiểm Chứng: ✅ ĐẠT 100% TẤT CẢ MỤC TIÊU CÂN BẰNG SPEC 3.10 & PHASE P5

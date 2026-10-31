@@ -1,6 +1,7 @@
 import { scaleBlessingDamage } from '../data/blessings.js';
+import { WEAPONS } from '../data/weapons.js';
 import { clamp } from '../math/vec2.js';
-import type { BulletVolleySpawnEvent, SimProjectileState } from './world-sim-types.js';
+import type { BulletVolleySpawnEvent, SimEnemyState, SimPlayerState, SimProjectileState } from './world-sim-types.js';
 import type { WorldSim } from './world-sim.js';
 
 export { scaleBlessingDamage };
@@ -18,6 +19,52 @@ export const ENEMY_VULN_HARD_CAP_MULT = 1.75 as const;
 export const SHATTER_REGULAR_MULT = 2.0 as const;
 export const SHATTER_BOSS_CAP_MULT = 1.35 as const;
 export const BOSS_SINGLE_HIT_MAX_MULT = 18.0 as const;
+export const BOSS_DPS_WINDOW_TICKS = 180 as const;
+export const BOSS_DPS_SOFT_CAP_RATIO_PER_SEC = 0.015 as const;
+export const BOSS_DPS_OVERFLOW_SLOPE = 0.12 as const;
+
+export function getPlayerMaxWeaponBaseDamage(
+  attacker: Pick<SimPlayerState, 'weaponSlots'> | undefined | null,
+): number {
+  if (!attacker) return 0;
+  let maxBase = 0;
+  for (const wid of attacker.weaponSlots) {
+    const wd = wid ? (WEAPONS[wid]?.damage ?? 0) : 0;
+    if (wd > maxBase) maxBase = wd;
+  }
+  return maxBase;
+}
+
+export function clampBossPlayerHitDamage(
+  attacker: Pick<SimPlayerState, 'weaponSlots'> | undefined | null,
+  rawDamage: number,
+): number {
+  const baseDmg = getPlayerMaxWeaponBaseDamage(attacker);
+  if (baseDmg <= 0) return rawDamage;
+  return Math.min(rawDamage, Math.round(baseDmg * BOSS_SINGLE_HIT_MAX_MULT));
+}
+
+export function dampenBossMultiProcDamage(
+  simTick: number,
+  enemy: Pick<SimEnemyState, 'maxHp' | 'bossDpsWindowStartTick' | 'bossDpsWindowAccum' | 'bossDpsWindowHits'>,
+  rawDamage: number,
+): number {
+  if (simTick - (enemy.bossDpsWindowStartTick ?? -999) >= BOSS_DPS_WINDOW_TICKS) {
+    enemy.bossDpsWindowStartTick = simTick;
+    enemy.bossDpsWindowAccum = 0;
+    enemy.bossDpsWindowHits = 0;
+  }
+  enemy.bossDpsWindowHits = (enemy.bossDpsWindowHits ?? 0) + 1;
+  const accum = enemy.bossDpsWindowAccum ?? 0;
+  const softCap = enemy.maxHp * BOSS_DPS_SOFT_CAP_RATIO_PER_SEC * (BOSS_DPS_WINDOW_TICKS / 60);
+  let out = rawDamage;
+  if (enemy.bossDpsWindowHits >= 10 && accum + out > softCap) {
+    const under = Math.max(0, softCap - accum);
+    out = Math.max(1, under + (out - under) * BOSS_DPS_OVERFLOW_SLOPE);
+  }
+  enemy.bossDpsWindowAccum = accum + Math.max(1, Math.round(out));
+  return out;
+}
 
 export interface AdditiveDamageBonusInput {
   finaleShot?: boolean | number;

@@ -8,8 +8,10 @@ import {
 } from './sim-ashen-pacts.js';
 import {
   BOSS_SINGLE_HIT_MAX_MULT,
+  clampBossPlayerHitDamage,
   computeEnemyVulnerabilityMultiplier,
   computeReactionMultiplier,
+  dampenBossMultiProcDamage,
 } from './sim-damage-pipeline.js';
 import {
   BULLET_HEAVY_PINBALL_KB_MULT,
@@ -157,6 +159,10 @@ export function applyDamageToEnemyImpl(
 
   if (enemy.isBoss) {
     finalAmount = Math.min(finalAmount, amount * BOSS_SINGLE_HIT_MAX_MULT);
+    if (!enemy.isDummy && !this.stressTestActive && this.tick > 0 && amount < Math.min(1000, enemy.maxHp * 0.3)) {
+      const attackerForCap = attackerPlayerId > 0 ? this.getPlayerById(attackerPlayerId) : undefined;
+      finalAmount = dampenBossMultiProcDamage(this.tick, enemy, clampBossPlayerHitDamage(attackerForCap, finalAmount));
+    }
   }
   const dmg = Math.max(1, Math.round(finalAmount));
   let hitArmor = hitFrontShield || Boolean(enemy.isBoss && enemy.bossArmorShellActive);
@@ -648,13 +654,18 @@ export function applyElementStatusToEnemyImpl(
 
   if (!this.stressTestActive) {
     const primerId = enemy.lastElementOwnerId || attackerPlayerId;
+    const isTeamReaction = primerId > 0 && attackerPlayerId > 0 && primerId !== attackerPlayerId;
+    const isBossCap = enemy.isBoss && !enemy.isDummy;
+    const bossReactionReady = !isBossCap || isTeamReaction || this.tick - (enemy.lastBossReactionTick ?? -999) >= 15;
 
     // Check 6 Elemental Reactions before applying the new status
     // 1. Vaporize (Hơi Nước): Burn + Chill/Frozen -> x2 burst damage + 3s Steam Blindness cloud
     if (
-      (element === 'chill' && enemy.burnTimer > 0) ||
-      (element === 'burn' && (enemy.chillTimer > 0 || enemy.frozenTimer > 0))
+      bossReactionReady &&
+      ((element === 'chill' && enemy.burnTimer > 0) ||
+        (element === 'burn' && (enemy.chillTimer > 0 || enemy.frozenTimer > 0)))
     ) {
+      if (isBossCap) enemy.lastBossReactionTick = this.tick;
       enemy.burnTimer = 0;
       enemy.chillTimer = 0;
       enemy.chillStacks = 0;
@@ -677,9 +688,11 @@ export function applyElementStatusToEnemyImpl(
 
     // 2. Superconduct (Siêu Dẫn): Chill/Frozen + Shock -> Armor shred + -30% defense (+30% damage taken) for 6s
     if (
-      (element === 'shock' && (enemy.chillTimer > 0 || enemy.frozenTimer > 0)) ||
-      (element === 'chill' && enemy.shockTimer > 0)
+      bossReactionReady &&
+      ((element === 'shock' && (enemy.chillTimer > 0 || enemy.frozenTimer > 0)) ||
+        (element === 'chill' && enemy.shockTimer > 0))
     ) {
+      if (isBossCap) enemy.lastBossReactionTick = this.tick;
       enemy.chillTimer = 0;
       enemy.chillStacks = 0;
       enemy.frozenTimer = 0;
@@ -696,9 +709,11 @@ export function applyElementStatusToEnemyImpl(
 
     // 3. Toxic Blast (Nổ Độc): Poison + Burn -> Detonate poison stacks AoE + spread 1 stack Poison
     if (
-      (element === 'burn' && enemy.poisonTimer > 0) ||
-      (element === 'poison' && enemy.burnTimer > 0)
+      bossReactionReady &&
+      ((element === 'burn' && enemy.poisonTimer > 0) ||
+        (element === 'poison' && enemy.burnTimer > 0))
     ) {
+      if (isBossCap) enemy.lastBossReactionTick = this.tick;
       const stacks = Math.max(1, enemy.poisonStacks);
       const blastDmg = Math.max(14, Math.round(hitDamage * 1.15 + stacks * 10));
       enemy.poisonTimer = 0;
@@ -723,13 +738,15 @@ export function applyElementStatusToEnemyImpl(
 
     // 4. Paralysis (Tê Liệt): Poison + Shock -> Stun 1.0s + interrupt Elite/Boss telegraph (except Boss Phase 3)
     if (
-      (element === 'shock' && enemy.poisonTimer > 0) ||
-      (element === 'poison' && enemy.shockTimer > 0)
+      bossReactionReady &&
+      ((element === 'shock' && enemy.poisonTimer > 0) ||
+        (element === 'poison' && enemy.shockTimer > 0))
     ) {
+      if (isBossCap) enemy.lastBossReactionTick = this.tick;
       enemy.poisonTimer = 0;
       enemy.poisonStacks = 0;
       enemy.shockTimer = 0;
-      if (!(enemy.isBoss && enemy.bossPhase >= 3 && enemy.aiState === 'telegraph')) {
+      if (!(isBossCap && enemy.bossPhase >= 3 && enemy.aiState === 'telegraph')) {
         enemy.aiState = 'stunned';
         enemy.stateTimer = Math.max(enemy.stateTimer, 1.0);
         enemy.vx = 0;
@@ -746,9 +763,11 @@ export function applyElementStatusToEnemyImpl(
 
     // 5. Overload (Quá Tải): Burn + Shock -> Explosive shockwave AoE + heavy knockback + shield break
     if (
-      (element === 'shock' && enemy.burnTimer > 0) ||
-      (element === 'burn' && enemy.shockTimer > 0)
+      bossReactionReady &&
+      ((element === 'shock' && enemy.burnTimer > 0) ||
+        (element === 'burn' && enemy.shockTimer > 0))
     ) {
+      if (isBossCap) enemy.lastBossReactionTick = this.tick;
       enemy.burnTimer = 0;
       enemy.shockTimer = 0;
       const overloadDmg = Math.max(14, Math.round(hitDamage * 1.35));
