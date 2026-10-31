@@ -61,6 +61,26 @@ const MUTATOR_COLOR_TABLE: Partial<
     accentHex: '#FB7185',
     badgeBgColor: 0x3f0d1d,
   },
+  mutator_holo_decoy_gun: {
+    borderColor: 0x38bdf8,
+    accentHex: '#38BDF8',
+    badgeBgColor: 0x082f49,
+  },
+  mutator_cluster_mortar: {
+    borderColor: 0xfb923c,
+    accentHex: '#FB923C',
+    badgeBgColor: 0x431407,
+  },
+  mutator_boomerang_core: {
+    borderColor: 0x2dd4bf,
+    accentHex: '#2DD4BF',
+    badgeBgColor: 0x042f2e,
+  },
+  mutator_elemental_infusion: {
+    borderColor: 0xc084fc,
+    accentHex: '#C084FC',
+    badgeBgColor: 0x2e1065,
+  },
 };
 
 export interface DaedalusModalHeaderSpec {
@@ -302,6 +322,78 @@ export function drawWeaponMutatorEmblem(
       g.fillTriangle(cx - 7, cy + 3, cx, cy - 13, cx + 7, cy + 3);
       g.fillStyle(NUM_SOLAR_GOLD, 0.95);
       g.fillCircle(cx, cy + 3, 4.5);
+      break;
+    case 'mutator_holo_decoy_gun':
+      // Cyan twin-turret hologram silhouette (#38BDF8)
+      g.lineStyle(1.4, 0x38bdf8, 0.55);
+      g.strokeRoundedRect(cx - 11, cy - 7, 10, 12, 2);
+      g.lineBetween(cx - 4, cy - 3, cx + 4, cy - 3);
+      g.fillStyle(0x38bdf8, 0.92);
+      g.fillRoundedRect(cx - 4, cy - 5, 11, 13, 2);
+      g.fillRect(cx + 5, cy - 2, 8, 3.5);
+      g.fillStyle(NUM_BONE_WHITE, 0.92);
+      g.fillCircle(cx + 1, cy + 1, 2.5);
+      g.lineStyle(1.6, 0x38bdf8, 0.85);
+      g.lineBetween(cx - 10, cy + 11, cx + 10, cy + 11);
+      break;
+    case 'mutator_cluster_mortar':
+      // Amber parabolic arc + 3 cluster dots (#FB923C)
+      g.lineStyle(2.2, 0xfb923c, 0.95);
+      g.beginPath();
+      g.arc(cx - 1, cy + 4, 11, -Math.PI * 0.92, -Math.PI * 0.14, false);
+      g.strokePath();
+      g.fillStyle(0xfb923c, 0.95);
+      g.fillCircle(cx + 8, cy + 2, 3.5);
+      g.fillCircle(cx + 2, cy + 9, 3.5);
+      g.fillCircle(cx + 11, cy + 9, 3.5);
+      g.fillStyle(NUM_SOLAR_GOLD, 0.95);
+      g.fillCircle(cx - 10, cy + 6, 2.5);
+      break;
+    case 'mutator_boomerang_core':
+      // Teal 4-tooth spinning sawblade disc (#2DD4BF)
+      g.fillStyle(0x2dd4bf, 0.92);
+      for (let i = 0; i < 4; i++) {
+        const a = (i * Math.PI) / 2 + Math.PI / 6;
+        const aLeft = a - 0.34;
+        const aRight = a + 0.34;
+        g.fillTriangle(
+          cx + Math.cos(a) * 14,
+          cy + Math.sin(a) * 14,
+          cx + Math.cos(aLeft) * 7.5,
+          cy + Math.sin(aLeft) * 7.5,
+          cx + Math.cos(aRight) * 7.5,
+          cy + Math.sin(aRight) * 7.5,
+        );
+      }
+      g.lineStyle(2, 0x2dd4bf, 0.95);
+      g.strokeCircle(cx, cy, 8);
+      g.fillStyle(0x090d16, 1);
+      g.fillCircle(cx, cy, 3.5);
+      g.lineStyle(1.4, NUM_BONE_WHITE, 0.9);
+      g.strokeCircle(cx, cy, 3.5);
+      break;
+    case 'mutator_elemental_infusion':
+      // Dual intertwined elemental diamonds (#C084FC + flame/frost accents)
+      g.fillStyle(NUM_FLAME_ORANGE, 0.88);
+      g.beginPath();
+      g.moveTo(cx - 4, cy - 11);
+      g.lineTo(cx + 3, cy);
+      g.lineTo(cx - 4, cy + 11);
+      g.lineTo(cx - 11, cy);
+      g.closePath();
+      g.fillPath();
+      g.fillStyle(0xc084fc, 0.92);
+      g.beginPath();
+      g.moveTo(cx + 4, cy - 11);
+      g.lineTo(cx + 11, cy);
+      g.lineTo(cx + 4, cy + 11);
+      g.lineTo(cx - 3, cy);
+      g.closePath();
+      g.fillPath();
+      g.lineStyle(1.5, 0xc084fc, 0.95);
+      g.strokeCircle(cx, cy, 5);
+      g.fillStyle(NUM_BONE_WHITE, 0.95);
+      g.fillCircle(cx, cy, 2.4);
       break;
     default:
       g.fillStyle(NUM_SOLAR_GOLD, 0.92);

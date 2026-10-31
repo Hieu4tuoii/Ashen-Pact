@@ -2,7 +2,7 @@ import { SeededRandom } from '../core/prng.js';
 import type { ElementType, WeaponMutatorId, WeaponStatsDef } from '../data/types.js';
 import {
   MAX_MUTATORS_PER_WEAPON_SLOT,
-  getCompatibleCoreMutatorsForWeapon,
+  getCompatibleWeaponMutators,
   isMutatorCompatibleWithWeapon,
 } from '../data/weapon-mutators.js';
 import { WEAPONS } from '../data/weapons.js';
@@ -14,6 +14,7 @@ import {
 import { ACROBAT_RELOAD_WINDOW_MAX, ACROBAT_RELOAD_WINDOW_MIN } from './sim-blessings.js';
 import { computeAdditivePoolMultiplier, computeUpgradeMultiplier } from './sim-damage-pipeline.js';
 import { triggerEnemyWallSlam } from './sim-tactical-physics.js';
+import { resolveSecondaryInfusedElementForShot } from './sim-weapon-mutators-p4a.js';
 import type { WorldSim } from './world-sim.js';
 import type {
   SimEnemyState,
@@ -166,7 +167,7 @@ export function activateDaedalusAnvilImpl(
   const existing = p.weaponMutators[slot] ?? [];
   if (existing.length >= MAX_MUTATORS_PER_WEAPON_SLOT) return false;
 
-  const pool = getCompatibleCoreMutatorsForWeapon(weaponId, existing);
+  const pool = getCompatibleWeaponMutators(weaponId, existing);
   if (pool.length === 0) return false;
 
   const seed =
@@ -352,6 +353,8 @@ export function triggerFinaleJoltVentBurst(
     gravitySingularityShot: singularity || undefined,
     chainHarpoonShot: harpoon || undefined,
     bypassFrontShield: bypassShield || undefined,
+    clusterMortarLob: hasActiveWeaponMutator(p, 'mutator_cluster_mortar') || undefined,
+    secondaryInfusedElement: resolveSecondaryInfusedElementForShot(p, true),
   };
 
   sim.spawnDeterministicVolley(volleyEvent);
@@ -538,3 +541,5 @@ export function applyChainHarpoonOnHit(
     triggerEnemyWallSlam(sim, e, undefined, 260);
   }
 }
+
+export * from './sim-weapon-mutators-p4a.js';

@@ -12,6 +12,7 @@ import {
 } from './sim-blessings.js';
 import { tryTriggerExecutionerScytheSlash } from './sim-ashen-pacts.js';
 import { triggerEnemyWallSlam, triggerMeleeKickProps } from './sim-tactical-physics.js';
+import { updateHoloDecoyTurretSummon } from './sim-weapon-mutators.js';
 import { ELEMENTALIST_ROTATION_ORDER, hasPlayerBlessing, type SimSummonState, type SimPlayerState, type SimEnemyState, type SimPropState } from './world-sim-types.js';
 import type { WorldSim } from './world-sim.js';
 
@@ -770,6 +771,8 @@ export function updateSkillZonesAndSummonsImpl(this: WorldSim, dtSec: number): v
             }
           }
         }
+      } else if (s.kind === 'holo_decoy_turret') {
+        updateHoloDecoyTurretSummon(this, s, dtSec);
       }
 
       this.summons[summonWrite++] = s;

@@ -93,40 +93,50 @@ export const WEAPON_MUTATORS: Record<WeaponMutatorId, WeaponMutatorDef> = {
   },
   mutator_holo_decoy_gun: {
     id: 'mutator_holo_decoy_gun',
-    nameVi: 'Nòng Bóng Ma Phản Xạ',
+    nameVi: 'Bóng Pháo Ảnh Phản Xạ',
     nameEn: 'Holo-Decoy Gun',
-    descVi: 'Phát Cuối Băng hoặc Xả Nhiệt [R] tạo bản sao ảnh ảo bắn lặp lại phát đạn.',
-    descEn: 'Finale Shot or Tactical Vent [R] spawns a holo-echo that replays the shot.',
+    descVi:
+      'Khi Nạp Chuẩn / Xả Nhiệt [R], để lại Bóng Pháo Ảnh (3.5s, tối đa 1 bóng) bắn phụ họa (40% ST) về phía con trỏ chuột.',
+    descEn:
+      'On Perfect Reload / Vent [R], leave a Holo-Decoy Turret (3.5s, max 1) firing auxiliary shots (40% DMG) toward your cursor.',
     compatibleCadences: ['CLIP_RELOAD', 'HEAT_VENT'],
     excludedCategories: ['melee'],
     phase: 4,
   },
   mutator_cluster_mortar: {
     id: 'mutator_cluster_mortar',
-    nameVi: 'Cối Chùm Phân Mảnh',
+    nameVi: 'Cối Chùm Cầu Vồng',
     nameEn: 'Cluster Mortar Core',
-    descVi: 'Phát nổ khi trúng mục tiêu tạo 3 mảnh đạn phụ rơi xung quanh.',
-    descEn: 'Impacts scatter 3 secondary cluster mortar shells around the target.',
+    descVi:
+      'Đạn bay cầu vồng vượt qua vật chắn thấp/đã lật và tách thành 3 mảnh nổ phụ khi chạm đích.',
+    descEn:
+      'Projectiles lob in an arc over cover obstacles and split into 3 secondary cluster blasts on impact.',
     compatibleCadences: ['CLIP_RELOAD', 'HEAT_VENT'],
     excludedCategories: ['melee'],
     phase: 4,
   },
   mutator_boomerang_core: {
     id: 'mutator_boomerang_core',
-    nameVi: 'Lõi Hồi Quy Boomerang',
-    nameEn: 'Boomerang Core',
-    descVi: 'Đạn hoặc sóng kiếm bay hết tầm sẽ quay ngược về vị trí người chơi.',
-    descEn: 'Projectiles return toward the player upon reaching maximum range.',
-    compatibleCadences: ['CLIP_RELOAD', 'HEAT_VENT', 'MELEE_COMBO'],
+    nameVi: 'Lõi Cưa Hồi Quy',
+    nameEn: 'Boomerang Saw Core',
+    descVi:
+      'Khi Nạp Chuẩn / Xả Nhiệt [R], phóng lưỡi cưa năng lượng xoay 200px rồi thu về vị trí của bạn (32 ST).',
+    descEn:
+      'On Perfect Reload / Vent [R], launch a spinning energy sawblade out 200px that returns to you (32 DMG).',
+    compatibleCadences: ['CLIP_RELOAD', 'HEAT_VENT'],
+    excludedCategories: ['melee'],
     phase: 4,
   },
   mutator_elemental_infusion: {
     id: 'mutator_elemental_infusion',
-    nameVi: 'Lõi Truyền Nguyên Tố',
+    nameVi: 'Lõi Truyền Nguyên Tố Kép',
     nameEn: 'Elemental Infusion Core',
-    descVi: 'Đòn thứ 3 cận chiến hoặc Phát Cuối Băng chắc chắn kích hoạt hiệu ứng nguyên tố.',
-    descEn: '3rd melee combo finisher or Finale Shot guarantees an elemental status proc.',
-    compatibleCadences: ['CLIP_RELOAD', 'HEAT_VENT', 'MELEE_COMBO'],
+    descVi:
+      'Vũ khí đang cầm nhận thêm Nguyên tố thứ hai từ vũ khí ở ô còn lại mỗi khi bắn Phát Cuối Băng hoặc Đạn Quá Tải.',
+    descEn:
+      'Active weapon gains the secondary element from your off-hand weapon on Finale Shot or Overclocked Shot.',
+    compatibleCadences: ['CLIP_RELOAD', 'HEAT_VENT'],
+    excludedCategories: ['melee'],
     phase: 4,
   },
 };
@@ -159,5 +169,14 @@ export function getCompatibleCoreMutatorsForWeapon(
   );
 }
 
+export function getCompatibleWeaponMutators(
+  weaponId: string,
+  alreadyAttached: readonly string[] = [],
+): WeaponMutatorId[] {
+  const attachedSet = new Set(alreadyAttached);
+  return ALL_WEAPON_MUTATOR_IDS.filter(
+    (id) => !attachedSet.has(id) && isMutatorCompatibleWithWeapon(id, weaponId),
+  );
+}
+
 export const MAX_MUTATORS_PER_WEAPON = MAX_MUTATORS_PER_WEAPON_SLOT;
-export const getCompatibleWeaponMutators = getCompatibleCoreMutatorsForWeapon;

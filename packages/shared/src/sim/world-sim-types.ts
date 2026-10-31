@@ -900,6 +900,7 @@ export interface BulletVolleySpawnEvent {
   clientHeldAtMaxRange?: boolean;
   clusterMortarLob?: boolean;
   secondaryInfusedElement?: ElementType;
+  splitGeneration?: 0 | 1;
 }
 
 

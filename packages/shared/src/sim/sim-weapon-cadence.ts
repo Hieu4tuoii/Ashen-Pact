@@ -25,12 +25,16 @@ import {
   computeUpgradeMultiplier,
 } from './sim-damage-pipeline.js';
 import {
+  applyElementalInfusionOnMeleeFinisher,
   applyFinaleJoltSafeRecoil,
+  applyP4AMutatorsToSpawnedProjectiles,
   getClipReloadGoldenWindow,
   getHeatVentOrangeZone,
   hasActiveWeaponMutator,
+  resolveSecondaryInfusedElementForShot,
   spawnShockwaveEdgeBlade,
   triggerFinaleJoltVentBurst,
+  triggerP4AMutatorsOnReloadOrVent,
 } from './sim-weapon-mutators.js';
 import {
   resolveMeleeConeHitsAndSynergies,
@@ -317,6 +321,7 @@ export function updatePlayerWeaponCadence(
           triggerReloadVentOrFinisherBlessings(sim, p, 'perfect_reload', {
             shotsFired: shotsFiredBeforeReload,
           });
+          triggerP4AMutatorsOnReloadOrVent(sim, p);
           onPlayerReloadVentOrMeleeFinisherAshenRelics(sim, p, 'perfect_reload', true);
         } else {
           p.reloadLockout = true;
@@ -367,6 +372,7 @@ export function updatePlayerWeaponCadence(
         triggerReloadVentOrFinisherBlessings(sim, p, 'tactical_vent', {
           shotsFired: shotsFiredFromVent,
         });
+        triggerP4AMutatorsOnReloadOrVent(sim, p);
         onPlayerReloadVentOrMeleeFinisherAshenRelics(sim, p, 'tactical_vent', true);
       }
     } else if (p.reloadTimer <= 0 && p.clipMax > 0 && p.clipAmmo < p.clipMax) {
@@ -639,6 +645,13 @@ export function tryFireActiveWeaponImpl(
       this, p, w, arcRad, halfArc, meleeRange, baseMeleeDmg, stepKnockback, critChance, shotElement, shotFlags, bulletsDestroyed, finisherHitEnemyIds, wasBlackCrystalEmpowered,
     );
     if (comboStep === 2) {
+      applyElementalInfusionOnMeleeFinisher(
+        this,
+        p,
+        shotElement,
+        baseMeleeDmg,
+        finisherHitEnemyIds,
+      );
       triggerReloadVentOrFinisherBlessings(this, p, 'melee_finisher', {
         hitAny,
         bulletsDestroyed,
@@ -800,13 +813,14 @@ export function tryFireActiveWeaponImpl(
     upsertTetherStaffBeam(this, p, baseDmg);
     return;
   }
+  const empoweredForMutator = isFinaleShot || wasOverclocked || wasVentEmpowered;
   if (w.id === 'solar_archon_staff') {
+    const prevProjLen = this.projectiles.length;
     spawnSolarArchonConvergingVolley(this, p, baseDmg, critChance, shotElement, shieldBoost, shotFlags);
+    applyP4AMutatorsToSpawnedProjectiles(p, empoweredForMutator, this.projectiles, prevProjLen);
     if (isFinaleShot) trySpawnCausticSporePod(this, p, true);
     return;
   }
-
-  const empoweredForMutator = isFinaleShot || wasOverclocked || wasVentEmpowered;
   const gravitySingularityShot =
     hasActiveWeaponMutator(p, 'mutator_gravity_singularity') && empoweredForMutator;
   const chainHarpoonShot =
@@ -815,6 +829,8 @@ export function tryFireActiveWeaponImpl(
     wasBlackCrystalEmpowered ||
     (hasActiveWeaponMutator(p, 'mutator_thermal_meltdown') &&
       (empoweredForMutator || inOrangeZoneBeforeShot));
+  const clusterMortarLob = hasActiveWeaponMutator(p, 'mutator_cluster_mortar');
+  const secondaryInfusedElement = resolveSecondaryInfusedElementForShot(p, empoweredForMutator);
 
   this.spawnDeterministicVolley({
     kind: 'bullet_volley_spawned',
@@ -850,6 +866,8 @@ export function tryFireActiveWeaponImpl(
     gravitySingularityShot: gravitySingularityShot || undefined,
     chainHarpoonShot: chainHarpoonShot || undefined,
     bypassFrontShield: bypassFrontShield || undefined,
+    clusterMortarLob: clusterMortarLob || undefined,
+    secondaryInfusedElement,
   });
 
   if (isFinaleShot) trySpawnCausticSporePod(this, p, true);

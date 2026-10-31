@@ -29,7 +29,13 @@ import {
   updateLegendaryProjectileInFlight,
   updateVoidStaffOrbInFlight,
 } from './sim-weapon-specials.js';
-import { applyChainHarpoonOnHit, applyGravitySingularityOnHit } from './sim-weapon-mutators.js';
+import {
+  applyWeaponMutatorsOnEnemyHit,
+  detonateClusterMortarOnImpact,
+  shouldClusterMortarSkipCoverProp,
+  stepBoomerangCoreSawCosmetic,
+  stepBoomerangCoreSawProjectile,
+} from './sim-weapon-mutators.js';
 import {
   type BulletVolleySpawnEvent,
   MAX_ENEMY_PROJECTILES,
@@ -39,6 +45,31 @@ import {
 import type { WorldSim } from './world-sim.js';
 
 export { spawnSeedGunLifeBlossomImpl, triggerLauncherProjectileExplosionImpl };
+
+function pushImpactEvent(
+  sim: WorldSim,
+  x: number,
+  y: number,
+  angle: number,
+  team: 'player' | 'enemy',
+  hitWall: boolean,
+  blockedByShield: boolean,
+  isCrit: boolean,
+  element?: SimProjectileState['element'],
+): void {
+  sim.events.push({
+    kind: 'projectile_impact',
+    x,
+    y,
+    angle,
+    team,
+    hitWall,
+    destroyedByMelee: false,
+    blockedByShield,
+    isCrit,
+    ...(element !== undefined ? { element } : {}),
+  });
+}
 
 export function spawnDeterministicVolleyImpl(this: WorldSim, ev: BulletVolleySpawnEvent, emitEvents = true): void {
   if (ev.eventId === undefined || ev.eventId <= 0) {
@@ -139,14 +170,15 @@ export function spawnDeterministicVolleyImpl(this: WorldSim, ev: BulletVolleySpa
       bounceRemaining: ev.team === 'player' ? clampBounceCount(ev.bounceCount) : ev.bounceCount,
       ttlSec: ev.ttlSec,
       element: ev.element, amplifiedByShield: ev.amplifiedByShield, shotFlags: ev.shotFlags ?? 0,
-      splitGeneration: 0, awaitingServerRedirectTimer: 0, explosionRadius: ev.explosionRadius,
+      splitGeneration: ev.splitGeneration ?? 0, awaitingServerRedirectTimer: 0, explosionRadius: ev.explosionRadius,
       guaranteedElementalProc: ev.guaranteedElementalProc, originX: ev.originX, originY: ev.originY,
       armedForAirburst: ev.armedForAirburst, airburstBypassShield: ev.airburstBypassShield,
       parentExplosionId: ev.parentExplosionId, firedWhileHoldingFire: ev.firedWhileHoldingFire,
       gravitySingularityShot: ev.gravitySingularityShot,
       chainHarpoonShot: ev.chainHarpoonShot,
       bypassFrontShield: ev.bypassFrontShield,
-      bouncesDone: ev.bouncesDone ?? 0, orbitReturned: Boolean(ev.orbitReturned), clusterMortarLob: ev.clusterMortarLob, secondaryInfusedElement: ev.secondaryInfusedElement,
+      bouncesDone: ev.bouncesDone ?? 0, orbitReturned: Boolean(ev.orbitReturned), boomerangPhase: ev.boomerangPhase,
+      clusterMortarLob: (ev.splitGeneration ?? 0) === 0 ? ev.clusterMortarLob : undefined, secondaryInfusedElement: ev.secondaryInfusedElement,
     });
     copyLegendaryVolleyFieldsToProjectile(ev, proj);
     this.projectiles.push(proj);
@@ -202,12 +234,19 @@ export function updateProjectilesImpl(this: WorldSim, dtSec: number): void {
       if (b.element !== 'none') {
         this.applyElementAtWorldPoint(b.x, b.y, b.element, 20);
       }
-      if (!tryRedirectProjectileOrbitReturnOnExpiry(this, b)) handleProjectileExpiredWeaponSpecials(this, b);
+      if (!tryRedirectProjectileOrbitReturnOnExpiry(this, b)) {
+        detonateClusterMortarOnImpact(this, b, b.x, b.y);
+        handleProjectileExpiredWeaponSpecials(this, b);
+      }
       continue;
     }
 
     if (b.weaponId === 'emerald_cleaver_boomerang') {
       updateEmeraldCleaverBoomerang(this, b, dtSec);
+      continue;
+    }
+    if (b.weaponId === 'mutator_boomerang_saw') {
+      stepBoomerangCoreSawProjectile(this, b, dtSec);
       continue;
     }
 
@@ -256,6 +295,20 @@ export function updateProjectilesImpl(this: WorldSim, dtSec: number): void {
         }
       }
 
+      if (b.clusterMortarLob && (b.splitGeneration ?? 0) === 0) {
+        b.ttlSec = 0;
+        if (b.element !== 'none') {
+          this.applyElementAtWorldPoint(wallHit.resolvedX, wallHit.resolvedY, b.element, 24);
+        }
+        detonateClusterMortarOnImpact(this, b, wallHit.resolvedX, wallHit.resolvedY);
+        handleProjectileWallHitWeaponSpecials(this, b, wallHit.resolvedX, wallHit.resolvedY);
+        if (!this.stressTestActive || stressImpactEventsThisTick < 3) {
+          stressImpactEventsThisTick += 1;
+          pushImpactEvent(this, wallHit.resolvedX, wallHit.resolvedY, b.angle, b.team, true, false, b.isCrit, b.element);
+        }
+        continue;
+      }
+
       if (
         handlePlayerProjectileWallHitBlessingsAndSkills(
           this,
@@ -299,21 +352,11 @@ export function updateProjectilesImpl(this: WorldSim, dtSec: number): void {
         if (b.element !== 'none') {
           this.applyElementAtWorldPoint(wallHit.resolvedX, wallHit.resolvedY, b.element, 24);
         }
+        detonateClusterMortarOnImpact(this, b, wallHit.resolvedX, wallHit.resolvedY);
         handleProjectileWallHitWeaponSpecials(this, b, wallHit.resolvedX, wallHit.resolvedY);
         if (!this.stressTestActive || stressImpactEventsThisTick < 3) {
           stressImpactEventsThisTick += 1;
-          this.events.push({
-            kind: 'projectile_impact',
-            x: wallHit.resolvedX,
-            y: wallHit.resolvedY,
-            angle: b.angle,
-            team: b.team,
-            hitWall: true,
-            destroyedByMelee: false,
-            blockedByShield: false,
-            isCrit: b.isCrit,
-            element: b.element,
-          });
+          pushImpactEvent(this, wallHit.resolvedX, wallHit.resolvedY, b.angle, b.team, true, false, b.isCrit, b.element);
         }
         continue;
       }
@@ -324,7 +367,7 @@ export function updateProjectilesImpl(this: WorldSim, dtSec: number): void {
       let hitProp = false;
       for (let k = 0; k < this.props.length; k++) {
         const prop = this.props[k]!;
-        if (prop.hp <= 0) continue;
+        if (prop.hp <= 0 || shouldClusterMortarSkipCoverProp(b, prop)) continue;
         // Boss Kryssa's ice laser refracts off indestructible Crystal Pillars toward the nearest player!
         if (prop.kind === 'crystal_pillar' && circleVsCircle(b, prop)) {
           if (!b.hitEntityIds.includes(prop.id)) {
@@ -402,18 +445,7 @@ export function updateProjectilesImpl(this: WorldSim, dtSec: number): void {
           }
           b.ttlSec = 0;
           hitProp = true;
-          this.events.push({
-            kind: 'projectile_impact',
-            x: b.x,
-            y: b.y,
-            angle: b.angle,
-            team: b.team,
-            hitWall: false,
-            destroyedByMelee: false,
-            blockedByShield: false,
-            isCrit: b.isCrit,
-            element: b.element,
-          });
+          pushImpactEvent(this, b.x, b.y, b.angle, b.team, false, false, b.isCrit, b.element);
           break;
         }
       }
@@ -529,27 +561,11 @@ export function updateProjectilesImpl(this: WorldSim, dtSec: number): void {
           );
 
           handlePlayerProjectileEnemyHitWeaponSpecials(this, b, enemy);
-          if (b.gravitySingularityShot) {
-            applyGravitySingularityOnHit(this, b, enemy);
-          }
-          if (b.chainHarpoonShot) {
-            applyChainHarpoonOnHit(this, b, enemy);
-          }
+          applyWeaponMutatorsOnEnemyHit(this, b, enemy, hitDmg, effectiveAttackerId);
 
           if (!this.stressTestActive || stressImpactEventsThisTick < 4) {
             stressImpactEventsThisTick += 1;
-            this.events.push({
-              kind: 'projectile_impact',
-              x: b.x,
-              y: b.y,
-              angle: b.angle,
-              team: 'player',
-              hitWall: false,
-              destroyedByMelee: false,
-              blockedByShield: false,
-              isCrit: b.isCrit,
-              element: b.element,
-            });
+            pushImpactEvent(this, b.x, b.y, b.angle, 'player', false, false, b.isCrit, b.element);
             if (!this.stressTestActive) {
               this.events.push({
                 kind: 'hit_stop',
@@ -591,17 +607,7 @@ export function updateProjectilesImpl(this: WorldSim, dtSec: number): void {
               b.ttlSec = 0;
               midFlightDestroyedScratch.push(b.id);
               sum.hp = Math.max(0, sum.hp - b.damage * (sum.kind === 'tesla_turret' ? 3 : 1));
-              this.events.push({
-                kind: 'projectile_impact',
-                x: b.x,
-                y: b.y,
-                angle: b.angle,
-                team: 'enemy',
-                hitWall: false,
-                destroyedByMelee: false,
-                blockedByShield: true,
-                isCrit: false,
-              });
+              pushImpactEvent(this, b.x, b.y, b.angle, 'enemy', false, true, false);
               blockedBySummon = true;
               break;
             }
@@ -635,17 +641,7 @@ export function updateProjectilesImpl(this: WorldSim, dtSec: number): void {
             }
           }
           if (!this.stressTestActive) {
-            this.events.push({
-              kind: 'projectile_impact',
-              x: b.x,
-              y: b.y,
-              angle: b.angle,
-              team: 'enemy',
-              hitWall: false,
-              destroyedByMelee: false,
-              blockedByShield: false,
-              isCrit: false,
-            });
+            pushImpactEvent(this, b.x, b.y, b.angle, 'enemy', false, false, false);
           }
           break;
         }
@@ -696,6 +692,7 @@ export function stepClientProjectilesCosmeticImpl(this: WorldSim, dtSec: number)
 
     b.ttlSec -= dtSec;
     if (b.ttlSec <= 0 && !tryHoldClientOrbitReturnAtMaxRange(this, b)) continue;
+    if (b.weaponId === 'mutator_boomerang_saw') { stepBoomerangCoreSawCosmetic(this, b, dtSec); continue; }
 
     b.x += b.vx * dtSec;
     b.y += b.vy * dtSec;
@@ -724,28 +721,17 @@ export function stepClientProjectilesCosmeticImpl(this: WorldSim, dtSec: number)
         }
       } else {
         b.ttlSec = 0;
-        this.events.push({
-          kind: 'projectile_impact',
-          x: wallHit.resolvedX,
-          y: wallHit.resolvedY,
-          angle: b.angle,
-          team: b.team,
-          hitWall: true,
-          destroyedByMelee: false,
-          blockedByShield: false,
-          isCrit: b.isCrit,
-          element: b.element,
-        });
+        pushImpactEvent(this, wallHit.resolvedX, wallHit.resolvedY, b.angle, b.team, true, false, b.isCrit, b.element);
         continue;
       }
     }
 
     // 2. Destructible prop cosmetic hit prediction
-    if (this.props.length > 0) {
+    if (this.props.length > 0 && b.weaponId !== 'mutator_boomerang_saw') {
       let hitProp = false;
       for (let k = 0; k < this.props.length; k++) {
         const prop = this.props[k]!;
-        if (prop.hp <= 0) continue;
+        if (prop.hp <= 0 || shouldClusterMortarSkipCoverProp(b, prop)) continue;
         if (prop.kind === 'crystal_pillar' && circleVsCircle(b, prop)) {
           if (((b.shotFlags ?? 0) & SHOT_FLAG.DYNAMIC_BOUNCE) !== 0) {
             b.vx = 0;
@@ -782,18 +768,7 @@ export function stepClientProjectilesCosmeticImpl(this: WorldSim, dtSec: number)
           prop.hitFlashTimer = Math.max(prop.hitFlashTimer, 0.1);
           b.ttlSec = 0;
           hitProp = true;
-          this.events.push({
-            kind: 'projectile_impact',
-            x: b.x,
-            y: b.y,
-            angle: b.angle,
-            team: b.team,
-            hitWall: false,
-            destroyedByMelee: false,
-            blockedByShield: false,
-            isCrit: b.isCrit,
-            element: b.element,
-          });
+          pushImpactEvent(this, b.x, b.y, b.angle, b.team, false, false, b.isCrit, b.element);
           break;
         }
       }
@@ -964,7 +939,7 @@ export function acquireProjectileImpl(this: WorldSim,
     pooled.gravitySingularityShot = init.gravitySingularityShot;
     pooled.chainHarpoonShot = init.chainHarpoonShot;
     pooled.bypassFrontShield = init.bypassFrontShield;
-    pooled.bouncesDone = init.bouncesDone ?? 0; pooled.orbitReturned = Boolean(init.orbitReturned); pooled.orbitReturnTicks = 0; pooled.clientHeldAtMaxRange = false; pooled.clusterMortarLob = init.clusterMortarLob; pooled.secondaryInfusedElement = init.secondaryInfusedElement;
+    pooled.bouncesDone = init.bouncesDone ?? 0; pooled.orbitReturned = Boolean(init.orbitReturned); pooled.orbitReturnTicks = 0; pooled.clientHeldAtMaxRange = false; pooled.boomerangPhase = init.boomerangPhase; pooled.clusterMortarLob = init.clusterMortarLob; pooled.secondaryInfusedElement = init.secondaryInfusedElement;
     pooled.trailLastX = init.originX ?? init.x; pooled.trailLastY = init.originY ?? init.y;
     pooled.hitEntityIds.length = 0;
     return pooled;
