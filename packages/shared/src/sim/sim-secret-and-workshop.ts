@@ -6,6 +6,7 @@ import { TILE_SIZE } from '../protocol/messages.js';
 import { findNearestWalkablePoint } from './arena-room-archetypes.js';
 import type { DungeonRoomNode } from './dungeon-gen.js';
 import { syncActiveWeaponCadenceState } from './sim-coop-hub.js';
+import { spawnSecretChallengeCrystal } from './sim-secret-arena.js';
 import { isFlippableBarricadeProp, isCircularKickableToyProp } from './sim-tactical-physics.js';
 import type { PropKind, SimChestState, SimPlayerState, SimWorldItemState } from './world-sim-types.js';
 import type { WorldSim } from './world-sim.js';
@@ -174,6 +175,7 @@ export function populateSecretRoomContents(
   sim.spawnProp('crystal_pillar', cx + 105, cy - 55);
   sim.spawnProp('glow_mushroom', cx - 95, cy + 55);
   sim.spawnProp('glow_mushroom', cx + 95, cy + 55);
+  spawnSecretChallengeCrystal(sim, room);
 
   if (!hasSavedState && !room.chestOpened) {
     const rarity: WeaponRarity =
@@ -213,7 +215,7 @@ export function populateSecretRoomContents(
 }
 
 export function openChestImpl(this: WorldSim, chest: SimChestState): boolean {
-  if (chest.opened) return false;
+  if (chest.opened || this.secretTrialActive) return false;
   chest.opened = true;
   const room = this.getCurrentRoom();
   room.chestOpened = true;
@@ -227,7 +229,11 @@ export function openChestImpl(this: WorldSim, chest: SimChestState): boolean {
       const p = allPlayers[pIdx]!;
       const instancedWepId =
         pIdx === 0 ? wep.id : this.rollRandomWeaponByRarities([chest.rarity, wep.rarity]);
-      const instancedWep = WEAPONS[instancedWepId] ?? wep;
+      const rolledWep = WEAPONS[instancedWepId];
+      const instancedWep =
+        rolledWep && (chest.rarity !== 'legendary' || rolledWep.rarity === 'legendary')
+          ? rolledWep
+          : wep;
       const offsetX = (pIdx - (allPlayers.length - 1) * 0.5) * 34;
       this.spawnWorldItem({
         kind: 'weapon',

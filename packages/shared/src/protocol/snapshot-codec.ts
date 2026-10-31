@@ -203,6 +203,11 @@ export interface QuantizedWorldSnapshot {
   magneticRivets?: SimMagneticRivetState[];
   coopPuzzleCompleted?: boolean;
   teamComboCount?: number;
+  secretTrialActive?: boolean;
+  secretTrialTimer100?: number;
+  secretTrialResult?: 'idle' | 'active' | 'victory' | 'expired';
+  secretTrialBanner10?: number;
+  secretTrialRemaining?: number;
   runStats?: {
     floorReached: number;
     roomsCleared: number;
@@ -387,7 +392,9 @@ export function encodeWorldSnapshot(
       ev.kind === 'bullet_volley_spawned' ||
       ev.kind === 'projectiles_destroyed' ||
       ev.kind === 'pact_signed' ||
-      ev.kind === 'relic_awakened'
+      ev.kind === 'relic_awakened' ||
+      ev.kind === 'secret_trial_started' ||
+      ev.kind === 'secret_trial_resolved'
     ) {
       priorityEvents.push(ev);
     } else {
@@ -429,6 +436,11 @@ export function encodeWorldSnapshot(
     magneticRivets: sim.magneticRivets.map((mr) => ({ ...mr })),
     coopPuzzleCompleted: sim.coopPuzzleCompleted,
     teamComboCount: sim.teamComboCount,
+    secretTrialActive: sim.secretTrialActive,
+    secretTrialTimer100: Math.round(sim.secretTrialTimer * 100),
+    secretTrialResult: sim.secretTrialResult,
+    secretTrialBanner10: Math.round(sim.secretTrialBannerTimer * 10),
+    secretTrialRemaining: sim.secretTrialRemainingEnemies,
     runStats: { ...sim.runStats },
     surfaces,
     discoveredRooms,

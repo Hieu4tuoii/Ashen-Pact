@@ -5,7 +5,7 @@ import { SpatialHashGrid } from '../math/spatial-hash.js';
 import type { PlayerInputPacket, QuickEmoteId } from '../protocol/messages.js';
 import { ArenaMap, type RoomArchetypeId, type SurfaceKind } from './arena-map.js';
 import { type DungeonFloorGraph, type DungeonRoomNode, generateDungeonFloor } from './dungeon-gen.js';
-import { PHASE1_SAMPLE_ENEMIES, hasPlayerBlessing, type PropKind, type SimPropState, type SimSummonState, type SimSkillZoneState, type SimPressurePlateState, type SimPushBlockState, type SimShockwaveRingState, type SimTetherBeamState, type SimMagneticRivetState, type SimFlameFissureState, type SimSolarFireZoneState, type SimMagmaTrailSegmentState, type SimLightningPillarState, type SimDoorState, type SimChestState, type SimWorldItemState, type SimNpcState, type SimHubStatue, type SimPingMarker, type RunSummaryStats, type MvpAwardEntry, type SimPlayerState, type SimEnemyState, type SimProjectileState, type SimPickupState, type BulletVolleySpawnEvent, type SimPendingMortarStrike, type SimEmpBlastVisualRing, type SimPendingBossSupplyDrop } from './world-sim-types.js';
+import { PHASE1_SAMPLE_ENEMIES, hasPlayerBlessing, type SecretTrialResult, type PropKind, type SimPropState, type SimSummonState, type SimSkillZoneState, type SimPressurePlateState, type SimPushBlockState, type SimShockwaveRingState, type SimTetherBeamState, type SimMagneticRivetState, type SimFlameFissureState, type SimSolarFireZoneState, type SimMagmaTrailSegmentState, type SimLightningPillarState, type SimDoorState, type SimChestState, type SimWorldItemState, type SimNpcState, type SimHubStatue, type SimPingMarker, type RunSummaryStats, type MvpAwardEntry, type SimPlayerState, type SimEnemyState, type SimProjectileState, type SimPickupState, type BulletVolleySpawnEvent, type SimPendingMortarStrike, type SimEmpBlastVisualRing, type SimPendingBossSupplyDrop } from './world-sim-types.js';
 import type { SimEvent, WorldSimOptions, CoPlayerInputEntry } from './world-sim-events.js';
 import { createPlayerStateImpl, getAllPlayersImpl, getActivePlayerCountImpl, setPlayerCountOverrideImpl, getPlayerByIdImpl, getPlayerBySlotImpl, addCoopPlayerImpl, removeCoopPlayerImpl, setCoopPlayerInputImpl, applyCharacterToPlayerStateImpl, selectCharacterImpl, togglePlayerReadyImpl, areAllPlayersReadyImpl, enterHubImpl, startDungeonRunFromHubImpl, triggerPingImpl, triggerEmoteImpl, spawnDroppedWeaponImpl, dropActiveWeaponImpl, updateCoopDownedAndReviveImpl } from './sim-coop-hub.js';
 import { spawnDefaultArenaPropsImpl, spawnPropImpl, cycleImbueElementImpl, setImbueElementImpl, configureStressTestImpl, topUpStressTestProjectilesImpl, setPlayerInputImpl, getActiveWeaponIdImpl, equipWeaponSlotImpl, cycleWeaponImpl, spawnTrainingDummyImpl, spawnEnemyImpl, spawnBossGuardianMushroomsImpl, hasActiveBossGuardiansImpl, spawnSampleWaveImpl, getCurrentRoomImpl, hasActiveCombatEnemiesImpl, getActiveBossImpl, rollChestRarityImpl, rollRandomWeaponByRaritiesImpl, spawnChestImpl, spawnWorldItemImpl, resolvePropMovementCollisionImpl, updatePropsImpl, damagePropImpl, detonateExplosiveBarrelImpl, applyElementAtWorldPointImpl } from './sim-props-spawning.js';
@@ -24,6 +24,7 @@ import { updateMagneticRivets } from './sim-weapon-specials.js';
 import { selectWeaponMutatorImpl, updateGravitySingularities } from './sim-weapon-mutators.js';
 import { purifyAshenPactsOnBossDefeated, selectAshenPactImpl } from './sim-ashen-pacts.js';
 import { updateDuoBoons } from './sim-duo-boons.js';
+import { resetSecretSkillArenaState, updateSecretSkillArena } from './sim-secret-arena.js';
 
 export * from './world-sim-types.js';
 export * from './world-sim-events.js';
@@ -34,6 +35,7 @@ export * from './sim-weapon-specials.js';
 export * from './sim-weapon-mutators.js';
 export * from './sim-ashen-pacts.js';
 export * from './sim-duo-boons.js';
+export * from './sim-secret-arena.js';
 export * from './sim-secret-and-workshop.js';
 export * from './sim-boss-armor-break.js';
 export * from './sim-bot-tactical-helpers.js';
@@ -99,6 +101,12 @@ export class WorldSim {
   public currentRoomId = 0;
   public roomArchetype?: RoomArchetypeId;
   public secretWallBroken = false;
+  public secretTrialActive = false;
+  public secretTrialTimer = 0;
+  public secretTrialResult: SecretTrialResult = 'idle';
+  public secretTrialBannerTimer = 0;
+  public secretTrialRemainingEnemies = 0;
+  public secretTrialActivatedTick = -1;
   public doors: SimDoorState[] = [];
   public chests: SimChestState[] = [];
   public worldItems: SimWorldItemState[] = [];
@@ -361,6 +369,7 @@ export class WorldSim {
       }
       updateGravitySingularities(this, dtSec);
       updateDuoBoons(this, dtSec);
+      updateSecretSkillArena(this, dtSec);
     }
 
     // 9. Update Pickups (Magnet & Collection)
@@ -442,7 +451,7 @@ export class WorldSim {
   public selectCharacter(playerId: number, characterId: CharacterId, allowDuplicateOverride?: boolean): boolean  { return selectCharacterImpl.call(this, playerId, characterId, allowDuplicateOverride); }
   public togglePlayerReady(playerId: number, ready?: boolean): boolean  { return togglePlayerReadyImpl.call(this, playerId, ready); }
   public areAllPlayersReady(): boolean  { return areAllPlayersReadyImpl.call(this); }
-  public enterHub(): void  { return enterHubImpl.call(this); }
+  public enterHub(): void  { resetSecretSkillArenaState(this); return enterHubImpl.call(this); }
   public startDungeonRunFromHub(): void  { return startDungeonRunFromHubImpl.call(this); }
   public triggerPing(playerId: number, worldX: number, worldY: number): SimPingMarker | null  { return triggerPingImpl.call(this, playerId, worldX, worldY); }
   public triggerEmote(playerId: number, emoteId: QuickEmoteId): boolean  { return triggerEmoteImpl.call(this, playerId, emoteId); }

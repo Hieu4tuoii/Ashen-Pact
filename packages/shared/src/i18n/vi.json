@@ -71,7 +71,18 @@
       "weaponCompareFireRate": "Tốc bắn",
       "weaponCompareEnergy": "Năng lượng",
       "weaponCompareCrit": "Chí mạng",
-      "weaponCompareSwap": "Nhặt / Đổi vũ khí"
+      "weaponCompareSwap": "Nhặt / Đổi vũ khí",
+      "secretTrial": {
+        "title": "✦ ĐẤU TRƯỜNG BÍ MẬT",
+        "countdown": "CÒN LẠI {sec}s · QUÁI: {enemies}",
+        "urgent": "⚡ SẮP HẾT GIỜ! {sec}s · QUÁI: {enemies}",
+        "victoryBanner": "✦ THĂNG HOA RƯƠNG HUYỀN THOẠI (+40 XU)!",
+        "expiredBanner": "⌛ HẾT GIỜ THỬ THÁCH — RƯƠNG GỐC GIỮ NGUYÊN"
+      }
+    },
+    "interact": {
+      "secretChallengeCrystal": "[E] Tinh Thể Khiêu Chiến 20s (Thăng Hoa Huyền Thoại)",
+      "secretChallengeCrystalUsed": "Tinh Thể Khiêu Chiến (Đã Khép Lại)"
     },
     "tooltip": {
       "weaponCompareHeader": "SO SÁNH VŨ KHÍ — Nhấn [E] Nhặt / Đổi · [X] Thả Vũ Khí",

@@ -71,7 +71,18 @@
       "weaponCompareFireRate": "Fire Rate",
       "weaponCompareEnergy": "Energy Cost",
       "weaponCompareCrit": "Crit Chance",
-      "weaponCompareSwap": "Equip / Swap Weapon"
+      "weaponCompareSwap": "Equip / Swap Weapon",
+      "secretTrial": {
+        "title": "✦ SECRET SKILL ARENA",
+        "countdown": "{sec}s LEFT · FOES: {enemies}",
+        "urgent": "⚡ HURRY! {sec}s · FOES: {enemies}",
+        "victoryBanner": "✦ CHEST ASCENDED TO LEGENDARY (+40 GOLD)!",
+        "expiredBanner": "⌛ TRIAL EXPIRED — ORIGINAL CHEST INTACT"
+      }
+    },
+    "interact": {
+      "secretChallengeCrystal": "[E] 20s Trial Crystal (Ascend Chest to Legendary)",
+      "secretChallengeCrystalUsed": "Trial Crystal (Dormant)"
     },
     "tooltip": {
       "weaponCompareHeader": "WEAPON COMPARISON — Press [E] Equip / Swap · [X] Drop Weapon",

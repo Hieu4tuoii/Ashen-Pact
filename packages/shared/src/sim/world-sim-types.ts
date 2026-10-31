@@ -394,9 +394,11 @@ export interface SimWorldItemState {
   isHubRackItem?: boolean;
 }
 
+export type SecretTrialResult = 'idle' | 'active' | 'victory' | 'expired';
+
 export interface SimNpcState {
   id: number;
-  kind: 'merchant' | 'shrine' | 'daedalus_anvil' | 'upgrade_anvil';
+  kind: 'merchant' | 'shrine' | 'daedalus_anvil' | 'upgrade_anvil' | 'secret_challenge_crystal';
   nameVi: string;
   dialogueVi: string;
   x: number;
@@ -735,6 +737,7 @@ export interface SimEnemyState {
   napalmPlagueDetonated?: boolean;
   cryoSpireIcdTimer?: number;
   lastCombatText?: string;
+  secretTrialEnemy?: boolean;
 }
 
 export interface SimPendingMortarStrike {

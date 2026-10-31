@@ -336,6 +336,31 @@ export function resolveInteractPromptSpec(
       };
     }
 
+    case 'secret_challenge_crystal': {
+      const colorHex = PALETTE.ELECTRIC_VIOLET;
+      const titleText = isEn
+        ? '20s Trial Crystal (Ascend Chest to Legendary)'
+        : 'Tinh Thể Khiêu Chiến 20s (Thăng Hoa Huyền Thoại)';
+      return {
+        key: target.key,
+        kind: 'secret_challenge_crystal',
+        x: target.x,
+        y: target.y - 34,
+        targetX: target.x,
+        targetY: target.y,
+        highlightRadiusX: 24,
+        highlightRadiusY: 28,
+        keycapText: 'E',
+        titleText,
+        colorHex,
+        colorNum: hexToNum(colorHex),
+        costGold: 0,
+        hasCoinIcon: false,
+        priceText: '',
+        suppressedByWeaponCard: false,
+      };
+    }
+
     case 'shrine': {
       const isLegacyAncientShrine =
         target.npc.nameVi === 'Điện Thờ Cổ Đại' &&

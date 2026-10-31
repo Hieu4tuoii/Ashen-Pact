@@ -665,6 +665,11 @@ export class NetworkTransport implements ITransport {
     if (snapshot.teamComboCount !== undefined) {
       this.sim.teamComboCount = snapshot.teamComboCount;
     }
+    if (snapshot.secretTrialActive !== undefined) this.sim.secretTrialActive = snapshot.secretTrialActive;
+    if (snapshot.secretTrialTimer100 !== undefined) this.sim.secretTrialTimer = snapshot.secretTrialTimer100 / 100;
+    if (snapshot.secretTrialResult !== undefined) this.sim.secretTrialResult = snapshot.secretTrialResult;
+    if (snapshot.secretTrialBanner10 !== undefined) this.sim.secretTrialBannerTimer = snapshot.secretTrialBanner10 / 10;
+    if (snapshot.secretTrialRemaining !== undefined) this.sim.secretTrialRemainingEnemies = snapshot.secretTrialRemaining;
 
     // Sync dynamic surfaces
     this.sim.map.surfaces.fill('none');

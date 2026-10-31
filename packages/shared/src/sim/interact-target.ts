@@ -43,6 +43,7 @@ export type InteractTargetKind =
   | 'flip_cover'
   | 'daedalus_anvil'
   | 'upgrade_anvil'
+  | 'secret_challenge_crystal'
   | (typeof INTERACT_PRIORITY_ORDER)[number];
 
 export type InteractTargetResult =
@@ -103,7 +104,7 @@ export type InteractTargetResult =
       npc: SimNpcState;
     }
   | {
-      kind: 'daedalus_anvil' | 'upgrade_anvil';
+      kind: 'daedalus_anvil' | 'upgrade_anvil' | 'secret_challenge_crystal';
       key: string;
       x: number;
       y: number;
@@ -288,8 +289,8 @@ export function findInteractTarget(
     }
   }
 
-  // 2. Unopened Chests
-  {
+  // 2. Unopened Chests (locked while Secret Skill Arena 20s trial is active so [E] flips cover instead)
+  if (!sim.secretTrialActive) {
     const baseRange = INTERACT_RANGE + INTERACT_RANGE_OFFSETS.chest;
     let bestChest: SimChestState | null = null;
     let bestDist = Infinity;
@@ -393,6 +394,8 @@ export function findInteractTarget(
         }
       } else if (npc.kind === 'daedalus_anvil' || npc.kind === 'upgrade_anvil') {
         if (hasPlayerUsedAnvil(npc, room, actor.id)) continue;
+      } else if (npc.kind === 'secret_challenge_crystal') {
+        if (npc.interacted || sim.secretTrialActive || room.secretTrialAttempted) continue;
       } else {
         continue;
       }
@@ -407,7 +410,11 @@ export function findInteractTarget(
     }
 
     if (bestNpc) {
-      if (bestNpc.kind === 'daedalus_anvil' || bestNpc.kind === 'upgrade_anvil') {
+      if (
+        bestNpc.kind === 'daedalus_anvil' ||
+        bestNpc.kind === 'upgrade_anvil' ||
+        bestNpc.kind === 'secret_challenge_crystal'
+      ) {
         return {
           kind: bestNpc.kind,
           key: bestKey,

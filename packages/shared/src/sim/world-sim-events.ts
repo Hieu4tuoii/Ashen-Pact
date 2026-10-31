@@ -565,6 +565,21 @@ export type SimEvent =
       }>;
       deflectedCount: number;
       alertTextVi: string;
+    }
+  | {
+      kind: 'secret_trial_started';
+      roomId: number;
+      durationSec: number;
+      x: number;
+      y: number;
+    }
+  | {
+      kind: 'secret_trial_resolved';
+      roomId: number;
+      victory: boolean;
+      bonusGold: number;
+      x: number;
+      y: number;
     };
 
 export interface WorldSimOptions {

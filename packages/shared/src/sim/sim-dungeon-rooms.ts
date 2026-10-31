@@ -35,6 +35,7 @@ import {
   syncAshenExecutionerInRoom,
 } from './sim-ashen-pacts.js';
 import { populateTreasureForgeWorkshop } from './sim-weapon-mutators.js';
+import { resetSecretSkillArenaState } from './sim-secret-arena.js';
 import type { WorldSim } from './world-sim.js';
 
 export { openChestImpl, pickupOrBuyWorldItemImpl, spawnCoopPressurePlatePuzzleImpl };
@@ -74,8 +75,8 @@ export function rebuildCurrentRoomDoorsImpl(this: WorldSim): void {
       room.secretWallBroken || targetRoom.secretWallBroken || this.secretWallBroken,
     );
     const locked = isSecretPassage
-      ? !isWallBroken || hasCombat
-      : hasCombat || (!room.cleared && room.type !== 'start');
+      ? !isWallBroken || hasCombat || this.secretTrialActive
+      : hasCombat || this.secretTrialActive || (!room.cleared && room.type !== 'start');
 
     this.doors.push({
       dir,
@@ -149,6 +150,7 @@ export function enterRoomImpl(this: WorldSim, roomId: number, entryDir?: Cardina
   this.pendingMortarStrikes.length = 0;
   this.empBlastVisualRings.length = 0;
   this.pendingBossSupplyDrops.length = 0;
+  resetSecretSkillArenaState(this);
   this.doorTransitionCooldown = 0.55;
 
   for (const pl of this.getAllPlayers()) {

@@ -25,6 +25,7 @@ import {
   stepBotReloadVentCadence,
 } from './sim-bot-tactical-helpers.js';
 import { flipCoverProp } from './sim-tactical-physics.js';
+import { activateSecretChallengeCrystal, resetSecretSkillArenaState } from './sim-secret-arena.js';
 import { activateDaedalusAnvilImpl, activateUpgradeAnvilImpl } from './sim-weapon-mutators.js';
 import { lerpSpeed, type SimSummonState, type SimDoorState, type SimNpcState, type SimPlayerState, type SimEnemyState, type SimPickupState } from './world-sim-types.js';
 import type { WorldSim } from './world-sim.js';
@@ -216,6 +217,7 @@ export function advanceToFloorImpl(this: WorldSim, floorNumber: 1 | 2 | 3 | 4 | 
   this.initializedRoomIds.clear();
   this.completedPuzzleRoomIds.clear();
   this.secretWallBroken = false;
+  resetSecretSkillArenaState(this);
   const floorInBiome: 1 | 2 = floorNumber % 2 === 1 ? 1 : 2;
   this.dungeon = generateDungeonFloor(
     this.baseSeed,
@@ -340,6 +342,9 @@ export function interactWithNearestImpl(
     case 'upgrade_anvil':
       return activateUpgradeAnvilImpl(this, target.npc, p);
 
+    case 'secret_challenge_crystal':
+      return activateSecretChallengeCrystal(this, target.npc, p);
+
     case 'portal':
       if (this.inHub) {
         p.ready = true;
@@ -377,9 +382,9 @@ export function updateCurrentRoomProgressionImpl(this: WorldSim, dtSec: number):
       const isWallBroken = Boolean(
         room.secretWallBroken || targetRoom?.secretWallBroken || this.secretWallBroken,
       );
-      d.locked = !isWallBroken || hasCombatEnemies || wavesRemaining;
+      d.locked = !isWallBroken || hasCombatEnemies || wavesRemaining || this.secretTrialActive;
     } else {
-      d.locked = hasCombatEnemies || wavesRemaining;
+      d.locked = hasCombatEnemies || wavesRemaining || this.secretTrialActive;
     }
   }
 
