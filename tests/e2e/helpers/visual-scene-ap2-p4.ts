@@ -20,6 +20,12 @@ export const AP2_P4A_SCENE_IDS: readonly string[] = [
 
 export const AP2_P4A_SCENE_GROUP = AP2_P4A_SCENE_IDS;
 
+export {
+  AP2_P4B_SCENE_GROUP,
+  AP2_P4B_SCENE_IDS,
+  AP2_P4B_VISUAL_SCENES,
+} from './visual-scene-ap2-p4b.js';
+
 interface CleanArenaConfig {
   minTx: number;
   maxTx: number;

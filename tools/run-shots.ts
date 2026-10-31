@@ -179,6 +179,13 @@ export const SCENE_GROUPS: Readonly<Record<string, readonly string[]>> = {
     'ap2-p4a-thunder-decoy-dash',
     'ap2-p4a-holo-decoy-mutator',
   ],
+  'ap2-p4b': [
+    'ap2-modal-duo-boon-card',
+    'ap2-duo-magnetic-bastion-ring',
+    'ap2-duo-superheated-cyclone',
+    'ap2-duo-plasma-overload-star',
+    'ap2-secret-arena-20s-trial',
+  ],
 };
 
 export interface ShotsCliOptions {
