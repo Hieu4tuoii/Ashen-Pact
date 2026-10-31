@@ -173,6 +173,12 @@ export const SCENE_GROUPS: Readonly<Record<string, readonly string[]>> = {
     'ap2-boss2-armor-break',
     'ap2-boss3-armor-break',
   ],
+  'ap2-p4a': [
+    'ap2-p4a-wall-tether-pylons',
+    'ap2-p4a-orbit-return-bullets',
+    'ap2-p4a-thunder-decoy-dash',
+    'ap2-p4a-holo-decoy-mutator',
+  ],
 };
 
 export interface ShotsCliOptions {

@@ -111,6 +111,7 @@ export class TextureBaker {
       return coverState === 'fallen' ? 'prop_pneumatic_press_slammed' : 'prop_pneumatic_press';
     }
     if (kind === 'slag_crucible') return 'prop_slag_crucible';
+    if (kind === 'caustic_spore_pod') return 'prop_volatile_spore_pod';
     return `prop_${kind}`;
   }
 

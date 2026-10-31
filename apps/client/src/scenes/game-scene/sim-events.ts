@@ -33,6 +33,7 @@ import {
   spawnP1DBlessingEventFx,
 } from '../../fx/combat-fx-weapons-v2.js';
 import { handleP2BSimEvent } from '../../fx/combat-fx-p2b.js';
+import { handleP4ASimEvent } from '../../fx/combat-fx-p4a.js';
 import { type GameScene, RIG_FOOT_OFFSET_Y } from '../GameScene.js';
 import { handleP2AForgeAndSalvageSimEvent } from './hud-pact-and-forge-modals.js';
 import { triggerP11WaveBanner } from './p11-drama-hud.js';
@@ -61,6 +62,7 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
     if (handleBatch2WeaponSimEvent(this, ev, sim, isStress, allowStressSfx)) continue;
     if (handleP2AForgeAndSalvageSimEvent(this, ev, isStress, allowStressSfx)) continue;
     if (handleP2BSimEvent(this, ev, sim, isStress, allowStressSfx)) continue;
+    if (handleP4ASimEvent(this, ev, sim, isStress, allowStressSfx)) continue;
     switch (ev.kind) {
       case 'projectile_spawned': {
         if (ev.team === 'player') {

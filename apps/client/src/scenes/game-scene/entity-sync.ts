@@ -99,6 +99,7 @@ export function resolveEnemyStatusTintImpl(this: GameScene, e: SimEnemyState): n
   if (e.shockTimer > 0) return 0xfde047;
   if (e.burnTimer > 0) return 0xfb923c;
   if (e.chillStacks > 0) return 0x38bdf8;
+  if ((e.causticVulnTimer ?? 0) > 0) return 0x84cc16;
   if (e.poisonStacks > 0) return 0xc084fc;
   return null;
 }

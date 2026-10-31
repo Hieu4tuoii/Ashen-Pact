@@ -56,6 +56,7 @@ import {
   AP2_P3B_SCENE_IDS,
   AP2_P3B_VISUAL_SCENES,
 } from './visual-scene-ap2-p3.js';
+import { AP2_P4A_SCENE_IDS, AP2_P4A_VISUAL_SCENES } from './visual-scene-ap2-p4.js';
 
 export {
   AP2_P0B_SCENE_IDS,
@@ -66,7 +67,7 @@ export {
   AP2_P2A_SCENE_IDS,
   AP2_P2B_SCENE_IDS,
   AP2_P3A_SCENE_IDS,
-  AP2_P3B_SCENE_IDS,
+  AP2_P3B_SCENE_IDS, AP2_P4A_SCENE_IDS,
   DEFAULT_FREEZE_MASK_RECTS,
   ENVIRONMENT_SAMPLE_RECTS,
   HUB_SAMPLE_RECTS,
@@ -968,4 +969,5 @@ export const VISUAL_SCENES: readonly VisualSceneDef[] = [
   ...AP2_P2B_VISUAL_SCENES,
   ...AP2_P3A_VISUAL_SCENES,
   ...AP2_P3B_VISUAL_SCENES,
+  ...AP2_P4A_VISUAL_SCENES,
 ];
