@@ -8,6 +8,7 @@ import {
   isEligibleOrbitReturnWeapon,
   tryPlantWallTetherPylonOnWallHit,
 } from './sim-blessings-p4a.js';
+import { anyPlayerHasDuoBoon } from './sim-duo-boons.js';
 import {
   isCircularKickableToyProp,
   isFlippableBarricadeProp,
@@ -69,7 +70,7 @@ export function applyBulletModBlessingsOnVolleySpawn(sim: WorldSim, ev: BulletVo
     ev.weaponId === 'reload_tediore_chuck' || ev.weaponId === 'table_tech_rocket' ||
     ev.weaponId === 'relic_perpetual_core_rocket' || ev.weaponId === 'vanguard_bastion_prism' ||
     ev.weaponId === 'dash_phase_blade' || ev.weaponId === 'holster_surge_bolt' ||
-    ev.weaponId === 'table_tech_toxic_shrapnel';
+    ev.weaponId === 'table_tech_toxic_shrapnel' || ev.weaponId === 'duo_plasma_overload_star';
   const hasRicochetPactOrRelic =
     owner.activePactId === 'pact_ricochet_vow' ||
     (Array.isArray(owner.awakenedRelicIds) &&
@@ -86,6 +87,11 @@ export function applyBulletModBlessingsOnVolleySpawn(sim: WorldSim, ev: BulletVo
     }
   }
   if (!ev.orbitReturned && hasPlayerBlessing(owner, 'bullet_orbit_return') && isEligibleOrbitReturnWeapon(ev.weaponId)) {
+    const nextFlags = (ev.shotFlags ?? ev.flags ?? 0) | SHOT_FLAG.DYNAMIC_BOUNCE;
+    ev.shotFlags = nextFlags;
+    ev.flags = nextFlags;
+  }
+  if (!ev.superconductRailRedirected && !isNonBouncingSpecial && anyPlayerHasDuoBoon(sim, 'duo_superconduct_rail') !== null) {
     const nextFlags = (ev.shotFlags ?? ev.flags ?? 0) | SHOT_FLAG.DYNAMIC_BOUNCE;
     ev.shotFlags = nextFlags;
     ev.flags = nextFlags;
@@ -184,7 +190,7 @@ export function trySplitBounceOnObstacleHit(
   if (b.team !== 'player') return false;
   const owner = sim.getPlayerById(b.ownerId);
   if (!owner || !hasPlayerBlessing(owner, 'bullet_split_bounce')) return false;
-  if (b.weaponId === 'void_staff' || b.weaponId === 'emerald_cleaver_boomerang' || b.weaponId === 'reload_tediore_chuck') {
+  if (b.weaponId === 'void_staff' || b.weaponId === 'emerald_cleaver_boomerang' || b.weaponId === 'reload_tediore_chuck' || b.weaponId === 'duo_plasma_overload_star') {
     return false;
   }
   // STRICT ONE-SPLIT RULE: splitGeneration >= 1 MUST NEVER spawn new child projectiles!

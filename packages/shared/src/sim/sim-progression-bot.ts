@@ -1,5 +1,11 @@
+import {
+  DUO_BOONS,
+  DUO_BOON_SLOT3_UPGRADE_CHANCE,
+  getEligibleDuoBoonsForPlayer,
+  isDuoBoonId,
+} from '../data/duo-boons.js';
 import { FLOOR_BUFFS, FLOOR_BUFF_LIST } from '../data/enemies.js';
-import type { BuffId, CardinalDir, WeaponMutatorId } from '../data/types.js';
+import type { BlessingId, BuffId, CardinalDir, WeaponMutatorId } from '../data/types.js';
 import { WEAPONS } from '../data/weapons.js';
 import { approach, distance } from '../math/vec2.js';
 import { INPUT_BUTTON } from '../protocol/messages.js';
@@ -86,7 +92,7 @@ export function enterPortalImpl(this: WorldSim): boolean {
 
 export function rollPendingBuffChoicesImpl(this: WorldSim): void {
   for (const p of this.getAllPlayers()) {
-    const available: BuffId[] = FLOOR_BUFF_LIST.filter(
+    const available: BlessingId[] = FLOOR_BUFF_LIST.filter(
       (b) =>
         !p.blessingIds.includes(b.id) &&
         (b.category === 'general' || b.characterId === p.characterId),
@@ -119,6 +125,12 @@ export function rollPendingBuffChoicesImpl(this: WorldSim): void {
         fallback.splice(idx, 1);
       }
     }
+    if (choices.length >= 3) {
+      const eligibleDuos = getEligibleDuoBoonsForPlayer(p);
+      if (eligibleDuos.length > 0 && this.rng.chance(DUO_BOON_SLOT3_UPGRADE_CHANCE)) {
+        choices[2] = this.rng.pick(eligibleDuos);
+      }
+    }
     p.buffChoices = choices;
   }
 }
@@ -128,9 +140,20 @@ export function applyBuffEffectsImpl(
   buffId: BuffId,
   playerId = this.player.id,
 ): void {
-  const def = FLOOR_BUFFS[buffId];
   const p = this.getPlayerById(playerId) ?? this.player;
-  if (!p || p.blessingIds.includes(buffId)) return;
+  if (!p) return;
+  if (isDuoBoonId(buffId)) {
+    if (p.duoBoonIds.includes(buffId)) return;
+    p.duoBoonIds.push(buffId);
+    this.events.push({
+      kind: 'buff_selected',
+      buffId,
+      nameVi: DUO_BOONS[buffId].nameVi,
+    });
+    return;
+  }
+  const def = FLOOR_BUFFS[buffId];
+  if (p.blessingIds.includes(buffId)) return;
   p.blessingIds.push(buffId);
   this.events.push({
     kind: 'buff_selected',
@@ -147,7 +170,8 @@ export function selectFloorBuffImpl(
   if (!buffId) return false;
   const p = this.getPlayerById(playerId) ?? this.player;
   if (!p) return false;
-  if (p.buffChoices.length > 0 && !p.buffChoices.includes(buffId) && !FLOOR_BUFFS[buffId]) {
+  const isKnownBuff = isDuoBoonId(buffId) || Boolean(FLOOR_BUFFS[buffId]);
+  if (p.buffChoices.length > 0 ? !p.buffChoices.includes(buffId) && !isKnownBuff : !isKnownBuff) {
     return false;
   }
 
@@ -157,7 +181,8 @@ export function selectFloorBuffImpl(
   if (!this.coopModeActive && p.id === this.player.id) {
     for (const sp of this.simulatedPlayers) {
       if (sp.buffChoices.length > 0) {
-        this.applyBuffEffects(sp.buffChoices[0]!, sp.id);
+        const spPick = sp.buffChoices.find(isDuoBoonId) ?? sp.buffChoices[0]!;
+        this.applyBuffEffects(spPick, sp.id);
         sp.buffChoices = [];
       }
     }
@@ -428,7 +453,8 @@ export function stepBotAutoPlayImpl(this: WorldSim, dtSec: number): void {
   if (this.runState === 'buff_choice') {
     for (const pl of this.getAllPlayers()) {
       if (pl.buffChoices.length > 0) {
-        this.selectFloorBuff(pl.buffChoices[0]!, pl.id);
+        const botPick = pl.buffChoices.find(isDuoBoonId) ?? pl.buffChoices[0]!;
+        this.selectFloorBuff(botPick, pl.id);
       }
     }
     return;

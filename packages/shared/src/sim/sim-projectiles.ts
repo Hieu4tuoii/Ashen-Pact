@@ -12,6 +12,7 @@ import {
   updateTableTechRocketProjectilesInFlight,
 } from './sim-blessings.js';
 import { spawnSeedGunLifeBlossomImpl, triggerLauncherProjectileExplosionImpl } from './sim-player.js';
+import { setActiveDuoReactionWeaponId, tryBouncePlasmaOverloadStarOnWall, tryHoldSuperconductRailClient, tryRedirectSuperconductRailServer } from './sim-duo-boons.js';
 import { refractEnemyProjectileThroughCryoPrism } from './sim-enemies-tactical-ai.js';
 import { tryChargeGlacialBarricadeWithCryoLaser } from './sim-boss-armor-break.js';
 import { refractProjectileThroughCryoPrism } from './sim-tactical-physics-p1c.js';
@@ -178,7 +179,7 @@ export function spawnDeterministicVolleyImpl(this: WorldSim, ev: BulletVolleySpa
       chainHarpoonShot: ev.chainHarpoonShot,
       bypassFrontShield: ev.bypassFrontShield,
       bouncesDone: ev.bouncesDone ?? 0, orbitReturned: Boolean(ev.orbitReturned), boomerangPhase: ev.boomerangPhase,
-      clusterMortarLob: (ev.splitGeneration ?? 0) === 0 ? ev.clusterMortarLob : undefined, secondaryInfusedElement: ev.secondaryInfusedElement,
+      clusterMortarLob: (ev.splitGeneration ?? 0) === 0 ? ev.clusterMortarLob : undefined, secondaryInfusedElement: ev.secondaryInfusedElement, superconductRailRedirected: Boolean(ev.superconductRailRedirected),
     });
     copyLegendaryVolleyFieldsToProjectile(ev, proj);
     this.projectiles.push(proj);
@@ -257,6 +258,7 @@ export function updateProjectilesImpl(this: WorldSim, dtSec: number): void {
     b.prevY = b.y;
     b.x += b.vx * dtSec;
     b.y += b.vy * dtSec;
+    if (b.team === 'player' && tryRedirectSuperconductRailServer(this, b)) continue;
     if (updateLegendaryProjectileInFlight(this, b, dtSec)) continue;
     // Elemental projectiles flying over interactive surfaces can ignite/freeze/electrify them!
     if (
@@ -309,6 +311,7 @@ export function updateProjectilesImpl(this: WorldSim, dtSec: number): void {
         continue;
       }
 
+      if (b.team === 'player' && tryBouncePlasmaOverloadStarOnWall(this, b, wallHit.resolvedX, wallHit.resolvedY, wallHit.normalX, wallHit.normalY)) continue;
       if (
         handlePlayerProjectileWallHitBlessingsAndSkills(
           this,
@@ -513,6 +516,7 @@ export function updateProjectilesImpl(this: WorldSim, dtSec: number): void {
             }
           }
 
+          setActiveDuoReactionWeaponId(b.weaponId);
           if (b.imbuedByZone) {
             const zoneOwnerId = b.imbuedOwnerId ?? b.ownerId;
             if (b.imbuedElement && b.imbuedElement !== 'none') {
@@ -559,6 +563,7 @@ export function updateProjectilesImpl(this: WorldSim, dtSec: number): void {
             b.procCoefficient ?? 1.0,
             false,
           );
+          setActiveDuoReactionWeaponId(undefined);
 
           handlePlayerProjectileEnemyHitWeaponSpecials(this, b, enemy);
           applyWeaponMutatorsOnEnemyHit(this, b, enemy, hitDmg, effectiveAttackerId);
@@ -697,6 +702,7 @@ export function stepClientProjectilesCosmeticImpl(this: WorldSim, dtSec: number)
     b.x += b.vx * dtSec;
     b.y += b.vy * dtSec;
     if (b.orbitReturned && shouldCatchReturnedOrbitProjectile(this, b)) continue;
+    if (b.team === 'player' && tryHoldSuperconductRailClient(this, b)) continue;
 
     // 1. Wall / Pillar collision & ricochet bounce
     const wallHit = this.map.checkProjectileWallHit(b.x, b.y, b.radius);
@@ -939,7 +945,7 @@ export function acquireProjectileImpl(this: WorldSim,
     pooled.gravitySingularityShot = init.gravitySingularityShot;
     pooled.chainHarpoonShot = init.chainHarpoonShot;
     pooled.bypassFrontShield = init.bypassFrontShield;
-    pooled.bouncesDone = init.bouncesDone ?? 0; pooled.orbitReturned = Boolean(init.orbitReturned); pooled.orbitReturnTicks = 0; pooled.clientHeldAtMaxRange = false; pooled.boomerangPhase = init.boomerangPhase; pooled.clusterMortarLob = init.clusterMortarLob; pooled.secondaryInfusedElement = init.secondaryInfusedElement;
+    pooled.bouncesDone = init.bouncesDone ?? 0; pooled.orbitReturned = Boolean(init.orbitReturned); pooled.orbitReturnTicks = 0; pooled.clientHeldAtMaxRange = false; pooled.boomerangPhase = init.boomerangPhase; pooled.clusterMortarLob = init.clusterMortarLob; pooled.secondaryInfusedElement = init.secondaryInfusedElement; pooled.superconductRailRedirected = Boolean(init.superconductRailRedirected);
     pooled.trailLastX = init.originX ?? init.x; pooled.trailLastY = init.originY ?? init.y;
     pooled.hitEntityIds.length = 0;
     return pooled;

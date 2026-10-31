@@ -22,6 +22,7 @@ import {
   triggerTableTechMagnetSnareOnFlip,
   tryTriggerToxicShrapnelOnPropBreak,
 } from './sim-blessings.js';
+import { tryDetonateCryoShatterSpireOnKickOrSlide } from './sim-duo-boons.js';
 import {
   checkSporeKingPillarCrash,
   onEnemyWallSlammed,
@@ -380,6 +381,7 @@ export function flipCoverPropImpl(this: WorldSim, prop: SimPropState, actor: Sim
 }
 
 export function kickProp(sim: WorldSim, prop: SimPropState, actor: SimPlayerState = sim.player, customAngle?: number): boolean {
+  if (tryDetonateCryoShatterSpireOnKickOrSlide(sim, prop, actor.id)) { onPlayerDashKickProp(sim, actor); return true; }
   if (prop.hp > 0 && prop.coverState === 'low' && isFlippableBarricadeProp(prop.kind)) {
     prop.coverState = 'flipped';
     prop.state = 'flipped';
@@ -506,6 +508,7 @@ export function resolvePropMovementCollision(sim: WorldSim, entity: { x: number;
     const dist = Math.sqrt(distSq);
 
     if (asPlayer && asPlayer.dashTimer > 0) {
+      if (tryDetonateCryoShatterSpireOnKickOrSlide(sim, prop, asPlayer.id)) { onPlayerDashKickProp(sim, asPlayer); continue; }
       if (prop.kind === 'shaman_totem') {
         triggerShamanTotemBacklash(sim, prop, asPlayer.id);
         continue;
@@ -812,6 +815,7 @@ export function updateSlidingPropsImpl(this: WorldSim, dtSec: number): void {
         hitPropObstacle = true;
         if (other.kind === 'rotten_totem_pillar') collapseRottenTotemPillar(this, other, slideAngle, ownerId);
         else if (other.kind === 'shaman_totem') triggerShamanTotemBacklash(this, other, ownerId);
+        else if (tryDetonateCryoShatterSpireOnKickOrSlide(this, other, ownerId)) { hitPropObstacle = false; continue; }
         break;
       }
     }

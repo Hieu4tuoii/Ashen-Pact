@@ -779,6 +779,7 @@ describe('AP2 Phase P1D.3 — Group 4 (Geometry & Co-op Bullet Mods) & 10 Charac
         // None of the offered choices may already be owned by this player
         for (const choice of pl.buffChoices) {
           expect(pl.blessingIds).not.toContain(choice);
+          expect(pl.duoBoonIds).not.toContain(choice);
         }
         // Pick one card for this floor
         const picked = pl.buffChoices[floor % pl.buffChoices.length]!;
@@ -788,8 +789,9 @@ describe('AP2 Phase P1D.3 — Group 4 (Geometry & Co-op Bullet Mods) & 10 Charac
     }
 
     for (const pl of party) {
-      expect(pl.blessingIds).toHaveLength(6);
-      expect(new Set(pl.blessingIds).size).toBe(6);
+      const ownedBuffs = [...pl.blessingIds, ...pl.duoBoonIds];
+      expect(ownedBuffs).toHaveLength(6);
+      expect(new Set(ownedBuffs).size).toBe(6);
     }
   });
 });

@@ -3,6 +3,7 @@ import type {
   AshenPactId,
   AshenRelicId,
   BlessingId,
+  BuffId,
   CardinalDir,
   CharacterId,
   DuoBoonId,
@@ -183,6 +184,7 @@ export interface SimPropState {
   lastDamagedByPlayerId?: number;
   causticRollRemainingPx?: number;
   ownerPlayerId?: number;
+  cryoShatterSpire?: boolean;
 }
 
 export type SummonKind =
@@ -192,7 +194,8 @@ export type SummonKind =
   | 'life_blossom'
   | 'thunder_decoy'
   | 'wall_tether_pylon'
-  | 'holo_decoy_turret';
+  | 'holo_decoy_turret'
+  | 'superheated_cyclone';
 
 export interface SimSummonState {
   id: number;
@@ -549,6 +552,7 @@ export interface SimPlayerState {
   toxicShrapnelIcdTimer?: number;
   holsterSurgeIcdTimer?: number;
   causticPodFinaleIcdTimer?: number;
+  plasmaStarIcdTimer?: number;
   // Ashen Pact 2.0 Per-Player Build State
   blessingIds: BlessingId[];
   weaponMutators: Record<number, WeaponMutatorId[]>;
@@ -556,7 +560,7 @@ export interface SimPlayerState {
   activePactId: AshenPactId | null;
   pactOriginalWeaponId: string | null;
   awakenedRelicIds: AshenRelicId[];
-  buffChoices: BlessingId[];
+  buffChoices: BuffId[];
   mutatorChoices?: WeaponMutatorId[];
   pactChoices?: AshenPactId[];
   soulChainTargetId?: number | null;
@@ -726,6 +730,10 @@ export interface SimEnemyState {
   shockArcVisualTimer?: number;
   shockArcVisualAngle?: number;
   causticVulnTimer?: number;
+  napalmPlagueTimer?: number;
+  napalmPlagueOwnerId?: number;
+  napalmPlagueDetonated?: boolean;
+  cryoSpireIcdTimer?: number;
   lastCombatText?: string;
 }
 
@@ -826,6 +834,7 @@ export interface SimProjectileState {
   clientHeldAtMaxRange?: boolean;
   clusterMortarLob?: boolean;
   secondaryInfusedElement?: ElementType;
+  superconductRailRedirected?: boolean;
   hitEntityIds: number[];
 }
 
@@ -900,6 +909,7 @@ export interface BulletVolleySpawnEvent {
   clientHeldAtMaxRange?: boolean;
   clusterMortarLob?: boolean;
   secondaryInfusedElement?: ElementType;
+  superconductRailRedirected?: boolean;
   splitGeneration?: 0 | 1;
 }
 
@@ -909,6 +919,13 @@ export function hasPlayerBlessing(
   id: BlessingId,
 ): boolean {
   return Boolean(p && Array.isArray(p.blessingIds) && p.blessingIds.includes(id));
+}
+
+export function hasPlayerDuoBoon(
+  p: SimPlayerState | undefined | null,
+  id: DuoBoonId,
+): boolean {
+  return Boolean(p && Array.isArray(p.duoBoonIds) && p.duoBoonIds.includes(id));
 }
 
 export function lerpSpeed(dist: number, maxRange: number, maxSpeed: number): number {

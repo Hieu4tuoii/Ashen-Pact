@@ -15,6 +15,7 @@ import {
   BULLET_HEAVY_PINBALL_KB_MULT,
   propagateRangerPreyChainDamageAndKnockback,
 } from './sim-blessings.js';
+import { handleDuoBoonOnElementalReaction, handleDuoBoonOnEnemyKilled } from './sim-duo-boons.js';
 import {
   addBossStaggerAccum,
   getBossArmorBreakVulnBonus,
@@ -330,6 +331,7 @@ export function triggerElementalReactionImpl(
       trauma: isTeamCombo ? 0.42 : 0.26,
     });
   }
+  handleDuoBoonOnElementalReaction(this, enemy, reaction, damage, primerPlayerId, triggerPlayerId);
 }
 
 export function handleEnemyKilledImpl(
@@ -350,6 +352,7 @@ export function handleEnemyKilledImpl(
     x: enemy.x,
     y: enemy.y,
   });
+  handleDuoBoonOnEnemyKilled(this, enemy, killerPlayerId);
 
   const allPlayers = this.getAllPlayers();
 

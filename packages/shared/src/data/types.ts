@@ -173,7 +173,7 @@ export type SkillUpgradeId =
 
 export type BlessingId = ActionBlessingId | SkillUpgradeId;
 
-export type BuffId = BlessingId;
+export type BuffId = BlessingId | DuoBoonId;
 
 export type WeaponMutatorId =
   | 'mutator_finale_jolt'
@@ -235,6 +235,18 @@ export interface BlessingDef extends BuffDef {
   descriptionEn: string;
   blessingGroup: BlessingGroup;
   element: ElementType;
+}
+
+export interface DuoBoonDef {
+  id: DuoBoonId;
+  requiredElements: readonly [ElementType, ElementType];
+  nameVi: string;
+  nameEn: string;
+  descriptionVi: string;
+  descriptionEn: string;
+  primaryColor: string;
+  secondaryColor: string;
+  reactionId?: ElementalReactionId;
 }
 
 export interface EnemyStatsDef {

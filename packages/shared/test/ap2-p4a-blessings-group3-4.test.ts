@@ -208,7 +208,7 @@ describe('AP2 Phase P4A.2 — Advanced Group 3 (Reload/Vent) & Group 4 (Bullet G
     }
 
     const sim = createCleanArenaSim(4201);
-    const rolled = new Set<BlessingId>();
+    const rolled = new Set<string>();
     for (let i = 0; i < 80; i++) {
       sim.rollPendingBuffChoices();
       for (const c of sim.player.buffChoices) {

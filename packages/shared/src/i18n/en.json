@@ -573,6 +573,30 @@
     "bullet_orbit_return": {
       "name": "Orbit Return",
       "desc": "Ranged projectiles reaching max range curve 180° back toward your current position, dealing 45% Poison DMG from behind enemies."
+    },
+    "duo_superheated_cyclone": {
+      "name": "Superheated Cyclone",
+      "desc": "Vaporize spawns a homing Superheated Cyclone (4.0s, max 3) chasing enemies at 140 px/s, dealing 14 DMG/s and applying Steam Blindness."
+    },
+    "duo_cryo_shatter_spires": {
+      "name": "Cryo Shatter Spires",
+      "desc": "Shatter plants 4 Cryo Spires (4.0s) that block enemy bullets; Dash-Kicking through a spire detonates it for 34 Ice DMG (r=80px) and 1.2s Freeze."
+    },
+    "duo_superconduct_rail": {
+      "name": "Superconduct Magnetic Rail",
+      "desc": "Superconducted enemies project a magnetic field (r=100px) that bends passing ranged projectiles directly toward their center."
+    },
+    "duo_napalm_chain_plague": {
+      "name": "Napalm Chain Plague",
+      "desc": "Toxic Blast splashes Napalm-Venom Resin (5.0s) onto foes within 160px; slaying afflicted enemies triggers a 32 Fire DMG chain explosion (r=110px)."
+    },
+    "duo_plasma_overload_star": {
+      "name": "Plasma Overload Star",
+      "desc": "Overload launches a piercing Plasma Star (420 px/s, 30 DMG) that bounces 3 times off walls across the room (0.35s ICD)."
+    },
+    "duo_magnetic_bastion_ring": {
+      "name": "Magnetic Bastion Ring",
+      "desc": "All pairs of Flipped Barricades [E] within 220px automatically link with High-Voltage Arc Wires dealing 28 Shock DMG/s to crossing enemies."
     }
   },
   "enemies": {

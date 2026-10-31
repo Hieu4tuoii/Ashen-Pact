@@ -23,6 +23,7 @@ import { flipCoverPropImpl, kickPropImpl, updateSlidingPropsImpl } from './sim-t
 import { updateMagneticRivets } from './sim-weapon-specials.js';
 import { selectWeaponMutatorImpl, updateGravitySingularities } from './sim-weapon-mutators.js';
 import { purifyAshenPactsOnBossDefeated, selectAshenPactImpl } from './sim-ashen-pacts.js';
+import { updateDuoBoons } from './sim-duo-boons.js';
 
 export * from './world-sim-types.js';
 export * from './world-sim-events.js';
@@ -32,6 +33,7 @@ export * from './sim-weapon-cadence.js';
 export * from './sim-weapon-specials.js';
 export * from './sim-weapon-mutators.js';
 export * from './sim-ashen-pacts.js';
+export * from './sim-duo-boons.js';
 export * from './sim-secret-and-workshop.js';
 export * from './sim-boss-armor-break.js';
 export * from './sim-bot-tactical-helpers.js';
@@ -358,6 +360,7 @@ export class WorldSim {
         updateMagneticRivets(this, dtSec);
       }
       updateGravitySingularities(this, dtSec);
+      updateDuoBoons(this, dtSec);
     }
 
     // 9. Update Pickups (Magnet & Collection)

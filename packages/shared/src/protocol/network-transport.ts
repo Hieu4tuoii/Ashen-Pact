@@ -572,6 +572,7 @@ export class NetworkTransport implements ITransport {
         wallSlamCooldownTimer: 0,
         stuckArrows: es.stuckArrows ?? 0,
         parasiticThorns: es.parasiticThorns ?? 0,
+        napalmPlagueTimer: (es.napalm10 ?? 0) / 10,
       };
     });
 

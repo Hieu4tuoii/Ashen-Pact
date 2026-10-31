@@ -69,6 +69,7 @@ const ORBIT_RETURN_EXCLUDED_WEAPON_IDS = new Set<string>([
   'table_tech_prism_split',
   'relic_perpetual_core_rocket',
   'vanguard_bastion_prism',
+  'duo_plasma_overload_star',
 ]);
 
 function pointToSegmentDist(

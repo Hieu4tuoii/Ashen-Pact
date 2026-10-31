@@ -2,6 +2,7 @@ import type {
   AshenPactId,
   AshenRelicId,
   BlessingId,
+  BuffId,
   CharacterId,
   DuoBoonId,
   EliteModifier,
@@ -83,7 +84,7 @@ export interface QuantizedPlayerSnap {
   blackCrystalEmpowered?: boolean;
   pactKeepWep?: string | null;
   pactKeepTimer10?: number;
-  buffChoices: BlessingId[];
+  buffChoices: BuffId[];
   mutatorChoices?: WeaponMutatorId[];
   pactChoices?: AshenPactId[];
   wepLevels?: Record<number, number>;
@@ -133,6 +134,7 @@ export interface QuantizedEnemySnap {
   blind10?: number;
   stuckArrows?: number;
   parasiticThorns?: number;
+  napalm10?: number;
 }
 
 /**
@@ -342,6 +344,7 @@ export function encodeWorldSnapshot(
     blind10: Math.round(e.steamBlindTimer * 10),
     stuckArrows: e.stuckArrows ?? 0,
     parasiticThorns: e.parasiticThorns ?? 0,
+    napalm10: Math.round((e.napalmPlagueTimer ?? 0) * 10),
   }));
 
   // Projectiles are spawned deterministically via bullet_volley_spawned events and simulated locally by clients
