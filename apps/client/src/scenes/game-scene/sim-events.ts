@@ -280,7 +280,8 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
       }
       case 'explosion': {
         const isBarrel = ev.sourceDefId === 'explosive_barrel';
-        const isSporePod = ev.sourceDefId === 'volatile_spore_pod';
+        const isSporePod =
+          ev.sourceDefId === 'volatile_spore_pod' || ev.sourceDefId === 'caustic_spore_pod';
         const isTriStaff = ev.sourceDefId === 'apprentice_staff';
         const isGaleCyclone = ev.sourceDefId === 'gale_smg';
         const isFragLauncher = ev.sourceDefId === 'frag_launcher';

@@ -727,7 +727,7 @@ export function stepClientProjectilesCosmeticImpl(this: WorldSim, dtSec: number)
     }
 
     // 2. Destructible prop cosmetic hit prediction
-    if (this.props.length > 0 && b.weaponId !== 'mutator_boomerang_saw') {
+    if (this.props.length > 0) {
       let hitProp = false;
       for (let k = 0; k < this.props.length; k++) {
         const prop = this.props[k]!;

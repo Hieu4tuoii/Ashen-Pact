@@ -37,6 +37,7 @@ const COL_MORTAR_ORANGE = 0xf97316;
 
 interface P4ATransientBurst {
   kind: 'thunder_decoy_nova' | 'caustic_pod_burst' | 'cluster_mortar_pop';
+  roomId: number;
   x: number;
   y: number;
   radius: number;
@@ -469,7 +470,7 @@ function drawDeterministicTransientBursts(g: Gfx, sim: WorldSim): void {
   for (let i = list.length - 1; i >= 0; i--) {
     const burst = list[i]!;
     const elapsedTicks = sim.tick - burst.spawnTick;
-    if (elapsedTicks < 0 || elapsedTicks > burst.durationTicks) {
+    if (burst.roomId !== sim.currentRoomId || elapsedTicks < 0 || elapsedTicks > burst.durationTicks) {
       list.splice(i, 1);
       continue;
     }
@@ -525,9 +526,10 @@ export function drawP4ATetherAndProjectileOverlays(scene: unknown, g: Gfx, sim: 
 
 export function handleP4ASimEvent(_scene: unknown, ev: SimEvent, sim: WorldSim, isStress: boolean, _allowStressSfx: boolean): boolean {
   if (isStress || ev.kind !== 'explosion') return false;
+  const isCausticPod = ev.sourceDefId === 'caustic_spore_pod' || ev.sourceDefId === 'reload_caustic_pod';
   if (
     ev.sourceDefId === 'dash_thunder_decoy' ||
-    ev.sourceDefId === 'reload_caustic_pod' ||
+    isCausticPod ||
     ev.sourceDefId === 'mutator_cluster_mortar'
   ) {
     const list = getTransientBurstList(sim);
@@ -536,16 +538,17 @@ export function handleP4ASimEvent(_scene: unknown, ev: SimEvent, sim: WorldSim, 
       kind:
         ev.sourceDefId === 'dash_thunder_decoy'
           ? 'thunder_decoy_nova'
-          : ev.sourceDefId === 'reload_caustic_pod'
+          : isCausticPod
             ? 'caustic_pod_burst'
             : 'cluster_mortar_pop',
+      roomId: sim.currentRoomId,
       x: ev.x,
       y: ev.y,
       radius:
         ev.radius ||
         (ev.sourceDefId === 'dash_thunder_decoy'
           ? THUNDER_DECOY_BLAST_RADIUS
-          : ev.sourceDefId === 'reload_caustic_pod'
+          : isCausticPod
             ? CAUSTIC_POD_BLAST_RADIUS
             : CLUSTER_MORTAR_BLAST_RADIUS),
       spawnTick: sim.tick,

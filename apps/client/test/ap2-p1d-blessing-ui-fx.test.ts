@@ -29,11 +29,21 @@ import {
 
 function createMockGraphics() {
   const calls: string[] = [];
+  const fillColors: number[] = [];
+  const lineColors: number[] = [];
   return {
     calls,
+    fillColors,
+    lineColors,
     clear: () => calls.push('clear'),
-    lineStyle: () => calls.push('lineStyle'),
-    fillStyle: () => calls.push('fillStyle'),
+    lineStyle: (_w?: number, col?: number) => {
+      calls.push('lineStyle');
+      if (typeof col === 'number') lineColors.push(col);
+    },
+    fillStyle: (col?: number) => {
+      calls.push('fillStyle');
+      if (typeof col === 'number') fillColors.push(col);
+    },
     beginPath: () => calls.push('beginPath'),
     closePath: () => calls.push('closePath'),
     moveTo: () => calls.push('moveTo'),
@@ -498,5 +508,45 @@ describe('AP2 Phase P1D.4 & P4A.4 — Per-Player Blessing Modal UI, HUD Chips, i
     expect(gPass1.calls.includes('strokePath')).toBe(true);
     expect(gPass1.calls.includes('fillEllipse')).toBe(true);
     expect(gPass1.calls).toEqual(gPass2.calls);
+  });
+
+  it('triggers caustic_pod_burst from real caustic_spore_pod explosion sourceDefId and clears transient bursts when currentRoomId changes', () => {
+    const sim = new WorldSim({ seed: 9405, startInHub: false });
+    sim.enemies.length = 0;
+    sim.props.length = 0;
+    sim.projectiles.length = 0;
+    sim.summons.length = 0;
+    sim.tick = 200;
+    const initialRoomId = sim.currentRoomId;
+    const mockScene = { sim, camFocusX: 240, camFocusY: 180, visualFreeze: true };
+
+    handleP4ASimEvent(
+      mockScene as never,
+      {
+        kind: 'explosion',
+        x: 240,
+        y: 180,
+        radius: 92,
+        damage: 32,
+        sourceDefId: 'caustic_spore_pod',
+      },
+      sim,
+      false,
+      false,
+    );
+
+    sim.tick = 203;
+    const gSameRoom = createMockGraphics();
+    drawP4ATetherAndProjectileOverlays(mockScene as never, gSameRoom as never, sim);
+    expect(gSameRoom.calls.includes('fillCircle')).toBe(true);
+    expect(gSameRoom.calls.includes('strokeCircle')).toBe(true);
+    expect(gSameRoom.fillColors).toContain(0x84cc16);
+    expect(gSameRoom.lineColors).toContain(0xbef264);
+
+    // Room transition drops stale transient bursts from the previous room
+    sim.currentRoomId = initialRoomId + 1;
+    const gNextRoom = createMockGraphics();
+    drawP4ATetherAndProjectileOverlays(mockScene as never, gNextRoom as never, sim);
+    expect(gNextRoom.calls).toHaveLength(0);
   });
 });
