@@ -58,6 +58,11 @@ function makeMockFx() {
     spawnChainLightningArc: vi.fn(),
     spawnDashDust: vi.fn(),
     spawnPropBreakBurst: vi.fn(),
+    spawnShaderNova: vi.fn(),
+    spawnShaderSlash: vi.fn(),
+    spawnShaderCone: vi.fn(),
+    spawnShaderLance: vi.fn(),
+    spawnShaderDirectional: vi.fn(),
   };
 }
 
@@ -107,11 +112,12 @@ describe('AP2-P1B.5 — Procedural VFX for 7 Batch-2 Weapons, ArtGallery 18 Weap
     });
   });
 
-  describe('2. Batch-2 SimEvent VFX Dispatch & Transient Shape Rendering', () => {
-    it('handles all Batch-2 weapon SimEvents, spawns procedural shapes & alerts, and renders them', () => {
+  describe('2. Batch-2 SimEvent Chiaroscuro Shader VFX Dispatch & Ground Hazard Routing', () => {
+    it('handles all Batch-2 weapon SimEvents, dispatches 1:1 Chiaroscuro shader flipbooks without spammy floating alerts, and renders hollow accents', () => {
       const sim = new WorldSim(42);
       const scene = makeMockScene();
       const g = makeMockGraphics();
+      const gGround = makeMockGraphics();
       const playSpy = vi.spyOn(zzfx, 'play');
 
       const events: SimEvent[] = [
@@ -272,55 +278,45 @@ describe('AP2-P1B.5 — Procedural VFX for 7 Batch-2 Weapons, ArtGallery 18 Weap
         1 / 60,
         0.5,
         'vi',
+        gGround as never,
       );
 
       expect(g.strokePath).toHaveBeenCalled();
-      expect(g.strokeCircle).toHaveBeenCalled();
+      expect(gGround.strokeCircle).toHaveBeenCalled();
       expect(g.fillCircle).toHaveBeenCalled();
       expect(playSpy).toHaveBeenCalledWith('emerald_boomerang', 340, 356, 270, 270);
       playSpy.mockRestore();
-      expect(scene.fx.spawnFloatingAlert).toHaveBeenCalledWith(
-        356,
-        242,
-        'RAILGUN XẢ ÁP!',
-        '#FACC15',
-      );
-      expect(scene.fx.spawnFloatingAlert).toHaveBeenCalledWith(
-        450,
-        244,
-        'HỐ ĐEN SỤP ĐỔ!',
-        '#C084FC',
-      );
-      expect(scene.fx.spawnFloatingAlert).toHaveBeenCalledWith(
+
+      expect(scene.fx.spawnShaderLance).toHaveBeenCalled();
+      expect(scene.fx.spawnShaderSlash).toHaveBeenCalledWith(
         402,
-        242,
-        'ĐOẠN ĐẦU ĐÀI!',
-        '#F97316',
+        270,
+        98,
+        0,
+        'fx_sh_slash_crimson',
+        expect.any(Object),
       );
-      expect(scene.fx.spawnFloatingAlert).toHaveBeenCalledWith(
+      expect(scene.fx.spawnShaderNova).toHaveBeenCalledWith(450, 270, 110, 'fx_sh_nova_void');
+      expect(scene.fx.spawnShaderNova).toHaveBeenCalledWith(402, 270, 76, 'fx_sh_geyser_plume');
+      expect(scene.fx.spawnShaderNova).toHaveBeenCalledWith(
         540,
-        238,
-        'SIÊU TÂN TINH HỘI TỤ!',
-        '#FACC15',
+        266,
+        52,
+        'fx_sh_arcane_sigil',
+        expect.objectContaining({ tint: 0xfef08a }),
       );
-      expect(scene.fx.spawnFloatingAlert).toHaveBeenCalledWith(
-        380,
-        242,
-        'VÒI DUNG NHAM PHUN TRÀO!',
-        '#F97316',
-      );
-      expect(scene.fx.spawnFloatingAlert).toHaveBeenCalledWith(
-        420,
-        242,
-        'CỘT LÔI ĐÌNH!',
-        '#38BDF8',
-      );
+      expect(scene.fx.spawnShaderNova).toHaveBeenCalledWith(540, 266, 120, 'fx_sh_nova_solar');
+      expect(scene.fx.spawnShaderNova).toHaveBeenCalledWith(380, 270, 56, 'fx_sh_geyser_plume');
+      expect(scene.fx.spawnShaderNova).toHaveBeenCalledWith(420, 270, 110, 'fx_sh_anvil_storm');
+      // Zero spammy mid-combat weapon floating alerts
+      expect(scene.fx.spawnFloatingAlert).not.toHaveBeenCalled();
     });
 
-    it('renders active Batch-2 hazards, 3 orbiting Mini-Suns, Bloodlust aura, and in-flight projectiles', () => {
+    it('renders active Batch-2 hazards onto groundHazardGraphics (depth: 16, < 0.08 interior fill), 3 orbiting Mini-Suns, Bloodlust aura, and in-flight projectiles', () => {
       const sim = new WorldSim(99);
       const sceneKey = {};
       const g = makeMockGraphics();
+      const gGround = makeMockGraphics();
 
       sim.magmaTrails.push({
         id: 1,
@@ -421,7 +417,7 @@ describe('AP2-P1B.5 — Procedural VFX for 7 Batch-2 Weapons, ArtGallery 18 Weap
           damage: 38,
           colorHex: '#F97316',
           ttlSec: 1.0,
-        }),
+          }),
         sim.acquireProjectile({
           id: 104,
           ownerId: sim.player.id,
@@ -448,7 +444,7 @@ describe('AP2-P1B.5 — Procedural VFX for 7 Batch-2 Weapons, ArtGallery 18 Weap
         activeWeaponSlot: 0,
         solarOrbitAngle: 0.4,
       };
-      drawBatch2ActiveWeaponOverlays(g as never, sim, solarPlayer, 0.5);
+      drawBatch2ActiveWeaponOverlays(g as never, sim, solarPlayer, 0.5, gGround as never);
 
       const axePlayer: SimPlayerState = {
         ...sim.player,
@@ -456,10 +452,15 @@ describe('AP2-P1B.5 — Procedural VFX for 7 Batch-2 Weapons, ArtGallery 18 Weap
         activeWeaponSlot: 0,
         berserkerBloodlustStacks: 4,
       };
+      // Fallback when groundG omitted routes to g directly
       drawBatch2ActiveWeaponOverlays(g as never, sim, axePlayer, 0.5);
 
       expect(g.strokeCircle).toHaveBeenCalledWith(sim.player.x, sim.player.y, 48);
+      expect(gGround.fillCircle).toHaveBeenCalledWith(420, 270, 110);
       expect(g.fillCircle).toHaveBeenCalledWith(420, 270, 110);
+      for (const [, alpha] of gGround.fillStyle.mock.calls) {
+        expect(alpha).toBeLessThanOrEqual(0.08);
+      }
       expect(g.strokeCircle).toHaveBeenCalledWith(410, 270, 110);
       expect(g.strokeCircle).toHaveBeenCalledWith(450, 270, 64);
       const gArc = makeMockGraphics();
@@ -609,7 +610,6 @@ describe('AP2-P1B.5 — Procedural VFX for 7 Batch-2 Weapons, ArtGallery 18 Weap
           return allEvs;
         };
 
-        // F2 (2t, fire), F3 (11t), F4 (12t), F5 (2t, fire), F6 (8t), F7 (8t), F8 (4t), F9 (4t)
         stepSim(2, true);
         stepSim(11);
         stepSim(12);
@@ -618,7 +618,6 @@ describe('AP2-P1B.5 — Procedural VFX for 7 Batch-2 Weapons, ArtGallery 18 Weap
         stepSim(8);
         stepSim(4);
         stepSim(4);
-        // F10 (2t, fire -> Apex Hit 3 Guillotine)
         const apexEvs = stepSim(2, true);
         expect(apexEvs.some((e) => e.kind === 'berserker_guillotine_slam')).toBe(true);
         expect(sim.flameFissures.length).toBe(1);
@@ -683,12 +682,10 @@ describe('AP2-P1B.5 — Procedural VFX for 7 Batch-2 Weapons, ArtGallery 18 Weap
           return allEvs;
         };
 
-        // F2: fire boulder (2t), F3: bulldoze roll (6t), F4: wall slam (7t)
         stepSim(2, INPUT_BUTTON.FIRE);
         stepSim(6, 0);
         stepSim(7, 0);
         expect(sim.magmaTrails.length).toBeGreaterThan(0);
-        // F5: press [R] inside Golden Window -> Perfect Reload + 4 Magma Geysers!
         const f5Evs = stepSim(2, INPUT_BUTTON.RELOAD_VENT);
         expect(f5Evs.some((e) => e.kind === 'perfect_reload')).toBe(true);
         expect(f5Evs.some((e) => e.kind === 'magma_geyser_eruption')).toBe(true);

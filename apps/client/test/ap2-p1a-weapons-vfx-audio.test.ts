@@ -39,6 +39,7 @@ import {
   spawnThornBloomVfx,
   spawnThornStaffWhipVfx,
   syncBatch1WeaponRoomEntities,
+  triggerMicroBarFeedbackOnScene,
   updateAndDrawWeaponV2Overlays,
 } from '../src/fx/combat-fx-weapons-v2';
 import {
@@ -80,6 +81,11 @@ function makeMockFx() {
     spawnChainLightningArc: vi.fn(),
     spawnDashDust: vi.fn(),
     spawnPropBreakBurst: vi.fn(),
+    spawnShaderNova: vi.fn(),
+    spawnShaderSlash: vi.fn(),
+    spawnShaderCone: vi.fn(),
+    spawnShaderLance: vi.fn(),
+    spawnShaderDirectional: vi.fn(),
   };
 }
 
@@ -170,7 +176,7 @@ describe('AP2-P1A.4 — Procedural VFX, Entity Indicators, Deployable/Tether Ren
           0.5,
         );
         expect(drawn).toBe(count);
-        // Each arrow draws 5 strokePath segments (dark outline, cyan shaft, white highlight, barbed head, V-fletching)
+        // Each arrow draws 5 strokePath segments (Chiaroscuro dark shear, cyan shaft, white highlight, barbed head, V-fletching)
         expect(gStep.strokePath).toHaveBeenCalledTimes(count * 5);
         expect(gStep.fillCircle).toHaveBeenCalledTimes(count);
       }
@@ -217,7 +223,7 @@ describe('AP2-P1A.4 — Procedural VFX, Entity Indicators, Deployable/Tether Ren
   });
 
   describe('3. Room Entities Sync: Seed Gun Life Blossom (r=88px) & Tether Staff Cutting Beams', () => {
-    it('renders Seed Gun life_blossom deployable with r=88px toxic spore aura, 8 orbiting motes, and 6 petals', () => {
+    it('renders Seed Gun life_blossom deployable with r=88px perimeter-weighted spore aura (< 0.06 interior fill), 8 orbiting motes, and 6 petals', () => {
       expect(p1aDrawBlossom).toBe(drawSeedGunLifeBlossom);
       const g = makeMockGraphics();
       const blossom: Pick<SimSummonState, 'id' | 'x' | 'y' | 'auraRadius'> = {
@@ -227,14 +233,22 @@ describe('AP2-P1A.4 — Procedural VFX, Entity Indicators, Deployable/Tether Ren
         auraRadius: 88,
       };
       drawSeedGunLifeBlossom(g as never, blossom, 0);
-      // Verify 88px aura circle is filled & stroked
+      // Verify 88px aura circle is filled & stroked with low interior opacity (< 0.06)
       expect(g.fillCircle).toHaveBeenCalledWith(300, 260, 88);
       expect(g.strokeCircle).toHaveBeenCalledWith(300, 260, 88);
+      expect(g.fillStyle.mock.calls[0]?.[1]).toBeLessThan(0.06);
       // 1 aura + 8 motes + 1 base + 6*2 petals + 3 stamen core = 25 fillCircle calls
       expect(g.fillCircle).toHaveBeenCalledTimes(25);
+
+      // When groundHazardGraphics (depth: 16) is supplied, floor aura routes to groundG while 3D bud stays on g
+      const gTop = makeMockGraphics();
+      const gGround = makeMockGraphics();
+      drawSeedGunLifeBlossom(gTop as never, blossom, 0, gGround as never);
+      expect(gGround.strokeCircle).toHaveBeenCalledWith(300, 260, 88);
+      expect(gTop.fillCircle).toHaveBeenCalledWith(300, 260, 16);
     });
 
-    it('renders Tether Staff cutting plasma/lightning beams and color-coded anchor nodes for all 5 anchor kinds', () => {
+    it('renders Tether Staff cutting Chiaroscuro plasma/lightning beams and color-coded anchor nodes for all 5 anchor kinds', () => {
       expect(p1aDrawTethers).toBe(drawTetherStaffBeams);
       const g = makeMockGraphics();
       const beams: SimTetherBeamState[] = [
@@ -251,12 +265,13 @@ describe('AP2-P1A.4 — Procedural VFX, Entity Indicators, Deployable/Tether Ren
     });
   });
 
-  describe('4. All 7 Batch-1 Weapons Procedural VFX Spawners & Transient Overlay Rendering', () => {
-    it('spawns and renders all 11 Batch-1 transient procedural VFX shapes and active projectiles', () => {
+  describe('4. All 7 Batch-1 Weapons Chiaroscuro Shader VFX Spawners & Decluttered Overlay Rendering', () => {
+    it('spawns 1:1 Chiaroscuro shader flipbooks, renders all 11 Batch-1 transient shapes, routes ground mist to groundHazardGraphics, and suppresses spammy floating alerts', () => {
       expect(p1aSyncBatch1).toBe(syncBatch1WeaponRoomEntities);
       const sceneKey = {};
       const fx = makeMockFx();
       const g = makeMockGraphics();
+      const gGround = makeMockGraphics();
       const player = makeMockPlayer({
         x: 200,
         y: 200,
@@ -376,7 +391,7 @@ describe('AP2-P1A.4 — Procedural VFX, Entity Indicators, Deployable/Tether Ren
         ],
       });
 
-      // Spawn all 10 Batch-1 weapon VFX triggers (producing 11 transient shape kinds)
+      // Spawn all 10 Batch-1 weapon VFX triggers + microbar feedback
       spawnCrossbowBarbedRipVfx(sceneKey, fx as never, 200, 200, [{ x: 310, y: 200 }], 3, 'vi');
       spawnThornStaffWhipVfx(sceneKey, fx as never, 200, 200, 0, true);
       spawnThornBloomVfx(sceneKey, fx as never, 200, 200, [{ x: 320, y: 210 }], 4, 'vi');
@@ -387,9 +402,41 @@ describe('AP2-P1A.4 — Procedural VFX, Entity Indicators, Deployable/Tether Ren
       spawnFragLauncherAirburstVfx(sceneKey, fx as never, 320, 200, 104, true, 'vi');
       spawnSeedGunHarvestBloomVfx(sceneKey, fx as never, 280, 200, 88, true, 200, 200, 'vi');
       spawnTetherElectromagneticYankVfx(sceneKey, fx as never, 200, 200, 340, 200, 96, 'vi');
+      triggerMicroBarFeedbackOnScene(sceneKey, fx as never, 'perfect_reload', 200, 200, 'vi');
 
       const state = getWeaponV2OverlayState(sceneKey);
       expect(state.shapes).toHaveLength(11);
+      expect(fx.spawnShaderSlash).toHaveBeenCalledWith(
+        expect.any(Number),
+        expect.any(Number),
+        104,
+        0,
+        'fx_sh_slash_emerald',
+        expect.any(Object),
+      );
+      expect(fx.spawnShaderCone).toHaveBeenCalled();
+      expect(fx.spawnShaderDirectional).toHaveBeenCalledWith(
+        310,
+        200,
+        64,
+        Math.PI,
+        'fx_sh_falcon_sonic',
+        expect.any(Object),
+      );
+      expect(fx.spawnShaderNova).toHaveBeenCalledWith(320, 210, 58, 'fx_sh_bloom_briar');
+      expect(fx.spawnShaderNova).toHaveBeenCalledWith(200, 200, 64, 'fx_sh_shrapnel_corona');
+      expect(fx.spawnShaderNova).toHaveBeenCalledWith(200, 200, 96, 'fx_sh_vortex_gale');
+      expect(fx.spawnShaderNova).toHaveBeenCalledWith(320, 200, 104, 'fx_sh_shrapnel_corona');
+      expect(fx.spawnShaderNova).toHaveBeenCalledWith(280, 200, 88, 'fx_sh_bloom_briar');
+      expect(fx.spawnShaderNova).toHaveBeenCalledWith(
+        340,
+        200,
+        96,
+        'fx_sh_anvil_storm',
+        expect.objectContaining({ tint: 0xc084fc }),
+      );
+      // Zero spammy mid-combat weapon or microbar floating text shouts
+      expect(fx.spawnFloatingAlert).not.toHaveBeenCalled();
 
       updateAndDrawWeaponV2Overlays(
         sceneKey,
@@ -400,12 +447,13 @@ describe('AP2-P1A.4 — Procedural VFX, Entity Indicators, Deployable/Tether Ren
         1 / 60,
         0.5,
         'vi',
+        gGround as never,
       );
 
       expect(g.strokePath).toHaveBeenCalled();
       expect(g.strokeCircle).toHaveBeenCalled();
       expect(g.fillCircle).toHaveBeenCalled();
-      expect(fx.spawnFloatingAlert).toHaveBeenCalled();
+      expect(gGround.strokeCircle).toHaveBeenCalled();
 
       // Also verify direct active projectile drawing
       const gProj = makeMockGraphics();

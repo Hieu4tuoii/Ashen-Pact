@@ -74,6 +74,14 @@ function resolveSimFromScene(scene: unknown): WorldSim | null {
   return s.sim ?? null;
 }
 
+function resolveFloorGfx(scene: unknown, fallbackG: Gfx): Gfx {
+  if (scene && typeof scene === 'object' && 'groundHazardGraphics' in scene) {
+    const gg = (scene as { groundHazardGraphics?: Gfx }).groundHazardGraphics;
+    if (gg) return gg;
+  }
+  return fallbackG;
+}
+
 function getOrCreateAdditiveOverlayGraphics(scene: unknown, fallbackG: Gfx): Gfx {
   if (!scene || typeof scene !== 'object') return fallbackG;
   const s = scene as {
@@ -90,8 +98,8 @@ function getOrCreateAdditiveOverlayGraphics(scene: unknown, fallbackG: Gfx): Gfx
   }
   const created = s.add.graphics();
   created.setDepth(42);
-  // Phaser.BlendModes.ADD === 1 (kept numeric so `phaser` remains a type-only import under Node Vitest)
-  created.setBlendMode(1);
+  // Phaser.BlendModes.NORMAL === 0 keeps Chiaroscuro contrast crisp without additive white-out
+  created.setBlendMode(0);
   p4bAdditiveGfxByScene.set(s, created);
   return created;
 }
@@ -99,7 +107,7 @@ function getOrCreateAdditiveOverlayGraphics(scene: unknown, fallbackG: Gfx): Gfx
 export function resolveP4BVisualTimeSec(scene: unknown, sim: WorldSim): number {
   const simTimeSec = sim.tick / 60;
   if (isVisualFreezeActive(scene) || getVisualQueryConfig().freeze) {
-    return getFreezeVisualTimeSec(simTimeSec);
+    return getFreezeVisualTimeSec(simTimeSec, true);
   }
   return simTimeSec;
 }
@@ -131,6 +139,7 @@ function pointToSegmentDist(
 
 function drawSuperheatedCycloneBase(
   g: Gfx,
+  floorG: Gfx,
   sim: WorldSim,
   sum: SimSummonState,
   tSec: number,
@@ -139,29 +148,50 @@ function drawSuperheatedCycloneBase(
   const auraR = sum.auraRadius || SUPERHEATED_CYCLONE_AURA_RADIUS;
   const spin = tSec * 5.4 + sum.id * 0.7;
 
-  // Boiling vapor outer boundary ring
-  g.fillStyle(COL_FROST_CYAN, 0.08 * aMul);
-  g.fillCircle(sum.x, sum.y, auraR);
-  g.lineStyle(2.2, COL_INK, 0.55 * aMul);
-  g.strokeCircle(sum.x, sum.y, auraR);
-  g.lineStyle(1.6, COL_ICE_WHITE, 0.72 * aMul);
-  g.strokeCircle(sum.x, sum.y, auraR);
+  // Boiling vapor outer 1:1 boundary ring on floor (depth 16, <= 0.06 fill)
+  floorG.fillStyle(COL_FROST_CYAN, 0.06 * aMul);
+  floorG.fillCircle(sum.x, sum.y, auraR);
+  floorG.lineStyle(3.6, COL_INK, 0.7 * aMul);
+  floorG.strokeCircle(sum.x, sum.y, auraR);
+  floorG.lineStyle(2.0, COL_ICE_WHITE, 0.86 * aMul);
+  floorG.strokeCircle(sum.x, sum.y, auraR);
 
-  // Dual counter-rotating steam spirals (white-cyan outer vortex)
-  for (let arm = 0; arm < 2; arm++) {
-    const baseAng = spin + arm * Math.PI;
-    g.lineStyle(2.2, arm === 0 ? COL_ICE_WHITE : COL_FROST_CYAN, 0.82 * aMul);
-    g.beginPath();
-    for (let step = 0; step <= 8; step++) {
-      const ratio = step / 8;
-      const r = 8 + ratio * (auraR - 10);
-      const ang = baseAng + ratio * 2.5;
-      const px = sum.x + Math.cos(ang) * r;
-      const py = sum.y + Math.sin(ang) * r;
-      if (step === 0) g.moveTo(px, py);
-      else g.lineTo(px, py);
+  // Triple tapered Chiaroscuro steam-vortex scythe arms (1:1 circular top-down vortex)
+  const steps = 6;
+  for (let arm = 0; arm < 3; arm++) {
+    const baseAng = spin + (arm * Math.PI * 2) / 3;
+    const midCol = arm % 2 === 0 ? COL_FROST_CYAN : COL_ICE_WHITE;
+    for (let step = 0; step < steps; step++) {
+      const r0Ratio = step / steps;
+      const r1Ratio = (step + 1) / steps;
+      const rm = (r0Ratio + r1Ratio) * 0.5;
+      const taper = Math.max(0.28, Math.sin((0.14 + rm * 0.82) * Math.PI));
+      const r0 = 11 + r0Ratio * (auraR - 13);
+      const r1 = 11 + r1Ratio * (auraR - 13);
+      const a0 = baseAng + r0Ratio * 2.35;
+      const a1 = baseAng + r1Ratio * 2.35;
+      const x0 = sum.x + Math.cos(a0) * r0;
+      const y0 = sum.y + Math.sin(a0) * r0;
+      const x1 = sum.x + Math.cos(a1) * r1;
+      const y1 = sum.y + Math.sin(a1) * r1;
+      g.lineStyle(5.2 * taper, COL_INK, 0.76 * aMul);
+      g.beginPath();
+      g.moveTo(x0, y0);
+      g.lineTo(x1, y1);
+      g.strokePath();
+      g.lineStyle(2.8 * taper, midCol, 0.88 * aMul);
+      g.beginPath();
+      g.moveTo(x0, y0);
+      g.lineTo(x1, y1);
+      g.strokePath();
+      if (step >= 1 && step <= 4) {
+        g.lineStyle(1.3 * taper, COL_BONE, 0.94 * aMul);
+        g.beginPath();
+        g.moveTo(x0, y0);
+        g.lineTo(x1, y1);
+        g.strokePath();
+      }
     }
-    g.strokePath();
   }
 }
 
@@ -175,28 +205,74 @@ function drawSuperheatedCycloneAdditiveCore(
   const auraR = sum.auraRadius || SUPERHEATED_CYCLONE_AURA_RADIUS;
   const counterSpin = -tSec * 7.2 + sum.id * 1.1;
 
-  // Additive blazing orange-gold inner fire core
-  addG.fillStyle(COL_FIRE_ORANGE, 0.26 * aMul);
-  addG.fillCircle(sum.x, sum.y, 20);
-  addG.fillStyle(COL_SOLAR_GOLD, 0.42 * aMul);
-  addG.fillCircle(sum.x, sum.y, 10.5);
-  addG.fillStyle(COL_BONE, 0.65 * aMul);
-  addG.fillCircle(sum.x, sum.y, 4.8);
+  // Chiaroscuro dark shear collar + compact blazing orange-gold inner fire core
+  addG.fillStyle(COL_INK, 0.82 * aMul);
+  addG.fillCircle(sum.x, sum.y, 14.0);
+  addG.fillStyle(COL_FIRE_ORANGE, 0.9 * aMul);
+  addG.fillCircle(sum.x, sum.y, 10.6);
+  addG.fillStyle(COL_SOLAR_GOLD, 0.95 * aMul);
+  addG.fillCircle(sum.x, sum.y, 7.0);
+  addG.fillStyle(COL_BONE, 0.98 * aMul);
+  addG.fillCircle(sum.x, sum.y, 3.6);
 
+  // 3 tapered Chiaroscuro flame-scythe blades counter-shearing around the eye
   for (let arm = 0; arm < 3; arm++) {
     const ang0 = counterSpin + (arm * Math.PI * 2) / 3;
-    addG.lineStyle(2.0, arm % 2 === 0 ? COL_FIRE_ORANGE : COL_SOLAR_GOLD, 0.78 * aMul);
-    addG.beginPath();
-    addG.arc(sum.x, sum.y, 15 + arm * 5, ang0, ang0 + 1.35, false);
-    addG.strokePath();
+    const bladeR = 19 + arm * 4.5;
+    const segs = 4;
+    for (let s = 0; s < segs; s++) {
+      const u0 = s / segs;
+      const u1 = (s + 1) / segs;
+      const taper = 1.0 - u0 * 0.72;
+      const a0 = ang0 + u0 * 1.42;
+      const a1 = ang0 + u1 * 1.42;
+      const r0 = bladeR + u0 * 6;
+      const r1 = bladeR + u1 * 6;
+      const x0 = sum.x + Math.cos(a0) * r0;
+      const y0 = sum.y + Math.sin(a0) * r0;
+      const x1 = sum.x + Math.cos(a1) * r1;
+      const y1 = sum.y + Math.sin(a1) * r1;
+      addG.lineStyle(5.6 * taper, COL_INK, 0.82 * aMul);
+      addG.beginPath();
+      addG.moveTo(x0, y0);
+      addG.lineTo(x1, y1);
+      addG.strokePath();
+      addG.lineStyle(3.0 * taper, arm % 2 === 0 ? COL_FIRE_ORANGE : COL_SOLAR_GOLD, 0.92 * aMul);
+      addG.beginPath();
+      addG.moveTo(x0, y0);
+      addG.lineTo(x1, y1);
+      addG.strokePath();
+      if (s < 2) {
+        addG.lineStyle(1.4 * taper, COL_BONE, 0.96 * aMul);
+        addG.beginPath();
+        addG.moveTo(x0, y0);
+        addG.lineTo(x1, y1);
+        addG.strokePath();
+      }
+    }
   }
 
-  // Orbiting boiling steam-ember droplets
+  // Orbiting #141019-cased diamond steam-ember shards on 1:1 circle
   for (let k = 0; k < 4; k++) {
     const dAng = counterSpin * 0.8 + (k * Math.PI) / 2;
-    const dR = auraR * 0.66;
-    addG.fillStyle(k % 2 === 0 ? COL_ICE_WHITE : COL_FIRE_ORANGE, 0.76 * aMul);
-    addG.fillCircle(sum.x + Math.cos(dAng) * dR, sum.y + Math.sin(dAng) * dR, 2.6);
+    const dR = auraR * 0.68;
+    const cx = sum.x + Math.cos(dAng) * dR;
+    const cy = sum.y + Math.sin(dAng) * dR;
+    const tx = -Math.sin(dAng);
+    const ty = Math.cos(dAng);
+    const col = k % 2 === 0 ? COL_ICE_WHITE : COL_FIRE_ORANGE;
+    addG.lineStyle(4.4, COL_INK, 0.84 * aMul);
+    addG.beginPath();
+    addG.moveTo(cx - tx * 5.2, cy - ty * 5.2);
+    addG.lineTo(cx + tx * 5.2, cy + ty * 5.2);
+    addG.strokePath();
+    addG.lineStyle(2.3, col, 0.94 * aMul);
+    addG.beginPath();
+    addG.moveTo(cx - tx * 4.2, cy - ty * 4.2);
+    addG.lineTo(cx + tx * 4.2, cy + ty * 4.2);
+    addG.strokePath();
+    addG.fillStyle(COL_BONE, 0.96 * aMul);
+    addG.fillCircle(cx, cy, 1.5);
   }
 }
 
@@ -211,12 +287,13 @@ export function drawP4BSummonOverlay(
   sum: SimSummonState,
 ): boolean {
   if (sum.kind !== 'superheated_cyclone') return false;
+  const floorG = resolveFloorGfx(scene, g);
   const tSec = resolveP4BVisualTimeSec(scene, sim);
-  drawSuperheatedCycloneBase(g, sim, sum, tSec);
+  drawSuperheatedCycloneBase(g, floorG, sim, sum, tSec);
   return true;
 }
 
-function drawCryoShatterSpireOverlays(g: Gfx, sim: WorldSim, tSec: number): void {
+function drawCryoShatterSpireOverlays(g: Gfx, floorG: Gfx, sim: WorldSim, tSec: number): void {
   for (let i = 0; i < sim.props.length; i++) {
     const prop = sim.props[i]!;
     if (prop.hp <= 0 || prop.kind !== 'glacial_spike' || !prop.cryoShatterSpire) continue;
@@ -226,14 +303,14 @@ function drawCryoShatterSpireOverlays(g: Gfx, sim: WorldSim, tSec: number): void
     const baseR = Math.max(16, prop.radius + 5);
     const ttlRatio = clamp((prop.ttlSec ?? CRYO_SHATTER_SPIRE_TTL_SEC) / CRYO_SHATTER_SPIRE_TTL_SEC, 0, 1);
 
-    g.fillStyle(COL_FROST_CYAN, 0.14 * aMul);
-    g.fillCircle(prop.x, prop.y, baseR + 4);
-    g.lineStyle(2.2, COL_INK, 0.68 * aMul);
-    g.strokeCircle(prop.x, prop.y, baseR);
-    g.lineStyle(1.6, COL_ICE_WHITE, 0.9 * aMul);
-    g.strokeCircle(prop.x, prop.y, baseR);
+    floorG.fillStyle(COL_FROST_CYAN, 0.06 * aMul);
+    floorG.fillCircle(prop.x, prop.y, baseR + 4);
+    floorG.lineStyle(2.8, COL_INK, 0.72 * aMul);
+    floorG.strokeCircle(prop.x, prop.y, baseR);
+    floorG.lineStyle(1.6, COL_ICE_WHITE, 0.9 * aMul);
+    floorG.strokeCircle(prop.x, prop.y, baseR);
 
-    // 4 cardinal diamond ice crystal shards around spire base
+    // 4 cardinal diamond ice crystal shards around spire base (1:1 circle)
     for (let k = 0; k < 4; k++) {
       const ang = rot + (k * Math.PI) / 2;
       const tipX = prop.x + Math.cos(ang) * (baseR + 7);
@@ -254,7 +331,12 @@ function drawCryoShatterSpireOverlays(g: Gfx, sim: WorldSim, tSec: number): void
   }
 }
 
-function drawSuperconductRailAndNapalmEnemyOverlays(g: Gfx, sim: WorldSim, tSec: number): void {
+function drawSuperconductRailAndNapalmEnemyOverlays(
+  g: Gfx,
+  floorG: Gfx,
+  sim: WorldSim,
+  tSec: number,
+): void {
   const railOwner = anyPlayerHasDuoBoon(sim, 'duo_superconduct_rail');
   const railAlpha = hasPlayerDuoBoon(sim.player, 'duo_superconduct_rail') ? 1.0 : 0.5;
 
@@ -262,21 +344,21 @@ function drawSuperconductRailAndNapalmEnemyOverlays(g: Gfx, sim: WorldSim, tSec:
     const e = sim.enemies[i]!;
     if (e.hp <= 0) continue;
 
-    // 3. duo_superconduct_rail: dashed r=100px cyan-violet magnetic field ring
+    // 3. duo_superconduct_rail: dashed r=100px 1:1 cyan-violet magnetic field ring on floor
     if (railOwner && e.superconductTimer > 0) {
       const r = SUPERCONDUCT_RAIL_RADIUS;
       const rot = tSec * 1.6 + e.id * 0.4;
-      g.lineStyle(1.4, COL_VIOLET, 0.26 * railAlpha);
-      g.strokeCircle(e.x, e.y, r);
+      floorG.lineStyle(1.4, COL_VIOLET, 0.24 * railAlpha);
+      floorG.strokeCircle(e.x, e.y, r);
 
       const segCount = 12;
       const arcSpan = (Math.PI * 2) / (segCount * 1.75);
       for (let s = 0; s < segCount; s++) {
         const a0 = rot + (s * Math.PI * 2) / segCount;
-        g.lineStyle(2.0, s % 2 === 0 ? COL_FROST_CYAN : COL_VIOLET, 0.84 * railAlpha);
-        g.beginPath();
-        g.arc(e.x, e.y, r, a0, a0 + arcSpan, false);
-        g.strokePath();
+        floorG.lineStyle(2.0, s % 2 === 0 ? COL_FROST_CYAN : COL_VIOLET, 0.84 * railAlpha);
+        floorG.beginPath();
+        floorG.arc(e.x, e.y, r, a0, a0 + arcSpan, false);
+        floorG.strokePath();
       }
 
       // 4 inward magnetic lock-on ticks
@@ -292,25 +374,26 @@ function drawSuperconductRailAndNapalmEnemyOverlays(g: Gfx, sim: WorldSim, tSec:
       }
     }
 
-    // 4. duo_napalm_chain_plague: bubbling amber-lime resin droplets around enemy feet
+    // 4. duo_napalm_chain_plague: 1:1 circular Chiaroscuro resin ring + orbiting amber-lime droplets (zero 3/4 ellipse)
     if ((e.napalmPlagueTimer ?? 0) > 0) {
       const pAlpha = resolveOwnerAlpha(sim, e.napalmPlagueOwnerId);
-      const footY = e.y + e.radius * 0.55;
-      const ringW = Math.max(20, e.radius * 2.1);
-      g.fillStyle(COL_LIME_VENOM, 0.18 * pAlpha);
-      g.fillEllipse(e.x, footY, ringW, ringW * 0.52);
-      g.lineStyle(1.5, COL_FIRE_ORANGE, 0.76 * pAlpha);
-      g.strokeEllipse(e.x, footY, ringW, ringW * 0.52);
+      const collarR = Math.max(12, e.radius + 4);
+      floorG.fillStyle(COL_LIME_VENOM, 0.06 * pAlpha);
+      floorG.fillCircle(e.x, e.y + 2, collarR);
+      floorG.lineStyle(3.2, COL_INK, 0.65 * pAlpha);
+      floorG.strokeCircle(e.x, e.y + 2, collarR);
+      floorG.lineStyle(1.8, COL_FIRE_ORANGE, 0.84 * pAlpha);
+      floorG.strokeCircle(e.x, e.y + 2, collarR);
 
       for (let d = 0; d < 5; d++) {
         const ang = tSec * 3.8 + d * 1.256 + e.id;
-        const bob = Math.sin(tSec * 7.5 + d * 1.7) * 3.2;
-        const dx = e.x + Math.cos(ang) * (e.radius * 0.85);
-        const dy = footY + Math.sin(ang) * (e.radius * 0.36) - Math.abs(bob);
+        const orbitR = collarR + Math.sin(tSec * 7.5 + d * 1.7) * 1.6;
+        const dx = e.x + Math.cos(ang) * orbitR;
+        const dy = e.y + Math.sin(ang) * orbitR;
         const dropCol = d % 2 === 0 ? COL_FIRE_ORANGE : COL_LIME_BRIGHT;
-        g.fillStyle(COL_INK, 0.75 * pAlpha);
+        g.fillStyle(COL_INK, 0.8 * pAlpha);
         g.fillCircle(dx, dy, 3.3);
-        g.fillStyle(dropCol, 0.92 * pAlpha);
+        g.fillStyle(dropCol, 0.94 * pAlpha);
         g.fillCircle(dx, dy, 2.3);
       }
     }
@@ -334,9 +417,11 @@ function drawPlasmaStarAndRailProjectiles(
     if (b.superconductRailRedirected || (b.awaitingServerRedirectTimer ?? 0) > 0) {
       const tailX = b.x - Math.cos(b.angle) * 18;
       const tailY = b.y - Math.sin(b.angle) * 18;
-      g.lineStyle(3.2, COL_VIOLET, 0.68 * aMul);
+      g.lineStyle(4.2, COL_INK, 0.68 * aMul);
       g.lineBetween(tailX, tailY, b.x, b.y);
-      g.lineStyle(1.6, COL_FROST_CYAN, 0.94 * aMul);
+      g.lineStyle(2.4, COL_VIOLET, 0.82 * aMul);
+      g.lineBetween(tailX, tailY, b.x, b.y);
+      g.lineStyle(1.4, COL_FROST_CYAN, 0.95 * aMul);
       g.lineBetween(tailX, tailY, b.x, b.y);
 
       if (hasRail) {
@@ -358,28 +443,32 @@ function drawPlasmaStarAndRailProjectiles(
       }
     }
 
-    // 5. duo_plasma_overload_star: counter-rotating 6-pointed gold-violet Plasma Star
+    // 5. duo_plasma_overload_star: counter-rotating 6-pointed Chiaroscuro gold-violet Plasma Star
     if (b.weaponId === 'duo_plasma_overload_star') {
       const rOuter = Math.max(10, b.radius + 3.5);
       const rotCw = tSec * 9.6 + b.id * 0.5;
       const rotCcw = -tSec * 9.6 - b.id * 0.3;
 
-      // Electric plasma wake & wall-bounce spark ring
       const backX = b.x - Math.cos(b.angle) * 20;
       const backY = b.y - Math.sin(b.angle) * 20;
       const midX = (b.x + backX) * 0.5 + Math.sin(tSec * 24 + b.id) * 3.5;
       const midY = (b.y + backY) * 0.5 - Math.cos(tSec * 24 + b.id) * 3.5;
-      g.lineStyle(2.2, COL_VIOLET, 0.78 * aMul);
+      g.lineStyle(3.8, COL_INK, 0.72 * aMul);
       g.beginPath();
       g.moveTo(backX, backY);
       g.lineTo(midX, midY);
       g.lineTo(b.x, b.y);
       g.strokePath();
+      g.lineStyle(2.0, COL_VIOLET, 0.86 * aMul);
+      g.strokePath();
 
       if ((b.bouncesDone ?? 0) > 0) {
-        g.lineStyle(1.5, COL_VOLT_YELLOW, 0.72 * aMul);
+        g.lineStyle(1.5, COL_VOLT_YELLOW, 0.76 * aMul);
         g.strokeCircle(b.x, b.y, rOuter + 3);
       }
+
+      addG.fillStyle(COL_INK, 0.82 * aMul);
+      addG.fillCircle(b.x, b.y, rOuter * 0.82);
 
       // Triangle A (Gold-Orange CW) + Triangle B (Electric Violet CCW) = 6-pointed Plasma Star
       for (let layer = 0; layer < 2; layer++) {
@@ -391,19 +480,70 @@ function drawPlasmaStarAndRailProjectiles(
         const p1y = b.y + Math.sin(baseRot + (Math.PI * 2) / 3) * rOuter;
         const p2x = b.x + Math.cos(baseRot + (Math.PI * 4) / 3) * rOuter;
         const p2y = b.y + Math.sin(baseRot + (Math.PI * 4) / 3) * rOuter;
-        addG.fillStyle(col, 0.85 * aMul);
+        addG.fillStyle(col, 0.9 * aMul);
         addG.fillTriangle(p0x, p0y, p1x, p1y, p2x, p2y);
       }
 
-      addG.fillStyle(COL_FIRE_ORANGE, 0.88 * aMul);
-      addG.fillCircle(b.x, b.y, 4.8);
-      addG.fillStyle(COL_BONE, 0.96 * aMul);
-      addG.fillCircle(b.x, b.y, 2.5);
+      addG.fillStyle(COL_FIRE_ORANGE, 0.92 * aMul);
+      addG.fillCircle(b.x, b.y, 4.6);
+      addG.fillStyle(COL_BONE, 0.98 * aMul);
+      addG.fillCircle(b.x, b.y, 2.4);
     }
   }
 }
 
 const flippedBarricadesScratch: SimPropState[] = [];
+const SCRATCH_BASTION_X0 = new Float64Array(10);
+const SCRATCH_BASTION_Y0 = new Float64Array(10);
+const SCRATCH_BASTION_X1 = new Float64Array(10);
+const SCRATCH_BASTION_Y1 = new Float64Array(10);
+
+function strokeBastionPolyline(
+  g: Gfx,
+  xs: Float64Array,
+  ys: Float64Array,
+  count: number,
+  width: number,
+  col: number,
+  alpha: number,
+): void {
+  g.lineStyle(width, col, alpha);
+  g.beginPath();
+  g.moveTo(xs[0]!, ys[0]!);
+  for (let i = 1; i < count; i++) {
+    g.lineTo(xs[i]!, ys[i]!);
+  }
+  g.strokePath();
+}
+
+function drawBastionShockStar(
+  g: Gfx,
+  cx: number,
+  cy: number,
+  outerR: number,
+  rotRad: number,
+  midCol: number,
+  wireAlpha: number,
+): void {
+  for (let axis = 0; axis < 2; axis++) {
+    const ang = rotRad + (axis * Math.PI) / 2;
+    const ca = Math.cos(ang);
+    const sa = Math.sin(ang);
+    const r = axis === 0 ? outerR : outerR * 0.8;
+    g.lineStyle(4.4, COL_INK, 0.86 * wireAlpha);
+    g.lineBetween(cx - ca * r, cy - sa * r, cx + ca * r, cy + sa * r);
+    g.lineStyle(2.4, midCol, 0.94 * wireAlpha);
+    g.lineBetween(cx - ca * (r - 1.1), cy - sa * (r - 1.1), cx + ca * (r - 1.1), cy + sa * (r - 1.1));
+    g.lineStyle(1.2, COL_BONE, 0.98 * wireAlpha);
+    g.lineBetween(cx - ca * (r * 0.62), cy - sa * (r * 0.62), cx + ca * (r * 0.62), cy + sa * (r * 0.62));
+  }
+  g.fillStyle(COL_INK, 0.88 * wireAlpha);
+  g.fillCircle(cx, cy, 3.4);
+  g.fillStyle(midCol, 0.95 * wireAlpha);
+  g.fillCircle(cx, cy, 2.2);
+  g.fillStyle(COL_BONE, 0.99 * wireAlpha);
+  g.fillCircle(cx, cy, 1.1);
+}
 
 function drawMagneticBastionArcWires(g: Gfx, sim: WorldSim, tSec: number): void {
   if (!anyPlayerHasDuoBoon(sim, 'duo_magnetic_bastion_ring')) return;
@@ -426,82 +566,109 @@ function drawMagneticBastionArcWires(g: Gfx, sim: WorldSim, tSec: number): void 
       const dist = distance(a.x, a.y, b.x, b.y);
       if (dist <= 1 || dist > MAGNETIC_BASTION_MAX_DIST) continue;
 
-      const nx = -(b.y - a.y) / dist;
-      const ny = (b.x - a.x) / dist;
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      const ux = dx / dist;
+      const uy = dy / dist;
+      const nx = -uy;
+      const ny = ux;
+      const segs = 8;
+      const ptCount = segs + 1;
 
-      // Subtle dark outline for contrast without obscuring #E84545 enemy projectiles
-      g.lineStyle(4.0, COL_INK, 0.48 * wireAlpha);
-      g.lineBetween(a.x, a.y, b.x, b.y);
-
-      // Dual jagged high-voltage electric arc strands
-      for (let strand = 0; strand < 2; strand++) {
-        const col = strand === 0 ? COL_VOLT_YELLOW : COL_FROST_CYAN;
-        const sign = strand === 0 ? 1 : -1;
-        g.lineStyle(strand === 0 ? 2.1 : 1.5, col, 0.88 * wireAlpha);
-        g.beginPath();
-        g.moveTo(a.x, a.y);
-        const segs = 6;
-        for (let s = 1; s < segs; s++) {
-          const u = s / segs;
-          const jitter =
-            Math.sin(tSec * 19 + s * 2.3 + a.id + b.id + strand * 1.9) * 5.2 * sign;
-          g.lineTo(a.x + (b.x - a.x) * u + nx * jitter, a.y + (b.y - a.y) * u + ny * jitter);
-        }
-        g.lineTo(b.x, b.y);
-        g.strokePath();
+      SCRATCH_BASTION_X0[0] = a.x;
+      SCRATCH_BASTION_Y0[0] = a.y;
+      SCRATCH_BASTION_X1[0] = a.x;
+      SCRATCH_BASTION_Y1[0] = a.y;
+      for (let s = 1; s < segs; s++) {
+        const u = s / segs;
+        const env = Math.sin(u * Math.PI);
+        const ph0 = tSec * 19 + s * 2.35 + a.id + b.id;
+        const j0 = (Math.sin(ph0) * 4.8 + Math.sin(ph0 * 2.1 + 0.6) * 2.1) * env;
+        const ph1 = tSec * 17 - s * 2.05 + a.id * 0.7 + b.id * 1.3 + 1.9;
+        const j1 = -(Math.sin(ph1) * 4.0 + Math.cos(ph1 * 1.8) * 1.6) * env;
+        SCRATCH_BASTION_X0[s] = a.x + dx * u + nx * j0;
+        SCRATCH_BASTION_Y0[s] = a.y + dy * u + ny * j0;
+        SCRATCH_BASTION_X1[s] = a.x + dx * u + nx * j1;
+        SCRATCH_BASTION_Y1[s] = a.y + dy * u + ny * j1;
       }
+      SCRATCH_BASTION_X0[segs] = b.x;
+      SCRATCH_BASTION_Y0[segs] = b.y;
+      SCRATCH_BASTION_X1[segs] = b.x;
+      SCRATCH_BASTION_Y1[segs] = b.y;
 
-      // Capacitor nodes on both flipped barricades
-      g.fillStyle(COL_VOLT_YELLOW, 0.9 * wireAlpha);
-      g.fillCircle(a.x, a.y, 3.6);
-      g.fillCircle(b.x, b.y, 3.6);
+      // Subtle magnetic flux axis + jagged #141019 Chiaroscuro casings hugging every lightning vertex
+      g.lineStyle(2.0, COL_INK, 0.36 * wireAlpha);
+      g.lineBetween(a.x, a.y, b.x, b.y);
+      strokeBastionPolyline(g, SCRATCH_BASTION_X1, SCRATCH_BASTION_Y1, ptCount, 4.4, COL_INK, 0.8 * wireAlpha);
+      strokeBastionPolyline(g, SCRATCH_BASTION_X0, SCRATCH_BASTION_Y0, ptCount, 5.8, COL_INK, 0.84 * wireAlpha);
+      strokeBastionPolyline(g, SCRATCH_BASTION_X1, SCRATCH_BASTION_Y1, ptCount, 1.9, COL_FROST_CYAN, 0.9 * wireAlpha);
+      strokeBastionPolyline(g, SCRATCH_BASTION_X0, SCRATCH_BASTION_Y0, ptCount, 2.8, COL_VOLT_YELLOW, 0.94 * wireAlpha);
+      strokeBastionPolyline(g, SCRATCH_BASTION_X0, SCRATCH_BASTION_Y0, ptCount, 1.3, COL_BONE, 0.98 * wireAlpha);
 
-      // Contact zap sparks on crossing enemies
+      // Mid-span crackling fork offshoot
+      const midIdx = 4;
+      const mx = SCRATCH_BASTION_X0[midIdx]!;
+      const my = SCRATCH_BASTION_Y0[midIdx]!;
+      const fSide = Math.sin(tSec * 15 + a.id + b.id) >= 0 ? 1 : -1;
+      const fx = mx + ux * 8 + nx * fSide * 10;
+      const fy = my + uy * 8 + ny * fSide * 10;
+      g.lineStyle(3.6, COL_INK, 0.8 * wireAlpha);
+      g.lineBetween(mx, my, fx, fy);
+      g.lineStyle(1.6, COL_FROST_CYAN, 0.92 * wireAlpha);
+      g.lineBetween(mx, my, fx, fy);
+
+      // 4-point Chiaroscuro capacitor stars on both flipped barricades
+      drawBastionShockStar(g, a.x, a.y, 7.0, tSec * 3.5 + a.id, COL_VOLT_YELLOW, wireAlpha);
+      drawBastionShockStar(g, b.x, b.y, 7.0, -tSec * 3.5 + b.id, COL_VOLT_YELLOW, wireAlpha);
+
+      // Contact Chiaroscuro shock stars on crossing enemies
       for (let ei = 0; ei < sim.enemies.length; ei++) {
         const e = sim.enemies[ei]!;
         if (e.hp <= 0) continue;
         const proj = pointToSegmentDist(e.x, e.y, a.x, a.y, b.x, b.y);
         if (proj.dist <= MAGNETIC_BASTION_WIRE_HALF_WIDTH + e.radius) {
-          g.lineStyle(1.8, COL_BONE, 0.9 * wireAlpha);
-          g.strokeCircle(proj.cx, proj.cy, 8 + Math.sin(tSec * 22 + e.id) * 2);
+          const flareR = 9.5 + Math.sin(tSec * 22 + e.id) * 1.8;
+          drawBastionShockStar(g, proj.cx, proj.cy, flareR, tSec * 9 + e.id * 0.8, COL_FROST_CYAN, wireAlpha);
         }
       }
     }
   }
 }
 
-function drawSecretChallengeCrystalOverlays(g: Gfx, sim: WorldSim, tSec: number): void {
+function drawSecretChallengeCrystalOverlays(g: Gfx, floorG: Gfx, sim: WorldSim, tSec: number): void {
   for (let i = 0; i < sim.npcEntities.length; i++) {
     const npc = sim.npcEntities[i]!;
     if (npc.kind !== 'secret_challenge_crystal') continue;
 
     if (npc.interacted) {
-      g.lineStyle(1.4, COL_SLATE_MUTED, 0.3);
-      g.strokeCircle(npc.x, npc.y + 4, 20);
+      floorG.lineStyle(1.4, COL_SLATE_MUTED, 0.3);
+      floorG.strokeCircle(npc.x, npc.y + 2, 20);
       continue;
     }
 
-    const pulse = Math.sin(tSec * 3.4 + npc.id) * 2.2;
+    const pulse = Math.sin(tSec * 3.4 + npc.id) * 2.0;
     const ringR = 24 + pulse;
-    g.fillStyle(COL_VIOLET, 0.14);
-    g.fillCircle(npc.x, npc.y + 2, ringR + 4);
-    g.lineStyle(2.0, COL_VIOLET, 0.82);
-    g.strokeCircle(npc.x, npc.y + 2, ringR);
-    g.lineStyle(1.3, COL_SOLAR_GOLD, 0.78);
-    g.strokeCircle(npc.x, npc.y + 2, ringR * 0.72);
+    floorG.fillStyle(COL_VIOLET, 0.06);
+    floorG.fillCircle(npc.x, npc.y + 2, ringR + 4);
+    floorG.lineStyle(3.2, COL_INK, 0.68);
+    floorG.strokeCircle(npc.x, npc.y + 2, ringR);
+    floorG.lineStyle(2.0, COL_VIOLET, 0.86);
+    floorG.strokeCircle(npc.x, npc.y + 2, ringR);
+    floorG.lineStyle(1.3, COL_SOLAR_GOLD, 0.8);
+    floorG.strokeCircle(npc.x, npc.y + 2, ringR * 0.72);
 
-    // 4 orbiting prismatic motes around active challenge crystal
+    // 4 orbiting prismatic motes on a 1:1 circular orbit around active challenge crystal
     for (let m = 0; m < 4; m++) {
       const ang = tSec * 2.2 + (m * Math.PI) / 2;
       const mx = npc.x + Math.cos(ang) * (ringR + 2);
-      const my = npc.y + 2 + Math.sin(ang) * (ringR * 0.65);
+      const my = npc.y + 2 + Math.sin(ang) * (ringR + 2);
       g.fillStyle(m % 2 === 0 ? COL_SOLAR_GOLD : COL_VIOLET, 0.92);
       g.fillCircle(mx, my, 2.4);
     }
   }
 }
 
-function drawP4BTransientBursts(g: Gfx, sim: WorldSim): void {
+function drawP4BTransientBursts(g: Gfx, floorG: Gfx, sim: WorldSim): void {
   const list = p4bTransientBurstsBySim.get(sim);
   if (!list || list.length === 0) return;
 
@@ -515,94 +682,99 @@ function drawP4BTransientBursts(g: Gfx, sim: WorldSim): void {
 
     const prog = clamp(elapsed / Math.max(1, burst.durationTicks), 0, 1);
     const fade = 1 - prog;
-    const curR = burst.radius * (0.35 + 0.65 * Math.sqrt(prog));
+    const curR = burst.radius * (0.42 + 0.58 * Math.sqrt(prog));
 
     if (burst.kind === 'cryo_shatter_spire_burst') {
-      g.fillStyle(COL_FROST_CYAN, 0.16 * fade);
-      g.fillCircle(burst.x, burst.y, curR);
-      g.lineStyle(3.2, COL_INK, 0.65 * fade);
-      g.strokeCircle(burst.x, burst.y, curR);
-      g.lineStyle(2.2, COL_ICE_WHITE, 0.94 * fade);
-      g.strokeCircle(burst.x, burst.y, curR);
+      floorG.fillStyle(COL_FROST_CYAN, 0.06 * fade);
+      floorG.fillCircle(burst.x, burst.y, curR);
+      floorG.lineStyle(3.8, COL_INK, 0.7 * fade);
+      floorG.strokeCircle(burst.x, burst.y, curR);
+      floorG.lineStyle(2.2, COL_ICE_WHITE, 0.94 * fade);
+      floorG.strokeCircle(burst.x, burst.y, curR);
       for (let s = 0; s < 8; s++) {
         const ang = (s * Math.PI) / 4;
         g.lineStyle(2.0, s % 2 === 0 ? COL_ICE_WHITE : COL_FROST_CYAN, 0.9 * fade);
         g.lineBetween(
-          burst.x + Math.cos(ang) * (curR * 0.25),
-          burst.y + Math.sin(ang) * (curR * 0.25),
+          burst.x + Math.cos(ang) * (curR * 0.6),
+          burst.y + Math.sin(ang) * (curR * 0.6),
           burst.x + Math.cos(ang) * (curR * 1.04),
           burst.y + Math.sin(ang) * (curR * 1.04),
         );
       }
     } else if (burst.kind === 'napalm_chain_plague_burst') {
-      g.fillStyle(COL_FIRE_ORANGE, 0.15 * fade);
-      g.fillCircle(burst.x, burst.y, curR);
-      g.lineStyle(3.4, COL_INK, 0.68 * fade);
-      g.strokeCircle(burst.x, burst.y, curR);
-      g.lineStyle(2.4, COL_FIRE_ORANGE, 0.92 * fade);
-      g.strokeCircle(burst.x, burst.y, curR);
-      g.lineStyle(2.0, COL_LIME_BRIGHT, 0.88 * fade);
-      g.strokeCircle(burst.x, burst.y, curR * 0.72);
+      floorG.fillStyle(COL_FIRE_ORANGE, 0.06 * fade);
+      floorG.fillCircle(burst.x, burst.y, curR);
+      floorG.lineStyle(3.8, COL_INK, 0.72 * fade);
+      floorG.strokeCircle(burst.x, burst.y, curR);
+      floorG.lineStyle(2.4, COL_FIRE_ORANGE, 0.94 * fade);
+      floorG.strokeCircle(burst.x, burst.y, curR);
+      floorG.lineStyle(1.8, COL_LIME_BRIGHT, 0.88 * fade);
+      floorG.strokeCircle(burst.x, burst.y, curR * 0.78);
       for (let s = 0; s < 10; s++) {
         const ang = (s * Math.PI * 2) / 10 + 0.15;
-        const sr = curR * 0.88;
+        const sr = curR * 0.9;
         g.fillStyle(s % 2 === 0 ? COL_FIRE_ORANGE : COL_LIME_VENOM, 0.88 * fade);
-        g.fillCircle(burst.x + Math.cos(ang) * sr, burst.y + Math.sin(ang) * sr, 3.2 * fade + 1);
+        g.fillCircle(burst.x + Math.cos(ang) * sr, burst.y + Math.sin(ang) * sr, 2.8 * fade + 1);
       }
     } else if (burst.kind === 'secret_trial_seal') {
-      g.lineStyle(3.0, COL_VIOLET, 0.88 * fade);
-      g.strokeCircle(burst.x, burst.y, curR);
-      g.lineStyle(1.8, COL_SOLAR_GOLD, 0.84 * fade);
-      g.strokeCircle(burst.x, burst.y, curR * 0.76);
+      floorG.lineStyle(4.4, COL_INK, 0.72 * fade);
+      floorG.strokeCircle(burst.x, burst.y, curR);
+      floorG.lineStyle(2.8, COL_VIOLET, 0.92 * fade);
+      floorG.strokeCircle(burst.x, burst.y, curR);
+      floorG.lineStyle(1.8, COL_SOLAR_GOLD, 0.86 * fade);
+      floorG.strokeCircle(burst.x, burst.y, curR * 0.78);
     } else if (burst.kind === 'secret_trial_victory') {
-      g.fillStyle(COL_SOLAR_GOLD, 0.14 * fade);
-      g.fillCircle(burst.x, burst.y, curR);
-      g.lineStyle(3.2, COL_SOLAR_GOLD, 0.95 * fade);
-      g.strokeCircle(burst.x, burst.y, curR);
+      floorG.fillStyle(COL_SOLAR_GOLD, 0.06 * fade);
+      floorG.fillCircle(burst.x, burst.y, curR);
+      floorG.lineStyle(4.4, COL_INK, 0.74 * fade);
+      floorG.strokeCircle(burst.x, burst.y, curR);
+      floorG.lineStyle(2.8, COL_SOLAR_GOLD, 0.96 * fade);
+      floorG.strokeCircle(burst.x, burst.y, curR);
       for (let s = 0; s < 8; s++) {
         const ang = (s * Math.PI) / 4 + prog * 0.4;
         g.lineStyle(2.0, COL_BONE, 0.88 * fade);
         g.lineBetween(
-          burst.x + Math.cos(ang) * (curR * 0.35),
-          burst.y + Math.sin(ang) * (curR * 0.35),
+          burst.x + Math.cos(ang) * (curR * 0.62),
+          burst.y + Math.sin(ang) * (curR * 0.62),
           burst.x + Math.cos(ang) * (curR * 1.05),
           burst.y + Math.sin(ang) * (curR * 1.05),
         );
       }
     } else {
-      g.lineStyle(2.2, COL_SLATE_MUTED, 0.75 * fade);
-      g.strokeCircle(burst.x, burst.y, curR);
+      floorG.lineStyle(2.2, COL_SLATE_MUTED, 0.75 * fade);
+      floorG.strokeCircle(burst.x, burst.y, curR);
     }
   }
 }
 
 /**
- * Renders all 6 Phase 4B Duo Boon procedural VFX layers and Secret Challenge Arena world overlays.
+ * Renders all 6 Phase 4B Duo Boon 1:1 Chiaroscuro VFX layers and Secret Challenge Arena world overlays.
  */
 export function renderP4BDuoAndSecretArenaOverlays(scene: GameScene): void {
   const sim = resolveSimFromScene(scene);
   const g = (scene as unknown as { telegraphGraphics?: Gfx }).telegraphGraphics;
   if (!sim || !g) return;
 
+  const floorG = resolveFloorGfx(scene, g);
   const addG = getOrCreateAdditiveOverlayGraphics(scene, g);
   const tSec = resolveP4BVisualTimeSec(scene, sim);
 
-  // 1. Superheated Cyclone summons (when renderP4BDuoAndSecretArenaOverlays runs standalone in tests, draw base too if not yet drawn via summon loop; additive core always renders here)
+  // 1. Superheated Cyclone summons
   const isStandaloneMock = addG === g;
   for (let i = 0; i < sim.summons.length; i++) {
     const sum = sim.summons[i]!;
     if (sum.hp <= 0 || sum.ttlSec <= 0 || sum.kind !== 'superheated_cyclone') continue;
     if (isStandaloneMock) {
-      drawSuperheatedCycloneBase(g, sim, sum, tSec);
+      drawSuperheatedCycloneBase(g, floorG, sim, sum, tSec);
     }
     drawSuperheatedCycloneAdditiveCore(addG, sim, sum, tSec);
   }
 
   // 2. Cryo Shatter Spires
-  drawCryoShatterSpireOverlays(g, sim, tSec);
+  drawCryoShatterSpireOverlays(g, floorG, sim, tSec);
 
-  // 3 & 4. Superconduct Rail magnetic rings + Napalm Chain Plague boiling resin
-  drawSuperconductRailAndNapalmEnemyOverlays(g, sim, tSec);
+  // 3 & 4. Superconduct Rail magnetic rings + Napalm Chain Plague 1:1 boiling resin
+  drawSuperconductRailAndNapalmEnemyOverlays(g, floorG, sim, tSec);
 
   // 3b & 5. Superconduct Rail redirected tracers + Plasma Overload 6-pointed counter-rotating stars
   drawPlasmaStarAndRailProjectiles(g, addG, sim, tSec);
@@ -611,8 +783,8 @@ export function renderP4BDuoAndSecretArenaOverlays(scene: GameScene): void {
   drawMagneticBastionArcWires(g, sim, tSec);
 
   // 7. Secret Challenge Crystal rune halo & deterministic room-scoped transient bursts
-  drawSecretChallengeCrystalOverlays(g, sim, tSec);
-  drawP4BTransientBursts(g, sim);
+  drawSecretChallengeCrystalOverlays(g, floorG, sim, tSec);
+  drawP4BTransientBursts(g, floorG, sim);
 }
 
 /**
@@ -658,6 +830,7 @@ export function handleP4BSimEvent(scene: GameScene, ev: SimEvent): boolean {
       spawnTick: sim.tick,
       durationTicks: 28,
     });
+    scene.fx?.spawnShaderNova?.(ev.x, ev.y, 130, 'fx_sh_nova_void');
     if (scene.lighting?.spawnTransientLight) {
       scene.lighting.spawnTransientLight(ev.x, ev.y, 180, PALETTE.ELECTRIC_VIOLET, 0.9, 0.45);
     }
@@ -678,6 +851,12 @@ export function handleP4BSimEvent(scene: GameScene, ev: SimEvent): boolean {
       spawnTick: sim.tick,
       durationTicks: ev.victory ? 36 : 24,
     });
+    scene.fx?.spawnShaderNova?.(
+      ev.x,
+      ev.y,
+      ev.victory ? 150 : 95,
+      ev.victory ? 'fx_sh_nova_solar' : 'fx_sh_nova_cryo',
+    );
     if (scene.lighting?.spawnTransientLight) {
       scene.lighting.spawnTransientLight(
         ev.x,

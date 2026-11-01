@@ -5,9 +5,12 @@ import {
   type WorldSim,
 } from '@ashen-pact/shared';
 import type Phaser from 'phaser';
+import type { ShaderNovaKey } from '../art/texture-baker-shader-fx.js';
 import { PALETTE } from '../art/palette.js';
 import { zzfx } from '../audio/zzfx.js';
+import { getVisualQueryConfig } from '../core/visual-query.js';
 import type { GameScene } from '../scenes/GameScene.js';
+import type { CombatFxManager } from './combat-fx.js';
 import { getWeaponV2OverlayState, type TransientWeaponV2Shape } from './combat-fx-weapons-v2.js';
 
 export const P1D_BLESSING_EVENT_KINDS = [
@@ -37,6 +40,9 @@ export function isVisualFreezeActive(scene?: unknown): boolean {
   if (scene && typeof scene === 'object' && (scene as { visualFreeze?: boolean }).visualFreeze) {
     return true;
   }
+  if (getVisualQueryConfig().freeze) {
+    return true;
+  }
   const g = globalThis as {
     __AP_VISUAL_FREEZE__?: boolean;
     location?: { search?: string };
@@ -57,8 +63,21 @@ function resolveGraphics(sceneOrG: unknown): Phaser.GameObjects.Graphics | null 
   return maybeScene.telegraphGraphics ?? null;
 }
 
+function resolveFloorGraphics(
+  sceneOrG: unknown,
+  fallbackG: Phaser.GameObjects.Graphics,
+  explicitGroundG?: Phaser.GameObjects.Graphics,
+): Phaser.GameObjects.Graphics {
+  if (explicitGroundG) return explicitGroundG;
+  if (sceneOrG && typeof sceneOrG === 'object' && 'groundHazardGraphics' in sceneOrG) {
+    const gg = (sceneOrG as { groundHazardGraphics?: Phaser.GameObjects.Graphics }).groundHazardGraphics;
+    if (gg) return gg;
+  }
+  return fallbackG;
+}
+
 /**
- * Draws procedural overlays for active P1D projectiles (`table_tech_rocket`, `reload_tediore_chuck`,
+ * Draws procedural Chiaroscuro 1:1 overlays for active P1D projectiles (`table_tech_rocket`, `reload_tediore_chuck`,
  * `vanguard_bastion_prism`, and `splitGeneration >= 1` child bullets).
  */
 export function drawP1DBlessingProjectileOverlay(
@@ -83,29 +102,33 @@ export function drawP1DBlessingProjectileOverlay(
   if (b.weaponId === 'table_tech_rocket') {
     const tailX = b.x - cos * 11;
     const tailY = b.y - sin * 11;
-    g.lineStyle(3.2, 0xf97316, 0.92);
+    g.lineStyle(4.8, 0x141019, 0.85);
     g.lineBetween(tailX, tailY, b.x + cos * 5, b.y + sin * 5);
-    g.fillStyle(0xfef08a, 0.95);
-    g.fillCircle(tailX - cos * (2 + Math.sin(t * 25 + b.id) * 1.5), tailY - sin * 2, 3.4);
-    g.lineStyle(1.4, 0xfacc15, 0.85);
+    g.lineStyle(2.8, 0xf97316, 0.95);
+    g.lineBetween(tailX, tailY, b.x + cos * 5, b.y + sin * 5);
+    g.fillStyle(0xfffdf5, 0.96);
+    g.fillCircle(tailX - cos * (2 + Math.sin(t * 25 + b.id) * 1.5), tailY - sin * 2, 3.2);
+    g.lineStyle(1.4, 0xfacc15, 0.88);
     g.strokeCircle(b.x, b.y, b.radius + 2);
   } else if (b.weaponId === 'reload_tediore_chuck') {
     const spin = freeze ? 0.6 : t * 14 + b.id;
     const rx = Math.cos(spin) * 6;
     const ry = Math.sin(spin) * 6;
-    g.lineStyle(2.4, 0xef4444, 0.92);
+    g.lineStyle(4.0, 0x141019, 0.86);
     g.lineBetween(b.x - rx, b.y - ry, b.x + rx, b.y + ry);
-    g.fillStyle(0xfacc15, 0.9);
-    g.fillCircle(b.x, b.y, 3.2);
-    g.lineStyle(1.2, 0xf97316, 0.65);
+    g.lineStyle(2.2, 0xf97316, 0.94);
+    g.lineBetween(b.x - rx, b.y - ry, b.x + rx, b.y + ry);
+    g.fillStyle(0xfffdf5, 0.94);
+    g.fillCircle(b.x, b.y, 2.8);
+    g.lineStyle(1.3, 0xfacc15, 0.72);
     g.strokeCircle(b.x, b.y, b.radius + 3);
   } else if (b.weaponId === 'vanguard_bastion_prism') {
-    g.lineStyle(2.2, 0xf97316, 0.9);
+    g.lineStyle(2.4, 0xf97316, 0.92);
     g.strokeCircle(b.x, b.y, b.radius + 1.5);
-    g.fillStyle(0xfef08a, 0.92);
+    g.fillStyle(0xfffdf5, 0.95);
     g.fillCircle(b.x, b.y, 2.5);
   } else if ((b.splitGeneration ?? 0) >= 1) {
-    g.lineStyle(1.5, 0x38bdf8, 0.78);
+    g.lineStyle(1.6, 0x38bdf8, 0.82);
     g.strokeCircle(b.x, b.y, Math.max(2.5, b.radius * 0.9));
     g.lineBetween(b.x - cos * 7, b.y - sin * 7, b.x, b.y);
   }
@@ -118,11 +141,13 @@ export function drawP1DBlessingActiveOverlays(
   sceneOrG: unknown,
   sim?: WorldSim,
   clockSec = 0,
+  groundG?: Phaser.GameObjects.Graphics,
 ): void {
   const g = resolveGraphics(sceneOrG);
   const activeSim =
     sim ?? (sceneOrG && typeof sceneOrG === 'object' ? (sceneOrG as { sim?: WorldSim }).sim : undefined);
   if (!g || !activeSim) return;
+  const floorG = resolveFloorGraphics(sceneOrG, g, groundG);
   const freeze = isVisualFreezeActive(sceneOrG);
   const t = freeze ? 0 : clockSec;
   const pulse = Math.sin(t * 8) * 2;
@@ -140,10 +165,12 @@ export function drawP1DBlessingActiveOverlays(
     const pr = props[i]!;
     if (pr.hp <= 0) continue;
     if (pr.coverState === 'flipped' && pr.prismAuraActive) {
-      g.lineStyle(2.0, 0x34d399, 0.82);
-      g.strokeCircle(pr.x, pr.y, pr.radius + 10 + pulse * 0.5);
-      g.lineStyle(1.2, 0x38bdf8, 0.65);
-      g.strokeCircle(pr.x, pr.y, pr.radius + 5);
+      floorG.lineStyle(3.2, 0x141019, 0.65);
+      floorG.strokeCircle(pr.x, pr.y, pr.radius + 10 + pulse * 0.5);
+      floorG.lineStyle(2.0, 0x34d399, 0.86);
+      floorG.strokeCircle(pr.x, pr.y, pr.radius + 10 + pulse * 0.5);
+      floorG.lineStyle(1.2, 0x38bdf8, 0.68);
+      floorG.strokeCircle(pr.x, pr.y, pr.radius + 5);
     }
     if (pr.coverState === 'sliding' && pr.rocketCharged) {
       const ang = Math.atan2(pr.vy || 0, pr.vx || 1);
@@ -151,8 +178,8 @@ export function drawP1DBlessingActiveOverlays(
       const backY = pr.y - Math.sin(ang) * (pr.radius + 10);
       g.lineStyle(2.4, 0xf97316, 0.92);
       g.strokeCircle(pr.x, pr.y, pr.radius + 5);
-      g.fillStyle(0xfacc15, 0.88);
-      g.fillCircle(backX, backY, 5.5);
+      g.fillStyle(0xfffdf5, 0.92);
+      g.fillCircle(backX, backY, 5.0);
     } else if (pr.coverState === 'sliding' && (pr.bouncesRemaining ?? 0) > 0) {
       g.lineStyle(1.8, 0xe2e8f0, 0.78);
       g.strokeCircle(pr.x, pr.y, pr.radius + 4);
@@ -168,9 +195,17 @@ export function drawP1DBlessingActiveOverlays(
     if (pl.lifeState !== 'alive') continue;
     if (pl.dashTimer > 0 && blessings.includes('dash_tidal_ram')) {
       const dAng = Math.atan2(pl.dashDirY || Math.sin(pl.aimAngle), pl.dashDirX || Math.cos(pl.aimAngle));
-      g.lineStyle(3.0, 0x38bdf8, 0.88);
+      g.lineStyle(5.2, 0x141019, 0.78);
       g.beginPath();
       g.arc(pl.x, pl.y, pl.radius + 10, dAng - 1.05, dAng + 1.05, false);
+      g.strokePath();
+      g.lineStyle(3.0, 0x38bdf8, 0.92);
+      g.beginPath();
+      g.arc(pl.x, pl.y, pl.radius + 10, dAng - 1.05, dAng + 1.05, false);
+      g.strokePath();
+      g.lineStyle(1.4, 0xfffdf5, 0.96);
+      g.beginPath();
+      g.arc(pl.x, pl.y, pl.radius + 11, dAng - 0.85, dAng + 0.85, false);
       g.strokePath();
     }
     if (
@@ -178,9 +213,11 @@ export function drawP1DBlessingActiveOverlays(
       pl.skillActiveTimer > 0 &&
       blessings.includes('vanguard_bastion_prism')
     ) {
-      g.lineStyle(2.4, 0xf97316, 0.86);
+      g.lineStyle(4.2, 0x141019, 0.72);
       g.strokeCircle(pl.x, pl.y, 34 + pulse * 0.4);
-      g.lineStyle(1.3, 0xfacc15, 0.65);
+      g.lineStyle(2.4, 0xf97316, 0.9);
+      g.strokeCircle(pl.x, pl.y, 34 + pulse * 0.4);
+      g.lineStyle(1.3, 0xfffdf5, 0.78);
       g.strokeCircle(pl.x, pl.y, 30);
     }
   }
@@ -190,18 +227,23 @@ export function drawP1DBlessingActiveOverlays(
     const z = skillZones[i]!;
     if (z.ttlSec <= 0) continue;
     if (z.vortex) {
-      g.lineStyle(1.5, 0x60a5fa, 0.52);
-      g.strokeCircle(z.x, z.y, Math.max(16, z.radius * 0.55 + pulse));
+      floorG.lineStyle(1.5, 0x60a5fa, 0.52);
+      floorG.strokeCircle(z.x, z.y, Math.max(16, z.radius * 0.55 + pulse));
     }
     if (z.linkedZoneId && !z.isTwinSecondary) {
       const partner = skillZones.find((o) => o.id === z.linkedZoneId && o.ttlSec > 0);
       if (partner) {
-        g.lineStyle(4.2, 0xc084fc, 0.75);
+        g.lineStyle(6.0, 0x141019, 0.78);
         g.beginPath();
         g.moveTo(z.x, z.y);
         g.lineTo(partner.x, partner.y);
         g.strokePath();
-        g.lineStyle(1.8, 0xfef08a, 0.92);
+        g.lineStyle(3.4, 0xc084fc, 0.88);
+        g.beginPath();
+        g.moveTo(z.x, z.y);
+        g.lineTo(partner.x, partner.y);
+        g.strokePath();
+        g.lineStyle(1.5, 0xfffdf5, 0.95);
         g.beginPath();
         g.moveTo(z.x, z.y);
         g.lineTo(partner.x, partner.y);
@@ -216,8 +258,8 @@ export function drawP1DBlessingActiveOverlays(
     if (s1.hp <= 0 || s1.ttlSec <= 0) continue;
     if (s1.kind === 'tesla_turret') {
       if (s1.selfDestruct) {
-        g.lineStyle(2.0, 0xef4444, 0.85);
-        g.strokeCircle(s1.x, s1.y, s1.radius + 5 + pulse * 0.4);
+        floorG.lineStyle(2.0, 0xf97316, 0.85);
+        floorG.strokeCircle(s1.x, s1.y, s1.radius + 5 + pulse * 0.4);
       }
       for (let j = i + 1; j < summons.length; j++) {
         const s2 = summons[j]!;
@@ -227,12 +269,17 @@ export function drawP1DBlessingActiveOverlays(
           s2.ttlSec > 0 &&
           s1.ownerPlayerId === s2.ownerPlayerId
         ) {
-          g.lineStyle(3.0, 0x38bdf8, 0.72);
+          g.lineStyle(5.0, 0x141019, 0.74);
           g.beginPath();
           g.moveTo(s1.x, s1.y);
           g.lineTo(s2.x, s2.y);
           g.strokePath();
-          g.lineStyle(1.4, 0xfacc15, 0.92);
+          g.lineStyle(2.8, 0x38bdf8, 0.86);
+          g.beginPath();
+          g.moveTo(s1.x, s1.y);
+          g.lineTo(s2.x, s2.y);
+          g.strokePath();
+          g.lineStyle(1.3, 0xfacc15, 0.94);
           g.beginPath();
           g.moveTo(s1.x, s1.y);
           g.lineTo(s2.x, s2.y);
@@ -241,17 +288,17 @@ export function drawP1DBlessingActiveOverlays(
       }
     } else if (s1.kind === 'sacred_tree') {
       if (s1.sacredGrove) {
-        g.lineStyle(1.8, 0x2dd4bf, 0.62);
-        g.strokeCircle(s1.x, s1.y, s1.auraRadius);
+        floorG.lineStyle(1.8, 0x2dd4bf, 0.62);
+        floorG.strokeCircle(s1.x, s1.y, s1.auraRadius);
       }
       if (s1.poisonRoots) {
-        g.lineStyle(1.6, 0x4ade80, 0.75);
-        g.strokeCircle(s1.x, s1.y, s1.radius + 7);
+        floorG.lineStyle(1.6, 0x4ade80, 0.75);
+        floorG.strokeCircle(s1.x, s1.y, s1.radius + 7);
       }
     }
   }
 
-  // 5. Enemies: Ranger Prey Chain crimson links & Heavy Pinball rebound ring
+  // 5. Enemies: Ranger Prey Chain Chiaroscuro links & Heavy Pinball rebound ring
   const markedEnemies = anyPreyChainOwner
     ? enemies.filter((e) => e.hp > 0 && e.markedTimer > 0)
     : [];
@@ -260,11 +307,16 @@ export function drawP1DBlessingActiveOverlays(
     for (let j = i + 1; j < markedEnemies.length; j++) {
       const b = markedEnemies[j]!;
       if (distance(a.x, a.y, b.x, b.y) <= 220) {
-        g.lineStyle(2.0, 0xef4444, 0.78);
-        g.beginPath();
-        g.moveTo(a.x, a.y);
-        g.lineTo(b.x, b.y);
-        g.strokePath();
+        floorG.lineStyle(3.6, 0x141019, 0.65);
+        floorG.beginPath();
+        floorG.moveTo(a.x, a.y);
+        floorG.lineTo(b.x, b.y);
+        floorG.strokePath();
+        floorG.lineStyle(1.8, 0xfacc15, 0.82);
+        floorG.beginPath();
+        floorG.moveTo(a.x, a.y);
+        floorG.lineTo(b.x, b.y);
+        floorG.strokePath();
       }
     }
   }
@@ -311,6 +363,62 @@ const COLOR_BY_P1D_KIND: Readonly<Record<P1DBlessingVfxKind, number>> = {
   druid_poison_root_whip: 0x4ade80,
 };
 
+const NOVA_KEY_BY_P1D_KIND: Partial<Record<P1DBlessingVfxKind, ShaderNovaKey>> = {
+  table_tech_rocket_launch: 'fx_sh_shrapnel_corona',
+  table_tech_blank_nova: 'fx_sh_nova_cryo',
+  dash_tidal_ram_hit: 'fx_sh_vortex_gale',
+  reload_tediore_chuck: 'fx_sh_shrapnel_corona',
+  reload_frost_nova: 'fx_sh_nova_cryo',
+  reload_magnet_vortex: 'fx_sh_vortex_gale',
+  bullet_ricochet_boom: 'fx_sh_shrapnel_corona',
+  ranger_arrow_wall_blast: 'fx_sh_spore_cloud',
+  druid_poison_root_whip: 'fx_sh_bloom_briar',
+};
+
+function dispatchP1DShaderFlipbook(
+  scene: object,
+  kind: P1DBlessingVfxKind,
+  x: number,
+  y: number,
+  radius: number,
+  angle: number,
+): void {
+  const fx = (scene as { fx?: CombatFxManager }).fx;
+  if (!fx) return;
+  if (kind === 'druid_poison_root_whip') {
+    fx.spawnShaderSlash?.(x, y, Math.max(54, radius), angle, 'fx_sh_slash_emerald');
+    fx.spawnShaderNova?.(x, y, Math.max(38, radius * 0.65), 'fx_sh_bloom_briar');
+    return;
+  }
+  const novaKey = NOVA_KEY_BY_P1D_KIND[kind];
+  if (novaKey) {
+    fx.spawnShaderNova?.(x, y, Math.max(36, radius), novaKey);
+    return;
+  }
+  if (kind === 'table_tech_prism_split') {
+    fx.spawnShaderCone?.(x, y, Math.max(48, radius), angle);
+    fx.spawnShaderNova?.(x, y, Math.max(36, radius * 0.65), 'fx_sh_arcane_sigil', {
+      tint: 0x67e8f9,
+    });
+    return;
+  }
+  if (kind === 'reload_repulsor_shock') {
+    fx.spawnShaderCone?.(x, y, Math.max(48, radius), angle);
+    return;
+  }
+  if (kind === 'vanguard_shield_charge') {
+    if (fx.spawnShaderDirectional) {
+      fx.spawnShaderDirectional(x, y, Math.max(58, radius), angle, 'fx_sh_aegis_crest');
+    } else {
+      fx.spawnShaderSlash?.(x, y, Math.max(54, radius), angle, 'fx_sh_slash_steel');
+    }
+    return;
+  }
+  if (kind === 'bullet_coop_arc_relay') {
+    fx.spawnShaderNova?.(x, y, Math.max(40, radius * 0.65), 'fx_sh_anvil_storm');
+  }
+}
+
 /**
  * Spawns deterministic transient VFX for explicit P1D blessing event kinds or matching SimEvents.
  */
@@ -334,19 +442,22 @@ export function spawnP1DBlessingEventFx(
     };
     const x = raw.x ?? 0;
     const y = raw.y ?? 0;
+    const radius = raw.radius ?? 72;
+    const angle = raw.angle ?? 0;
     const color = COLOR_BY_P1D_KIND[kind] ?? 0xfacc15;
     pushP1DShape(scene, {
       kind,
       x,
       y,
-      x2: raw.x2 ?? x + Math.cos(raw.angle ?? 0) * 64,
-      y2: raw.y2 ?? y + Math.sin(raw.angle ?? 0) * 64,
-      radius: raw.radius ?? 72,
-      angle: raw.angle ?? 0,
+      x2: raw.x2 ?? x + Math.cos(angle) * 64,
+      y2: raw.y2 ?? y + Math.sin(angle) * 64,
+      radius,
+      angle,
       color,
       ttlSec: 0.34,
       maxTtlSec: 0.34,
     });
+    dispatchP1DShaderFlipbook(scene, kind, x, y, radius, angle);
     return true;
   }
 
@@ -378,15 +489,17 @@ export function spawnP1DBlessingEventFx(
     const cf = ev as Extract<SimEvent, { kind: 'cover_flipped' }>;
     const pl = activeSim.getPlayerById(cf.playerId);
     if (pl?.blessingIds.includes('table_tech_blank_nova')) {
+      const blastR = Math.max(160, cf.radius);
       pushP1DShape(scene, {
         kind: 'table_tech_blank_nova',
         x: cf.x,
         y: cf.y,
-        radius: Math.max(160, cf.radius),
+        radius: blastR,
         color: 0x38bdf8,
         ttlSec: 0.38,
         maxTtlSec: 0.38,
       });
+      dispatchP1DShaderFlipbook(scene, 'table_tech_blank_nova', cf.x, cf.y, blastR, 0);
     }
   } else if (ev.kind === 'perfect_reload' || ev.kind === 'tactical_vent') {
     const pr = ev as Extract<SimEvent, { kind: 'perfect_reload' | 'tactical_vent' }>;
@@ -401,6 +514,7 @@ export function spawnP1DBlessingEventFx(
         ttlSec: 0.35,
         maxTtlSec: 0.35,
       });
+      dispatchP1DShaderFlipbook(scene, 'reload_frost_nova', pr.x, pr.y, 110, 0);
     }
     if (pl?.blessingIds.includes('reload_repulsor_shock')) {
       pushP1DShape(scene, {
@@ -413,6 +527,7 @@ export function spawnP1DBlessingEventFx(
         ttlSec: 0.32,
         maxTtlSec: 0.32,
       });
+      dispatchP1DShaderFlipbook(scene, 'reload_repulsor_shock', pr.x, pr.y, 165, pl.aimAngle);
     }
     if (allowStressSfx && 'camFocusX' in scene) {
       const gs = scene as GameScene;
@@ -442,17 +557,19 @@ export function spawnP1DBlessingEventFx(
 }
 
 /**
- * Renders transient P1D blessing shapes inside `updateAndDrawWeaponV2Overlays`.
+ * Renders transient P1D blessing shapes inside `updateAndDrawWeaponV2Overlays` (1:1 hollow Chiaroscuro sigils).
  */
 export function drawP1DTransientShape(
   g: Phaser.GameObjects.Graphics,
   s: TransientWeaponV2Shape,
   progress: number,
   alpha: number,
+  groundG?: Phaser.GameObjects.Graphics,
 ): boolean {
   if (!(P1D_BLESSING_EVENT_KINDS as readonly string[]).includes(s.kind)) {
     return false;
   }
+  const floorG = groundG ?? g;
 
   if (
     s.kind === 'dash_flame_shackle' ||
@@ -462,29 +579,45 @@ export function drawP1DTransientShape(
   ) {
     const x2 = s.x2 ?? s.x + Math.cos(s.angle ?? 0) * s.radius;
     const y2 = s.y2 ?? s.y + Math.sin(s.angle ?? 0) * s.radius;
-    g.lineStyle(3.2, s.color, alpha * 0.9);
+    g.lineStyle(5.2, 0x141019, alpha * 0.72);
     g.beginPath();
     g.moveTo(s.x, s.y);
     g.lineTo(x2, y2);
     g.strokePath();
-    g.strokeCircle(x2, y2, 10 + progress * 12);
+    g.lineStyle(2.8, s.color, alpha * 0.94);
+    g.beginPath();
+    g.moveTo(s.x, s.y);
+    g.lineTo(x2, y2);
+    g.strokePath();
+    floorG.lineStyle(2.2, s.color, alpha * 0.88);
+    floorG.strokeCircle(x2, y2, 10 + progress * 12);
     return true;
   }
 
   if (s.kind === 'reload_repulsor_shock' || s.kind === 'table_tech_prism_split') {
     const ang = s.angle ?? 0;
-    const r = s.radius * (0.35 + progress * 0.65);
-    g.lineStyle(3.0, s.color, alpha * 0.9);
+    const r = s.radius * (0.38 + progress * 0.62);
+    g.lineStyle(5.4, 0x141019, alpha * 0.75);
     g.beginPath();
     g.arc(s.x, s.y, r, ang - 1.1, ang + 1.1, false);
+    g.strokePath();
+    g.lineStyle(3.0, s.color, alpha * 0.94);
+    g.beginPath();
+    g.arc(s.x, s.y, r, ang - 1.1, ang + 1.1, false);
+    g.strokePath();
+    g.lineStyle(1.4, 0xfffdf5, alpha * 0.95);
+    g.beginPath();
+    g.arc(s.x, s.y, r - 2, ang - 0.88, ang + 0.88, false);
     g.strokePath();
     return true;
   }
 
-  const r = Math.max(8, s.radius * (0.3 + progress * 0.7));
-  g.lineStyle(2.6, s.color, alpha * 0.88);
-  g.strokeCircle(s.x, s.y, r);
-  g.fillStyle(s.color, alpha * 0.16);
-  g.fillCircle(s.x, s.y, r * 0.65);
+  const r = Math.max(8, s.radius * (0.38 + progress * 0.62));
+  floorG.fillStyle(s.color, alpha * 0.05);
+  floorG.fillCircle(s.x, s.y, r);
+  floorG.lineStyle(4.2, 0x141019, alpha * 0.7);
+  floorG.strokeCircle(s.x, s.y, r);
+  floorG.lineStyle(2.4, s.color, alpha * 0.92);
+  floorG.strokeCircle(s.x, s.y, r);
   return true;
 }

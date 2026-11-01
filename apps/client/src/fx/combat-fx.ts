@@ -8,6 +8,11 @@ import type Phaser from 'phaser';
 import { hexToNum, PALETTE, PLAYER_SLOT_COLORS } from '../art/palette.js';
 import { RIG_DEFS_BY_ID } from '../art/rig-defs.js';
 import { TextureBaker } from '../art/texture-baker.js';
+import type {
+  ShaderDirectionalKey,
+  ShaderNovaKey,
+  ShaderSlashKey,
+} from '../art/texture-baker-shader-fx.js';
 import { getClientFreezeRandom } from '../core/visual-query.js';
 import { graphicsSettings } from '../ui/graphics-settings.js';
 import {
@@ -38,25 +43,28 @@ import {
   activateParticle,
   applyBiomeToAmbientSlot,
   type CoalescedReactionBannerState,
+  type ShaderConeSpawnOptions,
+  type ShaderDirectionalSpawnOptions,
+  type ShaderLanceSpawnOptions,
+  type ShaderNovaSpawnOptions,
+  type ShaderSlashSpawnOptions,
   spawnElementalReactionFxImpl,
   spawnExplosionBurstImpl,
   spawnFloatingAlertImpl,
   spawnHitSparksImpl,
   spawnMuzzleFlashAndCasingImpl,
+  spawnShaderConeImpl,
+  spawnShaderDirectionalImpl,
+  spawnShaderLanceImpl,
+  spawnShaderNovaImpl,
+  spawnShaderSlashImpl,
 } from './combat-fx-spawners.js';
 
 export * from './combat-fx-pools.js';
 export * from './combat-fx-spawners.js';
 
 /**
- * Object-pooled Combat FX, Decals, Dash Afterimages, Clear Biome Ambient Particles & Game Feel ("Juice") system:
- * - Hit-stop freeze frames (30-60ms) & boss kill dramatic slow-mo (0.42s)
- * - Trauma-based screen shake (Perlin-like harmonic noise)
- * - Pooled floating damage numbers & coalesced elemental combo callouts
- * - Additive (BlendMode.ADD, depth > 34) combat FX for sparks, spark trails, impact/shockwave rings, and multi-layer muzzle flashes
- * - Physical shell casings with floor drop shadows (depth 19)
- * - Persistent floor decal ring-buffer (scorch marks, monster splatters, frost scars)
- * - Clear biome ambient particles (B1 leaves + fireflies, B2 60-80 2-layer parallax snow, B3 <= 4px rising embers, torch dust motes; ZERO mist)
+ * Object-pooled Combat FX, Chiaroscuro 1:1 Shader Flipbooks, Decals, Dash Afterimages, Clear Biome Ambient & Juice system.
  */
 export class CombatFxManager {
   private readonly sceneRef: Phaser.Scene;
@@ -76,6 +84,7 @@ export class CombatFxManager {
   public trauma = 0;
   public shakeTime = 0;
   public popupSpreadIndex = 0;
+  public slashFlipToggle = false;
   public currentBiome: 1 | 2 | 3 = 1;
   private blizzardIntense = false;
   public allowFreezeAmbientMotion = false;
@@ -153,6 +162,58 @@ export class CombatFxManager {
     for (let i = 0; i < limit; i++) {
       applyBiomeToAmbientSlot(this.ambientPool[i]!, i, biome, tier, isBlizzard, invBake);
     }
+  }
+
+  public spawnShaderNova(
+    x: number,
+    y: number,
+    radiusPx: number,
+    novaKey: ShaderNovaKey = 'fx_sh_nova_solar',
+    options?: ShaderNovaSpawnOptions,
+  ): void {
+    spawnShaderNovaImpl.call(this, x, y, radiusPx, novaKey, options);
+  }
+
+  public spawnShaderSlash(
+    x: number,
+    y: number,
+    rangePx: number,
+    angleRad: number,
+    slashKey: ShaderSlashKey = 'fx_sh_slash_steel',
+    options?: ShaderSlashSpawnOptions,
+  ): void {
+    spawnShaderSlashImpl.call(this, x, y, rangePx, angleRad, slashKey, options);
+  }
+
+  public spawnShaderCone(
+    x: number,
+    y: number,
+    reachPx: number,
+    angleRad: number,
+    options?: ShaderConeSpawnOptions,
+  ): void {
+    spawnShaderConeImpl.call(this, x, y, reachPx, angleRad, options);
+  }
+
+  public spawnShaderLance(
+    x: number,
+    y: number,
+    lengthPx: number,
+    angleRad: number,
+    options?: ShaderLanceSpawnOptions,
+  ): void {
+    spawnShaderLanceImpl.call(this, x, y, lengthPx, angleRad, options);
+  }
+
+  public spawnShaderDirectional(
+    x: number,
+    y: number,
+    reachPx: number,
+    angleRad: number,
+    key: ShaderDirectionalKey,
+    options?: ShaderDirectionalSpawnOptions,
+  ): void {
+    spawnShaderDirectionalImpl.call(this, x, y, reachPx, angleRad, key, options);
   }
 
   public spawnFloatingAlert(
@@ -387,8 +448,11 @@ export class CombatFxManager {
     }
     if (status === 'frozen' || status === 'shatter') {
       this.spawnFloorDecal('frost', x, y, status === 'shatter' ? 1.2 : 0.9);
+      if (status === 'shatter') {
+        this.spawnShaderNova(x, y, 52, 'fx_sh_nova_cryo', { ttl: 0.26, sparkCount: 4 });
+      }
       const invBake = 1 / TextureBaker.getBakeScale();
-      const shardCount = status === 'shatter' ? 10 : 5;
+      const shardCount = status === 'shatter' ? 8 : 5;
       for (let i = 0; i < shardCount; i++) {
         const p = this.acquireParticleSlot();
         if (!p) break;
@@ -402,7 +466,7 @@ export class CombatFxManager {
           vy: Math.sin(ang) * spd - 20,
           vr: 10,
           ttl: 0.35,
-          startScale: invBake * 1.1,
+          startScale: invBake * 1.05,
           endScale: invBake * 0.3,
           startAlpha: 1,
           gravityY: 120,
@@ -511,32 +575,26 @@ export class CombatFxManager {
     this.addTrauma(0.85);
 
     const invBake = 1 / TextureBaker.getBakeScale();
+    const novaKey: ShaderNovaKey =
+      defId === 'kryssa_ice_queen'
+        ? 'fx_sh_nova_cryo'
+        : defId === 'forge_titan'
+          ? 'fx_sh_geyser_plume'
+          : defId === 'spore_king'
+            ? 'fx_sh_spore_cloud'
+            : 'fx_sh_nova_solar';
     const primaryHex =
       defId === 'kryssa_ice_queen'
         ? PALETTE.CYAN_FROST
         : defId === 'forge_titan'
           ? PALETTE.FLAME_ORANGE
-          : PALETTE.SOLAR_GOLD;
+          : defId === 'spore_king'
+            ? PALETTE.LIME_GLOW
+            : PALETTE.SOLAR_GOLD;
 
-    for (let r = 0; r < 2; r++) {
-      const ring = this.acquireParticleSlot();
-      if (!ring) break;
-      activateParticle(ring, {
-        textureKey: 'fx_shockwave_ring',
-        x,
-        y,
-        vr: r === 0 ? 2.2 : -1.8,
-        ttl: 0.45 + r * 0.12,
-        startScale: invBake * (0.25 + r * 0.12),
-        endScale: invBake * (2.6 - r * 0.45),
-        startAlpha: 0.98,
-        tint: hexToNum(r === 0 ? primaryHex : PALETTE.BONE_WHITE),
-        depth: 56 + r,
-        easeCurve: 'easeOutCubic',
-      });
-    }
+    this.spawnShaderNova(x, y, 132, novaKey, { ttl: 0.48, depth: 56, sparkCount: 0 });
 
-    const count = 20;
+    const count = 18;
     for (let i = 0; i < count; i++) {
       const p = this.acquireParticleSlot();
       if (!p) break;
@@ -551,8 +609,8 @@ export class CombatFxManager {
         vy: Math.sin(ang) * spd,
         vr: isTrail ? 0 : 8,
         ttl: 0.44,
-        startScale: invBake * 1.38,
-        endScale: invBake * 0.22,
+        startScale: invBake * 1.28,
+        endScale: invBake * 0.2,
         damping: 4.2,
         rotation: ang,
         tint: hexToNum(i % 2 === 0 ? primaryHex : PALETTE.SOLAR_GOLD),
@@ -659,36 +717,89 @@ export class CombatFxManager {
     angleRad: number,
     isShotgun = false,
     isTeammate = false,
+    weaponId?: string,
   ): void {
-    spawnMuzzleFlashAndCasingImpl.call(this, x, y, angleRad, isShotgun, isTeammate);
+    spawnMuzzleFlashAndCasingImpl.call(this, x, y, angleRad, isShotgun, isTeammate, weaponId);
   }
 
-  public spawnMeleeSlash(x: number, y: number, angleRad: number, isTeammate = false): void {
-    const invBake = 1 / TextureBaker.getBakeScale();
-    const slash = this.acquireParticleSlot();
-    if (!slash) return;
-    const alphaMult = isTeammate
-      ? clamp(graphicsSettings.getState().teammateFxOpacity, 0.25, 1.0)
-      : 1.0;
-
-    activateParticle(slash, {
-      textureKey: 'fx_slash_arc',
-      x: x + Math.cos(angleRad) * 8,
-      y: y + Math.sin(angleRad) * 8,
-      vx: Math.cos(angleRad) * 40,
-      vy: Math.sin(angleRad) * 40,
-      vr: 0,
-      ttl: 0.14,
-      startScale: invBake * 0.95,
-      endScale: invBake * 1.18,
-      startAlpha: 0.95 * alphaMult,
-      gravityY: 0,
-      damping: 6,
-      rotation: angleRad,
-      blendMode: 'ADD',
+  public spawnMeleeSlash(
+    x: number,
+    y: number,
+    angleRad: number,
+    isTeammate = false,
+    rangeOrOptions:
+      | number
+      | { weaponId?: string; comboStep?: number; rangePx?: number } = 68,
+    slashKeyArg: ShaderSlashKey = 'fx_sh_slash_steel',
+  ): void {
+    const opts = typeof rangeOrOptions === 'object' ? rangeOrOptions : undefined;
+    const baseRangePx =
+      typeof rangeOrOptions === 'number' ? rangeOrOptions : (opts?.rangePx ?? 68);
+    const comboStep = opts?.comboStep;
+    const weaponId = opts?.weaponId;
+    const resolvedKey: ShaderSlashKey =
+      weaponId === 'emerald_cleaver'
+        ? 'fx_sh_slash_emerald'
+        : weaponId === 'berserker_axe'
+          ? 'fx_sh_slash_crimson'
+          : weaponId === 'thunder_hammer'
+            ? 'fx_sh_slash_thunder'
+            : slashKeyArg;
+    const rangePx = comboStep === 2 ? baseRangePx * 1.16 : baseRangePx;
+    let flipY: boolean;
+    if (typeof comboStep === 'number') {
+      flipY = comboStep === 1;
+    } else {
+      this.slashFlipToggle = !this.slashFlipToggle;
+      flipY = !this.slashFlipToggle;
+    }
+    this.spawnShaderSlash(x, y, rangePx, angleRad, resolvedKey, {
+      ttl: comboStep === 2 ? 0.23 : 0.19,
+      isTeammate,
+      flipY,
       depth: 52,
-      easeCurve: 'easeOutCubic',
     });
+
+    // 3rd-hit combo finishers (comboStep === 2) emit bespoke weapon-signature flourishes
+    if (comboStep === 2) {
+      if (weaponId === 'emerald_cleaver') {
+        this.spawnShaderSlash(
+          x,
+          y,
+          rangePx * 0.94,
+          angleRad + (flipY ? -0.26 : 0.26),
+          'fx_sh_slash_emerald',
+          {
+            ttl: 0.21,
+            isTeammate,
+            flipY: !flipY,
+            depth: 53,
+          },
+        );
+      } else if (weaponId === 'berserker_axe') {
+        this.spawnHitSparks(
+          x + Math.cos(angleRad) * rangePx * 0.72,
+          y + Math.sin(angleRad) * rangePx * 0.72,
+          angleRad + Math.PI,
+          { isCrit: true, element: 'burn', count: 6, isTeammate },
+        );
+      } else if (weaponId === 'thunder_hammer') {
+        this.spawnHitSparks(
+          x + Math.cos(angleRad) * rangePx * 0.72,
+          y + Math.sin(angleRad) * rangePx * 0.72,
+          angleRad + Math.PI,
+          { isCrit: true, element: 'shock', count: 6, isTeammate },
+        );
+      } else {
+        this.spawnShaderDirectional(x, y, rangePx * 0.92, angleRad, 'fx_sh_aegis_crest', {
+          ttl: 0.22,
+          isTeammate,
+          tint: 0xfef08a,
+          forwardOffsetRatio: 0.22,
+          depth: 53,
+        });
+      }
+    }
   }
 
   public spawnHitSparks(
@@ -801,14 +912,14 @@ export class CombatFxManager {
       }
     }
 
-    this.spawnHitSparks(x, y, 0, { isCrit: true, count: 10 });
+    this.spawnHitSparks(x, y, 0, { isCrit: true, count: 8 });
   }
 
   public spawnExplosionBurst(
     x: number,
     y: number,
     radius: number,
-    colorHex: string = PALETTE.TOXIC_PURPLE,
+    colorHex: string = PALETTE.FLAME_ORANGE,
   ): void {
     spawnExplosionBurstImpl.call(this, x, y, radius, colorHex);
   }

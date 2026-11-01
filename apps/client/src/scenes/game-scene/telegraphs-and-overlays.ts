@@ -8,10 +8,19 @@ import {
 } from '@ashen-pact/shared';
 import Phaser from 'phaser';
 import { hexToNum, PALETTE } from '../../art/palette.js';
+import { getFreezeVisualTimeSec } from '../../core/visual-query.js';
 import {
   computeBossKillFlashAlpha,
   computeEnemySpawnCircleSpec,
 } from '../../fx/combat-fx.js';
+import { isVisualFreezeActive } from '../../fx/combat-fx-blessings-p1d.js';
+import {
+  drawEngineerTurretChiaroscuro,
+  drawInscribedElementalistZone,
+  drawRangerPredatorMarkChiaroscuro,
+  drawSacredTreeChiaroscuro,
+  drawVanguardRubyPhalanxShield,
+} from '../../fx/combat-fx-classes.js';
 import {
   drawEnemyBatch1Indicators,
   drawSeedGunLifeBlossom,
@@ -44,6 +53,10 @@ export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, 
   }
   const g = this.telegraphGraphics;
   g.clear();
+  const floorG = this.groundHazardGraphics ?? g;
+  if (this.groundHazardGraphics) {
+    this.groundHazardGraphics.clear();
+  }
   const view = this.cameras.main.worldView;
   const hasView = view && view.width > 0;
   const viewLeft = hasView ? view.x - 48 : -9999;
@@ -52,10 +65,13 @@ export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, 
   const viewBottom = hasView ? view.y + view.height + 48 : 9999;
   const hudSafeTop = hasView ? view.y + 72 : 72;
   const hudSafeBottom = hasView ? view.y + view.height - 62 : 478;
+  const freezeOverlay = isVisualFreezeActive(this);
+  const overlayTimeSec = freezeOverlay ? getFreezeVisualTimeSec(sim.tick / 60, true) : sim.tick / 60;
+  const overlayTick = freezeOverlay ? overlayTimeSec * 60 : sim.tick;
 
   // 0a. Hub Campfire & Statue Pedestals (Doanh Trại)
   if (!isStress) {
-    drawWorldWeaponSalvageRing(g, sim, p, sim.tick / 60);
+    drawWorldWeaponSalvageRing(floorG, sim, p, overlayTimeSec);
     drawP2BWorldOverlays(this, g, sim, playerX, playerY);
   }
   if (sim.inHub) {
@@ -71,7 +87,7 @@ export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, 
     // Central Campfire
     const fireX = sim.map.width * 0.5;
     const fireY = sim.map.height * 0.5 + 32;
-    const flicker = Math.sin(sim.tick * 0.22) * 3;
+    const flicker = Math.sin(overlayTick * 0.22) * 3;
     g.fillStyle(hexToNum(PALETTE.SLATE_DARK), 0.95);
     g.lineStyle(2, hexToNum(PALETTE.INK_DARK), 1);
     g.fillCircle(fireX, fireY + 4, 18);
@@ -98,11 +114,11 @@ export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, 
     }
 
     if (pl.lifeState === 'downed') {
-      const pulseR = 24 + Math.sin(sim.tick * 0.2) * 3;
-      g.fillStyle(hexToNum(PALETTE.RUBY_DARK), 0.35);
-      g.fillCircle(px, py + 4, pulseR);
-      g.lineStyle(2.5, hexToNum(PALETTE.CRIMSON_BRIGHT), 0.9);
-      g.strokeCircle(px, py + 4, pulseR);
+      const pulseR = 24 + Math.sin(overlayTick * 0.2) * 3;
+      floorG.fillStyle(hexToNum(PALETTE.RUBY_DARK), 0.08);
+      floorG.fillCircle(px, py + 4, pulseR);
+      floorG.lineStyle(2.5, hexToNum(PALETTE.CRIMSON_BRIGHT), 0.9);
+      floorG.strokeCircle(px, py + 4, pulseR);
 
       if (pl.reviveProgress > 0) {
         g.lineStyle(4, hexToNum(PALETTE.LIME_GLOW), 1);
@@ -121,139 +137,46 @@ export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, 
 
     if (pl.skillActiveTimer > 0) {
       if (pl.characterId === 'vanguard') {
-        const halfArc = pl.blessingIds.includes('vanguard_bastion_prism')
-          ? Math.PI
-          : (60 * Math.PI) / 180;
-        const startA = pl.aimAngle - halfArc;
-        const endA = pl.aimAngle + halfArc;
-        const r = pl.blessingIds.includes('vanguard_bastion_prism') ? 32 : 38;
-
-        g.lineStyle(7, hexToNum(PALETTE.INK_DARK), 0.85);
-        g.beginPath();
-        g.arc(px, py, r, startA, endA, false);
-        g.strokePath();
-
-        g.lineStyle(4, hexToNum(PALETTE.CRIMSON_BRIGHT), 0.95);
-        g.beginPath();
-        g.arc(px, py, r, startA, endA, false);
-        g.strokePath();
-
-        g.lineStyle(2, hexToNum(PALETTE.SOLAR_GOLD), 0.9);
-        g.beginPath();
-        g.arc(px, py, r - 4, startA, endA, false);
-        g.strokePath();
+        drawVanguardRubyPhalanxShield(
+          g,
+          px,
+          py,
+          pl.aimAngle,
+          pl.blessingIds.includes('vanguard_bastion_prism'),
+          pl.shieldStoredBullets ?? 0,
+          overlayTimeSec,
+        );
       }
     }
   }
 
-  // 1a. Phase 5 Elementalist Skill Zones (Vùng Cầu Nguyên Tố + Xoáy Nguyên Tố)
+  // 1a. Phase 5 Elementalist Skill Zones (Vùng Cầu Nguyên Tố + Xoáy Nguyên Tố — 1:1 inscribed arcane sigil at depth 16)
   for (let i = 0; i < sim.skillZones.length; i++) {
     const z = sim.skillZones[i]!;
     if (z.ttlSec <= 0) continue;
-    const elHex =
-      z.element === 'burn'
-        ? PALETTE.FLAME_ORANGE
-        : z.element === 'chill'
-          ? PALETTE.CYAN_FROST
-          : PALETTE.VOLT_YELLOW;
-    const col = hexToNum(elHex);
-    const pulse = Math.sin(sim.tick * 0.16 + z.id) * 3;
-
-    g.fillStyle(col, 0.15);
-    g.fillCircle(z.x, z.y, z.radius + pulse);
-    g.lineStyle(2.5, col, 0.88);
-    g.strokeCircle(z.x, z.y, z.radius + pulse);
-
-    if (z.vortex) {
-      g.lineStyle(1.8, hexToNum(PALETTE.BONE_WHITE), 0.55);
-      g.strokeCircle(z.x, z.y, z.radius * 0.62 - pulse);
-    }
-
-    // Floating elemental orb core
-    g.fillStyle(hexToNum(PALETTE.INK_DARK), 0.9);
-    g.fillCircle(z.x, z.y, 11);
-    g.fillStyle(col, 0.95);
-    g.fillCircle(z.x, z.y, 8);
-    g.fillStyle(hexToNum(PALETTE.BONE_WHITE), 0.9);
-    g.fillCircle(z.x - 2, z.y - 2, 3);
+    drawInscribedElementalistZone(floorG, g, z, overlayTick);
   }
 
   // 1b. Phase 5 Summoned Entities (Druid Sacred Tree & Engineer Tesla / Ancient Turrets)
+  const turretClockMs = freezeOverlay
+    ? overlayTimeSec * 1000
+    : (this.time?.now ?? sim.tick * 16.67);
   for (let i = 0; i < sim.summons.length; i++) {
     const sum = sim.summons[i]!;
     if (sum.hp <= 0 || sum.ttlSec <= 0) continue;
 
     if (sum.kind === 'sacred_tree') {
-      const pulse = Math.sin(sim.tick * 0.12 + sum.id) * 3;
-      g.fillStyle(hexToNum(PALETTE.LIME_GLOW), 0.12);
-      g.fillCircle(sum.x, sum.y, sum.auraRadius + pulse);
-      g.lineStyle(2.2, hexToNum(PALETTE.LIME_GLOW), 0.82);
-      g.strokeCircle(sum.x, sum.y, sum.auraRadius + pulse);
-
-      // Tree trunk & glowing emerald canopy
-      g.fillStyle(hexToNum(PALETTE.INK_DARK), 0.95);
-      g.fillCircle(sum.x, sum.y, 20);
-      g.fillStyle(hexToNum(PALETTE.LEATHER_MID), 1);
-      g.fillRoundedRect(sum.x - 6, sum.y - 4, 12, 18, 3);
-      g.fillStyle(hexToNum(PALETTE.GOBLIN_GREEN), 0.98);
-      g.fillCircle(sum.x, sum.y - 8, 16);
-      g.fillStyle(hexToNum(PALETTE.LIME_GLOW), 0.95);
-      g.fillCircle(sum.x - 4, sum.y - 11, 9);
-      g.lineStyle(2.5, hexToNum(PALETTE.INK_DARK), 1);
-      g.strokeCircle(sum.x, sum.y - 8, 16);
+      drawSacredTreeChiaroscuro(floorG, g, sum, overlayTick);
     } else if (sum.kind === 'life_blossom') {
       // Phase P1A Weapon: Súng Phóng Hạt Sinh Mệnh (seed_gun) blooming Life Bud & r=88px Toxic Spore Aura
-      drawSeedGunLifeBlossom(g, sum, sim.tick / 60);
+      drawSeedGunLifeBlossom(g, sum, overlayTimeSec, floorG);
     } else if (
       drawP4ASummonOverlay(this, g, sim, sum) ||
       drawP4BSummonOverlay(this, g, sim, sum)
     ) {
       continue;
     } else {
-      // Tesla Turret / Ancient Turret
-      const isAncient = sum.kind === 'ancient_turret';
-      const auraCol = hexToNum(isAncient ? PALETTE.SOLAR_GOLD : PALETTE.CYAN_FROST);
-      g.fillStyle(auraCol, 0.08);
-      g.fillCircle(sum.x, sum.y, sum.auraRadius);
-      g.lineStyle(1.6, auraCol, 0.55);
-      g.strokeCircle(sum.x, sum.y, sum.auraRadius);
-
-      // Turret base + rotating barrel
-      g.fillStyle(hexToNum(PALETTE.INK_DARK), 0.95);
-      g.fillCircle(sum.x, sum.y, 16);
-      g.fillStyle(hexToNum(PALETTE.STEEL_DARK), 1);
-      g.fillCircle(sum.x, sum.y, 13);
-      g.fillStyle(hexToNum(isAncient ? PALETTE.SOLAR_GOLD : PALETTE.BRASS_CORE), 1);
-      g.fillCircle(sum.x, sum.y, 8);
-
-      const barrelAng = this.time.now * 0.002 + sum.id;
-      const bx = sum.x + Math.cos(barrelAng) * 16;
-      const by = sum.y + Math.sin(barrelAng) * 16;
-      g.lineStyle(6, hexToNum(PALETTE.INK_DARK), 1);
-      g.beginPath();
-      g.moveTo(sum.x, sum.y);
-      g.lineTo(bx, by);
-      g.strokePath();
-      g.lineStyle(3.2, hexToNum(PALETTE.STEEL_LIGHT), 1);
-      g.beginPath();
-      g.moveTo(sum.x, sum.y);
-      g.lineTo(bx, by);
-      g.strokePath();
-
-      // EMP Charge Arc around Tesla Turret (Co-op Synergy indicator)
-      if (sum.charge > 0) {
-        g.lineStyle(3, hexToNum(PALETTE.VOLT_YELLOW), 0.95);
-        g.beginPath();
-        g.arc(
-          sum.x,
-          sum.y,
-          19,
-          -Math.PI / 2,
-          -Math.PI / 2 + Math.PI * 2 * clamp(sum.charge / 100, 0, 1),
-          false,
-        );
-        g.strokePath();
-      }
+      drawEngineerTurretChiaroscuro(floorG, g, sum, turretClockMs);
     }
 
     // Mini TTL / HP bar above summon
@@ -290,12 +213,12 @@ export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, 
     const plate = sim.pressurePlates[i]!;
     const isPressed = plate.pressed || sim.coopPuzzleCompleted;
     const plateCol = hexToNum(isPressed ? PALETTE.LIME_GLOW : PALETTE.SOLAR_GOLD);
-    g.fillStyle(hexToNum(isPressed ? PALETTE.FOREST_SHADE : PALETTE.SLATE_DARK), 0.92);
-    g.lineStyle(2.5, plateCol, 0.95);
-    g.fillRoundedRect(plate.x - 18, plate.y - 18, 36, 36, 6);
-    g.strokeRoundedRect(plate.x - 18, plate.y - 18, 36, 36, 6);
-    g.fillStyle(plateCol, isPressed ? 0.95 : 0.45);
-    g.fillCircle(plate.x, plate.y, 8);
+    floorG.fillStyle(hexToNum(isPressed ? PALETTE.FOREST_SHADE : PALETTE.SLATE_DARK), 0.92);
+    floorG.lineStyle(2.5, plateCol, 0.95);
+    floorG.fillRoundedRect(plate.x - 18, plate.y - 18, 36, 36, 6);
+    floorG.strokeRoundedRect(plate.x - 18, plate.y - 18, 36, 36, 6);
+    floorG.fillStyle(plateCol, isPressed ? 0.95 : 0.45);
+    floorG.fillCircle(plate.x, plate.y, 8);
   }
 
   for (let i = 0; i < sim.pushBlocks.length; i++) {
@@ -316,9 +239,11 @@ export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, 
   // 1f. Phase 6 Boss Forge Titan Expanding Shockwave Rings (Dash through with i-frames!)
   for (let i = 0; i < sim.shockwaveRings.length; i++) {
     const ring = sim.shockwaveRings[i]!;
-    g.lineStyle(ring.thickness * 0.55, hexToNum(PALETTE.FLAME_ORANGE), 0.45);
+    g.lineStyle(ring.thickness * 0.5 + 2.5, hexToNum(PALETTE.INK_DARK), 0.65);
     g.strokeCircle(ring.x, ring.y, ring.radius);
-    g.lineStyle(3.5, hexToNum(PALETTE.SOLAR_GOLD), 0.95);
+    g.lineStyle(ring.thickness * 0.45, hexToNum(PALETTE.FLAME_ORANGE), 0.72);
+    g.strokeCircle(ring.x, ring.y, ring.radius);
+    g.lineStyle(2.6, hexToNum(PALETTE.SOLAR_GOLD), 0.96);
     g.strokeCircle(ring.x, ring.y, ring.radius);
   }
 
@@ -341,15 +266,19 @@ export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, 
     const e = sim.enemies[i]!;
     if (e.hp <= 0) continue;
 
-    // Boss Phase 2 Burrow Telegraph Circle on floor under target position
+    // Boss Phase 2 Burrow Telegraph Circle on floor under target position (1:1 hollow Chiaroscuro danger ring)
     if (e.bossBurrowed) {
       const r = e.telegraphRadius || 84;
       const progress =
         e.telegraphDurationSec > 0 ? 1 - clamp(e.stateTimer / e.telegraphDurationSec, 0, 1) : 1;
-      g.fillStyle(hexToNum(PALETTE.CRIMSON_BRIGHT), 0.22 + progress * 0.22);
-      g.fillCircle(e.bossTargetX, e.bossTargetY, r * (0.3 + progress * 0.7));
-      g.lineStyle(3, hexToNum(PALETTE.CRIMSON_BRIGHT), 0.95);
-      g.strokeCircle(e.bossTargetX, e.bossTargetY, r);
+      floorG.fillStyle(hexToNum(PALETTE.CRIMSON_BRIGHT), 0.06 + progress * 0.04);
+      floorG.fillCircle(e.bossTargetX, e.bossTargetY, r);
+      floorG.lineStyle(1.8, hexToNum(PALETTE.CRIMSON_BRIGHT), 0.72);
+      floorG.strokeCircle(e.bossTargetX, e.bossTargetY, r * (0.28 + progress * 0.72));
+      floorG.lineStyle(4.6, hexToNum(PALETTE.INK_DARK), 0.74);
+      floorG.strokeCircle(e.bossTargetX, e.bossTargetY, r);
+      floorG.lineStyle(2.8, hexToNum(PALETTE.CRIMSON_BRIGHT), 0.96);
+      floorG.strokeCircle(e.bossTargetX, e.bossTargetY, r);
       continue;
     }
 
@@ -358,22 +287,24 @@ export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, 
       continue;
     }
 
-    // 0.8s Rotating Arcane Rune Summoning Circle + Short Vertical Light Pillar on Floor
+    // 0.8s Rotating 1:1 Arcane Rune Summoning Circle on Floor + Rising Motes
     if (e.aiState === 'spawning') {
       const progress = 1 - clamp(e.stateTimer / ENEMY_SPAWN_WARMUP_SEC, 0, 1);
       const spec = computeEnemySpawnCircleSpec(e.radius, progress, e.isElite, e.isBoss);
       const primaryNum = hexToNum(spec.primaryColorHex);
       const coreNum = hexToNum(spec.coreColorHex);
 
-      // 1. Outer & inner arcane rings
-      g.fillStyle(primaryNum, 0.18 + 0.16 * progress);
-      g.fillCircle(pos.x, pos.y, spec.outerRadius * progress);
-      g.lineStyle(2.4, primaryNum, 0.92);
-      g.strokeCircle(pos.x, pos.y, spec.outerRadius);
-      g.lineStyle(1.4, coreNum, 0.82);
-      g.strokeCircle(pos.x, pos.y, spec.innerRadius);
+      // 1. Outer & inner 1:1 arcane rings on floor (depth 16)
+      floorG.fillStyle(primaryNum, 0.05 + 0.04 * progress);
+      floorG.fillCircle(pos.x, pos.y, spec.outerRadius * progress);
+      floorG.lineStyle(3.8, hexToNum(PALETTE.INK_DARK), 0.68);
+      floorG.strokeCircle(pos.x, pos.y, spec.outerRadius);
+      floorG.lineStyle(2.4, primaryNum, 0.92);
+      floorG.strokeCircle(pos.x, pos.y, spec.outerRadius);
+      floorG.lineStyle(1.4, coreNum, 0.82);
+      floorG.strokeCircle(pos.x, pos.y, spec.innerRadius);
 
-      // 2. Inscribed counter-rotating hexagram (2 equilateral triangles) & orbiting rune ticks
+      // 2. Inscribed counter-rotating hexagram (2 equilateral triangles) & orbiting rune ticks on floor
       if (!isStress) {
         const triAngles: readonly [number, number] = [
           spec.runeRotationRad,
@@ -381,16 +312,16 @@ export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, 
         ];
         for (let tIdx = 0; tIdx < 2; tIdx++) {
           const baseAng = triAngles[tIdx]!;
-          g.lineStyle(1.3, tIdx === 0 ? primaryNum : coreNum, 0.78);
-          g.beginPath();
+          floorG.lineStyle(1.3, tIdx === 0 ? primaryNum : coreNum, 0.78);
+          floorG.beginPath();
           for (let v = 0; v <= 3; v++) {
             const ang = baseAng + ((v % 3) * Math.PI * 2) / 3;
             const vx = pos.x + Math.cos(ang) * spec.innerRadius;
             const vy = pos.y + Math.sin(ang) * spec.innerRadius;
-            if (v === 0) g.moveTo(vx, vy);
-            else g.lineTo(vx, vy);
+            if (v === 0) floorG.moveTo(vx, vy);
+            else floorG.lineTo(vx, vy);
           }
-          g.strokePath();
+          floorG.strokePath();
         }
 
         for (let rIdx = 0; rIdx < spec.runeCount; rIdx++) {
@@ -399,31 +330,20 @@ export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, 
           const ry1 = pos.y + Math.sin(rAng) * (spec.innerRadius + 1.5);
           const rx2 = pos.x + Math.cos(rAng) * (spec.outerRadius + 2.5);
           const ry2 = pos.y + Math.sin(rAng) * (spec.outerRadius + 2.5);
-          g.lineStyle(1.8, rIdx % 2 === 0 ? coreNum : primaryNum, 0.86);
-          g.lineBetween(rx1, ry1, rx2, ry2);
+          floorG.lineStyle(1.8, rIdx % 2 === 0 ? coreNum : primaryNum, 0.86);
+          floorG.lineBetween(rx1, ry1, rx2, ry2);
         }
       }
 
-      // 3. Short vertical light pillar (cột sáng ngắn) + 3 rising rune motes
-      const pillarBaseY = pos.y + 4;
-      const pillarTopY = pos.y - spec.pillarHeightPx;
-      g.fillStyle(primaryNum, spec.pillarAlpha * 0.42);
-      g.fillTriangle(
-        pos.x - spec.pillarWidthPx,
-        pillarBaseY,
-        pos.x + spec.pillarWidthPx,
-        pillarBaseY,
-        pos.x,
-        pillarTopY,
-      );
-      g.lineStyle(2.2, coreNum, spec.pillarAlpha);
-      g.lineBetween(pos.x, pillarBaseY, pos.x, pillarTopY);
+      // 3. Compact top-down convergence motes
       for (let m = 0; m < 3; m++) {
         const mPhase = (progress * 1.8 + m * 0.33) % 1;
-        const my = pillarBaseY - mPhase * spec.pillarHeightPx;
-        const mx = pos.x + Math.sin(spec.runeRotationRad * 2 + m * 2.1) * (spec.pillarWidthPx * 0.45);
-        g.fillStyle(coreNum, (1 - mPhase) * 0.9);
-        g.fillCircle(mx, my, 1.8);
+        const mAng = spec.runeRotationRad * 2 + (m * Math.PI * 2) / 3;
+        const mRad = spec.outerRadius * (1 - mPhase * 0.75);
+        const mx = pos.x + Math.cos(mAng) * mRad;
+        const my = pos.y + Math.sin(mAng) * mRad;
+        g.fillStyle(coreNum, (1 - mPhase * 0.5) * 0.92);
+        g.fillCircle(mx, my, 2.0);
       }
       continue;
     }
@@ -460,11 +380,11 @@ export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, 
           : mod === 'volley'
             ? hexToNum(PALETTE.FLAME_ORANGE)
             : hexToNum(PALETTE.SOLAR_GOLD);
-      g.lineStyle(2.5, auraCol, 0.88);
-      g.strokeCircle(pos.x, pos.y + 4, e.radius + 5);
+      floorG.lineStyle(2.5, auraCol, 0.88);
+      floorG.strokeCircle(pos.x, pos.y + 2, e.radius + 5);
       if (mod === 'vengeful' || mod === 'volley') {
-        g.lineStyle(1.6, hexToNum(PALETTE.SOLAR_GOLD), 0.78);
-        g.strokeCircle(pos.x, pos.y + 4, e.radius + 8);
+        floorG.lineStyle(1.6, hexToNum(PALETTE.SOLAR_GOLD), 0.78);
+        floorG.strokeCircle(pos.x, pos.y + 2, e.radius + 8);
       }
       if (e.shieldArmor > 0) {
         g.lineStyle(2, hexToNum(PALETTE.CYAN_FROST), 0.92);
@@ -474,16 +394,18 @@ export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, 
 
     // Frozen encasement crystal ring
     if (e.frozenTimer > 0 && (!isStress || telegraphsDrawn < 6)) {
-      g.fillStyle(hexToNum(PALETTE.CYAN_FROST), 0.28);
+      g.fillStyle(hexToNum(PALETTE.CYAN_FROST), 0.24);
       g.fillCircle(pos.x, pos.y, e.radius + 5);
       g.lineStyle(2.2, hexToNum(PALETTE.BONE_WHITE), 0.9);
       g.strokeCircle(pos.x, pos.y, e.radius + 5);
     }
 
-    // Druid Rooted vines ring around enemy feet
+    // Druid Rooted 1:1 circular thorn collar on floor (zero 3/4 squash ellipse)
     if (e.rootedTimer > 0 && !isStress) {
-      g.lineStyle(2.5, hexToNum(PALETTE.LIME_GLOW), 0.92);
-      g.strokeEllipse(pos.x, pos.y + 8, e.radius * 2.1, e.radius * 1.1);
+      floorG.lineStyle(4.2, hexToNum(PALETTE.INK_DARK), 0.72);
+      floorG.strokeCircle(pos.x, pos.y + 2, e.radius + 4);
+      floorG.lineStyle(2.4, hexToNum(PALETTE.LIME_GLOW), 0.92);
+      floorG.strokeCircle(pos.x, pos.y + 2, e.radius + 4);
     }
 
     // Superconduct defense-shred aura ring
@@ -495,22 +417,15 @@ export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, 
     // Ranger Predator Mark Crosshair above enemy (visible through Fog of War!)
     if (e.markedTimer > 0 && !isStress) {
       const markY = pos.y - (e.isBoss ? 54 : 40);
-      g.lineStyle(2.2, hexToNum(PALETTE.SOLAR_GOLD), 0.95);
-      g.strokeCircle(pos.x, markY, 6);
-      g.beginPath();
-      g.moveTo(pos.x - 9, markY);
-      g.lineTo(pos.x + 9, markY);
-      g.moveTo(pos.x, markY - 9);
-      g.lineTo(pos.x, markY + 9);
-      g.strokePath();
+      drawRangerPredatorMarkChiaroscuro(g, pos.x, markY, overlayTick);
     }
 
     // Phase P1A Batch-1 Embedded Arrows (hunter_crossbow) & Parasitic Thorns (thorn_staff)
     if (!isStress) {
-      drawEnemyBatch1Indicators(g, pos.x, pos.y, e, playerX, playerY, sim.tick / 60);
+      drawEnemyBatch1Indicators(g, pos.x, pos.y, e, playerX, playerY, overlayTimeSec);
     }
 
-    // Enemy Attack Telegraphs (Section 3.7: high readability red warning before damage)
+    // Enemy Attack Telegraphs (Section 3.7: high readability #E84545 danger perimeters, <=0.10 floor fill)
     if (e.aiState === 'telegraph' && (!isStress || telegraphsDrawn < 4)) {
       telegraphsDrawn += 1;
       const progress =
@@ -523,11 +438,16 @@ export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, 
           const len = 240;
           const tx = pos.x + Math.cos(ang) * len;
           const ty = pos.y + Math.sin(ang) * len;
-          g.lineStyle(2.5, hexToNum(PALETTE.CRIMSON_BRIGHT), 0.45 + progress * 0.5);
-          g.beginPath();
-          g.moveTo(pos.x, pos.y);
-          g.lineTo(tx, ty);
-          g.strokePath();
+          floorG.lineStyle(3.8, hexToNum(PALETTE.INK_DARK), 0.45 + progress * 0.3);
+          floorG.beginPath();
+          floorG.moveTo(pos.x, pos.y);
+          floorG.lineTo(tx, ty);
+          floorG.strokePath();
+          floorG.lineStyle(2.2, hexToNum(PALETTE.CRIMSON_BRIGHT), 0.5 + progress * 0.46);
+          floorG.beginPath();
+          floorG.moveTo(pos.x, pos.y);
+          floorG.lineTo(tx, ty);
+          floorG.strokePath();
         }
       } else if (
         e.defId === 'kryssa_ice_queen' ||
@@ -537,16 +457,16 @@ export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, 
         const len = e.telegraphLength || 320;
         const tx = pos.x + Math.cos(e.telegraphAngle) * len;
         const ty = pos.y + Math.sin(e.telegraphAngle) * len;
-        g.lineStyle(6, hexToNum(PALETTE.CYAN_FROST), 0.35 + progress * 0.35);
-        g.beginPath();
-        g.moveTo(pos.x, pos.y);
-        g.lineTo(tx, ty);
-        g.strokePath();
-        g.lineStyle(2.2, hexToNum(PALETTE.CRIMSON_BRIGHT), 0.65 + progress * 0.35);
-        g.beginPath();
-        g.moveTo(pos.x, pos.y);
-        g.lineTo(tx, ty);
-        g.strokePath();
+        floorG.lineStyle(5.5, hexToNum(PALETTE.CYAN_FROST), 0.28 + progress * 0.3);
+        floorG.beginPath();
+        floorG.moveTo(pos.x, pos.y);
+        floorG.lineTo(tx, ty);
+        floorG.strokePath();
+        floorG.lineStyle(2.2, hexToNum(PALETTE.CRIMSON_BRIGHT), 0.65 + progress * 0.35);
+        floorG.beginPath();
+        floorG.moveTo(pos.x, pos.y);
+        floorG.lineTo(tx, ty);
+        floorG.strokePath();
       } else if (
         e.defId === 'goblin_shaman' ||
         e.defId === 'green_slime' ||
@@ -558,20 +478,25 @@ export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, 
         const len = e.telegraphLength || 160;
         const tx = pos.x + Math.cos(e.telegraphAngle) * len;
         const ty = pos.y + Math.sin(e.telegraphAngle) * len;
-        g.lineStyle(2.2, hexToNum(PALETTE.CRIMSON_BRIGHT), 0.5 + progress * 0.45);
-        g.beginPath();
-        g.moveTo(pos.x, pos.y);
-        g.lineTo(tx, ty);
-        g.strokePath();
+        floorG.lineStyle(3.6, hexToNum(PALETTE.INK_DARK), 0.45 + progress * 0.3);
+        floorG.beginPath();
+        floorG.moveTo(pos.x, pos.y);
+        floorG.lineTo(tx, ty);
+        floorG.strokePath();
+        floorG.lineStyle(2.2, hexToNum(PALETTE.CRIMSON_BRIGHT), 0.52 + progress * 0.44);
+        floorG.beginPath();
+        floorG.moveTo(pos.x, pos.y);
+        floorG.lineTo(tx, ty);
+        floorG.strokePath();
       } else if (e.defId === 'thorn_turret') {
         for (let k = 0; k < 6; k++) {
           const ang = e.telegraphAngle + (k * Math.PI) / 3;
           const len = 180;
-          g.lineStyle(2, hexToNum(PALETTE.CRIMSON_BRIGHT), 0.45 + progress * 0.45);
-          g.beginPath();
-          g.moveTo(pos.x, pos.y);
-          g.lineTo(pos.x + Math.cos(ang) * len, pos.y + Math.sin(ang) * len);
-          g.strokePath();
+          floorG.lineStyle(2, hexToNum(PALETTE.CRIMSON_BRIGHT), 0.48 + progress * 0.46);
+          floorG.beginPath();
+          floorG.moveTo(pos.x, pos.y);
+          floorG.lineTo(pos.x + Math.cos(ang) * len, pos.y + Math.sin(ang) * len);
+          floorG.strokePath();
         }
       } else if (e.defId === 'wild_boar' || e.defId === 'baby_yeti') {
         const len = e.telegraphLength || 220;
@@ -586,17 +511,19 @@ export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, 
         const p3 = { x: pos.x + cos * len - px, y: pos.y + sin * len - py };
         const p4 = { x: pos.x - px, y: pos.y - py };
 
-        g.fillStyle(hexToNum(PALETTE.CRIMSON_BRIGHT), 0.18 + progress * 0.22);
-        g.beginPath();
-        g.moveTo(p1.x, p1.y);
-        g.lineTo(p2.x, p2.y);
-        g.lineTo(p3.x, p3.y);
-        g.lineTo(p4.x, p4.y);
-        g.closePath();
-        g.fillPath();
+        floorG.fillStyle(hexToNum(PALETTE.CRIMSON_BRIGHT), 0.06 + progress * 0.04);
+        floorG.beginPath();
+        floorG.moveTo(p1.x, p1.y);
+        floorG.lineTo(p2.x, p2.y);
+        floorG.lineTo(p3.x, p3.y);
+        floorG.lineTo(p4.x, p4.y);
+        floorG.closePath();
+        floorG.fillPath();
 
-        g.lineStyle(2, hexToNum(PALETTE.CRIMSON_BRIGHT), 0.85);
-        g.strokePath();
+        floorG.lineStyle(3.8, hexToNum(PALETTE.INK_DARK), 0.68);
+        floorG.strokePath();
+        floorG.lineStyle(2.2, hexToNum(PALETTE.CRIMSON_BRIGHT), 0.92);
+        floorG.strokePath();
       } else if (
         e.defId === 'spore_bomber' ||
         e.defId === 'spore_king' ||
@@ -607,10 +534,14 @@ export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, 
         e.defId === 'forge_titan'
       ) {
         const r = e.telegraphRadius || (e.isBoss ? 96 : 68);
-        g.fillStyle(hexToNum(PALETTE.CRIMSON_BRIGHT), 0.16 + progress * 0.24);
-        g.fillCircle(pos.x, pos.y, r * (0.35 + progress * 0.65));
-        g.lineStyle(2.5, hexToNum(PALETTE.CRIMSON_BRIGHT), 0.92);
-        g.strokeCircle(pos.x, pos.y, r);
+        floorG.fillStyle(hexToNum(PALETTE.CRIMSON_BRIGHT), 0.06 + progress * 0.04);
+        floorG.fillCircle(pos.x, pos.y, r);
+        floorG.lineStyle(1.8, hexToNum(PALETTE.CRIMSON_BRIGHT), 0.72);
+        floorG.strokeCircle(pos.x, pos.y, r * (0.28 + progress * 0.72));
+        floorG.lineStyle(4.5, hexToNum(PALETTE.INK_DARK), 0.72);
+        floorG.strokeCircle(pos.x, pos.y, r);
+        floorG.lineStyle(2.6, hexToNum(PALETTE.CRIMSON_BRIGHT), 0.96);
+        floorG.strokeCircle(pos.x, pos.y, r);
       }
     }
 
@@ -672,8 +603,9 @@ export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, 
       p,
       sim.magneticRivets ?? [],
       isSoloPaused ? 0 : 1 / 60,
-      sim.tick / 60,
+      overlayTimeSec,
       i18n.getLocale(),
+      floorG,
     );
     drawFootMicroReloadBar(
       g,

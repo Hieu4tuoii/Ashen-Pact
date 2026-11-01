@@ -8,6 +8,15 @@ import {
 import { easeOutBack, easeOutCubic } from '../art/easing.js';
 import { hexToNum, PALETTE } from '../art/palette.js';
 import { TextureBaker } from '../art/texture-baker.js';
+import {
+  computeShaderDirectionalScale,
+  computeShaderNovaScale,
+  resolveColorHexToNovaKey,
+  SHADER_FX_FRAME_COUNT,
+  type ShaderDirectionalKey,
+  type ShaderNovaKey,
+  type ShaderSlashKey,
+} from '../art/texture-baker-shader-fx.js';
 import { getClientFreezeRandom } from '../core/visual-query.js';
 import { graphicsSettings } from '../ui/graphics-settings.js';
 import type { CombatFxManager } from './combat-fx.js';
@@ -185,6 +194,31 @@ const OPAQUE_FX_DEPTH_BY_KEY: Readonly<Record<string, number>> = {
   fx_ambient_leaf: 32,
   fx_ambient_snow: 35,
   fx_ice_shard: 53,
+  // 24 Chiaroscuro unpremultiplied RGBA shader flipbooks (NORMAL blend preserves dark veins + HDR edges, depth < 60!)
+  fx_sh_muzzle_burst: 50,
+  fx_sh_muzzle_arcane: 50,
+  fx_sh_slash_steel: 52,
+  fx_sh_slash_emerald: 52,
+  fx_sh_slash_crimson: 53,
+  fx_sh_slash_thunder: 53,
+  fx_sh_cone_blast: 54,
+  fx_sh_aegis_crest: 54,
+  fx_sh_falcon_sonic: 54,
+  fx_sh_beam_lance: 55,
+  fx_sh_hit_spark: 55,
+  fx_sh_arcane_sigil: 55,
+  fx_sh_nova_solar: 56,
+  fx_sh_nova_magma: 56,
+  fx_sh_nova_thunder: 56,
+  fx_sh_nova_cryo: 56,
+  fx_sh_nova_venom: 56,
+  fx_sh_nova_void: 56,
+  fx_sh_vortex_gale: 56,
+  fx_sh_bloom_briar: 56,
+  fx_sh_spore_cloud: 56,
+  fx_sh_anvil_storm: 56,
+  fx_sh_geyser_plume: 56,
+  fx_sh_shrapnel_corona: 56,
 };
 
 export function resolveParticleBlendAndDepth(textureKey: string): {
@@ -259,6 +293,24 @@ const REACTION_SECONDARY_COLOR: Readonly<Record<ElementalReactionId, string>> = 
   overload: PALETTE.SOLAR_GOLD,
 };
 
+const REACTION_NOVA_KEY: Readonly<Record<ElementalReactionId, ShaderNovaKey>> = {
+  vaporize: 'fx_sh_vortex_gale',
+  shatter: 'fx_sh_nova_cryo',
+  superconduct: 'fx_sh_anvil_storm',
+  toxic_blast: 'fx_sh_spore_cloud',
+  paralysis: 'fx_sh_nova_thunder',
+  overload: 'fx_sh_shrapnel_corona',
+};
+
+const REACTION_NOVA_TINT: Readonly<Record<ElementalReactionId, number | null>> = {
+  vaporize: 0xbae6fd,
+  shatter: null,
+  superconduct: 0x67e8f9,
+  toxic_blast: null,
+  paralysis: 0xbef264,
+  overload: 0xfde047,
+};
+
 export function resolveElementalReactionBurstSpec(
   reaction: ElementalReactionId,
   isTeamCombo: boolean,
@@ -283,8 +335,8 @@ export function resolveElementalReactionBurstSpec(
       easeCurve: 'easeOutCubic',
       depth: 56,
       startScale: 0.22,
-      endScale: isTeamCombo ? 2.15 : 1.72,
-      ttl: isTeamCombo ? 0.38 : 0.32,
+      endScale: isTeamCombo ? 1.58 : 1.28,
+      ttl: isTeamCombo ? 0.34 : 0.28,
       tintHex: primaryColorHex,
     },
     innerRing: {
@@ -293,11 +345,11 @@ export function resolveElementalReactionBurstSpec(
       easeCurve: 'easeOutCubic',
       depth: 57,
       startScale: 0.25,
-      endScale: isTeamCombo ? 1.55 : 1.25,
-      ttl: 0.24,
+      endScale: isTeamCombo ? 1.22 : 1.02,
+      ttl: 0.22,
       tintHex: PALETTE.BONE_WHITE,
     },
-    particleCount: isTeamCombo ? 18 : 14,
+    particleCount: isTeamCombo ? 14 : 10,
     particleTextures: ['fx_spark_trail', 'fx_spark', 'fx_sparkle_mote'],
     decalKind,
   };
@@ -500,15 +552,19 @@ export function activateParticle(
     scaleRatioY?: number;
     alignToVelocity?: boolean;
     hasGroundShadow?: boolean;
+    frameCount?: number;
+    preserveFlipbookAlpha?: boolean;
   },
 ): void {
   const defaultMeta = resolveParticleBlendAndDepth(config.textureKey);
   const blendMode = config.blendMode ?? defaultMeta.blendMode;
-  const depth = config.depth ?? defaultMeta.depth;
+  const depth = Math.min(59, config.depth ?? defaultMeta.depth);
   const scaleRatioY = config.scaleRatioY ?? 1;
   const vx = config.vx ?? 0;
   const vy = config.vy ?? 0;
   const startAlpha = config.startAlpha ?? 1;
+  const frameCount = config.frameCount && config.frameCount > 1 ? config.frameCount : 1;
+  const preserveFlipbookAlpha = config.preserveFlipbookAlpha ?? frameCount > 1;
 
   p.active = true;
   p.textureKey = config.textureKey;
@@ -529,8 +585,17 @@ export function activateParticle(
   p.scaleRatioY = scaleRatioY;
   p.alignToVelocity = config.alignToVelocity ?? false;
   p.hasGroundShadow = config.hasGroundShadow ?? false;
+  p.frameCount = frameCount;
+  p.preserveFlipbookAlpha = preserveFlipbookAlpha;
 
-  p.sprite.setTexture(config.textureKey);
+  if (frameCount > 1) {
+    p.sprite.setTexture(config.textureKey, 0);
+    if (typeof p.sprite.setFrame === 'function') {
+      p.sprite.setFrame(0);
+    }
+  } else {
+    p.sprite.setTexture(config.textureKey);
+  }
   if (config.tint !== undefined && config.tint !== null) p.sprite.setTint(config.tint);
   else p.sprite.clearTint();
   p.sprite.setBlendMode(blendMode);
@@ -556,6 +621,462 @@ export function activateParticle(
   }
 }
 
+export interface ShaderNovaSpawnOptions {
+  ttl?: number;
+  isTeammate?: boolean;
+  rotation?: number;
+  tint?: number | null;
+  depth?: number;
+  sparkCount?: number;
+  sparkHex?: string;
+}
+
+export function spawnShaderNovaImpl(
+  this: CombatFxManager,
+  x: number,
+  y: number,
+  radiusPx: number,
+  novaKey: ShaderNovaKey = 'fx_sh_nova_solar',
+  options: ShaderNovaSpawnOptions = {},
+): void {
+  const bakeScale = TextureBaker.getBakeScale();
+  const invBake = 1 / bakeScale;
+  const alphaMult = options.isTeammate
+    ? clamp(graphicsSettings.getState().teammateFxOpacity, 0.25, 1.0)
+    : 1.0;
+
+  const slot = this.acquireParticleSlot();
+  if (slot) {
+    const scale = computeShaderNovaScale(radiusPx, novaKey, bakeScale);
+    const mgrVar = this as CombatFxManager & { novaVarietyCursor?: number };
+    const seq = ((mgrVar.novaVarietyCursor ?? 0) + 1) | 0;
+    mgrVar.novaVarietyCursor = seq;
+    // Golden-angle rotation + alternating ±1 chirality eliminates FBM pattern repetition on cluster novas
+    const autoRotation =
+      (((seq * 2.399963229728653 + x * 0.0173 + y * 0.0291) % (Math.PI * 2)) + Math.PI * 2) %
+      (Math.PI * 2);
+    const chirality = options.rotation !== undefined ? 1 : seq % 2 === 0 ? 1 : -1;
+    activateParticle(slot, {
+      textureKey: novaKey,
+      x,
+      y,
+      ttl: options.ttl ?? 0.34,
+      startScale: scale,
+      endScale: scale,
+      startAlpha: 0.98 * alphaMult,
+      rotation: options.rotation ?? autoRotation,
+      tint: options.tint ?? null,
+      blendMode: 'NORMAL',
+      depth: options.depth ?? 56,
+      scaleRatioY: chirality,
+      frameCount: SHADER_FX_FRAME_COUNT,
+      preserveFlipbookAlpha: true,
+    });
+  }
+
+  const rawSparks = options.sparkCount ?? 6;
+  if (rawSparks > 0) {
+    const count = Math.max(
+      2,
+      Math.round(rawSparks * graphicsSettings.getBudget().particleBudgetRatio),
+    );
+    const sparkTint = hexToNum(
+      options.sparkHex ??
+        (novaKey === 'fx_sh_nova_cryo' || novaKey === 'fx_sh_vortex_gale'
+          ? PALETTE.CYAN_FROST
+          : novaKey === 'fx_sh_nova_thunder' || novaKey === 'fx_sh_anvil_storm'
+            ? PALETTE.VOLT_YELLOW
+            : novaKey === 'fx_sh_nova_venom' ||
+                novaKey === 'fx_sh_bloom_briar' ||
+                novaKey === 'fx_sh_spore_cloud'
+              ? PALETTE.LIME_GLOW
+              : novaKey === 'fx_sh_nova_void'
+                ? PALETTE.TOXIC_PURPLE
+                : novaKey === 'fx_sh_geyser_plume' || novaKey === 'fx_sh_nova_magma'
+                  ? PALETTE.FLAME_ORANGE
+                  : PALETTE.SOLAR_GOLD),
+    );
+    for (let i = 0; i < count; i++) {
+      const p = this.acquireParticleSlot();
+      if (!p) break;
+      const ang = (i / count) * Math.PI * 2 + (getClientFreezeRandom()() - 0.5) * 0.25;
+      const spd = Math.max(90, radiusPx * 2.4) * (0.65 + getClientFreezeRandom()() * 0.45);
+      activateParticle(p, {
+        textureKey: 'fx_spark_trail',
+        x,
+        y,
+        vx: Math.cos(ang) * spd,
+        vy: Math.sin(ang) * spd,
+        ttl: 0.22 + (i % 3) * 0.04,
+        startScale: invBake * 1.02,
+        endScale: invBake * 0.16,
+        startAlpha: 0.92 * alphaMult,
+        damping: 7,
+        rotation: ang,
+        tint: sparkTint,
+        depth: 57,
+        scaleRatioY: 0.42,
+        alignToVelocity: true,
+      });
+    }
+  }
+}
+
+export interface ShaderSlashSpawnOptions {
+  ttl?: number;
+  isTeammate?: boolean;
+  flipY?: boolean;
+  tint?: number | null;
+  depth?: number;
+}
+
+export function spawnShaderSlashImpl(
+  this: CombatFxManager,
+  x: number,
+  y: number,
+  rangePx: number,
+  angleRad: number,
+  slashKey: ShaderSlashKey = 'fx_sh_slash_steel',
+  options: ShaderSlashSpawnOptions = {},
+): void {
+  const bakeScale = TextureBaker.getBakeScale();
+  const alphaMult = options.isTeammate
+    ? clamp(graphicsSettings.getState().teammateFxOpacity, 0.25, 1.0)
+    : 1.0;
+
+  const slot = this.acquireParticleSlot();
+  if (!slot) return;
+  const scale = computeShaderDirectionalScale(rangePx, slashKey, bakeScale);
+  activateParticle(slot, {
+    textureKey: slashKey,
+    x,
+    y,
+    ttl: options.ttl ?? 0.2,
+    startScale: scale,
+    endScale: scale,
+    startAlpha: 0.98 * alphaMult,
+    rotation: angleRad,
+    tint: options.tint ?? null,
+    blendMode: 'NORMAL',
+    depth: options.depth ?? 52,
+    scaleRatioY: options.flipY ? -1 : 1,
+    frameCount: SHADER_FX_FRAME_COUNT,
+    preserveFlipbookAlpha: true,
+  });
+}
+
+export interface ShaderConeSpawnOptions {
+  ttl?: number;
+  isTeammate?: boolean;
+  tint?: number | null;
+  depth?: number;
+  scaleRatioY?: number;
+}
+
+export function spawnShaderConeImpl(
+  this: CombatFxManager,
+  x: number,
+  y: number,
+  reachPx: number,
+  angleRad: number,
+  options: ShaderConeSpawnOptions = {},
+): void {
+  const bakeScale = TextureBaker.getBakeScale();
+  const alphaMult = options.isTeammate
+    ? clamp(graphicsSettings.getState().teammateFxOpacity, 0.25, 1.0)
+    : 1.0;
+
+  const slot = this.acquireParticleSlot();
+  if (!slot) return;
+  const scale = computeShaderDirectionalScale(reachPx, 'fx_sh_cone_blast', bakeScale);
+  const cx = x + Math.cos(angleRad) * reachPx * 0.44;
+  const cy = y + Math.sin(angleRad) * reachPx * 0.44;
+  activateParticle(slot, {
+    textureKey: 'fx_sh_cone_blast',
+    x: cx,
+    y: cy,
+    ttl: options.ttl ?? 0.22,
+    startScale: scale,
+    endScale: scale,
+    startAlpha: 0.98 * alphaMult,
+    rotation: angleRad,
+    tint: options.tint ?? null,
+    blendMode: 'NORMAL',
+    depth: options.depth ?? 54,
+    scaleRatioY: options.scaleRatioY ?? 1,
+    frameCount: SHADER_FX_FRAME_COUNT,
+    preserveFlipbookAlpha: true,
+  });
+}
+
+export interface ShaderLanceSpawnOptions {
+  ttl?: number;
+  widthPx?: number;
+  isTeammate?: boolean;
+  tint?: number | null;
+  depth?: number;
+}
+
+export function spawnShaderLanceImpl(
+  this: CombatFxManager,
+  x: number,
+  y: number,
+  lengthPx: number,
+  angleRad: number,
+  options: ShaderLanceSpawnOptions = {},
+): void {
+  const bakeScale = TextureBaker.getBakeScale();
+  const alphaMult = options.isTeammate
+    ? clamp(graphicsSettings.getState().teammateFxOpacity, 0.25, 1.0)
+    : 1.0;
+
+  const slot = this.acquireParticleSlot();
+  if (!slot) return;
+  const scaleX = computeShaderDirectionalScale(lengthPx, 'fx_sh_beam_lance', bakeScale);
+  const desiredWidthReach = Math.max(36, (options.widthPx ?? 36) * 2.4);
+  const scaleY = computeShaderDirectionalScale(desiredWidthReach, 'fx_sh_beam_lance', bakeScale);
+  const ratioY = clamp(scaleY / Math.max(0.01, scaleX), 0.14, 1.15);
+
+  const midX = x + Math.cos(angleRad) * lengthPx * 0.48;
+  const midY = y + Math.sin(angleRad) * lengthPx * 0.48;
+  activateParticle(slot, {
+    textureKey: 'fx_sh_beam_lance',
+    x: midX,
+    y: midY,
+    ttl: options.ttl ?? 0.26,
+    startScale: scaleX,
+    endScale: scaleX,
+    startAlpha: 0.98 * alphaMult,
+    rotation: angleRad,
+    tint: options.tint ?? null,
+    blendMode: 'NORMAL',
+    depth: options.depth ?? 55,
+    scaleRatioY: ratioY,
+    frameCount: SHADER_FX_FRAME_COUNT,
+    preserveFlipbookAlpha: true,
+  });
+}
+
+export interface ShaderDirectionalSpawnOptions {
+  ttl?: number;
+  isTeammate?: boolean;
+  flipY?: boolean;
+  tint?: number | null;
+  depth?: number;
+  scaleRatioY?: number;
+  forwardOffsetRatio?: number;
+}
+
+export function spawnShaderDirectionalImpl(
+  this: CombatFxManager,
+  x: number,
+  y: number,
+  reachPx: number,
+  angleRad: number,
+  key: ShaderDirectionalKey,
+  options: ShaderDirectionalSpawnOptions = {},
+): void {
+  const bakeScale = TextureBaker.getBakeScale();
+  const alphaMult = options.isTeammate
+    ? clamp(graphicsSettings.getState().teammateFxOpacity, 0.25, 1.0)
+    : 1.0;
+
+  const slot = this.acquireParticleSlot();
+  if (!slot) return;
+  const scale = computeShaderDirectionalScale(reachPx, key, bakeScale);
+  const fwd = (options.forwardOffsetRatio ?? 0) * reachPx;
+  const cx = x + Math.cos(angleRad) * fwd;
+  const cy = y + Math.sin(angleRad) * fwd;
+  const baseRatioY = options.scaleRatioY ?? 1;
+  activateParticle(slot, {
+    textureKey: key,
+    x: cx,
+    y: cy,
+    ttl: options.ttl ?? 0.24,
+    startScale: scale,
+    endScale: scale,
+    startAlpha: 0.98 * alphaMult,
+    rotation: angleRad,
+    tint: options.tint ?? null,
+    blendMode: 'NORMAL',
+    depth: options.depth ?? 54,
+    scaleRatioY: options.flipY ? -Math.abs(baseRatioY) : baseRatioY,
+    frameCount: SHADER_FX_FRAME_COUNT,
+    preserveFlipbookAlpha: true,
+  });
+}
+
+export interface WeaponMuzzleProfile {
+  muzzleKey: 'fx_sh_muzzle_burst' | 'fx_sh_muzzle_arcane';
+  ejectCasing: boolean;
+  muzzleTint: number | null;
+  moteTexture: 'fx_spark_trail' | 'fx_sparkle_mote' | 'fx_ambient_leaf' | 'fx_ember_mote' | 'fx_spark';
+  moteHex: string;
+  reachPx: number;
+  ttlSec: number;
+}
+
+export function resolveWeaponMuzzleProfile(
+  weaponId?: string,
+  isShotgun = false,
+): WeaponMuzzleProfile {
+  switch (weaponId) {
+    case 'solar_archon_staff':
+      return {
+        muzzleKey: 'fx_sh_muzzle_arcane',
+        ejectCasing: false,
+        muzzleTint: 0xfef08a,
+        moteTexture: 'fx_sparkle_mote',
+        moteHex: PALETTE.SOLAR_GOLD,
+        reachPx: 26,
+        ttlSec: 0.12,
+      };
+    case 'apprentice_staff':
+      return {
+        muzzleKey: 'fx_sh_muzzle_arcane',
+        ejectCasing: false,
+        muzzleTint: 0xfdba74,
+        moteTexture: 'fx_sparkle_mote',
+        moteHex: PALETTE.SOLAR_GOLD,
+        reachPx: 24,
+        ttlSec: 0.11,
+      };
+    case 'thorn_staff':
+      return {
+        muzzleKey: 'fx_sh_muzzle_arcane',
+        ejectCasing: false,
+        muzzleTint: 0x86efac,
+        moteTexture: 'fx_ambient_leaf',
+        moteHex: PALETTE.LIME_GLOW,
+        reachPx: 25,
+        ttlSec: 0.12,
+      };
+    case 'seed_gun':
+      return {
+        muzzleKey: 'fx_sh_muzzle_arcane',
+        ejectCasing: false,
+        muzzleTint: 0xa7f3d0,
+        moteTexture: 'fx_ambient_leaf',
+        moteHex: PALETTE.MINT_LIGHT,
+        reachPx: 22,
+        ttlSec: 0.1,
+      };
+    case 'tether_staff':
+      return {
+        muzzleKey: 'fx_sh_muzzle_arcane',
+        ejectCasing: false,
+        muzzleTint: 0xd8b4fe,
+        moteTexture: 'fx_spark_trail',
+        moteHex: PALETTE.TOXIC_PURPLE,
+        reachPx: 24,
+        ttlSec: 0.11,
+      };
+    case 'void_staff':
+      return {
+        muzzleKey: 'fx_sh_muzzle_arcane',
+        ejectCasing: false,
+        muzzleTint: 0xc084fc,
+        moteTexture: 'fx_sparkle_mote',
+        moteHex: PALETTE.TOXIC_PURPLE,
+        reachPx: 26,
+        ttlSec: 0.12,
+      };
+    case 'hunter_crossbow':
+      return {
+        muzzleKey: 'fx_sh_muzzle_arcane',
+        ejectCasing: false,
+        muzzleTint: 0xbae6fd,
+        moteTexture: 'fx_spark_trail',
+        moteHex: PALETTE.CYAN_FROST,
+        reachPx: 24,
+        ttlSec: 0.11,
+      };
+    case 'gale_smg':
+    case 'gale_smg_wind_blade':
+      return {
+        muzzleKey: 'fx_sh_muzzle_arcane',
+        ejectCasing: false,
+        muzzleTint: 0x5eead4,
+        moteTexture: 'fx_spark_trail',
+        moteHex: PALETTE.CYAN_FROST,
+        reachPx: 20,
+        ttlSec: 0.085,
+      };
+    case 'tesla_carbine':
+      return {
+        muzzleKey: 'fx_sh_muzzle_arcane',
+        ejectCasing: false,
+        muzzleTint: 0xfef08a,
+        moteTexture: 'fx_spark',
+        moteHex: PALETTE.VOLT_YELLOW,
+        reachPx: 22,
+        ttlSec: 0.095,
+      };
+    case 'focus_laser':
+      return {
+        muzzleKey: 'fx_sh_muzzle_arcane',
+        ejectCasing: false,
+        muzzleTint: 0x7dd3fc,
+        moteTexture: 'fx_sparkle_mote',
+        moteHex: PALETTE.CYAN_FROST,
+        reachPx: 23,
+        ttlSec: 0.1,
+      };
+    case 'magma_cannon':
+      return {
+        muzzleKey: 'fx_sh_muzzle_burst',
+        ejectCasing: false,
+        muzzleTint: 0xff8a4c,
+        moteTexture: 'fx_ember_mote',
+        moteHex: PALETTE.FLAME_ORANGE,
+        reachPx: 32,
+        ttlSec: 0.13,
+      };
+    case 'knight_sword_wave':
+    case 'knight_sword_parry':
+      return {
+        muzzleKey: 'fx_sh_muzzle_arcane',
+        ejectCasing: false,
+        muzzleTint: 0xfef08a,
+        moteTexture: 'fx_spark_trail',
+        moteHex: PALETTE.SOLAR_GOLD,
+        reachPx: 20,
+        ttlSec: 0.09,
+      };
+    case 'frag_launcher_sub':
+      return {
+        muzzleKey: 'fx_sh_muzzle_burst',
+        ejectCasing: false,
+        muzzleTint: 0xfb923c,
+        moteTexture: 'fx_spark_trail',
+        moteHex: PALETTE.FLAME_ORANGE,
+        reachPx: 18,
+        ttlSec: 0.08,
+      };
+    case 'frag_launcher':
+    case 'scrap_shotgun':
+      return {
+        muzzleKey: 'fx_sh_muzzle_burst',
+        ejectCasing: true,
+        muzzleTint: null,
+        moteTexture: 'fx_spark_trail',
+        moteHex: PALETTE.FLAME_ORANGE,
+        reachPx: 30,
+        ttlSec: 0.12,
+      };
+    default:
+      return {
+        muzzleKey: 'fx_sh_muzzle_burst',
+        ejectCasing: true,
+        muzzleTint: null,
+        moteTexture: 'fx_spark_trail',
+        moteHex: isShotgun ? PALETTE.FLAME_ORANGE : PALETTE.SOLAR_GOLD,
+        reachPx: isShotgun ? 30 : 21,
+        ttlSec: isShotgun ? 0.12 : 0.095,
+      };
+  }
+}
+
 export function spawnMuzzleFlashAndCasingImpl(
   this: CombatFxManager,
   x: number,
@@ -563,93 +1084,90 @@ export function spawnMuzzleFlashAndCasingImpl(
   angleRad: number,
   isShotgun = false,
   isTeammate = false,
+  weaponId?: string,
 ): void {
-  const invBake = 1 / TextureBaker.getBakeScale();
+  const bakeScale = TextureBaker.getBakeScale();
+  const invBake = 1 / bakeScale;
   const alphaMult = isTeammate
     ? clamp(graphicsSettings.getState().teammateFxOpacity, 0.25, 1.0)
     : 1.0;
-  const muzzleX = x + Math.cos(angleRad) * 6;
-  const muzzleY = y + Math.sin(angleRad) * 6;
+  const profile = resolveWeaponMuzzleProfile(weaponId, isShotgun);
+  const muzzleX = x + Math.cos(angleRad) * 8;
+  const muzzleY = y + Math.sin(angleRad) * 8;
 
-  const flash = this.acquireParticleSlot();
-  if (flash) {
-    activateParticle(flash, {
-      textureKey: 'fx_muzzle_flash',
+  const burst = this.acquireParticleSlot();
+  if (burst) {
+    const shScale = computeShaderDirectionalScale(profile.reachPx, profile.muzzleKey, bakeScale);
+    const muzzleFlip = this.totalSparksSpawned % 2 === 0 ? 1 : -1;
+    const muzzleJitter = (((this.totalSparksSpawned * 0.618034) % 1) - 0.5) * 0.14;
+    activateParticle(burst, {
+      textureKey: profile.muzzleKey,
       x: muzzleX,
       y: muzzleY,
-      ttl: 0.08,
-      startScale: invBake * (isShotgun ? 1.48 : 1.08),
-      endScale: invBake * 0.42,
-      startAlpha: alphaMult,
-      rotation: angleRad,
-      tint: hexToNum(isShotgun ? PALETTE.FLAME_ORANGE : PALETTE.SOLAR_GOLD),
-      depth: 49,
-      easeCurve: 'easeOutCubic',
-    });
-  }
-
-  const core = this.acquireParticleSlot();
-  if (core) {
-    activateParticle(core, {
-      textureKey: 'fx_muzzle_core',
-      x: muzzleX + Math.cos(angleRad) * 2,
-      y: muzzleY + Math.sin(angleRad) * 2,
-      ttl: 0.065,
-      startScale: invBake * (isShotgun ? 1.32 : 1.0),
-      endScale: invBake * 0.3,
-      startAlpha: alphaMult,
-      rotation: angleRad,
-      tint: hexToNum(PALETTE.BONE_WHITE),
+      ttl: profile.ttlSec,
+      startScale: shScale,
+      endScale: shScale,
+      startAlpha: 0.98 * alphaMult,
+      rotation: angleRad + muzzleJitter,
+      tint: profile.muzzleTint,
+      blendMode: 'NORMAL',
       depth: 50,
-      easeCurve: 'easeOutCubic',
+      scaleRatioY: muzzleFlip,
+      frameCount: SHADER_FX_FRAME_COUNT,
+      preserveFlipbookAlpha: true,
     });
   }
 
+  const moteTint = hexToNum(profile.moteHex);
+  const isStreak = profile.moteTexture === 'fx_spark_trail';
   for (let i = 0; i < 2; i++) {
     const streak = this.acquireParticleSlot();
     if (!streak) break;
     const dir = angleRad + (i === 0 ? -1 : 1) * (0.18 + getClientFreezeRandom()() * 0.22);
-    const spd = 110 + getClientFreezeRandom()() * 60;
+    const spd = (isStreak ? 115 : 82) + getClientFreezeRandom()() * 58;
     activateParticle(streak, {
-      textureKey: 'fx_spark_trail',
+      textureKey: profile.moteTexture,
       x: muzzleX,
       y: muzzleY,
       vx: Math.cos(dir) * spd,
       vy: Math.sin(dir) * spd,
-      ttl: 0.09,
-      startScale: invBake * 0.72,
-      endScale: invBake * 0.18,
-      startAlpha: 0.9 * alphaMult,
-      damping: 9,
+      vr: isStreak ? 0 : (i === 0 ? -7 : 7),
+      ttl: isStreak ? 0.085 : 0.15,
+      startScale: invBake * (isStreak ? 0.68 : 0.82),
+      endScale: invBake * 0.16,
+      startAlpha: 0.88 * alphaMult,
+      damping: isStreak ? 9 : 5.5,
       rotation: dir,
-      tint: hexToNum(PALETTE.SOLAR_GOLD),
-      depth: 49,
-      scaleRatioY: 0.45,
-      alignToVelocity: true,
+      tint: moteTint,
+      depth: 51,
+      scaleRatioY: isStreak ? 0.42 : 1,
+      alignToVelocity: isStreak,
     });
   }
 
-  const casing = this.acquireParticleSlot();
-  if (casing) {
-    const ejectAngle = angleRad - Math.PI * 0.65 + (getClientFreezeRandom()() - 0.5) * 0.4;
-    const spd = 75 + getClientFreezeRandom()() * 45;
-    activateParticle(casing, {
-      textureKey: 'fx_shell_casing',
-      x,
-      y,
-      vx: Math.cos(ejectAngle) * spd,
-      vy: Math.sin(ejectAngle) * spd - 25,
-      vr: (getClientFreezeRandom()() - 0.5) * 18,
-      ttl: 0.42,
-      startScale: invBake,
-      endScale: invBake * 0.85,
-      startAlpha: 0.95 * alphaMult,
-      gravityY: 180,
-      damping: 3,
-      rotation: getClientFreezeRandom()() * Math.PI,
-      depth: 22,
-      hasGroundShadow: true,
-    });
+  if (profile.ejectCasing) {
+    const casing = this.acquireParticleSlot();
+    if (casing) {
+      const ejectAngle = angleRad - Math.PI * 0.65 + (getClientFreezeRandom()() - 0.5) * 0.4;
+      const spd = 75 + getClientFreezeRandom()() * 45;
+      activateParticle(casing, {
+        textureKey: 'fx_shell_casing',
+        x,
+        y,
+        vx: Math.cos(ejectAngle) * spd,
+        vy: Math.sin(ejectAngle) * spd - 25,
+        vr: (getClientFreezeRandom()() - 0.5) * 18,
+        ttl: 0.42,
+        startScale: invBake,
+        endScale: invBake * 0.85,
+        startAlpha: 0.95 * alphaMult,
+        gravityY: 180,
+        damping: 3,
+        rotation: getClientFreezeRandom()() * Math.PI,
+        depth: 22,
+        hasGroundShadow: true,
+      });
+    }
   }
 }
 
@@ -667,45 +1185,72 @@ export function spawnHitSparksImpl(
     isTeammate?: boolean;
   } = {},
 ): void {
-  const invBake = 1 / TextureBaker.getBakeScale();
+  const bakeScale = TextureBaker.getBakeScale();
+  const invBake = 1 / bakeScale;
   const budgetRatio = graphicsSettings.getBudget().particleBudgetRatio;
   const alphaMult = options.isTeammate
     ? clamp(graphicsSettings.getState().teammateFxOpacity, 0.25, 1.0)
     : 1.0;
-  const rawCount = options.count ?? (options.isCrit ? 10 : 6);
+  const rawCount = options.count ?? (options.isCrit ? 8 : 5);
   const count = Math.max(1, Math.round(rawCount * budgetRatio));
   this.totalSparksSpawned += count;
 
   let tint = hexToNum(PALETTE.CYAN_FROST);
-  if (options.element === 'burn') tint = hexToNum(PALETTE.FLAME_ORANGE);
-  else if (options.element === 'chill') tint = hexToNum(PALETTE.CYAN_FROST);
-  else if (options.element === 'shock') tint = hexToNum(PALETTE.VOLT_YELLOW);
-  else if (options.element === 'poison') tint = hexToNum(PALETTE.LIME_GLOW);
-  else if (options.isCrit) tint = hexToNum(PALETTE.SOLAR_GOLD);
-  else if (options.blockedByShield) tint = hexToNum(PALETTE.CRIMSON_BRIGHT);
-  else if (options.hitWall) tint = hexToNum(PALETTE.WARM_STONE);
+  let shaderTint: number | null = null;
+  if (options.element === 'burn') {
+    tint = hexToNum(PALETTE.FLAME_ORANGE);
+    shaderTint = 0xffb380;
+  } else if (options.element === 'chill') {
+    tint = hexToNum(PALETTE.CYAN_FROST);
+    shaderTint = 0x99ebff;
+  } else if (options.element === 'shock') {
+    tint = hexToNum(PALETTE.VOLT_YELLOW);
+    shaderTint = 0xbfe6ff;
+  } else if (options.element === 'poison') {
+    tint = hexToNum(PALETTE.LIME_GLOW);
+    shaderTint = 0xa3f79e;
+  } else if (options.isCrit) {
+    tint = hexToNum(PALETTE.SOLAR_GOLD);
+  } else if (options.blockedByShield) {
+    tint = hexToNum(PALETTE.CRIMSON_BRIGHT);
+    shaderTint = 0xff99a8;
+  } else if (options.hitWall) {
+    tint = hexToNum(PALETTE.WARM_STONE);
+  }
 
-  const ring = this.acquireParticleSlot();
-  if (ring) {
-    activateParticle(ring, {
-      textureKey: 'fx_impact_ring',
+  const spallAngle = impactAngleRad + Math.PI;
+  const shImpact = this.acquireParticleSlot();
+  if (shImpact) {
+    const shScale = computeShaderDirectionalScale(
+      options.isCrit ? 30 : 21,
+      'fx_sh_hit_spark',
+      bakeScale,
+    );
+    const sparkFlip = this.totalSparksSpawned % 2 === 0 ? 1 : -1;
+    const sparkJitter = (((this.totalSparksSpawned * 0.754877) % 1) - 0.5) * 0.22;
+    activateParticle(shImpact, {
+      textureKey: 'fx_sh_hit_spark',
       x,
       y,
-      ttl: options.isCrit ? 0.22 : 0.16,
-      startScale: invBake * 0.25,
-      endScale: invBake * (options.isCrit ? 1.45 : 1.12),
-      startAlpha: 0.92 * alphaMult,
-      tint,
-      depth: 54,
-      easeCurve: 'easeOutCubic',
+      ttl: options.isCrit ? 0.19 : 0.14,
+      startScale: shScale,
+      endScale: shScale,
+      startAlpha: 0.96 * alphaMult,
+      rotation: spallAngle + sparkJitter,
+      tint: shaderTint,
+      blendMode: 'NORMAL',
+      depth: 55,
+      scaleRatioY: sparkFlip,
+      frameCount: SHADER_FX_FRAME_COUNT,
+      preserveFlipbookAlpha: true,
     });
   }
 
   for (let i = 0; i < count; i++) {
     const p = this.acquireParticleSlot();
     if (!p) break;
-    const dir = impactAngleRad + Math.PI + (getClientFreezeRandom()() - 0.5) * 2.1;
-    const spd = 85 + getClientFreezeRandom()() * 145;
+    const dir = spallAngle + (getClientFreezeRandom()() - 0.5) * 1.9;
+    const spd = 95 + getClientFreezeRandom()() * 145;
     const isTrail = i % 2 === 0;
     activateParticle(p, {
       textureKey: isTrail ? 'fx_spark_trail' : 'fx_spark',
@@ -714,15 +1259,15 @@ export function spawnHitSparksImpl(
       vx: Math.cos(dir) * spd,
       vy: Math.sin(dir) * spd,
       vr: isTrail ? 0 : (getClientFreezeRandom()() - 0.5) * 12,
-      ttl: 0.16 + getClientFreezeRandom()() * 0.12,
-      startScale: invBake * (options.isCrit ? 1.18 : 0.92),
-      endScale: invBake * 0.18,
+      ttl: 0.15 + getClientFreezeRandom()() * 0.1,
+      startScale: invBake * (options.isCrit ? 1.08 : 0.85),
+      endScale: invBake * 0.16,
       startAlpha: alphaMult,
-      damping: 8,
+      damping: 8.5,
       rotation: dir,
       tint: i === 0 && options.isCrit ? hexToNum(PALETTE.BONE_WHITE) : tint,
-      depth: 55,
-      scaleRatioY: isTrail ? 0.45 : 1,
+      depth: 56,
+      scaleRatioY: isTrail ? 0.42 : 1,
       alignToVelocity: isTrail,
     });
   }
@@ -740,44 +1285,39 @@ export function spawnElementalReactionFxImpl(
 ): void {
   const invBake = 1 / TextureBaker.getBakeScale();
   const spec = resolveElementalReactionBurstSpec(params.reaction, params.isTeamCombo);
-  this.spawnFloorDecal(spec.decalKind, params.x, params.y, params.isTeamCombo ? 1.35 : 1.05);
+  this.spawnFloorDecal(spec.decalKind, params.x, params.y, params.isTeamCombo ? 1.25 : 1.0);
 
-  const primaryRing = this.acquireParticleSlot();
-  if (primaryRing) {
-    activateParticle(primaryRing, {
-      textureKey: spec.primaryRing.textureKey,
-      x: params.x,
-      y: params.y,
-      vr: 1.8,
-      ttl: spec.primaryRing.ttl,
-      startScale: invBake * spec.primaryRing.startScale,
-      endScale: invBake * spec.primaryRing.endScale,
-      startAlpha: 0.96,
-      tint: hexToNum(spec.primaryRing.tintHex),
-      depth: spec.primaryRing.depth,
-      easeCurve: 'easeOutCubic',
-    });
-  }
+  // Primary Chiaroscuro 1:1 Hollow-Core Elemental Nova (6 distinct morphologies across 6 reactions!)
+  const novaKey = REACTION_NOVA_KEY[params.reaction] ?? 'fx_sh_nova_solar';
+  const novaTint = REACTION_NOVA_TINT[params.reaction] ?? null;
+  const tacticalRadiusPx = params.isTeamCombo ? 84 : 66;
+  spawnShaderNovaImpl.call(this, params.x, params.y, tacticalRadiusPx, novaKey, {
+    ttl: params.isTeamCombo ? 0.36 : 0.3,
+    tint: novaTint,
+    depth: 56,
+    sparkCount: 0,
+  });
 
+  // Crisp secondary dual-element C-notched harmonic accent ring
   const innerRing = this.acquireParticleSlot();
   if (innerRing) {
     activateParticle(innerRing, {
       textureKey: spec.innerRing.textureKey,
       x: params.x,
       y: params.y,
-      vr: -1.4,
+      vr: params.reaction === 'vaporize' ? 3.2 : -1.4,
       ttl: spec.innerRing.ttl,
       startScale: invBake * spec.innerRing.startScale,
       endScale: invBake * spec.innerRing.endScale,
-      startAlpha: 0.92,
-      tint: hexToNum(spec.innerRing.tintHex),
+      startAlpha: 0.84,
+      tint: hexToNum(spec.secondaryColorHex),
       depth: spec.innerRing.depth,
       easeCurve: 'easeOutCubic',
     });
   }
 
   const count = Math.max(
-    8,
+    6,
     Math.round(spec.particleCount * graphicsSettings.getBudget().particleBudgetRatio),
   );
   const primaryTint = hexToNum(spec.primaryColorHex);
@@ -785,26 +1325,32 @@ export function spawnElementalReactionFxImpl(
   for (let i = 0; i < count; i++) {
     const p = this.acquireParticleSlot();
     if (!p) break;
-    const ang = (i / count) * Math.PI * 2 + (getClientFreezeRandom()() - 0.5) * 0.25;
-    const spd = (params.isTeamCombo ? 190 : 145) * (0.65 + getClientFreezeRandom()() * 0.55);
-    const texKey = spec.particleTextures[i % spec.particleTextures.length]!;
+    const ang = (i / count) * Math.PI * 2 + (getClientFreezeRandom()() - 0.5) * 0.22;
+    const spd = (params.isTeamCombo ? 175 : 138) * (0.68 + getClientFreezeRandom()() * 0.45);
+    const texKey =
+      params.reaction === 'shatter' && i % 2 === 0
+        ? 'fx_ice_shard'
+        : params.reaction === 'vaporize' && i % 2 === 1
+          ? 'fx_ember_mote'
+          : spec.particleTextures[i % spec.particleTextures.length]!;
     const isTrail = texKey === 'fx_spark_trail';
     activateParticle(p, {
       textureKey: texKey,
       x: params.x,
       y: params.y,
       vx: Math.cos(ang) * spd,
-      vy: Math.sin(ang) * spd,
+      vy: Math.sin(ang) * spd - (params.reaction === 'vaporize' ? 28 : 0),
       vr: isTrail ? 0 : (getClientFreezeRandom()() - 0.5) * 10,
-      ttl: 0.28 + (i % 3) * 0.05,
-      startScale: invBake * (params.isTeamCombo ? 1.28 : 1.08),
-      endScale: invBake * 0.2,
-      startAlpha: 0.96,
-      damping: 5.5,
+      ttl: 0.25 + (i % 3) * 0.04,
+      startScale: invBake * (params.isTeamCombo ? 1.12 : 0.96),
+      endScale: invBake * 0.18,
+      startAlpha: 0.92,
+      gravityY: params.reaction === 'shatter' ? 110 : params.reaction === 'vaporize' ? -35 : 0,
+      damping: 6,
       rotation: ang,
-      tint: i % 2 === 0 ? primaryTint : secondaryTint,
-      depth: 55,
-      scaleRatioY: isTrail ? 0.45 : 1,
+      tint: texKey === 'fx_ice_shard' ? null : i % 2 === 0 ? primaryTint : secondaryTint,
+      depth: 57,
+      scaleRatioY: isTrail ? 0.42 : 1,
       alignToVelocity: isTrail,
     });
   }
@@ -853,75 +1399,24 @@ export function spawnExplosionBurstImpl(
   x: number,
   y: number,
   radius: number,
-  colorHex: string = PALETTE.TOXIC_PURPLE,
+  colorHex: string = PALETTE.FLAME_ORANGE,
 ): void {
-  this.spawnFloorDecal('scorch', x, y, clamp(radius / 64, 0.8, 1.5));
-  const invBake = 1 / TextureBaker.getBakeScale();
-  const tint = hexToNum(colorHex);
-  const ringScale = clamp(radius / 52, 0.9, 2.2);
+  const novaKey = resolveColorHexToNovaKey(colorHex);
+  const decalKind: 'scorch' | 'frost' | 'splatter' =
+    novaKey === 'fx_sh_nova_cryo'
+      ? 'frost'
+      : novaKey === 'fx_sh_nova_venom'
+        ? 'splatter'
+        : 'scorch';
+  this.spawnFloorDecal(decalKind, x, y, clamp(radius / 64, 0.8, 1.45));
 
-  const shockRing = this.acquireParticleSlot();
-  if (shockRing) {
-    activateParticle(shockRing, {
-      textureKey: 'fx_shockwave_ring',
-      x,
-      y,
-      vr: 1.2,
-      ttl: 0.32,
-      startScale: invBake * 0.25,
-      endScale: invBake * 1.55 * ringScale,
-      startAlpha: 0.95,
-      tint,
-      depth: 56,
-      easeCurve: 'easeOutCubic',
-    });
-  }
-
-  const innerFlash = this.acquireParticleSlot();
-  if (innerFlash) {
-    activateParticle(innerFlash, {
-      textureKey: 'fx_impact_ring',
-      x,
-      y,
-      ttl: 0.22,
-      startScale: invBake * 0.3,
-      endScale: invBake * 1.15 * ringScale,
-      startAlpha: 0.92,
-      tint: hexToNum(PALETTE.SOLAR_GOLD),
-      depth: 57,
-      easeCurve: 'easeOutCubic',
-    });
-  }
-
-  const count = Math.max(6, Math.round(16 * graphicsSettings.getBudget().particleBudgetRatio));
-  for (let i = 0; i < count; i++) {
-    const p = this.acquireParticleSlot();
-    if (!p) break;
-    const ang = (i / count) * Math.PI * 2 + (getClientFreezeRandom()() - 0.5) * 0.25;
-    const spd = (radius / 0.28) * (0.6 + getClientFreezeRandom()() * 0.5);
-    const isDust = i % 3 === 2;
-    const isTrail = i % 3 === 0;
-    const texKey = isDust ? 'fx_dust_puff' : isTrail ? 'fx_spark_trail' : 'fx_spark';
-    activateParticle(p, {
-      textureKey: texKey,
-      x,
-      y,
-      vx: Math.cos(ang) * spd,
-      vy: Math.sin(ang) * spd,
-      vr: isTrail ? 0 : (getClientFreezeRandom()() - 0.5) * 10,
-      ttl: 0.34,
-      startScale: invBake * (isDust ? 1.25 : 1.35),
-      endScale: invBake * 0.22,
-      startAlpha: isDust ? 0.72 : 1,
-      damping: 6,
-      rotation: ang,
-      tint: i % 2 === 0 ? hexToNum(PALETTE.SOLAR_GOLD) : tint,
-      blendMode: isDust ? 'NORMAL' : 'ADD',
-      depth: isDust ? 38 : 58,
-      scaleRatioY: isTrail ? 0.45 : 1,
-      alignToVelocity: isTrail,
-    });
-  }
+  // True 1:1 hitbox-matched Chiaroscuro Hollow-Core Detonation + radial spark needles (zero muddy dust blobs!)
+  spawnShaderNovaImpl.call(this, x, y, radius, novaKey, {
+    ttl: clamp(0.28 + radius * 0.0008, 0.28, 0.4),
+    depth: 56,
+    sparkCount: 8,
+    sparkHex: colorHex,
+  });
 }
 
 export function spawnFloatingAlertImpl(
@@ -989,5 +1484,3 @@ export function spawnFloatingAlertImpl(
   slot.text.setActive(true);
   resolveActivePopupOverlaps(this.damagePool);
 }
-
-

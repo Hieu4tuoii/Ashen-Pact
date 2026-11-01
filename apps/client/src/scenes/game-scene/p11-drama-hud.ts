@@ -365,23 +365,24 @@ export function drawP11DramaWorldOverlays(scene: GameScene): void {
   const sim = scene?.transport?.getSim?.();
   const g: Phaser.GameObjects.Graphics | undefined = scene?.telegraphGraphics;
   if (!sim || !g) return;
+  const floorG: Phaser.GameObjects.Graphics = scene?.groundHazardGraphics ?? g;
 
   const pulse = 0.5 + 0.5 * Math.sin(sim.tick * 0.22);
 
-  // 1. Vengeful Elite 0.5s Death-Ring Telegraphs
+  // 1. Vengeful Elite 0.5s Death-Ring Telegraphs (floor layer depth 16, translucent fill)
   if (Array.isArray(sim.pendingVengefulRings)) {
     for (let i = 0; i < sim.pendingVengefulRings.length; i++) {
       const ring = sim.pendingVengefulRings[i]!;
       const ratio = Math.max(0, Math.min(1, 1 - ring.timerSec / 0.5));
       const r = 42;
-      g.fillStyle(0xa855f7, 0.14 + ratio * 0.18);
-      g.fillCircle(ring.x, ring.y, r * ratio);
-      g.lineStyle(2.5, 0xf43f5e, 0.85);
-      g.strokeCircle(ring.x, ring.y, r);
+      floorG.fillStyle(0xa855f7, 0.04 + ratio * 0.04);
+      floorG.fillCircle(ring.x, ring.y, r * ratio);
+      floorG.lineStyle(2.5, 0xf43f5e, 0.85);
+      floorG.strokeCircle(ring.x, ring.y, r);
       for (let k = 0; k < 8; k++) {
         const ang = (k / 8) * Math.PI * 2;
-        g.lineStyle(1.5, 0xfbbf24, 0.75);
-        g.lineBetween(
+        floorG.lineStyle(1.5, 0xfbbf24, 0.75);
+        floorG.lineBetween(
           ring.x + Math.cos(ang) * 10,
           ring.y + Math.sin(ang) * 10,
           ring.x + Math.cos(ang) * r,
@@ -400,10 +401,10 @@ export function drawP11DramaWorldOverlays(scene: GameScene): void {
     if (e.aiState === 'spawning' && (e.waveIndex ?? 1) >= 2) {
       const ratio = Math.max(0, Math.min(1, 1 - e.stateTimer / 0.8));
       const outerR = e.radius + 14;
-      g.lineStyle(2.5, 0xf97316, 0.85);
-      g.strokeCircle(e.x, e.y, outerR * (1.2 - ratio * 0.2));
-      g.fillStyle(0xfbbf24, 0.16 + 0.14 * pulse);
-      g.fillCircle(e.x, e.y, outerR * 0.75);
+      floorG.lineStyle(2.5, 0xf97316, 0.85);
+      floorG.strokeCircle(e.x, e.y, outerR * (1.2 - ratio * 0.2));
+      floorG.fillStyle(0xfbbf24, 0.05 + 0.03 * pulse);
+      floorG.fillCircle(e.x, e.y, outerR * 0.75);
     }
 
     if (!e.isBoss) continue;
@@ -447,12 +448,12 @@ export function drawP11DramaWorldOverlays(scene: GameScene): void {
     if (elapsed >= 90 || enrageLvl > 0) {
       const lvl = Math.max(1, enrageLvl || Math.floor((elapsed - 90) / 15) + 1);
       const auraR = e.radius + 16 + pulse * 8;
-      g.fillStyle(0xef4444, 0.18 + Math.min(0.18, lvl * 0.04));
-      g.fillCircle(e.x, e.y, auraR);
-      g.lineStyle(3, 0xff2a2a, 0.92);
-      g.strokeCircle(e.x, e.y, auraR);
-      g.lineStyle(1.8, 0xfbbf24, 0.78);
-      g.strokeCircle(e.x, e.y, auraR + 7);
+      floorG.fillStyle(0xef4444, 0.05 + Math.min(0.04, lvl * 0.01));
+      floorG.fillCircle(e.x, e.y, auraR);
+      floorG.lineStyle(3, 0xff2a2a, 0.88);
+      floorG.strokeCircle(e.x, e.y, auraR);
+      floorG.lineStyle(1.8, 0xfbbf24, 0.78);
+      floorG.strokeCircle(e.x, e.y, auraR + 7);
 
       // Crimson enrage crown spikes above Boss
       for (let k = 0; k < 6; k++) {

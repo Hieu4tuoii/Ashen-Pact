@@ -836,5 +836,30 @@ describe('AP2 Phase P4B.3 — Duo Boon Diamond-Rainbow UI, 20s Secret Arena HUD 
     ).toBe(true);
     expect(zzfx.getPlayedCount()).toBe(count0 + 3);
     expect(zzfx.getLastPlayedId()).toBe('ui_click');
+
+    // Verify 1:1 top-down circularity (zero 3/4 strokeEllipse squash) and groundHazardGraphics (<= 0.08 fill) routing in Duo Boons
+    const simDuoFloor = new WorldSim({ seed: 9418, startInHub: false });
+    simDuoFloor.player.duoBoonIds = ['duo_napalm_chain_plague', 'duo_superheated_cyclone'];
+    const afflicted = simDuoFloor.spawnEnemy('goblin_shooter', 320, 260, true);
+    afflicted.napalmPlagueTimer = 2.5;
+    afflicted.napalmPlagueOwnerId = simDuoFloor.player.id;
+    const groundAlphas: number[] = [];
+    const groundG = {
+      ...createMockGraphics(),
+      fillStyle: (_col?: number, a?: number) => {
+        if (typeof a === 'number') groundAlphas.push(a);
+      },
+    };
+    const elevatedG = createMockGraphics();
+    renderP4BDuoAndSecretArenaOverlays({
+      sim: simDuoFloor,
+      telegraphGraphics: elevatedG,
+      groundHazardGraphics: groundG,
+      visualFreeze: true,
+    } as never);
+    expect(elevatedG.calls).not.toContain('strokeEllipse');
+    expect(groundG.calls).not.toContain('strokeEllipse');
+    expect(groundG.calls).toContain('strokeCircle');
+    expect(Math.max(...groundAlphas)).toBeLessThanOrEqual(0.08);
   });
 });

@@ -259,10 +259,10 @@ function pushShape(state: WeaponV2OverlayState, shape: TransientWeaponV2Shape): 
 
 export function triggerMicroBarFeedbackOnScene(
   sceneKey: object,
-  fx: CombatFxManager | undefined,
+  _fx: CombatFxManager | undefined,
   kind: MicroBarFeedbackKind,
-  x: number,
-  y: number,
+  _x: number,
+  _y: number,
   locale: 'vi' | 'en' = 'vi',
 ): void {
   const state = getWeaponV2OverlayState(sceneKey);
@@ -270,7 +270,6 @@ export function triggerMicroBarFeedbackOnScene(
   state.microBarFlashColor = spec.flashColor;
   state.microBarFlashDurationSec = spec.durationSec;
   state.microBarFlashTimerSec = spec.durationSec;
-  fx?.spawnFloatingAlert(x, y - 6, spec.text, spec.textColor);
 }
 
 export function spawnCoverFlipMicroBlankVfx(
@@ -286,9 +285,13 @@ export function spawnCoverFlipMicroBlankVfx(
     x,
     y,
     radius,
-    color: 0xffffff,
+    color: 0x7dd3fc,
     ttlSec: 0.24,
     maxTtlSec: 0.24,
+  });
+  fx?.spawnShaderDirectional?.(x, y, radius, -Math.PI * 0.5, 'fx_sh_aegis_crest', {
+    tint: 0x7dd3fc,
+    ttl: 0.24,
   });
   fx?.spawnHitSparks(x, y, 0, { isCrit: true, count: 6 });
 }
@@ -313,6 +316,7 @@ export function spawnPropDashKickVfx(
     ttlSec: 0.18,
     maxTtlSec: 0.18,
   });
+  fx?.spawnShaderCone?.(x, y, 56, angle);
   fx?.spawnDashDust(x, y);
   fx?.spawnHitSparks(x, y, angle, { count: 5 });
 }
@@ -335,6 +339,7 @@ export function spawnWallSlamVfx(
     ttlSec: 0.42,
     maxTtlSec: 0.42,
   });
+  fx?.spawnShaderNova?.(x, y, spec.radius, 'fx_sh_geyser_plume');
   fx?.spawnHitSparks(x, y, 0, { isCrit: true, element: 'burn', count: 7 });
   if (spec.floatingText) {
     fx?.spawnFloatingAlert(x, y - 4, spec.floatingText, spec.textColor);
@@ -359,6 +364,7 @@ export function spawnChasmRingOutVfx(
     ttlSec: 0.38,
     maxTtlSec: 0.38,
   });
+  fx?.spawnShaderNova?.(x, y, spec.radius, 'fx_sh_vortex_gale', { tint: 0xc084fc });
   fx?.spawnHitSparks(x, y, 0, { isCrit: true, element: 'chill', count: 6 });
   if (spec.floatingText) {
     fx?.spawnFloatingAlert(x, y - 6, spec.floatingText, spec.textColor);
@@ -382,6 +388,7 @@ export function spawnTacticalVentVfx(
     ttlSec: 0.26,
     maxTtlSec: 0.26,
   });
+  fx?.spawnShaderNova?.(x, y, 56, 'fx_sh_vortex_gale');
   fx?.spawnHitSparks(x, y, 0, { element: 'chill', count: 6 });
   triggerMicroBarFeedbackOnScene(sceneKey, fx, 'tactical_vent', x, y, locale);
 }
@@ -407,6 +414,17 @@ export function spawnTriElementalBeamVfx(
     ttlSec: 0.3,
     maxTtlSec: 0.3,
   });
+  const dist = Math.hypot(toX - fromX, toY - fromY);
+  if (dist > 12) {
+    fx?.spawnShaderLance?.(
+      fromX,
+      fromY,
+      dist,
+      Math.atan2(toY - fromY, toX - fromX),
+      { widthPx: 22 },
+    );
+  }
+  fx?.spawnShaderNova?.(toX, toY, radius, 'fx_sh_arcane_sigil', { tint: 0xfef08a });
   fx?.spawnChainLightningArc(fromX, fromY, toX, toY);
 }
 
@@ -418,7 +436,11 @@ export function spawnRivetDetonationWebVfx(
   const state = getWeaponV2OverlayState(sceneKey);
   const rivets =
     rivetsArg && rivetsArg.length > 0 ? rivetsArg : state.lastRivetSnapshot;
-  for (const r of rivets) {
+  for (let i = 0; i < rivets.length; i += 1) {
+    const r = rivets[i]!;
+    if (i < 4) {
+      fx?.spawnShaderNova?.(r.x, r.y, 44, 'fx_sh_anvil_storm');
+    }
     fx?.spawnHitSparks(r.x, r.y, 0, { isCrit: true, element: 'shock', count: 5 });
   }
   const links = buildMagneticRivetArcLinks(rivets, RIVET_WEB_MAX_LINK_DIST);
@@ -452,11 +474,17 @@ export function spawnKnightSwordParryDeflectVfx(
     y,
     radius: 44,
     angle,
-    color: 0xffffff,
+    color: 0xfffdf5,
     ttlSec: 0.22,
     maxTtlSec: 0.22,
   });
-  fx?.spawnHitSparks(x, y, angle, { isCrit: true, blockedByShield: true, count: 6 });
+  fx?.spawnShaderDirectional?.(x, y, 48, angle, 'fx_sh_aegis_crest', {
+    tint: 0xfef08a,
+    ttl: 0.2,
+  });
+  // Orient spall forward along deflected bullet trajectory (+PI cancels spawnHitSparks's +PI spall flip)
+  // without spawning a duplicate full-size sword slash per bullet!
+  fx?.spawnHitSparks(x, y, angle + Math.PI, { isCrit: true, blockedByShield: true, count: 5 });
 }
 
 export function spawnTotemCollapseLaneVfx(
@@ -477,11 +505,10 @@ export function spawnTotemCollapseLaneVfx(
     ttlSec: 0.45,
     maxTtlSec: 0.45,
   });
-  fx?.spawnPropBreakBurst(
-    'rotten_totem_pillar',
-    x + Math.cos(fallAngle) * 72,
-    y + Math.sin(fallAngle) * 72,
-  );
+  const impactX = x + Math.cos(fallAngle) * 72;
+  const impactY = y + Math.sin(fallAngle) * 72;
+  fx?.spawnShaderNova?.(impactX, impactY, 64, 'fx_sh_spore_cloud');
+  fx?.spawnPropBreakBurst('rotten_totem_pillar', impactX, impactY);
 }
 
 export function updateAndDrawWeaponV2Overlays(
@@ -493,8 +520,10 @@ export function updateAndDrawWeaponV2Overlays(
   dtSec: number,
   clockSec: number,
   locale: 'vi' | 'en' = 'vi',
+  groundG?: Phaser.GameObjects.Graphics,
 ): { flashColor: number | null; flashAlpha: number } {
   const state = getWeaponV2OverlayState(sceneKey);
+  const floorG = groundG ?? g;
 
   // Detect reload misfire transition (reloadLockout false -> true)
   const lockedNow = Boolean(player.reloadLockout);
@@ -519,32 +548,38 @@ export function updateAndDrawWeaponV2Overlays(
     }));
   }
 
-  // 1. Draw embedded magnetic rivets & live web links
+  // 1. Draw embedded magnetic rivets & live Chiaroscuro electric web links
   if (rivets.length > 0) {
     const links = buildMagneticRivetArcLinks(rivets, RIVET_WEB_MAX_LINK_DIST);
     for (const link of links) {
-      g.lineStyle(1.4, 0x38bdf8, 0.35 + Math.sin(clockSec * 14) * 0.12);
+      const pulseA = 0.42 + Math.sin(clockSec * 14) * 0.14;
+      g.lineStyle(2.8, 0x071326, pulseA * 0.75);
+      g.beginPath();
+      g.moveTo(link.from.x, link.from.y);
+      g.lineTo(link.to.x, link.to.y);
+      g.strokePath();
+      g.lineStyle(1.3, 0x38bdf8, pulseA);
       g.beginPath();
       g.moveTo(link.from.x, link.from.y);
       g.lineTo(link.to.x, link.to.y);
       g.strokePath();
     }
     for (const r of rivets) {
-      const pulseR = 6 + Math.sin(clockSec * 12 + r.id) * 1.8;
-      g.lineStyle(1.4, 0x38bdf8, 0.72);
+      const pulseR = 5.6 + Math.sin(clockSec * 12 + r.id) * 1.4;
+      g.lineStyle(1.3, 0x38bdf8, 0.74);
       g.strokeCircle(r.x, r.y, pulseR);
-      g.fillStyle(0x141019, 0.95);
-      g.fillCircle(r.x, r.y, 4.2);
+      g.fillStyle(0x071326, 0.94);
+      g.fillCircle(r.x, r.y, 4.0);
       g.fillStyle(0xfacc15, 0.98);
-      g.fillCircle(r.x, r.y, 2.6);
+      g.fillCircle(r.x, r.y, 2.4);
     }
   }
 
-  // 1b. Draw active Batch-1 projectile procedural overlays & Gale SMG spin-up wind ribbons
+  // 1b. Draw active Batch-1/Batch-2/P1C/P1D overlays (persistent floor hazards routed to floorG at depth 16)
   drawBatch1ActiveProjectiles(g, state.syncedProjectiles, player, clockSec);
-  drawBatch2ActiveWeaponOverlays(g, state.syncedSim, player, clockSec);
-  drawP1CActiveOverlays(g, state.syncedSim, clockSec);
-  drawP1DBlessingActiveOverlays(g, state.syncedSim, clockSec);
+  drawBatch2ActiveWeaponOverlays(g, state.syncedSim, player, clockSec, floorG);
+  drawP1CActiveOverlays(g, state.syncedSim, clockSec, floorG);
+  drawP1DBlessingActiveOverlays(g, state.syncedSim, clockSec, floorG);
 
   // 2. Update & draw transient weapon v2 / tactical shapes
   for (let i = state.shapes.length - 1; i >= 0; i -= 1) {
@@ -557,82 +592,124 @@ export function updateAndDrawWeaponV2Overlays(
     const progress = clamp(1 - s.ttlSec / Math.max(0.01, s.maxTtlSec), 0, 1);
     const alpha = clamp(1 - progress, 0.05, 1);
 
-    if (drawBatch1TransientShape(g, s, progress, alpha, clockSec, i)) {
+    if (drawBatch1TransientShape(g, s, progress, alpha, clockSec, i, floorG)) {
       continue;
     }
-    if (drawBatch2TransientShape(g, s, progress, alpha, clockSec, i)) {
+    if (drawBatch2TransientShape(g, s, progress, alpha, clockSec, i, floorG)) {
       continue;
     }
-    if (drawP1CTransientShape(g, s, progress, alpha)) {
+    if (drawP1CTransientShape(g, s, progress, alpha, floorG)) {
       continue;
     }
-    if (drawP1DTransientShape(g, s, progress, alpha)) {
+    if (drawP1DTransientShape(g, s, progress, alpha, floorG)) {
       continue;
     }
 
     if (s.kind === 'rivet_arc' && s.x2 !== undefined && s.y2 !== undefined) {
-      const midX = (s.x + s.x2) * 0.5 + Math.sin(clockSec * 40 + i) * 7;
-      const midY = (s.y + s.y2) * 0.5 + Math.cos(clockSec * 40 + i) * 7;
-      g.lineStyle(3.2, 0x38bdf8, alpha * 0.85);
+      const midX = (s.x + s.x2) * 0.5 + Math.sin(clockSec * 40 + i) * 5.5;
+      const midY = (s.y + s.y2) * 0.5 + Math.cos(clockSec * 40 + i) * 5.5;
+      g.lineStyle(4.2, 0x071326, alpha * 0.78);
       g.beginPath();
       g.moveTo(s.x, s.y);
       g.lineTo(midX, midY);
       g.lineTo(s.x2, s.y2);
       g.strokePath();
-      g.lineStyle(1.4, 0xfef08a, alpha);
+      g.lineStyle(2.4, 0x38bdf8, alpha * 0.92);
+      g.beginPath();
+      g.moveTo(s.x, s.y);
+      g.lineTo(midX, midY);
+      g.lineTo(s.x2, s.y2);
+      g.strokePath();
+      g.lineStyle(1.1, 0xfffdf5, alpha);
       g.beginPath();
       g.moveTo(s.x, s.y);
       g.lineTo(midX, midY);
       g.lineTo(s.x2, s.y2);
       g.strokePath();
     } else if (s.kind === 'tri_beam' && s.x2 !== undefined && s.y2 !== undefined) {
-      g.lineStyle(7 * alpha, 0xf97316, alpha * 0.55);
+      const dx = s.x2 - s.x;
+      const dy = s.y2 - s.y;
+      const dist = Math.hypot(dx, dy) || 1;
+      const nx = -dy / dist;
+      const ny = dx / dist;
+      const segs = 10;
+      g.lineStyle(6.0 * alpha, 0x141019, alpha * 0.82);
       g.beginPath();
       g.moveTo(s.x, s.y);
       g.lineTo(s.x2, s.y2);
       g.strokePath();
-      g.lineStyle(4 * alpha, 0x38bdf8, alpha * 0.8);
+      const strandCols = [0xf97316, 0x38bdf8, 0xc084fc] as const;
+      for (let st = 0; st < 3; st += 1) {
+        const phaseOff = (st * Math.PI * 2) / 3;
+        g.lineStyle(2.1 * alpha, strandCols[st]!, alpha * 0.94);
+        g.beginPath();
+        g.moveTo(s.x, s.y);
+        for (let k = 1; k <= segs; k += 1) {
+          const u = k / segs;
+          const amp = Math.sin(u * Math.PI) * 7.5;
+          const wave = Math.sin(u * Math.PI * 4 - clockSec * 18 + phaseOff) * amp;
+          g.lineTo(s.x + dx * u + nx * wave, s.y + dy * u + ny * wave);
+        }
+        g.strokePath();
+      }
+      g.lineStyle(1.4 * alpha, 0xfffdf5, alpha);
       g.beginPath();
       g.moveTo(s.x, s.y);
       g.lineTo(s.x2, s.y2);
       g.strokePath();
-      g.lineStyle(2, 0xfacc15, alpha);
-      g.strokeCircle(s.x2, s.y2, s.radius * (0.45 + progress * 0.55));
+      floorG.lineStyle(2.0, 0xfacc15, alpha * 0.82);
+      floorG.strokeCircle(s.x2, s.y2, s.radius * (0.62 + progress * 0.38));
     } else if (s.kind === 'micro_blank' || s.kind === 'vent_pulse') {
-      const r = s.radius * (0.35 + progress * 0.65);
-      g.lineStyle(s.kind === 'micro_blank' ? 3.0 : 2.6, s.color, alpha * 0.9);
-      g.strokeCircle(s.x, s.y, r);
+      const r = s.radius * (0.55 + progress * 0.45);
+      floorG.lineStyle(2.0, s.color, alpha * 0.75);
+      floorG.strokeCircle(s.x, s.y, r);
     } else if (s.kind === 'parry_flash') {
       const ang = s.angle ?? 0;
-      g.lineStyle(3.4, s.color, alpha * 0.92);
+      const r = s.radius * (0.68 + progress * 0.32);
+      g.lineStyle(3.4, 0x091624, alpha * 0.75);
       g.beginPath();
-      g.arc(s.x, s.y, s.radius * (0.6 + progress * 0.4), ang - 0.85, ang + 0.85, false);
+      g.arc(s.x, s.y, r, ang - 0.82, ang + 0.82, false);
+      g.strokePath();
+      g.lineStyle(1.8, s.color, alpha * 0.95);
+      g.beginPath();
+      g.arc(s.x, s.y, r, ang - 0.8, ang + 0.8, false);
       g.strokePath();
     } else if (s.kind === 'wall_cracks') {
-      g.lineStyle(2.0, 0x141019, alpha * 0.9);
+      floorG.lineStyle(2.2, 0x1c0a06, alpha * 0.82);
       for (let k = 0; k < 5; k += 1) {
         const a = (k * Math.PI * 2) / 5 + 0.3;
         const len = s.radius * (0.5 + (k % 2) * 0.35);
-        g.beginPath();
-        g.moveTo(s.x, s.y);
-        g.lineTo(s.x + Math.cos(a) * len, s.y + Math.sin(a) * len);
-        g.strokePath();
+        floorG.beginPath();
+        floorG.moveTo(s.x, s.y);
+        floorG.lineTo(s.x + Math.cos(a) * len, s.y + Math.sin(a) * len);
+        floorG.strokePath();
       }
     } else if (s.kind === 'ring_out_vortex') {
-      const r = Math.max(4, s.radius * (1 - progress * 0.75));
-      g.lineStyle(2.4, 0x38bdf8, alpha * 0.85);
-      g.strokeCircle(s.x, s.y, r);
-      g.fillStyle(0x09070d, alpha * 0.75);
-      g.fillCircle(s.x, s.y, r * 0.55);
+      const r = Math.max(4, s.radius * (1 - progress * 0.72));
+      floorG.lineStyle(2.0, 0x38bdf8, alpha * 0.82);
+      floorG.strokeCircle(s.x, s.y, r);
+      floorG.lineStyle(1.4, 0xc084fc, alpha * 0.7);
+      floorG.strokeCircle(s.x, s.y, r * 0.62);
     } else if (s.kind === 'totem_lane') {
       const ang = s.angle ?? 0;
-      const endX = s.x + Math.cos(ang) * 160;
-      const endY = s.y + Math.sin(ang) * 160;
-      g.lineStyle(56 * (1 - progress * 0.35), 0x4d382b, alpha * 0.38);
-      g.beginPath();
-      g.moveTo(s.x, s.y);
-      g.lineTo(endX, endY);
-      g.strokePath();
+      const cos = Math.cos(ang);
+      const sin = Math.sin(ang);
+      const nx = -sin * 22;
+      const ny = cos * 22;
+      const endX = s.x + cos * 160;
+      const endY = s.y + sin * 160;
+      floorG.lineStyle(40 * (1 - progress * 0.25), 0x091c12, alpha * 0.07);
+      floorG.beginPath();
+      floorG.moveTo(s.x, s.y);
+      floorG.lineTo(endX, endY);
+      floorG.strokePath();
+      floorG.lineStyle(1.8, 0x4ade80, alpha * 0.65);
+      floorG.beginPath();
+      floorG.moveTo(s.x + nx, s.y + ny);
+      floorG.lineTo(endX + nx, endY + ny);
+      floorG.moveTo(s.x - nx, s.y - ny);
+      floorG.lineTo(endX - nx, endY - ny);
+      floorG.strokePath();
     }
   }
 

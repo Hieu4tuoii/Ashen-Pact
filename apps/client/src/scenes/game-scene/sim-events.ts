@@ -1,5 +1,7 @@
 import {
+  clamp,
   ELEMENTAL_REACTIONS,
+  type ElementType,
   SHOT_FLAG,
   i18n,
   type SimEvent,
@@ -7,6 +9,12 @@ import {
 } from '@ashen-pact/shared';
 import { PALETTE } from '../../art/palette.js';
 import { resolveWeaponShootSfx, zzfx } from '../../audio/zzfx.js';
+import {
+  spawnClassSkillCastVfx,
+  spawnClassSummonSpawnedVfx,
+  spawnEngineerEmpBlastVfx,
+  spawnVanguardShieldShockwaveVfx,
+} from '../../fx/combat-fx-classes.js';
 import {
   spawnChasmRingOutVfx,
   spawnCoverFlipMicroBlankVfx,
@@ -90,6 +98,15 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
             if (allowStressSfx) {
               zzfx.play('gale_wind_blade', ev.x, this.camFocusX, ev.y, this.camFocusY);
             }
+          } else if (ev.weaponId === 'hunter_crossbow' && !isStress && isFinale) {
+            this.fx.spawnShaderDirectional?.(
+              ev.x,
+              ev.y,
+              64,
+              ev.angle,
+              'fx_sh_falcon_sonic',
+              { tint: 0xbae6fd, ttl: 0.2 },
+            );
           }
           if (!playerShotFxTriggered) {
             playerShotFxTriggered = true;
@@ -101,7 +118,14 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
             const isTeammate =
               spawnedProj?.ownerId !== undefined && spawnedProj.ownerId !== sim.player.id;
             if (!isStress || sim.tick % 3 === 0) {
-              this.fx.spawnMuzzleFlashAndCasing(ev.x, ev.y, ev.angle, isShotgun, isTeammate);
+              this.fx.spawnMuzzleFlashAndCasing(
+                ev.x,
+                ev.y,
+                ev.angle,
+                isShotgun,
+                isTeammate,
+                ev.weaponId,
+              );
             }
             if (!isStress) {
               this.lighting.spawnTransientLight(ev.x, ev.y, 82, PALETTE.SOLAR_GOLD, 0.72, 0.08);
@@ -133,7 +157,17 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
           this.coopPlayerRigs.get(ev.playerId)?.rig.triggerMeleeSwing();
           this.simPlayerRigs.get(ev.playerId)?.triggerMeleeSwing();
         }
-        this.fx.spawnMeleeSlash(ev.x, ev.y, ev.angle, isTeammate);
+        const swinger = sim.getAllPlayers
+          ? (sim.getAllPlayers().find((pl) => pl.id === ev.playerId) ?? sim.player)
+          : sim.player;
+        const postComboStep = swinger?.meleeComboStep;
+        const executedComboStep =
+          postComboStep === 1 ? 0 : postComboStep === 2 ? 1 : postComboStep === 0 ? 2 : 0;
+        this.fx.spawnMeleeSlash(ev.x, ev.y, ev.angle, isTeammate, {
+          weaponId: ev.weaponId,
+          comboStep: executedComboStep,
+          rangePx: ev.range,
+        });
         this.lighting.spawnTransientLight(ev.x, ev.y, 92, PALETTE.CYAN_FROST, 0.65, 0.12);
         const swingSfx = resolveWeaponShootSfx(ev.weaponId);
         zzfx.play(swingSfx, ev.x, this.camFocusX, ev.y, this.camFocusY);
@@ -201,11 +235,20 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
             count: 8,
           });
           this.lighting.spawnTransientLight(ev.x, ev.y, 110, PALETTE.SOLAR_GOLD, 0.9, 0.25);
-          if (ev.targetKind === 'enemy') {
-            const brokenBoss = sim.enemies.find((e) => e.id === ev.targetId && e.isBoss);
-            if (brokenBoss) {
-              this.fx.spawnExplosionBurst(ev.x, ev.y, 82, PALETTE.SOLAR_GOLD);
-            }
+          const brokenBoss =
+            ev.targetKind === 'enemy'
+              ? sim.enemies.find((e) => e.id === ev.targetId && e.isBoss)
+              : undefined;
+          this.fx.spawnShaderDirectional?.(
+            ev.x,
+            ev.y,
+            brokenBoss ? 86 : 56,
+            -Math.PI * 0.5,
+            'fx_sh_aegis_crest',
+            { tint: 0xfef08a, ttl: 0.26 },
+          );
+          if (brokenBoss) {
+            this.fx.spawnExplosionBurst(ev.x, ev.y, 82, PALETTE.SOLAR_GOLD);
           }
         }
         if (allowStressSfx) {
@@ -281,28 +324,53 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
         break;
       }
       case 'explosion': {
-        const isBarrel = ev.sourceDefId === 'explosive_barrel';
+        const srcId = ev.sourceDefId ?? '';
         const isSporePod =
-          ev.sourceDefId === 'volatile_spore_pod' || ev.sourceDefId === 'caustic_spore_pod';
-        const isTriStaff = ev.sourceDefId === 'apprentice_staff';
-        const isGaleCyclone = ev.sourceDefId === 'gale_smg';
-        const isFragLauncher = ev.sourceDefId === 'frag_launcher';
-        const isSeedGun = ev.sourceDefId === 'seed_gun';
-        const isTetherStaff = ev.sourceDefId === 'tether_staff';
-        const isNapalmPlague = ev.sourceDefId === 'duo_napalm_chain_plague';
-        const isCryoSpire = ev.sourceDefId === 'duo_cryo_shatter_spire';
-        const colorHex =
-          isBarrel || isFragLauncher || isNapalmPlague
-            ? PALETTE.FLAME_ORANGE
+          srcId === 'volatile_spore_pod' ||
+          srcId === 'caustic_spore_pod' ||
+          srcId === 'reload_caustic_pod' ||
+          srcId === 'ranger_arrow_volley' ||
+          srcId === 'thorn_staff' ||
+          srcId.includes('spore') ||
+          srcId.includes('poison');
+        const isTriStaff = srcId === 'apprentice_staff';
+        const isGaleCyclone = srcId === 'gale_smg';
+        const isFragLauncher = srcId === 'frag_launcher';
+        const isSeedGun = srcId === 'seed_gun';
+        const isTetherStaff = srcId === 'tether_staff';
+        const isSolarStaff = srcId === 'solar_archon_staff';
+        const isMagmaCannon = srcId === 'magma_cannon';
+        const isVoidStaff = srcId === 'void_staff';
+        const isExecutionerScythe = srcId === 'relic_executioner_scythe';
+        const isCryoBlast =
+          srcId === 'duo_cryo_shatter_spire' ||
+          srcId.includes('frost') ||
+          srcId.includes('cryo') ||
+          srcId.includes('ice') ||
+          srcId.includes('glacial');
+        const isThunderBlast =
+          srcId === 'dash_thunder_decoy' ||
+          srcId === 'tesla_turret_self_destruct' ||
+          srcId === 'thunder_hammer' ||
+          srcId.includes('thunder') ||
+          srcId.includes('shock');
+        const isTrueVoid = isVoidStaff || srcId.includes('void');
+        const isSolarArcane = isTriStaff || isSolarStaff || srcId === 'knight_sword_parry';
+        const colorHex = isExecutionerScythe
+          ? PALETTE.CRIMSON_BRIGHT
+          : isTrueVoid
+            ? PALETTE.TOXIC_PURPLE
             : isSporePod || isSeedGun
               ? PALETTE.LIME_GLOW
-              : isGaleCyclone || isCryoSpire
+              : isGaleCyclone || isCryoBlast
                 ? PALETTE.CYAN_FROST
                 : isTetherStaff
                   ? PALETTE.ELECTRIC_VIOLET
-                  : isTriStaff
-                    ? PALETTE.SOLAR_GOLD
-                    : PALETTE.TOXIC_PURPLE;
+                  : isThunderBlast
+                    ? PALETTE.VOLT_YELLOW
+                    : isSolarArcane
+                      ? PALETTE.SOLAR_GOLD
+                      : PALETTE.FLAME_ORANGE;
         if (!isStress) {
           if (isTriStaff) {
             spawnTriElementalBeamVfx(
@@ -360,7 +428,43 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
             );
           }
         }
-        this.fx.spawnExplosionBurst(ev.x, ev.y, ev.radius, colorHex);
+        const hasDedicatedBatch2SpecialInTick =
+          (isSolarStaff &&
+            events.some(
+              (other) => other.kind === 'solar_supernova' || other.kind === 'solar_converge_burst',
+            )) ||
+          (isMagmaCannon && events.some((other) => other.kind === 'magma_geyser_eruption')) ||
+          (isVoidStaff && events.some((other) => other.kind === 'void_implosion'));
+        const handledByDedicatedWeaponVfx =
+          !isStress &&
+          (isTriStaff ||
+            isGaleCyclone ||
+            isFragLauncher ||
+            isSeedGun ||
+            isTetherStaff ||
+            hasDedicatedBatch2SpecialInTick ||
+            isExecutionerScythe);
+        if (!handledByDedicatedWeaponVfx) {
+          const isOrdnanceShrapnel =
+            srcId === 'explosive_barrel' ||
+            srcId === 'coal_bomb' ||
+            srcId === 'bullet_ricochet_boom' ||
+            srcId === 'mutator_cluster_mortar';
+          if (!isStress && this.fx.spawnShaderNova && isOrdnanceShrapnel) {
+            this.fx.spawnShaderNova(ev.x, ev.y, ev.radius, 'fx_sh_shrapnel_corona');
+            this.fx.spawnFloorDecal?.('scorch', ev.x, ev.y, clamp(ev.radius / 85, 0.55, 1.4));
+            this.fx.spawnHitSparks?.(ev.x, ev.y, 0, { isCrit: true, element: 'burn', count: 8 });
+          } else if (!isStress && this.fx.spawnShaderNova && isSporePod) {
+            this.fx.spawnShaderNova(ev.x, ev.y, ev.radius, 'fx_sh_spore_cloud');
+            this.fx.spawnFloorDecal?.('splatter', ev.x, ev.y, clamp(ev.radius / 85, 0.55, 1.3));
+            this.fx.spawnHitSparks?.(ev.x, ev.y, 0, { element: 'poison', count: 7 });
+          } else if (!isStress && this.fx.spawnShaderNova && isThunderBlast) {
+            this.fx.spawnShaderNova(ev.x, ev.y, ev.radius, 'fx_sh_anvil_storm');
+            this.fx.spawnHitSparks?.(ev.x, ev.y, 0, { isCrit: true, element: 'shock', count: 8 });
+          } else {
+            this.fx.spawnExplosionBurst(ev.x, ev.y, ev.radius, colorHex);
+          }
+        }
         this.lighting.spawnTransientLight(ev.x, ev.y, ev.radius * 2.2, colorHex, 1.0, 0.38);
         if (allowStressSfx) {
           const explosionSfx = isGaleCyclone
@@ -457,8 +561,30 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
           this.coopPlayerRigs.get(ev.playerId)?.rig.triggerCastPose(0.32);
           this.simPlayerRigs.get(ev.playerId)?.triggerCastPose(0.32);
         }
-        this.lighting.spawnTransientLight(ev.x, ev.y, 115, PALETTE.CRIMSON_BRIGHT, 0.88, 0.26);
         const caster = sim.getAllPlayers().find((pl) => pl.id === ev.playerId) ?? sim.player;
+        if (!isStress) {
+          let activeZoneElement: ElementType | undefined =
+            caster.activeImbueElement !== 'none' ? caster.activeImbueElement : undefined;
+          for (let zi = sim.skillZones.length - 1; zi >= 0; zi--) {
+            const z = sim.skillZones[zi]!;
+            if (z.ownerPlayerId === caster.id && z.ttlSec > 0) {
+              activeZoneElement = z.element;
+              break;
+            }
+          }
+          spawnClassSkillCastVfx(
+            this,
+            this.fx,
+            caster.characterId,
+            ev.x,
+            ev.y,
+            ev.angle ?? caster.aimAngle,
+            activeZoneElement,
+            caster.id !== sim.player.id,
+          );
+        } else {
+          this.lighting.spawnTransientLight(ev.x, ev.y, 115, PALETTE.CRIMSON_BRIGHT, 0.88, 0.26);
+        }
         const skillSfxMap = {
           vanguard: 'skill_vanguard',
           ranger: 'skill_ranger',
@@ -471,8 +597,19 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
         break;
       }
       case 'shield_shockwave': {
-        this.fx.spawnExplosionBurst(ev.x, ev.y, 90, PALETTE.CRIMSON_BRIGHT);
-        this.lighting.spawnTransientLight(ev.x, ev.y, 150, PALETTE.CRIMSON_BRIGHT, 0.95, 0.32);
+        if (!isStress) {
+          spawnVanguardShieldShockwaveVfx(
+            this,
+            this.fx,
+            ev.x,
+            ev.y,
+            ev.angle,
+            ev.storedBullets,
+          );
+        } else {
+          this.fx.spawnExplosionBurst(ev.x, ev.y, 90, PALETTE.CRIMSON_BRIGHT);
+          this.lighting.spawnTransientLight(ev.x, ev.y, 150, PALETTE.CRIMSON_BRIGHT, 0.95, 0.32);
+        }
         zzfx.play('shield_shockwave', ev.x, this.camFocusX, ev.y, this.camFocusY);
         break;
       }
@@ -525,6 +662,11 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
           ev.y,
           ev.rarity === 'uncommon' ? 'rare' : ev.rarity,
         );
+        if (!isStress && (ev.rarity === 'epic' || ev.rarity === 'legendary')) {
+          this.fx.spawnShaderNova?.(ev.x, ev.y, 68, 'fx_sh_arcane_sigil', {
+            tint: ev.rarity === 'legendary' ? 0xfef08a : 0xd8b4fe,
+          });
+        }
         this.lighting.spawnTransientLight(
           ev.x,
           ev.y,
@@ -561,11 +703,22 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
       }
       case 'boss_spawned': {
         this.fx.addTrauma(0.32);
+        if (!isStress) {
+          const boss = sim.enemies.find((e) => e.id === ev.enemyId);
+          if (boss) {
+            this.fx.spawnShaderNova?.(boss.x, boss.y, 116, 'fx_sh_geyser_plume');
+          }
+        }
         zzfx.play('boss_roar');
         break;
       }
       case 'boss_phase_changed': {
         this.fx.addTrauma(0.5);
+        if (!isStress) {
+          this.fx.spawnShaderNova?.(ev.x, ev.y, 124, 'fx_sh_arcane_sigil', {
+            tint: 0xfef08a,
+          });
+        }
         this.lighting.spawnTransientLight(ev.x, ev.y, 240, PALETTE.SOLAR_GOLD, 1.0, 0.55);
         this.fx.spawnFloatingAlert(ev.x, ev.y, `⚡ CHUYỂN PHA ${ev.phase} — BẤT TỬ!`);
         const rec = this as unknown as Record<string, unknown>;
@@ -583,6 +736,9 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
       }
       case 'boss_enraged': {
         this.fx.addTrauma(0.35);
+        if (!isStress) {
+          this.fx.spawnShaderNova?.(ev.x, ev.y, 112, 'fx_sh_geyser_plume');
+        }
         this.lighting.spawnTransientLight(ev.x, ev.y, 200, PALETTE.CRIMSON_BRIGHT, 0.95, 0.45);
         this.fx.spawnFloatingAlert(ev.x, ev.y, `🔥 CUỒNG NỘ ×${ev.enrageLevel}!`);
         if (allowStressSfx) {
@@ -598,6 +754,11 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
         break;
       }
       case 'shrine_blessing': {
+        if (!isStress) {
+          this.fx.spawnShaderNova?.(ev.x, ev.y, 84, 'fx_sh_arcane_sigil', {
+            tint: 0x67e8f9,
+          });
+        }
         this.lighting.spawnTransientLight(ev.x, ev.y, 140, PALETTE.CYAN_FROST, 0.95, 0.4);
         zzfx.play('skill_druid', ev.x, this.camFocusX, ev.y, this.camFocusY);
         break;
@@ -607,11 +768,21 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
         break;
       }
       case 'player_downed': {
+        if (!isStress) {
+          this.fx.spawnShaderNova?.(ev.x, ev.y, 64, 'fx_sh_nova_void', {
+            tint: 0xf43f5e,
+          });
+        }
         this.lighting.spawnTransientLight(ev.x, ev.y, 110, PALETTE.CRIMSON_BRIGHT, 0.92, 0.35);
         zzfx.play('player_downed', ev.x, this.camFocusX, ev.y, this.camFocusY);
         break;
       }
       case 'player_revived': {
+        if (!isStress) {
+          this.fx.spawnShaderNova?.(ev.x, ev.y, 82, 'fx_sh_bloom_briar', {
+            tint: 0x86efac,
+          });
+        }
         this.lighting.spawnTransientLight(ev.x, ev.y, 130, PALETTE.LIME_GLOW, 0.95, 0.4);
         zzfx.play('player_revived', ev.x, this.camFocusX, ev.y, this.camFocusY);
         break;
@@ -693,14 +864,18 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
         break;
       }
       case 'summon_spawned': {
-        this.lighting.spawnTransientLight(
-          ev.x,
-          ev.y,
-          135,
-          ev.summonKind === 'sacred_tree' ? PALETTE.LIME_GLOW : PALETTE.VOLT_YELLOW,
-          0.92,
-          0.35,
-        );
+        if (!isStress) {
+          spawnClassSummonSpawnedVfx(this, this.fx, ev.summonKind, ev.x, ev.y);
+        } else {
+          this.lighting.spawnTransientLight(
+            ev.x,
+            ev.y,
+            135,
+            ev.summonKind === 'sacred_tree' ? PALETTE.LIME_GLOW : PALETTE.VOLT_YELLOW,
+            0.92,
+            0.35,
+          );
+        }
         if (allowStressSfx) {
           zzfx.play(
             ev.summonKind === 'sacred_tree' ? 'skill_druid' : 'skill_engineer',
@@ -713,15 +888,19 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
         break;
       }
       case 'emp_blast': {
-        this.fx.spawnExplosionBurst(ev.x, ev.y, ev.radius, PALETTE.VOLT_YELLOW);
-        this.lighting.spawnTransientLight(
-          ev.x,
-          ev.y,
-          ev.radius * 2,
-          PALETTE.VOLT_YELLOW,
-          1.0,
-          0.38,
-        );
+        if (!isStress) {
+          spawnEngineerEmpBlastVfx(this, this.fx, ev.x, ev.y, ev.radius);
+        } else {
+          this.fx.spawnExplosionBurst(ev.x, ev.y, ev.radius, PALETTE.VOLT_YELLOW);
+          this.lighting.spawnTransientLight(
+            ev.x,
+            ev.y,
+            ev.radius * 2,
+            PALETTE.VOLT_YELLOW,
+            1.0,
+            0.38,
+          );
+        }
         if (allowStressSfx) {
           zzfx.play('emp_blast', ev.x, this.camFocusX, ev.y, this.camFocusY);
         }

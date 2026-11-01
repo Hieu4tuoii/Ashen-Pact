@@ -212,7 +212,9 @@ function drawSoulChainBeam(
   const ny = dx / len;
   const pulse = 0.72 + 0.28 * Math.sin(timeMs * (isStretched ? 0.016 : 0.006));
 
-  g.lineStyle(isStretched ? 6 : 4.5, primaryColor, 0.24 * pulse);
+  g.lineStyle(isStretched ? 6.5 : 5.0, 0x141019, 0.58);
+  g.lineBetween(x1, y1, x2, y2);
+  g.lineStyle(isStretched ? 3.2 : 2.2, primaryColor, 0.42 * pulse);
   g.lineBetween(x1, y1, x2, y2);
 
   const linkCount = Math.max(2, Math.min(36, Math.floor(len / 18)));
@@ -222,7 +224,7 @@ function drawSoulChainBeam(
     const cx = x1 + dx * t + nx * jitter;
     const cy = y1 + dy * t + ny * jitter;
     g.lineStyle(isStretched ? 2.2 : 1.8, i % 2 === 0 ? primaryColor : secondaryColor, 0.88 * pulse);
-    g.strokeCircle(cx, cy, isStretched ? 4.2 : 3.4);
+    g.strokeCircle(cx, cy, isStretched ? 4.0 : 3.2);
   }
 
   if (isStretched) {
@@ -237,7 +239,7 @@ function drawSoulChainBeam(
     g.lineTo(x2, y2);
     g.strokePath();
 
-    const warnRadius = 22 + 4 * Math.sin(timeMs * 0.018);
+    const warnRadius = 22 + 3 * Math.sin(timeMs * 0.018);
     g.lineStyle(2.2, 0xf43f5e, 0.9);
     g.strokeCircle(x1, y1, warnRadius);
 
@@ -263,11 +265,11 @@ function drawBloodOathLaserTether(
   const ny = dx / len;
   const pulse = 0.78 + 0.22 * Math.sin(timeMs * 0.012);
 
-  g.lineStyle(9, 0xff6b00, 0.28 * pulse);
+  g.lineStyle(8.0, 0x141019, 0.72);
   g.lineBetween(x1, y1, x2, y2);
-  g.lineStyle(4.2, 0xfacc15, 0.88 * pulse);
+  g.lineStyle(4.2, 0xff6b00, 0.88 * pulse);
   g.lineBetween(x1, y1, x2, y2);
-  g.lineStyle(1.8, 0xffffff, 0.92);
+  g.lineStyle(1.6, 0xfffdf5, 0.94);
   g.lineBetween(x1, y1, x2, y2);
 
   const segs = Math.max(4, Math.min(20, Math.floor(len / 18)));
@@ -276,7 +278,7 @@ function drawBloodOathLaserTether(
   g.moveTo(x1, y1);
   for (let i = 1; i < segs; i++) {
     const t = i / segs;
-    const offset = Math.sin(timeMs * 0.02 + i * 1.7) * 5.5;
+    const offset = Math.sin(timeMs * 0.02 + i * 1.7) * 5.0;
     g.lineTo(x1 + dx * t + nx * offset, y1 + dy * t + ny * offset);
   }
   g.lineTo(x2, y2);
@@ -294,6 +296,7 @@ export function drawP2BWorldOverlays(
   playerX: number,
   playerY: number,
 ): void {
+  const floorG = (scene as { groundHazardGraphics?: Phaser.GameObjects.Graphics }).groundHazardGraphics ?? g;
   const timeMs = getVisualTimeMs(scene);
   const pulse = 0.75 + 0.25 * Math.sin(timeMs * 0.007);
   const allPlayers = resolveAllPlayers(sim);
@@ -308,15 +311,17 @@ export function drawP2BWorldOverlays(
     if (p.blackCrystalEmpoweredNextShot) {
       const rot = (timeMs * 0.003) % (Math.PI * 2);
       const r = 20 + 2 * Math.sin(timeMs * 0.01);
-      g.fillStyle(0x311042, 0.26);
-      g.fillCircle(px, py, r);
-      g.lineStyle(2, 0xfacc15, 0.92);
+      floorG.fillStyle(0x311042, 0.08);
+      floorG.fillCircle(px, py, r);
+      g.lineStyle(3.4, 0x141019, 0.76);
       g.beginPath();
       g.moveTo(px + Math.cos(rot) * r, py + Math.sin(rot) * r);
       g.lineTo(px + Math.cos(rot + Math.PI / 2) * r, py + Math.sin(rot + Math.PI / 2) * r);
       g.lineTo(px + Math.cos(rot + Math.PI) * r, py + Math.sin(rot + Math.PI) * r);
       g.lineTo(px + Math.cos(rot + (Math.PI * 3) / 2) * r, py + Math.sin(rot + (Math.PI * 3) / 2) * r);
       g.closePath();
+      g.strokePath();
+      g.lineStyle(1.8, 0xfacc15, 0.94);
       g.strokePath();
     }
 
@@ -338,32 +343,34 @@ export function drawP2BWorldOverlays(
     }
   }
 
-  // 2. Ashen Executioner (`Bóng Ma Đao Phủ`) spectral aura & scythe cleave telegraph
+  // 2. Ashen Executioner (`Bóng Ma Đao Phủ`) 1:1 spectral aura & scythe cleave telegraph
   for (const e of sim.enemies) {
     if (e.hp <= 0 || e.defId !== 'ashen_executioner') continue;
     if (Math.hypot(e.x - playerX, e.y - playerY) > 760) continue;
 
     const r = e.radius || 22;
     const rot = (timeMs * 0.004) % (Math.PI * 2);
-    g.fillStyle(0x2e0718, 0.42);
-    g.fillCircle(e.x, e.y, r + 8);
-    g.lineStyle(2.2, 0xf43f5e, 0.78 * pulse);
-    g.strokeCircle(e.x, e.y, r + 8);
-    g.lineStyle(1.6, 0xc084fc, 0.78);
-    g.beginPath();
-    g.arc(e.x, e.y, r + 12, rot, rot + Math.PI * 1.15, false);
-    g.strokePath();
+    floorG.fillStyle(0x2e0718, 0.08);
+    floorG.fillCircle(e.x, e.y, r + 8);
+    floorG.lineStyle(2.2, 0xf43f5e, 0.78 * pulse);
+    floorG.strokeCircle(e.x, e.y, r + 8);
+    floorG.lineStyle(1.6, 0xc084fc, 0.78);
+    floorG.beginPath();
+    floorG.arc(e.x, e.y, r + 12, rot, rot + Math.PI * 1.15, false);
+    floorG.strokePath();
 
     if (e.aiState === 'telegraph') {
       const aimAngle = e.telegraphAngle ?? e.aimAngle;
-      g.fillStyle(0xf43f5e, 0.22);
-      g.lineStyle(2, 0xf43f5e, 0.92);
-      g.beginPath();
-      g.moveTo(e.x, e.y);
-      g.arc(e.x, e.y, 92, aimAngle - 0.75, aimAngle + 0.75, false);
-      g.closePath();
-      g.fillPath();
-      g.strokePath();
+      floorG.fillStyle(0xe84545, 0.08);
+      floorG.beginPath();
+      floorG.moveTo(e.x, e.y);
+      floorG.arc(e.x, e.y, 92, aimAngle - 0.75, aimAngle + 0.75, false);
+      floorG.closePath();
+      floorG.fillPath();
+      floorG.lineStyle(4.2, 0x141019, 0.72);
+      floorG.strokePath();
+      floorG.lineStyle(2.4, 0xe84545, 0.95);
+      floorG.strokePath();
     }
   }
 
@@ -373,25 +380,63 @@ export function drawP2BWorldOverlays(
 
     if (b.weaponId === 'ashen_executioner_wave') {
       const angle = b.angle ?? Math.atan2(b.vy, b.vx);
-      const r = Math.max(14, b.radius || 14);
-      g.lineStyle(3.2, 0x3b0764, 0.9);
+      const cos = Math.cos(angle);
+      const sin = Math.sin(angle);
+      const nx = -sin;
+      const ny = cos;
+      // Offset arc center behind (b.x, b.y) so the ~48px Chiaroscuro Dark-Flame Scythe Crescent
+      // sweeps directly through the inviolable #E84545 enemy core at (b.x, b.y)!
+      const arcR = Math.max(26, (b.radius || 14) + 12);
+      const cx = b.x - cos * (arcR - 2);
+      const cy = b.y - sin * (arcR - 2);
+
+      // Trailing dark-flame wake wisps from scythe horn tips
+      for (const side of [-1, 1] as const) {
+        const hornAng = angle + side * 1.12;
+        const hx = cx + Math.cos(hornAng) * arcR;
+        const hy = cy + Math.sin(hornAng) * arcR;
+        g.lineStyle(4.2, 0x141019, 0.86);
+        g.beginPath();
+        g.moveTo(hx, hy);
+        g.lineTo(hx - cos * 16 + nx * side * 3, hy - sin * 16 + ny * side * 3);
+        g.strokePath();
+
+        g.lineStyle(2.0, 0xa855f7, 0.88);
+        g.beginPath();
+        g.moveTo(hx, hy);
+        g.lineTo(hx - cos * 13 + nx * side * 2.5, hy - sin * 13 + ny * side * 2.5);
+        g.strokePath();
+      }
+
+      // 1. Wide #141019 obsidian Chiaroscuro shroud
+      g.lineStyle(8.4, 0x141019, 0.92);
       g.beginPath();
-      g.arc(b.x, b.y, r + 3, angle - 1.05, angle + 1.05, false);
+      g.arc(cx, cy, arcR, angle - 1.18, angle + 1.18, false);
       g.strokePath();
-      g.lineStyle(2.4, 0xf43f5e, 0.98);
+
+      // 2. Ashen dark-flame spectral violet outer mantle
+      g.lineStyle(5.6, 0x9333ea, 0.86);
       g.beginPath();
-      g.arc(b.x, b.y, r, angle - 0.95, angle + 0.95, false);
+      g.arc(cx - cos * 2.5, cy - sin * 2.5, arcR - 1, angle - 1.08, angle + 1.08, false);
       g.strokePath();
-      g.lineStyle(1.4, 0xc084fc, 0.95);
+
+      // 3. Saturated #E84545 crimson scythe blade
+      g.lineStyle(4.0, 0xe84545, 0.98);
       g.beginPath();
-      g.arc(b.x, b.y, r - 3, angle - 0.75, angle + 0.75, false);
+      g.arc(cx, cy, arcR, angle - 1.05, angle + 1.05, false);
+      g.strokePath();
+
+      // 4. Razor #FFFDF5 hot cutting spine passing right through (b.x, b.y)
+      g.lineStyle(1.8, 0xfffdf5, 0.98);
+      g.beginPath();
+      g.arc(cx, cy, arcR + 1.2, angle - 0.86, angle + 0.86, false);
       g.strokePath();
     } else if (b.weaponId === 'relic_perpetual_core_rocket') {
       const angle = b.angle ?? Math.atan2(b.vy, b.vx);
       const cos = Math.cos(angle);
       const sin = Math.sin(angle);
       g.fillStyle(0x38bdf8, 0.9);
-      g.fillCircle(b.x - cos * 8, b.y - sin * 8, 4.2);
+      g.fillCircle(b.x - cos * 8, b.y - sin * 8, 4.0);
       g.fillStyle(0xd97706, 0.95);
       g.fillTriangle(
         b.x + cos * 8,
@@ -413,7 +458,7 @@ export function drawP2BWorldOverlays(
     }
   }
 
-  // 4. Transient Cross Scythe X-Slash bursts (`relic_executioner_scythe`)
+  // 4. Transient Cross Scythe X-Slash bursts (`relic_executioner_scythe` — hollow 1:1 Chiaroscuro sigil)
   for (let i = activeCrossScytheSlashes.length - 1; i >= 0; i--) {
     const fx = activeCrossScytheSlashes[i]!;
     const elapsed = timeMs - fx.bornAtMs;
@@ -423,21 +468,27 @@ export function drawP2BWorldOverlays(
     }
     const t = Math.min(1, Math.max(0, elapsed / fx.durationMs));
     const alpha = 1 - t * 0.85;
-    const r = fx.radius * (0.65 + 0.35 * t);
+    const r = fx.radius * (0.68 + 0.32 * t);
 
-    g.fillStyle(0xf43f5e, alpha * 0.16);
-    g.fillCircle(fx.x, fx.y, r);
-    g.lineStyle(2.6, 0xfacc15, alpha * 0.9);
-    g.strokeCircle(fx.x, fx.y, r);
+    floorG.fillStyle(0xf43f5e, alpha * 0.05);
+    floorG.fillCircle(fx.x, fx.y, r);
+    floorG.lineStyle(4.2, 0x141019, alpha * 0.72);
+    floorG.strokeCircle(fx.x, fx.y, r);
+    floorG.lineStyle(2.4, 0xfacc15, alpha * 0.92);
+    floorG.strokeCircle(fx.x, fx.y, r);
 
-    const diag = r * 0.86;
-    g.lineStyle(4.5, 0xf43f5e, alpha * 0.95);
+    const diag = r * 0.84;
+    g.lineStyle(6.0, 0x141019, alpha * 0.82);
     g.lineBetween(fx.x - diag, fx.y - diag, fx.x + diag, fx.y + diag);
     g.lineBetween(fx.x + diag, fx.y - diag, fx.x - diag, fx.y + diag);
 
-    g.lineStyle(2.2, 0xfef08a, alpha);
-    g.lineBetween(fx.x - diag * 0.9, fx.y - diag * 0.9, fx.x + diag * 0.9, fx.y + diag * 0.9);
-    g.lineBetween(fx.x + diag * 0.9, fx.y - diag * 0.9, fx.x - diag * 0.9, fx.y + diag * 0.9);
+    g.lineStyle(3.4, 0xf43f5e, alpha * 0.95);
+    g.lineBetween(fx.x - diag, fx.y - diag, fx.x + diag, fx.y + diag);
+    g.lineBetween(fx.x + diag, fx.y - diag, fx.x - diag, fx.y + diag);
+
+    g.lineStyle(1.6, 0xfffdf5, alpha);
+    g.lineBetween(fx.x - diag * 0.88, fx.y - diag * 0.88, fx.x + diag * 0.88, fx.y + diag * 0.88);
+    g.lineBetween(fx.x + diag * 0.88, fx.y - diag * 0.88, fx.x - diag * 0.88, fx.y + diag * 0.88);
   }
 }
 
@@ -453,7 +504,7 @@ export function handleP2BSimEvent(
   if (ev.kind === 'pact_signed') {
     const pact = ASHEN_PACTS[ev.pactId];
     if (!isStress) {
-      scene.fx?.spawnExplosionBurst(ev.x, ev.y, 34);
+      scene.fx?.spawnExplosionBurst(ev.x, ev.y, 44, PALETTE.CRIMSON_BRIGHT);
       scene.fx?.addTrauma(0.24);
       scene.lighting?.spawnTransientLight(ev.x, ev.y, 130, PALETTE.CRIMSON_BRIGHT, 0.95, 0.35);
       const pactName = (isEn ? pact?.nameEn : pact?.nameVi) ?? ev.nameVi;
@@ -471,7 +522,7 @@ export function handleP2BSimEvent(
     const relic = ASHEN_RELICS[ev.relicId];
     if (!isStress) {
       triggerRelicAwakenedBanner(scene, ev.relicId, isEn);
-      scene.fx?.spawnExplosionBurst(ev.x, ev.y, 48);
+      scene.fx?.spawnExplosionBurst(ev.x, ev.y, 56, PALETTE.SOLAR_GOLD);
       scene.fx?.addTrauma(0.32);
       scene.lighting?.spawnTransientLight(ev.x, ev.y, 160, PALETTE.SOLAR_GOLD, 1.0, 0.55);
       const relicName = (isEn ? relic?.nameEn : relic?.nameVi) ?? ev.nameVi;
@@ -487,12 +538,17 @@ export function handleP2BSimEvent(
 
   if (ev.kind === 'explosion' && ev.sourceDefId === 'relic_executioner_scythe') {
     if (!isStress) {
+      const r = Math.max(48, ev.radius || 96);
       activeCrossScytheSlashes.push({
         x: ev.x,
         y: ev.y,
-        radius: Math.max(48, ev.radius || 96),
+        radius: r,
         bornAtMs: getVisualTimeMs(scene),
         durationMs: 360,
+      });
+      scene.fx?.spawnShaderSlash?.(ev.x, ev.y, r * 0.85, Math.PI * 0.25, 'fx_sh_slash_crimson');
+      scene.fx?.spawnShaderSlash?.(ev.x, ev.y, r * 0.85, -Math.PI * 0.25, 'fx_sh_slash_crimson', {
+        flipY: true,
       });
     }
     return false;

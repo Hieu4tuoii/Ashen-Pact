@@ -548,5 +548,78 @@ describe('AP2 Phase P1D.4 & P4A.4 — Per-Player Blessing Modal UI, HUD Chips, i
     const gNextRoom = createMockGraphics();
     drawP4ATetherAndProjectileOverlays(mockScene as never, gNextRoom as never, sim);
     expect(gNextRoom.calls).toHaveLength(0);
+
+    // Chiaroscuro shader flipbook dispatch & depth: 16 groundHazardGraphics floor routing (<= 0.08 fill)
+    const novaKeys: string[] = [];
+    const directionalKeys: string[] = [];
+    const floorAlphas: number[] = [];
+    const groundG = {
+      ...createMockGraphics(),
+      fillStyle: (_col?: number, a?: number) => {
+        if (typeof a === 'number') floorAlphas.push(a);
+      },
+    };
+    const shaderScene = {
+      sim,
+      groundHazardGraphics: groundG,
+      camFocusX: 240,
+      camFocusY: 180,
+      visualFreeze: true,
+      fx: {
+        spawnShaderNova: (_x: number, _y: number, _r: number, key: string) => novaKeys.push(key),
+        spawnShaderDirectional: (_x: number, _y: number, _r: number, _a: number, key: string) =>
+          directionalKeys.push(key),
+        spawnShaderCone: () => {},
+        spawnShaderSlash: () => {},
+      },
+    };
+    for (const [kind, expectedNova] of [
+      ['reload_frost_nova', 'fx_sh_nova_cryo'],
+      ['table_tech_rocket_launch', 'fx_sh_shrapnel_corona'],
+      ['reload_tediore_chuck', 'fx_sh_shrapnel_corona'],
+      ['bullet_ricochet_boom', 'fx_sh_shrapnel_corona'],
+      ['reload_magnet_vortex', 'fx_sh_vortex_gale'],
+      ['ranger_arrow_wall_blast', 'fx_sh_spore_cloud'],
+      ['druid_poison_root_whip', 'fx_sh_bloom_briar'],
+    ] as const) {
+      novaKeys.length = 0;
+      spawnP1DBlessingEventFx(
+        shaderScene as never,
+        { kind, x: 240, y: 180, radius: 96 } as never,
+        sim,
+        false,
+        false,
+      );
+      expect(novaKeys).toContain(expectedNova);
+    }
+    spawnP1DBlessingEventFx(
+      shaderScene as never,
+      { kind: 'vanguard_shield_charge', x: 240, y: 180, radius: 78, angle: 0.4 } as never,
+      sim,
+      false,
+      false,
+    );
+    expect(directionalKeys).toContain('fx_sh_aegis_crest');
+
+    handleP4ASimEvent(
+      shaderScene as never,
+      {
+        kind: 'explosion',
+        x: 240,
+        y: 180,
+        radius: 88,
+        damage: 36,
+        sourceDefId: 'dash_thunder_decoy',
+      },
+      sim,
+      false,
+      false,
+    );
+    sim.tick += 2;
+    const elevatedG = createMockGraphics();
+    drawP4ATetherAndProjectileOverlays(shaderScene as never, elevatedG as never, sim);
+    expect(groundG.calls.includes('strokeCircle')).toBe(true);
+    expect(floorAlphas.length).toBeGreaterThan(0);
+    expect(Math.max(...floorAlphas)).toBeLessThanOrEqual(0.08);
   });
 });

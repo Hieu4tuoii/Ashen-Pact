@@ -104,5 +104,43 @@ describe('AP2 Phase P1C.4 — Biome 2 & Biome 3 Procedural Prop Texture Keys & C
       false,
     );
     expect(handled).toBe(true);
+
+    // Verify 1:1 Chiaroscuro shader flipbooks for P1C tactical props and groundHazardGraphics (<= 0.08 fill) routing
+    const novaCalls: Array<[number, number, number, string]> = [];
+    const coneCalls: Array<[number, number, number, number]> = [];
+    const mockFx = {
+      spawnShaderNova: (x: number, y: number, r: number, key: string) => novaCalls.push([x, y, r, key]),
+      spawnShaderCone: (x: number, y: number, r: number, a: number) => coneCalls.push([x, y, r, a]),
+      spawnHitSparks: () => {},
+      spawnExplosionBurst: () => {},
+    };
+    spawnGlacialShatterSpikesVfx(sceneKey, mockFx as never, 320, 240, 0);
+    spawnPrismRefractFlashVfx(sceneKey, mockFx as never, 400, 240, 0.5);
+    spawnPneumaticPressSlamVfx(sceneKey, mockFx as never, 480, 240);
+    spawnSlagLavaCarpetVfx(sceneKey, mockFx as never, 520, 240, 0.25);
+
+    expect(novaCalls.some((c) => c[0] === 320 && c[3] === 'fx_sh_nova_cryo')).toBe(true);
+    expect(coneCalls.length).toBe(1);
+    expect(novaCalls.some((c) => c[0] === 400 && c[3] === 'fx_sh_arcane_sigil')).toBe(true);
+    expect(novaCalls.some((c) => c[0] === 480 && c[3] === 'fx_sh_geyser_plume')).toBe(true);
+    expect(novaCalls.some((c) => c[0] === 520 && c[3] === 'fx_sh_geyser_plume')).toBe(true);
+
+    const fillAlphas: number[] = [];
+    const groundG = {
+      ...createMockGraphics(),
+      fillStyle: (_c?: number, a?: number) => {
+        if (typeof a === 'number') fillAlphas.push(a);
+      },
+    };
+    const elevatedG = createMockGraphics();
+    (drawP1CActiveOverlays as unknown as (g: unknown, s: unknown, t: number, gg?: unknown) => void)(
+      elevatedG,
+      sim,
+      1.0,
+      groundG,
+    );
+    expect(groundG.calls.includes('strokeCircle')).toBe(true);
+    expect(fillAlphas.length).toBeGreaterThan(0);
+    expect(Math.max(...fillAlphas)).toBeLessThanOrEqual(0.08);
   });
 });

@@ -36,7 +36,7 @@ export function spawnCrossbowBarbedRipVfx(
   playerY: number,
   targets: ReadonlyArray<{ x: number; y: number }>,
   totalArrows = 1,
-  locale: 'vi' | 'en' = 'vi',
+  _locale: 'vi' | 'en' = 'vi',
 ): void {
   const state = getWeaponV2OverlayState(sceneKey);
   const effectiveTargets =
@@ -52,16 +52,17 @@ export function spawnCrossbowBarbedRipVfx(
       radius: 52,
       count: Math.max(1, totalArrows),
       color: 0x38bdf8,
-      ttlSec: 0.38,
-      maxTtlSec: 0.38,
+      ttlSec: 0.34,
+      maxTtlSec: 0.34,
     });
     const pullAng = Math.atan2(playerY - t.y, playerX - t.x);
+    fx?.spawnShaderDirectional?.(t.x, t.y, 64, pullAng, 'fx_sh_falcon_sonic', {
+      tint: 0x7dd3fc,
+      ttl: 0.24,
+    });
     fx?.spawnHitSparks(t.x, t.y, pullAng, { isCrit: true, element: 'chill', count: 7 });
     fx?.spawnFloorDecal('frost', t.x, t.y, 0.85);
   }
-  const label =
-    locale === 'en' ? `BARBED RIP! ×${totalArrows}` : `RÚT TÊN! ×${totalArrows}`;
-  fx?.spawnFloatingAlert(playerX, playerY - 28, label, '#38BDF8');
 }
 
 export function spawnThornStaffWhipVfx(
@@ -84,10 +85,18 @@ export function spawnThornStaffWhipVfx(
     radius: 240,
     angle,
     isFinale,
-    color: isFinale ? 0xc084fc : 0x4ade80,
-    ttlSec: isFinale ? 0.34 : 0.25,
-    maxTtlSec: isFinale ? 0.34 : 0.25,
+    color: isFinale ? 0xc084fc : 0x10b981,
+    ttlSec: isFinale ? 0.32 : 0.24,
+    maxTtlSec: isFinale ? 0.32 : 0.24,
   });
+  fx?.spawnShaderSlash?.(
+    x,
+    y,
+    isFinale ? 104 : 84,
+    angle,
+    'fx_sh_slash_emerald',
+    { ttl: isFinale ? 0.24 : 0.19 },
+  );
   if (isFinale) {
     fx?.spawnHitSparks(endX, endY, angle + Math.PI, {
       isCrit: true,
@@ -104,7 +113,7 @@ export function spawnThornBloomVfx(
   playerY: number,
   targets: ReadonlyArray<{ x: number; y: number }>,
   totalThorns = 1,
-  locale: 'vi' | 'en' = 'vi',
+  _locale: 'vi' | 'en' = 'vi',
 ): void {
   const state = getWeaponV2OverlayState(sceneKey);
   const effectiveTargets =
@@ -117,16 +126,14 @@ export function spawnThornBloomVfx(
       y: t.y,
       radius: 58,
       count: Math.max(1, totalThorns),
-      color: 0x4ade80,
-      ttlSec: 0.4,
-      maxTtlSec: 0.4,
+      color: 0x10b981,
+      ttlSec: 0.36,
+      maxTtlSec: 0.36,
     });
+    fx?.spawnShaderNova?.(t.x, t.y, 58, 'fx_sh_bloom_briar');
     fx?.spawnHitSparks(t.x, t.y, 0, { isCrit: true, element: 'poison', count: 8 });
     fx?.spawnFloorDecal('splatter', t.x, t.y, 1.05);
   }
-  const label =
-    locale === 'en' ? `THORN BLOOM! ×${totalThorns}` : `NỞ GAI ĐỘC! ×${totalThorns}`;
-  fx?.spawnFloatingAlert(playerX, playerY - 28, label, '#4ADE80');
 }
 
 export function spawnScrapShotgunBlastVfx(
@@ -146,9 +153,10 @@ export function spawnScrapShotgunBlastVfx(
     angle,
     isFinale,
     color: isFinale ? 0xf97316 : 0xfacc15,
-    ttlSec: isFinale ? 0.3 : 0.22,
-    maxTtlSec: isFinale ? 0.3 : 0.22,
+    ttlSec: isFinale ? 0.28 : 0.2,
+    maxTtlSec: isFinale ? 0.28 : 0.2,
   });
+  fx?.spawnShaderCone?.(x, y, isFinale ? 104 : 84, angle);
   if (isFinale) {
     fx?.spawnHitSparks(x + Math.cos(angle) * 28, y + Math.sin(angle) * 28, angle, {
       isCrit: true,
@@ -164,7 +172,7 @@ export function spawnScrapShotgunShellEjectVfx(
   x: number,
   y: number,
   angle: number,
-  locale: 'vi' | 'en' = 'vi',
+  _locale: 'vi' | 'en' = 'vi',
 ): void {
   const state = getWeaponV2OverlayState(sceneKey);
   pushP1AShape(state, {
@@ -174,20 +182,16 @@ export function spawnScrapShotgunShellEjectVfx(
     radius: 110,
     angle,
     color: 0xf97316,
-    ttlSec: 0.38,
-    maxTtlSec: 0.38,
+    ttlSec: 0.36,
+    maxTtlSec: 0.36,
   });
+  fx?.spawnShaderCone?.(x, y, 110, angle);
+  fx?.spawnShaderNova?.(x, y, 64, 'fx_sh_shrapnel_corona');
   fx?.spawnHitSparks(x + Math.cos(angle) * 44, y + Math.sin(angle) * 44, angle, {
     isCrit: true,
     element: 'burn',
     count: 8,
   });
-  fx?.spawnFloatingAlert(
-    x,
-    y - 28,
-    locale === 'en' ? 'HOT SHELLS!' : 'VỎ ĐẠN NÓNG!',
-    '#F97316',
-  );
 }
 
 export function spawnGaleWindBladeVfx(
@@ -207,8 +211,12 @@ export function spawnGaleWindBladeVfx(
     radius: 34,
     angle,
     color: 0x2dd4bf,
-    ttlSec: 0.3,
-    maxTtlSec: 0.3,
+    ttlSec: 0.28,
+    maxTtlSec: 0.28,
+  });
+  fx?.spawnShaderDirectional?.(x, y, 72, angle, 'fx_sh_falcon_sonic', {
+    tint: 0x5eead4,
+    ttl: 0.22,
   });
   fx?.spawnHitSparks(x + Math.cos(angle) * 22, y + Math.sin(angle) * 22, angle, {
     element: 'chill',
@@ -222,25 +230,21 @@ export function spawnGaleCycloneVentVfx(
   x: number,
   y: number,
   radius = 96,
-  locale: 'vi' | 'en' = 'vi',
+  _locale: 'vi' | 'en' = 'vi',
 ): void {
   const state = getWeaponV2OverlayState(sceneKey);
+  const cycloneR = radius > 0 ? radius : 96;
   pushP1AShape(state, {
     kind: 'gale_cyclone_vortex',
     x,
     y,
-    radius: Math.max(radius, 96),
+    radius: cycloneR,
     color: 0x2dd4bf,
-    ttlSec: 0.44,
-    maxTtlSec: 0.44,
+    ttlSec: 0.3,
+    maxTtlSec: 0.3,
   });
+  fx?.spawnShaderNova?.(x, y, cycloneR, 'fx_sh_vortex_gale');
   fx?.spawnHitSparks(x, y, 0, { isCrit: true, element: 'chill', count: 10 });
-  fx?.spawnFloatingAlert(
-    x,
-    y - 28,
-    locale === 'en' ? 'CYCLONE VENT!' : 'LỐC XOÁY!',
-    '#2DD4BF',
-  );
 }
 
 export function spawnFragLauncherAirburstVfx(
@@ -250,29 +254,23 @@ export function spawnFragLauncherAirburstVfx(
   y: number,
   radius = 104,
   isAirburst = radius >= 100,
-  locale: 'vi' | 'en' = 'vi',
+  _locale: 'vi' | 'en' = 'vi',
 ): void {
   const state = getWeaponV2OverlayState(sceneKey);
+  const effRadius = radius > 0 ? radius : isAirburst ? 104 : 68;
   pushP1AShape(state, {
     kind: 'frag_airburst_ring',
     x,
     y,
-    radius: isAirburst ? Math.max(radius, 104) : Math.max(radius, 68),
+    radius: effRadius,
     isAirburst,
     color: 0xf97316,
-    ttlSec: 0.42,
-    maxTtlSec: 0.42,
+    ttlSec: 0.3,
+    maxTtlSec: 0.3,
   });
+  fx?.spawnShaderNova?.(x, y, effRadius, 'fx_sh_shrapnel_corona');
   fx?.spawnFloorDecal('scorch', x, y, isAirburst ? 1.35 : 1.0);
   fx?.spawnHitSparks(x, y, 0, { isCrit: isAirburst, element: 'burn', count: 9 });
-  if (isAirburst) {
-    fx?.spawnFloatingAlert(
-      x,
-      y - 38,
-      locale === 'en' ? 'AIRBURST!' : 'NỔ TRÊN KHÔNG!',
-      '#FACC15',
-    );
-  }
 }
 
 export function spawnSeedGunHarvestBloomVfx(
@@ -284,19 +282,20 @@ export function spawnSeedGunHarvestBloomVfx(
   releasedHealingMist = false,
   playerX = x,
   playerY = y,
-  locale: 'vi' | 'en' = 'vi',
+  _locale: 'vi' | 'en' = 'vi',
 ): void {
   const state = getWeaponV2OverlayState(sceneKey);
-  const bloomR = Math.max(radius, 88);
+  const bloomR = radius > 0 ? radius : 88;
   pushP1AShape(state, {
     kind: 'seed_harvest_bloom',
     x,
     y,
     radius: bloomR,
-    color: 0x4ade80,
-    ttlSec: 0.44,
-    maxTtlSec: 0.44,
+    color: 0x10b981,
+    ttlSec: 0.3,
+    maxTtlSec: 0.3,
   });
+  fx?.spawnShaderNova?.(x, y, bloomR, 'fx_sh_bloom_briar');
   fx?.spawnHitSparks(x, y, 0, { isCrit: true, element: 'poison', count: 8 });
 
   if (releasedHealingMist) {
@@ -308,15 +307,9 @@ export function spawnSeedGunHarvestBloomVfx(
       y2: playerY,
       radius: bloomR,
       color: 0x2dd4bf,
-      ttlSec: 0.55,
-      maxTtlSec: 0.55,
+      ttlSec: 0.48,
+      maxTtlSec: 0.48,
     });
-    fx?.spawnFloatingAlert(
-      playerX,
-      playerY - 28,
-      locale === 'en' ? '✚ HEALING MIST!' : '✚ SƯƠNG HỒI PHỤC!',
-      '#2DD4BF',
-    );
   }
 }
 
@@ -328,7 +321,7 @@ export function spawnTetherElectromagneticYankVfx(
   anchorX?: number,
   anchorY?: number,
   radius = 96,
-  locale: 'vi' | 'en' = 'vi',
+  _locale: 'vi' | 'en' = 'vi',
 ): void {
   const state = getWeaponV2OverlayState(sceneKey);
   const lastBeam = state.lastTetherSnapshot[0];
@@ -336,6 +329,7 @@ export function spawnTetherElectromagneticYankVfx(
   const ay = anchorY ?? lastBeam?.y2 ?? playerY;
   const px = lastBeam?.x1 ?? playerX;
   const py = lastBeam?.y1 ?? playerY;
+  const effRadius = radius > 0 ? radius : 96;
 
   pushP1AShape(state, {
     kind: 'tether_em_yank',
@@ -343,23 +337,18 @@ export function spawnTetherElectromagneticYankVfx(
     y: ay,
     x2: px,
     y2: py,
-    radius: Math.max(radius, 96),
-    color: 0xa855f7,
-    ttlSec: 0.44,
-    maxTtlSec: 0.44,
+    radius: effRadius,
+    color: 0x7c3aed,
+    ttlSec: 0.3,
+    maxTtlSec: 0.3,
   });
+  fx?.spawnShaderNova?.(ax, ay, effRadius, 'fx_sh_anvil_storm', { tint: 0xc084fc });
   fx?.spawnChainLightningArc(px, py, ax, ay);
   fx?.spawnHitSparks(ax, ay, 0, { isCrit: true, element: 'shock', count: 10 });
-  fx?.spawnFloatingAlert(
-    ax,
-    ay - 38,
-    locale === 'en' ? '⚡ EM YANK NOVA!' : '⚡ XUNG KÉO ĐIỆN TỪ!',
-    '#C084FC',
-  );
 }
 
 /**
- * Renders the 11 Batch-1 P1A transient procedural VFX shapes onto the scene Graphics overlay.
+ * Renders the 11 Batch-1 P1A transient Chiaroscuro VFX accents (hollow-core, 1:1 circular, zero opaque discs).
  */
 export function drawBatch1TransientShape(
   g: Phaser.GameObjects.Graphics,
@@ -368,24 +357,26 @@ export function drawBatch1TransientShape(
   alpha: number,
   clockSec: number,
   index: number,
+  groundG?: Phaser.GameObjects.Graphics,
 ): boolean {
+  const floorG = groundG ?? g;
   switch (s.kind) {
     case 'crossbow_rip_tether': {
       const px = s.x2 ?? s.x;
       const py = s.y2 ?? s.y;
-      g.lineStyle(5.2 * alpha, 0x141019, alpha * 0.85);
+      g.lineStyle(4.0 * alpha, 0x071726, alpha * 0.82);
       g.beginPath();
       g.moveTo(s.x, s.y);
       g.lineTo(px, py);
       g.strokePath();
 
-      g.lineStyle(3.0, 0x38bdf8, alpha * 0.96);
+      g.lineStyle(2.2, 0x38bdf8, alpha * 0.94);
       g.beginPath();
       g.moveTo(s.x, s.y);
       g.lineTo(px, py);
       g.strokePath();
 
-      g.lineStyle(1.4, 0xfffdf5, alpha);
+      g.lineStyle(1.0, 0xfffdf5, alpha);
       g.beginPath();
       g.moveTo(s.x, s.y);
       g.lineTo(px, py);
@@ -397,25 +388,22 @@ export function drawBatch1TransientShape(
         const t = clamp(progress * 0.85 + k * 0.12, 0, 0.95);
         const ax = s.x + (px - s.x) * t;
         const ay = s.y + (py - s.y) * t;
-        g.lineStyle(2.4, 0x7dd3fc, alpha);
+        g.lineStyle(2.0, 0xbae6fd, alpha);
         g.beginPath();
-        g.moveTo(ax - Math.cos(ang) * 10, ay - Math.sin(ang) * 10);
-        g.lineTo(ax + Math.cos(ang) * 6, ay + Math.sin(ang) * 6);
+        g.moveTo(ax - Math.cos(ang) * 9, ay - Math.sin(ang) * 9);
+        g.lineTo(ax + Math.cos(ang) * 5, ay + Math.sin(ang) * 5);
         g.strokePath();
       }
 
-      const slowR = s.radius * (0.35 + progress * 0.72);
-      g.lineStyle(3.2, 0x38bdf8, alpha * 0.92);
-      g.strokeCircle(s.x, s.y, slowR);
-      g.lineStyle(1.8, 0xf43f5e, alpha * 0.85);
+      const slowR = s.radius * (0.45 + progress * 0.55);
+      floorG.lineStyle(1.8, 0x38bdf8, alpha * 0.72);
+      floorG.strokeCircle(s.x, s.y, slowR);
+      g.lineStyle(1.6, 0xf43f5e, alpha * 0.86);
       for (let k = 0; k < 6; k += 1) {
-        const a = (k * Math.PI) / 3 + progress * 0.6;
+        const a = (k * Math.PI) / 3 + progress * 0.5;
         g.beginPath();
-        g.moveTo(s.x + Math.cos(a) * 6, s.y + Math.sin(a) * 6);
-        g.lineTo(
-          s.x + Math.cos(a) * (16 + progress * 18),
-          s.y + Math.sin(a) * (16 + progress * 18),
-        );
+        g.moveTo(s.x + Math.cos(a) * (slowR * 0.65), s.y + Math.sin(a) * (slowR * 0.65));
+        g.lineTo(s.x + Math.cos(a) * (slowR * 1.02), s.y + Math.sin(a) * (slowR * 1.02));
         g.strokePath();
       }
       return true;
@@ -431,74 +419,78 @@ export function drawBatch1TransientShape(
       const ny = dx / dist;
       const segs = 10;
 
-      const layers: readonly [number, number, number][] = [
-        [6.2, 0x141019, alpha * 0.9],
-        [3.6, 0x22c55e, alpha * 0.96],
-        [1.8, s.isFinale ? 0xe879f9 : 0x86efac, alpha],
-      ];
-      for (const [lw, col, a] of layers) {
+      const strokeWhipPass = (lw: number, col: number, a: number): void => {
         g.lineStyle(lw, col, a);
         g.beginPath();
         g.moveTo(s.x, s.y);
         for (let k = 1; k <= segs; k += 1) {
           const t = k / segs;
           const wave =
-            Math.sin(t * Math.PI * 3 - progress * 9 + index) * (1 - t * 0.25) * 11;
+            Math.sin(t * Math.PI * 3 - progress * 9 + index) * (1 - t * 0.25) * 9.5;
           g.lineTo(s.x + dx * t + nx * wave, s.y + dy * t + ny * wave);
         }
         g.strokePath();
-      }
+      };
+      strokeWhipPass(4.8, 0x041a12, alpha * 0.86);
+      strokeWhipPass(2.8, 0x10b981, alpha * 0.96);
+      strokeWhipPass(1.3, s.isFinale ? 0xf0abfc : 0xfffdf5, alpha);
 
-      g.lineStyle(2.0, 0xc084fc, alpha * 0.95);
+      g.lineStyle(1.6, 0xc084fc, alpha * 0.92);
       for (let k = 1; k < segs; k += 1) {
         const t = k / segs;
         const wave =
-          Math.sin(t * Math.PI * 3 - progress * 9 + index) * (1 - t * 0.25) * 11;
+          Math.sin(t * Math.PI * 3 - progress * 9 + index) * (1 - t * 0.25) * 9.5;
         const vx = s.x + dx * t + nx * wave;
         const vy = s.y + dy * t + ny * wave;
         const side = k % 2 === 0 ? 1 : -1;
         g.beginPath();
         g.moveTo(vx, vy);
-        g.lineTo(vx + nx * side * 8 - (dx / dist) * 4, vy + ny * side * 8 - (dy / dist) * 4);
+        g.lineTo(vx + nx * side * 7 - (dx / dist) * 3.5, vy + ny * side * 7 - (dy / dist) * 3.5);
         g.strokePath();
       }
 
       if (s.isFinale) {
-        const pullT = 1 - progress * 0.38;
+        const pullT = 1 - progress * 0.35;
         const hx = s.x + dx * pullT;
         const hy = s.y + dy * pullT;
-        g.lineStyle(3.0, 0xc084fc, alpha * 0.96);
-        g.strokeCircle(hx, hy, 12);
-        g.lineStyle(2.2, 0xfef08a, alpha);
+        g.lineStyle(2.2, 0xc084fc, alpha * 0.94);
+        g.strokeCircle(hx, hy, 11);
+        g.lineStyle(1.6, 0xfffdf5, alpha);
         g.beginPath();
         g.moveTo(hx, hy);
-        g.lineTo(hx - (dx / dist) * 28 + nx * 10, hy - (dy / dist) * 28 + ny * 10);
+        g.lineTo(hx - (dx / dist) * 22 + nx * 8, hy - (dy / dist) * 22 + ny * 8);
         g.moveTo(hx, hy);
-        g.lineTo(hx - (dx / dist) * 28 - nx * 10, hy - (dy / dist) * 28 - ny * 10);
+        g.lineTo(hx - (dx / dist) * 22 - nx * 8, hy - (dy / dist) * 22 - ny * 8);
         g.strokePath();
       }
       return true;
     }
 
     case 'thorn_bloom_burst': {
-      const r = s.radius * (0.35 + progress * 0.75);
-      g.fillStyle(0xc084fc, alpha * 0.24);
-      g.fillCircle(s.x, s.y, r);
-      g.lineStyle(3.4, 0x141019, alpha * 0.85);
-      g.strokeCircle(s.x, s.y, r);
-      g.lineStyle(2.4, 0x4ade80, alpha * 0.96);
-      g.strokeCircle(s.x, s.y, r);
-      g.lineStyle(1.8, 0xc084fc, alpha * 0.88);
-      g.strokeCircle(s.x, s.y, r * 0.65);
-
-      const needles = 8 + Math.min(4, s.count ?? 2);
+      // Hollow perimeter-only hooked rose-briar burst synchronized 1:1 with fx_sh_bloom_briar
+      const ease = 1 - Math.pow(1 - progress, 2.7);
+      const r = s.radius * (0.24 + ease * 0.76);
+      floorG.lineStyle(3.2, 0x141019, alpha * 0.72);
+      floorG.strokeCircle(s.x, s.y, r);
+      floorG.lineStyle(1.9, 0x10b981, alpha * 0.84);
+      floorG.strokeCircle(s.x, s.y, r);
+      const needles = 6 + Math.min(4, s.count ?? 2);
       for (let k = 0; k < needles; k += 1) {
-        const a = (k * Math.PI * 2) / needles + progress * 0.35;
-        const innerD = r * 0.35;
-        const outerD = r * 1.15;
-        g.lineStyle(2.6, k % 2 === 0 ? 0x4ade80 : 0xe879f9, alpha * 0.96);
+        const a = (k * Math.PI * 2) / needles + progress * 0.3;
+        const hookA = a + (k % 2 === 0 ? 0.16 : -0.16);
+        const innerD = r * 0.72;
+        const midD = r * 0.9;
+        const outerD = r * 1.05;
+        g.lineStyle(3.4, 0x141019, alpha * 0.84);
         g.beginPath();
         g.moveTo(s.x + Math.cos(a) * innerD, s.y + Math.sin(a) * innerD);
+        g.lineTo(s.x + Math.cos(hookA) * midD, s.y + Math.sin(hookA) * midD);
+        g.lineTo(s.x + Math.cos(a) * outerD, s.y + Math.sin(a) * outerD);
+        g.strokePath();
+        g.lineStyle(1.9, k % 2 === 0 ? 0x4ade80 : 0xc084fc, alpha * 0.94);
+        g.beginPath();
+        g.moveTo(s.x + Math.cos(a) * innerD, s.y + Math.sin(a) * innerD);
+        g.lineTo(s.x + Math.cos(hookA) * midD, s.y + Math.sin(hookA) * midD);
         g.lineTo(s.x + Math.cos(a) * outerD, s.y + Math.sin(a) * outerD);
         g.strokePath();
       }
@@ -507,47 +499,23 @@ export function drawBatch1TransientShape(
 
     case 'scrap_blast_cone': {
       const ang = s.angle ?? 0;
-      const halfArc = 0.48;
-      const r = s.radius * (0.4 + progress * 0.6);
-      g.lineStyle(4.2, 0x141019, alpha * 0.82);
+      const halfArc = 0.46;
+      const r = s.radius * (0.52 + progress * 0.48);
+      g.lineStyle(3.0, 0x26080d, alpha * 0.72);
       g.beginPath();
       g.arc(s.x, s.y, r, ang - halfArc, ang + halfArc, false);
       g.strokePath();
 
-      g.lineStyle(2.8, s.isFinale ? 0xf97316 : 0xfacc15, alpha * 0.95);
+      g.lineStyle(1.8, s.isFinale ? 0xf97316 : 0xfacc15, alpha * 0.88);
       g.beginPath();
-      g.arc(s.x, s.y, r, ang - halfArc, ang + halfArc, false);
+      g.arc(s.x, s.y, r, ang - halfArc * 0.94, ang + halfArc * 0.94, false);
       g.strokePath();
-
-      if (s.isFinale) {
-        for (let k = -2; k <= 2; k += 1) {
-          const rayA = ang + k * 0.18;
-          g.lineStyle(2.2, k % 2 === 0 ? 0xfacc15 : 0xf97316, alpha * 0.92);
-          g.beginPath();
-          g.moveTo(s.x + Math.cos(rayA) * 14, s.y + Math.sin(rayA) * 14);
-          g.lineTo(s.x + Math.cos(rayA) * r, s.y + Math.sin(rayA) * r);
-          g.strokePath();
-        }
-      }
       return true;
     }
 
     case 'scrap_hot_shells': {
       const ang = s.angle ?? 0;
-      const halfArc = (60 * Math.PI) / 180;
-      const coneR = s.radius * (0.45 + progress * 0.55);
-
-      g.lineStyle(4.0, 0x141019, alpha * 0.85);
-      g.beginPath();
-      g.arc(s.x, s.y, coneR, ang - halfArc, ang + halfArc, false);
-      g.strokePath();
-
-      g.lineStyle(2.6, 0xf97316, alpha * 0.94);
-      g.beginPath();
-      g.arc(s.x, s.y, coneR, ang - halfArc, ang + halfArc, false);
-      g.strokePath();
-
-      const shellDist = s.radius * (0.25 + progress * 0.72);
+      const shellDist = s.radius * (0.28 + progress * 0.68);
       for (const side of [-1, 1] as const) {
         const sAng = ang + side * 0.28;
         const sx = s.x + Math.cos(sAng) * shellDist;
@@ -556,174 +524,172 @@ export function drawBatch1TransientShape(
         const scos = Math.cos(spin);
         const ssin = Math.sin(spin);
 
-        g.lineStyle(2.4, 0xf97316, alpha * 0.85);
+        g.lineStyle(1.8, 0xf97316, alpha * 0.78);
         g.beginPath();
-        g.moveTo(s.x + Math.cos(sAng) * 14, s.y + Math.sin(sAng) * 14);
+        g.moveTo(s.x + Math.cos(sAng) * 18, s.y + Math.sin(sAng) * 18);
         g.lineTo(sx, sy);
         g.strokePath();
 
-        g.lineStyle(6.5, 0x141019, alpha * 0.95);
+        g.lineStyle(4.8, 0x26080d, alpha * 0.92);
         g.beginPath();
-        g.moveTo(sx - scos * 6, sy - ssin * 6);
-        g.lineTo(sx + scos * 6, sy + ssin * 6);
+        g.moveTo(sx - scos * 5.2, sy - ssin * 5.2);
+        g.lineTo(sx + scos * 5.2, sy + ssin * 5.2);
         g.strokePath();
 
-        g.lineStyle(4.2, 0xef4444, alpha * 0.98);
+        g.lineStyle(3.0, 0xef4444, alpha * 0.98);
         g.beginPath();
-        g.moveTo(sx - scos * 5, sy - ssin * 5);
-        g.lineTo(sx + scos * 5, sy + ssin * 5);
+        g.moveTo(sx - scos * 4.4, sy - ssin * 4.4);
+        g.lineTo(sx + scos * 4.4, sy + ssin * 4.4);
         g.strokePath();
 
-        g.fillStyle(0xfacc15, alpha);
-        g.fillCircle(sx + scos * 4, sy + ssin * 4, 2.8);
+        g.fillStyle(0xfffdf5, alpha);
+        g.fillCircle(sx + scos * 3.4, sy + ssin * 3.4, 2.2);
       }
       return true;
     }
 
     case 'gale_wind_blade': {
       const ang = s.angle ?? 0;
-      const dist = 220 * progress;
+      const dist = 215 * progress;
       const bx = s.x + Math.cos(ang) * dist;
       const by = s.y + Math.sin(ang) * dist;
-      g.lineStyle(4.5, 0x141019, alpha * 0.85);
+      g.lineStyle(3.4, 0x041f1c, alpha * 0.8);
       g.beginPath();
-      g.arc(bx, by, 22, ang - 1.1, ang + 1.1, false);
+      g.arc(bx, by, 20, ang - 1.05, ang + 1.05, false);
       g.strokePath();
 
-      g.lineStyle(2.8, 0x2dd4bf, alpha * 0.96);
+      g.lineStyle(2.0, 0x2dd4bf, alpha * 0.94);
       g.beginPath();
-      g.arc(bx, by, 22, ang - 1.1, ang + 1.1, false);
+      g.arc(bx, by, 20, ang - 1.0, ang + 1.0, false);
       g.strokePath();
 
-      g.lineStyle(1.4, 0xfffdf5, alpha);
+      g.lineStyle(1.1, 0xfffdf5, alpha);
       g.beginPath();
-      g.arc(bx, by, 18, ang - 0.9, ang + 0.9, false);
+      g.arc(bx, by, 17, ang - 0.85, ang + 0.85, false);
       g.strokePath();
       return true;
     }
 
     case 'gale_cyclone_vortex': {
-      const r = s.radius * (0.45 + progress * 0.55);
-      g.fillStyle(0x2dd4bf, alpha * 0.14);
-      g.fillCircle(s.x, s.y, r);
-      g.lineStyle(4.5, 0x141019, alpha * 0.85);
-      g.strokeCircle(s.x, s.y, r);
-      g.lineStyle(3.0, 0x2dd4bf, alpha * 0.96);
-      g.strokeCircle(s.x, s.y, r);
-      g.lineStyle(2.0, 0x38bdf8, alpha * 0.88);
-      g.strokeCircle(s.x, s.y, r * 0.68);
-      g.lineStyle(1.6, 0xfffdf5, alpha * 0.9);
-      g.strokeCircle(s.x, s.y, r * 0.38);
-
+      // Hollow 1:1 6-blade logarithmic wind shear spiral synchronized with fx_sh_vortex_gale
+      const ease = 1 - Math.pow(1 - progress, 2.7);
+      const r = s.radius * (0.24 + ease * 0.76);
+      floorG.lineStyle(3.0, 0x141019, alpha * 0.7);
+      floorG.strokeCircle(s.x, s.y, r);
+      floorG.lineStyle(1.9, 0x2dd4bf, alpha * 0.82);
+      floorG.strokeCircle(s.x, s.y, r);
       for (let arm = 0; arm < 6; arm += 1) {
-        const baseA = (arm * Math.PI) / 3 + progress * 4.2;
-        g.lineStyle(2.2, arm % 2 === 0 ? 0x6ee7b7 : 0x7dd3fc, alpha * 0.92);
+        const baseA = (arm * Math.PI * 2) / 6 + progress * 4.2;
+        const innerR = r * 0.62;
+        const midR = r * 0.82;
+        const outerR = r * 0.98;
+        g.lineStyle(3.4, 0x141019, alpha * 0.78);
         g.beginPath();
-        for (let step = 0; step <= 6; step += 1) {
-          const t = step / 6;
-          const sr = r * (0.18 + t * 0.82);
-          const sa = baseA + t * 1.65;
-          const wx = s.x + Math.cos(sa) * sr;
-          const wy = s.y + Math.sin(sa) * sr;
-          if (step === 0) g.moveTo(wx, wy);
-          else g.lineTo(wx, wy);
-        }
+        g.moveTo(s.x + Math.cos(baseA) * innerR, s.y + Math.sin(baseA) * innerR);
+        g.lineTo(s.x + Math.cos(baseA + 0.38) * midR, s.y + Math.sin(baseA + 0.38) * midR);
+        g.lineTo(s.x + Math.cos(baseA + 0.76) * outerR, s.y + Math.sin(baseA + 0.76) * outerR);
+        g.strokePath();
+        g.lineStyle(1.8, arm % 2 === 0 ? 0x5eead4 : 0xfffdf5, alpha * 0.92);
+        g.beginPath();
+        g.moveTo(s.x + Math.cos(baseA) * innerR, s.y + Math.sin(baseA) * innerR);
+        g.lineTo(s.x + Math.cos(baseA + 0.38) * midR, s.y + Math.sin(baseA + 0.38) * midR);
+        g.lineTo(s.x + Math.cos(baseA + 0.76) * outerR, s.y + Math.sin(baseA + 0.76) * outerR);
         g.strokePath();
       }
       return true;
     }
 
     case 'frag_airburst_ring': {
-      const r = s.radius * (0.4 + progress * 0.6);
-      g.fillStyle(0xf97316, alpha * 0.16);
-      g.fillCircle(s.x, s.y, r);
-      g.lineStyle(4.8, 0x141019, alpha * 0.88);
-      g.strokeCircle(s.x, s.y, r);
-      g.lineStyle(3.2, 0xf97316, alpha * 0.96);
-      g.strokeCircle(s.x, s.y, r);
-      g.lineStyle(2.0, 0xfacc15, alpha * 0.92);
-      g.strokeCircle(s.x, s.y, r * 0.72);
+      // Hollow 1:1 ordnance perimeter synchronized with fx_sh_shrapnel_corona + 6 obsidian-cased warheads
+      const ease = 1 - Math.pow(1 - progress, 2.7);
+      const r = s.radius * (0.24 + ease * 0.76);
+      floorG.lineStyle(3.2, 0x141019, alpha * 0.74);
+      floorG.strokeCircle(s.x, s.y, r);
+      floorG.lineStyle(2.0, 0xf97316, alpha * 0.84);
+      floorG.strokeCircle(s.x, s.y, r);
 
-      const chR = 18 + progress * 12;
-      g.lineStyle(2.2, 0xfffdf5, alpha * 0.95);
-      g.strokeCircle(s.x, s.y, chR);
-      g.beginPath();
-      g.moveTo(s.x - chR - 8, s.y);
-      g.lineTo(s.x + chR + 8, s.y);
-      g.moveTo(s.x, s.y - chR - 8);
-      g.lineTo(s.x, s.y + chR + 8);
-      g.strokePath();
-
-      for (let k = 0; k < 5; k += 1) {
-        const subA = (k * Math.PI * 2) / 5 - Math.PI * 0.5 + 0.25;
-        const subDist = r * (0.35 + progress * 0.62);
-        const arcLift = Math.sin(progress * Math.PI) * 22;
+      for (let k = 0; k < 6; k += 1) {
+        const subA = (k * Math.PI * 2) / 6 - Math.PI * 0.5 + 0.25;
+        const subDist = r * (0.44 + progress * 0.54);
         const sx = s.x + Math.cos(subA) * subDist;
-        const sy = s.y + Math.sin(subA) * subDist - arcLift;
-        const midX = s.x + Math.cos(subA) * (subDist * 0.5);
-        const midY = s.y + Math.sin(subA) * (subDist * 0.5) - arcLift * 1.35;
+        const sy = s.y + Math.sin(subA) * subDist;
 
-        g.lineStyle(2.4, 0xfacc15, alpha * 0.9);
+        g.lineStyle(3.2, 0x141019, alpha * 0.84);
         g.beginPath();
-        g.moveTo(s.x, s.y);
-        g.lineTo(midX, midY);
+        g.moveTo(s.x + Math.cos(subA) * (r * 0.3), s.y + Math.sin(subA) * (r * 0.3));
         g.lineTo(sx, sy);
         g.strokePath();
 
+        g.lineStyle(1.7, 0xfacc15, alpha * 0.92);
+        g.beginPath();
+        g.moveTo(s.x + Math.cos(subA) * (r * 0.3), s.y + Math.sin(subA) * (r * 0.3));
+        g.lineTo(sx, sy);
+        g.strokePath();
+
+        g.fillStyle(0x141019, alpha * 0.94);
+        g.fillCircle(sx, sy, 4.8);
         g.fillStyle(0xf97316, alpha * 0.96);
-        g.fillCircle(sx, sy, 4.2);
+        g.fillCircle(sx, sy, 3.4);
         g.fillStyle(0xfffdf5, alpha);
-        g.fillCircle(sx, sy, 2.0);
+        g.fillCircle(sx, sy, 1.7);
       }
       return true;
     }
 
     case 'seed_harvest_bloom': {
-      const r = s.radius * (0.42 + progress * 0.58);
-      g.fillStyle(0x4ade80, alpha * 0.16);
-      g.fillCircle(s.x, s.y, r);
-      g.lineStyle(4.2, 0x141019, alpha * 0.85);
-      g.strokeCircle(s.x, s.y, r);
-      g.lineStyle(2.8, 0x4ade80, alpha * 0.96);
-      g.strokeCircle(s.x, s.y, r);
-
-      for (let pIdx = 0; pIdx < 8; pIdx += 1) {
-        const a = (pIdx * Math.PI) / 4 + progress * 0.25;
-        const px = s.x + Math.cos(a) * (r * 0.58);
-        const py = s.y + Math.sin(a) * (r * 0.58);
-        g.lineStyle(2.2, pIdx % 2 === 0 ? 0x4ade80 : 0xfacc15, alpha * 0.94);
-        g.strokeCircle(px, py, r * 0.28);
+      // Hollow 1:1 6-petal unfurling botanical lotus synchronized with fx_sh_bloom_briar
+      const ease = 1 - Math.pow(1 - progress, 2.7);
+      const r = s.radius * (0.24 + ease * 0.76);
+      floorG.lineStyle(3.0, 0x141019, alpha * 0.72);
+      floorG.strokeCircle(s.x, s.y, r);
+      floorG.lineStyle(2.0, 0x10b981, alpha * 0.84);
+      floorG.strokeCircle(s.x, s.y, r);
+      for (let p = 0; p < 6; p += 1) {
+        const a = (p * Math.PI) / 3 + progress * 0.25;
+        const px0 = s.x + Math.cos(a - 0.36) * (r * 0.8);
+        const py0 = s.y + Math.sin(a - 0.36) * (r * 0.8);
+        const tipX = s.x + Math.cos(a) * (r * 1.04);
+        const tipY = s.y + Math.sin(a) * (r * 1.04);
+        const px1 = s.x + Math.cos(a + 0.36) * (r * 0.8);
+        const py1 = s.y + Math.sin(a + 0.36) * (r * 0.8);
+        g.lineStyle(3.2, 0x141019, alpha * 0.82);
         g.beginPath();
-        g.moveTo(s.x, s.y);
-        g.lineTo(s.x + Math.cos(a) * r, s.y + Math.sin(a) * r);
+        g.moveTo(px0, py0);
+        g.lineTo(tipX, tipY);
+        g.lineTo(px1, py1);
+        g.strokePath();
+        g.lineStyle(1.8, p % 2 === 0 ? 0x4ade80 : 0xfacc15, alpha * 0.94);
+        g.beginPath();
+        g.moveTo(px0, py0);
+        g.lineTo(tipX, tipY);
+        g.lineTo(px1, py1);
         g.strokePath();
       }
       return true;
     }
 
     case 'seed_healing_mist': {
-      const r = s.radius * (0.5 + progress * 0.5);
-      g.fillStyle(0x2dd4bf, alpha * 0.18);
-      g.fillCircle(s.x, s.y, r);
-      g.lineStyle(2.6, 0x2dd4bf, alpha * 0.94);
-      g.strokeCircle(s.x, s.y, r * 0.85);
-      g.lineStyle(1.8, 0x6ee7b7, alpha * 0.85);
-      g.strokeCircle(s.x, s.y, r * 0.52);
+      const r = s.radius * (0.62 + progress * 0.38);
+      floorG.fillStyle(0x2dd4bf, alpha * 0.045);
+      floorG.fillCircle(s.x, s.y, r);
+      floorG.lineStyle(1.9, 0x2dd4bf, alpha * 0.78);
+      floorG.strokeCircle(s.x, s.y, r);
 
       const px = s.x2 ?? s.x;
       const py = s.y2 ?? s.y;
-      g.lineStyle(2.4, 0x2dd4bf, alpha * 0.92);
-      g.strokeCircle(px, py, 26 + progress * 14);
+      floorG.lineStyle(1.8, 0x6ee7b7, alpha * 0.82);
+      floorG.strokeCircle(px, py, 24 + progress * 10);
 
-      for (let k = 0; k < 5; k += 1) {
-        const rx = px + (k - 2) * 14;
-        const ry = py - 8 - progress * 28 - (k % 2) * 8;
-        g.lineStyle(2.2, k % 2 === 0 ? 0x4ade80 : 0x38bdf8, alpha * 0.96);
+      for (let k = 0; k < 4; k += 1) {
+        const ang = (k * Math.PI) / 2 + progress * 0.8;
+        const rx = px + Math.cos(ang) * 20;
+        const ry = py + Math.sin(ang) * 20;
+        g.lineStyle(1.8, k % 2 === 0 ? 0x4ade80 : 0x38bdf8, alpha * 0.92);
         g.beginPath();
-        g.moveTo(rx - 4, ry);
-        g.lineTo(rx + 4, ry);
-        g.moveTo(rx, ry - 4);
-        g.lineTo(rx, ry + 4);
+        g.moveTo(rx - 3.5, ry);
+        g.lineTo(rx + 3.5, ry);
+        g.moveTo(rx, ry - 3.5);
+        g.lineTo(rx, ry + 3.5);
         g.strokePath();
       }
       return true;
@@ -732,40 +698,25 @@ export function drawBatch1TransientShape(
     case 'tether_em_yank': {
       const px = s.x2 ?? s.x;
       const py = s.y2 ?? s.y;
-      const contractR = s.radius * (1 - progress * 0.62);
-      const novaR = s.radius * (0.32 + progress * 0.68);
+      const ease = 1 - Math.pow(1 - progress, 2.7);
+      const contractR = s.radius * (1 - progress * 0.48);
+      const novaR = s.radius * (0.24 + ease * 0.76);
 
-      g.lineStyle(4.2, 0xa855f7, alpha * 0.9);
+      g.lineStyle(3.2, 0x0c0620, alpha * 0.78);
+      g.beginPath();
+      g.moveTo(px, py);
+      g.lineTo(s.x, s.y);
+      g.strokePath();
+      g.lineStyle(1.8, 0x7c3aed, alpha * 0.9);
       g.beginPath();
       g.moveTo(px, py);
       g.lineTo(s.x, s.y);
       g.strokePath();
 
-      g.fillStyle(0xa855f7, alpha * 0.2);
-      g.fillCircle(s.x, s.y, novaR);
-      g.lineStyle(2.6, 0x38bdf8, alpha * 0.92);
-      g.strokeCircle(s.x, s.y, contractR);
-      g.lineStyle(4.4, 0x141019, alpha * 0.88);
-      g.strokeCircle(s.x, s.y, novaR);
-      g.lineStyle(3.2, 0xa855f7, alpha * 0.96);
-      g.strokeCircle(s.x, s.y, novaR);
-      g.lineStyle(2.0, 0xfde047, alpha * 0.94);
-      g.strokeCircle(s.x, s.y, novaR * 0.65);
-
-      for (let k = 0; k < 8; k += 1) {
-        const a = (k * Math.PI) / 4 + progress * 0.4;
-        const midR = novaR * 0.55;
-        const jx = s.x + Math.cos(a + 0.16) * midR;
-        const jy = s.y + Math.sin(a + 0.16) * midR;
-        const ex = s.x + Math.cos(a) * novaR;
-        const ey = s.y + Math.sin(a) * novaR;
-        g.lineStyle(2.0, k % 2 === 0 ? 0xfde047 : 0x7dd3fc, alpha * 0.95);
-        g.beginPath();
-        g.moveTo(s.x, s.y);
-        g.lineTo(jx, jy);
-        g.lineTo(ex, ey);
-        g.strokePath();
-      }
+      floorG.lineStyle(1.8, 0x38bdf8, alpha * 0.76);
+      floorG.strokeCircle(s.x, s.y, contractR);
+      floorG.lineStyle(2.0, 0xa855f7, alpha * 0.82);
+      floorG.strokeCircle(s.x, s.y, novaR);
       return true;
     }
 

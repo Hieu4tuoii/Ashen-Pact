@@ -301,6 +301,7 @@ export class GameScene extends Phaser.Scene {
   public lastBannerWaveNumber = -1;
   public lastBannerRoomCleared = false;
 
+  public groundHazardGraphics!: Phaser.GameObjects.Graphics;
   public telegraphGraphics!: Phaser.GameObjects.Graphics;
   public hitboxGraphics!: Phaser.GameObjects.Graphics;
   public crosshairSprite!: Phaser.GameObjects.Sprite;

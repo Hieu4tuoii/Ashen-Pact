@@ -40,6 +40,8 @@ export interface PooledParticle {
   scaleRatioY: number;
   alignToVelocity: boolean;
   hasGroundShadow: boolean;
+  frameCount?: number;
+  preserveFlipbookAlpha?: boolean;
 }
 
 export interface PooledDamageText {
@@ -177,6 +179,8 @@ export function initCombatFxPools(
       scaleRatioY: 1,
       alignToVelocity: false,
       hasGroundShadow: false,
+      frameCount: 1,
+      preserveFlipbookAlpha: false,
     });
   }
 
@@ -230,9 +234,9 @@ export function initCombatFxPools(
     }
   }
 
-  // 5. Chain Lightning Graphics (depth 62)
+  // 5. Chain Lightning Graphics (depth 57: strictly above lightmap 34 and below inviolable enemy red bullets 60)
   this.lightningGraphics = scene.add.graphics();
-  this.lightningGraphics.setDepth(62);
+  this.lightningGraphics.setDepth(57);
   for (let i = 0; i < 16; i++) {
     this.lightningPool.push({
       active: false,
@@ -286,11 +290,19 @@ export function refreshResolution(
   const invBake = 1 / bakeScale;
   const scaleRatio = prevScale && prevScale > 0 ? prevScale / bakeScale : 1;
   for (const p of this.particlePool) {
-    p.sprite.setTexture(p.textureKey);
+    if (p.frameCount && p.frameCount > 1) {
+      const frameIdx = Math.min(
+        p.frameCount - 1,
+        Math.max(0, Math.floor((p.age / Math.max(0.01, p.ttl)) * p.frameCount + 1e-6)),
+      );
+      p.sprite.setTexture(p.textureKey, frameIdx);
+    } else {
+      p.sprite.setTexture(p.textureKey);
+    }
     if (p.shadowSprite) {
       p.shadowSprite.setTexture('fx_dust_puff');
     }
-    if (p.active && scaleRatio !== 1) {
+    if (p.active && scaleRatio !== 1 && !(p.frameCount && p.frameCount > 1)) {
       p.startScale *= scaleRatio;
       p.endScale *= scaleRatio;
     } else if (!p.active) {
@@ -366,7 +378,7 @@ export function update(this: CombatFxManager, dtSec: number, camView?: Phaser.Ge
     this.bossKillFlashTimer = Math.max(0, this.bossKillFlashTimer - dtSec);
   }
 
-  // 1. Update pooled particles & shell casing ground shadows
+  // 1. Update pooled particles, 14-frame Chiaroscuro flipbooks & shell casing ground shadows
   for (let i = 0; i < this.particlePool.length; i++) {
     const p = this.particlePool[i]!;
     if (!p.active) continue;
@@ -398,9 +410,24 @@ export function update(this: CombatFxManager, dtSec: number, camView?: Phaser.Ge
       p.sprite.rotation += p.vr * dtSec;
     }
 
+    if (p.frameCount && p.frameCount > 1) {
+      const frameIdx = Math.min(
+        p.frameCount - 1,
+        Math.max(0, Math.floor(progress * p.frameCount + 1e-6)),
+      );
+      p.sprite.setFrame(frameIdx);
+    }
+
     const scale = computeFxParticleScale(p.startScale, p.endScale, progress, p.easeCurve);
     p.sprite.setScale(scale, scale * (p.scaleRatioY || 1));
-    p.sprite.setAlpha(p.startAlpha * (1 - progress));
+
+    // Shader flipbooks dissolve organically via FBM noise threshold; keep alpha crisp until tail release
+    const nextAlpha = p.preserveFlipbookAlpha
+      ? progress > 0.88
+        ? p.startAlpha * (1 - (progress - 0.88) / 0.12)
+        : p.startAlpha
+      : p.startAlpha * (1 - progress);
+    p.sprite.setAlpha(nextAlpha);
 
     if (p.hasGroundShadow && p.shadowSprite) {
       const sh = computeShellCasingShadowOffset(p.age, p.ttl);
@@ -513,8 +540,10 @@ export function update(this: CombatFxManager, dtSec: number, camView?: Phaser.Ge
     if (!amb.sprite.visible) amb.sprite.setVisible(true);
   }
 
-  // 4. Update & draw chain lightning arcs
+  // 4. Update & draw Chiaroscuro branched 3-layer chain lightning arcs (dark storm channel + cyan sheath + #FFFDF5 spine + fork + impact star)
   this.lightningGraphics.clear();
+  const cyanCol = hexToNum(PALETTE.CYAN_FROST);
+  const boneCol = 0xfffdf5;
   for (let i = 0; i < this.lightningPool.length; i++) {
     const arc = this.lightningPool[i]!;
     if (!arc.active) continue;
@@ -523,33 +552,63 @@ export function update(this: CombatFxManager, dtSec: number, camView?: Phaser.Ge
       arc.active = false;
       continue;
     }
-    const alpha = 1 - arc.age / arc.ttl;
+    const alpha = 1 - Math.pow(arc.age / arc.ttl, 1.5);
     const dx = arc.toX - arc.fromX;
     const dy = arc.toY - arc.fromY;
-    const nx = -dy * 0.18;
-    const ny = dx * 0.18;
-    const jitter = Math.sin(arc.age * 90 + arc.seed) >= 0 ? 1 : -1;
+    const nx = -dy * 0.155;
+    const ny = dx * 0.155;
+    const phase = arc.age * 90 + arc.seed;
+    const jitter = Math.sin(phase) >= 0 ? 1 : -1;
+    const h2 = Math.cos(phase * 0.73 + 1.1);
 
-    const mid1X = arc.fromX + dx * 0.33 + nx * jitter;
-    const mid1Y = arc.fromY + dy * 0.33 + ny * jitter;
-    const mid2X = arc.fromX + dx * 0.66 - nx * jitter * 0.8;
-    const mid2Y = arc.fromY + dy * 0.66 - ny * jitter * 0.8;
+    const mid1X = arc.fromX + dx * 0.19 + nx * jitter * (0.82 + 0.25 * h2);
+    const mid1Y = arc.fromY + dy * 0.19 + ny * jitter * (0.82 + 0.25 * h2);
+    const mid2X = arc.fromX + dx * 0.43 - nx * jitter * 0.96;
+    const mid2Y = arc.fromY + dy * 0.43 - ny * jitter * 0.96;
+    const mid3X = arc.fromX + dx * 0.66 + nx * jitter * (0.74 - 0.2 * h2);
+    const mid3Y = arc.fromY + dy * 0.66 + ny * jitter * (0.74 - 0.2 * h2);
+    const mid4X = arc.fromX + dx * 0.84 - nx * jitter * 0.46;
+    const mid4Y = arc.fromY + dy * 0.84 - ny * jitter * 0.46;
 
-    this.lightningGraphics.lineStyle(4.5, hexToNum(PALETTE.INK_DARK), alpha * 0.85);
-    this.lightningGraphics.beginPath();
-    this.lightningGraphics.moveTo(arc.fromX, arc.fromY);
-    this.lightningGraphics.lineTo(mid1X, mid1Y);
-    this.lightningGraphics.lineTo(mid2X, mid2Y);
-    this.lightningGraphics.lineTo(arc.toX, arc.toY);
-    this.lightningGraphics.strokePath();
+    const forkX = mid2X + dx * 0.22 - nx * jitter * 1.05;
+    const forkY = mid2Y + dy * 0.22 - ny * jitter * 1.05;
 
-    this.lightningGraphics.lineStyle(2.2, hexToNum(PALETTE.VOLT_YELLOW), alpha);
-    this.lightningGraphics.beginPath();
-    this.lightningGraphics.moveTo(arc.fromX, arc.fromY);
-    this.lightningGraphics.lineTo(mid1X, mid1Y);
-    this.lightningGraphics.lineTo(mid2X, mid2Y);
-    this.lightningGraphics.lineTo(arc.toX, arc.toY);
-    this.lightningGraphics.strokePath();
+    for (let layer = 0; layer < 3; layer++) {
+      const mainW = layer === 0 ? 5.6 : layer === 1 ? 3.0 : 1.4;
+      const forkW = layer === 0 ? 4.0 : layer === 1 ? 2.0 : 0.95;
+      const col = layer === 0 ? 0x141019 : layer === 1 ? cyanCol : boneCol;
+      const a = layer === 0 ? alpha * 0.9 : layer === 1 ? alpha * 0.94 : alpha;
+
+      this.lightningGraphics.lineStyle(mainW, col, a);
+      this.lightningGraphics.beginPath();
+      this.lightningGraphics.moveTo(arc.fromX, arc.fromY);
+      this.lightningGraphics.lineTo(mid1X, mid1Y);
+      this.lightningGraphics.lineTo(mid2X, mid2Y);
+      this.lightningGraphics.lineTo(mid3X, mid3Y);
+      this.lightningGraphics.lineTo(mid4X, mid4Y);
+      this.lightningGraphics.lineTo(arc.toX, arc.toY);
+      this.lightningGraphics.strokePath();
+
+      this.lightningGraphics.lineStyle(forkW, col, a * 0.92);
+      this.lightningGraphics.beginPath();
+      this.lightningGraphics.moveTo(mid2X, mid2Y);
+      this.lightningGraphics.lineTo(forkX, forkY);
+      this.lightningGraphics.strokePath();
+
+      // 4-point Chiaroscuro impact star at target endpoint
+      const starR = layer === 0 ? 7.6 : layer === 1 ? 6.4 : 4.6;
+      const rot = arc.seed * 0.7 + 0.35;
+      for (let axis = 0; axis < 2; axis++) {
+        const ang = rot + (axis * Math.PI) / 2;
+        const ca = Math.cos(ang) * starR;
+        const sa = Math.sin(ang) * starR;
+        this.lightningGraphics.lineStyle(forkW, col, a);
+        this.lightningGraphics.beginPath();
+        this.lightningGraphics.moveTo(arc.toX - ca, arc.toY - sa);
+        this.lightningGraphics.lineTo(arc.toX + ca, arc.toY + sa);
+        this.lightningGraphics.strokePath();
+      }
+    }
   }
 
   // 5. Update pooled damage numbers & coalesced reaction banner timer

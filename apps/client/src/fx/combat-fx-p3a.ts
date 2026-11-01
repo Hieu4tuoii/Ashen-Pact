@@ -104,16 +104,18 @@ export function computePredictiveSightlineSpec(
 }
 
 /**
- * Renders Phase 3A (P3A.1) 0.35s Predictive Sightline Telegraphs:
- * - Outer 4.5px #FF5722 red-orange sightline (alpha 0.42..0.75), clipped against walls and flipped cover
- * - Inner 1.8px #FFF7ED bright core (alpha 0.92)
- * - Muzzle lock diamond reticle + terminal lock dot
+ * Renders Phase 3A/3B Predictive Sightline Telegraphs & Arena Danger Overlays:
+ * - Ground danger zones routed to `groundHazardGraphics` (`depth: 16`) with `<= 0.10` interior fill
+ *   and crisp `#141019` + `#E84545` / `#FBBF24` Chiaroscuro danger perimeters.
  */
 export function drawP3APredictiveSightlinesAndOverlays(
   scene: GameScene,
   g: Phaser.GameObjects.Graphics,
   sim: WorldSim,
 ): void {
+  const floorG =
+    (scene as { groundHazardGraphics?: Phaser.GameObjects.Graphics }).groundHazardGraphics ?? g;
+  const inkColor = hexToNum(PALETTE.INK_DARK);
   const isStress = sim.stressTestActive;
   let sightlinesDrawn = 0;
 
@@ -129,7 +131,13 @@ export function drawP3APredictiveSightlinesAndOverlays(
     if (!spec) continue;
     sightlinesDrawn += 1;
 
-    // 1. Outer 4.5px #FF5722 sightline beam
+    // 1. Chiaroscuro dark bed + Outer 4.5px #FF5722 sightline beam
+    g.lineStyle(spec.outerWidthPx + 2.0, inkColor, spec.outerAlpha * 0.55);
+    g.beginPath();
+    g.moveTo(spec.startX, spec.startY);
+    g.lineTo(spec.endX, spec.endY);
+    g.strokePath();
+
     g.lineStyle(spec.outerWidthPx, spec.outerColor, spec.outerAlpha);
     g.beginPath();
     g.moveTo(spec.startX, spec.startY);
@@ -192,13 +200,19 @@ export function drawP3APredictiveSightlinesAndOverlays(
         const e = sim.enemies[eIdx]!;
         if (e.hp <= 0 || e.isBoss || e.isDummy) continue;
         if (distance(prop.x, prop.y, e.x, e.y) <= SHAMAN_TOTEM_LINK_RADIUS + e.radius) {
-          g.lineStyle(3.2, outerBeamColor, 0.55);
+          g.lineStyle(4.8, inkColor, 0.55);
           g.beginPath();
           g.moveTo(prop.x, prop.y);
           g.lineTo(e.x, e.y);
           g.strokePath();
 
-          g.lineStyle(1.4, coreBeamColor, 0.88);
+          g.lineStyle(2.6, outerBeamColor, 0.72);
+          g.beginPath();
+          g.moveTo(prop.x, prop.y);
+          g.lineTo(e.x, e.y);
+          g.strokePath();
+
+          g.lineStyle(1.3, coreBeamColor, 0.9);
           g.beginPath();
           g.moveTo(prop.x, prop.y);
           g.lineTo(e.x, e.y);
@@ -208,10 +222,10 @@ export function drawP3APredictiveSightlinesAndOverlays(
     }
   }
 
-  // 6. Biome 3 Coal Golem (`coal_bomb`) fuse countdown ring & blast danger circle (r=96px)
+  // 6. Biome 3 Coal Golem (`coal_bomb`) fuse countdown ring & 1:1 blast danger circle (r=96px at depth 16)
   if (sim.props.length > 0) {
+    const crimsonColor = hexToNum(PALETTE.CRIMSON_BRIGHT);
     const flameColor = hexToNum(PALETTE.FLAME_ORANGE);
-    const magmaColor = hexToNum(PALETTE.MAGMA_RED);
     const goldColor = hexToNum(PALETTE.SOLAR_GOLD);
     for (let pIdx = 0; pIdx < sim.props.length; pIdx++) {
       const prop = sim.props[pIdx]!;
@@ -219,10 +233,14 @@ export function drawP3APredictiveSightlinesAndOverlays(
       const fuseLeft = clamp(prop.fuseTimer ?? COAL_BOMB_FUSE_SEC, 0, COAL_BOMB_FUSE_SEC);
       const progress = 1 - fuseLeft / COAL_BOMB_FUSE_SEC;
 
-      g.fillStyle(magmaColor, 0.12 + 0.16 * progress);
-      g.fillCircle(prop.x, prop.y, COAL_BOMB_BLAST_RADIUS);
-      g.lineStyle(2.0, flameColor, 0.45 + 0.4 * progress);
-      g.strokeCircle(prop.x, prop.y, COAL_BOMB_BLAST_RADIUS);
+      floorG.fillStyle(crimsonColor, 0.05 + 0.04 * progress);
+      floorG.fillCircle(prop.x, prop.y, COAL_BOMB_BLAST_RADIUS);
+      floorG.lineStyle(4.0, inkColor, 0.65);
+      floorG.strokeCircle(prop.x, prop.y, COAL_BOMB_BLAST_RADIUS);
+      floorG.lineStyle(2.2, crimsonColor, 0.58 + 0.36 * progress);
+      floorG.strokeCircle(prop.x, prop.y, COAL_BOMB_BLAST_RADIUS);
+      floorG.lineStyle(1.6, flameColor, 0.68);
+      floorG.strokeCircle(prop.x, prop.y, COAL_BOMB_BLAST_RADIUS * (0.25 + 0.75 * progress));
 
       g.lineStyle(3.2, goldColor, 0.92);
       g.beginPath();
@@ -238,7 +256,7 @@ export function drawP3APredictiveSightlinesAndOverlays(
     }
   }
 
-  // 7. Biome 3 Dwarf Cannon (`pendingMortarStrikes`) r=56px red floor target indicator & parabolic shell arc
+  // 7. Biome 3 Dwarf Cannon (`pendingMortarStrikes`) r=56px red floor target indicator (depth 16) & parabolic shell arc
   if (sim.pendingMortarStrikes.length > 0) {
     const crimson = hexToNum(PALETTE.CRIMSON_BRIGHT);
     const flame = hexToNum(PALETTE.FLAME_ORANGE);
@@ -248,13 +266,15 @@ export function drawP3APredictiveSightlinesAndOverlays(
       const total = strike.maxTimer || DWARF_MORTAR_FLIGHT_SEC;
       const t = clamp(1 - strike.timer / total, 0, 1);
 
-      // Red floor target indicator (r = 56px)
-      g.fillStyle(crimson, 0.16 + 0.22 * t);
-      g.fillCircle(strike.x, strike.y, strike.radius);
-      g.lineStyle(2.6, crimson, 0.88);
-      g.strokeCircle(strike.x, strike.y, strike.radius);
-      g.lineStyle(1.8, flame, 0.78);
-      g.strokeCircle(strike.x, strike.y, Math.max(6, strike.radius * (1 - t)));
+      // Red floor target indicator (r = 56px, <= 0.10 interior fill)
+      floorG.fillStyle(crimson, 0.06 + 0.04 * t);
+      floorG.fillCircle(strike.x, strike.y, strike.radius);
+      floorG.lineStyle(4.4, inkColor, 0.72);
+      floorG.strokeCircle(strike.x, strike.y, strike.radius);
+      floorG.lineStyle(2.6, crimson, 0.94);
+      floorG.strokeCircle(strike.x, strike.y, strike.radius);
+      floorG.lineStyle(1.8, flame, 0.82);
+      floorG.strokeCircle(strike.x, strike.y, Math.max(6, strike.radius * (1 - t)));
 
       // Parabolic lobbed shell trajectory arc over cover
       if (!isStress) {
@@ -279,10 +299,12 @@ export function drawP3APredictiveSightlinesAndOverlays(
           strike.startY +
           (strike.y - strike.startY) * t -
           4 * arcPeak * t * (1 - t);
-        g.fillStyle(crimson, 0.95);
-        g.fillCircle(shellX, shellY, 6.5);
-        g.fillStyle(bone, 0.95);
-        g.fillCircle(shellX, shellY, 2.8);
+        g.fillStyle(inkColor, 0.9);
+        g.fillCircle(shellX, shellY, 7.8);
+        g.fillStyle(crimson, 0.96);
+        g.fillCircle(shellX, shellY, 6.2);
+        g.fillStyle(bone, 0.96);
+        g.fillCircle(shellX, shellY, 2.6);
       }
     }
   }
@@ -297,11 +319,10 @@ export function drawP3APredictiveSightlinesAndOverlays(
     const rearAngle = e.shockArcVisualAngle ?? e.aimAngle + Math.PI;
     const alpha = clamp(timer / 0.38, 0, 1);
 
-    g.fillStyle(cyanColor, 0.24 * alpha);
-    g.lineStyle(2.4, voltColor, 0.9 * alpha);
-    g.beginPath();
-    g.moveTo(e.x, e.y);
-    g.arc(
+    floorG.fillStyle(cyanColor, 0.08 * alpha);
+    floorG.beginPath();
+    floorG.moveTo(e.x, e.y);
+    floorG.arc(
       e.x,
       e.y,
       IRON_SHIELDER_ARC_RADIUS,
@@ -309,21 +330,26 @@ export function drawP3APredictiveSightlinesAndOverlays(
       rearAngle + IRON_SHIELDER_ARC_HALF_ANGLE_RAD,
       false,
     );
-    g.closePath();
-    g.fillPath();
-    g.strokePath();
+    floorG.closePath();
+    floorG.fillPath();
+    floorG.lineStyle(4.2, inkColor, 0.72 * alpha);
+    floorG.strokePath();
+    floorG.lineStyle(2.4, voltColor, 0.94 * alpha);
+    floorG.strokePath();
   }
 
   if (sim.empBlastVisualRings.length > 0) {
     for (let rIdx = 0; rIdx < sim.empBlastVisualRings.length; rIdx++) {
       const ring = sim.empBlastVisualRings[rIdx]!;
       const p = clamp(1 - ring.timer / (ring.maxTimer || 0.42), 0, 1);
-      const curR = ring.radius * (0.25 + 0.75 * p);
+      const curR = ring.radius * (0.28 + 0.72 * p);
       const alpha = 1 - p;
-      g.fillStyle(cyanColor, 0.2 * alpha);
-      g.fillCircle(ring.x, ring.y, curR);
-      g.lineStyle(3.0, voltColor, 0.92 * alpha);
-      g.strokeCircle(ring.x, ring.y, curR);
+      floorG.fillStyle(cyanColor, 0.06 * alpha);
+      floorG.fillCircle(ring.x, ring.y, curR);
+      floorG.lineStyle(4.5, inkColor, 0.7 * alpha);
+      floorG.strokeCircle(ring.x, ring.y, curR);
+      floorG.lineStyle(2.8, voltColor, 0.94 * alpha);
+      floorG.strokeCircle(ring.x, ring.y, curR);
     }
   }
 
@@ -356,16 +382,18 @@ export function drawP3APredictiveSightlinesAndOverlays(
       const progress = clamp(1 - drop.timer / maxT, 0, 1);
       const r = drop.radius || 26;
 
-      g.fillStyle(amber, 0.16 + 0.24 * progress);
-      g.fillCircle(drop.x, drop.y, r);
-      g.lineStyle(2.5, gold, 0.94);
-      g.strokeCircle(drop.x, drop.y, r);
+      floorG.fillStyle(amber, 0.05 + 0.03 * progress);
+      floorG.fillCircle(drop.x, drop.y, r);
+      floorG.lineStyle(4.0, inkColor, 0.72);
+      floorG.strokeCircle(drop.x, drop.y, r);
+      floorG.lineStyle(2.5, gold, 0.94);
+      floorG.strokeCircle(drop.x, drop.y, r);
 
       const innerR = Math.max(4, r * (1 - 0.72 * progress));
-      g.lineStyle(1.9, amber, 0.88);
-      g.strokeCircle(drop.x, drop.y, innerR);
+      floorG.lineStyle(1.9, amber, 0.88);
+      floorG.strokeCircle(drop.x, drop.y, innerR);
 
-      // Vertical beacon beam & descending crate pod
+      // Descending supply crate pod
       const dropHeightOffset = (1 - progress) * 54;
       g.lineStyle(2.0, gold, 0.45 + 0.35 * progress);
       g.beginPath();
@@ -394,12 +422,14 @@ export function drawP3APredictiveSightlinesAndOverlays(
       const p = clamp(ageTicks / 14, 0, 1);
       const rad = 16 + p * 34;
       const alpha = 1 - p;
-      g.fillStyle(gold, 0.25 * alpha);
-      g.fillCircle(lr.x, lr.y, rad * 0.75);
-      g.lineStyle(2.8, gold, 0.95 * alpha);
-      g.strokeCircle(lr.x, lr.y, rad);
-      g.lineStyle(1.8, amber, 0.8 * alpha);
-      g.strokeCircle(lr.x, lr.y, rad * 0.6);
+      floorG.fillStyle(gold, 0.06 * alpha);
+      floorG.fillCircle(lr.x, lr.y, rad);
+      floorG.lineStyle(4.2, inkColor, 0.7 * alpha);
+      floorG.strokeCircle(lr.x, lr.y, rad);
+      floorG.lineStyle(2.6, gold, 0.95 * alpha);
+      floorG.strokeCircle(lr.x, lr.y, rad);
+      floorG.lineStyle(1.6, amber, 0.8 * alpha);
+      floorG.strokeCircle(lr.x, lr.y, rad * 0.65);
     }
   }
 
@@ -428,11 +458,13 @@ export function drawP3APredictiveSightlinesAndOverlays(
             ? 0xe0f2fe
             : 0xfef08a;
 
-      g.fillStyle(shellCol, 0.16);
-      g.fillCircle(bx, by, br);
-      g.lineStyle(3.2, shellCol, 0.92);
+      floorG.fillStyle(shellCol, 0.06);
+      floorG.fillCircle(bx, by, br);
+      g.lineStyle(4.8, inkColor, 0.74);
       g.strokeCircle(bx, by, br);
-      g.lineStyle(1.6, coreCol, 0.85);
+      g.lineStyle(3.0, shellCol, 0.94);
+      g.strokeCircle(bx, by, br);
+      g.lineStyle(1.5, coreCol, 0.88);
       g.strokeCircle(bx, by, br - 4.5);
 
       // 6 rotating armor barrier nodes around the boss
@@ -441,29 +473,33 @@ export function drawP3APredictiveSightlinesAndOverlays(
         const ang = rotBase + (k * Math.PI) / 3;
         const nx = bx + Math.cos(ang) * br;
         const ny = by + Math.sin(ang) * br;
-        g.fillStyle(coreCol, 0.95);
-        g.fillCircle(nx, ny, 3.8);
+        g.fillStyle(inkColor, 0.9);
+        g.fillCircle(nx, ny, 5.0);
+        g.fillStyle(coreCol, 0.96);
+        g.fillCircle(nx, ny, 3.6);
       }
     } else if ((boss.bossArmorBreakVulnTimer ?? 0) > 0) {
       const vulnCol = 0xfbbf24;
       const crackCol = 0xef4444;
-      g.fillStyle(vulnCol, 0.14);
-      g.fillCircle(bx, by, br + 4);
-      g.lineStyle(2.6, vulnCol, 0.92);
-      g.strokeCircle(bx, by, br + 2);
+      floorG.fillStyle(vulnCol, 0.06);
+      floorG.fillCircle(bx, by, br + 4);
+      floorG.lineStyle(4.2, inkColor, 0.72);
+      floorG.strokeCircle(bx, by, br + 2);
+      floorG.lineStyle(2.6, vulnCol, 0.94);
+      floorG.strokeCircle(bx, by, br + 2);
 
-      // Radial shattered armor floor cracks & shard triangles
+      // Radial shattered armor floor cracks
       for (let k = 0; k < 8; k++) {
         const ang = (k * Math.PI) / 4 + 0.2;
         const x1 = bx + Math.cos(ang) * (br - 6);
         const y1 = by + Math.sin(ang) * (br - 6);
         const x2 = bx + Math.cos(ang) * (br + 14);
         const y2 = by + Math.sin(ang) * (br + 14);
-        g.lineStyle(2.2, k % 2 === 0 ? vulnCol : crackCol, 0.9);
-        g.beginPath();
-        g.moveTo(x1, y1);
-        g.lineTo(x2, y2);
-        g.strokePath();
+        floorG.lineStyle(2.2, k % 2 === 0 ? vulnCol : crackCol, 0.9);
+        floorG.beginPath();
+        floorG.moveTo(x1, y1);
+        floorG.lineTo(x2, y2);
+        floorG.strokePath();
       }
     }
   }
@@ -475,11 +511,13 @@ export function drawP3APredictiveSightlinesAndOverlays(
     const pr = (prop.radius || 20) + 7;
 
     if (prop.cryoChargedByLaser === true) {
-      g.fillStyle(0x38bdf8, 0.26);
-      g.fillCircle(prop.x, prop.y, pr + 4);
-      g.lineStyle(2.8, 0x38bdf8, 0.95);
+      floorG.fillStyle(0x38bdf8, 0.07);
+      floorG.fillCircle(prop.x, prop.y, pr + 4);
+      g.lineStyle(4.2, inkColor, 0.75);
       g.strokeCircle(prop.x, prop.y, pr + 2);
-      g.lineStyle(1.8, 0xe0f2fe, 0.95);
+      g.lineStyle(2.6, 0x38bdf8, 0.95);
+      g.strokeCircle(prop.x, prop.y, pr + 2);
+      g.lineStyle(1.6, 0xfffdf5, 0.95);
       g.strokeCircle(prop.x, prop.y, pr - 2);
     }
 

@@ -73,8 +73,9 @@ export function getClientFreezeRandom(forceFreeze?: boolean): () => number {
   return isFreeze ? boundFreezeNext : Math.random;
 }
 
-export function getFreezeVisualTimeSec(liveElapsedSec: number): number {
-  if (!getVisualQueryConfig().freeze) {
+export function getFreezeVisualTimeSec(liveElapsedSec: number, forceFreeze?: boolean): number {
+  const isFreeze = forceFreeze ?? getVisualQueryConfig().freeze;
+  if (!isFreeze) {
     return liveElapsedSec;
   }
   const stripStepTicks =

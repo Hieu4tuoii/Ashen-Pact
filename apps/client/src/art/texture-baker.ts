@@ -13,6 +13,7 @@ import { bakeCustomCanvas, registerCanvasTexture } from './texture-baker-canvas.
 import { bakeCrosshair, bakeLightRadialBrush, bakeProjectilesAndFx } from './texture-baker-fx.js';
 import { bakePortalsAndDoors } from './texture-baker-portals-doors.js';
 import { bakeProps } from './texture-baker-props.js';
+import { bakeShaderVfxFlipbooks, SHADER_FX_TEXTURE_KEYS } from './texture-baker-shader-fx.js';
 import { bakeSurfaces, drawSurfaceTile } from './texture-baker-surfaces.js';
 import {
   bakeBiomeTile,
@@ -171,6 +172,7 @@ export class TextureBaker {
       scene.textures.exists('ui_crosshair') &&
       scene.textures.exists('fx_light_radial') &&
       scene.textures.exists('fx_impact_ring') &&
+      SHADER_FX_TEXTURE_KEYS.every((k) => scene.textures.exists(k)) &&
       scene.textures.exists('chest_closed_legendary') &&
       scene.textures.exists('portal_pedestal_base') &&
       scene.textures.exists('portal_particle_mote') &&
@@ -218,6 +220,9 @@ export class TextureBaker {
     this.bakeProps(scene, targetScale);
     this.bakePortalsAndDoors(scene, targetScale);
     this.bakeProjectilesAndFx(scene, targetScale);
+    if (force || !SHADER_FX_TEXTURE_KEYS.every((k) => scene.textures.exists(k))) {
+      this.bakeShaderVfxFlipbooks(scene, targetScale);
+    }
     if (!scene.textures.exists('fx_light_radial')) {
       this.bakeLightRadialBrush(scene);
     }
@@ -486,6 +491,10 @@ export class TextureBaker {
 
   public static bakeProjectilesAndFx(scene: Phaser.Scene, scale: number): void {
     bakeProjectilesAndFx(scene, scale);
+  }
+
+  public static bakeShaderVfxFlipbooks(scene: Phaser.Scene, scale: number): void {
+    bakeShaderVfxFlipbooks(scene, scale);
   }
 
   public static bakeCrosshair(scene: Phaser.Scene, scale: number): void {

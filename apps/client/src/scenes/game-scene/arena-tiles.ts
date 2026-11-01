@@ -318,6 +318,9 @@ export function createImpl(this: GameScene): void {
   this.interactHighlightGraphics.setDepth(35.6);
   this.interactHighlightGraphics.setBlendMode(Phaser.BlendModes.ADD);
 
+  this.groundHazardGraphics = this.add.graphics();
+  this.groundHazardGraphics.setDepth(16);
+
   this.telegraphGraphics = this.add.graphics();
   this.telegraphGraphics.setDepth(38);
 
