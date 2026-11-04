@@ -1,0 +1,6 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "installCommand": "pnpm install",
+  "buildCommand": "pnpm --filter @ashen-pact/shared build && pnpm --filter @ashen-pact/client build",
+  "outputDirectory": "apps/client/dist"
+}
