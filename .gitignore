@@ -11,10 +11,13 @@ playwright/.cache/
 .DS_Store
 Thumbs.db
 release/
+*.zip
+*.exe
+*.7z
+*.tar.gz
 
 .worktrees/
 .superpowers/
 
-# Animation Verification Engine 2.6 transient artifacts
-docs/screenshots/**/*-roi-*.png
-docs/screenshots/**/*-telemetry.json
+# Animation Verification Engine 2.6 & visual test screenshots
+docs/screenshots/
