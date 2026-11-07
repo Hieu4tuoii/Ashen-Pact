@@ -498,11 +498,17 @@ export function stepHonestPlayerBot(
 
   const cx = sim.map.width * 0.5;
   const cy = sim.map.height * 0.5;
+  const halfArenaW = fightingBoss ? Math.min(cx, 18 * 32) : cx;
+  const halfArenaH = fightingBoss ? Math.min(cy, 11 * 32) : cy;
+  const arenaMinX = cx - halfArenaW;
+  const arenaMaxX = cx + halfArenaW;
+  const arenaMinY = cy - halfArenaH;
+  const arenaMaxY = cy + halfArenaH;
   const nearWall =
-    player.x < 155 ||
-    player.x > sim.map.width - 155 ||
-    player.y < 145 ||
-    player.y > sim.map.height - 145;
+    player.x < arenaMinX + 155 ||
+    player.x > arenaMaxX - 155 ||
+    player.y < arenaMinY + 145 ||
+    player.y > arenaMaxY - 145;
 
   if (downedAlly && Math.hypot(downedAlly.x - player.x, downedAlly.y - player.y) < 280) {
     const allyAng = Math.atan2(downedAlly.y - player.y, downedAlly.x - player.x);
@@ -585,10 +591,10 @@ export function stepHonestPlayerBot(
 
   // Keep away from outer room walls / hazard borders
   const margin = 96;
-  if (player.x < margin) moveX += 0.95;
-  if (player.x > sim.map.width - margin) moveX -= 0.95;
-  if (player.y < margin) moveY += 0.95;
-  if (player.y > sim.map.height - margin) moveY -= 0.95;
+  if (player.x < arenaMinX + margin) moveX += 0.95;
+  if (player.x > arenaMaxX - margin) moveX -= 0.95;
+  if (player.y < arenaMinY + margin) moveY += 0.95;
+  if (player.y > arenaMaxY - margin) moveY -= 0.95;
 
   const moveLen = Math.hypot(moveX, moveY);
   if (moveLen > 1e-4) {

@@ -166,6 +166,7 @@ export interface PopulateInteractableLightsParams {
   worldItems?: readonly SimWorldItemState[];
   doors?: readonly SimDoorState[];
   pickups?: readonly SimPickupState[];
+  secretWallBroken?: boolean;
 }
 
 const interactableLightEntryPool: InteractableLightEntry[] = [];
@@ -208,6 +209,7 @@ export function populateInteractableLightsScratch(
     worldItems = [],
     doors = [],
     pickups = [],
+    secretWallBroken = false,
   } = params;
 
   let count = 0;
@@ -329,6 +331,9 @@ export function populateInteractableLightsScratch(
   const openDoorColorNum = hexToNum(ENV_PALETTE[inHub ? 0 : biome].accent);
   for (let i = 0; i < doors.length; i++) {
     const door = doors[i]!;
+    if (door.isSecretPassage && door.locked && !secretWallBroken) {
+      continue;
+    }
     if (door.locked) {
       writeEntry('door', door.x, door.y, 62, 0xdc2626, 0.28);
     } else {

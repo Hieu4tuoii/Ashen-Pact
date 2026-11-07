@@ -2,8 +2,57 @@ import { SeededRandom } from '../core/prng.js';
 import type { CardinalDir, RoomType } from '../data/types.js';
 import { TILE_SIZE } from '../protocol/messages.js';
 import { type AABB, clamp, resolveCircleVsAABB } from '../math/vec2.js';
-import { type RoomArchetypeId, type RoomLayoutOptions, type RoomLayoutResult, type RoomPropAnchor, configureRoomLayout as configureArchetypeRoomLayout, selectCombatRoomArchetype } from './arena-room-archetypes.js';
-export { ALL_ROOM_ARCHETYPES, DOOR_TILES, DOOR_VESTIBULE_RECTS, P0B_COMBAT_ARCHETYPES, PHASE0B_ROOM_ARCHETYPES, type RoomArchetypeId, type RoomLayoutOptions, type RoomLayoutResult, type RoomPropAnchor, type RoomPropAnchorRole, areActiveDoorsConnectedBfs, configureRoomLayout, findNearestWalkablePoint, findNextWalkableWaypoint, isInDoorClearanceZone, isInDoorVestibule, isWalkableTileForBfs, selectBiome1RoomArchetype, selectCombatRoomArchetype, spawnCombatRoomArchetypeProps } from './arena-room-archetypes.js';
+import {
+  type RoomArchetypeId,
+  type RoomInteriorShape,
+  type RoomLayoutOptions,
+  type RoomLayoutResult,
+  type RoomPropAnchor,
+  type RoomShapeKind,
+  type RoomSizePreset,
+  ROOM_SIZE_PRESET_DIMS,
+  applyRoomInteriorShape,
+  configureRoomLayout as configureArchetypeRoomLayout,
+  getDoorVestibuleRectsForMap,
+  selectCombatRoomArchetype,
+} from './arena-room-archetypes.js';
+export {
+  ALL_ROOM_ARCHETYPES,
+  ALL_ROOM_INTERIOR_SHAPES,
+  ALL_ROOM_SHAPES,
+  ALL_ROOM_SIZE_PRESETS,
+  DOOR_TILES,
+  DOOR_VESTIBULE_RECTS,
+  P0B_COMBAT_ARCHETYPES,
+  PHASE0B_ROOM_ARCHETYPES,
+  ROOM_SIZE_PRESET_DIMS,
+  ROOM_SIZE_PRESETS,
+  type RoomArchetypeId,
+  type RoomInteriorShape,
+  type RoomLayoutOptions,
+  type RoomLayoutResult,
+  type RoomPropAnchor,
+  type RoomPropAnchorRole,
+  type RoomShapeKind,
+  type RoomSizePreset,
+  applyRoomInteriorShape,
+  areActiveDoorsConnectedBfs,
+  computeTwinBridgesRows,
+  configureRoomLayout,
+  findNearestWalkablePoint,
+  findNextWalkableWaypoint,
+  getCrumblingRingPillarRectsForMap,
+  getDoorTilesForMap,
+  getDoorVestibuleRectsForMap,
+  isActiveWallTile,
+  isExteriorVoidWallTile,
+  isInDoorClearanceZone,
+  isInDoorVestibule,
+  isWalkableTileForBfs,
+  selectBiome1RoomArchetype,
+  selectCombatRoomArchetype,
+  spawnCombatRoomArchetypeProps,
+} from './arena-room-archetypes.js';
 
 export type TileKind = 'floor' | 'wall' | 'pillar' | 'cracked_wall';
 export type SurfaceKind =
@@ -19,7 +68,13 @@ export const WALL_AO_WEST = 2;
 export const WALL_AO_NORTH_WEST = 4;
 
 export interface ArenaMapConfig {
-  cols?: number; rows?: number; includePillars?: boolean; includeSurfaces?: boolean; seed?: number | string; biome?: 1 | 2 | 3;
+  cols?: number;
+  rows?: number;
+  includePillars?: boolean;
+  includeSurfaces?: boolean;
+  seed?: number | string;
+  biome?: 1 | 2 | 3;
+  roomShape?: RoomInteriorShape;
 }
 
 /**
@@ -27,15 +82,15 @@ export interface ArenaMapConfig {
  * wall depth/ambient-occlusion masks, cracked secret walls, and interactive elemental surfaces.
  */
 export class ArenaMap {
-  public readonly cols: number;
-  public readonly rows: number;
-  public readonly width: number;
-  public readonly height: number;
-  public readonly tiles: TileKind[];
-  public readonly tileVariants: number[];
-  public readonly surfaces: SurfaceKind[];
-  public readonly baseSurfaces: SurfaceKind[];
-  public readonly surfaceTimers: number[];
+  public cols: number;
+  public rows: number;
+  public width: number;
+  public height: number;
+  public tiles: TileKind[];
+  public tileVariants: number[];
+  public surfaces: SurfaceKind[];
+  public baseSurfaces: SurfaceKind[];
+  public surfaceTimers: number[];
   public readonly solidBoxes: AABB[];
   public biome: 1 | 2 | 3;
   public conveyorDirection: 1 | -1 = 1;
@@ -43,6 +98,8 @@ export class ArenaMap {
   public conveyorWarningTimer = 0;
   public mapRevision = 1;
   public roomArchetype?: RoomArchetypeId;
+  public roomShape: RoomShapeKind = 'rectangle';
+  public roomSizePreset?: RoomSizePreset;
   public propAnchors: RoomPropAnchor[] = [];
   public lastLayoutResult: RoomLayoutResult | null = null;
   public lastRoomLayout: RoomLayoutResult | null = null;
@@ -54,6 +111,7 @@ export class ArenaMap {
     this.width = this.cols * TILE_SIZE;
     this.height = this.rows * TILE_SIZE;
     this.biome = config.biome ?? 1;
+    this.roomShape = config.roomShape ?? 'rectangle';
 
     const count = this.cols * this.rows;
     this.tiles = new Array<TileKind>(count).fill('floor');
@@ -71,6 +129,40 @@ export class ArenaMap {
     this.buildLayout(config.includePillars ?? true, config.includeSurfaces ?? true);
   }
 
+  /**
+   * Resizes the map grid and reallocates tile/surface buffers in place when entering a room
+   * with a different RoomSizePreset ('compact' 28x18, 'standard' 36x22, 'wide_hall' 46x20,
+   * 'tall_sanctum' 32x28, 'grand_arena' 44x26, 'colossal_boss' 48x28).
+   */
+  public resize(cols: number, rows: number): boolean {
+    const nextCols = Math.max(12, Math.trunc(cols));
+    const nextRows = Math.max(10, Math.trunc(rows));
+    if (
+      this.cols === nextCols &&
+      this.rows === nextRows &&
+      this.tiles.length === nextCols * nextRows
+    ) {
+      return false;
+    }
+    this.cols = nextCols;
+    this.rows = nextRows;
+    this.width = nextCols * TILE_SIZE;
+    this.height = nextRows * TILE_SIZE;
+    const count = nextCols * nextRows;
+    this.tiles = new Array<TileKind>(count).fill('floor');
+    this.tileVariants = new Array<number>(count).fill(0);
+    this.surfaces = new Array<SurfaceKind>(count).fill('none');
+    this.baseSurfaces = new Array<SurfaceKind>(count).fill('none');
+    this.surfaceTimers = new Array<number>(count).fill(0);
+    const rng = new SeededRandom(0x1337c0de).fork('arena_map');
+    for (let i = 0; i < count; i++) {
+      this.tileVariants[i] = rng.nextInt(0, 7);
+    }
+    this.rebuildSolidBoxes();
+    this.mapRevision += 1;
+    return true;
+  }
+
   public reverseConveyorDirection(): 1 | -1 {
     this.conveyorDirection = this.conveyorDirection === 1 ? -1 : 1;
     this.conveyorCycleTimer = 0;
@@ -81,11 +173,28 @@ export class ArenaMap {
 
   public configureRoomLayout(
     roomTypeOrOpts: RoomType | RoomLayoutOptions,
-    roomSeed = 1,
-    secretWallBroken = false,
-    biome: 1 | 2 | 3 = this.biome,
-    archetype?: RoomArchetypeId,
-    activeDoorSides?: readonly CardinalDir[],
+    roomSeedOrBiome = 1,
+    secretWallBrokenOrSeed: boolean | number = false,
+    biomeOrActiveDoors: 1 | 2 | 3 | readonly CardinalDir[] = this.biome,
+    archetypeOrOpts?:
+      | RoomArchetypeId
+      | {
+          cols?: number;
+          rows?: number;
+          roomShape?: RoomShapeKind;
+          roomSizePreset?: RoomSizePreset;
+          archetype?: RoomArchetypeId;
+          secretWallBroken?: boolean;
+        },
+    activeDoorSidesArg?: readonly CardinalDir[],
+    shapeOrDims?:
+      | RoomShapeKind
+      | {
+          cols?: number;
+          rows?: number;
+          roomShape?: RoomShapeKind;
+          roomSizePreset?: RoomSizePreset;
+        },
   ): RoomLayoutResult | void {
     if (typeof roomTypeOrOpts === 'object' && roomTypeOrOpts !== null) {
       this.isBossRoom = false;
@@ -93,6 +202,79 @@ export class ArenaMap {
     }
     const roomType = roomTypeOrOpts;
     this.isBossRoom = roomType === 'boss';
+
+    // Detect 5-arg signature: configureRoomLayout(roomType, biome, seed, activeDoorSides?, options?)
+    const isFiveArgContract =
+      typeof secretWallBrokenOrSeed === 'number' ||
+      Array.isArray(biomeOrActiveDoors) ||
+      (typeof archetypeOrOpts === 'object' && archetypeOrOpts !== null);
+
+    let roomSeed: number;
+    let secretWallBroken: boolean;
+    let biome: 1 | 2 | 3;
+    let archetype: RoomArchetypeId | undefined;
+    let activeDoorSides: readonly CardinalDir[] | undefined;
+    let resolvedShapeOrDims:
+      | RoomShapeKind
+      | {
+          cols?: number;
+          rows?: number;
+          roomShape?: RoomShapeKind;
+          roomSizePreset?: RoomSizePreset;
+        }
+      | undefined;
+
+    if (isFiveArgContract) {
+      biome =
+        roomSeedOrBiome === 1 || roomSeedOrBiome === 2 || roomSeedOrBiome === 3
+          ? roomSeedOrBiome
+          : this.biome;
+      roomSeed =
+        typeof secretWallBrokenOrSeed === 'number' ? secretWallBrokenOrSeed : roomSeedOrBiome;
+      activeDoorSides = Array.isArray(biomeOrActiveDoors)
+        ? biomeOrActiveDoors
+        : activeDoorSidesArg;
+      if (typeof archetypeOrOpts === 'object' && archetypeOrOpts !== null) {
+        archetype = archetypeOrOpts.archetype;
+        secretWallBroken = Boolean(archetypeOrOpts.secretWallBroken);
+        resolvedShapeOrDims = archetypeOrOpts;
+      } else {
+        archetype = archetypeOrOpts;
+        secretWallBroken = false;
+        resolvedShapeOrDims = shapeOrDims;
+      }
+    } else {
+      roomSeed = roomSeedOrBiome;
+      secretWallBroken = Boolean(secretWallBrokenOrSeed);
+      biome =
+        biomeOrActiveDoors === 1 || biomeOrActiveDoors === 2 || biomeOrActiveDoors === 3
+          ? biomeOrActiveDoors
+          : this.biome;
+      archetype = typeof archetypeOrOpts === 'string' ? archetypeOrOpts : undefined;
+      activeDoorSides = activeDoorSidesArg;
+      resolvedShapeOrDims = shapeOrDims;
+    }
+
+    let targetCols: number | undefined;
+    let targetRows: number | undefined;
+    let targetPreset: RoomSizePreset | undefined;
+    let targetShape: RoomShapeKind = 'rectangle';
+    if (typeof resolvedShapeOrDims === 'object' && resolvedShapeOrDims !== null) {
+      targetPreset = resolvedShapeOrDims.roomSizePreset;
+      const presetDims = targetPreset ? ROOM_SIZE_PRESET_DIMS[targetPreset] : undefined;
+      targetCols = resolvedShapeOrDims.cols ?? presetDims?.cols;
+      targetRows = resolvedShapeOrDims.rows ?? presetDims?.rows;
+      targetShape = resolvedShapeOrDims.roomShape ?? 'rectangle';
+    } else if (typeof resolvedShapeOrDims === 'string') {
+      targetShape = resolvedShapeOrDims;
+    }
+    if (targetPreset) {
+      this.roomSizePreset = targetPreset;
+    }
+    if (targetCols && targetRows) {
+      this.resize(targetCols, targetRows);
+    }
+    this.roomShape = roomType === 'start' ? 'rectangle' : targetShape;
     if (roomType === 'combat') {
       return configureArchetypeRoomLayout(this, {
         roomSeed,
@@ -100,6 +282,10 @@ export class ArenaMap {
         biome,
         activeDoorSides,
         secretWallBroken,
+        roomShape: this.roomShape,
+        roomSizePreset: targetPreset,
+        cols: targetCols,
+        rows: targetRows,
       });
     }
 
@@ -154,61 +340,93 @@ export class ArenaMap {
       }
     }
 
+    applyRoomInteriorShape(this, this.roomShape);
+
     const placePillar2x2 = (px: number, py: number) => {
       for (let dy = 0; dy < 2; dy++) {
         for (let dx = 0; dx < 2; dx++) {
           if (px + dx > 0 && px + dx < this.cols - 1 && py + dy > 0 && py + dy < this.rows - 1) {
-            this.tiles[(py + dy) * this.cols + (px + dx)] = 'pillar';
+            const idx = (py + dy) * this.cols + (px + dx);
+            if (this.tiles[idx] !== 'wall') {
+              this.tiles[idx] = 'pillar';
+              this.surfaces[idx] = 'none';
+              this.baseSurfaces[idx] = 'none';
+            }
           }
         }
       }
     };
 
+    const midX = Math.floor(this.cols / 2);
+    const midY = Math.floor(this.rows / 2);
+
     if (roomType === 'boss') {
-      // Wide open Boss Arena with 4 corner cover pillars
-      placePillar2x2(7, 4);
-      placePillar2x2(27, 4);
-      placePillar2x2(7, 16);
-      placePillar2x2(27, 16);
+      // Wide open Boss Arena with 4 corner cover pillars centered around (midX, midY)
+      placePillar2x2(midX - 11, midY - 7);
+      placePillar2x2(midX + 9, midY - 7);
+      placePillar2x2(midX - 11, midY + 5);
+      placePillar2x2(midX + 9, midY + 5);
       if (biome === 2) {
         // Ice Queen Kryssa Arena: slippery ice rings and freezing water pools
-        this.fillSurfaceRect(11, 4, 5, 3, 'ice');
-        this.fillSurfaceRect(20, 4, 5, 3, 'ice');
-        this.fillSurfaceRect(11, 15, 5, 3, 'water');
-        this.fillSurfaceRect(20, 15, 5, 3, 'ice');
+        this.fillSurfaceRect(midX - 7, midY - 7, 5, 3, 'ice');
+        this.fillSurfaceRect(midX + 2, midY - 7, 5, 3, 'ice');
+        this.fillSurfaceRect(midX - 7, midY + 4, 5, 3, 'water');
+        this.fillSurfaceRect(midX + 2, midY + 4, 5, 3, 'ice');
       } else if (biome === 3) {
         // Forge Titan Arena: twin horizontal conveyor lanes + corner lava pools
-        this.fillSurfaceRect(11, 5, 14, 2, 'conveyor');
-        this.fillSurfaceRect(11, 15, 14, 2, 'conveyor');
-        this.fillSurfaceRect(4, 4, 2, 3, 'lava');
-        this.fillSurfaceRect(30, 4, 2, 3, 'lava');
-        this.fillSurfaceRect(4, 15, 2, 3, 'lava');
-        this.fillSurfaceRect(30, 15, 2, 3, 'lava');
+        this.fillSurfaceRect(midX - 7, midY - 6, 14, 2, 'conveyor');
+        this.fillSurfaceRect(midX - 7, midY + 4, 14, 2, 'conveyor');
+        this.fillSurfaceRect(midX - 14, midY - 7, 2, 3, 'lava');
+        this.fillSurfaceRect(midX + 13, midY - 7, 2, 3, 'lava');
+        this.fillSurfaceRect(midX - 14, midY + 4, 2, 3, 'lava');
+        this.fillSurfaceRect(midX + 13, midY + 4, 2, 3, 'lava');
       } else {
-        this.fillSurfaceRect(10, 4, 3, 2, 'grass');
-        this.fillSurfaceRect(23, 4, 3, 2, 'grass');
-        this.fillSurfaceRect(10, 16, 3, 2, 'water');
-        this.fillSurfaceRect(23, 16, 3, 2, 'poison_swamp');
+        this.fillSurfaceRect(midX - 8, midY - 7, 3, 2, 'grass');
+        this.fillSurfaceRect(midX + 5, midY - 7, 3, 2, 'grass');
+        this.fillSurfaceRect(midX - 8, midY + 5, 3, 2, 'water');
+        this.fillSurfaceRect(midX + 5, midY + 5, 3, 2, 'poison_swamp');
       }
     } else {
       // Sanctuary rooms: treasure, merchant, shrine, secret, portal
-      placePillar2x2(7, 4);
-      placePillar2x2(27, 4);
-      placePillar2x2(7, 16);
-      placePillar2x2(27, 16);
+      const pLeftX = Math.max(5, Math.round((7 * this.cols) / 36));
+      const pRightX = this.cols - 2 - pLeftX;
+      const pTopY = Math.max(3, Math.round((4 * this.rows) / 22));
+      const pBotY = this.rows - 2 - pTopY;
+      placePillar2x2(pLeftX, pTopY);
+      placePillar2x2(pRightX, pTopY);
+      placePillar2x2(pLeftX, pBotY);
+      placePillar2x2(pRightX, pBotY);
       const accentA: SurfaceKind = biome === 2 ? 'ice' : biome === 3 ? 'conveyor' : 'water';
       const accentB: SurfaceKind = biome === 2 ? 'water' : biome === 3 ? 'oil' : 'grass';
       if (roomType === 'shrine' || roomType === 'portal') {
-        this.fillSurfaceRect(12, 5, 3, 3, accentA);
-        this.fillSurfaceRect(21, 5, 3, 3, accentA);
-        this.fillSurfaceRect(12, 14, 3, 3, accentB);
-        this.fillSurfaceRect(21, 14, 3, 3, accentB);
+        const sTopY = Math.max(4, midY - 6);
+        const sBotY = this.rows - 3 - sTopY;
+        this.fillSurfaceRect(midX - 6, sTopY, 3, 3, accentA);
+        this.fillSurfaceRect(midX + 3, sTopY, 3, 3, accentA);
+        this.fillSurfaceRect(midX - 6, sBotY, 3, 3, accentB);
+        this.fillSurfaceRect(midX + 3, sBotY, 3, 3, accentB);
       } else if (roomType === 'secret') {
-        this.fillSurfaceRect(11, 5, 3, 3, accentB);
-        this.fillSurfaceRect(22, 5, 3, 3, accentB);
+        const sTopY = Math.max(4, midY - 6);
+        this.fillSurfaceRect(midX - 7, sTopY, 3, 3, accentB);
+        this.fillSurfaceRect(midX + 4, sTopY, 3, 3, accentB);
       } else {
-        this.fillSurfaceRect(10, 5, 3, 2, accentB);
-        this.fillSurfaceRect(23, 5, 3, 2, accentB);
+        const sTopY = Math.max(4, midY - 6);
+        this.fillSurfaceRect(midX - 8, sTopY, 3, 2, accentB);
+        this.fillSurfaceRect(midX + 5, sTopY, 3, 2, accentB);
+      }
+    }
+
+    const vestibuleRects = getDoorVestibuleRectsForMap(this);
+    for (const dir of ['N', 'S', 'E', 'W'] as const) {
+      const rect = vestibuleRects[dir];
+      for (let ty = rect.minTy; ty <= rect.maxTy; ty++) {
+        for (let tx = rect.minTx; tx <= rect.maxTx; tx++) {
+          const idx = ty * this.cols + tx;
+          this.tiles[idx] = 'floor';
+          this.surfaces[idx] = 'none';
+          this.baseSurfaces[idx] = 'none';
+          this.surfaceTimers[idx] = 0;
+        }
       }
     }
 
@@ -217,10 +435,16 @@ export class ArenaMap {
   }
 
   public clearInteriorForHub(): void {
-    for (let ty = 1; ty < this.rows - 1; ty++) {
-      for (let tx = 1; tx < this.cols - 1; tx++) {
+    if (this.cols !== 36 || this.rows !== 22) {
+      this.resize(36, 22);
+    }
+    this.roomShape = 'rectangle';
+    this.roomSizePreset = 'standard';
+    for (let ty = 0; ty < this.rows; ty++) {
+      for (let tx = 0; tx < this.cols; tx++) {
         const idx = ty * this.cols + tx;
-        this.tiles[idx] = 'floor';
+        const isBorder = tx === 0 || ty === 0 || tx === this.cols - 1 || ty === this.rows - 1;
+        this.tiles[idx] = isBorder ? 'wall' : 'floor';
         this.surfaces[idx] = 'none';
         this.baseSurfaces[idx] = 'none';
         this.surfaceTimers[idx] = 0;
@@ -238,9 +462,12 @@ export class ArenaMap {
    * with creeping toxic swamp mist, shrinking the safe combat zone in the center.
    */
   public applyBossPhase3ToxicBorder(): void {
+    const midX = Math.floor(this.cols / 2);
+    const midY = Math.floor(this.rows / 2);
     for (let ty = 1; ty < this.rows - 1; ty++) {
       for (let tx = 1; tx < this.cols - 1; tx++) {
-        const isOuterRing = tx <= 3 || tx >= this.cols - 4 || ty <= 2 || ty >= this.rows - 3;
+        const isOuterRing =
+          tx <= midX - 15 || tx >= midX + 14 || ty <= midY - 9 || ty >= midY + 8;
         if (isOuterRing && !this.isSolidTile(tx, ty)) {
           this.setSurface(tx, ty, 'poison_swamp', 0, true);
         }
@@ -252,9 +479,12 @@ export class ArenaMap {
    * Boss 2 Kryssa Phase 3 ("Bão Tuyết Vĩnh Cửu"): freezes the outer ring of the Boss Arena into slippery ice.
    */
   public applyBossPhase3BlizzardBorder(): void {
+    const midX = Math.floor(this.cols / 2);
+    const midY = Math.floor(this.rows / 2);
     for (let ty = 1; ty < this.rows - 1; ty++) {
       for (let tx = 1; tx < this.cols - 1; tx++) {
-        const isOuterRing = tx <= 3 || tx >= this.cols - 4 || ty <= 2 || ty >= this.rows - 3;
+        const isOuterRing =
+          tx <= midX - 15 || tx >= midX + 14 || ty <= midY - 9 || ty >= midY + 8;
         if (isOuterRing && !this.isSolidTile(tx, ty)) {
           this.setSurface(tx, ty, 'ice', 0, true);
         }
@@ -266,9 +496,12 @@ export class ArenaMap {
    * Boss 3 Forge Titan Phase 3 ("Quá Nhiệt Dung Nham"): floods the outer ring of the Boss Arena with molten lava.
    */
   public applyBossPhase3LavaBorder(): void {
+    const midX = Math.floor(this.cols / 2);
+    const midY = Math.floor(this.rows / 2);
     for (let ty = 1; ty < this.rows - 1; ty++) {
       for (let tx = 1; tx < this.cols - 1; tx++) {
-        const isOuterRing = tx <= 1 || tx >= this.cols - 2 || ty <= 1 || ty >= this.rows - 2;
+        const isOuterRing =
+          tx <= midX - 17 || tx >= midX + 16 || ty <= midY - 10 || ty >= midY + 9;
         if (isOuterRing && !this.isSolidTile(tx, ty)) {
           this.setSurface(tx, ty, 'lava', 0, true);
         }
@@ -341,7 +574,7 @@ export class ArenaMap {
       for (let dx = 0; dx < w; dx++) {
         const tx = startTx + dx;
         const ty = startTy + dy;
-        if (!this.isSolidTile(tx, ty)) {
+        if (!this.isSolidTile(tx, ty) && (surface === 'chasm' || this.getSurface(tx, ty) !== 'chasm')) {
           this.setSurface(tx, ty, surface, 0, true);
         }
       }
@@ -458,21 +691,15 @@ export class ArenaMap {
     return mask;
   }
 
-  private isSameSurfaceFamily(a: SurfaceKind, b: SurfaceKind): boolean {
+  public isSameSurfaceFamily(a: SurfaceKind, b: SurfaceKind): boolean {
     if (a === b) return true;
     if (
-      (a === 'water' || a === 'electrified_water' || a === 'ice') &&
-      (b === 'water' || b === 'electrified_water' || b === 'ice')
+      (a === 'water' || a === 'electrified_water') &&
+      (b === 'water' || b === 'electrified_water')
     ) {
       return true;
     }
-    if ((a === 'oil' || a === 'burning_oil') && (b === 'oil' || b === 'burning_oil')) {
-      return true;
-    }
-    if (
-      (a === 'grass' || a === 'burning_grass' || a === 'ash') &&
-      (b === 'grass' || a === 'burning_grass' || b === 'ash')
-    ) {
+    if ((a === 'grass' || a === 'ash') && (b === 'grass' || b === 'ash')) {
       return true;
     }
     return false;

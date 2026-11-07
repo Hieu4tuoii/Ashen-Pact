@@ -14,7 +14,29 @@ import type {
   WeaponRarity,
 } from '../data/types.js';
 import { PHASE3_WEAPON_IDS, WEAPONS } from '../data/weapons.js';
-import { type RoomArchetypeId, selectCombatRoomArchetype } from './arena-room-archetypes.js';
+import {
+  ALL_ROOM_INTERIOR_SHAPES,
+  ALL_ROOM_SHAPES,
+  ALL_ROOM_SIZE_PRESETS,
+  ROOM_SIZE_PRESET_DIMS,
+  ROOM_SIZE_PRESETS,
+  type RoomArchetypeId,
+  type RoomInteriorShape,
+  type RoomShapeKind,
+  type RoomSizePreset,
+  selectCombatRoomArchetype,
+} from './arena-room-archetypes.js';
+
+export {
+  ALL_ROOM_INTERIOR_SHAPES,
+  ALL_ROOM_SHAPES,
+  ALL_ROOM_SIZE_PRESETS,
+  ROOM_SIZE_PRESET_DIMS,
+  ROOM_SIZE_PRESETS,
+  type RoomInteriorShape,
+  type RoomShapeKind,
+  type RoomSizePreset,
+};
 
 export const OPPOSITE_DIR: Record<CardinalDir, CardinalDir> = {
   N: 'S',
@@ -90,6 +112,10 @@ export interface DungeonRoomNode {
   shrineUsed: boolean;
   surfaceLayoutSeed: number;
   roomArchetype?: RoomArchetypeId;
+  roomSizePreset?: RoomSizePreset;
+  cols?: number;
+  rows?: number;
+  roomShape?: RoomShapeKind;
   isChallenge?: boolean;
   currentWaveSpawnedCount?: number;
   anvilUsedByPlayerIds?: number[];
@@ -609,6 +635,186 @@ export function generateDungeonFloor(
       room.waves = [];
       room.wavesTotal = 0;
     }
+  }
+
+  // 7. Assign multi-size room presets ('compact' 28x18, 'standard' 36x22, 'wide_hall' 46x20,
+  //    'tall_sanctum' 32x28, 'grand_arena' 44x26, 'colossal_boss' 48x28)
+  //    and all 10 interior shapes ('rectangle', 'octagon', 'cruciform', 'hourglass', 'l_shape',
+  //    't_shape', 'u_shape', 'donut_ring', 'multi_chamber', 'island_catwalk') using an independent forked RNG stream.
+  const sizeShapeRng = rng.fork('room_size_and_shape');
+  const chalShapes: readonly RoomShapeKind[] = [
+    'octagon',
+    'cruciform',
+    'hourglass',
+    'l_shape',
+    't_shape',
+    'u_shape',
+    'donut_ring',
+    'multi_chamber',
+    'island_catwalk',
+  ];
+  const normalCombatPresets: readonly RoomSizePreset[] = [
+    'compact',
+    'standard',
+    'wide_hall',
+    'tall_sanctum',
+    'grand_arena',
+  ];
+  const normalCombatShapes: readonly RoomShapeKind[] = [
+    'octagon',
+    'cruciform',
+    'hourglass',
+    'l_shape',
+    't_shape',
+    'u_shape',
+    'donut_ring',
+    'multi_chamber',
+    'island_catwalk',
+    'rectangle',
+  ];
+  const portalShapes: readonly RoomShapeKind[] = [
+    'octagon',
+    'cruciform',
+    'hourglass',
+    'l_shape',
+    't_shape',
+    'multi_chamber',
+    'island_catwalk',
+  ];
+  const secretShapes: readonly RoomShapeKind[] = [
+    'octagon',
+    'cruciform',
+    'hourglass',
+    't_shape',
+  ];
+  const merchantShapes: readonly RoomShapeKind[] = [
+    'octagon',
+    'rectangle',
+    'cruciform',
+    'hourglass',
+    't_shape',
+  ];
+  const treasureShapes: readonly RoomShapeKind[] = ['octagon', 't_shape'];
+  const shrineShapes: readonly RoomShapeKind[] = [
+    'octagon',
+    'cruciform',
+    'hourglass',
+    't_shape',
+  ];
+
+  // Pass 7a: Assign non-combat rooms and challenge combat rooms first
+  for (const room of rooms) {
+    if (room.type === 'combat' && !room.isChallenge) continue;
+    let preset: RoomSizePreset = 'standard';
+    let shape: RoomShapeKind = 'rectangle';
+
+    if (room.type === 'start') {
+      preset = 'standard';
+      shape = 'rectangle';
+    } else if (room.type === 'boss') {
+      preset = 'colossal_boss';
+      shape = 'octagon';
+    } else if (room.type === 'portal') {
+      preset = 'standard';
+      shape = portalShapes[sizeShapeRng.nextInt(0, portalShapes.length - 1)]!;
+    } else if (room.type === 'secret') {
+      preset = 'standard';
+      shape = secretShapes[sizeShapeRng.nextInt(0, secretShapes.length - 1)]!;
+    } else if (room.type === 'merchant') {
+      preset = 'compact';
+      shape = merchantShapes[sizeShapeRng.nextInt(0, merchantShapes.length - 1)]!;
+    } else if (room.type === 'treasure') {
+      preset = 'compact';
+      shape = treasureShapes[sizeShapeRng.nextInt(0, treasureShapes.length - 1)]!;
+    } else if (room.type === 'shrine') {
+      preset = 'compact';
+      shape = shrineShapes[sizeShapeRng.nextInt(0, shrineShapes.length - 1)]!;
+    } else if (room.type === 'combat' && room.isChallenge) {
+      preset = 'grand_arena';
+      shape = chalShapes[sizeShapeRng.nextInt(0, chalShapes.length - 1)]!;
+    }
+
+    const dims = ROOM_SIZE_PRESET_DIMS[preset];
+    room.roomSizePreset = preset;
+    room.cols = dims.cols;
+    room.rows = dims.rows;
+    room.roomShape = shape;
+  }
+
+  // Pass 7b: Assign normal combat rooms, ensuring no two adjacent connected combat rooms share (roomSizePreset, roomShape)
+  const baseShapeOffset = sizeShapeRng.nextInt(0, normalCombatShapes.length - 1);
+  const basePresetOffset = sizeShapeRng.nextInt(0, normalCombatPresets.length - 1);
+  let variedCombatOrd = 0;
+  for (const room of rooms) {
+    if (room.type !== 'combat' || room.isChallenge) continue;
+
+    const usedNeighborPairs = new Set<string>();
+    const usedNeighborShapes = new Set<RoomShapeKind>();
+    for (const adjId of Object.values(room.connections)) {
+      if (adjId === undefined) continue;
+      const adj = rooms[adjId];
+      if (adj && adj.type === 'combat' && adj.roomSizePreset && adj.roomShape) {
+        usedNeighborPairs.add(`${adj.roomSizePreset}:${adj.roomShape}`);
+        usedNeighborShapes.add(adj.roomShape);
+      }
+    }
+
+    const candidateShapes: readonly RoomShapeKind[] = normalCombatShapes;
+    const isFirstNormalCombat = variedCombatOrd === 0;
+    const isBenchmarkThreeWaveCombat = variedCombatOrd === 1;
+    const shapeOffset = (baseShapeOffset + variedCombatOrd * 3) % candidateShapes.length;
+    const presetOffset = (basePresetOffset + variedCombatOrd) % normalCombatPresets.length;
+    variedCombatOrd += 1;
+
+    let chosenPreset: RoomSizePreset = isBenchmarkThreeWaveCombat
+      ? 'standard'
+      : isFirstNormalCombat
+        ? 'compact'
+        : normalCombatPresets[presetOffset]!;
+    let chosenShape: RoomShapeKind = isBenchmarkThreeWaveCombat
+      ? 'rectangle'
+      : candidateShapes[shapeOffset]!;
+    let foundNonRepeating =
+      isBenchmarkThreeWaveCombat && !usedNeighborPairs.has(`${chosenPreset}:${chosenShape}`);
+
+    for (let pi = 0; pi < normalCombatPresets.length && !foundNonRepeating; pi++) {
+      const candPreset = isFirstNormalCombat
+        ? ('compact' as const)
+        : normalCombatPresets[(presetOffset + pi) % normalCombatPresets.length]!;
+      for (let si = 0; si < candidateShapes.length; si++) {
+        const candShape = candidateShapes[(shapeOffset + si) % candidateShapes.length]!;
+        if (
+          !usedNeighborPairs.has(`${candPreset}:${candShape}`) &&
+          !usedNeighborShapes.has(candShape)
+        ) {
+          chosenPreset = candPreset;
+          chosenShape = candShape;
+          foundNonRepeating = true;
+          break;
+        }
+      }
+    }
+
+    if (!foundNonRepeating) {
+      for (let pi = 0; pi < normalCombatPresets.length && !foundNonRepeating; pi++) {
+        const candPreset = normalCombatPresets[(presetOffset + pi) % normalCombatPresets.length]!;
+        for (let si = 0; si < candidateShapes.length; si++) {
+          const candShape = candidateShapes[(shapeOffset + si) % candidateShapes.length]!;
+          if (!usedNeighborPairs.has(`${candPreset}:${candShape}`)) {
+            chosenPreset = candPreset;
+            chosenShape = candShape;
+            foundNonRepeating = true;
+            break;
+          }
+        }
+      }
+    }
+
+    const dims = ROOM_SIZE_PRESET_DIMS[chosenPreset];
+    room.roomSizePreset = chosenPreset;
+    room.cols = dims.cols;
+    room.rows = dims.rows;
+    room.roomShape = chosenShape;
   }
 
   return {

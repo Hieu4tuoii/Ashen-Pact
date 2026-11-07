@@ -673,7 +673,7 @@ export function invalidateAllHudCachesImpl(this: GameScene): void {
   this.lastHudQuality = '';
   this.lastHudStatsText = '';
   this.lastMinimapHash = '';
-  this.lastBossHudHash = '';
+  this.lastBossHudHash = '__invalid__';
   this.lastCoopHudHash = '';
   this.lastInvitePanelHash = '';
   this.lastHubPreviewHash = '';

@@ -370,7 +370,7 @@ export function updateCurrentRoomProgressionImpl(this: WorldSim, dtSec: number):
       this.secretWallBroken = true;
       room.secretWallBroken = true;
     }
-  } else if (room.type === 'start' && this.map.getTile(18, 0) === 'floor') {
+  } else if (room.type === 'start' && this.map.getTile(Math.floor(this.map.cols / 2), 0) === 'floor') {
     this.secretWallBroken = true;
   }
 

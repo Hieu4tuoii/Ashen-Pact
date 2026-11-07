@@ -8,7 +8,10 @@ import {
   TABLE_TECH_BILLIARD_SLAM_DMG_MULT,
   triggerTableTechOnWallSlamOrStagger,
 } from './sim-blessings.js';
-import { clampBossPlayerHitDamage } from './sim-damage-pipeline.js';
+import {
+  clampBossPlayerHitDamage,
+  dampenBossMultiProcDamage,
+} from './sim-damage-pipeline.js';
 import { triggerBiome2WallSlamCryoPulse } from './sim-tactical-physics-p1c.js';
 import {
   collapseRottenTotemPillar,
@@ -726,9 +729,13 @@ export function triggerBossInPlaceWallSlam(
   }
 
   if (!boss.bossBurrowed && (boss.bossPhaseTransitionTimer ?? 0) <= 0) {
-    const effectiveDmg = sim.hasActiveBossGuardians()
+    const rawEffectiveDmg = sim.hasActiveBossGuardians()
       ? Math.max(1, Math.round(slamDmg * 0.35))
       : slamDmg;
+    const effectiveDmg =
+      sim.tick > 0 && hasPlayerBlessing(attackerPlayer, 'table_tech_billiard_master')
+        ? Math.max(1, Math.round(dampenBossMultiProcDamage(sim.tick, boss, rawEffectiveDmg)))
+        : rawEffectiveDmg;
     boss.hp = Math.max(0, boss.hp - effectiveDmg);
     boss.hitFlashTimer = 0.14;
     sim.events.push({

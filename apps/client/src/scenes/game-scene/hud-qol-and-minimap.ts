@@ -8,6 +8,7 @@ import {
   WORLD_VIEW_HEIGHT,
   WORLD_VIEW_WIDTH,
 } from '@ashen-pact/shared';
+import type Phaser from 'phaser';
 import { hexToNum, PALETTE } from '../../art/palette.js';
 import { musicManager } from '../../audio/music-synth.js';
 import {
@@ -72,12 +73,404 @@ export function triggerRoomClearedBannerImpl(this: GameScene): void {
   this.hudBannerTimer = 2.2;
 }
 
+export function resolveMinimapNodeDims(
+  cellStep: number,
+  preset?: string,
+  cols = 36,
+  rows = 22,
+): { nodeW: number; nodeH: number } {
+  const baseW = cellStep * 0.74;
+  const baseH = cellStep * 0.64;
+  let scaleW = 0.92;
+  let scaleH = 0.9;
+  if (preset === 'compact' || (cols <= 28 && rows <= 18)) {
+    scaleW = 0.76;
+    scaleH = 0.76;
+  } else if (preset === 'wide_hall' || (cols >= 46 && rows <= 20)) {
+    scaleW = 1.14;
+    scaleH = 0.8;
+  } else if (preset === 'tall_sanctum' || (cols <= 32 && rows >= 28)) {
+    scaleW = 0.82;
+    scaleH = 1.14;
+  } else if (preset === 'grand_arena' || (cols === 44 && rows === 26)) {
+    scaleW = 1.08;
+    scaleH = 1.06;
+  } else if (preset === 'colossal_boss' || cols >= 48) {
+    scaleW = 1.18;
+    scaleH = 1.16;
+  }
+  const maxDim = Math.max(8, Math.floor(cellStep * 0.88));
+  const minDim = Math.max(6, Math.floor(cellStep * 0.48));
+  return {
+    nodeW: clamp(Math.round(baseW * scaleW), minDim, maxDim),
+    nodeH: clamp(Math.round(baseH * scaleH), minDim, maxDim),
+  };
+}
+
+export function computeMinimapRoomPolygon(
+  shape: string,
+  cx: number,
+  cy: number,
+  nodeW: number,
+  nodeH: number,
+  orientation = 0,
+): readonly [number, number][] {
+  const hw = nodeW * 0.5;
+  const hh = nodeH * 0.5;
+  switch (shape) {
+    case 'octagon': {
+      const bx = hw * 0.36;
+      const by = hh * 0.36;
+      return [
+        [cx - hw + bx, cy - hh],
+        [cx + hw - bx, cy - hh],
+        [cx + hw, cy - hh + by],
+        [cx + hw, cy + hh - by],
+        [cx + hw - bx, cy + hh],
+        [cx - hw + bx, cy + hh],
+        [cx - hw, cy + hh - by],
+        [cx - hw, cy - hh + by],
+      ];
+    }
+    case 'diamond':
+    case 'rhombus': {
+      const tx = hw * 0.22;
+      const ty = hh * 0.22;
+      return [
+        [cx - tx, cy - hh],
+        [cx + tx, cy - hh],
+        [cx + hw, cy - ty],
+        [cx + hw, cy + ty],
+        [cx + tx, cy + hh],
+        [cx - tx, cy + hh],
+        [cx - hw, cy + ty],
+        [cx - hw, cy - ty],
+      ];
+    }
+    case 'cruciform':
+    case 'plus_shape':
+    case 'plus':
+    case 'cross_chamber': {
+      const ratio = shape === 'cruciform' ? 0.46 : 0.34;
+      const aw = hw * ratio;
+      const ah = hh * ratio;
+      return [
+        [cx - aw, cy - hh],
+        [cx + aw, cy - hh],
+        [cx + aw, cy - ah],
+        [cx + hw, cy - ah],
+        [cx + hw, cy + ah],
+        [cx + aw, cy + ah],
+        [cx + aw, cy + hh],
+        [cx - aw, cy + hh],
+        [cx - aw, cy + ah],
+        [cx - hw, cy + ah],
+        [cx - hw, cy - ah],
+        [cx - aw, cy - ah],
+      ];
+    }
+    case 'hourglass': {
+      const wx = hw * 0.34;
+      const wy = hh * 0.44;
+      return [
+        [cx - hw, cy - hh],
+        [cx - wx, cy - hh],
+        [cx - wx * 0.55, cy - wy],
+        [cx + wx * 0.55, cy - wy],
+        [cx + wx, cy - hh],
+        [cx + hw, cy - hh],
+        [cx + hw, cy + hh],
+        [cx + wx, cy + hh],
+        [cx + wx * 0.55, cy + wy],
+        [cx - wx * 0.55, cy + wy],
+        [cx - wx, cy + hh],
+        [cx - hw, cy + hh],
+      ];
+    }
+    case 'l_shape': {
+      const ix = hw * 0.12;
+      const iy = hh * 0.12;
+      const rot = ((orientation % 4) + 4) % 4;
+      if (rot === 1) {
+        return [
+          [cx + ix, cy - hh],
+          [cx + hw, cy - hh],
+          [cx + hw, cy + hh],
+          [cx - hw, cy + hh],
+          [cx - hw, cy - iy],
+          [cx + ix, cy - iy],
+        ];
+      }
+      if (rot === 2) {
+        return [
+          [cx - hw, cy - hh],
+          [cx + hw, cy - hh],
+          [cx + hw, cy + hh],
+          [cx + ix, cy + hh],
+          [cx + ix, cy + iy],
+          [cx - hw, cy + iy],
+        ];
+      }
+      if (rot === 3) {
+        return [
+          [cx - hw, cy - hh],
+          [cx + hw, cy - hh],
+          [cx + hw, cy + iy],
+          [cx - ix, cy + iy],
+          [cx - ix, cy + hh],
+          [cx - hw, cy + hh],
+        ];
+      }
+      return [
+        [cx - hw, cy - hh],
+        [cx - ix, cy - hh],
+        [cx - ix, cy - iy],
+        [cx + hw, cy - iy],
+        [cx + hw, cy + hh],
+        [cx - hw, cy + hh],
+      ];
+    }
+    case 't_shape': {
+      const sw = hw * 0.44;
+      const sh = hh * 0.16;
+      const rot = ((orientation % 4) + 4) % 4;
+      if (rot === 1) {
+        return [
+          [cx - sw, cy - hh],
+          [cx + sw, cy - hh],
+          [cx + sw, cy - sh],
+          [cx + hw, cy - sh],
+          [cx + hw, cy + hh],
+          [cx - hw, cy + hh],
+          [cx - hw, cy - sh],
+          [cx - sw, cy - sh],
+        ];
+      }
+      return [
+        [cx - hw, cy - hh],
+        [cx + hw, cy - hh],
+        [cx + hw, cy + sh],
+        [cx + sw, cy + sh],
+        [cx + sw, cy + hh],
+        [cx - sw, cy + hh],
+        [cx - sw, cy + sh],
+        [cx - hw, cy + sh],
+      ];
+    }
+    case 'u_shape': {
+      const uw = hw * 0.34;
+      const uy = hh * 0.22;
+      const rot = ((orientation % 4) + 4) % 4;
+      if (rot === 1) {
+        return [
+          [cx - hw, cy - hh],
+          [cx + hw, cy - hh],
+          [cx + hw, cy + hh],
+          [cx + uw, cy + hh],
+          [cx + uw, cy - uy],
+          [cx - uw, cy - uy],
+          [cx - uw, cy + hh],
+          [cx - hw, cy + hh],
+        ];
+      }
+      return [
+        [cx - hw, cy - hh],
+        [cx - uw, cy - hh],
+        [cx - uw, cy + uy],
+        [cx + uw, cy + uy],
+        [cx + uw, cy - hh],
+        [cx + hw, cy - hh],
+        [cx + hw, cy + hh],
+        [cx - hw, cy + hh],
+      ];
+    }
+    case 'multi_chamber':
+    case 'split_wing':
+    case 'split_twin_lobe':
+    case 'twin_lobe':
+    case 'asymmetric': {
+      const stepX = hw * 0.16;
+      const neckX = hw * 0.04;
+      const stepY = hh * 0.38;
+      const neckY = hh * 0.52;
+      return [
+        [cx - hw, cy - hh],
+        [cx + stepX, cy - hh],
+        [cx + stepX, cy - neckY],
+        [cx + neckX, cy - stepY],
+        [cx + hw, cy - stepY],
+        [cx + hw, cy + hh],
+        [cx - stepX, cy + hh],
+        [cx - stepX, cy + neckY],
+        [cx - neckX, cy + stepY],
+        [cx - hw, cy + stepY],
+      ];
+    }
+    case 'donut_ring':
+    case 'ring_donut':
+    case 'donut':
+    case 'ring': {
+      const bx = hw * 0.28;
+      const by = hh * 0.28;
+      return [
+        [cx - hw + bx, cy - hh],
+        [cx + hw - bx, cy - hh],
+        [cx + hw, cy - hh + by],
+        [cx + hw, cy + hh - by],
+        [cx + hw - bx, cy + hh],
+        [cx - hw + bx, cy + hh],
+        [cx - hw, cy + hh - by],
+        [cx - hw, cy - hh + by],
+      ];
+    }
+    case 'island_catwalk': {
+      const bx = hw * 0.22;
+      const by = hh * 0.22;
+      return [
+        [cx - hw + bx, cy - hh],
+        [cx + hw - bx, cy - hh],
+        [cx + hw, cy - hh + by],
+        [cx + hw, cy + hh - by],
+        [cx + hw - bx, cy + hh],
+        [cx - hw + bx, cy + hh],
+        [cx - hw, cy + hh - by],
+        [cx - hw, cy - hh + by],
+      ];
+    }
+    default:
+      return [
+        [cx - hw, cy - hh],
+        [cx + hw, cy - hh],
+        [cx + hw, cy + hh],
+        [cx - hw, cy + hh],
+      ];
+  }
+}
+
+export function drawMinimapRoomSilhouette(
+  g: Phaser.GameObjects.Graphics,
+  shape: string,
+  cx: number,
+  cy: number,
+  nodeW: number,
+  nodeH: number,
+  fillNum: number,
+  fillAlpha: number,
+  borderColor: number,
+  borderWidth = 1,
+  orientation = 0,
+): void {
+  const poly = computeMinimapRoomPolygon(shape, cx, cy, nodeW, nodeH, orientation);
+  if (poly.length === 0) return;
+
+  const isIslandCatwalk = shape === 'island_catwalk';
+  const outerFill = isIslandCatwalk ? UI_THEME.inkDeep : fillNum;
+  const outerAlpha = isIslandCatwalk ? Math.min(0.96, fillAlpha + 0.12) : fillAlpha;
+
+  g.fillStyle(outerFill, outerAlpha);
+  g.lineStyle(borderWidth, borderColor, 1);
+  g.beginPath();
+  g.moveTo(poly[0]![0], poly[0]![1]);
+  for (let i = 1; i < poly.length; i++) {
+    g.lineTo(poly[i]![0], poly[i]![1]);
+  }
+  g.closePath();
+  g.fillPath();
+  g.strokePath();
+
+  if (
+    shape === 'donut_ring' ||
+    shape === 'ring_donut' ||
+    shape === 'donut' ||
+    shape === 'ring'
+  ) {
+    const holeW = Math.max(3, nodeW * 0.38);
+    const holeH = Math.max(3, nodeH * 0.38);
+    g.fillStyle(UI_THEME.panelBgDark, 0.96);
+    g.fillRect(cx - holeW * 0.5, cy - holeH * 0.5, holeW, holeH);
+    g.lineStyle(Math.max(0.9, borderWidth * 0.85), borderColor, 0.92);
+    g.strokeRect(cx - holeW * 0.5, cy - holeH * 0.5, holeW, holeH);
+  } else if (
+    shape === 'multi_chamber' ||
+    shape === 'split_wing' ||
+    shape === 'split_twin_lobe' ||
+    shape === 'twin_lobe' ||
+    shape === 'asymmetric'
+  ) {
+    const hw = nodeW * 0.5;
+    const hh = nodeH * 0.5;
+    g.lineStyle(Math.max(0.9, borderWidth * 0.8), borderColor, 0.85);
+    g.beginPath();
+    g.moveTo(cx - hw * 0.18, cy - hh * 0.14);
+    g.lineTo(cx + hw * 0.18, cy + hh * 0.14);
+    g.strokePath();
+  } else if (isIslandCatwalk) {
+    const hw = nodeW * 0.5;
+    const hh = nodeH * 0.5;
+    const cw = hw * 0.24;
+    const ch = hh * 0.24;
+    const iw = hw * 0.52;
+    const ih = hh * 0.52;
+    const spanW = hw * 0.88;
+    const spanH = hh * 0.88;
+    const innerPoly: readonly [number, number][] = [
+      [cx - cw, cy - spanH],
+      [cx + cw, cy - spanH],
+      [cx + cw, cy - ih],
+      [cx + iw, cy - ih],
+      [cx + iw, cy - ch],
+      [cx + spanW, cy - ch],
+      [cx + spanW, cy + ch],
+      [cx + iw, cy + ch],
+      [cx + iw, cy + ih],
+      [cx + cw, cy + ih],
+      [cx + cw, cy + spanH],
+      [cx - cw, cy + spanH],
+      [cx - cw, cy + ih],
+      [cx - iw, cy + ih],
+      [cx - iw, cy + ch],
+      [cx - spanW, cy + ch],
+      [cx - spanW, cy - ch],
+      [cx - iw, cy - ch],
+      [cx - iw, cy - ih],
+      [cx - cw, cy - ih],
+    ];
+    g.fillStyle(fillNum, fillAlpha);
+    g.lineStyle(Math.max(0.8, borderWidth * 0.75), borderColor, 0.88);
+    g.beginPath();
+    g.moveTo(innerPoly[0]![0], innerPoly[0]![1]);
+    for (let i = 1; i < innerPoly.length; i++) {
+      g.lineTo(innerPoly[i]![0], innerPoly[i]![1]);
+    }
+    g.closePath();
+    g.fillPath();
+    g.strokePath();
+  }
+}
+
 export function updateMinimapHudImpl(this: GameScene): void {
   const sim = this.transport.getSim();
   const room = sim.getCurrentRoom();
   const uiScale = graphicsSettings.getState().uiScale;
-  const minimapHash = `${sim.inHub ? 'hub' : sim.currentFloor}:${sim.currentBiome}:${sim.currentRoomId}:${this.fullMapOpen ? 1 : 0}:${sim.secretWallBroken ? 1 : 0}:${room.cleared ? 1 : 0}:${sim.runStats.roomsCleared}:${sim.pings.length}:${i18n.getLocale()}:${this.hudPadX}:${this.hudPadY}:${uiScale}`;
-  if (minimapHash === this.lastMinimapHash) return;
+  const pNormX = Math.round(clamp(sim.player.x / Math.max(1, sim.map.width), 0, 1) * 16);
+  const pNormY = Math.round(clamp(sim.player.y / Math.max(1, sim.map.height), 0, 1) * 16);
+  const liveShape =
+    (sim.map as { roomShape?: string }).roomShape ??
+    sim.map.lastLayoutResult?.roomShape ??
+    room.roomShape ??
+    'rectangle';
+  const livePreset =
+    (sim.map as { roomSizePreset?: string }).roomSizePreset ??
+    (sim.map.lastLayoutResult as { roomSizePreset?: string } | null)?.roomSizePreset ??
+    room.roomSizePreset ??
+    'standard';
+  let roomsTopologySig = '';
+  for (let i = 0; i < sim.dungeon.rooms.length; i++) {
+    const rm = sim.dungeon.rooms[i]!;
+    roomsTopologySig += `${rm.id}:${rm.roomShape ?? 'r'}:${rm.roomSizePreset ?? 's'}:${rm.discovery};`;
+  }
+  const minimapHash = `${sim.inHub ? 'hub' : sim.currentFloor}:${sim.currentBiome}:${sim.currentRoomId}:${this.fullMapOpen ? 1 : 0}:${sim.secretWallBroken ? 1 : 0}:${room.cleared ? 1 : 0}:${sim.runStats.roomsCleared}:${sim.pings.length}:${i18n.getLocale()}:${this.hudPadX}:${this.hudPadY}:${uiScale}:${liveShape}:${livePreset}:${sim.map.cols}x${sim.map.rows}:${sim.map.mapRevision}:${pNormX},${pNormY}:${roomsTopologySig}`;
+  if (minimapHash === this.lastMinimapHash && !sim.stressTestActive) return;
   this.lastMinimapHash = minimapHash;
 
   const g = this.minimapGraphics;
@@ -158,8 +551,6 @@ export function updateMinimapHudImpl(this: GameScene): void {
   const cellStep = this.fullMapOpen
     ? Math.min(52, Math.floor((panelW - 56) / spanX), Math.floor((panelH - 52) / spanY))
     : Math.min(24, Math.floor((panelW - 24) / spanX), Math.floor((panelH - 22) / spanY));
-  const nodeW = Math.floor(cellStep * 0.74);
-  const nodeH = Math.floor(cellStep * 0.64);
 
   const originX = panelX + (panelW - (spanX - 1) * cellStep) * 0.5;
   const originY = panelY + (panelH - (spanY - 1) * cellStep) * 0.5;
@@ -167,12 +558,39 @@ export function updateMinimapHudImpl(this: GameScene): void {
   const isVisitedOrCleared = (rm: DungeonRoomNode) =>
     rm.discovery === 'visited' || rm.discovery === 'cleared';
 
-  // 1. Corridors between discovered / adjacent rooms
+  const resolveRoomNodeInfo = (
+    rm: DungeonRoomNode,
+  ): { isCurrent: boolean; effectiveShape: string; nodeW: number; nodeH: number } => {
+    const isCurrent = rm.id === sim.currentRoomId;
+    const effectiveShape = isCurrent
+      ? ((sim.map as { roomShape?: string }).roomShape ??
+        sim.map.lastLayoutResult?.roomShape ??
+        rm.roomShape ??
+        'rectangle')
+      : (rm.roomShape ?? 'rectangle');
+    const effectivePreset = isCurrent
+      ? ((sim.map as { roomSizePreset?: string }).roomSizePreset ??
+        (sim.map.lastLayoutResult as { roomSizePreset?: string } | null)?.roomSizePreset ??
+        rm.roomSizePreset)
+      : rm.roomSizePreset;
+    const effectiveCols = isCurrent ? sim.map.cols : (rm.cols ?? 36);
+    const effectiveRows = isCurrent ? sim.map.rows : (rm.rows ?? 22);
+    const { nodeW, nodeH } = resolveMinimapNodeDims(
+      cellStep,
+      effectivePreset,
+      effectiveCols,
+      effectiveRows,
+    );
+    return { isCurrent, effectiveShape, nodeW, nodeH };
+  };
+
+  // 1. Corridors between discovered / adjacent rooms (clipped to outer room borders)
   for (let i = 0; i < rooms.length; i++) {
     const r = rooms[i]!;
     if (!isVisitedOrCleared(r)) continue;
     const cx = originX + (r.gx - minGx) * cellStep;
     const cy = originY + (r.gy - minGy) * cellStep;
+    const srcDims = resolveRoomNodeInfo(r);
 
     for (const targetId of Object.values(r.connections)) {
       if (targetId === undefined) continue;
@@ -190,13 +608,32 @@ export function updateMinimapHudImpl(this: GameScene): void {
 
       const tx = originX + (target.gx - minGx) * cellStep;
       const ty = originY + (target.gy - minGy) * cellStep;
+      const dstDims = resolveRoomNodeInfo(target);
       g.fillStyle(UI_THEME.panelBorderHighlight, 0.82);
-      g.fillRect(
-        Math.min(cx, tx) - 1,
-        Math.min(cy, ty) - 1,
-        Math.max(2, Math.abs(tx - cx) + 2),
-        Math.max(2, Math.abs(ty - cy) + 2),
-      );
+
+      if (Math.abs(tx - cx) >= Math.abs(ty - cy)) {
+        const leftIsSrc = cx <= tx;
+        const leftX = leftIsSrc ? cx : tx;
+        const rightX = leftIsSrc ? tx : cx;
+        const leftW = leftIsSrc ? srcDims.nodeW : dstDims.nodeW;
+        const rightW = leftIsSrc ? dstDims.nodeW : srcDims.nodeW;
+        const x0 = leftX + leftW * 0.46;
+        const x1 = rightX - rightW * 0.46;
+        const segW = Math.max(1.5, x1 - x0);
+        const segX = x1 > x0 ? x0 : (leftX + rightX - segW) * 0.5;
+        g.fillRect(segX, (cy + ty) * 0.5 - 1, segW, 2);
+      } else {
+        const topIsSrc = cy <= ty;
+        const topY = topIsSrc ? cy : ty;
+        const botY = topIsSrc ? ty : cy;
+        const topH = topIsSrc ? srcDims.nodeH : dstDims.nodeH;
+        const botH = topIsSrc ? dstDims.nodeH : srcDims.nodeH;
+        const y0 = topY + topH * 0.46;
+        const y1 = botY - botH * 0.46;
+        const segH = Math.max(1.5, y1 - y0);
+        const segY = y1 > y0 ? y0 : (topY + botY - segH) * 0.5;
+        g.fillRect((cx + tx) * 0.5 - 1, segY, 2, segH);
+      }
     }
   }
 
@@ -239,15 +676,29 @@ export function updateMinimapHudImpl(this: GameScene): void {
       fillNum = 0x1e3a2f;
     }
 
-    const isCurrent = r.id === sim.currentRoomId;
+    const { isCurrent, effectiveShape, nodeW, nodeH } = resolveRoomNodeInfo(r);
+
     const bw = isCurrent ? 1.5 : 1;
-    g.fillStyle(
-      isCurrent ? 0xfacc15 : discovered ? UI_THEME.panelBorderHighlight : UI_THEME.panelBorder,
-      1,
+    const borderColor = isCurrent
+      ? 0xfacc15
+      : discovered
+        ? UI_THEME.panelBorderHighlight
+        : UI_THEME.panelBorder;
+    const fillAlpha = discovered ? 0.96 : 0.65;
+
+    drawMinimapRoomSilhouette(
+      g,
+      effectiveShape,
+      cx,
+      cy,
+      nodeW,
+      nodeH,
+      fillNum,
+      fillAlpha,
+      borderColor,
+      bw,
+      0,
     );
-    g.fillRect(cx - nodeW / 2 - bw, cy - nodeH / 2 - bw, nodeW + bw * 2, nodeH + bw * 2);
-    g.fillStyle(fillNum, discovered ? 0.96 : 0.65);
-    g.fillRect(cx - nodeW / 2, cy - nodeH / 2, nodeW, nodeH);
 
     const iconSize = this.fullMapOpen ? 4.8 : 2.8;
     if (discovered) {
@@ -261,14 +712,44 @@ export function updateMinimapHudImpl(this: GameScene): void {
         drawVectorHudIcon(g, 'coin', cx, cy, iconSize, 0xfbbf24);
       } else if (r.type === 'shrine') {
         drawVectorHudIcon(g, 'shrine', cx, cy, iconSize, 0x38bdf8);
-      } else if (isCurrent) {
-        const dotR = this.fullMapOpen ? 3.5 : 2.2;
-        g.fillStyle(0xfacc15, 1);
-        g.fillRect(cx - dotR, cy - dotR, dotR * 2, dotR * 2);
-      } else if (r.cleared) {
+      } else if (r.cleared && !isCurrent) {
         const dotR = this.fullMapOpen ? 2.2 : 1.5;
         g.fillStyle(0x4ade80, 0.9);
         g.fillRect(cx - dotR, cy - dotR, dotR * 2, dotR * 2);
+      }
+
+      if (isCurrent) {
+        const normX = clamp(sim.player.x / Math.max(1, sim.map.width), 0.12, 0.88) - 0.5;
+        const normY = clamp(sim.player.y / Math.max(1, sim.map.height), 0.12, 0.88) - 0.5;
+        const isCompactSmallNode = !this.fullMapOpen && Math.min(nodeW, nodeH) <= 12;
+        const dotR = this.fullMapOpen ? 3.2 : isCompactSmallNode ? 1.4 : 2.0;
+        const outlinePad = this.fullMapOpen ? 1.0 : isCompactSmallNode ? 0.7 : 1.0;
+        let dotX = cx + normX * Math.max(4, nodeW - 4);
+        let dotY = cy + normY * Math.max(4, nodeH - 4);
+
+        if (
+          effectiveShape === 'donut_ring' ||
+          effectiveShape === 'ring_donut' ||
+          effectiveShape === 'donut' ||
+          effectiveShape === 'ring'
+        ) {
+          const holeHalfW = Math.max(3, nodeW * 0.38) * 0.5;
+          const holeHalfH = Math.max(3, nodeH * 0.38) * 0.5;
+          const minClearX = Math.min(nodeW * 0.42, holeHalfW + dotR * 0.75);
+          const minClearY = Math.min(nodeH * 0.42, holeHalfH + dotR * 0.75);
+          if (Math.abs(dotX - cx) < minClearX && Math.abs(dotY - cy) < minClearY) {
+            if (Math.abs(normX) >= Math.abs(normY)) {
+              dotX = cx + (normX < 0 ? -minClearX : minClearX);
+            } else {
+              dotY = cy + (normY < 0 ? -minClearY : minClearY);
+            }
+          }
+        }
+
+        g.fillStyle(UI_THEME.inkDeep, 0.95);
+        g.fillCircle(dotX, dotY, dotR + outlinePad);
+        g.fillStyle(UI_THEME.status.goldBright, 1);
+        g.fillCircle(dotX, dotY, dotR);
       }
     }
   }

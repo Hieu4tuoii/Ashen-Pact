@@ -160,7 +160,8 @@ export function applyDamageToEnemyImpl(
   if (enemy.isBoss) {
     finalAmount = Math.min(finalAmount, amount * BOSS_SINGLE_HIT_MAX_MULT);
     if (!enemy.isDummy && !this.stressTestActive && this.tick > 0 && amount < Math.min(1000, enemy.maxHp * 0.3)) {
-      const attackerForCap = attackerPlayerId > 0 ? this.getPlayerById(attackerPlayerId) : undefined;
+      const attackerForCap =
+        (attackerPlayerId > 0 ? this.getPlayerById(attackerPlayerId) : undefined) ?? this.player;
       finalAmount = dampenBossMultiProcDamage(this.tick, enemy, clampBossPlayerHitDamage(attackerForCap, finalAmount));
     }
   }

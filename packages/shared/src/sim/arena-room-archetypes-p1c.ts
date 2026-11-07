@@ -28,9 +28,11 @@ function setPillarRect(
       const ty = startTy + dy;
       if (tx > 0 && tx < map.cols - 1 && ty > 0 && ty < map.rows - 1) {
         const idx = ty * map.cols + tx;
-        map.tiles[idx] = 'pillar';
-        map.surfaces[idx] = 'none';
-        map.baseSurfaces[idx] = 'none';
+        if (map.tiles[idx] !== 'wall') {
+          map.tiles[idx] = 'pillar';
+          map.surfaces[idx] = 'none';
+          map.baseSurfaces[idx] = 'none';
+        }
       }
     }
   }
@@ -66,8 +68,8 @@ function getBiomePropKinds(biome: 1 | 2 | 3): {
  * Computes the horizontal conveyor belt velocity (px/s) at world position (worldX, worldY):
  * - Returns 0 if the tile surface at (worldX, worldY) is not 'conveyor'.
  * - In CROSSFIRE_CONVEYORS:
- *   - Upper 3-tile belt (ty <= 10, i.e. ty: 6..8) flows East (+110 px/s * map.conveyorDirection).
- *   - Lower 3-tile belt (ty >= 11, i.e. ty: 13..15) flows West (-110 px/s * map.conveyorDirection).
+ *   - Upper 3-tile belt (ty < midY, e.g. ty: 6..8 on 36x22) flows East (+110 px/s * map.conveyorDirection).
+ *   - Lower 3-tile belt (ty >= midY, e.g. ty: 13..15 on 36x22) flows West (-110 px/s * map.conveyorDirection).
  * - In other archetypes: flows in +110 px/s * map.conveyorDirection.
  */
 export function getConveyorVelocityAtWorld(
@@ -78,15 +80,16 @@ export function getConveyorVelocityAtWorld(
   const tx = Math.floor(worldX / TILE_SIZE);
   const ty = Math.floor(worldY / TILE_SIZE);
   if (map.getSurface(tx, ty) !== 'conveyor') return 0;
-  const laneSign = map.roomArchetype === 'CROSSFIRE_CONVEYORS' && ty >= 11 ? -1 : 1;
+  const midY = Math.floor(map.rows / 2);
+  const laneSign = map.roomArchetype === 'CROSSFIRE_CONVEYORS' && ty >= midY ? -1 : 1;
   return laneSign * map.conveyorDirection * CONVEYOR_BELT_SPEED;
 }
 
 /**
  * 1. CROSSFIRE_CONVEYORS (Dây Chuyền Giao Lộ Tốc Độ Cao):
  * Two 3-tile-wide parallel conveyor lanes across the room:
- * - ty: 6..8 flowing East (+110 px/s)
- * - ty: 13..15 flowing West (-110 px/s)
+ * - Upper belt flowing East (+110 px/s)
+ * - Lower belt flowing West (-110 px/s)
  */
 export function buildCrossfireConveyorsGeometry(
   map: ArenaMap,
@@ -95,36 +98,116 @@ export function buildCrossfireConveyorsGeometry(
   flipY: boolean,
 ): BaseP1CAnchorSpec[] {
   const kinds = getBiomePropKinds(biome);
+  const cols = map.cols;
+  const rows = map.rows;
+  const midX = Math.floor(cols / 2);
+  const midY = Math.floor(rows / 2);
+  const topLaneY = midY - 5;
+  const botLaneY = midY + 2;
+  const beltW = Math.max(8, cols - 10);
+  const cornerTopY = Math.max(2, topLaneY - 3);
+  const cornerBotY = Math.min(rows - 4, botLaneY + 4);
 
   // Corner structural pillars framing the factory lanes
-  setPillarRect(map, 4, 3, 2, 2);
-  setPillarRect(map, 30, 3, 2, 2);
-  setPillarRect(map, 4, 17, 2, 2);
-  setPillarRect(map, 30, 17, 2, 2);
-  // Central divider bollards between the two conveyor lanes (ty: 10..11)
-  setPillarRect(map, flipX ? 23 : 11, 10, 2, 2);
-  setPillarRect(map, flipX ? 11 : 23, 10, 2, 2);
+  setPillarRect(map, 4, cornerTopY, 2, 2);
+  setPillarRect(map, cols - 6, cornerTopY, 2, 2);
+  setPillarRect(map, 4, cornerBotY, 2, 2);
+  setPillarRect(map, cols - 6, cornerBotY, 2, 2);
+  // Central divider bollards between the two conveyor lanes
+  const bollardLeftX = midX - 7;
+  const bollardRightX = cols - 2 - bollardLeftX;
+  setPillarRect(map, flipX ? bollardRightX : bollardLeftX, midY - 1, 2, 2);
+  setPillarRect(map, flipX ? bollardLeftX : bollardRightX, midY - 1, 2, 2);
 
-  // Two parallel 3-tile-wide conveyor belts (tx: 5..30, ty: 6..8 and ty: 13..15)
-  map.fillSurfaceRect(5, 6, 26, 3, 'conveyor');
-  map.fillSurfaceRect(5, 13, 26, 3, 'conveyor');
+  // Two parallel 3-tile-wide conveyor belts
+  map.fillSurfaceRect(5, topLaneY, beltW, 3, 'conveyor');
+  map.fillSurfaceRect(5, botLaneY, beltW, 3, 'conveyor');
 
   // Side hazard accents outside the belts
   const accentSurf: SurfaceKind = biome === 2 ? 'ice' : biome === 3 ? 'lava' : 'oil';
-  map.fillSurfaceRect(flipX ? 25 : 7, flipY ? 17 : 3, 4, 2, accentSurf);
-  map.fillSurfaceRect(flipX ? 7 : 25, flipY ? 3 : 17, 4, 2, biome === 2 ? 'water' : 'oil');
+  const accentRightX = cols - 11;
+  map.fillSurfaceRect(flipX ? accentRightX : 7, flipY ? cornerBotY : cornerTopY, 4, 2, accentSurf);
+  map.fillSurfaceRect(
+    flipX ? 7 : accentRightX,
+    flipY ? cornerTopY : cornerBotY,
+    4,
+    2,
+    biome === 2 ? 'water' : 'oil',
+  );
 
+  const barLeftX = Math.max(6, midX - 8);
+  const barRightX = cols - 1 - barLeftX;
   return [
-    { id: 'cc_barricade_nw', role: 'barricade', propKind: kinds.barricade, tx: 10, ty: 5 },
-    { id: 'cc_barricade_ne', role: 'barricade', propKind: kinds.barricade, tx: 25, ty: 5 },
-    { id: 'cc_barricade_sw', role: 'barricade', propKind: kinds.barricade, tx: 10, ty: 16 },
-    { id: 'cc_barricade_se', role: 'barricade', propKind: kinds.barricade, tx: 25, ty: 16 },
-    { id: 'cc_hazard_top', role: 'hazard', propKind: kinds.hazard, tx: 14, ty: 7 },
-    { id: 'cc_hazard_bot', role: 'hazard', propKind: kinds.hazard, tx: 21, ty: 14 },
-    { id: 'cc_pillar_mid_w', role: 'pillar_toy', propKind: kinds.pillarToy, tx: 15, ty: 10 },
-    { id: 'cc_pillar_mid_e', role: 'pillar_toy', propKind: kinds.pillarToy, tx: 20, ty: 11 },
-    { id: 'cc_mech', role: 'mechanism', propKind: 'ancient_mechanism', tx: 17, ty: 10 },
+    { id: 'cc_barricade_nw', role: 'barricade', propKind: kinds.barricade, tx: barLeftX, ty: topLaneY - 1 },
+    { id: 'cc_barricade_ne', role: 'barricade', propKind: kinds.barricade, tx: barRightX, ty: topLaneY - 1 },
+    { id: 'cc_barricade_sw', role: 'barricade', propKind: kinds.barricade, tx: barLeftX, ty: botLaneY + 3 },
+    { id: 'cc_barricade_se', role: 'barricade', propKind: kinds.barricade, tx: barRightX, ty: botLaneY + 3 },
+    { id: 'cc_hazard_top', role: 'hazard', propKind: kinds.hazard, tx: midX - 4, ty: topLaneY + 1 },
+    { id: 'cc_hazard_bot', role: 'hazard', propKind: kinds.hazard, tx: midX + 3, ty: botLaneY + 1 },
+    { id: 'cc_pillar_mid_w', role: 'pillar_toy', propKind: kinds.pillarToy, tx: midX - 3, ty: midY - 1 },
+    { id: 'cc_pillar_mid_e', role: 'pillar_toy', propKind: kinds.pillarToy, tx: midX + 2, ty: midY },
+    { id: 'cc_mech', role: 'mechanism', propKind: 'ancient_mechanism', tx: midX - 1, ty: midY - 1 },
   ];
+}
+
+function isInPrismDoorVestibule(map: ArenaMap, tx: number, ty: number): boolean {
+  const midX = Math.floor(map.cols / 2);
+  const midY = Math.floor(map.rows / 2);
+  if ((ty <= 3 || ty >= map.rows - 4) && tx >= midX - 1 && tx <= midX + 1) return true;
+  if ((tx <= 3 || tx >= map.cols - 4) && ty >= midY - 1 && ty <= midY + 1) return true;
+  return false;
+}
+
+function placePrismPillar2x4(map: ArenaMap, targetX: number, targetY: number): void {
+  const canPlaceAt = (px: number, py: number, requireMoat: boolean): boolean => {
+    if (px < 2 || py < 2 || px + 1 > map.cols - 3 || py + 3 > map.rows - 3) return false;
+    for (let dy = 0; dy < 4; dy++) {
+      for (let dx = 0; dx < 2; dx++) {
+        const tx = px + dx;
+        const ty = py + dy;
+        if (
+          map.getTile(tx, ty) !== 'floor' ||
+          map.getSurface(tx, ty) === 'chasm' ||
+          isInPrismDoorVestibule(map, tx, ty)
+        ) {
+          return false;
+        }
+      }
+    }
+    if (requireMoat) {
+      for (let dy = -1; dy <= 4; dy++) {
+        for (let dx = -1; dx <= 2; dx++) {
+          if (dx >= 0 && dx < 2 && dy >= 0 && dy < 4) continue;
+          const tx = px + dx;
+          const ty = py + dy;
+          if (tx <= 0 || ty <= 0 || tx >= map.cols - 1 || ty >= map.rows - 1) return false;
+          if (map.getTile(tx, ty) !== 'floor' || map.getSurface(tx, ty) === 'chasm') return false;
+        }
+      }
+    }
+    return true;
+  };
+
+  if (canPlaceAt(targetX, targetY, false)) {
+    setPillarRect(map, targetX, targetY, 2, 4);
+    return;
+  }
+  const maxRing = Math.max(map.cols, map.rows);
+  for (const requireMoat of [true, false]) {
+    for (let ring = 1; ring <= maxRing; ring++) {
+      for (let dy = -ring; dy <= ring; dy++) {
+        for (let dx = -ring; dx <= ring; dx++) {
+          if (Math.abs(dx) !== ring && Math.abs(dy) !== ring) continue;
+          const cx = targetX + dx;
+          const cy = targetY + dy;
+          if (canPlaceAt(cx, cy, requireMoat)) {
+            setPillarRect(map, cx, cy, 2, 4);
+            return;
+          }
+        }
+      }
+    }
+  }
 }
 
 /**
@@ -139,43 +222,59 @@ export function buildPrismLabyrinthGeometry(
   flipY: boolean,
 ): BaseP1CAnchorSpec[] {
   const kinds = getBiomePropKinds(biome);
+  const cols = map.cols;
+  const rows = map.rows;
+  const midX = Math.floor(cols / 2);
+  const midY = Math.floor(rows / 2);
 
   // 5 staggered 2x4 cover walls in a quincunx checkerboard pattern
   const wShift = flipX ? 1 : 0;
-  const hShift = flipY ? 1 : 0;
-  setPillarRect(map, 9 + wShift, 4 + hShift, 2, 4);
-  setPillarRect(map, 24 + wShift, 4 + hShift, 2, 4);
-  setPillarRect(map, 17, 9, 2, 4);
-  setPillarRect(map, 9 + wShift, 13 + hShift, 2, 4);
-  setPillarRect(map, 24 + wShift, 13 + hShift, 2, 4);
+  const hShift = rows >= 20 ? (flipY ? 1 : 0) : 0;
+  const leftWallX = Math.max(6, Math.round((9 * cols) / 36));
+  const rightWallX = cols - 3 - leftWallX;
+  const topWallY = rows >= 20 ? Math.max(4, Math.floor(rows * 0.18)) : 3;
+  const botWallY = rows - 5 - topWallY;
 
+  placePrismPillar2x4(map, leftWallX + wShift, topWallY + hShift);
+  placePrismPillar2x4(map, rightWallX + wShift, topWallY + hShift);
+  placePrismPillar2x4(map, midX - 1, midY - 2);
+  placePrismPillar2x4(map, leftWallX + wShift, botWallY + hShift);
+  placePrismPillar2x4(map, rightWallX + wShift, botWallY + hShift);
+
+  const surfLeftX = midX - 6;
+  const surfRightX = midX + 2;
+  const surfTopY = topWallY;
+  const surfBotY = rows - 3 - topWallY;
   if (biome === 2) {
-    map.fillSurfaceRect(12, 4, 4, 3, 'ice');
-    map.fillSurfaceRect(20, 4, 4, 3, 'ice');
-    map.fillSurfaceRect(12, 15, 4, 3, 'ice');
-    map.fillSurfaceRect(20, 15, 4, 3, 'water');
+    map.fillSurfaceRect(surfLeftX, surfTopY, 4, 3, 'ice');
+    map.fillSurfaceRect(surfRightX, surfTopY, 4, 3, 'ice');
+    map.fillSurfaceRect(surfLeftX, surfBotY, 4, 3, 'ice');
+    map.fillSurfaceRect(surfRightX, surfBotY, 4, 3, 'water');
   } else if (biome === 3) {
-    map.fillSurfaceRect(12, 4, 4, 2, 'conveyor');
-    map.fillSurfaceRect(20, 15, 4, 2, 'conveyor');
-    map.fillSurfaceRect(4, 6, 3, 3, 'lava');
-    map.fillSurfaceRect(29, 13, 3, 3, 'oil');
+    map.fillSurfaceRect(surfLeftX, surfTopY, 4, 2, 'conveyor');
+    map.fillSurfaceRect(surfRightX, surfBotY, 4, 2, 'conveyor');
+    map.fillSurfaceRect(4, topWallY + 2, 3, 3, 'lava');
+    map.fillSurfaceRect(cols - 7, botWallY, 3, 3, 'oil');
   } else {
-    map.fillSurfaceRect(12, 4, 4, 3, 'grass');
-    map.fillSurfaceRect(20, 4, 4, 3, 'water');
-    map.fillSurfaceRect(12, 15, 4, 3, 'poison_swamp');
-    map.fillSurfaceRect(20, 15, 4, 3, 'oil');
+    map.fillSurfaceRect(surfLeftX, surfTopY, 4, 3, 'grass');
+    map.fillSurfaceRect(surfRightX, surfTopY, 4, 3, 'water');
+    map.fillSurfaceRect(surfLeftX, surfBotY, 4, 3, 'poison_swamp');
+    map.fillSurfaceRect(surfRightX, surfBotY, 4, 3, 'oil');
   }
 
+  const flankX = Math.max(5, leftWallX - 3);
+  const anchorTopY = topWallY + 2;
+  const anchorBotY = rows - 1 - anchorTopY;
   return [
-    { id: 'pl_pillar_nw', role: 'pillar_toy', propKind: kinds.pillarToy, tx: 14, ty: 6 },
-    { id: 'pl_pillar_ne', role: 'pillar_toy', propKind: kinds.pillarToy, tx: 21, ty: 6 },
-    { id: 'pl_pillar_sw', role: 'pillar_toy', propKind: kinds.pillarToy, tx: 14, ty: 15 },
-    { id: 'pl_pillar_se', role: 'pillar_toy', propKind: kinds.pillarToy, tx: 21, ty: 15 },
-    { id: 'pl_barricade_w', role: 'barricade', propKind: kinds.barricade, tx: 13, ty: 10 },
-    { id: 'pl_barricade_e', role: 'barricade', propKind: kinds.barricade, tx: 22, ty: 11 },
-    { id: 'pl_hazard_w', role: 'hazard', propKind: kinds.hazard, tx: 6, ty: 10 },
-    { id: 'pl_hazard_e', role: 'hazard', propKind: kinds.hazard, tx: 29, ty: 11 },
-    { id: 'pl_mech', role: 'mechanism', propKind: 'ancient_mechanism', tx: 17, ty: 6 },
+    { id: 'pl_pillar_nw', role: 'pillar_toy', propKind: kinds.pillarToy, tx: midX - 4, ty: anchorTopY },
+    { id: 'pl_pillar_ne', role: 'pillar_toy', propKind: kinds.pillarToy, tx: midX + 3, ty: anchorTopY },
+    { id: 'pl_pillar_sw', role: 'pillar_toy', propKind: kinds.pillarToy, tx: midX - 4, ty: anchorBotY },
+    { id: 'pl_pillar_se', role: 'pillar_toy', propKind: kinds.pillarToy, tx: midX + 3, ty: anchorBotY },
+    { id: 'pl_barricade_w', role: 'barricade', propKind: kinds.barricade, tx: midX - 5, ty: midY - 1 },
+    { id: 'pl_barricade_e', role: 'barricade', propKind: kinds.barricade, tx: midX + 4, ty: midY },
+    { id: 'pl_hazard_w', role: 'hazard', propKind: kinds.hazard, tx: flankX, ty: midY - 1 },
+    { id: 'pl_hazard_e', role: 'hazard', propKind: kinds.hazard, tx: cols - 1 - flankX, ty: midY },
+    { id: 'pl_mech', role: 'mechanism', propKind: 'ancient_mechanism', tx: midX - 1, ty: anchorTopY },
   ];
 }
 
@@ -187,6 +286,27 @@ export const CRUMBLING_RING_PILLAR_RECTS: readonly [number, number][] = [
   [13, 15],
   [21, 15],
 ] as const;
+
+export function getCrumblingRingPillarRectsForMap(
+  map: Pick<ArenaMap, 'cols' | 'rows'>,
+): readonly [number, number][] {
+  const midX = Math.floor(map.cols / 2);
+  const midY = Math.floor(map.rows / 2);
+  const topRingY = Math.max(4, midY - 6);
+  const botRingY = map.rows - 2 - topRingY;
+  const innerLeftX = midX - 5;
+  const innerRightX = midX + 3;
+  const outerLeftX = Math.max(6, midX - 9);
+  const outerRightX = map.cols - 2 - outerLeftX;
+  return [
+    [innerLeftX, topRingY],
+    [innerRightX, topRingY],
+    [outerLeftX, midY - 1],
+    [outerRightX, midY - 1],
+    [innerLeftX, botRingY],
+    [innerRightX, botRingY],
+  ];
+}
 
 /**
  * 3. CRUMBLING_PILLAR_RING (Vòng Tròn Sáu Cột Sập):
@@ -200,25 +320,28 @@ export function buildCrumblingPillarRingGeometry(
   flipY: boolean,
 ): BaseP1CAnchorSpec[] {
   const kinds = getBiomePropKinds(biome);
+  const midX = Math.floor(map.cols / 2);
+  const midY = Math.floor(map.rows / 2);
+  const ringRects = getCrumblingRingPillarRectsForMap(map);
 
-  for (const [px, py] of CRUMBLING_RING_PILLAR_RECTS) {
+  for (const [px, py] of ringRects) {
     setPillarRect(map, px, py, 2, 2);
   }
 
   // Central arena floor surface accents
   if (biome === 2) {
-    map.fillSurfaceRect(15, 9, 6, 4, 'ice');
+    map.fillSurfaceRect(midX - 3, midY - 2, 6, 4, 'ice');
   } else if (biome === 3) {
-    map.fillSurfaceRect(15, 8, 6, 2, 'conveyor');
-    map.fillSurfaceRect(15, 12, 6, 2, 'conveyor');
+    map.fillSurfaceRect(midX - 3, midY - 3, 6, 2, 'conveyor');
+    map.fillSurfaceRect(midX - 3, midY + 1, 6, 2, 'conveyor');
   } else {
-    map.fillSurfaceRect(15, 9, 3, 4, 'grass');
-    map.fillSurfaceRect(18, 9, 3, 4, 'oil');
+    map.fillSurfaceRect(midX - 3, midY - 2, 3, 4, 'grass');
+    map.fillSurfaceRect(midX, midY - 2, 3, 4, 'oil');
   }
   void flipX;
   void flipY;
 
-  const ringPillarAnchors: BaseP1CAnchorSpec[] = CRUMBLING_RING_PILLAR_RECTS.map(
+  const ringPillarAnchors: BaseP1CAnchorSpec[] = ringRects.map(
     ([px, py], idx) => ({
       id: `cpr_ring_pillar_${idx + 1}`,
       role: 'pillar_toy',
@@ -231,42 +354,49 @@ export function buildCrumblingPillarRingGeometry(
     }),
   );
 
+  const topRingY = ringRects[0]![1];
+  const botRingY = ringRects[4]![1];
+  const innerLeftX = ringRects[0]![0];
+  const innerRightX = ringRects[1]![0];
+  const outerLeftX = ringRects[2]![0];
+  const flankX = Math.max(5, outerLeftX - 3);
+
   return [
     ...ringPillarAnchors,
     {
       id: 'cpr_barricade_n',
       role: 'barricade',
       propKind: kinds.barricade,
-      tx: 17,
-      ty: 5,
+      tx: midX - 1,
+      ty: topRingY,
       noJitter: true,
     },
     {
       id: 'cpr_barricade_s',
       role: 'barricade',
       propKind: kinds.barricade,
-      tx: 18,
-      ty: 16,
+      tx: midX,
+      ty: botRingY + 1,
       noJitter: true,
     },
     {
       id: 'cpr_barricade_w',
       role: 'barricade',
       propKind: kinds.barricade,
-      tx: 11,
-      ty: 8,
+      tx: innerLeftX - 2,
+      ty: midY - 3,
       noJitter: true,
     },
     {
       id: 'cpr_barricade_e',
       role: 'barricade',
       propKind: kinds.barricade,
-      tx: 24,
-      ty: 13,
+      tx: innerRightX + 3,
+      ty: midY + 2,
       noJitter: true,
     },
-    { id: 'cpr_hazard_nw', role: 'hazard', propKind: kinds.hazard, tx: 6, ty: 6 },
-    { id: 'cpr_hazard_se', role: 'hazard', propKind: kinds.hazard, tx: 29, ty: 15 },
+    { id: 'cpr_hazard_nw', role: 'hazard', propKind: kinds.hazard, tx: flankX, ty: topRingY + 1 },
+    { id: 'cpr_hazard_se', role: 'hazard', propKind: kinds.hazard, tx: map.cols - 1 - flankX, ty: botRingY },
   ];
 }
 

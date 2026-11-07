@@ -10,6 +10,11 @@ import {
 } from './sim-boss-armor-break.js';
 import { shatterIceGolemArmor } from './sim-enemies-tactical-ai.js';
 import {
+  clampBossPlayerHitDamage,
+  dampenBossMultiProcDamage,
+} from './sim-damage-pipeline.js';
+import {
+  computeFloorScalingMultiplier,
   computeHazardDamage,
   computeKickSlideDamage,
   SLIDING_PROP_ENEMY_KB_SPEED,
@@ -502,10 +507,22 @@ export function spillSlagCrucibleLavaCarpet(
         if (e.burnTickTimer <= 0) e.burnTickTimer = 0.5;
         continue;
       }
-      const dmg = applyRicochetVowTacticalPropBonus(
-        carpetOwner,
-        computeHazardDamage(e, sim.currentFloor, 26),
-      );
+      const rawHazardDmg = computeHazardDamage(e, sim.currentFloor, 26);
+      const dmg = e.isBoss
+        ? Math.max(
+            1,
+            Math.round(
+              dampenBossMultiProcDamage(
+                sim.tick,
+                e,
+                clampBossPlayerHitDamage(
+                  carpetOwner,
+                  Math.round(26 * computeFloorScalingMultiplier(sim.currentFloor)),
+                ),
+              ),
+            ),
+          )
+        : applyRicochetVowTacticalPropBonus(carpetOwner, rawHazardDmg);
       e.hp = Math.max(0, e.hp - dmg);
       e.hitFlashTimer = 0.14;
       e.lastHitDmg = dmg;

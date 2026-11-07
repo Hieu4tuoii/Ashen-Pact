@@ -504,6 +504,7 @@ export function enterHubImpl(this: WorldSim): void {
   this.empBlastVisualRings.length = 0;
   this.pendingBossSupplyDrops.length = 0;
 
+  this.map.resize(36, 22);
   this.map.configureRoomLayout('start', Number(this.baseSeed), false);
   this.map.clearInteriorForHub();
   const cx = this.map.width * 0.5;

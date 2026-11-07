@@ -364,6 +364,7 @@ export function syncEnemyRigsImpl(this: GameScene, dtSec: number): void {
 export function syncPropsImpl(this: GameScene, dtSec: number): void {
   const sim = this.transport.getSim();
   const invBake = 1 / TextureBaker.getBakeScale();
+  const t = getFreezeVisualTimeSec(this.lighting?.getElapsedSec() ?? 1.0);
   this.activePropIds.clear();
 
   for (let i = 0; i < sim.props.length; i++) {
@@ -386,7 +387,7 @@ export function syncPropsImpl(this: GameScene, dtSec: number): void {
       const shadow = this.add.sprite(prop.x, prop.y + 9, 'prop_shadow');
       shadow.setScale(invBake);
       shadow.setDepth(18);
-      shadow.setVisible(prop.kind !== 'torch_brazier');
+      shadow.setVisible(true);
 
       const sprite = this.add.sprite(prop.x, prop.y, targetTex);
       sprite.setScale(invBake);
@@ -403,9 +404,50 @@ export function syncPropsImpl(this: GameScene, dtSec: number): void {
       this.propVisuals.set(prop.id, pv);
     } else {
       pv.sprite.setPosition(prop.x, prop.y);
+      pv.sprite.setScale(invBake);
       pv.shadow.setPosition(prop.x, prop.y + 9);
+      pv.shadow.setVisible(true);
       if (pv.sprite.texture.key !== targetTex) {
         pv.sprite.setTexture(targetTex);
+      }
+    }
+
+    const footprintFactor = Math.max(0.75, Math.min(1.65, (prop.radius || 14) / 14));
+    const isWide =
+      prop.kind === 'rotten_totem_pillar' ||
+      prop.kind === 'crystal_pillar' ||
+      prop.kind === 'cryo_prism_pillar' ||
+      prop.kind === 'pneumatic_press' ||
+      prop.kind === 'moss_table' ||
+      prop.kind === 'glacial_barricade' ||
+      prop.kind === 'forge_blast_shield' ||
+      prop.kind === 'slag_crucible';
+    const shadowSx = invBake * (isWide ? Math.max(1.22, footprintFactor) : footprintFactor * 0.92);
+    const shadowSy =
+      invBake * (isWide ? Math.max(1.12, footprintFactor * 0.95) : footprintFactor * 0.85);
+    pv.shadow.setScale(shadowSx, shadowSy);
+
+    if (effectiveCoverState !== 'fallen' && prop.coverState !== 'fallen') {
+      const phase = t * 3.2 + prop.id * 0.9;
+      if (
+        prop.kind === 'volatile_spore_pod' ||
+        prop.kind === 'caustic_spore_pod' ||
+        prop.kind === 'glow_mushroom'
+      ) {
+        const stretch = Math.sin(phase) * 0.045;
+        pv.sprite.setScale(invBake * (1 + stretch), invBake * (1 - stretch));
+      } else if (prop.kind === 'cryo_prism_pillar' || prop.kind === 'crystal_pillar') {
+        const bob = Math.sin(phase * 0.8) * 1.6;
+        pv.sprite.setPosition(prop.x, prop.y + bob);
+        const shimmer = 1 + Math.cos(phase) * 0.025;
+        pv.sprite.setScale(invBake * shimmer, invBake * shimmer);
+      } else if (
+        prop.kind === 'torch_brazier' ||
+        prop.kind === 'slag_crucible' ||
+        prop.kind === 'coal_bomb'
+      ) {
+        const pulse = 1 + Math.sin(phase * 1.4) * 0.035;
+        pv.sprite.setScale(invBake * pulse, invBake * (2 - pulse));
       }
     }
 

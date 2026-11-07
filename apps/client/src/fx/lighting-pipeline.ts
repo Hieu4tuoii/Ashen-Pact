@@ -300,10 +300,17 @@ export class LightingPipeline {
     const targetScale = LIGHTMAP_RES_SCALE * budget.lightmapScale;
     if (Math.abs(targetScale - this.currentLightmapScale) > 0.001) {
       this.currentLightmapScale = targetScale;
-      this.lightmapRt.resize(
-        Math.round(this.currentCoverW * this.currentLightmapScale),
-        Math.round(this.currentCoverH * this.currentLightmapScale),
-      );
+      const rtW = Math.round(this.currentCoverW * this.currentLightmapScale);
+      const rtH = Math.round(this.currentCoverH * this.currentLightmapScale);
+      const webglRt = (
+        this.lightmapRt.texture as unknown as {
+          renderTarget?: { setAutoResize?: (v: boolean) => void };
+        }
+      )?.renderTarget;
+      webglRt?.setAutoResize?.(true);
+      this.lightmapRt.resize(rtW, rtH);
+      webglRt?.setAutoResize?.(false);
+      this.lightmapRt.setOrigin(0, 0);
       this.lightmapRt.setScale(1 / this.currentLightmapScale);
     }
 
@@ -441,10 +448,17 @@ export class LightingPipeline {
     if (coverW !== this.currentCoverW || coverH !== this.currentCoverH) {
       this.currentCoverW = coverW;
       this.currentCoverH = coverH;
-      this.lightmapRt.resize(
-        Math.round(this.currentCoverW * this.currentLightmapScale),
-        Math.round(this.currentCoverH * this.currentLightmapScale),
-      );
+      const rtW = Math.round(this.currentCoverW * this.currentLightmapScale);
+      const rtH = Math.round(this.currentCoverH * this.currentLightmapScale);
+      const webglRt = (
+        this.lightmapRt.texture as unknown as {
+          renderTarget?: { setAutoResize?: (v: boolean) => void };
+        }
+      )?.renderTarget;
+      webglRt?.setAutoResize?.(true);
+      this.lightmapRt.resize(rtW, rtH);
+      webglRt?.setAutoResize?.(false);
+      this.lightmapRt.setOrigin(0, 0);
       this.lightmapRt.setScale(1 / this.currentLightmapScale);
     }
 

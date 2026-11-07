@@ -54,9 +54,9 @@ describe('Phase 2 — Autotile Bitmasks, Wall AO Shadows, Seeded Variants & Crac
     expect(map.checkProjectileWallHit(17 * TILE_SIZE + 16, 16, 5).hit).toBe(true);
 
     // Surface autotile mask connects matching and dynamic family surface tiles seamlessly
-    map.setSurface(10, 10, 'oil', 0, true);
-    map.setSurface(11, 10, 'burning_oil', 2.0, true);
-    map.setSurface(10, 11, 'oil', 0, true);
+    map.setSurface(10, 10, 'water', 0, true);
+    map.setSurface(11, 10, 'electrified_water', 2.0, true);
+    map.setSurface(10, 11, 'water', 0, true);
     expect(map.getSurfaceAutotileMask(10, 10)).toBe(AUTOTILE_EAST | AUTOTILE_SOUTH);
   });
 });

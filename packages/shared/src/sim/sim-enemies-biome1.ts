@@ -2,6 +2,7 @@ import { ENEMIES } from '../data/enemies.js';
 import { circleVsCircle, clamp, distance } from '../math/vec2.js';
 import { COOP_SCALING } from '../data/scaling.js';
 import { TILE_SIZE } from '../protocol/messages.js';
+import { findNearestWalkablePoint } from './arena-room-archetypes.js';
 import {
   SPORE_KING_CHARGE_DURATION_SEC,
   SPORE_KING_CHARGE_SPEED,
@@ -722,16 +723,32 @@ export function updateBossSporeKingAIImpl(
       e.stateTimer = Math.max(0.61, 0.66 * bossCdScale);
       const offsetX = Math.cos(angleToPlayer + Math.PI) * 95;
       const offsetY = Math.sin(angleToPlayer + Math.PI) * 95;
-      const targetX = clamp(
+      const cx = this.map.width * 0.5;
+      const cy = this.map.height * 0.5;
+      const halfBurrowW = Math.min(cx - TILE_SIZE * 3.5, TILE_SIZE * 14.5);
+      const halfBurrowH = Math.min(cy - TILE_SIZE * 3.5, TILE_SIZE * 7.5);
+      const rawTargetX = clamp(
         targetPlayer.x + offsetX,
-        TILE_SIZE * 3.5,
-        this.map.width - TILE_SIZE * 3.5,
+        cx - halfBurrowW,
+        cx + halfBurrowW,
       );
-      const targetY = clamp(
+      const rawTargetY = clamp(
         targetPlayer.y + offsetY,
-        TILE_SIZE * 3.5,
-        this.map.height - TILE_SIZE * 3.5,
+        cy - halfBurrowH,
+        cy + halfBurrowH,
       );
+      const safeTarget = findNearestWalkablePoint(this.map, rawTargetX, rawTargetY, e.radius);
+      const resolvedTarget = this.map.resolveCircleCollision(safeTarget.x, safeTarget.y, e.radius, false);
+      const targetX =
+        this.map.isSolidTile(Math.floor(resolvedTarget.x / TILE_SIZE), Math.floor(resolvedTarget.y / TILE_SIZE)) ||
+        this.map.getSurfaceAtWorld(resolvedTarget.x, resolvedTarget.y) === 'chasm'
+          ? safeTarget.x
+          : resolvedTarget.x;
+      const targetY =
+        this.map.isSolidTile(Math.floor(resolvedTarget.x / TILE_SIZE), Math.floor(resolvedTarget.y / TILE_SIZE)) ||
+        this.map.getSurfaceAtWorld(resolvedTarget.x, resolvedTarget.y) === 'chasm'
+          ? safeTarget.y
+          : resolvedTarget.y;
       e.bossTargetX = targetX;
       e.bossTargetY = targetY;
       e.x = targetX;

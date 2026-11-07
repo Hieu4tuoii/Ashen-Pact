@@ -17,6 +17,7 @@ import {
   computeMerchantOfferCost,
 } from './dungeon-gen.js';
 import {
+  ROOM_SIZE_PRESETS,
   findNearestWalkablePoint,
   selectCombatRoomArchetype,
   spawnCombatRoomArchetypeProps,
@@ -54,20 +55,22 @@ export function rebuildCurrentRoomDoorsImpl(this: WorldSim): void {
     const targetRoom = this.dungeon.rooms[targetRoomId];
     if (!targetRoom) continue;
 
+    const midX = Math.floor(this.map.cols / 2);
+    const midY = Math.floor(this.map.rows / 2);
     let x = this.map.width * 0.5;
     let y = this.map.height * 0.5;
     if (dir === 'N') {
-      x = 18 * TILE_SIZE + 16;
+      x = midX * TILE_SIZE + 16;
       y = 1 * TILE_SIZE + 18;
     } else if (dir === 'S') {
-      x = 18 * TILE_SIZE + 16;
+      x = midX * TILE_SIZE + 16;
       y = (this.map.rows - 2) * TILE_SIZE + 14;
     } else if (dir === 'W') {
       x = 1 * TILE_SIZE + 18;
-      y = 11 * TILE_SIZE + 16;
+      y = midY * TILE_SIZE + 16;
     } else if (dir === 'E') {
       x = (this.map.cols - 2) * TILE_SIZE + 14;
-      y = 11 * TILE_SIZE + 16;
+      y = midY * TILE_SIZE + 16;
     }
 
     const isSecretPassage = room.type === 'secret' || targetRoom.type === 'secret';
@@ -171,6 +174,14 @@ export function enterRoomImpl(this: WorldSim, roomId: number, entryDir?: Cardina
     : targetRoom.surfaceLayoutSeed;
   const roomSeed = baseSeedNum + roomId * 997 + this.currentFloor * 7919;
   const activeDoorSides = Object.keys(targetRoom.connections) as CardinalDir[];
+  const targetPreset = targetRoom.roomSizePreset ?? 'standard';
+  const presetDims = ROOM_SIZE_PRESETS[targetPreset];
+  const targetCols = targetRoom.cols ?? presetDims.cols;
+  const targetRows = targetRoom.rows ?? presetDims.rows;
+  const targetShape = targetRoom.roomShape ?? 'rectangle';
+  this.map.resize(targetCols, targetRows);
+
+  this.map.roomSizePreset = targetPreset;
   if (targetRoom.type === 'combat') {
     const archetype = targetRoom.roomArchetype ?? selectCombatRoomArchetype(roomSeed);
     targetRoom.roomArchetype = archetype;
@@ -182,6 +193,12 @@ export function enterRoomImpl(this: WorldSim, roomId: number, entryDir?: Cardina
       this.currentBiome,
       archetype,
       activeDoorSides,
+      {
+        cols: targetCols,
+        rows: targetRows,
+        roomShape: targetShape,
+        roomSizePreset: targetPreset,
+      },
     );
   } else {
     this.roomArchetype = undefined;
@@ -190,33 +207,88 @@ export function enterRoomImpl(this: WorldSim, roomId: number, entryDir?: Cardina
       roomSeed,
       isWallBroken,
       this.currentBiome,
+      undefined,
+      activeDoorSides,
+      {
+        cols: targetCols,
+        rows: targetRows,
+        roomShape: targetShape,
+        roomSizePreset: targetPreset,
+      },
     );
   }
   this.map.placeCrackedSecretWall(targetRoom.secretWallDir, isWallBroken);
 
   // Position player(s) near the entrance door (opposite of entryDir)
-  let spawnX = this.map.width * 0.35;
+  let spawnX =
+    targetRoom.type === 'boss'
+      ? this.map.width * 0.5 - 172.8
+      : this.map.width * 0.35;
   let spawnY = this.map.height * 0.5;
   if (entryDir) {
     const arrivalSide = OPPOSITE_DIR[entryDir];
+    const midX = Math.floor(this.map.cols / 2);
+    const midY = Math.floor(this.map.rows / 2);
     if (arrivalSide === 'N') {
-      spawnX = 18 * TILE_SIZE + 16;
+      spawnX = midX * TILE_SIZE + 16;
       spawnY = 3 * TILE_SIZE + 20;
     } else if (arrivalSide === 'S') {
-      spawnX = 18 * TILE_SIZE + 16;
+      spawnX = midX * TILE_SIZE + 16;
       spawnY = (this.map.rows - 3) * TILE_SIZE - 8;
     } else if (arrivalSide === 'W') {
       spawnX = 3 * TILE_SIZE + 8;
-      spawnY = 11 * TILE_SIZE + 16;
+      spawnY = midY * TILE_SIZE + 16;
     } else if (arrivalSide === 'E') {
       spawnX = (this.map.cols - 3) * TILE_SIZE - 8;
-      spawnY = 11 * TILE_SIZE + 16;
+      spawnY = midY * TILE_SIZE + 16;
     }
   }
-  const resolvedPos = this.map.resolveCircleCollision(spawnX, spawnY, this.player.radius);
+  const resolveSafePlayerSpawn = (
+    rawX: number,
+    rawY: number,
+    radius: number,
+  ): { x: number; y: number } => {
+    const col = this.map.resolveCircleCollision(rawX, rawY, radius, true);
+    let x = col.x;
+    let y = col.y;
+    const tx = Math.floor(x / TILE_SIZE);
+    const ty = Math.floor(y / TILE_SIZE);
+    if (
+      tx <= 0 ||
+      ty <= 0 ||
+      tx >= this.map.cols - 1 ||
+      ty >= this.map.rows - 1 ||
+      this.map.isSolidTile(tx, ty) ||
+      this.map.getSurface(tx, ty) === 'chasm' ||
+      this.map.checkProjectileWallHit(x, y, radius - 0.5).hit
+    ) {
+      const safe = findNearestWalkablePoint(this.map, rawX, rawY, radius);
+      const reCol = this.map.resolveCircleCollision(safe.x, safe.y, radius, false);
+      const rTx = Math.floor(reCol.x / TILE_SIZE);
+      const rTy = Math.floor(reCol.y / TILE_SIZE);
+      if (
+        rTx > 0 &&
+        rTy > 0 &&
+        rTx < this.map.cols - 1 &&
+        rTy < this.map.rows - 1 &&
+        !this.map.isSolidTile(rTx, rTy) &&
+        this.map.getSurface(rTx, rTy) !== 'chasm' &&
+        !this.map.checkProjectileWallHit(reCol.x, reCol.y, radius - 0.5).hit
+      ) {
+        x = reCol.x;
+        y = reCol.y;
+      } else {
+        x = safe.x;
+        y = safe.y;
+      }
+    }
+    return { x, y };
+  };
+
+  const resolvedPos = resolveSafePlayerSpawn(spawnX, spawnY, this.player.radius);
   const hasCoopTeammates = !this.stressTestActive && this.simulatedPlayers.length > 0;
   const p1Pos = hasCoopTeammates
-    ? this.map.resolveCircleCollision(resolvedPos.x - 95, resolvedPos.y - 48, this.player.radius)
+    ? resolveSafePlayerSpawn(resolvedPos.x - 95, resolvedPos.y - 48, this.player.radius)
     : resolvedPos;
   this.player.x = p1Pos.x;
   this.player.y = p1Pos.y;
@@ -241,7 +313,7 @@ export function enterRoomImpl(this: WorldSim, roomId: number, entryDir?: Cardina
         anyTeleportedFromOutside = true;
       }
       const [ox, oy] = offsets[i % offsets.length]!;
-      const spPos = this.map.resolveCircleCollision(
+      const spPos = resolveSafePlayerSpawn(
         resolvedPos.x + ox,
         resolvedPos.y + oy,
         sp.radius,
@@ -332,13 +404,14 @@ export function populateRoomContentsImpl(this: WorldSim, room: DungeonRoomNode):
     case 'merchant': {
       this.spawnProp('torch_brazier', cx - 150, cy - 90);
       this.spawnProp('torch_brazier', cx + 150, cy - 90);
+      const merchantPos = findNearestWalkablePoint(this.map, cx, cy - 72, 18);
       this.npcEntities.push({
         id: ++this.nextEntityId,
         kind: 'merchant',
         nameVi: 'Thương Nhân Hắc Ám',
         dialogueVi: '“Vàng đổi lấy thần khí... chọn đi trước khi rừng sâu nuốt chửng ngươi!”',
-        x: cx,
-        y: cy - 72,
+        x: merchantPos.x,
+        y: merchantPos.y,
         radius: 18,
         interacted: false,
         costHp: 0,
@@ -437,6 +510,7 @@ export function populateRoomContentsImpl(this: WorldSim, room: DungeonRoomNode):
       this.spawnProp('torch_brazier', cx + 110, cy + 75);
       const usedIds = room.shrineUsedByPlayerIds ? [...room.shrineUsedByPlayerIds] : [];
       room.shrineUsedByPlayerIds = usedIds;
+      const shrinePos = findNearestWalkablePoint(this.map, cx, cy - 18, 22);
       this.npcEntities.push({
         id: ++this.nextEntityId,
         kind: 'shrine',
@@ -444,8 +518,8 @@ export function populateRoomContentsImpl(this: WorldSim, room: DungeonRoomNode):
         dialogueVi: room.shrineUsed
           ? 'Tế Đàn Khế Ước đã khắc ấn cổ ngữ.'
           : '[E] KÝ KHẾ ƯỚC TRO TÀN (THỬ THÁCH SUỐT BIOME)',
-        x: cx,
-        y: cy - 18,
+        x: shrinePos.x,
+        y: shrinePos.y,
         radius: 22,
         interacted: room.shrineUsed,
         costHp: 0,
@@ -457,8 +531,9 @@ export function populateRoomContentsImpl(this: WorldSim, room: DungeonRoomNode):
     case 'portal': {
       this.spawnProp('torch_brazier', cx - 130, cy - 90);
       this.spawnProp('torch_brazier', cx + 130, cy - 90);
-      this.portalX = cx;
-      this.portalY = cy;
+      const portalPos = findNearestWalkablePoint(this.map, cx, cy, 24);
+      this.portalX = portalPos.x;
+      this.portalY = portalPos.y;
       this.doorTransitionCooldown = Math.max(this.doorTransitionCooldown, 0.75);
       if (!room.cleared) {
         room.wavesSpawned = 0;
@@ -470,23 +545,36 @@ export function populateRoomContentsImpl(this: WorldSim, room: DungeonRoomNode):
       break;
     }
     case 'boss': {
-      this.spawnProp('torch_brazier', 6 * TILE_SIZE, 4 * TILE_SIZE);
-      this.spawnProp('torch_brazier', 18 * TILE_SIZE, 4 * TILE_SIZE);
-      this.spawnProp('torch_brazier', 30 * TILE_SIZE, 4 * TILE_SIZE);
-      this.spawnProp('torch_brazier', 6 * TILE_SIZE, 18 * TILE_SIZE);
-      this.spawnProp('torch_brazier', 18 * TILE_SIZE, 18 * TILE_SIZE);
-      this.spawnProp('torch_brazier', 30 * TILE_SIZE, 18 * TILE_SIZE);
+      const cols = this.map.cols;
+      const rows = this.map.rows;
+      const midX = Math.floor(cols / 2);
+      const midY = Math.floor(rows / 2);
+      const bLeftX = Math.max(4, midX - 12);
+      const bRightX = Math.min(cols - 4, midX + 12);
+      const bTopY = Math.max(3, midY - 7);
+      const bBotY = Math.min(rows - 3, midY + 7);
+      this.spawnProp('torch_brazier', bLeftX * TILE_SIZE, bTopY * TILE_SIZE);
+      this.spawnProp('torch_brazier', midX * TILE_SIZE, bTopY * TILE_SIZE);
+      this.spawnProp('torch_brazier', bRightX * TILE_SIZE, bTopY * TILE_SIZE);
+      this.spawnProp('torch_brazier', bLeftX * TILE_SIZE, bBotY * TILE_SIZE);
+      this.spawnProp('torch_brazier', midX * TILE_SIZE, bBotY * TILE_SIZE);
+      this.spawnProp('torch_brazier', bRightX * TILE_SIZE, bBotY * TILE_SIZE);
+      const innerLeftTx = midX - 7;
+      const innerRightTx = midX + 7;
+      const innerTopTy = midY - 5;
+      const innerBotTy = midY + 5;
       if (this.currentBiome === 2) {
-        this.spawnProp('crystal_pillar', 11 * TILE_SIZE + 16, 6 * TILE_SIZE + 16);
-        this.spawnProp('crystal_pillar', 25 * TILE_SIZE + 16, 6 * TILE_SIZE + 16);
-        this.spawnProp('crystal_pillar', 11 * TILE_SIZE + 16, 16 * TILE_SIZE + 16);
-        this.spawnProp('crystal_pillar', 25 * TILE_SIZE + 16, 16 * TILE_SIZE + 16);
+        this.spawnProp('crystal_pillar', innerLeftTx * TILE_SIZE + 16, innerTopTy * TILE_SIZE + 16);
+        this.spawnProp('crystal_pillar', innerRightTx * TILE_SIZE + 16, innerTopTy * TILE_SIZE + 16);
+        this.spawnProp('crystal_pillar', innerLeftTx * TILE_SIZE + 16, innerBotTy * TILE_SIZE + 16);
+        this.spawnProp('crystal_pillar', innerRightTx * TILE_SIZE + 16, innerBotTy * TILE_SIZE + 16);
       } else if (this.currentBiome === 3) {
-        this.spawnProp('ancient_mechanism', 11 * TILE_SIZE + 16, 6 * TILE_SIZE + 16);
-        this.spawnProp('ancient_mechanism', 25 * TILE_SIZE + 16, 16 * TILE_SIZE + 16);
+        this.spawnProp('ancient_mechanism', innerLeftTx * TILE_SIZE + 16, innerTopTy * TILE_SIZE + 16);
+        this.spawnProp('ancient_mechanism', innerRightTx * TILE_SIZE + 16, innerBotTy * TILE_SIZE + 16);
       }
-      this.portalX = cx;
-      this.portalY = cy;
+      const bossPortalPos = findNearestWalkablePoint(this.map, cx, cy, 24);
+      this.portalX = bossPortalPos.x;
+      this.portalY = bossPortalPos.y;
       this.doorTransitionCooldown = Math.max(this.doorTransitionCooldown, 0.75);
       if (!room.cleared) {
         room.wavesSpawned = 1;
@@ -497,7 +585,7 @@ export function populateRoomContentsImpl(this: WorldSim, room: DungeonRoomNode):
             : this.currentBiome === 3
               ? 'forge_titan'
               : 'spore_king';
-        this.spawnEnemy(bossDefId, this.map.width * 0.68, cy, false);
+        this.spawnEnemy(bossDefId, cx + 207.36, cy, false);
         syncAshenExecutionerInRoom(this);
       } else {
         this.portalActive = true;
@@ -608,7 +696,9 @@ export function spawnNextRoomWaveImpl(this: WorldSim): void {
       const pick = qualifying[(i + room.wavesSpawned * 2 + room.id) % qualifying.length]!;
       return { x: pick.x, y: pick.y };
     }
-    return bestFallback ? { x: bestFallback.x, y: bestFallback.y } : { x: cx + 180, y: cy };
+    return bestFallback
+      ? { x: bestFallback.x, y: bestFallback.y }
+      : findNearestWalkablePoint(this.map, cx + 180, cy, radius);
   };
 
   let spawnedCount = 0;
@@ -729,14 +819,16 @@ export function onRoomClearedImpl(
     }
   } else if (room.type === 'portal') {
     this.portalActive = true;
-    this.portalX = cx;
-    this.portalY = cy;
+    const portalPos = findNearestWalkablePoint(this.map, cx, cy, 24);
+    this.portalX = portalPos.x;
+    this.portalY = portalPos.y;
     this.doorTransitionCooldown = Math.max(this.doorTransitionCooldown, 0.75);
   } else if (room.type === 'boss') {
     purifyAshenPactsOnBossDefeated(this);
     this.portalActive = true;
-    this.portalX = cx;
-    this.portalY = cy;
+    const bossPortalPos = findNearestWalkablePoint(this.map, cx, cy, 24);
+    this.portalX = bossPortalPos.x;
+    this.portalY = bossPortalPos.y;
     this.doorTransitionCooldown = Math.max(this.doorTransitionCooldown, 0.75);
     this.blizzardVeilActive = false;
     const defaultLegWep =

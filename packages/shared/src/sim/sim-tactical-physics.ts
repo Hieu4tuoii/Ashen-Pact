@@ -302,10 +302,10 @@ export function collapseRottenTotemPillar(sim: WorldSim, pillar: SimPropState, f
     const clampedAlong = Math.max(0, Math.min(ROTTEN_TOTEM_FALL_LENGTH, along));
     const clampedPerp = Math.max(-halfWidth, Math.min(halfWidth, signedPerp));
     if (along >= 0 && Math.hypot(along - clampedAlong, signedPerp - clampedPerp) <= e.radius) {
-      const dmg = applyRicochetVowTacticalPropBonus(
-        attacker,
-        computeHazardDamage(e, sim.currentFloor, 28),
-      );
+      const rawHazardDmg = computeHazardDamage(e, sim.currentFloor, 28);
+      const dmg = e.isBoss
+        ? rawHazardDmg
+        : applyRicochetVowTacticalPropBonus(attacker, rawHazardDmg);
       e.hp = Math.max(0, e.hp - dmg); e.hitFlashTimer = 0.14; e.lastHitDmg = dmg;
       e.stunTimer = Math.max(e.stunTimer ?? 0, ROTTEN_TOTEM_STUN_SEC);
       e.aiState = 'stunned'; e.stateTimer = Math.max(e.stateTimer, ROTTEN_TOTEM_STUN_SEC);

@@ -282,26 +282,116 @@ export function bakeSurfaces(scene: Phaser.Scene, scale: number): void {
   });
 }
 
+export function traceOrganicPoolPath(
+  ctx: CanvasRenderingContext2D,
+  surfaceMask: number,
+  pad = 2.6,
+): void {
+  const hasN = (surfaceMask & AUTOTILE_NORTH) !== 0;
+  const hasE = (surfaceMask & AUTOTILE_EAST) !== 0;
+  const hasS = (surfaceMask & AUTOTILE_SOUTH) !== 0;
+  const hasW = (surfaceMask & AUTOTILE_WEST) !== 0;
+
+  const x0 = hasW ? 0 : pad;
+  const y0 = hasN ? 0 : pad;
+  const x1 = hasE ? 32 : 32 - pad;
+  const y1 = hasS ? 32 : 32 - pad;
+  const rNW = !hasN && !hasW ? 5.5 : 0;
+  const rNE = !hasN && !hasE ? 5.5 : 0;
+  const rSE = !hasS && !hasE ? 5.5 : 0;
+  const rSW = !hasS && !hasW ? 5.5 : 0;
+
+  ctx.beginPath();
+  ctx.moveTo(x0 + rNW, y0);
+  ctx.lineTo(x1 - rNE, y0);
+  if (rNE > 0) ctx.arcTo(x1, y0, x1, y0 + rNE, rNE);
+  ctx.lineTo(x1, y1 - rSE);
+  if (rSE > 0) ctx.arcTo(x1, y1, x1 - rSE, y1, rSE);
+  ctx.lineTo(x0 + rSW, y1);
+  if (rSW > 0) ctx.arcTo(x0, y1, x0, y1 - rSW, rSW);
+  ctx.lineTo(x0, y0 + rNW);
+  if (rNW > 0) ctx.arcTo(x0, y0, x0 + rNW, y0, rNW);
+  ctx.closePath();
+}
+
+function traceExposedOrganicShorelineRim(
+  ctx: CanvasRenderingContext2D,
+  surfaceMask: number,
+  pad = 2.4,
+): void {
+  const hasN = (surfaceMask & AUTOTILE_NORTH) !== 0;
+  const hasE = (surfaceMask & AUTOTILE_EAST) !== 0;
+  const hasS = (surfaceMask & AUTOTILE_SOUTH) !== 0;
+  const hasW = (surfaceMask & AUTOTILE_WEST) !== 0;
+
+  const x0 = hasW ? 0 : pad;
+  const y0 = hasN ? 0 : pad;
+  const x1 = hasE ? 32 : 32 - pad;
+  const y1 = hasS ? 32 : 32 - pad;
+  const rNW = !hasN && !hasW ? 5.5 : 0;
+  const rNE = !hasN && !hasE ? 5.5 : 0;
+  const rSE = !hasS && !hasE ? 5.5 : 0;
+  const rSW = !hasS && !hasW ? 5.5 : 0;
+
+  ctx.beginPath();
+  if (!hasN) {
+    ctx.moveTo(x0 + rNW, y0);
+    ctx.lineTo(x1 - rNE, y0);
+  }
+  if (rNE > 0) {
+    if (hasN) ctx.moveTo(x1 - rNE, y0);
+    ctx.arcTo(x1, y0, x1, y0 + rNE, rNE);
+  }
+  if (!hasE) {
+    if (rNE === 0) ctx.moveTo(x1, y0);
+    ctx.lineTo(x1, y1 - rSE);
+  }
+  if (rSE > 0) {
+    if (hasE) ctx.moveTo(x1, y1 - rSE);
+    ctx.arcTo(x1, y1, x1 - rSE, y1, rSE);
+  }
+  if (!hasS) {
+    if (rSE === 0) ctx.moveTo(x1, y1);
+    ctx.lineTo(x0 + rSW, y1);
+  }
+  if (rSW > 0) {
+    if (hasS) ctx.moveTo(x0 + rSW, y1);
+    ctx.arcTo(x0, y1, x0, y1 - rSW, rSW);
+  }
+  if (!hasW) {
+    if (rSW === 0) ctx.moveTo(x0, y1);
+    ctx.lineTo(x0, y0 + rNW);
+  }
+  if (rNW > 0) {
+    if (hasW) ctx.moveTo(x0, y0 + rNW);
+    ctx.arcTo(x0, y0, x0 + rNW, y0, rNW);
+  }
+}
+
 function isOrganicShorelineSurface(surface: Exclude<SurfaceKind, 'none'>): boolean {
   return (
     surface === 'water' ||
     surface === 'electrified_water' ||
     surface === 'poison_swamp' ||
+    surface === 'oil' ||
+    surface === 'burning_oil' ||
     surface === 'grass' ||
     surface === 'burning_grass' ||
-    surface === 'ice'
+    surface === 'ash' ||
+    surface === 'ice' ||
+    surface === 'lava'
   );
 }
 
 /**
  * Draws a neighbor-aware interactive surface cell directly onto the arena composite canvas:
- * - Desaturated surface fills (~30% reduced saturation) and interior patterns with deltaL <= 10
- * - P1 Organic 2-layer curved shoreline on exposed edges of water, electrified_water, poison_swamp, grass, burning_grass, ice
- * - P3 Beveled 4u basalt stone conduit curb (#7F6559 / #3B2D29) on exposed edges of lava, oil, burning_oil, conveyor, chasm, ash
+ * - Multi-layered volcanic magma ('lava') and translucent glacial crystal ('ice') with non-pinching organic pool paths
+ * - Bathymetric water, branching electric arcs, toxic swamp bubbles, iridescent oil, volumetric grass tufts,
+ *   multi-layered flames, biome-specific subterranean chasm cliff strata, and industrial conveyor chevrons
  */
 export function drawSurfaceTile(
   ctx: CanvasRenderingContext2D,
-  surface: Exclude<SurfaceKind, 'none'>,
+  surface: SurfaceKind,
   surfaceMask: number,
   dx: number,
   dy: number,
@@ -309,110 +399,324 @@ export function drawSurfaceTile(
   variant = 0,
   biome: 0 | 1 | 2 | 3 = 1,
 ): void {
+  if (surface === 'none') return;
+
   const scale = cellPx / 32;
+  const v = ((variant % 8) + 8) % 8;
+  const vShift = (v - 3.5) * 1.1;
   const hasN = (surfaceMask & AUTOTILE_NORTH) !== 0;
-  const hasE = (maskHas(surfaceMask, AUTOTILE_EAST));
-  const hasS = (maskHas(surfaceMask, AUTOTILE_SOUTH));
-  const hasW = (maskHas(surfaceMask, AUTOTILE_WEST));
+  const hasE = maskHas(surfaceMask, AUTOTILE_EAST);
+  const hasS = maskHas(surfaceMask, AUTOTILE_SOUTH);
+  const hasW = maskHas(surfaceMask, AUTOTILE_WEST);
+
+  ctx.save();
+  ctx.translate(dx, dy);
+  ctx.scale(scale, scale);
+
+  if (surface === 'lava') {
+    ctx.save();
+    traceOrganicPoolPath(ctx, surfaceMask, 2.4);
+    ctx.clip();
+
+    // Seamless magma bed: uniform #991B1B edge tone at 0 and 32 with soft interior #DC2626 glow (no diagonal linear gradient banding)
+    ctx.fillStyle = '#991B1B';
+    ctx.fillRect(0, 0, 32, 32);
+    ctx.fillStyle = '#DC2626';
+    ctx.globalAlpha = 0.38;
+    ctx.beginPath();
+    ctx.ellipse(
+      16 + ((v % 3) - 1) * 1.4,
+      16 + (((v >> 1) % 3) - 1) * 1.4,
+      10.5,
+      9.5,
+      0.15 * ((v % 3) - 1),
+      0,
+      Math.PI * 2,
+    );
+    ctx.fill();
+    ctx.globalAlpha = 1.0;
+
+    // Varied irregular polygonal cooled basalt crust plates across variants 0..7
+    const cx1 = 5 + ((v * 3) % 7);
+    const cy1 = 5 + ((v * 5) % 6);
+    ctx.fillStyle = '#261816';
+    ctx.beginPath();
+    ctx.moveTo(cx1, cy1 + 2);
+    ctx.lineTo(cx1 + 6 + (v % 3), cy1);
+    ctx.lineTo(cx1 + 9, cy1 + 5 + (v % 2));
+    ctx.lineTo(cx1 + 4, cy1 + 8);
+    ctx.lineTo(cx1 - 1, cy1 + 6);
+    ctx.closePath();
+    ctx.fill();
+
+    const cx2 = 16 + ((v * 5) % 6);
+    const cy2 = 15 + ((v * 3) % 6);
+    ctx.fillStyle = '#1F1614';
+    ctx.beginPath();
+    ctx.moveTo(cx2, cy2 + 1);
+    ctx.lineTo(cx2 + 7, cy2 - 1 + (v % 2));
+    ctx.lineTo(cx2 + 8 - (v % 2), cy2 + 6);
+    ctx.lineTo(cx2 + 2, cy2 + 8);
+    ctx.lineTo(cx2 - 2, cy2 + 5);
+    ctx.closePath();
+    ctx.fill();
+
+    // Organic Voronoi magma fissure network connecting across connected cardinal midpoints (16) and terminating inside exposed rims
+    const jx1 = 11 + ((v * 3) % 5) - 2;
+    const jy1 = 12 + ((v * 5) % 5) - 2;
+    const jx2 = 21 - ((v * 3) % 5) + 2;
+    const jy2 = 19 - ((v * 2) % 5) + 2;
+    const westX = hasW ? 0 : 6 + (v % 3);
+    const eastX = hasE ? 32 : 26 - (v % 3);
+    const northY = hasN ? 0 : 6 + ((v >> 1) % 3);
+    const southY = hasS ? 32 : 26 - ((v >> 1) % 3);
+
+    const traceFissures = () => {
+      ctx.beginPath();
+      ctx.moveTo(westX, 16);
+      ctx.lineTo(jx1, jy1);
+      ctx.lineTo(jx2, jy2);
+      ctx.lineTo(eastX, 16);
+      if (v % 2 === 0) {
+        ctx.moveTo(jx1, jy1);
+        ctx.lineTo(16, northY);
+        ctx.moveTo(jx2, jy2);
+        ctx.lineTo(16, southY);
+      } else {
+        ctx.moveTo(jx2, jy2);
+        ctx.lineTo(16, northY);
+        ctx.moveTo(jx1, jy1);
+        ctx.lineTo(16, southY);
+      }
+    };
+
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = '#EA580C';
+    ctx.lineWidth = 2.6;
+    traceFissures();
+    ctx.stroke();
+
+    ctx.strokeStyle = '#F97316';
+    ctx.lineWidth = 1.7;
+    ctx.stroke();
+
+    ctx.strokeStyle = '#FACC15';
+    ctx.lineWidth = 0.95;
+    ctx.stroke();
+
+    ctx.strokeStyle = '#FFFDF5';
+    ctx.lineWidth = 0.55;
+    ctx.beginPath();
+    ctx.moveTo(jx1, jy1);
+    ctx.lineTo(jx2, jy2);
+    ctx.stroke();
+    ctx.restore();
+
+    if (surfaceMask !== 15) {
+      ctx.save();
+      traceExposedOrganicShorelineRim(ctx, surfaceMask, 2.4);
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.strokeStyle = '#1F1614';
+      ctx.lineWidth = 2.6;
+      ctx.stroke();
+      ctx.strokeStyle = '#EA580C';
+      ctx.lineWidth = 1.1;
+      ctx.stroke();
+      ctx.restore();
+    }
+    ctx.restore();
+    return;
+  }
+
+  if (surface === 'ice') {
+    ctx.save();
+    traceOrganicPoolPath(ctx, surfaceMask, 2.4);
+    ctx.clip();
+
+    // Seamless glacial crystal base: uniform #3B7290 border tone with soft interior #2C5E7A / #4889A6 depth
+    ctx.fillStyle = '#3B7290';
+    ctx.fillRect(0, 0, 32, 32);
+    ctx.fillStyle = '#2C5E7A';
+    ctx.globalAlpha = 0.28;
+    ctx.beginPath();
+    ctx.ellipse(
+      14 + ((v % 3) - 1) * 1.3,
+      15 + (((v >> 1) % 3) - 1) * 1.3,
+      10.5,
+      9.0,
+      0.18 * ((v % 3) - 1),
+      0,
+      Math.PI * 2,
+    );
+    ctx.fill();
+    ctx.fillStyle = '#4889A6';
+    ctx.beginPath();
+    ctx.ellipse(
+      18 - ((v % 3) - 1) * 1.2,
+      17 - (((v >> 1) % 3) - 1) * 1.2,
+      8.5,
+      7.0,
+      -0.15 * ((v % 3) - 1),
+      0,
+      Math.PI * 2,
+    );
+    ctx.fill();
+
+    // Subtle sub-surface frost sheen (#7DD3FC) and polygonal crystalline facet (#BAE6FD)
+    ctx.fillStyle = '#7DD3FC';
+    ctx.globalAlpha = 0.16;
+    ctx.beginPath();
+    ctx.moveTo(2 + (v % 4), 18 - (v % 3));
+    ctx.lineTo(15 + vShift, 4 + (v % 4));
+    ctx.lineTo(29 - (v % 3), 14 + (v % 3));
+    ctx.lineTo(18 - (v % 4), 28 - (v % 2));
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle = '#BAE6FD';
+    ctx.globalAlpha = 0.18;
+    ctx.beginPath();
+    ctx.moveTo(6 + ((v * 3) % 6), 5 + (v % 3));
+    ctx.lineTo(19 + (v % 4), 7 + ((v * 2) % 4));
+    ctx.lineTo(16 - (v % 3), 17 + (v % 3));
+    ctx.lineTo(7 + (v % 2), 14 - (v % 2));
+    ctx.closePath();
+    ctx.fill();
+
+    // Continuous Voronoi pressure-crack network meeting at connected edge midpoints (16) and terminating inside exposed rims
+    const nx1 = 10 + ((v * 3) % 6);
+    const ny1 = 10 + ((v * 5) % 5);
+    const nx2 = 22 - ((v * 3) % 5);
+    const ny2 = 20 - ((v * 2) % 5);
+    const westX = hasW ? 0 : 6 + (v % 3);
+    const eastX = hasE ? 32 : 26 - (v % 3);
+    const northY = hasN ? 0 : 6 + ((v >> 1) % 3);
+    const southY = hasS ? 32 : 26 - ((v >> 1) % 3);
+
+    ctx.globalAlpha = 0.52;
+    ctx.strokeStyle = '#1E3A5F';
+    ctx.lineWidth = 1.15;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    ctx.moveTo(westX, 16);
+    ctx.lineTo(nx1, ny1);
+    ctx.lineTo(nx2, ny2);
+    ctx.lineTo(eastX, 16);
+    if ((v & 1) === 0) {
+      ctx.moveTo(nx1, ny1);
+      ctx.lineTo(16, northY);
+      ctx.moveTo(nx2, ny2);
+      ctx.lineTo(16, southY);
+    } else {
+      ctx.moveTo(nx2, ny2);
+      ctx.lineTo(16, northY);
+      ctx.moveTo(nx1, ny1);
+      ctx.lineTo(16, southY);
+    }
+    ctx.stroke();
+
+    ctx.globalAlpha = 0.65;
+    ctx.strokeStyle = '#E0F2FE';
+    ctx.lineWidth = 0.75;
+    ctx.beginPath();
+    ctx.moveTo(westX, 15.3);
+    ctx.lineTo(nx1, ny1 - 0.7);
+    ctx.lineTo(nx2, ny2 - 0.7);
+    ctx.lineTo(eastX, 15.3);
+    ctx.stroke();
+    ctx.restore();
+
+    if (surfaceMask !== 15) {
+      ctx.save();
+      traceExposedOrganicShorelineRim(ctx, surfaceMask, 2.4);
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.strokeStyle = '#CFE8EE';
+      ctx.lineWidth = 2.0;
+      ctx.stroke();
+      ctx.restore();
+    }
+    ctx.restore();
+    return;
+  }
 
   const organic = isOrganicShorelineSurface(surface);
 
   let fill = '#1D334A';
   let outerBank = '#2A4763';
   let innerLip = '#4B7294';
-  let detailColor = '#3B5C7A';
 
   switch (surface) {
     case 'water':
       fill = '#1D334A';
       outerBank = '#263B52';
       innerLip = '#3E6282';
-      detailColor = '#32516E';
       break;
     case 'electrified_water':
       fill = '#234463';
       outerBank = '#2C5173';
       innerLip = '#5687AD';
-      detailColor = '#8F853B';
       break;
     case 'poison_swamp':
       fill = '#3B2D4A';
       outerBank = '#2D3B36';
       innerLip = '#496146';
-      detailColor = '#4D6347';
       break;
     case 'grass':
       fill = '#2C4736';
       outerBank = '#253B2D';
       innerLip = '#3B5E47';
-      detailColor = '#41664D';
       break;
     case 'burning_grass':
       fill = '#6E332B';
       outerBank = '#4F2621';
       innerLip = '#8A4538';
-      detailColor = '#96543B';
-      break;
-    case 'ice':
-      fill = '#4F7A8A';
-      outerBank = '#3E616E';
-      innerLip = '#6A94A3';
-      detailColor = '#618999';
-      break;
-    case 'lava':
-      fill = '#8A342B';
-      outerBank = '#7F6559';
-      innerLip = '#3B2D29';
-      detailColor = '#A34E35';
       break;
     case 'oil':
-      fill = '#262333';
-      outerBank = '#7F6559';
+      fill = '#1B1924';
+      outerBank = '#2A2438';
       innerLip = '#3B2D29';
-      detailColor = '#353047';
       break;
     case 'burning_oil':
-      fill = '#8F452C';
-      outerBank = '#7F6559';
-      innerLip = '#3B2D29';
-      detailColor = '#A85E3A';
+      fill = '#7C2D12';
+      outerBank = '#3B2019';
+      innerLip = '#8F452C';
       break;
     case 'conveyor':
       fill = '#343A45';
       outerBank = '#7F6559';
       innerLip = '#3B2D29';
-      detailColor = '#4E5666';
       break;
     case 'chasm':
       if (biome === 2) {
         fill = '#09131c';
-        outerBank = '#6F949E';
-        innerLip = '#345462';
-        detailColor = '#22D3EE';
+        outerBank = '#4A6E7A';
+        innerLip = '#243B47';
       } else if (biome === 3) {
         fill = '#120807';
-        outerBank = '#7F6559';
+        outerBank = '#5E463F';
         innerLip = '#3B2D29';
-        detailColor = '#8A342B';
       } else {
         fill = '#09070d';
-        outerBank = '#627468';
+        outerBank = '#4D5D53';
         innerLip = '#2B3731';
-        detailColor = '#4D382B';
       }
       break;
     case 'ash':
       fill = '#332E36';
-      outerBank = '#7F6559';
-      innerLip = '#3B2D29';
-      detailColor = '#413B45';
+      outerBank = '#252129';
+      innerLip = '#423C46';
       break;
   }
 
-  const padN = hasN ? 0 : organic ? 2.2 : 3.6;
-  const padE = hasE ? 0 : organic ? 2.2 : 3.6;
-  const padS = hasS ? 0 : organic ? 2.2 : 3.6;
-  const padW = hasW ? 0 : organic ? 2.2 : 3.6;
+  const basePad = surface === 'chasm' ? 1.2 : organic ? 2.2 : 3.2;
+  const padN = hasN ? 0 : basePad;
+  const padE = hasE ? 0 : basePad;
+  const padS = hasS ? 0 : basePad;
+  const padW = hasW ? 0 : basePad;
 
   const sx = padW;
   const sy = padN;
@@ -424,142 +728,378 @@ export function drawSurfaceTile(
   const rSE = organic && !hasS && !hasE ? 9 : 0;
   const rSW = organic && !hasS && !hasW ? 9 : 0;
 
-  ctx.save();
-  ctx.translate(dx, dy);
-  ctx.scale(scale, scale);
+  const waveOffset = organic && surfaceMask !== 15 ? ((v & 1) === 0 ? 1 : -1) * 0.9 : 0;
 
-  // 1. Base desaturated surface fill (clipped to rounded r=9u outer corners on organic P1 pools)
+  // 1. Base surface fill
   ctx.fillStyle = fill;
-  traceOrganicSurfaceRect(ctx, sx, sy, sw, sh, rNW, rNE, rSE, rSW);
+  traceOrganicSurfaceRect(
+    ctx,
+    sx,
+    sy,
+    sw,
+    sh,
+    rNW,
+    rNE,
+    rSE,
+    rSW,
+    hasN,
+    hasE,
+    hasS,
+    hasW,
+    waveOffset,
+  );
   ctx.fill();
 
-  // 2. Interior details (kept strictly within deltaL <= 10 of fill)
-  const ox = ((variant % 3) - 1) * 1.6;
-  const oy = ((Math.floor(variant / 3) % 3) - 1) * 1.4;
+  // 2. Interior details
+  const ox = ((v % 3) - 1) * 1.6;
+  const oy = ((Math.floor(v / 3) % 3) - 1) * 1.4;
 
   ctx.save();
-  traceOrganicSurfaceRect(ctx, sx, sy, sw, sh, rNW, rNE, rSE, rSW);
+  traceOrganicSurfaceRect(
+    ctx,
+    sx,
+    sy,
+    sw,
+    sh,
+    rNW,
+    rNE,
+    rSE,
+    rSW,
+    hasN,
+    hasE,
+    hasS,
+    hasW,
+    waveOffset,
+  );
   ctx.clip();
 
   switch (surface) {
     case 'water': {
+      // Seamless #1D334A border tone with soft interior bathymetric depth patch (no horizontal linear gradient banding)
+      ctx.fillStyle = '#1D334A';
+      ctx.fillRect(0, 0, 32, 32);
+      ctx.fillStyle = '#162738';
+      ctx.globalAlpha = 0.45;
       ctx.beginPath();
-      ctx.arc(14 + ox, 15 + oy, 4.0, 0.15, Math.PI * 1.25);
-      ctx.strokeStyle = detailColor;
-      ctx.lineWidth = 1.2;
+      ctx.ellipse(
+        16 + ox,
+        16 + oy,
+        10.5,
+        8.5,
+        0.15 * ((v % 3) - 1),
+        0,
+        Math.PI * 2,
+      );
+      ctx.fill();
+
+      // Separate beginPath/stroke per ripple arc so Canvas 2D never joins them with a straight line
+      ctx.strokeStyle = '#7DD3FC';
+      ctx.lineWidth = 1.1;
+      ctx.globalAlpha = 0.55;
+      ctx.beginPath();
+      ctx.arc(9 + ((v * 3) % 7), 11 + (v % 4), 3.6, 0.25, Math.PI * 1.15);
       ctx.stroke();
+
+      ctx.beginPath();
+      ctx.arc(21 - ((v * 2) % 6), 21 - (v % 4), 2.8, Math.PI * 0.85, Math.PI * 1.75);
+      ctx.stroke();
+      ctx.globalAlpha = 1.0;
       break;
     }
     case 'electrified_water': {
+      // Seamless #234463 border tone with soft interior depth patch and edge-connected lightning arcs
+      ctx.fillStyle = '#234463';
+      ctx.fillRect(0, 0, 32, 32);
+      ctx.fillStyle = '#1A334B';
+      ctx.globalAlpha = 0.42;
       ctx.beginPath();
-      ctx.moveTo(8 + ox, 11 + oy);
-      ctx.lineTo(15, 15);
-      ctx.lineTo(13, 20);
-      ctx.lineTo(23 + ox, 23 + oy);
-      ctx.strokeStyle = detailColor;
-      ctx.lineWidth = 1.6;
+      ctx.ellipse(
+        16 - ox,
+        16 + oy,
+        10.5,
+        8.5,
+        -0.15 * ((v % 3) - 1),
+        0,
+        Math.PI * 2,
+      );
+      ctx.fill();
+      ctx.globalAlpha = 1.0;
+
+      const lx = (v % 3) * 1.5 - 1.5;
+      const ly = ((v >> 1) % 3) * 1.5 - 1.5;
+      const startX = hasW ? 0 : 4 + lx;
+      const startY = hasW ? 16 : 10 + (v % 4);
+      const endX = hasE ? 32 : 28;
+      const endY = hasE ? 16 : 17 - (v % 3);
+      const branchX = hasN ? 16 : 22 + lx;
+      const branchY = hasN ? 0 : 8 + (v % 3);
+      ctx.strokeStyle = '#22D3EE';
+      ctx.lineWidth = 1.5;
       ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.beginPath();
+      ctx.moveTo(startX, startY);
+      ctx.lineTo(11 - ly, 14 + lx);
+      ctx.lineTo(9 + ly, 19 - lx);
+      ctx.lineTo(17, 15 + ly);
+      ctx.lineTo(23 - lx, 22);
+      ctx.lineTo(endX, endY);
+      ctx.moveTo(17, 15 + ly);
+      ctx.lineTo(branchX, branchY);
+      if (hasS) {
+        ctx.moveTo(9 + ly, 19 - lx);
+        ctx.lineTo(16, 32);
+      }
+      ctx.stroke();
+      ctx.strokeStyle = '#FDE047';
+      ctx.lineWidth = 0.85;
       ctx.stroke();
       break;
     }
     case 'poison_swamp': {
-      for (const [bx, by, br] of [
-        [11 + ox, 13 + oy, 2.8],
-        [21 - ox, 20 - oy, 2.2],
-      ] as const) {
-        ctx.beginPath();
-        ctx.arc(bx, by, br, 0, Math.PI * 2);
-        ctx.fillStyle = detailColor;
-        ctx.fill();
-      }
+      // Mottled dark toxic mire patches
+      ctx.fillStyle = '#2B2138';
+      ctx.beginPath();
+      ctx.ellipse(11 + ox, 12 + oy, 7.5, 5.2, 0.3 * (v % 3), 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = '#32452E';
+      ctx.beginPath();
+      ctx.ellipse(21 - ox, 20 - oy, 6.5, 4.5, -0.25 * (v % 3), 0, Math.PI * 2);
+      ctx.fill();
+
+      // Separate beginPath/stroke per bubble ring so no connecting straight lines are drawn
+      ctx.strokeStyle = '#84CC16';
+      ctx.lineWidth = 1.1;
+      ctx.globalAlpha = 0.72;
+      const b1x = 8 + ((v * 3) % 7);
+      const b1y = 9 + ((v * 5) % 6);
+      ctx.beginPath();
+      ctx.arc(b1x, b1y, 2.5, 0, Math.PI * 2);
+      ctx.stroke();
+
+      const b2x = 22 - ((v * 3) % 6);
+      const b2y = 18 + (v % 5);
+      ctx.beginPath();
+      ctx.arc(b2x, b2y, 1.9, 0, Math.PI * 2);
+      ctx.stroke();
+
+      const b3x = 14 + ((v * 2) % 5);
+      const b3y = 23 - (v % 4);
+      ctx.beginPath();
+      ctx.arc(b3x, b3y, 1.4, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.globalAlpha = 1.0;
       break;
     }
     case 'grass': {
-      for (const gx of [10, 17, 23]) {
-        tracePolygon(ctx, [
-          { x: gx + ox - 2.0, y: 21 + oy },
-          { x: gx + ox, y: 11 + oy },
-          { x: gx + ox + 2.0, y: 21 + oy },
-        ]);
-        ctx.fillStyle = detailColor;
+      const clusterOffsets: ReadonlyArray<readonly [number, number]> = [
+        [6, 9],
+        [12, 19],
+        [16, 11],
+        [21, 21],
+        [26, 13],
+      ];
+      for (let b = 0; b < 5; b++) {
+        const [baseX, baseY] = clusterOffsets[(b + v) % 5]!;
+        const gx = baseX + (((v * 3 + b * 5) % 5) - 2) * 1.1;
+        const gy = baseY + (((v * 5 + b * 3) % 5) - 2) * 1.1;
+        const h = 4.2 + ((v + b) % 3) * 0.9;
+        ctx.fillStyle = b % 2 === 0 ? '#1E4E38' : '#499F54';
+        ctx.beginPath();
+        ctx.moveTo(gx - 2, gy + 4.5);
+        ctx.lineTo(gx + (b % 2 === 0 ? -0.7 : 0.7), gy - h);
+        ctx.lineTo(gx + 2, gy + 4.5);
+        ctx.closePath();
         ctx.fill();
       }
-      break;
-    }
-    case 'burning_grass': {
-      for (const gx of [11, 20]) {
-        tracePolygon(ctx, [
-          { x: gx + ox - 2.4, y: 21 },
-          { x: gx + ox, y: 10 },
-          { x: gx + ox + 2.4, y: 21 },
-        ]);
-        ctx.fillStyle = detailColor;
-        ctx.fill();
-      }
-      break;
-    }
-    case 'ice': {
-      ctx.beginPath();
-      ctx.moveTo(9 + ox, 21);
-      ctx.lineTo(21 + ox, 9);
-      ctx.moveTo(14 + ox, 23);
-      ctx.lineTo(24 + ox, 13);
-      ctx.strokeStyle = detailColor;
-      ctx.lineWidth = 1.3;
-      ctx.lineCap = 'round';
-      ctx.stroke();
-      break;
-    }
-    case 'lava': {
-      ctx.beginPath();
-      ctx.moveTo(8 + ox, 12 + oy);
-      ctx.lineTo(16, 18 + oy);
-      ctx.lineTo(24 - ox, 13 + oy);
-      ctx.strokeStyle = detailColor;
-      ctx.lineWidth = 2.0;
-      ctx.lineCap = 'round';
-      ctx.stroke();
       break;
     }
     case 'oil': {
+      ctx.fillStyle = '#1B1924';
+      ctx.fillRect(0, 0, 32, 32);
+      const sheenShiftX = (hasE ? 2.5 : 0) - (hasW ? 2.5 : 0);
+      const sheenShiftY = (hasS ? 2.5 : 0) - (hasN ? 2.5 : 0);
+      ctx.fillStyle = '#362B48';
       ctx.beginPath();
-      ctx.ellipse(13 + ox, 14 + oy, 5.8, 2.8, -0.3, 0, Math.PI * 2);
-      ctx.fillStyle = detailColor;
+      ctx.ellipse(
+        13 + ox + sheenShiftX,
+        14 + oy + sheenShiftY * 0.6,
+        9.5 + (hasE || hasW ? 2.5 : 0),
+        5.5 + (hasN || hasS ? 1.2 : 0),
+        0.22 * ((v % 3) - 1),
+        0,
+        Math.PI * 2,
+      );
+      ctx.fill();
+      ctx.fillStyle = '#263E57';
+      ctx.beginPath();
+      ctx.ellipse(
+        19 - ox + sheenShiftX * 0.6,
+        19 - oy + sheenShiftY,
+        7.2 + (hasE || hasW ? 1.8 : 0),
+        4.2 + (hasN || hasS ? 1.5 : 0),
+        -0.2 * ((v % 3) - 1),
+        0,
+        Math.PI * 2,
+      );
       ctx.fill();
       break;
     }
-    case 'burning_oil': {
-      tracePolygon(ctx, [
-        { x: 10 + ox, y: 21 },
-        { x: 14 + ox, y: 10 },
-        { x: 18 + ox, y: 16 },
-        { x: 22 + ox, y: 9 },
-        { x: 24 + ox, y: 21 },
-      ]);
-      ctx.fillStyle = detailColor;
+    case 'burning_oil':
+    case 'burning_grass': {
+      // Seamless uniform ember bed (no per-tile radial-gradient dark edge grid) + soft interior glow patches
+      ctx.fillStyle = surface === 'burning_oil' ? '#7C2D12' : '#6E332B';
+      ctx.fillRect(0, 0, 32, 32);
+
+      ctx.globalAlpha = 0.35;
+      ctx.fillStyle = '#DC2626';
+      ctx.beginPath();
+      ctx.ellipse(
+        14 + ox * 1.2,
+        17 + oy * 1.1,
+        8.5 + (v % 3),
+        6.5 + ((v >> 1) % 3),
+        0.2 * ((v % 3) - 1),
+        0,
+        Math.PI * 2,
+      );
       ctx.fill();
-      break;
-    }
-    case 'conveyor': {
-      for (const cx of [10, 20]) {
+
+      ctx.fillStyle = '#EA580C';
+      ctx.beginPath();
+      ctx.ellipse(
+        18 - ox * 1.1,
+        15 - oy * 1.2,
+        6.0 + ((v + 1) % 3),
+        4.8 + (v % 2),
+        -0.25 * ((v % 3) - 1),
+        0,
+        Math.PI * 2,
+      );
+      ctx.fill();
+      ctx.globalAlpha = 1.0;
+
+      const flameColors = ['#DC2626', '#F97316', '#FACC15', '#F4F1EA'];
+      const basePositions: ReadonlyArray<readonly [number, number, number]> = [
+        [7 + ((v * 3) % 6), 24 - (v % 4), 8.5 + (v % 3)],
+        [15 + ox * 1.4, 22 + oy * 1.2, 10.5 + ((v >> 1) % 3)],
+        [23 - ((v * 2) % 6), 25 - ((v >> 1) % 4), 8.0 + ((v + 1) % 3)],
+        [14 + ((v & 1) ? 2.5 : -2.5), 21 - (v % 2), 5.5 + (v % 2)],
+      ];
+      for (let f = 0; f < flameColors.length; f++) {
+        const [fx, fy, fh] = basePositions[f]!;
+        const w = 3.8 - f * 0.65;
+        const lean = (((v + f) % 3) - 1) * 1.4;
+        ctx.fillStyle = flameColors[f]!;
         ctx.beginPath();
-        ctx.moveTo(cx - 2.4, 10);
-        ctx.lineTo(cx + 2.4, 16);
-        ctx.lineTo(cx - 2.4, 22);
-        ctx.strokeStyle = detailColor;
-        ctx.lineWidth = 1.8;
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-        ctx.stroke();
+        ctx.moveTo(fx - w, fy);
+        ctx.quadraticCurveTo(fx - w * 0.5, fy - fh * 0.55, fx + lean, fy - fh);
+        ctx.quadraticCurveTo(fx + w * 0.5, fy - fh * 0.55, fx + w, fy);
+        ctx.closePath();
+        ctx.fill();
       }
       break;
     }
+    case 'conveyor': {
+      const x0 = hasW ? 0 : 2;
+      const x1 = hasE ? 32 : 30;
+      ctx.fillStyle = '#1E222B';
+      ctx.fillRect(x0, 2, x1 - x0, 28);
+      ctx.strokeStyle = '#6E7889';
+      ctx.lineWidth = 2.0;
+      ctx.strokeRect(x0, 3, x1 - x0, 26);
+
+      // Subtle static belt slats/chevrons (live directional chevrons are rendered over the track by BiomeArchitectureLiveLayer)
+      ctx.strokeStyle = '#F59E42';
+      ctx.globalAlpha = 0.28;
+      ctx.lineWidth = 1.6;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      for (const cx of [9, 18, 26]) {
+        ctx.beginPath();
+        ctx.moveTo(cx - 3, 9);
+        ctx.lineTo(cx, 16);
+        ctx.lineTo(cx - 3, 23);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1.0;
+      break;
+    }
     case 'chasm': {
+      const strataColors =
+        biome === 2
+          ? ['#345462', '#243B47', '#182A33', '#050408']
+          : biome === 3
+            ? ['#4A352F', '#8A342B', '#2A120E', '#050408']
+            : ['#4D382B', '#3D5235', '#1F1815', '#050408'];
+
+      // Deep abyssal void base
       ctx.fillStyle = '#050408';
-      ctx.fillRect(5, 5, 22, 22);
-      ctx.strokeStyle = detailColor;
-      ctx.lineWidth = 1.4;
-      ctx.strokeRect(7, 7, 18, 18);
+      ctx.fillRect(0, 0, 32, 32);
+
+      // 3/4 perspective receding subterranean cliff strata along exposed North/West/East/South edges
+      for (let s = 0; s < strataColors.length; s++) {
+        const topDepth = hasN ? 0 : 3.5 + s * 3.2;
+        const sideDepth = 1.8 + s * 1.4;
+        const botDepth = hasS ? 0 : 1.5 + s * 1.1;
+        const rx = hasW ? 0 : sideDepth;
+        const ry = hasN ? 0 : topDepth;
+        const rw = Math.max(2, 32 - rx - (hasE ? 0 : sideDepth));
+        const rh = Math.max(2, 32 - ry - botDepth);
+        ctx.fillStyle = strataColors[s]!;
+        ctx.fillRect(rx, ry, rw, rh);
+      }
+
+      if (!hasN) {
+        // Horizontal rock courses on the 3/4 northern subterranean cliff wall, clipped to West/East side strata
+        const c0x = hasW ? 0 : 1.8;
+        const c0w = Math.max(2, 32 - c0x - (hasE ? 0 : 1.8));
+        ctx.fillStyle = strataColors[0]!;
+        ctx.fillRect(c0x, 0, c0w, 4.5);
+
+        const c1x = hasW ? 0 : 3.2;
+        const c1w = Math.max(2, 32 - c1x - (hasE ? 0 : 3.2));
+        ctx.fillStyle = strataColors[1]!;
+        ctx.fillRect(c1x, 4.5, c1w, 4.5);
+
+        const c2x = hasW ? 0 : 4.6;
+        const c2w = Math.max(2, 32 - c2x - (hasE ? 0 : 4.6));
+        ctx.fillStyle = strataColors[2]!;
+        ctx.fillRect(c2x, 9.0, c2w, 4.0);
+
+        const vx0 = hasW ? 0 : 3.2;
+        const vx1 = hasE ? 32 : 28.8;
+        ctx.strokeStyle = biome === 2 ? '#22D3EE' : biome === 3 ? '#DC2626' : strataColors[0]!;
+        ctx.globalAlpha = 0.25;
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        ctx.moveTo(vx0, 4.5);
+        ctx.lineTo(16, 5.5 + (v % 2));
+        ctx.lineTo(vx1, 4.5);
+        ctx.stroke();
+        ctx.globalAlpha = 1.0;
+      } else if (biome === 2) {
+        // Record glacial cyan crystal vein in deep chasm
+        ctx.strokeStyle = '#22D3EE';
+        ctx.globalAlpha = 0.18;
+        ctx.lineWidth = 1.0;
+        ctx.beginPath();
+        ctx.moveTo(8, 12);
+        ctx.lineTo(14, 16);
+        ctx.stroke();
+        ctx.globalAlpha = 1.0;
+      } else if (biome === 3) {
+        ctx.strokeStyle = '#DC2626';
+        ctx.globalAlpha = 0.22;
+        ctx.lineWidth = 1.0;
+        ctx.beginPath();
+        ctx.moveTo(10, 14);
+        ctx.lineTo(18, 18);
+        ctx.stroke();
+        ctx.globalAlpha = 1.0;
+      }
+
       if (biome <= 1) {
         // Biome 1 Deep Root Abyss: gnarled roots clinging to exposed cliff edges
         ctx.strokeStyle = '#4D382B';
@@ -585,12 +1125,6 @@ export function drawSurfaceTile(
           ctx.quadraticCurveTo(23, 17, 20, 19);
         }
         ctx.stroke();
-        ctx.strokeStyle = '#3D5235';
-        ctx.lineWidth = 1.1;
-        ctx.beginPath();
-        ctx.moveTo(11 + ox, 11 + oy);
-        ctx.lineTo(15 + ox, 14 + oy);
-        ctx.stroke();
       }
       break;
     }
@@ -599,132 +1133,112 @@ export function drawSurfaceTile(
   }
   ctx.restore();
 
-  // 3. Exposed Edge Architecture: P1 Organic 2-Layer Curved Shoreline vs P3 4u Basalt Conduit Curb
+  // 3. Exposed Edge Architecture: P1 Organic 2-Layer Curved Shoreline vs P3 Conduit Curb / Chasm Lip
   if (organic) {
-    // P1: 2-layer organic curved shoreline along exposed edges & rounded outer corners
-    const waveOffset = ((variant & 1) === 0 ? 1 : -1) * 1.1;
+    if (surfaceMask !== 15) {
+      // P1: 2-layer organic curved shoreline along exposed edges & rounded outer corners only
+      const waveOffset = ((v & 1) === 0 ? 1 : -1) * 0.9;
 
-    // Layer 1: Outer damp bank (3.2u)
-    ctx.strokeStyle = outerBank;
-    ctx.lineWidth = 3.2;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    traceOrganicShorelineLayer(
-      ctx,
-      sx,
-      sy,
-      sw,
-      sh,
-      hasN,
-      hasE,
-      hasS,
-      hasW,
-      rNW,
-      rNE,
-      rSE,
-      rSW,
-      0.8,
-      waveOffset,
-    );
-    ctx.stroke();
+      // Layer 1: Outer damp bank (2.8u)
+      ctx.strokeStyle = outerBank;
+      ctx.lineWidth = 2.8;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      traceOrganicShorelineLayer(
+        ctx,
+        sx,
+        sy,
+        sw,
+        sh,
+        hasN,
+        hasE,
+        hasS,
+        hasW,
+        rNW,
+        rNE,
+        rSE,
+        rSW,
+        0.8,
+        waveOffset,
+      );
+      ctx.stroke();
 
-    // Layer 2: Inner foam / moss / frost shoreline lip (1.6u)
-    ctx.strokeStyle = innerLip;
-    ctx.lineWidth = 1.6;
-    traceOrganicShorelineLayer(
-      ctx,
-      sx,
-      sy,
-      sw,
-      sh,
-      hasN,
-      hasE,
-      hasS,
-      hasW,
-      rNW,
-      rNE,
-      rSE,
-      rSW,
-      2.2,
-      waveOffset,
-    );
-    ctx.stroke();
+      // Layer 2: Inner foam / moss / frost shoreline lip (1.4u)
+      ctx.strokeStyle = innerLip;
+      ctx.lineWidth = 1.4;
+      traceOrganicShorelineLayer(
+        ctx,
+        sx,
+        sy,
+        sw,
+        sh,
+        hasN,
+        hasE,
+        hasS,
+        hasW,
+        rNW,
+        rNE,
+        rSE,
+        rSW,
+        2.0,
+        waveOffset,
+      );
+      ctx.stroke();
+    }
+  } else if (surface === 'chasm') {
+    // Natural stone cliff lip along exposed chasm edges only
+    if (surfaceMask !== 15) {
+      ctx.fillStyle = outerBank;
+      if (!hasN) ctx.fillRect(0, 0, 32, 2.2);
+      if (!hasS) ctx.fillRect(0, 29.8, 32, 2.2);
+      if (!hasW) ctx.fillRect(0, 0, 2.2, 32);
+      if (!hasE) ctx.fillRect(29.8, 0, 2.2, 32);
+
+      ctx.strokeStyle = PALETTE.INK_DARK;
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      if (!hasN) {
+        ctx.moveTo(0, 0.7);
+        ctx.lineTo(32, 0.7);
+      }
+      if (!hasS) {
+        ctx.moveTo(0, 31.3);
+        ctx.lineTo(32, 31.3);
+      }
+      if (!hasW) {
+        ctx.moveTo(0.7, 0);
+        ctx.lineTo(0.7, 32);
+      }
+      if (!hasE) {
+        ctx.moveTo(31.3, 0);
+        ctx.lineTo(31.3, 32);
+      }
+      ctx.stroke();
+    }
   } else {
-    // P3: Beveled 4u stone conduit curb / chasm cliff lip
-    const curbTop = surface === 'chasm' ? outerBank : '#7F6559';
-    const curbFront = surface === 'chasm' ? innerLip : '#3B2D29';
-    const curbJoint = surface === 'chasm' ? '#16201C' : '#1F1614';
-
+    // Conveyor belt side rails along exposed North/South/West/East edges
+    const curbTop = '#7F6559';
+    const curbFront = '#3B2D29';
     if (!hasN) {
       ctx.fillStyle = curbTop;
-      ctx.fillRect(0, 0, 32, 2.4);
+      ctx.fillRect(0, 0, 32, 2.2);
       ctx.fillStyle = curbFront;
-      ctx.fillRect(0, 2.4, 32, 1.6);
-      ctx.strokeStyle = curbJoint;
-      ctx.lineWidth = 1.1;
-      ctx.beginPath();
-      ctx.moveTo(16, 0);
-      ctx.lineTo(16, 4.0);
-      ctx.stroke();
+      ctx.fillRect(0, 2.2, 32, 1.4);
     }
     if (!hasS) {
       ctx.fillStyle = curbFront;
-      ctx.fillRect(0, 28.0, 32, 1.6);
+      ctx.fillRect(0, 28.4, 32, 1.4);
       ctx.fillStyle = curbTop;
-      ctx.fillRect(0, 29.6, 32, 2.4);
-      ctx.strokeStyle = curbJoint;
-      ctx.lineWidth = 1.1;
-      ctx.beginPath();
-      ctx.moveTo(16, 28.0);
-      ctx.lineTo(16, 32);
-      ctx.stroke();
+      ctx.fillRect(0, 29.8, 32, 2.2);
     }
     if (!hasW) {
       ctx.fillStyle = curbTop;
-      ctx.fillRect(0, 0, 2.4, 32);
-      ctx.fillStyle = curbFront;
-      ctx.fillRect(2.4, 0, 1.6, 32);
-      ctx.strokeStyle = curbJoint;
-      ctx.lineWidth = 1.1;
-      ctx.beginPath();
-      ctx.moveTo(0, 16);
-      ctx.lineTo(4.0, 16);
-      ctx.stroke();
+      ctx.fillRect(0, 0, 2.2, 32);
     }
     if (!hasE) {
-      ctx.fillStyle = curbFront;
-      ctx.fillRect(28.0, 0, 1.6, 32);
       ctx.fillStyle = curbTop;
-      ctx.fillRect(29.6, 0, 2.4, 32);
-      ctx.strokeStyle = curbJoint;
-      ctx.lineWidth = 1.1;
-      ctx.beginPath();
-      ctx.moveTo(28.0, 16);
-      ctx.lineTo(32, 16);
-      ctx.stroke();
+      ctx.fillRect(29.8, 0, 2.2, 32);
     }
-
-    // Crisp outer contour on exposed conduit curb edges
-    ctx.strokeStyle = PALETTE.INK_DARK;
-    ctx.lineWidth = 1.4;
-    ctx.beginPath();
-    if (!hasN) {
-      ctx.moveTo(0, 0.7);
-      ctx.lineTo(32, 0.7);
-    }
-    if (!hasS) {
-      ctx.moveTo(0, 31.3);
-      ctx.lineTo(32, 31.3);
-    }
-    if (!hasW) {
-      ctx.moveTo(0.7, 0);
-      ctx.lineTo(0.7, 32);
-    }
-    if (!hasE) {
-      ctx.moveTo(31.3, 0);
-      ctx.lineTo(31.3, 32);
-    }
-    ctx.stroke();
   }
 
   ctx.restore();
@@ -740,22 +1254,43 @@ function traceOrganicSurfaceRect(
   rNE: number,
   rSE: number,
   rSW: number,
+  hasN = true,
+  hasE = true,
+  hasS = true,
+  hasW = true,
+  waveOffset = 0,
 ): void {
   ctx.beginPath();
   ctx.moveTo(sx + rNW, sy);
-  ctx.lineTo(sx + sw - rNE, sy);
+  if (!hasN && waveOffset !== 0) {
+    ctx.quadraticCurveTo(16, sy + waveOffset, sx + sw - rNE, sy);
+  } else {
+    ctx.lineTo(sx + sw - rNE, sy);
+  }
   if (rNE > 0) {
     ctx.arcTo(sx + sw, sy, sx + sw, sy + rNE, rNE);
   }
-  ctx.lineTo(sx + sw, sy + sh - rSE);
+  if (!hasE && waveOffset !== 0) {
+    ctx.quadraticCurveTo(sx + sw - waveOffset, 16, sx + sw, sy + sh - rSE);
+  } else {
+    ctx.lineTo(sx + sw, sy + sh - rSE);
+  }
   if (rSE > 0) {
     ctx.arcTo(sx + sw, sy + sh, sx + sw - rSE, sy + sh, rSE);
   }
-  ctx.lineTo(sx + rSW, sy + sh);
+  if (!hasS && waveOffset !== 0) {
+    ctx.quadraticCurveTo(16, sy + sh - waveOffset, sx + rSW, sy + sh);
+  } else {
+    ctx.lineTo(sx + rSW, sy + sh);
+  }
   if (rSW > 0) {
     ctx.arcTo(sx, sy + sh, sx, sy + sh - rSW, rSW);
   }
-  ctx.lineTo(sx, sy + rNW);
+  if (!hasW && waveOffset !== 0) {
+    ctx.quadraticCurveTo(sx + waveOffset, 16, sx, sy + rNW);
+  } else {
+    ctx.lineTo(sx, sy + rNW);
+  }
   if (rNW > 0) {
     ctx.arcTo(sx, sy, sx + rNW, sy, rNW);
   }
@@ -858,6 +1393,22 @@ function readLookupCell(
   return null;
 }
 
+export function hasChasmAlongAxisWithin3(
+  grid: BridgeTileLookup,
+  tx: number,
+  ty: number,
+  dx: number,
+  dy: number,
+): boolean {
+  for (let step = 1; step <= 4; step++) {
+    const c = readLookupCell(grid, tx + dx * step, ty + dy * step);
+    if (!c) return false;
+    if (c.surface === 'chasm') return true;
+    if (c.kind !== 'floor' || c.surface !== 'none') return false;
+  }
+  return false;
+}
+
 export function isBridgeFloorTileOverChasm(
   grid: BridgeTileLookup,
   tx: number,
@@ -865,21 +1416,16 @@ export function isBridgeFloorTileOverChasm(
 ): boolean {
   const cell = readLookupCell(grid, tx, ty);
   if (!cell || cell.kind !== 'floor' || cell.surface !== 'none') return false;
-  const n1 = readLookupCell(grid, tx, ty - 1);
-  const s1 = readLookupCell(grid, tx, ty + 1);
-  const w1 = readLookupCell(grid, tx - 1, ty);
-  const e1 = readLookupCell(grid, tx + 1, ty);
-  if (
-    n1?.surface === 'chasm' ||
-    s1?.surface === 'chasm' ||
-    w1?.surface === 'chasm' ||
-    e1?.surface === 'chasm'
-  ) {
+
+  const hasChasmN = hasChasmAlongAxisWithin3(grid, tx, ty, 0, -1);
+  const hasChasmS = hasChasmAlongAxisWithin3(grid, tx, ty, 0, 1);
+  if (hasChasmN && hasChasmS) {
     return true;
   }
-  const n2 = readLookupCell(grid, tx, ty - 2);
-  const s2 = readLookupCell(grid, tx, ty + 2);
-  return n2?.surface === 'chasm' && s2?.surface === 'chasm';
+
+  const hasChasmW = hasChasmAlongAxisWithin3(grid, tx, ty, -1, 0);
+  const hasChasmE = hasChasmAlongAxisWithin3(grid, tx, ty, 1, 0);
+  return hasChasmW && hasChasmE;
 }
 
 export function drawBridgeOverChasmOverlay(
@@ -890,41 +1436,108 @@ export function drawBridgeOverChasmOverlay(
   hasChasmN: boolean,
   hasChasmS: boolean,
   biome: 0 | 1 | 2 | 3 = 1,
+  hasChasmW = false,
+  hasChasmE = false,
+  isVerticalBridge = false,
 ): void {
   const scale = cellPx / 32;
   ctx.save();
   ctx.translate(dx, dy);
   ctx.scale(scale, scale);
 
-  const plankFill = biome === 2 ? '#4A6E7A' : biome === 3 ? '#5E463F' : '#524033';
+  const deckColor = biome === 2 ? '#4A6E7A' : biome === 3 ? '#5E463F' : '#524033';
   const plankSeam = biome === 2 ? '#2B4652' : biome === 3 ? '#2B1E1B' : '#2E221B';
-  const railTop = biome === 2 ? '#7CA6B2' : biome === 3 ? '#8C6C5E' : '#6E5A49';
+  const railColor = biome === 2 ? '#7CA6B2' : biome === 3 ? '#8C6C5E' : '#6E5A49';
+  const vertical = isVerticalBridge || ((hasChasmW || hasChasmE) && !hasChasmN && !hasChasmS);
 
-  ctx.fillStyle = plankFill;
-  ctx.globalAlpha = 0.42;
-  ctx.fillRect(0, 2, 32, 28);
-  ctx.globalAlpha = 0.85;
-  ctx.strokeStyle = plankSeam;
-  ctx.lineWidth = 1.2;
-  for (const px of [8, 16, 24]) {
+  if (vertical) {
+    // North-South catwalk orientation: horizontal planks across walkway, vertical center beam, W/E guardrails
+    ctx.fillStyle = deckColor;
+    ctx.globalAlpha = 0.86;
+    ctx.fillRect(1, 0, 30, 32);
+
+    ctx.globalAlpha = 0.92;
+    ctx.strokeStyle = '#141019';
+    ctx.lineWidth = 1.4;
+    for (const py of [6, 13, 20, 27]) {
+      ctx.beginPath();
+      ctx.moveTo(1, py);
+      ctx.lineTo(31, py);
+      ctx.stroke();
+    }
+
+    ctx.strokeStyle = plankSeam;
+    ctx.lineWidth = 1.1;
     ctx.beginPath();
-    ctx.moveTo(px, 1);
-    ctx.lineTo(px, 31);
+    ctx.moveTo(16, 0);
+    ctx.lineTo(16, 32);
     ctx.stroke();
-  }
-  if (hasChasmN) {
-    ctx.fillStyle = railTop;
-    ctx.fillRect(0, 0, 32, 3.2);
-    ctx.strokeStyle = PALETTE.INK_DARK;
-    ctx.lineWidth = 1.2;
-    ctx.strokeRect(0.5, 0.5, 31, 2.6);
-  }
-  if (hasChasmS) {
-    ctx.fillStyle = railTop;
-    ctx.fillRect(0, 28.8, 32, 3.2);
-    ctx.strokeStyle = PALETTE.INK_DARK;
-    ctx.lineWidth = 1.2;
-    ctx.strokeRect(0.5, 28.9, 31, 2.6);
+
+    // Recessed center-beam bolt heads in railColor (no internal rail bars)
+    ctx.fillStyle = railColor;
+    ctx.globalAlpha = 0.45;
+    ctx.fillRect(15.2, 3, 1.6, 1.6);
+    ctx.fillRect(15.2, 27.4, 1.6, 1.6);
+    ctx.globalAlpha = 0.92;
+
+    if (hasChasmW) {
+      ctx.fillStyle = railColor;
+      ctx.fillRect(0, 0, 4.2, 32);
+      ctx.strokeStyle = PALETTE.INK_DARK;
+      ctx.lineWidth = 1.3;
+      ctx.strokeRect(0.5, 0.5, 3.4, 31);
+    }
+    if (hasChasmE) {
+      ctx.fillStyle = railColor;
+      ctx.fillRect(27.8, 0, 4.2, 32);
+      ctx.strokeStyle = PALETTE.INK_DARK;
+      ctx.lineWidth = 1.3;
+      ctx.strokeRect(28.1, 0.5, 3.4, 31);
+    }
+  } else {
+    // East-West bridge orientation: vertical planks across walkway, horizontal center beam, N/S guardrails
+    ctx.fillStyle = deckColor;
+    ctx.globalAlpha = 0.86;
+    ctx.fillRect(0, 1, 32, 30);
+
+    ctx.globalAlpha = 0.92;
+    ctx.strokeStyle = '#141019';
+    ctx.lineWidth = 1.4;
+    for (const px of [6, 13, 20, 27]) {
+      ctx.beginPath();
+      ctx.moveTo(px, 1);
+      ctx.lineTo(px, 31);
+      ctx.stroke();
+    }
+
+    ctx.strokeStyle = plankSeam;
+    ctx.lineWidth = 1.1;
+    ctx.beginPath();
+    ctx.moveTo(0, 16);
+    ctx.lineTo(32, 16);
+    ctx.stroke();
+
+    // Recessed center-beam bolt heads in railColor (no internal rail bars when hasChasmN/S is false)
+    ctx.fillStyle = railColor;
+    ctx.globalAlpha = 0.45;
+    ctx.fillRect(3, 15.2, 1.6, 1.6);
+    ctx.fillRect(27.4, 15.2, 1.6, 1.6);
+    ctx.globalAlpha = 0.92;
+
+    if (hasChasmN) {
+      ctx.fillStyle = railColor;
+      ctx.fillRect(0, 0, 32, 4.2);
+      ctx.strokeStyle = PALETTE.INK_DARK;
+      ctx.lineWidth = 1.3;
+      ctx.strokeRect(0.5, 0.5, 31, 3.4);
+    }
+    if (hasChasmS) {
+      ctx.fillStyle = railColor;
+      ctx.fillRect(0, 27.8, 32, 4.2);
+      ctx.strokeStyle = PALETTE.INK_DARK;
+      ctx.lineWidth = 1.3;
+      ctx.strokeRect(0.5, 28.1, 31, 3.4);
+    }
   }
   ctx.restore();
 }

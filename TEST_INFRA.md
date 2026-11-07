@@ -1,0 +1,81 @@
+# Test Infrastructure & 5-Tier E2E Architecture (`TEST_INFRA.md`)
+
+## 1. Overview & Runner Commands
+This document defines the 5-Tier End-to-End (E2E) Test Suite and Playwright 1920×1080 WebGL Visual Verification architecture for Ashen-Pact's Commercial 2.5D Map Graphics, Realistic Living Hazards, Multi-Topology Dungeon & Visual/Lighting/Shadow Polish Overhaul (`PROJECT.md`, `F1`–`F19`).
+
+- **Primary E2E Test Suite File**: `tests/e2e/map-overhaul-e2e.test.ts` (`152` tests across Tiers 1–5)
+- **Dedicated E2E Vitest Config**: `tests/e2e/vitest.config.ts` (includes `tests/e2e/**/*.test.ts` and aliases `@ashen-pact/shared` to `packages/shared/src/index.ts`)
+- **Playwright WebGL Visual Spec**: `tests/e2e/visual.spec.ts` (`13` deterministic 1920×1080 WebGL scenes in `output/playwright/map-overhaul/01..13.png`)
+- **Deterministic Runner Command**:
+  ```bash
+  npx vitest run -c tests/e2e/vitest.config.ts tests/e2e/map-overhaul-e2e.test.ts
+  ```
+- **Strict Overhaul Contract Enforcement Mode (for M4 Round 3 Final Gate)**:
+  ```bash
+  ENFORCE_OVERHAUL_CONTRACTS=1 npx vitest run -c tests/e2e/vitest.config.ts tests/e2e/map-overhaul-e2e.test.ts
+  ```
+- **Visual WebGL Browser Suite**:
+  ```bash
+  npx playwright test tests/e2e/visual.spec.ts
+  ```
+
+---
+
+## 2. Feature Inventory to Test Tier Mapping (`F1`–`F19`)
+
+| Feature ID | Feature Name | Milestone | Tier 1 (Feature Coverage) | Tier 2 (Boundary & Corner Cases) | Tier 3 (Cross-Feature Combos) | Tier 4 (Real-World Scenarios) | Tier 5 (White-Box Adversarial Hardening) |
+|------------|--------------|-----------|---------------------------|----------------------------------|-------------------------------|-------------------------------|------------------------------------------|
+| **F1** | Dynamic `ArenaMap.resize(cols, rows)` & Room Size Presets (`compact`, `standard`, `wide_hall`, `tall_sanctum`, `grand_arena`, `colossal_boss`) | M1 (R1) | `>= 5` tests | `>= 5` tests | Pairwise with F2, F3, F9 | Scenarios 1–8 | `T5-WB-01`, `02`, `11`, `13`, `14` |
+| **F2** | Multi-Geometry Room Silhouettes (`RoomShapeKind`: `rectangle`, `octagon`, `cruciform`, `hourglass`) | M1 (R1) | `>= 5` tests | `>= 5` tests | Pairwise with F1, F3, F8 | Scenarios 1–8 | `T5-WB-02`, `03`, `13`, `14` |
+| **F3** | Dynamic Door/Vestibule Helpers (`getDoorTilesForMap`, `getDoorVestibuleRectsForMap`) & Proportional Archetypes (`TWIN_BRIDGES`, `GAUNTLET_CHOKEPOINT`, `CENTRAL_BASTION`, `CROSSFIRE_CONVEYORS`, `PRISM_LABYRINTH`, `CRUMBLING_PILLAR_RING`) + BFS Connectivity | M1 (R1) | `>= 5` tests | `>= 5` tests | Pairwise with F1, F2, F4, F6 | Scenarios 1–8 | `T5-WB-02`, `03`, `11`, `14` |
+| **F4** | Tactical Prop Eviction Protection (`MAX_TACTICAL_PROPS_PER_ROOM` & `rotten_totem_pillar` / `TileKind.Pillar` integrity) | M1 (R1) | `>= 5` tests | `>= 5` tests | Pairwise with F1, F3, F9 | Scenarios 2, 4, 6 | `T5-WB-04` |
+| **F5** | Realistic Multi-Layered Molten Lava & Crystalline Ice (`texture-baker-surfaces.ts` + `traceOrganicPoolPath`) | M2 (R1) | `>= 5` tests | `>= 5` tests (`T2-F5-05` synced with `F15`) | Pairwise with F6, F7, F8 | Scenarios 1, 2, 3, 6 | `T5-WB-05`, `21`, `23` |
+| **F6** | All Other Terrain Surfaces (`water`, `electrified_water`, `poison_swamp`, `oil`, `grass`, `burning_oil`, `burning_grass`), Chasm Strata, Conveyors & 3-Tile Bridges (`drawBridgeOverChasmOverlay`) | M2 (R1) | `>= 5` tests | `>= 5` tests | Pairwise with F3, F5, F7 | Scenarios 1–6 | `T5-WB-06`, `21`, `23` |
+| **F7** | Live Deterministic Surface Animation (`getFreezeVisualTimeSec`, `BiomeArchitectureLiveLayer`) & Additive Emissive Glow (`BlendModes.ADD`) | M2 (R1) | `>= 5` tests | `>= 5` tests | Pairwise with F5, F6, F9 | Scenarios 1–7 | `T5-WB-07`, `24` |
+| **F8** | Tactile 2.5D Flagstone Floors (`variant 0..7` including Center Arena `4..7`), 3/4 Multi-Course Walls (`hasS` coping + south cliff faces), Concave Corners & Monumental 2x2 Pillars | M2 (R1) | `>= 5` tests | `>= 5` tests | Pairwise with F2, F5, F9 | Scenarios 1–8 | `T5-WB-08`, `17`, `22` |
+| **F9** | Client Ground Composite Auto-Resize (`syncArenaTilesWithMapRevisionImpl`), Redraw Pass Fix (`renderGroundPass`), Prop Footprint Shadows/Idle Animations & Secret Door Light Suppression | M2 (R1) | `>= 5` tests | `>= 5` tests | Pairwise with F1, F4, F7, F8 | Scenarios 1–8 | `T5-WB-09`, `10`, `25` |
+| **F10** | End-to-End Multi-Room Floor Progression, Determinism, Backward Compatibility (`36x22 rectangle`) & Visual Quality Invariants | M3 (R1) | `>= 5` tests | `>= 5` tests | Pairwise across F1–F9 | Scenarios 1–8 | `T5-WB-01` .. `T5-WB-12` |
+| **F11** | Deep *Enter the Gungeon*-Style Room Shapes (10 `RoomShapeKind`s: `rectangle`, `octagon`, `cruciform`, `hourglass`, `l_shape`, `t_shape`, `u_shape`, `donut_ring`, `multi_chamber`, `island_catwalk`) & Unlocked `TWIN_BRIDGES` | `M1_r2_deep_shapes_sim` | `T1-F2-01`..`05` | `T2-F2-01`..`05` | `T3-CF-01`, `02`, `13` | `T4-SC-08` (60-matrix) | `T5-WB-02`, `11`, `13`, `14`, `15` |
+| **F12** | Exterior Void (`PALETTE.INK_DEEP` `#0B090E`) vs. Sculpted 1-Tile Perimeter Wall Rendering, 90° Concave Parapet Miters & Topology-Aware Biome Decors (`0` in Exterior Void) | `M2_r2_void_walls_minimap_client` | `T1-F8-01`..`05` | `T2-F8-01`..`05` | `T3-CF-06`, `10`, `13` | `T4-SC-08` (60-matrix) | `T5-WB-13`, `16`, `17`, `22`, `24` |
+| **F13** | Minimap & `[Tab]` Full-Map Room Shape Silhouettes (`computeMinimapRoomPolygon`, `drawMinimapRoomSilhouette`), Proportional Node Sizing (`resolveMinimapNodeDims`) & Live Player Dot | `M2_r2_void_walls_minimap_client` | Covered in Tier 5 | Covered in Tier 5 | Pairwise with F1, F11 | Verified across 13 WebGL scenes | `T5-WB-18`, `19`, `20`, `26` |
+| **F14** | Round 2 5-Tier E2E Suite Expansion (`146` tests) & Complete Playwright 1920×1080 WebGL Room Shape Visual Comparison Suite (`01`..`13.png`) | `M3_r2_e2e_and_playwright_visuals` | All 50 Tier 1 | All 50 Tier 2 | All 18 Tier 3 | All 8 Tier 4 (`60`-combo `T4-SC-08`) | `T5-WB-01`..`20` + Playwright `01`..`13` |
+| **F15** | Surface Autotile Family Fix (`burning_grass` typo & `ice`/`water` separation) & Hazard-Safe Prop/Brazier Spawning on Dry `'none'` Floor | `M1_r3_sim_surfaces_and_props` | `T1-F5-01`..`05`, `T1-F6-01`..`05` | `T2-F5-05` | `T3-CF-03`, `04`, `08`, `14`, `16` | `T4-SC-02`, `03`, `06` | `T5-WB-21` |
+| **F16** | Complete Wall Parapet Coping (`!hasS`), `4×4`/`4×12` Concave Miters, `6×6` Diagonal Void Casing, Corner-Only `14×14` Wall AO & Non-`2×2` Pillar Medallions | `M2_r3_client_tiles_surfaces_bridges` | `T1-F8-01`..`05` | `T2-F8-01`..`05` | `T3-CF-06`, `10`, `13`, `14` | `T4-SC-01`, `08` | `T5-WB-17`, `22` |
+| **F17** | Seamless Multi-Tile Hazard Pools (`burning_oil`/`burning_grass`/`lava`/`ice`), `2.6×2.6` Concave Corner Shorelines, Chasm Top-Corner Strata & Multi-Axis (`N–S` / `E–W`) Chasm Bridges | `M2_r3_client_tiles_surfaces_bridges` | `T1-F5-01`..`05`, `T1-F6-01`..`05` | `T2-F6-01`..`05` | `T3-CF-04`, `05`, `09`, `11`, `12` | `T4-SC-02`, `03`, `05` | `T5-WB-05`, `06`, `23` |
+| **F18** | WebGL `lightmapRt` FBO Resize (`setAutoResize(true)`), Exterior Void Light/Mote/God-Ray Masking (`depth 36.2`), Dynamic Contiguous `pillarShadows`, Grounded Braziers, Direction-Aware Decors & Minimap Corridor Clipping / Compact Dot Clamping | `M3_r3_client_lighting_architecture_minimap` | `T1-F7-01`..`05`, `T1-F9-01`..`05` | `T2-F7-01`..`05`, `T2-F9-01`..`05` | `T3-CF-05`, `08`, `09`, `15`, `18` | `T4-SC-01`..`08` | `T5-WB-24`, `25`, `26` |
+| **F19** | Round 3 5-Tier E2E Regression Suite (`152` tests across Tiers 1–5) & 13-Scene Playwright 1920×1080 WebGL Visual Verification (`01`..`13.png`) | `M4_r3_e2e_and_playwright_visuals` | All 50 Tier 1 | All 50 Tier 2 | All 18 Tier 3 | All 8 Tier 4 | All 26 Tier 5 (`T5-WB-01`..`26`) + Playwright `01`..`13` |
+
+---
+
+## 3. Five-Tier Architecture Specification
+
+### Tier 1 — Feature Coverage (`50` Test Cases, `5` per Feature `F1`–`F10`)
+- Verifies core functional and visual contracts for every feature in `PROJECT.md`:
+  - **F1**: `ROOM_SIZE_PRESET_DIMS` dimensions, `ArenaMap.resize(cols, rows)` buffer reallocation, `mapRevision` increment, `DungeonRoomNode` preset assignment, `WorldSim` room transitions resizing map.
+  - **F2 & F11**: `RoomShapeKind` (`rectangle`, `octagon`, `cruciform`, `hourglass`, `l_shape`, `t_shape`, `u_shape`, `donut_ring`, `multi_chamber`, `island_catwalk`) carving on `ArenaMap`, corner wall solidity, walkable center/ring preservation, door vestibule clearance.
+  - **F3**: `getDoorTilesForMap` & `getDoorVestibuleRectsForMap` across all 6 presets, all 6 combat archetypes scaling proportionally to `(cols, rows)`, 100% `areActiveDoorsConnectedBfs`.
+  - **F4**: `MAX_TACTICAL_PROPS_PER_ROOM` enforcement, `rotten_totem_pillar` non-orphan guarantee when spawning additional props, pillar collapse clearing `TileKind.Pillar`.
+  - **F5 & F17**: Multi-layered `lava` (charred basalt rim, cooled crust plates, edge-gated incandescent Voronoi fissures) and `ice` (glacial base, frosted rim, edge-gated Voronoi fracture networks across variants `0..7`), non-pinching `traceOrganicPoolPath`.
+  - **F6 & F17**: `water`, `electrified_water`, `poison_swamp`, `oil`, `grass`, seamless `burning_oil` & `burning_grass`, receding `chasm` strata with clipped top corners, `conveyor` belt tracks, and multi-axis (`N–S` & `E–W`) 3-tile chasm bridge overlays (`drawBridgeOverChasmOverlay`).
+  - **F7 & F18**: Deterministic `BiomeArchitectureLiveLayer` live surface animations driven by `getFreezeVisualTimeSec`, additive (`BlendModes.ADD`) emissive hazard glow above `lightmapRt`, and `voidMaskGraphics` at `depth 36.2`.
+  - **F8 & F12 & F16**: Interlocking ashlar flagstones across all 8 floor variants (`0..7`, including Center Arena `4..7`), `-135°` bevel highlights, raised 2.5D wall coping across both `hasS` and `!hasS` (`y = 0..20`), subtle North cliff mortar weathering, `4×4`/`4×12` concave miters, and monumental `2×2` pillars (`bakePillarTile`).
+  - **F9 & F18**: `syncArenaTilesWithMapRevisionImpl` dynamic ground composite resize when `(cols, rows)` changes, `renderGroundPass` re-invocation on dirty tile redraw, scaled prop shadows (including floor `torch_brazier` shadows) & deterministic idle prop animations, secret door light suppression while unbroken.
+  - **F10**: Full-floor seed determinism, `36x22 rectangle` backward compatibility, photometric/contrast invariants, and multi-biome structural integrity.
+
+### Tier 2 — Boundary & Corner Cases (`50` Test Cases, `5` per Feature `F1`–`F10`)
+- Tests extremes, odd/clamped dimensions, repeated resizes, 1-door/4-door extremes, narrowest `compact` (`28x18`) across all 10 `ALL_ROOM_SHAPES`, `findNextWalkableWaypoint` on `colossal_boss` (`48x28` > 792 tiles), prop cap overflow when all props are pillars, single-tile vs. L-shaped vs. 3x3 hazard pools, `isSameSurfaceFamily('ice', 'water') === false` shoreline separation (`T2-F5-05`), 1-tile vs. 3-tile bridges, freeze-time (`?freeze=1`) zero-delta determinism, and secret passage lock/unlock transitions.
+
+### Tier 3 — Cross-Feature Combinations (`18` Pairwise Test Cases)
+- Tests interactions across multiple features simultaneously, including all `60` (`6 Presets × 10 Shapes`) combinations in `T3-CF-01` and `T3-CF-02`.
+
+### Tier 4 — Real-World Application Scenarios (`8` End-to-End Multi-Room Scenarios)
+- Includes `T4-SC-01` through `T4-SC-08` (`Full 60-combination matrix (6 Presets × 10 Shapes) end-to-end composite build & architectural density audit`).
+
+### Tier 5 — White-Box Adversarial Coverage Hardening (`26` White-Box Test Cases `T5-WB-01`..`T5-WB-26`)
+- Covers Round 1 (`T5-WB-01`..`T5-WB-12`), Round 2 (`T5-WB-13`..`T5-WB-20`), and Round 3 (`T5-WB-21`..`T5-WB-26`):
+  - `T5-WB-21` (`F15` Shared Sim): `burning_grass` perimeter `surfaceMask < 15` vs interior `15`, `isSameSurfaceFamily('ice', 'water') === false`, and hazard-safe `torch_brazier` / `forge_blast_shield` / `slag_crucible` placement on dry `'none'` floor across all `360` `(preset × shape × archetype)` layouts, combat rooms, Boss rooms, and adversarial `4×4` hazard patches.
+  - `T5-WB-22` (`F16` Wall & Pillar Tiles): `!hasS` wall parapet coping (`y = 0..20`) & open seam strokes, subtle North cliff mortar weathering, `4×4` & `4×12` (`y = 20..32`) concave corner miters, `6×6` diagonal Exterior Void corner shadows & map-edge outer contours, convex-corner-only `14×14` wall AO (`aoMask === 4`), AO suppression on `chasm`/`lava`/`burning_*`, and non-`2×2` pillar medallion prevention.
+  - `T5-WB-23` (`F17` Seamless Hazards & Multi-Axis Bridges): Seamless `burning_oil`/`burning_grass` without radial-gradient waffle grid, edge-gated `lava`/`ice` fissures, `2.6×2.6` concave inner-corner shoreline caps, chasm top-corner horizontal strata clipping & wall-to-chasm floor lip suppression, and multi-axis (`N–S` vs `E–W`) `drawBridgeOverChasmOverlay` (`hasChasmAlongAxisWithin3`) without internal rail bars.
+  - `T5-WB-24` (`F18` Lighting Pipeline & Exterior Void Masking): `LightingPipeline` WebGL `RenderTarget.setAutoResize(true)` around `this.lightmapRt.resize(rtW, rtH)`, Biome 2 God-Ray active North wall anchoring (`!isExteriorVoidWallTile`), dust mote void guard, and `voidMaskGraphics` at `depth 36.2` (`0x0b090e` inset by `6px` along active walls).
+  - `T5-WB-25` (`F18` Dynamic Pillar Shadows, Grounded Braziers & Direction-Aware Decors): Contiguous `pillarShadows` (`widthTiles × heightTiles`) clipped to `surface === 'none'`, centered `2×2` pillar decors excluding `CRUMBLING_PILLAR_RING`, floor `torch_brazier` `shadow.setVisible(true)` & wall-only hanging rods, and direction/cliff-aware `wrought_iron_fence`, `brazier_pedestal`, `steam_pipe_wall`, `root_base`, `ice_alcove`, and `sunken_astrolabe`.
+  - `T5-WB-26` (`F18` Minimap Corridor Clipping & Compact Dot Clamping): Corridor `fillRect` segments clipped to outer room node borders (`0.46 * nodeW/H`), compact player dot `dotR = 1.4` on small nodes, and `(dotX, dotY)` clamped outside the `donut_ring` inner cutout.

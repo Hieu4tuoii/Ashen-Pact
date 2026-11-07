@@ -4,6 +4,10 @@ import { ALL_WEAPON_IDS, PHASE3_WEAPON_IDS, WEAPONS } from '../data/weapons.js';
 import { distance, distanceSq } from '../math/vec2.js';
 import { BIOME_SCALING, COOP_SCALING } from '../data/scaling.js';
 import { type PlayerInputPacket, TILE_SIZE } from '../protocol/messages.js';
+import {
+  clearCollapsedPillarFootprintOnMap,
+  findNearestWalkablePoint,
+} from './arena-room-archetypes.js';
 import type { DungeonRoomNode } from './dungeon-gen.js';
 import { detonateCausticSporePod, tryTriggerToxicShrapnelOnPropBreak } from './sim-blessings.js';
 import {
@@ -26,29 +30,33 @@ import type { WorldSim } from './world-sim.js';
 
 export function spawnDefaultArenaPropsImpl(this: WorldSim): void {
   this.props.length = 0;
+  const cols = this.map.cols;
+  const rows = this.map.rows;
+  const midX = Math.floor(cols / 2);
+  const midY = Math.floor(rows / 2);
 
   // 2 Entrance Pillar Torch Braziers flanking West entrance (preserving NW brazier for brazier_pool metric)
   this.spawnProp('torch_brazier', 8 * TILE_SIZE - 14, 5 * TILE_SIZE - 12);
-  this.spawnProp('torch_brazier', 8 * TILE_SIZE - 14, 17 * TILE_SIZE + 12);
+  this.spawnProp('torch_brazier', 8 * TILE_SIZE - 14, (rows - 5) * TILE_SIZE + 12);
 
   // Bioluminescent Glowing Mushrooms near water/grass/swamp
   this.spawnProp('glow_mushroom', 11 * TILE_SIZE - 12, 4 * TILE_SIZE + 16);
-  this.spawnProp('glow_mushroom', 25 * TILE_SIZE + 12, 4 * TILE_SIZE + 16);
-  this.spawnProp('glow_mushroom', 11 * TILE_SIZE - 12, 17 * TILE_SIZE + 16);
-  this.spawnProp('glow_mushroom', 4 * TILE_SIZE + 16, 11 * TILE_SIZE);
+  this.spawnProp('glow_mushroom', (cols - 11) * TILE_SIZE + 12, 4 * TILE_SIZE + 16);
+  this.spawnProp('glow_mushroom', 11 * TILE_SIZE - 12, (rows - 5) * TILE_SIZE + 16);
+  this.spawnProp('glow_mushroom', 4 * TILE_SIZE + 16, midY * TILE_SIZE);
 
   // Explosive Barrel near SE oil/lava tactical zone
-  this.spawnProp('explosive_barrel', 21 * TILE_SIZE + 16, 16 * TILE_SIZE + 16);
+  this.spawnProp('explosive_barrel', (midX + 3) * TILE_SIZE + 16, (rows - 6) * TILE_SIZE + 16);
 
   // Destructible Wooden Crates & Clay Vases
   this.spawnProp('wooden_crate', 6 * TILE_SIZE + 16, 4 * TILE_SIZE + 16);
-  this.spawnProp('wooden_crate', 6 * TILE_SIZE + 16, 17 * TILE_SIZE + 16);
+  this.spawnProp('wooden_crate', 6 * TILE_SIZE + 16, (rows - 5) * TILE_SIZE + 16);
   this.spawnProp('clay_vase', 7 * TILE_SIZE + 12, 4 * TILE_SIZE + 16);
-  this.spawnProp('clay_vase', 30 * TILE_SIZE + 16, 10 * TILE_SIZE + 16);
-  this.spawnProp('wooden_crate', 30 * TILE_SIZE + 16, 11 * TILE_SIZE + 20);
+  this.spawnProp('clay_vase', (cols - 6) * TILE_SIZE + 16, (midY - 1) * TILE_SIZE + 16);
+  this.spawnProp('wooden_crate', (cols - 6) * TILE_SIZE + 16, midY * TILE_SIZE + 20);
 
   // Ancient Mechanism that Engineer can repair & activate with [E]
-  this.spawnProp('ancient_mechanism', 15 * TILE_SIZE + 16, 11 * TILE_SIZE + 16);
+  this.spawnProp('ancient_mechanism', (midX - 3) * TILE_SIZE + 16, midY * TILE_SIZE + 16);
 }
 
 export function spawnPropImpl(this: WorldSim, kind: PropKind, x: number, y: number): SimPropState {
@@ -123,12 +131,29 @@ export function spawnPropImpl(this: WorldSim, kind: PropKind, x: number, y: numb
 
   let finalX = x;
   let finalY = y;
+  const isInvalidPropTile = (tx: number, ty: number): boolean =>
+    tx <= 0 ||
+    ty <= 0 ||
+    tx >= this.map.cols - 1 ||
+    ty >= this.map.rows - 1 ||
+    this.map.isSolidTile(tx, ty) ||
+    this.map.getSurface(tx, ty) === 'chasm';
   const pTx = Math.floor(finalX / TILE_SIZE);
   const pTy = Math.floor(finalY / TILE_SIZE);
-  if (!(kind === 'rotten_totem_pillar' && this.map.roomArchetype === 'CRUMBLING_PILLAR_RING') && (this.map.isSolidTile(pTx, pTy) || this.map.getSurface(pTx, pTy) === 'chasm')) {
-    const col = this.map.resolveCircleCollision(finalX, finalY, radius, false);
+  if (
+    !(kind === 'rotten_totem_pillar' && this.map.getTile(pTx, pTy) === 'pillar' && this.map.getSurface(pTx, pTy) !== 'chasm') &&
+    isInvalidPropTile(pTx, pTy)
+  ) {
+    const col = this.map.resolveCircleCollision(finalX, finalY, radius, true);
     finalX = col.x;
     finalY = col.y;
+    const rTx = Math.floor(finalX / TILE_SIZE);
+    const rTy = Math.floor(finalY / TILE_SIZE);
+    if (isInvalidPropTile(rTx, rTy)) {
+      const safePt = findNearestWalkablePoint(this.map, x, y, radius);
+      finalX = safePt.x;
+      finalY = safePt.y;
+    }
   }
 
   const prop: SimPropState = {
@@ -154,9 +179,41 @@ export function spawnPropImpl(this: WorldSim, kind: PropKind, x: number, y: numb
     ttlSec: tacticalSpec?.ttlSec,
   };
   if (!this.stressTestActive && this.props.length >= MAX_TACTICAL_PROPS_PER_ROOM) {
-    const brokenIdx = this.props.findIndex((p) => p.hp <= 0 || p.state === 'broken');
-    const destructibleIdx = brokenIdx >= 0 ? brokenIdx : this.props.findIndex((p) => p.destructible);
-    this.props.splice(destructibleIdx >= 0 ? destructibleIdx : 0, 1);
+    const isPillarBacked = (p: SimPropState): boolean =>
+      p.kind === 'rotten_totem_pillar' ||
+      this.map.getTile(Math.floor(p.x / TILE_SIZE), Math.floor(p.y / TILE_SIZE)) === 'pillar';
+    const brokenIdx = this.props.findIndex(
+      (p) => p.hp <= 0 || p.state === 'broken' || p.coverState === 'fallen',
+    );
+    const minorDestructibleIdx =
+      brokenIdx >= 0
+        ? brokenIdx
+        : this.props.findIndex(
+            (p) =>
+              p.destructible &&
+              !isPillarBacked(p) &&
+              (p.ttlSec !== undefined ||
+                p.kind === 'wooden_crate' ||
+                p.kind === 'clay_vase' ||
+                p.kind === 'caustic_spore_pod' ||
+                p.kind === 'glacial_spike' ||
+                p.kind === 'coal_bomb'),
+          );
+    const nonPillarDestructibleIdx =
+      minorDestructibleIdx >= 0
+        ? minorDestructibleIdx
+        : this.props.findIndex((p) => p.destructible && !isPillarBacked(p));
+    const nonPillarIdx =
+      nonPillarDestructibleIdx >= 0
+        ? nonPillarDestructibleIdx
+        : this.props.findIndex((p) => !isPillarBacked(p) && p.kind !== 'torch_brazier');
+    const anyNonPillarIdx =
+      nonPillarIdx >= 0 ? nonPillarIdx : this.props.findIndex((p) => !isPillarBacked(p));
+    const evictIdx = anyNonPillarIdx >= 0 ? anyNonPillarIdx : 0;
+    const [evicted] = this.props.splice(evictIdx, 1);
+    if (evicted && isPillarBacked(evicted) && evicted.coverState !== 'fallen') {
+      clearCollapsedPillarFootprintOnMap(this.map, evicted.x, evicted.y);
+    }
   }
   this.props.push(prop);
   return prop;
@@ -618,11 +675,13 @@ export function spawnBossGuardianMushroomsImpl(this: WorldSim): void {
     (e) => e.defId === 'spore_guardian' && e.hp > 0,
   ).length;
   if (existingGuardians >= 2) return;
-  this.spawnEnemy('spore_guardian', TILE_SIZE * 6.5, TILE_SIZE * 5.0, true);
+  const midX = Math.floor(this.map.cols / 2);
+  const midY = Math.floor(this.map.rows / 2);
+  this.spawnEnemy('spore_guardian', (midX - 11.5) * TILE_SIZE, (midY - 6) * TILE_SIZE, true);
   this.spawnEnemy(
     'spore_guardian',
-    this.map.width - TILE_SIZE * 6.5,
-    this.map.height - TILE_SIZE * 5.0,
+    (midX + 11.5) * TILE_SIZE,
+    (midY + 6) * TILE_SIZE,
     true,
   );
 }
@@ -716,10 +775,31 @@ export function spawnChestImpl(this: WorldSim,
   let finalY = y;
   const cTx = Math.floor(finalX / TILE_SIZE);
   const cTy = Math.floor(finalY / TILE_SIZE);
-  if (this.map.isSolidTile(cTx, cTy) || this.map.getSurface(cTx, cTy) === 'chasm') {
-    const col = this.map.resolveCircleCollision(finalX, finalY, 18, false);
+  if (
+    cTx <= 0 ||
+    cTy <= 0 ||
+    cTx >= this.map.cols - 1 ||
+    cTy >= this.map.rows - 1 ||
+    this.map.isSolidTile(cTx, cTy) ||
+    this.map.getSurface(cTx, cTy) === 'chasm'
+  ) {
+    const col = this.map.resolveCircleCollision(finalX, finalY, 18, true);
     finalX = col.x;
     finalY = col.y;
+    const rTx = Math.floor(finalX / TILE_SIZE);
+    const rTy = Math.floor(finalY / TILE_SIZE);
+    if (
+      rTx <= 0 ||
+      rTy <= 0 ||
+      rTx >= this.map.cols - 1 ||
+      rTy >= this.map.rows - 1 ||
+      this.map.isSolidTile(rTx, rTy) ||
+      this.map.getSurface(rTx, rTy) === 'chasm'
+    ) {
+      const safePt = findNearestWalkablePoint(this.map, x, y, 18);
+      finalX = safePt.x;
+      finalY = safePt.y;
+    }
   }
   const chest: SimChestState = {
     id: ++this.nextEntityId,
@@ -741,10 +821,31 @@ export function spawnWorldItemImpl(this: WorldSim,
   let finalY = init.y;
   const iTx = Math.floor(finalX / TILE_SIZE);
   const iTy = Math.floor(finalY / TILE_SIZE);
-  if (this.map.isSolidTile(iTx, iTy) || this.map.getSurface(iTx, iTy) === 'chasm') {
-    const col = this.map.resolveCircleCollision(finalX, finalY, 15, false);
+  if (
+    iTx <= 0 ||
+    iTy <= 0 ||
+    iTx >= this.map.cols - 1 ||
+    iTy >= this.map.rows - 1 ||
+    this.map.isSolidTile(iTx, iTy) ||
+    this.map.getSurface(iTx, iTy) === 'chasm'
+  ) {
+    const col = this.map.resolveCircleCollision(finalX, finalY, 15, true);
     finalX = col.x;
     finalY = col.y;
+    const rTx = Math.floor(finalX / TILE_SIZE);
+    const rTy = Math.floor(finalY / TILE_SIZE);
+    if (
+      rTx <= 0 ||
+      rTy <= 0 ||
+      rTx >= this.map.cols - 1 ||
+      rTy >= this.map.rows - 1 ||
+      this.map.isSolidTile(rTx, rTy) ||
+      this.map.getSurface(rTx, rTy) === 'chasm'
+    ) {
+      const safePt = findNearestWalkablePoint(this.map, init.x, init.y, 15);
+      finalX = safePt.x;
+      finalY = safePt.y;
+    }
   }
   const item: SimWorldItemState = {
     ...init,

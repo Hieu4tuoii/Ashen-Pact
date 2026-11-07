@@ -6,6 +6,7 @@ import {
   isMutatorCompatibleWithWeapon,
 } from '../data/weapon-mutators.js';
 import { WEAPONS } from '../data/weapons.js';
+import { findNearestWalkablePoint } from './arena-room-archetypes.js';
 import type { DungeonRoomNode } from './dungeon-gen.js';
 import {
   PERPETUAL_CORE_WINDOW_EXPAND_RATIO,
@@ -85,8 +86,9 @@ export function populateTreasureForgeWorkshop(
 
   const localFloor: 1 | 2 = sim.currentFloor % 2 === 1 ? 1 : 2;
   const anvilKind = localFloor === 1 ? 'daedalus_anvil' : 'upgrade_anvil';
-  const anvilX = cx + 64;
-  const anvilY = cy - 12;
+  const anvilPos = findNearestWalkablePoint(sim.map, cx + 64, cy - 12, 18);
+  const anvilX = anvilPos.x;
+  const anvilY = anvilPos.y;
   const usedIds = room.anvilUsedByPlayerIds ? [...room.anvilUsedByPlayerIds] : [];
   room.anvilUsedByPlayerIds = usedIds;
 

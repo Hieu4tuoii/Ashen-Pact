@@ -1,5 +1,6 @@
 import {
   type ArenaMap,
+  CONVEYOR_BELT_SPEED,
   type SimPropState,
   TILE_SIZE,
 } from '@ashen-pact/shared';
@@ -10,6 +11,8 @@ import { graphicsSettings } from '../ui/graphics-settings.js';
 import {
   computeTileDistToWall,
   getVisibleFloorDecals,
+  isActiveWallTile,
+  isExteriorVoidWallTile,
   isProtectedMetricSampleTile,
   type RoomArchitecturePlan,
   type SolidArchitectureDecor,
@@ -42,10 +45,13 @@ export function renderBiomeArchitectureToComposite(
 
     ctx.save();
     ctx.beginPath();
-    for (let ty = shadow.pillarTy; ty <= Math.min(map.rows - 2, shadow.pillarTy + 3); ty++) {
-      for (let tx = shadow.pillarTx; tx <= Math.min(map.cols - 2, shadow.pillarTx + 3); tx++) {
+    const maxTy = Math.min(map.rows - 2, shadow.pillarTy + shadow.heightTiles + 1);
+    const maxTx = Math.min(map.cols - 2, shadow.pillarTx + shadow.widthTiles + 1);
+    for (let ty = shadow.pillarTy; ty <= maxTy; ty++) {
+      for (let tx = shadow.pillarTx; tx <= maxTx; tx++) {
         if (
           !map.isSolidTile(tx, ty) &&
+          map.getSurface(tx, ty) === 'none' &&
           computeTileDistToWall(map, tx, ty) <= 2 &&
           !isProtectedMetricSampleTile(tx, ty)
         ) {
@@ -121,6 +127,45 @@ export function renderBiomeArchitectureToComposite(
       ctx.fill();
       ctx.restore();
     } else if (decal.kind === 'sunken_astrolabe') {
+      const centerTx = Math.floor(map.cols / 2);
+      const centerTy = Math.floor(map.rows / 2);
+      const acx = map.width * 0.5;
+      const acy = map.height * 0.5;
+      let clearCenterCount = 0;
+      for (let dy = -2; dy <= 2; dy++) {
+        for (let dx = -2; dx <= 2; dx++) {
+          const tx = centerTx + dx;
+          const ty = centerTy + dy;
+          if (
+            tx > 0 &&
+            ty > 0 &&
+            tx < map.cols - 1 &&
+            ty < map.rows - 1 &&
+            !map.isSolidTile(tx, ty) &&
+            map.getSurface(tx, ty) === 'none' &&
+            computeTileDistToWall(map, tx, ty) > 2
+          ) {
+            clearCenterCount += 1;
+          }
+        }
+      }
+      let minObstacleDistPx = Math.min(acx, acy);
+      for (let ty = 1; ty < map.rows - 1; ty++) {
+        for (let tx = 1; tx < map.cols - 1; tx++) {
+          if (map.isSolidTile(tx, ty) || map.getSurface(tx, ty) !== 'none') {
+            const tileCx = (tx + 0.5) * TILE_SIZE;
+            const tileCy = (ty + 0.5) * TILE_SIZE;
+            const distPx = Math.max(0, Math.hypot(tileCx - acx, tileCy - acy) - TILE_SIZE * 0.5);
+            if (distPx < minObstacleDistPx) {
+              minObstacleDistPx = distPx;
+            }
+          }
+        }
+      }
+      if (clearCenterCount < 16 || minObstacleDistPx < 64) {
+        continue;
+      }
+
       ctx.save();
       ctx.beginPath();
       for (let ty = 3; ty < map.rows - 3; ty++) {
@@ -137,11 +182,9 @@ export function renderBiomeArchitectureToComposite(
       }
       ctx.clip();
 
-      const acx = map.width * 0.5;
-      const acy = map.height * 0.5;
       const centerW = Math.max(128, (map.cols - 6) * TILE_SIZE);
       const centerH = Math.max(128, (map.rows - 6) * TILE_SIZE);
-      const maxOuterR = 0.45 * Math.min(centerW, centerH);
+      const maxOuterR = Math.min(0.45 * Math.min(centerW, centerH), minObstacleDistPx - 8);
       const rScale = Math.min(1, maxOuterR / 165);
       const rings: readonly [number, number, number] = [
         70 * rScale,
@@ -229,40 +272,78 @@ function drawSolidArchitectureDecor(
       ctx.fillStyle = env.wallFront;
       ctx.strokeStyle = PALETTE.INK_DARK;
       ctx.lineWidth = 1.8;
-      ctx.fillRect(5, 4, 22, 17);
-      ctx.strokeRect(5, 4, 22, 17);
+      if (item.dir === 'W' || item.dir === 'E') {
+        const isWest = item.dir === 'W';
+        const px = isWest ? 6 : 10;
+        ctx.fillRect(px, 4, 16, 14);
+        ctx.strokeRect(px, 4, 16, 14);
 
-      ctx.fillStyle = env.wallTop;
-      ctx.fillRect(7, 5, 18, 12);
+        ctx.fillStyle = env.wallTop;
+        ctx.fillRect(px + 2, 5, 12, 10);
 
-      // Top-left (-135 deg) rim light on stepped pedestal cap
-      ctx.strokeStyle = env.rim;
-      ctx.lineWidth = 1.4;
-      ctx.beginPath();
-      ctx.moveTo(7.5, 16);
-      ctx.lineTo(7.5, 5.5);
-      ctx.lineTo(24.5, 5.5);
-      ctx.stroke();
+        ctx.strokeStyle = env.rim;
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        ctx.moveTo(px + 2.5, 14);
+        ctx.lineTo(px + 2.5, 5.5);
+        ctx.lineTo(px + 13.5, 5.5);
+        ctx.stroke();
 
-      // 45-deg wrought-iron hanging bracket arm + diagonal strut
-      ctx.strokeStyle = PALETTE.SLATE_DARK;
-      ctx.lineWidth = 2.4;
-      ctx.beginPath();
-      ctx.moveTo(12, 10);
-      ctx.lineTo(22, 20);
-      ctx.moveTo(12, 16);
-      ctx.lineTo(18, 16);
-      ctx.stroke();
+        const armStartX = 16;
+        const armEndX = isWest ? 26 : 6;
+        const strutEndX = isWest ? 22 : 10;
+        ctx.strokeStyle = PALETTE.SLATE_DARK;
+        ctx.lineWidth = 2.4;
+        ctx.beginPath();
+        ctx.moveTo(armStartX, 9);
+        ctx.lineTo(armEndX, 16);
+        ctx.moveTo(armStartX, 14);
+        ctx.lineTo(strutEndX, 14);
+        ctx.stroke();
 
-      ctx.fillStyle = PALETTE.SOLAR_GOLD;
-      ctx.beginPath();
-      ctx.arc(22, 21, 2.3, 0, Math.PI * 2);
-      ctx.fill();
+        ctx.fillStyle = PALETTE.SOLAR_GOLD;
+        ctx.beginPath();
+        ctx.arc(armEndX, 16.5, 2.2, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        ctx.fillRect(5, 4, 22, 17);
+        ctx.strokeRect(5, 4, 22, 17);
+
+        ctx.fillStyle = env.wallTop;
+        ctx.fillRect(7, 5, 18, 12);
+
+        // Top-left (-135 deg) rim light on stepped pedestal cap
+        ctx.strokeStyle = env.rim;
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        ctx.moveTo(7.5, 16);
+        ctx.lineTo(7.5, 5.5);
+        ctx.lineTo(24.5, 5.5);
+        ctx.stroke();
+
+        // 45-deg wrought-iron hanging bracket arm + diagonal strut
+        ctx.strokeStyle = PALETTE.SLATE_DARK;
+        ctx.lineWidth = 2.4;
+        ctx.beginPath();
+        ctx.moveTo(12, 10);
+        ctx.lineTo(22, 20);
+        ctx.moveTo(12, 16);
+        ctx.lineTo(18, 16);
+        ctx.stroke();
+
+        ctx.fillStyle = PALETTE.SOLAR_GOLD;
+        ctx.beginPath();
+        ctx.arc(22, 21, 2.3, 0, Math.PI * 2);
+        ctx.fill();
+      }
       break;
     }
 
     case 'fluted_column': {
-      // Circular fluted stone column drum strictly on 2x2 pillar tile
+      // Circular fluted stone column drum centered on the 64x48 pillar Top Cap
+      ctx.translate(16, 6);
+      ctx.fillStyle = env.wallTop;
+      ctx.fillRect(-8, 2, 48, 18);
       ctx.beginPath();
       ctx.arc(16, 14, 11.5, 0, Math.PI * 2);
       ctx.fillStyle = env.wallFront;
@@ -331,7 +412,8 @@ function drawSolidArchitectureDecor(
     }
 
     case 'forge_anvil': {
-      // Heavy blacksmith forge anvil strictly on Biome 3 pillar tile
+      // Heavy blacksmith forge anvil centered on the 64x48 pillar Top Cap (from pillarTx + 1)
+      ctx.translate(-16, 6);
       ctx.fillStyle = PALETTE.STEEL_DARK;
       ctx.strokeStyle = PALETTE.INK_DARK;
       ctx.lineWidth = 2.0;
@@ -373,14 +455,14 @@ function drawSolidArchitectureDecor(
       ctx.lineJoin = 'round';
       ctx.beginPath();
       if (item.dir === 'N') {
-        ctx.moveTo(8, 4);
-        ctx.bezierCurveTo(22, 10, 8, 22, 14, 31);
+        ctx.moveTo(8, 5);
+        ctx.bezierCurveTo(20, 8, 10, 13, 14, 17);
       } else if (item.dir === 'W') {
-        ctx.moveTo(4, 8);
-        ctx.bezierCurveTo(12, 20, 22, 10, 31, 15);
+        ctx.moveTo(4, 7);
+        ctx.bezierCurveTo(12, 15, 22, 9, 28, 13);
       } else {
-        ctx.moveTo(28, 8);
-        ctx.bezierCurveTo(20, 20, 10, 10, 1, 16);
+        ctx.moveTo(28, 7);
+        ctx.bezierCurveTo(20, 15, 10, 9, 4, 13);
       }
       ctx.strokeStyle = PALETTE.INK_DARK;
       ctx.lineWidth = 10.5;
@@ -396,7 +478,7 @@ function drawSolidArchitectureDecor(
 
       ctx.fillStyle = PALETTE.GOBLIN_GREEN;
       ctx.beginPath();
-      ctx.ellipse(14, 12, 3.8, 2.4, -0.3, 0, Math.PI * 2);
+      ctx.ellipse(14, 11, 3.8, 2.4, -0.3, 0, Math.PI * 2);
       ctx.fill();
       break;
     }
@@ -553,15 +635,15 @@ function drawSolidArchitectureDecor(
       ctx.fillStyle = PALETTE.STEEL_DARK;
       ctx.strokeStyle = PALETTE.INK_DARK;
       ctx.lineWidth = 1.6;
-      ctx.fillRect(11, 3, 10, 26);
-      ctx.strokeRect(11, 3, 10, 26);
+      ctx.fillRect(11, 3, 10, 16);
+      ctx.strokeRect(11, 3, 10, 16);
 
       ctx.fillStyle = PALETTE.STEEL_LIGHT;
-      ctx.fillRect(9, 7, 14, 3.5);
-      ctx.fillRect(9, 21, 14, 3.5);
+      ctx.fillRect(9, 5, 14, 3);
+      ctx.fillRect(9, 14, 14, 3);
 
       ctx.beginPath();
-      ctx.arc(16, 16, 4.5, 0, Math.PI * 2);
+      ctx.arc(16, 11, 4.0, 0, Math.PI * 2);
       ctx.fillStyle = PALETTE.BRASS_CORE;
       ctx.fill();
       ctx.stroke();
@@ -572,27 +654,58 @@ function drawSolidArchitectureDecor(
       ctx.fillStyle = env.wallFront;
       ctx.strokeStyle = PALETTE.INK_DARK;
       ctx.lineWidth = 1.6;
-      ctx.fillRect(4, 14, 24, 5);
-      ctx.strokeRect(4, 14, 24, 5);
+      if (item.dir === 'W' || item.dir === 'E') {
+        const isWest = item.dir === 'W';
+        const railX = isWest ? 18 : 9;
+        const baseX = isWest ? 20 : 12;
+        const tipX = isWest ? 9 : 23;
+        const hiBaseX = isWest ? 18 : 14;
+        const hiTipX = isWest ? 11 : 21;
+        ctx.fillRect(railX, 4, 5, 24);
+        ctx.strokeRect(railX, 4, 5, 24);
 
-      for (const sx of [8, 16, 24]) {
-        ctx.beginPath();
-        ctx.moveTo(sx - 2.2, 16);
-        ctx.lineTo(sx, 5);
-        ctx.lineTo(sx + 2.2, 16);
-        ctx.closePath();
-        ctx.fillStyle = PALETTE.SLATE_DARK;
-        ctx.fill();
-        ctx.lineWidth = 1.5;
-        ctx.strokeStyle = PALETTE.INK_DARK;
-        ctx.stroke();
+        for (const sy of [8, 16, 24]) {
+          ctx.beginPath();
+          ctx.moveTo(baseX, sy - 2.2);
+          ctx.lineTo(tipX, sy);
+          ctx.lineTo(baseX, sy + 2.2);
+          ctx.closePath();
+          ctx.fillStyle = PALETTE.SLATE_DARK;
+          ctx.fill();
+          ctx.lineWidth = 1.5;
+          ctx.strokeStyle = PALETTE.INK_DARK;
+          ctx.stroke();
 
-        ctx.beginPath();
-        ctx.moveTo(sx - 0.8, 14);
-        ctx.lineTo(sx, 7);
-        ctx.strokeStyle = PALETTE.STEEL_LIGHT;
-        ctx.lineWidth = 1.1;
-        ctx.stroke();
+          ctx.beginPath();
+          ctx.moveTo(hiBaseX, sy - 0.8);
+          ctx.lineTo(hiTipX, sy);
+          ctx.strokeStyle = PALETTE.STEEL_LIGHT;
+          ctx.lineWidth = 1.1;
+          ctx.stroke();
+        }
+      } else {
+        ctx.fillRect(4, 14, 24, 5);
+        ctx.strokeRect(4, 14, 24, 5);
+
+        for (const sx of [8, 16, 24]) {
+          ctx.beginPath();
+          ctx.moveTo(sx - 2.2, 16);
+          ctx.lineTo(sx, 5);
+          ctx.lineTo(sx + 2.2, 16);
+          ctx.closePath();
+          ctx.fillStyle = PALETTE.SLATE_DARK;
+          ctx.fill();
+          ctx.lineWidth = 1.5;
+          ctx.strokeStyle = PALETTE.INK_DARK;
+          ctx.stroke();
+
+          ctx.beginPath();
+          ctx.moveTo(sx - 0.8, 14);
+          ctx.lineTo(sx, 7);
+          ctx.strokeStyle = PALETTE.STEEL_LIGHT;
+          ctx.lineWidth = 1.1;
+          ctx.stroke();
+        }
       }
       break;
     }
@@ -640,10 +753,12 @@ export class BiomeArchitectureLiveLayer {
   private readonly gearGraphics: Phaser.GameObjects.Graphics;
   private readonly bracketGraphics: Phaser.GameObjects.Graphics;
   private readonly additiveGraphics: Phaser.GameObjects.Graphics;
+  private readonly voidMaskGraphics: Phaser.GameObjects.Graphics;
   private readonly godRaySprites: Phaser.GameObjects.Image[] = [];
   private plan: RoomArchitecturePlan | null = null;
   private elapsedSec = 1.0;
   private lastBracketSig = '';
+  private lastVoidMaskSig = '';
   private gearHadContent = false;
 
   constructor(scene: Phaser.Scene) {
@@ -656,6 +771,9 @@ export class BiomeArchitectureLiveLayer {
     // Depth 35.5: above lightmapRt (depth 34) with BlendModes.ADD for embers, warm dust motes & heat channel breath
     this.additiveGraphics = scene.add.graphics().setDepth(35.5);
     this.additiveGraphics.setBlendMode(BLEND_MODE_ADD);
+    // Depth 36.2: above lightmapRt (34), warmGlowPool (35), godRaySprites (35.2), and additiveGraphics (35.5)
+    // to mask out any light/glow bleed into #0B090E Exterior Void cells while preserving the 6px outer wall casing.
+    this.voidMaskGraphics = scene.add.graphics().setDepth(36.2);
 
     for (let i = 0; i < 3; i++) {
       const ray = scene.add.image(-1000, -1000, GOD_RAY_TEX_KEY);
@@ -671,6 +789,17 @@ export class BiomeArchitectureLiveLayer {
   public setPlan(plan: RoomArchitecturePlan): void {
     this.plan = plan;
     this.lastBracketSig = '';
+    this.lastVoidMaskSig = '';
+  }
+
+  public renderGroundPass(
+    ctx: CanvasRenderingContext2D,
+    map: ArenaMap,
+    tileCompositeScale = 2,
+  ): void {
+    if (this.plan) {
+      renderBiomeArchitectureToComposite(ctx, map, this.plan, TILE_SIZE * tileCompositeScale);
+    }
   }
 
   public update(params: {
@@ -701,8 +830,100 @@ export class BiomeArchitectureLiveLayer {
         this.bracketGraphics.clear();
         this.lastBracketSig = '';
       }
+      if (this.lastVoidMaskSig !== '') {
+        this.voidMaskGraphics.clear();
+        this.lastVoidMaskSig = '';
+      }
       for (const s of this.godRaySprites) s.setVisible(false);
       return;
+    }
+
+    const voidMaskSig = `${plan.seed}:${map.cols}x${map.rows}:${(map as { roomShape?: string }).roomShape ?? 'rectangle'}:${map.solidBoxes.length}`;
+    if (voidMaskSig !== this.lastVoidMaskSig) {
+      this.lastVoidMaskSig = voidMaskSig;
+      this.voidMaskGraphics.clear();
+      this.voidMaskGraphics.fillStyle(hexToNum(PALETTE.INK_DEEP), 1);
+      for (let ty = 0; ty < map.rows; ty++) {
+        for (let tx = 0; tx < map.cols; tx++) {
+          if (!isExteriorVoidWallTile(map, tx, ty)) continue;
+          const ox = tx * TILE_SIZE;
+          const oy = ty * TILE_SIZE;
+          const adjN = ty > 0 && isActiveWallTile(map, tx, ty - 1);
+          const adjS = ty + 1 < map.rows && isActiveWallTile(map, tx, ty + 1);
+          const adjW = tx > 0 && isActiveWallTile(map, tx - 1, ty);
+          const adjE = tx + 1 < map.cols && isActiveWallTile(map, tx + 1, ty);
+          const diagNW =
+            !adjN && !adjW && tx > 0 && ty > 0 && isActiveWallTile(map, tx - 1, ty - 1);
+          const diagNE =
+            !adjN &&
+            !adjE &&
+            tx + 1 < map.cols &&
+            ty > 0 &&
+            isActiveWallTile(map, tx + 1, ty - 1);
+          const diagSW =
+            !adjS &&
+            !adjW &&
+            tx > 0 &&
+            ty + 1 < map.rows &&
+            isActiveWallTile(map, tx - 1, ty + 1);
+          const diagSE =
+            !adjS &&
+            !adjE &&
+            tx + 1 < map.cols &&
+            ty + 1 < map.rows &&
+            isActiveWallTile(map, tx + 1, ty + 1);
+
+          const inW = adjW ? 6 : 0;
+          const inE = adjE ? 6 : 0;
+          const inN = adjN || diagNW || diagNE ? 6 : 0;
+          const inS = adjS || diagSW || diagSE ? 6 : 0;
+          this.voidMaskGraphics.fillRect(
+            ox + inW,
+            oy + inN,
+            TILE_SIZE - inW - inE,
+            TILE_SIZE - inN - inS,
+          );
+          if (!adjN && (diagNW || diagNE)) {
+            const tx0 = ox + (adjW || diagNW ? 6 : 0);
+            const tx1 = ox + TILE_SIZE - (adjE || diagNE ? 6 : 0);
+            if (tx1 > tx0) {
+              this.voidMaskGraphics.fillRect(tx0, oy, tx1 - tx0, 6);
+            }
+          }
+          if (!adjS && (diagSW || diagSE)) {
+            const bx0 = ox + (adjW || diagSW ? 6 : 0);
+            const bx1 = ox + TILE_SIZE - (adjE || diagSE ? 6 : 0);
+            if (bx1 > bx0) {
+              this.voidMaskGraphics.fillRect(bx0, oy + TILE_SIZE - 6, bx1 - bx0, 6);
+            }
+          }
+        }
+      }
+    }
+
+    let activeHazardTiles = 0;
+    for (let i = 0; i < map.surfaces.length; i++) {
+      const s = map.surfaces[i]!;
+      if (
+        s === 'lava' ||
+        s === 'ice' ||
+        s === 'water' ||
+        s === 'electrified_water' ||
+        s === 'poison_swamp' ||
+        s === 'burning_oil' ||
+        s === 'burning_grass' ||
+        s === 'conveyor'
+      ) {
+        activeHazardTiles += 1;
+      }
+    }
+
+    if (plan.biome === 3 || (activeHazardTiles > 0 && !isLow)) {
+      this.gearGraphics.clear();
+      this.gearHadContent = true;
+    } else if (this.gearHadContent) {
+      this.gearGraphics.clear();
+      this.gearHadContent = false;
     }
 
     // 1. Biome 2 Diagonal (-135 deg) God-Rays (disabled on Low quality & hidden when lightingEnabled === false)
@@ -722,8 +943,6 @@ export class BiomeArchitectureLiveLayer {
 
     // 2. Biome 3 Slowly Rotating 8-12 Tooth Brass Wall Gears (~18 deg/s on High/Medium, static on Low)
     if (plan.biome === 3) {
-      this.gearGraphics.clear();
-      this.gearHadContent = true;
       const rotRad = isLow ? 0 : this.elapsedSec * ((18 * Math.PI) / 180);
       for (let i = 0; i < plan.solidDecors.length; i++) {
         const item = plan.solidDecors[i]!;
@@ -762,9 +981,95 @@ export class BiomeArchitectureLiveLayer {
         this.gearGraphics.fillStyle(hexToNum(PALETTE.COPPER_LIGHT), 1);
         this.gearGraphics.fillCircle(cx, cy, 2.8);
       }
-    } else if (this.gearHadContent) {
-      this.gearGraphics.clear();
-      this.gearHadContent = false;
+    }
+
+    // 2b. Live deterministic surface animations (lava, ice, water, electrified_water, poison_swamp, burning_*, conveyor)
+    if (activeHazardTiles > 0 && !isLow) {
+      for (let ty = 1; ty < map.rows - 1; ty++) {
+        for (let tx = 1; tx < map.cols - 1; tx++) {
+          const surf = map.getSurface(tx, ty);
+          if (
+            surf === 'none' ||
+            surf === 'chasm' ||
+            surf === 'oil' ||
+            surf === 'grass' ||
+            surf === 'ash'
+          ) {
+            continue;
+          }
+          const wx = tx * TILE_SIZE + 16;
+          const wy = ty * TILE_SIZE + 16;
+          const h = (tx * 73 + ty * 151) & 15;
+          const ox = ((h & 3) - 1.5) * 2.6;
+          const oy = (((h >> 2) & 3) - 1.5) * 2.6;
+          const phase = this.elapsedSec * 2.5 + tx * 0.7 + ty * 1.1;
+
+          if (surf === 'lava') {
+            const r = 1.6 + 0.9 * (0.5 + 0.5 * Math.sin(phase));
+            this.gearGraphics.fillStyle(0xfacc15, 0.72);
+            this.gearGraphics.fillCircle(
+              wx + ox + Math.sin(phase) * 2.5,
+              wy + oy + Math.cos(phase) * 2.5,
+              r,
+            );
+          } else if (surf === 'ice') {
+            const glintR = 1.3 + Math.abs(Math.sin(phase * 1.3)) * 1.2;
+            const gx = wx + ox;
+            const gy = wy + oy;
+            this.gearGraphics.lineStyle(1.0, 0xe0f2fe, 0.48);
+            this.gearGraphics.lineBetween(
+              gx - glintR,
+              gy - glintR * 0.45,
+              gx + glintR,
+              gy + glintR * 0.45,
+            );
+          } else if (surf === 'water') {
+            const ripR = 2.4 + ((this.elapsedSec * 3.2 + tx * 1.3 + ty * 0.9) % 3.8);
+            this.gearGraphics.lineStyle(1.0, 0x7dd3fc, 0.42);
+            this.gearGraphics.strokeCircle(wx + ox, wy + oy, ripR);
+          } else if (surf === 'electrified_water') {
+            const jx = Math.sin(phase * 3) * 4.5;
+            this.gearGraphics.lineStyle(1.3, 0x22d3ee, 0.78);
+            this.gearGraphics.lineBetween(wx + ox - 5, wy + oy - 3, wx + ox + jx, wy + oy + 3);
+          } else if (surf === 'poison_swamp') {
+            const bubR = 1.4 + 0.9 * (0.5 + 0.5 * Math.cos(phase));
+            this.gearGraphics.fillStyle(0x84cc16, 0.62);
+            this.gearGraphics.fillCircle(
+              wx + ox + Math.cos(phase) * 2.2,
+              wy + oy - Math.sin(phase) * 2.2,
+              bubR,
+            );
+          } else if (surf === 'burning_oil' || surf === 'burning_grass') {
+            const flameH = 4.2 + Math.sin(phase * 2.2) * 2.2;
+            const fx = wx + ox;
+            const fy = wy + oy + 2;
+            this.gearGraphics.fillStyle(0xfacc15, 0.78);
+            this.gearGraphics.fillTriangle(fx - 2.8, fy + 3, fx, fy - flameH, fx + 2.8, fy + 3);
+          } else if (surf === 'conveyor') {
+            const hasW = map.getSurface(tx - 1, ty) === 'conveyor';
+            const hasE = map.getSurface(tx + 1, ty) === 'conveyor';
+            const x0 = tx * TILE_SIZE + (hasW ? 0 : 3);
+            const x1 = tx * TILE_SIZE + (hasE ? 32 : 29);
+            // Cover static baked chevrons with continuous dark slate belt tread before drawing live scrolling chevrons
+            this.gearGraphics.fillStyle(0x1e222b, 1);
+            this.gearGraphics.fillRect(x0, ty * TILE_SIZE + 5, x1 - x0, 22);
+
+            const dir =
+              map.roomArchetype === 'CROSSFIRE_CONVEYORS' && ty >= Math.floor(map.rows / 2)
+                ? -map.conveyorDirection
+                : map.conveyorDirection;
+            const baseScroll =
+              (((this.elapsedSec * CONVEYOR_BELT_SPEED * dir) % 16) + 16) % 16;
+            this.gearGraphics.lineStyle(1.8, 0xf59e42, 0.88);
+            for (const baseOffset of [-8, 8]) {
+              const cx = wx + baseOffset + baseScroll - 8;
+              if (cx < x0 + 4 || cx > x1 - 4) continue;
+              this.gearGraphics.lineBetween(cx - 3 * dir, wy - 5.5, cx + 2.5 * dir, wy);
+              this.gearGraphics.lineBetween(cx + 2.5 * dir, wy, cx - 3 * dir, wy + 5.5);
+            }
+          }
+        }
+      }
     }
 
     // 3. P4 45-deg Wrought-Iron Hanging Brazier Brackets (depth 31, above player) & Brazier Embers/Warm Dust Motes
@@ -783,7 +1088,7 @@ export class BiomeArchitectureLiveLayer {
         brazierHash = (brazierHash * 31 + ((pr.x | 0) ^ ((pr.y | 0) << 10))) | 0;
       }
     }
-    const bracketSig = `${brazierCount}:${brazierHash}`;
+    const bracketSig = `${brazierCount}:${brazierHash}:${map.solidBoxes.length}`;
     if (bracketSig !== this.lastBracketSig) {
       this.lastBracketSig = bracketSig;
       this.bracketGraphics.clear();
@@ -792,6 +1097,9 @@ export class BiomeArchitectureLiveLayer {
         if (pr.hp <= 0 || pr.kind !== 'torch_brazier') continue;
         const bx = pr.x;
         const by = pr.y;
+        const btx = Math.floor(bx / TILE_SIZE);
+        const bty = Math.floor(by / TILE_SIZE);
+        if (bty <= 0 || !map.isSolidTile(btx, bty - 1)) continue;
         this.bracketGraphics.lineStyle(3.2, inkNum, 0.92);
         this.bracketGraphics.lineBetween(bx + 12, by - 18, bx + 1, by - 7);
         this.bracketGraphics.lineStyle(1.8, ironDarkNum, 1);
@@ -807,6 +1115,12 @@ export class BiomeArchitectureLiveLayer {
         if (pr.hp <= 0 || pr.kind !== 'torch_brazier') continue;
         const bx = pr.x;
         const by = pr.y;
+
+        // Subtle inner flame-core highlight strictly inside the brazier bowl (alphas 0.025 / 0.04)
+        this.additiveGraphics.fillStyle(orangeNum, 0.025);
+        this.additiveGraphics.fillCircle(bx, by - 8, 5.5);
+        this.additiveGraphics.fillStyle(goldNum, 0.04);
+        this.additiveGraphics.fillCircle(bx, by - 8, 3.0);
 
         // Rising Embers (<= 3.5px diameter -> r <= 1.65px, no dark outline, BlendModes.ADD) & Warm Dust Motes (<= 3px)
         for (let e = 0; e < 4; e++) {
@@ -824,28 +1138,65 @@ export class BiomeArchitectureLiveLayer {
           const dist = 28 + (m % 3) * 18 + Math.sin(this.elapsedSec * 1.4 + m) * 5;
           const moteX = bx + Math.cos(ang) * dist;
           const moteY = by + Math.sin(ang) * dist * 0.75;
+          const mtx = Math.floor(moteX / TILE_SIZE);
+          const mty = Math.floor(moteY / TILE_SIZE);
+          if (
+            mtx < 0 ||
+            mty < 0 ||
+            mtx >= map.cols ||
+            mty >= map.rows ||
+            map.isSolidTile(mtx, mty) ||
+            isExteriorVoidWallTile(map, mtx, mty)
+          ) {
+            continue;
+          }
           const moteR = 1.1 + (m % 2) * 0.25; // diameter 2.2..2.7px <= 3.0px
           const moteAlpha = 0.18 + 0.12 * Math.sin(this.elapsedSec * 2.1 + i + m); // <= 0.30 <= 0.35
           this.additiveGraphics.fillStyle(goldNum, moteAlpha);
           this.additiveGraphics.fillCircle(moteX, moteY, moteR);
         }
       }
-    }
 
-    // 4. Biome 3 Breathing Additive Lava Glow through Grated Heat Channel slots (High/Medium only, alpha <= 0.30)
-    if (plan.biome === 3 && !isLow && lightingEnabled) {
-      const visibleDecals = getVisibleFloorDecals(plan, map);
-      for (let i = 0; i < visibleDecals.length; i++) {
-        const decal = visibleDecals[i]!;
-        if (decal.kind !== 'grated_heat_channel') continue;
-        const pulse =
-          0.14 + 0.12 * (0.5 + 0.5 * Math.sin(this.elapsedSec * 2.4 + decal.variant));
-        const glowAlpha = Math.min(decal.maxGlowAlpha ?? 0.26, pulse);
-        const ox = decal.tx * TILE_SIZE;
-        const oy = decal.ty * TILE_SIZE;
-        this.additiveGraphics.fillStyle(orangeNum, glowAlpha);
-        for (const sx of [6, 10, 14, 18, 22]) {
-          this.additiveGraphics.fillRect(ox + sx, oy + 10, 2.0, 12);
+      // 4. Biome 3 Breathing Additive Lava Glow through Grated Heat Channel slots (High/Medium only, alpha <= 0.30)
+      if (plan.biome === 3) {
+        const visibleDecals = getVisibleFloorDecals(plan, map);
+        for (let i = 0; i < visibleDecals.length; i++) {
+          const decal = visibleDecals[i]!;
+          if (decal.kind !== 'grated_heat_channel') continue;
+          const pulse =
+            0.14 + 0.12 * (0.5 + 0.5 * Math.sin(this.elapsedSec * 2.4 + decal.variant));
+          const glowAlpha = Math.min(decal.maxGlowAlpha ?? 0.26, pulse);
+          const ox = decal.tx * TILE_SIZE;
+          const oy = decal.ty * TILE_SIZE;
+          this.additiveGraphics.fillStyle(orangeNum, glowAlpha);
+          for (const sx of [6, 10, 14, 18, 22]) {
+            this.additiveGraphics.fillRect(ox + sx, oy + 10, 2.0, 12);
+          }
+        }
+      }
+
+      // 5. Additive Emissive Hazard Spark / Ember Glints above lightmapRt (depth 35.5, BlendModes.ADD)
+      if (activeHazardTiles > 0) {
+        for (let ty = 1; ty < map.rows - 1; ty++) {
+          for (let tx = 1; tx < map.cols - 1; tx++) {
+            const surf = map.getSurface(tx, ty);
+            const wx = tx * TILE_SIZE + 16;
+            const wy = ty * TILE_SIZE + 16;
+            const h = (tx * 73 + ty * 151) & 15;
+            const ox = ((h & 3) - 1.5) * 2.6;
+            const oy = (((h >> 2) & 3) - 1.5) * 2.6;
+            const pulse = 0.08 + 0.05 * (0.5 + 0.5 * Math.sin(this.elapsedSec * 2.8 + tx + ty));
+            if (surf === 'lava' || surf === 'burning_oil' || surf === 'burning_grass') {
+              this.additiveGraphics.fillStyle(0xf97316, pulse);
+              this.additiveGraphics.fillCircle(wx + ox, wy + oy, 2.6);
+            } else if (surf === 'electrified_water') {
+              this.additiveGraphics.fillStyle(0x22d3ee, pulse);
+              this.additiveGraphics.fillCircle(wx + ox, wy + oy, 2.2);
+            } else if (surf === 'poison_swamp') {
+              this.additiveGraphics.fillStyle(0x84cc16, pulse * 0.85);
+              this.additiveGraphics.fillCircle(wx + ox, wy + oy, 2.2);
+            }
+          }
         }
       }
     }
@@ -855,6 +1206,7 @@ export class BiomeArchitectureLiveLayer {
     this.gearGraphics.destroy();
     this.bracketGraphics.destroy();
     this.additiveGraphics.destroy();
+    this.voidMaskGraphics.destroy();
     for (const s of this.godRaySprites) {
       s.destroy();
     }

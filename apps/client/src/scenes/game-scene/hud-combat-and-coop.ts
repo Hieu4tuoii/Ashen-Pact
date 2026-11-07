@@ -44,7 +44,10 @@ import {
 import { applyHudEdgeAnchors, syncHudDebugVisibility } from './hud-setup-and-pause.js';
 
 export {
+  computeMinimapRoomPolygon,
+  drawMinimapRoomSilhouette,
   renderViDiacriticsShowcaseImpl,
+  resolveMinimapNodeDims,
   shouldShowOffscreenEnemyArrows,
   triggerPlayerHitDirectionIndicatorImpl,
   triggerRoomClearedBannerImpl,

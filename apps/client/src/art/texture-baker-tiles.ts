@@ -29,24 +29,24 @@ export function bakeBiomeTile(
   if (!ctx) return;
 
   const env = ENV_PALETTE[biome] ?? ENV_PALETTE[1];
-  const rng = new SeededRandom(`tile_${biome}_${variant}`);
+  const v = ((variant % 8) + 8) % 8;
+  const rng = new SeededRandom(`tile_${biome}_${v}`);
 
   ctx.save();
   ctx.scale(scale, scale);
 
-  // Base monolithic floor fill (no INK_DARK waffle border, no C-crescent ellipse, no bright rim bevel)
+  // Base floor fill
   ctx.fillStyle = env.floor;
   ctx.fillRect(0, 0, size, size);
 
-  if (variant === 0) {
-    // Perimeter (distToWall === 1): 1x1 stone slab with 1u ENV.seam mortar lines (alpha 0.45)
+  if (v === 0) {
+    // Perimeter (distToWall === 1): 1x1 stone slab with mortar lines and subtle hairline crack
     ctx.save();
     ctx.globalAlpha = 0.45;
     ctx.strokeStyle = env.seam;
     ctx.lineWidth = 1.0;
     ctx.strokeRect(0.5, 0.5, size - 1, size - 1);
 
-    // Subtle hairline stone crack
     ctx.beginPath();
     ctx.moveTo(rng.nextFloat(7, 12), rng.nextFloat(8, 13));
     ctx.lineTo(rng.nextFloat(14, 19), rng.nextFloat(15, 20));
@@ -55,7 +55,6 @@ export function bakeBiomeTile(
     ctx.stroke();
     ctx.restore();
 
-    // 2 muted stone/moss specks with local deltaL <= 6
     ctx.save();
     ctx.globalAlpha = 0.35;
     ctx.fillStyle = env.var;
@@ -67,7 +66,7 @@ export function bakeBiomeTile(
       ctx.fill();
     }
     ctx.restore();
-  } else if (variant === 1) {
+  } else if (v === 1) {
     // Perimeter (distToWall === 1): 2x2 sub-divided stone pavers
     ctx.save();
     ctx.globalAlpha = 0.42;
@@ -89,7 +88,6 @@ export function bakeBiomeTile(
     ctx.stroke();
     ctx.restore();
 
-    // Muted stone fleck at alpha 0.30
     ctx.save();
     ctx.globalAlpha = 0.3;
     ctx.fillStyle = env.seam;
@@ -98,8 +96,8 @@ export function bakeBiomeTile(
     ctx.arc(24, 8, 1.4, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
-  } else if (variant === 2) {
-    // Perimeter (distToWall === 1): Recessed iron drainage grate (lưới thoát nước sắt lõm)
+  } else if (v === 2) {
+    // Perimeter (distToWall === 1): Recessed iron drainage grate
     ctx.save();
     ctx.globalAlpha = 0.45;
     ctx.strokeStyle = env.seam;
@@ -107,14 +105,12 @@ export function bakeBiomeTile(
     ctx.strokeRect(0.5, 0.5, size - 1, size - 1);
     ctx.restore();
 
-    // Recessed frame [8, 8, 16, 16] in ENV.seam at alpha 0.52
     ctx.save();
     ctx.globalAlpha = 0.52;
     ctx.fillStyle = env.seam;
     ctx.fillRect(8, 8, 16, 16);
     ctx.restore();
 
-    // 4 vertical dark iron bars in ENV.wallFront at alpha 0.48 (local deltaL <= 8)
     ctx.save();
     ctx.globalAlpha = 0.48;
     ctx.strokeStyle = env.wallFront;
@@ -126,25 +122,16 @@ export function bakeBiomeTile(
     }
     ctx.stroke();
     ctx.restore();
-  } else if (variant === 3) {
-    // Perimeter (distToWall === 2): Transition slab with faded mortar seams (alpha ~ 0.20)
+  } else if (v === 3) {
+    // Perimeter (distToWall === 2): Transition slab
     ctx.save();
     ctx.globalAlpha = 0.28;
     ctx.fillStyle = env.var;
     ctx.fillRect(0, 0, size, size);
     ctx.restore();
-
-    ctx.save();
-    ctx.globalAlpha = 0.2;
-    ctx.strokeStyle = env.seam;
-    ctx.lineWidth = 1.0;
-    ctx.strokeRect(0.5, 0.5, size - 1, size - 1);
-    ctx.restore();
   } else {
-    // Center Arena (distToWall > 2, variants 4..7):
-    // Smooth monolithic stone floor (ENV.floor base) with low-frequency tone modulation
-    // (ENV.var at alpha = 0.0, 0.20, 0.40, 0.60 for variants 4, 5, 6, 7)
-    const varAlpha = Math.max(0, Math.min(0.6, (variant - 4) * 0.2));
+    // Center Arena (distToWall > 2, variants 4..7): tone modulation
+    const varAlpha = Math.max(0, Math.min(0.6, (v - 4) * 0.2));
     if (varAlpha > 0) {
       ctx.save();
       ctx.globalAlpha = varAlpha;
@@ -152,15 +139,31 @@ export function bakeBiomeTile(
       ctx.fillRect(0, 0, size, size);
       ctx.restore();
     }
-
-    // Ultra-faint mortar seam (ENV.seam at alpha 0.06) so centerDeltaL <= 8.0
-    ctx.save();
-    ctx.globalAlpha = 0.06;
-    ctx.strokeStyle = env.seam;
-    ctx.lineWidth = 1.0;
-    ctx.strokeRect(0.5, 0.5, size - 1, size - 1);
-    ctx.restore();
   }
+
+  // Interlocking ashlar/flagstone mortar joints & -135 deg top-left bevel highlights across all 8 variants (0..7)
+  const splitX = 12 + (v % 4) * 3;
+  const splitY = 11 + ((v * 3) % 4) * 3;
+  ctx.save();
+  ctx.globalAlpha = 0.32;
+  ctx.strokeStyle = env.seam;
+  ctx.lineWidth = 1.3;
+  ctx.strokeRect(1, 1, splitX - 2, splitY - 2);
+  ctx.strokeRect(splitX, 1, 31 - splitX, splitY - 2);
+  ctx.strokeRect(1, splitY, 30, 31 - splitY);
+
+  ctx.globalAlpha = 0.28;
+  ctx.strokeStyle = env.rim;
+  ctx.lineWidth = 1.1;
+  ctx.beginPath();
+  ctx.moveTo(2, splitY - 2);
+  ctx.lineTo(2, 2);
+  ctx.lineTo(splitX - 2, 2);
+  ctx.moveTo(2, 30);
+  ctx.lineTo(2, splitY + 1);
+  ctx.lineTo(30, splitY + 1);
+  ctx.stroke();
+  ctx.restore();
 
   ctx.restore();
   registerCanvasTexture(scene, key, canvas);
@@ -169,9 +172,10 @@ export function bakeBiomeTile(
 /**
  * Bakes neighbor-aware autotiled 3-layer 3D wall tile:
  * - South Cliff Face (cliffH = 12u when !hasS, capBottom = 20u) in ENV.wallFront (deltaL -10 below floor)
- * - Top Cap (y = 0..capBottom) in ENV.wallTop (deltaL +15 above floor)
+ *   with biome-specific multi-course relief
+ * - Top Cap (y = 0..capBottom) in ENV.wallTop (deltaL +15 above floor) with raised parapet coping when hasS
  * - Crisp -135 deg directional rim-light (ENV.rim, 1.8u) along exposed North/West edges
- * - INK_DARK (2.2u) outer contour along exposed boundary edges (no repeating glowing dot)
+ * - INK_DARK (2.2u) outer contour along exposed boundary edges (0 segments on mask === 15)
  */
 export function bakeWallTile(
   scene: Phaser.Scene,
@@ -188,10 +192,11 @@ export function bakeWallTile(
   if (!ctx) return;
 
   const env = ENV_PALETTE[biome] ?? ENV_PALETTE[1];
-  const hasN = (mask & AUTOTILE_NORTH) !== 0;
-  const hasE = (mask & AUTOTILE_EAST) !== 0;
-  const hasS = (mask & AUTOTILE_SOUTH) !== 0;
-  const hasW = (mask & AUTOTILE_WEST) !== 0;
+  const m = mask & 15;
+  const hasN = (m & AUTOTILE_NORTH) !== 0;
+  const hasE = (m & AUTOTILE_EAST) !== 0;
+  const hasS = (m & AUTOTILE_SOUTH) !== 0;
+  const hasW = (m & AUTOTILE_WEST) !== 0;
 
   ctx.save();
   ctx.scale(scale, scale);
@@ -236,6 +241,48 @@ export function bakeWallTile(
   ctx.stroke();
   ctx.restore();
 
+  // 2b. Raised 2.5D stone parapet coping when m !== 15
+  if (m !== 15) {
+    ctx.save();
+    ctx.fillStyle = env.wallFront;
+    if (!hasN) ctx.fillRect(0, 0, 32, 4);
+    if (!hasW) ctx.fillRect(0, 0, 4, capBottom);
+    if (!hasE) ctx.fillRect(28, 0, 4, capBottom);
+    if (!hasN || !hasW) {
+      ctx.strokeStyle = env.rim;
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      if (!hasN) {
+        ctx.moveTo(0, 2);
+        ctx.lineTo(32, 2);
+      }
+      if (!hasW) {
+        ctx.moveTo(2, 0);
+        ctx.lineTo(2, capBottom);
+      }
+      ctx.stroke();
+    }
+    if (!hasN || !hasW || !hasE) {
+      ctx.strokeStyle = env.seam;
+      ctx.lineWidth = 1.1;
+      ctx.beginPath();
+      if (!hasN) {
+        ctx.moveTo(hasW ? 0 : 4, 4);
+        ctx.lineTo(hasE ? 32 : 28, 4);
+      }
+      if (!hasW) {
+        ctx.moveTo(4, hasN ? 0 : 4);
+        ctx.lineTo(4, capBottom);
+      }
+      if (!hasE) {
+        ctx.moveTo(28, hasN ? 0 : 4);
+        ctx.lineTo(28, capBottom);
+      }
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
   // 3. 3D South Cliff Face (cliffH = 12u when !hasS, capBottom = 20u)
   if (!hasS) {
     const cliffY = capBottom;
@@ -273,22 +320,54 @@ export function bakeWallTile(
     ctx.moveTo(23, 28);
     ctx.lineTo(23, size - 1.1);
     ctx.stroke();
+
+    // Subtle stone mortar/crack weathering along ashlar courses (no caution-tape diagonal slashes)
+    ctx.save();
+    ctx.globalAlpha = 0.25;
+    const ox = ((m * 3) % 5) - 2;
+    ctx.strokeStyle = env.seam;
+    ctx.lineWidth = 1.1;
+    ctx.beginPath();
+    ctx.moveTo(6 + ox, 22.5);
+    ctx.lineTo(10 + ox, 22.5);
+    ctx.lineTo(11 + ox, 24);
+    ctx.moveTo(19 - ox, 26);
+    ctx.lineTo(24 - ox, 26);
+    ctx.lineTo(25 - ox, 28);
+    ctx.stroke();
+
+    if (biome !== 0) {
+      const reliefColor =
+        biome === 1 ? '#3D5235' : biome === 2 ? '#6F949E' : '#8A342B';
+      ctx.globalAlpha = 0.24;
+      ctx.strokeStyle = reliefColor;
+      ctx.lineWidth = 1.0;
+      ctx.beginPath();
+      ctx.moveTo(12 + ox, 25.5);
+      ctx.lineTo(16 + ox, 25.5);
+      ctx.moveTo(22 - ox, 29.5);
+      ctx.lineTo(27 - ox, 29.5);
+      ctx.stroke();
+    }
+    ctx.restore();
   }
 
   // 4. Crisp -135 deg directional rim-light (ENV.rim, 1.8u) along exposed North/West edges
-  ctx.beginPath();
-  if (!hasW) {
-    ctx.moveTo(capX + 1.8, capY + capH - 1);
-    ctx.lineTo(capX + 1.8, capY + 1.8);
+  if (!hasW || !hasN) {
+    ctx.beginPath();
+    if (!hasW) {
+      ctx.moveTo(capX + 1.8, capY + capH - 1);
+      ctx.lineTo(capX + 1.8, capY + 1.8);
+    }
+    if (!hasN) {
+      ctx.moveTo(capX + 1.8, capY + 1.8);
+      ctx.lineTo(capX + capW - 1, capY + 1.8);
+    }
+    ctx.lineWidth = 1.8;
+    ctx.strokeStyle = env.rim;
+    ctx.lineCap = 'round';
+    ctx.stroke();
   }
-  if (!hasN) {
-    ctx.moveTo(capX + 1.8, capY + 1.8);
-    ctx.lineTo(capX + capW - 1, capY + 1.8);
-  }
-  ctx.lineWidth = 1.8;
-  ctx.strokeStyle = env.rim;
-  ctx.lineCap = 'round';
-  ctx.stroke();
 
   // 5. Crisp INK_DARK (2.2u) outer contour ONLY along exposed boundary edges
   ctx.beginPath();
@@ -359,7 +438,7 @@ export function bakePillarTile(
   ctx.fillStyle = env.wallTop;
   ctx.fillRect(capX, capY, capW, capH);
 
-  // 2. Subtle inner carved frame in ENV.seam (alpha 0.45)
+  // 2. Stepped capital inner carved frame in ENV.seam (alpha 0.45)
   const inN = hasN ? 0 : capY + 4.5;
   const inW = hasW ? 0 : capX + 4.5;
   const inE = hasE ? size : capX + capW - 4.5;
@@ -388,32 +467,50 @@ export function bakePillarTile(
   ctx.stroke();
   ctx.restore();
 
-  // 3. Unified central rune medallion at the shared center of a 2x2 pillar
-  const runeCx = hasE && !hasW ? size : hasW && !hasE ? 0 : 16;
-  const runeCy = hasS && !hasN ? size : hasN && !hasS ? 0 : 11;
+  // 3. Unified central rune medallion ONLY on 2x2 corner quadrants (m = 3, 6, 9, 12) or isolated 1x1 pillar (m = 0);
+  //    linear/interior pillar tiles (1, 2, 4, 8, 5, 10, 7, 11, 13, 14, 15) receive a clean rectangular stone course inset.
+  const m = mask & 15;
+  const isCornerMedallionMask = (hasE !== hasW && hasN !== hasS) || m === 0;
   ctx.save();
   ctx.beginPath();
   ctx.rect(capX, capY, capW, capH);
   ctx.clip();
 
-  ctx.beginPath();
-  ctx.arc(runeCx, runeCy, 6.8, 0, Math.PI * 2);
-  ctx.fillStyle = env.wallFront;
-  ctx.fill();
-  ctx.lineWidth = 1.5;
-  ctx.strokeStyle = PALETTE.INK_DARK;
-  ctx.stroke();
+  if (isCornerMedallionMask) {
+    const runeCx = hasE && !hasW ? size : hasW && !hasE ? 0 : 16;
+    const runeCy = hasS && !hasN ? size : hasN && !hasS ? 0 : 11;
 
-  ctx.beginPath();
-  ctx.arc(runeCx, runeCy, 3.8, 0, Math.PI * 2);
-  ctx.fillStyle = env.accent;
-  ctx.fill();
-  ctx.lineWidth = 1.1;
-  ctx.strokeStyle = PALETTE.INK_DARK;
-  ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(runeCx, runeCy, 6.8, 0, Math.PI * 2);
+    ctx.fillStyle = env.wallFront;
+    ctx.fill();
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = PALETTE.INK_DARK;
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.arc(runeCx, runeCy, 3.8, 0, Math.PI * 2);
+    ctx.fillStyle = env.accent;
+    ctx.fill();
+    ctx.lineWidth = 1.1;
+    ctx.strokeStyle = PALETTE.INK_DARK;
+    ctx.stroke();
+  } else {
+    const rx = hasW ? 4 : capX + 6.5;
+    const ry = hasN ? 4 : capY + 6.0;
+    const rw = Math.max(4, (hasE ? size - 4 : capX + capW - 6.5) - rx);
+    const rh = Math.max(4, (hasS ? capBottom - 4 : capY + capH - 6.0) - ry);
+    ctx.globalAlpha = 0.55;
+    ctx.fillStyle = env.var;
+    ctx.fillRect(rx, ry, rw, rh);
+    ctx.globalAlpha = 0.65;
+    ctx.strokeStyle = env.seam;
+    ctx.lineWidth = 1.1;
+    ctx.strokeRect(rx, ry, rw, rh);
+  }
   ctx.restore();
 
-  // 4. 3D South Cliff Face (cliffH = 12u when !hasS, capBottom = 20u)
+  // 4. 3D South Cliff Face & Base Plinth (cliffH = 12u when !hasS, capBottom = 20u)
   if (!hasS) {
     const cliffY = capBottom;
     ctx.fillStyle = env.wallFront;
@@ -422,6 +519,10 @@ export function bakePillarTile(
     // 2u top overhang shadow
     ctx.fillStyle = env.shadow;
     ctx.fillRect(capX, cliffY, capW, 2.0);
+
+    // Stepped base plinth molding at bottom of column shaft
+    ctx.fillStyle = env.seam;
+    ctx.fillRect(capX, size - 4.0, capW, 2.8);
 
     // Horizontal courses & vertical fluting lines in ENV.shadow
     ctx.strokeStyle = env.shadow;
@@ -586,7 +687,7 @@ export function bakeWallAoOverlay(scene: Phaser.Scene, aoMask: number, scale: nu
     ctx.fillRect(0, 0, 7, size);
   }
 
-  if (aoMask & (WALL_AO_NORTH_WEST | WALL_AO_NORTH | WALL_AO_WEST)) {
+  if ((aoMask & WALL_AO_NORTH_WEST) !== 0 && (aoMask & (WALL_AO_NORTH | WALL_AO_WEST)) === 0) {
     const gradSE = ctx.createLinearGradient(0, 0, 14, 14);
     gradSE.addColorStop(0, 'rgba(11, 9, 14, 0.22)');
     gradSE.addColorStop(1, 'rgba(11, 9, 14, 0)');

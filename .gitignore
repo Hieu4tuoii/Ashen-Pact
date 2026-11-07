@@ -18,6 +18,8 @@ release/
 
 .worktrees/
 .superpowers/
+.agents/
 
 # Animation Verification Engine 2.6 & visual test screenshots
 docs/screenshots/
+output/

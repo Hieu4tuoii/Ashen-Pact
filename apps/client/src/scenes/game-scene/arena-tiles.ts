@@ -1,8 +1,14 @@
 import {
+  type ArenaMap,
+  AUTOTILE_EAST,
+  AUTOTILE_NORTH,
+  AUTOTILE_SOUTH,
+  AUTOTILE_WEST,
   clamp,
   LocalTransport,
   NetworkTransport,
   PLAYER_SLOT_COLORS,
+  type SurfaceKind,
   TILE_SIZE,
   type TileKind,
   type WifiProfileId,
@@ -12,11 +18,12 @@ import {
 import Phaser from 'phaser';
 import { CutoutRig } from '../../art/cutout-rig.js';
 import { dampLerp } from '../../art/easing.js';
-import { hexToNum, PALETTE } from '../../art/palette.js';
+import { ENV_PALETTE, hexToNum, PALETTE } from '../../art/palette.js';
 import { VANGUARD_RIG_DEF } from '../../art/rig-defs.js';
 import { TextureBaker } from '../../art/texture-baker.js';
 import {
   drawBridgeOverChasmOverlay,
+  hasChasmAlongAxisWithin3,
   isBridgeFloorTileOverChasm,
 } from '../../art/texture-baker-surfaces.js';
 import { musicManager } from '../../audio/music-synth.js';
@@ -36,6 +43,8 @@ import {
   BiomeArchitectureLiveLayer,
   buildRoomArchitecturePlan,
   computeTileDistToWall,
+  isActiveWallTile,
+  isExteriorVoidWallTile,
   renderBiomeArchitectureToComposite,
   resolveHybridFloorVariant,
 } from '../../world/biome-architecture.js';
@@ -431,26 +440,220 @@ export function drawSourceKeyToCtxImpl(
   dy: number,
   cellPx: number,
 ): void {
-  if (!this.textures.exists(key)) return;
+  if (!this.textures?.exists?.(key)) return;
   const tex = this.textures.get(key);
-  const src = tex.getSourceImage() as CanvasImageSource | undefined;
+  const src = tex?.getSourceImage?.() as CanvasImageSource | undefined;
   if (src) {
     ctx.drawImage(src, dx, dy, cellPx, cellPx);
   }
 }
 
-export function renderTileCellToCompositeImpl(this: GameScene, tile: ArenaTileVisual): void {
-  const groundCtx = this.arenaGroundTex?.getContext();
+function isSameSurfaceFamilyForTile(map: ArenaMap, a: SurfaceKind, b: SurfaceKind): boolean {
+  const mapWithHelper = map as unknown as {
+    isSameSurfaceFamily?: (s1: SurfaceKind, s2: SurfaceKind) => boolean;
+  };
+  if (typeof mapWithHelper.isSameSurfaceFamily === 'function') {
+    return mapWithHelper.isSameSurfaceFamily(a, b);
+  }
+  if (a === b) return true;
+  if ((a === 'water' || a === 'electrified_water') && (b === 'water' || b === 'electrified_water')) {
+    return true;
+  }
+  if ((a === 'grass' || a === 'ash') && (b === 'grass' || b === 'ash')) {
+    return true;
+  }
+  return false;
+}
+
+function resolveSurfaceShorelineColors(
+  surface: Exclude<SurfaceKind, 'none' | 'chasm' | 'conveyor'>,
+): { outerBank: string; innerLip: string } {
+  switch (surface) {
+    case 'lava':
+      return { outerBank: '#1F1614', innerLip: '#EA580C' };
+    case 'ice':
+      return { outerBank: '#3B7290', innerLip: '#CFE8EE' };
+    case 'water':
+      return { outerBank: '#263B52', innerLip: '#3E6282' };
+    case 'electrified_water':
+      return { outerBank: '#2C5173', innerLip: '#5687AD' };
+    case 'poison_swamp':
+      return { outerBank: '#2D3B36', innerLip: '#496146' };
+    case 'grass':
+      return { outerBank: '#253B2D', innerLip: '#3B5E47' };
+    case 'burning_grass':
+      return { outerBank: '#4F2621', innerLip: '#8A4538' };
+    case 'oil':
+      return { outerBank: '#2A2438', innerLip: '#3B2D29' };
+    case 'burning_oil':
+      return { outerBank: '#3B2019', innerLip: '#8F452C' };
+    case 'ash':
+      return { outerBank: '#252129', innerLip: '#423C46' };
+  }
+}
+
+export function renderTileCellToCompositeImpl(
+  this: GameScene,
+  tileOrCtx: ArenaTileVisual | CanvasRenderingContext2D,
+  maybeTile?: ArenaTileVisual,
+  maybeScale?: number,
+  maybeBiome?: 0 | 1 | 2 | 3,
+): void {
+  const isDirectCtxCall =
+    maybeTile !== undefined &&
+    typeof (tileOrCtx as CanvasRenderingContext2D)?.fillRect === 'function';
+  const groundCtx = isDirectCtxCall
+    ? (tileOrCtx as CanvasRenderingContext2D)
+    : this.arenaGroundTex?.getContext();
   if (!groundCtx) return;
 
-  const sim = this.transport?.getSim();
-  const effectiveBiome: 0 | 1 | 2 | 3 = sim ? (sim.inHub ? 0 : sim.currentBiome) : 1;
-  const cellPx = TILE_SIZE * this.tileCompositeScale;
+  const tile = isDirectCtxCall ? maybeTile : (tileOrCtx as ArenaTileVisual);
+  const sim =
+    this.transport?.getSim?.() ??
+    (this as unknown as { sim?: ReturnType<LocalTransport['getSim']> })?.sim;
+  const map = sim?.map ?? (this as unknown as { map?: ArenaMap })?.map;
+  const effectiveBiome: 0 | 1 | 2 | 3 =
+    maybeBiome ?? (sim ? (sim.inHub ? 0 : sim.currentBiome) : (this.lastRenderedBiome ?? 1));
+  const env = ENV_PALETTE[effectiveBiome] ?? ENV_PALETTE[1];
+  const scale = maybeScale ?? (this.tileCompositeScale || 1);
+  const cellPx = TILE_SIZE * scale;
   const dx = tile.tx * cellPx;
   const dy = tile.ty * cellPx;
+  const drawKey = this.drawSourceKeyToCtx ?? drawSourceKeyToCtxImpl;
+  const getStructKey = this.getStructureTextureKey ?? getStructureTextureKeyImpl;
 
   groundCtx.clearRect(dx, dy, cellPx, cellPx);
-  this.drawSourceKeyToCtx(
+
+  // Branch A: Exterior Void Wall Tile (distToFloorChebyshev >= 2)
+  if (tile.kind === 'wall' && map && isExteriorVoidWallTile(map, tile.tx, tile.ty)) {
+    groundCtx.save();
+    groundCtx.fillStyle = PALETTE.INK_DEEP;
+    groundCtx.fillRect(dx, dy, cellPx, cellPx);
+
+    const tx = tile.tx;
+    const ty = tile.ty;
+    const adjWallN = ty > 0 && isActiveWallTile(map, tx, ty - 1);
+    const adjWallS = ty + 1 < map.rows && isActiveWallTile(map, tx, ty + 1);
+    const adjWallW = tx > 0 && isActiveWallTile(map, tx - 1, ty);
+    const adjWallE = tx + 1 < map.cols && isActiveWallTile(map, tx + 1, ty);
+    const adjWallNW =
+      !adjWallN && !adjWallW && tx > 0 && ty > 0 && isActiveWallTile(map, tx - 1, ty - 1);
+    const adjWallNE =
+      !adjWallN &&
+      !adjWallE &&
+      tx + 1 < map.cols &&
+      ty > 0 &&
+      isActiveWallTile(map, tx + 1, ty - 1);
+    const adjWallSW =
+      !adjWallS &&
+      !adjWallW &&
+      tx > 0 &&
+      ty + 1 < map.rows &&
+      isActiveWallTile(map, tx - 1, ty + 1);
+    const adjWallSE =
+      !adjWallS &&
+      !adjWallE &&
+      tx + 1 < map.cols &&
+      ty + 1 < map.rows &&
+      isActiveWallTile(map, tx + 1, ty + 1);
+
+    if (
+      adjWallN ||
+      adjWallS ||
+      adjWallW ||
+      adjWallE ||
+      adjWallNW ||
+      adjWallNE ||
+      adjWallSW ||
+      adjWallSE
+    ) {
+      // 1. 6px (6 * scale) outer-wall ambient shadow strip/corner in ENV_PALETTE[biome].shadow (alpha = 0.65)
+      groundCtx.fillStyle = env.shadow;
+      groundCtx.globalAlpha = 0.65;
+      if (adjWallN) groundCtx.fillRect(dx, dy, cellPx, 6 * scale);
+      if (adjWallS) groundCtx.fillRect(dx, dy + cellPx - 6 * scale, cellPx, 6 * scale);
+      if (adjWallW) groundCtx.fillRect(dx, dy, 6 * scale, cellPx);
+      if (adjWallE) groundCtx.fillRect(dx + cellPx - 6 * scale, dy, 6 * scale, cellPx);
+      if (adjWallNW) groundCtx.fillRect(dx, dy, 6 * scale, 6 * scale);
+      if (adjWallNE) groundCtx.fillRect(dx + cellPx - 6 * scale, dy, 6 * scale, 6 * scale);
+      if (adjWallSW) groundCtx.fillRect(dx, dy + cellPx - 6 * scale, 6 * scale, 6 * scale);
+      if (adjWallSE) {
+        groundCtx.fillRect(
+          dx + cellPx - 6 * scale,
+          dy + cellPx - 6 * scale,
+          6 * scale,
+          6 * scale,
+        );
+      }
+
+      // 2. 2px (2 * scale) PALETTE.INK_DARK (#141019) outer wall backing edge/corner
+      groundCtx.globalAlpha = 1;
+      groundCtx.fillStyle = PALETTE.INK_DARK;
+      if (adjWallN) groundCtx.fillRect(dx, dy, cellPx, 2 * scale);
+      if (adjWallS) groundCtx.fillRect(dx, dy + cellPx - 2 * scale, cellPx, 2 * scale);
+      if (adjWallW) groundCtx.fillRect(dx, dy, 2 * scale, cellPx);
+      if (adjWallE) groundCtx.fillRect(dx + cellPx - 2 * scale, dy, 2 * scale, cellPx);
+      if (adjWallNW) groundCtx.fillRect(dx, dy, 2 * scale, 2 * scale);
+      if (adjWallNE) groundCtx.fillRect(dx + cellPx - 2 * scale, dy, 2 * scale, 2 * scale);
+      if (adjWallSW) groundCtx.fillRect(dx, dy + cellPx - 2 * scale, 2 * scale, 2 * scale);
+      if (adjWallSE) {
+        groundCtx.fillRect(
+          dx + cellPx - 2 * scale,
+          dy + cellPx - 2 * scale,
+          2 * scale,
+          2 * scale,
+        );
+      }
+
+      // 3. 1px (1 * scale) ENV_PALETTE[biome].seam outer wall backing seam line & corner dot
+      if (adjWallNW || adjWallNE || adjWallSW || adjWallSE) {
+        groundCtx.fillStyle = env.seam;
+        if (adjWallNW) groundCtx.fillRect(dx + 2 * scale, dy + 2 * scale, 1 * scale, 1 * scale);
+        if (adjWallNE) {
+          groundCtx.fillRect(dx + cellPx - 3 * scale, dy + 2 * scale, 1 * scale, 1 * scale);
+        }
+        if (adjWallSW) {
+          groundCtx.fillRect(dx + 2 * scale, dy + cellPx - 3 * scale, 1 * scale, 1 * scale);
+        }
+        if (adjWallSE) {
+          groundCtx.fillRect(
+            dx + cellPx - 3 * scale,
+            dy + cellPx - 3 * scale,
+            1 * scale,
+            1 * scale,
+          );
+        }
+      }
+      if (adjWallN || adjWallS || adjWallW || adjWallE) {
+        groundCtx.strokeStyle = env.seam;
+        groundCtx.lineWidth = 1 * scale;
+        groundCtx.beginPath();
+        if (adjWallN) {
+          groundCtx.moveTo(dx, dy + 2.5 * scale);
+          groundCtx.lineTo(dx + cellPx, dy + 2.5 * scale);
+        }
+        if (adjWallS) {
+          groundCtx.moveTo(dx, dy + cellPx - 2.5 * scale);
+          groundCtx.lineTo(dx + cellPx, dy + cellPx - 2.5 * scale);
+        }
+        if (adjWallW) {
+          groundCtx.moveTo(dx + 2.5 * scale, dy);
+          groundCtx.lineTo(dx + 2.5 * scale, dy + cellPx);
+        }
+        if (adjWallE) {
+          groundCtx.moveTo(dx + cellPx - 2.5 * scale, dy);
+          groundCtx.lineTo(dx + cellPx - 2.5 * scale, dy + cellPx);
+        }
+        groundCtx.stroke();
+      }
+    }
+
+    groundCtx.restore();
+    return;
+  }
+
+  drawKey.call(
+    this,
     groundCtx,
     TextureBaker.getBiomeTileTextureKey(effectiveBiome, tile.variant),
     dx,
@@ -460,6 +663,7 @@ export function renderTileCellToCompositeImpl(this: GameScene, tile: ArenaTileVi
 
   if (tile.kind === 'floor') {
     if (tile.surface !== 'none') {
+      const surfaceVariant = (tile.tx * 7 + tile.ty * 13 + tile.variant) & 7;
       TextureBaker.drawSurfaceTile(
         groundCtx,
         tile.surface,
@@ -467,22 +671,108 @@ export function renderTileCellToCompositeImpl(this: GameScene, tile: ArenaTileVi
         dx,
         dy,
         cellPx,
-        tile.variant,
+        surfaceVariant,
         effectiveBiome,
       );
-    } else if (sim && isBridgeFloorTileOverChasm(sim.map, tile.tx, tile.ty)) {
+
+      if (map && tile.surface === 'chasm') {
+        const solidN = tile.ty > 0 && map.isSolidTile(tile.tx, tile.ty - 1);
+        const solidS = tile.ty + 1 < map.rows && map.isSolidTile(tile.tx, tile.ty + 1);
+        const solidW = tile.tx > 0 && map.isSolidTile(tile.tx - 1, tile.ty);
+        const solidE = tile.tx + 1 < map.cols && map.isSolidTile(tile.tx + 1, tile.ty);
+        if (solidN || solidS || solidW || solidE) {
+          const chasmStrataColor =
+            effectiveBiome === 2 ? '#243B47' : effectiveBiome === 3 ? '#2A120E' : '#1F1815';
+          groundCtx.save();
+          groundCtx.fillStyle = chasmStrataColor;
+          if (solidN) groundCtx.fillRect(dx, dy, cellPx, 2.2 * scale);
+          if (solidS) groundCtx.fillRect(dx, dy + cellPx - 2.2 * scale, cellPx, 2.2 * scale);
+          if (solidW) groundCtx.fillRect(dx, dy, 2.2 * scale, cellPx);
+          if (solidE) groundCtx.fillRect(dx + cellPx - 2.2 * scale, dy, 2.2 * scale, cellPx);
+          groundCtx.restore();
+        }
+      } else if (map && tile.surface !== 'chasm' && tile.surface !== 'conveyor') {
+        const sm = tile.surfaceMask;
+        const sHasN = (sm & AUTOTILE_NORTH) !== 0;
+        const sHasE = (sm & AUTOTILE_EAST) !== 0;
+        const sHasS = (sm & AUTOTILE_SOUTH) !== 0;
+        const sHasW = (sm & AUTOTILE_WEST) !== 0;
+        const sameDiag = (nx: number, ny: number): boolean => {
+          if (nx < 0 || ny < 0 || nx >= map.cols || ny >= map.rows) return false;
+          return isSameSurfaceFamilyForTile(map, tile.surface, map.getSurface(nx, ny));
+        };
+        const concaveNE = sHasN && sHasE && !sameDiag(tile.tx + 1, tile.ty - 1);
+        const concaveNW = sHasN && sHasW && !sameDiag(tile.tx - 1, tile.ty - 1);
+        const concaveSE = sHasS && sHasE && !sameDiag(tile.tx + 1, tile.ty + 1);
+        const concaveSW = sHasS && sHasW && !sameDiag(tile.tx - 1, tile.ty + 1);
+
+        if (concaveNE || concaveNW || concaveSE || concaveSW) {
+          const { outerBank, innerLip } = resolveSurfaceShorelineColors(tile.surface);
+          const cap = 2.6 * scale;
+          groundCtx.save();
+          groundCtx.fillStyle = outerBank;
+          if (concaveNE) groundCtx.fillRect(dx + cellPx - cap, dy, cap, cap);
+          if (concaveNW) groundCtx.fillRect(dx, dy, cap, cap);
+          if (concaveSE) groundCtx.fillRect(dx + cellPx - cap, dy + cellPx - cap, cap, cap);
+          if (concaveSW) groundCtx.fillRect(dx, dy + cellPx - cap, cap, cap);
+
+          groundCtx.strokeStyle = innerLip;
+          groundCtx.lineWidth = 1.4 * scale;
+          groundCtx.beginPath();
+          if (concaveNE) {
+            groundCtx.moveTo(dx + cellPx - cap, dy);
+            groundCtx.lineTo(dx + cellPx, dy + cap);
+          }
+          if (concaveNW) {
+            groundCtx.moveTo(dx + cap, dy);
+            groundCtx.lineTo(dx, dy + cap);
+          }
+          if (concaveSE) {
+            groundCtx.moveTo(dx + cellPx - cap, dy + cellPx);
+            groundCtx.lineTo(dx + cellPx, dy + cellPx - cap);
+          }
+          if (concaveSW) {
+            groundCtx.moveTo(dx + cap, dy + cellPx);
+            groundCtx.lineTo(dx, dy + cellPx - cap);
+          }
+          groundCtx.stroke();
+          groundCtx.restore();
+        }
+      }
+    } else if (map && isBridgeFloorTileOverChasm(map, tile.tx, tile.ty)) {
+      const hasChasmN = map.getSurface(tile.tx, tile.ty - 1) === 'chasm';
+      const hasChasmS = map.getSurface(tile.tx, tile.ty + 1) === 'chasm';
+      const hasChasmW = map.getSurface(tile.tx - 1, tile.ty) === 'chasm';
+      const hasChasmE = map.getSurface(tile.tx + 1, tile.ty) === 'chasm';
+      const spansWE =
+        hasChasmAlongAxisWithin3(map, tile.tx, tile.ty, -1, 0) &&
+        hasChasmAlongAxisWithin3(map, tile.tx, tile.ty, 1, 0);
+      const spansNS =
+        hasChasmAlongAxisWithin3(map, tile.tx, tile.ty, 0, -1) &&
+        hasChasmAlongAxisWithin3(map, tile.tx, tile.ty, 0, 1);
+      const isVerticalBridge = spansWE && !spansNS;
       drawBridgeOverChasmOverlay(
         groundCtx,
         dx,
         dy,
         cellPx,
-        sim.map.getSurface(tile.tx, tile.ty - 1) === 'chasm',
-        sim.map.getSurface(tile.tx, tile.ty + 1) === 'chasm',
+        hasChasmN,
+        hasChasmS,
         effectiveBiome,
+        hasChasmW,
+        hasChasmE,
+        isVerticalBridge,
       );
     }
-    if (tile.aoMask > 0) {
-      this.drawSourceKeyToCtx(
+    if (
+      tile.aoMask > 0 &&
+      tile.surface !== 'chasm' &&
+      tile.surface !== 'lava' &&
+      tile.surface !== 'burning_oil' &&
+      tile.surface !== 'burning_grass'
+    ) {
+      drawKey.call(
+        this,
         groundCtx,
         TextureBaker.getWallAoTextureKey(tile.aoMask),
         dx,
@@ -491,13 +781,262 @@ export function renderTileCellToCompositeImpl(this: GameScene, tile: ArenaTileVi
       );
     }
   } else {
-    this.drawSourceKeyToCtx(
+    drawKey.call(
+      this,
       groundCtx,
-      this.getStructureTextureKey(tile.kind, tile.autotileMask, effectiveBiome),
+      getStructKey.call(this, tile.kind, tile.autotileMask, effectiveBiome),
       dx,
       dy,
       cellPx,
     );
+
+    // Non-2x2 Pillar Check: only complete 2x2 pillar quads (masks 6, 12, 3, 9) keep corner medallions
+    if (tile.kind === 'pillar' && map) {
+      const pm = tile.autotileMask & 15;
+      const isCornerMask = pm === 6 || pm === 12 || pm === 3 || pm === 9;
+      const isLinearMedallionFallback = pm === 5 || pm === 10;
+      if (isCornerMask || isLinearMedallionFallback) {
+        const qTx = pm === 12 || pm === 9 ? tile.tx - 1 : tile.tx;
+        const qTy = pm === 3 || pm === 9 ? tile.ty - 1 : tile.ty;
+        const isComplete2x2PillarQuad =
+          isCornerMask &&
+          qTx >= 0 &&
+          qTy >= 0 &&
+          qTx + 1 < map.cols &&
+          qTy + 1 < map.rows &&
+          map.getTile(qTx, qTy) === 'pillar' &&
+          map.getAutotileMask(qTx, qTy) === 6 &&
+          map.getTile(qTx + 1, qTy) === 'pillar' &&
+          map.getAutotileMask(qTx + 1, qTy) === 12 &&
+          map.getTile(qTx, qTy + 1) === 'pillar' &&
+          map.getAutotileMask(qTx, qTy + 1) === 3 &&
+          map.getTile(qTx + 1, qTy + 1) === 'pillar' &&
+          map.getAutotileMask(qTx + 1, qTy + 1) === 9;
+
+        if (!isComplete2x2PillarQuad) {
+          groundCtx.save();
+          groundCtx.fillStyle = env.wallTop;
+          if (isCornerMask) {
+            const mx = dx + (pm === 6 || pm === 3 ? 23.5 : 0) * scale;
+            const my = dy + (pm === 6 || pm === 12 ? 23.5 : 0) * scale;
+            groundCtx.fillRect(mx, my, 8.5 * scale, 8.5 * scale);
+          }
+          const hasS = (pm & AUTOTILE_SOUTH) !== 0;
+          const reliefY = dy + (hasS ? 9 : 6) * scale;
+          const reliefH = (hasS ? 14 : 8) * scale;
+          groundCtx.fillStyle = env.var;
+          groundCtx.globalAlpha = 0.55;
+          groundCtx.fillRect(dx + 9 * scale, reliefY, 14 * scale, reliefH);
+          groundCtx.globalAlpha = 0.65;
+          groundCtx.strokeStyle = env.seam;
+          groundCtx.lineWidth = 1.1 * scale;
+          groundCtx.beginPath();
+          groundCtx.moveTo(dx + 9 * scale, reliefY);
+          groundCtx.lineTo(dx + 23 * scale, reliefY);
+          groundCtx.lineTo(dx + 23 * scale, reliefY + reliefH);
+          groundCtx.lineTo(dx + 9 * scale, reliefY + reliefH);
+          groundCtx.lineTo(dx + 9 * scale, reliefY);
+          groundCtx.stroke();
+          groundCtx.restore();
+        }
+      }
+    }
+
+    // Branch B: Active 1-Tile-Thick Sculpted Wall Tile
+    if (tile.kind === 'wall' && map) {
+      const tx = tile.tx;
+      const ty = tile.ty;
+      const voidN = ty === 0 || isExteriorVoidWallTile(map, tx, ty - 1);
+      const voidS = ty === map.rows - 1 || isExteriorVoidWallTile(map, tx, ty + 1);
+      const voidW = tx === 0 || isExteriorVoidWallTile(map, tx - 1, ty);
+      const voidE = tx === map.cols - 1 || isExteriorVoidWallTile(map, tx + 1, ty);
+
+      if (voidN || voidS || voidW || voidE) {
+        groundCtx.save();
+        // 1px ENV_PALETTE[biome].seam inner bevel along void-facing cardinal edges
+        groundCtx.strokeStyle = env.seam;
+        groundCtx.lineWidth = 1 * scale;
+        groundCtx.beginPath();
+        if (voidN) {
+          groundCtx.moveTo(dx, dy + 1.8 * scale);
+          groundCtx.lineTo(dx + cellPx, dy + 1.8 * scale);
+        }
+        if (voidS) {
+          groundCtx.moveTo(dx, dy + cellPx - 1.8 * scale);
+          groundCtx.lineTo(dx + cellPx, dy + cellPx - 1.8 * scale);
+        }
+        if (voidW) {
+          groundCtx.moveTo(dx + 1.8 * scale, dy);
+          groundCtx.lineTo(dx + 1.8 * scale, dy + cellPx);
+        }
+        if (voidE) {
+          groundCtx.moveTo(dx + cellPx - 1.8 * scale, dy);
+          groundCtx.lineTo(dx + cellPx - 1.8 * scale, dy + cellPx);
+        }
+        groundCtx.stroke();
+
+        // 1.5px PALETTE.INK_DARK outer contour line along void-facing cardinal edges
+        groundCtx.strokeStyle = PALETTE.INK_DARK;
+        groundCtx.lineWidth = 1.5 * scale;
+        groundCtx.beginPath();
+        if (voidN) {
+          groundCtx.moveTo(dx, dy + 0.75 * scale);
+          groundCtx.lineTo(dx + cellPx, dy + 0.75 * scale);
+        }
+        if (voidS) {
+          groundCtx.moveTo(dx, dy + cellPx - 0.75 * scale);
+          groundCtx.lineTo(dx + cellPx, dy + cellPx - 0.75 * scale);
+        }
+        if (voidW) {
+          groundCtx.moveTo(dx + 0.75 * scale, dy);
+          groundCtx.lineTo(dx + 0.75 * scale, dy + cellPx);
+        }
+        if (voidE) {
+          groundCtx.moveTo(dx + cellPx - 0.75 * scale, dy);
+          groundCtx.lineTo(dx + cellPx - 0.75 * scale, dy + cellPx);
+        }
+        groundCtx.stroke();
+        groundCtx.restore();
+      }
+
+      // 90° Concave-Corner Parapet Coping Miters whenever the two adjacent cardinal sides of a corner are solid
+      const wm = tile.autotileMask & 15;
+      const hasN = (wm & AUTOTILE_NORTH) !== 0;
+      const hasE = (wm & AUTOTILE_EAST) !== 0;
+      const hasS = (wm & AUTOTILE_SOUTH) !== 0;
+      const hasW = (wm & AUTOTILE_WEST) !== 0;
+
+      const floorNE =
+        hasN && hasE && tx + 1 < map.cols && ty - 1 >= 0 && !map.isSolidTile(tx + 1, ty - 1);
+      const floorNW =
+        hasN && hasW && tx - 1 >= 0 && ty - 1 >= 0 && !map.isSolidTile(tx - 1, ty - 1);
+      const floorSE =
+        hasS && hasE && tx + 1 < map.cols && ty + 1 < map.rows && !map.isSolidTile(tx + 1, ty + 1);
+      const floorSW =
+        hasS && hasW && tx - 1 >= 0 && ty + 1 < map.rows && !map.isSolidTile(tx - 1, ty + 1);
+
+      if (floorNE || floorNW || floorSE || floorSW) {
+        groundCtx.save();
+
+        // NE 4x4 parapet coping miter (x = 28..32, y = 0..4), preserving T5-WB-17 recording contract
+        if (floorNE) {
+          groundCtx.fillStyle = env.wallFront;
+          groundCtx.fillRect(dx + 25 * scale, dy, 7 * scale, 6 * scale);
+          groundCtx.fillStyle = env.wallTop;
+          groundCtx.fillRect(dx + 25 * scale, dy, 3 * scale, 6 * scale);
+          groundCtx.fillRect(dx + 28 * scale, dy + 4 * scale, 4 * scale, 2 * scale);
+          groundCtx.fillStyle = env.wallFront;
+          groundCtx.fillRect(dx + 28 * scale, dy, 4 * scale, 4 * scale);
+          groundCtx.strokeStyle = env.rim;
+          groundCtx.lineWidth = 1.4 * scale;
+          groundCtx.beginPath();
+          groundCtx.moveTo(dx + 29.8 * scale, dy + 4 * scale);
+          groundCtx.lineTo(dx + 29.8 * scale, dy + 1.8 * scale);
+          groundCtx.lineTo(dx + 32 * scale, dy + 1.8 * scale);
+          groundCtx.stroke();
+          groundCtx.strokeStyle = env.seam;
+          groundCtx.lineWidth = 1.1 * scale;
+          groundCtx.beginPath();
+          groundCtx.moveTo(dx + 28 * scale, dy);
+          groundCtx.lineTo(dx + 28 * scale, dy + 4 * scale);
+          groundCtx.lineTo(dx + 32 * scale, dy + 4 * scale);
+          groundCtx.stroke();
+          groundCtx.strokeStyle = PALETTE.INK_DARK;
+          groundCtx.lineWidth = 1.8 * scale;
+          groundCtx.beginPath();
+          groundCtx.moveTo(dx + 30.9 * scale, dy);
+          groundCtx.lineTo(dx + 30.9 * scale, dy + 1.1 * scale);
+          groundCtx.lineTo(dx + 32 * scale, dy + 1.1 * scale);
+          groundCtx.stroke();
+        }
+
+        // NW 4x4 parapet coping miter (x = 0..4, y = 0..4), preserving T5-WB-17 recording contract
+        if (floorNW) {
+          groundCtx.fillStyle = env.wallFront;
+          groundCtx.fillRect(dx, dy, 7 * scale, 6 * scale);
+          groundCtx.fillStyle = env.wallTop;
+          groundCtx.fillRect(dx + 4 * scale, dy, 3 * scale, 6 * scale);
+          groundCtx.fillRect(dx, dy + 4 * scale, 4 * scale, 2 * scale);
+          groundCtx.fillStyle = env.wallFront;
+          groundCtx.fillRect(dx, dy, 4 * scale, 4 * scale);
+          groundCtx.strokeStyle = env.rim;
+          groundCtx.lineWidth = 1.4 * scale;
+          groundCtx.beginPath();
+          groundCtx.moveTo(dx + 1.8 * scale, dy + 4 * scale);
+          groundCtx.lineTo(dx + 1.8 * scale, dy + 1.8 * scale);
+          groundCtx.lineTo(dx + 4 * scale, dy + 1.8 * scale);
+          groundCtx.stroke();
+          groundCtx.strokeStyle = env.seam;
+          groundCtx.lineWidth = 1.1 * scale;
+          groundCtx.beginPath();
+          groundCtx.moveTo(dx + 4 * scale, dy);
+          groundCtx.lineTo(dx + 4 * scale, dy + 4 * scale);
+          groundCtx.lineTo(dx, dy + 4 * scale);
+          groundCtx.stroke();
+          groundCtx.strokeStyle = PALETTE.INK_DARK;
+          groundCtx.lineWidth = 1.8 * scale;
+          groundCtx.beginPath();
+          groundCtx.moveTo(dx + 1.1 * scale, dy);
+          groundCtx.lineTo(dx + 1.1 * scale, dy + 1.1 * scale);
+          groundCtx.lineTo(dx, dy + 1.1 * scale);
+          groundCtx.stroke();
+        }
+
+        // SE 4x12 cliff-to-parapet corner miter (x = 28..32, y = 20..32), preserving T5-WB-17 recording contract
+        if (floorSE) {
+          groundCtx.fillStyle = env.wallFront;
+          groundCtx.fillRect(dx + 25 * scale, dy + 21 * scale, 7 * scale, 11 * scale);
+          groundCtx.fillStyle = env.wallTop;
+          groundCtx.fillRect(dx + 25 * scale, dy + 21 * scale, 3 * scale, 11 * scale);
+          groundCtx.fillStyle = env.wallFront;
+          groundCtx.fillRect(dx + 28 * scale, dy + 20 * scale, 4 * scale, 12 * scale);
+          groundCtx.fillStyle = env.shadow;
+          groundCtx.fillRect(dx + 28 * scale, dy + 20 * scale, 4 * scale, 2 * scale);
+          groundCtx.strokeStyle = env.seam;
+          groundCtx.lineWidth = 1.1 * scale;
+          groundCtx.beginPath();
+          groundCtx.moveTo(dx + 28 * scale, dy + 20 * scale);
+          groundCtx.lineTo(dx + 28 * scale, dy + 32 * scale);
+          groundCtx.stroke();
+          groundCtx.strokeStyle = PALETTE.INK_DARK;
+          groundCtx.lineWidth = 1.8 * scale;
+          groundCtx.beginPath();
+          groundCtx.moveTo(dx + 32 * scale, dy + 20 * scale);
+          groundCtx.lineTo(dx + 28 * scale, dy + 20 * scale);
+          groundCtx.lineTo(dx + 30.9 * scale, dy + 20 * scale);
+          groundCtx.lineTo(dx + 30.9 * scale, dy + 32 * scale);
+          groundCtx.stroke();
+        }
+
+        // SW 4x12 cliff-to-parapet corner miter (x = 0..4, y = 20..32), preserving T5-WB-17 recording contract
+        if (floorSW) {
+          groundCtx.fillStyle = env.wallFront;
+          groundCtx.fillRect(dx, dy + 21 * scale, 7 * scale, 11 * scale);
+          groundCtx.fillStyle = env.wallTop;
+          groundCtx.fillRect(dx + 4 * scale, dy + 21 * scale, 3 * scale, 11 * scale);
+          groundCtx.fillStyle = env.wallFront;
+          groundCtx.fillRect(dx, dy + 20 * scale, 4 * scale, 12 * scale);
+          groundCtx.fillStyle = env.shadow;
+          groundCtx.fillRect(dx, dy + 20 * scale, 4 * scale, 2 * scale);
+          groundCtx.strokeStyle = env.seam;
+          groundCtx.lineWidth = 1.1 * scale;
+          groundCtx.beginPath();
+          groundCtx.moveTo(dx + 4 * scale, dy + 20 * scale);
+          groundCtx.lineTo(dx + 4 * scale, dy + 32 * scale);
+          groundCtx.stroke();
+          groundCtx.strokeStyle = PALETTE.INK_DARK;
+          groundCtx.lineWidth = 1.8 * scale;
+          groundCtx.beginPath();
+          groundCtx.moveTo(dx, dy + 20 * scale);
+          groundCtx.lineTo(dx + 4 * scale, dy + 20 * scale);
+          groundCtx.lineTo(dx + 1.1 * scale, dy + 20 * scale);
+          groundCtx.lineTo(dx + 1.1 * scale, dy + 32 * scale);
+          groundCtx.stroke();
+        }
+
+        groundCtx.restore();
+      }
+    }
   }
 }
 
@@ -580,6 +1119,8 @@ export function buildArenaTilesImpl(this: GameScene): void {
   this.arenaGroundSprite.setDepth(2);
 
   this.lastRenderedBiome = effectiveBiome;
+  (this as GameScene & { lastConveyorDirection?: 1 | -1 }).lastConveyorDirection =
+    map.conveyorDirection;
   this.lastMapRevision =
     effectiveBiome * 10000000 +
     sim.currentFloor * 1000000 +
@@ -607,17 +1148,67 @@ export function syncArenaTilesWithMapRevisionImpl(this: GameScene): void {
   if (sim.stressTestActive) return;
   const map = sim.map;
   const effectiveBiome: 0 | 1 | 2 | 3 = sim.inHub ? 0 : sim.currentBiome;
+  const expectedW = map.width * this.tileCompositeScale;
+  const expectedH = map.height * this.tileCompositeScale;
+  const dimsChanged =
+    this.mapTileVisuals.length !== map.cols * map.rows ||
+    this.arenaGroundTex?.width !== expectedW ||
+    this.arenaGroundTex?.height !== expectedH;
+  const sceneWithConv = this as GameScene & { lastConveyorDirection?: 1 | -1 };
+  const conveyorFlipped =
+    sceneWithConv.lastConveyorDirection !== undefined &&
+    map.conveyorDirection !== sceneWithConv.lastConveyorDirection;
+  sceneWithConv.lastConveyorDirection = map.conveyorDirection;
+
   const revKey =
     effectiveBiome * 10000000 +
     sim.currentFloor * 1000000 +
     sim.currentRoomId * 10000 +
     map.mapRevision;
-  if (revKey === this.lastMapRevision && effectiveBiome === this.lastRenderedBiome) return;
+  if (
+    !dimsChanged &&
+    !conveyorFlipped &&
+    revKey === this.lastMapRevision &&
+    effectiveBiome === this.lastRenderedBiome
+  ) {
+    return;
+  }
   const biomeChanged = effectiveBiome !== this.lastRenderedBiome;
   this.lastMapRevision = revKey;
   this.lastRenderedBiome = effectiveBiome;
 
-  let groundDirty = false;
+  if (dimsChanged) {
+    if (this.textures.exists('arena_ground_composite')) {
+      this.textures.remove('arena_ground_composite');
+    }
+    this.arenaGroundTex =
+      this.textures.createCanvas('arena_ground_composite', expectedW, expectedH) ?? undefined;
+    if (this.arenaGroundSprite) {
+      this.arenaGroundSprite.setTexture('arena_ground_composite');
+      this.arenaGroundSprite.setPosition(map.width / 2, map.height / 2);
+    }
+    this.mapTileVisuals.length = 0;
+    for (let ty = 0; ty < map.rows; ty++) {
+      for (let tx = 0; tx < map.cols; tx++) {
+        const distToWall = computeTileDistToWall(map, tx, ty);
+        this.mapTileVisuals.push({
+          tx,
+          ty,
+          kind: map.getTile(tx, ty),
+          variant: resolveHybridFloorVariant(tx, ty, distToWall),
+          distToWall,
+          autotileMask: map.getAutotileMask(tx, ty),
+          aoMask: map.getWallAmbientOcclusionMask(tx, ty),
+          surface: map.getSurface(tx, ty),
+          surfaceMask: map.getSurfaceAutotileMask(tx, ty),
+        });
+      }
+    }
+    this.rebuildAllTileCellsToComposite();
+    return;
+  }
+
+  let groundDirty = conveyorFlipped;
 
   for (let i = 0; i < this.mapTileVisuals.length; i++) {
     const tile = this.mapTileVisuals[i]!;

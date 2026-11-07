@@ -562,6 +562,14 @@ describe('AP2-P1B.5 — Procedural VFX for 7 Batch-2 Weapons, ArtGallery 18 Weap
         sim.enemies.length = 0;
         sim.projectiles.length = 0;
         sim.flameFissures.length = 0;
+        sim.props.length = 0;
+        for (let ty = 7; ty <= 9; ty++) {
+          for (let tx = 8; tx <= 16; tx++) {
+            sim.map.tiles[ty * sim.map.cols + tx] = 'floor';
+            sim.map.surfaces[ty * sim.map.cols + tx] = 'none';
+          }
+        }
+        sim.map.rebuildSolidBoxes();
         Object.assign(sim.player, {
           godMode: true,
           x: 308,

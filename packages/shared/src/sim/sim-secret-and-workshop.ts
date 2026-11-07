@@ -97,28 +97,33 @@ export function spawnCoopPressurePlatePuzzleImpl(this: WorldSim, roomId = this.c
   const cx = this.map.width * 0.5;
   const cy = this.map.height * 0.5;
   this.coopPuzzleCompleted = this.completedPuzzleRoomIds.has(roomId);
+  const plateWest = findNearestWalkablePoint(this.map, cx - 110, cy - 118, 20);
+  const plateEast = findNearestWalkablePoint(this.map, cx + 110, cy - 118, 20);
   this.pressurePlates = [
     {
       id: ++this.nextPuzzleEntityId,
-      x: cx - 110,
-      y: cy - 118,
+      x: plateWest.x,
+      y: plateWest.y,
       radius: 20,
       pressed: this.coopPuzzleCompleted,
     },
     {
       id: ++this.nextPuzzleEntityId,
-      x: cx + 110,
-      y: cy - 118,
+      x: plateEast.x,
+      y: plateEast.y,
       radius: 20,
       pressed: this.coopPuzzleCompleted,
     },
   ];
   this.pushBlocks = [];
   if (this.getActivePlayerCount() === 1) {
+    const blockPos = this.coopPuzzleCompleted
+      ? plateEast
+      : findNearestWalkablePoint(this.map, cx + 110, cy - 58, 15);
     this.pushBlocks.push({
       id: ++this.nextPuzzleEntityId,
-      x: cx + 110,
-      y: this.coopPuzzleCompleted ? cy - 118 : cy - 58,
+      x: blockPos.x,
+      y: blockPos.y,
       radius: 15,
     });
   }
@@ -139,18 +144,20 @@ export function ensureSecretWallKickableProp(sim: WorldSim, room: DungeonRoomNod
   );
   if (hasNearbyKickable) return;
 
+  const midX = Math.floor(sim.map.cols / 2);
+  const midY = Math.floor(sim.map.rows / 2);
   const targetX =
     room.secretWallDir === 'W'
       ? 4 * TILE_SIZE + 16
       : room.secretWallDir === 'E'
         ? (sim.map.cols - 5) * TILE_SIZE + 16
-        : 18 * TILE_SIZE + 16;
+        : midX * TILE_SIZE + 16;
   const targetY =
     room.secretWallDir === 'N'
       ? 4 * TILE_SIZE + 16
       : room.secretWallDir === 'S'
         ? (sim.map.rows - 5) * TILE_SIZE + 16
-        : 11 * TILE_SIZE + 16;
+        : midY * TILE_SIZE + 16;
   const safePt = findNearestWalkablePoint(sim.map, targetX, targetY, 18);
   const barricadeKind: PropKind =
     sim.currentBiome === 2
@@ -196,12 +203,13 @@ export function populateSecretRoomContents(
     for (const pl of allPlayers) {
       for (let i = 0; i < clusterPositions.length; i++) {
         const [gx, gy] = clusterPositions[i]!;
+        const safeGoldPt = findNearestWalkablePoint(sim.map, gx, gy, 10);
         sim.pickups.push(
           sim.acquirePickup({
             id: ++sim.nextEntityId,
             kind: 'gold',
-            x: gx,
-            y: gy,
+            x: safeGoldPt.x,
+            y: safeGoldPt.y,
             vx: 0,
             vy: 0,
             amount: 15,
