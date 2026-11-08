@@ -136,28 +136,8 @@ export function resolveInteractPromptSpec(
       };
     }
 
-    case 'flip_cover': {
-      const colorHex = '#38BDF8';
-      const titleText = isEn ? 'Flip Cover' : 'Lật Bàn Chắn';
-      return {
-        key: target.key,
-        kind: 'flip_cover',
-        x: target.x,
-        y: target.y - 24,
-        targetX: target.x,
-        targetY: target.y,
-        highlightRadiusX: 22,
-        highlightRadiusY: 18,
-        keycapText: 'E',
-        titleText,
-        colorHex,
-        colorNum: hexToNum(colorHex),
-        costGold: 0,
-        hasCoinIcon: false,
-        priceText: '',
-        suppressedByWeaponCard: false,
-      };
-    }
+    case 'flip_cover':
+      return null;
 
     case 'chest': {
       const colorHex = WEAPON_RARITY_COLORS[target.chest.rarity];

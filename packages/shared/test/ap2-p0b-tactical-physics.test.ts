@@ -95,35 +95,28 @@ describe('P0B.2 — Global Tactical Physics Laws (Flip Cover [E], Dash/Melee-Kic
       expect(target1).not.toBeNull();
       expect(target1?.kind).toBe('revive');
 
-      // Once ally is alive, Flip Cover (<=52px) beats Chest/Item (<=64px) even when Chest is closer
+      // Once ally is alive, findInteractTarget ignores 'low' barricades (no [E] flip) and selects Chest
       ally.lifeState = 'alive';
       ally.hp = ally.maxHp;
 
       const target2 = findInteractTarget(sim, sim.player.id);
       expect(target2).not.toBeNull();
-      expect(target2?.kind).toBe('flip_cover');
-      if (target2?.kind === 'flip_cover') {
-        expect(target2.prop.id).toBe(table.id);
-      }
+      expect(target2?.kind).toBe('chest');
 
-      // Pressing [E] flips the table rather than opening the chest
+      // Pressing [E] opens the chest directly while table remains 'low'
       const acted = sim.interactWithNearest(sim.player);
       expect(acted).toBe(true);
-      expect(table.coverState).toBe('flipped');
-      expect(chest.opened).toBe(false);
-
-      // Once table is 'flipped', findInteractTarget ignores it and falls back to Chest
-      const target3 = findInteractTarget(sim, sim.player.id);
-      expect(target3?.kind).toBe('chest');
+      expect(table.coverState).toBe('low');
+      expect(chest.opened).toBe(true);
     });
 
-    it('ignores flip cover when coverState is flipped, sliding, or fallen, or when distance > 52px', () => {
+    it('ignores flip cover when coverState is low, flipped, sliding, or fallen', () => {
       const sim = createCleanSim(2102);
       const table = sim.spawnProp('moss_table', 455, 300); // dist = 55 > 52
       expect(findInteractTarget(sim, sim.player.id)).toBeNull();
 
       table.x = 440; // dist = 40 <= 52
-      expect(findInteractTarget(sim, sim.player.id)?.kind).toBe('flip_cover');
+      expect(findInteractTarget(sim, sim.player.id)).toBeNull();
 
       table.coverState = 'flipped';
       expect(findInteractTarget(sim, sim.player.id)).toBeNull();
@@ -191,7 +184,7 @@ describe('P0B.2 — Global Tactical Physics Laws (Flip Cover [E], Dash/Melee-Kic
       nearbyEnemy.kbVy = 0;
 
       sim.consumeEvents();
-      const flipped = sim.interactWithNearest(sim.player);
+      const flipped = sim.flipCoverProp(table, sim.player);
       expect(flipped).toBe(true);
 
       expect(table.coverState).toBe('flipped');
@@ -203,13 +196,13 @@ describe('P0B.2 — Global Tactical Physics Laws (Flip Cover [E], Dash/Melee-Kic
       // Check HP of glacial_barricade (65) and forge_blast_shield (85) when flipped
       sim.player.x = 200;
       sim.player.y = 170;
-      sim.interactWithNearest(sim.player);
+      sim.flipCoverProp(barricade, sim.player);
       expect(barricade.coverState).toBe('flipped');
       expect(barricade.hp).toBe(65);
 
       sim.player.x = 200;
       sim.player.y = 230;
-      sim.interactWithNearest(sim.player);
+      sim.flipCoverProp(shield, sim.player);
       expect(shield.coverState).toBe('flipped');
       expect(shield.hp).toBe(85);
 
@@ -277,7 +270,7 @@ describe('P0B.2 — Global Tactical Physics Laws (Flip Cover [E], Dash/Melee-Kic
     it('blocks walking into flipped cover, requires dot >= 0.45 to Dash-Kick without pushing back player on kick tick, and slides at 520 px/s along aimAngle', () => {
       const sim = createCleanSim(2301);
       const table = sim.spawnProp('moss_table', 440, 300);
-      sim.interactWithNearest(sim.player);
+      sim.flipCoverProp(table, sim.player);
       expect(table.coverState).toBe('flipped');
 
       // 1) Walking into flipped cover (dashTimer = 0) resolves circle collision (blocks player)
@@ -364,7 +357,6 @@ describe('P0B.2 — Global Tactical Physics Laws (Flip Cover [E], Dash/Melee-Kic
       const table = sim.spawnProp('moss_table', 250, 300);
       sim.player.x = 220;
       sim.player.y = 300;
-      sim.interactWithNearest(sim.player);
 
       // Kick table right along +X
       sim.player.x = 250 - table.radius - sim.player.radius + 4;
@@ -431,7 +423,7 @@ describe('P0B.2 — Global Tactical Physics Laws (Flip Cover [E], Dash/Melee-Kic
       sim.player.y = 300;
 
       const table = sim.spawnProp('moss_table', 432, 300);
-      sim.interactWithNearest(sim.player);
+      sim.flipCoverProp(table, sim.player);
       expect(table.coverState).toBe('flipped');
 
       // Step local prediction walking right (+X) into the flipped table: should be blocked by table

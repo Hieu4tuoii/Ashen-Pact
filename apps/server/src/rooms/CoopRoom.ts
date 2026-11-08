@@ -223,6 +223,35 @@ export class CoopRoom extends Room<CoopRoomState> {
       }
     });
 
+    this.onMessage('teleport_room', (client, payload: { roomId?: number }) => {
+      const meta = this.playersBySession.get(client.sessionId);
+      if (!meta || typeof payload?.roomId !== 'number') return;
+      if (this.sim.inHub || this.sim.runState !== 'playing') return;
+      const p = this.sim.getPlayerById(meta.playerId);
+      if (!p || p.lifeState !== 'alive') return;
+      const curRoom = this.sim.getCurrentRoom();
+      if (
+        !curRoom.cleared ||
+        this.sim.hasActiveCombatEnemies() ||
+        this.sim.secretTrialActive ||
+        this.sim.doors.some((d) => d.locked && !d.isSecretPassage)
+      ) {
+        return;
+      }
+      const targetRoom = this.sim.dungeon.rooms[payload.roomId];
+      if (
+        !targetRoom ||
+        targetRoom.id === this.sim.currentRoomId ||
+        (targetRoom.discovery !== 'visited' && targetRoom.discovery !== 'cleared')
+      ) {
+        return;
+      }
+      if (this.sim.enterRoom(targetRoom.id)) {
+        this.sim.doorTransitionCooldown = Math.max(this.sim.doorTransitionCooldown, 0.75);
+        this.broadcastImmediateSnapshot();
+      }
+    });
+
     const rejectIfDebugDisabled = (client: Client, cmdName: string): boolean => {
       if (isServerDebugEnabled()) return false;
       console.warn(

@@ -111,7 +111,7 @@ describe('AP2 Phase P1C.3 — Biome 3 Survival Law ("Nhịp Đập Lò Nung") & 
     const shield = sim.spawnProp('forge_blast_shield', 320, 352);
     sim.player.x = 290;
     sim.player.y = 352;
-    expect(sim.interactWithNearest(sim.player)).toBe(true);
+    expect(sim.flipCoverProp(shield, sim.player)).toBe(true);
     expect(shield.coverState).toBe('flipped');
     expect(shield.hp).toBe(85);
     expect(shield.maxHp).toBe(85);

@@ -2,6 +2,7 @@ import { ENEMIES } from '../data/enemies.js';
 import { angleDiff, circleVsCircle, clamp, distance } from '../math/vec2.js';
 import { COOP_SCALING } from '../data/scaling.js';
 import { TILE_SIZE } from '../protocol/messages.js';
+import { findNearestWalkablePoint } from './arena-room-archetypes.js';
 import {
   fireDwarfCannonLobbedMortar,
   resolveEnemyAimTarget,
@@ -429,11 +430,14 @@ export function updateIronShielderAIImpl(
 export function spawnForgeTitanEnergyCoresImpl(this: WorldSim, boss: SimEnemyState): void {
   const existing = this.enemies.filter((m) => m.defId === 'forge_energy_core' && m.hp > 0).length;
   if (existing > 0) return;
+  const coreRadius = ENEMIES.forge_energy_core?.radius ?? 16;
   const leftX = clamp(boss.x - 125, TILE_SIZE * 3, this.map.width - TILE_SIZE * 3);
   const rightX = clamp(boss.x + 125, TILE_SIZE * 3, this.map.width - TILE_SIZE * 3);
   const coreY = clamp(boss.y, TILE_SIZE * 3, this.map.height - TILE_SIZE * 3);
-  this.spawnEnemy('forge_energy_core', leftX, coreY, true);
-  this.spawnEnemy('forge_energy_core', rightX, coreY, true);
+  const leftPt = findNearestWalkablePoint(this.map, leftX, coreY, coreRadius, this.props);
+  const rightPt = findNearestWalkablePoint(this.map, rightX, coreY, coreRadius, this.props);
+  this.spawnEnemy('forge_energy_core', leftPt.x, leftPt.y, true);
+  this.spawnEnemy('forge_energy_core', rightPt.x, rightPt.y, true);
   this.titanCoreWindowTimer = 0;
   this.titanFirstCoreBrokenId = 0;
 }

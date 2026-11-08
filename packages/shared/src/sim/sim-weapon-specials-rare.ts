@@ -1,4 +1,6 @@
 import { angleDiff, clamp, distance } from '../math/vec2.js';
+import { TILE_SIZE } from '../protocol/messages.js';
+import { findNearestWalkablePoint } from './arena-room-archetypes.js';
 import { enforcePlayerDeployableCap } from './sim-blessings-p4a.js';
 import { resolveEnemyChasmRingOut } from './sim-tactical-physics.js';
 import type {
@@ -94,7 +96,12 @@ export function spawnSeedGunLifeBud(
 
   enforcePlayerDeployableCap(sim, ownerId, 1);
 
-  const col = sim.map.resolveCircleCollision(x, y, 14);
+  const safePt =
+    sim.map.isSolidTile(Math.floor(x / TILE_SIZE), Math.floor(y / TILE_SIZE)) ||
+    sim.map.getSurfaceAtWorld(x, y) === 'chasm'
+      ? findNearestWalkablePoint(sim.map, x, y, 14, sim.props)
+      : { x, y };
+  const col = sim.map.resolveCircleCollision(safePt.x, safePt.y, 14, false);
   const bud: SimSummonState = {
     id: ++sim.nextPuzzleEntityId,
     ownerPlayerId: ownerId,
@@ -661,6 +668,15 @@ export function triggerTetherStaffTacticalVent(
         enemy.kbVx = d > 1e-4 ? (dx / d) * 140 : 0;
         enemy.kbVy = d > 1e-4 ? (dy / d) * 140 : 0;
         if (!sim.stressTestActive) {
+          sim.resolvePropMovementCollision(enemy);
+          const postCol = sim.map.resolveCircleCollision(enemy.x, enemy.y, enemy.radius, true);
+          enemy.x = postCol.x;
+          enemy.y = postCol.y;
+          if (sim.map.isSolidTile(Math.floor(enemy.x / TILE_SIZE), Math.floor(enemy.y / TILE_SIZE))) {
+            const safeEnemyPt = findNearestWalkablePoint(sim.map, enemy.x, enemy.y, enemy.radius, sim.props);
+            enemy.x = safeEnemyPt.x;
+            enemy.y = safeEnemyPt.y;
+          }
           resolveEnemyChasmRingOut(sim, enemy);
         }
       }

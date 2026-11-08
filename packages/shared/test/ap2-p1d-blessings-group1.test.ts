@@ -121,7 +121,7 @@ describe('AP2 Phase P1D.1 — Blessing Data Architecture (26 Phase 1 Cards) & Gr
     // 1. P1 flips cover -> table stays flipped & spawns 2 homing rockets (base 26 DMG scaled to floor 3)
     p1.x = 332;
     p1.y = 352;
-    expect(sim.interactWithNearest(p1)).toBe(true);
+    expect(sim.flipCoverProp(table, p1)).toBe(true);
     expect(table.coverState).toBe('flipped');
     expect(table.blocksEnemyProjectiles).toBe(true);
 
@@ -147,7 +147,7 @@ describe('AP2 Phase P1D.1 — Blessing Data Architecture (26 Phase 1 Cards) & Gr
     const tableP2 = sim.spawnProp('moss_table', 360, 420);
     p2.x = 332;
     p2.y = 420;
-    expect(sim.interactWithNearest(p2)).toBe(true);
+    expect(sim.flipCoverProp(tableP2, p2)).toBe(true);
     expect(sim.projectiles.filter((b) => b.weaponId === 'table_tech_rocket')).toHaveLength(0);
 
     // 3. P1 Dash-Kicks the flipped table -> rocketCharged = true, speed = 620 px/s, explodes on impact (base 60 Fire DMG, r=104px)
@@ -265,7 +265,7 @@ describe('AP2 Phase P1D.1 — Blessing Data Architecture (26 Phase 1 Cards) & Gr
 
     p1.x = 370;
     p1.y = 352;
-    expect(sim.interactWithNearest(p1)).toBe(true);
+    expect(sim.flipCoverProp(table, p1)).toBe(true);
 
     expect(sim.projectiles.some((b) => b.id === 9101)).toBe(false);
     expect(sim.projectiles.some((b) => b.id === 9102)).toBe(true);
@@ -314,14 +314,14 @@ describe('AP2 Phase P1D.1 — Blessing Data Architecture (26 Phase 1 Cards) & Gr
     const prismTable1 = sim.spawnProp('moss_table', 420, 352);
     p1.x = 390;
     p1.y = 352;
-    expect(sim.interactWithNearest(p1)).toBe(true);
+    expect(sim.flipCoverProp(prismTable1, p1)).toBe(true);
     expect(prismTable1.flippedByPlayerId).toBe(p1.id);
     expect(prismTable1.prismAuraActive).toBe(true);
 
     const prismTable2 = sim.spawnProp('moss_table', 560, 352);
     p1.x = 530;
     p1.y = 352;
-    expect(sim.interactWithNearest(p1)).toBe(true);
+    expect(sim.flipCoverProp(prismTable2, p1)).toBe(true);
     expect(prismTable2.prismAuraActive).toBe(true);
 
     // Ally P2 fires a single bullet (splitGeneration = 0, damage = 20) through prismTable1
@@ -452,7 +452,7 @@ describe('AP2 Phase P1D.1 — Blessing Data Architecture (26 Phase 1 Cards) & Gr
     const table = sim.spawnProp('moss_table', 360, 320);
     p1.x = 330;
     p1.y = 320;
-    expect(sim.interactWithNearest(p1)).toBe(true);
+    expect(sim.flipCoverProp(table, p1)).toBe(true);
     expect(sim.kickProp(table, p1, 0)).toBe(true);
     expect(Math.hypot(table.vx ?? 0, table.vy ?? 0)).toBeCloseTo(520 * 1.35, 1);
     expect(table.bouncesRemaining).toBe(3);

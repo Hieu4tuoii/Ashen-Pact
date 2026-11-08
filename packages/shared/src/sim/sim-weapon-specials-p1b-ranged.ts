@@ -563,6 +563,10 @@ export function updateVoidStaffOrbInFlight(
       enemy.x = col.x;
       enemy.y = col.y;
       if (!sim.stressTestActive) {
+        sim.resolvePropMovementCollision(enemy);
+        const postCol = sim.map.resolveCircleCollision(enemy.x, enemy.y, enemy.radius, true);
+        enemy.x = postCol.x;
+        enemy.y = postCol.y;
         resolveEnemyChasmRingOut(sim, enemy);
       }
     }
@@ -639,7 +643,13 @@ export function triggerVoidStaffImplosion(
         enemy.x = col.x;
         enemy.y = col.y;
         if (!sim.stressTestActive) {
-          resolveEnemyChasmRingOut(sim, enemy);
+          sim.resolvePropMovementCollision(enemy);
+          const postCol = sim.map.resolveCircleCollision(enemy.x, enemy.y, enemy.radius, true);
+          enemy.x = postCol.x;
+          enemy.y = postCol.y;
+          if (resolveEnemyChasmRingOut(sim, enemy) && enemy.hp <= 0) {
+            continue;
+          }
         }
       }
       const pullAng = d > 1e-4 ? Math.atan2(y - enemy.y, x - enemy.x) : b.angle;

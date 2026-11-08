@@ -309,20 +309,6 @@ export class ArenaMap {
 
     if (roomType === 'start') {
       this.buildLayout(true, true);
-      if (biome === 2) {
-        this.fillSurfaceRect(11, 3, 4, 3, 'ice');
-        this.fillSurfaceRect(17, 3, 4, 3, 'water');
-        this.fillSurfaceRect(22, 3, 3, 3, 'chasm');
-        this.fillSurfaceRect(11, 16, 4, 3, 'ice');
-        this.fillSurfaceRect(16, 16, 4, 3, 'ice');
-        this.fillSurfaceRect(22, 16, 3, 3, 'water');
-      } else if (biome === 3) {
-        this.fillSurfaceRect(11, 3, 9, 2, 'conveyor');
-        this.fillSurfaceRect(22, 3, 3, 3, 'lava');
-        this.fillSurfaceRect(11, 16, 4, 3, 'oil');
-        this.fillSurfaceRect(16, 16, 5, 2, 'conveyor');
-        this.fillSurfaceRect(22, 16, 3, 3, 'lava');
-      }
       if (secretWallBroken && this.cols >= 24) {
         this.setTile(Math.floor(this.cols / 2), 0, 'floor');
         this.rebuildSolidBoxes();
@@ -510,6 +496,9 @@ export class ArenaMap {
   }
 
   private buildLayout(includePillars: boolean, includeSurfaces: boolean): void {
+    this.surfaces.fill('none');
+    this.baseSurfaces.fill('none');
+    this.surfaceTimers.fill(0);
     for (let ty = 0; ty < this.rows; ty++) {
       for (let tx = 0; tx < this.cols; tx++) {
         const isBorder = tx === 0 || ty === 0 || tx === this.cols - 1 || ty === this.rows - 1;
@@ -544,20 +533,36 @@ export class ArenaMap {
     }
 
     if (includeSurfaces && this.cols >= 32 && this.rows >= 20) {
-      // Place all 6 interactive surfaces in distinct tactical zones outside the central spawn lane (y = 8..13)
-      // 1. Water puddle (Top-Left inner courtyard: tx 11..14, ty 3..5)
-      this.fillSurfaceRect(11, 3, 4, 3, 'water');
-      // 2. Oil slick (Top-Center-Right: tx 17..20, ty 3..5)
-      this.fillSurfaceRect(17, 3, 4, 3, 'oil');
-      // 3. Lush Grass patch (Top-Right: tx 22..24, ty 3..5 & Left flank: tx 3..5, ty 7..10)
-      this.fillSurfaceRect(22, 3, 3, 3, 'grass');
-      this.fillSurfaceRect(3, 7, 3, 4, 'grass');
-      // 4. Poison Swamp (Bottom-Left: tx 11..14, ty 16..18)
-      this.fillSurfaceRect(11, 16, 4, 3, 'poison_swamp');
-      // 5. Molten Lava fissure (Bottom-Right: tx 22..24, ty 16..18)
-      this.fillSurfaceRect(22, 16, 3, 3, 'lava');
-      // 6. Slippery Ice sheet (Bottom-Center: tx 16..19, ty 16..18)
-      this.fillSurfaceRect(16, 16, 4, 3, 'ice');
+      if (this.biome === 2) {
+        this.fillSurfaceRect(11, 3, 4, 3, 'ice');
+        this.fillSurfaceRect(17, 3, 4, 3, 'water');
+        this.fillSurfaceRect(22, 3, 3, 3, 'chasm');
+        this.fillSurfaceRect(3, 7, 3, 4, 'ice');
+        this.fillSurfaceRect(11, 16, 4, 3, 'ice');
+        this.fillSurfaceRect(16, 16, 4, 3, 'ice');
+        this.fillSurfaceRect(22, 16, 3, 3, 'water');
+      } else if (this.biome === 3) {
+        this.fillSurfaceRect(11, 3, 9, 2, 'conveyor');
+        this.fillSurfaceRect(22, 3, 3, 3, 'lava');
+        this.fillSurfaceRect(3, 7, 3, 4, 'oil');
+        this.fillSurfaceRect(11, 16, 4, 3, 'oil');
+        this.fillSurfaceRect(16, 16, 5, 2, 'conveyor');
+        this.fillSurfaceRect(22, 16, 3, 3, 'lava');
+      } else {
+        // Place Biome 1 (Whispering Woods) interactive surfaces in distinct tactical zones outside the central spawn lane (y = 8..13)
+        // 1. Water puddle (Top-Left inner courtyard: tx 11..14, ty 3..5)
+        this.fillSurfaceRect(11, 3, 4, 3, 'water');
+        // 2. Oil slick (Top-Center-Right: tx 17..20, ty 3..5)
+        this.fillSurfaceRect(17, 3, 4, 3, 'oil');
+        // 3. Lush Grass patch (Top-Right: tx 22..24, ty 3..5 & Left flank: tx 3..5, ty 7..10)
+        this.fillSurfaceRect(22, 3, 3, 3, 'grass');
+        this.fillSurfaceRect(3, 7, 3, 4, 'grass');
+        // 4. Poison Swamp (Bottom-Left: tx 11..14, ty 16..18)
+        this.fillSurfaceRect(11, 16, 4, 3, 'poison_swamp');
+        // 5. Lush Grass & Poison Swamp patches (Bottom-Center & Bottom-Right)
+        this.fillSurfaceRect(16, 16, 4, 3, 'grass');
+        this.fillSurfaceRect(22, 16, 3, 3, 'poison_swamp');
+      }
     }
 
     this.rebuildSolidBoxes();

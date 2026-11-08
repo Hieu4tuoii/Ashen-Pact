@@ -79,8 +79,11 @@ test.describe('Phase 2 — Pipeline Hình Ảnh & Tương Tác Map', () => {
     });
 
     expect(mapAndLightCheck.surfaces).toEqual(
-      expect.arrayContaining(['water', 'oil', 'grass', 'poison_swamp', 'lava', 'ice']),
+      expect.arrayContaining(['water', 'oil', 'grass', 'poison_swamp']),
     );
+    expect(mapAndLightCheck.surfaces).not.toContain('lava');
+    expect(mapAndLightCheck.surfaces).not.toContain('ice');
+    expect(mapAndLightCheck.surfaces).not.toContain('conveyor');
     expect(mapAndLightCheck.autotiledWallCount).toBeGreaterThan(20);
     expect(mapAndLightCheck.aoFloorCount).toBeGreaterThan(20);
     expect(mapAndLightCheck.propCount).toBeGreaterThanOrEqual(10);

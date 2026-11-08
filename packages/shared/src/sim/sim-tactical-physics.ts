@@ -96,7 +96,7 @@ export function isCircularKickableToyProp(kind: PropKind): boolean {
 
 export function isKickableProp(prop: Pick<SimPropState, 'kind' | 'coverState' | 'hp'>): boolean {
   if (prop.hp <= 0 || prop.coverState === 'sliding' || prop.coverState === 'fallen') return false;
-  return isCircularKickableToyProp(prop.kind) || (isFlippableBarricadeProp(prop.kind) && prop.coverState === 'flipped');
+  return isCircularKickableToyProp(prop.kind) || isFlippableBarricadeProp(prop.kind);
 }
 
 export function getFlippedBarricadeHp(kind: PropKind): number {
@@ -384,8 +384,7 @@ export function flipCoverPropImpl(this: WorldSim, prop: SimPropState, actor: Sim
 export function kickProp(sim: WorldSim, prop: SimPropState, actor: SimPlayerState = sim.player, customAngle?: number): boolean {
   if (tryDetonateCryoShatterSpireOnKickOrSlide(sim, prop, actor.id)) { onPlayerDashKickProp(sim, actor); return true; }
   if (prop.hp > 0 && prop.coverState === 'low' && isFlippableBarricadeProp(prop.kind)) {
-    prop.coverState = 'flipped';
-    prop.state = 'flipped';
+    flipCoverProp(sim, prop, actor);
   }
   if (!isKickableProp(prop)) return false;
   const slideAngle = customAngle ?? actor.aimAngle;
@@ -426,7 +425,6 @@ export function kickPropImpl(this: WorldSim, prop: SimPropState, actor: SimPlaye
 
 export function triggerMeleeKickProps(sim: WorldSim, player: SimPlayerState, halfArc: number, range: number, attackAngle = player.aimAngle): number {
   let kickedCount = 0;
-  const activeBossShell = Boolean(sim.getActiveBoss()?.bossArmorShellActive);
   for (const prop of sim.props) {
     if (prop.kind === 'sliding_ice_block' && prop.enemyPushed && prop.hp > 0) {
       const dist = distance(player.x, player.y, prop.x, prop.y);
@@ -438,13 +436,7 @@ export function triggerMeleeKickProps(sim: WorldSim, player: SimPlayerState, hal
       }
       continue;
     }
-    const canOneStepBossKick =
-      activeBossShell &&
-      prop.coverState === 'low' &&
-      (prop.kind === 'moss_table' ||
-        prop.kind === 'glacial_barricade' ||
-        prop.kind === 'forge_blast_shield');
-    if (!isKickableProp(prop) && !canOneStepBossKick) continue;
+    if (!isKickableProp(prop)) continue;
     const dist = distance(player.x, player.y, prop.x, prop.y);
     if (dist > range + prop.radius) continue;
     const angToProp = Math.atan2(prop.y - player.y, prop.x - player.x);
@@ -520,12 +512,7 @@ export function resolvePropMovementCollision(sim: WorldSim, entity: { x: number;
       }
       if (
         isFlippableBarricadeProp(prop.kind) &&
-        (prop.coverState === 'flipped' ||
-          (prop.coverState === 'low' &&
-            (prop.kind === 'moss_table' ||
-              prop.kind === 'glacial_barricade' ||
-              prop.kind === 'forge_blast_shield') &&
-            Boolean(sim.getActiveBoss()?.bossArmorShellActive)))
+        (prop.coverState === 'flipped' || prop.coverState === 'low')
       ) {
         const toPropLen = Math.max(0.0001, dist);
         const toPropX = (prop.x - asPlayer.x) / toPropLen;
@@ -858,6 +845,17 @@ export function triggerEnemyWallSlam(sim: WorldSim, e: SimEnemyState, hitProp?: 
       : hitProp
         ? Math.atan2(hitProp.y - e.y, hitProp.x - e.x)
         : 0;
+  if (
+    !hitProp &&
+    e.isBoss &&
+    !sim.map.checkProjectileWallHit(
+      e.x + Math.cos(slamImpactAngle) * 12,
+      e.y + Math.sin(slamImpactAngle) * 12,
+      e.radius + 4,
+    ).hit
+  ) {
+    return false;
+  }
 
   e.wallSlamCooldownTimer = e.isBoss ? 2.5 : WALL_SLAM_COOLDOWN_SEC;
   const attackerId = e.lastHitPlayerId ?? sim.player.id;
@@ -913,21 +911,38 @@ export function triggerEnemyWallSlam(sim: WorldSim, e: SimEnemyState, hitProp?: 
 }
 
 export function resolveEnemyChasmRingOut(sim: WorldSim, e: SimEnemyState): boolean {
-  if (e.hp <= 0 || e.isDummy || e.isBoss || e.defId === 'ashen_executioner') return false;
+  if (e.hp <= 0 || e.defId === 'ashen_executioner') return false;
   if (sim.map.getSurfaceAtWorld(e.x, e.y) !== 'chasm') return false;
   const def = ENEMIES[e.defId];
   if (def?.flying) return false;
 
-  const safePt = findNearestWalkablePoint(sim.map, e.x, e.y, e.radius);
+  const safePt = findNearestWalkablePoint(sim.map, e.x, e.y, e.radius, sim.props);
+  if (e.isDummy || e.isBoss) {
+    if (Math.hypot(e.kbVx, e.kbVy) < 25) {
+      const col = sim.map.resolveCircleCollision(safePt.x, safePt.y, e.radius, false);
+      e.x = col.x;
+      e.y = col.y;
+      e.prevX = e.x;
+      e.prevY = e.y;
+    }
+    return false;
+  }
   const attackerId = e.lastHitPlayerId ?? sim.player.id;
 
   if (e.isElite) {
     const ringOutDmg = Math.max(1, Math.round(0.30 * e.maxHp));
     e.hp = Math.max(0, e.hp - ringOutDmg); e.hitFlashTimer = 0.14;
-    e.x = safePt.x; e.y = safePt.y; e.prevX = safePt.x; e.prevY = safePt.y;
+    const col = sim.map.resolveCircleCollision(safePt.x, safePt.y, e.radius, false);
+    e.x = col.x; e.y = col.y;
+    if (!sim.stressTestActive) {
+      sim.resolvePropMovementCollision(e);
+      const postCol = sim.map.resolveCircleCollision(e.x, e.y, e.radius, false);
+      e.x = postCol.x; e.y = postCol.y;
+    }
+    e.prevX = e.x; e.prevY = e.y;
     e.kbVx = 0; e.kbVy = 0; e.vx = 0; e.vy = 0;
     e.stunTimer = Math.max(e.stunTimer ?? 0, 1.0); e.aiState = 'stunned'; e.stateTimer = Math.max(e.stateTimer, 1.0);
-    sim.events.push({ kind: 'ring_out', enemyId: e.id, x: safePt.x, y: safePt.y, isElite: true, damage: ringOutDmg });
+    sim.events.push({ kind: 'ring_out', enemyId: e.id, x: e.x, y: e.y, isElite: true, damage: ringOutDmg });
     if (e.hp <= 0) sim.handleEnemyKilled(e, attackerId);
     return true;
   }

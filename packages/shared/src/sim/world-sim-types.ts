@@ -742,6 +742,9 @@ export interface SimEnemyState {
   bossDpsWindowHits?: number;
   lastCombatText?: string;
   secretTrialEnemy?: boolean;
+  navAnchorX?: number;
+  navAnchorY?: number;
+  navStuckTimer?: number;
 }
 
 export interface SimPendingMortarStrike {

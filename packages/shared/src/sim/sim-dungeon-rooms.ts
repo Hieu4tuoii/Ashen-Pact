@@ -634,17 +634,25 @@ export function spawnNextRoomWaveImpl(this: WorldSim): void {
 
     for (let c = 0; c < offsets.length; c++) {
       const [ox, oy] = offsets[c]!;
-      const rawX = clamp(
+      let rawX = clamp(
         cx + ox + jitterX,
         TILE_SIZE * 2.5,
         this.map.width - TILE_SIZE * 2.5,
       );
-      const rawY = clamp(
+      let rawY = clamp(
         cy + oy + jitterY,
         TILE_SIZE * 2.5,
         this.map.height - TILE_SIZE * 2.5,
       );
-      const resolved = this.map.resolveCircleCollision(rawX, rawY, radius);
+      if (
+        this.map.isSolidTile(Math.floor(rawX / TILE_SIZE), Math.floor(rawY / TILE_SIZE)) ||
+        this.map.getSurfaceAtWorld(rawX, rawY) === 'chasm'
+      ) {
+        const walkableRaw = findNearestWalkablePoint(this.map, rawX, rawY, radius, this.props);
+        rawX = walkableRaw.x;
+        rawY = walkableRaw.y;
+      }
+      const resolved = this.map.resolveCircleCollision(rawX, rawY, radius, false);
       let candX = resolved.x;
       let candY = resolved.y;
       for (let iter = 0; iter < 2; iter++) {
@@ -665,11 +673,12 @@ export function spawnNextRoomWaveImpl(this: WorldSim): void {
             }
           }
         }
-        const reCol = this.map.resolveCircleCollision(candX, candY, radius);
+        const reCol = this.map.resolveCircleCollision(candX, candY, radius, false);
         candX = reCol.x;
         candY = reCol.y;
       }
       if (
+        this.map.isSolidTile(Math.floor(candX / TILE_SIZE), Math.floor(candY / TILE_SIZE)) ||
         this.map.checkProjectileWallHit(candX, candY, radius - 0.5).hit ||
         this.map.getSurfaceAtWorld(candX, candY) === 'chasm'
       ) {
@@ -696,9 +705,36 @@ export function spawnNextRoomWaveImpl(this: WorldSim): void {
       const pick = qualifying[(i + room.wavesSpawned * 2 + room.id) % qualifying.length]!;
       return { x: pick.x, y: pick.y };
     }
-    return bestFallback
-      ? { x: bestFallback.x, y: bestFallback.y }
-      : findNearestWalkablePoint(this.map, cx + 180, cy, radius);
+    if (bestFallback) {
+      return { x: bestFallback.x, y: bestFallback.y };
+    }
+    const fbPt = findNearestWalkablePoint(this.map, cx + 180, cy, radius, this.props);
+    const fbCol = this.map.resolveCircleCollision(fbPt.x, fbPt.y, radius, false);
+    let fbX = fbCol.x;
+    let fbY = fbCol.y;
+    for (let iter = 0; iter < 2; iter++) {
+      for (let pIdx = 0; pIdx < this.props.length; pIdx++) {
+        const prop = this.props[pIdx]!;
+        if (prop.hp <= 0 || (!prop.blocksMovement && prop.kind !== 'ancient_mechanism')) continue;
+        const dx = fbX - prop.x;
+        const dy = fbY - prop.y;
+        const minDist = radius + prop.radius + 6;
+        const dSq = dx * dx + dy * dy;
+        if (dSq < minDist * minDist) {
+          if (dSq > 1e-6) {
+            const d = Math.sqrt(dSq);
+            fbX += (dx / d) * (minDist - d);
+            fbY += (dy / d) * (minDist - d);
+          } else {
+            fbX += minDist;
+          }
+        }
+      }
+      const reCol = this.map.resolveCircleCollision(fbX, fbY, radius, false);
+      fbX = reCol.x;
+      fbY = reCol.y;
+    }
+    return { x: fbX, y: fbY };
   };
 
   let spawnedCount = 0;

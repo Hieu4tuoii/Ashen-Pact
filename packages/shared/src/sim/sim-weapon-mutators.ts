@@ -501,8 +501,20 @@ export function applyChainHarpoonOnHit(
     const dirX = dx / dist;
     const dirY = dy / dist;
     const stopDist = nearestCover.radius + e.radius + 2;
-    e.x = nearestCover.x - dirX * stopDist;
-    e.y = nearestCover.y - dirY * stopDist;
+    const col = sim.map.resolveCircleCollision(
+      nearestCover.x - dirX * stopDist,
+      nearestCover.y - dirY * stopDist,
+      e.radius,
+      false,
+    );
+    e.x = col.x;
+    e.y = col.y;
+    if (!sim.stressTestActive) {
+      sim.resolvePropMovementCollision(e);
+      const postCol = sim.map.resolveCircleCollision(e.x, e.y, e.radius, false);
+      e.x = postCol.x;
+      e.y = postCol.y;
+    }
     e.kbVx = dirX * 260;
     e.kbVy = dirY * 260;
     triggerEnemyWallSlam(sim, e, nearestCover, 260);
@@ -523,7 +535,7 @@ export function applyChainHarpoonOnHit(
     for (let dist = 16; dist <= maxRange; dist += 16) {
       const tx = e.x + rdx * dist;
       const ty = e.y + rdy * dist;
-      const res = sim.map.resolveCircleCollision(tx, ty, e.radius, true);
+      const res = sim.map.resolveCircleCollision(tx, ty, e.radius, false);
       if (res.collided && dist < foundWallDist) {
         foundWallDist = dist;
         bestWallX = res.x;
@@ -538,6 +550,12 @@ export function applyChainHarpoonOnHit(
   if (foundWallDist <= maxRange) {
     e.x = bestWallX;
     e.y = bestWallY;
+    if (!sim.stressTestActive) {
+      sim.resolvePropMovementCollision(e);
+      const postCol = sim.map.resolveCircleCollision(e.x, e.y, e.radius, false);
+      e.x = postCol.x;
+      e.y = postCol.y;
+    }
     e.kbVx = bestDirX * 260;
     e.kbVy = bestDirY * 260;
     triggerEnemyWallSlam(sim, e, undefined, 260);

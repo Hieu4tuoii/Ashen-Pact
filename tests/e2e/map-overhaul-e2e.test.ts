@@ -104,7 +104,42 @@ import {
   WALL_AO_NORTH_WEST,
   WALL_AO_WEST,
   WorldSim,
+  distance,
+  ENEMIES,
+  type EnemyDefId,
+  findInteractTarget,
+  hasClearWalkableCorridor,
+  i18n,
+  INPUT_BUTTON,
+  type InteractTargetResult,
+  isKickableProp,
+  isPointBlockedByStationaryProp,
+  resolveEnemyChasmRingOut,
+  type RoomType,
+  triggerMeleeKickProps,
+  WORLD_VIEW_WIDTH,
 } from '@ashen-pact/shared';
+import {
+  syncAshenExecutionerInRoom,
+  updateAshenExecutionerAI,
+} from '../../packages/shared/src/sim/sim-ashen-pacts-combat.js';
+import { triggerDashFlameShackle } from '../../packages/shared/src/sim/sim-blessings-dash-reload.js';
+import {
+  executeBossSporeKingAttackImpl,
+  updateBossSporeKingAIImpl,
+} from '../../packages/shared/src/sim/sim-enemies-biome1.js';
+import { spawnKryssaMirrorClonesImpl } from '../../packages/shared/src/sim/sim-enemies-biome2.js';
+import { spawnForgeTitanEnergyCoresImpl } from '../../packages/shared/src/sim/sim-enemies-biome3.js';
+import { applyChainHarpoonOnHit } from '../../packages/shared/src/sim/sim-weapon-mutators.js';
+import { updateEmeraldCleaverBoomerang } from '../../packages/shared/src/sim/sim-weapon-specials-p1b-melee.js';
+import {
+  triggerVoidStaffImplosion,
+  updateVoidStaffOrbInFlight,
+} from '../../packages/shared/src/sim/sim-weapon-specials-p1b-ranged.js';
+import {
+  spawnSeedGunLifeBud,
+  triggerTetherStaffTacticalVent,
+} from '../../packages/shared/src/sim/sim-weapon-specials-rare.js';
 import { ENV_PALETTE, hexToNum, PALETTE } from '../../apps/client/src/art/palette.js';
 import { TextureBaker } from '../../apps/client/src/art/texture-baker.js';
 import { bakeProps } from '../../apps/client/src/art/texture-baker-props.js';
@@ -128,7 +163,17 @@ import {
   type InteractableLightEntry,
   resolveInteractableVisualGlowSpec,
 } from '../../apps/client/src/fx/lighting-config.js';
-import { renderTileCellToCompositeImpl } from '../../apps/client/src/scenes/game-scene/arena-tiles.js';
+import type { GameScene } from '../../apps/client/src/scenes/GameScene.js';
+import {
+  renderTileCellToCompositeImpl,
+  teleportToRoomImpl,
+} from '../../apps/client/src/scenes/game-scene/arena-tiles.js';
+import {
+  canTeleportFromCurrentRoom,
+  resolveMinimapClickedRoomId,
+} from '../../apps/client/src/scenes/game-scene/hud-combat-and-coop.js';
+import { resolveInteractPromptSpec } from '../../apps/client/src/scenes/game-scene/interact-prompt.js';
+import { renderTelegraphsAndShieldImpl } from '../../apps/client/src/scenes/game-scene/telegraphs-and-overlays.js';
 import { graphicsSettings } from '../../apps/client/src/ui/graphics-settings.js';
 import { UI_THEME } from '../../apps/client/src/ui/theme.js';
 import {
@@ -5388,6 +5433,9 @@ if (process.env.VITEST) {
         currentRoom.rows = 22;
         (sim.map as { roomShape?: string }).roomShape = 'donut_ring';
 
+        const adjId = Object.values(currentRoom.connections).find((id) => id !== undefined)!;
+        sim.dungeon.rooms[adjId]!.discovery = 'visited';
+
         // Place player near inner monolith edge so raw dotX would land inside the donut_ring hole
         sim.player.x = sim.map.width * 0.5 - 64;
         sim.player.y = sim.map.height * 0.5;
@@ -5467,6 +5515,1084 @@ if (process.env.VITEST) {
         }
         const holeHalfW = Math.max(3, nodeW * 0.38) * 0.5;
         expect(Math.abs(goldDot![0]! - cx)).toBeGreaterThanOrEqual(holeHalfW);
+      });
+
+      it('T5-WB-27 [F20]: Zero-allocation BFS enemy/boss/summon navigation, multi-angle context steering across carved room shapes, post-prop collision re-resolution, chasm/solid rescue, navStuckTimer recovery, and safe spawns/pulls', () => {
+        const makeCleanNavSim = (seed = 41001, biome: 1 | 2 | 3 = 1) => {
+          const sim = new WorldSim({
+            seed,
+            spawnInitialWave: false,
+            includeTrainingDummy: false,
+            autoRespawnWaves: false,
+            startInHub: false,
+          });
+          sim.currentBiome = biome;
+          sim.map.configureRoomLayout('combat', seed, false, biome);
+          for (let ty = 1; ty < sim.map.rows - 1; ty++) {
+            for (let tx = 1; tx < sim.map.cols - 1; tx++) {
+              sim.map.setTile(tx, ty, 'floor');
+              sim.map.setSurface(tx, ty, 'none', 0, true);
+            }
+          }
+          sim.map.rebuildSolidBoxes();
+          sim.props.length = 0;
+          sim.enemies.length = 0;
+          sim.projectiles.length = 0;
+          sim.summons.length = 0;
+          sim.chests.length = 0;
+          sim.worldItems.length = 0;
+          sim.player.x = 320;
+          sim.player.y = 320;
+          sim.player.hp = sim.player.maxHp;
+          return sim;
+        };
+
+        // 1. Large-radius clearance, prop avoidance & 2-step lookahead in findNearestWalkablePoint / findNextWalkableWaypoint / hasClearWalkableCorridor
+        const navSim = makeCleanNavSim(41001, 1);
+        for (let dy = 0; dy < 2; dy++) {
+          for (let dx = 0; dx < 2; dx++) {
+            navSim.map.setTile(10 + dx, 9 + dy, 'pillar');
+          }
+        }
+        navSim.map.rebuildSolidBoxes();
+        const pillarProp = navSim.spawnProp(
+          'rotten_totem_pillar',
+          14 * TILE_SIZE + 16,
+          10 * TILE_SIZE + 16,
+        );
+        expect(pillarProp.blocksMovement).toBe(true);
+        expect(isPointBlockedByStationaryProp(pillarProp.x, pillarProp.y, 14, navSim.props)).toBe(
+          true,
+        );
+        const lowTable = navSim.spawnProp('moss_table', 18 * TILE_SIZE + 16, 10 * TILE_SIZE + 16);
+        expect(isPointBlockedByStationaryProp(lowTable.x, lowTable.y, 14, navSim.props)).toBe(
+          false,
+        );
+
+        const safeFromPillar = findNearestWalkablePoint(
+          navSim.map,
+          10 * TILE_SIZE + 16,
+          9 * TILE_SIZE + 16,
+          34,
+          navSim.props,
+        );
+        expect(
+          navSim.map.isSolidTile(
+            Math.floor(safeFromPillar.x / TILE_SIZE),
+            Math.floor(safeFromPillar.y / TILE_SIZE),
+          ),
+        ).toBe(false);
+        expect(
+          navSim.map.resolveCircleCollision(safeFromPillar.x, safeFromPillar.y, 34, false).collided,
+        ).toBe(false);
+        expect(
+          isPointBlockedByStationaryProp(safeFromPillar.x, safeFromPillar.y, 34, navSim.props),
+        ).toBe(false);
+
+        expect(
+          hasClearWalkableCorridor(
+            navSim.map,
+            12 * TILE_SIZE + 16,
+            10 * TILE_SIZE + 16,
+            16 * TILE_SIZE + 16,
+            10 * TILE_SIZE + 16,
+            14,
+            navSim.props,
+          ),
+        ).toBe(false);
+
+        const wpAroundProp = findNextWalkableWaypoint(
+          navSim.map,
+          13 * TILE_SIZE + 16,
+          10 * TILE_SIZE + 16,
+          16 * TILE_SIZE + 16,
+          10 * TILE_SIZE + 16,
+          navSim.props,
+          false,
+          14,
+        );
+        expect(
+          isPointBlockedByStationaryProp(wpAroundProp.x, wpAroundProp.y, 14, navSim.props),
+        ).toBe(false);
+        expect(
+          navSim.map.isSolidTile(
+            Math.floor(wpAroundProp.x / TILE_SIZE),
+            Math.floor(wpAroundProp.y / TILE_SIZE),
+          ),
+        ).toBe(false);
+
+        // 2. Multi-angle context steering across carved room shapes (donut_ring, l_shape, t_shape, u_shape, multi_chamber, island_catwalk)
+        const shapesAndArchetypes: Array<{
+          shape: (typeof ALL_ROOM_SHAPES)[number];
+          archetype: (typeof ALL_ROOM_ARCHETYPES)[number];
+        }> = [
+          { shape: 'donut_ring', archetype: 'CENTRAL_BASTION' },
+          { shape: 'l_shape', archetype: 'GAUNTLET_CHOKEPOINT' },
+          { shape: 't_shape', archetype: 'PRISM_LABYRINTH' },
+          { shape: 'u_shape', archetype: 'CRUMBLING_PILLAR_RING' },
+          { shape: 'multi_chamber', archetype: 'CROSSFIRE_CONVEYORS' },
+          { shape: 'island_catwalk', archetype: 'TWIN_BRIDGES' },
+        ];
+        for (let idx = 0; idx < shapesAndArchetypes.length; idx++) {
+          const { shape, archetype } = shapesAndArchetypes[idx]!;
+          const sim = makeCleanNavSim(41100 + idx, 1);
+          const layout = sim.map.configureRoomLayout(
+            'combat',
+            41100 + idx,
+            false,
+            1,
+            archetype,
+            undefined,
+            { roomSizePreset: 'standard', roomShape: shape },
+          );
+          sim.props.length = 0;
+          if (layout) {
+            for (const anchor of layout.propAnchors) {
+              sim.spawnProp(anchor.propKind, anchor.x, anchor.y);
+            }
+          }
+          const doors = getDoorTilesForMap(sim.map);
+          const pPt = findNearestWalkablePoint(
+            sim.map,
+            (doors.W.tx + 2) * TILE_SIZE + 16,
+            doors.W.ty * TILE_SIZE + 16,
+            14,
+            sim.props,
+          );
+          const ePt = findNearestWalkablePoint(
+            sim.map,
+            (doors.E.tx - 2) * TILE_SIZE + 16,
+            doors.E.ty * TILE_SIZE + 16,
+            18,
+            sim.props,
+          );
+          sim.player.x = pPt.x;
+          sim.player.y = pPt.y;
+          sim.player.godMode = true;
+
+          const boar = sim.spawnEnemy('wild_boar', ePt.x, ePt.y, true);
+          boar.hp = 9999;
+          boar.maxHp = 9999;
+          const initialDist = distance(boar.x, boar.y, sim.player.x, sim.player.y);
+
+          for (let step = 0; step < 180; step++) {
+            sim.step(SIM_STEP_SEC);
+            const bTx = Math.floor(boar.x / TILE_SIZE);
+            const bTy = Math.floor(boar.y / TILE_SIZE);
+            expect(sim.map.isSolidTile(bTx, bTy)).toBe(false);
+            expect(sim.map.getSurfaceAtWorld(boar.x, boar.y)).not.toBe('chasm');
+          }
+          const finalDist = distance(boar.x, boar.y, sim.player.x, sim.player.y);
+          expect(finalDist).toBeLessThan(initialDist - 40);
+        }
+
+        // 3. Post-prop collision re-resolution, chasm/solid rescue & navStuckTimer recovery
+        const rescueSim = makeCleanNavSim(41200, 1);
+        rescueSim.map.setTile(10, 10, 'wall');
+        rescueSim.map.rebuildSolidBoxes();
+        const squeezePillar = rescueSim.spawnProp(
+          'rotten_totem_pillar',
+          11 * TILE_SIZE + 12,
+          10 * TILE_SIZE + 16,
+        );
+        const squeezedEnemy = rescueSim.spawnEnemy(
+          'goblin_shooter',
+          11 * TILE_SIZE,
+          10 * TILE_SIZE + 16,
+          true,
+        );
+        squeezedEnemy.x = squeezePillar.x - squeezePillar.radius - 2;
+        squeezedEnemy.y = squeezePillar.y;
+        rescueSim.step(SIM_STEP_SEC);
+        expect(
+          rescueSim.map.isSolidTile(
+            Math.floor(squeezedEnemy.x / TILE_SIZE),
+            Math.floor(squeezedEnemy.y / TILE_SIZE),
+          ),
+        ).toBe(false);
+
+        rescueSim.map.setSurface(15, 10, 'chasm', 0, true);
+        const chasmBoss = rescueSim.spawnEnemy(
+          'spore_king',
+          20 * TILE_SIZE + 16,
+          10 * TILE_SIZE + 16,
+          true,
+        );
+        chasmBoss.x = 15 * TILE_SIZE + 16;
+        chasmBoss.y = 10 * TILE_SIZE + 16;
+        expect(rescueSim.map.getSurfaceAtWorld(chasmBoss.x, chasmBoss.y)).toBe('chasm');
+        rescueSim.step(SIM_STEP_SEC);
+        expect(rescueSim.map.getSurfaceAtWorld(chasmBoss.x, chasmBoss.y)).not.toBe('chasm');
+        expect(
+          rescueSim.map.isSolidTile(
+            Math.floor(chasmBoss.x / TILE_SIZE),
+            Math.floor(chasmBoss.y / TILE_SIZE),
+          ),
+        ).toBe(false);
+
+        rescueSim.map.setTile(9, 8, 'wall');
+        rescueSim.map.rebuildSolidBoxes();
+        const stuckEnemy = rescueSim.spawnEnemy(
+          'goblin_shooter',
+          8 * TILE_SIZE + 20,
+          8 * TILE_SIZE + 16,
+          true,
+        );
+        stuckEnemy.x = 9 * TILE_SIZE - stuckEnemy.radius + 1;
+        stuckEnemy.y = 8 * TILE_SIZE + 16;
+        stuckEnemy.navAnchorX = stuckEnemy.x;
+        stuckEnemy.navAnchorY = stuckEnemy.y;
+        stuckEnemy.navStuckTimer = 0.345;
+        stuckEnemy.strafeSign = 1;
+        rescueSim.player.x = 18 * TILE_SIZE + 16;
+        rescueSim.player.y = 8 * TILE_SIZE + 16;
+        rescueSim.step(SIM_STEP_SEC);
+        expect(stuckEnemy.strafeSign).toBe(-1);
+
+        // 4. Boss unburrow/clones/cores/executioner, summons (sacred_tree, tesla_turret, life_blossom, superheated_cyclone), and pull/yank standoff
+        const bossSim = makeCleanNavSim(41300, 1);
+        bossSim.map.configureRoomLayout(
+          'combat',
+          41300,
+          false,
+          1,
+          'CENTRAL_BASTION',
+          undefined,
+          { roomSizePreset: 'standard', roomShape: 'donut_ring' },
+        );
+        const sporeKing = bossSim.spawnEnemy(
+          'spore_king',
+          6 * TILE_SIZE + 16,
+          10 * TILE_SIZE + 16,
+          true,
+        );
+        const totemAtPlayer = bossSim.spawnProp(
+          'rotten_totem_pillar',
+          bossSim.player.x,
+          bossSim.player.y,
+        );
+        sporeKing.bossPhase = 2;
+        sporeKing.hp = Math.floor(sporeKing.maxHp * 0.5);
+        sporeKing.bossBurrowed = true;
+        sporeKing.bossBurrowTimer = 0.01;
+        sporeKing.aiState = 'move';
+        updateBossSporeKingAIImpl.call(
+          bossSim,
+          sporeKing,
+          distance(sporeKing.x, sporeKing.y, bossSim.player.x, bossSim.player.y),
+          0,
+          0.05,
+        );
+        expect(
+          bossSim.map.isSolidTile(
+            Math.floor(sporeKing.x / TILE_SIZE),
+            Math.floor(sporeKing.y / TILE_SIZE),
+          ),
+        ).toBe(false);
+        expect(
+          distance(sporeKing.x, sporeKing.y, totemAtPlayer.x, totemAtPlayer.y),
+        ).toBeGreaterThanOrEqual(sporeKing.radius + totemAtPlayer.radius - 1);
+
+        sporeKing.bossBurrowed = false;
+        sporeKing.bossAttackCycle = 1;
+        sporeKing.bossAttackPattern = 2;
+        executeBossSporeKingAttackImpl.call(bossSim, sporeKing, bossSim.player.x, bossSim.player.y);
+        const kryssa = bossSim.spawnEnemy(
+          'kryssa_ice_queen',
+          8 * TILE_SIZE + 16,
+          10 * TILE_SIZE + 16,
+          true,
+        );
+        spawnKryssaMirrorClonesImpl.call(bossSim, kryssa);
+        const titan = bossSim.spawnEnemy(
+          'forge_titan',
+          18 * TILE_SIZE + 16,
+          6 * TILE_SIZE + 16,
+          true,
+        );
+        spawnForgeTitanEnergyCoresImpl.call(bossSim, titan);
+        for (const e of bossSim.enemies) {
+          expect(
+            bossSim.map.isSolidTile(Math.floor(e.x / TILE_SIZE), Math.floor(e.y / TILE_SIZE)),
+          ).toBe(false);
+          expect(bossSim.map.getSurfaceAtWorld(e.x, e.y)).not.toBe('chasm');
+        }
+
+        const summonSim = makeCleanNavSim(41302, 1);
+        summonSim.map.setSurface(12, 10, 'chasm', 0, true);
+        summonSim.player.characterId = 'druid';
+        summonSim.player.x = 10 * TILE_SIZE + 16;
+        summonSim.player.y = 10 * TILE_SIZE + 16;
+        summonSim.player.aimAngle = 0;
+        summonSim.player.skillCooldownTimer = 0;
+        summonSim.step({ moveX: 0, moveY: 0, aimAngle: 0, buttons: INPUT_BUTTON.SKILL });
+        const tree = summonSim.summons.find((s) => s.kind === 'sacred_tree');
+        expect(tree).toBeDefined();
+        expect(summonSim.map.getSurfaceAtWorld(tree!.x, tree!.y)).not.toBe('chasm');
+        expect(
+          summonSim.map.isSolidTile(
+            Math.floor(tree!.x / TILE_SIZE),
+            Math.floor(tree!.y / TILE_SIZE),
+          ),
+        ).toBe(false);
+
+        summonSim.player.characterId = 'engineer';
+        summonSim.player.skillCooldownTimer = 0;
+        summonSim.step({ moveX: 0, moveY: 0, aimAngle: 0, buttons: 0 });
+        summonSim.step({ moveX: 0, moveY: 0, aimAngle: 0, buttons: INPUT_BUTTON.SKILL });
+        const turret = summonSim.summons.find((s) => s.kind === 'tesla_turret');
+        expect(turret).toBeDefined();
+        expect(summonSim.map.getSurfaceAtWorld(turret!.x, turret!.y)).not.toBe('chasm');
+        expect(
+          summonSim.map.isSolidTile(
+            Math.floor(turret!.x / TILE_SIZE),
+            Math.floor(turret!.y / TILE_SIZE),
+          ),
+        ).toBe(false);
+
+        spawnSeedGunLifeBud(
+          summonSim,
+          summonSim.player,
+          12 * TILE_SIZE + 16,
+          10 * TILE_SIZE + 16,
+        );
+        const bud = summonSim.summons.find((s) => s.kind === 'life_blossom');
+        expect(bud).toBeDefined();
+        expect(summonSim.map.getSurfaceAtWorld(bud!.x, bud!.y)).not.toBe('chasm');
+
+        const pullSim = makeCleanNavSim(41304, 1);
+        const pullProp = pullSim.spawnProp(
+          'rotten_totem_pillar',
+          12 * TILE_SIZE + 16,
+          10 * TILE_SIZE + 16,
+        );
+        const pulledEnemy = pullSim.spawnEnemy(
+          'goblin_shooter',
+          13 * TILE_SIZE + 16,
+          10 * TILE_SIZE + 16,
+          true,
+        );
+        pulledEnemy.hp = 900;
+        pulledEnemy.maxHp = 900;
+        pullSim.player.characterId = 'druid';
+        pullSim.player.blessingIds = ['druid_poison_roots'];
+        pullSim.player.x = 12 * TILE_SIZE + 16;
+        pullSim.player.y = 10 * TILE_SIZE + 16;
+        pullSim.player.skillCooldownTimer = 0;
+        pullSim.step({ moveX: 0, moveY: 0, aimAngle: 0, buttons: INPUT_BUTTON.SKILL });
+        expect(
+          distance(pulledEnemy.x, pulledEnemy.y, pullProp.x, pullProp.y),
+        ).toBeGreaterThanOrEqual(pullProp.radius + pulledEnemy.radius - 1);
+
+        pullSim.player.blessingIds = ['dash_flame_shackle'];
+        pulledEnemy.x = 14 * TILE_SIZE + 16;
+        pulledEnemy.y = 10 * TILE_SIZE + 16;
+        triggerDashFlameShackle(pullSim, pullSim.player, pullProp.x + 20, pullProp.y);
+        expect(
+          distance(pulledEnemy.x, pulledEnemy.y, pullProp.x, pullProp.y),
+        ).toBeGreaterThanOrEqual(pullProp.radius + pulledEnemy.radius - 1);
+
+        applyChainHarpoonOnHit(pullSim, pullSim.player, pulledEnemy);
+        expect(
+          pullSim.map.isSolidTile(
+            Math.floor(pulledEnemy.x / TILE_SIZE),
+            Math.floor(pulledEnemy.y / TILE_SIZE),
+          ),
+        ).toBe(false);
+
+        pulledEnemy.tetherToX = pullProp.x;
+        pulledEnemy.tetherToY = pullProp.y;
+        pulledEnemy.tetherTimer = 2.0;
+        triggerTetherStaffTacticalVent(pullSim, pullSim.player);
+        expect(
+          distance(pulledEnemy.x, pulledEnemy.y, pullProp.x, pullProp.y),
+        ).toBeGreaterThanOrEqual(pullProp.radius + pulledEnemy.radius - 1);
+
+        const voidOrb = pullSim.acquireProjectile({
+          id: 8801,
+          ownerId: pullSim.player.id,
+          team: 'player',
+          weaponId: 'void_staff_orb',
+          x: pullProp.x,
+          y: pullProp.y,
+          vx: 0,
+          vy: 0,
+          angle: 0,
+          radius: 10,
+          damage: 10,
+          isCrit: false,
+          knockback: 0,
+          pierceRemaining: 5,
+          bounceRemaining: 0,
+          ttlSec: 1.0,
+          element: 'none',
+          amplifiedByShield: false,
+        });
+        updateVoidStaffOrbInFlight(pullSim, voidOrb, SIM_STEP_SEC);
+        expect(
+          distance(pulledEnemy.x, pulledEnemy.y, pullProp.x, pullProp.y),
+        ).toBeGreaterThanOrEqual(pullProp.radius + pulledEnemy.radius - 1);
+
+        triggerVoidStaffImplosion(pullSim, voidOrb);
+        expect(
+          distance(pulledEnemy.x, pulledEnemy.y, pullProp.x, pullProp.y),
+        ).toBeGreaterThanOrEqual(pullProp.radius + pulledEnemy.radius - 1);
+
+        pullSim.map.setSurface(18, 10, 'chasm', 0, true);
+        const ringOutBoss = pullSim.spawnEnemy(
+          'spore_king',
+          17 * TILE_SIZE + 16,
+          10 * TILE_SIZE + 16,
+          true,
+        );
+        ringOutBoss.x = 18 * TILE_SIZE + 16;
+        ringOutBoss.y = 10 * TILE_SIZE + 16;
+        expect(resolveEnemyChasmRingOut(pullSim, ringOutBoss)).toBe(false);
+        expect(pullSim.map.getSurfaceAtWorld(ringOutBoss.x, ringOutBoss.y)).not.toBe('chasm');
+      });
+
+      it('T5-WB-28 [F21]: 100% strict biome-specific terrain purity across Biomes 1, 2, and 3, all 8 room types, all 6 archetypes, all 6 size presets, and all 10 room shapes', () => {
+        const FORBIDDEN_BY_BIOME: Record<1 | 2 | 3, readonly SurfaceKind[]> = {
+          1: ['lava', 'ice', 'conveyor'],
+          2: ['lava', 'poison_swamp', 'grass', 'burning_grass', 'conveyor', 'oil', 'burning_oil'],
+          3: ['ice', 'poison_swamp', 'grass', 'burning_grass', 'water', 'electrified_water'],
+        };
+        const ALL_ROOM_TYPES: readonly RoomType[] = [
+          'start',
+          'combat',
+          'boss',
+          'treasure',
+          'merchant',
+          'shrine',
+          'secret',
+          'portal',
+        ];
+        const map = new ArenaMap();
+
+        for (const biome of [1, 2, 3] as const) {
+          const forbidden = new Set<SurfaceKind>(FORBIDDEN_BY_BIOME[biome]);
+
+          // 1. Direct buildLayout(true, true) check
+          map.biome = biome;
+          map.resize(36, 22);
+          map.buildLayout(true, true);
+          for (let i = 0; i < map.surfaces.length; i++) {
+            expect(forbidden.has(map.surfaces[i]!)).toBe(false);
+          }
+
+          // 2. All 8 room types across all 6 size presets and all 10 room shapes
+          for (const roomType of ALL_ROOM_TYPES) {
+            for (const preset of ALL_ROOM_SIZE_PRESETS) {
+              for (const shape of ALL_ROOM_SHAPES) {
+                map.configureRoomLayout(
+                  roomType,
+                  5000 + biome * 100,
+                  false,
+                  biome,
+                  undefined,
+                  undefined,
+                  { roomSizePreset: preset, roomShape: shape },
+                );
+                for (let i = 0; i < map.surfaces.length; i++) {
+                  const s = map.surfaces[i]!;
+                  if (forbidden.has(s)) {
+                    throw new Error(
+                      `Forbidden surface '${s}' found in biome=${biome}, roomType=${roomType}, preset=${preset}, shape=${shape}`,
+                    );
+                  }
+                }
+              }
+            }
+          }
+
+          // 3. All 6 combat room archetypes (including CROSSFIRE_CONVEYORS) across all 10 room shapes
+          for (const archetype of ALL_ROOM_ARCHETYPES) {
+            for (const shape of ALL_ROOM_SHAPES) {
+              map.configureRoomLayout(
+                'combat',
+                6000 + biome * 100,
+                false,
+                biome,
+                archetype,
+                undefined,
+                { roomSizePreset: 'standard', roomShape: shape },
+              );
+              for (let i = 0; i < map.surfaces.length; i++) {
+                const s = map.surfaces[i]!;
+                if (forbidden.has(s)) {
+                  throw new Error(
+                    `Forbidden surface '${s}' found in biome=${biome}, archetype=${archetype}, shape=${shape}`,
+                  );
+                }
+              }
+            }
+          }
+        }
+
+        // 4. Verify mid-combat elemental transformations remain active
+        map.configureRoomLayout('start', 42001, false, 1);
+        expect(map.getSurface(11, 3)).toBe('water');
+        map.electrifyWaterAt(11, 3, 4.0);
+        expect(map.getSurface(11, 3)).toBe('electrified_water');
+      });
+
+      it('T5-WB-29 [F23]: Entered-only Minimap & [Tab] Full Map fog-of-war hides hidden and discovered rooms and unentered corridors while keeping player gold dot as final fillCircle', () => {
+        const sim = createWorldSimWithOverhaulSupport({ seed: 2026, startInHub: false });
+        sim.enterRoom(sim.dungeon.startRoomId);
+        const startRoom = sim.getCurrentRoom()!;
+
+        for (const r of sim.dungeon.rooms) {
+          if (r.id !== startRoom.id) {
+            r.discovery = r.id % 2 === 0 ? 'discovered' : 'hidden';
+          }
+        }
+
+        const { scene, minimapGraphics: g } = createMockGameSceneHarness(sim);
+
+        const getOpsSinceLastClear = () => {
+          for (let i = g.ops.length - 1; i >= 0; i--) {
+            if (g.ops[i]!.op === 'clear') {
+              return g.ops.slice(i + 1);
+            }
+          }
+          return g.ops;
+        };
+
+        const countCorridorRects = () => {
+          const ops = getOpsSinceLastClear();
+          let count = 0;
+          for (let i = 1; i < ops.length; i++) {
+            const prev = ops[i - 1]!;
+            const cur = ops[i]!;
+            if (
+              prev.op === 'fillStyle' &&
+              prev.args[0] === UI_THEME.panelBorderHighlight &&
+              Math.abs(Number(prev.args[1]) - 0.82) < 1e-4 &&
+              cur.op === 'fillRect'
+            ) {
+              count++;
+            }
+          }
+          return count;
+        };
+
+        const countRoomSilhouettes = () =>
+          getOpsSinceLastClear().filter(
+            (o) =>
+              o.op === 'lineStyle' &&
+              (o.args[1] === 0xfacc15 || o.args[1] === UI_THEME.panelBorderHighlight),
+          ).length;
+
+        // 1. Compact mode with only startRoom entered -> 1 room silhouette, 0 corridors
+        scene.fullMapOpen = false;
+        scene.lastMinimapHash = '';
+        scene.updateMinimapHud();
+        expect(countRoomSilhouettes()).toBe(1);
+        expect(countCorridorRects()).toBe(0);
+
+        const compactOps = getOpsSinceLastClear();
+        const fillCirclesCompact = compactOps.filter((o) => o.op === 'fillCircle');
+        expect(fillCirclesCompact.length).toBeGreaterThanOrEqual(2);
+        let lastFillStyleBeforeDot: { op: string; args: unknown[] } | null = null;
+        for (let i = compactOps.length - 1; i >= 1; i--) {
+          if (compactOps[i]!.op === 'fillCircle') {
+            lastFillStyleBeforeDot = compactOps[i - 1]!;
+            break;
+          }
+        }
+        expect(lastFillStyleBeforeDot?.op).toBe('fillStyle');
+        expect(lastFillStyleBeforeDot?.args[0]).toBe(UI_THEME.status.goldBright);
+
+        // 2. Full Map mode with only startRoom entered -> still 1 room silhouette, 0 corridors
+        scene.fullMapOpen = true;
+        scene.lastMinimapHash = '';
+        scene.updateMinimapHud();
+        expect(countRoomSilhouettes()).toBe(1);
+        expect(countCorridorRects()).toBe(0);
+
+        // 3. Mark one connected neighbor as 'visited' & cleared -> 2 room silhouettes, >=1 corridor, and 1 fast-travel cyan strokeRect
+        const neighborId = Object.values(startRoom.connections).find((id) => id !== undefined)!;
+        const neighborRoom = sim.dungeon.rooms[neighborId]!;
+        neighborRoom.discovery = 'visited';
+        neighborRoom.cleared = true;
+        startRoom.cleared = true;
+        sim.enemies.length = 0;
+
+        scene.lastMinimapHash = '';
+        scene.updateMinimapHud();
+        expect(countRoomSilhouettes()).toBe(2);
+        expect(countCorridorRects()).toBeGreaterThanOrEqual(1);
+
+        const fullMapOps = getOpsSinceLastClear();
+        const cyanTeleportOutlines = fullMapOps.filter(
+          (o, idx) =>
+            o.op === 'strokeRect' &&
+            fullMapOps[idx - 1]?.op === 'lineStyle' &&
+            fullMapOps[idx - 1]?.args[1] === 0x38bdf8,
+        );
+        expect(cyanTeleportOutlines.length).toBe(1);
+
+        for (let i = fullMapOps.length - 1; i >= 1; i--) {
+          if (fullMapOps[i]!.op === 'fillCircle') {
+            expect(fullMapOps[i - 1]?.args[0]).toBe(UI_THEME.status.goldBright);
+            break;
+          }
+        }
+      });
+
+      it('T5-WB-30 [F24]: Fast-travel room teleportation guards (canTeleportFromCurrentRoom), coordinate hit-testing (resolveMinimapClickedRoomId), and departure/arrival VFX (teleportToRoomImpl & renderTelegraphsAndShieldImpl)', () => {
+        // 1. Validate canTeleportFromCurrentRoom guards
+        const guardSim = new WorldSim({ seed: 4242, biome: 1 });
+        guardSim.enterHub();
+        expect(canTeleportFromCurrentRoom(guardSim)).toBe(false);
+
+        guardSim.enterRoom(guardSim.dungeon.startRoomId);
+        const room = guardSim.getCurrentRoom()!;
+        room.cleared = true;
+        guardSim.enemies.length = 0;
+        for (const d of guardSim.doors) d.locked = false;
+        expect(canTeleportFromCurrentRoom(guardSim)).toBe(true);
+
+        guardSim.player.lifeState = 'dead';
+        expect(canTeleportFromCurrentRoom(guardSim)).toBe(false);
+        guardSim.player.lifeState = 'alive';
+
+        room.cleared = false;
+        expect(canTeleportFromCurrentRoom(guardSim)).toBe(false);
+        room.cleared = true;
+
+        guardSim.secretTrialActive = true;
+        expect(canTeleportFromCurrentRoom(guardSim)).toBe(false);
+        guardSim.secretTrialActive = false;
+
+        if (guardSim.doors.length > 0) {
+          guardSim.doors[0]!.isSecretPassage = true;
+          guardSim.doors[0]!.locked = true;
+          expect(canTeleportFromCurrentRoom(guardSim)).toBe(true);
+          guardSim.doors[0]!.isSecretPassage = false;
+          expect(canTeleportFromCurrentRoom(guardSim)).toBe(false);
+          guardSim.doors[0]!.locked = false;
+        }
+
+        const combatEnemyId = (Object.keys(ENEMIES).find((k) => k !== 'training_dummy') ??
+          Object.keys(ENEMIES)[0]!) as EnemyDefId;
+        guardSim.spawnEnemy(combatEnemyId, guardSim.player.x + 120, guardSim.player.y);
+        expect(canTeleportFromCurrentRoom(guardSim)).toBe(false);
+        guardSim.enemies.length = 0;
+        expect(canTeleportFromCurrentRoom(guardSim)).toBe(true);
+
+        // 2. Validate resolveMinimapClickedRoomId across compact/Full Map and uiScale/hudPadX/Y
+        const hitSim = new WorldSim({ seed: 5150, biome: 1 });
+        hitSim.enterRoom(hitSim.dungeon.startRoomId);
+        const startRoom = hitSim.getCurrentRoom()!;
+        const neighborId = Object.values(startRoom.connections).find((id) => id !== undefined)!;
+        const neighborRoom = hitSim.dungeon.rooms[neighborId]!;
+        neighborRoom.discovery = 'cleared';
+        const unvisitedRoom = hitSim.dungeon.rooms.find(
+          (r) => r.id !== startRoom.id && r.id !== neighborRoom.id,
+        )!;
+        unvisitedRoom.discovery = 'discovered';
+
+        let minGx = 99;
+        let maxGx = -99;
+        let minGy = 99;
+        let maxGy = -99;
+        for (const r of hitSim.dungeon.rooms) {
+          if (r.gx < minGx) minGx = r.gx;
+          if (r.gx > maxGx) maxGx = r.gx;
+          if (r.gy < minGy) minGy = r.gy;
+          if (r.gy > maxGy) maxGy = r.gy;
+        }
+        const spanX = Math.max(1, maxGx - minGx + 1);
+        const spanY = Math.max(1, maxGy - minGy + 1);
+
+        const computeViewPtForRoom = (
+          rm: typeof startRoom,
+          fullMapOpen: boolean,
+          uiScale: number,
+          padX: number,
+          padY: number,
+        ) => {
+          const panelW = fullMapOpen ? 420 : 172;
+          const panelH = fullMapOpen ? 280 : 102;
+          const panelX = fullMapOpen ? -480 - panelW * 0.5 : -184;
+          const panelY = fullMapOpen ? 110 : 10;
+          const cellStep = fullMapOpen
+            ? Math.min(52, Math.floor((panelW - 56) / spanX), Math.floor((panelH - 52) / spanY))
+            : Math.min(24, Math.floor((panelW - 24) / spanX), Math.floor((panelH - 22) / spanY));
+          const originX = panelX + (panelW - (spanX - 1) * cellStep) * 0.5;
+          const originY = panelY + (panelH - (spanY - 1) * cellStep) * 0.5;
+          const cx = originX + (rm.gx - minGx) * cellStep;
+          const cy = originY + (rm.gy - minGy) * cellStep;
+          return {
+            viewX: cx * uiScale + WORLD_VIEW_WIDTH + padX,
+            viewY: cy * uiScale - padY,
+          };
+        };
+
+        const prevScale = graphicsSettings.getState().uiScale;
+        try {
+          for (const [fullMapOpen, uiScale, padX, padY] of [
+            [false, 1.0, 0, 0],
+            [true, 1.0, 0, 0],
+            [true, 1.15, 24, 16],
+            [false, 0.9, 12, 8],
+          ] as const) {
+            graphicsSettings.setUiScale(uiScale);
+            const mockHitScene = {
+              transport: { getSim: () => hitSim },
+              fullMapOpen,
+              hudPadX: padX,
+              hudPadY: padY,
+              currentHudUiScale: uiScale,
+            };
+            const ptNeighbor = computeViewPtForRoom(
+              neighborRoom,
+              fullMapOpen,
+              uiScale,
+              padX,
+              padY,
+            );
+            expect(
+              resolveMinimapClickedRoomId(mockHitScene, ptNeighbor.viewX, ptNeighbor.viewY),
+            ).toBe(neighborRoom.id);
+
+            const ptStart = computeViewPtForRoom(startRoom, fullMapOpen, uiScale, padX, padY);
+            expect(resolveMinimapClickedRoomId(mockHitScene, ptStart.viewX, ptStart.viewY)).toBe(
+              startRoom.id,
+            );
+
+            const ptUnvisited = computeViewPtForRoom(
+              unvisitedRoom,
+              fullMapOpen,
+              uiScale,
+              padX,
+              padY,
+            );
+            expect(
+              resolveMinimapClickedRoomId(mockHitScene, ptUnvisited.viewX, ptUnvisited.viewY),
+            ).toBeNull();
+            expect(resolveMinimapClickedRoomId(mockHitScene, 20, 20)).toBeNull();
+          }
+        } finally {
+          graphicsSettings.setUiScale(prevScale);
+        }
+
+        // 3. Validate teleportToRoomImpl & renderTelegraphsAndShieldImpl departure/arrival VFX
+        const tpSim = new WorldSim({ seed: 7777, biome: 1 });
+        tpSim.enterRoom(tpSim.dungeon.startRoomId);
+        const tpStartRoom = tpSim.getCurrentRoom()!;
+        tpStartRoom.cleared = true;
+        tpSim.enemies.length = 0;
+
+        const tpNeighborId = Object.values(tpStartRoom.connections).find(
+          (id) => id !== undefined,
+        )!;
+        const tpNeighborRoom = tpSim.dungeon.rooms[tpNeighborId]!;
+        tpNeighborRoom.discovery = 'visited';
+        tpNeighborRoom.cleared = true;
+
+        const tpHiddenRoom = tpSim.dungeon.rooms.find(
+          (r) => r.id !== tpStartRoom.id && r.id !== tpNeighborRoom.id,
+        )!;
+        tpHiddenRoom.discovery = 'discovered';
+
+        const spawnShaderNova = vi.fn();
+        const spawnChestOpenBurst = vi.fn();
+        const addTrauma = vi.fn();
+        const spawnFloatingAlert = vi.fn();
+        const spawnTransientLight = vi.fn();
+        const roomSend = vi.fn();
+
+        const mockTpScene = {
+          coopMode: 'host' as const,
+          room: { send: roomSend },
+          fullMapOpen: true,
+          irisTransitionDir: 0 as -1 | 0 | 1,
+          irisTransitionProgress: 0,
+          roomTeleportAnimTimer: 0,
+          roomTeleportAnimDuration: 0.28,
+          lastMinimapHash: 'cached',
+          fx: {
+            spawnShaderNova,
+            spawnChestOpenBurst,
+            addTrauma,
+            spawnFloatingAlert,
+          },
+          lighting: {
+            spawnTransientLight,
+          },
+          transport: {
+            getSim: () => tpSim,
+            consumeEvents: () => tpSim.consumeEvents(),
+          },
+          processSimEvents: vi.fn(),
+        } as unknown as GameScene;
+
+        expect(teleportToRoomImpl.call(mockTpScene, tpStartRoom.id)).toBe(false);
+        expect(teleportToRoomImpl.call(mockTpScene, tpHiddenRoom.id)).toBe(false);
+        tpStartRoom.cleared = false;
+        expect(teleportToRoomImpl.call(mockTpScene, tpNeighborRoom.id)).toBe(false);
+        tpStartRoom.cleared = true;
+
+        i18n.setLocale('vi');
+        expect(teleportToRoomImpl.call(mockTpScene, tpNeighborRoom.id)).toBe(true);
+        expect(tpSim.currentRoomId).toBe(tpNeighborRoom.id);
+        expect(tpSim.doorTransitionCooldown).toBeGreaterThanOrEqual(0.75);
+        expect(mockTpScene.fullMapOpen).toBe(false);
+        expect(mockTpScene.irisTransitionDir).toBe(-1);
+        expect(mockTpScene.roomTeleportAnimTimer).toBeCloseTo(0.28, 5);
+        expect(roomSend).toHaveBeenCalledWith('teleport_room', { roomId: tpNeighborRoom.id });
+        expect(spawnShaderNova).toHaveBeenCalledTimes(2);
+        expect(spawnShaderNova.mock.calls[0]?.[3]).toBe('fx_sh_arcane_sigil');
+        expect(spawnShaderNova.mock.calls[1]?.[3]).toBe('fx_sh_arcane_sigil');
+        expect(spawnChestOpenBurst).toHaveBeenCalledWith(tpSim.player.x, tpSim.player.y, 'rare');
+        expect(spawnTransientLight).toHaveBeenCalledTimes(2);
+        expect(addTrauma).toHaveBeenCalledWith(0.2);
+        expect(spawnFloatingAlert).toHaveBeenCalledWith(
+          tpSim.player.x,
+          tpSim.player.y - 18,
+          '⚡ DỊCH CHUYỂN!',
+          PALETTE.CYAN_FROST,
+        );
+
+        const telegraphG = createRecordingGraphics();
+        const floorG = createRecordingGraphics();
+        const overlayScene = {
+          ...mockTpScene,
+          telegraphGraphics: telegraphG,
+          groundHazardGraphics: floorG,
+          cameras: { main: { worldView: { x: 0, y: 0, width: 960, height: 540 } } },
+          entityPosScratch: { x: 0, y: 0 },
+        } as unknown as GameScene;
+        renderTelegraphsAndShieldImpl.call(overlayScene, tpSim.player.x, tpSim.player.y);
+        expect(floorG.ops.some((o) => o.op === 'strokeCircle')).toBe(true);
+        expect(telegraphG.ops.some((o) => o.op === 'strokeCircle')).toBe(true);
+      });
+
+      it('T5-WB-31 [F22 & F25]: Direct 1-step barricade launch on melee swing, melee wave projectile, and dash without [E] flip, plus procedural vector biome barricade baking for all 9 keys', () => {
+        const sim = new WorldSim({
+          seed: 43001,
+          spawnInitialWave: false,
+          includeTrainingDummy: false,
+          autoRespawnWaves: false,
+          startInHub: false,
+        });
+        sim.currentBiome = 1;
+        sim.map.configureRoomLayout('combat', 43001, false, 1);
+        for (let ty = 1; ty < sim.map.rows - 1; ty++) {
+          for (let tx = 1; tx < sim.map.cols - 1; tx++) {
+            sim.map.setTile(tx, ty, 'floor');
+            sim.map.setSurface(tx, ty, 'none', 0, true);
+          }
+        }
+        sim.map.rebuildSolidBoxes();
+        sim.props.length = 0;
+        sim.enemies.length = 0;
+        sim.projectiles.length = 0;
+
+        const p = sim.player;
+        p.blessingIds.push(
+          'table_tech_rocket',
+          'table_tech_blank_nova',
+          'table_tech_magnet_snare',
+          'table_tech_billiard_master',
+        );
+
+        // 1. Low barricades are immediately kickable and never targeted by [E] findInteractTarget or resolveInteractPromptSpec
+        const table = sim.spawnProp('moss_table', 360, 320);
+        const glacial = sim.spawnProp('glacial_barricade', 360, 420);
+        const shield = sim.spawnProp('forge_blast_shield', 360, 220);
+
+        expect(table.coverState).toBe('low');
+        expect(glacial.coverState).toBe('low');
+        expect(shield.coverState).toBe('low');
+        expect(isKickableProp(table)).toBe(true);
+        expect(isKickableProp(glacial)).toBe(true);
+        expect(isKickableProp(shield)).toBe(true);
+
+        p.x = 340;
+        p.y = 320;
+        expect(findInteractTarget(sim, p.id)).toBeNull();
+        expect(sim.interactWithNearest(p)).toBe(false);
+        expect(
+          resolveInteractPromptSpec(sim, {
+            kind: 'flip_cover',
+            key: 'flip_cover:1',
+            x: 360,
+            y: 320,
+            distance: 20,
+            prop: table,
+          } as unknown as InteractTargetResult),
+        ).toBeNull();
+
+        // 2. Direct 1-step Melee Swing launches 'low' moss_table -> transitions HP/micro-blank/Table Tech blessings and slides
+        const enemyNearTable = sim.spawnEnemy('goblin_shooter', 490, 390, true);
+        enemyNearTable.hp = 800;
+        enemyNearTable.maxHp = 800;
+        const enemyBulletNearTable = sim.acquireProjectile({
+          id: 9901,
+          ownerId: enemyNearTable.id,
+          team: 'enemy',
+          weaponId: 'goblin_bow',
+          x: 385,
+          y: 320,
+          vx: -100,
+          vy: 0,
+          angle: Math.PI,
+          radius: 5,
+          damage: 10,
+          isCrit: false,
+          knockback: 0,
+          pierceRemaining: 0,
+          bounceRemaining: 0,
+          ttlSec: 2.0,
+          element: 'none',
+          amplifiedByShield: false,
+        });
+        sim.projectiles.push(enemyBulletNearTable);
+
+        p.weaponSlots = ['berserker_axe', 'rivet_gun'];
+        p.activeWeaponSlot = 0;
+        p.fireCooldownTimer = 0;
+        p.aimAngle = 0;
+        triggerMeleeKickProps(sim, p, Math.PI / 3, 72, 0);
+
+        expect(table.coverState).toBe('sliding');
+        expect(table.hp).toBe(60);
+        expect(table.maxHp).toBe(60);
+        expect(table.rocketCharged).toBe(true);
+        expect(table.bouncesRemaining).toBe(3);
+        expect(sim.projectiles.some((b) => b.id === 9901)).toBe(false);
+        expect(sim.projectiles.filter((b) => b.weaponId === 'table_tech_rocket')).toHaveLength(2);
+        expect(enemyNearTable.stunTimer).toBeGreaterThanOrEqual(0.8);
+
+        // 3. Direct 1-step Dash launches 'low' glacial_barricade (HP = 65)
+        p.x = 360 - glacial.radius - p.radius + 4;
+        p.y = 420;
+        p.dashTimer = 0.1;
+        p.dashDirX = 1;
+        p.dashDirY = 0;
+        p.aimAngle = 0;
+        sim.resolvePropMovementCollision(p);
+        expect(glacial.coverState).toBe('sliding');
+        expect(glacial.hp).toBe(65);
+        expect(glacial.maxHp).toBe(65);
+
+        // 4. Direct 1-step Melee Wave Projectile (knight_sword_wave) & Emerald Cleaver Boomerang launch 'low' barricades
+        const waveProj = sim.acquireProjectile({
+          id: 9902,
+          ownerId: p.id,
+          team: 'player',
+          weaponId: 'knight_sword_wave',
+          x: shield.x - 10,
+          y: shield.y,
+          vx: 480,
+          vy: 0,
+          angle: 0,
+          radius: 16,
+          damage: 25,
+          isCrit: false,
+          knockback: 100,
+          pierceRemaining: 3,
+          bounceRemaining: 0,
+          ttlSec: 0.5,
+          element: 'none',
+          amplifiedByShield: false,
+        });
+        sim.projectiles.push(waveProj);
+        sim.step(SIM_STEP_SEC);
+        expect(shield.coverState).toBe('sliding');
+        expect(shield.hp).toBe(85);
+
+        const tableBoomerang = sim.spawnProp('moss_table', 500, 220);
+        const cleaverProj = sim.acquireProjectile({
+          id: 9903,
+          ownerId: p.id,
+          team: 'player',
+          weaponId: 'emerald_cleaver_boomerang',
+          x: tableBoomerang.x,
+          y: tableBoomerang.y,
+          vx: 400,
+          vy: 0,
+          angle: 0,
+          radius: 18,
+          damage: 30,
+          isCrit: false,
+          knockback: 100,
+          pierceRemaining: 99,
+          bounceRemaining: 0,
+          ttlSec: 1.2,
+          element: 'poison',
+          amplifiedByShield: false,
+        });
+        updateEmeraldCleaverBoomerang(sim, cleaverProj, SIM_STEP_SEC);
+        expect(tableBoomerang.coverState).toBe('sliding');
+
+        // 5. Procedural vector biome barricade baking for all 9 texture keys
+        withMockBakerScene((scene, baked) => {
+          bakeProps(scene, 4);
+
+          const biome1Keys = [
+            'prop_moss_table',
+            'prop_moss_table_flipped',
+            'prop_moss_table_sliding',
+          ] as const;
+          const biome2Keys = [
+            'prop_glacial_barricade',
+            'prop_glacial_barricade_flipped',
+            'prop_glacial_barricade_sliding',
+          ] as const;
+          const biome3Keys = [
+            'prop_forge_blast_shield',
+            'prop_forge_blast_shield_flipped',
+            'prop_forge_blast_shield_sliding',
+          ] as const;
+
+          for (const key of [...biome1Keys, ...biome2Keys, ...biome3Keys]) {
+            const entry = baked.get(key);
+            expect(entry, `Missing baked texture for ${key}`).toBeDefined();
+            const lineToCount = entry!.ctx.ops.filter((o) => o.type === 'lineTo').length;
+            const fillCount = entry!.ctx.ops.filter((o) => o.type === 'fill').length;
+            const strokeCount = entry!.ctx.ops.filter((o) => o.type === 'stroke').length;
+
+            expect(lineToCount, `${key} should have >= 10 lineTo ops`).toBeGreaterThanOrEqual(10);
+            expect(fillCount, `${key} should have >= 3 fill ops`).toBeGreaterThanOrEqual(3);
+            expect(strokeCount, `${key} should have >= 2 stroke ops`).toBeGreaterThanOrEqual(2);
+          }
+
+          for (const key of biome1Keys) {
+            const colors = getAllRecordedColors(baked.get(key)!.ctx);
+            expect(colors.has(PALETTE.GOBLIN_GREEN.toUpperCase())).toBe(true);
+            expect(colors.has(PALETTE.LIME_GLOW.toUpperCase())).toBe(true);
+          }
+
+          for (const key of biome2Keys) {
+            const colors = getAllRecordedColors(baked.get(key)!.ctx);
+            expect(colors.has(PALETTE.COBALT_SHADE.toUpperCase())).toBe(true);
+            expect(colors.has(PALETTE.ICE_WHITE.toUpperCase())).toBe(true);
+          }
+
+          for (const key of biome3Keys) {
+            const colors = getAllRecordedColors(baked.get(key)!.ctx);
+            expect(colors.has(PALETTE.BRASS_CORE.toUpperCase())).toBe(true);
+            expect(colors.has(PALETTE.SOLAR_GOLD.toUpperCase())).toBe(true);
+          }
+
+          expect(TextureBaker.getPropTextureKey('moss_table', 'low')).toBe('prop_moss_table');
+          expect(TextureBaker.getPropTextureKey('moss_table', 'flipped')).toBe(
+            'prop_moss_table_flipped',
+          );
+          expect(TextureBaker.getPropTextureKey('moss_table', 'sliding')).toBe(
+            'prop_moss_table_sliding',
+          );
+          expect(TextureBaker.getPropTextureKey('glacial_barricade', 'low')).toBe(
+            'prop_glacial_barricade',
+          );
+          expect(TextureBaker.getPropTextureKey('forge_blast_shield', 'low')).toBe(
+            'prop_forge_blast_shield',
+          );
+        });
       });
     });
   });

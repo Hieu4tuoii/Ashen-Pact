@@ -87,7 +87,7 @@ describe('AP2 Phase P1C.2 — Biome 2 Survival Law ("Quán Tính Băng Vĩnh C�
 
     sim.player.x = 330;
     sim.player.y = 320;
-    const flipped = sim.interactWithNearest(sim.player);
+    const flipped = sim.flipCoverProp(barricade, sim.player);
     expect(flipped).toBe(true);
     expect(barricade.coverState).toBe('flipped');
     expect(barricade.hp).toBe(65);

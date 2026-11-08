@@ -402,11 +402,41 @@ export function triggerDashFlameShackle(
   }
   if (nearestEnemy.hp <= 0) return true;
 
-  const targetX = obstacle.x - Math.cos(yankAngle) * (nearestEnemy.radius + 2);
-  const targetY = obstacle.y - Math.sin(yankAngle) * (nearestEnemy.radius + 2);
-  const col = sim.map.resolveCircleCollision(targetX, targetY, nearestEnemy.radius, true);
+  const standoff =
+    (obstacle.prop ? obstacle.prop.radius : TILE_SIZE * 0.5) + nearestEnemy.radius + 2;
+  const targetX = obstacle.x - Math.cos(yankAngle) * standoff;
+  const targetY = obstacle.y - Math.sin(yankAngle) * standoff;
+  const col = sim.map.resolveCircleCollision(targetX, targetY, nearestEnemy.radius, false);
   nearestEnemy.x = col.x;
   nearestEnemy.y = col.y;
+  if (!sim.stressTestActive) {
+    sim.resolvePropMovementCollision(nearestEnemy);
+    const postCol = sim.map.resolveCircleCollision(
+      nearestEnemy.x,
+      nearestEnemy.y,
+      nearestEnemy.radius,
+      false,
+    );
+    nearestEnemy.x = postCol.x;
+    nearestEnemy.y = postCol.y;
+    if (
+      sim.map.isSolidTile(
+        Math.floor(nearestEnemy.x / TILE_SIZE),
+        Math.floor(nearestEnemy.y / TILE_SIZE),
+      ) ||
+      sim.map.getSurfaceAtWorld(nearestEnemy.x, nearestEnemy.y) === 'chasm'
+    ) {
+      const safePt = findNearestWalkablePoint(
+        sim.map,
+        nearestEnemy.x,
+        nearestEnemy.y,
+        nearestEnemy.radius,
+        sim.props,
+      );
+      nearestEnemy.x = safePt.x;
+      nearestEnemy.y = safePt.y;
+    }
+  }
   nearestEnemy.kbVx = Math.cos(yankAngle) * 300;
   nearestEnemy.kbVy = Math.sin(yankAngle) * 300;
   nearestEnemy.wallSlamCooldownTimer = 0;

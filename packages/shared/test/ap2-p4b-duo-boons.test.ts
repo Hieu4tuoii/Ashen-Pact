@@ -896,10 +896,10 @@ describe('AP2 Phase P4B.1 — 6 Elemental Duo Boons, 35% Slot-3 Unlock & 60Hz Sy
     expect(enemyBetweenAB.hp).toBe(500);
     expect(enemyBetweenBFar.hp).toBe(500);
 
-    // Player flips tableA with [E], then flips tableB with [E]
+    // Player flips tableA, then flips tableB
     p.x = 320;
     p.y = 292;
-    sim.interactWithNearest(p);
+    sim.flipCoverProp(tableA, p);
     expect(tableA.coverState).toBe('flipped');
 
     // Only 1 of (A, B) is flipped -> still no arc between A & B
@@ -908,7 +908,7 @@ describe('AP2 Phase P4B.1 — 6 Elemental Duo Boons, 35% Slot-3 Unlock & 60Hz Sy
 
     p.x = 500;
     p.y = 292;
-    sim.interactWithNearest(p);
+    sim.flipCoverProp(tableB, p);
     expect(tableB.coverState).toBe('flipped');
 
     // Now both tableA and tableB are 'flipped' at 180px (<= 220px):

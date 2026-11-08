@@ -98,6 +98,22 @@ export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, 
     g.fillCircle(fireX, fireY - 2, 7 - flicker * 0.25);
   }
 
+  if (this.roomTeleportAnimTimer > 0) {
+    const dur = Math.max(0.01, this.roomTeleportAnimDuration || 0.28);
+    const progress = 1 - clamp(this.roomTeleportAnimTimer / dur, 0, 1);
+    const alpha = (1 - progress) * 0.9;
+    const outerR = 14 + progress * 46;
+    const innerR = 8 + (1 - progress) * 24;
+    floorG.fillStyle(hexToNum(PALETTE.CYAN_FROST), alpha * 0.14);
+    floorG.fillCircle(playerX, playerY + 4, outerR);
+    floorG.lineStyle(3.2, hexToNum(PALETTE.INK_DARK), alpha * 0.75);
+    floorG.strokeCircle(playerX, playerY + 4, outerR);
+    floorG.lineStyle(2.2, hexToNum(PALETTE.CYAN_FROST), alpha);
+    floorG.strokeCircle(playerX, playerY + 4, outerR);
+    g.lineStyle(1.8, hexToNum(PALETTE.SOLAR_GOLD), alpha * 0.92);
+    g.strokeCircle(playerX, playerY + 4, innerR);
+  }
+
   // 1. Active Skills & Co-op Downed / Revive Circles for all players
   const allPlayers = sim.getAllPlayers();
   for (let i = 0; i < allPlayers.length; i++) {

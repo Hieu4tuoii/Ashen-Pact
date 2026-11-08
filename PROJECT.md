@@ -1,9 +1,9 @@
-# Project: Ashen-Pact — Commercial 2.5D Map Graphics, Realistic Living Hazards, Multi-Topology Dungeon & Visual/Lighting/Shadow Polish Overhaul (Round 3)
+# Project: Ashen-Pact — Commercial 2.5D Map Graphics, Realistic Living Hazards, Multi-Topology Dungeon, AI Pathfinding, Biome Terrain Purity, Minimap Fast-Travel & Vector Barricades (Round 4)
 
 ## Architecture
 
 ### Overview
-Ashen-Pact's map & environment upgrade is architected across two strictly separated layers connected by deterministic shared state:
+Ashen-Pact's map, simulation, and environment architecture spans two strictly separated layers connected by deterministic shared state:
 1. **Deterministic Shared Simulation (`packages/shared/src/sim/`)**:
    - **Dynamic Multi-Size & Deep Multi-Shape Arena Grid (`ArenaMap` + `DungeonFloorGraph`)**: Supports dynamic `ArenaMap.resize(cols, rows)` across **6 Room Size Presets** (`compact` 28×18, `standard` 36×22, `wide_hall` 46×20, `tall_sanctum` 32×28, `grand_arena` 44×26, `colossal_boss` 48×28) and **10 Authentic *Enter the Gungeon*-Style Room Silhouettes (`RoomShapeKind`)**:
      1. `'rectangle'` — Classic rectangular hall (`0` exterior void tiles; preserves 100% backward compatibility when `cols === 36 && rows === 22 && roomShape === 'rectangle'`).
@@ -16,23 +16,32 @@ Ashen-Pact's map & environment upgrade is architected across two strictly separa
      8. `'donut_ring'` — Ring / Donut chamber with chamfered outer corners and a large central architectural wall monolith (`6..10 × 4..6` tiles in the room center with hollow dark Exterior Void core and 1-tile sculpted interior wall ring).
      9. `'multi_chamber'` — Multi-chamber / Split-wing layout with staggered NE and SW Exterior Void corner cutouts AND interior dividing partition wall wings with narrow doorway chokepoints.
      10. `'island_catwalk'` — Island / Catwalk over Chasm layout with chamfered outer corners and a wide perimeter Chasm moat, leaving a central combat island and satellite pads connected to all 4 door vestibules by 3-tile-wide stone catwalks/bridges.
-   - **Unlocked `TWIN_BRIDGES`, Hazard-Safe Prop/Brazier Placement & Accurate Surface Autotile Families (`M1_r3_sim_surfaces_and_props`)**:
-     - Fixes `ArenaMap.isSameSurfaceFamily` (`arena-map.ts:707`) typo (`b === 'burning_grass'` instead of `a === 'burning_grass'`) so `burning_grass` pools compute accurate perimeter `surfaceMask` values (`!= 15` on outer borders) instead of raw un-bordered 32×32 squares, and separates solid `'ice'` from liquid `'water'` / `'electrified_water'` so adjacent ice and water pools render distinct shoreline rims.
-     - Updates `isValidAnchorTile` and `spawnBrazierSafe` (`arena-room-archetypes.ts`) to prefer dry floor (`map.getSurface(tx, ty) === 'none'`, with safe outward-ring fallback) so `torch_brazier` props and static barricades (`forge_blast_shield`, `slag_crucible`) never spawn inside active `ice`, `lava`, or moving `conveyor` belts.
+   - **Round 4 — Zero-Allocation BFS Enemy/Boss/Summon Navigation, Multi-Angle Context Steering, Post-Prop Collision Re-Resolution & Unsticking (`M1_r4_sim_navigation_terrain_and_barricade_launch`)**:
+     - Upgrades `findNearestWalkablePoint` and `findNextWalkableWaypoint` (`arena-room-archetypes.ts`) with zero-allocation module-level typed arrays, large-radius (`22..36px`) 8-neighbor clearance verification, stationary blocking-prop avoidance (`prop.blocksMovement && prop.hp > 0 && prop.coverState !== 'fallen'`), and 2-tile LOS lookahead.
+     - Adds centralized post-AI pathfinding and multi-angle obstacle avoidance in `updateEnemiesImpl` (`sim-enemies-core.ts`) so all 15 regular enemies, 3 bosses, and moving summons route smoothly around non-rectangular cutouts, central monoliths, partition walls, chasms, bridges, pillars, and props without getting stuck.
+     - Re-runs `this.map.resolveCircleCollision` immediately after `this.resolvePropMovementCollision(e)` and rescues any ground enemy stranded on a `'chasm'` tile or embedded in a solid tile via `findNearestWalkablePoint`, plus stuck-progress recovery (`navStuckTimer`).
+     - Validates all enemy waves (`spawnNextRoomWaveImpl`, `spawnEnemyImpl`), boss teleports/unburrows/adds (`spore_king`, `kryssa_ice_queen`, `forge_titan`, `ashen_executioner`), player summons (`sacred_tree`, `tesla_turret`, `life_blossom`, `superheated_cyclone`), and pull/yank mechanics against solid tiles, chasms, and prop radii.
+   - **Round 4 — Strict Biome-Specific Terrain Separation (`M1_r4_sim_navigation_terrain_and_barricade_launch`)**:
+     - Enforces strict biome-authentic terrain pools across `ArenaMap.buildLayout`, `ArenaMap.configureRoomLayout`, and `buildCrossfireConveyorsGeometry` (`arena-map.ts`, `arena-room-archetypes-p1c.ts`):
+       - **Biome 1 (Whispering Woods / Rừng Cổ)**: `'poison_swamp'`, `'grass'` (`'burning_grass'`/`'ash'`), `'water'` (`'electrified_water'`), `'oil'` (`'burning_oil'`), `'chasm'` — never spawns `'lava'`, `'ice'`, or `'conveyor'`.
+       - **Biome 2 (Hollow Caverns / Hầm Băng)**: `'ice'`, `'water'`, `'electrified_water'`, `'chasm'` — never spawns `'lava'`, `'poison_swamp'`, `'grass'`, `'conveyor'`, or `'oil'`.
+       - **Biome 3 (Ashen Forge / Lò Rèn)**: `'lava'`, `'conveyor'`, `'oil'`, `'burning_oil'`, `'ash'`, `'chasm'` — never spawns `'ice'`, `'poison_swamp'`, `'grass'`, or `'water'`.
+   - **Round 4 — Direct 1-Step Barricade Launch on Slash/Attack/Dash Without `[E]` Flip (`M1_r4_sim_navigation_terrain_and_barricade_launch`)**:
+     - Updates `isKickableProp`, `kickProp`, `triggerMeleeKickProps`, and `resolvePropMovementCollision` (`sim-tactical-physics.ts`), plus melee slash wave projectiles (`sim-projectiles.ts`, `sim-weapon-specials-p1b-melee.ts`), so attacking/slashing or dashing into `'moss_table'`, `'glacial_barricade'`, or `'forge_blast_shield'` in their initial `'low'` state immediately launches them (`coverState = 'sliding'`) along the attack angle while triggering micro-blank bullet clearing and Table Tech blessings, and removes `flip_cover` from `[E]` `findInteractTarget` (`interact-target.ts`).
 
-2. **Commercial 2.5D Client Rendering, Seamless Surfaces, Multi-Axis Bridges, Accurate Lightmaps & Dynamic Shadows (`apps/client/src/`)**:
-   - **Pillar 1 — Seamless Multi-Tile Living Hazards, Concave Shorelines, Chasm Strata & Multi-Axis Bridges (`M2_r3_client_tiles_surfaces_bridges`: `texture-baker-surfaces.ts` + `arena-tiles.ts`)**:
-     - Eliminates the per-tile radial-gradient 32×32 waffle grid on `burning_oil` and `burning_grass`, removes per-tile linear gradient banding on `lava`, `ice`, `water`, and `electrified_water`, keeps Voronoi fissures inside exposed pool edges (`!hasN/E/S/W`), connects `electrified_water` lightning arcs and `oil` sheen across shared tile boundaries, aligns `traceOrganicSurfaceRect` and `traceOrganicShorelineLayer` edge waves, and closes `2.4px` concave inner-corner shoreline gaps on L-shaped/stepped pools.
-     - Clips northern chasm rock strata (`y = 0..13`) horizontally to `[rx, rx + rw]` so top-left/top-right chasm corners keep their West/East side strata, tones down subterranean vein alpha, and suppresses the `2.2px` walkable floor lip on chasm edges that directly border a solid `'wall'` or `'pillar'`.
-     - Upgrades `drawBridgeOverChasmOverlay` to support both **East–West** (`hasChasmN`/`hasChasmS`) and **North–South** (`hasChasmW`/`hasChasmE` / `isVerticalBridge`) 3-tile bridges, drawing guardrails strictly on outer chasm-facing edges and removing internal rail bars between rows/columns of 3-tile bridges.
-   - **Pillar 2 — Complete Parapet Coping, Aligned `4×4`/`4×12` Concave Miters, Diagonal Void Casing, Corner-Only Wall AO & Clean Pillar Medallions (`M2_r3_client_tiles_surfaces_bridges`: `texture-baker-tiles.ts` + `arena-tiles.ts`)**:
-     - Draws West/East/North 4px parapet coping on `!hasS` wall tiles (`y = 0..20` Top Cap above the `y = 20..32` South Cliff Face) with open seam lines only on exposed sides, replaces caution-tape North cliff slashes with subtle mortar weathering, aligns concave corner miters to `4×4` (`floorNE`/`NW`) and `4×12` at `y = 20..32` (`floorSE`/`SW`), adds `6×6` diagonal Exterior Void corner shadows and map-border outer contours, restricts `bakeWallAoOverlay`'s `14×14` corner gradient strictly to convex outer corners (`WALL_AO_NORTH_WEST` without `WALL_AO_NORTH | WALL_AO_WEST`), suppresses `wall_ao` over `chasm`/`lava`/`burning_*`, and prevents non-`2×2` pillars (`1×N`, `2×1`, `2×4`, `3×3+1×2`) from stamping sliced half/quarter rune medallions.
-   - **Pillar 3 — Pixel-Accurate WebGL `lightmapRt` Resize, Exterior Void Light/Mote/God-Ray Masking, Dynamic Pillar Shadows & Direction-Aware Decors (`M3_r3_client_lighting_architecture_minimap`: `lighting-pipeline.ts` + `biome-architecture.ts` + `biome-architecture-render.ts` + `entity-sync.ts`)**:
-     - Enables `webglRt?.setAutoResize?.(true)` around `this.lightmapRt.resize(rtW, rtH)` in `LightingPipeline.update` so the WebGL `RenderTarget` FBO actually resizes from `480×270` to `rtW × rtH`, eliminating the 28%–55% down-right displacement of all dynamic lights across all camera zoom levels.
-     - Anchors Biome 2 God-Rays to active North perimeter wall tiles (`!isExteriorVoidWallTile`), skips dust motes over solid/Exterior Void tiles, masks `isExteriorVoidWallTile` cells above additive lighting layers (`depth 36.2`, preserving the `6px` outer wall shadow casing), and removes hard-edged `glowGraphics` circles so `#0B090E` Exterior Void remains pitch-black and crisp.
-     - Computes true contiguous `widthTiles` and `heightTiles` for `pillarShadows` (fixing floating shadows under `2×1` pillars and half-height shadows on `2×4` pillars), clips pillar shadows to dry floor (`surface === 'none'`), centers `fluted_column`/`forge_anvil`/`mushroom_cluster` on true `2×2` pillars without totem triple-stacking, restores ground `prop_shadow` and removes floating mid-air wall rods on floor `torch_brazier` props, and makes wall decors (`wrought_iron_fence`, `brazier_pedestal`, `steam_pipe_wall`, `root_base`, `ice_alcove`, `sunken_astrolabe`) direction- and cliff-aware.
-   - **Pillar 4 — Minimap Corridor Edge Clipping & Compact Player Dot Sizing (`M3_r3_client_lighting_architecture_minimap`: `hud-qol-and-minimap.ts`)**:
-     - Clips Minimap corridor connector segments to the outer borders of connected room nodes so corridor bars never bleed through `u_shape` / `hourglass` concave cutouts or translucent undiscovered rooms, and scales/clamps the compact-mode player dot so it sits cleanly on the `donut_ring` corridor and does not obscure the `island_catwalk` cross.
+2. **Commercial 2.5D Client Rendering, Entered-Only Minimap Fog-of-War, Fast-Travel Teleportation with VFX & Procedural Vector Biome Barricades (`apps/client/src/` & `apps/server/src/`)**:
+   - **Rounds 1–3 Visual Foundation**: Seamless multi-tile living hazards, concave shorelines, multi-axis bridges, parapet coping, `4×4`/`4×12` concave miters, WebGL `lightmapRt` auto-resize, `#0B090E` Exterior Void masking, dynamic pillar shadows, and grounded braziers.
+   - **Round 4 — Entered-Only Minimap & `[Tab]` Map Fog-of-War (`M2_r4_client_minimap_teleport_vfx_and_vector_barricades`: `hud-qol-and-minimap.ts`)**:
+     - Restricts room node and corridor rendering in `updateMinimapHudImpl` strictly to rooms the player has actually stepped into (`r.discovery === 'visited' || r.discovery === 'cleared' || r.id === sim.currentRoomId`), completely hiding unvisited rooms (`'hidden'` / `'discovered'`) and unvisited corridor stubs.
+   - **Round 4 — Fast-Travel Room Teleportation & Commercial Teleport Out / In VFX (`M2_r4_client_minimap_teleport_vfx_and_vector_barricades`: `hud-qol-and-minimap.ts`, `GameScene.ts`, `arena-tiles.ts`, `CoopRoom.ts`)**:
+     - Enables clicking any visited/cleared room node on the `[Tab]` Full Map or corner Minimap when out of combat (`canTeleportFromCurrentRoom(sim)` + `resolveMinimapClickedRoomId(scene, localViewX, localViewY)`) to fast-travel immediately via `scene.teleportToRoom(targetRoomId)` (with Co-op `'teleport_room'` sync in `CoopRoom.ts` and weapon-fire suppression in `isClickingHud`).
+     - Renders a dramatic **Teleport Out (departure) + Teleport In (arrival)** VFX sequence: origin arcane burst + `triggerIrisTransition('close')` + `zzfx.play('portal_enter')` + destination `fx_sh_arcane_sigil` shader nova + `spawnChestOpenBurst` vertical beam & sparkles + transient cyan frost light + `'⚡ DỊCH CHUYỂN!'` floating alert + `0.28s` `playerRig` vortex spin/scale materialization (`roomTeleportAnimTimer`).
+   - **Round 4 — Sharp Procedural Vector Biome Barricades & `[E]` Prompt Removal (`M2_r4_client_minimap_teleport_vfx_and_vector_barricades`: `texture-baker-props.ts`, `texture-baker-props-p1c.ts`, `interact-prompt.ts`)**:
+     - Suppresses the `[E] Lật Bàn Chắn` / `Flip Cover` UI prompt in `resolveInteractPromptSpec` (`interact-prompt.ts`).
+     - Replaces the flat rectangular table drawings for `prop_moss_table*`, `prop_glacial_barricade*`, and `prop_forge_blast_shield*` (`low`, `flipped`, `sliding`) with sharp, multi-faceted procedural vector biome objects:
+       - **Biome 1 (`prop_moss_table*`)**: **Ancient Runic Moss Boulder / Sylvan Spore Monolith** (craggy octagonal stone monolith, lush forest moss mantle, glowing emerald/mint rune sigil core, and luminous spore buds).
+       - **Biome 2 (`prop_glacial_barricade*`)**: **Runic Permafrost Obelisk / Jagged Cryo Shard Cluster** (hexagonal abyssal ice plinth crowned by 3 interlocking jagged crystal shards, crisp refraction ridges, `-135°` specular glints, and diamond cryo-rune core).
+       - **Biome 3 (`prop_forge_blast_shield*`)**: **Magma Core Anvil / Pressurized Dwarven Slag Cylinder** (octagonal dark-steel containment hull, twin riveted brass pressure bands, horned anvil shoulders, and incandescent molten magma furnace core).
 
 ---
 
@@ -41,25 +50,16 @@ Every feature from the Survey phase must appear here with its assigned milestone
 
 | # | Feature | Description | Milestone | Source |
 |---|---------|-------------|-----------|--------|
-| F1 | Dynamic `ArenaMap.resize(cols, rows)` & Room Size Presets | Support 6 even-dimension room size presets (`compact` 28×18, `standard` 36×22, `wide_hall` 46×20, `tall_sanctum` 32×28, `grand_arena` 44×26, `colossal_boss` 48×28). | M1 (R1) | survey |
-| F2 | Multi-Geometry Room Silhouettes (`RoomShapeKind`) | Initial 4 silhouettes (`rectangle`, `octagon`, `cruciform`, `hourglass`). | M1 (R1) | survey |
-| F3 | Dynamic Door/Vestibule Helpers & Proportional Archetypes | Proportional scaling of all 6 combat archetypes with 100% BFS door connectivity. | M1 (R1) | survey |
-| F4 | Tactical Prop Eviction Protection | Prevent `rotten_totem_pillar` eviction under `MAX_TACTICAL_PROPS_PER_ROOM` from orphaning solid `TileKind.Pillar` tiles. | M1 (R1) | survey |
-| F5 | Realistic Multi-Layered Molten Lava & Crystalline Ice | Multi-layered volcanic magma & crystalline ice across variants `0..7` + `traceOrganicPoolPath`. | M2 (R1) | survey |
-| F6 | All Other Terrain Surfaces, Chasm Strata & 3-Tile Bridges | Upgraded water, electrified water, poison swamp, oil, grass, burning surfaces, chasm strata, conveyors, and 3-tile chasm bridges. | M2 (R1) | survey |
-| F7 | Live Deterministic Surface Animation & Additive Emissive Glow | Per-frame deterministic surface animations and `BlendModes.ADD` emissive hazard glow. | M2 (R1) | survey |
-| F8 | Tactile 2.5D Flagstone Floors, 3/4 Multi-Course Walls & Monumental Pillars | 8-variant ashlar flagstones, raised parapet coping, 3/4 south cliff faces, monumental 2×2 pillars, and wall AO. | M2 (R1) | survey |
-| F9 | Client Ground Composite Auto-Resize, Redraw Fix, Prop Shadows/Life & Secret Door Light Fix | Auto-resize composite texture, re-run `renderGroundPass` on dirty tiles, prop footprint shadows & idle life, secret door light suppression. | M2 (R1) | survey |
-| F10 | Round 1 E2E Test Suite & Adversarial Coverage Hardening | 138-test 5-Tier E2E test suite (`TEST_READY.md`). | M3 (R1) | survey |
-| F11 | Deep *Enter the Gungeon*-Style Room Shapes (10 `RoomShapeKind`s) & Unlocked `TWIN_BRIDGES` | 10 deep room shapes (`rectangle`, `octagon`, `cruciform`, `hourglass`, `l_shape`, `t_shape`, `u_shape`, `donut_ring`, `multi_chamber`, `island_catwalk`) and unlocked `TWIN_BRIDGES`. | `M1_r2_deep_shapes_sim` | R2 survey |
-| F12 | Exterior Void vs. Sculpted 1-Tile Perimeter Wall Rendering & Topology-Aware Biome Decors | `#0B090E` Exterior Void rendering, active 1-tile walls, and `0` decors in Exterior Void. | `M2_r2_void_walls_minimap_client` | R2 survey |
-| F13 | Minimap & `[Tab]` Full-Map Room Shape Silhouettes, Proportional Node Sizing & Live Player Dot | Proportional node sizing and polygon silhouettes for all 10 room shapes. | `M2_r2_void_walls_minimap_client` | R2 survey |
-| F14 | Round 2 5-Tier E2E Suite Expansion & Complete Playwright Room Shape Visual Comparison Suite | 146-test E2E suite and 13 Playwright 1920×1080 screenshots (`01`..`13.png`). | `M3_r2_e2e_and_playwright_visuals` | R2 survey |
-| F15 | Surface Autotile Family Fix (`burning_grass` & `ice`/`water`) & Hazard-Safe Prop/Brazier Spawning | Fix `ArenaMap.isSameSurfaceFamily` typo (`b === 'burning_grass'` on line 707) and separate `'ice'` from `'water'`/`'electrified_water'`; update `isValidAnchorTile` & `spawnBrazierSafe` (`arena-room-archetypes.ts`) so props and floor braziers prefer dry `'none'` floor over `ice`, `lava`, and `conveyor` belts. | `M1_r3_sim_surfaces_and_props` | R3 survey |
-| F16 | Complete Wall Parapet Coping (`!hasS`), `4×4`/`4×12` Concave Miters, Diagonal Void Casing, Corner-Only Wall AO & Non-`2×2` Pillar Medallions | Draw W/E/N 4px parapet coping on `!hasS` wall tiles (`y = 0..20`) with selective open seam strokes; replace caution-tape North cliff slashes with subtle mortar cracks; align concave corner miters to `4×4` / `4×12` (`y = 20..32`); add `6×6` diagonal Exterior Void corner shadows & map-edge outer contours; restrict `bakeWallAoOverlay` `14×14` square to convex outer corners and skip `wall_ao` on `chasm`/`lava`/`burning_*`; restrict quadrant-split pillar medallions strictly to true `2×2` pillars (`texture-baker-tiles.ts`, `arena-tiles.ts`). | `M2_r3_client_tiles_surfaces_bridges` | R3 survey |
-| F17 | Seamless Multi-Tile Hazard Pools, Concave Corner Shorelines, Chasm Top-Corner Strata & Multi-Axis (`N–S` / `E–W`) Chasm Bridges | Eliminate `32×32` radial-gradient waffle grid on `burning_oil`/`burning_grass` and linear-gradient banding on `lava`/`ice`/`water`/`electrified_water`; keep fissures inside exposed pool edges; connect lightning/oil details across tiles; close `2.4px` concave inner-corner shoreline gaps; clip northern chasm rock strata horizontally to `[rx, rx+rw]` and suppress floor lips against solid walls; extend `drawBridgeOverChasmOverlay` to support both E–W and N–S bridges with outer-only chasm guardrails (`texture-baker-surfaces.ts`, `arena-tiles.ts`). | `M2_r3_client_tiles_surfaces_bridges` | R3 survey |
-| F18 | WebGL `lightmapRt` FBO Resize Fix, Exterior Void Light/Mote/God-Ray Masking, Dynamic Pillar Shadows, Grounded Floor Braziers, Direction-Aware Wall Decors & Minimap Corridor Clipping | Enable `webglRt?.setAutoResize?.(true)` around `this.lightmapRt.resize(rtW, rtH)` in `LightingPipeline`; anchor Biome 2 God-Rays to active North walls, skip dust motes in Exterior Void, and mask `isExteriorVoidWallTile` cells above additive light layers (`depth 36.2`); compute true `widthTiles`/`heightTiles` for `pillarShadows` clipped to `surface === 'none'` and center `2×2` pillar decors without totem triple-stacking; restore floor `torch_brazier` shadows and remove mid-air rods; make wall decors direction/cliff-aware; clip Minimap corridors to room node borders and scale/clamp compact player dot (`lighting-pipeline.ts`, `biome-architecture.ts`, `biome-architecture-render.ts`, `entity-sync.ts`, `hud-qol-and-minimap.ts`). | `M3_r3_client_lighting_architecture_minimap` | R3 survey |
-| F19 | Round 3 5-Tier E2E Regression Suite & 13-Scene Playwright Visual Verification (`1920×1080`) | Expand E2E test suite (`tests/e2e/map-overhaul-e2e.test.ts`) with Round 3 regression contracts (`T5-WB-21`+), recapture all 13 Playwright screenshots (`output/playwright/map-overhaul/01..13.png`), visually verify every screenshot via `view_file` for zero remaining visual/shadow/lighting/effect defects, and pass Tier 5 white-box adversarial hardening & Forensic Audit. | `M4_r3_e2e_and_playwright_visuals` | R3 survey |
+| F1–F10 | Round 1 Map Overhaul Features | Multi-size rooms, 4 initial shapes, proportional archetypes, realistic hazards, 2.5D flagstones/walls/pillars, and R1 E2E suite. | M1–M3 (R1) | R1 survey |
+| F11–F14 | Round 2 Deep Room Shapes & Exterior Void | 10 *Enter the Gungeon*-style room shapes, unlocked `TWIN_BRIDGES`, `#0B090E` Exterior Void, polygon minimap silhouettes, and R2 E2E/Playwright suite. | `M1_r2`–`M3_r2` | R2 survey |
+| F15–F19 | Round 3 Visual, Shadow, Lighting & Surface Polish | Surface autotile family fix, hazard-safe prop anchors, `!hasS` wall coping, concave miters, seamless multi-tile pools, N–S/E–W chasm bridges, WebGL `lightmapRt` FBO resize, Exterior Void light masking, dynamic pillar shadows, and R3 E2E/Playwright suite. | `M1_r3`–`M4_r3` | R3 survey |
+| F20 | Zero-Allocation BFS Enemy/Boss/Summon Navigation, Multi-Angle Steering, Post-Prop Re-Resolution & Unsticking | Upgrade `findNearestWalkablePoint` & `findNextWalkableWaypoint` (0-alloc typed arrays, prop avoidance, large-radius clearance, 2-tile lookahead); add centralized post-AI BFS pathfinding & multi-angle obstacle steering in `updateEnemiesImpl`; re-run `resolveCircleCollision` after `resolvePropMovementCollision`; rescue ground enemies on chasms/solid tiles & unstick stalled enemies; validate all wave spawns, boss teleports/unburrows/adds, summons (`sacred_tree`, `tesla_turret`, `life_blossom`, `superheated_cyclone`), and pull/yank mechanics (`packages/shared/src/sim/**`). | `M1_r4_sim_navigation_terrain_and_barricade_launch` | R4 survey (`ORIGINAL_REQUEST` Req 1) |
+| F21 | Strict Biome-Specific Terrain Separation | Eliminate cross-biome terrain surface contamination in `ArenaMap.buildLayout`, `ArenaMap.configureRoomLayout('start')`, and `buildCrossfireConveyorsGeometry` so Biome 1 only spawns Woods surfaces (`poison_swamp`, `grass`, `water`, `oil`), Biome 2 only spawns Ice Cavern surfaces (`ice`, `water`, `electrified_water`), and Biome 3 only spawns Forge surfaces (`lava`, `conveyor`, `oil`, `burning_oil`), while preserving mid-combat elemental surface interactions (`packages/shared/src/sim/arena-map.ts`, `arena-room-archetypes-p1c.ts`). | `M1_r4_sim_navigation_terrain_and_barricade_launch` | R4 survey (`ORIGINAL_REQUEST` Req 2) |
+| F22 | Direct 1-Step Barricade Launch on Slash/Attack/Dash Without `[E]` Flip (Sim) | Allow intact `'low'` `moss_table`, `glacial_barricade`, and `forge_blast_shield` props to be launched directly by melee cone swings, melee slash wave projectiles, and player dashes (`isKickableProp`, `kickProp`, `triggerMeleeKickProps`, `resolvePropMovementCollision`, `sim-projectiles.ts`, `sim-weapon-specials-p1b-melee.ts`, `sim-bot-tactical-helpers.ts`), triggering micro-blank and Table Tech blessings on 1-step launch, and remove `flip_cover` from `[E]` `findInteractTarget` (`interact-target.ts`). | `M1_r4_sim_navigation_terrain_and_barricade_launch` | R4 survey (`ORIGINAL_REQUEST` Req 5A) |
+| F23 | Entered-Only Minimap & `[Tab]` Map Fog-of-War | Restrict room node and corridor rendering in `updateMinimapHudImpl` (`hud-qol-and-minimap.ts`) strictly to rooms the player has entered (`discovery === 'visited' || discovery === 'cleared' || id === sim.currentRoomId`), hiding all unvisited rooms (`'hidden'` / `'discovered'`) and unvisited corridor stubs. | `M2_r4_client_minimap_teleport_vfx_and_vector_barricades` | R4 survey (`ORIGINAL_REQUEST` Req 3) |
+| F24 | Fast-Travel Room Teleportation Between Visited Rooms + Teleport Out / In VFX | Add `canTeleportFromCurrentRoom(sim)` and `resolveMinimapClickedRoomId(scene, localViewX, localViewY)` (`hud-qol-and-minimap.ts`), `GameScene.teleportToRoom(targetRoomId)` (`GameScene.ts`, `arena-tiles.ts`), and Co-op `'teleport_room'` support (`CoopRoom.ts`) with full departure + arrival VFX (`fx_sh_arcane_sigil` nova, `spawnChestOpenBurst` beam/sparkles, transient cyan light, `triggerIrisTransition('close')`, `'⚡ DỊCH CHUYỂN!'` alert, and `0.28s` `playerRig` vortex spin/scale materialization). | `M2_r4_client_minimap_teleport_vfx_and_vector_barricades` | R4 survey (`ORIGINAL_REQUEST` Req 4) |
+| F25 | Commercial Procedural Vector Biome Barricades & `[E]` Prompt Removal (Client) | Return `null` for `flip_cover` in `resolveInteractPromptSpec` (`interact-prompt.ts`) and replace `prop_moss_table*`, `prop_glacial_barricade*`, and `prop_forge_blast_shield*` textures (`texture-baker-props.ts`, `texture-baker-props-p1c.ts`) with multi-faceted procedural vector biome objects (Biome 1: Ancient Runic Moss Boulder / Spore Monolith; Biome 2: Runic Permafrost Obelisk / Cryo Shard Cluster; Biome 3: Magma Core Anvil / Pressurized Slag Cylinder). | `M2_r4_client_minimap_teleport_vfx_and_vector_barricades` | R4 survey (`ORIGINAL_REQUEST` Req 5B) |
+| F26 | Round 4 5-Tier E2E Regression Suite & 13-Scene Playwright Visual Verification | Update `tests/e2e/phase2.spec.ts` & `tests/e2e/map-overhaul-e2e.test.ts` with Round 4 regression contracts (`T5-WB-27`..`31`), recapture all 13 `1920×1080` Playwright WebGL screenshots (`01`..`13.png`), visually verify every screenshot via `view_file`, and pass Tier 5 white-box adversarial hardening & Forensic Audit. | `M3_r4_e2e_and_playwright_visuals` | R4 survey |
 
 ---
 
@@ -67,87 +67,80 @@ Every feature from the Survey phase must appear here with its assigned milestone
 
 | # | Name | Scope | Dependencies | Status |
 |---|------|-------|-------------|--------|
-| 1 | `M1_room_topology_sim` (R1) | Shared Simulation Round 1 (F1–F4). | none | DONE |
-| 2 | `M2_visual_depth_client` (R1) | Client Rendering Round 1 (F5–F9). | M1 (R1) | DONE |
-| 3 | `M3_final_e2e_and_hardening` (R1) | Final Milestone Round 1 (F10). | M1, M2 (R1) | DONE |
-| 4 | `M1_r2_deep_shapes_sim` (R2) | Shared Simulation Round 2 (F11). | none | DONE |
-| 5 | `M2_r2_void_walls_minimap_client` (R2) | Client Rendering & Minimap Round 2 (F12, F13). | none | DONE |
-| 6 | `M3_r2_e2e_and_playwright_visuals` (R2) | E2E Testing & Playwright Visuals Round 2 (F14). | M1_r2, M2_r2 | DONE |
-| 7 | `M1_r3_sim_surfaces_and_props` | Shared Simulation Round 3 (`packages/shared/**`): Fix `isSameSurfaceFamily` (`burning_grass` typo on line 707 + separate `'ice'` from `'water'`/`'electrified_water'`) in `arena-map.ts`; update `isValidAnchorTile` & `spawnBrazierSafe` in `arena-room-archetypes.ts` to prefer dry `'none'` floor over `ice`, `lava`, and `conveyor` belts; add Round 3 shared unit tests and pass all shared tests (F15). | none | DONE (`sub_orch_m1_r3`: `67/67` files / `403/403` shared tests passed, 2 Reviewers APPROVE, 2 Challengers APPROVE, Auditor CLEAN) |
-| 8 | `M2_r3_client_tiles_surfaces_bridges` | Client Tile, Surface & Bridge Baker + Ground Composite Round 3 (`apps/client/src/art/texture-baker-tiles.ts`, `apps/client/src/art/texture-baker-surfaces.ts`, `apps/client/src/scenes/game-scene/arena-tiles.ts`): Fix `!hasS` wall parapet coping & open seam strokes, subtle North cliff mortar weathering, `4×4`/`4×12` (`y = 20..32`) concave corner miters, `6×6` diagonal Exterior Void corner shadows & map-edge outer contours, convex-corner-only `14×14` wall AO & AO suppression over `chasm`/`lava`/`burning_*`, non-`2×2` pillar medallions, seamless `burning_oil`/`burning_grass`/`lava`/`ice`/`water`/`electrified_water`/`oil`/`grass` pools & concave inner-corner shorelines, chasm top-corner strata clipping & wall-to-chasm floor lip suppression, and multi-axis (`N–S` / `E–W`) `drawBridgeOverChasmOverlay` without internal rail bars; add client unit tests (F16, F17). | Interface Contracts defined | DONE (`sub_orch_m2_r3`: `26` suites / `202` client tests passed, 2 Reviewers APPROVE, 2 Challengers APPROVE, Auditor CLEAN) |
-| 9 | `M3_r3_client_lighting_architecture_minimap` | Client Lighting Pipeline, Biome Architecture, Entity Sync & Minimap Round 3 (`apps/client/src/fx/lighting-pipeline.ts`, `apps/client/src/world/biome-architecture.ts`, `apps/client/src/world/biome-architecture-render.ts`, `apps/client/src/scenes/game-scene/entity-sync.ts`, `apps/client/src/scenes/game-scene/hud-qol-and-minimap.ts`): Fix `LightingPipeline` WebGL `RenderTarget.resize` (`setAutoResize(true)`), anchor Biome 2 God-Rays to active North walls, skip dust motes in Exterior Void, mask `isExteriorVoidWallTile` cells above additive lighting (`depth 36.2`), remove hard-edged `glowGraphics` circles, compute true contiguous `widthTiles`/`heightTiles` for `pillarShadows` clipped to `surface === 'none'`, center `2×2` pillar decors without totem triple-stacking, restore floor `torch_brazier` shadows and remove mid-air rods, make wall decors direction/cliff-aware, and clip Minimap corridors to room node borders + scale/clamp compact player dot; add client unit tests (F18). | Interface Contracts defined | DONE (`sub_orch_m3_r3`: `26` suites / `202` client tests & `vite build` passed, 2 Reviewers APPROVE, 2 Challengers APPROVE, Auditor CLEAN) |
-| 10 | `M4_r3_e2e_and_playwright_visuals` | E2E Testing Track Update & Final Visual Verification Round 3 (`tests/e2e/**`, `TEST_INFRA.md`, `TEST_READY.md`, `output/playwright/map-overhaul/**`): Expand 5-Tier E2E suite (`tests/e2e/map-overhaul-e2e.test.ts`) with Round 3 regression contracts (`T5-WB-21`..`26`), recapture all 13 `1920×1080` Playwright WebGL screenshots (`01`..`13.png`), visually inspect every screenshot via `view_file` to verify zero remaining visual/shadow/lighting/effect defects, and pass Tier 5 white-box adversarial coverage hardening & Forensic Audit (F19). | `M1_r3_sim_surfaces_and_props`, `M2_r3_client_tiles_surfaces_bridges`, `M3_r3_client_lighting_architecture_minimap` | DONE (`sub_orch_m4_r3`: `152/152` E2E tests passed, `13/13` Playwright PNGs verified, 2 Reviewers APPROVE, 2 Challengers APPROVE, Auditor CLEAN) |
+| 1–3 | Round 1 Milestones (`M1`–`M3`) | Shared Sim, Client Visuals & E2E Round 1 (F1–F10). | none | DONE |
+| 4–6 | Round 2 Milestones (`M1_r2`–`M3_r2`) | Deep Room Shapes, Exterior Void & E2E Round 2 (F11–F14). | none | DONE |
+| 7–10 | Round 3 Milestones (`M1_r3`–`M4_r3`) | Surface Autotiling, Seamless Pools, Lightmap FBO Resize & E2E Round 3 (F15–F19). | none | DONE |
+| 11 | `M1_r4_sim_navigation_terrain_and_barricade_launch` | Shared Simulation Round 4 (`packages/shared/**`): Implement zero-allocation BFS enemy/boss/summon pathfinding, multi-angle obstacle steering, post-prop collision re-resolution, chasm/solid-tile rescue, stuck recovery, and spawn/pull/yank validation (F20); enforce strict biome-specific terrain separation across Biomes 1, 2, and 3 in `arena-map.ts` and `arena-room-archetypes-p1c.ts` (F21); enable direct 1-step barricade launch (`moss_table`, `glacial_barricade`, `forge_blast_shield`) on melee swing, melee slash wave projectile, and dash without `[E]` flip, and remove `flip_cover` from `findInteractTarget` while updating affected shared tests and adding comprehensive Round 4 shared unit tests (F22). | Interface Contracts defined | DONE (`sub_orch_m1_r4`: `22` sim files + `9` test files, `typecheck` & `vitest` suites passed; 2 Reviewers APPROVE, 2 Challengers APPROVE, Auditor CLEAN) |
+| 12 | `M2_r4_client_minimap_teleport_vfx_and_vector_barricades` | Client & Server Round 4 (`apps/client/**`, `apps/server/**`): Restrict Minimap and `[Tab]` Map room node and corridor rendering to entered rooms (`visited` / `cleared` / `currentRoomId`) (F23); implement click-to-teleport fast-travel on the `[Tab]` Map and Minimap (`canTeleportFromCurrentRoom`, `resolveMinimapClickedRoomId`, `GameScene.teleportToRoom`, `CoopRoom` `'teleport_room'`) with departure + arrival arcane sigil/beam/iris/vortex materialization VFX and weapon-fire suppression (F24); remove `[E] Lật Bàn Chắn` UI prompt in `interact-prompt.ts` and replace `prop_moss_table*`, `prop_glacial_barricade*`, and `prop_forge_blast_shield*` in `texture-baker-props.ts` & `texture-baker-props-p1c.ts` with sharp procedural vector biome objects; add comprehensive Round 4 client unit tests (F25). | Interface Contracts defined | DONE (`sub_orch_m2_r4`: `27/27` suites / `208/208` client tests, client & server `typecheck`, & `vite build` passed; 2 Reviewers APPROVE, 2 Challengers APPROVE, Auditor CLEAN) |
+| 13 | `M3_r4_e2e_and_playwright_visuals` | E2E Testing Track Update & Final Visual Verification Round 4 (`tests/e2e/**`, `TEST_INFRA.md`, `TEST_READY.md`, `output/playwright/map-overhaul/**`): Update `tests/e2e/phase2.spec.ts` and expand 5-Tier E2E suite (`tests/e2e/map-overhaul-e2e.test.ts`) with Round 4 regression contracts (`T5-WB-27`..`31` covering AI navigation/unsticking, biome terrain purity, entered-only minimap fog-of-war, fast-travel teleport + VFX, and 1-step slash-launched vector biome barricades), recapture all 13 `1920×1080` Playwright WebGL screenshots (`01`..`13.png`), visually inspect every screenshot via `view_file`, and pass Tier 5 white-box adversarial coverage hardening & Forensic Audit (F26). | `M1_r4_sim_navigation_terrain_and_barricade_launch`, `M2_r4_client_minimap_teleport_vfx_and_vector_barricades` | DONE (`sub_orch_m3_r4`: `157/157` E2E tests PASS under `ENFORCE_OVERHAUL_CONTRACTS=1`, `pnpm -r typecheck` PASS, `13/13` `1920×1080` WebGL screenshots recaptured & visually verified; 2 Reviewers APPROVE, 2 Challengers APPROVE, Auditor CLEAN) |
 
 ---
 
 ## Interface Contracts
 
-### 1. `packages/shared/src/sim/arena-map.ts` & `arena-room-archetypes.ts` ↔ `apps/client/**` & `tests/e2e/**`
-- **`ArenaMap.isSameSurfaceFamily(a: SurfaceKind, b: SurfaceKind): boolean`**:
-  - Returns `true` when `a === b`, or when `(a === 'water' || a === 'electrified_water') && (b === 'water' || b === 'electrified_water')`, or when `(a === 'grass' || a === 'ash') && (b === 'grass' || b === 'ash')`.
-  - Fixes the line 707 typo (`a === 'burning_grass'`) so `burning_grass` tiles only match `burning_grass` neighbors (giving `surfaceMask !== 15` on pool borders), and separates solid `'ice'` from liquid `'water'` / `'electrified_water'` so adjacent `ice` and `water` pools both draw their shoreline rims.
-- **Hazard-Safe Prop & Brazier Anchor Selection (`arena-room-archetypes.ts`)**:
-  - `isValidAnchorTile` and `spawnBrazierSafe` require `map.getSurface(tx, ty) === 'none'` on the primary search pass (with outward-ring fallback to non-chasm/non-lava/non-conveyor walkable floor only if no `'none'` surface exists in the search radius), ensuring `torch_brazier`, `forge_blast_shield`, and `slag_crucible` do not spawn inside `ice`, `lava`, or `conveyor` belts.
+### 1. `packages/shared/src/sim/**` ↔ `apps/client/**` & `tests/e2e/**` (`M1_r4` ↔ `M2_r4` & `M3_r4`)
+- **Enemy/Boss/Summon Navigation & Safe Placement (`arena-room-archetypes.ts` & `sim-enemies-core.ts`)**:
+  - `findNearestWalkablePoint(map: ArenaMap, worldX: number, worldY: number, radius = 14): { x: number; y: number }`:
+    - Preserves its existing 3-arg / 4-arg signature while ensuring large-radius entities (`radius > 16`) verify `map.resolveCircleCollision(cx, cy, radius, false)` remains on a non-solid, non-chasm tile, preferring tiles with full 8-neighbor clearance.
+  - `findNextWalkableWaypoint(map: ArenaMap, fromX: number, fromY: number, toX: number, toY: number, props?: readonly SimPropState[], ignoreChasm = false): { x: number; y: number }`:
+    - Backward-compatible with existing 5-arg calls; uses preallocated module-level typed arrays (zero per-call heap allocations), avoids tiles blocked by stationary `blocksMovement` props (falling back to ignoring props if all paths are prop-blocked), and looks ahead up to 2–3 tiles when clear line-of-sight exists.
+  - `updateEnemiesImpl` (`sim-enemies-core.ts`):
+    - Applies post-AI BFS waypoint + multi-angle obstacle avoidance for moving enemies (`aiState === 'move' || aiState === 'chase' || aiState === 'idle'`), re-runs `this.map.resolveCircleCollision` immediately after `this.resolvePropMovementCollision(e)`, rescues ground enemies on `'chasm'` or solid tiles via `findNearestWalkablePoint`, and unsticks stalled moving enemies via `navStuckTimer`.
+- **Biome-Specific Terrain Separation (`arena-map.ts` & `arena-room-archetypes-p1c.ts`)**:
+  - Initial room generation (`ArenaMap.buildLayout`, `ArenaMap.configureRoomLayout`, and all 6 `RoomArchetype` builders) strictly partitions surfaces by `biome`:
+    - **Biome 1**: only `'none' | 'poison_swamp' | 'grass' | 'burning_grass' | 'ash' | 'water' | 'electrified_water' | 'oil' | 'burning_oil' | 'chasm'` (never `'lava'`, `'ice'`, `'conveyor'`).
+    - **Biome 2**: only `'none' | 'ice' | 'water' | 'electrified_water' | 'chasm'` (never `'lava'`, `'poison_swamp'`, `'grass'`, `'burning_grass'`, `'conveyor'`, `'oil'`, `'burning_oil'`).
+    - **Biome 3**: only `'none' | 'lava' | 'conveyor' | 'oil' | 'burning_oil' | 'ash' | 'chasm'` (never `'ice'`, `'poison_swamp'`, `'grass'`, `'burning_grass'`, `'water'`, `'electrified_water'`).
+  - Dynamic mid-combat elemental transformations (`ArenaMap.applyElementAtWorldPoint`) remain unchanged.
+- **Direct 1-Step Barricade Launch Without `[E]` Flip (`sim-tactical-physics.ts`, `interact-target.ts`)**:
+  - `PropKind` values (`'moss_table'`, `'glacial_barricade'`, `'forge_blast_shield'`) and texture keys (`prop_moss_table*`, `prop_glacial_barricade*`, `prop_forge_blast_shield*`) remain unchanged.
+  - `isKickableProp(prop)` returns `true` for intact (`hp > 0`, `coverState !== 'sliding' && coverState !== 'fallen'`) `isFlippableBarricadeProp(prop.kind)` props in both `'low'` and `'flipped'` states.
+  - `kickProp(sim, prop, actor, customAngle)` transitions `'low'` barricade props through `'flipped'` (`hp = maxHp = getFlippedBarricadeHp(prop.kind)`), applies `applyFlipCoverTableTechBlessings`, `clearEnemyProjectilesAroundProp`, and `triggerTableTechMagnetSnareOnFlip`, and launches them into `'sliding'` (`vx, vy` along `customAngle ?? actor.aimAngle`).
+  - `findInteractTarget` (`interact-target.ts`) no longer returns `kind: 'flip_cover'` for `'low'` barricades (while `sim.flipCoverProp(prop, actor)` remains available on `WorldSim` for programmatic stationary-cover tests).
 
-### 2. `apps/client/src/art/texture-baker-surfaces.ts` & `texture-baker-tiles.ts` ↔ `apps/client/src/scenes/game-scene/arena-tiles.ts` & `tests/e2e/**`
-- **`drawBridgeOverChasmOverlay` (`texture-baker-surfaces.ts`)**:
-  ```ts
-  export function drawBridgeOverChasmOverlay(
-    ctx: CanvasRenderingContext2D,
-    dx: number,
-    dy: number,
-    cellPx: number,
-    hasChasmN: boolean,
-    hasChasmS: boolean,
-    biome: 0 | 1 | 2 | 3 = 1,
-    hasChasmW = false,
-    hasChasmE = false,
-    isVerticalBridge = false,
-  ): void;
-  ```
-  - Backward-compatible with existing 6-arg / 7-arg calls in E2E harness (`drawBridgeOverChasmOverlayContract`).
-  - When `isVerticalBridge` or `((hasChasmW || hasChasmE) && !hasChasmN && !hasChasmS)`, renders **North–South bridge orientation** (horizontal deck planks across the walkway, vertical structural beams, and vertical guardrails strictly on `hasChasmW` / `hasChasmE` chasm edges).
-  - For **East–West bridge orientation**, renders vertical deck planks and horizontal guardrails strictly on `hasChasmN` / `hasChasmS` chasm edges (no internal rail bars when `hasChasmN === false` or `hasChasmS === false`).
-- **Concave Pool Corner & Chasm-Wall Transition Helpers (`texture-baker-surfaces.ts` & `arena-tiles.ts`)**:
-  - Preserves `traceOrganicPoolPath(ctx, mask, 2.6)` (`0` `arcTo` for `mask === 15`, `4` `arcTo` for `mask === 0`) and `drawSurfaceTile` shoreline colors (`#1F1614` + `#EA580C` for lava, `#CFE8EE` for ice) required by `T5-WB-05`.
-  - Adds concave inner-corner shoreline arcs/Steps in `arena-tiles.ts` (or via optional diagonal mask bits) and suppresses chasm walkable floor lips on edges adjacent to solid `'wall'` or `'pillar'` tiles.
-- **Wall Parapet Coping, Concave Miters & Pillar Medallions (`texture-baker-tiles.ts` & `arena-tiles.ts`)**:
-  - `bakeWallTile` draws W/E/N 4px parapet coping whenever `m !== 15` (clamping W/E coping height to `capBottom = hasS ? 32 : 20`) and open seam strokes only on exposed edges (`!hasN`, `!hasW`, `!hasE`).
-  - `arena-tiles.ts` draws `4×4` (`floorNE`/`floorNW`) and `4×12` at `y = 20..32` (`floorSE`/`floorSW`) concave corner miters, `6×6` diagonal Exterior Void corner shadows, and map-border outer contours (`ty === 0`, `ty === map.rows - 1`, `tx === 0`, `tx === map.cols - 1`).
-  - `bakePillarTile` only draws the quadrant-split corner rune medallion on true `2×2` corner masks (`6, 10, 5, 9`), and `arena-tiles.ts` verifies that all 4 tiles of the `2×2` quad are `'pillar'` before using quadrant-split pillar textures (falling back to a centered relief on `1×N`, `2×1`, `2×4`, and L-pillar tiles).
-
-### 3. `apps/client/src/fx/lighting-pipeline.ts`, `apps/client/src/world/biome-architecture*.ts`, `entity-sync.ts` & `hud-qol-and-minimap.ts`
-- **`LightingPipeline.update` (`lighting-pipeline.ts`)**:
-  - Toggles `webglRt?.setAutoResize?.(true)` before `this.lightmapRt.resize(rtW, rtH)` and `webglRt?.setAutoResize?.(false)` after so the WebGL FBO matches `rtW × rtH` (`Math.round(coverW * lightmapScale) × Math.round(coverH * lightmapScale)`).
-- **`BiomeArchitectureLiveLayer` Exterior Void Mask & Grounded Braziers (`biome-architecture-render.ts` & `entity-sync.ts`)**:
-  - Masks `isExteriorVoidWallTile` cells above additive lighting layers (`depth 36.2`, `PALETTE.INK_DEEP` `#0B090E` inset by `6px` along active wall edges so outer wall shadow casing remains visible), skips dust motes in solid/Exterior Void cells, anchors Biome 2 God-Rays to active North wall tiles (`!isExteriorVoidWallTile`), enables `prop_shadow` on floor `torch_brazier` props, and only draws `bracketGraphics` hanging rods when `(tx, ty - 1)` is a solid wall/pillar.
-- **`hud-qol-and-minimap.ts`**:
-  - Preserves `resolveMinimapNodeDims`, `computeMinimapRoomPolygon` (`4, 6, 8, 8, 8, 8, 8, 10, 12, 12` vertices), and `drawMinimapRoomSilhouette` op counts (`T5-WB-18..20`).
-  - Clips corridor `fillRect` segments in `updateMinimapHudImpl` to the outer edges of connected room nodes and scales/clamps the compact-mode player dot (`dotR = 1.4`).
+### 2. `apps/client/src/scenes/game-scene/hud-qol-and-minimap.ts`, `GameScene.ts`, `arena-tiles.ts`, `texture-baker-props*.ts` ↔ `tests/e2e/**` (`M2_r4` ↔ `M3_r4`)
+- **Entered-Only Minimap Fog-of-War & Fast-Travel Helpers (`hud-qol-and-minimap.ts`)**:
+  - `updateMinimapHudImpl` renders room nodes and corridors strictly when `isVisitedOrCleared(r)` (`r.discovery === 'visited' || r.discovery === 'cleared' || r.id === sim.currentRoomId`) is true (and for corridors, both `r` and `target` satisfy `isVisitedOrCleared`).
+  - Preserves the player's gold position dot as the final `g.fillCircle` call in `updateMinimapHudImpl` (`map-overhaul-r2-void-and-minimap.test.ts:940`).
+  - Exports (and re-exports from `hud-combat-and-coop.ts`):
+    ```ts
+    export function canTeleportFromCurrentRoom(sim: WorldSim): boolean;
+    export function resolveMinimapClickedRoomId(
+      scene: Pick<GameScene, 'transport' | 'fullMapOpen' | 'hudPadX' | 'hudPadY'>,
+      localViewX: number,
+      localViewY: number,
+    ): number | null;
+    ```
+- **Fast-Travel Execution & VFX (`GameScene.ts` & `arena-tiles.ts`)**:
+  - `GameScene.teleportToRoom(targetRoomId: number): boolean`:
+    - Returns `false` if `!canTeleportFromCurrentRoom(sim)` or `targetRoomId === sim.currentRoomId` or target room is not `'visited' | 'cleared'`.
+    - When valid: spawns departure VFX at origin `(oldX, oldY)`, transitions `sim.enterRoom(targetRoomId)`, sets `sim.doorTransitionCooldown = Math.max(sim.doorTransitionCooldown, 0.75)`, closes `this.fullMapOpen`, sends `'teleport_room'` in Co-op, syncs arena tiles & sim events, triggers `this.triggerIrisTransition('close')`, sets `this.roomTeleportAnimTimer = this.roomTeleportAnimDuration` (`0.28s` `playerRig` vortex spin/scale materialization), plays `zzfx.play('portal_enter')`, and spawns arrival `fx_sh_arcane_sigil` nova + `spawnChestOpenBurst` vertical beam/sparkles + transient light + `'⚡ DỊCH CHUYỂN!'` / `'⚡ TELEPORT!'` floating alert.
+- **Procedural Vector Biome Barricades & Prompt Suppression (`interact-prompt.ts`, `texture-baker-props.ts`, `texture-baker-props-p1c.ts`)**:
+  - `resolveInteractPromptSpec` (`interact-prompt.ts`) returns `null` for `case 'flip_cover':`.
+  - `TextureBaker.bakeAll` bakes multi-faceted procedural vector biome objects into `prop_moss_table`, `prop_moss_table_flipped`, `prop_moss_table_sliding`, `prop_glacial_barricade`, `prop_glacial_barricade_flipped`, `prop_glacial_barricade_sliding`, `prop_forge_blast_shield`, `prop_forge_blast_shield_flipped`, and `prop_forge_blast_shield_sliding`.
 
 ---
 
 ## Code Layout
 
-- **Shared Simulation (`M1_r3_sim_surfaces_and_props` write scope — exclusive)**:
-  - `packages/shared/src/sim/arena-map.ts`
-  - `packages/shared/src/sim/arena-room-archetypes.ts`
-  - `packages/shared/test/round3-surfaces-and-props.test.ts` (and `packages/shared/test/*.test.ts`)
-- **Client Tiles, Surfaces, Chasm & Bridges (`M2_r3_client_tiles_surfaces_bridges` write scope — exclusive)**:
-  - `apps/client/src/art/texture-baker-tiles.ts`
-  - `apps/client/src/art/texture-baker-surfaces.ts`
-  - `apps/client/src/scenes/game-scene/arena-tiles.ts`
-  - `apps/client/test/round3-tiles-surfaces-bridges.test.ts`
-- **Client Lighting, Biome Architecture, Entity Sync & Minimap (`M3_r3_client_lighting_architecture_minimap` write scope — exclusive)**:
-  - `apps/client/src/fx/lighting-pipeline.ts`
-  - `apps/client/src/world/biome-architecture.ts`
-  - `apps/client/src/world/biome-architecture-render.ts`
-  - `apps/client/src/scenes/game-scene/entity-sync.ts`
+- **Shared Simulation (`M1_r4_sim_navigation_terrain_and_barricade_launch` write scope — exclusive)**:
+  - `packages/shared/src/sim/**` (`arena-map.ts`, `arena-room-archetypes.ts`, `arena-room-archetypes-p1c.ts`, `sim-enemies-core.ts`, `sim-enemies-biome1.ts`, `sim-enemies-biome2.ts`, `sim-enemies-biome3.ts`, `sim-ashen-pacts-combat.ts`, `sim-dungeon-rooms.ts`, `sim-props-spawning.ts`, `sim-skills-mechanics.ts`, `sim-duo-boons.ts`, `sim-weapon-specials-rare.ts`, `sim-weapon-specials-p1b-ranged.ts`, `sim-weapon-specials-p1b-melee.ts`, `sim-weapon-mutators-p4a.ts`, `sim-blessings-dash-reload.ts`, `sim-tactical-physics.ts`, `sim-projectiles.ts`, `sim-bot-tactical-helpers.ts`, `interact-target.ts`, `world-sim.ts`)
+  - `packages/shared/test/**` (update affected table-flip tests and add `packages/shared/test/round4-navigation-terrain-barricades.test.ts`)
+- **Client & Server (`M2_r4_client_minimap_teleport_vfx_and_vector_barricades` write scope — exclusive)**:
   - `apps/client/src/scenes/game-scene/hud-qol-and-minimap.ts`
-  - `apps/client/test/round3-lighting-architecture-minimap.test.ts`
-- **E2E Testing & Playwright Visual Verification (`M4_r3_e2e_and_playwright_visuals` write scope — exclusive)**:
+  - `apps/client/src/scenes/game-scene/hud-combat-and-coop.ts`
+  - `apps/client/src/scenes/game-scene/arena-tiles.ts`
+  - `apps/client/src/scenes/game-scene/interact-prompt.ts`
+  - `apps/client/src/scenes/game-scene/combat-telegraphs.ts` (optional arrival ring overlay)
+  - `apps/client/src/scenes/GameScene.ts`
+  - `apps/client/src/art/texture-baker-props.ts`
+  - `apps/client/src/art/texture-baker-props-p1c.ts`
+  - `apps/server/src/rooms/CoopRoom.ts`
+  - `apps/client/test/**` (update `round3-lighting-architecture-minimap.test.ts` corridor test and add `apps/client/test/round4-minimap-teleport-barricades.test.ts`)
+- **E2E Testing & Playwright Visual Verification (`M3_r4_e2e_and_playwright_visuals` write scope — exclusive)**:
   - `TEST_INFRA.md` (project root)
   - `TEST_READY.md` (project root)
+  - `tests/e2e/phase2.spec.ts`
   - `tests/e2e/helpers/map-overhaul-harness.ts`
   - `tests/e2e/map-overhaul-e2e.test.ts`
   - `tests/e2e/visual.spec.ts`

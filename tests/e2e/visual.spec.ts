@@ -182,6 +182,9 @@ async function setupTopologyShowcaseScene(
       'compact',
       'colossal_boss',
     ] as const;
+    const neighborIds = new Set(
+      Object.values(combatRoom.connections).filter((id): id is number => id !== undefined),
+    );
     for (let i = 0; i < sim.dungeon.rooms.length; i++) {
       const rm = sim.dungeon.rooms[i]!;
       if (rm.id === combatRoom.id) {
@@ -194,8 +197,13 @@ async function setupTopologyShowcaseScene(
       } else if (rm.type !== 'secret') {
         rm.roomShape = showcaseShapes[i % showcaseShapes.length]!;
         rm.roomSizePreset = showcasePresets[i % showcasePresets.length]!;
-        rm.discovery = 'cleared';
-        rm.cleared = true;
+        if (rm.type === 'start' || neighborIds.has(rm.id)) {
+          rm.discovery = 'cleared';
+          rm.cleared = true;
+        } else {
+          rm.discovery = 'discovered';
+          rm.cleared = false;
+        }
       }
     }
 
@@ -664,8 +672,8 @@ const MAP_OVERHAUL_SCENES: readonly VisualSceneDef[] = [
         playerOffset: { dx: -96, dy: 0 },
         extraSurfaces: [
           { tx: 16, ty: 9, w: 4, h: 3, surface: 'poison_swamp' },
-          { tx: 24, ty: 13, w: 4, h: 3, surface: 'lava' },
-          { tx: 18, ty: 15, w: 4, h: 3, surface: 'ice' },
+          { tx: 24, ty: 13, w: 4, h: 3, surface: 'burning_grass' },
+          { tx: 18, ty: 15, w: 4, h: 3, surface: 'water' },
         ],
         enemies: [
           { defId: 'wild_boar', tx: 22, ty: 12, elite: 'shield' },
@@ -745,6 +753,9 @@ const MAP_OVERHAUL_SCENES: readonly VisualSceneDef[] = [
           'island_catwalk',
           'rectangle',
         ] as const;
+        const bossNeighborIds = new Set(
+          Object.values(bossRoom.connections).filter((id): id is number => id !== undefined),
+        );
         for (let i = 0; i < sim.dungeon.rooms.length; i++) {
           const rm = sim.dungeon.rooms[i]!;
           if (rm.id === bossRoom.id) {
@@ -755,8 +766,13 @@ const MAP_OVERHAUL_SCENES: readonly VisualSceneDef[] = [
             rm.discovery = 'visited';
           } else if (rm.type !== 'secret') {
             rm.roomShape = showcaseShapes[i % showcaseShapes.length]!;
-            rm.discovery = 'cleared';
-            rm.cleared = true;
+            if (rm.type === 'start' || bossNeighborIds.has(rm.id)) {
+              rm.discovery = 'cleared';
+              rm.cleared = true;
+            } else {
+              rm.discovery = 'discovered';
+              rm.cleared = false;
+            }
           }
         }
 

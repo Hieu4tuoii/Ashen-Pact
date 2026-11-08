@@ -221,20 +221,14 @@ export function computeTacticalCoverKickInput(
   let moveX = (bestProp.x - player.x) / Math.max(1, distToProp);
   let moveY = (bestProp.y - player.y) / Math.max(1, distToProp);
   let buttons = INPUT_BUTTON.FIRE;
-  const prevInteractHeld = ((player.lastButtons ?? 0) & INPUT_BUTTON.INTERACT) !== 0;
 
   if (distToProp < 10 && bestProp.coverState === 'low') {
     moveX = -Math.cos(kickAngle);
     moveY = -Math.sin(kickAngle);
   } else if (distToProp <= FLIP_COVER_INTERACT_RANGE) {
-    if (isFlippableBarricadeProp(bestProp.kind) && bestProp.coverState === 'low' && !prevInteractHeld) {
-      buttons |= INPUT_BUTTON.INTERACT;
-    }
     if (player.dashCooldownTimer <= 0 && distToProp >= 10) {
       buttons |= INPUT_BUTTON.DASH;
-      if (bestProp.coverState === 'flipped' || isCircularKickableToyProp(bestProp.kind)) {
-        state.coverKickConsumed = true;
-      }
+      state.coverKickConsumed = true;
     }
   }
 
@@ -431,7 +425,6 @@ export function computeBossArmorBreakInput(
 
   const distToProp = distance(player.x, player.y, prop.x, prop.y);
   const distToStandoff = distance(player.x, player.y, standoffX, standoffY);
-  const prevInteractHeld = ((player.lastButtons ?? 0) & INPUT_BUTTON.INTERACT) !== 0;
 
   const urgentCoalBomb =
     prop.kind === 'coal_bomb' && prop.fuseTimer > 0 && prop.fuseTimer <= 0.65;
@@ -442,17 +435,6 @@ export function computeBossArmorBreakInput(
   let moveY = 0;
   let aimAngle = kickAngle;
   let buttons = 0;
-
-  // Flip low barricade once in position behind it (or just before kick)
-  if (
-    isFlippableBarricadeProp(prop.kind) &&
-    prop.coverState === 'low' &&
-    distToProp <= FLIP_COVER_INTERACT_RANGE &&
-    (distToStandoff <= 24 || state.bossArmorShellElapsedSec >= minBreakSec - 0.35) &&
-    !prevInteractHeld
-  ) {
-    buttons |= INPUT_BUTTON.INTERACT;
-  }
 
   if (readyToKick && distToProp <= 48 && distToProp >= 10) {
     moveX = (prop.x - player.x) / distToProp;

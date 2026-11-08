@@ -211,7 +211,7 @@ describe('AP2 Phase P0B.3 — Biome 1 Survival Law (Thảm Thực Vật Cộng H
       // Flip table1 with [E]
       p1.x = 370;
       p1.y = 300;
-      expect(sim.interactWithNearest(p1)).toBe(true);
+      expect(sim.flipCoverProp(table1, p1)).toBe(true);
       expect(table1.coverState).toBe('flipped');
       expect(table1.hp).toBe(60);
       expect(table1.maxHp).toBe(60);
@@ -242,7 +242,7 @@ describe('AP2 Phase P0B.3 — Biome 1 Survival Law (Thảm Thực Vật Cộng H
       const table2 = sim.spawnProp('moss_table', 460, 304);
       p1.x = 435;
       p1.y = 304;
-      sim.interactWithNearest(p1);
+      sim.flipCoverProp(table2, p1);
       expect(table2.coverState).toBe('flipped');
 
       // Position p2 near the wall (within 72px of impact) at full armor (3/3) and p1 within 72px at (2/5)
@@ -419,7 +419,7 @@ describe('AP2 Phase P0B.3 — Biome 1 Survival Law (Thảm Thực Vật Cộng H
       const tableC = sim.spawnProp('moss_table', 690, 450);
       sim.player.x = 665;
       sim.player.y = 450;
-      sim.interactWithNearest(sim.player);
+      sim.flipCoverProp(tableC, sim.player);
       expect(tableC.coverState).toBe('flipped');
 
       const crushedBySlideCollapse = sim.spawnEnemy('goblin_shooter', 850, 450, true); // 100px +X from pillarC

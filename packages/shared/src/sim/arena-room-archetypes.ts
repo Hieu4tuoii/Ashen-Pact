@@ -13,7 +13,7 @@ import {
   getCrumblingRingPillarRectsForMap,
 } from './arena-room-archetypes-p1c.js';
 import type { DungeonRoomNode } from './dungeon-gen.js';
-import type { PropKind } from './world-sim-types.js';
+import type { PropKind, SimPropState } from './world-sim-types.js';
 import type { WorldSim } from './world-sim.js';
 
 export {
@@ -250,6 +250,7 @@ let nextBfsVisitStamp = 1;
 const bfsQueueXScratch = new Int16Array(MAX_BFS_TILES);
 const bfsQueueYScratch = new Int16Array(MAX_BFS_TILES);
 const bfsParentScratch = new Int16Array(MAX_BFS_TILES);
+const bfsPropBlockedStampScratch = new Int32Array(MAX_BFS_TILES);
 
 export function selectBiome1RoomArchetype(roomSeed: number, roomIndex = 0): RoomArchetypeId {
   const normalized = Math.abs(Math.trunc(roomSeed) + Math.trunc(roomIndex));
@@ -328,31 +329,198 @@ export function areActiveDoorsConnectedBfs(
   return true;
 }
 
+export type NavBlockingPropLike = Pick<
+  SimPropState,
+  'x' | 'y' | 'radius' | 'hp' | 'blocksMovement' | 'coverState'
+>;
+
+export function isPointBlockedByStationaryProp(
+  worldX: number,
+  worldY: number,
+  radius: number,
+  props?: readonly NavBlockingPropLike[],
+): boolean {
+  if (!props || props.length === 0) return false;
+  for (let i = 0; i < props.length; i++) {
+    const prop = props[i]!;
+    if (prop.hp <= 0 || !prop.blocksMovement || prop.coverState === 'fallen') continue;
+    const dx = worldX - prop.x;
+    const dy = worldY - prop.y;
+    const minD = radius + prop.radius + 2;
+    if (dx * dx + dy * dy < minD * minD) return true;
+  }
+  return false;
+}
+
+function isWalkableTileWithChasmFlag(
+  map: ArenaMap,
+  tx: number,
+  ty: number,
+  ignoreChasm: boolean,
+): boolean {
+  if (tx <= 0 || ty <= 0 || tx >= map.cols - 1 || ty >= map.rows - 1) return false;
+  const idx = ty * map.cols + tx;
+  return map.tiles[idx] === 'floor' && (ignoreChasm || map.surfaces[idx] !== 'chasm');
+}
+
+function has8NeighborWalkableClearance(
+  map: ArenaMap,
+  tx: number,
+  ty: number,
+  ignoreChasm: boolean,
+): boolean {
+  for (let dy = -1; dy <= 1; dy++) {
+    for (let dx = -1; dx <= 1; dx++) {
+      if (!isWalkableTileWithChasmFlag(map, tx + dx, ty + dy, ignoreChasm)) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+export function hasClearWalkableCorridor(
+  map: ArenaMap,
+  fromX: number,
+  fromY: number,
+  toX: number,
+  toY: number,
+  radius = 14,
+  props?: readonly NavBlockingPropLike[],
+  ignoreChasm = false,
+): boolean {
+  const dx = toX - fromX;
+  const dy = toY - fromY;
+  const dist = Math.hypot(dx, dy);
+  if (dist <= 4) return true;
+  const steps = Math.max(1, Math.ceil(dist / (TILE_SIZE * 0.5)));
+  const hitRadius = Math.min(radius, 14);
+  const endGraceDist = radius + 16;
+  for (let i = 1; i <= steps; i++) {
+    const t = i / steps;
+    const px = fromX + dx * t;
+    const py = fromY + dy * t;
+    const tx = Math.floor(px / TILE_SIZE);
+    const ty = Math.floor(py / TILE_SIZE);
+    if (!isWalkableTileWithChasmFlag(map, tx, ty, ignoreChasm)) return false;
+    const distFromEnd = dist * (1 - t);
+    if (distFromEnd >= endGraceDist) {
+      if (map.checkProjectileWallHit(px, py, hitRadius).hit) return false;
+      if (isPointBlockedByStationaryProp(px, py, radius, props)) return false;
+    }
+  }
+  return true;
+}
+
 export function findNearestWalkablePoint(
   map: ArenaMap,
   worldX: number,
   worldY: number,
   radius = 14,
+  props?: readonly NavBlockingPropLike[],
+  ignoreChasm = false,
 ): { x: number; y: number } {
   const sTx = Math.max(1, Math.min(map.cols - 2, Math.floor(worldX / TILE_SIZE)));
   const sTy = Math.max(1, Math.min(map.rows - 2, Math.floor(worldY / TILE_SIZE)));
-  if (isWalkableTileForBfs(map, sTx, sTy) && !map.checkProjectileWallHit(worldX, worldY, radius).hit) {
+  if (!props && !ignoreChasm && radius <= 16) {
+    if (
+      isWalkableTileForBfs(map, sTx, sTy) &&
+      !map.checkProjectileWallHit(worldX, worldY, radius).hit
+    ) {
+      return { x: worldX, y: worldY };
+    }
+    const maxRingDefault = Math.max(map.cols, map.rows);
+    for (let ring = 1; ring <= maxRingDefault; ring++) {
+      for (let dy = -ring; dy <= ring; dy++) {
+        for (let dx = -ring; dx <= ring; dx++) {
+          if (Math.abs(dx) !== ring && Math.abs(dy) !== ring) continue;
+          const tx = sTx + dx;
+          const ty = sTy + dy;
+          if (!isWalkableTileForBfs(map, tx, ty)) continue;
+          const cx = tx * TILE_SIZE + TILE_SIZE * 0.5;
+          const cy = ty * TILE_SIZE + TILE_SIZE * 0.5;
+          if (!map.checkProjectileWallHit(cx, cy, radius).hit) return { x: cx, y: cy };
+        }
+      }
+    }
+    const clampedDefault = Math.min(radius, TILE_SIZE * 0.5 - 1);
+    for (let ring = 0; ring <= maxRingDefault; ring++) {
+      for (let dy = -ring; dy <= ring; dy++) {
+        for (let dx = -ring; dx <= ring; dx++) {
+          if (Math.abs(dx) !== ring && Math.abs(dy) !== ring) continue;
+          const tx = sTx + dx;
+          const ty = sTy + dy;
+          if (!isWalkableTileForBfs(map, tx, ty)) continue;
+          const cx = tx * TILE_SIZE + TILE_SIZE * 0.5;
+          const cy = ty * TILE_SIZE + TILE_SIZE * 0.5;
+          if (!map.checkProjectileWallHit(cx, cy, clampedDefault).hit) return { x: cx, y: cy };
+        }
+      }
+    }
+    const doors = getDoorTilesForMap(map);
+    return { x: doors.W.tx * TILE_SIZE + 16, y: doors.W.ty * TILE_SIZE + 16 };
+  }
+
+  const rawTx = Math.floor(worldX / TILE_SIZE);
+  const rawTy = Math.floor(worldY / TILE_SIZE);
+  const hitCheckRadius = Math.max(1, Math.min(radius, 14) - 0.5);
+  if (
+    isWalkableTileWithChasmFlag(map, rawTx, rawTy, ignoreChasm) &&
+    !map.checkProjectileWallHit(worldX, worldY, radius).hit &&
+    !map.resolveCircleCollision(worldX, worldY, radius, ignoreChasm).collided &&
+    !isPointBlockedByStationaryProp(worldX, worldY, radius, props)
+  ) {
     return { x: worldX, y: worldY };
   }
   const maxRing = Math.max(map.cols, map.rows);
-  for (let ring = 1; ring <= maxRing; ring++) {
+
+  // Pass 1: Full 8-neighbor clearance for large units (radius > 16) + uncollided circle + prop clearance
+  for (let ring = 0; ring <= maxRing; ring++) {
     for (let dy = -ring; dy <= ring; dy++) {
       for (let dx = -ring; dx <= ring; dx++) {
         if (Math.abs(dx) !== ring && Math.abs(dy) !== ring) continue;
         const tx = sTx + dx;
         const ty = sTy + dy;
-        if (!isWalkableTileForBfs(map, tx, ty)) continue;
+        if (!isWalkableTileWithChasmFlag(map, tx, ty, ignoreChasm)) continue;
+        if (radius > 16 && !has8NeighborWalkableClearance(map, tx, ty, ignoreChasm)) continue;
         const cx = tx * TILE_SIZE + TILE_SIZE * 0.5;
         const cy = ty * TILE_SIZE + TILE_SIZE * 0.5;
-        if (!map.checkProjectileWallHit(cx, cy, radius).hit) return { x: cx, y: cy };
+        if (
+          !map.checkProjectileWallHit(cx, cy, hitCheckRadius).hit &&
+          !map.resolveCircleCollision(cx, cy, radius, ignoreChasm).collided &&
+          !isPointBlockedByStationaryProp(cx, cy, radius, props)
+        ) {
+          return { x: cx, y: cy };
+        }
       }
     }
   }
+
+  // Pass 2: Resolved circle collision on verified walkable tile + prop clearance
+  for (let ring = 0; ring <= maxRing; ring++) {
+    for (let dy = -ring; dy <= ring; dy++) {
+      for (let dx = -ring; dx <= ring; dx++) {
+        if (Math.abs(dx) !== ring && Math.abs(dy) !== ring) continue;
+        const tx = sTx + dx;
+        const ty = sTy + dy;
+        if (!isWalkableTileWithChasmFlag(map, tx, ty, ignoreChasm)) continue;
+        const cx = tx * TILE_SIZE + TILE_SIZE * 0.5;
+        const cy = ty * TILE_SIZE + TILE_SIZE * 0.5;
+        const col = map.resolveCircleCollision(cx, cy, radius, ignoreChasm);
+        const colTx = Math.floor(col.x / TILE_SIZE);
+        const colTy = Math.floor(col.y / TILE_SIZE);
+        if (
+          isWalkableTileWithChasmFlag(map, colTx, colTy, ignoreChasm) &&
+          !map.checkProjectileWallHit(col.x, col.y, hitCheckRadius).hit &&
+          !isPointBlockedByStationaryProp(col.x, col.y, radius, props)
+        ) {
+          return { x: col.x, y: col.y };
+        }
+      }
+    }
+  }
+
+  // Pass 3: Fallback ignoring props
   const clampedRadius = Math.min(radius, TILE_SIZE * 0.5 - 1);
   for (let ring = 0; ring <= maxRing; ring++) {
     for (let dy = -ring; dy <= ring; dy++) {
@@ -360,10 +528,21 @@ export function findNearestWalkablePoint(
         if (Math.abs(dx) !== ring && Math.abs(dy) !== ring) continue;
         const tx = sTx + dx;
         const ty = sTy + dy;
-        if (!isWalkableTileForBfs(map, tx, ty)) continue;
+        if (!isWalkableTileWithChasmFlag(map, tx, ty, ignoreChasm)) continue;
         const cx = tx * TILE_SIZE + TILE_SIZE * 0.5;
         const cy = ty * TILE_SIZE + TILE_SIZE * 0.5;
-        if (!map.checkProjectileWallHit(cx, cy, clampedRadius).hit) return { x: cx, y: cy };
+        const col = map.resolveCircleCollision(cx, cy, radius, ignoreChasm);
+        const colTx = Math.floor(col.x / TILE_SIZE);
+        const colTy = Math.floor(col.y / TILE_SIZE);
+        if (
+          isWalkableTileWithChasmFlag(map, colTx, colTy, ignoreChasm) &&
+          !map.checkProjectileWallHit(col.x, col.y, clampedRadius).hit
+        ) {
+          return { x: col.x, y: col.y };
+        }
+        if (!map.checkProjectileWallHit(cx, cy, clampedRadius).hit) {
+          return { x: cx, y: cy };
+        }
       }
     }
   }
@@ -377,6 +556,9 @@ export function findNextWalkableWaypoint(
   fromY: number,
   toX: number,
   toY: number,
+  props?: readonly NavBlockingPropLike[],
+  ignoreChasm = false,
+  radius = 14,
 ): { x: number; y: number } {
   const cols = map.cols;
   const rows = map.rows;
@@ -386,62 +568,135 @@ export function findNextWalkableWaypoint(
   const sTy = Math.max(1, Math.min(rows - 2, Math.floor(fromY / TILE_SIZE)));
   let gTx = Math.max(1, Math.min(cols - 2, Math.floor(targetX / TILE_SIZE)));
   let gTy = Math.max(1, Math.min(rows - 2, Math.floor(targetY / TILE_SIZE)));
-  if (!isWalkableTileForBfs(map, gTx, gTy)) {
-    const safeGoal = findNearestWalkablePoint(map, targetX, targetY, 4);
+  if (!isWalkableTileWithChasmFlag(map, gTx, gTy, ignoreChasm)) {
+    const safeGoal = findNearestWalkablePoint(map, targetX, targetY, 4, props, ignoreChasm);
     targetX = safeGoal.x;
     targetY = safeGoal.y;
     gTx = Math.max(1, Math.min(cols - 2, Math.floor(targetX / TILE_SIZE)));
     gTy = Math.max(1, Math.min(rows - 2, Math.floor(targetY / TILE_SIZE)));
   }
   if (sTx === gTx && sTy === gTy) return { x: targetX, y: targetY };
-  let stamp = ++nextBfsVisitStamp;
-  if (stamp >= 0x7ffffff0) {
-    bfsVisitStampScratch.fill(0);
-    nextBfsVisitStamp = 1;
-    stamp = 1;
-  }
-  const tiles = map.tiles;
-  const surfaces = map.surfaces;
+
   const startIdx = sTy * cols + sTx;
   const goalIdx = gTy * cols + gTx;
-  let head = 0;
-  let tail = 1;
-  bfsVisitStampScratch[startIdx] = stamp;
-  bfsParentScratch[startIdx] = -1;
-  bfsQueueXScratch[0] = sTx;
-  bfsQueueYScratch[0] = sTy;
-  let found = false;
-  while (head < tail) {
-    const cx = bfsQueueXScratch[head]!;
-    const cy = bfsQueueYScratch[head]!;
-    const cIdx = cy * cols + cx;
-    head += 1;
-    if (cIdx === goalIdx) {
-      found = true;
-      break;
+  const tiles = map.tiles;
+  const surfaces = map.surfaces;
+
+  const allocStamp = (): number => {
+    let st = ++nextBfsVisitStamp;
+    if (st >= 0x7ffffff0) {
+      bfsVisitStampScratch.fill(0);
+      bfsPropBlockedStampScratch.fill(0);
+      nextBfsVisitStamp = 1;
+      st = 1;
     }
-    for (let k = 0; k < 4; k++) {
-      const nx = cx + CARDINAL_DIRS[k]![0];
-      const ny = cy + CARDINAL_DIRS[k]![1];
-      if (nx <= 0 || ny <= 0 || nx >= cols - 1 || ny >= rows - 1) continue;
-      const nIdx = ny * cols + nx;
-      if (bfsVisitStampScratch[nIdx] === stamp) continue;
-      if ((tiles[nIdx] !== 'floor' || surfaces[nIdx] === 'chasm') && nIdx !== goalIdx) continue;
-      bfsVisitStampScratch[nIdx] = stamp;
-      bfsParentScratch[nIdx] = cIdx;
-      bfsQueueXScratch[tail] = nx;
-      bfsQueueYScratch[tail] = ny;
-      tail += 1;
+    return st;
+  };
+
+  const stamp = allocStamp();
+  let hasPropMask = false;
+  if (props && props.length > 0) {
+    const padExtra = Math.min(radius, 14);
+    for (let i = 0; i < props.length; i++) {
+      const prop = props[i]!;
+      if (prop.hp <= 0 || !prop.blocksMovement || prop.coverState === 'fallen') continue;
+      const pad = prop.radius + padExtra;
+      const minTx = Math.max(1, Math.floor((prop.x - pad) / TILE_SIZE));
+      const maxTx = Math.min(cols - 2, Math.floor((prop.x + pad) / TILE_SIZE));
+      const minTy = Math.max(1, Math.floor((prop.y - pad) / TILE_SIZE));
+      const maxTy = Math.min(rows - 2, Math.floor((prop.y + pad) / TILE_SIZE));
+      for (let ty = minTy; ty <= maxTy; ty++) {
+        for (let tx = minTx; tx <= maxTx; tx++) {
+          const idx = ty * cols + tx;
+          if (idx === startIdx || idx === goalIdx) continue;
+          const cx = tx * TILE_SIZE + TILE_SIZE * 0.5;
+          const cy = ty * TILE_SIZE + TILE_SIZE * 0.5;
+          const dx = cx - prop.x;
+          const dy = cy - prop.y;
+          if (dx * dx + dy * dy < pad * pad) {
+            bfsPropBlockedStampScratch[idx] = stamp;
+            hasPropMask = true;
+          }
+        }
+      }
     }
+  }
+
+  const runBfs = (curStamp: number, usePropMask: boolean): boolean => {
+    let head = 0;
+    let tail = 1;
+    bfsVisitStampScratch[startIdx] = curStamp;
+    bfsParentScratch[startIdx] = -1;
+    bfsQueueXScratch[0] = sTx;
+    bfsQueueYScratch[0] = sTy;
+    while (head < tail) {
+      const cx = bfsQueueXScratch[head]!;
+      const cy = bfsQueueYScratch[head]!;
+      const cIdx = cy * cols + cx;
+      head += 1;
+      if (cIdx === goalIdx) return true;
+      for (let k = 0; k < 4; k++) {
+        const nx = cx + CARDINAL_DIRS[k]![0];
+        const ny = cy + CARDINAL_DIRS[k]![1];
+        if (nx <= 0 || ny <= 0 || nx >= cols - 1 || ny >= rows - 1) continue;
+        const nIdx = ny * cols + nx;
+        if (bfsVisitStampScratch[nIdx] === curStamp) continue;
+        if (usePropMask && bfsPropBlockedStampScratch[nIdx] === stamp) continue;
+        const walkable =
+          tiles[nIdx] === 'floor' && (ignoreChasm || surfaces[nIdx] !== 'chasm');
+        if (!walkable && nIdx !== goalIdx) continue;
+        bfsVisitStampScratch[nIdx] = curStamp;
+        bfsParentScratch[nIdx] = cIdx;
+        bfsQueueXScratch[tail] = nx;
+        bfsQueueYScratch[tail] = ny;
+        tail += 1;
+      }
+    }
+    return false;
+  };
+
+  let usedPropMask = hasPropMask;
+  let found = runBfs(stamp, hasPropMask);
+  if (!found && hasPropMask) {
+    const fallbackStamp = allocStamp();
+    usedPropMask = false;
+    found = runBfs(fallbackStamp, false);
   }
   if (!found) return { x: targetX, y: targetY };
-  let cur = goalIdx;
-  for (let s = 0; s < 96 && bfsParentScratch[cur] !== -1 && bfsParentScratch[cur] !== startIdx; s++) {
-    const p = bfsParentScratch[cur]!;
-    cur = p;
-    if (bfsParentScratch[p] === startIdx) break;
+
+  let firstStep = goalIdx;
+  let secondStep = goalIdx;
+  for (
+    let s = 0;
+    s < 128 && bfsParentScratch[firstStep] !== -1 && bfsParentScratch[firstStep] !== startIdx;
+    s++
+  ) {
+    secondStep = firstStep;
+    firstStep = bfsParentScratch[firstStep]!;
   }
-  return { x: (cur % cols) * TILE_SIZE + TILE_SIZE * 0.5, y: Math.floor(cur / cols) * TILE_SIZE + TILE_SIZE * 0.5 };
+
+  let chosenIdx = firstStep;
+  if (secondStep !== firstStep) {
+    const tx2 = secondStep % cols;
+    const ty2 = Math.floor(secondStep / cols);
+    const isCollinear = tx2 === sTx || ty2 === sTy;
+    const corner1Idx = ty2 * cols + sTx;
+    const corner2Idx = sTy * cols + tx2;
+    const cornersClear =
+      isWalkableTileWithChasmFlag(map, sTx, ty2, ignoreChasm) &&
+      isWalkableTileWithChasmFlag(map, tx2, sTy, ignoreChasm) &&
+      (!usedPropMask ||
+        (bfsPropBlockedStampScratch[corner1Idx] !== stamp &&
+          bfsPropBlockedStampScratch[corner2Idx] !== stamp));
+    if (isCollinear || cornersClear) {
+      chosenIdx = secondStep;
+    }
+  }
+
+  return {
+    x: (chosenIdx % cols) * TILE_SIZE + TILE_SIZE * 0.5,
+    y: Math.floor(chosenIdx / cols) * TILE_SIZE + TILE_SIZE * 0.5,
+  };
 }
 
 function isInCrumblingRingPillarFootprint(

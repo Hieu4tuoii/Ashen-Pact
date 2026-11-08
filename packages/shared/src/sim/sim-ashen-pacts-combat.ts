@@ -6,6 +6,8 @@ import {
 } from '../data/weapon-mutators.js';
 import { ALL_WEAPON_IDS, WEAPONS } from '../data/weapons.js';
 import { clamp, distance } from '../math/vec2.js';
+import { TILE_SIZE } from '../protocol/messages.js';
+import { findNearestWalkablePoint } from './arena-room-archetypes.js';
 import { equipPlayerWeaponSlot } from './sim-weapon-cadence.js';
 import type { WorldSim } from './world-sim.js';
 import type { SimEnemyState, SimPlayerState } from './world-sim-types.js';
@@ -174,18 +176,19 @@ export function syncAshenExecutionerInRoom(sim: WorldSim): SimEnemyState | null 
   }
 
   const anchor = huntedPlayers[0]!;
-  const spawnX = clamp(
+  const rawSpawnX = clamp(
     anchor.x + (anchor.x > sim.map.width * 0.5 ? -180 : 180),
     64,
     sim.map.width - 64,
   );
-  const spawnY = clamp(
+  const rawSpawnY = clamp(
     anchor.y + (anchor.y > sim.map.height * 0.5 ? -140 : 140),
     64,
     sim.map.height - 64,
   );
+  const safeSpawn = findNearestWalkablePoint(sim.map, rawSpawnX, rawSpawnY, 18, sim.props);
 
-  const exec = sim.spawnEnemy('ashen_executioner', spawnX, spawnY, true);
+  const exec = sim.spawnEnemy('ashen_executioner', safeSpawn.x, safeSpawn.y, true);
   exec.hp = 9999;
   exec.maxHp = 9999;
   exec.isElite = false;
@@ -272,18 +275,49 @@ export function updateAshenExecutionerAI(
       e.aiState = 'chase';
       e.attackCooldownTimer =
         ASHEN_EXECUTIONER_WAVE_COOLDOWN_SEC - ASHEN_EXECUTIONER_TELEGRAPH_SEC;
+      let waveX = e.x;
+      let waveY = e.y;
+      const cosA = Math.cos(ang);
+      const sinA = Math.sin(ang);
+      const muzzleDist = e.radius + 4;
+      if (
+        sim.map.isSolidTile(Math.floor(waveX / TILE_SIZE), Math.floor(waveY / TILE_SIZE)) ||
+        sim.map.checkProjectileWallHit(waveX + cosA * muzzleDist, waveY + sinA * muzzleDist, 10).hit
+      ) {
+        let cleared = false;
+        for (let step = 1; step <= 4; step++) {
+          const testX = e.x + cosA * (step * 16);
+          const testY = e.y + sinA * (step * 16);
+          const muzX = testX + cosA * muzzleDist;
+          const muzY = testY + sinA * muzzleDist;
+          if (
+            !sim.map.isSolidTile(Math.floor(muzX / TILE_SIZE), Math.floor(muzY / TILE_SIZE)) &&
+            !sim.map.checkProjectileWallHit(muzX, muzY, 10).hit
+          ) {
+            waveX = testX;
+            waveY = testY;
+            cleared = true;
+            break;
+          }
+        }
+        if (!cleared) {
+          const safeWavePt = findNearestWalkablePoint(sim.map, e.x, e.y, 12);
+          waveX = safeWavePt.x;
+          waveY = safeWavePt.y;
+        }
+      }
       sim.spawnDeterministicVolley({
         kind: 'bullet_volley_spawned',
         tick: sim.tick,
         ownerId: e.id,
         team: 'enemy',
         weaponId: 'ashen_executioner_wave',
-        x: e.x,
-        y: e.y,
+        x: waveX,
+        y: waveY,
         angle: ang,
         pelletCount: 1,
         spreadRad: 0,
-        muzzleOffset: e.radius + 4,
+        muzzleOffset: muzzleDist,
         speed: ASHEN_EXECUTIONER_WAVE_SPEED,
         damage: ASHEN_EXECUTIONER_WAVE_DAMAGE,
         radius: 10,

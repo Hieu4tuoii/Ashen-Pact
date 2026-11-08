@@ -296,34 +296,128 @@ export function bakeProps(scene: Phaser.Scene, scale: number): void {
     ctx.stroke();
   });
 
-  // 5e. Ashen Pact 2.0 Biome 1 Tactical Props (moss_table 3 states, volatile_spore_pod, rotten_totem_pillar)
-  bakeCustomCanvas(scene, 'prop_moss_table', 40, 36, scale, (ctx) => {
+  // 5e. Ashen Pact 2.0 Biome 1 Tactical Props (moss_table 3 states: Ancient Runic Moss Boulder / Sylvan Spore Monolith)
+  bakeCustomCanvas(scene, 'prop_moss_table', 42, 38, scale, (ctx) => {
+    // 1. Craggy octagonal basal stone plinth
+    outlined(
+      ctx,
+      {
+        fill: PALETTE.SLATE_DARK,
+        shade: PALETTE.INK_DARK,
+        highlight: PALETTE.WARM_STONE,
+        outlineWidth: 2.5,
+      },
+      (c) =>
+        tracePolygon(c, [
+          { x: -12, y: -14 },
+          { x: 10, y: -14 },
+          { x: 18, y: -7 },
+          { x: 18, y: 7 },
+          { x: 11, y: 14 },
+          { x: -11, y: 14 },
+          { x: -18, y: 8 },
+          { x: -18, y: -6 },
+        ]),
+      { cx: 0, cy: 0, rx: 18, ry: 14 },
+    );
+
+    // 2. Stepped monolithic boulder body with chiseled bevels
     outlined(
       ctx,
       {
         fill: PALETTE.SLATE_MID,
         shade: PALETTE.SLATE_DARK,
-        highlight: PALETTE.WARM_STONE,
+        highlight: PALETTE.BONE_WHITE,
         outlineWidth: 2.4,
       },
-      (c) => traceRoundedRect(c, -16, -12, 32, 24, 4),
-      { cx: 0, cy: 0, rx: 16, ry: 12 },
+      (c) =>
+        tracePolygon(c, [
+          { x: -9, y: -12 },
+          { x: 8, y: -12 },
+          { x: 15, y: -5 },
+          { x: 14, y: 6 },
+          { x: 7, y: 11 },
+          { x: -9, y: 11 },
+          { x: -15, y: 5 },
+          { x: -14, y: -6 },
+        ]),
+      { cx: 0, cy: 0, rx: 15, ry: 12 },
     );
-    ctx.fillStyle = PALETTE.GOBLIN_GREEN;
-    ctx.beginPath();
-    ctx.arc(-10, -7, 4.5, 0, Math.PI * 2);
-    ctx.arc(9, 6, 3.8, 0, Math.PI * 2);
+
+    // Top-left -135 deg lit bevel facet
+    ctx.fillStyle = PALETTE.WARM_STONE;
+    tracePolygon(ctx, [
+      { x: -13, y: -5 },
+      { x: -8, y: -11 },
+      { x: 6, y: -11 },
+      { x: -2, y: -4 },
+    ]);
     ctx.fill();
+
+    // 3. Overgrown lush sylvan moss mantle draping the crown
+    outlined(
+      ctx,
+      {
+        fill: PALETTE.GOBLIN_GREEN,
+        shade: PALETTE.FOREST_SHADE,
+        highlight: PALETTE.LIME_GLOW,
+        material: 'organic',
+        outlineWidth: 2.0,
+      },
+      (c) =>
+        tracePolygon(c, [
+          { x: -14, y: -4 },
+          { x: -10, y: -12 },
+          { x: 4, y: -12 },
+          { x: 11, y: -7 },
+          { x: 7, y: -1 },
+          { x: -1, y: -3 },
+          { x: -7, y: 3 },
+          { x: -13, y: 2 },
+        ]),
+      { cx: -2, cy: -5, rx: 12, ry: 7 },
+    );
+
+    // 4. Engraved bioluminescent emerald rune sigil & spore buds
+    ctx.fillStyle = PALETTE.MINT_LIGHT;
+    ctx.strokeStyle = PALETTE.LIME_GLOW;
+    ctx.lineWidth = 1.8;
+    tracePolygon(ctx, [
+      { x: 2, y: -5 },
+      { x: 7, y: 1 },
+      { x: 2, y: 7 },
+      { x: -3, y: 1 },
+    ]);
+    ctx.fill();
+    ctx.stroke();
+
     ctx.strokeStyle = PALETTE.LIME_GLOW;
     ctx.lineWidth = 1.5;
     ctx.beginPath();
-    ctx.moveTo(-12, -5);
-    ctx.lineTo(-4, -2);
+    ctx.moveTo(-8, -5);
+    ctx.lineTo(-3, 1);
+    ctx.lineTo(-7, 7);
+    ctx.moveTo(7, 1);
+    ctx.lineTo(12, 4);
     ctx.stroke();
+
+    for (const [bx, by, br] of [
+      [-9, -6, 2.4],
+      [9, -5, 2.0],
+      [-5, 7, 2.1],
+    ] as const) {
+      ctx.beginPath();
+      ctx.arc(bx, by, br, 0, Math.PI * 2);
+      ctx.fillStyle = PALETTE.LIME_GLOW;
+      ctx.fill();
+      ctx.lineWidth = 1.3;
+      ctx.strokeStyle = PALETTE.INK_DARK;
+      ctx.stroke();
+    }
   });
 
-  bakeCustomCanvas(scene, 'prop_moss_table_flipped', 42, 40, scale, (ctx) => {
-    // Upright thick stone barricade with -135 deg top-left rim highlight & glowing moss veins
+  bakeCustomCanvas(scene, 'prop_moss_table_flipped', 44, 42, scale, (ctx) => {
+    // 1. Raised octagonal stone pedestal
     outlined(
       ctx,
       {
@@ -332,25 +426,104 @@ export function bakeProps(scene: Phaser.Scene, scale: number): void {
         highlight: PALETTE.WARM_STONE,
         outlineWidth: 2.6,
       },
-      (c) => traceRoundedRect(c, -17, -15, 34, 30, 3.5),
-      { cx: 0, cy: 0, rx: 17, ry: 15 },
+      (c) =>
+        tracePolygon(c, [
+          { x: -13, y: -16 },
+          { x: 12, y: -16 },
+          { x: 19, y: -8 },
+          { x: 18, y: 9 },
+          { x: 12, y: 15 },
+          { x: -12, y: 15 },
+          { x: -18, y: 9 },
+          { x: -19, y: -8 },
+        ]),
+      { cx: 0, cy: 0, rx: 19, ry: 16 },
     );
-    ctx.fillStyle = PALETTE.WARM_STONE;
-    ctx.fillRect(-15, -13.5, 30, 4);
-    ctx.strokeStyle = PALETTE.LIME_GLOW;
-    ctx.lineWidth = 1.8;
+
+    // 2. Towering chiseled monolith crown
+    outlined(
+      ctx,
+      {
+        fill: PALETTE.SLATE_MID,
+        shade: PALETTE.SLATE_DARK,
+        highlight: PALETTE.BONE_WHITE,
+        outlineWidth: 2.4,
+      },
+      (c) =>
+        tracePolygon(c, [
+          { x: -10, y: -14 },
+          { x: 9, y: -14 },
+          { x: 15, y: -6 },
+          { x: 14, y: 8 },
+          { x: 8, y: 12 },
+          { x: -8, y: 12 },
+          { x: -14, y: 7 },
+          { x: -15, y: -6 },
+        ]),
+      { cx: 0, cy: -1, rx: 15, ry: 13 },
+    );
+
+    // 3. Thick sylvan moss crest
+    outlined(
+      ctx,
+      {
+        fill: PALETTE.GOBLIN_GREEN,
+        shade: PALETTE.FOREST_SHADE,
+        highlight: PALETTE.LIME_GLOW,
+        material: 'organic',
+        outlineWidth: 2.1,
+      },
+      (c) =>
+        tracePolygon(c, [
+          { x: -15, y: -6 },
+          { x: -10, y: -15 },
+          { x: 8, y: -15 },
+          { x: 14, y: -7 },
+          { x: 8, y: -2 },
+          { x: 0, y: -5 },
+          { x: -8, y: 1 },
+        ]),
+      { cx: 0, cy: -8, rx: 14, ry: 7 },
+    );
+
+    // 4. Awakened glowing emerald rune core & ley-lines
+    outlined(
+      ctx,
+      {
+        fill: PALETTE.LIME_GLOW,
+        shade: PALETTE.GOBLIN_GREEN,
+        highlight: PALETTE.MINT_LIGHT,
+        outlineWidth: 1.9,
+      },
+      (c) =>
+        tracePolygon(c, [
+          { x: 0, y: -7 },
+          { x: 6, y: 0 },
+          { x: 4, y: 7 },
+          { x: 0, y: 9 },
+          { x: -4, y: 7 },
+          { x: -6, y: 0 },
+        ]),
+      { cx: 0, cy: 1, rx: 6, ry: 8 },
+    );
+
+    ctx.strokeStyle = PALETTE.MINT_LIGHT;
+    ctx.lineWidth = 1.6;
     ctx.beginPath();
-    ctx.moveTo(-11, -6);
-    ctx.lineTo(-3, 2);
-    ctx.lineTo(7, -4);
-    ctx.moveTo(-5, 7);
-    ctx.lineTo(9, 9);
+    ctx.moveTo(-11, -3);
+    ctx.lineTo(-6, 0);
+    ctx.moveTo(11, -3);
+    ctx.lineTo(6, 0);
+    ctx.moveTo(0, -4);
+    ctx.lineTo(0, 6);
     ctx.stroke();
   });
 
-  bakeCustomCanvas(scene, 'prop_moss_table_sliding', 42, 38, scale, (ctx) => {
+  bakeCustomCanvas(scene, 'prop_moss_table_sliding', 44, 40, scale, (ctx) => {
     ctx.save();
     ctx.rotate(-0.14);
+
+    // 1. Hurtling octagonal stone monolith
     outlined(
       ctx,
       {
@@ -359,15 +532,65 @@ export function bakeProps(scene: Phaser.Scene, scale: number): void {
         highlight: PALETTE.BONE_WHITE,
         outlineWidth: 2.5,
       },
-      (c) => traceRoundedRect(c, -16, -13, 32, 26, 3.5),
-      { cx: 0, cy: 0, rx: 16, ry: 13 },
+      (c) =>
+        tracePolygon(c, [
+          { x: -12, y: -13 },
+          { x: 10, y: -14 },
+          { x: 18, y: -6 },
+          { x: 18, y: 6 },
+          { x: 10, y: 14 },
+          { x: -12, y: 13 },
+          { x: -18, y: 6 },
+          { x: -18, y: -6 },
+        ]),
+      { cx: 0, cy: 0, rx: 18, ry: 14 },
     );
+
+    // 2. Swept-back sylvan moss mantle
+    outlined(
+      ctx,
+      {
+        fill: PALETTE.GOBLIN_GREEN,
+        shade: PALETTE.FOREST_SHADE,
+        highlight: PALETTE.LIME_GLOW,
+        material: 'organic',
+        outlineWidth: 2.0,
+      },
+      (c) =>
+        tracePolygon(c, [
+          { x: -15, y: -5 },
+          { x: -8, y: -12 },
+          { x: 9, y: -11 },
+          { x: 14, y: -4 },
+          { x: 5, y: 1 },
+          { x: -6, y: -1 },
+          { x: -12, y: 4 },
+        ]),
+      { cx: 0, cy: -4, rx: 14, ry: 8 },
+    );
+
+    // 3. Blazing emerald rune core & kinetic spore streaks
+    ctx.fillStyle = PALETTE.MINT_LIGHT;
     ctx.strokeStyle = PALETTE.LIME_GLOW;
+    ctx.lineWidth = 2.0;
+    tracePolygon(ctx, [
+      { x: 3, y: -6 },
+      { x: 10, y: 0 },
+      { x: 3, y: 6 },
+      { x: -4, y: 0 },
+    ]);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.strokeStyle = PALETTE.MINT_LIGHT;
     ctx.lineWidth = 1.8;
     ctx.beginPath();
-    ctx.moveTo(-10, -4);
-    ctx.lineTo(10, 4);
+    ctx.moveTo(-16, -6);
+    ctx.lineTo(-4, -6);
+    ctx.moveTo(-17, 5);
+    ctx.lineTo(-3, 5);
     ctx.stroke();
+
     ctx.restore();
   });
 

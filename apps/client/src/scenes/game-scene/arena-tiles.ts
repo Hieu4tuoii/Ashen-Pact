@@ -5,6 +5,7 @@ import {
   AUTOTILE_SOUTH,
   AUTOTILE_WEST,
   clamp,
+  i18n,
   LocalTransport,
   NetworkTransport,
   PLAYER_SLOT_COLORS,
@@ -51,6 +52,10 @@ import {
 import { type ArenaTileVisual, type GameScene, RIG_FOOT_OFFSET_Y } from '../GameScene.js';
 import type { HudScene } from '../HudScene.js';
 import { applyHudEdgeAnchors } from './hud-setup-and-pause.js';
+import {
+  canTeleportFromCurrentRoom,
+  resolveMinimapClickedRoomId,
+} from './hud-qol-and-minimap.js';
 import { createInteractPromptFadeState } from './interact-prompt.js';
 import { createPortalAnimState } from '../../fx/portal-door-shaders.js';
 
@@ -189,6 +194,8 @@ export function createImpl(this: GameScene): void {
   this.trailingBossHpRatio = 1.0;
   this.lowHpHeartbeatTimer = 0;
   this.irisTransitionProgress = 0.0;
+  this.irisTransitionDir = 0;
+  this.roomTeleportAnimTimer = 0;
   this.invitePanelVisible = false;
   this.copyToastTimer = 0;
   this.pingQueued = null;
@@ -281,6 +288,20 @@ export function createImpl(this: GameScene): void {
         x: wPt.x - this.lastShakeX,
         y: wPt.y - this.lastShakeY,
       };
+      return;
+    }
+    if (
+      pointer.leftButtonDown() &&
+      !this.pauseModalOpen &&
+      !(this.settingsModal?.isOpen() ?? false)
+    ) {
+      const hudPt = this.uiScene?.cameras?.main
+        ? this.uiScene.cameras.main.getWorldPoint(pointer.x, pointer.y)
+        : { x: pointer.x, y: pointer.y };
+      const clickedRoomId = resolveMinimapClickedRoomId(this, hudPt.x, hudPt.y);
+      if (clickedRoomId !== null) {
+        this.teleportToRoom(clickedRoomId);
+      }
     }
   };
   const unlockAudio = () => zzfx.unlockOnUserGesture();
@@ -1254,6 +1275,80 @@ export function triggerIrisTransitionImpl(this: GameScene, mode: 'open' | 'close
     this.irisTransitionDir = 1;
     this.irisTransitionProgress = 1.0;
   }
+}
+
+export function teleportToRoomImpl(this: GameScene, targetRoomId: number): boolean {
+  const sim = this.transport?.getSim();
+  if (!sim || !canTeleportFromCurrentRoom(sim)) return false;
+  const targetRoom = sim.dungeon.rooms[targetRoomId];
+  if (
+    !targetRoom ||
+    targetRoom.id === sim.currentRoomId ||
+    (targetRoom.discovery !== 'visited' && targetRoom.discovery !== 'cleared')
+  ) {
+    return false;
+  }
+
+  const oldX = sim.player.x;
+  const oldY = sim.player.y;
+  this.fx?.spawnShaderNova?.(oldX, oldY, 72, 'fx_sh_arcane_sigil', {
+    tint: 0x38bdf8,
+    ttl: 0.26,
+  });
+  this.lighting?.spawnTransientLight?.(oldX, oldY, 140, PALETTE.CYAN_FROST, 0.9, 0.3);
+
+  if (this.fullMapOpen) {
+    this.fullMapOpen = false;
+    initGlobalDebugState().fullMapOpen = false;
+  }
+
+  const entered = sim.enterRoom(targetRoomId);
+  if (!entered) return false;
+  sim.doorTransitionCooldown = Math.max(sim.doorTransitionCooldown, 0.75);
+
+  if (this.room && this.coopMode !== 'solo') {
+    this.room.send('teleport_room', { roomId: targetRoomId });
+  }
+
+  if (this.textures) {
+    this.syncArenaTilesWithMapRevision();
+  }
+  if (
+    typeof this.processSimEvents === 'function' &&
+    typeof this.transport.consumeEvents === 'function'
+  ) {
+    this.processSimEvents(this.transport.consumeEvents());
+  }
+  this.lastMinimapHash = '';
+
+  if (typeof this.triggerIrisTransition === 'function') {
+    this.triggerIrisTransition('close');
+  } else {
+    triggerIrisTransitionImpl.call(this, 'close');
+  }
+  this.roomTeleportAnimTimer = this.roomTeleportAnimDuration ?? 0.28;
+  zzfx.play('portal_enter');
+  this.fx?.spawnShaderNova?.(sim.player.x, sim.player.y, 88, 'fx_sh_arcane_sigil', {
+    tint: 0x38bdf8,
+    ttl: 0.34,
+  });
+  this.fx?.spawnChestOpenBurst?.(sim.player.x, sim.player.y, 'rare');
+  this.lighting?.spawnTransientLight?.(
+    sim.player.x,
+    sim.player.y,
+    180,
+    PALETTE.CYAN_FROST,
+    1.0,
+    0.45,
+  );
+  this.fx?.addTrauma?.(0.2);
+  this.fx?.spawnFloatingAlert?.(
+    sim.player.x,
+    sim.player.y - 18,
+    i18n.getLocale() === 'en' ? '⚡ TELEPORT!' : '⚡ DỊCH CHUYỂN!',
+    PALETTE.CYAN_FROST,
+  );
+  return true;
 }
 
 export function applyCameraViewportImpl(this: GameScene): void {

@@ -1,6 +1,5 @@
 import { distance } from '../math/vec2.js';
 import { hasPlayerUsedAshenAltar } from './sim-ashen-pacts.js';
-import { isFlippableBarricadeProp } from './sim-tactical-physics.js';
 import { hasPlayerUsedAnvil } from './sim-weapon-mutators.js';
 import type {
   SimChestState,
@@ -183,39 +182,6 @@ export function findInteractTarget(
         y: bestAlly.y,
         distance: bestDist,
         player: bestAlly,
-      };
-    }
-  }
-
-  // Priority 2: Flippable Barricade in 'low' state (r <= 52px)
-  {
-    let bestProp: SimPropState | null = null;
-    let bestDist = Infinity;
-    let bestKey = '';
-
-    for (let i = 0; i < sim.props.length; i++) {
-      const prop = sim.props[i]!;
-      if (prop.hp <= 0 || prop.coverState !== 'low' || !isFlippableBarricadeProp(prop.kind)) {
-        continue;
-      }
-      const key = `flip_cover:${prop.id}`;
-      const maxRange = FLIP_COVER_INTERACT_RANGE + (currentKey === key ? hysteresis : 0);
-      const d = distance(actor.x, actor.y, prop.x, prop.y);
-      if (d <= maxRange && d < bestDist) {
-        bestDist = d;
-        bestProp = prop;
-        bestKey = key;
-      }
-    }
-
-    if (bestProp) {
-      return {
-        kind: 'flip_cover',
-        key: bestKey,
-        x: bestProp.x,
-        y: bestProp.y,
-        distance: bestDist,
-        prop: bestProp,
       };
     }
   }

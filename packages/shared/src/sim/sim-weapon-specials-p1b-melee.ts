@@ -1,6 +1,10 @@
 import type { ElementType } from '../data/types.js';
 import { angleDiff, circleVsCircle, clamp, distance } from '../math/vec2.js';
-import { resolveEnemyChasmRingOut } from './sim-tactical-physics.js';
+import {
+  isFlippableBarricadeProp,
+  isKickableProp,
+  resolveEnemyChasmRingOut,
+} from './sim-tactical-physics.js';
 import { pointToSegmentDist } from './sim-weapon-specials-rare.js';
 import { processMeleeParryDeflect } from './sim-weapon-specials.js';
 import type {
@@ -131,10 +135,16 @@ export function updateEmeraldCleaverBoomerang(
     b.y += b.vy * dtSec;
 
     if (!sim.stressTestActive && sim.props.length > 0) {
+      const owner = sim.getPlayerById(b.ownerId) ?? sim.player;
       for (let k = 0; k < sim.props.length; k++) {
         const prop = sim.props[k]!;
-        if (prop.hp <= 0 || !prop.destructible) continue;
+        if (prop.hp <= 0 || prop.coverState === 'sliding') continue;
         if (circleVsCircle(b, prop)) {
+          if (isFlippableBarricadeProp(prop.kind) && isKickableProp(prop)) {
+            sim.kickProp(prop, owner, b.angle);
+            continue;
+          }
+          if (!prop.destructible) continue;
           prop.fallAngle = b.angle;
           sim.damageProp(prop, b.damage, b.element);
         }
@@ -328,6 +338,12 @@ export function updateEmeraldCleaverBoomerang(
         const resolved = sim.map.resolveCircleCollision(nextX, nextY, enemy.radius, true);
         enemy.x = resolved.x;
         enemy.y = resolved.y;
+        if (!sim.stressTestActive) {
+          sim.resolvePropMovementCollision(enemy);
+          const postCol = sim.map.resolveCircleCollision(enemy.x, enemy.y, enemy.radius, true);
+          enemy.x = postCol.x;
+          enemy.y = postCol.y;
+        }
         resolveEnemyChasmRingOut(sim, enemy);
       }
     }

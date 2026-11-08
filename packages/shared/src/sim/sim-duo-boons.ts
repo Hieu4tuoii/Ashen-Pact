@@ -1,7 +1,8 @@
 import { scaleBlessingDamage } from '../data/blessings.js';
 import type { DuoBoonId, ElementalReactionId } from '../data/types.js';
 import { angleDiff, clamp, distance } from '../math/vec2.js';
-import { SHOT_FLAG } from '../protocol/messages.js';
+import { SHOT_FLAG, TILE_SIZE } from '../protocol/messages.js';
+import { findNextWalkableWaypoint } from './arena-room-archetypes.js';
 import { enforcePlayerDeployableCap } from './sim-blessings-p4a.js';
 import { isFlippableBarricadeProp } from './sim-tactical-physics.js';
 import {
@@ -825,13 +826,51 @@ export function updateDuoBoons(sim: WorldSim, dtSec: number): void {
 
       if (nearest && nearestDist > 2) {
         const stepPx = Math.min(nearestDist, SUPERHEATED_CYCLONE_SPEED * dtSec);
-        const ang = Math.atan2(nearest.y - s.y, nearest.x - s.x);
-        const col = sim.map.resolveCircleCollision(
+        let ang = Math.atan2(nearest.y - s.y, nearest.x - s.x);
+        const midX = (s.x + nearest.x) * 0.5;
+        const midY = (s.y + nearest.y) * 0.5;
+        let col = sim.map.resolveCircleCollision(
           s.x + Math.cos(ang) * stepPx,
           s.y + Math.sin(ang) * stepPx,
           s.radius,
           true,
         );
+        if (
+          col.collided ||
+          sim.map.isSolidTile(Math.floor(midX / TILE_SIZE), Math.floor(midY / TILE_SIZE))
+        ) {
+          const wp = findNextWalkableWaypoint(sim.map, s.x, s.y, nearest.x, nearest.y, sim.props, true, s.radius);
+          ang = Math.atan2(wp.y - s.y, wp.x - s.x);
+          col = sim.map.resolveCircleCollision(
+            s.x + Math.cos(ang) * stepPx,
+            s.y + Math.sin(ang) * stepPx,
+            s.radius,
+            true,
+          );
+          if (col.collided) {
+            const alt1 = ang + 0.85;
+            const altCol1 = sim.map.resolveCircleCollision(
+              s.x + Math.cos(alt1) * stepPx,
+              s.y + Math.sin(alt1) * stepPx,
+              s.radius,
+              true,
+            );
+            if (!altCol1.collided) {
+              col = altCol1;
+            } else {
+              const alt2 = ang - 0.85;
+              const altCol2 = sim.map.resolveCircleCollision(
+                s.x + Math.cos(alt2) * stepPx,
+                s.y + Math.sin(alt2) * stepPx,
+                s.radius,
+                true,
+              );
+              if (!altCol2.collided) {
+                col = altCol2;
+              }
+            }
+          }
+        }
         s.x = col.x;
         s.y = col.y;
       }

@@ -491,9 +491,25 @@ export function spawnEnemyImpl(this: WorldSim,
     }
   }
 
-  const explicitNonChasmPos =
-    x !== undefined && y !== undefined && this.map.getSurfaceAtWorld(spawnX, spawnY) !== 'chasm';
-  const resolved = this.map.resolveCircleCollision(spawnX, spawnY, radius, explicitNonChasmPos);
+  const allowChasm = Boolean(def.flying);
+  if (
+    defId !== 'ice_prison' &&
+    !this.stressTestActive &&
+    (this.map.isSolidTile(Math.floor(spawnX / TILE_SIZE), Math.floor(spawnY / TILE_SIZE)) ||
+      (!allowChasm && this.map.getSurfaceAtWorld(spawnX, spawnY) === 'chasm'))
+  ) {
+    const walkable = findNearestWalkablePoint(
+      this.map,
+      spawnX,
+      spawnY,
+      radius,
+      this.props,
+      allowChasm,
+    );
+    spawnX = walkable.x;
+    spawnY = walkable.y;
+  }
+  const resolved = this.map.resolveCircleCollision(spawnX, spawnY, radius, allowChasm);
   const safePos = { x: resolved.x, y: resolved.y, radius };
   if (defId !== 'ice_prison' && !this.stressTestActive) {
     for (let iter = 0; iter < 3; iter++) {
@@ -518,30 +534,36 @@ export function spawnEnemyImpl(this: WorldSim,
       }
       for (let i = 0; i < this.chests.length; i++) {
         const chest = this.chests[i]!;
-        const dx = safePos.x - chest.x;
-        const dy = safePos.y - chest.y;
+        const cdx = safePos.x - chest.x;
+        const cdy = safePos.y - chest.y;
         const minDist = safePos.radius + chest.radius + 4;
-        const dSq = dx * dx + dy * dy;
+        const dSq = cdx * cdx + cdy * cdy;
         if (dSq < minDist * minDist) {
           if (dSq > 1e-6) {
             const d = Math.sqrt(dSq);
             const push = minDist - d;
-            safePos.x += (dx / d) * push;
-            safePos.y += (dy / d) * push;
+            safePos.x += (cdx / d) * push;
+            safePos.y += (cdy / d) * push;
           } else {
             safePos.x += minDist;
           }
         }
       }
-      const wallCol = this.map.resolveCircleCollision(safePos.x, safePos.y, safePos.radius, explicitNonChasmPos);
+      const wallCol = this.map.resolveCircleCollision(
+        safePos.x,
+        safePos.y,
+        safePos.radius,
+        allowChasm,
+      );
       safePos.x = wallCol.x;
       safePos.y = wallCol.y;
     }
 
     // Fallback ring search if squeezed between multiple closely-spaced props and walls
     const isOverlappingObstacle = (px: number, py: number): boolean => {
+      if (this.map.isSolidTile(Math.floor(px / TILE_SIZE), Math.floor(py / TILE_SIZE))) return true;
       if (this.map.checkProjectileWallHit(px, py, safePos.radius).hit) return true;
-      if (this.map.getSurfaceAtWorld(px, py) === 'chasm') return true;
+      if (!allowChasm && this.map.getSurfaceAtWorld(px, py) === 'chasm') return true;
       for (let i = 0; i < this.props.length; i++) {
         const prop = this.props[i]!;
         if (prop.hp <= 0 || (!prop.blocksMovement && prop.kind !== 'ancient_mechanism')) continue;
@@ -564,6 +586,7 @@ export function spawnEnemyImpl(this: WorldSim,
             spawnX + Math.cos(ang) * distR,
             spawnY + Math.sin(ang) * distR,
             safePos.radius,
+            allowChasm,
           );
           if (!isOverlappingObstacle(col.x, col.y)) {
             safePos.x = col.x;
@@ -572,6 +595,24 @@ export function spawnEnemyImpl(this: WorldSim,
             break;
           }
         }
+      }
+      if (!foundClear) {
+        const fallbackPt = findNearestWalkablePoint(
+          this.map,
+          safePos.x,
+          safePos.y,
+          safePos.radius,
+          this.props,
+          allowChasm,
+        );
+        const fallbackCol = this.map.resolveCircleCollision(
+          fallbackPt.x,
+          fallbackPt.y,
+          safePos.radius,
+          allowChasm,
+        );
+        safePos.x = fallbackCol.x;
+        safePos.y = fallbackCol.y;
       }
     }
   }

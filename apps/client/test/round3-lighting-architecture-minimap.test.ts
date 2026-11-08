@@ -1090,6 +1090,8 @@ describe('Round 3 (F18) — WebGL Lightmap Resize, Exterior Void Masking, Dynami
       const sim = new WorldSim({ seed: 1337, biome: 1 });
       sim.enterRoom(sim.dungeon.startRoomId);
       const currentRoom = sim.getCurrentRoom()!;
+      const adjId = Object.values(currentRoom.connections).find((id) => id !== undefined)!;
+      sim.dungeon.rooms[adjId]!.discovery = 'visited';
       currentRoom.roomShape = 'donut_ring';
       currentRoom.roomSizePreset = 'standard';
       currentRoom.cols = 36;

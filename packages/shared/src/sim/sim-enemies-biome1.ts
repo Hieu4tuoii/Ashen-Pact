@@ -737,7 +737,7 @@ export function updateBossSporeKingAIImpl(
         cy - halfBurrowH,
         cy + halfBurrowH,
       );
-      const safeTarget = findNearestWalkablePoint(this.map, rawTargetX, rawTargetY, e.radius);
+      const safeTarget = findNearestWalkablePoint(this.map, rawTargetX, rawTargetY, e.radius, this.props);
       const resolvedTarget = this.map.resolveCircleCollision(safeTarget.x, safeTarget.y, e.radius, false);
       const targetX =
         this.map.isSolidTile(Math.floor(resolvedTarget.x / TILE_SIZE), Math.floor(resolvedTarget.y / TILE_SIZE)) ||
@@ -749,12 +749,30 @@ export function updateBossSporeKingAIImpl(
         this.map.getSurfaceAtWorld(resolvedTarget.x, resolvedTarget.y) === 'chasm'
           ? safeTarget.y
           : resolvedTarget.y;
-      e.bossTargetX = targetX;
-      e.bossTargetY = targetY;
       e.x = targetX;
       e.y = targetY;
-      e.prevX = targetX;
-      e.prevY = targetY;
+      if (!this.stressTestActive) {
+        this.resolvePropMovementCollision(e);
+        const postProp = this.map.resolveCircleCollision(e.x, e.y, e.radius, false);
+        if (
+          !this.map.isSolidTile(
+            Math.floor(postProp.x / TILE_SIZE),
+            Math.floor(postProp.y / TILE_SIZE),
+          ) &&
+          this.map.getSurfaceAtWorld(postProp.x, postProp.y) !== 'chasm'
+        ) {
+          e.x = postProp.x;
+          e.y = postProp.y;
+        } else {
+          const fallbackPt = findNearestWalkablePoint(this.map, e.x, e.y, e.radius, this.props);
+          e.x = fallbackPt.x;
+          e.y = fallbackPt.y;
+        }
+      }
+      e.bossTargetX = e.x;
+      e.bossTargetY = e.y;
+      e.prevX = e.x;
+      e.prevY = e.y;
       e.telegraphRadius = BOSS_ERUPT_RADIUS;
     } else {
       e.bossBurrowed = false;
@@ -908,7 +926,8 @@ export function executeBossSporeKingAttackImpl(
     ).length;
     if (cycle % 2 === 1 && activeMinions < 2) {
       const minionDef = e.bossPhase >= 2 && cycle % 4 === 3 ? 'spore_bomber' : 'mini_slime';
-      this.spawnEnemy(minionDef, e.x + 48, e.y + 36, false);
+      const minionPt = findNearestWalkablePoint(this.map, e.x + 48, e.y + 36, 14, this.props);
+      this.spawnEnemy(minionDef, minionPt.x, minionPt.y, false);
     }
 
     // Phase 3 aimed 3-way toxic burst

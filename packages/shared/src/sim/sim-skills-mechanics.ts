@@ -3,6 +3,7 @@ import { scaleBlessingDamage } from '../data/blessings.js';
 import type { ElementType } from '../data/types.js';
 import { angleDiff, clamp, distance, isCircleInCone } from '../math/vec2.js';
 import { TILE_SIZE } from '../protocol/messages.js';
+import { findNearestWalkablePoint } from './arena-room-archetypes.js';
 import {
   detonateThunderDecoy,
   enforcePlayerDeployableCap,
@@ -78,14 +79,26 @@ function lashDruidPoisonRootsIntoWall(sim: WorldSim, ownerId: number, e: SimEnem
 
   e.kbVx = Math.cos(lashAngle) * kbSpeed;
   e.kbVy = Math.sin(lashAngle) * kbSpeed;
-  const col = sim.map.resolveCircleCollision(
-    obstacle.x - Math.cos(lashAngle) * (e.radius + 2),
-    obstacle.y - Math.sin(lashAngle) * (e.radius + 2),
-    e.radius,
-    true,
-  );
+  const standoff = (obstacle.prop ? obstacle.prop.radius : TILE_SIZE * 0.5) + e.radius + 2;
+  const rawX = obstacle.x - Math.cos(lashAngle) * standoff;
+  const rawY = obstacle.y - Math.sin(lashAngle) * standoff;
+  const col = sim.map.resolveCircleCollision(rawX, rawY, e.radius, false);
   e.x = col.x;
   e.y = col.y;
+  if (!sim.stressTestActive) {
+    sim.resolvePropMovementCollision(e);
+    const postCol = sim.map.resolveCircleCollision(e.x, e.y, e.radius, false);
+    e.x = postCol.x;
+    e.y = postCol.y;
+    if (
+      sim.map.isSolidTile(Math.floor(e.x / TILE_SIZE), Math.floor(e.y / TILE_SIZE)) ||
+      sim.map.getSurfaceAtWorld(e.x, e.y) === 'chasm'
+    ) {
+      const safePt = findNearestWalkablePoint(sim.map, e.x, e.y, e.radius, sim.props);
+      e.x = safePt.x;
+      e.y = safePt.y;
+    }
+  }
   e.wallSlamCooldownTimer = 0;
   triggerEnemyWallSlam(sim, e, obstacle.prop, kbSpeed);
   e.rootedTimer = Math.max(e.rootedTimer, 1.5);
@@ -357,7 +370,16 @@ export function activateCharacterSkillImpl(this: WorldSim, p: SimPlayerState): v
         TILE_SIZE * 2,
         this.map.height - TILE_SIZE * 2,
       );
-      const resolved = this.map.resolveCircleCollision(tx, ty, 16);
+      const treeRadius = hasSacredGrove ? 15 : 18;
+      const walkablePt = findNearestWalkablePoint(this.map, tx, ty, treeRadius, this.props);
+      const resolvedCol = this.map.resolveCircleCollision(walkablePt.x, walkablePt.y, treeRadius, false);
+      const resolved = { x: resolvedCol.x, y: resolvedCol.y, radius: treeRadius };
+      if (!this.stressTestActive) {
+        this.resolvePropMovementCollision(resolved);
+        const postProp = this.map.resolveCircleCollision(resolved.x, resolved.y, treeRadius, false);
+        resolved.x = postProp.x;
+        resolved.y = postProp.y;
+      }
       const auraRadius = hasSacredGrove ? 105 : 120;
       const rootedIds: number[] = [];
 
@@ -397,7 +419,7 @@ export function activateCharacterSkillImpl(this: WorldSim, p: SimPlayerState): v
         nameVi: 'Cây Thiêng',
         x: resolved.x,
         y: resolved.y,
-        radius: hasSacredGrove ? 15 : 18,
+        radius: treeRadius,
         auraRadius,
         hp: hasSacredGrove ? 36 : 48,
         maxHp: hasSacredGrove ? 36 : 48,
@@ -446,11 +468,17 @@ export function activateCharacterSkillImpl(this: WorldSim, p: SimPlayerState): v
       const lateral = spawnCount === 2 ? (t === 0 ? -28 : 28) : 0;
       const baseX = p.x + Math.cos(p.aimAngle) * 48 + Math.cos(perpAngle) * lateral;
       const baseY = p.y + Math.sin(p.aimAngle) * 48 + Math.sin(perpAngle) * lateral;
-      const resolved = this.map.resolveCircleCollision(
-        clamp(baseX, TILE_SIZE * 2, this.map.width - TILE_SIZE * 2),
-        clamp(baseY, TILE_SIZE * 2, this.map.height - TILE_SIZE * 2),
-        15,
-      );
+      const clampedX = clamp(baseX, TILE_SIZE * 2, this.map.width - TILE_SIZE * 2);
+      const clampedY = clamp(baseY, TILE_SIZE * 2, this.map.height - TILE_SIZE * 2);
+      const walkablePt = findNearestWalkablePoint(this.map, clampedX, clampedY, 15, this.props);
+      const resolvedCol = this.map.resolveCircleCollision(walkablePt.x, walkablePt.y, 15, false);
+      const resolved = { x: resolvedCol.x, y: resolvedCol.y, radius: 15 };
+      if (!this.stressTestActive) {
+        this.resolvePropMovementCollision(resolved);
+        const postProp = this.map.resolveCircleCollision(resolved.x, resolved.y, 15, false);
+        resolved.x = postProp.x;
+        resolved.y = postProp.y;
+      }
 
       const turret: SimSummonState = {
         id: ++this.nextEntityId,

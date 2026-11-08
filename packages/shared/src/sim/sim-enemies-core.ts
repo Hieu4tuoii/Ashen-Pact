@@ -1,9 +1,16 @@
 import { ENEMIES } from '../data/enemies.js';
 import type { ElementType } from '../data/types.js';
-import { approach, distance, distanceSq } from '../math/vec2.js';
+import { angleDiff, approach, distance, distanceSq } from '../math/vec2.js';
 import { BIOME_SCALING, COOP_SCALING } from '../data/scaling.js';
+import { TILE_SIZE } from '../protocol/messages.js';
 import type { SurfaceKind } from './arena-map.js';
-import { getConveyorVelocityAtWorld } from './arena-room-archetypes.js';
+import {
+  findNearestWalkablePoint,
+  findNextWalkableWaypoint,
+  getConveyorVelocityAtWorld,
+  hasClearWalkableCorridor,
+  isPointBlockedByStationaryProp,
+} from './arena-room-archetypes.js';
 import {
   syncAshenExecutionerInRoom,
   updateAshenExecutionerAI,
@@ -29,6 +36,9 @@ export * from './sim-enemies-tactical-ai.js';
 export * from './sim-boss-armor-break.js';
 
 const EMPTY_PLAYERS: readonly SimPlayerState[] = [];
+const BASE_STEER_OFFSETS: readonly number[] = [
+  0, 0.35, -0.35, 0.72, -0.72, 1.1, -1.1, 1.57, -1.57, 2.1, -2.1,
+];
 
 export function updatePhase6MechanicsImpl(this: WorldSim, dtSec: number): void {
   const allPlayers =
@@ -249,10 +259,17 @@ export function updatePhase6MechanicsImpl(this: WorldSim, dtSec: number): void {
         // Window expired before second core was destroyed -> respawn first core at 50% HP
         const survivor = remainingCores[0]!;
         const spawnLeft = survivor.x >= titan.x;
-        const respawned = this.spawnEnemy(
-          'forge_energy_core',
+        const safeCorePt = findNearestWalkablePoint(
+          this.map,
           titan.x + (spawnLeft ? -115 : 115),
           titan.y,
+          ENEMIES.forge_energy_core?.radius ?? 16,
+          this.props,
+        );
+        const respawned = this.spawnEnemy(
+          'forge_energy_core',
+          safeCorePt.x,
+          safeCorePt.y,
           true,
         );
         respawned.hp = Math.max(10, Math.round(respawned.maxHp * 0.5));
@@ -591,6 +608,123 @@ export function updateEnemiesImpl(this: WorldSim, dtSec: number): void {
       e.kbVy = 0;
     }
 
+    const canSteer =
+      !this.stressTestActive &&
+      !isStationaryDef &&
+      !e.bossBurrowed &&
+      !e.kickedSporeBomber &&
+      e.rootedTimer <= 0 &&
+      e.frozenTimer <= 0 &&
+      (e.stunTimer ?? 0) <= 0 &&
+      e.aiState !== 'attack' &&
+      e.aiState !== 'telegraph' &&
+      e.aiState !== 'stunned';
+    if (canSteer) {
+      const rawSpeed = Math.hypot(e.vx, e.vy);
+      if (rawSpeed > 1) {
+        const rawAngle = Math.atan2(e.vy, e.vx);
+        const isFlying = Boolean(ENEMIES[e.defId]?.flying);
+        const isSeekingCover =
+          e.defId === 'goblin_shooter' &&
+          e.cachedCoverX !== undefined &&
+          e.cachedCoverY !== undefined;
+        const directToTargetAng = Math.atan2(targetY - e.y, targetX - e.x);
+        const isChasing =
+          !isSeekingCover && Math.abs(angleDiff(rawAngle, directToTargetAng)) <= 0.35;
+        const stepDist = Math.max(4, rawSpeed * dtSec * 2);
+        const probeDist = Math.max(14, Math.min(24, e.radius + 4));
+        const curBlockedByProp =
+          hasAliveProps && isPointBlockedByStationaryProp(e.x, e.y, e.radius, this.props);
+        const isWallOrChasmClear = (ang: number, dist: number): boolean => {
+          const px = e.x + Math.cos(ang) * dist;
+          const py = e.y + Math.sin(ang) * dist;
+          const ptx = Math.floor(px / TILE_SIZE);
+          const pty = Math.floor(py / TILE_SIZE);
+          if (this.map.isSolidTile(ptx, pty)) return false;
+          if (!isFlying && this.map.getSurfaceAtWorld(px, py) === 'chasm') return false;
+          if (this.map.resolveCircleCollision(px, py, e.radius, isFlying).collided) return false;
+          return true;
+        };
+        const isPathPointClear = (ang: number, dist: number): boolean => {
+          if (!isWallOrChasmClear(ang, dist)) return false;
+          if (hasAliveProps && !curBlockedByProp) {
+            const px = e.x + Math.cos(ang) * dist;
+            const py = e.y + Math.sin(ang) * dist;
+            if (isPointBlockedByStationaryProp(px, py, e.radius, this.props)) return false;
+          }
+          return true;
+        };
+
+        const isStuck = (e.navStuckTimer ?? 0) >= 0.35;
+        const immediateBlocked =
+          !isPathPointClear(rawAngle, stepDist) || !isPathPointClear(rawAngle, probeDist);
+        const corridorBlocked =
+          isChasing &&
+          !hasClearWalkableCorridor(
+            this.map,
+            e.x,
+            e.y,
+            targetX,
+            targetY,
+            e.radius,
+            hasAliveProps ? this.props : undefined,
+            isFlying,
+          );
+
+        if (corridorBlocked || immediateBlocked || isStuck) {
+          let baseAngle = rawAngle;
+          if (corridorBlocked || (isChasing && (immediateBlocked || isStuck))) {
+            const wp = findNextWalkableWaypoint(
+              this.map,
+              e.x,
+              e.y,
+              targetX,
+              targetY,
+              hasAliveProps ? this.props : undefined,
+              isFlying,
+              e.radius,
+            );
+            if (distanceSq(e.x, e.y, wp.x, wp.y) > 4) {
+              baseAngle = Math.atan2(wp.y - e.y, wp.x - e.x);
+            }
+          }
+
+          const s = e.strafeSign === -1 ? -1 : 1;
+          let chosenAngle = baseAngle;
+          let chosenOffset = 0;
+          let foundSteer = false;
+          for (let k = 0; k < BASE_STEER_OFFSETS.length; k++) {
+            const off = BASE_STEER_OFFSETS[k]! * s;
+            const candAng = baseAngle + off;
+            if (!isPathPointClear(candAng, stepDist)) continue;
+            if (!isPathPointClear(candAng, probeDist)) continue;
+            chosenAngle = candAng;
+            chosenOffset = off;
+            foundSteer = true;
+            break;
+          }
+          if (!foundSteer) {
+            for (let k = 0; k < BASE_STEER_OFFSETS.length; k++) {
+              const off = BASE_STEER_OFFSETS[k]! * s;
+              const candAng = baseAngle + off;
+              if (!isWallOrChasmClear(candAng, stepDist)) continue;
+              if (!isWallOrChasmClear(candAng, probeDist)) continue;
+              chosenAngle = candAng;
+              chosenOffset = off;
+              break;
+            }
+          }
+          if (chosenAngle !== rawAngle) {
+            e.vx = Math.cos(chosenAngle) * rawSpeed;
+            e.vy = Math.sin(chosenAngle) * rawSpeed;
+            if (chosenOffset !== 0 && !isChasing) {
+              e.strafeSign = chosenOffset > 0 ? 1 : -1;
+            }
+          }
+        }
+      }
+    }
+
     // Apply Chill (-30% or -50% laser fence) and Oil (-15%) movement speed modifiers
     let speedMult = 1.0;
     if ((e.fenceSlow50Timer ?? 0) > 0) speedMult *= 0.5;
@@ -636,7 +770,7 @@ export function updateEnemiesImpl(this: WorldSim, dtSec: number): void {
     const nextX = e.x + (e.vx + e.kbVx + sepX + conveyorPushX) * dtSec;
     const nextY = e.y + (e.vy + e.kbVy + sepY) * dtSec;
     const ignoreChasm = Boolean(
-      e.isBoss || ENEMIES[e.defId]?.flying || kbSpeed >= 25 || surf === 'chasm',
+      ENEMIES[e.defId]?.flying || (!e.isBoss && kbSpeed >= 25) || surf === 'chasm',
     );
     const col = this.map.resolveCircleCollision(nextX, nextY, e.radius, ignoreChasm);
     let wallCollided = col.collided;
@@ -696,6 +830,86 @@ export function updateEnemiesImpl(this: WorldSim, dtSec: number): void {
 
     if (!this.stressTestActive && resolveEnemyChasmRingOut(this, e)) {
       if (e.hp <= 0) continue;
+    }
+
+    if (!this.stressTestActive && e.hp > 0) {
+      const isFlying = Boolean(ENEMIES[e.defId]?.flying);
+      const curTx = Math.floor(e.x / TILE_SIZE);
+      const curTy = Math.floor(e.y / TILE_SIZE);
+      const onSolid = this.map.isSolidTile(curTx, curTy);
+      const onChasm = !isFlying && this.map.getSurfaceAtWorld(e.x, e.y) === 'chasm';
+      if (onSolid || onChasm) {
+        const safePt = findNearestWalkablePoint(
+          this.map,
+          e.x,
+          e.y,
+          e.radius,
+          hasAliveProps ? this.props : undefined,
+          isFlying,
+        );
+        const safeCol = this.map.resolveCircleCollision(safePt.x, safePt.y, e.radius, isFlying);
+        e.x = safeCol.x;
+        e.y = safeCol.y;
+        if (hasAliveProps && e.defId !== 'ice_prison') {
+          this.resolvePropMovementCollision(e);
+          const postSafeCol = this.map.resolveCircleCollision(e.x, e.y, e.radius, isFlying);
+          e.x = postSafeCol.x;
+          e.y = postSafeCol.y;
+        }
+      }
+    }
+
+    if (canSteer && Math.hypot(e.vx, e.vy) > 20) {
+      if (
+        e.navAnchorX === undefined ||
+        e.navAnchorY === undefined ||
+        distance(e.x, e.y, e.navAnchorX, e.navAnchorY) >= 8
+      ) {
+        e.navAnchorX = e.x;
+        e.navAnchorY = e.y;
+        e.navStuckTimer = 0;
+      } else {
+        const prevStuck = e.navStuckTimer ?? 0;
+        const nextStuck = prevStuck + dtSec;
+        e.navStuckTimer = nextStuck;
+        if (prevStuck < 0.35 && nextStuck >= 0.35) {
+          e.strafeSign = e.strafeSign === -1 ? 1 : -1;
+          e.cachedCoverX = undefined;
+          e.cachedCoverY = undefined;
+        }
+        if (nextStuck >= 0.7) {
+          const isFlying = Boolean(ENEMIES[e.defId]?.flying);
+          const wp = findNextWalkableWaypoint(
+            this.map,
+            e.x,
+            e.y,
+            targetX,
+            targetY,
+            hasAliveProps ? this.props : undefined,
+            isFlying,
+            e.radius,
+          );
+          const step = Math.min(18, Math.max(6, e.moveSpeed * dtSec * 2));
+          const nudgeX = approach(e.x, wp.x, step);
+          const nudgeY = approach(e.y, wp.y, step);
+          const nudgeCol = this.map.resolveCircleCollision(nudgeX, nudgeY, e.radius, isFlying);
+          e.x = nudgeCol.x;
+          e.y = nudgeCol.y;
+          if (hasAliveProps && e.defId !== 'ice_prison') {
+            this.resolvePropMovementCollision(e);
+            const postNudgeCol = this.map.resolveCircleCollision(e.x, e.y, e.radius, isFlying);
+            e.x = postNudgeCol.x;
+            e.y = postNudgeCol.y;
+          }
+          e.navAnchorX = e.x;
+          e.navAnchorY = e.y;
+          e.navStuckTimer = 0;
+        }
+      }
+    } else {
+      e.navStuckTimer = 0;
+      e.navAnchorX = e.x;
+      e.navAnchorY = e.y;
     }
 
     if (surf === 'grass' && Math.hypot(e.vx, e.vy) > 25 && e.grassRustleCooldown <= 0) {

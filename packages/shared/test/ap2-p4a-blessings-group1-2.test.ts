@@ -463,7 +463,7 @@ describe('AP2 Phase P4A.1 — Advanced Group 1 (Barricade) & Group 2 (Dash) Bles
       e.maxHp = 600;
     }
 
-    expect(sim.interactWithNearest(p1)).toBe(true);
+    expect(sim.flipCoverProp(table, p1)).toBe(true);
     expect(table.coverState).toBe('flipped');
 
     const pulled = [eCloseBehind, eCloseSide, eMid1, eMid2];
@@ -499,7 +499,7 @@ describe('AP2 Phase P4A.1 — Advanced Group 1 (Barricade) & Group 2 (Dash) Bles
         sim.map.setSurface(chasmTableTx + dx, chasmTableTy + dy, 'chasm', 999, true);
       }
     }
-    sim.spawnProp(
+    const chasmTable = sim.spawnProp(
       'moss_table',
       chasmTableTx * TILE_SIZE + 16,
       chasmTableTy * TILE_SIZE + 16,
@@ -517,7 +517,7 @@ describe('AP2 Phase P4A.1 — Advanced Group 1 (Barricade) & Group 2 (Dash) Bles
     safeEnemy.hp = 500;
     safeEnemy.maxHp = 500;
 
-    expect(sim.interactWithNearest(p1)).toBe(true);
+    expect(sim.flipCoverProp(chasmTable, p1)).toBe(true);
     expect(safeEnemy.stunTimer).toBeGreaterThanOrEqual(0.8);
     expect(sim.map.getSurfaceAtWorld(safeEnemy.x, safeEnemy.y)).not.toBe('chasm');
     const eTx = Math.floor(safeEnemy.x / TILE_SIZE);
@@ -825,7 +825,7 @@ describe('AP2 Phase P4A.1 — Advanced Group 1 (Barricade) & Group 2 (Dash) Bles
       p.x = 340;
       p.y = 368;
       p.aimAngle = 0;
-      sim.interactWithNearest(p); // Flip cover -> magnet snare
+      sim.flipCoverProp(table, p); // Flip cover -> magnet snare
 
       sim.step({ moveX: 1, moveY: 0, aimAngle: 0, buttons: INPUT_BUTTON.DASH }); // Thunder decoy + arm phase blade
       for (let t = 0; t < 15; t++) {

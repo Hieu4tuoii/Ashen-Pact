@@ -20,7 +20,7 @@ import {
   drawStyledPanel,
   drawVectorHudIcon,
 } from '../../ui/components/hud-primitives.js';
-import { graphicsSettings } from '../../ui/graphics-settings.js';
+import { clampUiScale, graphicsSettings } from '../../ui/graphics-settings.js';
 import {
   computeUiTextResolution,
   createSceneTextStyle,
@@ -448,6 +448,128 @@ export function drawMinimapRoomSilhouette(
   }
 }
 
+export function canTeleportFromCurrentRoom(
+  sim: ReturnType<GameScene['transport']['getSim']>,
+): boolean {
+  if (!sim || sim.inHub || sim.runState !== 'playing') return false;
+  if (sim.player && sim.player.lifeState !== 'alive') return false;
+  const curRoom = sim.getCurrentRoom?.();
+  if (!curRoom || !curRoom.cleared) return false;
+  if (typeof sim.hasActiveCombatEnemies === 'function' && sim.hasActiveCombatEnemies()) {
+    return false;
+  }
+  if (sim.secretTrialActive) return false;
+  if (Array.isArray(sim.doors) && sim.doors.some((d) => d.locked && !d.isSecretPassage)) {
+    return false;
+  }
+  return true;
+}
+
+export function resolveMinimapClickedRoomId(
+  scene: Pick<GameScene, 'transport'> &
+    Partial<Pick<GameScene, 'fullMapOpen' | 'hudPadX' | 'hudPadY' | 'currentHudUiScale'>>,
+  localViewX: number,
+  localViewY: number,
+): number | null {
+  const sim = scene.transport?.getSim?.();
+  if (!sim || sim.inHub) return null;
+  const rooms = sim.dungeon?.rooms;
+  if (!rooms || rooms.length === 0) return null;
+
+  const settingsScale = clampUiScale(graphicsSettings.getState().uiScale);
+  const sceneScale =
+    typeof scene.currentHudUiScale === 'number' && scene.currentHudUiScale > 0
+      ? clampUiScale(scene.currentHudUiScale)
+      : 1;
+  const uiScale = settingsScale !== 1 ? settingsScale : sceneScale;
+  const padX = scene.hudPadX ?? 0;
+  const padY = scene.hudPadY ?? 0;
+
+  const mapLocalX = (localViewX - (WORLD_VIEW_WIDTH + padX)) / uiScale;
+  const mapLocalY = (localViewY + padY) / uiScale;
+
+  const fullMapOpen = Boolean(scene.fullMapOpen);
+  const panelW = fullMapOpen ? 420 : 172;
+  const panelH = fullMapOpen ? 280 : 102;
+  const panelX = fullMapOpen ? -480 - panelW * 0.5 : -184;
+  const panelY = fullMapOpen ? 110 : 10;
+
+  if (
+    mapLocalX < panelX ||
+    mapLocalX > panelX + panelW ||
+    mapLocalY < panelY ||
+    mapLocalY > panelY + panelH
+  ) {
+    return null;
+  }
+
+  let minGx = 99;
+  let maxGx = -99;
+  let minGy = 99;
+  let maxGy = -99;
+  for (let i = 0; i < rooms.length; i++) {
+    const r = rooms[i]!;
+    if (r.gx < minGx) minGx = r.gx;
+    if (r.gx > maxGx) maxGx = r.gx;
+    if (r.gy < minGy) minGy = r.gy;
+    if (r.gy > maxGy) maxGy = r.gy;
+  }
+
+  const spanX = Math.max(1, maxGx - minGx + 1);
+  const spanY = Math.max(1, maxGy - minGy + 1);
+
+  const cellStep = fullMapOpen
+    ? Math.min(52, Math.floor((panelW - 56) / spanX), Math.floor((panelH - 52) / spanY))
+    : Math.min(24, Math.floor((panelW - 24) / spanX), Math.floor((panelH - 22) / spanY));
+
+  const originX = panelX + (panelW - (spanX - 1) * cellStep) * 0.5;
+  const originY = panelY + (panelH - (spanY - 1) * cellStep) * 0.5;
+
+  const isVisitedOrCleared = (rm: DungeonRoomNode) =>
+    rm.discovery === 'visited' || rm.discovery === 'cleared' || rm.id === sim.currentRoomId;
+
+  const hitPad = fullMapOpen ? 4 : 2;
+  let bestRoomId: number | null = null;
+  let bestDistSq = Infinity;
+
+  for (let i = 0; i < rooms.length; i++) {
+    const r = rooms[i]!;
+    if (!isVisitedOrCleared(r)) continue;
+
+    const cx = originX + (r.gx - minGx) * cellStep;
+    const cy = originY + (r.gy - minGy) * cellStep;
+    const isCurrent = r.id === sim.currentRoomId;
+    const effectivePreset = isCurrent
+      ? ((sim.map as { roomSizePreset?: string })?.roomSizePreset ??
+        (sim.map?.lastLayoutResult as { roomSizePreset?: string } | null)?.roomSizePreset ??
+        r.roomSizePreset)
+      : r.roomSizePreset;
+    const effectiveCols = isCurrent ? (sim.map?.cols ?? 36) : (r.cols ?? 36);
+    const effectiveRows = isCurrent ? (sim.map?.rows ?? 22) : (r.rows ?? 22);
+    const { nodeW, nodeH } = resolveMinimapNodeDims(
+      cellStep,
+      effectivePreset,
+      effectiveCols,
+      effectiveRows,
+    );
+
+    const halfW = Math.min(cellStep * 0.48, nodeW * 0.5 + hitPad);
+    const halfH = Math.min(cellStep * 0.48, nodeH * 0.5 + hitPad);
+    const dx = mapLocalX - cx;
+    const dy = mapLocalY - cy;
+
+    if (Math.abs(dx) <= halfW && Math.abs(dy) <= halfH) {
+      const distSq = dx * dx + dy * dy;
+      if (distSq < bestDistSq) {
+        bestDistSq = distSq;
+        bestRoomId = r.id;
+      }
+    }
+  }
+
+  return bestRoomId;
+}
+
 export function updateMinimapHudImpl(this: GameScene): void {
   const sim = this.transport.getSim();
   const room = sim.getCurrentRoom();
@@ -467,9 +589,10 @@ export function updateMinimapHudImpl(this: GameScene): void {
   let roomsTopologySig = '';
   for (let i = 0; i < sim.dungeon.rooms.length; i++) {
     const rm = sim.dungeon.rooms[i]!;
-    roomsTopologySig += `${rm.id}:${rm.roomShape ?? 'r'}:${rm.roomSizePreset ?? 's'}:${rm.discovery};`;
+    roomsTopologySig += `${rm.id}:${rm.roomShape ?? 'r'}:${rm.roomSizePreset ?? 's'}:${rm.discovery}:${rm.cleared ? 1 : 0};`;
   }
-  const minimapHash = `${sim.inHub ? 'hub' : sim.currentFloor}:${sim.currentBiome}:${sim.currentRoomId}:${this.fullMapOpen ? 1 : 0}:${sim.secretWallBroken ? 1 : 0}:${room.cleared ? 1 : 0}:${sim.runStats.roomsCleared}:${sim.pings.length}:${i18n.getLocale()}:${this.hudPadX}:${this.hudPadY}:${uiScale}:${liveShape}:${livePreset}:${sim.map.cols}x${sim.map.rows}:${sim.map.mapRevision}:${pNormX},${pNormY}:${roomsTopologySig}`;
+  const canTeleport = canTeleportFromCurrentRoom(sim);
+  const minimapHash = `${sim.inHub ? 'hub' : sim.currentFloor}:${sim.currentBiome}:${sim.currentRoomId}:${this.fullMapOpen ? 1 : 0}:${sim.secretWallBroken ? 1 : 0}:${room.cleared ? 1 : 0}:${canTeleport ? 1 : 0}:${sim.runStats.roomsCleared}:${sim.pings.length}:${i18n.getLocale()}:${this.hudPadX}:${this.hudPadY}:${uiScale}:${liveShape}:${livePreset}:${sim.map.cols}x${sim.map.rows}:${sim.map.mapRevision}:${pNormX},${pNormY}:${roomsTopologySig}`;
   if (minimapHash === this.lastMinimapHash && !sim.stressTestActive) return;
   this.lastMinimapHash = minimapHash;
 
@@ -556,7 +679,7 @@ export function updateMinimapHudImpl(this: GameScene): void {
   const originY = panelY + (panelH - (spanY - 1) * cellStep) * 0.5;
 
   const isVisitedOrCleared = (rm: DungeonRoomNode) =>
-    rm.discovery === 'visited' || rm.discovery === 'cleared';
+    rm.discovery === 'visited' || rm.discovery === 'cleared' || rm.id === sim.currentRoomId;
 
   const resolveRoomNodeInfo = (
     rm: DungeonRoomNode,
@@ -584,7 +707,7 @@ export function updateMinimapHudImpl(this: GameScene): void {
     return { isCurrent, effectiveShape, nodeW, nodeH };
   };
 
-  // 1. Corridors between discovered / adjacent rooms (clipped to outer room borders)
+  // 1. Corridors between entered rooms (clipped to outer room borders)
   for (let i = 0; i < rooms.length; i++) {
     const r = rooms[i]!;
     if (!isVisitedOrCleared(r)) continue;
@@ -601,10 +724,7 @@ export function updateMinimapHudImpl(this: GameScene): void {
           break;
         }
       }
-      if (!target) continue;
-      if (target.type === 'secret' && !r.secretWallBroken && !isVisitedOrCleared(target)) {
-        continue;
-      }
+      if (!target || !isVisitedOrCleared(target)) continue;
 
       const tx = originX + (target.gx - minGx) * cellStep;
       const ty = originY + (target.gy - minGy) * cellStep;
@@ -637,24 +757,11 @@ export function updateMinimapHudImpl(this: GameScene): void {
     }
   }
 
-  // 2. Room Nodes
-  const adjacentIds = new Set<number>();
-  for (let i = 0; i < rooms.length; i++) {
-    const r = rooms[i]!;
-    if (!isVisitedOrCleared(r)) continue;
-    for (const tid of Object.values(r.connections)) {
-      if (typeof tid === 'number') adjacentIds.add(tid);
-    }
-  }
-
+  // 2. Room Nodes (strictly entered rooms only: visited, cleared, or currentRoomId)
   for (let i = 0; i < rooms.length; i++) {
     const r = rooms[i]!;
     const discovered = isVisitedOrCleared(r);
-    const isVisible =
-      discovered ||
-      r.discovery === 'discovered' ||
-      (adjacentIds.has(r.id) && (r.type !== 'secret' || room.secretWallBroken));
-    if (!isVisible) continue;
+    if (!discovered) continue;
 
     const cx = originX + (r.gx - minGx) * cellStep;
     const cy = originY + (r.gy - minGy) * cellStep;
@@ -699,6 +806,16 @@ export function updateMinimapHudImpl(this: GameScene): void {
       bw,
       0,
     );
+
+    if (this.fullMapOpen && canTeleport && !isCurrent) {
+      g.lineStyle(1.2, 0x38bdf8, 0.85);
+      g.strokeRect(
+        cx - nodeW * 0.5 - 1.5,
+        cy - nodeH * 0.5 - 1.5,
+        nodeW + 3,
+        nodeH + 3,
+      );
+    }
 
     const iconSize = this.fullMapOpen ? 4.8 : 2.8;
     if (discovered) {

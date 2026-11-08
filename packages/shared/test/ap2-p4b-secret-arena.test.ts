@@ -174,16 +174,16 @@ describe('AP2 Phase P4B.2 — 20s Secret Skill Arena Challenge & Legendary Chest
       const onChestTarget = findInteractTarget(sim, sim.player.id);
       expect(onChestTarget?.kind).not.toBe('chest');
 
-      // Place a 'low' barricade 30px from chest and player right between them -> [E] flips barricade, chest stays closed!
+      // Place a 'low' barricade 30px from chest and player right between them -> chest is locked mid-trial and barricade launches in 1 step!
       const nearBarricade = barricades[0]!;
       nearBarricade.x = chest.x + 30;
       nearBarricade.y = chest.y;
       sim.player.x = chest.x + 12;
       sim.player.y = chest.y;
       const coverTarget = findInteractTarget(sim, sim.player.id);
-      expect(coverTarget?.kind).toBe('flip_cover');
-      expect(sim.interactWithNearest(sim.player)).toBe(true);
-      expect(nearBarricade.coverState).toBe('flipped');
+      expect(coverTarget).toBeNull();
+      expect(sim.kickProp(nearBarricade, sim.player, 0)).toBe(true);
+      expect(nearBarricade.coverState).toBe('sliding');
       expect(chest.opened).toBe(false);
     }
   });

@@ -15,6 +15,7 @@ import { spawnSeedGunLifeBlossomImpl, triggerLauncherProjectileExplosionImpl } f
 import { setActiveDuoReactionWeaponId, tryBouncePlasmaOverloadStarOnWall, tryHoldSuperconductRailClient, tryRedirectSuperconductRailServer } from './sim-duo-boons.js';
 import { refractEnemyProjectileThroughCryoPrism } from './sim-enemies-tactical-ai.js';
 import { tryChargeGlacialBarricadeWithCryoLaser } from './sim-boss-armor-break.js';
+import { isFlippableBarricadeProp, isKickableProp } from './sim-tactical-physics.js';
 import { refractProjectileThroughCryoPrism } from './sim-tactical-physics-p1c.js';
 import {
   canApplyFragSubmunitionHit,
@@ -391,6 +392,22 @@ export function updateProjectilesImpl(this: WorldSim, dtSec: number): void {
             b.y = prop.y + Math.sin(refractAng) * (prop.radius + b.radius + 3);
             b.ttlSec = Math.max(b.ttlSec, 1.4);
           }
+          continue;
+        }
+        const isMeleeWaveProj =
+          b.team === 'player' &&
+          (b.weaponId === 'knight_sword_wave' ||
+            b.weaponId === 'ruby_sword_wave' ||
+            b.weaponId === 'mutator_shockwave_edge' ||
+            b.weaponId === 'dash_phase_blade');
+        if (
+          isMeleeWaveProj &&
+          isFlippableBarricadeProp(prop.kind) &&
+          isKickableProp(prop) &&
+          circleVsCircle(b, prop)
+        ) {
+          const owner = this.getPlayerById(b.ownerId) ?? this.player;
+          this.kickProp(prop, owner, b.angle);
           continue;
         }
         if (!prop.destructible || prop.coverState === 'sliding') continue;

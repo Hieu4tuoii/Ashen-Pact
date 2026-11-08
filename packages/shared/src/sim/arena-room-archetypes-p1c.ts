@@ -119,20 +119,25 @@ export function buildCrossfireConveyorsGeometry(
   setPillarRect(map, flipX ? bollardRightX : bollardLeftX, midY - 1, 2, 2);
   setPillarRect(map, flipX ? bollardLeftX : bollardRightX, midY - 1, 2, 2);
 
-  // Two parallel 3-tile-wide conveyor belts
-  map.fillSurfaceRect(5, topLaneY, beltW, 3, 'conveyor');
-  map.fillSurfaceRect(5, botLaneY, beltW, 3, 'conveyor');
+  // Two parallel 3-tile-wide hazard/conveyor lanes partitioned by biome
+  const topLaneSurf: SurfaceKind =
+    biome === 3 ? 'conveyor' : biome === 2 ? 'ice' : 'poison_swamp';
+  const botLaneSurf: SurfaceKind =
+    biome === 3 ? 'conveyor' : biome === 2 ? 'ice' : 'water';
+  map.fillSurfaceRect(5, topLaneY, beltW, 3, topLaneSurf);
+  map.fillSurfaceRect(5, botLaneY, beltW, 3, botLaneSurf);
 
-  // Side hazard accents outside the belts
-  const accentSurf: SurfaceKind = biome === 2 ? 'ice' : biome === 3 ? 'lava' : 'oil';
+  // Side hazard accents outside the lanes
+  const accentSurfA: SurfaceKind = biome === 2 ? 'ice' : biome === 3 ? 'lava' : 'grass';
+  const accentSurfB: SurfaceKind = biome === 2 ? 'water' : 'oil';
   const accentRightX = cols - 11;
-  map.fillSurfaceRect(flipX ? accentRightX : 7, flipY ? cornerBotY : cornerTopY, 4, 2, accentSurf);
+  map.fillSurfaceRect(flipX ? accentRightX : 7, flipY ? cornerBotY : cornerTopY, 4, 2, accentSurfA);
   map.fillSurfaceRect(
     flipX ? 7 : accentRightX,
     flipY ? cornerTopY : cornerBotY,
     4,
     2,
-    biome === 2 ? 'water' : 'oil',
+    accentSurfB,
   );
 
   const barLeftX = Math.max(6, midX - 8);

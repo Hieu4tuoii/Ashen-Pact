@@ -35,10 +35,11 @@ import { type GraphicsQualityTier, graphicsSettings } from '../ui/graphics-setti
 import type { ModalOverlayManager } from '../ui/settings-modal.js';
 import type { BiomeArchitectureLiveLayer } from '../world/biome-architecture.js';
 import type { HudScene } from './HudScene.js';
-import { applyCameraViewportImpl, buildArenaTilesImpl, createImpl, drawSourceKeyToCtxImpl, getStructureTextureKeyImpl, rebuildAllTileCellsToCompositeImpl, renderTileCellToCompositeImpl, setStressTestModeImpl, syncArenaTilesWithMapRevisionImpl, triggerIrisTransitionImpl, updateCameraWithLookaheadAndShakeImpl, updateIrisTransitionImpl } from './game-scene/arena-tiles.js';
+import { applyCameraViewportImpl, buildArenaTilesImpl, createImpl, drawSourceKeyToCtxImpl, getStructureTextureKeyImpl, rebuildAllTileCellsToCompositeImpl, renderTileCellToCompositeImpl, setStressTestModeImpl, syncArenaTilesWithMapRevisionImpl, teleportToRoomImpl, triggerIrisTransitionImpl, updateCameraWithLookaheadAndShakeImpl, updateIrisTransitionImpl } from './game-scene/arena-tiles.js';
 import { resolveEnemyStatusTintImpl, resolvePlayerStatusTintImpl, syncEnemyRigsImpl, syncProjectilesAndPickupsImpl, syncPropsImpl, syncSimulatedPlayersImpl, updatePlayerOverheadUiImpl } from './game-scene/entity-sync.js';
 import {
   renderViDiacriticsShowcaseImpl,
+  resolveMinimapClickedRoomId,
   triggerPlayerHitDirectionIndicatorImpl,
   triggerRoomClearedBannerImpl,
   triggerWaveBannerImpl,
@@ -292,6 +293,8 @@ export class GameScene extends Phaser.Scene {
   public lastBlizzardPhase3 = false;
   public irisTransitionProgress = 0.0;
   public irisTransitionDir: -1 | 0 | 1 = 0;
+  public roomTeleportAnimTimer = 0;
+  public readonly roomTeleportAnimDuration = 0.28;
   public playerHitIndicatorTimer = 0;
   public playerHitIndicatorAngleRad = 0;
   public hudBannerTimer = 0;
@@ -575,6 +578,8 @@ export class GameScene extends Phaser.Scene {
       isClickingInvitePanel ||
       suppressFireForEmoteWheel ||
       isModalOrPaused ||
+      this.fullMapOpen ||
+      resolveMinimapClickedRoomId(this, localViewX, localViewY) !== null ||
       (this.transport.getLocalPlayerState().buffChoices?.length ?? 0) > 0 ||
       (this.transport.getLocalPlayerState().mutatorChoices?.length ?? 0) > 0 ||
       (this.transport.getLocalPlayerState().pactChoices?.length ?? 0) > 0 ||
@@ -760,6 +765,26 @@ export class GameScene extends Phaser.Scene {
         this.dashAfterimageTimer = 0;
       }
 
+      if (this.roomTeleportAnimTimer > 0) {
+        if (!isSoloPaused) {
+          this.roomTeleportAnimTimer = Math.max(0, this.roomTeleportAnimTimer - dtSec);
+        }
+        const dur = Math.max(0.01, this.roomTeleportAnimDuration);
+        const progress = 1 - clamp(this.roomTeleportAnimTimer / dur, 0, 1);
+        if (progress < 1 && !this.portalAnimState.enterActive) {
+          const ease = 1 - Math.pow(1 - progress, 3);
+          const scale = 0.25 + 0.75 * ease;
+          const spin = (1 - ease) * Math.PI * 2.2;
+          this.playerRig.container.setScale(scale, scale * (1.28 - 0.28 * ease));
+          this.playerRig.container.setRotation(spin);
+          this.playerRig.container.setAlpha(clamp(0.25 + 0.75 * ease, 0, 1));
+        } else if (!this.portalAnimState.enterActive) {
+          this.playerRig.container.setScale(1, 1);
+          this.playerRig.container.setRotation(0);
+          this.playerRig.container.setAlpha(1);
+        }
+      }
+
       this.updatePlayerOverheadUi(
         sim.player,
         playerPos.x,
@@ -914,6 +939,7 @@ export class GameScene extends Phaser.Scene {
   }
   public rebuildPauseModal(): void { rebuildPauseModalImpl.call(this); }
   public triggerIrisTransition(mode: 'open' | 'close' = 'open'): void { triggerIrisTransitionImpl.call(this, mode); }
+  public teleportToRoom(targetRoomId: number): boolean { return teleportToRoomImpl.call(this, targetRoomId); }
   public setupKeyboardBindings(): void { setupKeyboardBindingsImpl.call(this); }
   public getResolvedWsUrl(): string { return getResolvedWsUrlImpl.call(this); }
   public fetchHostLanInfo(): Promise<void> { return fetchHostLanInfoImpl.call(this); }

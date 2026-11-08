@@ -1,6 +1,7 @@
 import { ENEMIES } from '../data/enemies.js';
 import { angleDiff, circleVsCircle, clamp, distance } from '../math/vec2.js';
 import { COOP_SCALING } from '../data/scaling.js';
+import { findNearestWalkablePoint } from './arena-room-archetypes.js';
 import {
   findIceMageTargetPrism,
   fireIceMagePrismShotOrVolley,
@@ -512,18 +513,23 @@ export function spawnKryssaMirrorClonesImpl(this: WorldSim, boss: SimEnemyState)
   if (existingClones >= 2) return;
   const cx = this.map.width * 0.5;
   const cy = this.map.height * 0.5;
-  this.spawnEnemy(
-    'kryssa_clone',
+  const cloneRadius = ENEMIES.kryssa_clone?.radius ?? 16;
+  const pt1 = findNearestWalkablePoint(
+    this.map,
     clamp(cx - 170, 96, this.map.width - 96),
     clamp(cy - 90, 96, this.map.height - 96),
-    true,
+    cloneRadius,
+    this.props,
   );
-  this.spawnEnemy(
-    'kryssa_clone',
+  const pt2 = findNearestWalkablePoint(
+    this.map,
     clamp(cx + 170, 96, this.map.width - 96),
     clamp(cy + 90, 96, this.map.height - 96),
-    true,
+    cloneRadius,
+    this.props,
   );
+  this.spawnEnemy('kryssa_clone', pt1.x, pt1.y, true);
+  this.spawnEnemy('kryssa_clone', pt2.x, pt2.y, true);
   boss.prevX = boss.x;
   boss.prevY = boss.y;
 }

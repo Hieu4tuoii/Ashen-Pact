@@ -1,16 +1,16 @@
 # Test Infrastructure & 5-Tier E2E Architecture (`TEST_INFRA.md`)
 
 ## 1. Overview & Runner Commands
-This document defines the 5-Tier End-to-End (E2E) Test Suite and Playwright 1920×1080 WebGL Visual Verification architecture for Ashen-Pact's Commercial 2.5D Map Graphics, Realistic Living Hazards, Multi-Topology Dungeon & Visual/Lighting/Shadow Polish Overhaul (`PROJECT.md`, `F1`–`F19`).
+This document defines the 5-Tier End-to-End (E2E) Test Suite and Playwright 1920×1080 WebGL Visual Verification architecture for Ashen-Pact's Commercial 2.5D Map Graphics, Realistic Living Hazards, Multi-Topology Dungeon, AI Pathfinding, Biome Terrain Purity, Minimap Fast-Travel & Vector Barricades Overhaul (`PROJECT.md`, `F1`–`F26`).
 
-- **Primary E2E Test Suite File**: `tests/e2e/map-overhaul-e2e.test.ts` (`152` tests across Tiers 1–5)
+- **Primary E2E Test Suite File**: `tests/e2e/map-overhaul-e2e.test.ts` (`157` tests across Tiers 1–5)
 - **Dedicated E2E Vitest Config**: `tests/e2e/vitest.config.ts` (includes `tests/e2e/**/*.test.ts` and aliases `@ashen-pact/shared` to `packages/shared/src/index.ts`)
 - **Playwright WebGL Visual Spec**: `tests/e2e/visual.spec.ts` (`13` deterministic 1920×1080 WebGL scenes in `output/playwright/map-overhaul/01..13.png`)
 - **Deterministic Runner Command**:
   ```bash
   npx vitest run -c tests/e2e/vitest.config.ts tests/e2e/map-overhaul-e2e.test.ts
   ```
-- **Strict Overhaul Contract Enforcement Mode (for M4 Round 3 Final Gate)**:
+- **Strict Overhaul Contract Enforcement Mode (for M3 Round 4 Final Gate)**:
   ```bash
   ENFORCE_OVERHAUL_CONTRACTS=1 npx vitest run -c tests/e2e/vitest.config.ts tests/e2e/map-overhaul-e2e.test.ts
   ```
@@ -21,7 +21,7 @@ This document defines the 5-Tier End-to-End (E2E) Test Suite and Playwright 1920
 
 ---
 
-## 2. Feature Inventory to Test Tier Mapping (`F1`–`F19`)
+## 2. Feature Inventory to Test Tier Mapping (`F1`–`F26`)
 
 | Feature ID | Feature Name | Milestone | Tier 1 (Feature Coverage) | Tier 2 (Boundary & Corner Cases) | Tier 3 (Cross-Feature Combos) | Tier 4 (Real-World Scenarios) | Tier 5 (White-Box Adversarial Hardening) |
 |------------|--------------|-----------|---------------------------|----------------------------------|-------------------------------|-------------------------------|------------------------------------------|
@@ -44,6 +44,13 @@ This document defines the 5-Tier End-to-End (E2E) Test Suite and Playwright 1920
 | **F17** | Seamless Multi-Tile Hazard Pools (`burning_oil`/`burning_grass`/`lava`/`ice`), `2.6×2.6` Concave Corner Shorelines, Chasm Top-Corner Strata & Multi-Axis (`N–S` / `E–W`) Chasm Bridges | `M2_r3_client_tiles_surfaces_bridges` | `T1-F5-01`..`05`, `T1-F6-01`..`05` | `T2-F6-01`..`05` | `T3-CF-04`, `05`, `09`, `11`, `12` | `T4-SC-02`, `03`, `05` | `T5-WB-05`, `06`, `23` |
 | **F18** | WebGL `lightmapRt` FBO Resize (`setAutoResize(true)`), Exterior Void Light/Mote/God-Ray Masking (`depth 36.2`), Dynamic Contiguous `pillarShadows`, Grounded Braziers, Direction-Aware Decors & Minimap Corridor Clipping / Compact Dot Clamping | `M3_r3_client_lighting_architecture_minimap` | `T1-F7-01`..`05`, `T1-F9-01`..`05` | `T2-F7-01`..`05`, `T2-F9-01`..`05` | `T3-CF-05`, `08`, `09`, `15`, `18` | `T4-SC-01`..`08` | `T5-WB-24`, `25`, `26` |
 | **F19** | Round 3 5-Tier E2E Regression Suite (`152` tests across Tiers 1–5) & 13-Scene Playwright 1920×1080 WebGL Visual Verification (`01`..`13.png`) | `M4_r3_e2e_and_playwright_visuals` | All 50 Tier 1 | All 50 Tier 2 | All 18 Tier 3 | All 8 Tier 4 | All 26 Tier 5 (`T5-WB-01`..`26`) + Playwright `01`..`13` |
+| **F20** | Zero-Allocation BFS Enemy/Boss/Summon Navigation, Multi-Angle Context Steering, Post-Prop Re-Resolution & Unsticking (`findNearestWalkablePoint`, `findNextWalkableWaypoint`, `hasClearWalkableCorridor`, `updateEnemiesImpl`, safe spawns/unburrow/summons/pulls) | `M1_r4_sim_navigation_terrain_and_barricade_launch` | `T1-F2-01`..`05`, `T1-F3-01`..`05` | `T2-F2-01`..`05`, `T2-F3-01`..`05` | `T3-CF-01`, `02` | `T4-SC-01`..`08` | `T5-WB-27` |
+| **F21** | Strict Biome-Specific Terrain Separation Across Biomes 1, 2 & 3 (`ArenaMap.buildLayout`, `ArenaMap.configureRoomLayout`, `buildCrossfireConveyorsGeometry`) | `M1_r4_sim_navigation_terrain_and_barricade_launch` | `T1-F5-01`..`05`, `T1-F6-01`..`05` | `T2-F5-01`..`05`, `T2-F6-01`..`05` | `T3-CF-02`, `05`, `11`, `12` | `T4-SC-02`, `03`, `06` | `T5-WB-28` |
+| **F22** | Direct 1-Step Barricade Launch on Slash/Attack/Dash Without `[E]` Flip (`isKickableProp`, `kickProp`, `triggerMeleeKickProps`, `resolvePropMovementCollision`, melee wave projectiles, `findInteractTarget` returning `null` for `flip_cover`) | `M1_r4_sim_navigation_terrain_and_barricade_launch` | `T1-F4-01`..`05` | `T2-F4-01`..`05` | `T3-CF-03`, `08` | `T4-SC-04` | `T5-WB-31` |
+| **F23** | Entered-Only Minimap & `[Tab]` Map Fog-of-War (`updateMinimapHudImpl` hiding `'hidden'` & `'discovered'` rooms and unentered corridors) | `M2_r4_client_minimap_teleport_vfx_and_vector_barricades` | Covered in Tier 5 | Covered in Tier 5 | Pairwise with F13, F18 | Verified across 13 WebGL scenes | `T5-WB-20`, `26`, `29` |
+| **F24** | Fast-Travel Room Teleportation Between Visited Rooms + Teleport Out / In VFX (`canTeleportFromCurrentRoom`, `resolveMinimapClickedRoomId`, `teleportToRoomImpl`, `renderTelegraphsAndShieldImpl` arrival rings) | `M2_r4_client_minimap_teleport_vfx_and_vector_barricades` | Covered in Tier 5 | Covered in Tier 5 | Pairwise with F13, F23 | Verified across 13 WebGL scenes | `T5-WB-30` |
+| **F25** | Commercial Procedural Vector Biome Barricades (`prop_moss_table*`, `prop_glacial_barricade*`, `prop_forge_blast_shield*`) & `[E]` Prompt Removal (`resolveInteractPromptSpec` returning `null` for `flip_cover`) | `M2_r4_client_minimap_teleport_vfx_and_vector_barricades` | Covered in Tier 5 | Covered in Tier 5 | Pairwise with F4, F22 | Verified across 13 WebGL scenes | `T5-WB-31` |
+| **F26** | Round 4 5-Tier E2E Regression Suite (`157` tests across Tiers 1–5) & 13-Scene Playwright 1920×1080 WebGL Visual Verification (`01`..`13.png`) | `M3_r4_e2e_and_playwright_visuals` | All 50 Tier 1 | All 50 Tier 2 | All 18 Tier 3 | All 8 Tier 4 | All 31 Tier 5 (`T5-WB-01`..`31`) + Playwright `01`..`13` |
 
 ---
 
@@ -71,11 +78,16 @@ This document defines the 5-Tier End-to-End (E2E) Test Suite and Playwright 1920
 ### Tier 4 — Real-World Application Scenarios (`8` End-to-End Multi-Room Scenarios)
 - Includes `T4-SC-01` through `T4-SC-08` (`Full 60-combination matrix (6 Presets × 10 Shapes) end-to-end composite build & architectural density audit`).
 
-### Tier 5 — White-Box Adversarial Coverage Hardening (`26` White-Box Test Cases `T5-WB-01`..`T5-WB-26`)
-- Covers Round 1 (`T5-WB-01`..`T5-WB-12`), Round 2 (`T5-WB-13`..`T5-WB-20`), and Round 3 (`T5-WB-21`..`T5-WB-26`):
+### Tier 5 — White-Box Adversarial Coverage Hardening (`31` White-Box Test Cases `T5-WB-01`..`T5-WB-31`)
+- Covers Round 1 (`T5-WB-01`..`T5-WB-12`), Round 2 (`T5-WB-13`..`T5-WB-20`), Round 3 (`T5-WB-21`..`T5-WB-26`), and Round 4 (`T5-WB-27`..`T5-WB-31`):
   - `T5-WB-21` (`F15` Shared Sim): `burning_grass` perimeter `surfaceMask < 15` vs interior `15`, `isSameSurfaceFamily('ice', 'water') === false`, and hazard-safe `torch_brazier` / `forge_blast_shield` / `slag_crucible` placement on dry `'none'` floor across all `360` `(preset × shape × archetype)` layouts, combat rooms, Boss rooms, and adversarial `4×4` hazard patches.
   - `T5-WB-22` (`F16` Wall & Pillar Tiles): `!hasS` wall parapet coping (`y = 0..20`) & open seam strokes, subtle North cliff mortar weathering, `4×4` & `4×12` (`y = 20..32`) concave corner miters, `6×6` diagonal Exterior Void corner shadows & map-edge outer contours, convex-corner-only `14×14` wall AO (`aoMask === 4`), AO suppression on `chasm`/`lava`/`burning_*`, and non-`2×2` pillar medallion prevention.
   - `T5-WB-23` (`F17` Seamless Hazards & Multi-Axis Bridges): Seamless `burning_oil`/`burning_grass` without radial-gradient waffle grid, edge-gated `lava`/`ice` fissures, `2.6×2.6` concave inner-corner shoreline caps, chasm top-corner horizontal strata clipping & wall-to-chasm floor lip suppression, and multi-axis (`N–S` vs `E–W`) `drawBridgeOverChasmOverlay` (`hasChasmAlongAxisWithin3`) without internal rail bars.
   - `T5-WB-24` (`F18` Lighting Pipeline & Exterior Void Masking): `LightingPipeline` WebGL `RenderTarget.setAutoResize(true)` around `this.lightmapRt.resize(rtW, rtH)`, Biome 2 God-Ray active North wall anchoring (`!isExteriorVoidWallTile`), dust mote void guard, and `voidMaskGraphics` at `depth 36.2` (`0x0b090e` inset by `6px` along active walls).
   - `T5-WB-25` (`F18` Dynamic Pillar Shadows, Grounded Braziers & Direction-Aware Decors): Contiguous `pillarShadows` (`widthTiles × heightTiles`) clipped to `surface === 'none'`, centered `2×2` pillar decors excluding `CRUMBLING_PILLAR_RING`, floor `torch_brazier` `shadow.setVisible(true)` & wall-only hanging rods, and direction/cliff-aware `wrought_iron_fence`, `brazier_pedestal`, `steam_pipe_wall`, `root_base`, `ice_alcove`, and `sunken_astrolabe`.
   - `T5-WB-26` (`F18` Minimap Corridor Clipping & Compact Dot Clamping): Corridor `fillRect` segments clipped to outer room node borders (`0.46 * nodeW/H`), compact player dot `dotR = 1.4` on small nodes, and `(dotX, dotY)` clamped outside the `donut_ring` inner cutout.
+  - `T5-WB-27` (`F20` Zero-Alloc BFS Navigation, Multi-Angle Steering, Post-Prop Re-Resolution & Unsticking): `findNearestWalkablePoint`, `findNextWalkableWaypoint`, and `hasClearWalkableCorridor` with large-radius clearance, prop avoidance, and 2-step lookahead; multi-angle obstacle steering across carved room shapes (`donut_ring`, `l_shape`, `t_shape`, `u_shape`, `multi_chamber`, `island_catwalk`); post-prop `resolveCircleCollision` re-resolution, chasm/solid rescue, `navStuckTimer` recovery, and safe spawns/pulls (`spore_king`, `kryssa_ice_queen`, `forge_titan`, `sacred_tree`, `tesla_turret`, `life_blossom`, `dash_flame_shackle`, `chain_harpoon`, `tether_staff`, `void_staff`).
+  - `T5-WB-28` (`F21` Strict Biome-Specific Terrain Purity): 0 cross-biome terrain contamination across Biomes 1, 2, and 3 (`buildLayout(true, true)` + all 8 `RoomType`s × 6 `RoomSizePreset`s × 10 `RoomShapeKind`s + all 6 `RoomArchetype`s × 10 `RoomShapeKind`s) while preserving mid-combat elemental reactions (`electrifyWaterAt`).
+  - `T5-WB-29` (`F23` Entered-Only Minimap & `[Tab]` Map Fog-of-War): `updateMinimapHudImpl` renders room nodes and corridors strictly for `'visited' | 'cleared' | currentRoomId` rooms and hides `'hidden'` and `'discovered'` unentered rooms while keeping the player gold dot as the final `fillCircle`.
+  - `T5-WB-30` (`F24` Fast-Travel Room Teleportation & Departure/Arrival VFX): `canTeleportFromCurrentRoom` state guards, `resolveMinimapClickedRoomId` coordinate hit-testing across compact/Full Map and `uiScale`/`hudPadX/Y`, `teleportToRoomImpl` fast-travel execution with Co-op `'teleport_room'` sync, departure/arrival `fx_sh_arcane_sigil` novas, `spawnChestOpenBurst`, transient light, iris transition, `'⚡ DỊCH CHUYỂN!'` floating alert, and `renderTelegraphsAndShieldImpl` arrival rings (`roomTeleportAnimTimer > 0`).
+  - `T5-WB-31` (`F22 & F25` Direct 1-Step Barricade Launch Without `[E]` Flip & Procedural Vector Biome Barricades): `'low'` `moss_table`, `glacial_barricade`, and `forge_blast_shield` launch directly into `'sliding'` on melee swing, melee wave projectile, and dash (triggering micro-blank & Table Tech blessings), `findInteractTarget` and `resolveInteractPromptSpec` return `null` for `flip_cover`, and `bakeProps` bakes multi-faceted procedural vector biome objects for all 9 barricade texture keys.
