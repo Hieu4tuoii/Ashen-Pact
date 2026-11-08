@@ -14,7 +14,10 @@ vi.mock('phaser', () => {
 });
 
 import { processSimEventsImpl } from '../src/scenes/game-scene/sim-events.js';
-import { renderTelegraphsAndShieldImpl } from '../src/scenes/game-scene/telegraphs-and-overlays.js';
+import {
+  renderTelegraphsAndShieldImpl,
+  withInterpolatedProjectilesAndPlayer,
+} from '../src/scenes/game-scene/telegraphs-and-overlays.js';
 import {
   drawEngineerTurretChiaroscuro,
   drawInscribedElementalistZone,
@@ -613,5 +616,52 @@ describe('Commercial-Grade Class Skills, Summons & Dramatic World/Boss Interacti
 
     expect(resolveWeaponMuzzleProfile('apprentice_staff').muzzleTint).toBe(0xfdba74);
     expect(resolveWeaponMuzzleProfile('hunter_crossbow').muzzleTint).toBe(0xbae6fd);
+  });
+
+  it('temporarily aligns sim.projectiles and sim.player to interpolated coordinates during overlay passes and restores raw sim coordinates afterward', () => {
+    const sim = new WorldSim(505);
+    sim.player.x = 300;
+    sim.player.y = 240;
+    sim.projectiles.push({
+      id: 77,
+      team: 'player',
+      weaponId: 'void_anchor_disc',
+      x: 400,
+      y: 250,
+      vx: 180,
+      vy: 0,
+      radius: 8,
+      damage: 20,
+      ttl: 1.0,
+      pierceCount: 0,
+      bounceCount: 0,
+      homingStrength: 0,
+      element: 'none',
+    } as never);
+
+    let observedPlayerX = 0;
+    let observedProjX = 0;
+    const mockScene = {
+      entityPosScratch: { x: 0, y: 0 },
+      transport: {
+        getSim: () => sim,
+        getInterpolatedProjectilePos: (b: { x: number; y: number }, out: { x: number; y: number }) => {
+          out.x = b.x + 12.5;
+          out.y = b.y - 4.0;
+          return out;
+        },
+      },
+    };
+
+    withInterpolatedProjectilesAndPlayer(mockScene as never, sim, 308.5, 242.0, () => {
+      observedPlayerX = sim.player.x;
+      observedProjX = sim.projectiles[0]!.x;
+    });
+
+    expect(observedPlayerX).toBeCloseTo(308.5, 4);
+    expect(observedProjX).toBeCloseTo(412.5, 4);
+    // Raw simulation state is restored immediately after the overlay pass
+    expect(sim.player.x).toBe(300);
+    expect(sim.projectiles[0]!.x).toBe(400);
   });
 });

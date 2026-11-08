@@ -501,4 +501,52 @@ describe('1:1 Top-Down Chiaroscuro Flipbook Playback & Core Combat Spawners', ()
     expect(colorsUsed).toContain(0x141019);
     expect(colorsUsed).toContain(0xfffdf5);
   });
+
+  it('caps floor decal alpha at 0.42, deduplicates overlapping decals within 24px, and fades decals out over 6.0s', () => {
+    const mgr = createHeadlessFxManager(4);
+    const makeDecalSprite = (x: number, y: number, alpha = 0.82) => {
+      const spr = {
+        x,
+        y,
+        alpha,
+        visible: true,
+        setAlpha: vi.fn((a: number) => {
+          spr.alpha = a;
+        }),
+        setVisible: vi.fn((v: boolean) => {
+          spr.visible = v;
+        }),
+      };
+      return spr;
+    };
+
+    const s1 = makeDecalSprite(300, 240, 0.82);
+    const s2 = makeDecalSprite(310, 245, 0.82); // within 24px of s1 -> deduplicated
+    const s3 = makeDecalSprite(420, 240, 0.82); // > 24px away -> kept active
+    mgr.decalPool.push(
+      { sprite: s1 as never, textureKey: 'fx_decal_scorch', active: true },
+      { sprite: s2 as never, textureKey: 'fx_decal_scorch', active: true },
+      { sprite: s3 as never, textureKey: 'fx_decal_scorch', active: true },
+    );
+    mgr.activeDecalCount = 3;
+
+    update.call(mgr, 1 / 60);
+    // s1 is replaced by newer overlapping s2 within 24px, and active decals are capped at alpha 0.42
+    expect(mgr.decalPool[0]!.active).toBe(false);
+    expect(mgr.decalPool[1]!.active).toBe(true);
+    expect(s2.alpha).toBeCloseTo(0.42, 4);
+    expect(mgr.decalPool[2]!.active).toBe(true);
+    expect(s3.alpha).toBeCloseTo(0.42, 4);
+    expect(mgr.activeDecalCount).toBe(2);
+
+    // Advance 3.0s -> decals fade smoothly below 0.42
+    update.call(mgr, 3.0);
+    expect(s2.alpha).toBeLessThan(0.42);
+    expect(s2.alpha).toBeGreaterThan(0);
+
+    // Advance past 6.0s total -> decals deactivate and hide
+    update.call(mgr, 3.5);
+    expect(mgr.decalPool[1]!.active).toBe(false);
+    expect(s2.visible).toBe(false);
+  });
 });

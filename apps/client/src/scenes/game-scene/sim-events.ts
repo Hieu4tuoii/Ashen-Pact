@@ -127,8 +127,8 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
                 ev.weaponId,
               );
             }
-            if (!isStress) {
-              this.lighting.spawnTransientLight(ev.x, ev.y, 82, PALETTE.SOLAR_GOLD, 0.72, 0.08);
+            if (!isStress && isShotgun) {
+              this.lighting.spawnTransientLight(ev.x, ev.y, 48, PALETTE.SOLAR_GOLD, 0.36, 0.06);
             }
             if (!isTeammate) {
               this.crosshairPulse = isShotgun ? 0.9 : 0.45;
@@ -137,8 +137,8 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
 
             if (allowStressSfx) {
               zzfx.play(shootSfx, ev.x, this.camFocusX, ev.y, this.camFocusY);
-              if (!isTeammate) {
-                this.fx.addTrauma(isShotgun ? 0.18 : shootSfx === 'shoot_smg' ? 0.06 : 0.1);
+              if (!isTeammate && isShotgun) {
+                this.fx.addTrauma(0.08);
               }
             }
           }
@@ -452,20 +452,22 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
             srcId === 'mutator_cluster_mortar';
           if (!isStress && this.fx.spawnShaderNova && isOrdnanceShrapnel) {
             this.fx.spawnShaderNova(ev.x, ev.y, ev.radius, 'fx_sh_shrapnel_corona');
-            this.fx.spawnFloorDecal?.('scorch', ev.x, ev.y, clamp(ev.radius / 85, 0.55, 1.4));
-            this.fx.spawnHitSparks?.(ev.x, ev.y, 0, { isCrit: true, element: 'burn', count: 8 });
+            if (srcId !== 'explosive_barrel') {
+              this.fx.spawnFloorDecal?.('scorch', ev.x, ev.y, clamp(ev.radius / 96, 0.5, 0.9));
+            }
+            this.fx.spawnHitSparks?.(ev.x, ev.y, 0, { isCrit: true, element: 'burn', count: 6 });
           } else if (!isStress && this.fx.spawnShaderNova && isSporePod) {
             this.fx.spawnShaderNova(ev.x, ev.y, ev.radius, 'fx_sh_spore_cloud');
-            this.fx.spawnFloorDecal?.('splatter', ev.x, ev.y, clamp(ev.radius / 85, 0.55, 1.3));
-            this.fx.spawnHitSparks?.(ev.x, ev.y, 0, { element: 'poison', count: 7 });
+            this.fx.spawnFloorDecal?.('splatter', ev.x, ev.y, clamp(ev.radius / 96, 0.5, 0.9));
+            this.fx.spawnHitSparks?.(ev.x, ev.y, 0, { element: 'poison', count: 5 });
           } else if (!isStress && this.fx.spawnShaderNova && isThunderBlast) {
             this.fx.spawnShaderNova(ev.x, ev.y, ev.radius, 'fx_sh_anvil_storm');
-            this.fx.spawnHitSparks?.(ev.x, ev.y, 0, { isCrit: true, element: 'shock', count: 8 });
+            this.fx.spawnHitSparks?.(ev.x, ev.y, 0, { isCrit: true, element: 'shock', count: 6 });
           } else {
             this.fx.spawnExplosionBurst(ev.x, ev.y, ev.radius, colorHex);
           }
         }
-        this.lighting.spawnTransientLight(ev.x, ev.y, ev.radius * 2.2, colorHex, 1.0, 0.38);
+        this.lighting.spawnTransientLight(ev.x, ev.y, ev.radius * 1.4, colorHex, 0.68, 0.24);
         if (allowStressSfx) {
           const explosionSfx = isGaleCyclone
             ? 'gale_cyclone_vent'

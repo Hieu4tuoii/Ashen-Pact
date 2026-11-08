@@ -452,9 +452,9 @@ const SHADER_COMMON_HEADER = `
   vec3 elementalBodyRamp(int elem, float e) {
     vec3 c1, c2, c3;
     if (elem == 0) {
-      c1 = vec3(0.140, 0.240, 0.420);
-      c2 = vec3(0.920, 0.680, 0.200);
-      c3 = vec3(1.000, 0.930, 0.600);
+      c1 = vec3(0.760, 0.820, 0.920);
+      c2 = vec3(0.960, 0.880, 0.680);
+      c3 = vec3(1.000, 0.970, 0.880);
     } else if (elem == 1) {
       c1 = vec3(0.015, 0.280, 0.195);
       c2 = vec3(0.035, 0.680, 0.450);
@@ -523,10 +523,10 @@ const SHADER_COMMON_HEADER = `
   }
 
   float crescentGapErode(float ang, float t, float wNoise, float seedShift) {
-    float lobes = 0.5 + 0.5 * cos(ang * 4.0 + seedShift + sin(ang * 3.0 - seedShift * 0.7) * 0.85);
-    float field = mix(wNoise, lobes, 0.48);
-    float thresh = max(0.0, (t - 0.28) * 1.12);
-    return smoothstep(thresh, thresh + 0.15, field);
+    float lobes = 0.5 + 0.5 * cos(ang * 4.0 + seedShift + sin(ang * 3.0 - seedShift * 0.7) * 0.45);
+    float field = mix(wNoise, lobes, 0.78);
+    float thresh = max(0.0, (t - 0.58) * 0.85);
+    return smoothstep(thresh, thresh + 0.38, field);
   }
 
   void decodeAtlasCoord(vec2 fragCoord, float framePx, float frameCount, out float t, out vec2 p) {
@@ -540,7 +540,7 @@ const SHADER_COMMON_HEADER = `
     p = vec2(localX - 0.5 * framePx, 0.5 * framePx - localY) / (0.43 * framePx);
   }
 
-  // Tapered diamond/dagger flying ember shards with #141019 obsidian ink casing for Cutout art harmony
+  // Tapered diamond/dagger flying ember shards without detached black ink blotches
   void radialDaggerSparks(
     float r,
     float ang,
@@ -564,41 +564,41 @@ const SHADER_COMMON_HEADER = `
     float diamond = dAng / max(0.003, halfW) + dRad / max(0.010, halfLen);
     float active = step(0.20, seed) * gateMask * alive;
     sparkHot = invSmooth(0.95, 0.22, diamond) * active;
-    sparkInk = invSmooth(1.55, 0.78, diamond) * (1.0 - sparkHot * 0.85) * active * 0.86;
+    sparkInk = 0.0;
   }
 
   vec4 synthesizeChiaroscuroRgba(int elem, float energy, float edge, float vein, float sparks, float borderFade) {
-    // Cel-stepped value posterization + crisp #141019 outer obsidian contour to match Chibi Cutout art
-    float celStepped = floor(clamp(energy, 0.0, 1.15) * 3.8 + 0.28) / 3.8;
-    float celE = mix(energy, celStepped, 0.44);
+    // Smooth cel-stepped value ramp with internal depth shading (no detached black soot blotches)
+    float celStepped = floor(clamp(energy, 0.0, 1.15) * 4.5 + 0.35) / 4.5;
+    float celE = mix(energy, celStepped, 0.28);
     vec3 bodyCol = elementalBodyRamp(elem, celE);
-    float aBody = smoothstep(0.052, 0.148, energy) * 0.96;
-    vec3 pmCol = (bodyCol * 1.42) * aBody;
+    float aBody = smoothstep(0.065, 0.180, energy) * 0.95;
+    vec3 pmCol = (bodyCol * 1.38) * aBody;
     float alpha = aBody;
 
-    float outerContour = smoothstep(0.036, 0.088, energy)
-                       * invSmooth(0.22, 0.11, energy)
+    float outerContour = smoothstep(0.085, 0.165, energy)
+                       * invSmooth(0.26, 0.14, energy)
                        * invSmooth(0.34, 0.06, edge + sparks);
-    float totalVein = clamp(max(vein, outerContour * 0.86), 0.0, 1.0);
+    float totalVein = clamp(max(vein * 0.55, outerContour * 0.45), 0.0, 1.0) * aBody;
 
-    float aVein = clamp(totalVein * 0.95, 0.0, 0.95);
-    pmCol = pmCol * (1.0 - aVein) + darkVeinTint(elem) * aVein;
-    alpha = alpha + aVein * (1.0 - alpha);
+    float aVein = clamp(totalVein * 0.36, 0.0, 0.36);
+    vec3 deepShadowCol = mix(bodyCol * 0.52, darkVeinTint(elem) * 3.2, 0.45);
+    pmCol = mix(pmCol, deepShadowCol * aBody, aVein);
 
-    float veinMask = 1.0 - aVein * 0.90;
+    float veinMask = 1.0 - aVein * 0.35;
     vec3 hdrAdd = elementalGlowTint(elem) * sq(max(celE, 0.0)) * 0.72 * veinMask
-                + elementalEdgeHdr(elem) * (edge * (1.0 - aVein * 0.42) + sparks * 1.42);
+                + elementalEdgeHdr(elem) * (edge * (1.0 - aVein * 0.25) + sparks * 1.42);
     pmCol += hdrAdd;
 
     float hdrPeak = max(hdrAdd.r, max(hdrAdd.g, hdrAdd.b));
     float aEmissive = clamp(hdrPeak * 0.88, 0.0, 0.98);
     alpha = clamp(max(alpha, aEmissive) * borderFade, 0.0, 0.99);
 
-    if (alpha < 0.012) {
+    if (alpha < 0.015) {
       return vec4(0.0);
     }
 
-    vec3 straightRgb = aces((pmCol * borderFade) / max(alpha, 0.012));
+    vec3 straightRgb = aces((pmCol * borderFade) / max(alpha, 0.015));
     return vec4(straightRgb, alpha);
   }
 `;
@@ -622,45 +622,45 @@ const FRAG_DIRECTIONAL_SRC = SHADER_COMMON_HEADER + `
     float headReveal = invSmooth(1.0, 0.86, u / clamp(0.44 + t * 2.5, 0.01, 1.0));
     float inArc = smoothstep(0.0, 0.08 + t * 0.22, u) * invSmooth(1.0, 0.90, u) * headReveal * step(abs(dAng), span);
 
-    float freqA = variant == 1 ? 5.6 : variant == 2 ? 4.6 : 3.4;
-    float wNoise = warpedFbm(vec2(ang * freqA - ease * 3.2, r * 6.5 - ease * 4.5), t * 3.2);
+    float freqA = variant == 1 ? 4.2 : variant == 2 ? 3.6 : 2.8;
+    float wNoise = warpedFbm(vec2(ang * freqA - ease * 2.4, r * 4.5 - ease * 3.2), t * 2.4);
 
     // 4 Bespoke Melee Weapon Morphologies:
     // 0 = Knight Broadsword (clean twin-fuller steel arc + crossguard glint)
     // 1 = Emerald Great-Cleaver (7 hooked shark-tooth serrated poison fangs)
     // 2 = Berserker Great-Axe (wide asymmetric bearded-hatchet executioner wedge)
     // 3 = Mjolnir Thunder Hammer (blunt seismic hammer-anvil shockhead + dual lightning forks)
-    float jag = (wNoise - 0.5) * 0.024;
+    float jag = (wNoise - 0.5) * 0.016;
     float trailMult = 0.88;
     if (variant == 1) {
       float sawPhase = fract(u * 7.0 - ease * 0.35);
       float tooth = (1.0 - sawPhase) * smoothstep(0.06, 0.22, sawPhase);
-      jag = (tooth - 0.32) * 0.135 + (wNoise - 0.5) * 0.032;
+      jag = (tooth - 0.32) * 0.115 + (wNoise - 0.5) * 0.022;
       trailMult = 1.08;
     } else if (variant == 2) {
       float axeBeard = smoothstep(0.30, 0.54, u) * invSmooth(0.96, 0.80, u);
       float beardNotch = smoothstep(0.24, 0.36, u) * invSmooth(0.46, 0.36, u);
-      jag = axeBeard * 0.072 - beardNotch * 0.048 + (wNoise - 0.5) * 0.056;
+      jag = axeBeard * 0.068 - beardNotch * 0.044 + (wNoise - 0.5) * 0.036;
       trailMult = 0.74 + axeBeard * 1.05;
     } else if (variant == 3) {
       float anvilHead = exp(-sq((u - 0.64) / 0.22));
-      float stepZig = (abs(fract(u * 9.0 + floor(t * 10.0) * 0.25) - 0.5) - 0.25) * 0.11;
-      jag = anvilHead * 0.055 + stepZig + (wNoise - 0.5) * 0.036;
+      float stepZig = (abs(fract(u * 9.0 + floor(t * 10.0) * 0.25) - 0.5) - 0.25) * 0.09;
+      jag = anvilHead * 0.052 + stepZig + (wNoise - 0.5) * 0.024;
       trailMult = 0.84 + anvilHead * 0.78;
     }
 
     float dr = r - (mainR + jag * taper);
     float leadW = (variant == 3 ? 0.032 : 0.024) * taper;
-    float trailW = (0.24 + 0.15 * wNoise) * trailMult * taper * (1.0 - t * 0.36);
+    float trailW = (0.24 + 0.10 * wNoise) * trailMult * taper * (1.0 - t * 0.36);
     float body = dr > 0.0
       ? 1.0 - smoothstep(0.0, max(0.004, leadW), dr)
       : 1.0 - smoothstep(0.0, max(0.006, trailW), -dr);
 
-    float wakeDissolve = smoothstep(t * 0.92 - 0.10, t * 0.92 + 0.24, body * (0.50 + 0.72 * wNoise));
+    float wakeDissolve = 1.0 - smoothstep(0.62, 1.0, t) * (0.65 - 0.35 * body);
     float mainSlash = body * inArc * wakeDissolve;
 
     float innerTrack = invSmooth(0.076 * taper, 0.014 * taper, abs(dr + 0.056 * taper));
-    vein = innerTrack * inArc * smoothstep(0.26, 0.72, wNoise) * (1.0 - t * 0.68) * step(dr, -0.008);
+    vein = innerTrack * inArc * smoothstep(0.32, 0.76, wNoise) * (1.0 - t * 0.68) * step(dr, -0.008);
 
     float extraDetail = 0.0;
     if (variant == 0) {
@@ -676,7 +676,7 @@ const FRAG_DIRECTIONAL_SRC = SHADER_COMMON_HEADER + `
     }
 
     float razor = invSmooth(0.022, 0.0, abs(dr + 0.002)) * pow(max(0.0, taper), 0.82) * inArc * (1.0 - pow(max(0.0, t), 1.75));
-    float echoR = mainR + 0.072 + 0.020 * wNoise;
+    float echoR = mainR + 0.072 + 0.014 * wNoise;
     float echoU = clamp((dAng + span * 0.78 - 0.14) / (1.55 * span), 0.0, 1.0);
     float echoEnv = max(0.0, sin(echoU * PI)) * step(0.02, echoU) * step(echoU, 0.98) * (1.0 - t);
     float echoRibbon = (variant == 2 ? 0.45 : 1.0) * invSmooth(0.014, 0.0, abs(r - echoR)) * echoEnv;
@@ -697,16 +697,17 @@ const FRAG_DIRECTIONAL_SRC = SHADER_COMMON_HEADER + `
     float star = (exp(-abs(hpR.y) * 58.0) * exp(-abs(hpR.x) * 4.4)
                 + exp(-abs(hpR.x) * 58.0) * exp(-abs(hpR.y) * 4.8)) * impEnv * starScale;
 
+    float alive = 1.0 - pow(max(0.0, t), 2.1);
     float sparkInk = 0.0;
     radialDaggerSparks(
       r, ang, variant == 1 ? 14.0 : 16.0, 3.7 + float(variant), 0.44, ease * 0.48,
-      0.082 * (1.0 - t * 0.48), 0.013, step(abs(dAng), span * 1.05), 1.0 - t * 0.80,
+      0.082 * (1.0 - t * 0.48), 0.013, step(abs(dAng), span * 1.05), (1.0 - t * 0.80) * alive,
       sparks, sparkInk
     );
-    vein = max(vein, sparkInk);
+    vein = max(vein, sparkInk) * alive;
 
-    energy = clamp(mainSlash * (0.60 + 0.62 * wNoise) + echoRibbon * 0.88 + arcBolt * 0.72 + extraDetail * 0.45, 0.0, 1.15);
-    edge = razor * 1.22 + echoRibbon * 0.82 + star * 1.16 + arcBolt * 1.32 + extraDetail;
+    energy = clamp(mainSlash * (0.76 + 0.36 * wNoise) + echoRibbon * 0.88 + arcBolt * 0.72 + extraDetail * 0.45, 0.0, 1.15) * alive;
+    edge = (razor * 1.22 + echoRibbon * 0.82 + star * 1.16 + arcBolt * 1.32 + extraDetail) * alive;
   }
 
   void vfxConeBlast(vec2 rp, float t, out float energy, out float edge, out float vein, out float sparks) {
@@ -721,19 +722,20 @@ const FRAG_DIRECTIONAL_SRC = SHADER_COMMON_HEADER + `
     float inCone = invSmooth(coneSpan + 0.08, coneSpan - 0.08, abs(ang));
     float taper = pow(max(0.0, cos(ang / coneSpan * 0.5 * PI)), 0.55);
 
-    float wNoise = warpedFbm(vec2(ang * 5.0, r * 6.0 - ease * 6.5), t * 3.8);
-    float dr = r - (frontR + (wNoise - 0.5) * 0.11 * taper);
+    float wNoise = warpedFbm(vec2(ang * 3.8, r * 4.4 - ease * 4.8), t * 2.8);
+    float dr = r - (frontR + (wNoise - 0.5) * 0.068 * taper);
     float outerW = 0.032 * (1.0 - t * 0.35);
-    float innerW = (0.30 + 0.18 * wNoise) * (1.0 - t * 0.45);
+    float innerW = (0.28 + 0.12 * wNoise) * (1.0 - t * 0.45);
     float wave = (dr > 0.0
       ? 1.0 - smoothstep(0.0, max(0.005, outerW), dr)
       : 1.0 - smoothstep(0.0, max(0.008, innerW), -dr))
       * smoothstep(frontR * 0.28, frontR * 0.56, r) * inCone;
 
-    float erode = smoothstep(t * 0.90 - 0.10, t * 0.90 + 0.24, wave * (0.48 + 0.76 * wNoise));
-    energy = wave * erode * (0.58 + 0.65 * wNoise);
+    float erode = 1.0 - smoothstep(0.62, 1.0, t) * (0.65 - 0.35 * wave);
+    float alive = 1.0 - pow(max(0.0, t), 2.1);
+    energy = wave * erode * (0.74 + 0.38 * wNoise) * alive;
 
-    vein = invSmooth(0.072, 0.012, abs(dr + 0.054)) * erode * inCone * smoothstep(0.25, 0.72, wNoise) * (1.0 - t * 0.70);
+    vein = invSmooth(0.072, 0.012, abs(dr + 0.054)) * erode * inCone * smoothstep(0.32, 0.76, wNoise) * (1.0 - t * 0.70) * alive;
     float crestRazor = invSmooth(0.019, 0.0, abs(dr - 0.002)) * erode * inCone * taper * (1.0 - pow(max(0.0, t), 1.6));
 
     float impEnv = 1.0 - smoothstep(0.0, 0.24, t);
@@ -747,9 +749,9 @@ const FRAG_DIRECTIONAL_SRC = SHADER_COMMON_HEADER + `
     float sr = 0.18 + ease * (0.78 + seed * 0.38);
     sparks = invSmooth(0.011, 0.0, abs(ang - sa) * r)
            * invSmooth(0.11 * (1.0 - t * 0.5), 0.0, abs(r - sr))
-           * (1.0 - t * 0.78) * step(abs(sa), coneSpan * 0.92) * step(0.16, seed);
+           * (1.0 - t * 0.78) * alive * step(abs(sa), coneSpan * 0.92) * step(0.16, seed);
 
-    edge = crestRazor * 1.2 + muzzleStar * 1.25;
+    edge = (crestRazor * 1.2 + muzzleStar * 1.25) * alive;
   }
 
   void vfxBeamLance(vec2 rp, float t, out float energy, out float edge, out float vein, out float sparks) {
@@ -758,15 +760,15 @@ const FRAG_DIRECTIONAL_SRC = SHADER_COMMON_HEADER + `
     float headX = mix(-0.12, 0.78, clamp(t * 4.8, 0.0, 1.0));
     float inSpan = smoothstep(muzzleX - 0.02, muzzleX + 0.04, rp.x) * invSmooth(headX + 0.04, headX - 0.04, rp.x);
 
-    float turb = warpedFbm(vec2(rp.x * 4.0 - t * 9.5, rp.y * 9.5), t * 4.5);
-    float beamW = (0.165 - t * 0.095) * (0.76 + 0.52 * turb);
-    float helix = sin(rp.x * 12.5 - t * 20.0) * 0.025 * (1.0 - t * 0.5);
+    float turb = warpedFbm(vec2(rp.x * 3.0 - t * 6.5, rp.y * 6.5), t * 3.0);
+    float beamW = (0.165 - t * 0.095) * (0.86 + 0.28 * turb);
+    float helix = sin(rp.x * 12.5 - t * 20.0) * 0.020 * (1.0 - t * 0.5);
 
     float sheath = (1.0 - smoothstep(0.01, max(0.015, beamW), abs(rp.y - helix))) * inSpan;
-    float erode = smoothstep(t * 0.90 - 0.10, t * 0.90 + 0.24, sheath * (0.50 + 0.74 * turb));
-    energy = sheath * erode * (0.55 + 0.65 * turb);
+    float erode = 1.0 - smoothstep(0.64, 1.0, t) * (0.65 - 0.35 * sheath);
+    energy = sheath * erode * (0.76 + 0.36 * turb);
 
-    float coreBreak = smoothstep(max(0.0, (t - 0.58) * 2.0), max(0.01, (t - 0.58) * 2.0 + 0.22), turb);
+    float coreBreak = 1.0 - smoothstep(0.72, 1.0, t) * 0.55;
     float core = exp(-sq(rp.y / (0.016 * (1.0 - t * 0.55) + 0.004))) * inSpan * coreBreak;
     float machDiamonds = pow(max(0.0, 0.5 + 0.5 * cos(rp.x * 22.0 - t * 28.0)), 3.0)
                        * exp(-sq(rp.y / (0.042 * (1.0 - t * 0.45) + 0.008))) * inSpan * coreBreak;
@@ -774,7 +776,7 @@ const FRAG_DIRECTIONAL_SRC = SHADER_COMMON_HEADER + `
     edge += (core * 1.38 + machDiamonds * 0.72 + outerRim * 0.82) * (1.0 - pow(max(0.0, t), 2.2));
 
     float shearBand = smoothstep(0.013, 0.032, abs(rp.y)) * invSmooth(beamW * 0.78, beamW * 0.30, abs(rp.y));
-    vein = shearBand * inSpan * erode * smoothstep(0.24, 0.66, turb) * (1.0 - t * 0.65) * 0.98;
+    vein = shearBand * inSpan * erode * smoothstep(0.30, 0.72, turb) * (1.0 - t * 0.65) * 0.85;
 
     float tipDx = headX - rp.x;
     if (tipDx > -0.03 && tipDx < 0.42) {
@@ -790,13 +792,17 @@ const FRAG_DIRECTIONAL_SRC = SHADER_COMMON_HEADER + `
                   * (1.0 - pow(max(0.0, t), 1.45));
     edge += tipStar * 1.15;
 
+    float alive = 1.0 - pow(max(0.0, t), 2.1);
     float laneId = floor((rp.y + 0.24) / 0.048);
     float laneY = (laneId + 0.5) * 0.048 - 0.24;
     float lSeed = hash21(vec2(laneId, 6.1));
     float sx = -0.52 + fract(lSeed * 1.7 + t * (1.1 + 0.3 * hash21(vec2(laneId, 2.3)))) * 1.24;
     sparks = invSmooth(0.065 * (1.0 - t * 0.55), 0.0, abs(rp.x - sx))
            * invSmooth(0.009, 0.0, abs(rp.y - laneY))
-           * (1.0 - t * 0.85) * step(abs(laneY), 0.18 * (0.45 + t)) * step(0.20, lSeed);
+           * (1.0 - t * 0.85) * alive * step(abs(laneY), 0.18 * (0.45 + t)) * step(0.20, lSeed);
+    energy *= alive;
+    edge *= alive;
+    vein *= alive;
   }
 
   void vfxMuzzleBurst(vec2 rp, float t, out float energy, out float edge, out float vein, out float sparks) {
@@ -806,21 +812,22 @@ const FRAG_DIRECTIONAL_SRC = SHADER_COMMON_HEADER + `
     float ang = atan(mp.y, mp.x);
     float ease = 1.0 - pow(max(0.0, 1.0 - t), 2.8);
 
-    float mainJet = exp(-abs(mp.y) * 34.0) * smoothstep(-0.08, 0.04, mp.x) * invSmooth(1.08 * (1.0 - t * 0.25), 0.05, mp.x);
+    float mainJet = exp(-abs(mp.y) * 36.0) * smoothstep(-0.08, 0.04, mp.x) * invSmooth(0.96 * (1.0 - t * 0.28), 0.05, mp.x);
     vec2 v1 = rot2(0.66) * mp;
     vec2 v2 = rot2(-0.66) * mp;
-    float sideJets = (exp(-abs(v1.y) * 38.0) * smoothstep(-0.04, 0.04, v1.x) * invSmooth(0.62, 0.04, v1.x)
-                    + exp(-abs(v2.y) * 38.0) * smoothstep(-0.04, 0.04, v2.x) * invSmooth(0.62, 0.04, v2.x));
+    float sideJets = (exp(-abs(v1.y) * 40.0) * smoothstep(-0.04, 0.04, v1.x) * invSmooth(0.56, 0.04, v1.x)
+                    + exp(-abs(v2.y) * 40.0) * smoothstep(-0.04, 0.04, v2.x) * invSmooth(0.56, 0.04, v2.x));
 
-    float wNoise = warpedFbm(vec2(mp.x * 5.5 - ease * 5.0, mp.y * 7.5), t * 4.0);
-    float plumeR = 0.22 + ease * 0.56;
-    float inFront = invSmooth(1.05, 0.25, abs(ang));
-    float plume = invSmooth(plumeR, plumeR * 0.25, length(vec2(mp.x * 0.72, mp.y * 1.35))) * inFront;
-    float erode = smoothstep(t * 0.92 - 0.12, t * 0.92 + 0.24, plume * (0.48 + 0.78 * wNoise));
+    float wNoise = warpedFbm(vec2(mp.x * 3.8 - ease * 3.5, mp.y * 5.2), t * 2.8);
+    float plumeR = 0.18 + ease * 0.42;
+    float inFront = invSmooth(0.95, 0.22, abs(ang));
+    float plume = invSmooth(plumeR, plumeR * 0.25, length(vec2(mp.x * 0.78, mp.y * 1.48))) * inFront;
+    float erode = 1.0 - smoothstep(0.58, 1.0, t) * (0.72 - 0.28 * plume);
+    float alive = 1.0 - pow(max(0.0, t), 2.1);
 
-    energy = clamp(plume * erode * (0.62 + 0.58 * wNoise) + (mainJet + sideJets * 0.8) * (1.0 - t * 0.7), 0.0, 1.15);
-    vein = invSmooth(0.24, 0.06, abs(r - (0.18 + ease * 0.24))) * inFront * erode * smoothstep(0.32, 0.76, wNoise) * (1.0 - t * 0.65) * (1.0 - mainJet);
-    edge = (mainJet * 1.45 + sideJets * 1.15 + exp(-r * 22.0)) * (1.0 - pow(max(0.0, t), 1.55));
+    energy = clamp(plume * erode * (0.72 + 0.36 * wNoise) + (mainJet + sideJets * 0.82) * (1.0 - t * 0.72), 0.0, 1.15) * alive;
+    vein = invSmooth(0.18, 0.05, abs(r - (0.16 + ease * 0.20))) * inFront * erode * smoothstep(0.36, 0.78, wNoise) * (1.0 - t * 0.72) * (1.0 - mainJet) * alive;
+    edge = (mainJet * 1.48 + sideJets * 1.18 + exp(-r * 24.0)) * (1.0 - pow(max(0.0, t), 1.55)) * alive;
 
     float cells = 20.0;
     float idx = floor((ang + PI) / (2.0 * PI) * cells);
@@ -829,7 +836,7 @@ const FRAG_DIRECTIONAL_SRC = SHADER_COMMON_HEADER + `
     float sr = 0.16 + ease * (0.52 + 0.30 * seed);
     sparks = invSmooth(0.013, 0.0, abs(ang - sa) * r)
            * invSmooth(0.09 * (1.0 - t * 0.5), 0.0, abs(r - sr))
-           * (1.0 - t * 0.8) * step(abs(sa), 0.70) * step(0.20, seed);
+           * (1.0 - t * 0.8) * alive * step(abs(sa), 0.70) * step(0.20, seed);
   }
 
   void vfxHitSpark(vec2 rp, float t, out float energy, out float edge, out float vein, out float sparks) {
@@ -843,16 +850,17 @@ const FRAG_DIRECTIONAL_SRC = SHADER_COMMON_HEADER + `
     float cutStar = (exp(-abs(sp1.y) * 54.0) * exp(-abs(sp1.x) * 3.6)
                    + exp(-abs(sp1.x) * 54.0) * exp(-abs(sp1.y) * 4.4)) * impEnv;
 
-    float ringR = 0.14 + ease * 0.58;
-    float wNoise = warpedFbm(vec2(ang * 4.0, r * 7.0 - ease * 5.0), t * 3.5);
-    float cMask = invSmooth(1.85, 0.65, abs(ang));
-    float dr = r - (ringR + (wNoise - 0.5) * 0.07);
-    float band = (1.0 - smoothstep(0.0, 0.09 * (1.0 - t * 0.4), abs(dr))) * cMask * smoothstep(ringR * 0.4, ringR * 0.7, r);
-    float erode = smoothstep(t * 0.90 - 0.10, t * 0.90 + 0.22, band * (0.5 + 0.72 * wNoise));
+    float ringR = 0.14 + ease * 0.52;
+    float wNoise = warpedFbm(vec2(ang * 3.0, r * 4.8 - ease * 3.6), t * 2.6);
+    float cMask = invSmooth(1.75, 0.65, abs(ang));
+    float dr = r - (ringR + (wNoise - 0.5) * 0.045);
+    float band = (1.0 - smoothstep(0.0, 0.075 * (1.0 - t * 0.4), abs(dr))) * cMask * smoothstep(ringR * 0.45, ringR * 0.72, r);
+    float erode = 1.0 - smoothstep(0.60, 1.0, t) * (0.70 - 0.30 * band);
+    float alive = 1.0 - pow(max(0.0, t), 2.1);
 
-    energy = band * erode * (0.65 + 0.55 * wNoise);
-    vein = invSmooth(0.045, 0.008, abs(dr + 0.032)) * erode * cMask * (1.0 - t * 0.7);
-    edge = cutStar * 1.45 + invSmooth(0.018, 0.0, abs(dr - 0.002)) * erode * cMask * (1.0 - pow(max(0.0, t), 1.6)) * 1.15;
+    energy = band * erode * (0.76 + 0.34 * wNoise) * alive;
+    vein = invSmooth(0.040, 0.008, abs(dr + 0.028)) * erode * cMask * (1.0 - t * 0.72) * alive;
+    edge = (cutStar * 1.48 + invSmooth(0.018, 0.0, abs(dr - 0.002)) * erode * cMask * (1.0 - pow(max(0.0, t), 1.6)) * 1.18) * alive;
 
     float cells = 18.0;
     float idx = floor((ang + PI) / (2.0 * PI) * cells);
@@ -861,7 +869,7 @@ const FRAG_DIRECTIONAL_SRC = SHADER_COMMON_HEADER + `
     float sr = 0.12 + ease * (0.48 + 0.26 * seed);
     sparks = invSmooth(0.013, 0.0, abs(ang - sa) * r)
            * invSmooth(0.09 * (1.0 - t * 0.5), 0.0, abs(r - sr))
-           * (1.0 - t * 0.8) * step(abs(sa), 1.22) * step(0.18, seed);
+           * (1.0 - t * 0.8) * alive * step(abs(sa), 1.22) * step(0.18, seed);
   }
 
   void main() {
@@ -941,16 +949,17 @@ const FRAG_NOVA_HOT_SRC = SHADER_COMMON_HEADER + `
     float innerFilament = invSmooth(0.014, 0.0, abs(r - innerCrestR)) * hollowGate * erode * (1.0 - pow(max(0.0, t), 1.45));
     float rimRazor = invSmooth(0.017, 0.0, abs(dr - 0.002)) * hollowGate * erode * (1.0 - pow(max(0.0, t), 1.6));
 
+    float alive = 1.0 - pow(max(0.0, t), 2.1);
     float sparkInk = 0.0;
     radialDaggerSparks(
       r, ang, 20.0, 9.1 + float(isMagma) * 3.3, 0.15, ease * 0.58,
-      0.078 * (1.0 - t * 0.52), 0.012, 1.0, 1.0 - t * 0.78,
+      0.078 * (1.0 - t * 0.52), 0.012, 1.0, (1.0 - t * 0.78) * alive,
       sparks, sparkInk
     );
-    vein = max(vein, sparkInk);
+    vein = max(vein, sparkInk) * alive;
 
-    energy = max(energy, waveEnergy + innerFilament * 0.36);
-    edge += rimRazor * 1.22 + innerFilament * 0.76;
+    energy = max(energy, waveEnergy + innerFilament * 0.36) * alive;
+    edge = (edge + rimRazor * 1.22 + innerFilament * 0.76) * alive;
   }
 
   void vfxThunderRadial(vec2 p, float t, out float energy, out float edge, out float vein, out float sparks) {
@@ -1000,10 +1009,10 @@ const FRAG_NOVA_HOT_SRC = SHADER_COMMON_HEADER + `
     float forkDist = abs(localA - forkOffset) * r;
     float forkBolt = exp(-sq(forkDist / 0.008)) * smoothstep(0.34, 0.40, r) * radialGate * boltBreak;
 
-    float alive = 1.0 - pow(max(0.0, t), 2.2);
-    energy = clamp(plasmaBand * erode * (0.6 + 0.5 * wNoise) + boltAura * 0.95 * alive, 0.0, 1.15);
-    edge += (mainBolt * 1.35 + forkBolt * 1.05 + hoopRazor * 1.1) * alive;
-    vein = clamp(hoopVein * 0.98 + boltAura * (1.0 - mainBolt * 1.4) * 0.72 * alive, 0.0, 1.0);
+    float alive = 1.0 - pow(max(0.0, t), 2.1);
+    energy = clamp(plasmaBand * erode * (0.6 + 0.5 * wNoise) + boltAura * 0.95, 0.0, 1.15) * alive;
+    edge = (edge + mainBolt * 1.35 + forkBolt * 1.05 + hoopRazor * 1.1) * alive;
+    vein = clamp(hoopVein * 0.98 + boltAura * (1.0 - mainBolt * 1.4) * 0.72, 0.0, 1.0) * alive;
 
     float cells = 18.0;
     float idx = floor((ang + PI) / (2.0 * PI) * cells);
@@ -1074,7 +1083,7 @@ const FRAG_NOVA_COLD_SRC = SHADER_COMMON_HEADER + `
     float alive = 1.0 - pow(max(0.0, t), 2.1);
     // CRITICAL: Gate energy by rawBody so early frames never flood the bounding square with an 8-wedge pinwheel!
     energy = clamp(rawBody * erode * (0.44 + 0.64 * litSide) * alive, 0.0, 1.1);
-    edge = (centerSpine * 1.28 + outerBevel * 0.96 + coronaRim * 0.88) * (1.0 - pow(max(0.0, t), 1.7));
+    edge = (centerSpine * 1.28 + outerBevel * 0.96 + coronaRim * 0.88) * (1.0 - pow(max(0.0, t), 1.7)) * alive;
     vein = clamp((inCrystal * (1.0 - litSide) * (1.0 - outerBevel * 0.85) * 0.96
                 + frostCorona * smoothstep(0.22, 0.62, facetNoise) * 0.68) * erode * alive, 0.0, 1.0);
 
@@ -1110,14 +1119,15 @@ const FRAG_NOVA_COLD_SRC = SHADER_COMMON_HEADER + `
       * hollowGate;
 
     float erode = crescentGapErode(ang, t, wNoise, 2.4);
-    energy = corona * erode * (0.60 + 0.65 * wNoise);
-    vein = invSmooth(0.068, 0.011, abs(dr + 0.044)) * hollowGate * erode * smoothstep(0.20, 0.60, wNoise) * (1.0 - t * 0.56);
-    edge += invSmooth(0.016, 0.0, abs(dr - 0.002)) * hollowGate * erode * (1.0 - pow(max(0.0, t), 1.6)) * 1.22;
+    float alive = 1.0 - pow(max(0.0, t), 2.1);
+    energy = corona * erode * (0.60 + 0.65 * wNoise) * alive;
+    vein = invSmooth(0.068, 0.011, abs(dr + 0.044)) * hollowGate * erode * smoothstep(0.20, 0.60, wNoise) * (1.0 - t * 0.56) * alive;
+    edge = (edge + invSmooth(0.016, 0.0, abs(dr - 0.002)) * hollowGate * erode * (1.0 - pow(max(0.0, t), 1.6)) * 1.22) * alive;
 
     float sparkInk = 0.0;
     radialDaggerSparks(
       r, ang, 18.0, 7.7, 0.16, ease * 0.56,
-      0.074 * (1.0 - t * 0.52), 0.013, 1.0, 1.0 - t * 0.78,
+      0.074 * (1.0 - t * 0.52), 0.013, 1.0, (1.0 - t * 0.78) * alive,
       sparks, sparkInk
     );
     vein = max(vein, sparkInk);
@@ -1159,17 +1169,18 @@ const FRAG_NOVA_COLD_SRC = SHADER_COMMON_HEADER + `
         : 1.0 - smoothstep(0.0, max(0.006, innerW), -dr)) * hollowGate;
 
       float erode = crescentGapErode(ang, ot, wNoise, 5.2);
+      float alive = 1.0 - pow(max(0.0, ot), 2.1);
       energy = corona * erode * (0.58 + 0.65 * wNoise);
 
-      vein = invSmooth(0.068, 0.012, abs(dr + 0.042)) * hollowGate * erode * smoothstep(0.22, 0.62, wNoise) * (1.0 - ot * 0.58);
+      vein = invSmooth(0.068, 0.012, abs(dr + 0.042)) * hollowGate * erode * smoothstep(0.22, 0.62, wNoise) * (1.0 - ot * 0.58) * alive;
       float innerVoidCrest = invSmooth(0.013, 0.0, abs(r - (ringR * 0.76 + (0.5 - wNoise) * 0.034))) * hollowGate * erode * (1.0 - pow(max(0.0, ot), 1.45));
-      edge = invSmooth(0.017, 0.0, abs(dr - 0.002)) * hollowGate * erode * (1.0 - pow(max(0.0, ot), 1.55)) * 1.24 + innerVoidCrest * 0.74;
-      energy += innerVoidCrest * 0.34;
+      edge = (invSmooth(0.017, 0.0, abs(dr - 0.002)) * hollowGate * erode * (1.0 - pow(max(0.0, ot), 1.55)) * 1.24 + innerVoidCrest * 0.74) * alive;
+      energy = (energy + innerVoidCrest * 0.34) * alive;
 
       float sparkInk = 0.0;
       radialDaggerSparks(
         r, ang, 16.0, 4.9, 0.16, ease * 0.56,
-        0.075 * (1.0 - ot * 0.54), 0.012, 1.0, 1.0 - ot * 0.78,
+        0.075 * (1.0 - ot * 0.54), 0.012, 1.0, (1.0 - ot * 0.78) * alive,
         sparks, sparkInk
       );
       vein = max(vein, sparkInk);
@@ -1213,20 +1224,20 @@ const FRAG_ARCHETYPE_NATURE_WIND_SRC = SHADER_COMMON_HEADER + `
     float wNoise = warpedFbm(vec2(ang * 3.0 - t * 4.5, r * 6.5 - ease * 4.0), t * 3.6);
 
     float blade = smoothstep(0.05, 0.22, armPhase) * invSmooth(0.66 - t * 0.18, 0.24, armPhase) * radialGate;
-    float erode = smoothstep(max(0.0, (t - 0.34) * 1.15), max(0.02, (t - 0.34) * 1.15 + 0.18), wNoise * 0.65 + blade * 0.55);
+    float erode = 1.0 - smoothstep(0.60, 1.0, t) * (0.65 - 0.35 * blade);
 
     float leadScythe = invSmooth(0.075, 0.0, abs(armPhase - 0.20)) * radialGate * erode;
     float innerShear = invSmooth(0.020, 0.0, abs(r - (innerEye + 0.035))) * erode * (1.0 - pow(max(0.0, t), 1.6));
     float alive = 1.0 - pow(max(0.0, t), 2.15);
 
-    energy = clamp(blade * erode * (0.58 + 0.64 * wNoise) + innerShear * 0.45, 0.0, 1.12) * alive;
-    vein = invSmooth(0.14, 0.02, abs(armPhase - 0.42)) * radialGate * erode * smoothstep(0.22, 0.66, wNoise) * (1.0 - t * 0.52);
-    edge = (leadScythe * 1.32 + innerShear * 0.92) * (1.0 - pow(max(0.0, t), 1.65));
+    energy = clamp(blade * erode * (0.72 + 0.42 * wNoise) + innerShear * 0.45, 0.0, 1.12) * alive;
+    vein = invSmooth(0.14, 0.02, abs(armPhase - 0.42)) * radialGate * erode * smoothstep(0.28, 0.72, wNoise) * (1.0 - t * 0.52) * alive;
+    edge = (leadScythe * 1.32 + innerShear * 0.92) * (1.0 - pow(max(0.0, t), 1.65)) * alive;
 
     float sparkInk = 0.0;
     radialDaggerSparks(
       r, ang + logR * 0.65, 16.0, 14.3, 0.18, ease * 0.58,
-      0.086 * (1.0 - t * 0.48), 0.011, 1.0, 1.0 - t * 0.76,
+      0.086 * (1.0 - t * 0.48), 0.011, 1.0, (1.0 - t * 0.76) * alive,
       sparks, sparkInk
     );
     vein = max(vein, sparkInk);
@@ -1274,12 +1285,12 @@ const FRAG_ARCHETYPE_NATURE_WIND_SRC = SHADER_COMMON_HEADER + `
     float body = clamp(max(inPetal * (0.56 + 0.54 * wNoise), inThorn * 0.95), 0.0, 1.0);
     energy = body * erode * alive;
     vein = clamp((inPetal * invSmooth(halfW * 0.72, halfW * 0.22, lat) * (1.0 - midrib) * 0.82 + inThorn * 0.45) * erode * alive, 0.0, 1.0);
-    edge = (petalRim * 1.18 + midrib * 1.10 + inThorn * 0.92) * (1.0 - pow(max(0.0, t), 1.65));
+    edge = (petalRim * 1.18 + midrib * 1.10 + inThorn * 0.92) * (1.0 - pow(max(0.0, t), 1.65)) * alive;
 
     float sparkInk = 0.0;
     radialDaggerSparks(
       r, ang, 12.0, 15.7, 0.18, ease * 0.56,
-      0.064 * (1.0 - t * 0.45), 0.015, 1.0, 1.0 - t * 0.75,
+      0.064 * (1.0 - t * 0.45), 0.015, 1.0, (1.0 - t * 0.75) * alive,
       sparks, sparkInk
     );
     vein = max(vein, sparkInk);
@@ -1301,24 +1312,24 @@ const FRAG_ARCHETYPE_NATURE_WIND_SRC = SHADER_COMMON_HEADER + `
     float podR = (0.14 + 0.07 * seed) * (0.65 + 0.45 * ease) * (1.0 - t * 0.22);
 
     float dPod = length(p - podC);
-    float wNoise = warpedFbm(p * 6.4 - vec2(cos(podAng), sin(podAng)) * ease * 2.5, t * 3.0);
-    float dr = dPod - (podR + (wNoise - 0.5) * 0.055);
+    float wNoise = warpedFbm(p * 4.6 - vec2(cos(podAng), sin(podAng)) * ease * 1.8, t * 2.2);
+    float dr = dPod - (podR + (wNoise - 0.5) * 0.036);
 
     // Hollow ruptured bio-vesicle crescent facing outward
     float outwardBias = smoothstep(-0.06, 0.08, dot(p - podC, vec2(cos(podAng), sin(podAng))));
     float vesicleShell = invSmooth(0.075, 0.008, abs(dr + 0.026)) * (0.38 + 0.62 * outwardBias);
     float hollowCenter = smoothstep(0.12 + t * 0.18, 0.22 + t * 0.22, r);
-    float erode = smoothstep(max(0.0, (t - 0.30) * 1.15), max(0.02, (t - 0.30) * 1.15 + 0.18), wNoise * 0.72 + outwardBias * 0.38);
+    float erode = 1.0 - smoothstep(0.60, 1.0, t) * (0.65 - 0.35 * outwardBias);
 
     float alive = 1.0 - pow(max(0.0, t), 2.15);
-    energy = clamp(vesicleShell * hollowCenter * erode * (0.64 + 0.62 * wNoise), 0.0, 1.12) * alive;
-    vein = invSmooth(0.052, 0.008, abs(dr + 0.044)) * hollowCenter * erode * smoothstep(0.20, 0.64, wNoise) * (1.0 - t * 0.48);
-    edge = invSmooth(0.016, 0.0, abs(dr + 0.003)) * outwardBias * hollowCenter * erode * (1.0 - pow(max(0.0, t), 1.65)) * 1.26;
+    energy = clamp(vesicleShell * hollowCenter * erode * (0.74 + 0.38 * wNoise), 0.0, 1.12) * alive;
+    vein = invSmooth(0.052, 0.008, abs(dr + 0.044)) * hollowCenter * erode * smoothstep(0.28, 0.72, wNoise) * (1.0 - t * 0.48) * alive;
+    edge = invSmooth(0.016, 0.0, abs(dr + 0.003)) * outwardBias * hollowCenter * erode * (1.0 - pow(max(0.0, t), 1.65)) * 1.26 * alive;
 
     float sparkInk = 0.0;
     radialDaggerSparks(
       r, ang, 14.0, 16.9, 0.16, ease * 0.58,
-      0.058 * (1.0 - t * 0.48), 0.016, 1.0, 1.0 - t * 0.76,
+      0.058 * (1.0 - t * 0.48), 0.016, 1.0, (1.0 - t * 0.76) * alive,
       sparks, sparkInk
     );
     vein = max(vein, sparkInk);
@@ -1356,12 +1367,12 @@ const FRAG_ARCHETYPE_NATURE_WIND_SRC = SHADER_COMMON_HEADER + `
     float alive = 1.0 - pow(max(0.0, t), 2.15);
     energy = clamp((outerOct * (0.62 + 0.52 * wNoise) + innerOct * 0.65 + boltSheath * 0.92) * erode, 0.0, 1.15) * alive;
     vein = clamp((invSmooth(0.038, 0.006, abs(dOct + 0.036)) * outerOct + boltSheath * (1.0 - boltCore) * 0.78) * erode * alive, 0.0, 1.0);
-    edge = (invSmooth(0.014, 0.0, abs(dOct)) * erode * 1.24 + boltCore * erode * 1.38 + innerOct * erode * 0.85) * (1.0 - pow(max(0.0, t), 1.7));
+    edge = (invSmooth(0.014, 0.0, abs(dOct)) * erode * 1.24 + boltCore * erode * 1.38 + innerOct * erode * 0.85) * (1.0 - pow(max(0.0, t), 1.7)) * alive;
 
     float sparkInk = 0.0;
     radialDaggerSparks(
       r, ang, 16.0, 17.5, 0.18, ease * 0.58,
-      0.072 * (1.0 - t * 0.50), 0.011, 1.0, 1.0 - t * 0.78,
+      0.072 * (1.0 - t * 0.50), 0.011, 1.0, (1.0 - t * 0.78) * alive,
       sparks, sparkInk
     );
     vein = max(vein, sparkInk);
@@ -1396,13 +1407,13 @@ const FRAG_ARCHETYPE_NATURE_WIND_SRC = SHADER_COMMON_HEADER + `
     float alive = 1.0 - pow(max(0.0, t), 2.1);
 
     energy = clamp((inPlume * (0.60 + 0.66 * wNoise) + fissureSpine * 0.65) * erode, 0.0, 1.15) * alive;
-    vein = clamp(invSmooth(0.078, 0.010, abs(dr + 0.052)) * inPlume * erode * smoothstep(0.16, 0.58, wNoise) * (1.0 - t * 0.45), 0.0, 1.0);
-    edge = (invSmooth(0.016, 0.0, abs(dr)) * inPlume * 1.24 + fissureSpine * 1.22) * erode * (1.0 - pow(max(0.0, t), 1.65));
+    vein = clamp(invSmooth(0.078, 0.010, abs(dr + 0.052)) * inPlume * erode * smoothstep(0.16, 0.58, wNoise) * (1.0 - t * 0.45) * alive, 0.0, 1.0);
+    edge = (invSmooth(0.016, 0.0, abs(dr)) * inPlume * 1.24 + fissureSpine * 1.22) * erode * (1.0 - pow(max(0.0, t), 1.65)) * alive;
 
     float sparkInk = 0.0;
     radialDaggerSparks(
       r, ang, 15.0, 18.2, 0.16, ease * 0.60,
-      0.084 * (1.0 - t * 0.50), 0.014, 1.0, 1.0 - t * 0.76,
+      0.084 * (1.0 - t * 0.50), 0.014, 1.0, (1.0 - t * 0.76) * alive,
       sparks, sparkInk
     );
     vein = max(vein, sparkInk);
@@ -1459,12 +1470,12 @@ const FRAG_ARCHETYPE_TACTICAL_CLASS_SRC = SHADER_COMMON_HEADER + `
 
     energy = clamp((inSpear * (0.64 + 0.56 * wNoise) + impBlast * 0.85), 0.0, 1.15) * alive;
     vein = clamp(inSpear * (1.0 - spearCore) * invSmooth(0.62, 0.12, uSpear) * 0.86 * alive, 0.0, 1.0);
-    edge = (spearCore * 1.42 + invSmooth(0.010, 0.0, abs(lat - spearW * 0.9)) * inSpear * 0.95 + impBlast * 1.1) * (1.0 - pow(max(0.0, t), 1.65));
+    edge = (spearCore * 1.42 + invSmooth(0.010, 0.0, abs(lat - spearW * 0.9)) * inSpear * 0.95 + impBlast * 1.1) * (1.0 - pow(max(0.0, t), 1.65)) * alive;
 
     float sparkInk = 0.0;
     radialDaggerSparks(
       r, ang, 18.0, 19.8, 0.20, ease * 0.58,
-      0.088 * (1.0 - t * 0.45), 0.011, 1.0, 1.0 - t * 0.75,
+      0.088 * (1.0 - t * 0.45), 0.011, 1.0, (1.0 - t * 0.75) * alive,
       sparks, sparkInk
     );
     vein = max(vein, sparkInk);
@@ -1491,19 +1502,19 @@ const FRAG_ARCHETYPE_TACTICAL_CLASS_SRC = SHADER_COMMON_HEADER + `
     // Panel seam lines at |y| = 0.16 and |y| = 0.40 for armored phalanx plates
     float seam = (invSmooth(0.018, 0.003, abs(absY - 0.16)) + invSmooth(0.018, 0.003, abs(absY - 0.40))) * inPlate;
     float echoWave = invSmooth(0.020, 0.0, abs(dx + plateThick * 0.62)) * inSpanY;
-    float erode = smoothstep(max(0.0, (t - 0.36) * 1.25), max(0.02, (t - 0.36) * 1.25 + 0.18), wNoise * 0.65 + inPlate * 0.55);
+    float erode = 1.0 - smoothstep(0.62, 1.0, t) * (0.65 - 0.35 * inPlate);
     float alive = 1.0 - pow(max(0.0, t), 2.1);
 
-    energy = clamp((inPlate * (0.66 + 0.48 * wNoise) + echoWave * 0.72) * erode, 0.0, 1.15) * alive;
+    energy = clamp((inPlate * (0.74 + 0.36 * wNoise) + echoWave * 0.72) * erode, 0.0, 1.15) * alive;
     vein = clamp((seam * 0.92 + invSmooth(0.055, 0.010, abs(dx + 0.052)) * inPlate * 0.78) * erode * alive, 0.0, 1.0);
-    edge = (invSmooth(0.018, 0.0, abs(dx)) * inSpanY * 1.35 + echoWave * 0.95) * erode * (1.0 - pow(max(0.0, t), 1.65));
+    edge = (invSmooth(0.018, 0.0, abs(dx)) * inSpanY * 1.35 + echoWave * 0.95) * erode * (1.0 - pow(max(0.0, t), 1.65)) * alive;
 
     float r = length(rp);
     float ang = atan(rp.y, rp.x + 1e-6);
     float sparkInk = 0.0;
     radialDaggerSparks(
       r, ang, 16.0, 20.4, 0.20, ease * 0.56,
-      0.076 * (1.0 - t * 0.48), 0.013, step(abs(ang), 1.15), 1.0 - t * 0.78,
+      0.076 * (1.0 - t * 0.48), 0.013, step(abs(ang), 1.15), (1.0 - t * 0.78) * alive,
       sparks, sparkInk
     );
     vein = max(vein, sparkInk);
@@ -1523,7 +1534,7 @@ const FRAG_ARCHETYPE_TACTICAL_CLASS_SRC = SHADER_COMMON_HEADER + `
     float dW1 = abs(rp.x - wing1X);
     float dW2 = abs(rp.x - wing2X);
 
-    float wNoise = warpedFbm(vec2(rp.x * 5.0 - ease * 5.5, rp.y * 7.0), t * 3.5);
+    float wNoise = warpedFbm(vec2(rp.x * 3.8 - ease * 4.0, rp.y * 5.2), t * 2.6);
     float wing1 = invSmooth(0.085 * (1.0 - t * 0.32), 0.0, dW1) * wingSpan * step(rp.x, wing1X + 0.03);
     float wing2 = invSmooth(0.055 * (1.0 - t * 0.38), 0.0, dW2) * invSmooth(0.54, 0.38, absY);
 
@@ -1533,20 +1544,20 @@ const FRAG_ARCHETYPE_TACTICAL_CLASS_SRC = SHADER_COMMON_HEADER + `
     float tipStar = (exp(-abs(tipP.y) * 62.0) * exp(-abs(tipP.x) * 6.0) + exp(-abs(tipP.x) * 62.0) * exp(-abs(tipP.y) * 6.5))
                   * (1.0 - pow(max(0.0, t), 1.5));
 
-    float erode = smoothstep(max(0.0, (t - 0.34) * 1.2), max(0.02, (t - 0.34) * 1.2 + 0.18), wNoise * 0.62 + max(wing1, wing2) * 0.55);
+    float erode = 1.0 - smoothstep(0.60, 1.0, t) * (0.65 - 0.35 * max(wing1, wing2));
     float alive = 1.0 - pow(max(0.0, t), 2.1);
 
-    energy = clamp(((wing1 + wing2 * 0.82) * (0.62 + 0.55 * wNoise) + arrowShaft * 0.95) * erode, 0.0, 1.15) * alive;
+    energy = clamp(((wing1 + wing2 * 0.82) * (0.72 + 0.38 * wNoise) + arrowShaft * 0.95) * erode, 0.0, 1.15) * alive;
     vein = clamp((invSmooth(0.045, 0.008, abs(rp.x - (wing1X - 0.042))) * wingSpan * 0.85) * erode * alive, 0.0, 1.0);
     edge = (invSmooth(0.016, 0.0, dW1) * wingSpan * 1.32 + invSmooth(0.013, 0.0, dW2) * wingSpan * 0.95 + arrowShaft * 1.38 + tipStar * 1.25)
-         * erode * (1.0 - pow(max(0.0, t), 1.65));
+         * erode * (1.0 - pow(max(0.0, t), 1.65)) * alive;
 
     float r = length(rp);
     float ang = atan(rp.y, rp.x + 1e-6);
     float sparkInk = 0.0;
     radialDaggerSparks(
       r, ang, 14.0, 21.2, 0.18, ease * 0.58,
-      0.085 * (1.0 - t * 0.45), 0.010, step(abs(ang), 0.95), 1.0 - t * 0.75,
+      0.085 * (1.0 - t * 0.45), 0.010, step(abs(ang), 0.95), (1.0 - t * 0.75) * alive,
       sparks, sparkInk
     );
     vein = max(vein, sparkInk);
@@ -1591,12 +1602,12 @@ const FRAG_ARCHETYPE_TACTICAL_CLASS_SRC = SHADER_COMMON_HEADER + `
 
     energy = rawSigil * erode * (0.68 + 0.45 * wNoise) * alive;
     vein = clamp((invSmooth(0.034, 0.006, abs(r - (sigilR - 0.032))) + hexagram * 0.35) * erode * alive, 0.0, 1.0);
-    edge = (invSmooth(0.013, 0.0, abs(r - sigilR)) * 1.28 + hexagram * 1.15 + runeTicks * 1.20) * erode * (1.0 - pow(max(0.0, t), 1.7));
+    edge = (invSmooth(0.013, 0.0, abs(r - sigilR)) * 1.28 + hexagram * 1.15 + runeTicks * 1.20) * erode * (1.0 - pow(max(0.0, t), 1.7)) * alive;
 
     float sparkInk = 0.0;
     radialDaggerSparks(
       r, ang, 12.0, 22.6, 0.20, ease * 0.56,
-      0.068 * (1.0 - t * 0.48), 0.014, 1.0, 1.0 - t * 0.76,
+      0.068 * (1.0 - t * 0.48), 0.014, 1.0, (1.0 - t * 0.76) * alive,
       sparks, sparkInk
     );
     vein = max(vein, sparkInk);
@@ -1614,21 +1625,21 @@ const FRAG_ARCHETYPE_TACTICAL_CLASS_SRC = SHADER_COMMON_HEADER + `
     float manaStar = (exp(-abs(mp.y) * 44.0) * smoothstep(-0.18, 0.02, mp.x) * invSmooth(0.96, 0.04, mp.x)
                     + exp(-abs(mp.x - 0.06) * 42.0) * invSmooth(0.58, 0.02, abs(mp.y))) * starEnv;
 
-    float arcR = 0.16 + ease * 0.48;
-    float inFront = invSmooth(1.35, 0.35, abs(ang));
-    float wisp = invSmooth(0.055 * (1.0 - t * 0.35), 0.0, abs(r - arcR)) * inFront;
-    float wNoise = warpedFbm(mp * 6.0 - vec2(ease * 4.0, 0.0), t * 3.6);
-    float erode = smoothstep(max(0.0, (t - 0.30) * 1.25), max(0.02, (t - 0.30) * 1.25 + 0.20), wNoise * 0.68 + wisp * 0.52);
+    float arcR = 0.16 + ease * 0.42;
+    float inFront = invSmooth(1.25, 0.32, abs(ang));
+    float wisp = invSmooth(0.050 * (1.0 - t * 0.35), 0.0, abs(r - arcR)) * inFront;
+    float wNoise = warpedFbm(mp * 4.2 - vec2(ease * 2.8, 0.0), t * 2.6);
+    float erode = 1.0 - smoothstep(0.58, 1.0, t) * (0.70 - 0.30 * wisp);
 
     float alive = 1.0 - pow(max(0.0, t), 2.1);
-    energy = clamp((wisp * erode * (0.68 + 0.48 * wNoise) + manaStar * 0.92), 0.0, 1.15) * alive;
-    vein = clamp(invSmooth(0.044, 0.008, abs(r - (arcR - 0.036))) * inFront * erode * (1.0 - manaStar) * 0.85 * alive, 0.0, 1.0);
-    edge = (manaStar * 1.45 + invSmooth(0.015, 0.0, abs(r - arcR)) * inFront * erode * 1.20) * (1.0 - pow(max(0.0, t), 1.6));
+    energy = clamp((wisp * erode * (0.76 + 0.34 * wNoise) + manaStar * 0.94), 0.0, 1.15) * alive;
+    vein = clamp(invSmooth(0.040, 0.008, abs(r - (arcR - 0.032))) * inFront * erode * (1.0 - manaStar) * 0.72 * alive, 0.0, 1.0);
+    edge = (manaStar * 1.48 + invSmooth(0.015, 0.0, abs(r - arcR)) * inFront * erode * 1.22) * (1.0 - pow(max(0.0, t), 1.6)) * alive;
 
     float sparkInk = 0.0;
     radialDaggerSparks(
       r, ang, 12.0, 23.4, 0.14, ease * 0.54,
-      0.075 * (1.0 - t * 0.48), 0.014, step(abs(ang), 1.05), 1.0 - t * 0.78,
+      0.075 * (1.0 - t * 0.48), 0.014, step(abs(ang), 1.05), (1.0 - t * 0.78) * alive,
       sparks, sparkInk
     );
     vein = max(vein, sparkInk);
@@ -1959,6 +1970,61 @@ export function bakeShaderVfxFlipbooks(scene: Phaser.Scene, bakeScale = 4): void
           const col = f % SHADER_ATLAS_COLS;
           const row = Math.floor(f / SHADER_ATLAS_COLS);
           canvasTex.add(f, 0, col * framePx, row * framePx, framePx, framePx);
+        }
+        // Phaser 3's Texture.get(0) treats numeric 0 as falsy (`if (!name) name = this.firstFrame`),
+        // falling back to '__BASE'. Crop '__BASE' to frame 0 (framePx x framePx) so frame 0 never
+        // renders the entire 7x2 14-frame sprite sheet!
+        interface RawBaseFrame {
+          cutX?: number;
+          cutY?: number;
+          cutWidth?: number;
+          cutHeight?: number;
+          width?: number;
+          height?: number;
+          halfWidth?: number;
+          halfHeight?: number;
+          centerX?: number;
+          centerY?: number;
+          realWidth?: number;
+          realHeight?: number;
+          data?: {
+            sourceSize?: { w: number; h: number };
+            spriteSourceSize?: { w: number; h: number };
+          };
+          setSize?: (width: number, height: number, x?: number, y?: number) => unknown;
+          updateUVs?: () => void;
+        }
+        const rawTex = canvasTex as unknown as {
+          frames?: Record<string, RawBaseFrame>;
+          get?: (name?: string | number) => RawBaseFrame;
+        };
+        const baseFrame = rawTex.frames?.['__BASE'] ?? rawTex.get?.('__BASE');
+        if (baseFrame) {
+          if (typeof baseFrame.setSize === 'function') {
+            baseFrame.setSize(framePx, framePx, 0, 0);
+          } else {
+            baseFrame.cutX = 0;
+            baseFrame.cutY = 0;
+            baseFrame.cutWidth = framePx;
+            baseFrame.cutHeight = framePx;
+            baseFrame.width = framePx;
+            baseFrame.height = framePx;
+            baseFrame.halfWidth = Math.floor(framePx * 0.5);
+            baseFrame.halfHeight = Math.floor(framePx * 0.5);
+            baseFrame.centerX = Math.floor(framePx * 0.5);
+            baseFrame.centerY = Math.floor(framePx * 0.5);
+            baseFrame.realWidth = framePx;
+            baseFrame.realHeight = framePx;
+            if (baseFrame.data?.sourceSize) {
+              baseFrame.data.sourceSize.w = framePx;
+              baseFrame.data.sourceSize.h = framePx;
+            }
+            if (baseFrame.data?.spriteSourceSize) {
+              baseFrame.data.spriteSourceSize.w = framePx;
+              baseFrame.data.spriteSourceSize.h = framePx;
+            }
+            baseFrame.updateUVs?.();
+          }
         }
       }
     }

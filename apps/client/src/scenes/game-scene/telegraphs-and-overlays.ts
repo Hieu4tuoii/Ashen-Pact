@@ -44,6 +44,53 @@ import { drawFootMicroReloadBar } from './hud-micro-reload-bar.js';
 import { drawWorldWeaponSalvageRing } from './hud-pact-and-forge-modals.js';
 import { drawP11DramaWorldOverlays } from './p11-drama-hud.js';
 
+const projRawXScratch: number[] = [];
+const projRawYScratch: number[] = [];
+
+export function withInterpolatedProjectilesAndPlayer<T>(
+  scene: GameScene,
+  sim: ReturnType<GameScene['transport']['getSim']>,
+  playerX: number,
+  playerY: number,
+  fn: () => T,
+): T {
+  const getInterpProj = scene.transport?.getInterpolatedProjectilePos;
+  const p = sim.player;
+  const rawPx = p.x;
+  const rawPy = p.y;
+  const projs = sim.projectiles;
+  const count = projs.length;
+  const canInterpProj = typeof getInterpProj === 'function' && count > 0;
+  if (canInterpProj) {
+    const scratch = scene.entityPosScratch ?? { x: 0, y: 0 };
+    for (let i = 0; i < count; i++) {
+      const b = projs[i]!;
+      projRawXScratch[i] = b.x;
+      projRawYScratch[i] = b.y;
+      const ip = getInterpProj.call(scene.transport, b, scratch);
+      b.x = ip.x;
+      b.y = ip.y;
+    }
+  }
+  p.x = playerX;
+  p.y = playerY;
+  try {
+    return fn();
+  } finally {
+    p.x = rawPx;
+    p.y = rawPy;
+    if (canInterpProj) {
+      for (let i = 0; i < count; i++) {
+        const b = projs[i];
+        if (b) {
+          b.x = projRawXScratch[i]!;
+          b.y = projRawYScratch[i]!;
+        }
+      }
+    }
+  }
+}
+
 export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, playerY: number): void {
   const sim = this.transport.getSim();
   const p = sim.player;
@@ -72,7 +119,9 @@ export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, 
   // 0a. Hub Campfire & Statue Pedestals (Doanh Trại)
   if (!isStress) {
     drawWorldWeaponSalvageRing(floorG, sim, p, overlayTimeSec);
-    drawP2BWorldOverlays(this, g, sim, playerX, playerY);
+    withInterpolatedProjectilesAndPlayer(this, sim, playerX, playerY, () => {
+      drawP2BWorldOverlays(this, g, sim, playerX, playerY);
+    });
   }
   if (sim.inHub) {
     for (let i = 0; i < sim.hubStatues.length; i++) {
@@ -584,9 +633,11 @@ export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, 
   }
 
   // 2b. Phase 3A (P3A.1) 0.35s Predictive Sightline Telegraph (#FF5722 outer + #FFF7ED bright core + muzzle diamond reticle)
-  drawP3APredictiveSightlinesAndOverlays(this, g, sim);
-  drawP4ATetherAndProjectileOverlays(this, g, sim);
-  renderP4BDuoAndSecretArenaOverlays(this);
+  withInterpolatedProjectilesAndPlayer(this, sim, playerX, playerY, () => {
+    drawP3APredictiveSightlinesAndOverlays(this, g, sim);
+    drawP4ATetherAndProjectileOverlays(this, g, sim);
+    renderP4BDuoAndSecretArenaOverlays(this);
+  });
 
   // 3. Boss Kill Dramatic Flash Overlay (0.28s additive-feeling golden-white world flash)
   if (this.fx.bossKillFlashTimer > 0) {
@@ -611,18 +662,20 @@ export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, 
   if (!isStress) {
     const isSoloPaused =
       (this.pauseModalOpen || (this.settingsModal?.isOpen() ?? false)) && this.coopMode === 'solo';
-    syncBatch1WeaponRoomEntities(this, sim);
-    const v2Flash = updateAndDrawWeaponV2Overlays(
-      this,
-      g,
-      this.fx,
-      p,
-      sim.magneticRivets ?? [],
-      isSoloPaused ? 0 : 1 / 60,
-      overlayTimeSec,
-      i18n.getLocale(),
-      floorG,
-    );
+    const v2Flash = withInterpolatedProjectilesAndPlayer(this, sim, playerX, playerY, () => {
+      syncBatch1WeaponRoomEntities(this, sim);
+      return updateAndDrawWeaponV2Overlays(
+        this,
+        g,
+        this.fx,
+        p,
+        sim.magneticRivets ?? [],
+        isSoloPaused ? 0 : 1 / 60,
+        overlayTimeSec,
+        i18n.getLocale(),
+        floorG,
+      );
+    });
     drawFootMicroReloadBar(
       g,
       playerX,

@@ -1097,17 +1097,21 @@ export function spawnMuzzleFlashAndCasingImpl(
 
   const burst = this.acquireParticleSlot();
   if (burst) {
-    const shScale = computeShaderDirectionalScale(profile.reachPx, profile.muzzleKey, bakeScale);
+    const shScale = computeShaderDirectionalScale(
+      profile.reachPx * 0.72,
+      profile.muzzleKey,
+      bakeScale,
+    );
     const muzzleFlip = this.totalSparksSpawned % 2 === 0 ? 1 : -1;
     const muzzleJitter = (((this.totalSparksSpawned * 0.618034) % 1) - 0.5) * 0.14;
     activateParticle(burst, {
       textureKey: profile.muzzleKey,
       x: muzzleX,
       y: muzzleY,
-      ttl: profile.ttlSec,
+      ttl: Math.min(profile.ttlSec, 0.085),
       startScale: shScale,
       endScale: shScale,
-      startAlpha: 0.98 * alphaMult,
+      startAlpha: 0.88 * alphaMult,
       rotation: angleRad + muzzleJitter,
       tint: profile.muzzleTint,
       blendMode: 'NORMAL',
@@ -1120,7 +1124,8 @@ export function spawnMuzzleFlashAndCasingImpl(
 
   const moteTint = hexToNum(profile.moteHex);
   const isStreak = profile.moteTexture === 'fx_spark_trail';
-  for (let i = 0; i < 2; i++) {
+  const moteCount = isShotgun ? 2 : 1;
+  for (let i = 0; i < moteCount; i++) {
     const streak = this.acquireParticleSlot();
     if (!streak) break;
     const dir = angleRad + (i === 0 ? -1 : 1) * (0.18 + getClientFreezeRandom()() * 0.22);
@@ -1191,7 +1196,7 @@ export function spawnHitSparksImpl(
   const alphaMult = options.isTeammate
     ? clamp(graphicsSettings.getState().teammateFxOpacity, 0.25, 1.0)
     : 1.0;
-  const rawCount = options.count ?? (options.isCrit ? 8 : 5);
+  const rawCount = options.count ?? (options.isCrit ? 5 : 3);
   const count = Math.max(1, Math.round(rawCount * budgetRatio));
   this.totalSparksSpawned += count;
 
@@ -1222,7 +1227,7 @@ export function spawnHitSparksImpl(
   const shImpact = this.acquireParticleSlot();
   if (shImpact) {
     const shScale = computeShaderDirectionalScale(
-      options.isCrit ? 30 : 21,
+      options.isCrit ? 20 : 14,
       'fx_sh_hit_spark',
       bakeScale,
     );
@@ -1232,10 +1237,10 @@ export function spawnHitSparksImpl(
       textureKey: 'fx_sh_hit_spark',
       x,
       y,
-      ttl: options.isCrit ? 0.19 : 0.14,
+      ttl: options.isCrit ? 0.13 : 0.1,
       startScale: shScale,
       endScale: shScale,
-      startAlpha: 0.96 * alphaMult,
+      startAlpha: 0.86 * alphaMult,
       rotation: spallAngle + sparkJitter,
       tint: shaderTint,
       blendMode: 'NORMAL',
@@ -1259,8 +1264,8 @@ export function spawnHitSparksImpl(
       vx: Math.cos(dir) * spd,
       vy: Math.sin(dir) * spd,
       vr: isTrail ? 0 : (getClientFreezeRandom()() - 0.5) * 12,
-      ttl: 0.15 + getClientFreezeRandom()() * 0.1,
-      startScale: invBake * (options.isCrit ? 1.08 : 0.85),
+      ttl: 0.14 + getClientFreezeRandom()() * 0.08,
+      startScale: invBake * (options.isCrit ? 0.96 : 0.78),
       endScale: invBake * 0.16,
       startAlpha: alphaMult,
       damping: 8.5,
@@ -1285,7 +1290,7 @@ export function spawnElementalReactionFxImpl(
 ): void {
   const invBake = 1 / TextureBaker.getBakeScale();
   const spec = resolveElementalReactionBurstSpec(params.reaction, params.isTeamCombo);
-  this.spawnFloorDecal(spec.decalKind, params.x, params.y, params.isTeamCombo ? 1.25 : 1.0);
+  this.spawnFloorDecal(spec.decalKind, params.x, params.y, params.isTeamCombo ? 0.85 : 0.68);
 
   // Primary Chiaroscuro 1:1 Hollow-Core Elemental Nova (6 distinct morphologies across 6 reactions!)
   const novaKey = REACTION_NOVA_KEY[params.reaction] ?? 'fx_sh_nova_solar';
@@ -1317,8 +1322,8 @@ export function spawnElementalReactionFxImpl(
   }
 
   const count = Math.max(
-    6,
-    Math.round(spec.particleCount * graphicsSettings.getBudget().particleBudgetRatio),
+    4,
+    Math.round(spec.particleCount * 0.65 * graphicsSettings.getBudget().particleBudgetRatio),
   );
   const primaryTint = hexToNum(spec.primaryColorHex);
   const secondaryTint = hexToNum(spec.secondaryColorHex);
@@ -1331,7 +1336,7 @@ export function spawnElementalReactionFxImpl(
       params.reaction === 'shatter' && i % 2 === 0
         ? 'fx_ice_shard'
         : params.reaction === 'vaporize' && i % 2 === 1
-          ? 'fx_ember_mote'
+           ? 'fx_ember_mote'
           : spec.particleTextures[i % spec.particleTextures.length]!;
     const isTrail = texKey === 'fx_spark_trail';
     activateParticle(p, {
@@ -1341,10 +1346,10 @@ export function spawnElementalReactionFxImpl(
       vx: Math.cos(ang) * spd,
       vy: Math.sin(ang) * spd - (params.reaction === 'vaporize' ? 28 : 0),
       vr: isTrail ? 0 : (getClientFreezeRandom()() - 0.5) * 10,
-      ttl: 0.25 + (i % 3) * 0.04,
-      startScale: invBake * (params.isTeamCombo ? 1.12 : 0.96),
+      ttl: 0.24 + (i % 3) * 0.04,
+      startScale: invBake * (params.isTeamCombo ? 1.04 : 0.88),
       endScale: invBake * 0.18,
-      startAlpha: 0.92,
+      startAlpha: 0.9,
       gravityY: params.reaction === 'shatter' ? 110 : params.reaction === 'vaporize' ? -35 : 0,
       damping: 6,
       rotation: ang,
@@ -1408,13 +1413,13 @@ export function spawnExplosionBurstImpl(
       : novaKey === 'fx_sh_nova_venom'
         ? 'splatter'
         : 'scorch';
-  this.spawnFloorDecal(decalKind, x, y, clamp(radius / 64, 0.8, 1.45));
+  this.spawnFloorDecal(decalKind, x, y, clamp(radius / 96, 0.55, 0.95));
 
   // True 1:1 hitbox-matched Chiaroscuro Hollow-Core Detonation + radial spark needles (zero muddy dust blobs!)
   spawnShaderNovaImpl.call(this, x, y, radius, novaKey, {
     ttl: clamp(0.28 + radius * 0.0008, 0.28, 0.4),
     depth: 56,
-    sparkCount: 8,
+    sparkCount: 5,
     sparkHex: colorHex,
   });
 }

@@ -307,7 +307,7 @@ export function resolveHybridFloorVariant(tx: number, ty: number, distToWall: nu
   if (distToWall === 2) {
     return 3;
   }
-  const clusterWave = (Math.floor(tx / 3) * 3 + Math.floor(ty / 3) * 5 + ((tx + ty) & 1)) & 3;
+  const clusterWave = (Math.floor(tx / 3) * 3 + Math.floor(ty / 3) * 5) & 3;
   return 4 + clusterWave;
 }
 

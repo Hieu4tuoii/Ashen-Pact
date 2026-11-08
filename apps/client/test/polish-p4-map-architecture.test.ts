@@ -1,7 +1,14 @@
-import { ArenaMap } from '@ashen-pact/shared';
+import {
+  ArenaMap,
+  WALL_AO_NORTH,
+  WALL_AO_NORTH_WEST,
+  WALL_AO_WEST,
+} from '@ashen-pact/shared';
+import type Phaser from 'phaser';
 import { describe, expect, it } from 'vitest';
 import { srgbToCieL } from '../../../tools/visual-metrics.js';
 import { ENV_PALETTE, getBiomeTheme, PALETTE } from '../src/art/palette.js';
+import { bakeWallAoOverlay } from '../src/art/texture-baker-tiles.js';
 import {
   buildRoomArchitecturePlan,
   computeTileDistToWall,
@@ -274,5 +281,89 @@ describe('Phase P4 — Hybrid Map Architecture, ENV_PALETTE & Biome 1 Golden Roo
     expect(b3Plan.budget.largeDecorCount).toBeLessThanOrEqual(8);
     expect(b3Plan.budget.emptyPerimeterRatio).toBeGreaterThanOrEqual(0.4);
     expect(b3Plan.budget.centerArenaSolidDecorCount).toBe(0);
+  });
+
+  it('keeps Center Arena (distToWall > 2) floor variants uniform within each 3x3 cluster without 1x1 checkerboard oscillation', () => {
+    const seenClusterVariants = new Set<number>();
+    for (let cy = 1; cy <= 5; cy++) {
+      for (let cx = 1; cx <= 9; cx++) {
+        const expected = resolveHybridFloorVariant(cx * 3, cy * 3, 6);
+        expect(expected).toBeGreaterThanOrEqual(4);
+        expect(expected).toBeLessThanOrEqual(7);
+        seenClusterVariants.add(expected);
+        for (let dy = 0; dy < 3; dy++) {
+          for (let dx = 0; dx < 3; dx++) {
+            expect(resolveHybridFloorVariant(cx * 3 + dx, cy * 3 + dy, 6)).toBe(expected);
+          }
+        }
+      }
+    }
+    expect(seenClusterVariants.size).toBe(4);
+  });
+
+  it('bakes 14x14 diagonal SE corner AO shadow only on outer NW corner masks (hasNW && !hasN && !hasW) across all 256 aoMask values', () => {
+    const prevDoc = (globalThis as { document?: unknown }).document;
+    let gradNCount = 0;
+    let gradWCount = 0;
+    let gradSECornerCount = 0;
+
+    try {
+      for (let aoMask = 0; aoMask < 256; aoMask++) {
+        const gradients: Array<[number, number, number, number]> = [];
+        const mockCtx = {
+          save: () => {},
+          restore: () => {},
+          scale: () => {},
+          createLinearGradient: (x0: number, y0: number, x1: number, y1: number) => {
+            gradients.push([x0, y0, x1, y1]);
+            return { addColorStop: () => {} };
+          },
+          fillRect: () => {},
+          beginPath: () => {},
+          moveTo: () => {},
+          lineTo: () => {},
+          closePath: () => {},
+          fill: () => {},
+          fillStyle: '',
+        };
+        (globalThis as { document?: unknown }).document = {
+          createElement: () => ({
+            width: 0,
+            height: 0,
+            getContext: () => mockCtx,
+          }),
+        };
+        const mockScene = {
+          textures: {
+            exists: () => false,
+            remove: () => {},
+            addCanvas: () => {},
+          },
+        } as unknown as Phaser.Scene;
+
+        bakeWallAoOverlay(mockScene, aoMask, 1);
+
+        const hasN = (aoMask & WALL_AO_NORTH) !== 0;
+        const hasW = (aoMask & WALL_AO_WEST) !== 0;
+        const hasNW = (aoMask & WALL_AO_NORTH_WEST) !== 0;
+        const drewN = gradients.some((g) => g[2] === 0 && g[3] === 7);
+        const drewW = gradients.some((g) => g[2] === 7 && g[3] === 0);
+        const drewSE = gradients.some((g) => g[2] === 14 && g[3] === 14);
+
+        expect(drewN).toBe(hasN);
+        expect(drewW).toBe(hasW);
+        expect(drewSE).toBe(hasNW && !hasN && !hasW);
+
+        if (drewN) gradNCount += 1;
+        if (drewW) gradWCount += 1;
+        if (drewSE) gradSECornerCount += 1;
+      }
+    } finally {
+      (globalThis as { document?: unknown }).document = prevDoc;
+    }
+
+    expect(gradNCount).toBe(128);
+    expect(gradWCount).toBe(128);
+    expect(gradSECornerCount).toBe(32);
   });
 });

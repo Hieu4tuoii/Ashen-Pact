@@ -93,13 +93,34 @@ function createMockPhaserSceneForBaker(customWebglContext?: unknown) {
         registered.delete(key);
       },
       addCanvas: (key: string, canvas: { width: number; height: number }) => {
-        const rec: RegisteredStripRecord = {
+        const baseFrame = {
+          cutX: 0,
+          cutY: 0,
+          cutWidth: canvas.width,
+          cutHeight: canvas.height,
+          width: canvas.width,
+          height: canvas.height,
+          halfWidth: Math.floor(canvas.width * 0.5),
+          halfHeight: Math.floor(canvas.height * 0.5),
+          centerX: Math.floor(canvas.width * 0.5),
+          centerY: Math.floor(canvas.height * 0.5),
+          realWidth: canvas.width,
+          realHeight: canvas.height,
+          data: {
+            sourceSize: { w: canvas.width, h: canvas.height },
+            spriteSourceSize: { w: canvas.width, h: canvas.height },
+          },
+          updateUVs: vi.fn(),
+        };
+        const rec: RegisteredStripRecord & { baseFrame?: typeof baseFrame } = {
           width: canvas.width,
           height: canvas.height,
           frames: [],
+          baseFrame,
         };
         registered.set(key, rec);
         return {
+          frames: { __BASE: baseFrame },
           add: (name: number, sourceIndex: number, x: number, y: number, w: number, h: number) => {
             rec.frames.push({ name, sourceIndex, x, y, w, h });
           },
@@ -220,6 +241,38 @@ describe('1:1 Top-Down Chiaroscuro Shader Sprite-Sheet Baker', () => {
           h: expectedFramePx,
         });
       }
+
+      const baseFrame = (rec as unknown as {
+        baseFrame?: {
+          cutX: number;
+          cutY: number;
+          cutWidth: number;
+          cutHeight: number;
+          width: number;
+          height: number;
+          realWidth: number;
+          realHeight: number;
+          data: {
+            sourceSize: { w: number; h: number };
+            spriteSourceSize: { w: number; h: number };
+          };
+          updateUVs: ReturnType<typeof vi.fn>;
+        };
+      }).baseFrame;
+      expect(baseFrame).toBeDefined();
+      expect(baseFrame!.cutX).toBe(0);
+      expect(baseFrame!.cutY).toBe(0);
+      expect(baseFrame!.cutWidth).toBe(expectedFramePx);
+      expect(baseFrame!.cutHeight).toBe(expectedFramePx);
+      expect(baseFrame!.width).toBe(expectedFramePx);
+      expect(baseFrame!.height).toBe(expectedFramePx);
+      expect(baseFrame!.realWidth).toBe(expectedFramePx);
+      expect(baseFrame!.realHeight).toBe(expectedFramePx);
+      expect(baseFrame!.data.sourceSize.w).toBe(expectedFramePx);
+      expect(baseFrame!.data.sourceSize.h).toBe(expectedFramePx);
+      expect(baseFrame!.data.spriteSourceSize.w).toBe(expectedFramePx);
+      expect(baseFrame!.data.spriteSourceSize.h).toBe(expectedFramePx);
+      expect(baseFrame!.updateUVs).toHaveBeenCalledTimes(1);
     }
   });
 

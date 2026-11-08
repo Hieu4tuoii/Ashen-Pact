@@ -423,8 +423,8 @@ export function update(this: CombatFxManager, dtSec: number, camView?: Phaser.Ge
 
     // Shader flipbooks dissolve organically via FBM noise threshold; keep alpha crisp until tail release
     const nextAlpha = p.preserveFlipbookAlpha
-      ? progress > 0.88
-        ? p.startAlpha * (1 - (progress - 0.88) / 0.12)
+      ? progress > 0.55
+        ? p.startAlpha * (1 - (progress - 0.55) / 0.45)
         : p.startAlpha
       : p.startAlpha * (1 - progress);
     p.sprite.setAlpha(nextAlpha);
@@ -450,23 +450,61 @@ export function update(this: CombatFxManager, dtSec: number, camView?: Phaser.Ge
     a.sprite.setAlpha(a.startAlpha * (1 - a.age / a.ttl));
   }
 
-  // 3. Enforce decal budget dynamically & update clear biome ambient + torch dust motes
+  // 3. Enforce decal budget dynamically, deduplicate overlapping floor decals & fade out over 6s
   const budget = graphicsSettings.getBudget();
   const maxDecals = budget.maxDecals;
-  if (this.activeDecalCount > maxDecals) {
-    let count = 0;
-    for (let i = 0; i < this.decalPool.length; i++) {
-      const d = this.decalPool[i]!;
-      if (!d.active) continue;
-      if (i >= maxDecals) {
-        d.active = false;
-        d.sprite.setVisible(false);
-      } else {
-        count += 1;
-      }
+  let activeDecalsCounted = 0;
+  for (let i = 0; i < this.decalPool.length; i++) {
+    const d = this.decalPool[i]! as PooledDecal & { age?: number; ttl?: number };
+    if (!d.active) continue;
+    if (i >= maxDecals) {
+      d.active = false;
+      d.sprite.setVisible(false);
+      continue;
     }
-    this.activeDecalCount = count;
+    const spr = d.sprite as unknown as {
+      x?: number;
+      y?: number;
+      alpha?: number;
+      setAlpha?: (a: number) => void;
+      setVisible: (v: boolean) => void;
+    };
+    if ((spr.alpha ?? 0) > 0.45) {
+      d.age = 0;
+      d.ttl = 6.0;
+      spr.setAlpha?.(0.42);
+      const dx0 = spr.x ?? 0;
+      const dy0 = spr.y ?? 0;
+      for (let j = 0; j < this.decalPool.length; j++) {
+        if (j === i) continue;
+        const other = this.decalPool[j]!;
+        if (!other.active) continue;
+        const ospr = other.sprite as unknown as { x?: number; y?: number; alpha?: number };
+        if ((ospr.alpha ?? 0) > 0.45 && j > i) continue;
+        const ox = (ospr.x ?? 0) - dx0;
+        const oy = (ospr.y ?? 0) - dy0;
+        if (ox * ox + oy * oy <= 24 * 24) {
+          other.active = false;
+          other.sprite.setVisible(false);
+          if (j < i) {
+            activeDecalsCounted = Math.max(0, activeDecalsCounted - 1);
+          }
+        }
+      }
+    } else {
+      d.age = (d.age ?? 0) + dtSec;
+      const ttl = d.ttl ?? 6.0;
+      if (d.age >= ttl) {
+        d.active = false;
+        spr.setVisible(false);
+        continue;
+      }
+      const fade = 0.42 * (1 - Math.pow(d.age / ttl, 1.8));
+      spr.setAlpha?.(fade);
+    }
+    activeDecalsCounted += 1;
   }
+  this.activeDecalCount = activeDecalsCounted;
 
   const isBlizzard = this.currentBiome === 2 && this.isBlizzardIntense();
   const allowedAmbient = Math.min(
