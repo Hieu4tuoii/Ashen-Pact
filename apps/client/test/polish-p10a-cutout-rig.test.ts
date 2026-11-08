@@ -452,4 +452,49 @@ describe('Phase P10a — Cutout 2.0 Parametric Animation & Spring Math Engine', 
     expect(shouldEmitFootstepDust(0.16, 0.20, true, 'welder_drone', false)).toBe(false);
     expect(shouldEmitFootstepDust(0.16, 0.20, true, false, true)).toBe(false);
   });
+
+  it('12. sweeps sword cleave arc monotonically from windup to follow-through and glides lunge offset smoothly to zero', async () => {
+    const mathMod = await import('../src/art/cutout-rig-math.js');
+    const computeArc = (
+      mathMod as unknown as {
+        computeMeleeSwingArcOffset?: (progress01: number, swingDir: number) => number;
+      }
+    ).computeMeleeSwingArcOffset;
+    expect(typeof computeArc).toBe('function');
+
+    // During active cleave (progress 0 -> 0.35 -> 0.65), angle sweeps monotonically from negative windup to positive follow-through
+    const aStart = computeArc!(0.0, 1);
+    const aMid = computeArc!(0.35, 1);
+    const aPeak = computeArc!(0.65, 1);
+    const aEnd = computeArc!(1.0, 1);
+    expect(aStart).toBeLessThan(-0.5);
+    expect(aMid).toBeGreaterThan(aStart);
+    expect(aPeak).toBeGreaterThan(0.8);
+    expect(aPeak).toBeGreaterThan(aMid);
+    expect(Math.abs(aEnd)).toBeLessThan(0.05);
+
+    const stepLunge = (
+      mathMod as unknown as {
+        stepMeleeLungeGlideOffset?: (
+          offsetX: number,
+          offsetY: number,
+          dtSec: number,
+        ) => { x: number; y: number };
+      }
+    ).stepMeleeLungeGlideOffset;
+    expect(typeof stepLunge).toBe('function');
+
+    let off = { x: -24, y: 0 };
+    const samples: number[] = [off.x];
+    for (let f = 0; f < 10; f++) {
+      off = stepLunge!(off.x, off.y, 1 / 60);
+      samples.push(off.x);
+    }
+    // Smoothly increases from -24 toward 0 over multiple frames (never jumps all 24px in 1 frame)
+    expect(samples[1]!).toBeGreaterThan(-24);
+    expect(samples[1]!).toBeLessThan(-12);
+    expect(samples[5]!).toBeGreaterThan(samples[1]!);
+    expect(samples[10]!).toBeGreaterThan(-4.5);
+  });
 });
+

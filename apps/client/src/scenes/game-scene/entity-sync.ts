@@ -188,6 +188,10 @@ export function syncSimulatedPlayersImpl(this: GameScene, dtSec: number): void {
       }
 
       const pos = this.transport.getInterpolatedSimPlayerPos(cp, this.entityPosScratch);
+      entry.rig.stepLungeOffset(dtSec);
+      const lungeOff = entry.rig.getLungeOffset();
+      pos.x += lungeOff.x;
+      pos.y += lungeOff.y;
 
       const prevAnimTime = entry.rig.getAnimTime();
       entry.rig.setRigDef(charRigDef);

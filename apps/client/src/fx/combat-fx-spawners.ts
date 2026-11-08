@@ -728,6 +728,9 @@ export interface ShaderSlashSpawnOptions {
   flipY?: boolean;
   tint?: number | null;
   depth?: number;
+  vx?: number;
+  vy?: number;
+  damping?: number;
 }
 
 export function spawnShaderSlashImpl(
@@ -751,6 +754,9 @@ export function spawnShaderSlashImpl(
     textureKey: slashKey,
     x,
     y,
+    vx: options.vx ?? 0,
+    vy: options.vy ?? 0,
+    damping: options.damping ?? 0,
     ttl: options.ttl ?? 0.2,
     startScale: scale,
     endScale: scale,

@@ -709,6 +709,12 @@ export class GameScene extends Phaser.Scene {
     // 5. Render Interpolated Player & CutoutRig Animation + Dash Afterimage Ghosts
     const playerPos = this.transport.getInterpolatedPlayerPos(this.playerPosScratch);
     if (this.playerRig) {
+      if (!isSoloPaused) {
+        this.playerRig.stepLungeOffset(dtSec);
+      }
+      const lungeOff = this.playerRig.getLungeOffset();
+      playerPos.x += lungeOff.x;
+      playerPos.y += lungeOff.y;
       const prevAnimTime = this.playerRig.getAnimTime();
       const charRigDef = RIG_DEFS_BY_ID[sim.player.characterId] ?? VANGUARD_RIG_DEF;
       this.playerRig.setRigDef(charRigDef);

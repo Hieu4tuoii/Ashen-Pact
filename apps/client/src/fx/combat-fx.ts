@@ -729,7 +729,13 @@ export class CombatFxManager {
     isTeammate = false,
     rangeOrOptions:
       | number
-      | { weaponId?: string; comboStep?: number; rangePx?: number } = 68,
+      | {
+          weaponId?: string;
+          comboStep?: number;
+          rangePx?: number;
+          lungeDx?: number;
+          lungeDy?: number;
+        } = 68,
     slashKeyArg: ShaderSlashKey = 'fx_sh_slash_steel',
   ): void {
     const opts = typeof rangeOrOptions === 'object' ? rangeOrOptions : undefined;
@@ -737,6 +743,14 @@ export class CombatFxManager {
       typeof rangeOrOptions === 'number' ? rangeOrOptions : (opts?.rangePx ?? 68);
     const comboStep = opts?.comboStep;
     const weaponId = opts?.weaponId;
+    const lungeDx = opts?.lungeDx ?? 0;
+    const lungeDy = opts?.lungeDy ?? 0;
+    const hasLunge = Math.hypot(lungeDx, lungeDy) > 0.5;
+    const startX = hasLunge ? x - lungeDx : x;
+    const startY = hasLunge ? y - lungeDy : y;
+    const glideVx = hasLunge ? lungeDx * 18 : 0;
+    const glideVy = hasLunge ? lungeDy * 18 : 0;
+    const glideDamping = hasLunge ? 18 : 0;
     const resolvedKey: ShaderSlashKey =
       weaponId === 'emerald_cleaver'
         ? 'fx_sh_slash_emerald'
@@ -753,19 +767,22 @@ export class CombatFxManager {
       this.slashFlipToggle = !this.slashFlipToggle;
       flipY = !this.slashFlipToggle;
     }
-    this.spawnShaderSlash(x, y, rangePx, angleRad, resolvedKey, {
+    this.spawnShaderSlash(startX, startY, rangePx, angleRad, resolvedKey, {
       ttl: comboStep === 2 ? 0.23 : 0.19,
       isTeammate,
       flipY,
       depth: 52,
+      vx: glideVx,
+      vy: glideVy,
+      damping: glideDamping,
     });
 
     // 3rd-hit combo finishers (comboStep === 2) emit bespoke weapon-signature flourishes
     if (comboStep === 2) {
       if (weaponId === 'emerald_cleaver') {
         this.spawnShaderSlash(
-          x,
-          y,
+          startX,
+          startY,
           rangePx * 0.94,
           angleRad + (flipY ? -0.26 : 0.26),
           'fx_sh_slash_emerald',
@@ -774,6 +791,9 @@ export class CombatFxManager {
             isTeammate,
             flipY: !flipY,
             depth: 53,
+            vx: glideVx,
+            vy: glideVy,
+            damping: glideDamping,
           },
         );
       } else if (weaponId === 'berserker_axe') {

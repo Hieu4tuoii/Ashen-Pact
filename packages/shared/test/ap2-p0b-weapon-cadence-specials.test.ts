@@ -912,5 +912,57 @@ describe('AP2 P0B.4 — Active Weapon Cadence (CLIP_RELOAD, HEAT_VENT, MELEE_COM
         expect(boostedVolley.bounceCount).toBe(3); // 2 base + 1 bonus bounce!
       }
     });
+
+    it('emits lungeDx/lungeDy on melee_swing, shifts prevX/prevY for continuous glide interpolation, and does not freeze regular combo hits with 35ms hit_stop', () => {
+      const sim = createCleanSim(4109);
+      const p = sim.player;
+      p.weaponSlots = ['knight_sword'];
+      sim.equipWeaponSlot(0);
+      p.x = 300;
+      p.y = 260;
+      p.prevX = 300;
+      p.prevY = 260;
+      p.vx = 0;
+      p.vy = 0;
+      p.aimAngle = 0;
+      p.critChance = -1; // 0% crit
+      p.meleeComboStep = 0;
+
+      const boar = sim.spawnEnemy('wild_boar', 350, 260, true);
+      boar.hp = 500;
+      boar.maxHp = 500;
+
+      sim.consumeEvents();
+      p.fireCooldownTimer = 0;
+      sim.tryFireActiveWeapon(p);
+
+      const evs1 = sim.consumeEvents();
+      const swing1 = evs1.find((e) => e.kind === 'melee_swing');
+      expect(swing1).toBeDefined();
+      if (swing1?.kind === 'melee_swing') {
+        expect(swing1.lungeDx).toBeCloseTo(24, 2);
+        expect(swing1.lungeDy).toBeCloseTo(0, 2);
+      }
+      // prevX shifted by lungeDx so tick interpolation doesn't snap 24px before client lunge glide
+      expect(p.prevX).toBeCloseTo(324, 2);
+      // Regular Hit 1 (non-crit, non-finisher) does NOT emit a 35ms simulation-freezing hit_stop
+      expect(evs1.some((e) => e.kind === 'hit_stop')).toBe(false);
+
+      // Hit 3 Finisher DOES emit a crisp micro hit_stop (<= 20ms) on enemy hit
+      p.meleeComboStep = 2;
+      p.fireCooldownTimer = 0;
+      boar.x = 340;
+      boar.y = 260;
+      sim.consumeEvents();
+      sim.tryFireActiveWeapon(p);
+      const evs3 = sim.consumeEvents();
+      const hitStop3 = evs3.find((e) => e.kind === 'hit_stop');
+      expect(hitStop3).toBeDefined();
+      if (hitStop3?.kind === 'hit_stop') {
+        expect(hitStop3.durationMs).toBeGreaterThan(0);
+        expect(hitStop3.durationMs).toBeLessThanOrEqual(20);
+      }
+    });
   });
 });
+

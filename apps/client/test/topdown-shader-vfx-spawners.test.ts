@@ -549,4 +549,31 @@ describe('1:1 Top-Down Chiaroscuro Flipbook Playback & Core Combat Spawners', ()
     expect(mgr.decalPool[1]!.active).toBe(false);
     expect(s2.visible).toBe(false);
   });
+
+  it('glides melee slash flipbook smoothly from pre-lunge to post-lunge position when lungeDx/lungeDy are provided', () => {
+    const mgr = createHeadlessFxManager(8);
+    mgr.spawnMeleeSlash(324, 260, 0, false, {
+      weaponId: 'knight_sword',
+      comboStep: 0,
+      rangePx: 68,
+      lungeDx: 24,
+      lungeDy: 0,
+    });
+    const slashSlot = mgr.particlePool.find(
+      (p) => p.active && p.textureKey === 'fx_sh_slash_steel',
+    )!;
+    expect(slashSlot).toBeDefined();
+    // Starts at pre-lunge x = 324 - 24 = 300 with forward damped glide velocity
+    expect(slashSlot.x).toBeCloseTo(300, 2);
+    expect(slashSlot.vx).toBeGreaterThan(300);
+    expect(slashSlot.damping).toBeGreaterThanOrEqual(15);
+
+    // Step 4 frames -> slash glides smoothly toward 324
+    for (let i = 0; i < 4; i++) {
+      update.call(mgr, 1 / 60);
+    }
+    expect(slashSlot.x).toBeGreaterThan(310);
+    expect(slashSlot.x).toBeLessThan(324);
+  });
 });
+

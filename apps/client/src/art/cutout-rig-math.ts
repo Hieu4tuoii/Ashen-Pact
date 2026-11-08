@@ -488,18 +488,21 @@ export function evaluateRigPose(params: EvaluateRigPoseParams): RigPoseSnapshot 
     addPartOffset(parts.armRight, -swing * 0.9 + cosAim * 1.1 + recoilX * 0.72, sinAim * 0.9 + recoilY * 0.72, localAim * 0.82 - swing * 0.1 + meleeSwingOffsetRad * 0.78 + recoilSpring.angleKick * 0.65);
   } else if (animState === 'attack') {
     const pulse = Math.sin(animTime * 16) * 0.5 + 0.5;
-    const thrustDist = 3.6 + pulse * 1.2;
-    bodyY += -0.8;
-    bodyScaleX *= 1.05;
-    bodyScaleY *= 0.96;
-    addPartOffset(parts.torso, 1.4, 0, 0.21 + pulse * 0.05 + moveLeanRad);
-    addPartOffset(parts.head, 1.6 + headAim.offsetX, headAim.offsetY, 0.09 + headAim.rotation);
-    addPartOffset(parts.legLeft, -1.8, 0, 0.28);
-    addPartOffset(parts.legRight, 2.0, 0, -0.26);
-    addPartOffset(parts.armLeft, -2.2, 0.6, -0.42);
-    addPartOffset(parts.backAccessory, -2.0 + backSpring.offsetX, backSpring.offsetY, -0.28 + backSpring.angle);
+    const stridePhase = animTime * ((Math.PI * 2) / 0.36) * arch.cadenceMult;
+    const stride = Math.sin(stridePhase);
+    const thrustDist = 4.2 + pulse * 1.4;
+    bodyY += -1.1 - Math.abs(stride) * 1.2;
+    bodyScaleX *= 1.08;
+    bodyScaleY *= 0.94;
+    shadowScale = 0.94;
+    addPartOffset(parts.torso, 1.8, 0, 0.22 + pulse * 0.05 + moveLeanRad);
+    addPartOffset(parts.head, 1.8 + headAim.offsetX, headAim.offsetY, 0.1 + headAim.rotation);
+    addPartOffset(parts.legLeft, -1.8 - stride * 1.4, -Math.max(0, stride) * 1.1, 0.28 + stride * 0.26);
+    addPartOffset(parts.legRight, 2.0 + stride * 1.4, -Math.max(0, -stride) * 1.1, -0.26 - stride * 0.26);
+    addPartOffset(parts.armLeft, -2.2 + stride * 0.6, 0.6, -0.42 - stride * 0.14);
+    addPartOffset(parts.backAccessory, -2.2 + backSpring.offsetX, backSpring.offsetY, -0.3 + backSpring.angle);
     addPartOffset(parts.weapon, cosAim * thrustDist + recoilX, sinAim * thrustDist + recoilY, weaponAimRot + 0.08);
-    addPartOffset(parts.armRight, cosAim * (thrustDist * 0.78) + recoilX * 0.75, sinAim * (thrustDist * 0.78) + recoilY * 0.75, localAim * 0.92 + meleeSwingOffsetRad * 0.85 + 0.1);
+    addPartOffset(parts.armRight, cosAim * (thrustDist * 0.8) + recoilX * 0.75, sinAim * (thrustDist * 0.8) + recoilY * 0.75, localAim * 0.92 + meleeSwingOffsetRad * 0.85 + 0.1);
   } else if (animState === 'hurt') {
     const shudder = Math.sin(animTime * 34) * 0.6;
     bodyY += -0.6;
@@ -571,3 +574,39 @@ export function evaluateRigPose(params: EvaluateRigPoseParams): RigPoseSnapshot 
 
   return { bodyY, bodyScaleX, bodyScaleY, bodyRotation, shadowScale, eyeBlinkScaleY, parts };
 }
+
+/**
+ * Computes a smooth, monotonic sword cleave arc from windup (-0.95 rad) through follow-through (+1.15 rad)
+ * during the active slash (progress 0..0.65), then eases back to neutral (0.65..1.0).
+ */
+export function computeMeleeSwingArcOffset(progress01: number, swingDir: number): number {
+  const p = clamp(progress01, 0, 1);
+  const dir = swingDir >= 0 ? 1 : -1;
+  if (p <= 0.65) {
+    const t = p / 0.65;
+    const ease = 1 - Math.pow(1 - t, 3);
+    return dir * (-0.95 + 2.1 * ease);
+  }
+  const u = (p - 0.65) / 0.35;
+  const smooth = u * u * (3 - 2 * u);
+  return dir * 1.15 * (1 - smooth);
+}
+
+/**
+ * Exponentially glides a world-space melee lunge offset toward (0, 0) so 1-tick simulation lunges
+ * render as a smooth multi-frame forward dash/glide instead of a 1-frame teleport.
+ */
+export function stepMeleeLungeGlideOffset(
+  offsetX: number,
+  offsetY: number,
+  dtSec: number,
+): { x: number; y: number } {
+  const decay = Math.exp(-18 * Math.max(0, dtSec));
+  const nextX = offsetX * decay;
+  const nextY = offsetY * decay;
+  return {
+    x: Math.abs(nextX) < 0.08 ? 0 : nextX,
+    y: Math.abs(nextY) < 0.08 ? 0 : nextY,
+  };
+}
+

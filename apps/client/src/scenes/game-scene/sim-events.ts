@@ -150,12 +150,24 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
       }
       case 'melee_swing': {
         const isTeammate = ev.playerId !== sim.player.id;
+        const lungeDx = ev.lungeDx ?? 0;
+        const lungeDy = ev.lungeDy ?? 0;
+        const lungeDist = Math.hypot(lungeDx, lungeDy);
         if (!isTeammate) {
-          this.playerRig?.triggerMeleeSwing();
+          this.playerRig?.triggerMeleeSwing(lungeDx, lungeDy);
           this.crosshairPulse = 0.6;
+          if (!isStress && lungeDist >= 8 && this.playerRig) {
+            this.fx.spawnDashAfterimage?.(
+              ev.x - lungeDx,
+              ev.y - lungeDy + RIG_FOOT_OFFSET_Y,
+              this.playerRig.getFacingSign(),
+              sim.player.slot,
+              false,
+            );
+          }
         } else {
-          this.coopPlayerRigs.get(ev.playerId)?.rig.triggerMeleeSwing();
-          this.simPlayerRigs.get(ev.playerId)?.triggerMeleeSwing();
+          this.coopPlayerRigs.get(ev.playerId)?.rig.triggerMeleeSwing(lungeDx, lungeDy);
+          this.simPlayerRigs.get(ev.playerId)?.triggerMeleeSwing(lungeDx, lungeDy);
         }
         const swinger = sim.getAllPlayers
           ? (sim.getAllPlayers().find((pl) => pl.id === ev.playerId) ?? sim.player)
@@ -167,6 +179,8 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
           weaponId: ev.weaponId,
           comboStep: executedComboStep,
           rangePx: ev.range,
+          lungeDx,
+          lungeDy,
         });
         this.lighting.spawnTransientLight(ev.x, ev.y, 92, PALETTE.CYAN_FROST, 0.65, 0.12);
         const swingSfx = resolveWeaponShootSfx(ev.weaponId);

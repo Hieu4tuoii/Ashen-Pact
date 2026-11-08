@@ -620,6 +620,8 @@ export function tryFireActiveWeaponImpl(
     }
 
     const finisherHitEnemyIds = new Set<number>();
+    const preLungeX = p.x;
+    const preLungeY = p.y;
     if (comboStep === 0 || comboStep === 1) {
       applyMeleeLunge(this, p, MELEE_LUNGE_DISTANCE);
       p.meleeComboStep = (comboStep + 1) as 0 | 1 | 2;
@@ -641,9 +643,13 @@ export function tryFireActiveWeaponImpl(
         }
       }
     }
+    const lungeDx = p.x - preLungeX;
+    const lungeDy = p.y - preLungeY;
+    p.prevX += lungeDx;
+    p.prevY += lungeDy;
 
     const hitAny = resolveMeleeConeHitsAndSynergies(
-      this, p, w, arcRad, halfArc, meleeRange, baseMeleeDmg, stepKnockback, critChance, shotElement, shotFlags, bulletsDestroyed, finisherHitEnemyIds, wasBlackCrystalEmpowered,
+      this, p, w, arcRad, halfArc, meleeRange, baseMeleeDmg, stepKnockback, critChance, shotElement, shotFlags, bulletsDestroyed, finisherHitEnemyIds, wasBlackCrystalEmpowered, lungeDx, lungeDy,
     );
     if (comboStep === 2) {
       applyElementalInfusionOnMeleeFinisher(

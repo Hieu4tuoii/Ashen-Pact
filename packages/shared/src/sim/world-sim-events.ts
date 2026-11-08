@@ -28,6 +28,8 @@ export type SimEvent =
       arcRad: number;
       range: number;
       bulletsDestroyed: number;
+      lungeDx?: number;
+      lungeDy?: number;
     }
   | {
       kind: 'damage_dealt';

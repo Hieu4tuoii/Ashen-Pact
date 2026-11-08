@@ -669,6 +669,8 @@ export function resolveMeleeConeHitsAndSynergies(
   bulletsDestroyed: number,
   alreadyHitEnemyIds?: Set<number>,
   bypassFrontShield = false,
+  lungeDx = 0,
+  lungeDy = 0,
 ): boolean {
   tryTriggerCoopArcRelayForMelee(sim, p, meleeRange);
   triggerMeleeKickProps(sim, p, halfArc, meleeRange + 6, p.aimAngle);
@@ -816,13 +818,16 @@ export function resolveMeleeConeHitsAndSynergies(
     arcRad,
     range: isVanguardSwordWave ? 200 : meleeRange,
     bulletsDestroyed,
+    lungeDx,
+    lungeDy,
   });
 
-  if (hitAny) {
+  const isFinisher = (p.meleeComboStep ?? 0) === 0;
+  if (hitAny && (isFinisher || anyCrit)) {
     sim.events.push({
       kind: 'hit_stop',
-      durationMs: anyCrit ? 50 : 35,
-      trauma: anyCrit ? 0.36 : 0.24,
+      durationMs: anyCrit ? 18 : 14,
+      trauma: anyCrit ? 0.16 : 0.1,
     });
   }
   return hitAny;

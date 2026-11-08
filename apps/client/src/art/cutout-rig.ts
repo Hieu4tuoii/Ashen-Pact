@@ -3,6 +3,7 @@ import {
   type BackAccessorySpringState,
   blendRigPoseSnapshots,
   computeEnemyArchetypeMotion,
+  computeMeleeSwingArcOffset,
   createBackAccessorySpringState,
   createStateCrossfadeController,
   createWeaponRecoilSpringState,
@@ -11,6 +12,7 @@ import {
   type RigPoseSnapshot,
   type StateCrossfadeController,
   stepBackAccessorySpring,
+  stepMeleeLungeGlideOffset,
   stepStateCrossfade,
   stepTorsoMoveLean,
   stepWeaponRecoilSpring,
@@ -87,6 +89,8 @@ export class CutoutRig {
   private recoilStrength = 4;
   private meleeSwingTimer = 0;
   private meleeSwingDir = 1;
+  private lungeOffsetX = 0;
+  private lungeOffsetY = 0;
   private hitFlashTimer = 0;
   private castPoseTimer = 0;
   private reviveProgress = 0;
@@ -232,9 +236,27 @@ export class CutoutRig {
     this.recoilSpring = triggerWeaponRecoilImpulse(this.recoilSpring, strength);
   }
 
-  public triggerMeleeSwing(): void {
-    this.meleeSwingTimer = 0.18;
+  public triggerMeleeSwing(lungeDx = 0, lungeDy = 0): void {
+    this.meleeSwingTimer = 0.2;
     this.meleeSwingDir = -this.meleeSwingDir;
+    if (Math.hypot(lungeDx, lungeDy) > 0.5) {
+      this.lungeOffsetX = Math.max(-110, Math.min(110, this.lungeOffsetX - lungeDx));
+      this.lungeOffsetY = Math.max(-110, Math.min(110, this.lungeOffsetY - lungeDy));
+    } else {
+      this.lungeOffsetX = Math.max(-48, Math.min(48, this.lungeOffsetX - Math.cos(this.aimAngleRad) * 6));
+      this.lungeOffsetY = Math.max(-48, Math.min(48, this.lungeOffsetY - Math.sin(this.aimAngleRad) * 6));
+    }
+  }
+
+  public stepLungeOffset(dtSec: number): void {
+    if (this.lungeOffsetX === 0 && this.lungeOffsetY === 0) return;
+    const next = stepMeleeLungeGlideOffset(this.lungeOffsetX, this.lungeOffsetY, dtSec);
+    this.lungeOffsetX = next.x;
+    this.lungeOffsetY = next.y;
+  }
+
+  public getLungeOffset(): { x: number; y: number } {
+    return { x: this.lungeOffsetX, y: this.lungeOffsetY };
   }
 
   public triggerHitFlash(durationSec = 0.11): void {
@@ -477,8 +499,8 @@ export class CutoutRig {
 
     let swingAngleOffset = 0;
     if (this.meleeSwingTimer > 0) {
-      const p = 1 - this.meleeSwingTimer / 0.18;
-      swingAngleOffset = this.meleeSwingDir * Math.sin(p * Math.PI) * 1.35;
+      const p = 1 - this.meleeSwingTimer / 0.2;
+      swingAngleOffset = computeMeleeSwingArcOffset(p, this.meleeSwingDir);
     }
 
     const targetPose = evaluateRigPose({
