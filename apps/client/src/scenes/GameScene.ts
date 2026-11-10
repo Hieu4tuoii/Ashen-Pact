@@ -170,7 +170,11 @@ export class GameScene extends Phaser.Scene {
   public propVisuals = new Map<number, PropVisual>();
   public projectileSprites = new Map<
     number,
-    { sprite: Phaser.GameObjects.Sprite; textureKey: string }
+    {
+      sprite: Phaser.GameObjects.Sprite;
+      glowSprite: Phaser.GameObjects.Image;
+      textureKey: string;
+    }
   >();
   public pickupSprites = new Map<
     number,
@@ -182,6 +186,7 @@ export class GameScene extends Phaser.Scene {
   >();
   public projectileSpritePool: {
     sprite: Phaser.GameObjects.Sprite;
+    glowSprite: Phaser.GameObjects.Image;
     textureKey: string;
   }[] = [];
   public pickupSpritePool: {

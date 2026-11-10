@@ -3,6 +3,7 @@ import {
   ELEMENTAL_REACTIONS,
   type ElementalReactionId,
   type ElementType,
+  type EnemyBulletShape,
   i18n,
 } from '@ashen-pact/shared';
 import { easeOutBack, easeOutCubic } from '../art/easing.js';
@@ -98,6 +99,8 @@ export function resolveProjectileRenderSpec(
         isStress?: boolean;
         isTeammate?: boolean;
         teammateFxOpacity?: number;
+        bulletShape?: EnemyBulletShape;
+        radius?: number;
       },
 ): ProjectileRenderSpec {
   const params =
@@ -106,7 +109,23 @@ export function resolveProjectileRenderSpec(
       : paramsOrWeaponId;
 
   if (params.team === 'enemy') {
-    const textureKey = params.isStress ? 'proj_stress_enemy' : 'proj_enemy_orb';
+    let textureKey = 'proj_enemy_orb';
+    if (params.isStress) {
+      textureKey = 'proj_stress_enemy';
+    } else if (params.bulletShape === 'wave') {
+      textureKey = 'proj_enemy_wave';
+    } else if (params.bulletShape === 'lance') {
+      textureKey = 'proj_enemy_lance';
+    } else if (params.bulletShape === 'diamond') {
+      textureKey = 'proj_enemy_diamond';
+    } else if (params.bulletShape === 'heavy_orb') {
+      textureKey = 'proj_enemy_heavy_orb';
+    } else if (params.bulletShape === 'ring_bolt') {
+      textureKey = 'proj_enemy_ring_bolt';
+    }
+    const radiusScale = params.isStress
+      ? 1.0
+      : clamp((params.radius ?? 6.0) / 6.0, 0.85, 1.65);
     return {
       textureKey,
       texture: textureKey,
@@ -114,7 +133,7 @@ export function resolveProjectileRenderSpec(
       blendMode: 'NORMAL',
       depth: 60,
       alpha: 1.0,
-      scale: 1.0,
+      scale: radiusScale,
     };
   }
 

@@ -510,6 +510,8 @@ export function syncProjectilesAndPickupsImpl(this: GameScene): void {
       isStress,
       isTeammate: isTeammateBullet,
       teammateFxOpacity: teammateOpacity,
+      bulletShape: b.bulletShape,
+      radius: b.radius,
     });
     const tex = spec.textureKey;
     const tint = spec.tint;
@@ -524,15 +526,22 @@ export function syncProjectilesAndPickupsImpl(this: GameScene): void {
           entry.sprite.setTexture(tex);
         }
         entry.sprite.setActive(true);
+        entry.glowSprite.setActive(true);
       } else {
         const sprite = this.add.sprite(b.x, b.y, tex);
-        entry = { sprite, textureKey: tex };
+        const glowSprite = this.add.image(b.x, b.y, 'fx_enemy_bullet_glow');
+        glowSprite.setDepth(59);
+        glowSprite.setBlendMode(Phaser.BlendModes.ADD);
+        glowSprite.setVisible(false);
+        entry = { sprite, glowSprite, textureKey: tex };
       }
       entry.sprite.setScale(projScale * (spec.scale ?? 1));
       this.projectileSprites.set(b.id, entry);
     } else if (entry.textureKey !== tex) {
       entry.textureKey = tex;
       entry.sprite.setTexture(tex);
+      entry.sprite.setScale(projScale * (spec.scale ?? 1));
+    } else {
       entry.sprite.setScale(projScale * (spec.scale ?? 1));
     }
 
@@ -557,7 +566,19 @@ export function syncProjectilesAndPickupsImpl(this: GameScene): void {
       }
       entry.sprite.setAlpha(spec.alpha);
       entry.sprite.setPosition(pos.x, pos.y);
-      entry.sprite.setRotation(b.team === 'enemy' ? 0 : b.angle);
+      const directionalEnemyShape =
+        b.bulletShape === 'wave' || b.bulletShape === 'lance' || b.bulletShape === 'diamond';
+      entry.sprite.setRotation(b.team === 'enemy' && !directionalEnemyShape ? 0 : b.angle);
+      if (b.team === 'enemy' && !isStress) {
+        entry.glowSprite.setVisible(true);
+        entry.glowSprite.setPosition(pos.x, pos.y);
+        entry.glowSprite.setScale(projScale * (spec.scale ?? 1) * 1.15);
+        entry.glowSprite.setAlpha(0.62);
+      } else {
+        entry.glowSprite.setVisible(false);
+      }
+    } else {
+      entry.glowSprite.setVisible(false);
     }
   }
 
@@ -565,6 +586,8 @@ export function syncProjectilesAndPickupsImpl(this: GameScene): void {
     if (!this.activeProjIds.has(id)) {
       entry.sprite.setVisible(false);
       entry.sprite.setActive(false);
+      entry.glowSprite.setVisible(false);
+      entry.glowSprite.setActive(false);
       this.projectileSpritePool.push(entry);
       this.projectileSprites.delete(id);
     }

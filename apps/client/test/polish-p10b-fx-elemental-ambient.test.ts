@@ -74,6 +74,32 @@ describe('Phase P10b — Combat FX (BlendMode.ADD), Elemental Combo FX & Clear B
       }
     });
 
+    it('maps enemy bulletShape to vivid multi-shape textures and scales by radius while defaulting to proj_enemy_orb', () => {
+      expect(BAKED_FX_TEXTURE_KEYS).toContain('proj_enemy_wave');
+      expect(BAKED_FX_TEXTURE_KEYS).toContain('proj_enemy_lance');
+      expect(BAKED_FX_TEXTURE_KEYS).toContain('proj_enemy_diamond');
+      expect(BAKED_FX_TEXTURE_KEYS).toContain('proj_enemy_heavy_orb');
+      expect(BAKED_FX_TEXTURE_KEYS).toContain('proj_enemy_ring_bolt');
+      expect(BAKED_FX_TEXTURE_KEYS).toContain('fx_enemy_bullet_glow');
+
+      const waveSpec = resolveProjectileRenderSpec({
+        team: 'enemy',
+        bulletShape: 'wave',
+        radius: 8.4,
+      });
+      expect(waveSpec.textureKey).toBe('proj_enemy_wave');
+      expect(waveSpec.depth).toBe(60);
+      expect(waveSpec.scale).toBeGreaterThan(1.2);
+
+      const lanceSpec = resolveProjectileRenderSpec({
+        team: 'enemy',
+        bulletShape: 'lance',
+        radius: 7.2,
+      });
+      expect(lanceSpec.textureKey).toBe('proj_enemy_lance');
+      expect(lanceSpec.scale).toBeCloseTo(7.2 / 6.0, 2);
+    });
+
     it('assigns blendMode = ADD, depth = 42, and scales alpha by teammateFxOpacity for teammate player projectiles', () => {
       const localSpec = resolveProjectileRenderSpec({
         team: 'player',

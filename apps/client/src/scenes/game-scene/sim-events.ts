@@ -332,8 +332,59 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
         break;
       }
       case 'enemy_telegraph': {
+        if (!isStress) {
+          const boss = sim.enemies.find((e) => e.id === ev.enemyId && e.isBoss);
+          if (boss) {
+            const isEn = i18n.getLocale() === 'en';
+            const pat = boss.bossPatternId ?? 0;
+            let callout: string | undefined;
+            if (boss.defId === 'spore_king') {
+              if (pat === 2) callout = isEn ? '🌀 SPORE SPIRAL!' : '🌀 BÀO TỬ XOÁY!';
+              else if (pat === 4) callout = isEn ? '☠️ SPORE PANDEMIC!' : '☠️ ĐẠI DỊCH BÀO TỬ!';
+            } else if (boss.defId === 'kryssa_ice_queen') {
+              if (pat === 1) callout = isEn ? '❄️ PRISM WALL!' : '❄️ TƯỜNG BĂNG!';
+              else if (pat === 4) callout = isEn ? '🌨️ ETERNAL BLIZZARD!' : '🌨️ BÃO TUYẾT VĨNH CỬU!';
+            } else if (boss.defId === 'forge_titan') {
+              if (pat === 2) callout = isEn ? '🔥 CRUCIBLE SWEEP!' : '🔥 LỬA QUÉT LÒ RÈN!';
+              else if (pat === 4) callout = isEn ? '⚡ CORE OVERLOAD!' : '⚡ LÕI NHIỆT HẠCH QUÁ TẢI!';
+            }
+            if (callout) {
+              this.fx.spawnFloatingAlert(ev.x, ev.y - 34, callout, '#FDE047');
+            }
+          }
+        }
         if (allowStressSfx) {
           zzfx.play('telegraph', ev.x, this.camFocusX, ev.y, this.camFocusY);
+        }
+        break;
+      }
+      case 'bullet_grazed': {
+        if (!isStress) {
+          this.fx.spawnHitSparks(ev.x, ev.y, 0, {
+            isCrit: true,
+            element: 'shock',
+            count: 4,
+          });
+          this.lighting.spawnTransientLight(ev.x, ev.y, 64, PALETTE.CYAN_FROST, 0.72, 0.14);
+          if (ev.playerId === sim.player.id && sim.tick % 3 === 0) {
+            const isEn = i18n.getLocale() === 'en';
+            const inBossFight = sim.enemies.some((e) => e.isBoss && e.hp > 0 && !e.isDummy);
+            this.fx.spawnFloatingAlert(
+              ev.x,
+              ev.y - 18,
+              inBossFight
+                ? isEn
+                  ? '⚡ GRAZE -CD!'
+                  : '⚡ SƯỢT ĐẠN -CD!'
+                : isEn
+                  ? '⚡ GRAZE!'
+                  : '⚡ SƯỢT ĐẠN!',
+              '#67E8F9',
+            );
+          }
+        }
+        if (allowStressSfx) {
+          zzfx.play('bullet_graze', ev.x, this.camFocusX, ev.y, this.camFocusY);
         }
         break;
       }

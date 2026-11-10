@@ -24,6 +24,12 @@ export const BAKED_FX_TEXTURE_KEYS = [
   'proj_player_pellet',
   'proj_knight_sword_wave',
   'proj_enemy_orb',
+  'proj_enemy_wave',
+  'proj_enemy_lance',
+  'proj_enemy_diamond',
+  'proj_enemy_heavy_orb',
+  'proj_enemy_ring_bolt',
+  'fx_enemy_bullet_glow',
   'proj_stress_orb',
   'proj_stress_enemy',
   'proj_stress_player',
@@ -186,11 +192,15 @@ export function bakeProjectilesAndFx(scene: Phaser.Scene, scale: number): void {
     ctx.fill();
   });
 
-  // 3. Enemy Projectile Orb (INVIOLABLE high-contrast concentric bullseye: #E84545 body + 1.5u #141019 outline + centered #FFFDF5 core)
-  bakeCustomCanvas(scene, 'proj_enemy_orb', 24, 24, scale, (ctx) => {
+  // 3. Enemy Projectile Orb (INVIOLABLE high-contrast concentric bullseye: #E84545 body + 1.5u #141019 outline + centered #FFFDF5 core + vivid emissive rim)
+  bakeCustomCanvas(scene, 'proj_enemy_orb', 28, 28, scale, (ctx) => {
+    const halo = ctx.createRadialGradient(0, 0, 2, 0, 0, 12.2);
+    halo.addColorStop(0, 'rgba(255, 85, 115, 0.72)');
+    halo.addColorStop(0.55, 'rgba(232, 69, 69, 0.38)');
+    halo.addColorStop(1, 'rgba(232, 69, 69, 0)');
     ctx.beginPath();
-    ctx.arc(0, 0, 9.4, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(232, 69, 69, 0.36)';
+    ctx.arc(0, 0, 12.2, 0, Math.PI * 2);
+    ctx.fillStyle = halo;
     ctx.fill();
 
     outlined(
@@ -198,27 +208,230 @@ export function bakeProjectilesAndFx(scene: Phaser.Scene, scale: number): void {
       {
         fill: ENEMY_BULLET_VISUAL_SPEC.fill,
         shade: PALETTE.RUBY_CORE,
-        highlight: PALETTE.CRIMSON_BRIGHT,
+        highlight: '#FF758F',
         outlineColor: ENEMY_BULLET_VISUAL_SPEC.outlineColor,
         outlineWidth: ENEMY_BULLET_VISUAL_SPEC.outlineWidth,
       },
       (c) => {
         c.beginPath();
-        c.arc(0, 0, 6.2, 0, Math.PI * 2);
+        c.arc(0, 0, 6.8, 0, Math.PI * 2);
         c.closePath();
       },
-      { cx: 0, cy: 0, rx: 6, ry: 6 },
+      { cx: 0, cy: 0, rx: 6.6, ry: 6.6 },
     );
 
-    // Subtle dark crimson separator ring around the white core for maximum grayscale bullseye contrast
     ctx.beginPath();
-    ctx.arc(0, 0, ENEMY_BULLET_VISUAL_SPEC.coreRadius + 0.9, 0, Math.PI * 2);
+    ctx.arc(0, 0, ENEMY_BULLET_VISUAL_SPEC.coreRadius + 1.1, 0, Math.PI * 2);
     ctx.fillStyle = PALETTE.RUBY_DARK;
     ctx.fill();
 
     ctx.beginPath();
-    ctx.arc(0, 0, ENEMY_BULLET_VISUAL_SPEC.coreRadius, 0, Math.PI * 2);
+    ctx.arc(0, 0, ENEMY_BULLET_VISUAL_SPEC.coreRadius + 0.2, 0, Math.PI * 2);
     ctx.fillStyle = ENEMY_BULLET_VISUAL_SPEC.core;
+    ctx.fill();
+  });
+
+  // 3.1 Enemy Crescent Wave ('proj_enemy_wave')
+  bakeCustomCanvas(scene, 'proj_enemy_wave', 34, 32, scale, (ctx) => {
+    const halo = ctx.createRadialGradient(1, 0, 2, 1, 0, 14.5);
+    halo.addColorStop(0, 'rgba(255, 77, 109, 0.65)');
+    halo.addColorStop(1, 'rgba(232, 69, 69, 0)');
+    ctx.fillStyle = halo;
+    ctx.beginPath();
+    ctx.arc(1, 0, 14.5, 0, Math.PI * 2);
+    ctx.fill();
+
+    outlined(
+      ctx,
+      {
+        fill: ENEMY_BULLET_VISUAL_SPEC.fill,
+        shade: PALETTE.RUBY_CORE,
+        highlight: '#FF758F',
+        outlineColor: ENEMY_BULLET_VISUAL_SPEC.outlineColor,
+        outlineWidth: ENEMY_BULLET_VISUAL_SPEC.outlineWidth,
+      },
+      (c) => {
+        c.beginPath();
+        c.arc(-3.5, 0, 11.8, -Math.PI * 0.44, Math.PI * 0.44, false);
+        c.arc(-7.8, 0, 8.8, Math.PI * 0.37, -Math.PI * 0.37, true);
+        c.closePath();
+      },
+      { cx: 2, cy: 0, rx: 9, ry: 11 },
+    );
+
+    ctx.strokeStyle = ENEMY_BULLET_VISUAL_SPEC.core;
+    ctx.lineWidth = 2.0;
+    ctx.beginPath();
+    ctx.arc(-3.2, 0, 10.6, -Math.PI * 0.34, Math.PI * 0.34, false);
+    ctx.stroke();
+  });
+
+  // 3.2 Enemy Spearhead Lance ('proj_enemy_lance')
+  bakeCustomCanvas(scene, 'proj_enemy_lance', 32, 18, scale, (ctx) => {
+    const halo = ctx.createRadialGradient(1, 0, 1.5, 1, 0, 13);
+    halo.addColorStop(0, 'rgba(255, 92, 122, 0.65)');
+    halo.addColorStop(1, 'rgba(232, 69, 69, 0)');
+    ctx.fillStyle = halo;
+    ctx.fillRect(-14, -8, 28, 16);
+
+    outlined(
+      ctx,
+      {
+        fill: ENEMY_BULLET_VISUAL_SPEC.fill,
+        shade: PALETTE.RUBY_CORE,
+        highlight: '#FF758F',
+        outlineColor: ENEMY_BULLET_VISUAL_SPEC.outlineColor,
+        outlineWidth: ENEMY_BULLET_VISUAL_SPEC.outlineWidth,
+      },
+      (c) =>
+        tracePolygon(c, [
+          { x: -11.0, y: 0 },
+          { x: -4.2, y: -4.8 },
+          { x: 5.2, y: -3.6 },
+          { x: 11.8, y: 0 },
+          { x: 5.2, y: 3.6 },
+          { x: -4.2, y: 4.8 },
+        ]),
+      { cx: 1, cy: 0, rx: 10, ry: 4.8 },
+    );
+
+    ctx.fillStyle = ENEMY_BULLET_VISUAL_SPEC.core;
+    tracePolygon(ctx, [
+      { x: -4.5, y: 0 },
+      { x: 2.5, y: -1.9 },
+      { x: 9.8, y: 0 },
+      { x: 2.5, y: 1.9 },
+    ]);
+    ctx.fill();
+  });
+
+  // 3.3 Enemy Faceted Diamond ('proj_enemy_diamond')
+  bakeCustomCanvas(scene, 'proj_enemy_diamond', 28, 20, scale, (ctx) => {
+    const halo = ctx.createRadialGradient(0, 0, 1.5, 0, 0, 11.5);
+    halo.addColorStop(0, 'rgba(255, 92, 122, 0.65)');
+    halo.addColorStop(1, 'rgba(232, 69, 69, 0)');
+    ctx.fillStyle = halo;
+    ctx.beginPath();
+    ctx.arc(0, 0, 11.5, 0, Math.PI * 2);
+    ctx.fill();
+
+    outlined(
+      ctx,
+      {
+        fill: ENEMY_BULLET_VISUAL_SPEC.fill,
+        shade: PALETTE.RUBY_CORE,
+        highlight: '#FF758F',
+        outlineColor: ENEMY_BULLET_VISUAL_SPEC.outlineColor,
+        outlineWidth: ENEMY_BULLET_VISUAL_SPEC.outlineWidth,
+      },
+      (c) =>
+        tracePolygon(c, [
+          { x: -9.5, y: 0 },
+          { x: 0, y: -6.2 },
+          { x: 9.8, y: 0 },
+          { x: 0, y: 6.2 },
+        ]),
+      { cx: 0, cy: 0, rx: 9, ry: 6 },
+    );
+
+    ctx.fillStyle = ENEMY_BULLET_VISUAL_SPEC.core;
+    tracePolygon(ctx, [
+      { x: -4.4, y: 0 },
+      { x: 0, y: -2.6 },
+      { x: 5.0, y: 0 },
+      { x: 0, y: 2.6 },
+    ]);
+    ctx.fill();
+  });
+
+  // 3.4 Enemy Heavy Core Orb ('proj_enemy_heavy_orb')
+  bakeCustomCanvas(scene, 'proj_enemy_heavy_orb', 32, 32, scale, (ctx) => {
+    const halo = ctx.createRadialGradient(0, 0, 2, 0, 0, 14.5);
+    halo.addColorStop(0, 'rgba(255, 110, 80, 0.78)');
+    halo.addColorStop(0.55, 'rgba(232, 69, 69, 0.42)');
+    halo.addColorStop(1, 'rgba(232, 69, 69, 0)');
+    ctx.beginPath();
+    ctx.arc(0, 0, 14.5, 0, Math.PI * 2);
+    ctx.fillStyle = halo;
+    ctx.fill();
+
+    outlined(
+      ctx,
+      {
+        fill: ENEMY_BULLET_VISUAL_SPEC.fill,
+        shade: PALETTE.RUBY_CORE,
+        highlight: '#FF8FA3',
+        outlineColor: ENEMY_BULLET_VISUAL_SPEC.outlineColor,
+        outlineWidth: 1.8,
+      },
+      (c) => {
+        c.beginPath();
+        c.arc(0, 0, 8.6, 0, Math.PI * 2);
+        c.closePath();
+      },
+      { cx: 0, cy: 0, rx: 8.5, ry: 8.5 },
+    );
+
+    ctx.strokeStyle = '#FFB703';
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.arc(0, 0, 5.6, 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.arc(0, 0, 3.6, 0, Math.PI * 2);
+    ctx.fillStyle = ENEMY_BULLET_VISUAL_SPEC.core;
+    ctx.fill();
+  });
+
+  // 3.5 Enemy Ring Bolt ('proj_enemy_ring_bolt')
+  bakeCustomCanvas(scene, 'proj_enemy_ring_bolt', 28, 28, scale, (ctx) => {
+    const halo = ctx.createRadialGradient(0, 0, 2, 0, 0, 12.5);
+    halo.addColorStop(0, 'rgba(255, 85, 130, 0.68)');
+    halo.addColorStop(1, 'rgba(232, 69, 69, 0)');
+    ctx.beginPath();
+    ctx.arc(0, 0, 12.5, 0, Math.PI * 2);
+    ctx.fillStyle = halo;
+    ctx.fill();
+
+    outlined(
+      ctx,
+      {
+        fill: ENEMY_BULLET_VISUAL_SPEC.fill,
+        shade: PALETTE.RUBY_CORE,
+        highlight: '#FF758F',
+        outlineColor: ENEMY_BULLET_VISUAL_SPEC.outlineColor,
+        outlineWidth: ENEMY_BULLET_VISUAL_SPEC.outlineWidth,
+      },
+      (c) => {
+        c.beginPath();
+        c.arc(0, 0, 7.2, 0, Math.PI * 2);
+        c.closePath();
+      },
+      { cx: 0, cy: 0, rx: 7, ry: 7 },
+    );
+
+    ctx.beginPath();
+    ctx.arc(0, 0, 4.3, 0, Math.PI * 2);
+    ctx.fillStyle = PALETTE.INK_DARK;
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.arc(0, 0, 2.5, 0, Math.PI * 2);
+    ctx.fillStyle = ENEMY_BULLET_VISUAL_SPEC.core;
+    ctx.fill();
+  });
+
+  // 3.6 Soft Additive Emissive Halo for Enemy Bullets ('fx_enemy_bullet_glow')
+  bakeCustomCanvas(scene, 'fx_enemy_bullet_glow', 44, 44, scale, (ctx) => {
+    const grad = ctx.createRadialGradient(0, 0, 1.5, 0, 0, 20);
+    grad.addColorStop(0, 'rgba(255, 240, 245, 0.95)');
+    grad.addColorStop(0.28, 'rgba(255, 68, 102, 0.68)');
+    grad.addColorStop(0.62, 'rgba(232, 69, 69, 0.25)');
+    grad.addColorStop(1, 'rgba(232, 69, 69, 0)');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(0, 0, 20, 0, Math.PI * 2);
     ctx.fill();
   });
 
