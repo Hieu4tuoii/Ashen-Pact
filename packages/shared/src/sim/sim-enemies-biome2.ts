@@ -11,6 +11,10 @@ import {
   tryBabyYetiPushIceBlock,
   updateEnemyPredictiveSightline,
 } from './sim-enemies-tactical-ai.js';
+import {
+  executeKryssaPattern,
+  selectNextBossPattern,
+} from './sim-boss-patterns.js';
 import type { SimPlayerState, SimEnemyState } from './world-sim-types.js';
 import type { WorldSim } from './world-sim.js';
 
@@ -569,7 +573,7 @@ export function updateBossKryssaAIImpl(
   const bossCdScale = this.getEnemyCooldownScale(true);
 
   if (e.aiState === 'telegraph') {
-    if (stepEnemyTelegraphSightline(this, e, targetPlayer, 250, dtSec)) {
+    if (stepEnemyTelegraphSightline(this, e, targetPlayer, 195, dtSec)) {
       this.executeBossKryssaAttack(e, targetPlayer, e.telegraphAngle);
     }
     return;
@@ -587,12 +591,15 @@ export function updateBossKryssaAIImpl(
 
   if (e.attackCooldownTimer <= 0) {
     e.aiState = 'telegraph';
+    if (!e.bossArmorShellActive) {
+      selectNextBossPattern(this, e);
+    }
     e.stateTimer = Math.max(
       0.38,
       (e.bossPhase === 3 ? 0.42 : e.telegraphDurationSec * 0.85) * bossCdScale,
     );
     e.leadSightlineActive = false;
-    e.telegraphAngle = updateEnemyPredictiveSightline(this, e, targetPlayer, 250);
+    e.telegraphAngle = updateEnemyPredictiveSightline(this, e, targetPlayer, 195);
     e.telegraphRadius = 56;
     e.vx = 0;
     e.vy = 0;
@@ -631,79 +638,7 @@ export function executeBossKryssaAttackImpl(
   e.bossAttackCycle += 1;
   const bossCdScale = this.getEnemyCooldownScale(true);
 
-  // 1. Refracting Ice Laser Volley (bounces off crystal pillars & walls!)
-  const beamCount = e.bossPhase === 3 || e.bossArmorShellActive ? 5 : e.bossPhase === 2 ? 4 : 3;
-  this.spawnDeterministicVolley({
-    kind: 'bullet_volley_spawned',
-    tick: this.tick,
-    ownerId: e.id,
-    team: 'enemy',
-    weaponId: 'kryssa_ice_beam',
-    x: e.x,
-    y: e.y,
-    angle: angleToPlayer,
-    pelletCount: beamCount,
-    spreadRad: e.bossArmorShellActive ? 0.1 : cycle % 2 === 0 ? 0.38 : 0.18,
-    muzzleOffset: e.radius + 8,
-    speed: 250,
-    damage: e.damage + (cycle % 3 === 0 ? 1 : 0),
-    radius: 5.5,
-    knockback: 105,
-    pierceCount: 1,
-    bounceCount: 3,
-    ttlSec: 1.25,
-    element: 'chill',
-    critChance: 0,
-    amplifiedByShield: false,
-    seed: this.rng.nextUint32(),
-  });
-
-  // 2. Alternate cycle: Radial Frost Crystal Nova
-  if (cycle % 2 === 1) {
-    const ringCount = e.bossPhase === 3 ? 14 : 10;
-    const ringStep = (Math.PI * 2) / ringCount;
-    const novaParity = Math.floor(cycle / 2) % 2;
-    this.spawnDeterministicVolley({
-      kind: 'bullet_volley_spawned',
-      tick: this.tick,
-      ownerId: e.id,
-      team: 'enemy',
-      weaponId: 'kryssa_frost_nova',
-      x: e.x,
-      y: e.y,
-      angle: angleToPlayer + (novaParity === 1 ? ringStep * 0.5 : 0),
-      pelletCount: ringCount,
-      spreadRad: 0,
-      radialStepRad: ringStep,
-      muzzleOffset: e.radius + 6,
-      speed: 250,
-      damage: e.damage,
-      radius: 5.5,
-      knockback: 90,
-      pierceCount: 0,
-      bounceCount: 1,
-      ttlSec: 1.45,
-      element: 'chill',
-      critChance: 0,
-      amplifiedByShield: false,
-      seed: this.rng.nextUint32(),
-    });
-  }
-
-  // 3. Phase 2+: Refresh Mirror Illusion Clones (no ground shadow!)
-  if (e.bossPhase >= 2 && cycle % 3 === 0) {
-    this.spawnKryssaMirrorClones(e);
-  }
-
-  // 4. Phase 3: Ice Prison Co-op Mechanic (encases 1 player in an Ice Prison block!)
-  if (
-    e.bossPhase === 3 &&
-    cycle % 3 === 1 &&
-    this.getActivePlayerCount() > 1 &&
-    !this.stressTestActive
-  ) {
-    this.encasePlayerInIcePrison(targetPlayer);
-  }
+  executeKryssaPattern(this, e, targetPlayer, angleToPlayer, cycle);
 
   e.aiState = 'cooldown';
   e.stateTimer = (e.bossPhase === 3 ? 0.29 : 0.37) * bossCdScale;

@@ -9,6 +9,10 @@ import {
   stepEnemyTelegraphSightline,
   updateEnemyPredictiveSightline,
 } from './sim-enemies-tactical-ai.js';
+import {
+  executeForgeTitanPattern,
+  selectNextBossPattern,
+} from './sim-boss-patterns.js';
 import type { MvpAwardEntry, SimPlayerState, SimEnemyState } from './world-sim-types.js';
 import type { WorldSim } from './world-sim.js';
 
@@ -455,7 +459,7 @@ export function updateBossForgeTitanAIImpl(
   const bossCdScale = this.getEnemyCooldownScale(true);
 
   if (e.aiState === 'telegraph') {
-    if (stepEnemyTelegraphSightline(this, e, _targetPlayer, 220, dtSec)) {
+    if (stepEnemyTelegraphSightline(this, e, _targetPlayer, 175, dtSec)) {
       this.executeBossForgeTitanAttack(e, e.telegraphAngle);
     }
     return;
@@ -476,12 +480,15 @@ export function updateBossForgeTitanAIImpl(
   );
   if (e.attackCooldownTimer <= 0 && !hasCloseShockwave) {
     e.aiState = 'telegraph';
+    if (!e.bossArmorShellActive) {
+      selectNextBossPattern(this, e);
+    }
     e.stateTimer = Math.max(
       0.38,
       (e.bossPhase === 3 ? 0.46 : e.telegraphDurationSec * 0.85) * bossCdScale,
     );
     e.leadSightlineActive = false;
-    e.telegraphAngle = updateEnemyPredictiveSightline(this, e, _targetPlayer, 220);
+    e.telegraphAngle = updateEnemyPredictiveSightline(this, e, _targetPlayer, 175);
     e.telegraphRadius = 72;
     e.vx = 0;
     e.vy = 0;
@@ -519,90 +526,7 @@ export function executeBossForgeTitanAttackImpl(
   e.bossAttackCycle += 1;
   const bossCdScale = this.getEnemyCooldownScale(true);
 
-  // 1. Hammer Slam Shockwave Ring (players Dash through with i-frames) + Reverse Conveyor Belts!
-  this.map.reverseConveyorDirection();
-  if (cycle % 2 === 0) {
-    this.shockwaveRings.push({
-      id: ++this.nextPuzzleEntityId,
-      sourceEnemyId: e.id,
-      x: e.x,
-      y: e.y,
-      radius: e.radius,
-      maxRadius: 360,
-      speed: e.bossPhase === 3 ? 215 : 205,
-      thickness: 28,
-      damage: e.damage,
-      hitPlayerIds: [],
-    });
-  }
-  this.events.push({
-    kind: 'hit_stop',
-    durationMs: 50,
-    trauma: 0.52,
-  });
-
-  // 2. Magma Barrage Volley
-  if (cycle % 2 === 1 || e.bossPhase === 3) {
-    const barrageCount = e.bossPhase === 3 ? 12 : e.bossPhase === 2 ? 10 : 8;
-    const barrageStep = (Math.PI * 2) / barrageCount;
-    const barrageParity = (e.bossPhase === 3 ? cycle : Math.floor(cycle / 2)) % 2;
-    this.spawnDeterministicVolley({
-      kind: 'bullet_volley_spawned',
-      tick: this.tick,
-      ownerId: e.id,
-      team: 'enemy',
-      weaponId: 'titan_magma_barrage',
-      x: e.x,
-      y: e.y,
-      angle: angleToPlayer + (barrageParity === 1 ? barrageStep * 0.5 : 0),
-      pelletCount: barrageCount,
-      spreadRad: 0,
-      radialStepRad: barrageStep,
-      muzzleOffset: e.radius + 8,
-      speed: 215,
-      damage: e.damage,
-      radius: 6,
-      knockback: 115,
-      pierceCount: 0,
-      bounceCount: 0,
-      ttlSec: 1.55,
-      element: 'burn',
-      critChance: 0,
-      amplifiedByShield: false,
-      seed: this.rng.nextUint32(),
-    });
-  }
-
-  // 3. Phase 3 Overheat: 360-degree Rotating Flame Sweep
-  if (e.bossPhase === 3 && cycle % 2 === 1) {
-    const sweepStep = (Math.PI * 2) / 8;
-    const sweepParity = Math.floor(cycle / 2) % 2;
-    this.spawnDeterministicVolley({
-      kind: 'bullet_volley_spawned',
-      tick: this.tick,
-      ownerId: e.id,
-      team: 'enemy',
-      weaponId: 'titan_flame_sweep',
-      x: e.x,
-      y: e.y,
-      angle: angleToPlayer + (sweepParity === 1 ? sweepStep * 0.5 : 0),
-      pelletCount: 8,
-      spreadRad: 0,
-      radialStepRad: sweepStep,
-      muzzleOffset: e.radius + 10,
-      speed: 225,
-      damage: e.damage,
-      radius: 6,
-      knockback: 110,
-      pierceCount: 0,
-      bounceCount: 0,
-      ttlSec: 1.5,
-      element: 'burn',
-      critChance: 0,
-      amplifiedByShield: false,
-      seed: this.rng.nextUint32(),
-    });
-  }
+  executeForgeTitanPattern(this, e, angleToPlayer, cycle);
 
   e.aiState = 'cooldown';
   e.stateTimer = (e.bossPhase === 3 ? 0.3 : 0.38) * bossCdScale;

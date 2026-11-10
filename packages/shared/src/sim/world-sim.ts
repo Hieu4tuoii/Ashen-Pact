@@ -38,6 +38,7 @@ export * from './sim-duo-boons.js';
 export * from './sim-secret-arena.js';
 export * from './sim-secret-and-workshop.js';
 export * from './sim-boss-armor-break.js';
+export * from './sim-boss-patterns.js';
 export * from './sim-bot-tactical-helpers.js';
 
 export class WorldSim {

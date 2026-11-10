@@ -25,6 +25,7 @@ import {
   stepBossSupplyDropsAndStagger,
   triggerBossPhaseSupplyDrop,
 } from './sim-boss-armor-break.js';
+import { updateBossProjectileStream } from './sim-boss-patterns.js';
 import { resolveEnemyChasmRingOut, triggerEnemyWallSlam } from './sim-tactical-physics.js';
 import { stepPendingMortarStrikes } from './sim-enemies-tactical-ai.js';
 import { updateLegendaryWeaponHazards } from './sim-weapon-specials-p1b-legendary.js';
@@ -467,6 +468,7 @@ export function updateEnemiesImpl(this: WorldSim, dtSec: number): void {
           });
         }
       }
+      updateBossProjectileStream(this, e, dtSec);
     }
 
     // Dramatic 1.2s Boss Phase Transition roar/invulnerability pause

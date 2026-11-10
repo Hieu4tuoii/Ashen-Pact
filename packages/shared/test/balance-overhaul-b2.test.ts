@@ -24,42 +24,42 @@ describe('Phase B2 — Boss Overhaul (HP, True 360° Radial Patterns, Cooldowns,
     const sporeKing = sim.spawnEnemy('spore_king', 540, 320, true);
     const angleToPlayer = Math.atan2(p.y - sporeKing.y, p.x - sporeKing.x);
 
-    // Cycle 0: Spore Ring Nova (12 pellets in Phase 1)
+    // Cycle 0: Spore Ring Nova (16 pellets in Phase 1)
     sim.projectiles.length = 0;
     sporeKing.bossPhase = 1;
     sporeKing.bossBurrowed = false;
     sporeKing.bossAttackCycle = 0;
     sim.executeBossSporeKingAttack(sporeKing, angleToPlayer);
     const ring0 = sim.projectiles.filter((b) => b.weaponId === 'boss_spore_ring');
-    expect(ring0).toHaveLength(12);
-    // Check uniform 360° spacing (2π / 12) and that a bullet aims directly toward player (diff ~ 0)
-    const step12 = (Math.PI * 2) / 12;
+    expect(ring0).toHaveLength(16);
+    // Check uniform 360° spacing (2π / 16) and that a bullet aims directly toward player (diff ~ 0)
+    const step16 = (Math.PI * 2) / 16;
     for (let i = 1; i < ring0.length; i++) {
-      expect(Math.abs(angleDiff(ring0[i]!.angle, ring0[i - 1]!.angle))).toBeCloseTo(step12, 3);
+      expect(Math.abs(angleDiff(ring0[i]!.angle, ring0[i - 1]!.angle))).toBeCloseTo(step16, 3);
     }
     expect(Math.min(...ring0.map((b) => Math.abs(angleDiff(b.angle, angleToPlayer))))).toBeLessThan(
       0.01,
     );
 
-    // Cycle 1: Alternating angle offset shifted by half step (π / 12)
+    // Cycle 1: Alternating angle offset shifted by half step (π / 16)
     sim.projectiles.length = 0;
     sporeKing.bossBurrowed = false;
     sporeKing.bossAttackCycle = 1;
     sim.executeBossSporeKingAttack(sporeKing, angleToPlayer);
     const ring1 = sim.projectiles.filter((b) => b.weaponId === 'boss_spore_ring');
-    expect(ring1).toHaveLength(12);
-    expect(Math.abs(angleDiff(ring1[0]!.angle, ring0[0]!.angle))).toBeCloseTo(step12 * 0.5, 3);
+    expect(ring1).toHaveLength(16);
+    expect(Math.abs(angleDiff(ring1[0]!.angle, ring0[0]!.angle))).toBeCloseTo(step16 * 0.5, 3);
 
-    // Burrow Eruption: 8 radial thorns at (2π / 8)
+    // Burrow Eruption: 12 radial thorns at (2π / 12)
     sim.projectiles.length = 0;
     sporeKing.bossBurrowed = true;
     sporeKing.bossAttackCycle = 0;
     sim.executeBossSporeKingAttack(sporeKing, angleToPlayer);
     const thorns0 = sim.projectiles.filter((b) => b.weaponId === 'thorn_burst');
-    expect(thorns0).toHaveLength(8);
-    const step8 = (Math.PI * 2) / 8;
+    expect(thorns0).toHaveLength(12);
+    const step12 = (Math.PI * 2) / 12;
     for (let i = 1; i < thorns0.length; i++) {
-      expect(Math.abs(angleDiff(thorns0[i]!.angle, thorns0[i - 1]!.angle))).toBeCloseTo(step8, 3);
+      expect(Math.abs(angleDiff(thorns0[i]!.angle, thorns0[i - 1]!.angle))).toBeCloseTo(step12, 3);
     }
 
     // 2. Kryssa Ice Queen — Radial Frost Crystal Nova
@@ -69,20 +69,20 @@ describe('Phase B2 — Boss Overhaul (HP, True 360° Radial Patterns, Cooldowns,
     kryssa.bossAttackCycle = 1; // odd cycle triggers frost nova (parity 0)
     sim.executeBossKryssaAttack(kryssa, p, angleToPlayer);
     const nova0 = sim.projectiles.filter((b) => b.weaponId === 'kryssa_frost_nova');
-    expect(nova0).toHaveLength(10);
-    const step10 = (Math.PI * 2) / 10;
+    expect(nova0).toHaveLength(14);
+    const step14 = (Math.PI * 2) / 14;
     for (let i = 1; i < nova0.length; i++) {
-      expect(Math.abs(angleDiff(nova0[i]!.angle, nova0[i - 1]!.angle))).toBeCloseTo(step10, 3);
+      expect(Math.abs(angleDiff(nova0[i]!.angle, nova0[i - 1]!.angle))).toBeCloseTo(step14, 3);
     }
 
     sim.projectiles.length = 0;
-    kryssa.bossAttackCycle = 3; // next odd cycle alternates angle offset by half step (π / 10)
+    kryssa.bossAttackCycle = 3; // next odd cycle alternates angle offset by half step (π / 14)
     sim.executeBossKryssaAttack(kryssa, p, angleToPlayer);
     const nova1 = sim.projectiles.filter((b) => b.weaponId === 'kryssa_frost_nova');
-    expect(nova1).toHaveLength(10);
-    expect(Math.abs(angleDiff(nova1[0]!.angle, nova0[0]!.angle))).toBeCloseTo(step10 * 0.5, 3);
+    expect(nova1).toHaveLength(14);
+    expect(Math.abs(angleDiff(nova1[0]!.angle, nova0[0]!.angle))).toBeCloseTo(step14 * 0.5, 3);
 
-    // 3. Forge Titan — Magma Barrage & Phase 3 8-pellet Flame Sweep
+    // 3. Forge Titan — Magma Barrage & Phase 3 12-pellet Flame Sweep
     const titan = sim.spawnEnemy('forge_titan', 540, 320, true);
     titan.bossPhase = 3;
     sim.projectiles.length = 0;
@@ -90,24 +90,25 @@ describe('Phase B2 — Boss Overhaul (HP, True 360° Radial Patterns, Cooldowns,
     sim.executeBossForgeTitanAttack(titan, angleToPlayer);
     const barrage0 = sim.projectiles.filter((b) => b.weaponId === 'titan_magma_barrage');
     const sweep0 = sim.projectiles.filter((b) => b.weaponId === 'titan_flame_sweep');
-    expect(barrage0).toHaveLength(12);
-    expect(sweep0).toHaveLength(8);
+    expect(barrage0).toHaveLength(20);
+    expect(sweep0).toHaveLength(12);
+    const step20 = (Math.PI * 2) / 20;
     for (let i = 1; i < barrage0.length; i++) {
       expect(Math.abs(angleDiff(barrage0[i]!.angle, barrage0[i - 1]!.angle))).toBeCloseTo(
-        step12,
+        step20,
         3,
       );
     }
     for (let i = 1; i < sweep0.length; i++) {
-      expect(Math.abs(angleDiff(sweep0[i]!.angle, sweep0[i - 1]!.angle))).toBeCloseTo(step8, 3);
+      expect(Math.abs(angleDiff(sweep0[i]!.angle, sweep0[i - 1]!.angle))).toBeCloseTo(step12, 3);
     }
 
     sim.projectiles.length = 0;
     titan.bossAttackCycle = 3;
     sim.executeBossForgeTitanAttack(titan, angleToPlayer);
     const sweep1 = sim.projectiles.filter((b) => b.weaponId === 'titan_flame_sweep');
-    expect(sweep1).toHaveLength(8);
-    expect(Math.abs(angleDiff(sweep1[0]!.angle, sweep0[0]!.angle))).toBeCloseTo(step8 * 0.5, 3);
+    expect(sweep1).toHaveLength(12);
+    expect(Math.abs(angleDiff(sweep1[0]!.angle, sweep0[0]!.angle))).toBeCloseTo(step12 * 0.5, 3);
   });
 
   it('B2.1c: killing boss adds or forge_energy_core never spawns pickups at (pl.x, pl.y); spawns at (enemy.x, enemy.y) with 25% life_seed chance for adds', () => {

@@ -9,6 +9,10 @@ import {
   checkSporeKingPillarCrash,
 } from './sim-boss-armor-break.js';
 import {
+  executeSporeKingSurfacePattern,
+  selectNextBossPattern,
+} from './sim-boss-patterns.js';
+import {
   GOBLIN_SHOOTER_ARROW_SPEED,
   KICKED_SPORE_EXPLOSION_DAMAGE,
   KICKED_SPORE_EXPLOSION_RADIUS,
@@ -696,7 +700,7 @@ export function updateBossSporeKingAIImpl(
       }
       return;
     }
-    const sporeProjSpeed = e.bossPhase === 3 ? 245 : 215;
+    const sporeProjSpeed = 185;
     if (stepEnemyTelegraphSightline(this, e, targetPlayer, sporeProjSpeed, dtSec)) {
       this.executeBossSporeKingAttack(e, e.telegraphAngle);
     }
@@ -720,6 +724,7 @@ export function updateBossSporeKingAIImpl(
     // In Phase 2 & 3, every 3rd attack cycle burrows underground and targets near player's position!
     if (e.bossPhase >= 2 && e.bossAttackCycle % 3 === 2) {
       e.bossBurrowed = true;
+      e.bossPatternId = undefined;
       e.stateTimer = Math.max(0.61, 0.66 * bossCdScale);
       const offsetX = Math.cos(angleToPlayer + Math.PI) * 95;
       const offsetY = Math.sin(angleToPlayer + Math.PI) * 95;
@@ -776,17 +781,15 @@ export function updateBossSporeKingAIImpl(
       e.telegraphRadius = BOSS_ERUPT_RADIUS;
     } else {
       e.bossBurrowed = false;
+      if (!e.bossArmorShellActive) {
+        selectNextBossPattern(this, e);
+      }
       e.stateTimer = Math.max(
         0.38,
         (e.bossPhase === 3 ? 0.46 : e.telegraphDurationSec * 0.85) * bossCdScale,
       );
       e.leadSightlineActive = false;
-      e.telegraphAngle = updateEnemyPredictiveSightline(
-        this,
-        e,
-        targetPlayer,
-        e.bossPhase === 3 ? 245 : 215,
-      );
+      e.telegraphAngle = updateEnemyPredictiveSightline(this, e, targetPlayer, 185);
       e.telegraphRadius = 60;
     }
 
@@ -848,8 +851,9 @@ export function executeBossSporeKingAttackImpl(
       }
     }
 
-    // Also erupt with 8 radial thorns
-    const thornStep = (Math.PI * 2) / 8;
+    // Erupt with 12 (P2) or 14 (P3) radial thorns with alternating speed rings
+    const thornCount = e.bossPhase === 3 ? 14 : 12;
+    const thornStep = (Math.PI * 2) / thornCount;
     this.spawnDeterministicVolley({
       kind: 'bullet_volley_spawned',
       tick: this.tick,
@@ -859,17 +863,19 @@ export function executeBossSporeKingAttackImpl(
       x: e.x,
       y: e.y,
       angle: angleToPlayer + (cycle % 2 === 1 ? thornStep * 0.5 : 0),
-      pelletCount: 8,
+      pelletCount: thornCount,
       spreadRad: 0,
       radialStepRad: thornStep,
       muzzleOffset: 24,
-      speed: 225,
+      speed: 162,
+      alternateSpeedScale: 0.75,
       damage: e.damage,
-      radius: 5.5,
+      radius: 7.2,
+      bulletShape: 'lance',
       knockback: 110,
       pierceCount: 0,
       bounceCount: 0,
-      ttlSec: 1.85,
+      ttlSec: 2.3,
       element: 'poison',
       critChance: 0,
       amplifiedByShield: false,
@@ -890,73 +896,7 @@ export function executeBossSporeKingAttackImpl(
       trauma: 0.55,
     });
   } else {
-    // Spore Ring Nova + Summon Minions
-    const ringCount = e.bossPhase === 3 ? 16 : e.bossPhase === 2 ? 14 : 12;
-    const ringSpeed = e.bossPhase === 3 ? 235 : 215;
-    const ringStep = (Math.PI * 2) / ringCount;
-    this.spawnDeterministicVolley({
-      kind: 'bullet_volley_spawned',
-      tick: this.tick,
-      ownerId: e.id,
-      team: 'enemy',
-      weaponId: 'boss_spore_ring',
-      x: e.x,
-      y: e.y,
-      angle: angleToPlayer + (cycle % 2 === 1 ? ringStep * 0.5 : 0),
-      pelletCount: ringCount,
-      spreadRad: 0,
-      radialStepRad: ringStep,
-      muzzleOffset: e.radius + 6,
-      speed: ringSpeed,
-      damage: e.damage,
-      radius: 5.5,
-      knockback: 95,
-      pierceCount: 0,
-      bounceCount: 0,
-      ttlSec: 1.85,
-      element: 'poison',
-      critChance: 0,
-      amplifiedByShield: false,
-      seed: this.rng.nextUint32(),
-    });
-
-    // Summon spore minion on alternate cycles if active non-boss count < 2
-    const activeMinions = this.enemies.filter(
-      (m) => !m.isDummy && !m.isBoss && m.defId !== 'spore_guardian' && m.hp > 0,
-    ).length;
-    if (cycle % 2 === 1 && activeMinions < 2) {
-      const minionDef = e.bossPhase >= 2 && cycle % 4 === 3 ? 'spore_bomber' : 'mini_slime';
-      const minionPt = findNearestWalkablePoint(this.map, e.x + 48, e.y + 36, 14, this.props);
-      this.spawnEnemy(minionDef, minionPt.x, minionPt.y, false);
-    }
-
-    // Phase 3 aimed 3-way toxic burst
-    if (e.bossPhase === 3 && cycle % 2 === 0) {
-      this.spawnDeterministicVolley({
-        kind: 'bullet_volley_spawned',
-        tick: this.tick,
-        ownerId: e.id,
-        team: 'enemy',
-        weaponId: 'shaman_staff',
-        x: e.x,
-        y: e.y,
-        angle: angleToPlayer,
-        pelletCount: 3,
-        spreadRad: 0.38,
-        muzzleOffset: 24,
-        speed: 245,
-        damage: e.damage + 1,
-        radius: 6,
-        knockback: 110,
-        pierceCount: 0,
-        bounceCount: 0,
-        ttlSec: 1.8,
-        element: 'poison',
-        critChance: 0,
-        amplifiedByShield: false,
-        seed: this.rng.nextUint32(),
-      });
-    }
+    executeSporeKingSurfacePattern(this, e, angleToPlayer, cycle);
   }
 
   const baseCd = (ENEMIES.spore_king?.attackCooldownSec ?? 1.85) * 0.85;
