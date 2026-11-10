@@ -41,9 +41,14 @@ export const IRON_SHIELDER_ARC_STUN_SEC = 1.4;
 export const IRON_SHIELDER_SELF_STUN_SEC = 1.0;
 export const IRON_SHIELDER_SHIELD_BROKEN_SEC = 3.0;
 
+export const FROST_BAT_SONIC_DART_SPEED = 235;
+export const ICE_MAGE_BOLT_SPEED = 220;
+export const ICE_MAGE_SHATTER_SPEAR_SPEED = 232;
+export const FIRE_IMP_FIREBALL_SPEED = 235;
+
 export const DWARF_MORTAR_RADIUS = 56;
 export const DWARF_MORTAR_FLIGHT_SEC = 0.85;
-export const DWARF_MORTAR_SPEED_REF = 255;
+export const DWARF_MORTAR_SPEED_REF = 215;
 
 export const WELDER_DRONE_EMP_RADIUS = 110;
 export const WELDER_DRONE_EMP_DAMAGE = 35;
@@ -282,7 +287,7 @@ export function fireIceMagePrismShotOrVolley(
     sim.spawnDeterministicVolley({
       kind: 'bullet_volley_spawned', tick: sim.tick, ownerId: e.id, team: 'enemy', weaponId: 'frost_orb',
       x: e.x + Math.cos(angleToPrism) * 16, y: e.y + Math.sin(angleToPrism) * 16, angle: angleToPrism,
-      pelletCount: 1, spreadRad: 0, speed: 280, damage: e.damage, radius: 6, knockback: 85,
+      pelletCount: 1, spreadRad: 0, speed: ICE_MAGE_SHATTER_SPEAR_SPEED, damage: e.damage, radius: 6.6, bulletShape: 'lance', knockback: 85,
       pierceCount: 0, bounceCount: 0, ttlSec: 2.3, element: 'chill', critChance: 0,
       amplifiedByShield: false, seed: sim.rng.nextUint32(),
     });
@@ -293,7 +298,7 @@ export function fireIceMagePrismShotOrVolley(
   sim.spawnDeterministicVolley({
     kind: 'bullet_volley_spawned', tick: sim.tick, ownerId: e.id, team: 'enemy', weaponId: 'frost_orb',
     x: e.x + Math.cos(e.telegraphAngle) * 16, y: e.y + Math.sin(e.telegraphAngle) * 16, angle: e.telegraphAngle,
-    pelletCount: 3, spreadRad: 0.96, speed: 265, damage: e.damage, radius: 6, knockback: 85,
+    pelletCount: 3, spreadRad: 0.96, speed: ICE_MAGE_BOLT_SPEED, damage: e.damage, radius: 6.6, bulletShape: 'diamond', knockback: 85,
     pierceCount: 0, bounceCount: 0, ttlSec: 2.3, element: 'chill', critChance: 0,
     amplifiedByShield: false, seed: sim.rng.nextUint32(),
   });
@@ -328,7 +333,7 @@ export function refractEnemyProjectileThroughCryoPrism(
 
   const targetPl = sim.findNearestAlivePlayer(prism.x, prism.y);
   const centerAngle = Math.atan2(targetPl.y - prism.y, targetPl.x - prism.x);
-  const speed = Math.max(265, Math.hypot(b.vx, b.vy));
+  const speed = Math.max(ICE_MAGE_BOLT_SPEED, Math.hypot(b.vx, b.vy));
   const prevIds = new Set(sim.projectiles.map((p) => p.id));
 
   const savedMod = owner?.eliteModifier ?? null;
@@ -340,7 +345,7 @@ export function refractEnemyProjectileThroughCryoPrism(
     x: prism.x + Math.cos(centerAngle) * (prism.radius + b.radius + 4),
     y: prism.y + Math.sin(centerAngle) * (prism.radius + b.radius + 4),
     angle: centerAngle, pelletCount: 3, spreadRad: ICE_MAGE_PRISM_FAN_SPREAD_RAD,
-    speed, damage: b.damage, critChance: 0, knockback: b.knockback, radius: b.radius,
+    speed, damage: b.damage, critChance: 0, knockback: b.knockback, radius: b.radius, bulletShape: 'diamond',
     ttlSec: 2.2, pierceCount: 0, bounceCount: 0, element: 'chill',
     amplifiedByShield: false, seed: sim.rng.nextUint32(), replacedProjectileId: b.id,
   });

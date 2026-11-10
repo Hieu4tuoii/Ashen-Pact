@@ -71,6 +71,6 @@ export const BIOME_SCALING: Record<1 | 2 | 3, BiomeScalingTier> = {
     projectileSpeedMultiplier: 1.12,
     eliteBonusMultiplier: 1.12,
     eliteDamageBonus: 2,
-    bossHpScale: 2.08,
+    bossHpScale: 2.32,
   },
 };

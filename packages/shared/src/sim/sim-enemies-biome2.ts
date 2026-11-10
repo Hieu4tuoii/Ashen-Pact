@@ -3,6 +3,8 @@ import { angleDiff, circleVsCircle, clamp, distance } from '../math/vec2.js';
 import { COOP_SCALING } from '../data/scaling.js';
 import { findNearestWalkablePoint } from './arena-room-archetypes.js';
 import {
+  FROST_BAT_SONIC_DART_SPEED,
+  ICE_MAGE_BOLT_SPEED,
   findIceMageTargetPrism,
   fireIceMagePrismShotOrVolley,
   resolveEnemyAimTarget,
@@ -28,7 +30,15 @@ export function updateFrostBatAIImpl(
   const cdMult =
     (e.isElite && e.eliteModifier === 'fast' ? 0.72 : 1.0) * this.getEnemyCooldownScale(false);
   if (e.aiState === 'telegraph') {
-    if (stepEnemyTelegraphSightline(this, e, resolveEnemyAimTarget(this, e), 285, dtSec)) {
+    if (
+      stepEnemyTelegraphSightline(
+        this,
+        e,
+        resolveEnemyAimTarget(this, e),
+        FROST_BAT_SONIC_DART_SPEED,
+        dtSec,
+      )
+    ) {
       if (!this.stressTestActive || this.projectiles.length < 660) {
         this.spawnDeterministicVolley({
           kind: 'bullet_volley_spawned',
@@ -41,9 +51,10 @@ export function updateFrostBatAIImpl(
           angle: e.telegraphAngle,
           pelletCount: 2,
           spreadRad: 0.72,
-          speed: 285,
+          speed: FROST_BAT_SONIC_DART_SPEED,
           damage: e.damage,
-          radius: 5,
+          radius: 5.8,
+          bulletShape: 'diamond',
           knockback: 75,
           pierceCount: 0,
           bounceCount: 0,
@@ -71,7 +82,12 @@ export function updateFrostBatAIImpl(
     e.aiState = 'telegraph';
     e.stateTimer = e.telegraphDurationSec;
     e.leadSightlineActive = false;
-    e.telegraphAngle = updateEnemyPredictiveSightline(this, e, resolveEnemyAimTarget(this, e), 285);
+    e.telegraphAngle = updateEnemyPredictiveSightline(
+      this,
+      e,
+      resolveEnemyAimTarget(this, e),
+      FROST_BAT_SONIC_DART_SPEED,
+    );
     e.vx = 0;
     e.vy = 0;
     if (!this.stressTestActive) {
@@ -215,7 +231,7 @@ export function updateIceMageAIImpl(
       }
       return;
     }
-    if (stepEnemyTelegraphSightline(this, e, aimTarget, 265, dtSec)) {
+    if (stepEnemyTelegraphSightline(this, e, aimTarget, ICE_MAGE_BOLT_SPEED, dtSec)) {
       if (!this.stressTestActive) {
         this.map.freezeSurfaceInRadius(e.x, e.y, 44);
       }
@@ -246,7 +262,7 @@ export function updateIceMageAIImpl(
     e.leadSightlineActive = false;
     e.telegraphAngle = nearbyPrism
       ? Math.atan2(nearbyPrism.y - e.y, nearbyPrism.x - e.x)
-      : updateEnemyPredictiveSightline(this, e, aimTarget, 265);
+      : updateEnemyPredictiveSightline(this, e, aimTarget, ICE_MAGE_BOLT_SPEED);
     e.aimAngle = e.telegraphAngle;
     e.telegraphRadius = 40;
     e.vx = 0;
@@ -289,7 +305,7 @@ export function updateIceGolemAIImpl(
   const cdMult =
     (e.isElite && e.eliteModifier === 'fast' ? 0.72 : 1.0) * this.getEnemyCooldownScale(false);
   if (e.aiState === 'telegraph') {
-    if (stepEnemyTelegraphSightline(this, e, resolveEnemyAimTarget(this, e), 250, dtSec)) {
+    if (stepEnemyTelegraphSightline(this, e, resolveEnemyAimTarget(this, e), 208, dtSec)) {
       if (!this.stressTestActive || this.projectiles.length < 660) {
         this.spawnDeterministicVolley({
           kind: 'bullet_volley_spawned',
@@ -302,13 +318,14 @@ export function updateIceGolemAIImpl(
           angle: e.telegraphAngle,
           pelletCount: 5,
           spreadRad: 1.68,
-          speed: 250,
+          speed: 208,
           damage: e.damage,
-          radius: 6.5,
+          radius: 7.2,
+          bulletShape: 'heavy_orb',
           knockback: 130,
           pierceCount: 0,
           bounceCount: 0,
-          ttlSec: 1.9,
+          ttlSec: 2.1,
           element: 'chill',
           critChance: 0,
           amplifiedByShield: false,
@@ -339,7 +356,7 @@ export function updateIceGolemAIImpl(
     e.aiState = 'telegraph';
     e.stateTimer = e.telegraphDurationSec;
     e.leadSightlineActive = false;
-    e.telegraphAngle = updateEnemyPredictiveSightline(this, e, resolveEnemyAimTarget(this, e), 250);
+    e.telegraphAngle = updateEnemyPredictiveSightline(this, e, resolveEnemyAimTarget(this, e), 208);
     e.vx = 0;
     e.vy = 0;
     if (!this.stressTestActive) {
@@ -452,7 +469,7 @@ export function updateKryssaCloneAIImpl(
 ): void {
   const cdScale = this.getEnemyCooldownScale(false);
   if (e.aiState === 'telegraph') {
-    if (stepEnemyTelegraphSightline(this, e, resolveEnemyAimTarget(this, e), 250, dtSec)) {
+    if (stepEnemyTelegraphSightline(this, e, resolveEnemyAimTarget(this, e), 175, dtSec)) {
       if (!this.stressTestActive || this.projectiles.length < 660) {
         this.spawnDeterministicVolley({
           kind: 'bullet_volley_spawned',
@@ -463,15 +480,16 @@ export function updateKryssaCloneAIImpl(
           x: e.x + Math.cos(e.telegraphAngle) * 16,
           y: e.y + Math.sin(e.telegraphAngle) * 16,
           angle: e.telegraphAngle,
-          pelletCount: 3,
-          spreadRad: 0.96,
-          speed: 250,
+          pelletCount: 2,
+          spreadRad: 0.22,
+          speed: 175,
           damage: e.damage,
-          radius: 5.5,
+          radius: 6.5,
+          bulletShape: 'lance',
           knockback: 80,
           pierceCount: 0,
           bounceCount: 0,
-          ttlSec: 1.35,
+          ttlSec: 1.5,
           element: 'chill',
           critChance: 0,
           amplifiedByShield: false,
@@ -498,7 +516,7 @@ export function updateKryssaCloneAIImpl(
     e.aiState = 'telegraph';
     e.stateTimer = e.telegraphDurationSec;
     e.leadSightlineActive = false;
-    e.telegraphAngle = updateEnemyPredictiveSightline(this, e, resolveEnemyAimTarget(this, e), 250);
+    e.telegraphAngle = updateEnemyPredictiveSightline(this, e, resolveEnemyAimTarget(this, e), 175);
     e.vx = 0;
     e.vy = 0;
     return;

@@ -4,6 +4,7 @@ import { COOP_SCALING } from '../data/scaling.js';
 import { TILE_SIZE } from '../protocol/messages.js';
 import { findNearestWalkablePoint } from './arena-room-archetypes.js';
 import {
+  FIRE_IMP_FIREBALL_SPEED,
   fireDwarfCannonLobbedMortar,
   resolveEnemyAimTarget,
   stepEnemyTelegraphSightline,
@@ -26,7 +27,15 @@ export function updateFireImpAIImpl(
   const cdMult =
     (e.isElite && e.eliteModifier === 'fast' ? 0.72 : 1.0) * this.getEnemyCooldownScale(false);
   if (e.aiState === 'telegraph') {
-    if (stepEnemyTelegraphSightline(this, e, resolveEnemyAimTarget(this, e), 290, dtSec)) {
+    if (
+      stepEnemyTelegraphSightline(
+        this,
+        e,
+        resolveEnemyAimTarget(this, e),
+        FIRE_IMP_FIREBALL_SPEED,
+        dtSec,
+      )
+    ) {
       if (!this.stressTestActive || this.projectiles.length < 660) {
         this.spawnDeterministicVolley({
           kind: 'bullet_volley_spawned',
@@ -39,9 +48,10 @@ export function updateFireImpAIImpl(
           angle: e.telegraphAngle,
           pelletCount: 2,
           spreadRad: 0.68,
-          speed: 290,
+          speed: FIRE_IMP_FIREBALL_SPEED,
           damage: e.damage,
-          radius: 5.5,
+          radius: 6.2,
+          bulletShape: 'orb',
           knockback: 80,
           pierceCount: 0,
           bounceCount: 0,
@@ -69,7 +79,12 @@ export function updateFireImpAIImpl(
     e.aiState = 'telegraph';
     e.stateTimer = e.telegraphDurationSec;
     e.leadSightlineActive = false;
-    e.telegraphAngle = updateEnemyPredictiveSightline(this, e, resolveEnemyAimTarget(this, e), 290);
+    e.telegraphAngle = updateEnemyPredictiveSightline(
+      this,
+      e,
+      resolveEnemyAimTarget(this, e),
+      FIRE_IMP_FIREBALL_SPEED,
+    );
     e.vx = 0;
     e.vy = 0;
     if (!this.stressTestActive) {
@@ -104,7 +119,7 @@ export function updateDwarfCannonAIImpl(
     (e.isElite && e.eliteModifier === 'fast' ? 0.72 : 1.0) * this.getEnemyCooldownScale(false);
   const aimTarget = resolveEnemyAimTarget(this, e);
   if (e.aiState === 'telegraph') {
-    if (stepEnemyTelegraphSightline(this, e, aimTarget, 255, dtSec)) {
+    if (stepEnemyTelegraphSightline(this, e, aimTarget, 215, dtSec)) {
       if (this.stressTestActive) {
         if (this.projectiles.length < 660) {
           this.spawnDeterministicVolley({
@@ -118,13 +133,14 @@ export function updateDwarfCannonAIImpl(
             angle: e.telegraphAngle,
             pelletCount: 1,
             spreadRad: 0.08,
-            speed: 255,
+            speed: 215,
             damage: e.damage,
-            radius: 7.5,
+            radius: 7.8,
+            bulletShape: 'heavy_orb',
             knockback: 150,
             pierceCount: 0,
             bounceCount: 0,
-            ttlSec: 1.5,
+            ttlSec: 1.7,
             element: 'burn',
             critChance: 0,
             amplifiedByShield: false,
@@ -154,7 +170,7 @@ export function updateDwarfCannonAIImpl(
     e.aiState = 'telegraph';
     e.stateTimer = e.telegraphDurationSec;
     e.leadSightlineActive = false;
-    e.telegraphAngle = updateEnemyPredictiveSightline(this, e, aimTarget, 255);
+    e.telegraphAngle = updateEnemyPredictiveSightline(this, e, aimTarget, 215);
     e.telegraphRadius = 56;
     e.vx = 0;
     e.vy = 0;
@@ -269,7 +285,7 @@ export function updateWelderDroneAIImpl(
   const cdMult =
     (e.isElite && e.eliteModifier === 'fast' ? 0.72 : 1.0) * this.getEnemyCooldownScale(false);
   if (e.aiState === 'telegraph') {
-    if (stepEnemyTelegraphSightline(this, e, resolveEnemyAimTarget(this, e), 320, dtSec)) {
+    if (stepEnemyTelegraphSightline(this, e, resolveEnemyAimTarget(this, e), 255, dtSec)) {
       // Weld / grant shieldArmor (+10 up to 24) to nearby allies within 200u!
       let weldedCount = 0;
       for (let i = 0; i < this.enemies.length; i++) {
@@ -303,13 +319,14 @@ export function updateWelderDroneAIImpl(
           angle: e.telegraphAngle,
           pelletCount: 1,
           spreadRad: 0,
-          speed: 320,
+          speed: 255,
           damage: e.damage,
-          radius: 5.5,
+          radius: 6.2,
+          bulletShape: 'lance',
           knockback: 75,
           pierceCount: 0,
           bounceCount: 0,
-          ttlSec: 1.9,
+          ttlSec: 2.1,
           element: 'shock',
           critChance: 0,
           amplifiedByShield: false,
@@ -337,7 +354,7 @@ export function updateWelderDroneAIImpl(
     e.aiState = 'telegraph';
     e.stateTimer = e.telegraphDurationSec;
     e.leadSightlineActive = false;
-    e.telegraphAngle = updateEnemyPredictiveSightline(this, e, resolveEnemyAimTarget(this, e), 320);
+    e.telegraphAngle = updateEnemyPredictiveSightline(this, e, resolveEnemyAimTarget(this, e), 255);
     e.vx = 0;
     e.vy = 0;
     return;
@@ -359,7 +376,7 @@ export function updateIronShielderAIImpl(
   const cdMult =
     (e.isElite && e.eliteModifier === 'fast' ? 0.72 : 1.0) * this.getEnemyCooldownScale(false);
   if (e.aiState === 'telegraph') {
-    if (stepEnemyTelegraphSightline(this, e, resolveEnemyAimTarget(this, e), 270, dtSec)) {
+    if (stepEnemyTelegraphSightline(this, e, resolveEnemyAimTarget(this, e), 222, dtSec)) {
       if (!this.stressTestActive || this.projectiles.length < 660) {
         this.spawnDeterministicVolley({
           kind: 'bullet_volley_spawned',
@@ -372,13 +389,14 @@ export function updateIronShielderAIImpl(
           angle: e.telegraphAngle,
           pelletCount: 3,
           spreadRad: 0.96,
-          speed: 270,
+          speed: 222,
           damage: e.damage,
-          radius: 6,
+          radius: 6.6,
+          bulletShape: 'heavy_orb',
           knockback: 115,
           pierceCount: 0,
           bounceCount: 0,
-          ttlSec: 2.1,
+          ttlSec: 2.3,
           element: 'burn',
           critChance: 0,
           amplifiedByShield: false,
@@ -409,7 +427,7 @@ export function updateIronShielderAIImpl(
     e.aiState = 'telegraph';
     e.stateTimer = e.telegraphDurationSec;
     e.leadSightlineActive = false;
-    e.telegraphAngle = updateEnemyPredictiveSightline(this, e, resolveEnemyAimTarget(this, e), 270);
+    e.telegraphAngle = updateEnemyPredictiveSightline(this, e, resolveEnemyAimTarget(this, e), 222);
     e.vx = 0;
     e.vy = 0;
     if (!this.stressTestActive) {
@@ -531,9 +549,16 @@ export function executeBossForgeTitanAttackImpl(
   e.aiState = 'cooldown';
   e.stateTimer = (e.bossPhase === 3 ? 0.3 : 0.38) * bossCdScale;
   const baseCd = (ENEMIES.forge_titan?.attackCooldownSec ?? 1.9) * 0.85;
-  e.attackCooldownTimer =
-    (e.bossPhase === 3 ? baseCd * 0.65 : e.bossPhase === 2 ? baseCd * 0.82 : baseCd) *
-    bossCdScale;
+  const isOverheatedP3 =
+    e.bossPhase === 3 &&
+    e.bossAttackCycle >= 14 &&
+    e.bossAttackCycle <= 18 &&
+    this.getActivePlayerCount() === 1;
+  e.attackCooldownTimer = isOverheatedP3
+    ? baseCd * 0.46 * bossCdScale
+    : ((e.bossPhase === 3 ? baseCd * 0.68 : e.bossPhase === 2 ? baseCd * 0.82 : baseCd) +
+        (e.bossStreamTimer ?? 0) * 0.58) *
+      bossCdScale;
 }
 
 export function computeMvpAwardsImpl(this: WorldSim): MvpAwardEntry[] {

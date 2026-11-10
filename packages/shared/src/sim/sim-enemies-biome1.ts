@@ -454,7 +454,7 @@ export function updateGoblinShamanAIImpl(
   const cdMult =
     (e.isElite && e.eliteModifier === 'fast' ? 0.72 : 1.0) * this.getEnemyCooldownScale(false);
   if (e.aiState === 'telegraph') {
-    if (stepEnemyTelegraphSightline(this, e, resolveEnemyAimTarget(this, e), 245, dtSec)) {
+    if (stepEnemyTelegraphSightline(this, e, resolveEnemyAimTarget(this, e), 205, dtSec)) {
       if (!this.stressTestActive) {
         spawnShamanTotem(this, e);
       }
@@ -484,7 +484,7 @@ export function updateGoblinShamanAIImpl(
       }
 
       // 2. Fire a Poison Bolt toward the player
-      const bulletSpeed = 245;
+      const bulletSpeed = 205;
       const muzzleX = e.x + Math.cos(e.telegraphAngle) * 16;
       const muzzleY = e.y + Math.sin(e.telegraphAngle) * 16;
       this.spawnDeterministicVolley({
@@ -500,11 +500,12 @@ export function updateGoblinShamanAIImpl(
         spreadRad: 0,
         speed: bulletSpeed,
         damage: e.damage,
-        radius: 6,
+        radius: 6.6,
+        bulletShape: 'orb',
         knockback: 80,
         pierceCount: 0,
         bounceCount: 0,
-        ttlSec: 2.3,
+        ttlSec: 2.5,
         element: 'poison',
         critChance: 0,
         amplifiedByShield: false,
@@ -533,7 +534,7 @@ export function updateGoblinShamanAIImpl(
     e.aiState = 'telegraph';
     e.stateTimer = e.telegraphDurationSec;
     e.leadSightlineActive = false;
-    e.telegraphAngle = updateEnemyPredictiveSightline(this, e, resolveEnemyAimTarget(this, e), 245);
+    e.telegraphAngle = updateEnemyPredictiveSightline(this, e, resolveEnemyAimTarget(this, e), 205);
     e.telegraphRadius = 38;
     e.vx = 0;
     e.vy = 0;
@@ -587,7 +588,7 @@ export function updateThornTurretAIImpl(
     e.stateTimer -= dtSec;
     if (e.stateTimer <= 0) {
       // Fire 6 radial thorns in 360 degrees
-      const bulletSpeed = 215;
+      const bulletSpeed = 180;
       this.spawnDeterministicVolley({
         kind: 'bullet_volley_spawned',
         tick: this.tick,
@@ -603,11 +604,12 @@ export function updateThornTurretAIImpl(
         muzzleOffset: 14,
         speed: bulletSpeed,
         damage: e.damage,
-        radius: 5,
+        radius: 6.0,
+        bulletShape: 'ring_bolt',
         knockback: 75,
         pierceCount: 0,
         bounceCount: 0,
-        ttlSec: 2.2,
+        ttlSec: 2.4,
         element: 'none',
         critChance: 0,
         amplifiedByShield: false,
@@ -851,8 +853,8 @@ export function executeBossSporeKingAttackImpl(
       }
     }
 
-    // Erupt with 12 (P2) or 14 (P3) radial thorns with alternating speed rings
-    const thornCount = e.bossPhase === 3 ? 14 : 12;
+    // Erupt with 8 (P2) or 10 (P3) radial thorns with alternating speed rings
+    const thornCount = e.bossPhase === 3 ? 10 : 8;
     const thornStep = (Math.PI * 2) / thornCount;
     this.spawnDeterministicVolley({
       kind: 'bullet_volley_spawned',
@@ -867,15 +869,15 @@ export function executeBossSporeKingAttackImpl(
       spreadRad: 0,
       radialStepRad: thornStep,
       muzzleOffset: 24,
-      speed: 162,
-      alternateSpeedScale: 0.75,
+      speed: 168,
+      alternateSpeedScale: 0.78,
       damage: e.damage,
-      radius: 7.2,
+      radius: 6.8,
       bulletShape: 'lance',
       knockback: 110,
       pierceCount: 0,
       bounceCount: 0,
-      ttlSec: 2.3,
+      ttlSec: 2.1,
       element: 'poison',
       critChance: 0,
       amplifiedByShield: false,
@@ -901,7 +903,8 @@ export function executeBossSporeKingAttackImpl(
 
   const baseCd = (ENEMIES.spore_king?.attackCooldownSec ?? 1.85) * 0.85;
   e.attackCooldownTimer =
-    (e.bossPhase === 3 ? baseCd * 0.65 : e.bossPhase === 2 ? baseCd * 0.82 : baseCd) *
+    ((e.bossPhase === 3 ? baseCd * 0.66 : e.bossPhase === 2 ? baseCd * 0.82 : baseCd) +
+      (e.bossStreamTimer ?? 0) * 0.22) *
     bossCdScale;
   if (e.bossArmorShellActive) {
     e.aiState = 'attack';

@@ -74,8 +74,8 @@ export function updateBossProjectileStream(
 
     if (e.defId === 'spore_king') {
       if (pat === 2) {
-        e.bossStreamTickTimer = 0.12;
-        const arms = e.bossPhase >= 2 ? 4 : 3;
+        e.bossStreamTickTimer = 0.15;
+        const arms = 3;
         const armStep = (Math.PI * 2) / arms;
         const spinSign = step % 4 < 2 ? 1 : -1;
         sim.spawnDeterministicVolley({
@@ -86,25 +86,25 @@ export function updateBossProjectileStream(
           weaponId: 'spore_spiral_stream',
           x: e.x,
           y: e.y,
-          angle: baseAngle + step * 0.28 * e.strafeSign,
+          angle: baseAngle + armStep * 0.5 + step * 0.34 * e.strafeSign,
           pelletCount: arms,
           spreadRad: 0,
           radialStepRad: armStep,
           muzzleOffset: e.radius + 6,
-          speed: 154,
+          speed: 158,
           damage: e.damage,
-          radius: 7.2,
+          radius: 6.8,
           knockback: 85,
           pierceCount: 0,
           bounceCount: 0,
-          ttlSec: 2.1,
+          ttlSec: 2.0,
           element: 'poison',
           critChance: 0,
           amplifiedByShield: false,
           seed: sim.rng.nextUint32(),
           bulletShape: 'orb',
           kinematicMode: 'spiral',
-          angularVelRad: 0.32 * spinSign,
+          angularVelRad: 0.08 * spinSign,
         });
       } else if (pat === 3) {
         e.bossStreamTimer = 0;
@@ -117,16 +117,16 @@ export function updateBossProjectileStream(
           x: e.x,
           y: e.y,
           angle: baseAngle,
-          pelletCount: 5,
-          spreadRad: 0.56,
+          pelletCount: 2,
+          spreadRad: 0.44,
           muzzleOffset: e.radius + 8,
-          speed: 175,
+          speed: 172,
           damage: e.damage,
           radius: 6.8,
           knockback: 95,
           pierceCount: 0,
           bounceCount: 0,
-          ttlSec: 1.9,
+          ttlSec: 1.85,
           element: 'poison',
           critChance: 0,
           amplifiedByShield: false,
@@ -134,7 +134,7 @@ export function updateBossProjectileStream(
           bulletShape: 'diamond',
         });
       } else if (pat === 4) {
-        e.bossStreamTickTimer = 0.14;
+        e.bossStreamTickTimer = 0.16;
         const armStep = Math.PI * 0.5;
         sim.spawnDeterministicVolley({
           kind: 'bullet_volley_spawned',
@@ -144,18 +144,18 @@ export function updateBossProjectileStream(
           weaponId: 'spore_miasma_climax',
           x: e.x,
           y: e.y,
-          angle: baseAngle + step * 0.34,
+          angle: baseAngle + armStep * 0.5 + step * 0.38,
           pelletCount: 4,
           spreadRad: 0,
           radialStepRad: armStep,
           muzzleOffset: e.radius + 8,
           speed: 158,
           damage: e.damage,
-          radius: 7.6,
+          radius: 7.0,
           knockback: 95,
           pierceCount: 0,
           bounceCount: 0,
-          ttlSec: 2.0,
+          ttlSec: 1.95,
           element: 'poison',
           critChance: 0,
           amplifiedByShield: false,
@@ -258,7 +258,7 @@ export function updateBossProjectileStream(
       if (pat === 2) {
         e.bossStreamTickTimer = 0.12;
         const sweepT = Math.min(1, step / 5);
-        const sweepOffset = (-0.85 + sweepT * 1.7) * e.strafeSign;
+        const sweepOffset = (-0.82 + sweepT * 1.64) * e.strafeSign;
         sim.spawnDeterministicVolley({
           kind: 'bullet_volley_spawned',
           tick: sim.tick,
@@ -269,15 +269,15 @@ export function updateBossProjectileStream(
           y: e.y,
           angle: baseAngle + sweepOffset,
           pelletCount: 3,
-          spreadRad: 0.18,
+          spreadRad: 0.22,
           muzzleOffset: e.radius + 10,
-          speed: 155,
+          speed: 166,
           damage: e.damage,
           radius: 7.6,
           knockback: 100,
           pierceCount: 0,
           bounceCount: 0,
-          ttlSec: 1.8,
+          ttlSec: 1.85,
           element: 'burn',
           critChance: 0,
           amplifiedByShield: false,
@@ -295,12 +295,12 @@ export function updateBossProjectileStream(
           weaponId: 'titan_crucible_gear',
           x: e.x,
           y: e.y,
-          angle: baseAngle + step * 0.16 * e.strafeSign,
+          angle: baseAngle + step * 0.18 * e.strafeSign,
           pelletCount: 8,
           spreadRad: 0,
           radialStepRad: spokeStep,
           muzzleOffset: e.radius + 8,
-          speed: 142,
+          speed: 156,
           damage: e.damage,
           radius: 7.6,
           knockback: 95,
@@ -313,7 +313,7 @@ export function updateBossProjectileStream(
           seed: sim.rng.nextUint32(),
           bulletShape: 'ring_bolt',
           kinematicMode: 'spiral',
-          angularVelRad: 0.24 * e.strafeSign,
+          angularVelRad: 0.14 * e.strafeSign,
         });
       } else if (pat === 4) {
         e.bossStreamTickTimer = 0.16;
@@ -331,7 +331,7 @@ export function updateBossProjectileStream(
           spreadRad: 0,
           radialStepRad: spokeStep,
           muzzleOffset: e.radius + 8,
-          speed: 148,
+          speed: 160,
           damage: e.damage,
           radius: 7.6,
           knockback: 100,
@@ -368,7 +368,7 @@ export function executeSporeKingSurfacePattern(
   }
 
   if (pat === 0) {
-    const ringCount = e.bossPhase === 3 ? 20 : e.bossPhase === 2 ? 18 : 16;
+    const ringCount = e.bossPhase === 3 ? 18 : e.bossPhase === 2 ? 16 : 16;
     const ringStep = (Math.PI * 2) / ringCount;
     sim.spawnDeterministicVolley({
       kind: 'bullet_volley_spawned',
@@ -378,20 +378,20 @@ export function executeSporeKingSurfacePattern(
       weaponId: 'boss_spore_ring',
       x: e.x,
       y: e.y,
-      angle: angleToPlayer + (cycle % 2 === 1 ? ringStep * 0.5 : 0),
+      angle: angleToPlayer + (cycle % 2 === 1 ? ringStep * 0.5 : ringStep * 0.25),
       pelletCount: ringCount,
       spreadRad: 0,
       radialStepRad: ringStep,
       muzzleOffset: e.radius + 6,
-      speed: 172,
-      alternateSpeedScale: 0.72,
+      speed: 174,
+      alternateSpeedScale: 0.76,
       damage: e.damage,
-      radius: 7.8,
-      alternateRadiusScale: 0.87,
+      radius: 7.0,
+      alternateRadiusScale: 0.88,
       knockback: 95,
       pierceCount: 0,
       bounceCount: 0,
-      ttlSec: 2.25,
+      ttlSec: 2.1,
       element: 'poison',
       critChance: 0,
       amplifiedByShield: false,
@@ -410,16 +410,16 @@ export function executeSporeKingSurfacePattern(
         x: e.x,
         y: e.y,
         angle: angleToPlayer,
-        pelletCount: 3,
-        spreadRad: 0.38,
+        pelletCount: 2,
+        spreadRad: 0.44,
         muzzleOffset: 24,
-        speed: 195,
+        speed: 188,
         damage: e.damage + 1,
-        radius: 7.2,
+        radius: 6.8,
         knockback: 110,
         pierceCount: 0,
         bounceCount: 0,
-        ttlSec: 1.95,
+        ttlSec: 1.9,
         element: 'poison',
         critChance: 0,
         amplifiedByShield: false,
@@ -440,19 +440,19 @@ export function executeSporeKingSurfacePattern(
       x: e.x,
       y: e.y,
       angle: angleToPlayer,
-      pelletCount: 3,
-      spreadRad: 0.28,
+      pelletCount: 2,
+      spreadRad: 0.44,
       muzzleOffset: e.radius + 8,
-      speed: 205,
+      speed: 194,
       targetSpeed: 138,
       kinematicMode: 'decel',
-      kinematicRate: 3.2,
+      kinematicRate: 3.0,
       damage: e.damage,
-      radius: 9.2,
+      radius: 8.4,
       knockback: 105,
       pierceCount: 0,
       bounceCount: 0,
-      ttlSec: 2.1,
+      ttlSec: 2.0,
       element: 'poison',
       critChance: 0,
       amplifiedByShield: false,
@@ -468,9 +468,9 @@ export function executeSporeKingSurfacePattern(
         weaponId: 'spore_thorn_fan',
         x: e.x,
         y: e.y,
-        angle: angleToPlayer + side * 0.62,
-        pelletCount: 4,
-        spreadRad: 0.34,
+        angle: angleToPlayer + side * 0.86,
+        pelletCount: 3,
+        spreadRad: 0.28,
         muzzleOffset: e.radius + 6,
         speed: 162,
         damage: e.damage,
@@ -478,7 +478,7 @@ export function executeSporeKingSurfacePattern(
         knockback: 90,
         pierceCount: 0,
         bounceCount: 0,
-        ttlSec: 2.0,
+        ttlSec: 1.95,
         element: 'poison',
         critChance: 0,
         amplifiedByShield: false,
@@ -490,7 +490,7 @@ export function executeSporeKingSurfacePattern(
   }
 
   if (pat === 2) {
-    const arms = e.bossPhase >= 2 ? 4 : 3;
+    const arms = 3;
     const armStep = (Math.PI * 2) / arms;
     sim.spawnDeterministicVolley({
       kind: 'bullet_volley_spawned',
@@ -500,35 +500,35 @@ export function executeSporeKingSurfacePattern(
       weaponId: 'spore_spiral_stream',
       x: e.x,
       y: e.y,
-      angle: angleToPlayer,
+      angle: angleToPlayer + armStep * 0.5,
       pelletCount: arms,
       spreadRad: 0,
       radialStepRad: armStep,
       muzzleOffset: e.radius + 6,
-      speed: 154,
+      speed: 158,
       damage: e.damage,
-      radius: 7.2,
+      radius: 6.8,
       knockback: 85,
       pierceCount: 0,
       bounceCount: 0,
-      ttlSec: 2.1,
+      ttlSec: 2.0,
       element: 'poison',
       critChance: 0,
       amplifiedByShield: false,
       seed: sim.rng.nextUint32(),
       bulletShape: 'orb',
       kinematicMode: 'spiral',
-      angularVelRad: 0.32,
+      angularVelRad: 0.08,
     });
     e.bossStreamBaseAngle = angleToPlayer;
     e.bossStreamStep = 0;
-    e.bossStreamTickTimer = 0.12;
-    e.bossStreamTimer = 0.62;
+    e.bossStreamTickTimer = 0.15;
+    e.bossStreamTimer = 0.34;
     return;
   }
 
   if (pat === 3) {
-    const ringCount = 12;
+    const ringCount = 10;
     const ringStep = (Math.PI * 2) / ringCount;
     sim.spawnDeterministicVolley({
       kind: 'bullet_volley_spawned',
@@ -538,21 +538,21 @@ export function executeSporeKingSurfacePattern(
       weaponId: 'spore_cluster_orb',
       x: e.x,
       y: e.y,
-      angle: angleToPlayer,
+      angle: angleToPlayer + ringStep * 0.5,
       pelletCount: ringCount,
       spreadRad: 0,
       radialStepRad: ringStep,
       muzzleOffset: e.radius + 8,
-      speed: 220,
-      targetSpeed: 92,
+      speed: 198,
+      targetSpeed: 108,
       kinematicMode: 'decel',
-      kinematicRate: 3.4,
+      kinematicRate: 3.2,
       damage: e.damage,
-      radius: 9.2,
+      radius: 8.0,
       knockback: 105,
       pierceCount: 0,
       bounceCount: 0,
-      ttlSec: 2.4,
+      ttlSec: 2.15,
       element: 'poison',
       critChance: 0,
       amplifiedByShield: false,
@@ -561,14 +561,14 @@ export function executeSporeKingSurfacePattern(
     });
     e.bossStreamBaseAngle = angleToPlayer;
     e.bossStreamStep = 0;
-    e.bossStreamTickTimer = 0.24;
-    e.bossStreamTimer = 0.28;
+    e.bossStreamTickTimer = 0.22;
+    e.bossStreamTimer = 0.25;
     return;
   }
 
   // Pattern 4: Phase 3 Climax ("ĐẠI DỊCH BÀO TỬ!")
   e.lastCombatText = 'ĐẠI DỊCH BÀO TỬ!';
-  const climaxCount = 18;
+  const climaxCount = 14;
   const climaxStep = (Math.PI * 2) / climaxCount;
   sim.spawnDeterministicVolley({
     kind: 'bullet_volley_spawned',
@@ -578,21 +578,21 @@ export function executeSporeKingSurfacePattern(
     weaponId: 'spore_miasma_climax',
     x: e.x,
     y: e.y,
-    angle: angleToPlayer,
+    angle: angleToPlayer + climaxStep * 0.5,
     pelletCount: climaxCount,
     spreadRad: 0,
     radialStepRad: climaxStep,
     muzzleOffset: e.radius + 6,
     speed: 165,
-    targetSpeed: 105,
+    targetSpeed: 112,
     kinematicMode: 'pulse',
     kinematicRate: 8.0,
     damage: e.damage,
-    radius: 8.0,
+    radius: 7.4,
     knockback: 95,
     pierceCount: 0,
     bounceCount: 0,
-    ttlSec: 2.35,
+    ttlSec: 2.15,
     element: 'poison',
     critChance: 0,
     amplifiedByShield: false,
@@ -601,8 +601,8 @@ export function executeSporeKingSurfacePattern(
   });
   e.bossStreamBaseAngle = angleToPlayer;
   e.bossStreamStep = 0;
-  e.bossStreamTickTimer = 0.14;
-  e.bossStreamTimer = 0.58;
+  e.bossStreamTickTimer = 0.16;
+  e.bossStreamTimer = 0.36;
 }
 
 export function executeKryssaPattern(
@@ -848,7 +848,7 @@ export function executeForgeTitanPattern(
     trauma: 0.52,
   });
 
-  if (pat === 0) {
+  if (pat === 0 || (e.bossPhase === 3 && pat === 4)) {
     sim.shockwaveRings.push({
       id: ++sim.nextPuzzleEntityId,
       sourceEnemyId: e.id,
@@ -856,11 +856,42 @@ export function executeForgeTitanPattern(
       y: e.y,
       radius: e.radius,
       maxRadius: 360,
-      speed: e.bossPhase === 3 ? 195 : 185,
+      speed: e.bossPhase === 3 ? 212 : 192,
       thickness: 28,
       damage: e.damage,
       hitPlayerIds: [],
     });
+  }
+
+  if (e.bossPhase === 3 && cycle >= 14 && cycle <= 18 && sim.getActivePlayerCount() === 1) {
+    sim.spawnDeterministicVolley({
+      kind: 'bullet_volley_spawned',
+      tick: sim.tick,
+      ownerId: e.id,
+      team: 'enemy',
+      weaponId: 'titan_slag_wave',
+      x: e.x,
+      y: e.y,
+      angle: angleToPlayer,
+      pelletCount: 3,
+      spreadRad: 0.24,
+      muzzleOffset: e.radius + 10,
+      speed: 192,
+      damage: e.damage,
+      radius: 8.8,
+      knockback: 110,
+      pierceCount: 0,
+      bounceCount: 0,
+      ttlSec: 1.9,
+      element: 'burn',
+      critChance: 0,
+      amplifiedByShield: false,
+      seed: sim.rng.nextUint32(),
+      bulletShape: 'lance',
+    });
+  }
+
+  if (pat === 0) {
 
     const anvilCount = e.bossPhase === 3 ? 18 : e.bossPhase === 2 ? 16 : 14;
     const anvilStep = (Math.PI * 2) / anvilCount;
@@ -872,15 +903,15 @@ export function executeForgeTitanPattern(
       weaponId: 'titan_anvil_ring',
       x: e.x,
       y: e.y,
-      angle: angleToPlayer + (cycle % 2 === 1 ? anvilStep * 0.5 : 0),
+      angle: angleToPlayer + (cycle % 2 === 1 ? anvilStep * 0.5 : anvilStep * 0.25),
       pelletCount: anvilCount,
       spreadRad: 0,
       radialStepRad: anvilStep,
       muzzleOffset: e.radius + 8,
-      speed: 172,
-      targetSpeed: 105,
+      speed: 178,
+      targetSpeed: 112,
       kinematicMode: 'decel',
-      kinematicRate: 2.8,
+      kinematicRate: 2.6,
       damage: e.damage,
       radius: 8.6,
       knockback: 110,
@@ -913,12 +944,12 @@ export function executeForgeTitanPattern(
         x: e.x,
         y: e.y,
         angle: angleToPlayer,
-        pelletCount: 3,
-        spreadRad: 0.32,
+        pelletCount: 2,
+        spreadRad: 0.42,
         muzzleOffset: e.radius + 10,
-        speed: 158,
+        speed: 162,
         damage: e.damage,
-        radius: 8.2,
+        radius: 8.0,
         knockback: 105,
         pierceCount: 0,
         bounceCount: 0,
@@ -973,17 +1004,17 @@ export function executeForgeTitanPattern(
       weaponId: 'titan_flame_sweep',
       x: e.x,
       y: e.y,
-      angle: angleToPlayer - 0.85 * e.strafeSign,
-      pelletCount: 3,
-      spreadRad: 0.18,
+      angle: angleToPlayer - 0.72 * e.strafeSign,
+      pelletCount: 2,
+      spreadRad: 0.42,
       muzzleOffset: e.radius + 10,
-      speed: 155,
+      speed: 162,
       damage: e.damage,
-      radius: 7.6,
+      radius: 7.4,
       knockback: 100,
       pierceCount: 0,
       bounceCount: 0,
-      ttlSec: 1.8,
+      ttlSec: 1.85,
       element: 'burn',
       critChance: 0,
       amplifiedByShield: false,
@@ -992,8 +1023,8 @@ export function executeForgeTitanPattern(
     });
     e.bossStreamBaseAngle = angleToPlayer;
     e.bossStreamStep = 0;
-    e.bossStreamTickTimer = 0.12;
-    e.bossStreamTimer = 0.62;
+    e.bossStreamTickTimer = 0.14;
+    e.bossStreamTimer = 0.36;
     return;
   }
 
@@ -1007,14 +1038,14 @@ export function executeForgeTitanPattern(
       weaponId: 'titan_crucible_gear',
       x: e.x,
       y: e.y,
-      angle: angleToPlayer,
+      angle: angleToPlayer + spokeStep * 0.5,
       pelletCount: 8,
       spreadRad: 0,
       radialStepRad: spokeStep,
       muzzleOffset: e.radius + 8,
-      speed: 142,
+      speed: 152,
       damage: e.damage,
-      radius: 7.6,
+      radius: 7.4,
       knockback: 95,
       pierceCount: 0,
       bounceCount: 0,
@@ -1025,12 +1056,12 @@ export function executeForgeTitanPattern(
       seed: sim.rng.nextUint32(),
       bulletShape: 'ring_bolt',
       kinematicMode: 'spiral',
-      angularVelRad: 0.24 * e.strafeSign,
+      angularVelRad: 0.06 * e.strafeSign,
     });
-    e.bossStreamBaseAngle = angleToPlayer;
+    e.bossStreamBaseAngle = angleToPlayer + spokeStep * 0.5;
     e.bossStreamStep = 0;
-    e.bossStreamTickTimer = 0.13;
-    e.bossStreamTimer = 0.54;
+    e.bossStreamTickTimer = 0.15;
+    e.bossStreamTimer = 0.32;
     return;
   }
 
@@ -1046,12 +1077,12 @@ export function executeForgeTitanPattern(
     weaponId: 'titan_magma_barrage',
     x: e.x,
     y: e.y,
-    angle: angleToPlayer,
+    angle: angleToPlayer + barrageStep * 0.5,
     pelletCount: barrageCount,
     spreadRad: 0,
     radialStepRad: barrageStep,
     muzzleOffset: e.radius + 8,
-    speed: 140,
+    speed: 154,
     damage: e.damage,
     radius: 8.8,
     knockback: 115,
@@ -1075,16 +1106,16 @@ export function executeForgeTitanPattern(
     weaponId: 'titan_flame_sweep',
     x: e.x,
     y: e.y,
-    angle: angleToPlayer + sweepStep * 0.5,
+    angle: angleToPlayer + sweepStep * 0.25,
     pelletCount: sweepCount,
     spreadRad: 0,
     radialStepRad: sweepStep,
     muzzleOffset: e.radius + 10,
-    speed: 85,
-    targetSpeed: 182,
+    speed: 92,
+    targetSpeed: 185,
     kinematicMode: 'accel',
-    kinematicDelaySec: 0.28,
-    kinematicRate: 4.2,
+    kinematicDelaySec: 0.26,
+    kinematicRate: 4.3,
     damage: e.damage,
     radius: 7.8,
     knockback: 110,
@@ -1097,10 +1128,10 @@ export function executeForgeTitanPattern(
     seed: sim.rng.nextUint32(),
     bulletShape: 'wave',
   });
-  e.bossStreamBaseAngle = angleToPlayer;
+  e.bossStreamBaseAngle = angleToPlayer + barrageStep * 0.5;
   e.bossStreamStep = 0;
-  e.bossStreamTickTimer = 0.16;
-  e.bossStreamTimer = 0.34;
+  e.bossStreamTickTimer = 0.18;
+  e.bossStreamTimer = 0.22;
 }
 
 function spawnTitanMagmaBarrageVolley(
@@ -1109,7 +1140,7 @@ function spawnTitanMagmaBarrageVolley(
   angleToPlayer: number,
   cycle: number,
 ): void {
-  const barrageCount = e.bossPhase === 3 ? 20 : e.bossPhase === 2 ? 18 : 16;
+  const barrageCount = e.bossPhase === 3 ? 18 : 16;
   const barrageStep = (Math.PI * 2) / barrageCount;
   const barrageParity = (e.bossPhase === 3 ? cycle : Math.floor(cycle / 2)) % 2;
   sim.spawnDeterministicVolley({
@@ -1125,10 +1156,10 @@ function spawnTitanMagmaBarrageVolley(
     spreadRad: 0,
     radialStepRad: barrageStep,
     muzzleOffset: e.radius + 8,
-    speed: 128,
-    alternateSpeedScale: 1.38,
+    speed: 142,
+    alternateSpeedScale: 1.32,
     damage: e.damage,
-    radius: 9.2,
+    radius: 8.6,
     alternateRadiusScale: 0.76,
     knockback: 115,
     pierceCount: 0,

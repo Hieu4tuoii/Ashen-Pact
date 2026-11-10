@@ -14,7 +14,7 @@ export const MAX_PREDICTIVE_LEAD_ANGLE_RAD = (28 * Math.PI) / 180; // ~0.488692 
 export const SIGHTLINE_TELEGRAPH_WINDOW_SEC = 0.35;
 
 export const GOBLIN_SHOOTER_COVER_SEARCH_RADIUS = 220;
-export const GOBLIN_SHOOTER_ARROW_SPEED = 360;
+export const GOBLIN_SHOOTER_ARROW_SPEED = 285;
 export const GOBLIN_SHOOTER_SPREAD_RAD = 0.11;
 export const KICKED_SPORE_BOMBER_SPEED = 520;
 export const KICKED_SPORE_EXPLOSION_RADIUS = 95;
@@ -358,7 +358,8 @@ export function fireGoblinShooterVolley(
     spreadRad: GOBLIN_SHOOTER_SPREAD_RAD * 2,
     speed: GOBLIN_SHOOTER_ARROW_SPEED,
     damage: e.damage,
-    radius: 5,
+    radius: 5.8,
+    bulletShape: 'lance',
     knockback: 90,
     pierceCount: 0,
     bounceCount: 0,
@@ -384,7 +385,8 @@ export function fireGoblinShooterVolley(
     spreadRad: 0,
     speed: GOBLIN_SHOOTER_ARROW_SPEED,
     damage: e.damage,
-    radius: 5,
+    radius: 5.8,
+    bulletShape: 'lance',
     knockback: 90,
     pierceCount: 0,
     bounceCount: 0,

@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { MAX_ENEMY_PROJECTILES, WorldSim } from '../src/index.js';
+import {
+  FIRE_IMP_FIREBALL_SPEED,
+  FROST_BAT_SONIC_DART_SPEED,
+  GOBLIN_SHOOTER_ARROW_SPEED,
+  ICE_MAGE_BOLT_SPEED,
+  ICE_MAGE_SHATTER_SPEAR_SPEED,
+  MAX_ENEMY_PROJECTILES,
+  WorldSim,
+} from '../src/index.js';
 
 const DT = 1 / 60;
 
@@ -237,4 +245,13 @@ describe('Boss Bullet-Hell Kinematics, Pool Reset & Bullet Graze', () => {
     expect(sim.consumeEvents().some((e) => e.kind === 'bullet_grazed')).toBe(false);
     expect(pl.skillCooldownTimer).toBeCloseTo(2.75, 3);
   });
+
+  it('reduces regular enemy projectile speeds by 16-21% and bumps tiny radii with readable bulletShape tags', () => {
+    expect(GOBLIN_SHOOTER_ARROW_SPEED).toBe(285);
+    expect(FROST_BAT_SONIC_DART_SPEED).toBe(235);
+    expect(ICE_MAGE_BOLT_SPEED).toBe(220);
+    expect(ICE_MAGE_SHATTER_SPEAR_SPEED).toBe(232);
+    expect(FIRE_IMP_FIREBALL_SPEED).toBe(235);
+  });
 });
+

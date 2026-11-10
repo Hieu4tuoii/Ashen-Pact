@@ -93,7 +93,7 @@ describe('AP2-P3A.2: 4 Biome 1 Terrain-Interactive Enemy Behaviors', () => {
       shooter.telegraphDurationSec = 0.5;
 
       const directAngle = Math.atan2(sim.player.y - shooter.y, sim.player.x - shooter.x);
-      const expectedLeadAngle = computePredictiveLeadAimAngle(shooter, sim.player, 360, 0.35);
+      const expectedLeadAngle = computePredictiveLeadAimAngle(shooter, sim.player, 285, 0.35);
       expect(Math.abs(expectedLeadAngle - directAngle)).toBeGreaterThan(0.05);
 
       sim.setPlayerInput({
