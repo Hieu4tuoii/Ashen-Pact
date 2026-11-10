@@ -582,6 +582,12 @@ export type SimEvent =
       bonusGold: number;
       x: number;
       y: number;
+    }
+  | {
+      kind: 'bullet_grazed';
+      playerId: number;
+      x: number;
+      y: number;
     };
 
 export interface WorldSimOptions {

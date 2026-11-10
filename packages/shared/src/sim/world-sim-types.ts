@@ -106,9 +106,27 @@ export const REVIVE_HOLD_DURATION_SEC = 2.5;
 export const DRUID_REVIVE_HOLD_DURATION_SEC = 1.25;
 
 export const MAX_PLAYER_PROJECTILES = 240;
-export const MAX_ENEMY_PROJECTILES = 160;
+export const MAX_ENEMY_PROJECTILES = 300;
 export const MAX_TACTICAL_PROPS_PER_ROOM = 16;
 export const MAX_DEPLOYABLES_PER_PLAYER = 8;
+
+export const GRAZE_MARGIN_PX = 18;
+export const GRAZE_REWARD_ICD_SEC = 0.16;
+
+export type EnemyBulletShape =
+  | 'orb'
+  | 'wave'
+  | 'lance'
+  | 'diamond'
+  | 'heavy_orb'
+  | 'ring_bolt';
+
+export type ProjectileKinematicMode =
+  | 'constant'
+  | 'decel'
+  | 'accel'
+  | 'pulse'
+  | 'spiral';
 
 export type EnemyAIState =
   'spawning' | 'idle' | 'move' | 'chase' | 'telegraph' | 'attack' | 'cooldown' | 'stunned';
@@ -555,6 +573,7 @@ export interface SimPlayerState {
   holsterSurgeIcdTimer?: number;
   causticPodFinaleIcdTimer?: number;
   plasmaStarIcdTimer?: number;
+  grazeIcdTimer?: number;
   // Ashen Pact 2.0 Per-Player Build State
   blessingIds: BlessingId[];
   weaponMutators: Record<number, WeaponMutatorId[]>;
@@ -672,6 +691,13 @@ export interface SimEnemyState {
   bossTargetX: number;
   bossTargetY: number;
   bossAttackCycle: number;
+  bossPatternId?: number;
+  bossLastPatternId?: number;
+  bossClimaxFiredP3?: boolean;
+  bossStreamTimer?: number;
+  bossStreamTickTimer?: number;
+  bossStreamStep?: number;
+  bossStreamBaseAngle?: number;
   // Phase 5 Synergy & Elemental Reaction states
   markedTimer: number;
   markedByPlayerId: number;
@@ -800,6 +826,15 @@ export interface SimProjectileState {
   ttlSec: number;
   element: ElementType;
   amplifiedByShield: boolean;
+  bulletShape?: EnemyBulletShape;
+  kinematicMode?: ProjectileKinematicMode;
+  initialSpeed?: number;
+  targetSpeed?: number;
+  kinematicRate?: number;
+  kinematicDelaySec?: number;
+  kinematicElapsedSec?: number;
+  angularVelRad?: number;
+  grazedPlayerIds?: number[];
   shotFlags?: number;
   splitGeneration?: 0 | 1;
   prismBonusAdd?: number;
@@ -866,7 +901,7 @@ export interface SimPickupState {
 export interface BulletVolleySpawnEvent {
   kind: 'bullet_volley_spawned';
   eventId?: number;
-  tick: number;
+  tick?: number;
   ownerId: number;
   team: 'player' | 'enemy';
   weaponId: string;
@@ -888,6 +923,16 @@ export interface BulletVolleySpawnEvent {
   critChance: number;
   amplifiedByShield: boolean;
   seed: number;
+  bulletShape?: EnemyBulletShape;
+  kinematicMode?: ProjectileKinematicMode;
+  targetSpeed?: number;
+  kinematicRate?: number;
+  kinematicDelaySec?: number;
+  angularVelRad?: number;
+  alternateSpeedScale?: number;
+  alternateRadiusScale?: number;
+  alternateBulletShape?: EnemyBulletShape;
+  gapIndices?: number[];
   shotFlags?: number;
   flags?: number;
   replacedProjectileId?: number;

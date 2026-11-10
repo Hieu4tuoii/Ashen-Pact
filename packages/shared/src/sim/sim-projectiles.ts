@@ -40,6 +40,8 @@ import {
 } from './sim-weapon-mutators.js';
 import {
   type BulletVolleySpawnEvent,
+  GRAZE_MARGIN_PX,
+  GRAZE_REWARD_ICD_SEC,
   MAX_ENEMY_PROJECTILES,
   MAX_PLAYER_PROJECTILES,
   type SimProjectileState,
@@ -47,6 +49,38 @@ import {
 import type { WorldSim } from './world-sim.js';
 
 export { spawnSeedGunLifeBlossomImpl, triggerLauncherProjectileExplosionImpl };
+
+export function stepProjectileKinematics(b: SimProjectileState, dtSec: number): void {
+  const mode = b.kinematicMode;
+  const angVel = b.angularVelRad ?? 0;
+  if ((!mode || mode === 'constant') && angVel === 0) return;
+
+  b.kinematicElapsedSec = (b.kinematicElapsedSec ?? 0) + dtSec;
+  let ang = Math.atan2(b.vy, b.vx);
+  const curSpd = Math.hypot(b.vx, b.vy);
+  if (angVel !== 0) {
+    ang += angVel * dtSec;
+  }
+
+  let nextSpd = curSpd;
+  const elapsed = b.kinematicElapsedSec;
+  const delay = b.kinematicDelaySec ?? 0;
+
+  if ((mode === 'decel' || mode === 'accel') && b.targetSpeed !== undefined && elapsed > delay) {
+    const k = Math.min(1, (b.kinematicRate ?? 3.0) * dtSec);
+    nextSpd = curSpd + (b.targetSpeed - curSpd) * k;
+  } else if (mode === 'pulse') {
+    const baseSpd = b.initialSpeed ?? curSpd;
+    const targetSpd = b.targetSpeed ?? baseSpd * 0.55;
+    const mid = 0.5 * (baseSpd + targetSpd);
+    const amp = 0.5 * (baseSpd - targetSpd);
+    nextSpd = Math.max(40, mid + amp * Math.cos(elapsed * (b.kinematicRate ?? 7.5)));
+  }
+
+  b.vx = Math.cos(ang) * nextSpd;
+  b.vy = Math.sin(ang) * nextSpd;
+  b.angle = ang;
+}
 
 function pushImpactEvent(
   sim: WorldSim,
@@ -87,11 +121,15 @@ export function spawnDeterministicVolleyImpl(this: WorldSim, ev: BulletVolleySpa
   let spreadRad = ev.spreadRad;
   let radialStepRad = ev.radialStepRad;
   let speed = ev.speed;
+  let resolvedTargetSpeed = ev.targetSpeed;
 
   if (ev.team === 'enemy') {
     const biomeScale = BIOME_SCALING[this.currentBiome] ?? BIOME_SCALING[1];
     if (ev.weaponId !== 'vengeful_ring' && ev.weaponId !== 'ashen_executioner_wave') {
       speed = Math.min(390, Math.round(speed * biomeScale.projectileSpeedMultiplier));
+      if (resolvedTargetSpeed !== undefined) {
+        resolvedTargetSpeed = Math.min(390, Math.round(resolvedTargetSpeed * biomeScale.projectileSpeedMultiplier));
+      }
     }
     const ownerEnemy = this.enemies.find((e) => e.id === ev.ownerId);
     if (ownerEnemy?.isElite && ownerEnemy.eliteModifier === 'volley') {
@@ -111,6 +149,9 @@ export function spawnDeterministicVolleyImpl(this: WorldSim, ev: BulletVolleySpa
   const teamCap = ev.team === 'player' ? MAX_PLAYER_PROJECTILES : MAX_ENEMY_PROJECTILES;
 
   for (let i = 0; i < pellets; i++) {
+    if (ev.gapIndices && ev.gapIndices.includes(i)) {
+      continue;
+    }
     let shotAngle = ev.angle;
     if (radialStepRad !== undefined && radialStepRad !== 0) {
       shotAngle = ev.angle + i * radialStepRad;
@@ -122,6 +163,26 @@ export function spawnDeterministicVolleyImpl(this: WorldSim, ev: BulletVolleySpa
     } else if (spreadRad > 0) {
       shotAngle = ev.angle + volleyRng.nextFloat(-spreadRad * 0.5, spreadRad * 0.5);
     }
+
+    const isOddPellet = (i & 1) === 1;
+    const pelletSpeed =
+      isOddPellet && ev.alternateSpeedScale !== undefined
+        ? speed * ev.alternateSpeedScale
+        : speed;
+    const pelletTargetSpeed =
+      resolvedTargetSpeed !== undefined
+        ? isOddPellet && ev.alternateSpeedScale !== undefined
+          ? resolvedTargetSpeed * ev.alternateSpeedScale
+          : resolvedTargetSpeed
+        : undefined;
+    const pelletRadius =
+      isOddPellet && ev.alternateRadiusScale !== undefined
+        ? ev.radius * ev.alternateRadiusScale
+        : ev.radius;
+    const pelletShape =
+      isOddPellet && ev.alternateBulletShape !== undefined
+        ? ev.alternateBulletShape
+        : ev.bulletShape;
 
     const bx =
       ev.muzzleOffset && ev.muzzleOffset > 0
@@ -157,6 +218,7 @@ export function spawnDeterministicVolleyImpl(this: WorldSim, ev: BulletVolleySpa
         if (evicted) {
           evicted.ttlSec = 0;
           evicted.hitEntityIds.length = 0;
+          if (evicted.grazedPlayerIds) evicted.grazedPlayerIds.length = 0;
           this.projectilePool.push(evicted);
         }
       }
@@ -166,12 +228,21 @@ export function spawnDeterministicVolleyImpl(this: WorldSim, ev: BulletVolleySpa
 
     const proj = this.acquireProjectile({
       id: deterministicId, ownerId: ev.ownerId, team: ev.team, weaponId: ev.weaponId,
-      x: bx, y: by, vx: Math.cos(shotAngle) * speed, vy: Math.sin(shotAngle) * speed, angle: shotAngle,
-      radius: ev.radius, damage: finalDmg, isCrit, knockback: ev.knockback,
+      x: bx, y: by, vx: Math.cos(shotAngle) * pelletSpeed, vy: Math.sin(shotAngle) * pelletSpeed, angle: shotAngle,
+      radius: pelletRadius, damage: finalDmg, isCrit, knockback: ev.knockback,
       pierceRemaining: ev.pierceCount,
       bounceRemaining: ev.team === 'player' ? clampBounceCount(ev.bounceCount) : ev.bounceCount,
       ttlSec: ev.ttlSec,
-      element: ev.element, amplifiedByShield: ev.amplifiedByShield, shotFlags: ev.shotFlags ?? 0,
+      element: ev.element, amplifiedByShield: ev.amplifiedByShield,
+      bulletShape: pelletShape,
+      kinematicMode: ev.kinematicMode,
+      initialSpeed: pelletSpeed,
+      targetSpeed: pelletTargetSpeed,
+      kinematicRate: ev.kinematicRate,
+      kinematicDelaySec: ev.kinematicDelaySec,
+      kinematicElapsedSec: 0,
+      angularVelRad: ev.angularVelRad,
+      shotFlags: ev.shotFlags ?? 0,
       splitGeneration: ev.splitGeneration ?? 0, awaitingServerRedirectTimer: 0, explosionRadius: ev.explosionRadius,
       guaranteedElementalProc: ev.guaranteedElementalProc, originX: ev.originX, originY: ev.originY,
       armedForAirburst: ev.armedForAirburst, airburstBypassShield: ev.airburstBypassShield,
@@ -257,6 +328,7 @@ export function updateProjectilesImpl(this: WorldSim, dtSec: number): void {
     }
     b.prevX = b.x;
     b.prevY = b.y;
+    stepProjectileKinematics(b, dtSec);
     b.x += b.vx * dtSec;
     b.y += b.vy * dtSec;
     if (b.team === 'player' && tryRedirectSuperconductRailServer(this, b)) continue;
@@ -669,6 +741,39 @@ export function updateProjectilesImpl(this: WorldSim, dtSec: number): void {
           }
           break;
         }
+        // Bullet Graze ("Sượt Đạn") near-miss detection & solo micro-reward
+        if (!b.grazedPlayerIds || !b.grazedPlayerIds.includes(pl.id)) {
+          const dGraze = distance(b.x, b.y, pl.x, pl.y);
+          if (dGraze <= b.radius + pl.radius + GRAZE_MARGIN_PX) {
+            if (!b.grazedPlayerIds) {
+              b.grazedPlayerIds = [pl.id];
+            } else {
+              b.grazedPlayerIds.push(pl.id);
+            }
+            if ((pl.grazeIcdTimer ?? 0) <= 0) {
+              pl.grazeIcdTimer = GRAZE_REWARD_ICD_SEC;
+              const inBossFight = this.getActiveBoss() !== undefined;
+              const cdRefund = inBossFight ? 0.25 : 0.08;
+              const heatVent = inBossFight ? 4 : 1.5;
+              if (pl.skillCooldownTimer > 0) {
+                pl.skillCooldownTimer = Math.max(0, pl.skillCooldownTimer - cdRefund);
+              }
+              if (pl.weaponHeat > 0) {
+                pl.weaponHeat = Math.max(0, pl.weaponHeat - heatVent);
+              } else if (inBossFight && pl.reloadTimer > 0 && !pl.reloadLockout) {
+                pl.reloadTimer = Math.max(0.01, pl.reloadTimer - 0.05);
+              }
+              if (!this.stressTestActive) {
+                this.events.push({
+                  kind: 'bullet_grazed',
+                  playerId: pl.id,
+                  x: (pl.x + b.x) * 0.5,
+                  y: (pl.y + b.y) * 0.5,
+                });
+              }
+            }
+          }
+        }
       }
     }
   }
@@ -687,6 +792,7 @@ export function updateProjectilesImpl(this: WorldSim, dtSec: number): void {
       this.projectiles[projWriteIdx++] = b;
     } else {
       b.hitEntityIds.length = 0;
+      if (b.grazedPlayerIds) b.grazedPlayerIds.length = 0;
       this.projectilePool.push(b);
     }
   }
@@ -718,6 +824,7 @@ export function stepClientProjectilesCosmeticImpl(this: WorldSim, dtSec: number)
     if (b.ttlSec <= 0 && !tryHoldClientOrbitReturnAtMaxRange(this, b)) continue;
     if (b.weaponId === 'mutator_boomerang_saw') { stepBoomerangCoreSawCosmetic(this, b, dtSec); continue; }
 
+    stepProjectileKinematics(b, dtSec);
     b.x += b.vx * dtSec;
     b.y += b.vy * dtSec;
     if (b.orbitReturned && shouldCatchReturnedOrbitProjectile(this, b)) continue;
@@ -915,6 +1022,7 @@ export function stepClientProjectilesCosmeticImpl(this: WorldSim, dtSec: number)
       this.projectiles[projWriteIdx++] = b;
     } else {
       b.hitEntityIds.length = 0;
+      if (b.grazedPlayerIds) b.grazedPlayerIds.length = 0;
       this.projectilePool.push(b);
     }
   }
@@ -943,6 +1051,15 @@ export function acquireProjectileImpl(this: WorldSim,
     pooled.knockback = init.knockback ?? 0; pooled.pierceRemaining = resolvedPierce;
     pooled.bounceRemaining = resolvedBounce; pooled.ttlSec = resolvedTtl;
     pooled.element = init.element ?? 'none'; pooled.amplifiedByShield = init.amplifiedByShield ?? false;
+    pooled.bulletShape = init.bulletShape;
+    pooled.kinematicMode = init.kinematicMode;
+    pooled.initialSpeed = init.initialSpeed;
+    pooled.targetSpeed = init.targetSpeed;
+    pooled.kinematicRate = init.kinematicRate;
+    pooled.kinematicDelaySec = init.kinematicDelaySec;
+    pooled.kinematicElapsedSec = init.kinematicElapsedSec ?? 0;
+    pooled.angularVelRad = init.angularVelRad;
+    if (pooled.grazedPlayerIds) pooled.grazedPlayerIds.length = 0;
     pooled.shotFlags = init.shotFlags ?? 0; pooled.splitGeneration = init.splitGeneration ?? 0;
     pooled.procCoefficient = init.procCoefficient ?? 1.0; pooled.heavyPinballApplied = init.heavyPinballApplied ?? false;
     pooled.prismBonusAdd = init.prismBonusAdd ?? 0;
