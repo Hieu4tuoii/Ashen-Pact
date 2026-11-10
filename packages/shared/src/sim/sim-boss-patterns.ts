@@ -355,6 +355,7 @@ export function executeSporeKingSurfacePattern(
   angleToPlayer: number,
   cycle: number,
 ): void {
+  const isLegacyDefault = e.bossPatternId === undefined;
   const pat = e.bossPatternId ?? 0;
 
   // Summon spore minion on alternate cycles if active non-boss count < 2
@@ -378,7 +379,9 @@ export function executeSporeKingSurfacePattern(
       weaponId: 'boss_spore_ring',
       x: e.x,
       y: e.y,
-      angle: angleToPlayer + (cycle % 2 === 1 ? ringStep * 0.5 : ringStep * 0.25),
+      angle:
+        angleToPlayer +
+        (cycle % 2 === 1 ? ringStep * 0.5 : isLegacyDefault ? 0 : ringStep * 0.25),
       pelletCount: ringCount,
       spreadRad: 0,
       radialStepRad: ringStep,
@@ -1140,7 +1143,9 @@ function spawnTitanMagmaBarrageVolley(
   angleToPlayer: number,
   cycle: number,
 ): void {
-  const barrageCount = e.bossPhase === 3 ? 18 : 16;
+  const isLegacyDefault = e.bossPatternId === undefined;
+  const barrageCount =
+    isLegacyDefault && e.bossPhase === 3 ? 20 : e.bossPhase === 3 ? 18 : 16;
   const barrageStep = (Math.PI * 2) / barrageCount;
   const barrageParity = (e.bossPhase === 3 ? cycle : Math.floor(cycle / 2)) % 2;
   sim.spawnDeterministicVolley({

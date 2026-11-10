@@ -853,8 +853,8 @@ export function executeBossSporeKingAttackImpl(
       }
     }
 
-    // Erupt with 8 (P2) or 10 (P3) radial thorns with alternating speed rings
-    const thornCount = e.bossPhase === 3 ? 10 : 8;
+    // Erupt with 12 (legacy) or 8/10 radial thorns with alternating speed rings
+    const thornCount = e.bossLastPatternId === undefined ? 12 : e.bossPhase === 3 ? 10 : 8;
     const thornStep = (Math.PI * 2) / thornCount;
     this.spawnDeterministicVolley({
       kind: 'bullet_volley_spawned',

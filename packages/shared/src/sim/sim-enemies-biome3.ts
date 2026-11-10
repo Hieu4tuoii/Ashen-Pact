@@ -497,8 +497,11 @@ export function updateBossForgeTitanAIImpl(
     (r) => r.sourceEnemyId === e.id && r.radius < 265,
   );
   if (e.attackCooldownTimer <= 0 && !hasCloseShockwave) {
+    const wasIdle = e.aiState === 'idle';
     e.aiState = 'telegraph';
-    if (!e.bossArmorShellActive) {
+    if (wasIdle) {
+      e.bossPatternId = 0;
+    } else if (!e.bossArmorShellActive) {
       selectNextBossPattern(this, e);
     }
     e.stateTimer = Math.max(
