@@ -102,7 +102,7 @@ export function updateBossProjectileStream(
           critChance: 0,
           amplifiedByShield: false,
           seed: sim.rng.nextUint32(),
-          bulletShape: 'orb',
+          bulletShape: step % 2 === 1 ? 'small_orb' : 'orb',
           kinematicMode: 'spiral',
           angularVelRad: 0.08 * spinSign,
         });
@@ -131,7 +131,7 @@ export function updateBossProjectileStream(
           critChance: 0,
           amplifiedByShield: false,
           seed: sim.rng.nextUint32(),
-          bulletShape: 'diamond',
+          bulletShape: 'small_orb',
         });
       } else if (pat === 4) {
         e.bossStreamTickTimer = 0.16;
@@ -160,7 +160,7 @@ export function updateBossProjectileStream(
           critChance: 0,
           amplifiedByShield: false,
           seed: sim.rng.nextUint32(),
-          bulletShape: 'wave',
+          bulletShape: 'small_orb',
         });
       }
     } else if (e.defId === 'kryssa_ice_queen') {
@@ -220,7 +220,7 @@ export function updateBossProjectileStream(
             critChance: 0,
             amplifiedByShield: false,
             seed: sim.rng.nextUint32(),
-            bulletShape: 'diamond',
+            bulletShape: sign === 1 ? 'orb' : 'small_orb',
             kinematicMode: 'spiral',
             angularVelRad: 0.4 * sign,
           });
@@ -251,7 +251,8 @@ export function updateBossProjectileStream(
           critChance: 0,
           amplifiedByShield: false,
           seed: sim.rng.nextUint32(),
-          bulletShape: 'wave',
+          bulletShape: 'orb',
+          alternateBulletShape: 'small_orb',
         });
       }
     } else if (e.defId === 'forge_titan') {
@@ -282,7 +283,8 @@ export function updateBossProjectileStream(
           critChance: 0,
           amplifiedByShield: false,
           seed: sim.rng.nextUint32(),
-          bulletShape: 'wave',
+          bulletShape: 'orb',
+          alternateBulletShape: 'small_orb',
         });
       } else if (pat === 3) {
         e.bossStreamTickTimer = 0.13;
@@ -311,7 +313,7 @@ export function updateBossProjectileStream(
           critChance: 0,
           amplifiedByShield: false,
           seed: sim.rng.nextUint32(),
-          bulletShape: 'ring_bolt',
+          bulletShape: step % 2 === 1 ? 'small_orb' : 'orb',
           kinematicMode: 'spiral',
           angularVelRad: 0.14 * e.strafeSign,
         });
@@ -342,7 +344,7 @@ export function updateBossProjectileStream(
           critChance: 0,
           amplifiedByShield: false,
           seed: sim.rng.nextUint32(),
-          bulletShape: 'ring_bolt',
+          bulletShape: 'small_orb',
         });
       }
     }
@@ -399,8 +401,8 @@ export function executeSporeKingSurfacePattern(
       critChance: 0,
       amplifiedByShield: false,
       seed: sim.rng.nextUint32(),
-      bulletShape: 'ring_bolt',
-      alternateBulletShape: 'orb',
+      bulletShape: 'orb',
+      alternateBulletShape: 'small_orb',
     });
 
     if (e.bossPhase === 3 && cycle % 2 === 0) {
@@ -427,7 +429,7 @@ export function executeSporeKingSurfacePattern(
         critChance: 0,
         amplifiedByShield: false,
         seed: sim.rng.nextUint32(),
-        bulletShape: 'wave',
+        bulletShape: 'heavy_orb',
       });
     }
     return;
@@ -460,7 +462,7 @@ export function executeSporeKingSurfacePattern(
       critChance: 0,
       amplifiedByShield: false,
       seed: sim.rng.nextUint32(),
-      bulletShape: 'wave',
+      bulletShape: 'heavy_orb',
     });
     for (const side of [-1, 1] as const) {
       sim.spawnDeterministicVolley({
@@ -486,7 +488,7 @@ export function executeSporeKingSurfacePattern(
         critChance: 0,
         amplifiedByShield: false,
         seed: sim.rng.nextUint32(),
-        bulletShape: 'lance',
+        bulletShape: 'small_orb',
       });
     }
     return;
@@ -600,7 +602,8 @@ export function executeSporeKingSurfacePattern(
     critChance: 0,
     amplifiedByShield: false,
     seed: sim.rng.nextUint32(),
-    bulletShape: 'ring_bolt',
+    bulletShape: 'heavy_orb',
+    alternateBulletShape: 'orb',
   });
   e.bossStreamBaseAngle = angleToPlayer;
   e.bossStreamStep = 0;
@@ -683,7 +686,8 @@ export function executeKryssaPattern(
       critChance: 0,
       amplifiedByShield: false,
       seed: sim.rng.nextUint32(),
-      bulletShape: 'diamond',
+      bulletShape: 'orb',
+      alternateBulletShape: 'small_orb',
     });
   } else if (pat === 1) {
     e.lastCombatText = 'TƯỜNG BĂNG!';
@@ -716,7 +720,7 @@ export function executeKryssaPattern(
       critChance: 0,
       amplifiedByShield: false,
       seed: sim.rng.nextUint32(),
-      bulletShape: 'diamond',
+      bulletShape: 'heavy_orb',
       gapIndices: [gapStart, gapStart + 1, gapStart + 2],
     });
   } else if (pat === 3) {
@@ -746,7 +750,7 @@ export function executeKryssaPattern(
         critChance: 0,
         amplifiedByShield: false,
         seed: sim.rng.nextUint32(),
-        bulletShape: 'diamond',
+        bulletShape: sign === 1 ? 'orb' : 'small_orb',
         kinematicMode: 'spiral',
         angularVelRad: 0.4 * sign,
       });
@@ -811,7 +815,8 @@ export function executeKryssaPattern(
       critChance: 0,
       amplifiedByShield: false,
       seed: sim.rng.nextUint32(),
-      bulletShape: 'wave',
+      bulletShape: 'orb',
+      alternateBulletShape: 'small_orb',
     });
     e.bossStreamBaseAngle = angleToPlayer;
     e.bossStreamStep = 0;
@@ -965,7 +970,7 @@ export function executeForgeTitanPattern(
         critChance: 0,
         amplifiedByShield: false,
         seed: sim.rng.nextUint32(),
-        bulletShape: 'wave',
+        bulletShape: 'heavy_orb',
       });
     } else if (e.bossPhase === 3 && cycle % 2 === 1) {
       const sweepCount = 12;
@@ -995,7 +1000,7 @@ export function executeForgeTitanPattern(
         critChance: 0,
         amplifiedByShield: false,
         seed: sim.rng.nextUint32(),
-        bulletShape: 'wave',
+        bulletShape: 'orb',
       });
     }
     return;
@@ -1026,7 +1031,7 @@ export function executeForgeTitanPattern(
       critChance: 0,
       amplifiedByShield: false,
       seed: sim.rng.nextUint32(),
-      bulletShape: 'wave',
+      bulletShape: 'orb',
     });
     e.bossStreamBaseAngle = angleToPlayer;
     e.bossStreamStep = 0;
@@ -1061,7 +1066,7 @@ export function executeForgeTitanPattern(
       critChance: 0,
       amplifiedByShield: false,
       seed: sim.rng.nextUint32(),
-      bulletShape: 'ring_bolt',
+      bulletShape: 'orb',
       kinematicMode: 'spiral',
       angularVelRad: 0.06 * e.strafeSign,
     });
@@ -1133,7 +1138,7 @@ export function executeForgeTitanPattern(
     critChance: 0,
     amplifiedByShield: false,
     seed: sim.rng.nextUint32(),
-    bulletShape: 'wave',
+    bulletShape: 'orb',
   });
   e.bossStreamBaseAngle = angleToPlayer + barrageStep * 0.5;
   e.bossStreamStep = 0;
@@ -1179,6 +1184,6 @@ function spawnTitanMagmaBarrageVolley(
     amplifiedByShield: false,
     seed: sim.rng.nextUint32(),
     bulletShape: 'heavy_orb',
-    alternateBulletShape: 'lance',
+    alternateBulletShape: 'small_orb',
   });
 }

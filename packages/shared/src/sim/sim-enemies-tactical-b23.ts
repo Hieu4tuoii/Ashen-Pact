@@ -298,7 +298,7 @@ export function fireIceMagePrismShotOrVolley(
   sim.spawnDeterministicVolley({
     kind: 'bullet_volley_spawned', tick: sim.tick, ownerId: e.id, team: 'enemy', weaponId: 'frost_orb',
     x: e.x + Math.cos(e.telegraphAngle) * 16, y: e.y + Math.sin(e.telegraphAngle) * 16, angle: e.telegraphAngle,
-    pelletCount: 3, spreadRad: 0.96, speed: ICE_MAGE_BOLT_SPEED, damage: e.damage, radius: 6.6, bulletShape: 'diamond', knockback: 85,
+    pelletCount: 3, spreadRad: 0.96, speed: ICE_MAGE_BOLT_SPEED, damage: e.damage, radius: 6.6, bulletShape: 'orb', knockback: 85,
     pierceCount: 0, bounceCount: 0, ttlSec: 2.3, element: 'chill', critChance: 0,
     amplifiedByShield: false, seed: sim.rng.nextUint32(),
   });
@@ -345,7 +345,7 @@ export function refractEnemyProjectileThroughCryoPrism(
     x: prism.x + Math.cos(centerAngle) * (prism.radius + b.radius + 4),
     y: prism.y + Math.sin(centerAngle) * (prism.radius + b.radius + 4),
     angle: centerAngle, pelletCount: 3, spreadRad: ICE_MAGE_PRISM_FAN_SPREAD_RAD,
-    speed, damage: b.damage, critChance: 0, knockback: b.knockback, radius: b.radius, bulletShape: 'diamond',
+    speed, damage: b.damage, critChance: 0, knockback: b.knockback, radius: b.radius, bulletShape: 'small_orb',
     ttlSec: 2.2, pierceCount: 0, bounceCount: 0, element: 'chill',
     amplifiedByShield: false, seed: sim.rng.nextUint32(), replacedProjectileId: b.id,
   });

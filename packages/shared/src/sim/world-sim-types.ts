@@ -111,12 +111,10 @@ export const MAX_TACTICAL_PROPS_PER_ROOM = 16;
 export const MAX_DEPLOYABLES_PER_PLAYER = 8;
 
 export type EnemyBulletShape =
+  | 'small_orb'
   | 'orb'
-  | 'wave'
-  | 'lance'
-  | 'diamond'
   | 'heavy_orb'
-  | 'ring_bolt';
+  | 'lance';
 
 export type ProjectileKinematicMode =
   | 'constant'

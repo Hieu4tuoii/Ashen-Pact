@@ -97,7 +97,7 @@ describe('Boss Bullet-Hell Kinematics, Pool Reset & Bullet Graze', () => {
       element: 'chill' as const,
       amplifiedByShield: false,
       seed: 99,
-      bulletShape: 'diamond' as const,
+      bulletShape: 'orb' as const,
     };
     serverSim.spawnDeterministicVolley({ ...ev }, false);
     clientSim.spawnDeterministicVolley({ ...ev }, false);
@@ -145,7 +145,7 @@ describe('Boss Bullet-Hell Kinematics, Pool Reset & Bullet Graze', () => {
       kinematicMode: 'decel',
       kinematicRate: 4,
       angularVelRad: 0.5,
-      bulletShape: 'wave',
+      bulletShape: 'small_orb',
       radius: 8,
       damage: 2,
       critChance: 0,
@@ -157,6 +157,7 @@ describe('Boss Bullet-Hell Kinematics, Pool Reset & Bullet Graze', () => {
       amplifiedByShield: false,
       seed: 1,
     });
+    expect(sim.projectiles[0]!.bulletShape).toBe('small_orb');
     sim.updateProjectiles(DT); // expires into projectilePool
     expect(sim.projectiles).toHaveLength(0);
 
@@ -332,7 +333,7 @@ describe('Boss Bullet-Hell Kinematics, Pool Reset & Bullet Graze', () => {
       pierceRemaining: 0,
       bounceRemaining: 0,
       element: 'poison',
-      bulletShape: 'wave',
+      bulletShape: 'heavy_orb',
       kinematicMode: 'decel',
       initialSpeed: 160,
       targetSpeed: 40,
@@ -362,6 +363,88 @@ describe('Boss Bullet-Hell Kinematics, Pool Reset & Bullet Graze', () => {
     expect(ICE_MAGE_BOLT_SPEED).toBe(220);
     expect(ICE_MAGE_SHATTER_SPEAR_SPEED).toBe(232);
     expect(FIRE_IMP_FIREBALL_SPEED).toBe(235);
+
+    const fireEnemyAttack = (defId: string, biome: 1 | 2 | 3) => {
+      const sim = new WorldSim({
+        seed: 707,
+        biome,
+        spawnInitialWave: false,
+        includeTrainingDummy: false,
+        includeProps: false,
+      });
+      sim.player.x = 220;
+      sim.player.y = 320;
+      const enemy = sim.spawnEnemy(defId, 460, 320, true);
+      enemy.aiState = 'telegraph';
+      enemy.stateTimer = 0.005;
+      enemy.telegraphAngle = Math.PI;
+      enemy.aimAngle = Math.PI;
+      sim.projectiles.length = 0;
+      sim.step(DT);
+      return sim.projectiles.filter((b) => b.team === 'enemy');
+    };
+
+    const goblinBullets = fireEnemyAttack('goblin_shooter', 1);
+    expect(goblinBullets.length).toBe(3);
+    expect(goblinBullets.every((b) => b.bulletShape === 'lance')).toBe(true);
+
+    const turretBullets = fireEnemyAttack('thorn_turret', 1);
+    expect(turretBullets.length).toBe(6);
+    expect(turretBullets.every((b) => b.bulletShape === 'small_orb')).toBe(true);
+
+    const batBullets = fireEnemyAttack('frost_bat', 2);
+    expect(batBullets.length).toBe(2);
+    expect(batBullets.every((b) => b.bulletShape === 'small_orb')).toBe(true);
+
+    const mageSpreadBullets = fireEnemyAttack('ice_mage', 2);
+    expect(mageSpreadBullets.length).toBe(3);
+    expect(mageSpreadBullets.every((b) => b.bulletShape === 'orb')).toBe(true);
+
+    const cloneBullets = fireEnemyAttack('kryssa_clone', 2);
+    expect(cloneBullets.length).toBe(2);
+    expect(cloneBullets.every((b) => b.bulletShape === 'small_orb')).toBe(true);
+
+    // Vengeful elite death ring -> 'orb', and ice_mage cryo_prism snipe ('lance') + refracted fan ('small_orb')
+    const prismSim = new WorldSim({
+      seed: 708,
+      biome: 2,
+      spawnInitialWave: false,
+      includeTrainingDummy: false,
+      includeProps: false,
+    });
+    prismSim.player.x = 300;
+    prismSim.player.y = 320;
+    prismSim.pendingVengefulRings.push({
+      x: 420,
+      y: 200,
+      timerSec: 0.005,
+      ownerId: 88,
+      damage: 2,
+    });
+    prismSim.step(DT);
+    const vengefulBullets = prismSim.projectiles.filter((b) => b.weaponId === 'vengeful_ring');
+    expect(vengefulBullets.length).toBe(8);
+    expect(vengefulBullets.every((b) => b.bulletShape === 'orb')).toBe(true);
+
+    prismSim.projectiles.length = 0;
+    prismSim.spawnProp('cryo_prism_pillar', 480, 320);
+    const prismMage = prismSim.spawnEnemy('ice_mage', 620, 320, true);
+    prismMage.aiState = 'telegraph';
+    prismMage.stateTimer = 0.005;
+    prismMage.telegraphDurationSec = 0.55;
+    prismSim.step(DT);
+    expect(prismSim.projectiles.length).toBe(1);
+    expect(prismSim.projectiles[0]!.bulletShape).toBe('lance');
+
+    for (let i = 0; i < 30; i++) {
+      prismSim.step(DT);
+      if (prismSim.projectiles.some((b) => b.team === 'enemy' && b.splitGeneration === 1)) break;
+    }
+    const refracted = prismSim.projectiles.filter(
+      (b) => b.team === 'enemy' && b.splitGeneration === 1,
+    );
+    expect(refracted.length).toBe(3);
+    expect(refracted.every((b) => b.bulletShape === 'small_orb')).toBe(true);
   });
 });
 

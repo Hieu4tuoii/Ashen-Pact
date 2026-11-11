@@ -334,6 +334,7 @@ export function updateEnemiesImpl(this: WorldSim, dtSec: number): void {
           speed: 175,
           damage: ring.damage,
           radius: 6,
+          bulletShape: 'orb',
           knockback: 90,
           pierceCount: 0,
           bounceCount: 0,

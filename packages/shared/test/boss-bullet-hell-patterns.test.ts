@@ -29,9 +29,9 @@ describe('Solo-First Boss 5-Pattern Bullet-Hell Choreography & Stream Cancellati
     sim.projectiles.length = 0;
     sim.executeBossSporeKingAttack(boss, Math.PI);
     expect(
-      sim.projectiles.some((b) => b.bulletShape === 'wave' && b.kinematicMode === 'decel'),
+      sim.projectiles.some((b) => b.bulletShape === 'heavy_orb' && b.kinematicMode === 'decel'),
     ).toBe(true);
-    expect(sim.projectiles.some((b) => b.bulletShape === 'lance')).toBe(true);
+    expect(sim.projectiles.some((b) => b.bulletShape === 'small_orb')).toBe(true);
 
     // Pattern 2: Multi-tick Toxic Spiral Stream -> cancels immediately when stunned
     boss.bossPatternId = 2;
@@ -264,5 +264,120 @@ describe('Solo-First Boss 5-Pattern Bullet-Hell Choreography & Stream Cancellati
     expect(sim3.shockwaveRings.length).toBe(1);
     expect(sim3.projectiles.some((b) => b.weaponId === 'titan_anvil_ring')).toBe(true);
     expect(sim3.projectiles.some((b) => b.weaponId === 'titan_flame_sweep')).toBe(false);
+  });
+
+  it('enforces Gungeon 4-shape discipline and linear-only lance invariant across all 15 Boss patterns and streams', () => {
+    const allowed = new Set(['small_orb', 'orb', 'heavy_orb', 'lance']);
+
+    const assertProjectilesAndVolleys = (sim: WorldSim) => {
+      const enemyBullets = sim.projectiles.filter((b) => b.team === 'enemy');
+      expect(enemyBullets.length).toBeGreaterThan(0);
+      for (const b of enemyBullets) {
+        expect(allowed.has(b.bulletShape!)).toBe(true);
+        if (b.bulletShape === 'lance') {
+          expect(b.angularVelRad ?? 0).toBe(0);
+          expect(b.kinematicMode).not.toBe('spiral');
+        }
+      }
+      for (const ev of sim.consumeEvents()) {
+        if (ev.kind === 'bullet_volley_spawned' && ev.team === 'enemy') {
+          expect(allowed.has(ev.bulletShape!)).toBe(true);
+          if (ev.alternateBulletShape !== undefined) {
+            expect(allowed.has(ev.alternateBulletShape)).toBe(true);
+          }
+          if (ev.bulletShape === 'lance' || ev.alternateBulletShape === 'lance') {
+            expect(ev.radialStepRad).toBeUndefined();
+            expect(ev.angularVelRad ?? 0).toBe(0);
+            expect(ev.spreadRad).toBeLessThanOrEqual(0.44);
+          }
+        }
+      }
+    };
+
+    const bossConfigs = [
+      { defId: 'spore_king', biome: 1 as const },
+      { defId: 'kryssa_ice_queen', biome: 2 as const },
+      { defId: 'forge_titan', biome: 3 as const },
+    ];
+
+    for (const cfg of bossConfigs) {
+      for (let pat = 0; pat <= 4; pat++) {
+        const sim = new WorldSim({
+          seed: 800 + cfg.biome * 10 + pat,
+          biome: cfg.biome,
+          spawnInitialWave: false,
+          includeTrainingDummy: false,
+          includeProps: false,
+        });
+        const boss = sim.spawnEnemy(cfg.defId, 480, 320, true);
+        sim.player.x = 140;
+        sim.player.y = 140;
+        boss.bossPhase = 3;
+        boss.bossArmorShellActive = false;
+        boss.bossPatternId = pat;
+        boss.bossLastPatternId = pat;
+        boss.bossAttackCycle = cfg.defId === 'forge_titan' && pat === 0 ? 14 : 0;
+        boss.aiState = 'cooldown';
+        boss.stateTimer = 5.0;
+        boss.attackCooldownTimer = 5.0;
+
+        sim.projectiles.length = 0;
+        sim.consumeEvents();
+
+        if (cfg.defId === 'spore_king') {
+          sim.executeBossSporeKingAttack(boss, Math.PI);
+        } else if (cfg.defId === 'kryssa_ice_queen') {
+          sim.executeBossKryssaAttack(boss, sim.player, Math.PI);
+        } else {
+          sim.executeBossForgeTitanAttack(boss, Math.PI);
+        }
+
+        // Step 12 stream ticks and continue through full stream duration (36 sim ticks = 0.60s)
+        for (let t = 0; t < 12; t++) sim.step(DT);
+        assertProjectilesAndVolleys(sim);
+        for (let t = 0; t < 24; t++) sim.step(DT);
+        assertProjectilesAndVolleys(sim);
+      }
+    }
+
+    // Spore King burrow eruption -> alternating 'orb' and 'small_orb' (no 'lance' radial ring)
+    const burrowSim = new WorldSim({
+      seed: 899,
+      biome: 1,
+      spawnInitialWave: false,
+      includeTrainingDummy: false,
+      includeProps: false,
+    });
+    const burrowBoss = burrowSim.spawnEnemy('spore_king', 480, 320, true);
+    burrowSim.player.x = 140;
+    burrowSim.player.y = 140;
+    burrowBoss.bossPhase = 3;
+    burrowBoss.bossLastPatternId = 0;
+    burrowBoss.bossBurrowed = true;
+    burrowSim.projectiles.length = 0;
+    burrowSim.consumeEvents();
+    burrowSim.executeBossSporeKingAttack(burrowBoss, Math.PI);
+    assertProjectilesAndVolleys(burrowSim);
+    expect(burrowSim.projectiles.some((b) => b.bulletShape === 'orb')).toBe(true);
+    expect(burrowSim.projectiles.some((b) => b.bulletShape === 'small_orb')).toBe(true);
+
+    // Forge Titan legacy P3 odd-cycle flame sweep -> 'orb'
+    const legacyTitanSim = new WorldSim({
+      seed: 900,
+      biome: 3,
+      spawnInitialWave: false,
+      includeTrainingDummy: false,
+      includeProps: false,
+    });
+    const legacyTitan = legacyTitanSim.spawnEnemy('forge_titan', 480, 320, true);
+    legacyTitanSim.player.x = 140;
+    legacyTitanSim.player.y = 140;
+    legacyTitan.bossPhase = 3;
+    legacyTitan.bossPatternId = undefined;
+    legacyTitan.bossAttackCycle = 1;
+    legacyTitanSim.projectiles.length = 0;
+    legacyTitanSim.consumeEvents();
+    legacyTitanSim.executeBossForgeTitanAttack(legacyTitan, Math.PI);
+    assertProjectilesAndVolleys(legacyTitanSim);
   });
 });
