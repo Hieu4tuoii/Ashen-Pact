@@ -72,6 +72,7 @@ import {
   triggerPortalEnterSequenceImpl,
 } from './game-scene/portal-door-sync.js';
 import { syncRoomEntitiesImpl } from './game-scene/room-entities-sync.js';
+import type { SanctuaryVisualLayer } from './game-scene/sanctuary-architecture.js';
 import { processSimEventsImpl } from './game-scene/sim-events.js';
 import { drawEnemyHealthAndStatusBarImpl, renderHitboxesIfEnabledImpl, renderTelegraphsAndShieldImpl } from './game-scene/telegraphs-and-overlays.js';
 
@@ -258,6 +259,7 @@ export class GameScene extends Phaser.Scene {
   public arenaGroundTex?: Phaser.Textures.CanvasTexture;
   public arenaGroundSprite?: Phaser.GameObjects.Image;
   public biomeArchLive?: BiomeArchitectureLiveLayer;
+  public sanctuaryLayer?: SanctuaryVisualLayer;
   public readonly tileCompositeScale = 2;
   public lastMapRevision = -1;
   public lastRenderedBiome: 0 | 1 | 2 | 3 = 1;
@@ -396,6 +398,7 @@ export class GameScene extends Phaser.Scene {
   public reloadVentQueued = false;
   public dropWeaponQueued = false;
   public readyToggleQueued = false;
+  public suppressFireUntilPointerUp = false;
   public pingQueued: { x: number; y: number } | null = null;
   public queuedEmote: QuickEmoteId | null = null;
 
@@ -481,6 +484,9 @@ export class GameScene extends Phaser.Scene {
     // 1. Sample Player Input (WASD + Mouse Aim + Buttons)
     // Subtract lastShakeX/Y so screen shake never perturbs player aim angle or camera lookahead
     const pointer = this.input.activePointer;
+    if (!pointer.leftButtonDown()) {
+      this.suppressFireUntilPointerUp = false;
+    }
     const worldPt = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
     const unshakenWorldX = worldPt.x - this.lastShakeX;
     const unshakenWorldY = worldPt.y - this.lastShakeY;
@@ -584,6 +590,7 @@ export class GameScene extends Phaser.Scene {
       localViewY > 480 + this.hudPadY ||
       isClickingInvitePanel ||
       suppressFireForEmoteWheel ||
+      this.suppressFireUntilPointerUp ||
       isModalOrPaused ||
       this.fullMapOpen ||
       resolveMinimapClickedRoomId(this, localViewX, localViewY) !== null ||
@@ -864,13 +871,14 @@ export class GameScene extends Phaser.Scene {
 
     this.lighting.setBiome(sim.currentBiome);
     this.lighting.setBlizzardVeil(isBlizzardPhase3);
+    const visualTimeSec = getFreezeVisualTimeSec(this.lighting.getElapsedSec());
     if (sim.stressTestActive) {
       this.interactableLightsScratch.length = 0;
     } else {
       const qualityTier = graphicsSettings.getState().quality;
       populateInteractableLightsScratch(this.interactableLightsScratch, {
         tier: qualityTier,
-        elapsedSec: getFreezeVisualTimeSec(this.lighting.getElapsedSec()),
+        elapsedSec: visualTimeSec,
         simTick: sim.tick,
         biome: sim.currentBiome,
         inHub: sim.inHub,
@@ -886,6 +894,7 @@ export class GameScene extends Phaser.Scene {
         doors: sim.doors,
         npcEntities: sim.npcEntities,
         hubStatues: sim.hubStatues,
+        hubStations: sim.hubStations,
       });
     }
     this.lighting.update({
@@ -901,6 +910,7 @@ export class GameScene extends Phaser.Scene {
       trauma: sim.runState === 'playing' && !isSoloPaused ? this.fx.getTrauma() : 0,
       inHub: sim.inHub,
     });
+    this.sanctuaryLayer?.sync(sim, animDt, visualTimeSec);
     if (!sim.stressTestActive) {
       this.biomeArchLive?.update({
         dtSec: animDt,

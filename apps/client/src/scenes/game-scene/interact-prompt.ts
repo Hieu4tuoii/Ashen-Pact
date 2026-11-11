@@ -245,6 +245,41 @@ export function resolveInteractPromptSpec(
       };
     }
 
+    case 'hub_station': {
+      const isCoopBoard = target.station.id === 'coop_board';
+      const colorHex = isCoopBoard ? PALETTE.AZURE_CORE : PALETTE.SOLAR_GOLD;
+      const promptKey = isCoopBoard
+        ? 'ui.sanctuary.coopStationPrompt'
+        : 'ui.sanctuary.codexStationPrompt';
+      const prevLoc = i18n.getLocale();
+      if (prevLoc !== locale) i18n.setLocale(locale);
+      let rawPrompt = '';
+      try {
+        rawPrompt = i18n.t(promptKey);
+      } finally {
+        if (prevLoc !== locale) i18n.setLocale(prevLoc);
+      }
+      const titleText = stripLeadingKeyTag(rawPrompt);
+      return {
+        key: target.key,
+        kind: 'hub_station',
+        x: target.x,
+        y: target.y - 34,
+        targetX: target.x,
+        targetY: target.y,
+        highlightRadiusX: isCoopBoard ? 36 : 28,
+        highlightRadiusY: isCoopBoard ? 24 : 22,
+        keycapText: 'E',
+        titleText,
+        colorHex,
+        colorNum: hexToNum(colorHex),
+        costGold: 0,
+        hasCoinIcon: false,
+        priceText: '',
+        suppressedByWeaponCard: false,
+      };
+    }
+
     case 'ancient_mechanism': {
       const colorHex = PALETTE.SOLAR_GOLD;
       const titleText = isEn ? 'Repair Ancient Mechanism' : 'Sửa Máy Cổ Đại';

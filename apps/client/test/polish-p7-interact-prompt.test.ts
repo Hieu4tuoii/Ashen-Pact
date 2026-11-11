@@ -420,4 +420,61 @@ describe('Phase P7 — Single-Pill [E] Prompt, Fade + Hysteresis, Door Labels, H
     expect(downedTeammateSpec.color).toBe(PALETTE.CRIMSON_BRIGHT);
     expect(downedTeammateSpec.text).toContain('40%');
   });
+
+  it('resolves hub_station [E] prompts for coop_board (AZURE_CORE) and codex_desk (SOLAR_GOLD) in VI and EN without leading [E]', () => {
+    const sim = createCleanSim('p7-hub-stations');
+    sim.enterHub();
+
+    // 1. East Co-op Guild Board at (928, 352) — player approaches at (928, 380)
+    sim.player.x = 928;
+    sim.player.y = 380;
+    const coopTarget = findInteractTarget(sim, sim.player.id);
+    expect(coopTarget?.kind).toBe('hub_station');
+
+    i18n.setLocale('vi');
+    const coopSpecVi = resolveInteractPromptSpec(sim, coopTarget);
+    expect(coopSpecVi).not.toBeNull();
+    expect(coopSpecVi?.kind).toBe('hub_station');
+    expect(coopSpecVi?.key).toBe('hub_station:coop_board');
+    expect(coopSpecVi?.keycapText).toBe('E');
+    expect(coopSpecVi?.colorHex).toBe(PALETTE.AZURE_CORE);
+    expect(coopSpecVi?.titleText.length).toBeGreaterThan(0);
+    expect(coopSpecVi?.titleText).not.toMatch(/^\[E\]/i);
+
+    i18n.setLocale('en');
+    const coopSpecEn = resolveInteractPromptSpec(sim, coopTarget);
+    expect(coopSpecEn?.kind).toBe('hub_station');
+    expect(coopSpecEn?.keycapText).toBe('E');
+    expect(coopSpecEn?.colorHex).toBe(PALETTE.AZURE_CORE);
+    expect(coopSpecEn?.titleText.length).toBeGreaterThan(0);
+    expect(coopSpecEn?.titleText).not.toMatch(/^\[E\]/i);
+    expect(coopSpecEn?.titleText).not.toBe(coopSpecVi?.titleText);
+
+    // 2. South-East Chronicler's Codex Desk at (860, 520) — player approaches at (860, 546)
+    sim.player.x = 860;
+    sim.player.y = 546;
+    const codexTarget = findInteractTarget(sim, sim.player.id);
+    expect(codexTarget?.kind).toBe('hub_station');
+
+    i18n.setLocale('vi');
+    const codexSpecVi = resolveInteractPromptSpec(sim, codexTarget);
+    expect(codexSpecVi).not.toBeNull();
+    expect(codexSpecVi?.kind).toBe('hub_station');
+    expect(codexSpecVi?.key).toBe('hub_station:codex_desk');
+    expect(codexSpecVi?.keycapText).toBe('E');
+    expect(codexSpecVi?.colorHex).toBe(PALETTE.SOLAR_GOLD);
+    expect(codexSpecVi?.titleText.length).toBeGreaterThan(0);
+    expect(codexSpecVi?.titleText).not.toMatch(/^\[E\]/i);
+
+    i18n.setLocale('en');
+    const codexSpecEn = resolveInteractPromptSpec(sim, codexTarget);
+    expect(codexSpecEn?.kind).toBe('hub_station');
+    expect(codexSpecEn?.keycapText).toBe('E');
+    expect(codexSpecEn?.colorHex).toBe(PALETTE.SOLAR_GOLD);
+    expect(codexSpecEn?.titleText.length).toBeGreaterThan(0);
+    expect(codexSpecEn?.titleText).not.toMatch(/^\[E\]/i);
+    expect(codexSpecEn?.titleText).not.toBe(codexSpecVi?.titleText);
+
+    i18n.setLocale('vi');
+  });
 });

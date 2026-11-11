@@ -1,4 +1,5 @@
 import {
+  type CharacterId,
   CHARACTERS,
   clamp,
   findInteractTarget,
@@ -22,7 +23,10 @@ import {
   drawTetherStaffBeams,
   syncBatch1WeaponRoomEntities,
 } from '../../fx/combat-fx-weapons-v2.js';
-import { resolveInteractableVisualGlowSpec } from '../../fx/lighting-config.js';
+import {
+  CHARACTER_THEME_COLORS,
+  resolveInteractableVisualGlowSpec,
+} from '../../fx/lighting-config.js';
 
 export {
   drawEnemyBatch1Indicators,
@@ -40,9 +44,15 @@ import {
   resolveInteractPromptSpec,
   syncWorldInteractPromptPill,
 } from './interact-prompt.js';
+import {
+  resolveHeroLoungeLabelState,
+  resolveHeroStationVisualState,
+  resolveSanctuaryGuideSpecs,
+} from './sanctuary-architecture.js';
 
 const chestOpenedAtTickById = new Map<number, number>();
 const prevChestOpenedById = new Map<number, boolean>();
+const activeCharacterIdsScratch: CharacterId[] = [];
 
 export function recordChestOpenedAnim(chestId: number, simTick: number): void {
   chestOpenedAtTickById.set(chestId, simTick);
@@ -68,7 +78,7 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
       });
   this.currentInteractTarget = target;
 
-  // 0. Hub 5 Character Statues & Natural Hub Guidance Signs (Doanh Trại)
+  // 0. Hub 5 Lounging Hero Rigs & Natural 5-Wing Sanctuary Guidance Signs
   const previewOpen =
     sim.inHub &&
     !this.fullMapOpen &&
@@ -95,6 +105,12 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
       : null;
 
   if (sim.inHub && sim.hubStatues.length > 0) {
+    activeCharacterIdsScratch.length = 0;
+    const allPlayers = sim.getAllPlayers();
+    for (let pIdx = 0; pIdx < allPlayers.length; pIdx++) {
+      activeCharacterIdsScratch.push(allPlayers[pIdx]!.characterId);
+    }
+
     for (let i = 0; i < sim.hubStatues.length; i++) {
       const st = sim.hubStatues[i]!;
       const cDef = CHARACTERS[st.characterId];
@@ -114,11 +130,11 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
         glowSprite.setBlendMode(Phaser.BlendModes.ADD);
 
         const label = this.add
-          .text(st.x, st.y - 30, charTxt.name, {
+          .text(st.x, st.y - 32, charTxt.name, {
             fontFamily: '"Be Vietnam Pro", sans-serif',
             fontSize: '10.5px',
             fontStyle: '800',
-            color: PALETTE.SOLAR_GOLD,
+            color: CHARACTER_THEME_COLORS[st.characterId] ?? PALETTE.SOLAR_GOLD,
             stroke: PALETTE.INK_DEEP,
             strokeThickness: 3,
             resolution: textRes,
@@ -128,11 +144,11 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
           .setVisible(false);
 
         const subLabel = this.add
-          .text(st.x, st.y + 23, '', {
+          .text(st.x, st.y + 24, '', {
             fontFamily: '"Be Vietnam Pro", sans-serif',
             fontSize: '8.5px',
             fontStyle: '700',
-            color: PALETTE.SILVER_BRIGHT,
+            color: PALETTE.LIME_GLOW,
             stroke: PALETTE.INK_DEEP,
             strokeThickness: 2.5,
             align: 'center',
@@ -146,6 +162,14 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
         this.hubStatueRigs.set(st.characterId, entry);
       }
 
+      const stationVisual = resolveHeroStationVisualState(
+        st.characterId,
+        activeCharacterIdsScratch,
+        sim.allowDuplicateCharacters,
+      );
+      entry.rig.container.setPosition(st.x, st.y + RIG_FOOT_OFFSET_Y);
+      entry.rig.container.setAlpha(stationVisual.rigAlpha);
+
       const glowSpec = resolveInteractableVisualGlowSpec({
         kind: 'hub_statue',
         characterId: st.characterId,
@@ -154,66 +178,69 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
         entry.glowSprite.setPosition(st.x, st.y + 4);
         entry.glowSprite.setDisplaySize(glowSpec.glowRadiusX * 2, glowSpec.glowRadiusY * 2);
         entry.glowSprite.setTint(glowSpec.colorNum);
-        entry.glowSprite.setAlpha(glowSpec.glowAlpha);
+        entry.glowSprite.setAlpha(glowSpec.glowAlpha * (stationVisual.embodied ? 0.55 : 1));
         entry.glowSprite.setVisible(true);
       } else {
         entry.glowSprite.setVisible(false);
       }
 
-      entry.label.setVisible(false);
-      entry.subLabel.setVisible(false);
+      const labelState = resolveHeroLoungeLabelState({
+        characterId: st.characterId,
+        characterName: charTxt.name,
+        stationVisual,
+        playerX: sim.player.x,
+        playerY: sim.player.y,
+        statueX: st.x,
+        statueY: st.y,
+        modalOrMapOpen,
+        isTargetedStatue:
+          target?.kind === 'hub_statue' && target.statue.characterId === st.characterId,
+      });
+
+      if (labelState.subLabelVisible) {
+        if (entry.subLabel.text !== labelState.subLabelText) {
+          entry.subLabel.setText(labelState.subLabelText);
+        }
+        if (entry.subLabel.style.color !== labelState.subLabelColor) {
+          entry.subLabel.setColor(labelState.subLabelColor);
+        }
+        entry.subLabel.setPosition(st.x, st.y + 24);
+        entry.subLabel.setAlpha(labelState.subLabelAlpha);
+        entry.subLabel.setVisible(true);
+      } else {
+        entry.subLabel.setVisible(false);
+      }
+
+      if (labelState.labelVisible) {
+        if (entry.label.text !== labelState.labelText) {
+          entry.label.setText(labelState.labelText);
+        }
+        if (entry.label.style.color !== labelState.labelColor) {
+          entry.label.setColor(labelState.labelColor);
+        }
+        entry.label.setPosition(st.x, st.y - 32);
+        entry.label.setAlpha(labelState.labelAlpha);
+        entry.label.setVisible(true);
+      } else {
+        entry.label.setVisible(false);
+      }
+
       entry.rig.update(dtSec);
     }
 
-    // Natural Hub Guidance Signs (Statues Arc, Weapon Rack, Training Dummy live DPS) — visible only within <= 200u
-    const isEn = i18n.getLocale() === 'en';
-    const hubCx = sim.map.width * 0.5;
-    const hubCy = sim.map.height * 0.5;
-    const camScrollX = this.cameras.main.worldView?.x ?? 0;
-    const dummySignX = hubCx + 95;
-    const dummyBlockedByInvite =
-      this.invitePanelVisible && !this.fullMapOpen && dummySignX - camScrollX > 560;
-    const guideSpecs: {
-      x: number;
-      y: number;
-      anchorX: number;
-      anchorY: number;
-      text: string;
-      color: string;
-      blocked: boolean;
-    }[] = [
-      {
-        x: hubCx - 125,
-        y: hubCy - 60,
-        anchorX: hubCx - 125,
-        anchorY: hubCy - 125,
-        text: i18n.t('ui.hubGuide.statuesSign'),
-        color: PALETTE.CYAN_FROST,
-        blocked: previewOpen,
-      },
-      {
-        x: hubCx - 258,
-        y: hubCy + 22,
-        anchorX: hubCx - 258,
-        anchorY: hubCy + 22,
-        text: isEn
-          ? '⚔ PRACTICE WEAPON RACK — Press [E] to Test & Compare'
-          : '⚔ KỆ VŨ KHÍ THỬ NGHIỆM — Nhấn [E] Nhặt Thử & So Sánh',
-        color: PALETTE.SOLAR_GOLD,
-        blocked: previewOpen,
-      },
-      {
-        x: dummySignX,
-        y: hubCy + 42,
-        anchorX: dummySignX,
-        anchorY: hubCy + 42,
-        text: isEn
-          ? `🎯 Training Dummy · DPS: ${sim.getRollingDps().toFixed(1)}`
-          : `🎯 Bù Nhìn Tập Bắn · DPS: ${sim.getRollingDps().toFixed(1)}`,
-        color: PALETTE.LIME_GLOW,
-        blocked: dummyBlockedByInvite,
-      },
-    ];
+    // Natural 5-Wing Sanctuary Guidance Signs — visible only within <= 200u
+    const guideSpecs = resolveSanctuaryGuideSpecs({
+      mapWidth: sim.map.width,
+      mapHeight: sim.map.height,
+      rollingDps: sim.getRollingDps(),
+      camScrollX: this.cameras.main.worldView?.x ?? 0,
+      invitePanelVisible: this.invitePanelVisible,
+      fullMapOpen: this.fullMapOpen,
+      previewOpen,
+      modalOrMapOpen,
+      weaponComparisonVisible,
+      target,
+    });
 
     for (let gIdx = 0; gIdx < guideSpecs.length; gIdx++) {
       const spec = guideSpecs[gIdx]!;
@@ -246,6 +273,9 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
       );
       gTxt.setAlpha(guideVis.alpha);
       gTxt.setVisible(guideVis.visible);
+    }
+    while (this.hubGuideTexts.length > guideSpecs.length) {
+      this.hubGuideTexts.pop()?.destroy();
     }
   } else {
     if (this.hubStatueRigs.size > 0) {

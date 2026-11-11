@@ -34,7 +34,7 @@ import {
   isTestHooksEnabled,
   onDebugFlagsChanged,
 } from '../../core/debug-flag.js';
-import { resetClientFreezeRandom } from '../../core/visual-query.js';
+import { getFreezeVisualTimeSec, resetClientFreezeRandom } from '../../core/visual-query.js';
 import { CombatFxManager, computeIrisHoleRadius } from '../../fx/combat-fx.js';
 import { computeUniformViewportMetrics } from '../../fx/lighting-config.js';
 import { LightingPipeline } from '../../fx/lighting-pipeline.js';
@@ -57,6 +57,10 @@ import {
   resolveMinimapClickedRoomId,
 } from './hud-qol-and-minimap.js';
 import { createInteractPromptFadeState } from './interact-prompt.js';
+import {
+  resolveHubWorldPointerClick,
+  SanctuaryVisualLayer,
+} from './sanctuary-architecture.js';
 import { createPortalAnimState } from '../../fx/portal-door-shaders.js';
 
 export function syncGameSceneTestHooks(scene: GameScene): void {
@@ -203,6 +207,7 @@ export function createImpl(this: GameScene): void {
   this.queuedEmote = null;
   this.dropWeaponQueued = false;
   this.readyToggleQueued = false;
+  this.suppressFireUntilPointerUp = false;
   musicManager.setPaused(false);
 
   // 1. Initialize Transport (NetworkTransport for Co-op LAN Host/Join, LocalTransport for Solo)
@@ -302,6 +307,65 @@ export function createImpl(this: GameScene): void {
       const clickedRoomId = resolveMinimapClickedRoomId(this, hudPt.x, hudPt.y);
       if (clickedRoomId !== null) {
         this.teleportToRoom(clickedRoomId);
+        return;
+      }
+
+      const curSim = this.transport.getSim();
+      const debugState = initGlobalDebugState();
+      const modalOpen =
+        this.pauseModalOpen ||
+        (this.settingsModal?.isOpen() ?? false) ||
+        this.fullMapOpen ||
+        this.emoteWheelOpen ||
+        debugState.overlayVisible ||
+        (this.transport.getLocalPlayerState().buffChoices?.length ?? 0) > 0 ||
+        (this.transport.getLocalPlayerState().mutatorChoices?.length ?? 0) > 0 ||
+        (this.transport.getLocalPlayerState().pactChoices?.length ?? 0) > 0;
+      const isClickingInvitePanel =
+        curSim.inHub &&
+        this.invitePanelVisible &&
+        hudPt.x >= 676 + this.hudPadX &&
+        hudPt.x <= 952 + this.hudPadX &&
+        hudPt.y >= 70 - this.hudPadY &&
+        hudPt.y <= 470 - this.hudPadY;
+      const isClickingHudChrome =
+        hudPt.y < 68 - this.hudPadY ||
+        hudPt.y > 480 + this.hudPadY ||
+        isClickingInvitePanel;
+
+      if (curSim.inHub && !modalOpen && !isClickingHudChrome) {
+        const wPt = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
+        const action = resolveHubWorldPointerClick({
+          inHub: curSim.inHub,
+          coopMode: this.coopMode,
+          modalOpen,
+          worldX: wPt.x - this.lastShakeX,
+          worldY: wPt.y - this.lastShakeY,
+          hubStatues: curSim.hubStatues,
+          hubStations: curSim.hubStations,
+        });
+        if (action) {
+          this.suppressFireUntilPointerUp = true;
+          if (action.kind === 'select_character') {
+            if (curSim.selectCharacter(curSim.player.id, action.characterId)) {
+              zzfx.play('ui_click');
+              if (typeof window !== 'undefined') {
+                window.localStorage?.setItem('ashen_pact_character', action.characterId);
+              }
+              this.lastHudCharacterId = '';
+              this.lastHubPreviewHash = '';
+              this.lastInvitePanelHash = '';
+            }
+          } else if (action.kind === 'toggle_coop_board') {
+            this.invitePanelVisible = !this.invitePanelVisible;
+            debugState.invitePanelVisible = this.invitePanelVisible;
+            this.lastInvitePanelHash = '';
+            zzfx.play('ui_click');
+          } else if (action.kind === 'open_codex_desk') {
+            this.settingsModal?.open('settings');
+            zzfx.play('ui_click');
+          }
+        }
       }
     }
   };
@@ -317,6 +381,8 @@ export function createImpl(this: GameScene): void {
     this.input.keyboard?.off('keydown', unlockAudio);
     this.lighting?.destroy();
     this.destroyPortalAndDoorVisuals();
+    this.sanctuaryLayer?.destroy();
+    this.sanctuaryLayer = undefined;
     this.biomeArchLive?.destroy();
     this.biomeArchLive = undefined;
     this.settingsModal?.destroy();
@@ -343,6 +409,8 @@ export function createImpl(this: GameScene): void {
 
   // 2. Build Arena Tilemap (8 Floor Variants, Autotiled Walls/Pillars, Cracked Walls, AO Shadows, 6 Interactive Surfaces)
   this.buildArenaTiles();
+  this.sanctuaryLayer?.destroy();
+  this.sanctuaryLayer = new SanctuaryVisualLayer(this);
 
   // 3. Telegraph, Interact Highlight & Hitbox Overlay Graphics (depth 35.6..38: above lightmapRt depth 34)
   this.interactHighlightGraphics = this.add.graphics();
@@ -412,6 +480,7 @@ export function createImpl(this: GameScene): void {
 
   // 7. Dynamic Lighting Pipeline + WebGL PostFX Shader
   this.lighting = new LightingPipeline(this);
+  this.sanctuaryLayer.sync(sim, 0, getFreezeVisualTimeSec(this.lighting.getElapsedSec()));
 
   // 8. Custom Procedural Crosshair (in HudScene so it is unaffected by PostFX/lightmap)
   const invBake = 1 / textRes;
@@ -441,6 +510,7 @@ export function setStressTestModeImpl(this: GameScene, active: boolean): void {
     rig.destroy();
   }
   this.enemyRigs.clear();
+  this.sanctuaryLayer?.sync(sim, 0, getFreezeVisualTimeSec(this.lighting?.getElapsedSec() ?? 1.0));
   if (active) {
     this.transport.consumeEvents();
     this.fx?.consumeHitStopDelta(999);
@@ -1379,6 +1449,9 @@ export function applyCameraViewportImpl(this: GameScene): void {
       entry.glowSprite.setTexture('fx_light_radial');
       entry.label.setResolution(newScale);
       entry.subLabel.setResolution(newScale);
+    }
+    for (const gTxt of this.hubGuideTexts) {
+      gTxt.setResolution(newScale);
     }
     for (const rig of this.enemyRigs.values()) {
       rig.refreshBakedTextures();

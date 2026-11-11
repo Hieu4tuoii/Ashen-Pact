@@ -4,6 +4,7 @@ import {
   type RoomType,
   type SimChestState,
   type SimDoorState,
+  type SimHubStation,
   type SimHubStatue,
   type SimNpcState,
   type SimPickupState,
@@ -122,6 +123,7 @@ export type InteractableLightKind =
   | 'merchant'
   | 'shrine'
   | 'hub_statue'
+  | 'hub_station'
   | 'world_item'
   | 'door'
   | 'pickup';
@@ -163,6 +165,7 @@ export interface PopulateInteractableLightsParams {
   chests?: readonly SimChestState[];
   npcEntities?: readonly SimNpcState[];
   hubStatues?: readonly SimHubStatue[];
+  hubStations?: readonly SimHubStation[];
   worldItems?: readonly SimWorldItemState[];
   doors?: readonly SimDoorState[];
   pickups?: readonly SimPickupState[];
@@ -206,6 +209,7 @@ export function populateInteractableLightsScratch(
     chests = [],
     npcEntities = [],
     hubStatues = [],
+    hubStations = [],
     worldItems = [],
     doors = [],
     pickups = [],
@@ -278,7 +282,7 @@ export function populateInteractableLightsScratch(
     writeEntry('chest', ch.x, ch.y, radius, colorNum, alpha);
   }
 
-  // 3. NPCs (Merchant gold #F59E42, Shrine cyan #22D3EE when unused, 0 when interacted) & Hub Statues
+  // 3. NPCs (Merchant gold #F59E42, Shrine cyan #22D3EE when unused, 0 when interacted) & Hub Stations / Statues
   for (let i = 0; i < npcEntities.length; i++) {
     const npc = npcEntities[i]!;
     if (npc.kind === 'merchant') {
@@ -291,6 +295,36 @@ export function populateInteractableLightsScratch(
   }
 
   if (inHub) {
+    for (let i = 0; i < hubStations.length; i++) {
+      const station = hubStations[i]!;
+      if (station.id === 'coop_board') {
+        const radius = clamp(92 + 5 * Math.sin(elapsedSec * 2.4), 82, 102);
+        writeEntry(
+          'hub_station',
+          station.x,
+          station.y,
+          radius,
+          hexToNum(PALETTE.AZURE_CORE),
+          0.32,
+          hexToNum(PALETTE.CYAN_FROST),
+          48,
+          0.24,
+        );
+      } else {
+        const radius = clamp(84 + 4 * Math.sin(elapsedSec * 3.1 + 1.2), 74, 94);
+        writeEntry(
+          'hub_station',
+          station.x,
+          station.y,
+          radius,
+          hexToNum(PALETTE.SOLAR_GOLD),
+          0.31,
+          hexToNum(PALETTE.FLAME_ORANGE),
+          44,
+          0.22,
+        );
+      }
+    }
     for (let i = 0; i < hubStatues.length; i++) {
       const st = hubStatues[i]!;
       const col = hexToNum(CHARACTER_THEME_COLORS[st.characterId] ?? PALETTE.SOLAR_GOLD);
