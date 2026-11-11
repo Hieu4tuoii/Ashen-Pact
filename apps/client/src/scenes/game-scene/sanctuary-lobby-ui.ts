@@ -442,7 +442,11 @@ export function syncSanctuaryOnStressTest(scene: GameScene, active: boolean): vo
   if (active) {
     scene.invitePanelVisible = false;
     initGlobalDebugState().invitePanelVisible = false;
-    scene.lastInvitePanelHash = '';
+    scene.lastInvitePanelHash = '__invalid__';
+    scene.lastSanctuaryHudHash = '__invalid__';
+    if (!scene.updateHubInvitePanel) {
+      scene.invitePanelContainer?.removeAll(true);
+    }
   }
   scene.updateHubInvitePanel?.();
   if (scene.updateSanctuaryOverlayHud) {
@@ -486,7 +490,7 @@ export function updateSanctuaryOverlayHudImpl(this: GameScene, dtSec: number): v
   this.sanctuaryPlaqueContainer?.setAlpha(plaqueAlpha);
 
   const hudHash = !showInHub
-    ? ''
+    ? 'hidden'
     : `${locale}:${showDebug ? 1 : 0}:${showViFooter ? 1 : 0}:${this.disconnectReason ?? ''}:${this.hubLoungeAnimOverride ?? 'idle'}:${this.currentHudUiScale}`;
 
   if (hudHash === this.lastSanctuaryHudHash) return;

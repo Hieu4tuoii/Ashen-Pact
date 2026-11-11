@@ -49,19 +49,19 @@ export function updateHubInvitePanelImpl(this: GameScene): void {
   const ui = this.uiScene;
   const sim = this.transport.getSim();
   const debug = initGlobalDebugState();
-  const showInHub = sim.inHub && !this.fullMapOpen;
+  const showInHub = sim.inHub && !sim.stressTestActive && !this.fullMapOpen;
   const allPlayers = sim.getAllPlayers();
   const playersKey = allPlayers
     .map((pl) => `${pl.id}:${pl.slot}:${pl.displayName}:${pl.characterId}:${pl.ready ? 1 : 0}`)
     .join('|');
   const hash = !showInHub
-    ? ''
+    ? 'hidden'
     : `${this.coopMode}:${this.invitePanelVisible ? 1 : 0}:${this.displayName}:${this.serverHostPort}:${this.menuActiveInput ?? ''}:${debug.serverConnected ? 1 : 0}:${this.primaryLanIp}:${this.serverPort}:${this.hostInviteUrl ?? ''}:${sim.allowDuplicateCharacters ? 1 : 0}:${this.copyToastTimer > 0 ? 1 : 0}:${playersKey}:${i18n.getLocale()}:${this.currentHudUiScale}`;
 
   if (hash === this.lastInvitePanelHash) return;
   this.lastInvitePanelHash = hash;
 
-  this.invitePanelContainer.removeAll(true);
+  this.invitePanelContainer?.removeAll(true);
   if (!showInHub) return;
 
   const textRes = computeUiTextResolution(

@@ -1,6 +1,9 @@
 import type Phaser from 'phaser';
 import { describe, expect, it, vi } from 'vitest';
-import { formatHubInvitePlayerRowText } from '../src/scenes/game-scene/hud-hub-and-cards.js';
+import {
+  formatHubInvitePlayerRowText,
+  updateHubInvitePanelImpl,
+} from '../src/scenes/game-scene/hud-hub-and-cards.js';
 import {
   getResultScreenButtonSpecs,
   resolveLocalizedBuffText,
@@ -457,9 +460,15 @@ describe('Phase P9b — Menus, Hub Invite Panel, Modals, Pause Confirm & 4-Tab S
   it('clears Sanctuary HUD chrome, collapses Solo Co-op Drawer, and hides DOM inputs when entering Stress Test mode', () => {
     const hudRemoveAll = vi.fn();
     const footerRemoveAll = vi.fn();
+    const inviteRemoveAll = vi.fn();
     const domSetVisible = vi.fn();
     const domSetModalBlocked = vi.fn();
-    const updateHubInvitePanel = vi.fn();
+    const simState = {
+      inHub: false,
+      stressTestActive: true,
+      allowDuplicateCharacters: true,
+      getAllPlayers: () => [],
+    };
 
     const mockScene = {
       uiScene: {},
@@ -476,9 +485,14 @@ describe('Phase P9b — Menus, Hub Invite Panel, Modals, Pause Confirm & 4-Tab S
       menuActiveInput: 'name',
       displayName: 'Hiệp Sĩ Tro',
       serverHostPort: '127.0.0.1:2567',
+      primaryLanIp: '127.0.0.1',
+      serverPort: 2567,
+      hostInviteUrl: null,
+      copyToastTimer: 0,
       currentHudUiScale: 1,
       hudPadX: 0,
       hudPadY: 0,
+      invitePanelContainer: { removeAll: inviteRemoveAll },
       sanctuaryHudContainer: { removeAll: hudRemoveAll },
       sanctuaryDebugFooterContainer: { removeAll: footerRemoveAll },
       sanctuaryPlaqueContainer: { setAlpha: vi.fn() },
@@ -496,12 +510,14 @@ describe('Phase P9b — Menus, Hub Invite Panel, Modals, Pause Confirm & 4-Tab S
           resetKeys: vi.fn(),
         },
       },
-      updateHubInvitePanel,
+      updateHubInvitePanel() {
+        updateHubInvitePanelImpl.call(mockScene as unknown as GameScene);
+      },
       updateSanctuaryOverlayHud(dtSec: number) {
         updateSanctuaryOverlayHudImpl.call(mockScene as unknown as GameScene, dtSec);
       },
       transport: {
-        getSim: () => ({ inHub: false, stressTestActive: true }),
+        getSim: () => simState,
         getLocalPlayerState: () => ({ buffChoices: [], mutatorChoices: [], pactChoices: [] }),
       },
     } as unknown as GameScene;
@@ -509,12 +525,19 @@ describe('Phase P9b — Menus, Hub Invite Panel, Modals, Pause Confirm & 4-Tab S
     syncSanctuaryOnStressTest(mockScene, true);
 
     expect(mockScene.invitePanelVisible).toBe(false);
+    expect(inviteRemoveAll).toHaveBeenCalledWith(true);
     expect(domSetVisible).toHaveBeenCalledWith(false);
     expect(mockScene.input.keyboard!.enabled).toBe(true);
     expect(hudRemoveAll).toHaveBeenCalledWith(true);
     expect(footerRemoveAll).toHaveBeenCalledWith(true);
-    expect(mockScene.lastSanctuaryHudHash).toBe('');
-    expect(updateHubInvitePanel).toHaveBeenCalledTimes(1);
+
+    // Subsequent frame while in Stress Test or exiting Stress Test into combat is an O(1) no-op
+    inviteRemoveAll.mockClear();
+    hudRemoveAll.mockClear();
+    simState.stressTestActive = false;
+    syncSanctuaryOnStressTest(mockScene, false);
+    expect(inviteRemoveAll).toHaveBeenCalledTimes(0);
+    expect(hudRemoveAll).toHaveBeenCalledTimes(0);
   });
 
   it('honors explicit startInHub: false on Replay restart even when page URL contains ?hub=1', async () => {
