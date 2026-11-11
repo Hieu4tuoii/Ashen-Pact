@@ -501,7 +501,9 @@ export function updateBossForgeTitanAIImpl(
     e.aiState = 'telegraph';
     if (wasIdle) {
       e.bossPatternId = 0;
-    } else if (!e.bossArmorShellActive) {
+    } else if (e.bossArmorShellActive) {
+      e.bossPatternId = e.bossAttackCycle % 2 === 0 ? 0 : 1;
+    } else {
       selectNextBossPattern(this, e);
     }
     e.stateTimer = Math.max(
@@ -522,6 +524,7 @@ export function updateBossForgeTitanAIImpl(
       angle: e.telegraphAngle,
       durationSec: e.stateTimer,
       radius: e.telegraphRadius,
+      bossPatternId: e.bossArmorShellActive ? 0 : e.bossPatternId,
     });
     return;
   }

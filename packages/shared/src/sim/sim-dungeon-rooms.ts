@@ -119,10 +119,7 @@ export function enterRoomImpl(this: WorldSim, roomId: number, entryDir?: Cardina
   // Clear transient entities from previous room
   this.enemies.length = 0;
   for (let i = 0; i < this.projectiles.length; i++) {
-    const b = this.projectiles[i]!;
-    b.ttlSec = 0;
-    b.hitEntityIds.length = 0;
-    this.projectilePool.push(b);
+    this.releaseProjectileToPool(this.projectiles[i]!);
   }
   this.projectiles.length = 0;
   for (let i = 0; i < this.pickups.length; i++) {

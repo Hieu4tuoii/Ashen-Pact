@@ -494,6 +494,7 @@ export function syncProjectilesAndPickupsImpl(this: GameScene): void {
   const viewBottom = hasView ? view.y + view.height + 24 : 9999;
 
   // 1. Projectiles (object-pooled Sprites)
+  const visualTimeSec = getFreezeVisualTimeSec(this.lighting?.getElapsedSec() ?? 1.0);
   const isStress = sim.stressTestActive;
   const projScale = isStress ? stressInvBake : invBake;
   this.activeProjIds.clear();
@@ -515,6 +516,7 @@ export function syncProjectilesAndPickupsImpl(this: GameScene): void {
     });
     const tex = spec.textureKey;
     const tint = spec.tint;
+    const specScale = spec.scale ?? 1;
 
     let entry = this.projectileSprites.get(b.id);
     if (!entry) {
@@ -525,6 +527,7 @@ export function syncProjectilesAndPickupsImpl(this: GameScene): void {
           entry.textureKey = tex;
           entry.sprite.setTexture(tex);
         }
+        entry.specScale = specScale;
         entry.sprite.setActive(true);
         entry.glowSprite.setActive(true);
       } else {
@@ -533,16 +536,18 @@ export function syncProjectilesAndPickupsImpl(this: GameScene): void {
         glowSprite.setDepth(59);
         glowSprite.setBlendMode(Phaser.BlendModes.ADD);
         glowSprite.setVisible(false);
-        entry = { sprite, glowSprite, textureKey: tex };
+        entry = { sprite, glowSprite, textureKey: tex, specScale };
       }
-      entry.sprite.setScale(projScale * (spec.scale ?? 1));
+      entry.sprite.setScale(projScale * specScale);
       this.projectileSprites.set(b.id, entry);
     } else if (entry.textureKey !== tex) {
       entry.textureKey = tex;
+      entry.specScale = specScale;
       entry.sprite.setTexture(tex);
-      entry.sprite.setScale(projScale * (spec.scale ?? 1));
+      entry.sprite.setScale(projScale * specScale);
     } else {
-      entry.sprite.setScale(projScale * (spec.scale ?? 1));
+      entry.specScale = specScale;
+      entry.sprite.setScale(projScale * specScale);
     }
 
     if (entry.sprite.depth !== spec.depth) {
@@ -566,14 +571,22 @@ export function syncProjectilesAndPickupsImpl(this: GameScene): void {
       }
       entry.sprite.setAlpha(spec.alpha);
       entry.sprite.setPosition(pos.x, pos.y);
-      const directionalEnemyShape =
-        b.bulletShape === 'wave' || b.bulletShape === 'lance' || b.bulletShape === 'diamond';
-      entry.sprite.setRotation(b.team === 'enemy' && !directionalEnemyShape ? 0 : b.angle);
+      let rot = b.angle;
+      if (b.team === 'enemy') {
+        if (b.bulletShape === 'wave' || b.bulletShape === 'lance' || b.bulletShape === 'diamond') {
+          rot = b.angle;
+        } else if (b.bulletShape === 'ring_bolt') {
+          rot = (visualTimeSec * 6.0 + (b.id & 7)) % (Math.PI * 2);
+        } else {
+          rot = 0;
+        }
+      }
+      entry.sprite.setRotation(rot);
       if (b.team === 'enemy' && !isStress) {
         entry.glowSprite.setVisible(true);
         entry.glowSprite.setPosition(pos.x, pos.y);
-        entry.glowSprite.setScale(projScale * (spec.scale ?? 1) * 1.15);
-        entry.glowSprite.setAlpha(0.62);
+        entry.glowSprite.setScale(projScale * specScale * 1.35);
+        entry.glowSprite.setAlpha(0.58 + 0.12 * Math.sin(visualTimeSec * 9.0 + (b.id & 7)));
       } else {
         entry.glowSprite.setVisible(false);
       }
@@ -594,7 +607,6 @@ export function syncProjectilesAndPickupsImpl(this: GameScene): void {
   }
 
   // 2. Pickups (Energy & Gold, object-pooled Sprites, instanced per player)
-  const visualTimeSec = getFreezeVisualTimeSec(this.lighting?.getElapsedSec() ?? 1.0);
   const showPickupGlow =
     !sim.stressTestActive &&
     graphicsSettings.getState().quality === 'high' &&

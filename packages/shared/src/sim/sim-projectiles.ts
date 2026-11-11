@@ -51,13 +51,16 @@ import type { WorldSim } from './world-sim.js';
 export { spawnSeedGunLifeBlossomImpl, triggerLauncherProjectileExplosionImpl };
 
 export function stepProjectileKinematics(b: SimProjectileState, dtSec: number): void {
+  if ((b.awaitingServerRedirectTimer ?? 0) > 0) return;
   const mode = b.kinematicMode;
   const angVel = b.angularVelRad ?? 0;
   if ((!mode || mode === 'constant') && angVel === 0) return;
 
-  b.kinematicElapsedSec = (b.kinematicElapsedSec ?? 0) + dtSec;
-  let ang = Math.atan2(b.vy, b.vx);
   const curSpd = Math.hypot(b.vx, b.vy);
+  if (curSpd <= 1e-4 && mode !== 'accel' && mode !== 'pulse') return;
+
+  b.kinematicElapsedSec = (b.kinematicElapsedSec ?? 0) + dtSec;
+  let ang = curSpd > 1e-4 ? Math.atan2(b.vy, b.vx) : b.angle;
   if (angVel !== 0) {
     ang += angVel * dtSec;
   }
@@ -77,6 +80,7 @@ export function stepProjectileKinematics(b: SimProjectileState, dtSec: number): 
     nextSpd = Math.max(40, mid + amp * Math.cos(elapsed * (b.kinematicRate ?? 7.5)));
   }
 
+  nextSpd = Math.max(0, nextSpd);
   b.vx = Math.cos(ang) * nextSpd;
   b.vy = Math.sin(ang) * nextSpd;
   b.angle = ang;
@@ -216,10 +220,7 @@ export function spawnDeterministicVolleyImpl(this: WorldSim, ev: BulletVolleySpa
       if (teamCount >= teamCap && oldestTeamIdx >= 0) {
         const [evicted] = this.projectiles.splice(oldestTeamIdx, 1);
         if (evicted) {
-          evicted.ttlSec = 0;
-          evicted.hitEntityIds.length = 0;
-          if (evicted.grazedPlayerIds) evicted.grazedPlayerIds.length = 0;
-          this.projectilePool.push(evicted);
+          this.releaseProjectileToPool(evicted);
         }
       }
     }
@@ -714,7 +715,7 @@ export function updateProjectilesImpl(this: WorldSim, dtSec: number): void {
 
       for (let pIdx = 0; pIdx < allPlayers.length; pIdx++) {
         const pl = allPlayers[pIdx]!;
-        if (pl.lifeState !== 'alive' || b.hitEntityIds.includes(pl.id)) continue;
+        if (pl.hp <= 0 || pl.lifeState !== 'alive' || b.hitEntityIds.includes(pl.id)) continue;
         if (circleVsCircle(b, pl)) {
           b.hitEntityIds.push(pl.id);
           if (b.pierceRemaining > 0 && b.weaponId !== 'dwarf_mortar') {
@@ -752,7 +753,7 @@ export function updateProjectilesImpl(this: WorldSim, dtSec: number): void {
             }
             if ((pl.grazeIcdTimer ?? 0) <= 0) {
               pl.grazeIcdTimer = GRAZE_REWARD_ICD_SEC;
-              const inBossFight = this.getActiveBoss() !== undefined;
+              const inBossFight = this.getActiveBoss() !== null;
               const cdRefund = inBossFight ? 0.25 : 0.08;
               const heatVent = inBossFight ? 4 : 1.5;
               if (pl.skillCooldownTimer > 0) {
@@ -791,9 +792,7 @@ export function updateProjectilesImpl(this: WorldSim, dtSec: number): void {
     if (b.ttlSec > 0) {
       this.projectiles[projWriteIdx++] = b;
     } else {
-      b.hitEntityIds.length = 0;
-      if (b.grazedPlayerIds) b.grazedPlayerIds.length = 0;
-      this.projectilePool.push(b);
+      this.releaseProjectileToPool(b);
     }
   }
   this.projectiles.length = projWriteIdx;
@@ -1021,9 +1020,7 @@ export function stepClientProjectilesCosmeticImpl(this: WorldSim, dtSec: number)
     if (b.ttlSec > 0) {
       this.projectiles[projWriteIdx++] = b;
     } else {
-      b.hitEntityIds.length = 0;
-      if (b.grazedPlayerIds) b.grazedPlayerIds.length = 0;
-      this.projectilePool.push(b);
+      this.releaseProjectileToPool(b);
     }
   }
   this.projectiles.length = projWriteIdx;

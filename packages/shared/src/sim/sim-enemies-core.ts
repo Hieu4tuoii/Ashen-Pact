@@ -1107,9 +1107,7 @@ export function clearBossNearbyProjectiles(
       players.some((pl) => pl.lifeState === 'alive' && distance(pl.x, pl.y, b.x, b.y) <= radius);
     if (nearAlivePlayer) {
       destroyedIds.push(b.id);
-      b.ttlSec = 0;
-      b.hitEntityIds.length = 0;
-      sim.projectilePool.push(b);
+      sim.releaseProjectileToPool(b);
     } else {
       sim.projectiles[writeIdx++] = b;
     }

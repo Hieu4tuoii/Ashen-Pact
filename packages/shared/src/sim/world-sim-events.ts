@@ -80,6 +80,7 @@ export type SimEvent =
       angle: number;
       durationSec: number;
       radius: number;
+      bossPatternId?: number;
     }
   | {
       kind: 'explosion';

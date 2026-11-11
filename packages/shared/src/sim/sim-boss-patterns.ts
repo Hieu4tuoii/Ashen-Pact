@@ -356,7 +356,7 @@ export function executeSporeKingSurfacePattern(
   cycle: number,
 ): void {
   const isLegacyDefault = e.bossPatternId === undefined;
-  const pat = e.bossPatternId ?? 0;
+  const pat = e.bossArmorShellActive ? 0 : (e.bossPatternId ?? 0);
 
   // Summon spore minion on alternate cycles if active non-boss count < 2
   const activeMinions = sim.enemies.filter(
@@ -842,7 +842,11 @@ export function executeForgeTitanPattern(
   cycle: number,
 ): void {
   const isLegacyDefault = e.bossPatternId === undefined;
-  const pat = e.bossPatternId ?? (cycle % 2 === 0 ? 0 : 1);
+  const pat = e.bossArmorShellActive
+    ? cycle % 2 === 0
+      ? 0
+      : 1
+    : (e.bossPatternId ?? (cycle % 2 === 0 ? 0 : 1));
 
   sim.map.reverseConveyorDirection();
   sim.events.push({

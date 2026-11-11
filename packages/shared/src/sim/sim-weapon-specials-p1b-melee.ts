@@ -219,6 +219,14 @@ export function updateEmeraldCleaverBoomerang(
           eb.team = 'player';
           eb.ownerId = b.ownerId;
           eb.parryDeflected = true;
+          eb.kinematicMode = undefined;
+          eb.initialSpeed = undefined;
+          eb.targetSpeed = undefined;
+          eb.kinematicRate = undefined;
+          eb.kinematicDelaySec = undefined;
+          eb.kinematicElapsedSec = 0;
+          eb.angularVelRad = undefined;
+          eb.bulletShape = undefined;
           eb.angle = b.angle;
           eb.vx = Math.cos(b.angle) * EMERALD_BOOMERANG_DEFLECT_SPEED;
           eb.vy = Math.sin(b.angle) * EMERALD_BOOMERANG_DEFLECT_SPEED;

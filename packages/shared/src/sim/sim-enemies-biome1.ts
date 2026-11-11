@@ -783,7 +783,9 @@ export function updateBossSporeKingAIImpl(
       e.telegraphRadius = BOSS_ERUPT_RADIUS;
     } else {
       e.bossBurrowed = false;
-      if (!e.bossArmorShellActive) {
+      if (e.bossArmorShellActive) {
+        e.bossPatternId = 0;
+      } else {
         selectNextBossPattern(this, e);
       }
       e.stateTimer = Math.max(
@@ -806,6 +808,7 @@ export function updateBossSporeKingAIImpl(
       angle: e.telegraphAngle,
       durationSec: e.stateTimer,
       radius: e.telegraphRadius,
+      bossPatternId: e.bossArmorShellActive || e.bossBurrowed ? 0 : e.bossPatternId,
     });
     return;
   }

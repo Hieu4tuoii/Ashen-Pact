@@ -67,7 +67,7 @@ export const BIOME_SCALING: Record<1 | 2 | 3, BiomeScalingTier> = {
   3: {
     biome: 3,
     hpMultiplier: 1.35,
-    cooldownScale: 0.87,
+    cooldownScale: 0.89,
     projectileSpeedMultiplier: 1.12,
     eliteBonusMultiplier: 1.12,
     eliteDamageBonus: 2,

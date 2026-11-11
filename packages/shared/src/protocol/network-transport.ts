@@ -688,9 +688,7 @@ export class NetworkTransport implements ITransport {
           for (let i = 0; i < this.sim.projectiles.length; i++) {
             const p = this.sim.projectiles[i]!;
             if (p.id === ev.replacedProjectileId) {
-              p.ttlSec = 0;
-              p.hitEntityIds.length = 0;
-              this.sim.projectilePool.push(p);
+              this.sim.releaseProjectileToPool(p);
             } else {
               this.sim.projectiles[writeIdx++] = p;
             }
@@ -714,9 +712,7 @@ export class NetworkTransport implements ITransport {
           for (let i = 0; i < this.sim.projectiles.length; i++) {
             const p = this.sim.projectiles[i]!;
             if (idSet.has(p.id)) {
-              p.ttlSec = 0;
-              p.hitEntityIds.length = 0;
-              this.sim.projectilePool.push(p);
+              this.sim.releaseProjectileToPool(p);
             } else {
               this.sim.projectiles[writeIdx++] = p;
             }

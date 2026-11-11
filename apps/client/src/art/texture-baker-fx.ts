@@ -267,12 +267,14 @@ export function bakeProjectilesAndFx(scene: Phaser.Scene, scale: number): void {
   });
 
   // 3.2 Enemy Spearhead Lance ('proj_enemy_lance')
-  bakeCustomCanvas(scene, 'proj_enemy_lance', 32, 18, scale, (ctx) => {
-    const halo = ctx.createRadialGradient(1, 0, 1.5, 1, 0, 13);
+  bakeCustomCanvas(scene, 'proj_enemy_lance', 32, 26, scale, (ctx) => {
+    const halo = ctx.createRadialGradient(1, 0, 1.5, 1, 0, 12.0);
     halo.addColorStop(0, 'rgba(255, 92, 122, 0.65)');
     halo.addColorStop(1, 'rgba(232, 69, 69, 0)');
     ctx.fillStyle = halo;
-    ctx.fillRect(-14, -8, 28, 16);
+    ctx.beginPath();
+    ctx.arc(1, 0, 12.0, 0, Math.PI * 2);
+    ctx.fill();
 
     outlined(
       ctx,
@@ -306,13 +308,13 @@ export function bakeProjectilesAndFx(scene: Phaser.Scene, scale: number): void {
   });
 
   // 3.3 Enemy Faceted Diamond ('proj_enemy_diamond')
-  bakeCustomCanvas(scene, 'proj_enemy_diamond', 28, 20, scale, (ctx) => {
-    const halo = ctx.createRadialGradient(0, 0, 1.5, 0, 0, 11.5);
+  bakeCustomCanvas(scene, 'proj_enemy_diamond', 28, 26, scale, (ctx) => {
+    const halo = ctx.createRadialGradient(0, 0, 1.5, 0, 0, 11.2);
     halo.addColorStop(0, 'rgba(255, 92, 122, 0.65)');
     halo.addColorStop(1, 'rgba(232, 69, 69, 0)');
     ctx.fillStyle = halo;
     ctx.beginPath();
-    ctx.arc(0, 0, 11.5, 0, Math.PI * 2);
+    ctx.arc(0, 0, 11.2, 0, Math.PI * 2);
     ctx.fill();
 
     outlined(
@@ -384,15 +386,41 @@ export function bakeProjectilesAndFx(scene: Phaser.Scene, scale: number): void {
     ctx.fill();
   });
 
-  // 3.5 Enemy Ring Bolt ('proj_enemy_ring_bolt')
-  bakeCustomCanvas(scene, 'proj_enemy_ring_bolt', 28, 28, scale, (ctx) => {
-    const halo = ctx.createRadialGradient(0, 0, 2, 0, 0, 12.5);
+  // 3.5 Enemy Ring Bolt ('proj_enemy_ring_bolt' — spiked chakram torus with 4 crisp cardinal notches)
+  bakeCustomCanvas(scene, 'proj_enemy_ring_bolt', 30, 30, scale, (ctx) => {
+    const halo = ctx.createRadialGradient(0, 0, 2, 0, 0, 13.0);
     halo.addColorStop(0, 'rgba(255, 85, 130, 0.68)');
     halo.addColorStop(1, 'rgba(232, 69, 69, 0)');
     ctx.beginPath();
-    ctx.arc(0, 0, 12.5, 0, Math.PI * 2);
+    ctx.arc(0, 0, 13.0, 0, Math.PI * 2);
     ctx.fillStyle = halo;
     ctx.fill();
+
+    // 4 cardinal outer chakram fins so spinning silhouette is unmistakably distinct from proj_enemy_orb
+    for (let k = 0; k < 4; k++) {
+      const a = k * Math.PI * 0.5;
+      const ca = Math.cos(a);
+      const sa = Math.sin(a);
+      const px = -sa;
+      const py = ca;
+      outlined(
+        ctx,
+        {
+          fill: ENEMY_BULLET_VISUAL_SPEC.fill,
+          shade: PALETTE.RUBY_CORE,
+          highlight: '#FF8FA3',
+          outlineColor: ENEMY_BULLET_VISUAL_SPEC.outlineColor,
+          outlineWidth: 1.3,
+        },
+        (c) =>
+          tracePolygon(c, [
+            { x: ca * 5.8 + px * 2.2, y: sa * 5.8 + py * 2.2 },
+            { x: ca * 10.2, y: sa * 10.2 },
+            { x: ca * 5.8 - px * 2.2, y: sa * 5.8 - py * 2.2 },
+          ]),
+        { cx: ca * 7.8, cy: sa * 7.8, rx: 2.5, ry: 2.5 },
+      );
+    }
 
     outlined(
       ctx,
@@ -410,6 +438,17 @@ export function bakeProjectilesAndFx(scene: Phaser.Scene, scale: number): void {
       },
       { cx: 0, cy: 0, rx: 7, ry: 7 },
     );
+
+    // 4 crisp white-hot cardinal notches across the torus rim
+    ctx.strokeStyle = ENEMY_BULLET_VISUAL_SPEC.core;
+    ctx.lineWidth = 1.5;
+    for (let k = 0; k < 4; k++) {
+      const a = k * Math.PI * 0.5;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a) * 4.5, Math.sin(a) * 4.5);
+      ctx.lineTo(Math.cos(a) * 8.4, Math.sin(a) * 8.4);
+      ctx.stroke();
+    }
 
     ctx.beginPath();
     ctx.arc(0, 0, 4.3, 0, Math.PI * 2);

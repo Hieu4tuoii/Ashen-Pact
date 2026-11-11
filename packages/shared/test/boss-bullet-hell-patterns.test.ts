@@ -145,4 +145,124 @@ describe('Solo-First Boss 5-Pattern Bullet-Hell Choreography & Stream Cancellati
     expect(sim.projectiles.some((b) => b.weaponId === 'titan_magma_barrage')).toBe(true);
     expect(sim.projectiles.some((b) => b.weaponId === 'titan_flame_sweep')).toBe(true);
   });
+
+  it('clamps bossPatternId when bossArmorShellActive is true on spore_king, kryssa_ice_queen, and forge_titan (preventing truncated streams, preserving titan shockwaves, deferring P3 Climax, and propagating bossPatternId in enemy_telegraph)', () => {
+    // 1. Spore King: stale Pattern 2 with bossArmorShellActive = true resets to 0 on telegraph, never starts stream, and defers P3 Climax until shell breaks
+    const sim1 = new WorldSim({
+      seed: 601,
+      biome: 1,
+      spawnInitialWave: false,
+      includeTrainingDummy: false,
+      includeProps: false,
+    });
+    const spore = sim1.spawnEnemy('spore_king', 520, 320, true);
+    sim1.player.x = 260;
+    sim1.player.y = 320;
+    spore.bossPhase = 3;
+    spore.bossPhaseTransitionTimer = 0;
+    spore.bossClimaxFiredP3 = false;
+    spore.bossArmorShellActive = true;
+    spore.bossPatternId = 2;
+    spore.bossAttackCycle = 0;
+    spore.aiState = 'move';
+    spore.attackCooldownTimer = 0;
+    sim1.consumeEvents();
+    sim1.step(DT);
+
+    expect(spore.aiState).toBe('telegraph');
+    expect(spore.bossPatternId).toBe(0);
+    expect(spore.bossClimaxFiredP3).toBeFalsy();
+    const sporeTele = sim1.consumeEvents().find((ev) => ev.kind === 'enemy_telegraph');
+    expect(sporeTele?.kind === 'enemy_telegraph' ? sporeTele.bossPatternId : undefined).toBe(0);
+
+    // Even if executeBossSporeKingAttack is called with stale bossPatternId = 2 while shell active, it clamps to Pattern 0 with zero stream
+    spore.bossPatternId = 2;
+    sim1.projectiles.length = 0;
+    sim1.executeBossSporeKingAttack(spore, Math.PI);
+    expect(spore.bossStreamTimer ?? 0).toBe(0);
+    expect(sim1.projectiles.some((b) => b.weaponId === 'boss_spore_ring')).toBe(true);
+    expect(sim1.projectiles.some((b) => b.weaponId === 'spore_spiral_stream')).toBe(false);
+
+    // Once armor shell breaks, P3 Climax (Pattern 4) fires and propagates bossPatternId = 4 in enemy_telegraph
+    spore.bossArmorShellActive = false;
+    spore.bossAttackCycle = 0;
+    spore.aiState = 'move';
+    spore.attackCooldownTimer = 0;
+    sim1.consumeEvents();
+    sim1.step(DT);
+    expect(spore.bossPatternId).toBe(4);
+    expect(spore.bossClimaxFiredP3).toBe(true);
+    const sporeClimaxTele = sim1.consumeEvents().find((ev) => ev.kind === 'enemy_telegraph');
+    expect(
+      sporeClimaxTele?.kind === 'enemy_telegraph' ? sporeClimaxTele.bossPatternId : undefined,
+    ).toBe(4);
+
+    // 2. Kryssa: resets stale bossPatternId to 0 while shell active and propagates bossPatternId in enemy_telegraph
+    const sim2 = new WorldSim({
+      seed: 602,
+      biome: 2,
+      spawnInitialWave: false,
+      includeTrainingDummy: false,
+      includeProps: false,
+    });
+    const kryssa = sim2.spawnEnemy('kryssa_ice_queen', 520, 320, true);
+    sim2.player.x = 260;
+    sim2.player.y = 320;
+    kryssa.bossPhase = 3;
+    kryssa.bossPhaseTransitionTimer = 0;
+    kryssa.bossClimaxFiredP3 = false;
+    kryssa.bossArmorShellActive = true;
+    kryssa.bossPatternId = 3;
+    kryssa.aiState = 'move';
+    kryssa.attackCooldownTimer = 0;
+    sim2.consumeEvents();
+    sim2.step(DT);
+    expect(kryssa.bossPatternId).toBe(0);
+    expect(kryssa.bossClimaxFiredP3).toBeFalsy();
+    const kryssaShellTele = sim2.consumeEvents().find((ev) => ev.kind === 'enemy_telegraph');
+    expect(
+      kryssaShellTele?.kind === 'enemy_telegraph' ? kryssaShellTele.bossPatternId : undefined,
+    ).toBe(0);
+
+    // 3. Forge Titan: stale Pattern 2 with bossArmorShellActive = true clamps to 0/1 by cycle parity, never starts stream, and keeps shockwaveRings active on even cycles
+    const sim3 = new WorldSim({
+      seed: 603,
+      biome: 3,
+      spawnInitialWave: false,
+      includeTrainingDummy: false,
+      includeProps: false,
+    });
+    const titan = sim3.spawnEnemy('forge_titan', 520, 320, true);
+    sim3.player.x = 260;
+    sim3.player.y = 320;
+    titan.bossPhase = 3;
+    titan.bossPhaseTransitionTimer = 0;
+    titan.bossClimaxFiredP3 = false;
+    titan.bossArmorShellActive = true;
+    titan.bossPatternId = 2;
+    titan.bossAttackCycle = 0;
+    titan.aiState = 'move';
+    titan.attackCooldownTimer = 0;
+    sim3.consumeEvents();
+    sim3.step(DT);
+
+    expect(titan.aiState).toBe('telegraph');
+    expect(titan.bossPatternId).toBe(0);
+    expect(titan.bossClimaxFiredP3).toBeFalsy();
+    const titanShellTele = sim3.consumeEvents().find((ev) => ev.kind === 'enemy_telegraph');
+    expect(
+      titanShellTele?.kind === 'enemy_telegraph' ? titanShellTele.bossPatternId : undefined,
+    ).toBe(0);
+
+    // Even if executeBossForgeTitanAttack is called with stale bossPatternId = 2 while shell active, even cycle emits shockwaveRing + anvil ring with zero stream
+    titan.bossPatternId = 2;
+    titan.bossAttackCycle = 0;
+    sim3.projectiles.length = 0;
+    sim3.shockwaveRings.length = 0;
+    sim3.executeBossForgeTitanAttack(titan, Math.PI);
+    expect(titan.bossStreamTimer ?? 0).toBe(0);
+    expect(sim3.shockwaveRings.length).toBe(1);
+    expect(sim3.projectiles.some((b) => b.weaponId === 'titan_anvil_ring')).toBe(true);
+    expect(sim3.projectiles.some((b) => b.weaponId === 'titan_flame_sweep')).toBe(false);
+  });
 });

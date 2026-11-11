@@ -609,7 +609,9 @@ export function updateBossKryssaAIImpl(
 
   if (e.attackCooldownTimer <= 0) {
     e.aiState = 'telegraph';
-    if (!e.bossArmorShellActive) {
+    if (e.bossArmorShellActive) {
+      e.bossPatternId = 0;
+    } else {
       selectNextBossPattern(this, e);
     }
     e.stateTimer = Math.max(
@@ -630,6 +632,7 @@ export function updateBossKryssaAIImpl(
       angle: e.telegraphAngle,
       durationSec: e.stateTimer,
       radius: e.telegraphRadius,
+      bossPatternId: e.bossArmorShellActive ? 0 : e.bossPatternId,
     });
     return;
   }

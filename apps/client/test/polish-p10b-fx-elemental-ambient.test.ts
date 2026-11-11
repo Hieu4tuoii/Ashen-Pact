@@ -2,15 +2,31 @@ import {
   ELEMENTAL_REACTIONS,
   type ElementalReactionId,
   type ElementType,
+  type EnemyBulletShape,
   i18n,
+  type SimEvent,
   WorldSim,
 } from '@ashen-pact/shared';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+vi.mock('phaser', () => {
+  class MockScene {}
+  class MockPostFXPipeline {}
+  const phaserStub = {
+    Scene: MockScene,
+    BlendModes: { NORMAL: 0, ADD: 1, MULTIPLY: 2, SCREEN: 3 },
+    Math: { Clamp: (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v)) },
+    Renderer: { WebGL: { Pipelines: { PostFXPipeline: MockPostFXPipeline } } },
+  };
+  return { default: phaserStub, ...phaserStub };
+});
+
 import { PALETTE } from '../src/art/palette.js';
 import {
   BAKED_FX_TEXTURE_KEYS,
   ENEMY_BULLET_VISUAL_SPEC,
 } from '../src/art/texture-baker-fx.js';
+import { SFX_PRESETS } from '../src/audio/zzfx.js';
 import {
   coalesceElementalReaction,
   CombatFxManager,
@@ -28,6 +44,8 @@ import {
   resolveParticleBlendAndDepth,
   resolveProjectileRenderSpec,
 } from '../src/fx/combat-fx.js';
+import { syncProjectilesAndPickupsImpl } from '../src/scenes/game-scene/entity-sync.js';
+import { processSimEventsImpl } from '../src/scenes/game-scene/sim-events.js';
 
 describe('Phase P10b — Combat FX (BlendMode.ADD), Elemental Combo FX & Clear Biome Ambient', () => {
   describe('1. Enemy Bullet Visual Spec & Salience Invariants (depth = 60, untinted concentric bullseye)', () => {
@@ -74,30 +92,41 @@ describe('Phase P10b — Combat FX (BlendMode.ADD), Elemental Combo FX & Clear B
       }
     });
 
-    it('maps enemy bulletShape to vivid multi-shape textures and scales by radius while defaulting to proj_enemy_orb', () => {
-      expect(BAKED_FX_TEXTURE_KEYS).toContain('proj_enemy_wave');
-      expect(BAKED_FX_TEXTURE_KEYS).toContain('proj_enemy_lance');
-      expect(BAKED_FX_TEXTURE_KEYS).toContain('proj_enemy_diamond');
-      expect(BAKED_FX_TEXTURE_KEYS).toContain('proj_enemy_heavy_orb');
-      expect(BAKED_FX_TEXTURE_KEYS).toContain('proj_enemy_ring_bolt');
+    it('maps all 6 EnemyBulletShape values to vivid multi-shape textures and clamps radius scale while defaulting to proj_enemy_orb', () => {
+      const shapeMappings: readonly [EnemyBulletShape | undefined, string][] = [
+        [undefined, 'proj_enemy_orb'],
+        ['orb', 'proj_enemy_orb'],
+        ['wave', 'proj_enemy_wave'],
+        ['lance', 'proj_enemy_lance'],
+        ['diamond', 'proj_enemy_diamond'],
+        ['heavy_orb', 'proj_enemy_heavy_orb'],
+        ['ring_bolt', 'proj_enemy_ring_bolt'],
+      ];
       expect(BAKED_FX_TEXTURE_KEYS).toContain('fx_enemy_bullet_glow');
 
-      const waveSpec = resolveProjectileRenderSpec({
-        team: 'enemy',
-        bulletShape: 'wave',
-        radius: 8.4,
-      });
-      expect(waveSpec.textureKey).toBe('proj_enemy_wave');
-      expect(waveSpec.depth).toBe(60);
-      expect(waveSpec.scale).toBeGreaterThan(1.2);
+      for (const [shape, expectedKey] of shapeMappings) {
+        expect(BAKED_FX_TEXTURE_KEYS).toContain(expectedKey);
+        const spec = resolveProjectileRenderSpec({
+          team: 'enemy',
+          bulletShape: shape,
+          radius: 7.2,
+          isStress: false,
+        });
+        expect(spec.textureKey).toBe(expectedKey);
+        expect(spec.texture).toBe(expectedKey);
+        expect(spec.tint).toBe(0xffffff);
+        expect(spec.blendMode).toBe('NORMAL');
+        expect(spec.depth).toBe(60);
+        expect(spec.alpha).toBe(1.0);
+        expect(spec.scale).toBeCloseTo(7.2 / 6.0, 4);
+      }
 
-      const lanceSpec = resolveProjectileRenderSpec({
-        team: 'enemy',
-        bulletShape: 'lance',
-        radius: 7.2,
-      });
-      expect(lanceSpec.textureKey).toBe('proj_enemy_lance');
-      expect(lanceSpec.scale).toBeCloseTo(7.2 / 6.0, 2);
+      // Default radius (omitted) -> scale 1.0; tiny radius -> lower clamp; huge radius -> upper clamp
+      expect(resolveProjectileRenderSpec({ team: 'enemy' }).scale).toBeCloseTo(1.0, 4);
+      const minClamped = resolveProjectileRenderSpec({ team: 'enemy', radius: 2.0 });
+      const maxClamped = resolveProjectileRenderSpec({ team: 'enemy', radius: 16.0 });
+      expect(minClamped.scale).toBeCloseTo(0.85, 4);
+      expect(maxClamped.scale).toBeCloseTo(1.65, 4);
     });
 
     it('assigns blendMode = ADD, depth = 42, and scales alpha by teammateFxOpacity for teammate player projectiles', () => {
@@ -478,6 +507,278 @@ describe('Phase P10b — Combat FX (BlendMode.ADD), Elemental Combo FX & Clear B
       const rThreeQuarter = computeIrisHoleRadius(0.75, maxR);
       expect(rQuarter).toBeGreaterThan(maxR * 0.75); // easeInOutCubic(0.25) = 0.0625 => hole stays wider initially
       expect(rThreeQuarter).toBeLessThan(maxR * 0.25); // easeInOutCubic(0.75) = 0.9375 => hole closes smoothly at end
+    });
+  });
+
+  describe('6. Boss Signature/Climax Co-op Callouts, Transient Light Pulse, 900ms Bullet Graze Throttle & Ring-Bolt Spin', () => {
+    it('defines crisp high-pitch SFX_PRESETS.bullet_graze synth tick', () => {
+      const preset = SFX_PRESETS.bullet_graze;
+      expect(preset).toBeDefined();
+      expect(preset.freq).toBeGreaterThanOrEqual(900);
+      expect(preset.decaySec).toBeLessThanOrEqual(0.08);
+      expect(preset.minIntervalMs).toBeGreaterThanOrEqual(60);
+    });
+
+    it('uses ev.bossPatternId in Co-op when boss.bossPatternId is undefined, spawns boss-colored transient light pulse, suppresses callouts during bossArmorShellActive, and throttles bullet_grazed alerts by 900ms', () => {
+      i18n.setLocale('vi');
+      const sim = new WorldSim({
+        seed: 707,
+        biome: 2,
+        spawnInitialWave: false,
+        includeTrainingDummy: false,
+        includeProps: false,
+      });
+      const kryssa = sim.spawnEnemy('kryssa_ice_queen', 500, 280, true);
+      // Simulate Co-op client where QuantizedEnemySnap omits bossPatternId
+      kryssa.bossPatternId = undefined;
+
+      const floatingAlerts: { x: number; y: number; text: string; color?: string }[] = [];
+      const transientLights: {
+        x: number;
+        y: number;
+        radius: number;
+        color: string;
+        alpha: number;
+        durationSec: number;
+      }[] = [];
+
+      const mockScene = {
+        transport: { getSim: () => sim },
+        time: { now: 0 },
+        lastGrazeAlertMs: -Infinity,
+        fx: {
+          spawnFloatingAlert: vi.fn((x: number, y: number, text: string, color?: string) => {
+            floatingAlerts.push({ x, y, text, color });
+          }),
+          spawnHitSparks: vi.fn(),
+        },
+        lighting: {
+          spawnTransientLight: vi.fn(
+            (
+              x: number,
+              y: number,
+              radius: number,
+              color: string,
+              alpha: number,
+              durationSec: number,
+            ) => {
+              transientLights.push({ x, y, radius, color, alpha, durationSec });
+            },
+          ),
+        },
+        coopPlayerRigs: new Map(),
+        simPlayerRigs: new Map(),
+        enemyRigs: new Map(),
+        camFocusX: 480,
+        camFocusY: 270,
+      };
+
+      // 1. Co-op enemy_telegraph with ev.bossPatternId = 4 triggers callout + CYAN_FROST transient light pulse
+      processSimEventsImpl.call(mockScene as never, [
+        {
+          kind: 'enemy_telegraph',
+          enemyId: kryssa.id,
+          defId: 'kryssa_ice_queen',
+          x: 500,
+          y: 280,
+          angle: 0,
+          durationSec: 0.42,
+          radius: 56,
+          bossPatternId: 4,
+        } as SimEvent,
+      ]);
+      expect(floatingAlerts).toHaveLength(1);
+      expect(floatingAlerts[0]!.text).toBe('🌨️ BÃO TUYẾT VĨNH CỬU!');
+      expect(transientLights).toContainEqual({
+        x: 500,
+        y: 280,
+        radius: 150,
+        color: PALETTE.CYAN_FROST,
+        alpha: 0.85,
+        durationSec: 0.32,
+      });
+
+      // 2. When boss.bossArmorShellActive is true, callouts & telegraph light pulses are suppressed even if stale pattern is 4
+      floatingAlerts.length = 0;
+      transientLights.length = 0;
+      kryssa.bossArmorShellActive = true;
+      kryssa.bossPatternId = 4;
+      processSimEventsImpl.call(mockScene as never, [
+        {
+          kind: 'enemy_telegraph',
+          enemyId: kryssa.id,
+          defId: 'kryssa_ice_queen',
+          x: 500,
+          y: 280,
+          angle: 0,
+          durationSec: 0.42,
+          radius: 56,
+          bossPatternId: 4,
+        } as SimEvent,
+      ]);
+      expect(floatingAlerts).toHaveLength(0);
+      expect(transientLights).toHaveLength(0);
+
+      // 3. bullet_grazed 900ms throttle (independent of sim.tick % 3)
+      sim.tick = 1; // Not divisible by 3!
+      mockScene.time.now = 0;
+      processSimEventsImpl.call(mockScene as never, [
+        { kind: 'bullet_grazed', playerId: sim.player.id, x: 310, y: 290 },
+      ]);
+      expect(floatingAlerts).toHaveLength(1);
+      expect(floatingAlerts[0]!.text).toBe('⚡ SƯỢT ĐẠN -CD!');
+
+      // Within 900ms (450ms later, even on sim.tick = 3) -> alert throttled, sparks still spawn
+      sim.tick = 3;
+      mockScene.time.now = 450;
+      processSimEventsImpl.call(mockScene as never, [
+        { kind: 'bullet_grazed', playerId: sim.player.id, x: 312, y: 292 },
+      ]);
+      expect(floatingAlerts).toHaveLength(1);
+      expect(mockScene.fx.spawnHitSparks).toHaveBeenCalledTimes(2);
+
+      // At 900ms -> alert fires again
+      mockScene.time.now = 900;
+      processSimEventsImpl.call(mockScene as never, [
+        { kind: 'bullet_grazed', playerId: sim.player.id, x: 315, y: 295 },
+      ]);
+      expect(floatingAlerts).toHaveLength(2);
+    });
+
+    it('spins ring_bolt enemy bullets, pulses glowSprite alpha with 1.35x specScale, and stores specScale on projectileSprites entries', () => {
+      const sim = new WorldSim({
+        seed: 808,
+        spawnInitialWave: false,
+        includeTrainingDummy: false,
+        includeProps: false,
+      });
+      sim.spawnDeterministicVolley({
+        kind: 'bullet_volley_spawned',
+        ownerId: 99,
+        team: 'enemy',
+        weaponId: 'boss_spore_ring',
+        x: 320,
+        y: 260,
+        angle: 0,
+        pelletCount: 1,
+        spreadRad: 0,
+        speed: 150,
+        radius: 7.2,
+        damage: 2,
+        critChance: 0,
+        knockback: 0,
+        ttlSec: 2,
+        pierceCount: 0,
+        bounceCount: 0,
+        element: 'poison',
+        amplifiedByShield: false,
+        seed: 1,
+        bulletShape: 'ring_bolt',
+      });
+      const bullet = sim.projectiles[0]!;
+
+      const makeMockDisplayObj = () => {
+        const obj = {
+          depth: 0,
+          blendMode: 0,
+          visible: false,
+          scale: 1,
+          alpha: 1,
+          rotation: 0,
+          x: 0,
+          y: 0,
+          setDepth(d: number) {
+            obj.depth = d;
+            return obj;
+          },
+          setBlendMode(m: number) {
+            obj.blendMode = m;
+            return obj;
+          },
+          setVisible(v: boolean) {
+            obj.visible = v;
+            return obj;
+          },
+          setActive() {
+            return obj;
+          },
+          setScale(s: number) {
+            obj.scale = s;
+            return obj;
+          },
+          setAlpha(a: number) {
+            obj.alpha = a;
+            return obj;
+          },
+          setRotation(r: number) {
+            obj.rotation = r;
+            return obj;
+          },
+          setPosition(x: number, y: number) {
+            obj.x = x;
+            obj.y = y;
+            return obj;
+          },
+          setTexture() {
+            return obj;
+          },
+          setTint() {
+            return obj;
+          },
+          clearTint() {
+            return obj;
+          },
+          setDisplaySize() {
+            return obj;
+          },
+        };
+        return obj;
+      };
+
+      const mockScene = {
+        transport: {
+          getSim: () => sim,
+          getInterpolatedProjectilePos: (b: { x: number; y: number }, out: { x: number; y: number }) => {
+            out.x = b.x;
+            out.y = b.y;
+            return out;
+          },
+          getInterpolatedPickupPos: (p: { x: number; y: number }, out: { x: number; y: number }) => {
+            out.x = p.x;
+            out.y = p.y;
+            return out;
+          },
+        },
+        cameras: { main: { worldView: { x: 0, y: 0, width: 960, height: 540 } } },
+        lighting: { getElapsedSec: () => 0.5, isLightmapVisible: () => true },
+        add: {
+          sprite: vi.fn(() => makeMockDisplayObj()),
+          image: vi.fn(() => makeMockDisplayObj()),
+        },
+        projectileSprites: new Map(),
+        projectileSpritePool: [],
+        pickupSprites: new Map(),
+        pickupSpritePool: [],
+        activeProjIds: new Set<number>(),
+        activePickupIds: new Set<number>(),
+        entityPosScratch: { x: 0, y: 0 },
+      };
+
+      syncProjectilesAndPickupsImpl.call(mockScene as never);
+      const entry = mockScene.projectileSprites.get(bullet.id) as {
+        sprite: ReturnType<typeof makeMockDisplayObj>;
+        glowSprite: ReturnType<typeof makeMockDisplayObj>;
+        textureKey: string;
+        specScale?: number;
+      };
+      expect(entry).toBeDefined();
+      expect(entry.textureKey).toBe('proj_enemy_ring_bolt');
+      expect(entry.specScale).toBeCloseTo(1.2, 4);
+      const expectedRot = (0.5 * 6.0 + (bullet.id & 7)) % (Math.PI * 2);
+      expect(entry.sprite.rotation).toBeCloseTo(expectedRot, 4);
+      expect(entry.glowSprite.scale / entry.sprite.scale).toBeCloseTo(1.35, 4);
+      const expectedAlpha = 0.58 + 0.12 * Math.sin(0.5 * 9.0 + (bullet.id & 7));
+      expect(entry.glowSprite.alpha).toBeCloseTo(expectedAlpha, 4);
     });
   });
 });

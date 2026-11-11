@@ -174,6 +174,7 @@ export class GameScene extends Phaser.Scene {
       sprite: Phaser.GameObjects.Sprite;
       glowSprite: Phaser.GameObjects.Image;
       textureKey: string;
+      specScale: number;
     }
   >();
   public pickupSprites = new Map<
@@ -188,6 +189,7 @@ export class GameScene extends Phaser.Scene {
     sprite: Phaser.GameObjects.Sprite;
     glowSprite: Phaser.GameObjects.Image;
     textureKey: string;
+    specScale: number;
   }[] = [];
   public pickupSpritePool: {
     sprite: Phaser.GameObjects.Sprite;
@@ -296,6 +298,7 @@ export class GameScene extends Phaser.Scene {
   public trailingBossHpRatio = 1.0;
   public lowHpHeartbeatTimer = 0;
   public lastBlizzardPhase3 = false;
+  public lastGrazeAlertMs = -Infinity;
   public irisTransitionProgress = 0.0;
   public irisTransitionDir: -1 | 0 | 1 = 0;
   public roomTeleportAnimTimer = 0;
@@ -828,7 +831,7 @@ export class GameScene extends Phaser.Scene {
       this.fx.spawnFloatingAlert(
         activeBoss.x,
         activeBoss.y,
-        i18n.getLocale() === 'en' ? '❄ ETERNAL BLIZZARD!' : '❄ BÃO TUYẾT VĨNH CỬU!',
+        i18n.getLocale() === 'en' ? '❄ BLIZZARD VEIL!' : '❄ MÀN SƯƠNG BĂNG GIÁ!',
       );
     }
     this.lastBlizzardPhase3 = isBlizzardPhase3;

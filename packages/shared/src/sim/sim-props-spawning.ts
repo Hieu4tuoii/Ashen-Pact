@@ -236,10 +236,7 @@ export function configureStressTestImpl(this: WorldSim, active: boolean): void {
     this.simulatedPlayers.length = 0;
     this.enemies = this.enemies.filter((e) => e.isDummy);
     for (let i = 0; i < this.projectiles.length; i++) {
-      const b = this.projectiles[i]!;
-      b.ttlSec = 0;
-      b.hitEntityIds.length = 0;
-      this.projectilePool.push(b);
+      this.releaseProjectileToPool(this.projectiles[i]!);
     }
     this.projectiles.length = 0;
     this.spawnSampleWave();

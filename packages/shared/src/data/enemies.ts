@@ -13,7 +13,7 @@ export const ENEMIES: Record<string, EnemyStatsDef> = {
     damage: 1,
     radius: 13,
     telegraphSec: 0.5,
-    attackCooldownSec: 1.32,
+    attackCooldownSec: 1.18,
   },
   green_slime: {
     id: 'green_slime',
@@ -26,7 +26,7 @@ export const ENEMIES: Record<string, EnemyStatsDef> = {
     damage: 1,
     radius: 14,
     telegraphSec: 0.4,
-    attackCooldownSec: 1.08,
+    attackCooldownSec: 0.98,
   },
   mini_slime: {
     id: 'mini_slime',
@@ -65,7 +65,7 @@ export const ENEMIES: Record<string, EnemyStatsDef> = {
     damage: 2,
     radius: 16,
     telegraphSec: 0.7,
-    attackCooldownSec: 1.82,
+    attackCooldownSec: 1.66,
   },
   goblin_shaman: {
     id: 'goblin_shaman',
@@ -91,7 +91,7 @@ export const ENEMIES: Record<string, EnemyStatsDef> = {
     damage: 1,
     radius: 15,
     telegraphSec: 0.55,
-    attackCooldownSec: 1.88,
+    attackCooldownSec: 1.68,
   },
   spore_guardian: {
     id: 'spore_guardian',
