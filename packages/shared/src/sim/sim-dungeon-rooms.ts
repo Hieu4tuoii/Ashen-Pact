@@ -132,6 +132,7 @@ export function enterRoomImpl(this: WorldSim, roomId: number, entryDir?: Cardina
   this.chests.length = 0;
   this.worldItems.length = 0;
   this.npcEntities.length = 0;
+  this.hubStations.length = 0;
   this.pressurePlates.length = 0;
   this.pushBlocks.length = 0;
   this.shockwaveRings.length = 0;

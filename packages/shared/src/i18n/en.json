@@ -98,10 +98,25 @@
       "firstPickupHint": "💡 Tip: Carry up to 2 weapons (Swap with [Q], Mouse Wheel, or [1]/[2])"
     },
     "hubGuide": {
-      "statuesSign": "🏛 5 HERO STATUES — Approach & Press [E] to preview skills & select",
-      "weaponsSign": "⚔ PRACTICE WEAPON RACK — Press [E] to test & compare weapon stats",
-      "dummySign": "🎯 TRAINING DUMMY — Attack to measure live DPS & elemental reactions",
-      "portalSign": "🌀 DEPARTURE PORTAL — Press [V] Ready then [E] to enter the Dungeon"
+      "statuesSign": "🏛 HERO LOUNGE — Approach [E] or Click to embody hero",
+      "weaponsSign": "⚔ ARMORY WEAPON RACK — Press [E] to test & compare weapon stats",
+      "dummySign": "🎯 SHOOTING RANGE — Attack the Dummy to measure live DPS & reactions",
+      "portalSign": "🌀 EXPEDITION PORTAL — Walk in or press [E] to enter the Dungeon"
+    },
+    "sanctuary": {
+      "title": "ASHEN PACT — ASHEN SANCTUARY",
+      "subtitle": "Living Sanctuary · Choose Hero, Test Weapons & Embark",
+      "coopWingSign": "📡 CO-OP LAN GUILD — Press [E] or [I] to Host / Join Room",
+      "codexWingSign": "📖 CHRONICLER'S CODEX — Press [E] for Settings & Guide",
+      "coopStationPrompt": "[E] Co-op LAN Guild Table — Host / Join Room [I]",
+      "codexStationPrompt": "[E] Chronicler's Codex — Settings & Guide",
+      "embodiedBadge": "★ Active",
+      "soloCoopChip": "📡 Co-op Room [I]",
+      "soloCoopTitle": "CO-OP LAN ROOM [I]",
+      "leaveCoopBtn": "🚪 Leave Room",
+      "returnSanctuaryConfirmTitle": "RETURN TO SANCTUARY?",
+      "returnSanctuaryConfirmBody": "Your current dungeon run will end and return to the Ashen Sanctuary. Press [Enter] to confirm or [Esc] to cancel.",
+      "pauseReturnSanctuary": "🏛 Return to Sanctuary [M]"
     },
     "settings": {
       "title": "SYSTEM SETTINGS",

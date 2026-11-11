@@ -229,14 +229,22 @@ export function addCoopPlayerImpl(this: WorldSim,
 
   const cx = this.map.width * 0.5;
   const cy = this.map.height * 0.5;
-  const spawnOffsets: Record<1 | 2 | 3 | 4, [number, number]> = {
-    1: [-90, 8],
-    2: [15, 28],
-    3: [-90, 68],
-    4: [15, 88],
-  };
+  const spawnOffsets: Record<1 | 2 | 3 | 4, [number, number]> = this.inHub
+    ? {
+        1: [0, 60],
+        2: [-64, 34],
+        3: [64, 34],
+        4: [0, 110],
+      }
+    : {
+        1: [-90, 8],
+        2: [15, 28],
+        3: [-90, 68],
+        4: [15, 88],
+      };
   const [ox, oy] = spawnOffsets[slot];
   const resolved = this.map.resolveCircleCollision(cx + ox, cy + oy, PLAYER_RADIUS);
+  const initialAimAngle = this.inHub ? -Math.PI * 0.5 : 0;
 
   if (slot === 1 && this.player.slot === 1) {
     this.player.id = pid;
@@ -245,6 +253,10 @@ export function addCoopPlayerImpl(this: WorldSim,
     this.player.y = resolved.y;
     this.player.prevX = resolved.x;
     this.player.prevY = resolved.y;
+    if (this.inHub) {
+      this.player.aimAngle = initialAimAngle;
+      this.currentInput.aimAngle = initialAimAngle;
+    }
     return this.player;
   }
 
@@ -257,6 +269,7 @@ export function addCoopPlayerImpl(this: WorldSim,
     resolved.y,
     displayName,
   );
+  state.aimAngle = initialAimAngle;
   if (existingIdx >= 0) {
     this.simulatedPlayers[existingIdx] = state;
   } else {
@@ -269,7 +282,7 @@ export function addCoopPlayerImpl(this: WorldSim,
       tick: this.tick,
       moveX: 0,
       moveY: 0,
-      aimAngle: 0,
+      aimAngle: initialAimAngle,
       buttons: 0,
       weaponSlotSelect: null,
     },
@@ -494,6 +507,7 @@ export function enterHubImpl(this: WorldSim): void {
   this.npcEntities.length = 0;
   this.doors.length = 0;
   this.hubStatues.length = 0;
+  this.hubStations.length = 0;
   this.tetherBeams.length = 0;
   this.magneticRivets.length = 0;
   this.flameFissures.length = 0;
@@ -510,14 +524,13 @@ export function enterHubImpl(this: WorldSim): void {
   const cx = this.map.width * 0.5;
   const cy = this.map.height * 0.5;
 
-  // 5 Character Statues in a staggered 2-row arc at the top-center of the Hub Camp
-  // Positioned cleanly between the top-left [P2..P4] HUD cards (cx - 340) and the right Invite Panel (cx + 112)
+  // 5 Living Hero Lounge Stations around the Sanctuary Hall
   const statueCoords: readonly [CharacterId, number, number][] = [
-    ['vanguard', cx - 245, cy - 96],
-    ['ranger', cx - 185, cy - 182],
-    ['elementalist', cx - 125, cy - 96],
-    ['druid', cx - 65, cy - 182],
-    ['engineer', cx - 5, cy - 96],
+    ['engineer', 764, 224],
+    ['druid', 388, 316],
+    ['vanguard', 388, 224],
+    ['ranger', 452, 160],
+    ['elementalist', 700, 160],
   ];
   for (const [cid, sx, sy] of statueCoords) {
     const cDef = CHARACTERS[cid];
@@ -531,34 +544,54 @@ export function enterHubImpl(this: WorldSim): void {
     });
   }
 
-  // Central Campfire & Torch Braziers
-  this.spawnProp('torch_brazier', cx - 35, cy - 10);
-  this.spawnProp('torch_brazier', cx - 210, cy - 35);
-  this.spawnProp('torch_brazier', cx + 135, cy - 35);
-  this.spawnProp('glow_mushroom', cx - 310, cy + 10);
-  this.spawnProp('glow_mushroom', cx + 165, cy + 20);
+  // East Co-op Guild Wing & South-East Chronicler's Codex Wing Stations
+  this.hubStations.push(
+    {
+      id: 'coop_board',
+      nameVi: 'Bàn Hội Co-op LAN',
+      x: 928,
+      y: 352,
+      radius: 26,
+    },
+    {
+      id: 'codex_desk',
+      nameVi: 'Bàn Cổ Thư & Cài Đặt',
+      x: 860,
+      y: 520,
+      radius: 24,
+    },
+  );
 
-  // Training Dummy in the Hub (East-center side, left of Invite Panel)
-  this.spawnTrainingDummy(cx + 95, cy + 95);
+  // Central Hearth, North Portal Dais, West Armory & East/SE Wing Lighting Props
+  this.spawnProp('torch_brazier', 576, 352);
+  this.spawnProp('torch_brazier', 476, 128);
+  this.spawnProp('torch_brazier', 676, 128);
+  this.spawnProp('torch_brazier', 236, 156);
+  this.spawnProp('torch_brazier', 884, 276);
+  this.spawnProp('glow_mushroom', 330, 316);
+  this.spawnProp('glow_mushroom', 920, 536);
 
-  // Weapon Test Rack (West side — 2x2 staggered grid so [E] labels never overlap)
+  // West Shooting Range Training Dummy
+  this.spawnTrainingDummy(236, 236);
+
+  // West Armory Weapon Test Rack (2x2 ornate stands)
   const rackWeapons = [
     'hunter_crossbow',
     'apprentice_staff',
     'tesla_carbine',
     'scrap_shotgun',
   ] as const;
-  const rackOffsets: readonly [number, number][] = [
-    [-320, 48],
-    [-195, 48],
-    [-320, 118],
-    [-195, 118],
+  const rackPositions: readonly [number, number][] = [
+    [206, 404],
+    [326, 404],
+    [206, 488],
+    [326, 488],
   ];
   for (let i = 0; i < rackWeapons.length; i++) {
     const wid = rackWeapons[i]!;
     const wep = WEAPONS[wid];
     if (!wep) continue;
-    const [rx, ry] = rackOffsets[i % rackOffsets.length]!;
+    const [rx, ry] = rackPositions[i % rackPositions.length]!;
     this.spawnWorldItem({
       kind: 'weapon',
       weaponId: wep.id,
@@ -566,28 +599,29 @@ export function enterHubImpl(this: WorldSim): void {
       nameVi: wep.nameVi,
       costGold: 0,
       healAmount: 0,
-      x: cx + rx,
-      y: cy + ry,
+      x: rx,
+      y: ry,
       isHubRackItem: true,
     });
   }
 
-  // Hub Expedition Portal at bottom center
+  // North Wing Expedition Portal
   this.portalActive = true;
-  this.portalX = cx - 30;
-  this.portalY = cy + 142;
+  this.portalX = 576;
+  this.portalY = 122;
 
-  // Position all players around the campfire in a wide vertically-staggered 2x2 formation
+  // Position all players around the central hearth facing North (-PI/2)
   const allPlayers = this.getAllPlayers();
-  const offsets: readonly [number, number][] = [
-    [-105, 8],
-    [-18, 28],
-    [-105, 68],
-    [-18, 88],
-  ];
+  const hubSpawnOffsets: Record<1 | 2 | 3 | 4, [number, number]> = {
+    1: [0, 60],
+    2: [-64, 34],
+    3: [64, 34],
+    4: [0, 110],
+  };
+  this.currentInput.aimAngle = -Math.PI * 0.5;
   for (let i = 0; i < allPlayers.length; i++) {
     const p = allPlayers[i]!;
-    const [ox, oy] = offsets[i % offsets.length]!;
+    const [ox, oy] = hubSpawnOffsets[p.slot] ?? [0, 60];
     const pos = this.map.resolveCircleCollision(cx + ox, cy + oy, p.radius);
     p.x = pos.x;
     p.y = pos.y;
@@ -595,6 +629,11 @@ export function enterHubImpl(this: WorldSim): void {
     p.prevY = pos.y;
     p.vx = 0;
     p.vy = 0;
+    p.aimAngle = -Math.PI * 0.5;
+    const coopInp = this.coopPlayerInputs.get(p.id);
+    if (coopInp) {
+      coopInp.current.aimAngle = -Math.PI * 0.5;
+    }
     p.lifeState = 'alive';
     p.hp = p.maxHp;
     p.armor = p.maxArmor;
@@ -618,6 +657,7 @@ export function enterHubImpl(this: WorldSim): void {
 export function startDungeonRunFromHubImpl(this: WorldSim): void {
   this.inHub = false;
   this.hubStatues.length = 0;
+  this.hubStations.length = 0;
   this.currentFloor = 1;
   this.currentBiome = 1;
   this.map.biome = 1;

@@ -98,10 +98,25 @@
       "firstPickupHint": "💡 Mẹo: Bạn mang tối đa 2 vũ khí (Đổi bằng [Q], Lăn chuột hoặc phím [1]/[2])"
     },
     "hubGuide": {
-      "statuesSign": "🏛 TƯỢNG 5 NHÂN VẬT — Lại gần & Nhấn [E] chọn nhân vật",
-      "weaponsSign": "⚔ KỆ VŨ KHÍ THỬ NGHIỆM — Nhấn [E] nhặt thử & so sánh chỉ số",
-      "dummySign": "🎯 BÙ NHÌN TẬP BẮN — Tấn công để đo DPS & thử phản ứng nguyên tố",
-      "portalSign": "🌀 CỔNG KHỞI HÀNH — Nhấn [V] Sẵn Sàng rồi [E] bước vào Hầm Ngục"
+      "statuesSign": "🏛 KHU ANH HÙNG — Lại gần [E] hoặc Nhấp chuột để hóa thân",
+      "weaponsSign": "⚔ XƯỞNG VŨ KHÍ THỬ NGHIỆM — Nhấn [E] nhặt thử & so sánh chỉ số",
+      "dummySign": "🎯 TRƯỜNG TẬP BẮN — Tấn công Bù Nhìn để đo DPS & phản ứng nguyên tố",
+      "portalSign": "🌀 CỔNG VIỄN CHINH — Bước vào cổng hoặc nhấn [E] để vào Hầm Ngục"
+    },
+    "sanctuary": {
+      "title": "ASHEN PACT — ĐẠI SẢNH TRO TÀN",
+      "subtitle": "Đại Sảnh Hiệp Ước · Chọn Anh Hùng, Thử Vũ Khí & Khởi Hành",
+      "coopWingSign": "📡 BÀN HỘI CO-OP LAN — Nhấn [E] hoặc [I] Tạo / Vào Phòng",
+      "codexWingSign": "📖 BÀN CỔ THƯ — Nhấn [E] Cài Đặt & Hướng Dẫn",
+      "coopStationPrompt": "[E] Bàn Hội Co-op LAN — Tạo / Vào Phòng [I]",
+      "codexStationPrompt": "[E] Bàn Cổ Thư — Cài Đặt & Hướng Dẫn",
+      "embodiedBadge": "★ Đang hóa thân",
+      "soloCoopChip": "📡 Phòng Co-op [I]",
+      "soloCoopTitle": "PHÒNG CO-OP LAN [I]",
+      "leaveCoopBtn": "🚪 Rời Phòng",
+      "returnSanctuaryConfirmTitle": "RỜI HẦM NGỤC VỀ ĐẠI SẢNH?",
+      "returnSanctuaryConfirmBody": "Lượt chơi hiện tại sẽ kết thúc và bạn sẽ quay về Đại Sảnh Tro Tàn. Nhấn [Enter] xác nhận hoặc [Esc] hủy.",
+      "pauseReturnSanctuary": "🏛 Về Đại Sảnh [M]"
     },
     "settings": {
       "title": "CÀI ĐẶT HỆ THỐNG",

@@ -347,6 +347,16 @@ export function interactWithNearestImpl(
     case 'secret_challenge_crystal':
       return activateSecretChallengeCrystal(this, target.npc, p);
 
+    case 'hub_station':
+      this.events.push({
+        kind: 'hub_station_interacted',
+        playerId: p.id,
+        stationId: target.station.id,
+        x: target.station.x,
+        y: target.station.y,
+      });
+      return true;
+
     case 'portal':
       if (this.inHub) {
         p.ready = true;

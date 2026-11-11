@@ -15,6 +15,7 @@ import type {
   PlayerLifeState,
   SimChestState,
   SimEvent,
+  SimHubStation,
   SimHubStatue,
   SimMagneticRivetState,
   SimNpcState,
@@ -195,6 +196,7 @@ export interface QuantizedWorldSnapshot {
   }>;
   pings: SimPingMarker[];
   hubStatues: SimHubStatue[];
+  hubStations?: SimHubStation[];
   summons?: SimSummonState[];
   skillZones?: SimSkillZoneState[];
   pressurePlates?: SimPressurePlateState[];
@@ -394,7 +396,8 @@ export function encodeWorldSnapshot(
       ev.kind === 'pact_signed' ||
       ev.kind === 'relic_awakened' ||
       ev.kind === 'secret_trial_started' ||
-      ev.kind === 'secret_trial_resolved'
+      ev.kind === 'secret_trial_resolved' ||
+      ev.kind === 'hub_station_interacted'
     ) {
       priorityEvents.push(ev);
     } else {
@@ -428,6 +431,7 @@ export function encodeWorldSnapshot(
     pickups,
     pings: sim.pings.map((pg) => ({ ...pg })),
     hubStatues: sim.hubStatues.map((st) => ({ ...st })),
+    hubStations: sim.hubStations.map((st) => ({ ...st })),
     summons: sim.summons.map((s) => ({ ...s })),
     skillZones: sim.skillZones.map((z) => ({ ...z })),
     pressurePlates: sim.pressurePlates.map((p) => ({ ...p })),

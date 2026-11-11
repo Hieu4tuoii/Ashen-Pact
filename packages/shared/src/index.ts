@@ -30,4 +30,5 @@ export * from './sim/sim-weapon-specials.js';
 export * from './sim/sim-boss-armor-break.js';
 export * from './sim/sim-bot-tactical-helpers.js';
 export * from './sim/world-sim.js';
+export type { HubStationId, SimHubStation } from './sim/world-sim-types.js';
 export * from './i18n/index.js';

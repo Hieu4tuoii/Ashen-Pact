@@ -432,6 +432,16 @@ export interface SimHubStatue {
   radius: number;
 }
 
+export type HubStationId = 'coop_board' | 'codex_desk';
+
+export interface SimHubStation {
+  id: HubStationId;
+  nameVi: string;
+  x: number;
+  y: number;
+  radius: number;
+}
+
 export type PingMarkerKind = 'enemy' | 'loot' | 'revive' | 'move';
 
 export interface SimPingMarker {

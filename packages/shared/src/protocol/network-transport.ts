@@ -638,6 +638,11 @@ export class NetworkTransport implements ITransport {
     });
     this.sim.pings = snapshot.pings.map((pg) => ({ ...pg }));
     this.sim.hubStatues = snapshot.hubStatues.map((st) => ({ ...st }));
+    if (snapshot.inHub && snapshot.hubStations) {
+      this.sim.hubStations = snapshot.hubStations.map((st) => ({ ...st }));
+    } else if (!snapshot.inHub) {
+      this.sim.hubStations = [];
+    }
     if (snapshot.summons) {
       this.sim.summons = snapshot.summons.map((s) => ({ ...s }));
     }

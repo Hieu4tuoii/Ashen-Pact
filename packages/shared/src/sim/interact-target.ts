@@ -4,6 +4,7 @@ import { hasPlayerUsedAnvil } from './sim-weapon-mutators.js';
 import type {
   SimChestState,
   SimDoorState,
+  SimHubStation,
   SimHubStatue,
   SimNpcState,
   SimPlayerState,
@@ -43,6 +44,7 @@ export type InteractTargetKind =
   | 'daedalus_anvil'
   | 'upgrade_anvil'
   | 'secret_challenge_crystal'
+  | 'hub_station'
   | (typeof INTERACT_PRIORITY_ORDER)[number];
 
 export type InteractTargetResult =
@@ -109,6 +111,14 @@ export type InteractTargetResult =
       y: number;
       distance: number;
       npc: SimNpcState;
+    }
+  | {
+      kind: 'hub_station';
+      key: string;
+      x: number;
+      y: number;
+      distance: number;
+      station: SimHubStation;
     }
   | {
       kind: 'portal';
@@ -397,6 +407,37 @@ export function findInteractTarget(
         y: bestNpc.y,
         distance: bestDist,
         npc: bestNpc,
+      };
+    }
+  }
+
+  // 4.5 Hub Stations (Co-op Guild Board & Chronicler's Codex Desk)
+  if (sim.inHub && sim.hubStations.length > 0) {
+    const baseRange = INTERACT_RANGE + 8;
+    let bestStation: SimHubStation | null = null;
+    let bestDist = Infinity;
+    let bestKey = '';
+
+    for (let i = 0; i < sim.hubStations.length; i++) {
+      const station = sim.hubStations[i]!;
+      const key = `hub_station:${station.id}`;
+      const maxRange = baseRange + (currentKey === key ? hysteresis : 0);
+      const d = distance(actor.x, actor.y, station.x, station.y);
+      if (d <= maxRange && d < bestDist) {
+        bestDist = d;
+        bestStation = station;
+        bestKey = key;
+      }
+    }
+
+    if (bestStation) {
+      return {
+        kind: 'hub_station',
+        key: bestKey,
+        x: bestStation.x,
+        y: bestStation.y,
+        distance: bestDist,
+        station: bestStation,
       };
     }
   }

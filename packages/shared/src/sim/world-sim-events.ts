@@ -1,7 +1,13 @@
 import type { AshenPactId, AshenRelicId, BuffId, CharacterId, ElementalReactionId, ElementType, RoomType, WeaponRarity } from '../data/types.js';
 import type { PlayerInputPacket, QuickEmoteId } from '../protocol/messages.js';
 import type { ArenaMapConfig, SurfaceKind } from './arena-map.js';
-import type { PropKind, SummonKind, PingMarkerKind, BulletVolleySpawnEvent } from './world-sim-types.js';
+import type {
+  BulletVolleySpawnEvent,
+  HubStationId,
+  PingMarkerKind,
+  PropKind,
+  SummonKind,
+} from './world-sim-types.js';
 
 export type SimEvent =
   | BulletVolleySpawnEvent
@@ -581,6 +587,13 @@ export type SimEvent =
       roomId: number;
       victory: boolean;
       bonusGold: number;
+      x: number;
+      y: number;
+    }
+  | {
+      kind: 'hub_station_interacted';
+      playerId: number;
+      stationId: HubStationId;
       x: number;
       y: number;
     };
