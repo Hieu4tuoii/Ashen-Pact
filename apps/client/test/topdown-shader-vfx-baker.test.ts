@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { PALETTE } from '../src/art/palette.js';
 import {
   BAKED_FX_TEXTURE_KEYS,
+  bakeProjectilesAndFx,
   ENEMY_BULLET_VISUAL_SPEC,
 } from '../src/art/texture-baker-fx.js';
 import {
@@ -46,8 +47,11 @@ function createMock2dContext() {
     closePath: vi.fn(),
     moveTo: vi.fn(),
     lineTo: vi.fn(),
+    quadraticCurveTo: vi.fn(),
+    bezierCurveTo: vi.fn(),
     arc: vi.fn(),
     ellipse: vi.fn(),
+    clip: vi.fn(),
     fill: vi.fn(),
     stroke: vi.fn(),
     fillRect: vi.fn(),
@@ -57,6 +61,8 @@ function createMock2dContext() {
     fillStyle: '',
     strokeStyle: '',
     lineWidth: 1,
+    lineCap: 'butt',
+    lineJoin: 'miter',
     globalAlpha: 1,
     globalCompositeOperation: 'source-over',
   };
@@ -294,10 +300,55 @@ describe('1:1 Top-Down Chiaroscuro Shader Sprite-Sheet Baker', () => {
   it('preserves ENEMY_BULLET_VISUAL_SPEC (#E84545, depth 60) and core BAKED_FX_TEXTURE_KEYS invariants', () => {
     expect(ENEMY_BULLET_VISUAL_SPEC.fill).toBe(PALETTE.CRIMSON_BRIGHT);
     expect(ENEMY_BULLET_VISUAL_SPEC.core).toBe(PALETTE.BONE_WHITE);
+    expect(ENEMY_BULLET_VISUAL_SPEC.outlineColor).toBe(PALETTE.INK_DARK);
     expect(ENEMY_BULLET_VISUAL_SPEC.depth).toBe(60);
     expect(ENEMY_BULLET_VISUAL_SPEC.neverTintByElement).toBe(true);
+    expect(BAKED_FX_TEXTURE_KEYS).toContain('proj_enemy_small_orb');
     expect(BAKED_FX_TEXTURE_KEYS).toContain('proj_enemy_orb');
+    expect(BAKED_FX_TEXTURE_KEYS).toContain('proj_enemy_heavy_orb');
+    expect(BAKED_FX_TEXTURE_KEYS).toContain('proj_enemy_lance');
+    expect(BAKED_FX_TEXTURE_KEYS).not.toContain('proj_enemy_wave');
+    expect(BAKED_FX_TEXTURE_KEYS).not.toContain('proj_enemy_diamond');
+    expect(BAKED_FX_TEXTURE_KEYS).not.toContain('proj_enemy_ring_bolt');
     expect(BAKED_FX_TEXTURE_KEYS).not.toContain('fx_ambient_mist');
+  });
+
+  it('bakes proj_enemy_small_orb, proj_enemy_orb, proj_enemy_heavy_orb, and streamlined proj_enemy_lance while excluding retired enemy projectile keys', () => {
+    const mockScene = createMockPhaserSceneForBaker();
+    const scale = 4;
+    bakeProjectilesAndFx(mockScene as never, scale);
+
+    expect(mockScene.registered.has('proj_enemy_small_orb')).toBe(true);
+    expect(mockScene.registered.has('proj_enemy_orb')).toBe(true);
+    expect(mockScene.registered.has('proj_enemy_heavy_orb')).toBe(true);
+    expect(mockScene.registered.has('proj_enemy_lance')).toBe(true);
+    expect(mockScene.registered.has('fx_enemy_bullet_glow')).toBe(true);
+
+    expect(mockScene.registered.has('proj_enemy_wave')).toBe(false);
+    expect(mockScene.registered.has('proj_enemy_diamond')).toBe(false);
+    expect(mockScene.registered.has('proj_enemy_ring_bolt')).toBe(false);
+
+    expect(mockScene.registered.get('proj_enemy_small_orb')).toMatchObject({
+      width: 24 * scale,
+      height: 24 * scale,
+    });
+    expect(mockScene.registered.get('proj_enemy_orb')).toMatchObject({
+      width: 28 * scale,
+      height: 28 * scale,
+    });
+    expect(mockScene.registered.get('proj_enemy_heavy_orb')).toMatchObject({
+      width: 32 * scale,
+      height: 32 * scale,
+    });
+    expect(mockScene.registered.get('proj_enemy_lance')).toMatchObject({
+      width: 30 * scale,
+      height: 22 * scale,
+    });
+
+    const expectedCanvasKeys = BAKED_FX_TEXTURE_KEYS.filter((k) => k !== 'fx_light_radial')
+      .slice()
+      .sort();
+    expect([...mockScene.registered.keys()].sort()).toEqual(expectedCanvasKeys);
   });
 
   it('cleans up WebGL1 buffers, programs, and loses the offscreen WebGL context after baking and on link failure', () => {
