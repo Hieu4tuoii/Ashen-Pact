@@ -636,7 +636,7 @@ describe('Phase P10b — Combat FX (BlendMode.ADD), Elemental Combo FX & Clear B
       expect(mockScene.fx.spawnHitSparks).toHaveBeenCalledTimes(2);
     });
 
-    it('spins ring_bolt enemy bullets, applies subtle 1.05x low-alpha glowSprite halo, and stores specScale on projectileSprites entries', () => {
+    it('spins ring_bolt enemy bullets, renders core-locked additive glowSprite at depth 61 above bullet core, and offsets wave glow onto crescent blade', () => {
       const sim = new WorldSim({
         seed: 808,
         spawnInitialWave: false,
@@ -666,7 +666,31 @@ describe('Phase P10b — Combat FX (BlendMode.ADD), Elemental Combo FX & Clear B
         seed: 1,
         bulletShape: 'ring_bolt',
       });
+      sim.spawnDeterministicVolley({
+        kind: 'bullet_volley_spawned',
+        ownerId: 99,
+        team: 'enemy',
+        weaponId: 'boss_kryssa_wave',
+        x: 400,
+        y: 260,
+        angle: 0,
+        pelletCount: 1,
+        spreadRad: 0,
+        speed: 150,
+        radius: 6.8,
+        damage: 2,
+        critChance: 0,
+        knockback: 0,
+        ttlSec: 2,
+        pierceCount: 0,
+        bounceCount: 0,
+        element: 'chill',
+        amplifiedByShield: false,
+        seed: 2,
+        bulletShape: 'wave',
+      });
       const bullet = sim.projectiles[0]!;
+      const waveBullet = sim.projectiles[1]!;
 
       const makeMockDisplayObj = () => {
         const obj = {
@@ -767,9 +791,22 @@ describe('Phase P10b — Combat FX (BlendMode.ADD), Elemental Combo FX & Clear B
       expect(entry.specScale).toBeCloseTo(1.2, 4);
       const expectedRot = (0.5 * 6.0 + (bullet.id & 7)) % (Math.PI * 2);
       expect(entry.sprite.rotation).toBeCloseTo(expectedRot, 4);
-      expect(entry.glowSprite.scale / entry.sprite.scale).toBeCloseTo(1.05, 4);
-      const expectedAlpha = 0.24 + 0.04 * Math.sin(0.5 * 9.0 + (bullet.id & 7));
+      expect(entry.sprite.depth).toBe(60);
+      expect(entry.glowSprite.depth).toBe(61);
+      expect(entry.glowSprite.scale / entry.sprite.scale).toBeCloseTo(0.92, 4);
+      const expectedAlpha = 0.42 + 0.08 * Math.sin(0.5 * 9.0 + (bullet.id & 7));
       expect(entry.glowSprite.alpha).toBeCloseTo(expectedAlpha, 4);
+
+      const waveEntry = mockScene.projectileSprites.get(waveBullet.id) as {
+        sprite: ReturnType<typeof makeMockDisplayObj>;
+        glowSprite: ReturnType<typeof makeMockDisplayObj>;
+        specScale?: number;
+      };
+      expect(waveEntry).toBeDefined();
+      expect(waveEntry.glowSprite.depth).toBe(61);
+      expect(waveEntry.glowSprite.scale / waveEntry.sprite.scale).toBeCloseTo(0.8, 4);
+      expect(waveEntry.glowSprite.x).toBeGreaterThan(waveBullet.x + 3.5);
+      expect(waveEntry.glowSprite.y).toBeCloseTo(waveBullet.y, 4);
     });
   });
 });

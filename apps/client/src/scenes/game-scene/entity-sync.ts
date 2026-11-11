@@ -533,7 +533,7 @@ export function syncProjectilesAndPickupsImpl(this: GameScene): void {
       } else {
         const sprite = this.add.sprite(b.x, b.y, tex);
         const glowSprite = this.add.image(b.x, b.y, 'fx_enemy_bullet_glow');
-        glowSprite.setDepth(59);
+        glowSprite.setDepth(61);
         glowSprite.setBlendMode(Phaser.BlendModes.ADD);
         glowSprite.setVisible(false);
         entry = { sprite, glowSprite, textureKey: tex, specScale };
@@ -552,6 +552,9 @@ export function syncProjectilesAndPickupsImpl(this: GameScene): void {
 
     if (entry.sprite.depth !== spec.depth) {
       entry.sprite.setDepth(spec.depth);
+    }
+    if (entry.glowSprite.depth !== 61) {
+      entry.glowSprite.setDepth(61);
     }
     const targetBlendMode =
       spec.blendMode === 'ADD' ? Phaser.BlendModes.ADD : Phaser.BlendModes.NORMAL;
@@ -584,9 +587,18 @@ export function syncProjectilesAndPickupsImpl(this: GameScene): void {
       entry.sprite.setRotation(rot);
       if (b.team === 'enemy' && !isStress) {
         entry.glowSprite.setVisible(true);
-        entry.glowSprite.setPosition(pos.x, pos.y);
-        entry.glowSprite.setScale(projScale * specScale * 1.05);
-        entry.glowSprite.setAlpha(0.24 + 0.04 * Math.sin(visualTimeSec * 9.0 + (b.id & 7)));
+        if (b.bulletShape === 'wave') {
+          const waveOff = 4.2 * specScale;
+          entry.glowSprite.setPosition(
+            pos.x + Math.cos(rot) * waveOff,
+            pos.y + Math.sin(rot) * waveOff,
+          );
+          entry.glowSprite.setScale(projScale * specScale * 0.8);
+        } else {
+          entry.glowSprite.setPosition(pos.x, pos.y);
+          entry.glowSprite.setScale(projScale * specScale * 0.92);
+        }
+        entry.glowSprite.setAlpha(0.42 + 0.08 * Math.sin(visualTimeSec * 9.0 + (b.id & 7)));
       } else {
         entry.glowSprite.setVisible(false);
       }
