@@ -124,6 +124,9 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
         });
         rig.container.setDepth(24);
         rig.setEquippedWeapon(cDef.starterWeaponId);
+        if (this.hubLoungeAnimOverride) {
+          rig.setAnimState(this.hubLoungeAnimOverride);
+        }
 
         const glowSprite = this.add.image(st.x, st.y + 4, 'fx_light_radial');
         glowSprite.setDepth(35);

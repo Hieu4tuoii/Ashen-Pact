@@ -337,7 +337,7 @@ export interface SanctuaryHudChromeClickParams {
  * Determines whether a pointerdown in `HudScene` coordinates (`hudX`, `hudY`) hits interactive
  * `HudScene` targets (`hitTestPointer(pointer)`), top/bottom HUD chrome, or the scaled
  * non-interactive Co-op Invite Panel background rect
- * `[960 - 296 * s + hudPadX, 960 - 12 * s + hudPadX] × [144 * s - hudPadY, 426 * s - hudPadY]`.
+ * `[960 - 316 * s + hudPadX, 960 - 12 * s + hudPadX] × [144 * s - hudPadY, 426 * s - hudPadY]`.
  */
 export function isSanctuaryHudChromeClick(params: SanctuaryHudChromeClickParams): boolean {
   const {
@@ -362,7 +362,7 @@ export function isSanctuaryHudChromeClick(params: SanctuaryHudChromeClickParams)
   if (
     inHub &&
     invitePanelVisible &&
-    hudX >= 960 - 296 * s + hudPadX &&
+    hudX >= 960 - 316 * s + hudPadX &&
     hudX <= 960 - 12 * s + hudPadX &&
     hudY >= 144 * s - hudPadY &&
     hudY <= 426 * s - hudPadY

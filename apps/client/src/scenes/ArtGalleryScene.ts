@@ -77,7 +77,7 @@ export class ArtGalleryScene extends Phaser.Scene {
       this.scene.stop('HudScene');
     }
     if (!(isDebugUiEnabled() || isTestHooksEnabled())) {
-      this.scene.start('MenuScene');
+      this.scene.start('GameScene', { coopMode: 'solo', startInHub: true });
       return;
     }
 
@@ -168,9 +168,9 @@ export class ArtGalleryScene extends Phaser.Scene {
     });
 
     const menuBtn = this.add
-      .text(898, 28, '[Về Menu]', {
+      .text(898, 28, '[Về Sảnh]', {
         fontFamily: '"Be Vietnam Pro", sans-serif',
-        fontSize: '12px',
+        fontSize: '11.5px',
         fontStyle: '700',
         color: PALETTE.SOLAR_GOLD,
         stroke: PALETTE.INK_DARK,
@@ -179,7 +179,9 @@ export class ArtGalleryScene extends Phaser.Scene {
       })
       .setOrigin(0.5, 0)
       .setInteractive({ useHandCursor: true });
-    menuBtn.on('pointerdown', () => this.scene.start('MenuScene'));
+    menuBtn.on('pointerdown', () =>
+      this.scene.start('GameScene', { coopMode: 'solo', startInHub: true }),
+    );
     this.textObjects.push(menuBtn);
 
     // 3. Build Gallery Page 1 initially (Pages 2, 3, 4, 5 lazy-built on tab switch)

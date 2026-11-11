@@ -18,9 +18,16 @@ import { ModalOverlayManager } from '../../ui/settings-modal.js';
 import { computeUiTextResolution, createUiTextStyle, UI_THEME } from '../../ui/theme.js';
 import { type GameScene } from '../GameScene.js';
 import { formatWeaponCadenceHudLabel } from './hud-micro-reload-bar.js';
+import {
+  destroySanctuaryDomInputs,
+  exitToSoloSanctuary,
+  syncSanctuaryDomInputsLayoutAndVisibility,
+} from './sanctuary-lobby-ui.js';
 
 export function syncHudDebugVisibility(scene: GameScene): void {
   const showDebug = isEffectiveDebugUiEnabled(scene.coopMode !== 'solo');
+  const inHub = Boolean(scene.transport?.getSim?.()?.inHub);
+  const showCombatDebug = showDebug && !inHub;
   const isEn = i18n.getLocale() === 'en';
   const nextStatus = showDebug
     ? isEn
@@ -34,13 +41,13 @@ export function syncHudDebugVisibility(scene: GameScene): void {
     if (scene.statusText.text !== nextStatus) {
       scene.statusText.setText(nextStatus);
     }
-    if (scene.statusText.visible !== showDebug) {
-      scene.statusText.setVisible(showDebug);
+    if (scene.statusText.visible !== showCombatDebug) {
+      scene.statusText.setVisible(showCombatDebug);
     }
   }
 
-  if (scene.statsLineText && scene.statsLineText.visible !== showDebug) {
-    scene.statsLineText.setVisible(showDebug);
+  if (scene.statsLineText && scene.statsLineText.visible !== showCombatDebug) {
+    scene.statsLineText.setVisible(showCombatDebug);
   }
 
   for (const btn of [
@@ -48,17 +55,20 @@ export function syncHudDebugVisibility(scene: GameScene): void {
     scene.qualityBtnText,
     scene.galleryBtnText,
     scene.menuBtnText,
-    scene.pauseBtnText,
   ]) {
     if (!btn) continue;
-    if (btn.visible !== showDebug) {
-      btn.setVisible(showDebug);
-      if (showDebug && btn !== scene.pauseBtnText) {
+    if (btn.visible !== showCombatDebug) {
+      btn.setVisible(showCombatDebug);
+      if (showCombatDebug) {
         btn.setInteractive({ useHandCursor: true });
-      } else if (!showDebug) {
+      } else {
         btn.disableInteractive();
       }
     }
+  }
+
+  if (scene.pauseBtnText && scene.pauseBtnText.visible !== showDebug) {
+    scene.pauseBtnText.setVisible(showDebug);
   }
 
   if (scene.pauseBtnBg && scene.pauseBtnBg.visible !== showDebug) {
@@ -108,6 +118,9 @@ export function applyHudEdgeAnchors(scene: GameScene): void {
   scene.lastHudBarsExtraHash = '';
   scene.lastHudHp = -1;
   scene.lastCoopHudHash = '';
+  scene.lastInvitePanelHash = '';
+  scene.lastSanctuaryHudHash = '';
+  syncSanctuaryDomInputsLayoutAndVisibility(scene);
 }
 
 export function buildVectorHudImpl(this: GameScene): void {
@@ -293,6 +306,7 @@ export function buildVectorHudImpl(this: GameScene): void {
     .setInteractive({ useHandCursor: true });
   galleryBtn.on('pointerdown', () => {
     if (!isEffectiveDebugUiEnabled(this.coopMode !== 'solo')) return;
+    destroySanctuaryDomInputs(this);
     this.scene.start('ArtGalleryScene');
   });
   this.galleryBtnText = galleryBtn;
@@ -312,7 +326,7 @@ export function buildVectorHudImpl(this: GameScene): void {
       }),
     )
     .setInteractive({ useHandCursor: true });
-  menuBtn.on('pointerdown', () => this.scene.start('MenuScene'));
+  menuBtn.on('pointerdown', () => exitToSoloSanctuary(this));
   this.menuBtnText = menuBtn;
   this.textObjects.push(menuBtn);
   this.hudTopRightContainer.add(menuBtn);
@@ -553,13 +567,16 @@ export function buildVectorHudImpl(this: GameScene): void {
     .setVisible(false);
   this.textObjects.push(this.downedBannerText);
   this.weaponCompareContainer = ui.add.container(0, 0);
+  this.sanctuaryDebugFooterContainer = ui.add.container(0, 0);
   this.hudBottomCenterContainer.add([
     this.downedBannerGraphics,
     this.downedBannerText,
     this.weaponCompareContainer,
+    this.sanctuaryDebugFooterContainer,
   ]);
 
-  // 5. Top-Center Boss HP Bar, Wave/Room Banner & Coalesced Reaction Banner
+  // 5. Top-Center Boss HP Bar, Wave/Room Banner, Sanctuary Plaque & Coalesced Reaction Banner
+  this.sanctuaryHudContainer = ui.add.container(0, 0);
   this.bossBarGraphics = ui.add.graphics();
   this.bossTitleText = ui.add
     .text(
@@ -614,6 +631,7 @@ export function buildVectorHudImpl(this: GameScene): void {
   this.textObjects.push(this.reactionBannerText);
 
   this.hudTopCenterContainer.add([
+    this.sanctuaryHudContainer,
     this.bossBarGraphics,
     this.bossTitleText,
     this.waveBannerGraphics,
@@ -676,6 +694,7 @@ export function invalidateAllHudCachesImpl(this: GameScene): void {
   this.lastBossHudHash = '__invalid__';
   this.lastCoopHudHash = '';
   this.lastInvitePanelHash = '';
+  this.lastSanctuaryHudHash = '';
   this.lastHubPreviewHash = '';
   this.lastWeaponCompareHash = '';
   this.lastEmoteWheelHash = '';
@@ -860,7 +879,7 @@ export function rebuildPauseModalImpl(this: GameScene): void {
       },
     ],
     [
-      isEn ? '🏠 Leave to Menu [M]' : '🏠 Về Menu Chính [M]',
+      i18n.t('ui.sanctuary.pauseReturnSanctuary'),
       PALETTE.RUBY_CORE,
       () => {
         zzfx.play('ui_click');
@@ -895,9 +914,9 @@ export function rebuildPauseModalImpl(this: GameScene): void {
       .text(
         480,
         cY + 30,
-        isEn ? '⚠ RETURN TO MAIN MENU?' : '⚠ XÁC NHẬN VỀ MENU CHÍNH?',
+        `⚠ ${i18n.t('ui.sanctuary.returnSanctuaryConfirmTitle')}`,
         createUiTextStyle({
-          fontPxAt1080p: 22,
+          fontPxAt1080p: 20,
           weight: 800,
           color: PALETTE.SOLAR_GOLD,
           strokeThickness: 3.2,
@@ -905,15 +924,16 @@ export function rebuildPauseModalImpl(this: GameScene): void {
         }),
       )
       .setOrigin(0.5);
+    if (confirmTitle.width > cW - 28 && confirmTitle.width > 0) {
+      confirmTitle.setScale((cW - 28) / confirmTitle.width);
+    }
     const confirmBody = ui.add
       .text(
         480,
         cY + 78,
-        isEn
-          ? 'Leave current match? Progress will be lost.'
-          : 'Rời trận đấu hiện tại? Tiến trình sẽ mất.',
+        i18n.t('ui.sanctuary.returnSanctuaryConfirmBody'),
         createUiTextStyle({
-          fontPxAt1080p: 16,
+          fontPxAt1080p: 14,
           weight: 700,
           color: PALETTE.BONE_WHITE,
           align: 'center',
@@ -956,7 +976,7 @@ export function rebuildPauseModalImpl(this: GameScene): void {
         this.pauseConfirmExitOpen = false;
         initGlobalDebugState().pauseConfirmExitOpen = false;
         this.togglePauseModal(false);
-        this.scene.start('MenuScene');
+        exitToSoloSanctuary(this);
       },
     );
   }

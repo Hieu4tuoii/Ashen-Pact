@@ -6,6 +6,7 @@ import { isEffectiveDebugUiEnabled, setServerDebugAllowed } from '../../core/deb
 import { initGlobalDebugState } from '../../ui/debug-overlay.js';
 import { graphicsSettings } from '../../ui/graphics-settings.js';
 import { type GameScene } from '../GameScene.js';
+import { exitToSoloSanctuary, resolveSanctuaryWsUrl } from './sanctuary-lobby-ui.js';
 
 export function setupKeyboardBindingsImpl(this: GameScene): void {
   const kb = this.input.keyboard;
@@ -43,6 +44,7 @@ export function setupKeyboardBindingsImpl(this: GameScene): void {
   };
 
   kb.on('keydown-ESC', () => {
+    if (this.menuActiveInput !== null) return;
     zzfx.play('ui_click');
     if (this.settingsModal?.isOpen()) {
       this.settingsModal.close();
@@ -63,15 +65,19 @@ export function setupKeyboardBindingsImpl(this: GameScene): void {
   });
 
   this.keys.SHIFT.on('down', () => {
+    if (this.menuActiveInput !== null) return;
     this.dashQueued = true;
   });
   this.keys.SPACE.on('down', () => {
+    if (this.menuActiveInput !== null) return;
     this.skillQueued = true;
   });
   this.keys.Q.on('down', () => {
+    if (this.menuActiveInput !== null) return;
     this.wheelSwapQueued = true;
   });
   this.keys.E.on('down', () => {
+    if (this.menuActiveInput !== null) return;
     this.interactQueued = true;
     const sim = this.transport.getSim();
     if (sim.runState === 'victory' && sim.currentFloor < 6 && !this.resultDismissed) {
@@ -96,6 +102,7 @@ export function setupKeyboardBindingsImpl(this: GameScene): void {
     }
   });
   this.keys.Z.on('down', () => {
+    if (this.menuActiveInput !== null) return;
     const pointer = this.input.activePointer;
     const wPt = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
     this.pingQueued = {
@@ -104,9 +111,11 @@ export function setupKeyboardBindingsImpl(this: GameScene): void {
     };
   });
   this.keys.X.on('down', () => {
+    if (this.menuActiveInput !== null) return;
     this.dropWeaponQueued = true;
   });
   this.keys.V.on('down', () => {
+    if (this.menuActiveInput !== null) return;
     const sim = this.transport.getSim();
     if (this.room && this.coopMode !== 'solo') {
       if (!sim.player.ready) {
@@ -128,6 +137,7 @@ export function setupKeyboardBindingsImpl(this: GameScene): void {
     this.lastInvitePanelHash = '';
   });
   this.keys.I.on('down', () => {
+    if (this.menuActiveInput !== null) return;
     this.invitePanelVisible = !this.invitePanelVisible;
     initGlobalDebugState().invitePanelVisible = this.invitePanelVisible;
     this.lastInvitePanelHash = '';
@@ -352,12 +362,13 @@ export function setupKeyboardBindingsImpl(this: GameScene): void {
 
   // ENTER: Confirm exit when Pause Exit Confirmation is open, or Replay run when Victory/Defeat modal is active
   kb.on('keydown-ENTER', () => {
+    if (this.menuActiveInput !== null) return;
     if (this.pauseModalOpen && this.pauseConfirmExitOpen) {
       zzfx.play('ui_click');
       this.pauseConfirmExitOpen = false;
       initGlobalDebugState().pauseConfirmExitOpen = false;
       this.togglePauseModal(false);
-      this.scene.start('MenuScene');
+      exitToSoloSanctuary(this);
       return;
     }
     const sim = this.transport.getSim();
@@ -368,12 +379,13 @@ export function setupKeyboardBindingsImpl(this: GameScene): void {
         this.triggerIrisTransition('close');
         this.invalidateAllHudCaches();
       } else {
-        this.scene.restart();
+        this.scene.restart({ coopMode: 'solo', startInHub: false });
       }
     }
   });
 
   kb.on('keydown-H', () => {
+    if (this.menuActiveInput !== null) return;
     const sim = this.transport.getSim();
     if (this.pauseModalOpen && !this.pauseConfirmExitOpen && !this.settingsModal?.isOpen()) {
       zzfx.play('portal_enter');
@@ -394,13 +406,64 @@ export function setupKeyboardBindingsImpl(this: GameScene): void {
   });
 
   kb.on('keydown-O', () => {
-    if (this.pauseModalOpen && !this.pauseConfirmExitOpen && !this.settingsModal?.isOpen()) {
+    if (this.menuActiveInput !== null) return;
+    const sim = this.transport.getSim();
+    if (
+      !this.settingsModal?.isOpen() &&
+      ((this.pauseModalOpen && !this.pauseConfirmExitOpen) ||
+        (sim.inHub && !this.pauseModalOpen && !this.fullMapOpen))
+    ) {
       zzfx.play('ui_click');
       this.settingsModal?.open('settings');
     }
   });
 
+  kb.on('keydown-K', () => {
+    if (this.menuActiveInput !== null) return;
+    const sim = this.transport.getSim();
+    if (
+      sim.inHub &&
+      !this.pauseModalOpen &&
+      !this.fullMapOpen &&
+      !this.settingsModal?.isOpen()
+    ) {
+      zzfx.play('ui_click');
+      this.settingsModal?.open('controls');
+    }
+  });
+
+  kb.on('keydown-C', () => {
+    if (this.menuActiveInput !== null) return;
+    const sim = this.transport.getSim();
+    if (
+      sim.inHub &&
+      !this.pauseModalOpen &&
+      !this.fullMapOpen &&
+      !this.settingsModal?.isOpen()
+    ) {
+      zzfx.play('ui_click');
+      this.settingsModal?.open('credits');
+    }
+  });
+
+  kb.on('keydown-L', () => {
+    if (this.menuActiveInput !== null) return;
+    const sim = this.transport.getSim();
+    if (
+      sim.inHub &&
+      !this.pauseModalOpen &&
+      !this.fullMapOpen &&
+      !this.settingsModal?.isOpen()
+    ) {
+      zzfx.play('ui_click');
+      graphicsSettings.toggleLanguage();
+      initGlobalDebugState().language = graphicsSettings.getState().language;
+      this.invalidateAllHudCaches();
+    }
+  });
+
   kb.on('keydown-M', () => {
+    if (this.menuActiveInput !== null) return;
     const sim = this.transport.getSim();
     if (this.pauseModalOpen && !this.pauseConfirmExitOpen && !this.settingsModal?.isOpen()) {
       zzfx.play('ui_click');
@@ -408,22 +471,21 @@ export function setupKeyboardBindingsImpl(this: GameScene): void {
       return;
     }
     if ((sim.runState === 'victory' || sim.runState === 'defeat') && !this.resultDismissed) {
-      this.scene.start('MenuScene');
+      exitToSoloSanctuary(this);
     }
   });
 }
 
 export function getResolvedWsUrlImpl(this: GameScene): string {
   if (this.serverUrl) {
-    if (this.serverUrl.startsWith('ws://') || this.serverUrl.startsWith('wss://')) {
-      return this.serverUrl;
-    }
-    return `ws://${this.serverUrl}`;
+    return resolveSanctuaryWsUrl(this.serverUrl);
   }
+  const protocol =
+    typeof window !== 'undefined' && window.location?.protocol === 'https:' ? 'wss:' : 'ws:';
   const wsHost = window.location.hostname || 'localhost';
   const locPort = window.location.port;
   const wsPort = locPort && locPort !== '5173' && locPort !== '4173' ? locPort : '2567';
-  return `ws://${wsHost}:${wsPort}`;
+  return `${protocol}//${wsHost}:${wsPort}`;
 }
 
 export async function fetchHostLanInfoImpl(this: GameScene): Promise<void> {
@@ -445,6 +507,11 @@ export async function fetchHostLanInfoImpl(this: GameScene): Promise<void> {
       if (data.primaryLanIp) this.primaryLanIp = data.primaryLanIp;
       if (data.lanIps) this.lanIps = data.lanIps;
       if (data.port) this.serverPort = data.port;
+      if (data.primaryLanIp && !this.menuActiveInput && !this.serverUrl) {
+        this.serverHostPort = `${this.primaryLanIp}:${this.serverPort}`;
+        debug.menuServerHostPort = this.serverHostPort;
+        this.sanctuaryDomInputs?.syncValues(this.displayName, this.serverHostPort);
+      }
       debug.lanIps = this.lanIps;
       this.updateHostInviteUrl();
     }
@@ -531,30 +598,23 @@ export function bindCoopRoomHandlersImpl(this: GameScene, room: ColyseusRoom): v
 
   room.onMessage('host_disconnected', (msg: { reasonVi?: string }) => {
     if (!this.scene.isActive()) return;
-    this.intentionalLeave = true;
-    this.scene.start('MenuScene', {
-      disconnectReason: msg.reasonVi ?? 'Phòng Co-op đã đóng do Host ngắt kết nối.',
-    });
+    exitToSoloSanctuary(this, msg.reasonVi ?? 'Phòng Co-op đã đóng do Host ngắt kết nối.');
   });
 
   const onKicked = (msg: { reasonVi?: string }) => {
     if (!this.scene.isActive()) return;
-    this.intentionalLeave = true;
-    this.scene.start('MenuScene', {
-      disconnectReason: msg.reasonVi ?? 'Bạn đã bị Host mời rời khỏi phòng.',
-    });
+    exitToSoloSanctuary(this, msg.reasonVi ?? 'Bạn đã bị Host mời rời khỏi phòng.');
   };
   room.onMessage('kicked', onKicked);
   room.onMessage('kicked_by_host', onKicked);
 
   room.onMessage('join_rejected', (msg: { reasonVi?: string }) => {
     if (!this.scene.isActive()) return;
-    this.intentionalLeave = true;
-    this.scene.start('MenuScene', {
-      disconnectReason:
-        msg.reasonVi ??
+    exitToSoloSanctuary(
+      this,
+      msg.reasonVi ??
         'Đội đang chiến đấu — chỉ có thể tham gia ở Sảnh Chờ (Hub) hoặc giữa các tầng!',
-    });
+    );
   });
 
   room.onMessage('character_select_result', () => {
@@ -570,16 +630,16 @@ export function bindCoopRoomHandlersImpl(this: GameScene, room: ColyseusRoom): v
     if (!this.scene.isActive() || this.intentionalLeave) return;
     // Code 4000 = Host disconnect, 4001 = Kicked, 4002 = Room Full, 4003 = Mid-run Join Rejected
     if (code === 4000 || code === 4001 || code === 4002 || code === 4003) {
-      this.scene.start('MenuScene', {
-        disconnectReason:
-          code === 4001
-            ? 'Bạn đã bị Host mời rời khỏi phòng.'
-            : code === 4002
-              ? 'Phòng Co-op đã đủ 4 người chơi.'
-              : code === 4003
-                ? 'Đội đang chiến đấu — chỉ có thể tham gia ở Sảnh Chờ (Hub) hoặc giữa các tầng!'
-                : 'Phòng Co-op đã đóng do Host ngắt kết nối.',
-      });
+      exitToSoloSanctuary(
+        this,
+        code === 4001
+          ? 'Bạn đã bị Host mời rời khỏi phòng.'
+          : code === 4002
+            ? 'Phòng Co-op đã đủ 4 người chơi.'
+            : code === 4003
+              ? 'Đội đang chiến đấu — chỉ có thể tham gia ở Sảnh Chờ (Hub) hoặc giữa các tầng!'
+              : 'Phòng Co-op đã đóng do Host ngắt kết nối.',
+      );
       return;
     }
     debug.serverConnected = false;
@@ -632,6 +692,7 @@ export async function connectCoopRoomImpl(this: GameScene): Promise<void> {
   } catch {
     if (!this.scene.isActive()) return;
     debug.serverConnected = false;
+    this.lastInvitePanelHash = '';
   }
 }
 
@@ -684,7 +745,8 @@ export async function connectHelloRoomImpl(this: GameScene): Promise<void> {
   await this.fetchHostLanInfo();
   try {
     const wsHost = window.location.hostname || 'localhost';
-    const client = new ColyseusClient(`ws://${wsHost}:2567`);
+    const wsPort = this.serverPort || 2567;
+    const client = new ColyseusClient(`ws://${wsHost}:${wsPort}`);
     const room = await client.joinOrCreate('hello_room', {});
     if (!this.scene.isActive()) {
       void room.leave().catch(() => {});
@@ -692,6 +754,7 @@ export async function connectHelloRoomImpl(this: GameScene): Promise<void> {
     }
     this.room = room;
     debug.serverConnected = true;
+    this.lastInvitePanelHash = '';
 
     room.onMessage('hello_welcome', (msg: { seed?: number; debugAllowed?: boolean }) => {
       if (!this.scene.isActive()) return;
@@ -720,5 +783,6 @@ export async function connectHelloRoomImpl(this: GameScene): Promise<void> {
   } catch {
     if (!this.scene.isActive()) return;
     debug.serverConnected = false;
+    this.lastInvitePanelHash = '';
   }
 }

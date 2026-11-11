@@ -62,6 +62,12 @@ import {
   resolveHubWorldPointerClick,
   SanctuaryVisualLayer,
 } from './sanctuary-architecture.js';
+import {
+  destroySanctuaryDomInputs,
+  mountSanctuaryDomInputs,
+  resolveSavedSanctuaryCharacter,
+  syncSanctuaryDomInputsLayoutAndVisibility,
+} from './sanctuary-lobby-ui.js';
 import { createPortalAnimState } from '../../fx/portal-door-shaders.js';
 
 export function syncGameSceneTestHooks(scene: GameScene): void {
@@ -129,6 +135,9 @@ export function createImpl(this: GameScene): void {
   debug.comparedWeaponId = null;
   debug.emoteWheelOpen = false;
   debug.lastDebugRejected = null;
+  debug.menuDisplayName = this.displayName;
+  debug.menuServerHostPort = this.serverHostPort;
+  debug.menuActiveInput = null;
 
   this.simPlayerRigs.clear();
   this.coopPlayerRigs.clear();
@@ -183,6 +192,7 @@ export function createImpl(this: GameScene): void {
   this.lastBossHudHash = '';
   this.lastCoopHudHash = '';
   this.lastInvitePanelHash = '';
+  this.lastSanctuaryHudHash = '';
   this.lastHubPreviewHash = '';
   this.lastWeaponCompareHash = '';
   this.lastEmoteWheelHash = '';
@@ -209,6 +219,10 @@ export function createImpl(this: GameScene): void {
   this.dropWeaponQueued = false;
   this.readyToggleQueued = false;
   this.suppressFireUntilPointerUp = false;
+  this.hubTicksElapsed = 0;
+  this.wasInHubLastFrame = false;
+  this.hubLoungeAnimOverride = null;
+  this.sanctuaryHubElapsedSec = 0;
   musicManager.setPaused(false);
 
   // 1. Initialize Transport (NetworkTransport for Co-op LAN Host/Join, LocalTransport for Solo)
@@ -220,6 +234,7 @@ export function createImpl(this: GameScene): void {
       localPlayerSlot: 1,
     });
     this.transport = this.networkTransport;
+    this.wasInHubLastFrame = true;
   } else {
     const searchParams = new URLSearchParams(window.location.search);
     const allowShortcuts = isDebugUiEnabled() || isTestHooksEnabled();
@@ -242,8 +257,16 @@ export function createImpl(this: GameScene): void {
       autoRespawnWaves: false,
       autoRevivePlayer: false,
     });
-    if (allowShortcuts && searchParams.get('hub') === '1') {
-      this.transport.getSim().enterHub();
+    if (this.startInHub || (allowShortcuts && searchParams.get('hub') === '1')) {
+      const soloSim = this.transport.getSim();
+      soloSim.enterHub();
+      soloSim.player.displayName = this.displayName;
+      const savedChar = resolveSavedSanctuaryCharacter(window.location.search);
+      if (savedChar && savedChar !== soloSim.player.characterId) {
+        soloSim.selectCharacter(soloSim.player.id, savedChar);
+      }
+      this.transport.consumeEvents();
+      this.wasInHubLastFrame = true;
     } else if (allowShortcuts && initialBiome > 1) {
       this.transport.getSim().advanceToBiome(initialBiome);
     }
@@ -379,6 +402,10 @@ export function createImpl(this: GameScene): void {
 
   this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
     this.intentionalLeave = true;
+    destroySanctuaryDomInputs(this);
+    this.sanctuaryHudContainer = undefined;
+    this.sanctuaryPlaqueContainer = undefined;
+    this.sanctuaryDebugFooterContainer = undefined;
     this.scale.off('resize', this.applyCameraViewport, this);
     this.input.off('wheel', onWheel);
     this.input.off('pointerdown', onPointerDown);
@@ -492,8 +519,10 @@ export function createImpl(this: GameScene): void {
   this.crosshairSprite.setScale(invBake);
   this.crosshairSprite.setDepth(5000);
 
-  // 9. Camera-Pinned Vector HUD
+  // 9. Camera-Pinned Vector HUD + Sanctuary DOM Input Overlay
   this.buildVectorHud();
+  mountSanctuaryDomInputs(this);
+  syncSanctuaryDomInputsLayoutAndVisibility(this);
   this.triggerIrisTransition('open');
 
   // 10. Keyboard & Debug Bindings

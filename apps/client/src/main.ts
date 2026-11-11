@@ -8,7 +8,6 @@ import { ArtGalleryScene } from './scenes/ArtGalleryScene.js';
 import { BootScene } from './scenes/BootScene.js';
 import { GameScene } from './scenes/GameScene.js';
 import { HudScene } from './scenes/HudScene.js';
-import { MenuScene } from './scenes/MenuScene.js';
 import { PreloadScene } from './scenes/PreloadScene.js';
 import { initGlobalDebugState } from './ui/debug-overlay.js';
 
@@ -31,7 +30,7 @@ const config: Phaser.Types.Core.GameConfig = {
     width: window.innerWidth || 1920,
     height: window.innerHeight || 1080,
   },
-  scene: [BootScene, PreloadScene, MenuScene, GameScene, HudScene, ArtGalleryScene],
+  scene: [BootScene, PreloadScene, GameScene, HudScene, ArtGalleryScene],
 };
 
 export const game = new Phaser.Game(config);

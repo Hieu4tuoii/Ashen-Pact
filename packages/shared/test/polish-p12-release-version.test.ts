@@ -25,7 +25,7 @@ describe('Phase P5.4 / P12 — Release Version v2.0.0, Deferred P9b Ledger & Doc
     }
   });
 
-  it('updates tools/package-release.ts, apps/server/src/index.ts, and MenuScene.ts to v2.0.0 with zero 0.1.0/0.2.1 occurrences', () => {
+  it('updates tools/package-release.ts, apps/server/src/index.ts, and sanctuary-lobby-ui.ts to v2.0.0 with zero 0.1.0/0.2.1 occurrences and retires MenuScene.ts', () => {
     const packageReleaseSrc = readRepoFile('tools/package-release.ts');
     expect(packageReleaseSrc).toContain("const RELEASE_NAME = 'AshenPact-v2.0.0-win-x64';");
     expect(packageReleaseSrc).toContain('Ashen Pact v2.0.0 - Co-op LAN Host Server');
@@ -45,9 +45,13 @@ describe('Phase P5.4 / P12 — Release Version v2.0.0, Deferred P9b Ledger & Doc
     expect(serverIndexSrc).not.toContain('0.1.0');
     expect(serverIndexSrc).not.toContain('0.2.1');
 
-    const menuSceneSrc = readRepoFile('apps/client/src/scenes/MenuScene.ts');
-    expect(menuSceneSrc).toContain("'v2.0.0 · LAN'");
-    expect(menuSceneSrc).not.toContain('0.2.1');
+    expect(fs.existsSync(path.join(ROOT_DIR, 'apps/client/src/scenes/MenuScene.ts'))).toBe(false);
+    const sanctuaryLobbyUiSrc = readRepoFile(
+      'apps/client/src/scenes/game-scene/sanctuary-lobby-ui.ts',
+    );
+    expect(sanctuaryLobbyUiSrc).toContain("'v2.0.0 · LAN'");
+    expect(sanctuaryLobbyUiSrc).not.toContain('0.1.0');
+    expect(sanctuaryLobbyUiSrc).not.toContain('0.2.1');
   });
 
   it('updates phase8.spec.ts and phase8-soak-release.test.ts to reference AshenPact-v2.0.0-win-x64 and 2.0.0', () => {
@@ -115,7 +119,7 @@ describe('Phase P5.4 / P12 — Release Version v2.0.0, Deferred P9b Ledger & Doc
       'apps/server/package.json',
       'tools/package-release.ts',
       'apps/server/src/index.ts',
-      'apps/client/src/scenes/MenuScene.ts',
+      'apps/client/src/scenes/game-scene/sanctuary-lobby-ui.ts',
       'tests/e2e/phase8.spec.ts',
       'packages/shared/test/phase8-soak-release.test.ts',
       'README.md',

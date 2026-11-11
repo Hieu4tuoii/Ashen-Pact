@@ -555,13 +555,13 @@ describe('Ashen Sanctuary 5-Wing Visual Architecture, Embodied Hero Rigs & Click
       }),
     ).toBe(true);
 
-    // 3. Expanded Invite Panel non-interactive background rect [960 - 296*s + padX, 960 - 12*s + padX] x [144*s - padY, 426*s - padY]
-    //    At s = 1, pad = 0: x = 664..948, y = 144..426 -> left margin x = 665 is suppressed (previously missed by 676..952)
+    // 3. Expanded Co-op Guild Drawer non-interactive background rect [960 - 316*s + padX, 960 - 12*s + padX] x [144*s - padY, 426*s - padY]
+    //    At s = 1, pad = 0: x = 644..948, y = 144..426 -> left margin x = 646 is suppressed across the full 304px drawer
     expect(
       isSanctuaryHudChromeClick({
         inHub: true,
         invitePanelVisible: true,
-        hudX: 665,
+        hudX: 646,
         hudY: 220,
         hudPadX: 0,
         hudPadY: 0,

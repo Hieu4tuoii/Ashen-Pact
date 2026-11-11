@@ -11,6 +11,7 @@ import {
   isTestHooksEnabled,
 } from '../core/debug-flag.js';
 import { initGlobalDebugState } from '../ui/debug-overlay.js';
+import { resolveBootGameSceneInitData } from './game-scene/sanctuary-lobby-ui.js';
 
 export class PreloadScene extends Phaser.Scene {
   constructor() {
@@ -30,44 +31,12 @@ export class PreloadScene extends Phaser.Scene {
     const finalizeLoad = () => {
       TextureBaker.bakeAll(this, zoom, true);
 
-      const params = new URLSearchParams(window.location.search);
-      const requestedScene = params.get('scene')?.toLowerCase();
-      const coopParam = params.get('coop')?.toLowerCase();
-      const joinRoomId = params.get('join');
-      const hubParam = params.get('hub');
-      const galleryParam = params.get('gallery');
       const allowSceneShortcuts = isDebugUiEnabled() || isTestHooksEnabled();
-
-
-
-
-      if (requestedScene === 'gallery' || requestedScene === 'artgallery' || galleryParam === '1') {
-        if (allowSceneShortcuts) {
-          this.scene.start('ArtGalleryScene');
-        } else {
-          this.scene.start('MenuScene');
-        }
-      } else if (requestedScene === 'menu') {
-        this.scene.start('MenuScene');
-      } else if (
-        coopParam === 'host' ||
-        coopParam === 'join' ||
-        joinRoomId
-
-      ) {
-        this.scene.start('GameScene', {
-          coopMode: coopParam === 'host' ? 'host' : 'join',
-          roomId: joinRoomId ?? undefined,
-          displayName: params.get('name') ?? undefined,
-          serverUrl: params.get('server') ?? undefined,
-        });
-      } else if (
-        allowSceneShortcuts &&
-        (requestedScene === 'game' || hubParam === '1' || params.has('biome'))
-      ) {
-        this.scene.start('GameScene');
+      const route = resolveBootGameSceneInitData(window.location.search, allowSceneShortcuts);
+      if (route.targetScene === 'ArtGalleryScene') {
+        this.scene.start('ArtGalleryScene');
       } else {
-        this.scene.start('MenuScene');
+        this.scene.start('GameScene', route.initData);
       }
     };
 

@@ -22,6 +22,15 @@ import { computeUiTextResolution, createUiTextStyle, UI_THEME } from '../../ui/t
 import { type GameScene } from '../GameScene.js';
 import { formatWeaponCadenceHudLabel } from './hud-micro-reload-bar.js';
 import { renderWeaponCompareSalvageBar } from './hud-pact-and-forge-modals.js';
+import {
+  PRESET_NAMES_VI,
+  SOLO_COOP_DRAWER_H,
+  SOLO_COOP_DRAWER_W,
+  SOLO_COOP_DRAWER_X,
+  SOLO_COOP_DRAWER_Y,
+  SOLO_COOP_INPUT_LOCAL_BOUNDS,
+  switchSanctuaryCoopMode,
+} from './sanctuary-lobby-ui.js';
 
 export function formatHubInvitePlayerRowText(
   slot: number,
@@ -39,6 +48,7 @@ export function formatHubInvitePlayerRowText(
 export function updateHubInvitePanelImpl(this: GameScene): void {
   const ui = this.uiScene;
   const sim = this.transport.getSim();
+  const debug = initGlobalDebugState();
   const showInHub = sim.inHub && !this.fullMapOpen;
   const allPlayers = sim.getAllPlayers();
   const playersKey = allPlayers
@@ -46,7 +56,7 @@ export function updateHubInvitePanelImpl(this: GameScene): void {
     .join('|');
   const hash = !showInHub
     ? ''
-    : `${this.invitePanelVisible ? 1 : 0}:${this.primaryLanIp}:${this.serverPort}:${this.hostInviteUrl ?? ''}:${sim.allowDuplicateCharacters ? 1 : 0}:${this.copyToastTimer > 0 ? 1 : 0}:${playersKey}:${i18n.getLocale()}:${this.currentHudUiScale}`;
+    : `${this.coopMode}:${this.invitePanelVisible ? 1 : 0}:${this.displayName}:${this.serverHostPort}:${this.menuActiveInput ?? ''}:${debug.serverConnected ? 1 : 0}:${this.primaryLanIp}:${this.serverPort}:${this.hostInviteUrl ?? ''}:${sim.allowDuplicateCharacters ? 1 : 0}:${this.copyToastTimer > 0 ? 1 : 0}:${playersKey}:${i18n.getLocale()}:${this.currentHudUiScale}`;
 
   if (hash === this.lastInvitePanelHash) return;
   this.lastInvitePanelHash = hash;
@@ -62,12 +72,12 @@ export function updateHubInvitePanelImpl(this: GameScene): void {
   const isEn = i18n.getLocale() === 'en';
   const activeCount = Math.max(1, allPlayers.length);
 
-  // Collapsed default state: compact top-right chip "📡 Mời bạn [I] · 2/4"
+  // Collapsed default state: compact top-right chip ("📡 Phòng Co-op [I]" in Solo; "📡 Mời bạn · N/4 [I]" in Co-op)
   if (!this.invitePanelVisible) {
     const chipW = 166;
     const chipH = 26;
     const chipX = -12 - chipW;
-    const chipY = 144;
+    const chipY = SOLO_COOP_DRAWER_Y;
 
     const chipBg = ui.add.graphics();
     drawStyledPanel(chipBg, chipX, chipY, chipW, chipH, {
@@ -80,7 +90,12 @@ export function updateHubInvitePanelImpl(this: GameScene): void {
       accentSide: 'left',
     });
 
-    const labelStr = isEn ? `📡 Invite · ${activeCount}/4` : `📡 Mời bạn · ${activeCount}/4`;
+    const labelStr =
+      this.coopMode === 'solo'
+        ? i18n.t('ui.sanctuary.soloCoopChip').replace(/\s*\[I\]$/i, '')
+        : isEn
+          ? `📡 Invite · ${activeCount}/4`
+          : `📡 Mời bạn · ${activeCount}/4`;
     const chipTxt = ui.add
       .text(
         chipX + 10,
@@ -123,11 +138,374 @@ export function updateHubInvitePanelImpl(this: GameScene): void {
     return;
   }
 
-  // Expanded state: full QR + LAN IP + 4-Slot Co-op Roster inside hudTopRightContainer
-  const pw = 284;
+  // Expanded Solo Mode: Sanctuary Co-op LAN Guild Card (pw = 304, ph = 212, px = -316, py = 144)
+  if (this.coopMode === 'solo') {
+    const pw = SOLO_COOP_DRAWER_W;
+    const ph = SOLO_COOP_DRAWER_H;
+    const px = SOLO_COOP_DRAWER_X;
+    const py = SOLO_COOP_DRAWER_Y;
+
+    const bg = ui.add.graphics();
+    drawStyledPanel(bg, px, py, pw, ph, {
+      fillColor: UI_THEME.panelBgDark,
+      fillAlpha: 0.95,
+      borderColor: hexToNum(PALETTE.SOLAR_GOLD),
+      borderWidth: 1.8,
+      radius: UI_THEME.panelRadius.md,
+      accentColor: hexToNum(PALETTE.SOLAR_GOLD),
+      accentSide: 'top',
+    });
+    this.invitePanelContainer.add(bg);
+
+    const collapseBtnW = 54;
+    const collapseBtnH = 18;
+    const collapseBtnX = px + pw - collapseBtnW - 10;
+    const collapseBtnY = py + 8;
+
+    const soloHeader = ui.add
+      .text(
+        px + 12,
+        py + 17,
+        i18n.t('ui.sanctuary.soloCoopTitle'),
+        createUiTextStyle({
+          fontPxAt1080p: 13.5,
+          weight: 800,
+          color: PALETTE.SOLAR_GOLD,
+          resolution: textRes,
+        }),
+      )
+      .setOrigin(0, 0.5);
+    const maxSoloHeaderW = collapseBtnX - (px + 12) - 6;
+    if (soloHeader.width > maxSoloHeaderW && soloHeader.width > 0) {
+      soloHeader.setScale(maxSoloHeaderW / soloHeader.width);
+    }
+    this.invitePanelContainer.add(soloHeader);
+
+    drawStyledPanel(bg, collapseBtnX, collapseBtnY, collapseBtnW, collapseBtnH, {
+      fillColor: UI_THEME.panelBgElevated,
+      fillAlpha: 0.95,
+      borderColor: UI_THEME.panelBorder,
+      borderWidth: 1.2,
+      radius: 4,
+    });
+    const collapseTxt = ui.add
+      .text(
+        collapseBtnX + collapseBtnW * 0.5,
+        collapseBtnY + collapseBtnH * 0.5,
+        isEn ? 'Hide [I]' : 'Ẩn [I]',
+        createUiTextStyle({
+          fontPxAt1080p: 11,
+          weight: 800,
+          color: PALETTE.SILVER_BRIGHT,
+          resolution: textRes,
+        }),
+      )
+      .setOrigin(0.5, 0.5);
+    const collapseHit = ui.add
+      .rectangle(
+        collapseBtnX + collapseBtnW * 0.5,
+        collapseBtnY + collapseBtnH * 0.5,
+        collapseBtnW,
+        collapseBtnH,
+        0x000000,
+        0,
+      )
+      .setInteractive({ useHandCursor: true });
+    collapseHit.on('pointerdown', () => {
+      this.invitePanelVisible = false;
+      initGlobalDebugState().invitePanelVisible = false;
+      this.lastInvitePanelHash = '';
+    });
+    this.invitePanelContainer.add([collapseTxt, collapseHit]);
+
+    // Player Name Field + Preset Cycler (↻)
+    const nameLocal = SOLO_COOP_INPUT_LOCAL_BOUNDS.name;
+    const nameBoxX = nameLocal.cx - nameLocal.w * 0.5;
+    const nameBoxY = nameLocal.cy - nameLocal.h * 0.5;
+    const nameFocused = this.menuActiveInput === 'name';
+
+    const nameLabel = ui.add
+      .text(
+        nameBoxX,
+        nameBoxY - 8,
+        i18n.t('ui.menu.nameLabel'),
+        createUiTextStyle({
+          fontPxAt1080p: 11,
+          weight: 700,
+          color: PALETTE.SILVER_BRIGHT,
+          resolution: textRes,
+        }),
+      )
+      .setOrigin(0, 0.5);
+
+    drawStyledPanel(bg, nameBoxX, nameBoxY, nameLocal.w, nameLocal.h, {
+      fillColor: UI_THEME.panelBg,
+      fillAlpha: 0.96,
+      borderColor: hexToNum(nameFocused ? PALETTE.SOLAR_GOLD : PALETTE.STEEL_LIGHT),
+      borderWidth: nameFocused ? 1.8 : 1.2,
+      radius: 5,
+    });
+
+    const nameValueStr = `${this.displayName}${nameFocused ? '▌' : ''}`;
+    const nameValueTxt = ui.add
+      .text(
+        nameBoxX + 9,
+        nameLocal.cy,
+        nameValueStr,
+        createUiTextStyle({
+          fontPxAt1080p: 12.5,
+          weight: 700,
+          color: nameFocused ? PALETTE.SOLAR_GOLD : PALETTE.BONE_WHITE,
+          resolution: textRes,
+        }),
+      )
+      .setOrigin(0, 0.5);
+    const maxNameValW = nameLocal.w - 40;
+    if (nameValueTxt.width > maxNameValW && nameValueTxt.width > 0) {
+      nameValueTxt.setScale(maxNameValW / nameValueTxt.width);
+    }
+
+    const cycleBtnW = 24;
+    const cycleBtnH = 22;
+    const cycleBtnX = nameBoxX + nameLocal.w - cycleBtnW - 3;
+    const cycleBtnY = nameLocal.cy - cycleBtnH * 0.5;
+    drawStyledPanel(bg, cycleBtnX, cycleBtnY, cycleBtnW, cycleBtnH, {
+      fillColor: UI_THEME.panelBgElevated,
+      fillAlpha: 0.96,
+      borderColor: UI_THEME.panelBorder,
+      borderWidth: 1.1,
+      radius: 4,
+    });
+    const cycleTxt = ui.add
+      .text(
+        cycleBtnX + cycleBtnW * 0.5,
+        nameLocal.cy,
+        '↻',
+        createUiTextStyle({
+          fontPxAt1080p: 13,
+          weight: 800,
+          color: PALETTE.SOLAR_GOLD,
+          resolution: textRes,
+        }),
+      )
+      .setOrigin(0.5, 0.5);
+    const cycleHit = ui.add
+      .rectangle(cycleBtnX + cycleBtnW * 0.5, nameLocal.cy, 26, nameLocal.h, 0x000000, 0)
+      .setInteractive({ useHandCursor: true });
+    cycleHit.on('pointerdown', () => {
+      this.presetNameIndex = (this.presetNameIndex + 1) % PRESET_NAMES_VI.length;
+      const nextName = PRESET_NAMES_VI[this.presetNameIndex] ?? PRESET_NAMES_VI[0];
+      this.displayName = nextName;
+      initGlobalDebugState().menuDisplayName = nextName;
+      this.sanctuaryDomInputs?.syncValues(this.displayName, this.serverHostPort);
+      this.lastInvitePanelHash = '';
+    });
+
+    const nameFocusHit = ui.add
+      .rectangle(
+        nameBoxX + (nameLocal.w - 28) * 0.5,
+        nameLocal.cy,
+        nameLocal.w - 28,
+        nameLocal.h,
+        0x000000,
+        0,
+      )
+      .setInteractive({ useHandCursor: true });
+    nameFocusHit.on('pointerdown', () => {
+      this.menuActiveInput = 'name';
+      initGlobalDebugState().menuActiveInput = 'name';
+      this.sanctuaryDomInputs?.focusField('name');
+      this.lastInvitePanelHash = '';
+    });
+
+    this.invitePanelContainer.add([
+      nameLabel,
+      nameValueTxt,
+      cycleTxt,
+      cycleHit,
+      nameFocusHit,
+    ]);
+
+    // LAN Server IP:Port Field + Server Status Pill
+    const ipLocal = SOLO_COOP_INPUT_LOCAL_BOUNDS.ip;
+    const ipBoxX = ipLocal.cx - ipLocal.w * 0.5;
+    const ipBoxY = ipLocal.cy - ipLocal.h * 0.5;
+    const ipFocused = this.menuActiveInput === 'ip';
+
+    const ipLabel = ui.add
+      .text(
+        ipBoxX,
+        ipBoxY - 8,
+        i18n.t('ui.menu.ipLabel'),
+        createUiTextStyle({
+          fontPxAt1080p: 11,
+          weight: 700,
+          color: PALETTE.SILVER_BRIGHT,
+          resolution: textRes,
+        }),
+      )
+      .setOrigin(0, 0.5);
+
+    const serverStatusTxt = ui.add
+      .text(
+        ipBoxX + ipLocal.w,
+        ipBoxY - 8,
+        debug.serverConnected
+          ? isEn
+            ? '● LAN Ready'
+            : '● Server Sẵn sàng'
+          : isEn
+            ? '○ LAN Standby'
+            : '○ Chờ kết nối',
+        createUiTextStyle({
+          fontPxAt1080p: 10.5,
+          weight: 700,
+          color: debug.serverConnected ? PALETTE.LIME_GLOW : PALETTE.ASH_GRAY,
+          resolution: textRes,
+        }),
+      )
+      .setOrigin(1, 0.5);
+
+    drawStyledPanel(bg, ipBoxX, ipBoxY, ipLocal.w, ipLocal.h, {
+      fillColor: UI_THEME.panelBg,
+      fillAlpha: 0.96,
+      borderColor: hexToNum(ipFocused ? PALETTE.CYAN_FROST : PALETTE.STEEL_LIGHT),
+      borderWidth: ipFocused ? 1.8 : 1.2,
+      radius: 5,
+    });
+
+    const ipValueStr = `${this.serverHostPort}${ipFocused ? '▌' : ''}`;
+    const ipValueTxt = ui.add
+      .text(
+        ipBoxX + 9,
+        ipLocal.cy,
+        ipValueStr,
+        createUiTextStyle({
+          fontPxAt1080p: 12.5,
+          weight: 700,
+          color: ipFocused ? PALETTE.CYAN_FROST : PALETTE.BONE_WHITE,
+          resolution: textRes,
+        }),
+      )
+      .setOrigin(0, 0.5);
+    const maxIpValW = ipLocal.w - 18;
+    if (ipValueTxt.width > maxIpValW && ipValueTxt.width > 0) {
+      ipValueTxt.setScale(maxIpValW / ipValueTxt.width);
+    }
+
+    const ipFocusHit = ui.add
+      .rectangle(ipLocal.cx, ipLocal.cy, ipLocal.w, ipLocal.h, 0x000000, 0)
+      .setInteractive({ useHandCursor: true });
+    ipFocusHit.on('pointerdown', () => {
+      this.menuActiveInput = 'ip';
+      initGlobalDebugState().menuActiveInput = 'ip';
+      this.sanctuaryDomInputs?.focusField('ip');
+      this.lastInvitePanelHash = '';
+    });
+
+    this.invitePanelContainer.add([ipLabel, serverStatusTxt, ipValueTxt, ipFocusHit]);
+
+    // Host LAN & Join LAN Action Buttons
+    const addSoloActionBtn = (
+      bx: number,
+      by: number,
+      bw: number,
+      bh: number,
+      label: string,
+      accentHex: string,
+      onClick: () => void,
+    ) => {
+      const btnG = ui.add.graphics();
+      const drawBtn = (hover: boolean) => {
+        btnG.clear();
+        drawStyledPanel(btnG, bx, by, bw, bh, {
+          fillColor: hover ? UI_THEME.panelBgElevated : hexToNum(accentHex),
+          fillAlpha: 0.96,
+          borderColor: hexToNum(hover ? PALETTE.SOLAR_GOLD : accentHex),
+          borderWidth: hover ? 1.8 : 1.4,
+          radius: 6,
+          accentColor: hexToNum(PALETTE.SOLAR_GOLD),
+          accentSide: 'left',
+        });
+      };
+      drawBtn(false);
+
+      const txt = ui.add
+        .text(
+          bx + bw * 0.5,
+          by + bh * 0.5,
+          label,
+          createUiTextStyle({
+            fontPxAt1080p: 12,
+            weight: 800,
+            color: PALETTE.BONE_WHITE,
+            resolution: textRes,
+          }),
+        )
+        .setOrigin(0.5, 0.5);
+      if (txt.width > bw - 10 && txt.width > 0) {
+        txt.setScale((bw - 10) / txt.width);
+      }
+
+      const hit = ui.add
+        .rectangle(bx + bw * 0.5, by + bh * 0.5, bw, bh, 0x000000, 0)
+        .setInteractive({ useHandCursor: true });
+      hit.on('pointerover', () => drawBtn(true));
+      hit.on('pointerout', () => drawBtn(false));
+      hit.on('pointerdown', onClick);
+
+      this.invitePanelContainer.add([btnG, txt, hit]);
+    };
+
+    const actionBtnY = py + 140;
+    const actionBtnW = 136;
+    const actionBtnH = 32;
+    addSoloActionBtn(
+      px + 12,
+      actionBtnY,
+      actionBtnW,
+      actionBtnH,
+      isEn ? '📡 Host LAN Room' : '📡 Tạo Phòng LAN',
+      PALETTE.BRASS_CORE,
+      () => switchSanctuaryCoopMode(this, 'host'),
+    );
+    addSoloActionBtn(
+      px + 12 + actionBtnW + 8,
+      actionBtnY,
+      actionBtnW,
+      actionBtnH,
+      isEn ? '🔗 Join LAN IP' : '🔗 Vào Phòng LAN',
+      PALETTE.AZURE_CORE,
+      () => switchSanctuaryCoopMode(this, 'join'),
+    );
+
+    const soloHintTxt = ui.add
+      .text(
+        px + pw * 0.5,
+        py + 190,
+        isEn
+          ? 'Solo ready — walk North into Portal to embark!'
+          : 'Chơi đơn sẵn sàng — tiến lên Cổng Bắc để xuất kích!',
+        createUiTextStyle({
+          fontPxAt1080p: 10.5,
+          weight: 600,
+          color: PALETTE.CYAN_FROST,
+          resolution: textRes,
+        }),
+      )
+      .setOrigin(0.5, 0.5);
+    if (soloHintTxt.width > pw - 20 && soloHintTxt.width > 0) {
+      soloHintTxt.setScale((pw - 20) / soloHintTxt.width);
+    }
+    this.invitePanelContainer.add(soloHintTxt);
+    return;
+  }
+
+  // Expanded Co-op state: full QR + LAN IP + 4-Slot Co-op Roster + Leave Room inside hudTopRightContainer
+  const pw = SOLO_COOP_DRAWER_W;
   const ph = 282;
-  const px = -12 - pw;
-  const py = 144;
+  const px = SOLO_COOP_DRAWER_X;
+  const py = SOLO_COOP_DRAWER_Y;
 
   const bg = ui.add.graphics();
   drawStyledPanel(bg, px, py, pw, ph, {
@@ -141,17 +519,33 @@ export function updateHubInvitePanelImpl(this: GameScene): void {
   });
   this.invitePanelContainer.add(bg);
 
+  // Collapse button [I] and Leave Room button at top-right of expanded Co-op panel
+  const collapseBtnW = 50;
+  const collapseBtnH = 18;
+  const collapseBtnX = px + pw - collapseBtnW - 8;
+  const collapseBtnY = py + 6;
+
+  const leaveBtnW = 78;
+  const leaveBtnH = 18;
+  const leaveBtnX = collapseBtnX - leaveBtnW - 5;
+  const leaveBtnY = py + 6;
+
   const header = ui.add.text(
     px + 10,
     py + 6,
     `${i18n.t('ui.hud.coopInviteHeader')} · ${activeCount}/4`,
     createUiTextStyle({
-      fontPxAt1080p: 14,
+      fontPxAt1080p: 12.5,
       weight: 800,
       color: PALETTE.SOLAR_GOLD,
       resolution: textRes,
     }),
   );
+  const maxCoopHeaderW = leaveBtnX - (px + 10) - 6;
+  if (header.width > maxCoopHeaderW && header.width > 0) {
+    header.setScale(maxCoopHeaderW / header.width);
+  }
+
   const ipText = ui.add.text(
     px + 10,
     py + 21,
@@ -165,11 +559,44 @@ export function updateHubInvitePanelImpl(this: GameScene): void {
   );
   this.invitePanelContainer.add([header, ipText]);
 
-  // Collapse button [I] at top-right of expanded panel
-  const collapseBtnW = 54;
-  const collapseBtnH = 18;
-  const collapseBtnX = px + pw - collapseBtnW - 8;
-  const collapseBtnY = py + 6;
+  drawStyledPanel(bg, leaveBtnX, leaveBtnY, leaveBtnW, leaveBtnH, {
+    fillColor: hexToNum(PALETTE.RUBY_DARK),
+    fillAlpha: 0.95,
+    borderColor: hexToNum(PALETTE.RUBY_CORE),
+    borderWidth: 1.3,
+    radius: 4,
+  });
+  const leaveTxt = ui.add
+    .text(
+      leaveBtnX + leaveBtnW * 0.5,
+      leaveBtnY + leaveBtnH * 0.5,
+      i18n.t('ui.sanctuary.leaveCoopBtn'),
+      createUiTextStyle({
+        fontPxAt1080p: 10.5,
+        weight: 800,
+        color: PALETTE.BONE_WHITE,
+        resolution: textRes,
+      }),
+    )
+    .setOrigin(0.5, 0.5);
+  if (leaveTxt.width > leaveBtnW - 6 && leaveTxt.width > 0) {
+    leaveTxt.setScale((leaveBtnW - 6) / leaveTxt.width);
+  }
+  const leaveHit = ui.add
+    .rectangle(
+      leaveBtnX + leaveBtnW * 0.5,
+      leaveBtnY + leaveBtnH * 0.5,
+      leaveBtnW,
+      leaveBtnH,
+      0x000000,
+      0,
+    )
+    .setInteractive({ useHandCursor: true });
+  leaveHit.on('pointerdown', () => {
+    switchSanctuaryCoopMode(this, 'solo');
+  });
+  this.invitePanelContainer.add([leaveTxt, leaveHit]);
+
   drawStyledPanel(bg, collapseBtnX, collapseBtnY, collapseBtnW, collapseBtnH, {
     fillColor: UI_THEME.panelBgElevated,
     fillAlpha: 0.95,
@@ -447,7 +874,7 @@ export function updateHubInvitePanelImpl(this: GameScene): void {
     { id: 4, key: 'T+4' },
   ];
   const emY = py + ph - 25;
-  const emW = 63;
+  const emW = Math.floor((pw - 20 - 3 * 4) / 4);
   emotes.forEach((em, idx) => {
     makePanelBtn(
       px + 10 + idx * (emW + 4),

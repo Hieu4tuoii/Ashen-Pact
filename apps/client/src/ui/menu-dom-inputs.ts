@@ -119,6 +119,8 @@ export class MenuDomInputOverlay {
   private inputs: Record<MenuInputFieldId, HTMLInputElement> | null = null;
   private activeField: MenuInputFieldId | null = null;
   private modalBlocked = false;
+  private visible = true;
+  private bounds: Record<MenuInputFieldId, MenuInputBoxBounds>;
   private readonly boundReposition: () => void;
   private readonly boundWindowPaste: (ev: ClipboardEvent) => void;
 
@@ -127,9 +129,11 @@ export class MenuDomInputOverlay {
     initialName: string,
     initialIp: string,
     callbacks: MenuDomInputCallbacks,
+    bounds: Record<MenuInputFieldId, MenuInputBoxBounds> = MENU_INPUT_BOUNDS,
   ) {
     this.scene = scene;
     this.callbacks = callbacks;
+    this.bounds = bounds;
     this.boundReposition = () => this.reposition();
     this.boundWindowPaste = (ev: ClipboardEvent) => this.handleWindowPaste(ev);
     this.mount(initialName, initialIp);
@@ -189,7 +193,7 @@ export class MenuDomInputOverlay {
       });
 
       input.addEventListener('focus', () => {
-        if (this.modalBlocked) {
+        if (this.modalBlocked || !this.visible) {
           input.blur();
           return;
         }
@@ -268,7 +272,7 @@ export class MenuDomInputOverlay {
           }
           return;
         }
-        // Stop single-letter hotkeys (O, K, C, L) from bubbling to MenuScene window keydown while typing
+        // Stop single-letter hotkeys (O, K, C, L) from bubbling to window keydown while typing
         ev.stopPropagation();
       });
 
@@ -289,7 +293,7 @@ export class MenuDomInputOverlay {
   }
 
   private handleWindowPaste(ev: ClipboardEvent): void {
-    if (this.modalBlocked || !this.activeField || !this.inputs) return;
+    if (!this.visible || this.modalBlocked || !this.activeField || !this.inputs) return;
     const input = this.inputs[this.activeField];
     if (document.activeElement === input) return; // Handled by input's own paste listener
     const pasted = ev.clipboardData?.getData('text/plain') ?? '';
@@ -324,7 +328,7 @@ export class MenuDomInputOverlay {
     const offsetY = rect.top + (rect.height - viewH) * 0.5;
 
     for (const field of ['name', 'ip'] as const) {
-      const bounds = MENU_INPUT_BOUNDS[field];
+      const bounds = this.bounds[field];
       const input = this.inputs[field];
       // Leave 28px on the right of the name box for the preset-name cycle button (↻)
       const hitW = field === 'name' ? bounds.w - 28 : bounds.w;
@@ -362,6 +366,7 @@ export class MenuDomInputOverlay {
       this.inputs.ip.blur();
       return;
     }
+    if (!this.visible || this.modalBlocked) return;
     const target = this.inputs[field];
     target.focus();
     const len = target.value.length;
@@ -372,15 +377,37 @@ export class MenuDomInputOverlay {
     }
   }
 
+  public setBounds(nextBounds: Record<MenuInputFieldId, MenuInputBoxBounds>): void {
+    this.bounds = nextBounds;
+    this.reposition();
+  }
+
+  public setVisible(visible: boolean): void {
+    if (this.visible === visible) return;
+    this.visible = visible;
+    this.syncVisibility();
+  }
+
   public setModalBlocked(blocked: boolean): void {
+    if (this.modalBlocked === blocked) return;
     this.modalBlocked = blocked;
+    this.syncVisibility();
+  }
+
+  private syncVisibility(): void {
     if (!this.inputs || !this.wrapperEl) return;
-    if (blocked) {
+    const shouldShow = this.visible && !this.modalBlocked;
+    if (!shouldShow) {
+      const hadActive = this.activeField !== null;
+      this.activeField = null;
       this.inputs.name.blur();
       this.inputs.ip.blur();
       this.inputs.name.style.pointerEvents = 'none';
       this.inputs.ip.style.pointerEvents = 'none';
       this.wrapperEl.style.display = 'none';
+      if (hadActive) {
+        this.callbacks.onFocusChange(null);
+      }
     } else {
       this.wrapperEl.style.display = 'block';
       this.inputs.name.style.pointerEvents = 'auto';

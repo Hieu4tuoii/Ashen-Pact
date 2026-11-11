@@ -22,7 +22,12 @@ import { RIG_DEFS_BY_ID, VANGUARD_RIG_DEF } from '../art/rig-defs.js';
 import { TextureBaker } from '../art/texture-baker.js';
 import { musicManager } from '../audio/music-synth.js';
 import { zzfx } from '../audio/zzfx.js';
-import { getFreezeVisualTimeSec, getVisualQueryConfig } from '../core/visual-query.js';
+import { isDebugUiEnabled, isTestHooksEnabled } from '../core/debug-flag.js';
+import {
+  getClientFreezeRandom,
+  getFreezeVisualTimeSec,
+  getVisualQueryConfig,
+} from '../core/visual-query.js';
 import type { CombatFxManager } from '../fx/combat-fx.js';
 import {
   type InteractableLightEntry,
@@ -32,6 +37,7 @@ import type { LightingPipeline } from '../fx/lighting-pipeline.js';
 import { createPortalAnimState, type PortalAnimState } from '../fx/portal-door-shaders.js';
 import type { DebugOverlay } from '../ui/debug-overlay.js';
 import { type GraphicsQualityTier, graphicsSettings } from '../ui/graphics-settings.js';
+import type { MenuDomInputOverlay, MenuInputFieldId } from '../ui/html-input-overlay.js';
 import type { ModalOverlayManager } from '../ui/settings-modal.js';
 import type { BiomeArchitectureLiveLayer } from '../world/biome-architecture.js';
 import type { HudScene } from './HudScene.js';
@@ -73,14 +79,22 @@ import {
 } from './game-scene/portal-door-sync.js';
 import { syncRoomEntitiesImpl } from './game-scene/room-entities-sync.js';
 import type { SanctuaryVisualLayer } from './game-scene/sanctuary-architecture.js';
+import {
+  normalizeServerHostPortDisplay,
+  PRESET_NAMES_VI,
+  resolveBootGameSceneInitData,
+  updateSanctuaryOverlayHudImpl,
+} from './game-scene/sanctuary-lobby-ui.js';
 import { processSimEventsImpl } from './game-scene/sim-events.js';
 import { drawEnemyHealthAndStatusBarImpl, renderHitboxesIfEnabledImpl, renderTelegraphsAndShieldImpl } from './game-scene/telegraphs-and-overlays.js';
 
 export interface GameSceneInitData {
   coopMode?: 'solo' | 'host' | 'join';
+  startInHub?: boolean;
   roomId?: string;
   displayName?: string;
   serverUrl?: string;
+  disconnectReason?: string;
 }
 
 declare global {
@@ -130,9 +144,25 @@ export class GameScene extends Phaser.Scene {
   public transport!: LocalTransport | NetworkTransport;
   public networkTransport: NetworkTransport | null = null;
   public coopMode: 'solo' | 'host' | 'join' = 'solo';
+  public startInHub = true;
   public requestedRoomId: string | undefined;
-  public displayName = 'Hiệp Sĩ Tro';
+  public displayName: string = PRESET_NAMES_VI[0];
+  public presetNameIndex = 0;
   public serverUrl: string | undefined;
+  public serverHostPort = '127.0.0.1:2567';
+  public menuActiveInput: MenuInputFieldId | null = null;
+  public sanctuaryDomInputs?: MenuDomInputOverlay;
+  public sanctuaryDomKeydownHandler?: (event: KeyboardEvent) => void;
+  public sanctuaryHudContainer?: Phaser.GameObjects.Container;
+  public sanctuaryPlaqueContainer?: Phaser.GameObjects.Container;
+  public sanctuaryDebugFooterContainer?: Phaser.GameObjects.Container;
+  public lastSanctuaryHudHash = '';
+  public sanctuaryHubElapsedSec = 0;
+  public hubTicksElapsed = 0;
+  public wasInHubLastFrame = false;
+  public disconnectReason: string | null = null;
+  public disconnectBannerTimer = 0;
+  public hubLoungeAnimOverride: 'idle' | 'run' | null = null;
   public reconnectToken: string | null = null;
   public hostInviteUrl: string | null = null;
   public lanIps: string[] = [];
@@ -462,13 +492,58 @@ export class GameScene extends Phaser.Scene {
       this.coopMode = 'solo';
     }
 
-    this.requestedRoomId = data?.roomId ?? urlJoin;
-    this.displayName =
-      data?.displayName ??
-      urlName ??
-      (typeof window !== 'undefined' ? window.localStorage?.getItem('ashen_pact_name') : null) ??
-      'Hiệp Sĩ Tro';
-    this.serverUrl = data?.serverUrl ?? urlServer;
+    if (typeof data?.startInHub === 'boolean') {
+      this.startInHub = data.startInHub;
+    } else if (typeof window !== 'undefined') {
+      const bootRoute = resolveBootGameSceneInitData(
+        window.location.search,
+        isDebugUiEnabled() || isTestHooksEnabled(),
+      );
+      this.startInHub = bootRoute.initData?.startInHub ?? true;
+    } else {
+      this.startInHub = true;
+    }
+
+    this.disconnectReason = data?.disconnectReason ?? null;
+    this.disconnectBannerTimer = this.disconnectReason ? 10.0 : 0;
+
+    let savedName: string | null = null;
+    try {
+      savedName =
+        typeof window !== 'undefined' ? window.localStorage?.getItem('ashen_pact_name') : null;
+    } catch {
+      savedName = null;
+    }
+    if (data?.displayName) {
+      this.displayName = data.displayName;
+    } else if (urlName) {
+      this.displayName = urlName;
+    } else if (savedName) {
+      this.displayName = savedName;
+    } else {
+      this.presetNameIndex = getVisualQueryConfig().freeze
+        ? 0
+        : Math.floor(getClientFreezeRandom()() * PRESET_NAMES_VI.length);
+      this.displayName = PRESET_NAMES_VI[this.presetNameIndex] ?? PRESET_NAMES_VI[0];
+    }
+
+    const host =
+      typeof window !== 'undefined' ? window.location.hostname || '127.0.0.1' : '127.0.0.1';
+    const locPort = typeof window !== 'undefined' ? window.location.port : '';
+    const defaultPort = locPort && locPort !== '5173' && locPort !== '4173' ? locPort : '2567';
+    const fallbackHostPort = `${host}:${defaultPort}`;
+
+    this.serverHostPort = normalizeServerHostPortDisplay(
+      data?.serverUrl ?? urlServer,
+      fallbackHostPort,
+    );
+    this.requestedRoomId = this.coopMode === 'solo' ? undefined : (data?.roomId ?? urlJoin);
+    this.serverUrl = this.coopMode === 'solo' ? undefined : (data?.serverUrl ?? urlServer);
+    this.menuActiveInput = null;
+    this.hubTicksElapsed = 0;
+    this.wasInHubLastFrame = false;
+    this.sanctuaryHubElapsedSec = 0;
+    this.hubLoungeAnimOverride = null;
     this.intentionalLeave = false;
   }
 
@@ -479,6 +554,8 @@ export class GameScene extends Phaser.Scene {
     const sim = this.transport.getSim();
     const dtSec = Math.min(rawDeltaMs / 1000, 0.05);
     const isModalOrPaused = this.pauseModalOpen || (this.settingsModal?.isOpen() ?? false);
+    const isTypingInInput = this.menuActiveInput !== null;
+    const isInputBlocked = isModalOrPaused || isTypingInInput;
     const isSoloPaused = isModalOrPaused && this.coopMode === 'solo';
 
     // 1. Sample Player Input (WASD + Mouse Aim + Buttons)
@@ -497,7 +574,7 @@ export class GameScene extends Phaser.Scene {
     let moveY = 0;
     let buttons = 0;
 
-    if (this.keys && !isModalOrPaused) {
+    if (this.keys && !isInputBlocked) {
       if (this.keys.A.isDown) moveX -= 1;
       if (this.keys.D.isDown) moveX += 1;
       if (this.keys.W.isDown) moveY -= 1;
@@ -511,39 +588,39 @@ export class GameScene extends Phaser.Scene {
     }
 
     if (this.dashQueued) {
-      if (!isModalOrPaused) buttons |= INPUT_BUTTON.DASH;
+      if (!isInputBlocked) buttons |= INPUT_BUTTON.DASH;
       this.dashQueued = false;
     }
     if (this.skillQueued) {
-      if (!isModalOrPaused) buttons |= INPUT_BUTTON.SKILL;
+      if (!isInputBlocked) buttons |= INPUT_BUTTON.SKILL;
       this.skillQueued = false;
     }
     if (this.wheelSwapQueued) {
-      if (!isModalOrPaused) buttons |= INPUT_BUTTON.SWAP;
+      if (!isInputBlocked) buttons |= INPUT_BUTTON.SWAP;
       this.wheelSwapQueued = false;
     }
     if (this.interactQueued) {
-      if (!isModalOrPaused) buttons |= INPUT_BUTTON.INTERACT;
+      if (!isInputBlocked) buttons |= INPUT_BUTTON.INTERACT;
       this.interactQueued = false;
     }
     if (this.reloadVentQueued) {
-      if (!isModalOrPaused) buttons |= INPUT_BUTTON.RELOAD_VENT;
+      if (!isInputBlocked) buttons |= INPUT_BUTTON.RELOAD_VENT;
       this.reloadVentQueued = false;
     }
 
     if (this.dropWeaponQueued) {
-      if (!isModalOrPaused) buttons |= INPUT_BUTTON.DROP_WEAPON;
+      if (!isInputBlocked) buttons |= INPUT_BUTTON.DROP_WEAPON;
       this.dropWeaponQueued = false;
     }
     if (this.readyToggleQueued) {
-      if (!isModalOrPaused) buttons |= INPUT_BUTTON.READY;
+      if (!isInputBlocked) buttons |= INPUT_BUTTON.READY;
       this.readyToggleQueued = false;
     }
 
     let pingWorldX: number | undefined;
     let pingWorldY: number | undefined;
     if (this.pingQueued) {
-      if (!isModalOrPaused) {
+      if (!isInputBlocked) {
         buttons |= INPUT_BUTTON.PING;
         pingWorldX = this.pingQueued.x;
         pingWorldY = this.pingQueued.y;
@@ -575,14 +652,14 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    const emoteId = !isModalOrPaused ? (this.queuedEmote ?? undefined) : undefined;
+    const emoteId = !isInputBlocked ? (this.queuedEmote ?? undefined) : undefined;
     this.queuedEmote = null;
 
     const hudScale = this.currentHudUiScale || 1;
     const isClickingInvitePanel =
       sim.inHub &&
       this.invitePanelVisible &&
-      localViewX >= 960 - 296 * hudScale + this.hudPadX &&
+      localViewX >= 960 - 316 * hudScale + this.hudPadX &&
       localViewX <= 960 - 12 * hudScale + this.hudPadX &&
       localViewY >= 144 * hudScale - this.hudPadY &&
       localViewY <= 426 * hudScale - this.hudPadY;
@@ -592,7 +669,7 @@ export class GameScene extends Phaser.Scene {
       isClickingInvitePanel ||
       suppressFireForEmoteWheel ||
       this.suppressFireUntilPointerUp ||
-      isModalOrPaused ||
+      isInputBlocked ||
       this.fullMapOpen ||
       resolveMinimapClickedRoomId(this, localViewX, localViewY) !== null ||
       (this.transport.getLocalPlayerState().buffChoices?.length ?? 0) > 0 ||
@@ -602,11 +679,11 @@ export class GameScene extends Phaser.Scene {
     if (pointer.leftButtonDown() && !isClickingHud) {
       buttons |= INPUT_BUTTON.FIRE;
     }
-    if (pointer.rightButtonDown() && sim.runState === 'playing' && !isModalOrPaused) {
+    if (pointer.rightButtonDown() && sim.runState === 'playing' && !isInputBlocked) {
       buttons |= INPUT_BUTTON.SKILL;
     }
 
-    const slotSelect = !isModalOrPaused ? this.queuedWeaponSlot : null;
+    const slotSelect = !isInputBlocked ? this.queuedWeaponSlot : null;
     this.queuedWeaponSlot = null;
 
     if (this.copyToastTimer > 0) {
@@ -633,6 +710,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     if (!isSoloPaused) {
+      const tickBefore = sim.tick;
       this.inputSeq += 1;
       this.transport.sendInput({
         seq: this.inputSeq,
@@ -652,6 +730,30 @@ export class GameScene extends Phaser.Scene {
       if (simDeltaMs > 0) {
         const effectiveDelta = sim.stressTestActive ? Math.min(simDeltaMs, 16.6667) : simDeltaMs;
         this.transport.step(effectiveDelta);
+      }
+
+      const ticksStepped = Math.max(0, sim.tick - tickBefore);
+      if (sim.inHub) {
+        this.hubTicksElapsed = this.wasInHubLastFrame
+          ? this.hubTicksElapsed + ticksStepped
+          : ticksStepped;
+        this.wasInHubLastFrame = true;
+        if (
+          this.coopMode === 'solo' &&
+          sim.portalActive &&
+          !this.portalAnimState.enterActive &&
+          this.hubTicksElapsed >= 45 &&
+          (moveX !== 0 || moveY !== 0) &&
+          Math.hypot(sim.player.x - sim.portalX, sim.player.y - sim.portalY) <= 24
+        ) {
+          this.hubTicksElapsed = 0;
+          this.wasInHubLastFrame = false;
+          sim.enterPortal();
+          this.triggerIrisTransition();
+        }
+      } else {
+        this.hubTicksElapsed = 0;
+        this.wasInHubLastFrame = false;
       }
 
       // 3. Sync dynamic map changes (room transitions, cracked walls destroyed, surface ignitions/electrifications/freezes)
@@ -930,7 +1032,8 @@ export class GameScene extends Phaser.Scene {
       sim.runState !== 'playing' ||
       this.pauseModalOpen ||
       (this.settingsModal?.isOpen() ?? false) ||
-      this.fullMapOpen;
+      this.fullMapOpen ||
+      this.menuActiveInput !== null;
     this.crosshairSprite.setVisible(!modalBlockingCrosshair);
     this.crosshairSprite.setPosition(hudPt.x, hudPt.y);
     this.crosshairSprite.setScale(invBake * (1 + this.crosshairPulse * 0.35));
@@ -939,8 +1042,11 @@ export class GameScene extends Phaser.Scene {
     this.renderTelegraphsAndShield(playerPos.x, playerPos.y);
     this.renderHitboxesIfEnabled();
 
-    // 12. Update Camera-Pinned Vector HUD, Iris Transition & Debug Telemetry
+    // 12. Update Camera-Pinned Vector HUD, Sanctuary Overlay, Iris Transition & Debug Telemetry
     this.updateVectorHud();
+    if (!sim.stressTestActive) {
+      this.updateSanctuaryOverlayHud(dtSec);
+    }
     this.updateIrisTransition(dtSec);
     this.updateDebugState(playerPos.x, playerPos.y);
   }
@@ -996,6 +1102,7 @@ export class GameScene extends Phaser.Scene {
   public drawEnemyHealthAndStatusBar(g: Phaser.GameObjects.Graphics, x: number, y: number, e: SimEnemyState): void { drawEnemyHealthAndStatusBarImpl.call(this, g, x, y, e); }
   public renderHitboxesIfEnabled(): void { renderHitboxesIfEnabledImpl.call(this); }
   public updateVectorHud(): void { updateVectorHudImpl.call(this); }
+  public updateSanctuaryOverlayHud(dtSec: number): void { updateSanctuaryOverlayHudImpl.call(this, dtSec); }
   public updateCoopTeammateHud(): void { updateCoopTeammateHudImpl.call(this); }
   public updateHubInvitePanel(): void { updateHubInvitePanelImpl.call(this); }
   public updateHubCharacterSkillPreview(): void { updateHubCharacterSkillPreviewImpl.call(this); }

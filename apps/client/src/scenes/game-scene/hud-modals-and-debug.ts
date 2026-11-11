@@ -590,7 +590,7 @@ export function updateModalHudImpl(this: GameScene): void {
             this.triggerIrisTransition('close');
             this.invalidateAllHudCaches();
           } else {
-            this.scene.restart();
+            this.scene.restart({ coopMode: 'solo', startInHub: false });
           }
         } else if (spec.id === 'returnHub') {
           if (this.room && this.coopMode !== 'solo') {
@@ -641,7 +641,11 @@ export function updateDebugStateImpl(
   debug.rollingDps = sim.getRollingDps();
   debug.cameraCenterX = Math.round(this.cameras.main.midPoint.x * 100) / 100;
   debug.cameraCenterY = Math.round(this.cameras.main.midPoint.y * 100) / 100;
-  debug.animState = this.playerRig?.getAnimState() ?? 'idle';
+  const playerAnimState = this.playerRig?.getAnimState() ?? 'idle';
+  debug.animState =
+    sim.inHub && this.hubLoungeAnimOverride && playerAnimState === 'idle'
+      ? this.hubLoungeAnimOverride
+      : playerAnimState;
 
   // Phase 2 telemetry
   debug.activeLightCount = this.lighting.getActiveLightCount();
@@ -717,6 +721,9 @@ export function updateDebugStateImpl(
   debug.pauseModalOpen = this.pauseModalOpen;
   debug.pauseConfirmExitOpen = this.pauseConfirmExitOpen;
   debug.invitePanelVisible = this.invitePanelVisible;
+  debug.menuDisplayName = this.displayName;
+  debug.menuServerHostPort = this.serverHostPort;
+  debug.menuActiveInput = this.menuActiveInput;
   const activeModal = this.settingsModal?.getActiveModal() ?? 'none';
   const activeTab = this.settingsModal?.getActiveTab() ?? 'audio';
   debug.settingsModalOpen = activeModal === 'settings';

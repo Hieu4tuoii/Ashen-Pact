@@ -21,6 +21,11 @@ import {
   getSettingsTabSpecs,
   SETTINGS_TABS,
 } from '../src/ui/settings-modal.js';
+import {
+  computeSanctuaryCoopInputBounds,
+  resolveBootGameSceneInitData,
+  shouldRestoreSavedCharacter,
+} from '../src/scenes/game-scene/sanctuary-lobby-ui.js';
 
 describe('Phase P9b — Menus, Hub Invite Panel, Modals, Pause Confirm & 4-Tab Settings', () => {
   it('defines 3-tier Main Menu button hierarchy and maps HTML <input> overlay coordinates accurately', () => {
@@ -189,5 +194,97 @@ describe('Phase P9b — Menus, Hub Invite Panel, Modals, Pause Confirm & 4-Tab S
     expect(graphicsSettings.getState().showKeyHints).toBe(false);
 
     graphicsSettings.resetDefaults();
+  });
+
+  it('routes boot URLs directly into Solo Sanctuary, combat shortcuts, Co-op rooms, or privileged ArtGalleryScene', () => {
+    expect(resolveBootGameSceneInitData('', false)).toEqual({
+      targetScene: 'GameScene',
+      initData: { coopMode: 'solo', startInHub: true },
+    });
+    expect(resolveBootGameSceneInitData('?test=1', true)).toEqual({
+      targetScene: 'GameScene',
+      initData: { coopMode: 'solo', startInHub: true },
+    });
+    expect(resolveBootGameSceneInitData('?scene=menu', false)).toEqual({
+      targetScene: 'GameScene',
+      initData: { coopMode: 'solo', startInHub: true },
+    });
+    expect(resolveBootGameSceneInitData('?scene=gallery', false)).toEqual({
+      targetScene: 'GameScene',
+      initData: { coopMode: 'solo', startInHub: true },
+    });
+    expect(resolveBootGameSceneInitData('?scene=gallery', true)).toEqual({
+      targetScene: 'ArtGalleryScene',
+    });
+    expect(resolveBootGameSceneInitData('?gallery=1', true)).toEqual({
+      targetScene: 'ArtGalleryScene',
+    });
+    expect(resolveBootGameSceneInitData('?scene=game&testHooks=1', true)).toEqual({
+      targetScene: 'GameScene',
+      initData: { coopMode: 'solo', startInHub: false },
+    });
+    expect(resolveBootGameSceneInitData('?scene=game&hub=1&testHooks=1', true)).toEqual({
+      targetScene: 'GameScene',
+      initData: { coopMode: 'solo', startInHub: true },
+    });
+    expect(resolveBootGameSceneInitData('?biome=2', true)).toEqual({
+      targetScene: 'GameScene',
+      initData: { coopMode: 'solo', startInHub: false },
+    });
+    expect(resolveBootGameSceneInitData('?biome=2', false)).toEqual({
+      targetScene: 'GameScene',
+      initData: { coopMode: 'solo', startInHub: true },
+    });
+    expect(resolveBootGameSceneInitData('?coop=host&name=HostHero', false)).toEqual({
+      targetScene: 'GameScene',
+      initData: {
+        coopMode: 'host',
+        roomId: undefined,
+        displayName: 'HostHero',
+        serverUrl: undefined,
+        startInHub: true,
+      },
+    });
+    expect(
+      resolveBootGameSceneInitData('?join=room42&name=GuestHero&server=192.168.1.10:2567', false),
+    ).toEqual({
+      targetScene: 'GameScene',
+      initData: {
+        coopMode: 'join',
+        roomId: 'room42',
+        displayName: 'GuestHero',
+        serverUrl: '192.168.1.10:2567',
+        startInHub: true,
+      },
+    });
+
+    expect(shouldRestoreSavedCharacter('')).toBe(true);
+    expect(shouldRestoreSavedCharacter('?debug=1')).toBe(true);
+    expect(shouldRestoreSavedCharacter('?freeze=1')).toBe(false);
+    expect(shouldRestoreSavedCharacter('?test=1')).toBe(false);
+    expect(shouldRestoreSavedCharacter('?testHooks=1')).toBe(false);
+  });
+
+  it('positions Sanctuary Co-op Guild Drawer DOM inputs strictly inside the right-hand drawer and maps accurately onto 1080p CSS pixels', () => {
+    const customBounds = computeSanctuaryCoopInputBounds(1, 0, 0);
+    expect(customBounds.name.cx).toBeGreaterThan(650);
+    expect(customBounds.ip.cx).toBeGreaterThan(650);
+    expect(customBounds.name.cx + customBounds.name.w * 0.5).toBeLessThanOrEqual(960);
+    expect(customBounds.ip.cx + customBounds.ip.w * 0.5).toBeLessThanOrEqual(960);
+    expect(
+      Math.abs(customBounds.ip.cy - customBounds.name.cy),
+    ).toBeGreaterThanOrEqual((customBounds.name.h + customBounds.ip.h) * 0.5 + 8);
+
+    const ipRect = computeMenuInputOverlayRect(
+      'ip',
+      { left: 0, top: 0, width: 1920, height: 1080 },
+      customBounds.ip,
+    );
+    expect(ipRect.leftPx).toBe(Math.round((customBounds.ip.cx - customBounds.ip.w * 0.5) * 2));
+    expect(ipRect.topPx).toBe(Math.round((customBounds.ip.cy - customBounds.ip.h * 0.5) * 2));
+    expect(ipRect.widthPx).toBe(Math.round(customBounds.ip.w * 2));
+    expect(ipRect.heightPx).toBe(Math.round(customBounds.ip.h * 2));
+    expect(ipRect.leftPx).toBeGreaterThan(1300);
+    expect(ipRect.leftPx + ipRect.widthPx).toBeLessThanOrEqual(1920);
   });
 });

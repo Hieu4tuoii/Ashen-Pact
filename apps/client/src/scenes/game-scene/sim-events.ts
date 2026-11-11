@@ -44,6 +44,7 @@ import {
 import { handleP2BSimEvent } from '../../fx/combat-fx-p2b.js';
 import { handleP4ASimEvent } from '../../fx/combat-fx-p4a.js';
 import { handleP4BSimEvent } from '../../fx/combat-fx-p4b.js';
+import { initGlobalDebugState } from '../../ui/debug-overlay.js';
 import { type GameScene, RIG_FOOT_OFFSET_Y } from '../GameScene.js';
 import { handleP2AForgeAndSalvageSimEvent } from './hud-pact-and-forge-modals.js';
 import { triggerP11WaveBanner } from './p11-drama-hud.js';
@@ -848,6 +849,18 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
         break;
       }
       case 'character_selected': {
+        if (ev.playerId === sim.player.id) {
+          try {
+            if (typeof window !== 'undefined') {
+              window.localStorage?.setItem('ashen_pact_character', ev.characterId);
+            }
+          } catch {
+            // Ignore storage restrictions
+          }
+          this.lastHudCharacterId = '';
+          this.lastHubPreviewHash = '';
+          this.lastInvitePanelHash = '';
+        }
         this.lighting.spawnTransientLight(
           sim.player.x,
           sim.player.y,
@@ -857,6 +870,20 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
           0.3,
         );
         zzfx.play('weapon_swap', sim.player.x, this.camFocusX, sim.player.y, this.camFocusY);
+        break;
+      }
+      case 'hub_station_interacted': {
+        if (ev.playerId === sim.player.id) {
+          if (ev.stationId === 'coop_board') {
+            this.invitePanelVisible = true;
+            initGlobalDebugState().invitePanelVisible = true;
+            this.lastInvitePanelHash = '';
+            zzfx.play('ui_click');
+          } else if (ev.stationId === 'codex_desk') {
+            this.settingsModal?.open('settings');
+            zzfx.play('ui_click');
+          }
+        }
         break;
       }
       case 'ping_issued': {
