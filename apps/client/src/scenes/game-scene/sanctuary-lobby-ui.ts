@@ -107,6 +107,25 @@ export function resolveBootGameSceneInitData(
 }
 
 /**
+ * Resolves `GameScene.startInHub` from explicit scene restart/start `initData` first,
+ * falling back to URL boot routing only when `data?.startInHub` is omitted.
+ */
+export function resolveGameSceneStartInHub(
+  data: GameSceneInitData | undefined,
+  search: string | undefined,
+  allowSceneShortcuts: boolean,
+): boolean {
+  if (typeof data?.startInHub === 'boolean') {
+    return data.startInHub;
+  }
+  if (typeof search === 'string') {
+    const bootRoute = resolveBootGameSceneInitData(search, allowSceneShortcuts);
+    return bootRoute.initData?.startInHub ?? true;
+  }
+  return true;
+}
+
+/**
  * Returns `false` when automated test/visual-freeze query parameters (`freeze`, `test`, `testHooks`)
  * are truthy so automated suites deterministically spawn on `'vanguard'`.
  */
@@ -202,13 +221,13 @@ export function setSanctuaryKeyboardSuspended(scene: GameScene, suspended: boole
     if (kb.enabled) {
       kb.resetKeys();
       kb.enabled = false;
+      kb.disableGlobalCapture();
     }
-    kb.disableGlobalCapture();
   } else {
     if (!kb.enabled) {
       kb.enabled = true;
+      kb.enableGlobalCapture();
     }
-    kb.enableGlobalCapture();
   }
 }
 
@@ -381,6 +400,11 @@ export function syncSanctuaryDomInputsLayoutAndVisibility(scene: GameScene): voi
   const sim = scene.transport?.getSim?.();
   if (!sim) return;
 
+  if (!scene.sanctuaryDomInputs) {
+    setSanctuaryKeyboardSuspended(scene, false);
+    return;
+  }
+
   const debug = initGlobalDebugState();
   const lp = scene.transport.getLocalPlayerState();
   const modalOpen =
@@ -393,7 +417,14 @@ export function syncSanctuaryDomInputsLayoutAndVisibility(scene: GameScene): voi
     (lp.mutatorChoices?.length ?? 0) > 0 ||
     (lp.pactChoices?.length ?? 0) > 0;
 
-  if (scene.sanctuaryDomInputs) {
+  const shouldShowInputs =
+    sim.inHub &&
+    !sim.stressTestActive &&
+    scene.coopMode === 'solo' &&
+    scene.invitePanelVisible &&
+    !modalOpen;
+
+  if (shouldShowInputs) {
     const bounds = computeSanctuaryCoopInputBounds(
       scene.currentHudUiScale || 1,
       scene.hudPadX,
@@ -401,13 +432,23 @@ export function syncSanctuaryDomInputsLayoutAndVisibility(scene: GameScene): voi
     );
     scene.sanctuaryDomInputs.setBounds(bounds);
     scene.sanctuaryDomInputs.syncValues(scene.displayName, scene.serverHostPort);
-    scene.sanctuaryDomInputs.setModalBlocked(modalOpen);
-    const shouldShowInputs =
-      sim.inHub && scene.coopMode === 'solo' && scene.invitePanelVisible && !modalOpen;
-    scene.sanctuaryDomInputs.setVisible(shouldShowInputs);
-    setSanctuaryKeyboardSuspended(scene, shouldShowInputs && scene.menuActiveInput !== null);
+  }
+  scene.sanctuaryDomInputs.setModalBlocked(modalOpen);
+  scene.sanctuaryDomInputs.setVisible(shouldShowInputs);
+  setSanctuaryKeyboardSuspended(scene, shouldShowInputs && scene.menuActiveInput !== null);
+}
+
+export function syncSanctuaryOnStressTest(scene: GameScene, active: boolean): void {
+  if (active) {
+    scene.invitePanelVisible = false;
+    initGlobalDebugState().invitePanelVisible = false;
+    scene.lastInvitePanelHash = '';
+  }
+  scene.updateHubInvitePanel?.();
+  if (scene.updateSanctuaryOverlayHud) {
+    scene.updateSanctuaryOverlayHud(0);
   } else {
-    setSanctuaryKeyboardSuspended(scene, false);
+    updateSanctuaryOverlayHudImpl.call(scene, 0);
   }
 }
 
@@ -433,7 +474,7 @@ export function updateSanctuaryOverlayHudImpl(this: GameScene, dtSec: number): v
     }
   }
 
-  const showInHub = sim.inHub && !this.fullMapOpen;
+  const showInHub = sim.inHub && !sim.stressTestActive && !this.fullMapOpen;
   const showDebug = isEffectiveDebugUiEnabled(this.coopMode !== 'solo');
   const debug = initGlobalDebugState();
   const showViFooter = showInHub && showDebug && !debug.hubPreviewCharacterId;

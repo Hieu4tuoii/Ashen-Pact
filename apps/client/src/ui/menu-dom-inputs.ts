@@ -133,7 +133,10 @@ export class MenuDomInputOverlay {
   ) {
     this.scene = scene;
     this.callbacks = callbacks;
-    this.bounds = bounds;
+    this.bounds = {
+      name: { ...bounds.name },
+      ip: { ...bounds.ip },
+    };
     this.boundReposition = () => this.reposition();
     this.boundWindowPaste = (ev: ClipboardEvent) => this.handleWindowPaste(ev);
     this.mount(initialName, initialIp);
@@ -313,7 +316,7 @@ export class MenuDomInputOverlay {
   }
 
   public reposition(): void {
-    if (!this.inputs) return;
+    if (!this.inputs || !this.visible || this.modalBlocked) return;
     const canvas = this.scene.game?.canvas;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
@@ -377,8 +380,28 @@ export class MenuDomInputOverlay {
     }
   }
 
+  private static boundsEqual(
+    a: Record<MenuInputFieldId, MenuInputBoxBounds>,
+    b: Record<MenuInputFieldId, MenuInputBoxBounds>,
+  ): boolean {
+    return (
+      a.name.cx === b.name.cx &&
+      a.name.cy === b.name.cy &&
+      a.name.w === b.name.w &&
+      a.name.h === b.name.h &&
+      a.ip.cx === b.ip.cx &&
+      a.ip.cy === b.ip.cy &&
+      a.ip.w === b.ip.w &&
+      a.ip.h === b.ip.h
+    );
+  }
+
   public setBounds(nextBounds: Record<MenuInputFieldId, MenuInputBoxBounds>): void {
-    this.bounds = nextBounds;
+    if (MenuDomInputOverlay.boundsEqual(this.bounds, nextBounds)) return;
+    this.bounds = {
+      name: { ...nextBounds.name },
+      ip: { ...nextBounds.ip },
+    };
     this.reposition();
   }
 

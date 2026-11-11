@@ -67,6 +67,7 @@ import {
   mountSanctuaryDomInputs,
   resolveSavedSanctuaryCharacter,
   syncSanctuaryDomInputsLayoutAndVisibility,
+  syncSanctuaryOnStressTest,
 } from './sanctuary-lobby-ui.js';
 import { createPortalAnimState } from '../../fx/portal-door-shaders.js';
 
@@ -257,7 +258,7 @@ export function createImpl(this: GameScene): void {
       autoRespawnWaves: false,
       autoRevivePlayer: false,
     });
-    if (this.startInHub || (allowShortcuts && searchParams.get('hub') === '1')) {
+    if (this.startInHub) {
       const soloSim = this.transport.getSim();
       soloSim.enterHub();
       soloSim.player.displayName = this.displayName;
@@ -554,6 +555,7 @@ export function setStressTestModeImpl(this: GameScene, active: boolean): void {
     this.syncProps(0);
     this.syncProjectilesAndPickups();
   }
+  syncSanctuaryOnStressTest(this, active);
   this.debugOverlay?.resetSamples();
 }
 

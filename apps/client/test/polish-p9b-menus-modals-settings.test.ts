@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import type Phaser from 'phaser';
+import { describe, expect, it, vi } from 'vitest';
 import { formatHubInvitePlayerRowText } from '../src/scenes/game-scene/hud-hub-and-cards.js';
 import {
   getResultScreenButtonSpecs,
@@ -12,6 +13,7 @@ import {
   computeMenuInputOverlayRect,
   MENU_IP_MAX_LEN,
   MENU_NAME_MAX_LEN,
+  MenuDomInputOverlay,
   resolveMenuButtonHierarchySpec,
   sanitizeMenuInputText,
   sanitizeMenuInputValue,
@@ -21,10 +23,16 @@ import {
   getSettingsTabSpecs,
   SETTINGS_TABS,
 } from '../src/ui/settings-modal.js';
+import type { GameScene } from '../src/scenes/GameScene.js';
 import {
   computeSanctuaryCoopInputBounds,
   resolveBootGameSceneInitData,
+  resolveGameSceneStartInHub,
+  setSanctuaryKeyboardSuspended,
   shouldRestoreSavedCharacter,
+  syncSanctuaryDomInputsLayoutAndVisibility,
+  syncSanctuaryOnStressTest,
+  updateSanctuaryOverlayHudImpl,
 } from '../src/scenes/game-scene/sanctuary-lobby-ui.js';
 
 describe('Phase P9b — Menus, Hub Invite Panel, Modals, Pause Confirm & 4-Tab Settings', () => {
@@ -286,5 +294,257 @@ describe('Phase P9b — Menus, Hub Invite Panel, Modals, Pause Confirm & 4-Tab S
     expect(ipRect.heightPx).toBe(Math.round(customBounds.ip.h * 2));
     expect(ipRect.leftPx).toBeGreaterThan(1300);
     expect(ipRect.leftPx + ipRect.widthPx).toBeLessThanOrEqual(1920);
+  });
+
+  it('skips DOM layout getBoundingClientRect() while MenuDomInputOverlay is hidden or bounds are unchanged, and avoids per-frame enableGlobalCapture()', () => {
+    interface MockElement {
+      tagName: string;
+      type?: string;
+      value: string;
+      maxLength?: number;
+      autocomplete?: string;
+      spellcheck?: boolean;
+      style: Record<string, string>;
+      attributes: Record<string, string>;
+      children: MockElement[];
+      parentElement: MockElement | null;
+      setAttribute: (k: string, v: string) => void;
+      addEventListener: ReturnType<typeof vi.fn>;
+      appendChild: (child: MockElement) => MockElement;
+      removeChild: (child: MockElement) => MockElement;
+      blur: ReturnType<typeof vi.fn>;
+      focus: ReturnType<typeof vi.fn>;
+      setSelectionRange: ReturnType<typeof vi.fn>;
+    }
+
+    const createMockEl = (tag: string): MockElement => {
+      const el: MockElement = {
+        tagName: tag.toUpperCase(),
+        value: '',
+        style: {},
+        attributes: {},
+        children: [],
+        parentElement: null,
+        setAttribute(k, v) {
+          el.attributes[k] = v;
+        },
+        addEventListener: vi.fn(),
+        appendChild(child) {
+          child.parentElement = el;
+          el.children.push(child);
+          return child;
+        },
+        removeChild(child) {
+          el.children = el.children.filter((c) => c !== child);
+          child.parentElement = null;
+          return child;
+        },
+        blur: vi.fn(),
+        focus: vi.fn(),
+        setSelectionRange: vi.fn(),
+      };
+      return el;
+    };
+
+    const bodyEl = createMockEl('body');
+    const getBoundingClientRect = vi.fn(() => ({
+      left: 0,
+      top: 0,
+      width: 1920,
+      height: 1080,
+    }));
+    const canvasEl = {
+      parentElement: bodyEl,
+      getBoundingClientRect,
+    };
+
+    vi.stubGlobal('document', {
+      body: bodyEl,
+      activeElement: null,
+      createElement: (tag: string) => createMockEl(tag),
+    });
+    vi.stubGlobal('window', {
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      location: { search: '' },
+    });
+
+    try {
+      const boundsA = computeSanctuaryCoopInputBounds(1, 0, 0);
+      const boundsB = computeSanctuaryCoopInputBounds(1.25, 0, 0);
+      const mockSceneForOverlay = { game: { canvas: canvasEl } } as unknown as Phaser.Scene;
+
+      const overlay = new MenuDomInputOverlay(
+        mockSceneForOverlay,
+        'Hiệp Sĩ Tro',
+        '127.0.0.1:2567',
+        { onFocusChange: vi.fn(), onValueChange: vi.fn() },
+        boundsA,
+      );
+      expect(getBoundingClientRect).toHaveBeenCalledTimes(1);
+
+      // Hide overlay and verify zero getBoundingClientRect() calls while hidden
+      overlay.setVisible(false);
+      getBoundingClientRect.mockClear();
+
+      overlay.reposition();
+      overlay.setBounds(computeSanctuaryCoopInputBounds(1, 0, 0));
+      overlay.setBounds(boundsB);
+      expect(getBoundingClientRect).toHaveBeenCalledTimes(0);
+
+      // Transitioning back to visible repositions once; identical bounds are no-ops
+      overlay.setVisible(true);
+      expect(getBoundingClientRect).toHaveBeenCalledTimes(1);
+      overlay.setBounds(computeSanctuaryCoopInputBounds(1.25, 0, 0));
+      expect(getBoundingClientRect).toHaveBeenCalledTimes(1);
+
+      // Verify per-frame syncSanctuaryDomInputsLayoutAndVisibility & setSanctuaryKeyboardSuspended no-ops
+      overlay.setVisible(false);
+      getBoundingClientRect.mockClear();
+
+      const enableGlobalCapture = vi.fn();
+      const disableGlobalCapture = vi.fn();
+      const resetKeys = vi.fn();
+      const mockGameScene = {
+        coopMode: 'solo',
+        invitePanelVisible: false,
+        pauseModalOpen: false,
+        fullMapOpen: false,
+        emoteWheelOpen: false,
+        menuActiveInput: null,
+        displayName: 'Hiệp Sĩ Tro',
+        serverHostPort: '127.0.0.1:2567',
+        currentHudUiScale: 1,
+        hudPadX: 0,
+        hudPadY: 0,
+        sanctuaryDomInputs: overlay,
+        input: {
+          keyboard: {
+            enabled: true,
+            enableGlobalCapture,
+            disableGlobalCapture,
+            resetKeys,
+          },
+        },
+        transport: {
+          getSim: () => ({ inHub: false, stressTestActive: false }),
+          getLocalPlayerState: () => ({ buffChoices: [], mutatorChoices: [], pactChoices: [] }),
+        },
+      } as unknown as GameScene;
+
+      syncSanctuaryDomInputsLayoutAndVisibility(mockGameScene);
+      syncSanctuaryDomInputsLayoutAndVisibility(mockGameScene);
+      expect(getBoundingClientRect).toHaveBeenCalledTimes(0);
+      expect(enableGlobalCapture).toHaveBeenCalledTimes(0);
+
+      // Suspending and resuming keyboard transitions global capture cleanly once each
+      setSanctuaryKeyboardSuspended(mockGameScene, true);
+      setSanctuaryKeyboardSuspended(mockGameScene, true);
+      expect(disableGlobalCapture).toHaveBeenCalledTimes(1);
+      expect(mockGameScene.input.keyboard!.enabled).toBe(false);
+
+      setSanctuaryKeyboardSuspended(mockGameScene, false);
+      setSanctuaryKeyboardSuspended(mockGameScene, false);
+      expect(enableGlobalCapture).toHaveBeenCalledTimes(1);
+      expect(mockGameScene.input.keyboard!.enabled).toBe(true);
+
+      overlay.destroy();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('clears Sanctuary HUD chrome, collapses Solo Co-op Drawer, and hides DOM inputs when entering Stress Test mode', () => {
+    const hudRemoveAll = vi.fn();
+    const footerRemoveAll = vi.fn();
+    const domSetVisible = vi.fn();
+    const domSetModalBlocked = vi.fn();
+    const updateHubInvitePanel = vi.fn();
+
+    const mockScene = {
+      uiScene: {},
+      coopMode: 'solo',
+      invitePanelVisible: true,
+      lastInvitePanelHash: 'solo:1:cached',
+      lastSanctuaryHudHash: 'vi:1:1::idle:1',
+      sanctuaryHubElapsedSec: 2.5,
+      disconnectReason: null,
+      disconnectBannerTimer: 0,
+      fullMapOpen: false,
+      pauseModalOpen: false,
+      emoteWheelOpen: false,
+      menuActiveInput: 'name',
+      displayName: 'Hiệp Sĩ Tro',
+      serverHostPort: '127.0.0.1:2567',
+      currentHudUiScale: 1,
+      hudPadX: 0,
+      hudPadY: 0,
+      sanctuaryHudContainer: { removeAll: hudRemoveAll },
+      sanctuaryDebugFooterContainer: { removeAll: footerRemoveAll },
+      sanctuaryPlaqueContainer: { setAlpha: vi.fn() },
+      sanctuaryDomInputs: {
+        setVisible: domSetVisible,
+        setModalBlocked: domSetModalBlocked,
+        setBounds: vi.fn(),
+        syncValues: vi.fn(),
+      },
+      input: {
+        keyboard: {
+          enabled: false,
+          enableGlobalCapture: vi.fn(),
+          disableGlobalCapture: vi.fn(),
+          resetKeys: vi.fn(),
+        },
+      },
+      updateHubInvitePanel,
+      updateSanctuaryOverlayHud(dtSec: number) {
+        updateSanctuaryOverlayHudImpl.call(mockScene as unknown as GameScene, dtSec);
+      },
+      transport: {
+        getSim: () => ({ inHub: false, stressTestActive: true }),
+        getLocalPlayerState: () => ({ buffChoices: [], mutatorChoices: [], pactChoices: [] }),
+      },
+    } as unknown as GameScene;
+
+    syncSanctuaryOnStressTest(mockScene, true);
+
+    expect(mockScene.invitePanelVisible).toBe(false);
+    expect(domSetVisible).toHaveBeenCalledWith(false);
+    expect(mockScene.input.keyboard!.enabled).toBe(true);
+    expect(hudRemoveAll).toHaveBeenCalledWith(true);
+    expect(footerRemoveAll).toHaveBeenCalledWith(true);
+    expect(mockScene.lastSanctuaryHudHash).toBe('');
+    expect(updateHubInvitePanel).toHaveBeenCalledTimes(1);
+  });
+
+  it('honors explicit startInHub: false on Replay restart even when page URL contains ?hub=1', async () => {
+    expect(resolveGameSceneStartInHub(undefined, '?scene=game&hub=1&testHooks=1', true)).toBe(
+      true,
+    );
+    expect(
+      resolveGameSceneStartInHub(
+        { coopMode: 'solo', startInHub: false },
+        '?scene=game&hub=1&testHooks=1',
+        true,
+      ),
+    ).toBe(false);
+    expect(
+      resolveGameSceneStartInHub({ coopMode: 'solo', startInHub: true }, '?scene=game', true),
+    ).toBe(true);
+
+    const fs = await import('node:fs');
+    const path = await import('node:path');
+    const arenaTilesSrc = fs.readFileSync(
+      path.resolve(__dirname, '../src/scenes/game-scene/arena-tiles.ts'),
+      'utf8',
+    );
+    expect(arenaTilesSrc).not.toContain("searchParams.get('hub') === '1'");
+    expect(arenaTilesSrc).toContain('if (this.startInHub) {');
+
+    const gameSceneSrc = fs.readFileSync(
+      path.resolve(__dirname, '../src/scenes/GameScene.ts'),
+      'utf8',
+    );
+    expect(gameSceneSrc).not.toMatch(/if\s*\(\s*!sim\.stressTestActive\s*\)\s*\{\s*this\.updateSanctuaryOverlayHud/);
   });
 });

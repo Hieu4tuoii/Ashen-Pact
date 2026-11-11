@@ -82,7 +82,7 @@ import type { SanctuaryVisualLayer } from './game-scene/sanctuary-architecture.j
 import {
   normalizeServerHostPortDisplay,
   PRESET_NAMES_VI,
-  resolveBootGameSceneInitData,
+  resolveGameSceneStartInHub,
   updateSanctuaryOverlayHudImpl,
 } from './game-scene/sanctuary-lobby-ui.js';
 import { processSimEventsImpl } from './game-scene/sim-events.js';
@@ -492,17 +492,11 @@ export class GameScene extends Phaser.Scene {
       this.coopMode = 'solo';
     }
 
-    if (typeof data?.startInHub === 'boolean') {
-      this.startInHub = data.startInHub;
-    } else if (typeof window !== 'undefined') {
-      const bootRoute = resolveBootGameSceneInitData(
-        window.location.search,
-        isDebugUiEnabled() || isTestHooksEnabled(),
-      );
-      this.startInHub = bootRoute.initData?.startInHub ?? true;
-    } else {
-      this.startInHub = true;
-    }
+    this.startInHub = resolveGameSceneStartInHub(
+      data,
+      typeof window !== 'undefined' ? window.location.search : undefined,
+      isDebugUiEnabled() || isTestHooksEnabled(),
+    );
 
     this.disconnectReason = data?.disconnectReason ?? null;
     this.disconnectBannerTimer = this.disconnectReason ? 10.0 : 0;
@@ -1044,9 +1038,7 @@ export class GameScene extends Phaser.Scene {
 
     // 12. Update Camera-Pinned Vector HUD, Sanctuary Overlay, Iris Transition & Debug Telemetry
     this.updateVectorHud();
-    if (!sim.stressTestActive) {
-      this.updateSanctuaryOverlayHud(dtSec);
-    }
+    this.updateSanctuaryOverlayHud(dtSec);
     this.updateIrisTransition(dtSec);
     this.updateDebugState(playerPos.x, playerPos.y);
   }
