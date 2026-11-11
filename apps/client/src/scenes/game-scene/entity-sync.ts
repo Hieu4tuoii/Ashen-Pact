@@ -578,20 +578,15 @@ export function syncProjectilesAndPickupsImpl(this: GameScene): void {
       entry.sprite.setPosition(pos.x, pos.y);
       let rot = b.angle;
       if (b.team === 'enemy') {
-        if (b.bulletShape === 'wave' || b.bulletShape === 'lance' || b.bulletShape === 'diamond') {
-          rot = b.angle;
-        } else if (b.bulletShape === 'ring_bolt') {
-          rot = (visualTimeSec * 6.0 + (b.id & 7)) % (Math.PI * 2);
-        } else {
-          rot = 0;
-        }
+        rot = b.bulletShape === 'lance' ? b.angle : 0;
       }
       entry.sprite.setRotation(rot);
       if (b.team === 'enemy' && !isStress) {
+        const glowMult = b.bulletShape === 'lance' ? 0.95 : 1.05;
         entry.glowSprite.setVisible(true);
         entry.glowSprite.setPosition(pos.x, pos.y);
-        entry.glowSprite.setScale(projScale * specScale * 1.05);
-        entry.glowSprite.setAlpha(0.24 + 0.04 * Math.sin(visualTimeSec * 9.0 + (b.id & 7)));
+        entry.glowSprite.setScale(projScale * specScale * glowMult);
+        entry.glowSprite.setAlpha(0.22 + 0.04 * Math.sin(visualTimeSec * 9.0 + (b.id & 7)));
       } else {
         entry.glowSprite.setVisible(false);
       }

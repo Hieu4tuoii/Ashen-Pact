@@ -110,22 +110,22 @@ export function resolveProjectileRenderSpec(
 
   if (params.team === 'enemy') {
     let textureKey = 'proj_enemy_orb';
+    let refRadius = 6.0;
     if (params.isStress) {
       textureKey = 'proj_stress_enemy';
-    } else if (params.bulletShape === 'wave') {
-      textureKey = 'proj_enemy_wave';
-    } else if (params.bulletShape === 'lance') {
-      textureKey = 'proj_enemy_lance';
-    } else if (params.bulletShape === 'diamond') {
-      textureKey = 'proj_enemy_diamond';
+    } else if (params.bulletShape === 'small_orb') {
+      textureKey = 'proj_enemy_small_orb';
+      refRadius = 5.2;
     } else if (params.bulletShape === 'heavy_orb') {
       textureKey = 'proj_enemy_heavy_orb';
-    } else if (params.bulletShape === 'ring_bolt') {
-      textureKey = 'proj_enemy_ring_bolt';
+      refRadius = 7.8;
+    } else if (params.bulletShape === 'lance') {
+      textureKey = 'proj_enemy_lance';
+      refRadius = 6.0;
     }
-    const radiusScale = params.isStress
+    const scale = params.isStress
       ? 1.0
-      : clamp((params.radius ?? 6.0) / 6.0, 0.85, 1.65);
+      : clamp((params.radius ?? refRadius) / refRadius, 0.75, 1.65);
     return {
       textureKey,
       texture: textureKey,
@@ -133,7 +133,7 @@ export function resolveProjectileRenderSpec(
       blendMode: 'NORMAL',
       depth: 60,
       alpha: 1.0,
-      scale: radiusScale,
+      scale,
     };
   }
 

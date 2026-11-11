@@ -92,24 +92,22 @@ describe('Phase P10b — Combat FX (BlendMode.ADD), Elemental Combo FX & Clear B
       }
     });
 
-    it('maps all 6 EnemyBulletShape values to vivid multi-shape textures and clamps radius scale while defaulting to proj_enemy_orb', () => {
-      const shapeMappings: readonly [EnemyBulletShape | undefined, string][] = [
-        [undefined, 'proj_enemy_orb'],
-        ['orb', 'proj_enemy_orb'],
-        ['wave', 'proj_enemy_wave'],
-        ['lance', 'proj_enemy_lance'],
-        ['diamond', 'proj_enemy_diamond'],
-        ['heavy_orb', 'proj_enemy_heavy_orb'],
-        ['ring_bolt', 'proj_enemy_ring_bolt'],
+    it('maps all EnemyBulletShape tiers to 1:1 hitbox-aligned textures/refRadius and clamps radius scale while defaulting to proj_enemy_orb', () => {
+      const shapeMappings: readonly [EnemyBulletShape | undefined, string, number][] = [
+        [undefined, 'proj_enemy_orb', 6.0],
+        ['small_orb', 'proj_enemy_small_orb', 5.2],
+        ['orb', 'proj_enemy_orb', 6.0],
+        ['heavy_orb', 'proj_enemy_heavy_orb', 7.8],
+        ['lance', 'proj_enemy_lance', 6.0],
       ];
       expect(BAKED_FX_TEXTURE_KEYS).toContain('fx_enemy_bullet_glow');
 
-      for (const [shape, expectedKey] of shapeMappings) {
+      for (const [shape, expectedKey, refRadius] of shapeMappings) {
         expect(BAKED_FX_TEXTURE_KEYS).toContain(expectedKey);
         const spec = resolveProjectileRenderSpec({
           team: 'enemy',
           bulletShape: shape,
-          radius: 7.2,
+          radius: refRadius,
           isStress: false,
         });
         expect(spec.textureKey).toBe(expectedKey);
@@ -118,14 +116,30 @@ describe('Phase P10b — Combat FX (BlendMode.ADD), Elemental Combo FX & Clear B
         expect(spec.blendMode).toBe('NORMAL');
         expect(spec.depth).toBe(60);
         expect(spec.alpha).toBe(1.0);
-        expect(spec.scale).toBeCloseTo(7.2 / 6.0, 4);
+        expect(spec.scale).toBeCloseTo(1.0, 4);
       }
 
-      // Default radius (omitted) -> scale 1.0; tiny radius -> lower clamp; huge radius -> upper clamp
-      expect(resolveProjectileRenderSpec({ team: 'enemy' }).scale).toBeCloseTo(1.0, 4);
+      // Per-tier 1:1 hitbox scaling checks
+      expect(
+        resolveProjectileRenderSpec({ team: 'enemy', bulletShape: 'heavy_orb', radius: 7.8 }).scale,
+      ).toBeCloseTo(1.0, 4);
+      expect(
+        resolveProjectileRenderSpec({ team: 'enemy', bulletShape: 'heavy_orb', radius: 8.6 }).scale,
+      ).toBeCloseTo(8.6 / 7.8, 4);
+      expect(
+        resolveProjectileRenderSpec({ team: 'enemy', bulletShape: 'small_orb', radius: 5.2 }).scale,
+      ).toBeCloseTo(1.0, 4);
+      expect(
+        resolveProjectileRenderSpec({ team: 'enemy', bulletShape: 'small_orb', radius: 5.72 }).scale,
+      ).toBeCloseTo(5.72 / 5.2, 4);
+
+      // Default radius (omitted) -> proj_enemy_orb with scale 1.0; tiny radius -> 0.75 clamp; huge radius -> 1.65 clamp
+      const defaultEnemySpec = resolveProjectileRenderSpec({ team: 'enemy' });
+      expect(defaultEnemySpec.textureKey).toBe('proj_enemy_orb');
+      expect(defaultEnemySpec.scale).toBeCloseTo(1.0, 4);
       const minClamped = resolveProjectileRenderSpec({ team: 'enemy', radius: 2.0 });
       const maxClamped = resolveProjectileRenderSpec({ team: 'enemy', radius: 16.0 });
-      expect(minClamped.scale).toBeCloseTo(0.85, 4);
+      expect(minClamped.scale).toBeCloseTo(0.75, 4);
       expect(maxClamped.scale).toBeCloseTo(1.65, 4);
     });
 
@@ -510,7 +524,7 @@ describe('Phase P10b — Combat FX (BlendMode.ADD), Elemental Combo FX & Clear B
     });
   });
 
-  describe('6. Boss Signature/Climax Co-op Callouts, Transient Light Pulse, Colored Hit Flash & Ring-Bolt Spin', () => {
+  describe('6. Boss Signature/Climax Co-op Callouts, Transient Light Pulse, Colored Hit Flash & Lance-Only Bullet Rotation', () => {
     it('removes bullet_graze from SFX_PRESETS completely', () => {
       expect('bullet_graze' in SFX_PRESETS).toBe(false);
     });
@@ -656,7 +670,7 @@ describe('Phase P10b — Combat FX (BlendMode.ADD), Elemental Combo FX & Clear B
       expect(critHitColor).not.toBe(normalHitColor);
     });
 
-    it('spins ring_bolt enemy bullets, applies subtle 1.05x low-alpha glowSprite halo, and stores specScale on projectileSprites entries', () => {
+    it('rotates only lance enemy bullets, applies 0.95x/1.05x glowSprite halo at 0.22 pulse alpha, and resets rotation to 0 when pooled for round orbs', () => {
       const sim = new WorldSim({
         seed: 808,
         spawnInitialWave: false,
@@ -667,29 +681,30 @@ describe('Phase P10b — Combat FX (BlendMode.ADD), Elemental Combo FX & Clear B
         kind: 'bullet_volley_spawned',
         ownerId: 99,
         team: 'enemy',
-        weaponId: 'boss_spore_ring',
+        weaponId: 'enemy_sniper_lance',
         x: 320,
         y: 260,
-        angle: 0,
+        angle: 0.65,
         pelletCount: 1,
         spreadRad: 0,
-        speed: 150,
-        radius: 7.2,
+        speed: 220,
+        radius: 6.0,
         damage: 2,
         critChance: 0,
         knockback: 0,
         ttlSec: 2,
         pierceCount: 0,
         bounceCount: 0,
-        element: 'poison',
+        element: 'none',
         amplifiedByShield: false,
         seed: 1,
-        bulletShape: 'ring_bolt',
+        bulletShape: 'lance',
       });
-      const bullet = sim.projectiles[0]!;
+      const lanceBullet = sim.projectiles[0]!;
 
-      const makeMockDisplayObj = () => {
+      const makeMockDisplayObj = (initialTex = '') => {
         const obj = {
+          texture: initialTex,
           depth: 0,
           blendMode: 0,
           visible: false,
@@ -730,7 +745,8 @@ describe('Phase P10b — Combat FX (BlendMode.ADD), Elemental Combo FX & Clear B
             obj.y = y;
             return obj;
           },
-          setTexture() {
+          setTexture(t: string) {
+            obj.texture = t;
             return obj;
           },
           setTint() {
@@ -763,8 +779,8 @@ describe('Phase P10b — Combat FX (BlendMode.ADD), Elemental Combo FX & Clear B
         cameras: { main: { worldView: { x: 0, y: 0, width: 960, height: 540 } } },
         lighting: { getElapsedSec: () => 0.5, isLightmapVisible: () => true },
         add: {
-          sprite: vi.fn(() => makeMockDisplayObj()),
-          image: vi.fn(() => makeMockDisplayObj()),
+          sprite: vi.fn((_x: number, _y: number, tex: string) => makeMockDisplayObj(tex)),
+          image: vi.fn((_x: number, _y: number, tex: string) => makeMockDisplayObj(tex)),
         },
         projectileSprites: new Map(),
         projectileSpritePool: [],
@@ -775,21 +791,101 @@ describe('Phase P10b — Combat FX (BlendMode.ADD), Elemental Combo FX & Clear B
         entityPosScratch: { x: 0, y: 0 },
       };
 
-      syncProjectilesAndPickupsImpl.call(mockScene as never);
-      const entry = mockScene.projectileSprites.get(bullet.id) as {
+      type SpriteEntry = {
         sprite: ReturnType<typeof makeMockDisplayObj>;
         glowSprite: ReturnType<typeof makeMockDisplayObj>;
         textureKey: string;
         specScale?: number;
       };
-      expect(entry).toBeDefined();
-      expect(entry.textureKey).toBe('proj_enemy_ring_bolt');
-      expect(entry.specScale).toBeCloseTo(1.2, 4);
-      const expectedRot = (0.5 * 6.0 + (bullet.id & 7)) % (Math.PI * 2);
-      expect(entry.sprite.rotation).toBeCloseTo(expectedRot, 4);
-      expect(entry.glowSprite.scale / entry.sprite.scale).toBeCloseTo(1.05, 4);
-      const expectedAlpha = 0.24 + 0.04 * Math.sin(0.5 * 9.0 + (bullet.id & 7));
-      expect(entry.glowSprite.alpha).toBeCloseTo(expectedAlpha, 4);
+
+      // 1. Enemy 'lance' bullet rotates to b.angle (0.65) and uses 0.95x glowMult
+      syncProjectilesAndPickupsImpl.call(mockScene as never);
+      const lanceEntry = mockScene.projectileSprites.get(lanceBullet.id) as SpriteEntry;
+      expect(lanceEntry).toBeDefined();
+      expect(lanceEntry.textureKey).toBe('proj_enemy_lance');
+      expect(lanceEntry.specScale).toBeCloseTo(1.0, 4);
+      expect(lanceEntry.sprite.rotation).toBeCloseTo(0.65, 4);
+      expect(lanceEntry.glowSprite.scale / lanceEntry.sprite.scale).toBeCloseTo(0.95, 4);
+      const expectedLanceAlpha = 0.22 + 0.04 * Math.sin(0.5 * 9.0 + (lanceBullet.id & 7));
+      expect(lanceEntry.glowSprite.alpha).toBeCloseTo(expectedLanceAlpha, 4);
+
+      // Return the lance sprite entry to projectileSpritePool
+      sim.projectiles.length = 0;
+      syncProjectilesAndPickupsImpl.call(mockScene as never);
+      expect(mockScene.projectileSpritePool).toHaveLength(1);
+
+      // 2. Recycle pooled sprite for a 'small_orb' bullet with angle: 1.2 -> rotation resets to 0, glowMult = 1.05
+      sim.spawnDeterministicVolley({
+        kind: 'bullet_volley_spawned',
+        ownerId: 99,
+        team: 'enemy',
+        weaponId: 'enemy_rapid_orb',
+        x: 340,
+        y: 270,
+        angle: 1.2,
+        pelletCount: 1,
+        spreadRad: 0,
+        speed: 170,
+        radius: 5.2,
+        damage: 1,
+        critChance: 0,
+        knockback: 0,
+        ttlSec: 2,
+        pierceCount: 0,
+        bounceCount: 0,
+        element: 'burn',
+        amplifiedByShield: false,
+        seed: 2,
+        bulletShape: 'small_orb',
+      });
+      const smallOrbBullet = sim.projectiles[0]!;
+      syncProjectilesAndPickupsImpl.call(mockScene as never);
+
+      const recycledSmallOrb = mockScene.projectileSprites.get(smallOrbBullet.id) as SpriteEntry;
+      expect(recycledSmallOrb).toBe(lanceEntry);
+      expect(recycledSmallOrb.textureKey).toBe('proj_enemy_small_orb');
+      expect(recycledSmallOrb.sprite.texture).toBe('proj_enemy_small_orb');
+      expect(recycledSmallOrb.specScale).toBeCloseTo(1.0, 4);
+      expect(recycledSmallOrb.sprite.rotation).toBe(0);
+      expect(recycledSmallOrb.glowSprite.scale / recycledSmallOrb.sprite.scale).toBeCloseTo(1.05, 4);
+      const expectedSmallOrbAlpha = 0.22 + 0.04 * Math.sin(0.5 * 9.0 + (smallOrbBullet.id & 7));
+      expect(recycledSmallOrb.glowSprite.alpha).toBeCloseTo(expectedSmallOrbAlpha, 4);
+
+      // 3. Also verify 'heavy_orb' keeps rotation === 0 and glowMult === 1.05
+      sim.projectiles.length = 0;
+      syncProjectilesAndPickupsImpl.call(mockScene as never);
+      sim.spawnDeterministicVolley({
+        kind: 'bullet_volley_spawned',
+        ownerId: 99,
+        team: 'enemy',
+        weaponId: 'boss_heavy_orb',
+        x: 360,
+        y: 280,
+        angle: -0.9,
+        pelletCount: 1,
+        spreadRad: 0,
+        speed: 130,
+        radius: 7.8,
+        damage: 3,
+        critChance: 0,
+        knockback: 0,
+        ttlSec: 2,
+        pierceCount: 0,
+        bounceCount: 0,
+        element: 'poison',
+        amplifiedByShield: false,
+        seed: 3,
+        bulletShape: 'heavy_orb',
+      });
+      const heavyOrbBullet = sim.projectiles[0]!;
+      syncProjectilesAndPickupsImpl.call(mockScene as never);
+
+      const recycledHeavyOrb = mockScene.projectileSprites.get(heavyOrbBullet.id) as SpriteEntry;
+      expect(recycledHeavyOrb).toBe(lanceEntry);
+      expect(recycledHeavyOrb.textureKey).toBe('proj_enemy_heavy_orb');
+      expect(recycledHeavyOrb.specScale).toBeCloseTo(1.0, 4);
+      expect(recycledHeavyOrb.sprite.rotation).toBe(0);
+      expect(recycledHeavyOrb.glowSprite.scale / recycledHeavyOrb.sprite.scale).toBeCloseTo(1.05, 4);
     });
   });
 });
