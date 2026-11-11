@@ -1393,19 +1393,17 @@ export function applyCameraViewportImpl(this: GameScene): void {
     const stressInvBake = 1 / Math.min(2, newScale);
     for (const item of this.projectileSprites.values()) {
       const baseInv = item.textureKey.startsWith('proj_stress_') ? stressInvBake : invBake;
-      const glowMult = item.textureKey === 'proj_enemy_wave' ? 0.8 : 0.92;
       item.sprite.setTexture(item.textureKey);
       item.sprite.setScale(baseInv * item.specScale);
       item.glowSprite.setTexture('fx_enemy_bullet_glow');
-      item.glowSprite.setScale(baseInv * item.specScale * glowMult);
+      item.glowSprite.setScale(baseInv * item.specScale * 1.05);
     }
     for (const item of this.projectileSpritePool) {
       const baseInv = item.textureKey.startsWith('proj_stress_') ? stressInvBake : invBake;
-      const glowMult = item.textureKey === 'proj_enemy_wave' ? 0.8 : 0.92;
       item.sprite.setTexture(item.textureKey);
       item.sprite.setScale(baseInv * item.specScale);
       item.glowSprite.setTexture('fx_enemy_bullet_glow');
-      item.glowSprite.setScale(baseInv * item.specScale * glowMult);
+      item.glowSprite.setScale(baseInv * item.specScale * 1.05);
     }
     for (const item of this.pickupSprites.values()) {
       item.sprite.setTexture(item.textureKey);

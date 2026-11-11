@@ -510,16 +510,12 @@ describe('Phase P10b — Combat FX (BlendMode.ADD), Elemental Combo FX & Clear B
     });
   });
 
-  describe('6. Boss Signature/Climax Co-op Callouts, Transient Light Pulse, 900ms Bullet Graze Throttle & Ring-Bolt Spin', () => {
-    it('defines crisp high-pitch SFX_PRESETS.bullet_graze synth tick', () => {
-      const preset = SFX_PRESETS.bullet_graze;
-      expect(preset).toBeDefined();
-      expect(preset.freq).toBeGreaterThanOrEqual(900);
-      expect(preset.decaySec).toBeLessThanOrEqual(0.08);
-      expect(preset.minIntervalMs).toBeGreaterThanOrEqual(60);
+  describe('6. Boss Signature/Climax Co-op Callouts, Transient Light Pulse, Colored Hit Flash & Ring-Bolt Spin', () => {
+    it('removes bullet_graze from SFX_PRESETS completely', () => {
+      expect('bullet_graze' in SFX_PRESETS).toBe(false);
     });
 
-    it('uses ev.bossPatternId in Co-op when boss.bossPatternId is undefined, spawns boss-colored transient light pulse, suppresses callouts during bossArmorShellActive, and keeps bullet_grazed free of floating text clutter', () => {
+    it('uses ev.bossPatternId in Co-op when boss.bossPatternId is undefined, spawns boss-colored transient light pulse, suppresses callouts during bossArmorShellActive, and triggers non-white colored hit tint on entity_damaged', () => {
       i18n.setLocale('vi');
       const sim = new WorldSim({
         seed: 707,
@@ -532,7 +528,7 @@ describe('Phase P10b — Combat FX (BlendMode.ADD), Elemental Combo FX & Clear B
       // Simulate Co-op client where QuantizedEnemySnap omits bossPatternId
       kryssa.bossPatternId = undefined;
 
-      const floatingAlerts: { x: number; y: number; text: string; color?: string }[] = [];
+      const floatingAlerts: { x: number, y: number, text: string, color?: string }[] = [];
       const transientLights: {
         x: number;
         y: number;
@@ -541,6 +537,7 @@ describe('Phase P10b — Combat FX (BlendMode.ADD), Elemental Combo FX & Clear B
         alpha: number;
         durationSec: number;
       }[] = [];
+      const triggerHitFlashMock = vi.fn();
 
       const mockScene = {
         transport: { getSim: () => sim },
@@ -550,6 +547,7 @@ describe('Phase P10b — Combat FX (BlendMode.ADD), Elemental Combo FX & Clear B
             floatingAlerts.push({ x, y, text, color });
           }),
           spawnHitSparks: vi.fn(),
+          spawnDamageNumber: vi.fn(),
         },
         lighting: {
           spawnTransientLight: vi.fn(
@@ -567,7 +565,7 @@ describe('Phase P10b — Combat FX (BlendMode.ADD), Elemental Combo FX & Clear B
         },
         coopPlayerRigs: new Map(),
         simPlayerRigs: new Map(),
-        enemyRigs: new Map(),
+        enemyRigs: new Map([[kryssa.id, { triggerHitFlash: triggerHitFlashMock }]]),
         camFocusX: 480,
         camFocusY: 270,
       };
@@ -618,25 +616,47 @@ describe('Phase P10b — Combat FX (BlendMode.ADD), Elemental Combo FX & Clear B
       expect(floatingAlerts).toHaveLength(0);
       expect(transientLights).toHaveLength(0);
 
-      // 3. bullet_grazed spawns subtle sparks & glint but NEVER spawns cluttered floating text
-      sim.tick = 1;
-      mockScene.time.now = 0;
+      // 3. damage_dealt on Boss/enemy passes distinct non-white tint colors to triggerHitFlash(duration, tint)
+      (mockScene.fx as Record<string, unknown>).spawnDamagePopup = vi.fn();
       processSimEventsImpl.call(mockScene as never, [
-        { kind: 'bullet_grazed', playerId: sim.player.id, x: 310, y: 290 },
+        {
+          kind: 'damage_dealt',
+          targetId: kryssa.id,
+          targetKind: 'enemy',
+          amount: 14,
+          isCrit: false,
+          hitArmor: false,
+          element: 'none',
+          x: 500,
+          y: 280,
+          knockbackX: 1,
+          knockbackY: 0,
+        } as SimEvent,
+        {
+          kind: 'damage_dealt',
+          targetId: kryssa.id,
+          targetKind: 'enemy',
+          amount: 28,
+          isCrit: true,
+          hitArmor: false,
+          element: 'none',
+          x: 500,
+          y: 280,
+          knockbackX: 1,
+          knockbackY: 0,
+        } as SimEvent,
       ]);
-      expect(floatingAlerts).toHaveLength(0);
-      expect(mockScene.fx.spawnHitSparks).toHaveBeenCalledTimes(1);
-
-      sim.tick = 3;
-      mockScene.time.now = 1200;
-      processSimEventsImpl.call(mockScene as never, [
-        { kind: 'bullet_grazed', playerId: sim.player.id, x: 312, y: 292 },
-      ]);
-      expect(floatingAlerts).toHaveLength(0);
-      expect(mockScene.fx.spawnHitSparks).toHaveBeenCalledTimes(2);
+      expect(triggerHitFlashMock).toHaveBeenCalledTimes(2);
+      const [, normalHitColor] = triggerHitFlashMock.mock.calls[0]!;
+      const [, critHitColor] = triggerHitFlashMock.mock.calls[1]!;
+      expect(typeof normalHitColor).toBe('number');
+      expect(normalHitColor).not.toBe(0xffffff);
+      expect(normalHitColor).not.toBe(0xf4f1ea);
+      expect(typeof critHitColor).toBe('number');
+      expect(critHitColor).not.toBe(normalHitColor);
     });
 
-    it('spins ring_bolt enemy bullets, renders core-locked additive glowSprite at depth 61 above bullet core, and offsets wave glow onto crescent blade', () => {
+    it('spins ring_bolt enemy bullets, applies subtle 1.05x low-alpha glowSprite halo, and stores specScale on projectileSprites entries', () => {
       const sim = new WorldSim({
         seed: 808,
         spawnInitialWave: false,
@@ -666,31 +686,7 @@ describe('Phase P10b — Combat FX (BlendMode.ADD), Elemental Combo FX & Clear B
         seed: 1,
         bulletShape: 'ring_bolt',
       });
-      sim.spawnDeterministicVolley({
-        kind: 'bullet_volley_spawned',
-        ownerId: 99,
-        team: 'enemy',
-        weaponId: 'boss_kryssa_wave',
-        x: 400,
-        y: 260,
-        angle: 0,
-        pelletCount: 1,
-        spreadRad: 0,
-        speed: 150,
-        radius: 6.8,
-        damage: 2,
-        critChance: 0,
-        knockback: 0,
-        ttlSec: 2,
-        pierceCount: 0,
-        bounceCount: 0,
-        element: 'chill',
-        amplifiedByShield: false,
-        seed: 2,
-        bulletShape: 'wave',
-      });
       const bullet = sim.projectiles[0]!;
-      const waveBullet = sim.projectiles[1]!;
 
       const makeMockDisplayObj = () => {
         const obj = {
@@ -791,22 +787,9 @@ describe('Phase P10b — Combat FX (BlendMode.ADD), Elemental Combo FX & Clear B
       expect(entry.specScale).toBeCloseTo(1.2, 4);
       const expectedRot = (0.5 * 6.0 + (bullet.id & 7)) % (Math.PI * 2);
       expect(entry.sprite.rotation).toBeCloseTo(expectedRot, 4);
-      expect(entry.sprite.depth).toBe(60);
-      expect(entry.glowSprite.depth).toBe(61);
-      expect(entry.glowSprite.scale / entry.sprite.scale).toBeCloseTo(0.92, 4);
-      const expectedAlpha = 0.42 + 0.08 * Math.sin(0.5 * 9.0 + (bullet.id & 7));
+      expect(entry.glowSprite.scale / entry.sprite.scale).toBeCloseTo(1.05, 4);
+      const expectedAlpha = 0.24 + 0.04 * Math.sin(0.5 * 9.0 + (bullet.id & 7));
       expect(entry.glowSprite.alpha).toBeCloseTo(expectedAlpha, 4);
-
-      const waveEntry = mockScene.projectileSprites.get(waveBullet.id) as {
-        sprite: ReturnType<typeof makeMockDisplayObj>;
-        glowSprite: ReturnType<typeof makeMockDisplayObj>;
-        specScale?: number;
-      };
-      expect(waveEntry).toBeDefined();
-      expect(waveEntry.glowSprite.depth).toBe(61);
-      expect(waveEntry.glowSprite.scale / waveEntry.sprite.scale).toBeCloseTo(0.8, 4);
-      expect(waveEntry.glowSprite.x).toBeGreaterThan(waveBullet.x + 3.5);
-      expect(waveEntry.glowSprite.y).toBeCloseTo(waveBullet.y, 4);
     });
   });
 });

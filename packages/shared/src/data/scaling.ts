@@ -53,16 +53,16 @@ export const BIOME_SCALING: Record<1 | 2 | 3, BiomeScalingTier> = {
     projectileSpeedMultiplier: 1.0,
     eliteBonusMultiplier: 1.0,
     eliteDamageBonus: 1,
-    bossHpScale: 1.5,
+    bossHpScale: 1.54,
   },
   2: {
     biome: 2,
-    hpMultiplier: 1.27,
-    cooldownScale: 0.91,
+    hpMultiplier: 1.16,
+    cooldownScale: 1.01,
     projectileSpeedMultiplier: 1.06,
     eliteBonusMultiplier: 1.06,
     eliteDamageBonus: 1,
-    bossHpScale: 1.05,
+    bossHpScale: 1.09,
   },
   3: {
     biome: 3,
@@ -71,6 +71,6 @@ export const BIOME_SCALING: Record<1 | 2 | 3, BiomeScalingTier> = {
     projectileSpeedMultiplier: 1.12,
     eliteBonusMultiplier: 1.12,
     eliteDamageBonus: 2,
-    bossHpScale: 2.32,
+    bossHpScale: 2.52,
   },
 };

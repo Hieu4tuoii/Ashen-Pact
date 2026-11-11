@@ -110,9 +110,6 @@ export const MAX_ENEMY_PROJECTILES = 300;
 export const MAX_TACTICAL_PROPS_PER_ROOM = 16;
 export const MAX_DEPLOYABLES_PER_PLAYER = 8;
 
-export const GRAZE_MARGIN_PX = 18;
-export const GRAZE_REWARD_ICD_SEC = 0.16;
-
 export type EnemyBulletShape =
   | 'orb'
   | 'wave'
@@ -573,7 +570,6 @@ export interface SimPlayerState {
   holsterSurgeIcdTimer?: number;
   causticPodFinaleIcdTimer?: number;
   plasmaStarIcdTimer?: number;
-  grazeIcdTimer?: number;
   // Ashen Pact 2.0 Per-Player Build State
   blessingIds: BlessingId[];
   weaponMutators: Record<number, WeaponMutatorId[]>;
@@ -834,7 +830,6 @@ export interface SimProjectileState {
   kinematicDelaySec?: number;
   kinematicElapsedSec?: number;
   angularVelRad?: number;
-  grazedPlayerIds?: number[];
   shotFlags?: number;
   splitGeneration?: 0 | 1;
   prismBonusAdd?: number;

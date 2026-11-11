@@ -521,7 +521,7 @@ export class WorldSim {
   public flipCoverProp(prop: SimPropState, actor: SimPlayerState = this.player): boolean { return flipCoverPropImpl.call(this, prop, actor); }
   public kickProp(prop: SimPropState, actor: SimPlayerState = this.player, customAngle?: number): boolean { return kickPropImpl.call(this, prop, actor, customAngle); }
   public updateSlidingProps(dtSec: number): void { return updateSlidingPropsImpl.call(this, dtSec); }
-  public releaseProjectileToPool(proj: SimProjectileState): void { proj.ttlSec = 0; proj.hitEntityIds.length = 0; if (proj.grazedPlayerIds) proj.grazedPlayerIds.length = 0; this.projectilePool.push(proj); }
+  public releaseProjectileToPool(proj: SimProjectileState): void { proj.ttlSec = 0; proj.hitEntityIds.length = 0; this.projectilePool.push(proj); }
   public recordDestroyedProjectiles(ids: number[]): void {
     if (ids.length === 0 || this.stressTestActive) return;
     this.events.push({ kind: 'projectiles_destroyed', ids: [...ids] });

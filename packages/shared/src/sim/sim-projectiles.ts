@@ -40,8 +40,6 @@ import {
 } from './sim-weapon-mutators.js';
 import {
   type BulletVolleySpawnEvent,
-  GRAZE_MARGIN_PX,
-  GRAZE_REWARD_ICD_SEC,
   MAX_ENEMY_PROJECTILES,
   MAX_PLAYER_PROJECTILES,
   type SimProjectileState,
@@ -742,39 +740,6 @@ export function updateProjectilesImpl(this: WorldSim, dtSec: number): void {
           }
           break;
         }
-        // Bullet Graze ("Sượt Đạn") near-miss detection & solo micro-reward
-        if (!b.grazedPlayerIds || !b.grazedPlayerIds.includes(pl.id)) {
-          const dGraze = distance(b.x, b.y, pl.x, pl.y);
-          if (dGraze <= b.radius + pl.radius + GRAZE_MARGIN_PX) {
-            if (!b.grazedPlayerIds) {
-              b.grazedPlayerIds = [pl.id];
-            } else {
-              b.grazedPlayerIds.push(pl.id);
-            }
-            if ((pl.grazeIcdTimer ?? 0) <= 0) {
-              pl.grazeIcdTimer = GRAZE_REWARD_ICD_SEC;
-              const inBossFight = this.getActiveBoss() !== null;
-              const cdRefund = inBossFight ? 0.25 : 0.08;
-              const heatVent = inBossFight ? 4 : 1.5;
-              if (pl.skillCooldownTimer > 0) {
-                pl.skillCooldownTimer = Math.max(0, pl.skillCooldownTimer - cdRefund);
-              }
-              if (pl.weaponHeat > 0) {
-                pl.weaponHeat = Math.max(0, pl.weaponHeat - heatVent);
-              } else if (inBossFight && pl.reloadTimer > 0 && !pl.reloadLockout) {
-                pl.reloadTimer = Math.max(0.01, pl.reloadTimer - 0.05);
-              }
-              if (!this.stressTestActive) {
-                this.events.push({
-                  kind: 'bullet_grazed',
-                  playerId: pl.id,
-                  x: (pl.x + b.x) * 0.5,
-                  y: (pl.y + b.y) * 0.5,
-                });
-              }
-            }
-          }
-        }
       }
     }
   }
@@ -1056,7 +1021,6 @@ export function acquireProjectileImpl(this: WorldSim,
     pooled.kinematicDelaySec = init.kinematicDelaySec;
     pooled.kinematicElapsedSec = init.kinematicElapsedSec ?? 0;
     pooled.angularVelRad = init.angularVelRad;
-    if (pooled.grazedPlayerIds) pooled.grazedPlayerIds.length = 0;
     pooled.shotFlags = init.shotFlags ?? 0; pooled.splitGeneration = init.splitGeneration ?? 0;
     pooled.procCoefficient = init.procCoefficient ?? 1.0; pooled.heavyPinballApplied = init.heavyPinballApplied ?? false;
     pooled.prismBonusAdd = init.prismBonusAdd ?? 0;

@@ -17,7 +17,6 @@ export type SfxId =
   | 'swing_sword'
   | 'swing_heavy'
   | 'bullet_deflect'
-  | 'bullet_graze'
   | 'hit_enemy'
   | 'crit_hit'
   | 'kill_enemy'
@@ -197,16 +196,6 @@ export const SFX_PRESETS: Record<SfxId, ZzfxPreset> = {
     noise: 0.05,
     wave: 'triangle',
     minIntervalMs: 25,
-  },
-  bullet_graze: {
-    volume: 0.22,
-    freq: 1180,
-    slide: 360,
-    attackSec: 0.001,
-    decaySec: 0.055,
-    noise: 0.04,
-    wave: 'sine',
-    minIntervalMs: 90,
   },
   hit_enemy: {
     volume: 0.22,

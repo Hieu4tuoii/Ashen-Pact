@@ -610,3 +610,40 @@ export function stepMeleeLungeGlideOffset(
   };
 }
 
+export interface HitFlashTintOptions {
+  isCrit?: boolean;
+  hitArmor?: boolean;
+  element?: string;
+  isPlayer?: boolean;
+}
+
+/**
+ * Resolves a vibrant, non-white multiplicative hit tint (`setTint`) so damaged enemies,
+ * Bosses, and players preserve 100% of their dark outlines and surface shading instead
+ * of turning into a flat solid-white silhouette.
+ */
+export function resolveHitFlashTint(options: HitFlashTintOptions = {}): number {
+  if (options.isPlayer) {
+    return 0xff5555; // Danger crimson hurt tint
+  }
+  if (options.hitArmor) {
+    return 0xfbbf24; // Solar amber metallic armor-spark tint
+  }
+  if (options.isCrit) {
+    return 0xff9f43; // Fiery tangerine-gold critical impact tint
+  }
+  switch (options.element) {
+    case 'burn':
+      return 0xff7849;
+    case 'chill':
+      return 0x67e8f9;
+    case 'shock':
+      return 0xc084fc;
+    case 'poison':
+      return 0xa3e635;
+    default:
+      return 0xff6b6b; // Crisp coral-crimson physical impact tint
+  }
+}
+
+

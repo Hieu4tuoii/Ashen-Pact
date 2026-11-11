@@ -8,6 +8,7 @@ import {
   createStateCrossfadeController,
   createWeaponRecoilSpringState,
   evaluateRigPose,
+  resolveHitFlashTint,
   type RigAnimState,
   type RigPoseSnapshot,
   type StateCrossfadeController,
@@ -36,6 +37,7 @@ export interface CutoutRigOptions {
   displayScale?: number;
   initialPhaseOffset?: number;
   fastComposite?: boolean;
+  isBoss?: boolean;
 }
 
 function hashRigId(id: string): number {
@@ -63,6 +65,7 @@ export class CutoutRig {
   private compositeSprite: Phaser.GameObjects.Sprite | null = null;
   private playerRingSprite: Phaser.GameObjects.Sprite | null = null;
   private fastComposite = false;
+  private isBoss = false;
 
   private animState: RigAnimState = 'idle';
   private lifeState: 'alive' | 'downed' | 'ghost' = 'alive';
@@ -92,6 +95,8 @@ export class CutoutRig {
   private lungeOffsetX = 0;
   private lungeOffsetY = 0;
   private hitFlashTimer = 0;
+  private hitFlashCooldownTimer = 0;
+  private hitFlashTint = 0xff6b6b;
   private castPoseTimer = 0;
   private reviveProgress = 0;
   private isHitFlashing = false;
@@ -115,6 +120,9 @@ export class CutoutRig {
     this.animTime = options.initialPhaseOffset ?? 0;
     this.phaseSeed = (options.initialPhaseOffset ?? 0) + hashRigId(def.id);
     this.fastComposite = options.fastComposite ?? false;
+    this.isBoss =
+      options.isBoss ??
+      (def.id === 'spore_king' || def.id === 'kryssa_ice_queen' || def.id === 'forge_titan');
 
     this.container = scene.add.container(x, y);
     this.bodyContainer = scene.add.container(0, 0);
@@ -259,8 +267,26 @@ export class CutoutRig {
     return { x: this.lungeOffsetX, y: this.lungeOffsetY };
   }
 
-  public triggerHitFlash(durationSec = 0.11): void {
-    this.hitFlashTimer = Math.max(this.hitFlashTimer, durationSec);
+  public triggerHitFlash(durationSec = 0.075, tintColor?: number): void {
+    const resolvedTint =
+      tintColor ?? resolveHitFlashTint({ isPlayer: this.playerSlot !== null });
+    if (this.hitFlashCooldownTimer > 0) {
+      if (this.hitFlashTimer > 0 && tintColor !== undefined) {
+        this.hitFlashTint = resolvedTint;
+      }
+      return;
+    }
+    this.hitFlashTint = resolvedTint;
+    if (this.isBoss) {
+      this.hitFlashTimer = Math.min(durationSec, 0.055);
+      this.hitFlashCooldownTimer = 0.22;
+    } else if (this.playerSlot !== null) {
+      this.hitFlashTimer = Math.max(this.hitFlashTimer, durationSec);
+      this.hitFlashCooldownTimer = 0.08;
+    } else {
+      this.hitFlashTimer = Math.min(durationSec, 0.075);
+      this.hitFlashCooldownTimer = 0.15;
+    }
   }
 
   public setDashActive(active: boolean): void {
@@ -373,7 +399,7 @@ export class CutoutRig {
     if (this.animState !== 'idle' && this.animState !== 'run') {
       return this.animState;
     }
-    if (this.hitFlashTimer > 0.02) return 'hurt';
+    if (!this.isBoss && this.hitFlashTimer > 0.02) return 'hurt';
     if (this.isDashing) return 'dash';
     if (this.castPoseTimer > 0) return 'cast';
     if (this.meleeSwingTimer > 0.02) return 'attack';
@@ -391,14 +417,17 @@ export class CutoutRig {
     if (this.recoilTimer > 0) this.recoilTimer = Math.max(0, this.recoilTimer - dtSec);
     if (this.meleeSwingTimer > 0) this.meleeSwingTimer = Math.max(0, this.meleeSwingTimer - dtSec);
     if (this.hitFlashTimer > 0) this.hitFlashTimer = Math.max(0, this.hitFlashTimer - dtSec);
+    if (this.hitFlashCooldownTimer > 0) {
+      this.hitFlashCooldownTimer = Math.max(0, this.hitFlashCooldownTimer - dtSec);
+    }
     if (this.castPoseTimer > 0) this.castPoseTimer = Math.max(0, this.castPoseTimer - dtSec);
 
-    // Hit flash, telegraph flash, life state tint, or elemental status tint
-    const shouldFlashWhite = this.hitFlashTimer > 0;
+    // Multiplicative hit tint, telegraph flash, life state tint, or elemental status tint
+    const shouldTintHit = this.hitFlashTimer > 0;
     const shouldFlashTelegraph =
-      !shouldFlashWhite && this.telegraphProgress > 0 && Math.floor(this.animTime * 18) % 2 === 0;
+      !shouldTintHit && this.telegraphProgress > 0 && Math.floor(this.animTime * 18) % 2 === 0;
 
-    if (shouldFlashWhite) {
+    if (shouldTintHit) {
       this.applyHitFlashTint();
       this.isHitFlashing = true;
       this.isStatusTinted = false;
@@ -426,7 +455,10 @@ export class CutoutRig {
     }
 
     const spawnScale = this.spawnProgress < 1 ? easeOutBack(this.spawnProgress) : 1;
-    const hitPunch = this.hitFlashTimer > 0 ? 1 + (this.hitFlashTimer / 0.12) * 0.12 : 1;
+    const hitPunch =
+      this.hitFlashTimer > 0
+        ? 1 + (this.hitFlashTimer / 0.12) * (this.isBoss ? 0.035 : 0.1)
+        : 1;
     const effectiveState = this.resolveEffectiveAnimState();
 
     if (this.fastComposite && this.compositeSprite) {
@@ -556,11 +588,11 @@ export class CutoutRig {
 
   private applyHitFlashTint(): void {
     if (this.compositeSprite) {
-      this.compositeSprite.setTintFill(0xf4f1ea);
+      this.compositeSprite.setTint(this.hitFlashTint);
     }
     for (const [partId, sprite] of this.partSprites.entries()) {
       if (partId === 'torso' || partId === 'head') {
-        sprite.setTintFill(0xf4f1ea);
+        sprite.setTint(this.hitFlashTint);
       } else {
         sprite.clearTint();
       }

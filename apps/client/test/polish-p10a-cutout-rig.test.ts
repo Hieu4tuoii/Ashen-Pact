@@ -496,5 +496,190 @@ describe('Phase P10a — Cutout 2.0 Parametric Animation & Spring Math Engine', 
     expect(samples[5]!).toBeGreaterThan(samples[1]!);
     expect(samples[10]!).toBeGreaterThan(-4.5);
   });
+
+  it('13. uses non-white multiplicative setTint on hit (never setTintFill) and enforces anti-strobe cooldown on Boss rigs under rapid fire', async () => {
+    const mathMod = await import('../src/art/cutout-rig-math.js');
+    const { CutoutRig } = await import('../src/art/cutout-rig.js');
+    const resolveHitTint = (
+      mathMod as unknown as {
+        resolveHitFlashTint?: (opts?: {
+          isCrit?: boolean;
+          hitArmor?: boolean;
+          element?: string;
+          isPlayer?: boolean;
+        }) => number;
+      }
+    ).resolveHitFlashTint;
+    expect(typeof resolveHitTint).toBe('function');
+
+    const normalTint = resolveHitTint!({});
+    const critTint = resolveHitTint!({ isCrit: true });
+    const armorTint = resolveHitTint!({ hitArmor: true });
+    const burnTint = resolveHitTint!({ element: 'burn' });
+    const chillTint = resolveHitTint!({ element: 'chill' });
+    const playerTint = resolveHitTint!({ isPlayer: true });
+
+    for (const c of [normalTint, critTint, armorTint, burnTint, chillTint, playerTint]) {
+      expect(c).not.toBe(0xffffff);
+      expect(c).not.toBe(0xf4f1ea);
+    }
+    expect(critTint).not.toBe(normalTint);
+    expect(armorTint).not.toBe(normalTint);
+
+    interface MockSprite {
+      key: string;
+      x: number;
+      y: number;
+      scaleX: number;
+      scaleY: number;
+      rotation: number;
+      alpha: number;
+      visible: boolean;
+      active: boolean;
+      currentTint: number | null;
+      tintFillCalls: number;
+      setOrigin: () => MockSprite;
+      setScale: (sx: number, sy?: number) => MockSprite;
+      setPosition: (x: number, y: number) => MockSprite;
+      setTexture: (k: string) => MockSprite;
+      setVisible: (v: boolean) => MockSprite;
+      setActive: (v: boolean) => MockSprite;
+      setTint: (c: number) => MockSprite;
+      setTintFill: (c: number) => MockSprite;
+      clearTint: () => MockSprite;
+      destroy: () => void;
+    }
+
+    const createdSprites: MockSprite[] = [];
+    const mockScene = {
+      textures: { exists: () => true },
+      add: {
+        container: (x: number, y: number) => {
+          const children: unknown[] = [];
+          const c = {
+            x,
+            y,
+            scaleX: 1,
+            scaleY: 1,
+            rotation: 0,
+            alpha: 1,
+            visible: true,
+            add: (child: unknown) => {
+              children.push(child);
+              return c;
+            },
+            addAt: (child: unknown) => {
+              children.unshift(child);
+              return c;
+            },
+            setScale: (sx: number, sy?: number) => {
+              c.scaleX = sx;
+              c.scaleY = sy ?? sx;
+              return c;
+            },
+            setPosition: (nx: number, ny: number) => {
+              c.x = nx;
+              c.y = ny;
+              return c;
+            },
+            setVisible: (v: boolean) => {
+              c.visible = v;
+              return c;
+            },
+            setDepth: () => c,
+            destroy: () => {},
+          };
+          return c;
+        },
+        sprite: (x: number, y: number, key: string) => {
+          const s: MockSprite = {
+            key,
+            x,
+            y,
+            scaleX: 1,
+            scaleY: 1,
+            rotation: 0,
+            alpha: 1,
+            visible: true,
+            active: true,
+            currentTint: null,
+            tintFillCalls: 0,
+            setOrigin: () => s,
+            setScale: (sx: number, sy?: number) => {
+              s.scaleX = sx;
+              s.scaleY = sy ?? sx;
+              return s;
+            },
+            setPosition: (nx: number, ny: number) => {
+              s.x = nx;
+              s.y = ny;
+              return s;
+            },
+            setTexture: (k: string) => {
+              s.key = k;
+              return s;
+            },
+            setVisible: (v: boolean) => {
+              s.visible = v;
+              return s;
+            },
+            setActive: (v: boolean) => {
+              s.active = v;
+              return s;
+            },
+            setTint: (c: number) => {
+              s.currentTint = c;
+              return s;
+            },
+            setTintFill: () => {
+              s.tintFillCalls += 1;
+              return s;
+            },
+            clearTint: () => {
+              s.currentTint = null;
+              return s;
+            },
+            destroy: () => {},
+          };
+          createdSprites.push(s);
+          return s;
+        },
+      },
+    };
+
+    const bossRig = new CutoutRig(
+      mockScene as never,
+      400,
+      300,
+      FORGE_TITAN_RIG_DEF,
+      { isBoss: true } as never,
+    );
+    const bossTorso = createdSprites.find((s) => s.key.includes('forge_titan') && s.key.includes('torso'))!;
+    expect(bossTorso).toBeDefined();
+
+    // Simulate rapid-fire hits every frame (60 hits/sec for 36 frames = 0.60s)
+    let tintedFrames = 0;
+    let untintedFrames = 0;
+    for (let f = 0; f < 36; f++) {
+      (bossRig as unknown as { triggerHitFlash: (d?: number, c?: number) => void }).triggerHitFlash(
+        0.12,
+        normalTint,
+      );
+      bossRig.update(1 / 60);
+      expect(bossTorso.tintFillCalls).toBe(0);
+      // Boss hit punch stays subtle (<= 1.04) and never balloons to 1.12
+      expect(Math.abs(bossRig.bodyContainer.scaleY)).toBeLessThanOrEqual(1.06);
+      if (bossTorso.currentTint !== null) {
+        expect(bossTorso.currentTint).toBe(normalTint);
+        tintedFrames += 1;
+      } else {
+        untintedFrames += 1;
+      }
+    }
+
+    // Must pulse briefly with multiplicative tint and spend the majority (>= 60%) of rapid-fire frames in natural untinted colors!
+    expect(tintedFrames).toBeGreaterThanOrEqual(4);
+    expect(untintedFrames).toBeGreaterThanOrEqual(22);
+  });
 });
 

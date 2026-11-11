@@ -7,6 +7,7 @@ import {
   type SimEvent,
   WEAPON_RARITY_COLORS,
 } from '@ashen-pact/shared';
+import { resolveHitFlashTint } from '../../art/cutout-rig-math.js';
 import { PALETTE } from '../../art/palette.js';
 import { resolveWeaponShootSfx, zzfx } from '../../audio/zzfx.js';
 import {
@@ -218,7 +219,12 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
         if (ev.targetKind === 'enemy') {
           if (!isStress || enemyHitCountThisStep < 2) {
             const rig = this.enemyRigs.get(ev.targetId);
-            rig?.triggerHitFlash(0.12);
+            const hitTint = resolveHitFlashTint({
+              isCrit: ev.isCrit,
+              hitArmor: ev.hitArmor,
+              element: ev.element,
+            });
+            rig?.triggerHitFlash(0.08, hitTint);
           }
           enemyHitCountThisStep += 1;
           if (ev.isCrit) {
@@ -227,7 +233,7 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
           enemyHitSfxX = ev.x;
           enemyHitSfxY = ev.y;
         } else if (ev.targetId === sim.player.id) {
-          this.playerRig?.triggerHitFlash(0.16);
+          this.playerRig?.triggerHitFlash(0.14, resolveHitFlashTint({ isPlayer: true }));
           if (Math.hypot(ev.knockbackX, ev.knockbackY) > 0.01) {
             this.triggerPlayerHitDirectionIndicator(Math.atan2(-ev.knockbackY, -ev.knockbackX));
           } else {
@@ -235,8 +241,9 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
           }
           zzfx.play('player_hurt', ev.x, this.camFocusX, ev.y, this.camFocusY);
         } else {
-          this.coopPlayerRigs.get(ev.targetId)?.rig.triggerHitFlash(0.16);
-          this.simPlayerRigs.get(ev.targetId)?.triggerHitFlash(0.16);
+          const hurtTint = resolveHitFlashTint({ isPlayer: true });
+          this.coopPlayerRigs.get(ev.targetId)?.rig.triggerHitFlash(0.14, hurtTint);
+          this.simPlayerRigs.get(ev.targetId)?.triggerHitFlash(0.14, hurtTint);
           zzfx.play('player_hurt', ev.x, this.camFocusX, ev.y, this.camFocusY);
         }
         break;
@@ -360,20 +367,6 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
         }
         if (allowStressSfx) {
           zzfx.play('telegraph', ev.x, this.camFocusX, ev.y, this.camFocusY);
-        }
-        break;
-      }
-      case 'bullet_grazed': {
-        if (!isStress) {
-          this.fx.spawnHitSparks(ev.x, ev.y, 0, {
-            isCrit: true,
-            element: 'shock',
-            count: 3,
-          });
-          this.lighting.spawnTransientLight(ev.x, ev.y, 44, PALETTE.CYAN_FROST, 0.42, 0.11);
-        }
-        if (allowStressSfx) {
-          zzfx.play('bullet_graze', ev.x, this.camFocusX, ev.y, this.camFocusY);
         }
         break;
       }

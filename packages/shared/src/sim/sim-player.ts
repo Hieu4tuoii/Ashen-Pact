@@ -79,10 +79,6 @@ export function updateSinglePlayerStateImpl(this: WorldSim,
     const nextLock = (p.weaponPickupLockTimer ?? 0) - dtSec;
     p.weaponPickupLockTimer = nextLock < 1e-6 ? 0 : nextLock;
   }
-  if ((p.grazeIcdTimer ?? 0) > 0) {
-    const nextGraze = (p.grazeIcdTimer ?? 0) - dtSec;
-    p.grazeIcdTimer = nextGraze < 1e-6 ? 0 : nextGraze;
-  }
 
   if (justPressed & INPUT_BUTTON.PING) {
     const px =

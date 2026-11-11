@@ -264,9 +264,9 @@ describe('AP2 P0A.4 — RELOAD_VENT Input, Deterministic Projectile IDs, Zero-Ru
     expect(snap.events[1]).toEqual(priorityDestroyed);
   });
 
-  it('7. enforces separate MAX_PLAYER_PROJECTILES (240) and MAX_ENEMY_PROJECTILES (160) pools without cross-eviction', () => {
+  it('7. enforces separate MAX_PLAYER_PROJECTILES (240) and MAX_ENEMY_PROJECTILES (300) pools without cross-eviction', () => {
     expect(MAX_PLAYER_PROJECTILES).toBe(240);
-    expect(MAX_ENEMY_PROJECTILES).toBe(160);
+    expect(MAX_ENEMY_PROJECTILES).toBe(300);
     expect(MAX_TACTICAL_PROPS_PER_ROOM).toBe(16);
     expect(MAX_DEPLOYABLES_PER_PLAYER).toBe(8);
 
@@ -312,8 +312,8 @@ describe('AP2 P0A.4 — RELOAD_VENT Input, Deterministic Projectile IDs, Zero-Ru
     expect(activePlayerProjs[0]!.id).toBe(spawnedPlayerIds[10]);
     expect(activePlayerProjs[MAX_PLAYER_PROJECTILES - 1]!.id).toBe(spawnedPlayerIds[249]);
 
-    // Now spawn 160 more enemy projectiles (total 170 enemy projectiles) -> enemy count caps at 160, player projectiles untouched!
-    for (let i = 0; i < 160; i++) {
+    // Now spawn 300 more enemy projectiles (total 310 enemy projectiles) -> enemy count caps at 300, player projectiles untouched!
+    for (let i = 0; i < 300; i++) {
       sim.spawnDeterministicVolley(
         makeVolleyEvent({
           team: 'enemy',

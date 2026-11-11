@@ -554,14 +554,14 @@ export function executeBossForgeTitanAttackImpl(
 
   e.aiState = 'cooldown';
   e.stateTimer = (e.bossPhase === 3 ? 0.3 : 0.38) * bossCdScale;
-  const baseCd = (ENEMIES.forge_titan?.attackCooldownSec ?? 1.9) * 0.85;
+  const baseCd = (ENEMIES.forge_titan?.attackCooldownSec ?? 1.9) * 0.925;
   const isOverheatedP3 =
     e.bossPhase === 3 &&
     e.bossAttackCycle >= 14 &&
     e.bossAttackCycle <= 18 &&
     this.getActivePlayerCount() === 1;
   e.attackCooldownTimer = isOverheatedP3
-    ? baseCd * 0.46 * bossCdScale
+    ? baseCd * 0.56 * bossCdScale
     : ((e.bossPhase === 3 ? baseCd * 0.68 : e.bossPhase === 2 ? baseCd * 0.82 : baseCd) +
         (e.bossStreamTimer ?? 0) * 0.58) *
       bossCdScale;

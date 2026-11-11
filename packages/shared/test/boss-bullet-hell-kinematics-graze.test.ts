@@ -123,7 +123,7 @@ describe('Boss Bullet-Hell Kinematics, Pool Reset & Bullet Graze', () => {
     expect(sb1.y).toBeCloseTo(cb1.y, 4);
   });
 
-  it('clears kinematic and graze fields when recycling projectiles through projectilePool', () => {
+  it('clears kinematic fields when recycling projectiles through projectilePool', () => {
     const sim = new WorldSim({
       seed: 303,
       spawnInitialWave: false,
@@ -157,7 +157,6 @@ describe('Boss Bullet-Hell Kinematics, Pool Reset & Bullet Graze', () => {
       amplifiedByShield: false,
       seed: 1,
     });
-    sim.projectiles[0]!.grazedPlayerIds = [1];
     sim.updateProjectiles(DT); // expires into projectilePool
     expect(sim.projectiles).toHaveLength(0);
 
@@ -188,10 +187,9 @@ describe('Boss Bullet-Hell Kinematics, Pool Reset & Bullet Graze', () => {
     expect(reused.kinematicMode).toBeUndefined();
     expect(reused.targetSpeed).toBeUndefined();
     expect(reused.angularVelRad).toBeUndefined();
-    expect(reused.grazedPlayerIds ?? []).toHaveLength(0);
   });
 
-  it('triggers Bullet Graze once per bullet within 18px margin without colliding, respecting 0.16s ICD and Boss vs normal room refund scaling', () => {
+  it('does NOT trigger any bullet graze event or cooldown/heat/reload refund on near-miss enemy bullets in Boss or normal rooms', () => {
     const sim = new WorldSim({
       seed: 404,
       spawnInitialWave: false,
@@ -203,11 +201,12 @@ describe('Boss Bullet-Hell Kinematics, Pool Reset & Bullet Graze', () => {
     pl.y = 300;
     pl.skillCooldownTimer = 3.0;
     pl.weaponHeat = 20;
+    pl.reloadTimer = 0.8;
+    pl.reloadLockout = false;
 
-    // Spawn a boss so Boss-tier graze refund applies (-0.25s skill CD, -4 heat)
     sim.spawnEnemy('spore_king', 600, 300, true);
 
-    // Bullet passes at y = 300 + pl.radius (12) + b.radius (7) + 10 = 329 (inside 18px graze margin, outside collision)
+    // Bullet passes 10px outside collision radius (formerly inside 18px graze band)
     sim.spawnDeterministicVolley({
       kind: 'bullet_volley_spawned',
       ownerId: 99,
@@ -233,151 +232,11 @@ describe('Boss Bullet-Hell Kinematics, Pool Reset & Bullet Graze', () => {
     sim.consumeEvents();
     sim.updateProjectiles(DT);
 
-    const evs1 = sim.consumeEvents();
-    expect(evs1.some((e) => e.kind === 'bullet_grazed' && e.playerId === pl.id)).toBe(true);
-    expect(pl.skillCooldownTimer).toBeCloseTo(2.75, 3);
-    expect(pl.weaponHeat).toBeCloseTo(16, 3);
-    expect(pl.grazeIcdTimer).toBeCloseTo(0.16, 3);
-
-    // Stepping again with the same bullet does NOT graze a second time
-    pl.grazeIcdTimer = 0;
-    sim.updateProjectiles(DT);
-    expect(sim.consumeEvents().some((e) => e.kind === 'bullet_grazed')).toBe(false);
-    expect(pl.skillCooldownTimer).toBeCloseTo(2.75, 3);
-
-    // Boss-room reload shave: when weaponHeat is 0 and reloadTimer > 0, shaves 0.05s clamped >= 0.01s
-    pl.weaponHeat = 0;
-    pl.reloadTimer = 0.04;
-    pl.reloadLockout = false;
-    pl.grazeIcdTimer = 0;
-    sim.spawnDeterministicVolley({
-      kind: 'bullet_volley_spawned',
-      ownerId: 99,
-      team: 'enemy',
-      weaponId: 'boss_spore_ring',
-      x: 300,
-      y: pl.y + pl.radius + 7 + 10,
-      angle: 0,
-      pelletCount: 1,
-      spreadRad: 0,
-      speed: 10,
-      radius: 7,
-      damage: 2,
-      critChance: 0,
-      knockback: 0,
-      ttlSec: 2,
-      pierceCount: 0,
-      bounceCount: 0,
-      element: 'none',
-      amplifiedByShield: false,
-      seed: 6,
-    });
-    sim.updateProjectiles(DT);
-    expect(pl.reloadTimer).toBeCloseTo(0.01, 4);
-  });
-
-  it('applies normal-room graze micro-refund (-0.08s CD, -1.5 heat, no reload shave) when getActiveBoss() === null, enforces 0.16s ICD, and suppresses graze at 0 HP on lethal tick', () => {
-    const sim = new WorldSim({
-      seed: 405,
-      spawnInitialWave: false,
-      includeTrainingDummy: false,
-      includeProps: false,
-    });
-    expect(sim.getActiveBoss()).toBeNull();
-    const pl = sim.player;
-    pl.x = 300;
-    pl.y = 300;
-    pl.skillCooldownTimer = 3.0;
-    pl.weaponHeat = 10;
-    pl.reloadTimer = 0.8;
-    pl.reloadLockout = false;
-
-    const spawnGrazeBullet = (seed: number) =>
-      sim.spawnDeterministicVolley({
-        kind: 'bullet_volley_spawned',
-        ownerId: 99,
-        team: 'enemy',
-        weaponId: 'goblin_arrow',
-        x: 300,
-        y: pl.y + pl.radius + 6 + 10,
-        angle: 0,
-        pelletCount: 1,
-        spreadRad: 0,
-        speed: 10,
-        radius: 6,
-        damage: 2,
-        critChance: 0,
-        knockback: 0,
-        ttlSec: 2,
-        pierceCount: 0,
-        bounceCount: 0,
-        element: 'none',
-        amplifiedByShield: false,
-        seed,
-      });
-
-    spawnGrazeBullet(11);
-    sim.consumeEvents();
-    sim.updateProjectiles(DT);
-
-    expect(sim.consumeEvents().some((e) => e.kind === 'bullet_grazed')).toBe(true);
-    expect(pl.skillCooldownTimer).toBeCloseTo(2.92, 4);
-    expect(pl.weaponHeat).toBeCloseTo(8.5, 4);
-    expect(pl.grazeIcdTimer).toBeCloseTo(0.16, 4);
-
-    // Second distinct bullet while grazeIcdTimer > 0 is suppressed
-    spawnGrazeBullet(12);
-    sim.updateProjectiles(DT);
-    expect(sim.consumeEvents().some((e) => e.kind === 'bullet_grazed')).toBe(false);
-    expect(pl.skillCooldownTimer).toBeCloseTo(2.92, 4);
-    expect(pl.weaponHeat).toBeCloseTo(8.5, 4);
-
-    // Normal room with weaponHeat = 0 does NOT shave reloadTimer
-    pl.grazeIcdTimer = 0;
-    pl.weaponHeat = 0;
-    pl.reloadTimer = 0.8;
-    spawnGrazeBullet(13);
-    sim.updateProjectiles(DT);
-    expect(pl.reloadTimer).toBeCloseTo(0.8, 4);
-
-    // Lethal-tick guard: bullet 1 kills 1 HP solo player -> bullet 2 in graze band on same tick must NOT graze
-    sim.inHub = false;
-    sim.autoRevivePlayer = false;
-    sim.projectiles.length = 0;
-    pl.hp = 1;
-    pl.armor = 0;
-    pl.invulnerableTimer = 0;
-    pl.godMode = false;
-    pl.grazeIcdTimer = 0;
-    // Direct lethal hit bullet
-    sim.spawnDeterministicVolley({
-      kind: 'bullet_volley_spawned',
-      ownerId: 99,
-      team: 'enemy',
-      weaponId: 'goblin_arrow',
-      x: pl.x,
-      y: pl.y,
-      angle: 0,
-      pelletCount: 1,
-      spreadRad: 0,
-      speed: 0,
-      radius: 6,
-      damage: 5,
-      critChance: 0,
-      knockback: 0,
-      ttlSec: 2,
-      pierceCount: 0,
-      bounceCount: 0,
-      element: 'none',
-      amplifiedByShield: false,
-      seed: 14,
-    });
-    // Simultaneous near-miss bullet in same updateProjectiles pass
-    spawnGrazeBullet(15);
-    sim.consumeEvents();
-    sim.updateProjectiles(DT);
-    expect(pl.hp).toBe(0);
-    expect(sim.consumeEvents().some((e) => e.kind === 'bullet_grazed')).toBe(false);
+    const evs = sim.consumeEvents();
+    expect(evs.some((e) => (e.kind as string) === 'bullet_grazed')).toBe(false);
+    expect(pl.skillCooldownTimer).toBeCloseTo(3.0, 5);
+    expect(pl.weaponHeat).toBeCloseTo(20, 5);
+    expect(pl.reloadTimer).toBeCloseTo(0.8, 5);
   });
 
   it('preserves projectile heading on zero-initial-speed accel, skips kinematics while awaitingServerRedirectTimer > 0, and clears kinematics on emerald_cleaver boomerang deflection', () => {
@@ -416,20 +275,17 @@ describe('Boss Bullet-Hell Kinematics, Pool Reset & Bullet Graze', () => {
     });
 
     const b = sim.projectiles[0]!;
-    // While awaiting server redirect, stepProjectileKinematics in updateProjectiles returns early without advancing elapsed or clobbering angle
     b.awaitingServerRedirectTimer = 0.08;
     sim.updateProjectiles(DT);
     expect(b.angle).toBeCloseTo(targetAngle, 4);
     expect(b.kinematicElapsedSec ?? 0).toBe(0);
     b.awaitingServerRedirectTimer = 0;
 
-    // Before delay (3 ticks = 0.05s): speed stays 0, heading stays 0.75*pi (never snaps to 0)
     for (let t = 0; t < 3; t++) {
       sim.updateProjectiles(DT);
     }
     expect(b.angle).toBeCloseTo(targetAngle, 4);
 
-    // After delay (15 ticks = 0.25s total): accelerates along 0.75*pi (-X, +Y)
     for (let t = 0; t < 15; t++) {
       sim.updateProjectiles(DT);
     }
@@ -438,11 +294,7 @@ describe('Boss Bullet-Hell Kinematics, Pool Reset & Bullet Graze', () => {
     expect(b.vx).toBeLessThan(-50);
     expect(b.vy).toBeGreaterThan(50);
 
-    // Secondary pool release (configureStressTest(false)) clears grazedPlayerIds immediately
-    b.grazedPlayerIds = [sim.player.id];
     sim.configureStressTest(false);
-    const lastPooled = sim.projectilePool[sim.projectilePool.length - 1]!;
-    expect(lastPooled.grazedPlayerIds ?? []).toHaveLength(0);
 
     // Emerald Cleaver spinning boomerang deflects decel+spiral enemy bullet cleanly along boomerang angle
     sim.projectiles.length = 0;

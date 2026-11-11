@@ -118,7 +118,7 @@ export const ENEMIES: Record<string, EnemyStatsDef> = {
     damage: 2,
     radius: 34,
     telegraphSec: 0.75,
-    attackCooldownSec: 1.48,
+    attackCooldownSec: 1.56,
     isBoss: true,
   },
 
@@ -136,7 +136,7 @@ export const ENEMIES: Record<string, EnemyStatsDef> = {
     damage: 1,
     radius: 11,
     telegraphSec: 0.4,
-    attackCooldownSec: 1.42,
+    attackCooldownSec: 1.54,
     flying: true,
   },
   baby_yeti: {
@@ -163,7 +163,7 @@ export const ENEMIES: Record<string, EnemyStatsDef> = {
     damage: 1,
     radius: 13,
     telegraphSec: 0.55,
-    attackCooldownSec: 1.92,
+    attackCooldownSec: 2.08,
   },
   ice_golem: {
     id: 'ice_golem',
@@ -176,7 +176,7 @@ export const ENEMIES: Record<string, EnemyStatsDef> = {
     damage: 2,
     radius: 19,
     telegraphSec: 0.7,
-    attackCooldownSec: 2.38,
+    attackCooldownSec: 2.55,
     frontShieldReduction: 0.75,
   },
   snow_spirit: {
@@ -232,7 +232,7 @@ export const ENEMIES: Record<string, EnemyStatsDef> = {
     damage: 2,
     radius: 32,
     telegraphSec: 0.7,
-    attackCooldownSec: 1.64,
+    attackCooldownSec: 1.8,
     isBoss: true,
   },
 
