@@ -298,14 +298,14 @@ export function buildSanctuaryArchitectureSpec(
 
 /**
  * Resolves the lounging hero station visual state:
- * - Embodied heroes fade to an astral echo (`rigAlpha: 0.38` when duplicates disallowed, `0.68` when allowed)
+ * - Embodied heroes fade to an astral echo (`rigAlpha: 0.38`) regardless of `allowDuplicates`
  *   and display the localized `"★ Đang hóa thân"` / `"★ Active"` badge.
  * - Unselected heroes lounge at full opacity (`rigAlpha: 1`).
  */
 export function resolveHeroStationVisualState(
   characterId: CharacterId,
   activeCharacterIds: readonly CharacterId[],
-  allowDuplicates: boolean,
+  _allowDuplicates: boolean,
 ): HeroStationVisualState {
   const embodied = activeCharacterIds.includes(characterId);
   if (!embodied) {
@@ -317,13 +317,64 @@ export function resolveHeroStationVisualState(
   }
   return {
     embodied: true,
-    rigAlpha: allowDuplicates ? 0.68 : 0.38,
+    rigAlpha: 0.38,
     showActiveBadge: true,
   };
 }
 
+export interface SanctuaryHudChromeClickParams {
+  inHub: boolean;
+  invitePanelVisible: boolean;
+  hudX: number;
+  hudY: number;
+  hudPadX: number;
+  hudPadY: number;
+  hudUiScale?: number;
+  hudHitCount?: number;
+}
+
 /**
- * Resolves world-space pointer clicks inside the Sanctuary Hub when no modal is open:
+ * Determines whether a pointerdown in `HudScene` coordinates (`hudX`, `hudY`) hits interactive
+ * `HudScene` targets (`hitTestPointer(pointer)`), top/bottom HUD chrome, or the scaled
+ * non-interactive Co-op Invite Panel background rect
+ * `[960 - 296 * s + hudPadX, 960 - 12 * s + hudPadX] × [144 * s - hudPadY, 426 * s - hudPadY]`.
+ */
+export function isSanctuaryHudChromeClick(params: SanctuaryHudChromeClickParams): boolean {
+  const {
+    inHub,
+    invitePanelVisible,
+    hudX,
+    hudY,
+    hudPadX,
+    hudPadY,
+    hudUiScale = 1,
+    hudHitCount = 0,
+  } = params;
+
+  if (hudHitCount > 0) {
+    return true;
+  }
+  if (hudY < 68 - hudPadY || hudY > 480 + hudPadY) {
+    return true;
+  }
+
+  const s = hudUiScale > 0 ? hudUiScale : 1;
+  if (
+    inHub &&
+    invitePanelVisible &&
+    hudX >= 960 - 296 * s + hudPadX &&
+    hudX <= 960 - 12 * s + hudPadX &&
+    hudY >= 144 * s - hudPadY &&
+    hudY <= 426 * s - hudPadY
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Resolves world-space pointer clicks inside the Sanctuary Hub when no modal or HUD chrome is clicked:
  * - Solo Hub (`coopMode === 'solo'`): within `<= 30u` of a `hubStatue` selects that character.
  * - Any Hub mode: within `<= 34u` of `coop_board` toggles `invitePanelVisible`.
  * - Any Hub mode: within `<= 32u` of `codex_desk` opens `settingsModal.open('settings')`.
@@ -332,13 +383,23 @@ export function resolveHubWorldPointerClick(params: {
   inHub: boolean;
   coopMode: 'solo' | 'host' | 'join';
   modalOpen: boolean;
+  isClickingHudChrome?: boolean;
   worldX: number;
   worldY: number;
   hubStatues: readonly SimHubStatue[];
   hubStations: readonly SimHubStation[];
 }): HubWorldClickAction | null {
-  const { inHub, coopMode, modalOpen, worldX, worldY, hubStatues, hubStations } = params;
-  if (!inHub || modalOpen) {
+  const {
+    inHub,
+    coopMode,
+    modalOpen,
+    isClickingHudChrome = false,
+    worldX,
+    worldY,
+    hubStatues,
+    hubStations,
+  } = params;
+  if (!inHub || modalOpen || isClickingHudChrome) {
     return null;
   }
 

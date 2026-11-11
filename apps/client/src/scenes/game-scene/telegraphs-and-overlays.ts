@@ -116,35 +116,12 @@ export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, 
   const overlayTimeSec = freezeOverlay ? getFreezeVisualTimeSec(sim.tick / 60, true) : sim.tick / 60;
   const overlayTick = freezeOverlay ? overlayTimeSec * 60 : sim.tick;
 
-  // 0a. Hub Campfire & Statue Pedestals (Doanh Trại)
+  // 0a. World Weapon Salvage Ring & P2B World Overlays
   if (!isStress) {
     drawWorldWeaponSalvageRing(floorG, sim, p, overlayTimeSec);
     withInterpolatedProjectilesAndPlayer(this, sim, playerX, playerY, () => {
       drawP2BWorldOverlays(this, g, sim, playerX, playerY);
     });
-  }
-  if (sim.inHub) {
-    for (let i = 0; i < sim.hubStatues.length; i++) {
-      const st = sim.hubStatues[i]!;
-      const isCurrent = p.characterId === st.characterId;
-      g.fillStyle(hexToNum(PALETTE.SLATE_DARK), 0.92);
-      g.lineStyle(2.5, hexToNum(isCurrent ? PALETTE.LIME_GLOW : PALETTE.SOLAR_GOLD), 0.9);
-      g.fillEllipse(st.x, st.y + 12, 42, 18);
-      g.strokeEllipse(st.x, st.y + 12, 42, 18);
-    }
-
-    // Central Campfire
-    const fireX = sim.map.width * 0.5;
-    const fireY = sim.map.height * 0.5 + 32;
-    const flicker = Math.sin(overlayTick * 0.22) * 3;
-    g.fillStyle(hexToNum(PALETTE.SLATE_DARK), 0.95);
-    g.lineStyle(2, hexToNum(PALETTE.INK_DARK), 1);
-    g.fillCircle(fireX, fireY + 4, 18);
-    g.strokeCircle(fireX, fireY + 4, 18);
-    g.fillStyle(hexToNum(PALETTE.FLAME_ORANGE), 0.85);
-    g.fillCircle(fireX, fireY, 12 + flicker * 0.4);
-    g.fillStyle(hexToNum(PALETTE.SOLAR_GOLD), 0.95);
-    g.fillCircle(fireX, fireY - 2, 7 - flicker * 0.25);
   }
 
   if (this.roomTeleportAnimTimer > 0) {

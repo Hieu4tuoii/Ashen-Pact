@@ -58,6 +58,7 @@ import {
 } from './hud-qol-and-minimap.js';
 import { createInteractPromptFadeState } from './interact-prompt.js';
 import {
+  isSanctuaryHudChromeClick,
   resolveHubWorldPointerClick,
   SanctuaryVisualLayer,
 } from './sanctuary-architecture.js';
@@ -321,24 +322,27 @@ export function createImpl(this: GameScene): void {
         (this.transport.getLocalPlayerState().buffChoices?.length ?? 0) > 0 ||
         (this.transport.getLocalPlayerState().mutatorChoices?.length ?? 0) > 0 ||
         (this.transport.getLocalPlayerState().pactChoices?.length ?? 0) > 0;
-      const isClickingInvitePanel =
-        curSim.inHub &&
-        this.invitePanelVisible &&
-        hudPt.x >= 676 + this.hudPadX &&
-        hudPt.x <= 952 + this.hudPadX &&
-        hudPt.y >= 70 - this.hudPadY &&
-        hudPt.y <= 470 - this.hudPadY;
-      const isClickingHudChrome =
-        hudPt.y < 68 - this.hudPadY ||
-        hudPt.y > 480 + this.hudPadY ||
-        isClickingInvitePanel;
+      const hudHitCount = this.uiScene?.input?.hitTestPointer(pointer)?.length ?? 0;
+      const isClickingHudChrome = isSanctuaryHudChromeClick({
+        inHub: curSim.inHub,
+        invitePanelVisible: this.invitePanelVisible,
+        hudX: hudPt.x,
+        hudY: hudPt.y,
+        hudPadX: this.hudPadX,
+        hudPadY: this.hudPadY,
+        hudUiScale: this.currentHudUiScale || 1,
+        hudHitCount,
+      });
 
-      if (curSim.inHub && !modalOpen && !isClickingHudChrome) {
+      if (curSim.inHub && !modalOpen && isClickingHudChrome) {
+        this.suppressFireUntilPointerUp = true;
+      } else if (curSim.inHub && !modalOpen) {
         const wPt = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
         const action = resolveHubWorldPointerClick({
           inHub: curSim.inHub,
           coopMode: this.coopMode,
           modalOpen,
+          isClickingHudChrome,
           worldX: wPt.x - this.lastShakeX,
           worldY: wPt.y - this.lastShakeY,
           hubStatues: curSim.hubStatues,

@@ -578,13 +578,14 @@ export class GameScene extends Phaser.Scene {
     const emoteId = !isModalOrPaused ? (this.queuedEmote ?? undefined) : undefined;
     this.queuedEmote = null;
 
+    const hudScale = this.currentHudUiScale || 1;
     const isClickingInvitePanel =
       sim.inHub &&
       this.invitePanelVisible &&
-      localViewX >= 676 + this.hudPadX &&
-      localViewX <= 952 + this.hudPadX &&
-      localViewY >= 70 - this.hudPadY &&
-      localViewY <= 470 - this.hudPadY;
+      localViewX >= 960 - 296 * hudScale + this.hudPadX &&
+      localViewX <= 960 - 12 * hudScale + this.hudPadX &&
+      localViewY >= 144 * hudScale - this.hudPadY &&
+      localViewY <= 426 * hudScale - this.hudPadY;
     const isClickingHud =
       localViewY < 68 - this.hudPadY ||
       localViewY > 480 + this.hudPadY ||

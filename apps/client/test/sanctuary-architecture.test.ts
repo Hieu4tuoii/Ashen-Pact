@@ -9,6 +9,7 @@ import {
 } from '../src/fx/lighting-config.js';
 import {
   buildSanctuaryArchitectureSpec,
+  isSanctuaryHudChromeClick,
   resolveHeroLoungeLabelState,
   resolveHeroStationVisualState,
   resolveHubWorldPointerClick,
@@ -204,8 +205,14 @@ describe('Ashen Sanctuary 5-Wing Visual Architecture, Embodied Hero Rigs & Click
     expect(spec.codexStation.y).toBe(520);
   });
 
-  it('resolveHeroStationVisualState dims embodied lounging hero rigs to 0.38 with active badge and keeps unselected heroes at alpha 1', () => {
+  it('resolveHeroStationVisualState dims embodied lounging hero rigs to 0.38 with active badge regardless of allowDuplicates and keeps unselected heroes at alpha 1', () => {
     expect(resolveHeroStationVisualState('vanguard', ['vanguard'], false)).toEqual({
+      embodied: true,
+      rigAlpha: 0.38,
+      showActiveBadge: true,
+    });
+
+    expect(resolveHeroStationVisualState('druid', ['vanguard', 'druid'], true)).toEqual({
       embodied: true,
       rigAlpha: 0.38,
       showActiveBadge: true,
@@ -217,11 +224,11 @@ describe('Ashen Sanctuary 5-Wing Visual Architecture, Embodied Hero Rigs & Click
       showActiveBadge: false,
     });
 
-    const dupAllowed = resolveHeroStationVisualState('druid', ['vanguard', 'druid'], true);
-    expect(dupAllowed.embodied).toBe(true);
-    expect(dupAllowed.showActiveBadge).toBe(true);
-    expect(dupAllowed.rigAlpha).toBeGreaterThan(0.38);
-    expect(dupAllowed.rigAlpha).toBeLessThan(1);
+    expect(resolveHeroStationVisualState('ranger', ['vanguard'], true)).toEqual({
+      embodied: false,
+      rigAlpha: 1,
+      showActiveBadge: false,
+    });
   });
 
   it('SanctuaryVisualLayer renders static floor at depth 6 only on Hub state change and animates depth 33 deterministically via visualTimeSec', () => {
@@ -513,5 +520,96 @@ describe('Ashen Sanctuary 5-Wing Visual Architecture, Embodied Hero Rigs & Click
     } finally {
       i18n.setLocale(prevLocale);
     }
+  });
+
+  it('isSanctuaryHudChromeClick suppresses Hub world clicks on interactive HudScene hitboxes (collapseHit / collapsed chip) and scaled Invite Panel bounds', () => {
+    const sim = new WorldSim({ seed: 'sanctuary-hud-chrome-test', spawnInitialWave: false });
+    sim.enterHub();
+
+    // 1. Clicking collapseHit on open Invite Panel flips invitePanelVisible -> false in HudScene first,
+    //    but HudScene.input.hitTestPointer(pointer) still returns the interactive hitbox (hudHitCount = 1)
+    expect(
+      isSanctuaryHudChromeClick({
+        inHub: true,
+        invitePanelVisible: false,
+        hudX: 912,
+        hudY: 158,
+        hudPadX: 0,
+        hudPadY: 0,
+        hudUiScale: 1,
+        hudHitCount: 1,
+      }),
+    ).toBe(true);
+
+    // 2. Clicking collapsed "📡 Invite" chip (!invitePanelVisible, x: 782..948, y: 144..170) is caught by hudHitCount > 0 at any uiScale
+    expect(
+      isSanctuaryHudChromeClick({
+        inHub: true,
+        invitePanelVisible: false,
+        hudX: 840,
+        hudY: 156,
+        hudPadX: 0,
+        hudPadY: 0,
+        hudUiScale: 1.15,
+        hudHitCount: 1,
+      }),
+    ).toBe(true);
+
+    // 3. Expanded Invite Panel non-interactive background rect [960 - 296*s + padX, 960 - 12*s + padX] x [144*s - padY, 426*s - padY]
+    //    At s = 1, pad = 0: x = 664..948, y = 144..426 -> left margin x = 665 is suppressed (previously missed by 676..952)
+    expect(
+      isSanctuaryHudChromeClick({
+        inHub: true,
+        invitePanelVisible: true,
+        hudX: 665,
+        hudY: 220,
+        hudPadX: 0,
+        hudPadY: 0,
+        hudUiScale: 1,
+        hudHitCount: 0,
+      }),
+    ).toBe(true);
+
+    //    At s = 1.15, padX = 20, padY = 10: x = [639.6, 966.2], y = [155.6, 479.9]
+    expect(
+      isSanctuaryHudChromeClick({
+        inHub: true,
+        invitePanelVisible: true,
+        hudX: 642,
+        hudY: 475,
+        hudPadX: 20,
+        hudPadY: 10,
+        hudUiScale: 1.15,
+        hudHitCount: 0,
+      }),
+    ).toBe(true);
+
+    //    At s = 0.85, pad = 0: x = [708.4, 949.8], y = [122.4, 362.1] -> hudX = 685 is outside the smaller panel
+    expect(
+      isSanctuaryHudChromeClick({
+        inHub: true,
+        invitePanelVisible: true,
+        hudX: 685,
+        hudY: 240,
+        hudPadX: 0,
+        hudPadY: 0,
+        hudUiScale: 0.85,
+        hudHitCount: 0,
+      }),
+    ).toBe(false);
+
+    // 4. resolveHubWorldPointerClick returns null when isClickingHudChrome is true even directly over coop_board (928, 352)
+    expect(
+      resolveHubWorldPointerClick({
+        inHub: true,
+        coopMode: 'solo',
+        modalOpen: false,
+        isClickingHudChrome: true,
+        worldX: 928,
+        worldY: 352,
+        hubStatues: sim.hubStatues,
+        hubStations: sim.hubStations,
+      }),
+    ).toBeNull();
   });
 });
