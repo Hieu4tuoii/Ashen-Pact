@@ -194,7 +194,6 @@ export function createImpl(this: GameScene): void {
   this.trailingBossHpRatio = 1.0;
   this.lowHpHeartbeatTimer = 0;
   this.lastBlizzardPhase3 = false;
-  this.lastGrazeAlertMs = -Infinity;
   this.irisTransitionProgress = 0.0;
   this.irisTransitionDir = 0;
   this.roomTeleportAnimTimer = 0;
@@ -1397,14 +1396,14 @@ export function applyCameraViewportImpl(this: GameScene): void {
       item.sprite.setTexture(item.textureKey);
       item.sprite.setScale(baseInv * item.specScale);
       item.glowSprite.setTexture('fx_enemy_bullet_glow');
-      item.glowSprite.setScale(baseInv * item.specScale * 1.35);
+      item.glowSprite.setScale(baseInv * item.specScale * 1.05);
     }
     for (const item of this.projectileSpritePool) {
       const baseInv = item.textureKey.startsWith('proj_stress_') ? stressInvBake : invBake;
       item.sprite.setTexture(item.textureKey);
       item.sprite.setScale(baseInv * item.specScale);
       item.glowSprite.setTexture('fx_enemy_bullet_glow');
-      item.glowSprite.setScale(baseInv * item.specScale * 1.35);
+      item.glowSprite.setScale(baseInv * item.specScale * 1.05);
     }
     for (const item of this.pickupSprites.values()) {
       item.sprite.setTexture(item.textureKey);

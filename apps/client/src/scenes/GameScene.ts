@@ -298,7 +298,6 @@ export class GameScene extends Phaser.Scene {
   public trailingBossHpRatio = 1.0;
   public lowHpHeartbeatTimer = 0;
   public lastBlizzardPhase3 = false;
-  public lastGrazeAlertMs = -Infinity;
   public irisTransitionProgress = 0.0;
   public irisTransitionDir: -1 | 0 | 1 = 0;
   public roomTeleportAnimTimer = 0;

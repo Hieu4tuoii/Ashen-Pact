@@ -585,8 +585,8 @@ export function syncProjectilesAndPickupsImpl(this: GameScene): void {
       if (b.team === 'enemy' && !isStress) {
         entry.glowSprite.setVisible(true);
         entry.glowSprite.setPosition(pos.x, pos.y);
-        entry.glowSprite.setScale(projScale * specScale * 1.35);
-        entry.glowSprite.setAlpha(0.58 + 0.12 * Math.sin(visualTimeSec * 9.0 + (b.id & 7)));
+        entry.glowSprite.setScale(projScale * specScale * 1.05);
+        entry.glowSprite.setAlpha(0.24 + 0.04 * Math.sin(visualTimeSec * 9.0 + (b.id & 7)));
       } else {
         entry.glowSprite.setVisible(false);
       }

@@ -368,30 +368,9 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
           this.fx.spawnHitSparks(ev.x, ev.y, 0, {
             isCrit: true,
             element: 'shock',
-            count: 4,
+            count: 3,
           });
-          this.lighting.spawnTransientLight(ev.x, ev.y, 64, PALETTE.CYAN_FROST, 0.72, 0.14);
-          const nowMs = this.time?.now ?? 0;
-          if (
-            ev.playerId === sim.player.id &&
-            nowMs - (this.lastGrazeAlertMs ?? -Infinity) >= 900
-          ) {
-            this.lastGrazeAlertMs = nowMs;
-            const isEn = i18n.getLocale() === 'en';
-            const inBossFight = sim.enemies.some((e) => e.isBoss && e.hp > 0 && !e.isDummy);
-            this.fx.spawnFloatingAlert(
-              ev.x,
-              ev.y - 18,
-              inBossFight
-                ? isEn
-                  ? '⚡ GRAZE -CD!'
-                  : '⚡ SƯỢT ĐẠN -CD!'
-                : isEn
-                  ? '⚡ GRAZE!'
-                  : '⚡ SƯỢT ĐẠN!',
-              '#67E8F9',
-            );
-          }
+          this.lighting.spawnTransientLight(ev.x, ev.y, 44, PALETTE.CYAN_FROST, 0.42, 0.11);
         }
         if (allowStressSfx) {
           zzfx.play('bullet_graze', ev.x, this.camFocusX, ev.y, this.camFocusY);

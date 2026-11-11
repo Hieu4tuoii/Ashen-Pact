@@ -358,16 +358,16 @@ export class LightingPipeline {
     }
 
     const iceColor = 0xcfe8ee;
-    // Outer frost rim along 4 viewport edges
-    this.blizzardRimGraphics.lineStyle(18, iceColor, 0.11);
-    this.blizzardRimGraphics.strokeRect(rawViewX + 9, rawViewY + 9, viewW - 18, viewH - 18);
+    // Thin, subtle outer frost rim along 4 viewport edges so HUD edges remain crisp
+    this.blizzardRimGraphics.lineStyle(10, iceColor, 0.035);
+    this.blizzardRimGraphics.strokeRect(rawViewX + 5, rawViewY + 5, viewW - 10, viewH - 10);
 
-    // Inner softer frost rim
-    this.blizzardRimGraphics.lineStyle(36, iceColor, 0.06);
-    this.blizzardRimGraphics.strokeRect(rawViewX + 27, rawViewY + 27, viewW - 54, viewH - 54);
+    // Whisper-soft inner frost rim
+    this.blizzardRimGraphics.lineStyle(20, iceColor, 0.018);
+    this.blizzardRimGraphics.strokeRect(rawViewX + 15, rawViewY + 15, viewW - 30, viewH - 30);
 
-    // Subtle diagonal frost crystal streaks at the 4 corners (alpha <= 0.12, pure #CFE8EE)
-    this.blizzardRimGraphics.lineStyle(2.5, iceColor, 0.12);
+    // Subtle diagonal frost crystal streaks at the 4 corners (alpha <= 0.06, pure #CFE8EE)
+    this.blizzardRimGraphics.lineStyle(2.0, iceColor, 0.06);
     const corners: readonly [number, number, number, number][] = [
       [rawViewX + 6, rawViewY + 6, 1, 1],
       [rawViewX + viewW - 6, rawViewY + 6, -1, 1],

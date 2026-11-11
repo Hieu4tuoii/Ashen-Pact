@@ -192,14 +192,14 @@ export function bakeProjectilesAndFx(scene: Phaser.Scene, scale: number): void {
     ctx.fill();
   });
 
-  // 3. Enemy Projectile Orb (INVIOLABLE high-contrast concentric bullseye: #E84545 body + 1.5u #141019 outline + centered #FFFDF5 core + vivid emissive rim)
+  // 3. Enemy Projectile Orb (INVIOLABLE high-contrast concentric bullseye: #E84545 body + 1.5u #141019 outline + centered #FFFDF5 core + clean subtle rim)
   bakeCustomCanvas(scene, 'proj_enemy_orb', 28, 28, scale, (ctx) => {
-    const halo = ctx.createRadialGradient(0, 0, 2, 0, 0, 12.2);
-    halo.addColorStop(0, 'rgba(255, 85, 115, 0.72)');
-    halo.addColorStop(0.55, 'rgba(232, 69, 69, 0.38)');
+    const halo = ctx.createRadialGradient(0, 0, 4.5, 0, 0, 9.6);
+    halo.addColorStop(0, 'rgba(255, 85, 115, 0.28)');
+    halo.addColorStop(0.6, 'rgba(232, 69, 69, 0.12)');
     halo.addColorStop(1, 'rgba(232, 69, 69, 0)');
     ctx.beginPath();
-    ctx.arc(0, 0, 12.2, 0, Math.PI * 2);
+    ctx.arc(0, 0, 9.6, 0, Math.PI * 2);
     ctx.fillStyle = halo;
     ctx.fill();
 
@@ -233,12 +233,12 @@ export function bakeProjectilesAndFx(scene: Phaser.Scene, scale: number): void {
 
   // 3.1 Enemy Crescent Wave ('proj_enemy_wave')
   bakeCustomCanvas(scene, 'proj_enemy_wave', 34, 32, scale, (ctx) => {
-    const halo = ctx.createRadialGradient(1, 0, 2, 1, 0, 14.5);
-    halo.addColorStop(0, 'rgba(255, 77, 109, 0.65)');
+    const halo = ctx.createRadialGradient(1, 0, 4, 1, 0, 11.8);
+    halo.addColorStop(0, 'rgba(255, 77, 109, 0.24)');
     halo.addColorStop(1, 'rgba(232, 69, 69, 0)');
     ctx.fillStyle = halo;
     ctx.beginPath();
-    ctx.arc(1, 0, 14.5, 0, Math.PI * 2);
+    ctx.arc(1, 0, 11.8, 0, Math.PI * 2);
     ctx.fill();
 
     outlined(
@@ -268,12 +268,12 @@ export function bakeProjectilesAndFx(scene: Phaser.Scene, scale: number): void {
 
   // 3.2 Enemy Spearhead Lance ('proj_enemy_lance')
   bakeCustomCanvas(scene, 'proj_enemy_lance', 32, 26, scale, (ctx) => {
-    const halo = ctx.createRadialGradient(1, 0, 1.5, 1, 0, 12.0);
-    halo.addColorStop(0, 'rgba(255, 92, 122, 0.65)');
+    const halo = ctx.createRadialGradient(1, 0, 3, 1, 0, 9.8);
+    halo.addColorStop(0, 'rgba(255, 92, 122, 0.24)');
     halo.addColorStop(1, 'rgba(232, 69, 69, 0)');
     ctx.fillStyle = halo;
     ctx.beginPath();
-    ctx.arc(1, 0, 12.0, 0, Math.PI * 2);
+    ctx.arc(1, 0, 9.8, 0, Math.PI * 2);
     ctx.fill();
 
     outlined(
@@ -309,12 +309,12 @@ export function bakeProjectilesAndFx(scene: Phaser.Scene, scale: number): void {
 
   // 3.3 Enemy Faceted Diamond ('proj_enemy_diamond')
   bakeCustomCanvas(scene, 'proj_enemy_diamond', 28, 26, scale, (ctx) => {
-    const halo = ctx.createRadialGradient(0, 0, 1.5, 0, 0, 11.2);
-    halo.addColorStop(0, 'rgba(255, 92, 122, 0.65)');
+    const halo = ctx.createRadialGradient(0, 0, 3, 0, 0, 9.2);
+    halo.addColorStop(0, 'rgba(255, 92, 122, 0.24)');
     halo.addColorStop(1, 'rgba(232, 69, 69, 0)');
     ctx.fillStyle = halo;
     ctx.beginPath();
-    ctx.arc(0, 0, 11.2, 0, Math.PI * 2);
+    ctx.arc(0, 0, 9.2, 0, Math.PI * 2);
     ctx.fill();
 
     outlined(
@@ -348,12 +348,12 @@ export function bakeProjectilesAndFx(scene: Phaser.Scene, scale: number): void {
 
   // 3.4 Enemy Heavy Core Orb ('proj_enemy_heavy_orb')
   bakeCustomCanvas(scene, 'proj_enemy_heavy_orb', 32, 32, scale, (ctx) => {
-    const halo = ctx.createRadialGradient(0, 0, 2, 0, 0, 14.5);
-    halo.addColorStop(0, 'rgba(255, 110, 80, 0.78)');
-    halo.addColorStop(0.55, 'rgba(232, 69, 69, 0.42)');
+    const halo = ctx.createRadialGradient(0, 0, 5.5, 0, 0, 11.6);
+    halo.addColorStop(0, 'rgba(255, 110, 80, 0.30)');
+    halo.addColorStop(0.6, 'rgba(232, 69, 69, 0.14)');
     halo.addColorStop(1, 'rgba(232, 69, 69, 0)');
     ctx.beginPath();
-    ctx.arc(0, 0, 14.5, 0, Math.PI * 2);
+    ctx.arc(0, 0, 11.6, 0, Math.PI * 2);
     ctx.fillStyle = halo;
     ctx.fill();
 
@@ -388,11 +388,11 @@ export function bakeProjectilesAndFx(scene: Phaser.Scene, scale: number): void {
 
   // 3.5 Enemy Ring Bolt ('proj_enemy_ring_bolt' — spiked chakram torus with 4 crisp cardinal notches)
   bakeCustomCanvas(scene, 'proj_enemy_ring_bolt', 30, 30, scale, (ctx) => {
-    const halo = ctx.createRadialGradient(0, 0, 2, 0, 0, 13.0);
-    halo.addColorStop(0, 'rgba(255, 85, 130, 0.68)');
+    const halo = ctx.createRadialGradient(0, 0, 5, 0, 0, 10.6);
+    halo.addColorStop(0, 'rgba(255, 85, 130, 0.26)');
     halo.addColorStop(1, 'rgba(232, 69, 69, 0)');
     ctx.beginPath();
-    ctx.arc(0, 0, 13.0, 0, Math.PI * 2);
+    ctx.arc(0, 0, 10.6, 0, Math.PI * 2);
     ctx.fillStyle = halo;
     ctx.fill();
 
@@ -461,16 +461,16 @@ export function bakeProjectilesAndFx(scene: Phaser.Scene, scale: number): void {
     ctx.fill();
   });
 
-  // 3.6 Soft Additive Emissive Halo for Enemy Bullets ('fx_enemy_bullet_glow')
-  bakeCustomCanvas(scene, 'fx_enemy_bullet_glow', 44, 44, scale, (ctx) => {
-    const grad = ctx.createRadialGradient(0, 0, 1.5, 0, 0, 20);
-    grad.addColorStop(0, 'rgba(255, 240, 245, 0.95)');
-    grad.addColorStop(0.28, 'rgba(255, 68, 102, 0.68)');
-    grad.addColorStop(0.62, 'rgba(232, 69, 69, 0.25)');
+  // 3.6 Clean Subtle Emissive Halo for Enemy Bullets ('fx_enemy_bullet_glow')
+  bakeCustomCanvas(scene, 'fx_enemy_bullet_glow', 36, 36, scale, (ctx) => {
+    const grad = ctx.createRadialGradient(0, 0, 2, 0, 0, 15.5);
+    grad.addColorStop(0, 'rgba(255, 235, 242, 0.58)');
+    grad.addColorStop(0.32, 'rgba(255, 68, 102, 0.28)');
+    grad.addColorStop(0.68, 'rgba(232, 69, 69, 0.08)');
     grad.addColorStop(1, 'rgba(232, 69, 69, 0)');
     ctx.fillStyle = grad;
     ctx.beginPath();
-    ctx.arc(0, 0, 20, 0, Math.PI * 2);
+    ctx.arc(0, 0, 15.5, 0, Math.PI * 2);
     ctx.fill();
   });
 

@@ -519,7 +519,7 @@ describe('Phase P10b — Combat FX (BlendMode.ADD), Elemental Combo FX & Clear B
       expect(preset.minIntervalMs).toBeGreaterThanOrEqual(60);
     });
 
-    it('uses ev.bossPatternId in Co-op when boss.bossPatternId is undefined, spawns boss-colored transient light pulse, suppresses callouts during bossArmorShellActive, and throttles bullet_grazed alerts by 900ms', () => {
+    it('uses ev.bossPatternId in Co-op when boss.bossPatternId is undefined, spawns boss-colored transient light pulse, suppresses callouts during bossArmorShellActive, and keeps bullet_grazed free of floating text clutter', () => {
       i18n.setLocale('vi');
       const sim = new WorldSim({
         seed: 707,
@@ -545,7 +545,6 @@ describe('Phase P10b — Combat FX (BlendMode.ADD), Elemental Combo FX & Clear B
       const mockScene = {
         transport: { getSim: () => sim },
         time: { now: 0 },
-        lastGrazeAlertMs: -Infinity,
         fx: {
           spawnFloatingAlert: vi.fn((x: number, y: number, text: string, color?: string) => {
             floatingAlerts.push({ x, y, text, color });
@@ -619,33 +618,25 @@ describe('Phase P10b — Combat FX (BlendMode.ADD), Elemental Combo FX & Clear B
       expect(floatingAlerts).toHaveLength(0);
       expect(transientLights).toHaveLength(0);
 
-      // 3. bullet_grazed 900ms throttle (independent of sim.tick % 3)
-      sim.tick = 1; // Not divisible by 3!
+      // 3. bullet_grazed spawns subtle sparks & glint but NEVER spawns cluttered floating text
+      sim.tick = 1;
       mockScene.time.now = 0;
       processSimEventsImpl.call(mockScene as never, [
         { kind: 'bullet_grazed', playerId: sim.player.id, x: 310, y: 290 },
       ]);
-      expect(floatingAlerts).toHaveLength(1);
-      expect(floatingAlerts[0]!.text).toBe('⚡ SƯỢT ĐẠN -CD!');
+      expect(floatingAlerts).toHaveLength(0);
+      expect(mockScene.fx.spawnHitSparks).toHaveBeenCalledTimes(1);
 
-      // Within 900ms (450ms later, even on sim.tick = 3) -> alert throttled, sparks still spawn
       sim.tick = 3;
-      mockScene.time.now = 450;
+      mockScene.time.now = 1200;
       processSimEventsImpl.call(mockScene as never, [
         { kind: 'bullet_grazed', playerId: sim.player.id, x: 312, y: 292 },
       ]);
-      expect(floatingAlerts).toHaveLength(1);
+      expect(floatingAlerts).toHaveLength(0);
       expect(mockScene.fx.spawnHitSparks).toHaveBeenCalledTimes(2);
-
-      // At 900ms -> alert fires again
-      mockScene.time.now = 900;
-      processSimEventsImpl.call(mockScene as never, [
-        { kind: 'bullet_grazed', playerId: sim.player.id, x: 315, y: 295 },
-      ]);
-      expect(floatingAlerts).toHaveLength(2);
     });
 
-    it('spins ring_bolt enemy bullets, pulses glowSprite alpha with 1.35x specScale, and stores specScale on projectileSprites entries', () => {
+    it('spins ring_bolt enemy bullets, applies subtle 1.05x low-alpha glowSprite halo, and stores specScale on projectileSprites entries', () => {
       const sim = new WorldSim({
         seed: 808,
         spawnInitialWave: false,
@@ -776,8 +767,8 @@ describe('Phase P10b — Combat FX (BlendMode.ADD), Elemental Combo FX & Clear B
       expect(entry.specScale).toBeCloseTo(1.2, 4);
       const expectedRot = (0.5 * 6.0 + (bullet.id & 7)) % (Math.PI * 2);
       expect(entry.sprite.rotation).toBeCloseTo(expectedRot, 4);
-      expect(entry.glowSprite.scale / entry.sprite.scale).toBeCloseTo(1.35, 4);
-      const expectedAlpha = 0.58 + 0.12 * Math.sin(0.5 * 9.0 + (bullet.id & 7));
+      expect(entry.glowSprite.scale / entry.sprite.scale).toBeCloseTo(1.05, 4);
+      const expectedAlpha = 0.24 + 0.04 * Math.sin(0.5 * 9.0 + (bullet.id & 7));
       expect(entry.glowSprite.alpha).toBeCloseTo(expectedAlpha, 4);
     });
   });
