@@ -401,16 +401,23 @@ describe('Customizable Keybindings — Task 1: Registry, Persistence, Debug Stat
 
 interface MockDisplayNode {
   kind: 'container' | 'graphics' | 'text' | 'rect';
+  x?: number;
+  y?: number;
+  w?: number;
+  h?: number;
   text?: string;
   visible: boolean;
   active: boolean;
   list?: MockDisplayNode[];
+  emit?: (event: string) => boolean;
 }
 
 function createModalMockScene() {
-  const makeContainer = (): MockDisplayNode & Record<string, unknown> => {
+  const makeContainer = (x = 0, y = 0): MockDisplayNode & Record<string, unknown> => {
     const node: MockDisplayNode & Record<string, unknown> = {
       kind: 'container',
+      x,
+      y,
       visible: true,
       active: true,
       list: [],
@@ -421,7 +428,9 @@ function createModalMockScene() {
         node.visible = v;
         return node;
       },
-      setPosition() {
+      setPosition(nx = 0, ny = 0) {
+        node.x = nx;
+        node.y = ny;
         return node;
       },
       add(item: MockDisplayNode | MockDisplayNode[]) {
@@ -463,8 +472,8 @@ function createModalMockScene() {
       off: vi.fn(),
     },
     add: {
-      container: vi.fn(() => {
-        const c = makeContainer();
+      container: vi.fn((x = 0, y = 0) => {
+        const c = makeContainer(x, y);
         if (!rootContainer) rootContainer = c;
         return c;
       }),
@@ -484,9 +493,14 @@ function createModalMockScene() {
         };
         return g;
       }),
-      rectangle: vi.fn(() => {
+      rectangle: vi.fn((x = 0, y = 0, w = 0, h = 0) => {
+        const handlers = new Map<string, Array<() => void>>();
         const r: MockDisplayNode & Record<string, unknown> = {
           kind: 'rect',
+          x,
+          y,
+          w,
+          h,
           visible: true,
           active: true,
           input: null as unknown,
@@ -494,8 +508,17 @@ function createModalMockScene() {
             r.input = { enabled: true };
             return r;
           },
-          on() {
+          on(event: string, fn: () => void) {
+            const list = handlers.get(event) ?? [];
+            list.push(fn);
+            handlers.set(event, list);
             return r;
+          },
+          emit(event: string) {
+            const list = handlers.get(event);
+            if (!list || list.length === 0) return false;
+            for (const fn of [...list]) fn();
+            return true;
           },
         };
         return r;
@@ -546,7 +569,30 @@ function createModalMockScene() {
     return out;
   };
 
-  return { scene: scene as unknown as Phaser.Scene, collectVisibleTexts };
+  const triggerPointerDownAt = (targetX: number, targetY: number): boolean => {
+    let triggered = false;
+    const visit = (n: MockDisplayNode | undefined, ox: number, oy: number) => {
+      if (!n || !n.visible || triggered) return;
+      const wx = ox + (n.x ?? 0);
+      const wy = oy + (n.y ?? 0);
+      if (
+        n.kind === 'rect' &&
+        (n as Record<string, unknown>).input &&
+        Math.abs(wx - targetX) <= 0.5 &&
+        Math.abs(wy - targetY) <= 0.5
+      ) {
+        triggered = Boolean(n.emit?.('pointerdown'));
+        return;
+      }
+      if (n.list) {
+        for (const child of n.list) visit(child, wx, wy);
+      }
+    };
+    if (rootContainer) visit(rootContainer, 0, 0);
+    return triggered;
+  };
+
+  return { scene: scene as unknown as Phaser.Scene, collectVisibleTexts, triggerPointerDownAt };
 }
 
 function createCaptureFakeWindow() {
@@ -752,7 +798,7 @@ describe('Customizable Keybindings — Task 2: Controls Tab UI, Live GameScene R
     vi.stubGlobal('window', windowObj);
     initGlobalDebugState();
 
-    const { scene, collectVisibleTexts } = createModalMockScene();
+    const { scene, collectVisibleTexts, triggerPointerDownAt } = createModalMockScene();
     const onLocaleChanged = vi.fn();
     const modal = new ModalOverlayManager(scene, onLocaleChanged);
 
@@ -839,6 +885,32 @@ describe('Customizable Keybindings — Task 2: Controls Tab UI, Live GameScene R
     expect(graphicsSettings.getKeybindings().dash).toBe('KeyQ');
     expect(graphicsSettings.getKeybindings().swapWeapon).toBe('Shift');
     expect(onLocaleChanged).toHaveBeenCalled();
+
+    // Cleanup on Restore Defaults button (534, 466) while actively capturing (+ clears stale feedback)
+    modal.startRebinding('interact');
+    dispatchKeydown({ code: 'Digit1', key: '1', cancelable: true });
+    expect(modal.getRebindingAction()).toBe('interact');
+    expect(window.__GAME_DEBUG__.rebindingAction).toBe('interact');
+    expect(getCaptureKeydownListenerCount()).toBe(1);
+
+    expect(triggerPointerDownAt(534, 466)).toBe(true);
+    expect(modal.getRebindingAction()).toBeNull();
+    expect(window.__GAME_DEBUG__.rebindingAction).toBeNull();
+    expect(getCaptureKeydownListenerCount()).toBe(0);
+    expect(graphicsSettings.getKeybindings().dash).toBe('Shift');
+    expect(graphicsSettings.getKeybindings().swapWeapon).toBe('KeyQ');
+    expect(collectVisibleTexts()).not.toContain('[ ... ]');
+    expect(collectVisibleTexts()).toContain(i18n.t('ui.controls.rebindHint'));
+
+    // Cleanup on open() while actively capturing
+    modal.startRebinding('interact');
+    expect(modal.getRebindingAction()).toBe('interact');
+    expect(window.__GAME_DEBUG__.rebindingAction).toBe('interact');
+    expect(getCaptureKeydownListenerCount()).toBe(1);
+    modal.open('controls');
+    expect(modal.getRebindingAction()).toBeNull();
+    expect(window.__GAME_DEBUG__.rebindingAction).toBeNull();
+    expect(getCaptureKeydownListenerCount()).toBe(0);
 
     // Cleanup on selectTab('audio')
     modal.startRebinding('reload');

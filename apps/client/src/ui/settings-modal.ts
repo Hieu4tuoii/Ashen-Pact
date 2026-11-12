@@ -534,6 +534,8 @@ export class ModalOverlayManager {
       i18n.t('ui.settings.resetDefaults'),
       PALETTE.BRONZE_SHADE,
       () => {
+        this.cancelRebinding(false);
+        this.controlsFeedback = null;
         graphicsSettings.resetDefaults();
         this.syncDebugFlags();
         zzfx.play('ui_click');
