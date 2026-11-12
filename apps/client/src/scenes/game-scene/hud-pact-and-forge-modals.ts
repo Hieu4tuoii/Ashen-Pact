@@ -16,6 +16,7 @@ import {
 } from '@ashen-pact/shared';
 import { hexToNum, PALETTE } from '../../art/palette.js';
 import { zzfx } from '../../audio/zzfx.js';
+import { graphicsSettings } from '../../ui/graphics-settings.js';
 import type { GameScene } from '../GameScene.js';
 
 type WeaponId = keyof typeof WEAPONS;
@@ -207,9 +208,10 @@ export function computeWeaponSalvageHudState(
   const rawHold = Math.max(0, player.salvageHoldTimer ?? 0);
   const progress = Math.max(0, Math.min(1, rawHold / WEAPON_SALVAGE_HOLD_SEC));
   const percent = Math.round(progress * 100);
+  const dropLabel = graphicsSettings.getActionKeyLabel('dropWeapon');
   const promptText = isEn
-    ? `[X] Hold 0.5s Salvage (+${goldValue} Gold)`
-    : `[X] Giữ 0.5s Phân Rã (+${goldValue} Vàng)`;
+    ? `[${dropLabel}] Hold 0.5s Salvage (+${goldValue} Gold)`
+    : `[${dropLabel}] Giữ 0.5s Phân Rã (+${goldValue} Vàng)`;
 
   return {
     canSalvage: true,

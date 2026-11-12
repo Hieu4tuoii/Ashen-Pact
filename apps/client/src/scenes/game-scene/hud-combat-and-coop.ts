@@ -16,6 +16,7 @@ import { isEffectiveDebugUiEnabled } from '../../core/debug-flag.js';
 import { drawPlayerBlessingChipsHud } from '../../ui/blessing-card-visuals.js';
 import { renderSecretArenaCountdownHud } from '../../ui/secret-arena-hud.js';
 import {
+  computeKeyChipMetrics,
   drawCircularCooldown,
   drawKeyChip,
   drawMiniCharacterPortrait,
@@ -25,6 +26,7 @@ import {
 } from '../../ui/components/hud-primitives.js';
 import { initGlobalDebugState } from '../../ui/debug-overlay.js';
 import { clampUiScale, graphicsSettings } from '../../ui/graphics-settings.js';
+import { serializeKeybindingsHash } from '../../ui/keybindings.js';
 import {
   computeUiTextResolution,
   createUiTextStyle,
@@ -122,9 +124,10 @@ export function updateVectorHudImpl(this: GameScene): void {
   const activeWId = p.weaponSlots[p.activeWeaponSlot] ?? p.weaponSlots[0] ?? 'knight_sword';
   const activeWDef = WEAPONS[activeWId] ?? WEAPONS.knight_sword!;
   const cadenceStateHash = `${activeWId}:${p.clipAmmo}:${p.clipMax}:${Math.round(p.weaponHeat)}:${Math.round((p.reloadTimer ?? 0) * 20)}:${p.overclockedNextShot ? 1 : 0}:${Math.round((p.overheatLockTimer ?? 0) * 10)}:${p.meleeComboStep ?? 0}`;
+  const keybindsHash = serializeKeybindingsHash(gState.keybindings);
   const blessingsSig = `${(p.duoBoonIds ?? []).join(',')}|${(p.blessingIds ?? []).join(',')}`;
   const pactRelicSig = `${p.activePactId ?? ''}:${(p.awakenedRelicIds ?? []).join(',')}:${Math.ceil(p.pactKeepMorphedTimer ?? 0)}`;
-  const topCardHash = `${p.hp}:${p.maxHp}:${p.armor}:${p.maxArmor}:${cadenceStateHash}:${p.characterId}:${p.slot}:${curBiomeKey}:${lowHpPulse ? 1 : 0}:${trailHash}:${statusChipStr}:${blessingsSig}:${pactRelicSig}:${curLocale}`;
+  const topCardHash = `${p.hp}:${p.maxHp}:${p.armor}:${p.maxArmor}:${cadenceStateHash}:${p.characterId}:${p.slot}:${curBiomeKey}:${lowHpPulse ? 1 : 0}:${trailHash}:${statusChipStr}:${blessingsSig}:${pactRelicSig}:${curLocale}:${keybindsHash}`;
 
   const sceneCache = this as GameScene & {
     lastTopCardHash?: string;
@@ -298,7 +301,7 @@ export function updateVectorHudImpl(this: GameScene): void {
     const skillActQuant = Math.ceil(Math.max(0, p.skillActiveTimer) * 10);
     const dashCdQuant = Math.ceil(Math.max(0, p.dashCooldownTimer) * 10);
     const dashActQuant = Math.ceil(Math.max(0, p.dashTimer) * 10);
-    const abilityHash = `${p.characterId}:${skillCdQuant}:${skillActQuant}:${dashCdQuant}:${dashActQuant}:${showHints ? 1 : 0}:${curLocale}`;
+    const abilityHash = `${p.characterId}:${skillCdQuant}:${skillActQuant}:${dashCdQuant}:${dashActQuant}:${showHints ? 1 : 0}:${curLocale}:${keybindsHash}`;
 
     if (sceneCache.lastAbilityHudHash !== abilityHash) {
       sceneCache.lastAbilityHudHash = abilityHash;
@@ -329,16 +332,34 @@ export function updateVectorHudImpl(this: GameScene): void {
         iconKind: 'dash',
       });
 
+      const skillLabel = graphicsSettings.getActionKeyLabel('skill');
+      const dashLabel = graphicsSettings.getActionKeyLabel('dash');
       if (showHints) {
-        drawKeyChip(ag, -366, -56, 'Space', { active: skillGeo.isReady || skillGeo.isActive });
-        drawKeyChip(ag, -321, -56, 'Shift', { active: dashGeo.isReady || dashGeo.isActive });
+        const skillChip = computeKeyChipMetrics(skillLabel);
+        const dashChip = computeKeyChipMetrics(dashLabel);
+        drawKeyChip(ag, -352 - skillChip.width * 0.5, -56, skillLabel, {
+          active: skillGeo.isReady || skillGeo.isActive,
+        });
+        drawKeyChip(ag, -308 - dashChip.width * 0.5, -56, dashLabel, {
+          active: dashGeo.isReady || dashGeo.isActive,
+        });
       }
 
-      if (this.skillLabelText && this.skillLabelText.visible !== showHints) {
-        this.skillLabelText.setVisible(showHints);
+      if (this.skillLabelText) {
+        if (this.skillLabelText.text !== skillLabel) {
+          this.skillLabelText.setText(skillLabel);
+        }
+        if (this.skillLabelText.visible !== showHints) {
+          this.skillLabelText.setVisible(showHints);
+        }
       }
-      if (this.dashLabelText && this.dashLabelText.visible !== showHints) {
-        this.dashLabelText.setVisible(showHints);
+      if (this.dashLabelText) {
+        if (this.dashLabelText.text !== dashLabel) {
+          this.dashLabelText.setText(dashLabel);
+        }
+        if (this.dashLabelText.visible !== showHints) {
+          this.dashLabelText.setVisible(showHints);
+        }
       }
 
       if (this.skillCdText) {
@@ -414,11 +435,12 @@ export function updateVectorHudImpl(this: GameScene): void {
   // Update Bottom-Right 2-slot Weapon Cards (Active Enlarged & Highlighted, Inactive Compact & Dimmed)
   const upgSig = `${p.weaponUpgradeLevels?.[0] ?? 0},${p.weaponUpgradeLevels?.[1] ?? 0}`;
   const mutSig = `${(p.weaponMutators?.[0] ?? []).join('+')}|${(p.weaponMutators?.[1] ?? []).join('+')}`;
-  const weaponHash = `${p.activeWeaponSlot}:${p.weaponSlots.join(',')}:${upgSig}:${mutSig}:${cadenceStateHash}:${curLocale}:${gState.showKeyHints ? 1 : 0}`;
+  const weaponHash = `${p.activeWeaponSlot}:${p.weaponSlots.join(',')}:${upgSig}:${mutSig}:${cadenceStateHash}:${curLocale}:${gState.showKeyHints ? 1 : 0}:${keybindsHash}`;
   if (weaponHash !== this.lastHudWeaponHash) {
     this.lastHudWeaponHash = weaponHash;
     const invBake = 1 / TextureBaker.getBakeScale();
     const showHints = gState.showKeyHints;
+    const interactLabel = graphicsSettings.getActionKeyLabel('interact');
 
     const activeW = 152;
     const activeH = 44;
@@ -524,7 +546,9 @@ export function updateVectorHudImpl(this: GameScene): void {
           nameTxt.setColor(PALETTE.STEEL_LIGHT);
         }
         if (metaTxt) {
-          metaTxt.setText(curLocale === 'en' ? '[E] Equip' : '[E] Nhặt');
+          metaTxt.setText(
+            curLocale === 'en' ? `[${interactLabel}] Equip` : `[${interactLabel}] Nhặt`,
+          );
           metaTxt.setPosition(sx + 12, sy + 26);
           metaTxt.setColor(PALETTE.STEEL_LIGHT);
         }

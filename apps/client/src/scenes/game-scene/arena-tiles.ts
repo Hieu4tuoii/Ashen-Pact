@@ -57,6 +57,7 @@ import {
   canTeleportFromCurrentRoom,
   resolveMinimapClickedRoomId,
 } from './hud-qol-and-minimap.js';
+import { syncSceneKeybindings } from './input-and-network.js';
 import { createInteractPromptFadeState } from './interact-prompt.js';
 import {
   type HubWorldClickAction,
@@ -446,6 +447,8 @@ export function createImpl(this: GameScene): void {
     this.hudScene = undefined;
     this.unsubDebugFlags?.();
     this.unsubDebugFlags = undefined;
+    this.unsubGraphicsSettings?.();
+    this.unsubGraphicsSettings = undefined;
     delete window.__PHASER_GAME__;
     delete window.__GAME_TRANSPORT__;
     delete window.__GAME_STRESS_TEST__;
@@ -552,6 +555,11 @@ export function createImpl(this: GameScene): void {
 
   // 10. Keyboard & Debug Bindings
   this.setupKeyboardBindings();
+  this.unsubGraphicsSettings?.();
+  this.unsubGraphicsSettings = graphicsSettings.onChange(() => {
+    syncSceneKeybindings(this);
+    this.invalidateAllHudCaches();
+  });
 
   this.debugOverlay = new DebugOverlay(this, false, this.uiScene);
   if (this.coopMode === 'host' || this.coopMode === 'join') {

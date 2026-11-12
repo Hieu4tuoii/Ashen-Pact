@@ -12,12 +12,14 @@ import {
 } from '@ashen-pact/shared';
 import { hexToNum, PALETTE } from '../../art/palette.js';
 import {
+  computeKeyChipMetrics,
   drawKeyChip,
   drawStyledPanel,
   drawVectorHudIcon,
 } from '../../ui/components/hud-primitives.js';
 import { initGlobalDebugState } from '../../ui/debug-overlay.js';
 import { graphicsSettings } from '../../ui/graphics-settings.js';
+import { serializeKeybindingsHash } from '../../ui/keybindings.js';
 import { computeUiTextResolution, createUiTextStyle, UI_THEME } from '../../ui/theme.js';
 import { type GameScene } from '../GameScene.js';
 import { formatWeaponCadenceHudLabel } from './hud-micro-reload-bar.js';
@@ -55,9 +57,12 @@ export function updateHubInvitePanelImpl(this: GameScene): void {
   const playersKey = allPlayers
     .map((pl) => `${pl.id}:${pl.slot}:${pl.displayName}:${pl.characterId}:${pl.ready ? 1 : 0}`)
     .join('|');
+  const gState = graphicsSettings.getState();
+  const coopPanelLabel = graphicsSettings.getActionKeyLabel('coopPanel');
+  const emoteLabel = graphicsSettings.getActionKeyLabel('emote');
   const hash = !showInHub
     ? 'hidden'
-    : `${this.coopMode}:${this.invitePanelVisible ? 1 : 0}:${this.displayName}:${this.serverHostPort}:${this.menuActiveInput ?? ''}:${debug.serverConnected ? 1 : 0}:${this.primaryLanIp}:${this.serverPort}:${this.hostInviteUrl ?? ''}:${sim.allowDuplicateCharacters ? 1 : 0}:${this.copyToastTimer > 0 ? 1 : 0}:${playersKey}:${i18n.getLocale()}:${this.currentHudUiScale}`;
+    : `${this.coopMode}:${this.invitePanelVisible ? 1 : 0}:${this.displayName}:${this.serverHostPort}:${this.menuActiveInput ?? ''}:${debug.serverConnected ? 1 : 0}:${this.primaryLanIp}:${this.serverPort}:${this.hostInviteUrl ?? ''}:${sim.allowDuplicateCharacters ? 1 : 0}:${this.copyToastTimer > 0 ? 1 : 0}:${playersKey}:${i18n.getLocale()}:${this.currentHudUiScale}:${serializeKeybindingsHash(gState.keybindings)}`;
 
   if (hash === this.lastInvitePanelHash) return;
   this.lastInvitePanelHash = hash;
@@ -111,12 +116,18 @@ export function updateHubInvitePanelImpl(this: GameScene): void {
       )
       .setOrigin(0, 0.5);
 
-    const keyMetrics = drawKeyChip(chipBg, chipX + chipW - 22, chipY + 7, 'I', { active: true });
+    const keyMetricsPreview = computeKeyChipMetrics(coopPanelLabel);
+    const keyChipX = chipX + chipW - 8 - keyMetricsPreview.width;
+    const maxChipTxtW = Math.max(48, keyChipX - (chipX + 10) - 6);
+    if (chipTxt.width > maxChipTxtW && chipTxt.width > 0) {
+      chipTxt.setScale(maxChipTxtW / chipTxt.width);
+    }
+    const keyMetrics = drawKeyChip(chipBg, keyChipX, chipY + 7, coopPanelLabel, { active: true });
     const keyTxt = ui.add
       .text(
-        chipX + chipW - 22 + keyMetrics.width * 0.5,
+        keyChipX + keyMetrics.width * 0.5,
         chipY + chipH * 0.5,
-        'I',
+        coopPanelLabel,
         createUiTextStyle({
           fontPxAt1080p: 12,
           weight: 800,
@@ -193,7 +204,7 @@ export function updateHubInvitePanelImpl(this: GameScene): void {
       .text(
         collapseBtnX + collapseBtnW * 0.5,
         collapseBtnY + collapseBtnH * 0.5,
-        isEn ? 'Hide [I]' : 'Ẩn [I]',
+        isEn ? `Hide [${coopPanelLabel}]` : `Ẩn [${coopPanelLabel}]`,
         createUiTextStyle({
           fontPxAt1080p: 11,
           weight: 800,
@@ -202,6 +213,9 @@ export function updateHubInvitePanelImpl(this: GameScene): void {
         }),
       )
       .setOrigin(0.5, 0.5);
+    if (collapseTxt.width > collapseBtnW - 6 && collapseTxt.width > 0) {
+      collapseTxt.setScale((collapseBtnW - 6) / collapseTxt.width);
+    }
     const collapseHit = ui.add
       .rectangle(
         collapseBtnX + collapseBtnW * 0.5,
@@ -608,7 +622,7 @@ export function updateHubInvitePanelImpl(this: GameScene): void {
     .text(
       collapseBtnX + collapseBtnW * 0.5,
       collapseBtnY + collapseBtnH * 0.5,
-      isEn ? 'Hide [I]' : 'Ẩn [I]',
+      isEn ? `Hide [${coopPanelLabel}]` : `Ẩn [${coopPanelLabel}]`,
       createUiTextStyle({
         fontPxAt1080p: 11,
         weight: 800,
@@ -617,6 +631,9 @@ export function updateHubInvitePanelImpl(this: GameScene): void {
       }),
     )
     .setOrigin(0.5, 0.5);
+  if (collapseTxt.width > collapseBtnW - 6 && collapseTxt.width > 0) {
+    collapseTxt.setScale((collapseBtnW - 6) / collapseTxt.width);
+  }
   const collapseHit = ui.add
     .rectangle(
       collapseBtnX + collapseBtnW * 0.5,
@@ -698,6 +715,9 @@ export function updateHubInvitePanelImpl(this: GameScene): void {
         }),
       )
       .setOrigin(0.5, 0.5);
+    if (txt.width > bw - 8 && txt.width > 0) {
+      txt.setScale((bw - 8) / txt.width);
+    }
 
     const hit = ui.add
       .rectangle(bx + bw / 2, by + bh / 2, bw, bh, 0x000000, 0)
@@ -868,10 +888,10 @@ export function updateHubInvitePanelImpl(this: GameScene): void {
 
   // Quick Emote Bar at bottom of Hub Panel
   const emotes: { id: QuickEmoteId; key: string }[] = [
-    { id: 1, key: 'T+1' },
-    { id: 2, key: 'T+2' },
-    { id: 3, key: 'T+3' },
-    { id: 4, key: 'T+4' },
+    { id: 1, key: `${emoteLabel}+1` },
+    { id: 2, key: `${emoteLabel}+2` },
+    { id: 3, key: `${emoteLabel}+3` },
+    { id: 4, key: `${emoteLabel}+4` },
   ];
   const emY = py + ph - 25;
   const emW = Math.floor((pw - 20 - 3 * 4) / 4);
@@ -908,8 +928,9 @@ export function updateHubCharacterSkillPreviewImpl(this: GameScene): void {
 
   debug.hubPreviewCharacterId = nearestCharId;
   const isEquipped = nearestCharId === sim.player.characterId;
+  const gState = graphicsSettings.getState();
   const hash = nearestCharId
-    ? `${nearestCharId}:${isEquipped ? 1 : 0}:${i18n.getLocale()}:${this.currentHudUiScale}`
+    ? `${nearestCharId}:${isEquipped ? 1 : 0}:${i18n.getLocale()}:${this.currentHudUiScale}:${serializeKeybindingsHash(gState.keybindings)}`
     : '';
 
   if (hash === this.lastHubPreviewHash) return;
@@ -922,6 +943,8 @@ export function updateHubCharacterSkillPreviewImpl(this: GameScene): void {
   if (!cDef) return;
   const charTxt = i18n.getCharacterText(nearestCharId);
   const isEn = i18n.getLocale() === 'en';
+  const interactLabel = graphicsSettings.getActionKeyLabel('interact');
+  const skillLabel = graphicsSettings.getActionKeyLabel('skill');
 
   const textRes = computeUiTextResolution(
     typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1,
@@ -947,9 +970,12 @@ export function updateHubCharacterSkillPreviewImpl(this: GameScene): void {
   });
   this.hubPreviewContainer.add(bg);
 
+  const rawPressToSelect = i18n.t('ui.hud.pressEToSelect');
   const statusBadge = isEquipped
     ? i18n.t('ui.hud.equippedBadge')
-    : i18n.t('ui.hud.pressEToSelect');
+    : interactLabel === 'E'
+      ? rawPressToSelect
+      : rawPressToSelect.replace(/\[E\]/gi, `[${interactLabel}]`);
   const header = ui.add.text(
     px + 12,
     py + 6,
@@ -984,13 +1010,13 @@ export function updateHubCharacterSkillPreviewImpl(this: GameScene): void {
   const bodyLines = isEn
     ? [
         `• Passive (${charTxt.passiveName}): ${charTxt.passiveDesc}`,
-        `• Skill [Space/RMB] (${charTxt.skillName} · CD ${cDef.skill.cooldownSec}s): ${charTxt.skillDesc}`,
+        `• Skill [${skillLabel}/RMB] (${charTxt.skillName} · CD ${cDef.skill.cooldownSec}s): ${charTxt.skillDesc}`,
         `• Upgrades: (1) ${upg1Txt.name}: ${upg1Txt.desc} | (2) ${upg2Txt.name}: ${upg2Txt.desc}`,
         `• Co-op Synergy: ${charTxt.synergy}`,
       ].join('\n')
     : [
         `• Nội tại (${charTxt.passiveName}): ${charTxt.passiveDesc}`,
-        `• Kỹ năng [Space] (${charTxt.skillName} · Hồi ${cDef.skill.cooldownSec}s): ${charTxt.skillDesc}`,
+        `• Kỹ năng [${skillLabel}] (${charTxt.skillName} · Hồi ${cDef.skill.cooldownSec}s): ${charTxt.skillDesc}`,
         `• Nâng cấp: (1) ${upg1Txt.name}: ${upg1Txt.desc} | (2) ${upg2Txt.name}: ${upg2Txt.desc}`,
         `• Synergy Co-op: ${charTxt.synergy}`,
       ].join('\n');
@@ -1039,10 +1065,11 @@ export function updateWeaponComparisonCardImpl(this: GameScene): void {
   debug.comparedWeaponId = dropWId;
 
   const currWId = sim.getActiveWeaponId();
-  const showHints = graphicsSettings.getState().showKeyHints;
+  const gState = graphicsSettings.getState();
+  const showHints = gState.showKeyHints;
   const salvagePct = Math.round((sim.player.salvageHoldTimer ?? 0) * 100);
   const hash = dropWId
-    ? `${dropWId}:${currWId}:${nearestWeaponItem?.costGold ?? 0}:${salvagePct}:${sim.inHub ? 1 : 0}:${i18n.getLocale()}:${showHints ? 1 : 0}:${this.currentHudUiScale}`
+    ? `${dropWId}:${currWId}:${nearestWeaponItem?.costGold ?? 0}:${salvagePct}:${sim.inHub ? 1 : 0}:${i18n.getLocale()}:${showHints ? 1 : 0}:${this.currentHudUiScale}:${serializeKeybindingsHash(gState.keybindings)}`
     : '';
   if (hash === this.lastWeaponCompareHash) return;
   this.lastWeaponCompareHash = hash;
@@ -1058,6 +1085,8 @@ export function updateWeaponComparisonCardImpl(this: GameScene): void {
     this.currentHudUiScale || 1,
   );
   const isEn = i18n.getLocale() === 'en';
+  const interactLabel = graphicsSettings.getActionKeyLabel('interact');
+  const swapLabel = graphicsSettings.getActionKeyLabel('swapWeapon');
 
   // Local coordinates inside hudBottomCenterContainer (anchored at x = 480, y = WORLD_VIEW_HEIGHT + padY)
   // Shifted slightly left (-276..+100) so it never collides with bottom-right Weapon & Cooldown cards!
@@ -1120,7 +1149,7 @@ export function updateWeaponComparisonCardImpl(this: GameScene): void {
     .text(
       0,
       0,
-      'E',
+      interactLabel,
       createUiTextStyle({
         fontPxAt1080p: 13,
         weight: 800,
@@ -1160,7 +1189,8 @@ export function updateWeaponComparisonCardImpl(this: GameScene): void {
         .setOrigin(0, 0.5)
     : null;
 
-  const chipW = 14;
+  const chipMetricsPreview = computeKeyChipMetrics(interactLabel);
+  const chipW = Math.max(14, chipMetricsPreview.width);
   const pillH = 18;
   const coinBlockW = priceTxt ? 6 + 9 + 4 + priceTxt.width : 0;
   const pillW = Math.ceil(5 + chipW + 5 + actionTxt.width + coinBlockW + 6);
@@ -1176,9 +1206,10 @@ export function updateWeaponComparisonCardImpl(this: GameScene): void {
     radius: 4,
   });
 
-  const chipMetrics = drawKeyChip(bg, pillX + 4, pillCy - 5.5, 'E', { active: true });
-  keyTxt.setPosition(pillX + 4 + chipMetrics.width * 0.5, pillCy);
-  const actionX = pillX + 4 + chipMetrics.width + 5;
+  const chipMetrics = drawKeyChip(bg, pillX + 4, pillCy - 5.5, interactLabel, { active: true });
+  const effectiveChipW = Math.max(chipW, chipMetrics.width);
+  keyTxt.setPosition(pillX + 4 + effectiveChipW * 0.5, pillCy);
+  const actionX = pillX + 4 + effectiveChipW + 5;
   actionTxt.setPosition(actionX, pillCy);
   this.weaponCompareContainer.add([keyTxt, actionTxt]);
 
@@ -1213,10 +1244,15 @@ export function updateWeaponComparisonCardImpl(this: GameScene): void {
 
   this.weaponCompareContainer.add(body);
   if (!renderWeaponCompareSalvageBar(this, bg, sim, sim.player, px, py, pw, ph, isEn, textRes)) {
+    const rawFirstPickupHint = i18n.t('ui.tooltip.firstPickupHint');
+    const firstPickupHintStr =
+      swapLabel === 'Q'
+        ? rawFirstPickupHint
+        : rawFirstPickupHint.replace(/\[Q\]/gi, `[${swapLabel}]`);
     const tipText = ui.add.text(
       px + 12,
       py + ph - 18,
-      i18n.t('ui.tooltip.firstPickupHint'),
+      firstPickupHintStr,
       createUiTextStyle({
         fontPxAt1080p: 13,
         weight: 700,
@@ -1230,12 +1266,13 @@ export function updateWeaponComparisonCardImpl(this: GameScene): void {
 
 export function updateEmoteWheelHudImpl(this: GameScene): void {
   const ui = this.uiScene;
+  const emoteLabel = graphicsSettings.getActionKeyLabel('emote');
   const showWheel =
     this.emoteWheelOpen &&
     !this.fullMapOpen &&
     !this.pauseModalOpen &&
     !(this.settingsModal?.isOpen() ?? false);
-  const hash = showWheel ? `${this.emoteWheelHoveredId ?? 0}:${i18n.getLocale()}` : '';
+  const hash = showWheel ? `${this.emoteWheelHoveredId ?? 0}:${i18n.getLocale()}:${emoteLabel}` : '';
   if (hash === this.lastEmoteWheelHash) return;
   this.lastEmoteWheelHash = hash;
 
@@ -1262,7 +1299,7 @@ export function updateEmoteWheelHudImpl(this: GameScene): void {
     .text(
       cx,
       cy,
-      isEn ? '[T] EMOTE' : '[T] BIỂU CẢM',
+      isEn ? `[${emoteLabel}] EMOTE` : `[${emoteLabel}] BIỂU CẢM`,
       createUiTextStyle({
         fontPxAt1080p: 14,
         weight: 800,

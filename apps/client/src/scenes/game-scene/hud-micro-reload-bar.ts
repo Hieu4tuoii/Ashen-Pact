@@ -9,6 +9,7 @@ import {
   type WeaponStatsDef,
 } from '@ashen-pact/shared';
 import type Phaser from 'phaser';
+import { graphicsSettings } from '../../ui/graphics-settings.js';
 
 export interface WeaponCadenceHudLabel {
   barText: string;
@@ -26,6 +27,7 @@ export function formatWeaponCadenceHudLabel(
   const mode = wDef.cadenceKind;
   const dmg = wDef.damage;
   const isEn = locale === 'en';
+  const reloadLabel = graphicsSettings.getActionKeyLabel('reload');
 
   if (mode === 'HEAT_VENT') {
     const rawHeat = p.weaponHeat ?? 0;
@@ -35,10 +37,10 @@ export function formatWeaponCadenceHudLabel(
     const barText = isOverheated
       ? isEn ? 'OVERHEAT!' : 'QUÁ NHIỆT!'
       : inSweetSpot
-        ? `${heat}% [R]`
+        ? `${heat}% [${reloadLabel}]`
         : isEn ? `${heat}% Heat` : `${heat}% Nhiệt`;
     const cardMetaText = isEn ? `DMG ${dmg} · Heat ${wDef.heatPerShot}%/shot` : `ST ${dmg} · Nhiệt ${wDef.heatPerShot}%/phát`;
-    const compareStatText = isEn ? `Heat: ${wDef.heatPerShot}%/shot · Vent [R]` : `Nhiệt: ${wDef.heatPerShot}%/phát · Xả [R]`;
+    const compareStatText = isEn ? `Heat: ${wDef.heatPerShot}%/shot · Vent [${reloadLabel}]` : `Nhiệt: ${wDef.heatPerShot}%/phát · Xả [${reloadLabel}]`;
     return { barText, cardMetaText, compareStatText, mode, isFinaleOrSweetSpot: inSweetSpot };
   }
 
@@ -59,7 +61,7 @@ export function formatWeaponCadenceHudLabel(
   const isReloading = (p.reloadTimer ?? 0) > 0;
   const isOverclocked = Boolean(p.overclockedNextShot);
   const barText = isReloading
-    ? isEn ? 'RELOAD [R]' : 'NẠP [R]'
+    ? isEn ? `RELOAD [${reloadLabel}]` : `NẠP [${reloadLabel}]`
     : isOverclocked
       ? isEn ? '⚡ OVERCLOCK' : '⚡ QUÁ TẢI'
       : `${clipAmmo}/${clipMax}`;

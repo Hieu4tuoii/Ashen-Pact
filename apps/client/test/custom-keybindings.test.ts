@@ -1,4 +1,13 @@
-import { collectLeafKeys, enLocale, i18n, viLocale } from '@ashen-pact/shared';
+import {
+  collectLeafKeys,
+  enLocale,
+  findInteractTarget,
+  i18n,
+  viLocale,
+  WEAPONS,
+  WorldSim,
+} from '@ashen-pact/shared';
+import type Phaser from 'phaser';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('phaser', () => {
@@ -17,6 +26,14 @@ vi.mock('phaser', () => {
   return { default: PhaserMock, ...PhaserMock };
 });
 
+import type { GameScene } from '../src/scenes/GameScene.js';
+import { formatWeaponCadenceHudLabel } from '../src/scenes/game-scene/hud-micro-reload-bar.js';
+import { computeWeaponSalvageHudState } from '../src/scenes/game-scene/hud-pact-and-forge-modals.js';
+import {
+  setupKeyboardBindingsImpl,
+  syncSceneKeybindings,
+} from '../src/scenes/game-scene/input-and-network.js';
+import { resolveInteractPromptSpec } from '../src/scenes/game-scene/interact-prompt.js';
 import { initGlobalDebugState } from '../src/ui/debug-overlay.js';
 import {
   DEFAULT_GRAPHICS_SETTINGS,
@@ -37,6 +54,10 @@ import {
   serializeKeybindingsHash,
   shouldCaptureBrowserKey,
 } from '../src/ui/keybindings.js';
+import {
+  getControlsActionRowBounds,
+  ModalOverlayManager,
+} from '../src/ui/settings-modal.js';
 
 function createFakeWindow(initialEntries: Array<[string, string]> = []) {
   const store = new Map<string, string>(initialEntries);
@@ -377,3 +398,662 @@ describe('Customizable Keybindings — Task 1: Registry, Persistence, Debug Stat
     }
   });
 });
+
+interface MockDisplayNode {
+  kind: 'container' | 'graphics' | 'text' | 'rect';
+  text?: string;
+  visible: boolean;
+  active: boolean;
+  list?: MockDisplayNode[];
+}
+
+function createModalMockScene() {
+  const makeContainer = (): MockDisplayNode & Record<string, unknown> => {
+    const node: MockDisplayNode & Record<string, unknown> = {
+      kind: 'container',
+      visible: true,
+      active: true,
+      list: [],
+      setDepth() {
+        return node;
+      },
+      setVisible(v: boolean) {
+        node.visible = v;
+        return node;
+      },
+      setPosition() {
+        return node;
+      },
+      add(item: MockDisplayNode | MockDisplayNode[]) {
+        if (Array.isArray(item)) {
+          node.list!.push(...item);
+        } else {
+          node.list!.push(item);
+        }
+        return node;
+      },
+      removeAll() {
+        node.list!.length = 0;
+        return node;
+      },
+    };
+    return node;
+  };
+
+  let rootContainer: (MockDisplayNode & Record<string, unknown>) | null = null;
+
+  const scene = {
+    cameras: {
+      main: {
+        midPoint: { x: 480, y: 270 },
+        renderList: [],
+      },
+    },
+    input: {
+      preUpdate: vi.fn(),
+    },
+    scale: {
+      isFullscreen: false,
+      startFullscreen: vi.fn(),
+      stopFullscreen: vi.fn(),
+    },
+    events: {
+      on: vi.fn(),
+      once: vi.fn(),
+      off: vi.fn(),
+    },
+    add: {
+      container: vi.fn(() => {
+        const c = makeContainer();
+        if (!rootContainer) rootContainer = c;
+        return c;
+      }),
+      graphics: vi.fn(() => {
+        const g: MockDisplayNode & Record<string, unknown> = {
+          kind: 'graphics',
+          visible: true,
+          active: true,
+          clear: vi.fn(),
+          fillStyle: vi.fn(),
+          lineStyle: vi.fn(),
+          fillRect: vi.fn(),
+          strokeRect: vi.fn(),
+          fillRoundedRect: vi.fn(),
+          strokeRoundedRect: vi.fn(),
+          lineBetween: vi.fn(),
+        };
+        return g;
+      }),
+      rectangle: vi.fn(() => {
+        const r: MockDisplayNode & Record<string, unknown> = {
+          kind: 'rect',
+          visible: true,
+          active: true,
+          input: null as unknown,
+          setInteractive() {
+            r.input = { enabled: true };
+            return r;
+          },
+          on() {
+            return r;
+          },
+        };
+        return r;
+      }),
+      text: vi.fn((_x: number, _y: number, content: string, style?: Record<string, unknown>) => {
+        const t: MockDisplayNode & Record<string, unknown> = {
+          kind: 'text',
+          text: content,
+          visible: true,
+          active: true,
+          width: content.length * 6.5,
+          style: style ?? {},
+          setOrigin() {
+            return t;
+          },
+          setScale() {
+            return t;
+          },
+          setResolution() {
+            return t;
+          },
+          setText(next: string) {
+            t.text = next;
+            t.width = next.length * 6.5;
+            return t;
+          },
+          setColor() {
+            return t;
+          },
+        };
+        return t;
+      }),
+    },
+  };
+
+  const collectVisibleTexts = (): string[] => {
+    const out: string[] = [];
+    const visit = (n: MockDisplayNode | undefined) => {
+      if (!n || !n.visible) return;
+      if (n.kind === 'text' && typeof n.text === 'string') {
+        out.push(n.text);
+      }
+      if (n.list) {
+        for (const child of n.list) visit(child);
+      }
+    };
+    if (rootContainer) visit(rootContainer);
+    return out;
+  };
+
+  return { scene: scene as unknown as Phaser.Scene, collectVisibleTexts };
+}
+
+function createCaptureFakeWindow() {
+  const store = new Map<string, string>();
+  type KeyListenerEntry = {
+    type: string;
+    fn: (ev: KeyboardEvent) => void;
+    capture: boolean;
+  };
+  const listeners: KeyListenerEntry[] = [];
+
+  const isCaptureOpt = (opts?: boolean | AddEventListenerOptions | EventListenerOptions): boolean =>
+    typeof opts === 'boolean' ? opts : Boolean(opts?.capture);
+
+  const windowObj = {
+    devicePixelRatio: 1,
+    location: { search: '' },
+    localStorage: {
+      getItem: (key: string) => store.get(key) ?? null,
+      setItem: (key: string, val: string) => {
+        store.set(key, val);
+      },
+      removeItem: (key: string) => {
+        store.delete(key);
+      },
+      clear: () => {
+        store.clear();
+      },
+    },
+    addEventListener: vi.fn(
+      (
+        type: string,
+        fn: (ev: KeyboardEvent) => void,
+        opts?: boolean | AddEventListenerOptions,
+      ) => {
+        const capture = isCaptureOpt(opts);
+        if (!listeners.some((l) => l.type === type && l.fn === fn && l.capture === capture)) {
+          listeners.push({ type, fn, capture });
+        }
+      },
+    ),
+    removeEventListener: vi.fn(
+      (type: string, fn: (ev: KeyboardEvent) => void, opts?: boolean | EventListenerOptions) => {
+        const capture = isCaptureOpt(opts);
+        const idx = listeners.findIndex(
+          (l) => l.type === type && l.fn === fn && l.capture === capture,
+        );
+        if (idx >= 0) listeners.splice(idx, 1);
+      },
+    ),
+    dispatchEvent: vi.fn(),
+  };
+
+  const dispatchKeydown = (init: { code?: string; key?: string; cancelable?: boolean }) => {
+    let defaultPrevented = false;
+    let immediateStopped = false;
+    const ev = {
+      type: 'keydown',
+      code: init.code ?? '',
+      key: init.key ?? '',
+      cancelable: init.cancelable ?? true,
+      get defaultPrevented() {
+        return defaultPrevented;
+      },
+      preventDefault: vi.fn(() => {
+        if (init.cancelable !== false) defaultPrevented = true;
+      }),
+      stopImmediatePropagation: vi.fn(() => {
+        immediateStopped = true;
+      }),
+      stopPropagation: vi.fn(),
+    } as unknown as KeyboardEvent;
+
+    for (const entry of [...listeners]) {
+      if (entry.type === 'keydown' && entry.capture) {
+        entry.fn(ev);
+        if (immediateStopped) return ev;
+      }
+    }
+    for (const entry of [...listeners]) {
+      if (entry.type === 'keydown' && !entry.capture) {
+        entry.fn(ev);
+        if (immediateStopped) return ev;
+      }
+    }
+    return ev;
+  };
+
+  const getCaptureKeydownListenerCount = () =>
+    listeners.filter((l) => l.type === 'keydown' && l.capture).length;
+
+  return { windowObj, dispatchKeydown, getCaptureKeydownListenerCount };
+}
+
+class MockPhaserKey {
+  public readonly keyCode: number;
+  public isDown = false;
+  public altKey = false;
+  private readonly handlers = new Map<string, Set<(...args: unknown[]) => void>>();
+
+  constructor(keyCode: number) {
+    this.keyCode = keyCode;
+  }
+
+  public on(event: string, fn: (...args: unknown[]) => void): this {
+    let set = this.handlers.get(event);
+    if (!set) {
+      set = new Set();
+      this.handlers.set(event, set);
+    }
+    set.add(fn);
+    return this;
+  }
+
+  public off(event: string, fn?: (...args: unknown[]) => void): this {
+    if (!fn) {
+      this.handlers.delete(event);
+      return this;
+    }
+    this.handlers.get(event)?.delete(fn);
+    return this;
+  }
+
+  public reset(): void {
+    this.isDown = false;
+  }
+
+  public listenerCount(event: string): number {
+    return this.handlers.get(event)?.size ?? 0;
+  }
+
+  public emitDown(domEvent?: Partial<KeyboardEvent>): void {
+    this.isDown = true;
+    for (const fn of [...(this.handlers.get('down') ?? [])]) {
+      fn(this, domEvent);
+    }
+  }
+
+  public emitUp(domEvent?: Partial<KeyboardEvent>): void {
+    this.isDown = false;
+    for (const fn of [...(this.handlers.get('up') ?? [])]) {
+      fn(this, domEvent);
+    }
+  }
+}
+
+function createMockKeyboardPlugin() {
+  const keyMap = new Map<number, MockPhaserKey>();
+  const eventHandlers = new Map<string, Set<(...args: unknown[]) => void>>();
+  const captures = new Set<number>();
+
+  const getOrCreateKey = (keyCode: number) => {
+    let k = keyMap.get(keyCode);
+    if (!k) {
+      k = new MockPhaserKey(keyCode);
+      keyMap.set(keyCode, k);
+    }
+    return k;
+  };
+
+  return {
+    keyMap,
+    captures,
+    plugin: {
+      addKey: vi.fn((keyCode: number, enableCapture = true) => {
+        if (enableCapture) captures.add(keyCode);
+        return getOrCreateKey(keyCode);
+      }),
+      addCapture: vi.fn((keyCode: number) => {
+        captures.add(keyCode);
+      }),
+      removeCapture: vi.fn((keyCode: number) => {
+        captures.delete(keyCode);
+      }),
+      on: vi.fn((event: string, fn: (...args: unknown[]) => void) => {
+        let set = eventHandlers.get(event);
+        if (!set) {
+          set = new Set();
+          eventHandlers.set(event, set);
+        }
+        set.add(fn);
+      }),
+      emit: (event: string, ...args: unknown[]) => {
+        for (const fn of [...(eventHandlers.get(event) ?? [])]) {
+          fn(...args);
+        }
+      },
+    },
+  };
+}
+
+describe('Customizable Keybindings — Task 2: Controls Tab UI, Live GameScene Rebinding & Dynamic HUD Keycaps', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    graphicsSettings.resetDefaults();
+    initGlobalDebugState().rebindingAction = null;
+    i18n.setLocale('vi');
+  });
+
+  it('computes non-overlapping 7x2 Controls tab row bounds strictly inside card body (y=136..434) and manages capture lifecycle on Escape, conflict swap, reserved key, tab switch, and close', () => {
+    const { windowObj, dispatchKeydown, getCaptureKeydownListenerCount } =
+      createCaptureFakeWindow();
+    vi.stubGlobal('window', windowObj);
+    initGlobalDebugState();
+
+    const { scene, collectVisibleTexts } = createModalMockScene();
+    const onLocaleChanged = vi.fn();
+    const modal = new ModalOverlayManager(scene, onLocaleChanged);
+
+    // Bubble listener simulating downstream Phaser keydown-ESC handler
+    const bubbleKeydownSpy = vi.fn((ev: KeyboardEvent) => {
+      if (ev.code === 'Escape' && modal.isOpen()) {
+        modal.close();
+      }
+    });
+    windowObj.addEventListener('keydown', bubbleKeydownSpy, false);
+
+    modal.open('controls');
+    expect(modal.isOpen()).toBe(true);
+    expect(modal.getActiveTab()).toBe('controls');
+    expect(modal.getRebindingAction()).toBeNull();
+
+    // Verify all 14 action row bounds fit strictly inside [174..786] × [165..380] (within card body y=136..434) with zero pairwise overlap
+    const allBounds = KEYBIND_ACTION_IDS.map((action, idx) => {
+      const byIndex = getControlsActionRowBounds(idx);
+      const byAction = getControlsActionRowBounds(action);
+      expect(byAction).toEqual(byIndex);
+      expect(byAction.action).toBe(action);
+      expect(byAction.index).toBe(idx);
+      expect(byAction.x).toBeGreaterThanOrEqual(174);
+      expect(byAction.x + byAction.w).toBeLessThanOrEqual(786);
+      expect(byAction.y).toBeGreaterThanOrEqual(165);
+      expect(byAction.y + byAction.h).toBeLessThanOrEqual(380);
+      expect(byAction.y).toBeGreaterThanOrEqual(136);
+      expect(byAction.y + byAction.h).toBeLessThanOrEqual(434);
+      expect(byAction.keyPillCx - byAction.keyPillW * 0.5).toBeGreaterThan(byAction.x);
+      expect(byAction.keyPillCx + byAction.keyPillW * 0.5).toBeLessThanOrEqual(
+        byAction.x + byAction.w,
+      );
+      return byAction;
+    });
+    expect(allBounds).toHaveLength(14);
+
+    for (let i = 0; i < allBounds.length; i++) {
+      for (let j = i + 1; j < allBounds.length; j++) {
+        const a = allBounds[i]!;
+        const b = allBounds[j]!;
+        const overlapsX = a.x < b.x + b.w && a.x + a.w > b.x;
+        const overlapsY = a.y < b.y + b.h && a.y + a.h > b.y;
+        expect(overlapsX && overlapsY, `Row ${a.action} overlaps ${b.action}`).toBe(false);
+      }
+    }
+
+    // Start rebinding 'interact'
+    modal.startRebinding('interact');
+    expect(modal.getRebindingAction()).toBe('interact');
+    expect(window.__GAME_DEBUG__.rebindingAction).toBe('interact');
+    expect(getCaptureKeydownListenerCount()).toBe(1);
+
+    // Reserved key 'Digit1': keeps capture open, shows reserved feedback, calls preventDefault + stopImmediatePropagation
+    const reservedEv = dispatchKeydown({ code: 'Digit1', key: '1', cancelable: true });
+    expect(reservedEv.preventDefault).toHaveBeenCalledTimes(1);
+    expect(bubbleKeydownSpy).not.toHaveBeenCalled();
+    expect(modal.isOpen()).toBe(true);
+    expect(modal.getRebindingAction()).toBe('interact');
+    expect(graphicsSettings.getKeybindings().interact).toBe('KeyE');
+    expect(
+      collectVisibleTexts().some((t) => t === i18n.t('ui.controls.reservedNotice', { key: '1' })),
+    ).toBe(true);
+
+    // Escape during active capture: cancels capture in window capture phase WITHOUT closing modal
+    const escCaptureEv = dispatchKeydown({ code: 'Escape', key: 'Escape', cancelable: true });
+    expect(escCaptureEv.preventDefault).toHaveBeenCalledTimes(1);
+    expect(bubbleKeydownSpy).not.toHaveBeenCalled();
+    expect(modal.isOpen()).toBe(true);
+    expect(modal.getRebindingAction()).toBeNull();
+    expect(window.__GAME_DEBUG__.rebindingAction).toBeNull();
+    expect(getCaptureKeydownListenerCount()).toBe(0);
+
+    // Start rebinding 'dash' -> press 'KeyQ' -> auto-swaps dash = 'KeyQ' and swapWeapon = 'Shift'
+    modal.startRebinding('dash');
+    expect(modal.getRebindingAction()).toBe('dash');
+    expect(getCaptureKeydownListenerCount()).toBe(1);
+
+    const swapEv = dispatchKeydown({ code: 'KeyQ', key: 'q', cancelable: true });
+    expect(swapEv.preventDefault).toHaveBeenCalledTimes(1);
+    expect(modal.getRebindingAction()).toBeNull();
+    expect(window.__GAME_DEBUG__.rebindingAction).toBeNull();
+    expect(getCaptureKeydownListenerCount()).toBe(0);
+    expect(graphicsSettings.getKeybindings().dash).toBe('KeyQ');
+    expect(graphicsSettings.getKeybindings().swapWeapon).toBe('Shift');
+    expect(onLocaleChanged).toHaveBeenCalled();
+
+    // Cleanup on selectTab('audio')
+    modal.startRebinding('reload');
+    expect(getCaptureKeydownListenerCount()).toBe(1);
+    modal.selectTab('audio');
+    expect(modal.getRebindingAction()).toBeNull();
+    expect(window.__GAME_DEBUG__.rebindingAction).toBeNull();
+    expect(getCaptureKeydownListenerCount()).toBe(0);
+
+    // Cleanup on close()
+    modal.selectTab('controls');
+    modal.startRebinding('ping');
+    expect(getCaptureKeydownListenerCount()).toBe(1);
+    modal.close();
+    expect(modal.isOpen()).toBe(false);
+    expect(modal.getRebindingAction()).toBeNull();
+    expect(getCaptureKeydownListenerCount()).toBe(0);
+
+    // Cleanup on destroy()
+    modal.open('controls');
+    modal.startRebinding('emote');
+    expect(getCaptureKeydownListenerCount()).toBe(1);
+    modal.destroy();
+    expect(modal.getRebindingAction()).toBeNull();
+    expect(getCaptureKeydownListenerCount()).toBe(0);
+  });
+
+  it('hot-swaps GameScene Phaser Key bindings via syncSceneKeybindings without duplicate listeners and guards Hub letter shortcuts when bound', () => {
+    const { windowObj } = createCaptureFakeWindow();
+    vi.stubGlobal('window', windowObj);
+
+    const sim = new WorldSim({
+      seed: 'keybind-runtime-test',
+      spawnInitialWave: false,
+      includeTrainingDummy: false,
+      includeProps: false,
+      autoRespawnWaves: false,
+    });
+    sim.enterHub();
+
+    const { keyMap, plugin } = createMockKeyboardPlugin();
+    const openModalSpy = vi.fn();
+
+    const scene = {
+      coopMode: 'solo',
+      menuActiveInput: null,
+      pauseModalOpen: false,
+      pauseConfirmExitOpen: false,
+      fullMapOpen: false,
+      emoteWheelOpen: false,
+      emoteWheelHoveredId: null,
+      invitePanelVisible: false,
+      resultDismissed: false,
+      dashQueued: false,
+      skillQueued: false,
+      wheelSwapQueued: false,
+      interactQueued: false,
+      reloadVentQueued: false,
+      dropWeaponQueued: false,
+      readyToggleQueued: false,
+      pingQueued: null,
+      queuedEmote: null,
+      queuedWeaponSlot: null,
+      lastShakeX: 0,
+      lastShakeY: 0,
+      lastInvitePanelHash: 'cached',
+      input: {
+        keyboard: plugin,
+        activePointer: { x: 240, y: 135 },
+      },
+      cameras: {
+        main: {
+          getWorldPoint: (x: number, y: number) => ({ x, y }),
+        },
+      },
+      transport: {
+        getSim: () => sim,
+        getLocalPlayerState: () => sim.player,
+      },
+      settingsModal: {
+        isOpen: () => false,
+        open: openModalSpy,
+        close: vi.fn(),
+      },
+      invalidateAllHudCaches: vi.fn(),
+      togglePauseModal: vi.fn(),
+      rebuildPauseModal: vi.fn(),
+      openPauseConfirmExit: vi.fn(),
+      triggerIrisTransition: vi.fn(),
+    } as unknown as GameScene;
+
+    setupKeyboardBindingsImpl.call(scene);
+
+    // Rebind interact 'KeyE' -> 'KeyF' and dash 'Shift' <-> 'KeyQ'
+    graphicsSettings.setKeybinding('interact', 'KeyF');
+    graphicsSettings.setKeybinding('dash', 'KeyQ');
+    syncSceneKeybindings(scene);
+
+    // Firing old 'KeyE' (69) must NOT queue interact
+    scene.interactQueued = false;
+    keyMap.get(getKeyCodeForBinding('KeyE'))?.emitDown();
+    expect(scene.interactQueued).toBe(false);
+
+    // Firing new 'KeyF' (70) queues interact cleanly
+    expect(keyMap.get(getKeyCodeForBinding('KeyF'))?.listenerCount('down')).toBe(1);
+    keyMap.get(getKeyCodeForBinding('KeyF'))?.emitDown();
+    expect(scene.interactQueued).toBe(true);
+
+    // Swapped dash ('KeyQ') and swapWeapon ('Shift') fire their new actions cleanly
+    scene.dashQueued = false;
+    scene.wheelSwapQueued = false;
+    keyMap.get(getKeyCodeForBinding('KeyQ'))?.emitDown();
+    expect(scene.dashQueued).toBe(true);
+    expect(scene.wheelSwapQueued).toBe(false);
+
+    scene.dashQueued = false;
+    keyMap.get(getKeyCodeForBinding('Shift'))?.emitDown();
+    expect(scene.wheelSwapQueued).toBe(true);
+    expect(scene.dashQueued).toBe(false);
+
+    // Rebind 'KeyF' -> 'KeyE' and verify 'KeyE' fires once with zero duplicate listeners
+    scene.interactQueued = false;
+    graphicsSettings.setKeybinding('interact', 'KeyE');
+    syncSceneKeybindings(scene);
+
+    const keyE = keyMap.get(getKeyCodeForBinding('KeyE'))!;
+    expect(keyE.listenerCount('down')).toBe(1);
+    let interactObservedCount = 0;
+    Object.defineProperty(scene, 'interactQueued', {
+      configurable: true,
+      get: () => interactObservedCount > 0,
+      set: (val: boolean) => {
+        if (val) interactObservedCount += 1;
+      },
+    });
+    keyE.emitDown();
+    expect(interactObservedCount).toBe(1);
+
+    // Binding an action to 'KeyO' suppresses unpaused Hub 'keydown-O' modal shortcut while preserving pauseModalOpen '[O]'
+    graphicsSettings.setKeybinding('ping', 'KeyO');
+    syncSceneKeybindings(scene);
+
+    scene.pauseModalOpen = false;
+    plugin.emit('keydown-O');
+    expect(openModalSpy).not.toHaveBeenCalled();
+
+    scene.pauseModalOpen = true;
+    plugin.emit('keydown-O');
+    expect(openModalSpy).toHaveBeenCalledWith('settings');
+  });
+
+  it("propagates custom key labels into resolveInteractPromptSpec, formatWeaponCadenceHudLabel, and computeWeaponSalvageHudState while keeping default 'E'/'R'/'X' unchanged", () => {
+    const { windowObj } = createCaptureFakeWindow();
+    vi.stubGlobal('window', windowObj);
+
+    const sim = new WorldSim({
+      seed: 'keybind-hud-labels-test',
+      spawnInitialWave: false,
+      includeTrainingDummy: false,
+      includeProps: false,
+      autoRespawnWaves: false,
+    });
+    sim.enemies.length = 0;
+    sim.chests.length = 0;
+    sim.worldItems.length = 0;
+    sim.doors.length = 0;
+    sim.inHub = false;
+    sim.player.x = 480;
+    sim.player.y = 320;
+
+    const clipWeapon = Object.values(WEAPONS).find((w) => w.cadenceKind === 'CLIP_RELOAD')!;
+    const heatWeapon = Object.values(WEAPONS).find((w) => w.cadenceKind === 'HEAT_VENT')!;
+
+    sim.spawnWorldItem({
+      kind: 'weapon',
+      weaponId: clipWeapon.id,
+      rarity: 'rare',
+      nameVi: clipWeapon.nameVi,
+      costGold: 0,
+      x: 492,
+      y: 320,
+    });
+
+    sim.player.reloadTimer = 0.5;
+    sim.player.weaponHeat = 80;
+    sim.player.overheatLockTimer = 0;
+
+    // 1. Default bindings: 'E', 'R', 'X'
+    const target = findInteractTarget(sim, sim.player.id);
+    expect(resolveInteractPromptSpec(sim, target)?.keycapText).toBe('E');
+    expect(formatWeaponCadenceHudLabel(sim.player, clipWeapon, 'en').barText).toContain('[R]');
+    expect(formatWeaponCadenceHudLabel(sim.player, heatWeapon, 'vi').barText).toContain('[R]');
+    expect(formatWeaponCadenceHudLabel(sim.player, heatWeapon, 'en').compareStatText).toContain(
+      '[R]',
+    );
+    expect(computeWeaponSalvageHudState(sim, sim.player, true).promptText).toContain('[X]');
+    expect(computeWeaponSalvageHudState(sim, sim.player, false).promptText).toContain('[X]');
+
+    // 2. Custom bindings: interact -> 'KeyF', reload -> 'KeyC', dropWeapon -> 'KeyB'
+    graphicsSettings.setKeybinding('interact', 'KeyF');
+    graphicsSettings.setKeybinding('reload', 'KeyC');
+    graphicsSettings.setKeybinding('dropWeapon', 'KeyB');
+
+    expect(resolveInteractPromptSpec(sim, target)?.keycapText).toBe('F');
+    expect(
+      resolveInteractPromptSpec(sim, target, { keycapText: 'Space' })?.keycapText,
+    ).toBe('Space');
+    expect(formatWeaponCadenceHudLabel(sim.player, clipWeapon, 'en').barText).toContain('[C]');
+    expect(formatWeaponCadenceHudLabel(sim.player, clipWeapon, 'vi').barText).toContain('[C]');
+    expect(formatWeaponCadenceHudLabel(sim.player, heatWeapon, 'vi').barText).toContain('[C]');
+    expect(formatWeaponCadenceHudLabel(sim.player, heatWeapon, 'en').compareStatText).toContain(
+      '[C]',
+    );
+    expect(computeWeaponSalvageHudState(sim, sim.player, true).promptText).toContain('[B]');
+    expect(computeWeaponSalvageHudState(sim, sim.player, false).promptText).toContain('[B]');
+  });
+});
+

@@ -5,46 +5,290 @@ import { zzfx } from '../../audio/zzfx.js';
 import { isEffectiveDebugUiEnabled, setServerDebugAllowed } from '../../core/debug-flag.js';
 import { initGlobalDebugState } from '../../ui/debug-overlay.js';
 import { graphicsSettings } from '../../ui/graphics-settings.js';
+import {
+  getKeyCodeForBinding,
+  isBindingCodeUsed,
+  type KeybindActionId,
+  shouldCaptureBrowserKey,
+} from '../../ui/keybindings.js';
 import { type GameScene } from '../GameScene.js';
 import { exitToSoloSanctuary, resolveSanctuaryWsUrl } from './sanctuary-lobby-ui.js';
+
+interface BoundActionKeyEntry {
+  action: KeybindActionId;
+  code: string;
+  keyCode: number;
+  keyObj: Phaser.Input.Keyboard.Key;
+  onDown?: (keyObj?: Phaser.Input.Keyboard.Key, event?: KeyboardEvent) => void;
+  onUp?: (keyObj?: Phaser.Input.Keyboard.Key, event?: KeyboardEvent) => void;
+}
+
+interface SceneKeybindRuntime {
+  boundEntries: BoundActionKeyEntry[];
+  cycleElement: () => void;
+  handlers: {
+    onDashDown: () => void;
+    onSkillDown: () => void;
+    onSwapDown: () => void;
+    onInteractDown: () => void;
+    onPingDown: () => void;
+    onDropWeaponDown: () => void;
+    onReloadDown: (keyObj?: Phaser.Input.Keyboard.Key, event?: KeyboardEvent) => void;
+    onToggleMapDown: () => void;
+    onCoopPanelDown: () => void;
+    onEmoteDown: () => void;
+    onEmoteUp: () => void;
+  };
+}
+
+const sceneKeybindRuntimeMap = new WeakMap<GameScene, SceneKeybindRuntime>();
+
+function createSceneKeybindRuntime(scene: GameScene): SceneKeybindRuntime {
+  let lastCycleElementAt = -1000;
+  let lastAltREvent: KeyboardEvent | undefined;
+
+  const cycleElement = () => {
+    if (!isEffectiveDebugUiEnabled(scene.coopMode !== 'solo')) return;
+    const now = performance.now();
+    if (now - lastCycleElementAt < 60) return;
+    lastCycleElementAt = now;
+    scene.transport.getSim().cycleImbueElement();
+    zzfx.play('weapon_swap');
+  };
+
+  return {
+    boundEntries: [],
+    cycleElement,
+    handlers: {
+      onDashDown: () => {
+        if (scene.menuActiveInput !== null || initGlobalDebugState().rebindingAction !== null) {
+          return;
+        }
+        scene.dashQueued = true;
+      },
+      onSkillDown: () => {
+        if (scene.menuActiveInput !== null || initGlobalDebugState().rebindingAction !== null) {
+          return;
+        }
+        scene.skillQueued = true;
+      },
+      onSwapDown: () => {
+        if (scene.menuActiveInput !== null || initGlobalDebugState().rebindingAction !== null) {
+          return;
+        }
+        scene.wheelSwapQueued = true;
+      },
+      onInteractDown: () => {
+        if (scene.menuActiveInput !== null || initGlobalDebugState().rebindingAction !== null) {
+          return;
+        }
+        scene.interactQueued = true;
+        const sim = scene.transport.getSim();
+        if (sim.runState === 'victory' && sim.currentFloor < 6 && !scene.resultDismissed) {
+          scene.resultDismissed = true;
+          sim.campaignMaxFloors = 6;
+          sim.runState = 'playing';
+          if (scene.room && scene.coopMode !== 'solo') {
+            scene.room.send('continue_campaign', {});
+          }
+        } else if (
+          scene.room &&
+          scene.coopMode !== 'solo' &&
+          sim.inHub &&
+          sim.portalActive &&
+          Math.hypot(sim.player.x - sim.portalX, sim.player.y - sim.portalY) <= 76
+        ) {
+          sim.player.ready = true;
+          scene.room.send('set_ready', { ready: true, autoStartIfAllReady: true });
+          if (sim.areAllPlayersReady() || sim.player.slot === 1) {
+            scene.room.send('start_run', {});
+          }
+        }
+      },
+      onPingDown: () => {
+        if (scene.menuActiveInput !== null || initGlobalDebugState().rebindingAction !== null) {
+          return;
+        }
+        const pointer = scene.input.activePointer;
+        const wPt = scene.cameras.main.getWorldPoint(pointer.x, pointer.y);
+        scene.pingQueued = {
+          x: wPt.x - scene.lastShakeX,
+          y: wPt.y - scene.lastShakeY,
+        };
+      },
+      onDropWeaponDown: () => {
+        if (scene.menuActiveInput !== null || initGlobalDebugState().rebindingAction !== null) {
+          return;
+        }
+        scene.dropWeaponQueued = true;
+      },
+      onReloadDown: (keyObj?: Phaser.Input.Keyboard.Key, event?: KeyboardEvent) => {
+        if (scene.menuActiveInput !== null || initGlobalDebugState().rebindingAction !== null) {
+          return;
+        }
+        scene.reloadVentQueued = true;
+        const domEvent = event ?? keyObj?.originalEvent;
+        if ((domEvent?.altKey || keyObj?.altKey) && domEvent !== lastAltREvent) {
+          lastAltREvent = domEvent;
+          cycleElement();
+        }
+      },
+      onToggleMapDown: () => {
+        if (scene.menuActiveInput !== null || initGlobalDebugState().rebindingAction !== null) {
+          return;
+        }
+        scene.fullMapOpen = !scene.fullMapOpen;
+        initGlobalDebugState().fullMapOpen = scene.fullMapOpen;
+      },
+      onCoopPanelDown: () => {
+        if (scene.menuActiveInput !== null || initGlobalDebugState().rebindingAction !== null) {
+          return;
+        }
+        scene.invitePanelVisible = !scene.invitePanelVisible;
+        initGlobalDebugState().invitePanelVisible = scene.invitePanelVisible;
+        scene.lastInvitePanelHash = '';
+      },
+      onEmoteDown: () => {
+        if (scene.menuActiveInput !== null || initGlobalDebugState().rebindingAction !== null) {
+          return;
+        }
+        const sim = scene.transport.getSim();
+        if (
+          !scene.pauseModalOpen &&
+          !(scene.settingsModal?.isOpen() ?? false) &&
+          sim.runState === 'playing'
+        ) {
+          scene.emoteWheelOpen = true;
+          initGlobalDebugState().emoteWheelOpen = true;
+        }
+      },
+      onEmoteUp: () => {
+        if (scene.emoteWheelOpen) {
+          if (scene.emoteWheelHoveredId !== null) {
+            scene.queuedEmote = scene.emoteWheelHoveredId;
+          }
+          scene.emoteWheelOpen = false;
+          scene.emoteWheelHoveredId = null;
+          initGlobalDebugState().emoteWheelOpen = false;
+        }
+      },
+    },
+  };
+}
+
+function getOrCreateSceneKeybindRuntime(scene: GameScene): SceneKeybindRuntime {
+  let runtime = sceneKeybindRuntimeMap.get(scene);
+  if (!runtime) {
+    runtime = createSceneKeybindRuntime(scene);
+    sceneKeybindRuntimeMap.set(scene, runtime);
+  }
+  return runtime;
+}
+
+/**
+ * Hot-swaps all 14 customizable Phaser `Key` bindings on `scene.keys` without destroying
+ * shared `KeyboardPlugin.keys` instances (`G`, `V`, etc.) or registering duplicate listeners.
+ */
+export function syncSceneKeybindings(scene: GameScene): void {
+  const kb = scene.input?.keyboard;
+  if (!kb) return;
+
+  const runtime = getOrCreateSceneKeybindRuntime(scene);
+  const bindings = graphicsSettings.getKeybindings();
+
+  for (const prev of runtime.boundEntries) {
+    if (prev.onDown) {
+      prev.keyObj.off('down', prev.onDown);
+    }
+    if (prev.onUp) {
+      prev.keyObj.off('up', prev.onUp);
+    }
+    prev.keyObj.reset?.();
+    if (
+      shouldCaptureBrowserKey(prev.code) &&
+      !isBindingCodeUsed(bindings, prev.code) &&
+      typeof (kb as { removeCapture?: unknown }).removeCapture === 'function'
+    ) {
+      kb.removeCapture(prev.keyCode);
+    }
+  }
+  runtime.boundEntries = [];
+
+  const resolveActionKey = (
+    action: KeybindActionId,
+    onDown?: (keyObj?: Phaser.Input.Keyboard.Key, event?: KeyboardEvent) => void,
+    onUp?: (keyObj?: Phaser.Input.Keyboard.Key, event?: KeyboardEvent) => void,
+  ): Phaser.Input.Keyboard.Key => {
+    const code = bindings[action];
+    const keyCode = getKeyCodeForBinding(code);
+    const capture = shouldCaptureBrowserKey(code);
+    const keyObj = kb.addKey(keyCode, capture);
+    if (
+      capture &&
+      scene.menuActiveInput === null &&
+      typeof (kb as { addCapture?: unknown }).addCapture === 'function'
+    ) {
+      kb.addCapture(keyCode);
+    }
+    if (onDown) {
+      keyObj.on('down', onDown);
+    }
+    if (onUp) {
+      keyObj.on('up', onUp);
+    }
+    runtime.boundEntries.push({ action, code, keyCode, keyObj, onDown, onUp });
+    return keyObj;
+  };
+
+  const kc = Phaser.Input.Keyboard.KeyCodes as Record<string, number | undefined>;
+  const existingKeys = scene.keys;
+
+  scene.keys = {
+    W: resolveActionKey('moveUp'),
+    S: resolveActionKey('moveDown'),
+    A: resolveActionKey('moveLeft'),
+    D: resolveActionKey('moveRight'),
+    SPACE: resolveActionKey('skill', runtime.handlers.onSkillDown),
+    SHIFT: resolveActionKey('dash', runtime.handlers.onDashDown),
+    E: resolveActionKey('interact', runtime.handlers.onInteractDown),
+    Q: resolveActionKey('swapWeapon', runtime.handlers.onSwapDown),
+    R: resolveActionKey('reload', runtime.handlers.onReloadDown),
+    X: resolveActionKey('dropWeapon', runtime.handlers.onDropWeaponDown),
+    TAB: resolveActionKey('toggleMap', runtime.handlers.onToggleMapDown),
+    Z: resolveActionKey('ping', runtime.handlers.onPingDown),
+    T: resolveActionKey('emote', runtime.handlers.onEmoteDown, runtime.handlers.onEmoteUp),
+    I: resolveActionKey('coopPanel', runtime.handlers.onCoopPanelDown),
+    G: existingKeys?.G ?? kb.addKey(kc.G ?? 71),
+    V: existingKeys?.V ?? kb.addKey(kc.V ?? 86),
+    ONE: existingKeys?.ONE ?? kb.addKey(kc.ONE ?? 49),
+    TWO: existingKeys?.TWO ?? kb.addKey(kc.TWO ?? 50),
+    THREE: existingKeys?.THREE ?? kb.addKey(kc.THREE ?? 51),
+    FOUR: existingKeys?.FOUR ?? kb.addKey(kc.FOUR ?? 52),
+    F2: existingKeys?.F2 ?? kb.addKey(kc.F2 ?? 113),
+    F3: existingKeys?.F3 ?? kb.addKey(kc.F3 ?? 114),
+    F4: existingKeys?.F4 ?? kb.addKey(kc.F4 ?? 115),
+    F5: existingKeys?.F5 ?? kb.addKey(kc.F5 ?? 116),
+    F6: existingKeys?.F6 ?? kb.addKey(kc.F6 ?? 117),
+    F7: existingKeys?.F7 ?? kb.addKey(kc.F7 ?? 118),
+    F8: existingKeys?.F8 ?? kb.addKey(kc.F8 ?? 119),
+    F9: existingKeys?.F9 ?? kb.addKey(kc.F9 ?? 120),
+  };
+}
 
 export function setupKeyboardBindingsImpl(this: GameScene): void {
   const kb = this.input.keyboard;
   if (!kb) return;
 
-  this.keys = {
-    W: kb.addKey(Phaser.Input.Keyboard.KeyCodes.W),
-    A: kb.addKey(Phaser.Input.Keyboard.KeyCodes.A),
-    S: kb.addKey(Phaser.Input.Keyboard.KeyCodes.S),
-    D: kb.addKey(Phaser.Input.Keyboard.KeyCodes.D),
-    SPACE: kb.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE),
-    SHIFT: kb.addKey(Phaser.Input.Keyboard.KeyCodes.SHIFT),
-    Q: kb.addKey(Phaser.Input.Keyboard.KeyCodes.Q),
-    E: kb.addKey(Phaser.Input.Keyboard.KeyCodes.E),
-    R: kb.addKey(Phaser.Input.Keyboard.KeyCodes.R),
-    G: kb.addKey(Phaser.Input.Keyboard.KeyCodes.G),
-    Z: kb.addKey(Phaser.Input.Keyboard.KeyCodes.Z),
-    X: kb.addKey(Phaser.Input.Keyboard.KeyCodes.X),
-    T: kb.addKey(Phaser.Input.Keyboard.KeyCodes.T),
-    V: kb.addKey(Phaser.Input.Keyboard.KeyCodes.V),
-    I: kb.addKey(Phaser.Input.Keyboard.KeyCodes.I),
-    TAB: kb.addKey(Phaser.Input.Keyboard.KeyCodes.TAB, false),
-    ONE: kb.addKey(Phaser.Input.Keyboard.KeyCodes.ONE),
-    TWO: kb.addKey(Phaser.Input.Keyboard.KeyCodes.TWO),
-    THREE: kb.addKey(Phaser.Input.Keyboard.KeyCodes.THREE),
-    FOUR: kb.addKey(Phaser.Input.Keyboard.KeyCodes.FOUR),
-    F2: kb.addKey(Phaser.Input.Keyboard.KeyCodes.F2),
-    F3: kb.addKey(Phaser.Input.Keyboard.KeyCodes.F3),
-    F4: kb.addKey(Phaser.Input.Keyboard.KeyCodes.F4),
-    F5: kb.addKey(Phaser.Input.Keyboard.KeyCodes.F5),
-    F6: kb.addKey(Phaser.Input.Keyboard.KeyCodes.F6),
-    F7: kb.addKey(Phaser.Input.Keyboard.KeyCodes.F7),
-    F8: kb.addKey(Phaser.Input.Keyboard.KeyCodes.F8),
-    F9: kb.addKey(Phaser.Input.Keyboard.KeyCodes.F9),
-  };
+  // Create fresh per-scene keybind runtime and wire all 14 customizable keys
+  const runtime = createSceneKeybindRuntime(this);
+  sceneKeybindRuntimeMap.set(this, runtime);
+  this.keys = undefined;
+  syncSceneKeybindings(this);
+  const keys = this.keys as GameScene['keys'];
+  if (!keys) return;
 
   kb.on('keydown-ESC', () => {
-    if (this.menuActiveInput !== null) return;
+    if (this.menuActiveInput !== null || initGlobalDebugState().rebindingAction !== null) return;
     zzfx.play('ui_click');
     if (this.settingsModal?.isOpen()) {
       this.settingsModal.close();
@@ -64,58 +308,9 @@ export function setupKeyboardBindingsImpl(this: GameScene): void {
     this.togglePauseModal();
   });
 
-  this.keys.SHIFT.on('down', () => {
-    if (this.menuActiveInput !== null) return;
-    this.dashQueued = true;
-  });
-  this.keys.SPACE.on('down', () => {
-    if (this.menuActiveInput !== null) return;
-    this.skillQueued = true;
-  });
-  this.keys.Q.on('down', () => {
-    if (this.menuActiveInput !== null) return;
-    this.wheelSwapQueued = true;
-  });
-  this.keys.E.on('down', () => {
-    if (this.menuActiveInput !== null) return;
-    this.interactQueued = true;
-    const sim = this.transport.getSim();
-    if (sim.runState === 'victory' && sim.currentFloor < 6 && !this.resultDismissed) {
-      this.resultDismissed = true;
-      sim.campaignMaxFloors = 6;
-      sim.runState = 'playing';
-      if (this.room && this.coopMode !== 'solo') {
-        this.room.send('continue_campaign', {});
-      }
-    } else if (
-      this.room &&
-      this.coopMode !== 'solo' &&
-      sim.inHub &&
-      sim.portalActive &&
-      Math.hypot(sim.player.x - sim.portalX, sim.player.y - sim.portalY) <= 76
-    ) {
-      sim.player.ready = true;
-      this.room.send('set_ready', { ready: true, autoStartIfAllReady: true });
-      if (sim.areAllPlayersReady() || sim.player.slot === 1) {
-        this.room.send('start_run', {});
-      }
-    }
-  });
-  this.keys.Z.on('down', () => {
-    if (this.menuActiveInput !== null) return;
-    const pointer = this.input.activePointer;
-    const wPt = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
-    this.pingQueued = {
-      x: wPt.x - this.lastShakeX,
-      y: wPt.y - this.lastShakeY,
-    };
-  });
-  this.keys.X.on('down', () => {
-    if (this.menuActiveInput !== null) return;
-    this.dropWeaponQueued = true;
-  });
-  this.keys.V.on('down', () => {
-    if (this.menuActiveInput !== null) return;
+  keys.V.on('down', () => {
+    if (this.menuActiveInput !== null || initGlobalDebugState().rebindingAction !== null) return;
+    if (isBindingCodeUsed(graphicsSettings.getKeybindings(), 'KeyV')) return;
     const sim = this.transport.getSim();
     if (this.room && this.coopMode !== 'solo') {
       if (!sim.player.ready) {
@@ -136,38 +331,9 @@ export function setupKeyboardBindingsImpl(this: GameScene): void {
     }
     this.lastInvitePanelHash = '';
   });
-  this.keys.I.on('down', () => {
-    if (this.menuActiveInput !== null) return;
-    this.invitePanelVisible = !this.invitePanelVisible;
-    initGlobalDebugState().invitePanelVisible = this.invitePanelVisible;
-    this.lastInvitePanelHash = '';
-  });
-  this.keys.TAB.on('down', () => {
-    this.fullMapOpen = !this.fullMapOpen;
-    initGlobalDebugState().fullMapOpen = this.fullMapOpen;
-  });
-  this.keys.T.on('down', () => {
-    const sim = this.transport.getSim();
-    if (
-      !this.pauseModalOpen &&
-      !(this.settingsModal?.isOpen() ?? false) &&
-      sim.runState === 'playing'
-    ) {
-      this.emoteWheelOpen = true;
-      initGlobalDebugState().emoteWheelOpen = true;
-    }
-  });
-  this.keys.T.on('up', () => {
-    if (this.emoteWheelOpen) {
-      if (this.emoteWheelHoveredId !== null) {
-        this.queuedEmote = this.emoteWheelHoveredId;
-      }
-      this.emoteWheelOpen = false;
-      this.emoteWheelHoveredId = null;
-      initGlobalDebugState().emoteWheelOpen = false;
-    }
-  });
-  this.keys.ONE.on('down', () => {
+
+  keys.ONE.on('down', () => {
+    if (initGlobalDebugState().rebindingAction !== null) return;
     const sim = this.transport.getSim();
     const lp = this.transport.getLocalPlayerState();
     const choice0 = lp.buffChoices[0];
@@ -199,7 +365,8 @@ export function setupKeyboardBindingsImpl(this: GameScene): void {
       this.queuedWeaponSlot = 0;
     }
   });
-  this.keys.TWO.on('down', () => {
+  keys.TWO.on('down', () => {
+    if (initGlobalDebugState().rebindingAction !== null) return;
     const sim = this.transport.getSim();
     const lp = this.transport.getLocalPlayerState();
     const choice1 = lp.buffChoices[1];
@@ -231,7 +398,8 @@ export function setupKeyboardBindingsImpl(this: GameScene): void {
       this.queuedWeaponSlot = 1;
     }
   });
-  this.keys.THREE.on('down', () => {
+  keys.THREE.on('down', () => {
+    if (initGlobalDebugState().rebindingAction !== null) return;
     const sim = this.transport.getSim();
     const lp = this.transport.getLocalPlayerState();
     const choice2 = lp.buffChoices[2];
@@ -255,7 +423,8 @@ export function setupKeyboardBindingsImpl(this: GameScene): void {
       initGlobalDebugState().emoteWheelOpen = false;
     }
   });
-  this.keys.FOUR.on('down', () => {
+  keys.FOUR.on('down', () => {
+    if (initGlobalDebugState().rebindingAction !== null) return;
     if (this.keys?.T.isDown || this.emoteWheelOpen) {
       this.queuedEmote = 4;
       this.emoteWheelOpen = false;
@@ -264,35 +433,19 @@ export function setupKeyboardBindingsImpl(this: GameScene): void {
     }
   });
 
-  // R: Active Reload / Thermal Vent (INPUT_BUTTON.RELOAD_VENT); Alt+R or F6: Cycle Elemental Imbue (Debug)
-  let lastCycleElementAt = -1000;
-  const cycleElement = () => {
-    if (!isEffectiveDebugUiEnabled(this.coopMode !== 'solo')) return;
-    const now = performance.now();
-    if (now - lastCycleElementAt < 60) return;
-    lastCycleElementAt = now;
-    this.transport.getSim().cycleImbueElement();
-    zzfx.play('weapon_swap');
-  };
-  let lastAltREvent: KeyboardEvent | undefined;
-  this.keys.R.on('down', (keyObj?: Phaser.Input.Keyboard.Key, event?: KeyboardEvent) => {
-    this.reloadVentQueued = true;
-    const domEvent = event ?? keyObj?.originalEvent;
-    if ((domEvent?.altKey || keyObj?.altKey) && domEvent !== lastAltREvent) {
-      lastAltREvent = domEvent;
-      cycleElement();
-    }
-  });
-  this.keys.F6.on('down', cycleElement);
+  // F6: Cycle Elemental Imbue (Debug)
+  keys.F6.on('down', runtime.cycleElement);
 
   // G: Cycle Graphics Quality Preset (High -> Medium -> Low -> High)
-  this.keys.G.on('down', () => {
+  keys.G.on('down', () => {
+    if (initGlobalDebugState().rebindingAction !== null) return;
+    if (isBindingCodeUsed(graphicsSettings.getKeybindings(), 'KeyG')) return;
     if (!isEffectiveDebugUiEnabled(this.coopMode !== 'solo')) return;
     graphicsSettings.cycleQuality();
   });
 
   // F2: Toggle God Mode
-  this.keys.F2.on('down', () => {
+  keys.F2.on('down', () => {
     if (!isEffectiveDebugUiEnabled(this.coopMode !== 'solo')) return;
     const sim = this.transport.getSim();
     const nextGod = !sim.player.godMode;
@@ -305,13 +458,13 @@ export function setupKeyboardBindingsImpl(this: GameScene): void {
   });
 
   // F3: Spawn fresh sample wave of 3 enemies
-  this.keys.F3.on('down', () => {
+  keys.F3.on('down', () => {
     if (!isEffectiveDebugUiEnabled(this.coopMode !== 'solo')) return;
     this.transport.getSim().spawnSampleWave();
   });
 
   // F4: Toggle Hitbox & SpatialHashGrid visualization
-  this.keys.F4.on('down', () => {
+  keys.F4.on('down', () => {
     if (!isEffectiveDebugUiEnabled(this.coopMode !== 'solo')) return;
     const debug = initGlobalDebugState();
     debug.showHitboxes = !debug.showHitboxes;
@@ -321,7 +474,7 @@ export function setupKeyboardBindingsImpl(this: GameScene): void {
   });
 
   // F5: Skip current room waves & unlock doors
-  this.keys.F5.on('down', () => {
+  keys.F5.on('down', () => {
     if (!isEffectiveDebugUiEnabled(this.coopMode !== 'solo')) return;
     const sim = this.transport.getSim();
     sim.skipCurrentRoomWaves();
@@ -331,14 +484,14 @@ export function setupKeyboardBindingsImpl(this: GameScene): void {
   });
 
   // F7: Toggle Phase 2 Stress Test (4 players + 80 enemies + 600+ projectiles)
-  this.keys.F7.on('down', () => {
+  keys.F7.on('down', () => {
     if (!isEffectiveDebugUiEnabled(this.coopMode !== 'solo')) return;
     const sim = this.transport.getSim();
     this.setStressTestMode(!sim.stressTestActive);
   });
 
   // F8: Toggle Phase 3 Bot Auto-Play (auto-clears Floor 1 -> Buff -> Floor 2 + Boss)
-  this.keys.F8.on('down', () => {
+  keys.F8.on('down', () => {
     if (!isEffectiveDebugUiEnabled(this.coopMode !== 'solo')) return;
     const sim = this.transport.getSim();
     const nextBot = !sim.botAutoPlayActive;
@@ -350,7 +503,7 @@ export function setupKeyboardBindingsImpl(this: GameScene): void {
   });
 
   // F9: Cycle Phase 4 Wi-Fi Network Simulation Profile (off -> good -> normal -> bad)
-  this.keys.F9.on('down', () => {
+  keys.F9.on('down', () => {
     if (!isEffectiveDebugUiEnabled(this.coopMode !== 'solo')) return;
     const profiles: WifiProfileId[] = ['off', 'good', 'normal', 'bad'];
     const debug = initGlobalDebugState();
@@ -362,7 +515,7 @@ export function setupKeyboardBindingsImpl(this: GameScene): void {
 
   // ENTER: Confirm exit when Pause Exit Confirmation is open, or Replay run when Victory/Defeat modal is active
   kb.on('keydown-ENTER', () => {
-    if (this.menuActiveInput !== null) return;
+    if (this.menuActiveInput !== null || initGlobalDebugState().rebindingAction !== null) return;
     if (this.pauseModalOpen && this.pauseConfirmExitOpen) {
       zzfx.play('ui_click');
       this.pauseConfirmExitOpen = false;
@@ -385,7 +538,7 @@ export function setupKeyboardBindingsImpl(this: GameScene): void {
   });
 
   kb.on('keydown-H', () => {
-    if (this.menuActiveInput !== null) return;
+    if (this.menuActiveInput !== null || initGlobalDebugState().rebindingAction !== null) return;
     const sim = this.transport.getSim();
     if (this.pauseModalOpen && !this.pauseConfirmExitOpen && !this.settingsModal?.isOpen()) {
       zzfx.play('portal_enter');
@@ -406,20 +559,24 @@ export function setupKeyboardBindingsImpl(this: GameScene): void {
   });
 
   kb.on('keydown-O', () => {
-    if (this.menuActiveInput !== null) return;
+    if (this.menuActiveInput !== null || initGlobalDebugState().rebindingAction !== null) return;
+    if (this.settingsModal?.isOpen()) return;
+    if (this.pauseModalOpen && !this.pauseConfirmExitOpen) {
+      zzfx.play('ui_click');
+      this.settingsModal?.open('settings');
+      return;
+    }
+    if (isBindingCodeUsed(graphicsSettings.getKeybindings(), 'KeyO')) return;
     const sim = this.transport.getSim();
-    if (
-      !this.settingsModal?.isOpen() &&
-      ((this.pauseModalOpen && !this.pauseConfirmExitOpen) ||
-        (sim.inHub && !this.pauseModalOpen && !this.fullMapOpen))
-    ) {
+    if (sim.inHub && !this.pauseModalOpen && !this.fullMapOpen) {
       zzfx.play('ui_click');
       this.settingsModal?.open('settings');
     }
   });
 
   kb.on('keydown-K', () => {
-    if (this.menuActiveInput !== null) return;
+    if (this.menuActiveInput !== null || initGlobalDebugState().rebindingAction !== null) return;
+    if (isBindingCodeUsed(graphicsSettings.getKeybindings(), 'KeyK')) return;
     const sim = this.transport.getSim();
     if (
       sim.inHub &&
@@ -433,7 +590,8 @@ export function setupKeyboardBindingsImpl(this: GameScene): void {
   });
 
   kb.on('keydown-C', () => {
-    if (this.menuActiveInput !== null) return;
+    if (this.menuActiveInput !== null || initGlobalDebugState().rebindingAction !== null) return;
+    if (isBindingCodeUsed(graphicsSettings.getKeybindings(), 'KeyC')) return;
     const sim = this.transport.getSim();
     if (
       sim.inHub &&
@@ -447,7 +605,8 @@ export function setupKeyboardBindingsImpl(this: GameScene): void {
   });
 
   kb.on('keydown-L', () => {
-    if (this.menuActiveInput !== null) return;
+    if (this.menuActiveInput !== null || initGlobalDebugState().rebindingAction !== null) return;
+    if (isBindingCodeUsed(graphicsSettings.getKeybindings(), 'KeyL')) return;
     const sim = this.transport.getSim();
     if (
       sim.inHub &&
@@ -463,7 +622,7 @@ export function setupKeyboardBindingsImpl(this: GameScene): void {
   });
 
   kb.on('keydown-M', () => {
-    if (this.menuActiveInput !== null) return;
+    if (this.menuActiveInput !== null || initGlobalDebugState().rebindingAction !== null) return;
     const sim = this.transport.getSim();
     if (this.pauseModalOpen && !this.pauseConfirmExitOpen && !this.settingsModal?.isOpen()) {
       zzfx.play('ui_click');

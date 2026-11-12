@@ -30,13 +30,17 @@ export function syncHudDebugVisibility(scene: GameScene): void {
   const inHub = Boolean(scene.transport?.getSim?.()?.inHub);
   const showCombatDebug = showDebug && !inHub;
   const isEn = i18n.getLocale() === 'en';
+  const dashKey = graphicsSettings.getActionKeyLabel('dash');
+  const reloadKey = graphicsSettings.getActionKeyLabel('reload');
+  const interactKey = graphicsSettings.getActionKeyLabel('interact');
+  const mapKey = graphicsSettings.getActionKeyLabel('toggleMap');
   const nextStatus = showDebug
     ? isEn
-      ? 'WASD: Move · Mouse: Shoot/Skill · Shift: Dash · R: Reload/Vent · G: Quality · F1-F7: Debug'
-      : 'WASD: Chạy · Chuột: Bắn/Khiên · Shift: Dash · R: Nạp/Xả · G: Đồ Họa · F1-F7: Debug'
+      ? `Move · Mouse: Shoot/Skill · ${dashKey}: Dash · ${reloadKey}: Reload/Vent · G: Quality · F1-F7: Debug`
+      : `Chạy · Chuột: Bắn/Khiên · ${dashKey}: Dash · ${reloadKey}: Nạp/Xả · G: Đồ Họa · F1-F7: Debug`
     : isEn
-      ? 'WASD: Move · Mouse: Shoot/Skill · Shift: Dash · E: Interact · Tab: Map'
-      : 'WASD: Chạy · Chuột: Bắn/Kỹ năng · Shift: Dash · E: Tương tác · Tab: Bản đồ';
+      ? `Move · Mouse: Shoot/Skill · ${dashKey}: Dash · ${interactKey}: Interact · ${mapKey}: Map`
+      : `Chạy · Chuột: Bắn/Kỹ năng · ${dashKey}: Dash · ${interactKey}: Tương tác · ${mapKey}: Bản đồ`;
 
   if (scene.statusText) {
     if (scene.statusText.text !== nextStatus) {
@@ -359,7 +363,7 @@ export function buildVectorHudImpl(this: GameScene): void {
     .text(
       -352,
       -52,
-      'Space',
+      graphicsSettings.getActionKeyLabel('skill'),
       createUiTextStyle({
         fontPxAt1080p: 13,
         weight: 700,
@@ -400,7 +404,7 @@ export function buildVectorHudImpl(this: GameScene): void {
     .text(
       -308,
       -52,
-      'Shift',
+      graphicsSettings.getActionKeyLabel('dash'),
       createUiTextStyle({
         fontPxAt1080p: 13,
         weight: 700,
@@ -704,8 +708,8 @@ export function invalidateAllHudCachesImpl(this: GameScene): void {
   syncHudDebugVisibility(this);
   applyHudEdgeAnchors(this);
   this.menuBtnText?.setText(i18n.t('ui.hud.menuBtn'));
-  this.skillLabelText?.setText('Space');
-  this.dashLabelText?.setText('Shift');
+  this.skillLabelText?.setText(graphicsSettings.getActionKeyLabel('skill'));
+  this.dashLabelText?.setText(graphicsSettings.getActionKeyLabel('dash'));
   this.pauseBtnText?.setText(isEn ? '⚙ [Esc] Pause' : '⚙ [Esc] Dừng');
 }
 

@@ -15,6 +15,7 @@ import type Phaser from 'phaser';
 import { ENV_PALETTE, hexToNum, PALETTE } from '../../art/palette.js';
 import { TextureBaker } from '../../art/texture-baker.js';
 import { CHARACTER_THEME_COLORS } from '../../fx/lighting-config.js';
+import { graphicsSettings } from '../../ui/graphics-settings.js';
 import type { GameScene } from '../GameScene.js';
 
 /** Smooth fade duration (135ms, within Spec 3.3 120–150ms window) for the single [E] prompt pill. */
@@ -39,7 +40,7 @@ export interface InteractPromptSpec {
   targetY: number;
   highlightRadiusX: number;
   highlightRadiusY: number;
-  keycapText: 'E';
+  keycapText: string;
   titleText: string;
   colorHex: string;
   colorNum: number;
@@ -97,10 +98,11 @@ function stripLeadingKeyTag(text: string): string {
 export interface ResolveInteractPromptOptions {
   weaponComparisonVisible?: boolean;
   locale?: SupportedLocale;
+  keycapText?: string;
 }
 
 /**
- * Resolves the single-target `[E]` prompt pill descriptor from the shared `findInteractTarget` result.
+ * Resolves the single-target interact prompt pill descriptor from the shared `findInteractTarget` result.
  */
 export function resolveInteractPromptSpec(
   sim: WorldSim,
@@ -111,6 +113,7 @@ export function resolveInteractPromptSpec(
 
   const locale = options?.locale ?? i18n.getLocale();
   const isEn = locale === 'en';
+  const keycapText = options?.keycapText ?? graphicsSettings.getActionKeyLabel('interact');
 
   switch (target.kind) {
     case 'revive': {
@@ -125,7 +128,7 @@ export function resolveInteractPromptSpec(
         targetY: target.y,
         highlightRadiusX: 22,
         highlightRadiusY: 18,
-        keycapText: 'E',
+        keycapText,
         titleText,
         colorHex,
         colorNum: hexToNum(colorHex),
@@ -153,7 +156,7 @@ export function resolveInteractPromptSpec(
         targetY: target.y,
         highlightRadiusX: 24,
         highlightRadiusY: 20,
-        keycapText: 'E',
+        keycapText,
         titleText,
         colorHex,
         colorNum: hexToNum(colorHex),
@@ -205,7 +208,7 @@ export function resolveInteractPromptSpec(
         targetY: target.y,
         highlightRadiusX: 20,
         highlightRadiusY: 16,
-        keycapText: 'E',
+        keycapText,
         titleText,
         colorHex,
         colorNum: hexToNum(colorHex),
@@ -234,7 +237,7 @@ export function resolveInteractPromptSpec(
         targetY: target.y,
         highlightRadiusX: 22,
         highlightRadiusY: 26,
-        keycapText: 'E',
+        keycapText,
         titleText,
         colorHex,
         colorNum: hexToNum(colorHex),
@@ -269,7 +272,7 @@ export function resolveInteractPromptSpec(
         targetY: target.y,
         highlightRadiusX: isCoopBoard ? 36 : 28,
         highlightRadiusY: isCoopBoard ? 24 : 22,
-        keycapText: 'E',
+        keycapText,
         titleText,
         colorHex,
         colorNum: hexToNum(colorHex),
@@ -292,7 +295,7 @@ export function resolveInteractPromptSpec(
         targetY: target.y,
         highlightRadiusX: 22,
         highlightRadiusY: 22,
-        keycapText: 'E',
+        keycapText,
         titleText,
         colorHex,
         colorNum: hexToNum(colorHex),
@@ -315,7 +318,7 @@ export function resolveInteractPromptSpec(
         targetY: target.y,
         highlightRadiusX: 24,
         highlightRadiusY: 24,
-        keycapText: 'E',
+        keycapText,
         titleText,
         colorHex,
         colorNum: hexToNum(colorHex),
@@ -340,7 +343,7 @@ export function resolveInteractPromptSpec(
         targetY: target.y,
         highlightRadiusX: 24,
         highlightRadiusY: 24,
-        keycapText: 'E',
+        keycapText,
         titleText,
         colorHex,
         colorNum: hexToNum(colorHex),
@@ -371,7 +374,7 @@ export function resolveInteractPromptSpec(
         targetY: target.y,
         highlightRadiusX: 24,
         highlightRadiusY: 28,
-        keycapText: 'E',
+        keycapText,
         titleText,
         colorHex,
         colorNum: hexToNum(colorHex),
@@ -404,7 +407,7 @@ export function resolveInteractPromptSpec(
           targetY: target.y,
           highlightRadiusX: 24,
           highlightRadiusY: 28,
-          keycapText: 'E',
+          keycapText,
           titleText,
           colorHex,
           colorNum: hexToNum(colorHex),
@@ -426,7 +429,7 @@ export function resolveInteractPromptSpec(
         targetY: target.y,
         highlightRadiusX: 24,
         highlightRadiusY: 28,
-        keycapText: 'E',
+        keycapText,
         titleText,
         colorHex,
         colorNum: hexToNum(colorHex),
@@ -455,7 +458,7 @@ export function resolveInteractPromptSpec(
         targetY: target.y,
         highlightRadiusX: 28,
         highlightRadiusY: 28,
-        keycapText: 'E',
+        keycapText,
         titleText,
         colorHex,
         colorNum: hexToNum(colorHex),
@@ -487,7 +490,7 @@ export function resolveInteractPromptSpec(
         targetY: door.y,
         highlightRadiusX: 26,
         highlightRadiusY: 26,
-        keycapText: 'E',
+        keycapText,
         titleText: `→ ${roomLabel}`,
         colorHex,
         colorNum: accentNum,
@@ -689,10 +692,15 @@ export function resolvePlayerNameplateSpec(params: {
   let statusSuffix = '';
   if (p.lifeState === 'downed') {
     const revPct = Math.round(p.reviveProgress * 100);
+    const interactLabel = graphicsSettings.getActionKeyLabel('interact');
+    const holdReviveHint =
+      interactLabel === 'E'
+        ? i18n.t('ui.hud.holdEToRevive')
+        : i18n.t('ui.hud.holdEToRevive').replace(/\bE\]/g, `${interactLabel}]`);
     statusSuffix =
       revPct > 0
         ? ` · ${i18n.t('ui.hud.reviving')} ${revPct}%`
-        : ` · ${i18n.t('ui.hud.downed')} (${Math.ceil(p.downedTimer)}s) ${i18n.t('ui.hud.holdEToRevive')}`;
+        : ` · ${i18n.t('ui.hud.downed')} (${Math.ceil(p.downedTimer)}s) ${holdReviveHint}`;
   } else if (p.lifeState === 'ghost') {
     statusSuffix = ` · ${i18n.t('ui.hud.ghost')}`;
   } else if (inHub && p.ready) {
@@ -721,7 +729,7 @@ export function resolvePlayerNameplateSpec(params: {
 }
 
 /**
- * Updates and renders the single reusable world-space `[E]` rounded-pill prompt container
+ * Updates and renders the single reusable world-space interact rounded-pill prompt container
  * at depth 52 with zero per-frame object allocations.
  */
 export function syncWorldInteractPromptPill(
@@ -758,7 +766,7 @@ export function syncWorldInteractPromptPill(
     const container = scene.add.container(0, 0).setDepth(52);
     const bgGraphics = scene.add.graphics();
     const keyText = scene.add
-      .text(0, 0, 'E', {
+      .text(0, 0, renderSpec.keycapText, {
         fontFamily: '"Be Vietnam Pro", sans-serif',
         fontSize: '9px',
         fontStyle: '800',
@@ -806,12 +814,13 @@ export function syncWorldInteractPromptPill(
     scene.interactPromptVisuals = visuals;
   }
 
-  const hash = `${renderSpec.key}:${renderSpec.titleText}:${renderSpec.colorHex}:${renderSpec.costGold}:${renderSpec.priceText}:${textRes}`;
+  const hash = `${renderSpec.key}:${renderSpec.keycapText}:${renderSpec.titleText}:${renderSpec.colorHex}:${renderSpec.costGold}:${renderSpec.priceText}:${textRes}`;
   if (hash !== visuals.lastHash) {
     visuals.lastHash = hash;
     visuals.keyText.setResolution(textRes);
     visuals.titleText.setResolution(textRes);
     visuals.priceText.setResolution(textRes);
+    visuals.keyText.setText(renderSpec.keycapText);
     visuals.titleText.setText(renderSpec.titleText);
     visuals.titleText.setColor(renderSpec.colorHex);
 
@@ -824,7 +833,7 @@ export function syncWorldInteractPromptPill(
     }
 
     const padLeft = 5;
-    const chipW = 14;
+    const chipW = Math.max(14, Math.ceil(visuals.keyText.width + 8));
     const chipH = 14;
     const gapAfterChip = 5;
     const titleW = visuals.titleText.width;
@@ -845,7 +854,7 @@ export function syncWorldInteractPromptPill(
     g.fillRoundedRect(leftX, -pillH * 0.5, pillW, pillH, 6);
     g.strokeRoundedRect(leftX, -pillH * 0.5, pillW, pillH, 6);
 
-    // [E] keycap chip on the left
+    // Keycap chip on the left
     const chipX = leftX + padLeft;
     g.fillStyle(hexToNum(PALETTE.SLATE_MID), 0.98);
     g.lineStyle(1.2, hexToNum(PALETTE.SOLAR_GOLD), 0.98);

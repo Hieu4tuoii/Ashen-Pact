@@ -21,6 +21,7 @@ import {
   drawVectorHudIcon,
 } from '../../ui/components/hud-primitives.js';
 import { clampUiScale, graphicsSettings } from '../../ui/graphics-settings.js';
+import { serializeKeybindingsHash } from '../../ui/keybindings.js';
 import {
   computeUiTextResolution,
   createSceneTextStyle,
@@ -592,7 +593,9 @@ export function updateMinimapHudImpl(this: GameScene): void {
     roomsTopologySig += `${rm.id}:${rm.roomShape ?? 'r'}:${rm.roomSizePreset ?? 's'}:${rm.discovery}:${rm.cleared ? 1 : 0};`;
   }
   const canTeleport = canTeleportFromCurrentRoom(sim);
-  const minimapHash = `${sim.inHub ? 'hub' : sim.currentFloor}:${sim.currentBiome}:${sim.currentRoomId}:${this.fullMapOpen ? 1 : 0}:${sim.secretWallBroken ? 1 : 0}:${room.cleared ? 1 : 0}:${canTeleport ? 1 : 0}:${sim.runStats.roomsCleared}:${sim.pings.length}:${i18n.getLocale()}:${this.hudPadX}:${this.hudPadY}:${uiScale}:${liveShape}:${livePreset}:${sim.map.cols}x${sim.map.rows}:${sim.map.mapRevision}:${pNormX},${pNormY}:${roomsTopologySig}`;
+  const gState = graphicsSettings.getState();
+  const mapLabel = graphicsSettings.getActionKeyLabel('toggleMap');
+  const minimapHash = `${sim.inHub ? 'hub' : sim.currentFloor}:${sim.currentBiome}:${sim.currentRoomId}:${this.fullMapOpen ? 1 : 0}:${sim.secretWallBroken ? 1 : 0}:${room.cleared ? 1 : 0}:${canTeleport ? 1 : 0}:${sim.runStats.roomsCleared}:${sim.pings.length}:${i18n.getLocale()}:${this.hudPadX}:${this.hudPadY}:${uiScale}:${liveShape}:${livePreset}:${sim.map.cols}x${sim.map.rows}:${sim.map.mapRevision}:${pNormX},${pNormY}:${roomsTopologySig}:${serializeKeybindingsHash(gState.keybindings)}`;
   if (minimapHash === this.lastMinimapHash && !sim.stressTestActive) return;
   this.lastMinimapHash = minimapHash;
 
@@ -603,16 +606,21 @@ export function updateMinimapHudImpl(this: GameScene): void {
   const biomeAccent = getBiomeUiAccent(sim.inHub ? 0 : sim.currentBiome);
   const biomeName = i18n.biomeName(sim.currentBiome);
   const roomOrd = Math.max(1, room.id + 1);
-  const titleStr = this.fullMapOpen
+  const rawFullTitle = this.fullMapOpen
     ? i18n.t('ui.minimap.fullTitle', {
         floor: sim.currentFloor,
         max: sim.campaignMaxFloors,
         roomType: sim.inHub ? i18n.roomTypeLabel('hub') : i18n.roomTypeLabel(room.type),
       })
+    : '';
+  const titleStr = this.fullMapOpen
+    ? mapLabel === 'Tab'
+      ? rawFullTitle
+      : rawFullTitle.replace(/\[Tab\]/gi, `[${mapLabel}]`)
     : sim.inHub
       ? isEn
-        ? 'Campfire Hub · [Tab] Map'
-        : 'Doanh Trại · [Tab] Bản Đồ'
+        ? `Campfire Hub · [${mapLabel}] Map`
+        : `Doanh Trại · [${mapLabel}] Bản Đồ`
       : isEn
         ? `Floor ${sim.currentFloor}-${roomOrd} · ${biomeName}`
         : `Tầng ${sim.currentFloor}-${roomOrd} · ${biomeName}`;
@@ -1231,13 +1239,14 @@ export function updateTopCenterBannersAndQolImpl(this: GameScene, dtSec: number)
         fillDarkColor: isReviving ? 0x16a34a : 0x991b1b,
       });
 
+      const interactLabel = graphicsSettings.getActionKeyLabel('interact');
       const bannerLabel = isReviving
         ? isEn
           ? `REVIVING ${downedTarget.displayName.toUpperCase()} (${revPct}%) · Bleedout ${bleedSec}s`
           : `ĐANG CỨU ${downedTarget.displayName.toUpperCase()} (${revPct}%) · Hấp hối ${bleedSec}s`
         : isEn
-          ? `${downedTarget.displayName.toUpperCase()} DOWNED (${bleedSec}s) · Hold [E] to Revive`
-          : `${downedTarget.displayName.toUpperCase()} GỤC NGÃ (${bleedSec}s) · Giữ [E] Cứu`;
+          ? `${downedTarget.displayName.toUpperCase()} DOWNED (${bleedSec}s) · Hold [${interactLabel}] to Revive`
+          : `${downedTarget.displayName.toUpperCase()} GỤC NGÃ (${bleedSec}s) · Giữ [${interactLabel}] Cứu`;
 
       if (this.downedBannerText.text !== bannerLabel) {
         this.downedBannerText.setText(bannerLabel);

@@ -5,12 +5,17 @@ import { TextureBaker } from '../art/texture-baker.js';
 import { zzfx } from '../audio/zzfx.js';
 import { flushSceneInteractiveContainer } from '../core/software-gl.js';
 import {
-  drawKeyChip,
   drawSegmentedBar,
   drawStyledPanel,
 } from './components/hud-primitives.js';
 import { initGlobalDebugState } from './debug-overlay.js';
 import { graphicsSettings } from './graphics-settings.js';
+import {
+  getActionDisplayLabel,
+  KEYBIND_ACTION_IDS,
+  type KeybindActionId,
+  normalizeKeyEventToBindingCode,
+} from './keybindings.js';
 import { UI_THEME } from './theme.js';
 
 export type ModalKind = 'none' | 'settings' | 'controls' | 'credits';
@@ -30,6 +35,67 @@ export interface SettingsTabSpec {
   cy: number;
   w: number;
   h: number;
+}
+
+export interface ControlsActionRowBounds {
+  action: KeybindActionId;
+  index: number;
+  col: number;
+  row: number;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  cx: number;
+  cy: number;
+  keyPillCx: number;
+  keyPillCy: number;
+  keyPillW: number;
+  keyPillH: number;
+}
+
+/**
+ * Computes the 960x540 bounds for one of the 14 interactive Controls-tab rows (7x2 grid).
+ */
+export function getControlsActionRowBounds(
+  indexOrAction: number | KeybindActionId,
+  cardX = 150,
+  cardY = 48,
+): ControlsActionRowBounds {
+  const rawIndex =
+    typeof indexOrAction === 'number'
+      ? indexOrAction
+      : KEYBIND_ACTION_IDS.indexOf(indexOrAction);
+  const index = Math.max(0, Math.min(KEYBIND_ACTION_IDS.length - 1, rawIndex));
+  const action = KEYBIND_ACTION_IDS[index]!;
+  const col = index % 2;
+  const row = Math.floor(index / 2);
+  const w = 300;
+  const h = 27;
+  const x = cardX + 24 + col * 312;
+  const cy = cardY + 131 + row * 31;
+  const y = cy - h / 2;
+  const cx = x + w / 2;
+  const keyPillW = 76;
+  const keyPillH = 21;
+  const keyPillCx = x + 254;
+  const keyPillCy = cy;
+  return {
+    action,
+    index,
+    col,
+    row,
+    x,
+    y,
+    w,
+    h,
+    cx,
+    cy,
+    keyPillCx,
+    keyPillCy,
+    keyPillW,
+    keyPillH,
+  };
 }
 
 /**
@@ -107,6 +173,12 @@ export class ModalOverlayManager {
   private activeModal: ModalKind = 'none';
   private activeTab: SettingsTabId = 'audio';
   private textObjects: Phaser.GameObjects.Text[] = [];
+  private rebindingAction: KeybindActionId | null = null;
+  private controlsFeedback: { text: string; tone: 'info' | 'success' | 'warn' } | null = null;
+  private captureListenerAttached = false;
+  private readonly boundCaptureKeyDown = (event: KeyboardEvent): void => {
+    this.handleCaptureKeyDown(event);
+  };
 
   constructor(scene: Phaser.Scene, onLocaleChanged?: () => void) {
     this.scene = scene;
@@ -114,6 +186,8 @@ export class ModalOverlayManager {
     this.container = scene.add.container(0, 0).setDepth(4200).setVisible(false);
     scene.events.on('postupdate', this.syncViewportPosition, this);
     scene.events.once('shutdown', () => {
+      this.cancelRebinding(false);
+      this.controlsFeedback = null;
       scene.events.off('postupdate', this.syncViewportPosition, this);
     });
   }
@@ -127,6 +201,8 @@ export class ModalOverlayManager {
   }
 
   public destroy(): void {
+    this.cancelRebinding(false);
+    this.controlsFeedback = null;
     this.scene.events.off('postupdate', this.syncViewportPosition, this);
   }
 
@@ -138,7 +214,104 @@ export class ModalOverlayManager {
     return this.activeTab;
   }
 
+  public getRebindingAction(): KeybindActionId | null {
+    return this.rebindingAction;
+  }
+
+  public startRebinding(action: KeybindActionId): void {
+    if (!this.isOpen()) return;
+    this.rebindingAction = action;
+    this.controlsFeedback = null;
+    this.attachCaptureListener();
+    this.syncDebugFlags();
+    if (this.activeModal !== 'none') this.rebuild();
+  }
+
+  public cancelRebinding(showNotice = false): void {
+    const wasRebinding = this.rebindingAction !== null;
+    this.rebindingAction = null;
+    this.detachCaptureListener();
+    if (showNotice) {
+      this.controlsFeedback = {
+        text: i18n.t('ui.controls.cancelledNotice'),
+        tone: 'info',
+      };
+    }
+    this.syncDebugFlags();
+    if (wasRebinding && showNotice && this.activeModal !== 'none') {
+      this.rebuild();
+    }
+  }
+
+  private attachCaptureListener(): void {
+    if (this.captureListenerAttached || typeof window === 'undefined') return;
+    window.addEventListener('keydown', this.boundCaptureKeyDown, true);
+    this.captureListenerAttached = true;
+  }
+
+  private detachCaptureListener(): void {
+    if (!this.captureListenerAttached || typeof window === 'undefined') return;
+    window.removeEventListener('keydown', this.boundCaptureKeyDown, true);
+    this.captureListenerAttached = false;
+  }
+
+  private handleCaptureKeyDown(event: KeyboardEvent): void {
+    if (!this.rebindingAction || !this.isOpen()) {
+      this.detachCaptureListener();
+      return;
+    }
+    event.preventDefault();
+    event.stopImmediatePropagation();
+
+    const action = this.rebindingAction;
+    const res = normalizeKeyEventToBindingCode(event);
+    if (res.status === 'cancel') {
+      zzfx.play('ui_hover');
+      this.cancelRebinding(true);
+      return;
+    }
+    if (res.status === 'reserved' || res.status === 'unsupported') {
+      this.controlsFeedback = {
+        text: i18n.t('ui.controls.reservedNotice', { key: res.displayLabel }),
+        tone: 'warn',
+      };
+      zzfx.play('ui_hover');
+      this.rebuild();
+      return;
+    }
+
+    const update = graphicsSettings.setKeybinding(action, res.code);
+    this.rebindingAction = null;
+    this.detachCaptureListener();
+    const actionTitle = i18n.t(`ui.controls.actions.${action}`);
+    if (update.ok && update.swappedWith) {
+      const otherTitle = i18n.t(`ui.controls.actions.${update.swappedWith}`);
+      this.controlsFeedback = {
+        text: i18n.t('ui.controls.swappedNotice', {
+          key: res.displayLabel,
+          action: actionTitle,
+          otherAction: otherTitle,
+        }),
+        tone: 'success',
+      };
+    } else {
+      const isEn = graphicsSettings.getState().language === 'en';
+      this.controlsFeedback = {
+        text: isEn
+          ? `${actionTitle} bound to [${res.displayLabel}].`
+          : `Đã gán [${res.displayLabel}] cho ${actionTitle}.`,
+        tone: 'success',
+      };
+    }
+    this.syncDebugFlags();
+    zzfx.play('ui_click');
+    this.onLocaleChanged?.();
+    this.rebuild();
+  }
+
   public setLanguage(lang: SupportedLocale): void {
+    this.cancelRebinding(false);
+    this.controlsFeedback = null;
     graphicsSettings.setLanguage(lang);
     this.syncDebugFlags();
     this.onLocaleChanged?.();
@@ -146,6 +319,8 @@ export class ModalOverlayManager {
   }
 
   public selectTab(tab: SettingsTabId): void {
+    this.cancelRebinding(false);
+    this.controlsFeedback = null;
     this.activeTab = tab;
     if (this.activeModal === 'controls' && tab !== 'controls') this.activeModal = 'settings';
     this.syncDebugFlags();
@@ -157,6 +332,8 @@ export class ModalOverlayManager {
   }
 
   public open(kind: Exclude<ModalKind, 'none'>, initialTab?: SettingsTabId): void {
+    this.cancelRebinding(false);
+    this.controlsFeedback = null;
     this.activeModal = kind;
     this.activeTab = kind === 'controls' ? 'controls' : (initialTab ?? 'audio');
     this.syncDebugFlags();
@@ -165,6 +342,8 @@ export class ModalOverlayManager {
 
   public close(): void {
     if (this.activeModal === 'none') return;
+    this.cancelRebinding(false);
+    this.controlsFeedback = null;
     this.activeModal = 'none';
     this.syncDebugFlags();
     this.container.removeAll(true);
@@ -188,6 +367,7 @@ export class ModalOverlayManager {
     debug.creditsModalOpen = this.activeModal === 'credits';
     debug.settingsActiveTab = this.activeTab;
     debug.language = graphicsSettings.getState().language;
+    debug.rebindingAction = this.rebindingAction;
   }
 
   public rebuild(): void {
@@ -596,8 +776,8 @@ export class ModalOverlayManager {
         id: 'showKeyHints',
         label: isEn ? 'Show Keybind Hints' : 'Hiển thị Gợi ý Phím tắt',
         subLabel: isEn
-          ? 'Display [Space], [Shift], [E], [Q] key chips on HUD'
-          : 'Hiển thị nhãn phím [Space], [Shift], [E], [Q] trên HUD',
+          ? `Display [${graphicsSettings.getActionKeyLabel('skill')}], [${graphicsSettings.getActionKeyLabel('dash')}], [${graphicsSettings.getActionKeyLabel('interact')}], [${graphicsSettings.getActionKeyLabel('swapWeapon')}] key chips on HUD`
+          : `Hiển thị nhãn phím [${graphicsSettings.getActionKeyLabel('skill')}], [${graphicsSettings.getActionKeyLabel('dash')}], [${graphicsSettings.getActionKeyLabel('interact')}], [${graphicsSettings.getActionKeyLabel('swapWeapon')}] trên HUD`,
         valueText: s.showKeyHints ? onLabel : offLabel,
         onToggle: () => {
           graphicsSettings.setShowKeyHints(!s.showKeyHints);
@@ -753,109 +933,188 @@ export class ModalOverlayManager {
     cardY: number,
     cardW: number,
     textRes: number,
-    isEn: boolean,
+    _isEn: boolean,
   ): void {
-    const keyEntries: Array<{ key: string; desc: string }> = isEn
-      ? [
-          { key: 'WASD', desc: '8-way movement' },
-          { key: 'LMB', desc: 'Aim & Auto-fire weapon' },
-          { key: 'Space', desc: 'Cast Active Hero Skill' },
-          { key: 'Shift', desc: 'Dash (0.2s i-frames)' },
-          { key: 'Q / 1-2', desc: 'Swap weapon · [X] Drop' },
-          { key: 'E', desc: 'Interact / Loot / Revive' },
-          { key: 'Tab', desc: 'Toggle Dungeon Map' },
-          { key: 'Z', desc: 'Contextual Team Ping' },
-          { key: 'Hold T', desc: 'Radial Emote Wheel' },
-          { key: 'Esc', desc: 'Pause & System Settings' },
-        ]
-      : [
-          { key: 'WASD', desc: 'Di chuyển 8 hướng' },
-          { key: 'LMB', desc: 'Ngắm & Bắn tự động' },
-          { key: 'Space', desc: 'Kỹ năng chủ động NV' },
-          { key: 'Shift', desc: 'Lướt Dash (0.2s bất tử)' },
-          { key: 'Q / 1-2', desc: 'Đổi vũ khí · [X] Thả VK' },
-          { key: 'E', desc: 'Tương tác / Nhặt / Cứu' },
-          { key: 'Tab', desc: 'Bản đồ Hầm ngục' },
-          { key: 'Z', desc: 'Ping ngữ cảnh đồng đội' },
-          { key: 'Hold T', desc: 'Vòng biểu cảm nhanh' },
-          { key: 'Esc', desc: 'Tạm dừng & Cài đặt' },
-        ];
+    const keybindings = graphicsSettings.getKeybindings();
 
-    keyEntries.forEach((entry, idx) => {
-      const col = idx % 2;
-      const row = Math.floor(idx / 2);
-      const lx = cardX + 24 + col * 308;
-      const ly = cardY + 106 + row * 38;
-      const boxW = 300;
-      const boxH = 31;
+    // 1. Top Status / Instruction Banner (y = cardY + 88 .. cardY + 112)
+    const bannerX = cardX + 24;
+    const bannerY = cardY + 88;
+    const bannerW = cardW - 48;
+    const bannerH = 24;
 
-      const box = this.scene.add.graphics();
-      drawStyledPanel(box, lx, ly - boxH / 2, boxW, boxH, {
-        fillColor: UI_THEME.panelBg,
-        fillAlpha: 0.9,
-        borderColor: UI_THEME.panelBorder,
-        borderWidth: 1.2,
-        radius: 5,
-      });
-      const chip = drawKeyChip(box, lx + 8, ly - 7, entry.key, {
-        active: true,
-        sceneFontPx: 8.5,
-      });
-      this.container.add(box);
+    let bannerText = i18n.t('ui.controls.rebindHint');
+    let bannerBorderHex: string = PALETTE.SLATE_MID;
+    let bannerTextColor: string = PALETTE.SILVER_BRIGHT;
 
-      const keyTxt = this.scene.add
-        .text(lx + 8 + chip.width * 0.5, ly, entry.key, {
-          fontFamily: '"JetBrains Mono", monospace',
-          fontSize: '10.5px',
-          fontStyle: '800',
-          color: PALETTE.SOLAR_GOLD,
-          stroke: PALETTE.INK_DARK,
-          strokeThickness: 2,
-          resolution: textRes,
-        })
-        .setOrigin(0.5, 0.5);
+    if (this.controlsFeedback) {
+      bannerText = this.controlsFeedback.text;
+      if (this.controlsFeedback.tone === 'warn') {
+        bannerBorderHex = PALETTE.FLAME_ORANGE;
+        bannerTextColor = PALETTE.FLAME_ORANGE;
+      } else if (this.controlsFeedback.tone === 'success') {
+        bannerBorderHex = PALETTE.LIME_GLOW;
+        bannerTextColor = PALETTE.LIME_GLOW;
+      } else {
+        bannerBorderHex = PALETTE.CYAN_FROST;
+        bannerTextColor = PALETTE.CYAN_FROST;
+      }
+    } else if (this.rebindingAction) {
+      const actionTitle = i18n.t(`ui.controls.actions.${this.rebindingAction}`);
+      bannerText = i18n.t('ui.controls.listeningPrompt', { action: actionTitle });
+      bannerBorderHex = PALETTE.CYAN_FROST;
+      bannerTextColor = PALETTE.CYAN_FROST;
+    }
+
+    const bannerGfx = this.scene.add.graphics();
+    drawStyledPanel(bannerGfx, bannerX, bannerY, bannerW, bannerH, {
+      fillColor: UI_THEME.panelBgElevated,
+      fillAlpha: 0.94,
+      borderColor: hexToNum(bannerBorderHex),
+      borderWidth: this.rebindingAction || this.controlsFeedback ? 1.6 : 1.1,
+      radius: 5,
+    });
+    this.container.add(bannerGfx);
+
+    const bannerTxt = this.scene.add
+      .text(480, bannerY + bannerH * 0.5, bannerText, {
+        fontFamily: '"Be Vietnam Pro", sans-serif',
+        fontSize: '10.5px',
+        fontStyle: '700',
+        color: bannerTextColor,
+        stroke: PALETTE.INK_DARK,
+        strokeThickness: 2,
+        resolution: textRes,
+      })
+      .setOrigin(0.5);
+    if (bannerTxt.width > bannerW - 18) {
+      bannerTxt.setScale((bannerW - 18) / bannerTxt.width, 1);
+    }
+    this.textObjects.push(bannerTxt);
+    this.container.add(bannerTxt);
+
+    // 2. 14 Interactive Action Rows (7x2 grid inside y = 165.5 .. 378.5)
+    for (let idx = 0; idx < KEYBIND_ACTION_IDS.length; idx++) {
+      const bounds = getControlsActionRowBounds(idx, cardX, cardY);
+      const isListening = this.rebindingAction === bounds.action;
+      const keyLabel = getActionDisplayLabel(bounds.action, keybindings);
+      const pillText = isListening ? '[ ... ]' : `[${keyLabel}]`;
+
+      const rowGfx = this.scene.add.graphics();
+      const drawRow = (hover: boolean) => {
+        rowGfx.clear();
+        drawStyledPanel(rowGfx, bounds.x, bounds.y, bounds.w, bounds.h, {
+          fillColor: isListening
+            ? UI_THEME.panelBgElevated
+            : hover
+              ? UI_THEME.panelBgElevated
+              : UI_THEME.panelBg,
+          fillAlpha: 0.92,
+          borderColor: isListening
+            ? hexToNum(PALETTE.CYAN_FROST)
+            : hover
+              ? hexToNum(PALETTE.SOLAR_GOLD)
+              : UI_THEME.panelBorder,
+          borderWidth: isListening ? 1.8 : hover ? 1.5 : 1.1,
+          radius: 5,
+        });
+        drawStyledPanel(
+          rowGfx,
+          bounds.keyPillCx - bounds.keyPillW * 0.5,
+          bounds.keyPillCy - bounds.keyPillH * 0.5,
+          bounds.keyPillW,
+          bounds.keyPillH,
+          {
+            fillColor: UI_THEME.panelBgDark,
+            fillAlpha: 0.96,
+            borderColor: hexToNum(
+              isListening ? PALETTE.CYAN_FROST : hover ? PALETTE.SOLAR_GOLD : PALETTE.BRONZE_SHADE,
+            ),
+            borderWidth: isListening ? 1.8 : 1.2,
+            radius: 4,
+          },
+        );
+      };
+      drawRow(false);
+      this.container.add(rowGfx);
 
       const descTxt = this.scene.add
-        .text(lx + 16 + chip.width, ly, entry.desc, {
+        .text(bounds.x + 10, bounds.cy, i18n.t(`ui.controls.actions.${bounds.action}`), {
           fontFamily: '"Be Vietnam Pro", sans-serif',
-          fontSize: '11.5px',
+          fontSize: '11px',
           fontStyle: '700',
-          color: PALETTE.BONE_WHITE,
+          color: isListening ? PALETTE.CYAN_FROST : PALETTE.BONE_WHITE,
           stroke: PALETTE.INK_DARK,
           strokeThickness: 2,
           resolution: textRes,
         })
         .setOrigin(0, 0.5);
+      if (descTxt.width > 198) {
+        descTxt.setScale(198 / descTxt.width, 1);
+      }
 
-      this.textObjects.push(keyTxt, descTxt);
-      this.container.add([keyTxt, descTxt]);
-    });
+      const keyTxt = this.scene.add
+        .text(bounds.keyPillCx, bounds.keyPillCy, pillText, {
+          fontFamily: '"JetBrains Mono", monospace',
+          fontSize: '10.5px',
+          fontStyle: '800',
+          color: isListening ? PALETTE.CYAN_FROST : PALETTE.SOLAR_GOLD,
+          stroke: PALETTE.INK_DARK,
+          strokeThickness: 2,
+          resolution: textRes,
+        })
+        .setOrigin(0.5, 0.5);
+      if (keyTxt.width > bounds.keyPillW - 8) {
+        keyTxt.setScale((bounds.keyPillW - 8) / keyTxt.width, 1);
+      }
 
-    // Elemental Reactions summary box
-    const reactBoxY = cardY + 292;
+      const hit = this.scene.add
+        .rectangle(bounds.cx, bounds.cy, bounds.w, bounds.h, 0x000000, 0)
+        .setInteractive({ useHandCursor: true });
+      hit.on('pointerover', () => {
+        drawRow(true);
+        zzfx.play('ui_hover');
+      });
+      hit.on('pointerout', () => drawRow(false));
+      hit.on('pointerdown', () => {
+        zzfx.play('ui_click');
+        if (this.rebindingAction === bounds.action) {
+          this.cancelRebinding(true);
+        } else {
+          this.startRebinding(bounds.action);
+        }
+      });
+
+      this.textObjects.push(descTxt, keyTxt);
+      this.container.add([descTxt, keyTxt, hit]);
+    }
+
+    // 3. Compact 2-line Elemental Reactions cheat-sheet panel (y = cardY + 338, h = 47 -> 386..433)
+    const reactBoxY = cardY + 338;
+    const reactBoxW = cardW - 48;
+    const reactBoxH = 47;
     const rBox = this.scene.add.graphics();
-    drawStyledPanel(rBox, cardX + 24, reactBoxY, cardW - 48, 86, {
+    drawStyledPanel(rBox, cardX + 24, reactBoxY, reactBoxW, reactBoxH, {
       fillColor: UI_THEME.panelBgElevated,
       fillAlpha: 0.92,
       borderColor: hexToNum(PALETTE.SOLAR_GOLD),
-      borderWidth: 1.5,
-      radius: 7,
+      borderWidth: 1.4,
+      radius: 6,
       accentColor: hexToNum(PALETTE.SOLAR_GOLD),
       accentSide: 'left',
     });
     this.container.add(rBox);
 
     const reactLines = [
-      `${i18n.t('reactions.vaporize')}: ${i18n.t('elements.burn')} + ${i18n.t('elements.chill')}   |   ${i18n.t('reactions.superconduct')}: ${i18n.t('elements.chill')} + ${i18n.t('elements.shock')}`,
-      `${i18n.t('reactions.toxic_blast')}: ${i18n.t('elements.poison')} + ${i18n.t('elements.burn')}   |   ${i18n.t('reactions.paralysis')}: ${i18n.t('elements.poison')} + ${i18n.t('elements.shock')}`,
-      `${i18n.t('reactions.overload')}: ${i18n.t('elements.burn')} + ${i18n.t('elements.shock')}   |   ${i18n.t('reactions.shatter')}: ${i18n.t('elements.chill')} (×3) + Crit`,
+      `${i18n.t('reactions.vaporize')}: ${i18n.t('elements.burn')}+${i18n.t('elements.chill')}  ·  ${i18n.t('reactions.superconduct')}: ${i18n.t('elements.chill')}+${i18n.t('elements.shock')}  ·  ${i18n.t('reactions.overload')}: ${i18n.t('elements.burn')}+${i18n.t('elements.shock')}`,
+      `${i18n.t('reactions.toxic_blast')}: ${i18n.t('elements.poison')}+${i18n.t('elements.burn')}  ·  ${i18n.t('reactions.paralysis')}: ${i18n.t('elements.poison')}+${i18n.t('elements.shock')}  ·  ${i18n.t('reactions.shatter')}: ${i18n.t('elements.chill')}(×3)+Crit`,
     ];
 
     reactLines.forEach((rl, idx) => {
       const rt = this.scene.add
-        .text(480, reactBoxY + 19 + idx * 23, rl, {
+        .text(480, reactBoxY + 15 + idx * 18, rl, {
           fontFamily: '"Be Vietnam Pro", sans-serif',
-          fontSize: '11px',
+          fontSize: '10px',
           fontStyle: '700',
           color: idx === 0 ? PALETTE.SOLAR_GOLD : PALETTE.SILVER_BRIGHT,
           stroke: PALETTE.INK_DARK,
@@ -863,6 +1122,9 @@ export class ModalOverlayManager {
           resolution: textRes,
         })
         .setOrigin(0.5);
+      if (rt.width > reactBoxW - 22) {
+        rt.setScale((reactBoxW - 22) / rt.width, 1);
+      }
       this.textObjects.push(rt);
       this.container.add(rt);
     });
