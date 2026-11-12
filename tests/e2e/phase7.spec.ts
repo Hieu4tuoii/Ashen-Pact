@@ -27,20 +27,27 @@ test.describe('Phase 7 — UI/UX & Âm Thanh Hoàn Thiện (Polished HUD, Modals
     await page.setViewportSize({ width: 1920, height: 1080 });
     await page.goto('/');
 
-    // 1. MenuScene: Dynamic Campfire Hub, 5 Hero Rigs, Music Theme, Language Toggle [L], Controls [K], Credits [C] & Settings [O]
-    await page.waitForFunction(() => window.__GAME_DEBUG__?.scene === 'MenuScene', null, {
-      timeout: 15000,
-    });
+    // 1. Sanctuary Lobby: Living 5-Wing Hub, 5 Hero Rigs, Music Theme, Language Toggle [L], Controls [K], Credits [C] & Settings [O]
+    await page.waitForFunction(
+      () =>
+        window.__GAME_DEBUG__?.scene === 'GameScene' &&
+        window.__GAME_DEBUG__?.inHub === true &&
+        window.__GAME_DEBUG__?.irisTransitionProgress === 0,
+      null,
+      { timeout: 15000 },
+    );
 
     await page.waitForTimeout(250);
-    const initialMenuDebug = await page.evaluate(() => ({
+    const initialSanctuaryDebug = await page.evaluate(() => ({
       scene: window.__GAME_DEBUG__.scene,
+      inHub: window.__GAME_DEBUG__.inHub,
       language: window.__GAME_DEBUG__.language,
       musicTheme: window.__GAME_DEBUG__.musicTheme,
     }));
-    expect(initialMenuDebug.scene).toBe('MenuScene');
-    expect(initialMenuDebug.language).toBe('vi');
-    expect(initialMenuDebug.musicTheme).toBe('menu_hub');
+    expect(initialSanctuaryDebug.scene).toBe('GameScene');
+    expect(initialSanctuaryDebug.inHub).toBe(true);
+    expect(initialSanctuaryDebug.language).toBe('vi');
+    expect(initialSanctuaryDebug.musicTheme).toBe('menu_hub');
 
     await page.screenshot({
       path: path.join(SCREENSHOT_DIR, 'menu-campfire-hub-1080p.png'),
@@ -94,41 +101,95 @@ test.describe('Phase 7 — UI/UX & Âm Thanh Hoàn Thiện (Polished HUD, Modals
     await page.waitForTimeout(120);
     expect(await page.evaluate(() => window.__GAME_DEBUG__.settingsModalOpen)).toBe(false);
 
-    // 2. Click Play Solo at (960, 450) -> GameScene (starts in Hub Campfire with Iris opening transition)
-    await page.mouse.click(960, 450);
+    // 2. Move P1 near a Hero Station in Sanctuary to verify Guidance Signs + Skill Preview Card + Hero Selection
+    const rangerScreenPt = await page.evaluate(() => {
+      const sim = window.__GAME_TRANSPORT__!.getSim();
+      const rangerStatue =
+        sim.hubStatues.find((s) => s.characterId === 'ranger') ?? sim.hubStatues[1]!;
+      sim.player.x = rangerStatue.x;
+      sim.player.y = rangerStatue.y + 28;
+      const gs = window.__PHASER_GAME__!.scene.getScene('GameScene') as {
+        cameras: {
+          main: { scrollX: number; scrollY: number; width: number; height: number; zoom: number };
+        };
+      };
+      const cam = gs.cameras.main;
+      const midX = cam.scrollX + cam.width * 0.5;
+      const midY = cam.scrollY + cam.height * 0.5;
+      return {
+        x: (rangerStatue.x - midX) * cam.zoom + cam.width * 0.5,
+        y: (rangerStatue.y - midY) * cam.zoom + cam.height * 0.5,
+      };
+    });
     await page.waitForFunction(
-      () =>
-        window.__GAME_DEBUG__?.scene === 'GameScene' &&
-        (window.__GAME_DEBUG__?.irisTransitionProgress ?? 0) > 0.05,
+      () => window.__GAME_DEBUG__?.hubPreviewCharacterId === 'ranger',
+      null,
+      { timeout: 5000 },
+    );
+    await page.screenshot({
+      path: path.join(SCREENSHOT_DIR, 'hub-guide-skill-preview-1080p.png'),
+    });
+
+    // Select Ranger via [E] interact, then re-compute screen coords after camera smooth-follow and click Vanguard station to switch back
+    await page.keyboard.press('e');
+    await page.waitForFunction(
+      () => window.__GAME_DEBUG__?.playerCharacterId === 'ranger',
+      null,
+      { timeout: 5000 },
+    );
+    expect(rangerScreenPt.x).toBeGreaterThan(0);
+    await page.waitForTimeout(200);
+    const vanguardScreenPt = await page.evaluate(() => {
+      const sim = window.__GAME_TRANSPORT__!.getSim();
+      const vanguardStatue =
+        sim.hubStatues.find((s) => s.characterId === 'vanguard') ?? sim.hubStatues[0]!;
+      const gs = window.__PHASER_GAME__!.scene.getScene('GameScene') as {
+        cameras: {
+          main: { scrollX: number; scrollY: number; width: number; height: number; zoom: number };
+        };
+      };
+      const cam = gs.cameras.main;
+      const midX = cam.scrollX + cam.width * 0.5;
+      const midY = cam.scrollY + cam.height * 0.5;
+      return {
+        x: (vanguardStatue.x - midX) * cam.zoom + cam.width * 0.5,
+        y: (vanguardStatue.y - midY) * cam.zoom + cam.height * 0.5,
+      };
+    });
+    await page.mouse.click(vanguardScreenPt.x, vanguardScreenPt.y);
+    await page.waitForFunction(
+      () => window.__GAME_DEBUG__?.playerCharacterId === 'vanguard',
+      null,
+      { timeout: 5000 },
+    );
+
+    // Step into North Expedition Portal -> capture Iris sweep -> enter Floor 1 Dungeon
+    await page.evaluate(() => {
+      const sim = window.__GAME_TRANSPORT__!.getSim();
+      sim.player.x = sim.portalX;
+      sim.player.y = sim.portalY;
+      const gs = window.__PHASER_GAME__?.scene.getScene('GameScene') as
+        | { triggerPortalEnterSequence?: (commit?: boolean) => void }
+        | undefined;
+      gs?.triggerPortalEnterSequence?.(true);
+    });
+    await page.waitForFunction(
+      () => (window.__GAME_DEBUG__?.irisTransitionProgress ?? 0) > 0.05,
       null,
       { timeout: 10000 },
     );
 
-    // Capture Iris transition mid-sweep right after entering GameScene
     await page.screenshot({
       path: path.join(SCREENSHOT_DIR, 'iris-transition-1080p.png'),
     });
 
     await page.waitForFunction(
       () =>
-        (window.__GAME_DEBUG__?.tick ?? 0) >= 35 &&
+        window.__GAME_DEBUG__?.inHub === false &&
         window.__GAME_DEBUG__?.irisTransitionProgress === 0,
       null,
       { timeout: 10000 },
     );
-
-    // Enter Hub and move P1 near a Hub Character Statue to verify Hub Guidance Signs + Character Skill Preview Card
-    await page.evaluate(() => {
-      const sim = window.__GAME_TRANSPORT__!.getSim();
-      sim.enterHub();
-      const statue = sim.hubStatues[0]!;
-      sim.player.x = statue.x;
-      sim.player.y = statue.y + 28;
-    });
-    await page.waitForTimeout(180);
-    await page.screenshot({
-      path: path.join(SCREENSHOT_DIR, 'hub-guide-skill-preview-1080p.png'),
-    });
 
     // 3. Enter a combat room, spawn a weapon drop near the player for the Weapon Comparison Card, and test trailing HP/Armor bars + Armor Break SFX
     const hudCheck = await page.evaluate(() => {
@@ -141,12 +202,14 @@ test.describe('Phase 7 — UI/UX & Âm Thanh Hoàn Thiện (Polished HUD, Modals
       sim.enemies.length = 0;
       sim.projectiles.length = 0;
       sim.pickups.length = 0;
+      sim.chests.length = 0;
+      sim.props.length = 0;
 
       const p1 = sim.player;
       p1.godMode = false;
       p1.invulnerableTimer = 0;
-      p1.x = 480;
-      p1.y = 290;
+      p1.x = sim.map.width * 0.5;
+      p1.y = sim.map.height * 0.5;
       p1.hp = p1.maxHp;
       p1.armor = 2;
 

@@ -106,8 +106,12 @@ test.describe('Phase P10b — Combat FX (BlendMode.ADD), Elemental Combo FX, Che
       return {
         activeCount: active.length,
         additiveCount: additiveParticles.length,
-        hasMuzzleCore: active.some((p) => p.textureKey === 'fx_muzzle_core'),
-        hasImpactRing: active.some((p) => p.textureKey === 'fx_impact_ring'),
+        hasMuzzleCore: active.some(
+          (p) => p.textureKey === 'fx_sh_muzzle_burst' || p.textureKey === 'fx_muzzle_core',
+        ),
+        hasImpactRing: active.some(
+          (p) => p.textureKey === 'fx_sh_hit_spark' || p.textureKey === 'fx_impact_ring',
+        ),
         hasSparkTrail: active.some((p) => p.textureKey === 'fx_spark_trail'),
         casingHasShadow: Boolean(casing?.hasGroundShadow && casing?.shadowSprite?.visible),
         casingShadowDepth: casing?.shadowSprite?.depth ?? 0,
@@ -121,7 +125,7 @@ test.describe('Phase P10b — Combat FX (BlendMode.ADD), Elemental Combo FX, Che
     expect(combatFxCheck!.casingHasShadow).toBe(true);
     expect(combatFxCheck!.casingShadowDepth).toBe(19);
 
-    // 3. Verify Elemental Reaction coalescing within 0.4s -> "HƠI NƯỚC ×3" & fx_shockwave_ring (easeOutCubic)
+    // 3. Verify Elemental Reaction coalescing within 0.4s -> "HƠI NƯỚC ×3" & harmonic ring (easeOutCubic)
     const reactionCheck = await page.evaluate(() => {
       const gs = window.__PHASER_GAME__?.scene.getScene('GameScene') as
         | {
@@ -176,7 +180,9 @@ test.describe('Phase P10b — Combat FX (BlendMode.ADD), Elemental Combo FX, Che
       });
 
       const shockwaves = gs.fx.particlePool.filter(
-        (p) => p.active && p.textureKey === 'fx_shockwave_ring',
+        (p) =>
+          p.active &&
+          (p.textureKey === 'fx_shockwave_ring' || p.textureKey === 'fx_impact_ring'),
       );
       return {
         bannerLabel: gs.fx.activeReactionBanner?.label ?? '',

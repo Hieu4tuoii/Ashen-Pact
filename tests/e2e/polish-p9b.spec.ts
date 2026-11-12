@@ -17,18 +17,37 @@ test.describe('Phase P9b — Menus, Hub Invite Panel, Modals, Pause Confirm & 4-
     await page.setViewportSize({ width: 1920, height: 1080 });
     await page.goto('/?test=1');
 
-    await page.waitForFunction(() => window.__GAME_DEBUG__?.scene === 'MenuScene', null, {
-      timeout: 15000,
+    await page.waitForFunction(
+      () =>
+        window.__GAME_DEBUG__?.scene === 'GameScene' &&
+        window.__GAME_DEBUG__?.inHub === true &&
+        window.__GAME_DEBUG__?.irisTransitionProgress === 0,
+      null,
+      { timeout: 15000 },
+    );
+
+    // 1. Sanctuary Co-op Guild Drawer: collapsed initially -> [I] opens -> native typing, spaces, WASD isolation & clipboard paste
+    expect(await page.evaluate(() => window.__GAME_DEBUG__.invitePanelVisible)).toBe(false);
+    await page.keyboard.press('KeyI');
+    await page.waitForFunction(() => window.__GAME_DEBUG__?.invitePanelVisible === true, null, {
+      timeout: 5000,
     });
 
-    // 1. Menu Name & LAN IP Inputs: native typing, Backspace/Delete & clipboard paste
+    const startPos = await page.evaluate(() => ({
+      x: window.__GAME_DEBUG__.playerX,
+      y: window.__GAME_DEBUG__.playerY,
+    }));
+
     const nameInput = page.locator('[data-testid="menu-name-input"]');
     const ipInput = page.locator('[data-testid="menu-ip-input"]');
-    await expect(nameInput).toBeAttached();
-    await expect(ipInput).toBeAttached();
+    await expect(nameInput).toBeVisible();
+    await expect(ipInput).toBeVisible();
 
-    // Focus Name input, select all, Backspace, type + paste Vietnamese name
+    // Focus Name input, select all, Backspace, exercise WASD/E/I + Space typing, then type + paste Vietnamese name
     await nameInput.click();
+    await nameInput.selectText();
+    await page.keyboard.press('Backspace');
+    await page.keyboard.type('wasdei ');
     await nameInput.selectText();
     await page.keyboard.press('Backspace');
     await page.keyboard.type('Chiến ');
@@ -41,7 +60,7 @@ test.describe('Phase P9b — Menus, Hub Invite Panel, Modals, Pause Confirm & 4-
     const updatedName = await page.evaluate(() => window.__GAME_DEBUG__.menuDisplayName);
     expect(updatedName).toBe('Chiến Thần Tro');
 
-    // Focus IP input, select port, Delete, and paste new LAN IP:Port
+    // Focus IP input, select all, Delete, and paste new LAN IP:Port
     await ipInput.click();
     await ipInput.selectText();
     await page.keyboard.press('Delete');
@@ -52,10 +71,22 @@ test.describe('Phase P9b — Menus, Hub Invite Panel, Modals, Pause Confirm & 4-
     });
     await page.keyboard.press('Enter');
 
-    const updatedIp = await page.evaluate(() => window.__GAME_DEBUG__.menuServerHostPort);
-    expect(updatedIp).toBe('192.168.1.88:2567');
+    const afterTyping = await page.evaluate(() => ({
+      ip: window.__GAME_DEBUG__.menuServerHostPort,
+      x: window.__GAME_DEBUG__.playerX,
+      y: window.__GAME_DEBUG__.playerY,
+    }));
+    expect(afterTyping.ip).toBe('192.168.1.88:2567');
+    expect(afterTyping.x).toBe(startPos.x);
+    expect(afterTyping.y).toBe(startPos.y);
 
-    // 2. Open 4-Tab Settings Modal [O] on MenuScene, cycle 4 tabs, adjust UI Scale & Key Hints, verify localStorage
+    // Close the Solo Co-op Guild Drawer with [I]
+    await page.keyboard.press('KeyI');
+    await page.waitForFunction(() => window.__GAME_DEBUG__?.invitePanelVisible === false, null, {
+      timeout: 5000,
+    });
+
+    // 2. Open 4-Tab Settings Modal [O] directly in Sanctuary, cycle 4 tabs, adjust UI Scale & Key Hints, verify localStorage
     await page.keyboard.press('o');
     await page.waitForFunction(() => window.__GAME_DEBUG__?.settingsModalOpen === true, null, {
       timeout: 5000,
@@ -99,21 +130,25 @@ test.describe('Phase P9b — Menus, Hub Invite Panel, Modals, Pause Confirm & 4-
       timeout: 5000,
     });
 
-    // 3. Enter GameScene -> Hub Co-op 2P: verify Invite Panel collapsed by default, expand with [I], verify no overlap with "Đuổi"
-    await page.mouse.click(960, 450);
-    await page.waitForFunction(
-      () =>
-        window.__GAME_DEBUG__?.scene === 'GameScene' &&
-        (window.__GAME_DEBUG__?.tick ?? 0) >= 35,
-      null,
-      { timeout: 10000 },
-    );
-
+    // 3. Hub Co-op 2P in Sanctuary: switch scene coopMode to 'host' with 2 players, verify Invite Panel collapsed, expand with [I], verify no overlap with "Đuổi"
     await page.evaluate(() => {
       const sim = window.__GAME_TRANSPORT__!.getSim();
       sim.enterHub();
       sim.addCoopPlayer(2, 'ranger', 'Chiến Binh Rất Dài P2', 2);
       sim.enterHub();
+      const gs = window.__PHASER_GAME__?.scene.getScene('GameScene') as
+        | {
+            coopMode?: 'solo' | 'host' | 'join';
+            lastInvitePanelHash?: string;
+            updateHubInvitePanel?: () => void;
+          }
+        | undefined;
+      if (gs) {
+        gs.coopMode = 'host';
+        window.__GAME_DEBUG__.coopMode = 'host';
+        gs.lastInvitePanelHash = '';
+        gs.updateHubInvitePanel?.();
+      }
     });
     await page.waitForTimeout(150);
 
@@ -213,7 +248,7 @@ test.describe('Phase P9b — Menus, Hub Invite Panel, Modals, Pause Confirm & 4-
     expect(modalAudit.victoryTexts.some((t) => t.includes('bountiful_vitality'))).toBe(false);
     expect(modalAudit.victoryTexts.some((t) => t.includes('Pháo Đài Phản Xạ'))).toBe(true);
 
-    // 5. Pause Modal -> "Về Menu" Confirmation Dialog -> Cancel stays in match -> Confirm exits to MenuScene
+    // 5. Pause Modal -> "Về Menu" Confirmation Dialog -> Cancel stays in match -> Confirm exits to Solo Sanctuary
     await page.keyboard.press('Escape');
     await page.waitForFunction(() => window.__GAME_DEBUG__?.pauseModalOpen === true, null, {
       timeout: 5000,
@@ -225,25 +260,30 @@ test.describe('Phase P9b — Menus, Hub Invite Panel, Modals, Pause Confirm & 4-
     await page.waitForFunction(() => window.__GAME_DEBUG__?.pauseConfirmExitOpen === true, null, {
       timeout: 5000,
     });
-    expect(await page.evaluate(() => window.__GAME_DEBUG__.scene)).toBe('GameScene');
+    expect(await page.evaluate(() => window.__GAME_DEBUG__.inHub)).toBe(false);
 
-    // Click "Hủy [Esc]" at (784, 644) in 1080p -> stays in GameScene with Pause open
+    // Click "Hủy [Esc]" at (784, 644) in 1080p -> stays in dungeon match with Pause open
     await page.mouse.click(784, 644);
     await page.waitForFunction(() => window.__GAME_DEBUG__?.pauseConfirmExitOpen === false, null, {
       timeout: 5000,
     });
-    expect(await page.evaluate(() => window.__GAME_DEBUG__.scene)).toBe('GameScene');
+    expect(await page.evaluate(() => window.__GAME_DEBUG__.inHub)).toBe(false);
     expect(await page.evaluate(() => window.__GAME_DEBUG__.pauseModalOpen)).toBe(true);
 
-    // Click "🏠 Về Menu Chính [M]" again -> click "Xác nhận thoát [Enter]" at (1136, 644) -> returns to MenuScene
+    // Click "🏠 Về Menu Chính [M]" again -> click "Xác nhận thoát [Enter]" at (1136, 644) -> returns to Solo Sanctuary
     await page.mouse.click(960, 754);
     await page.waitForFunction(() => window.__GAME_DEBUG__?.pauseConfirmExitOpen === true, null, {
       timeout: 5000,
     });
     await page.mouse.click(1136, 644);
-    await page.waitForFunction(() => window.__GAME_DEBUG__?.scene === 'MenuScene', null, {
-      timeout: 10000,
-    });
+    await page.waitForFunction(
+      () =>
+        window.__GAME_DEBUG__?.scene === 'GameScene' &&
+        window.__GAME_DEBUG__?.inHub === true &&
+        window.__GAME_DEBUG__?.coopMode === 'solo',
+      null,
+      { timeout: 10000 },
+    );
 
     expect(consoleErrors).toEqual([]);
   });

@@ -1,7 +1,10 @@
 import { defineConfig, devices } from '@playwright/test';
 
+const isLinux = process.platform === 'linux';
+
 export default defineConfig({
   testDir: './tests/e2e',
+  testMatch: '**/*.spec.ts',
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: 0,
@@ -12,19 +15,35 @@ export default defineConfig({
     baseURL: 'http://localhost:5173',
     trace: 'on-first-retry',
     viewport: { width: 1920, height: 1080 },
-    launchOptions: {
-      args: [
-        '--use-gl=angle',
-        '--use-angle=d3d11',
-        '--enable-webgl',
-        '--ignore-gpu-blocklist',
-      ],
-    },
+    launchOptions: isLinux
+      ? {
+          executablePath: '/usr/bin/chromium',
+          args: [
+            '--no-sandbox',
+            '--disable-dev-shm-usage',
+            '--no-proxy-server',
+            '--use-gl=angle',
+            '--use-angle=swiftshader',
+            '--enable-unsafe-swiftshader',
+            '--enable-webgl',
+            '--ignore-gpu-blocklist',
+          ],
+        }
+      : {
+          args: [
+            '--use-gl=angle',
+            '--use-angle=d3d11',
+            '--enable-webgl',
+            '--ignore-gpu-blocklist',
+          ],
+        },
   },
   projects: [
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'], channel: 'chromium' },
+      use: isLinux
+        ? { ...devices['Desktop Chrome'] }
+        : { ...devices['Desktop Chrome'], channel: 'chromium' },
     },
   ],
   webServer: [

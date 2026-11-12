@@ -12,6 +12,7 @@ test.describe('Phase 3 — Dungeon, Vòng Lặp Lượt Chơi & Biome 1 Hoàn Ch
   test('verifies procedural dungeon rooms, minimap + fog of war, 14 weapons & rarity chests, merchant & shrine, secret room, 6 Biome 1 enemies + elites, Boss Mục Vương 3 phases, and E2E bot auto-play victory at 1080p', async ({
     page,
   }) => {
+    test.setTimeout(90000);
     const consoleErrors: string[] = [];
     const consoleWarnings: string[] = [];
 
@@ -26,18 +27,27 @@ test.describe('Phase 3 — Dungeon, Vòng Lặp Lượt Chơi & Biome 1 Hoàn Ch
     await page.setViewportSize({ width: 1920, height: 1080 });
     await page.goto('/');
 
-    await page.waitForFunction(() => window.__GAME_DEBUG__?.scene === 'MenuScene', null, {
-      timeout: 15000,
-    });
+    await page.waitForFunction(
+      () =>
+        window.__GAME_DEBUG__?.scene === 'GameScene' &&
+        window.__GAME_DEBUG__?.inHub === true,
+      null,
+      { timeout: 15000 },
+    );
 
-    // Click "Bắt Đầu Chơi Thử (Game Scene)" button
-    await page.mouse.click(960, 450);
-    await page.waitForFunction(() => window.__GAME_DEBUG__?.scene === 'GameScene', null, {
-      timeout: 10000,
+    // Enter Floor 1 Dungeon from Sanctuary Lobby via North Expedition Portal
+    await page.evaluate(() => {
+      window.__GAME_TRANSPORT__?.getSim().enterPortal();
     });
-    await page.waitForFunction(() => (window.__GAME_DEBUG__?.tick ?? 0) >= 60, null, {
-      timeout: 10000,
-    });
+    await page.waitForFunction(
+      () =>
+        window.__GAME_DEBUG__?.scene === 'GameScene' &&
+        window.__GAME_DEBUG__?.inHub === false &&
+        window.__GAME_DEBUG__?.irisTransitionProgress === 0 &&
+        (window.__GAME_DEBUG__?.tick ?? 0) >= 60,
+      null,
+      { timeout: 10000 },
+    );
 
     // 1. Verify Floor 1 Dungeon Graph (7-10 rooms, all required room types present) & Minimap + [Tab] Full Map
     const dungeonInfo = await page.evaluate(() => {

@@ -24,20 +24,16 @@ test.describe('Phase 2 — Pipeline Hình Ảnh & Tương Tác Map', () => {
     });
 
     await page.setViewportSize({ width: 1920, height: 1080 });
-    await page.goto('/');
+    await page.goto('/?scene=game');
 
-    await page.waitForFunction(() => window.__GAME_DEBUG__?.scene === 'MenuScene', null, {
-      timeout: 15000,
-    });
-
-    // Click "Bắt Đầu Chơi Thử (Game Scene)" button
-    await page.mouse.click(960, 450);
-    await page.waitForFunction(() => window.__GAME_DEBUG__?.scene === 'GameScene', null, {
-      timeout: 10000,
-    });
-    await page.waitForFunction(() => (window.__GAME_DEBUG__?.tick ?? 0) >= 60, null, {
-      timeout: 10000,
-    });
+    await page.waitForFunction(
+      () =>
+        window.__GAME_DEBUG__?.scene === 'GameScene' &&
+        window.__GAME_DEBUG__?.inHub === false &&
+        (window.__GAME_DEBUG__?.tick ?? 0) >= 60,
+      null,
+      { timeout: 15000 },
+    );
 
     // 1. Verify Tilemap Autotiling, AO Shadows, Dynamic Lighting & 6 Interactive Surfaces
     const mapAndLightCheck = await page.evaluate(() => {

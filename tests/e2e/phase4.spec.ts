@@ -12,7 +12,7 @@ test.describe('Phase 4 — Co-op LAN Authoritative, Prediction/Interpolation, Hu
   test('connects 4 clients via real LAN IPv4 address, verifies Hub QR & 5-char selection, bad Wi-Fi prediction/reconciliation, bandwidth <= 30 KB/s, Downed/Revive, clearing Floor 1 together, 30s Reconnect, and Host disconnect handling', async ({
     browser,
   }) => {
-    test.setTimeout(90000);
+    test.setTimeout(120000);
 
     const consoleErrors: string[] = [];
     const consoleWarnings: string[] = [];
@@ -31,6 +31,7 @@ test.describe('Phase 4 — Co-op LAN Authoritative, Prediction/Interpolation, Hu
     for (const [idx, p] of pages.entries()) {
       p.on('console', (msg) => {
         if (msg.text().includes('WebSocket is already in CLOSING or CLOSED state')) return;
+        if (msg.text().includes('GPU stall due to ReadPixels')) return;
         if (msg.type() === 'error') consoleErrors.push(`[P${idx + 1}] ${msg.text()}`);
         if (msg.type() === 'warning') consoleWarnings.push(`[P${idx + 1}] ${msg.text()}`);
       });
@@ -63,7 +64,7 @@ test.describe('Phase 4 — Co-op LAN Authoritative, Prediction/Interpolation, Hu
         window.__GAME_DEBUG__?.serverConnected === true &&
         Boolean(window.__GAME_DEBUG__?.coopRoomId),
       null,
-      { timeout: 15000 },
+      { timeout: 25000 },
     );
 
     const roomId = await page1.evaluate(() => window.__GAME_DEBUG__.coopRoomId!);
@@ -86,7 +87,7 @@ test.describe('Phase 4 — Co-op LAN Authoritative, Prediction/Interpolation, Hu
           window.__GAME_DEBUG__?.serverConnected === true &&
           window.__GAME_DEBUG__?.inHub === true,
         null,
-        { timeout: 15000 },
+        { timeout: 25000 },
       );
     }
 
@@ -98,7 +99,7 @@ test.describe('Phase 4 — Co-op LAN Authoritative, Prediction/Interpolation, Hu
           window.__GAME_DEBUG__?.coopPlayerCount === 4 &&
           window.__GAME_DEBUG__?.inHub === true,
         null,
-        { timeout: 15000 },
+        { timeout: 25000 },
       );
     }
 
@@ -175,7 +176,7 @@ test.describe('Phase 4 — Co-op LAN Authoritative, Prediction/Interpolation, Hu
         else await pg.keyboard.up(code);
         return next;
       };
-      for (let step = 0; step < 80; step++) {
+      for (let step = 0; step < 120; step++) {
         const pos = await pg.evaluate(() => ({
           x: window.__GAME_DEBUG__.playerX,
           y: window.__GAME_DEBUG__.playerY,
@@ -196,8 +197,18 @@ test.describe('Phase 4 — Co-op LAN Authoritative, Prediction/Interpolation, Hu
       await pg.waitForTimeout(50);
     };
 
-    // P1 walks to apprentice_staff (381, 400) and equips it into Slot 2 (2/2)
-    await walkPlayerTo(page1, 396, 400, 14);
+    const rackCoords = await page1.evaluate(() => {
+      const items = window.__GAME_TRANSPORT__!.getSim().worldItems;
+      const staff = items.find((it) => it.isHubRackItem && it.weaponId === 'apprentice_staff')!;
+      const shotgun = items.find((it) => it.isHubRackItem && it.weaponId === 'scrap_shotgun')!;
+      return {
+        staff: { x: staff.x, y: staff.y },
+        shotgun: { x: shotgun.x, y: shotgun.y },
+      };
+    });
+
+    // P1 walks to apprentice_staff on Sanctuary West Armory rack and equips it into Slot 2 (2/2)
+    await walkPlayerTo(page1, rackCoords.staff.x + 16, rackCoords.staff.y, 14);
     await page1.keyboard.press('KeyE');
     await page1.waitForFunction(
       () =>
@@ -206,9 +217,9 @@ test.describe('Phase 4 — Co-op LAN Authoritative, Prediction/Interpolation, Hu
       { timeout: 5000 },
     );
 
-    // Wait for 0.3s weaponPickupLockTimer to expire, walk to (398, 475) near scrap_shotgun (381, 470), aim East, and press E while full (2/2)
+    // Wait for 0.3s weaponPickupLockTimer to expire, walk near scrap_shotgun on Sanctuary West Armory rack, aim East, and press E while full (2/2)
     await page1.waitForTimeout(360);
-    await walkPlayerTo(page1, 398, 475, 12);
+    await walkPlayerTo(page1, rackCoords.shotgun.x + 16, rackCoords.shotgun.y + 4, 12);
     await page1.mouse.move(1450, 540);
     await page1.waitForTimeout(60);
     await page1.keyboard.press('KeyE');
@@ -295,7 +306,7 @@ test.describe('Phase 4 — Co-op LAN Authoritative, Prediction/Interpolation, Hu
       window.__GAME_TRIGGER_LAG_SPIKE__?.(300);
     });
 
-    await page2.keyboard.down('KeyD');
+    await page2.keyboard.down('KeyS');
     await page1.mouse.move(1120, 480);
     await page1.mouse.down();
 
@@ -309,7 +320,7 @@ test.describe('Phase 4 — Co-op LAN Authoritative, Prediction/Interpolation, Hu
       p2Positions.push(pos);
     }
 
-    await page2.keyboard.up('KeyD');
+    await page2.keyboard.up('KeyS');
     await page1.mouse.up();
 
     // Verify P2 actually moved and never snapped/teleported erratically during bad Wi-Fi + lag spike
@@ -455,13 +466,18 @@ test.describe('Phase 4 — Co-op LAN Authoritative, Prediction/Interpolation, Hu
       window.__GAME_COOP_SEND__?.('debug_cmd', { cmd: 'bot_autoplay', enabled: false });
     });
 
-    // 9. Host Disconnect: close Host (P1) and verify P2, P3, P4 return gracefully to MenuScene with Vietnamese notice
+    // 9. Host Disconnect: close Host (P1) and verify P2, P3, P4 return gracefully to Solo Sanctuary with Vietnamese notice
     await page1.close();
 
     for (const p of [page2, page3, page4]) {
-      await p.waitForFunction(() => window.__GAME_DEBUG__?.scene === 'MenuScene', null, {
-        timeout: 15000,
-      });
+      await p.waitForFunction(
+        () =>
+          window.__GAME_DEBUG__?.scene === 'GameScene' &&
+          window.__GAME_DEBUG__?.inHub === true &&
+          window.__GAME_DEBUG__?.coopMode === 'solo',
+        null,
+        { timeout: 25000 },
+      );
     }
 
     await page2.waitForTimeout(250);

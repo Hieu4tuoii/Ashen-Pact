@@ -10,7 +10,7 @@ test.beforeAll(() => {
 });
 
 test.describe('Phase 0 — Foundation, Procedural Vector Art & E2E Smoke', () => {
-  test('MenuScene & GameScene load at 60 FPS with Vietnamese font subsets, UI navigation, resize safety, and Colyseus HelloRoom', async ({
+  test('Sanctuary Lobby & Floor 1 GameScene load at 60 FPS with Vietnamese font subsets, portal entry, resize safety, and Colyseus HelloRoom', async ({
     page,
   }) => {
     const consoleErrors: string[] = [];
@@ -27,14 +27,25 @@ test.describe('Phase 0 — Foundation, Procedural Vector Art & E2E Smoke', () =>
     await page.setViewportSize({ width: 1920, height: 1080 });
     await page.goto('/');
 
-    await page.waitForFunction(() => window.__GAME_DEBUG__?.scene === 'MenuScene', null, {
-      timeout: 15000,
-    });
+    await page.waitForFunction(
+      () =>
+        window.__GAME_DEBUG__?.scene === 'GameScene' &&
+        window.__GAME_DEBUG__?.inHub === true &&
+        window.__GAME_DEBUG__?.serverConnected === true &&
+        window.__GAME_DEBUG__?.fontsLoaded === true &&
+        window.__GAME_DEBUG__?.irisTransitionProgress === 0,
+      null,
+      { timeout: 15000 },
+    );
     await page.waitForTimeout(600);
 
-    const menuDebug = await page.evaluate(() => window.__GAME_DEBUG__);
-    expect(menuDebug.vietnameseSampleText).toBe(VIETNAMESE_VERIFICATION_STRING);
-    expect(menuDebug.fontsLoaded).toBe(true);
+    const sanctuaryDebug = await page.evaluate(() => window.__GAME_DEBUG__);
+    expect(sanctuaryDebug.scene).toBe('GameScene');
+    expect(sanctuaryDebug.inHub).toBe(true);
+    expect(sanctuaryDebug.serverConnected).toBe(true);
+    expect(sanctuaryDebug.vietnameseSampleText).toBe(VIETNAMESE_VERIFICATION_STRING);
+    expect(sanctuaryDebug.fontsLoaded).toBe(true);
+    expect(sanctuaryDebug.fps).toBeGreaterThanOrEqual(50);
 
     const fontCheck = await page.evaluate((sample) => {
       const faces = Array.from(document.fonts);
@@ -50,26 +61,31 @@ test.describe('Phase 0 — Foundation, Procedural Vector Art & E2E Smoke', () =>
     expect(fontCheck.allLoaded).toBe(true);
     expect(fontCheck.check700).toBe(true);
     expect(fontCheck.check800).toBe(true);
-    expect(menuDebug.errors).toEqual([]);
-    expect(menuDebug.warnings).toEqual([]);
+    expect(sanctuaryDebug.errors).toEqual([]);
+    expect(sanctuaryDebug.warnings).toEqual([]);
 
     await page.screenshot({
       path: path.join(SCREENSHOT_DIR, 'menu-1080p.png'),
     });
 
-    // Click "Bắt Đầu Chơi Thử (Game Scene)" button at center (world 480, 225 -> screen 960, 450)
-    await page.mouse.click(960, 450);
-    await page.waitForFunction(() => window.__GAME_DEBUG__?.scene === 'GameScene', null, {
-      timeout: 10000,
+    // Enter Floor 1 Dungeon from Sanctuary Lobby via North Expedition Portal
+    const enteredFloor1 = await page.evaluate(() => {
+      const sim = window.__GAME_TRANSPORT__?.getSim();
+      return sim ? sim.enterPortal() : false;
     });
-    await page.waitForFunction(() => window.__GAME_DEBUG__?.serverConnected === true, null, {
-      timeout: 10000,
-    });
-    await page.waitForFunction(() => (window.__GAME_DEBUG__?.tick ?? 0) >= 30, null, {
-      timeout: 10000,
-    });
+    expect(enteredFloor1).toBe(true);
 
-    // Test resize while in GameScene after transitioning from MenuScene (verifies shutdown cleanup & texture rebake)
+    await page.waitForFunction(
+      () =>
+        window.__GAME_DEBUG__?.scene === 'GameScene' &&
+        window.__GAME_DEBUG__?.inHub === false &&
+        window.__GAME_DEBUG__?.irisTransitionProgress === 0 &&
+        (window.__GAME_DEBUG__?.tick ?? 0) >= 30,
+      null,
+      { timeout: 10000 },
+    );
+
+    // Test resize while in Floor 1 GameScene after transitioning from Sanctuary Lobby (verifies texture rebake & HUD layout)
     await page.setViewportSize({ width: 2560, height: 1440 });
     await page.waitForTimeout(200);
     await page.setViewportSize({ width: 1920, height: 1080 });
@@ -80,6 +96,7 @@ test.describe('Phase 0 — Foundation, Procedural Vector Art & E2E Smoke', () =>
     await page.waitForTimeout(400);
 
     const gameDebug = await page.evaluate(() => window.__GAME_DEBUG__);
+    expect(gameDebug.inHub).toBe(false);
     expect(gameDebug.overlayVisible).toBe(true);
     expect(gameDebug.serverConnected).toBe(true);
     expect(gameDebug.fps).toBeGreaterThanOrEqual(50);

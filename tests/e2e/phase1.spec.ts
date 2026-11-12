@@ -25,20 +25,16 @@ test.describe('Phase 1 — Core Gameplay & Game Feel (Solo, Phòng Thử Nghiệ
     });
 
     await page.setViewportSize({ width: 1920, height: 1080 });
-    await page.goto('/');
+    await page.goto('/?scene=game&seed=42');
 
-    await page.waitForFunction(() => window.__GAME_DEBUG__?.scene === 'MenuScene', null, {
-      timeout: 15000,
-    });
-
-    // Click "Bắt Đầu Chơi Thử (Game Scene)" button
-    await page.mouse.click(960, 450);
-    await page.waitForFunction(() => window.__GAME_DEBUG__?.scene === 'GameScene', null, {
-      timeout: 10000,
-    });
-    await page.waitForFunction(() => (window.__GAME_DEBUG__?.tick ?? 0) >= 60, null, {
-      timeout: 10000,
-    });
+    await page.waitForFunction(
+      () =>
+        window.__GAME_DEBUG__?.scene === 'GameScene' &&
+        window.__GAME_DEBUG__?.inHub === false &&
+        (window.__GAME_DEBUG__?.tick ?? 0) >= 60,
+      null,
+      { timeout: 15000 },
+    );
 
     // 1. Capture Arena Overview screenshot (with initial wave of 3 sample enemies + dummy)
     await page.mouse.move(1250, 540);
@@ -123,6 +119,17 @@ test.describe('Phase 1 — Core Gameplay & Game Feel (Solo, Phòng Thử Nghiệ
       sim.player.y = 350;
       sim.player.prevX = 420;
       sim.player.prevY = 350;
+      sim.player.vx = 0;
+      sim.player.vy = 0;
+      sim.player.dashTimer = 0;
+      const gs = window.__PHASER_GAME__?.scene.getScene('GameScene') as
+        | { camFocusX?: number; camFocusY?: number; cameras?: { main?: { centerOn: (x: number, y: number) => void } } }
+        | undefined;
+      if (gs) {
+        gs.camFocusX = 420;
+        gs.camFocusY = 350;
+        gs.cameras?.main?.centerOn(420, 350);
+      }
       sim.equipWeaponSlot(1);
       const shotgunItem = sim.spawnWorldItem({
         kind: 'weapon',
@@ -139,11 +146,15 @@ test.describe('Phase 1 — Core Gameplay & Game Feel (Solo, Phòng Thử Nghiệ
         (it) => !it.pickedUp && it.weaponId === 'rivet_gun' && it.droppedByPlayerId === sim.player.id,
       );
 
-      // Spawn all 3 sample enemies right in front of the player
+      // Clear any random props/push-blocks in the firing lane and spawn all 3 sample enemies right in front of the player
+      sim.props = sim.props.filter((pr) => Math.hypot(pr.x - 475, pr.y - 358) > 120);
+      sim.pushBlocks = [];
+      sim.player.fireCooldownTimer = 0;
+      sim.player.reloadTimer = 0;
       sim.enemies = sim.enemies.filter((e) => e.isDummy);
-      const g = sim.spawnEnemy('goblin_shooter', 515, 325, true);
-      const b = sim.spawnEnemy('wild_boar', 530, 365, true);
-      const s = sim.spawnEnemy('spore_bomber', 505, 395, true);
+      const g = sim.spawnEnemy('goblin_shooter', 515, 315, true);
+      const b = sim.spawnEnemy('wild_boar', 495, 355, true);
+      const s = sim.spawnEnemy('spore_bomber', 515, 398, true);
 
       return {
         goblinId: g.id,
@@ -156,24 +167,50 @@ test.describe('Phase 1 — Core Gameplay & Game Feel (Solo, Phòng Thử Nghiệ
     expect(combatStats.activeWeaponId).toBe('scrap_shotgun');
     expect(combatStats.droppedRivetGun).toBe(true);
 
-    // Ensure slot 2 (Scrap Shotgun) is active, aim at enemies, and fire!
+    // Ensure slot 2 (Scrap Shotgun) is active, aim directly at wild_boar in screen space, and fire!
     await page.keyboard.press('Digit2');
-    await page.mouse.move(1120, 560);
+    const boarScreenPt = await page.evaluate((boarId) => {
+      const sim = window.__GAME_TRANSPORT__!.getSim();
+      sim.player.fireCooldownTimer = 0;
+      sim.player.reloadTimer = 0;
+      const boar = sim.enemies.find((e) => e.id === boarId);
+      const gs = window.__PHASER_GAME__!.scene.getScene('GameScene') as {
+        cameras: { main: { scrollX: number; scrollY: number; width: number; height: number; zoom: number } };
+      };
+      const cam = gs.cameras.main;
+      const midX = cam.scrollX + cam.width * 0.5;
+      const midY = cam.scrollY + cam.height * 0.5;
+      return {
+        x: ((boar?.x ?? 495) - midX) * cam.zoom + cam.width * 0.5,
+        y: ((boar?.y ?? 355) - midY) * cam.zoom + cam.height * 0.5,
+      };
+    }, combatStats.boarId);
+    await page.mouse.move(boarScreenPt.x, boarScreenPt.y);
     await page.mouse.down({ button: 'left' });
-    await page.waitForTimeout(140);
+    await page.waitForTimeout(160);
     await page.mouse.up({ button: 'left' });
+    await page.waitForTimeout(120);
 
     const hitFeelResult = await page.evaluate((ids) => {
       const sim = window.__GAME_TRANSPORT__!.getSim();
       const boar = sim.enemies.find((e) => e.id === ids.boarId);
       const goblin = sim.enemies.find((e) => e.id === ids.goblinId);
+      const spore = sim.enemies.find((e) => e.id === ids.sporeId);
       return {
         debug: window.__GAME_DEBUG__,
         boarHp: boar?.hp ?? 0,
         boarMaxHp: boar?.maxHp ?? 36,
+        boarX: boar?.x ?? -1,
+        boarY: boar?.y ?? -1,
+        playerX: sim.player.x,
+        playerY: sim.player.y,
+        aimAngle: sim.player.aimAngle,
+        clipAmmo: sim.player.clipAmmo,
+        activeWeapon: sim.getActiveWeaponId(),
         boarFlash: boar?.hitFlashTimer ?? 0,
         boarKbX: boar?.kbVx ?? 0,
         goblinHp: goblin?.hp ?? 0,
+        sporeHp: spore?.hp ?? 0,
       };
     }, combatStats);
 
@@ -182,7 +219,10 @@ test.describe('Phase 1 — Core Gameplay & Game Feel (Solo, Phòng Thử Nghiệ
     expect(hitFeelResult.debug.totalHitStopsTriggered).toBeGreaterThan(0);
     expect(hitFeelResult.debug.totalShakesTriggered).toBeGreaterThan(0);
     expect(hitFeelResult.debug.sfxPlayedCount).toBeGreaterThan(0);
-    expect(hitFeelResult.boarHp).toBeLessThan(hitFeelResult.boarMaxHp);
+    expect(
+      hitFeelResult.boarHp,
+      `boar=(${hitFeelResult.boarX},${hitFeelResult.boarY}) player=(${hitFeelResult.playerX},${hitFeelResult.playerY}) aim=${hitFeelResult.aimAngle} wep=${hitFeelResult.activeWeapon} clip=${hitFeelResult.clipAmmo} gHp=${hitFeelResult.goblinHp} sHp=${hitFeelResult.sporeHp}`,
+    ).toBeLessThan(hitFeelResult.boarMaxHp);
 
     await page.screenshot({
       path: path.join(SCREENSHOT_DIR, 'combat-shotgun-feel-1080p.png'),

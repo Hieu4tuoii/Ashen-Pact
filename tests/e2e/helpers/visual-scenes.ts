@@ -80,18 +80,21 @@ export {
 };
 
 export const VISUAL_SCENES: readonly VisualSceneDef[] = [
-  // 1. Menu
-  makeScene('menu', 'Main menu campfire hub in Vietnamese', DEFAULT_MENU_URL, 'MenuScene', async (page) => {
+  // 1. Sanctuary Lobby (legacy menu-* visual IDs preserved)
+  makeScene('menu', 'Sanctuary Lobby campfire hub in Vietnamese', DEFAULT_MENU_URL, 'GameScene', async (page) => {
+    await lockCameraAndIrisToPlayer(page);
     await stepDeterministicFrames(page, 45);
   }),
-  makeScene('menu-debug-on', 'Main menu with ?debug=1 showing Art Gallery, Toggle Anim & Vietnamese debug footer', DEBUG_MENU_URL, 'MenuScene', async (page) => {
-    await page.mouse.click(1136, 706);
+  makeScene('menu-debug-on', 'Sanctuary Lobby with ?debug=1 showing Art Gallery, Toggle Anim & Vietnamese debug footer', DEBUG_MENU_URL, 'GameScene', async (page) => {
+    await lockCameraAndIrisToPlayer(page);
+    await stepDeterministicFrames(page, 2);
+    await page.mouse.click(1292, 108);
     await stepDeterministicFrames(page, 2);
     const toggledToRun = await page.evaluate(() => window.__GAME_DEBUG__?.animState === 'run');
     if (!toggledToRun) {
-      throw new Error('Expected Toggle Anim (Đổi Hoạt Ảnh) debug button to be visible and interactive in menu-debug-on');
+      throw new Error('Expected Toggle Anim (🏃 Anim) debug pill to be visible and interactive in menu-debug-on');
     }
-    await page.mouse.click(1136, 706);
+    await page.mouse.click(1292, 108);
     await page.mouse.move(960, 540);
     await stepDeterministicFrames(page, 45);
     const menuCheck = await page.evaluate(() => ({
@@ -102,12 +105,16 @@ export const VISUAL_SCENES: readonly VisualSceneDef[] = [
       throw new Error(`menu-debug-on verification failed: ${JSON.stringify(menuCheck)}`);
     }
   }),
-  makeScene('menu-settings', 'Main menu with Settings modal open', DEFAULT_MENU_URL, 'MenuScene', async (page) => {
+  makeScene('menu-settings', 'Sanctuary Lobby with Settings modal open', DEFAULT_MENU_URL, 'GameScene', async (page) => {
+    await lockCameraAndIrisToPlayer(page);
     await page.keyboard.press('o');
     await stepDeterministicFrames(page, 45);
   }),
-  makeScene('menu-join-input', 'Main menu with LAN Co-op Join IP input active', DEFAULT_MENU_URL, 'MenuScene', async (page) => {
-    await page.mouse.click(1210, 352);
+  makeScene('menu-join-input', 'Sanctuary Lobby with LAN Co-op Guild Drawer Join IP input active', DEFAULT_MENU_URL, 'GameScene', async (page) => {
+    await lockCameraAndIrisToPlayer(page);
+    await page.keyboard.press('KeyI');
+    await stepDeterministicFrames(page, 2);
+    await page.mouse.click(1592, 520);
     await page.mouse.move(960, 540);
     await stepDeterministicFrames(page, 45);
   }),
@@ -902,11 +909,13 @@ export const VISUAL_SCENES: readonly VisualSceneDef[] = [
     await lockCameraAndIrisToPlayer(page);
     await stepDeterministicFrames(page, 45);
   }),
-  makeScene('menu-en', 'Main menu in English locale', DEFAULT_MENU_URL, 'MenuScene', async (page) => {
+  makeScene('menu-en', 'Sanctuary Lobby in English locale', DEFAULT_MENU_URL, 'GameScene', async (page) => {
+    await lockCameraAndIrisToPlayer(page);
     await page.keyboard.press('l');
     await stepDeterministicFrames(page, 45);
   }),
-  makeScene('menu-settings-en', 'Main menu Settings modal in English locale', DEFAULT_MENU_URL, 'MenuScene', async (page) => {
+  makeScene('menu-settings-en', 'Sanctuary Lobby Settings modal in English locale', DEFAULT_MENU_URL, 'GameScene', async (page) => {
+    await lockCameraAndIrisToPlayer(page);
     await page.keyboard.press('l');
     await page.keyboard.press('o');
     await stepDeterministicFrames(page, 45);

@@ -49,7 +49,7 @@ export interface VisualSceneDef {
   id: string;
   description: string;
   url: string;
-  expectedScene: 'MenuScene' | 'GameScene' | 'ArtGalleryScene';
+  expectedScene: 'GameScene' | 'ArtGalleryScene';
   viewport?: { width: number; height: number };
   captureUnlit?: boolean;
   includeUnlit?: boolean;
@@ -73,11 +73,11 @@ interface RafGateWindow {
 
 export const DEFAULT_GAME_URL = '/?scene=game&seed=1337&freeze=1&debug=0&testHooks=1';
 export const DEFAULT_HUB_URL = '/?scene=game&hub=1&seed=1337&freeze=1&debug=0&testHooks=1';
-export const DEFAULT_MENU_URL = '/?scene=menu&seed=1337&freeze=1&debug=0&testHooks=1';
+export const DEFAULT_MENU_URL = '/?seed=1337&freeze=1&debug=0&testHooks=1';
 export const DEFAULT_GALLERY_URL = '/?scene=gallery&seed=1337&freeze=1&debug=0&testHooks=1';
 export const BIOME2_GAME_URL = '/?scene=game&biome=2&seed=1337&freeze=1&debug=0&testHooks=1';
 export const BIOME3_GAME_URL = '/?scene=game&biome=3&seed=1337&freeze=1&debug=0&testHooks=1';
-export const DEBUG_MENU_URL = '/?scene=menu&seed=1337&freeze=1&debug=1&testHooks=1';
+export const DEBUG_MENU_URL = '/?seed=1337&freeze=1&debug=1&testHooks=1';
 export const DEBUG_GAME_URL = '/?scene=game&seed=1337&freeze=1&debug=1&testHooks=1';
 
 export const ENVIRONMENT_SAMPLE_RECTS: SampleRect[] = [
@@ -151,9 +151,7 @@ export async function installDeterministicRafGate(page: Page): Promise<void> {
         const isTargetReady =
           dbg !== undefined &&
           dbg.fontsLoaded === true &&
-          (dbg.scene === 'MenuScene' ||
-            dbg.scene === 'GameScene' ||
-            dbg.scene === 'ArtGalleryScene');
+          (dbg.scene === 'GameScene' || dbg.scene === 'ArtGalleryScene');
 
         if (!gateActive && isTargetReady) {
           gateActive = true;
@@ -729,7 +727,7 @@ export function makeScene(
   id: string,
   description: string,
   url: string,
-  expectedScene: 'MenuScene' | 'GameScene' | 'ArtGalleryScene',
+  expectedScene: 'GameScene' | 'ArtGalleryScene',
   setup: (page: Page) => Promise<void>,
   opts?: Partial<
     Pick<

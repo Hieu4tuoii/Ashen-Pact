@@ -118,6 +118,7 @@ test.describe('Phase 8 — Standalone Windows Release Package (v2.0.0), Real LAN
 
       for (const [idx, p] of pages.entries()) {
         p.on('console', (msg) => {
+          if (msg.text().includes('GPU stall due to ReadPixels')) return;
           if (msg.type() === 'error') consoleErrors.push(`[P${idx + 1}] ${msg.text()}`);
           if (msg.type() === 'warning') consoleWarnings.push(`[P${idx + 1}] ${msg.text()}`);
         });
@@ -347,7 +348,7 @@ test.describe('Phase 8 — Standalone Windows Release Package (v2.0.0), Real LAN
   test('verifies standalone release default mode (without --debug) hides all debug UI/hooks, enforces read-only __GAME_DEBUG__, and rejects debug commands on the server', async ({
     browser,
   }) => {
-    test.setTimeout(60000);
+    test.setTimeout(90000);
 
     let hostProc: ChildProcessWithoutNullStreams | null = null;
     let consoleStdout = '';
@@ -402,6 +403,7 @@ test.describe('Phase 8 — Standalone Windows Release Package (v2.0.0), Real LAN
       const context = await browser.newContext({ viewport: { width: 1920, height: 1080 } });
       const page = await context.newPage();
       page.on('console', (msg) => {
+        if (msg.text().includes('GPU stall due to ReadPixels')) return;
         if (msg.type() === 'error') consoleErrors.push(msg.text());
         if (msg.type() === 'warning') consoleWarnings.push(msg.text());
       });
@@ -424,11 +426,12 @@ test.describe('Phase 8 — Standalone Windows Release Package (v2.0.0), Real LAN
 
       const noDebugBaseUrl = `http://${hostInfo.primaryLanIp}:${hostInfo.port}`;
 
-      // 2. Verify MenuScene in default release mode hides debug buttons/footer and redirects ?scene=gallery
+      // 2. Verify Sanctuary Lobby in default release mode hides debug buttons/footer and redirects ?scene=gallery
       await page.goto(`${noDebugBaseUrl}/?scene=menu`);
       await page.waitForFunction(
         () =>
-          window.__GAME_DEBUG__?.scene === 'MenuScene' &&
+          window.__GAME_DEBUG__?.scene === 'GameScene' &&
+          window.__GAME_DEBUG__?.inHub === true &&
           window.__GAME_DEBUG__?.fontsLoaded === true,
         null,
         { timeout: 15000 },
@@ -440,7 +443,9 @@ test.describe('Phase 8 — Standalone Windows Release Package (v2.0.0), Real LAN
 
       await page.goto(`${noDebugBaseUrl}/?scene=gallery`);
       await page.waitForFunction(
-        () => window.__GAME_DEBUG__?.scene === 'MenuScene',
+        () =>
+          window.__GAME_DEBUG__?.scene === 'GameScene' &&
+          window.__GAME_DEBUG__?.inHub === true,
         null,
         { timeout: 10000 },
       );
@@ -512,6 +517,7 @@ test.describe('Phase 8 — Standalone Windows Release Package (v2.0.0), Real LAN
       // 7. Verify server rejects debug_cmd and set_god_mode even if a client forces ?debug=1 on URL
       const attackerPage = await context.newPage();
       attackerPage.on('console', (msg) => {
+        if (msg.text().includes('GPU stall due to ReadPixels')) return;
         if (msg.type() === 'error') consoleErrors.push(`[Attacker] ${msg.text()}`);
         if (msg.type() === 'warning') consoleWarnings.push(`[Attacker] ${msg.text()}`);
       });
