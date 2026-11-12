@@ -23,6 +23,7 @@ import { type GameScene } from '../GameScene.js';
 import { formatWeaponCadenceHudLabel } from './hud-micro-reload-bar.js';
 import { renderWeaponCompareSalvageBar } from './hud-pact-and-forge-modals.js';
 import {
+  applySanctuaryDisplayNameChange,
   PRESET_NAMES_VI,
   SOLO_COOP_DRAWER_H,
   SOLO_COOP_DRAWER_W,
@@ -295,8 +296,7 @@ export function updateHubInvitePanelImpl(this: GameScene): void {
     cycleHit.on('pointerdown', () => {
       this.presetNameIndex = (this.presetNameIndex + 1) % PRESET_NAMES_VI.length;
       const nextName = PRESET_NAMES_VI[this.presetNameIndex] ?? PRESET_NAMES_VI[0];
-      this.displayName = nextName;
-      initGlobalDebugState().menuDisplayName = nextName;
+      applySanctuaryDisplayNameChange(this, nextName);
       this.sanctuaryDomInputs?.syncValues(this.displayName, this.serverHostPort);
       this.lastInvitePanelHash = '';
     });

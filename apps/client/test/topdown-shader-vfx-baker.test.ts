@@ -419,4 +419,99 @@ describe('1:1 Top-Down Chiaroscuro Shader Sprite-Sheet Baker', () => {
     expect(failMock.gl.deleteProgram).toHaveBeenCalledTimes(5);
     expect(failMock.loseContext).toHaveBeenCalledTimes(1);
   });
+
+  it('downscales shader bake render viewport by 0.25x ONLY when headless automation is active, ?freeze=1 is off, and WebGL renderer is software GL', () => {
+    const createSwiftShaderGl = (rendererName: string) => {
+      let nextId = 1;
+      const UNMASKED_RENDERER_WEBGL = 0x9246;
+      return {
+        VERTEX_SHADER: 0x8b31,
+        FRAGMENT_SHADER: 0x8b30,
+        COMPILE_STATUS: 0x8b81,
+        LINK_STATUS: 0x8b82,
+        ARRAY_BUFFER: 0x8892,
+        STATIC_DRAW: 0x88e4,
+        BLEND: 0x0be2,
+        DEPTH_TEST: 0x0b71,
+        COLOR_BUFFER_BIT: 0x4000,
+        FLOAT: 0x1406,
+        TRIANGLE_STRIP: 0x0005,
+        RENDERER: 0x1f01,
+        createShader: vi.fn(() => ({ id: nextId++ })),
+        shaderSource: vi.fn(),
+        compileShader: vi.fn(),
+        getShaderParameter: vi.fn(() => true),
+        deleteShader: vi.fn(),
+        createProgram: vi.fn(() => ({ id: nextId++ })),
+        attachShader: vi.fn(),
+        linkProgram: vi.fn(),
+        getProgramParameter: vi.fn(() => true),
+        deleteProgram: vi.fn(),
+        createBuffer: vi.fn(() => ({ id: nextId++ })),
+        bindBuffer: vi.fn(),
+        bufferData: vi.fn(),
+        deleteBuffer: vi.fn(),
+        disable: vi.fn(),
+        getAttribLocation: vi.fn(() => 0),
+        getUniformLocation: vi.fn(() => ({ loc: nextId++ })),
+        viewport: vi.fn(),
+        clearColor: vi.fn(),
+        clear: vi.fn(),
+        useProgram: vi.fn(),
+        enableVertexAttribArray: vi.fn(),
+        vertexAttribPointer: vi.fn(),
+        uniform1f: vi.fn(),
+        drawArrays: vi.fn(),
+        getParameter: vi.fn((param: number) =>
+          param === UNMASKED_RENDERER_WEBGL || param === 0x1f01 ? rendererName : null,
+        ),
+        getExtension: vi.fn((ext: string) => {
+          if (ext === 'WEBGL_debug_renderer_info') return { UNMASKED_RENDERER_WEBGL };
+          if (ext === 'WEBGL_lose_context') return { loseContext: vi.fn() };
+          return null;
+        }),
+      };
+    };
+
+    try {
+      // 1. Real user (webdriver: false) on software GL (llvmpipe / SwiftShader) -> full resolution (384 * 7 = 2688)
+      vi.stubGlobal('navigator', { webdriver: false });
+      vi.stubGlobal('window', { location: { search: '' } });
+      const userSwGl = createSwiftShaderGl('ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device))');
+      const userScene = createMockPhaserSceneForBaker(userSwGl);
+      bakeShaderVfxFlipbooks(userScene as never, 4);
+      expect(userSwGl.viewport).toHaveBeenCalledWith(0, 0, 384 * 7, 384 * 2);
+      expect(userSwGl.viewport).not.toHaveBeenCalledWith(0, 0, 96 * 7, 96 * 2);
+
+      // 2. Headless automation (webdriver: true) + ?freeze=1 on software GL -> full resolution (384 * 7 = 2688)
+      vi.stubGlobal('navigator', { webdriver: true });
+      vi.stubGlobal('window', { location: { search: '?freeze=1' } });
+      const freezeSwGl = createSwiftShaderGl('Mesa llvmpipe (LLVM 15.0.6, 256 bits)');
+      const freezeScene = createMockPhaserSceneForBaker(freezeSwGl);
+      bakeShaderVfxFlipbooks(freezeScene as never, 4);
+      expect(freezeSwGl.viewport).toHaveBeenCalledWith(0, 0, 384 * 7, 384 * 2);
+      expect(freezeSwGl.viewport).not.toHaveBeenCalledWith(0, 0, 96 * 7, 96 * 2);
+
+      // 3. Headless automation (webdriver: true) + hardware GPU -> full resolution
+      vi.stubGlobal('navigator', { webdriver: true });
+      vi.stubGlobal('window', { location: { search: '' } });
+      const hwGl = createSwiftShaderGl('ANGLE (NVIDIA, NVIDIA GeForce RTX 4070 Direct3D11)');
+      const hwScene = createMockPhaserSceneForBaker(hwGl);
+      bakeShaderVfxFlipbooks(hwScene as never, 4);
+      expect(hwGl.viewport).toHaveBeenCalledWith(0, 0, 384 * 7, 384 * 2);
+
+      // 4. Headless automation (webdriver: true) + no ?freeze=1 + software GL -> 0.25x downscaled render viewport (96 * 7 = 672)
+      vi.stubGlobal('navigator', { webdriver: true });
+      vi.stubGlobal('window', { location: { search: '' } });
+      const autoSwGl = createSwiftShaderGl('ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device))');
+      const autoScene = createMockPhaserSceneForBaker(autoSwGl);
+      bakeShaderVfxFlipbooks(autoScene as never, 4);
+      expect(autoSwGl.viewport).toHaveBeenCalledWith(0, 0, 96 * 7, 96 * 2);
+      // Output atlas frames still preserve canonical 384px dimensions
+      expect(autoScene.registered.get('fx_sh_nova_solar')?.width).toBe(384 * 7);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
 });
+

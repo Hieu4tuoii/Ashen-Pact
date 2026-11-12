@@ -1,5 +1,81 @@
+import { WorldSim } from '@ashen-pact/shared';
 import type Phaser from 'phaser';
 import { describe, expect, it, vi } from 'vitest';
+
+const colyseusMockState = {
+  joinOrCreateImpl: vi.fn(),
+  joinByIdImpl: vi.fn(),
+};
+
+vi.mock('colyseus.js', () => {
+  class MockColyseusClient {
+    public wsUrl: string;
+    constructor(wsUrl: string) {
+      this.wsUrl = wsUrl;
+    }
+    joinOrCreate(roomName: string, opts: unknown) {
+      return colyseusMockState.joinOrCreateImpl(roomName, opts, this.wsUrl);
+    }
+    joinById(roomId: string, opts: unknown) {
+      return colyseusMockState.joinByIdImpl(roomId, opts, this.wsUrl);
+    }
+  }
+  return { Client: MockColyseusClient };
+});
+
+vi.mock('phaser', () => {
+  class MockPostFXPipeline {
+    public game: unknown;
+    public name: string;
+    constructor(config: { game: unknown; name: string }) {
+      this.game = config.game;
+      this.name = config.name;
+    }
+    set1f() {}
+    set3f() {}
+  }
+  class MockSinglePipeline {
+    public config: unknown;
+    public vertexCount = 0;
+    constructor(config: unknown) {
+      this.config = config;
+    }
+    flush() {
+      this.vertexCount = 0;
+    }
+    set1f() {}
+    set3f() {}
+  }
+  class MockWebGLRenderer {
+    public pipelines = {
+      has: vi.fn(() => true),
+      addPostPipeline: vi.fn(),
+    };
+  }
+  class MockScene {
+    constructor(_config?: unknown) {}
+  }
+  const PhaserMock = {
+    Scene: MockScene,
+    BlendModes: { NORMAL: 0, ADD: 1, MULTIPLY: 2, SCREEN: 3 },
+    Scenes: { Events: { SHUTDOWN: 'shutdown' } },
+    Input: { Keyboard: { KeyCodes: {} } },
+    Math: {
+      Clamp: (v: number, min: number, max: number) => Math.max(min, Math.min(max, v)),
+    },
+    Renderer: {
+      WebGL: {
+        WebGLRenderer: MockWebGLRenderer,
+        Pipelines: {
+          PostFXPipeline: MockPostFXPipeline,
+          SinglePipeline: MockSinglePipeline,
+        },
+      },
+    },
+  };
+  return { default: PhaserMock, ...PhaserMock };
+});
+
 import {
   formatHubInvitePlayerRowText,
   updateHubInvitePanelImpl,
@@ -8,8 +84,16 @@ import {
   getResultScreenButtonSpecs,
   resolveLocalizedBuffText,
 } from '../src/scenes/game-scene/hud-modals-and-debug.js';
+import {
+  connectCoopRoomImpl,
+  connectHelloRoomImpl,
+  fetchHostLanInfoImpl,
+  getResolvedWsUrlImpl,
+  updateHostInviteUrlImpl,
+} from '../src/scenes/game-scene/input-and-network.js';
 import { computeCameraShakeOffset } from '../src/fx/combat-fx-pools.js';
 import type { CombatFxManager } from '../src/fx/combat-fx.js';
+import { resetDebugFlagsForTest } from '../src/core/debug-flag.js';
 import { DEFAULT_GRAPHICS_SETTINGS, graphicsSettings } from '../src/ui/graphics-settings.js';
 import {
   applyMenuInputEdit,
@@ -26,13 +110,16 @@ import {
   getSettingsTabSpecs,
   SETTINGS_TABS,
 } from '../src/ui/settings-modal.js';
-import type { GameScene } from '../src/scenes/GameScene.js';
+import { GameScene } from '../src/scenes/GameScene.js';
 import {
   computeSanctuaryCoopInputBounds,
+  exitToSoloSanctuary,
+  mountSanctuaryDomInputs,
   resolveBootGameSceneInitData,
   resolveGameSceneStartInHub,
   setSanctuaryKeyboardSuspended,
   shouldRestoreSavedCharacter,
+  switchSanctuaryCoopMode,
   syncSanctuaryDomInputsLayoutAndVisibility,
   syncSanctuaryOnStressTest,
   updateSanctuaryOverlayHudImpl,
@@ -570,4 +657,398 @@ describe('Phase P9b — Menus, Hub Invite Panel, Modals, Pause Confirm & 4-Tab S
     );
     expect(gameSceneSrc).not.toMatch(/if\s*\(\s*!sim\.stressTestActive\s*\)\s*\{\s*this\.updateSanctuaryOverlayHud/);
   });
+
+  it('guards async fetchHostLanInfo, connectHelloRoom, and connectCoopRoom with monotonic sceneSessionEpoch across GameScene restarts', async () => {
+    vi.stubGlobal('window', {
+      location: { protocol: 'http:', hostname: '127.0.0.1', port: '5173', search: '' },
+      sessionStorage: { getItem: () => null, setItem: vi.fn(), removeItem: vi.fn() },
+      localStorage: { getItem: () => null, setItem: vi.fn() },
+    });
+
+    let resolveFetch!: (val: { ok: boolean; json: () => Promise<unknown> }) => void;
+    const delayedFetch = vi.fn(
+      () =>
+        new Promise<{ ok: boolean; json: () => Promise<unknown> }>((res) => {
+          resolveFetch = res;
+        }),
+    );
+    vi.stubGlobal('fetch', delayedFetch);
+
+    try {
+      const gs = new GameScene() as GameScene & { sceneSessionEpoch: number };
+      (gs as unknown as { scene: { isActive: () => boolean } }).scene = { isActive: () => true };
+      (gs as unknown as { time: { addEvent: ReturnType<typeof vi.fn> } }).time = {
+        addEvent: vi.fn(),
+      };
+      gs.getResolvedWsUrl = () => getResolvedWsUrlImpl.call(gs);
+      gs.updateHostInviteUrl = () => updateHostInviteUrlImpl.call(gs);
+
+      expect(gs.sceneSessionEpoch).toBe(0);
+      gs.init({ coopMode: 'solo', startInHub: true });
+      const epoch1 = gs.sceneSessionEpoch;
+      expect(epoch1).toBe(1);
+
+      // 1. Start fetchHostLanInfo in session 1, then restart GameScene into session 2 with custom IP before fetch resolves
+      const pendingHostInfo = fetchHostLanInfoImpl.call(gs);
+      gs.init({
+        coopMode: 'join',
+        startInHub: true,
+        serverUrl: 'ws://192.168.1.99:2567',
+        displayName: 'GuestHero',
+      });
+      expect(gs.sceneSessionEpoch).toBe(2);
+
+      resolveFetch({
+        ok: true,
+        json: async () => ({ primaryLanIp: '10.0.0.55', lanIps: ['10.0.0.55'], port: 2567 }),
+      });
+      await pendingHostInfo;
+      // Stale fetch from epoch 1 must NOT mutate primaryLanIp or serverHostPort in epoch 2
+      expect(gs.primaryLanIp).not.toBe('10.0.0.55');
+      expect(gs.serverHostPort).toBe('192.168.1.99:2567');
+
+      // 2. Start connectHelloRoom in session 2, then restart GameScene into Co-op session 3 while joinOrCreate('hello_room') is in-flight
+      gs.fetchHostLanInfo = vi.fn(async () => {});
+      const staleHelloLeave = vi.fn(async () => {});
+      let resolveHelloJoin!: (room: unknown) => void;
+      colyseusMockState.joinOrCreateImpl.mockImplementationOnce(
+        () =>
+          new Promise((res) => {
+            resolveHelloJoin = res;
+          }),
+      );
+
+      const pendingHello = connectHelloRoomImpl.call(gs);
+      await Promise.resolve();
+
+      // Simulate restart into Co-op session 3 where scene.isActive() is immediately true again and a new coopRoom is active
+      const activeCoopRoom = { roomId: 'coop-active', send: vi.fn(), leave: vi.fn() };
+      gs.init({ coopMode: 'host', startInHub: true });
+      expect(gs.sceneSessionEpoch).toBe(3);
+      gs.room = activeCoopRoom as never;
+
+      resolveHelloJoin({
+        roomId: 'stale-hello',
+        leave: staleHelloLeave,
+        onMessage: vi.fn(),
+        send: vi.fn(),
+      });
+      await pendingHello;
+
+      expect(staleHelloLeave).toHaveBeenCalledTimes(1);
+      expect(gs.room).toBe(activeCoopRoom);
+
+      // 3. Start connectCoopRoom in session 3, then restart back to Solo session 4 while joinOrCreate('coop_room') is in-flight
+      const staleCoopLeave = vi.fn(async () => {});
+      let resolveCoopJoin!: (room: unknown) => void;
+      colyseusMockState.joinOrCreateImpl.mockImplementationOnce(
+        () =>
+          new Promise((res) => {
+            resolveCoopJoin = res;
+          }),
+      );
+
+      const pendingCoop = connectCoopRoomImpl.call(gs);
+      await Promise.resolve();
+
+      gs.init({ coopMode: 'solo', startInHub: true });
+      expect(gs.sceneSessionEpoch).toBe(4);
+      gs.room = undefined;
+      const bindSpy = vi.fn();
+      gs.bindCoopRoomHandlers = bindSpy;
+
+      resolveCoopJoin({
+        roomId: 'stale-coop',
+        leave: staleCoopLeave,
+        onMessage: vi.fn(),
+        onLeave: vi.fn(),
+        send: vi.fn(),
+      });
+      await pendingCoop;
+
+      expect(staleCoopLeave).toHaveBeenCalledTimes(1);
+      expect(bindSpy).not.toHaveBeenCalled();
+      expect(gs.room).toBeUndefined();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('dispatches select_character over Colyseus in Co-op Sanctuary and guards Solo localStorage.setItem so HUD caches still invalidate on storage errors', async () => {
+    const arenaMod = (await import('../src/scenes/game-scene/arena-tiles.js')) as {
+      applyHubWorldPointerClickAction?: (
+        scene: GameScene,
+        curSim: WorldSim,
+        action:
+          | { kind: 'select_character'; characterId: 'ranger' | 'druid' }
+          | { kind: 'toggle_coop_board' }
+          | { kind: 'open_codex_desk' },
+      ) => void;
+    };
+    expect(typeof arenaMod.applyHubWorldPointerClickAction).toBe('function');
+
+    // 1. Co-op mode sends authoritative 'select_character' to room and suppresses weapon fire
+    const simCoop = new WorldSim({ seed: 'coop-click-dispatch', spawnInitialWave: false });
+    simCoop.enterHub();
+    const roomSend = vi.fn();
+    const coopScene = {
+      coopMode: 'host',
+      room: { send: roomSend },
+      suppressFireUntilPointerUp: false,
+      lastHudCharacterId: 'vanguard',
+      lastHubPreviewHash: 'cached-preview',
+      lastInvitePanelHash: 'cached-invite',
+    } as unknown as GameScene;
+
+    arenaMod.applyHubWorldPointerClickAction!(coopScene, simCoop, {
+      kind: 'select_character',
+      characterId: 'ranger',
+    });
+    expect(coopScene.suppressFireUntilPointerUp).toBe(true);
+    expect(roomSend).toHaveBeenCalledWith('select_character', { characterId: 'ranger' });
+    expect(simCoop.player.characterId).toBe('vanguard');
+
+    // 2. Solo mode wraps localStorage.setItem in try/catch BEFORE invalidating HUD caches
+    vi.stubGlobal('window', {
+      localStorage: {
+        setItem: () => {
+          throw new Error('QuotaExceededError: storage disabled');
+        },
+      },
+    });
+    try {
+      const simSolo = new WorldSim({ seed: 'solo-click-storage-guard', spawnInitialWave: false });
+      simSolo.enterHub();
+      const soloScene = {
+        coopMode: 'solo',
+        room: undefined,
+        suppressFireUntilPointerUp: false,
+        lastHudCharacterId: 'vanguard',
+        lastHubPreviewHash: 'cached-preview',
+        lastInvitePanelHash: 'cached-invite',
+      } as unknown as GameScene;
+
+      expect(() =>
+        arenaMod.applyHubWorldPointerClickAction!(soloScene, simSolo, {
+          kind: 'select_character',
+          characterId: 'druid',
+        }),
+      ).not.toThrow();
+      expect(soloScene.suppressFireUntilPointerUp).toBe(true);
+      expect(simSolo.player.characterId).toBe('druid');
+      expect(soloScene.lastHudCharacterId).toBe('');
+      expect(soloScene.lastHubPreviewHash).toBe('');
+      expect(soloScene.lastInvitePanelHash).toBe('');
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('preserves typed LAN IP, ?server= Solo boot IP, and Solo-edited Display Name across fetchHostLanInfo, Leave Room, and exitToSoloSanctuary', async () => {
+    const storage = new Map<string, string>();
+    const keydownListeners: Array<(ev: KeyboardEvent) => void> = [];
+    const fakeWindow = {
+      location: {
+        protocol: 'http:',
+        hostname: '127.0.0.1',
+        port: '5173',
+        search: '?server=192.168.1.77:2567',
+      },
+      localStorage: {
+        getItem: (k: string) => storage.get(k) ?? null,
+        setItem: (k: string, v: string) => {
+          storage.set(k, v);
+        },
+      },
+      sessionStorage: {
+        getItem: () => null,
+        setItem: vi.fn(),
+        removeItem: vi.fn(),
+      },
+      addEventListener: vi.fn((ev: string, fn: (e: KeyboardEvent) => void) => {
+        if (ev === 'keydown') keydownListeners.push(fn);
+      }),
+      removeEventListener: vi.fn(),
+    };
+    vi.stubGlobal('window', fakeWindow);
+    vi.stubGlobal('document', {
+      body: {
+        appendChild: (c: unknown) => c,
+        removeChild: (c: unknown) => c,
+      },
+      activeElement: null,
+      createElement: () => ({
+        tagName: 'DIV',
+        value: '',
+        style: {},
+        setAttribute: vi.fn(),
+        addEventListener: vi.fn(),
+        appendChild: (c: unknown) => c,
+        removeChild: (c: unknown) => c,
+        blur: vi.fn(),
+        focus: vi.fn(),
+        setSelectionRange: vi.fn(),
+      }),
+    });
+    vi.stubGlobal('fetch', () =>
+      Promise.resolve({
+        ok: true,
+        json: async () => ({ primaryLanIp: '10.0.0.5', lanIps: ['10.0.0.5'], port: 2567 }),
+      }),
+    );
+
+    try {
+      // 1. Solo boot with ?server=192.168.1.77:2567 sets hasCustomServerHostPort = true and resists fetchHostLanInfo overwrite
+      const gs = new GameScene() as GameScene & {
+        hasCustomServerHostPort: boolean;
+        sceneSessionEpoch: number;
+      };
+      const restartSpy = vi.fn();
+      const startSpy = vi.fn();
+      (
+        gs as unknown as {
+          scene: {
+            isActive: () => boolean;
+            restart: typeof restartSpy;
+            start: typeof startSpy;
+          };
+        }
+      ).scene = {
+        isActive: () => true,
+        restart: restartSpy,
+        start: startSpy,
+      };
+      gs.game = {
+        canvas: {
+          parentElement: null,
+          getBoundingClientRect: () => ({ left: 0, top: 0, width: 1920, height: 1080 }),
+        },
+      } as never;
+      gs.getResolvedWsUrl = () => getResolvedWsUrlImpl.call(gs);
+      gs.updateHostInviteUrl = () => updateHostInviteUrlImpl.call(gs);
+
+      gs.init({ coopMode: 'solo', startInHub: true });
+      expect(gs.serverHostPort).toBe('192.168.1.77:2567');
+      expect(gs.hasCustomServerHostPort).toBe(true);
+
+      await fetchHostLanInfoImpl.call(gs);
+      expect(gs.serverHostPort).toBe('192.168.1.77:2567');
+
+      // 2. Clean Solo boot without ?server= auto-fills from fetchHostLanInfo, then user edits Name & IP in Solo Sanctuary
+      fakeWindow.location.search = '';
+      gs.init({ coopMode: 'solo', startInHub: true });
+      expect(gs.hasCustomServerHostPort).toBe(false);
+      await fetchHostLanInfoImpl.call(gs);
+      expect(gs.serverHostPort).toBe('10.0.0.5:2567');
+
+      const soloSim = new WorldSim({ seed: 'solo-name-sync', spawnInitialWave: false });
+      soloSim.enterHub();
+      gs.transport = {
+        getSim: () => soloSim,
+        getLocalPlayerState: () => soloSim.player,
+      } as never;
+
+      mountSanctuaryDomInputs(gs);
+      expect(keydownListeners.length).toBeGreaterThan(0);
+
+      // Edit Name via fallback keydown -> syncs soloSim.player.displayName & localStorage 'ashen_pact_name'
+      gs.displayName = 'Chiến Thần';
+      gs.menuActiveInput = 'name';
+      keydownListeners[keydownListeners.length - 1]!({
+        key: '!',
+        ctrlKey: false,
+        metaKey: false,
+        preventDefault: vi.fn(),
+      } as unknown as KeyboardEvent);
+      expect(gs.displayName).toBe('Chiến Thần!');
+      expect(soloSim.player.displayName).toBe('Chiến Thần!');
+      expect(storage.get('ashen_pact_name')).toBe('Chiến Thần!');
+
+      // Edit IP via fallback keydown -> sets hasCustomServerHostPort = true so subsequent fetchHostLanInfo won't wipe it
+      gs.serverHostPort = '192.168.1.88:256';
+      gs.menuActiveInput = 'ip';
+      keydownListeners[keydownListeners.length - 1]!({
+        key: '7',
+        ctrlKey: false,
+        metaKey: false,
+        preventDefault: vi.fn(),
+      } as unknown as KeyboardEvent);
+      expect(gs.serverHostPort).toBe('192.168.1.88:2567');
+      expect(gs.hasCustomServerHostPort).toBe(true);
+      gs.menuActiveInput = null;
+
+      await fetchHostLanInfoImpl.call(gs);
+      expect(gs.serverHostPort).toBe('192.168.1.88:2567');
+
+      // 3. exitToSoloSanctuary passes BOTH displayName and custom serverUrl
+      exitToSoloSanctuary(gs, 'Host đóng phòng');
+      expect(startSpy).toHaveBeenCalledWith('GameScene', {
+        coopMode: 'solo',
+        startInHub: true,
+        disconnectReason: 'Host đóng phòng',
+        displayName: 'Chiến Thần!',
+        serverUrl: '192.168.1.88:2567',
+      });
+
+      // 4. Leave Room (switchSanctuaryCoopMode -> 'solo') preserves custom serverUrl AND GameScene.init keeps it across fetchHostLanInfo
+      switchSanctuaryCoopMode(gs, 'solo');
+      expect(restartSpy).toHaveBeenCalledWith({
+        coopMode: 'solo',
+        startInHub: true,
+        displayName: 'Chiến Thần!',
+        serverUrl: '192.168.1.88:2567',
+      });
+      const restartData = restartSpy.mock.calls[0]![0] as Parameters<GameScene['init']>[0];
+      gs.init(restartData);
+      await fetchHostLanInfoImpl.call(gs);
+      expect(gs.displayName).toBe('Chiến Thần!');
+      expect(gs.serverHostPort).toBe('192.168.1.88:2567');
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('short-circuits isEffectiveDebugUiEnabled in updateSanctuaryOverlayHudImpl during Dungeon combat so zero localStorage reads occur at 60Hz', () => {
+    const getItemSpy = vi.fn(() => null);
+    vi.stubGlobal('window', {
+      location: { search: '' },
+      localStorage: {
+        getItem: getItemSpy,
+        setItem: vi.fn(),
+      },
+    });
+
+    try {
+      resetDebugFlagsForTest();
+      getItemSpy.mockClear();
+
+      const mockCombatScene = {
+        uiScene: {},
+        coopMode: 'solo',
+        fullMapOpen: false,
+        pauseModalOpen: false,
+        emoteWheelOpen: false,
+        invitePanelVisible: false,
+        disconnectReason: null,
+        disconnectBannerTimer: 0,
+        sanctuaryHubElapsedSec: 0,
+        lastSanctuaryHudHash: 'hidden',
+        currentHudUiScale: 1,
+        hudPadX: 0,
+        hudPadY: 0,
+        transport: {
+          getSim: () => ({ inHub: false, stressTestActive: false }),
+          getLocalPlayerState: () => ({ buffChoices: [], mutatorChoices: [], pactChoices: [] }),
+        },
+      } as unknown as GameScene;
+
+      for (let frame = 0; frame < 120; frame++) {
+        updateSanctuaryOverlayHudImpl.call(mockCombatScene, 1 / 60);
+      }
+      expect(getItemSpy).toHaveBeenCalledTimes(0);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
 });
+

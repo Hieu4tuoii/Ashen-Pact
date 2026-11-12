@@ -304,11 +304,11 @@ describe('Ashen Sanctuary 5-Wing Visual Architecture, Embodied Hero Rigs & Click
     expect(dynamicG.destroyed).toBe(true);
   });
 
-  it('resolveHubWorldPointerClick enforces exact radii (30u statue in Solo, 34u coop_board, 32u codex_desk) and modal/mode guards', () => {
+  it('resolveHubWorldPointerClick enforces exact radii (30u statue in Solo & Co-op, 34u coop_board, 32u codex_desk) and modal guards', () => {
     const sim = new WorldSim({ seed: 'sanctuary-click-test', spawnInitialWave: false });
     sim.enterHub();
 
-    // Solo click within 30u of Ranger (452, 160) -> selects ranger
+    // Solo, Host, and Join clicks within 30u of lounging heroes select that character
     expect(
       resolveHubWorldPointerClick({
         inHub: true,
@@ -321,24 +321,37 @@ describe('Ashen Sanctuary 5-Wing Visual Architecture, Embodied Hero Rigs & Click
       }),
     ).toEqual({ kind: 'select_character', characterId: 'ranger' });
 
-    // Outside 30u -> null; Co-op mode -> statue click ignored; Modal open -> null
-    expect(
-      resolveHubWorldPointerClick({
-        inHub: true,
-        coopMode: 'solo',
-        modalOpen: false,
-        worldX: 452 + 32,
-        worldY: 160,
-        hubStatues: sim.hubStatues,
-        hubStations: sim.hubStations,
-      }),
-    ).toBeNull();
     expect(
       resolveHubWorldPointerClick({
         inHub: true,
         coopMode: 'host',
         modalOpen: false,
         worldX: 452,
+        worldY: 160,
+        hubStatues: sim.hubStatues,
+        hubStations: sim.hubStations,
+      }),
+    ).toEqual({ kind: 'select_character', characterId: 'ranger' });
+
+    expect(
+      resolveHubWorldPointerClick({
+        inHub: true,
+        coopMode: 'join',
+        modalOpen: false,
+        worldX: 388,
+        worldY: 316 - 20,
+        hubStatues: sim.hubStatues,
+        hubStations: sim.hubStations,
+      }),
+    ).toEqual({ kind: 'select_character', characterId: 'druid' });
+
+    // Outside 30u -> null; Modal open -> null
+    expect(
+      resolveHubWorldPointerClick({
+        inHub: true,
+        coopMode: 'solo',
+        modalOpen: false,
+        worldX: 452 + 32,
         worldY: 160,
         hubStatues: sim.hubStatues,
         hubStations: sim.hubStations,
@@ -429,7 +442,7 @@ describe('Ashen Sanctuary 5-Wing Visual Architecture, Embodied Hero Rigs & Click
     expect(codexLight?.alpha).toBeLessThanOrEqual(0.35);
   });
 
-  it('resolves localized embodied hero badge (VI/EN), subtle <=240u unselected hero labels, and all 6 5-Wing guide sign coordinates', () => {
+  it('resolves localized embodied hero badge (VI/EN), raised y-42 hero labels, and non-overlapping wrapped 5-Wing guide sign coordinates', async () => {
     const prevLocale = i18n.getLocale();
     try {
       i18n.setLocale('vi');
@@ -508,21 +521,54 @@ describe('Ashen Sanctuary 5-Wing Visual Architecture, Embodied Hero Rigs & Click
       });
       expect(guides.map((g) => [g.x, g.y])).toEqual([
         [576, 174],
-        [576, 228],
+        [576, 266],
         [266, 368],
         [236, 192],
         [928, 304],
         [860, 480],
       ]);
+      expect(guides[0]?.blocked).toBe(false);
+      expect((guides[0] as { wordWrapWidth?: number }).wordWrapWidth).toBe(176);
+      expect((guides[1] as { wordWrapWidth?: number }).wordWrapWidth).toBe(240);
       expect(guides[3]?.text).toContain('42.5');
       expect(guides[4]?.text).toBe(i18n.t('ui.sanctuary.coopWingSign'));
       expect(guides[5]?.text).toBe(i18n.t('ui.sanctuary.codexWingSign'));
+
+      // portalSign and statuesSign are BOTH blocked when previewOpen is true (e.g. inspecting Ranger at 452, 160)
+      const guidesWithPreview = resolveSanctuaryGuideSpecs({
+        mapWidth: 1152,
+        mapHeight: 704,
+        rollingDps: 0,
+        camScrollX: 0,
+        invitePanelVisible: false,
+        fullMapOpen: false,
+        previewOpen: true,
+        modalOrMapOpen: false,
+        weaponComparisonVisible: false,
+        target: null,
+      });
+      expect(guidesWithPreview[0]?.blocked).toBe(true);
+      expect(guidesWithPreview[1]?.blocked).toBe(true);
+
+      // Hero lounge label offset raised to st.y - 42 (not st.y - 32) so Mộc Linh clears Druid's 1.12x helmet
+      const archMod = (await import('../src/scenes/game-scene/sanctuary-architecture.js')) as {
+        HERO_LOUNGE_LABEL_OFFSET_Y?: number;
+      };
+      expect(archMod.HERO_LOUNGE_LABEL_OFFSET_Y).toBe(-42);
+      const fs = await import('node:fs');
+      const path = await import('node:path');
+      const roomSyncSrc = fs.readFileSync(
+        path.resolve(__dirname, '../src/scenes/game-scene/room-entities-sync.ts'),
+        'utf8',
+      );
+      expect(roomSyncSrc).not.toContain('st.y - 32');
+      expect(roomSyncSrc).toContain('HERO_LOUNGE_LABEL_OFFSET_Y');
     } finally {
       i18n.setLocale(prevLocale);
     }
   });
 
-  it('isSanctuaryHudChromeClick suppresses Hub world clicks on interactive HudScene hitboxes (collapseHit / collapsed chip) and scaled Invite Panel bounds', () => {
+  it('isSanctuaryHudChromeClick distinguishes Solo drawer bottom (356*s) from Co-op drawer bottom (426*s) so codex_desk stays clickable in Solo', () => {
     const sim = new WorldSim({ seed: 'sanctuary-hud-chrome-test', spawnInitialWave: false });
     sim.enterHub();
 
@@ -531,6 +577,7 @@ describe('Ashen Sanctuary 5-Wing Visual Architecture, Embodied Hero Rigs & Click
     expect(
       isSanctuaryHudChromeClick({
         inHub: true,
+        coopMode: 'solo',
         invitePanelVisible: false,
         hudX: 912,
         hudY: 158,
@@ -538,13 +585,14 @@ describe('Ashen Sanctuary 5-Wing Visual Architecture, Embodied Hero Rigs & Click
         hudPadY: 0,
         hudUiScale: 1,
         hudHitCount: 1,
-      }),
+      } as Parameters<typeof isSanctuaryHudChromeClick>[0]),
     ).toBe(true);
 
     // 2. Clicking collapsed "📡 Invite" chip (!invitePanelVisible, x: 782..948, y: 144..170) is caught by hudHitCount > 0 at any uiScale
     expect(
       isSanctuaryHudChromeClick({
         inHub: true,
+        coopMode: 'solo',
         invitePanelVisible: false,
         hudX: 840,
         hudY: 156,
@@ -552,28 +600,57 @@ describe('Ashen Sanctuary 5-Wing Visual Architecture, Embodied Hero Rigs & Click
         hudPadY: 0,
         hudUiScale: 1.15,
         hudHitCount: 1,
-      }),
+      } as Parameters<typeof isSanctuaryHudChromeClick>[0]),
     ).toBe(true);
 
-    // 3. Expanded Co-op Guild Drawer non-interactive background rect [960 - 316*s + padX, 960 - 12*s + padX] x [144*s - padY, 426*s - padY]
-    //    At s = 1, pad = 0: x = 644..948, y = 144..426 -> left margin x = 646 is suppressed across the full 304px drawer
+    // 3. Solo Co-op Drawer uses height 212 -> bottom = 356 * s - padY:
+    //    Inside Solo drawer (hudY = 355) -> blocked (true), while codex_desk at spawn (hudX = 764, hudY = 378) -> NOT blocked (false)!
     expect(
       isSanctuaryHudChromeClick({
         inHub: true,
+        coopMode: 'solo',
         invitePanelVisible: true,
-        hudX: 646,
-        hudY: 220,
+        hudX: 764,
+        hudY: 355,
         hudPadX: 0,
         hudPadY: 0,
         hudUiScale: 1,
         hudHitCount: 0,
-      }),
+      } as Parameters<typeof isSanctuaryHudChromeClick>[0]),
     ).toBe(true);
-
-    //    At s = 1.15, padX = 20, padY = 10: x = [639.6, 966.2], y = [155.6, 479.9]
     expect(
       isSanctuaryHudChromeClick({
         inHub: true,
+        coopMode: 'solo',
+        invitePanelVisible: true,
+        hudX: 764,
+        hudY: 378,
+        hudPadX: 0,
+        hudPadY: 0,
+        hudUiScale: 1,
+        hudHitCount: 0,
+      } as Parameters<typeof isSanctuaryHudChromeClick>[0]),
+    ).toBe(false);
+
+    // 4. Co-op Invite Panel ('host' / 'join') uses height 282 -> bottom = 426 * s - padY:
+    //    hudY = 378 and scaled hudY = 475 (at s = 1.15, padX = 20, padY = 10 -> 426 * 1.15 - 10 = 479.9) ARE blocked (true)
+    expect(
+      isSanctuaryHudChromeClick({
+        inHub: true,
+        coopMode: 'host',
+        invitePanelVisible: true,
+        hudX: 764,
+        hudY: 378,
+        hudPadX: 0,
+        hudPadY: 0,
+        hudUiScale: 1,
+        hudHitCount: 0,
+      } as Parameters<typeof isSanctuaryHudChromeClick>[0]),
+    ).toBe(true);
+    expect(
+      isSanctuaryHudChromeClick({
+        inHub: true,
+        coopMode: 'join',
         invitePanelVisible: true,
         hudX: 642,
         hudY: 475,
@@ -581,13 +658,14 @@ describe('Ashen Sanctuary 5-Wing Visual Architecture, Embodied Hero Rigs & Click
         hudPadY: 10,
         hudUiScale: 1.15,
         hudHitCount: 0,
-      }),
+      } as Parameters<typeof isSanctuaryHudChromeClick>[0]),
     ).toBe(true);
 
     //    At s = 0.85, pad = 0: x = [708.4, 949.8], y = [122.4, 362.1] -> hudX = 685 is outside the smaller panel
     expect(
       isSanctuaryHudChromeClick({
         inHub: true,
+        coopMode: 'host',
         invitePanelVisible: true,
         hudX: 685,
         hudY: 240,
@@ -595,10 +673,10 @@ describe('Ashen Sanctuary 5-Wing Visual Architecture, Embodied Hero Rigs & Click
         hudPadY: 0,
         hudUiScale: 0.85,
         hudHitCount: 0,
-      }),
+      } as Parameters<typeof isSanctuaryHudChromeClick>[0]),
     ).toBe(false);
 
-    // 4. resolveHubWorldPointerClick returns null when isClickingHudChrome is true even directly over coop_board (928, 352)
+    // 5. resolveHubWorldPointerClick returns null when isClickingHudChrome is true even directly over coop_board (928, 352)
     expect(
       resolveHubWorldPointerClick({
         inHub: true,
@@ -613,3 +691,4 @@ describe('Ashen Sanctuary 5-Wing Visual Architecture, Embodied Hero Rigs & Click
     ).toBeNull();
   });
 });
+

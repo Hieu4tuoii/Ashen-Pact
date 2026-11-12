@@ -324,6 +324,7 @@ export function resolveHeroStationVisualState(
 
 export interface SanctuaryHudChromeClickParams {
   inHub: boolean;
+  coopMode?: 'solo' | 'host' | 'join';
   invitePanelVisible: boolean;
   hudX: number;
   hudY: number;
@@ -336,12 +337,14 @@ export interface SanctuaryHudChromeClickParams {
 /**
  * Determines whether a pointerdown in `HudScene` coordinates (`hudX`, `hudY`) hits interactive
  * `HudScene` targets (`hitTestPointer(pointer)`), top/bottom HUD chrome, or the scaled
- * non-interactive Co-op Invite Panel background rect
- * `[960 - 316 * s + hudPadX, 960 - 12 * s + hudPadX] × [144 * s - hudPadY, 426 * s - hudPadY]`.
+ * non-interactive Co-op Drawer / Invite Panel background rect:
+ * - Solo (`coopMode === 'solo'`): `[960 - 316 * s + hudPadX, 960 - 12 * s + hudPadX] × [144 * s - hudPadY, 356 * s - hudPadY]`
+ * - Co-op (`'host'` / `'join'`): `[960 - 316 * s + hudPadX, 960 - 12 * s + hudPadX] × [144 * s - hudPadY, 426 * s - hudPadY]`
  */
 export function isSanctuaryHudChromeClick(params: SanctuaryHudChromeClickParams): boolean {
   const {
     inHub,
+    coopMode = 'solo',
     invitePanelVisible,
     hudX,
     hudY,
@@ -359,13 +362,14 @@ export function isSanctuaryHudChromeClick(params: SanctuaryHudChromeClickParams)
   }
 
   const s = hudUiScale > 0 ? hudUiScale : 1;
+  const drawerBottom = coopMode === 'solo' ? 356 : 426;
   if (
     inHub &&
     invitePanelVisible &&
     hudX >= 960 - 316 * s + hudPadX &&
     hudX <= 960 - 12 * s + hudPadX &&
     hudY >= 144 * s - hudPadY &&
-    hudY <= 426 * s - hudPadY
+    hudY <= drawerBottom * s - hudPadY
   ) {
     return true;
   }
@@ -375,7 +379,7 @@ export function isSanctuaryHudChromeClick(params: SanctuaryHudChromeClickParams)
 
 /**
  * Resolves world-space pointer clicks inside the Sanctuary Hub when no modal or HUD chrome is clicked:
- * - Solo Hub (`coopMode === 'solo'`): within `<= 30u` of a `hubStatue` selects that character.
+ * - Any Hub mode (`'solo'` / `'host'` / `'join'`): within `<= 30u` of a `hubStatue` selects that character.
  * - Any Hub mode: within `<= 34u` of `coop_board` toggles `invitePanelVisible`.
  * - Any Hub mode: within `<= 32u` of `codex_desk` opens `settingsModal.open('settings')`.
  */
@@ -391,7 +395,7 @@ export function resolveHubWorldPointerClick(params: {
 }): HubWorldClickAction | null {
   const {
     inHub,
-    coopMode,
+    coopMode: _coopMode,
     modalOpen,
     isClickingHudChrome = false,
     worldX,
@@ -403,23 +407,21 @@ export function resolveHubWorldPointerClick(params: {
     return null;
   }
 
-  if (coopMode === 'solo') {
-    let bestStatue: SimHubStatue | null = null;
-    let bestDist = 30;
-    for (let i = 0; i < hubStatues.length; i++) {
-      const st = hubStatues[i]!;
-      const d = Math.hypot(worldX - st.x, worldY - st.y);
-      if (d <= bestDist) {
-        bestDist = d;
-        bestStatue = st;
-      }
+  let bestStatue: SimHubStatue | null = null;
+  let bestDist = 30;
+  for (let i = 0; i < hubStatues.length; i++) {
+    const st = hubStatues[i]!;
+    const d = Math.hypot(worldX - st.x, worldY - st.y);
+    if (d <= bestDist) {
+      bestDist = d;
+      bestStatue = st;
     }
-    if (bestStatue) {
-      return {
-        kind: 'select_character',
-        characterId: bestStatue.characterId,
-      };
-    }
+  }
+  if (bestStatue) {
+    return {
+      kind: 'select_character',
+      characterId: bestStatue.characterId,
+    };
   }
 
   for (let i = 0; i < hubStations.length; i++) {
@@ -435,6 +437,8 @@ export function resolveHubWorldPointerClick(params: {
 
   return null;
 }
+
+export const HERO_LOUNGE_LABEL_OFFSET_Y = -42;
 
 export interface HeroLoungeLabelState {
   labelVisible: boolean;
@@ -502,6 +506,7 @@ export interface SanctuaryGuideSignSpec {
   text: string;
   color: string;
   blocked: boolean;
+  wordWrapWidth?: number;
 }
 
 export function resolveSanctuaryGuideSpecs(params: {
@@ -547,16 +552,18 @@ export function resolveSanctuaryGuideSpecs(params: {
       anchorY: 174 + oy,
       text: i18n.t('ui.hubGuide.portalSign'),
       color: PALETTE.SOLAR_GOLD,
-      blocked: modalOrMapOpen || target?.kind === 'portal',
+      blocked: previewOpen || modalOrMapOpen || target?.kind === 'portal',
+      wordWrapWidth: 176,
     },
     {
       x: 576 + ox,
-      y: 228 + oy,
+      y: 266 + oy,
       anchorX: 576 + ox,
-      anchorY: 228 + oy,
+      anchorY: 266 + oy,
       text: i18n.t('ui.hubGuide.statuesSign'),
       color: PALETTE.CYAN_FROST,
       blocked: previewOpen || modalOrMapOpen,
+      wordWrapWidth: 240,
     },
     {
       x: 266 + ox,

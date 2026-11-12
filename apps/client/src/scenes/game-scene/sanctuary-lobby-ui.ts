@@ -231,6 +231,39 @@ export function setSanctuaryKeyboardSuspended(scene: GameScene, suspended: boole
   }
 }
 
+export function applySanctuaryDisplayNameChange(scene: GameScene, nextName: string): void {
+  const debug = initGlobalDebugState();
+  scene.displayName = nextName;
+  debug.menuDisplayName = nextName;
+  const trimmed = nextName.trim();
+  const effectiveName = trimmed || PRESET_NAMES_VI[0];
+  if (scene.coopMode === 'solo') {
+    const sim = scene.transport?.getSim?.();
+    if (sim) {
+      sim.player.displayName = effectiveName;
+    }
+  }
+  if (trimmed.length > 0) {
+    try {
+      if (typeof window !== 'undefined') {
+        window.localStorage?.setItem('ashen_pact_name', trimmed);
+      }
+    } catch {
+      // Ignore localStorage restrictions
+    }
+  }
+}
+
+export function applySanctuaryServerHostPortChange(
+  scene: GameScene,
+  nextHostPort: string,
+): void {
+  const debug = initGlobalDebugState();
+  scene.serverHostPort = nextHostPort;
+  scene.hasCustomServerHostPort = true;
+  debug.menuServerHostPort = nextHostPort;
+}
+
 export function mountSanctuaryDomInputs(scene: GameScene): void {
   destroySanctuaryDomInputs(scene);
 
@@ -252,13 +285,10 @@ export function mountSanctuaryDomInputs(scene: GameScene): void {
         scene.lastInvitePanelHash = '';
       },
       onValueChange: (field, value) => {
-        const debug = initGlobalDebugState();
         if (field === 'name') {
-          scene.displayName = value;
-          debug.menuDisplayName = value;
+          applySanctuaryDisplayNameChange(scene, value);
         } else {
-          scene.serverHostPort = value;
-          debug.menuServerHostPort = value;
+          applySanctuaryServerHostPortChange(scene, value);
         }
         scene.lastInvitePanelHash = '';
       },
@@ -305,13 +335,10 @@ export function mountSanctuaryDomInputs(scene: GameScene): void {
           activeField,
           maxLen,
         );
-        const debug = initGlobalDebugState();
         if (activeField === 'name') {
-          scene.displayName = next.value;
-          debug.menuDisplayName = next.value;
+          applySanctuaryDisplayNameChange(scene, next.value);
         } else {
-          scene.serverHostPort = next.value;
-          debug.menuServerHostPort = next.value;
+          applySanctuaryServerHostPortChange(scene, next.value);
         }
         scene.sanctuaryDomInputs?.syncValues(scene.displayName, scene.serverHostPort);
         scene.lastInvitePanelHash = '';
@@ -376,11 +403,17 @@ export function switchSanctuaryCoopMode(
     startInHub: true,
     displayName: effectiveName,
     serverUrl:
-      nextMode === 'solo' ? scene.serverHostPort : resolveSanctuaryWsUrl(scene.serverHostPort),
+      nextMode === 'solo'
+        ? scene.hasCustomServerHostPort
+          ? scene.serverHostPort
+          : undefined
+        : resolveSanctuaryWsUrl(scene.serverHostPort),
   });
 }
 
 export function exitToSoloSanctuary(scene: GameScene, disconnectReason?: string): void {
+  const effectiveName = scene.displayName.trim() || PRESET_NAMES_VI[0];
+  scene.displayName = effectiveName;
   destroySanctuaryDomInputs(scene);
   scene.intentionalLeave = true;
   if (scene.room) {
@@ -393,6 +426,8 @@ export function exitToSoloSanctuary(scene: GameScene, disconnectReason?: string)
     coopMode: 'solo',
     startInHub: true,
     disconnectReason,
+    displayName: effectiveName,
+    serverUrl: scene.hasCustomServerHostPort ? scene.serverHostPort : undefined,
   });
 }
 
@@ -479,7 +514,7 @@ export function updateSanctuaryOverlayHudImpl(this: GameScene, dtSec: number): v
   }
 
   const showInHub = sim.inHub && !sim.stressTestActive && !this.fullMapOpen;
-  const showDebug = isEffectiveDebugUiEnabled(this.coopMode !== 'solo');
+  const showDebug = showInHub ? isEffectiveDebugUiEnabled(this.coopMode !== 'solo') : false;
   const debug = initGlobalDebugState();
   const showViFooter = showInHub && showDebug && !debug.hubPreviewCharacterId;
   const locale = i18n.getLocale();

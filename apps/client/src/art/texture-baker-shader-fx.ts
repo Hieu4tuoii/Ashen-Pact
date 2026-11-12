@@ -1,5 +1,7 @@
 import type { ElementType } from '@ashen-pact/shared';
 import type Phaser from 'phaser';
+import { detectSoftwareGlContext, isHeadlessAutomation } from '../core/software-gl.js';
+import { getVisualQueryConfig } from '../core/visual-query.js';
 import { PALETTE } from './palette.js';
 
 export const SHADER_FX_FRAME_COUNT = 14;
@@ -1694,23 +1696,6 @@ interface CompiledGlBaker {
   softwareRasterizer: boolean;
 }
 
-function detectSoftwareGlRenderer(gl: WebGLRenderingContext): boolean {
-  if (typeof gl.getParameter !== 'function' || typeof gl.getExtension !== 'function') {
-    return false;
-  }
-  try {
-    const dbgExt = gl.getExtension('WEBGL_debug_renderer_info') as
-      | { UNMASKED_RENDERER_WEBGL: number }
-      | null;
-    const unmasked = dbgExt ? gl.getParameter(dbgExt.UNMASKED_RENDERER_WEBGL) : null;
-    const fallback = typeof gl.RENDERER === 'number' ? gl.getParameter(gl.RENDERER) : '';
-    const rendererStr = String(unmasked || fallback || '');
-    return /swiftshader|llvmpipe|softpipe|software/i.test(rendererStr);
-  } catch {
-    return false;
-  }
-}
-
 function startCompileShader(
   gl: WebGLRenderingContext,
   type: number,
@@ -1832,7 +1817,8 @@ function createOffscreenGlBaker(): CompiledGlBaker | null {
       buildFamily(rawPrograms[4]!),
     ],
     vbo,
-    softwareRasterizer: detectSoftwareGlRenderer(gl),
+    softwareRasterizer:
+      isHeadlessAutomation() && !getVisualQueryConfig().freeze && detectSoftwareGlContext(gl),
   };
 }
 

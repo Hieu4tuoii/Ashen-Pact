@@ -17,6 +17,9 @@ test.describe.configure({ timeout: 120000 });
 test.beforeAll(() => {
   fs.mkdirSync(SCREENSHOT_DIR, { recursive: true });
   fs.mkdirSync(POLISH_P1_AFTER_DIR, { recursive: true });
+  if (process.platform !== 'win32') {
+    process.env.ASHEN_PACT_POSIX_STUB = '1';
+  }
   packageRelease({ skipBuild: false });
 });
 

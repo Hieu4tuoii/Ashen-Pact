@@ -418,6 +418,8 @@ export class GameScene extends Phaser.Scene {
   public room?: ColyseusRoom;
   public colyseusClient?: ColyseusClient;
   public intentionalLeave = false;
+  public sceneSessionEpoch = 0;
+  public hasCustomServerHostPort = false;
 
   public inputSeq = 0;
   public queuedWeaponSlot: number | null = null;
@@ -475,6 +477,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   public init(data?: GameSceneInitData): void {
+    this.sceneSessionEpoch += 1;
     const params =
       typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
     const urlCoop = params?.get('coop')?.toLowerCase();
@@ -501,6 +504,7 @@ export class GameScene extends Phaser.Scene {
     this.disconnectReason = data?.disconnectReason ?? null;
     this.disconnectBannerTimer = this.disconnectReason ? 10.0 : 0;
 
+    const visualCfg = getVisualQueryConfig();
     let savedName: string | null = null;
     try {
       savedName =
@@ -512,10 +516,10 @@ export class GameScene extends Phaser.Scene {
       this.displayName = data.displayName;
     } else if (urlName) {
       this.displayName = urlName;
-    } else if (savedName) {
+    } else if (!visualCfg.freeze && savedName) {
       this.displayName = savedName;
     } else {
-      this.presetNameIndex = getVisualQueryConfig().freeze
+      this.presetNameIndex = visualCfg.freeze
         ? 0
         : Math.floor(getClientFreezeRandom()() * PRESET_NAMES_VI.length);
       this.displayName = PRESET_NAMES_VI[this.presetNameIndex] ?? PRESET_NAMES_VI[0];
@@ -527,12 +531,11 @@ export class GameScene extends Phaser.Scene {
     const defaultPort = locPort && locPort !== '5173' && locPort !== '4173' ? locPort : '2567';
     const fallbackHostPort = `${host}:${defaultPort}`;
 
-    this.serverHostPort = normalizeServerHostPortDisplay(
-      data?.serverUrl ?? urlServer,
-      fallbackHostPort,
-    );
+    const explicitServer = (data?.serverUrl ?? urlServer)?.trim() || undefined;
+    this.hasCustomServerHostPort = Boolean(explicitServer);
+    this.serverHostPort = normalizeServerHostPortDisplay(explicitServer, fallbackHostPort);
     this.requestedRoomId = this.coopMode === 'solo' ? undefined : (data?.roomId ?? urlJoin);
-    this.serverUrl = this.coopMode === 'solo' ? undefined : (data?.serverUrl ?? urlServer);
+    this.serverUrl = this.coopMode === 'solo' ? undefined : explicitServer;
     this.menuActiveInput = null;
     this.hubTicksElapsed = 0;
     this.wasInHubLastFrame = false;
@@ -650,13 +653,14 @@ export class GameScene extends Phaser.Scene {
     this.queuedEmote = null;
 
     const hudScale = this.currentHudUiScale || 1;
+    const inviteDrawerBottom = this.coopMode === 'solo' ? 356 : 426;
     const isClickingInvitePanel =
       sim.inHub &&
       this.invitePanelVisible &&
       localViewX >= 960 - 316 * hudScale + this.hudPadX &&
       localViewX <= 960 - 12 * hudScale + this.hudPadX &&
       localViewY >= 144 * hudScale - this.hudPadY &&
-      localViewY <= 426 * hudScale - this.hudPadY;
+      localViewY <= inviteDrawerBottom * hudScale - this.hudPadY;
     const isClickingHud =
       localViewY < 68 - this.hudPadY ||
       localViewY > 480 + this.hudPadY ||

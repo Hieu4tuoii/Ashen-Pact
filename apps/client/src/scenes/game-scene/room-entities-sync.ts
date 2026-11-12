@@ -45,6 +45,7 @@ import {
   syncWorldInteractPromptPill,
 } from './interact-prompt.js';
 import {
+  HERO_LOUNGE_LABEL_OFFSET_Y,
   resolveHeroLoungeLabelState,
   resolveHeroStationVisualState,
   resolveSanctuaryGuideSpecs,
@@ -133,7 +134,7 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
         glowSprite.setBlendMode(Phaser.BlendModes.ADD);
 
         const label = this.add
-          .text(st.x, st.y - 32, charTxt.name, {
+          .text(st.x, st.y + HERO_LOUNGE_LABEL_OFFSET_Y, charTxt.name, {
             fontFamily: '"Be Vietnam Pro", sans-serif',
             fontSize: '10.5px',
             fontStyle: '800',
@@ -221,7 +222,7 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
         if (entry.label.style.color !== labelState.labelColor) {
           entry.label.setColor(labelState.labelColor);
         }
-        entry.label.setPosition(st.x, st.y - 32);
+        entry.label.setPosition(st.x, st.y + HERO_LOUNGE_LABEL_OFFSET_Y);
         entry.label.setAlpha(labelState.labelAlpha);
         entry.label.setVisible(true);
       } else {
@@ -257,12 +258,20 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
             color: spec.color,
             stroke: PALETTE.INK_DEEP,
             strokeThickness: 3,
+            align: 'center',
+            wordWrap: spec.wordWrapWidth
+              ? { width: spec.wordWrapWidth, useAdvancedWrap: true }
+              : undefined,
             resolution: textRes,
           })
           .setOrigin(0.5, 0.5)
           .setDepth(45);
         this.hubGuideTexts[gIdx] = gTxt;
       } else {
+        const curWrapWidth = gTxt.style.wordWrapWidth ?? undefined;
+        if (curWrapWidth !== spec.wordWrapWidth) {
+          gTxt.setWordWrapWidth(spec.wordWrapWidth ?? null, true);
+        }
         if (gTxt.text !== spec.text) gTxt.setText(spec.text);
         if (gTxt.style.color !== spec.color) gTxt.setColor(spec.color);
         gTxt.setPosition(spec.x, spec.y);

@@ -51,6 +51,8 @@ export function resolveDebugFlags(input: DebugFlagsInput): ResolvedDebugFlags {
 
 let runtimeDebugUiOverride: boolean | null = null;
 let serverDebugAllowedState: boolean | null = null;
+let cachedFlagsSearch: string | null = null;
+let cachedFlagsResult: ResolvedDebugFlags | null = null;
 let hotkeyInstalled = false;
 let toastFadeTimer: ReturnType<typeof setTimeout> | null = null;
 const listeners = new Set<() => void>();
@@ -81,7 +83,30 @@ function getStorageDebugValue(): string | null {
   return null;
 }
 
+function invalidateDebugFlagsCache(): void {
+  cachedFlagsSearch = null;
+  cachedFlagsResult = null;
+}
+
+function getMemoizedDebugFlags(): ResolvedDebugFlags {
+  const search = getSearchString();
+  if (cachedFlagsResult !== null && cachedFlagsSearch === search) {
+    return cachedFlagsResult;
+  }
+  const resolved = resolveDebugFlags({
+    isDev: getIsDev(),
+    search,
+    storageDebug: getStorageDebugValue(),
+    serverDebugAllowed: serverDebugAllowedState === true,
+    runtimeOverride: runtimeDebugUiOverride,
+  });
+  cachedFlagsSearch = search;
+  cachedFlagsResult = resolved;
+  return resolved;
+}
+
 function notifyDebugFlagsChanged(): void {
+  invalidateDebugFlagsCache();
   for (const listener of Array.from(listeners)) {
     try {
       listener();
@@ -103,13 +128,7 @@ export function setServerDebugAllowed(allowed: boolean): void {
 }
 
 export function isDebugUiEnabled(): boolean {
-  return resolveDebugFlags({
-    isDev: getIsDev(),
-    search: getSearchString(),
-    storageDebug: getStorageDebugValue(),
-    serverDebugAllowed: serverDebugAllowedState === true,
-    runtimeOverride: runtimeDebugUiOverride,
-  }).debugUi;
+  return getMemoizedDebugFlags().debugUi;
 }
 
 export function isEffectiveDebugUiEnabled(isCoop = false): boolean {
@@ -119,13 +138,7 @@ export function isEffectiveDebugUiEnabled(isCoop = false): boolean {
 }
 
 export function isTestHooksEnabled(): boolean {
-  return resolveDebugFlags({
-    isDev: getIsDev(),
-    search: getSearchString(),
-    storageDebug: getStorageDebugValue(),
-    serverDebugAllowed: serverDebugAllowedState === true,
-    runtimeOverride: runtimeDebugUiOverride,
-  }).testHooks;
+  return getMemoizedDebugFlags().testHooks;
 }
 
 export function showDebugToast(message: string): void {
@@ -191,6 +204,7 @@ export function onDebugFlagsChanged(listener: () => void): () => void {
 export function resetDebugFlagsForTest(): void {
   runtimeDebugUiOverride = null;
   serverDebugAllowedState = null;
+  invalidateDebugFlagsCache();
   listeners.clear();
 }
 

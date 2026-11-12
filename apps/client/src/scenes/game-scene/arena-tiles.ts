@@ -15,6 +15,7 @@ import {
   type WifiProfileId,
   WORLD_VIEW_HEIGHT,
   WORLD_VIEW_WIDTH,
+  type WorldSim,
 } from '@ashen-pact/shared';
 import Phaser from 'phaser';
 import { CutoutRig } from '../../art/cutout-rig.js';
@@ -58,6 +59,7 @@ import {
 } from './hud-qol-and-minimap.js';
 import { createInteractPromptFadeState } from './interact-prompt.js';
 import {
+  type HubWorldClickAction,
   isSanctuaryHudChromeClick,
   resolveHubWorldPointerClick,
   SanctuaryVisualLayer,
@@ -70,6 +72,44 @@ import {
   syncSanctuaryOnStressTest,
 } from './sanctuary-lobby-ui.js';
 import { createPortalAnimState } from '../../fx/portal-door-shaders.js';
+
+export function applyHubWorldPointerClickAction(
+  scene: GameScene,
+  curSim: WorldSim,
+  action: HubWorldClickAction,
+): void {
+  scene.suppressFireUntilPointerUp = true;
+  if (action.kind === 'select_character') {
+    if (scene.room && scene.coopMode !== 'solo') {
+      scene.room.send('select_character', { characterId: action.characterId });
+      zzfx.play('ui_click');
+    } else if (
+      scene.coopMode === 'solo' &&
+      curSim.selectCharacter(curSim.player.id, action.characterId)
+    ) {
+      zzfx.play('ui_click');
+      try {
+        if (typeof window !== 'undefined') {
+          window.localStorage?.setItem('ashen_pact_character', action.characterId);
+        }
+      } catch {
+        // Ignore storage restrictions
+      }
+      scene.lastHudCharacterId = '';
+      scene.lastHubPreviewHash = '';
+      scene.lastInvitePanelHash = '';
+    }
+  } else if (action.kind === 'toggle_coop_board') {
+    const debugState = initGlobalDebugState();
+    scene.invitePanelVisible = !scene.invitePanelVisible;
+    debugState.invitePanelVisible = scene.invitePanelVisible;
+    scene.lastInvitePanelHash = '';
+    zzfx.play('ui_click');
+  } else if (action.kind === 'open_codex_desk') {
+    scene.settingsModal?.open('settings');
+    zzfx.play('ui_click');
+  }
+}
 
 export function syncGameSceneTestHooks(scene: GameScene): void {
   if (typeof window === 'undefined') return;
@@ -258,6 +298,7 @@ export function createImpl(this: GameScene): void {
       autoRespawnWaves: false,
       autoRevivePlayer: false,
     });
+    this.transport.getSim().player.displayName = this.displayName;
     if (this.startInHub) {
       const soloSim = this.transport.getSim();
       soloSim.enterHub();
@@ -349,6 +390,7 @@ export function createImpl(this: GameScene): void {
       const hudHitCount = this.uiScene?.input?.hitTestPointer(pointer)?.length ?? 0;
       const isClickingHudChrome = isSanctuaryHudChromeClick({
         inHub: curSim.inHub,
+        coopMode: this.coopMode,
         invitePanelVisible: this.invitePanelVisible,
         hudX: hudPt.x,
         hudY: hudPt.y,
@@ -373,26 +415,7 @@ export function createImpl(this: GameScene): void {
           hubStations: curSim.hubStations,
         });
         if (action) {
-          this.suppressFireUntilPointerUp = true;
-          if (action.kind === 'select_character') {
-            if (curSim.selectCharacter(curSim.player.id, action.characterId)) {
-              zzfx.play('ui_click');
-              if (typeof window !== 'undefined') {
-                window.localStorage?.setItem('ashen_pact_character', action.characterId);
-              }
-              this.lastHudCharacterId = '';
-              this.lastHubPreviewHash = '';
-              this.lastInvitePanelHash = '';
-            }
-          } else if (action.kind === 'toggle_coop_board') {
-            this.invitePanelVisible = !this.invitePanelVisible;
-            debugState.invitePanelVisible = this.invitePanelVisible;
-            this.lastInvitePanelHash = '';
-            zzfx.play('ui_click');
-          } else if (action.kind === 'open_codex_desk') {
-            this.settingsModal?.open('settings');
-            zzfx.play('ui_click');
-          }
+          applyHubWorldPointerClickAction(this, curSim, action);
         }
       }
     }
@@ -402,6 +425,7 @@ export function createImpl(this: GameScene): void {
   this.input.keyboard?.on('keydown', unlockAudio);
 
   this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+    this.sceneSessionEpoch += 1;
     this.intentionalLeave = true;
     destroySanctuaryDomInputs(this);
     this.sanctuaryHudContainer = undefined;

@@ -133,4 +133,48 @@ describe('Phase P5.4 / P12 — Release Version v2.0.0, Deferred P9b Ledger & Doc
       );
     }
   });
+
+  it('refuses non-Windows packageRelease without ASHEN_PACT_POSIX_STUB=1 and prints an unmistakable POSIX stub notice when opted in', async () => {
+    const pkgMod = (await import('../../../tools/package-release.js')) as {
+      packageRelease: (options?: { skipBuild?: boolean; skipZip?: boolean }) => unknown;
+      assertPlatformSupportedForPackageRelease?: (
+        platform?: NodeJS.Platform,
+        env?: NodeJS.ProcessEnv,
+      ) => { isPosixStub: boolean };
+    };
+
+    expect(typeof pkgMod.assertPlatformSupportedForPackageRelease).toBe('function');
+    expect(pkgMod.assertPlatformSupportedForPackageRelease!('win32', {})).toEqual({
+      isPosixStub: false,
+    });
+    expect(() => pkgMod.assertPlatformSupportedForPackageRelease!('linux', {})).toThrow(
+      /ASHEN_PACT_POSIX_STUB=1/,
+    );
+    expect(() =>
+      pkgMod.assertPlatformSupportedForPackageRelease!('darwin', { ASHEN_PACT_POSIX_STUB: '0' }),
+    ).toThrow(/ASHEN_PACT_POSIX_STUB=1/);
+    expect(
+      pkgMod.assertPlatformSupportedForPackageRelease!('linux', { ASHEN_PACT_POSIX_STUB: '1' }),
+    ).toEqual({ isPosixStub: true });
+
+    if (process.platform !== 'win32') {
+      const prevStub = process.env.ASHEN_PACT_POSIX_STUB;
+      delete process.env.ASHEN_PACT_POSIX_STUB;
+      try {
+        expect(() => pkgMod.packageRelease({ skipBuild: true, skipZip: true })).toThrow(
+          /ASHEN_PACT_POSIX_STUB=1/,
+        );
+      } finally {
+        if (prevStub === undefined) {
+          delete process.env.ASHEN_PACT_POSIX_STUB;
+        } else {
+          process.env.ASHEN_PACT_POSIX_STUB = prevStub;
+        }
+      }
+    }
+
+    const packageReleaseSrc = readRepoFile('tools/package-release.ts');
+    expect(packageReleaseSrc).toContain('[POSIX SMOKE STUB — NOT A WINDOWS BUILD]');
+  });
 });
+

@@ -489,11 +489,13 @@ export function getResolvedWsUrlImpl(this: GameScene): string {
 }
 
 export async function fetchHostLanInfoImpl(this: GameScene): Promise<void> {
+  const epoch = this.sceneSessionEpoch;
   const debug = initGlobalDebugState();
   try {
     const wsUrl = this.getResolvedWsUrl();
     const httpBase = wsUrl.replace(/^ws:/, 'http:').replace(/^wss:/, 'https:');
     const res = await fetch(`${httpBase}/api/host-info`);
+    if (!this.scene.isActive() || this.sceneSessionEpoch !== epoch) return;
     if (res.ok) {
       const data = (await res.json()) as {
         lanIps?: string[];
@@ -501,13 +503,14 @@ export async function fetchHostLanInfoImpl(this: GameScene): Promise<void> {
         port?: number;
         debugAllowed?: boolean;
       };
+      if (!this.scene.isActive() || this.sceneSessionEpoch !== epoch) return;
       if (typeof data.debugAllowed === 'boolean') {
         setServerDebugAllowed(data.debugAllowed);
       }
       if (data.primaryLanIp) this.primaryLanIp = data.primaryLanIp;
       if (data.lanIps) this.lanIps = data.lanIps;
       if (data.port) this.serverPort = data.port;
-      if (data.primaryLanIp && !this.menuActiveInput && !this.serverUrl) {
+      if (data.primaryLanIp && !this.menuActiveInput && !this.hasCustomServerHostPort) {
         this.serverHostPort = `${this.primaryLanIp}:${this.serverPort}`;
         debug.menuServerHostPort = this.serverHostPort;
         this.sanctuaryDomInputs?.syncValues(this.displayName, this.serverHostPort);
@@ -530,6 +533,8 @@ export function updateHostInviteUrlImpl(this: GameScene): void {
 }
 
 export function bindCoopRoomHandlersImpl(this: GameScene, room: ColyseusRoom): void {
+  const boundEpoch = this.sceneSessionEpoch;
+  const isStaleSession = () => !this.scene.isActive() || this.sceneSessionEpoch !== boundEpoch;
   const debug = initGlobalDebugState();
   this.room = room;
   debug.serverConnected = true;
@@ -538,12 +543,12 @@ export function bindCoopRoomHandlersImpl(this: GameScene, room: ColyseusRoom): v
 
   if (this.networkTransport) {
     this.networkTransport.setOnSendInput((msg) => {
-      if (this.room === room) {
+      if (this.room === room && !isStaleSession()) {
         room.send('input', msg);
       }
     });
     this.networkTransport.setOnSendMessage((type, payload) => {
-      if (this.room === room) {
+      if (this.room === room && !isStaleSession()) {
         room.send(type, payload);
       }
     });
@@ -559,7 +564,7 @@ export function bindCoopRoomHandlersImpl(this: GameScene, room: ColyseusRoom): v
       isHost: boolean;
       debugAllowed?: boolean;
     }) => {
-      if (!this.scene.isActive()) return;
+      if (isStaleSession()) return;
       if (typeof msg.debugAllowed === 'boolean') {
         setServerDebugAllowed(msg.debugAllowed);
       }
@@ -584,12 +589,12 @@ export function bindCoopRoomHandlersImpl(this: GameScene, room: ColyseusRoom): v
   );
 
   room.onMessage('world_snapshot', (snap) => {
-    if (!this.scene.isActive()) return;
+    if (isStaleSession()) return;
     this.networkTransport?.receiveSnapshot(snap);
   });
 
   room.onMessage('pong_check', (payload: { clientTime: number }) => {
-    if (!this.scene.isActive()) return;
+    if (isStaleSession()) return;
     const rtt = Math.max(1, Date.now() - payload.clientTime);
     this.networkTransport?.setRttMs(rtt);
     debug.pingMs = rtt;
@@ -597,19 +602,19 @@ export function bindCoopRoomHandlersImpl(this: GameScene, room: ColyseusRoom): v
   });
 
   room.onMessage('host_disconnected', (msg: { reasonVi?: string }) => {
-    if (!this.scene.isActive()) return;
+    if (isStaleSession()) return;
     exitToSoloSanctuary(this, msg.reasonVi ?? 'Phòng Co-op đã đóng do Host ngắt kết nối.');
   });
 
   const onKicked = (msg: { reasonVi?: string }) => {
-    if (!this.scene.isActive()) return;
+    if (isStaleSession()) return;
     exitToSoloSanctuary(this, msg.reasonVi ?? 'Bạn đã bị Host mời rời khỏi phòng.');
   };
   room.onMessage('kicked', onKicked);
   room.onMessage('kicked_by_host', onKicked);
 
   room.onMessage('join_rejected', (msg: { reasonVi?: string }) => {
-    if (!this.scene.isActive()) return;
+    if (isStaleSession()) return;
     exitToSoloSanctuary(
       this,
       msg.reasonVi ??
@@ -618,16 +623,17 @@ export function bindCoopRoomHandlersImpl(this: GameScene, room: ColyseusRoom): v
   });
 
   room.onMessage('character_select_result', () => {
+    if (isStaleSession()) return;
     this.lastInvitePanelHash = '';
   });
 
   room.onMessage('debug_rejected', (msg: { command?: string; reason?: string }) => {
-    if (!this.scene.isActive()) return;
+    if (isStaleSession()) return;
     debug.lastDebugRejected = msg?.command ?? 'unknown';
   });
 
   room.onLeave((code: number) => {
-    if (!this.scene.isActive() || this.intentionalLeave) return;
+    if (isStaleSession() || this.intentionalLeave) return;
     // Code 4000 = Host disconnect, 4001 = Kicked, 4002 = Room Full, 4003 = Mid-run Join Rejected
     if (code === 4000 || code === 4001 || code === 4002 || code === 4003) {
       exitToSoloSanctuary(
@@ -648,16 +654,25 @@ export function bindCoopRoomHandlersImpl(this: GameScene, room: ColyseusRoom): v
 }
 
 export async function connectCoopRoomImpl(this: GameScene): Promise<void> {
+  const epoch = this.sceneSessionEpoch;
   const debug = initGlobalDebugState();
   await this.fetchHostLanInfo();
+  if (!this.scene.isActive() || this.sceneSessionEpoch !== epoch) {
+    return;
+  }
   try {
     const wsUrl = this.getResolvedWsUrl();
     this.colyseusClient = new ColyseusClient(wsUrl);
-    const savedToken =
-      this.reconnectToken ??
-      (typeof window !== 'undefined'
-        ? window.sessionStorage?.getItem('ashen_pact_reconnect_token')
-        : null);
+    let storedReconnectToken: string | null = null;
+    try {
+      storedReconnectToken =
+        typeof window !== 'undefined'
+          ? window.sessionStorage?.getItem('ashen_pact_reconnect_token')
+          : null;
+    } catch {
+      storedReconnectToken = null;
+    }
+    const savedToken = this.reconnectToken ?? storedReconnectToken;
     const joinOpts = {
       name: this.displayName,
       reconnectToken: savedToken ?? undefined,
@@ -668,7 +683,7 @@ export async function connectCoopRoomImpl(this: GameScene): Promise<void> {
       ? await this.colyseusClient.joinById(this.requestedRoomId, joinOpts)
       : await this.colyseusClient.joinOrCreate('coop_room', joinOpts);
 
-    if (!this.scene.isActive()) {
+    if (!this.scene.isActive() || this.sceneSessionEpoch !== epoch) {
       void room.leave().catch(() => {});
       return;
     }
@@ -680,7 +695,7 @@ export async function connectCoopRoomImpl(this: GameScene): Promise<void> {
       delay: 500,
       loop: true,
       callback: () => {
-        if (this.room && this.scene.isActive()) {
+        if (this.room === room && this.scene.isActive() && this.sceneSessionEpoch === epoch) {
           const curRtt = this.networkTransport?.getTelemetry().rttMs ?? debug.pingMs ?? 8;
           this.room.send('ping_check', {
             clientTime: Date.now(),
@@ -690,26 +705,33 @@ export async function connectCoopRoomImpl(this: GameScene): Promise<void> {
       },
     });
   } catch {
-    if (!this.scene.isActive()) return;
+    if (!this.scene.isActive() || this.sceneSessionEpoch !== epoch) return;
     debug.serverConnected = false;
     this.lastInvitePanelHash = '';
   }
 }
 
 export async function forceCoopReconnectImpl(this: GameScene): Promise<boolean> {
+  const epoch = this.sceneSessionEpoch;
   if (!this.colyseusClient) {
     this.colyseusClient = new ColyseusClient(this.getResolvedWsUrl());
   }
   const debug = initGlobalDebugState();
-  const targetRoomId =
-    this.room?.roomId ??
-    this.requestedRoomId ??
-    (typeof window !== 'undefined' ? window.sessionStorage?.getItem('ashen_pact_room_id') : null);
-  const savedToken =
-    this.reconnectToken ??
-    (typeof window !== 'undefined'
-      ? window.sessionStorage?.getItem('ashen_pact_reconnect_token')
-      : null);
+  let storedRoomId: string | null = null;
+  let storedToken: string | null = null;
+  try {
+    storedRoomId =
+      typeof window !== 'undefined' ? window.sessionStorage?.getItem('ashen_pact_room_id') : null;
+    storedToken =
+      typeof window !== 'undefined'
+        ? window.sessionStorage?.getItem('ashen_pact_reconnect_token')
+        : null;
+  } catch {
+    storedRoomId = null;
+    storedToken = null;
+  }
+  const targetRoomId = this.room?.roomId ?? this.requestedRoomId ?? storedRoomId;
+  const savedToken = this.reconnectToken ?? storedToken;
 
   if (this.room) {
     const prevRoom = this.room;
@@ -722,6 +744,9 @@ export async function forceCoopReconnectImpl(this: GameScene): Promise<boolean> 
     }
     this.intentionalLeave = false;
   }
+  if (!this.scene.isActive() || this.sceneSessionEpoch !== epoch) {
+    return false;
+  }
 
   try {
     const joinOpts = {
@@ -731,24 +756,35 @@ export async function forceCoopReconnectImpl(this: GameScene): Promise<boolean> 
     const newRoom = targetRoomId
       ? await this.colyseusClient.joinById(targetRoomId, joinOpts)
       : await this.colyseusClient.joinOrCreate('coop_room', joinOpts);
+    if (!this.scene.isActive() || this.sceneSessionEpoch !== epoch) {
+      void newRoom.leave().catch(() => {});
+      return false;
+    }
     this.bindCoopRoomHandlers(newRoom);
     debug.serverConnected = true;
     return true;
   } catch {
+    if (!this.scene.isActive() || this.sceneSessionEpoch !== epoch) {
+      return false;
+    }
     debug.serverConnected = false;
     return false;
   }
 }
 
 export async function connectHelloRoomImpl(this: GameScene): Promise<void> {
+  const epoch = this.sceneSessionEpoch;
   const debug = initGlobalDebugState();
   await this.fetchHostLanInfo();
+  if (!this.scene.isActive() || this.sceneSessionEpoch !== epoch) {
+    return;
+  }
   try {
     const wsHost = window.location.hostname || 'localhost';
     const wsPort = this.serverPort || 2567;
     const client = new ColyseusClient(`ws://${wsHost}:${wsPort}`);
     const room = await client.joinOrCreate('hello_room', {});
-    if (!this.scene.isActive()) {
+    if (!this.scene.isActive() || this.sceneSessionEpoch !== epoch) {
       void room.leave().catch(() => {});
       return;
     }
@@ -757,7 +793,7 @@ export async function connectHelloRoomImpl(this: GameScene): Promise<void> {
     this.lastInvitePanelHash = '';
 
     room.onMessage('hello_welcome', (msg: { seed?: number; debugAllowed?: boolean }) => {
-      if (!this.scene.isActive()) return;
+      if (!this.scene.isActive() || this.sceneSessionEpoch !== epoch) return;
       if (typeof msg.debugAllowed === 'boolean') {
         setServerDebugAllowed(msg.debugAllowed);
       }
@@ -767,7 +803,7 @@ export async function connectHelloRoomImpl(this: GameScene): Promise<void> {
     });
 
     room.onMessage('pong_check', (payload: { clientTime: number }) => {
-      if (!this.scene.isActive()) return;
+      if (!this.scene.isActive() || this.sceneSessionEpoch !== epoch) return;
       debug.pingMs = Math.max(1, Date.now() - payload.clientTime);
     });
 
@@ -775,13 +811,13 @@ export async function connectHelloRoomImpl(this: GameScene): Promise<void> {
       delay: 1000,
       loop: true,
       callback: () => {
-        if (this.room && this.scene.isActive()) {
+        if (this.room === room && this.scene.isActive() && this.sceneSessionEpoch === epoch) {
           this.room.send('ping_check', { clientTime: Date.now() });
         }
       },
     });
   } catch {
-    if (!this.scene.isActive()) return;
+    if (!this.scene.isActive() || this.sceneSessionEpoch !== epoch) return;
     debug.serverConnected = false;
     this.lastInvitePanelHash = '';
   }

@@ -277,8 +277,25 @@ internal static class Program
 `;
 }
 
+export function assertPlatformSupportedForPackageRelease(
+  platform: NodeJS.Platform = process.platform,
+  env: NodeJS.ProcessEnv = process.env,
+): { isPosixStub: boolean } {
+  if (platform === 'win32') {
+    return { isPosixStub: false };
+  }
+  if (env.ASHEN_PACT_POSIX_STUB === '1') {
+    return { isPosixStub: true };
+  }
+  throw new Error(
+    `[package:release] Cannot build '${RELEASE_NAME}.zip' on non-Windows platform '${platform}' without explicit opt-in. ` +
+      'Run on Windows (win32) to compile native x64 binaries, or set ASHEN_PACT_POSIX_STUB=1 for non-Windows smoke testing.',
+  );
+}
+
 function compileHostExecutable(targetExePath: string): void {
   if (process.platform !== 'win32') {
+    assertPlatformSupportedForPackageRelease();
     const posixLauncher = [
       '#!/usr/bin/env bash',
       'set -e',
@@ -304,6 +321,7 @@ function compileHostExecutable(targetExePath: string): void {
     fs.chmodSync(targetExePath, 0o755);
     return;
   }
+
 
   const cscCandidates = [
     'C:\\Windows\\Microsoft.NET\\Framework64\\v4.0.30319\\csc.exe',
@@ -424,6 +442,13 @@ export interface PackageReleaseResult {
 }
 
 export function packageRelease(options?: { skipBuild?: boolean; skipZip?: boolean }): PackageReleaseResult {
+  const { isPosixStub } = assertPlatformSupportedForPackageRelease();
+  if (isPosixStub) {
+    console.warn(
+      '[package:release] [POSIX SMOKE STUB — NOT A WINDOWS BUILD] ASHEN_PACT_POSIX_STUB=1 active: packaging POSIX Node runtime & bash launcher stub for smoke verification.',
+    );
+  }
+
   const clientDistDir = path.join(ROOT_DIR, 'apps/client/dist');
   if (!options?.skipBuild || !fs.existsSync(path.join(clientDistDir, 'index.html'))) {
     console.log('[package:release] Running production build (pnpm build)...');
@@ -459,12 +484,20 @@ export function packageRelease(options?: { skipBuild?: boolean; skipZip?: boolea
   const runtimeDir = path.join(RELEASE_DIR, 'runtime');
   fs.mkdirSync(runtimeDir, { recursive: true });
   const targetNodeExe = path.join(runtimeDir, 'node.exe');
-  console.log(`[package:release] Embedding standalone Node runtime (${process.version})...`);
+  console.log(
+    isPosixStub
+      ? `[package:release] [POSIX SMOKE STUB — NOT A WINDOWS BUILD] Copying local POSIX Node runtime (${process.version}) into runtime/node.exe...`
+      : `[package:release] Embedding standalone Node runtime (${process.version})...`,
+  );
   fs.copyFileSync(process.execPath, targetNodeExe);
 
   // 4. Compile native Windows x64 launcher AshenPact-Host.exe
   const hostExePath = path.join(RELEASE_DIR, 'AshenPact-Host.exe');
-  console.log('[package:release] Compiling native Windows launcher AshenPact-Host.exe...');
+  console.log(
+    isPosixStub
+      ? '[package:release] [POSIX SMOKE STUB — NOT A WINDOWS BUILD] Writing POSIX bash launcher stub to AshenPact-Host.exe...'
+      : '[package:release] Compiling native Windows launcher AshenPact-Host.exe...',
+  );
   compileHostExecutable(hostExePath);
 
   // 5. Write start-host.bat & allow-firewall-port-2567.bat
@@ -503,7 +536,11 @@ export function packageRelease(options?: { skipBuild?: boolean; skipZip?: boolea
   }
 
   console.log('==================================================================');
-  console.log('  ✅ ĐÓNG GÓI BẢN PHÁT HÀNH HOÀN TẤT (ASHEN PACT v2.0.0 WIN-X64)');
+  if (isPosixStub) {
+    console.log('  ⚠️ [POSIX SMOKE STUB — NOT A WINDOWS BUILD] (ASHEN PACT v2.0.0)');
+  } else {
+    console.log('  ✅ ĐÓNG GÓI BẢN PHÁT HÀNH HOÀN TẤT (ASHEN PACT v2.0.0 WIN-X64)');
+  }
   console.log(`  📁 Thư mục: ${RELEASE_DIR}`);
   console.log(`  📦 File nén: ${RELEASE_ZIP}`);
   console.log(`  🚀 Thực thi: ${hostExePath}`);
