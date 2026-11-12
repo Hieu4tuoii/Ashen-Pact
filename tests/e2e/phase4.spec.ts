@@ -306,11 +306,17 @@ test.describe('Phase 4 — Co-op LAN Authoritative, Prediction/Interpolation, Hu
       window.__GAME_TRIGGER_LAG_SPIKE__?.(300);
     });
 
-    await page2.keyboard.down('KeyS');
     await page1.mouse.move(1120, 480);
     await page1.mouse.down();
 
-    const p2Positions: { x: number; y: number }[] = [];
+    const p2Positions: { x: number; y: number }[] = [
+      await page2.evaluate(() => ({
+        x: window.__GAME_DEBUG__.playerX,
+        y: window.__GAME_DEBUG__.playerY,
+      })),
+    ];
+    await page2.keyboard.down('KeyS');
+
     for (let i = 0; i < 12; i++) {
       await page2.waitForTimeout(80);
       const pos = await page2.evaluate(() => ({
