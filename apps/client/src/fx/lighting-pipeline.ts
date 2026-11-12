@@ -303,6 +303,12 @@ export class LightingPipeline {
   }
 
   public syncPostFxPipeline(): void {
+    if (
+      (this.scene.game as { __softwareLogicOnlyStep?: boolean } | undefined)
+        ?.__softwareLogicOnlyStep
+    ) {
+      return;
+    }
     const renderer = this.scene.game.renderer;
     if (!(renderer instanceof Phaser.Renderer.WebGL.WebGLRenderer)) return;
 
@@ -493,6 +499,10 @@ export class LightingPipeline {
     this.drawBlizzardRim(rawViewX, rawViewY, viewW, viewH);
 
     // 2. Render Dynamic Lightmap into RenderTexture (amortized during 600+ bullet swarm)
+    const skipRtDraw = Boolean(
+      (this.scene.game as { __softwareLogicOnlyStep?: boolean } | undefined)
+        ?.__softwareLogicOnlyStep,
+    );
     const needsResize = coverW !== this.currentCoverW || coverH !== this.currentCoverH;
     if (
       !needsResize &&
@@ -503,7 +513,7 @@ export class LightingPipeline {
       return;
     }
 
-    if (needsResize) {
+    if (needsResize && !skipRtDraw) {
       this.currentCoverW = coverW;
       this.currentCoverH = coverH;
       const rtW = Math.round(this.currentCoverW * this.currentLightmapScale);
@@ -525,9 +535,11 @@ export class LightingPipeline {
     const ambientColor = liftAmbientTowardClearWhite(sceneConfig.ambientColor, 0.68);
     const lmScale = this.currentLightmapScale;
     const maxLights = budget.tier === 'high' ? 48 : budget.tier === 'medium' ? 28 : 12;
-    this.lightmapRt.clear();
-    this.lightmapRt.fill(ambientColor, 1.0);
-    this.lightmapRt.beginDraw();
+    if (!skipRtDraw) {
+      this.lightmapRt.clear();
+      this.lightmapRt.fill(ambientColor, 1.0);
+      this.lightmapRt.beginDraw();
+    }
 
     let lightsDrawn = 0;
     const drawLight = (
@@ -548,10 +560,12 @@ export class LightingPipeline {
       ) {
         return;
       }
-      this.brushSprite.setScale(((radius * 2) / this.brushBaseTexWidth) * lmScale);
-      this.brushSprite.setTint(colorNum);
-      this.brushSprite.setAlpha(clamp(alpha, 0, 1));
-      this.lightmapRt.batchDraw(this.brushSprite, lx * lmScale, ly * lmScale);
+      if (!skipRtDraw) {
+        this.brushSprite.setScale(((radius * 2) / this.brushBaseTexWidth) * lmScale);
+        this.brushSprite.setTint(colorNum);
+        this.brushSprite.setAlpha(clamp(alpha, 0, 1));
+        this.lightmapRt.batchDraw(this.brushSprite, lx * lmScale, ly * lmScale);
+      }
       lightsDrawn += 1;
     };
 
@@ -723,24 +737,26 @@ export class LightingPipeline {
         ) {
           continue;
         }
-        this.brushSprite.setScale(((r * 2) / this.brushBaseTexWidth) * lmScale);
-        this.brushSprite.setTint(entry.colorNum);
-        this.brushSprite.setAlpha(clamp(entry.alpha, 0, 0.35));
-        this.lightmapRt.batchDraw(this.brushSprite, lx * lmScale, ly * lmScale);
-
-        if (
-          entry.secondaryColorNum !== undefined &&
-          entry.secondaryRadius !== undefined &&
-          entry.secondaryAlpha !== undefined &&
-          entry.secondaryRadius > 0 &&
-          entry.secondaryAlpha > 0
-        ) {
-          this.brushSprite.setScale(
-            ((entry.secondaryRadius * 2) / this.brushBaseTexWidth) * lmScale,
-          );
-          this.brushSprite.setTint(entry.secondaryColorNum);
-          this.brushSprite.setAlpha(clamp(entry.secondaryAlpha, 0, 0.35));
+        if (!skipRtDraw) {
+          this.brushSprite.setScale(((r * 2) / this.brushBaseTexWidth) * lmScale);
+          this.brushSprite.setTint(entry.colorNum);
+          this.brushSprite.setAlpha(clamp(entry.alpha, 0, 0.35));
           this.lightmapRt.batchDraw(this.brushSprite, lx * lmScale, ly * lmScale);
+
+          if (
+            entry.secondaryColorNum !== undefined &&
+            entry.secondaryRadius !== undefined &&
+            entry.secondaryAlpha !== undefined &&
+            entry.secondaryRadius > 0 &&
+            entry.secondaryAlpha > 0
+          ) {
+            this.brushSprite.setScale(
+              ((entry.secondaryRadius * 2) / this.brushBaseTexWidth) * lmScale,
+            );
+            this.brushSprite.setTint(entry.secondaryColorNum);
+            this.brushSprite.setAlpha(clamp(entry.secondaryAlpha, 0, 0.35));
+            this.lightmapRt.batchDraw(this.brushSprite, lx * lmScale, ly * lmScale);
+          }
         }
 
         interactableLightsDrawn += 1;
@@ -808,11 +824,16 @@ export class LightingPipeline {
       }
     }
 
-    // G. Projectile Point Lights — omitted from low-res lightmapRt so fast bullets never leave blocky spotlight trails
-    void projectiles;
+    // G. Projectile Point Lights — omitted from low-res lightmapRt so fast bullets never leave blocky spotlight trails,
+    // while additive bullet glow sprites remain active emitters counted toward the tier light budget
+    const projectileGlowLights = budget.enableProjectileLights
+      ? Math.min(Math.max(0, maxLights - lightsDrawn), projectiles.length)
+      : 0;
 
-    this.lightmapRt.endDraw();
-    this.activeLightCount = lightsDrawn;
+    if (!skipRtDraw) {
+      this.lightmapRt.endDraw();
+    }
+    this.activeLightCount = lightsDrawn + projectileGlowLights;
     this.activeInteractableLightCount = interactableLightsDrawn;
   }
 

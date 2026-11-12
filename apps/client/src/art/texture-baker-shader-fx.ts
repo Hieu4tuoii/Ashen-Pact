@@ -1691,6 +1691,24 @@ interface CompiledGlBaker {
     CompiledGlFamilyProgram,
   ];
   vbo: WebGLBuffer;
+  softwareRasterizer: boolean;
+}
+
+function detectSoftwareGlRenderer(gl: WebGLRenderingContext): boolean {
+  if (typeof gl.getParameter !== 'function' || typeof gl.getExtension !== 'function') {
+    return false;
+  }
+  try {
+    const dbgExt = gl.getExtension('WEBGL_debug_renderer_info') as
+      | { UNMASKED_RENDERER_WEBGL: number }
+      | null;
+    const unmasked = dbgExt ? gl.getParameter(dbgExt.UNMASKED_RENDERER_WEBGL) : null;
+    const fallback = typeof gl.RENDERER === 'number' ? gl.getParameter(gl.RENDERER) : '';
+    const rendererStr = String(unmasked || fallback || '');
+    return /swiftshader|llvmpipe|softpipe|software/i.test(rendererStr);
+  } catch {
+    return false;
+  }
 }
 
 function startCompileShader(
@@ -1814,6 +1832,7 @@ function createOffscreenGlBaker(): CompiledGlBaker | null {
       buildFamily(rawPrograms[4]!),
     ],
     vbo,
+    softwareRasterizer: detectSoftwareGlRenderer(gl),
   };
 }
 
@@ -1927,7 +1946,12 @@ export function bakeShaderVfxFlipbooks(scene: Phaser.Scene, bakeScale = 4): void
       if (!ctx2d) continue;
 
       if (glBaker) {
-        const { gl, glCanvas, programs } = glBaker;
+        const { gl, glCanvas, programs, softwareRasterizer } = glBaker;
+        const renderFramePx = softwareRasterizer
+          ? Math.max(48, Math.round(framePx * 0.25))
+          : framePx;
+        const renderW = renderFramePx * SHADER_ATLAS_COLS;
+        const renderH = renderFramePx * SHADER_ATLAS_ROWS;
         const famIdx =
           entry.shaderId <= 7
             ? 0
@@ -1939,23 +1963,27 @@ export function bakeShaderVfxFlipbooks(scene: Phaser.Scene, bakeScale = 4): void
                   ? 3
                   : 4;
         const fam = programs[famIdx]!;
-        if (glCanvas.width !== stripW || glCanvas.height !== stripH) {
-          glCanvas.width = stripW;
-          glCanvas.height = stripH;
+        if (glCanvas.width !== renderW || glCanvas.height !== renderH) {
+          glCanvas.width = renderW;
+          glCanvas.height = renderH;
         }
-        gl.viewport(0, 0, stripW, stripH);
+        gl.viewport(0, 0, renderW, renderH);
         gl.clearColor(0, 0, 0, 0);
         gl.clear(gl.COLOR_BUFFER_BIT);
         gl.useProgram(fam.program);
         gl.enableVertexAttribArray(fam.aPos);
         gl.vertexAttribPointer(fam.aPos, 2, gl.FLOAT, false, 0, 0);
-        gl.uniform1f(fam.uFramePx, framePx);
+        gl.uniform1f(fam.uFramePx, renderFramePx);
         gl.uniform1f(fam.uFrameCount, SHADER_FX_FRAME_COUNT);
         gl.uniform1f(fam.uShaderId, entry.shaderId);
         gl.uniform1f(fam.uElemId, entry.elemId);
         gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
         ctx2d.clearRect(0, 0, stripW, stripH);
-        ctx2d.drawImage(glCanvas, 0, 0);
+        if (renderW === stripW && renderH === stripH) {
+          ctx2d.drawImage(glCanvas, 0, 0);
+        } else {
+          ctx2d.drawImage(glCanvas, 0, 0, renderW, renderH, 0, 0, stripW, stripH);
+        }
       } else {
         ctx2d.clearRect(0, 0, stripW, stripH);
         drawFallback2DStrip(ctx2d, entry, framePx, SHADER_FX_FRAME_COUNT);

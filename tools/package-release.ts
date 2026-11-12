@@ -278,6 +278,33 @@ internal static class Program
 }
 
 function compileHostExecutable(targetExePath: string): void {
+  if (process.platform !== 'win32') {
+    const posixLauncher = [
+      '#!/usr/bin/env bash',
+      'set -e',
+      'BASE_DIR="$(cd "$(dirname "$0")" && pwd)"',
+      'NODE_BIN="$BASE_DIR/runtime/node.exe"',
+      'if [ ! -x "$NODE_BIN" ]; then',
+      '  NODE_BIN="node"',
+      'fi',
+      'HAS_HOST=0',
+      'for arg in "$@"; do',
+      '  if [ "$arg" = "--host" ]; then',
+      '    HAS_HOST=1',
+      '  fi',
+      'done',
+      'if [ "$HAS_HOST" = "1" ]; then',
+      '  exec "$NODE_BIN" "$BASE_DIR/server-bundle.cjs" "$@"',
+      'else',
+      '  exec "$NODE_BIN" "$BASE_DIR/server-bundle.cjs" --host "$@"',
+      'fi',
+      '',
+    ].join('\n');
+    fs.writeFileSync(targetExePath, posixLauncher, { encoding: 'utf8', mode: 0o755 });
+    fs.chmodSync(targetExePath, 0o755);
+    return;
+  }
+
   const cscCandidates = [
     'C:\\Windows\\Microsoft.NET\\Framework64\\v4.0.30319\\csc.exe',
     'C:\\Windows\\Microsoft.NET\\Framework\\v4.0.30319\\csc.exe',
@@ -462,10 +489,17 @@ export function packageRelease(options?: { skipBuild?: boolean; skipZip?: boolea
       fs.unlinkSync(RELEASE_ZIP);
     }
     console.log(`[package:release] Creating archive ${RELEASE_ZIP}...`);
-    const psCmd = `Add-Type -AssemblyName System.IO.Compression.FileSystem; [System.IO.Compression.ZipFile]::CreateFromDirectory('${RELEASE_DIR.replace(/'/g, "''")}', '${RELEASE_ZIP.replace(/'/g, "''")}')`;
-    execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', psCmd], {
-      stdio: 'inherit',
-    });
+    if (process.platform !== 'win32') {
+      execFileSync('zip', ['-r', '-q', RELEASE_ZIP, '.'], {
+        cwd: RELEASE_DIR,
+        stdio: 'inherit',
+      });
+    } else {
+      const psCmd = `Add-Type -AssemblyName System.IO.Compression.FileSystem; [System.IO.Compression.ZipFile]::CreateFromDirectory('${RELEASE_DIR.replace(/'/g, "''")}', '${RELEASE_ZIP.replace(/'/g, "''")}')`;
+      execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', psCmd], {
+        stdio: 'inherit',
+      });
+    }
   }
 
   console.log('==================================================================');

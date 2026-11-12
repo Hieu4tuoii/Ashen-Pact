@@ -29,13 +29,13 @@ export class PreloadScene extends Phaser.Scene {
     );
 
     const finalizeLoad = () => {
-      TextureBaker.bakeAll(this, zoom, true);
-
       const allowSceneShortcuts = isDebugUiEnabled() || isTestHooksEnabled();
       const route = resolveBootGameSceneInitData(window.location.search, allowSceneShortcuts);
       if (route.targetScene === 'ArtGalleryScene') {
+        TextureBaker.bakeGalleryPage1(this, zoom);
         this.scene.start('ArtGalleryScene');
       } else {
+        TextureBaker.bakeAll(this, zoom, true);
         this.scene.start('GameScene', route.initData);
       }
     };

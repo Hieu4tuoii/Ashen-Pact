@@ -10,6 +10,7 @@ import { hexToNum, PALETTE } from '../../art/palette.js';
 import { TextureBaker } from '../../art/texture-baker.js';
 import { musicManager } from '../../audio/music-synth.js';
 import { zzfx } from '../../audio/zzfx.js';
+import { flushSceneInteractiveContainer } from '../../core/software-gl.js';
 import {
   drawBuffEmblemIcon,
   drawPlayerBlessingChipsHud,
@@ -605,6 +606,7 @@ export function updateModalHudImpl(this: GameScene): void {
       this.modalContainer.add(hit);
     }
   }
+  flushSceneInteractiveContainer(ui, this.modalContainer);
 }
 
 export function updateDebugStateImpl(

@@ -441,9 +441,12 @@ export class DebugOverlay {
     const rawDelta = loop.delta > 0 ? loop.delta : 16.67;
 
     const isHidden = typeof document !== 'undefined' && document.hidden;
+    const isSoftwareGl = Boolean(
+      (this.scene.game as { __isSoftwareGl?: boolean } | undefined)?.__isSoftwareGl,
+    );
     this.warmupFrames += 1;
-    // Ignore scene-init/resize warmup frames and background-throttled frames
-    if (!isHidden && this.warmupFrames > 10 && rawDelta < 45) {
+    // Ignore scene-init/resize warmup frames, software-GL rasterizer frames, and background-throttled frames
+    if (!isHidden && !isSoftwareGl && this.warmupFrames > 10 && rawDelta < 45) {
       this.frameDeltaSamples.push(rawDelta);
       if (this.frameDeltaSamples.length > 30) {
         this.frameDeltaSamples.shift();

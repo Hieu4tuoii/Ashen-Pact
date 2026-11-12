@@ -1,5 +1,6 @@
 import { WORLD_VIEW_HEIGHT, WORLD_VIEW_WIDTH } from '@ashen-pact/shared';
 import Phaser from 'phaser';
+import { syncCameraMatrix } from '../core/software-gl.js';
 import { computeUniformViewportMetrics } from '../fx/lighting-config.js';
 
 export class HudScene extends Phaser.Scene {
@@ -37,6 +38,7 @@ export class HudScene extends Phaser.Scene {
     if (cam) {
       cam.setZoom(m.zoom);
       cam.centerOn(WORLD_VIEW_WIDTH * 0.5, WORLD_VIEW_HEIGHT * 0.5);
+      syncCameraMatrix(cam);
     }
   }
 }

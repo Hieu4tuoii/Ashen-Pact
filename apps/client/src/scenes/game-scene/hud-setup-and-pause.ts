@@ -11,6 +11,7 @@ import { TextureBaker } from '../../art/texture-baker.js';
 import { musicManager } from '../../audio/music-synth.js';
 import { zzfx } from '../../audio/zzfx.js';
 import { isEffectiveDebugUiEnabled } from '../../core/debug-flag.js';
+import { flushSceneInteractiveContainer } from '../../core/software-gl.js';
 import { drawStyledPanel } from '../../ui/components/hud-primitives.js';
 import { initGlobalDebugState } from '../../ui/debug-overlay.js';
 import { clampUiScale, graphicsSettings } from '../../ui/graphics-settings.js';
@@ -721,6 +722,7 @@ export function togglePauseModalImpl(this: GameScene, forceState?: boolean): voi
   if (!next) {
     this.pauseContainer.removeAll(true);
     this.pauseContainer.setVisible(false);
+    (this.uiScene?.input as unknown as { preUpdate?: () => void })?.preUpdate?.();
   } else {
     this.rebuildPauseModal();
   }
@@ -731,6 +733,7 @@ export function rebuildPauseModalImpl(this: GameScene): void {
   this.pauseContainer.removeAll(true);
   if (!this.pauseModalOpen) {
     this.pauseContainer.setVisible(false);
+    (ui.input as unknown as { preUpdate?: () => void })?.preUpdate?.();
     return;
   }
   this.pauseContainer.setVisible(true);
@@ -980,4 +983,5 @@ export function rebuildPauseModalImpl(this: GameScene): void {
       },
     );
   }
+  flushSceneInteractiveContainer(ui, this.pauseContainer);
 }

@@ -3,6 +3,7 @@ import type Phaser from 'phaser';
 import { hexToNum, PALETTE } from '../art/palette.js';
 import { TextureBaker } from '../art/texture-baker.js';
 import { zzfx } from '../audio/zzfx.js';
+import { flushSceneInteractiveContainer } from '../core/software-gl.js';
 import {
   drawKeyChip,
   drawSegmentedBar,
@@ -169,6 +170,7 @@ export class ModalOverlayManager {
     this.container.removeAll(true);
     this.textObjects = [];
     this.container.setVisible(false);
+    (this.scene.input as unknown as { preUpdate?: () => void })?.preUpdate?.();
   }
 
   public refreshResolution(scale: number): void {
@@ -193,6 +195,7 @@ export class ModalOverlayManager {
     this.textObjects = [];
     if (this.activeModal === 'none') {
       this.container.setVisible(false);
+      (this.scene.input as unknown as { preUpdate?: () => void })?.preUpdate?.();
       return;
     }
     this.container.setVisible(true);
@@ -210,6 +213,7 @@ export class ModalOverlayManager {
     } else if (this.activeModal === 'credits') {
       this.buildCreditsModal(textRes);
     }
+    flushSceneInteractiveContainer(this.scene, this.container);
   }
 
   private buildTabbedSettingsModal(textRes: number): void {
