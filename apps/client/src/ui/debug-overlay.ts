@@ -10,6 +10,7 @@ import {
 } from '../core/debug-flag.js';
 import { getVisualQueryConfig } from '../core/visual-query.js';
 import { type GraphicsQualityTier, graphicsSettings } from './graphics-settings.js';
+import type { KeybindActionId } from './keybindings.js';
 
 export interface GameDebugState {
   fps: number;
@@ -135,6 +136,7 @@ export interface GameDebugState {
   invitePanelVisible: boolean;
   pauseConfirmExitOpen: boolean;
   settingsActiveTab: string;
+  rebindingAction: KeybindActionId | null;
   lastDebugRejected: string | null;
   errors: string[];
   warnings: string[];
@@ -293,6 +295,7 @@ export function initGlobalDebugState(): GameDebugState {
     invitePanelVisible: false,
     pauseConfirmExitOpen: false,
     settingsActiveTab: 'audio',
+    rebindingAction: null,
     lastDebugRejected: null,
     errors: [],
     warnings: [],

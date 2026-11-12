@@ -1,4 +1,13 @@
 import { clamp, i18n, type SupportedLocale } from '@ashen-pact/shared';
+import {
+  applyKeybindingChange,
+  DEFAULT_KEYBINDINGS,
+  getActionDisplayLabel,
+  type KeybindActionId,
+  type KeybindingsMap,
+  type KeybindUpdateResult,
+  sanitizeKeybindings,
+} from './keybindings.js';
 
 export type GraphicsQualityTier = 'high' | 'medium' | 'low';
 
@@ -59,6 +68,7 @@ export interface GraphicsSettingsState {
   language: SupportedLocale;
   uiScale: number;
   showKeyHints: boolean;
+  keybindings: KeybindingsMap;
 }
 
 export const DEFAULT_GRAPHICS_SETTINGS: GraphicsSettingsState = {
@@ -74,6 +84,7 @@ export const DEFAULT_GRAPHICS_SETTINGS: GraphicsSettingsState = {
   language: 'vi',
   uiScale: 1.0,
   showKeyHints: true,
+  keybindings: { ...DEFAULT_KEYBINDINGS },
 };
 
 export function clampUiScale(val: number): number {
@@ -120,7 +131,10 @@ const STORAGE_KEY = 'ashen_pact_graphics_settings';
  * and automatic quality step-down when sustained FPS drops below threshold.
  */
 export class GraphicsSettingsManager {
-  private state: GraphicsSettingsState = { ...DEFAULT_GRAPHICS_SETTINGS };
+  private state: GraphicsSettingsState = {
+    ...DEFAULT_GRAPHICS_SETTINGS,
+    keybindings: { ...DEFAULT_KEYBINDINGS },
+  };
 
   private lowFpsAccumSec = 0;
   private downgradeCooldownSec = 0;
@@ -253,6 +267,39 @@ export class GraphicsSettingsManager {
     this.notify();
   }
 
+  public getKeybindings(): Readonly<KeybindingsMap> {
+    return this.state.keybindings;
+  }
+
+  public getActionKeyLabel(action: KeybindActionId): string {
+    return getActionDisplayLabel(action, this.state.keybindings);
+  }
+
+  public setKeybinding(action: KeybindActionId, code: string): KeybindUpdateResult {
+    const result = applyKeybindingChange(this.state.keybindings, action, code);
+    if (!result.ok) {
+      return result;
+    }
+    if (result.changed) {
+      this.state = {
+        ...this.state,
+        keybindings: { ...result.keybindings },
+      };
+      this.saveToStorage();
+      this.notify();
+    }
+    return result;
+  }
+
+  public resetKeybindings(): void {
+    this.state = {
+      ...this.state,
+      keybindings: { ...DEFAULT_KEYBINDINGS },
+    };
+    this.saveToStorage();
+    this.notify();
+  }
+
   public applyUrlQueryOverrides(search?: string): void {
     const rawSearch =
       search ?? (typeof window !== 'undefined' && window.location ? window.location.search : '');
@@ -272,7 +319,10 @@ export class GraphicsSettingsManager {
   }
 
   public resetDefaults(): void {
-    this.state = { ...DEFAULT_GRAPHICS_SETTINGS };
+    this.state = {
+      ...DEFAULT_GRAPHICS_SETTINGS,
+      keybindings: { ...DEFAULT_KEYBINDINGS },
+    };
     i18n.setLocale(this.state.language);
     this.lowFpsAccumSec = 0;
     this.saveToStorage();
@@ -370,6 +420,7 @@ export class GraphicsSettingsManager {
       if (typeof parsed.showKeyHints === 'boolean') {
         this.state.showKeyHints = parsed.showKeyHints;
       }
+      this.state.keybindings = sanitizeKeybindings(parsed.keybindings);
     } catch {
       // Ignore storage read errors in restricted contexts
     }

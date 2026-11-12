@@ -174,7 +174,28 @@
       "emote": "Hold T (+ Mouse or 1-4) : Open quick team Emote Wheel",
       "pause": "Esc : Pause & Settings",
       "reactionsTip": "⚡ 6 Elemental Reactions: Vaporize (Burn+Chill), Shatter (Frozen+Heavy Hit), Superconduct (Shock+Chill), Toxic Blast (Burn+Poison), Paralysis (Shock+Poison), Overload (Burn+Shock). 2-player cross-trigger = Elemental Convergence (+20% move & fire speed for 3.0s, instant reload/vent)!",
-      "close": "Close Guide [Esc]"
+      "close": "Close Guide [Esc]",
+      "rebindHint": "Click any action slot to rebind · LMB: Aim & Auto-fire · RMB: Active Skill",
+      "listeningPrompt": "Press a new key for \"{action}\"... or press [Esc] to cancel",
+      "swappedNotice": "Bound [{key}] to {action} (swapped with {otherAction})",
+      "reservedNotice": "Key [{key}] is reserved by the system — press another key ([Esc] to cancel)",
+      "cancelledNotice": "Key rebind cancelled — previous binding kept",
+      "actions": {
+        "moveUp": "Move Up",
+        "moveDown": "Move Down",
+        "moveLeft": "Move Left",
+        "moveRight": "Move Right",
+        "skill": "Active Skill (+RMB)",
+        "dash": "Dash (i-frames)",
+        "interact": "Interact / Loot / Revive",
+        "swapWeapon": "Swap Weapon (+Wheel)",
+        "reload": "Reload / Vent Heat",
+        "dropWeapon": "Drop / Salvage Weapon",
+        "toggleMap": "Dungeon Map",
+        "ping": "Team Ping (+MMB)",
+        "emote": "Emote Wheel (Hold)",
+        "coopPanel": "Co-op Guild Panel"
+      }
     },
     "credits": {
       "title": "PROJECT CREDITS — ASHEN PACT",

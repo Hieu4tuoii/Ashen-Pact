@@ -174,7 +174,28 @@
       "emote": "Giữ T (+ Chuột hoặc 1-4) : Mở vòng biểu cảm nhanh cùng đồng đội",
       "pause": "Esc : Tạm Dừng & Cài Đặt",
       "reactionsTip": "⚡ 6 Phản Ứng Nguyên Tố: Hơi Nước (Lửa+Băng), Vỡ Băng (Đóng Băng+Đòn nặng), Siêu Dẫn (Sét+Băng), Nổ Độc (Lửa+Độc), Tê Liệt (Sét+Độc), Quá Tải (Lửa+Sét). Phối hợp 2 người = Hội Tụ Nguyên Tố (+20% tốc chạy & tốc bắn 3.0s, nạp đầy đạn/xả nhiệt tức thì)!",
-      "close": "Đóng Hướng Dẫn [Esc]"
+      "close": "Đóng Hướng Dẫn [Esc]",
+      "rebindHint": "Nhấp vào ô hành động để đổi phím · Chuột Trái: Ngắm & Bắn · Chuột Phải: Kỹ năng",
+      "listeningPrompt": "Đang chờ phím mới cho «{action}»... Nhấn phím bất kỳ hoặc [Esc] để hủy",
+      "swappedNotice": "Đã gán [{key}] cho {action} (hoán đổi phím với {otherAction})",
+      "reservedNotice": "Phím [{key}] là phím hệ thống cố định — hãy chọn phím khác ([Esc] để hủy)",
+      "cancelledNotice": "Đã hủy đổi phím — giữ nguyên thiết lập hiện tại",
+      "actions": {
+        "moveUp": "Di chuyển Lên",
+        "moveDown": "Di chuyển Xuống",
+        "moveLeft": "Di chuyển Trái",
+        "moveRight": "Di chuyển Phải",
+        "skill": "Kỹ năng chủ động (+RMB)",
+        "dash": "Lướt né đòn (Dash)",
+        "interact": "Tương tác / Nhặt / Cứu",
+        "swapWeapon": "Đổi vũ khí (+Con lăn)",
+        "reload": "Nạp đạn / Xả nhiệt",
+        "dropWeapon": "Thả / Phân rã vũ khí",
+        "toggleMap": "Bản đồ Hầm ngục",
+        "ping": "Ping đồng đội (+MMB)",
+        "emote": "Vòng biểu cảm (Giữ)",
+        "coopPanel": "Bảng Tổ Đội Co-op"
+      }
     },
     "credits": {
       "title": "THÔNG TIN DỰ ÁN — ASHEN PACT",
