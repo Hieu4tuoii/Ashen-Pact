@@ -1,7 +1,15 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { expect, test } from '@playwright/test';
 
+const PLAYWRIGHT_OUT_DIR = path.resolve(process.cwd(), 'output/playwright');
+
+test.beforeAll(() => {
+  fs.mkdirSync(PLAYWRIGHT_OUT_DIR, { recursive: true });
+});
+
 test.describe('Phase P9b — Menus, Hub Invite Panel, Modals, Pause Confirm & 4-Tab Settings', () => {
-  test('verifies Menu Name/IP typing & paste, 4-tab Settings with UI Scale & Key Hints persistence, Hub Co-op 2P collapsed/expanded Invite Panel without Kick overlap, Pause Exit Confirmation dialog, and Buff/Victory/Defeat modals in VI & EN', async ({
+  test('verifies Menu Name/IP typing & paste, 4-tab Settings with UI Scale, Key Hints & Custom Keybindings (capture, auto-swap, live Sanctuary input, restore defaults), Hub Co-op 2P Invite Panel, Pause Exit Confirmation, and Buff/Victory/Defeat modals', async ({
     page,
   }) => {
     test.setTimeout(90000);
@@ -149,12 +157,236 @@ test.describe('Phase P9b — Menus, Hub Invite Panel, Modals, Pause Confirm & 4-
     expect(await page.evaluate(() => window.__GAME_DEBUG__.settingsActiveTab)).toBe('controls');
     expect(await page.evaluate(() => window.__GAME_DEBUG__.controlsModalOpen)).toBe(true);
 
-    // Restore defaults (button at 534 * 2 = 1068, 466 * 2 = 932) and close Settings [Escape]
-    await page.mouse.click(1068, 932);
-    await page.waitForTimeout(80);
-    await page.keyboard.press('Escape');
-    await page.waitForFunction(() => window.__GAME_DEBUG__?.settingsModalOpen === false, null, {
+    const flushSoftwareGlFrame = async (): Promise<void> => {
+      await page.evaluate(
+        () =>
+          new Promise<void>((resolve) => {
+            const game = window.__PHASER_GAME__ as
+              | { __forceNextSoftwareRender?: boolean }
+              | undefined;
+            if (game) {
+              game.__forceNextSoftwareRender = true;
+            }
+            requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+          }),
+      );
+    };
+
+    // 2a. Click `interact` row (index = 6, col = 0, row = 3, design (324, 272) -> 1080p (648, 544)) -> listening state -> Escape cancels without closing modal
+    await page.mouse.click(648, 544);
+    await page.waitForFunction(() => window.__GAME_DEBUG__?.rebindingAction === 'interact', null, {
       timeout: 5000,
+    });
+    expect(await page.evaluate(() => window.__GAME_DEBUG__.rebindingAction)).toBe('interact');
+    await flushSoftwareGlFrame();
+    await page.screenshot({
+      path: path.join(PLAYWRIGHT_OUT_DIR, 'controls-rebind-listening-vi.png'),
+    });
+
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => window.__GAME_DEBUG__?.rebindingAction === null, null, {
+      timeout: 5000,
+    });
+    expect(await page.evaluate(() => window.__GAME_DEBUG__.rebindingAction)).toBeNull();
+    expect(await page.evaluate(() => window.__GAME_DEBUG__.controlsModalOpen)).toBe(true);
+    expect(await page.evaluate(() => window.__GAME_DEBUG__.settingsModalOpen)).toBe(true);
+
+    // 2b. Click `interact` row (648, 544) again and rebind to 'KeyF'
+    await page.mouse.click(648, 544);
+    await page.waitForFunction(() => window.__GAME_DEBUG__?.rebindingAction === 'interact', null, {
+      timeout: 5000,
+    });
+    await page.keyboard.press('KeyF');
+    await page.waitForFunction(() => window.__GAME_DEBUG__?.rebindingAction === null, null, {
+      timeout: 5000,
+    });
+    expect(await page.evaluate(() => window.__GAME_DEBUG__.rebindingAction)).toBeNull();
+    const afterInteractRebind = await page.evaluate(() => {
+      const raw = window.localStorage.getItem('ashen_pact_graphics_settings');
+      return raw ? (JSON.parse(raw) as { keybindings: Record<string, string> }) : null;
+    });
+    expect(afterInteractRebind).not.toBeNull();
+    expect(afterInteractRebind!.keybindings.interact).toBe('KeyF');
+
+    // 2c. Test conflict auto-swap: click `dash` row (index = 5, col = 1, row = 2, design (636, 241) -> 1080p (1272, 482)) and press 'KeyQ'
+    await page.mouse.click(1272, 482);
+    await page.waitForFunction(() => window.__GAME_DEBUG__?.rebindingAction === 'dash', null, {
+      timeout: 5000,
+    });
+    await page.keyboard.press('KeyQ');
+    await page.waitForFunction(() => window.__GAME_DEBUG__?.rebindingAction === null, null, {
+      timeout: 5000,
+    });
+    const afterDashSwap = await page.evaluate(() => {
+      const raw = window.localStorage.getItem('ashen_pact_graphics_settings');
+      return raw ? (JSON.parse(raw) as { keybindings: Record<string, string> }) : null;
+    });
+    expect(afterDashSwap).not.toBeNull();
+    expect(afterDashSwap!.keybindings.dash).toBe('KeyQ');
+    expect(afterDashSwap!.keybindings.swapWeapon).toBe('Shift');
+    await flushSoftwareGlFrame();
+    await page.screenshot({
+      path: path.join(PLAYWRIGHT_OUT_DIR, 'controls-rebind-swapped-vi.png'),
+    });
+
+    // 2d. Close Settings [Escape] and test live gameplay input in Sanctuary (old 'KeyE' inert, rebound 'KeyF' selects Ranger & Vanguard)
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(
+      () =>
+        window.__GAME_DEBUG__?.settingsModalOpen === false &&
+        window.__GAME_DEBUG__?.controlsModalOpen === false,
+      null,
+      { timeout: 5000 },
+    );
+    expect(await page.evaluate(() => window.__GAME_DEBUG__.playerCharacterId)).toBe('vanguard');
+
+    await page.evaluate(() => {
+      const sim = window.__GAME_TRANSPORT__!.getSim();
+      const rangerStatue =
+        sim.hubStatues.find((s) => s.characterId === 'ranger') ?? sim.hubStatues[1]!;
+      sim.player.x = rangerStatue.x;
+      sim.player.y = rangerStatue.y + 28;
+      sim.player.prevX = sim.player.x;
+      sim.player.prevY = sim.player.y;
+      sim.player.vx = 0;
+      sim.player.vy = 0;
+    });
+    await page.waitForFunction(
+      () => window.__GAME_DEBUG__?.hubPreviewCharacterId === 'ranger',
+      null,
+      { timeout: 5000 },
+    );
+
+    // Old 'KeyE' must NOT trigger interact
+    await page.keyboard.press('KeyE');
+    await page.waitForTimeout(150);
+    expect(await page.evaluate(() => window.__GAME_DEBUG__.playerCharacterId)).toBe('vanguard');
+
+    // Rebound 'KeyF' triggers live Hero Station selection -> 'ranger'
+    await page.keyboard.press('KeyF');
+    await page.waitForFunction(
+      () => window.__GAME_DEBUG__?.playerCharacterId === 'ranger',
+      null,
+      { timeout: 5000 },
+    );
+    expect(await page.evaluate(() => window.__GAME_DEBUG__.playerCharacterId)).toBe('ranger');
+
+    // Switch back to 'vanguard' via rebound 'KeyF' on Vanguard's station and restore P1 start position
+    await page.evaluate(() => {
+      const sim = window.__GAME_TRANSPORT__!.getSim();
+      const vanguardStatue =
+        sim.hubStatues.find((s) => s.characterId === 'vanguard') ?? sim.hubStatues[0]!;
+      sim.player.x = vanguardStatue.x;
+      sim.player.y = vanguardStatue.y + 28;
+      sim.player.prevX = sim.player.x;
+      sim.player.prevY = sim.player.y;
+      sim.player.vx = 0;
+      sim.player.vy = 0;
+    });
+    await page.waitForFunction(
+      () => window.__GAME_DEBUG__?.hubPreviewCharacterId === 'vanguard',
+      null,
+      { timeout: 5000 },
+    );
+    await page.keyboard.press('KeyF');
+    await page.waitForFunction(
+      () => window.__GAME_DEBUG__?.playerCharacterId === 'vanguard',
+      null,
+      { timeout: 5000 },
+    );
+    await page.evaluate(
+      (pos) => {
+        const sim = window.__GAME_TRANSPORT__!.getSim();
+        sim.player.x = pos.x;
+        sim.player.y = pos.y;
+        sim.player.prevX = pos.x;
+        sim.player.prevY = pos.y;
+        sim.player.vx = 0;
+        sim.player.vy = 0;
+      },
+      { x: startState.x, y: startState.y },
+    );
+    await page.waitForFunction(
+      (pos) =>
+        Math.abs((window.__GAME_DEBUG__?.playerX ?? 0) - pos.x) < 0.5 &&
+        Math.abs((window.__GAME_DEBUG__?.playerY ?? 0) - pos.y) < 0.5,
+      { x: startState.x, y: startState.y },
+      { timeout: 5000 },
+    );
+
+    // 2e. Reopen Controls [K], verify EN Controls layout at 1080p, click Restore Defaults (1068, 932), verify defaults restored, and close [Escape]
+    await page.keyboard.press('KeyK');
+    await page.waitForFunction(() => window.__GAME_DEBUG__?.controlsModalOpen === true, null, {
+      timeout: 5000,
+    });
+
+    // Switch to Tab 3 (Gameplay at 1116, 216), toggle Display Language to EN (Row 0 at 1270, 324), return to Tab 4 (Controls at 1426, 216) for EN visual audit
+    await page.mouse.click(1116, 216);
+    await page.waitForFunction(() => window.__GAME_DEBUG__?.settingsActiveTab === 'gameplay', null, {
+      timeout: 5000,
+    });
+    await page.mouse.click(1270, 324);
+    await page.waitForFunction(() => window.__GAME_DEBUG__?.language === 'en', null, {
+      timeout: 5000,
+    });
+    await page.mouse.click(1426, 216);
+    await page.waitForFunction(() => window.__GAME_DEBUG__?.controlsModalOpen === true, null, {
+      timeout: 5000,
+    });
+    await flushSoftwareGlFrame();
+    await page.screenshot({
+      path: path.join(PLAYWRIGHT_OUT_DIR, 'controls-rebind-en.png'),
+    });
+
+    // Click Restore Defaults (1068, 932) -> restores keybindings, uiScale, showKeyHints, and 'vi' locale
+    await page.mouse.click(1068, 932);
+    await page.waitForFunction(() => window.__GAME_DEBUG__?.language === 'vi', null, {
+      timeout: 5000,
+    });
+    const restoredSettings = await page.evaluate(() => {
+      const raw = window.localStorage.getItem('ashen_pact_graphics_settings');
+      return raw
+        ? (JSON.parse(raw) as {
+            uiScale: number;
+            showKeyHints: boolean;
+            language: string;
+            keybindings: Record<string, string>;
+          })
+        : null;
+    });
+    expect(restoredSettings).not.toBeNull();
+    expect(restoredSettings!.keybindings.interact).toBe('KeyE');
+    expect(restoredSettings!.keybindings.dash).toBe('Shift');
+    expect(restoredSettings!.keybindings.swapWeapon).toBe('KeyQ');
+    expect(restoredSettings!.uiScale).toBe(1);
+    expect(restoredSettings!.showKeyHints).toBe(true);
+    expect(restoredSettings!.language).toBe('vi');
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(
+      () =>
+        window.__GAME_DEBUG__?.controlsModalOpen === false &&
+        window.__GAME_DEBUG__?.settingsModalOpen === false,
+      null,
+      { timeout: 5000 },
+    );
+
+    const postControlsState = await page.evaluate(() => ({
+      playerCharacterId: window.__GAME_DEBUG__.playerCharacterId,
+      x: window.__GAME_DEBUG__.playerX,
+      y: window.__GAME_DEBUG__.playerY,
+      settingsModalOpen: window.__GAME_DEBUG__.settingsModalOpen,
+      controlsModalOpen: window.__GAME_DEBUG__.controlsModalOpen,
+      rebindingAction: window.__GAME_DEBUG__.rebindingAction,
+      language: window.__GAME_DEBUG__.language,
+    }));
+    expect(postControlsState).toEqual({
+      playerCharacterId: 'vanguard',
+      x: startState.x,
+      y: startState.y,
+      settingsModalOpen: false,
+      controlsModalOpen: false,
+      rebindingAction: null,
+      language: startState.language,
     });
 
     // 3. Hub Co-op 2P in Sanctuary: switch scene coopMode to 'host' with 2 players, verify Invite Panel collapsed, expand with [I], verify no overlap with "Đuổi"
