@@ -82,16 +82,26 @@ function createSceneKeybindRuntime(scene: GameScene): SceneKeybindRuntime {
         if (scene.menuActiveInput !== null || initGlobalDebugState().rebindingAction !== null) {
           return;
         }
-        scene.interactQueued = true;
+        if (scene.pauseModalOpen || (scene.settingsModal?.isOpen() ?? false)) return;
         const sim = scene.transport.getSim();
-        if (sim.runState === 'victory' && sim.currentFloor < 6 && !scene.resultDismissed) {
-          scene.resultDismissed = true;
-          sim.campaignMaxFloors = 6;
-          sim.runState = 'playing';
-          if (scene.room && scene.coopMode !== 'solo') {
-            scene.room.send('continue_campaign', {});
+        if (sim.runState === 'victory') {
+          const interactBinding = graphicsSettings.getKeybindings().interact;
+          if (interactBinding === 'KeyH' || interactBinding === 'KeyM') {
+            return;
           }
-        } else if (
+          scene.interactQueued = true;
+          if (sim.currentFloor < 6 && !scene.resultDismissed) {
+            scene.resultDismissed = true;
+            sim.campaignMaxFloors = 6;
+            sim.runState = 'playing';
+            if (scene.room && scene.coopMode !== 'solo') {
+              scene.room.send('continue_campaign', {});
+            }
+          }
+          return;
+        }
+        scene.interactQueued = true;
+        if (
           scene.room &&
           scene.coopMode !== 'solo' &&
           sim.inHub &&
@@ -126,6 +136,7 @@ function createSceneKeybindRuntime(scene: GameScene): SceneKeybindRuntime {
         if (scene.menuActiveInput !== null || initGlobalDebugState().rebindingAction !== null) {
           return;
         }
+        if (scene.pauseModalOpen || (scene.settingsModal?.isOpen() ?? false)) return;
         scene.reloadVentQueued = true;
         const domEvent = event ?? keyObj?.originalEvent;
         if ((domEvent?.altKey || keyObj?.altKey) && domEvent !== lastAltREvent) {
@@ -137,6 +148,7 @@ function createSceneKeybindRuntime(scene: GameScene): SceneKeybindRuntime {
         if (scene.menuActiveInput !== null || initGlobalDebugState().rebindingAction !== null) {
           return;
         }
+        if (scene.pauseModalOpen || (scene.settingsModal?.isOpen() ?? false)) return;
         scene.fullMapOpen = !scene.fullMapOpen;
         initGlobalDebugState().fullMapOpen = scene.fullMapOpen;
       },
@@ -144,6 +156,7 @@ function createSceneKeybindRuntime(scene: GameScene): SceneKeybindRuntime {
         if (scene.menuActiveInput !== null || initGlobalDebugState().rebindingAction !== null) {
           return;
         }
+        if (scene.pauseModalOpen || (scene.settingsModal?.isOpen() ?? false)) return;
         scene.invitePanelVisible = !scene.invitePanelVisible;
         initGlobalDebugState().invitePanelVisible = scene.invitePanelVisible;
         scene.lastInvitePanelHash = '';
@@ -196,6 +209,12 @@ export function syncSceneKeybindings(scene: GameScene): void {
   const runtime = getOrCreateSceneKeybindRuntime(scene);
   const bindings = graphicsSettings.getKeybindings();
 
+  if (scene.emoteWheelOpen) {
+    scene.emoteWheelOpen = false;
+    scene.emoteWheelHoveredId = null;
+    initGlobalDebugState().emoteWheelOpen = false;
+  }
+
   for (const prev of runtime.boundEntries) {
     if (prev.onDown) {
       prev.keyObj.off('down', prev.onDown);
@@ -223,11 +242,7 @@ export function syncSceneKeybindings(scene: GameScene): void {
     const keyCode = getKeyCodeForBinding(code);
     const capture = shouldCaptureBrowserKey(code);
     const keyObj = kb.addKey(keyCode, capture);
-    if (
-      capture &&
-      scene.menuActiveInput === null &&
-      typeof (kb as { addCapture?: unknown }).addCapture === 'function'
-    ) {
+    if (capture && typeof (kb as { addCapture?: unknown }).addCapture === 'function') {
       kb.addCapture(keyCode);
     }
     if (onDown) {

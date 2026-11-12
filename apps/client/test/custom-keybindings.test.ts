@@ -26,7 +26,9 @@ vi.mock('phaser', () => {
   return { default: PhaserMock, ...PhaserMock };
 });
 
+import { zzfx } from '../src/audio/zzfx.js';
 import type { GameScene } from '../src/scenes/GameScene.js';
+import { updateHubInvitePanelImpl } from '../src/scenes/game-scene/hud-hub-and-cards.js';
 import { formatWeaponCadenceHudLabel } from '../src/scenes/game-scene/hud-micro-reload-bar.js';
 import { computeWeaponSalvageHudState } from '../src/scenes/game-scene/hud-pact-and-forge-modals.js';
 import {
@@ -646,13 +648,19 @@ function createCaptureFakeWindow() {
     dispatchEvent: vi.fn(),
   };
 
-  const dispatchKeydown = (init: { code?: string; key?: string; cancelable?: boolean }) => {
+  const dispatchKeydown = (init: {
+    code?: string;
+    key?: string;
+    repeat?: boolean;
+    cancelable?: boolean;
+  }) => {
     let defaultPrevented = false;
     let immediateStopped = false;
     const ev = {
       type: 'keydown',
       code: init.code ?? '',
       key: init.key ?? '',
+      repeat: init.repeat ?? false,
       cancelable: init.cancelable ?? true,
       get defaultPrevented() {
         return defaultPrevented;
@@ -1128,4 +1136,468 @@ describe('Customizable Keybindings — Task 2: Controls Tab UI, Live GameScene R
     expect(computeWeaponSalvageHudState(sim, sim.player, false).promptText).toContain('[B]');
   });
 });
+
+describe('Customizable Keybindings — Final-Review Fix Wave: Modal/Victory Guards, Capture Repeat & Dynamic Co-op Labels', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    graphicsSettings.resetDefaults();
+    const dbg = initGlobalDebugState();
+    dbg.rebindingAction = null;
+    dbg.emoteWheelOpen = false;
+    dbg.fullMapOpen = false;
+    dbg.invitePanelVisible = false;
+    i18n.setLocale('vi');
+  });
+
+  it('suppresses onToggleMapDown, onCoopPanelDown, onInteractDown (Co-op Sanctuary portal), and onReloadDown (Alt+reload cycleElement) while pauseModalOpen or settingsModal.isOpen() is true', () => {
+    const { windowObj } = createCaptureFakeWindow();
+    windowObj.location.search = '?debug=1';
+    vi.stubGlobal('window', windowObj);
+
+    const sim = new WorldSim({
+      seed: 'pause-modal-guards-test',
+      spawnInitialWave: false,
+      includeTrainingDummy: false,
+      includeProps: false,
+      autoRespawnWaves: false,
+    });
+    sim.enterHub();
+    sim.portalActive = true;
+    sim.player.x = sim.portalX;
+    sim.player.y = sim.portalY;
+    sim.player.ready = false;
+
+    const cycleElementSpy = vi.spyOn(sim, 'cycleImbueElement');
+    const roomSendSpy = vi.fn();
+    const { keyMap, plugin } = createMockKeyboardPlugin();
+
+    let settingsOpen = false;
+    const openModalSpy = vi.fn(() => {
+      settingsOpen = true;
+    });
+    const closeModalSpy = vi.fn(() => {
+      settingsOpen = false;
+    });
+    const togglePauseModalSpy = vi.fn();
+
+    const scene = {
+      coopMode: 'solo' as 'solo' | 'host',
+      room: { send: roomSendSpy },
+      menuActiveInput: null,
+      pauseModalOpen: false,
+      pauseConfirmExitOpen: false,
+      fullMapOpen: false,
+      emoteWheelOpen: false,
+      emoteWheelHoveredId: null,
+      invitePanelVisible: false,
+      resultDismissed: false,
+      dashQueued: false,
+      skillQueued: false,
+      wheelSwapQueued: false,
+      interactQueued: false,
+      reloadVentQueued: false,
+      dropWeaponQueued: false,
+      readyToggleQueued: false,
+      pingQueued: null,
+      queuedEmote: null,
+      queuedWeaponSlot: null,
+      lastShakeX: 0,
+      lastShakeY: 0,
+      lastInvitePanelHash: 'cached',
+      input: {
+        keyboard: plugin,
+        activePointer: { x: 240, y: 135 },
+      },
+      cameras: {
+        main: {
+          getWorldPoint: (x: number, y: number) => ({ x, y }),
+        },
+      },
+      transport: {
+        getSim: () => sim,
+        getLocalPlayerState: () => sim.player,
+      },
+      settingsModal: {
+        isOpen: () => settingsOpen,
+        open: openModalSpy,
+        close: closeModalSpy,
+      },
+      invalidateAllHudCaches: vi.fn(),
+      togglePauseModal: togglePauseModalSpy,
+      rebuildPauseModal: vi.fn(),
+      openPauseConfirmExit: vi.fn(),
+      triggerIrisTransition: vi.fn(),
+    } as unknown as GameScene;
+
+    setupKeyboardBindingsImpl.call(scene);
+
+    // Bind toggleMap to 'KeyO' to test Pause '[O]' -> Esc unpause trap directly
+    graphicsSettings.setKeybinding('toggleMap', 'KeyO');
+    syncSceneKeybindings(scene);
+
+    // 1. Paused: pressing '[O]' opens Settings without toggling fullMapOpen underneath, so 2nd Esc unpauses cleanly
+    scene.pauseModalOpen = true;
+    settingsOpen = false;
+    keyMap.get(getKeyCodeForBinding('KeyO'))!.emitDown();
+    plugin.emit('keydown-O');
+    expect(openModalSpy).toHaveBeenCalledWith('settings');
+    expect(scene.fullMapOpen).toBe(false);
+
+    // First Esc closes Settings; second Esc unpauses instead of getting swallowed by fullMapOpen
+    plugin.emit('keydown-ESC');
+    expect(closeModalSpy).toHaveBeenCalledTimes(1);
+    expect(togglePauseModalSpy).not.toHaveBeenCalled();
+    plugin.emit('keydown-ESC');
+    expect(togglePauseModalSpy).toHaveBeenCalledTimes(1);
+
+    // 2. Check all 4 handlers are suppressed both when pauseModalOpen === true and when settingsModal.isOpen() === true
+    for (const modalState of [
+      { pauseModalOpen: true, settingsModalOpen: false },
+      { pauseModalOpen: false, settingsModalOpen: true },
+    ]) {
+      scene.pauseModalOpen = modalState.pauseModalOpen;
+      settingsOpen = modalState.settingsModalOpen;
+      scene.fullMapOpen = false;
+      scene.invitePanelVisible = false;
+      scene.interactQueued = false;
+      scene.reloadVentQueued = false;
+      sim.player.ready = false;
+      roomSendSpy.mockClear();
+      cycleElementSpy.mockClear();
+
+      // onToggleMapDown
+      keyMap.get(getKeyCodeForBinding('KeyO'))!.emitDown();
+      expect(scene.fullMapOpen).toBe(false);
+
+      // onCoopPanelDown
+      keyMap.get(getKeyCodeForBinding('KeyI'))!.emitDown();
+      expect(scene.invitePanelVisible).toBe(false);
+
+      // onReloadDown (Alt+reload in solo debug mode)
+      scene.coopMode = 'solo';
+      keyMap.get(getKeyCodeForBinding('KeyR'))!.emitDown({ altKey: true });
+      expect(scene.reloadVentQueued).toBe(false);
+      expect(cycleElementSpy).not.toHaveBeenCalled();
+
+      // onInteractDown (Co-op Sanctuary portal within <= 76px)
+      scene.coopMode = 'host';
+      keyMap.get(getKeyCodeForBinding('KeyE'))!.emitDown();
+      expect(scene.interactQueued).toBe(false);
+      expect(sim.player.ready).toBe(false);
+      expect(roomSendSpy).not.toHaveBeenCalled();
+    }
+
+    // 3. Once both Pause and Settings are closed, action handlers work normally
+    scene.pauseModalOpen = false;
+    settingsOpen = false;
+    scene.coopMode = 'solo';
+    keyMap.get(getKeyCodeForBinding('KeyO'))!.emitDown();
+    expect(scene.fullMapOpen).toBe(true);
+    keyMap.get(getKeyCodeForBinding('KeyR'))!.emitDown({ altKey: true });
+    expect(scene.reloadVentQueued).toBe(true);
+    expect(cycleElementSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('yields Floor 3 Boss Victory [H] and [M] shortcuts when interact is bound to KeyH or KeyM while continuing campaign on other bindings', () => {
+    const { windowObj } = createCaptureFakeWindow();
+    vi.stubGlobal('window', windowObj);
+
+    const sim = new WorldSim({
+      seed: 'floor3-victory-shortcut-test',
+      spawnInitialWave: false,
+      includeTrainingDummy: false,
+      includeProps: false,
+      autoRespawnWaves: false,
+    });
+
+    const roomSendSpy = vi.fn();
+    const { keyMap, plugin } = createMockKeyboardPlugin();
+
+    const scene = {
+      coopMode: 'host' as 'solo' | 'host',
+      room: { send: roomSendSpy },
+      menuActiveInput: null,
+      pauseModalOpen: false,
+      pauseConfirmExitOpen: false,
+      fullMapOpen: false,
+      emoteWheelOpen: false,
+      emoteWheelHoveredId: null,
+      invitePanelVisible: false,
+      resultDismissed: false,
+      dashQueued: false,
+      skillQueued: false,
+      wheelSwapQueued: false,
+      interactQueued: false,
+      reloadVentQueued: false,
+      dropWeaponQueued: false,
+      readyToggleQueued: false,
+      pingQueued: null,
+      queuedEmote: null,
+      queuedWeaponSlot: null,
+      lastShakeX: 0,
+      lastShakeY: 0,
+      lastInvitePanelHash: 'cached',
+      input: {
+        keyboard: plugin,
+        activePointer: { x: 240, y: 135 },
+      },
+      cameras: {
+        main: {
+          getWorldPoint: (x: number, y: number) => ({ x, y }),
+        },
+      },
+      transport: {
+        getSim: () => sim,
+        getLocalPlayerState: () => sim.player,
+      },
+      settingsModal: {
+        isOpen: () => false,
+        open: vi.fn(),
+        close: vi.fn(),
+      },
+      invalidateAllHudCaches: vi.fn(),
+      togglePauseModal: vi.fn(),
+      rebuildPauseModal: vi.fn(),
+      openPauseConfirmExit: vi.fn(),
+      triggerIrisTransition: vi.fn(),
+    } as unknown as GameScene;
+
+    setupKeyboardBindingsImpl.call(scene);
+
+    const resetFloor3Victory = () => {
+      sim.inHub = false;
+      sim.currentFloor = 3;
+      sim.campaignMaxFloors = 3;
+      sim.runState = 'victory';
+      scene.resultDismissed = false;
+      scene.interactQueued = false;
+      roomSendSpy.mockClear();
+    };
+
+    // 1. interact = 'KeyH': onInteractDown yields so keydown-H returns to Hub cleanly
+    resetFloor3Victory();
+    graphicsSettings.setKeybinding('interact', 'KeyH');
+    syncSceneKeybindings(scene);
+
+    keyMap.get(getKeyCodeForBinding('KeyH'))!.emitDown();
+    expect(scene.resultDismissed).toBe(false);
+    expect(sim.runState).toBe('victory');
+    expect(sim.campaignMaxFloors).toBe(3);
+    expect(roomSendSpy).not.toHaveBeenCalled();
+
+    plugin.emit('keydown-H');
+    expect(roomSendSpy).toHaveBeenCalledWith('return_to_hub', {});
+    expect(sim.inHub).toBe(true);
+    expect(scene.resultDismissed).toBe(true);
+
+    // 2. interact = 'KeyM': onInteractDown yields without dismissing Victory or continuing campaign
+    resetFloor3Victory();
+    graphicsSettings.setKeybinding('interact', 'KeyM');
+    syncSceneKeybindings(scene);
+
+    keyMap.get(getKeyCodeForBinding('KeyM'))!.emitDown();
+    expect(scene.resultDismissed).toBe(false);
+    expect(sim.runState).toBe('victory');
+    expect(sim.campaignMaxFloors).toBe(3);
+    expect(roomSendSpy).not.toHaveBeenCalled();
+
+    // 3. interact = 'KeyF' and 'KeyE': continues campaign normally to Floor 6
+    for (const code of ['KeyF', 'KeyE'] as const) {
+      resetFloor3Victory();
+      graphicsSettings.setKeybinding('interact', code);
+      syncSceneKeybindings(scene);
+
+      keyMap.get(getKeyCodeForBinding(code))!.emitDown();
+      expect(scene.resultDismissed).toBe(true);
+      expect(sim.campaignMaxFloors).toBe(6);
+      expect(sim.runState).toBe('playing');
+      expect(roomSendSpy).toHaveBeenCalledWith('continue_campaign', {});
+    }
+  });
+
+  it('suppresses OS key-repeat ticks (event.repeat === true) during active Controls capture while preventing default and propagation', () => {
+    const { windowObj, dispatchKeydown } = createCaptureFakeWindow();
+    vi.stubGlobal('window', windowObj);
+    initGlobalDebugState();
+
+    const zzfxSpy = vi.spyOn(zzfx, 'play');
+    const { scene } = createModalMockScene();
+    const modal = new ModalOverlayManager(scene, vi.fn());
+    const bubbleKeydownSpy = vi.fn();
+    windowObj.addEventListener('keydown', bubbleKeydownSpy, false);
+
+    modal.open('controls');
+    modal.startRebinding('interact');
+
+    // First non-repeat reserved key triggers feedback rebuild + ui_hover sound once
+    const firstEv = dispatchKeydown({
+      code: 'Digit1',
+      key: '1',
+      repeat: false,
+      cancelable: true,
+    });
+    expect(firstEv.preventDefault).toHaveBeenCalledTimes(1);
+    expect(zzfxSpy).toHaveBeenCalledWith('ui_hover');
+
+    const rootContainer = (
+      scene.add.container as unknown as { mock: { results: Array<{ value: { removeAll: () => void } }> } }
+    ).mock.results[0]!.value;
+    const rebuildRemoveAllSpy = vi.spyOn(rootContainer, 'removeAll');
+    zzfxSpy.mockClear();
+
+    // Subsequent OS repeat tick on Digit1 prevents default & propagation without rebuilding or playing ui_hover
+    const repeatEv = dispatchKeydown({
+      code: 'Digit1',
+      key: '1',
+      repeat: true,
+      cancelable: true,
+    });
+    expect(repeatEv.preventDefault).toHaveBeenCalledTimes(1);
+    expect(repeatEv.stopImmediatePropagation).toHaveBeenCalledTimes(1);
+    expect(bubbleKeydownSpy).not.toHaveBeenCalled();
+    expect(modal.getRebindingAction()).toBe('interact');
+    expect(zzfxSpy).not.toHaveBeenCalled();
+    expect(rebuildRemoveAllSpy).not.toHaveBeenCalled();
+  });
+
+  it('resets emoteWheelOpen on syncSceneKeybindings and registers browser key captures regardless of menuActiveInput', () => {
+    const { windowObj } = createCaptureFakeWindow();
+    vi.stubGlobal('window', windowObj);
+
+    const sim = new WorldSim({
+      seed: 'emote-rebind-reset-test',
+      spawnInitialWave: false,
+      includeTrainingDummy: false,
+      includeProps: false,
+      autoRespawnWaves: false,
+    });
+    const { captures, plugin } = createMockKeyboardPlugin();
+
+    const scene = {
+      coopMode: 'solo',
+      menuActiveInput: 'name',
+      pauseModalOpen: false,
+      pauseConfirmExitOpen: false,
+      fullMapOpen: false,
+      emoteWheelOpen: true,
+      emoteWheelHoveredId: 2,
+      invitePanelVisible: false,
+      resultDismissed: false,
+      input: {
+        keyboard: plugin,
+        activePointer: { x: 240, y: 135 },
+      },
+      cameras: {
+        main: {
+          getWorldPoint: (x: number, y: number) => ({ x, y }),
+        },
+      },
+      transport: {
+        getSim: () => sim,
+        getLocalPlayerState: () => sim.player,
+      },
+      settingsModal: {
+        isOpen: () => false,
+        open: vi.fn(),
+        close: vi.fn(),
+      },
+    } as unknown as GameScene;
+
+    initGlobalDebugState().emoteWheelOpen = true;
+    // Simulate addKey returning an existing Key without auto-capturing so addCapture must be invoked directly
+    plugin.addKey.mockImplementation((keyCode: number) => {
+      return new MockPhaserKey(keyCode);
+    });
+    captures.clear();
+    plugin.addCapture.mockClear();
+
+    graphicsSettings.setKeybinding('emote', 'KeyY');
+    syncSceneKeybindings(scene);
+
+    expect(scene.emoteWheelOpen).toBe(false);
+    expect(scene.emoteWheelHoveredId).toBeNull();
+    expect(initGlobalDebugState().emoteWheelOpen).toBe(false);
+    expect(captures.has(getKeyCodeForBinding('Space'))).toBe(true);
+    expect(captures.has(getKeyCodeForBinding('Tab'))).toBe(true);
+  });
+
+  it('replaces hardcoded [I] with dynamic coopPanel label in expanded Solo/Co-op Hub invite headers and coopStationPrompt', () => {
+    const { windowObj } = createCaptureFakeWindow();
+    vi.stubGlobal('window', windowObj);
+    initGlobalDebugState();
+
+    const sim = new WorldSim({
+      seed: 'coop-panel-dynamic-label-test',
+      spawnInitialWave: false,
+      includeTrainingDummy: false,
+      includeProps: false,
+      autoRespawnWaves: false,
+    });
+    sim.enterHub();
+    sim.player.x = 928;
+    sim.player.y = 380;
+    const coopTarget = findInteractTarget(sim, sim.player.id);
+    expect(coopTarget?.kind).toBe('hub_station');
+
+    graphicsSettings.setKeybinding('coopPanel', 'KeyP');
+
+    // 1. coopStationPrompt in VI and EN replaces trailing [I] with [P]
+    i18n.setLocale('vi');
+    const specVi = resolveInteractPromptSpec(sim, coopTarget);
+    expect(specVi?.titleText).toContain('[P]');
+    expect(specVi?.titleText).not.toContain('[I]');
+
+    i18n.setLocale('en');
+    const specEn = resolveInteractPromptSpec(sim, coopTarget);
+    expect(specEn?.titleText).toContain('[P]');
+    expect(specEn?.titleText).not.toContain('[I]');
+
+    // 2. Expanded Solo & Co-op Hub invite panels replace [I] with [P] in header titles
+    const { scene: uiScene, collectVisibleTexts } = createModalMockScene();
+    (uiScene.cameras.main as unknown as { zoom: number }).zoom = 2;
+    const invitePanelContainer = uiScene.add.container(0, 0);
+
+    const hudScene = {
+      uiScene,
+      invitePanelContainer,
+      coopMode: 'solo' as 'solo' | 'host',
+      invitePanelVisible: true,
+      displayName: 'AshenHero',
+      serverHostPort: '127.0.0.1:2567',
+      menuActiveInput: null,
+      primaryLanIp: '192.168.1.20',
+      serverPort: 2567,
+      hostInviteUrl: 'http://192.168.1.20:2567/?join=room1',
+      copyToastTimer: 0,
+      currentHudUiScale: 1,
+      lastInvitePanelHash: '',
+      fullMapOpen: false,
+      transport: {
+        getSim: () => sim,
+      },
+    } as unknown as GameScene;
+
+    for (const locale of ['vi', 'en'] as const) {
+      i18n.setLocale(locale);
+
+      hudScene.coopMode = 'solo';
+      hudScene.lastInvitePanelHash = '';
+      updateHubInvitePanelImpl.call(hudScene);
+      const soloTexts = collectVisibleTexts();
+      expect(soloTexts.some((t) => t.includes('[P]') && !t.startsWith('Hide') && !t.startsWith('Ẩn'))).toBe(
+        true,
+      );
+      expect(soloTexts.some((t) => t.includes('[I]'))).toBe(false);
+
+      hudScene.coopMode = 'host';
+      hudScene.lastInvitePanelHash = '';
+      updateHubInvitePanelImpl.call(hudScene);
+      const coopTexts = collectVisibleTexts();
+      expect(coopTexts.some((t) => t.includes('[P]') && t.includes('/4'))).toBe(true);
+      expect(coopTexts.some((t) => t.includes('[I]'))).toBe(false);
+    }
+  });
+});
+
 

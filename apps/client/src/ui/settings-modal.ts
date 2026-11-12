@@ -262,6 +262,7 @@ export class ModalOverlayManager {
     }
     event.preventDefault();
     event.stopImmediatePropagation();
+    if (event.repeat) return;
 
     const action = this.rebindingAction;
     const res = normalizeKeyEventToBindingCode(event);

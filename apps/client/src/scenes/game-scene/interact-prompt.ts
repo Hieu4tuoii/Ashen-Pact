@@ -262,7 +262,11 @@ export function resolveInteractPromptSpec(
       } finally {
         if (prevLoc !== locale) i18n.setLocale(prevLoc);
       }
-      const titleText = stripLeadingKeyTag(rawPrompt);
+      const coopPanelLabel = graphicsSettings.getActionKeyLabel('coopPanel');
+      const strippedPrompt = stripLeadingKeyTag(rawPrompt);
+      const titleText = isCoopBoard
+        ? strippedPrompt.replace(/\[I\]/g, `[${coopPanelLabel}]`)
+        : strippedPrompt;
       return {
         key: target.key,
         kind: 'hub_station',

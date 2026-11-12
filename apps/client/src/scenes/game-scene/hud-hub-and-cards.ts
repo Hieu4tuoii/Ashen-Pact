@@ -178,7 +178,7 @@ export function updateHubInvitePanelImpl(this: GameScene): void {
       .text(
         px + 12,
         py + 17,
-        i18n.t('ui.sanctuary.soloCoopTitle'),
+        i18n.t('ui.sanctuary.soloCoopTitle').replace(/\[I\]/g, `[${coopPanelLabel}]`),
         createUiTextStyle({
           fontPxAt1080p: 13.5,
           weight: 800,
@@ -547,7 +547,7 @@ export function updateHubInvitePanelImpl(this: GameScene): void {
   const header = ui.add.text(
     px + 10,
     py + 6,
-    `${i18n.t('ui.hud.coopInviteHeader')} · ${activeCount}/4`,
+    `${i18n.t('ui.hud.coopInviteHeader').replace(/\[I\]/g, `[${coopPanelLabel}]`)} · ${activeCount}/4`,
     createUiTextStyle({
       fontPxAt1080p: 12.5,
       weight: 800,
