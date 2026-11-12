@@ -426,7 +426,7 @@ test.describe('Phase 8 — Standalone Windows Release Package (v2.0.0), Real LAN
 
       const noDebugBaseUrl = `http://${hostInfo.primaryLanIp}:${hostInfo.port}`;
 
-      // 2. Verify Sanctuary Lobby in default release mode hides debug buttons/footer and redirects ?scene=gallery
+      // 2. Verify Sanctuary Lobby in default release mode hides debug overlay, test hooks, and Gallery/Anim debug pills, and redirects ?scene=gallery
       await page.goto(`${noDebugBaseUrl}/?scene=menu`);
       await page.waitForFunction(
         () =>
@@ -437,6 +437,48 @@ test.describe('Phase 8 — Standalone Windows Release Package (v2.0.0), Real LAN
         { timeout: 15000 },
       );
       await page.waitForTimeout(300);
+
+      const menuReleaseDebugCheck = await page.evaluate(() => ({
+        overlayVisible: window.__GAME_DEBUG__.overlayVisible,
+        godMode: window.__GAME_DEBUG__.godMode,
+        animState: window.__GAME_DEBUG__.animState,
+        hasPhaserGame: typeof window.__PHASER_GAME__ !== 'undefined',
+        hasTransport: typeof window.__GAME_TRANSPORT__ !== 'undefined',
+        hasCoopSend: typeof window.__GAME_COOP_SEND__ !== 'undefined',
+        hasStressTest: typeof window.__GAME_STRESS_TEST__ !== 'undefined',
+      }));
+      expect(menuReleaseDebugCheck).toEqual({
+        overlayVisible: false,
+        godMode: false,
+        animState: 'idle',
+        hasPhaserGame: false,
+        hasTransport: false,
+        hasCoopSend: false,
+        hasStressTest: false,
+      });
+
+      // Verify F1/F2 hotkeys and debug-only Gallery (1208, 108) / Anim (1288, 108) pill coordinates are inactive/hidden on /?scene=menu
+      await page.keyboard.press('F1');
+      await page.keyboard.press('F2');
+      await page.mouse.click(1208, 108);
+      await page.mouse.click(1288, 108);
+      await page.waitForTimeout(150);
+
+      const menuAfterDebugProbe = await page.evaluate(() => ({
+        scene: window.__GAME_DEBUG__.scene,
+        inHub: window.__GAME_DEBUG__.inHub,
+        overlayVisible: window.__GAME_DEBUG__.overlayVisible,
+        godMode: window.__GAME_DEBUG__.godMode,
+        animState: window.__GAME_DEBUG__.animState,
+      }));
+      expect(menuAfterDebugProbe).toEqual({
+        scene: 'GameScene',
+        inHub: true,
+        overlayVisible: false,
+        godMode: false,
+        animState: 'idle',
+      });
+
       await page.screenshot({
         path: path.join(POLISH_P1_AFTER_DIR, 'release-menu-no-debug.png'),
       });
@@ -449,6 +491,14 @@ test.describe('Phase 8 — Standalone Windows Release Package (v2.0.0), Real LAN
         null,
         { timeout: 10000 },
       );
+      const galleryRedirectCheck = await page.evaluate(() => ({
+        overlayVisible: window.__GAME_DEBUG__.overlayVisible,
+        hasPhaserGame: typeof window.__PHASER_GAME__ !== 'undefined',
+      }));
+      expect(galleryRedirectCheck).toEqual({
+        overlayVisible: false,
+        hasPhaserGame: false,
+      });
 
       // 3. Open Host Co-op Hub in default release mode (without ?debug=1)
       await page.goto(

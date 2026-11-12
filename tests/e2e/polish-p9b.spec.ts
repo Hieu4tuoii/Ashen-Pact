@@ -33,9 +33,10 @@ test.describe('Phase P9b — Menus, Hub Invite Panel, Modals, Pause Confirm & 4-
       timeout: 5000,
     });
 
-    const startPos = await page.evaluate(() => ({
+    const startState = await page.evaluate(() => ({
       x: window.__GAME_DEBUG__.playerX,
       y: window.__GAME_DEBUG__.playerY,
+      language: window.__GAME_DEBUG__.language,
     }));
 
     const nameInput = page.locator('[data-testid="menu-name-input"]');
@@ -43,11 +44,35 @@ test.describe('Phase P9b — Menus, Hub Invite Panel, Modals, Pause Confirm & 4-
     await expect(nameInput).toBeVisible();
     await expect(ipInput).toBeVisible();
 
-    // Focus Name input, select all, Backspace, exercise WASD/E/I + Space typing, then type + paste Vietnamese name
+    // Focus Name input, select all, Backspace, exercise full hotkey alphabet 'wasdeiokcl ' + Space typing without triggering modals, locale, drawer close, or movement
     await nameInput.click();
     await nameInput.selectText();
     await page.keyboard.press('Backspace');
-    await page.keyboard.type('wasdei ');
+    await page.keyboard.type('wasdeiokcl ');
+
+    const hotkeySuppressionCheck = await page.evaluate(() => ({
+      name: window.__GAME_DEBUG__.menuDisplayName,
+      invitePanelVisible: window.__GAME_DEBUG__.invitePanelVisible,
+      settingsModalOpen: window.__GAME_DEBUG__.settingsModalOpen,
+      controlsModalOpen: window.__GAME_DEBUG__.controlsModalOpen,
+      creditsModalOpen: window.__GAME_DEBUG__.creditsModalOpen,
+      pauseModalOpen: window.__GAME_DEBUG__.pauseModalOpen,
+      language: window.__GAME_DEBUG__.language,
+      x: window.__GAME_DEBUG__.playerX,
+      y: window.__GAME_DEBUG__.playerY,
+    }));
+    expect(hotkeySuppressionCheck).toEqual({
+      name: 'wasdeiokcl ',
+      invitePanelVisible: true,
+      settingsModalOpen: false,
+      controlsModalOpen: false,
+      creditsModalOpen: false,
+      pauseModalOpen: false,
+      language: startState.language,
+      x: startState.x,
+      y: startState.y,
+    });
+
     await nameInput.selectText();
     await page.keyboard.press('Backspace');
     await page.keyboard.type('Chiến ');
@@ -77,14 +102,16 @@ test.describe('Phase P9b — Menus, Hub Invite Panel, Modals, Pause Confirm & 4-
       y: window.__GAME_DEBUG__.playerY,
     }));
     expect(afterTyping.ip).toBe('192.168.1.88:2567');
-    expect(afterTyping.x).toBe(startPos.x);
-    expect(afterTyping.y).toBe(startPos.y);
+    expect(afterTyping.x).toBe(startState.x);
+    expect(afterTyping.y).toBe(startState.y);
 
-    // Close the Solo Co-op Guild Drawer with [I]
+    // Close the Solo Co-op Guild Drawer with [I] and verify DOM inputs hide immediately
     await page.keyboard.press('KeyI');
     await page.waitForFunction(() => window.__GAME_DEBUG__?.invitePanelVisible === false, null, {
       timeout: 5000,
     });
+    await expect(nameInput).toBeHidden();
+    await expect(ipInput).toBeHidden();
 
     // 2. Open 4-Tab Settings Modal [O] directly in Sanctuary, cycle 4 tabs, adjust UI Scale & Key Hints, verify localStorage
     await page.keyboard.press('o');
@@ -200,7 +227,29 @@ test.describe('Phase P9b — Menus, Hub Invite Panel, Modals, Pause Confirm & 4-
     expect(expandedOverlapCheck.hasKickBtn).toBe(true);
     expect(expandedOverlapCheck.nonOverlapping).toBe(true);
 
-    // 4. Verify Buff Choice Modal & Victory/Defeat Result Screen (no Dismiss button, no raw buff IDs)
+    // Switch back to Solo with Co-op Drawer open so inputs are visible, then enter combat (inHub === false) and verify DOM inputs hide
+    await page.evaluate(() => {
+      const gs = window.__PHASER_GAME__?.scene.getScene('GameScene') as
+        | {
+            coopMode?: 'solo' | 'host' | 'join';
+            invitePanelVisible?: boolean;
+            lastInvitePanelHash?: string;
+            updateHubInvitePanel?: () => void;
+          }
+        | undefined;
+      if (gs) {
+        gs.coopMode = 'solo';
+        gs.invitePanelVisible = true;
+        window.__GAME_DEBUG__.coopMode = 'solo';
+        window.__GAME_DEBUG__.invitePanelVisible = true;
+        gs.lastInvitePanelHash = '';
+        gs.updateHubInvitePanel?.();
+      }
+    });
+    await expect(nameInput).toBeVisible();
+    await expect(ipInput).toBeVisible();
+
+    // 4. Verify Buff Choice Modal & Victory/Defeat Result Screen (no Dismiss button, no raw buff IDs) and DOM inputs hidden in combat
     const modalAudit = await page.evaluate(() => {
       const sim = window.__GAME_TRANSPORT__!.getSim();
       sim.inHub = false;
@@ -214,10 +263,12 @@ test.describe('Phase P9b — Menus, Hub Invite Panel, Modals, Pause Confirm & 4-
 
       const gs = window.__PHASER_GAME__?.scene.getScene('GameScene') as
         | {
+            updateHubInvitePanel?: () => void;
             updateModalHud?: () => void;
             modalContainer?: { list?: Array<{ text?: string }> };
           }
         | undefined;
+      gs?.updateHubInvitePanel?.();
       gs?.updateModalHud?.();
       const buffTexts = (gs?.modalContainer?.list ?? [])
         .map((o) => o.text)
@@ -239,6 +290,12 @@ test.describe('Phase P9b — Menus, Hub Invite Panel, Modals, Pause Confirm & 4-
         victoryTexts,
       };
     });
+
+    await page.waitForFunction(() => window.__GAME_DEBUG__?.inHub === false, null, {
+      timeout: 5000,
+    });
+    await expect(nameInput).toBeHidden();
+    await expect(ipInput).toBeHidden();
 
     expect(modalAudit.buffTexts.some((t) => t.includes('Nhấn [1] Chọn'))).toBe(true);
     expect(modalAudit.victoryTexts.some((t) => t.includes('Chơi lại [Enter]'))).toBe(true);

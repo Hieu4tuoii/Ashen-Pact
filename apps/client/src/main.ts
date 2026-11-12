@@ -4,7 +4,7 @@ import '@fontsource/be-vietnam-pro/700.css';
 import '@fontsource/be-vietnam-pro/800.css';
 import Phaser from 'phaser';
 import { PALETTE } from './art/palette.js';
-import { installSoftwareGlSubstepper } from './core/software-gl.js';
+import { installSoftwareGlSubstepper, isHeadlessAutomation } from './core/software-gl.js';
 import { ArtGalleryScene } from './scenes/ArtGalleryScene.js';
 import { BootScene } from './scenes/BootScene.js';
 import { GameScene } from './scenes/GameScene.js';
@@ -35,4 +35,6 @@ const config: Phaser.Types.Core.GameConfig = {
 };
 
 export const game = new Phaser.Game(config);
-installSoftwareGlSubstepper(game);
+if (isHeadlessAutomation()) {
+  installSoftwareGlSubstepper(game);
+}

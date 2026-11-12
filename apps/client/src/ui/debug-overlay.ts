@@ -348,6 +348,7 @@ export class DebugOverlay {
   private readonly textObj: Phaser.GameObjects.Text;
   private readonly frameDeltaSamples: number[] = [];
   private warmupFrames = 0;
+  private consecutiveSlowFrames = 0;
   private onKeyDown?: (ev: KeyboardEvent) => void;
   private unsubDebugFlags?: () => void;
 
@@ -411,6 +412,7 @@ export class DebugOverlay {
   public resetSamples(): void {
     this.frameDeltaSamples.length = 0;
     this.warmupFrames = 0;
+    this.consecutiveSlowFrames = 0;
   }
 
   public destroy(): void {
@@ -441,13 +443,21 @@ export class DebugOverlay {
     const rawDelta = loop.delta > 0 ? loop.delta : 16.67;
 
     const isHidden = typeof document !== 'undefined' && document.hidden;
-    const isSoftwareGl = Boolean(
-      (this.scene.game as { __isSoftwareGl?: boolean } | undefined)?.__isSoftwareGl,
-    );
     this.warmupFrames += 1;
-    // Ignore scene-init/resize warmup frames, software-GL rasterizer frames, and background-throttled frames
-    if (!isHidden && !isSoftwareGl && this.warmupFrames > 10 && rawDelta < 45) {
-      this.frameDeltaSamples.push(rawDelta);
+    // Ignore scene-init/resize warmup frames and isolated single-frame tab/GC spikes,
+    // while recording sustained slow frame deltas so FPS and autoQuality stay honest on all devices.
+    if (!isHidden && this.warmupFrames > 10) {
+      if (rawDelta < 45) {
+        this.consecutiveSlowFrames = 0;
+        this.frameDeltaSamples.push(rawDelta);
+      } else if (rawDelta < 250) {
+        this.consecutiveSlowFrames += 1;
+        if (this.consecutiveSlowFrames >= 3 || this.frameDeltaSamples.length === 0) {
+          this.frameDeltaSamples.push(rawDelta);
+        }
+      } else if (this.frameDeltaSamples.length === 0 && this.warmupFrames > 15) {
+        this.frameDeltaSamples.push(250);
+      }
       if (this.frameDeltaSamples.length > 30) {
         this.frameDeltaSamples.shift();
       }
@@ -469,7 +479,7 @@ export class DebugOverlay {
       !state.stressTestActive &&
       !isHidden &&
       this.warmupFrames > 15 &&
-      rawDelta < 120
+      rawDelta < 250
     ) {
       graphicsSettings.updateAutoQualityMonitor(state.fps, Math.min(0.05, rawDelta / 1000));
     }

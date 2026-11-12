@@ -23,7 +23,6 @@ import { TextureBaker } from '../art/texture-baker.js';
 import { musicManager } from '../audio/music-synth.js';
 import { zzfx } from '../audio/zzfx.js';
 import { isDebugUiEnabled, isTestHooksEnabled } from '../core/debug-flag.js';
-import type { SoftwareGlGameFlags } from '../core/software-gl.js';
 import {
   getClientFreezeRandom,
   getFreezeVisualTimeSec,
@@ -751,29 +750,11 @@ export class GameScene extends Phaser.Scene {
         this.wasInHubLastFrame = false;
       }
 
-      const isBackgroundJoinSwSubstep =
-        this.coopMode === 'join' &&
-        (this.game as Phaser.Game & SoftwareGlGameFlags).__softwareLogicOnlyStep === true;
+      // 3. Sync dynamic map changes (room transitions, cracked walls destroyed, surface ignitions/electrifications/freezes)
+      this.syncArenaTilesWithMapRevision();
 
-      if (!isBackgroundJoinSwSubstep) {
-        // 3. Sync dynamic map changes (room transitions, cracked walls destroyed, surface ignitions/electrifications/freezes)
-        this.syncArenaTilesWithMapRevision();
-
-        // 4. Process Sim Events (SFX, Sparks, Damage Numbers, Decals, Chain Lightning, Hit-Stop, Screen Shake)
-        this.processSimEvents(this.transport.consumeEvents());
-      } else {
-        this.transport.consumeEvents();
-        const joinPlayerPos = this.transport.getInterpolatedPlayerPos(this.playerPosScratch);
-        this.updateCameraWithLookaheadAndShake(
-          joinPlayerPos.x,
-          joinPlayerPos.y,
-          unshakenWorldX,
-          unshakenWorldY,
-          dtSec,
-        );
-        this.updateDebugState(joinPlayerPos.x, joinPlayerPos.y);
-        return;
-      }
+      // 4. Process Sim Events (SFX, Sparks, Damage Numbers, Decals, Chain Lightning, Hit-Stop, Screen Shake)
+      this.processSimEvents(this.transport.consumeEvents());
     }
 
     // 4b. Trailing Damage Bars, Low-HP Heartbeat Warning & Dynamic Procedural Music

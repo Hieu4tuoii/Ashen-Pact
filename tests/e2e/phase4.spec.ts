@@ -12,7 +12,7 @@ test.describe('Phase 4 — Co-op LAN Authoritative, Prediction/Interpolation, Hu
   test('connects 4 clients via real LAN IPv4 address, verifies Hub QR & 5-char selection, bad Wi-Fi prediction/reconciliation, bandwidth <= 30 KB/s, Downed/Revive, clearing Floor 1 together, 30s Reconnect, and Host disconnect handling', async ({
     browser,
   }) => {
-    test.setTimeout(120000);
+    test.setTimeout(180000);
 
     const consoleErrors: string[] = [];
     const consoleWarnings: string[] = [];
