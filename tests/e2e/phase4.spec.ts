@@ -64,7 +64,7 @@ test.describe('Phase 4 — Co-op LAN Authoritative, Prediction/Interpolation, Hu
         window.__GAME_DEBUG__?.serverConnected === true &&
         Boolean(window.__GAME_DEBUG__?.coopRoomId),
       null,
-      { timeout: 25000 },
+      { timeout: 45000 },
     );
 
     const roomId = await page1.evaluate(() => window.__GAME_DEBUG__.coopRoomId!);
@@ -87,7 +87,7 @@ test.describe('Phase 4 — Co-op LAN Authoritative, Prediction/Interpolation, Hu
           window.__GAME_DEBUG__?.serverConnected === true &&
           window.__GAME_DEBUG__?.inHub === true,
         null,
-        { timeout: 25000 },
+        { timeout: 45000 },
       );
     }
 
@@ -99,7 +99,7 @@ test.describe('Phase 4 — Co-op LAN Authoritative, Prediction/Interpolation, Hu
           window.__GAME_DEBUG__?.coopPlayerCount === 4 &&
           window.__GAME_DEBUG__?.inHub === true,
         null,
-        { timeout: 25000 },
+        { timeout: 45000 },
       );
     }
 

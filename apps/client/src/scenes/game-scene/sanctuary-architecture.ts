@@ -652,6 +652,7 @@ const COL_COPPER_LIGHT = hexToNum(PALETTE.COPPER_LIGHT);
  *   threshold rune shimmer, East LAN beacon pulse, and South-East candle flicker driven by `visualTimeSec`.
  */
 export class SanctuaryVisualLayer {
+  private readonly scene: Phaser.Scene;
   private readonly floorGraphics: Phaser.GameObjects.Graphics;
   private readonly dynamicGraphics: Phaser.GameObjects.Graphics;
   private lastStaticKey = '';
@@ -659,6 +660,7 @@ export class SanctuaryVisualLayer {
   private isShowing = false;
 
   constructor(scene: Phaser.Scene) {
+    this.scene = scene;
     this.floorGraphics = scene.add.graphics().setDepth(6);
     this.dynamicGraphics = scene.add.graphics().setDepth(33);
     this.floorGraphics.setVisible(false);
@@ -694,6 +696,13 @@ export class SanctuaryVisualLayer {
       this.lastStaticKey = staticKey;
       this.cachedSpec = buildSanctuaryArchitectureSpec(mapW, mapH);
       this.drawStaticFloor(this.floorGraphics, this.cachedSpec);
+    }
+
+    if (
+      (this.scene.game as { __softwareLogicOnlyStep?: boolean } | undefined)
+        ?.__softwareLogicOnlyStep
+    ) {
+      return;
     }
 
     this.drawDynamicEffects(this.dynamicGraphics, this.cachedSpec, visualTimeSec);
