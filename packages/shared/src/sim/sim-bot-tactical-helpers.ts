@@ -675,7 +675,7 @@ export function stepBotOutOfCombatRoomActions(
     if (it.kind === 'weapon_upgrade') {
       return (p.weaponUpgradeLevels?.[p.activeWeaponSlot ?? 0] ?? 0) < 3;
     }
-    if (it.kind === 'armor_upgrade' || it.kind === 'blessing_scroll') {
+    if (it.kind === 'blessing_scroll') {
       return true;
     }
     if (it.kind === 'health_potion') {

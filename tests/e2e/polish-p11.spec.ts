@@ -70,6 +70,8 @@ test.describe('Phase P11 — Balance, Data-Driven Difficulty Levers, Boss Drama 
         challengeWavesTotal: challengeRoom?.wavesTotal ?? 0,
         challengeChestRarity: challengeRoom?.chestRarity ?? null,
         shopPrices,
+        shopOfferCount: merchantRoom?.shopOffers.length ?? 0,
+        shopWeaponCount: (merchantRoom?.shopOffers ?? []).filter((o) => o.kind === 'weapon').length,
       };
     });
 
@@ -79,9 +81,10 @@ test.describe('Phase P11 — Balance, Data-Driven Difficulty Levers, Boss Drama 
     expect(dungeonCheck!.hasChallengeRoom).toBe(true);
     expect(dungeonCheck!.challengeWavesTotal).toBe(3);
     expect(dungeonCheck!.challengeChestRarity).toBe('epic');
+    expect(dungeonCheck!.shopOfferCount).toBe(5);
+    expect(dungeonCheck!.shopWeaponCount).toBe(2);
     expect(dungeonCheck!.shopPrices.health_potion).toBe(32);
     expect(dungeonCheck!.shopPrices.weapon).toBe(55);
-    expect(dungeonCheck!.shopPrices.armor_upgrade).toBe(32);
     expect(dungeonCheck!.shopPrices.blessing_scroll).toBe(68);
     expect(dungeonCheck!.shopPrices.weapon_upgrade).toBe(75);
 

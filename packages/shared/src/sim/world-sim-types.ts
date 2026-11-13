@@ -387,7 +387,7 @@ export interface SimChestState {
 
 export interface SimWorldItemState {
   id: number;
-  kind: 'weapon' | 'health_potion' | 'armor_upgrade' | 'blessing_scroll' | 'weapon_upgrade';
+  kind: 'weapon' | 'health_potion' | 'blessing_scroll' | 'weapon_upgrade';
   weaponId?: string;
   rarity: WeaponRarity;
   nameVi: string;

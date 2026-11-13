@@ -435,7 +435,7 @@ export function populateRoomContentsImpl(this: WorldSim, room: DungeonRoomNode):
                   ? 'legendary'
                   : offer.kind === 'blessing_scroll'
                     ? 'epic'
-                    : offer.kind === 'armor_upgrade'
+                    : offer.kind === 'weapon'
                       ? 'rare'
                       : 'uncommon'),
               nameVi: offer.nameVi,
@@ -459,26 +459,25 @@ export function populateRoomContentsImpl(this: WorldSim, room: DungeonRoomNode):
             y: cy + 8,
           });
           const rareWepId = this.rollRandomWeaponByRarities(['uncommon', 'rare']);
-          const rareWep = WEAPONS[rareWepId]!;
-          this.spawnWorldItem({
-            kind: 'weapon',
-            weaponId: rareWep.id,
-            rarity: rareWep.rarity,
-            nameVi: rareWep.nameVi,
-            costGold: computeMerchantOfferCost(MERCHANT_BASE_PRICES.weapon, globalFloor),
-            healAmount: 0,
-            x: cx - 95,
-            y: cy + 28,
-          });
-          this.spawnWorldItem({
-            kind: 'armor_upgrade',
-            rarity: 'rare',
-            nameVi: 'Giáp Cổ Ngữ (+2 Giáp)',
-            costGold: computeMerchantOfferCost(MERCHANT_BASE_PRICES.armor_upgrade, globalFloor),
-            healAmount: 0,
-            x: cx,
-            y: cy + 40,
-          });
+          const altWepId = this.rollRandomWeaponByRarities(['uncommon', 'rare'], rareWepId);
+          const weaponCost = computeMerchantOfferCost(MERCHANT_BASE_PRICES.weapon, globalFloor);
+          const weaponPlacements: readonly [string, number, number][] = [
+            [rareWepId, cx - 95, cy + 28],
+            [altWepId, cx, cy + 40],
+          ];
+          for (const [wId, wx, wy] of weaponPlacements) {
+            const wep = WEAPONS[wId]!;
+            this.spawnWorldItem({
+              kind: 'weapon',
+              weaponId: wep.id,
+              rarity: wep.rarity,
+              nameVi: wep.nameVi,
+              costGold: weaponCost,
+              healAmount: 0,
+              x: wx,
+              y: wy,
+            });
+          }
           this.spawnWorldItem({
             kind: 'blessing_scroll',
             rarity: 'epic',

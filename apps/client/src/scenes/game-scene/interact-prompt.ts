@@ -177,19 +177,15 @@ export function resolveInteractPromptSpec(
             ? isEn
               ? `Health Potion (+${it.healAmount || 3} HP)`
               : it.nameVi
-            : it.kind === 'armor_upgrade'
+            : it.kind === 'blessing_scroll'
               ? isEn
-                ? 'Iron Armor Plate (+2 Max Armor)'
+                ? 'Action Blessing Scroll'
                 : it.nameVi
-              : it.kind === 'blessing_scroll'
+              : it.kind === 'weapon_upgrade'
                 ? isEn
-                  ? 'Action Blessing Scroll'
+                  ? 'Weapon Upgrade Stone (+1 Lv)'
                   : it.nameVi
-                : it.kind === 'weapon_upgrade'
-                  ? isEn
-                    ? 'Weapon Upgrade Stone (+1 Lv)'
-                    : it.nameVi
-                  : it.nameVi;
+                : it.nameVi;
       const costGold = Math.max(0, it.costGold ?? 0);
       const hasCoinIcon = costGold > 0;
       const goldUnit = isEn ? 'Gold' : i18n.t('ui.hud.gold');

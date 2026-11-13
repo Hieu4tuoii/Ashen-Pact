@@ -65,7 +65,6 @@ export interface DungeonWaveDef {
 
 export const MERCHANT_BASE_PRICES = {
   health_potion: 32,
-  armor_upgrade: 32,
   weapon: 55,
   blessing_scroll: 68,
   weapon_upgrade: 75,
@@ -78,7 +77,7 @@ export function computeMerchantOfferCost(baseCost: number, globalFloor: number):
 
 export interface ShopOfferDef {
   id: string;
-  kind: 'health_potion' | 'weapon' | 'armor_upgrade' | 'blessing_scroll' | 'weapon_upgrade';
+  kind: 'health_potion' | 'weapon' | 'blessing_scroll' | 'weapon_upgrade';
   nameVi: string;
   descriptionVi: string;
   costGold: number;
@@ -178,15 +177,25 @@ export function rollWeaponForRarity(
   rng: SeededRandom,
   targetRarity: WeaponRarity,
   biome: 1 | 2 | 3 = 1,
+  excludeWeaponId?: string,
 ): string {
   const poolIds = biome === 1 ? PHASE3_WEAPON_IDS : Object.keys(WEAPONS);
   const matching = poolIds
     .map((id) => WEAPONS[id]!)
-    .filter((w) => w && w.rarity === targetRarity && w.id !== 'knight_sword');
+    .filter(
+      (w) =>
+        w && w.rarity === targetRarity && w.id !== 'knight_sword' && w.id !== excludeWeaponId,
+    );
   if (matching.length > 0) {
     return rng.pick(matching).id;
   }
-  return 'tesla_carbine';
+  const fallback = poolIds
+    .map((id) => WEAPONS[id]!)
+    .filter((w) => w && w.id !== 'knight_sword' && w.id !== excludeWeaponId);
+  if (fallback.length > 0) {
+    return rng.pick(fallback).id;
+  }
+  return excludeWeaponId === 'tesla_carbine' ? 'gale_smg' : 'tesla_carbine';
 }
 
 /**
@@ -517,8 +526,23 @@ export function generateDungeonFloor(
       room.wavesTotal = 0;
       const globalFloor = (biome - 1) * 2 + localFloor;
       const shopRarity: WeaponRarity = localFloor === 2 ? 'epic' : 'rare';
+      const secondaryRarity: WeaponRarity = localFloor === 2 ? 'rare' : 'uncommon';
       const shopWeaponId = rollWeaponForRarity(rng, shopRarity, biome);
-      const wDef = WEAPONS[shopWeaponId]!;
+      const secondaryWeaponId = rollWeaponForRarity(rng, secondaryRarity, biome, shopWeaponId);
+      const weaponCost = computeMerchantOfferCost(MERCHANT_BASE_PRICES.weapon, globalFloor);
+      const createWeaponOffer = (idPrefix: string, weaponId: string): ShopOfferDef => {
+        const wDef = WEAPONS[weaponId]!;
+        return {
+          id: `${idPrefix}_${weaponId}`,
+          kind: 'weapon',
+          nameVi: wDef.nameVi,
+          descriptionVi: `Vũ khí ${wDef.rarity.toUpperCase()} · DMG ${wDef.damage}`,
+          costGold: weaponCost,
+          weaponId,
+          rarity: wDef.rarity,
+          purchased: false,
+        };
+      };
       room.shopOffers = [
         {
           id: 'offer_potion',
@@ -529,25 +553,8 @@ export function generateDungeonFloor(
           rarity: 'uncommon',
           purchased: false,
         },
-        {
-          id: `offer_weapon_${shopWeaponId}`,
-          kind: 'weapon',
-          nameVi: wDef.nameVi,
-          descriptionVi: `Vũ khí ${wDef.rarity.toUpperCase()} · DMG ${wDef.damage}`,
-          costGold: computeMerchantOfferCost(MERCHANT_BASE_PRICES.weapon, globalFloor),
-          weaponId: shopWeaponId,
-          rarity: shopRarity,
-          purchased: false,
-        },
-        {
-          id: 'offer_armor',
-          kind: 'armor_upgrade',
-          nameVi: 'Giáp Cổ Ngữ (+2 Giáp)',
-          descriptionVi: 'Tăng +2 Giáp tối đa và hồi đầy Giáp.',
-          costGold: computeMerchantOfferCost(MERCHANT_BASE_PRICES.armor_upgrade, globalFloor),
-          rarity: 'rare',
-          purchased: false,
-        },
+        createWeaponOffer('offer_weapon', shopWeaponId),
+        createWeaponOffer('offer_weapon_alt', secondaryWeaponId),
         {
           id: 'offer_blessing_scroll',
           kind: 'blessing_scroll',

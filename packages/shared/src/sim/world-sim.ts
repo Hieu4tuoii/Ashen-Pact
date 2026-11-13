@@ -484,7 +484,7 @@ export class WorldSim {
   public spawnNextRoomWave(): void  { return spawnNextRoomWaveImpl.call(this); }
   public onRoomCleared(room: DungeonRoomNode = this.getCurrentRoom()): void  { return onRoomClearedImpl.call(this, room); }
   public rollChestRarity(bonusTier = 0): WeaponRarity  { return rollChestRarityImpl.call(this, bonusTier); }
-  public rollRandomWeaponByRarities(allowedRarities: readonly WeaponRarity[]): string  { return rollRandomWeaponByRaritiesImpl.call(this, allowedRarities); }
+  public rollRandomWeaponByRarities(allowedRarities: readonly WeaponRarity[], excludeWeaponId?: string): string  { return rollRandomWeaponByRaritiesImpl.call(this, allowedRarities, excludeWeaponId); }
   public spawnChest(x: number, y: number, rarity: WeaponRarity, preselectedWeaponId?: string): SimChestState  { return spawnChestImpl.call(this, x, y, rarity, preselectedWeaponId); }
   public spawnWorldItem(init: Omit<SimWorldItemState, 'id' | 'radius' | 'pickedUp'>): SimWorldItemState  { return spawnWorldItemImpl.call(this, init); }
   public openChest(chest: SimChestState): boolean  { return openChestImpl.call(this, chest); }

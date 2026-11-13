@@ -788,15 +788,25 @@ export function rollChestRarityImpl(this: WorldSim, bonusTier = 0): WeaponRarity
   return 'common';
 }
 
-export function rollRandomWeaponByRaritiesImpl(this: WorldSim, allowedRarities: readonly WeaponRarity[]): string {
+export function rollRandomWeaponByRaritiesImpl(
+  this: WorldSim,
+  allowedRarities: readonly WeaponRarity[],
+  excludeWeaponId?: string,
+): string {
   const weaponPool =
     this.currentBiome === 1 && this.campaignMaxFloors === 2 ? PHASE3_WEAPON_IDS : ALL_WEAPON_IDS;
   const candidates = weaponPool.filter((id) => {
     const w = WEAPONS[id];
-    return w && allowedRarities.includes(w.rarity);
+    return w && allowedRarities.includes(w.rarity) && id !== excludeWeaponId;
   });
-  if (candidates.length === 0) return 'gale_smg';
-  return this.rng.pick(candidates);
+  if (candidates.length > 0) {
+    return this.rng.pick(candidates);
+  }
+  const fallback = weaponPool.filter((id) => WEAPONS[id] && id !== 'knight_sword' && id !== excludeWeaponId);
+  if (fallback.length > 0) {
+    return this.rng.pick(fallback);
+  }
+  return excludeWeaponId === 'gale_smg' ? 'tesla_carbine' : 'gale_smg';
 }
 
 export function spawnChestImpl(this: WorldSim,

@@ -125,21 +125,27 @@ describe('Phase B1 — Combat & Economy Balance Overhaul', () => {
       expect(goldTotal).toBeLessThanOrEqual(10);
     }
 
-    // 5. Merchant prices on Floor 1 vs Floor 2 (Spec Rev 4 Section 5.2.B)
+    // 5. Merchant prices on Floor 1 vs Floor 2 (5 offers including 2 distinct weapons, no armor_upgrade)
     const floor1 = generateDungeonFloor(4242, 1, 1, 1);
     const shop1 = floor1.rooms.find((r) => r.type === 'merchant')!;
+    expect(shop1.shopOffers).toHaveLength(5);
+    const shop1Weapons = shop1.shopOffers.filter((it) => it.kind === 'weapon');
+    expect(shop1Weapons).toHaveLength(2);
+    expect(shop1Weapons[0]!.weaponId).not.toBe(shop1Weapons[1]!.weaponId);
     const byKind1 = Object.fromEntries(shop1.shopOffers.map((it) => [it.kind, it.costGold]));
     expect(byKind1.health_potion).toBe(32);
-    expect(byKind1.armor_upgrade).toBe(32);
     expect(byKind1.weapon).toBe(55);
     expect(byKind1.blessing_scroll).toBe(68);
     expect(byKind1.weapon_upgrade).toBe(75);
 
     const floor2 = generateDungeonFloor(4242, 2, 1, 1);
     const shop2 = floor2.rooms.find((r) => r.type === 'merchant')!;
+    expect(shop2.shopOffers).toHaveLength(5);
+    const shop2Weapons = shop2.shopOffers.filter((it) => it.kind === 'weapon');
+    expect(shop2Weapons).toHaveLength(2);
+    expect(shop2Weapons[0]!.weaponId).not.toBe(shop2Weapons[1]!.weaponId);
     const byKind2 = Object.fromEntries(shop2.shopOffers.map((it) => [it.kind, it.costGold]));
     expect(byKind2.health_potion).toBe(35);
-    expect(byKind2.armor_upgrade).toBe(35);
     expect(byKind2.weapon).toBe(61);
     expect(byKind2.blessing_scroll).toBe(75);
     expect(byKind2.weapon_upgrade).toBe(83);

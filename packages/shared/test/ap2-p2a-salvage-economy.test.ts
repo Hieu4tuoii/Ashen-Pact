@@ -294,10 +294,9 @@ describe('AP2 Phase P2A.3 — 0.5s Weapon Salvage Hold, Flawless Room Bonus & Me
     }
   });
 
-  it('4. standardizes Merchant pricing across Floors 1..6 and supports buying blessing_scroll (68G) and weapon_upgrade (75G)', () => {
+  it('4. standardizes Merchant pricing across Floors 1..6 (5 offers with 2 distinct weapons, no armor_upgrade) and supports buying blessing_scroll (68G) and weapon_upgrade (75G)', () => {
     expect(MERCHANT_BASE_PRICES).toEqual({
       health_potion: 32,
-      armor_upgrade: 32,
       weapon: 55,
       blessing_scroll: 68,
       weapon_upgrade: 75,
@@ -307,27 +306,23 @@ describe('AP2 Phase P2A.3 — 0.5s Weapon Salvage Hold, Flawless Room Bonus & Me
       number,
       {
         health_potion: number;
-        armor_upgrade: number;
         weapon: number;
         blessing_scroll: number;
         weapon_upgrade: number;
       }
     > = {
-      1: { health_potion: 32, armor_upgrade: 32, weapon: 55, blessing_scroll: 68, weapon_upgrade: 75 },
-      2: { health_potion: 35, armor_upgrade: 35, weapon: 61, blessing_scroll: 75, weapon_upgrade: 83 },
-      3: { health_potion: 38, armor_upgrade: 38, weapon: 66, blessing_scroll: 82, weapon_upgrade: 90 },
-      4: { health_potion: 42, armor_upgrade: 42, weapon: 72, blessing_scroll: 88, weapon_upgrade: 98 },
-      5: { health_potion: 45, armor_upgrade: 45, weapon: 77, blessing_scroll: 95, weapon_upgrade: 105 },
-      6: { health_potion: 48, armor_upgrade: 48, weapon: 83, blessing_scroll: 102, weapon_upgrade: 113 },
+      1: { health_potion: 32, weapon: 55, blessing_scroll: 68, weapon_upgrade: 75 },
+      2: { health_potion: 35, weapon: 61, blessing_scroll: 75, weapon_upgrade: 83 },
+      3: { health_potion: 38, weapon: 66, blessing_scroll: 82, weapon_upgrade: 90 },
+      4: { health_potion: 42, weapon: 72, blessing_scroll: 88, weapon_upgrade: 98 },
+      5: { health_potion: 45, weapon: 77, blessing_scroll: 95, weapon_upgrade: 105 },
+      6: { health_potion: 48, weapon: 83, blessing_scroll: 102, weapon_upgrade: 113 },
     };
 
     for (let globalFloor = 1; globalFloor <= 6; globalFloor++) {
       const exp = expectedByFloor[globalFloor]!;
       expect(computeMerchantOfferCost(MERCHANT_BASE_PRICES.health_potion, globalFloor)).toBe(
         exp.health_potion,
-      );
-      expect(computeMerchantOfferCost(MERCHANT_BASE_PRICES.armor_upgrade, globalFloor)).toBe(
-        exp.armor_upgrade,
       );
       expect(computeMerchantOfferCost(MERCHANT_BASE_PRICES.weapon, globalFloor)).toBe(exp.weapon);
       expect(computeMerchantOfferCost(MERCHANT_BASE_PRICES.blessing_scroll, globalFloor)).toBe(
@@ -341,9 +336,12 @@ describe('AP2 Phase P2A.3 — 0.5s Weapon Salvage Hold, Flawless Room Bonus & Me
       const localFloor: 1 | 2 = globalFloor % 2 === 1 ? 1 : 2;
       const floorGraph = generateDungeonFloor(9000 + globalFloor, localFloor, biome, 1);
       const merchant = floorGraph.rooms.find((r) => r.type === 'merchant')!;
+      expect(merchant.shopOffers).toHaveLength(5);
+      const weaponOffers = merchant.shopOffers.filter((o) => o.kind === 'weapon');
+      expect(weaponOffers).toHaveLength(2);
+      expect(weaponOffers[0]!.weaponId).not.toBe(weaponOffers[1]!.weaponId);
       const byKind = Object.fromEntries(merchant.shopOffers.map((o) => [o.kind, o.costGold]));
       expect(byKind.health_potion).toBe(exp.health_potion);
-      expect(byKind.armor_upgrade).toBe(exp.armor_upgrade);
       expect(byKind.weapon).toBe(exp.weapon);
       expect(byKind.blessing_scroll).toBe(exp.blessing_scroll);
       expect(byKind.weapon_upgrade).toBe(exp.weapon_upgrade);

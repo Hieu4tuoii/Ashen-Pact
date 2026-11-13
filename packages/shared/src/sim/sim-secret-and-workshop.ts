@@ -414,15 +414,6 @@ export function pickupOrBuyWorldItemImpl(
     return true;
   }
 
-  if (item.kind === 'armor_upgrade') {
-    collector.maxArmor += 2;
-    collector.armor = collector.maxArmor;
-    if (!this.inHub) {
-      this.roomItemsByRoomId.set(room.id, [...this.worldItems]);
-    }
-    return true;
-  }
-
   if (item.kind === 'blessing_scroll') {
     const available = FLOOR_BUFF_LIST.filter(
       (b) =>

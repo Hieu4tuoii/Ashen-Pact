@@ -116,7 +116,7 @@ export function buildPage2EnemiesAndBoss(
     },
     {
       title: '7. Thương Nhân Hắc Ám',
-      sub: 'NPC bán vũ khí, máu & giáp',
+      sub: 'NPC bán vũ khí, máu & phước lành',
       rigDef: MERCHANT_RIG_DEF,
       scale: 1.25,
     },

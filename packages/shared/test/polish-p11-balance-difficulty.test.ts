@@ -90,14 +90,17 @@ describe('Phase P11 — Step 2: Data-Driven Difficulty Levers, Boss Drama & Pres
     const challenge2 = floor2.rooms.find((r) => r.isChallenge)!;
     expect(challenge2.chestRarity).toBe('legendary');
 
-    // Shop prices standardized by Spec Rev 4 (Cost = round(base * (1 + 0.10 * (globalFloor - 1))))
+    // Shop prices standardized (Cost = round(base * (1 + 0.10 * (globalFloor - 1))), 5 offers with 2 weapons)
     const shop1 = floor1.rooms.find((r) => r.type === 'merchant')!;
+    expect(shop1.shopOffers).toHaveLength(5);
+    expect(shop1.shopOffers.filter((it) => it.kind === 'weapon')).toHaveLength(2);
     const byKind1 = Object.fromEntries(shop1.shopOffers.map((it) => [it.kind, it.costGold]));
     expect(byKind1.health_potion).toBe(32);
     expect(byKind1.weapon).toBe(55);
-    expect(byKind1.armor_upgrade).toBe(32);
 
     const shop2 = floor2.rooms.find((r) => r.type === 'merchant')!;
+    expect(shop2.shopOffers).toHaveLength(5);
+    expect(shop2.shopOffers.filter((it) => it.kind === 'weapon')).toHaveLength(2);
     const byKind2 = Object.fromEntries(shop2.shopOffers.map((it) => [it.kind, it.costGold]));
     expect(byKind2.weapon).toBe(61);
   });
