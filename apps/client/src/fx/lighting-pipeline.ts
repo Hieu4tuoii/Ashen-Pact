@@ -589,44 +589,14 @@ export class LightingPipeline {
     void simulatedPlayers;
 
     // C. Props: Flickering Torches (with Warm ADD Glow Pool at depth 35), Bioluminescent Mushrooms (B1 only), Crystal Pillars, Explosive Barrels
-    // On Low quality tier, Spec 3.5 caps scene lights at 2 closest braziers to camera center
-    const camCenterX = rawViewX + viewW * 0.5;
-    const camCenterY = rawViewY + viewH * 0.5;
+    // Illuminate all visible torch_braziers regardless of distance to camera/player so distant torches stay lit
     const isLowTier = budget.tier === 'low';
-    const maxBrazierCount = isLowTier ? 2 : 16;
-
-    let lowBestBrazierIdx1 = -1;
-    let lowBestBrazierIdx2 = -1;
-    if (isLowTier) {
-      let bestDist1 = Infinity;
-      let bestDist2 = Infinity;
-      for (let i = 0; i < props.length; i++) {
-        const pr = props[i]!;
-        if (pr.hp <= 0 || pr.lightRadius <= 0 || pr.kind !== 'torch_brazier') continue;
-        const lx = pr.x - viewX;
-        const ly = pr.y - viewY;
-        const r = pr.lightRadius * 1.25;
-        if (lx + r < -16 || lx - r > coverW + 16 || ly + r < -16 || ly - r > coverH + 16) {
-          continue;
-        }
-        const dSq =
-          (pr.x - camCenterX) * (pr.x - camCenterX) + (pr.y - camCenterY) * (pr.y - camCenterY);
-        if (dSq < bestDist1) {
-          bestDist2 = bestDist1;
-          lowBestBrazierIdx2 = lowBestBrazierIdx1;
-          bestDist1 = dSq;
-          lowBestBrazierIdx1 = i;
-        } else if (dSq < bestDist2) {
-          bestDist2 = dSq;
-          lowBestBrazierIdx2 = i;
-        }
-      }
-    }
+    const maxBrazierCount = 16;
+    const maxOtherScenePropLights = isLowTier ? 4 : 32;
 
     let warmGlowCursor = 0;
     let braziersActive = 0;
-    let scenePropLightsActive = 0;
-    const maxScenePropLights = isLowTier ? 2 : 32;
+    let otherScenePropLightsActive = 0;
 
     for (let i = 0; i < props.length; i++) {
       const prop = props[i]!;
@@ -638,10 +608,7 @@ export class LightingPipeline {
       }
 
       if (prop.kind === 'torch_brazier') {
-        if (isLowTier && i !== lowBestBrazierIdx1 && i !== lowBestBrazierIdx2) {
-          continue;
-        }
-        if (braziersActive >= maxBrazierCount || scenePropLightsActive >= maxScenePropLights) {
+        if (braziersActive >= maxBrazierCount) {
           continue;
         }
         const lx = prop.x - viewX;
@@ -665,7 +632,6 @@ export class LightingPipeline {
 
         drawLight(prop.x, prop.y, radius * 1.15, hexToNum(prop.lightColorHex), alpha);
         braziersActive += 1;
-        scenePropLightsActive += 1;
 
         if (warmGlowCursor + 1 < this.warmGlowPool.length) {
           const outerGlow = this.warmGlowPool[warmGlowCursor++]!;
@@ -687,7 +653,7 @@ export class LightingPipeline {
         continue;
       }
 
-      if (scenePropLightsActive >= maxScenePropLights) {
+      if (otherScenePropLightsActive >= maxOtherScenePropLights) {
         continue;
       }
 
@@ -706,7 +672,7 @@ export class LightingPipeline {
       }
 
       drawLight(prop.x, prop.y, radius * 1.1, hexToNum(prop.lightColorHex), alpha);
-      scenePropLightsActive += 1;
+      otherScenePropLightsActive += 1;
     }
 
     for (let i = warmGlowCursor; i < this.warmGlowPool.length; i++) {
