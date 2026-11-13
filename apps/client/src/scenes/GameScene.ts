@@ -21,7 +21,7 @@ import { dampLerp } from '../art/easing.js';
 import { RIG_DEFS_BY_ID, VANGUARD_RIG_DEF } from '../art/rig-defs.js';
 import { TextureBaker } from '../art/texture-baker.js';
 import { musicManager } from '../audio/music-synth.js';
-import { zzfx } from '../audio/zzfx.js';
+import { resolveFootstepSurfaceSfx, zzfx } from '../audio/zzfx.js';
 import { isDebugUiEnabled, isTestHooksEnabled } from '../core/debug-flag.js';
 import {
   getClientFreezeRandom,
@@ -294,6 +294,7 @@ export class GameScene extends Phaser.Scene {
   public lastMapRevision = -1;
   public lastRenderedBiome: 0 | 1 | 2 | 3 = 1;
   public dashAfterimageTimer = 0;
+  private wasLocalReloading = false;
   public textObjects: Phaser.GameObjects.Text[] = [];
 
   // Cached HUD state to avoid redundant per-frame Canvas2D text uploads
@@ -542,6 +543,7 @@ export class GameScene extends Phaser.Scene {
     this.wasInHubLastFrame = false;
     this.sanctuaryHubElapsedSec = 0;
     this.hubLoungeAnimOverride = null;
+    this.wasLocalReloading = false;
     this.intentionalLeave = false;
   }
 
@@ -760,6 +762,26 @@ export class GameScene extends Phaser.Scene {
 
       // 4. Process Sim Events (SFX, Sparks, Damage Numbers, Decals, Chain Lightning, Hit-Stop, Screen Shake)
       this.processSimEvents(this.transport.consumeEvents());
+
+      const isReloadingNow =
+        sim.player.lifeState === 'alive' &&
+        !sim.stressTestActive &&
+        sim.player.reloadTimer > 0.02;
+      if (isReloadingNow && !this.wasLocalReloading) {
+        if (zzfx.isAudioReady()) {
+          zzfx.play('reload_start', sim.player.x, this.camFocusX, sim.player.y, this.camFocusY);
+        }
+      } else if (
+        !isReloadingNow &&
+        this.wasLocalReloading &&
+        sim.player.lifeState === 'alive' &&
+        sim.player.clipAmmo > 0 &&
+        zzfx.getLastPlayedId() !== 'perfect_reload' &&
+        zzfx.isAudioReady()
+      ) {
+        zzfx.play('reload_complete', sim.player.x, this.camFocusX, sim.player.y, this.camFocusY);
+      }
+      this.wasLocalReloading = isReloadingNow;
     }
 
     // 4b. Trailing Damage Bars, Low-HP Heartbeat Warning & Dynamic Procedural Music
@@ -869,6 +891,19 @@ export class GameScene extends Phaser.Scene {
             playerPos.y + RIG_FOOT_OFFSET_Y,
             sim.currentBiome,
           );
+          if (zzfx.isAudioReady()) {
+            const footSurface = sim.map.getSurfaceAtWorld(
+              playerPos.x,
+              playerPos.y + RIG_FOOT_OFFSET_Y,
+            );
+            zzfx.play(
+              resolveFootstepSurfaceSfx(footSurface, sim.currentBiome, sim.inHub),
+              playerPos.x,
+              this.camFocusX,
+              playerPos.y,
+              this.camFocusY,
+            );
+          }
         }
       }
 

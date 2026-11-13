@@ -5,6 +5,7 @@ import {
   WORLD_VIEW_WIDTH,
 } from '@ashen-pact/shared';
 import { TextureBaker } from '../art/texture-baker.js';
+import { zzfx } from '../audio/zzfx.js';
 import {
   installDebugHotkeyListener,
   isDebugUiEnabled,
@@ -59,7 +60,12 @@ export class PreloadScene extends Phaser.Scene {
         facesAfter.length > 0 && facesAfter.every((face) => face.status === 'loaded');
     };
 
-    loadAllFontSubsets()
+    const sfxWarmup = Promise.race([
+      zzfx.preloadSamples(),
+      new Promise<void>((resolveTimer) => setTimeout(resolveTimer, 600)),
+    ]);
+
+    Promise.all([loadAllFontSubsets(), sfxWarmup])
       .then(() => finalizeLoad())
       .catch(() => finalizeLoad());
   }

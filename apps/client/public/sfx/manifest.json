@@ -1,0 +1,4218 @@
+{
+  "version": "2.0.0",
+  "sampleRate": 32000,
+  "format": "RIFF WAVE PCM 16-bit Mono",
+  "totalSfxIds": 105,
+  "totalFiles": 160,
+  "totalBytes": 3192246,
+  "attribution": {
+    "150_combat_sfx": {
+      "title": "150 CC0 Combat, Magic & Explosion SFX",
+      "author": "OpenGameArt CC0 Contributors",
+      "license": "CC0-1.0",
+      "url": "https://opengameart.org/"
+    },
+    "25_bang_sfx": {
+      "title": "25 CC0 Bang, Firework & Cannon SFX",
+      "author": "rubberduck (OpenGameArt)",
+      "license": "CC0-1.0",
+      "url": "https://opengameart.org/content/25-cc0-bang-firework-sfx"
+    },
+    "80_cc0_rpg_sfx": {
+      "title": "80 CC0 RPG SFX",
+      "author": "rubberduck (OpenGameArt)",
+      "license": "CC0-1.0",
+      "url": "https://opengameart.org/content/80-cc0-rpg-sfx"
+    },
+    "cure_magic": {
+      "title": "Cure & Healing Magic SFX",
+      "author": "bart (OpenGameArt)",
+      "license": "CC0-1.0",
+      "url": "https://opengameart.org/"
+    },
+    "gunshot_sounds": {
+      "title": "CC0 Firearm Recordings",
+      "author": "OpenGameArt CC0 Contributors",
+      "license": "CC0-1.0",
+      "url": "https://opengameart.org/"
+    },
+    "ice_shatters": {
+      "title": "Ice Shatters Foley",
+      "author": "OpenGameArt CC0 Contributors",
+      "license": "CC0-1.0",
+      "url": "https://opengameart.org/"
+    },
+    "ice_spells": {
+      "title": "Ice Spells SFX",
+      "author": "OpenGameArt CC0 Contributors",
+      "license": "CC0-1.0",
+      "url": "https://opengameart.org/"
+    },
+    "kenney_interface_wav": {
+      "title": "Interface Sounds",
+      "author": "Kenney Vleugels (Kenney.nl)",
+      "license": "CC0-1.0",
+      "url": "https://kenney.nl/assets/interface-sounds"
+    },
+    "oculus_pack": {
+      "title": "Oculus Audio Pack 01",
+      "author": "Oculus VR, LLC",
+      "license": "CC-BY-4.0",
+      "url": "https://developer.oculus.com/downloads/package/oculus-audio-pack-1/"
+    },
+    "oga_singles": {
+      "title": "OpenGameArt CC0 Combat Singles",
+      "author": "OpenGameArt CC0 Contributors",
+      "license": "CC0-1.0",
+      "url": "https://opengameart.org/"
+    },
+    "prepared_firearms": {
+      "title": "Prepared Firearm SFX Library",
+      "author": "Still North Media",
+      "license": "CC0-1.0",
+      "url": "https://www.stillnorthmedia.com/firearm-sfx-library/"
+    },
+    "rpg_sound_pack": {
+      "title": "RPG Sound Pack",
+      "author": "artisticdude (OpenGameArt)",
+      "license": "CC0-1.0",
+      "url": "https://opengameart.org/content/rpg-sound-pack"
+    },
+    "shotgun_sounds": {
+      "title": "Shotgun Shoot & Reload Foley",
+      "author": "OpenGameArt CC0 Contributors",
+      "license": "CC0-1.0",
+      "url": "https://opengameart.org/"
+    },
+    "weapons_apparel": {
+      "title": "Weapons & Apparel Foley SFX",
+      "author": "qubodup / OpenGameArt CC0 Contributors",
+      "license": "CC0-1.0",
+      "url": "https://opengameart.org/"
+    }
+  },
+  "entries": {
+    "shoot_pistol": {
+      "category": "weapons",
+      "transient": true,
+      "files": [
+        "sfx/weapons/shoot_pistol_1.wav",
+        "sfx/weapons/shoot_pistol_2.wav",
+        "sfx/weapons/shoot_pistol_3.wav"
+      ],
+      "licenses": [
+        "CC-BY-4.0",
+        "CC0-1.0"
+      ],
+      "packs": [
+        "prepared_firearms",
+        "oga_singles",
+        "oculus_pack"
+      ],
+      "sources": [
+        "prepared_firearms/Prepared SFX Library/1911/A_34P.wav",
+        "oga_singles/clipload1.wav",
+        "prepared_firearms/Prepared SFX Library/Walther PPQ/X_31P.wav",
+        "oculus_pack/oculus-audio-pack/ogg/UIClick_MetalConfirm_OS_01.wav",
+        "prepared_firearms/Prepared SFX Library/Bersa/F_41P.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/weapons/shoot_pistol_1.wav",
+          "sampleRate": 32000,
+          "samples": 7277,
+          "durationSec": 0.227,
+          "onsetMs": 0.59,
+          "peakDb": -1.4,
+          "rmsDb": -21.07,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        },
+        {
+          "file": "sfx/weapons/shoot_pistol_2.wav",
+          "sampleRate": 32000,
+          "samples": 7049,
+          "durationSec": 0.22,
+          "onsetMs": 0.59,
+          "peakDb": -1.4,
+          "rmsDb": -22.44,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        },
+        {
+          "file": "sfx/weapons/shoot_pistol_3.wav",
+          "sampleRate": 32000,
+          "samples": 7519,
+          "durationSec": 0.235,
+          "onsetMs": 0.59,
+          "peakDb": -1.4,
+          "rmsDb": -23.61,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "shoot_rivet_finale": {
+      "category": "weapons",
+      "transient": true,
+      "files": [
+        "sfx/weapons/shoot_rivet_finale.wav"
+      ],
+      "licenses": [
+        "CC-BY-4.0",
+        "CC0-1.0"
+      ],
+      "packs": [
+        "prepared_firearms",
+        "150_combat_sfx",
+        "oculus_pack"
+      ],
+      "sources": [
+        "prepared_firearms/Prepared SFX Library/Smith & Wesson 642/V_22P.wav",
+        "150_combat_sfx/04_magic_spells/ElectroZap_s01.wav",
+        "oculus_pack/oculus-audio-pack/ogg/METLImpt_HammerAnvil_OS_01.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/weapons/shoot_rivet_finale.wav",
+          "sampleRate": 32000,
+          "samples": 10311,
+          "durationSec": 0.322,
+          "onsetMs": 0.59,
+          "peakDb": -1.0,
+          "rmsDb": -18.5,
+          "clippedSamples": 0,
+          "tailMax": 3e-05
+        }
+      ]
+    },
+    "shoot_shotgun": {
+      "category": "weapons",
+      "transient": true,
+      "files": [
+        "sfx/weapons/shoot_shotgun_1.wav",
+        "sfx/weapons/shoot_shotgun_2.wav",
+        "sfx/weapons/shoot_shotgun_3.wav"
+      ],
+      "licenses": [
+        "CC0-1.0"
+      ],
+      "packs": [
+        "gunshot_sounds",
+        "prepared_firearms",
+        "25_bang_sfx"
+      ],
+      "sources": [
+        "gunshot_sounds/sounds/shotty.wav",
+        "prepared_firearms/Prepared SFX Library/Mossberg/N_26P.wav",
+        "prepared_firearms/Prepared SFX Library/Nova/O_17P.wav",
+        "prepared_firearms/Prepared SFX Library/Model 12/K_17P.wav",
+        "25_bang_sfx/cannon_02.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/weapons/shoot_shotgun_1.wav",
+          "sampleRate": 32000,
+          "samples": 11929,
+          "durationSec": 0.373,
+          "onsetMs": 0.38,
+          "peakDb": -1.0,
+          "rmsDb": -13.82,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        },
+        {
+          "file": "sfx/weapons/shoot_shotgun_2.wav",
+          "sampleRate": 32000,
+          "samples": 11275,
+          "durationSec": 0.352,
+          "onsetMs": 0.59,
+          "peakDb": -1.0,
+          "rmsDb": -14.17,
+          "clippedSamples": 0,
+          "tailMax": 3e-05
+        },
+        {
+          "file": "sfx/weapons/shoot_shotgun_3.wav",
+          "sampleRate": 32000,
+          "samples": 11077,
+          "durationSec": 0.346,
+          "onsetMs": 0.59,
+          "peakDb": -1.0,
+          "rmsDb": -19.51,
+          "clippedSamples": 0,
+          "tailMax": 3e-05
+        }
+      ]
+    },
+    "shoot_smg": {
+      "category": "weapons",
+      "transient": true,
+      "files": [
+        "sfx/weapons/shoot_smg_1.wav",
+        "sfx/weapons/shoot_smg_2.wav",
+        "sfx/weapons/shoot_smg_3.wav"
+      ],
+      "licenses": [
+        "CC-BY-4.0",
+        "CC0-1.0"
+      ],
+      "packs": [
+        "prepared_firearms",
+        "oculus_pack"
+      ],
+      "sources": [
+        "prepared_firearms/Prepared SFX Library/Carl Gustav M45/G_24P.wav",
+        "oculus_pack/oculus-audio-pack/ogg/WHSH_WhooshSmall_OS_01.wav",
+        "prepared_firearms/Prepared SFX Library/PPSh/P_22P.wav",
+        "oculus_pack/oculus-audio-pack/ogg/WHSH_WhooshSmall_OS_02.wav",
+        "prepared_firearms/Prepared SFX Library/Carl Gustav M45/G_22P.wav",
+        "oculus_pack/oculus-audio-pack/ogg/WHSH_WhooshSmall_OS_03.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/weapons/shoot_smg_1.wav",
+          "sampleRate": 32000,
+          "samples": 2541,
+          "durationSec": 0.079,
+          "onsetMs": 0.59,
+          "peakDb": -2.2,
+          "rmsDb": -17.95,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        },
+        {
+          "file": "sfx/weapons/shoot_smg_2.wav",
+          "sampleRate": 32000,
+          "samples": 4480,
+          "durationSec": 0.14,
+          "onsetMs": 0.5,
+          "peakDb": -2.2,
+          "rmsDb": -18.46,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        },
+        {
+          "file": "sfx/weapons/shoot_smg_3.wav",
+          "sampleRate": 32000,
+          "samples": 4099,
+          "durationSec": 0.128,
+          "onsetMs": 0.59,
+          "peakDb": -2.2,
+          "rmsDb": -20.36,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "shoot_rifle": {
+      "category": "weapons",
+      "transient": true,
+      "files": [
+        "sfx/weapons/shoot_rifle_1.wav",
+        "sfx/weapons/shoot_rifle_2.wav"
+      ],
+      "licenses": [
+        "CC0-1.0"
+      ],
+      "packs": [
+        "prepared_firearms",
+        "oga_singles"
+      ],
+      "sources": [
+        "prepared_firearms/Prepared SFX Library/AR-15/D_24P.wav",
+        "prepared_firearms/Prepared SFX Library/Savage 10 .300 Blackout/T_17P.wav",
+        "prepared_firearms/Prepared SFX Library/AK-47/C_27P.wav",
+        "oga_singles/clipload1.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/weapons/shoot_rifle_1.wav",
+          "sampleRate": 32000,
+          "samples": 8434,
+          "durationSec": 0.264,
+          "onsetMs": 0.59,
+          "peakDb": -1.4,
+          "rmsDb": -21.47,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        },
+        {
+          "file": "sfx/weapons/shoot_rifle_2.wav",
+          "sampleRate": 32000,
+          "samples": 7495,
+          "durationSec": 0.234,
+          "onsetMs": 0.59,
+          "peakDb": -1.4,
+          "rmsDb": -19.55,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "shoot_tesla_carbine": {
+      "category": "weapons",
+      "transient": true,
+      "files": [
+        "sfx/weapons/shoot_tesla_carbine_1.wav",
+        "sfx/weapons/shoot_tesla_carbine_2.wav"
+      ],
+      "licenses": [
+        "CC0-1.0"
+      ],
+      "packs": [
+        "prepared_firearms",
+        "150_combat_sfx"
+      ],
+      "sources": [
+        "prepared_firearms/Prepared SFX Library/AR-15/D_24P.wav",
+        "150_combat_sfx/04_magic_spells/ElectroZap_s01.wav",
+        "prepared_firearms/Prepared SFX Library/Savage 10 .300 Blackout/T_17P.wav",
+        "150_combat_sfx/04_magic_spells/HeavyZap_s01.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/weapons/shoot_tesla_carbine_1.wav",
+          "sampleRate": 32000,
+          "samples": 7551,
+          "durationSec": 0.236,
+          "onsetMs": 0.59,
+          "peakDb": -1.4,
+          "rmsDb": -21.06,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        },
+        {
+          "file": "sfx/weapons/shoot_tesla_carbine_2.wav",
+          "sampleRate": 32000,
+          "samples": 7612,
+          "durationSec": 0.238,
+          "onsetMs": 0.59,
+          "peakDb": -1.4,
+          "rmsDb": -16.65,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "shoot_bow": {
+      "category": "weapons",
+      "transient": true,
+      "files": [
+        "sfx/weapons/shoot_bow_1.wav",
+        "sfx/weapons/shoot_bow_2.wav"
+      ],
+      "licenses": [
+        "CC-BY-4.0",
+        "CC0-1.0"
+      ],
+      "packs": [
+        "80_cc0_rpg_sfx",
+        "weapons_apparel",
+        "oculus_pack",
+        "kenney_interface_wav"
+      ],
+      "sources": [
+        "80_cc0_rpg_sfx/wood_02.wav",
+        "weapons_apparel/sfx/arrow-feathers-01.wav",
+        "oculus_pack/oculus-audio-pack/ogg/WHSH_WhooshSmall_OS_02.wav",
+        "kenney_interface_wav/kenney-interface-sounds-master/addons/kenney_interface_sounds/pluck_001.wav",
+        "weapons_apparel/sfx/arrow-feathers-03.wav",
+        "oculus_pack/oculus-audio-pack/ogg/WHSH_WhooshSmall_OS_01.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/weapons/shoot_bow_1.wav",
+          "sampleRate": 32000,
+          "samples": 7581,
+          "durationSec": 0.237,
+          "onsetMs": 0.72,
+          "peakDb": -1.8,
+          "rmsDb": -19.48,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        },
+        {
+          "file": "sfx/weapons/shoot_bow_2.wav",
+          "sampleRate": 32000,
+          "samples": 3741,
+          "durationSec": 0.117,
+          "onsetMs": 0.53,
+          "peakDb": -1.8,
+          "rmsDb": -17.08,
+          "clippedSamples": 0,
+          "tailMax": 3e-05
+        }
+      ]
+    },
+    "shoot_staff": {
+      "category": "weapons",
+      "transient": true,
+      "files": [
+        "sfx/weapons/shoot_staff_1.wav",
+        "sfx/weapons/shoot_staff_2.wav"
+      ],
+      "licenses": [
+        "CC-BY-4.0",
+        "CC0-1.0"
+      ],
+      "packs": [
+        "80_cc0_rpg_sfx",
+        "oculus_pack",
+        "rpg_sound_pack"
+      ],
+      "sources": [
+        "80_cc0_rpg_sfx/spell_01.wav",
+        "oculus_pack/oculus-audio-pack/ogg/MAGSpel_MagicSpell_OS_01.wav",
+        "rpg_sound_pack/RPG Sound Pack/battle/magic1.wav",
+        "80_cc0_rpg_sfx/spell_fire_06.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/weapons/shoot_staff_1.wav",
+          "sampleRate": 32000,
+          "samples": 9651,
+          "durationSec": 0.302,
+          "onsetMs": 0.56,
+          "peakDb": -1.8,
+          "rmsDb": -15.7,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        },
+        {
+          "file": "sfx/weapons/shoot_staff_2.wav",
+          "sampleRate": 32000,
+          "samples": 8958,
+          "durationSec": 0.28,
+          "onsetMs": 0.44,
+          "peakDb": -1.8,
+          "rmsDb": -14.29,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "shoot_apprentice_staff": {
+      "category": "weapons",
+      "transient": true,
+      "files": [
+        "sfx/weapons/shoot_apprentice_staff_1.wav",
+        "sfx/weapons/shoot_apprentice_staff_2.wav"
+      ],
+      "licenses": [
+        "CC0-1.0"
+      ],
+      "packs": [
+        "rpg_sound_pack",
+        "80_cc0_rpg_sfx"
+      ],
+      "sources": [
+        "rpg_sound_pack/RPG Sound Pack/battle/magic1.wav",
+        "80_cc0_rpg_sfx/spell_fire_06.wav",
+        "80_cc0_rpg_sfx/spell_01.wav",
+        "80_cc0_rpg_sfx/spell_fire_02.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/weapons/shoot_apprentice_staff_1.wav",
+          "sampleRate": 32000,
+          "samples": 8320,
+          "durationSec": 0.26,
+          "onsetMs": 0.38,
+          "peakDb": -1.8,
+          "rmsDb": -14.41,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        },
+        {
+          "file": "sfx/weapons/shoot_apprentice_staff_2.wav",
+          "sampleRate": 32000,
+          "samples": 8163,
+          "durationSec": 0.255,
+          "onsetMs": 0.47,
+          "peakDb": -1.8,
+          "rmsDb": -15.92,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "shoot_solar_staff": {
+      "category": "weapons",
+      "transient": true,
+      "files": [
+        "sfx/weapons/shoot_solar_staff_1.wav",
+        "sfx/weapons/shoot_solar_staff_2.wav"
+      ],
+      "licenses": [
+        "CC0-1.0"
+      ],
+      "packs": [
+        "150_combat_sfx",
+        "cure_magic"
+      ],
+      "sources": [
+        "150_combat_sfx/04_magic_spells/Fire Spell Impact 3_s06.wav",
+        "cure_magic/Cure2.wav",
+        "150_combat_sfx/04_magic_spells/Fire Spell Impact 5_s06.wav",
+        "cure_magic/Cure3.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/weapons/shoot_solar_staff_1.wav",
+          "sampleRate": 32000,
+          "samples": 9553,
+          "durationSec": 0.299,
+          "onsetMs": 0.59,
+          "peakDb": -1.6,
+          "rmsDb": -15.09,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        },
+        {
+          "file": "sfx/weapons/shoot_solar_staff_2.wav",
+          "sampleRate": 32000,
+          "samples": 8995,
+          "durationSec": 0.281,
+          "onsetMs": 0.47,
+          "peakDb": -1.6,
+          "rmsDb": -15.69,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "solar_converge": {
+      "category": "weapons",
+      "transient": true,
+      "files": [
+        "sfx/weapons/solar_converge.wav"
+      ],
+      "licenses": [
+        "CC0-1.0"
+      ],
+      "packs": [
+        "150_combat_sfx",
+        "cure_magic"
+      ],
+      "sources": [
+        "150_combat_sfx/03_explosions_destruction/BlastImpact_01_s01.wav",
+        "150_combat_sfx/04_magic_spells/Retro Charge Magic 11_s05.wav",
+        "cure_magic/Cure6.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/weapons/solar_converge.wav",
+          "sampleRate": 32000,
+          "samples": 10033,
+          "durationSec": 0.314,
+          "onsetMs": 0.38,
+          "peakDb": -1.3,
+          "rmsDb": -16.52,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "shoot_void_staff": {
+      "category": "weapons",
+      "transient": true,
+      "files": [
+        "sfx/weapons/shoot_void_staff_1.wav",
+        "sfx/weapons/shoot_void_staff_2.wav"
+      ],
+      "licenses": [
+        "CC-BY-4.0",
+        "CC0-1.0"
+      ],
+      "packs": [
+        "150_combat_sfx",
+        "oculus_pack"
+      ],
+      "sources": [
+        "150_combat_sfx/03_explosions_destruction/GravityBomb_01_s01.wav",
+        "oculus_pack/oculus-audio-pack/ogg/MAGSpel_MagicSpell_OS_02.wav",
+        "150_combat_sfx/03_explosions_destruction/GravityBomb_02_s01.wav",
+        "oculus_pack/oculus-audio-pack/ogg/MAGSpel_MagicSpell_OS_01.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/weapons/shoot_void_staff_1.wav",
+          "sampleRate": 32000,
+          "samples": 11106,
+          "durationSec": 0.347,
+          "onsetMs": 0.53,
+          "peakDb": -1.5,
+          "rmsDb": -14.06,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        },
+        {
+          "file": "sfx/weapons/shoot_void_staff_2.wav",
+          "sampleRate": 32000,
+          "samples": 11124,
+          "durationSec": 0.348,
+          "onsetMs": 0.5,
+          "peakDb": -1.5,
+          "rmsDb": -11.97,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "shoot_laser": {
+      "category": "weapons",
+      "transient": true,
+      "files": [
+        "sfx/weapons/shoot_laser_1.wav",
+        "sfx/weapons/shoot_laser_2.wav"
+      ],
+      "licenses": [
+        "CC-BY-4.0",
+        "CC0-1.0"
+      ],
+      "packs": [
+        "oculus_pack",
+        "150_combat_sfx"
+      ],
+      "sources": [
+        "oculus_pack/oculus-audio-pack/ogg/LASRGun_LaserShootUI_OS_01.wav",
+        "150_combat_sfx/02_combat_ranged/Laser Pistol 4_s09.wav",
+        "oculus_pack/oculus-audio-pack/ogg/LASRGun_LaserShootUI_OS_02.wav",
+        "150_combat_sfx/02_combat_ranged/Laser Pistol 1_s09.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/weapons/shoot_laser_1.wav",
+          "sampleRate": 32000,
+          "samples": 6064,
+          "durationSec": 0.19,
+          "onsetMs": 0.69,
+          "peakDb": -2.0,
+          "rmsDb": -14.33,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        },
+        {
+          "file": "sfx/weapons/shoot_laser_2.wav",
+          "sampleRate": 32000,
+          "samples": 6258,
+          "durationSec": 0.196,
+          "onsetMs": 0.59,
+          "peakDb": -2.0,
+          "rmsDb": -13.54,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "shoot_launcher": {
+      "category": "weapons",
+      "transient": true,
+      "files": [
+        "sfx/weapons/shoot_launcher_1.wav",
+        "sfx/weapons/shoot_launcher_2.wav"
+      ],
+      "licenses": [
+        "CC-BY-4.0",
+        "CC0-1.0"
+      ],
+      "packs": [
+        "25_bang_sfx",
+        "oculus_pack"
+      ],
+      "sources": [
+        "25_bang_sfx/cannon_02.wav",
+        "oculus_pack/oculus-audio-pack/ogg/MECHLvr_LeverPull_OS_05.wav",
+        "25_bang_sfx/bang_09.wav",
+        "oculus_pack/oculus-audio-pack/ogg/MECHLvr_LeverPull_OS_06.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/weapons/shoot_launcher_1.wav",
+          "sampleRate": 32000,
+          "samples": 10880,
+          "durationSec": 0.34,
+          "onsetMs": 0.59,
+          "peakDb": -1.2,
+          "rmsDb": -16.04,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        },
+        {
+          "file": "sfx/weapons/shoot_launcher_2.wav",
+          "sampleRate": 32000,
+          "samples": 10803,
+          "durationSec": 0.338,
+          "onsetMs": 0.59,
+          "peakDb": -1.2,
+          "rmsDb": -14.5,
+          "clippedSamples": 0,
+          "tailMax": 3e-05
+        }
+      ]
+    },
+    "shoot_magma_cannon": {
+      "category": "weapons",
+      "transient": true,
+      "files": [
+        "sfx/weapons/shoot_magma_cannon_1.wav",
+        "sfx/weapons/shoot_magma_cannon_2.wav"
+      ],
+      "licenses": [
+        "CC0-1.0"
+      ],
+      "packs": [
+        "25_bang_sfx",
+        "150_combat_sfx"
+      ],
+      "sources": [
+        "25_bang_sfx/cannon_04.wav",
+        "150_combat_sfx/04_magic_spells/Fire Spell Impact 4_s06.wav",
+        "150_combat_sfx/03_explosions_destruction/low_frequency_explosion_001_48kHz_16bit_1s_a63b8c61_s04.wav",
+        "25_bang_sfx/cannon_02.wav",
+        "150_combat_sfx/04_magic_spells/Fire Spell Impact 3_s06.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/weapons/shoot_magma_cannon_1.wav",
+          "sampleRate": 32000,
+          "samples": 13640,
+          "durationSec": 0.426,
+          "onsetMs": 0.62,
+          "peakDb": -1.0,
+          "rmsDb": -12.2,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        },
+        {
+          "file": "sfx/weapons/shoot_magma_cannon_2.wav",
+          "sampleRate": 32000,
+          "samples": 13600,
+          "durationSec": 0.425,
+          "onsetMs": 0.59,
+          "peakDb": -1.0,
+          "rmsDb": -14.15,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "shoot_coop_special": {
+      "category": "weapons",
+      "transient": true,
+      "files": [
+        "sfx/weapons/shoot_coop_special_1.wav",
+        "sfx/weapons/shoot_coop_special_2.wav"
+      ],
+      "licenses": [
+        "CC0-1.0"
+      ],
+      "packs": [
+        "150_combat_sfx",
+        "cure_magic"
+      ],
+      "sources": [
+        "150_combat_sfx/02_combat_ranged/ZapLauncher_01_s01.wav",
+        "cure_magic/Cure4.wav",
+        "150_combat_sfx/02_combat_ranged/ShootShort_s01.wav",
+        "150_combat_sfx/04_magic_spells/EnergyZap_s01.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/weapons/shoot_coop_special_1.wav",
+          "sampleRate": 32000,
+          "samples": 7844,
+          "durationSec": 0.245,
+          "onsetMs": 0.41,
+          "peakDb": -1.7,
+          "rmsDb": -15.54,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        },
+        {
+          "file": "sfx/weapons/shoot_coop_special_2.wav",
+          "sampleRate": 32000,
+          "samples": 6099,
+          "durationSec": 0.191,
+          "onsetMs": 0.31,
+          "peakDb": -1.7,
+          "rmsDb": -16.65,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "shoot_seed_gun": {
+      "category": "weapons",
+      "transient": true,
+      "files": [
+        "sfx/weapons/shoot_seed_gun_1.wav",
+        "sfx/weapons/shoot_seed_gun_2.wav"
+      ],
+      "licenses": [
+        "CC0-1.0"
+      ],
+      "packs": [
+        "150_combat_sfx",
+        "rpg_sound_pack"
+      ],
+      "sources": [
+        "150_combat_sfx/02_combat_ranged/ShootShort_s01.wav",
+        "rpg_sound_pack/RPG Sound Pack/inventory/bubble.wav",
+        "150_combat_sfx/04_magic_spells/Plant Spell Impact 2_s07.wav",
+        "rpg_sound_pack/RPG Sound Pack/inventory/bubble2.wav",
+        "150_combat_sfx/04_magic_spells/Plant Spell Impact 1_s07.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/weapons/shoot_seed_gun_1.wav",
+          "sampleRate": 32000,
+          "samples": 7759,
+          "durationSec": 0.242,
+          "onsetMs": 0.34,
+          "peakDb": -1.8,
+          "rmsDb": -14.73,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        },
+        {
+          "file": "sfx/weapons/shoot_seed_gun_2.wav",
+          "sampleRate": 32000,
+          "samples": 7787,
+          "durationSec": 0.243,
+          "onsetMs": 0.31,
+          "peakDb": -1.8,
+          "rmsDb": -15.79,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "shoot_tether_staff": {
+      "category": "weapons",
+      "transient": true,
+      "files": [
+        "sfx/weapons/shoot_tether_staff_1.wav",
+        "sfx/weapons/shoot_tether_staff_2.wav"
+      ],
+      "licenses": [
+        "CC0-1.0"
+      ],
+      "packs": [
+        "150_combat_sfx",
+        "80_cc0_rpg_sfx"
+      ],
+      "sources": [
+        "150_combat_sfx/02_combat_ranged/ZapLauncher_01_s01.wav",
+        "150_combat_sfx/04_magic_spells/ElectroZap_s01.wav",
+        "150_combat_sfx/04_magic_spells/EnergyZap_s01.wav",
+        "80_cc0_rpg_sfx/chain_02.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/weapons/shoot_tether_staff_1.wav",
+          "sampleRate": 32000,
+          "samples": 7501,
+          "durationSec": 0.234,
+          "onsetMs": 0.41,
+          "peakDb": -1.7,
+          "rmsDb": -17.61,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        },
+        {
+          "file": "sfx/weapons/shoot_tether_staff_2.wav",
+          "sampleRate": 32000,
+          "samples": 6100,
+          "durationSec": 0.191,
+          "onsetMs": 0.34,
+          "peakDb": -1.7,
+          "rmsDb": -13.99,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "swing_sword": {
+      "category": "weapons",
+      "transient": true,
+      "files": [
+        "sfx/weapons/swing_sword_1.wav",
+        "sfx/weapons/swing_sword_2.wav",
+        "sfx/weapons/swing_sword_3.wav"
+      ],
+      "licenses": [
+        "CC-BY-4.0",
+        "CC0-1.0"
+      ],
+      "packs": [
+        "oculus_pack",
+        "80_cc0_rpg_sfx"
+      ],
+      "sources": [
+        "oculus_pack/oculus-audio-pack/ogg/WHSH_WhooshMedium_OS_01.wav",
+        "oculus_pack/oculus-audio-pack/ogg/WEAPSwrd_Sword_OS_01.wav",
+        "oculus_pack/oculus-audio-pack/ogg/WHSH_WhooshMedium_OS_02.wav",
+        "80_cc0_rpg_sfx/blade_01.wav",
+        "oculus_pack/oculus-audio-pack/ogg/WHSH_WhooshMedium_OS_03.wav",
+        "80_cc0_rpg_sfx/blade_03.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/weapons/swing_sword_1.wav",
+          "sampleRate": 32000,
+          "samples": 5776,
+          "durationSec": 0.18,
+          "onsetMs": 0.59,
+          "peakDb": -1.6,
+          "rmsDb": -15.56,
+          "clippedSamples": 0,
+          "tailMax": 3e-05
+        },
+        {
+          "file": "sfx/weapons/swing_sword_2.wav",
+          "sampleRate": 32000,
+          "samples": 5007,
+          "durationSec": 0.156,
+          "onsetMs": 0.56,
+          "peakDb": -1.6,
+          "rmsDb": -13.44,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        },
+        {
+          "file": "sfx/weapons/swing_sword_3.wav",
+          "sampleRate": 32000,
+          "samples": 5867,
+          "durationSec": 0.183,
+          "onsetMs": 0.41,
+          "peakDb": -1.6,
+          "rmsDb": -12.16,
+          "clippedSamples": 0,
+          "tailMax": 3e-05
+        }
+      ]
+    },
+    "swing_heavy": {
+      "category": "weapons",
+      "transient": true,
+      "files": [
+        "sfx/weapons/swing_heavy_1.wav",
+        "sfx/weapons/swing_heavy_2.wav"
+      ],
+      "licenses": [
+        "CC-BY-4.0"
+      ],
+      "packs": [
+        "oculus_pack"
+      ],
+      "sources": [
+        "oculus_pack/oculus-audio-pack/ogg/SWSH_Swoosh_OS_02.wav",
+        "oculus_pack/oculus-audio-pack/ogg/FGHTImpt_Kick_OS_02.wav",
+        "oculus_pack/oculus-audio-pack/ogg/SWSH_Swoosh_OS_05.wav",
+        "oculus_pack/oculus-audio-pack/ogg/FGHTImpt_PunchHarder_OS_02.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/weapons/swing_heavy_1.wav",
+          "sampleRate": 32000,
+          "samples": 8719,
+          "durationSec": 0.272,
+          "onsetMs": 0.28,
+          "peakDb": -1.3,
+          "rmsDb": -12.84,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        },
+        {
+          "file": "sfx/weapons/swing_heavy_2.wav",
+          "sampleRate": 32000,
+          "samples": 8691,
+          "durationSec": 0.272,
+          "onsetMs": 0.44,
+          "peakDb": -1.3,
+          "rmsDb": -13.98,
+          "clippedSamples": 0,
+          "tailMax": 3e-05
+        }
+      ]
+    },
+    "swing_emerald_cleaver": {
+      "category": "weapons",
+      "transient": true,
+      "files": [
+        "sfx/weapons/swing_emerald_cleaver_1.wav",
+        "sfx/weapons/swing_emerald_cleaver_2.wav"
+      ],
+      "licenses": [
+        "CC-BY-4.0",
+        "CC0-1.0"
+      ],
+      "packs": [
+        "oculus_pack",
+        "150_combat_sfx",
+        "80_cc0_rpg_sfx"
+      ],
+      "sources": [
+        "oculus_pack/oculus-audio-pack/ogg/SWSH_Swoosh_OS_01.wav",
+        "oculus_pack/oculus-audio-pack/ogg/WEAPSwrd_SwordScrape_OS_01.wav",
+        "150_combat_sfx/01_combat_melee/slime_000_48kHz_16bit_0.5s_691d3d6e_s04.wav",
+        "oculus_pack/oculus-audio-pack/ogg/SWSH_Swoosh_OS_03.wav",
+        "oculus_pack/oculus-audio-pack/ogg/WEAPSwrd_Sword_OS_02.wav",
+        "80_cc0_rpg_sfx/item_gem_01.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/weapons/swing_emerald_cleaver_1.wav",
+          "sampleRate": 32000,
+          "samples": 7829,
+          "durationSec": 0.245,
+          "onsetMs": 0.72,
+          "peakDb": -1.4,
+          "rmsDb": -14.32,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        },
+        {
+          "file": "sfx/weapons/swing_emerald_cleaver_2.wav",
+          "sampleRate": 32000,
+          "samples": 7895,
+          "durationSec": 0.247,
+          "onsetMs": 0.38,
+          "peakDb": -1.4,
+          "rmsDb": -13.75,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "swing_berserker_axe": {
+      "category": "weapons",
+      "transient": true,
+      "files": [
+        "sfx/weapons/swing_berserker_axe_1.wav",
+        "sfx/weapons/swing_berserker_axe_2.wav"
+      ],
+      "licenses": [
+        "CC-BY-4.0",
+        "CC0-1.0"
+      ],
+      "packs": [
+        "oculus_pack",
+        "80_cc0_rpg_sfx"
+      ],
+      "sources": [
+        "oculus_pack/oculus-audio-pack/ogg/SWSH_Swoosh_OS_06.wav",
+        "oculus_pack/oculus-audio-pack/ogg/WEAPSwrd_Sword_OS_02.wav",
+        "80_cc0_rpg_sfx/spell_fire_06.wav",
+        "oculus_pack/oculus-audio-pack/ogg/SWSH_Swoosh_OS_02.wav",
+        "80_cc0_rpg_sfx/blade_02.wav",
+        "80_cc0_rpg_sfx/spell_fire_02.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/weapons/swing_berserker_axe_1.wav",
+          "sampleRate": 32000,
+          "samples": 9537,
+          "durationSec": 0.298,
+          "onsetMs": 0.62,
+          "peakDb": -1.2,
+          "rmsDb": -15.84,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        },
+        {
+          "file": "sfx/weapons/swing_berserker_axe_2.wav",
+          "sampleRate": 32000,
+          "samples": 9422,
+          "durationSec": 0.294,
+          "onsetMs": 0.62,
+          "peakDb": -1.2,
+          "rmsDb": -14.7,
+          "clippedSamples": 0,
+          "tailMax": 3e-05
+        }
+      ]
+    },
+    "swing_thunder_hammer": {
+      "category": "weapons",
+      "transient": true,
+      "files": [
+        "sfx/weapons/swing_thunder_hammer_1.wav",
+        "sfx/weapons/swing_thunder_hammer_2.wav"
+      ],
+      "licenses": [
+        "CC-BY-4.0",
+        "CC0-1.0"
+      ],
+      "packs": [
+        "oculus_pack",
+        "150_combat_sfx"
+      ],
+      "sources": [
+        "oculus_pack/oculus-audio-pack/ogg/SWSH_Swoosh_OS_02.wav",
+        "oculus_pack/oculus-audio-pack/ogg/METLImpt_HammerAnvil_OS_01.wav",
+        "150_combat_sfx/04_magic_spells/ElectroZap_s01.wav",
+        "oculus_pack/oculus-audio-pack/ogg/SWSH_Swoosh_OS_05.wav",
+        "oculus_pack/oculus-audio-pack/ogg/METLImpt_MetalHitSurface_OS_03.wav",
+        "150_combat_sfx/04_magic_spells/HeavyZap_s01.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/weapons/swing_thunder_hammer_1.wav",
+          "sampleRate": 32000,
+          "samples": 9258,
+          "durationSec": 0.289,
+          "onsetMs": 0.66,
+          "peakDb": -1.1,
+          "rmsDb": -14.72,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        },
+        {
+          "file": "sfx/weapons/swing_thunder_hammer_2.wav",
+          "sampleRate": 32000,
+          "samples": 9390,
+          "durationSec": 0.293,
+          "onsetMs": 0.53,
+          "peakDb": -1.1,
+          "rmsDb": -14.8,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "perfect_reload": {
+      "category": "weapons",
+      "transient": true,
+      "files": [
+        "sfx/weapons/perfect_reload.wav"
+      ],
+      "licenses": [
+        "CC-BY-4.0",
+        "CC0-1.0"
+      ],
+      "packs": [
+        "shotgun_sounds",
+        "oculus_pack",
+        "cure_magic"
+      ],
+      "sources": [
+        "shotgun_sounds/ShotgunSounds/Rack.wav",
+        "oculus_pack/oculus-audio-pack/ogg/UIClick_MetalConfirm_OS_01.wav",
+        "cure_magic/Cure2.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/weapons/perfect_reload.wav",
+          "sampleRate": 32000,
+          "samples": 8490,
+          "durationSec": 0.265,
+          "onsetMs": 0.38,
+          "peakDb": -1.3,
+          "rmsDb": -13.73,
+          "clippedSamples": 0,
+          "tailMax": 3e-05
+        }
+      ]
+    },
+    "reload_start": {
+      "category": "foley",
+      "transient": true,
+      "files": [
+        "sfx/foley/reload_start.wav"
+      ],
+      "licenses": [
+        "CC-BY-4.0",
+        "CC0-1.0"
+      ],
+      "packs": [
+        "oga_singles",
+        "oculus_pack"
+      ],
+      "sources": [
+        "oga_singles/clipload1.wav",
+        "oculus_pack/oculus-audio-pack/ogg/MECHLvr_LeverPull_OS_06.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/foley/reload_start.wav",
+          "sampleRate": 32000,
+          "samples": 4044,
+          "durationSec": 0.126,
+          "onsetMs": 0.72,
+          "peakDb": -2.8,
+          "rmsDb": -16.22,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "reload_complete": {
+      "category": "foley",
+      "transient": true,
+      "files": [
+        "sfx/foley/reload_complete.wav"
+      ],
+      "licenses": [
+        "CC-BY-4.0",
+        "CC0-1.0"
+      ],
+      "packs": [
+        "shotgun_sounds",
+        "oculus_pack"
+      ],
+      "sources": [
+        "shotgun_sounds/ShotgunSounds/Shell in Chamber.wav",
+        "oculus_pack/oculus-audio-pack/ogg/MECHLock_DoorUnlockKey_OS_01.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/foley/reload_complete.wav",
+          "sampleRate": 32000,
+          "samples": 5957,
+          "durationSec": 0.186,
+          "onsetMs": 0.5,
+          "peakDb": -2.2,
+          "rmsDb": -13.89,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "tactical_vent": {
+      "category": "weapons",
+      "transient": true,
+      "files": [
+        "sfx/weapons/tactical_vent.wav"
+      ],
+      "licenses": [
+        "CC-BY-4.0",
+        "CC0-1.0"
+      ],
+      "packs": [
+        "oculus_pack",
+        "150_combat_sfx"
+      ],
+      "sources": [
+        "oculus_pack/oculus-audio-pack/ogg/MACHInd_Hydraulic_OS_01.wav",
+        "150_combat_sfx/04_magic_spells/Wind Spell Impact 3_s07.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/weapons/tactical_vent.wav",
+          "sampleRate": 32000,
+          "samples": 10790,
+          "durationSec": 0.337,
+          "onsetMs": 0.75,
+          "peakDb": -1.5,
+          "rmsDb": -14.74,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "flip_cover": {
+      "category": "world",
+      "transient": true,
+      "files": [
+        "sfx/world/flip_cover.wav"
+      ],
+      "licenses": [
+        "CC-BY-4.0",
+        "CC0-1.0"
+      ],
+      "packs": [
+        "oculus_pack",
+        "150_combat_sfx"
+      ],
+      "sources": [
+        "oculus_pack/oculus-audio-pack/ogg/WOODImpt_LargeWoodDrop_OS_01.wav",
+        "150_combat_sfx/04_magic_spells/Earth Spell Impact 4_s07.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/world/flip_cover.wav",
+          "sampleRate": 32000,
+          "samples": 8985,
+          "durationSec": 0.281,
+          "onsetMs": 0.53,
+          "peakDb": -1.4,
+          "rmsDb": -14.43,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "wall_slam": {
+      "category": "combat",
+      "transient": true,
+      "files": [
+        "sfx/combat/wall_slam.wav"
+      ],
+      "licenses": [
+        "CC-BY-4.0",
+        "CC0-1.0"
+      ],
+      "packs": [
+        "oculus_pack",
+        "150_combat_sfx"
+      ],
+      "sources": [
+        "oculus_pack/oculus-audio-pack/ogg/FGHTImpt_PunchHarder_OS_03.wav",
+        "150_combat_sfx/04_magic_spells/Earth Spell Impact 5_s07.wav",
+        "oculus_pack/oculus-audio-pack/ogg/GOREBone_SkullCracking_OS_02.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/combat/wall_slam.wav",
+          "sampleRate": 32000,
+          "samples": 11529,
+          "durationSec": 0.36,
+          "onsetMs": 0.34,
+          "peakDb": -1.0,
+          "rmsDb": -12.82,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "crossbow_rip": {
+      "category": "weapons",
+      "transient": true,
+      "files": [
+        "sfx/weapons/crossbow_rip.wav"
+      ],
+      "licenses": [
+        "CC-BY-4.0",
+        "CC0-1.0"
+      ],
+      "packs": [
+        "150_combat_sfx",
+        "oculus_pack"
+      ],
+      "sources": [
+        "150_combat_sfx/01_combat_melee/knife_slice2_48kHz_16bit_0.56s_d1b73212_s03.wav",
+        "oculus_pack/oculus-audio-pack/ogg/GOREBone_SkullCracking_OS_02.wav",
+        "oculus_pack/oculus-audio-pack/ogg/PAPRRip_PaperTear_OS_01.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/weapons/crossbow_rip.wav",
+          "sampleRate": 32000,
+          "samples": 8960,
+          "durationSec": 0.28,
+          "onsetMs": 0.59,
+          "peakDb": -1.2,
+          "rmsDb": -17.71,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "thorn_whip": {
+      "category": "weapons",
+      "transient": true,
+      "files": [
+        "sfx/weapons/thorn_whip_1.wav",
+        "sfx/weapons/thorn_whip_2.wav"
+      ],
+      "licenses": [
+        "CC-BY-4.0",
+        "CC0-1.0"
+      ],
+      "packs": [
+        "oculus_pack",
+        "150_combat_sfx"
+      ],
+      "sources": [
+        "oculus_pack/oculus-audio-pack/ogg/SWSH_Swoosh_OS_04.wav",
+        "150_combat_sfx/04_magic_spells/Plant Spell Impact 1_s07.wav",
+        "oculus_pack/oculus-audio-pack/ogg/WHSH_WhooshMedium_OS_01.wav",
+        "150_combat_sfx/04_magic_spells/Plant Spell Impact 2_s07.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/weapons/thorn_whip_1.wav",
+          "sampleRate": 32000,
+          "samples": 7069,
+          "durationSec": 0.221,
+          "onsetMs": 0.69,
+          "peakDb": -1.6,
+          "rmsDb": -15.28,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        },
+        {
+          "file": "sfx/weapons/thorn_whip_2.wav",
+          "sampleRate": 32000,
+          "samples": 7021,
+          "durationSec": 0.219,
+          "onsetMs": 0.72,
+          "peakDb": -1.6,
+          "rmsDb": -15.06,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "thorn_bloom": {
+      "category": "weapons",
+      "transient": true,
+      "files": [
+        "sfx/weapons/thorn_bloom.wav"
+      ],
+      "licenses": [
+        "CC-BY-4.0",
+        "CC0-1.0"
+      ],
+      "packs": [
+        "150_combat_sfx",
+        "oculus_pack"
+      ],
+      "sources": [
+        "150_combat_sfx/04_magic_spells/Plant Spell Impact 3_s07.wav",
+        "oculus_pack/oculus-audio-pack/ogg/GORESqsh_BloodSquishSlimy_OS_03.wav",
+        "150_combat_sfx/03_explosions_destruction/Break_02_s01.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/weapons/thorn_bloom.wav",
+          "sampleRate": 32000,
+          "samples": 11481,
+          "durationSec": 0.359,
+          "onsetMs": 0.31,
+          "peakDb": -1.2,
+          "rmsDb": -14.43,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "scrap_shell_eject": {
+      "category": "weapons",
+      "transient": true,
+      "files": [
+        "sfx/weapons/scrap_shell_eject.wav"
+      ],
+      "licenses": [
+        "CC-BY-4.0",
+        "CC0-1.0"
+      ],
+      "packs": [
+        "shotgun_sounds",
+        "oculus_pack"
+      ],
+      "sources": [
+        "shotgun_sounds/ShotgunSounds/Rack.wav",
+        "oculus_pack/oculus-audio-pack/ogg/BLLTShel_ShellCasingConcrete_OS_01.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/weapons/scrap_shell_eject.wav",
+          "sampleRate": 32000,
+          "samples": 11177,
+          "durationSec": 0.349,
+          "onsetMs": 0.62,
+          "peakDb": -1.6,
+          "rmsDb": -14.7,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "gale_wind_blade": {
+      "category": "weapons",
+      "transient": true,
+      "files": [
+        "sfx/weapons/gale_wind_blade.wav"
+      ],
+      "licenses": [
+        "CC-BY-4.0",
+        "CC0-1.0"
+      ],
+      "packs": [
+        "oculus_pack",
+        "150_combat_sfx"
+      ],
+      "sources": [
+        "oculus_pack/oculus-audio-pack/ogg/SWSH_Swoosh_OS_03.wav",
+        "150_combat_sfx/01_combat_melee/knife_slice2_48kHz_16bit_0.56s_d1b73212_s03.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/weapons/gale_wind_blade.wav",
+          "sampleRate": 32000,
+          "samples": 7150,
+          "durationSec": 0.223,
+          "onsetMs": 0.47,
+          "peakDb": -1.6,
+          "rmsDb": -14.93,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "gale_cyclone_vent": {
+      "category": "weapons",
+      "transient": true,
+      "files": [
+        "sfx/weapons/gale_cyclone_vent.wav"
+      ],
+      "licenses": [
+        "CC-BY-4.0",
+        "CC0-1.0"
+      ],
+      "packs": [
+        "150_combat_sfx",
+        "oculus_pack"
+      ],
+      "sources": [
+        "150_combat_sfx/04_magic_spells/Wind Spell Impact 3_s07.wav",
+        "oculus_pack/oculus-audio-pack/ogg/SWSH_Swoosh_OS_06.wav",
+        "150_combat_sfx/03_explosions_destruction/BlastImpact_02_s01.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/weapons/gale_cyclone_vent.wav",
+          "sampleRate": 32000,
+          "samples": 13430,
+          "durationSec": 0.42,
+          "onsetMs": 0.62,
+          "peakDb": -1.2,
+          "rmsDb": -15.28,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "frag_airburst": {
+      "category": "weapons",
+      "transient": true,
+      "files": [
+        "sfx/weapons/frag_airburst.wav"
+      ],
+      "licenses": [
+        "CC-BY-4.0",
+        "CC0-1.0"
+      ],
+      "packs": [
+        "150_combat_sfx",
+        "oculus_pack"
+      ],
+      "sources": [
+        "150_combat_sfx/03_explosions_destruction/explosion_crunch_002_48kHz_16bit_1.26s_e0852ce0_s04.wav",
+        "oculus_pack/oculus-audio-pack/ogg/BLLTShel_ShellCasingMetal_OS_01.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/weapons/frag_airburst.wav",
+          "sampleRate": 32000,
+          "samples": 12757,
+          "durationSec": 0.399,
+          "onsetMs": 0.38,
+          "peakDb": -1.1,
+          "rmsDb": -15.72,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "seed_harvest_bloom": {
+      "category": "weapons",
+      "transient": true,
+      "files": [
+        "sfx/weapons/seed_harvest_bloom.wav"
+      ],
+      "licenses": [
+        "CC0-1.0"
+      ],
+      "packs": [
+        "150_combat_sfx",
+        "cure_magic"
+      ],
+      "sources": [
+        "150_combat_sfx/04_magic_spells/Healing Spell impact 8_s08.wav",
+        "150_combat_sfx/04_magic_spells/Plant Spell Impact 1_s07.wav",
+        "cure_magic/Cure3.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/weapons/seed_harvest_bloom.wav",
+          "sampleRate": 32000,
+          "samples": 12429,
+          "durationSec": 0.388,
+          "onsetMs": 0.53,
+          "peakDb": -1.3,
+          "rmsDb": -15.25,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "tether_em_yank": {
+      "category": "weapons",
+      "transient": true,
+      "files": [
+        "sfx/weapons/tether_em_yank.wav"
+      ],
+      "licenses": [
+        "CC0-1.0"
+      ],
+      "packs": [
+        "150_combat_sfx",
+        "80_cc0_rpg_sfx"
+      ],
+      "sources": [
+        "150_combat_sfx/04_magic_spells/EMP_02_s01.wav",
+        "150_combat_sfx/03_explosions_destruction/ElectricExplosion_s01.wav",
+        "80_cc0_rpg_sfx/chain_01.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/weapons/tether_em_yank.wav",
+          "sampleRate": 32000,
+          "samples": 11685,
+          "durationSec": 0.365,
+          "onsetMs": 0.53,
+          "peakDb": -1.1,
+          "rmsDb": -15.95,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "focus_laser_hum": {
+      "category": "weapons",
+      "transient": true,
+      "files": [
+        "sfx/weapons/focus_laser_hum.wav"
+      ],
+      "licenses": [
+        "CC-BY-4.0",
+        "CC0-1.0"
+      ],
+      "packs": [
+        "150_combat_sfx",
+        "oculus_pack"
+      ],
+      "sources": [
+        "150_combat_sfx/02_combat_ranged/Laser Beam 1_s09.wav",
+        "oculus_pack/oculus-audio-pack/ogg/LASRGun_LaserShootUI_OS_01.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/weapons/focus_laser_hum.wav",
+          "sampleRate": 32000,
+          "samples": 4700,
+          "durationSec": 0.147,
+          "onsetMs": 0.59,
+          "peakDb": -2.6,
+          "rmsDb": -13.79,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "focus_laser_railgun": {
+      "category": "weapons",
+      "transient": true,
+      "files": [
+        "sfx/weapons/focus_laser_railgun.wav"
+      ],
+      "licenses": [
+        "CC0-1.0"
+      ],
+      "packs": [
+        "150_combat_sfx"
+      ],
+      "sources": [
+        "150_combat_sfx/02_combat_ranged/HeavyShot_01_s01.wav",
+        "150_combat_sfx/02_combat_ranged/Laser Rifle 2_s09.wav",
+        "150_combat_sfx/03_explosions_destruction/ElectricExplosion_s01.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/weapons/focus_laser_railgun.wav",
+          "sampleRate": 32000,
+          "samples": 13021,
+          "durationSec": 0.407,
+          "onsetMs": 0.41,
+          "peakDb": -1.0,
+          "rmsDb": -14.76,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "void_implosion": {
+      "category": "weapons",
+      "transient": true,
+      "files": [
+        "sfx/weapons/void_implosion.wav"
+      ],
+      "licenses": [
+        "CC-BY-4.0",
+        "CC0-1.0"
+      ],
+      "packs": [
+        "150_combat_sfx",
+        "oculus_pack"
+      ],
+      "sources": [
+        "150_combat_sfx/03_explosions_destruction/GravityBomb_03_s01.wav",
+        "oculus_pack/oculus-audio-pack/ogg/DSGNImpt_ImpactCreepyReverb_OS_02.wav",
+        "150_combat_sfx/04_magic_spells/EMP_01_s01.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/weapons/void_implosion.wav",
+          "sampleRate": 32000,
+          "samples": 16107,
+          "durationSec": 0.503,
+          "onsetMs": 0.53,
+          "peakDb": -1.0,
+          "rmsDb": -11.97,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "emerald_boomerang": {
+      "category": "weapons",
+      "transient": true,
+      "files": [
+        "sfx/weapons/emerald_boomerang.wav"
+      ],
+      "licenses": [
+        "CC-BY-4.0",
+        "CC0-1.0"
+      ],
+      "packs": [
+        "oculus_pack",
+        "80_cc0_rpg_sfx"
+      ],
+      "sources": [
+        "oculus_pack/oculus-audio-pack/ogg/WEAPSwrd_SwordClash_OS_01.wav",
+        "oculus_pack/oculus-audio-pack/ogg/SWSH_Swoosh_OS_03.wav",
+        "80_cc0_rpg_sfx/item_gem_01.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/weapons/emerald_boomerang.wav",
+          "sampleRate": 32000,
+          "samples": 10201,
+          "durationSec": 0.319,
+          "onsetMs": 0.72,
+          "peakDb": -1.3,
+          "rmsDb": -16.32,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "berserker_guillotine": {
+      "category": "weapons",
+      "transient": true,
+      "files": [
+        "sfx/weapons/berserker_guillotine.wav"
+      ],
+      "licenses": [
+        "CC-BY-4.0",
+        "CC0-1.0"
+      ],
+      "packs": [
+        "150_combat_sfx",
+        "oculus_pack"
+      ],
+      "sources": [
+        "150_combat_sfx/04_magic_spells/Earth Spell Impact 4_s07.wav",
+        "oculus_pack/oculus-audio-pack/ogg/METLImpt_HammerAnvil_OS_01.wav",
+        "150_combat_sfx/04_magic_spells/Fire Spell Impact 4_s06.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/weapons/berserker_guillotine.wav",
+          "sampleRate": 32000,
+          "samples": 14844,
+          "durationSec": 0.464,
+          "onsetMs": 0.56,
+          "peakDb": -1.0,
+          "rmsDb": -15.58,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "solar_supernova": {
+      "category": "weapons",
+      "transient": true,
+      "files": [
+        "sfx/weapons/solar_supernova.wav"
+      ],
+      "licenses": [
+        "CC-BY-4.0",
+        "CC0-1.0"
+      ],
+      "packs": [
+        "150_combat_sfx",
+        "oculus_pack"
+      ],
+      "sources": [
+        "150_combat_sfx/03_explosions_destruction/explosion_crunch_001_48kHz_16bit_1.36s_5803a7f0_s04.wav",
+        "150_combat_sfx/04_magic_spells/Fire Spell Impact 3_s06.wav",
+        "oculus_pack/oculus-audio-pack/ogg/UIMisc_BelltreeUp_OS_01.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/weapons/solar_supernova.wav",
+          "sampleRate": 32000,
+          "samples": 17799,
+          "durationSec": 0.556,
+          "onsetMs": 0.59,
+          "peakDb": -1.0,
+          "rmsDb": -13.66,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "magma_geyser": {
+      "category": "weapons",
+      "transient": true,
+      "files": [
+        "sfx/weapons/magma_geyser.wav"
+      ],
+      "licenses": [
+        "CC0-1.0"
+      ],
+      "packs": [
+        "150_combat_sfx"
+      ],
+      "sources": [
+        "150_combat_sfx/04_magic_spells/Earth Spell Impact 5_s07.wav",
+        "150_combat_sfx/04_magic_spells/Fire Spell Impact 1_s06.wav",
+        "150_combat_sfx/04_magic_spells/Water Spell Impact 1_s06.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/weapons/magma_geyser.wav",
+          "sampleRate": 32000,
+          "samples": 14801,
+          "durationSec": 0.463,
+          "onsetMs": 0.47,
+          "peakDb": -1.0,
+          "rmsDb": -11.85,
+          "clippedSamples": 0,
+          "tailMax": 3e-05
+        }
+      ]
+    },
+    "thunder_pillar": {
+      "category": "weapons",
+      "transient": true,
+      "files": [
+        "sfx/weapons/thunder_pillar.wav"
+      ],
+      "licenses": [
+        "CC-BY-4.0",
+        "CC0-1.0"
+      ],
+      "packs": [
+        "150_combat_sfx",
+        "oculus_pack"
+      ],
+      "sources": [
+        "150_combat_sfx/04_magic_spells/Lightning Spell Impact 1_s06.wav",
+        "oculus_pack/oculus-audio-pack/ogg/METLImpt_HammerAnvil_OS_01.wav",
+        "150_combat_sfx/03_explosions_destruction/explosion_crunch_000_48kHz_16bit_0.78s_e875be4e_s04.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/weapons/thunder_pillar.wav",
+          "sampleRate": 32000,
+          "samples": 17127,
+          "durationSec": 0.535,
+          "onsetMs": 0.59,
+          "peakDb": -1.0,
+          "rmsDb": -13.81,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "bullet_deflect": {
+      "category": "combat",
+      "transient": true,
+      "files": [
+        "sfx/combat/bullet_deflect_1.wav",
+        "sfx/combat/bullet_deflect_2.wav"
+      ],
+      "licenses": [
+        "CC-BY-4.0",
+        "CC0-1.0"
+      ],
+      "packs": [
+        "oculus_pack",
+        "weapons_apparel"
+      ],
+      "sources": [
+        "oculus_pack/oculus-audio-pack/ogg/WEAPSwrd_SwordClash_OS_01.wav",
+        "weapons_apparel/sfx/sword-knife-clash-15.wav",
+        "weapons_apparel/sfx/sword-knife-clash-16.wav",
+        "oculus_pack/oculus-audio-pack/ogg/BLLTShel_ShellCasingMetal_OS_01.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/combat/bullet_deflect_1.wav",
+          "sampleRate": 32000,
+          "samples": 7370,
+          "durationSec": 0.23,
+          "onsetMs": 0.5,
+          "peakDb": -1.5,
+          "rmsDb": -14.84,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        },
+        {
+          "file": "sfx/combat/bullet_deflect_2.wav",
+          "sampleRate": 32000,
+          "samples": 6763,
+          "durationSec": 0.211,
+          "onsetMs": 0.59,
+          "peakDb": -1.5,
+          "rmsDb": -17.67,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "hit_enemy": {
+      "category": "combat",
+      "transient": true,
+      "files": [
+        "sfx/combat/hit_enemy_1.wav",
+        "sfx/combat/hit_enemy_2.wav",
+        "sfx/combat/hit_enemy_3.wav"
+      ],
+      "licenses": [
+        "CC-BY-4.0",
+        "CC0-1.0"
+      ],
+      "packs": [
+        "150_combat_sfx",
+        "oculus_pack"
+      ],
+      "sources": [
+        "150_combat_sfx/01_combat_melee/Impact_01_s01.wav",
+        "oculus_pack/oculus-audio-pack/ogg/FGHTImpt_PunchRegular_OS_02.wav",
+        "150_combat_sfx/01_combat_melee/Impact_02_s01.wav",
+        "oculus_pack/oculus-audio-pack/ogg/FGHTImpt_PunchRegular_OS_05.wav",
+        "150_combat_sfx/01_combat_melee/impact_punch_medium_001_48kHz_16bit_0.35s_bfeb7339_s02.wav",
+        "150_combat_sfx/01_combat_melee/SmallImpact_01_s01.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/combat/hit_enemy_1.wav",
+          "sampleRate": 32000,
+          "samples": 4940,
+          "durationSec": 0.154,
+          "onsetMs": 0.44,
+          "peakDb": -2.0,
+          "rmsDb": -16.87,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        },
+        {
+          "file": "sfx/combat/hit_enemy_2.wav",
+          "sampleRate": 32000,
+          "samples": 5006,
+          "durationSec": 0.156,
+          "onsetMs": 0.41,
+          "peakDb": -2.0,
+          "rmsDb": -15.23,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        },
+        {
+          "file": "sfx/combat/hit_enemy_3.wav",
+          "sampleRate": 32000,
+          "samples": 4434,
+          "durationSec": 0.139,
+          "onsetMs": 0.72,
+          "peakDb": -2.0,
+          "rmsDb": -14.23,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "crit_hit": {
+      "category": "combat",
+      "transient": true,
+      "files": [
+        "sfx/combat/crit_hit_1.wav",
+        "sfx/combat/crit_hit_2.wav"
+      ],
+      "licenses": [
+        "CC-BY-4.0",
+        "CC0-1.0"
+      ],
+      "packs": [
+        "oculus_pack",
+        "80_cc0_rpg_sfx"
+      ],
+      "sources": [
+        "oculus_pack/oculus-audio-pack/ogg/FGHTImpt_PunchHarder_OS_01.wav",
+        "oculus_pack/oculus-audio-pack/ogg/GOREBone_SkullCracking_OS_02.wav",
+        "80_cc0_rpg_sfx/blade_01.wav",
+        "oculus_pack/oculus-audio-pack/ogg/FGHTImpt_PunchHarder_OS_04.wav",
+        "oculus_pack/oculus-audio-pack/ogg/WEAPSwrd_SwordClash_OS_01.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/combat/crit_hit_1.wav",
+          "sampleRate": 32000,
+          "samples": 7363,
+          "durationSec": 0.23,
+          "onsetMs": 0.41,
+          "peakDb": -1.2,
+          "rmsDb": -15.12,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        },
+        {
+          "file": "sfx/combat/crit_hit_2.wav",
+          "sampleRate": 32000,
+          "samples": 7243,
+          "durationSec": 0.226,
+          "onsetMs": 0.75,
+          "peakDb": -1.2,
+          "rmsDb": -14.8,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "hit_armor": {
+      "category": "combat",
+      "transient": true,
+      "files": [
+        "sfx/combat/hit_armor_1.wav",
+        "sfx/combat/hit_armor_2.wav"
+      ],
+      "licenses": [
+        "CC-BY-4.0",
+        "CC0-1.0"
+      ],
+      "packs": [
+        "oculus_pack",
+        "oga_singles",
+        "80_cc0_rpg_sfx"
+      ],
+      "sources": [
+        "oculus_pack/oculus-audio-pack/ogg/METLImpt_MetalHitSurface_OS_01.wav",
+        "oga_singles/shieldhit.wav",
+        "oculus_pack/oculus-audio-pack/ogg/METLImpt_MetalHitSurface_OS_05.wav",
+        "80_cc0_rpg_sfx/metal_02.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/combat/hit_armor_1.wav",
+          "sampleRate": 32000,
+          "samples": 6299,
+          "durationSec": 0.197,
+          "onsetMs": 0.41,
+          "peakDb": -1.8,
+          "rmsDb": -12.37,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        },
+        {
+          "file": "sfx/combat/hit_armor_2.wav",
+          "sampleRate": 32000,
+          "samples": 6349,
+          "durationSec": 0.198,
+          "onsetMs": 0.62,
+          "peakDb": -1.8,
+          "rmsDb": -14.81,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "impact_wall": {
+      "category": "combat",
+      "transient": true,
+      "files": [
+        "sfx/combat/impact_wall_1.wav",
+        "sfx/combat/impact_wall_2.wav"
+      ],
+      "licenses": [
+        "CC0-1.0"
+      ],
+      "packs": [
+        "150_combat_sfx",
+        "80_cc0_rpg_sfx",
+        "oga_singles"
+      ],
+      "sources": [
+        "150_combat_sfx/01_combat_melee/SmallImpact_01_s01.wav",
+        "80_cc0_rpg_sfx/stones_04.wav",
+        "150_combat_sfx/01_combat_melee/SmallImpact_03_s01.wav",
+        "oga_singles/groundhit.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/combat/impact_wall_1.wav",
+          "sampleRate": 32000,
+          "samples": 3848,
+          "durationSec": 0.12,
+          "onsetMs": 0.31,
+          "peakDb": -3.6,
+          "rmsDb": -19.22,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        },
+        {
+          "file": "sfx/combat/impact_wall_2.wav",
+          "sampleRate": 32000,
+          "samples": 3876,
+          "durationSec": 0.121,
+          "onsetMs": 0.28,
+          "peakDb": -3.6,
+          "rmsDb": -19.97,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "kill_enemy": {
+      "category": "combat",
+      "transient": true,
+      "files": [
+        "sfx/combat/kill_enemy_1.wav",
+        "sfx/combat/kill_enemy_2.wav"
+      ],
+      "licenses": [
+        "CC-BY-4.0",
+        "CC0-1.0"
+      ],
+      "packs": [
+        "oculus_pack",
+        "80_cc0_rpg_sfx"
+      ],
+      "sources": [
+        "oculus_pack/oculus-audio-pack/ogg/FGHTImpt_Kick_OS_02.wav",
+        "oculus_pack/oculus-audio-pack/ogg/GORESqsh_BloodSquishSlimy_OS_03.wav",
+        "oculus_pack/oculus-audio-pack/ogg/CREAHmn_TrollHurt_OS_01.wav",
+        "oculus_pack/oculus-audio-pack/ogg/FGHTImpt_PunchHarder_OS_02.wav",
+        "oculus_pack/oculus-audio-pack/ogg/GOREBone_BonesBreaking_OS_01.wav",
+        "80_cc0_rpg_sfx/creature_hurt_01.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/combat/kill_enemy_1.wav",
+          "sampleRate": 32000,
+          "samples": 7403,
+          "durationSec": 0.231,
+          "onsetMs": 0.41,
+          "peakDb": -1.4,
+          "rmsDb": -13.51,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        },
+        {
+          "file": "sfx/combat/kill_enemy_2.wav",
+          "sampleRate": 32000,
+          "samples": 7626,
+          "durationSec": 0.238,
+          "onsetMs": 0.44,
+          "peakDb": -1.4,
+          "rmsDb": -13.09,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "player_hurt": {
+      "category": "combat",
+      "transient": true,
+      "files": [
+        "sfx/combat/player_hurt_1.wav",
+        "sfx/combat/player_hurt_2.wav"
+      ],
+      "licenses": [
+        "CC-BY-4.0",
+        "CC0-1.0"
+      ],
+      "packs": [
+        "oculus_pack",
+        "rpg_sound_pack"
+      ],
+      "sources": [
+        "oculus_pack/oculus-audio-pack/ogg/FGHTImpt_Kick_OS_01.wav",
+        "rpg_sound_pack/RPG Sound Pack/inventory/armor-light.wav",
+        "oculus_pack/oculus-audio-pack/ogg/VOXMale_Male01Hurt_OS_03.wav",
+        "oculus_pack/oculus-audio-pack/ogg/FGHTImpt_PunchHarder_OS_03.wav",
+        "rpg_sound_pack/RPG Sound Pack/inventory/chainmail2.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/combat/player_hurt_1.wav",
+          "sampleRate": 32000,
+          "samples": 7515,
+          "durationSec": 0.235,
+          "onsetMs": 0.31,
+          "peakDb": -1.1,
+          "rmsDb": -11.42,
+          "clippedSamples": 0,
+          "tailMax": 3e-05
+        },
+        {
+          "file": "sfx/combat/player_hurt_2.wav",
+          "sampleRate": 32000,
+          "samples": 8020,
+          "durationSec": 0.251,
+          "onsetMs": 0.38,
+          "peakDb": -1.1,
+          "rmsDb": -13.1,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "armor_break": {
+      "category": "combat",
+      "transient": true,
+      "files": [
+        "sfx/combat/armor_break.wav"
+      ],
+      "licenses": [
+        "CC-BY-4.0",
+        "CC0-1.0"
+      ],
+      "packs": [
+        "oga_singles",
+        "150_combat_sfx",
+        "oculus_pack"
+      ],
+      "sources": [
+        "oga_singles/shieldhit.wav",
+        "150_combat_sfx/03_explosions_destruction/BreakGlass_03_s01.wav",
+        "oculus_pack/oculus-audio-pack/ogg/METLImpt_HammerAnvil_OS_01.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/combat/armor_break.wav",
+          "sampleRate": 32000,
+          "samples": 11404,
+          "durationSec": 0.356,
+          "onsetMs": 0.41,
+          "peakDb": -1.0,
+          "rmsDb": -14.06,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "low_hp_heartbeat": {
+      "category": "combat",
+      "transient": false,
+      "files": [
+        "sfx/combat/low_hp_heartbeat.wav"
+      ],
+      "licenses": [
+        "CC-BY-4.0"
+      ],
+      "packs": [
+        "oculus_pack"
+      ],
+      "sources": [
+        "oculus_pack/oculus-audio-pack/ogg/FGHTImpt_PunchRegular_OS_04.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/combat/low_hp_heartbeat.wav",
+          "sampleRate": 32000,
+          "samples": 11040,
+          "durationSec": 0.345,
+          "onsetMs": 1.69,
+          "peakDb": -2.2,
+          "rmsDb": -11.16,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "player_downed": {
+      "category": "combat",
+      "transient": true,
+      "files": [
+        "sfx/combat/player_downed.wav"
+      ],
+      "licenses": [
+        "CC-BY-4.0",
+        "CC0-1.0"
+      ],
+      "packs": [
+        "oculus_pack",
+        "oga_singles"
+      ],
+      "sources": [
+        "oculus_pack/oculus-audio-pack/ogg/DSGNImpt_ImpactCreepyReverb_OS_02.wav",
+        "oga_singles/powerdown.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/combat/player_downed.wav",
+          "sampleRate": 32000,
+          "samples": 19482,
+          "durationSec": 0.609,
+          "onsetMs": 0.38,
+          "peakDb": -1.0,
+          "rmsDb": -14.24,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "player_revived": {
+      "category": "combat",
+      "transient": true,
+      "files": [
+        "sfx/combat/player_revived.wav"
+      ],
+      "licenses": [
+        "CC-BY-4.0",
+        "CC0-1.0"
+      ],
+      "packs": [
+        "cure_magic",
+        "oculus_pack"
+      ],
+      "sources": [
+        "cure_magic/Cure6.wav",
+        "oculus_pack/oculus-audio-pack/ogg/MUSCStngr_LevelUpOrchestral_OS_01.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/combat/player_revived.wav",
+          "sampleRate": 32000,
+          "samples": 19332,
+          "durationSec": 0.604,
+          "onsetMs": 0.44,
+          "peakDb": -1.2,
+          "rmsDb": -13.62,
+          "clippedSamples": 0,
+          "tailMax": 3e-05
+        }
+      ]
+    },
+    "dash": {
+      "category": "foley",
+      "transient": true,
+      "files": [
+        "sfx/foley/dash_1.wav",
+        "sfx/foley/dash_2.wav"
+      ],
+      "licenses": [
+        "CC-BY-4.0",
+        "CC0-1.0"
+      ],
+      "packs": [
+        "oculus_pack",
+        "rpg_sound_pack"
+      ],
+      "sources": [
+        "oculus_pack/oculus-audio-pack/ogg/SWSH_Swoosh_OS_01.wav",
+        "rpg_sound_pack/RPG Sound Pack/inventory/cloth-heavy.wav",
+        "oculus_pack/oculus-audio-pack/ogg/SWSH_Swoosh_OS_06.wav",
+        "rpg_sound_pack/RPG Sound Pack/inventory/cloth.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/foley/dash_1.wav",
+          "sampleRate": 32000,
+          "samples": 5759,
+          "durationSec": 0.18,
+          "onsetMs": 0.69,
+          "peakDb": -2.0,
+          "rmsDb": -17.44,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        },
+        {
+          "file": "sfx/foley/dash_2.wav",
+          "sampleRate": 32000,
+          "samples": 6104,
+          "durationSec": 0.191,
+          "onsetMs": 0.56,
+          "peakDb": -2.0,
+          "rmsDb": -16.35,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "explosion": {
+      "category": "combat",
+      "transient": true,
+      "files": [
+        "sfx/combat/explosion_1.wav",
+        "sfx/combat/explosion_2.wav"
+      ],
+      "licenses": [
+        "CC0-1.0"
+      ],
+      "packs": [
+        "150_combat_sfx",
+        "25_bang_sfx"
+      ],
+      "sources": [
+        "150_combat_sfx/03_explosions_destruction/explosion_crunch_000_48kHz_16bit_0.78s_e875be4e_s04.wav",
+        "25_bang_sfx/bang_09.wav",
+        "150_combat_sfx/03_explosions_destruction/explosion_crunch_001_48kHz_16bit_1.36s_5803a7f0_s04.wav",
+        "150_combat_sfx/03_explosions_destruction/BlastImpact_03_s01.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/combat/explosion_1.wav",
+          "sampleRate": 32000,
+          "samples": 16463,
+          "durationSec": 0.514,
+          "onsetMs": 0.62,
+          "peakDb": -1.0,
+          "rmsDb": -14.39,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        },
+        {
+          "file": "sfx/combat/explosion_2.wav",
+          "sampleRate": 32000,
+          "samples": 17169,
+          "durationSec": 0.537,
+          "onsetMs": 0.62,
+          "peakDb": -1.0,
+          "rmsDb": -14.61,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "telegraph": {
+      "category": "enemies",
+      "transient": true,
+      "files": [
+        "sfx/enemies/telegraph.wav"
+      ],
+      "licenses": [
+        "CC-BY-4.0",
+        "CC0-1.0"
+      ],
+      "packs": [
+        "150_combat_sfx",
+        "oculus_pack"
+      ],
+      "sources": [
+        "150_combat_sfx/04_magic_spells/Retro Charge Magic 11_s05.wav",
+        "oculus_pack/oculus-audio-pack/ogg/UIAlert_MagicalError_OS_01.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/enemies/telegraph.wav",
+          "sampleRate": 32000,
+          "samples": 10014,
+          "durationSec": 0.313,
+          "onsetMs": 0.47,
+          "peakDb": -1.8,
+          "rmsDb": -14.66,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "boss_roar": {
+      "category": "enemies",
+      "transient": true,
+      "files": [
+        "sfx/enemies/boss_roar_1.wav",
+        "sfx/enemies/boss_roar_2.wav"
+      ],
+      "licenses": [
+        "CC-BY-4.0",
+        "CC0-1.0"
+      ],
+      "packs": [
+        "80_cc0_rpg_sfx",
+        "oculus_pack"
+      ],
+      "sources": [
+        "80_cc0_rpg_sfx/creature_roar_03.wav",
+        "oculus_pack/oculus-audio-pack/ogg/CREAHmn_GiantEffort_OS_01.wav",
+        "oculus_pack/oculus-audio-pack/ogg/DSGNImpt_ImpactCreepyReverb_OS_03.wav",
+        "80_cc0_rpg_sfx/creature_roar_01.wav",
+        "oculus_pack/oculus-audio-pack/ogg/CREAMnstr_CreatureCreepyReverb_OS_03.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/enemies/boss_roar_1.wav",
+          "sampleRate": 32000,
+          "samples": 26955,
+          "durationSec": 0.842,
+          "onsetMs": 0.66,
+          "peakDb": -1.0,
+          "rmsDb": -13.52,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        },
+        {
+          "file": "sfx/enemies/boss_roar_2.wav",
+          "sampleRate": 32000,
+          "samples": 26613,
+          "durationSec": 0.832,
+          "onsetMs": 0.44,
+          "peakDb": -1.0,
+          "rmsDb": -13.02,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "boss_phase_change": {
+      "category": "enemies",
+      "transient": true,
+      "files": [
+        "sfx/enemies/boss_phase_change.wav"
+      ],
+      "licenses": [
+        "CC-BY-4.0",
+        "CC0-1.0"
+      ],
+      "packs": [
+        "150_combat_sfx",
+        "oculus_pack"
+      ],
+      "sources": [
+        "150_combat_sfx/04_magic_spells/EMP_01_s01.wav",
+        "oculus_pack/oculus-audio-pack/ogg/DSGNImpt_ImpactCreepyReverb_OS_01.wav",
+        "oculus_pack/oculus-audio-pack/ogg/CREAMnstr_CreatureCreepyReverb_OS_02.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/enemies/boss_phase_change.wav",
+          "sampleRate": 32000,
+          "samples": 24738,
+          "durationSec": 0.773,
+          "onsetMs": 0.34,
+          "peakDb": -1.0,
+          "rmsDb": -13.78,
+          "clippedSamples": 0,
+          "tailMax": 6e-05
+        }
+      ]
+    },
+    "shoot_enemy_magic": {
+      "category": "enemies",
+      "transient": true,
+      "files": [
+        "sfx/enemies/shoot_enemy_magic_1.wav",
+        "sfx/enemies/shoot_enemy_magic_2.wav"
+      ],
+      "licenses": [
+        "CC0-1.0"
+      ],
+      "packs": [
+        "150_combat_sfx",
+        "80_cc0_rpg_sfx",
+        "oga_singles"
+      ],
+      "sources": [
+        "150_combat_sfx/02_combat_ranged/Shoot_01_s01.wav",
+        "80_cc0_rpg_sfx/spell_02.wav",
+        "150_combat_sfx/02_combat_ranged/Shoot_02_s01.wav",
+        "oga_singles/magical_3.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/enemies/shoot_enemy_magic_1.wav",
+          "sampleRate": 32000,
+          "samples": 6876,
+          "durationSec": 0.215,
+          "onsetMs": 0.31,
+          "peakDb": -2.4,
+          "rmsDb": -16.12,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        },
+        {
+          "file": "sfx/enemies/shoot_enemy_magic_2.wav",
+          "sampleRate": 32000,
+          "samples": 6849,
+          "durationSec": 0.214,
+          "onsetMs": 0.31,
+          "peakDb": -2.4,
+          "rmsDb": -14.74,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "shoot_enemy_heavy": {
+      "category": "enemies",
+      "transient": true,
+      "files": [
+        "sfx/enemies/shoot_enemy_heavy_1.wav",
+        "sfx/enemies/shoot_enemy_heavy_2.wav"
+      ],
+      "licenses": [
+        "CC0-1.0"
+      ],
+      "packs": [
+        "150_combat_sfx",
+        "25_bang_sfx"
+      ],
+      "sources": [
+        "150_combat_sfx/02_combat_ranged/HeavyShot_02_s01.wav",
+        "25_bang_sfx/cannon_04.wav",
+        "150_combat_sfx/02_combat_ranged/HeavyShot_03_s01.wav",
+        "25_bang_sfx/bang_01.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/enemies/shoot_enemy_heavy_1.wav",
+          "sampleRate": 32000,
+          "samples": 8990,
+          "durationSec": 0.281,
+          "onsetMs": 0.38,
+          "peakDb": -1.8,
+          "rmsDb": -16.41,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        },
+        {
+          "file": "sfx/enemies/shoot_enemy_heavy_2.wav",
+          "sampleRate": 32000,
+          "samples": 9032,
+          "durationSec": 0.282,
+          "onsetMs": 0.47,
+          "peakDb": -1.8,
+          "rmsDb": -17.04,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "shaman_heal": {
+      "category": "enemies",
+      "transient": true,
+      "files": [
+        "sfx/enemies/shaman_heal.wav"
+      ],
+      "licenses": [
+        "CC0-1.0"
+      ],
+      "packs": [
+        "cure_magic",
+        "150_combat_sfx"
+      ],
+      "sources": [
+        "cure_magic/Cure4.wav",
+        "150_combat_sfx/04_magic_spells/Healing Spell Impact 10_s08.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/enemies/shaman_heal.wav",
+          "sampleRate": 32000,
+          "samples": 13164,
+          "durationSec": 0.411,
+          "onsetMs": 0.59,
+          "peakDb": -2.0,
+          "rmsDb": -15.41,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "shockwave_slam": {
+      "category": "enemies",
+      "transient": true,
+      "files": [
+        "sfx/enemies/shockwave_slam.wav"
+      ],
+      "licenses": [
+        "CC0-1.0"
+      ],
+      "packs": [
+        "150_combat_sfx"
+      ],
+      "sources": [
+        "150_combat_sfx/04_magic_spells/Earth Spell Impact 4_s07.wav",
+        "150_combat_sfx/03_explosions_destruction/low_frequency_explosion_001_48kHz_16bit_1s_a63b8c61_s04.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/enemies/shockwave_slam.wav",
+          "sampleRate": 32000,
+          "samples": 14447,
+          "durationSec": 0.451,
+          "onsetMs": 0.47,
+          "peakDb": -1.1,
+          "rmsDb": -12.9,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "skill_cast": {
+      "category": "skills",
+      "transient": true,
+      "files": [
+        "sfx/skills/skill_cast.wav"
+      ],
+      "licenses": [
+        "CC-BY-4.0"
+      ],
+      "packs": [
+        "oculus_pack"
+      ],
+      "sources": [
+        "oculus_pack/oculus-audio-pack/ogg/MAGSpel_MagicSpell_OS_01.wav",
+        "oculus_pack/oculus-audio-pack/ogg/UIMisc_Powerup_OS_02.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/skills/skill_cast.wav",
+          "sampleRate": 32000,
+          "samples": 12160,
+          "durationSec": 0.38,
+          "onsetMs": 0.41,
+          "peakDb": -1.4,
+          "rmsDb": -13.2,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "skill_vanguard": {
+      "category": "skills",
+      "transient": true,
+      "files": [
+        "sfx/skills/skill_vanguard.wav"
+      ],
+      "licenses": [
+        "CC-BY-4.0",
+        "CC0-1.0"
+      ],
+      "packs": [
+        "oculus_pack",
+        "oga_singles"
+      ],
+      "sources": [
+        "oculus_pack/oculus-audio-pack/ogg/METLImpt_HammerAnvil_OS_01.wav",
+        "oga_singles/shieldhit.wav",
+        "oculus_pack/oculus-audio-pack/ogg/WEAPSwrd_SwordClash_OS_01.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/skills/skill_vanguard.wav",
+          "sampleRate": 32000,
+          "samples": 11617,
+          "durationSec": 0.363,
+          "onsetMs": 0.62,
+          "peakDb": -1.1,
+          "rmsDb": -12.57,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "skill_ranger": {
+      "category": "skills",
+      "transient": true,
+      "files": [
+        "sfx/skills/skill_ranger.wav"
+      ],
+      "licenses": [
+        "CC-BY-4.0",
+        "CC0-1.0"
+      ],
+      "packs": [
+        "oculus_pack",
+        "weapons_apparel",
+        "150_combat_sfx"
+      ],
+      "sources": [
+        "oculus_pack/oculus-audio-pack/ogg/SWSH_Swoosh_OS_03.wav",
+        "weapons_apparel/sfx/arrow-feathers-01.wav",
+        "150_combat_sfx/04_magic_spells/Wind Spell Impact 3_s07.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/skills/skill_ranger.wav",
+          "sampleRate": 32000,
+          "samples": 10940,
+          "durationSec": 0.342,
+          "onsetMs": 0.72,
+          "peakDb": -1.3,
+          "rmsDb": -15.17,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "skill_elementalist": {
+      "category": "skills",
+      "transient": true,
+      "files": [
+        "sfx/skills/skill_elementalist.wav"
+      ],
+      "licenses": [
+        "CC-BY-4.0",
+        "CC0-1.0"
+      ],
+      "packs": [
+        "150_combat_sfx",
+        "oculus_pack"
+      ],
+      "sources": [
+        "150_combat_sfx/04_magic_spells/Fire Spell Impact 3_s06.wav",
+        "150_combat_sfx/04_magic_spells/Lightning Spell Impact 5_s06.wav",
+        "oculus_pack/oculus-audio-pack/ogg/MAGSpel_MagicSpell_OS_02.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/skills/skill_elementalist.wav",
+          "sampleRate": 32000,
+          "samples": 13151,
+          "durationSec": 0.411,
+          "onsetMs": 0.66,
+          "peakDb": -1.2,
+          "rmsDb": -14.19,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "skill_druid": {
+      "category": "skills",
+      "transient": true,
+      "files": [
+        "sfx/skills/skill_druid.wav"
+      ],
+      "licenses": [
+        "CC0-1.0"
+      ],
+      "packs": [
+        "cure_magic",
+        "150_combat_sfx"
+      ],
+      "sources": [
+        "cure_magic/Cure6.wav",
+        "150_combat_sfx/04_magic_spells/Plant Spell Impact 1_s07.wav",
+        "150_combat_sfx/04_magic_spells/Healing Spell impact 8_s08.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/skills/skill_druid.wav",
+          "sampleRate": 32000,
+          "samples": 14998,
+          "durationSec": 0.469,
+          "onsetMs": 0.78,
+          "peakDb": -1.3,
+          "rmsDb": -15.46,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "skill_engineer": {
+      "category": "skills",
+      "transient": true,
+      "files": [
+        "sfx/skills/skill_engineer.wav"
+      ],
+      "licenses": [
+        "CC-BY-4.0",
+        "CC0-1.0"
+      ],
+      "packs": [
+        "oculus_pack",
+        "150_combat_sfx"
+      ],
+      "sources": [
+        "oculus_pack/oculus-audio-pack/ogg/MECHLvr_LeverPull_OS_05.wav",
+        "oculus_pack/oculus-audio-pack/ogg/MACHInd_Hydraulic_OS_01.wav",
+        "150_combat_sfx/04_magic_spells/ElectroZap_s01.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/skills/skill_engineer.wav",
+          "sampleRate": 32000,
+          "samples": 11427,
+          "durationSec": 0.357,
+          "onsetMs": 0.72,
+          "peakDb": -1.2,
+          "rmsDb": -16.76,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "shield_shockwave": {
+      "category": "skills",
+      "transient": true,
+      "files": [
+        "sfx/skills/shield_shockwave.wav"
+      ],
+      "licenses": [
+        "CC-BY-4.0",
+        "CC0-1.0"
+      ],
+      "packs": [
+        "150_combat_sfx",
+        "oga_singles",
+        "oculus_pack"
+      ],
+      "sources": [
+        "150_combat_sfx/03_explosions_destruction/BlastImpact_01_s01.wav",
+        "oga_singles/shieldhit.wav",
+        "oculus_pack/oculus-audio-pack/ogg/METLImpt_HammerAnvil_OS_01.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/skills/shield_shockwave.wav",
+          "sampleRate": 32000,
+          "samples": 12088,
+          "durationSec": 0.378,
+          "onsetMs": 0.38,
+          "peakDb": -1.0,
+          "rmsDb": -13.12,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "emp_blast": {
+      "category": "skills",
+      "transient": true,
+      "files": [
+        "sfx/skills/emp_blast.wav"
+      ],
+      "licenses": [
+        "CC0-1.0"
+      ],
+      "packs": [
+        "150_combat_sfx"
+      ],
+      "sources": [
+        "150_combat_sfx/04_magic_spells/EMP_02_s01.wav",
+        "150_combat_sfx/03_explosions_destruction/ElectricExplosion_s01.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/skills/emp_blast.wav",
+          "sampleRate": 32000,
+          "samples": 14375,
+          "durationSec": 0.449,
+          "onsetMs": 0.72,
+          "peakDb": -1.0,
+          "rmsDb": -16.14,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "freeze": {
+      "category": "elements",
+      "transient": true,
+      "files": [
+        "sfx/elements/freeze.wav"
+      ],
+      "licenses": [
+        "CC0-1.0"
+      ],
+      "packs": [
+        "ice_spells",
+        "150_combat_sfx"
+      ],
+      "sources": [
+        "ice_spells/coldsnap.wav",
+        "150_combat_sfx/04_magic_spells/Ice Spell Impact 5_s06.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/elements/freeze.wav",
+          "sampleRate": 32000,
+          "samples": 10542,
+          "durationSec": 0.329,
+          "onsetMs": 0.59,
+          "peakDb": -1.6,
+          "rmsDb": -16.28,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "shatter": {
+      "category": "elements",
+      "transient": true,
+      "files": [
+        "sfx/elements/shatter_1.wav",
+        "sfx/elements/shatter_2.wav"
+      ],
+      "licenses": [
+        "CC-BY-4.0",
+        "CC0-1.0"
+      ],
+      "packs": [
+        "ice_shatters",
+        "oculus_pack",
+        "150_combat_sfx"
+      ],
+      "sources": [
+        "ice_shatters/IceShatters/LedasLuzta5.wav",
+        "oculus_pack/oculus-audio-pack/ogg/GLASBrk_WindowPaneSmallBreak_OS_01.wav",
+        "ice_shatters/IceShatters/LedasLuzta.wav",
+        "150_combat_sfx/03_explosions_destruction/BreakGlass_01_s01.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/elements/shatter_1.wav",
+          "sampleRate": 32000,
+          "samples": 10449,
+          "durationSec": 0.327,
+          "onsetMs": 0.59,
+          "peakDb": -1.1,
+          "rmsDb": -16.12,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        },
+        {
+          "file": "sfx/elements/shatter_2.wav",
+          "sampleRate": 32000,
+          "samples": 10458,
+          "durationSec": 0.327,
+          "onsetMs": 0.59,
+          "peakDb": -1.1,
+          "rmsDb": -16.82,
+          "clippedSamples": 0,
+          "tailMax": 3e-05
+        }
+      ]
+    },
+    "chain_lightning": {
+      "category": "elements",
+      "transient": true,
+      "files": [
+        "sfx/elements/chain_lightning_1.wav",
+        "sfx/elements/chain_lightning_2.wav"
+      ],
+      "licenses": [
+        "CC0-1.0"
+      ],
+      "packs": [
+        "150_combat_sfx"
+      ],
+      "sources": [
+        "150_combat_sfx/04_magic_spells/ElectroZap_s01.wav",
+        "150_combat_sfx/04_magic_spells/Lightning Spell Impact 1_s06.wav",
+        "150_combat_sfx/04_magic_spells/HeavyZap_s01.wav",
+        "150_combat_sfx/04_magic_spells/Retro Electric Sparks 22_s05.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/elements/chain_lightning_1.wav",
+          "sampleRate": 32000,
+          "samples": 8721,
+          "durationSec": 0.273,
+          "onsetMs": 0.38,
+          "peakDb": -1.6,
+          "rmsDb": -16.85,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        },
+        {
+          "file": "sfx/elements/chain_lightning_2.wav",
+          "sampleRate": 32000,
+          "samples": 8157,
+          "durationSec": 0.255,
+          "onsetMs": 0.38,
+          "peakDb": -1.6,
+          "rmsDb": -14.06,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "surface_ignite": {
+      "category": "elements",
+      "transient": true,
+      "files": [
+        "sfx/elements/surface_ignite.wav"
+      ],
+      "licenses": [
+        "CC0-1.0"
+      ],
+      "packs": [
+        "80_cc0_rpg_sfx",
+        "150_combat_sfx"
+      ],
+      "sources": [
+        "80_cc0_rpg_sfx/spell_fire_06.wav",
+        "150_combat_sfx/04_magic_spells/Fire Spell Impact 3_s06.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/elements/surface_ignite.wav",
+          "sampleRate": 32000,
+          "samples": 11154,
+          "durationSec": 0.349,
+          "onsetMs": 0.72,
+          "peakDb": -1.7,
+          "rmsDb": -18.37,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "elemental_reaction": {
+      "category": "elements",
+      "transient": true,
+      "files": [
+        "sfx/elements/elemental_reaction.wav"
+      ],
+      "licenses": [
+        "CC-BY-4.0",
+        "CC0-1.0"
+      ],
+      "packs": [
+        "150_combat_sfx",
+        "oculus_pack"
+      ],
+      "sources": [
+        "150_combat_sfx/03_explosions_destruction/BlastImpact_02_s01.wav",
+        "oculus_pack/oculus-audio-pack/ogg/MAGSpel_MagicSpell_OS_01.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/elements/elemental_reaction.wav",
+          "sampleRate": 32000,
+          "samples": 11562,
+          "durationSec": 0.361,
+          "onsetMs": 0.34,
+          "peakDb": -1.3,
+          "rmsDb": -14.13,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "reaction_vaporize": {
+      "category": "elements",
+      "transient": true,
+      "files": [
+        "sfx/elements/reaction_vaporize.wav"
+      ],
+      "licenses": [
+        "CC-BY-4.0",
+        "CC0-1.0"
+      ],
+      "packs": [
+        "150_combat_sfx",
+        "oculus_pack"
+      ],
+      "sources": [
+        "150_combat_sfx/04_magic_spells/Water Spell Impact 2_s06.wav",
+        "oculus_pack/oculus-audio-pack/ogg/MACHInd_Hydraulic_OS_01.wav",
+        "150_combat_sfx/04_magic_spells/Fire Spell Impact 5_s06.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/elements/reaction_vaporize.wav",
+          "sampleRate": 32000,
+          "samples": 11963,
+          "durationSec": 0.374,
+          "onsetMs": 0.44,
+          "peakDb": -1.2,
+          "rmsDb": -14.97,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "reaction_superconduct": {
+      "category": "elements",
+      "transient": true,
+      "files": [
+        "sfx/elements/reaction_superconduct.wav"
+      ],
+      "licenses": [
+        "CC0-1.0"
+      ],
+      "packs": [
+        "ice_shatters",
+        "150_combat_sfx"
+      ],
+      "sources": [
+        "ice_shatters/IceShatters/LedasLuzta33.wav",
+        "150_combat_sfx/04_magic_spells/EMP_03_s01.wav",
+        "150_combat_sfx/04_magic_spells/ElectroZap_s01.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/elements/reaction_superconduct.wav",
+          "sampleRate": 32000,
+          "samples": 11878,
+          "durationSec": 0.371,
+          "onsetMs": 0.62,
+          "peakDb": -1.1,
+          "rmsDb": -15.19,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "reaction_toxic_blast": {
+      "category": "elements",
+      "transient": true,
+      "files": [
+        "sfx/elements/reaction_toxic_blast.wav"
+      ],
+      "licenses": [
+        "CC-BY-4.0",
+        "CC0-1.0"
+      ],
+      "packs": [
+        "150_combat_sfx",
+        "oculus_pack",
+        "rpg_sound_pack"
+      ],
+      "sources": [
+        "150_combat_sfx/03_explosions_destruction/explosion_crunch_002_48kHz_16bit_1.26s_e0852ce0_s04.wav",
+        "oculus_pack/oculus-audio-pack/ogg/GORESqsh_BloodSquishSlimy_OS_03.wav",
+        "rpg_sound_pack/RPG Sound Pack/inventory/bubble3.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/elements/reaction_toxic_blast.wav",
+          "sampleRate": 32000,
+          "samples": 13391,
+          "durationSec": 0.418,
+          "onsetMs": 0.59,
+          "peakDb": -1.1,
+          "rmsDb": -14.94,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "reaction_paralysis": {
+      "category": "elements",
+      "transient": true,
+      "files": [
+        "sfx/elements/reaction_paralysis.wav"
+      ],
+      "licenses": [
+        "CC0-1.0"
+      ],
+      "packs": [
+        "150_combat_sfx"
+      ],
+      "sources": [
+        "150_combat_sfx/04_magic_spells/HeavyZap_s01.wav",
+        "150_combat_sfx/01_combat_melee/slime_000_48kHz_16bit_0.5s_691d3d6e_s04.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/elements/reaction_paralysis.wav",
+          "sampleRate": 32000,
+          "samples": 10506,
+          "durationSec": 0.328,
+          "onsetMs": 0.38,
+          "peakDb": -1.3,
+          "rmsDb": -13.74,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "reaction_overload": {
+      "category": "elements",
+      "transient": true,
+      "files": [
+        "sfx/elements/reaction_overload.wav"
+      ],
+      "licenses": [
+        "CC0-1.0"
+      ],
+      "packs": [
+        "150_combat_sfx"
+      ],
+      "sources": [
+        "150_combat_sfx/03_explosions_destruction/ElectricExplosion_s01.wav",
+        "150_combat_sfx/03_explosions_destruction/explosion_crunch_000_48kHz_16bit_0.78s_e875be4e_s04.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/elements/reaction_overload.wav",
+          "sampleRate": 32000,
+          "samples": 15034,
+          "durationSec": 0.47,
+          "onsetMs": 0.72,
+          "peakDb": -1.0,
+          "rmsDb": -13.11,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "team_combo": {
+      "category": "elements",
+      "transient": true,
+      "files": [
+        "sfx/elements/team_combo.wav"
+      ],
+      "licenses": [
+        "CC-BY-4.0",
+        "CC0-1.0"
+      ],
+      "packs": [
+        "oculus_pack",
+        "150_combat_sfx",
+        "cure_magic"
+      ],
+      "sources": [
+        "oculus_pack/oculus-audio-pack/ogg/MUSCStngr_LevelUpOrchestral_OS_02.wav",
+        "150_combat_sfx/04_magic_spells/EMP_02_s01.wav",
+        "cure_magic/Cure6.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/elements/team_combo.wav",
+          "sampleRate": 32000,
+          "samples": 18372,
+          "durationSec": 0.574,
+          "onsetMs": 0.47,
+          "peakDb": -1.0,
+          "rmsDb": -15.77,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "weapon_swap": {
+      "category": "foley",
+      "transient": true,
+      "files": [
+        "sfx/foley/weapon_swap_1.wav",
+        "sfx/foley/weapon_swap_2.wav"
+      ],
+      "licenses": [
+        "CC0-1.0"
+      ],
+      "packs": [
+        "rpg_sound_pack",
+        "oga_singles",
+        "weapons_apparel"
+      ],
+      "sources": [
+        "rpg_sound_pack/RPG Sound Pack/battle/sword-unsheathe.wav",
+        "oga_singles/clipload1.wav",
+        "weapons_apparel/sfx/seax-unsheathe-03.wav",
+        "rpg_sound_pack/RPG Sound Pack/inventory/cloth-heavy.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/foley/weapon_swap_1.wav",
+          "sampleRate": 32000,
+          "samples": 5407,
+          "durationSec": 0.169,
+          "onsetMs": 0.56,
+          "peakDb": -2.4,
+          "rmsDb": -16.89,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        },
+        {
+          "file": "sfx/foley/weapon_swap_2.wav",
+          "sampleRate": 32000,
+          "samples": 5660,
+          "durationSec": 0.177,
+          "onsetMs": 0.62,
+          "peakDb": -2.4,
+          "rmsDb": -19.58,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "pickup": {
+      "category": "world",
+      "transient": true,
+      "files": [
+        "sfx/world/pickup_1.wav",
+        "sfx/world/pickup_2.wav"
+      ],
+      "licenses": [
+        "CC-BY-4.0",
+        "CC0-1.0"
+      ],
+      "packs": [
+        "oculus_pack",
+        "rpg_sound_pack",
+        "80_cc0_rpg_sfx"
+      ],
+      "sources": [
+        "oculus_pack/oculus-audio-pack/ogg/OBJCoin_CoinDrop_OS_01.wav",
+        "rpg_sound_pack/RPG Sound Pack/inventory/coin.wav",
+        "80_cc0_rpg_sfx/item_coins_01.wav",
+        "rpg_sound_pack/RPG Sound Pack/inventory/coin3.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/world/pickup_1.wav",
+          "sampleRate": 32000,
+          "samples": 7768,
+          "durationSec": 0.243,
+          "onsetMs": 0.44,
+          "peakDb": -2.4,
+          "rmsDb": -17.86,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        },
+        {
+          "file": "sfx/world/pickup_2.wav",
+          "sampleRate": 32000,
+          "samples": 7027,
+          "durationSec": 0.22,
+          "onsetMs": 0.59,
+          "peakDb": -2.4,
+          "rmsDb": -17.93,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "pickup_energy": {
+      "category": "world",
+      "transient": true,
+      "files": [
+        "sfx/world/pickup_energy.wav"
+      ],
+      "licenses": [
+        "CC-BY-4.0",
+        "CC0-1.0"
+      ],
+      "packs": [
+        "oculus_pack",
+        "80_cc0_rpg_sfx"
+      ],
+      "sources": [
+        "oculus_pack/oculus-audio-pack/ogg/UIMisc_Powerup_OS_02.wav",
+        "80_cc0_rpg_sfx/item_gem_01.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/world/pickup_energy.wav",
+          "sampleRate": 32000,
+          "samples": 9594,
+          "durationSec": 0.3,
+          "onsetMs": 0.59,
+          "peakDb": -2.2,
+          "rmsDb": -16.24,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "pickup_health": {
+      "category": "world",
+      "transient": true,
+      "files": [
+        "sfx/world/pickup_health.wav"
+      ],
+      "licenses": [
+        "CC0-1.0"
+      ],
+      "packs": [
+        "cure_magic",
+        "rpg_sound_pack"
+      ],
+      "sources": [
+        "cure_magic/Cure2.wav",
+        "rpg_sound_pack/RPG Sound Pack/inventory/bottle.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/world/pickup_health.wav",
+          "sampleRate": 32000,
+          "samples": 10632,
+          "durationSec": 0.332,
+          "onsetMs": 0.41,
+          "peakDb": -2.2,
+          "rmsDb": -14.02,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "pickup_weapon": {
+      "category": "world",
+      "transient": true,
+      "files": [
+        "sfx/world/pickup_weapon.wav"
+      ],
+      "licenses": [
+        "CC-BY-4.0",
+        "CC0-1.0"
+      ],
+      "packs": [
+        "shotgun_sounds",
+        "rpg_sound_pack",
+        "oculus_pack"
+      ],
+      "sources": [
+        "shotgun_sounds/ShotgunSounds/Rack.wav",
+        "rpg_sound_pack/RPG Sound Pack/battle/sword-unsheathe3.wav",
+        "oculus_pack/oculus-audio-pack/ogg/UIClick_MetalConfirm_OS_01.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/world/pickup_weapon.wav",
+          "sampleRate": 32000,
+          "samples": 8851,
+          "durationSec": 0.277,
+          "onsetMs": 0.47,
+          "peakDb": -1.8,
+          "rmsDb": -14.44,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "chest_open": {
+      "category": "world",
+      "transient": true,
+      "files": [
+        "sfx/world/chest_open.wav"
+      ],
+      "licenses": [
+        "CC-BY-4.0"
+      ],
+      "packs": [
+        "oculus_pack"
+      ],
+      "sources": [
+        "oculus_pack/oculus-audio-pack/ogg/MECHLock_DoorUnlockKey_OS_01.wav",
+        "oculus_pack/oculus-audio-pack/ogg/DOORWood_FrontDoorOpen_OS_01.wav",
+        "oculus_pack/oculus-audio-pack/ogg/MUSCStngr_LevelUpMallet_OS_01.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/world/chest_open.wav",
+          "sampleRate": 32000,
+          "samples": 18272,
+          "durationSec": 0.571,
+          "onsetMs": 0.59,
+          "peakDb": -1.3,
+          "rmsDb": -14.42,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "door_lock": {
+      "category": "world",
+      "transient": true,
+      "files": [
+        "sfx/world/door_lock.wav"
+      ],
+      "licenses": [
+        "CC-BY-4.0",
+        "CC0-1.0"
+      ],
+      "packs": [
+        "oculus_pack",
+        "80_cc0_rpg_sfx"
+      ],
+      "sources": [
+        "oculus_pack/oculus-audio-pack/ogg/DOORMetl_HatchClose_OS_01.wav",
+        "80_cc0_rpg_sfx/chain_01.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/world/door_lock.wav",
+          "sampleRate": 32000,
+          "samples": 13495,
+          "durationSec": 0.422,
+          "onsetMs": 0.31,
+          "peakDb": -1.4,
+          "rmsDb": -15.95,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "door_open": {
+      "category": "world",
+      "transient": true,
+      "files": [
+        "sfx/world/door_open.wav"
+      ],
+      "licenses": [
+        "CC-BY-4.0"
+      ],
+      "packs": [
+        "oculus_pack"
+      ],
+      "sources": [
+        "oculus_pack/oculus-audio-pack/ogg/DOORMetl_HatchOpen_OS_01.wav",
+        "oculus_pack/oculus-audio-pack/ogg/MECHLvr_LeverPull_OS_05.wav",
+        "oculus_pack/oculus-audio-pack/ogg/UIClick_MagicalConfirm_OS_01.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/world/door_open.wav",
+          "sampleRate": 32000,
+          "samples": 14601,
+          "durationSec": 0.456,
+          "onsetMs": 0.47,
+          "peakDb": -1.4,
+          "rmsDb": -16.02,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "portal_enter": {
+      "category": "world",
+      "transient": true,
+      "files": [
+        "sfx/world/portal_enter.wav"
+      ],
+      "licenses": [
+        "CC-BY-4.0",
+        "CC0-1.0"
+      ],
+      "packs": [
+        "oga_singles",
+        "oculus_pack"
+      ],
+      "sources": [
+        "oga_singles/teleport_1.wav",
+        "oculus_pack/oculus-audio-pack/ogg/MAGSpel_MagicSpell_OS_02.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/world/portal_enter.wav",
+          "sampleRate": 32000,
+          "samples": 19122,
+          "durationSec": 0.598,
+          "onsetMs": 0.59,
+          "peakDb": -1.3,
+          "rmsDb": -14.16,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "prop_break": {
+      "category": "world",
+      "transient": true,
+      "files": [
+        "sfx/world/prop_break_1.wav",
+        "sfx/world/prop_break_2.wav"
+      ],
+      "licenses": [
+        "CC-BY-4.0",
+        "CC0-1.0"
+      ],
+      "packs": [
+        "150_combat_sfx",
+        "oculus_pack",
+        "80_cc0_rpg_sfx"
+      ],
+      "sources": [
+        "150_combat_sfx/03_explosions_destruction/Break_01_s01.wav",
+        "oculus_pack/oculus-audio-pack/ogg/WOODImpt_LargeWoodDrop_OS_01.wav",
+        "oculus_pack/oculus-audio-pack/ogg/CERMImpt_CeramicSmallImpact_OS_01.wav",
+        "150_combat_sfx/03_explosions_destruction/Break_02_s01.wav",
+        "80_cc0_rpg_sfx/wood_03.wav",
+        "80_cc0_rpg_sfx/stones_01.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/world/prop_break_1.wav",
+          "sampleRate": 32000,
+          "samples": 8735,
+          "durationSec": 0.273,
+          "onsetMs": 0.34,
+          "peakDb": -1.5,
+          "rmsDb": -16.64,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        },
+        {
+          "file": "sfx/world/prop_break_2.wav",
+          "sampleRate": 32000,
+          "samples": 6715,
+          "durationSec": 0.21,
+          "onsetMs": 0.38,
+          "peakDb": -1.5,
+          "rmsDb": -17.44,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "grass_rustle": {
+      "category": "foley",
+      "transient": true,
+      "files": [
+        "sfx/foley/grass_rustle.wav"
+      ],
+      "licenses": [
+        "CC-BY-4.0"
+      ],
+      "packs": [
+        "oculus_pack"
+      ],
+      "sources": [
+        "oculus_pack/oculus-audio-pack/ogg/VEGELeaf_MovementThroughBushes_OS_02.wav",
+        "oculus_pack/oculus-audio-pack/ogg/FEETHmn_ShoeGrassRun_OS_01.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/foley/grass_rustle.wav",
+          "sampleRate": 32000,
+          "samples": 6973,
+          "durationSec": 0.218,
+          "onsetMs": 0.59,
+          "peakDb": -5.5,
+          "rmsDb": -24.48,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "footstep_stone": {
+      "category": "foley",
+      "transient": true,
+      "files": [
+        "sfx/foley/footstep_stone_1.wav",
+        "sfx/foley/footstep_stone_2.wav",
+        "sfx/foley/footstep_stone_3.wav"
+      ],
+      "licenses": [
+        "CC-BY-4.0"
+      ],
+      "packs": [
+        "oculus_pack"
+      ],
+      "sources": [
+        "oculus_pack/oculus-audio-pack/ogg/FEETHmn_ShoeConcreteRun_OS_01.wav",
+        "oculus_pack/oculus-audio-pack/ogg/FEETHmn_ShoeConcreteRun_OS_02.wav",
+        "oculus_pack/oculus-audio-pack/ogg/FEETHmn_ShoeConcreteRun_OS_04.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/foley/footstep_stone_1.wav",
+          "sampleRate": 32000,
+          "samples": 3950,
+          "durationSec": 0.123,
+          "onsetMs": 0.59,
+          "peakDb": -6.0,
+          "rmsDb": -18.32,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        },
+        {
+          "file": "sfx/foley/footstep_stone_2.wav",
+          "sampleRate": 32000,
+          "samples": 3427,
+          "durationSec": 0.107,
+          "onsetMs": 0.69,
+          "peakDb": -6.0,
+          "rmsDb": -22.39,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        },
+        {
+          "file": "sfx/foley/footstep_stone_3.wav",
+          "sampleRate": 32000,
+          "samples": 3927,
+          "durationSec": 0.123,
+          "onsetMs": 0.62,
+          "peakDb": -6.0,
+          "rmsDb": -21.3,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "footstep_grass": {
+      "category": "foley",
+      "transient": true,
+      "files": [
+        "sfx/foley/footstep_grass_1.wav",
+        "sfx/foley/footstep_grass_2.wav",
+        "sfx/foley/footstep_grass_3.wav"
+      ],
+      "licenses": [
+        "CC-BY-4.0"
+      ],
+      "packs": [
+        "oculus_pack"
+      ],
+      "sources": [
+        "oculus_pack/oculus-audio-pack/ogg/FEETHmn_ShoeGrassRun_OS_01.wav",
+        "oculus_pack/oculus-audio-pack/ogg/FEETHmn_ShoeGrassRun_OS_02.wav",
+        "oculus_pack/oculus-audio-pack/ogg/FEETHmn_ShoeGrassRun_OS_04.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/foley/footstep_grass_1.wav",
+          "sampleRate": 32000,
+          "samples": 4891,
+          "durationSec": 0.153,
+          "onsetMs": 0.78,
+          "peakDb": -6.2,
+          "rmsDb": -20.52,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        },
+        {
+          "file": "sfx/foley/footstep_grass_2.wav",
+          "sampleRate": 32000,
+          "samples": 4856,
+          "durationSec": 0.152,
+          "onsetMs": 0.56,
+          "peakDb": -6.2,
+          "rmsDb": -20.33,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        },
+        {
+          "file": "sfx/foley/footstep_grass_3.wav",
+          "sampleRate": 32000,
+          "samples": 4350,
+          "durationSec": 0.136,
+          "onsetMs": 0.75,
+          "peakDb": -6.2,
+          "rmsDb": -20.12,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "footstep_water": {
+      "category": "foley",
+      "transient": true,
+      "files": [
+        "sfx/foley/footstep_water_1.wav",
+        "sfx/foley/footstep_water_2.wav",
+        "sfx/foley/footstep_water_3.wav"
+      ],
+      "licenses": [
+        "CC-BY-4.0",
+        "CC0-1.0"
+      ],
+      "packs": [
+        "150_combat_sfx",
+        "oculus_pack",
+        "rpg_sound_pack"
+      ],
+      "sources": [
+        "150_combat_sfx/04_magic_spells/Water Spell Impact 1_s06.wav",
+        "oculus_pack/oculus-audio-pack/ogg/FEETHmn_ShoeDirtRun_OS_05.wav",
+        "150_combat_sfx/04_magic_spells/Water Spell Impact 2_s06.wav",
+        "rpg_sound_pack/RPG Sound Pack/inventory/bubble.wav",
+        "150_combat_sfx/04_magic_spells/Water Spell Impact 3_s06.wav",
+        "oculus_pack/oculus-audio-pack/ogg/FEETHmn_ShoeDirtRun_OS_04.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/foley/footstep_water_1.wav",
+          "sampleRate": 32000,
+          "samples": 5440,
+          "durationSec": 0.17,
+          "onsetMs": 0.59,
+          "peakDb": -5.6,
+          "rmsDb": -18.73,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        },
+        {
+          "file": "sfx/foley/footstep_water_2.wav",
+          "sampleRate": 32000,
+          "samples": 5417,
+          "durationSec": 0.169,
+          "onsetMs": 0.62,
+          "peakDb": -5.6,
+          "rmsDb": -21.17,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        },
+        {
+          "file": "sfx/foley/footstep_water_3.wav",
+          "sampleRate": 32000,
+          "samples": 5400,
+          "durationSec": 0.169,
+          "onsetMs": 0.72,
+          "peakDb": -5.6,
+          "rmsDb": -18.22,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "footstep_ice": {
+      "category": "foley",
+      "transient": true,
+      "files": [
+        "sfx/foley/footstep_ice_1.wav",
+        "sfx/foley/footstep_ice_2.wav",
+        "sfx/foley/footstep_ice_3.wav"
+      ],
+      "licenses": [
+        "CC-BY-4.0"
+      ],
+      "packs": [
+        "oculus_pack"
+      ],
+      "sources": [
+        "oculus_pack/oculus-audio-pack/ogg/FEETHmn_ShoeSnowRun_OS_02.wav",
+        "oculus_pack/oculus-audio-pack/ogg/FEETHmn_ShoeSnowRun_OS_03.wav",
+        "oculus_pack/oculus-audio-pack/ogg/FEETHmn_ShoeSnowRun_OS_05.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/foley/footstep_ice_1.wav",
+          "sampleRate": 32000,
+          "samples": 4507,
+          "durationSec": 0.141,
+          "onsetMs": 0.47,
+          "peakDb": -5.8,
+          "rmsDb": -24.18,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        },
+        {
+          "file": "sfx/foley/footstep_ice_2.wav",
+          "sampleRate": 32000,
+          "samples": 4723,
+          "durationSec": 0.148,
+          "onsetMs": 0.75,
+          "peakDb": -5.8,
+          "rmsDb": -22.71,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        },
+        {
+          "file": "sfx/foley/footstep_ice_3.wav",
+          "sampleRate": 32000,
+          "samples": 4327,
+          "durationSec": 0.135,
+          "onsetMs": 0.75,
+          "peakDb": -5.8,
+          "rmsDb": -23.35,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "footstep_metal": {
+      "category": "foley",
+      "transient": true,
+      "files": [
+        "sfx/foley/footstep_metal_1.wav",
+        "sfx/foley/footstep_metal_2.wav",
+        "sfx/foley/footstep_metal_3.wav"
+      ],
+      "licenses": [
+        "CC-BY-4.0"
+      ],
+      "packs": [
+        "oculus_pack"
+      ],
+      "sources": [
+        "oculus_pack/oculus-audio-pack/ogg/FEETHmn_ShoeMetalWalk_OS_03.wav",
+        "oculus_pack/oculus-audio-pack/ogg/METLImpt_MetalHitSurface_OS_01.wav",
+        "oculus_pack/oculus-audio-pack/ogg/FEETHmn_ShoeMetalWalk_OS_04.wav",
+        "oculus_pack/oculus-audio-pack/ogg/METLImpt_MetalHitSurface_OS_05.wav",
+        "oculus_pack/oculus-audio-pack/ogg/FEETHmn_ShoeMetalWalk_OS_05.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/foley/footstep_metal_1.wav",
+          "sampleRate": 32000,
+          "samples": 4713,
+          "durationSec": 0.147,
+          "onsetMs": 0.62,
+          "peakDb": -5.8,
+          "rmsDb": -20.99,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        },
+        {
+          "file": "sfx/foley/footstep_metal_2.wav",
+          "sampleRate": 32000,
+          "samples": 4800,
+          "durationSec": 0.15,
+          "onsetMs": 0.28,
+          "peakDb": -5.8,
+          "rmsDb": -17.52,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        },
+        {
+          "file": "sfx/foley/footstep_metal_3.wav",
+          "sampleRate": 32000,
+          "samples": 4800,
+          "durationSec": 0.15,
+          "onsetMs": 0.56,
+          "peakDb": -5.8,
+          "rmsDb": -17.91,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "ui_hover": {
+      "category": "ui",
+      "transient": true,
+      "files": [
+        "sfx/ui/ui_hover.wav"
+      ],
+      "licenses": [
+        "CC0-1.0"
+      ],
+      "packs": [
+        "kenney_interface_wav"
+      ],
+      "sources": [
+        "kenney_interface_wav/kenney-interface-sounds-master/addons/kenney_interface_sounds/tick_002.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/ui/ui_hover.wav",
+          "sampleRate": 32000,
+          "samples": 1252,
+          "durationSec": 0.039,
+          "onsetMs": 0.47,
+          "peakDb": -5.5,
+          "rmsDb": -20.74,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "ui_click": {
+      "category": "ui",
+      "transient": true,
+      "files": [
+        "sfx/ui/ui_click_1.wav",
+        "sfx/ui/ui_click_2.wav"
+      ],
+      "licenses": [
+        "CC-BY-4.0",
+        "CC0-1.0"
+      ],
+      "packs": [
+        "kenney_interface_wav",
+        "oculus_pack"
+      ],
+      "sources": [
+        "kenney_interface_wav/kenney-interface-sounds-master/addons/kenney_interface_sounds/select_001.wav",
+        "oculus_pack/oculus-audio-pack/ogg/UIClick_MetalBack_OS_01.wav",
+        "kenney_interface_wav/kenney-interface-sounds-master/addons/kenney_interface_sounds/click_001.wav",
+        "oculus_pack/oculus-audio-pack/ogg/UIClick_WoodConfirm_OS_01.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/ui/ui_click_1.wav",
+          "sampleRate": 32000,
+          "samples": 3104,
+          "durationSec": 0.097,
+          "onsetMs": 0.5,
+          "peakDb": -2.8,
+          "rmsDb": -18.74,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        },
+        {
+          "file": "sfx/ui/ui_click_2.wav",
+          "sampleRate": 32000,
+          "samples": 2808,
+          "durationSec": 0.088,
+          "onsetMs": 0.72,
+          "peakDb": -2.8,
+          "rmsDb": -19.6,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "ui_victory": {
+      "category": "ui",
+      "transient": false,
+      "files": [
+        "sfx/ui/ui_victory.wav"
+      ],
+      "licenses": [
+        "CC-BY-4.0"
+      ],
+      "packs": [
+        "oculus_pack"
+      ],
+      "sources": [
+        "oculus_pack/oculus-audio-pack/ogg/MUSCStngr_VictoryOrchestral_OS_01.wav",
+        "oculus_pack/oculus-audio-pack/ogg/MUSCStngr_LevelUpOrchestral_OS_01.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/ui/ui_victory.wav",
+          "sampleRate": 32000,
+          "samples": 54946,
+          "durationSec": 1.717,
+          "onsetMs": 0.56,
+          "peakDb": -1.0,
+          "rmsDb": -12.42,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    },
+    "ui_defeat": {
+      "category": "ui",
+      "transient": false,
+      "files": [
+        "sfx/ui/ui_defeat.wav"
+      ],
+      "licenses": [
+        "CC-BY-4.0"
+      ],
+      "packs": [
+        "oculus_pack"
+      ],
+      "sources": [
+        "oculus_pack/oculus-audio-pack/ogg/MUSCStngr_LossOrchestral_OS_01.wav"
+      ],
+      "metrics": [
+        {
+          "file": "sfx/ui/ui_defeat.wav",
+          "sampleRate": 32000,
+          "samples": 57530,
+          "durationSec": 1.798,
+          "onsetMs": 0.56,
+          "peakDb": -1.1,
+          "rmsDb": -12.35,
+          "clippedSamples": 0,
+          "tailMax": 0.0
+        }
+      ]
+    }
+  }
+}

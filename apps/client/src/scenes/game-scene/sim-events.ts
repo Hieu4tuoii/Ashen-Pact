@@ -9,7 +9,13 @@ import {
 } from '@ashen-pact/shared';
 import { resolveHitFlashTint } from '../../art/cutout-rig-math.js';
 import { PALETTE } from '../../art/palette.js';
-import { resolveWeaponShootSfx, zzfx } from '../../audio/zzfx.js';
+import {
+  resolveEnemyProjectileSfx,
+  resolvePickupSfx,
+  resolveWeaponAttackSfx,
+  resolveWeaponShootSfx,
+  zzfx,
+} from '../../audio/zzfx.js';
 import {
   spawnClassSkillCastVfx,
   spawnClassSummonSpawnedVfx,
@@ -61,6 +67,9 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
   let enemyHitCountThisStep = 0;
   let statusFxCountThisStep = 0;
   let enemyHitCritThisStep = false;
+  let enemyHitArmorThisStep = false;
+  let enemyHitFleshThisStep = false;
+  let wallImpactSfxTriggered = false;
   let enemyHitSfxX = this.camFocusX;
   let enemyHitSfxY = this.camFocusY;
   let maxHitStopMs = 0;
@@ -138,7 +147,8 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
             }
 
             if (allowStressSfx) {
-              zzfx.play(shootSfx, ev.x, this.camFocusX, ev.y, this.camFocusY);
+              const attackSfx = resolveWeaponAttackSfx(ev.weaponId, { isFinale });
+              zzfx.play(attackSfx, ev.x, this.camFocusX, ev.y, this.camFocusY);
               if (!isTeammate && isShotgun) {
                 this.fx.addTrauma(0.08);
               }
@@ -146,7 +156,13 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
           }
         } else if (!enemyShotSfxTriggered && allowStressSfx) {
           enemyShotSfxTriggered = true;
-          zzfx.play('shoot_pistol', ev.x, this.camFocusX, ev.y, this.camFocusY);
+          zzfx.play(
+            resolveEnemyProjectileSfx(ev.weaponId),
+            ev.x,
+            this.camFocusX,
+            ev.y,
+            this.camFocusY,
+          );
         }
         break;
       }
@@ -185,7 +201,7 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
           lungeDy,
         });
         this.lighting.spawnTransientLight(ev.x, ev.y, 92, PALETTE.CYAN_FROST, 0.65, 0.12);
-        const swingSfx = resolveWeaponShootSfx(ev.weaponId);
+        const swingSfx = resolveWeaponAttackSfx(ev.weaponId);
         zzfx.play(swingSfx, ev.x, this.camFocusX, ev.y, this.camFocusY);
         if (ev.bulletsDestroyed > 0) {
           if (!isStress) {
@@ -230,6 +246,10 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
           enemyHitCountThisStep += 1;
           if (ev.isCrit) {
             enemyHitCritThisStep = true;
+          } else if (ev.hitArmor) {
+            enemyHitArmorThisStep = true;
+          } else {
+            enemyHitFleshThisStep = true;
           }
           enemyHitSfxX = ev.x;
           enemyHitSfxY = ev.y;
@@ -290,6 +310,9 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
         }
         if ((ev.blockedByShield || ev.destroyedByMelee) && allowStressSfx) {
           zzfx.play('bullet_deflect', ev.x, this.camFocusX, ev.y, this.camFocusY);
+        } else if (ev.hitWall && !wallImpactSfxTriggered && allowStressSfx) {
+          wallImpactSfxTriggered = true;
+          zzfx.play('impact_wall', ev.x, this.camFocusX, ev.y, this.camFocusY);
         }
         break;
       }
@@ -602,6 +625,9 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
         if (!isStress) {
           this.fx.spawnGrassRustle(ev.x, ev.y);
         }
+        if (allowStressSfx) {
+          zzfx.play('grass_rustle', ev.x, this.camFocusX, ev.y, this.camFocusY);
+        }
         break;
       }
       case 'skill_cast': {
@@ -695,13 +721,22 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
           );
         }
         if (allowStressSfx) {
-          zzfx.play('pickup', ev.x, this.camFocusX, ev.y, this.camFocusY);
+          zzfx.play(resolvePickupSfx(ev.pickupKind), ev.x, this.camFocusX, ev.y, this.camFocusY);
         }
         break;
       }
       case 'shaman_heal': {
         if (!isStress) {
           this.lighting.spawnTransientLight(ev.x, ev.y, 88, PALETTE.GOBLIN_GREEN, 0.85, 0.25);
+        }
+        if (allowStressSfx) {
+          zzfx.play('shaman_heal', ev.x, this.camFocusX, ev.y, this.camFocusY);
+        }
+        break;
+      }
+      case 'shockwave_spawned': {
+        if (allowStressSfx) {
+          zzfx.play('shockwave_slam', ev.x, this.camFocusX, ev.y, this.camFocusY);
         }
         break;
       }
@@ -814,7 +849,13 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
         break;
       }
       case 'item_purchased': {
-        zzfx.play('pickup', ev.x, this.camFocusX, ev.y, this.camFocusY);
+        zzfx.play(
+          ev.costGold === 0 ? 'pickup_weapon' : 'pickup',
+          ev.x,
+          this.camFocusX,
+          ev.y,
+          this.camFocusY,
+        );
         break;
       }
       case 'player_downed': {
@@ -1113,13 +1154,12 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
   }
 
   if (enemyHitCountThisStep > 0 && allowStressSfx) {
-    zzfx.play(
-      enemyHitCritThisStep ? 'crit_hit' : 'hit_enemy',
-      enemyHitSfxX,
-      this.camFocusX,
-      enemyHitSfxY,
-      this.camFocusY,
-    );
+    const hitSfx = enemyHitCritThisStep
+      ? 'crit_hit'
+      : enemyHitArmorThisStep && !enemyHitFleshThisStep
+        ? 'hit_armor'
+        : 'hit_enemy';
+    zzfx.play(hitSfx, enemyHitSfxX, this.camFocusX, enemyHitSfxY, this.camFocusY);
   }
   if (maxHitStopMs > 0 && !isStress) {
     this.fx.triggerHitStop(maxHitStopMs);

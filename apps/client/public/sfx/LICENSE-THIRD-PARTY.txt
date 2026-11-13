@@ -1,0 +1,27 @@
+ASHEN PACT v2.0.0 — THIRD-PARTY SOUND EFFECTS ATTRIBUTION & LICENSES
+====================================================================
+
+All sound effects in this directory were acoustically curated, trimmed,
+layered, EQ-sculpted, and mastered from permissive free sound libraries:
+
+1. "Oculus Audio Pack 01" by Oculus VR, LLC
+   License: Creative Commons Attribution 4.0 International (CC-BY-4.0)
+   License URL: https://creativecommons.org/licenses/by/4.0/
+   Source URL: https://developer.oculus.com/downloads/package/oculus-audio-pack-1/
+   Modifications: Trimmed transient windows, resampled to 32kHz mono PCM16,
+   layered with CC0 foley/magic/firearm elements, EQ-filtered, and peak-mastered.
+
+2. Public Domain (CC0-1.0) Sound Libraries:
+   - 150 CC0 Combat, Magic & Explosion SFX — OpenGameArt CC0 Contributors (CC0-1.0) [https://opengameart.org/]
+   - 25 CC0 Bang, Firework & Cannon SFX — rubberduck (OpenGameArt) (CC0-1.0) [https://opengameart.org/content/25-cc0-bang-firework-sfx]
+   - 80 CC0 RPG SFX — rubberduck (OpenGameArt) (CC0-1.0) [https://opengameart.org/content/80-cc0-rpg-sfx]
+   - Cure & Healing Magic SFX — bart (OpenGameArt) (CC0-1.0) [https://opengameart.org/]
+   - CC0 Firearm Recordings — OpenGameArt CC0 Contributors (CC0-1.0) [https://opengameart.org/]
+   - Ice Shatters Foley — OpenGameArt CC0 Contributors (CC0-1.0) [https://opengameart.org/]
+   - Ice Spells SFX — OpenGameArt CC0 Contributors (CC0-1.0) [https://opengameart.org/]
+   - Interface Sounds — Kenney Vleugels (Kenney.nl) (CC0-1.0) [https://kenney.nl/assets/interface-sounds]
+   - OpenGameArt CC0 Combat Singles — OpenGameArt CC0 Contributors (CC0-1.0) [https://opengameart.org/]
+   - Prepared Firearm SFX Library — Still North Media (CC0-1.0) [https://www.stillnorthmedia.com/firearm-sfx-library/]
+   - RPG Sound Pack — artisticdude (OpenGameArt) (CC0-1.0) [https://opengameart.org/content/rpg-sound-pack]
+   - Shotgun Shoot & Reload Foley — OpenGameArt CC0 Contributors (CC0-1.0) [https://opengameart.org/]
+   - Weapons & Apparel Foley SFX — qubodup / OpenGameArt CC0 Contributors (CC0-1.0) [https://opengameart.org/]

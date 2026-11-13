@@ -14,7 +14,7 @@
       "languageBtn": "🌐 Tiếng Việt",
       "nameLabel": "Tên",
       "ipLabel": "IP LAN",
-      "footerHint": "Nhấn [F1] bật/tắt Debug · [Esc] Cài Đặt · 100% Đồ Họa Vector & Âm Thanh Code",
+      "footerHint": "Nhấn [F1] bật/tắt Debug · [Esc] Cài Đặt · Đồ Họa Vector & Âm Thanh Không Gian 2D",
       "campfireLabel": "Doanh Trại Lửa Trại · Chọn Chế Độ Để Khởi Hành"
     },
     "hud": {
@@ -202,11 +202,11 @@
       "line1": "Thiết Kế & Phát Triển: Đội Ngũ Kỹ Thuật Ashen Pact",
       "line2": "Kiến Trúc: TypeScript Strict · Phaser 3 WebGL · Colyseus 60Hz Authoritative",
       "line3": "Đồ Họa: 100% Procedural Vector Cutout Rig & Dynamic Lightmap",
-      "line4": "Âm Thanh: Bộ Tổng Hợp WebAudio ZzFX & Nhạc Nền Động 2 Lớp",
+      "line4": "Âm Thanh: SFX Thực Chiến Đã Mastering (CC0 & Oculus CC-BY-4.0) + Nhạc Động",
       "line5": "Phông Chữ: Be Vietnam Pro (SIL Open Font License 1.1 — Đóng Gói Local)",
       "studio": "Thiết Kế & Phát Triển: Đội Ngũ Kỹ Thuật Ashen Pact",
       "engine": "Kiến Trúc: TypeScript Strict · Phaser 3 WebGL · Colyseus 60Hz Authoritative",
-      "artAudio": "Đồ Họa & Âm Thanh: 100% Procedural Vector Cutout Rig & WebAudio ZzFX",
+      "artAudio": "Đồ Họa Vector Cutout & SFX Thực Chiến (Still North/Kenney CC0, Oculus CC-BY-4.0)",
       "coop": "Mạng Nội Bộ: LAN Co-op 1–4 Người Chơi · Đồng Bộ 60Hz Deterministic",
       "thanks": "Cảm ơn bạn đã chiến đấu cùng đồng đội trong Ashen Pact!",
       "close": "Đóng [Esc]"

@@ -286,6 +286,9 @@ export function handleBatch2WeaponSimEvent(
         fx?.spawnHitSparks(ev.x, ev.y, 0, { isCrit: true, element: 'burn', count: 6 });
         scene.lighting?.spawnTransientLight(ev.x, ev.y, 145, PALETTE.SOLAR_GOLD, 0.92, 0.3);
       }
+      if (allowStressSfx) {
+        zzfx.play('solar_converge', ev.x, scene.camFocusX, ev.y, scene.camFocusY);
+      }
       return true;
     }
 

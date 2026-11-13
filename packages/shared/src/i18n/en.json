@@ -14,7 +14,7 @@
       "languageBtn": "🌐 English",
       "nameLabel": "Name",
       "ipLabel": "LAN IP",
-      "footerHint": "Press [F1] Debug Overlay · [Esc] Settings · 100% Procedural Vector Art & Audio",
+      "footerHint": "Press [F1] Debug Overlay · [Esc] Settings · Procedural Vector Art & 2D Spatial Audio",
       "campfireLabel": "Campfire Hub · Select a Mode to Embark"
     },
     "hud": {
@@ -202,11 +202,11 @@
       "line1": "Design & Engineering: Ashen Pact Core Team",
       "line2": "Architecture: Strict TypeScript · Phaser 3 WebGL · Colyseus 60Hz Authoritative",
       "line3": "Visuals: 100% Procedural Vector Cutout Rigs & Dynamic Lightmap",
-      "line4": "Audio: Procedural WebAudio ZzFX Synth & Dual-Layer Dynamic Sequencer",
+      "line4": "Audio: Mastered Free Foley SFX (CC0 & Oculus CC-BY-4.0) + Dynamic Music",
       "line5": "Typography: Be Vietnam Pro (SIL Open Font License 1.1 — Local Bundle)",
       "studio": "Design & Engineering: Ashen Pact Core Team",
       "engine": "Architecture: Strict TypeScript · Phaser 3 WebGL · Colyseus 60Hz Authoritative",
-      "artAudio": "Visuals & Audio: 100% Procedural Vector Cutout Rigs & WebAudio ZzFX",
+      "artAudio": "Vector Cutout Art & Mastered SFX (Still North/Kenney CC0, Oculus CC-BY-4.0)",
       "coop": "Networking: 1–4 Player LAN Co-op · 60Hz Deterministic Lockstep",
       "thanks": "Thank you for fighting alongside your pact in Ashen Pact!",
       "close": "Close [Esc]"
