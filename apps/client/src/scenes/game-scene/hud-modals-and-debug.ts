@@ -688,6 +688,7 @@ export function updateDebugStateImpl(
   // Phase 4 Co-op & Network telemetry
   debug.coopMode = this.coopMode;
   debug.coopBackend = this.coopBackend;
+  debug.p2pFastChannel = Boolean(this.room?.isFastChannelActive?.());
   debug.preferredCoopTransport = this.preferredCoopTransport;
   debug.coopPlayerCount = sim.getActivePlayerCount();
   debug.inHub = sim.inHub;
