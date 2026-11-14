@@ -28,6 +28,12 @@ Bạn bè của bạn (dùng Laptop hoặc PC khác đang bắt **cùng một m�
 2. **Cách 2 (Quét mã QR):** Dùng camera điện thoại hoặc thiết bị quét **Mã QR** hiển thị trên bảng **Mời Bạn Bè (`[I]`)** ở góc phải Sảnh Doanh Trại (hoặc trên cửa sổ Console của Chủ Phòng) để lấy đường dẫn vào phòng.
 3. **Cách 3 (Nhập IP thủ công tại Menu chính):** Nếu bạn bè đang ở Menu chính của game, chỉ cần nhập địa chỉ IP LAN của Chủ Phòng (ví dụ `192.168.1.25:2567`) vào ô **IP LAN** (hỗ trợ dán nhanh `Ctrl+V`) rồi bấm nút **Vào Phòng LAN**.
 
+### 🌐 Chơi Co-op Online Khác Mạng Wi-Fi Miễn Phí (Deploy Vercel WebRTC P2P — Không Cần Server!)
+Khi triển khai tĩnh lên **Vercel** (`vercel.json` đã cấu hình sẵn `apps/client/dist`), bạn bè ở **khác mạng Wi-Fi / khác tỉnh thành** có thể vào chơi chung 1–4 người hoàn toàn miễn phí qua **WebRTC P2P (`PeerJS`)**:
+1. **Chủ Phòng (Host):** Mở đường dẫn Vercel (`https://<ten-du-an>.vercel.app`) → nhấn phím **`[I]`** mở bảng **Phòng Co-op** (tự động chọn chế độ **`🌐 Online`** trên HTTPS) → bấm **`🌐 Tạo Phòng`**. Máy của Chủ Phòng sẽ đóng vai trò mô phỏng `60Hz` trực tiếp trên trình duyệt (kể cả khi Alt-Tab sang cửa sổ khác nhờ *Web Worker Ticker*) và cấp ngay **Mã Phòng 6 ký tự** (ví dụ: `7K9M2P`), **Link Mời trực tiếp** (`?join=7K9M2P&p2p=1`) cùng **Mã QR**.
+2. **Bạn Bè Tham Gia (1–3 người):** Chỉ cần bấm thẳng vào **Link Mời** Chủ Phòng gửi, hoặc mở trang Vercel → nhấn **`[I]`** → nhập **Mã Phòng 6 ký tự** (hoặc dán Link Mời `Ctrl+V`) → bấm **`🔗 Vào Phòng`** là kết nối thẳng vào Đại Sảnh!
+3. **Tùy chọn nâng cao (TURN Relay cho mạng 4G/NAT đối xứng khắt khe):** Mặc định game dùng máy chủ STUN công cộng của Google & Cloudflare. Nếu nhóm bạn chơi qua mạng công ty/4G chặn UDP P2P trực tiếp, bạn có thể khai báo thêm biến môi trường miễn phí (như Cloudflare Realtime TURN / Metered) trên Vercel Dashboard: `VITE_TURN_URLS`, `VITE_TURN_USERNAME`, `VITE_TURN_CREDENTIAL`.
+
 ---
 
 ## 🛡️ 2. Xử Lý Sự Cố Kết Nối Mạng LAN (Windows Firewall & Wi-Fi Công Cộng)

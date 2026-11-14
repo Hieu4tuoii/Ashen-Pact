@@ -116,7 +116,18 @@
       "leaveCoopBtn": "🚪 Rời Phòng",
       "returnSanctuaryConfirmTitle": "RỜI HẦM NGỤC VỀ ĐẠI SẢNH?",
       "returnSanctuaryConfirmBody": "Lượt chơi hiện tại sẽ kết thúc và bạn sẽ quay về Đại Sảnh Tro Tàn. Nhấn [Enter] xác nhận hoặc [Esc] hủy.",
-      "pauseReturnSanctuary": "🏛 Về Đại Sảnh [M]"
+      "pauseReturnSanctuary": "🏛 Về Đại Sảnh [M]",
+      "onlineModePill": "🌐 Online",
+      "lanModePill": "📡 LAN",
+      "roomCodeLabel": "Mã Phòng Online (6 ký tự)",
+      "roomCodePlaceholder": "Nhập mã (VD: 7K9M2P) hoặc dán link mời",
+      "p2pReadyStatus": "● P2P Online",
+      "hostOnlineBtn": "🌐 Tạo Phòng",
+      "joinOnlineBtn": "🔗 Vào Phòng",
+      "onlineInviteHeader": "MỜI BẠN ONLINE [I]",
+      "roomCodeDisplayLabel": "Mã Phòng",
+      "enterRoomCodePrompt": "Hãy nhập Mã Phòng 6 ký tự (VD: 7K9M2P) hoặc dán link mời vào ô trên!",
+      "roomNotFoundError": "Không tìm thấy phòng Online hoặc Chủ phòng đã đóng phòng."
     },
     "settings": {
       "title": "CÀI ĐẶT HỆ THỐNG",
