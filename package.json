@@ -27,6 +27,7 @@
     "@types/pngjs": "^6.0.5",
     "concurrently": "^9.1.0",
     "eslint": "^9.15.0",
+    "peer": "^1.0.2",
     "pixelmatch": "^8.0.0",
     "pngjs": "^7.0.0",
     "prettier": "^3.3.3",
