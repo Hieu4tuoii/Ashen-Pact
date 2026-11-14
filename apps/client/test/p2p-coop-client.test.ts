@@ -1,4 +1,10 @@
-import { SIM_STEP_MS, type QuantizedWorldSnapshot, roomCodeToPeerId } from '@ashen-pact/shared';
+import {
+  INPUT_BUTTON,
+  SIM_STEP_MS,
+  type QuantizedWorldSnapshot,
+  type SimEvent,
+  roomCodeToPeerId,
+} from '@ashen-pact/shared';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createBackgroundTicker } from '../src/net/background-ticker.js';
 import {
@@ -10,9 +16,102 @@ import {
   resolvePeerRuntimeOptions,
 } from '../src/net/p2p-coop-client.js';
 
+class FakeFastDataChannel {
+  public readyState: 'connecting' | 'open' | 'closing' | 'closed' = 'connecting';
+  public bufferedAmount = 0;
+  public counterpart?: FakeFastDataChannel;
+  public readonly sentRaw: string[] = [];
+  public dropOutboundPredicate: ((raw: string, index: number) => boolean) | null = null;
+  private sendIndex = 0;
+  private readonly listeners = new Map<string, Array<(ev?: unknown) => void>>();
+
+  public constructor(
+    public readonly label: string,
+    public readonly init: RTCDataChannelInit,
+    private readonly getSendDelayMs: () => number,
+  ) {}
+
+  public addEventListener(type: string, cb: (ev?: unknown) => void): void {
+    let list = this.listeners.get(type);
+    if (!list) {
+      list = [];
+      this.listeners.set(type, list);
+    }
+    list.push(cb);
+  }
+
+  public send(data: string): void {
+    if (this.readyState !== 'open') return;
+    this.sentRaw.push(data);
+    const idx = this.sendIndex++;
+    if (this.dropOutboundPredicate?.(data, idx)) {
+      return;
+    }
+    const target = this.counterpart;
+    if (!target || target.readyState !== 'open') return;
+    const delayMs = this.getSendDelayMs();
+    if (delayMs > 0) {
+      globalThis.setTimeout(() => {
+        if (target.readyState === 'open') {
+          target.emitMessage(data);
+        }
+      }, delayMs);
+      return;
+    }
+    queueMicrotask(() => {
+      if (target.readyState === 'open') {
+        target.emitMessage(data);
+      }
+    });
+  }
+
+  public close(): void {
+    if (this.readyState === 'closed') return;
+    this.readyState = 'closed';
+    this.emit('close', {});
+    const other = this.counterpart;
+    if (other && other.readyState !== 'closed') {
+      queueMicrotask(() => {
+        other.closeFromRemote();
+      });
+    }
+  }
+
+  public closeFromRemote(): void {
+    if (this.readyState === 'closed') return;
+    this.readyState = 'closed';
+    this.emit('close', {});
+  }
+
+  public emitOpen(): void {
+    if (this.readyState === 'closed') return;
+    this.readyState = 'open';
+    this.emit('open', {});
+  }
+
+  public emitMessage(data: string): void {
+    this.emit('message', { data });
+  }
+
+  public emitError(err: unknown): void {
+    this.emit('error', err);
+  }
+
+  private emit(type: string, ev: unknown): void {
+    const list = this.listeners.get(type);
+    if (!list) return;
+    for (const cb of list) cb(ev);
+  }
+}
+
 class FakeDataConnection implements PeerDataConnectionLike {
   public open = false;
   public counterpart?: FakeDataConnection;
+  public readonly sentReliable: unknown[] = [];
+  public readonly negotiatedChannels = new Map<number, FakeFastDataChannel>();
+  public readonly peerConnection?: {
+    createDataChannel: (label: string, opts: RTCDataChannelInit) => FakeFastDataChannel;
+  };
   private readonly openHandlers: Array<() => void> = [];
   private readonly dataHandlers: Array<(data: unknown) => void> = [];
   private readonly closeHandlers: Array<() => void> = [];
@@ -21,10 +120,44 @@ class FakeDataConnection implements PeerDataConnectionLike {
   public constructor(
     public readonly peer: string,
     private readonly getSendDelayMs: () => number = () => 0,
-  ) {}
+    enablePeerConnection = true,
+    private readonly onFastChannelCreated?: (ch: FakeFastDataChannel) => void,
+  ) {
+    if (enablePeerConnection) {
+      this.peerConnection = {
+        createDataChannel: (label: string, opts: RTCDataChannelInit) => {
+          const id = opts.id ?? 0;
+          const existing = this.negotiatedChannels.get(id);
+          if (existing) return existing;
+          const ch = new FakeFastDataChannel(label, opts, this.getSendDelayMs);
+          this.negotiatedChannels.set(id, ch);
+          this.onFastChannelCreated?.(ch);
+          this.tryLinkNegotiatedChannel(id, ch);
+          return ch;
+        },
+      };
+    }
+  }
+
+  public tryLinkNegotiatedChannel(id: number, ch: FakeFastDataChannel): void {
+    const remote = this.counterpart?.negotiatedChannels.get(id);
+    if (remote && !ch.counterpart) {
+      ch.counterpart = remote;
+      remote.counterpart = ch;
+      queueMicrotask(() => {
+        if (ch.readyState !== 'closed' && remote.readyState !== 'closed') {
+          ch.readyState = 'open';
+          remote.readyState = 'open';
+          ch.emitOpen();
+          remote.emitOpen();
+        }
+      });
+    }
+  }
 
   public send(data: unknown): void {
     if (!this.open || !this.counterpart || !this.counterpart.open) return;
+    this.sentReliable.push(data);
     const cloned = JSON.parse(JSON.stringify(data)) as unknown;
     const target = this.counterpart;
     const delayMs = this.getSendDelayMs();
@@ -46,6 +179,9 @@ class FakeDataConnection implements PeerDataConnectionLike {
   public close(): void {
     if (!this.open) return;
     this.open = false;
+    for (const ch of this.negotiatedChannels.values()) {
+      ch.close();
+    }
     for (const cb of this.closeHandlers) cb();
     const other = this.counterpart;
     if (other && other.open) {
@@ -58,6 +194,9 @@ class FakeDataConnection implements PeerDataConnectionLike {
   public closeFromRemote(): void {
     if (!this.open) return;
     this.open = false;
+    for (const ch of this.negotiatedChannels.values()) {
+      ch.closeFromRemote();
+    }
     for (const cb of this.closeHandlers) cb();
   }
 
@@ -89,7 +228,13 @@ class FakePeerHub {
   public readonly peers = new Map<string, FakePeerInstance>();
   public readonly preReservedIds = new Set<string>();
   public readonly createdConfigs: Array<{ id?: string; debug: number }> = [];
+  public readonly connectionPairs: Array<{
+    clientConn: FakeDataConnection;
+    hostConn: FakeDataConnection;
+  }> = [];
   public sendDelayMs = 0;
+  public enableFastChannel = true;
+  public dropFastAck = false;
   private anonSeq = 1;
 
   public readonly factory: PeerLikeFactory = (peerId, opts) => {
@@ -128,7 +273,11 @@ class FakePeerInstance implements PeerInstanceLike {
   ) {}
 
   public connect(targetPeerId: string): PeerDataConnectionLike {
-    const clientSide = new FakeDataConnection(targetPeerId, () => this.hub.sendDelayMs);
+    const clientSide = new FakeDataConnection(
+      targetPeerId,
+      () => this.hub.sendDelayMs,
+      this.hub.enableFastChannel,
+    );
     this.activeConnections.add(clientSide);
 
     queueMicrotask(() => {
@@ -141,16 +290,29 @@ class FakePeerInstance implements PeerInstanceLike {
         });
         return;
       }
-      const hostSide = new FakeDataConnection(this.id, () => this.hub.sendDelayMs);
+      const hostSide = new FakeDataConnection(
+        this.id,
+        () => this.hub.sendDelayMs,
+        this.hub.enableFastChannel,
+        (ch) => {
+          if (this.hub.dropFastAck) {
+            ch.dropOutboundPredicate = (raw) => raw.includes('__fast_ack__');
+          }
+        },
+      );
       hostPeer.activeConnections.add(hostSide);
       clientSide.counterpart = hostSide;
       hostSide.counterpart = clientSide;
+      this.hub.connectionPairs.push({ clientConn: clientSide, hostConn: hostSide });
 
       hostPeer.emitIncomingConnection(hostSide);
       queueMicrotask(() => {
         if (!this.destroyed && !hostPeer.destroyed) {
           hostSide.emitOpen();
           clientSide.emitOpen();
+          for (const [id, ch] of clientSide.negotiatedChannels) {
+            clientSide.tryLinkNegotiatedChannel(id, ch);
+          }
         }
       });
     });
@@ -698,6 +860,324 @@ describe('PeerJS WebRTC P2P Engine & BackgroundTicker', () => {
     vi.advanceTimersByTime(1_200);
     expect(hostPeer.reconnectCalls).toBe(1);
 
+    await hostRoom.leave(true);
+  });
+
+  it('activates negotiated UDP fast channel (id: 42) after __fast_hello__/__fast_ack__ and separates reliable world_events from compact __fast__ frames', async () => {
+    vi.stubGlobal('Worker', undefined);
+    const hub = new FakePeerHub();
+
+    const hostRoom = await createPeerHostRoom({
+      requestedRoomCode: 'FAST42',
+      hostDisplayName: 'Host',
+      seed: 4242,
+      isDebugEnabled: () => true,
+      peerFactory: hub.factory,
+    });
+    const clientRoom = await joinPeerClientRoom({
+      roomCode: 'FAST42',
+      displayName: 'Joiner',
+      characterId: 'ranger',
+      peerFactory: hub.factory,
+    });
+
+    const receivedSnapshots: QuantizedWorldSnapshot[] = [];
+    const receivedWorldEvents: SimEvent[][] = [];
+    clientRoom.onMessage('world_snapshot', (s: QuantizedWorldSnapshot) => {
+      receivedSnapshots.push(s);
+    });
+    clientRoom.onMessage('world_events', (ev: SimEvent[]) => {
+      receivedWorldEvents.push(ev);
+    });
+
+    await new Promise((r) => setTimeout(r, 80));
+
+    expect(hostRoom.isFastChannelActive?.()).toBe(true);
+    expect(clientRoom.isFastChannelActive?.()).toBe(true);
+
+    const pair = hub.connectionPairs[0]!;
+    const hostFastDc = pair.hostConn.negotiatedChannels.get(42)!;
+    const clientFastDc = pair.clientConn.negotiatedChannels.get(42)!;
+    expect(hostFastDc).toBeDefined();
+    expect(hostFastDc.label).toBe('ashen_fast_udp');
+    expect(hostFastDc.init).toMatchObject({
+      negotiated: true,
+      id: 42,
+      ordered: false,
+      maxRetransmits: 0,
+    });
+    expect(clientFastDc.init).toMatchObject({
+      negotiated: true,
+      id: 42,
+      ordered: false,
+      maxRetransmits: 0,
+    });
+
+    // Immediate state change (set_ready) sends over reliable conn
+    const reliableCountBeforeReady = pair.hostConn.sentReliable.length;
+    clientRoom.send('set_ready', { ready: true });
+    await new Promise((r) => setTimeout(r, 40));
+    expect(pair.hostConn.sentReliable.length).toBeGreaterThan(reliableCountBeforeReady);
+
+    // Start dungeon run and fire Ranger bow to emit deterministic bullet_volley_spawned events
+    hostRoom.send('debug_cmd', { cmd: 'start_run' });
+    await new Promise((r) => setTimeout(r, 50));
+
+    const fastSentBeforeCombat = hostFastDc.sentRaw.length;
+    clientRoom.send('input', {
+      seq: 1,
+      tick: 0,
+      moveX: 1,
+      moveY: 0,
+      aimAngle: 0,
+      buttons: INPUT_BUTTON.FIRE,
+      weaponSlotSelect: null,
+    });
+    await new Promise((r) => setTimeout(r, 120));
+
+    // Periodic 30Hz snapshots flow as compact __fast__ frames over fastDc
+    expect(hostFastDc.sentRaw.length).toBeGreaterThan(fastSentBeforeCombat);
+    expect(hostFastDc.sentRaw.some((s) => s.includes('"__fast__"'))).toBe(true);
+
+    // Deterministic bullet_volley_spawned events were stripped onto reliable world_events
+    const flatEvents = receivedWorldEvents.flat();
+    expect(flatEvents.some((e) => e.kind === 'bullet_volley_spawned')).toBe(true);
+    expect(receivedSnapshots.length).toBeGreaterThan(0);
+    expect(receivedSnapshots[receivedSnapshots.length - 1]!.inHub).toBe(false);
+
+    await clientRoom.leave(true);
+    await hostRoom.leave(true);
+  });
+
+  it('preserves deterministic bullet events and discrete button edges even under 50% UDP fastDc packet loss', async () => {
+    vi.stubGlobal('Worker', undefined);
+    const hub = new FakePeerHub();
+
+    const hostRoom = await createPeerHostRoom({
+      requestedRoomCode: 'LOSS50',
+      hostDisplayName: 'Host',
+      seed: 5150,
+      isDebugEnabled: () => true,
+      peerFactory: hub.factory,
+    });
+    const clientRoom = await joinPeerClientRoom({
+      roomCode: 'LOSS50',
+      displayName: 'Joiner',
+      characterId: 'ranger',
+      peerFactory: hub.factory,
+    });
+
+    const receivedEvents: SimEvent[] = [];
+    let latestClientSnap: QuantizedWorldSnapshot | null = null;
+    clientRoom.onMessage('world_events', (evs: SimEvent[]) => {
+      receivedEvents.push(...evs);
+    });
+    clientRoom.onMessage('world_snapshot', (s: QuantizedWorldSnapshot) => {
+      latestClientSnap = s;
+    });
+
+    await new Promise((r) => setTimeout(r, 60));
+    expect(clientRoom.isFastChannelActive?.()).toBe(true);
+
+    hostRoom.send('debug_cmd', { cmd: 'start_run' });
+    await new Promise((r) => setTimeout(r, 50));
+
+    // Drop 50% of non-handshake UDP packets in BOTH directions!
+    const pair = hub.connectionPairs[0]!;
+    const hostFastDc = pair.hostConn.negotiatedChannels.get(42)!;
+    const clientFastDc = pair.clientConn.negotiatedChannels.get(42)!;
+    hostFastDc.dropOutboundPredicate = (_raw, idx) => idx % 2 === 0;
+    clientFastDc.dropOutboundPredicate = (_raw, idx) => idx % 2 === 0;
+
+    // Continuous movement goes on fastDc; discrete DASH + FIRE press & release go on reliable conn with edgeButtons
+    clientRoom.send('input', {
+      seq: 1,
+      tick: 0,
+      moveX: 1,
+      moveY: 0,
+      aimAngle: 0,
+      buttons: 0,
+      weaponSlotSelect: null,
+    });
+    clientRoom.send('input', {
+      seq: 2,
+      tick: 0,
+      moveX: 1,
+      moveY: 0,
+      aimAngle: 0,
+      buttons: INPUT_BUTTON.DASH | INPUT_BUTTON.FIRE,
+      weaponSlotSelect: null,
+      emoteId: 1,
+      pingWorldX: 320,
+      pingWorldY: 280,
+    });
+    clientRoom.send('input', {
+      seq: 3,
+      tick: 0,
+      moveX: 0,
+      moveY: 0,
+      aimAngle: 0,
+      buttons: 0,
+      weaponSlotSelect: null,
+    });
+
+    // Verify discrete edge input carried edgeButtons over reliable conn
+    const reliableEdgeEnvs = pair.clientConn.sentReliable.filter(
+      (m): m is { t: string; p: { seq: number; edgeButtons?: number } } =>
+        typeof m === 'object' && m !== null && (m as { t?: string }).t === 'input',
+    );
+    expect(
+      reliableEdgeEnvs.some(
+        (m) => m.p.seq === 2 && m.p.edgeButtons === (INPUT_BUTTON.DASH | INPUT_BUTTON.FIRE),
+      ),
+    ).toBe(true);
+
+    await new Promise((r) => setTimeout(r, 180));
+
+    // Discrete emote + ping + stop + dash/volley events arrived reliably despite 50% fastDc loss
+    expect(latestClientSnap).not.toBeNull();
+    const joinerSnap = latestClientSnap!.players.find((p) => p.slot === 2);
+    expect(joinerSnap?.lastSeq).toBe(3);
+    expect(joinerSnap?.emoteId).toBe(1);
+    expect(latestClientSnap!.pings.length).toBe(1);
+    expect(receivedEvents.some((e) => e.kind === 'dash_started')).toBe(true);
+    expect(receivedEvents.some((e) => e.kind === 'bullet_volley_spawned')).toBe(true);
+
+    await clientRoom.leave(true);
+    await hostRoom.leave(true);
+  });
+
+  it('falls back seamlessly to reliable PeerJS channel if fastDc is unavailable, unacknowledged, or closes mid-session', async () => {
+    vi.stubGlobal('Worker', undefined);
+
+    // Case A: Browser/mock without peerConnection.createDataChannel
+    const legacyHub = new FakePeerHub();
+    legacyHub.enableFastChannel = false;
+    const legacyHost = await createPeerHostRoom({
+      requestedRoomCode: 'LEG111',
+      hostDisplayName: 'Host',
+      peerFactory: legacyHub.factory,
+    });
+    const legacyClient = await joinPeerClientRoom({
+      roomCode: 'LEG111',
+      displayName: 'Joiner',
+      peerFactory: legacyHub.factory,
+    });
+    let legacySnaps = 0;
+    legacyClient.onMessage('world_snapshot', () => {
+      legacySnaps += 1;
+    });
+    await new Promise((r) => setTimeout(r, 90));
+    expect(legacyClient.isFastChannelActive?.()).toBe(false);
+    expect(legacySnaps).toBeGreaterThan(0);
+    await legacyClient.leave(true);
+    await legacyHost.leave(true);
+
+    // Case A2: fastDc opens locally, yet __fast_ack__ is dropped -> end-to-end probe prevents blackholing
+    const unackedHub = new FakePeerHub();
+    unackedHub.dropFastAck = true;
+    const unackedHost = await createPeerHostRoom({
+      requestedRoomCode: 'NOACK1',
+      hostDisplayName: 'Host',
+      peerFactory: unackedHub.factory,
+    });
+    const unackedClient = await joinPeerClientRoom({
+      roomCode: 'NOACK1',
+      displayName: 'Joiner',
+      peerFactory: unackedHub.factory,
+    });
+    let unackedSnaps = 0;
+    unackedClient.onMessage('world_snapshot', () => {
+      unackedSnaps += 1;
+    });
+    await new Promise((r) => setTimeout(r, 90));
+    expect(unackedClient.isFastChannelActive?.()).toBe(false);
+    expect(unackedSnaps).toBeGreaterThan(0);
+    await unackedClient.leave(true);
+    await unackedHost.leave(true);
+
+    // Case B: Negotiated channel opens, then closes mid-session without dropping the primary room!
+    const midDropHub = new FakePeerHub();
+    const hostRoom = await createPeerHostRoom({
+      requestedRoomCode: 'MID222',
+      hostDisplayName: 'Host',
+      peerFactory: midDropHub.factory,
+    });
+    const clientRoom = await joinPeerClientRoom({
+      roomCode: 'MID222',
+      displayName: 'Joiner',
+      peerFactory: midDropHub.factory,
+    });
+    let leaveTriggered = false;
+    clientRoom.onLeave(() => {
+      leaveTriggered = true;
+    });
+    let pongCount = 0;
+    clientRoom.onMessage('pong_check', () => {
+      pongCount += 1;
+    });
+    let snapCount = 0;
+    clientRoom.onMessage('world_snapshot', () => {
+      snapCount += 1;
+    });
+
+    await new Promise((r) => setTimeout(r, 60));
+    expect(clientRoom.isFastChannelActive?.()).toBe(true);
+
+    // Abruptly close ONLY fastDc while primary conn stays open
+    const pair = midDropHub.connectionPairs[0]!;
+    pair.clientConn.negotiatedChannels.get(42)!.close();
+    await new Promise((r) => setTimeout(r, 20));
+
+    expect(clientRoom.isFastChannelActive?.()).toBe(false);
+    expect(hostRoom.isFastChannelActive?.()).toBe(false);
+    expect(leaveTriggered).toBe(false);
+
+    const snapsBeforeFallback = snapCount;
+    clientRoom.send('ping_check', { clientTime: 1000, clientPerfMs: 123.4 });
+    await new Promise((r) => setTimeout(r, 110));
+
+    expect(leaveTriggered).toBe(false);
+    expect(pongCount).toBeGreaterThan(0);
+    expect(snapCount).toBeGreaterThan(snapsBeforeFallback);
+
+    await clientRoom.leave(true);
+    await hostRoom.leave(true);
+  });
+
+  it('skips non-immediate UDP fast frames when fastDc.bufferedAmount exceeds 16KB backpressure threshold', async () => {
+    vi.stubGlobal('Worker', undefined);
+    const hub = new FakePeerHub();
+
+    const hostRoom = await createPeerHostRoom({
+      requestedRoomCode: 'BKPR99',
+      hostDisplayName: 'Host',
+      peerFactory: hub.factory,
+    });
+    const clientRoom = await joinPeerClientRoom({
+      roomCode: 'BKPR99',
+      displayName: 'Joiner',
+      peerFactory: hub.factory,
+    });
+
+    await new Promise((r) => setTimeout(r, 60));
+    expect(hostRoom.isFastChannelActive?.()).toBe(true);
+
+    const pair = hub.connectionPairs[0]!;
+    const hostFastDc = pair.hostConn.negotiatedChannels.get(42)!;
+    const sentBeforeCongestion = hostFastDc.sentRaw.length;
+
+    // Simulate congested OS UDP send buffer (> 16_384 bytes)
+    hostFastDc.bufferedAmount = 32_768;
+    await new Promise((r) => setTimeout(r, 110));
+    expect(hostFastDc.sentRaw.length).toBe(sentBeforeCongestion);
+
+    // Drain buffer -> periodic fast frames resume immediately
+    hostFastDc.bufferedAmount = 0;
+    await new Promise((r) => setTimeout(r, 90));
+    expect(hostFastDc.sentRaw.length).toBeGreaterThan(sentBeforeCongestion);
+
+    await clientRoom.leave(true);
     await hostRoom.leave(true);
   });
 });

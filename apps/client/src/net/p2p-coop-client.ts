@@ -1,6 +1,9 @@
 import {
   CoopRoomAuthority,
   type CoopAuthorityPeer,
+  type CoopAuthorityPeerSendOptions,
+  type PlayerInputPacket,
+  type QuantizedWorldSnapshot,
   SIM_STEP_MS,
   generateRoomCode,
   normalizeRoomCode,
@@ -9,10 +12,34 @@ import {
 import { isDebugUiEnabled, isTestHooksEnabled } from '../core/debug-flag.js';
 import { createBackgroundTicker, type BackgroundTickerHandle } from './background-ticker.js';
 import { type CoopRoomConnection } from './coop-room-connection.js';
+import {
+  type P2PFastFrame,
+  type P2PSnapshotBaseline,
+  P2PSnapshotDecoder,
+  P2PSnapshotEncoder,
+} from './p2p-wire-codec.js';
+
+export const FAST_CHANNEL_LABEL = 'ashen_fast_udp';
+export const FAST_CHANNEL_ID = 42;
+export const FAST_MAX_BUFFERED_BYTES = 16_384;
+
+export interface FastDataChannelLike {
+  readonly readyState: 'connecting' | 'open' | 'closing' | 'closed' | string;
+  readonly bufferedAmount?: number;
+  send(data: string): void;
+  close(): void;
+  addEventListener(
+    type: 'open' | 'message' | 'close' | 'error' | string,
+    listener: (ev: unknown) => void,
+  ): void;
+}
 
 export interface PeerDataConnectionLike {
   readonly peer: string;
   readonly open: boolean;
+  readonly peerConnection?: {
+    createDataChannel?: (label: string, opts: RTCDataChannelInit) => FastDataChannelLike;
+  } | null;
   send(data: unknown): void;
   close(): void;
   on(event: 'open', cb: () => void): void;
@@ -78,7 +105,51 @@ type P2PWireEnvelope =
   | { t: '__join__'; opts?: Record<string, unknown> }
   | { t: '__leave__'; consented?: boolean }
   | { t: '__close__'; code: number }
+  | { t: '__fast_hello__' }
+  | { t: '__fast_ack__' }
+  | { t: '__fast_ready__' }
+  | { t: '__base__'; rev: number; b: P2PSnapshotBaseline }
+  | { t: '__fast__'; f: P2PFastFrame }
   | { t: string; p?: unknown };
+
+const fastTextDecoder = new TextDecoder();
+
+function openNegotiatedFastChannel(conn: PeerDataConnectionLike): FastDataChannelLike | null {
+  const pc = conn.peerConnection;
+  if (!pc || typeof pc.createDataChannel !== 'function') {
+    return null;
+  }
+  try {
+    return pc.createDataChannel(FAST_CHANNEL_LABEL, {
+      negotiated: true,
+      id: FAST_CHANNEL_ID,
+      ordered: false,
+      maxRetransmits: 0,
+    });
+  } catch {
+    return null;
+  }
+}
+
+function parseFastChannelEnvelope(ev: unknown): P2PWireEnvelope | null {
+  if (!ev || typeof ev !== 'object') return null;
+  const raw = (ev as { data?: unknown }).data;
+  let text: string | null = null;
+  if (typeof raw === 'string') {
+    text = raw;
+  } else if (raw instanceof ArrayBuffer) {
+    text = fastTextDecoder.decode(new Uint8Array(raw));
+  } else if (ArrayBuffer.isView(raw)) {
+    text = fastTextDecoder.decode(new Uint8Array(raw.buffer, raw.byteOffset, raw.byteLength));
+  }
+  if (!text) return null;
+  try {
+    const parsed = JSON.parse(text) as P2PWireEnvelope;
+    return parsed && typeof parsed === 'object' && typeof parsed.t === 'string' ? parsed : null;
+  } catch {
+    return null;
+  }
+}
 
 const DEFAULT_STUN_SERVERS: RTCIceServer[] = [
   { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] },
@@ -434,6 +505,10 @@ export async function createPeerHostRoom(
   let closed = false;
   let remoteConnSeq = 1;
   const remoteConnections = new Set<PeerDataConnectionLike>();
+  const remoteFastStates = new Map<
+    PeerDataConnectionLike,
+    { dc: FastDataChannelLike | null; verified: boolean }
+  >();
   const pendingCloseTimers = new Set<ReturnType<typeof globalThis.setTimeout>>();
   const emptyWaiters = new Set<() => void>();
   let signalingReconnectTimer: ReturnType<typeof globalThis.setTimeout> | null = null;
@@ -447,6 +522,18 @@ export async function createPeerHostRoom(
       globalThis.clearTimeout(timer);
     }
     pendingCloseTimers.clear();
+  };
+
+  const closeAllRemoteFastChannels = () => {
+    for (const st of remoteFastStates.values()) {
+      st.verified = false;
+      try {
+        st.dc?.close();
+      } catch {
+        // Ignore
+      }
+    }
+    remoteFastStates.clear();
   };
 
   const notifyIfRemoteEmpty = () => {
@@ -511,6 +598,13 @@ export async function createPeerHostRoom(
     }
     remoteConnections.add(conn);
     const sessionId = `p2p_peer_${remoteConnSeq++}_${conn.peer}`;
+    const snapshotEncoder = new P2PSnapshotEncoder();
+    const fastState: { dc: FastDataChannelLike | null; verified: boolean } = {
+      dc: null,
+      verified: false,
+    };
+    remoteFastStates.set(conn, fastState);
+
     let joined = false;
     let closedByAuthority = false;
     let clientConsentedLeave = false;
@@ -524,10 +618,131 @@ export async function createPeerHostRoom(
       }
     };
 
+    const cleanupPeerFastChannel = () => {
+      fastState.verified = false;
+      const dc = fastState.dc;
+      fastState.dc = null;
+      remoteFastStates.delete(conn);
+      try {
+        dc?.close();
+      } catch {
+        // Ignore
+      }
+    };
+
+    const initHostFastChannel = () => {
+      if (closed || fastState.dc !== null) return;
+      const dc = openNegotiatedFastChannel(conn);
+      if (!dc) return;
+      fastState.dc = dc;
+
+      dc.addEventListener('message', (ev) => {
+        if (closed) return;
+        const env = parseFastChannelEnvelope(ev);
+        if (!env) return;
+
+        if (env.t === '__fast_hello__') {
+          if (dc.readyState === 'open') {
+            try {
+              dc.send(JSON.stringify({ t: '__fast_ack__' } satisfies P2PWireEnvelope));
+            } catch {
+              fastState.verified = false;
+            }
+          }
+          return;
+        }
+
+        if (env.t === '__fast_ready__') {
+          if (dc.readyState === 'open') {
+            fastState.verified = true;
+          }
+          return;
+        }
+
+        if (!joined) return;
+        authority.handleMessage(sessionId, env.t, (env as { p?: unknown }).p);
+      });
+
+      const onFastClosedOrErrored = () => {
+        fastState.verified = false;
+      };
+      dc.addEventListener('close', onFastClosedOrErrored);
+      dc.addEventListener('error', onFastClosedOrErrored);
+    };
+
+    if (conn.open) {
+      initHostFastChannel();
+    } else {
+      conn.on('open', initHostFastChannel);
+    }
+
     const remotePeerAdapter: CoopAuthorityPeer = {
       sessionId,
-      send(type, payload) {
+      send(type, payload, sendOpts?: CoopAuthorityPeerSendOptions) {
         if (!conn.open) return;
+
+        if (type === 'world_snapshot' && payload && typeof payload === 'object') {
+          const snap = payload as QuantizedWorldSnapshot;
+          if (Array.isArray(snap.events) && snap.events.length > 0) {
+            conn.send({ t: 'world_events', p: snap.events } satisfies P2PWireEnvelope);
+          }
+          const snapForCodec =
+            Array.isArray(snap.events) && snap.events.length > 0
+              ? { ...snap, events: [] }
+              : snap;
+          const encoded = snapshotEncoder.encode(snapForCodec);
+          if (encoded.baseline) {
+            conn.send({
+              t: '__base__',
+              rev: encoded.baseline.rev,
+              b: encoded.baseline.data,
+            } satisfies P2PWireEnvelope);
+          }
+
+          const canUseFast =
+            !sendOpts?.immediate &&
+            fastState.verified &&
+            fastState.dc !== null &&
+            fastState.dc.readyState === 'open';
+          if (canUseFast) {
+            const fastDc = fastState.dc!;
+            if ((fastDc.bufferedAmount ?? 0) <= FAST_MAX_BUFFERED_BYTES) {
+              try {
+                fastDc.send(
+                  JSON.stringify({ t: '__fast__', f: encoded.fast } satisfies P2PWireEnvelope),
+                );
+                return;
+              } catch {
+                fastState.verified = false;
+              }
+            } else {
+              // Congested UDP send buffer: skip stale non-immediate positional frame cleanly
+              return;
+            }
+          }
+
+          conn.send({ t: '__fast__', f: encoded.fast } satisfies P2PWireEnvelope);
+          return;
+        }
+
+        if (
+          sendOpts?.reliable === false &&
+          !sendOpts?.immediate &&
+          fastState.verified &&
+          fastState.dc !== null &&
+          fastState.dc.readyState === 'open'
+        ) {
+          const fastDc = fastState.dc;
+          if ((fastDc.bufferedAmount ?? 0) <= FAST_MAX_BUFFERED_BYTES) {
+            try {
+              fastDc.send(JSON.stringify({ t: type, p: payload } satisfies P2PWireEnvelope));
+              return;
+            } catch {
+              fastState.verified = false;
+            }
+          }
+        }
+
         const env: P2PWireEnvelope = { t: type, p: payload };
         conn.send(env);
       },
@@ -539,6 +754,7 @@ export async function createPeerHostRoom(
           clearConnCloseFallback();
           connCloseFallbackTimer = globalThis.setTimeout(() => {
             connCloseFallbackTimer = null;
+            cleanupPeerFastChannel();
             try {
               conn.close();
             } catch {
@@ -558,9 +774,17 @@ export async function createPeerHostRoom(
       if (env.t === '__join__') {
         if (joined) return;
         joined = true;
+        initHostFastChannel();
         const joinPayload =
           'opts' in env && env.opts && typeof env.opts === 'object' ? env.opts : {};
         authority.joinPeer(remotePeerAdapter, joinPayload);
+        return;
+      }
+
+      if (env.t === '__fast_ready__') {
+        if (fastState.dc && fastState.dc.readyState === 'open') {
+          fastState.verified = true;
+        }
         return;
       }
 
@@ -568,6 +792,7 @@ export async function createPeerHostRoom(
         if (!joined) return;
         clientConsentedLeave = Boolean((env as { consented?: boolean }).consented);
         closedByAuthority = true;
+        cleanupPeerFastChannel();
         authority.leavePeer(sessionId, clientConsentedLeave);
         try {
           conn.close();
@@ -583,6 +808,7 @@ export async function createPeerHostRoom(
 
     conn.on('close', () => {
       clearConnCloseFallback();
+      cleanupPeerFastChannel();
       remoteConnections.delete(conn);
       notifyIfRemoteEmpty();
       if (joined && !closedByAuthority && !closed) {
@@ -592,6 +818,7 @@ export async function createPeerHostRoom(
 
     conn.on('error', () => {
       clearConnCloseFallback();
+      cleanupPeerFastChannel();
       remoteConnections.delete(conn);
       notifyIfRemoteEmpty();
       if (joined && !closedByAuthority && !closed) {
@@ -615,6 +842,7 @@ export async function createPeerHostRoom(
     authority.leavePeer(LOCAL_HOST_SESSION_ID, true);
     authority.dispose();
     clearPendingTimers();
+    closeAllRemoteFastChannels();
     for (const c of remoteConnections) {
       try {
         if (c.open) {
@@ -642,6 +870,15 @@ export async function createPeerHostRoom(
 
   return {
     roomId: roomCode,
+    isFastChannelActive(): boolean {
+      if (closed) return false;
+      for (const st of remoteFastStates.values()) {
+        if (st.verified && st.dc !== null && st.dc.readyState === 'open') {
+          return true;
+        }
+      }
+      return false;
+    },
     send(type: string, message?: unknown): void {
       if (closed) return;
       authority.handleMessage(LOCAL_HOST_SESSION_ID, type, message);
@@ -659,6 +896,7 @@ export async function createPeerHostRoom(
       ticker.stop();
       authority.leavePeer(LOCAL_HOST_SESSION_ID, consented);
       authority.dispose();
+      closeAllRemoteFastChannels();
       // Wait until remote clients acknowledge/close after receiving __close__(4000) or 150ms flush window
       if (remoteConnections.size > 0) {
         await new Promise<void>((resolve) => {
@@ -796,8 +1034,101 @@ export async function joinPeerClientRoom(
   }
 
   const peer = createdPeer!;
-
   const activeConn = conn;
+  const snapshotDecoder = new P2PSnapshotDecoder();
+
+  let fastDc: FastDataChannelLike | null = null;
+  let fastVerified = false;
+  let helloTimer: ReturnType<typeof globalThis.setTimeout> | null = null;
+  let helloAttempts = 0;
+  let lastSentButtons = 0;
+  let lastWasMoving = false;
+
+  const clearHelloTimer = () => {
+    if (helloTimer !== null) {
+      globalThis.clearTimeout(helloTimer);
+      helloTimer = null;
+    }
+  };
+
+  const cleanupClientFastChannel = () => {
+    fastVerified = false;
+    clearHelloTimer();
+    const dc = fastDc;
+    fastDc = null;
+    try {
+      dc?.close();
+    } catch {
+      // Ignore
+    }
+  };
+
+  fastDc = openNegotiatedFastChannel(activeConn);
+  if (fastDc !== null) {
+    const channelRef = fastDc;
+    const sendFastHello = () => {
+      if (closed || fastVerified || fastDc !== channelRef || channelRef.readyState !== 'open') {
+        return;
+      }
+      try {
+        channelRef.send(JSON.stringify({ t: '__fast_hello__' } satisfies P2PWireEnvelope));
+      } catch {
+        fastVerified = false;
+        return;
+      }
+      helloAttempts += 1;
+      if (helloAttempts < 6) {
+        clearHelloTimer();
+        const retryMs = 25 * (1 << (helloAttempts - 1));
+        helloTimer = globalThis.setTimeout(sendFastHello, retryMs);
+      }
+    };
+
+    if (channelRef.readyState === 'open') {
+      sendFastHello();
+    } else {
+      channelRef.addEventListener('open', sendFastHello);
+    }
+
+    channelRef.addEventListener('message', (ev) => {
+      if (closed) return;
+      const env = parseFastChannelEnvelope(ev);
+      if (!env) return;
+
+      if (env.t === '__fast_ack__') {
+        clearHelloTimer();
+        if (!fastVerified && channelRef.readyState === 'open') {
+          fastVerified = true;
+          if (activeConn.open) {
+            activeConn.send({ t: '__fast_ready__' } satisfies P2PWireEnvelope);
+          }
+          try {
+            channelRef.send(JSON.stringify({ t: '__fast_ready__' } satisfies P2PWireEnvelope));
+          } catch {
+            // Ignore secondary ready frame failure; reliable conn already delivered it
+          }
+        }
+        return;
+      }
+
+      if (env.t === '__fast__') {
+        const decoded = snapshotDecoder.decodeFast((env as { f: P2PFastFrame }).f);
+        if (decoded) {
+          dispatcher.emitMessage('world_snapshot', decoded);
+        }
+        return;
+      }
+
+      dispatcher.emitMessage(env.t, (env as { p?: unknown }).p);
+    });
+
+    const onFastClosedOrErrored = () => {
+      fastVerified = false;
+      clearHelloTimer();
+    };
+    channelRef.addEventListener('close', onFastClosedOrErrored);
+    channelRef.addEventListener('error', onFastClosedOrErrored);
+  }
 
   activeConn.on('data', (raw) => {
     if (closed || !raw || typeof raw !== 'object') return;
@@ -805,10 +1136,12 @@ export async function joinPeerClientRoom(
     if (typeof env.t !== 'string') return;
 
     if (env.t === '__close__') {
-      const closeCode = typeof (env as { code?: unknown }).code === 'number'
-        ? (env as { code: number }).code
-        : 4000;
+      const closeCode =
+        typeof (env as { code?: unknown }).code === 'number'
+          ? (env as { code: number }).code
+          : 4000;
       closed = true;
+      cleanupClientFastChannel();
       dispatcher.emitLeave(closeCode);
       queueMicrotask(() => {
         try {
@@ -821,12 +1154,30 @@ export async function joinPeerClientRoom(
       return;
     }
 
+    if (env.t === '__base__') {
+      const baseEnv = env as { rev: number; b: P2PSnapshotBaseline };
+      const unlocked = snapshotDecoder.applyBaseline(baseEnv.rev, baseEnv.b);
+      if (unlocked) {
+        dispatcher.emitMessage('world_snapshot', unlocked);
+      }
+      return;
+    }
+
+    if (env.t === '__fast__') {
+      const decoded = snapshotDecoder.decodeFast((env as { f: P2PFastFrame }).f);
+      if (decoded) {
+        dispatcher.emitMessage('world_snapshot', decoded);
+      }
+      return;
+    }
+
     dispatcher.emitMessage(env.t, (env as { p?: unknown }).p);
   });
 
   const handleUnexpectedDisconnect = () => {
     if (closed || intentionalLeave) return;
     closed = true;
+    cleanupClientFastChannel();
     try {
       peer.destroy();
     } catch {
@@ -850,8 +1201,62 @@ export async function joinPeerClientRoom(
 
   return {
     roomId: roomCode,
+    isFastChannelActive(): boolean {
+      return !closed && fastVerified && fastDc !== null && fastDc.readyState === 'open';
+    },
     send(type: string, message?: unknown): void {
       if (closed || !activeConn.open) return;
+
+      const canUseFast = fastVerified && fastDc !== null && fastDc.readyState === 'open';
+
+      if ((type === 'input' || type === 'player_input') && message && typeof message === 'object') {
+        const pkt = message as PlayerInputPacket;
+        const buttons = pkt.buttons ?? 0;
+        const isMoving = Math.abs(pkt.moveX ?? 0) > 1e-4 || Math.abs(pkt.moveY ?? 0) > 1e-4;
+        const edgeButtons = buttons & ~lastSentButtons;
+        const hasDiscreteAction =
+          buttons !== lastSentButtons ||
+          (lastWasMoving && !isMoving) ||
+          (pkt.weaponSlotSelect !== null && pkt.weaponSlotSelect !== undefined) ||
+          pkt.pingWorldX !== undefined ||
+          pkt.emoteId !== undefined;
+
+        lastSentButtons = buttons;
+        lastWasMoving = isMoving;
+
+        const outPkt: PlayerInputPacket =
+          edgeButtons !== 0 ? { ...pkt, edgeButtons } : pkt;
+
+        if (!hasDiscreteAction && canUseFast) {
+          if ((fastDc!.bufferedAmount ?? 0) <= FAST_MAX_BUFFERED_BYTES) {
+            try {
+              fastDc!.send(JSON.stringify({ t: type, p: outPkt } satisfies P2PWireEnvelope));
+              return;
+            } catch {
+              fastVerified = false;
+            }
+          } else {
+            return;
+          }
+        }
+
+        activeConn.send({ t: type, p: outPkt } satisfies P2PWireEnvelope);
+        return;
+      }
+
+      if (
+        (type === 'ping_check' || type === 'report_ping') &&
+        canUseFast &&
+        (fastDc!.bufferedAmount ?? 0) <= FAST_MAX_BUFFERED_BYTES
+      ) {
+        try {
+          fastDc!.send(JSON.stringify({ t: type, p: message } satisfies P2PWireEnvelope));
+          return;
+        } catch {
+          fastVerified = false;
+        }
+      }
+
       const env: P2PWireEnvelope = { t: type, p: message };
       activeConn.send(env);
     },
@@ -865,6 +1270,7 @@ export async function joinPeerClientRoom(
       if (closed) return;
       intentionalLeave = true;
       closed = true;
+      cleanupClientFastChannel();
       if (activeConn.open) {
         const leaveEnv: P2PWireEnvelope = { t: '__leave__', consented };
         activeConn.send(leaveEnv);

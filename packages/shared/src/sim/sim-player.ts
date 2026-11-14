@@ -435,7 +435,11 @@ export function updateSinglePlayerStateImpl(this: WorldSim,
     }
   }
 
-  if (inp.buttons & INPUT_BUTTON.FIRE && p.fireCooldownTimer <= 0 && p.hp > 0) {
+  if (
+    ((inp.buttons | justPressed) & INPUT_BUTTON.FIRE) !== 0 &&
+    p.fireCooldownTimer <= 0 &&
+    p.hp > 0
+  ) {
     this.tryFireActiveWeapon(p);
   }
 

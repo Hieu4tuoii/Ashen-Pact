@@ -295,20 +295,49 @@ export type P2PFastFrame =
       P2PWorldFastExtras, // 10: non-empty transient arrays
     ];
 
+const LIFE_INDEX: Record<PlayerLifeState, number> = {
+  alive: 0,
+  downed: 1,
+  ghost: 2,
+};
 const LIFE_STATES: readonly PlayerLifeState[] = ['alive', 'downed', 'ghost'];
-const ELEMENTS: readonly ElementType[] = ['none', 'fire', 'ice', 'lightning', 'poison'];
+
+const ELEMENT_INDEX: Record<ElementType, number> = {
+  none: 0,
+  burn: 1,
+  chill: 2,
+  shock: 3,
+  poison: 4,
+};
+const ELEMENTS: readonly ElementType[] = ['none', 'burn', 'chill', 'shock', 'poison'];
+
 const PICKUP_KINDS = ['gold', 'life_seed', 'prey_emblem'] as const;
+
+const AI_INDEX: Record<EnemyAIState, number> = {
+  spawning: 0,
+  idle: 1,
+  move: 2,
+  chase: 3,
+  telegraph: 4,
+  attack: 5,
+  cooldown: 6,
+  stunned: 7,
+};
 const AI_STATES: readonly EnemyAIState[] = [
+  'spawning',
   'idle',
+  'move',
   'chase',
   'telegraph',
   'attack',
-  'recover',
-  'flee',
-  'patrol',
+  'cooldown',
   'stunned',
 ];
-const AI_TO_CODE = new Map<EnemyAIState, number>(AI_STATES.map((s, idx) => [s, idx]));
+const AI_TO_CODE = new Map<EnemyAIState, number>(
+  Object.entries(AI_INDEX).map(([k, v]) => [k as EnemyAIState, v]),
+);
+void LIFE_INDEX;
+void ELEMENT_INDEX;
 
 const OPT_SUMMONS = 1 << 0;
 const OPT_SKILL_ZONES = 1 << 1;

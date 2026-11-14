@@ -35,8 +35,9 @@ function buildRichFourPlayerCombatSim(): WorldSim {
   p1.soulChainStretchTimer = 0.45;
   p1.salvageHoldTimer = 0.35;
   p1.salvageTargetItemId = 77;
-  p1.emoteId = 'thumbs_up';
+  p1.emoteId = 1;
   p1.emoteTimer = 1.2;
+  p1.activeImbueElement = 'burn';
   p1.statsDamageDealt = 480;
   p1.statsKills = 9;
 
