@@ -396,7 +396,23 @@ export function setCoopPlayerInputImpl(this: WorldSim, playerId: number, input: 
     };
     this.coopPlayerInputs.set(playerId, entry);
   }
-  const newEdges = input.buttons & ~entry.current.buttons;
+  if (input.seq > 0 && entry.current.seq > 0 && input.seq < entry.current.seq) {
+    if (typeof input.edgeButtons === 'number' && input.edgeButtons !== 0) {
+      entry.latchedButtons |= input.edgeButtons;
+    }
+    if (typeof input.weaponSlotSelect === 'number') {
+      entry.latchedWeaponSlot = input.weaponSlotSelect;
+    }
+    if (typeof input.pingWorldX === 'number' && typeof input.pingWorldY === 'number') {
+      this.triggerPing(playerId, input.pingWorldX, input.pingWorldY);
+    }
+    if (input.emoteId) {
+      this.triggerEmote(playerId, input.emoteId);
+    }
+    return;
+  }
+
+  const newEdges = (input.buttons & ~entry.current.buttons) | (input.edgeButtons ?? 0);
   entry.latchedButtons |= newEdges;
   if (typeof input.weaponSlotSelect === 'number') {
     entry.latchedWeaponSlot = input.weaponSlotSelect;

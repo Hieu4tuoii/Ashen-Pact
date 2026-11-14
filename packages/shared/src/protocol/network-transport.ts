@@ -1,7 +1,13 @@
 import { FixedTimestepLoop } from '../core/fixed-timestep.js';
 import { ENEMIES } from '../data/enemies.js';
 import type { AshenPactId } from '../data/types.js';
-import { clamp, lerp } from '../math/vec2.js';
+import { approach, clamp, lerp } from '../math/vec2.js';
+import { getConveyorVelocityAtWorld } from '../sim/arena-room-archetypes.js';
+import {
+  DASH_COOLDOWN_SEC,
+  DASH_DURATION_SEC,
+  DASH_SPEED_MULTIPLIER,
+} from '../sim/world-sim-types.js';
 import { type SimEnemyState, type SimEvent, type SimPickupState, type SimPlayerState, type SimProjectileState, WorldSim, type WorldSimOptions } from '../sim/world-sim.js';
 import { INPUT_BUTTON, type PlayerInputPacket, dequantizeAngle, dequantizeCoord } from './messages.js';
 import { type QuantizedWorldSnapshot, estimateSnapshotBytes } from './snapshot-codec.js';
@@ -69,7 +75,7 @@ export class NetworkTransport implements ITransport {
     weaponSlotSelect: null,
   };
 
-  private readonly pendingInputs: PlayerInputPacket[] = [];
+  private readonly pendingInputs: Array<{ packet: PlayerInputPacket; simTicks: number }> = [];
   private reconcileOffsetX = 0;
   private reconcileOffsetY = 0;
 
@@ -78,6 +84,8 @@ export class NetworkTransport implements ITransport {
   private readonly pendingEvents: SimEvent[] = [];
 
   private lastSnapshotRecvMs = 0;
+  private lastSnapshotSeq = 0;
+  private lastSnapshotTick = -1;
   private rttMs = 8;
   private measuredJitterMs = 2;
   private interpolationDelayMs = 55;
@@ -193,14 +201,26 @@ export class NetworkTransport implements ITransport {
       this.sim.setPlayerInput(packet);
     }
 
-    this.pendingInputs.push(packet);
-    if (this.pendingInputs.length > 120) {
+    this.pendingInputs.push({ packet, simTicks: 0 });
+    if (this.pendingInputs.length > 240) {
       this.pendingInputs.shift();
     }
 
     this.bytesOutWindow += 18;
     this.wifiSim.sendOutbound(packet, (deliveredPacket) => {
       this.onSendInputCallback?.(deliveredPacket);
+    });
+  }
+
+  /**
+   * Called when reliable simulation events arrive separately from fast UDP world snapshots.
+   */
+  public receiveEvents(events: SimEvent[]): void {
+    if (!events || events.length === 0) return;
+    const copy = [...events];
+    this.bytesInWindow += copy.length * 14;
+    this.wifiSim.receiveInbound(copy, (deliveredEvents: SimEvent[]) => {
+      this.applyAuthoritativeEvents(deliveredEvents);
     });
   }
 
@@ -220,6 +240,17 @@ export class NetworkTransport implements ITransport {
   }
 
   private applyAuthoritativeSnapshot(snapshot: QuantizedWorldSnapshot): void {
+    const isFreshHubReset = snapshot.tick === 0 && snapshot.inHub && !this.sim.inHub;
+    if (typeof snapshot.snapshotSeq === 'number') {
+      if (this.lastSnapshotSeq > 0 && snapshot.snapshotSeq <= this.lastSnapshotSeq && !isFreshHubReset) {
+        return;
+      }
+      this.lastSnapshotSeq = snapshot.snapshotSeq;
+    } else if (this.lastSnapshotTick >= 0 && snapshot.tick < this.lastSnapshotTick && !isFreshHubReset) {
+      return;
+    }
+    this.lastSnapshotTick = snapshot.tick;
+
     const nowMs = this.wifiSim.getNowMs();
     if (this.lastSnapshotRecvMs > 0) {
       const intervalMs = nowMs - this.lastSnapshotRecvMs;
@@ -391,7 +422,7 @@ export class NetworkTransport implements ITransport {
 
       if (ps.id === this.localPlayerId) {
         // Local player: Client-Side Prediction + Server Reconciliation
-        while (this.pendingInputs.length > 0 && this.pendingInputs[0]!.seq <= ps.lastSeq) {
+        while (this.pendingInputs.length > 0 && this.pendingInputs[0]!.packet.seq <= ps.lastSeq) {
           this.pendingInputs.shift();
         }
 
@@ -404,21 +435,22 @@ export class NetworkTransport implements ITransport {
         pState.vy = ps.vy;
         pState.dashTimer = ps.dashTimer100 / 100;
         pState.dashCooldownTimer = ps.dashCd100 / 100;
+        if (pState.dashTimer > 0) {
+          const authSpeed = Math.hypot(ps.vx, ps.vy);
+          if (authSpeed > 1) {
+            pState.dashDirX = ps.vx / authSpeed;
+            pState.dashDirY = ps.vy / authSpeed;
+          }
+        }
 
-        // Replay unacknowledged local inputs on top of server state
+        // Replay exact fixed 60Hz ticks simulated locally for unacknowledged inputs
         const replayDt = 1 / 60;
         for (let i = 0; i < this.pendingInputs.length; i++) {
-          const inp = this.pendingInputs[i]!;
-          const len = Math.hypot(inp.moveX, inp.moveY);
-          const nx = len > 0.001 ? inp.moveX / Math.max(1, len) : 0;
-          const ny = len > 0.001 ? inp.moveY / Math.max(1, len) : 0;
-          const speed = pState.lifeState === 'downed' ? 38 : pState.moveSpeed;
-          const nextX = pState.x + nx * speed * replayDt;
-          const nextY = pState.y + ny * speed * replayDt;
-          const col = this.sim.map.resolveCircleCollision(nextX, nextY, pState.radius);
-          pState.x = col.x;
-          pState.y = col.y;
-          this.sim.resolvePropMovementCollision(pState);
+          const entry = this.pendingInputs[i]!;
+          if (entry.simTicks <= 0) continue;
+          for (let stepIdx = 0; stepIdx < entry.simTicks; stepIdx++) {
+            this.stepPredictedPlayerKinematics(pState, entry.packet, replayDt);
+          }
         }
         pState.prevX = pState.x;
         pState.prevY = pState.y;
@@ -686,7 +718,11 @@ export class NetworkTransport implements ITransport {
       }
     }
 
-    for (const ev of snapshot.events) {
+    this.applyAuthoritativeEvents(snapshot.events);
+  }
+
+  private applyAuthoritativeEvents(events: SimEvent[]): void {
+    for (const ev of events) {
       if (ev.kind === 'bullet_volley_spawned') {
         if (ev.replacedProjectileId !== undefined) {
           let writeIdx = 0;
@@ -764,6 +800,9 @@ export class NetworkTransport implements ITransport {
   }
 
   private stepLocalPrediction(dtSec: number): void {
+    if (this.pendingInputs.length > 0) {
+      this.pendingInputs[this.pendingInputs.length - 1]!.simTicks += 1;
+    }
     const localPlayer = this.getLocalPlayerState();
     localPlayer.prevX = localPlayer.x;
     localPlayer.prevY = localPlayer.y;
@@ -771,55 +810,87 @@ export class NetworkTransport implements ITransport {
     const inp = this.latestInput;
     localPlayer.aimAngle = inp.aimAngle;
 
-    if (localPlayer.dashCooldownTimer > 0) {
-      localPlayer.dashCooldownTimer = Math.max(0, localPlayer.dashCooldownTimer - dtSec);
-    }
-    if (localPlayer.dashTimer > 0) {
-      localPlayer.dashTimer = Math.max(0, localPlayer.dashTimer - dtSec);
-    }
-
-    const wantsDash = (inp.buttons & INPUT_BUTTON.DASH) !== 0;
-    if (
-      wantsDash &&
-      localPlayer.lifeState === 'alive' &&
-      localPlayer.dashTimer <= 0 &&
-      localPlayer.dashCooldownTimer <= 0
-    ) {
-      localPlayer.dashTimer = 0.14;
-      localPlayer.dashCooldownTimer = 0.55;
-      const len = Math.hypot(inp.moveX, inp.moveY);
-      const dirX = len > 0.01 ? inp.moveX / len : Math.cos(inp.aimAngle);
-      const dirY = len > 0.01 ? inp.moveY / len : Math.sin(inp.aimAngle);
-      localPlayer.dashDirX = dirX;
-      localPlayer.dashDirY = dirY;
-      localPlayer.vx = dirX * 520;
-      localPlayer.vy = dirY * 520;
-    } else if (localPlayer.dashTimer <= 0) {
-      const len = Math.hypot(inp.moveX, inp.moveY);
-      const nx = len > 0.001 ? inp.moveX / Math.max(1, len) : 0;
-      const ny = len > 0.001 ? inp.moveY / Math.max(1, len) : 0;
-      const speed =
-        localPlayer.lifeState === 'downed'
-          ? 38
-          : localPlayer.lifeState === 'ghost'
-            ? localPlayer.moveSpeed * 0.85
-            : localPlayer.moveSpeed;
-      localPlayer.vx = nx * speed;
-      localPlayer.vy = ny * speed;
-    }
-
-    const nextX = localPlayer.x + localPlayer.vx * dtSec;
-    const nextY = localPlayer.y + localPlayer.vy * dtSec;
-    const col = this.sim.map.resolveCircleCollision(nextX, nextY, localPlayer.radius);
-    localPlayer.x = col.x;
-    localPlayer.y = col.y;
-    this.sim.resolvePropMovementCollision(localPlayer);
+    this.stepPredictedPlayerKinematics(localPlayer, inp, dtSec);
     if (!this.sim.stressTestActive) {
       this.sim.updatePhase6Mechanics(dtSec);
     }
 
     // Deterministically simulate projectiles on client (wall bounce + immediate cosmetic enemy hit prediction)
     this.sim.stepClientProjectilesCosmetic(dtSec);
+  }
+
+  private stepPredictedPlayerKinematics(
+    p: SimPlayerState,
+    inp: PlayerInputPacket,
+    dtSec: number,
+  ): void {
+    const len = Math.hypot(inp.moveX, inp.moveY);
+    const dirX = len > 1e-4 ? inp.moveX / len : 0;
+    const dirY = len > 1e-4 ? inp.moveY / len : 0;
+
+    if (p.lifeState !== 'alive') {
+      const crawlSpeed = p.lifeState === 'downed' ? 38 : p.moveSpeed * 0.85;
+      p.vx = dirX * crawlSpeed;
+      p.vy = dirY * crawlSpeed;
+      const col = this.sim.map.resolveCircleCollision(
+        p.x + p.vx * dtSec,
+        p.y + p.vy * dtSec,
+        p.radius,
+      );
+      p.x = col.x;
+      p.y = col.y;
+      return;
+    }
+
+    if (p.dashCooldownTimer > 0) {
+      p.dashCooldownTimer = Math.max(0, p.dashCooldownTimer - dtSec);
+    }
+
+    const wantsDash = ((inp.buttons | (inp.edgeButtons ?? 0)) & INPUT_BUTTON.DASH) !== 0;
+    if (wantsDash && p.dashTimer <= 0 && p.dashCooldownTimer <= 0) {
+      p.dashTimer = DASH_DURATION_SEC;
+      p.dashCooldownTimer = DASH_COOLDOWN_SEC;
+      p.dashDirX = dirX !== 0 || dirY !== 0 ? dirX : Math.cos(inp.aimAngle);
+      p.dashDirY = dirX !== 0 || dirY !== 0 ? dirY : Math.sin(inp.aimAngle);
+    }
+
+    const surf = this.sim.map.getSurfaceAtWorld(p.x, p.y);
+    const wasDashingThisStep = p.dashTimer > 0;
+    if (p.dashTimer > 0) {
+      p.dashTimer = Math.max(0, p.dashTimer - dtSec);
+      const dashSpeed = p.moveSpeed * DASH_SPEED_MULTIPLIER;
+      p.vx = p.dashDirX * dashSpeed;
+      p.vy = p.dashDirY * dashSpeed;
+    } else {
+      let speedMult = p.elementalConvergenceTimer > 0 ? 1.2 : 1.0;
+      if (surf === 'oil' || surf === 'poison_swamp') speedMult *= 0.85;
+      if (p.chillTimer > 0) speedMult *= 0.7;
+      const effectiveSpeed = p.moveSpeed * speedMult;
+      const targetVx = dirX * effectiveSpeed;
+      const targetVy = dirY * effectiveSpeed;
+      let accelRate = dirX !== 0 || dirY !== 0 ? effectiveSpeed / 0.055 : effectiveSpeed / 0.045;
+      if (surf === 'ice') {
+        accelRate *= dirX !== 0 || dirY !== 0 ? 0.32 : 0.16;
+      }
+      const maxDeltaV = accelRate * dtSec;
+      p.vx = approach(p.vx, targetVx, maxDeltaV);
+      p.vy = approach(p.vy, targetVy, maxDeltaV);
+    }
+
+    const conveyorVx = getConveyorVelocityAtWorld(this.sim.map, p.x, p.y);
+    const nextX = p.x + (p.vx + conveyorVx) * dtSec;
+    const nextY = p.y + p.vy * dtSec;
+    const col = this.sim.map.resolveCircleCollision(
+      nextX,
+      nextY,
+      p.radius,
+      wasDashingThisStep || p.dashTimer > 0 || surf === 'chasm',
+    );
+    p.x = col.x;
+    p.y = col.y;
+    if (!this.sim.stressTestActive) {
+      this.sim.resolvePropMovementCollision(p);
+    }
   }
 
   public getLocalPlayerState(): SimPlayerState {

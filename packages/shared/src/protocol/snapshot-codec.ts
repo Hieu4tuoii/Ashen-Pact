@@ -166,6 +166,7 @@ export type QuantizedSurfaceTuple = [number, SurfaceKind, number];
 
 export interface QuantizedWorldSnapshot {
   tick: number;
+  snapshotSeq?: number;
   serverTimeMs: number;
   seed: string | number;
   inHub: boolean;

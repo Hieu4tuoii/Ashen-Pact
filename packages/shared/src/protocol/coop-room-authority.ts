@@ -9,9 +9,14 @@ import { ALL_CHARACTER_IDS, type SimEvent, WorldSim } from '../sim/world-sim.js'
 import { type PlayerInputPacket } from './messages.js';
 import { encodeWorldSnapshot } from './snapshot-codec.js';
 
+export interface CoopAuthorityPeerSendOptions {
+  reliable?: boolean;
+  immediate?: boolean;
+}
+
 export interface CoopAuthorityPeer {
   readonly sessionId: string;
-  send(type: string, payload: unknown): void;
+  send(type: string, payload: unknown, options?: CoopAuthorityPeerSendOptions): void;
   close(code: number): void;
 }
 
@@ -61,6 +66,7 @@ export class CoopRoomAuthority {
   private readonly disconnectedByToken = new Map<string, AuthorityPlayerMeta>();
   private readonly accumulatedEvents: SimEvent[] = [];
   private snapshotTickCounter = 0;
+  private snapshotSeq = 0;
   private hostName = 'Chủ Phòng';
   private disposed = false;
   private readonly isDebugEnabled: () => boolean;
@@ -126,8 +132,9 @@ export class CoopRoomAuthority {
           this.sim.allowDuplicateCharacters,
           Date.now(),
         );
+        snap.snapshotSeq = ++this.snapshotSeq;
         this.accumulatedEvents.length = 0;
-        this.broadcast('world_snapshot', snap);
+        this.broadcast('world_snapshot', snap, { reliable: false, immediate: false });
       }
     }
   }
@@ -461,15 +468,24 @@ export class CoopRoomAuthority {
       }
 
       case 'ping_check': {
-        const body = payload as { clientTime?: number; rttMs?: number } | undefined;
+        const body = payload as
+          | { clientTime?: number; clientPerfMs?: number; rttMs?: number }
+          | undefined;
         if (meta && typeof body?.rttMs === 'number') {
           const p = this.sim.getPlayerById(meta.playerId);
           if (p) p.pingMs = Math.max(1, Math.round(body.rttMs));
         }
-        peer?.send('pong_check', {
-          clientTime: body?.clientTime ?? Date.now(),
-          serverTick: this.sim.tick,
-        });
+        peer?.send(
+          'pong_check',
+          {
+            clientTime: body?.clientTime ?? Date.now(),
+            ...(typeof body?.clientPerfMs === 'number'
+              ? { clientPerfMs: body.clientPerfMs }
+              : {}),
+            serverTick: this.sim.tick,
+          },
+          { reliable: false },
+        );
         return;
       }
 
@@ -623,8 +639,9 @@ export class CoopRoomAuthority {
       this.sim.allowDuplicateCharacters,
       Date.now(),
     );
+    snap.snapshotSeq = ++this.snapshotSeq;
     this.accumulatedEvents.length = 0;
-    this.broadcast('world_snapshot', snap);
+    this.broadcast('world_snapshot', snap, { reliable: true, immediate: true });
   }
 
   public dispose(): void {
@@ -684,9 +701,17 @@ export class CoopRoomAuthority {
     return 4;
   }
 
-  private broadcast(type: string, payload: unknown): void {
+  private broadcast(
+    type: string,
+    payload: unknown,
+    options?: CoopAuthorityPeerSendOptions,
+  ): void {
     for (const peer of this.peersBySession.values()) {
-      peer.send(type, payload);
+      if (options) {
+        peer.send(type, payload, options);
+      } else {
+        peer.send(type, payload);
+      }
     }
   }
 
