@@ -5,6 +5,7 @@ import {
   type InteractTargetResult,
   LocalTransport,
   NetworkTransport,
+  normalizeRoomCode,
   type PropKind,
   type QuickEmoteId,
   type SimEnemyState,
@@ -13,8 +14,9 @@ import {
   type TileKind,
   type WifiProfileId,
 } from '@ashen-pact/shared';
-import { type Client as ColyseusClient, type Room as ColyseusRoom } from 'colyseus.js';
+import { type Client as ColyseusClient } from 'colyseus.js';
 import Phaser from 'phaser';
+import type { CoopRoomConnection } from '../net/coop-room-connection.js';
 import type { CutoutRig } from '../art/cutout-rig.js';
 import { shouldEmitFootstepDust } from '../art/cutout-rig-math.js';
 import { dampLerp } from '../art/easing.js';
@@ -90,6 +92,8 @@ import { drawEnemyHealthAndStatusBarImpl, renderHitboxesIfEnabledImpl, renderTel
 
 export interface GameSceneInitData {
   coopMode?: 'solo' | 'host' | 'join';
+  coopBackend?: 'colyseus' | 'p2p';
+  preferredCoopTransport?: 'p2p' | 'lan';
   startInHub?: boolean;
   roomId?: string;
   displayName?: string;
@@ -144,6 +148,10 @@ export class GameScene extends Phaser.Scene {
   public transport!: LocalTransport | NetworkTransport;
   public networkTransport: NetworkTransport | null = null;
   public coopMode: 'solo' | 'host' | 'join' = 'solo';
+  public coopBackend: 'colyseus' | 'p2p' = 'colyseus';
+  public preferredCoopTransport: 'p2p' | 'lan' = 'lan';
+  public hasManualTransportChoice = false;
+  public lanServerAvailable = false;
   public startInHub = true;
   public requestedRoomId: string | undefined;
   public displayName: string = PRESET_NAMES_VI[0];
@@ -417,7 +425,7 @@ export class GameScene extends Phaser.Scene {
   public weaponKeyTexts: Phaser.GameObjects.Text[] = [];
 
   public debugOverlay?: DebugOverlay;
-  public room?: ColyseusRoom;
+  public room?: CoopRoomConnection;
   public colyseusClient?: ColyseusClient;
   public intentionalLeave = false;
   public sceneSessionEpoch = 0;
@@ -486,6 +494,9 @@ export class GameScene extends Phaser.Scene {
     const urlJoin = params?.get('join') ?? undefined;
     const urlName = params?.get('name') ?? undefined;
     const urlServer = params?.get('server') ?? undefined;
+    const rawP2pParam = params?.get('p2p')?.trim().toLowerCase();
+    const urlP2p = Boolean(rawP2pParam && rawP2pParam !== '0' && rawP2pParam !== 'false');
+    const pageProtocol = typeof window !== 'undefined' ? window.location?.protocol : undefined;
 
     if (data?.coopMode) {
       this.coopMode = data.coopMode;
@@ -535,8 +546,45 @@ export class GameScene extends Phaser.Scene {
 
     const explicitServer = (data?.serverUrl ?? urlServer)?.trim() || undefined;
     this.hasCustomServerHostPort = Boolean(explicitServer);
-    this.serverHostPort = normalizeServerHostPortDisplay(explicitServer, fallbackHostPort);
-    this.requestedRoomId = this.coopMode === 'solo' ? undefined : (data?.roomId ?? urlJoin);
+
+    if (this.coopMode === 'solo') {
+      this.coopBackend = 'colyseus';
+    } else if (data?.coopBackend) {
+      this.coopBackend = data.coopBackend;
+    } else if (
+      urlP2p ||
+      (!explicitServer &&
+        Boolean(urlJoin) &&
+        (pageProtocol === 'https:' || /^p2p:/i.test(urlJoin ?? '')))
+    ) {
+      this.coopBackend = 'p2p';
+    } else {
+      this.coopBackend = 'colyseus';
+    }
+
+    if (data?.preferredCoopTransport) {
+      this.preferredCoopTransport = data.preferredCoopTransport;
+      this.hasManualTransportChoice = true;
+    } else {
+      this.hasManualTransportChoice = false;
+      if (this.coopMode !== 'solo') {
+        this.preferredCoopTransport = this.coopBackend === 'p2p' ? 'p2p' : 'lan';
+      } else if (!explicitServer && (pageProtocol === 'https:' || urlP2p)) {
+        this.preferredCoopTransport = 'p2p';
+      } else {
+        this.preferredCoopTransport = 'lan';
+      }
+    }
+
+    this.serverHostPort =
+      this.coopMode === 'solo' && this.preferredCoopTransport === 'p2p' && !explicitServer
+        ? ''
+        : normalizeServerHostPortDisplay(explicitServer, fallbackHostPort);
+    const rawRoomId = this.coopMode === 'solo' ? undefined : (data?.roomId ?? urlJoin);
+    this.requestedRoomId =
+      this.coopBackend === 'p2p' && rawRoomId
+        ? (normalizeRoomCode(rawRoomId) ?? rawRoomId)
+        : rawRoomId;
     this.serverUrl = this.coopMode === 'solo' ? undefined : explicitServer;
     this.menuActiveInput = null;
     this.hubTicksElapsed = 0;
@@ -1106,7 +1154,7 @@ export class GameScene extends Phaser.Scene {
   public getResolvedWsUrl(): string { return getResolvedWsUrlImpl.call(this); }
   public fetchHostLanInfo(): Promise<void> { return fetchHostLanInfoImpl.call(this); }
   public updateHostInviteUrl(): void { updateHostInviteUrlImpl.call(this); }
-  public bindCoopRoomHandlers(room: ColyseusRoom): void { bindCoopRoomHandlersImpl.call(this, room); }
+  public bindCoopRoomHandlers(room: CoopRoomConnection): void { bindCoopRoomHandlersImpl.call(this, room); }
   public connectCoopRoom(): Promise<void> { return connectCoopRoomImpl.call(this); }
   public forceCoopReconnect(): Promise<boolean> { return forceCoopReconnectImpl.call(this); }
   public connectHelloRoom(): Promise<void> { return connectHelloRoomImpl.call(this); }

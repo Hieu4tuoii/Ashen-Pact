@@ -62,7 +62,7 @@ export function updateHubInvitePanelImpl(this: GameScene): void {
   const emoteLabel = graphicsSettings.getActionKeyLabel('emote');
   const hash = !showInHub
     ? 'hidden'
-    : `${this.coopMode}:${this.invitePanelVisible ? 1 : 0}:${this.displayName}:${this.serverHostPort}:${this.menuActiveInput ?? ''}:${debug.serverConnected ? 1 : 0}:${this.primaryLanIp}:${this.serverPort}:${this.hostInviteUrl ?? ''}:${sim.allowDuplicateCharacters ? 1 : 0}:${this.copyToastTimer > 0 ? 1 : 0}:${playersKey}:${i18n.getLocale()}:${this.currentHudUiScale}:${serializeKeybindingsHash(gState.keybindings)}`;
+    : `${this.coopMode}:${this.coopBackend}:${this.preferredCoopTransport}:${this.invitePanelVisible ? 1 : 0}:${this.displayName}:${this.serverHostPort}:${this.menuActiveInput ?? ''}:${debug.serverConnected ? 1 : 0}:${this.primaryLanIp}:${this.serverPort}:${this.hostInviteUrl ?? ''}:${sim.allowDuplicateCharacters ? 1 : 0}:${this.copyToastTimer > 0 ? 1 : 0}:${playersKey}:${i18n.getLocale()}:${this.currentHudUiScale}:${serializeKeybindingsHash(gState.keybindings)}`;
 
   if (hash === this.lastInvitePanelHash) return;
   this.lastInvitePanelHash = hash;
@@ -78,7 +78,7 @@ export function updateHubInvitePanelImpl(this: GameScene): void {
   const isEn = i18n.getLocale() === 'en';
   const activeCount = Math.max(1, allPlayers.length);
 
-  // Collapsed default state: compact top-right chip ("📡 Phòng Co-op [I]" in Solo; "📡 Mời bạn · N/4 [I]" in Co-op)
+  // Collapsed default state: compact top-right chip ("📡 Phòng Co-op [I]" in Solo; "🌐/📡 Mời bạn · N/4 [I]" in Co-op)
   if (!this.invitePanelVisible) {
     const chipW = 166;
     const chipH = 26;
@@ -96,12 +96,13 @@ export function updateHubInvitePanelImpl(this: GameScene): void {
       accentSide: 'left',
     });
 
+    const coopChipIcon = this.coopBackend === 'p2p' ? '🌐' : '📡';
     const labelStr =
       this.coopMode === 'solo'
         ? i18n.t('ui.sanctuary.soloCoopChip').replace(/\s*\[I\]$/i, '')
         : isEn
-          ? `📡 Invite · ${activeCount}/4`
-          : `📡 Mời bạn · ${activeCount}/4`;
+          ? `${coopChipIcon} Invite · ${activeCount}/4`
+          : `${coopChipIcon} Mời bạn · ${activeCount}/4`;
     const chipTxt = ui.add
       .text(
         chipX + 10,
@@ -150,12 +151,13 @@ export function updateHubInvitePanelImpl(this: GameScene): void {
     return;
   }
 
-  // Expanded Solo Mode: Sanctuary Co-op LAN Guild Card (pw = 304, ph = 212, px = -316, py = 144)
+  // Expanded Solo Mode: Sanctuary Co-op Online / LAN Guild Card (pw = 304, ph = 212, px = -316, py = 144)
   if (this.coopMode === 'solo') {
     const pw = SOLO_COOP_DRAWER_W;
     const ph = SOLO_COOP_DRAWER_H;
     const px = SOLO_COOP_DRAWER_X;
     const py = SOLO_COOP_DRAWER_Y;
+    const isOnlinePref = this.preferredCoopTransport === 'p2p';
 
     const bg = ui.add.graphics();
     drawStyledPanel(bg, px, py, pw, ph, {
@@ -174,11 +176,22 @@ export function updateHubInvitePanelImpl(this: GameScene): void {
     const collapseBtnX = px + pw - collapseBtnW - 10;
     const collapseBtnY = py + 8;
 
+    const modeBtnW = 68;
+    const modeBtnH = 18;
+    const modeBtnX = collapseBtnX - modeBtnW - 5;
+    const modeBtnY = py + 8;
+
+    const soloHeaderLabel = isOnlinePref
+      ? isEn
+        ? `ONLINE CO-OP [${coopPanelLabel}]`
+        : `PHÒNG CO-OP [${coopPanelLabel}]`
+      : i18n.t('ui.sanctuary.soloCoopTitle').replace(/\[I\]/g, `[${coopPanelLabel}]`);
+
     const soloHeader = ui.add
       .text(
         px + 12,
         py + 17,
-        i18n.t('ui.sanctuary.soloCoopTitle').replace(/\[I\]/g, `[${coopPanelLabel}]`),
+        soloHeaderLabel,
         createUiTextStyle({
           fontPxAt1080p: 13.5,
           weight: 800,
@@ -187,11 +200,61 @@ export function updateHubInvitePanelImpl(this: GameScene): void {
         }),
       )
       .setOrigin(0, 0.5);
-    const maxSoloHeaderW = collapseBtnX - (px + 12) - 6;
+    const maxSoloHeaderW = Math.max(48, modeBtnX - (px + 12) - 6);
     if (soloHeader.width > maxSoloHeaderW && soloHeader.width > 0) {
       soloHeader.setScale(maxSoloHeaderW / soloHeader.width);
     }
     this.invitePanelContainer.add(soloHeader);
+
+    drawStyledPanel(bg, modeBtnX, modeBtnY, modeBtnW, modeBtnH, {
+      fillColor: isOnlinePref ? hexToNum(PALETTE.AZURE_CORE) : UI_THEME.panelBgElevated,
+      fillAlpha: 0.95,
+      borderColor: hexToNum(isOnlinePref ? PALETTE.CYAN_FROST : PALETTE.SOLAR_GOLD),
+      borderWidth: 1.3,
+      radius: 4,
+    });
+    const modeTxt = ui.add
+      .text(
+        modeBtnX + modeBtnW * 0.5,
+        modeBtnY + modeBtnH * 0.5,
+        isOnlinePref
+          ? i18n.t('ui.sanctuary.onlineModePill')
+          : i18n.t('ui.sanctuary.lanModePill'),
+        createUiTextStyle({
+          fontPxAt1080p: 10.5,
+          weight: 800,
+          color: isOnlinePref ? PALETTE.CYAN_FROST : PALETTE.SOLAR_GOLD,
+          resolution: textRes,
+        }),
+      )
+      .setOrigin(0.5, 0.5);
+    if (modeTxt.width > modeBtnW - 6 && modeTxt.width > 0) {
+      modeTxt.setScale((modeBtnW - 6) / modeTxt.width);
+    }
+    const modeHit = ui.add
+      .rectangle(
+        modeBtnX + modeBtnW * 0.5,
+        modeBtnY + modeBtnH * 0.5,
+        modeBtnW,
+        modeBtnH,
+        0x000000,
+        0,
+      )
+      .setInteractive({ useHandCursor: true });
+    modeHit.on('pointerdown', () => {
+      const nextTransport = isOnlinePref ? 'lan' : 'p2p';
+      this.preferredCoopTransport = nextTransport;
+      this.hasManualTransportChoice = true;
+      debug.preferredCoopTransport = nextTransport;
+      if (!this.hasCustomServerHostPort) {
+        this.serverHostPort =
+          nextTransport === 'p2p' ? '' : `${this.primaryLanIp}:${this.serverPort}`;
+        debug.menuServerHostPort = this.serverHostPort;
+        this.sanctuaryDomInputs?.syncValues(this.displayName, this.serverHostPort);
+      }
+      this.lastInvitePanelHash = '';
+    });
+    this.invitePanelContainer.add([modeTxt, modeHit]);
 
     drawStyledPanel(bg, collapseBtnX, collapseBtnY, collapseBtnW, collapseBtnH, {
       fillColor: UI_THEME.panelBgElevated,
@@ -340,7 +403,7 @@ export function updateHubInvitePanelImpl(this: GameScene): void {
       nameFocusHit,
     ]);
 
-    // LAN Server IP:Port Field + Server Status Pill
+    // Room Code / LAN Server IP:Port Field + Status Pill
     const ipLocal = SOLO_COOP_INPUT_LOCAL_BOUNDS.ip;
     const ipBoxX = ipLocal.cx - ipLocal.w * 0.5;
     const ipBoxY = ipLocal.cy - ipLocal.h * 0.5;
@@ -350,7 +413,7 @@ export function updateHubInvitePanelImpl(this: GameScene): void {
       .text(
         ipBoxX,
         ipBoxY - 8,
-        i18n.t('ui.menu.ipLabel'),
+        isOnlinePref ? i18n.t('ui.sanctuary.roomCodeLabel') : i18n.t('ui.menu.ipLabel'),
         createUiTextStyle({
           fontPxAt1080p: 11,
           weight: 700,
@@ -360,21 +423,30 @@ export function updateHubInvitePanelImpl(this: GameScene): void {
       )
       .setOrigin(0, 0.5);
 
+    const statusLabelStr = isOnlinePref
+      ? i18n.t('ui.sanctuary.p2pReadyStatus')
+      : debug.serverConnected
+        ? isEn
+          ? '● LAN Ready'
+          : '● Server Sẵn sàng'
+        : isEn
+          ? '○ LAN Standby'
+          : '○ Chờ kết nối';
+    const statusColor = isOnlinePref
+      ? PALETTE.CYAN_FROST
+      : debug.serverConnected
+        ? PALETTE.LIME_GLOW
+        : PALETTE.ASH_GRAY;
+
     const serverStatusTxt = ui.add
       .text(
         ipBoxX + ipLocal.w,
         ipBoxY - 8,
-        debug.serverConnected
-          ? isEn
-            ? '● LAN Ready'
-            : '● Server Sẵn sàng'
-          : isEn
-            ? '○ LAN Standby'
-            : '○ Chờ kết nối',
+        statusLabelStr,
         createUiTextStyle({
           fontPxAt1080p: 10.5,
           weight: 700,
-          color: debug.serverConnected ? PALETTE.LIME_GLOW : PALETTE.ASH_GRAY,
+          color: statusColor,
           resolution: textRes,
         }),
       )
@@ -388,16 +460,23 @@ export function updateHubInvitePanelImpl(this: GameScene): void {
       radius: 5,
     });
 
-    const ipValueStr = `${this.serverHostPort}${ipFocused ? '▌' : ''}`;
+    const showRoomCodePlaceholder = isOnlinePref && this.serverHostPort.length === 0 && !ipFocused;
+    const ipValueStr = showRoomCodePlaceholder
+      ? i18n.t('ui.sanctuary.roomCodePlaceholder')
+      : `${this.serverHostPort}${ipFocused ? '▌' : ''}`;
     const ipValueTxt = ui.add
       .text(
         ipBoxX + 9,
         ipLocal.cy,
         ipValueStr,
         createUiTextStyle({
-          fontPxAt1080p: 12.5,
-          weight: 700,
-          color: ipFocused ? PALETTE.CYAN_FROST : PALETTE.BONE_WHITE,
+          fontPxAt1080p: showRoomCodePlaceholder ? 11 : 12.5,
+          weight: showRoomCodePlaceholder ? 600 : 700,
+          color: showRoomCodePlaceholder
+            ? PALETTE.ASH_GRAY
+            : ipFocused
+              ? PALETTE.CYAN_FROST
+              : PALETTE.BONE_WHITE,
           resolution: textRes,
         }),
       )
@@ -419,7 +498,7 @@ export function updateHubInvitePanelImpl(this: GameScene): void {
 
     this.invitePanelContainer.add([ipLabel, serverStatusTxt, ipValueTxt, ipFocusHit]);
 
-    // Host LAN & Join LAN Action Buttons
+    // Host & Join Action Buttons
     const addSoloActionBtn = (
       bx: number,
       by: number,
@@ -479,7 +558,11 @@ export function updateHubInvitePanelImpl(this: GameScene): void {
       actionBtnY,
       actionBtnW,
       actionBtnH,
-      isEn ? '📡 Host LAN Room' : '📡 Tạo Phòng LAN',
+      isOnlinePref
+        ? i18n.t('ui.sanctuary.hostOnlineBtn')
+        : isEn
+          ? '📡 Host LAN Room'
+          : '📡 Tạo Phòng LAN',
       PALETTE.BRASS_CORE,
       () => switchSanctuaryCoopMode(this, 'host'),
     );
@@ -488,7 +571,11 @@ export function updateHubInvitePanelImpl(this: GameScene): void {
       actionBtnY,
       actionBtnW,
       actionBtnH,
-      isEn ? '🔗 Join LAN IP' : '🔗 Vào Phòng LAN',
+      isOnlinePref
+        ? i18n.t('ui.sanctuary.joinOnlineBtn')
+        : isEn
+          ? '🔗 Join LAN IP'
+          : '🔗 Vào Phòng LAN',
       PALETTE.AZURE_CORE,
       () => switchSanctuaryCoopMode(this, 'join'),
     );
@@ -515,11 +602,12 @@ export function updateHubInvitePanelImpl(this: GameScene): void {
     return;
   }
 
-  // Expanded Co-op state: full QR + LAN IP + 4-Slot Co-op Roster + Leave Room inside hudTopRightContainer
+  // Expanded Co-op state: full QR + Room Code / LAN IP + 4-Slot Co-op Roster + Leave Room inside hudTopRightContainer
   const pw = SOLO_COOP_DRAWER_W;
   const ph = 282;
   const px = SOLO_COOP_DRAWER_X;
   const py = SOLO_COOP_DRAWER_Y;
+  const isP2pSession = this.coopBackend === 'p2p';
 
   const bg = ui.add.graphics();
   drawStyledPanel(bg, px, py, pw, ph, {
@@ -544,10 +632,11 @@ export function updateHubInvitePanelImpl(this: GameScene): void {
   const leaveBtnX = collapseBtnX - leaveBtnW - 5;
   const leaveBtnY = py + 6;
 
+  const coopHeaderKey = isP2pSession ? 'ui.sanctuary.onlineInviteHeader' : 'ui.hud.coopInviteHeader';
   const header = ui.add.text(
     px + 10,
     py + 6,
-    `${i18n.t('ui.hud.coopInviteHeader').replace(/\[I\]/g, `[${coopPanelLabel}]`)} · ${activeCount}/4`,
+    `${i18n.t(coopHeaderKey).replace(/\[I\]/g, `[${coopPanelLabel}]`)} · ${activeCount}/4`,
     createUiTextStyle({
       fontPxAt1080p: 12.5,
       weight: 800,
@@ -560,17 +649,24 @@ export function updateHubInvitePanelImpl(this: GameScene): void {
     header.setScale(maxCoopHeaderW / header.width);
   }
 
+  const activeRoomCode = this.room?.roomId ?? this.requestedRoomId ?? '------';
+  const ipLineStr = isP2pSession
+    ? `${i18n.t('ui.sanctuary.roomCodeDisplayLabel')}: ${activeRoomCode}`
+    : `${i18n.t('ui.menu.ipLabel')}: ${this.primaryLanIp}:${this.serverPort}`;
   const ipText = ui.add.text(
     px + 10,
     py + 21,
-    `${i18n.t('ui.menu.ipLabel')}: ${this.primaryLanIp}:${this.serverPort}`,
+    ipLineStr,
     createUiTextStyle({
       fontPxAt1080p: 13,
-      weight: 700,
+      weight: 800,
       color: PALETTE.CYAN_FROST,
       resolution: textRes,
     }),
   );
+  if (ipText.width > pw - 20 && ipText.width > 0) {
+    ipText.setScale((pw - 20) / ipText.width);
+  }
   this.invitePanelContainer.add([header, ipText]);
 
   drawStyledPanel(bg, leaveBtnX, leaveBtnY, leaveBtnW, leaveBtnH, {
@@ -652,7 +748,15 @@ export function updateHubInvitePanelImpl(this: GameScene): void {
   this.invitePanelContainer.add([collapseTxt, collapseHit]);
 
   // Procedural Vector QR Code (ISO/IEC 18004)
-  const qrUrl = this.hostInviteUrl ?? `http://${this.primaryLanIp}:${this.serverPort}/?coop=join`;
+  const fallbackOrigin =
+    typeof window !== 'undefined' && window.location?.origin
+      ? window.location.origin
+      : 'https://localhost';
+  const qrUrl =
+    this.hostInviteUrl ??
+    (isP2pSession
+      ? `${fallbackOrigin}/?coop=host&p2p=1`
+      : `http://${this.primaryLanIp}:${this.serverPort}/?coop=join`);
   const qrMatrix = generateQrMatrix(qrUrl);
   const qrSize = qrMatrix.length;
   const qrBoxSize = 76;

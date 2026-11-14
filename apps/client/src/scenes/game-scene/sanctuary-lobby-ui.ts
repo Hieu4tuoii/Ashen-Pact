@@ -2,7 +2,11 @@ import {
   CHARACTERS,
   type CharacterId,
   clamp,
+  formatCoopHostPortDisplay,
   i18n,
+  normalizeRoomCode,
+  parseCoopTargetInput,
+  resolveWsEndpointUrl,
   VIETNAMESE_VERIFICATION_STRING,
   WORLD_VIEW_WIDTH,
 } from '@ashen-pact/shared';
@@ -58,7 +62,7 @@ function isTruthyQueryParam(val: string | null): boolean {
 /**
  * Resolves the initial boot scene and `GameSceneInitData` directly into the Living Sanctuary
  * (`{ coopMode: 'solo', startInHub: true }`) while preserving privileged ArtGalleryScene,
- * combat test shortcuts (`?scene=game`, `?biome=...`), and LAN Co-op URL invites.
+ * combat test shortcuts (`?scene=game`, `?biome=...`), and LAN/Online Co-op URL invites.
  */
 export function resolveBootGameSceneInitData(
   search: string,
@@ -83,13 +87,20 @@ export function resolveBootGameSceneInitData(
   }
 
   if (coopParam === 'host' || coopParam === 'join' || joinRoomId) {
+    const serverParam = params.get('server')?.trim() || undefined;
+    const isP2p =
+      isTruthyQueryParam(params.get('p2p')) ||
+      (!serverParam && Boolean(joinRoomId && /^p2p:/i.test(joinRoomId)));
+    const normalizedP2pRoom =
+      isP2p && joinRoomId ? (normalizeRoomCode(joinRoomId) ?? joinRoomId) : undefined;
     return {
       targetScene: 'GameScene',
       initData: {
         coopMode: coopParam === 'host' ? 'host' : 'join',
-        roomId: joinRoomId ?? undefined,
+        ...(isP2p ? { coopBackend: 'p2p' as const } : {}),
+        roomId: isP2p ? normalizedP2pRoom : (joinRoomId ?? undefined),
         displayName: params.get('name') ?? undefined,
-        serverUrl: params.get('server') ?? undefined,
+        serverUrl: serverParam,
         startInHub: true,
       },
     };
@@ -192,26 +203,14 @@ export function normalizeServerHostPortDisplay(
 ): string {
   const trimmed = rawUrlOrHostPort?.trim();
   if (!trimmed) return fallbackHostPort;
-  const stripped = trimmed
-    .replace(/^wss?:\/\//i, '')
-    .replace(/^https?:\/\//i, '')
-    .replace(/\/.*$/, '');
-  if (!stripped) return fallbackHostPort;
-  return stripped.includes(':') ? stripped : `${stripped}:2567`;
+  const roomCode = normalizeRoomCode(trimmed);
+  if (roomCode) return roomCode;
+  return formatCoopHostPortDisplay(trimmed) || fallbackHostPort;
 }
 
 export function resolveSanctuaryWsUrl(hostPortOrUrl: string): string {
-  const trimmed = hostPortOrUrl.trim();
-  if (trimmed.startsWith('ws://') || trimmed.startsWith('wss://')) {
-    return trimmed;
-  }
-  const protocol =
-    typeof window !== 'undefined' && window.location?.protocol === 'https:' ? 'wss:' : 'ws:';
-  const hostPort = trimmed
-    .replace(/^https?:\/\//i, '')
-    .replace(/\/.*$/, '');
-  const normalized = hostPort || '127.0.0.1:2567';
-  return `${protocol}//${normalized.includes(':') ? normalized : `${normalized}:2567`}`;
+  const pageProtocol = typeof window !== 'undefined' ? window.location?.protocol : undefined;
+  return resolveWsEndpointUrl(hostPortOrUrl, pageProtocol);
 }
 
 export function setSanctuaryKeyboardSuspended(scene: GameScene, suspended: boolean): void {
@@ -387,6 +386,25 @@ export function switchSanctuaryCoopMode(
     // Ignore localStorage restrictions
   }
 
+  const pageProtocol = typeof window !== 'undefined' ? window.location?.protocol : undefined;
+  const parsedJoinTarget =
+    nextMode === 'join'
+      ? parseCoopTargetInput(scene.serverHostPort, {
+          pageProtocol,
+          preferredTransport: scene.preferredCoopTransport,
+        })
+      : null;
+
+  if (nextMode === 'join' && parsedJoinTarget?.kind === 'empty') {
+    if (scene.preferredCoopTransport === 'p2p') {
+      scene.disconnectReason = i18n.t('ui.sanctuary.enterRoomCodePrompt');
+      scene.disconnectBannerTimer = 6.0;
+      scene.lastSanctuaryHudHash = '';
+      scene.lastInvitePanelHash = '';
+      return;
+    }
+  }
+
   destroySanctuaryDomInputs(scene);
   scene.intentionalLeave = true;
   if (scene.room) {
@@ -398,16 +416,79 @@ export function switchSanctuaryCoopMode(
     clearSavedCoopSessionTokens();
   }
 
+  const manualTransportProp = scene.hasManualTransportChoice
+    ? { preferredCoopTransport: scene.preferredCoopTransport }
+    : {};
+
+  if (nextMode === 'solo') {
+    const soloCustomServer =
+      scene.hasCustomServerHostPort && !normalizeRoomCode(scene.serverHostPort)
+        ? scene.serverHostPort
+        : undefined;
+    scene.scene.restart({
+      coopMode: 'solo',
+      startInHub: true,
+      displayName: effectiveName,
+      serverUrl: soloCustomServer,
+      ...manualTransportProp,
+    });
+    return;
+  }
+
+  if (nextMode === 'host') {
+    if (scene.preferredCoopTransport === 'p2p') {
+      const customRoomCode = normalizeRoomCode(scene.serverHostPort) ?? undefined;
+      scene.scene.restart({
+        coopMode: 'host',
+        coopBackend: 'p2p',
+        startInHub: true,
+        displayName: effectiveName,
+        ...(customRoomCode ? { roomId: customRoomCode } : {}),
+        ...manualTransportProp,
+      });
+      return;
+    }
+    scene.scene.restart({
+      coopMode: 'host',
+      startInHub: true,
+      displayName: effectiveName,
+      serverUrl: resolveSanctuaryWsUrl(scene.serverHostPort),
+      ...manualTransportProp,
+    });
+    return;
+  }
+
+  if (parsedJoinTarget?.kind === 'p2p') {
+    scene.scene.restart({
+      coopMode: 'join',
+      coopBackend: 'p2p',
+      roomId: parsedJoinTarget.roomCode,
+      startInHub: true,
+      displayName: effectiveName,
+      ...manualTransportProp,
+    });
+    return;
+  }
+
+  if (parsedJoinTarget?.kind === 'colyseus') {
+    scene.scene.restart({
+      coopMode: 'join',
+      coopBackend: 'colyseus',
+      ...(parsedJoinTarget.roomId ? { roomId: parsedJoinTarget.roomId } : {}),
+      startInHub: true,
+      displayName: effectiveName,
+      serverUrl: parsedJoinTarget.wsUrl,
+      ...manualTransportProp,
+    });
+    return;
+  }
+
   scene.scene.restart({
-    coopMode: nextMode,
+    coopMode: 'join',
     startInHub: true,
     displayName: effectiveName,
-    serverUrl:
-      nextMode === 'solo'
-        ? scene.hasCustomServerHostPort
-          ? scene.serverHostPort
-          : undefined
-        : resolveSanctuaryWsUrl(scene.serverHostPort),
+    serverUrl: resolveSanctuaryWsUrl(scene.serverHostPort),
+    ...manualTransportProp,
   });
 }
 
@@ -422,12 +503,19 @@ export function exitToSoloSanctuary(scene: GameScene, disconnectReason?: string)
     void activeRoom.leave().catch(() => {});
   }
   clearSavedCoopSessionTokens();
+  const soloCustomServer =
+    scene.hasCustomServerHostPort && !normalizeRoomCode(scene.serverHostPort)
+      ? scene.serverHostPort
+      : undefined;
   scene.scene.start('GameScene', {
     coopMode: 'solo',
     startInHub: true,
     disconnectReason,
     displayName: effectiveName,
-    serverUrl: scene.hasCustomServerHostPort ? scene.serverHostPort : undefined,
+    serverUrl: soloCustomServer,
+    ...(scene.hasManualTransportChoice
+      ? { preferredCoopTransport: scene.preferredCoopTransport }
+      : {}),
   });
 }
 

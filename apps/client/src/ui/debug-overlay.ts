@@ -87,6 +87,8 @@ export interface GameDebugState {
   activeBuffs: string[];
   // Phase 4 Co-op LAN & Network telemetry
   coopMode: 'solo' | 'host' | 'join';
+  coopBackend: 'colyseus' | 'p2p';
+  preferredCoopTransport: 'p2p' | 'lan';
   coopRoomId: string | null;
   coopPlayerCount: number;
   inHub: boolean;
@@ -249,6 +251,8 @@ export function initGlobalDebugState(): GameDebugState {
     botAutoPlayActive: false,
     activeBuffs: [],
     coopMode: 'solo',
+    coopBackend: 'colyseus',
+    preferredCoopTransport: 'lan',
     coopRoomId: null,
     coopPlayerCount: 1,
     inHub: false,
