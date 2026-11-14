@@ -39,6 +39,7 @@ vi.mock('phaser', () => {
   return { default: PhaserMock, ...PhaserMock };
 });
 
+import { INPUT_BUTTON, NetworkTransport } from '@ashen-pact/shared';
 import { GameScene } from '../src/scenes/GameScene.js';
 import {
   bindCoopRoomHandlersImpl,
@@ -47,6 +48,8 @@ import {
   fetchHostLanInfoImpl,
   forceCoopReconnectImpl,
   getResolvedWsUrlImpl,
+  shouldSendCoopInputThisFrame,
+  smoothPingRttMs,
   updateHostInviteUrlImpl,
 } from '../src/scenes/game-scene/input-and-network.js';
 import {
@@ -55,6 +58,7 @@ import {
   resolveSanctuaryWsUrl,
   switchSanctuaryCoopMode,
 } from '../src/scenes/game-scene/sanctuary-lobby-ui.js';
+import { initGlobalDebugState } from '../src/ui/debug-overlay.js';
 import { applyMenuInputEdit, MENU_IP_MAX_LEN } from '../src/ui/html-input-overlay.js';
 
 describe('Sanctuary Online P2P Co-op Routing, Guild Drawer & GameScene Integration', () => {
@@ -464,10 +468,222 @@ describe('Sanctuary Online P2P Co-op Routing, Guild Drawer & GameScene Integrati
       timerCallbacks[timerCallbacks.length - 1]!();
       expect(reconnectedRoom.send).toHaveBeenCalledWith(
         'ping_check',
-        expect.objectContaining({ clientTime: expect.any(Number) }),
+        expect.objectContaining({
+          clientTime: expect.any(Number),
+          clientPerfMs: expect.any(Number),
+        }),
       );
     } finally {
       vi.unstubAllGlobals();
     }
   });
+
+  it('forwards reliable world_events to NetworkTransport, computes monotonic clientPerfMs EWMA ping, and exposes p2pFastChannel telemetry', () => {
+    // 1. Outlier-clamped EWMA ping smoothing helper
+    expect(smoothPingRttMs(null, 20)).toBe(20);
+    expect(smoothPingRttMs(0, 0.2)).toBe(1);
+    expect(smoothPingRttMs(null, 1500)).toBe(999);
+
+    const afterSpike = smoothPingRttMs(20, 120);
+    expect(afterSpike).toBeGreaterThan(20);
+    expect(afterSpike).toBeLessThanOrEqual(35);
+
+    // 2. bindCoopRoomHandlersImpl wires world_events, clientPerfMs pong_check, and p2pFastChannel
+    const gs = new GameScene();
+    (gs as unknown as { scene: { isActive: () => boolean } }).scene = {
+      isActive: () => true,
+    };
+    gs.updateHostInviteUrl = () => {};
+    gs.init({ coopMode: 'join', coopBackend: 'p2p', roomId: 'FAST42', startInHub: true });
+
+    const net = new NetworkTransport(4242);
+    gs.networkTransport = net;
+    gs.transport = net;
+
+    let fastActive = false;
+    const messageHandlers = new Map<string, (payload: unknown) => void>();
+    const fakeRoom = {
+      roomId: 'FAST42',
+      send: vi.fn(),
+      onMessage: vi.fn((type: string, cb: (payload: unknown) => void) => {
+        messageHandlers.set(type, cb);
+      }),
+      onLeave: vi.fn(),
+      leave: vi.fn(async () => {}),
+      isFastChannelActive: () => fastActive,
+    };
+
+    bindCoopRoomHandlersImpl.call(gs, fakeRoom);
+    const debug = initGlobalDebugState();
+    expect(debug.p2pFastChannel).toBe(false);
+
+    // Emit reliable world_events with deterministic projectile spawn
+    const onWorldEvents = messageHandlers.get('world_events');
+    expect(onWorldEvents).toBeTypeOf('function');
+    onWorldEvents!([
+      {
+        kind: 'bullet_volley_spawned',
+        weaponId: 'pistol',
+        team: 'player',
+        x: 200,
+        y: 200,
+        angle: 0,
+        count: 1,
+        speed: 520,
+        damage: 14,
+        range: 420,
+        radius: 4,
+        pierce: 0,
+        bounce: 0,
+        homing: 0,
+        element: 'none',
+        critChance: 0,
+        spreadDeg: 0,
+        ownerPlayerId: 1,
+        seed: 99,
+      },
+    ]);
+    expect(net.getSim().projectiles.length).toBe(1);
+
+    // Flip negotiated UDP fast channel active and verify monotonic clientPerfMs overrides skewed Date.now()
+    fastActive = true;
+    const onPong = messageHandlers.get('pong_check');
+    expect(onPong).toBeTypeOf('function');
+    const perfNow = performance.now();
+    onPong!({
+      clientTime: Date.now() - 480,
+      clientPerfMs: perfNow - 18,
+    });
+    expect(debug.p2pFastChannel).toBe(true);
+    expect(debug.pingMs).toBeGreaterThanOrEqual(15);
+    expect(debug.pingMs).toBeLessThan(40);
+    expect(fakeRoom.send).toHaveBeenLastCalledWith('report_ping', { rttMs: debug.pingMs });
+
+    // Single-sample jitter spike on subsequent pong is damped by smoothPingRttMs
+    const settledPing = debug.pingMs;
+    onPong!({
+      clientTime: Date.now() - 150,
+      clientPerfMs: performance.now() - 150,
+    });
+    expect(debug.pingMs).toBeGreaterThan(settledPing);
+    expect(debug.pingMs).toBeLessThan(settledPing + 35);
+
+    // Legacy Colyseus pong_check without clientPerfMs falls back cleanly to Date.now() - clientTime
+    const gsLegacy = new GameScene();
+    (gsLegacy as unknown as { scene: { isActive: () => boolean } }).scene = {
+      isActive: () => true,
+    };
+    gsLegacy.updateHostInviteUrl = () => {};
+    gsLegacy.init({ coopMode: 'join', coopBackend: 'colyseus', startInHub: true });
+    const legacyHandlers = new Map<string, (payload: unknown) => void>();
+    bindCoopRoomHandlersImpl.call(gsLegacy, {
+      roomId: 'LAN123',
+      send: vi.fn(),
+      onMessage: (type: string, cb: (payload: unknown) => void) => {
+        legacyHandlers.set(type, cb);
+      },
+      onLeave: vi.fn(),
+      leave: vi.fn(async () => {}),
+    });
+    legacyHandlers.get('pong_check')!({ clientTime: Date.now() - 12 });
+    expect(debug.p2pFastChannel).toBe(false);
+    expect(debug.pingMs).toBeGreaterThanOrEqual(10);
+    expect(debug.pingMs).toBeLessThan(50);
+  });
+
+  it('paces continuous 240Hz co-op inputs to ~60Hz (>= 15ms) while flushing button edges, WASD transitions, weapon slots, pings, emotes, and solo inputs immediately', () => {
+    // Solo mode always sends every frame even at 240Hz
+    expect(
+      shouldSendCoopInputThisFrame({
+        coopMode: 'solo',
+        accumMs: 4.16,
+        moveX: 1,
+        moveY: 0,
+        prevMoveX: 1,
+        prevMoveY: 0,
+        buttons: 0,
+        prevButtons: 0,
+        slotSelect: null,
+      }),
+    ).toBe(true);
+
+    // Simulate 60 frames at 240Hz (~250ms total) of continuous unchanged rightward movement in Co-op
+    let accumMs = 100; // Initialized ready-to-send on first frame
+    let prevMoveX = 1;
+    let prevMoveY = 0;
+    let prevButtons = 0;
+    let sentCount = 0;
+    const rawDelta240Hz = 1000 / 240;
+
+    for (let frame = 0; frame < 60; frame++) {
+      accumMs += rawDelta240Hz;
+      if (
+        shouldSendCoopInputThisFrame({
+          coopMode: 'join',
+          accumMs,
+          moveX: 1,
+          moveY: 0,
+          prevMoveX,
+          prevMoveY,
+          buttons: 0,
+          prevButtons,
+          slotSelect: null,
+        })
+      ) {
+        sentCount += 1;
+        accumMs = 0;
+        prevMoveX = 1;
+        prevMoveY = 0;
+        prevButtons = 0;
+      }
+    }
+
+    // 60 frames @ 240Hz (250ms) sends ~15-16 packets (~60Hz), never all 60 frames
+    expect(sentCount).toBeGreaterThanOrEqual(15);
+    expect(sentCount).toBeLessThanOrEqual(16);
+
+    // Immediate 0ms flush right after a send (accumMs = 4.16ms < 15ms) on any discrete event:
+    const baseSubFrame = {
+      coopMode: 'join' as const,
+      accumMs: 4.16,
+      moveX: 1,
+      moveY: 0,
+      prevMoveX: 1,
+      prevMoveY: 0,
+      buttons: 0,
+      prevButtons: 0,
+      slotSelect: null as number | null,
+    };
+
+    expect(shouldSendCoopInputThisFrame(baseSubFrame)).toBe(false);
+    expect(
+      shouldSendCoopInputThisFrame({ ...baseSubFrame, buttons: INPUT_BUTTON.FIRE }),
+    ).toBe(true);
+    expect(
+      shouldSendCoopInputThisFrame({ ...baseSubFrame, buttons: INPUT_BUTTON.DASH }),
+    ).toBe(true);
+    expect(
+      shouldSendCoopInputThisFrame({
+        ...baseSubFrame,
+        prevButtons: INPUT_BUTTON.SKILL,
+        buttons: 0,
+      }),
+    ).toBe(true);
+    expect(
+      shouldSendCoopInputThisFrame({ ...baseSubFrame, moveX: 0, moveY: 0 }),
+    ).toBe(true);
+    expect(
+      shouldSendCoopInputThisFrame({ ...baseSubFrame, moveX: 1, moveY: -1 }),
+    ).toBe(true);
+    expect(
+      shouldSendCoopInputThisFrame({ ...baseSubFrame, slotSelect: 1 }),
+    ).toBe(true);
+    expect(
+      shouldSendCoopInputThisFrame({ ...baseSubFrame, pingWorldX: 320 }),
+    ).toBe(true);
+    expect(
+      shouldSendCoopInputThisFrame({ ...baseSubFrame, emoteId: 2 }),
+    ).toBe(true);
+  });
 });
+

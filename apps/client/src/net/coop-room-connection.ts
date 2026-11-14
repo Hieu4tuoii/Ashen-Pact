@@ -5,6 +5,7 @@
 export interface CoopRoomConnection {
   readonly roomId: string;
   readonly reconnectionToken?: string;
+  readonly isFastChannelActive?: () => boolean;
   send(type: string, message?: unknown): void;
   onMessage<T = unknown>(type: string, callback: (message: T) => void): unknown;
   onLeave(callback: (code: number) => void): unknown;

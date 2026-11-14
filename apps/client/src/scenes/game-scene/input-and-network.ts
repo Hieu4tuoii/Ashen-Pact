@@ -2,6 +2,8 @@ import {
   i18n,
   normalizeRoomCode,
   type QuantizedWorldSnapshot,
+  type QuickEmoteId,
+  type SimEvent,
   type WifiProfileId,
 } from '@ashen-pact/shared';
 import { Client as ColyseusClient } from 'colyseus.js';
@@ -24,6 +26,51 @@ import {
   resolveSanctuaryWsUrl,
   resolveSavedSanctuaryCharacter,
 } from './sanctuary-lobby-ui.js';
+
+export interface CoopInputPaceCheck {
+  coopMode: 'solo' | 'host' | 'join';
+  accumMs: number;
+  moveX: number;
+  moveY: number;
+  prevMoveX: number;
+  prevMoveY: number;
+  buttons: number;
+  prevButtons: number;
+  slotSelect: number | null;
+  pingWorldX?: number;
+  emoteId?: QuickEmoteId;
+  hasQueuedEdge?: boolean;
+  minIntervalMs?: number;
+}
+
+/**
+ * Outlier-clamped EWMA RTT smoother (`0.7 / 0.3`) that initializes immediately on the
+ * first sample while damping single-sample scheduling/Wi-Fi jitter spikes.
+ */
+export function smoothPingRttMs(prevSmoothedMs: number | null, sampleRttMs: number): number {
+  const clamped = Math.max(1, Math.min(999, Number.isFinite(sampleRttMs) ? sampleRttMs : 1));
+  if (prevSmoothedMs === null || prevSmoothedMs <= 0 || !Number.isFinite(prevSmoothedMs)) {
+    return Math.max(1, Math.round(clamped));
+  }
+  const maxJump = Math.min(80, Math.max(25, prevSmoothedMs * 1.5));
+  const capped = Math.min(clamped, prevSmoothedMs + maxJump);
+  return Math.max(1, Math.round(prevSmoothedMs * 0.7 + capped * 0.3));
+}
+
+/**
+ * Paces continuous unchanged Co-op inputs to ~60Hz (`>= 15ms`) on high-refresh-rate
+ * monitors (`120Hz`/`144Hz`/`240Hz`) while flushing any discrete input change with `0ms` delay.
+ */
+export function shouldSendCoopInputThisFrame(check: CoopInputPaceCheck): boolean {
+  if (check.coopMode === 'solo') return true;
+  if (check.hasQueuedEdge) return true;
+  if (check.slotSelect !== null) return true;
+  if (check.pingWorldX !== undefined) return true;
+  if (check.emoteId !== undefined) return true;
+  if (check.buttons !== check.prevButtons) return true;
+  if (check.moveX !== check.prevMoveX || check.moveY !== check.prevMoveY) return true;
+  return check.accumMs >= (check.minIntervalMs ?? 15);
+}
 
 interface BoundActionKeyEntry {
   action: KeybindActionId;
@@ -789,9 +836,11 @@ export function bindCoopRoomHandlersImpl(this: GameScene, room: CoopRoomConnecti
   const boundEpoch = this.sceneSessionEpoch;
   const isStaleSession = () => !this.scene.isActive() || this.sceneSessionEpoch !== boundEpoch;
   const debug = initGlobalDebugState();
+  let smoothedRttMs: number | null = null;
   this.room = room;
   debug.serverConnected = true;
   debug.coopBackend = this.coopBackend;
+  debug.p2pFastChannel = Boolean(room.isFastChannelActive?.());
   debug.coopRoomId = room.roomId;
   this.updateHostInviteUrl();
 
@@ -844,14 +893,28 @@ export function bindCoopRoomHandlersImpl(this: GameScene, room: CoopRoomConnecti
 
   room.onMessage<QuantizedWorldSnapshot>('world_snapshot', (snap) => {
     if (isStaleSession()) return;
+    debug.p2pFastChannel = Boolean(room.isFastChannelActive?.());
     this.networkTransport?.receiveSnapshot(snap);
   });
 
-  room.onMessage('pong_check', (payload: { clientTime: number }) => {
+  room.onMessage<SimEvent[]>('world_events', (events) => {
     if (isStaleSession()) return;
-    const rtt = Math.max(1, Date.now() - payload.clientTime);
+    if (Array.isArray(events) && events.length > 0) {
+      this.networkTransport?.receiveEvents(events);
+    }
+  });
+
+  room.onMessage('pong_check', (payload: { clientTime: number; clientPerfMs?: number }) => {
+    if (isStaleSession()) return;
+    const rawSample =
+      typeof payload.clientPerfMs === 'number' && Number.isFinite(payload.clientPerfMs)
+        ? performance.now() - payload.clientPerfMs
+        : Date.now() - payload.clientTime;
+    const rtt = smoothPingRttMs(smoothedRttMs, rawSample);
+    smoothedRttMs = rtt;
     this.networkTransport?.setRttMs(rtt);
     debug.pingMs = rtt;
+    debug.p2pFastChannel = Boolean(room.isFastChannelActive?.());
     room.send('report_ping', { rttMs: rtt });
   });
 
@@ -903,6 +966,7 @@ export function bindCoopRoomHandlersImpl(this: GameScene, room: CoopRoomConnecti
       return;
     }
     debug.serverConnected = false;
+    debug.p2pFastChannel = false;
     void this.forceCoopReconnect();
   });
 }
@@ -972,7 +1036,11 @@ export async function connectCoopRoomImpl(this: GameScene): Promise<void> {
 
       this.requestedRoomId = room.roomId;
       this.bindCoopRoomHandlers(room);
-      room.send('ping_check', { clientTime: Date.now(), rttMs: 8 });
+      room.send('ping_check', {
+        clientTime: Date.now(),
+        clientPerfMs: performance.now(),
+        rttMs: 8,
+      });
 
       this.time.addEvent({
         delay: 500,
@@ -984,9 +1052,11 @@ export async function connectCoopRoomImpl(this: GameScene): Promise<void> {
             this.scene.isActive() &&
             this.sceneSessionEpoch === epoch
           ) {
+            debug.p2pFastChannel = Boolean(this.room.isFastChannelActive?.());
             const curRtt = this.networkTransport?.getTelemetry().rttMs ?? debug.pingMs ?? 8;
             this.room.send('ping_check', {
               clientTime: Date.now(),
+              clientPerfMs: performance.now(),
               rttMs: curRtt,
             });
           }
@@ -995,6 +1065,7 @@ export async function connectCoopRoomImpl(this: GameScene): Promise<void> {
     } catch (err) {
       if (!this.scene.isActive() || this.sceneSessionEpoch !== epoch) return;
       debug.serverConnected = false;
+      debug.p2pFastChannel = false;
       this.lastInvitePanelHash = '';
       const errMsg =
         err instanceof Error && err.message
@@ -1034,7 +1105,11 @@ export async function connectCoopRoomImpl(this: GameScene): Promise<void> {
     }
 
     this.bindCoopRoomHandlers(room);
-    room.send('ping_check', { clientTime: Date.now(), rttMs: 8 });
+    room.send('ping_check', {
+      clientTime: Date.now(),
+      clientPerfMs: performance.now(),
+      rttMs: 8,
+    });
 
     this.time.addEvent({
       delay: 500,
@@ -1049,6 +1124,7 @@ export async function connectCoopRoomImpl(this: GameScene): Promise<void> {
           const curRtt = this.networkTransport?.getTelemetry().rttMs ?? debug.pingMs ?? 8;
           this.room.send('ping_check', {
             clientTime: Date.now(),
+            clientPerfMs: performance.now(),
             rttMs: curRtt,
           });
         }
@@ -1083,6 +1159,7 @@ export async function forceCoopReconnectImpl(this: GameScene): Promise<boolean> 
   if (this.coopBackend === 'p2p') {
     if (this.coopMode === 'host' && this.room) {
       debug.serverConnected = true;
+      debug.p2pFastChannel = Boolean(this.room.isFastChannelActive?.());
       return true;
     }
     if (this.room) {
@@ -1124,14 +1201,20 @@ export async function forceCoopReconnectImpl(this: GameScene): Promise<boolean> 
       }
       this.requestedRoomId = newRoom.roomId;
       this.bindCoopRoomHandlers(newRoom);
-      newRoom.send('ping_check', { clientTime: Date.now(), rttMs: 8 });
+      newRoom.send('ping_check', {
+        clientTime: Date.now(),
+        clientPerfMs: performance.now(),
+        rttMs: 8,
+      });
       debug.serverConnected = true;
+      debug.p2pFastChannel = Boolean(newRoom.isFastChannelActive?.());
       return true;
     } catch (err) {
       if (!this.scene.isActive() || this.sceneSessionEpoch !== epoch) {
         return false;
       }
       debug.serverConnected = false;
+      debug.p2pFastChannel = false;
       const errMsg =
         err instanceof Error && err.message
           ? err.message

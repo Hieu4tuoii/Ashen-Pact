@@ -209,6 +209,7 @@ test.describe('Online WebRTC P2P Co-op — Room Codes, Invite Links, Sanctuary U
             window.__GAME_DEBUG__?.scene === 'GameScene' &&
             window.__GAME_DEBUG__?.serverConnected === true &&
             window.__GAME_DEBUG__?.coopBackend === 'p2p' &&
+            window.__GAME_DEBUG__?.p2pFastChannel === true &&
             window.__GAME_DEBUG__?.coopPlayerCount === 3 &&
             window.__GAME_DEBUG__?.inHub === true,
           null,
@@ -259,13 +260,29 @@ test.describe('Online WebRTC P2P Co-op — Room Codes, Invite Links, Sanctuary U
           () =>
             window.__GAME_DEBUG__?.inHub === false &&
             window.__GAME_DEBUG__?.currentFloor === 1 &&
-            window.__GAME_DEBUG__?.runState === 'playing',
+            window.__GAME_DEBUG__?.runState === 'playing' &&
+            window.__GAME_DEBUG__?.p2pFastChannel === true,
           null,
           { timeout: 20000 },
         );
       }
 
-      // 5. Verify 30s WebRTC reconnect recovery on P2 (__GAME_FORCE_RECONNECT__) preserves slot 2
+      // 4b. Verify P2 (Ranger) weapon fire streams reliable world_events (bullet_volley_spawned) while UDP fast snapshots run
+      await page2.mouse.move(1280, 540);
+      await page2.mouse.down();
+      try {
+        for (const p of pages) {
+          await p.waitForFunction(
+            () => (window.__GAME_DEBUG__?.bulletCount ?? 0) > 0,
+            null,
+            { timeout: 10000 },
+          );
+        }
+      } finally {
+        await page2.mouse.up();
+      }
+
+      // 5. Verify 30s WebRTC reconnect recovery on P2 (__GAME_FORCE_RECONNECT__) preserves slot 2 and re-verifies UDP fast channel
       const reconnected = await page2.evaluate(() => window.__GAME_FORCE_RECONNECT__!());
       expect(reconnected).toBe(true);
 
@@ -273,6 +290,7 @@ test.describe('Online WebRTC P2P Co-op — Room Codes, Invite Links, Sanctuary U
         () =>
           window.__GAME_DEBUG__?.serverConnected === true &&
           window.__GAME_DEBUG__?.coopBackend === 'p2p' &&
+          window.__GAME_DEBUG__?.p2pFastChannel === true &&
           window.__GAME_DEBUG__?.playerSlot === 2 &&
           window.__GAME_DEBUG__?.coopPlayerCount === 3 &&
           window.__GAME_DEBUG__?.inHub === false &&
@@ -281,7 +299,7 @@ test.describe('Online WebRTC P2P Co-op — Room Codes, Invite Links, Sanctuary U
         { timeout: 20000 },
       );
 
-      // 6. Close P1 Host tab and verify P2 & P3 gracefully return to Solo Sanctuary
+      // 6. Close P1 Host tab and verify P2 & P3 gracefully return to Solo Sanctuary with p2pFastChannel reset to false
       await page1.close();
 
       for (const p of [page2, page3]) {
@@ -289,6 +307,7 @@ test.describe('Online WebRTC P2P Co-op — Room Codes, Invite Links, Sanctuary U
           () =>
             window.__GAME_DEBUG__?.scene === 'GameScene' &&
             window.__GAME_DEBUG__?.coopMode === 'solo' &&
+            window.__GAME_DEBUG__?.p2pFastChannel === false &&
             window.__GAME_DEBUG__?.inHub === true,
           null,
           { timeout: 25000 },

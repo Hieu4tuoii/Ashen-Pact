@@ -37,7 +37,7 @@ import {
 } from '../fx/lighting-config.js';
 import type { LightingPipeline } from '../fx/lighting-pipeline.js';
 import { createPortalAnimState, type PortalAnimState } from '../fx/portal-door-shaders.js';
-import type { DebugOverlay } from '../ui/debug-overlay.js';
+import { type DebugOverlay, initGlobalDebugState } from '../ui/debug-overlay.js';
 import { type GraphicsQualityTier, graphicsSettings } from '../ui/graphics-settings.js';
 import type { MenuDomInputOverlay, MenuInputFieldId } from '../ui/html-input-overlay.js';
 import type { ModalOverlayManager } from '../ui/settings-modal.js';
@@ -61,7 +61,7 @@ import {
 import { updateEmoteWheelHudImpl, updateHubCharacterSkillPreviewImpl, updateHubInvitePanelImpl, updateWeaponComparisonCardImpl } from './game-scene/hud-hub-and-cards.js';
 import { updateDebugStateImpl, updateModalHudImpl } from './game-scene/hud-modals-and-debug.js';
 import { buildVectorHudImpl, invalidateAllHudCachesImpl, rebuildPauseModalImpl, togglePauseModalImpl } from './game-scene/hud-setup-and-pause.js';
-import { bindCoopRoomHandlersImpl, connectCoopRoomImpl, connectHelloRoomImpl, fetchHostLanInfoImpl, forceCoopReconnectImpl, getResolvedWsUrlImpl, setupKeyboardBindingsImpl, updateHostInviteUrlImpl } from './game-scene/input-and-network.js';
+import { bindCoopRoomHandlersImpl, connectCoopRoomImpl, connectHelloRoomImpl, fetchHostLanInfoImpl, forceCoopReconnectImpl, getResolvedWsUrlImpl, setupKeyboardBindingsImpl, shouldSendCoopInputThisFrame, updateHostInviteUrlImpl } from './game-scene/input-and-network.js';
 import {
   createInteractPromptFadeState,
   type InteractPromptFadeState,
@@ -432,6 +432,10 @@ export class GameScene extends Phaser.Scene {
   public hasCustomServerHostPort = false;
 
   public inputSeq = 0;
+  public coopInputSendAccumMs = 100;
+  public lastSentCoopMoveX = 0;
+  public lastSentCoopMoveY = 0;
+  public lastSentCoopButtons = 0;
   public queuedWeaponSlot: number | null = null;
   public wheelSwapQueued = false;
   public dashQueued = false;
@@ -599,6 +603,11 @@ export class GameScene extends Phaser.Scene {
     this.hubLoungeAnimOverride = null;
     this.wasLocalReloading = false;
     this.intentionalLeave = false;
+    this.coopInputSendAccumMs = 100;
+    this.lastSentCoopMoveX = 0;
+    this.lastSentCoopMoveY = 0;
+    this.lastSentCoopButtons = 0;
+    initGlobalDebugState().p2pFastChannel = false;
   }
 
   public override update(_time: number, rawDeltaMs: number): void {
@@ -640,6 +649,16 @@ export class GameScene extends Phaser.Scene {
       if (this.keys.R.isDown) buttons |= INPUT_BUTTON.RELOAD_VENT;
       if (this.keys.X.isDown) buttons |= INPUT_BUTTON.DROP_WEAPON;
     }
+
+    const hasQueuedEdge =
+      !isInputBlocked &&
+      (this.dashQueued ||
+        this.skillQueued ||
+        this.wheelSwapQueued ||
+        this.interactQueued ||
+        this.reloadVentQueued ||
+        this.dropWeaponQueued ||
+        this.readyToggleQueued);
 
     if (this.dashQueued) {
       if (!isInputBlocked) buttons |= INPUT_BUTTON.DASH;
@@ -766,19 +785,41 @@ export class GameScene extends Phaser.Scene {
 
     if (!isSoloPaused) {
       const tickBefore = sim.tick;
-      this.inputSeq += 1;
-      this.transport.sendInput({
-        seq: this.inputSeq,
-        tick: sim.tick,
-        moveX,
-        moveY,
-        aimAngle,
-        buttons,
-        weaponSlotSelect: slotSelect,
-        pingWorldX,
-        pingWorldY,
-        emoteId,
-      });
+      this.coopInputSendAccumMs += Math.min(rawDeltaMs, 50);
+      if (
+        shouldSendCoopInputThisFrame({
+          coopMode: this.coopMode,
+          accumMs: this.coopInputSendAccumMs,
+          moveX,
+          moveY,
+          prevMoveX: this.lastSentCoopMoveX,
+          prevMoveY: this.lastSentCoopMoveY,
+          buttons,
+          prevButtons: this.lastSentCoopButtons,
+          slotSelect,
+          pingWorldX,
+          emoteId,
+          hasQueuedEdge,
+        })
+      ) {
+        this.coopInputSendAccumMs = 0;
+        this.lastSentCoopMoveX = moveX;
+        this.lastSentCoopMoveY = moveY;
+        this.lastSentCoopButtons = buttons;
+        this.inputSeq += 1;
+        this.transport.sendInput({
+          seq: this.inputSeq,
+          tick: sim.tick,
+          moveX,
+          moveY,
+          aimAngle,
+          buttons,
+          weaponSlotSelect: slotSelect,
+          pingWorldX,
+          pingWorldY,
+          emoteId,
+        });
+      }
 
       // 2. Hit-Stop check & Fixed 60Hz Simulation Step via Transport
       const { simDeltaMs } = this.fx.consumeHitStopDelta(Math.min(rawDeltaMs, 50));
@@ -786,6 +827,7 @@ export class GameScene extends Phaser.Scene {
         const effectiveDelta = sim.stressTestActive ? Math.min(simDeltaMs, 16.6667) : simDeltaMs;
         this.transport.step(effectiveDelta);
       }
+      this.transport.getLocalPlayerState().aimAngle = aimAngle;
 
       const ticksStepped = Math.max(0, sim.tick - tickBefore);
       if (sim.inHub) {
