@@ -1,4 +1,9 @@
-import { i18n, type QuantizedWorldSnapshot, type WifiProfileId } from '@ashen-pact/shared';
+import {
+  i18n,
+  normalizeRoomCode,
+  type QuantizedWorldSnapshot,
+  type WifiProfileId,
+} from '@ashen-pact/shared';
 import { Client as ColyseusClient } from 'colyseus.js';
 import Phaser from 'phaser';
 import { zzfx } from '../../audio/zzfx.js';
@@ -678,10 +683,35 @@ export async function fetchHostLanInfoImpl(this: GameScene): Promise<void> {
   }
   const epoch = this.sceneSessionEpoch;
   const debug = initGlobalDebugState();
+  const applyNoLanServerFallback = () => {
+    if (!this.scene.isActive() || this.sceneSessionEpoch !== epoch) return;
+    this.lanServerAvailable = false;
+    if (
+      this.coopMode === 'solo' &&
+      !this.hasManualTransportChoice &&
+      !this.hasCustomServerHostPort &&
+      !this.menuActiveInput
+    ) {
+      this.preferredCoopTransport = 'p2p';
+      debug.preferredCoopTransport = 'p2p';
+      this.serverHostPort = '';
+      debug.menuServerHostPort = '';
+      this.sanctuaryDomInputs?.syncValues(this.displayName, this.serverHostPort);
+      this.lastInvitePanelHash = '';
+    }
+  };
+
+  const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  const abortTimer = controller
+    ? globalThis.setTimeout(() => controller.abort(), 1_500)
+    : null;
   try {
     const wsUrl = this.getResolvedWsUrl();
     const httpBase = wsUrl.replace(/^ws:/, 'http:').replace(/^wss:/, 'https:');
-    const res = await fetch(`${httpBase}/api/host-info`);
+    const res = await fetch(
+      `${httpBase}/api/host-info`,
+      controller ? { signal: controller.signal } : undefined,
+    );
     if (!this.scene.isActive() || this.sceneSessionEpoch !== epoch) return;
     if (res.ok) {
       this.lanServerAvailable = true;
@@ -710,9 +740,15 @@ export async function fetchHostLanInfoImpl(this: GameScene): Promise<void> {
       }
       debug.lanIps = this.lanIps;
       this.updateHostInviteUrl();
+    } else {
+      applyNoLanServerFallback();
     }
   } catch {
-    // Ignore if endpoint is unreachable
+    applyNoLanServerFallback();
+  } finally {
+    if (abortTimer !== null) {
+      globalThis.clearTimeout(abortTimer);
+    }
   }
 }
 
@@ -875,6 +911,28 @@ export async function connectCoopRoomImpl(this: GameScene): Promise<void> {
   const epoch = this.sceneSessionEpoch;
   const debug = initGlobalDebugState();
 
+  if (this.coopBackend !== 'p2p') {
+    await this.fetchHostLanInfo();
+    if (!this.scene.isActive() || this.sceneSessionEpoch !== epoch) {
+      return;
+    }
+    if (
+      !this.lanServerAvailable &&
+      this.coopMode === 'join' &&
+      !this.serverUrl &&
+      !this.hasCustomServerHostPort
+    ) {
+      const fallbackCode = normalizeRoomCode(this.requestedRoomId ?? '');
+      if (fallbackCode) {
+        this.coopBackend = 'p2p';
+        this.preferredCoopTransport = 'p2p';
+        debug.coopBackend = 'p2p';
+        debug.preferredCoopTransport = 'p2p';
+        this.requestedRoomId = fallbackCode;
+      }
+    }
+  }
+
   if (this.coopBackend === 'p2p') {
     let storedReconnectToken: string | null = null;
     try {
@@ -920,7 +978,12 @@ export async function connectCoopRoomImpl(this: GameScene): Promise<void> {
         delay: 500,
         loop: true,
         callback: () => {
-          if (this.room === room && this.scene.isActive() && this.sceneSessionEpoch === epoch) {
+          if (
+            this.room &&
+            this.coopMode !== 'solo' &&
+            this.scene.isActive() &&
+            this.sceneSessionEpoch === epoch
+          ) {
             const curRtt = this.networkTransport?.getTelemetry().rttMs ?? debug.pingMs ?? 8;
             this.room.send('ping_check', {
               clientTime: Date.now(),
@@ -942,10 +1005,6 @@ export async function connectCoopRoomImpl(this: GameScene): Promise<void> {
     return;
   }
 
-  await this.fetchHostLanInfo();
-  if (!this.scene.isActive() || this.sceneSessionEpoch !== epoch) {
-    return;
-  }
   try {
     const wsUrl = this.getResolvedWsUrl();
     this.colyseusClient = new ColyseusClient(wsUrl);
@@ -981,7 +1040,12 @@ export async function connectCoopRoomImpl(this: GameScene): Promise<void> {
       delay: 500,
       loop: true,
       callback: () => {
-        if (this.room === room && this.scene.isActive() && this.sceneSessionEpoch === epoch) {
+        if (
+          this.room &&
+          this.coopMode !== 'solo' &&
+          this.scene.isActive() &&
+          this.sceneSessionEpoch === epoch
+        ) {
           const curRtt = this.networkTransport?.getTelemetry().rttMs ?? debug.pingMs ?? 8;
           this.room.send('ping_check', {
             clientTime: Date.now(),
@@ -1129,6 +1193,9 @@ export async function connectHelloRoomImpl(this: GameScene): Promise<void> {
   const debug = initGlobalDebugState();
   await this.fetchHostLanInfo();
   if (!this.scene.isActive() || this.sceneSessionEpoch !== epoch) {
+    return;
+  }
+  if (!this.lanServerAvailable && !this.hasCustomServerHostPort && !this.serverUrl) {
     return;
   }
   try {

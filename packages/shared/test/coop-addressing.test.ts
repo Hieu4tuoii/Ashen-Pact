@@ -132,4 +132,36 @@ describe('Co-op P2P Room Code & Smart URL Addressing', () => {
     // Proves bytes > 78 were NOT truncated away:
     expect(matrixA).not.toEqual(matrixB);
   });
+
+  it('routes http:// ?join=<CODE> invite URLs to P2P when preferredTransport is p2p or origin matches pageOrigin', () => {
+    expect(
+      parseCoopTargetInput('http://localhost:5173/?join=7k9m2p', {
+        preferredTransport: 'p2p',
+      }),
+    ).toEqual({
+      kind: 'p2p',
+      roomCode: '7K9M2P',
+    });
+
+    expect(
+      parseCoopTargetInput('http://my-static-preview.local/?join=7K9M2P', {
+        pageOrigin: 'http://my-static-preview.local',
+      }),
+    ).toEqual({
+      kind: 'p2p',
+      roomCode: '7K9M2P',
+    });
+
+    // Explicit LAN port :2567 always stays on Colyseus even when preferredTransport is p2p
+    expect(
+      parseCoopTargetInput('http://192.168.1.25:2567/?join=7K9M2P', {
+        preferredTransport: 'p2p',
+      }),
+    ).toEqual({
+      kind: 'colyseus',
+      wsUrl: 'ws://192.168.1.25:2567',
+      hostPortDisplay: '192.168.1.25:2567',
+      roomId: '7K9M2P',
+    });
+  });
 });

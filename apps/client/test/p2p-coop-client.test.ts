@@ -18,12 +18,24 @@ class FakeDataConnection implements PeerDataConnectionLike {
   private readonly closeHandlers: Array<() => void> = [];
   private readonly errorHandlers: Array<(err: unknown) => void> = [];
 
-  public constructor(public readonly peer: string) {}
+  public constructor(
+    public readonly peer: string,
+    private readonly getSendDelayMs: () => number = () => 0,
+  ) {}
 
   public send(data: unknown): void {
     if (!this.open || !this.counterpart || !this.counterpart.open) return;
     const cloned = JSON.parse(JSON.stringify(data)) as unknown;
     const target = this.counterpart;
+    const delayMs = this.getSendDelayMs();
+    if (delayMs > 0) {
+      globalThis.setTimeout(() => {
+        if (target.open) {
+          target.emitData(cloned);
+        }
+      }, delayMs);
+      return;
+    }
     queueMicrotask(() => {
       if (target.open) {
         target.emitData(cloned);
@@ -77,6 +89,7 @@ class FakePeerHub {
   public readonly peers = new Map<string, FakePeerInstance>();
   public readonly preReservedIds = new Set<string>();
   public readonly createdConfigs: Array<{ id?: string; debug: number }> = [];
+  public sendDelayMs = 0;
   private anonSeq = 1;
 
   public readonly factory: PeerLikeFactory = (peerId, opts) => {
@@ -100,9 +113,12 @@ class FakePeerHub {
 
 class FakePeerInstance implements PeerInstanceLike {
   public destroyed = false;
+  public disconnected = false;
+  public reconnectCalls = 0;
   private readonly openHandlers: Array<(id: string) => void> = [];
   private readonly connHandlers: Array<(conn: PeerDataConnectionLike) => void> = [];
   private readonly errorHandlers: Array<(err: { type?: string; message?: string }) => void> = [];
+  private readonly disconnectedHandlers: Array<() => void> = [];
   private readonly closeHandlers: Array<() => void> = [];
   private readonly activeConnections = new Set<FakeDataConnection>();
 
@@ -112,7 +128,7 @@ class FakePeerInstance implements PeerInstanceLike {
   ) {}
 
   public connect(targetPeerId: string): PeerDataConnectionLike {
-    const clientSide = new FakeDataConnection(targetPeerId);
+    const clientSide = new FakeDataConnection(targetPeerId, () => this.hub.sendDelayMs);
     this.activeConnections.add(clientSide);
 
     queueMicrotask(() => {
@@ -125,7 +141,7 @@ class FakePeerInstance implements PeerInstanceLike {
         });
         return;
       }
-      const hostSide = new FakeDataConnection(this.id);
+      const hostSide = new FakeDataConnection(this.id, () => this.hub.sendDelayMs);
       hostPeer.activeConnections.add(hostSide);
       clientSide.counterpart = hostSide;
       hostSide.counterpart = clientSide;
@@ -140,6 +156,18 @@ class FakePeerInstance implements PeerInstanceLike {
     });
 
     return clientSide;
+  }
+
+  public reconnect(): void {
+    if (this.destroyed) return;
+    this.reconnectCalls += 1;
+    this.disconnected = false;
+    this.hub.peers.set(this.id, this);
+  }
+
+  public emitDisconnected(): void {
+    this.disconnected = true;
+    for (const cb of this.disconnectedHandlers) cb();
   }
 
   public destroy(): void {
@@ -189,6 +217,7 @@ class FakePeerInstance implements PeerInstanceLike {
       this.connHandlers.push(cb as (conn: PeerDataConnectionLike) => void);
     else if (event === 'error')
       this.errorHandlers.push(cb as (err: { type?: string; message?: string }) => void);
+    else if (event === 'disconnected') this.disconnectedHandlers.push(cb as () => void);
     else this.closeHandlers.push(cb as () => void);
   }
 }
@@ -566,6 +595,109 @@ describe('PeerJS WebRTC P2P Engine & BackgroundTicker', () => {
 
     expect(clientLeaveCode).toBe(4000);
     expect(listeners.get('pagehide')?.size ?? 0).toBe(0);
+    await hostRoom.leave(true);
+  });
+
+  it('flushes __close__ (4001/4000) and consented __leave__ reliably over simulated WAN latency without racing conn.close()', async () => {
+    vi.stubGlobal('Worker', undefined);
+    const hub = new FakePeerHub();
+    hub.sendDelayMs = 20;
+
+    const hostRoom = await createPeerHostRoom({
+      requestedRoomCode: 'WAN777',
+      hostDisplayName: 'Host',
+      reconnectGraceMs: 5_000,
+      peerFactory: hub.factory,
+    });
+    let latestHostSnap: QuantizedWorldSnapshot | null = null;
+    hostRoom.onMessage('world_snapshot', (s: QuantizedWorldSnapshot) => {
+      latestHostSnap = s;
+    });
+
+    const p2Room = await joinPeerClientRoom({
+      roomCode: 'WAN777',
+      displayName: 'P2',
+      peerFactory: hub.factory,
+    });
+    const p3Room = await joinPeerClientRoom({
+      roomCode: 'WAN777',
+      displayName: 'P3',
+      peerFactory: hub.factory,
+    });
+    const p4Room = await joinPeerClientRoom({
+      roomCode: 'WAN777',
+      displayName: 'P4',
+      peerFactory: hub.factory,
+    });
+
+    let p2LeaveCode: number | null = null;
+    p2Room.onLeave((code) => {
+      p2LeaveCode = code;
+    });
+    let p4LeaveCode: number | null = null;
+    let p4GotHostDisc = false;
+    p4Room.onMessage('host_disconnected', () => {
+      p4GotHostDisc = true;
+    });
+    p4Room.onLeave((code) => {
+      p4LeaveCode = code;
+    });
+
+    await new Promise((r) => setTimeout(r, 80));
+
+    // 1. Kick P2 (slot 2) over 20ms WAN -> must receive 4001, NOT 1006!
+    hostRoom.send('kick_player', { slot: 2 });
+    await new Promise((r) => setTimeout(r, 60));
+    expect(p2LeaveCode).toBe(4001);
+
+    // 2. P3 leaves voluntarily (consented = true) over 20ms WAN -> Host must remove slot 3 immediately (2 players left: Host + P4)
+    await p3Room.leave(true);
+    await new Promise((r) => setTimeout(r, 60));
+    expect(latestHostSnap?.players.map((pl) => pl.slot)).toEqual([1, 4]);
+
+    // 3. Host leaves voluntarily over 20ms WAN -> P4 must receive host_disconnected + 4000, NOT 1006!
+    await hostRoom.leave(true);
+    await new Promise((r) => setTimeout(r, 60));
+    expect(p4GotHostDisc).toBe(true);
+    expect(p4LeaveCode).toBe(4000);
+  });
+
+  it('reconnects Host signaling Peer automatically on disconnected event and honours window.__ASHEN_PACT_PEER_OPTIONS__', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal('Worker', undefined);
+    vi.stubGlobal('window', {
+      location: { search: '' },
+      __ASHEN_PACT_PEER_OPTIONS__: {
+        host: '127.0.0.1',
+        port: 9988,
+        path: '/custom-peer',
+        secure: false,
+        debug: 3,
+      },
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    });
+
+    const opts = resolvePeerRuntimeOptions('', {});
+    expect(opts.host).toBe('127.0.0.1');
+    expect(opts.port).toBe(9988);
+    expect(opts.path).toBe('/custom-peer');
+    expect(opts.debug).toBe(0);
+
+    const hub = new FakePeerHub();
+    const hostRoom = await createPeerHostRoom({
+      requestedRoomCode: 'SIGREC',
+      hostDisplayName: 'Host',
+      peerFactory: hub.factory,
+    });
+    const hostPeer = hub.peers.get(roomCodeToPeerId('SIGREC'))!;
+    expect(hostPeer).toBeDefined();
+    expect(hostPeer.reconnectCalls).toBe(0);
+
+    hostPeer.emitDisconnected();
+    vi.advanceTimersByTime(1_200);
+    expect(hostPeer.reconnectCalls).toBe(1);
+
     await hostRoom.leave(true);
   });
 });

@@ -546,6 +546,7 @@ export class GameScene extends Phaser.Scene {
 
     const explicitServer = (data?.serverUrl ?? urlServer)?.trim() || undefined;
     this.hasCustomServerHostPort = Boolean(explicitServer);
+    this.lanServerAvailable = false;
 
     if (this.coopMode === 'solo') {
       this.coopBackend = 'colyseus';
@@ -580,7 +581,12 @@ export class GameScene extends Phaser.Scene {
       this.coopMode === 'solo' && this.preferredCoopTransport === 'p2p' && !explicitServer
         ? ''
         : normalizeServerHostPortDisplay(explicitServer, fallbackHostPort);
-    const rawRoomId = this.coopMode === 'solo' ? undefined : (data?.roomId ?? urlJoin);
+    const rawRoomId =
+      this.coopMode === 'solo'
+        ? undefined
+        : data?.coopMode
+          ? data.roomId
+          : (data?.roomId ?? (this.coopMode === 'join' ? urlJoin : undefined));
     this.requestedRoomId =
       this.coopBackend === 'p2p' && rawRoomId
         ? (normalizeRoomCode(rawRoomId) ?? rawRoomId)

@@ -24,10 +24,12 @@ export interface PeerDataConnectionLike {
 export interface PeerInstanceLike {
   readonly id: string;
   readonly destroyed: boolean;
+  readonly disconnected?: boolean;
   connect(
     peerId: string,
     options?: { reliable?: boolean; serialization?: string },
   ): PeerDataConnectionLike;
+  reconnect?(): void;
   destroy(): void;
   on(event: 'open', cb: (id: string) => void): void;
   on(event: 'connection', cb: (conn: PeerDataConnectionLike) => void): void;
@@ -153,6 +155,32 @@ export function resolvePeerRuntimeOptions(
     }
   }
 
+  if (typeof window !== 'undefined') {
+    const winOverride = (
+      window as unknown as { __ASHEN_PACT_PEER_OPTIONS__?: Partial<PeerSignalingEndpointConfig> }
+    ).__ASHEN_PACT_PEER_OPTIONS__;
+    if (winOverride && typeof winOverride === 'object') {
+      if (typeof winOverride.host === 'string' && winOverride.host.trim()) {
+        out.host = winOverride.host.trim();
+      }
+      if (typeof winOverride.port === 'number' && winOverride.port > 0) {
+        out.port = winOverride.port;
+      }
+      if (typeof winOverride.path === 'string' && winOverride.path.trim()) {
+        out.path = winOverride.path.trim();
+      }
+      if (typeof winOverride.secure === 'boolean') {
+        out.secure = winOverride.secure;
+      }
+      if (typeof winOverride.key === 'string' && winOverride.key.trim()) {
+        out.key = winOverride.key.trim();
+      }
+      if (Array.isArray(winOverride.iceServers)) {
+        out.iceServers = winOverride.iceServers;
+      }
+    }
+  }
+
   const params = new URLSearchParams(search);
   const peerSignal = params.get('peerSignal')?.trim();
   if (peerSignal) {
@@ -179,6 +207,7 @@ export function resolvePeerRuntimeOptions(
         : [];
   }
 
+  out.debug = 0;
   return out;
 }
 
@@ -405,6 +434,28 @@ export async function createPeerHostRoom(
   let closed = false;
   let remoteConnSeq = 1;
   const remoteConnections = new Set<PeerDataConnectionLike>();
+  const pendingCloseTimers = new Set<ReturnType<typeof globalThis.setTimeout>>();
+  const emptyWaiters = new Set<() => void>();
+  let signalingReconnectTimer: ReturnType<typeof globalThis.setTimeout> | null = null;
+
+  const clearPendingTimers = () => {
+    if (signalingReconnectTimer !== null) {
+      globalThis.clearTimeout(signalingReconnectTimer);
+      signalingReconnectTimer = null;
+    }
+    for (const timer of pendingCloseTimers) {
+      globalThis.clearTimeout(timer);
+    }
+    pendingCloseTimers.clear();
+  };
+
+  const notifyIfRemoteEmpty = () => {
+    if (remoteConnections.size === 0 && emptyWaiters.size > 0) {
+      const cbs = [...emptyWaiters];
+      emptyWaiters.clear();
+      for (const cb of cbs) cb();
+    }
+  };
 
   const authority = new CoopRoomAuthority({
     roomId: roomCode,
@@ -436,6 +487,23 @@ export async function createPeerHostRoom(
     authority.step(deltaMs);
   });
 
+  peer.on('disconnected', () => {
+    if (closed || peer.destroyed || typeof peer.reconnect !== 'function') return;
+    if (signalingReconnectTimer !== null) {
+      globalThis.clearTimeout(signalingReconnectTimer);
+    }
+    signalingReconnectTimer = globalThis.setTimeout(() => {
+      signalingReconnectTimer = null;
+      if (!closed && !peer.destroyed) {
+        try {
+          peer.reconnect?.();
+        } catch {
+          // Ignore transient signaling reconnect errors
+        }
+      }
+    }, 1_000);
+  });
+
   peer.on('connection', (conn) => {
     if (closed) {
       conn.close();
@@ -446,6 +514,15 @@ export async function createPeerHostRoom(
     let joined = false;
     let closedByAuthority = false;
     let clientConsentedLeave = false;
+    let connCloseFallbackTimer: ReturnType<typeof globalThis.setTimeout> | null = null;
+
+    const clearConnCloseFallback = () => {
+      if (connCloseFallbackTimer !== null) {
+        globalThis.clearTimeout(connCloseFallbackTimer);
+        pendingCloseTimers.delete(connCloseFallbackTimer);
+        connCloseFallbackTimer = null;
+      }
+    };
 
     const remotePeerAdapter: CoopAuthorityPeer = {
       sessionId,
@@ -459,13 +536,16 @@ export async function createPeerHostRoom(
         if (conn.open) {
           const closeEnv: P2PWireEnvelope = { t: '__close__', code };
           conn.send(closeEnv);
-          queueMicrotask(() => {
+          clearConnCloseFallback();
+          connCloseFallbackTimer = globalThis.setTimeout(() => {
+            connCloseFallbackTimer = null;
             try {
               conn.close();
             } catch {
               // Ignore close error
             }
-          });
+          }, 250);
+          pendingCloseTimers.add(connCloseFallbackTimer);
         }
       },
     };
@@ -487,8 +567,13 @@ export async function createPeerHostRoom(
       if (env.t === '__leave__') {
         if (!joined) return;
         clientConsentedLeave = Boolean((env as { consented?: boolean }).consented);
-        authority.leavePeer(sessionId, clientConsentedLeave);
         closedByAuthority = true;
+        authority.leavePeer(sessionId, clientConsentedLeave);
+        try {
+          conn.close();
+        } catch {
+          // Ignore close error
+        }
         return;
       }
 
@@ -497,14 +582,18 @@ export async function createPeerHostRoom(
     });
 
     conn.on('close', () => {
+      clearConnCloseFallback();
       remoteConnections.delete(conn);
+      notifyIfRemoteEmpty();
       if (joined && !closedByAuthority && !closed) {
         authority.leavePeer(sessionId, clientConsentedLeave);
       }
     });
 
     conn.on('error', () => {
+      clearConnCloseFallback();
       remoteConnections.delete(conn);
+      notifyIfRemoteEmpty();
       if (joined && !closedByAuthority && !closed) {
         authority.leavePeer(sessionId, false);
       }
@@ -525,6 +614,7 @@ export async function createPeerHostRoom(
     ticker.stop();
     authority.leavePeer(LOCAL_HOST_SESSION_ID, true);
     authority.dispose();
+    clearPendingTimers();
     for (const c of remoteConnections) {
       try {
         if (c.open) {
@@ -536,6 +626,7 @@ export async function createPeerHostRoom(
       }
     }
     remoteConnections.clear();
+    notifyIfRemoteEmpty();
     try {
       peer.destroy();
     } catch {
@@ -568,8 +659,22 @@ export async function createPeerHostRoom(
       ticker.stop();
       authority.leavePeer(LOCAL_HOST_SESSION_ID, consented);
       authority.dispose();
-      // Allow queued __close__ frames to flush before tearing down Peer
-      await new Promise<void>((resolve) => queueMicrotask(resolve));
+      // Wait until remote clients acknowledge/close after receiving __close__(4000) or 150ms flush window
+      if (remoteConnections.size > 0) {
+        await new Promise<void>((resolve) => {
+          let settled = false;
+          const finish = () => {
+            if (settled) return;
+            settled = true;
+            emptyWaiters.delete(finish);
+            globalThis.clearTimeout(flushTimer);
+            resolve();
+          };
+          const flushTimer = globalThis.setTimeout(finish, 150);
+          emptyWaiters.add(finish);
+        });
+      }
+      clearPendingTimers();
       for (const c of remoteConnections) {
         try {
           c.close();
@@ -763,7 +868,19 @@ export async function joinPeerClientRoom(
       if (activeConn.open) {
         const leaveEnv: P2PWireEnvelope = { t: '__leave__', consented };
         activeConn.send(leaveEnv);
-        await new Promise<void>((resolve) => queueMicrotask(resolve));
+        // Wait for Host to process __leave__ and close the channel (or 150ms WAN fallback)
+        await new Promise<void>((resolve) => {
+          let settled = false;
+          const finish = () => {
+            if (settled) return;
+            settled = true;
+            globalThis.clearTimeout(flushTimer);
+            resolve();
+          };
+          const flushTimer = globalThis.setTimeout(finish, 150);
+          activeConn.on('close', finish);
+          activeConn.on('error', finish);
+        });
         try {
           activeConn.close();
         } catch {

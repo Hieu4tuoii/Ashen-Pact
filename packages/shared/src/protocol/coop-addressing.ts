@@ -179,9 +179,14 @@ export function parseCoopTargetInput(
         }
       }
 
+      const matchesSameStaticOrigin =
+        Boolean(opts?.pageOrigin) && url.origin === opts?.pageOrigin;
       if (
         joinParam &&
-        (url.protocol === 'https:' || /^p2p:/i.test(joinParam)) &&
+        (url.protocol === 'https:' ||
+          /^p2p:/i.test(joinParam) ||
+          opts?.preferredTransport === 'p2p' ||
+          matchesSameStaticOrigin) &&
         url.port !== '2567'
       ) {
         const code = normalizeRoomCode(joinParam);

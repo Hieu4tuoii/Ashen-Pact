@@ -43,6 +43,7 @@ import { GameScene } from '../src/scenes/GameScene.js';
 import {
   bindCoopRoomHandlersImpl,
   connectCoopRoomImpl,
+  connectHelloRoomImpl,
   fetchHostLanInfoImpl,
   forceCoopReconnectImpl,
   getResolvedWsUrlImpl,
@@ -336,6 +337,134 @@ describe('Sanctuary Online P2P Co-op Routing, Guild Drawer & GameScene Integrati
           startInHub: true,
           disconnectReason: expect.stringContaining('GONE99'),
         }),
+      );
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('ignores stale ?join=<CODE> query on Host Online, falls back to P2P over HTTP when /api/host-info fails, and keeps 500ms ping_check alive after forceCoopReconnect', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('ECONNREFUSED')));
+    vi.stubGlobal('window', {
+      location: {
+        protocol: 'https:',
+        origin: 'https://ashen-pact.vercel.app',
+        hostname: 'ashen-pact.vercel.app',
+        pathname: '/',
+        port: '',
+        search: '?join=7K9M2P&p2p=1',
+      },
+      localStorage: { getItem: () => null, setItem: vi.fn() },
+      sessionStorage: { getItem: () => null, setItem: vi.fn(), removeItem: vi.fn() },
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    });
+
+    try {
+      const gs = new GameScene();
+      let lastRestartPayload: Record<string, unknown> | undefined;
+      const timerCallbacks: Array<() => void> = [];
+      (
+        gs as unknown as {
+          scene: {
+            isActive: () => boolean;
+            start: ReturnType<typeof vi.fn>;
+            restart: (data?: Record<string, unknown>) => void;
+          };
+        }
+      ).scene = {
+        isActive: () => true,
+        start: vi.fn(),
+        restart: (data) => {
+          lastRestartPayload = data;
+        },
+      };
+      (
+        gs as unknown as {
+          time: { addEvent: (cfg: { delay: number; callback: () => void }) => void };
+        }
+      ).time = {
+        addEvent: (cfg) => {
+          if (cfg.delay === 500) {
+            timerCallbacks.push(cfg.callback);
+          }
+        },
+      };
+      gs.getResolvedWsUrl = () => getResolvedWsUrlImpl.call(gs);
+      gs.fetchHostLanInfo = () => fetchHostLanInfoImpl.call(gs);
+      gs.updateHostInviteUrl = () => updateHostInviteUrlImpl.call(gs);
+      gs.bindCoopRoomHandlers = (r) => bindCoopRoomHandlersImpl.call(gs, r);
+
+      // 1. Player arrived via ?join=7K9M2P&p2p=1, exited to Solo, then clicks Host Online -> MUST NOT inherit 7K9M2P!
+      gs.init({ coopMode: 'solo', startInHub: true });
+      gs.serverHostPort = '';
+      switchSanctuaryCoopMode(gs, 'host');
+      expect(lastRestartPayload).toBeDefined();
+      gs.init(lastRestartPayload as Parameters<GameScene['init']>[0]);
+      expect(gs.coopMode).toBe('host');
+      expect(gs.coopBackend).toBe('p2p');
+      expect(gs.requestedRoomId).toBeUndefined();
+
+      // 2. Booting Solo Sanctuary over HTTP without a running Colyseus server switches to Online P2P and skips ws://localhost:2567
+      vi.stubGlobal('window', {
+        location: {
+          protocol: 'http:',
+          origin: 'http://localhost:5173',
+          hostname: 'localhost',
+          pathname: '/',
+          port: '5173',
+          search: '',
+        },
+        localStorage: { getItem: () => null, setItem: vi.fn() },
+        sessionStorage: { getItem: () => null, setItem: vi.fn(), removeItem: vi.fn() },
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      });
+
+      gs.init({ coopMode: 'solo', startInHub: true });
+      expect(gs.preferredCoopTransport).toBe('lan');
+      await connectHelloRoomImpl.call(gs);
+      expect(gs.lanServerAvailable).toBe(false);
+      expect(gs.preferredCoopTransport).toBe('p2p');
+      expect(gs.serverHostPort).toBe('');
+      expect(gs.room).toBeUndefined();
+
+      // 3. Opening http://localhost:5173/?join=9X4M2K when /api/host-info fails falls back to P2P Join + keeps 500ms ping_check alive across forceCoopReconnect
+      (window.location as { search: string }).search = '?join=9x4m2k';
+      gs.init();
+      expect(gs.coopMode).toBe('join');
+      expect(gs.coopBackend).toBe('colyseus');
+
+      const initialJoinRoom = {
+        roomId: '9X4M2K',
+        send: vi.fn(),
+        onMessage: vi.fn(),
+        onLeave: vi.fn(),
+        leave: vi.fn(async () => {}),
+      };
+      p2pMockState.joinPeerClientRoomImpl.mockResolvedValueOnce(initialJoinRoom);
+      await connectCoopRoomImpl.call(gs);
+      expect(gs.coopBackend).toBe('p2p');
+      expect(gs.room).toBe(initialJoinRoom);
+      expect(timerCallbacks.length).toBeGreaterThan(0);
+
+      const reconnectedRoom = {
+        roomId: '9X4M2K',
+        send: vi.fn(),
+        onMessage: vi.fn(),
+        onLeave: vi.fn(),
+        leave: vi.fn(async () => {}),
+      };
+      p2pMockState.joinPeerClientRoomImpl.mockResolvedValueOnce(reconnectedRoom);
+      const ok = await forceCoopReconnectImpl.call(gs);
+      expect(ok).toBe(true);
+      reconnectedRoom.send.mockClear();
+
+      // Trigger the 500ms ping_check timer created during connectCoopRoomImpl
+      timerCallbacks[timerCallbacks.length - 1]!();
+      expect(reconnectedRoom.send).toHaveBeenCalledWith(
+        'ping_check',
+        expect.objectContaining({ clientTime: expect.any(Number) }),
       );
     } finally {
       vi.unstubAllGlobals();
