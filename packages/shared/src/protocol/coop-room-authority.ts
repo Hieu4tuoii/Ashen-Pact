@@ -113,6 +113,11 @@ export class CoopRoomAuthority {
 
   public step(deltaMs: number): void {
     if (this.disposed) return;
+    const prevInHub = this.sim.inHub;
+    const prevFloor = this.sim.currentFloor;
+    const prevRoomId = this.sim.currentRoomId;
+    const prevRunState = this.sim.runState;
+
     const res = this.simLoop.step(deltaMs, (dtSec) => {
       this.sim.step(dtSec);
       const tickEvents = this.sim.consumeEvents();
@@ -123,8 +128,13 @@ export class CoopRoomAuthority {
     });
 
     if (res.ticksExecuted > 0) {
+      const structuralChanged =
+        this.sim.inHub !== prevInHub ||
+        this.sim.currentFloor !== prevFloor ||
+        this.sim.currentRoomId !== prevRoomId ||
+        this.sim.runState !== prevRunState;
       this.emitStateChange();
-      if (this.snapshotTickCounter >= 2) {
+      if (structuralChanged || this.snapshotTickCounter >= 2) {
         this.snapshotTickCounter = 0;
         const snap = encodeWorldSnapshot(
           this.sim,
@@ -134,7 +144,10 @@ export class CoopRoomAuthority {
         );
         snap.snapshotSeq = ++this.snapshotSeq;
         this.accumulatedEvents.length = 0;
-        this.broadcast('world_snapshot', snap, { reliable: false, immediate: false });
+        this.broadcast('world_snapshot', snap, {
+          reliable: structuralChanged,
+          immediate: structuralChanged,
+        });
       }
     }
   }

@@ -1,8 +1,10 @@
 import {
   INPUT_BUTTON,
+  NetworkTransport,
   SIM_STEP_MS,
   type QuantizedWorldSnapshot,
   type SimEvent,
+  dequantizeCoord,
   roomCodeToPeerId,
 } from '@ashen-pact/shared';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -1176,6 +1178,195 @@ describe('PeerJS WebRTC P2P Engine & BackgroundTicker', () => {
     hostFastDc.bufferedAmount = 0;
     await new Promise((r) => setTimeout(r, 90));
     expect(hostFastDc.sentRaw.length).toBeGreaterThan(sentBeforeCongestion);
+
+    await clientRoom.leave(true);
+    await hostRoom.leave(true);
+  });
+
+  it('delivers room-transition world_snapshot reliably before world_events so post-transition projectiles are preserved', async () => {
+    vi.stubGlobal('Worker', undefined);
+    const hub = new FakePeerHub();
+
+    const hostRoom = await createPeerHostRoom({
+      requestedRoomCode: 'TXORD1',
+      hostDisplayName: 'Host P1',
+      seed: 4242,
+      isDebugEnabled: () => true,
+      peerFactory: hub.factory,
+    });
+    const clientRoom = await joinPeerClientRoom({
+      roomCode: 'TXORD1',
+      displayName: 'Joiner P2',
+      characterId: 'engineer',
+      peerFactory: hub.factory,
+    });
+
+    const clientTransport = new NetworkTransport({
+      seed: 4242,
+      startInHub: true,
+      localPlayerId: 2,
+      localPlayerSlot: 2,
+      wifiProfile: 'off',
+    });
+
+    const arrivalLog: Array<
+      | { kind: 'snap'; roomId: number; inHub: boolean }
+      | { kind: 'events'; count: number; hasVolley: boolean }
+    > = [];
+    let hostLatestSnap: QuantizedWorldSnapshot | null = null;
+    hostRoom.onMessage('world_snapshot', (s: QuantizedWorldSnapshot) => {
+      hostLatestSnap = s;
+    });
+    clientRoom.onMessage('world_snapshot', (s: QuantizedWorldSnapshot) => {
+      arrivalLog.push({ kind: 'snap', roomId: s.currentRoomId, inHub: s.inHub });
+      clientTransport.receiveSnapshot(s);
+    });
+    clientRoom.onMessage('world_events', (evs: SimEvent[]) => {
+      arrivalLog.push({
+        kind: 'events',
+        count: evs.length,
+        hasVolley: evs.some((e) => e.kind === 'bullet_volley_spawned'),
+      });
+      clientTransport.receiveEvents(evs);
+    });
+
+    await new Promise((r) => setTimeout(r, 60));
+    expect(clientRoom.isFastChannelActive?.()).toBe(true);
+    expect(clientTransport.getSim().inHub).toBe(true);
+
+    // Walk Host P1 around central brazier (576, 352) via (620, 300) to (576, 174):
+    // 52px from Hub Portal (576, 122) — inside 72px INTERACT range, outside 26px auto-touch radius!
+    let hostSeq = 1;
+    const waypoints: Array<[number, number]> = [
+      [620, 300],
+      [576, 174],
+    ];
+    for (const [wx, wy] of waypoints) {
+      for (let step = 0; step < 35; step++) {
+        const p1Snap = hostLatestSnap?.players.find((p) => p.slot === 1);
+        const p1x = p1Snap ? dequantizeCoord(p1Snap.qx) : 576;
+        const p1y = p1Snap ? dequantizeCoord(p1Snap.qy) : 412;
+        const dx = wx - p1x;
+        const dy = wy - p1y;
+        const dist = Math.hypot(dx, dy);
+        if (dist < 14) break;
+        hostRoom.send('input', {
+          seq: hostSeq++,
+          tick: 0,
+          moveX: dx / dist,
+          moveY: dy / dist,
+          aimAngle: -Math.PI * 0.5,
+          buttons: 0,
+          weaponSlotSelect: null,
+        });
+        await new Promise((r) => setTimeout(r, 25));
+      }
+    }
+    hostRoom.send('input', {
+      seq: hostSeq++,
+      tick: 0,
+      moveX: 0,
+      moveY: 0,
+      aimAngle: -Math.PI * 0.5,
+      buttons: 0,
+      weaponSlotSelect: null,
+    });
+    await new Promise((r) => setTimeout(r, 45));
+    expect(clientTransport.getSim().inHub).toBe(true);
+
+    // Clear log right before the transition tick:
+    // Host P1 presses INTERACT on Hub Portal (transitioning inHub: true -> false inside authority.step)
+    // while Joiner P2 taps FIRE (spawning rivet_gun volley inside Floor 1 Room 0 on the SAME sim.step!)
+    arrivalLog.length = 0;
+    clientRoom.send('input', {
+      seq: 1,
+      tick: 0,
+      moveX: 0,
+      moveY: 0,
+      aimAngle: 0,
+      buttons: INPUT_BUTTON.FIRE,
+      weaponSlotSelect: null,
+    });
+    hostRoom.send('input', {
+      seq: hostSeq++,
+      tick: 0,
+      moveX: 0,
+      moveY: 0,
+      aimAngle: -Math.PI * 0.5,
+      buttons: INPUT_BUTTON.INTERACT,
+      edgeButtons: INPUT_BUTTON.INTERACT,
+      weaponSlotSelect: null,
+    });
+    // Release FIRE immediately so only that transition-tick volley is emitted
+    clientRoom.send('input', {
+      seq: 2,
+      tick: 0,
+      moveX: 0,
+      moveY: 0,
+      aimAngle: 0,
+      buttons: 0,
+      weaponSlotSelect: null,
+    });
+
+    await new Promise((r) => setTimeout(r, 50));
+
+    expect(clientTransport.getSim().inHub).toBe(false);
+
+    const dungeonSnapIdx = arrivalLog.findIndex((entry) => entry.kind === 'snap' && !entry.inHub);
+    const volleyEventsIdx = arrivalLog.findIndex(
+      (entry) => entry.kind === 'events' && entry.hasVolley,
+    );
+    expect(dungeonSnapIdx).toBeGreaterThanOrEqual(0);
+    expect(volleyEventsIdx).toBeGreaterThanOrEqual(0);
+    // Floor 1 world_snapshot MUST arrive BEFORE Floor 1 world_events so enterRoom doesn't wipe P2's spawned projectiles!
+    expect(dungeonSnapIdx, JSON.stringify(arrivalLog)).toBeLessThan(volleyEventsIdx);
+    expect(clientTransport.getSim().projectiles.length).toBeGreaterThan(0);
+
+    await clientRoom.leave(true);
+    await hostRoom.leave(true);
+  });
+
+  it('notifies remote peer via __fast_fallback__ on asymmetric fastDc error so both Host and Joiner revert to reliable channel', async () => {
+    vi.stubGlobal('Worker', undefined);
+    const hub = new FakePeerHub();
+
+    const hostRoom = await createPeerHostRoom({
+      requestedRoomCode: 'ASYM99',
+      hostDisplayName: 'Host',
+      peerFactory: hub.factory,
+    });
+    const clientRoom = await joinPeerClientRoom({
+      roomCode: 'ASYM99',
+      displayName: 'Joiner',
+      peerFactory: hub.factory,
+    });
+
+    let snapCount = 0;
+    clientRoom.onMessage('world_snapshot', () => {
+      snapCount += 1;
+    });
+
+    await new Promise((r) => setTimeout(r, 60));
+    expect(clientRoom.isFastChannelActive?.()).toBe(true);
+    expect(hostRoom.isFastChannelActive?.()).toBe(true);
+
+    // Simulate asymmetric SCTP UDP transport failure where Joiner's fastDc errors locally without auto-closing Host's RTCDataChannel
+    const pair = hub.connectionPairs[0]!;
+    const clientFastDc = pair.clientConn.negotiatedChannels.get(42)!;
+    const hostFastDc = pair.hostConn.negotiatedChannels.get(42)!;
+    clientFastDc.counterpart = undefined;
+    hostFastDc.counterpart = undefined;
+
+    clientFastDc.emitError(new Error('asymmetric-sctp-udp-error'));
+    await new Promise((r) => setTimeout(r, 30));
+
+    expect(clientRoom.isFastChannelActive?.()).toBe(false);
+    expect(hostRoom.isFastChannelActive?.()).toBe(false);
+
+    const snapsBeforeReliableResume = snapCount;
+    await new Promise((r) => setTimeout(r, 110));
+    // Snapshots continue arriving reliably even though fastDc is dead on both ends!
+    expect(snapCount).toBeGreaterThan(snapsBeforeReliableResume);
 
     await clientRoom.leave(true);
     await hostRoom.leave(true);

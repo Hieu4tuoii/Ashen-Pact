@@ -398,7 +398,21 @@ export function setCoopPlayerInputImpl(this: WorldSim, playerId: number, input: 
   }
   if (input.seq > 0 && entry.current.seq > 0 && input.seq < entry.current.seq) {
     if (typeof input.edgeButtons === 'number' && input.edgeButtons !== 0) {
-      entry.latchedButtons |= input.edgeButtons;
+      let uncreditedEdges = input.edgeButtons;
+      const spans = entry.inferredEdgeSpans;
+      if (spans && spans.length > 0) {
+        for (let i = spans.length - 1; i >= 0 && uncreditedEdges !== 0; i--) {
+          const span = spans[i]!;
+          if (span.fromSeq < input.seq && input.seq <= span.toSeq) {
+            const matched = uncreditedEdges & span.mask;
+            if (matched !== 0) {
+              uncreditedEdges &= ~matched;
+              span.mask &= ~matched;
+            }
+          }
+        }
+      }
+      entry.latchedButtons |= uncreditedEdges;
     }
     if (typeof input.weaponSlotSelect === 'number') {
       entry.latchedWeaponSlot = input.weaponSlotSelect;
@@ -410,6 +424,22 @@ export function setCoopPlayerInputImpl(this: WorldSim, playerId: number, input: 
       this.triggerEmote(playerId, input.emoteId);
     }
     return;
+  }
+
+  const prevSeq = entry.current.seq;
+  const inferredEdges = (input.buttons & ~entry.current.buttons) & ~(input.edgeButtons ?? 0);
+  if (inferredEdges !== 0 && input.seq > prevSeq) {
+    if (!entry.inferredEdgeSpans) {
+      entry.inferredEdgeSpans = [];
+    }
+    entry.inferredEdgeSpans.push({
+      fromSeq: prevSeq,
+      toSeq: input.seq,
+      mask: inferredEdges,
+    });
+    if (entry.inferredEdgeSpans.length > 16) {
+      entry.inferredEdgeSpans.shift();
+    }
   }
 
   const newEdges = (input.buttons & ~entry.current.buttons) | (input.edgeButtons ?? 0);

@@ -75,7 +75,13 @@ export class NetworkTransport implements ITransport {
     weaponSlotSelect: null,
   };
 
-  private readonly pendingInputs: Array<{ packet: PlayerInputPacket; simTicks: number }> = [];
+  private readonly pendingInputs: Array<{
+    packet: PlayerInputPacket;
+    simTicks: number;
+    dashEdgeAtTick: number;
+  }> = [];
+  private prevSentButtons = 0;
+  private pendingLocalDashEdge = false;
   private reconcileOffsetX = 0;
   private reconcileOffsetY = 0;
 
@@ -192,6 +198,14 @@ export class NetworkTransport implements ITransport {
       ...input,
     };
     this.latestInput = packet;
+    const dashEdge =
+      (((packet.buttons & ~this.prevSentButtons) | (packet.edgeButtons ?? 0)) &
+        INPUT_BUTTON.DASH) !==
+      0;
+    this.prevSentButtons = packet.buttons;
+    if (dashEdge) {
+      this.pendingLocalDashEdge = true;
+    }
 
     // Apply immediately to local player for 0ms client-side prediction
     const localPlayer = this.getLocalPlayerState();
@@ -201,7 +215,7 @@ export class NetworkTransport implements ITransport {
       this.sim.setPlayerInput(packet);
     }
 
-    this.pendingInputs.push({ packet, simTicks: 0 });
+    this.pendingInputs.push({ packet, simTicks: 0, dashEdgeAtTick: -1 });
     if (this.pendingInputs.length > 240) {
       this.pendingInputs.shift();
     }
@@ -449,7 +463,12 @@ export class NetworkTransport implements ITransport {
           const entry = this.pendingInputs[i]!;
           if (entry.simTicks <= 0) continue;
           for (let stepIdx = 0; stepIdx < entry.simTicks; stepIdx++) {
-            this.stepPredictedPlayerKinematics(pState, entry.packet, replayDt);
+            this.stepPredictedPlayerKinematics(
+              pState,
+              entry.packet,
+              replayDt,
+              stepIdx === entry.dashEdgeAtTick,
+            );
           }
         }
         pState.prevX = pState.x;
@@ -800,8 +819,14 @@ export class NetworkTransport implements ITransport {
   }
 
   private stepLocalPrediction(dtSec: number): void {
+    const dashNow = this.pendingLocalDashEdge;
+    this.pendingLocalDashEdge = false;
     if (this.pendingInputs.length > 0) {
-      this.pendingInputs[this.pendingInputs.length - 1]!.simTicks += 1;
+      const activeEntry = this.pendingInputs[this.pendingInputs.length - 1]!;
+      if (dashNow && activeEntry.dashEdgeAtTick < 0) {
+        activeEntry.dashEdgeAtTick = activeEntry.simTicks;
+      }
+      activeEntry.simTicks += 1;
     }
     const localPlayer = this.getLocalPlayerState();
     localPlayer.prevX = localPlayer.x;
@@ -810,7 +835,7 @@ export class NetworkTransport implements ITransport {
     const inp = this.latestInput;
     localPlayer.aimAngle = inp.aimAngle;
 
-    this.stepPredictedPlayerKinematics(localPlayer, inp, dtSec);
+    this.stepPredictedPlayerKinematics(localPlayer, inp, dtSec, dashNow);
     if (!this.sim.stressTestActive) {
       this.sim.updatePhase6Mechanics(dtSec);
     }
@@ -823,6 +848,7 @@ export class NetworkTransport implements ITransport {
     p: SimPlayerState,
     inp: PlayerInputPacket,
     dtSec: number,
+    dashJustPressed: boolean,
   ): void {
     const len = Math.hypot(inp.moveX, inp.moveY);
     const dirX = len > 1e-4 ? inp.moveX / len : 0;
@@ -846,8 +872,7 @@ export class NetworkTransport implements ITransport {
       p.dashCooldownTimer = Math.max(0, p.dashCooldownTimer - dtSec);
     }
 
-    const wantsDash = ((inp.buttons | (inp.edgeButtons ?? 0)) & INPUT_BUTTON.DASH) !== 0;
-    if (wantsDash && p.dashTimer <= 0 && p.dashCooldownTimer <= 0) {
+    if (dashJustPressed && p.dashTimer <= 0 && p.dashCooldownTimer <= 0) {
       p.dashTimer = DASH_DURATION_SEC;
       p.dashCooldownTimer = DASH_COOLDOWN_SEC;
       p.dashDirX = dirX !== 0 || dirY !== 0 ? dirX : Math.cos(inp.aimAngle);

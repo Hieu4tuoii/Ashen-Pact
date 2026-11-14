@@ -243,4 +243,209 @@ describe('P2P Netcode Smoothing — Shared Monotonic Guards, Reliable Events & H
     });
     authority.dispose();
   });
+
+  it('deduplicates delayed SCTP edgeButtons when a newer continuous packet already inferred the rising edge, while preserving genuine double-taps', () => {
+    const sim = new WorldSim({
+      seed: 8181,
+      startInHub: false,
+      spawnInitialWave: false,
+      includeTrainingDummy: false,
+    });
+    const p2 = sim.addCoopPlayer(2, 'ranger', 'Friend P2', 2);
+    p2.weaponSlots = ['hunter_crossbow', 'knight_sword'];
+    p2.activeWeaponSlot = 0;
+
+    // Baseline seq = 10 with no buttons pressed
+    sim.setCoopPlayerInput(p2.id, {
+      seq: 10,
+      tick: sim.tick,
+      moveX: 0,
+      moveY: 0,
+      aimAngle: 0,
+      buttons: 0,
+      weaponSlotSelect: null,
+    });
+    sim.step(1 / 60);
+    expect(p2.activeWeaponSlot).toBe(0);
+
+    // Normal >15ms keypress of SWAP (Q):
+    // seq = 12 (continuous UDP packet with SWAP still held, no edgeButtons) arrives BEFORE seq = 11 (SCTP packet with edgeButtons: SWAP)
+    sim.setCoopPlayerInput(p2.id, {
+      seq: 12,
+      tick: sim.tick,
+      moveX: 1,
+      moveY: 0,
+      aimAngle: 0,
+      buttons: INPUT_BUTTON.SWAP,
+      weaponSlotSelect: null,
+    });
+    sim.step(1 / 60);
+    expect(p2.activeWeaponSlot).toBe(1);
+
+    // Delayed reliable seq = 11 arrives 30ms later -> must NOT swap a second time back to slot 0!
+    sim.setCoopPlayerInput(p2.id, {
+      seq: 11,
+      tick: sim.tick,
+      moveX: 1,
+      moveY: 0,
+      aimAngle: 0,
+      buttons: INPUT_BUTTON.SWAP,
+      edgeButtons: INPUT_BUTTON.SWAP,
+      weaponSlotSelect: null,
+    });
+    sim.step(1 / 60);
+    expect(p2.activeWeaponSlot).toBe(1);
+
+    // Release SWAP on seq = 20
+    sim.setCoopPlayerInput(p2.id, {
+      seq: 20,
+      tick: sim.tick,
+      moveX: 0,
+      moveY: 0,
+      aimAngle: 0,
+      buttons: 0,
+      weaponSlotSelect: null,
+    });
+    sim.step(1 / 60);
+
+    // Genuine rapid double-tap where seq = 24 (continuous hold of tap #2) overtakes SCTP seq = 21 (tap #1), 22 (release), 23 (tap #2)
+    sim.setCoopPlayerInput(p2.id, {
+      seq: 24,
+      tick: sim.tick,
+      moveX: 0,
+      moveY: 0,
+      aimAngle: 0,
+      buttons: INPUT_BUTTON.SWAP,
+      weaponSlotSelect: null,
+    });
+    sim.step(1 / 60);
+    expect(p2.activeWeaponSlot).toBe(0); // Tap #1 inferred
+
+    sim.setCoopPlayerInput(p2.id, {
+      seq: 21,
+      tick: sim.tick,
+      moveX: 0,
+      moveY: 0,
+      aimAngle: 0,
+      buttons: INPUT_BUTTON.SWAP,
+      edgeButtons: INPUT_BUTTON.SWAP,
+      weaponSlotSelect: null,
+    });
+    sim.setCoopPlayerInput(p2.id, {
+      seq: 22,
+      tick: sim.tick,
+      moveX: 0,
+      moveY: 0,
+      aimAngle: 0,
+      buttons: 0,
+      weaponSlotSelect: null,
+    });
+    sim.setCoopPlayerInput(p2.id, {
+      seq: 23,
+      tick: sim.tick,
+      moveX: 0,
+      moveY: 0,
+      aimAngle: 0,
+      buttons: INPUT_BUTTON.SWAP,
+      edgeButtons: INPUT_BUTTON.SWAP,
+      weaponSlotSelect: null,
+    });
+    sim.step(1 / 60);
+    expect(p2.activeWeaponSlot).toBe(1); // Tap #2 executed -> net 2 swaps (1 -> 0 -> 1)
+  });
+
+  it('triggers local predicted dash only on INPUT_BUTTON.DASH rising edge and never while holding SHIFT across cooldown expiry', () => {
+    const serverSim = new WorldSim({
+      seed: 9191,
+      startInHub: false,
+      spawnInitialWave: false,
+      includeTrainingDummy: false,
+    });
+    const clientTransport = new NetworkTransport({
+      seed: 9191,
+      startInHub: false,
+      localPlayerId: 1,
+      localPlayerSlot: 1,
+      wifiProfile: 'off',
+    });
+
+    clientTransport.setOnSendInput((pkt) => {
+      serverSim.setPlayerInput(pkt);
+    });
+
+    // Hold SHIFT continuously across 125 fixed ticks (2.08s > 1.85s DASH_COOLDOWN_SEC) without snapshot sync after tick 10
+    for (let tick = 1; tick <= 125; tick++) {
+      clientTransport.sendInput({
+        seq: tick,
+        tick: serverSim.tick,
+        moveX: 0,
+        moveY: 1,
+        aimAngle: 0,
+        buttons: INPUT_BUTTON.DASH,
+        weaponSlotSelect: null,
+      });
+      clientTransport.step(1000 / 60);
+      serverSim.step(1 / 60);
+
+      if (tick === 1) {
+        expect(serverSim.player.dashTimer).toBeGreaterThan(0);
+        expect(clientTransport.getLocalPlayerState().dashTimer).toBeGreaterThan(0);
+      }
+      if (tick === 10) {
+        clientTransport.receiveSnapshot(encodeWorldSnapshot(serverSim, serverSim.consumeEvents()));
+      }
+      if (tick >= 113) {
+        // Cooldown (1.85s = 111 ticks) has expired while SHIFT remained held: neither authoritative sim nor local prediction may dash a second time!
+        expect(serverSim.player.dashTimer).toBe(0);
+        expect(clientTransport.getLocalPlayerState().dashTimer).toBe(0);
+      }
+    }
+
+    expect(Math.abs(clientTransport.getLocalPlayerState().y - serverSim.player.y)).toBeLessThan(2);
+  });
+
+  it('flushes an immediate reliable world_snapshot on odd tick when an in-step room transition occurs', () => {
+    const sent: Array<{
+      type: string;
+      payload: unknown;
+      options?: CoopAuthorityPeerSendOptions;
+    }> = [];
+    const authority = new CoopRoomAuthority({ roomId: 'ROOMTX', seed: 31337, startInHub: false });
+    const hostPeer: CoopAuthorityPeer = {
+      sessionId: 'host_tx',
+      send(type, payload, options) {
+        sent.push({ type, payload, options });
+      },
+      close() {},
+    };
+
+    authority.joinPeer(hostPeer, { name: 'Host' });
+    authority.sim.skipCurrentRoomWaves();
+    const door = authority.sim.doors.find((d) => !d.locked)!;
+    expect(door).toBeDefined();
+    expect(door.locked).toBe(false);
+
+    // Place P1 directly on the unlocked start-room door and press INTERACT on a single 17ms (1-tick) step
+    authority.sim.player.x = door.x;
+    authority.sim.player.y = door.y;
+    authority.handleMessage('host_tx', 'input', {
+      seq: 1,
+      tick: authority.sim.tick,
+      moveX: 0,
+      moveY: 0,
+      aimAngle: 0,
+      buttons: INPUT_BUTTON.INTERACT,
+      edgeButtons: INPUT_BUTTON.INTERACT,
+      weaponSlotSelect: null,
+    });
+
+    sent.length = 0;
+    authority.step(17); // Only 1 fixed tick executed (odd tick, snapshotTickCounter would be 1)
+
+    expect(authority.sim.currentRoomId).toBe(door.targetRoomId);
+    const transitionSnap = sent.find((m) => m.type === 'world_snapshot');
+    expect(transitionSnap).toBeDefined();
+    expect(transitionSnap?.options).toEqual({ reliable: true, immediate: true });
+    authority.dispose();
+  });
 });
