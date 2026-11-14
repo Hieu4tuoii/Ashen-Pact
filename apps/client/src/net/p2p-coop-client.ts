@@ -172,6 +172,13 @@ export function resolvePeerRuntimeOptions(
     }
   }
 
+  if ((out.host === '127.0.0.1' || out.host === 'localhost') && !turnUrlsRaw) {
+    out.iceServers =
+      typeof out.port === 'number' && out.port > 0
+        ? [{ urls: `stun:${out.host}:${out.port}` }]
+        : [];
+  }
+
   return out;
 }
 
@@ -504,6 +511,44 @@ export async function createPeerHostRoom(
     });
   });
 
+  const unregisterWindowLifecycle = () => {
+    if (typeof window !== 'undefined' && typeof window.removeEventListener === 'function') {
+      window.removeEventListener('pagehide', onHostWindowUnload);
+      window.removeEventListener('beforeunload', onHostWindowUnload);
+    }
+  };
+
+  const onHostWindowUnload = () => {
+    unregisterWindowLifecycle();
+    if (closed) return;
+    closed = true;
+    ticker.stop();
+    authority.leavePeer(LOCAL_HOST_SESSION_ID, true);
+    authority.dispose();
+    for (const c of remoteConnections) {
+      try {
+        if (c.open) {
+          c.send({ t: '__close__', code: 4000 } satisfies P2PWireEnvelope);
+        }
+        c.close();
+      } catch {
+        // Ignore
+      }
+    }
+    remoteConnections.clear();
+    try {
+      peer.destroy();
+    } catch {
+      // Ignore
+    }
+    dispatcher.clear();
+  };
+
+  if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+    window.addEventListener('pagehide', onHostWindowUnload);
+    window.addEventListener('beforeunload', onHostWindowUnload);
+  }
+
   return {
     roomId: roomCode,
     send(type: string, message?: unknown): void {
@@ -517,6 +562,7 @@ export async function createPeerHostRoom(
       return dispatcher.onLeave(callback);
     },
     async leave(consented = true): Promise<void> {
+      unregisterWindowLifecycle();
       if (closed) return;
       closed = true;
       ticker.stop();

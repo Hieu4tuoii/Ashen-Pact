@@ -1063,11 +1063,16 @@ export async function forceCoopReconnectImpl(this: GameScene): Promise<boolean> 
       newRoom.send('ping_check', { clientTime: Date.now(), rttMs: 8 });
       debug.serverConnected = true;
       return true;
-    } catch {
+    } catch (err) {
       if (!this.scene.isActive() || this.sceneSessionEpoch !== epoch) {
         return false;
       }
       debug.serverConnected = false;
+      const errMsg =
+        err instanceof Error && err.message
+          ? err.message
+          : i18n.t('ui.sanctuary.roomNotFoundError');
+      exitToSoloSanctuary(this, errMsg);
       return false;
     }
   }

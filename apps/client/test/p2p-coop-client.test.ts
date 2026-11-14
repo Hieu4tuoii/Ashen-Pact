@@ -222,6 +222,7 @@ describe('PeerJS WebRTC P2P Engine & BackgroundTicker', () => {
     expect(localSig.path).toBe('/peerjs');
     expect(localSig.secure).toBe(false);
     expect(localSig.debug).toBe(0);
+    expect(localSig.iceServers).toEqual([{ urls: 'stun:127.0.0.1:9123' }]);
 
     const withTurn = resolvePeerRuntimeOptions('', {
       VITE_TURN_URLS: 'turn:relay1.metered.ca:80,turns:relay1.metered.ca:443',
@@ -518,5 +519,53 @@ describe('PeerJS WebRTC P2P Engine & BackgroundTicker', () => {
     vi.advanceTimersByTime(16);
     expect(intervalDeltas).toEqual([16]);
     fallback.stop();
+  });
+
+  it('notifies connected clients with close code 4000 when Host browser tab triggers pagehide and cleans up listeners on leave', async () => {
+    vi.stubGlobal('Worker', undefined);
+    const listeners = new Map<string, Set<() => void>>();
+    const addSpy = vi.fn((ev: string, fn: () => void) => {
+      let set = listeners.get(ev);
+      if (!set) {
+        set = new Set();
+        listeners.set(ev, set);
+      }
+      set.add(fn);
+    });
+    const removeSpy = vi.fn((ev: string, fn: () => void) => {
+      listeners.get(ev)?.delete(fn);
+    });
+    vi.stubGlobal('window', {
+      location: { search: '' },
+      addEventListener: addSpy,
+      removeEventListener: removeSpy,
+    });
+
+    const hub = new FakePeerHub();
+    const hostRoom = await createPeerHostRoom({
+      requestedRoomCode: 'TABCLS',
+      hostDisplayName: 'Host',
+      peerFactory: hub.factory,
+    });
+    const clientRoom = await joinPeerClientRoom({
+      roomCode: 'TABCLS',
+      displayName: 'Joiner',
+      peerFactory: hub.factory,
+    });
+
+    let clientLeaveCode: number | null = null;
+    clientRoom.onLeave((code) => {
+      clientLeaveCode = code;
+    });
+    await flushMicrotasks(8);
+
+    for (const fn of listeners.get('pagehide') ?? []) {
+      fn();
+    }
+    await flushMicrotasks(8);
+
+    expect(clientLeaveCode).toBe(4000);
+    expect(listeners.get('pagehide')?.size ?? 0).toBe(0);
+    await hostRoom.leave(true);
   });
 });

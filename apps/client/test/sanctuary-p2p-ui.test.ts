@@ -44,6 +44,7 @@ import {
   bindCoopRoomHandlersImpl,
   connectCoopRoomImpl,
   fetchHostLanInfoImpl,
+  forceCoopReconnectImpl,
   getResolvedWsUrlImpl,
   updateHostInviteUrlImpl,
 } from '../src/scenes/game-scene/input-and-network.js';
@@ -319,6 +320,23 @@ describe('Sanctuary Online P2P Co-op Routing, Guild Drawer & GameScene Integrati
 
       expect(staleLeaveSpy).toHaveBeenCalledWith(true);
       expect(gs.room).toBeUndefined();
+
+      // 4. Failed P2P reconnect (Host closed room while client had 1006 drop) exits cleanly to Solo Sanctuary
+      startSpy.mockClear();
+      gs.init({ coopMode: 'join', coopBackend: 'p2p', roomId: 'GONE99', startInHub: true });
+      p2pMockState.joinPeerClientRoomImpl.mockRejectedValueOnce(
+        new Error('Không tìm thấy phòng Online "GONE99" hoặc Chủ phòng đã đóng phòng.'),
+      );
+      const reconnected = await forceCoopReconnectImpl.call(gs);
+      expect(reconnected).toBe(false);
+      expect(startSpy).toHaveBeenCalledWith(
+        'GameScene',
+        expect.objectContaining({
+          coopMode: 'solo',
+          startInHub: true,
+          disconnectReason: expect.stringContaining('GONE99'),
+        }),
+      );
     } finally {
       vi.unstubAllGlobals();
     }
