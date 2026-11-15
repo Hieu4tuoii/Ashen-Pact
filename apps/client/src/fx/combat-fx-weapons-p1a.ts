@@ -574,30 +574,29 @@ export function drawBatch1TransientShape(
     }
 
     case 'gale_cyclone_vortex': {
-      // Hollow 1:1 6-blade logarithmic wind shear spiral synchronized with fx_sh_vortex_gale
+      // 3 pointed spiral fillTaperedArcRibbon wind-blades at depth 26.6 (underActorGraphics, r_eye = 28px hollow)
+      // ZERO strokeCircle!
+      const targetGfx =
+        (g as unknown as { underActorGraphics?: Phaser.GameObjects.Graphics }).underActorGraphics ??
+        floorG;
       const ease = 1 - Math.pow(1 - progress, 2.7);
-      const r = s.radius * (0.24 + ease * 0.76);
-      floorG.lineStyle(3.0, 0x141019, alpha * 0.7);
-      floorG.strokeCircle(s.x, s.y, r);
-      floorG.lineStyle(1.9, 0x2dd4bf, alpha * 0.82);
-      floorG.strokeCircle(s.x, s.y, r);
-      for (let arm = 0; arm < 6; arm += 1) {
-        const baseA = (arm * Math.PI * 2) / 6 + progress * 4.2;
-        const innerR = r * 0.62;
-        const midR = r * 0.82;
-        const outerR = r * 0.98;
-        g.lineStyle(3.4, 0x141019, alpha * 0.78);
-        g.beginPath();
-        g.moveTo(s.x + Math.cos(baseA) * innerR, s.y + Math.sin(baseA) * innerR);
-        g.lineTo(s.x + Math.cos(baseA + 0.38) * midR, s.y + Math.sin(baseA + 0.38) * midR);
-        g.lineTo(s.x + Math.cos(baseA + 0.76) * outerR, s.y + Math.sin(baseA + 0.76) * outerR);
-        g.strokePath();
-        g.lineStyle(1.8, arm % 2 === 0 ? 0x5eead4 : 0xfffdf5, alpha * 0.92);
-        g.beginPath();
-        g.moveTo(s.x + Math.cos(baseA) * innerR, s.y + Math.sin(baseA) * innerR);
-        g.lineTo(s.x + Math.cos(baseA + 0.38) * midR, s.y + Math.sin(baseA + 0.38) * midR);
-        g.lineTo(s.x + Math.cos(baseA + 0.76) * outerR, s.y + Math.sin(baseA + 0.76) * outerR);
-        g.strokePath();
+      const span = 0.95;
+      for (let arm = 0; arm < 3; arm += 1) {
+        const baseA = (arm * Math.PI * 2) / 3 + progress * 5.2;
+        const armR = 28 + (s.radius - 28) * (0.35 + ease * 0.65);
+        fillTaperedArcRibbon(
+          targetGfx,
+          s.x,
+          s.y,
+          armR,
+          baseA,
+          baseA + span,
+          3.2 * (1 - progress * 0.35),
+          0x2dd4bf,
+          alpha * 0.9,
+          8,
+          1.8,
+        );
       }
       return true;
     }
@@ -701,11 +700,7 @@ export function drawBatch1TransientShape(
     case 'tether_em_yank': {
       const px = s.x2 ?? s.x;
       const py = s.y2 ?? s.y;
-      const ease = 1 - Math.pow(1 - progress, 2.7);
-      const contractR = s.radius * (1 - progress * 0.48);
-      const novaR = s.radius * (0.24 + ease * 0.76);
-
-      g.lineStyle(3.2, 0x0c0620, alpha * 0.78);
+      g.lineStyle(3.2, 0x141019, alpha * 0.78);
       g.beginPath();
       g.moveTo(px, py);
       g.lineTo(s.x, s.y);
@@ -716,10 +711,29 @@ export function drawBatch1TransientShape(
       g.lineTo(s.x, s.y);
       g.strokePath();
 
-      floorG.lineStyle(1.8, 0x38bdf8, alpha * 0.76);
-      floorG.strokeCircle(s.x, s.y, contractR);
-      floorG.lineStyle(2.0, 0xa855f7, alpha * 0.82);
-      floorG.strokeCircle(s.x, s.y, novaR);
+      // Snaps 4 inward fillTaperedArcRibbon magnetic jaws from ev.radius down inward (depth 26.6)
+      // ZERO strokeCircle!
+      const targetGfx =
+        (g as unknown as { underActorGraphics?: Phaser.GameObjects.Graphics }).underActorGraphics ??
+        floorG;
+      const jawR = s.radius * (1 - progress * 0.62);
+      const halfSpan = 0.32;
+      for (let k = 0; k < 4; k += 1) {
+        const midA = (k * Math.PI) / 2 + progress * 0.45;
+        fillTaperedArcRibbon(
+          targetGfx,
+          s.x,
+          s.y,
+          Math.max(12, jawR),
+          midA - halfSpan,
+          midA + halfSpan,
+          3.4 * (1 - progress * 0.45),
+          0xa855f7,
+          alpha * 0.92,
+          6,
+          1.8,
+        );
+      }
       return true;
     }
 

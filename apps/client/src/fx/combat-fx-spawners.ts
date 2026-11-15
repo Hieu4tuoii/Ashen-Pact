@@ -205,9 +205,10 @@ export function resolveProjectileRenderSpec(
     tint = 0xfef08a;
     scale = 1.2;
   } else if (params.weaponId === 'gale_smg_wind_blade' && !params.isStress) {
-    textureKey = 'proj_knight_sword_wave';
-    tint = 0x2dd4bf;
-    scale = 1.28;
+    textureKey = CUTOUT_KIT_ATLAS_KEY;
+    frameName = 'proj_gale_wind_blade';
+    tint = 0xffffff;
+    scale = 1 / 3;
   } else if (params.weaponId === 'thunder_hammer' && !params.isStress) {
     textureKey = CUTOUT_KIT_ATLAS_KEY;
     frameName = 'fx_thrown_thunder_hammer';

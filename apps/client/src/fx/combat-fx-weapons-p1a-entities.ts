@@ -11,6 +11,7 @@ import {
 import type Phaser from 'phaser';
 import { hexToNum, PALETTE } from '../art/palette.js';
 import { getWeaponV2OverlayState } from './combat-fx-weapons-v2.js';
+import { fillTaperedQuadraticBezier } from './tapered-ribbon-builder.js';
 
 /**
  * Syncs Batch-1 & Batch-2 weapon room entities (enemies with stuckArrows/parasiticThorns,
@@ -273,61 +274,46 @@ export function drawTetherStaffBeams(
     const nx = dist > 1e-3 ? -dy / dist : 0;
     const ny = dist > 1e-3 ? dx / dist : 1;
 
-    // 1. Chiaroscuro deep obsidian-indigo recessed channel + electric-violet plasma sheath + cyan wire + #FFFDF5 spine
-    g.lineStyle(5.8, 0x0c0620, 0.76);
-    g.beginPath();
-    g.moveTo(beam.x1, beam.y1);
-    g.lineTo(beam.x2, beam.y2);
-    g.strokePath();
+    // 1. fillTaperedQuadraticBezier beam (depth 44.0) with electric jitter
+    const jitter = Math.sin(clockSec * 28 + beam.id * 1.5) * 6.5;
+    const cx = (beam.x1 + beam.x2) * 0.5 + nx * jitter;
+    const cy = (beam.y1 + beam.y2) * 0.5 + ny * jitter;
+    fillTaperedQuadraticBezier(
+      g,
+      beam.x1,
+      beam.y1,
+      cx,
+      cy,
+      beam.x2,
+      beam.y2,
+      2.4,
+      3.8,
+      2.0,
+      0x38bdf8,
+      0.95,
+      8,
+      1.8,
+    );
 
-    g.lineStyle(3.8, hexToNum(PALETTE.ELECTRIC_VIOLET), 0.68);
-    g.beginPath();
-    g.moveTo(beam.x1, beam.y1);
-    g.lineTo(beam.x2, beam.y2);
-    g.strokePath();
-
-    g.lineStyle(2.2, hexToNum(PALETTE.CYAN_FROST), 0.96);
-    g.beginPath();
-    g.moveTo(beam.x1, beam.y1);
-    g.lineTo(beam.x2, beam.y2);
-    g.strokePath();
-
-    g.lineStyle(1.1, 0xfffdf5, 0.95);
-    g.beginPath();
-    g.moveTo(beam.x1, beam.y1);
-    g.lineTo(beam.x2, beam.y2);
-    g.strokePath();
-
-    // 2. Two tight counter-oscillating electric filaments
-    const segments = 7;
-    for (let strand = 0; strand < 2; strand += 1) {
-      const strandCol = strand === 0 ? 0xfacc15 : 0x7dd3fc;
-      const sign = strand === 0 ? 1 : -1;
-      g.lineStyle(1.4, strandCol, 0.9);
-      g.beginPath();
-      g.moveTo(beam.x1, beam.y1);
-      for (let s = 1; s < segments; s += 1) {
-        const t = s / segments;
-        const jitter =
-          Math.sin(clockSec * 34 + s * 2.1 + strand * 1.7 + beam.id) * 5.0 * sign;
-        g.lineTo(beam.x1 + dx * t + nx * jitter, beam.y1 + dy * t + ny * jitter);
+    // 2. 2 sliding #CFFAFE diamond pulses (P1 only)
+    const isLocalP1 = beam.ownerPlayerId === undefined || beam.ownerPlayerId === 1;
+    if (isLocalP1) {
+      for (let pIdx = 0; pIdx < 2; pIdx += 1) {
+        const t = (clockSec * 2.2 + pIdx * 0.5) % 1;
+        const u = 1 - t;
+        const px = u * u * beam.x1 + 2 * u * t * cx + t * t * beam.x2;
+        const py = u * u * beam.y1 + 2 * u * t * cy + t * t * beam.y2;
+        const dSize = 3.6;
+        g.fillStyle(0x141019, 0.9);
+        g.fillTriangle(px, py - dSize - 1.2, px + dSize + 1.2, py, px, py + dSize + 1.2);
+        g.fillTriangle(px, py - dSize - 1.2, px - dSize - 1.2, py, px, py + dSize + 1.2);
+        g.fillStyle(0xcffafe, 0.98);
+        g.fillTriangle(px, py - dSize, px + dSize, py, px, py + dSize);
+        g.fillTriangle(px, py - dSize, px - dSize, py, px, py + dSize);
       }
-      g.lineTo(beam.x2, beam.y2);
-      g.strokePath();
     }
 
-    // 3. Slicing plasma spark nodes traveling along the line
-    for (let sp = 0; sp < 3; sp += 1) {
-      const t = (clockSec * 2.8 + sp * 0.33 + beam.id * 0.17) % 1;
-      const sx = beam.x1 + dx * t;
-      const sy = beam.y1 + dy * t;
-      g.fillStyle(0xfacc15, 0.95);
-      g.fillCircle(sx, sy, 2.8);
-      g.fillStyle(0xfffdf5, 0.98);
-      g.fillCircle(sx, sy, 1.5);
-    }
-
-    // 4. Chiaroscuro Anchor Nodes at Player (x1, y1) and Target Anchor (x2, y2)
+    // 3. Anchor nodes at muzzle (x1, y1) and target (x2, y2) with zero strokeCircle
     const anchorColor =
       beam.targetKind === 'player'
         ? 0x38bdf8
@@ -338,23 +324,23 @@ export function drawTetherStaffBeams(
             : beam.targetKind === 'enemy'
               ? 0xf43f5e
               : 0xfacc15;
-    const anchorPulse = 9.5 + Math.sin(clockSec * 14 + beam.id) * 1.8;
+    const aSize = 5.5 + Math.sin(clockSec * 12 + beam.id) * 1.2;
 
-    g.fillStyle(0x0c0620, 0.92);
-    g.fillCircle(beam.x1, beam.y1, 5.8);
-    g.fillStyle(0x38bdf8, 0.96);
-    g.fillCircle(beam.x1, beam.y1, 3.8);
+    g.fillStyle(0x141019, 0.95);
+    g.fillTriangle(beam.x1, beam.y1 - 5.5, beam.x1 + 5.5, beam.y1, beam.x1, beam.y1 + 5.5);
+    g.fillTriangle(beam.x1, beam.y1 - 5.5, beam.x1 - 5.5, beam.y1, beam.x1, beam.y1 + 5.5);
+    g.fillStyle(0x38bdf8, 0.98);
+    g.fillTriangle(beam.x1, beam.y1 - 3.8, beam.x1 + 3.8, beam.y1, beam.x1, beam.y1 + 3.8);
+    g.fillTriangle(beam.x1, beam.y1 - 3.8, beam.x1 - 3.8, beam.y1, beam.x1, beam.y1 + 3.8);
 
-    g.lineStyle(2.8, 0x0c0620, 0.88);
-    g.strokeCircle(beam.x2, beam.y2, anchorPulse);
-    g.lineStyle(1.9, anchorColor, 0.96);
-    g.strokeCircle(beam.x2, beam.y2, anchorPulse);
-    g.fillStyle(0x0c0620, 0.95);
-    g.fillCircle(beam.x2, beam.y2, 5.8);
+    g.fillStyle(0x141019, 0.95);
+    g.fillTriangle(beam.x2, beam.y2 - aSize - 1.4, beam.x2 + aSize + 1.4, beam.y2, beam.x2, beam.y2 + aSize + 1.4);
+    g.fillTriangle(beam.x2, beam.y2 - aSize - 1.4, beam.x2 - aSize - 1.4, beam.y2, beam.x2, beam.y2 + aSize + 1.4);
     g.fillStyle(anchorColor, 0.98);
-    g.fillCircle(beam.x2, beam.y2, 4.0);
+    g.fillTriangle(beam.x2, beam.y2 - aSize, beam.x2 + aSize, beam.y2, beam.x2, beam.y2 + aSize);
+    g.fillTriangle(beam.x2, beam.y2 - aSize, beam.x2 - aSize, beam.y2, beam.x2, beam.y2 + aSize);
     g.fillStyle(0xfffdf5, 0.98);
-    g.fillCircle(beam.x2, beam.y2, 1.9);
+    g.fillCircle(beam.x2, beam.y2, 1.8);
   }
   return drawn;
 }
@@ -455,16 +441,14 @@ export function drawBatch1ActiveProjectiles(
     }
   }
 
-  // Gale SMG spin-up wind ribbons around player feet (1:1 circular top-down)
+  // Gale SMG personal speed buff renders as a subtle 2.12 : 1 foot wind-ring at (player.x, player.y + 12) (depth 15.0)
   const activeWep = player.weaponSlots[player.activeWeaponSlot ?? 0];
-  if (activeWep === 'gale_smg' && (player.fireHoldTimer ?? 0) > 0.25) {
-    const spinA = clockSec * 12;
-    g.lineStyle(1.5, 0x2dd4bf, 0.58);
-    g.beginPath();
-    g.arc(player.x, player.y + 4, 20, spinA, spinA + 1.6, false);
-    g.strokePath();
-    g.beginPath();
-    g.arc(player.x, player.y + 4, 23, spinA + Math.PI, spinA + Math.PI + 1.6, false);
-    g.strokePath();
+  if (activeWep === 'gale_smg' && ((player.fireHoldTimer ?? 0) > 0.2 || (player.moveSpeed ?? 0) > 160 || Math.hypot(player.vx, player.vy) > 80)) {
+    const rx = 18.0;
+    const ry = 18.0 / 2.12; // 8.49px => exact 2.12:1 ratio
+    g.lineStyle(2.4, 0x141019, 0.42);
+    g.strokeEllipse(player.x, player.y + 12, rx * 2, ry * 2);
+    g.lineStyle(1.4, 0x2dd4bf, 0.68);
+    g.strokeEllipse(player.x, player.y + 12, (rx - 1.2) * 2, (ry - 0.6) * 2);
   }
 }

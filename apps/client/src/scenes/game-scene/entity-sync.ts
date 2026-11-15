@@ -2,6 +2,7 @@ import {
   clamp,
   ENEMIES,
   ENEMY_SPAWN_WARMUP_SEC,
+  getSolarMiniSunPositions,
   i18n,
   LocalTransport,
   PLAYER_SLOT_COLORS,
@@ -18,8 +19,10 @@ import {
 import { hexToNum, PALETTE } from '../../art/palette.js';
 import { RIG_DEFS_BY_ID, VANGUARD_RIG_DEF } from '../../art/rig-defs.js';
 import { TextureBaker } from '../../art/texture-baker.js';
+import { CUTOUT_KIT_ATLAS_KEY } from '../../art/texture-baker-fx.js';
 import { getFreezeVisualTimeSec } from '../../core/visual-query.js';
 import { resolveProjectileRenderSpec } from '../../fx/combat-fx.js';
+import { tickPlayerOverheatVentPuffs } from '../../fx/combat-fx-weapons-v2.js';
 import { graphicsSettings } from '../../ui/graphics-settings.js';
 import { type GameScene, RIG_FOOT_OFFSET_Y } from '../GameScene.js';
 import { resolvePlayerNameplateSpec } from './interact-prompt.js';
@@ -111,6 +114,22 @@ export function syncSimulatedPlayersImpl(this: GameScene, dtSec: number): void {
   this.activeSimPlayerIds.clear();
   this.activeCoopPlayerIds.clear();
 
+  if (this.fx) {
+    const p = sim.player;
+    const pWeaponId = p.weaponSlots[p.activeWeaponSlot] ?? '';
+    const isOverheated = (p.overheatLockTimer ?? 0) > 0 || (p.weaponHeat ?? 0) >= 100;
+    tickPlayerOverheatVentPuffs(
+      this.fx,
+      p.id,
+      pWeaponId,
+      isOverheated,
+      p.x,
+      p.y - 12,
+      dtSec,
+      false,
+    );
+  }
+
   if (sim.stressTestActive) {
     // 1. Stress test simulated players
     for (let i = 0; i < sim.simulatedPlayers.length; i++) {
@@ -136,6 +155,20 @@ export function syncSimulatedPlayersImpl(this: GameScene, dtSec: number): void {
       rig.setMoveVelocity(sp.vx, sp.vy);
       rig.setAnimState('run');
       rig.update(dtSec);
+
+      if (this.fx) {
+        const isOverheated = (sp.overheatLockTimer ?? 0) > 0 || (sp.weaponHeat ?? 0) >= 100;
+        tickPlayerOverheatVentPuffs(
+          this.fx,
+          sp.id,
+          spWeaponId,
+          isOverheated,
+          pos.x,
+          pos.y - 12,
+          dtSec,
+          true,
+        );
+      }
     }
   } else {
     // 2. Co-op LAN teammates (sim.simulatedPlayers when not in stress test)
@@ -242,6 +275,20 @@ export function syncSimulatedPlayersImpl(this: GameScene, dtSec: number): void {
       ) {
         this.fx.spawnFrostBreath(pos.x, pos.y, entry.rig.getFacingSign());
       }
+
+      if (this.fx) {
+        const isOverheated = (cp.overheatLockTimer ?? 0) > 0 || (cp.weaponHeat ?? 0) >= 100;
+        tickPlayerOverheatVentPuffs(
+          this.fx,
+          cp.id,
+          cpWeaponId,
+          isOverheated,
+          pos.x,
+          pos.y - 12,
+          dtSec,
+          true,
+        );
+      }
     }
   }
 
@@ -259,6 +306,55 @@ export function syncSimulatedPlayersImpl(this: GameScene, dtSec: number): void {
       entry.emoteLabel.destroy();
       entry.emoteBg.destroy();
       this.coopPlayerRigs.delete(id);
+    }
+  }
+
+  syncSolarMiniSunsImpl.call(this, sim);
+}
+
+export function syncSolarMiniSunsImpl(
+  this: GameScene,
+  sim: ReturnType<LocalTransport['getSim']>,
+): void {
+  const activeKeys = new Set<string>();
+  const players = [sim.player, ...(sim.simulatedPlayers ?? [])];
+
+  for (let pIdx = 0; pIdx < players.length; pIdx++) {
+    const p = players[pIdx]!;
+    if (p.lifeState !== 'alive') continue;
+    const activeWeapon = p.weaponSlots[p.activeWeaponSlot] ?? '';
+    if (activeWeapon !== 'solar_archon_staff') continue;
+
+    const suns = getSolarMiniSunPositions(p);
+    const isTeammate = p.id !== sim.player.id;
+    const alpha = isTeammate ? 0.35 : 1.0;
+
+    for (let sIdx = 0; sIdx < suns.length; sIdx++) {
+      const sun = suns[sIdx]!;
+      const key = `${p.id}_${sIdx}`;
+      activeKeys.add(key);
+
+      let sprite = this.solarMiniSunSprites.get(key);
+      if (!sprite) {
+        sprite = this.add
+          .sprite(sun.x, sun.y, CUTOUT_KIT_ATLAS_KEY, 'fx_solar_mini_sun')
+          .setScale(1 / 3)
+          .setDepth(41.5);
+        this.solarMiniSunSprites.set(key, sprite);
+      } else {
+        sprite.setPosition(sun.x, sun.y);
+        sprite.setVisible(true);
+        sprite.setActive(true);
+      }
+      sprite.setAlpha(alpha);
+      sprite.setRotation(sun.angle);
+    }
+  }
+
+  for (const [key, sprite] of this.solarMiniSunSprites.entries()) {
+    if (!activeKeys.has(key)) {
+      sprite.setVisible(false);
+      sprite.setActive(false);
     }
   }
 }

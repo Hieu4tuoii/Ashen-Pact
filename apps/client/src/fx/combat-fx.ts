@@ -61,6 +61,7 @@ import {
   spawnShaderNovaImpl,
   spawnShaderSlashImpl,
 } from './combat-fx-spawners.js';
+import { resetPlayerOverheatVentPuffs } from './combat-fx-weapons-v2.js';
 
 export * from './combat-fx-pools.js';
 export * from './combat-fx-spawners.js';
@@ -191,6 +192,7 @@ export class CombatFxManager {
     this.lastHitSparkTimeByTargetId.clear();
     this.activePerimeterRings.length = 0;
     this.activeArcRibbons.length = 0;
+    resetPlayerOverheatVentPuffs();
   }
 
   public spawnShaderNova(

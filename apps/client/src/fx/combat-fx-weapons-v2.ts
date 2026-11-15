@@ -16,6 +16,10 @@ import {
   resolveMicroBarFeedbackSpec,
 } from '../scenes/game-scene/hud-micro-reload-bar.js';
 import type { CombatFxManager } from './combat-fx.js';
+import { CUTOUT_KIT_ATLAS_KEY } from '../art/texture-baker-fx.js';
+import { activateParticle } from './combat-fx-spawners.js';
+import { acquireParticleSlot } from './combat-fx-pools.js';
+import { fillTaperedQuadraticBezier } from './tapered-ribbon-builder.js';
 import {
   type Batch1WeaponVfxKind,
   drawBatch1ActiveProjectiles,
@@ -41,6 +45,64 @@ export * from './combat-fx-weapons-p1a.js';
 export * from './combat-fx-weapons-p1b.js';
 export * from './combat-fx-p1c.js';
 export * from './combat-fx-blessings-p1d.js';
+
+export const HEAT_VENT_WEAPON_IDS = [
+  'apprentice_staff',
+  'gale_smg',
+  'solar_archon_staff',
+  'tether_staff',
+  'focus_laser',
+] as const;
+
+export type HeatVentWeaponId = (typeof HEAT_VENT_WEAPON_IDS)[number];
+
+const OVERHEAT_VENT_INTERVAL_SEC = 0.18;
+const overheatVentAccByPlayer = new Map<number, number>();
+
+export function resetPlayerOverheatVentPuffs(): void {
+  overheatVentAccByPlayer.clear();
+}
+
+export function tickPlayerOverheatVentPuffs(
+  fx: CombatFxManager,
+  playerId: number,
+  weaponId: string,
+  overheated: boolean,
+  muzzleX: number,
+  muzzleY: number,
+  dtSec: number,
+  isTeammate: boolean,
+): void {
+  if (!overheated || !HEAT_VENT_WEAPON_IDS.includes(weaponId as HeatVentWeaponId)) {
+    overheatVentAccByPlayer.delete(playerId);
+    return;
+  }
+  let acc = (overheatVentAccByPlayer.get(playerId) ?? 0) + dtSec;
+  if (acc >= OVERHEAT_VENT_INTERVAL_SEC) {
+    acc -= OVERHEAT_VENT_INTERVAL_SEC;
+    const slot =
+      typeof fx.acquireParticleSlot === 'function'
+        ? fx.acquireParticleSlot()
+        : acquireParticleSlot.call(fx);
+    if (slot) {
+      activateParticle(slot, {
+        textureKey: CUTOUT_KIT_ATLAS_KEY,
+        frameName: 'fx_overheat_puff',
+        x: muzzleX,
+        y: muzzleY,
+        vx: 0,
+        vy: -22,
+        startScale: 1 / 3,
+        endScale: 1 / 3,
+        ttl: 0.24,
+        startAlpha: isTeammate ? 0.25 : 0.85,
+        depth: 42.0,
+        blendMode: 'NORMAL',
+      });
+    }
+  }
+  overheatVentAccByPlayer.set(playerId, acc);
+}
 
 export interface MagneticRivetPoint {
   id: number;
@@ -400,7 +462,7 @@ export function spawnTriElementalBeamVfx(
   fromY: number,
   toX: number,
   toY: number,
-  radius = 72,
+  radius = 36,
 ): void {
   const state = getWeaponV2OverlayState(sceneKey);
   pushShape(state, {
@@ -632,33 +694,30 @@ export function updateAndDrawWeaponV2Overlays(
       const dist = Math.hypot(dx, dy) || 1;
       const nx = -dy / dist;
       const ny = dx / dist;
-      const segs = 10;
-      g.lineStyle(6.0 * alpha, 0x141019, alpha * 0.82);
-      g.beginPath();
-      g.moveTo(s.x, s.y);
-      g.lineTo(s.x2, s.y2);
-      g.strokePath();
-      const strandCols = [0xf97316, 0x38bdf8, 0xc084fc] as const;
+      const targetRibbonGfx = fx?.weaponRibbonGraphics ?? g;
+      const strandCols = [0xf97316, 0x22d3ee, 0xfde047] as const;
       for (let st = 0; st < 3; st += 1) {
         const phaseOff = (st * Math.PI * 2) / 3;
-        g.lineStyle(2.1 * alpha, strandCols[st]!, alpha * 0.94);
-        g.beginPath();
-        g.moveTo(s.x, s.y);
-        for (let k = 1; k <= segs; k += 1) {
-          const u = k / segs;
-          const amp = Math.sin(u * Math.PI) * 7.5;
-          const wave = Math.sin(u * Math.PI * 4 - clockSec * 18 + phaseOff) * amp;
-          g.lineTo(s.x + dx * u + nx * wave, s.y + dy * u + ny * wave);
-        }
-        g.strokePath();
+        const amp = Math.sin(-clockSec * 16 + phaseOff + progress * 6) * 12.0;
+        const cx = (s.x + s.x2) * 0.5 + nx * amp;
+        const cy = (s.y + s.y2) * 0.5 + ny * amp;
+        fillTaperedQuadraticBezier(
+          targetRibbonGfx,
+          s.x,
+          s.y,
+          cx,
+          cy,
+          s.x2,
+          s.y2,
+          1.8,
+          2.6,
+          0.8,
+          strandCols[st]!,
+          alpha * 0.95,
+          8,
+          1.8,
+        );
       }
-      g.lineStyle(1.4 * alpha, 0xfffdf5, alpha);
-      g.beginPath();
-      g.moveTo(s.x, s.y);
-      g.lineTo(s.x2, s.y2);
-      g.strokePath();
-      floorG.lineStyle(2.0, 0xfacc15, alpha * 0.82);
-      floorG.strokeCircle(s.x2, s.y2, s.radius * (0.62 + progress * 0.38));
     } else if (s.kind === 'micro_blank' || s.kind === 'vent_pulse') {
       const r = s.radius * (0.55 + progress * 0.45);
       floorG.lineStyle(2.0, s.color, alpha * 0.75);

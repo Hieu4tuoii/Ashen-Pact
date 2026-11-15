@@ -197,6 +197,7 @@ export class GameScene extends Phaser.Scene {
     }
   >();
   public pingVisuals = new Map<number, Phaser.GameObjects.Text>();
+  public solarMiniSunSprites = new Map<string, Phaser.GameObjects.Sprite>();
   public enemyRigs = new Map<number, CutoutRig>();
   public propVisuals = new Map<number, PropVisual>();
   public projectileSprites = new Map<

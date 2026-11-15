@@ -27,6 +27,10 @@ import {
   renderEmeraldBoomerangOverlay,
   renderBerserkerGuillotineCorridor,
   spawnThunderHammerPillarFx,
+  HEAT_VENT_WEAPON_IDS,
+  tickPlayerOverheatVentPuffs,
+  renderFocusLaserRailgunShot,
+  spawnSolarSupernovaFx,
 } from '../src/fx/combat-fx-weapons-v2';
 import { PALETTE } from '../src/art/palette';
 import { createHeadlessFxManager } from './helpers/test-combat-fx';
@@ -308,10 +312,16 @@ describe('AP2-P1B.5 — Procedural VFX for 7 Batch-2 Weapons, ArtGallery 18 Weap
         540,
         266,
         52,
-        'fx_sh_arcane_sigil',
-        expect.objectContaining({ tint: 0xfef08a }),
+        'fx_sh_nova_magma',
+        expect.objectContaining({ tint: 0xf59e0b }),
       );
-      expect(scene.fx.spawnShaderNova).toHaveBeenCalledWith(540, 266, 120, 'fx_sh_nova_solar');
+      expect(scene.fx.spawnShaderNova).toHaveBeenCalledWith(
+        540,
+        266,
+        120,
+        'fx_sh_nova_solar',
+        expect.anything(),
+      );
       expect(scene.fx.spawnShaderNova).toHaveBeenCalledWith(380, 270, 56, 'fx_sh_geyser_plume');
       expect(scene.fx.spawnShaderNova).toHaveBeenCalledWith(
         420,
@@ -467,7 +477,8 @@ describe('AP2-P1B.5 — Procedural VFX for 7 Batch-2 Weapons, ArtGallery 18 Weap
       // Fallback when groundG omitted routes to g directly
       drawBatch2ActiveWeaponOverlays(g as never, sim, axePlayer, 0.5);
 
-      expect(g.strokeCircle).toHaveBeenCalledWith(sim.player.x, sim.player.y, 48);
+      // Cutout 2.0: Solar Archon Staff orbits 3 fx_solar_mini_sun sprites; zero connecting strokeCircle(x, y, 48)
+      expect(g.strokeCircle).not.toHaveBeenCalledWith(sim.player.x, sim.player.y, 48);
       expect(gGround.fillCircle).toHaveBeenCalledWith(420, 270, 110);
       expect(g.fillCircle).toHaveBeenCalledWith(420, 270, 110);
       for (const [, alpha] of gGround.fillStyle.mock.calls) {
@@ -850,6 +861,148 @@ describe('AP2-P1B.5 — Procedural VFX for 7 Batch-2 Weapons, ArtGallery 18 Weap
         gGroundTest as never,
       );
       expect(gGroundTest.strokePath).toHaveBeenCalled();
+    });
+  });
+
+  describe('4. Plan 2 Task 2: HEAT_VENT Weapons & Unified overheat_puff', () => {
+    function createRecordingGraphicsMock() {
+      const fillTriangleCalls: Array<{ x0: number; y0: number; x1: number; y1: number; x2: number; y2: number }> = [];
+      const fillStyleCalls: Array<{ color: number; alpha: number }> = [];
+      const strokeCircleCalls: Array<{ x: number; y: number; radius: number }> = [];
+      const lineStyleCalls: Array<{ width: number; color: number; alpha: number }> = [];
+      const mock = {
+        fillTriangleCalls,
+        fillStyleCalls,
+        strokeCircleCalls,
+        lineStyleCalls,
+        fillStyle(color: number, alpha = 1) {
+          fillStyleCalls.push({ color, alpha });
+          return mock;
+        },
+        fillTriangle(x0: number, y0: number, x1: number, y1: number, x2: number, y2: number) {
+          fillTriangleCalls.push({ x0, y0, x1, y1, x2, y2 });
+          return mock;
+        },
+        strokeCircle(x: number, y: number, radius: number) {
+          strokeCircleCalls.push({ x, y, radius });
+          return mock;
+        },
+        lineStyle(width: number, color: number, alpha = 1) {
+          lineStyleCalls.push({ width, color, alpha });
+          return mock;
+        },
+        beginPath: vi.fn().mockReturnThis(),
+        moveTo: vi.fn().mockReturnThis(),
+        lineTo: vi.fn().mockReturnThis(),
+        strokePath: vi.fn().mockReturnThis(),
+        arc: vi.fn().mockReturnThis(),
+        fillCircle: vi.fn().mockReturnThis(),
+        clear: vi.fn().mockReturnThis(),
+      };
+      return mock;
+    }
+
+    function createTestWeaponFxHarness() {
+      const lights = {
+        lastColorHex: '',
+        spawnTransientLight: vi.fn((_x: number, _y: number, _r: number, colorHex: string) => {
+          lights.lastColorHex = colorHex;
+        }),
+      };
+      const fx = createHeadlessFxManager(64);
+      (fx as unknown as { lighting?: typeof lights }).lighting = lights;
+      return { fx, lights };
+    }
+
+    it('emits fx_overheat_puff every 0.18s for all 5 HEAT_VENT weapons when overheated and scales ally alpha to 0.25', () => {
+      const { fx } = createTestWeaponFxHarness();
+      for (const wid of HEAT_VENT_WEAPON_IDS) {
+        tickPlayerOverheatVentPuffs(fx, 1, wid, true, 120, 120, 0.19, false);
+      }
+      const puffs = fx.particlePool.filter((p) => p.active && (p.frameName === 'fx_overheat_puff' || p.textureKey.includes('fx_overheat_puff')));
+      expect(puffs).toHaveLength(5);
+      expect(puffs[0]?.vy).toBeCloseTo(-22, 1);
+      expect(puffs[0]?.startAlpha).toBeCloseTo(0.85, 2);
+
+      // Verify ally alpha scales to 0.25
+      tickPlayerOverheatVentPuffs(fx, 2, 'focus_laser', true, 120, 120, 0.19, true);
+      const allyPuff = fx.particlePool.filter((p) => p.active && (p.frameName === 'fx_overheat_puff' || p.textureKey.includes('fx_overheat_puff'))).pop();
+      expect(allyPuff?.startAlpha).toBeCloseTo(0.25, 2);
+    });
+
+    it('renders focus_laser Railgun within ±14.0px with 2-frame #141019 inverted-ink flash and zero strokeCircle calls on solar_archon_staff', () => {
+      const gfx = createRecordingGraphicsMock();
+      renderFocusLaserRailgunShot(gfx as never, {
+        kind: 'focus_laser_railgun', playerId: 1, x1: 100, y1: 200, x2: 400, y2: 200, angle: 0, width: 28, damage: 90, alertTextVi: '',
+      }, 0, 1.0);
+      expect(gfx.fillStyleCalls.some((c) => c.color === 0x141019)).toBe(true);
+      const ys = gfx.fillTriangleCalls.flatMap((t) => [t.y0, t.y1, t.y2]);
+      expect(Math.max(...ys) - 200).toBeLessThanOrEqual(15.9);
+      expect(200 - Math.min(...ys)).toBeLessThanOrEqual(15.9);
+
+      // Frame 2+ renders dashed Cutout shock-rails at ±14.0px
+      const gfxFrame2 = createRecordingGraphicsMock();
+      renderFocusLaserRailgunShot(gfxFrame2 as never, {
+        kind: 'focus_laser_railgun', playerId: 1, x1: 100, y1: 200, x2: 400, y2: 200, angle: 0, width: 28, damage: 90, alertTextVi: '',
+      }, 2, 0.8);
+      const ysF2 = gfxFrame2.fillTriangleCalls.flatMap((t) => [t.y0, t.y1, t.y2]);
+      expect(ysF2.length).toBeGreaterThan(0);
+      expect(Math.max(...ysF2) - 200).toBeLessThanOrEqual(15.9);
+      expect(200 - Math.min(...ysF2)).toBeLessThanOrEqual(15.9);
+
+      // Verify ZERO strokeCircle calls on active solar_archon_staff
+      const gfxSolar = createRecordingGraphicsMock();
+      const floorSolar = createRecordingGraphicsMock();
+      drawBatch2ActiveWeaponOverlays(
+        gfxSolar as never,
+        {
+          projectiles: [],
+          magmaTrails: [],
+          solarFireZones: [],
+          flameFissures: [],
+          lightningPillars: [],
+        } as never,
+        {
+          id: 1,
+          x: 200,
+          y: 200,
+          lifeState: 'alive',
+          weaponSlots: ['solar_archon_staff'],
+          activeWeaponSlot: 0,
+        } as never,
+        0.5,
+        floorSolar as never,
+      );
+      expect(gfxSolar.strokeCircleCalls.filter((c) => c.radius === 48)).toHaveLength(0);
+      expect(floorSolar.strokeCircleCalls.filter((c) => c.radius === 48)).toHaveLength(0);
+    });
+
+    it('routes solar_supernova 120px burst and renders 8 corona lances reaching r = 120px on underActorGraphics (depth 26.6)', () => {
+      const { fx } = createTestWeaponFxHarness();
+      const underGfx = createRecordingGraphicsMock();
+      fx.underActorGraphics = underGfx as never;
+
+      const ev: Extract<SimEvent, { kind: 'solar_supernova' }> = {
+        kind: 'solar_supernova',
+        playerId: 1,
+        x: 300,
+        y: 250,
+        radius: 120,
+        damage: 180,
+      };
+
+      spawnSolarSupernovaFx(fx, ev, false);
+      const nova = fx.particlePool.find((p) => p.active && p.textureKey === 'fx_sh_nova_solar');
+      expect(nova).toBeDefined();
+
+      const lanceTriangles = underGfx.fillTriangleCalls;
+      expect(lanceTriangles.length).toBeGreaterThanOrEqual(8);
+      const maxDist = Math.max(...lanceTriangles.flatMap((t) => [
+        Math.hypot(t.x0 - 300, t.y0 - 250),
+        Math.hypot(t.x1 - 300, t.y1 - 250),
+        Math.hypot(t.x2 - 300, t.y2 - 250),
+      ]));
+      expect(maxDist).toBeCloseTo(120, 0);
     });
   });
 });

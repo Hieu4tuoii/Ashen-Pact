@@ -1,6 +1,5 @@
 import {
   clamp,
-  getSolarMiniSunPositions,
   type ArenaMap,
   type SimEvent,
   type SimPlayerState,
@@ -306,11 +305,14 @@ export function handleBatch2WeaponSimEvent(
           y: ev.y,
           radius: rad,
           count: ev.rayIndex ?? 0,
-          color: 0xfacc15,
+          color: 0xf59e0b,
           ttlSec: 0.26,
           maxTtlSec: 0.26,
         });
-        fx?.spawnShaderNova?.(ev.x, ev.y, rad, 'fx_sh_arcane_sigil', { tint: 0xfef08a });
+        const isTeammate = ev.playerId !== undefined && ev.playerId !== sim.player.id;
+        if (fx) {
+          routeCutoutBurstByRadius(fx, ev.x, ev.y, rad, 'fx_sh_nova_magma', { tint: 0xf59e0b, isTeammate, depth: 43.5 });
+        }
         fx?.spawnHitSparks(ev.x, ev.y, 0, { isCrit: true, element: 'burn', count: 6 });
         scene.lighting?.spawnTransientLight(ev.x, ev.y, 145, PALETTE.SOLAR_GOLD, 0.92, 0.3);
       }
@@ -322,21 +324,27 @@ export function handleBatch2WeaponSimEvent(
 
     case 'solar_supernova': {
       if (!isStress) {
-        const rad = ev.radius || 120;
-        pushP1BShape(state, {
-          kind: 'solar_supernova_blast',
-          x: ev.x,
-          y: ev.y,
-          x2: sim.player.x,
-          y2: sim.player.y,
-          radius: rad,
-          color: 0xfacc15,
-          ttlSec: 0.42,
-          maxTtlSec: 0.42,
-        });
-        fx?.spawnShaderNova?.(ev.x, ev.y, rad, 'fx_sh_nova_solar');
+        const isTeammate = ev.playerId !== undefined && ev.playerId !== sim.player.id;
+        if (fx) {
+          spawnSolarSupernovaFx(fx, ev, isTeammate);
+        } else {
+          const rad = ev.radius || 120;
+          pushP1BShape(state, {
+            kind: 'solar_supernova_blast',
+            x: ev.x,
+            y: ev.y,
+            x2: sim.player.x,
+            y2: sim.player.y,
+            radius: rad,
+            color: 0xfacc15,
+            ttlSec: 0.42,
+            maxTtlSec: 0.42,
+          });
+        }
         fx?.spawnFloorDecal('scorch', ev.x, ev.y, 1.35);
-        scene.lighting?.spawnTransientLight(ev.x, ev.y, 220, PALETTE.SOLAR_GOLD, 1.0, 0.55);
+        if (!isTeammate) {
+          scene.lighting?.spawnTransientLight(ev.x, ev.y, 220, PALETTE.SOLAR_GOLD, 1.0, 0.55);
+        }
       }
       if (allowStressSfx) {
         zzfx.play('solar_supernova', ev.x, scene.camFocusX, ev.y, scene.camFocusY);
@@ -547,37 +555,12 @@ export function drawBatch2ActiveWeaponOverlays(
     g.fillCircle(pl.x, pl.y, 2.2);
   }
 
-  // 5. Orbiting Solar Mini-Suns (1:1 circular orbit r=48) & Berserker Bloodlust ring
+  // 5. Orbiting Solar Mini-Suns (3 fx_solar_mini_sun sprites pooled at depth 41.5, zero connecting strokeCircle) & Berserker Bloodlust ring
   const activeWepId =
     player.weaponSlots[player.activeWeaponSlot ?? 0] ?? player.weaponSlots[0] ?? 'knight_sword';
   if (activeWepId === 'solar_archon_staff' && player.lifeState === 'alive') {
-    const suns = getSolarMiniSunPositions(player);
-    g.lineStyle(1.2, 0xfacc15, 0.34);
-    g.strokeCircle(player.x, player.y, 48);
-    for (let i = 0; i < suns.length; i += 1) {
-      const sun = suns[i]!;
-      g.fillStyle(0x26080d, 0.94);
-      g.fillCircle(sun.x, sun.y, 10.5);
-      for (let rIdx = 0; rIdx < 4; rIdx += 1) {
-        const ra = clockSec * 5.5 + (rIdx * Math.PI) / 2;
-        strokeSeg(
-          g,
-          1.8,
-          0xf97316,
-          0.92,
-          sun.x + Math.cos(ra) * 6.5,
-          sun.y + Math.sin(ra) * 6.5,
-          sun.x + Math.cos(ra) * 12.5,
-          sun.y + Math.sin(ra) * 12.5,
-        );
-      }
-      g.fillStyle(0xf97316, 0.96);
-      g.fillCircle(sun.x, sun.y, 8.0);
-      g.fillStyle(0xfacc15, 0.98);
-      g.fillCircle(sun.x, sun.y, 5.6);
-      g.fillStyle(0xfffdf5, 0.98);
-      g.fillCircle(sun.x, sun.y, 2.8);
-    }
+    // Rendered via entity-sync as 3 fx_solar_mini_sun sprites (12x12px, depth 41.5) at ±48.0px
+    // ZERO connecting strokeCircle!
   }
   if (activeWepId === 'berserker_axe' && (player.berserkerBloodlustStacks ?? 0) > 0) {
     const stacks = clamp(player.berserkerBloodlustStacks ?? 0, 1, 5);
@@ -684,27 +667,78 @@ export function drawBatch2TransientShape(
     case 'focus_laser_beam': {
       const x2 = s.x2 ?? s.x + 200;
       const y2 = s.y2 ?? s.y;
-      const w = Math.max(3.5, s.radius);
-      const darkCol = s.isFinale ? 0x071726 : 0x1c060b;
-      const midCol = s.isFinale ? 0x0284c7 : 0xef4444;
-      const hotCol = s.isFinale ? 0x38bdf8 : 0xfacc15;
-      strokeSeg(g, w + 3.6, darkCol, alpha * 0.84, s.x, s.y, x2, y2);
-      strokeSeg(g, w + 0.8, midCol, alpha * 0.88, s.x, s.y, x2, y2);
-      strokeSeg(g, w * 0.56, hotCol, alpha * 0.96, s.x, s.y, x2, y2);
-      strokeSeg(g, Math.max(1.4, w * 0.24), 0xfffdf5, alpha, s.x, s.y, x2, y2);
-      g.fillStyle(0xfffdf5, alpha * 0.94);
-      g.fillCircle(x2, y2, w * 0.65);
+      const dx = x2 - s.x;
+      const dy = y2 - s.y;
+      const len = Math.hypot(dx, dy) || 1;
+      const tx = dx / len;
+      const ty = dy / len;
+      const nx = -ty;
+      const ny = tx;
+
+      const heat = clamp(s.count !== undefined && s.count > 0 ? 80 : 30, 0, 100);
+      const coreW = 2.4 + (heat / 100) * 1.6;
+      const coreCol = heat < 40 ? 0x38bdf8 : heat < 80 ? 0xf59e0b : 0xf4f1ea;
+
+      // Ink outline
+      g.lineStyle(coreW + 2.8, 0x141019, alpha * 0.9);
+      g.beginPath();
+      g.moveTo(s.x, s.y);
+      g.lineTo(x2, y2);
+      g.strokePath();
+
+      // Core beam
+      g.lineStyle(coreW, coreCol, alpha * 0.96);
+      g.beginPath();
+      g.moveTo(s.x, s.y);
+      g.lineTo(x2, y2);
+      g.strokePath();
+
+      // Center bright needle
+      g.lineStyle(Math.max(1.0, coreW * 0.35), 0xffffff, alpha);
+      g.beginPath();
+      g.moveTo(s.x, s.y);
+      g.lineTo(x2, y2);
+      g.strokePath();
+
+      // 1 sliding 4-point diamond star on the hit rim at (x2, y2)
+      const starR = 5.2 + (heat / 100) * 2.5;
+      const starOutR = starR + 1.4;
+      g.fillStyle(0x141019, alpha * 0.95);
+      g.fillTriangle(x2 + tx * starOutR, y2 + ty * starOutR, x2 + nx * 3.0, y2 + ny * 3.0, x2 - tx * starOutR, y2 - ty * starOutR);
+      g.fillTriangle(x2 + tx * starOutR, y2 + ty * starOutR, x2 - tx * starOutR, y2 - ty * starOutR, x2 - nx * 3.0, y2 - ny * 3.0);
+      g.fillTriangle(x2 + nx * starOutR, y2 + ny * starOutR, x2 + tx * 3.0, y2 + ty * 3.0, x2 - nx * starOutR, y2 - ny * starOutR);
+      g.fillTriangle(x2 + nx * starOutR, y2 + ny * starOutR, x2 - nx * starOutR, y2 - ny * starOutR, x2 - tx * 3.0, y2 - ty * 3.0);
+
+      g.fillStyle(0xf4f1ea, alpha);
+      g.fillTriangle(x2 + tx * starR, y2 + ty * starR, x2 + nx * 2.0, y2 + ny * 2.0, x2 - tx * starR, y2 - ty * starR);
+      g.fillTriangle(x2 + tx * starR, y2 + ty * starR, x2 - tx * starR, y2 - ty * starR, x2 - nx * 2.0, y2 - ny * 2.0);
+      g.fillTriangle(x2 + nx * starR, y2 + ny * starR, x2 + tx * 2.0, y2 + ty * 2.0, x2 - nx * starR, y2 - ny * starR);
+      g.fillTriangle(x2 + nx * starR, y2 + ny * starR, x2 - nx * starR, y2 - ny * starR, x2 - tx * 2.0, y2 - ty * 2.0);
+
       return true;
     }
 
     case 'focus_laser_railgun': {
       const x2 = s.x2 ?? s.x + 520;
       const y2 = s.y2 ?? s.y;
-      const w = Math.max(8, s.radius * (1 - progress * 0.55));
-      strokeSeg(g, w + 4, 0x1c060b, alpha * 0.82, s.x, s.y, x2, y2);
-      strokeSeg(g, w * 0.82, 0xf97316, alpha * 0.88, s.x, s.y, x2, y2);
-      strokeSeg(g, w * 0.5, 0xfacc15, alpha * 0.96, s.x, s.y, x2, y2);
-      strokeSeg(g, w * 0.22, 0xfffdf5, alpha, s.x, s.y, x2, y2);
+      const frameIndex = Math.min(5, Math.floor(progress * 6));
+      renderFocusLaserRailgunShot(
+        g,
+        {
+          kind: 'focus_laser_railgun',
+          playerId: 1,
+          x1: s.x,
+          y1: s.y,
+          x2,
+          y2,
+          angle: Math.atan2(y2 - s.y, x2 - s.x),
+          width: s.radius || 28,
+          damage: 90,
+          alertTextVi: '',
+        },
+        frameIndex,
+        alpha,
+      );
       return true;
     }
 
@@ -791,71 +825,34 @@ export function drawBatch2TransientShape(
     }
 
     case 'solar_converge_burst': {
-      // Hollow 1:1 solar astrolabe convergence sigil (synchronized with fx_sh_arcane_sigil)
+      // 4 converging Cutout diamond darts (zero strokeCircle) + center gleam
       const r = s.radius * (0.58 + progress * 0.42);
-      floorG.lineStyle(2.8, 0x141019, alpha * 0.76);
-      floorG.strokeCircle(s.x, s.y, r);
-      floorG.lineStyle(1.9, 0xf97316, alpha * 0.88);
-      floorG.strokeCircle(s.x, s.y, r);
       for (let k = 0; k < 4; k += 1) {
         const a = (k * Math.PI) / 2 + progress * 0.6;
-        strokeSeg(
-          g,
-          3.0,
-          0x141019,
-          alpha * 0.8,
-          s.x + Math.cos(a) * (r * 0.74),
-          s.y + Math.sin(a) * (r * 0.74),
-          s.x + Math.cos(a) * (r * 1.05),
-          s.y + Math.sin(a) * (r * 1.05),
-        );
-        strokeSeg(
-          g,
-          1.6,
-          0xfffdf5,
-          alpha * 0.94,
-          s.x + Math.cos(a) * (r * 0.74),
-          s.y + Math.sin(a) * (r * 0.74),
-          s.x + Math.cos(a) * (r * 1.05),
-          s.y + Math.sin(a) * (r * 1.05),
-        );
+        const cos = Math.cos(a);
+        const sin = Math.sin(a);
+        const nx = -sin * 3.0;
+        const ny = cos * 3.0;
+        const inX = s.x + cos * (r * 0.65);
+        const inY = s.y + sin * (r * 0.65);
+        const outX = s.x + cos * (r * 1.05);
+        const outY = s.y + sin * (r * 1.05);
+        floorG.fillStyle(0x141019, alpha * 0.82);
+        floorG.fillTriangle(inX, inY, outX + nx, outY + ny, outX - nx, outY - ny);
+        floorG.fillStyle(0xf59e0b, alpha * 0.94);
+        floorG.fillTriangle(inX + cos * 2, inY + sin * 2, outX + nx * 0.6, outY + ny * 0.6, outX - nx * 0.6, outY - ny * 0.6);
       }
+      g.fillStyle(0xfffdf5, alpha * 0.96);
+      g.fillCircle(s.x, s.y, 4.2 * (1 - progress));
       return true;
     }
 
     case 'solar_supernova_blast': {
-      // Hollow 1:1 8-point celestial sunburst crown around outer shock-rim at depth 16
-      const r = s.radius * (0.56 + progress * 0.44);
-      floorG.lineStyle(3.2, 0x141019, alpha * 0.8);
-      floorG.strokeCircle(s.x, s.y, r);
-      floorG.lineStyle(2.1, 0xf97316, alpha * 0.9);
-      floorG.strokeCircle(s.x, s.y, r);
-      floorG.lineStyle(1.3, 0xfacc15, alpha * 0.78);
-      floorG.strokeCircle(s.x, s.y, r * 0.86);
-      for (let k = 0; k < 8; k += 1) {
-        const a = (k * Math.PI) / 4 + progress * 0.25;
-        const tipR = r * (k % 2 === 0 ? 1.07 : 1.01);
-        strokeSeg(
-          g,
-          3.4,
-          0x141019,
-          alpha * 0.82,
-          s.x + Math.cos(a) * (r * 0.84),
-          s.y + Math.sin(a) * (r * 0.84),
-          s.x + Math.cos(a) * tipR,
-          s.y + Math.sin(a) * tipR,
-        );
-        strokeSeg(
-          g,
-          1.8,
-          k % 2 === 0 ? 0xfffdf5 : 0xfacc15,
-          alpha * 0.94,
-          s.x + Math.cos(a) * (r * 0.84),
-          s.y + Math.sin(a) * (r * 0.84),
-          s.x + Math.cos(a) * tipR,
-          s.y + Math.sin(a) * tipR,
-        );
-      }
+      // 8 60Hz corona lances reaching r = 120.0px on underActorGraphics (depth 26.6, zero strokeCircle)
+      const targetGfx =
+        (g as unknown as { underActorGraphics?: Phaser.GameObjects.Graphics }).underActorGraphics ??
+        floorG;
+      renderSolarSupernovaCoronaLances(targetGfx, s.x, s.y, s.radius || 120.0, progress, alpha);
       return true;
     }
 
@@ -1255,5 +1252,191 @@ export function spawnThunderHammerPillarFx(
       (fx as unknown as { lighting?: { spawnTransientLight: (x: number, y: number, r: number, c: string, i: number, d: number) => void } }).lighting ??
       (fx as unknown as { sceneRef?: { lighting?: { spawnTransientLight: (x: number, y: number, r: number, c: string, i: number, d: number) => void } } }).sceneRef?.lighting;
     lighting?.spawnTransientLight(ev.x, ev.y, 195, PALETTE.CYAN_FROST, 1.0, 0.48);
+  }
+}
+
+export function renderFocusLaserRailgunShot(
+  ribbonGfx: Phaser.GameObjects.Graphics,
+  ev: Extract<SimEvent, { kind: 'focus_laser_railgun' }>,
+  frameIndex: number,
+  alpha: number,
+): void {
+  const dx = ev.x2 - ev.x1;
+  const dy = ev.y2 - ev.y1;
+  const len = Math.hypot(dx, dy) || 1;
+  const nx = -dy / len;
+  const ny = dx / len;
+  const tx = dx / len;
+  const ty = dy / len;
+
+  if (frameIndex === 0 || frameIndex === 1) {
+    // 2-frame #141019 inverted-ink flash (±14.0px tapered to ±4.0px at muzzle, #F4F1EA 4px center spine)
+    const mLeftX = ev.x1 + nx * 4.0;
+    const mLeftY = ev.y1 + ny * 4.0;
+    const mRightX = ev.x1 - nx * 4.0;
+    const mRightY = ev.y1 - ny * 4.0;
+
+    const eLeftX = ev.x2 + nx * 14.0;
+    const eLeftY = ev.y2 + ny * 14.0;
+    const eRightX = ev.x2 - nx * 14.0;
+    const eRightY = ev.y2 - ny * 14.0;
+
+    ribbonGfx.fillStyle(0x141019, alpha * 0.96);
+    ribbonGfx.fillTriangle(mLeftX, mLeftY, eLeftX, eLeftY, eRightX, eRightY);
+    ribbonGfx.fillTriangle(mLeftX, mLeftY, eRightX, eRightY, mRightX, mRightY);
+
+    // #F4F1EA 4px center spine (±2.0px)
+    const smLeftX = ev.x1 + nx * 2.0;
+    const smLeftY = ev.y1 + ny * 2.0;
+    const smRightX = ev.x1 - nx * 2.0;
+    const smRightY = ev.y1 - ny * 2.0;
+
+    const seLeftX = ev.x2 + nx * 2.0;
+    const seLeftY = ev.y2 + ny * 2.0;
+    const seRightX = ev.x2 - nx * 2.0;
+    const seRightY = ev.y2 - ny * 2.0;
+
+    ribbonGfx.fillStyle(0xf4f1ea, alpha);
+    ribbonGfx.fillTriangle(smLeftX, smLeftY, seLeftX, seLeftY, seRightX, seRightY);
+    ribbonGfx.fillTriangle(smLeftX, smLeftY, seRightX, seRightY, smRightX, smRightY);
+  } else {
+    // 4 frames of dashed Cutout shock-rails at ±14.0px
+    const step = 24;
+    const dashLen = 14;
+    for (const side of [-1, 1] as const) {
+      const railOffsetX = nx * (side * 14.0);
+      const railOffsetY = ny * (side * 14.0);
+
+      for (let d = 0; d < len; d += step) {
+        const d0 = d;
+        const d1 = Math.min(len, d + dashLen);
+
+        const p0x = ev.x1 + tx * d0 + railOffsetX;
+        const p0y = ev.y1 + ty * d0 + railOffsetY;
+        const p1x = ev.x1 + tx * d1 + railOffsetX;
+        const p1y = ev.y1 + ty * d1 + railOffsetY;
+
+        // Ink outline (width 2.6px => ±1.3px, staying within ±15.3px from axis)
+        const inW = 1.3;
+        ribbonGfx.fillStyle(0x141019, alpha * 0.88);
+        ribbonGfx.fillTriangle(
+          p0x + nx * inW, p0y + ny * inW,
+          p1x + nx * inW, p1y + ny * inW,
+          p1x - nx * inW, p1y - ny * inW,
+        );
+        ribbonGfx.fillTriangle(
+          p0x + nx * inW, p0y + ny * inW,
+          p1x - nx * inW, p1y - ny * inW,
+          p0x - nx * inW, p0y - ny * inW,
+        );
+
+        // Core fill (width 1.2px => ±0.6px)
+        const coreW = 0.6;
+        ribbonGfx.fillStyle(0xfacc15, alpha * 0.95);
+        ribbonGfx.fillTriangle(
+          p0x + nx * coreW, p0y + ny * coreW,
+          p1x + nx * coreW, p1y + ny * coreW,
+          p1x - nx * coreW, p1y - ny * coreW,
+        );
+        ribbonGfx.fillTriangle(
+          p0x + nx * coreW, p0y + ny * coreW,
+          p1x - nx * coreW, p1y - ny * coreW,
+          p0x - nx * coreW, p0y - ny * coreW,
+        );
+      }
+    }
+
+    // Residual core filament
+    const resW = 0.9;
+    ribbonGfx.fillStyle(0xf4f1ea, alpha * 0.65);
+    ribbonGfx.fillTriangle(
+      ev.x1 + nx * resW, ev.y1 + ny * resW,
+      ev.x2 + nx * resW, ev.y2 + ny * resW,
+      ev.x2 - nx * resW, ev.y2 - ny * resW,
+    );
+    ribbonGfx.fillTriangle(
+      ev.x1 + nx * resW, ev.y1 + ny * resW,
+      ev.x2 - nx * resW, ev.y2 - ny * resW,
+      ev.x1 - nx * resW, ev.y1 - ny * resW,
+    );
+  }
+}
+
+export function renderSolarSupernovaCoronaLances(
+  underGfx: Phaser.GameObjects.Graphics,
+  x: number,
+  y: number,
+  radius: number,
+  progress: number,
+  alpha: number,
+): void {
+  const innerR = 26.0;
+  const reachR = radius || 120.0;
+  for (let k = 0; k < 8; k += 1) {
+    const angle = (k * Math.PI) / 4 + progress * 0.25;
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    const nx = -sin;
+    const ny = cos;
+
+    const baseHalfW = 3.6;
+    const b1x = x + cos * innerR + nx * baseHalfW;
+    const b1y = y + sin * innerR + ny * baseHalfW;
+    const b2x = x + cos * innerR - nx * baseHalfW;
+    const b2y = y + sin * innerR - ny * baseHalfW;
+    const tipX = x + cos * reachR;
+    const tipY = y + sin * reachR;
+
+    // #141019 ink outline
+    underGfx.fillStyle(0x141019, alpha * 0.88);
+    const outPad = 1.2;
+    underGfx.fillTriangle(
+      b1x + nx * outPad, b1y + ny * outPad,
+      tipX, tipY,
+      b2x - nx * outPad, b2y - ny * outPad,
+    );
+
+    // #FACC15 / #F4F1EA core lance
+    underGfx.fillStyle(k % 2 === 0 ? 0xfacc15 : 0xf4f1ea, alpha * 0.95);
+    underGfx.fillTriangle(b1x, b1y, tipX - cos * 1.0, tipY - sin * 1.0, b2x, b2y);
+  }
+}
+
+export function spawnSolarSupernovaFx(
+  fx: CombatFxManager,
+  ev: Extract<SimEvent, { kind: 'solar_supernova' }>,
+  isTeammate: boolean,
+): void {
+  const rad = ev.radius || 120.0;
+  const ally = resolveAllyFxProfile(isTeammate ? 2 : 1, 1);
+  const dist = fx?.distanceToLocalPlayer ? fx.distanceToLocalPlayer(ev.x, ev.y) : Infinity;
+  const alpha = applyP1SafeHaloAlpha(ally.aoeAlpha, isTeammate, dist, rad);
+
+  routeCutoutBurstByRadius(fx, ev.x, ev.y, rad, 'fx_sh_nova_solar', {
+    isTeammate,
+    depth: 43.5,
+    tint: 0xfacc15,
+    alpha,
+  });
+
+  const sceneKey = (fx as unknown as { sceneRef?: object }).sceneRef ?? fx;
+  if (sceneKey) {
+    const state = getWeaponV2OverlayState(sceneKey);
+    pushP1BShape(state, {
+      kind: 'solar_supernova_blast',
+      x: ev.x,
+      y: ev.y,
+      radius: rad,
+      color: 0xfacc15,
+      ttlSec: 0.42,
+      maxTtlSec: 0.42,
+    });
+  }
+
+  const underGfx =
+    fx.underActorGraphics ??
+    (fx as unknown as { sceneRef?: { underActorGraphics?: Phaser.GameObjects.Graphics } }).sceneRef?.underActorGraphics;
+  if (underGfx) {
+    renderSolarSupernovaCoronaLances(underGfx, ev.x, ev.y, rad, 0, alpha);
   }
 }

@@ -141,8 +141,9 @@ describe('AP2-P1A.4 — Procedural VFX, Entity Indicators, Deployable/Tether Ren
 
     it('resolves projectile render specs for Batch-1 special projectiles', () => {
       const windBlade = resolveProjectileRenderSpec('gale_smg_wind_blade');
-      expect(windBlade.texture).toBe('proj_knight_sword_wave');
-      expect(windBlade.tint).toBe(0x2dd4bf);
+      expect(windBlade.textureKey).toBe('fx_cutout_kit_512');
+      expect(windBlade.frameName).toBe('proj_gale_wind_blade');
+      expect(windBlade.scale).toBeCloseTo(1 / 3, 4);
 
       const fragSub = resolveProjectileRenderSpec('frag_launcher_sub');
       expect(fragSub.texture).toBe('proj_player_pellet');
@@ -263,8 +264,9 @@ describe('AP2-P1A.4 — Procedural VFX, Entity Indicators, Deployable/Tether Ren
       ];
       const drawn = drawTetherStaffBeams(g as never, beams, 0.5);
       expect(drawn).toBe(5);
-      expect(g.strokePath).toHaveBeenCalledTimes(5 * 6);
-      expect(g.strokeCircle).toHaveBeenCalledTimes(5 * 2);
+      // Cutout 2.0: Tether Staff renders fillTaperedQuadraticBezier and diamond nodes via fillTriangle; zero strokeCircle
+      expect(g.fillTriangle).toHaveBeenCalled();
+      expect(g.strokeCircle).not.toHaveBeenCalled();
     });
   });
 
