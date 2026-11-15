@@ -2673,8 +2673,8 @@ if (process.env.VITEST) {
         scene.buildArenaTiles();
         const planB2 = buildRoomArchitecturePlanContract(sim.map, 'combat', 2, 3115);
         scene.biomeArchLive.setPlan(planB2);
-        expect(planB2.godRays.length).toBeGreaterThanOrEqual(2);
-        expect(planB2.godRays.every((r) => r.anchorX >= 0 && r.anchorX <= sim.map.width)).toBe(true);
+        expect(planB2.godRays).toHaveLength(0);
+        expect(scene.textures.exists('arch_b2_godray_shaft')).toBe(false);
 
         sim.currentBiome = 3;
         const planB3 = buildRoomArchitecturePlanContract(sim.map, 'combat', 3, 3115);
@@ -5112,15 +5112,7 @@ if (process.env.VITEST) {
             roomShape: shape,
           });
           const plan = buildRoomArchitecturePlan(map, 'combat', 2, 1337);
-          expect(plan.godRays.length).toBeGreaterThanOrEqual(2);
-          for (const ray of plan.godRays) {
-            const wallTx = Math.floor(ray.anchorX / TILE_SIZE);
-            const floorTy = Math.round(ray.anchorY / TILE_SIZE);
-            const wallTy = floorTy - 1;
-            expect(map.getTile(wallTx, wallTy)).toBe('wall');
-            expect(isExteriorVoidWallTile(map, wallTx, wallTy)).toBe(false);
-            expect(map.isSolidTile(wallTx, floorTy)).toBe(false);
-          }
+          expect(plan.godRays).toHaveLength(0);
         }
 
         // 3. voidMaskGraphics at depth 36.2 (0x0b090e inset by 6px along active walls) & dust mote void guard

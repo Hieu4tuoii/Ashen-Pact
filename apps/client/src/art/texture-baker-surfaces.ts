@@ -208,28 +208,43 @@ export function bakeSurfaces(scene: Phaser.Scene, scale: number): void {
     ctx.stroke();
   });
 
-  // 10. Ice
+  // 10. Ice (Packed Frosted Rime-Glacier)
   bakeCustomCanvas(scene, 'surface_ice', 32, 32, scale, (ctx) => {
     outlined(
       ctx,
       {
-        fill: '#4F7A8A',
-        shade: '#3D606E',
-        highlight: '#739EAE',
+        fill: '#31627D',
+        shade: '#2C5E7A',
+        highlight: '#3B7391',
         outlineWidth: 1.7,
       },
       (c) => traceRoundedRect(c, -14.5, -14.5, 29, 29, 5),
       { cx: 0, cy: 0, rx: 14, ry: 14 },
     );
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
     ctx.beginPath();
     ctx.moveTo(-8, 6);
     ctx.lineTo(6, -8);
     ctx.moveTo(-2, 8);
     ctx.lineTo(9, -3);
-    ctx.strokeStyle = '#6892A3';
-    ctx.lineWidth = 1.5;
-    ctx.lineCap = 'round';
+
+    ctx.globalAlpha = 0.50;
+    ctx.strokeStyle = '#6BA6C2';
+    ctx.lineWidth = 2.0;
     ctx.stroke();
+
+    ctx.globalAlpha = 0.68;
+    ctx.strokeStyle = '#1E3A5F';
+    ctx.lineWidth = 1.40;
+    ctx.stroke();
+
+    ctx.globalAlpha = 0.82;
+    ctx.strokeStyle = '#141019';
+    ctx.lineWidth = 0.95;
+    ctx.stroke();
+
+    ctx.globalAlpha = 1.0;
   });
 
   // 11. Chasm (Biome 1 Deep Root Abyss + Biome 2/3 variants)
@@ -392,16 +407,18 @@ function isOrganicShorelineSurface(surface: Exclude<SurfaceKind, 'none'>): boole
 export function drawSurfaceTile(
   ctx: CanvasRenderingContext2D,
   surface: SurfaceKind,
-  surfaceMask: number,
-  dx: number,
-  dy: number,
-  cellPx: number,
+  surfaceMask = 0,
+  dx = 0,
+  dy = 0,
+  cellPx = 32,
   variant = 0,
   biome: 0 | 1 | 2 | 3 = 1,
 ): void {
   if (surface === 'none') return;
 
-  const scale = cellPx / 32;
+  const scale = Number.isFinite(cellPx) && cellPx > 0 ? cellPx / 32 : 1;
+  const targetDx = Number.isFinite(dx) ? dx : 0;
+  const targetDy = Number.isFinite(dy) ? dy : 0;
   const v = ((variant % 8) + 8) % 8;
   const vShift = (v - 3.5) * 1.1;
   const hasN = (surfaceMask & AUTOTILE_NORTH) !== 0;
@@ -410,7 +427,7 @@ export function drawSurfaceTile(
   const hasW = maskHas(surfaceMask, AUTOTILE_WEST);
 
   ctx.save();
-  ctx.translate(dx, dy);
+  ctx.translate(targetDx, targetDy);
   ctx.scale(scale, scale);
 
   if (surface === 'lava') {
@@ -535,11 +552,13 @@ export function drawSurfaceTile(
     traceOrganicPoolPath(ctx, surfaceMask, 2.4);
     ctx.clip();
 
-    // Seamless glacial crystal base: uniform #3B7290 border tone with soft interior #2C5E7A / #4889A6 depth
-    ctx.fillStyle = '#3B7290';
+    // 1. Packed Frosted Rime-Glacier opaque base (#31627D, globalAlpha = 1.0)
+    ctx.globalAlpha = 1.0;
+    ctx.fillStyle = '#31627D';
     ctx.fillRect(0, 0, 32, 32);
+
+    // 2. Deep recess pocket (#2C5E7A, globalAlpha = 1.0)
     ctx.fillStyle = '#2C5E7A';
-    ctx.globalAlpha = 0.28;
     ctx.beginPath();
     ctx.ellipse(
       14 + ((v % 3) - 1) * 1.3,
@@ -551,22 +570,10 @@ export function drawSurfaceTile(
       Math.PI * 2,
     );
     ctx.fill();
-    ctx.fillStyle = '#4889A6';
-    ctx.beginPath();
-    ctx.ellipse(
-      18 - ((v % 3) - 1) * 1.2,
-      17 - (((v >> 1) % 3) - 1) * 1.2,
-      8.5,
-      7.0,
-      -0.15 * ((v % 3) - 1),
-      0,
-      Math.PI * 2,
-    );
-    ctx.fill();
 
-    // Subtle sub-surface frost sheen (#7DD3FC) and polygonal crystalline facet (#BAE6FD)
-    ctx.fillStyle = '#7DD3FC';
-    ctx.globalAlpha = 0.16;
+    // 3. Asymmetric matte slab (#3B7391, globalAlpha = 0.55)
+    ctx.fillStyle = '#3B7391';
+    ctx.globalAlpha = 0.55;
     ctx.beginPath();
     ctx.moveTo(2 + (v % 4), 18 - (v % 3));
     ctx.lineTo(15 + vShift, 4 + (v % 4));
@@ -575,17 +582,7 @@ export function drawSurfaceTile(
     ctx.closePath();
     ctx.fill();
 
-    ctx.fillStyle = '#BAE6FD';
-    ctx.globalAlpha = 0.18;
-    ctx.beginPath();
-    ctx.moveTo(6 + ((v * 3) % 6), 5 + (v % 3));
-    ctx.lineTo(19 + (v % 4), 7 + ((v * 2) % 4));
-    ctx.lineTo(16 - (v % 3), 17 + (v % 3));
-    ctx.lineTo(7 + (v % 2), 14 - (v % 2));
-    ctx.closePath();
-    ctx.fill();
-
-    // Continuous Voronoi pressure-crack network meeting at connected edge midpoints (16) and terminating inside exposed rims
+    // 4. Continuous 3-pass Voronoi pressure-crack network meeting at connected edge midpoints (16)
     const nx1 = 10 + ((v * 3) % 6);
     const ny1 = 10 + ((v * 5) % 5);
     const nx2 = 22 - ((v * 3) % 5);
@@ -595,51 +592,64 @@ export function drawSurfaceTile(
     const northY = hasN ? 0 : 6 + ((v >> 1) % 3);
     const southY = hasS ? 32 : 26 - ((v >> 1) % 3);
 
-    ctx.globalAlpha = 0.52;
-    ctx.strokeStyle = '#1E3A5F';
-    ctx.lineWidth = 1.15;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
-    ctx.beginPath();
-    ctx.moveTo(westX, 16);
-    ctx.lineTo(nx1, ny1);
-    ctx.lineTo(nx2, ny2);
-    ctx.lineTo(eastX, 16);
-    if ((v & 1) === 0) {
-      ctx.moveTo(nx1, ny1);
-      ctx.lineTo(16, northY);
-      ctx.moveTo(nx2, ny2);
-      ctx.lineTo(16, southY);
-    } else {
-      ctx.moveTo(nx2, ny2);
-      ctx.lineTo(16, northY);
-      ctx.moveTo(nx1, ny1);
-      ctx.lineTo(16, southY);
-    }
-    ctx.stroke();
 
-    ctx.globalAlpha = 0.65;
-    ctx.strokeStyle = '#E0F2FE';
-    ctx.lineWidth = 0.75;
-    ctx.beginPath();
-    ctx.moveTo(westX, 15.3);
-    ctx.lineTo(nx1, ny1 - 0.7);
-    ctx.lineTo(nx2, ny2 - 0.7);
-    ctx.lineTo(eastX, 15.3);
-    ctx.stroke();
-    ctx.restore();
+    const drawFissurePath = () => {
+      ctx.beginPath();
+      ctx.moveTo(westX, 16);
+      ctx.lineTo(nx1, ny1);
+      ctx.lineTo(nx2, ny2);
+      ctx.lineTo(eastX, 16);
+      if ((v & 1) === 0) {
+        ctx.moveTo(nx1, ny1);
+        ctx.lineTo(16, northY);
+        ctx.moveTo(nx2, ny2);
+        ctx.lineTo(16, southY);
+      } else {
+        ctx.moveTo(nx2, ny2);
+        ctx.lineTo(16, northY);
+        ctx.moveTo(nx1, ny1);
+        ctx.lineTo(16, southY);
+      }
+      ctx.stroke();
+    };
+
+    // Pass 1: #6BA6C2 2.0px @ 0.50
+    ctx.globalAlpha = 0.50;
+    ctx.strokeStyle = '#6BA6C2';
+    ctx.lineWidth = 2.0;
+    drawFissurePath();
+
+    // Pass 2: #1E3A5F 1.40px @ 0.68
+    ctx.globalAlpha = 0.68;
+    ctx.strokeStyle = '#1E3A5F';
+    ctx.lineWidth = 1.40;
+    drawFissurePath();
+
+    // Pass 3: #141019 0.95px @ 0.82
+    ctx.globalAlpha = 0.82;
+    ctx.strokeStyle = '#141019';
+    ctx.lineWidth = 0.95;
+    drawFissurePath();
+
+    ctx.restore(); // Close inner save (clip)
 
     if (surfaceMask !== 15) {
       ctx.save();
       traceExposedOrganicShorelineRim(ctx, surfaceMask, 2.4);
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
+      ctx.globalAlpha = 1.0;
+      ctx.strokeStyle = '#141019';
+      ctx.lineWidth = 3.2;
+      ctx.stroke();
       ctx.strokeStyle = '#CFE8EE';
-      ctx.lineWidth = 2.0;
+      ctx.lineWidth = 1.7;
       ctx.stroke();
       ctx.restore();
     }
-    ctx.restore();
+    ctx.restore(); // Close outer save (translate/scale)
     return;
   }
 

@@ -2,7 +2,6 @@ import {
   type ArenaMap,
   type RoomType,
   SeededRandom,
-  TILE_SIZE,
 } from '@ashen-pact/shared';
 import {
   BiomeArchitectureLiveLayer,
@@ -931,61 +930,6 @@ export function buildRoomArchitecturePlan(
         }
       }
     }
-
-    // 2-3 diagonal (-135 deg) God-ray light shafts anchored to active North perimeter wall tiles
-    const resolveRayAnchor = (
-      baseTx: number,
-    ): { anchorX: number; anchorY: number } | null => {
-      const scaledTx =
-        baseTx <= map.cols - 3
-          ? baseTx
-          : Math.max(2, Math.min(map.cols - 3, Math.round((baseTx / 36) * map.cols)));
-      const wall = resolvePerimeterWallTileNear(map, scaledTx, 'N');
-      if (
-        wall.ty + 1 < map.rows &&
-        map.getTile(wall.tx, wall.ty) === 'wall' &&
-        !isExteriorVoidWallTile(map, wall.tx, wall.ty) &&
-        !map.isSolidTile(wall.tx, wall.ty + 1)
-      ) {
-        return {
-          anchorX: Math.min((map.cols - 2) * TILE_SIZE, (wall.tx + 0.5) * TILE_SIZE),
-          anchorY: (wall.ty + 1) * TILE_SIZE,
-        };
-      }
-      return null;
-    };
-
-    const rayCandidates: ReadonlyArray<{
-      baseTx: number;
-      widthU: number;
-      lengthU: number;
-      maxAlpha: number;
-      enabled: boolean;
-    }> = [
-      { baseTx: 10, widthU: 76, lengthU: 250, maxAlpha: 0.055, enabled: true },
-      { baseTx: 18, widthU: 84, lengthU: 270, maxAlpha: 0.055, enabled: true },
-      {
-        baseTx: 25,
-        widthU: 68,
-        lengthU: 230,
-        maxAlpha: 0.05,
-        enabled: selectedMotifs.includes('glacial_columns') || rng.chance(0.5),
-      },
-    ];
-    for (const rc of rayCandidates) {
-      if (!rc.enabled) continue;
-      const anchor = resolveRayAnchor(rc.baseTx);
-      if (anchor) {
-        godRays.push({
-          anchorX: anchor.anchorX,
-          anchorY: anchor.anchorY,
-          angleDeg: -135,
-          widthU: rc.widthU,
-          lengthU: rc.lengthU,
-          maxAlpha: rc.maxAlpha,
-        });
-      }
-    }
   } else if (biome === 3) {
     // Biome 3 (Lò Rèn Dung Nham): 8-12 Tooth Brass Wall Gears, Flanged Steam Pipes, Forge Anvil (strictly on pillar) & Grated Heat Channels
     const gearCols = selectedMotifs.includes('brass_gears')
@@ -1227,4 +1171,13 @@ export function buildRoomArchitecturePlan(
     },
   };
 }
+
+export function buildBiomeArchitecturePlan(
+  map: ArenaMap,
+  roomType: RoomType = 'combat',
+  seed = 1337,
+): RoomArchitecturePlan {
+  return buildRoomArchitecturePlan(map, roomType, map.biome, seed);
+}
+
 

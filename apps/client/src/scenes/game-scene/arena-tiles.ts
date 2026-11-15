@@ -645,14 +645,14 @@ function isSameSurfaceFamilyForTile(map: ArenaMap, a: SurfaceKind, b: SurfaceKin
   return false;
 }
 
-function resolveSurfaceShorelineColors(
+export function resolveSurfaceShorelineColors(
   surface: Exclude<SurfaceKind, 'none' | 'chasm' | 'conveyor'>,
 ): { outerBank: string; innerLip: string } {
   switch (surface) {
     case 'lava':
       return { outerBank: '#1F1614', innerLip: '#EA580C' };
     case 'ice':
-      return { outerBank: '#3B7290', innerLip: '#CFE8EE' };
+      return { outerBank: '#31627D', innerLip: '#CFE8EE' };
     case 'water':
       return { outerBank: '#263B52', innerLip: '#3E6282' };
     case 'electrified_water':

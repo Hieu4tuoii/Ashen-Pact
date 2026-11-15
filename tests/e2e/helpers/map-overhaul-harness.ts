@@ -1722,7 +1722,7 @@ export function drawSurfaceTileContract(
       ctx.stroke();
       ctx.restore();
     }
-  } else if (surface === 'ice' && !colors.has('#E0F2FE') && !colors.has('#BAE6FD')) {
+  } else if (surface === 'ice' && !colors.has('#E0F2FE') && !colors.has('#BAE6FD') && !colors.has('#31627D')) {
     ctx.save();
     traceOrganicPoolPathContract(ctx, surfaceMask, 2.4);
     ctx.clip();
@@ -2324,7 +2324,6 @@ export function enhanceBiomeArchitectureLiveLayerContract(
       const s = map.surfaces[i]!;
       if (
         s === 'lava' ||
-        s === 'ice' ||
         s === 'water' ||
         s === 'electrified_water' ||
         s === 'poison_swamp' ||
@@ -2361,11 +2360,6 @@ export function enhanceBiomeArchitectureLiveLayerContract(
             const r = 2.0 + 1.2 * (0.5 + 0.5 * Math.sin(phase));
             surfaceGraphics.fillStyle(0xfacc15, 0.78);
             surfaceGraphics.fillCircle(wx + Math.sin(phase) * 4, wy + Math.cos(phase) * 4, r);
-          } else if (surf === 'ice') {
-            const glintR = 1.5 + Math.abs(Math.sin(phase * 1.3)) * 1.8;
-            surfaceGraphics.lineStyle(1.3, 0xe0f2fe, 0.82);
-            surfaceGraphics.lineBetween(wx - glintR, wy, wx + glintR, wy);
-            surfaceGraphics.lineBetween(wx, wy - glintR, wx, wy + glintR);
           } else if (surf === 'water') {
             const ripR = 3.0 + ((elapsedSec * 4 + tx + ty) % 5);
             surfaceGraphics.lineStyle(1.1, 0x7dd3fc, 0.55);

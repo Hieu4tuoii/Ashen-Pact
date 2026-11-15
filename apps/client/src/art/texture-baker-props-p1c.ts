@@ -57,9 +57,9 @@ export function bakeP1CProps(scene: Phaser.Scene, scale: number): void {
     outlined(
       ctx,
       {
-        fill: PALETTE.AZURE_CORE,
-        shade: PALETTE.COBALT_SHADE,
-        highlight: PALETTE.ICE_WHITE,
+        fill: '#356D8E',
+        shade: '#264E66',
+        highlight: '#356D8E',
         material: 'crystal',
         outlineWidth: 2.5,
       },
@@ -76,17 +76,26 @@ export function bakeP1CProps(scene: Phaser.Scene, scale: number): void {
       { cx: 0, cy: -1, rx: 12, ry: 14 },
     );
 
-    // Internal refraction facet & diamond cryo-rune core
-    ctx.fillStyle = PALETTE.CYAN_FROST;
+    // < 15% #CFE8EE top crest with PALETTE.ICE_WHITE apex highlight
+    ctx.fillStyle = '#CFE8EE';
     tracePolygon(ctx, [
-      { x: 0, y: -14 },
-      { x: 7, y: -7 },
-      { x: 0, y: -1 },
-      { x: -7, y: -7 },
+      { x: 0, y: -16 },
+      { x: 5, y: -12 },
+      { x: 0, y: -8 },
+      { x: -5, y: -12 },
     ]);
     ctx.fill();
 
-    ctx.fillStyle = PALETTE.ICE_WHITE;
+    ctx.strokeStyle = PALETTE.ICE_WHITE;
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(-2, -14);
+    ctx.lineTo(0, -16);
+    ctx.lineTo(2, -14);
+    ctx.stroke();
+
+    // Recessed core & diamond cryo-rune
+    ctx.fillStyle = '#264E66';
     ctx.strokeStyle = PALETTE.INK_DARK;
     ctx.lineWidth = 1.5;
     tracePolygon(ctx, [
@@ -98,12 +107,9 @@ export function bakeP1CProps(scene: Phaser.Scene, scale: number): void {
     ctx.fill();
     ctx.stroke();
 
-    ctx.strokeStyle = PALETTE.ICE_WHITE;
+    ctx.strokeStyle = '#264E66';
     ctx.lineWidth = 1.6;
     ctx.beginPath();
-    ctx.moveTo(-9, -8);
-    ctx.lineTo(0, -15);
-    ctx.lineTo(9, -8);
     ctx.moveTo(-10, 3);
     ctx.lineTo(-5, 1);
     ctx.moveTo(10, 3);
@@ -163,9 +169,9 @@ export function bakeP1CProps(scene: Phaser.Scene, scale: number): void {
     outlined(
       ctx,
       {
-        fill: PALETTE.AZURE_CORE,
-        shade: PALETTE.COBALT_SHADE,
-        highlight: PALETTE.ICE_WHITE,
+        fill: '#356D8E',
+        shade: '#264E66',
+        highlight: '#356D8E',
         material: 'crystal',
         outlineWidth: 2.6,
       },
@@ -182,12 +188,30 @@ export function bakeP1CProps(scene: Phaser.Scene, scale: number): void {
       { cx: 0, cy: -2, rx: 11, ry: 15 },
     );
 
-    // Charged prism core & facet ridges
+    // < 15% #CFE8EE top crest with PALETTE.ICE_WHITE apex highlight
+    ctx.fillStyle = '#CFE8EE';
+    tracePolygon(ctx, [
+      { x: 0, y: -18 },
+      { x: 5, y: -13 },
+      { x: 0, y: -9 },
+      { x: -5, y: -13 },
+    ]);
+    ctx.fill();
+
+    ctx.strokeStyle = PALETTE.ICE_WHITE;
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(-2, -16);
+    ctx.lineTo(0, -18);
+    ctx.lineTo(2, -16);
+    ctx.stroke();
+
+    // Recessed core & facet ridges
     outlined(
       ctx,
       {
-        fill: PALETTE.ICE_WHITE,
-        shade: PALETTE.CYAN_FROST,
+        fill: '#264E66',
+        shade: PALETTE.ABYSS_BLUE,
         outlineWidth: 1.7,
       },
       (c) =>
@@ -200,11 +224,9 @@ export function bakeP1CProps(scene: Phaser.Scene, scale: number): void {
       { cx: 0, cy: 0, rx: 6, ry: 8 },
     );
 
-    ctx.strokeStyle = PALETTE.ICE_WHITE;
+    ctx.strokeStyle = '#264E66';
     ctx.lineWidth = 1.7;
     ctx.beginPath();
-    ctx.moveTo(0, -17);
-    ctx.lineTo(0, -8);
     ctx.moveTo(-10, -4);
     ctx.lineTo(-6, 0);
     ctx.moveTo(10, -4);
@@ -244,9 +266,9 @@ export function bakeP1CProps(scene: Phaser.Scene, scale: number): void {
     outlined(
       ctx,
       {
-        fill: PALETTE.CYAN_FROST,
-        shade: PALETTE.AZURE_CORE,
-        highlight: PALETTE.ICE_WHITE,
+        fill: '#356D8E',
+        shade: '#264E66',
+        highlight: '#356D8E',
         material: 'crystal',
         outlineWidth: 2.5,
       },
@@ -262,8 +284,26 @@ export function bakeP1CProps(scene: Phaser.Scene, scale: number): void {
       { cx: 1, cy: 0, rx: 15, ry: 10 },
     );
 
-    // 3. Glowing cryo diamond & frost-wake slipstreams
-    ctx.fillStyle = PALETTE.ICE_WHITE;
+    // < 15% #CFE8EE leading crest with PALETTE.ICE_WHITE apex highlight
+    ctx.fillStyle = '#CFE8EE';
+    tracePolygon(ctx, [
+      { x: 10, y: -4 },
+      { x: 16, y: 0 },
+      { x: 10, y: 4 },
+      { x: 8, y: 0 },
+    ]);
+    ctx.fill();
+
+    ctx.strokeStyle = PALETTE.ICE_WHITE;
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(13, -2);
+    ctx.lineTo(16, 0);
+    ctx.lineTo(13, 2);
+    ctx.stroke();
+
+    // 3. Recessed cryo diamond
+    ctx.fillStyle = '#264E66';
     tracePolygon(ctx, [
       { x: 2, y: -5 },
       { x: 10, y: 0 },
@@ -272,7 +312,7 @@ export function bakeP1CProps(scene: Phaser.Scene, scale: number): void {
     ]);
     ctx.fill();
 
-    ctx.strokeStyle = PALETTE.ICE_WHITE;
+    ctx.strokeStyle = '#264E66';
     ctx.lineWidth = 1.9;
     ctx.beginPath();
     ctx.moveTo(-17, -6);
@@ -312,35 +352,57 @@ export function bakeP1CProps(scene: Phaser.Scene, scale: number): void {
     ctx.stroke();
   });
 
-  // 3. Biome 2 Toy: sliding_ice_block
+  // 3. Biome 2 Toy: sliding_ice_block (Matte Rime-Glacier)
   bakeCustomCanvas(scene, 'prop_sliding_ice_block', 38, 38, scale, (ctx) => {
     outlined(
       ctx,
       {
-        fill: PALETTE.AZURE_CORE,
-        shade: PALETTE.COBALT_SHADE,
-        highlight: PALETTE.CYAN_FROST,
-        outlineWidth: 2.5,
+        fill: '#3B7391',
+        shade: '#264E66',
+        highlight: '#3B7391',
+        outlineWidth: 2.2,
       },
       (c) => traceRoundedRect(c, -14, -14, 28, 28, 5),
       { cx: 0, cy: 0, rx: 14, ry: 14 },
     );
-    outlined(
-      ctx,
-      {
-        fill: PALETTE.ICE_WHITE,
-        shade: PALETTE.CYAN_FROST,
-        outlineWidth: 1.6,
-      },
-      (c) =>
-        tracePolygon(c, [
-          { x: 0, y: -7 },
-          { x: 7, y: 0 },
-          { x: 0, y: 7 },
-          { x: -7, y: 0 },
-        ]),
-      { cx: 0, cy: 0, rx: 7, ry: 7 },
-    );
+
+    // Recessed directional cross-chevron (zero 45° ICE_WHITE mirror slash)
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = '#264E66';
+    ctx.lineWidth = 2.2;
+    ctx.beginPath();
+    ctx.moveTo(0, -9);
+    ctx.lineTo(0, 9);
+    ctx.moveTo(-9, 0);
+    ctx.lineTo(9, 0);
+
+    ctx.moveTo(-4, -6);
+    ctx.lineTo(0, -9);
+    ctx.lineTo(4, -6);
+
+    ctx.moveTo(-4, 6);
+    ctx.lineTo(0, 9);
+    ctx.lineTo(4, 6);
+
+    ctx.moveTo(-6, -4);
+    ctx.lineTo(-9, 0);
+    ctx.lineTo(-6, 4);
+
+    ctx.moveTo(6, -4);
+    ctx.lineTo(9, 0);
+    ctx.lineTo(6, 4);
+    ctx.stroke();
+
+    // Darker recessed center notch
+    ctx.strokeStyle = '#141019';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(-4, 0);
+    ctx.lineTo(4, 0);
+    ctx.moveTo(0, -4);
+    ctx.lineTo(0, 4);
+    ctx.stroke();
   });
 
   // 4. Biome 2 Pillar Toy: cryo_prism_pillar

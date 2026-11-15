@@ -1,11 +1,140 @@
 import { ArenaMap, type RoomType, TILE_SIZE, WorldSim } from '@ashen-pact/shared';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+vi.mock('phaser', () => {
+  class MockPostFXPipeline {
+    public game: unknown;
+    public name: string;
+    constructor(config: { game: unknown; name: string }) {
+      this.game = config.game;
+      this.name = config.name;
+    }
+    set1f() {}
+    set3f() {}
+  }
+  class MockSinglePipeline {
+    public config: unknown;
+    public vertexCount = 0;
+    constructor(config: unknown) {
+      this.config = config;
+    }
+    flush() {
+      this.vertexCount = 0;
+    }
+    set1f() {}
+    set3f() {}
+  }
+  class MockWebGLRenderer {}
+  class MockScene {
+    constructor(_config?: unknown) {}
+  }
+  const PhaserMock = {
+    Scene: MockScene,
+    BlendModes: {
+      NORMAL: 0,
+      ADD: 1,
+      MULTIPLY: 2,
+      SCREEN: 3,
+    },
+    Scenes: {
+      Events: {
+        SHUTDOWN: 'shutdown',
+      },
+    },
+    Renderer: {
+      WebGL: {
+        WebGLRenderer: MockWebGLRenderer,
+        Pipelines: {
+          PostFXPipeline: MockPostFXPipeline,
+          SinglePipeline: MockSinglePipeline,
+        },
+      },
+    },
+  };
+  return {
+    default: PhaserMock,
+    ...PhaserMock,
+  };
+});
+
+import { drawSurfaceTile } from '../src/art/texture-baker-surfaces.js';
+import { resolveSurfaceShorelineColors } from '../src/scenes/game-scene/arena-tiles.js';
 import {
+  buildBiomeArchitecturePlan,
   buildRoomArchitecturePlan,
   computeTileDistToWall,
   getVisibleFloorDecals,
   isFloorDecalVisible,
 } from '../src/world/biome-architecture.js';
+
+function createBiomeTestMap(biome: 0 | 1 | 2 | 3 = 2, seed = 1337): ArenaMap {
+  const map = new ArenaMap({ cols: 36, rows: 22, includePillars: true, seed, biome });
+  map.configureRoomLayout('combat', seed, false, biome);
+  return map;
+}
+
+function createSpyCanvas2DContext() {
+  let saveCount = 0;
+  let restoreCount = 0;
+  const strokeColors: string[] = [];
+  const fillColors: string[] = [];
+  let currentStroke = '#000000';
+  let currentFill = '#000000';
+
+  return {
+    get saveCount() {
+      return saveCount;
+    },
+    get restoreCount() {
+      return restoreCount;
+    },
+    get strokeColors() {
+      return strokeColors;
+    },
+    get fillColors() {
+      return fillColors;
+    },
+    save() {
+      saveCount++;
+    },
+    restore() {
+      restoreCount++;
+    },
+    get strokeStyle() {
+      return currentStroke;
+    },
+    set strokeStyle(val: string) {
+      currentStroke = val;
+      if (typeof val === 'string' && !strokeColors.includes(val)) strokeColors.push(val);
+    },
+    get fillStyle() {
+      return currentFill;
+    },
+    set fillStyle(val: string) {
+      currentFill = val;
+      if (typeof val === 'string' && !fillColors.includes(val)) fillColors.push(val);
+    },
+    beginPath() {},
+    closePath() {},
+    moveTo() {},
+    lineTo() {},
+    quadraticCurveTo() {},
+    arc() {},
+    arcTo() {},
+    ellipse() {},
+    rect() {},
+    fillRect() {},
+    stroke() {},
+    fill() {},
+    clip() {},
+    scale() {},
+    translate() {},
+    globalAlpha: 1.0,
+    lineWidth: 1.0,
+    lineCap: 'round',
+    lineJoin: 'round',
+  };
+}
 
 function canReachAllFourDoorsViaBfs(map: ArenaMap): boolean {
   const midX = Math.floor(map.cols / 2);
@@ -155,18 +284,7 @@ describe('Phase P5 — Biome Architectural Identity (P1/P2/P3/P4), Room Brazier 
         expect(plan.budget.emptyPerimeterRatio).toBeGreaterThanOrEqual(0.4);
         expect(plan.budget.centerArenaSolidDecorCount).toBe(0);
 
-        if (biome === 2) {
-          expect(plan.godRays.length).toBeGreaterThanOrEqual(2);
-          expect(plan.godRays.length).toBeLessThanOrEqual(3);
-          for (const ray of plan.godRays) {
-            expect(ray.angleDeg).toBe(-135);
-            expect(ray.widthU).toBeGreaterThanOrEqual(60);
-            expect(ray.widthU).toBeLessThanOrEqual(90);
-            expect(ray.maxAlpha).toBeLessThanOrEqual(0.06);
-          }
-        } else {
-          expect(plan.godRays.length).toBe(0);
-        }
+        expect(plan.godRays).toHaveLength(0);
       }
       expect(distinctMotifPairs.size).toBeGreaterThanOrEqual(2);
     }
@@ -223,6 +341,18 @@ describe('Phase P5 — Biome Architectural Identity (P1/P2/P3/P4), Room Brazier 
     const bossBrazierCount = countBraziers();
     expect(bossBrazierCount).toBeGreaterThanOrEqual(6);
     expect(bossBrazierCount).toBeLessThanOrEqual(8);
+  });
+
+  it('emits zero godRays in Biome 2, removes arch_b2_godray_shaft, and balances ctx.save/restore in drawSurfaceTile("ice")', () => {
+    const b2Plan = buildBiomeArchitecturePlan(createBiomeTestMap(2));
+    expect(b2Plan.godRays).toHaveLength(0);
+
+    const ctx = createSpyCanvas2DContext();
+    drawSurfaceTile(ctx as never, 'ice', 0, 15);
+    expect(ctx.saveCount).toBe(ctx.restoreCount);
+    expect(ctx.strokeColors).toEqual(expect.arrayContaining(['#6BA6C2', '#1E3A5F', '#141019']));
+    expect(ctx.fillColors).toEqual(expect.arrayContaining(['#31627D', '#2C5E7A']));
+    expect(resolveSurfaceShorelineColors('ice')).toEqual({ outerBank: '#31627D', innerLip: '#CFE8EE' });
   });
 
   it('(4) forbids hazard-like glowing decor outside real sim surfaces (hasHazardGlow === false, stepping_stone on dry floor only, grated_heat_channel covered by iron grate in perimeter)', () => {

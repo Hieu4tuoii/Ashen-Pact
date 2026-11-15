@@ -714,36 +714,10 @@ function drawSolidArchitectureDecor(
   ctx.restore();
 }
 
-const GOD_RAY_TEX_KEY = 'arch_b2_godray_shaft';
 const BLEND_MODE_ADD = 1; // Phaser.BlendModes.ADD
-
-function ensureGodRayTexture(scene: Phaser.Scene): void {
-  if (scene.textures.exists(GOD_RAY_TEX_KEY)) return;
-  const w = 96;
-  const h = 280;
-  const canvasTex = scene.textures.createCanvas(GOD_RAY_TEX_KEY, w, h);
-  const ctx = canvasTex?.getContext();
-  if (!ctx || !canvasTex) return;
-
-  const grad = ctx.createLinearGradient(0, 0, 0, h);
-  grad.addColorStop(0, 'rgba(207, 232, 238, 1.0)');
-  grad.addColorStop(0.55, 'rgba(207, 232, 238, 0.42)');
-  grad.addColorStop(1, 'rgba(207, 232, 238, 0.0)');
-
-  ctx.fillStyle = grad;
-  ctx.beginPath();
-  ctx.moveTo(10, 0);
-  ctx.lineTo(w - 10, 0);
-  ctx.lineTo(w, h);
-  ctx.lineTo(0, h);
-  ctx.closePath();
-  ctx.fill();
-  canvasTex.refresh();
-}
 
 /**
  * Live architectural effects layer (Spec 3.5 & Ruling 2):
- * - Biome 2: 2-3 diagonal (-135 deg) God-ray light shafts (#CFE8EE, alpha <= 0.06 -> 0), hidden on Low / unlit.
  * - Biome 3: Slowly rotating 8-12 tooth brass wall gears (~18 deg/s on High/Medium, static on Low)
  *   and breathing additive lava glow (alpha <= 0.30) through visible grated_heat_channel iron bars.
  * - Common P4 & Braziers: 45-deg wrought-iron hanging bracket arm above each torch_brazier (depth 31, above player)
@@ -754,7 +728,6 @@ export class BiomeArchitectureLiveLayer {
   private readonly bracketGraphics: Phaser.GameObjects.Graphics;
   private readonly additiveGraphics: Phaser.GameObjects.Graphics;
   private readonly voidMaskGraphics: Phaser.GameObjects.Graphics;
-  private readonly godRaySprites: Phaser.GameObjects.Image[] = [];
   private plan: RoomArchitecturePlan | null = null;
   private elapsedSec = 1.0;
   private lastBracketSig = '';
@@ -762,8 +735,6 @@ export class BiomeArchitectureLiveLayer {
   private gearHadContent = false;
 
   constructor(scene: Phaser.Scene) {
-    ensureGodRayTexture(scene);
-
     // Depth 14: above arenaGroundSprite (depth 2), below entities (depth 22+)
     this.gearGraphics = scene.add.graphics().setDepth(14);
     // Depth 31: above player rig (depth 30), below lightmapRt (depth 34) per Spec 3.5 P4 hanging brazier bracket
@@ -771,19 +742,9 @@ export class BiomeArchitectureLiveLayer {
     // Depth 35.5: above lightmapRt (depth 34) with BlendModes.ADD for embers, warm dust motes & heat channel breath
     this.additiveGraphics = scene.add.graphics().setDepth(35.5);
     this.additiveGraphics.setBlendMode(BLEND_MODE_ADD);
-    // Depth 36.2: above lightmapRt (34), warmGlowPool (35), godRaySprites (35.2), and additiveGraphics (35.5)
+    // Depth 36.2: above lightmapRt (34), warmGlowPool (35), and additiveGraphics (35.5)
     // to mask out any light/glow bleed into #0B090E Exterior Void cells while preserving the 6px outer wall casing.
     this.voidMaskGraphics = scene.add.graphics().setDepth(36.2);
-
-    for (let i = 0; i < 3; i++) {
-      const ray = scene.add.image(-1000, -1000, GOD_RAY_TEX_KEY);
-      ray.setOrigin(0.5, 0);
-      ray.setRotation(-Math.PI / 4); // Top-left (-135 deg) key light -> shines South-East (+45 deg)
-      ray.setBlendMode(BLEND_MODE_ADD);
-      ray.setDepth(35.2);
-      ray.setVisible(false);
-      this.godRaySprites.push(ray);
-    }
   }
 
   public setPlan(plan: RoomArchitecturePlan): void {
@@ -834,7 +795,6 @@ export class BiomeArchitectureLiveLayer {
         this.voidMaskGraphics.clear();
         this.lastVoidMaskSig = '';
       }
-      for (const s of this.godRaySprites) s.setVisible(false);
       return;
     }
 
@@ -906,7 +866,6 @@ export class BiomeArchitectureLiveLayer {
       const s = map.surfaces[i]!;
       if (
         s === 'lava' ||
-        s === 'ice' ||
         s === 'water' ||
         s === 'electrified_water' ||
         s === 'poison_swamp' ||
@@ -924,21 +883,6 @@ export class BiomeArchitectureLiveLayer {
     } else if (this.gearHadContent) {
       this.gearGraphics.clear();
       this.gearHadContent = false;
-    }
-
-    // 1. Biome 2 Diagonal (-135 deg) God-Rays (disabled on Low quality & hidden when lightingEnabled === false)
-    const showGodRays = plan.biome === 2 && !isLow && lightingEnabled;
-    for (let i = 0; i < this.godRaySprites.length; i++) {
-      const sprite = this.godRaySprites[i]!;
-      const spec = plan.godRays[i];
-      if (!showGodRays || !spec) {
-        if (sprite.visible) sprite.setVisible(false);
-        continue;
-      }
-      sprite.setPosition(spec.anchorX, spec.anchorY);
-      sprite.setDisplaySize(spec.widthU, spec.lengthU);
-      sprite.setAlpha(Math.min(0.06, spec.maxAlpha));
-      sprite.setVisible(true);
     }
 
     // 2. Biome 3 Slowly Rotating 8-12 Tooth Brass Wall Gears (~18 deg/s on High/Medium, static on Low)
@@ -991,6 +935,7 @@ export class BiomeArchitectureLiveLayer {
           if (
             surf === 'none' ||
             surf === 'chasm' ||
+            surf === 'ice' ||
             surf === 'oil' ||
             surf === 'grass' ||
             surf === 'ash'
@@ -1011,17 +956,6 @@ export class BiomeArchitectureLiveLayer {
               wx + ox + Math.sin(phase) * 2.5,
               wy + oy + Math.cos(phase) * 2.5,
               r,
-            );
-          } else if (surf === 'ice') {
-            const glintR = 1.3 + Math.abs(Math.sin(phase * 1.3)) * 1.2;
-            const gx = wx + ox;
-            const gy = wy + oy;
-            this.gearGraphics.lineStyle(1.0, 0xe0f2fe, 0.48);
-            this.gearGraphics.lineBetween(
-              gx - glintR,
-              gy - glintR * 0.45,
-              gx + glintR,
-              gy + glintR * 0.45,
             );
           } else if (surf === 'water') {
             const ripR = 2.4 + ((this.elapsedSec * 3.2 + tx * 1.3 + ty * 0.9) % 3.8);
@@ -1207,9 +1141,5 @@ export class BiomeArchitectureLiveLayer {
     this.bracketGraphics.destroy();
     this.additiveGraphics.destroy();
     this.voidMaskGraphics.destroy();
-    for (const s of this.godRaySprites) {
-      s.destroy();
-    }
-    this.godRaySprites.length = 0;
   }
 }

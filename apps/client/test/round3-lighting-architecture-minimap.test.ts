@@ -604,22 +604,11 @@ describe('Round 3 (F18) — WebGL Lightmap Resize, Exterior Void Masking, Dynami
   });
 
   describe('2. Exterior Void Light, God-Ray & Dust Mote Masking + Soft Brazier Core', () => {
-    it('anchors Biome 2 God-Rays strictly to active North perimeter wall tiles with non-solid south floor across all 10 room shapes', () => {
+    it('emits zero godRays in Biome 2 across all 10 room shapes and does not create arch_b2_godray_shaft', () => {
       for (const shape of ALL_10_SHAPES) {
         const map = createConfiguredShapeMap(shape, 'standard', 2, 1337);
         const plan = buildRoomArchitecturePlan(map, 'combat', 2, 1337);
-        expect(plan.godRays.length).toBeGreaterThanOrEqual(2);
-
-        for (const ray of plan.godRays) {
-          const wallTx = Math.floor(ray.anchorX / TILE_SIZE);
-          const floorTy = Math.round(ray.anchorY / TILE_SIZE);
-          const wallTy = floorTy - 1;
-          expect(wallTy).toBeGreaterThanOrEqual(0);
-          expect(floorTy).toBeLessThan(map.rows);
-          expect(map.getTile(wallTx, wallTy)).toBe('wall');
-          expect(isExteriorVoidWallTile(map, wallTx, wallTy)).toBe(false);
-          expect(map.isSolidTile(wallTx, floorTy)).toBe(false);
-        }
+        expect(plan.godRays).toHaveLength(0);
       }
     });
 

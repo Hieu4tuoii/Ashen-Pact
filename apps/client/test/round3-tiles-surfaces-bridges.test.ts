@@ -81,7 +81,10 @@ import {
   bakeWallTile,
 } from '../src/art/texture-baker-tiles.js';
 import type { ArenaTileVisual, GameScene } from '../src/scenes/GameScene.js';
-import { renderTileCellToCompositeImpl } from '../src/scenes/game-scene/arena-tiles.js';
+import {
+  renderTileCellToCompositeImpl,
+  resolveSurfaceShorelineColors,
+} from '../src/scenes/game-scene/arena-tiles.js';
 
 interface RecordedOp {
   type:
@@ -969,6 +972,20 @@ describe('Round 3 Milestone M2_r3 — F16 (Walls, Parapets, Miters, Void Casing,
           rec.ops.filter((o) => o.type === 'quadraticCurveTo').length,
         ).toBeGreaterThanOrEqual(6);
       }
+    });
+
+    it('bakes matte rime-glacier ice with balanced save/restore and resolves shoreline colors', () => {
+      const rec = createFullRecordingCanvas2D();
+      drawSurfaceTile(rec.ctx, 'ice', 0, 0, 0, 32, 1, 2);
+      const saves = rec.ops.filter((o) => o.type === 'save').length;
+      const restores = rec.ops.filter((o) => o.type === 'restore').length;
+      expect(saves).toBe(restores);
+
+      const fillColors = rec.ops.filter((o) => o.type === 'fillRect' || o.type === 'fill').map((o) => o.fillStyle);
+      const strokeColors = rec.ops.filter((o) => o.type === 'stroke').map((o) => o.strokeStyle);
+      expect(fillColors).toEqual(expect.arrayContaining(['#31627D', '#2C5E7A']));
+      expect(strokeColors).toEqual(expect.arrayContaining(['#6BA6C2', '#1E3A5F', '#141019']));
+      expect(resolveSurfaceShorelineColors('ice')).toEqual({ outerBank: '#31627D', innerLip: '#CFE8EE' });
     });
 
     it('draws a 2.6*scale x 2.6*scale concave inner-corner shoreline cap in arena-tiles.ts when two adjacent cardinal bits are set and the diagonal neighbor is dry floor', () => {
