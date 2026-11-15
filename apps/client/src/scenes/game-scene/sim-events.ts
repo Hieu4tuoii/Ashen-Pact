@@ -52,6 +52,13 @@ import {
   spawnP1DBlessingEventFx,
 } from '../../fx/combat-fx-weapons-v2.js';
 import { handleP2BSimEvent } from '../../fx/combat-fx-p2b.js';
+import { routeCutoutDirectionalByReach } from '../../fx/combat-fx-spawners.js';
+
+const crystalPillarImpactIcdMap = new Map<number, number>();
+
+export function resetCrystalPillarImpactTracker(): void {
+  crystalPillarImpactIcdMap.clear();
+}
 
 const scratchTickImpactTargetIds: number[] = [];
 import { handleP4ASimEvent } from '../../fx/combat-fx-p4a.js';
@@ -335,6 +342,25 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
         break;
       }
       case 'projectile_impact': {
+        if (ev.propKind === 'crystal_pillar' && ev.propId !== undefined) {
+          const now = this.time?.now ?? (sim?.tick ?? 0) * 16.67;
+          const lastTime = crystalPillarImpactIcdMap.get(ev.propId) ?? -999;
+          if (now - lastTime >= 120) {
+            crystalPillarImpactIcdMap.set(ev.propId, now);
+            const normalRad = ev.angle + Math.PI;
+            routeCutoutDirectionalByReach(
+              this.fx,
+              ev.x,
+              ev.y,
+              24,
+              normalRad,
+              'fx_sh_cone_blast',
+              Math.PI / 4,
+              { depth: 26.6, tint: 0x67E8F9 },
+            );
+          }
+        }
+
         let struckTargetId: number | undefined;
         let struckTargetX: number | undefined;
         let struckTargetY: number | undefined;
@@ -858,6 +884,7 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
         break;
       }
       case 'room_entered': {
+        resetCrystalPillarImpactTracker();
         this.fx?.resetRoomTransientState?.();
         this.camFocusX = sim.player.x;
         this.camFocusY = sim.player.y;

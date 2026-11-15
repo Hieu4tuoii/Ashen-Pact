@@ -198,6 +198,7 @@ export interface SimPropState {
   causticRollRemainingPx?: number;
   ownerPlayerId?: number;
   cryoShatterSpire?: boolean;
+  prismPulseCooldownSec?: number;
 }
 
 export type SummonKind =

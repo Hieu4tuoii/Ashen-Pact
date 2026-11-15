@@ -252,25 +252,11 @@ export function isPrismLineBlockedByFlippedBarricade(
 }
 
 export function findIceMageTargetPrism(
-  sim: Pick<WorldSim, 'props'>,
-  e: Pick<SimEnemyState, 'x' | 'y'>,
-  requireUnblocked = false,
+  _sim: Pick<WorldSim, 'props'>,
+  _e: Pick<SimEnemyState, 'x' | 'y'>,
+  _requireUnblocked = false,
 ): SimPropState | null {
-  let bestPrism: SimPropState | null = null;
-  let bestDistSq = ICE_MAGE_PRISM_SEARCH_RADIUS * ICE_MAGE_PRISM_SEARCH_RADIUS;
-  for (let i = 0; i < sim.props.length; i++) {
-    const p = sim.props[i]!;
-    if (p.kind !== 'cryo_prism_pillar' || p.hp <= 0 || p.state === 'broken') continue;
-    const dx = p.x - e.x;
-    const dy = p.y - e.y;
-    const dSq = dx * dx + dy * dy;
-    if (dSq <= bestDistSq) {
-      if (requireUnblocked && isPrismLineBlockedByFlippedBarricade(sim, e.x, e.y, p)) continue;
-      bestDistSq = dSq;
-      bestPrism = p;
-    }
-  }
-  return bestPrism;
+  return null;
 }
 
 export function fireIceMagePrismShotOrVolley(
@@ -305,72 +291,11 @@ export function fireIceMagePrismShotOrVolley(
 }
 
 export function refractEnemyProjectileThroughCryoPrism(
-  sim: WorldSim,
-  b: SimProjectileState,
-  prism: SimPropState,
+  _sim: WorldSim,
+  _b: SimProjectileState,
+  _prism: SimPropState,
 ): boolean {
-  if (
-    b.team !== 'enemy' ||
-    (b.splitGeneration ?? 0) >= 1 ||
-    b.hitEntityIds.includes(prism.id) ||
-    prism.hp <= 0 ||
-    prism.state === 'broken'
-  ) {
-    return false;
-  }
-
-  const owner = sim.enemies.find((e) => e.id === b.ownerId);
-  const fromX = owner ? owner.x : (b.originX ?? b.prevX);
-  const fromY = owner ? owner.y : (b.originY ?? b.prevY);
-  if (isPrismLineBlockedByFlippedBarricade(sim, fromX, fromY, prism)) {
-    b.ttlSec = 0;
-    return true;
-  }
-
-  b.hitEntityIds.push(prism.id);
-  b.ttlSec = 0;
-  prism.hitFlashTimer = 0.16;
-
-  const targetPl = sim.findNearestAlivePlayer(prism.x, prism.y);
-  const centerAngle = Math.atan2(targetPl.y - prism.y, targetPl.x - prism.x);
-  const speed = Math.max(ICE_MAGE_BOLT_SPEED, Math.hypot(b.vx, b.vy));
-  const prevIds = new Set(sim.projectiles.map((p) => p.id));
-
-  const savedMod = owner?.eliteModifier ?? null;
-  if (owner && savedMod === 'volley') owner.eliteModifier = null;
-
-  sim.spawnDeterministicVolley({
-    kind: 'bullet_volley_spawned', tick: sim.tick, eventId: sim.nextVolleyEventId++,
-    ownerId: b.ownerId, team: 'enemy', weaponId: b.weaponId || 'frost_orb',
-    x: prism.x + Math.cos(centerAngle) * (prism.radius + b.radius + 4),
-    y: prism.y + Math.sin(centerAngle) * (prism.radius + b.radius + 4),
-    angle: centerAngle, pelletCount: 3, spreadRad: ICE_MAGE_PRISM_FAN_SPREAD_RAD,
-    speed, damage: b.damage, critChance: 0, knockback: b.knockback, radius: b.radius, bulletShape: 'small_orb',
-    ttlSec: 2.2, pierceCount: 0, bounceCount: 0, element: 'chill',
-    amplifiedByShield: false, seed: sim.rng.nextUint32(), replacedProjectileId: b.id,
-  });
-  if (owner) owner.eliteModifier = savedMod;
-
-  const rayAngles = [
-    centerAngle - ICE_MAGE_PRISM_FAN_HALF_ANGLE_RAD,
-    centerAngle,
-    centerAngle + ICE_MAGE_PRISM_FAN_HALF_ANGLE_RAD,
-  ];
-  let rayIdx = 0;
-  for (let i = 0; i < sim.projectiles.length; i++) {
-    const child = sim.projectiles[i]!;
-    if (!prevIds.has(child.id)) {
-      const exactAng = rayAngles[rayIdx] ?? centerAngle;
-      rayIdx += 1;
-      child.angle = exactAng;
-      child.vx = Math.cos(exactAng) * speed;
-      child.vy = Math.sin(exactAng) * speed;
-      child.splitGeneration = 1;
-      child.passedThroughCoverOrPrism = true;
-      child.hitEntityIds.push(prism.id);
-    }
-  }
-  return true;
+  return false;
 }
 
 export function shatterIceGolemArmor(

@@ -478,7 +478,7 @@ export const AP2_P1C_VISUAL_SCENES: readonly VisualSceneDef[] = [
   ),
   makeScene(
     'ap2-b2-prism-refract',
-    'Player shooting cryo_prism_pillar to refract projectile into 3 fan chill rays toward enemy cluster',
+    'Player shooting cryo_prism_pillar (Cryo Tuning Obelisk) to emit enemy-only Chill resonance pulse',
     BIOME2_GAME_URL,
     'GameScene',
     setupAp2B2PrismRefractScene,
@@ -487,16 +487,15 @@ export const AP2_P1C_VISUAL_SCENES: readonly VisualSceneDef[] = [
       frameCount: 8,
       heroFrameIndex: 4,
       apexEvent: {
-        simEventKind: 'bullet_volley_spawned',
-        simEventPredicate: (ev) =>
-          ev['replacedProjectileId'] !== undefined && Number(ev['pelletCount']) === 3,
+        simEventKind: 'explosion',
+        simEventPredicate: (ev) => ev['sourceDefId'] === 'cryo_prism_pillar',
       },
       actionRoi: {
         includeProjectiles: 'none',
         propKinds: ['cryo_prism_pillar'],
       },
       stripSchedule: [
-        { stepCount: 0, stage: 'windup_hold', label: 'AIM PRISM' },
+        { stepCount: 0, stage: 'windup_hold', label: 'AIM OBELISK' },
         {
           stepCount: 2,
           stage: 'trigger',
@@ -511,9 +510,9 @@ export const AP2_P1C_VISUAL_SCENES: readonly VisualSceneDef[] = [
             queueStepInput(page, { moveX: 1, aimAngle: 0, durationTicks: 6 }),
         },
         { stepCount: 3, stage: 'active', label: 'BOLT FLIGHT 2' },
-        { stepCount: 2, stage: 'apex', label: 'PRISM 3X SPLIT!' },
-        { stepCount: 3, stage: 'sub_impact', label: 'CHILL RAYS HIT' },
-        { stepCount: 4, stage: 'settled', label: 'ICE KNOCKBACK' },
+        { stepCount: 2, stage: 'apex', label: 'CHILL PULSE!' },
+        { stepCount: 3, stage: 'sub_impact', label: 'CHILL PULSE HIT' },
+        { stepCount: 4, stage: 'settled', label: 'ICE RESONANCE' },
         { stepCount: 4, stage: 'settled', label: 'SETTLED' },
       ],
     },

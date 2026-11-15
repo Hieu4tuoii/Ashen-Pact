@@ -191,12 +191,11 @@ export async function setupAp2WepLaserRailgunScene(page: Page): Promise<void> {
     roomSeed: 1336,
     fourBraziers: true,
     rebuildDoors: true,
-    characterId: 'engineer',
+    characterId: 'vanguard',
     playerX: 356,
     playerY: 270,
     aimAngle: 0,
     props: [
-      ['cryo_prism_pillar', 416, 270],
       ['moss_table', 6 * 32 + 16, 10 * 32 + 16],
       ['moss_table', 23 * 32 + 16, 10 * 32 + 16],
       ['volatile_spore_pod', 15 * 32 + 16, 6 * 32 + 16],
@@ -213,6 +212,7 @@ export async function setupAp2WepLaserRailgunScene(page: Page): Promise<void> {
       activeWeaponSlot: 0,
       weaponHeat: 68,
       weaponSlotHeat: [68, 0],
+      skillActiveTimer: 8.0,
       overheatLockTimer: 0,
       fireCooldownTimer: 0,
       reloadTimer: 0,
@@ -452,7 +452,6 @@ export const AP2_P1B_VISUAL_SCENES: readonly VisualSceneDef[] = [
       actionRoi: {
         mode: 'auto_bounds',
         includeProjectiles: 'none',
-        propKinds: ['cryo_prism_pillar'],
       },
       stripSchedule: [
         { stepCount: 0, stage: 'windup_hold', label: 'ORANGE 68%' },
@@ -462,7 +461,7 @@ export const AP2_P1B_VISUAL_SCENES: readonly VisualSceneDef[] = [
           label: 'LASER BEAM',
           beforeStep: (page) => triggerFireWeapon(page, 0, 8),
         },
-        { stepCount: 3, stage: 'active', label: 'PRISM SPLIT' },
+        { stepCount: 3, stage: 'active', label: 'SHIELD REFRACT' },
         { stepCount: 3, stage: 'active', label: 'HEAT 73%' },
         {
           stepCount: 2,

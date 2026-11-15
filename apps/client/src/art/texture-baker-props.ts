@@ -194,42 +194,50 @@ export function bakeProps(scene: Phaser.Scene, scale: number): void {
     ctx.stroke();
   });
 
-  // 5c. Crystal Pillar (Biome 2 Frozen Depths laser-reflecting ice prism)
+  // 5c. Permafrost Bastion Pillar (crystal_pillar — 38x44px flat-top octagonal frost-stone bastion)
   bakeCustomCanvas(scene, 'prop_crystal_pillar', 38, 44, scale, (ctx) => {
     outlined(
       ctx,
       {
-        fill: PALETTE.COBALT_SHADE,
-        shade: PALETTE.ABYSS_BLUE,
-        highlight: PALETTE.CYAN_FROST,
-        outlineWidth: 2.4,
+        fill: '#1D3557',
+        shade: '#141019',
+        highlight: '#264E66',
+        outlineWidth: 2.0,
+        outlineColor: '#141019',
       },
-      (c) => traceRoundedRect(c, -13, 4, 26, 12, 4),
-      { cx: 0, cy: 10, rx: 13, ry: 6 },
+      (c) => traceRoundedRect(c, -13, 6, 26, 12, 3),
+      { cx: 0, cy: 12, rx: 13, ry: 6 },
     );
     outlined(
       ctx,
       {
-        fill: PALETTE.CYAN_FROST,
-        shade: PALETTE.AZURE_CORE,
-        highlight: PALETTE.ICE_WHITE,
-        outlineWidth: 2.4,
+        fill: '#264E66',
+        shade: '#1D3557',
+        highlight: '#38BDF8',
+        outlineWidth: 2.0,
+        outlineColor: '#141019',
       },
       (c) =>
         tracePolygon(c, [
-          { x: 0, y: -18 },
-          { x: 11, y: -6 },
+          { x: -9, y: -18 },
+          { x: 9, y: -18 },
+          { x: 14, y: -10 },
+          { x: 14, y: 7 },
           { x: 9, y: 11 },
-          { x: 0, y: 15 },
           { x: -9, y: 11 },
-          { x: -11, y: -6 },
+          { x: -14, y: 7 },
+          { x: -14, y: -10 },
         ]),
-      { cx: 0, cy: -1, rx: 11, ry: 16 },
+      { cx: 0, cy: -3, rx: 14, ry: 15 },
     );
+    // Hollow 6x10px diamond glyph (#38BDF8)
     ctx.beginPath();
-    ctx.moveTo(0, -14);
-    ctx.lineTo(0, 11);
-    ctx.strokeStyle = PALETTE.BONE_WHITE;
+    ctx.moveTo(0, -8);
+    ctx.lineTo(3, -3);
+    ctx.lineTo(0, 2);
+    ctx.lineTo(-3, -3);
+    ctx.closePath();
+    ctx.strokeStyle = '#38BDF8';
     ctx.lineWidth = 1.8;
     ctx.stroke();
   });

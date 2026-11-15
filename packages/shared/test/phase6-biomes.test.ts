@@ -196,7 +196,7 @@ describe('Phase 6 — Biomes 2 & 3, 18 Weapons, Co-op Mechanics & Bosses Kryssa 
     p2.x = 280;
     p2.y = 380;
 
-    // 1. Crystal Pillar reflects Frost Laser projectiles
+    // 1. Crystal Pillar (Permafrost Bastion) blocks laser projectiles
     const pillar = sim.spawnProp('crystal_pillar', 420, 320);
     expect(pillar.kind).toBe('crystal_pillar');
 

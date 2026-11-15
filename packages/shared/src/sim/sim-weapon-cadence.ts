@@ -776,7 +776,7 @@ export function tryFireActiveWeaponImpl(
     p.blessingIds.includes('bullet_split_bounce') ||
     p.blessingIds.includes('bullet_orbit_return') ||
     (w.id !== 'void_staff' && hasPlayerDuoBoon(p, 'duo_superconduct_rail')) ||
-    this.props.some((pr) => pr.hp > 0 && (pr.kind === 'cryo_prism_pillar' || pr.prismAuraActive))
+    this.props.some((pr) => pr.hp > 0 && pr.prismAuraActive)
   ) {
     shotFlags |= SHOT_FLAG.DYNAMIC_BOUNCE;
   }

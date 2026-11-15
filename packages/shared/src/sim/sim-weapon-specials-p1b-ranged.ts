@@ -5,6 +5,7 @@ import {
    resolveEnemyChasmRingOut,
   triggerGrassPollenSpeedBoost,
 } from './sim-tactical-physics.js';
+import { triggerCryoTuningObeliskPulse } from './sim-tactical-physics-p1c.js';
 import { pointToSegmentDist } from './sim-weapon-specials-rare.js';
 import type {
   SimEnemyState,
@@ -115,7 +116,9 @@ function findLaserRefractionPoint(
   let refractX = 0;
   let refractY = 0;
 
-  // 1. Check cryo_prism_pillar props along the primary beam segment
+  // 1. Check cryo_prism_pillar (Cryo Tuning Obelisk) props along the primary beam segment
+  let obeliskHit: import('./world-sim-types.js').SimPropState | null = null;
+  let obeliskDist = Infinity;
   for (let i = 0; i < sim.props.length; i++) {
     const prop = sim.props[i]!;
     if (prop.hp <= 0 || prop.kind !== 'cryo_prism_pillar') continue;
@@ -124,11 +127,9 @@ function findLaserRefractionPoint(
     const proj = dx * cos + dy * sin;
     if (proj <= 0) continue;
     const segDist = pointToSegmentDist(prop.x, prop.y, startX, startY, wallEndX, wallEndY);
-    if (segDist <= prop.radius + beamRadius + 6 && proj < bestDist) {
-      bestDist = proj;
-      refractX = prop.x;
-      refractY = prop.y;
-      prop.hitFlashTimer = Math.max(prop.hitFlashTimer, 0.16);
+    if (segDist <= prop.radius + beamRadius + 6 && proj < obeliskDist) {
+      obeliskDist = proj;
+      obeliskHit = prop;
     }
   }
 
@@ -165,6 +166,15 @@ function findLaserRefractionPoint(
         refractY = pl.y;
       }
     }
+  }
+
+  // If Cryo Tuning Obelisk is struck before any Vanguard shield, absorb beam segment at surface and trigger Chill pulse
+  if (obeliskHit && obeliskDist < bestDist) {
+    const surfaceDist = Math.max(0, obeliskDist - obeliskHit.radius);
+    const clampX = startX + cos * surfaceDist;
+    const clampY = startY + sin * surfaceDist;
+    triggerCryoTuningObeliskPulse(sim, obeliskHit, p.id);
+    return { refracted: false, x: clampX, y: clampY };
   }
 
   if (bestDist < Infinity) {
@@ -257,7 +267,7 @@ function applyLaserSegmentHits(
  * Focus Laser (Súng Tia Hội Tụ — Rare, HEAT_VENT):
  * Fires a continuous 520px Hitscan Laser Beam stopped by solid arena walls.
  * Scales damage linearly from 4 (0% heat) to 11 (95%+ heat) and increases beam width.
- * Refracts into 3 fan beams (0, -0.32, +0.32 rad, 360px range) on cryo_prism_pillar or active Vanguard shield.
+ * Refracts into 3 fan beams (0, -0.32, +0.32 rad, 360px range) on active Vanguard shield, or triggers pulse on Cryo Tuning Obelisk.
  */
 export function fireFocusLaserHitscanBeam(
   sim: WorldSim,

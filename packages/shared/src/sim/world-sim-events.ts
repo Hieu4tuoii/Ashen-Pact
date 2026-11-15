@@ -63,6 +63,8 @@ export type SimEvent =
       element?: ElementType;
       weaponId?: string;
       ownerId?: number;
+      propId?: number;
+      propKind?: PropKind;
     }
   | {
       kind: 'entity_killed';

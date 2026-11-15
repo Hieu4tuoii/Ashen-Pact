@@ -38,6 +38,7 @@ import {
 import { getFreezeVisualTimeSec, resetClientFreezeRandom } from '../../core/visual-query.js';
 import { CombatFxManager, computeIrisHoleRadius } from '../../fx/combat-fx.js';
 import { resetScrapShotgunPelletHitTracker } from '../../fx/combat-fx-weapons-v2.js';
+import { resetCrystalPillarImpactTracker } from './sim-events.js';
 import { computeUniformViewportMetrics } from '../../fx/lighting-config.js';
 import { LightingPipeline } from '../../fx/lighting-pipeline.js';
 import { DebugOverlay, initGlobalDebugState } from '../../ui/debug-overlay.js';
@@ -203,6 +204,7 @@ export function createImpl(this: GameScene): void {
     this.fragFuseWheelFreePool.length = 0;
   }
   resetScrapShotgunPelletHitTracker();
+  resetCrystalPillarImpactTracker();
   this.projectileSprites.clear();
   this.pickupSprites.clear();
   this.doorSprites.clear();

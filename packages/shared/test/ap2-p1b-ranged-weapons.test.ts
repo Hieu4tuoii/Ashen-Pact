@@ -105,7 +105,7 @@ describe('AP2 P1B.1 — Rare & Epic Ranged Weapons: focus_laser & void_staff', (
       expect(enemy.hp).toBe(500);
     });
 
-    it('refracts into 3 fan beams (0 rad, -0.32 rad, +0.32 rad, remaining range 360px) when intersecting a cryo_prism_pillar prop or an active Vanguard shield', () => {
+    it('absorbs focus_laser on cryo_prism_pillar to trigger Chill pulse while active Vanguard shield refracts into 3 fan beams', () => {
       const sim = createCleanSim(4102);
       const p = sim.player;
       sim.selectCharacter(p.id, 'elementalist');
@@ -117,41 +117,36 @@ describe('AP2 P1B.1 — Rare & Epic Ranged Weapons: focus_laser & void_staff', (
       p.aimAngle = 0;
       p.critChance = 0;
 
-      // 1. Refraction via cryo_prism_pillar prop
+      // 1. Cryo Tuning Obelisk absorbs beam without fan refraction, emitting Chill pulse
       const prism = sim.spawnProp('cryo_prism_pillar', p.x + 140, p.y);
       expect(prism.hp).toBeGreaterThan(0);
 
-      const distFromPrism = 220; // <= 360px remaining range
-      const eCenter = sim.spawnEnemy(
+      const distFromPrism = 220; // far away
+      const eFar = sim.spawnEnemy(
         'spore_guardian',
         prism.x + Math.cos(0) * distFromPrism,
         prism.y + Math.sin(0) * distFromPrism,
         true,
       );
-      const eUp = sim.spawnEnemy(
+      const eNear = sim.spawnEnemy(
         'spore_guardian',
-        prism.x + Math.cos(-0.32) * distFromPrism,
-        prism.y + Math.sin(-0.32) * distFromPrism,
+        prism.x + 40,
+        prism.y,
         true,
       );
-      const eDown = sim.spawnEnemy(
-        'spore_guardian',
-        prism.x + Math.cos(0.32) * distFromPrism,
-        prism.y + Math.sin(0.32) * distFromPrism,
-        true,
-      );
-      eCenter.hp = 500;
-      eUp.hp = 500;
-      eDown.hp = 500;
+      eFar.hp = 500;
+      eNear.hp = 500;
 
       p.weaponHeat = 0;
       p.fireCooldownTimer = 0;
       sim.consumeEvents();
       sim.tryFireActiveWeapon(p);
 
-      expect(500 - eCenter.hp).toBe(4);
-      expect(500 - eUp.hp).toBe(4);
-      expect(500 - eDown.hp).toBe(4);
+      // Far enemy takes 0 damage (no fan refraction)
+      expect(500 - eFar.hp).toBe(0);
+      // Near enemy takes 14 Chill damage from pulse
+      expect(500 - eNear.hp).toBe(14);
+      expect(eNear.chillTimer).toBeGreaterThanOrEqual(1.9);
 
       // 2. Refraction via active Vanguard shield (p.characterId === 'vanguard' && p.skillActiveTimer > 0)
       sim.props.length = 0;

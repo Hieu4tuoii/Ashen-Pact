@@ -1,5 +1,5 @@
 import { distance } from '../math/vec2.js';
-import { SHOT_FLAG, TILE_SIZE } from '../protocol/messages.js';
+import { TILE_SIZE } from '../protocol/messages.js';
 import { applyRicochetVowTacticalPropBonus } from './sim-ashen-pacts.js';
 import { tryTriggerToxicShrapnelOnPropBreak } from './sim-blessings-p4a.js';
 import {
@@ -198,130 +198,70 @@ export function shatterGlacialBarricade(
   }
 }
 
-function findDensestEnemyClusterAngle(
+export const CRYO_OBELISK_PULSE_RADIUS = 72;
+export const CRYO_OBELISK_PULSE_DAMAGE = 14;
+export const CRYO_OBELISK_PULSE_CHILL_SEC = 2.0;
+export const CRYO_OBELISK_PULSE_COOLDOWN_SEC = 1.2;
+
+/**
+ * Biome 2 Prop 3 — cryo_prism_pillar (Cryo Tuning Obelisk):
+ * When struck by a player projectile or focus_laser, emits an enemy-only Chill resonance pulse:
+ * radius = 72px, 14 Chill damage + 2.0s 'chill' (1 stack), 1.20s ICD per prop, 0 friendly-fire, 0 RNG calls.
+ */
+export function triggerCryoTuningObeliskPulse(
   sim: WorldSim,
-  fromX: number,
-  fromY: number,
-  fallbackAngle: number,
-): number {
-  let bestEnemy: SimEnemyState | null = null;
-  let bestClusterSize = -1;
-  let bestDist = Infinity;
+  obelisk: SimPropState,
+  ownerPlayerId?: number,
+): boolean {
+  obelisk.hitFlashTimer = 0.16;
+  if ((obelisk.prismPulseCooldownSec ?? 0) > 0) {
+    return false;
+  }
+  obelisk.prismPulseCooldownSec = CRYO_OBELISK_PULSE_COOLDOWN_SEC;
+  sim.events.push({
+    kind: 'explosion',
+    x: obelisk.x,
+    y: obelisk.y,
+    radius: CRYO_OBELISK_PULSE_RADIUS,
+    damage: CRYO_OBELISK_PULSE_DAMAGE,
+    sourceDefId: 'cryo_prism_pillar',
+  });
+
+  const r = CRYO_OBELISK_PULSE_RADIUS;
+  const dmg = CRYO_OBELISK_PULSE_DAMAGE;
+  const chillSec = CRYO_OBELISK_PULSE_CHILL_SEC;
 
   for (let i = 0; i < sim.enemies.length; i++) {
     const e = sim.enemies[i]!;
     if (e.hp <= 0 || e.isDummy || e.aiState === 'spawning') continue;
-    let count = 0;
-    for (let j = 0; j < sim.enemies.length; j++) {
-      const other = sim.enemies[j]!;
-      if (other.hp <= 0 || other.isDummy || other.aiState === 'spawning') continue;
-      if (distance(e.x, e.y, other.x, other.y) <= 140) {
-        count += 1;
-      }
-    }
-    const d = distance(fromX, fromY, e.x, e.y);
-    if (count > bestClusterSize || (count === bestClusterSize && d < bestDist)) {
-      bestClusterSize = count;
-      bestDist = d;
-      bestEnemy = e;
+    if (distance(obelisk.x, obelisk.y, e.x, e.y) <= r + e.radius) {
+      const hitAng = Math.atan2(e.y - obelisk.y, e.x - obelisk.x);
+      sim.applyDamageToEnemy(
+        e,
+        dmg,
+        false,
+        'chill',
+        hitAng,
+        0,
+        false,
+        ownerPlayerId ?? sim.player.id,
+      );
+      e.chillTimer = chillSec;
+      e.chillStacks = 1;
     }
   }
-
-  if (!bestEnemy) return fallbackAngle;
-  return Math.atan2(bestEnemy.y - fromY, bestEnemy.x - fromX);
+  return true;
 }
 
-/**
- * Biome 2 Prop 3 — cryo_prism_pillar:
- * - If splitGeneration === 0: refracts into 3 Chill fan rays (+20% Additive DMG, splitGeneration = 1,
- *   SHOT_FLAG.DYNAMIC_BOUNCE) aimed toward the densest enemy cluster.
- * - If splitGeneration >= 1: does NOT spawn children; instead redirects toward the cluster, boosts
- *   damage by +20%, imbues 'chill', and adds +1 bounceRemaining (clamped to <= 4).
- */
 export function refractProjectileThroughCryoPrism(
   sim: WorldSim,
   b: SimProjectileState,
   prism: SimPropState,
 ): boolean {
   if (b.team !== 'player' || b.hitEntityIds.includes(prism.id)) return false;
-
   b.hitEntityIds.push(prism.id);
-  b.passedThroughCoverOrPrism = true;
-  prism.hitFlashTimer = 0.16;
-
-  const clusterAngle = findDensestEnemyClusterAngle(sim, prism.x, prism.y, b.angle);
-  const boostedDamage = Math.max(1, Math.round(b.damage * 1.2));
-  const speed = Math.max(420, Math.hypot(b.vx, b.vy));
-
-  if ((b.splitGeneration ?? 0) === 0) {
-    const prevIds = new Set(sim.projectiles.map((p) => p.id));
-    const origTtl = Math.max(b.ttlSec, 1.35);
-    b.ttlSec = 0;
-
-    const shotFlags = (b.shotFlags ?? 0) | SHOT_FLAG.DYNAMIC_BOUNCE;
-    sim.spawnDeterministicVolley({
-      kind: 'bullet_volley_spawned',
-      tick: sim.tick,
-      eventId: sim.nextVolleyEventId++,
-      ownerId: b.ownerId,
-      team: 'player',
-      weaponId: b.weaponId ?? 'hunter_crossbow',
-      x: prism.x + Math.cos(clusterAngle) * (prism.radius + b.radius + 3),
-      y: prism.y + Math.sin(clusterAngle) * (prism.radius + b.radius + 3),
-      angle: clusterAngle,
-      pelletCount: 3,
-      spreadRad: CRYO_PRISM_FAN_SPREAD_RAD,
-      speed,
-      damage: boostedDamage,
-      critChance: 0,
-      knockback: b.knockback,
-      radius: b.radius,
-      ttlSec: origTtl,
-      pierceCount: b.pierceRemaining,
-      bounceCount: Math.min(4, Math.max(1, b.bounceRemaining)),
-      element: 'chill',
-      amplifiedByShield: Boolean(b.amplifiedByShield),
-      seed: ((sim.tick + 1) * 2654435761) >>> 0,
-      shotFlags,
-      flags: shotFlags,
-      replacedProjectileId: b.id,
-    });
-
-    const rayAngles = [
-      clusterAngle - CRYO_PRISM_FAN_SPREAD_RAD * 0.5,
-      clusterAngle,
-      clusterAngle + CRYO_PRISM_FAN_SPREAD_RAD * 0.5,
-    ];
-    let rayIdx = 0;
-    for (let i = 0; i < sim.projectiles.length; i++) {
-      const child = sim.projectiles[i]!;
-      if (!prevIds.has(child.id)) {
-        const exactAng = rayAngles[rayIdx] ?? clusterAngle;
-        rayIdx += 1;
-        child.angle = exactAng;
-        child.vx = Math.cos(exactAng) * speed;
-        child.vy = Math.sin(exactAng) * speed;
-        child.isCrit = b.isCrit;
-        child.splitGeneration = 1;
-        child.passedThroughCoverOrPrism = true;
-        child.bouncesDone = (b.bouncesDone ?? 0) + 1;
-        child.hitEntityIds.push(prism.id);
-      }
-    }
-    return true;
-  }
-
-  b.damage = boostedDamage;
-  b.element = 'chill';
-  b.bounceRemaining = Math.min(4, (b.bounceRemaining ?? 0) + 1);
-  b.bouncesDone = (b.bouncesDone ?? 0) + 1;
-  b.shotFlags = (b.shotFlags ?? 0) | SHOT_FLAG.DYNAMIC_BOUNCE;
-  b.angle = clusterAngle;
-  b.vx = Math.cos(clusterAngle) * speed;
-  b.vy = Math.sin(clusterAngle) * speed;
-  b.x = prism.x + Math.cos(clusterAngle) * (prism.radius + b.radius + 3);
-  b.y = prism.y + Math.sin(clusterAngle) * (prism.radius + b.radius + 3);
-  b.ttlSec = Math.max(b.ttlSec, 1.2);
+  b.ttlSec = 0;
+  triggerCryoTuningObeliskPulse(sim, prism, b.ownerId);
   return true;
 }
 
@@ -679,6 +619,10 @@ export function updateP1CTacticalProps(sim: WorldSim, dtSec: number): void {
   for (let i = 0; i < sim.props.length; i++) {
     const prop = sim.props[i]!;
     if (prop.hp <= 0) continue;
+
+    if (prop.prismPulseCooldownSec !== undefined && prop.prismPulseCooldownSec > 0) {
+      prop.prismPulseCooldownSec = Math.max(0, prop.prismPulseCooldownSec - dtSec);
+    }
 
     if (prop.ttlSec !== undefined && prop.ttlSec > 0) {
       prop.ttlSec -= dtSec;

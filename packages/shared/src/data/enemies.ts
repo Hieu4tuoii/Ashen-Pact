@@ -195,8 +195,8 @@ export const ENEMIES: Record<string, EnemyStatsDef> = {
   },
   kryssa_clone: {
     id: 'kryssa_clone',
-    nameVi: 'Ảo Ảnh Gương Kryssa',
-    nameEn: 'Kryssa Mirror Clone',
+    nameVi: 'Ảo Ảnh Sương Giá Kryssa',
+    nameEn: 'Kryssa Frost Mirage',
     biome: 2,
     role: 'ranged',
     hp: 16,

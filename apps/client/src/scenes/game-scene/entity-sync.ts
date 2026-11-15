@@ -480,8 +480,10 @@ export function syncEnemyRigsImpl(this: GameScene, dtSec: number): void {
       this.enemyRigs.set(e.id, rig);
     }
 
-    // Mirror clones (kryssa_clone) have no ground shadow so observant players can distinguish real vs illusion!
-    rig.setShadowVisible(!ENEMIES[e.defId]?.isIllusion);
+    // Mirror clones (kryssa_clone) have no ground shadow and semi-transparent alpha so observant players can distinguish real vs illusion!
+    const isIllusion = Boolean(ENEMIES[e.defId]?.isIllusion);
+    rig.setShadowVisible(!isIllusion);
+    rig.container.setAlpha(isIllusion ? 0.76 : 1.0);
 
     if (e.bossBurrowed) {
       rig.container.setVisible(false);
@@ -562,7 +564,10 @@ export function syncPropsImpl(this: GameScene, dtSec: number): void {
       (prop.pressTimer ?? 0) >= 3.2
         ? 'fallen'
         : prop.coverState;
-    const targetTex = TextureBaker.getPropTextureKey(prop.kind, effectiveCoverState);
+    let targetTex = TextureBaker.getPropTextureKey(prop.kind, effectiveCoverState);
+    if (prop.kind === 'cryo_prism_pillar' && (prop.prismPulseCooldownSec ?? 0) > 0) {
+      targetTex = 'prop_cryo_prism_pillar_cooldown';
+    }
     if (!pv) {
       const shadow = this.add.sprite(prop.x, prop.y + 9, 'prop_shadow');
       shadow.setScale(invBake);
@@ -617,8 +622,7 @@ export function syncPropsImpl(this: GameScene, dtSec: number): void {
         const stretch = Math.sin(phase) * 0.045;
         pv.sprite.setScale(invBake * (1 + stretch), invBake * (1 - stretch));
       } else if (prop.kind === 'cryo_prism_pillar' || prop.kind === 'crystal_pillar') {
-        const bob = Math.sin(phase * 0.8) * 1.6;
-        pv.sprite.setPosition(prop.x, prop.y + bob);
+        pv.sprite.setPosition(prop.x, prop.y);
         const shimmer = 1 + Math.cos(phase) * 0.025;
         pv.sprite.setScale(invBake * shimmer, invBake * shimmer);
       } else if (

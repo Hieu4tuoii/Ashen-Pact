@@ -818,9 +818,11 @@ export class LightingPipeline {
         radius = prop.lightRadius * (1 + pulse);
         alpha = clamp(0.22 + pulse, 0.12, 0.28);
       } else if (prop.kind === 'crystal_pillar') {
-        const pulse = Math.sin(this.elapsedSec * 3.2 + prop.id) * 0.05;
-        radius = prop.lightRadius * (1 + pulse);
-        alpha = 0.32 + pulse;
+        radius = 84;
+        alpha = 0.16;
+      } else if (prop.kind === 'cryo_prism_pillar') {
+        radius = 72;
+        alpha = 0.14;
       } else if (prop.kind === 'explosive_barrel') {
         alpha = 0.25;
       }

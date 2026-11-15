@@ -7,6 +7,9 @@ import {
   TILE_SIZE,
   WorldSim,
 } from '../src/index.js';
+import { ENEMIES } from '../src/data/enemies.js';
+import viLocale from '../src/i18n/vi.json';
+import enLocale from '../src/i18n/en.json';
 
 function createBiome2Sim(seed = 7201): WorldSim {
   const sim = new WorldSim({ seed, startInHub: false });
@@ -161,28 +164,22 @@ describe('AP2 Phase P1C.2 — Biome 2 Survival Law ("Quán Tính Băng Vĩnh C�
     expect(iceBlock.bouncesRemaining).toBe(0);
   });
 
-  it('implements cryo_prism_pillar: refracts splitGeneration=0 player bullet into 3 Chill fan rays (+20% DMG, DYNAMIC_BOUNCE) toward densest enemy cluster, and caps splitGeneration=1 without re-splitting', () => {
+  it('absorbs player bullets on cryo_prism_pillar without splitting, emits r=72px enemy-only Chill pulse (14 DMG, 2.0s chill, 1.20s ICD, 0 RNG calls), and does not freeze client prediction', () => {
     const sim = createBiome2Sim(7204);
-    const prism = sim.spawnProp('cryo_prism_pillar', 420, 320);
+    const obelisk = sim.spawnProp('cryo_prism_pillar', 300, 300);
+    const enemy = sim.spawnEnemy('frost_bat', 355, 300, true); // dist 55 <= 72 + r
+    enemy.hp = 500;
+    enemy.maxHp = 500;
+    const rngBefore = sim.rng.getState();
 
-    // Dense enemy cluster of 3 enemies to the North-East of the prism (around 560, 200)
-    const c1 = sim.spawnEnemy('goblin_shooter', 560, 200, true);
-    const c2 = sim.spawnEnemy('goblin_shooter', 580, 210, true);
-    const c3 = sim.spawnEnemy('goblin_shooter', 550, 190, true);
-    // Lone enemy to the South (420, 480)
-    sim.spawnEnemy('goblin_shooter', 420, 480, true);
-
-    const expectedClusterAngle = Math.atan2(c1.y - prism.y, c1.x - prism.x);
-
-    // Fire a splitGeneration = 0 player projectile into the prism along +X (angle = 0)
     sim.spawnDeterministicVolley({
       kind: 'bullet_volley_spawned',
       eventId: sim.nextVolleyEventId++,
       ownerId: sim.player.id,
       team: 'player',
       weaponId: 'hunter_crossbow',
-      x: 370,
-      y: 320,
+      x: 280,
+      y: 300,
       angle: 0,
       pelletCount: 1,
       spreadRad: 0,
@@ -192,104 +189,83 @@ describe('AP2 Phase P1C.2 — Biome 2 Survival Law ("Quán Tính Băng Vĩnh C�
       knockback: 40,
       radius: 5,
       ttlSec: 1.5,
-      pierceCount: 1,
+      pierceCount: 0,
       bounceCount: 0,
       element: 'none',
       seed: 1001,
     });
+    sim.step(SIM_STEP_SEC);
 
-    for (let t = 0; t < 12; t++) {
-      sim.step(SIM_STEP_SEC);
-      if (sim.projectiles.length >= 3) break;
-    }
+    expect(sim.projectiles.filter((p) => p.team === 'player' && p.ttlSec > 0)).toHaveLength(0);
+    expect((sim.projectiles[0]?.shotFlags ?? 0) & SHOT_FLAG.DYNAMIC_BOUNCE).toBe(0);
+    expect(enemy.chillTimer).toBeGreaterThanOrEqual(1.9);
+    expect(obelisk.prismPulseCooldownSec).toBeCloseTo(1.2, 2);
+    expect(sim.rng.getState()).toBe(rngBefore);
+  });
 
-    expect(sim.projectiles.length).toBe(3);
-    for (const ray of sim.projectiles) {
-      expect(ray.splitGeneration).toBe(1);
-      expect(ray.element).toBe('chill');
-      expect(ray.damage).toBe(60); // 50 * 1.20 (+20% Additive DMG)
-      expect((ray.shotFlags ?? 0) & SHOT_FLAG.DYNAMIC_BOUNCE).not.toBe(0);
-    }
-
-    // Middle ray should be aimed toward the NE enemy cluster
-    const angles = sim.projectiles.map((p) => p.angle).sort((a, b) => a - b);
-    expect(angles[1]!).toBeCloseTo(expectedClusterAngle, 1);
-
-    // Now test anti-infinite-split rule: a splitGeneration = 1 projectile hitting a second prism must NOT split into 3 more rays!
-    const prism2 = sim.spawnProp('cryo_prism_pillar', 480, 320);
-    sim.projectiles.length = 0;
+  it('terminates kryssa_ice_beam and bullets on crystal_pillar across both server and client cosmetic prediction while preserving Vanguard shield focus_laser refraction', () => {
+    const sim = createBiome2Sim(7205);
+    sim.spawnProp('crystal_pillar', 320, 240);
     sim.spawnDeterministicVolley({
       kind: 'bullet_volley_spawned',
       eventId: sim.nextVolleyEventId++,
-      ownerId: sim.player.id,
-      team: 'player',
-      weaponId: 'hunter_crossbow',
-      x: 445,
-      y: 320,
+      ownerId: 99,
+      team: 'enemy',
+      weaponId: 'kryssa_ice_beam',
+      x: 300,
+      y: 240,
       angle: 0,
       pelletCount: 1,
       spreadRad: 0,
-      speed: 600,
-      damage: 60,
-      critChance: 0,
-      knockback: 40,
-      radius: 5,
+      speed: 500,
+      damage: 15,
+      radius: 8,
       ttlSec: 1.5,
-      pierceCount: 1,
-      bounceCount: 1,
+      pierceCount: 0,
+      bounceCount: 0,
       element: 'chill',
       seed: 1002,
     });
-    const gen1Bullet = sim.projectiles[0]!;
-    gen1Bullet.splitGeneration = 1;
-    gen1Bullet.hitEntityIds.push(prism.id);
-
-    for (let t = 0; t < 10; t++) {
+    for (let t = 0; t < 5; t++) {
       sim.step(SIM_STEP_SEC);
-      if (gen1Bullet.hitEntityIds.includes(prism2.id)) break;
+      if (sim.projectiles.filter((p) => p.weaponId === 'kryssa_ice_beam' && p.ttlSec > 0).length === 0) break;
     }
+    expect(sim.projectiles.filter((p) => p.weaponId === 'kryssa_ice_beam' && p.ttlSec > 0)).toHaveLength(0);
 
-    // Still only 1 projectile, with damage boosted +20% (72) and bounceRemaining incremented (2 <= 4)
-    expect(sim.projectiles.length).toBe(1);
-    expect(gen1Bullet.damage).toBe(72);
-    expect(gen1Bullet.bounceRemaining).toBe(2);
+    const clientSim = createBiome2Sim(7206);
+    clientSim.spawnProp('crystal_pillar', 320, 240);
+    clientSim.spawnDeterministicVolley(
+      {
+        kind: 'bullet_volley_spawned',
+        eventId: clientSim.nextVolleyEventId++,
+        ownerId: clientSim.player.id,
+        team: 'player',
+        weaponId: 'hunter_crossbow',
+        x: 315,
+        y: 240,
+        angle: 0,
+        pelletCount: 1,
+        spreadRad: 0,
+        speed: 600,
+        damage: 50,
+        shotFlags: SHOT_FLAG.DYNAMIC_BOUNCE,
+        bounceCount: 1,
+        radius: 6,
+        ttlSec: 1.5,
+        element: 'none',
+        seed: 1003,
+      },
+      false,
+    );
+    const predBolt = clientSim.projectiles[0]!;
+    clientSim.stepClientProjectilesCosmetic(SIM_STEP_SEC);
+    expect(predBolt.awaitingServerRedirectTimer ?? 0).toBe(0);
+    expect(predBolt.ttlSec).toBeLessThanOrEqual(0);
+  });
 
-    // Also verify a critical projectile (isCrit = true) refracting through prism does NOT double-multiply 1.5x crit damage
-    const prism3 = sim.spawnProp('cryo_prism_pillar', 520, 420);
-    sim.projectiles.length = 0;
-    sim.spawnDeterministicVolley({
-      kind: 'bullet_volley_spawned',
-      eventId: sim.nextVolleyEventId++,
-      ownerId: sim.player.id,
-      team: 'player',
-      weaponId: 'hunter_crossbow',
-      x: 485,
-      y: 420,
-      angle: 0,
-      pelletCount: 1,
-      spreadRad: 0,
-      speed: 600,
-      damage: 100,
-      critChance: 1, // 100 * 1.5 = 150 crit damage
-      knockback: 40,
-      radius: 5,
-      ttlSec: 1.5,
-      pierceCount: 1,
-      bounceCount: 0,
-      element: 'none',
-      seed: 1003,
-    });
-    expect(sim.projectiles[0]!.damage).toBe(100);
-    expect(sim.projectiles[0]!.isCrit).toBe(true);
-    for (let t = 0; t < 10; t++) {
-      sim.step(SIM_STEP_SEC);
-      if (sim.projectiles.length >= 3) break;
-    }
-    expect(sim.projectiles.length).toBe(3);
-    for (const r of sim.projectiles) {
-      expect(r.isCrit).toBe(true);
-      expect(r.damage).toBe(120); // 100 * 1.20 (+20%), preserving isCrit
-    }
-    void prism3;
+  it('syncs kryssa_clone Frost Mirage labels in shared definitions', () => {
+    expect(ENEMIES.kryssa_clone.nameVi).toBe('Ảo Ảnh Sương Giá Kryssa');
+    expect(viLocale.enemies.kryssa_clone.name).toBe('Ảo Ảnh Sương Giá Kryssa');
+    expect(enLocale.enemies.kryssa_clone.name).toBe('Kryssa Frost Mirage');
   });
 });

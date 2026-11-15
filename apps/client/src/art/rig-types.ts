@@ -22,6 +22,7 @@ export interface RigPartDef {
 export interface EntityRigDef {
   id: string;
   nameVi: string;
+  labelVi?: string;
   roleVi: string;
   worldWidth: number;
   worldHeight: number;

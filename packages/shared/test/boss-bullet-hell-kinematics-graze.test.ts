@@ -433,18 +433,8 @@ describe('Boss Bullet-Hell Kinematics, Pool Reset & Bullet Graze', () => {
     prismMage.stateTimer = 0.005;
     prismMage.telegraphDurationSec = 0.55;
     prismSim.step(DT);
-    expect(prismSim.projectiles.length).toBe(1);
-    expect(prismSim.projectiles[0]!.bulletShape).toBe('lance');
-
-    for (let i = 0; i < 30; i++) {
-      prismSim.step(DT);
-      if (prismSim.projectiles.some((b) => b.team === 'enemy' && b.splitGeneration === 1)) break;
-    }
-    const refracted = prismSim.projectiles.filter(
-      (b) => b.team === 'enemy' && b.splitGeneration === 1,
-    );
-    expect(refracted.length).toBe(3);
-    expect(refracted.every((b) => b.bulletShape === 'small_orb')).toBe(true);
+    expect(prismSim.projectiles.length).toBe(3);
+    expect(prismSim.projectiles.every((b) => b.bulletShape === 'orb')).toBe(true);
   });
 });
 

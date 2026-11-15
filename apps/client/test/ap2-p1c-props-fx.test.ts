@@ -1,5 +1,6 @@
-import { WorldSim } from '@ashen-pact/shared';
+import { ENEMIES, WorldSim } from '@ashen-pact/shared';
 import { describe, expect, it } from 'vitest';
+import { KRYSSA_CLONE_RIG_DEF } from '../src/art/rig-defs-biome2-boss.js';
 import { TextureBaker } from '../src/art/texture-baker.js';
 import {
   drawP1CActiveOverlays,
@@ -142,5 +143,11 @@ describe('AP2 Phase P1C.4 — Biome 2 & Biome 3 Procedural Prop Texture Keys & C
     expect(groundG.calls.includes('strokeCircle')).toBe(true);
     expect(fillAlphas.length).toBeGreaterThan(0);
     expect(Math.max(...fillAlphas)).toBeLessThanOrEqual(0.08);
+  });
+
+  it('syncs kryssa_clone Frost Mirage labels across all 4 files and sets container alpha to 0.76', () => {
+    expect(ENEMIES.kryssa_clone.nameVi).toBe('Ảo Ảnh Sương Giá Kryssa');
+    expect(KRYSSA_CLONE_RIG_DEF.nameVi).toBe('Ảo Ảnh Sương Giá Kryssa');
+    expect(KRYSSA_CLONE_RIG_DEF.labelVi).toBe('Ảo Ảnh Sương Giá Kryssa');
   });
 });

@@ -405,15 +405,16 @@ export function bakeP1CProps(scene: Phaser.Scene, scale: number): void {
     ctx.stroke();
   });
 
-  // 4. Biome 2 Pillar Toy: cryo_prism_pillar
-  bakeCustomCanvas(scene, 'prop_cryo_prism_pillar', 42, 48, scale, (ctx) => {
+  // 4. Biome 2 Pillar Toy: cryo_prism_pillar (Cryo Tuning Obelisk — 3-pronged tuning-fork stone monolith)
+  const drawCryoObelisk = (ctx: CanvasRenderingContext2D, yRuneColor: string) => {
     outlined(
       ctx,
       {
-        fill: PALETTE.SLATE_MID,
-        shade: PALETTE.SLATE_DARK,
-        highlight: PALETTE.STEEL_LIGHT,
-        outlineWidth: 2.4,
+        fill: PALETTE.SLATE_DARK,
+        shade: '#141019',
+        highlight: '#334155',
+        outlineWidth: 2.0,
+        outlineColor: '#141019',
       },
       (c) => traceRoundedRect(c, -14, 6, 28, 12, 4),
       { cx: 0, cy: 12, rx: 14, ry: 6 },
@@ -421,29 +422,47 @@ export function bakeP1CProps(scene: Phaser.Scene, scale: number): void {
     outlined(
       ctx,
       {
-        fill: PALETTE.CYAN_FROST,
-        shade: PALETTE.AZURE_CORE,
-        highlight: PALETTE.ICE_WHITE,
-        outlineWidth: 2.5,
+        fill: '#264E66',
+        shade: PALETTE.SLATE_DARK,
+        highlight: '#38BDF8',
+        outlineWidth: 2.0,
+        outlineColor: '#141019',
       },
       (c) =>
         tracePolygon(c, [
-          { x: 0, y: -20 },
-          { x: 12, y: -7 },
-          { x: 10, y: 11 },
-          { x: 0, y: 15 },
-          { x: -10, y: 11 },
-          { x: -12, y: -7 },
+          { x: -14, y: 8 },
+          { x: -14, y: -16 },
+          { x: -9, y: -16 },
+          { x: -7, y: -4 },
+          { x: -3, y: -20 },
+          { x: 3, y: -20 },
+          { x: 7, y: -4 },
+          { x: 9, y: -16 },
+          { x: 14, y: -16 },
+          { x: 14, y: 8 },
+          { x: 0, y: 11 },
         ]),
-      { cx: 0, cy: -2, rx: 12, ry: 17 },
+      { cx: 0, cy: -2, rx: 14, ry: 18 },
     );
+    // Center Y-rune (cyan #38BDF8 when ready, deep indigo #1E3A5F on cooldown)
     ctx.beginPath();
-    ctx.arc(0, -3, 4.5, 0, Math.PI * 2);
-    ctx.fillStyle = PALETTE.ICE_WHITE;
-    ctx.fill();
-    ctx.lineWidth = 1.5;
-    ctx.strokeStyle = PALETTE.INK_DARK;
+    ctx.moveTo(0, 6);
+    ctx.lineTo(0, -1);
+    ctx.lineTo(-4, -8);
+    ctx.moveTo(0, -1);
+    ctx.lineTo(4, -8);
+    ctx.strokeStyle = yRuneColor;
+    ctx.lineWidth = 2.0;
+    ctx.lineCap = 'round';
     ctx.stroke();
+  };
+
+  bakeCustomCanvas(scene, 'prop_cryo_prism_pillar', 42, 48, scale, (ctx) => {
+    drawCryoObelisk(ctx, '#38BDF8');
+  });
+
+  bakeCustomCanvas(scene, 'prop_cryo_prism_pillar_cooldown', 42, 48, scale, (ctx) => {
+    drawCryoObelisk(ctx, '#1E3A5F');
   });
 
   // 5. Biome 3 Barricade: forge_blast_shield ('low' | 'flipped' | 'sliding') — Magma Core Anvil / Pressurized Dwarven Slag Cylinder

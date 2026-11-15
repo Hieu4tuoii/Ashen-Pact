@@ -9,11 +9,12 @@ function buildKryssaQueenRig(spec: {
   isClone: boolean;
 }): EntityRigDef {
   const s = spec.scale;
-  const bossOutline = spec.isClone ? undefined : BOSS_OUTLINE_WIDTH;
-  const bossOutlineColor = spec.isClone ? undefined : PALETTE.INK_DEEP;
+  const bossOutline = spec.isClone ? 1.8 : BOSS_OUTLINE_WIDTH;
+  const bossOutlineColor = spec.isClone ? '#141019' : PALETTE.INK_DEEP;
   return {
     id: spec.id,
     nameVi: spec.nameVi,
+    labelVi: spec.nameVi,
     roleVi: spec.roleVi,
     worldWidth: Math.round(44 * s),
     worldHeight: Math.round(50 * s),
@@ -46,9 +47,9 @@ function buildKryssaQueenRig(spec: {
               { x: 19 * s, y: -16 * s },
             ],
             style: {
-              fill: spec.isClone ? PALETTE.ELECTRIC_VIOLET : PALETTE.COBALT_SHADE,
-              shade: PALETTE.ABYSS_BLUE,
-              highlight: PALETTE.CYAN_FROST,
+              fill: spec.isClone ? '#5B4B8A' : PALETTE.COBALT_SHADE,
+              shade: spec.isClone ? '#356D8E' : PALETTE.ABYSS_BLUE,
+              highlight: spec.isClone ? '#6BA6C2' : PALETTE.CYAN_FROST,
               outlineColor: bossOutlineColor,
               outlineWidth: bossOutline,
             },
@@ -74,8 +75,8 @@ function buildKryssaQueenRig(spec: {
               { x: -2 * s, y: 4 * s },
             ],
             style: {
-              fill: PALETTE.ABYSS_BLUE,
-              shade: PALETTE.INK_DARK,
+              fill: spec.isClone ? '#356D8E' : PALETTE.ABYSS_BLUE,
+              shade: spec.isClone ? '#5B4B8A' : PALETTE.INK_DARK,
               outlineColor: bossOutlineColor,
               outlineWidth: bossOutline,
             },
@@ -101,8 +102,8 @@ function buildKryssaQueenRig(spec: {
               { x: -2 * s, y: 4 * s },
             ],
             style: {
-              fill: PALETTE.ABYSS_BLUE,
-              shade: PALETTE.INK_DARK,
+              fill: spec.isClone ? '#356D8E' : PALETTE.ABYSS_BLUE,
+              shade: spec.isClone ? '#5B4B8A' : PALETTE.INK_DARK,
               outlineColor: bossOutlineColor,
               outlineWidth: bossOutline,
             },
@@ -132,9 +133,9 @@ function buildKryssaQueenRig(spec: {
               { x: -7 * s, y: -2 * s },
             ],
             style: {
-              fill: spec.isClone ? PALETTE.CYAN_FROST : PALETTE.AZURE_CORE,
-              shade: PALETTE.COBALT_SHADE,
-              highlight: PALETTE.ICE_WHITE,
+              fill: spec.isClone ? '#356D8E' : PALETTE.AZURE_CORE,
+              shade: spec.isClone ? '#5B4B8A' : PALETTE.COBALT_SHADE,
+              highlight: spec.isClone ? '#6BA6C2' : PALETTE.ICE_WHITE,
               outlineColor: bossOutlineColor,
               outlineWidth: bossOutline,
             },
@@ -149,9 +150,9 @@ function buildKryssaQueenRig(spec: {
               { x: -4.5 * s, y: -2 * s },
             ],
             style: {
-              fill: PALETTE.ICE_WHITE,
-              shade: PALETTE.ELECTRIC_VIOLET,
-              highlight: PALETTE.BONE_WHITE,
+              fill: spec.isClone ? '#6BA6C2' : PALETTE.ICE_WHITE,
+              shade: spec.isClone ? '#5B4B8A' : PALETTE.ELECTRIC_VIOLET,
+              highlight: spec.isClone ? '#6BA6C2' : PALETTE.BONE_WHITE,
             },
           },
         ],
@@ -175,8 +176,8 @@ function buildKryssaQueenRig(spec: {
               { x: -5 * s, y: 0 },
             ],
             style: {
-              fill: PALETTE.ICE_WHITE,
-              shade: PALETTE.CYAN_FROST,
+              fill: spec.isClone ? '#6BA6C2' : PALETTE.ICE_WHITE,
+              shade: spec.isClone ? '#356D8E' : PALETTE.CYAN_FROST,
               outlineColor: bossOutlineColor,
               outlineWidth: bossOutline,
             },
@@ -206,9 +207,9 @@ function buildKryssaQueenRig(spec: {
               { x: 11 * s, y: -5 * s },
             ],
             style: {
-              fill: PALETTE.ICE_WHITE,
-              shade: PALETTE.CYAN_FROST,
-              highlight: PALETTE.BONE_WHITE,
+              fill: spec.isClone ? '#6BA6C2' : PALETTE.ICE_WHITE,
+              shade: spec.isClone ? '#356D8E' : PALETTE.CYAN_FROST,
+              highlight: spec.isClone ? '#6BA6C2' : PALETTE.BONE_WHITE,
               outlineColor: bossOutlineColor,
               outlineWidth: bossOutline,
             },
@@ -221,9 +222,9 @@ function buildKryssaQueenRig(spec: {
             h: 15 * s,
             r: 7 * s,
             style: {
-              fill: PALETTE.ICE_WHITE,
-              shade: PALETTE.CYAN_FROST,
-              highlight: PALETTE.BONE_WHITE,
+              fill: spec.isClone ? '#6BA6C2' : PALETTE.ICE_WHITE,
+              shade: spec.isClone ? '#356D8E' : PALETTE.CYAN_FROST,
+              highlight: spec.isClone ? '#6BA6C2' : PALETTE.BONE_WHITE,
               outlineColor: bossOutlineColor,
               outlineWidth: bossOutline,
             },
@@ -234,8 +235,8 @@ function buildKryssaQueenRig(spec: {
             cy: 0,
             r: 2.2 * s,
             style: {
-              fill: spec.isClone ? PALETTE.ELECTRIC_VIOLET : PALETTE.AZURE_CORE,
-              highlight: PALETTE.ICE_WHITE,
+              fill: spec.isClone ? '#5B4B8A' : PALETTE.AZURE_CORE,
+              highlight: spec.isClone ? '#6BA6C2' : PALETTE.ICE_WHITE,
               outlineWidth: 0,
             },
           },
@@ -245,8 +246,8 @@ function buildKryssaQueenRig(spec: {
             cy: 0,
             r: 2.2 * s,
             style: {
-              fill: spec.isClone ? PALETTE.ELECTRIC_VIOLET : PALETTE.AZURE_CORE,
-              highlight: PALETTE.ICE_WHITE,
+              fill: spec.isClone ? '#5B4B8A' : PALETTE.AZURE_CORE,
+              highlight: spec.isClone ? '#6BA6C2' : PALETTE.ICE_WHITE,
               outlineWidth: 0,
             },
           },
@@ -271,8 +272,8 @@ function buildKryssaQueenRig(spec: {
             h: 28 * s,
             r: 1.5 * s,
             style: {
-              fill: PALETTE.CYAN_FROST,
-              shade: PALETTE.COBALT_SHADE,
+              fill: spec.isClone ? '#356D8E' : PALETTE.CYAN_FROST,
+              shade: spec.isClone ? '#5B4B8A' : PALETTE.COBALT_SHADE,
               outlineColor: bossOutlineColor,
               outlineWidth: bossOutline,
             },
@@ -286,9 +287,9 @@ function buildKryssaQueenRig(spec: {
               { x: -9 * s, y: -12 * s },
             ],
             style: {
-              fill: PALETTE.ICE_WHITE,
-              shade: PALETTE.ELECTRIC_VIOLET,
-              highlight: PALETTE.BONE_WHITE,
+              fill: spec.isClone ? '#6BA6C2' : PALETTE.ICE_WHITE,
+              shade: spec.isClone ? '#5B4B8A' : PALETTE.ELECTRIC_VIOLET,
+              highlight: spec.isClone ? '#6BA6C2' : PALETTE.BONE_WHITE,
               outlineColor: bossOutlineColor,
               outlineWidth: bossOutline,
             },
@@ -311,8 +312,8 @@ function buildKryssaQueenRig(spec: {
             cy: 0,
             r: 4.5 * s,
             style: {
-              fill: PALETTE.ICE_WHITE,
-              shade: PALETTE.CYAN_FROST,
+              fill: spec.isClone ? '#6BA6C2' : PALETTE.ICE_WHITE,
+              shade: spec.isClone ? '#356D8E' : PALETTE.CYAN_FROST,
               outlineColor: bossOutlineColor,
               outlineWidth: bossOutline,
             },
@@ -333,8 +334,8 @@ export const KRYSSA_ICE_QUEEN_RIG_DEF: EntityRigDef = buildKryssaQueenRig({
 
 export const KRYSSA_CLONE_RIG_DEF: EntityRigDef = buildKryssaQueenRig({
   id: 'kryssa_clone',
-  nameVi: 'Ảo Ảnh Băng Hậu (Mirror Clone)',
-  roleVi: 'Phân Thân Không Bóng Đổ · Biome 2',
+  nameVi: 'Ảo Ảnh Sương Giá Kryssa',
+  roleVi: 'Ảo Ảnh Không Bóng Đổ · Biome 2',
   scale: 1.05,
   isClone: true,
 });

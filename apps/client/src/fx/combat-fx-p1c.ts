@@ -15,6 +15,7 @@ import type Phaser from 'phaser';
 import { PALETTE } from '../art/palette.js';
 import { zzfx } from '../audio/zzfx.js';
 import type { CombatFxManager } from './combat-fx.js';
+import { routeCutoutBurstByRadius } from './combat-fx-spawners.js';
 import {
   type Batch2SceneContext,
   type TransientWeaponV2Shape,
@@ -144,6 +145,16 @@ export function handleP1CSimEvent(
   allowStressSfx: boolean,
 ): boolean {
   if (ev.kind === 'explosion') {
+    if (ev.sourceDefId === 'cryo_prism_pillar') {
+      if (!isStress && scene.fx) {
+        routeCutoutBurstByRadius(scene.fx, ev.x, ev.y, 72, 'fx_sh_nova_cryo');
+        scene.lighting?.spawnTransientLight(ev.x, ev.y, 110, PALETTE.CYAN_FROST, 0.88, 0.22);
+      }
+      if (allowStressSfx) {
+        zzfx.play('shatter', ev.x, scene.camFocusX, ev.y, scene.camFocusY);
+      }
+      return true;
+    }
     if (ev.sourceDefId === 'glacial_barricade') {
       if (!isStress) {
         const pAim = sim.player?.aimAngle ?? 0;

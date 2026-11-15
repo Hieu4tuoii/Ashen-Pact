@@ -13,10 +13,9 @@ import {
 } from './sim-blessings.js';
 import { spawnSeedGunLifeBlossomImpl, triggerLauncherProjectileExplosionImpl } from './sim-player.js';
 import { setActiveDuoReactionWeaponId, tryBouncePlasmaOverloadStarOnWall, tryHoldSuperconductRailClient, tryRedirectSuperconductRailServer } from './sim-duo-boons.js';
-import { refractEnemyProjectileThroughCryoPrism } from './sim-enemies-tactical-ai.js';
 import { tryChargeGlacialBarricadeWithCryoLaser } from './sim-boss-armor-break.js';
 import { isFlippableBarricadeProp, isKickableProp } from './sim-tactical-physics.js';
-import { refractProjectileThroughCryoPrism } from './sim-tactical-physics-p1c.js';
+import { triggerCryoTuningObeliskPulse } from './sim-tactical-physics-p1c.js';
 import {
   canApplyFragSubmunitionHit,
   copyLegendaryVolleyFieldsToProjectile,
@@ -42,6 +41,7 @@ import {
   type BulletVolleySpawnEvent,
   MAX_ENEMY_PROJECTILES,
   MAX_PLAYER_PROJECTILES,
+  type PropKind,
   type SimProjectileState,
 } from './world-sim-types.js';
 import type { WorldSim } from './world-sim.js';
@@ -96,6 +96,8 @@ function pushImpactEvent(
   element?: SimProjectileState['element'],
   weaponId?: string,
   ownerId?: number,
+  propId?: number,
+  propKind?: PropKind,
 ): void {
   sim.events.push({
     kind: 'projectile_impact',
@@ -110,6 +112,8 @@ function pushImpactEvent(
     ...(element !== undefined ? { element } : {}),
     ...(weaponId !== undefined ? { weaponId } : {}),
     ...(ownerId !== undefined ? { ownerId } : {}),
+    ...(propId !== undefined ? { propId } : {}),
+    ...(propKind !== undefined ? { propKind } : {}),
   });
 }
 
@@ -447,27 +451,27 @@ export function updateProjectilesImpl(this: WorldSim, dtSec: number): void {
       for (let k = 0; k < this.props.length; k++) {
         const prop = this.props[k]!;
         if (prop.hp <= 0 || shouldClusterMortarSkipCoverProp(b, prop)) continue;
-        // Boss Kryssa's ice laser refracts off indestructible Crystal Pillars toward the nearest player!
+        // Permafrost Bastion Pillar (crystal_pillar): blocks lasers & bullets cleanly
         if (prop.kind === 'crystal_pillar' && circleVsCircle(b, prop)) {
-          if (!b.hitEntityIds.includes(prop.id)) {
-            b.hitEntityIds.push(prop.id);
-            b.passedThroughCoverOrPrism = true;
-            b.bouncesDone = (b.bouncesDone ?? 0) + 1;
-            prop.hitFlashTimer = 0.16;
-            const spd = Math.hypot(b.vx, b.vy) || 350;
-            const nearestPl = this.findNearestAlivePlayer(prop.x, prop.y);
-            const refractAng =
-              b.weaponId === 'kryssa_ice_beam'
-                ? Math.atan2(nearestPl.y - prop.y, nearestPl.x - prop.x)
-                : b.angle + Math.PI * 0.65;
-            b.angle = refractAng;
-            b.vx = Math.cos(refractAng) * spd;
-            b.vy = Math.sin(refractAng) * spd;
-            b.x = prop.x + Math.cos(refractAng) * (prop.radius + b.radius + 3);
-            b.y = prop.y + Math.sin(refractAng) * (prop.radius + b.radius + 3);
-            b.ttlSec = Math.max(b.ttlSec, 1.4);
-          }
-          continue;
+          prop.hitFlashTimer = 0.16;
+          b.ttlSec = 0;
+          hitProp = true;
+          pushImpactEvent(
+            this,
+            b.x,
+            b.y,
+            b.angle,
+            b.team,
+            true,
+            false,
+            b.isCrit,
+            b.element,
+            b.weaponId,
+            b.ownerId,
+            prop.id,
+            prop.kind,
+          );
+          break;
         }
         const isMeleeWaveProj =
           b.team === 'player' &&
@@ -488,17 +492,15 @@ export function updateProjectilesImpl(this: WorldSim, dtSec: number): void {
         if (!prop.destructible || prop.coverState === 'sliding') continue;
         if (prop.kind === 'cryo_prism_pillar' && circleVsCircle(b, prop)) {
           if (b.team === 'player') {
-            if (refractProjectileThroughCryoPrism(this, b, prop) && b.ttlSec <= 0) {
-              hitProp = true;
-              break;
-            }
-            continue;
-          }
-          if (refractEnemyProjectileThroughCryoPrism(this, b, prop) && b.ttlSec <= 0) {
+            b.ttlSec = 0;
+            triggerCryoTuningObeliskPulse(this, prop, b.ownerId);
             hitProp = true;
             break;
           }
-          continue;
+          prop.hitFlashTimer = 0.12;
+          b.ttlSec = 0;
+          hitProp = true;
+          break;
         }
         if (prop.blocksEnemyProjectiles && b.team === 'player') {
           if (!b.hitEntityIds.includes(prop.id) && circleVsCircle(b, prop)) {
@@ -833,14 +835,26 @@ export function stepClientProjectilesCosmeticImpl(this: WorldSim, dtSec: number)
         const prop = this.props[k]!;
         if (prop.hp <= 0 || shouldClusterMortarSkipCoverProp(b, prop)) continue;
         if (prop.kind === 'crystal_pillar' && circleVsCircle(b, prop)) {
-          if (((b.shotFlags ?? 0) & SHOT_FLAG.DYNAMIC_BOUNCE) !== 0) {
-            b.vx = 0;
-            b.vy = 0;
-            b.awaitingServerRedirectTimer = 0.12;
-            hitProp = true;
-            break;
-          }
-          continue;
+          prop.hitFlashTimer = Math.max(prop.hitFlashTimer, 0.16);
+          b.awaitingServerRedirectTimer = 0;
+          b.ttlSec = 0;
+          hitProp = true;
+          pushImpactEvent(
+            this,
+            b.x,
+            b.y,
+            b.angle,
+            b.team,
+            true,
+            false,
+            b.isCrit,
+            b.element,
+            b.weaponId,
+            b.ownerId,
+            prop.id,
+            prop.kind,
+          );
+          break;
         }
         if (!prop.destructible || prop.coverState === 'sliding') continue;
         if (prop.blocksEnemyProjectiles && b.team === 'player') {
@@ -858,6 +872,13 @@ export function stepClientProjectilesCosmeticImpl(this: WorldSim, dtSec: number)
           b.ttlSec = 0; hitProp = true; break;
         }
         if (!b.hitEntityIds.includes(prop.id) && circleVsCircle(b, prop)) {
+          if (prop.kind === 'cryo_prism_pillar') {
+            prop.hitFlashTimer = Math.max(prop.hitFlashTimer, 0.16);
+            b.awaitingServerRedirectTimer = 0;
+            b.ttlSec = 0;
+            hitProp = true;
+            break;
+          }
           if (((b.shotFlags ?? 0) & SHOT_FLAG.DYNAMIC_BOUNCE) !== 0) {
             b.vx = 0;
             b.vy = 0;
