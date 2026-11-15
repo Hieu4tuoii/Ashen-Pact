@@ -10,7 +10,15 @@ import {
   type WeaponVectorDef,
 } from './rig-defs.js';
 import { bakeCustomCanvas, registerCanvasTexture } from './texture-baker-canvas.js';
-import { bakeCrosshair, bakeLightRadialBrush, bakeProjectilesAndFx } from './texture-baker-fx.js';
+import {
+  bakeCrosshair,
+  bakeCutoutKit512,
+  bakeElementalReactionMiniStrips,
+  bakeLightRadialBrush,
+  bakeProjectilesAndFx,
+  CUTOUT_KIT_ATLAS_KEY,
+  ELEMENTAL_REACTION_STRIP_KEYS,
+} from './texture-baker-fx.js';
 import { bakePortalsAndDoors } from './texture-baker-portals-doors.js';
 import { bakeProps } from './texture-baker-props.js';
 import { bakeShaderVfxFlipbooks, SHADER_FX_TEXTURE_KEYS } from './texture-baker-shader-fx.js';
@@ -222,6 +230,12 @@ export class TextureBaker {
     this.bakeProjectilesAndFx(scene, targetScale);
     if (force || !SHADER_FX_TEXTURE_KEYS.every((k) => scene.textures.exists(k))) {
       this.bakeShaderVfxFlipbooks(scene, targetScale);
+    }
+    if (force || !scene.textures.exists(CUTOUT_KIT_ATLAS_KEY)) {
+      bakeCutoutKit512(scene);
+    }
+    if (force || !ELEMENTAL_REACTION_STRIP_KEYS.every((k) => scene.textures.exists(k))) {
+      bakeElementalReactionMiniStrips(scene);
     }
     if (!scene.textures.exists('fx_light_radial')) {
       this.bakeLightRadialBrush(scene);
@@ -520,3 +534,16 @@ export class TextureBaker {
     registerCanvasTexture(scene, key, canvas);
   }
 }
+
+export {
+  ALL_CUTOUT_KIT_FRAME_KEYS,
+  bakeCutoutKit512,
+  bakeElementalReactionMiniStrips,
+  computeTotalVramBytes,
+  CUTOUT_KIT_ATLAS_KEY,
+  CUTOUT_KIT_BAKE_SCALE,
+  type CutoutKitFrameKey,
+  ELEMENTAL_REACTION_STRIP_KEYS,
+  type ElementalReactionStripKey,
+  getCutoutKitFrameSpec,
+} from './texture-baker-fx.js';

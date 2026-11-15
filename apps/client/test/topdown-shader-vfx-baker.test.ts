@@ -1,10 +1,21 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { PALETTE } from '../src/art/palette.js';
 import {
+  ALL_CUTOUT_KIT_FRAME_KEYS,
   BAKED_FX_TEXTURE_KEYS,
+  bakeCutoutKit512,
+  bakeElementalReactionMiniStrips,
   bakeProjectilesAndFx,
+  computeTotalVramBytes,
+  CUTOUT_KIT_ATLAS_KEY,
+  CUTOUT_KIT_BAKE_SCALE,
+  type CutoutKitFrameKey,
+  ELEMENTAL_REACTION_STRIP_KEYS,
+  type ElementalReactionStripKey,
   ENEMY_BULLET_VISUAL_SPEC,
+  getCutoutKitFrameSpec,
 } from '../src/art/texture-baker-fx.js';
+import { TextureBaker } from '../src/art/texture-baker.js';
 import {
   bakeShaderVfxFlipbooks,
   computeShaderDirectionalScale,
@@ -29,7 +40,7 @@ import {
 interface RegisteredStripRecord {
   width: number;
   height: number;
-  frames: Array<{ name: number; sourceIndex: number; x: number; y: number; w: number; h: number }>;
+  frames: Array<{ name: number | string; sourceIndex: number; x: number; y: number; w: number; h: number }>;
 }
 
 const ORIGINAL_DOCUMENT = (globalThis as { document?: unknown }).document;
@@ -57,11 +68,16 @@ function createMock2dContext() {
     quadraticCurveTo: vi.fn(),
     bezierCurveTo: vi.fn(),
     arc: vi.fn(),
+    arcTo: vi.fn(),
     ellipse: vi.fn(),
+    rect: vi.fn(),
+    roundRect: vi.fn(),
     clip: vi.fn(),
     fill: vi.fn(),
     stroke: vi.fn(),
     fillRect: vi.fn(),
+    strokeRect: vi.fn(),
+    setLineDash: vi.fn(),
     drawImage: vi.fn(),
     createRadialGradient: () => ({ addColorStop: vi.fn() }),
     createLinearGradient: () => ({ addColorStop: vi.fn() }),
@@ -132,12 +148,47 @@ function createMockPhaserSceneForBaker(customWebglContext?: unknown) {
           baseFrame,
         };
         registered.set(key, rec);
+        const texObj = {
+          key,
+          frames: { __BASE: baseFrame } as Record<string | number, unknown>,
+          getSourceImage: () => ({ width: canvas.width, height: canvas.height }),
+          source: [{ width: canvas.width, height: canvas.height }],
+          width: canvas.width,
+          height: canvas.height,
+          add: (name: number | string, sourceIndex: number, x: number, y: number, w: number, h: number) => {
+            const frameObj = { name, sourceIndex, x, y, w, h };
+            rec.frames.push(frameObj);
+            texObj.frames[name] = frameObj;
+          },
+        };
+        return texObj;
+      },
+      get: (key: string) => {
+        const rec = registered.get(key);
+        if (!rec) return undefined;
+        const framesRecord: Record<string | number, unknown> = { __BASE: rec.baseFrame };
+        for (const f of rec.frames) {
+          framesRecord[f.name] = f;
+        }
         return {
-          frames: { __BASE: baseFrame },
-          add: (name: number, sourceIndex: number, x: number, y: number, w: number, h: number) => {
+          key,
+          frames: framesRecord,
+          getSourceImage: () => ({ width: rec.width, height: rec.height }),
+          source: [{ width: rec.width, height: rec.height }],
+          width: rec.width,
+          height: rec.height,
+          add: (name: number | string, sourceIndex: number, x: number, y: number, w: number, h: number) => {
             rec.frames.push({ name, sourceIndex, x, y, w, h });
           },
         };
+      },
+      getTextureKeys: () => Array.from(registered.keys()),
+      get list() {
+        const out: Record<string, unknown> = {};
+        for (const k of registered.keys()) {
+          out[k] = this.get(k);
+        }
+        return out;
       },
     },
   };
@@ -623,5 +674,63 @@ describe('1:1 Top-Down Cutout 2.0 Multi-Band SDF-Cel Shader Baker', () => {
       expect(src).toMatch(/mod\s*\(\s*frameIdx\s*,\s*4\.0\s*\)/);
       expect(src).toMatch(/floor\s*\(\s*frameIdx\s*\/\s*4\.0\s*\)/);
     }
+  });
+
+  it('packs all 51 Cutout 2.0 kit entries inside 512x512 POT with +2px border and keeps total VRAM < 25.0 MB', () => {
+    const scene = createMockPhaserSceneForBaker();
+    TextureBaker.bakeAll(scene as unknown as Phaser.Scene, 1.5, true);
+
+    const kitTex = scene.textures.get(CUTOUT_KIT_ATLAS_KEY);
+    expect(kitTex).toBeDefined();
+    expect(kitTex?.getSourceImage().width).toBe(512);
+    expect(kitTex?.getSourceImage().height).toBe(512);
+
+    expect(ALL_CUTOUT_KIT_FRAME_KEYS).toHaveLength(51);
+
+    const rects: Array<{ key: string; x: number; y: number; w: number; h: number }> = [];
+    for (const key of ALL_CUTOUT_KIT_FRAME_KEYS) {
+      const spec = getCutoutKitFrameSpec(key);
+      if (key === 'fx_compact_burst_4f') {
+        expect(spec.w).toBe(256);
+        expect(spec.h).toBe(64);
+      } else {
+        expect(spec.w).toBe((3 * spec.worldW + 4) * spec.frameCount);
+        expect(spec.h).toBe(3 * spec.worldH + 4);
+      }
+      expect(spec.x + spec.w).toBeLessThanOrEqual(512);
+      expect(spec.y + spec.h).toBeLessThanOrEqual(512);
+      for (const prev of rects) {
+        const overlaps =
+          spec.x < prev.x + prev.w &&
+          spec.x + spec.w > prev.x &&
+          spec.y < prev.y + prev.h &&
+          spec.y + spec.h > prev.y;
+        expect(overlaps, `${key} overlaps ${prev.key}`).toBe(false);
+      }
+      rects.push({ key, ...spec });
+
+      // Sub-frame registration verification on fx_cutout_kit_512
+      expect(kitTex?.frames[key]).toBeDefined();
+      if (spec.frameCount > 1) {
+        for (let f = 0; f < spec.frameCount; f++) {
+          expect(kitTex?.frames[`${key}_${f}`]).toBeDefined();
+        }
+      }
+    }
+
+    expect(ELEMENTAL_REACTION_STRIP_KEYS).toHaveLength(6);
+    for (const rxKey of ELEMENTAL_REACTION_STRIP_KEYS) {
+      const rxTex = scene.textures.get(rxKey);
+      expect(rxTex).toBeDefined();
+      expect(rxTex?.getSourceImage().width).toBe(256);
+      expect(rxTex?.getSourceImage().height).toBe(64);
+      for (let f = 0; f < 4; f++) {
+        expect(rxTex?.frames[f] ?? rxTex?.frames[String(f)]).toBeDefined();
+      }
+    }
+
+    const totalVram = computeTotalVramBytes(scene as unknown as Phaser.Scene);
+    expect(totalVram).toBeGreaterThan(0);
+    expect(totalVram).toBeLessThanOrEqual(24_950_000);
   });
 });
