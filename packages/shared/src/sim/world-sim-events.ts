@@ -62,6 +62,7 @@ export type SimEvent =
       isCrit: boolean;
       element?: ElementType;
       weaponId?: string;
+      ownerId?: number;
     }
   | {
       kind: 'entity_killed';

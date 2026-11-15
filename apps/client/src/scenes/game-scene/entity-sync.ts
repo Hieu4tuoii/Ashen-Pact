@@ -320,6 +320,8 @@ export function syncSimulatedPlayersImpl(this: GameScene, dtSec: number): void {
   syncFragFuseWheelsImpl.call(this, sim);
 }
 
+const scratchDeadFuseWheelIds: number[] = [];
+
 export function syncFragFuseWheelsImpl(
   this: GameScene,
   sim: ReturnType<LocalTransport['getSim']>,
@@ -333,10 +335,21 @@ export function syncFragFuseWheelsImpl(
     if (b.weaponId === 'frag_launcher' && b.armedForAirburst && b.ttlSec > 0) {
       let entry = this.fragFuseWheelSprites.get(b.id);
       if (!entry) {
-        const sprite = this.add
-          .sprite(b.x, b.y, CUTOUT_KIT_ATLAS_KEY, 'fx_frag_fuse_wheel')
-          .setScale(1 / 3)
-          .setDepth(41.5);
+        let sprite: Phaser.GameObjects.Sprite;
+        if (this.fragFuseWheelFreePool && this.fragFuseWheelFreePool.length > 0) {
+          sprite = this.fragFuseWheelFreePool.pop()!;
+          sprite.setTexture(CUTOUT_KIT_ATLAS_KEY, 'fx_frag_fuse_wheel');
+          sprite.setPosition(b.x, b.y);
+          sprite.setScale(1 / 3);
+          sprite.setDepth(41.5);
+          sprite.setVisible(true);
+          sprite.setActive(true);
+        } else {
+          sprite = this.add
+            .sprite(b.x, b.y, CUTOUT_KIT_ATLAS_KEY, 'fx_frag_fuse_wheel')
+            .setScale(1 / 3)
+            .setDepth(41.5);
+        }
         entry = { sprite, lastSeenGen: currentGen };
         this.fragFuseWheelSprites.set(b.id, entry);
       } else {
@@ -351,12 +364,21 @@ export function syncFragFuseWheelsImpl(
     }
   }
 
-  this.fragFuseWheelSprites.forEach((entry) => {
-    if (entry.lastSeenGen !== currentGen && entry.sprite.visible) {
+  scratchDeadFuseWheelIds.length = 0;
+  for (const [id, entry] of this.fragFuseWheelSprites) {
+    if (entry.lastSeenGen !== currentGen) {
       entry.sprite.setVisible(false);
       entry.sprite.setActive(false);
+      if (!this.fragFuseWheelFreePool) {
+        this.fragFuseWheelFreePool = [];
+      }
+      this.fragFuseWheelFreePool.push(entry.sprite);
+      scratchDeadFuseWheelIds.push(id);
     }
-  });
+  }
+  for (let i = 0; i < scratchDeadFuseWheelIds.length; i++) {
+    this.fragFuseWheelSprites.delete(scratchDeadFuseWheelIds[i]!);
+  }
 }
 
 export function syncSolarMiniSunsImpl(

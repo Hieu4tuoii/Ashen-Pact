@@ -410,8 +410,6 @@ export function drawBatch1ActiveProjectiles(
       g.fillCircle(b.x, b.y, 5.2);
       if (b.armedForAirburst) {
         const pulseR = 15 + Math.sin(clockSec * 20 + b.id) * 2.0;
-        g.lineStyle(1.8, 0xfacc15, 0.92);
-        g.strokeCircle(b.x, b.y, pulseR);
         g.lineStyle(1.5, 0xfffdf5, 0.9);
         g.beginPath();
         g.moveTo(b.x - pulseR - 4, b.y);

@@ -94,6 +94,8 @@ function pushImpactEvent(
   blockedByShield: boolean,
   isCrit: boolean,
   element?: SimProjectileState['element'],
+  weaponId?: string,
+  ownerId?: number,
 ): void {
   sim.events.push({
     kind: 'projectile_impact',
@@ -106,6 +108,8 @@ function pushImpactEvent(
     blockedByShield,
     isCrit,
     ...(element !== undefined ? { element } : {}),
+    ...(weaponId !== undefined ? { weaponId } : {}),
+    ...(ownerId !== undefined ? { ownerId } : {}),
   });
 }
 
@@ -660,7 +664,7 @@ export function updateProjectilesImpl(this: WorldSim, dtSec: number): void {
 
           if (!this.stressTestActive || stressImpactEventsThisTick < 4) {
             stressImpactEventsThisTick += 1;
-            pushImpactEvent(this, b.x, b.y, b.angle, 'player', false, false, b.isCrit, b.element);
+            pushImpactEvent(this, b.x, b.y, b.angle, 'player', false, false, b.isCrit, b.element, b.weaponId, b.ownerId);
             if (!this.stressTestActive) {
               this.events.push({
                 kind: 'hit_stop',
@@ -908,6 +912,7 @@ export function stepClientProjectilesCosmeticImpl(this: WorldSim, dtSec: number)
             isCrit: b.isCrit,
             element: b.element,
             weaponId: b.weaponId,
+            ownerId: b.ownerId,
           });
 
           if (b.pierceRemaining > 0) {

@@ -361,8 +361,9 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
           scratchTickImpactTargetIds.push(struckTargetId);
         }
 
-        const isScrapPellet = (ev as unknown as { weaponId?: string }).weaponId === 'scrap_shotgun';
+        const isScrapPellet = ev.weaponId === 'scrap_shotgun';
         if (isScrapPellet && !ev.hitWall) {
+          const isTeammate = ev.ownerId !== undefined && ev.ownerId !== sim.player.id;
           recordScrapShotgunPelletHit(
             this.fx,
             struckTargetId ?? 0,
@@ -370,7 +371,7 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
             ev.y,
             ev.angle,
             sim.tick,
-            ev.team === 'player' ? false : true,
+            isTeammate,
           );
         } else if (!isStress || i < 4) {
           this.fx.spawnHitSparks(ev.x, ev.y, ev.angle, {

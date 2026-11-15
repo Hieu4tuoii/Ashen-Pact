@@ -503,5 +503,39 @@ describe('AP2 P1B.1 — Rare & Epic Ranged Weapons: focus_laser & void_staff', (
       expect(endEnemy.poisonTimer).toBeGreaterThan(0);
       expect(typeof triggerVoidStaffImplosion).toBe('function');
     });
+
+    it('emits projectile_impact carrying weaponId: scrap_shotgun and ownerId when pellets hit an enemy', () => {
+      const sim = createCleanSim(4103);
+      const p = sim.player;
+      p.weaponSlots = ['scrap_shotgun'];
+      p.activeWeaponSlot = 0;
+      p.clipAmmo = 2;
+      p.reloadTimer = 0;
+      p.fireCooldownTimer = 0;
+
+      const dummy = sim.spawnEnemy('spore_guardian', p.x + 40, p.y, true);
+      dummy.hp = 1000;
+      dummy.maxHp = 1000;
+
+      sim.consumeEvents();
+      sim.tryFireActiveWeapon(p);
+      expect(sim.projectiles.length).toBeGreaterThanOrEqual(1);
+
+      // Step simulation to trigger projectile hit
+      sim.step(1 / 60);
+
+      const events = sim.consumeEvents();
+      const impactEvents = events.filter(
+        (ev) => ev.kind === 'projectile_impact' && ev.weaponId === 'scrap_shotgun',
+      );
+      expect(impactEvents.length).toBeGreaterThanOrEqual(1);
+      const firstImpact = impactEvents[0];
+      if (firstImpact && firstImpact.kind === 'projectile_impact') {
+        expect(firstImpact.weaponId).toBe('scrap_shotgun');
+        expect(firstImpact.ownerId).toBe(p.id);
+        expect(firstImpact.team).toBe('player');
+        expect(firstImpact.hitWall).toBe(false);
+      }
+    });
   });
 });

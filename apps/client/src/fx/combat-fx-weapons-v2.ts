@@ -121,32 +121,36 @@ export interface MagneticRivetArcLink {
   dist: number;
 }
 
-export function buildLinearRivetTetherPairs(
+const scratchDegrees = new Map<number, number>();
+const scratchVisited = new Set<number>();
+const scratchPairsPool: Array<[number, number]> = [];
+let scratchPairCount = 0;
+
+function computeLinearRivetTetherPairsInternal(
   rivets: ReadonlyArray<{ id: number; x: number; y: number }>,
-  maxDist = RIVET_WEB_MAX_LINK_DIST,
-): Array<[number, number]> {
-  if (rivets.length <= 1) return [];
+  maxDist: number,
+): number {
+  scratchDegrees.clear();
+  scratchVisited.clear();
+  scratchPairCount = 0;
+  if (rivets.length <= 1) return 0;
 
   const n = rivets.length;
-  const degrees = new Map<number, number>();
-  const visited = new Set<number>();
-  const pairs: Array<[number, number]> = [];
-
   for (let i = 0; i < n; i++) {
     const start = rivets[i]!;
-    if (visited.has(start.id)) continue;
-    visited.add(start.id);
+    if (scratchVisited.has(start.id)) continue;
+    scratchVisited.add(start.id);
 
     let current = start;
-    while ((degrees.get(current.id) ?? 0) < 2) {
+    while ((scratchDegrees.get(current.id) ?? 0) < 2) {
       let nearestNext: { id: number; x: number; y: number } | null = null;
       let nearestDist = Infinity;
 
       for (let j = 0; j < n; j++) {
         const candidate = rivets[j]!;
         if (candidate.id === current.id) continue;
-        if (visited.has(candidate.id)) continue;
-        if ((degrees.get(candidate.id) ?? 0) >= 2) continue;
+        if (scratchVisited.has(candidate.id)) continue;
+        if ((scratchDegrees.get(candidate.id) ?? 0) >= 2) continue;
 
         const d = Math.hypot(candidate.x - current.x, candidate.y - current.y);
         if (d > 0.001 && d <= maxDist && d < nearestDist) {
@@ -157,40 +161,77 @@ export function buildLinearRivetTetherPairs(
 
       if (!nearestNext) break;
 
-      visited.add(nearestNext.id);
-      pairs.push([current.id, nearestNext.id]);
-      degrees.set(current.id, (degrees.get(current.id) ?? 0) + 1);
-      degrees.set(nearestNext.id, (degrees.get(nearestNext.id) ?? 0) + 1);
+      scratchVisited.add(nearestNext.id);
+      let pair = scratchPairsPool[scratchPairCount];
+      if (!pair) {
+        pair = [current.id, nearestNext.id];
+        scratchPairsPool.push(pair);
+      } else {
+        pair[0] = current.id;
+        pair[1] = nearestNext.id;
+      }
+      scratchPairCount++;
+
+      scratchDegrees.set(current.id, (scratchDegrees.get(current.id) ?? 0) + 1);
+      scratchDegrees.set(nearestNext.id, (scratchDegrees.get(nearestNext.id) ?? 0) + 1);
       current = nearestNext;
     }
   }
 
-  return pairs;
+  return scratchPairCount;
 }
+
+export function buildLinearRivetTetherPairs(
+  rivets: ReadonlyArray<{ id: number; x: number; y: number }>,
+  maxDist = RIVET_WEB_MAX_LINK_DIST,
+): Array<[number, number]> {
+  const count = computeLinearRivetTetherPairsInternal(rivets, maxDist);
+  const result: Array<[number, number]> = new Array(count);
+  for (let i = 0; i < count; i++) {
+    const p = scratchPairsPool[i]!;
+    result[i] = [p[0], p[1]];
+  }
+  return result;
+}
+
+const scratchRivetMap = new Map<number, MagneticRivetPoint>();
+const scratchLinksPool: MagneticRivetArcLink[] = [];
 
 export function buildMagneticRivetArcLinks(
   rivets: ReadonlyArray<MagneticRivetPoint>,
   maxDist = RIVET_WEB_MAX_LINK_DIST,
 ): MagneticRivetArcLink[] {
-  const rivetMap = new Map<number, MagneticRivetPoint>();
-  for (const r of rivets) {
-    rivetMap.set(r.id, r);
+  scratchRivetMap.clear();
+  for (let i = 0; i < rivets.length; i++) {
+    const r = rivets[i]!;
+    scratchRivetMap.set(r.id, r);
   }
-  const pairs = buildLinearRivetTetherPairs(rivets, maxDist);
-  const links: MagneticRivetArcLink[] = [];
-  for (const [idA, idB] of pairs) {
-    const a = rivetMap.get(idA);
-    const b = rivetMap.get(idB);
+  const pairCount = computeLinearRivetTetherPairsInternal(rivets, maxDist);
+  let linkCount = 0;
+  for (let i = 0; i < pairCount; i++) {
+    const p = scratchPairsPool[i]!;
+    const a = scratchRivetMap.get(p[0]);
+    const b = scratchRivetMap.get(p[1]);
     if (!a || !b) continue;
     const ownerA = a.ownerPlayerId ?? a.ownerId ?? 0;
     const ownerB = b.ownerPlayerId ?? b.ownerId ?? 0;
     if (ownerA !== 0 && ownerB !== 0 && ownerA !== ownerB) continue;
     const dist = Math.hypot(b.x - a.x, b.y - a.y);
     if (dist > 0.001 && dist <= maxDist) {
-      links.push({ from: a, to: b, dist });
+      let link = scratchLinksPool[linkCount];
+      if (!link) {
+        link = { from: a, to: b, dist };
+        scratchLinksPool.push(link);
+      } else {
+        link.from = a;
+        link.to = b;
+        link.dist = dist;
+      }
+      linkCount++;
     }
   }
-  return links;
+  scratchLinksPool.length = linkCount;
+  return scratchLinksPool;
 }
 
 const scrapShotgunPelletHitsByTarget = new Map<number, { tick: number; count: number }>();
@@ -233,6 +274,14 @@ export function recordScrapShotgunPelletHit(
   }
 
   // 2. Track hits per target per tick
+  if (scrapShotgunPelletHitsByTarget.size > 128) {
+    for (const [id, info] of scrapShotgunPelletHitsByTarget) {
+      if (info.tick < tick - 60) {
+        scrapShotgunPelletHitsByTarget.delete(id);
+      }
+    }
+  }
+
   let hitInfo = scrapShotgunPelletHitsByTarget.get(targetId);
   if (!hitInfo) {
     hitInfo = { tick, count: 1 };
@@ -743,15 +792,26 @@ export function updateAndDrawWeaponV2Overlays(
   }
 
   if (rivets.length > 0) {
-    state.lastRivetSnapshot = rivets.map((r) => ({
-      id: r.id,
-      x: r.x,
-      y: r.y,
-      ownerPlayerId: r.ownerPlayerId,
-      attachedEnemyId: r.attachedEnemyId,
-      attachedPropId: r.attachedPropId,
-      ttlSec: r.ttlSec,
-    }));
+    while (state.lastRivetSnapshot.length < rivets.length) {
+      state.lastRivetSnapshot.push({
+        id: 0,
+        x: 0,
+        y: 0,
+        ttlSec: 0,
+      });
+    }
+    state.lastRivetSnapshot.length = rivets.length;
+    for (let i = 0; i < rivets.length; i++) {
+      const r = rivets[i]!;
+      const s = state.lastRivetSnapshot[i]!;
+      s.id = r.id;
+      s.x = r.x;
+      s.y = r.y;
+      s.ownerPlayerId = r.ownerPlayerId;
+      s.attachedEnemyId = r.attachedEnemyId;
+      s.attachedPropId = r.attachedPropId;
+      s.ttlSec = r.ttlSec;
+    }
   }
 
   // 1. Draw embedded magnetic rivets & live Chiaroscuro electric web links

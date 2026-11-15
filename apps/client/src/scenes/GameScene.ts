@@ -206,6 +206,7 @@ export class GameScene extends Phaser.Scene {
     number,
     { sprite: Phaser.GameObjects.Sprite; lastSeenGen: number }
   >();
+  public fragFuseWheelFreePool: Phaser.GameObjects.Sprite[] = [];
   public fragFuseWheelSyncGen = 0;
   public enemyRigs = new Map<number, CutoutRig>();
   public propVisuals = new Map<number, PropVisual>();

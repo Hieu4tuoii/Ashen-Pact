@@ -37,6 +37,7 @@ import {
 } from '../../core/debug-flag.js';
 import { getFreezeVisualTimeSec, resetClientFreezeRandom } from '../../core/visual-query.js';
 import { CombatFxManager, computeIrisHoleRadius } from '../../fx/combat-fx.js';
+import { resetScrapShotgunPelletHitTracker } from '../../fx/combat-fx-weapons-v2.js';
 import { computeUniformViewportMetrics } from '../../fx/lighting-config.js';
 import { LightingPipeline } from '../../fx/lighting-pipeline.js';
 import { DebugOverlay, initGlobalDebugState } from '../../ui/debug-overlay.js';
@@ -195,6 +196,13 @@ export function createImpl(this: GameScene): void {
     entry.sprite.destroy();
   }
   this.fragFuseWheelSprites.clear();
+  if (this.fragFuseWheelFreePool) {
+    for (const sprite of this.fragFuseWheelFreePool) {
+      sprite.destroy();
+    }
+    this.fragFuseWheelFreePool.length = 0;
+  }
+  resetScrapShotgunPelletHitTracker();
   this.projectileSprites.clear();
   this.pickupSprites.clear();
   this.doorSprites.clear();
