@@ -9,14 +9,20 @@ import {
   bakeShaderVfxFlipbooks,
   computeShaderDirectionalScale,
   computeShaderNovaScale,
+  computeSoftwareGlInkTexelWidth,
+  getShaderBakerGlslSourceForTest,
+  getShaderStripEntry,
   resolveColorHexToNovaKey,
   resolveElementToNovaKey,
   resolveShaderStripFramePx,
+  SHADER_ATLAS_COLS,
+  SHADER_ATLAS_ROWS,
   SHADER_CANONICAL_HITBOX_RADIUS_RATIO,
   SHADER_CANONICAL_LANCE_SPAN_RATIO,
   SHADER_FX_FRAME_COUNT,
   SHADER_FX_TEXTURE_KEYS,
   type ShaderFxTextureKey,
+  type ShaderStripEntry,
 } from '../src/art/texture-baker-shader-fx.js';
 
 interface RegisteredStripRecord {
@@ -138,9 +144,11 @@ function createMockPhaserSceneForBaker(customWebglContext?: unknown) {
   return scene;
 }
 
-describe('1:1 Top-Down Chiaroscuro Shader Sprite-Sheet Baker', () => {
-  it('defines all 24 Chiaroscuro 14-frame flipbook texture keys (11 directional +X 360° + 13 circular 1:1)', () => {
-    expect(SHADER_FX_FRAME_COUNT).toBe(14);
+describe('1:1 Top-Down Cutout 2.0 Multi-Band SDF-Cel Shader Baker', () => {
+  it('defines all 24 Cutout 2.0 8-frame flipbook texture keys (11 directional +X 360° + 13 circular 1:1)', () => {
+    expect(SHADER_FX_FRAME_COUNT).toBe(8);
+    expect(SHADER_ATLAS_COLS).toBe(4);
+    expect(SHADER_ATLAS_ROWS).toBe(2);
     expect(SHADER_FX_TEXTURE_KEYS).toEqual([
       'fx_sh_slash_steel',
       'fx_sh_slash_emerald',
@@ -169,8 +177,38 @@ describe('1:1 Top-Down Chiaroscuro Shader Sprite-Sheet Baker', () => {
     ]);
   });
 
+  it('enforces 4x2 (8-frame) POT atlas geometry, [1.50, 2.20]px worldInkPx across all 24 entries, and neutral aegis_crest', () => {
+    expect(SHADER_FX_FRAME_COUNT).toBe(8);
+    expect(SHADER_ATLAS_COLS).toBe(4);
+    expect(SHADER_ATLAS_ROWS).toBe(2);
+    expect(SHADER_CANONICAL_HITBOX_RADIUS_RATIO).toBeCloseTo(0.41, 4);
+    expect(SHADER_CANONICAL_LANCE_SPAN_RATIO).toBeCloseTo(0.82, 4);
+    expect(getShaderStripEntry('fx_sh_aegis_crest').elemId).toBe(0);
+    expect(getShaderStripEntry('fx_sh_slash_emerald').validRadiusBandPx).toEqual([63.0, 92.2]);
+
+    for (const key of SHADER_FX_TEXTURE_KEYS) {
+      const entry = getShaderStripEntry(key);
+      const framePx = entry.sizeClass === 'small' ? 64 : entry.sizeClass === 'medium' ? 128 : 256;
+      expect(Math.log2(framePx * 4) % 1).toBe(0);
+      expect(Math.log2(framePx * 2) % 1).toBe(0);
+      const denom = (entry.isLanceSpan ? 0.82 : 0.41) * framePx;
+      const [rMin, rMax] = entry.validRadiusBandPx;
+      expect((rMin / denom) * entry.canonicalInkTexels).toBeGreaterThanOrEqual(1.499);
+      expect((rMax / denom) * entry.canonicalInkTexels).toBeLessThanOrEqual(2.201);
+    }
+  });
+
+  it('guards GLSL against D3D11 pow(0, y) NaN and compensates uInkTexelWidth under software-GL 0.5x scale', () => {
+    const glsl = getShaderBakerGlslSourceForTest();
+    const stripped = glsl.replace(/float\s+safePow\s*\([^)]*\)\s*\{[^}]*\}/, '');
+    expect(stripped).not.toMatch(/\bpow\s*\(/);
+    expect(glsl).toContain('sdArcForwardX');
+    expect(computeSoftwareGlInkTexelWidth(1.8, 32, 64)).toBeGreaterThanOrEqual(1.15);
+  });
+
   it('maps 1:1 circular nova & archetype scales accurately to 1.0x WorldSim Euclidean hitbox radii with zero 3/4 squash', () => {
-    expect(SHADER_CANONICAL_HITBOX_RADIUS_RATIO).toBeCloseTo(0.78 * 0.43, 5);
+    expect(SHADER_CANONICAL_HITBOX_RADIUS_RATIO).toBeCloseTo(0.41, 4);
+    expect(SHADER_CANONICAL_LANCE_SPAN_RATIO).toBeCloseTo(0.82, 4);
 
     const radialKeys: ShaderFxTextureKey[] = [
       'fx_sh_nova_solar',
@@ -212,32 +250,32 @@ describe('1:1 Top-Down Chiaroscuro Shader Sprite-Sheet Baker', () => {
     }
   });
 
-  it('bakes all 24 7x2 Hi-DPI sprite atlases (192/288/384px, <= 2688x768) and registers 14 square 1:1 frames (0..13) per texture', () => {
+  it('bakes all 24 4x2 POT sprite atlases (64/128/256px, <= 1024x512) and registers 8 square 1:1 frames (0..7) per texture', () => {
     const mockScene = createMockPhaserSceneForBaker();
     bakeShaderVfxFlipbooks(mockScene as never, 4);
 
     expect(mockScene.registered.size).toBe(24);
-    expect(resolveShaderStripFramePx('fx_sh_hit_spark', 4)).toBe(192);
-    expect(resolveShaderStripFramePx('fx_sh_muzzle_arcane', 4)).toBe(192);
-    expect(resolveShaderStripFramePx('fx_sh_slash_steel', 4)).toBe(288);
-    expect(resolveShaderStripFramePx('fx_sh_aegis_crest', 4)).toBe(288);
-    expect(resolveShaderStripFramePx('fx_sh_falcon_sonic', 4)).toBe(288);
-    expect(resolveShaderStripFramePx('fx_sh_nova_solar', 4)).toBe(384);
-    expect(resolveShaderStripFramePx('fx_sh_vortex_gale', 4)).toBe(384);
-    expect(resolveShaderStripFramePx('fx_sh_arcane_sigil', 4)).toBe(384);
+    expect(resolveShaderStripFramePx('fx_sh_hit_spark', 4)).toBe(64);
+    expect(resolveShaderStripFramePx('fx_sh_muzzle_arcane', 4)).toBe(64);
+    expect(resolveShaderStripFramePx('fx_sh_slash_steel', 4)).toBe(128);
+    expect(resolveShaderStripFramePx('fx_sh_aegis_crest', 4)).toBe(64);
+    expect(resolveShaderStripFramePx('fx_sh_falcon_sonic', 4)).toBe(64);
+    expect(resolveShaderStripFramePx('fx_sh_nova_solar', 4)).toBe(256);
+    expect(resolveShaderStripFramePx('fx_sh_vortex_gale', 4)).toBe(128);
+    expect(resolveShaderStripFramePx('fx_sh_arcane_sigil', 4)).toBe(64);
     for (const key of SHADER_FX_TEXTURE_KEYS) {
       const rec = mockScene.registered.get(key);
       expect(rec, `Missing registered strip for ${key}`).toBeDefined();
       const expectedFramePx = resolveShaderStripFramePx(key, 4);
-      expect(rec!.width).toBe(expectedFramePx * 7);
-      expect(rec!.height).toBe(expectedFramePx * 2);
-      expect(rec!.width).toBeLessThanOrEqual(4096);
-      expect(rec!.height).toBeLessThanOrEqual(4096);
+      expect(rec!.width).toBe(expectedFramePx * SHADER_ATLAS_COLS);
+      expect(rec!.height).toBe(expectedFramePx * SHADER_ATLAS_ROWS);
+      expect(rec!.width).toBeLessThanOrEqual(1024);
+      expect(rec!.height).toBeLessThanOrEqual(512);
       expect(rec!.frames).toHaveLength(SHADER_FX_FRAME_COUNT);
 
       for (let f = 0; f < SHADER_FX_FRAME_COUNT; f++) {
-        const col = f % 7;
-        const row = Math.floor(f / 7);
+        const col = f % SHADER_ATLAS_COLS;
+        const row = Math.floor(f / SHADER_ATLAS_COLS);
         expect(rec!.frames[f]).toEqual({
           name: f,
           sourceIndex: 0,
@@ -420,7 +458,39 @@ describe('1:1 Top-Down Chiaroscuro Shader Sprite-Sheet Baker', () => {
     expect(failMock.loseContext).toHaveBeenCalledTimes(1);
   });
 
-  it('downscales shader bake render viewport by 0.25x ONLY when headless automation is active, ?freeze=1 is off, and WebGL renderer is software GL', () => {
+  it('generates WebGL1 LINEAR_MIPMAP_LINEAR mipmaps on small POT (256x128) textures uploaded to Phaser', () => {
+    const mockGl = {
+      TEXTURE_2D: 0x0de1,
+      TEXTURE_MIN_FILTER: 0x2801,
+      LINEAR_MIPMAP_LINEAR: 0x2703,
+      bindTexture: vi.fn(),
+      texParameteri: vi.fn(),
+      generateMipmap: vi.fn(),
+    };
+    const mockScene = {
+      ...createMockPhaserSceneForBaker(),
+      renderer: { gl: mockGl },
+      game: { renderer: { gl: mockGl } },
+    };
+    const origAddCanvas = mockScene.textures.addCanvas;
+    mockScene.textures.addCanvas = (key: string, canvas: { width: number; height: number }) => {
+      const tex = origAddCanvas(key, canvas);
+      (tex as unknown as { source: Array<{ glTexture: { webGLTexture: object } }> }).source = [
+        { glTexture: { webGLTexture: { id: `tex_${key}` } } },
+      ];
+      return tex;
+    };
+    bakeShaderVfxFlipbooks(mockScene as never, 4);
+    // 7 small keys should generate mipmaps
+    expect(mockGl.generateMipmap).toHaveBeenCalledTimes(7);
+    expect(mockGl.texParameteri).toHaveBeenCalledWith(
+      mockGl.TEXTURE_2D,
+      mockGl.TEXTURE_MIN_FILTER,
+      mockGl.LINEAR_MIPMAP_LINEAR,
+    );
+  });
+
+  it('downscales shader bake render viewport by 0.5x ONLY when headless automation is active, ?freeze=1 is off, and WebGL renderer is software GL', () => {
     const createSwiftShaderGl = (rendererName: string) => {
       let nextId = 1;
       const UNMASKED_RENDERER_WEBGL = 0x9246;
@@ -474,23 +544,23 @@ describe('1:1 Top-Down Chiaroscuro Shader Sprite-Sheet Baker', () => {
     };
 
     try {
-      // 1. Real user (webdriver: false) on software GL (llvmpipe / SwiftShader) -> full resolution (384 * 7 = 2688)
+      // 1. Real user (webdriver: false) on software GL (llvmpipe / SwiftShader) -> full resolution (large nova: 256 * 4 = 1024, 256 * 2 = 512)
       vi.stubGlobal('navigator', { webdriver: false });
       vi.stubGlobal('window', { location: { search: '' } });
       const userSwGl = createSwiftShaderGl('ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device))');
       const userScene = createMockPhaserSceneForBaker(userSwGl);
       bakeShaderVfxFlipbooks(userScene as never, 4);
-      expect(userSwGl.viewport).toHaveBeenCalledWith(0, 0, 384 * 7, 384 * 2);
-      expect(userSwGl.viewport).not.toHaveBeenCalledWith(0, 0, 96 * 7, 96 * 2);
+      expect(userSwGl.viewport).toHaveBeenCalledWith(0, 0, 256 * 4, 256 * 2);
+      expect(userSwGl.viewport).not.toHaveBeenCalledWith(0, 0, 32 * 4, 32 * 2);
 
-      // 2. Headless automation (webdriver: true) + ?freeze=1 on software GL -> full resolution (384 * 7 = 2688)
+      // 2. Headless automation (webdriver: true) + ?freeze=1 on software GL -> full resolution
       vi.stubGlobal('navigator', { webdriver: true });
       vi.stubGlobal('window', { location: { search: '?freeze=1' } });
       const freezeSwGl = createSwiftShaderGl('Mesa llvmpipe (LLVM 15.0.6, 256 bits)');
       const freezeScene = createMockPhaserSceneForBaker(freezeSwGl);
       bakeShaderVfxFlipbooks(freezeScene as never, 4);
-      expect(freezeSwGl.viewport).toHaveBeenCalledWith(0, 0, 384 * 7, 384 * 2);
-      expect(freezeSwGl.viewport).not.toHaveBeenCalledWith(0, 0, 96 * 7, 96 * 2);
+      expect(freezeSwGl.viewport).toHaveBeenCalledWith(0, 0, 256 * 4, 256 * 2);
+      expect(freezeSwGl.viewport).not.toHaveBeenCalledWith(0, 0, 32 * 4, 32 * 2);
 
       // 3. Headless automation (webdriver: true) + hardware GPU -> full resolution
       vi.stubGlobal('navigator', { webdriver: true });
@@ -498,17 +568,17 @@ describe('1:1 Top-Down Chiaroscuro Shader Sprite-Sheet Baker', () => {
       const hwGl = createSwiftShaderGl('ANGLE (NVIDIA, NVIDIA GeForce RTX 4070 Direct3D11)');
       const hwScene = createMockPhaserSceneForBaker(hwGl);
       bakeShaderVfxFlipbooks(hwScene as never, 4);
-      expect(hwGl.viewport).toHaveBeenCalledWith(0, 0, 384 * 7, 384 * 2);
+      expect(hwGl.viewport).toHaveBeenCalledWith(0, 0, 256 * 4, 256 * 2);
 
-      // 4. Headless automation (webdriver: true) + no ?freeze=1 + software GL -> 0.25x downscaled render viewport (96 * 7 = 672)
+      // 4. Headless automation (webdriver: true) + no ?freeze=1 + software GL -> 0.5x downscaled render viewport (128 * 4 = 512, 128 * 2 = 256)
       vi.stubGlobal('navigator', { webdriver: true });
       vi.stubGlobal('window', { location: { search: '' } });
       const autoSwGl = createSwiftShaderGl('ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device))');
       const autoScene = createMockPhaserSceneForBaker(autoSwGl);
       bakeShaderVfxFlipbooks(autoScene as never, 4);
-      expect(autoSwGl.viewport).toHaveBeenCalledWith(0, 0, 96 * 7, 96 * 2);
-      // Output atlas frames still preserve canonical 384px dimensions
-      expect(autoScene.registered.get('fx_sh_nova_solar')?.width).toBe(384 * 7);
+      expect(autoSwGl.viewport).toHaveBeenCalledWith(0, 0, 128 * 4, 128 * 2);
+      // Output atlas frames still preserve canonical 256px dimensions
+      expect(autoScene.registered.get('fx_sh_nova_solar')?.width).toBe(256 * 4);
     } finally {
       vi.unstubAllGlobals();
     }
