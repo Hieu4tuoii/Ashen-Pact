@@ -31,6 +31,7 @@ import {
   tickPlayerOverheatVentPuffs,
   renderFocusLaserRailgunShot,
   spawnSolarSupernovaFx,
+  spawnMagmaGeyserClusterFx,
 } from '../src/fx/combat-fx-weapons-v2';
 import { PALETTE } from '../src/art/palette';
 import { createHeadlessFxManager } from './helpers/test-combat-fx';
@@ -306,7 +307,13 @@ describe('AP2-P1B.5 — Procedural VFX for 7 Batch-2 Weapons, ArtGallery 18 Weap
         'fx_sh_slash_crimson',
         expect.any(Object),
       );
-      expect(scene.fx.spawnShaderNova).toHaveBeenCalledWith(450, 270, 110, 'fx_sh_nova_void');
+      expect(scene.fx.spawnShaderNova).toHaveBeenCalledWith(
+        450,
+        270,
+        110,
+        'fx_sh_nova_void',
+        expect.anything(),
+      );
       expect(scene.fx.spawnShaderNova).toHaveBeenCalledWith(402, 270, 76, 'fx_sh_geyser_plume');
       expect(scene.fx.spawnShaderNova).toHaveBeenCalledWith(
         540,
@@ -484,7 +491,9 @@ describe('AP2-P1B.5 — Procedural VFX for 7 Batch-2 Weapons, ArtGallery 18 Weap
       for (const [, alpha] of gGround.fillStyle.mock.calls) {
         expect(alpha).toBeLessThanOrEqual(0.08);
       }
-      expect(g.strokeCircle).toHaveBeenCalledWith(410, 270, 110);
+      // Cutout 2.0: void_staff deletes solid strokeCircle on active black holes; renders r=11px core + 4 subtle inward arc ribbons
+      expect(g.strokeCircle).not.toHaveBeenCalledWith(410, 270, 110);
+      expect(g.strokeCircle).toHaveBeenCalledWith(410, 270, 11);
       // Cutout 2.0: Emerald Boomerang renders jade crescents; zero full strokeCircle(450, 270, 64)
       expect(g.strokeCircle).not.toHaveBeenCalledWith(450, 270, 64);
       expect(g.fillTriangle).toHaveBeenCalled();
@@ -1059,6 +1068,25 @@ describe('AP2-P1B.5 — Procedural VFX for 7 Batch-2 Weapons, ArtGallery 18 Weap
 
       expect(underG.fillTriangleCalls.length).toBeGreaterThanOrEqual(3);
       expect(ribbonG.fillTriangleCalls.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('renders 100% of magma_cannon r=56px floor rims while capping tall plumes within 46px to low boils', () => {
+      const { fx } = createTestWeaponFxHarness();
+      const counts = spawnMagmaGeyserClusterFx(fx, {
+        kind: 'magma_geyser_eruption',
+        playerId: 1,
+        damage: 40,
+        radius: 56,
+        alertTextVi: '',
+        geysers: [
+          { x: 200, y: 200, radius: 56, damage: 40 },
+          { x: 230, y: 200, radius: 56, damage: 40 }, // dist 30px < 46px -> low boil, but rim still drawn!
+          { x: 300, y: 200, radius: 56, damage: 40 }, // dist >= 46px -> tall plume
+        ],
+      }, false);
+      expect(counts.rimCount).toBe(3);
+      expect(counts.tallPlumeCount).toBe(2);
+      expect(counts.lowBoilCount).toBe(1);
     });
   });
 });

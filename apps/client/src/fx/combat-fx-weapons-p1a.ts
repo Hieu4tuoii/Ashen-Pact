@@ -1,8 +1,22 @@
 import { clamp } from '@ashen-pact/shared';
 import type Phaser from 'phaser';
 import type { CombatFxManager } from './combat-fx.js';
-import { activateParticle, applyP1SafeHaloAlpha, resolveAllyFxProfile } from './combat-fx-spawners.js';
-import { fillTaperedArcRibbon } from './tapered-ribbon-builder.js';
+import { CUTOUT_KIT_ATLAS_KEY } from '../art/texture-baker-fx.js';
+import { acquireParticleSlot } from './combat-fx-pools.js';
+import {
+  activateParticle,
+  applyP1SafeHaloAlpha,
+  resolveAllyFxProfile,
+  routeCutoutBurstByRadius,
+} from './combat-fx-spawners.js';
+import {
+  fillTaperedArcRibbon,
+  fillTaperedQuadraticBezier,
+  strokeCutoutQuadStripFromScratch,
+  SCRATCH_PX,
+  SCRATCH_PY,
+  SCRATCH_HW,
+} from './tapered-ribbon-builder.js';
 import {
   type TransientWeaponV2Shape,
   type WeaponV2OverlayState,
@@ -63,6 +77,35 @@ export function spawnCrossbowBarbedRipVfx(
       tint: 0x7dd3fc,
       ttl: 0.24,
     });
+
+    // 24px 3-prong crimson rip flash (fx_small_burst_4f tinted crimson, R = 12px, scale = 12/16 = 0.75)
+    if (fx) {
+      const ripSlot =
+        typeof fx.acquireParticleSlot === 'function'
+          ? fx.acquireParticleSlot()
+          : fx.particlePool
+            ? acquireParticleSlot.call(fx)
+            : undefined;
+      if (ripSlot) {
+        activateParticle(ripSlot, {
+          textureKey: CUTOUT_KIT_ATLAS_KEY,
+          frameName: 'fx_small_burst_4f_0',
+          kitFramePrefix: 'fx_small_burst_4f',
+          frameCount: 4,
+          x: t.x,
+          y: t.y,
+          ttl: 0.2,
+          startScale: 12 / 16.0,
+          endScale: 12 / 16.0,
+          startAlpha: 0.95,
+          tint: 0xef4444,
+          depth: 43.0,
+          blendMode: 'NORMAL',
+          preserveFlipbookAlpha: true,
+        });
+      }
+    }
+
     fx?.spawnHitSparks(t.x, t.y, pullAng, { isCrit: true, element: 'chill', count: 7 });
     fx?.spawnFloorDecal('frost', t.x, t.y, 0.85);
   }
@@ -271,7 +314,9 @@ export function spawnFragLauncherAirburstVfx(
     ttlSec: 0.3,
     maxTtlSec: 0.3,
   });
-  fx?.spawnShaderNova?.(x, y, effRadius, 'fx_sh_shrapnel_corona');
+  if (fx) {
+    routeCutoutBurstByRadius(fx, x, y, effRadius, 'fx_sh_shrapnel_corona', { depth: 43.5 });
+  }
   fx?.spawnFloorDecal('scorch', x, y, isAirburst ? 1.35 : 1.0);
   fx?.spawnHitSparks(x, y, 0, { isCrit: isAirburst, element: 'burn', count: 9 });
 }
@@ -313,6 +358,39 @@ export function spawnSeedGunHarvestBloomVfx(
       ttlSec: 0.48,
       maxTtlSec: 0.48,
     });
+    if (fx) {
+      for (let i = 0; i < 3; i++) {
+        const slot =
+          typeof fx.acquireParticleSlot === 'function'
+            ? fx.acquireParticleSlot()
+            : fx.particlePool
+              ? acquireParticleSlot.call(fx)
+              : undefined;
+        if (!slot) break;
+        const angle = (i * Math.PI * 2) / 3;
+        const startX = x + Math.cos(angle) * (bloomR * 0.45);
+        const startY = y + Math.sin(angle) * (bloomR * 0.45);
+        const dx = playerX - startX;
+        const dy = playerY - startY;
+        const dist = Math.hypot(dx, dy) || 1;
+        const speed = dist / 0.48;
+        activateParticle(slot, {
+          textureKey: CUTOUT_KIT_ATLAS_KEY,
+          frameName: 'fx_seed_heal_wisp',
+          startScale: 1 / 3,
+          endScale: 1 / 3,
+          x: startX,
+          y: startY,
+          vx: (dx / dist) * speed,
+          vy: (dy / dist) * speed,
+          ttl: 0.48,
+          startAlpha: 0.88,
+          depth: 42.0,
+          blendMode: 'NORMAL',
+          tint: 0x34d399,
+        });
+      }
+    }
   }
 }
 
@@ -373,23 +451,29 @@ export function drawBatch1TransientShape(
     case 'crossbow_rip_tether': {
       const px = s.x2 ?? s.x;
       const py = s.y2 ?? s.y;
-      g.lineStyle(4.0 * alpha, 0x071726, alpha * 0.82);
-      g.beginPath();
-      g.moveTo(s.x, s.y);
-      g.lineTo(px, py);
-      g.strokePath();
-
-      g.lineStyle(2.2, 0x38bdf8, alpha * 0.94);
-      g.beginPath();
-      g.moveTo(s.x, s.y);
-      g.lineTo(px, py);
-      g.strokePath();
-
-      g.lineStyle(1.0, 0xfffdf5, alpha);
-      g.beginPath();
-      g.moveTo(s.x, s.y);
-      g.lineTo(px, py);
-      g.strokePath();
+      const targetG = _ribbonG ?? g;
+      const dx = px - s.x;
+      const dy = py - s.y;
+      const dist = Math.hypot(dx, dy) || 1;
+      const nx = -dy / dist;
+      const ny = dx / dist;
+      const wave = Math.sin(progress * Math.PI * 2) * 16 * (1 - progress);
+      const cx = (s.x + px) * 0.5 + nx * wave;
+      const cy = (s.y + py) * 0.5 + ny * wave;
+      fillTaperedQuadraticBezier(
+        targetG,
+        s.x,
+        s.y,
+        cx,
+        cy,
+        px,
+        py,
+        3.4,
+        2.2,
+        0.8,
+        0x38bdf8,
+        alpha * 0.94,
+      );
 
       const arrowCount = clamp(s.count ?? 2, 1, 4);
       const ang = Math.atan2(py - s.y, px - s.x);
@@ -476,32 +560,23 @@ export function drawBatch1TransientShape(
     }
 
     case 'thorn_bloom_burst': {
-      // Hollow perimeter-only hooked rose-briar burst synchronized 1:1 with fx_sh_bloom_briar
-      const ease = 1 - Math.pow(1 - progress, 2.7);
-      const r = s.radius * (0.24 + ease * 0.76);
-      floorG.lineStyle(3.2, 0x141019, alpha * 0.72);
-      floorG.strokeCircle(s.x, s.y, r);
-      floorG.lineStyle(1.9, 0x10b981, alpha * 0.84);
-      floorG.strokeCircle(s.x, s.y, r);
-      const needles = 6 + Math.min(4, s.count ?? 2);
-      for (let k = 0; k < needles; k += 1) {
-        const a = (k * Math.PI * 2) / needles + progress * 0.3;
-        const hookA = a + (k % 2 === 0 ? 0.16 : -0.16);
-        const innerD = r * 0.72;
-        const midD = r * 0.9;
-        const outerD = r * 1.05;
-        g.lineStyle(3.4, 0x141019, alpha * 0.84);
-        g.beginPath();
-        g.moveTo(s.x + Math.cos(a) * innerD, s.y + Math.sin(a) * innerD);
-        g.lineTo(s.x + Math.cos(hookA) * midD, s.y + Math.sin(hookA) * midD);
-        g.lineTo(s.x + Math.cos(a) * outerD, s.y + Math.sin(a) * outerD);
-        g.strokePath();
-        g.lineStyle(1.9, k % 2 === 0 ? 0x4ade80 : 0xc084fc, alpha * 0.94);
-        g.beginPath();
-        g.moveTo(s.x + Math.cos(a) * innerD, s.y + Math.sin(a) * innerD);
-        g.lineTo(s.x + Math.cos(hookA) * midD, s.y + Math.sin(hookA) * midD);
-        g.lineTo(s.x + Math.cos(a) * outerD, s.y + Math.sin(a) * outerD);
-        g.strokePath();
+      // 5 hooked briar quad-strips (depth 26.6 on underActorG) inward from exact 1.000 * s.radius. Zero strokeCircle!
+      const targetGfx = underActorG;
+      for (let k = 0; k < 5; k += 1) {
+        const angle = (k * Math.PI * 2) / 5 + progress * 0.35;
+        const hookA = angle + 0.28;
+        const midR = s.radius * (0.65 - progress * 0.15);
+        const innerR = s.radius * (0.20 - progress * 0.1);
+        SCRATCH_PX[0] = s.x + Math.cos(angle) * s.radius;
+        SCRATCH_PY[0] = s.y + Math.sin(angle) * s.radius;
+        SCRATCH_HW[0] = 0.5;
+        SCRATCH_PX[1] = s.x + Math.cos(hookA) * midR;
+        SCRATCH_PY[1] = s.y + Math.sin(hookA) * midR;
+        SCRATCH_HW[1] = 2.4 * (1 - progress * 0.4);
+        SCRATCH_PX[2] = s.x + Math.cos(angle + 0.12) * innerR;
+        SCRATCH_PY[2] = s.y + Math.sin(angle + 0.12) * innerR;
+        SCRATCH_HW[2] = 0.8;
+        strokeCutoutQuadStripFromScratch(targetGfx, 3, 0x10b981, alpha * 0.94);
       }
       return true;
     }
@@ -643,33 +718,26 @@ export function drawBatch1TransientShape(
     }
 
     case 'seed_harvest_bloom': {
-      // Hollow 1:1 6-petal unfurling botanical lotus synchronized with fx_sh_bloom_briar
+      // 5-petal jade bloom on underActorG (depth 26.6, 1:1 ev.radius). Zero strokeCircle!
+      const targetGfx = underActorG;
       const ease = 1 - Math.pow(1 - progress, 2.7);
       const r = s.radius * (0.24 + ease * 0.76);
-      floorG.lineStyle(3.0, 0x141019, alpha * 0.72);
-      floorG.strokeCircle(s.x, s.y, r);
-      floorG.lineStyle(2.0, 0x10b981, alpha * 0.84);
-      floorG.strokeCircle(s.x, s.y, r);
-      for (let p = 0; p < 6; p += 1) {
-        const a = (p * Math.PI) / 3 + progress * 0.25;
-        const px0 = s.x + Math.cos(a - 0.36) * (r * 0.8);
-        const py0 = s.y + Math.sin(a - 0.36) * (r * 0.8);
-        const tipX = s.x + Math.cos(a) * (r * 1.04);
-        const tipY = s.y + Math.sin(a) * (r * 1.04);
-        const px1 = s.x + Math.cos(a + 0.36) * (r * 0.8);
-        const py1 = s.y + Math.sin(a + 0.36) * (r * 0.8);
-        g.lineStyle(3.2, 0x141019, alpha * 0.82);
-        g.beginPath();
-        g.moveTo(px0, py0);
-        g.lineTo(tipX, tipY);
-        g.lineTo(px1, py1);
-        g.strokePath();
-        g.lineStyle(1.8, p % 2 === 0 ? 0x4ade80 : 0xfacc15, alpha * 0.94);
-        g.beginPath();
-        g.moveTo(px0, py0);
-        g.lineTo(tipX, tipY);
-        g.lineTo(px1, py1);
-        g.strokePath();
+      for (let p = 0; p < 5; p += 1) {
+        const a = (p * Math.PI * 2) / 5 + progress * 0.25;
+        const span = 0.52;
+        fillTaperedArcRibbon(
+          targetGfx,
+          s.x,
+          s.y,
+          r * 0.85,
+          a - span * 0.5,
+          a + span * 0.5,
+          3.2 * (1 - progress * 0.3),
+          p % 2 === 0 ? 0x10b981 : 0x2dd4bf,
+          alpha * 0.92,
+          6,
+          1.8,
+        );
       }
       return true;
     }

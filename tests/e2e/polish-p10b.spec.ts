@@ -98,6 +98,23 @@ test.describe('Phase P10b — Combat FX (BlendMode.ADD), Elemental Combo FX, Che
       gs.fx.spawnHitSparks(510, 270, 0, { isCrit: true, element: 'burn', count: 8 });
       gs.fx.update(0.016);
 
+      // Shotgun pellet impact: stamps fx_pellet_dent with 0 fx_sh_* flipbooks
+      const flipbooksBefore = gs.fx.particlePool.filter((p) => p.active && p.textureKey.startsWith('fx_sh_')).length;
+      (gs as unknown as { processSimEvents: (evts: unknown[]) => void }).processSimEvents([
+        {
+          kind: 'projectile_impact',
+          weaponId: 'scrap_shotgun',
+          x: 510,
+          y: 270,
+          angle: 0,
+          team: 'player',
+          hitWall: false,
+        },
+      ]);
+      const flipbooksAfter = gs.fx.particlePool.filter((p) => p.active && p.textureKey.startsWith('fx_sh_')).length;
+      const shotgunHitFlipbooks = flipbooksAfter - flipbooksBefore;
+      const hasPelletDent = gs.fx.particlePool.some((p) => p.active && p.frameName === 'fx_pellet_dent');
+
       const active = gs.fx.particlePool.filter((p) => p.active);
       const additiveParticles = active.filter(
         (p) => p.blendMode === 'ADD' && p.sprite.depth > 34 && p.sprite.depth < 60,
@@ -115,6 +132,8 @@ test.describe('Phase P10b — Combat FX (BlendMode.ADD), Elemental Combo FX, Che
         hasSparkTrail: active.some((p) => p.textureKey === 'fx_spark_trail'),
         casingHasShadow: Boolean(casing?.hasGroundShadow && casing?.shadowSprite?.visible),
         casingShadowDepth: casing?.shadowSprite?.depth ?? 0,
+        shotgunHitFlipbooks,
+        hasPelletDent,
       };
     });
     expect(combatFxCheck).not.toBeNull();
@@ -124,6 +143,8 @@ test.describe('Phase P10b — Combat FX (BlendMode.ADD), Elemental Combo FX, Che
     expect(combatFxCheck!.hasSparkTrail).toBe(true);
     expect(combatFxCheck!.casingHasShadow).toBe(true);
     expect(combatFxCheck!.casingShadowDepth).toBe(19);
+    expect(combatFxCheck!.shotgunHitFlipbooks).toBe(0);
+    expect(combatFxCheck!.hasPelletDent).toBe(true);
 
     // 3. Verify Elemental Reaction coalescing within 0.4s -> "HƠI NƯỚC ×3" & harmonic ring (easeOutCubic)
     const reactionCheck = await page.evaluate(() => {
@@ -343,8 +364,37 @@ test.describe('Phase P10b — Combat FX (BlendMode.ADD), Elemental Combo FX, Che
         isLifeSeed: false,
         hitEntityIds: [],
       });
+      // Spawn a player projectile to verify BlendMode.NORMAL (0) and depth 41.0
+      const playerProjId = 77778;
+      sim.projectiles.push({
+        id: playerProjId,
+        team: 'player',
+        ownerId: sim.player.id,
+        weaponId: 'hunter_crossbow',
+        x: sim.player.x + 40,
+        y: sim.player.y,
+        prevX: sim.player.x + 40,
+        prevY: sim.player.y,
+        vx: 240,
+        vy: 0,
+        angle: 0,
+        radius: 6,
+        damage: 15,
+        critChance: 0,
+        critMultiplier: 1.5,
+        knockback: 10,
+        ttlSec: 2,
+        pierceRemaining: 0,
+        bounceRemaining: 0,
+        element: 'chill',
+        statusChance: 0,
+        aoeRadius: 0,
+        isLifeSeed: false,
+        hitEntityIds: [],
+      });
       gs.syncProjectilesAndPickups();
       const projEntry = gs.projectileSprites.get(enemyProjId);
+      const playerProjEntry = gs.projectileSprites.get(playerProjId);
 
       return {
         b2Count: b2Visible.length,
@@ -358,6 +408,8 @@ test.describe('Phase P10b — Combat FX (BlendMode.ADD), Elemental Combo FX, Che
         enemyProjBlendMode: projEntry?.sprite.blendMode,
         enemyProjTint: projEntry?.sprite.tintTopLeft,
         enemyProjAlpha: projEntry?.sprite.alpha,
+        playerProjDepth: playerProjEntry?.sprite.depth,
+        playerProjBlendMode: playerProjEntry?.sprite.blendMode,
       };
     });
 
@@ -376,6 +428,9 @@ test.describe('Phase P10b — Combat FX (BlendMode.ADD), Elemental Combo FX, Che
     expect(biome2And3Check!.enemyProjBlendMode).toBe(0);
     expect(biome2And3Check!.enemyProjTint).toBe(0xffffff);
     expect(biome2And3Check!.enemyProjAlpha).toBe(1);
+
+    expect(biome2And3Check!.playerProjDepth).toBe(41);
+    expect(biome2And3Check!.playerProjBlendMode).toBe(0); // BlendMode.NORMAL
 
     expect(consoleErrors).toEqual([]);
     expect(consoleWarnings).toEqual([]);

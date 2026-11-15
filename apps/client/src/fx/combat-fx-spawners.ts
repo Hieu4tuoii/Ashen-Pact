@@ -1541,6 +1541,28 @@ export function spawnMuzzleFlashAndCasingImpl(
     });
   }
 
+  if (weaponId === 'thorn_staff') {
+    const barb = this.acquireParticleSlot();
+    if (barb) {
+      activateParticle(barb, {
+        textureKey: CUTOUT_KIT_ATLAS_KEY,
+        frameName: 'fx_muzzle_thorn_barb',
+        startScale: 1 / 3,
+        endScale: 1 / 3,
+        x: muzzleX,
+        y: muzzleY,
+        vx: Math.cos(angleRad) * 45,
+        vy: Math.sin(angleRad) * 45,
+        rotation: angleRad,
+        ttl: 0.1,
+        startAlpha: 0.92 * alphaMult,
+        depth: 42.0,
+        blendMode: 'NORMAL',
+        tint: 0x86efac,
+      });
+    }
+  }
+
   if (profile.ejectCasing) {
     const casing = this.acquireParticleSlot();
     if (casing) {

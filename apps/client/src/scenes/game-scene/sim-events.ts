@@ -9,6 +9,7 @@ import {
 } from '@ashen-pact/shared';
 import { resolveHitFlashTint } from '../../art/cutout-rig-math.js';
 import { PALETTE } from '../../art/palette.js';
+import { routeCutoutBurstByRadius } from '../../fx/combat-fx-spawners.js';
 import {
   resolveEnemyProjectileSfx,
   resolvePickupSfx,
@@ -34,6 +35,7 @@ import {
   spawnMeleeParryDeflectFx,
   spawnPropDashKickVfx,
   spawnRivetDetonationWebVfx,
+  recordScrapShotgunPelletHit,
   spawnScrapShotgunBlastVfx,
   spawnScrapShotgunShellEjectVfx,
   spawnSeedGunHarvestBloomVfx,
@@ -359,7 +361,18 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
           scratchTickImpactTargetIds.push(struckTargetId);
         }
 
-        if (!isStress || i < 4) {
+        const isScrapPellet = (ev as unknown as { weaponId?: string }).weaponId === 'scrap_shotgun';
+        if (isScrapPellet && !ev.hitWall) {
+          recordScrapShotgunPelletHit(
+            this.fx,
+            struckTargetId ?? 0,
+            ev.x,
+            ev.y,
+            ev.angle,
+            sim.tick,
+            ev.team === 'player' ? false : true,
+          );
+        } else if (!isStress || i < 4) {
           this.fx.spawnHitSparks(ev.x, ev.y, ev.angle, {
             isCrit: ev.isCrit,
             hitWall: ev.hitWall,
@@ -485,6 +498,7 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
           srcId.includes('ice') ||
           srcId.includes('glacial');
         const isThunderBlast =
+          srcId === 'tesla_carbine' ||
           srcId === 'dash_thunder_decoy' ||
           srcId === 'tesla_turret_self_destruct' ||
           srcId === 'thunder_hammer' ||
@@ -596,6 +610,9 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
             this.fx.spawnShaderNova(ev.x, ev.y, ev.radius, 'fx_sh_spore_cloud');
             this.fx.spawnFloorDecal?.('splatter', ev.x, ev.y, clamp(ev.radius / 96, 0.5, 0.9));
             this.fx.spawnHitSparks?.(ev.x, ev.y, 0, { element: 'poison', count: 5 });
+          } else if (!isStress && srcId === 'tesla_carbine') {
+            routeCutoutBurstByRadius(this.fx, ev.x, ev.y, ev.radius || 88, 'fx_sh_anvil_storm');
+            this.fx.spawnHitSparks?.(ev.x, ev.y, 0, { isCrit: true, element: 'shock', count: 6 });
           } else if (!isStress && this.fx.spawnShaderNova && isThunderBlast) {
             this.fx.spawnShaderNova(ev.x, ev.y, ev.radius, 'fx_sh_anvil_storm');
             this.fx.spawnHitSparks?.(ev.x, ev.y, 0, { isCrit: true, element: 'shock', count: 6 });

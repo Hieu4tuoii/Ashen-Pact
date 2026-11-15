@@ -317,6 +317,46 @@ export function syncSimulatedPlayersImpl(this: GameScene, dtSec: number): void {
   }
 
   syncSolarMiniSunsImpl.call(this, sim);
+  syncFragFuseWheelsImpl.call(this, sim);
+}
+
+export function syncFragFuseWheelsImpl(
+  this: GameScene,
+  sim: ReturnType<LocalTransport['getSim']>,
+): void {
+  this.fragFuseWheelSyncGen = (this.fragFuseWheelSyncGen + 1) | 0;
+  const currentGen = this.fragFuseWheelSyncGen;
+  const visualTime = getFreezeVisualTimeSec(this.lighting?.getElapsedSec() ?? 1.0);
+
+  for (let i = 0; i < sim.projectiles.length; i++) {
+    const b = sim.projectiles[i]!;
+    if (b.weaponId === 'frag_launcher' && b.armedForAirburst && b.ttlSec > 0) {
+      let entry = this.fragFuseWheelSprites.get(b.id);
+      if (!entry) {
+        const sprite = this.add
+          .sprite(b.x, b.y, CUTOUT_KIT_ATLAS_KEY, 'fx_frag_fuse_wheel')
+          .setScale(1 / 3)
+          .setDepth(41.5);
+        entry = { sprite, lastSeenGen: currentGen };
+        this.fragFuseWheelSprites.set(b.id, entry);
+      } else {
+        entry.sprite.setPosition(b.x, b.y);
+        entry.sprite.setVisible(true);
+        entry.sprite.setActive(true);
+        entry.lastSeenGen = currentGen;
+      }
+      entry.sprite.setRotation(visualTime * 18 + b.id);
+      const isTeammate = b.team === 'player' && b.ownerId !== sim.player.id;
+      entry.sprite.setAlpha(isTeammate ? 0.35 : 1.0);
+    }
+  }
+
+  this.fragFuseWheelSprites.forEach((entry) => {
+    if (entry.lastSeenGen !== currentGen && entry.sprite.visible) {
+      entry.sprite.setVisible(false);
+      entry.sprite.setActive(false);
+    }
+  });
 }
 
 export function syncSolarMiniSunsImpl(

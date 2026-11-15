@@ -202,6 +202,11 @@ export class GameScene extends Phaser.Scene {
     { sprite: Phaser.GameObjects.Sprite; lastSeenGen: number }
   >();
   public solarMiniSunSyncGen = 0;
+  public fragFuseWheelSprites = new Map<
+    number,
+    { sprite: Phaser.GameObjects.Sprite; lastSeenGen: number }
+  >();
+  public fragFuseWheelSyncGen = 0;
   public enemyRigs = new Map<number, CutoutRig>();
   public propVisuals = new Map<number, PropVisual>();
   public projectileSprites = new Map<

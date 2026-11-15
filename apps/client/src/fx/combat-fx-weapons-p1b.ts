@@ -7,9 +7,12 @@ import {
 } from '@ashen-pact/shared';
 import type Phaser from 'phaser';
 import { PALETTE } from '../art/palette.js';
+import { CUTOUT_KIT_ATLAS_KEY } from '../art/texture-baker-fx.js';
 import { zzfx } from '../audio/zzfx.js';
 import type { CombatFxManager } from './combat-fx.js';
+import { acquireParticleSlot } from './combat-fx-pools.js';
 import {
+  activateParticle,
   applyP1SafeHaloAlpha,
   resolveAllyFxProfile,
   routeCutoutBurstByRadius,
@@ -183,6 +186,11 @@ export function handleBatch2WeaponSimEvent(
     case 'void_implosion': {
       if (!isStress) {
         const rad = ev.radius || 110;
+        const isTeammate = ev.playerId !== sim.player.id;
+        const dist = Math.hypot(ev.x - sim.player.x, ev.y - sim.player.y);
+        const ally = resolveAllyFxProfile(isTeammate ? 2 : 1, 1);
+        const alpha = applyP1SafeHaloAlpha(ally.aoeAlpha, isTeammate, dist, rad);
+
         pushP1BShape(state, {
           kind: 'void_implosion_ring',
           x: ev.x,
@@ -190,12 +198,20 @@ export function handleBatch2WeaponSimEvent(
           radius: rad,
           count: ev.swallowedBullets ?? 0,
           color: 0xa855f7,
-          ttlSec: 0.38,
-          maxTtlSec: 0.38,
+          ttlSec: 4 / 60,
+          maxTtlSec: 4 / 60,
         });
-        fx?.spawnShaderNova?.(ev.x, ev.y, rad, 'fx_sh_nova_void');
-        fx?.spawnFloorDecal('scorch', ev.x, ev.y, 1.15);
-        scene.lighting?.spawnTransientLight(ev.x, ev.y, 165, '#C084FC', 0.95, 0.4);
+        if (fx) {
+          routeCutoutBurstByRadius(fx, ev.x, ev.y, rad, 'fx_sh_nova_void', {
+            isTeammate,
+            alpha,
+            depth: 43.5,
+          });
+        }
+        fx?.spawnFloorDecal?.('scorch', ev.x, ev.y, 1.15);
+        if (!isTeammate) {
+          scene.lighting?.spawnTransientLight(ev.x, ev.y, 165, '#C084FC', 0.95, 0.4);
+        }
       }
       if (allowStressSfx) {
         zzfx.play('void_implosion', ev.x, scene.camFocusX, ev.y, scene.camFocusY);
@@ -361,27 +377,9 @@ export function handleBatch2WeaponSimEvent(
     }
 
     case 'magma_geyser_eruption': {
-      if (!isStress) {
-        const geysers =
-          ev.geysers && ev.geysers.length > 0
-            ? ev.geysers
-            : [{ x: sim.player.x + 80, y: sim.player.y, radius: 56, damage: 22 }];
-        for (let i = 0; i < geysers.length; i += 1) {
-          const gy = geysers[i]!;
-          const rad = gy.radius || 56;
-          pushP1BShape(state, {
-            kind: 'magma_geyser_plume',
-            x: gy.x,
-            y: gy.y,
-            radius: rad,
-            count: i,
-            color: 0xf97316,
-            ttlSec: 0.38,
-            maxTtlSec: 0.38,
-          });
-          fx?.spawnShaderNova?.(gy.x, gy.y, rad, 'fx_sh_geyser_plume');
-          fx?.spawnFloorDecal('scorch', gy.x, gy.y, 1.0);
-        }
+      if (!isStress && fx) {
+        spawnMagmaGeyserClusterFx(fx, ev, ev.playerId !== sim.player.id, scene);
+        const geysers = ev.geysers && ev.geysers.length > 0 ? ev.geysers : [{ x: sim.player.x + 80, y: sim.player.y }];
         const first = geysers[0]!;
         scene.lighting?.spawnTransientLight(first.x, first.y, 175, PALETTE.FLAME_ORANGE, 0.98, 0.45);
       }
@@ -433,9 +431,14 @@ export function drawBatch2ActiveWeaponOverlays(
   player: SimPlayerState,
   clockSec: number,
   groundG?: Phaser.GameObjects.Graphics,
+  underG?: Phaser.GameObjects.Graphics,
 ): void {
   if (!sim) return;
   const floorG = groundG ?? g;
+  const underActorG =
+    underG ??
+    (g as unknown as { underActorGraphics?: Phaser.GameObjects.Graphics }).underActorGraphics ??
+    g;
 
   // 1. Magma Cannon ground trails at depth 16 (perimeter-crisp molten crack, low interior fill)
   for (let i = 0; i < (sim.magmaTrails?.length ?? 0); i += 1) {
@@ -581,20 +584,39 @@ export function drawBatch2ActiveWeaponOverlays(
     const b = sim.projectiles[i]!;
     if (b.ttlSec <= 0 || b.team !== 'player') continue;
     if (b.weaponId === 'void_staff') {
-      g.lineStyle(1.4, 0xa855f7, 0.38);
-      g.strokeCircle(b.x, b.y, 110);
+      const isTeammate = b.ownerId !== undefined && b.ownerId !== player.id;
+      const baseAlpha = isTeammate ? 0.07 : 0.22;
+      const distToPlayer = Math.hypot(b.x - player.x, b.y - player.y);
+      const alpha = applyP1SafeHaloAlpha(baseAlpha, isTeammate, distToPlayer, 110);
+
+      // 4 subtle inward fillTaperedArcRibbon arcs at r = 110.0px (depth 26.6 on underActorG, 68% open)
+      // ZERO solid strokeCircle!
+      const arcSpan = ((1 - 0.68) * Math.PI * 2) / 4;
       for (let arm = 0; arm < 4; arm += 1) {
-        const a0 = clockSec * 6.5 + (arm * Math.PI) / 2;
-        strokeArc(g, 1.8, 0xc084fc, 0.72, b.x, b.y, 34, a0, a0 + 0.9);
+        const aMid = clockSec * 2.0 + (arm * Math.PI) / 2;
+        fillTaperedArcRibbon(
+          underActorG,
+          b.x,
+          b.y,
+          110.0,
+          aMid - arcSpan * 0.5,
+          aMid + arcSpan * 0.5,
+          2.6,
+          0xa855f7,
+          alpha,
+          6,
+          1.8,
+        );
       }
-      g.fillStyle(0x050209, 0.98);
-      g.fillCircle(b.x, b.y, 17);
-      g.lineStyle(2.6, 0x7c3aed, 0.98);
-      g.strokeCircle(b.x, b.y, 15.5);
-      g.lineStyle(1.5, 0xf0abfc, 0.95);
-      g.strokeCircle(b.x, b.y, 11.5);
-      g.fillStyle(0x030106, 1);
-      g.fillCircle(b.x, b.y, 9.0);
+
+      // Core: #0B090E r = 11px core (1.8px #A855F7 + #141019 rim)
+      g.fillStyle(0x0b090e, 0.98);
+      g.fillCircle(b.x, b.y, 11);
+      g.lineStyle(1.8, 0xa855f7, 0.96);
+      g.strokeCircle(b.x, b.y, 11);
+      g.lineStyle(1.0, 0x141019, 0.92);
+      g.strokeCircle(b.x, b.y, 12);
+
       const swallowed = clamp(b.swallowedBullets ?? 0, 0, 6);
       for (let m = 0; m < swallowed; m += 1) {
         const ma = -clockSec * 10 + (m * Math.PI * 2) / Math.max(1, swallowed);
@@ -761,15 +783,12 @@ export function drawBatch2TransientShape(
     }
 
     case 'void_implosion_ring': {
-      // Hollow gravitational event-horizon rings on floor (fx_sh_nova_void renders the Chiaroscuro collapse)
-      const outerR = s.radius * (1 - progress * 0.45);
-      const shockR = s.radius * (0.55 + progress * 0.45);
-      floorG.lineStyle(2.4, 0x050209, alpha * 0.86);
-      floorG.strokeCircle(s.x, s.y, shockR);
-      floorG.lineStyle(1.9, 0xa855f7, alpha * 0.88);
-      floorG.strokeCircle(s.x, s.y, shockR);
-      floorG.lineStyle(1.4, 0xf0abfc, alpha * 0.78);
-      floorG.strokeCircle(s.x, s.y, outerR);
+      // Hollow gravitational event-horizon collapse 110px -> 0px over 4 ticks
+      const collapseR = s.radius * Math.max(0, 1 - progress);
+      floorG.lineStyle(2.4, 0x141019, alpha * 0.86);
+      floorG.strokeCircle(s.x, s.y, collapseR);
+      floorG.lineStyle(1.8, 0xa855f7, alpha * 0.92);
+      floorG.strokeCircle(s.x, s.y, collapseR);
       return true;
     }
 
@@ -1455,4 +1474,126 @@ export function spawnSolarSupernovaFx(
   if (underGfx) {
     renderSolarSupernovaCoronaLances(underGfx, ev.x, ev.y, rad, 0, alpha);
   }
+}
+
+export function spawnMagmaGeyserClusterFx(
+  fx: CombatFxManager,
+  ev: Extract<SimEvent, { kind: 'magma_geyser_eruption' }>,
+  isTeammate: boolean,
+  sceneKeyArg?: object,
+): { rimCount: number; tallPlumeCount: number; lowBoilCount: number } {
+  const geysers =
+    ev.geysers && ev.geysers.length > 0
+      ? ev.geysers
+      : [{ x: (ev as unknown as { x?: number }).x ?? 0, y: (ev as unknown as { y?: number }).y ?? 0, radius: ev.radius || 56, damage: ev.damage || 40 }];
+
+  let rimCount = 0;
+  let tallPlumeCount = 0;
+  let lowBoilCount = 0;
+  const tallPlumePositions: Array<{ x: number; y: number }> = [];
+
+  if (fx.particlePool) {
+    for (const p of fx.particlePool) {
+      if (p.active && (p.textureKey === 'fx_sh_geyser_plume' || p.frameName === 'fx_sh_geyser_plume')) {
+        tallPlumePositions.push({ x: p.x, y: p.y });
+      }
+    }
+  }
+
+  const ally = resolveAllyFxProfile(isTeammate ? 2 : 1, 1);
+  const sceneKey = sceneKeyArg ?? (fx as unknown as { sceneRef?: object }).sceneRef ?? fx;
+
+  for (let i = 0; i < geysers.length; i++) {
+    const gy = geysers[i]!;
+    const rad = gy.radius || 56.0;
+    rimCount += 1;
+
+    const distToPlayer = fx.distanceToLocalPlayer ? fx.distanceToLocalPlayer(gy.x, gy.y) : Infinity;
+    const aoeAlpha = applyP1SafeHaloAlpha(ally.aoeAlpha, isTeammate, distToPlayer, rad);
+
+    // 1. Persistent magma rim at depth 16.0
+    if (sceneKey) {
+      const state = getWeaponV2OverlayState(sceneKey);
+      pushP1BShape(state, {
+        kind: 'magma_geyser_plume',
+        x: gy.x,
+        y: gy.y,
+        radius: rad,
+        count: i,
+        color: 0xf97316,
+        ttlSec: 0.38,
+        maxTtlSec: 0.38,
+      });
+    }
+
+    // 2. Depth 26.6 perimeter crescent ring
+    if (fx.activePerimeterRings) {
+      const ring = (fx.perimeterRingFreePool ? fx.perimeterRingFreePool.pop() : undefined) ?? {
+        active: true,
+        x: gy.x,
+        y: gy.y,
+        targetRadiusPx: rad,
+        currentRadiusPx: rad,
+        colorNum: 0xf97316,
+        alpha: aoeAlpha,
+        age: 0,
+        ttl: 0.28,
+      };
+      ring.active = true;
+      ring.x = gy.x;
+      ring.y = gy.y;
+      ring.targetRadiusPx = rad;
+      ring.currentRadiusPx = rad;
+      ring.colorNum = 0xf97316;
+      ring.alpha = aoeAlpha;
+      ring.age = 0;
+      ring.ttl = 0.28;
+      fx.activePerimeterRings.push(ring);
+    }
+
+    // 3. Tall plume vs low boil
+    let isTooClose = false;
+    for (const pos of tallPlumePositions) {
+      if (Math.hypot(gy.x - pos.x, gy.y - pos.y) < 46.0) {
+        isTooClose = true;
+        break;
+      }
+    }
+
+    if (isTooClose) {
+      lowBoilCount += 1;
+      const slot =
+        typeof fx.acquireParticleSlot === 'function'
+          ? fx.acquireParticleSlot()
+          : fx.particlePool
+            ? acquireParticleSlot.call(fx)
+            : undefined;
+      if (slot) {
+        const boilScale = 12 / 11.0;
+        activateParticle(slot, {
+          textureKey: CUTOUT_KIT_ATLAS_KEY,
+          frameName: 'fx_micro_burst_4f_0',
+          kitFramePrefix: 'fx_micro_burst_4f',
+          frameCount: 4,
+          x: gy.x,
+          y: gy.y,
+          ttl: 0.2,
+          startScale: boilScale,
+          endScale: boilScale,
+          startAlpha: aoeAlpha,
+          depth: 26.4,
+          blendMode: 'NORMAL',
+          preserveFlipbookAlpha: true,
+        });
+      }
+    } else {
+      tallPlumeCount += 1;
+      tallPlumePositions.push({ x: gy.x, y: gy.y });
+      fx.spawnShaderNova?.(gy.x, gy.y, rad, 'fx_sh_geyser_plume');
+    }
+
+    fx.spawnFloorDecal?.('scorch', gy.x, gy.y, 1.0);
+  }
+
+  return { rimCount, tallPlumeCount, lowBoilCount };
 }

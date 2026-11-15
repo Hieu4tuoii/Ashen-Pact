@@ -191,6 +191,10 @@ export function createImpl(this: GameScene): void {
     entry.sprite.destroy();
   }
   this.solarMiniSunSprites.clear();
+  for (const entry of this.fragFuseWheelSprites.values()) {
+    entry.sprite.destroy();
+  }
+  this.fragFuseWheelSprites.clear();
   this.projectileSprites.clear();
   this.pickupSprites.clear();
   this.doorSprites.clear();

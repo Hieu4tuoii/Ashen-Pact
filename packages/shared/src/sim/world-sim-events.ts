@@ -61,6 +61,7 @@ export type SimEvent =
       blockedByShield: boolean;
       isCrit: boolean;
       element?: ElementType;
+      weaponId?: string;
     }
   | {
       kind: 'entity_killed';

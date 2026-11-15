@@ -57,8 +57,8 @@ export function drawEnemyEmbeddedArrows(
     Math.hypot(playerX - ex, playerY - ey) > 1e-3
       ? Math.atan2(playerY - ey, playerX - ex)
       : (enemy.aimAngle ?? 0) + Math.PI;
-  const rStart = Math.max(4, enemy.radius * 0.32);
-  const rEnd = enemy.radius + 14.5;
+  const rStart = enemy.radius;
+  const rEnd = enemy.radius + 14.0;
 
   for (let k = 0; k < arrows; k += 1) {
     const fanOffset =
@@ -94,15 +94,15 @@ export function drawEnemyEmbeddedArrows(
     g.lineTo(bx, by);
     g.strokePath();
 
-    // Embedded barbed head & icy wound point
+    // Embedded barbed head & icy wound point (14x7px rim-pinned)
     g.fillStyle(0x38bdf8, 0.88);
     g.fillCircle(tx, ty, 2.3);
     g.lineStyle(1.6, 0x7dd3fc, 0.96);
     g.beginPath();
     g.moveTo(tx, ty);
-    g.lineTo(tx + cos * 4.8 + px * 3.3, ty + sin * 4.8 + py * 3.3);
+    g.lineTo(tx + cos * 4.8 + px * 3.5, ty + sin * 4.8 + py * 3.5);
     g.moveTo(tx, ty);
-    g.lineTo(tx + cos * 4.8 - px * 3.3, ty + sin * 4.8 - py * 3.3);
+    g.lineTo(tx + cos * 4.8 - px * 3.5, ty + sin * 4.8 - py * 3.5);
     g.strokePath();
 
     // Crisp cyan-white V-shaped fletching feathers at tail
@@ -111,9 +111,9 @@ export function drawEnemyEmbeddedArrows(
     g.lineStyle(1.8, 0xbae6fd, 0.98);
     g.beginPath();
     g.moveTo(fx1, fy1);
-    g.lineTo(bx + px * 4.0, by + py * 4.0);
+    g.lineTo(bx + px * 3.5, by + py * 3.5);
     g.moveTo(fx1, fy1);
-    g.lineTo(bx - px * 4.0, by - py * 4.0);
+    g.lineTo(bx - px * 3.5, by - py * 3.5);
     g.strokePath();
   }
 
@@ -412,8 +412,6 @@ export function drawBatch1ActiveProjectiles(
         const pulseR = 15 + Math.sin(clockSec * 20 + b.id) * 2.0;
         g.lineStyle(1.8, 0xfacc15, 0.92);
         g.strokeCircle(b.x, b.y, pulseR);
-        g.lineStyle(1.2, 0xf97316, 0.28);
-        g.strokeCircle(b.x, b.y, 104);
         g.lineStyle(1.5, 0xfffdf5, 0.9);
         g.beginPath();
         g.moveTo(b.x - pulseR - 4, b.y);

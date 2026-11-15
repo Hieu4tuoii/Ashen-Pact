@@ -121,25 +121,156 @@ export interface MagneticRivetArcLink {
   dist: number;
 }
 
+export function buildLinearRivetTetherPairs(
+  rivets: ReadonlyArray<{ id: number; x: number; y: number }>,
+  maxDist = RIVET_WEB_MAX_LINK_DIST,
+): Array<[number, number]> {
+  if (rivets.length <= 1) return [];
+
+  const n = rivets.length;
+  const degrees = new Map<number, number>();
+  const visited = new Set<number>();
+  const pairs: Array<[number, number]> = [];
+
+  for (let i = 0; i < n; i++) {
+    const start = rivets[i]!;
+    if (visited.has(start.id)) continue;
+    visited.add(start.id);
+
+    let current = start;
+    while ((degrees.get(current.id) ?? 0) < 2) {
+      let nearestNext: { id: number; x: number; y: number } | null = null;
+      let nearestDist = Infinity;
+
+      for (let j = 0; j < n; j++) {
+        const candidate = rivets[j]!;
+        if (candidate.id === current.id) continue;
+        if (visited.has(candidate.id)) continue;
+        if ((degrees.get(candidate.id) ?? 0) >= 2) continue;
+
+        const d = Math.hypot(candidate.x - current.x, candidate.y - current.y);
+        if (d > 0.001 && d <= maxDist && d < nearestDist) {
+          nearestDist = d;
+          nearestNext = candidate;
+        }
+      }
+
+      if (!nearestNext) break;
+
+      visited.add(nearestNext.id);
+      pairs.push([current.id, nearestNext.id]);
+      degrees.set(current.id, (degrees.get(current.id) ?? 0) + 1);
+      degrees.set(nearestNext.id, (degrees.get(nearestNext.id) ?? 0) + 1);
+      current = nearestNext;
+    }
+  }
+
+  return pairs;
+}
+
 export function buildMagneticRivetArcLinks(
   rivets: ReadonlyArray<MagneticRivetPoint>,
   maxDist = RIVET_WEB_MAX_LINK_DIST,
 ): MagneticRivetArcLink[] {
+  const rivetMap = new Map<number, MagneticRivetPoint>();
+  for (const r of rivets) {
+    rivetMap.set(r.id, r);
+  }
+  const pairs = buildLinearRivetTetherPairs(rivets, maxDist);
   const links: MagneticRivetArcLink[] = [];
-  for (let i = 0; i < rivets.length; i += 1) {
-    const a = rivets[i]!;
+  for (const [idA, idB] of pairs) {
+    const a = rivetMap.get(idA);
+    const b = rivetMap.get(idB);
+    if (!a || !b) continue;
     const ownerA = a.ownerPlayerId ?? a.ownerId ?? 0;
-    for (let j = i + 1; j < rivets.length; j += 1) {
-      const b = rivets[j]!;
-      const ownerB = b.ownerPlayerId ?? b.ownerId ?? 0;
-      if (ownerA !== 0 && ownerB !== 0 && ownerA !== ownerB) continue;
-      const dist = Math.hypot(b.x - a.x, b.y - a.y);
-      if (dist > 0.001 && dist <= maxDist) {
-        links.push({ from: a, to: b, dist });
-      }
+    const ownerB = b.ownerPlayerId ?? b.ownerId ?? 0;
+    if (ownerA !== 0 && ownerB !== 0 && ownerA !== ownerB) continue;
+    const dist = Math.hypot(b.x - a.x, b.y - a.y);
+    if (dist > 0.001 && dist <= maxDist) {
+      links.push({ from: a, to: b, dist });
     }
   }
   return links;
+}
+
+const scrapShotgunPelletHitsByTarget = new Map<number, { tick: number; count: number }>();
+
+export function resetScrapShotgunPelletHitTracker(): void {
+  scrapShotgunPelletHitsByTarget.clear();
+}
+
+export function recordScrapShotgunPelletHit(
+  fx: CombatFxManager,
+  targetId: number,
+  hitX: number,
+  hitY: number,
+  angleRad: number,
+  tick: number,
+  isTeammate: boolean,
+): void {
+  // 1. Stamps fx_pellet_dent (8×6px, ttl = 0.05s = 3 ticks, depth = 43.0, 0 fx_sh_* flipbooks!)
+  const slot =
+    typeof fx.acquireParticleSlot === 'function'
+      ? fx.acquireParticleSlot()
+      : fx.particlePool
+        ? acquireParticleSlot.call(fx)
+        : undefined;
+  if (slot) {
+    activateParticle(slot, {
+      textureKey: CUTOUT_KIT_ATLAS_KEY,
+      frameName: 'fx_pellet_dent',
+      x: hitX,
+      y: hitY,
+      ttl: 0.05,
+      startScale: 1 / 3,
+      endScale: 1 / 3,
+      rotation: angleRad,
+      startAlpha: isTeammate ? 0.35 : 0.95,
+      depth: 43.0,
+      blendMode: 'NORMAL',
+      preserveFlipbookAlpha: true,
+    });
+  }
+
+  // 2. Track hits per target per tick
+  let hitInfo = scrapShotgunPelletHitsByTarget.get(targetId);
+  if (!hitInfo) {
+    hitInfo = { tick, count: 1 };
+    scrapShotgunPelletHitsByTarget.set(targetId, hitInfo);
+  } else if (hitInfo.tick !== tick) {
+    hitInfo.tick = tick;
+    hitInfo.count = 1;
+  } else {
+    hitInfo.count += 1;
+  }
+
+  // 3. When a target reaches === 3 pellet hits in the same tick, push 1 26px air-compression fan into activeArcRibbons
+  if (hitInfo.count === 3 && fx.activeArcRibbons) {
+    const fanSpreadRad = Math.PI * 0.25; // 45° fan
+    const ribbon = (fx.arcRibbonFreePool ? fx.arcRibbonFreePool.pop() : undefined) ?? {
+      active: true,
+      x: hitX,
+      y: hitY,
+      reachPx: 26,
+      angleRad,
+      arcSpreadRad: fanSpreadRad,
+      colorNum: 0xf4f1ea,
+      alpha: isTeammate ? 0.35 : 0.85,
+      age: 0,
+      ttl: 0.12,
+    };
+    ribbon.active = true;
+    ribbon.x = hitX;
+    ribbon.y = hitY;
+    ribbon.reachPx = 26;
+    ribbon.angleRad = angleRad;
+    ribbon.arcSpreadRad = fanSpreadRad;
+    ribbon.colorNum = 0xf4f1ea;
+    ribbon.alpha = isTeammate ? 0.35 : 0.85;
+    ribbon.age = 0;
+    ribbon.ttl = 0.12;
+    fx.activeArcRibbons.push(ribbon);
+  }
 }
 
 export type TacticalEventVfxKind =
@@ -652,7 +783,7 @@ export function updateAndDrawWeaponV2Overlays(
 
   // 1b. Draw active Batch-1/Batch-2/P1C/P1D overlays (persistent floor hazards routed to floorG at depth 16)
   drawBatch1ActiveProjectiles(g, state.syncedProjectiles, player, clockSec);
-  drawBatch2ActiveWeaponOverlays(g, state.syncedSim, player, clockSec, floorG);
+  drawBatch2ActiveWeaponOverlays(g, state.syncedSim, player, clockSec, floorG, underActorG);
   drawP1CActiveOverlays(g, state.syncedSim, clockSec, floorG);
   drawP1DBlessingActiveOverlays(g, state.syncedSim, clockSec, floorG);
 

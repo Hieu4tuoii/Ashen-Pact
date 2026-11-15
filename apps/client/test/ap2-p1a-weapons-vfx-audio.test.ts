@@ -43,6 +43,8 @@ import {
   updateAndDrawWeaponV2Overlays,
   spawnKnightSwordComboSlash,
   spawnMeleeParryDeflectFx,
+  buildLinearRivetTetherPairs,
+  recordScrapShotgunPelletHit,
 } from '../src/fx/combat-fx-weapons-v2';
 import { createHeadlessFxManager } from './helpers/test-combat-fx';
 import {
@@ -431,7 +433,13 @@ describe('AP2-P1A.4 — Procedural VFX, Entity Indicators, Deployable/Tether Ren
       expect(fx.spawnShaderNova).toHaveBeenCalledWith(320, 210, 58, 'fx_sh_bloom_briar');
       expect(fx.spawnShaderNova).toHaveBeenCalledWith(200, 200, 64, 'fx_sh_shrapnel_corona');
       expect(fx.spawnShaderNova).toHaveBeenCalledWith(200, 200, 96, 'fx_sh_vortex_gale');
-      expect(fx.spawnShaderNova).toHaveBeenCalledWith(320, 200, 104, 'fx_sh_shrapnel_corona');
+      expect(fx.spawnShaderNova).toHaveBeenCalledWith(
+        320,
+        200,
+        64,
+        'fx_sh_shrapnel_corona',
+        expect.any(Object),
+      );
       expect(fx.spawnShaderNova).toHaveBeenCalledWith(280, 200, 88, 'fx_sh_bloom_briar');
       expect(fx.spawnShaderNova).toHaveBeenCalledWith(
         340,
@@ -463,7 +471,8 @@ describe('AP2-P1A.4 — Procedural VFX, Entity Indicators, Deployable/Tether Ren
       // Also verify direct active projectile drawing
       const gProj = makeMockGraphics();
       drawBatch1ActiveProjectiles(gProj as never, activeProjectiles, player, 0.5);
-      expect(gProj.strokeCircle).toHaveBeenCalledWith(320, 200, 104);
+      // Cutout 2.0: frag_launcher deletes airborne r=104px strokeCircle in favor of pooled fx_frag_fuse_wheel
+      expect(gProj.strokeCircle).not.toHaveBeenCalledWith(320, 200, 104);
     });
   });
 
@@ -647,6 +656,21 @@ describe('AP2-P1A.4 — Procedural VFX, Entity Indicators, Deployable/Tether Ren
       expect(spec.frameName).toBe('fx_thrown_thunder_hammer');
       expect(spec.scale).toBeCloseTo(1 / 3, 3);
       expect(spec.depth).toBe(41.5);
+    });
+
+    it('caps rivet_gun tethers at O(N) degree <= 2 and spawns 0 shader flipbooks on regular scrap_shotgun pellets', () => {
+      const pairs = buildLinearRivetTetherPairs([
+        { id: 1, x: 0, y: 0 }, { id: 2, x: 40, y: 0 }, { id: 3, x: 80, y: 0 }, { id: 4, x: 120, y: 0 },
+      ]);
+      expect(pairs.length).toBeLessThanOrEqual(3);
+
+      const fx = createHeadlessFxManager(32);
+      for (let i = 0; i < 8; i++) {
+        recordScrapShotgunPelletHit(fx, 99, 250, 250, 0, 10, false);
+      }
+      const shaderFlipbooks = fx.particlePool.filter((p) => p.active && p.textureKey.startsWith('fx_sh_'));
+      expect(shaderFlipbooks).toHaveLength(0);
+      expect(fx.activeArcRibbons.length).toBe(1); // single 26px air-compression fan on >= 3 hits
     });
   });
 });

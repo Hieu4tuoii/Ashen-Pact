@@ -907,6 +907,7 @@ export function stepClientProjectilesCosmeticImpl(this: WorldSim, dtSec: number)
             blockedByShield: false,
             isCrit: b.isCrit,
             element: b.element,
+            weaponId: b.weaponId,
           });
 
           if (b.pierceRemaining > 0) {
