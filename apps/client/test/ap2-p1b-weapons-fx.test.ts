@@ -23,7 +23,13 @@ import {
   handleBatch2WeaponSimEvent,
   syncBatch1WeaponRoomEntities,
   updateAndDrawWeaponV2Overlays,
+  spawnEmeraldCleaverSlash,
+  renderEmeraldBoomerangOverlay,
+  renderBerserkerGuillotineCorridor,
+  spawnThunderHammerPillarFx,
 } from '../src/fx/combat-fx-weapons-v2';
+import { PALETTE } from '../src/art/palette';
+import { createHeadlessFxManager } from './helpers/test-combat-fx';
 import { AP2_P1B_SCENE_IDS } from '../../../tests/e2e/helpers/visual-scene-ap2-p1b';
 
 function makeMockGraphics() {
@@ -259,7 +265,7 @@ describe('AP2-P1B.5 — Procedural VFX for 7 Batch-2 Weapons, ArtGallery 18 Weap
 
       for (const ev of events) {
         const consumed = handleBatch2WeaponSimEvent(scene as never, ev, sim, false, true);
-        if (ev.kind === 'melee_swing') {
+        if (ev.kind === 'melee_swing' && ev.weaponId !== 'emerald_cleaver') {
           expect(consumed).toBe(false);
         } else {
           expect(consumed).toBe(true);
@@ -307,7 +313,13 @@ describe('AP2-P1B.5 — Procedural VFX for 7 Batch-2 Weapons, ArtGallery 18 Weap
       );
       expect(scene.fx.spawnShaderNova).toHaveBeenCalledWith(540, 266, 120, 'fx_sh_nova_solar');
       expect(scene.fx.spawnShaderNova).toHaveBeenCalledWith(380, 270, 56, 'fx_sh_geyser_plume');
-      expect(scene.fx.spawnShaderNova).toHaveBeenCalledWith(420, 270, 110, 'fx_sh_anvil_storm');
+      expect(scene.fx.spawnShaderNova).toHaveBeenCalledWith(
+        420,
+        270,
+        64,
+        'fx_sh_nova_thunder',
+        expect.objectContaining({ tint: 0x38bdf8 }),
+      );
       // Zero spammy mid-combat weapon floating alerts
       expect(scene.fx.spawnFloatingAlert).not.toHaveBeenCalled();
     });
@@ -462,7 +474,9 @@ describe('AP2-P1B.5 — Procedural VFX for 7 Batch-2 Weapons, ArtGallery 18 Weap
         expect(alpha).toBeLessThanOrEqual(0.08);
       }
       expect(g.strokeCircle).toHaveBeenCalledWith(410, 270, 110);
-      expect(g.strokeCircle).toHaveBeenCalledWith(450, 270, 64);
+      // Cutout 2.0: Emerald Boomerang renders jade crescents; zero full strokeCircle(450, 270, 64)
+      expect(g.strokeCircle).not.toHaveBeenCalledWith(450, 270, 64);
+      expect(g.fillTriangle).toHaveBeenCalled();
       const gArc = makeMockGraphics();
       expect(
         drawBatch2TransientShape(
@@ -699,6 +713,116 @@ describe('AP2-P1B.5 — Procedural VFX for 7 Batch-2 Weapons, ArtGallery 18 Weap
         expect(f5Evs.some((e) => e.kind === 'magma_geyser_eruption')).toBe(true);
         expect(Math.hypot(enemy.x - 432, enemy.y - 270)).toBeGreaterThanOrEqual(18);
       }
+    });
+  });
+
+  describe('3. Plan 2 Task 1: Bespoke Melee & Hybrid Weapons (emerald_cleaver, berserker_axe, thunder_hammer)', () => {
+    function createRecordingGraphicsMock() {
+      const fillTriangleCalls: Array<{ x0: number; y0: number; x1: number; y1: number; x2: number; y2: number }> = [];
+      const fillStyleCalls: Array<{ color: number; alpha: number }> = [];
+      const strokeCircleCalls: Array<{ x: number; y: number; radius: number }> = [];
+      const mock = {
+        fillTriangleCalls,
+        fillStyleCalls,
+        strokeCircleCalls,
+        fillStyle(color: number, alpha = 1) {
+          fillStyleCalls.push({ color, alpha });
+          return mock;
+        },
+        fillTriangle(x0: number, y0: number, x1: number, y1: number, x2: number, y2: number) {
+          fillTriangleCalls.push({ x0, y0, x1, y1, x2, y2 });
+          return mock;
+        },
+        strokeCircle(x: number, y: number, radius: number) {
+          strokeCircleCalls.push({ x, y, radius });
+          return mock;
+        },
+        lineStyle: vi.fn().mockReturnThis(),
+        beginPath: vi.fn().mockReturnThis(),
+        moveTo: vi.fn().mockReturnThis(),
+        lineTo: vi.fn().mockReturnThis(),
+        strokePath: vi.fn().mockReturnThis(),
+        arc: vi.fn().mockReturnThis(),
+        fillCircle: vi.fn().mockReturnThis(),
+        clear: vi.fn().mockReturnThis(),
+      };
+      return mock;
+    }
+
+    function createTestWeaponFxHarness() {
+      const lights = {
+        lastColorHex: '',
+        spawnTransientLight: vi.fn((_x: number, _y: number, _r: number, colorHex: string) => {
+          lights.lastColorHex = colorHex;
+        }),
+      };
+      const fx = createHeadlessFxManager(32);
+      (fx as unknown as { lighting?: typeof lights }).lighting = lights;
+      return { fx, lights };
+    }
+
+    function createTestMapWithInteriorPillarAndChasm() {
+      const tiles: Record<string, 'floor' | 'wall' | 'pillar' | 'chasm'> = {
+        '4,5': 'pillar', // step 2
+        '5,5': 'chasm',  // step 4
+        '7,5': 'wall',   // step 7 outer perimeter
+      };
+      return {
+        width: 8,
+        height: 10,
+        getTile(tx: number, ty: number) {
+          if (tx <= 0 || ty <= 0 || tx >= 7 || ty >= 9) return 'wall' as const;
+          return tiles[`${tx},${ty}`] ?? ('floor' as const);
+        },
+        getSurface(tx: number, ty: number) {
+          return tiles[`${tx},${ty}`] === 'chasm' ? 'chasm' : 'floor';
+        },
+      };
+    }
+
+    it('renders emerald_cleaver 92px 1:1 on fx_sh_slash_emerald, returns true on combo 3 with LIME_GLOW, and draws 56px spin crescents', () => {
+      const { fx, lights } = createTestWeaponFxHarness();
+      const handled = spawnEmeraldCleaverSlash(fx, 200, 200, 0, 92, 3, false);
+      expect(handled).toBe(true);
+      const slash = fx.particlePool.find((p) => p.active && p.textureKey === 'fx_sh_slash_emerald');
+      expect(slash?.startScale).toBeCloseTo(92 / (0.41 * 128), 3);
+      expect(lights.lastColorHex).toBe(PALETTE.LIME_GLOW);
+
+      const underGfx = createRecordingGraphicsMock();
+      renderEmeraldBoomerangOverlay(underGfx as never, 300, 300, 'spinning', 0, 1.0);
+      const maxDist = Math.max(...underGfx.fillTriangleCalls.flatMap((t) => [Math.hypot(t.x0 - 300, t.y0 - 300), Math.hypot(t.x1 - 300, t.y1 - 300)]));
+      expect(maxDist).toBeGreaterThan(54);
+      expect(maxDist).toBeLessThanOrEqual(56 + 1.8 * 1.36);
+    });
+
+    it('advances berserker_axe 160x36px corridor through interior pillars (depth 16) and bridges chasm tiles on depth 26.6, stopping only at outer perimeter walls', () => {
+      const map = createTestMapWithInteriorPillarAndChasm(); // pillar at step 2, chasm at step 4, outer wall at step 7
+      const groundGfx = createRecordingGraphicsMock();
+      const underGfx = createRecordingGraphicsMock();
+      const res = renderBerserkerGuillotineCorridor(groundGfx as never, underGfx as never, map, 96, 160, 256, 160, 18, 1.0);
+      expect(res.renderedSegments).toBe(6);
+      expect(res.chasmBridgeSegments).toBe(1);
+      expect(underGfx.fillTriangleCalls.length).toBeGreaterThan(0);
+    });
+
+    it('dispatches thunder_hammer_pillar multi-strike event dropping -90px vertical bolt, stamping depth 16 fissure and routing 110px nova', () => {
+      const { fx } = createTestWeaponFxHarness();
+      const pillarEv: Extract<SimEvent, { kind: 'thunder_hammer_pillar' }> = {
+        kind: 'thunder_hammer_pillar',
+        playerId: 1,
+        x: 400,
+        y: 300,
+        radius: 110,
+        damage: 54,
+        strikes: [
+          { x: 380, y: 300, radius: 110, damage: 54 },
+          { x: 420, y: 300, radius: 110, damage: 54 },
+        ],
+      };
+      spawnThunderHammerPillarFx(fx, pillarEv, false);
+      expect(fx.activePerimeterRings.length).toBeGreaterThan(0);
+      const nova = fx.particlePool.find((p) => p.active && p.textureKey === 'fx_sh_nova_thunder');
+      expect(nova).toBeDefined();
     });
   });
 });

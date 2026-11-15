@@ -41,7 +41,10 @@ import {
   syncBatch1WeaponRoomEntities,
   triggerMicroBarFeedbackOnScene,
   updateAndDrawWeaponV2Overlays,
+  spawnKnightSwordComboSlash,
+  spawnMeleeParryDeflectFx,
 } from '../src/fx/combat-fx-weapons-v2';
+import { createHeadlessFxManager } from './helpers/test-combat-fx';
 import {
   drawEnemyEmbeddedArrows as p1aDrawArrows,
   drawEnemyParasiticThorns as p1aDrawThorns,
@@ -571,6 +574,42 @@ describe('AP2-P1A.4 — Procedural VFX, Entity Indicators, Deployable/Tether Ren
       // 3. Spawn duplicate "ĐẬP TƯỜNG!" at (496, 268) within 72px and age < 0.25s -> deduplicated!
       spawnFloatingAlertImpl.call(mockManager as never, 496, 268, 'ĐẬP TƯỜNG!', '#F97316');
       expect(mockManager.totalDamagePopupsSpawned).toBe(2);
+    });
+  });
+
+  describe('3. Plan 2 Task 1: knight_sword 3-Hit Combo & Melee Parry Deflect', () => {
+    it('spawns distinct 3-hit combo for knight_sword without aegis_crest stacking and spawns parry winged crest at depth 43', () => {
+      const fx = createHeadlessFxManager(32);
+
+      // Hit 1: normal flipY=false
+      spawnKnightSwordComboSlash(fx, 200, 200, 0, 56, 1, false);
+      const hit1 = fx.particlePool.filter((p) => p.active && p.textureKey === 'fx_sh_slash_steel');
+      expect(hit1.length).toBe(1);
+      expect(hit1[0]?.flipY).toBe(false);
+
+      // Hit 2: reverse flipY=true
+      spawnKnightSwordComboSlash(fx, 200, 200, 0, 56, 2, false);
+      const hit2 = fx.particlePool.filter((p) => p.active && p.textureKey === 'fx_sh_slash_steel');
+      expect(hit2.length).toBe(2);
+      expect(hit2[1]?.flipY).toBe(true);
+
+      // Hit 3: wide twin-edge slash_steel (2 slashes), ZERO fx_sh_aegis_crest
+      spawnKnightSwordComboSlash(fx, 200, 200, 0, 56, 3, false);
+      const hit3 = fx.particlePool.filter((p) => p.active && p.textureKey === 'fx_sh_slash_steel');
+      expect(hit3.length).toBe(4); // 1 + 1 + 2 = 4
+      const hasAegis = fx.particlePool.some((p) => p.active && p.textureKey === 'fx_sh_aegis_crest');
+      expect(hasAegis).toBe(false);
+
+      // Parry deflect: fx_parry_winged_crest (32x16, depth 43.0, scale 1/3) + 45 deg 26px air compression fan
+      spawnMeleeParryDeflectFx(fx, 300, 300, 0, 2, false);
+      const parrySprite = fx.particlePool.find(
+        (p) => p.active && p.textureKey === 'fx_cutout_kit_512' && p.frameName === 'fx_parry_winged_crest',
+      );
+      expect(parrySprite).toBeDefined();
+      expect(parrySprite?.depth).toBe(43.0);
+      expect(parrySprite?.startScale).toBeCloseTo(1 / 3, 3);
+      expect(fx.activeArcRibbons.length).toBeGreaterThan(0);
+      expect(fx.activeArcRibbons[0]?.reachPx).toBe(26);
     });
   });
 });

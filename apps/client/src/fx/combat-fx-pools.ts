@@ -50,6 +50,7 @@ export interface PooledParticle {
   blendMode: 'NORMAL' | 'ADD';
   easeCurve: FxEaseCurve;
   scaleRatioY: number;
+  flipY?: boolean;
   alignToVelocity: boolean;
   hasGroundShadow: boolean;
   depth?: number;

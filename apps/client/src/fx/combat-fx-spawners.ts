@@ -205,6 +205,10 @@ export function resolveProjectileRenderSpec(
     textureKey = 'proj_knight_sword_wave';
     tint = 0x2dd4bf;
     scale = 1.28;
+  } else if (params.weaponId === 'thunder_hammer' && !params.isStress) {
+    textureKey = 'fx_thrown_thunder_hammer';
+    tint = 0xffffff;
+    scale = 1.0;
   } else if (params.weaponId === 'frag_launcher_sub' && !params.isStress) {
     textureKey = 'proj_player_pellet';
     tint = 0xf97316;
@@ -244,7 +248,8 @@ export function resolveProjectileRenderSpec(
   const isTeammate = Boolean(params.isTeammate);
   const s = clamp(params.teammateFxOpacity ?? 1.0, 0, 1);
   const alpha = isTeammate ? 0.42 * s : 1.0;
-  return { textureKey, texture: textureKey, tint, blendMode: 'NORMAL', depth: 41, alpha, scale };
+  const depth = params.weaponId === 'thunder_hammer' ? 41.5 : 41;
+  return { textureKey, texture: textureKey, tint, blendMode: 'NORMAL', depth, alpha, scale };
 }
 
 const ADDITIVE_FX_DEPTH_BY_KEY: Readonly<Record<string, number>> = {
@@ -664,6 +669,7 @@ export function activateParticle(
   p.blendMode = blendMode;
   p.easeCurve = config.easeCurve ?? 'linear';
   p.scaleRatioY = scaleRatioY;
+  p.flipY = scaleRatioY < 0;
   p.alignToVelocity = config.alignToVelocity ?? false;
   p.hasGroundShadow = config.hasGroundShadow ?? false;
   p.depth = depth;
@@ -1045,15 +1051,17 @@ export function routeCutoutBurstByRadius(
   const alpha = options.alpha ?? 1.0;
   const ttl = options.ttlSec;
 
+  const px = fx.localPlayerPos?.x ?? 0;
+  const py = fx.localPlayerPos?.y ?? 0;
   const distToP1 = fx.distanceToLocalPlayer
     ? fx.distanceToLocalPlayer(x, y)
-    : Math.hypot(x - fx.localPlayerPos.x, y - fx.localPlayerPos.y);
+    : Math.hypot(x - px, y - py);
   const isP1SelfBurst = distToP1 <= 24;
 
   const coreDepth = options.depth ?? (isP1SelfBurst ? 26.4 : 43.5);
 
   if (radiusPx < rMin) {
-    if (!options.suppressPerimeterRing) {
+    if (!options.suppressPerimeterRing && fx.activePerimeterRings) {
       const ring = (fx.perimeterRingFreePool ? fx.perimeterRingFreePool.pop() : undefined) ?? {
         active: true,
         x,
@@ -1121,7 +1129,7 @@ export function routeCutoutBurstByRadius(
   let effectiveRadius = radiusPx;
   if (radiusPx > rMax) {
     effectiveRadius = rMax;
-    if (!options.suppressPerimeterRing) {
+    if (!options.suppressPerimeterRing && fx.activePerimeterRings) {
       const ring = (fx.perimeterRingFreePool ? fx.perimeterRingFreePool.pop() : undefined) ?? {
         active: true,
         x,
@@ -1175,15 +1183,17 @@ export function routeCutoutDirectionalByReach(
   const alpha = options.alpha ?? 1.0;
   const ttl = options.ttlSec;
 
+  const px = fx.localPlayerPos?.x ?? 0;
+  const py = fx.localPlayerPos?.y ?? 0;
   const distToP1 = fx.distanceToLocalPlayer
     ? fx.distanceToLocalPlayer(x, y)
-    : Math.hypot(x - fx.localPlayerPos.x, y - fx.localPlayerPos.y);
+    : Math.hypot(x - px, y - py);
   const isP1SelfBurst = distToP1 <= 24;
 
   const coreDepth = options.depth ?? (isP1SelfBurst ? 26.4 : 43.0);
 
   if (reachPx < rMin) {
-    if (!options.suppressPerimeterRing) {
+    if (!options.suppressPerimeterRing && fx.activeArcRibbons) {
       const ribbon = (fx.arcRibbonFreePool ? fx.arcRibbonFreePool.pop() : undefined) ?? {
         active: true,
         x,
@@ -1230,7 +1240,7 @@ export function routeCutoutDirectionalByReach(
   let effectiveReach = reachPx;
   if (reachPx > rMax) {
     effectiveReach = rMax;
-    if (!options.suppressPerimeterRing) {
+    if (!options.suppressPerimeterRing && fx.activeArcRibbons) {
       const ribbon = (fx.arcRibbonFreePool ? fx.arcRibbonFreePool.pop() : undefined) ?? {
         active: true,
         x,

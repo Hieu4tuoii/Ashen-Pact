@@ -184,16 +184,18 @@ describe('1:1 Top-Down Chiaroscuro Flipbook Playback & Core Combat Spawners', ()
     expect(mgr.particlePool[1]!.textureKey).toBe('fx_sh_falcon_sonic');
 
     // 3rd-hit combo finishers (comboStep === 2) add weapon-signature finisher flourishes
-    mgr.spawnMeleeSlash(250, 220, 0, false, {
+    const swordMgr = createHeadlessFxManager(16);
+    swordMgr.spawnMeleeSlash(250, 220, 0, false, {
       weaponId: 'knight_sword',
       comboStep: 2,
       rangePx: 72,
     });
-    expect(mgr.particlePool.some((p) => p.active && p.textureKey === 'fx_sh_slash_steel')).toBe(
-      true,
+    const steelSlashes = swordMgr.particlePool.filter(
+      (p) => p.active && p.textureKey === 'fx_sh_slash_steel',
     );
-    expect(mgr.particlePool.some((p) => p.active && p.textureKey === 'fx_sh_aegis_crest')).toBe(
-      true,
+    expect(steelSlashes.length).toBeGreaterThanOrEqual(2);
+    expect(swordMgr.particlePool.some((p) => p.active && p.textureKey === 'fx_sh_aegis_crest')).toBe(
+      false,
     );
 
     const cleaverMgr = createHeadlessFxManager(16);

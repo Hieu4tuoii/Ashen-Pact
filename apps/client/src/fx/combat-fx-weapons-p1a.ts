@@ -1,6 +1,8 @@
 import { clamp } from '@ashen-pact/shared';
 import type Phaser from 'phaser';
 import type { CombatFxManager } from './combat-fx.js';
+import { activateParticle, resolveAllyFxProfile } from './combat-fx-spawners.js';
+import { fillTaperedArcRibbon } from './tapered-ribbon-builder.js';
 import {
   type TransientWeaponV2Shape,
   type WeaponV2OverlayState,
@@ -722,5 +724,182 @@ export function drawBatch1TransientShape(
 
     default:
       return false;
+  }
+}
+
+export function spawnKnightSwordComboSlash(
+  fx: CombatFxManager,
+  x: number,
+  y: number,
+  angleRad: number,
+  rangePx: number,
+  comboStep: 1 | 2 | 3,
+  isTeammate: boolean,
+): void {
+  const ally = resolveAllyFxProfile(isTeammate ? 2 : 1, 1);
+  const alpha = ally.bulletAlpha;
+  const effectiveRange = rangePx || 56.0;
+
+  if (comboStep === 1) {
+    fx.spawnShaderSlash?.(x, y, effectiveRange, angleRad, 'fx_sh_slash_steel', {
+      ttl: 0.19,
+      isTeammate,
+      flipY: false,
+      depth: 42.0,
+      alpha,
+    });
+  } else if (comboStep === 2) {
+    fx.spawnShaderSlash?.(x, y, effectiveRange, angleRad, 'fx_sh_slash_steel', {
+      ttl: 0.19,
+      isTeammate,
+      flipY: true,
+      depth: 42.0,
+      alpha,
+    });
+    // Sharp tip glint at slash tip
+    const tipX = x + Math.cos(angleRad) * effectiveRange;
+    const tipY = y + Math.sin(angleRad) * effectiveRange;
+    if (typeof fx.acquireParticleSlot === 'function') {
+      const glint = fx.acquireParticleSlot();
+      if (glint) {
+        activateParticle(glint, {
+          textureKey: 'fx_cutout_kit_512',
+          frameName: 'fx_rim_glint',
+          x: tipX,
+          y: tipY,
+          ttl: 0.034,
+          startScale: 1 / 3,
+          endScale: 1 / 3,
+          startAlpha: isTeammate ? 0.35 : 0.9,
+          depth: 43.0,
+          blendMode: 'NORMAL',
+          preserveFlipbookAlpha: true,
+        });
+      }
+    }
+  } else {
+    // comboStep === 3: wide twin-edge slash_steel with #141019 negative wind-channel (zero fx_sh_aegis_crest!)
+    const spread = 0.18;
+    fx.spawnShaderSlash?.(x, y, effectiveRange * 1.15, angleRad - spread, 'fx_sh_slash_steel', {
+      ttl: 0.23,
+      isTeammate,
+      flipY: false,
+      depth: 42.0,
+      alpha,
+    });
+    fx.spawnShaderSlash?.(x, y, effectiveRange * 1.15, angleRad + spread, 'fx_sh_slash_steel', {
+      ttl: 0.23,
+      isTeammate,
+      flipY: true,
+      depth: 42.0,
+      alpha,
+    });
+
+    // 26px floor stone nick on groundHazardGraphics (depth 16.0)
+    const nickDist = effectiveRange * 0.85;
+    const nickX = x + Math.cos(angleRad) * nickDist;
+    const nickY = y + Math.sin(angleRad) * nickDist;
+    const tAng = angleRad + Math.PI * 0.5;
+    const floorG =
+      (fx as unknown as { groundHazardGraphics?: Phaser.GameObjects.Graphics }).groundHazardGraphics ??
+      (fx as unknown as { sceneRef?: { groundHazardGraphics?: Phaser.GameObjects.Graphics } }).sceneRef?.groundHazardGraphics;
+    if (floorG) {
+      floorG.lineStyle(2.4, 0x141019, isTeammate ? 0.35 : 0.85);
+      floorG.beginPath();
+      floorG.moveTo(nickX - Math.cos(tAng) * 13, nickY - Math.sin(tAng) * 13);
+      floorG.lineTo(nickX + Math.cos(tAng) * 13, nickY + Math.sin(tAng) * 13);
+      floorG.strokePath();
+
+      floorG.lineStyle(1.2, 0x78716c, isTeammate ? 0.35 : 0.95);
+      floorG.beginPath();
+      floorG.moveTo(nickX - Math.cos(tAng) * 10, nickY - Math.sin(tAng) * 10);
+      floorG.lineTo(nickX + Math.cos(tAng) * 10, nickY + Math.sin(tAng) * 10);
+      floorG.strokePath();
+    }
+    if (typeof fx.spawnFloorDecal === 'function') {
+      fx.spawnFloorDecal('scorch', nickX, nickY, 0.75);
+    }
+  }
+}
+
+export function spawnMeleeParryDeflectFx(
+  fx: CombatFxManager,
+  x: number,
+  y: number,
+  angleRad: number,
+  _deflectedCount: number,
+  isTeammate: boolean,
+): void {
+  const ally = resolveAllyFxProfile(isTeammate ? 2 : 1, 1);
+
+  // 1. Spawns fx_parry_winged_crest (32×16px, depth 43.0, scale 1/3)
+  if (typeof fx.acquireParticleSlot === 'function') {
+    const crest = fx.acquireParticleSlot();
+    if (crest) {
+      activateParticle(crest, {
+        textureKey: 'fx_cutout_kit_512',
+        frameName: 'fx_parry_winged_crest',
+        x,
+        y,
+        ttl: 0.18,
+        startScale: 1 / 3,
+        endScale: 1 / 3,
+        startAlpha: ally.bulletAlpha,
+        depth: 43.0,
+        rotation: angleRad,
+        blendMode: 'NORMAL',
+        preserveFlipbookAlpha: true,
+      });
+    }
+  }
+
+  // 2. 45° 26px air-compression fan (depth 26.6)
+  const fanSpreadRad = Math.PI * 0.25; // 45 degrees
+  if (fx.activeArcRibbons) {
+    const ribbon = (fx.arcRibbonFreePool ? fx.arcRibbonFreePool.pop() : undefined) ?? {
+      active: true,
+      x,
+      y,
+      reachPx: 26,
+      angleRad,
+      arcSpreadRad: fanSpreadRad,
+      colorNum: 0xf4f1ea,
+      alpha: isTeammate ? 0.35 : 0.85,
+      age: 0,
+      ttl: 0.12,
+    };
+    ribbon.active = true;
+    ribbon.x = x;
+    ribbon.y = y;
+    ribbon.reachPx = 26;
+    ribbon.angleRad = angleRad;
+    ribbon.arcSpreadRad = fanSpreadRad;
+    ribbon.colorNum = 0xf4f1ea;
+    ribbon.alpha = isTeammate ? 0.35 : 0.85;
+    ribbon.age = 0;
+    ribbon.ttl = 0.12;
+    fx.activeArcRibbons.push(ribbon);
+  }
+  if (fx.underActorGraphics) {
+    fillTaperedArcRibbon(
+      fx.underActorGraphics,
+      x,
+      y,
+      26,
+      angleRad - fanSpreadRad * 0.5,
+      angleRad + fanSpreadRad * 0.5,
+      3.0,
+      0xf4f1ea,
+      isTeammate ? 0.35 : 0.85,
+      8,
+      1.80,
+    );
+  }
+
+  // 3. 2f 0xF4F1EA rig flash
+  if (!isTeammate) {
+    const rig = (fx as unknown as { sceneRef?: { playerRig?: { triggerHitFlash?: (dur: number, tint: number) => void } } })
+      .sceneRef?.playerRig;
+    rig?.triggerHitFlash?.(0.034, 0xf4f1ea);
   }
 }

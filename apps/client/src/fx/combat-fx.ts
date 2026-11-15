@@ -840,6 +840,23 @@ export class CombatFxManager {
           angleRad + Math.PI,
           { isCrit: true, element: 'shock', count: 6, isTeammate },
         );
+      } else if (weaponId === 'knight_sword') {
+        this.spawnShaderSlash(
+          startX,
+          startY,
+          rangePx * 0.94,
+          angleRad + (flipY ? -0.22 : 0.22),
+          'fx_sh_slash_steel',
+          {
+            ttl: 0.21,
+            isTeammate,
+            flipY: !flipY,
+            depth: 53,
+            vx: glideVx,
+            vy: glideVy,
+            damping: glideDamping,
+          },
+        );
       } else {
         this.spawnShaderDirectional(x, y, rangePx * 0.92, angleRad, 'fx_sh_aegis_crest', {
           ttl: 0.22,

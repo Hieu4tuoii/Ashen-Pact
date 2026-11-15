@@ -30,6 +30,8 @@ import {
   spawnGaleCycloneVentVfx,
   spawnGaleWindBladeVfx,
   spawnKnightSwordParryDeflectVfx,
+  spawnKnightSwordComboSlash,
+  spawnMeleeParryDeflectFx,
   spawnPropDashKickVfx,
   spawnRivetDetonationWebVfx,
   spawnScrapShotgunBlastVfx,
@@ -196,22 +198,37 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
         const postComboStep = swinger?.meleeComboStep;
         const executedComboStep =
           postComboStep === 1 ? 0 : postComboStep === 2 ? 1 : postComboStep === 0 ? 2 : 0;
-        this.fx.spawnMeleeSlash(ev.x, ev.y, ev.angle, isTeammate, {
-          weaponId: ev.weaponId,
-          comboStep: executedComboStep,
-          rangePx: ev.range,
-          lungeDx,
-          lungeDy,
-        });
+        if (ev.weaponId === 'knight_sword') {
+          const combo123 = (executedComboStep + 1) as 1 | 2 | 3;
+          spawnKnightSwordComboSlash(this.fx, ev.x, ev.y, ev.angle, ev.range || 56, combo123, isTeammate);
+        } else {
+          this.fx.spawnMeleeSlash(ev.x, ev.y, ev.angle, isTeammate, {
+            weaponId: ev.weaponId,
+            comboStep: executedComboStep,
+            rangePx: ev.range,
+            lungeDx,
+            lungeDy,
+          });
+        }
         this.lighting.spawnTransientLight(ev.x, ev.y, 92, PALETTE.CYAN_FROST, 0.65, 0.12);
         const swingSfx = resolveWeaponAttackSfx(ev.weaponId);
         zzfx.play(swingSfx, ev.x, this.camFocusX, ev.y, this.camFocusY);
         if (ev.bulletsDestroyed > 0) {
+          spawnMeleeParryDeflectFx(this.fx, ev.x, ev.y, ev.angle, ev.bulletsDestroyed, isTeammate);
           if (!isStress) {
             this.fx.spawnFloatingAlert(ev.x + 18, ev.y - 14, ev.bulletsDestroyed > 1 ? `PARRY ×${ev.bulletsDestroyed}!` : 'PARRY!', '#FEF08A');
           }
           zzfx.play('bullet_deflect', ev.x, this.camFocusX, ev.y, this.camFocusY);
         }
+        break;
+      }
+      case 'melee_parry_deflect': {
+        const isTeammate = ev.playerId !== sim.player.id;
+        spawnMeleeParryDeflectFx(this.fx, ev.x, ev.y, ev.angle, ev.deflectedCount, isTeammate);
+        if (!isStress) {
+          this.fx.spawnFloatingAlert(ev.x + 18, ev.y - 14, ev.deflectedCount > 1 ? `PARRY ×${ev.deflectedCount}!` : 'PARRY!', '#FEF08A');
+        }
+        zzfx.play('bullet_deflect', ev.x, this.camFocusX, ev.y, this.camFocusY);
         break;
       }
       case 'damage_dealt': {
