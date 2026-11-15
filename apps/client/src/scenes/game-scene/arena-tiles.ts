@@ -1467,6 +1467,15 @@ export function teleportToRoomImpl(this: GameScene, targetRoomId: number): boole
   const entered = sim.enterRoom(targetRoomId);
   if (!entered) return false;
   this.fx?.resetRoomTransientState?.();
+  if (this.summonVisuals) {
+    for (const vis of this.summonVisuals.values()) {
+      vis.shadow.setVisible(false).setActive(false);
+      vis.base.setVisible(false).setActive(false);
+      vis.head?.setVisible(false).setActive(false);
+      this.summonSpritePool?.push(vis);
+    }
+    this.summonVisuals.clear();
+  }
   sim.doorTransitionCooldown = Math.max(sim.doorTransitionCooldown, 0.75);
 
   if (this.room && this.coopMode !== 'solo') {
@@ -1551,6 +1560,13 @@ export function applyCameraViewportImpl(this: GameScene): void {
       pv.sprite.setScale(invBake);
       pv.shadow.setTexture('prop_shadow');
       pv.shadow.setScale(invBake);
+    }
+    if (this.summonVisuals) {
+      for (const vis of this.summonVisuals.values()) {
+        vis.shadow.setScale(1 / 3);
+        vis.base.setScale(1 / 3);
+        vis.head?.setScale(1 / 3);
+      }
     }
     const stressInvBake = 1 / Math.min(2, newScale);
     for (const item of this.projectileSprites.values()) {

@@ -1,4 +1,11 @@
-import { SHOT_FLAG, WorldSim, type CharacterId, type SimEvent } from '@ashen-pact/shared';
+import {
+  SHOT_FLAG,
+  WorldSim,
+  type CharacterId,
+  type SimEvent,
+  type SimSummonState,
+  type SummonKind,
+} from '@ashen-pact/shared';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('phaser', () => {
@@ -15,9 +22,16 @@ vi.mock('phaser', () => {
 
 import { processSimEventsImpl } from '../src/scenes/game-scene/sim-events.js';
 import {
+  renderDownedReviveBrackets,
+  renderBastionPrismPlates,
+  renderIcePrisonBars,
   renderTelegraphsAndShieldImpl,
   withInterpolatedProjectilesAndPlayer,
 } from '../src/scenes/game-scene/telegraphs-and-overlays.js';
+import {
+  syncSummonCutoutVisuals,
+  type PooledSummonVisual,
+} from '../src/scenes/game-scene/room-entities-sync.js';
 import {
   drawEngineerTurretChiaroscuro,
   drawInscribedElementalistZone,
@@ -32,6 +46,7 @@ import {
 import { resolveWeaponMuzzleProfile } from '../src/fx/combat-fx-spawners.js';
 import { handleBatch2WeaponSimEvent } from '../src/fx/combat-fx-weapons-p1b.js';
 import { getWeaponV2OverlayState } from '../src/fx/combat-fx-weapons-v2.js';
+import type { GameScene } from '../src/scenes/GameScene.js';
 
 function makeMockGraphics() {
   const fillAlphas: number[] = [];
@@ -150,7 +165,13 @@ describe('Commercial-Grade Class Skills, Summons & Dramatic World/Boss Interacti
       expect.any(Object),
     );
     expect(fx.spawnShaderCone).toHaveBeenCalledWith(320, 240, expect.any(Number), 0.25);
-    expect(fx.spawnShaderNova).toHaveBeenCalledWith(320, 240, expect.any(Number), 'fx_sh_shrapnel_corona');
+    expect(fx.spawnShaderNova).toHaveBeenCalledWith(
+      320,
+      240,
+      expect.any(Number),
+      'fx_sh_shrapnel_corona',
+      expect.any(Object),
+    );
 
     fx.spawnShaderNova.mockClear();
     spawnClassSummonSpawnedVfx({ lighting }, fx as never, 'sacred_tree', 400, 260);
@@ -168,7 +189,13 @@ describe('Commercial-Grade Class Skills, Summons & Dramatic World/Boss Interacti
 
     fx.spawnShaderNova.mockClear();
     spawnEngineerEmpBlastVfx({ lighting }, fx as never, 440, 260, 120);
-    expect(fx.spawnShaderNova).toHaveBeenCalledWith(440, 260, 120, 'fx_sh_anvil_storm');
+    expect(fx.spawnShaderNova).toHaveBeenCalledWith(
+      440,
+      260,
+      expect.any(Number),
+      'fx_sh_nova_thunder',
+      expect.any(Object),
+    );
     expect(fx.spawnChainLightningArc.mock.calls.length).toBeGreaterThanOrEqual(4);
   });
 
@@ -353,7 +380,13 @@ describe('Commercial-Grade Class Skills, Summons & Dramatic World/Boss Interacti
 
     // 3. Bespoke radial morphologies for summons, EMP, barrel, spore pod, shrine, revive, boss phase/enrage
     expect(fx.spawnShaderNova).toHaveBeenCalledWith(360, 250, expect.any(Number), 'fx_sh_bloom_briar');
-    expect(fx.spawnShaderNova).toHaveBeenCalledWith(400, 250, 110, 'fx_sh_anvil_storm');
+    expect(fx.spawnShaderNova).toHaveBeenCalledWith(
+      400,
+      250,
+      expect.any(Number),
+      'fx_sh_nova_thunder',
+      expect.any(Object),
+    );
     expect(fx.spawnShaderNova).toHaveBeenCalledWith(440, 250, 88, 'fx_sh_shrapnel_corona');
     expect(fx.spawnShaderNova).toHaveBeenCalledWith(480, 250, 72, 'fx_sh_spore_cloud');
     expect(fx.spawnShaderNova).toHaveBeenCalledWith(
@@ -663,5 +696,148 @@ describe('Commercial-Grade Class Skills, Summons & Dramatic World/Boss Interacti
     // Raw simulation state is restored immediately after the overlay pass
     expect(sim.player.x).toBe(300);
     expect(sim.projectiles[0]!.x).toBe(400);
+  });
+
+  function createRecordingGraphicsMock() {
+    const fillTriangleCalls: Array<{ x0: number; y0: number; x1: number; y1: number; x2: number; y2: number }> = [];
+    const fillStyleCalls: Array<{ color: number; alpha: number }> = [];
+    const mock = {
+      fillTriangleCalls,
+      fillStyleCalls,
+      fillStyle(color: number, alpha = 1) {
+        fillStyleCalls.push({ color, alpha });
+        return mock;
+      },
+      fillTriangle(x0: number, y0: number, x1: number, y1: number, x2: number, y2: number) {
+        fillTriangleCalls.push({ x0, y0, x1, y1, x2, y2 });
+        return mock;
+      },
+      clear() {
+        fillTriangleCalls.length = 0;
+        fillStyleCalls.length = 0;
+        return mock;
+      },
+    };
+    return mock;
+  }
+
+  function createMockSummon(partial: Partial<SimSummonState> & { id: number; kind: SummonKind }): SimSummonState {
+    return {
+      id: partial.id,
+      kind: partial.kind,
+      ownerPlayerId: partial.ownerPlayerId ?? 1,
+      x: partial.x ?? 200,
+      y: partial.y ?? 200,
+      radius: partial.radius ?? 16,
+      auraRadius: partial.auraRadius ?? 100,
+      hp: partial.hp ?? 80,
+      maxHp: partial.maxHp ?? 80,
+      ttlSec: partial.ttlSec ?? 6.0,
+      maxTtlSec: partial.maxTtlSec ?? 8.0,
+      tickTimer: partial.tickTimer ?? 0.2,
+      charge: partial.charge ?? 0,
+      ...partial,
+    } as SimSummonState;
+  }
+
+  function createSummonSyncHarness(opts: { localPlayerId: number } = { localPlayerId: 1 }) {
+    const summonVisuals = new Map<number, PooledSummonVisual>();
+    let turretRangeRingsDrawn = 0;
+    const mockGroundGfx = {
+      ...createRecordingGraphicsMock(),
+      strokePath: vi.fn(() => { turretRangeRingsDrawn++; }),
+      arc: vi.fn(),
+      strokeCircle: vi.fn(() => { turretRangeRingsDrawn++; }),
+    };
+    const mockUnderActorGfx = createRecordingGraphicsMock();
+    const scene = {
+      summonVisuals,
+      summonSpritePool: [] as PooledSummonVisual[],
+      groundHazardGraphics: mockGroundGfx,
+      underActorGraphics: mockUnderActorGfx,
+      textures: {
+        exists: vi.fn(() => true),
+      },
+      add: {
+        sprite: vi.fn((x: number, y: number, textureKey: string, frame?: string) => {
+          let depthVal = 0;
+          let alphaVal = 1;
+          let scaleVal = 1;
+          let rotationVal = 0;
+          let tintVal: number | undefined;
+          let visibleVal = true;
+          let activeVal = true;
+          const sp = {
+            x,
+            y,
+            textureKey,
+            frame,
+            get depth() { return depthVal; },
+            set depth(d: number) { depthVal = d; },
+            get alpha() { return alphaVal; },
+            set alpha(a: number) { alphaVal = a; },
+            get scale() { return scaleVal; },
+            set scale(s: number) { scaleVal = s; },
+            get rotation() { return rotationVal; },
+            set rotation(r: number) { rotationVal = r; },
+            get tint() { return tintVal; },
+            get visible() { return visibleVal; },
+            get active() { return activeVal; },
+            setDepth(d: number) { depthVal = d; return sp; },
+            setAlpha(a: number) { alphaVal = a; return sp; },
+            setScale(s: number) { scaleVal = s; return sp; },
+            setRotation(r: number) { rotationVal = r; return sp; },
+            setTint(t: number) { tintVal = t; return sp; },
+            clearTint() { tintVal = undefined; return sp; },
+            setPosition(nx: number, ny: number) { sp.x = nx; sp.y = ny; return sp; },
+            setTexture(k: string, f?: string) { sp.textureKey = k; sp.frame = f; return sp; },
+            setActive(act: boolean) { activeVal = act; return sp; },
+            setVisible(vis: boolean) { visibleVal = vis; return sp; },
+            setBlendMode: vi.fn(),
+          } as unknown as Phaser.GameObjects.Sprite;
+          return sp;
+        }),
+      },
+      time: { now: 1000 },
+    } as unknown as GameScene;
+
+    return {
+      scene,
+      getVisual: (id: number) => summonVisuals.get(id),
+      get turretRangeRingsDrawn() { return turretRangeRingsDrawn; },
+    };
+  }
+
+  it('renders downed (r=64) and bastion_prism (r=38) circularly 1:1 at (x, y) and splits icePrison across depths 15.0 and 30.3', () => {
+    const gfx = createRecordingGraphicsMock();
+    renderDownedReviveBrackets(gfx as never, 250, 300, 64, 0.5);
+    const radii = gfx.fillTriangleCalls.map((t) => Math.hypot(t.x0 - 250, t.y0 - 300));
+    expect(Math.max(...radii)).toBeGreaterThan(62);
+    expect(Math.max(...radii)).toBeLessThanOrEqual(66.5);
+
+    const rear = createRecordingGraphicsMock();
+    const front = createRecordingGraphicsMock();
+    renderBastionPrismPlates(rear as never, front as never, 400, 400, 38, 0, 1.0);
+    expect(rear.fillTriangleCalls.length).toBeGreaterThan(0);
+    expect(front.fillTriangleCalls.length).toBeGreaterThan(0);
+
+    const rearPrison = createRecordingGraphicsMock();
+    const frontPrison = createRecordingGraphicsMock();
+    renderIcePrisonBars(rearPrison as never, frontPrison as never, 300, 250, 1.0);
+    expect(rearPrison.fillTriangleCalls.length).toBeGreaterThan(0);
+    expect(frontPrison.fillTriangleCalls.length).toBeGreaterThan(0);
+  });
+
+  it('syncs all 6 Cutout summons at depth 28.4..28.6 (< 30.0 P1) with 0.00 steady-state/ally turret range ring', () => {
+    const harness = createSummonSyncHarness({ localPlayerId: 1 });
+    syncSummonCutoutVisuals(harness.scene, [
+      createMockSummon({ id: 10, kind: 'tesla_turret', ownerPlayerId: 1, x: 200, y: 200 }),
+      createMockSummon({ id: 11, kind: 'holo_decoy_turret', ownerPlayerId: 2, x: 280, y: 200 }),
+    ], 1, 1.0); // age 1.0s > 0.65s placement cue
+    const v1 = harness.getVisual(10)!;
+    expect(v1.shadow.depth).toBe(19);
+    expect(v1.base.depth).toBeCloseTo(28.4, 2);
+    expect(v1.head?.depth).toBeCloseTo(28.6, 2);
+    expect(harness.turretRangeRingsDrawn).toBe(0);
   });
 });

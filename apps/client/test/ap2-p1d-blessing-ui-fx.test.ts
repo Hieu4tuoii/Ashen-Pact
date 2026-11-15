@@ -5,7 +5,7 @@ import {
   type BlessingId,
   WorldSim,
 } from '@ashen-pact/shared';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { TextureBaker } from '../src/art/texture-baker.js';
 import {
   drawP1DBlessingActiveOverlays,
@@ -621,5 +621,60 @@ describe('AP2 Phase P1D.4 & P4A.4 — Per-Player Blessing Modal UI, HUD Chips, i
     expect(groundG.calls.includes('strokeCircle')).toBe(true);
     expect(floorAlphas.length).toBeGreaterThan(0);
     expect(Math.max(...floorAlphas)).toBeLessThanOrEqual(0.08);
+  });
+
+  it('renders electric_cutter via fillTaperedLightningBolt on underActorGraphics with zero telegraph lineBetween', () => {
+    const sim = new WorldSim({ seed: 501, startInHub: false });
+    sim.summons.push(
+      {
+        id: 101,
+        kind: 'tesla_turret',
+        ownerPlayerId: 1,
+        x: 100,
+        y: 100,
+        radius: 16,
+        auraRadius: 100,
+        hp: 100,
+        maxHp: 100,
+        ttlSec: 5,
+        maxTtlSec: 8,
+        tickTimer: 0.1,
+        charge: 50,
+      },
+      {
+        id: 102,
+        kind: 'tesla_turret',
+        ownerPlayerId: 1,
+        x: 200,
+        y: 100,
+        radius: 16,
+        auraRadius: 100,
+        hp: 100,
+        maxHp: 100,
+        ttlSec: 5,
+        maxTtlSec: 8,
+        tickTimer: 0.1,
+        charge: 50,
+      },
+    );
+
+    const g = createMockGraphics();
+    const floorG = createMockGraphics();
+    const underG = {
+      fillTriangleCalls: [] as Array<{ x0: number; y0: number }>,
+      fillStyleCalls: [] as unknown[],
+      fillStyle: vi.fn((col: number, a = 1) => { underG.fillStyleCalls.push({ col, a }); }),
+      fillTriangle: vi.fn((x0: number, y0: number) => { underG.fillTriangleCalls.push({ x0, y0 }); }),
+    };
+    const mockScene = {
+      sim,
+      telegraphGraphics: g,
+      groundHazardGraphics: floorG,
+      underActorGraphics: underG,
+    };
+
+    drawP1DBlessingActiveOverlays(mockScene, sim, 1.0);
+    expect(underG.fillTriangleCalls.length).toBeGreaterThan(0);
+    expect(g.calls.includes('lineBetween')).toBe(false);
   });
 });

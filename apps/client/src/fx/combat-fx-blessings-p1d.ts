@@ -11,6 +11,12 @@ import { zzfx } from '../audio/zzfx.js';
 import { getVisualQueryConfig } from '../core/visual-query.js';
 import type { GameScene } from '../scenes/GameScene.js';
 import type { CombatFxManager } from './combat-fx.js';
+import {
+  fillTaperedArcRibbon,
+  fillTaperedLightningBolt,
+  fillTaperedQuadraticBezier,
+} from './tapered-ribbon-builder.js';
+import { renderBastionPrismPlates } from './combat-fx-classes.js';
 import { getWeaponV2OverlayState, type TransientWeaponV2Shape } from './combat-fx-weapons-v2.js';
 
 export const P1D_BLESSING_EVENT_KINDS = [
@@ -72,6 +78,21 @@ function resolveFloorGraphics(
   if (sceneOrG && typeof sceneOrG === 'object' && 'groundHazardGraphics' in sceneOrG) {
     const gg = (sceneOrG as { groundHazardGraphics?: Phaser.GameObjects.Graphics }).groundHazardGraphics;
     if (gg) return gg;
+  }
+  return fallbackG;
+}
+
+function resolveUnderActorGraphics(
+  sceneOrG: unknown,
+  fallbackG: Phaser.GameObjects.Graphics,
+): Phaser.GameObjects.Graphics {
+  if (sceneOrG && typeof sceneOrG === 'object') {
+    const sc = sceneOrG as {
+      underActorGraphics?: Phaser.GameObjects.Graphics;
+      fx?: { underActorGraphics?: Phaser.GameObjects.Graphics };
+    };
+    if (sc.underActorGraphics) return sc.underActorGraphics;
+    if (sc.fx?.underActorGraphics) return sc.fx.underActorGraphics;
   }
   return fallbackG;
 }
@@ -234,12 +255,8 @@ export function drawP1DBlessingActiveOverlays(
       pl.skillActiveTimer > 0 &&
       blessings.includes('vanguard_bastion_prism')
     ) {
-      g.lineStyle(4.2, 0x141019, 0.72);
-      g.strokeCircle(pl.x, pl.y, 34 + pulse * 0.4);
-      g.lineStyle(2.4, 0xf97316, 0.9);
-      g.strokeCircle(pl.x, pl.y, 34 + pulse * 0.4);
-      g.lineStyle(1.3, 0xfffdf5, 0.78);
-      g.strokeCircle(pl.x, pl.y, 30);
+      const underG = resolveUnderActorGraphics(sceneOrG, g);
+      renderBastionPrismPlates(underG, g, pl.x, pl.y, 38, t * 2.8, 1.0);
     }
   }
 
@@ -254,26 +271,30 @@ export function drawP1DBlessingActiveOverlays(
     if (z.linkedZoneId && !z.isTwinSecondary) {
       const partner = skillZones.find((o) => o.id === z.linkedZoneId && o.ttlSec > 0);
       if (partner) {
-        g.lineStyle(6.0, 0x141019, 0.78);
-        g.beginPath();
-        g.moveTo(z.x, z.y);
-        g.lineTo(partner.x, partner.y);
-        g.strokePath();
-        g.lineStyle(3.4, 0xc084fc, 0.88);
-        g.beginPath();
-        g.moveTo(z.x, z.y);
-        g.lineTo(partner.x, partner.y);
-        g.strokePath();
-        g.lineStyle(1.5, 0xfffdf5, 0.95);
-        g.beginPath();
-        g.moveTo(z.x, z.y);
-        g.lineTo(partner.x, partner.y);
-        g.strokePath();
+        const underG = resolveUnderActorGraphics(sceneOrG, g);
+        const midX = (z.x + partner.x) * 0.5 + Math.sin(t * 4 + z.id) * 8;
+        const midY = (z.y + partner.y) * 0.5 + Math.cos(t * 4 + z.id) * 8;
+        fillTaperedQuadraticBezier(
+          underG,
+          z.x,
+          z.y,
+          midX,
+          midY,
+          partner.x,
+          partner.y,
+          1.8,
+          3.2,
+          1.8,
+          0xc084fc,
+          0.88,
+          6,
+          1.8,
+        );
       }
     }
   }
 
-  // 4. Summons: Twin Tesla Turret laser fence, Self-Destruct core, Sacred Grove canopy
+  // 4. Summons: Twin Tesla Turret laser fence (electric_cutter via fillTaperedLightningBolt on underActorGraphics)
   for (let i = 0; i < summons.length; i++) {
     const s1 = summons[i]!;
     if (s1.hp <= 0 || s1.ttlSec <= 0) continue;
@@ -290,31 +311,36 @@ export function drawP1DBlessingActiveOverlays(
           s2.ttlSec > 0 &&
           s1.ownerPlayerId === s2.ownerPlayerId
         ) {
-          g.lineStyle(5.0, 0x141019, 0.74);
-          g.beginPath();
-          g.moveTo(s1.x, s1.y);
-          g.lineTo(s2.x, s2.y);
-          g.strokePath();
-          g.lineStyle(2.8, 0x38bdf8, 0.86);
-          g.beginPath();
-          g.moveTo(s1.x, s1.y);
-          g.lineTo(s2.x, s2.y);
-          g.strokePath();
-          g.lineStyle(1.3, 0xfacc15, 0.94);
-          g.beginPath();
-          g.moveTo(s1.x, s1.y);
-          g.lineTo(s2.x, s2.y);
-          g.strokePath();
+          const underG = resolveUnderActorGraphics(sceneOrG, g);
+          fillTaperedLightningBolt(
+            underG,
+            s1.x,
+            s1.y,
+            s2.x,
+            s2.y,
+            2.4,
+            0x38bdf8,
+            0.92,
+            (s1.id * 31 + s2.id) & 0xffff,
+            6,
+            1.8,
+          );
         }
       }
     } else if (s1.kind === 'sacred_tree') {
       if (s1.sacredGrove) {
-        floorG.lineStyle(1.8, 0x2dd4bf, 0.62);
-        floorG.strokeCircle(s1.x, s1.y, s1.auraRadius);
+        const underG = resolveUnderActorGraphics(sceneOrG, floorG);
+        for (let rc = 0; rc < 4; rc++) {
+          const rAng = (rc * Math.PI) / 2 + t * 0.5;
+          fillTaperedArcRibbon(underG, s1.x, s1.y, s1.auraRadius, rAng - 0.28, rAng + 0.28, 1.6, 0x2dd4bf, 0.75, 4, 1.2);
+        }
       }
       if (s1.poisonRoots) {
-        floorG.lineStyle(1.6, 0x4ade80, 0.75);
-        floorG.strokeCircle(s1.x, s1.y, s1.radius + 7);
+        const underG = resolveUnderActorGraphics(sceneOrG, floorG);
+        for (let rc = 0; rc < 4; rc++) {
+          const rAng = (rc * Math.PI) / 2 + Math.PI / 4 - t * 0.4;
+          fillTaperedArcRibbon(underG, s1.x, s1.y, s1.radius + 7, rAng - 0.32, rAng + 0.32, 1.4, 0x4ade80, 0.82, 4, 1.2);
+        }
       }
     }
   }

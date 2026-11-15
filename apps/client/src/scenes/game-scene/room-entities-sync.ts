@@ -6,6 +6,7 @@ import {
   i18n,
   INTERACT_HYSTERESIS,
   PLAYER_SLOT_COLORS,
+  type SimSummonState,
   WEAPON_RARITY_COLORS,
 } from '@ashen-pact/shared';
 import Phaser from 'phaser';
@@ -13,6 +14,7 @@ import { CutoutRig } from '../../art/cutout-rig.js';
 import { PALETTE } from '../../art/palette.js';
 import { MERCHANT_RIG_DEF, RIG_DEFS_BY_ID, VANGUARD_RIG_DEF } from '../../art/rig-defs.js';
 import { TextureBaker } from '../../art/texture-baker.js';
+import { CUTOUT_KIT_ATLAS_KEY } from '../../art/texture-baker-fx.js';
 import { getFreezeVisualTimeSec } from '../../core/visual-query.js';
 import { computeChestOpenBounce, computeWorldItemArcPose } from '../../fx/combat-fx.js';
 import {
@@ -60,9 +62,212 @@ export function recordChestOpenedAnim(chestId: number, simTick: number): void {
   prevChestOpenedById.set(chestId, true);
 }
 
+export interface PooledSummonVisual {
+  summonId: number;
+  shadow: Phaser.GameObjects.Sprite;
+  base: Phaser.GameObjects.Sprite;
+  head?: Phaser.GameObjects.Sprite;
+  spawnAgeSec: number;
+  aimAngleRad: number;
+  recoilPx: number;
+}
+
+const activeSummonIdsScratch: number[] = [];
+
+export function syncSummonCutoutVisuals(
+  scene: GameScene,
+  summons: readonly SimSummonState[],
+  localPlayerId: number,
+  dtSec: number,
+): void {
+  if (!scene.summonVisuals) {
+    scene.summonVisuals = new Map();
+  }
+  if (!scene.summonSpritePool) {
+    scene.summonSpritePool = [];
+  }
+
+  activeSummonIdsScratch.length = 0;
+
+  for (let i = 0; i < summons.length; i++) {
+    const sum = summons[i]!;
+    if (sum.hp <= 0 || sum.ttlSec <= 0) continue;
+    activeSummonIdsScratch.push(sum.id);
+
+    let vis = scene.summonVisuals.get(sum.id);
+    const isTesla = sum.kind === 'tesla_turret';
+    const isAncient = sum.kind === 'ancient_turret';
+    const isHolo = sum.kind === 'holo_decoy_turret';
+    const isTurret = isTesla || isAncient || isHolo;
+
+    let baseFrame = 'summon_sacred_tree';
+    let headFrame: string | undefined;
+    let baseDepth = 28.5;
+    let tintNum: number | undefined;
+    let alphaVal = 1.0;
+
+    if (sum.kind === 'sacred_tree') {
+      baseFrame = 'summon_sacred_tree';
+      baseDepth = 28.5;
+    } else if (sum.kind === 'life_blossom') {
+      baseFrame = 'summon_life_blossom';
+      baseDepth = 28.5;
+    } else if (sum.kind === 'thunder_decoy') {
+      baseFrame = 'summon_thunder_decoy';
+      baseDepth = 28.5;
+    } else if (sum.kind === 'wall_tether_pylon') {
+      baseFrame = 'summon_wall_tether_pylon';
+      baseDepth = 28.5;
+    } else if (isTesla || isAncient) {
+      baseFrame = 'summon_tesla_base';
+      headFrame = 'summon_tesla_head';
+      baseDepth = 28.4;
+      if (isAncient) {
+        tintNum = 0xfef08a;
+      }
+    } else if (isHolo) {
+      baseFrame = 'summon_holo_base';
+      headFrame = 'summon_holo_head';
+      baseDepth = 28.4;
+      alphaVal = 0.82;
+    }
+
+    if (!vis) {
+      const pooled = scene.summonSpritePool.pop();
+      if (pooled) {
+        vis = pooled;
+        vis.summonId = sum.id;
+        vis.spawnAgeSec = 0;
+        vis.aimAngleRad = 0;
+        vis.recoilPx = 0;
+        vis.shadow.setVisible(true).setActive(true);
+        vis.base.setVisible(true).setActive(true);
+        vis.base.setTexture(CUTOUT_KIT_ATLAS_KEY, baseFrame);
+        if (headFrame) {
+          if (!vis.head) {
+            vis.head = scene.add.sprite(sum.x, sum.y, CUTOUT_KIT_ATLAS_KEY, headFrame);
+            vis.head.setBlendMode(Phaser.BlendModes.NORMAL);
+          } else {
+            vis.head.setTexture(CUTOUT_KIT_ATLAS_KEY, headFrame);
+            vis.head.setVisible(true).setActive(true);
+          }
+        } else if (vis.head) {
+          vis.head.setVisible(false).setActive(false);
+        }
+      } else {
+        const shadow = scene.add.sprite(sum.x, sum.y + 6, 'prop_shadow');
+        shadow.setDepth(19.0);
+        shadow.setScale(1 / 3);
+        shadow.setBlendMode(Phaser.BlendModes.NORMAL);
+
+        const base = scene.add.sprite(sum.x, sum.y, CUTOUT_KIT_ATLAS_KEY, baseFrame);
+        base.setDepth(baseDepth);
+        base.setScale(1 / 3);
+        base.setBlendMode(Phaser.BlendModes.NORMAL);
+
+        let head: Phaser.GameObjects.Sprite | undefined;
+        if (headFrame) {
+          head = scene.add.sprite(sum.x, sum.y, CUTOUT_KIT_ATLAS_KEY, headFrame);
+          head.setDepth(28.6);
+          head.setScale(1 / 3);
+          head.setBlendMode(Phaser.BlendModes.NORMAL);
+        }
+
+        vis = {
+          summonId: sum.id,
+          shadow,
+          base,
+          head,
+          spawnAgeSec: 0,
+          aimAngleRad: 0,
+          recoilPx: 0,
+        };
+      }
+      scene.summonVisuals.set(sum.id, vis);
+    }
+
+    vis.spawnAgeSec += dtSec;
+
+    vis.shadow.setDepth(19.0);
+    vis.shadow.setPosition(sum.x, sum.y + (sum.kind === 'sacred_tree' ? 8 : 6));
+    vis.shadow.setScale(1 / 3);
+    vis.shadow.setAlpha(alphaVal * 0.7);
+
+    vis.base.setDepth(baseDepth);
+    vis.base.setPosition(sum.x, sum.y);
+    vis.base.setScale(1 / 3);
+    vis.base.setAlpha(alphaVal);
+    if (tintNum !== undefined) {
+      vis.base.setTint(tintNum);
+    } else {
+      vis.base.clearTint();
+    }
+
+    if (headFrame && vis.head) {
+      vis.head.setDepth(28.6);
+      vis.head.setScale(1 / 3);
+      vis.head.setAlpha(alphaVal);
+      if (tintNum !== undefined) {
+        vis.head.setTint(tintNum);
+      } else {
+        vis.head.clearTint();
+      }
+
+      if (isTesla || isAncient) {
+        vis.aimAngleRad = (vis.aimAngleRad + dtSec * 2.2) % (Math.PI * 2);
+        if (sum.tickTimer <= 0.05) {
+          vis.recoilPx = 3.0;
+        } else {
+          vis.recoilPx = Math.max(0, vis.recoilPx - dtSec * 12);
+        }
+      } else if (isHolo) {
+        if (sum.tickTimer <= 0.05) {
+          vis.recoilPx = 2.5;
+        } else {
+          vis.recoilPx = Math.max(0, vis.recoilPx - dtSec * 12);
+        }
+      }
+
+      const hx = sum.x - Math.cos(vis.aimAngleRad) * vis.recoilPx;
+      const hy = sum.y - Math.sin(vis.aimAngleRad) * vis.recoilPx;
+      vis.head.setPosition(hx, hy);
+      vis.head.setRotation(vis.aimAngleRad);
+    }
+
+    if (isTurret && sum.ownerPlayerId === localPlayerId && vis.spawnAgeSec <= 0.65) {
+      const p = vis.spawnAgeSec / 0.65;
+      const alpha = (1 - p) * 0.9;
+      const g = scene.groundHazardGraphics;
+      if (g && alpha > 0.01) {
+        const ringCol = isAncient ? 0xfef08a : 0xfacc15;
+        for (let k = 0; k < 4; k++) {
+          const ca = (k * Math.PI) / 2 + Math.PI / 4;
+          g.lineStyle(2.2, ringCol, alpha);
+          g.beginPath();
+          g.arc(sum.x, sum.y, sum.auraRadius, ca - 0.22, ca + 0.22, false);
+          g.strokePath();
+        }
+      }
+    }
+  }
+
+  for (const [id, vis] of scene.summonVisuals.entries()) {
+    if (!activeSummonIdsScratch.includes(id)) {
+      vis.shadow.setVisible(false).setActive(false);
+      vis.base.setVisible(false).setActive(false);
+      if (vis.head) {
+        vis.head.setVisible(false).setActive(false);
+      }
+      scene.summonVisuals.delete(id);
+      scene.summonSpritePool.push(vis);
+    }
+  }
+}
+
 export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
   const sim = this.transport.getSim();
   syncBatch1WeaponRoomEntities(this, sim);
+  syncSummonCutoutVisuals(this, sim.summons, sim.player.id, dtSec);
   const textRes = TextureBaker.getBakeScale();
   const invBake = 1 / textRes;
   const lightingEnabled = this.lighting?.isLightmapVisible() ?? true;

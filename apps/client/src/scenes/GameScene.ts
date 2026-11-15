@@ -77,7 +77,7 @@ import {
   triggerPortalActivationBurstImpl,
   triggerPortalEnterSequenceImpl,
 } from './game-scene/portal-door-sync.js';
-import { syncRoomEntitiesImpl } from './game-scene/room-entities-sync.js';
+import { syncRoomEntitiesImpl, type PooledSummonVisual } from './game-scene/room-entities-sync.js';
 import type { SanctuaryVisualLayer } from './game-scene/sanctuary-architecture.js';
 import {
   normalizeServerHostPortDisplay,
@@ -210,6 +210,8 @@ export class GameScene extends Phaser.Scene {
   public fragFuseWheelSyncGen = 0;
   public enemyRigs = new Map<number, CutoutRig>();
   public propVisuals = new Map<number, PropVisual>();
+  public summonVisuals = new Map<number, PooledSummonVisual>();
+  public summonSpritePool: PooledSummonVisual[] = [];
   public projectileSprites = new Map<
     number,
     {
@@ -226,6 +228,7 @@ export class GameScene extends Phaser.Scene {
       sprite: Phaser.GameObjects.Sprite;
       glowSprite: Phaser.GameObjects.Image;
       textureKey: string;
+      frameName?: string;
     }
   >();
   public projectileSpritePool: {
@@ -239,6 +242,7 @@ export class GameScene extends Phaser.Scene {
     sprite: Phaser.GameObjects.Sprite;
     glowSprite: Phaser.GameObjects.Image;
     textureKey: string;
+    frameName?: string;
   }[] = [];
 
   // Phase 3 Room Visuals (Doors, Chests, World Items, NPCs, Portal)

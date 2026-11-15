@@ -9,6 +9,166 @@ import {
 import type Phaser from 'phaser';
 import { hexToNum, PALETTE } from '../art/palette.js';
 import type { CombatFxManager } from './combat-fx.js';
+import { routeCutoutBurstByRadius, routeCutoutDirectionalByReach } from './combat-fx-spawners.js';
+import { fillTaperedArcRibbon, fillTaperedQuadraticBezier } from './tapered-ribbon-builder.js';
+
+export function renderDownedReviveBrackets(
+  groundGfx: Phaser.GameObjects.Graphics,
+  x: number,
+  y: number,
+  radiusPx: number,
+  reviveProgress01: number,
+): void {
+  const bracketSpan = 0.62;
+  const colCrimson = hexToNum(PALETTE.CRIMSON_BRIGHT);
+  const colLime = hexToNum(PALETTE.LIME_GLOW);
+  const progClamped = clamp(reviveProgress01, 0, 1);
+
+  for (let k = 0; k < 4; k++) {
+    const baseA = -Math.PI / 2 + (k * Math.PI) / 2;
+    const a0 = baseA - bracketSpan * 0.5;
+    const a1 = baseA + bracketSpan * 0.5;
+
+    const bracketMidFromStart = (k * Math.PI) / 2;
+    const bracketFraction = bracketMidFromStart / (Math.PI * 2);
+    const isReviveFilled = progClamped > 0 && bracketFraction < progClamped;
+    const col = isReviveFilled ? colLime : colCrimson;
+    const alpha = isReviveFilled ? 0.98 : 0.88;
+
+    fillTaperedArcRibbon(
+      groundGfx,
+      x,
+      y,
+      radiusPx,
+      a0,
+      a1,
+      1.2,
+      col,
+      alpha,
+      6,
+      1.0,
+    );
+  }
+
+  if (progClamped > 0) {
+    const startA = -Math.PI / 2;
+    const endA = startA + Math.PI * 2 * progClamped;
+    fillTaperedArcRibbon(
+      groundGfx,
+      x,
+      y,
+      radiusPx,
+      startA,
+      endA,
+      1.2,
+      colLime,
+      0.95,
+      8,
+      1.0,
+    );
+  }
+}
+
+export function renderBastionPrismPlates(
+  rearGfx: Phaser.GameObjects.Graphics,
+  frontGfx: Phaser.GameObjects.Graphics,
+  x: number,
+  y: number,
+  shieldRadiusPx: number,
+  phaseRad: number,
+  alpha: number,
+): void {
+  const colPlate = 0xf97316;
+  const plateSpan = 0.52;
+
+  for (let k = 0; k < 6; k++) {
+    const ang = phaseRad + (k * Math.PI * 2) / 6;
+    const sinVal = Math.sin(ang);
+    const targetGfx = sinVal < 0 ? rearGfx : frontGfx;
+
+    fillTaperedArcRibbon(
+      targetGfx,
+      x,
+      y,
+      shieldRadiusPx,
+      ang - plateSpan * 0.5,
+      ang + plateSpan * 0.5,
+      1.8,
+      colPlate,
+      alpha,
+      4,
+      1.2,
+    );
+  }
+}
+
+export function renderIcePrisonBars(
+  rearGfx: Phaser.GameObjects.Graphics,
+  frontGfx: Phaser.GameObjects.Graphics,
+  x: number,
+  y: number,
+  hpRatio = 1.0,
+): void {
+  const centerY = y + 12;
+  const colSpires = 0x264e66;
+  const colBars = 0x38bdf8;
+  const colHighlight = 0xe0f2fe;
+  const alpha = clamp(hpRatio, 0.2, 1.0);
+
+  for (let i = -1; i <= 1; i++) {
+    const sx = x + i * 14;
+    const h = 26 + (i === 0 ? 6 : 0);
+    fillTaperedQuadraticBezier(
+      rearGfx,
+      sx - 4,
+      centerY,
+      sx,
+      centerY - h * 0.5,
+      sx,
+      centerY - h,
+      2.0,
+      2.4,
+      0.1,
+      colSpires,
+      alpha,
+      4,
+      1.2,
+    );
+  }
+
+  fillTaperedQuadraticBezier(
+    frontGfx,
+    x - 16,
+    centerY - 8,
+    x - 2,
+    centerY + 2,
+    x + 16,
+    centerY - 12,
+    0.1,
+    2.5,
+    0.1,
+    colBars,
+    alpha,
+    4,
+    1.2,
+  );
+  fillTaperedQuadraticBezier(
+    frontGfx,
+    x - 14,
+    centerY + 8,
+    x + 2,
+    centerY - 2,
+    x + 15,
+    centerY + 10,
+    0.1,
+    2.2,
+    0.1,
+    colHighlight,
+    alpha,
+    4,
+    1.2,
+  );
+}
 
 export interface ClassFxSceneLightingContext {
   lighting?: {
@@ -59,11 +219,13 @@ export function spawnClassSkillCastVfx(
 ): void {
   switch (characterId) {
     case 'vanguard': {
-      fx?.spawnShaderDirectional?.(x, y, 72, angleRad, 'fx_sh_aegis_crest', {
-        tint: 0xfca5a5,
-        ttl: 0.28,
-        isTeammate,
-      });
+      if (fx) {
+        routeCutoutDirectionalByReach(fx, x, y, 72, angleRad, 'fx_sh_aegis_crest', Math.PI / 3, {
+          tint: 0xfca5a5,
+          ttlSec: 0.28,
+          isTeammate,
+        });
+      }
       fx?.spawnHitSparks?.(
         x + Math.cos(angleRad) * 24,
         y + Math.sin(angleRad) * 24,
@@ -75,11 +237,28 @@ export function spawnClassSkillCastVfx(
     }
 
     case 'ranger': {
-      fx?.spawnShaderDirectional?.(x, y, 88, angleRad, 'fx_sh_falcon_sonic', {
-        tint: 0xfef08a,
-        ttl: 0.28,
-        isTeammate,
-      });
+      if (fx) {
+        routeCutoutDirectionalByReach(fx, x, y, 88, angleRad, 'fx_sh_falcon_sonic', Math.PI / 4, {
+          tint: 0xfef08a,
+          ttlSec: 0.28,
+          isTeammate,
+        });
+      }
+      if (fx?.underActorGraphics) {
+        fillTaperedArcRibbon(
+          fx.underActorGraphics,
+          x,
+          y,
+          36,
+          angleRad - 0.45,
+          angleRad + 0.45,
+          2.0,
+          0xfef08a,
+          isTeammate ? 0.35 : 0.9,
+          6,
+          1.8,
+        );
+      }
       fx?.spawnHitSparks?.(
         x + Math.cos(angleRad) * 28,
         y + Math.sin(angleRad) * 28,
@@ -92,11 +271,13 @@ export function spawnClassSkillCastVfx(
 
     case 'elementalist': {
       const pal = resolveElementalistSigilPalette(activeElement);
-      fx?.spawnShaderNova?.(x, y, 86, 'fx_sh_arcane_sigil', {
-        tint: pal.tint,
-        ttl: 0.34,
-        isTeammate,
-      });
+      if (fx) {
+        routeCutoutBurstByRadius(fx, x, y, 86, 'fx_sh_arcane_sigil', {
+          tint: pal.tint,
+          ttlSec: 0.34,
+          isTeammate,
+        });
+      }
       fx?.spawnHitSparks?.(x, y, angleRad, {
         isCrit: true,
         element: pal.sparkElement,
@@ -108,10 +289,12 @@ export function spawnClassSkillCastVfx(
     }
 
     case 'druid': {
-      fx?.spawnShaderNova?.(x, y, 84, 'fx_sh_bloom_briar', {
-        ttl: 0.34,
-        isTeammate,
-      });
+      if (fx) {
+        routeCutoutBurstByRadius(fx, x, y, 84, 'fx_sh_bloom_briar', {
+          ttlSec: 0.34,
+          isTeammate,
+        });
+      }
       fx?.spawnHitSparks?.(x, y, 0, {
         element: 'poison',
         count: 7,
@@ -122,10 +305,12 @@ export function spawnClassSkillCastVfx(
     }
 
     case 'engineer': {
-      fx?.spawnShaderNova?.(x, y, 78, 'fx_sh_anvil_storm', {
-        ttl: 0.3,
-        isTeammate,
-      });
+      if (fx) {
+        routeCutoutBurstByRadius(fx, x, y, 78, 'fx_sh_anvil_storm', {
+          ttlSec: 0.3,
+          isTeammate,
+        });
+      }
       fx?.spawnHitSparks?.(x, y, 0, {
         isCrit: true,
         element: 'shock',
@@ -151,13 +336,13 @@ export function spawnVanguardShieldShockwaveVfx(
 ): void {
   const reachPx = 102 + Math.min(26, Math.max(0, storedBullets) * 4);
   if (fx?.spawnShaderDirectional) {
-    fx.spawnShaderDirectional(x, y, reachPx, angleRad, 'fx_sh_aegis_crest', {
+    routeCutoutDirectionalByReach(fx, x, y, reachPx, angleRad, 'fx_sh_aegis_crest', Math.PI / 3, {
       tint: storedBullets > 0 ? 0xfef08a : 0xfca5a5,
-      ttl: 0.3,
+      ttlSec: 0.3,
     });
     fx.spawnShaderCone?.(x, y, 94, angleRad);
     if (storedBullets > 0) {
-      fx.spawnShaderNova?.(x, y, 68, 'fx_sh_shrapnel_corona');
+      routeCutoutBurstByRadius(fx, x, y, 68, 'fx_sh_shrapnel_corona');
     }
     fx.spawnHitSparks?.(
       x + Math.cos(angleRad) * 32,
@@ -215,7 +400,7 @@ export function spawnEngineerEmpBlastVfx(
 ): void {
   const effR = Math.max(72, radius);
   if (fx?.spawnShaderNova) {
-    fx.spawnShaderNova(x, y, effR, 'fx_sh_anvil_storm');
+    routeCutoutBurstByRadius(fx, x, y, effR, 'fx_sh_nova_thunder');
     const boltReach = effR * 0.92;
     for (let k = 0; k < 4; k += 1) {
       const ang = (k * Math.PI) / 2 + 0.32;
@@ -244,7 +429,13 @@ export function drawVanguardRubyPhalanxShield(
   isBastionPrism: boolean,
   storedBullets: number,
   clockSec: number,
+  rearGfx?: Phaser.GameObjects.Graphics,
+  frontGfx?: Phaser.GameObjects.Graphics,
 ): void {
+  if (isBastionPrism) {
+    renderBastionPrismPlates(rearGfx ?? g, frontGfx ?? g, px, py, 38, clockSec * 2.8, 1.0);
+    return;
+  }
   const halfArc = isBastionPrism ? Math.PI : (60 * Math.PI) / 180;
   const startA = aimAngle - halfArc;
   const endA = aimAngle + halfArc;
@@ -316,6 +507,7 @@ export function drawInscribedElementalistZone(
   g: Phaser.GameObjects.Graphics,
   z: SimSkillZoneState,
   tick: number,
+  underGfx?: Phaser.GameObjects.Graphics,
 ): void {
   const elHex =
     z.element === 'burn'
@@ -338,6 +530,25 @@ export function drawInscribedElementalistZone(
   floorG.strokeCircle(z.x, z.y, outerR);
   floorG.lineStyle(1.3, COL_BONE, 0.56);
   floorG.strokeCircle(z.x, z.y, innerR);
+
+  // 4 element-coded perimeter crescents at depth 26.6
+  const underTarget = underGfx ?? g;
+  for (let c = 0; c < 4; c++) {
+    const cAng = rot + (c * Math.PI) / 2;
+    fillTaperedArcRibbon(
+      underTarget,
+      z.x,
+      z.y,
+      outerR,
+      cAng - 0.28,
+      cAng + 0.28,
+      1.8,
+      col,
+      0.9,
+      6,
+      1.2,
+    );
+  }
 
   // 2. Inscribed 6-point arcane hexagram + cardinal rune ticks on floorG
   for (let tri = 0; tri < 2; tri += 1) {
@@ -407,6 +618,7 @@ export function drawSacredTreeChiaroscuro(
   g: Phaser.GameObjects.Graphics,
   sum: SimSummonState,
   tick: number,
+  underGfx?: Phaser.GameObjects.Graphics,
 ): void {
   const pulse = Math.sin(tick * 0.12 + sum.id) * 2.2;
   const auraR = Math.max(24, sum.auraRadius + pulse);
@@ -419,6 +631,25 @@ export function drawSacredTreeChiaroscuro(
   floorG.strokeCircle(sum.x, sum.y, auraR);
   floorG.lineStyle(2.2, limeCol, 0.88);
   floorG.strokeCircle(sum.x, sum.y, auraR);
+
+  // 1:1 (x, y) jade root crescents
+  const underTarget = underGfx ?? g;
+  for (let p = 0; p < 4; p += 1) {
+    const a = (p * Math.PI) / 2 + tick * 0.01;
+    fillTaperedArcRibbon(
+      underTarget,
+      sum.x,
+      sum.y,
+      auraR,
+      a - 0.26,
+      a + 0.26,
+      1.6,
+      limeCol,
+      0.85,
+      4,
+      1.2,
+    );
+  }
 
   // 6 perimeter root-petal notches (outer 15% annulus only — center stays crystal clear)
   for (let p = 0; p < 6; p += 1) {

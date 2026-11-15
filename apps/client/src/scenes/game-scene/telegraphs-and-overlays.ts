@@ -15,15 +15,21 @@ import {
 } from '../../fx/combat-fx.js';
 import { isVisualFreezeActive } from '../../fx/combat-fx-blessings-p1d.js';
 import {
-  drawEngineerTurretChiaroscuro,
   drawInscribedElementalistZone,
   drawRangerPredatorMarkChiaroscuro,
-  drawSacredTreeChiaroscuro,
   drawVanguardRubyPhalanxShield,
+  renderBastionPrismPlates,
+  renderDownedReviveBrackets,
+  renderIcePrisonBars,
 } from '../../fx/combat-fx-classes.js';
+
+export {
+  renderBastionPrismPlates,
+  renderDownedReviveBrackets,
+  renderIcePrisonBars,
+};
 import {
   drawEnemyBatch1Indicators,
-  drawSeedGunLifeBlossom,
   drawTetherStaffBeams,
   syncBatch1WeaponRoomEntities,
   updateAndDrawWeaponV2Overlays,
@@ -32,11 +38,9 @@ import { initGlobalDebugState } from '../../ui/debug-overlay.js';
 import { drawP2BWorldOverlays } from '../../fx/combat-fx-p2b.js';
 import { drawP3APredictiveSightlinesAndOverlays } from '../../fx/combat-fx-p3a.js';
 import {
-  drawP4ASummonOverlay,
   drawP4ATetherAndProjectileOverlays,
 } from '../../fx/combat-fx-p4a.js';
 import {
-  drawP4BSummonOverlay,
   renderP4BDuoAndSecretArenaOverlays,
 } from '../../fx/combat-fx-p4b.js';
 import { type GameScene, RIG_FOOT_OFFSET_Y } from '../GameScene.js';
@@ -171,38 +175,43 @@ export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, 
     }
 
     if (pl.lifeState === 'downed') {
-      const pulseR = 24 + Math.sin(overlayTick * 0.2) * 3;
-      floorG.fillStyle(hexToNum(PALETTE.RUBY_DARK), 0.08);
-      floorG.fillCircle(px, py + 4, pulseR);
-      floorG.lineStyle(2.5, hexToNum(PALETTE.CRIMSON_BRIGHT), 0.9);
-      floorG.strokeCircle(px, py + 4, pulseR);
+      renderDownedReviveBrackets(floorG, px, py, 64, pl.reviveProgress ?? 0);
+    }
 
-      if (pl.reviveProgress > 0) {
-        g.lineStyle(4, hexToNum(PALETTE.LIME_GLOW), 1);
-        g.beginPath();
-        g.arc(
-          px,
-          py + 4,
-          pulseR + 4,
-          -Math.PI / 2,
-          -Math.PI / 2 + Math.PI * 2 * clamp(pl.reviveProgress, 0, 1),
-          false,
-        );
-        g.strokePath();
-      }
+    if (pl.icePrisonId && pl.icePrisonId > 0) {
+      renderIcePrisonBars(
+        this.interactFootRingGraphics ?? floorG,
+        this.telegraphGraphics ?? g,
+        px,
+        py,
+        1.0,
+      );
     }
 
     if (pl.skillActiveTimer > 0) {
       if (pl.characterId === 'vanguard') {
-        drawVanguardRubyPhalanxShield(
-          g,
-          px,
-          py,
-          pl.aimAngle,
-          pl.blessingIds.includes('vanguard_bastion_prism'),
-          pl.shieldStoredBullets ?? 0,
-          overlayTimeSec,
-        );
+        const isBastion = pl.blessingIds.includes('vanguard_bastion_prism');
+        if (isBastion) {
+          renderBastionPrismPlates(
+            this.underActorGraphics ?? floorG,
+            this.telegraphGraphics ?? g,
+            px,
+            py,
+            38,
+            overlayTimeSec * 2.8,
+            1.0,
+          );
+        } else {
+          drawVanguardRubyPhalanxShield(
+            g,
+            px,
+            py,
+            pl.aimAngle,
+            false,
+            pl.shieldStoredBullets ?? 0,
+            overlayTimeSec,
+          );
+        }
       }
     }
   }
@@ -214,27 +223,10 @@ export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, 
     drawInscribedElementalistZone(floorG, g, z, overlayTick);
   }
 
-  // 1b. Phase 5 Summoned Entities (Druid Sacred Tree & Engineer Tesla / Ancient Turrets)
-  const turretClockMs = freezeOverlay
-    ? overlayTimeSec * 1000
-    : (this.time?.now ?? sim.tick * 16.67);
+  // 1b. Phase 5 Summoned Entities (Cutout summons rendered via syncSummonCutoutVisuals; only mini TTL/HP bar here)
   for (let i = 0; i < sim.summons.length; i++) {
     const sum = sim.summons[i]!;
     if (sum.hp <= 0 || sum.ttlSec <= 0) continue;
-
-    if (sum.kind === 'sacred_tree') {
-      drawSacredTreeChiaroscuro(floorG, g, sum, overlayTick);
-    } else if (sum.kind === 'life_blossom') {
-      // Phase P1A Weapon: Súng Phóng Hạt Sinh Mệnh (seed_gun) blooming Life Bud & r=88px Toxic Spore Aura
-      drawSeedGunLifeBlossom(g, sum, overlayTimeSec, floorG);
-    } else if (
-      drawP4ASummonOverlay(this, g, sim, sum) ||
-      drawP4BSummonOverlay(this, g, sim, sum)
-    ) {
-      continue;
-    } else {
-      drawEngineerTurretChiaroscuro(floorG, g, sum, turretClockMs);
-    }
 
     // Mini TTL / HP bar above summon
     const barW = 28;
@@ -329,6 +321,16 @@ export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, 
     const pos = this.transport.getInterpolatedEnemyPos(e, this.entityPosScratch);
     if (pos.x < viewLeft || pos.x > viewRight || pos.y < viewTop || pos.y > viewBottom) {
       continue;
+    }
+
+    if (e.defId === 'ice_prison') {
+      renderIcePrisonBars(
+        this.interactFootRingGraphics ?? floorG,
+        this.telegraphGraphics ?? g,
+        pos.x,
+        pos.y - 12,
+        clamp(e.hp / Math.max(1, e.maxHp), 0, 1),
+      );
     }
 
     // 0.8s Rotating 1:1 Arcane Rune Summoning Circle on Floor + Rising Motes

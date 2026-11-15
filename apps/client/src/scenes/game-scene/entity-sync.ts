@@ -871,41 +871,42 @@ export function syncProjectilesAndPickupsImpl(this: GameScene): void {
       pk.kind === 'prey_emblem'
         ? 'fx_pickup_energy'
         : pk.kind === 'life_seed'
-          ? 'fx_ambient_leaf'
+          ? CUTOUT_KIT_ATLAS_KEY
           : 'fx_pickup_gold';
+    const frame = pk.kind === 'life_seed' ? 'item_life_seed' : undefined;
     if (!entry) {
       const pooled = this.pickupSpritePool.pop();
       if (pooled) {
         entry = pooled;
-        if (entry.textureKey !== tex) {
+        if (entry.textureKey !== tex || entry.frameName !== frame) {
           entry.textureKey = tex;
-          entry.sprite.setTexture(tex);
+          entry.frameName = frame;
+          entry.sprite.setTexture(tex, frame);
         }
         entry.sprite.setVisible(true);
         entry.sprite.setActive(true);
         entry.glowSprite.setActive(true);
       } else {
-        const sprite = this.add.sprite(pk.x, pk.y, tex);
-        sprite.setDepth(25);
+        const sprite = this.add.sprite(pk.x, pk.y, tex, frame);
+        sprite.setDepth(pk.kind === 'life_seed' ? 22.0 : 25);
         const glowSprite = this.add.image(pk.x, pk.y, 'fx_light_radial');
         glowSprite.setDepth(35);
         glowSprite.setBlendMode(Phaser.BlendModes.ADD);
         glowSprite.setVisible(false);
-        entry = { sprite, glowSprite, textureKey: tex };
+        entry = { sprite, glowSprite, textureKey: tex, frameName: frame };
       }
-      entry.sprite.setScale(invBake * (pk.kind === 'life_seed' ? 1.35 : 1));
+      entry.sprite.setDepth(pk.kind === 'life_seed' ? 22.0 : 25);
+      entry.sprite.setScale(pk.kind === 'life_seed' ? 1 / 3 : invBake);
       this.pickupSprites.set(pk.id, entry);
-    } else if (entry.textureKey !== tex) {
+    } else if (entry.textureKey !== tex || entry.frameName !== frame) {
       entry.textureKey = tex;
-      entry.sprite.setTexture(tex);
-      entry.sprite.setScale(invBake * (pk.kind === 'life_seed' ? 1.35 : 1));
+      entry.frameName = frame;
+      entry.sprite.setTexture(tex, frame);
+      entry.sprite.setDepth(pk.kind === 'life_seed' ? 22.0 : 25);
+      entry.sprite.setScale(pk.kind === 'life_seed' ? 1 / 3 : invBake);
     }
 
-    if (pk.kind === 'life_seed') {
-      entry.sprite.setTint(hexToNum(PALETTE.LIME_GLOW));
-    } else {
-      entry.sprite.clearTint();
-    }
+    entry.sprite.clearTint();
     const pos = this.transport.getInterpolatedPickupPos(pk, this.entityPosScratch);
     const bobY = Math.sin(visualTimeSec * 5 + pk.id) * 1.5;
     entry.sprite.setPosition(pos.x, pos.y + bobY);
