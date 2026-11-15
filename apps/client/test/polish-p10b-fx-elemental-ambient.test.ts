@@ -22,6 +22,8 @@ vi.mock('phaser', () => {
 });
 
 import { PALETTE } from '../src/art/palette.js';
+import { CutoutRig } from '../src/art/cutout-rig.js';
+import { VANGUARD_RIG_DEF } from '../src/art/rig-defs.js';
 import {
   BAKED_FX_TEXTURE_KEYS,
   ENEMY_BULLET_VISUAL_SPEC,
@@ -938,6 +940,121 @@ describe('Phase P10b — Combat FX (BlendMode.ADD), Elemental Combo FX & Clear B
       expect(recycledHeavyOrb.specScale).toBeCloseTo(1.0, 4);
       expect(recycledHeavyOrb.sprite.rotation).toBe(0);
       expect(recycledHeavyOrb.glowSprite.scale / recycledHeavyOrb.sprite.scale).toBeCloseTo(1.05, 4);
+    });
+  });
+
+  describe('7. CutoutRig Elemental Status & Hit Flash Tint Clearing Invariants', () => {
+    it('clears torso and head hit flash tint while retaining leg frost tint on chilled rigs', () => {
+      interface MockSprite {
+        key: string;
+        currentTint: number | null;
+        setOrigin: () => MockSprite;
+        setScale: () => MockSprite;
+        setPosition: () => MockSprite;
+        setTexture: () => MockSprite;
+        setVisible: () => MockSprite;
+        setActive: () => MockSprite;
+        setTint: (c: number) => MockSprite;
+        setTintFill: () => MockSprite;
+        clearTint: () => MockSprite;
+        destroy: () => void;
+      }
+
+      const createdSprites: MockSprite[] = [];
+      const createMockContainer = () => {
+        const c = {
+          x: 0,
+          y: 0,
+          scaleX: 1,
+          scaleY: 1,
+          rotation: 0,
+          alpha: 1,
+          visible: true,
+          add: () => c,
+          bringToTop: () => c,
+          sendToBack: () => c,
+          moveTo: () => c,
+          setPosition: () => c,
+          setScale: () => c,
+          setVisible: () => c,
+          setDepth: () => c,
+          destroy: () => {},
+        };
+        return c;
+      };
+      const mockScene = {
+        add: {
+          container: () => createMockContainer(),
+          sprite: (_x: number, _y: number, key: string) => {
+            const s: MockSprite = {
+              key,
+              currentTint: null,
+              setOrigin: () => s,
+              setScale: () => s,
+              setPosition: () => s,
+              setTexture: () => s,
+              setVisible: () => s,
+              setActive: () => s,
+              setTint: (c: number) => {
+                s.currentTint = c;
+                return s;
+              },
+              setTintFill: () => s,
+              clearTint: () => {
+                s.currentTint = null;
+                return s;
+              },
+              destroy: () => {},
+            };
+            createdSprites.push(s);
+            return s;
+          },
+        },
+      };
+
+      const rig = new CutoutRig(mockScene as never, 100, 100, VANGUARD_RIG_DEF);
+      const torso = createdSprites.find((s) => s.key.includes('torso'))!;
+      const head = createdSprites.find((s) => s.key.includes('head'))!;
+      const legLeft = createdSprites.find((s) => s.key.includes('legLeft'))!;
+      const legRight = createdSprites.find((s) => s.key.includes('legRight'))!;
+
+      expect(torso).toBeDefined();
+      expect(head).toBeDefined();
+      expect(legLeft).toBeDefined();
+      expect(legRight).toBeDefined();
+
+      // 1. Chill status applied: only legs receive 0xcfe8ee, torso & head remain untinted
+      rig.setElementalStatusTint(0xcfe8ee);
+      rig.update(0.016);
+
+      expect(legLeft.currentTint).toBe(0xcfe8ee);
+      expect(legRight.currentTint).toBe(0xcfe8ee);
+      expect(torso.currentTint).toBeNull();
+      expect(head.currentTint).toBeNull();
+
+      // 2. Chilled rig takes a hit: torso & head get hit flash tint (0xFFFBEB)
+      rig.triggerHitFlash(0.06, 0xFFFBEB);
+      rig.update(0.016);
+
+      expect(torso.currentTint).toBe(0xFFFBEB);
+      expect(head.currentTint).toBe(0xFFFBEB);
+
+      // 3. Ticks past hit-flash duration while still chilled: torso & head cleared, legs retain 0xcfe8ee!
+      rig.update(0.08);
+
+      expect(torso.currentTint).toBeNull();
+      expect(head.currentTint).toBeNull();
+      expect(legLeft.currentTint).toBe(0xcfe8ee);
+      expect(legRight.currentTint).toBe(0xcfe8ee);
+
+      // 4. Chill expires: legs also cleared
+      rig.setElementalStatusTint(null);
+      rig.update(0.016);
+
+      expect(legLeft.currentTint).toBeNull();
+      expect(legRight.currentTint).toBeNull();
+      expect(torso.currentTint).toBeNull();
+      expect(head.currentTint).toBeNull();
     });
   });
 });

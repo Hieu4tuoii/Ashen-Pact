@@ -106,6 +106,7 @@ export class CutoutRig {
   private spawnProgress = 1; // 1 = fully spawned
   private elementalStatusTint: number | null = null;
   private footFrostTinted = false;
+  private appliedFootFrostColor: number | null = null;
 
   constructor(
     scene: Phaser.Scene,
@@ -432,23 +433,39 @@ export class CutoutRig {
       this.applyHitFlashTint();
       this.isHitFlashing = true;
       this.isStatusTinted = false;
+      this.footFrostTinted = false;
+      this.appliedFootFrostColor = null;
     } else if (shouldFlashTelegraph) {
       this.applyMultiplicativeTint(0xff9e64);
       this.isHitFlashing = true;
       this.isStatusTinted = false;
+      this.footFrostTinted = false;
+      this.appliedFootFrostColor = null;
     } else if (this.lifeState === 'downed') {
       const pulse = Math.floor(this.animTime * 6) % 2 === 0 ? 0xf7768e : 0xff9e64;
       this.applyMultiplicativeTint(pulse);
       this.isHitFlashing = false;
       this.isStatusTinted = true;
+      this.footFrostTinted = false;
+      this.appliedFootFrostColor = null;
     } else if (this.lifeState === 'ghost') {
       this.applyMultiplicativeTint(0x7dcfff);
       this.isHitFlashing = false;
       this.isStatusTinted = true;
+      this.footFrostTinted = false;
+      this.appliedFootFrostColor = null;
     } else if (this.elementalStatusTint !== null) {
-      this.applyFootFrostTint(this.elementalStatusTint);
+      if (
+        this.isHitFlashing ||
+        this.isStatusTinted ||
+        !this.footFrostTinted ||
+        this.appliedFootFrostColor !== this.elementalStatusTint
+      ) {
+        this.clearPartTints();
+        this.applyFootFrostTint(this.elementalStatusTint);
+      }
       this.isHitFlashing = false;
-      this.isStatusTinted = true;
+      this.isStatusTinted = false;
     } else if (this.isHitFlashing || this.isStatusTinted || this.footFrostTinted) {
       this.clearPartTints();
       this.isHitFlashing = false;
@@ -609,6 +626,7 @@ export class CutoutRig {
     const legRight = this.partSprites.get('legRight');
     if (legRight) legRight.setTint(color);
     this.footFrostTinted = true;
+    this.appliedFootFrostColor = color;
   }
 
   private applyMultiplicativeTint(color: number): void {
@@ -628,6 +646,7 @@ export class CutoutRig {
       sprite.clearTint();
     }
     this.footFrostTinted = false;
+    this.appliedFootFrostColor = null;
   }
 
   public destroy(): void {
