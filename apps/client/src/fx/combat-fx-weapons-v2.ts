@@ -17,7 +17,7 @@ import {
 } from '../scenes/game-scene/hud-micro-reload-bar.js';
 import type { CombatFxManager } from './combat-fx.js';
 import { CUTOUT_KIT_ATLAS_KEY } from '../art/texture-baker-fx.js';
-import { activateParticle } from './combat-fx-spawners.js';
+import { activateParticle, routeCutoutDirectionalByReach } from './combat-fx-spawners.js';
 import { acquireParticleSlot } from './combat-fx-pools.js';
 import { fillTaperedQuadraticBezier } from './tapered-ribbon-builder.js';
 import {
@@ -581,7 +581,9 @@ export function spawnWallSlamVfx(
     ttlSec: 0.42,
     maxTtlSec: 0.42,
   });
-  fx?.spawnShaderNova?.(x, y, spec.radius, 'fx_sh_geyser_plume');
+  if (fx) {
+    routeCutoutDirectionalByReach(fx, x, y, spec.radius, 0, 'fx_sh_cone_blast', Math.PI);
+  }
   fx?.spawnHitSparks(x, y, 0, { isCrit: true, element: 'burn', count: 7 });
   if (spec.floatingText) {
     fx?.spawnFloatingAlert(x, y - 4, spec.floatingText, spec.textColor);
@@ -938,9 +940,14 @@ export function updateAndDrawWeaponV2Overlays(
       g.arc(s.x, s.y, r, ang - 0.8, ang + 0.8, false);
       g.strokePath();
     } else if (s.kind === 'wall_cracks') {
-      floorG.lineStyle(2.2, 0x1c0a06, alpha * 0.82);
+      // 180° wall-aligned crescent (zero bleeding inside solid wall tiles)
+      floorG.lineStyle(3.2, 0x141019, alpha * 0.85);
+      floorG.beginPath();
+      floorG.arc(s.x, s.y, s.radius * 0.72, -Math.PI / 2, Math.PI / 2, false);
+      floorG.strokePath();
+      floorG.lineStyle(2.0, 0x1c0a06, alpha * 0.82);
       for (let k = 0; k < 5; k += 1) {
-        const a = (k * Math.PI * 2) / 5 + 0.3;
+        const a = -Math.PI / 2 + (k * Math.PI) / 4;
         const len = s.radius * (0.5 + (k % 2) * 0.35);
         floorG.beginPath();
         floorG.moveTo(s.x, s.y);
@@ -949,10 +956,39 @@ export function updateAndDrawWeaponV2Overlays(
       }
     } else if (s.kind === 'ring_out_vortex') {
       const r = Math.max(4, s.radius * (1 - progress * 0.72));
-      floorG.lineStyle(2.0, 0x38bdf8, alpha * 0.82);
-      floorG.strokeCircle(s.x, s.y, r);
-      floorG.lineStyle(1.4, 0xc084fc, alpha * 0.7);
-      floorG.strokeCircle(s.x, s.y, r * 0.62);
+      const innerR = r * 0.32;
+      // Crisp 4-point abyssal star
+      floorG.fillStyle(0x0b090e, alpha * 0.95);
+      for (let k = 0; k < 4; k++) {
+        const a0 = (k * Math.PI) / 2;
+        const a1 = a0 + Math.PI / 4;
+        const a2 = a0 + Math.PI / 2;
+        floorG.fillTriangle(
+          s.x,
+          s.y,
+          s.x + Math.cos(a0) * r,
+          s.y + Math.sin(a0) * r,
+          s.x + Math.cos(a1) * innerR,
+          s.y + Math.sin(a1) * innerR,
+        );
+        floorG.fillTriangle(
+          s.x,
+          s.y,
+          s.x + Math.cos(a1) * innerR,
+          s.y + Math.sin(a1) * innerR,
+          s.x + Math.cos(a2) * r,
+          s.y + Math.sin(a2) * r,
+        );
+      }
+      floorG.lineStyle(1.8, 0xc084fc, alpha * 0.9);
+      for (let k = 0; k < 4; k++) {
+        const a0 = (k * Math.PI) / 2;
+        const a1 = a0 + Math.PI / 4;
+        floorG.beginPath();
+        floorG.moveTo(s.x + Math.cos(a0) * r, s.y + Math.sin(a0) * r);
+        floorG.lineTo(s.x + Math.cos(a1) * innerR, s.y + Math.sin(a1) * innerR);
+        floorG.strokePath();
+      }
     } else if (s.kind === 'totem_lane') {
       const ang = s.angle ?? 0;
       const cos = Math.cos(ang);

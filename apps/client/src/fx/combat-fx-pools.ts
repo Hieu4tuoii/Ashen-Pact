@@ -552,6 +552,7 @@ export function update(this: CombatFxManager, dtSec: number, camView?: Phaser.Ge
         if (j === i) continue;
         const other = this.decalPool[j]!;
         if (!other.active) continue;
+        if (!d.textureKey?.includes('scorch') || !other.textureKey?.includes('scorch')) continue;
         const ospr = other.sprite as unknown as { x?: number; y?: number; alpha?: number };
         const ox = (ospr.x ?? 0) - dx0;
         const oy = (ospr.y ?? 0) - dy0;

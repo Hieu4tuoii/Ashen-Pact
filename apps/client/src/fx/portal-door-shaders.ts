@@ -9,6 +9,11 @@ export const PORTAL_ENTER_DURATION_SEC = 0.3;
 export const DOOR_UNLOCK_DISSOLVE_DURATION_SEC = 0.38;
 export const DOOR_COMBAT_LOCKUP_DURATION_SEC = 0.25;
 
+export const PORTAL_VORTEX_DEFAULTS = {
+  particleCount: 8,
+  rayCount: 3,
+} as const;
+
 export type PortalVisualMode =
   | 'hidden'
   | 'dungeon_inactive'
@@ -709,12 +714,6 @@ export const DOOR_BARRIER_FRAG = [
   '  vec2 i=floor(p), f=fract(p), u=f*f*(3.0-2.0*f);',
   '  return mix(mix(hash21(i),hash21(i+vec2(1.0,0.0)),u.x),mix(hash21(i+vec2(0.0,1.0)),hash21(i+vec2(1.0,1.0)),u.x),u.y);',
   '}',
-  'float hexDist(vec2 p){p=abs(p);return max(dot(p,normalize(vec2(1.0,1.73205))),p.x);}',
-  'float hexGridEdge(vec2 uv){',
-  '  vec2 r=vec2(1.0,1.73205), h=r*0.5, a=mod(uv,r)-h, b=mod(uv-h,r)-h;',
-  '  vec2 gv = dot(a,a) < dot(b,b) ? a : b;',
-  '  return smoothstep(0.11, 0.02, 0.5 - hexDist(gv));',
-  '}',
   'void main(){',
   '  vec4 baseTex = texture2D(uMainSampler, outTexCoord);',
   '  if (baseTex.a < 0.02) { gl_FragColor = vec4(0.0); return; }',
@@ -727,15 +726,24 @@ export const DOOR_BARRIER_FRAG = [
   '  float dissolveField = clamp(n * 0.75 + centerBias * 0.25, 0.0, 1.0);',
   '  if (uDissolveProgress > 0.001 && dissolveField < uDissolveProgress * 1.08) { gl_FragColor = vec4(0.0); return; }',
   '  float dissolveEdge = uDissolveProgress > 0.001 ? smoothstep(0.15, 0.0, dissolveField - uDissolveProgress * 1.08) : 0.0;',
-  '  vec2 hexUv = aspectUv * 1.35 + vec2(0.0, -uTime * 0.55);',
-  '  float hexLine = hexGridEdge(hexUv);',
+  '  float barCoord = uIsVertical > 0.5 ? outTexCoord.y : outTexCoord.x;',
+  '  float barSpan = fract(barCoord * 7.5) - 0.5;',
+  '  float barDist = abs(barSpan);',
+  '  float gothicBarCore = smoothstep(0.18, 0.06, barDist);',
+  '  float gothicBarInk = smoothstep(0.32, 0.16, barDist);',
+  '  float chainCoord = uIsVertical > 0.5 ? outTexCoord.x : outTexCoord.y;',
+  '  float chainDist = abs(chainCoord - 0.5);',
+  '  float lockChain = smoothstep(0.12, 0.03, chainDist) * (0.55 + 0.45 * sin(barCoord * 28.0 + uTime * 2.4));',
   '  float scanWave = 0.5 + 0.5 * sin(outTexCoord.y * 12.0 - uTime * 3.8);',
   '  float borderGlow = smoothstep(0.28, 0.48, max(abs(outTexCoord.x - 0.5), abs(outTexCoord.y - 0.5)));',
-  '  vec3 col = mix(uPrimaryColor * 0.52, uPrimaryColor * 1.18, hexLine * 0.72 + scanWave * 0.28);',
-  '  col = mix(col, baseTex.rgb, 0.42);',
+  '  vec3 inkCol = vec3(0.078, 0.063, 0.098);',
+  '  vec3 ironCol = mix(inkCol, uPrimaryColor * 0.95, 0.72);',
+  '  vec3 col = mix(inkCol, ironCol, gothicBarCore);',
+  '  col = mix(col, uRimColor, lockChain * 0.85);',
+  '  col = mix(col, baseTex.rgb, 0.38 + scanWave * 0.12);',
   '  col += uPrimaryColor * borderGlow * 0.45 + vec3(1.0, 0.78, 0.78) * lockupLeadBeam * 0.95;',
   '  col = mix(col, uRimColor, dissolveEdge);',
-  '  float alpha = clamp(baseTex.a * (0.76 + hexLine * 0.18 + dissolveEdge * 0.24 + lockupLeadBeam * 0.22) * outTint.a, 0.0, 1.0);',
+  '  float alpha = clamp(baseTex.a * (0.76 + gothicBarInk * 0.18 + dissolveEdge * 0.24 + lockupLeadBeam * 0.22) * outTint.a, 0.0, 1.0);',
   '  gl_FragColor = vec4(clamp(col, 0.0, 1.0) * alpha, alpha);',
   '}',
 ].join('\n');

@@ -622,6 +622,7 @@ describe('Round 4 — Entered-Only Minimap Fog-of-War, Fast-Travel Teleportation
       hiddenRoom.discovery = 'discovered';
 
       const spawnShaderNova = vi.fn();
+      const spawnArcaneTeleportFold = vi.fn();
       const spawnChestOpenBurst = vi.fn();
       const addTrauma = vi.fn();
       const spawnFloatingAlert = vi.fn();
@@ -639,6 +640,7 @@ describe('Round 4 — Entered-Only Minimap Fog-of-War, Fast-Travel Teleportation
         lastMinimapHash: 'cached',
         fx: {
           spawnShaderNova,
+          spawnArcaneTeleportFold,
           spawnChestOpenBurst,
           addTrauma,
           spawnFloatingAlert,
@@ -674,16 +676,14 @@ describe('Round 4 — Entered-Only Minimap Fog-of-War, Fast-Travel Teleportation
       expect(roomSend).toHaveBeenCalledWith('teleport_room', { roomId: neighborRoom.id });
 
       // Departure + Arrival VFX calls
-      expect(spawnShaderNova).toHaveBeenCalledTimes(2);
-      expect(spawnShaderNova.mock.calls[0]?.[3]).toBe('fx_sh_arcane_sigil');
-      expect(spawnShaderNova.mock.calls[1]?.[3]).toBe('fx_sh_arcane_sigil');
+      expect(spawnArcaneTeleportFold).toHaveBeenCalledTimes(2);
       expect(spawnChestOpenBurst).toHaveBeenCalledWith(sim.player.x, sim.player.y, 'rare');
       expect(spawnTransientLight).toHaveBeenCalledTimes(2);
       expect(addTrauma).toHaveBeenCalledWith(0.2);
       expect(spawnFloatingAlert).toHaveBeenCalledWith(
         sim.player.x,
         sim.player.y - 18,
-        '⚡ DỊCH CHUYỂN!',
+        'DỊCH CHUYỂN!',
         PALETTE.CYAN_FROST,
       );
 

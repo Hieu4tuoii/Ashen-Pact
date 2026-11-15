@@ -1,3 +1,4 @@
+import { i18n, WorldSim } from '@ashen-pact/shared';
 import { vi } from 'vitest';
 import { CombatFxManager, type PooledParticle } from '../../src/fx/combat-fx.js';
 
@@ -182,5 +183,80 @@ export function createTestCombatFx(options?: { localPlayerPos?: { x: number; y: 
   if (options?.localPlayerPos) {
     fx.setLocalPlayerPosition(options.localPlayerPos.x, options.localPlayerPos.y);
   }
+  for (let i = 0; i < 32; i++) {
+    const sprite = createMockSprite();
+    fx.decalPool.push({
+      sprite: sprite as never,
+      textureKey: 'fx_decal_scorch',
+      active: false,
+    });
+  }
   return { fx };
+}
+
+export function createTeleportTestScene(): {
+  scene: Record<string, unknown>;
+  fx: Record<string, unknown>;
+  sim: WorldSim;
+} {
+  i18n.setLocale('vi');
+  const sim = new WorldSim({ seed: 7777, biome: 1 });
+  sim.enterRoom(sim.dungeon.startRoomId);
+  const startRoom = sim.getCurrentRoom()!;
+  startRoom.cleared = true;
+  sim.enemies.length = 0;
+
+  if (sim.currentRoomId === 2) {
+    const otherRoom = sim.dungeon.rooms.find((r) => r && r.id !== 2);
+    if (otherRoom) {
+      sim.enterRoom(otherRoom.id);
+      const cur = sim.getCurrentRoom();
+      if (cur) cur.cleared = true;
+      sim.enemies.length = 0;
+    }
+  }
+
+  if (sim.dungeon.rooms[2]) {
+    sim.dungeon.rooms[2].discovery = 'visited';
+    sim.dungeon.rooms[2].cleared = true;
+  }
+  if (sim.doors) {
+    for (const d of sim.doors) {
+      d.locked = false;
+    }
+  }
+
+  const fx: Record<string, unknown> = {
+    lastTeleportFoldPos: undefined as { x: number; y: number } | undefined,
+    lastFloatingAlertText: undefined as string | undefined,
+    spawnArcaneTeleportFold: vi.fn((x: number, y: number) => {
+      fx.lastTeleportFoldPos = { x, y };
+    }),
+    spawnFloatingAlert: vi.fn((x: number, y: number, text: string) => {
+      fx.lastFloatingAlertText = text;
+    }),
+    resetRoomTransientState: vi.fn(),
+    spawnChestOpenBurst: vi.fn(),
+    addTrauma: vi.fn(),
+    spawnShaderNova: vi.fn(),
+  };
+
+  const scene: Record<string, unknown> = {
+    transport: {
+      getSim: () => sim,
+      consumeEvents: () => [],
+    },
+    fx,
+    lighting: {
+      spawnTransientLight: vi.fn(),
+    },
+    fullMapOpen: true,
+    triggerIrisTransition: vi.fn(),
+    roomTeleportAnimTimer: 0,
+    roomTeleportAnimDuration: 0.28,
+    lastMinimapHash: '',
+    syncArenaTilesWithMapRevision: vi.fn(),
+  };
+
+  return { scene, fx, sim };
 }

@@ -305,10 +305,13 @@ function drawCryoShatterSpireOverlays(g: Gfx, floorG: Gfx, sim: WorldSim, tSec: 
 
     floorG.fillStyle(COL_FROST_CYAN, 0.06 * aMul);
     floorG.fillCircle(prop.x, prop.y, baseR + 4);
-    floorG.lineStyle(2.8, COL_INK, 0.72 * aMul);
-    floorG.strokeCircle(prop.x, prop.y, baseR);
-    floorG.lineStyle(1.6, COL_ICE_WHITE, 0.9 * aMul);
-    floorG.strokeCircle(prop.x, prop.y, baseR);
+    // prop_cryo_spire (26x38px faceted cryo spire attachment)
+    floorG.fillStyle(COL_INK, 0.75 * aMul);
+    floorG.fillTriangle(prop.x, prop.y - 19, prop.x - 13, prop.y + 19, prop.x + 13, prop.y + 19);
+    floorG.fillStyle(COL_FROST_CYAN, 0.9 * aMul);
+    floorG.fillTriangle(prop.x, prop.y - 17, prop.x - 11, prop.y + 17, prop.x + 11, prop.y + 17);
+    floorG.fillStyle(COL_ICE_WHITE, 0.95 * aMul);
+    floorG.fillTriangle(prop.x, prop.y - 14, prop.x - 4, prop.y + 14, prop.x + 4, prop.y + 14);
 
     // 4 cardinal diamond ice crystal shards around spire base (1:1 circle)
     for (let k = 0; k < 4; k++) {

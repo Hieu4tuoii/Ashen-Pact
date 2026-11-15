@@ -16,6 +16,7 @@ import { PALETTE } from '../art/palette.js';
 import { zzfx } from '../audio/zzfx.js';
 import type { CombatFxManager } from './combat-fx.js';
 import { routeCutoutBurstByRadius } from './combat-fx-spawners.js';
+import { fillTaperedArcRibbon } from './tapered-ribbon-builder.js';
 import {
   type Batch2SceneContext,
   type TransientWeaponV2Shape,
@@ -260,16 +261,62 @@ export function drawP1CActiveOverlays(
 
     if (prop.kind === 'pneumatic_press') {
       const pState = prop.pressState ?? 'idle';
+      const r = PNEUMATIC_PRESS_CRUSH_RADIUS;
+      // 4 industrial #141019 + #F59E0B L-brackets on depth 16.0 (floorG)
+      const bracketArm = 8;
+      const corners = [
+        [-r, -r, 1, 1],
+        [r, -r, -1, 1],
+        [-r, r, 1, -1],
+        [r, r, -1, -1],
+      ];
+      for (let c = 0; c < corners.length; c++) {
+        const corner = corners[c]!;
+        const cx = corner[0]!;
+        const cy = corner[1]!;
+        const dx = corner[2]!;
+        const dy = corner[3]!;
+        const bx = prop.x + cx;
+        const by = prop.y + cy;
+        floorG.lineStyle(3.8, 0x141019, 0.85);
+        floorG.beginPath();
+        floorG.moveTo(bx + dx * bracketArm, by);
+        floorG.lineTo(bx, by);
+        floorG.lineTo(bx, by + dy * bracketArm);
+        floorG.strokePath();
+        floorG.lineStyle(2.0, 0xf59e0b, 0.95);
+        floorG.beginPath();
+        floorG.moveTo(bx + dx * bracketArm, by);
+        floorG.lineTo(bx, by);
+        floorG.lineTo(bx, by + dy * bracketArm);
+        floorG.strokePath();
+      }
+
       if (pState === 'windup') {
         const t = clamp(1 - (prop.pressTimer ?? 0) / 0.35, 0, 1);
         floorG.fillStyle(0xe84545, 0.05 + t * 0.03);
-        floorG.fillCircle(prop.x, prop.y, PNEUMATIC_PRESS_CRUSH_RADIUS);
+        floorG.fillCircle(prop.x, prop.y, r);
         floorG.lineStyle(4.2, 0x141019, 0.72);
-        floorG.strokeCircle(prop.x, prop.y, PNEUMATIC_PRESS_CRUSH_RADIUS);
+        floorG.strokeCircle(prop.x, prop.y, r);
         floorG.lineStyle(2.6, 0xe84545, 0.94);
-        floorG.strokeCircle(prop.x, prop.y, PNEUMATIC_PRESS_CRUSH_RADIUS);
+        floorG.strokeCircle(prop.x, prop.y, r);
         floorG.lineStyle(2.4, 0xfacc15, 0.92);
-        floorG.strokeCircle(prop.x, prop.y, PNEUMATIC_PRESS_CRUSH_RADIUS * (1 - t * 0.38));
+        floorG.strokeCircle(prop.x, prop.y, r * (1 - t * 0.38));
+        // 4 cardinal steam puffs
+        const steamDist = r * (0.8 + t * 0.35);
+        const cardinals = [
+          [0, -1],
+          [1, 0],
+          [0, 1],
+          [-1, 0],
+        ];
+        for (let cd = 0; cd < cardinals.length; cd++) {
+          const card = cardinals[cd]!;
+          const cdx = card[0]!;
+          const cdy = card[1]!;
+          g.fillStyle(0xfffdf5, 0.35 * (1 - t * 0.5));
+          g.fillCircle(prop.x + cdx * steamDist, prop.y + cdy * steamDist, 3.5 + t * 2.5);
+        }
       } else if (pState === 'cooldown') {
         floorG.lineStyle(1.6, 0x64748b, 0.45);
         floorG.strokeCircle(prop.x, prop.y, PNEUMATIC_PRESS_SENSOR_RADIUS);
@@ -278,89 +325,58 @@ export function drawP1CActiveOverlays(
         floorG.lineStyle(1.8, 0xf97316, pulse);
         floorG.strokeCircle(prop.x, prop.y, PNEUMATIC_PRESS_SENSOR_RADIUS);
       }
+    } else if (prop.kind === 'slag_crucible') {
+      // 3-phase tilt/pour/basalt-crust rim at depth 16.0
+      floorG.lineStyle(3.8, 0x141019, 0.85);
+      floorG.beginPath();
+      floorG.arc(prop.x, prop.y + 2, 14, 0, Math.PI * 2, false);
+      floorG.strokePath();
+      floorG.lineStyle(2.0, 0xf97316, 0.92);
+      floorG.beginPath();
+      floorG.arc(prop.x, prop.y + 2, 10, 0, Math.PI * 2, false);
+      floorG.strokePath();
     } else if (prop.kind === 'forge_blast_shield' && prop.coverState === 'sliding') {
       const ang = Math.atan2(prop.vy ?? 0, prop.vx ?? 1);
       const r = FORGE_BLAST_SHIELD_WAVE_HALF_WIDTH;
-      const segs = 10;
-      const halfSpan = 1.2;
-      // 1. Parabolic tapered Chiaroscuro flame crescent (thick prow -> razor swept-back wingtips)
-      for (let pass = 0; pass < 3; pass++) {
-        for (let k = 0; k < segs; k++) {
-          const u0 = (k / segs) * 2 - 1;
-          const u1 = ((k + 1) / segs) * 2 - 1;
-          const um = (u0 + u1) * 0.5;
-          if (pass === 2 && Math.abs(um) > 0.82) continue;
-          const taper = Math.pow(Math.max(0.16, Math.cos(um * Math.PI * 0.45)), 0.78);
-          const pad = pass === 0 ? 0.045 : 0.025;
-          const a0 = ang + u0 * halfSpan - pad;
-          const a1 = ang + u1 * halfSpan + pad;
-          const r0 = r - u0 * u0 * 5.5;
-          const r1 = r - u1 * u1 * 5.5;
-          if (pass === 0) {
-            g.lineStyle(13.8 * taper, 0x141019, 0.86);
-          } else if (pass === 1) {
-            g.lineStyle(8.8 * taper, 0xf97316, 0.94);
-          } else {
-            g.lineStyle(4.6 * taper, 0xfacc15, 0.96);
-          }
-          g.beginPath();
-          g.moveTo(prop.x + Math.cos(a0) * r0, prop.y + Math.sin(a0) * r0);
-          g.lineTo(prop.x + Math.cos(a1) * r1, prop.y + Math.sin(a1) * r1);
-          g.strokePath();
-        }
-      }
-      // 2. Swept-back flickering flame fangs / tongues cased in #141019 ink
-      for (let j = -3; j <= 3; j++) {
-        const u = j / 3;
-        const fangAng = ang + u * 0.96;
-        const baseR = r - u * u * 5.2;
-        const flick = 0.85 + 0.28 * Math.sin(clockSec * 22 + prop.id * 1.7 + j * 2.15);
-        const fangLen = (15.5 - Math.abs(j) * 2.2) * flick;
-        const bx = prop.x + Math.cos(fangAng) * baseR;
-        const by = prop.y + Math.sin(fangAng) * baseR;
-        const tx = bx - Math.cos(ang) * fangLen * 0.65 - Math.cos(fangAng) * fangLen * 0.45;
-        const ty = by - Math.sin(ang) * fangLen * 0.65 - Math.sin(fangAng) * fangLen * 0.45;
-        g.lineStyle(5.2, 0x141019, 0.8);
-        g.beginPath();
-        g.moveTo(bx, by);
-        g.lineTo(tx, ty);
-        g.strokePath();
-        g.lineStyle(2.8, j % 2 === 0 ? 0xf97316 : 0xfacc15, 0.94);
-        g.beginPath();
-        g.moveTo(bx, by);
-        g.lineTo(tx, ty);
-        g.strokePath();
-      }
-      // 3. Incandescent #FFFDF5 leading shock-crest arc + trailing magma cinders
+      // fillTaperedArcRibbon heat wave at depth 26.6 (g)
+      fillTaperedArcRibbon(g, prop.x, prop.y, r, ang - 0.95, ang + 0.95, 6.0, 0xf97316, 0.94);
+      fillTaperedArcRibbon(g, prop.x, prop.y, r - 2, ang - 0.72, ang + 0.72, 3.2, 0xfacc15, 0.96);
+      // Incandescent leading shock-crest arc
       g.lineStyle(2.5, 0xfffdf5, 0.98);
       g.beginPath();
       g.arc(prop.x, prop.y, r + 0.8, ang - 0.82, ang + 0.82, false);
       g.strokePath();
-      for (let c = -1; c <= 1; c += 2) {
-        const cAng = ang + c * 0.68;
-        const cR = r - 13;
-        const cx = prop.x + Math.cos(cAng) * cR;
-        const cy = prop.y + Math.sin(cAng) * cR;
-        g.fillStyle(0x141019, 0.84);
-        g.fillCircle(cx, cy, 3.6);
-        g.fillStyle(0xfacc15, 0.95);
-        g.fillCircle(cx, cy, 2.0);
-      }
-    } else if (
-      (prop.kind === 'sliding_ice_block' || prop.kind === 'glacial_barricade') &&
-      prop.coverState === 'sliding'
-    ) {
-      const ang = Math.atan2(prop.vy ?? 0, prop.vx ?? 1);
-      const tailX = prop.x - Math.cos(ang) * 28;
-      const tailY = prop.y - Math.sin(ang) * 28;
-      floorG.lineStyle(6.0, 0x141019, 0.55);
+      // Single V-groove floor scrape (depth 16.0 floorG)
+      const tailX = prop.x - Math.cos(ang) * 32;
+      const tailY = prop.y - Math.sin(ang) * 32;
+      floorG.lineStyle(4.5, 0x141019, 0.65);
       floorG.beginPath();
-      floorG.moveTo(prop.x, prop.y);
+      floorG.moveTo(prop.x - Math.cos(ang) * 6, prop.y - Math.sin(ang) * 6);
       floorG.lineTo(tailX, tailY);
       floorG.strokePath();
-      floorG.lineStyle(3.4, 0x67e8f9, 0.85);
+      floorG.lineStyle(2.0, 0xf97316, 0.85);
       floorG.beginPath();
-      floorG.moveTo(prop.x, prop.y);
+      floorG.moveTo(prop.x - Math.cos(ang) * 6, prop.y - Math.sin(ang) * 6);
+      floorG.lineTo(tailX, tailY);
+      floorG.strokePath();
+    } else if (
+      (prop.kind === 'sliding_ice_block' ||
+        prop.kind === 'glacial_barricade' ||
+        prop.kind === 'moss_table') &&
+      prop.coverState === 'sliding'
+    ) {
+      // Unified single V-groove floor scrape (depth 16.0 floorG)
+      const ang = Math.atan2(prop.vy ?? 0, prop.vx ?? 1);
+      const tailX = prop.x - Math.cos(ang) * 32;
+      const tailY = prop.y - Math.sin(ang) * 32;
+      floorG.lineStyle(4.5, 0x141019, 0.65);
+      floorG.beginPath();
+      floorG.moveTo(prop.x - Math.cos(ang) * 6, prop.y - Math.sin(ang) * 6);
+      floorG.lineTo(tailX, tailY);
+      floorG.strokePath();
+      floorG.lineStyle(2.0, prop.kind.includes('ice') ? 0x67e8f9 : 0x2c2218, 0.85);
+      floorG.beginPath();
+      floorG.moveTo(prop.x - Math.cos(ang) * 6, prop.y - Math.sin(ang) * 6);
       floorG.lineTo(tailX, tailY);
       floorG.strokePath();
     }

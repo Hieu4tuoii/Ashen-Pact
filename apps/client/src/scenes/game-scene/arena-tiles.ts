@@ -1452,10 +1452,7 @@ export function teleportToRoomImpl(this: GameScene, targetRoomId: number): boole
 
   const oldX = sim.player.x;
   const oldY = sim.player.y;
-  this.fx?.spawnShaderNova?.(oldX, oldY, 72, 'fx_sh_arcane_sigil', {
-    tint: 0x38bdf8,
-    ttl: 0.26,
-  });
+  this.fx?.spawnArcaneTeleportFold?.(oldX, oldY);
   this.lighting?.spawnTransientLight?.(oldX, oldY, 140, PALETTE.CYAN_FROST, 0.9, 0.3);
 
   if (this.fullMapOpen) {
@@ -1490,10 +1487,7 @@ export function teleportToRoomImpl(this: GameScene, targetRoomId: number): boole
   }
   this.roomTeleportAnimTimer = this.roomTeleportAnimDuration ?? 0.28;
   zzfx.play('portal_enter');
-  this.fx?.spawnShaderNova?.(sim.player.x, sim.player.y, 88, 'fx_sh_arcane_sigil', {
-    tint: 0x38bdf8,
-    ttl: 0.34,
-  });
+  this.fx?.spawnArcaneTeleportFold?.(sim.player.x, sim.player.y);
   this.fx?.spawnChestOpenBurst?.(sim.player.x, sim.player.y, 'rare');
   this.lighting?.spawnTransientLight?.(
     sim.player.x,
@@ -1507,7 +1501,7 @@ export function teleportToRoomImpl(this: GameScene, targetRoomId: number): boole
   this.fx?.spawnFloatingAlert?.(
     sim.player.x,
     sim.player.y - 18,
-    i18n.getLocale() === 'en' ? '⚡ TELEPORT!' : '⚡ DỊCH CHUYỂN!',
+    i18n.getLocale() === 'en' ? 'TELEPORT!' : 'DỊCH CHUYỂN!',
     PALETTE.CYAN_FROST,
   );
   return true;

@@ -1,7 +1,64 @@
 import { ENEMIES, WorldSim } from '@ashen-pact/shared';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+vi.mock('phaser', () => {
+  class MockPostFXPipeline {
+    public game: unknown;
+    public name: string;
+    constructor(config: { game: unknown; name: string }) {
+      this.game = config.game;
+      this.name = config.name;
+    }
+    set1f() {}
+    set3f() {}
+  }
+  class MockSinglePipeline {
+    public config: unknown;
+    public vertexCount = 0;
+    constructor(config: unknown) {
+      this.config = config;
+    }
+    flush() {
+      this.vertexCount = 0;
+    }
+    set1f() {}
+    set3f() {}
+  }
+  class MockWebGLRenderer {
+    public pipelines = {
+      has: vi.fn(() => true),
+      addPostPipeline: vi.fn(),
+    };
+  }
+  class MockScene {
+    constructor(_config?: unknown) {}
+  }
+  const PhaserMock = {
+    Scene: MockScene,
+    BlendModes: { NORMAL: 0, ADD: 1, MULTIPLY: 2, SCREEN: 3 },
+    Scenes: { Events: { SHUTDOWN: 'shutdown' } },
+    Math: {
+      Clamp: (v: number, min: number, max: number) => Math.max(min, Math.min(max, v)),
+    },
+    Renderer: {
+      WebGL: {
+        WebGLRenderer: MockWebGLRenderer,
+        Pipelines: {
+          PostFXPipeline: MockPostFXPipeline,
+          SinglePipeline: MockSinglePipeline,
+        },
+      },
+    },
+  };
+  return { default: PhaserMock, ...PhaserMock };
+});
+
 import { KRYSSA_CLONE_RIG_DEF } from '../src/art/rig-defs-biome2-boss.js';
 import { TextureBaker } from '../src/art/texture-baker.js';
+import { spawnPropBreakBurst } from '../src/fx/combat-fx.js';
+import { PORTAL_VORTEX_DEFAULTS } from '../src/fx/portal-door-shaders.js';
+import { teleportToRoomImpl } from '../src/scenes/game-scene/arena-tiles.js';
+import { createTeleportTestScene, createTestCombatFx } from './helpers/test-combat-fx.js';
 import {
   drawP1CActiveOverlays,
   getWeaponV2OverlayState,
@@ -25,6 +82,7 @@ function createMockGraphics() {
     strokeCircle: () => calls.push('strokeCircle'),
     fillCircle: () => calls.push('fillCircle'),
     arc: () => calls.push('arc'),
+    fillTriangle: () => calls.push('fillTriangle'),
   };
 }
 
@@ -149,5 +207,24 @@ describe('AP2 Phase P1C.4 — Biome 2 & Biome 3 Procedural Prop Texture Keys & C
     expect(ENEMIES.kryssa_clone.nameVi).toBe('Ảo Ảnh Sương Giá Kryssa');
     expect(KRYSSA_CLONE_RIG_DEF.nameVi).toBe('Ảo Ảnh Sương Giá Kryssa');
     expect(KRYSSA_CLONE_RIG_DEF.labelVi).toBe('Ảo Ảnh Sương Giá Kryssa');
+  });
+
+  it('routes prop breaks to 4 material shard decals (scorch only on explosive_barrel / coal_bomb) and invokes spawnCrackedWallBurst on cracked_wall_broken', () => {
+    const { fx } = createTestCombatFx();
+    spawnPropBreakBurst(fx, 'crate', 100, 100);
+    expect(fx.decalPool.some((d) => d.active && d.textureKey.includes('fx_wood_shard'))).toBe(true);
+    expect(fx.decalPool.some((d) => d.active && d.textureKey === 'fx_decal_scorch')).toBe(false);
+
+    spawnPropBreakBurst(fx, 'explosive_barrel', 200, 200);
+    expect(fx.decalPool.some((d) => d.active && d.textureKey === 'fx_decal_scorch')).toBe(true);
+  });
+
+  it('replaces shockwave_spawned teleport spoof with spawnArcaneTeleportFold + clean "DỊCH CHUYỂN!" while keeping Portal shader constants intact', () => {
+    const { scene, fx } = createTeleportTestScene();
+    teleportToRoomImpl.call(scene as never, 2);
+    expect(fx.lastTeleportFoldPos).toBeDefined();
+    expect(fx.lastFloatingAlertText).toBe('DỊCH CHUYỂN!');
+    expect(PORTAL_VORTEX_DEFAULTS.particleCount).toBe(8);
+    expect(PORTAL_VORTEX_DEFAULTS.rayCount).toBe(3);
   });
 });

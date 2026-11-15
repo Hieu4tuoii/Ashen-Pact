@@ -424,8 +424,6 @@ function drawCausticSporePodOverlays(g: Gfx, floorG: Gfx, sim: WorldSim, tSec: n
     const r = prop.radius + 4.5;
     const pulse = Math.sin(tSec * 7.5 + prop.id) * 1.4;
     fillDisc(floorG, prop.x, prop.y, r + 4 + pulse, COL_LIME_ACID, 0.06);
-    strokeRing(floorG, prop.x, prop.y, r + pulse * 0.5, 3.4, COL_INK, 0.82);
-    strokeRing(floorG, prop.x, prop.y, r + pulse * 0.5, 2.0, COL_LIME_ACID, 0.94);
 
     for (let b = 0; b < 4; b++) {
       const ang = tSec * 2.8 + prop.id * 0.9 + (b * Math.PI) / 2;

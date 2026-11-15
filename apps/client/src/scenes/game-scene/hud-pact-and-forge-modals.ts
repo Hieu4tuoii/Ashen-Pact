@@ -16,6 +16,7 @@ import {
 } from '@ashen-pact/shared';
 import { hexToNum, PALETTE } from '../../art/palette.js';
 import { zzfx } from '../../audio/zzfx.js';
+import { spawnCrackedWallBurst } from '../../fx/combat-fx.js';
 import { graphicsSettings } from '../../ui/graphics-settings.js';
 import type { GameScene } from '../GameScene.js';
 
@@ -655,29 +656,32 @@ export function drawWorldWeaponSalvageRing(
 
   const ix = state.targetItem.x;
   const iy = state.targetItem.y;
-  const pulse = 0.5 + 0.5 * Math.sin(clockSec * 6);
+  // 3-jaw mechanical clamp (clamps inward from 24px to 14px with progress)
+  const jawRadius = 24 - state.progress * 10;
+  for (let j = 0; j < 3; j++) {
+    const ja = -Math.PI / 2 + (j * Math.PI * 2) / 3;
+    const jx = ix + Math.cos(ja) * jawRadius;
+    const jy = iy + Math.sin(ja) * jawRadius;
+    const px = -Math.sin(ja) * 6;
+    const py = Math.cos(ja) * 6;
+    // Outer #141019 ink casing
+    g.lineStyle(4.2, 0x141019, 0.9);
+    g.beginPath();
+    g.moveTo(jx + px, jy + py);
+    g.lineTo(jx - Math.cos(ja) * 4, jy - Math.sin(ja) * 4);
+    g.lineTo(jx - px, jy - py);
+    g.strokePath();
+    // Inner solar gold / flame orange mechanical tooth
+    g.lineStyle(2.2, state.progress > 0 ? NUM_SOLAR_GOLD : NUM_FLAME_ORANGE, 0.95);
+    g.beginPath();
+    g.moveTo(jx + px, jy + py);
+    g.lineTo(jx - Math.cos(ja) * 4, jy - Math.sin(ja) * 4);
+    g.lineTo(jx - px, jy - py);
+    g.strokePath();
+  }
   if (state.progress <= 0) {
-    g.lineStyle(1.2, NUM_SOLAR_GOLD, 0.28 + pulse * 0.2);
-    g.strokeCircle(ix, iy, 18);
     return;
   }
-
-  const radius = 24;
-  const startAngle = -Math.PI / 2;
-  const endAngle = startAngle + Math.PI * 2 * state.progress;
-
-  g.fillStyle(NUM_SOLAR_GOLD, 0.12 + state.progress * 0.22);
-  g.fillCircle(ix, iy, 14 + state.progress * 10);
-  g.lineStyle(5, 0x090d16, 0.9);
-  g.strokeCircle(ix, iy, radius);
-  g.lineStyle(6.5, NUM_FLAME_ORANGE, 0.55);
-  g.beginPath();
-  g.arc(ix, iy, radius, startAngle, endAngle, false);
-  g.strokePath();
-  g.lineStyle(3.5, NUM_SOLAR_GOLD, 0.98);
-  g.beginPath();
-  g.arc(ix, iy, radius, startAngle, endAngle, false);
-  g.strokePath();
 
   const barW = 42;
   const barH = 6;
@@ -707,9 +711,9 @@ export function handleP2AForgeAndSalvageSimEvent(
   const isEn = i18n.getLocale() === 'en';
   if (ev.kind === 'cracked_wall_broken') {
     if (!isStress) {
-      scene.fx?.spawnExplosionBurst(ev.x, ev.y, 44);
-      scene.fx?.spawnHitSparks(ev.x, ev.y, Math.PI, { hitWall: true });
-      scene.fx?.addTrauma(0.28);
+      if (scene.fx) {
+        spawnCrackedWallBurst(scene.fx, ev.x, ev.y);
+      }
       scene.lighting?.spawnTransientLight(ev.x, ev.y, 140, PALETTE.SOLAR_GOLD, 0.95, 0.4);
       scene.fx?.spawnFloatingAlert(ev.x, ev.y - 16, isEn ? 'SECRET PASSAGE!' : 'LỐI ĐI BÍ MẬT!');
     }

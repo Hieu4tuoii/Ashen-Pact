@@ -345,6 +345,8 @@ export class CombatFxManager {
           : 'fx_decal_splatter';
 
     slot.active = true;
+    (slot as { age?: number }).age = 0;
+    (slot as { ttl?: number }).ttl = 6.0;
     slot.textureKey = texKey;
     slot.sprite.setTexture(texKey);
     slot.sprite.setPosition(x, y);
@@ -430,39 +432,16 @@ export class CombatFxManager {
     }
   }
 
-  public spawnPropBreakBurst(kind: PropKind, x: number, y: number): void {
-    const invBake = 1 / TextureBaker.getBakeScale();
-    if (kind === 'explosive_barrel') {
-      this.spawnFloorDecal('scorch', x, y, 1.25);
-      return;
-    }
+  public spawnPropBreakBurst(kind: PropKind | string, x: number, y: number): void {
+    spawnPropBreakBurst(this, kind, x, y);
+  }
 
-    this.spawnFloorDecal('scorch', x, y, 0.65);
-    const count = 8;
-    for (let i = 0; i < count; i++) {
-      const p = this.acquireParticleSlot();
-      if (!p) break;
-      const ang = (i / count) * Math.PI * 2 + (getClientFreezeRandom()() - 0.5) * 0.4;
-      const spd = 65 + getClientFreezeRandom()() * 85;
-      activateParticle(p, {
-        textureKey: 'fx_wood_shard',
-        x,
-        y,
-        vx: Math.cos(ang) * spd,
-        vy: Math.sin(ang) * spd - 30,
-        vr: (getClientFreezeRandom()() - 0.5) * 16,
-        ttl: 0.45,
-        startScale: invBake * 1.05,
-        endScale: invBake * 0.45,
-        startAlpha: 1,
-        gravityY: 200,
-        damping: 4,
-        rotation: ang,
-        tint: kind === 'clay_vase' ? hexToNum(PALETTE.COPPER_LIGHT) : null,
-        blendMode: 'NORMAL',
-        depth: 38,
-      });
-    }
+  public spawnCrackedWallBurst(x: number, y: number): void {
+    spawnCrackedWallBurst(this, x, y);
+  }
+
+  public spawnArcaneTeleportFold(x: number, y: number): void {
+    spawnArcaneTeleportFold(this, x, y);
   }
 
   public spawnStatusBurst(
@@ -1046,5 +1025,214 @@ export class CombatFxManager {
 
   public acquireDamageSlot(targetX?: number, targetY?: number): PooledDamageText | null {
     return acquireDamageSlot.call(this, targetX, targetY);
+  }
+}
+
+export function resolvePropMaterialShardKey(propKind: PropKind | string): {
+  isScorch: boolean;
+  shardKey:
+    | 'fx_wood_shard'
+    | 'fx_ceramic_shard'
+    | 'fx_stone_chip'
+    | 'fx_ice_shard_decal'
+    | 'fx_decal_scorch';
+} {
+  const k = String(propKind).toLowerCase();
+  if (k === 'explosive_barrel' || k === 'coal_bomb') {
+    return { isScorch: true, shardKey: 'fx_decal_scorch' };
+  }
+  if (
+    k.includes('wood') ||
+    k.includes('crate') ||
+    k.includes('moss_table') ||
+    k.includes('rotten_totem')
+  ) {
+    return { isScorch: false, shardKey: 'fx_wood_shard' };
+  }
+  if (
+    k.includes('vase') ||
+    k.includes('clay') ||
+    k.includes('spore_pod') ||
+    k.includes('caustic') ||
+    k.includes('volatile')
+  ) {
+    return { isScorch: false, shardKey: 'fx_ceramic_shard' };
+  }
+  if (
+    k.includes('ice') ||
+    k.includes('glacial') ||
+    k.includes('cryo') ||
+    k.includes('crystal')
+  ) {
+    return { isScorch: false, shardKey: 'fx_ice_shard_decal' };
+  }
+  return { isScorch: false, shardKey: 'fx_stone_chip' };
+}
+
+export function spawnPropBreakBurst(
+  fx: CombatFxManager,
+  propKind: PropKind | string,
+  x: number,
+  y: number,
+): void {
+  const { isScorch, shardKey } = resolvePropMaterialShardKey(propKind);
+  if (isScorch) {
+    fx.spawnFloorDecal('scorch', x, y, 1.25);
+    fx.spawnExplosionBurst?.(x, y, 48, PALETTE.FLAME_ORANGE);
+    fx.addTrauma?.(0.24);
+    return;
+  }
+
+  const maxAllowed = graphicsSettings.getBudget().maxDecals;
+  if (maxAllowed > 0 && fx.decalPool.length > 0) {
+    const shardCount = 3;
+    for (let s = 0; s < shardCount; s++) {
+      const idx = fx.decalWriteCursor % Math.min(maxAllowed, fx.decalPool.length);
+      fx.decalWriteCursor += 1;
+      const slot = fx.decalPool[idx];
+      if (!slot) continue;
+      const offDist = s === 0 ? 0 : 5 + s * 4;
+      const offAng = (s * 2.1) % (Math.PI * 2);
+      const sx = x + Math.cos(offAng) * offDist;
+      const sy = y + Math.sin(offAng) * offDist;
+      slot.active = true;
+      slot.textureKey = shardKey;
+      (slot as { age?: number }).age = 0;
+      (slot as { ttl?: number }).ttl = 6.0;
+      slot.sprite.setTexture('fx_cutout_kit_512', shardKey);
+      slot.sprite.setPosition(sx, sy);
+      slot.sprite.setRotation(offAng + s * 0.7);
+      slot.sprite.setScale(1 / 3);
+      slot.sprite.setAlpha(0.32);
+      slot.sprite.setDepth(6);
+      slot.sprite.setVisible(true);
+      fx.totalDecalsSpawned += 1;
+      fx.activeDecalCount = Math.min(maxAllowed, fx.activeDecalCount + 1);
+    }
+  }
+
+  const count = 8;
+  for (let i = 0; i < count; i++) {
+    const p = fx.acquireParticleSlot();
+    if (!p) break;
+    const ang = (i / count) * Math.PI * 2 + (getClientFreezeRandom()() - 0.5) * 0.4;
+    const spd = 65 + getClientFreezeRandom()() * 85;
+    activateParticle(p, {
+      textureKey: shardKey,
+      x,
+      y,
+      vx: Math.cos(ang) * spd,
+      vy: Math.sin(ang) * spd - 30,
+      vr: (getClientFreezeRandom()() - 0.5) * 16,
+      ttl: 0.45,
+      startScale: (1 / 3) * 1.05,
+      endScale: (1 / 3) * 0.45,
+      startAlpha: 1,
+      gravityY: 200,
+      damping: 4,
+      rotation: ang,
+      blendMode: 'NORMAL',
+      depth: 38,
+    });
+  }
+}
+
+export function spawnCrackedWallBurst(
+  fx: CombatFxManager,
+  x: number,
+  y: number,
+): void {
+  const maxAllowed = graphicsSettings.getBudget().maxDecals;
+  if (maxAllowed > 0 && fx.decalPool.length > 0) {
+    const shardCount = 4;
+    for (let s = 0; s < shardCount; s++) {
+      const idx = fx.decalWriteCursor % Math.min(maxAllowed, fx.decalPool.length);
+      fx.decalWriteCursor += 1;
+      const slot = fx.decalPool[idx];
+      if (!slot) continue;
+      const offDist = s === 0 ? 0 : 6 + s * 4;
+      const offAng = (s * 1.8) % (Math.PI * 2);
+      const sx = x + Math.cos(offAng) * offDist;
+      const sy = y + Math.sin(offAng) * offDist;
+      slot.active = true;
+      slot.textureKey = 'fx_stone_chip';
+      (slot as { age?: number }).age = 0;
+      (slot as { ttl?: number }).ttl = 6.0;
+      slot.sprite.setTexture('fx_cutout_kit_512', 'fx_stone_chip');
+      slot.sprite.setPosition(sx, sy);
+      slot.sprite.setRotation(offAng);
+      slot.sprite.setScale(1 / 3);
+      slot.sprite.setAlpha(0.32);
+      slot.sprite.setDepth(6);
+      slot.sprite.setVisible(true);
+      fx.totalDecalsSpawned += 1;
+      fx.activeDecalCount = Math.min(maxAllowed, fx.activeDecalCount + 1);
+    }
+  }
+
+  const count = 8;
+  for (let i = 0; i < count; i++) {
+    const p = fx.acquireParticleSlot();
+    if (!p) break;
+    const ang = (i / count) * Math.PI * 2 + (getClientFreezeRandom()() - 0.5) * 0.4;
+    const spd = 75 + getClientFreezeRandom()() * 85;
+    activateParticle(p, {
+      textureKey: 'fx_stone_chip',
+      x,
+      y,
+      vx: Math.cos(ang) * spd,
+      vy: Math.sin(ang) * spd - 30,
+      vr: (getClientFreezeRandom()() - 0.5) * 16,
+      ttl: 0.45,
+      startScale: (1 / 3) * 1.1,
+      endScale: (1 / 3) * 0.4,
+      startAlpha: 1,
+      gravityY: 220,
+      damping: 4,
+      rotation: ang,
+      blendMode: 'NORMAL',
+      depth: 38,
+    });
+  }
+
+  fx.spawnExplosionBurst?.(x, y, 44);
+  fx.spawnHitSparks?.(x, y, Math.PI, { hitWall: true });
+  fx.addTrauma?.(0.28);
+}
+
+export function spawnArcaneTeleportFold(
+  fx: CombatFxManager,
+  x: number,
+  y: number,
+): void {
+  (fx as unknown as { lastTeleportFoldPos?: { x: number; y: number } }).lastTeleportFoldPos = {
+    x,
+    y,
+  };
+  fx.spawnShaderNova?.(x, y, 72, 'fx_sh_arcane_sigil', {
+    tint: 0x38bdf8,
+    ttl: 0.28,
+  });
+
+  const p = fx.acquireParticleSlot();
+  if (p) {
+    activateParticle(p, {
+      textureKey: 'fx_spark',
+      x,
+      y: y - 10,
+      vx: 0,
+      vy: 0,
+      vr: 0,
+      ttl: 0.28,
+      startScale: 1.2,
+      endScale: 0.1,
+      scaleRatioY: 4.5,
+      startAlpha: 0.95,
+      gravityY: 0,
+      damping: 0,
+      tint: 0x38bdf8,
+      blendMode: 'ADD',
+      depth: 35,
+    });
   }
 }

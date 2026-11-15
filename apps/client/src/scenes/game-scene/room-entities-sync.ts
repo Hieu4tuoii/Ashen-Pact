@@ -808,6 +808,68 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
   const hg = this.interactHighlightGraphics;
   if (hg) {
     hg.clear();
+
+    // Render vertical Cutout trapezoid light shafts (alpha <= 0.16, depth 35.0) + 2.12 : 1 depth 15.0 highlight foot-rings
+    // 1. Unopened Chests
+    for (let i = 0; i < sim.chests.length; i++) {
+      const ch = sim.chests[i]!;
+      if (ch.opened) continue;
+      const pulse = 0.5 + 0.5 * Math.sin(visualTimeSec * 3.2 + ch.id);
+      const alpha = Math.min(0.16, 0.10 + pulse * 0.05);
+      const topW = 8;
+      const botW = 20;
+      const topY = ch.y - 100;
+      const botY = ch.y + 4;
+      hg.fillStyle(0xfacc15, alpha);
+      hg.beginPath();
+      hg.moveTo(ch.x - topW, topY);
+      hg.lineTo(ch.x + topW, topY);
+      hg.lineTo(ch.x + botW, botY);
+      hg.lineTo(ch.x - botW, botY);
+      hg.closePath();
+      hg.fillPath();
+
+      const footRx = 20;
+      const footRy = footRx / 2.12;
+      hg.lineStyle(2.2, 0xfacc15, 0.38 + pulse * 0.12);
+      hg.strokeEllipse(ch.x, ch.y + 4, footRx * 2, footRy * 2);
+    }
+
+    // 2. World Shrines & Anvils
+    for (let i = 0; i < sim.npcEntities.length; i++) {
+      const npc = sim.npcEntities[i]!;
+      const usedByLocal =
+        npc.interacted || (npc.usedByPlayerIds?.includes(sim.player.id) ?? false);
+      if (usedByLocal) continue;
+      if (
+        npc.kind !== 'shrine' &&
+        npc.kind !== 'daedalus_anvil' &&
+        npc.kind !== 'upgrade_anvil'
+      ) {
+        continue;
+      }
+      const pulse = 0.5 + 0.5 * Math.sin(visualTimeSec * 3.2 + npc.id);
+      const alpha = Math.min(0.16, 0.10 + pulse * 0.05);
+      const col = npc.kind === 'shrine' ? 0x38bdf8 : 0xfacc15;
+      const topW = 8;
+      const botW = 22;
+      const topY = npc.y - 110;
+      const botY = npc.y + 4;
+      hg.fillStyle(col, alpha);
+      hg.beginPath();
+      hg.moveTo(npc.x - topW, topY);
+      hg.lineTo(npc.x + topW, topY);
+      hg.lineTo(npc.x + botW, botY);
+      hg.lineTo(npc.x - botW, botY);
+      hg.closePath();
+      hg.fillPath();
+
+      const footRx = 22;
+      const footRy = footRx / 2.12;
+      hg.lineStyle(2.2, col, 0.38 + pulse * 0.12);
+      hg.strokeEllipse(npc.x, npc.y + 4, footRx * 2, footRy * 2);
+    }
+
     if (promptSpec) {
       const pulse = 0.5 + 0.5 * Math.sin(visualTimeSec * 5.2);
       const rx = promptSpec.highlightRadiusX + pulse * 1.5;

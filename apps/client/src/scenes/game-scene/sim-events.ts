@@ -675,7 +675,7 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
         break;
       }
       case 'cracked_wall_broken': {
-        this.fx.spawnPropBreakBurst('clay_vase', ev.x, ev.y);
+        this.fx.spawnCrackedWallBurst?.(ev.x, ev.y);
         this.lighting.spawnTransientLight(ev.x, ev.y, 120, PALETTE.CYAN_FROST, 0.85, 0.4);
         zzfx.play('prop_break', ev.x, this.camFocusX, ev.y, this.camFocusY);
         break;

@@ -513,12 +513,18 @@ export function drawP3APredictiveSightlinesAndOverlays(
     if (prop.cryoChargedByLaser === true) {
       floorG.fillStyle(0x38bdf8, 0.07);
       floorG.fillCircle(prop.x, prop.y, pr + 4);
-      g.lineStyle(4.2, inkColor, 0.75);
-      g.strokeCircle(prop.x, prop.y, pr + 2);
-      g.lineStyle(2.6, 0x38bdf8, 0.95);
-      g.strokeCircle(prop.x, prop.y, pr + 2);
-      g.lineStyle(1.6, 0xfffdf5, 0.95);
-      g.strokeCircle(prop.x, prop.y, pr - 2);
+      // prop_cryo_node (6x6 pulsing frost crystal attachment)
+      const tSec = sim.tick * (1 / 60);
+      const pulse = 0.85 + 0.25 * Math.sin(tSec * 6.5 + prop.id);
+      const nodeR = 3.5 * pulse;
+      g.fillStyle(inkColor, 0.9);
+      g.fillTriangle(prop.x, prop.y - nodeR - 1.5, prop.x - nodeR - 1.5, prop.y, prop.x + nodeR + 1.5, prop.y);
+      g.fillTriangle(prop.x, prop.y + nodeR + 1.5, prop.x - nodeR - 1.5, prop.y, prop.x + nodeR + 1.5, prop.y);
+      g.fillStyle(0x38bdf8, 0.95);
+      g.fillTriangle(prop.x, prop.y - nodeR, prop.x - nodeR, prop.y, prop.x + nodeR, prop.y);
+      g.fillTriangle(prop.x, prop.y + nodeR, prop.x - nodeR, prop.y, prop.x + nodeR, prop.y);
+      g.fillStyle(0xfffdf5, 0.98);
+      g.fillCircle(prop.x, prop.y, 1.2);
     }
 
     const kvx = prop.coverState === 'sliding' ? (prop.vx ?? 0) : 0;
@@ -528,13 +534,17 @@ export function drawP3APredictiveSightlinesAndOverlays(
       const nx = kvx / kSpd;
       const ny = kvy / kSpd;
       const wakeCol = prop.cryoChargedByLaser ? 0x38bdf8 : 0xfbbf24;
-      g.lineStyle(3.0, wakeCol, 0.88);
-      g.beginPath();
-      g.moveTo(prop.x - nx * 8, prop.y - ny * 8);
-      g.lineTo(prop.x - nx * 36, prop.y - ny * 36);
-      g.strokePath();
-      g.lineStyle(2.2, 0xfffbeb, 0.92);
-      g.strokeCircle(prop.x, prop.y, pr);
+      // Single V-groove floor scrape (depth 16.0 floorG)
+      floorG.lineStyle(4.5, inkColor, 0.65);
+      floorG.beginPath();
+      floorG.moveTo(prop.x - nx * 8, prop.y - ny * 8);
+      floorG.lineTo(prop.x - nx * 36, prop.y - ny * 36);
+      floorG.strokePath();
+      floorG.lineStyle(2.0, wakeCol, 0.88);
+      floorG.beginPath();
+      floorG.moveTo(prop.x - nx * 8, prop.y - ny * 8);
+      floorG.lineTo(prop.x - nx * 36, prop.y - ny * 36);
+      floorG.strokePath();
     }
   }
 }

@@ -6290,6 +6290,7 @@ if (process.env.VITEST) {
         tpHiddenRoom.discovery = 'discovered';
 
         const spawnShaderNova = vi.fn();
+        const spawnArcaneTeleportFold = vi.fn();
         const spawnChestOpenBurst = vi.fn();
         const addTrauma = vi.fn();
         const spawnFloatingAlert = vi.fn();
@@ -6307,6 +6308,7 @@ if (process.env.VITEST) {
           lastMinimapHash: 'cached',
           fx: {
             spawnShaderNova,
+            spawnArcaneTeleportFold,
             spawnChestOpenBurst,
             addTrauma,
             spawnFloatingAlert,
@@ -6335,16 +6337,15 @@ if (process.env.VITEST) {
         expect(mockTpScene.irisTransitionDir).toBe(-1);
         expect(mockTpScene.roomTeleportAnimTimer).toBeCloseTo(0.28, 5);
         expect(roomSend).toHaveBeenCalledWith('teleport_room', { roomId: tpNeighborRoom.id });
-        expect(spawnShaderNova).toHaveBeenCalledTimes(2);
-        expect(spawnShaderNova.mock.calls[0]?.[3]).toBe('fx_sh_arcane_sigil');
-        expect(spawnShaderNova.mock.calls[1]?.[3]).toBe('fx_sh_arcane_sigil');
+        // Departure + Arrival VFX calls
+        expect(spawnArcaneTeleportFold).toHaveBeenCalledTimes(2);
         expect(spawnChestOpenBurst).toHaveBeenCalledWith(tpSim.player.x, tpSim.player.y, 'rare');
         expect(spawnTransientLight).toHaveBeenCalledTimes(2);
         expect(addTrauma).toHaveBeenCalledWith(0.2);
         expect(spawnFloatingAlert).toHaveBeenCalledWith(
           tpSim.player.x,
           tpSim.player.y - 18,
-          '⚡ DỊCH CHUYỂN!',
+          'DỊCH CHUYỂN!',
           PALETTE.CYAN_FROST,
         );
 

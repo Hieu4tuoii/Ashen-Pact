@@ -14,12 +14,14 @@ import {
   createDoorBarrierPipeline,
   createPortalAnimState,
   createPortalVortexPipeline,
+  DOOR_BARRIER_FRAG,
   DOOR_BARRIER_PIPELINE_KEY,
   DOOR_COMBAT_LOCKUP_DURATION_SEC,
   DOOR_UNLOCK_DISSOLVE_DURATION_SEC,
   type DoorShaderSprite,
   PORTAL_BURST_DURATION_SEC,
   PORTAL_ENTER_DURATION_SEC,
+  PORTAL_VORTEX_DEFAULTS,
   PORTAL_VORTEX_PIPELINE_KEY,
   type PortalShaderSprite,
   resolveDoorVisualState,
@@ -678,6 +680,13 @@ describe('Phase P8 — Portals & Room Doors Visual State & Animation Resolvers',
       expect(bakedKeys.has('door_barrier_ew')).toBe(true);
       expect(bakedKeys.has('door_open_arch_ns')).toBe(true);
       expect(bakedKeys.has('door_open_arch_ew')).toBe(true);
+    });
+
+    it('upgrades DOOR_BARRIER_FRAG to gothic iron bars wrapped in #141019 ink with arcane lock-chain, while preserving Portal constants', () => {
+      expect(PORTAL_VORTEX_DEFAULTS.particleCount).toBe(8);
+      expect(PORTAL_VORTEX_DEFAULTS.rayCount).toBe(3);
+      expect(DOOR_BARRIER_FRAG.includes('gothic') || DOOR_BARRIER_FRAG.includes('barDist') || DOOR_BARRIER_FRAG.includes('lockChain')).toBe(true);
+      expect(DOOR_BARRIER_FRAG.includes('hexGridEdge')).toBe(false);
     });
   });
 });

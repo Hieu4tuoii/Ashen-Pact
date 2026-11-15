@@ -165,24 +165,45 @@ export function drawP1DBlessingActiveOverlays(
     const pr = props[i]!;
     if (pr.hp <= 0) continue;
     if (pr.coverState === 'flipped' && pr.prismAuraActive) {
-      floorG.lineStyle(3.2, 0x141019, 0.65);
-      floorG.strokeCircle(pr.x, pr.y, pr.radius + 10 + pulse * 0.5);
-      floorG.lineStyle(2.0, 0x34d399, 0.86);
-      floorG.strokeCircle(pr.x, pr.y, pr.radius + 10 + pulse * 0.5);
-      floorG.lineStyle(1.2, 0x38bdf8, 0.68);
-      floorG.strokeCircle(pr.x, pr.y, pr.radius + 5);
+      const cr = pr.radius + 6 + pulse * 0.4;
+      for (let k = 0; k < 4; k++) {
+        const ca = (k * Math.PI) / 2 + Math.PI / 4;
+        floorG.lineStyle(3.2, 0x141019, 0.82);
+        floorG.beginPath();
+        floorG.arc(pr.x, pr.y, cr, ca - 0.28, ca + 0.28, false);
+        floorG.strokePath();
+        floorG.lineStyle(2.0, 0x34d399, 0.95);
+        floorG.beginPath();
+        floorG.arc(pr.x, pr.y, cr, ca - 0.26, ca + 0.26, false);
+        floorG.strokePath();
+      }
     }
     if (pr.coverState === 'sliding' && pr.rocketCharged) {
       const ang = Math.atan2(pr.vy || 0, pr.vx || 1);
-      const backX = pr.x - Math.cos(ang) * (pr.radius + 10);
-      const backY = pr.y - Math.sin(ang) * (pr.radius + 10);
-      g.lineStyle(2.4, 0xf97316, 0.92);
-      g.strokeCircle(pr.x, pr.y, pr.radius + 5);
-      g.fillStyle(0xfffdf5, 0.92);
-      g.fillCircle(backX, backY, 5.0);
+      const backX = pr.x - Math.cos(ang) * (pr.radius + 8);
+      const backY = pr.y - Math.sin(ang) * (pr.radius + 8);
+      const nx = Math.cos(ang + Math.PI);
+      const ny = Math.sin(ang + Math.PI);
+      const px = -ny;
+      const py = nx;
+      g.fillStyle(0x141019, 0.95);
+      g.fillTriangle(backX + px * 5, backY + py * 5, backX - px * 5, backY - py * 5, backX + nx * 6, backY + ny * 6);
+      g.fillStyle(0xf97316, 0.95);
+      g.fillTriangle(backX + px * 3.5, backY + py * 3.5, backX - px * 3.5, backY - py * 3.5, backX + nx * 4.5, backY + ny * 4.5);
+      g.fillStyle(0xfacc15, 0.95);
+      g.fillCircle(backX + nx * 8, backY + ny * 8, 2.0);
     } else if (pr.coverState === 'sliding' && (pr.bouncesRemaining ?? 0) > 0) {
-      g.lineStyle(1.8, 0xe2e8f0, 0.78);
-      g.strokeCircle(pr.x, pr.y, pr.radius + 4);
+      const ang = Math.atan2(pr.vy || 0, pr.vx || 1);
+      const px = -Math.sin(ang) * (pr.radius + 3);
+      const py = Math.cos(ang) * (pr.radius + 3);
+      for (let side = -1; side <= 1; side += 2) {
+        const bx = pr.x + px * side;
+        const by = pr.y + py * side;
+        g.fillStyle(0x141019, 0.85);
+        g.fillCircle(bx, by, 3.8);
+        g.fillStyle(0xe2e8f0, 0.95);
+        g.fillCircle(bx, by, 2.4);
+      }
     }
   }
 
