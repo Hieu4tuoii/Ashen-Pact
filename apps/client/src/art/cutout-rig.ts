@@ -445,7 +445,7 @@ export class CutoutRig {
       this.isHitFlashing = false;
       this.isStatusTinted = true;
     } else if (this.elementalStatusTint !== null) {
-      this.applyMultiplicativeTint(this.elementalStatusTint);
+      this.applyFootFrostTint(this.elementalStatusTint);
       this.isHitFlashing = false;
       this.isStatusTinted = true;
     } else if (this.isHitFlashing || this.isStatusTinted) {
@@ -593,6 +593,19 @@ export class CutoutRig {
     for (const [partId, sprite] of this.partSprites.entries()) {
       if (partId === 'torso' || partId === 'head') {
         sprite.setTint(this.hitFlashTint);
+      } else {
+        sprite.clearTint();
+      }
+    }
+  }
+
+  private applyFootFrostTint(color: number): void {
+    if (this.compositeSprite) {
+      this.compositeSprite.clearTint();
+    }
+    for (const [partId, sprite] of this.partSprites) {
+      if (partId === 'legLeft' || partId === 'legRight') {
+        sprite.setTint(color);
       } else {
         sprite.clearTint();
       }

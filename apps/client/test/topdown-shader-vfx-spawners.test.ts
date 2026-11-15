@@ -160,7 +160,7 @@ describe('1:1 Top-Down Chiaroscuro Flipbook Playback & Core Combat Spawners', ()
       isTeamCombo: true,
     });
     expect(
-      mgr.particlePool.some((p) => p.active && p.textureKey === 'fx_sh_shrapnel_corona'),
+      mgr.particlePool.some((p) => p.active && p.textureKey === 'fx_react_overload_star'),
     ).toBe(true);
   });
 
@@ -265,12 +265,12 @@ describe('1:1 Top-Down Chiaroscuro Flipbook Playback & Core Combat Spawners', ()
 
   it('gives all 6 ElementalReactionIds 6 distinct Chiaroscuro shader silhouettes instead of colliding on 2 rings', () => {
     const expectedReactionKeys = [
-      ['vaporize', 'fx_sh_vortex_gale'],
-      ['shatter', 'fx_sh_nova_cryo'],
-      ['superconduct', 'fx_sh_anvil_storm'],
-      ['toxic_blast', 'fx_sh_spore_cloud'],
-      ['paralysis', 'fx_sh_nova_thunder'],
-      ['overload', 'fx_sh_shrapnel_corona'],
+      ['vaporize', 'fx_react_vapor_puff'],
+      ['shatter', 'fx_react_shatter_pane'],
+      ['superconduct', 'fx_react_superconduct_cross'],
+      ['toxic_blast', 'fx_react_toxic_glob'],
+      ['paralysis', 'fx_react_paralysis_x'],
+      ['overload', 'fx_react_overload_star'],
     ] as const;
 
     const distinctKeys = new Set<string>();
@@ -284,7 +284,7 @@ describe('1:1 Top-Down Chiaroscuro Flipbook Playback & Core Combat Spawners', ()
         isTeamCombo: false,
       });
       expect(
-        mgr.particlePool.some((p) => p.active && p.textureKey === expectedKey),
+        mgr.particlePool.some((p) => p.active && p.textureKey === expectedKey && p.frameCount === 4),
         `Expected ${reaction} to spawn bespoke morphology ${expectedKey}`,
       ).toBe(true);
       distinctKeys.add(expectedKey);

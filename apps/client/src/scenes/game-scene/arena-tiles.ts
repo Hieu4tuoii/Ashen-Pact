@@ -203,6 +203,24 @@ export function createImpl(this: GameScene): void {
     }
     this.fragFuseWheelFreePool.length = 0;
   }
+  if (this.statusRimPool) {
+    for (const sprite of this.statusRimPool) {
+      sprite.destroy();
+    }
+    this.statusRimPool.length = 0;
+  }
+  if (this.statusFreezeCuffPool) {
+    for (const sprite of this.statusFreezeCuffPool) {
+      sprite.destroy();
+    }
+    this.statusFreezeCuffPool.length = 0;
+  }
+  if (this.statusBadgePool) {
+    for (const sprite of this.statusBadgePool) {
+      sprite.destroy();
+    }
+    this.statusBadgePool.length = 0;
+  }
   resetScrapShotgunPelletHitTracker();
   resetCrystalPillarImpactTracker();
   this.projectileSprites.clear();
@@ -583,7 +601,44 @@ export function createImpl(this: GameScene): void {
   if (this.summonVisuals) {
     this.summonVisuals.clear();
   }
+  if (this.statusRimPool) {
+    for (let i = 0; i < this.statusRimPool.length; i++) {
+      this.statusRimPool[i]!.setVisible(false).setActive(false);
+    }
+  }
+  if (this.statusFreezeCuffPool) {
+    for (let i = 0; i < this.statusFreezeCuffPool.length; i++) {
+      this.statusFreezeCuffPool[i]!.setVisible(false).setActive(false);
+    }
+  }
+  if (this.statusBadgePool) {
+    for (let i = 0; i < this.statusBadgePool.length; i++) {
+      this.statusBadgePool[i]!.setVisible(false).setActive(false);
+    }
+  }
   this.summonSpritePool = [];
+
+  // Peripheral Status Pools: 64 statusRimPool slots at depth 28.2, 16 statusFreezeCuffPool slots at depth 28.3, 32 statusBadgePool slots at depth 48.0
+  this.statusRimPool = [];
+  this.statusFreezeCuffPool = [];
+  this.statusBadgePool = [];
+  if (this.add?.sprite) {
+    for (let i = 0; i < 64; i++) {
+      const s = this.add.sprite(0, 0, 'fx_cutout_kit_512', 'status_burn_2f_0');
+      s.setDepth(28.2).setScale(1 / 3).setBlendMode(Phaser.BlendModes.NORMAL).setVisible(false).setActive(false);
+      this.statusRimPool.push(s);
+    }
+    for (let i = 0; i < 16; i++) {
+      const s = this.add.sprite(0, 0, 'fx_cutout_kit_512', 'status_freeze_cuff');
+      s.setDepth(28.3).setScale(1 / 3).setBlendMode(Phaser.BlendModes.NORMAL).setVisible(false).setActive(false);
+      this.statusFreezeCuffPool.push(s);
+    }
+    for (let i = 0; i < 32; i++) {
+      const s = this.add.sprite(0, 0, 'fx_cutout_kit_512', 'status_badge_burn_9x9');
+      s.setDepth(48.0).setScale(1 / 3).setBlendMode(Phaser.BlendModes.NORMAL).setVisible(false).setActive(false);
+      this.statusBadgePool.push(s);
+    }
+  }
 
   // 7. Dynamic Lighting Pipeline + WebGL PostFX Shader
   this.lighting = new LightingPipeline(this);
@@ -1501,6 +1556,21 @@ export function teleportToRoomImpl(this: GameScene, targetRoomId: number): boole
     }
     this.summonVisuals.clear();
   }
+  if (this.statusRimPool) {
+    for (let i = 0; i < this.statusRimPool.length; i++) {
+      this.statusRimPool[i]!.setVisible(false).setActive(false);
+    }
+  }
+  if (this.statusFreezeCuffPool) {
+    for (let i = 0; i < this.statusFreezeCuffPool.length; i++) {
+      this.statusFreezeCuffPool[i]!.setVisible(false).setActive(false);
+    }
+  }
+  if (this.statusBadgePool) {
+    for (let i = 0; i < this.statusBadgePool.length; i++) {
+      this.statusBadgePool[i]!.setVisible(false).setActive(false);
+    }
+  }
   sim.doorTransitionCooldown = Math.max(sim.doorTransitionCooldown, 0.75);
 
   if (this.room && this.coopMode !== 'solo') {
@@ -1591,6 +1661,21 @@ export function applyCameraViewportImpl(this: GameScene): void {
         vis.shadow.setScale(1 / 3);
         vis.base.setScale(1 / 3);
         vis.head?.setScale(1 / 3);
+      }
+    }
+    if (this.statusRimPool) {
+      for (let i = 0; i < this.statusRimPool.length; i++) {
+        this.statusRimPool[i]!.setScale(1 / 3);
+      }
+    }
+    if (this.statusFreezeCuffPool) {
+      for (let i = 0; i < this.statusFreezeCuffPool.length; i++) {
+        this.statusFreezeCuffPool[i]!.setScale(1 / 3);
+      }
+    }
+    if (this.statusBadgePool) {
+      for (let i = 0; i < this.statusBadgePool.length; i++) {
+        this.statusBadgePool[i]!.setScale(1 / 3);
       }
     }
     const stressInvBake = 1 / Math.min(2, newScale);

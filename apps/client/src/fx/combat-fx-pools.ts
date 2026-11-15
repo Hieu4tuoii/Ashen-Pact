@@ -822,6 +822,41 @@ export function update(this: CombatFxManager, dtSec: number, camView?: Phaser.Ge
       writeFoldIdx++;
     }
     this.activeFloorTeleportFolds.length = writeFoldIdx;
+
+    if (this.activeTeamComboFootRings && this.activeTeamComboFootRings.length > 0) {
+      let writeComboIdx = 0;
+      for (let i = 0; i < this.activeTeamComboFootRings.length; i++) {
+        const ring = this.activeTeamComboFootRings[i]!;
+        if (!ring.active) continue;
+        ring.age += dtSec;
+        if (ring.age >= ring.ttl) {
+          ring.active = false;
+          this.teamComboFootRingFreePool?.push(ring);
+          continue;
+        }
+        const p = Math.min(1, ring.age / ring.ttl);
+        const alpha = (1 - p) * 0.95;
+        const outerRx = 22 + p * 6;
+        const outerRy = outerRx / 2.12;
+        const innerRx = 16 + p * 4;
+        const innerRy = innerRx / 2.12;
+        if (typeof this.floorFoldGraphics.strokeEllipse === 'function') {
+          this.floorFoldGraphics.lineStyle(3.2, 0x141019, alpha * 0.85);
+          this.floorFoldGraphics.strokeEllipse(ring.x, ring.y, outerRx * 2, outerRy * 2);
+          this.floorFoldGraphics.lineStyle(1.8, 0xfde047, alpha);
+          this.floorFoldGraphics.strokeEllipse(ring.x, ring.y, outerRx * 2, outerRy * 2);
+          this.floorFoldGraphics.lineStyle(2.6, 0x141019, alpha * 0.85);
+          this.floorFoldGraphics.strokeEllipse(ring.x, ring.y, innerRx * 2, innerRy * 2);
+          this.floorFoldGraphics.lineStyle(1.4, 0xfffdf5, alpha * 0.95);
+          this.floorFoldGraphics.strokeEllipse(ring.x, ring.y, innerRx * 2, innerRy * 2);
+        }
+        if (writeComboIdx !== i) {
+          this.activeTeamComboFootRings[writeComboIdx] = ring;
+        }
+        writeComboIdx++;
+      }
+      this.activeTeamComboFootRings.length = writeComboIdx;
+    }
   }
 
   // 5. Update pooled damage numbers & coalesced reaction banner timer

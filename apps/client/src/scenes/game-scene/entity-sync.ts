@@ -90,21 +90,33 @@ export function updatePlayerOverheadUiImpl(
   }
 }
 
+export function computeDeterministicShockCornerIndex(enemyId: number, simTick: number): 0 | 1 | 2 | 3 {
+  return ((enemyId * 31 + Math.floor(simTick / 7)) & 3) as 0 | 1 | 2 | 3;
+}
+
+export function resolveSecondaryStatusBadgeAnchor(
+  enemyX: number,
+  enemyY: number,
+  enemyRadius: number,
+  hp: number,
+  maxHp: number,
+  hpBarLeftX: number,
+  hpBarY: number,
+): { x: number; y: number } {
+  if (hp >= maxHp) {
+    return { x: enemyX, y: enemyY - enemyRadius - 10 };
+  }
+  return { x: hpBarLeftX - 7, y: hpBarY };
+}
+
 export function resolvePlayerStatusTintImpl(this: GameScene): number | null {
   const p = this.transport.getSim().player;
-  if (p.burnTimer > 0) return 0xfb923c;
-  if (p.chillTimer > 0) return 0x38bdf8;
-  if (p.poisonTimer > 0) return 0xc084fc;
+  if (p.chillTimer > 0) return 0xcfe8ee;
   return null;
 }
 
 export function resolveEnemyStatusTintImpl(this: GameScene, e: SimEnemyState): number | null {
-  if (e.frozenTimer > 0) return 0x7dd3fc;
-  if (e.shockTimer > 0) return 0xfde047;
-  if (e.burnTimer > 0) return 0xfb923c;
-  if (e.chillStacks > 0) return 0x38bdf8;
-  if ((e.causticVulnTimer ?? 0) > 0) return 0x84cc16;
-  if (e.poisonStacks > 0) return 0xc084fc;
+  if (e.frozenTimer > 0 || e.chillStacks > 0) return 0xcfe8ee;
   return null;
 }
 
@@ -449,6 +461,10 @@ export function syncEnemyRigsImpl(this: GameScene, dtSec: number): void {
   const viewTop = hasView ? view.y - 48 : -9999;
   const viewBottom = hasView ? view.y + view.height + 48 : 9999;
 
+  let statusRimCursor = 0;
+  let freezeCuffCursor = 0;
+  let badgeCursor = 0;
+
   for (let i = 0; i < enemyCount; i++) {
     const e = sim.enemies[i]!;
     if (e.hp <= 0) continue;
@@ -532,6 +548,160 @@ export function syncEnemyRigsImpl(this: GameScene, dtSec: number): void {
       )
     ) {
       this.fx.spawnFootstepDust(pos.x, pos.y + RIG_FOOT_OFFSET_Y, sim.currentBiome);
+    }
+
+    // 4. Peripheral Shoulder Status Attachments (depth 28.2), Freeze Cuff (depth 28.3) & Secondary Badges (depth 48.0)
+    let primaryElem: 'burn' | 'chill' | 'shock' | 'poison' | null = null;
+    let secondaryElem: 'burn' | 'chill' | 'shock' | 'poison' | null = null;
+    if (e.burnTimer > 0) {
+      primaryElem = 'burn';
+    }
+    if (e.chillStacks > 0 || e.frozenTimer > 0) {
+      if (!primaryElem) primaryElem = 'chill';
+      else if (!secondaryElem) secondaryElem = 'chill';
+    }
+    if (e.shockTimer > 0) {
+      if (!primaryElem) primaryElem = 'shock';
+      else if (!secondaryElem) secondaryElem = 'shock';
+    }
+    if (e.poisonStacks > 0) {
+      if (!primaryElem) primaryElem = 'poison';
+      else if (!secondaryElem) secondaryElem = 'poison';
+    }
+
+    if (this.statusRimPool && primaryElem) {
+      const r = e.radius;
+      if (primaryElem === 'burn') {
+        const burnFrame = Math.floor((sim.tick * 8) / 60) % 2 === 0 ? 'status_burn_2f_0' : 'status_burn_2f_1';
+        if (statusRimCursor < this.statusRimPool.length) {
+          const s = this.statusRimPool[statusRimCursor++]!;
+          s.setTexture('fx_cutout_kit_512', burnFrame)
+            .setPosition(pos.x - r * 0.65, pos.y - r * 0.5)
+            .setScale(1 / 3)
+            .setDepth(28.2)
+            .setVisible(true)
+            .setActive(true);
+        }
+        if (statusRimCursor < this.statusRimPool.length) {
+          const s = this.statusRimPool[statusRimCursor++]!;
+          s.setTexture('fx_cutout_kit_512', burnFrame)
+            .setPosition(pos.x + r * 0.65, pos.y - r * 0.5)
+            .setScale(1 / 3)
+            .setDepth(28.2)
+            .setVisible(true)
+            .setActive(true);
+        }
+      } else if (primaryElem === 'chill') {
+        const chillFrame = Math.floor((sim.tick * 6) / 60) % 2 === 0 ? 'status_chill_2f_0' : 'status_chill_2f_1';
+        if (statusRimCursor < this.statusRimPool.length) {
+          const s = this.statusRimPool[statusRimCursor++]!;
+          s.setTexture('fx_cutout_kit_512', chillFrame)
+            .setPosition(pos.x - r * 0.65, pos.y - r * 0.5)
+            .setScale(1 / 3)
+            .setDepth(28.2)
+            .setVisible(true)
+            .setActive(true);
+        }
+        if (statusRimCursor < this.statusRimPool.length) {
+          const s = this.statusRimPool[statusRimCursor++]!;
+          s.setTexture('fx_cutout_kit_512', chillFrame)
+            .setPosition(pos.x + r * 0.65, pos.y - r * 0.5)
+            .setScale(1 / 3)
+            .setDepth(28.2)
+            .setVisible(true)
+            .setActive(true);
+        }
+      } else if (primaryElem === 'shock') {
+        const cornerIdx = computeDeterministicShockCornerIndex(e.id, sim.tick);
+        const shockFrame = Math.floor(sim.tick / 4) % 2 === 0 ? 'status_shock_2f_0' : 'status_shock_2f_1';
+        let sx = pos.x;
+        let sy = pos.y;
+        if (cornerIdx === 0) { sx -= r * 0.7; sy -= r * 0.6; }
+        else if (cornerIdx === 1) { sx += r * 0.7; sy -= r * 0.6; }
+        else if (cornerIdx === 2) { sx += r * 0.7; sy += r * 0.2; }
+        else { sx -= r * 0.7; sy += r * 0.2; }
+        if (statusRimCursor < this.statusRimPool.length) {
+          const s = this.statusRimPool[statusRimCursor++]!;
+          s.setTexture('fx_cutout_kit_512', shockFrame)
+            .setPosition(sx, sy)
+            .setScale(1 / 3)
+            .setDepth(28.2)
+            .setVisible(true)
+            .setActive(true);
+        }
+      } else if (primaryElem === 'poison') {
+        const pF1 = Math.floor(sim.tick / 8) % 2 === 0 ? 'status_poison_2f_0' : 'status_poison_2f_1';
+        const pF2 = Math.floor(sim.tick / 8) % 2 === 0 ? 'status_poison_2f_1' : 'status_poison_2f_0';
+        if (statusRimCursor < this.statusRimPool.length) {
+          const s = this.statusRimPool[statusRimCursor++]!;
+          s.setTexture('fx_cutout_kit_512', pF1)
+            .setPosition(pos.x - r * 0.6, pos.y - r * 0.55)
+            .setScale(1 / 3)
+            .setDepth(28.2)
+            .setVisible(true)
+            .setActive(true);
+        }
+        if (statusRimCursor < this.statusRimPool.length) {
+          const s = this.statusRimPool[statusRimCursor++]!;
+          s.setTexture('fx_cutout_kit_512', pF2)
+            .setPosition(pos.x + r * 0.7, pos.y - r * 0.45)
+            .setScale(1 / 3)
+            .setDepth(28.2)
+            .setVisible(true)
+            .setActive(true);
+        }
+      }
+    }
+
+    if (e.frozenTimer > 0 && this.statusFreezeCuffPool && freezeCuffCursor < this.statusFreezeCuffPool.length) {
+      const cuff = this.statusFreezeCuffPool[freezeCuffCursor++]!;
+      cuff.setTexture('fx_cutout_kit_512', 'status_freeze_cuff')
+        .setPosition(pos.x, pos.y + 12)
+        .setScale(1 / 3)
+        .setDepth(28.3)
+        .setVisible(true)
+        .setActive(true);
+    }
+
+    if (secondaryElem && this.statusBadgePool && badgeCursor < this.statusBadgePool.length) {
+      const badgeKey =
+        (secondaryElem as string) === 'burn'
+          ? 'status_badge_burn_9x9'
+          : secondaryElem === 'chill'
+            ? 'status_badge_chill_9x9'
+            : secondaryElem === 'shock'
+              ? 'status_badge_shock_9x9'
+              : 'status_badge_poison_9x9';
+      const hpBarW = e.isBoss ? 52 : e.isElite ? 36 : 28;
+      const hpBarLeftX = pos.x - hpBarW / 2;
+      const hpBarY = pos.y - (e.isBoss ? 44 : 30);
+      const anchor = resolveSecondaryStatusBadgeAnchor(pos.x, pos.y, e.radius, e.hp, e.maxHp, hpBarLeftX, hpBarY);
+      const badge = this.statusBadgePool[badgeCursor++]!;
+      badge.setTexture('fx_cutout_kit_512', badgeKey)
+        .setPosition(anchor.x, anchor.y)
+        .setScale(1 / 3)
+        .setDepth(48.0)
+        .setVisible(true)
+        .setActive(true);
+    }
+  }
+
+  if (this.statusRimPool) {
+    for (let k = statusRimCursor; k < this.statusRimPool.length; k++) {
+      const s = this.statusRimPool[k]!;
+      if (s.visible) s.setVisible(false).setActive(false);
+    }
+  }
+  if (this.statusFreezeCuffPool) {
+    for (let k = freezeCuffCursor; k < this.statusFreezeCuffPool.length; k++) {
+      const s = this.statusFreezeCuffPool[k]!;
+      if (s.visible) s.setVisible(false).setActive(false);
+    }
+  }
+  if (this.statusBadgePool) {
+    for (let k = badgeCursor; k < this.statusBadgePool.length; k++) {
+      const s = this.statusBadgePool[k]!;
+      if (s.visible) s.setVisible(false).setActive(false);
     }
   }
 

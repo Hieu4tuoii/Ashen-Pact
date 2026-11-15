@@ -438,26 +438,12 @@ export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, 
       }
     }
 
-    // Frozen encasement crystal ring
-    if (e.frozenTimer > 0 && (!isStress || telegraphsDrawn < 6)) {
-      g.fillStyle(hexToNum(PALETTE.CYAN_FROST), 0.24);
-      g.fillCircle(pos.x, pos.y, e.radius + 5);
-      g.lineStyle(2.2, hexToNum(PALETTE.BONE_WHITE), 0.9);
-      g.strokeCircle(pos.x, pos.y, e.radius + 5);
-    }
-
     // Druid Rooted 1:1 circular thorn collar on floor (zero 3/4 squash ellipse)
     if (e.rootedTimer > 0 && !isStress) {
       floorG.lineStyle(4.2, hexToNum(PALETTE.INK_DARK), 0.72);
       floorG.strokeCircle(pos.x, pos.y + 2, e.radius + 4);
       floorG.lineStyle(2.4, hexToNum(PALETTE.LIME_GLOW), 0.92);
       floorG.strokeCircle(pos.x, pos.y + 2, e.radius + 4);
-    }
-
-    // Superconduct defense-shred aura ring
-    if (e.superconductTimer > 0 && !isStress) {
-      g.lineStyle(2, hexToNum(PALETTE.ELECTRIC_VIOLET), 0.9);
-      g.strokeCircle(pos.x, pos.y, e.radius + 6);
     }
 
     // Ranger Predator Mark Crosshair above enemy (visible through Fog of War!)

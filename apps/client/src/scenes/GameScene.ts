@@ -212,6 +212,9 @@ export class GameScene extends Phaser.Scene {
   public propVisuals = new Map<number, PropVisual>();
   public summonVisuals = new Map<number, PooledSummonVisual>();
   public summonSpritePool: PooledSummonVisual[] = [];
+  public statusRimPool: Phaser.GameObjects.Sprite[] = [];
+  public statusFreezeCuffPool: Phaser.GameObjects.Sprite[] = [];
+  public statusBadgePool: Phaser.GameObjects.Sprite[] = [];
   public projectileSprites = new Map<
     number,
     {

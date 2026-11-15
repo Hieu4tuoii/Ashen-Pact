@@ -151,6 +151,15 @@ export function createHeadlessFxManager(particleSlots = 64): CombatFxManager {
     totalAfterimagesSpawned: 0,
     activeReactionBanner: null,
     activeWorldReactionPopupSlot: null,
+    activeTeamComboFootRings: [],
+    teamComboFootRingFreePool: [],
+    getActiveDamagePopupCount: () => {
+      let count = 0;
+      for (let i = 0; i < mgr.damagePool.length; i++) {
+        if (mgr.damagePool[i]!.active) count += 1;
+      }
+      return count;
+    },
   });
 
   for (let i = 0; i < particleSlots; i++) {

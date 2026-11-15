@@ -9,7 +9,7 @@ import {
 import { easeOutBack, easeOutCubic } from '../art/easing.js';
 import { hexToNum, PALETTE } from '../art/palette.js';
 import { TextureBaker } from '../art/texture-baker.js';
-import { CUTOUT_KIT_ATLAS_KEY } from '../art/texture-baker-fx.js';
+import { CUTOUT_KIT_ATLAS_KEY, type ElementalReactionStripKey } from '../art/texture-baker-fx.js';
 import {
   computeShaderDirectionalScale,
   computeShaderNovaScale,
@@ -1750,124 +1750,131 @@ export function spawnHitSparksImpl(
   }
 }
 
+export function resolveReactionMiniStripKey(
+  reaction: ElementalReactionId | 'corrosive_blast',
+): ElementalReactionStripKey {
+  switch (reaction) {
+    case 'overload':
+      return 'fx_react_overload_star';
+    case 'shatter':
+      return 'fx_react_shatter_pane';
+    case 'vaporize':
+      return 'fx_react_vapor_puff';
+    case 'superconduct':
+      return 'fx_react_superconduct_cross';
+    case 'corrosive_blast':
+    case 'toxic_blast':
+      return 'fx_react_toxic_glob';
+    case 'paralysis':
+      return 'fx_react_paralysis_x';
+  }
+}
+
 export function spawnElementalReactionFxImpl(
   this: CombatFxManager,
   params: {
     reaction: ElementalReactionId;
     x: number;
     y: number;
-    damage: number;
-    isTeamCombo: boolean;
+    damage?: number;
+    radius?: number;
+    isTeamCombo?: boolean;
+    isTeammate?: boolean;
   },
+): void;
+export function spawnElementalReactionFxImpl(
+  this: CombatFxManager,
+  reaction: ElementalReactionId,
+  x: number,
+  y: number,
+  radiusOrDamage?: number,
+  isTeamCombo?: boolean,
+  isTeammate?: boolean,
+): void;
+export function spawnElementalReactionFxImpl(
+  this: CombatFxManager,
+  arg1:
+    | {
+        reaction: ElementalReactionId;
+        x: number;
+        y: number;
+        damage?: number;
+        radius?: number;
+        isTeamCombo?: boolean;
+        isTeammate?: boolean;
+      }
+    | ElementalReactionId,
+  arg2?: number,
+  arg3?: number,
+  arg4?: number,
+  arg5?: boolean,
+  arg6?: boolean,
 ): void {
-  const invBake = 1 / TextureBaker.getBakeScale();
-  const spec = resolveElementalReactionBurstSpec(params.reaction, params.isTeamCombo);
-  this.spawnFloorDecal(spec.decalKind, params.x, params.y, params.isTeamCombo ? 0.85 : 0.68);
+  const reaction = typeof arg1 === 'string' ? arg1 : arg1.reaction;
+  const x = typeof arg1 === 'string' ? (arg2 ?? 0) : arg1.x;
+  const y = typeof arg1 === 'string' ? (arg3 ?? 0) : arg1.y;
+  const damage = typeof arg1 === 'string' ? (arg4 ?? 0) : (arg1.damage ?? 0);
+  const radius = typeof arg1 === 'string' ? arg4 : (arg1.radius ?? arg1.damage);
+  const isTeamCombo = typeof arg1 === 'string' ? Boolean(arg5) : Boolean(arg1.isTeamCombo);
+  const isTeammate = typeof arg1 === 'string' ? Boolean(arg6) : Boolean(arg1.isTeammate);
 
-  // Primary Chiaroscuro 1:1 Hollow-Core Elemental Nova (6 distinct morphologies across 6 reactions!)
-  const novaKey = REACTION_NOVA_KEY[params.reaction] ?? 'fx_sh_nova_solar';
-  const novaTint = REACTION_NOVA_TINT[params.reaction] ?? null;
-  const tacticalRadiusPx = params.isTeamCombo ? 84 : 66;
-  spawnShaderNovaImpl.call(this, params.x, params.y, tacticalRadiusPx, novaKey, {
-    ttl: params.isTeamCombo ? 0.36 : 0.3,
-    tint: novaTint,
-    depth: 56,
-    sparkCount: 0,
-  });
+  const spec = resolveElementalReactionBurstSpec(reaction, isTeamCombo);
+  this.spawnFloorDecal(spec.decalKind, x, y, isTeamCombo ? 0.85 : 0.68);
 
-  // Crisp secondary dual-element C-notched harmonic accent ring
-  const innerRing = this.acquireParticleSlot();
-  if (innerRing) {
-    activateParticle(innerRing, {
-      textureKey: spec.innerRing.textureKey,
-      x: params.x,
-      y: params.y,
-      vr: params.reaction === 'vaporize' ? 3.2 : -1.4,
-      ttl: spec.innerRing.ttl,
-      startScale: invBake * spec.innerRing.startScale,
-      endScale: invBake * spec.innerRing.endScale,
-      startAlpha: 0.84,
-      tint: hexToNum(spec.secondaryColorHex),
-      depth: spec.innerRing.depth,
-      easeCurve: 'easeOutCubic',
+  // 1. Spawns mapped fx_react_* 4f mini-strip (frameCount = 4, ttl = 0.20s, depth 42.5, BlendMode.NORMAL, 1/4 bake scale)
+  const stripKey = resolveReactionMiniStripKey(reaction);
+  const stripSlot = this.acquireParticleSlot();
+  const aoeAlpha = isTeammate ? 0.35 : 1.0;
+  const distToP1 = this.distanceToLocalPlayer ? this.distanceToLocalPlayer(x, y) : 999;
+  let alpha = (isTeamCombo ? 1.0 : 0.9) * aoeAlpha;
+  if (isTeammate) {
+    alpha = applyP1SafeHaloAlpha(alpha, true, distToP1, radius ?? 32);
+  }
+
+  if (stripSlot) {
+    activateParticle(stripSlot, {
+      textureKey: stripKey,
+      x,
+      y,
+      ttl: 0.2,
+      startScale: 0.25,
+      endScale: 0.25,
+      startAlpha: alpha,
+      depth: 42.5,
+      blendMode: 'NORMAL',
+      frameCount: 4,
+      preserveFlipbookAlpha: true,
     });
   }
 
-  const count = Math.max(
-    4,
-    Math.round(spec.particleCount * 0.65 * graphicsSettings.getBudget().particleBudgetRatio),
-  );
-  const primaryTint = hexToNum(spec.primaryColorHex);
-  const secondaryTint = hexToNum(spec.secondaryColorHex);
-  for (let i = 0; i < count; i++) {
-    const p = this.acquireParticleSlot();
-    if (!p) break;
-    const ang = (i / count) * Math.PI * 2 + (getClientFreezeRandom()() - 0.5) * 0.22;
-    const spd = (params.isTeamCombo ? 175 : 138) * (0.68 + getClientFreezeRandom()() * 0.45);
-    const texKey =
-      params.reaction === 'shatter' && i % 2 === 0
-        ? 'fx_ice_shard'
-        : params.reaction === 'vaporize' && i % 2 === 1
-           ? 'fx_ember_mote'
-          : spec.particleTextures[i % spec.particleTextures.length]!;
-    const isTrail = texKey === 'fx_spark_trail';
-    activateParticle(p, {
-      textureKey: texKey,
-      x: params.x,
-      y: params.y,
-      vx: Math.cos(ang) * spd,
-      vy: Math.sin(ang) * spd - (params.reaction === 'vaporize' ? 28 : 0),
-      vr: isTrail ? 0 : (getClientFreezeRandom()() - 0.5) * 10,
-      ttl: 0.24 + (i % 3) * 0.04,
-      startScale: invBake * (params.isTeamCombo ? 1.04 : 0.88),
-      endScale: invBake * 0.18,
-      startAlpha: 0.9,
-      gravityY: params.reaction === 'shatter' ? 110 : params.reaction === 'vaporize' ? -35 : 0,
-      damping: 6,
-      rotation: ang,
-      tint: texKey === 'fx_ice_shard' ? null : i % 2 === 0 ? primaryTint : secondaryTint,
-      depth: 57,
-      scaleRatioY: isTrail ? 0.42 : 1,
-      alignToVelocity: isTrail,
+  // 2. Pairs with routeCutoutBurstByRadius perimeter crescent when AoE reaction radius applies
+  if (radius && radius > 0) {
+    const novaKey = REACTION_NOVA_KEY[reaction] ?? 'fx_sh_nova_solar';
+    const novaTint = REACTION_NOVA_TINT[reaction] ?? null;
+    routeCutoutBurstByRadius(this, x, y, radius, novaKey, {
+      isTeammate,
+      depth: 42.5,
+      tint: novaTint,
     });
   }
 
-  this.totalDamagePopupsSpawned += 1;
+  // 3. Spawns zero world-space damage/reaction text popups (activeReactionBanner feeds into HUD banner)
+  this.activeWorldReactionPopupSlot = null;
+
+  // 4. Feeds coalesceElementalReaction (0.40s window) into this.activeReactionBanner
   this.activeReactionBanner = coalesceElementalReaction(
     this.activeReactionBanner,
-    params.reaction,
-    params.damage,
-    params.isTeamCombo,
+    reaction,
+    damage,
+    isTeamCombo,
     0.4,
   );
 
-  const reuseWorldSlot =
-    this.activeWorldReactionPopupSlot &&
-    this.activeWorldReactionPopupSlot.active &&
-    this.activeWorldReactionPopupSlot.age <= 0.42 &&
-    this.activeReactionBanner.count > 1
-      ? this.activeWorldReactionPopupSlot
-      : this.acquireDamageSlot(params.x, params.y);
-
-  if (reuseWorldSlot) {
-    this.activeWorldReactionPopupSlot = reuseWorldSlot;
-    reuseWorldSlot.active = true;
-    reuseWorldSlot.age = 0;
-    reuseWorldSlot.ttl = 0.85;
-    reuseWorldSlot.originX = params.x;
-    reuseWorldSlot.originY = params.y;
-    reuseWorldSlot.x = params.x;
-    reuseWorldSlot.y = params.y - 34;
-    reuseWorldSlot.vx = 0;
-    reuseWorldSlot.vy = -38;
-    reuseWorldSlot.baseScale = params.isTeamCombo ? 1.34 : 1.2;
-    reuseWorldSlot.text.setText(`⚡ ${this.activeReactionBanner.label}`);
-    reuseWorldSlot.text.setColor(this.activeReactionBanner.colorHex);
-    reuseWorldSlot.text.setPosition(reuseWorldSlot.x, reuseWorldSlot.y);
-    reuseWorldSlot.text.setScale(reuseWorldSlot.baseScale * 1.15);
-    reuseWorldSlot.text.setAlpha(1);
-    reuseWorldSlot.text.setVisible(true);
-    reuseWorldSlot.text.setActive(true);
+  // 5. Stamps a 0.45s double 2.12:1 foot-ellipse at depth 15.0 (NORMAL blend) under P1 when isTeamCombo === true
+  if (isTeamCombo) {
+    const p1x = this.localPlayerPos?.x ?? x;
+    const p1y = (this.localPlayerPos?.y ?? y) + 12;
+    this.stampTeamComboFootRing?.(p1x, p1y);
   }
 }
 

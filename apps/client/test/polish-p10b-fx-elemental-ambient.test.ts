@@ -46,8 +46,13 @@ import {
   resolveElementalReactionBurstSpec,
   resolveParticleBlendAndDepth,
   resolveProjectileRenderSpec,
+  resolveReactionMiniStripKey,
 } from '../src/fx/combat-fx.js';
-import { syncProjectilesAndPickupsImpl } from '../src/scenes/game-scene/entity-sync.js';
+import {
+  computeDeterministicShockCornerIndex,
+  resolveSecondaryStatusBadgeAnchor,
+  syncProjectilesAndPickupsImpl,
+} from '../src/scenes/game-scene/entity-sync.js';
 import { processSimEventsImpl } from '../src/scenes/game-scene/sim-events.js';
 
 describe('Phase P10b — Combat FX (BlendMode.ADD), Elemental Combo FX & Clear Biome Ambient', () => {
@@ -311,6 +316,31 @@ describe('Phase P10b — Combat FX (BlendMode.ADD), Elemental Combo FX & Clear B
       enState = coalesceElementalReaction(enState, 'vaporize', 20, true, 0.4);
       expect(enState.label).toBe('VAPORIZE ×3');
       i18n.setLocale('vi');
+    });
+
+    it('replaces full-body rainbow status tint with depth 28.2 shoulder attachments, deterministic shock corner hash, and full-HP 2nd-element badge fallback', () => {
+      expect(computeDeterministicShockCornerIndex(12, 70)).toBe(((12 * 31 + 10) & 3));
+      expect(computeDeterministicShockCornerIndex(12, 73)).toBe(((12 * 31 + 10) & 3));
+
+      const fullHpAnchor = resolveSecondaryStatusBadgeAnchor(300, 200, 16, 100, 100, 280, 172);
+      expect(fullHpAnchor).toEqual({ x: 300, y: 200 - 16 - 10 });
+      const hurtAnchor = resolveSecondaryStatusBadgeAnchor(300, 200, 16, 60, 100, 280, 172);
+      expect(hurtAnchor.x).toBeLessThan(280);
+    });
+
+    it('maps all 6 elemental reactions to dedicated 256x64 4f mini-strips and coalesces text into the 0.40s HUD Reaction Banner with zero world text spam', () => {
+      expect(resolveReactionMiniStripKey('overload')).toBe('fx_react_overload_star');
+      expect(resolveReactionMiniStripKey('shatter')).toBe('fx_react_shatter_pane');
+      expect(resolveReactionMiniStripKey('vaporize')).toBe('fx_react_vapor_puff');
+      expect(resolveReactionMiniStripKey('superconduct')).toBe('fx_react_superconduct_cross');
+      expect(resolveReactionMiniStripKey('corrosive_blast')).toBe('fx_react_toxic_glob');
+      expect(resolveReactionMiniStripKey('paralysis')).toBe('fx_react_paralysis_x');
+
+      const { fx } = createTestCombatFx();
+      fx.spawnElementalReactionFx('overload', 240, 240, 55, true);
+      expect(fx.particlePool.some((p) => p.active && p.textureKey === 'fx_react_overload_star' && p.frameCount === 4)).toBe(true);
+      expect(fx.activeReactionBanner?.count).toBe(1);
+      expect(fx.getActiveDamagePopupCount()).toBe(0);
     });
   });
 

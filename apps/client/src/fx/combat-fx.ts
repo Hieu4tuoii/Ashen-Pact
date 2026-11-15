@@ -85,6 +85,8 @@ export class CombatFxManager {
   public floorFoldGraphics!: Phaser.GameObjects.Graphics;
   public activeFloorTeleportFolds: ActiveFloorTeleportFold[] = [];
   public floorFoldFreePool: ActiveFloorTeleportFold[] = [];
+  public activeTeamComboFootRings: ActiveFloorTeleportFold[] = [];
+  public teamComboFootRingFreePool: ActiveFloorTeleportFold[] = [];
   public lastHitSparkTimeByTargetId: Map<number, number> = new Map();
   public activePerimeterRings: ActivePerimeterRing[] = [];
   public activeArcRibbons: ActiveArcRibbon[] = [];
@@ -193,11 +195,28 @@ export class CombatFxManager {
     return Math.sqrt(dx * dx + dy * dy);
   }
 
+  public stampTeamComboFootRing(x: number, y: number): void {
+    const ring = this.teamComboFootRingFreePool.pop() ?? {
+      active: true,
+      x,
+      y,
+      age: 0,
+      ttl: 0.45,
+    };
+    ring.active = true;
+    ring.x = x;
+    ring.y = y;
+    ring.age = 0;
+    ring.ttl = 0.45;
+    this.activeTeamComboFootRings.push(ring);
+  }
+
   public resetRoomTransientState(): void {
     this.lastHitSparkTimeByTargetId.clear();
     this.activePerimeterRings.length = 0;
     this.activeArcRibbons.length = 0;
     this.activeFloorTeleportFolds.length = 0;
+    this.activeTeamComboFootRings.length = 0;
     resetPlayerOverheatVentPuffs();
   }
 
@@ -499,10 +518,50 @@ export class CombatFxManager {
     reaction: ElementalReactionId;
     x: number;
     y: number;
-    damage: number;
-    isTeamCombo: boolean;
-  }): void {
-    spawnElementalReactionFxImpl.call(this, params);
+    damage?: number;
+    radius?: number;
+    isTeamCombo?: boolean;
+    isTeammate?: boolean;
+  }): void;
+  public spawnElementalReactionFx(
+    reaction: ElementalReactionId,
+    x: number,
+    y: number,
+    radiusOrDamage?: number,
+    isTeamCombo?: boolean,
+    isTeammate?: boolean,
+  ): void;
+  public spawnElementalReactionFx(
+    arg1:
+      | {
+          reaction: ElementalReactionId;
+          x: number;
+          y: number;
+          damage?: number;
+          radius?: number;
+          isTeamCombo?: boolean;
+          isTeammate?: boolean;
+        }
+      | ElementalReactionId,
+    arg2?: number,
+    arg3?: number,
+    arg4?: number,
+    arg5?: boolean,
+    arg6?: boolean,
+  ): void {
+    if (typeof arg1 === 'string') {
+      (spawnElementalReactionFxImpl as (this: CombatFxManager, ...args: unknown[]) => void).call(
+        this,
+        arg1,
+        arg2 ?? 0,
+        arg3 ?? 0,
+        arg4,
+        arg5 ?? false,
+        arg6 ?? false,
+      );
+    } else {
+      (spawnElementalReactionFxImpl as (this: CombatFxManager, ...args: unknown[]) => void).call(this, arg1);
+    }
   }
 
   public spawnChestOpenBurst(
