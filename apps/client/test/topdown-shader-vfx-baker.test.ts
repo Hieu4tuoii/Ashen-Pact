@@ -6,6 +6,7 @@ import {
   bakeCutoutKit512,
   bakeElementalReactionMiniStrips,
   bakeProjectilesAndFx,
+  computeRawAllSceneTexturesVramBytes,
   computeTotalVramBytes,
   CUTOUT_KIT_ATLAS_KEY,
   CUTOUT_KIT_BAKE_SCALE,
@@ -677,6 +678,10 @@ describe('1:1 Top-Down Cutout 2.0 Multi-Band SDF-Cel Shader Baker', () => {
   });
 
   it('packs all 51 Cutout 2.0 kit entries inside 512x512 POT with +2px border and keeps total VRAM < 25.0 MB', () => {
+    // 1. Verify empty scene has exactly 0 total VRAM (zero hardcoded byte floor)
+    const emptyScene = createMockPhaserSceneForBaker();
+    expect(computeTotalVramBytes(emptyScene as unknown as Phaser.Scene)).toBe(0);
+
     const scene = createMockPhaserSceneForBaker();
     TextureBaker.bakeAll(scene as unknown as Phaser.Scene, 1.5, true);
 
@@ -729,8 +734,25 @@ describe('1:1 Top-Down Cutout 2.0 Multi-Band SDF-Cel Shader Baker', () => {
       }
     }
 
+    // 2. Dynamic VRAM ledger checks
     const totalVram = computeTotalVramBytes(scene as unknown as Phaser.Scene);
-    expect(totalVram).toBeGreaterThan(0);
+    expect(totalVram).toBeGreaterThan(14_700_000);
     expect(totalVram).toBeLessThanOrEqual(24_950_000);
+
+    const rawAllVram = computeRawAllSceneTexturesVramBytes(scene as unknown as Phaser.Scene);
+    expect(rawAllVram).toBeGreaterThan(totalVram);
+
+    // 3. Dynamic scene.textures iteration test: adding extra canvas texture increases VRAM by exact w*h*4 bytes
+    const beforeRogue = computeTotalVramBytes(scene as unknown as Phaser.Scene);
+    scene.textures.addCanvas('fx_rogue_probe', { width: 32, height: 16 });
+    const afterRogue = computeTotalVramBytes(scene as unknown as Phaser.Scene);
+    expect(afterRogue - beforeRogue).toBe(32 * 16 * 4); // 2048 bytes
+    scene.textures.remove('fx_rogue_probe');
+
+    // 4. Cache-hit guard check: removing CUTOUT_KIT_ATLAS_KEY and calling bakeAll with force=false re-bakes it
+    scene.textures.remove(CUTOUT_KIT_ATLAS_KEY);
+    expect(scene.textures.exists(CUTOUT_KIT_ATLAS_KEY)).toBe(false);
+    TextureBaker.bakeAll(scene as unknown as Phaser.Scene, 1.5, false);
+    expect(scene.textures.exists(CUTOUT_KIT_ATLAS_KEY)).toBe(true);
   });
 });

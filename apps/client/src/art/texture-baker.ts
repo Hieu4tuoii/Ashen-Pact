@@ -181,6 +181,8 @@ export class TextureBaker {
       scene.textures.exists('fx_light_radial') &&
       scene.textures.exists('fx_impact_ring') &&
       SHADER_FX_TEXTURE_KEYS.every((k) => scene.textures.exists(k)) &&
+      scene.textures.exists(CUTOUT_KIT_ATLAS_KEY) &&
+      ELEMENTAL_REACTION_STRIP_KEYS.every((k) => scene.textures.exists(k)) &&
       scene.textures.exists('chest_closed_legendary') &&
       scene.textures.exists('portal_pedestal_base') &&
       scene.textures.exists('portal_particle_mote') &&
@@ -539,6 +541,7 @@ export {
   ALL_CUTOUT_KIT_FRAME_KEYS,
   bakeCutoutKit512,
   bakeElementalReactionMiniStrips,
+  computeRawAllSceneTexturesVramBytes,
   computeTotalVramBytes,
   CUTOUT_KIT_ATLAS_KEY,
   CUTOUT_KIT_BAKE_SCALE,
@@ -546,4 +549,6 @@ export {
   ELEMENTAL_REACTION_STRIP_KEYS,
   type ElementalReactionStripKey,
   getCutoutKitFrameSpec,
+  isPreExistingNonVfxWorldOrRigTextureKey,
+  listRegisteredCustomTextureKeys,
 } from './texture-baker-fx.js';

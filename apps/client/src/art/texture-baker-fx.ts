@@ -2,7 +2,6 @@ import type Phaser from 'phaser';
 import { PALETTE, type PaletteHex } from './palette.js';
 import { outlined, tracePolygon, traceRoundedRect } from './primitives.js';
 import { bakeCustomCanvas, registerCanvasTexture } from './texture-baker-canvas.js';
-import { SHADER_FX_TEXTURE_KEYS } from './texture-baker-shader-fx.js';
 
 export const ENEMY_BULLET_VISUAL_SPEC = {
   fill: PALETTE.CRIMSON_BRIGHT,
@@ -1189,12 +1188,44 @@ const SMALL_SHADER_KEYS = [
   'fx_sh_muzzle_arcane',
 ] as const;
 
-export const EXISTING_GAME_ATLASES_VRAM_BYTES = 10_092_480; // Spec Section 4.2 Row 7 (10,200,000 B - 107,520 B)
+export function isPreExistingNonVfxWorldOrRigTextureKey(key: string): boolean {
+  return (
+    key.startsWith('rig_') ||
+    key.startsWith('weapon_vec_') ||
+    key.startsWith('player_ring_') ||
+    key.startsWith('biome_') ||
+    key.startsWith('wall_ao_') ||
+    key.startsWith('surface_') ||
+    key.startsWith('prop_') ||
+    key.startsWith('chest_') ||
+    key.startsWith('portal_') ||
+    key.startsWith('door_') ||
+    key === 'ui_crosshair'
+  );
+}
 
-export function computeTotalVramBytes(scene: Phaser.Scene): number {
-  let totalBytes = EXISTING_GAME_ATLASES_VRAM_BYTES;
+export function listRegisteredCustomTextureKeys(scene: Phaser.Scene): string[] {
   const texMgr = scene.textures as unknown as {
     getTextureKeys?: () => string[];
+    list?: Record<string, unknown>;
+  };
+  const rawKeys = texMgr.getTextureKeys
+    ? texMgr.getTextureKeys()
+    : Object.keys(texMgr.list ?? {});
+  return rawKeys.filter((k) => !k.startsWith('__'));
+}
+
+export function computeTotalVramBytes(scene: Phaser.Scene): number {
+  let totalBytes = 0;
+  const texMgr = scene.textures as unknown as {
+    get?: (key: string) =>
+      | {
+          getSourceImage?: () => { width: number; height: number };
+          source?: Array<{ width: number; height: number }>;
+          width?: number;
+          height?: number;
+        }
+      | undefined;
     list?: Record<
       string,
       {
@@ -1204,6 +1235,37 @@ export function computeTotalVramBytes(scene: Phaser.Scene): number {
         height?: number;
       }
     >;
+    exists?: (key: string) => boolean;
+  };
+
+  const getTex = (key: string) => (texMgr.get ? texMgr.get(key) : texMgr.list?.[key]);
+  const hasTex = (key: string) =>
+    texMgr.exists ? texMgr.exists(key) : Boolean(texMgr.list && key in texMgr.list);
+
+  const keys = listRegisteredCustomTextureKeys(scene);
+  for (const key of keys) {
+    if (isPreExistingNonVfxWorldOrRigTextureKey(key)) continue;
+    const tex = getTex(key);
+    if (!tex) continue;
+    const src = tex.getSourceImage ? tex.getSourceImage() : tex.source?.[0];
+    const w = src?.width ?? tex.width ?? 0;
+    const h = src?.height ?? tex.height ?? 0;
+    totalBytes += w * h * 4;
+  }
+
+  // Add 43,692 bytes for each of the 7 small shader strips that actually exists in scene.textures
+  for (const smallKey of SMALL_SHADER_KEYS) {
+    if (hasTex(smallKey)) {
+      totalBytes += 43_692;
+    }
+  }
+
+  return totalBytes;
+}
+
+export function computeRawAllSceneTexturesVramBytes(scene: Phaser.Scene): number {
+  let totalBytes = 0;
+  const texMgr = scene.textures as unknown as {
     get?: (key: string) =>
       | {
           getSourceImage?: () => { width: number; height: number };
@@ -1212,6 +1274,15 @@ export function computeTotalVramBytes(scene: Phaser.Scene): number {
           height?: number;
         }
       | undefined;
+    list?: Record<
+      string,
+      {
+        getSourceImage?: () => { width: number; height: number };
+        source?: Array<{ width: number; height: number }>;
+        width?: number;
+        height?: number;
+      }
+    >;
     exists?: (key: string) => boolean;
   };
 
@@ -1219,8 +1290,8 @@ export function computeTotalVramBytes(scene: Phaser.Scene): number {
   const hasTex = (key: string) =>
     texMgr.exists ? texMgr.exists(key) : Boolean(texMgr.list && key in texMgr.list);
 
-  // 1, 3, 4. 24 Shader Strips (7 small 256x128 + 15 medium 512x256 + 2 large 1024x512)
-  for (const key of SHADER_FX_TEXTURE_KEYS) {
+  const keys = listRegisteredCustomTextureKeys(scene);
+  for (const key of keys) {
     const tex = getTex(key);
     if (!tex) continue;
     const src = tex.getSourceImage ? tex.getSourceImage() : tex.source?.[0];
@@ -1229,42 +1300,9 @@ export function computeTotalVramBytes(scene: Phaser.Scene): number {
     totalBytes += w * h * 4;
   }
 
-  // 2. Mipmap pyramid for the 7 small shader strips (7 * 10,923 texels * 4 B = 305,844 B)
   for (const smallKey of SMALL_SHADER_KEYS) {
     if (hasTex(smallKey)) {
       totalBytes += 43_692;
-    }
-  }
-
-  // 5. 6 Elemental Reaction Mini-Strips (6 * 256x64 * 4 B = 393,216 B)
-  for (const key of ELEMENTAL_REACTION_STRIP_KEYS) {
-    const tex = getTex(key);
-    if (!tex) continue;
-    const src = tex.getSourceImage ? tex.getSourceImage() : tex.source?.[0];
-    const w = src?.width ?? tex.width ?? 0;
-    const h = src?.height ?? tex.height ?? 0;
-    totalBytes += w * h * 4;
-  }
-
-  // 6. Cutout 2.0 Kit Atlas (fx_cutout_kit_512: 512x512 * 4 B = 1,048,576 B)
-  if (hasTex(CUTOUT_KIT_ATLAS_KEY)) {
-    const tex = getTex(CUTOUT_KIT_ATLAS_KEY);
-    if (tex) {
-      const src = tex.getSourceImage ? tex.getSourceImage() : tex.source?.[0];
-      const w = src?.width ?? tex.width ?? 0;
-      const h = src?.height ?? tex.height ?? 0;
-      totalBytes += w * h * 4;
-    }
-  }
-
-  // Legacy godray shaft if present before Track A removal (96x280 * 4 B = 107,520 B)
-  if (hasTex('arch_b2_godray_shaft')) {
-    const tex = getTex('arch_b2_godray_shaft');
-    if (tex) {
-      const src = tex.getSourceImage ? tex.getSourceImage() : tex.source?.[0];
-      const w = src?.width ?? tex.width ?? 96;
-      const h = src?.height ?? tex.height ?? 280;
-      totalBytes += w * h * 4;
     }
   }
 
