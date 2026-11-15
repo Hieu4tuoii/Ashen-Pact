@@ -583,9 +583,22 @@ export function updateAndDrawWeaponV2Overlays(
   clockSec: number,
   locale: 'vi' | 'en' = 'vi',
   groundG?: Phaser.GameObjects.Graphics,
+  underG?: Phaser.GameObjects.Graphics,
+  ribbonG?: Phaser.GameObjects.Graphics,
 ): { flashColor: number | null; flashAlpha: number } {
   const state = getWeaponV2OverlayState(sceneKey);
   const floorG = groundG ?? g;
+  const underActorG =
+    underG ??
+    (g as unknown as { underActorGraphics?: Phaser.GameObjects.Graphics }).underActorGraphics ??
+    (sceneKey as unknown as { underActorGraphics?: Phaser.GameObjects.Graphics }).underActorGraphics ??
+    floorG;
+  const ribbonTargetG =
+    ribbonG ??
+    (g as unknown as { weaponRibbonGraphics?: Phaser.GameObjects.Graphics }).weaponRibbonGraphics ??
+    (sceneKey as unknown as { weaponRibbonGraphics?: Phaser.GameObjects.Graphics }).weaponRibbonGraphics ??
+    fx?.weaponRibbonGraphics ??
+    g;
 
   // Detect reload misfire transition (reloadLockout false -> true)
   const lockedNow = Boolean(player.reloadLockout);
@@ -654,10 +667,10 @@ export function updateAndDrawWeaponV2Overlays(
     const progress = clamp(1 - s.ttlSec / Math.max(0.01, s.maxTtlSec), 0, 1);
     const alpha = clamp(1 - progress, 0.05, 1);
 
-    if (drawBatch1TransientShape(g, s, progress, alpha, clockSec, i, floorG)) {
+    if (drawBatch1TransientShape(g, s, progress, alpha, clockSec, i, floorG, underActorG, ribbonTargetG)) {
       continue;
     }
-    if (drawBatch2TransientShape(g, s, progress, alpha, clockSec, i, floorG)) {
+    if (drawBatch2TransientShape(g, s, progress, alpha, clockSec, i, floorG, underActorG, ribbonTargetG)) {
       continue;
     }
     if (drawP1CTransientShape(g, s, progress, alpha, floorG)) {
@@ -694,7 +707,7 @@ export function updateAndDrawWeaponV2Overlays(
       const dist = Math.hypot(dx, dy) || 1;
       const nx = -dy / dist;
       const ny = dx / dist;
-      const targetRibbonGfx = fx?.weaponRibbonGraphics ?? g;
+      const targetRibbonGfx = ribbonTargetG;
       const strandCols = [0xf97316, 0x22d3ee, 0xfde047] as const;
       for (let st = 0; st < 3; st += 1) {
         const phaseOff = (st * Math.PI * 2) / 3;

@@ -1053,7 +1053,6 @@ export function routeCutoutBurstByRadius(
   const entry = getShaderStripEntry(novaKey);
   const [rMin, rMax] = entry ? entry.validRadiusBandPx : [24, 64];
   const tint = resolveEntryTint(entry, options.tint);
-  const alpha = options.alpha ?? 1.0;
   const ttl = options.ttlSec;
 
   const px = fx.localPlayerPos?.x ?? 0;
@@ -1062,6 +1061,12 @@ export function routeCutoutBurstByRadius(
     ? fx.distanceToLocalPlayer(x, y)
     : Math.hypot(x - px, y - py);
   const isP1SelfBurst = distToP1 <= 24;
+  const alpha =
+    options.alpha !== undefined
+      ? options.alpha
+      : options.isTeammate
+        ? applyP1SafeHaloAlpha(0.35, true, distToP1, radiusPx)
+        : 1.0;
 
   const coreDepth = options.depth ?? (isP1SelfBurst ? 26.4 : 43.5);
 
@@ -1185,7 +1190,6 @@ export function routeCutoutDirectionalByReach(
   const entry = getShaderStripEntry(key);
   const [rMin, rMax] = entry ? entry.validRadiusBandPx : [48, 70];
   const tint = resolveEntryTint(entry, options.tint);
-  const alpha = options.alpha ?? 1.0;
   const ttl = options.ttlSec;
 
   const px = fx.localPlayerPos?.x ?? 0;
@@ -1194,6 +1198,12 @@ export function routeCutoutDirectionalByReach(
     ? fx.distanceToLocalPlayer(x, y)
     : Math.hypot(x - px, y - py);
   const isP1SelfBurst = distToP1 <= 24;
+  const alpha =
+    options.alpha !== undefined
+      ? options.alpha
+      : options.isTeammate
+        ? applyP1SafeHaloAlpha(0.35, true, distToP1, reachPx)
+        : 1.0;
 
   const coreDepth = options.depth ?? (isP1SelfBurst ? 26.4 : 43.0);
 

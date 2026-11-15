@@ -311,7 +311,15 @@ export function handleBatch2WeaponSimEvent(
         });
         const isTeammate = ev.playerId !== undefined && ev.playerId !== sim.player.id;
         if (fx) {
-          routeCutoutBurstByRadius(fx, ev.x, ev.y, rad, 'fx_sh_nova_magma', { tint: 0xf59e0b, isTeammate, depth: 43.5 });
+          const ally = resolveAllyFxProfile(isTeammate ? 2 : 1, 1);
+          const dist = fx.distanceToLocalPlayer ? fx.distanceToLocalPlayer(ev.x, ev.y) : Infinity;
+          const alpha = applyP1SafeHaloAlpha(ally.aoeAlpha, isTeammate, dist, rad);
+          routeCutoutBurstByRadius(fx, ev.x, ev.y, rad, 'fx_sh_nova_magma', {
+            tint: 0xf59e0b,
+            isTeammate,
+            depth: 43.5,
+            alpha,
+          });
         }
         fx?.spawnHitSparks(ev.x, ev.y, 0, { isCrit: true, element: 'burn', count: 6 });
         scene.lighting?.spawnTransientLight(ev.x, ev.y, 145, PALETTE.SOLAR_GOLD, 0.92, 0.3);
@@ -661,8 +669,18 @@ export function drawBatch2TransientShape(
   clockSec: number,
   idx: number,
   groundG?: Phaser.GameObjects.Graphics,
+  underG?: Phaser.GameObjects.Graphics,
+  ribbonG?: Phaser.GameObjects.Graphics,
 ): boolean {
   const floorG = groundG ?? g;
+  const underActorG =
+    underG ??
+    (g as unknown as { underActorGraphics?: Phaser.GameObjects.Graphics }).underActorGraphics ??
+    floorG;
+  const ribbonTargetG =
+    ribbonG ??
+    (g as unknown as { weaponRibbonGraphics?: Phaser.GameObjects.Graphics }).weaponRibbonGraphics ??
+    g;
   switch (s.kind) {
     case 'focus_laser_beam': {
       const x2 = s.x2 ?? s.x + 200;
@@ -680,40 +698,40 @@ export function drawBatch2TransientShape(
       const coreCol = heat < 40 ? 0x38bdf8 : heat < 80 ? 0xf59e0b : 0xf4f1ea;
 
       // Ink outline
-      g.lineStyle(coreW + 2.8, 0x141019, alpha * 0.9);
-      g.beginPath();
-      g.moveTo(s.x, s.y);
-      g.lineTo(x2, y2);
-      g.strokePath();
+      ribbonTargetG.lineStyle(coreW + 2.8, 0x141019, alpha * 0.9);
+      ribbonTargetG.beginPath();
+      ribbonTargetG.moveTo(s.x, s.y);
+      ribbonTargetG.lineTo(x2, y2);
+      ribbonTargetG.strokePath();
 
       // Core beam
-      g.lineStyle(coreW, coreCol, alpha * 0.96);
-      g.beginPath();
-      g.moveTo(s.x, s.y);
-      g.lineTo(x2, y2);
-      g.strokePath();
+      ribbonTargetG.lineStyle(coreW, coreCol, alpha * 0.96);
+      ribbonTargetG.beginPath();
+      ribbonTargetG.moveTo(s.x, s.y);
+      ribbonTargetG.lineTo(x2, y2);
+      ribbonTargetG.strokePath();
 
       // Center bright needle
-      g.lineStyle(Math.max(1.0, coreW * 0.35), 0xffffff, alpha);
-      g.beginPath();
-      g.moveTo(s.x, s.y);
-      g.lineTo(x2, y2);
-      g.strokePath();
+      ribbonTargetG.lineStyle(Math.max(1.0, coreW * 0.35), 0xffffff, alpha);
+      ribbonTargetG.beginPath();
+      ribbonTargetG.moveTo(s.x, s.y);
+      ribbonTargetG.lineTo(x2, y2);
+      ribbonTargetG.strokePath();
 
       // 1 sliding 4-point diamond star on the hit rim at (x2, y2)
       const starR = 5.2 + (heat / 100) * 2.5;
       const starOutR = starR + 1.4;
-      g.fillStyle(0x141019, alpha * 0.95);
-      g.fillTriangle(x2 + tx * starOutR, y2 + ty * starOutR, x2 + nx * 3.0, y2 + ny * 3.0, x2 - tx * starOutR, y2 - ty * starOutR);
-      g.fillTriangle(x2 + tx * starOutR, y2 + ty * starOutR, x2 - tx * starOutR, y2 - ty * starOutR, x2 - nx * 3.0, y2 - ny * 3.0);
-      g.fillTriangle(x2 + nx * starOutR, y2 + ny * starOutR, x2 + tx * 3.0, y2 + ty * 3.0, x2 - nx * starOutR, y2 - ny * starOutR);
-      g.fillTriangle(x2 + nx * starOutR, y2 + ny * starOutR, x2 - nx * starOutR, y2 - ny * starOutR, x2 - tx * 3.0, y2 - ty * 3.0);
+      ribbonTargetG.fillStyle(0x141019, alpha * 0.95);
+      ribbonTargetG.fillTriangle(x2 + tx * starOutR, y2 + ty * starOutR, x2 + nx * 3.0, y2 + ny * 3.0, x2 - tx * starOutR, y2 - ty * starOutR);
+      ribbonTargetG.fillTriangle(x2 + tx * starOutR, y2 + ty * starOutR, x2 - tx * starOutR, y2 - ty * starOutR, x2 - nx * 3.0, y2 - ny * 3.0);
+      ribbonTargetG.fillTriangle(x2 + nx * starOutR, y2 + ny * starOutR, x2 + tx * 3.0, y2 + ty * 3.0, x2 - nx * starOutR, y2 - ny * starOutR);
+      ribbonTargetG.fillTriangle(x2 + nx * starOutR, y2 + ny * starOutR, x2 - nx * starOutR, y2 - ny * starOutR, x2 - tx * 3.0, y2 - ty * 3.0);
 
-      g.fillStyle(0xf4f1ea, alpha);
-      g.fillTriangle(x2 + tx * starR, y2 + ty * starR, x2 + nx * 2.0, y2 + ny * 2.0, x2 - tx * starR, y2 - ty * starR);
-      g.fillTriangle(x2 + tx * starR, y2 + ty * starR, x2 - tx * starR, y2 - ty * starR, x2 - nx * 2.0, y2 - ny * 2.0);
-      g.fillTriangle(x2 + nx * starR, y2 + ny * starR, x2 + tx * 2.0, y2 + ty * 2.0, x2 - nx * starR, y2 - ny * starR);
-      g.fillTriangle(x2 + nx * starR, y2 + ny * starR, x2 - nx * starR, y2 - ny * starR, x2 - tx * 2.0, y2 - ty * 2.0);
+      ribbonTargetG.fillStyle(0xf4f1ea, alpha);
+      ribbonTargetG.fillTriangle(x2 + tx * starR, y2 + ty * starR, x2 + nx * 2.0, y2 + ny * 2.0, x2 - tx * starR, y2 - ty * starR);
+      ribbonTargetG.fillTriangle(x2 + tx * starR, y2 + ty * starR, x2 - tx * starR, y2 - ty * starR, x2 - nx * 2.0, y2 - ny * 2.0);
+      ribbonTargetG.fillTriangle(x2 + nx * starR, y2 + ny * starR, x2 + tx * 2.0, y2 + ty * 2.0, x2 - nx * starR, y2 - ny * starR);
+      ribbonTargetG.fillTriangle(x2 + nx * starR, y2 + ny * starR, x2 - nx * starR, y2 - ny * starR, x2 - tx * 2.0, y2 - ty * 2.0);
 
       return true;
     }
@@ -723,7 +741,7 @@ export function drawBatch2TransientShape(
       const y2 = s.y2 ?? s.y;
       const frameIndex = Math.min(5, Math.floor(progress * 6));
       renderFocusLaserRailgunShot(
-        g,
+        ribbonTargetG,
         {
           kind: 'focus_laser_railgun',
           playerId: 1,
@@ -849,9 +867,7 @@ export function drawBatch2TransientShape(
 
     case 'solar_supernova_blast': {
       // 8 60Hz corona lances reaching r = 120.0px on underActorGraphics (depth 26.6, zero strokeCircle)
-      const targetGfx =
-        (g as unknown as { underActorGraphics?: Phaser.GameObjects.Graphics }).underActorGraphics ??
-        floorG;
+      const targetGfx = underActorG;
       renderSolarSupernovaCoronaLances(targetGfx, s.x, s.y, s.radius || 120.0, progress, alpha);
       return true;
     }

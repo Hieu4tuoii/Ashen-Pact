@@ -261,6 +261,7 @@ export function drawTetherStaffBeams(
   g: Phaser.GameObjects.Graphics,
   tetherBeams: ReadonlyArray<SimTetherBeamState>,
   clockSec: number,
+  localPlayerId: number = 1,
 ): number {
   let drawn = 0;
   for (let i = 0; i < tetherBeams.length; i += 1) {
@@ -295,9 +296,9 @@ export function drawTetherStaffBeams(
       1.8,
     );
 
-    // 2. 2 sliding #CFFAFE diamond pulses (P1 only)
-    const isLocalP1 = beam.ownerPlayerId === undefined || beam.ownerPlayerId === 1;
-    if (isLocalP1) {
+    // 2. 2 sliding #CFFAFE diamond pulses (local player only)
+    const isLocal = beam.ownerPlayerId === undefined || beam.ownerPlayerId === localPlayerId;
+    if (isLocal) {
       for (let pIdx = 0; pIdx < 2; pIdx += 1) {
         const t = (clockSec * 2.2 + pIdx * 0.5) % 1;
         const u = 1 - t;

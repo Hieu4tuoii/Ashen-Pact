@@ -361,8 +361,14 @@ export function drawBatch1TransientShape(
   clockSec: number,
   index: number,
   groundG?: Phaser.GameObjects.Graphics,
+  underG?: Phaser.GameObjects.Graphics,
+  _ribbonG?: Phaser.GameObjects.Graphics,
 ): boolean {
   const floorG = groundG ?? g;
+  const underActorG =
+    underG ??
+    (g as unknown as { underActorGraphics?: Phaser.GameObjects.Graphics }).underActorGraphics ??
+    floorG;
   switch (s.kind) {
     case 'crossbow_rip_tether': {
       const px = s.x2 ?? s.x;
@@ -576,9 +582,7 @@ export function drawBatch1TransientShape(
     case 'gale_cyclone_vortex': {
       // 3 pointed spiral fillTaperedArcRibbon wind-blades at depth 26.6 (underActorGraphics, r_eye = 28px hollow)
       // ZERO strokeCircle!
-      const targetGfx =
-        (g as unknown as { underActorGraphics?: Phaser.GameObjects.Graphics }).underActorGraphics ??
-        floorG;
+      const targetGfx = underActorG;
       const ease = 1 - Math.pow(1 - progress, 2.7);
       const span = 0.95;
       for (let arm = 0; arm < 3; arm += 1) {
@@ -713,9 +717,7 @@ export function drawBatch1TransientShape(
 
       // Snaps 4 inward fillTaperedArcRibbon magnetic jaws from ev.radius down inward (depth 26.6)
       // ZERO strokeCircle!
-      const targetGfx =
-        (g as unknown as { underActorGraphics?: Phaser.GameObjects.Graphics }).underActorGraphics ??
-        floorG;
+      const targetGfx = underActorG;
       const jawR = s.radius * (1 - progress * 0.62);
       const halfSpan = 0.32;
       for (let k = 0; k < 4; k += 1) {

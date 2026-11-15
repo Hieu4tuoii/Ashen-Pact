@@ -1004,5 +1004,61 @@ describe('AP2-P1B.5 — Procedural VFX for 7 Batch-2 Weapons, ArtGallery 18 Weap
       ]));
       expect(maxDist).toBeCloseTo(120, 0);
     });
+
+    it('routes underActor shapes to explicit underG (depth 26.6) and ribbons to ribbonG (depth 44.0) via updateAndDrawWeaponV2Overlays', () => {
+      const scene = {};
+      const state = getWeaponV2OverlayState(scene);
+      const topG = createRecordingGraphicsMock();
+      const floorG = createRecordingGraphicsMock();
+      const underG = createRecordingGraphicsMock();
+      const ribbonG = createRecordingGraphicsMock();
+
+      state.shapes.push({
+        kind: 'gale_cyclone_vortex',
+        x: 200,
+        y: 200,
+        radius: 96,
+        color: 0x2dd4bf,
+        ttlSec: 0.3,
+        maxTtlSec: 0.3,
+      });
+      state.shapes.push({
+        kind: 'focus_laser_beam',
+        x: 100,
+        y: 100,
+        x2: 300,
+        y2: 100,
+        radius: 4,
+        color: 0x38bdf8,
+        ttlSec: 0.14,
+        maxTtlSec: 0.14,
+      });
+
+      const player = {
+        id: 1,
+        slot: 0,
+        x: 100,
+        y: 100,
+        weaponSlots: ['gale_smg', 'focus_laser'],
+        activeWeaponSlot: 0,
+      } as SimPlayerState;
+
+      updateAndDrawWeaponV2Overlays(
+        scene,
+        topG as never,
+        undefined,
+        player,
+        [],
+        1 / 60,
+        0.5,
+        'vi',
+        floorG as never,
+        underG as never,
+        ribbonG as never,
+      );
+
+      expect(underG.fillTriangleCalls.length).toBeGreaterThanOrEqual(3);
+      expect(ribbonG.fillTriangleCalls.length).toBeGreaterThanOrEqual(1);
+    });
   });
 });

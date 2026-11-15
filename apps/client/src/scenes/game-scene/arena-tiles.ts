@@ -187,6 +187,10 @@ export function createImpl(this: GameScene): void {
   this.pingVisuals.clear();
   this.enemyRigs.clear();
   this.propVisuals.clear();
+  for (const entry of this.solarMiniSunSprites.values()) {
+    entry.sprite.destroy();
+  }
+  this.solarMiniSunSprites.clear();
   this.projectileSprites.clear();
   this.pickupSprites.clear();
   this.doorSprites.clear();

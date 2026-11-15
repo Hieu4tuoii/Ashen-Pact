@@ -8,6 +8,7 @@ import {
   PLAYER_SLOT_COLORS,
   QUICK_EMOTES_VI,
   type SimEnemyState,
+  type SimPlayerState,
 } from '@ashen-pact/shared';
 import Phaser from 'phaser';
 import { CutoutRig } from '../../art/cutout-rig.js';
@@ -117,7 +118,9 @@ export function syncSimulatedPlayersImpl(this: GameScene, dtSec: number): void {
   if (this.fx) {
     const p = sim.player;
     const pWeaponId = p.weaponSlots[p.activeWeaponSlot] ?? '';
-    const isOverheated = (p.overheatLockTimer ?? 0) > 0 || (p.weaponHeat ?? 0) >= 100;
+    const isOverheated =
+      (p.lifeState === undefined || p.lifeState === 'alive') &&
+      ((p.overheatLockTimer ?? 0) > 0 || (p.weaponHeat ?? 0) >= 100);
     tickPlayerOverheatVentPuffs(
       this.fx,
       p.id,
@@ -157,7 +160,9 @@ export function syncSimulatedPlayersImpl(this: GameScene, dtSec: number): void {
       rig.update(dtSec);
 
       if (this.fx) {
-        const isOverheated = (sp.overheatLockTimer ?? 0) > 0 || (sp.weaponHeat ?? 0) >= 100;
+        const isOverheated =
+          (sp.lifeState === undefined || sp.lifeState === 'alive') &&
+          ((sp.overheatLockTimer ?? 0) > 0 || (sp.weaponHeat ?? 0) >= 100);
         tickPlayerOverheatVentPuffs(
           this.fx,
           sp.id,
@@ -277,7 +282,9 @@ export function syncSimulatedPlayersImpl(this: GameScene, dtSec: number): void {
       }
 
       if (this.fx) {
-        const isOverheated = (cp.overheatLockTimer ?? 0) > 0 || (cp.weaponHeat ?? 0) >= 100;
+        const isOverheated =
+          (cp.lifeState === undefined || cp.lifeState === 'alive') &&
+          ((cp.overheatLockTimer ?? 0) > 0 || (cp.weaponHeat ?? 0) >= 100);
         tickPlayerOverheatVentPuffs(
           this.fx,
           cp.id,
@@ -316,47 +323,56 @@ export function syncSolarMiniSunsImpl(
   this: GameScene,
   sim: ReturnType<LocalTransport['getSim']>,
 ): void {
-  const activeKeys = new Set<string>();
-  const players = [sim.player, ...(sim.simulatedPlayers ?? [])];
+  this.solarMiniSunSyncGen = (this.solarMiniSunSyncGen + 1) | 0;
+  const currentGen = this.solarMiniSunSyncGen;
 
-  for (let pIdx = 0; pIdx < players.length; pIdx++) {
-    const p = players[pIdx]!;
-    if (p.lifeState !== 'alive') continue;
+  const syncPlayerSuns = (p: SimPlayerState, isTeammate: boolean): void => {
+    if (p.lifeState !== 'alive') return;
     const activeWeapon = p.weaponSlots[p.activeWeaponSlot] ?? '';
-    if (activeWeapon !== 'solar_archon_staff') continue;
+    if (activeWeapon !== 'solar_archon_staff') return;
 
     const suns = getSolarMiniSunPositions(p);
-    const isTeammate = p.id !== sim.player.id;
     const alpha = isTeammate ? 0.35 : 1.0;
 
     for (let sIdx = 0; sIdx < suns.length; sIdx++) {
       const sun = suns[sIdx]!;
-      const key = `${p.id}_${sIdx}`;
-      activeKeys.add(key);
+      const key = p.id * 8 + sIdx;
 
-      let sprite = this.solarMiniSunSprites.get(key);
-      if (!sprite) {
-        sprite = this.add
+      let entry = this.solarMiniSunSprites.get(key);
+      if (!entry) {
+        const sprite = this.add
           .sprite(sun.x, sun.y, CUTOUT_KIT_ATLAS_KEY, 'fx_solar_mini_sun')
           .setScale(1 / 3)
           .setDepth(41.5);
-        this.solarMiniSunSprites.set(key, sprite);
+        entry = { sprite, lastSeenGen: currentGen };
+        this.solarMiniSunSprites.set(key, entry);
       } else {
-        sprite.setPosition(sun.x, sun.y);
-        sprite.setVisible(true);
-        sprite.setActive(true);
+        entry.sprite.setPosition(sun.x, sun.y);
+        entry.sprite.setVisible(true);
+        entry.sprite.setActive(true);
+        entry.lastSeenGen = currentGen;
       }
-      sprite.setAlpha(alpha);
-      sprite.setRotation(sun.angle);
+      entry.sprite.setAlpha(alpha);
+      entry.sprite.setRotation(sun.angle);
+    }
+  };
+
+  syncPlayerSuns(sim.player, false);
+  const others = sim.simulatedPlayers;
+  if (others) {
+    for (let i = 0; i < others.length; i++) {
+      const sp = others[i]!;
+      if (sp.id === sim.player.id) continue;
+      syncPlayerSuns(sp, true);
     }
   }
 
-  for (const [key, sprite] of this.solarMiniSunSprites.entries()) {
-    if (!activeKeys.has(key)) {
-      sprite.setVisible(false);
-      sprite.setActive(false);
+  this.solarMiniSunSprites.forEach((entry) => {
+    if (entry.lastSeenGen !== currentGen && entry.sprite.visible) {
+      entry.sprite.setVisible(false);
+      entry.sprite.setActive(false);
     }
-  }
+  });
 }
 
 export function syncEnemyRigsImpl(this: GameScene, dtSec: number): void {

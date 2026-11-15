@@ -279,7 +279,7 @@ export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, 
   }
 
   // 1e. Phase P1A Tether Staff Energy Beams & Anchor Nodes (tether_staff)
-  drawTetherStaffBeams(g, sim.tetherBeams, sim.tick / 60);
+  drawTetherStaffBeams(g, sim.tetherBeams, sim.tick / 60, sim.player.id);
 
   // 1f. Phase 6 Boss Forge Titan Expanding Shockwave Rings (Dash through with i-frames!)
   for (let i = 0; i < sim.shockwaveRings.length; i++) {
@@ -647,6 +647,8 @@ export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, 
         overlayTimeSec,
         i18n.getLocale(),
         floorG,
+        this.underActorGraphics,
+        this.weaponRibbonGraphics,
       );
     });
     drawFootMicroReloadBar(
