@@ -120,8 +120,15 @@ export function createHeadlessFxManager(particleSlots = 64): CombatFxManager {
     lastHitSparkTimeByTargetId: new Map<number, number>(),
     activePerimeterRings: [],
     activeArcRibbons: [],
+    activeFloorTeleportFolds: [],
     perimeterRingFreePool: [],
     arcRibbonFreePool: [],
+    floorFoldFreePool: [],
+    floorFoldGraphics: {
+      clear: vi.fn(),
+      lineStyle: vi.fn(),
+      strokeEllipse: vi.fn(),
+    },
     localPlayerPos: { x: 0, y: 0 },
     muzzleVariantCounter: 0,
     muzzleFlipCounter: 0,
@@ -229,8 +236,13 @@ export function createTeleportTestScene(): {
   const fx: Record<string, unknown> = {
     lastTeleportFoldPos: undefined as { x: number; y: number } | undefined,
     lastFloatingAlertText: undefined as string | undefined,
+    activeFloorTeleportFolds: [] as Array<{ active: boolean; x: number; y: number; age: number; ttl: number }>,
+    floorFoldFreePool: [] as Array<{ active: boolean; x: number; y: number; age: number; ttl: number }>,
     spawnArcaneTeleportFold: vi.fn((x: number, y: number) => {
       fx.lastTeleportFoldPos = { x, y };
+      if (Array.isArray(fx.activeFloorTeleportFolds)) {
+        fx.activeFloorTeleportFolds.push({ active: true, x, y, age: 0, ttl: 0.32 });
+      }
     }),
     spawnFloatingAlert: vi.fn((x: number, y: number, text: string) => {
       fx.lastFloatingAlertText = text;

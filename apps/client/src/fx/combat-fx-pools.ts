@@ -86,6 +86,14 @@ export interface ActiveArcRibbon {
   ttl: number;
 }
 
+export interface ActiveFloorTeleportFold {
+  active: boolean;
+  x: number;
+  y: number;
+  age: number;
+  ttl: number;
+}
+
 export interface PooledDamageText {
   text: Phaser.GameObjects.Text;
   active: boolean;
@@ -313,6 +321,22 @@ export function initCombatFxPools(
       age: 0,
       ttl: 0.16,
       seed: i + 1,
+    });
+  }
+
+  if (!this.floorFoldGraphics) {
+    this.floorFoldGraphics = scene.add ? scene.add.graphics() : ({} as Phaser.GameObjects.Graphics);
+    if (this.floorFoldGraphics && typeof this.floorFoldGraphics.setDepth === 'function') {
+      this.floorFoldGraphics.setDepth(15.0);
+    }
+  }
+  for (let i = 0; i < 8; i++) {
+    this.floorFoldFreePool.push({
+      active: false,
+      x: 0,
+      y: 0,
+      age: 0,
+      ttl: 0.32,
     });
   }
 
@@ -765,6 +789,39 @@ export function update(this: CombatFxManager, dtSec: number, camView?: Phaser.Ge
       writeRibbonIdx++;
     }
     this.activeArcRibbons.length = writeRibbonIdx;
+  }
+
+  // 4c. Draw floor teleport folds on floorFoldGraphics (depth 15.0)
+  if (this.floorFoldGraphics && typeof this.floorFoldGraphics.clear === 'function') {
+    this.floorFoldGraphics.clear();
+    let writeFoldIdx = 0;
+    for (let i = 0; i < this.activeFloorTeleportFolds.length; i++) {
+      const fold = this.activeFloorTeleportFolds[i]!;
+      if (!fold.active) continue;
+      fold.age += dtSec;
+      if (fold.age >= fold.ttl) {
+        fold.active = false;
+        this.floorFoldFreePool.push(fold);
+        continue;
+      }
+      const p = Math.min(1, fold.age / fold.ttl);
+      const rx = 18 + p * 16;
+      const ry = rx / 2.12;
+      const alpha = (1 - p) * 0.95;
+      if (typeof this.floorFoldGraphics.strokeEllipse === 'function') {
+        this.floorFoldGraphics.lineStyle(4.2, 0x141019, alpha * 0.75);
+        this.floorFoldGraphics.strokeEllipse(fold.x, fold.y, rx * 2, ry * 2);
+        this.floorFoldGraphics.lineStyle(2.2, 0x38bdf8, alpha);
+        this.floorFoldGraphics.strokeEllipse(fold.x, fold.y, rx * 2, ry * 2);
+        this.floorFoldGraphics.lineStyle(1.4, 0xfffdf5, alpha * 0.9);
+        this.floorFoldGraphics.strokeEllipse(fold.x, fold.y, (rx - 1.5) * 2, (ry - 0.7) * 2);
+      }
+      if (writeFoldIdx !== i) {
+        this.activeFloorTeleportFolds[writeFoldIdx] = fold;
+      }
+      writeFoldIdx++;
+    }
+    this.activeFloorTeleportFolds.length = writeFoldIdx;
   }
 
   // 5. Update pooled damage numbers & coalesced reaction banner timer

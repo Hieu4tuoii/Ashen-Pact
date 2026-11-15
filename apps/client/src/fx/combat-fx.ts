@@ -7,6 +7,7 @@ import {
 import type Phaser from 'phaser';
 import { hexToNum, PALETTE, PLAYER_SLOT_COLORS } from '../art/palette.js';
 import { RIG_DEFS_BY_ID } from '../art/rig-defs.js';
+import { CUTOUT_KIT_ATLAS_KEY } from '../art/texture-baker-fx.js';
 import { TextureBaker } from '../art/texture-baker.js';
 import type {
   ShaderDirectionalKey,
@@ -29,6 +30,7 @@ import {
   getActiveTorchMoteCount,
   initCombatFxPools,
   type ActiveArcRibbon,
+  type ActiveFloorTeleportFold,
   type ActivePerimeterRing,
   type PooledAfterimage,
   type PooledAmbientParticle,
@@ -80,6 +82,9 @@ export class CombatFxManager {
   public lightningGraphics!: Phaser.GameObjects.Graphics;
   public underActorGraphics!: Phaser.GameObjects.Graphics;
   public weaponRibbonGraphics!: Phaser.GameObjects.Graphics;
+  public floorFoldGraphics!: Phaser.GameObjects.Graphics;
+  public activeFloorTeleportFolds: ActiveFloorTeleportFold[] = [];
+  public floorFoldFreePool: ActiveFloorTeleportFold[] = [];
   public lastHitSparkTimeByTargetId: Map<number, number> = new Map();
   public activePerimeterRings: ActivePerimeterRing[] = [];
   public activeArcRibbons: ActiveArcRibbon[] = [];
@@ -192,6 +197,7 @@ export class CombatFxManager {
     this.lastHitSparkTimeByTargetId.clear();
     this.activePerimeterRings.length = 0;
     this.activeArcRibbons.length = 0;
+    this.activeFloorTeleportFolds.length = 0;
     resetPlayerOverheatVentPuffs();
   }
 
@@ -1118,7 +1124,8 @@ export function spawnPropBreakBurst(
     const ang = (i / count) * Math.PI * 2 + (getClientFreezeRandom()() - 0.5) * 0.4;
     const spd = 65 + getClientFreezeRandom()() * 85;
     activateParticle(p, {
-      textureKey: shardKey,
+      textureKey: CUTOUT_KIT_ATLAS_KEY,
+      frameName: shardKey,
       x,
       y,
       vx: Math.cos(ang) * spd,
@@ -1177,7 +1184,8 @@ export function spawnCrackedWallBurst(
     const ang = (i / count) * Math.PI * 2 + (getClientFreezeRandom()() - 0.5) * 0.4;
     const spd = 75 + getClientFreezeRandom()() * 85;
     activateParticle(p, {
-      textureKey: 'fx_stone_chip',
+      textureKey: CUTOUT_KIT_ATLAS_KEY,
+      frameName: 'fx_stone_chip',
       x,
       y,
       vx: Math.cos(ang) * spd,
@@ -1209,6 +1217,16 @@ export function spawnArcaneTeleportFold(
     x,
     y,
   };
+  const fold = fx.floorFoldFreePool?.pop() ?? { active: true, x, y, age: 0, ttl: 0.32 };
+  fold.active = true;
+  fold.x = x;
+  fold.y = y;
+  fold.age = 0;
+  fold.ttl = 0.32;
+  if (Array.isArray(fx.activeFloorTeleportFolds)) {
+    fx.activeFloorTeleportFolds.push(fold);
+  }
+
   fx.spawnShaderNova?.(x, y, 72, 'fx_sh_arcane_sigil', {
     tint: 0x38bdf8,
     ttl: 0.28,

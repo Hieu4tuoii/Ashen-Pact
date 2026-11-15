@@ -806,10 +806,16 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
   }
 
   const hg = this.interactHighlightGraphics;
+  const fg = this.interactFootRingGraphics;
+  if (fg) {
+    fg.clear();
+  }
   if (hg) {
     hg.clear();
 
-    // Render vertical Cutout trapezoid light shafts (alpha <= 0.16, depth 35.0) + 2.12 : 1 depth 15.0 highlight foot-rings
+    // Render vertical Cutout trapezoid light shafts (alpha <= 0.16, depth 35.0) on hg + 2.12 : 1 depth 15.0 highlight foot-rings on fg
+    const ringG = fg ?? hg;
+
     // 1. Unopened Chests
     for (let i = 0; i < sim.chests.length; i++) {
       const ch = sim.chests[i]!;
@@ -831,8 +837,8 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
 
       const footRx = 20;
       const footRy = footRx / 2.12;
-      hg.lineStyle(2.2, 0xfacc15, 0.38 + pulse * 0.12);
-      hg.strokeEllipse(ch.x, ch.y + 4, footRx * 2, footRy * 2);
+      ringG.lineStyle(2.2, 0xfacc15, 0.38 + pulse * 0.12);
+      ringG.strokeEllipse(ch.x, ch.y + 4, footRx * 2, footRy * 2);
     }
 
     // 2. World Shrines & Anvils
@@ -866,8 +872,8 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
 
       const footRx = 22;
       const footRy = footRx / 2.12;
-      hg.lineStyle(2.2, col, 0.38 + pulse * 0.12);
-      hg.strokeEllipse(npc.x, npc.y + 4, footRx * 2, footRy * 2);
+      ringG.lineStyle(2.2, col, 0.38 + pulse * 0.12);
+      ringG.strokeEllipse(npc.x, npc.y + 4, footRx * 2, footRy * 2);
     }
 
     if (promptSpec) {

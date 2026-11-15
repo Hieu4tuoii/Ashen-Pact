@@ -53,9 +53,10 @@ vi.mock('phaser', () => {
   return { default: PhaserMock, ...PhaserMock };
 });
 
+import { CUTOUT_KIT_ATLAS_KEY } from '../src/art/texture-baker-fx.js';
 import { KRYSSA_CLONE_RIG_DEF } from '../src/art/rig-defs-biome2-boss.js';
 import { TextureBaker } from '../src/art/texture-baker.js';
-import { spawnPropBreakBurst } from '../src/fx/combat-fx.js';
+import { spawnArcaneTeleportFold, spawnCrackedWallBurst, spawnPropBreakBurst } from '../src/fx/combat-fx.js';
 import { PORTAL_VORTEX_DEFAULTS } from '../src/fx/portal-door-shaders.js';
 import { teleportToRoomImpl } from '../src/scenes/game-scene/arena-tiles.js';
 import { createTeleportTestScene, createTestCombatFx } from './helpers/test-combat-fx.js';
@@ -214,9 +215,28 @@ describe('AP2 Phase P1C.4 — Biome 2 & Biome 3 Procedural Prop Texture Keys & C
     spawnPropBreakBurst(fx, 'crate', 100, 100);
     expect(fx.decalPool.some((d) => d.active && d.textureKey.includes('fx_wood_shard'))).toBe(true);
     expect(fx.decalPool.some((d) => d.active && d.textureKey === 'fx_decal_scorch')).toBe(false);
+    expect(
+      fx.particlePool.some(
+        (p) => p.active && p.textureKey === CUTOUT_KIT_ATLAS_KEY && p.frameName === 'fx_wood_shard',
+      ),
+    ).toBe(true);
+
+    spawnPropBreakBurst(fx, 'vase', 150, 150);
+    expect(
+      fx.particlePool.some(
+        (p) => p.active && p.textureKey === CUTOUT_KIT_ATLAS_KEY && p.frameName === 'fx_ceramic_shard',
+      ),
+    ).toBe(true);
 
     spawnPropBreakBurst(fx, 'explosive_barrel', 200, 200);
     expect(fx.decalPool.some((d) => d.active && d.textureKey === 'fx_decal_scorch')).toBe(true);
+
+    spawnCrackedWallBurst(fx, 300, 300);
+    expect(
+      fx.particlePool.some(
+        (p) => p.active && p.textureKey === CUTOUT_KIT_ATLAS_KEY && p.frameName === 'fx_stone_chip',
+      ),
+    ).toBe(true);
   });
 
   it('replaces shockwave_spawned teleport spoof with spawnArcaneTeleportFold + clean "DỊCH CHUYỂN!" while keeping Portal shader constants intact', () => {
@@ -226,5 +246,15 @@ describe('AP2 Phase P1C.4 — Biome 2 & Biome 3 Procedural Prop Texture Keys & C
     expect(fx.lastFloatingAlertText).toBe('DỊCH CHUYỂN!');
     expect(PORTAL_VORTEX_DEFAULTS.particleCount).toBe(8);
     expect(PORTAL_VORTEX_DEFAULTS.rayCount).toBe(3);
+
+    // Verify spawnArcaneTeleportFold creates a 2.12:1 rune ellipse on activeFloorTeleportFolds (depth 15.0)
+    const testFx = createTestCombatFx().fx;
+    spawnArcaneTeleportFold(testFx, 120, 240);
+    expect(testFx.activeFloorTeleportFolds.length).toBeGreaterThan(0);
+    const fold = testFx.activeFloorTeleportFolds[0]!;
+    expect(fold.active).toBe(true);
+    expect(fold.x).toBe(120);
+    expect(fold.y).toBe(240);
+    expect(fold.ttl).toBeCloseTo(0.32, 2);
   });
 });

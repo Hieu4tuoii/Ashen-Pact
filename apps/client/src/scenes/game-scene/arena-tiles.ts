@@ -489,10 +489,14 @@ export function createImpl(this: GameScene): void {
   this.sanctuaryLayer?.destroy();
   this.sanctuaryLayer = new SanctuaryVisualLayer(this);
 
-  // 3. Telegraph, Interact Highlight & Hitbox Overlay Graphics (depth 35.6..38: above lightmapRt depth 34)
+  // 3. Telegraph, Interact Highlight & Hitbox Overlay Graphics (depth 35.0..38: above lightmapRt depth 34)
   this.interactHighlightGraphics = this.add.graphics();
-  this.interactHighlightGraphics.setDepth(35.6);
+  this.interactHighlightGraphics.setDepth(35.0);
   this.interactHighlightGraphics.setBlendMode(Phaser.BlendModes.ADD);
+
+  this.interactFootRingGraphics = this.add.graphics();
+  this.interactFootRingGraphics.setDepth(15.0);
+  this.interactFootRingGraphics.setBlendMode(Phaser.BlendModes.ADD);
 
   this.groundHazardGraphics = this.add.graphics();
   this.groundHazardGraphics.setDepth(16.0);

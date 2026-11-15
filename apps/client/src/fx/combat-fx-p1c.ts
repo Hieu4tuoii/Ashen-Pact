@@ -33,6 +33,20 @@ export type P1CTacticalVfxKind =
 
 const PRISM_RAY_OFFSETS = [-CRYO_PRISM_FAN_SPREAD_RAD * 0.5, 0, CRYO_PRISM_FAN_SPREAD_RAD * 0.5] as const;
 
+const PNEUMATIC_PRESS_CORNER_SIGNS: ReadonlyArray<readonly [number, number, number, number]> = [
+  [-1, -1, 1, 1],
+  [1, -1, -1, 1],
+  [-1, 1, 1, -1],
+  [1, 1, -1, -1],
+];
+
+const CARDINAL_DIRS: ReadonlyArray<readonly [number, number]> = [
+  [0, -1],
+  [1, 0],
+  [0, 1],
+  [-1, 0],
+];
+
 function pushP1CShape(state: WeaponV2OverlayState, shape: TransientWeaponV2Shape): void {
   if (state.shapes.length >= 64) state.shapes.shift();
   state.shapes.push(shape);
@@ -264,18 +278,12 @@ export function drawP1CActiveOverlays(
       const r = PNEUMATIC_PRESS_CRUSH_RADIUS;
       // 4 industrial #141019 + #F59E0B L-brackets on depth 16.0 (floorG)
       const bracketArm = 8;
-      const corners = [
-        [-r, -r, 1, 1],
-        [r, -r, -1, 1],
-        [-r, r, 1, -1],
-        [r, r, -1, -1],
-      ];
-      for (let c = 0; c < corners.length; c++) {
-        const corner = corners[c]!;
-        const cx = corner[0]!;
-        const cy = corner[1]!;
-        const dx = corner[2]!;
-        const dy = corner[3]!;
+      for (let c = 0; c < PNEUMATIC_PRESS_CORNER_SIGNS.length; c++) {
+        const corner = PNEUMATIC_PRESS_CORNER_SIGNS[c]!;
+        const cx = corner[0] * r;
+        const cy = corner[1] * r;
+        const dx = corner[2];
+        const dy = corner[3];
         const bx = prop.x + cx;
         const by = prop.y + cy;
         floorG.lineStyle(3.8, 0x141019, 0.85);
@@ -304,16 +312,10 @@ export function drawP1CActiveOverlays(
         floorG.strokeCircle(prop.x, prop.y, r * (1 - t * 0.38));
         // 4 cardinal steam puffs
         const steamDist = r * (0.8 + t * 0.35);
-        const cardinals = [
-          [0, -1],
-          [1, 0],
-          [0, 1],
-          [-1, 0],
-        ];
-        for (let cd = 0; cd < cardinals.length; cd++) {
-          const card = cardinals[cd]!;
-          const cdx = card[0]!;
-          const cdy = card[1]!;
+        for (let cd = 0; cd < CARDINAL_DIRS.length; cd++) {
+          const card = CARDINAL_DIRS[cd]!;
+          const cdx = card[0];
+          const cdy = card[1];
           g.fillStyle(0xfffdf5, 0.35 * (1 - t * 0.5));
           g.fillCircle(prop.x + cdx * steamDist, prop.y + cdy * steamDist, 3.5 + t * 2.5);
         }

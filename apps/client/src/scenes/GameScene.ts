@@ -273,6 +273,7 @@ export class GameScene extends Phaser.Scene {
   public portalDoorAnimClockSec = 0;
   public lastDoorRoomKey = '';
   public interactHighlightGraphics!: Phaser.GameObjects.Graphics;
+  public interactFootRingGraphics!: Phaser.GameObjects.Graphics;
   public interactPromptState: InteractPromptFadeState = createInteractPromptFadeState();
   public currentInteractTarget: InteractTargetResult | null = null;
   public interactPromptVisuals?: InteractPromptPillVisuals;
