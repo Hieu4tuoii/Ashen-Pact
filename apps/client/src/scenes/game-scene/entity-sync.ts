@@ -102,12 +102,20 @@ export function resolveSecondaryStatusBadgeAnchor(
   maxHp: number,
   hpBarLeftX: number,
   hpBarY: number,
+  out?: { x: number; y: number },
 ): { x: number; y: number } {
+  const target = out ?? { x: 0, y: 0 };
   if (hp >= maxHp) {
-    return { x: enemyX, y: enemyY - enemyRadius - 10 };
+    target.x = enemyX;
+    target.y = enemyY - enemyRadius - 10;
+    return target;
   }
-  return { x: hpBarLeftX - 7, y: hpBarY };
+  target.x = hpBarLeftX - 7;
+  target.y = hpBarY;
+  return target;
 }
+
+const statusBadgeAnchorScratch = { x: 0, y: 0 };
 
 export function resolvePlayerStatusTintImpl(this: GameScene): number | null {
   const p = this.transport.getSim().player;
@@ -675,7 +683,16 @@ export function syncEnemyRigsImpl(this: GameScene, dtSec: number): void {
       const hpBarW = e.isBoss ? 52 : e.isElite ? 36 : 28;
       const hpBarLeftX = pos.x - hpBarW / 2;
       const hpBarY = pos.y - (e.isBoss ? 44 : 30);
-      const anchor = resolveSecondaryStatusBadgeAnchor(pos.x, pos.y, e.radius, e.hp, e.maxHp, hpBarLeftX, hpBarY);
+      const anchor = resolveSecondaryStatusBadgeAnchor(
+        pos.x,
+        pos.y,
+        e.radius,
+        e.hp,
+        e.maxHp,
+        hpBarLeftX,
+        hpBarY,
+        statusBadgeAnchorScratch,
+      );
       const badge = this.statusBadgePool[badgeCursor++]!;
       badge.setTexture('fx_cutout_kit_512', badgeKey)
         .setPosition(anchor.x, anchor.y)

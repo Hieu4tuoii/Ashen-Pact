@@ -162,6 +162,23 @@ describe('1:1 Top-Down Chiaroscuro Flipbook Playback & Core Combat Spawners', ()
     expect(
       mgr.particlePool.some((p) => p.active && p.textureKey === 'fx_react_overload_star'),
     ).toBe(true);
+
+    // Verify single-target reaction (vaporize) spawns mini-strip and never routes damage (650) as AoE pixel radius
+    const vapMgr = createHeadlessFxManager(16);
+    vapMgr.spawnElementalReactionFx({
+      reaction: 'vaporize',
+      x: 200,
+      y: 200,
+      damage: 650,
+      isTeamCombo: false,
+    });
+    expect(
+      vapMgr.particlePool.some((p) => p.active && p.textureKey === 'fx_react_vapor_puff'),
+    ).toBe(true);
+    expect(
+      vapMgr.particlePool.some((p) => p.active && p.textureKey.startsWith('fx_sh_')),
+    ).toBe(false);
+    expect(vapMgr.activePerimeterRings.length).toBe(0);
   });
 
   it('spawns directional +X archetypes (fx_sh_aegis_crest, fx_sh_falcon_sonic) at exact 1:1 reach and angle, plus combo-finisher melee flourishes', () => {

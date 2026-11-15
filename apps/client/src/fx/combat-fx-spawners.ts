@@ -1814,14 +1814,23 @@ export function spawnElementalReactionFxImpl(
   const x = typeof arg1 === 'string' ? (arg2 ?? 0) : arg1.x;
   const y = typeof arg1 === 'string' ? (arg3 ?? 0) : arg1.y;
   const damage = typeof arg1 === 'string' ? (arg4 ?? 0) : (arg1.damage ?? 0);
-  const radius = typeof arg1 === 'string' ? arg4 : (arg1.radius ?? arg1.damage);
+  const radius =
+    typeof arg1 === 'string'
+      ? arg4
+      : arg1.radius !== undefined
+        ? arg1.radius
+        : reaction === 'overload'
+          ? 92
+          : (reaction as string) === 'toxic_blast' || (reaction as string) === 'corrosive_blast'
+            ? 96
+            : 0;
   const isTeamCombo = typeof arg1 === 'string' ? Boolean(arg5) : Boolean(arg1.isTeamCombo);
   const isTeammate = typeof arg1 === 'string' ? Boolean(arg6) : Boolean(arg1.isTeammate);
 
   const spec = resolveElementalReactionBurstSpec(reaction, isTeamCombo);
   this.spawnFloorDecal(spec.decalKind, x, y, isTeamCombo ? 0.85 : 0.68);
 
-  // 1. Spawns mapped fx_react_* 4f mini-strip (frameCount = 4, ttl = 0.20s, depth 42.5, BlendMode.NORMAL, 1/4 bake scale)
+  // 1. Spawns mapped fx_react_* 4f mini-strip (frameCount = 4, ttl = 0.20s, depth 42.5, BlendMode.NORMAL, 1:1 world scale [1.50, 2.20]px ink)
   const stripKey = resolveReactionMiniStripKey(reaction);
   const stripSlot = this.acquireParticleSlot();
   const aoeAlpha = isTeammate ? 0.35 : 1.0;
@@ -1831,14 +1840,15 @@ export function spawnElementalReactionFxImpl(
     alpha = applyP1SafeHaloAlpha(alpha, true, distToP1, radius ?? 32);
   }
 
+  const stripScale = isTeamCombo ? 1.05 : 0.96;
   if (stripSlot) {
     activateParticle(stripSlot, {
       textureKey: stripKey,
       x,
       y,
       ttl: 0.2,
-      startScale: 0.25,
-      endScale: 0.25,
+      startScale: stripScale,
+      endScale: stripScale,
       startAlpha: alpha,
       depth: 42.5,
       blendMode: 'NORMAL',

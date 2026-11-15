@@ -105,6 +105,7 @@ export class CutoutRig {
   private telegraphProgress = 0; // 0 = none, (0..1] = active telegraph progress
   private spawnProgress = 1; // 1 = fully spawned
   private elementalStatusTint: number | null = null;
+  private footFrostTinted = false;
 
   constructor(
     scene: Phaser.Scene,
@@ -448,7 +449,7 @@ export class CutoutRig {
       this.applyFootFrostTint(this.elementalStatusTint);
       this.isHitFlashing = false;
       this.isStatusTinted = true;
-    } else if (this.isHitFlashing || this.isStatusTinted) {
+    } else if (this.isHitFlashing || this.isStatusTinted || this.footFrostTinted) {
       this.clearPartTints();
       this.isHitFlashing = false;
       this.isStatusTinted = false;
@@ -603,13 +604,11 @@ export class CutoutRig {
     if (this.compositeSprite) {
       this.compositeSprite.clearTint();
     }
-    for (const [partId, sprite] of this.partSprites) {
-      if (partId === 'legLeft' || partId === 'legRight') {
-        sprite.setTint(color);
-      } else {
-        sprite.clearTint();
-      }
-    }
+    const legLeft = this.partSprites.get('legLeft');
+    if (legLeft) legLeft.setTint(color);
+    const legRight = this.partSprites.get('legRight');
+    if (legRight) legRight.setTint(color);
+    this.footFrostTinted = true;
   }
 
   private applyMultiplicativeTint(color: number): void {
@@ -628,6 +627,7 @@ export class CutoutRig {
     for (const sprite of this.partSprites.values()) {
       sprite.clearTint();
     }
+    this.footFrostTinted = false;
   }
 
   public destroy(): void {
