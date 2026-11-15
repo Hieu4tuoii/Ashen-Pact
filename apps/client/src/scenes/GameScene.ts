@@ -345,9 +345,13 @@ export class GameScene extends Phaser.Scene {
   public lastBannerRoomCleared = false;
 
   public groundHazardGraphics!: Phaser.GameObjects.Graphics;
+  public enemyGroundTelegraphGfx!: Phaser.GameObjects.Graphics;
+  public underActorGraphics!: Phaser.GameObjects.Graphics;
+  public weaponRibbonGraphics!: Phaser.GameObjects.Graphics;
   public telegraphGraphics!: Phaser.GameObjects.Graphics;
   public hitboxGraphics!: Phaser.GameObjects.Graphics;
   public crosshairSprite!: Phaser.GameObjects.Sprite;
+  public pushBlockVisuals = new Map<number, { sprite: Phaser.GameObjects.Sprite; shadow: Phaser.GameObjects.Sprite }>();
 
   // Camera-pinned HUD elements
   public hudScene?: HudScene;

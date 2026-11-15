@@ -96,7 +96,7 @@ export class CutoutRig {
   private lungeOffsetY = 0;
   private hitFlashTimer = 0;
   private hitFlashCooldownTimer = 0;
-  private hitFlashTint = 0xff6b6b;
+  private hitFlashTint = 0xFFFBEB;
   private castPoseTimer = 0;
   private reviveProgress = 0;
   private isHitFlashing = false;
@@ -267,7 +267,7 @@ export class CutoutRig {
     return { x: this.lungeOffsetX, y: this.lungeOffsetY };
   }
 
-  public triggerHitFlash(durationSec = 0.075, tintColor?: number): void {
+  public triggerHitFlash(durationSec = 0.034, tintColor?: number): void {
     const resolvedTint =
       tintColor ?? resolveHitFlashTint({ isPlayer: this.playerSlot !== null });
     if (this.hitFlashCooldownTimer > 0) {
@@ -278,13 +278,13 @@ export class CutoutRig {
     }
     this.hitFlashTint = resolvedTint;
     if (this.isBoss) {
-      this.hitFlashTimer = Math.min(durationSec, 0.055);
+      this.hitFlashTimer = Math.min(durationSec, 0.034);
       this.hitFlashCooldownTimer = 0.22;
     } else if (this.playerSlot !== null) {
       this.hitFlashTimer = Math.max(this.hitFlashTimer, durationSec);
       this.hitFlashCooldownTimer = 0.08;
     } else {
-      this.hitFlashTimer = Math.min(durationSec, 0.075);
+      this.hitFlashTimer = Math.min(durationSec, 0.034);
       this.hitFlashCooldownTimer = 0.15;
     }
   }

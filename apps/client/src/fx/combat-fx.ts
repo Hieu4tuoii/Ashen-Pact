@@ -28,6 +28,8 @@ import {
   getActiveParticleCount,
   getActiveTorchMoteCount,
   initCombatFxPools,
+  type ActiveArcRibbon,
+  type ActivePerimeterRing,
   type PooledAfterimage,
   type PooledAmbientParticle,
   type PooledDamageText,
@@ -75,6 +77,14 @@ export class CombatFxManager {
   public readonly ambientPool: PooledAmbientParticle[] = [];
   public readonly lightningPool: PooledLightningArc[] = [];
   public lightningGraphics!: Phaser.GameObjects.Graphics;
+  public underActorGraphics!: Phaser.GameObjects.Graphics;
+  public weaponRibbonGraphics!: Phaser.GameObjects.Graphics;
+  public lastHitSparkTimeByTargetId: Map<string, number> = new Map();
+  public activePerimeterRings: ActivePerimeterRing[] = [];
+  public activeArcRibbons: ActiveArcRibbon[] = [];
+  public muzzleVariantCounter = 0;
+  public muzzleFlipCounter = 0;
+  public localPlayerPos = { x: 0, y: 0 };
 
   public decalWriteCursor = 0;
   public activeDecalCount = 0;
@@ -164,14 +174,31 @@ export class CombatFxManager {
     }
   }
 
+  public setLocalPlayerPosition(x: number, y: number): void {
+    this.localPlayerPos.x = x;
+    this.localPlayerPos.y = y;
+  }
+
+  public distanceToLocalPlayer(x: number, y: number): number {
+    const dx = x - this.localPlayerPos.x;
+    const dy = y - this.localPlayerPos.y;
+    return Math.sqrt(dx * dx + dy * dy);
+  }
+
+  public resetRoomTransientState(): void {
+    this.lastHitSparkTimeByTargetId.clear();
+    this.activePerimeterRings.length = 0;
+    this.activeArcRibbons.length = 0;
+  }
+
   public spawnShaderNova(
     x: number,
     y: number,
     radiusPx: number,
     novaKey: ShaderNovaKey = 'fx_sh_nova_solar',
     options?: ShaderNovaSpawnOptions,
-  ): void {
-    spawnShaderNovaImpl.call(this, x, y, radiusPx, novaKey, options);
+  ): PooledParticle | null {
+    return spawnShaderNovaImpl.call(this, x, y, radiusPx, novaKey, options);
   }
 
   public spawnShaderSlash(
@@ -181,8 +208,8 @@ export class CombatFxManager {
     angleRad: number,
     slashKey: ShaderSlashKey = 'fx_sh_slash_steel',
     options?: ShaderSlashSpawnOptions,
-  ): void {
-    spawnShaderSlashImpl.call(this, x, y, rangePx, angleRad, slashKey, options);
+  ): PooledParticle | null {
+    return spawnShaderSlashImpl.call(this, x, y, rangePx, angleRad, slashKey, options);
   }
 
   public spawnShaderCone(
@@ -191,8 +218,8 @@ export class CombatFxManager {
     reachPx: number,
     angleRad: number,
     options?: ShaderConeSpawnOptions,
-  ): void {
-    spawnShaderConeImpl.call(this, x, y, reachPx, angleRad, options);
+  ): PooledParticle | null {
+    return spawnShaderConeImpl.call(this, x, y, reachPx, angleRad, options);
   }
 
   public spawnShaderLance(
@@ -201,8 +228,8 @@ export class CombatFxManager {
     lengthPx: number,
     angleRad: number,
     options?: ShaderLanceSpawnOptions,
-  ): void {
-    spawnShaderLanceImpl.call(this, x, y, lengthPx, angleRad, options);
+  ): PooledParticle | null {
+    return spawnShaderLanceImpl.call(this, x, y, lengthPx, angleRad, options);
   }
 
   public spawnShaderDirectional(
@@ -212,8 +239,8 @@ export class CombatFxManager {
     angleRad: number,
     key: ShaderDirectionalKey,
     options?: ShaderDirectionalSpawnOptions,
-  ): void {
-    spawnShaderDirectionalImpl.call(this, x, y, reachPx, angleRad, key, options);
+  ): PooledParticle | null {
+    return spawnShaderDirectionalImpl.call(this, x, y, reachPx, angleRad, key, options);
   }
 
   public spawnFloatingAlert(
@@ -319,7 +346,8 @@ export class CombatFxManager {
     slot.sprite.setPosition(x, y);
     slot.sprite.setRotation((this.decalWriteCursor * 1.17) % (Math.PI * 2));
     slot.sprite.setScale(invBake * scaleMult);
-    slot.sprite.setAlpha(0.82);
+    slot.sprite.setAlpha(0.32);
+    slot.sprite.setDepth(6);
     slot.sprite.setVisible(true);
 
     this.totalDecalsSpawned += 1;
@@ -833,6 +861,11 @@ export class CombatFxManager {
       element?: ElementType;
       count?: number;
       isTeammate?: boolean;
+      targetId?: string | number;
+      targetX?: number;
+      targetY?: number;
+      targetRadius?: number;
+      nowMs?: number;
     } = {},
   ): void {
     spawnHitSparksImpl.call(this, x, y, impactAngleRad, options);

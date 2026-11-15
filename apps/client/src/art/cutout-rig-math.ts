@@ -642,7 +642,7 @@ export function resolveHitFlashTint(options: HitFlashTintOptions = {}): number {
     case 'poison':
       return 0xa3e635;
     default:
-      return 0xff6b6b; // Crisp coral-crimson physical impact tint
+      return 0xFFFBEB; // warm ivory normal hit-flash (0xFFFBEB)
   }
 }
 

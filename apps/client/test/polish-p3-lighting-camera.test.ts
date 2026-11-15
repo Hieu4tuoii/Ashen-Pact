@@ -1,10 +1,22 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+vi.mock('phaser', () => {
+  class MockPostFXPipeline {}
+  return {
+    default: {
+      Renderer: { WebGL: { Pipelines: { PostFXPipeline: MockPostFXPipeline } } },
+      BlendModes: { MULTIPLY: 2, ADD: 1, NORMAL: 0 },
+    },
+  };
+});
+
 import {
   BIOME_LIGHTING_CONFIG,
   computeUniformViewportMetrics,
   POSTFX_DEFAULTS,
   resolveSceneLightingConfig,
 } from '../src/fx/lighting-config.js';
+import { getBiomePostFxFragForTest } from '../src/fx/lighting-pipeline.js';
 
 function getRgbChannelMean(colorNum: number): number {
   const r = ((colorNum >> 16) & 0xff) / 255;
@@ -86,5 +98,10 @@ describe('Phase P3 — Full-Screen Clear Visibility Lighting & Uniform Viewport 
     expect(m5by4.viewH).toBeCloseTo(768, 4);
     expect(m5by4.padX).toBeCloseTo(0, 4);
     expect(m5by4.padY).toBeCloseTo(114, 4);
+  });
+
+  it('protects #141019 ink in BIOME_POSTFX_FRAG with inkGuard and keeps bloomStrength = 0.14', () => {
+    expect(POSTFX_DEFAULTS.bloomStrength).toBe(0.14);
+    expect(getBiomePostFxFragForTest()).toContain('smoothstep(0.22, 0.48, centerLuma)');
   });
 });

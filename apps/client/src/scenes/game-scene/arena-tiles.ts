@@ -477,10 +477,21 @@ export function createImpl(this: GameScene): void {
   this.interactHighlightGraphics.setBlendMode(Phaser.BlendModes.ADD);
 
   this.groundHazardGraphics = this.add.graphics();
-  this.groundHazardGraphics.setDepth(16);
+  this.groundHazardGraphics.setDepth(16.0);
+
+  this.enemyGroundTelegraphGfx = this.add.graphics();
+  this.enemyGroundTelegraphGfx.setDepth(17.0);
+
+  this.underActorGraphics = this.add.graphics();
+  this.underActorGraphics.setDepth(26.6);
+  if (this.fx) this.fx.underActorGraphics = this.underActorGraphics;
+
+  this.weaponRibbonGraphics = this.add.graphics();
+  this.weaponRibbonGraphics.setDepth(44.0);
+  if (this.fx) this.fx.weaponRibbonGraphics = this.weaponRibbonGraphics;
 
   this.telegraphGraphics = this.add.graphics();
-  this.telegraphGraphics.setDepth(38);
+  this.telegraphGraphics.setDepth(46.0);
 
   this.hitboxGraphics = this.add.graphics();
   this.hitboxGraphics.setDepth(90);
@@ -1442,6 +1453,7 @@ export function teleportToRoomImpl(this: GameScene, targetRoomId: number): boole
 
   const entered = sim.enterRoom(targetRoomId);
   if (!entered) return false;
+  this.fx?.resetRoomTransientState?.();
   sim.doorTransitionCooldown = Math.max(sim.doorTransitionCooldown, 0.75);
 
   if (this.room && this.coopMode !== 'solo') {

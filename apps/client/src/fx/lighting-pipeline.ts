@@ -84,7 +84,8 @@ void main() {
     float centerLuma = dot(color, vec3(0.299, 0.587, 0.114));
     float haloLuma = dot(avg, vec3(0.299, 0.587, 0.114));
     float brightFactor = smoothstep(0.74, 0.95, max(centerLuma, haloLuma * 0.92));
-    color += avg * brightFactor * (uBloomStrength * 0.65);
+    float inkGuard = smoothstep(0.22, 0.48, centerLuma);
+    color += avg * brightFactor * (uBloomStrength * 0.65) * inkGuard;
   }
 
   // 3. Biome Color Grading & Contrast
@@ -101,7 +102,11 @@ void main() {
 }
 `;
 
-function liftAmbientTowardClearWhite(ambientColor: number, whiteWeight = 0.68): number {
+export function getBiomePostFxFragForTest(): string {
+  return BIOME_POSTFX_FRAG;
+}
+
+function liftAmbientTowardClearWhite(ambientColor: number, whiteWeight = 0.46): number {
   const r = (ambientColor >> 16) & 0xff;
   const g = (ambientColor >> 8) & 0xff;
   const b = ambientColor & 0xff;
@@ -168,6 +173,17 @@ export class LightingPipeline {
   private readonly lightmapRt: Phaser.GameObjects.RenderTexture;
   private readonly brushSprite: Phaser.GameObjects.Image;
   private readonly warmGlowPool: Phaser.GameObjects.Image[] = [];
+  private readonly combatChromaticGlowPool: Array<{
+    sprite: Phaser.GameObjects.Image;
+    active: boolean;
+    x: number;
+    y: number;
+    radius: number;
+    color: number;
+    alpha: number;
+    age: number;
+    ttl: number;
+  }> = [];
   private readonly blizzardRimGraphics: Phaser.GameObjects.Graphics;
   private readonly transientPool: TransientLight[] = [];
   private readonly brushBaseTexWidth = 128;
@@ -219,6 +235,26 @@ export class LightingPipeline {
     this.blizzardRimGraphics = scene.add.graphics();
     this.blizzardRimGraphics.setDepth(36);
 
+    // Pre-allocate 16 combat chromatic glow sprites at depth 35.0 (ADD, alpha <= 0.18, ttl = 0.12–0.18s)
+    for (let i = 0; i < 16; i++) {
+      const glow = scene.add.image(-1000, -1000, 'fx_light_radial');
+      glow.setOrigin(0.5, 0.5);
+      glow.setBlendMode(Phaser.BlendModes.ADD);
+      glow.setDepth(35);
+      glow.setVisible(false);
+      this.combatChromaticGlowPool.push({
+        sprite: glow,
+        active: false,
+        x: 0,
+        y: 0,
+        radius: 60,
+        color: 0xffffff,
+        alpha: 0.18,
+        age: 0,
+        ttl: 0.15,
+      });
+    }
+
     for (let i = 0; i < 32; i++) {
       this.transientPool.push({
         active: false,
@@ -269,6 +305,11 @@ export class LightingPipeline {
         const g = this.warmGlowPool[i]!;
         if (g.visible) g.setVisible(false);
       }
+      for (let i = 0; i < this.combatChromaticGlowPool.length; i++) {
+        const g = this.combatChromaticGlowPool[i]!;
+        if (g.sprite.visible) g.sprite.setVisible(false);
+        g.active = false;
+      }
       this.blizzardRimGraphics.clear();
     }
     this.syncPostFxPipeline();
@@ -276,6 +317,37 @@ export class LightingPipeline {
 
   public isLightmapVisible(): boolean {
     return this.lightmapRt.visible;
+  }
+
+  public spawnCombatChromaticGlow(
+    x: number,
+    y: number,
+    radiusPx: number,
+    colorHex: string,
+    alpha = 0.18,
+    ttlSec = 0.15,
+  ): void {
+    const cappedAlpha = Math.min(0.18, Math.max(0, alpha));
+    const safeTtl = clamp(ttlSec, 0.12, 0.18);
+    for (let i = 0; i < this.combatChromaticGlowPool.length; i++) {
+      const slot = this.combatChromaticGlowPool[i]!;
+      if (!slot.active) {
+        slot.active = true;
+        slot.x = x;
+        slot.y = y;
+        slot.radius = radiusPx;
+        slot.color = hexToNum(colorHex);
+        slot.alpha = cappedAlpha;
+        slot.age = 0;
+        slot.ttl = safeTtl;
+        slot.sprite.setPosition(x, y);
+        slot.sprite.setTint(slot.color);
+        slot.sprite.setScale((radiusPx * 2) / this.brushBaseTexWidth);
+        slot.sprite.setAlpha(cappedAlpha);
+        slot.sprite.setVisible(true);
+        return;
+      }
+    }
   }
 
   public spawnTransientLight(
@@ -498,6 +570,22 @@ export class LightingPipeline {
     // Draw frost rim when Kryssa Phase 3 blizzardVeil is active
     this.drawBlizzardRim(rawViewX, rawViewY, viewW, viewH);
 
+    // Update combat chromatic glow pool (depth 35.0 ADD, alpha <= 0.18, ttl = 0.12–0.18s)
+    for (let i = 0; i < this.combatChromaticGlowPool.length; i++) {
+      const slot = this.combatChromaticGlowPool[i]!;
+      if (!slot.active) continue;
+      slot.age += dtSec;
+      if (slot.age >= slot.ttl) {
+        slot.active = false;
+        slot.sprite.setVisible(false);
+        continue;
+      }
+      const progress = slot.age / slot.ttl;
+      const currentAlpha = slot.alpha * (1 - progress);
+      slot.sprite.setAlpha(currentAlpha);
+      slot.sprite.setPosition(slot.x, slot.y);
+    }
+
     // 2. Render Dynamic Lightmap into RenderTexture (amortized during 600+ bullet swarm)
     const skipRtDraw = Boolean(
       (this.scene.game as { __softwareLogicOnlyStep?: boolean } | undefined)
@@ -532,7 +620,7 @@ export class LightingPipeline {
 
     this.lightmapRt.setPosition(viewX, viewY);
 
-    const ambientColor = liftAmbientTowardClearWhite(sceneConfig.ambientColor, 0.68);
+    const ambientColor = liftAmbientTowardClearWhite(sceneConfig.ambientColor, 0.46);
     const lmScale = this.currentLightmapScale;
     const maxLights = budget.tier === 'high' ? 48 : budget.tier === 'medium' ? 28 : 12;
     if (!skipRtDraw) {
@@ -569,7 +657,7 @@ export class LightingPipeline {
       lightsDrawn += 1;
     };
 
-    // A. Main Player subtle foot presence (no fog-of-war spotlight circle)
+    // 1. P1–P4 vision
     const dashBoost = player.dashTimer > 0 ? 1 : 0;
     if (dashBoost > 0) {
       drawLight(playerPos.x, playerPos.y, 110, 0xfff3d6, 0.12);
@@ -584,11 +672,77 @@ export class LightingPipeline {
         0.28,
       );
     }
-
-    // B. Simulated Co-op Players (P2-P4) — no fog-of-war spotlight circles
     void simulatedPlayers;
 
-    // C. Props: Flickering Torches (with Warm ADD Glow Pool at depth 35), Bioluminescent Mushrooms (B1 only), Crystal Pillars, Explosive Barrels
+    // 2. Transient Flash Lights (up to 16 combat lights prioritized before props/surfaces)
+    let transientDrawn = 0;
+    const maxTransientLights = 16;
+    for (let i = 0; i < this.transientPool.length; i++) {
+      const t = this.transientPool[i]!;
+      if (!t.active) continue;
+      t.age += dtSec;
+      if (t.age >= t.ttl) {
+        t.active = false;
+        continue;
+      }
+      if (transientDrawn < maxTransientLights && lightsDrawn < maxLights) {
+        const p = 1 - t.age / t.ttl;
+        drawLight(t.x, t.y, t.radius * (0.75 + 0.25 * p), t.color, t.intensity * p * 0.45);
+        transientDrawn++;
+      }
+    }
+
+    // 3. Phase P6 Interactable & Pickup Lights (reserved quota: 16 High / 10 Medium / 6 Low, alpha <= 0.35)
+    const interactableQuota = getInteractableLightQuota(budget.tier);
+    let interactableLightsDrawn = 0;
+    if (interactableLights && interactableLights.length > 0) {
+      for (
+        let i = 0;
+        i < interactableLights.length &&
+        interactableLightsDrawn < interactableQuota &&
+        lightsDrawn < maxLights;
+        i++
+      ) {
+        const entry = interactableLights[i]!;
+        const lx = entry.x - viewX;
+        const ly = entry.y - viewY;
+        const r = entry.radius;
+        if (
+          lx + r < -16 ||
+          lx - r > coverW + 16 ||
+          ly + r < -16 ||
+          ly - r > coverH + 16
+        ) {
+          continue;
+        }
+        if (!skipRtDraw) {
+          this.brushSprite.setScale(((r * 2) / this.brushBaseTexWidth) * lmScale);
+          this.brushSprite.setTint(entry.colorNum);
+          this.brushSprite.setAlpha(clamp(entry.alpha, 0, 0.35));
+          this.lightmapRt.batchDraw(this.brushSprite, lx * lmScale, ly * lmScale);
+
+          if (
+            entry.secondaryColorNum !== undefined &&
+            entry.secondaryRadius !== undefined &&
+            entry.secondaryAlpha !== undefined &&
+            entry.secondaryRadius > 0 &&
+            entry.secondaryAlpha > 0
+          ) {
+            this.brushSprite.setScale(
+              ((entry.secondaryRadius * 2) / this.brushBaseTexWidth) * lmScale,
+            );
+            this.brushSprite.setTint(entry.secondaryColorNum);
+            this.brushSprite.setAlpha(clamp(entry.secondaryAlpha, 0, 0.35));
+            this.lightmapRt.batchDraw(this.brushSprite, lx * lmScale, ly * lmScale);
+          }
+        }
+
+        interactableLightsDrawn += 1;
+        lightsDrawn += 1;
+      }
+    }
+
+    // 4. Static Props & Surfaces: Flickering Torches, Bioluminescent Mushrooms, Crystal Pillars, Explosive Barrels
     // Illuminate all visible torch_braziers regardless of distance to camera/player so distant torches stay lit
     const isLowTier = budget.tier === 'low';
     const maxBrazierCount = 16;
@@ -680,70 +834,7 @@ export class LightingPipeline {
       if (g.visible) g.setVisible(false);
     }
 
-    // C2. Phase P6 Interactable & Pickup Lights (reserved quota: 16 High / 10 Medium / 6 Low, alpha <= 0.35)
-    const interactableQuota = getInteractableLightQuota(budget.tier);
-    let interactableLightsDrawn = 0;
-    if (interactableLights && interactableLights.length > 0) {
-      for (
-        let i = 0;
-        i < interactableLights.length &&
-        interactableLightsDrawn < interactableQuota &&
-        lightsDrawn < maxLights;
-        i++
-      ) {
-        const entry = interactableLights[i]!;
-        const lx = entry.x - viewX;
-        const ly = entry.y - viewY;
-        const r = entry.radius;
-        if (
-          lx + r < -16 ||
-          lx - r > coverW + 16 ||
-          ly + r < -16 ||
-          ly - r > coverH + 16
-        ) {
-          continue;
-        }
-        if (!skipRtDraw) {
-          this.brushSprite.setScale(((r * 2) / this.brushBaseTexWidth) * lmScale);
-          this.brushSprite.setTint(entry.colorNum);
-          this.brushSprite.setAlpha(clamp(entry.alpha, 0, 0.35));
-          this.lightmapRt.batchDraw(this.brushSprite, lx * lmScale, ly * lmScale);
-
-          if (
-            entry.secondaryColorNum !== undefined &&
-            entry.secondaryRadius !== undefined &&
-            entry.secondaryAlpha !== undefined &&
-            entry.secondaryRadius > 0 &&
-            entry.secondaryAlpha > 0
-          ) {
-            this.brushSprite.setScale(
-              ((entry.secondaryRadius * 2) / this.brushBaseTexWidth) * lmScale,
-            );
-            this.brushSprite.setTint(entry.secondaryColorNum);
-            this.brushSprite.setAlpha(clamp(entry.secondaryAlpha, 0, 0.35));
-            this.lightmapRt.batchDraw(this.brushSprite, lx * lmScale, ly * lmScale);
-          }
-        }
-
-        interactableLightsDrawn += 1;
-        lightsDrawn += 1;
-      }
-    }
-
-    // D. Transient Flash Lights (Explosions, Lightning arcs, Heavy impacts)
-    for (let i = 0; i < this.transientPool.length; i++) {
-      const t = this.transientPool[i]!;
-      if (!t.active) continue;
-      t.age += dtSec;
-      if (t.age >= t.ttl) {
-        t.active = false;
-        continue;
-      }
-      const p = 1 - t.age / t.ttl;
-      drawLight(t.x, t.y, t.radius * (0.75 + 0.25 * p), t.color, t.intensity * p * 0.45);
-    }
-
-    // E. Glowing Interactive Surfaces (Lava, Burning Oil/Grass, Electrified Water, Poison Swamp)
+    // 4b. Glowing Interactive Surfaces (Lava, Burning Oil/Grass, Electrified Water, Poison Swamp)
     const minTx = Math.max(1, Math.floor(viewX / TILE_SIZE));
     const maxTx = Math.min(map.cols - 2, Math.ceil((viewX + coverW) / TILE_SIZE));
     const minTy = Math.max(1, Math.floor(viewY / TILE_SIZE));
@@ -813,6 +904,10 @@ export class LightingPipeline {
       this.warmGlowPool[i]!.destroy();
     }
     this.warmGlowPool.length = 0;
+    for (let i = 0; i < this.combatChromaticGlowPool.length; i++) {
+      this.combatChromaticGlowPool[i]!.sprite.destroy();
+    }
+    this.combatChromaticGlowPool.length = 0;
     this.blizzardRimGraphics.destroy();
     this.brushSprite.destroy();
     this.lightmapRt.destroy();

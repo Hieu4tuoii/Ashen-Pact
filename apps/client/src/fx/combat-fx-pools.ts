@@ -14,6 +14,18 @@ import {
   type FxEaseCurve,
   resolveAmbientBudgetCount,
 } from './combat-fx-spawners.js';
+import {
+  fillTaperedArcRibbon,
+  fillTaperedLightningBolt,
+} from './tapered-ribbon-builder.js';
+import {
+  ALL_CUTOUT_KIT_FRAME_KEYS,
+} from '../art/texture-baker-fx.js';
+
+const CUTOUT_KIT_SET = new Set<string>(ALL_CUTOUT_KIT_FRAME_KEYS);
+function isCutoutKitFrame(key: string): boolean {
+  return CUTOUT_KIT_SET.has(key);
+}
 
 export const BIOME_AMBIENT_POOL_SLOTS = 80;
 export const TORCH_MOTE_POOL_SLOTS = 16;
@@ -40,8 +52,34 @@ export interface PooledParticle {
   scaleRatioY: number;
   alignToVelocity: boolean;
   hasGroundShadow: boolean;
+  baseFrame?: number;
   frameCount?: number;
   preserveFlipbookAlpha?: boolean;
+}
+
+export interface ActivePerimeterRing {
+  active: boolean;
+  x: number;
+  y: number;
+  targetRadiusPx: number;
+  currentRadiusPx: number;
+  colorNum: number;
+  alpha: number;
+  age: number;
+  ttl: number;
+}
+
+export interface ActiveArcRibbon {
+  active: boolean;
+  x: number;
+  y: number;
+  reachPx: number;
+  angleRad: number;
+  arcSpreadRad: number;
+  colorNum: number;
+  alpha: number;
+  age: number;
+  ttl: number;
 }
 
 export interface PooledDamageText {
@@ -118,6 +156,7 @@ export function initCombatFxPools(
     sprite.setVisible(false);
     sprite.setActive(false);
     sprite.setScale(invBake);
+    sprite.setAlpha(0.32);
     sprite.setDepth(6);
     this.decalPool.push({
       sprite,
@@ -234,9 +273,19 @@ export function initCombatFxPools(
     }
   }
 
-  // 5. Chain Lightning Graphics (depth 57: strictly above lightmap 34 and below inviolable enemy red bullets 60)
-  this.lightningGraphics = scene.add.graphics();
-  this.lightningGraphics.setDepth(57);
+  // 5. Chain Lightning & Ribbon Graphics (depth 44.0: strictly below bullets & sightlines)
+  if (!this.underActorGraphics && scene.add) {
+    this.underActorGraphics = scene.add.graphics();
+    this.underActorGraphics.setDepth(26.6);
+  }
+  if (!this.weaponRibbonGraphics && scene.add) {
+    this.weaponRibbonGraphics = scene.add.graphics();
+    this.weaponRibbonGraphics.setDepth(44.0);
+  }
+  this.lightningGraphics = scene.add ? scene.add.graphics() : (this.weaponRibbonGraphics as unknown as Phaser.GameObjects.Graphics);
+  if (this.lightningGraphics && typeof this.lightningGraphics.setDepth === 'function') {
+    this.lightningGraphics.setDepth(44.0);
+  }
   for (let i = 0; i < 16; i++) {
     this.lightningPool.push({
       active: false,
@@ -411,11 +460,16 @@ export function update(this: CombatFxManager, dtSec: number, camView?: Phaser.Ge
     }
 
     if (p.frameCount && p.frameCount > 1) {
-      const frameIdx = Math.min(
+      const frameOffset = Math.min(
         p.frameCount - 1,
         Math.max(0, Math.floor(progress * p.frameCount + 1e-6)),
       );
-      p.sprite.setFrame(frameIdx);
+      const targetFrame = (p.baseFrame ?? 0) + frameOffset;
+      if (isCutoutKitFrame(p.textureKey)) {
+        p.sprite.setFrame(`${p.textureKey}_${targetFrame}`);
+      } else {
+        p.sprite.setFrame(targetFrame);
+      }
     }
 
     const scale = computeFxParticleScale(p.startScale, p.endScale, progress, p.easeCurve);
@@ -469,10 +523,10 @@ export function update(this: CombatFxManager, dtSec: number, camView?: Phaser.Ge
       setAlpha?: (a: number) => void;
       setVisible: (v: boolean) => void;
     };
-    if ((spr.alpha ?? 0) > 0.45) {
-      d.age = 0;
+    if (d.age === undefined || d.age === 0) {
+      d.age = dtSec;
       d.ttl = 6.0;
-      spr.setAlpha?.(0.42);
+      spr.setAlpha?.(0.32);
       const dx0 = spr.x ?? 0;
       const dy0 = spr.y ?? 0;
       for (let j = 0; j < this.decalPool.length; j++) {
@@ -480,13 +534,12 @@ export function update(this: CombatFxManager, dtSec: number, camView?: Phaser.Ge
         const other = this.decalPool[j]!;
         if (!other.active) continue;
         const ospr = other.sprite as unknown as { x?: number; y?: number; alpha?: number };
-        if ((ospr.alpha ?? 0) > 0.45 && j > i) continue;
         const ox = (ospr.x ?? 0) - dx0;
         const oy = (ospr.y ?? 0) - dy0;
         if (ox * ox + oy * oy <= 24 * 24) {
-          other.active = false;
-          other.sprite.setVisible(false);
           if (j < i) {
+            other.active = false;
+            other.sprite.setVisible(false);
             activeDecalsCounted = Math.max(0, activeDecalsCounted - 1);
           }
         }
@@ -499,7 +552,7 @@ export function update(this: CombatFxManager, dtSec: number, camView?: Phaser.Ge
         spr.setVisible(false);
         continue;
       }
-      const fade = 0.42 * (1 - Math.pow(d.age / ttl, 1.8));
+      const fade = 0.32 * (1 - Math.pow(d.age / ttl, 1.8));
       spr.setAlpha?.(fade);
     }
     activeDecalsCounted += 1;
@@ -578,10 +631,13 @@ export function update(this: CombatFxManager, dtSec: number, camView?: Phaser.Ge
     if (!amb.sprite.visible) amb.sprite.setVisible(true);
   }
 
-  // 4. Update & draw Chiaroscuro branched 3-layer chain lightning arcs (dark storm channel + cyan sheath + #FFFDF5 spine + fork + impact star)
-  this.lightningGraphics.clear();
-  const cyanCol = hexToNum(PALETTE.CYAN_FROST);
-  const boneCol = 0xfffdf5;
+  // 4. Update & draw Cutout branched chain lightning arcs on weaponRibbonGraphics (depth 44.0)
+  if (this.weaponRibbonGraphics) {
+    this.weaponRibbonGraphics.clear();
+  }
+  if (this.lightningGraphics) {
+    this.lightningGraphics.clear();
+  }
   for (let i = 0; i < this.lightningPool.length; i++) {
     const arc = this.lightningPool[i]!;
     if (!arc.active) continue;
@@ -590,63 +646,77 @@ export function update(this: CombatFxManager, dtSec: number, camView?: Phaser.Ge
       arc.active = false;
       continue;
     }
-    const alpha = 1 - Math.pow(arc.age / arc.ttl, 1.5);
-    const dx = arc.toX - arc.fromX;
-    const dy = arc.toY - arc.fromY;
-    const nx = -dy * 0.155;
-    const ny = dx * 0.155;
-    const phase = arc.age * 90 + arc.seed;
-    const jitter = Math.sin(phase) >= 0 ? 1 : -1;
-    const h2 = Math.cos(phase * 0.73 + 1.1);
-
-    const mid1X = arc.fromX + dx * 0.19 + nx * jitter * (0.82 + 0.25 * h2);
-    const mid1Y = arc.fromY + dy * 0.19 + ny * jitter * (0.82 + 0.25 * h2);
-    const mid2X = arc.fromX + dx * 0.43 - nx * jitter * 0.96;
-    const mid2Y = arc.fromY + dy * 0.43 - ny * jitter * 0.96;
-    const mid3X = arc.fromX + dx * 0.66 + nx * jitter * (0.74 - 0.2 * h2);
-    const mid3Y = arc.fromY + dy * 0.66 + ny * jitter * (0.74 - 0.2 * h2);
-    const mid4X = arc.fromX + dx * 0.84 - nx * jitter * 0.46;
-    const mid4Y = arc.fromY + dy * 0.84 - ny * jitter * 0.46;
-
-    const forkX = mid2X + dx * 0.22 - nx * jitter * 1.05;
-    const forkY = mid2Y + dy * 0.22 - ny * jitter * 1.05;
-
-    for (let layer = 0; layer < 3; layer++) {
-      const mainW = layer === 0 ? 5.6 : layer === 1 ? 3.0 : 1.4;
-      const forkW = layer === 0 ? 4.0 : layer === 1 ? 2.0 : 0.95;
-      const col = layer === 0 ? 0x141019 : layer === 1 ? cyanCol : boneCol;
-      const a = layer === 0 ? alpha * 0.9 : layer === 1 ? alpha * 0.94 : alpha;
-
-      this.lightningGraphics.lineStyle(mainW, col, a);
-      this.lightningGraphics.beginPath();
-      this.lightningGraphics.moveTo(arc.fromX, arc.fromY);
-      this.lightningGraphics.lineTo(mid1X, mid1Y);
-      this.lightningGraphics.lineTo(mid2X, mid2Y);
-      this.lightningGraphics.lineTo(mid3X, mid3Y);
-      this.lightningGraphics.lineTo(mid4X, mid4Y);
-      this.lightningGraphics.lineTo(arc.toX, arc.toY);
-      this.lightningGraphics.strokePath();
-
-      this.lightningGraphics.lineStyle(forkW, col, a * 0.92);
-      this.lightningGraphics.beginPath();
-      this.lightningGraphics.moveTo(mid2X, mid2Y);
-      this.lightningGraphics.lineTo(forkX, forkY);
-      this.lightningGraphics.strokePath();
-
-      // 4-point Chiaroscuro impact star at target endpoint
-      const starR = layer === 0 ? 7.6 : layer === 1 ? 6.4 : 4.6;
-      const rot = arc.seed * 0.7 + 0.35;
-      for (let axis = 0; axis < 2; axis++) {
-        const ang = rot + (axis * Math.PI) / 2;
-        const ca = Math.cos(ang) * starR;
-        const sa = Math.sin(ang) * starR;
-        this.lightningGraphics.lineStyle(forkW, col, a);
-        this.lightningGraphics.beginPath();
-        this.lightningGraphics.moveTo(arc.toX - ca, arc.toY - sa);
-        this.lightningGraphics.lineTo(arc.toX + ca, arc.toY + sa);
-        this.lightningGraphics.strokePath();
-      }
+    const progress = arc.age / arc.ttl;
+    if (this.weaponRibbonGraphics) {
+      fillTaperedLightningBolt(
+        this.weaponRibbonGraphics,
+        arc.fromX,
+        arc.fromY,
+        arc.toX,
+        arc.toY,
+        3.2,
+        0xfffdf5,
+        1 - progress,
+        arc.seed,
+      );
     }
+  }
+
+  // 4b. Draw perimeter rings and arc ribbons on underActorGraphics (depth 26.6)
+  if (this.underActorGraphics) {
+    this.underActorGraphics.clear();
+    let writeRingIdx = 0;
+    for (let i = 0; i < this.activePerimeterRings.length; i++) {
+      const ring = this.activePerimeterRings[i]!;
+      if (!ring.active) continue;
+      ring.age += dtSec;
+      if (ring.age >= ring.ttl) {
+        ring.active = false;
+        continue;
+      }
+      const rProgress = Math.min(1, ring.age / 0.05);
+      const curR = ring.currentRadiusPx + (ring.targetRadiusPx - ring.currentRadiusPx) * rProgress;
+      const alpha = ring.alpha * (1 - ring.age / ring.ttl);
+      this.underActorGraphics.lineStyle(3.2, 0x141019, alpha * 0.95);
+      this.underActorGraphics.strokeCircle(ring.x, ring.y, curR);
+      this.underActorGraphics.lineStyle(2.0, ring.colorNum, alpha);
+      this.underActorGraphics.strokeCircle(ring.x, ring.y, curR);
+
+      if (writeRingIdx !== i) {
+        this.activePerimeterRings[writeRingIdx] = ring;
+      }
+      writeRingIdx++;
+    }
+    this.activePerimeterRings.length = writeRingIdx;
+
+    let writeRibbonIdx = 0;
+    for (let i = 0; i < this.activeArcRibbons.length; i++) {
+      const ribbon = this.activeArcRibbons[i]!;
+      if (!ribbon.active) continue;
+      ribbon.age += dtSec;
+      if (ribbon.age >= ribbon.ttl) {
+        ribbon.active = false;
+        continue;
+      }
+      const halfSpread = ribbon.arcSpreadRad * 0.5;
+      fillTaperedArcRibbon(
+        this.underActorGraphics,
+        ribbon.x,
+        ribbon.y,
+        ribbon.reachPx,
+        ribbon.angleRad - halfSpread,
+        ribbon.angleRad + halfSpread,
+        3.5,
+        ribbon.colorNum,
+        ribbon.alpha * (1 - ribbon.age / ribbon.ttl),
+      );
+
+      if (writeRibbonIdx !== i) {
+        this.activeArcRibbons[writeRibbonIdx] = ribbon;
+      }
+      writeRibbonIdx++;
+    }
+    this.activeArcRibbons.length = writeRibbonIdx;
   }
 
   // 5. Update pooled damage numbers & coalesced reaction banner timer

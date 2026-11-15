@@ -8,172 +8,36 @@ import {
 } from '../src/art/texture-baker-shader-fx.js';
 import {
   activateParticle,
+  applyP1SafeHaloAlpha,
   CombatFxManager,
   type PooledParticle,
   refreshResolution,
+  resolveAllyFxProfile,
   resolveParticleBlendAndDepth,
   resolveWeaponMuzzleProfile,
+  routeCutoutBurstByRadius,
+  routeCutoutDirectionalByReach,
   update,
 } from '../src/fx/combat-fx.js';
-
-function createMockSprite() {
-  const state = {
-    textureKey: '',
-    frame: 0 as number | string | undefined,
-    x: 0,
-    y: 0,
-    rotation: 0,
-    scaleX: 1,
-    scaleY: 1,
-    alpha: 1,
-    depth: 45,
-    visible: false,
-    active: false,
-    blendMode: 'NORMAL' as string | number,
-    tint: null as number | null,
-  };
-  return {
-    state,
-    get depth() {
-      return state.depth;
-    },
-    get visible() {
-      return state.visible;
-    },
-    get rotation() {
-      return state.rotation;
-    },
-    set rotation(v: number) {
-      state.rotation = v;
-    },
-    get scaleX() {
-      return state.scaleX;
-    },
-    setTexture: vi.fn((key: string, frame?: number | string) => {
-      state.textureKey = key;
-      if (frame !== undefined) state.frame = frame;
-    }),
-    setFrame: vi.fn((frame: number | string) => {
-      state.frame = frame;
-    }),
-    setPosition: vi.fn((x: number, y: number) => {
-      state.x = x;
-      state.y = y;
-    }),
-    setRotation: vi.fn((r: number) => {
-      state.rotation = r;
-    }),
-    setScale: vi.fn((sx: number, sy?: number) => {
-      state.scaleX = sx;
-      state.scaleY = sy ?? sx;
-    }),
-    setAlpha: vi.fn((a: number) => {
-      state.alpha = a;
-    }),
-    setDepth: vi.fn((d: number) => {
-      state.depth = d;
-    }),
-    setVisible: vi.fn((v: boolean) => {
-      state.visible = v;
-    }),
-    setActive: vi.fn((v: boolean) => {
-      state.active = v;
-    }),
-    setBlendMode: vi.fn((m: string | number) => {
-      state.blendMode = m;
-    }),
-    setTint: vi.fn((t: number) => {
-      state.tint = t;
-    }),
-    clearTint: vi.fn(() => {
-      state.tint = null;
-    }),
-  };
-}
-
-function createHeadlessFxManager(particleSlots = 32): CombatFxManager {
-  const mgr = Object.create(CombatFxManager.prototype) as CombatFxManager;
-  Object.assign(mgr, {
-    particlePool: [] as PooledParticle[],
-    damagePool: [],
-    decalPool: [],
-    afterimagePool: [],
-    ambientPool: [],
-    lightningPool: [],
-    lightningGraphics: {
-      clear: vi.fn(),
-      lineStyle: vi.fn(),
-      beginPath: vi.fn(),
-      moveTo: vi.fn(),
-      lineTo: vi.fn(),
-      strokePath: vi.fn(),
-    },
-    decalWriteCursor: 0,
-    activeDecalCount: 0,
-    hitStopRemainingMs: 0,
-    bossKillSlowMoTimer: 0,
-    bossKillFlashTimer: 0,
-    trauma: 0,
-    shakeTime: 0,
-    popupSpreadIndex: 0,
-    currentBiome: 1,
-    allowFreezeAmbientMotion: false,
-    torchPositions: [],
-    totalHitStopsTriggered: 0,
-    totalShakesTriggered: 0,
-    totalSparksSpawned: 0,
-    totalDamagePopupsSpawned: 0,
-    totalDecalsSpawned: 0,
-    totalAfterimagesSpawned: 0,
-    activeReactionBanner: null,
-    activeWorldReactionPopupSlot: null,
-  });
-
-  for (let i = 0; i < particleSlots; i++) {
-    const sprite = createMockSprite();
-    const shadowSprite = createMockSprite();
-    mgr.particlePool.push({
-      sprite: sprite as never,
-      shadowSprite: shadowSprite as never,
-      textureKey: 'fx_spark',
-      active: false,
-      x: 0,
-      y: 0,
-      vx: 0,
-      vy: 0,
-      vr: 0,
-      age: 0,
-      ttl: 0.3,
-      startScale: 1,
-      endScale: 1,
-      startAlpha: 1,
-      gravityY: 0,
-      damping: 0,
-      blendMode: 'ADD',
-      easeCurve: 'linear',
-      scaleRatioY: 1,
-      alignToVelocity: false,
-      hasGroundShadow: false,
-      frameCount: 1,
-      preserveFlipbookAlpha: false,
-    });
-  }
-  return mgr;
-}
+import {
+  createHeadlessFxManager,
+  createMockSprite,
+  createTestCombatFx,
+} from './helpers/test-combat-fx.js';
 
 describe('1:1 Top-Down Chiaroscuro Flipbook Playback & Core Combat Spawners', () => {
-  it('assigns BlendMode.NORMAL and 44 <= depth < 60 to all 14 fx_sh_* Chiaroscuro shader flipbooks', () => {
+  it('assigns BlendMode.NORMAL and 42 <= depth <= 43.5 to all 24 fx_sh_* Chiaroscuro shader flipbooks', () => {
     for (const key of SHADER_FX_TEXTURE_KEYS) {
       const meta = resolveParticleBlendAndDepth(key);
       expect(meta.blendMode, `Expected ${key} to use NORMAL blend for Chiaroscuro dark veins`).toBe(
         'NORMAL',
       );
-      expect(meta.depth, `Expected ${key} above lightmap (> 34)`).toBeGreaterThanOrEqual(44);
-      expect(meta.depth, `Expected ${key} strictly below enemy bullets (< 60)`).toBeLessThan(60);
+      expect(meta.depth, `Expected ${key} >= 42.0`).toBeGreaterThanOrEqual(42.0);
+      expect(meta.depth, `Expected ${key} <= 43.5`).toBeLessThanOrEqual(43.5);
     }
   });
 
-  it('advances 14-frame flipbook particles across frames 0..13 without muddy linear alpha-fog fade', () => {
+  it('advances 8-frame flipbook particles across frames 0..7 without muddy linear alpha-fog fade', () => {
     const mgr = createHeadlessFxManager(4);
     const slot = mgr.particlePool[0]!;
     const mockSpr = slot.sprite as unknown as ReturnType<typeof createMockSprite>;
@@ -194,15 +58,14 @@ describe('1:1 Top-Down Chiaroscuro Flipbook Playback & Core Combat Spawners', ()
     expect(mockSpr.state.frame).toBe(0);
     expect(mockSpr.state.blendMode).toBe('NORMAL');
 
-    // Advance to 50% lifetime -> frame 7, alpha preserved crisp (no 50% muddy fog fade!)
+    // Advance to 50% lifetime -> frame 4 (with 8 frames: floor(0.5 * 8) = 4)
     update.call(mgr, 0.14);
-    expect(mockSpr.state.frame).toBe(7);
+    expect(mockSpr.state.frame).toBe(4);
     expect(mockSpr.state.alpha).toBeCloseTo(0.96, 3);
 
-    // Advance to ~93% lifetime -> frame 13, clean tail release
-    update.call(mgr, 0.12);
-    expect(mockSpr.state.frame).toBe(13);
-    expect(mockSpr.state.alpha).toBeLessThan(0.96);
+    // Advance to ~87.5% lifetime -> frame 7
+    update.call(mgr, 0.105);
+    expect(mockSpr.state.frame).toBe(7);
 
     // Advance past 100% -> deactivated & hidden
     update.call(mgr, 0.05);
@@ -218,7 +81,7 @@ describe('1:1 Top-Down Chiaroscuro Flipbook Playback & Core Combat Spawners', ()
     const expectedScale = computeShaderNovaScale(110, 'fx_sh_nova_void', 4);
     expect(novaSlot.active).toBe(true);
     expect(novaSlot.textureKey).toBe('fx_sh_nova_void');
-    expect(novaSlot.frameCount).toBe(14);
+    expect(novaSlot.frameCount).toBe(SHADER_FX_FRAME_COUNT);
     expect(novaSlot.startScale).toBeCloseTo(expectedScale, 4);
     expect(novaSlot.endScale).toBeCloseTo(expectedScale, 4);
     expect(Math.abs(novaSlot.scaleRatioY)).toBe(1);
@@ -476,7 +339,7 @@ describe('1:1 Top-Down Chiaroscuro Flipbook Playback & Core Combat Spawners', ()
     expect(explicitSpr.state.rotation).toBeCloseTo(1.25, 5);
   });
 
-  it('renders branched Chiaroscuro chain lightning with #141019 casing, fork offshoot, and 4-point target star', () => {
+  it('renders branched chain lightning via fillTaperedLightningBolt on weaponRibbonGraphics', () => {
     const mgr = createHeadlessFxManager(4);
     mgr.lightningPool.push({
       active: true,
@@ -491,20 +354,15 @@ describe('1:1 Top-Down Chiaroscuro Flipbook Playback & Core Combat Spawners', ()
 
     update.call(mgr, 1 / 60);
 
-    const lg = mgr.lightningGraphics as unknown as {
-      lineStyle: ReturnType<typeof vi.fn>;
-      strokePath: ReturnType<typeof vi.fn>;
+    const wrg = mgr.weaponRibbonGraphics as unknown as {
+      fillTriangle: ReturnType<typeof vi.fn>;
     };
-    // 3 Chiaroscuro layers * (1 main jagged bolt + 1 mid-span fork + 2 star axes) = 12 strokes
-    expect(lg.strokePath).toHaveBeenCalledTimes(12);
-    const colorsUsed = lg.lineStyle.mock.calls.map((c: unknown[]) => c[1]);
-    expect(colorsUsed).toContain(0x141019);
-    expect(colorsUsed).toContain(0xfffdf5);
+    expect(wrg.fillTriangle).toHaveBeenCalled();
   });
 
-  it('caps floor decal alpha at 0.42, deduplicates overlapping decals within 24px, and fades decals out over 6.0s', () => {
+  it('caps floor decal alpha at 0.32, deduplicates overlapping decals within 24px, and fades decals out over 6.0s', () => {
     const mgr = createHeadlessFxManager(4);
-    const makeDecalSprite = (x: number, y: number, alpha = 0.82) => {
+    const makeDecalSprite = (x: number, y: number, alpha = 0.32) => {
       const spr = {
         x,
         y,
@@ -520,9 +378,9 @@ describe('1:1 Top-Down Chiaroscuro Flipbook Playback & Core Combat Spawners', ()
       return spr;
     };
 
-    const s1 = makeDecalSprite(300, 240, 0.82);
-    const s2 = makeDecalSprite(310, 245, 0.82); // within 24px of s1 -> deduplicated
-    const s3 = makeDecalSprite(420, 240, 0.82); // > 24px away -> kept active
+    const s1 = makeDecalSprite(300, 240, 0.32);
+    const s2 = makeDecalSprite(310, 245, 0.32); // within 24px of s1 -> deduplicated
+    const s3 = makeDecalSprite(420, 240, 0.32); // > 24px away -> kept active
     mgr.decalPool.push(
       { sprite: s1 as never, textureKey: 'fx_decal_scorch', active: true },
       { sprite: s2 as never, textureKey: 'fx_decal_scorch', active: true },
@@ -531,17 +389,17 @@ describe('1:1 Top-Down Chiaroscuro Flipbook Playback & Core Combat Spawners', ()
     mgr.activeDecalCount = 3;
 
     update.call(mgr, 1 / 60);
-    // s1 is replaced by newer overlapping s2 within 24px, and active decals are capped at alpha 0.42
+    // s1 is replaced by newer overlapping s2 within 24px, and active decals are capped at alpha 0.32
     expect(mgr.decalPool[0]!.active).toBe(false);
     expect(mgr.decalPool[1]!.active).toBe(true);
-    expect(s2.alpha).toBeCloseTo(0.42, 4);
+    expect(s2.alpha).toBeCloseTo(0.32, 4);
     expect(mgr.decalPool[2]!.active).toBe(true);
-    expect(s3.alpha).toBeCloseTo(0.42, 4);
+    expect(s3.alpha).toBeCloseTo(0.32, 4);
     expect(mgr.activeDecalCount).toBe(2);
 
-    // Advance 3.0s -> decals fade smoothly below 0.42
+    // Advance 3.0s -> decals fade smoothly below 0.32
     update.call(mgr, 3.0);
-    expect(s2.alpha).toBeLessThan(0.42);
+    expect(s2.alpha).toBeLessThan(0.32);
     expect(s2.alpha).toBeGreaterThan(0);
 
     // Advance past 6.0s total -> decals deactivate and hide
@@ -574,6 +432,71 @@ describe('1:1 Top-Down Chiaroscuro Flipbook Playback & Core Combat Spawners', ()
     }
     expect(slashSlot.x).toBeGreaterThan(310);
     expect(slashSlot.x).toBeLessThan(324);
+  });
+
+  it('preserves 1:1 low-level spawnShader* scales while routing out-of-band radii via routeCutoutBurstByRadius and dropping P1 self-bursts to depth 26.4', () => {
+    const { fx } = createTestCombatFx({ localPlayerPos: { x: 200, y: 200 } });
+    // Direct primitive stays 1:1
+    const slot = fx.spawnShaderNova(400, 400, 104, 'fx_sh_shrapnel_corona');
+    expect(slot?.startScale).toBeCloseTo(104 / (0.41 * 128), 4);
+    expect(slot?.endScale).toBeCloseTo(slot!.startScale, 4);
+
+    // Router clamps > rMax (64px) core at rMax and drops P1 self-centered burst (dist <= 24) to depth 26.4
+    routeCutoutBurstByRadius(fx, 210, 200, 104, 'fx_sh_shrapnel_corona');
+    const clampedCore = fx.particlePool.find((p) => p.active && p.textureKey === 'fx_sh_shrapnel_corona' && p !== slot);
+    expect(clampedCore?.startScale).toBeCloseTo(64 / (0.41 * 128), 4);
+    expect(clampedCore?.sprite.depth).toBeCloseTo(26.4, 2);
+    expect(fx.activePerimeterRings.length).toBe(1);
+    expect(fx.activePerimeterRings[0]?.targetRadiusPx).toBe(104);
+  });
+
+  it('routes directional slashes/cones via routeCutoutDirectionalByReach with arc ribbons', () => {
+    const { fx } = createTestCombatFx();
+    // In-band: [48, 70]
+    routeCutoutDirectionalByReach(fx, 100, 100, 60, 0, 'fx_sh_cone_blast', Math.PI / 4);
+    const inBand = fx.particlePool.find((p) => p.active && p.textureKey === 'fx_sh_cone_blast');
+    expect(inBand).toBeDefined();
+
+    // Out-of-band > rMax (70px): clamps core to 70 and adds to activeArcRibbons
+    routeCutoutDirectionalByReach(fx, 100, 100, 90, 0, 'fx_sh_cone_blast', Math.PI / 4);
+    expect(fx.activeArcRibbons.length).toBe(1);
+    expect(fx.activeArcRibbons[0]?.reachPx).toBe(90);
+  });
+
+  it('plays 4+4 sub-range variants for muzzle flipbooks with independent flipY and ttl = 0.067', () => {
+    const { fx } = createTestCombatFx();
+    fx.spawnMuzzleFlashAndCasing(100, 100, 0, false, false, 'rivet_gun');
+    const p1 = fx.particlePool.find((p) => p.active && p.textureKey === 'fx_sh_muzzle_burst');
+    expect(p1?.frameCount).toBe(4);
+    expect(p1?.ttl).toBeCloseTo(0.067, 3);
+    expect(p1?.baseFrame).toBe(0);
+
+    fx.spawnMuzzleFlashAndCasing(100, 100, 0, false, false, 'rivet_gun');
+    const p2 = fx.particlePool.filter((p) => p.active && p.textureKey === 'fx_sh_muzzle_burst')[1];
+    expect(p2?.baseFrame).toBe(4);
+    expect(p2?.scaleRatioY).not.toBe(p1?.scaleRatioY);
+  });
+
+  it('resolves ally FX profile and applies P1 safe-halo alpha scaling', () => {
+    const localProfile = resolveAllyFxProfile(1, 1, 0.7);
+    expect(localProfile.isTeammate).toBe(false);
+    expect(localProfile.bulletAlpha).toBe(1.0);
+    expect(localProfile.aoeAlpha).toBe(1.0);
+    expect(localProfile.turretRingAlpha).toBe(1.0);
+    expect(localProfile.allowLightAndShake).toBe(true);
+
+    const allyProfile = resolveAllyFxProfile(2, 1, 0.7);
+    expect(allyProfile.isTeammate).toBe(true);
+    expect(allyProfile.bulletAlpha).toBeCloseTo(0.42 * 0.7, 4);
+    expect(allyProfile.aoeAlpha).toBeCloseTo(0.35 * 0.7, 4);
+    expect(allyProfile.turretRingAlpha).toBe(0);
+    expect(allyProfile.allowLightAndShake).toBe(false);
+
+    // Safe halo: within 18 + 0.35 * R
+    const r = 50;
+    expect(applyP1SafeHaloAlpha(1.0, true, 20, r)).toBeCloseTo(0.15, 4);
+    expect(applyP1SafeHaloAlpha(1.0, true, 40, r)).toBeCloseTo(1.0, 4);
+    expect(applyP1SafeHaloAlpha(1.0, false, 20, r)).toBeCloseTo(1.0, 4);
   });
 });
 

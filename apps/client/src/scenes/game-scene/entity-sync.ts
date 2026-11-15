@@ -107,6 +107,7 @@ export function resolveEnemyStatusTintImpl(this: GameScene, e: SimEnemyState): n
 export function syncSimulatedPlayersImpl(this: GameScene, dtSec: number): void {
   const sim = this.transport.getSim();
   const textRes = TextureBaker.getBakeScale();
+  this.fx?.setLocalPlayerPosition(sim.player.x, sim.player.y);
   this.activeSimPlayerIds.clear();
   this.activeCoopPlayerIds.clear();
 
@@ -301,7 +302,7 @@ export function syncEnemyRigsImpl(this: GameScene, dtSec: number): void {
         fastComposite: wantFastComposite,
         isBoss: e.isBoss,
       });
-      rig.container.setDepth(e.defId === 'ice_prison' ? 32 : e.isBoss ? 31 : 28);
+      rig.container.setDepth(e.defId === 'ice_prison' ? 32 : e.isBoss ? 30.6 : 28);
       this.enemyRigs.set(e.id, rig);
     }
 
@@ -484,6 +485,48 @@ export function syncPropsImpl(this: GameScene, dtSec: number): void {
       this.propVisuals.delete(id);
     }
   }
+
+  syncPushBlocksImpl.call(this, sim, invBake);
+}
+
+export function syncPushBlocksImpl(
+  this: GameScene,
+  sim: ReturnType<LocalTransport['getSim']>,
+  invBake: number,
+): void {
+  if (!sim?.pushBlocks) return;
+  if (!this.pushBlockVisuals) this.pushBlockVisuals = new Map();
+  const activeIds = new Set<number>();
+  for (let i = 0; i < sim.pushBlocks.length; i++) {
+    const blk = sim.pushBlocks[i]!;
+    activeIds.add(blk.id);
+    let vis = this.pushBlockVisuals.get(blk.id);
+    if (!vis) {
+      const shadow = this.add.sprite(blk.x, blk.y + 8, 'prop_shadow');
+      shadow.setScale(invBake);
+      shadow.setDepth(19.0);
+      const sprite = this.add.sprite(blk.x, blk.y, 'prop_push_block');
+      sprite.setScale(invBake);
+      sprite.setDepth(23.0);
+      vis = { sprite, shadow };
+      this.pushBlockVisuals.set(blk.id, vis);
+    } else {
+      vis.shadow.setPosition(blk.x, blk.y + 8);
+      vis.sprite.setPosition(blk.x, blk.y);
+      vis.shadow.setVisible(true);
+      vis.sprite.setVisible(true);
+    }
+  }
+
+  for (const [id, vis] of this.pushBlockVisuals.entries()) {
+    if (!activeIds.has(id)) {
+      vis.shadow.setVisible(false);
+      vis.sprite.setVisible(false);
+      vis.shadow.destroy();
+      vis.sprite.destroy();
+      this.pushBlockVisuals.delete(id);
+    }
+  }
 }
 
 export function syncProjectilesAndPickupsImpl(this: GameScene): void {
@@ -583,10 +626,27 @@ export function syncProjectilesAndPickupsImpl(this: GameScene): void {
       entry.sprite.setRotation(rot);
       if (b.team === 'enemy' && !isStress) {
         const glowMult = b.bulletShape === 'lance' ? 0.95 : 1.05;
+        entry.glowSprite.setDepth(59);
         entry.glowSprite.setVisible(true);
         entry.glowSprite.setPosition(pos.x, pos.y);
         entry.glowSprite.setScale(projScale * specScale * glowMult);
         entry.glowSprite.setAlpha(0.22 + 0.04 * Math.sin(visualTimeSec * 9.0 + (b.id & 7)));
+      } else if (
+        b.team === 'player' &&
+        !isStress &&
+        (b.bulletShape === 'heavy_orb' ||
+          (b.weaponId &&
+            (b.weaponId.includes('staff') ||
+              b.weaponId.includes('cannon') ||
+              b.weaponId.includes('wave'))))
+      ) {
+        entry.glowSprite.setDepth(40.5);
+        entry.glowSprite.setVisible(true);
+        entry.glowSprite.setPosition(pos.x, pos.y);
+        entry.glowSprite.setScale(projScale * specScale * 1.02);
+        entry.glowSprite.setAlpha(
+          Math.min(0.2, 0.16 + 0.04 * Math.sin(visualTimeSec * 9.0 + (b.id & 7))),
+        );
       } else {
         entry.glowSprite.setVisible(false);
       }

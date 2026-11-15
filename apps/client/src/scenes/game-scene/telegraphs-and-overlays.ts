@@ -104,6 +104,10 @@ export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, 
   if (this.groundHazardGraphics) {
     this.groundHazardGraphics.clear();
   }
+  const enemyG = this.enemyGroundTelegraphGfx ?? floorG;
+  if (this.enemyGroundTelegraphGfx) {
+    this.enemyGroundTelegraphGfx.clear();
+  }
   const view = this.cameras.main.worldView;
   const hasView = view && view.width > 0;
   const viewLeft = hasView ? view.x - 48 : -9999;
@@ -263,18 +267,6 @@ export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, 
     floorG.fillCircle(plate.x, plate.y, 8);
   }
 
-  for (let i = 0; i < sim.pushBlocks.length; i++) {
-    const blk = sim.pushBlocks[i]!;
-    g.fillStyle(hexToNum(PALETTE.INK_DARK), 0.95);
-    g.fillRoundedRect(blk.x - 17, blk.y - 17, 34, 34, 5);
-    g.fillStyle(hexToNum(PALETTE.WARM_STONE), 1);
-    g.lineStyle(2.5, hexToNum(PALETTE.SOLAR_GOLD), 0.95);
-    g.fillRoundedRect(blk.x - 15, blk.y - 15, 30, 30, 4);
-    g.strokeRoundedRect(blk.x - 15, blk.y - 15, 30, 30, 4);
-    g.fillStyle(hexToNum(PALETTE.CYAN_FROST), 0.95);
-    g.fillCircle(blk.x, blk.y, 5);
-  }
-
   // 1e. Phase P1A Tether Staff Energy Beams & Anchor Nodes (tether_staff)
   drawTetherStaffBeams(g, sim.tetherBeams, sim.tick / 60);
 
@@ -313,14 +305,12 @@ export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, 
       const r = e.telegraphRadius || 84;
       const progress =
         e.telegraphDurationSec > 0 ? 1 - clamp(e.stateTimer / e.telegraphDurationSec, 0, 1) : 1;
-      floorG.fillStyle(hexToNum(PALETTE.CRIMSON_BRIGHT), 0.06 + progress * 0.04);
-      floorG.fillCircle(e.bossTargetX, e.bossTargetY, r);
-      floorG.lineStyle(1.8, hexToNum(PALETTE.CRIMSON_BRIGHT), 0.72);
-      floorG.strokeCircle(e.bossTargetX, e.bossTargetY, r * (0.28 + progress * 0.72));
-      floorG.lineStyle(4.6, hexToNum(PALETTE.INK_DARK), 0.74);
-      floorG.strokeCircle(e.bossTargetX, e.bossTargetY, r);
-      floorG.lineStyle(2.8, hexToNum(PALETTE.CRIMSON_BRIGHT), 0.96);
-      floorG.strokeCircle(e.bossTargetX, e.bossTargetY, r);
+      enemyG.fillStyle(hexToNum(PALETTE.CRIMSON_BRIGHT), 0.06 + progress * 0.04);
+      enemyG.fillCircle(e.bossTargetX, e.bossTargetY, r);
+      enemyG.lineStyle(3.2, 0x141019, 0.95);
+      enemyG.strokeCircle(e.bossTargetX, e.bossTargetY, r);
+      enemyG.lineStyle(2.0, hexToNum(PALETTE.CRIMSON_BRIGHT), 0.96);
+      enemyG.strokeCircle(e.bossTargetX, e.bossTargetY, r);
       continue;
     }
 
@@ -553,19 +543,19 @@ export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, 
         const p3 = { x: pos.x + cos * len - px, y: pos.y + sin * len - py };
         const p4 = { x: pos.x - px, y: pos.y - py };
 
-        floorG.fillStyle(hexToNum(PALETTE.CRIMSON_BRIGHT), 0.06 + progress * 0.04);
-        floorG.beginPath();
-        floorG.moveTo(p1.x, p1.y);
-        floorG.lineTo(p2.x, p2.y);
-        floorG.lineTo(p3.x, p3.y);
-        floorG.lineTo(p4.x, p4.y);
-        floorG.closePath();
-        floorG.fillPath();
+        enemyG.fillStyle(hexToNum(PALETTE.CRIMSON_BRIGHT), 0.06 + progress * 0.04);
+        enemyG.beginPath();
+        enemyG.moveTo(p1.x, p1.y);
+        enemyG.lineTo(p2.x, p2.y);
+        enemyG.lineTo(p3.x, p3.y);
+        enemyG.lineTo(p4.x, p4.y);
+        enemyG.closePath();
+        enemyG.fillPath();
 
-        floorG.lineStyle(3.8, hexToNum(PALETTE.INK_DARK), 0.68);
-        floorG.strokePath();
-        floorG.lineStyle(2.2, hexToNum(PALETTE.CRIMSON_BRIGHT), 0.92);
-        floorG.strokePath();
+        enemyG.lineStyle(3.2, 0x141019, 0.95);
+        enemyG.strokePath();
+        enemyG.lineStyle(2.0, hexToNum(PALETTE.CRIMSON_BRIGHT), 0.96);
+        enemyG.strokePath();
       } else if (
         e.defId === 'spore_bomber' ||
         e.defId === 'spore_king' ||
@@ -576,14 +566,12 @@ export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, 
         e.defId === 'forge_titan'
       ) {
         const r = e.telegraphRadius || (e.isBoss ? 96 : 68);
-        floorG.fillStyle(hexToNum(PALETTE.CRIMSON_BRIGHT), 0.06 + progress * 0.04);
-        floorG.fillCircle(pos.x, pos.y, r);
-        floorG.lineStyle(1.8, hexToNum(PALETTE.CRIMSON_BRIGHT), 0.72);
-        floorG.strokeCircle(pos.x, pos.y, r * (0.28 + progress * 0.72));
-        floorG.lineStyle(4.5, hexToNum(PALETTE.INK_DARK), 0.72);
-        floorG.strokeCircle(pos.x, pos.y, r);
-        floorG.lineStyle(2.6, hexToNum(PALETTE.CRIMSON_BRIGHT), 0.96);
-        floorG.strokeCircle(pos.x, pos.y, r);
+        enemyG.fillStyle(hexToNum(PALETTE.CRIMSON_BRIGHT), 0.06 + progress * 0.04);
+        enemyG.fillCircle(pos.x, pos.y, r);
+        enemyG.lineStyle(3.2, 0x141019, 0.95);
+        enemyG.strokeCircle(pos.x, pos.y, r);
+        enemyG.lineStyle(2.0, hexToNum(PALETTE.CRIMSON_BRIGHT), 0.96);
+        enemyG.strokeCircle(pos.x, pos.y, r);
       }
     }
 

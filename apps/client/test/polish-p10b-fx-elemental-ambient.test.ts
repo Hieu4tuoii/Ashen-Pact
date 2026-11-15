@@ -27,6 +27,9 @@ import {
   ENEMY_BULLET_VISUAL_SPEC,
 } from '../src/art/texture-baker-fx.js';
 import { SFX_PRESETS } from '../src/audio/zzfx.js';
+import { POSTFX_DEFAULTS } from '../src/fx/lighting-config.js';
+import { getBiomePostFxFragForTest } from '../src/fx/lighting-pipeline.js';
+import { createTestCombatFx } from './helpers/test-combat-fx.js';
 import {
   coalesceElementalReaction,
   CombatFxManager,
@@ -143,7 +146,7 @@ describe('Phase P10b — Combat FX (BlendMode.ADD), Elemental Combo FX & Clear B
       expect(maxClamped.scale).toBeCloseTo(1.65, 4);
     });
 
-    it('assigns blendMode = ADD, depth = 42, and scales alpha by teammateFxOpacity for teammate player projectiles', () => {
+    it('assigns blendMode = NORMAL, depth = 41, and scales alpha by 0.42 * teammateFxOpacity for teammate player projectiles', () => {
       const localSpec = resolveProjectileRenderSpec({
         team: 'player',
         element: 'burn',
@@ -151,8 +154,8 @@ describe('Phase P10b — Combat FX (BlendMode.ADD), Elemental Combo FX & Clear B
         teammateFxOpacity: 0.45,
       });
       expect(localSpec.textureKey).toBe('proj_player_burn');
-      expect(localSpec.blendMode).toBe('ADD');
-      expect(localSpec.depth).toBe(42);
+      expect(localSpec.blendMode).toBe('NORMAL');
+      expect(localSpec.depth).toBe(41);
       expect(localSpec.alpha).toBeCloseTo(1.0, 4);
 
       const teammateSpec = resolveProjectileRenderSpec({
@@ -162,9 +165,28 @@ describe('Phase P10b — Combat FX (BlendMode.ADD), Elemental Combo FX & Clear B
         teammateFxOpacity: 0.45,
       });
       expect(teammateSpec.textureKey).toBe('proj_player_chill');
-      expect(teammateSpec.blendMode).toBe('ADD');
-      expect(teammateSpec.depth).toBe(42);
-      expect(teammateSpec.alpha).toBeCloseTo(0.45, 4);
+      expect(teammateSpec.blendMode).toBe('NORMAL');
+      expect(teammateSpec.depth).toBe(41);
+      expect(teammateSpec.alpha).toBeCloseTo(0.42 * 0.45, 4);
+    });
+
+    it('switches player bolts to NORMAL depth 41.0, deduplicates hit sparks with 75ms per-target ICD, and protects #141019 ink in BIOME_POSTFX_FRAG', () => {
+      const playerSpec = resolveProjectileRenderSpec({ team: 'player', weaponId: 'hunter_crossbow' });
+      expect(playerSpec.blendMode).toBe('NORMAL');
+      expect(playerSpec.depth).toBe(41);
+      const enemySpec = resolveProjectileRenderSpec({ team: 'enemy', bulletShape: 'orb' });
+      expect(enemySpec.blendMode).toBe('NORMAL');
+      expect(enemySpec.depth).toBe(60);
+
+      const { fx } = createTestCombatFx();
+      fx.spawnHitSparks(300, 300, 0, { targetId: 7, targetX: 312, targetY: 300, targetRadius: 14, nowMs: 1000 });
+      fx.spawnHitSparks(300, 300, 0, { targetId: 7, targetX: 312, targetY: 300, targetRadius: 14, nowMs: 1040 });
+      const sparks = fx.particlePool.filter((p) => p.active && p.textureKey === 'fx_sh_hit_spark');
+      expect(sparks).toHaveLength(1);
+      expect(sparks[0]?.x).toBeCloseTo(312 - 0.85 * 14, 2);
+
+      expect(POSTFX_DEFAULTS.bloomStrength).toBe(0.14);
+      expect(getBiomePostFxFragForTest()).toContain('smoothstep(0.22, 0.48, centerLuma)');
     });
   });
 

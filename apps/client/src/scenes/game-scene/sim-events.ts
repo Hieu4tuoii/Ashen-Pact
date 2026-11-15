@@ -225,11 +225,23 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
         }
         const hitAngle = Math.atan2(ev.knockbackY, ev.knockbackX);
         const sparkCount = enemyHitCountThisStep === 0 ? (ev.isCrit ? 8 : 5) : 2;
-        if (!isStress || enemyHitCountThisStep < 2) {
+        const enemy =
+          ev.targetKind === 'enemy' ? sim.enemies.find((en) => en.id === ev.targetId) : undefined;
+        const hasSameTickProjImpact = events.some(
+          (other) =>
+            other.kind === 'projectile_impact' &&
+            !other.hitWall &&
+            Math.hypot(other.x - ev.x, other.y - ev.y) < 28,
+        );
+        if ((!isStress || enemyHitCountThisStep < 2) && !hasSameTickProjImpact) {
           this.fx.spawnHitSparks(ev.x, ev.y, hitAngle, {
             isCrit: ev.isCrit,
             element: ev.element,
             count: sparkCount,
+            targetId: ev.targetId,
+            targetX: enemy?.x,
+            targetY: enemy?.y,
+            targetRadius: enemy?.radius,
           });
         }
 
@@ -775,6 +787,7 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
         break;
       }
       case 'room_entered': {
+        this.fx?.resetRoomTransientState?.();
         this.camFocusX = sim.player.x;
         this.camFocusY = sim.player.y;
         break;
@@ -884,6 +897,7 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
         break;
       }
       case 'players_teleported_to_room': {
+        this.fx?.resetRoomTransientState?.();
         this.lighting.spawnTransientLight(ev.x, ev.y, 120, PALETTE.CYAN_FROST, 0.9, 0.3);
         this.camFocusX = sim.player.x;
         this.camFocusY = sim.player.y;
