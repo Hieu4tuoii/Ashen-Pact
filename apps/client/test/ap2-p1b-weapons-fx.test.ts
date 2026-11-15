@@ -803,10 +803,16 @@ describe('AP2-P1B.5 — Procedural VFX for 7 Batch-2 Weapons, ArtGallery 18 Weap
       expect(res.renderedSegments).toBe(6);
       expect(res.chasmBridgeSegments).toBe(1);
       expect(underGfx.fillTriangleCalls.length).toBeGreaterThan(0);
+
+      // Verify zero-alloc module-static return identity
+      const res2 = renderBerserkerGuillotineCorridor(groundGfx as never, underGfx as never, map, 96, 160, 256, 160, 18, 1.0);
+      expect(res2).toBe(res);
     });
 
     it('dispatches thunder_hammer_pillar multi-strike event dropping -90px vertical bolt, stamping depth 16 fissure and routing 110px nova', () => {
+      const sceneKey = {};
       const { fx } = createTestWeaponFxHarness();
+      (fx as unknown as { sceneRef?: object }).sceneRef = sceneKey;
       const pillarEv: Extract<SimEvent, { kind: 'thunder_hammer_pillar' }> = {
         kind: 'thunder_hammer_pillar',
         playerId: 1,
@@ -823,6 +829,27 @@ describe('AP2-P1B.5 — Procedural VFX for 7 Batch-2 Weapons, ArtGallery 18 Weap
       expect(fx.activePerimeterRings.length).toBeGreaterThan(0);
       const nova = fx.particlePool.find((p) => p.active && p.textureKey === 'fx_sh_nova_thunder');
       expect(nova).toBeDefined();
+
+      // Verify persistent 6-branch radial fissure (ttlSec ≈ 0.35s) in state.shapes
+      const state = getWeaponV2OverlayState(sceneKey);
+      const pillarShapes = state.shapes.filter((s) => s.kind === 'thunder_pillar_strike');
+      expect(pillarShapes.length).toBe(2);
+      expect(pillarShapes[0]?.ttlSec).toBeCloseTo(0.35, 2);
+
+      const gTest = makeMockGraphics();
+      const gGroundTest = makeMockGraphics();
+      updateAndDrawWeaponV2Overlays(
+        sceneKey,
+        gTest as never,
+        fx as never,
+        { x: 400, y: 300, weaponSlots: ['thunder_hammer'], activeWeaponSlot: 0 } as never,
+        [],
+        1 / 60,
+        0.1,
+        'vi',
+        gGroundTest as never,
+      );
+      expect(gGroundTest.strokePath).toHaveBeenCalled();
     });
   });
 });

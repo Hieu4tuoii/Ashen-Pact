@@ -205,6 +205,7 @@ export class GameScene extends Phaser.Scene {
       sprite: Phaser.GameObjects.Sprite;
       glowSprite: Phaser.GameObjects.Image;
       textureKey: string;
+      frameName?: string;
       specScale: number;
     }
   >();
@@ -220,6 +221,7 @@ export class GameScene extends Phaser.Scene {
     sprite: Phaser.GameObjects.Sprite;
     glowSprite: Phaser.GameObjects.Image;
     textureKey: string;
+    frameName?: string;
     specScale: number;
   }[] = [];
   public pickupSpritePool: {

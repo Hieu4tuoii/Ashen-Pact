@@ -9,6 +9,7 @@ import {
 import { easeOutBack, easeOutCubic } from '../art/easing.js';
 import { hexToNum, PALETTE } from '../art/palette.js';
 import { TextureBaker } from '../art/texture-baker.js';
+import { CUTOUT_KIT_ATLAS_KEY } from '../art/texture-baker-fx.js';
 import {
   computeShaderDirectionalScale,
   computeShaderNovaScale,
@@ -134,6 +135,7 @@ export function applyP1SafeHaloAlpha(
 export interface ProjectileRenderSpec {
   textureKey: string;
   texture: string;
+  frameName?: string;
   tint: number;
   blendMode: 'NORMAL' | 'ADD';
   depth: number;
@@ -191,6 +193,7 @@ export function resolveProjectileRenderSpec(
   }
 
   let textureKey = 'proj_player_bolt';
+  let frameName: string | undefined = undefined;
   let tint = 0xffffff;
   let scale = 1.0;
   if (params.weaponId === 'knight_sword_wave' && !params.isStress) {
@@ -206,9 +209,10 @@ export function resolveProjectileRenderSpec(
     tint = 0x2dd4bf;
     scale = 1.28;
   } else if (params.weaponId === 'thunder_hammer' && !params.isStress) {
-    textureKey = 'fx_thrown_thunder_hammer';
+    textureKey = CUTOUT_KIT_ATLAS_KEY;
+    frameName = 'fx_thrown_thunder_hammer';
     tint = 0xffffff;
-    scale = 1.0;
+    scale = 1 / 3;
   } else if (params.weaponId === 'frag_launcher_sub' && !params.isStress) {
     textureKey = 'proj_player_pellet';
     tint = 0xf97316;
@@ -249,7 +253,7 @@ export function resolveProjectileRenderSpec(
   const s = clamp(params.teammateFxOpacity ?? 1.0, 0, 1);
   const alpha = isTeammate ? 0.42 * s : 1.0;
   const depth = params.weaponId === 'thunder_hammer' ? 41.5 : 41;
-  return { textureKey, texture: textureKey, tint, blendMode: 'NORMAL', depth, alpha, scale };
+  return { textureKey, texture: textureKey, frameName, tint, blendMode: 'NORMAL', depth, alpha, scale };
 }
 
 const ADDITIVE_FX_DEPTH_BY_KEY: Readonly<Record<string, number>> = {

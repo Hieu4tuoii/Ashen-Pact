@@ -11,6 +11,7 @@ import { PALETTE } from '../art/palette.js';
 import { zzfx } from '../audio/zzfx.js';
 import type { CombatFxManager } from './combat-fx.js';
 import {
+  applyP1SafeHaloAlpha,
   resolveAllyFxProfile,
   routeCutoutBurstByRadius,
 } from './combat-fx-spawners.js';
@@ -377,20 +378,25 @@ export function handleBatch2WeaponSimEvent(
     case 'thunder_hammer_pillar': {
       if (!isStress) {
         const isTeammate = ev.playerId !== sim.player.id;
+        const strikes = ev.strikes?.length
+          ? ev.strikes
+          : [{ x: ev.x, y: ev.y, radius: ev.radius || 110, damage: ev.damage || 54 }];
+        for (let i = 0; i < strikes.length; i++) {
+          const s = strikes[i]!;
+          pushP1BShape(state, {
+            kind: 'thunder_pillar_strike',
+            x: s.x,
+            y: s.y,
+            radius: s.radius || 110,
+            count: 6,
+            color: 0x38bdf8,
+            ttlSec: 0.35,
+            maxTtlSec: 0.35,
+          });
+        }
         if (fx) {
           spawnThunderHammerPillarFx(fx, ev, isTeammate);
         } else {
-          const rad = ev.radius || 110;
-          pushP1BShape(state, {
-            kind: 'thunder_pillar_strike',
-            x: ev.x,
-            y: ev.y,
-            radius: rad,
-            count: ev.strikes?.length ?? 3,
-            color: 0x38bdf8,
-            ttlSec: 0.4,
-            maxTtlSec: 0.4,
-          });
           scene.lighting?.spawnTransientLight(ev.x, ev.y, 195, PALETTE.CYAN_FROST, 1.0, 0.48);
         }
       }
@@ -466,7 +472,9 @@ export function drawBatch2ActiveWeaponOverlays(
     const a = clamp(f.ttlSec / Math.max(0.1, f.maxTtlSec), 0.25, 1);
     const halfEdge = (f.width || 36) * 0.5;
     if (sim.map) {
-      renderBerserkerGuillotineCorridor(floorG, g, sim.map, f.x1, f.y1, f.x2, f.y2, halfEdge, a);
+      const isTeammateCorridor = f.ownerPlayerId !== undefined && f.ownerPlayerId !== player.id;
+      const distToPlayer = Math.hypot(f.x1 - player.x, f.y1 - player.y);
+      renderBerserkerGuillotineCorridor(floorG, g, sim.map, f.x1, f.y1, f.x2, f.y2, halfEdge, a, isTeammateCorridor, distToPlayer);
     } else {
       const w = f.width || 36;
       const nx = -Math.sin(f.angle);
@@ -604,6 +612,8 @@ export function drawBatch2ActiveWeaponOverlays(
       }
     } else if (b.weaponId === 'emerald_cleaver_boomerang') {
       const spinAng = clockSec * 22 + b.id;
+      const isTeammate = b.ownerId !== undefined && b.ownerId !== player.id;
+      const distToPlayer = Math.hypot(b.x - player.x, b.y - player.y);
       renderEmeraldBoomerangOverlay(
         g,
         b.x,
@@ -611,6 +621,8 @@ export function drawBatch2ActiveWeaponOverlays(
         b.boomerangPhase ?? 'spinning',
         spinAng,
         1.0,
+        isTeammate,
+        distToPlayer,
       );
     } else if (b.weaponId === 'magma_cannon') {
       const r = b.radius || 20;
@@ -635,8 +647,11 @@ export function drawBatch2ActiveWeaponOverlays(
       g.fillStyle(0xfacc15, 0.98);
       g.fillCircle(b.x, b.y, 6);
     } else if (b.weaponId === 'thunder_hammer') {
-      const owner = sim.player.id === b.ownerId ? sim.player : undefined;
+      const owner = sim.getAllPlayers ? (sim.getAllPlayers().find((p) => p.id === b.ownerId) ?? sim.player) : sim.player;
       if (owner) {
+        const isTeammate = owner.id !== player.id;
+        const distToPlayer = Math.hypot(b.x - player.x, b.y - player.y);
+        const tetherAlpha = applyP1SafeHaloAlpha(0.65, isTeammate, distToPlayer, 28);
         fillTaperedLightningBolt(
           g,
           owner.x,
@@ -645,7 +660,7 @@ export function drawBatch2ActiveWeaponOverlays(
           b.y,
           2.0,
           0x38bdf8,
-          0.65,
+          tetherAlpha,
           ((b.id * 17) & 0xffff),
           5,
           1.4,
@@ -874,6 +889,28 @@ export function drawBatch2TransientShape(
       floorG.strokeCircle(s.x, s.y, r);
       floorG.lineStyle(1.9, 0x38bdf8, alpha * 0.88);
       floorG.strokeCircle(s.x, s.y, r);
+
+      // Persistent 6-branch radial fissure on floorG (depth 16.0) across frames
+      const fAlpha = alpha * (1 - progress * 0.35);
+      for (let k = 0; k < 6; k++) {
+        const branchAng = (k * Math.PI) / 3 + 0.14;
+        const branchLen = 32 + (k % 2) * 14;
+        const bx = s.x + Math.cos(branchAng) * branchLen;
+        const by = s.y + Math.sin(branchAng) * branchLen;
+
+        floorG.lineStyle(3.0, 0x141019, fAlpha * 0.85);
+        floorG.beginPath();
+        floorG.moveTo(s.x, s.y);
+        floorG.lineTo(bx, by);
+        floorG.strokePath();
+
+        floorG.lineStyle(1.6, 0x38bdf8, fAlpha * 0.95);
+        floorG.beginPath();
+        floorG.moveTo(s.x, s.y);
+        floorG.lineTo(bx, by);
+        floorG.strokePath();
+      }
+
       for (let bIdx = 0; bIdx < 3; bIdx += 1) {
         const ang = (bIdx * Math.PI * 2) / 3 + progress * 0.6;
         const midA = ang + Math.sin(clockSec * 28 + idx + bIdx) * 0.14;
@@ -910,8 +947,9 @@ export function spawnEmeraldCleaverSlash(
   isTeammate: boolean,
 ): boolean {
   const ally = resolveAllyFxProfile(isTeammate ? 2 : 1, 1);
-  const alpha = ally.bulletAlpha;
   const effectiveRange = rangePx || 92.0;
+  const dist = fx?.distanceToLocalPlayer ? fx.distanceToLocalPlayer(x, y) : Infinity;
+  const alpha = applyP1SafeHaloAlpha(ally.aoeAlpha, isTeammate, dist, effectiveRange);
 
   if (comboStep === 1) {
     fx.spawnShaderSlash?.(x, y, effectiveRange, angleRad, 'fx_sh_slash_emerald', {
@@ -964,8 +1002,11 @@ export function renderEmeraldBoomerangOverlay(
   phase: 'outbound' | 'spinning' | 'returning',
   spinAngleRad: number,
   alpha: number,
+  isTeammate = false,
+  distToLocal = Infinity,
 ): void {
-  if (alpha <= 0.005) return;
+  const effAlpha = isTeammate ? applyP1SafeHaloAlpha(alpha, true, distToLocal, 56) : alpha;
+  if (effAlpha <= 0.005) return;
 
   if (phase === 'spinning') {
     // 3 120°-spaced fillTaperedArcRibbon jade crescents at r = 56.0px on underActorGraphics (depth 26.6)
@@ -984,7 +1025,7 @@ export function renderEmeraldBoomerangOverlay(
         midAngle + arcSpan * 0.5,
         peakHw,
         0x10b981,
-        alpha * 0.92,
+        effAlpha * 0.92,
         8,
         1.8,
       );
@@ -1003,13 +1044,15 @@ export function renderEmeraldBoomerangOverlay(
         midAngle + bladeSpan * 0.5,
         3.5,
         0x10b981,
-        alpha,
+        effAlpha,
         6,
         1.8,
       );
     }
   }
 }
+
+const CORRIDOR_RESULT = { renderedSegments: 0, chasmBridgeSegments: 0 };
 
 export function renderBerserkerGuillotineCorridor(
   groundGfx: Phaser.GameObjects.Graphics,
@@ -1021,16 +1064,19 @@ export function renderBerserkerGuillotineCorridor(
   y2: number,
   halfWidthPx: number,
   alpha: number,
+  isTeammate = false,
+  distToLocal = Infinity,
 ): { renderedSegments: number; chasmBridgeSegments: number } {
+  const effAlpha = isTeammate ? applyP1SafeHaloAlpha(alpha, true, distToLocal, halfWidthPx * 2) : alpha;
+  CORRIDOR_RESULT.renderedSegments = 0;
+  CORRIDOR_RESULT.chasmBridgeSegments = 0;
+
   const totalSegs = 8;
   const dx = (x2 - x1) / totalSegs;
   const dy = (y2 - y1) / totalSegs;
   const segLen = Math.hypot(dx, dy) || 1;
   const nx = -dy / segLen;
   const ny = dx / segLen;
-
-  let renderedSegments = 0;
-  let chasmBridgeSegments = 0;
 
   for (let i = 0; i < totalSegs; i++) {
     const s0x = x1 + i * dx;
@@ -1053,8 +1099,8 @@ export function renderBerserkerGuillotineCorridor(
 
     if (isChasm) {
       // ±18.0px pointed fire-arc bridge on underGfx (depth 26.6)
-      chasmBridgeSegments++;
-      renderedSegments++;
+      CORRIDOR_RESULT.chasmBridgeSegments++;
+      CORRIDOR_RESULT.renderedSegments++;
 
       const midX = (s0x + s1x) * 0.5;
       const midY = (s0y + s1y) * 0.5;
@@ -1063,11 +1109,11 @@ export function renderBerserkerGuillotineCorridor(
       const botX = midX - nx * halfWidthPx;
       const botY = midY - ny * halfWidthPx;
 
-      underGfx.fillStyle(0x141019, alpha * 0.95);
+      underGfx.fillStyle(0x141019, effAlpha * 0.95);
       underGfx.fillTriangle(s0x, s0y, topX, topY, s1x, s1y);
       underGfx.fillTriangle(s0x, s0y, s1x, s1y, botX, botY);
 
-      underGfx.fillStyle(0xea580c, alpha);
+      underGfx.fillStyle(0xea580c, effAlpha);
       const innerHalf = halfWidthPx * 0.72;
       const inTopX = midX + nx * innerHalf;
       const inTopY = midY + ny * innerHalf;
@@ -1078,7 +1124,7 @@ export function renderBerserkerGuillotineCorridor(
     } else {
       // Floor or interior pillar (TileKind.Wall / pillar inside 1..width-2):
       // Draw jagged #141019 + #EA580C ember fissure plates on groundGfx (depth 16.0, naturally passing under pillars)
-      renderedSegments++;
+      CORRIDOR_RESULT.renderedSegments++;
 
       const midX = (s0x + s1x) * 0.5;
       const midY = (s0y + s1y) * 0.5;
@@ -1086,21 +1132,21 @@ export function renderBerserkerGuillotineCorridor(
       const px = midX + nx * jag;
       const py = midY + ny * jag;
 
-      groundGfx.lineStyle(halfWidthPx * 1.8, 0x141019, alpha * 0.82);
+      groundGfx.lineStyle(halfWidthPx * 1.8, 0x141019, effAlpha * 0.82);
       groundGfx.beginPath();
       groundGfx.moveTo(s0x, s0y);
       groundGfx.lineTo(px, py);
       groundGfx.lineTo(s1x, s1y);
       groundGfx.strokePath();
 
-      groundGfx.lineStyle(3.2, 0xea580c, alpha * 0.92);
+      groundGfx.lineStyle(3.2, 0xea580c, effAlpha * 0.92);
       groundGfx.beginPath();
       groundGfx.moveTo(s0x, s0y);
       groundGfx.lineTo(px, py);
       groundGfx.lineTo(s1x, s1y);
       groundGfx.strokePath();
 
-      groundGfx.lineStyle(1.4, 0xfacc15, alpha * 0.95);
+      groundGfx.lineStyle(1.4, 0xfacc15, effAlpha * 0.95);
       groundGfx.beginPath();
       groundGfx.moveTo(s0x, s0y);
       groundGfx.lineTo(px, py);
@@ -1109,7 +1155,7 @@ export function renderBerserkerGuillotineCorridor(
     }
   }
 
-  return { renderedSegments, chasmBridgeSegments };
+  return CORRIDOR_RESULT;
 }
 
 export function spawnThunderHammerPillarFx(
@@ -1118,14 +1164,34 @@ export function spawnThunderHammerPillarFx(
   isTeammate: boolean,
 ): void {
   const ally = resolveAllyFxProfile(isTeammate ? 2 : 1, 1);
-  const alpha = ally.aoeAlpha;
   const strikes = ev.strikes?.length
     ? ev.strikes
     : [{ x: ev.x, y: ev.y, radius: ev.radius || 110, damage: ev.damage || 54 }];
 
+  // Register persistent transient ground shape (ttl ≈ 0.35s) for each strike
+  const sceneKey = (fx as unknown as { sceneRef?: object }).sceneRef ?? fx;
+  if (sceneKey) {
+    const state = getWeaponV2OverlayState(sceneKey);
+    for (let i = 0; i < strikes.length; i++) {
+      const s = strikes[i]!;
+      pushP1BShape(state, {
+        kind: 'thunder_pillar_strike',
+        x: s.x,
+        y: s.y,
+        radius: s.radius || 110,
+        count: 6,
+        color: 0x38bdf8,
+        ttlSec: 0.35,
+        maxTtlSec: 0.35,
+      });
+    }
+  }
+
   for (let i = 0; i < strikes.length; i++) {
     const s = strikes[i]!;
     const strikeRad = s.radius || 110;
+    const dist = fx?.distanceToLocalPlayer ? fx.distanceToLocalPlayer(s.x, s.y) : Infinity;
+    const alpha = applyP1SafeHaloAlpha(ally.aoeAlpha, isTeammate, dist, strikeRad);
 
     // 1. -90px vertical fillTaperedLightningBolt (depth 42.5)
     const targetGfx =

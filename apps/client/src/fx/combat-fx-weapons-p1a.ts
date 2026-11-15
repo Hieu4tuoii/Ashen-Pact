@@ -1,7 +1,7 @@
 import { clamp } from '@ashen-pact/shared';
 import type Phaser from 'phaser';
 import type { CombatFxManager } from './combat-fx.js';
-import { activateParticle, resolveAllyFxProfile } from './combat-fx-spawners.js';
+import { activateParticle, applyP1SafeHaloAlpha, resolveAllyFxProfile } from './combat-fx-spawners.js';
 import { fillTaperedArcRibbon } from './tapered-ribbon-builder.js';
 import {
   type TransientWeaponV2Shape,
@@ -22,7 +22,8 @@ export type Batch1WeaponVfxKind =
   | 'frag_airburst_ring'
   | 'seed_harvest_bloom'
   | 'seed_healing_mist'
-  | 'tether_em_yank';
+  | 'tether_em_yank'
+  | 'knight_sword_stone_nick';
 
 function pushP1AShape(state: WeaponV2OverlayState, shape: TransientWeaponV2Shape): void {
   if (state.shapes.length >= 64) {
@@ -722,6 +723,23 @@ export function drawBatch1TransientShape(
       return true;
     }
 
+    case 'knight_sword_stone_nick': {
+      const tAng = s.angle ?? 0;
+      const a = alpha * (1 - progress * 0.35);
+      floorG.lineStyle(2.4, 0x141019, a * 0.85);
+      floorG.beginPath();
+      floorG.moveTo(s.x - Math.cos(tAng) * 13, s.y - Math.sin(tAng) * 13);
+      floorG.lineTo(s.x + Math.cos(tAng) * 13, s.y + Math.sin(tAng) * 13);
+      floorG.strokePath();
+
+      floorG.lineStyle(1.2, 0x78716c, a * 0.95);
+      floorG.beginPath();
+      floorG.moveTo(s.x - Math.cos(tAng) * 10, s.y - Math.sin(tAng) * 10);
+      floorG.lineTo(s.x + Math.cos(tAng) * 10, s.y + Math.sin(tAng) * 10);
+      floorG.strokePath();
+      return true;
+    }
+
     default:
       return false;
   }
@@ -737,8 +755,9 @@ export function spawnKnightSwordComboSlash(
   isTeammate: boolean,
 ): void {
   const ally = resolveAllyFxProfile(isTeammate ? 2 : 1, 1);
-  const alpha = ally.bulletAlpha;
   const effectiveRange = rangePx || 56.0;
+  const dist = fx?.distanceToLocalPlayer ? fx.distanceToLocalPlayer(x, y) : Infinity;
+  const alpha = applyP1SafeHaloAlpha(ally.aoeAlpha, isTeammate, dist, effectiveRange);
 
   if (comboStep === 1) {
     fx.spawnShaderSlash?.(x, y, effectiveRange, angleRad, 'fx_sh_slash_steel', {
@@ -800,6 +819,23 @@ export function spawnKnightSwordComboSlash(
     const nickX = x + Math.cos(angleRad) * nickDist;
     const nickY = y + Math.sin(angleRad) * nickDist;
     const tAng = angleRad + Math.PI * 0.5;
+
+    // Register persistent transient ground shape (ttl ≈ 0.24s)
+    const sceneKey = (fx as unknown as { sceneRef?: object }).sceneRef ?? fx;
+    if (sceneKey) {
+      const state = getWeaponV2OverlayState(sceneKey);
+      pushP1AShape(state, {
+        kind: 'knight_sword_stone_nick',
+        x: nickX,
+        y: nickY,
+        radius: 26,
+        angle: tAng,
+        color: 0xd4d4d8,
+        ttlSec: 0.24,
+        maxTtlSec: 0.24,
+      });
+    }
+
     const floorG =
       (fx as unknown as { groundHazardGraphics?: Phaser.GameObjects.Graphics }).groundHazardGraphics ??
       (fx as unknown as { sceneRef?: { groundHazardGraphics?: Phaser.GameObjects.Graphics } }).sceneRef?.groundHazardGraphics;
@@ -831,6 +867,8 @@ export function spawnMeleeParryDeflectFx(
   isTeammate: boolean,
 ): void {
   const ally = resolveAllyFxProfile(isTeammate ? 2 : 1, 1);
+  const dist = fx?.distanceToLocalPlayer ? fx.distanceToLocalPlayer(x, y) : Infinity;
+  const alpha = applyP1SafeHaloAlpha(ally.aoeAlpha, isTeammate, dist, 32);
 
   // 1. Spawns fx_parry_winged_crest (32×16px, depth 43.0, scale 1/3)
   if (typeof fx.acquireParticleSlot === 'function') {
@@ -844,7 +882,7 @@ export function spawnMeleeParryDeflectFx(
         ttl: 0.18,
         startScale: 1 / 3,
         endScale: 1 / 3,
-        startAlpha: ally.bulletAlpha,
+        startAlpha: alpha,
         depth: 43.0,
         rotation: angleRad,
         blendMode: 'NORMAL',
@@ -864,7 +902,7 @@ export function spawnMeleeParryDeflectFx(
       angleRad,
       arcSpreadRad: fanSpreadRad,
       colorNum: 0xf4f1ea,
-      alpha: isTeammate ? 0.35 : 0.85,
+      alpha,
       age: 0,
       ttl: 0.12,
     };
@@ -875,7 +913,7 @@ export function spawnMeleeParryDeflectFx(
     ribbon.angleRad = angleRad;
     ribbon.arcSpreadRad = fanSpreadRad;
     ribbon.colorNum = 0xf4f1ea;
-    ribbon.alpha = isTeammate ? 0.35 : 0.85;
+    ribbon.alpha = alpha;
     ribbon.age = 0;
     ribbon.ttl = 0.12;
     fx.activeArcRibbons.push(ribbon);

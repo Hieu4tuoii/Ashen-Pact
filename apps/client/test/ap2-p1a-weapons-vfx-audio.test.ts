@@ -610,6 +610,41 @@ describe('AP2-P1A.4 — Procedural VFX, Entity Indicators, Deployable/Tether Ren
       expect(parrySprite?.startScale).toBeCloseTo(1 / 3, 3);
       expect(fx.activeArcRibbons.length).toBeGreaterThan(0);
       expect(fx.activeArcRibbons[0]?.reachPx).toBe(26);
+
+      // Verify persistent floor stone nick (ttlSec ≈ 0.24s) onto groundHazardGraphics
+      const sceneKey = {};
+      const mockFxWithScene = { ...fx, sceneRef: sceneKey };
+      spawnKnightSwordComboSlash(mockFxWithScene as never, 200, 200, 0, 56, 3, false);
+      const state = getWeaponV2OverlayState(sceneKey);
+      const nickShape = state.shapes.find((s) => s.kind === 'knight_sword_stone_nick');
+      expect(nickShape).toBeDefined();
+      expect(nickShape?.ttlSec).toBeCloseTo(0.24, 2);
+
+      const gTest = makeMockGraphics();
+      const gGroundTest = makeMockGraphics();
+      updateAndDrawWeaponV2Overlays(
+        sceneKey,
+        gTest as never,
+        mockFxWithScene as never,
+        { x: 200, y: 200, weaponSlots: ['knight_sword'], activeWeaponSlot: 0 } as never,
+        [],
+        1 / 60,
+        0.1,
+        'vi',
+        gGroundTest as never,
+      );
+      expect(gGroundTest.strokePath).toHaveBeenCalled();
+    });
+
+    it('resolves thrown thunder_hammer projectile to fx_cutout_kit_512 atlas with fx_thrown_thunder_hammer frame and 1/3 scale', () => {
+      const spec = resolveProjectileRenderSpec({
+        team: 'player',
+        weaponId: 'thunder_hammer',
+      });
+      expect(spec.textureKey).toBe('fx_cutout_kit_512');
+      expect(spec.frameName).toBe('fx_thrown_thunder_hammer');
+      expect(spec.scale).toBeCloseTo(1 / 3, 3);
+      expect(spec.depth).toBe(41.5);
     });
   });
 });

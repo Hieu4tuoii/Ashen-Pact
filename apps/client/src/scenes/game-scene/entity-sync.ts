@@ -565,6 +565,7 @@ export function syncProjectilesAndPickupsImpl(this: GameScene): void {
       radius: b.radius,
     });
     const tex = spec.textureKey;
+    const frame = spec.frameName;
     const tint = spec.tint;
     const specScale = spec.scale ?? 1;
 
@@ -573,27 +574,29 @@ export function syncProjectilesAndPickupsImpl(this: GameScene): void {
       const pooled = this.projectileSpritePool.pop();
       if (pooled) {
         entry = pooled;
-        if (entry.textureKey !== tex) {
+        if (entry.textureKey !== tex || entry.frameName !== frame) {
           entry.textureKey = tex;
-          entry.sprite.setTexture(tex);
+          entry.frameName = frame;
+          entry.sprite.setTexture(tex, frame);
         }
         entry.specScale = specScale;
         entry.sprite.setActive(true);
         entry.glowSprite.setActive(true);
       } else {
-        const sprite = this.add.sprite(b.x, b.y, tex);
+        const sprite = this.add.sprite(b.x, b.y, tex, frame);
         const glowSprite = this.add.image(b.x, b.y, 'fx_enemy_bullet_glow');
         glowSprite.setDepth(59);
         glowSprite.setBlendMode(Phaser.BlendModes.ADD);
         glowSprite.setVisible(false);
-        entry = { sprite, glowSprite, textureKey: tex, specScale };
+        entry = { sprite, glowSprite, textureKey: tex, frameName: frame, specScale };
       }
       entry.sprite.setScale(projScale * specScale);
       this.projectileSprites.set(b.id, entry);
-    } else if (entry.textureKey !== tex) {
+    } else if (entry.textureKey !== tex || entry.frameName !== frame) {
       entry.textureKey = tex;
+      entry.frameName = frame;
       entry.specScale = specScale;
-      entry.sprite.setTexture(tex);
+      entry.sprite.setTexture(tex, frame);
       entry.sprite.setScale(projScale * specScale);
     } else {
       entry.specScale = specScale;
