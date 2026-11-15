@@ -607,6 +607,53 @@ describe('1:1 Top-Down Chiaroscuro Flipbook Playback & Core Combat Spawners', ()
     expect(fx.activeArcRibbons.length).toBe(1);
   });
 
+  it('correctly passes inkPadPx to fillTaperedArcRibbon and advances R < rMin kit burst sub-frames as strings', () => {
+    const { fx } = createTestCombatFx();
+
+    // 1. Assert stepping fx.update(0.025) with an active perimeter ring draws fillTriangle vertices within <= targetRadiusPx + 10
+    const ring = {
+      active: true,
+      x: 200,
+      y: 200,
+      targetRadiusPx: 25,
+      currentRadiusPx: 10,
+      colorNum: 0xff8800,
+      alpha: 1.0,
+      age: 0,
+      ttl: 0.05,
+    };
+    fx.activePerimeterRings.push(ring);
+    fx.update(0.025);
+
+    const fillTriMock = fx.underActorGraphics.fillTriangle as unknown as ReturnType<typeof vi.fn>;
+    expect(fillTriMock.mock.calls.length).toBeGreaterThan(0);
+    let maxDist = 0;
+    for (const call of fillTriMock.mock.calls) {
+      const [x0, y0, x1, y1, x2, y2] = call as [number, number, number, number, number, number];
+      maxDist = Math.max(
+        maxDist,
+        Math.hypot(x0 - ring.x, y0 - ring.y),
+        Math.hypot(x1 - ring.x, y1 - ring.y),
+        Math.hypot(x2 - ring.x, y2 - ring.y),
+      );
+    }
+    expect(maxDist).toBeLessThanOrEqual(ring.targetRadiusPx + 10);
+
+    // 2. Assert spawning an R < rMin burst and stepping fx.update(0.05) advances sprite frame to 'fx_micro_burst_4f_1' or 'fx_micro_burst_4f_2' (string sub-frame)
+    const { fx: fx2 } = createTestCombatFx();
+    const burstSlot = routeCutoutBurstByRadius(fx2, 300, 300, 12, 'fx_sh_nova_magma');
+    expect(burstSlot).toBeDefined();
+    expect(burstSlot?.textureKey).toBe('fx_cutout_kit_512');
+    expect(burstSlot?.kitFramePrefix).toBe('fx_micro_burst_4f');
+
+    fx2.update(0.05);
+    const mockSpr = burstSlot!.sprite as unknown as ReturnType<typeof createMockSprite>;
+    expect(typeof mockSpr.state.frame).toBe('string');
+    expect(['fx_micro_burst_4f_1', 'fx_micro_burst_4f_2']).toContain(mockSpr.state.frame);
+    expect(mockSpr.state.frame).not.toBe(1);
+    expect(mockSpr.state.frame).not.toBe(2);
+  });
+
   it('unifies aiming enemy sniper sightlines onto telegraphGraphics at depth 46.0 and caps at top 8 most dangerous', () => {
     const drawnLines: Array<{ width: number; color: number; alpha: number }> = [];
     const mockTelegraphGraphics = {

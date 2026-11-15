@@ -981,14 +981,16 @@ export class CombatFxManager {
 
   public update(dtSec: number, camView?: Phaser.Geom.Rectangle): void {
     const simProps = (
-      this.sceneRef as unknown as {
-        transport?: {
-          getSim?: () => {
-            props?: ReadonlyArray<{ kind: string; x: number; y: number; hp: number }>;
-          };
-        };
-      }
-    ).transport?.getSim?.()?.props;
+      this.sceneRef as unknown as
+        | {
+            transport?: {
+              getSim?: () => {
+                props?: ReadonlyArray<{ kind: string; x: number; y: number; hp: number }>;
+              };
+            };
+          }
+        | undefined
+    )?.transport?.getSim?.()?.props;
     if (simProps) {
       this.syncTorchPositions(simProps);
     }

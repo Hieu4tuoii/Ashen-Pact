@@ -24,6 +24,7 @@ import { getClientFreezeRandom } from '../core/visual-query.js';
 import { graphicsSettings } from '../ui/graphics-settings.js';
 import type { CombatFxManager } from './combat-fx.js';
 import {
+  isCutoutKitFrame,
   type PooledAmbientParticle,
   type PooledParticle,
   resolveActivePopupOverlaps,
@@ -632,6 +633,7 @@ export function activateParticle(
     baseFrame?: number;
     frameCount?: number;
     frameName?: string;
+    kitFramePrefix?: string;
     preserveFlipbookAlpha?: boolean;
   },
 ): void {
@@ -668,6 +670,8 @@ export function activateParticle(
   p.baseFrame = config.baseFrame;
   p.frameCount = frameCount;
   p.frameName = config.frameName;
+  p.kitFramePrefix =
+    config.kitFramePrefix ?? (isCutoutKitFrame(config.textureKey) ? config.textureKey : undefined);
   p.preserveFlipbookAlpha = preserveFlipbookAlpha;
 
   if (config.frameName) {
@@ -1094,6 +1098,7 @@ export function routeCutoutBurstByRadius(
       activateParticle(slot, {
         textureKey: 'fx_cutout_kit_512',
         frameName: `${kitKey}_0`,
+        kitFramePrefix: kitKey,
         x,
         y,
         ttl: ttl ?? 0.12,

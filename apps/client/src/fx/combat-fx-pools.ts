@@ -23,7 +23,7 @@ import {
 } from '../art/texture-baker-fx.js';
 
 const CUTOUT_KIT_SET = new Set<string>(ALL_CUTOUT_KIT_FRAME_KEYS);
-function isCutoutKitFrame(key: string): boolean {
+export function isCutoutKitFrame(key: string): boolean {
   return CUTOUT_KIT_SET.has(key);
 }
 
@@ -56,6 +56,7 @@ export interface PooledParticle {
   baseFrame?: number;
   frameCount?: number;
   frameName?: string;
+  kitFramePrefix?: string;
   preserveFlipbookAlpha?: boolean;
 }
 
@@ -480,7 +481,9 @@ export function update(this: CombatFxManager, dtSec: number, camView?: Phaser.Ge
         Math.max(0, Math.floor(progress * p.frameCount + 1e-6)),
       );
       const targetFrame = (p.baseFrame ?? 0) + frameOffset;
-      if (isCutoutKitFrame(p.textureKey)) {
+      if (p.kitFramePrefix) {
+        p.sprite.setFrame(`${p.kitFramePrefix}_${targetFrame}`);
+      } else if (isCutoutKitFrame(p.textureKey)) {
         p.sprite.setFrame(`${p.textureKey}_${targetFrame}`);
       } else {
         p.sprite.setFrame(targetFrame);
@@ -705,8 +708,8 @@ export function update(this: CombatFxManager, dtSec: number, camView?: Phaser.Ge
         3.6,
         ring.colorNum,
         alpha,
+        8,
         1.80,
-        0x141019,
       );
       fillTaperedArcRibbon(
         this.underActorGraphics,
@@ -718,8 +721,8 @@ export function update(this: CombatFxManager, dtSec: number, camView?: Phaser.Ge
         3.6,
         ring.colorNum,
         alpha,
+        8,
         1.80,
-        0x141019,
       );
 
       if (writeRingIdx !== i) {
@@ -750,6 +753,8 @@ export function update(this: CombatFxManager, dtSec: number, camView?: Phaser.Ge
         3.5,
         ribbon.colorNum,
         ribbon.alpha * (1 - ribbon.age / ribbon.ttl),
+        8,
+        1.80,
       );
 
       if (writeRibbonIdx !== i) {
