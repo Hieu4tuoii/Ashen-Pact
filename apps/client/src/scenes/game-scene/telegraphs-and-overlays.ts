@@ -47,6 +47,17 @@ import { drawP11DramaWorldOverlays } from './p11-drama-hud.js';
 const projRawXScratch: number[] = [];
 const projRawYScratch: number[] = [];
 
+export interface ScratchAimingSightline {
+  x: number;
+  y: number;
+  angle: number;
+  length: number;
+  progress: number;
+  stateTimer: number;
+  distSqToPlayer: number;
+}
+export const scratchAimingSightlines: ScratchAimingSightline[] = [];
+
 export function withInterpolatedProjectilesAndPlayer<T>(
   scene: GameScene,
   sim: ReturnType<GameScene['transport']['getSim']>,
@@ -296,6 +307,7 @@ export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, 
   // 2. Enemy Spawn Circles, Attack Telegraphs, Boss Burrow Warning, Elite Aura & Mini HP Bars
   let hpBarsDrawn = 0;
   let telegraphsDrawn = 0;
+  scratchAimingSightlines.length = 0;
   for (let i = 0; i < sim.enemies.length; i++) {
     const e = sim.enemies[i]!;
     if (e.hp <= 0) continue;
@@ -463,73 +475,40 @@ export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, 
       const progress =
         e.telegraphDurationSec > 0 ? 1 - clamp(e.stateTimer / e.telegraphDurationSec, 0, 1) : 1;
 
-      if (e.defId === 'goblin_shooter' || e.defId === 'frost_bat') {
-        const spreadRad = (15 * Math.PI) / 180;
-        for (const mult of [-1, 0, 1]) {
-          const ang = e.telegraphAngle + mult * spreadRad;
-          const len = 240;
-          const tx = pos.x + Math.cos(ang) * len;
-          const ty = pos.y + Math.sin(ang) * len;
-          floorG.lineStyle(3.8, hexToNum(PALETTE.INK_DARK), 0.45 + progress * 0.3);
-          floorG.beginPath();
-          floorG.moveTo(pos.x, pos.y);
-          floorG.lineTo(tx, ty);
-          floorG.strokePath();
-          floorG.lineStyle(2.2, hexToNum(PALETTE.CRIMSON_BRIGHT), 0.5 + progress * 0.46);
-          floorG.beginPath();
-          floorG.moveTo(pos.x, pos.y);
-          floorG.lineTo(tx, ty);
-          floorG.strokePath();
-        }
-      } else if (
+      if (
+        e.defId === 'goblin_shooter' ||
+        e.defId === 'frost_bat' ||
         e.defId === 'kryssa_ice_queen' ||
         e.defId === 'kryssa_clone' ||
-        e.defId === 'ice_mage'
-      ) {
-        const len = e.telegraphLength || 320;
-        const tx = pos.x + Math.cos(e.telegraphAngle) * len;
-        const ty = pos.y + Math.sin(e.telegraphAngle) * len;
-        floorG.lineStyle(5.5, hexToNum(PALETTE.CYAN_FROST), 0.28 + progress * 0.3);
-        floorG.beginPath();
-        floorG.moveTo(pos.x, pos.y);
-        floorG.lineTo(tx, ty);
-        floorG.strokePath();
-        floorG.lineStyle(2.2, hexToNum(PALETTE.CRIMSON_BRIGHT), 0.65 + progress * 0.35);
-        floorG.beginPath();
-        floorG.moveTo(pos.x, pos.y);
-        floorG.lineTo(tx, ty);
-        floorG.strokePath();
-      } else if (
+        e.defId === 'ice_mage' ||
         e.defId === 'goblin_shaman' ||
         e.defId === 'green_slime' ||
         e.defId === 'mini_slime' ||
         e.defId === 'fire_imp' ||
         e.defId === 'iron_shielder' ||
-        e.defId === 'welder_drone'
+        e.defId === 'welder_drone' ||
+        e.defId === 'thorn_turret'
       ) {
-        const len = e.telegraphLength || 160;
-        const tx = pos.x + Math.cos(e.telegraphAngle) * len;
-        const ty = pos.y + Math.sin(e.telegraphAngle) * len;
-        floorG.lineStyle(3.6, hexToNum(PALETTE.INK_DARK), 0.45 + progress * 0.3);
-        floorG.beginPath();
-        floorG.moveTo(pos.x, pos.y);
-        floorG.lineTo(tx, ty);
-        floorG.strokePath();
-        floorG.lineStyle(2.2, hexToNum(PALETTE.CRIMSON_BRIGHT), 0.52 + progress * 0.44);
-        floorG.beginPath();
-        floorG.moveTo(pos.x, pos.y);
-        floorG.lineTo(tx, ty);
-        floorG.strokePath();
-      } else if (e.defId === 'thorn_turret') {
-        for (let k = 0; k < 6; k++) {
-          const ang = e.telegraphAngle + (k * Math.PI) / 3;
-          const len = 180;
-          floorG.lineStyle(2, hexToNum(PALETTE.CRIMSON_BRIGHT), 0.48 + progress * 0.46);
-          floorG.beginPath();
-          floorG.moveTo(pos.x, pos.y);
-          floorG.lineTo(pos.x + Math.cos(ang) * len, pos.y + Math.sin(ang) * len);
-          floorG.strokePath();
-        }
+        // Collect single unified sightline per aiming enemy
+        const defaultLen =
+          e.defId === 'kryssa_ice_queen' || e.defId === 'kryssa_clone' || e.defId === 'ice_mage'
+            ? 320
+            : e.defId === 'goblin_shooter' || e.defId === 'frost_bat'
+              ? 240
+              : e.defId === 'thorn_turret'
+                ? 180
+                : 160;
+        const len = e.telegraphLength || defaultLen;
+        const distSq = (pos.x - playerX) ** 2 + (pos.y - playerY) ** 2;
+        scratchAimingSightlines.push({
+          x: pos.x,
+          y: pos.y,
+          angle: e.telegraphAngle,
+          length: len,
+          progress,
+          stateTimer: e.stateTimer,
+          distSqToPlayer: distSq,
+        });
       } else if (e.defId === 'wild_boar' || e.defId === 'baby_yeti') {
         const len = e.telegraphLength || 220;
         const halfW = e.radius;
@@ -594,6 +573,35 @@ export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, 
     ) {
       this.drawEnemyHealthAndStatusBar(g, pos.x, barY, e);
       hpBarsDrawn += 1;
+    }
+  }
+
+  // 2a. Top-8 Enemy Sniper Sightlines unified onto telegraphGraphics (depth 46.0)
+  if (scratchAimingSightlines.length > 0 && this.telegraphGraphics) {
+    scratchAimingSightlines.sort((a, b) => {
+      if (Math.abs(a.stateTimer - b.stateTimer) > 0.001) {
+        return a.stateTimer - b.stateTimer;
+      }
+      return a.distSqToPlayer - b.distSqToPlayer;
+    });
+    const cap = Math.min(scratchAimingSightlines.length, 8);
+    for (let k = 0; k < cap; k++) {
+      const s = scratchAimingSightlines[k]!;
+      const tx = s.x + Math.cos(s.angle) * s.length;
+      const ty = s.y + Math.sin(s.angle) * s.length;
+
+      // Cutout #141019 border (5.2) + #E84545 core (2.0) -> 1.6px ink border per side
+      this.telegraphGraphics.lineStyle(5.2, 0x141019, 0.45 + s.progress * 0.45);
+      this.telegraphGraphics.beginPath();
+      this.telegraphGraphics.moveTo(s.x, s.y);
+      this.telegraphGraphics.lineTo(tx, ty);
+      this.telegraphGraphics.strokePath();
+
+      this.telegraphGraphics.lineStyle(2.0, 0xe84545, 0.65 + s.progress * 0.35);
+      this.telegraphGraphics.beginPath();
+      this.telegraphGraphics.moveTo(s.x, s.y);
+      this.telegraphGraphics.lineTo(tx, ty);
+      this.telegraphGraphics.strokePath();
     }
   }
 

@@ -1,4 +1,18 @@
 import { describe, expect, it, vi } from 'vitest';
+import { WorldSim } from '@ashen-pact/shared';
+
+vi.mock('phaser', () => {
+  class MockScene {}
+  class MockPostFXPipeline {}
+  const phaserStub = {
+    Scene: MockScene,
+    BlendModes: { NORMAL: 0, ADD: 1, MULTIPLY: 2, SCREEN: 3 },
+    Math: { Clamp: (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v)) },
+    Renderer: { WebGL: { Pipelines: { PostFXPipeline: MockPostFXPipeline } } },
+  };
+  return { default: phaserStub, ...phaserStub };
+});
+
 import { PALETTE } from '../src/art/palette.js';
 import {
   computeShaderDirectionalScale,
@@ -24,6 +38,7 @@ import {
   createMockSprite,
   createTestCombatFx,
 } from './helpers/test-combat-fx.js';
+import { renderTelegraphsAndShieldImpl } from '../src/scenes/game-scene/telegraphs-and-overlays.js';
 
 describe('1:1 Top-Down Chiaroscuro Flipbook Playback & Core Combat Spawners', () => {
   it('assigns BlendMode.NORMAL and 42 <= depth <= 43.5 to all 24 fx_sh_* Chiaroscuro shader flipbooks', () => {
@@ -497,6 +512,175 @@ describe('1:1 Top-Down Chiaroscuro Flipbook Playback & Core Combat Spawners', ()
     expect(applyP1SafeHaloAlpha(1.0, true, 20, r)).toBeCloseTo(0.15, 4);
     expect(applyP1SafeHaloAlpha(1.0, true, 40, r)).toBeCloseTo(1.0, 4);
     expect(applyP1SafeHaloAlpha(1.0, false, 20, r)).toBeCloseTo(1.0, 4);
+  });
+
+  it('enforces 75ms per-target ICD on hit sparks: keeps fx_sh_hit_spark count at 1 on rapid double-hit and spawns fx_rim_glint fallback on second hit', () => {
+    const { fx } = createTestCombatFx();
+    // 1st hit on targetId 42
+    fx.spawnHitSparks(100, 100, 0, {
+      targetId: 42,
+      targetX: 90,
+      targetY: 100,
+      targetRadius: 16,
+      nowMs: 1000,
+    });
+    const firstHitSparkCount = fx.particlePool.filter(
+      (p) => p.active && p.textureKey === 'fx_sh_hit_spark',
+    ).length;
+    expect(firstHitSparkCount).toBe(1);
+
+    // 2nd hit on same targetId within 75ms (nowMs = 1040, diff = 40ms < 75ms)
+    fx.spawnHitSparks(100, 100, 0, {
+      targetId: 42,
+      targetX: 90,
+      targetY: 100,
+      targetRadius: 16,
+      nowMs: 1040,
+    });
+    // fx_sh_hit_spark count MUST remain 1 (no duplicate shader spark)
+    const secondHitSparkCount = fx.particlePool.filter(
+      (p) => p.active && p.textureKey === 'fx_sh_hit_spark',
+    ).length;
+    expect(secondHitSparkCount).toBe(1);
+
+    // Instead, a 2-tick fx_rim_glint from fx_cutout_kit_512 was spawned!
+    const glint = fx.particlePool.find(
+      (p) => p.active && p.textureKey === 'fx_cutout_kit_512' && p.frameName === 'fx_rim_glint',
+    );
+    expect(glint).toBeDefined();
+    expect(glint?.ttl).toBeCloseTo(0.034, 3);
+    expect(glint?.startScale).toBeCloseTo(1 / 3, 4);
+    expect(glint?.depth).toBe(43.0);
+    expect(glint?.startAlpha).toBe(0.9);
+
+    // 3rd hit from teammate -> always spawns fx_rim_glint with alpha 0.35
+    fx.spawnHitSparks(150, 150, 0, {
+      isTeammate: true,
+      targetId: 99,
+      nowMs: 2000,
+    });
+    const teammateGlint = fx.particlePool.find(
+      (p) =>
+        p.active &&
+        p.textureKey === 'fx_cutout_kit_512' &&
+        p.frameName === 'fx_rim_glint' &&
+        p !== glint,
+    );
+    expect(teammateGlint).toBeDefined();
+    expect(teammateGlint?.startAlpha).toBe(0.35);
+  });
+
+  it('implements Spec Section 4.3 R < rMin neutral 4f kit burst & reachPx < rMin small directional fallback with suppressPerimeterRing option', () => {
+    const { fx } = createTestCombatFx();
+
+    // R = 10px (< 14.6px -> fx_micro_burst_4f, baseTexelR = 11.04)
+    routeCutoutBurstByRadius(fx, 300, 300, 10, 'fx_sh_nova_solar');
+    const microBurst = fx.particlePool.find(
+      (p) =>
+        p.active &&
+        p.textureKey === 'fx_cutout_kit_512' &&
+        p.frameName === 'fx_micro_burst_4f_0',
+    );
+    expect(microBurst).toBeDefined();
+    expect(microBurst?.startScale).toBeCloseTo(10 / 11.04, 4);
+    expect(microBurst?.frameCount).toBe(4);
+    expect(fx.activePerimeterRings.length).toBe(1);
+
+    // suppressPerimeterRing = true suppresses ring push
+    routeCutoutBurstByRadius(fx, 300, 300, 10, 'fx_sh_nova_solar', {
+      suppressPerimeterRing: true,
+    });
+    expect(fx.activePerimeterRings.length).toBe(1);
+
+    // reachPx = 20px (< 24.5px -> fallback fx_sh_hit_spark)
+    routeCutoutDirectionalByReach(fx, 300, 300, 20, 0, 'fx_sh_cone_blast', Math.PI / 4);
+    const hitSparkFallback = fx.particlePool.find(
+      (p) => p.active && p.textureKey === 'fx_sh_hit_spark',
+    );
+    expect(hitSparkFallback).toBeDefined();
+    expect(fx.activeArcRibbons.length).toBe(1);
+
+    // suppressPerimeterRing = true suppresses arc ribbon push
+    routeCutoutDirectionalByReach(fx, 300, 300, 20, 0, 'fx_sh_cone_blast', Math.PI / 4, {
+      suppressPerimeterRing: true,
+    });
+    expect(fx.activeArcRibbons.length).toBe(1);
+  });
+
+  it('unifies aiming enemy sniper sightlines onto telegraphGraphics at depth 46.0 and caps at top 8 most dangerous', () => {
+    const drawnLines: Array<{ width: number; color: number; alpha: number }> = [];
+    const mockTelegraphGraphics = {
+      depth: 46.0,
+      lineStyle: vi.fn((width: number, color: number, alpha: number) => {
+        drawnLines.push({ width, color, alpha });
+      }),
+      beginPath: vi.fn(),
+      moveTo: vi.fn(),
+      lineTo: vi.fn(),
+      strokePath: vi.fn(),
+      clear: vi.fn(),
+      fillStyle: vi.fn(),
+      fillCircle: vi.fn(),
+      fillPath: vi.fn(),
+      closePath: vi.fn(),
+    };
+    const mockFloorG = {
+      lineStyle: vi.fn(),
+      beginPath: vi.fn(),
+      moveTo: vi.fn(),
+      lineTo: vi.fn(),
+      strokePath: vi.fn(),
+      fillStyle: vi.fn(),
+      fillCircle: vi.fn(),
+      strokeCircle: vi.fn(),
+      clear: vi.fn(),
+    };
+
+    // 10 aiming enemies with different stateTimers
+    const mockEnemies = Array.from({ length: 10 }, (_, i) => ({
+      id: i + 1,
+      hp: 100,
+      maxHp: 100,
+      x: 100 + i * 20,
+      y: 100,
+      radius: 16,
+      defId: 'goblin_shooter',
+      aiState: 'telegraph',
+      telegraphAngle: 0,
+      telegraphLength: 200,
+      telegraphDurationSec: 1.0,
+      stateTimer: 0.1 * (i + 1),
+    }));
+
+    const sim = new WorldSim();
+    sim.enemies = mockEnemies as never;
+    sim.player.x = 100;
+    sim.player.y = 100;
+
+    const mockScene = {
+      telegraphGraphics: mockTelegraphGraphics,
+      groundHazardGraphics: mockFloorG,
+      enemyGroundTelegraphGfx: mockFloorG,
+      transport: {
+        getSim: () => sim,
+        getInterpolatedEnemyPos: (e: { x: number; y: number }) => ({ x: e.x, y: e.y }),
+      },
+      entityPosAlpha: 1,
+      fx: { bossKillFlashTimer: 0 },
+      cameras: { main: { worldView: { x: 0, y: 0, width: 1000, height: 1000 } } },
+      drawEnemyHealthAndStatusBar: vi.fn(),
+      camFocusX: 100,
+      camFocusY: 100,
+    };
+
+    renderTelegraphsAndShieldImpl.call(mockScene as never, 100, 100);
+
+    // Verify exactly 8 enemies rendered (each gets border 5.2 and core 2.0 -> 8 border calls and 8 core calls)
+    const borderCalls = drawnLines.filter((l) => l.width === 5.2 && l.color === 0x141019);
+    const coreCalls = drawnLines.filter((l) => l.width === 2.0 && l.color === 0xe84545);
+    expect(borderCalls.length).toBe(8);
+    expect(coreCalls.length).toBe(8);
+    expect(mockTelegraphGraphics.depth).toBe(46.0);
   });
 });
 

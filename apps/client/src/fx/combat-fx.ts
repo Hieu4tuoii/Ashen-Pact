@@ -79,9 +79,11 @@ export class CombatFxManager {
   public lightningGraphics!: Phaser.GameObjects.Graphics;
   public underActorGraphics!: Phaser.GameObjects.Graphics;
   public weaponRibbonGraphics!: Phaser.GameObjects.Graphics;
-  public lastHitSparkTimeByTargetId: Map<string, number> = new Map();
+  public lastHitSparkTimeByTargetId: Map<number, number> = new Map();
   public activePerimeterRings: ActivePerimeterRing[] = [];
   public activeArcRibbons: ActiveArcRibbon[] = [];
+  public perimeterRingFreePool: ActivePerimeterRing[] = [];
+  public arcRibbonFreePool: ActiveArcRibbon[] = [];
   public muzzleVariantCounter = 0;
   public muzzleFlipCounter = 0;
   public localPlayerPos = { x: 0, y: 0 };

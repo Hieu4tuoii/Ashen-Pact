@@ -496,10 +496,11 @@ export function syncPushBlocksImpl(
 ): void {
   if (!sim?.pushBlocks) return;
   if (!this.pushBlockVisuals) this.pushBlockVisuals = new Map();
-  const activeIds = new Set<number>();
+  this.pushBlockSyncGeneration = (this.pushBlockSyncGeneration ?? 0) + 1;
+  const gen = this.pushBlockSyncGeneration;
+
   for (let i = 0; i < sim.pushBlocks.length; i++) {
     const blk = sim.pushBlocks[i]!;
-    activeIds.add(blk.id);
     let vis = this.pushBlockVisuals.get(blk.id);
     if (!vis) {
       const shadow = this.add.sprite(blk.x, blk.y + 8, 'prop_shadow');
@@ -508,9 +509,10 @@ export function syncPushBlocksImpl(
       const sprite = this.add.sprite(blk.x, blk.y, 'prop_push_block');
       sprite.setScale(invBake);
       sprite.setDepth(23.0);
-      vis = { sprite, shadow };
+      vis = { sprite, shadow, lastSeenGen: gen };
       this.pushBlockVisuals.set(blk.id, vis);
     } else {
+      vis.lastSeenGen = gen;
       vis.shadow.setPosition(blk.x, blk.y + 8);
       vis.sprite.setPosition(blk.x, blk.y);
       vis.shadow.setVisible(true);
@@ -518,15 +520,15 @@ export function syncPushBlocksImpl(
     }
   }
 
-  for (const [id, vis] of this.pushBlockVisuals.entries()) {
-    if (!activeIds.has(id)) {
+  this.pushBlockVisuals.forEach((vis, id) => {
+    if (vis.lastSeenGen !== gen) {
       vis.shadow.setVisible(false);
       vis.sprite.setVisible(false);
       vis.shadow.destroy();
       vis.sprite.destroy();
       this.pushBlockVisuals.delete(id);
     }
-  }
+  });
 }
 
 export function syncProjectilesAndPickupsImpl(this: GameScene): void {

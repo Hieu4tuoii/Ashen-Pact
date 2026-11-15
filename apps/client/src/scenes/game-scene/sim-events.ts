@@ -48,6 +48,8 @@ import {
   spawnP1DBlessingEventFx,
 } from '../../fx/combat-fx-weapons-v2.js';
 import { handleP2BSimEvent } from '../../fx/combat-fx-p2b.js';
+
+const scratchTickImpactTargetIds: number[] = [];
 import { handleP4ASimEvent } from '../../fx/combat-fx-p4a.js';
 import { handleP4BSimEvent } from '../../fx/combat-fx-p4b.js';
 import { initGlobalDebugState } from '../../ui/debug-overlay.js';
@@ -59,6 +61,7 @@ import { recordChestOpenedAnim } from './room-entities-sync.js';
 export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void {
   if (events.length === 0) return;
 
+  scratchTickImpactTargetIds.length = 0;
   const sim = this.transport.getSim();
   const isStress = sim.stressTestActive;
   const allowStressSfx = !isStress || sim.tick % 8 === 0;
@@ -227,12 +230,14 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
         const sparkCount = enemyHitCountThisStep === 0 ? (ev.isCrit ? 8 : 5) : 2;
         const enemy =
           ev.targetKind === 'enemy' ? sim.enemies.find((en) => en.id === ev.targetId) : undefined;
-        const hasSameTickProjImpact = events.some(
-          (other) =>
-            other.kind === 'projectile_impact' &&
-            !other.hitWall &&
-            Math.hypot(other.x - ev.x, other.y - ev.y) < 28,
-        );
+        const hasSameTickProjImpact =
+          scratchTickImpactTargetIds.includes(ev.targetId) ||
+          events.some(
+            (other) =>
+              other.kind === 'projectile_impact' &&
+              !other.hitWall &&
+              Math.hypot(other.x - ev.x, other.y - ev.y) < 28,
+          );
         if ((!isStress || enemyHitCountThisStep < 2) && !hasSameTickProjImpact) {
           this.fx.spawnHitSparks(ev.x, ev.y, hitAngle, {
             isCrit: ev.isCrit,
@@ -311,6 +316,32 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
         break;
       }
       case 'projectile_impact': {
+        let struckTargetId: number | undefined;
+        let struckTargetX: number | undefined;
+        let struckTargetY: number | undefined;
+        let struckTargetRadius: number | undefined;
+
+        if (!ev.hitWall && sim?.enemies) {
+          let closestDist = 48;
+          for (let eIdx = 0; eIdx < sim.enemies.length; eIdx++) {
+            const en = sim.enemies[eIdx]!;
+            if (en.hp <= 0) continue;
+            const d = Math.hypot(en.x - ev.x, en.y - ev.y);
+            const reach = (en.radius ?? 16) + 16;
+            if (d < reach && d < closestDist) {
+              closestDist = d;
+              struckTargetId = en.id;
+              struckTargetX = en.x;
+              struckTargetY = en.y;
+              struckTargetRadius = en.radius;
+            }
+          }
+        }
+
+        if (struckTargetId !== undefined) {
+          scratchTickImpactTargetIds.push(struckTargetId);
+        }
+
         if (!isStress || i < 4) {
           this.fx.spawnHitSparks(ev.x, ev.y, ev.angle, {
             isCrit: ev.isCrit,
@@ -318,6 +349,11 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
             blockedByShield: ev.blockedByShield || ev.destroyedByMelee,
             element: ev.element,
             count: 4,
+            targetId: struckTargetId,
+            targetX: struckTargetX,
+            targetY: struckTargetY,
+            targetRadius: struckTargetRadius,
+            isTeammate: ev.team === 'player' ? false : undefined,
           });
         }
         if ((ev.blockedByShield || ev.destroyedByMelee) && allowStressSfx) {

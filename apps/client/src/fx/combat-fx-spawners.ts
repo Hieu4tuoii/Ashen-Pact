@@ -18,6 +18,7 @@ import {
   type ShaderDirectionalKey,
   type ShaderNovaKey,
   type ShaderSlashKey,
+  type ShaderStripEntry,
 } from '../art/texture-baker-shader-fx.js';
 import { getClientFreezeRandom } from '../core/visual-query.js';
 import { graphicsSettings } from '../ui/graphics-settings.js';
@@ -88,11 +89,14 @@ export interface AllyFxProfile {
 }
 
 export function resolveAllyFxProfile(
-  ownerPlayerId: string | number,
-  localPlayerId: string | number,
+  ownerPlayerId: number | string | undefined,
+  localPlayerId: number | string | undefined,
   settingOpacity?: number,
 ): AllyFxProfile {
-  const isTeammate = ownerPlayerId !== localPlayerId;
+  const isTeammate =
+    ownerPlayerId !== undefined &&
+    localPlayerId !== undefined &&
+    String(ownerPlayerId) !== String(localPlayerId);
   if (!isTeammate) {
     return {
       isTeammate: false,
@@ -627,6 +631,7 @@ export function activateParticle(
     hasGroundShadow?: boolean;
     baseFrame?: number;
     frameCount?: number;
+    frameName?: string;
     preserveFlipbookAlpha?: boolean;
   },
 ): void {
@@ -659,11 +664,18 @@ export function activateParticle(
   p.scaleRatioY = scaleRatioY;
   p.alignToVelocity = config.alignToVelocity ?? false;
   p.hasGroundShadow = config.hasGroundShadow ?? false;
+  p.depth = depth;
   p.baseFrame = config.baseFrame;
   p.frameCount = frameCount;
+  p.frameName = config.frameName;
   p.preserveFlipbookAlpha = preserveFlipbookAlpha;
 
-  if (frameCount > 1) {
+  if (config.frameName) {
+    p.sprite.setTexture(config.textureKey, config.frameName);
+    if (typeof p.sprite.setFrame === 'function') {
+      p.sprite.setFrame(config.frameName);
+    }
+  } else if (frameCount > 1) {
     const startFrame = config.baseFrame ?? 0;
     p.sprite.setTexture(config.textureKey, startFrame);
     if (typeof p.sprite.setFrame === 'function') {
@@ -699,6 +711,7 @@ export function activateParticle(
 
 export interface ShaderNovaSpawnOptions {
   ttl?: number;
+  alpha?: number;
   isTeammate?: boolean;
   rotation?: number;
   tint?: number | null;
@@ -739,7 +752,7 @@ export function spawnShaderNovaImpl(
       ttl: options.ttl ?? 0.34,
       startScale: scale,
       endScale: scale,
-      startAlpha: 0.98 * alphaMult,
+      startAlpha: (options.alpha ?? 0.98) * alphaMult,
       rotation: options.rotation ?? autoRotation,
       tint: options.tint ?? null,
       blendMode: 'NORMAL',
@@ -802,6 +815,7 @@ export function spawnShaderNovaImpl(
 
 export interface ShaderSlashSpawnOptions {
   ttl?: number;
+  alpha?: number;
   isTeammate?: boolean;
   flipY?: boolean;
   tint?: number | null;
@@ -838,7 +852,7 @@ export function spawnShaderSlashImpl(
     ttl: options.ttl ?? 0.2,
     startScale: scale,
     endScale: scale,
-    startAlpha: 0.98 * alphaMult,
+    startAlpha: (options.alpha ?? 0.98) * alphaMult,
     rotation: angleRad,
     tint: options.tint ?? null,
     blendMode: 'NORMAL',
@@ -852,6 +866,7 @@ export function spawnShaderSlashImpl(
 
 export interface ShaderConeSpawnOptions {
   ttl?: number;
+  alpha?: number;
   isTeammate?: boolean;
   tint?: number | null;
   depth?: number;
@@ -883,7 +898,7 @@ export function spawnShaderConeImpl(
     ttl: options.ttl ?? 0.22,
     startScale: scale,
     endScale: scale,
-    startAlpha: 0.98 * alphaMult,
+    startAlpha: (options.alpha ?? 0.98) * alphaMult,
     rotation: angleRad,
     tint: options.tint ?? null,
     blendMode: 'NORMAL',
@@ -897,6 +912,7 @@ export function spawnShaderConeImpl(
 
 export interface ShaderLanceSpawnOptions {
   ttl?: number;
+  alpha?: number;
   widthPx?: number;
   isTeammate?: boolean;
   tint?: number | null;
@@ -932,7 +948,7 @@ export function spawnShaderLanceImpl(
     ttl: options.ttl ?? 0.26,
     startScale: scaleX,
     endScale: scaleX,
-    startAlpha: 0.98 * alphaMult,
+    startAlpha: (options.alpha ?? 0.98) * alphaMult,
     rotation: angleRad,
     tint: options.tint ?? null,
     blendMode: 'NORMAL',
@@ -946,6 +962,7 @@ export function spawnShaderLanceImpl(
 
 export interface ShaderDirectionalSpawnOptions {
   ttl?: number;
+  alpha?: number;
   isTeammate?: boolean;
   flipY?: boolean;
   tint?: number | null;
@@ -982,7 +999,7 @@ export function spawnShaderDirectionalImpl(
     ttl: options.ttl ?? 0.24,
     startScale: scale,
     endScale: scale,
-    startAlpha: 0.98 * alphaMult,
+    startAlpha: (options.alpha ?? 0.98) * alphaMult,
     rotation: angleRad,
     tint: options.tint ?? null,
     blendMode: 'NORMAL',
@@ -997,6 +1014,17 @@ export function spawnShaderDirectionalImpl(
 export interface CutoutRouterOptions extends ShaderNovaSpawnOptions {
   arcSpreadRad?: number;
   isAllyOrSelf?: boolean;
+  alpha?: number;
+  ttlSec?: number;
+  suppressPerimeterRing?: boolean;
+  isTeammate?: boolean;
+}
+
+function resolveEntryTint(entry?: ShaderStripEntry | null, overrideTint?: number | null): number {
+  if (overrideTint !== undefined && overrideTint !== null) return overrideTint;
+  if (!entry) return 0xffffff;
+  if (entry.fallbackPrimaryHex) return hexToNum(entry.fallbackPrimaryHex);
+  return 0xffffff;
 }
 
 export function routeCutoutBurstByRadius(
@@ -1009,35 +1037,116 @@ export function routeCutoutBurstByRadius(
 ): PooledParticle | null {
   const entry = getShaderStripEntry(novaKey);
   const [rMin, rMax] = entry ? entry.validRadiusBandPx : [24, 64];
+  const tint = resolveEntryTint(entry, options.tint);
+  const alpha = options.alpha ?? 1.0;
+  const ttl = options.ttlSec;
 
   const distToP1 = fx.distanceToLocalPlayer
     ? fx.distanceToLocalPlayer(x, y)
     : Math.hypot(x - fx.localPlayerPos.x, y - fx.localPlayerPos.y);
   const isP1SelfBurst = distToP1 <= 24;
 
-  let effectiveRadius = radiusPx;
   const coreDepth = options.depth ?? (isP1SelfBurst ? 26.4 : 43.5);
 
   if (radiusPx < rMin) {
-    effectiveRadius = rMin;
-  } else if (radiusPx > rMax) {
+    if (!options.suppressPerimeterRing) {
+      const ring = (fx.perimeterRingFreePool ? fx.perimeterRingFreePool.pop() : undefined) ?? {
+        active: true,
+        x,
+        y,
+        targetRadiusPx: radiusPx,
+        currentRadiusPx: radiusPx * 0.3,
+        colorNum: tint,
+        alpha,
+        age: 0,
+        ttl: 0.05,
+      };
+      ring.active = true;
+      ring.x = x;
+      ring.y = y;
+      ring.targetRadiusPx = radiusPx;
+      ring.currentRadiusPx = radiusPx * 0.3;
+      ring.colorNum = tint;
+      ring.alpha = alpha;
+      ring.age = 0;
+      ring.ttl = 0.05;
+      fx.activePerimeterRings.push(ring);
+    }
+
+    let kitKey: string;
+    let baseTexelR: number;
+    if (radiusPx < 14.6) {
+      kitKey = 'fx_micro_burst_4f';
+      baseTexelR = 11.04;
+    } else if (radiusPx < 21.3) {
+      kitKey = 'fx_small_burst_4f';
+      baseTexelR = 16.56;
+    } else if (radiusPx < 31.2) {
+      kitKey = 'fx_mid_burst_4f';
+      baseTexelR = 22.08;
+    } else {
+      kitKey = 'fx_compact_burst_4f';
+      baseTexelR = 26.0;
+    }
+    const scale = radiusPx / baseTexelR;
+    const slot = fx.acquireParticleSlot();
+    if (slot) {
+      activateParticle(slot, {
+        textureKey: 'fx_cutout_kit_512',
+        frameName: `${kitKey}_0`,
+        x,
+        y,
+        ttl: ttl ?? 0.12,
+        startScale: scale,
+        endScale: scale,
+        startAlpha: alpha,
+        depth: coreDepth,
+        blendMode: 'NORMAL',
+        tint,
+        frameCount: 4,
+        preserveFlipbookAlpha: true,
+      });
+      if (isP1SelfBurst) {
+        slot.sprite.setDepth(26.4);
+      }
+    }
+    return slot;
+  }
+
+  let effectiveRadius = radiusPx;
+  if (radiusPx > rMax) {
     effectiveRadius = rMax;
-    fx.activePerimeterRings.push({
-      active: true,
-      x,
-      y,
-      targetRadiusPx: radiusPx,
-      currentRadiusPx: rMax,
-      colorNum: options.tint ?? 0xffffff,
-      alpha: 1.0,
-      age: 0,
-      ttl: 0.25,
-    });
+    if (!options.suppressPerimeterRing) {
+      const ring = (fx.perimeterRingFreePool ? fx.perimeterRingFreePool.pop() : undefined) ?? {
+        active: true,
+        x,
+        y,
+        targetRadiusPx: radiusPx,
+        currentRadiusPx: rMax,
+        colorNum: tint,
+        alpha,
+        age: 0,
+        ttl: 0.05,
+      };
+      ring.active = true;
+      ring.x = x;
+      ring.y = y;
+      ring.targetRadiusPx = radiusPx;
+      ring.currentRadiusPx = rMax;
+      ring.colorNum = tint;
+      ring.alpha = alpha;
+      ring.age = 0;
+      ring.ttl = 0.05;
+      fx.activePerimeterRings.push(ring);
+    }
   }
 
   const slot = fx.spawnShaderNova(x, y, effectiveRadius, novaKey, {
     ...options,
     depth: coreDepth,
+    ttl: ttl ?? (radiusPx > rMax ? 0.16 : undefined),
+    alpha,
+    tint,
   });
   if (slot && isP1SelfBurst) {
     slot.sprite.setDepth(26.4);
@@ -1057,36 +1166,98 @@ export function routeCutoutDirectionalByReach(
 ): PooledParticle | null {
   const entry = getShaderStripEntry(key);
   const [rMin, rMax] = entry ? entry.validRadiusBandPx : [48, 70];
+  const tint = resolveEntryTint(entry, options.tint);
+  const alpha = options.alpha ?? 1.0;
+  const ttl = options.ttlSec;
 
   const distToP1 = fx.distanceToLocalPlayer
     ? fx.distanceToLocalPlayer(x, y)
     : Math.hypot(x - fx.localPlayerPos.x, y - fx.localPlayerPos.y);
   const isP1SelfBurst = distToP1 <= 24;
 
-  let effectiveReach = reachPx;
   const coreDepth = options.depth ?? (isP1SelfBurst ? 26.4 : 43.0);
 
   if (reachPx < rMin) {
-    effectiveReach = rMin;
-  } else if (reachPx > rMax) {
-    effectiveReach = rMax;
-    fx.activeArcRibbons.push({
-      active: true,
-      x,
-      y,
-      reachPx,
-      angleRad,
-      arcSpreadRad,
-      colorNum: options.tint ?? 0xffffff,
-      alpha: 1.0,
-      age: 0,
-      ttl: 0.22,
+    if (!options.suppressPerimeterRing) {
+      const ribbon = (fx.arcRibbonFreePool ? fx.arcRibbonFreePool.pop() : undefined) ?? {
+        active: true,
+        x,
+        y,
+        reachPx,
+        angleRad,
+        arcSpreadRad,
+        colorNum: tint,
+        alpha,
+        age: 0,
+        ttl: 0.05,
+      };
+      ribbon.active = true;
+      ribbon.x = x;
+      ribbon.y = y;
+      ribbon.reachPx = reachPx;
+      ribbon.angleRad = angleRad;
+      ribbon.arcSpreadRad = arcSpreadRad;
+      ribbon.colorNum = tint;
+      ribbon.alpha = alpha;
+      ribbon.age = 0;
+      ribbon.ttl = 0.05;
+      fx.activeArcRibbons.push(ribbon);
+    }
+
+    const fallbackKey: ShaderDirectionalKey =
+      reachPx < 24.5 ? 'fx_sh_hit_spark' : 'fx_sh_aegis_crest';
+    const fbEntry = getShaderStripEntry(fallbackKey);
+    const [fbMin, fbMax] = fbEntry ? fbEntry.validRadiusBandPx : [24, 48];
+    const clampedReach = clamp(reachPx, fbMin, fbMax);
+    const slot = fx.spawnShaderDirectional(x, y, clampedReach, angleRad, fallbackKey, {
+      ...options,
+      depth: coreDepth,
+      ttl: ttl ?? 0.12,
+      alpha,
+      tint,
     });
+    if (slot && isP1SelfBurst) {
+      slot.sprite.setDepth(26.4);
+    }
+    return slot;
+  }
+
+  let effectiveReach = reachPx;
+  if (reachPx > rMax) {
+    effectiveReach = rMax;
+    if (!options.suppressPerimeterRing) {
+      const ribbon = (fx.arcRibbonFreePool ? fx.arcRibbonFreePool.pop() : undefined) ?? {
+        active: true,
+        x,
+        y,
+        reachPx,
+        angleRad,
+        arcSpreadRad,
+        colorNum: tint,
+        alpha,
+        age: 0,
+        ttl: 0.22,
+      };
+      ribbon.active = true;
+      ribbon.x = x;
+      ribbon.y = y;
+      ribbon.reachPx = reachPx;
+      ribbon.angleRad = angleRad;
+      ribbon.arcSpreadRad = arcSpreadRad;
+      ribbon.colorNum = tint;
+      ribbon.alpha = alpha;
+      ribbon.age = 0;
+      ribbon.ttl = 0.22;
+      fx.activeArcRibbons.push(ribbon);
+    }
   }
 
   const slot = fx.spawnShaderDirectional(x, y, effectiveReach, angleRad, key, {
     ...options,
     depth: coreDepth,
+    ttl: ttl ?? (reachPx > rMax ? 0.15 : undefined),
+    alpha,
+    tint,
   });
   if (slot && isP1SelfBurst) {
     slot.sprite.setDepth(26.4);
@@ -1387,14 +1558,6 @@ export function spawnHitSparksImpl(
 ): void {
   const now =
     options.nowMs ?? (typeof performance !== 'undefined' ? performance.now() : Date.now());
-  if (options.targetId !== undefined) {
-    const targetKey = String(options.targetId);
-    const lastTime = this.lastHitSparkTimeByTargetId.get(targetKey);
-    if (lastTime !== undefined && now - lastTime < 75) {
-      return;
-    }
-    this.lastHitSparkTimeByTargetId.set(targetKey, now);
-  }
 
   let spawnX = x;
   let spawnY = y;
@@ -1408,6 +1571,43 @@ export function spawnHitSparksImpl(
     const angleFromTarget = Math.atan2(dy, dx);
     spawnX = options.targetX + Math.cos(angleFromTarget) * (0.85 * options.targetRadius);
     spawnY = options.targetY + Math.sin(angleFromTarget) * (0.85 * options.targetRadius);
+  }
+
+  const targetIdNum =
+    typeof options.targetId === 'number'
+      ? options.targetId
+      : options.targetId !== undefined
+        ? Number(options.targetId)
+        : undefined;
+
+  let isWithinIcd = false;
+  if (targetIdNum !== undefined && !Number.isNaN(targetIdNum)) {
+    const lastTime = this.lastHitSparkTimeByTargetId.get(targetIdNum);
+    if (lastTime !== undefined && now - lastTime < 75) {
+      isWithinIcd = true;
+    } else {
+      this.lastHitSparkTimeByTargetId.set(targetIdNum, now);
+    }
+  }
+
+  if (isWithinIcd || options.isTeammate === true) {
+    const glint = this.acquireParticleSlot();
+    if (glint) {
+      activateParticle(glint, {
+        textureKey: 'fx_cutout_kit_512',
+        frameName: 'fx_rim_glint',
+        x: spawnX,
+        y: spawnY,
+        ttl: 0.034,
+        startScale: 1 / 3,
+        endScale: 1 / 3,
+        startAlpha: options.isTeammate ? 0.35 : 0.9,
+        depth: 43.0,
+        blendMode: 'NORMAL',
+        preserveFlipbookAlpha: true,
+      });
+    }
+    return;
   }
 
   const bakeScale = TextureBaker.getBakeScale();

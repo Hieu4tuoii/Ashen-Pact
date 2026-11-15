@@ -119,6 +119,8 @@ export function createHeadlessFxManager(particleSlots = 64): CombatFxManager {
     lastHitSparkTimeByTargetId: new Map<number, number>(),
     activePerimeterRings: [],
     activeArcRibbons: [],
+    perimeterRingFreePool: [],
+    arcRibbonFreePool: [],
     localPlayerPos: { x: 0, y: 0 },
     muzzleVariantCounter: 0,
     muzzleFlipCounter: 0,

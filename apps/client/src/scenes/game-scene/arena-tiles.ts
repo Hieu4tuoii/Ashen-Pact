@@ -482,14 +482,6 @@ export function createImpl(this: GameScene): void {
   this.enemyGroundTelegraphGfx = this.add.graphics();
   this.enemyGroundTelegraphGfx.setDepth(17.0);
 
-  this.underActorGraphics = this.add.graphics();
-  this.underActorGraphics.setDepth(26.6);
-  if (this.fx) this.fx.underActorGraphics = this.underActorGraphics;
-
-  this.weaponRibbonGraphics = this.add.graphics();
-  this.weaponRibbonGraphics.setDepth(44.0);
-  if (this.fx) this.fx.weaponRibbonGraphics = this.weaponRibbonGraphics;
-
   this.telegraphGraphics = this.add.graphics();
   this.telegraphGraphics.setDepth(46.0);
 
@@ -547,6 +539,8 @@ export function createImpl(this: GameScene): void {
 
   // 6. Pooled Combat FX Manager (Particles, Persistent Decals, Dash Afterimages, Ambient Leaves/Mist, Chain Lightning)
   this.fx = new CombatFxManager(this);
+  this.underActorGraphics = this.fx.underActorGraphics;
+  this.weaponRibbonGraphics = this.fx.weaponRibbonGraphics;
 
   // 7. Dynamic Lighting Pipeline + WebGL PostFX Shader
   this.lighting = new LightingPipeline(this);

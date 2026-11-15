@@ -52,8 +52,10 @@ export interface PooledParticle {
   scaleRatioY: number;
   alignToVelocity: boolean;
   hasGroundShadow: boolean;
+  depth?: number;
   baseFrame?: number;
   frameCount?: number;
+  frameName?: string;
   preserveFlipbookAlpha?: boolean;
 }
 
@@ -274,14 +276,27 @@ export function initCombatFxPools(
   }
 
   // 5. Chain Lightning & Ribbon Graphics (depth 44.0: strictly below bullets & sightlines)
-  if (!this.underActorGraphics && scene.add) {
-    this.underActorGraphics = scene.add.graphics();
-    this.underActorGraphics.setDepth(26.6);
+  const sceneWithGfx = scene as unknown as {
+    underActorGraphics?: Phaser.GameObjects.Graphics;
+    weaponRibbonGraphics?: Phaser.GameObjects.Graphics;
+  };
+  if (!this.underActorGraphics) {
+    this.underActorGraphics =
+      sceneWithGfx.underActorGraphics ?? (scene.add ? scene.add.graphics() : ({} as Phaser.GameObjects.Graphics));
+    if (this.underActorGraphics && typeof this.underActorGraphics.setDepth === 'function') {
+      this.underActorGraphics.setDepth(26.6);
+    }
   }
-  if (!this.weaponRibbonGraphics && scene.add) {
-    this.weaponRibbonGraphics = scene.add.graphics();
-    this.weaponRibbonGraphics.setDepth(44.0);
+  sceneWithGfx.underActorGraphics = this.underActorGraphics;
+
+  if (!this.weaponRibbonGraphics) {
+    this.weaponRibbonGraphics =
+      sceneWithGfx.weaponRibbonGraphics ?? (scene.add ? scene.add.graphics() : ({} as Phaser.GameObjects.Graphics));
+    if (this.weaponRibbonGraphics && typeof this.weaponRibbonGraphics.setDepth === 'function') {
+      this.weaponRibbonGraphics.setDepth(44.0);
+    }
   }
+  sceneWithGfx.weaponRibbonGraphics = this.weaponRibbonGraphics;
   this.lightningGraphics = scene.add ? scene.add.graphics() : (this.weaponRibbonGraphics as unknown as Phaser.GameObjects.Graphics);
   if (this.lightningGraphics && typeof this.lightningGraphics.setDepth === 'function') {
     this.lightningGraphics.setDepth(44.0);
@@ -672,15 +687,40 @@ export function update(this: CombatFxManager, dtSec: number, camView?: Phaser.Ge
       ring.age += dtSec;
       if (ring.age >= ring.ttl) {
         ring.active = false;
+        this.perimeterRingFreePool.push(ring);
         continue;
       }
       const rProgress = Math.min(1, ring.age / 0.05);
       const curR = ring.currentRadiusPx + (ring.targetRadiusPx - ring.currentRadiusPx) * rProgress;
       const alpha = ring.alpha * (1 - ring.age / ring.ttl);
-      this.underActorGraphics.lineStyle(3.2, 0x141019, alpha * 0.95);
-      this.underActorGraphics.strokeCircle(ring.x, ring.y, curR);
-      this.underActorGraphics.lineStyle(2.0, ring.colorNum, alpha);
-      this.underActorGraphics.strokeCircle(ring.x, ring.y, curR);
+
+      // Render as pointed fillTaperedArcRibbon crescents on underActorGraphics with inkPadPx = 1.80
+      fillTaperedArcRibbon(
+        this.underActorGraphics,
+        ring.x,
+        ring.y,
+        curR,
+        -Math.PI * 0.95,
+        0.05 * Math.PI,
+        3.6,
+        ring.colorNum,
+        alpha,
+        1.80,
+        0x141019,
+      );
+      fillTaperedArcRibbon(
+        this.underActorGraphics,
+        ring.x,
+        ring.y,
+        curR,
+        0.05 * Math.PI,
+        1.05 * Math.PI,
+        3.6,
+        ring.colorNum,
+        alpha,
+        1.80,
+        0x141019,
+      );
 
       if (writeRingIdx !== i) {
         this.activePerimeterRings[writeRingIdx] = ring;
@@ -696,6 +736,7 @@ export function update(this: CombatFxManager, dtSec: number, camView?: Phaser.Ge
       ribbon.age += dtSec;
       if (ribbon.age >= ribbon.ttl) {
         ribbon.active = false;
+        this.arcRibbonFreePool.push(ribbon);
         continue;
       }
       const halfSpread = ribbon.arcSpreadRad * 0.5;

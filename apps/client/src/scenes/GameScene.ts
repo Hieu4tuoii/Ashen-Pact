@@ -351,7 +351,8 @@ export class GameScene extends Phaser.Scene {
   public telegraphGraphics!: Phaser.GameObjects.Graphics;
   public hitboxGraphics!: Phaser.GameObjects.Graphics;
   public crosshairSprite!: Phaser.GameObjects.Sprite;
-  public pushBlockVisuals = new Map<number, { sprite: Phaser.GameObjects.Sprite; shadow: Phaser.GameObjects.Sprite }>();
+  public pushBlockVisuals = new Map<number, { sprite: Phaser.GameObjects.Sprite; shadow: Phaser.GameObjects.Sprite; lastSeenGen: number }>();
+  public pushBlockSyncGeneration = 0;
 
   // Camera-pinned HUD elements
   public hudScene?: HudScene;
