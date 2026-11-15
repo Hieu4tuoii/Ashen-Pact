@@ -10,6 +10,7 @@ import {
   computeShaderDirectionalScale,
   computeShaderNovaScale,
   computeSoftwareGlInkTexelWidth,
+  getShaderBakerFamilySourcesForTest,
   getShaderBakerGlslSourceForTest,
   getShaderStripEntry,
   resolveColorHexToNovaKey,
@@ -583,5 +584,44 @@ describe('1:1 Top-Down Cutout 2.0 Multi-Band SDF-Cel Shader Baker', () => {
       vi.unstubAllGlobals();
     }
   });
-});
+  it('verifies per-program GLSL symbol declaration, shaderId dispatch integrity, and 4+4 muzzle variant flips', () => {
+    const families = getShaderBakerFamilySourcesForTest();
+    expect(families).toHaveLength(5);
 
+    const expectedGeneratorsPerFamily = [
+      ['vfxSlash', 'vfxConeBlast', 'vfxBeamLance', 'vfxMuzzleBurst', 'vfxHitSpark'],
+      ['vfxSolarOrMagmaNova', 'vfxThunderRadial'],
+      ['vfxCryoShatter', 'vfxVenomNova', 'vfxVoidImplosion'],
+      ['vfxVortexGale', 'vfxBloomBriar', 'vfxSporeCloud', 'vfxAnvilStorm', 'vfxGeyserPlume'],
+      ['vfxShrapnelCorona', 'vfxAegisCrest', 'vfxFalconSonic', 'vfxArcaneSigil', 'vfxMuzzleArcane'],
+    ];
+
+    families.forEach((src, idx) => {
+      // 1. Zero cross-family undeclared vfx* calls
+      const declared = new Set(
+        [...src.matchAll(/void\s+(vfx[A-Za-z0-9_]+)\s*\(/g)].map((m) => m[1]),
+      );
+      const mainBody = src.slice(src.lastIndexOf('void main'));
+      const calledInMain = [
+        ...mainBody.matchAll(/\b(vfx[A-Za-z0-9_]+)\s*\(/g),
+      ].map((m) => m[1]);
+
+      for (const fn of calledInMain) {
+        expect(declared.has(fn), `Undeclared call ${fn} in family ${idx}`).toBe(true);
+      }
+
+      // 2. All expected generators are present and called in main
+      for (const fn of expectedGeneratorsPerFamily[idx]!) {
+        expect(declared.has(fn), `Missing declaration for ${fn} in family ${idx}`).toBe(true);
+        expect(calledInMain).toContain(fn);
+      }
+    });
+
+    // 3. 4+4 variant flip in Family 0 (vfxMuzzleBurst) and Family 4 (vfxMuzzleArcane)
+    for (const famIdx of [0, 4]) {
+      const src = families[famIdx]!;
+      expect(src).toMatch(/mod\s*\(\s*frameIdx\s*,\s*4\.0\s*\)/);
+      expect(src).toMatch(/floor\s*\(\s*frameIdx\s*\/\s*4\.0\s*\)/);
+    }
+  });
+});

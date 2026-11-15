@@ -1116,15 +1116,8 @@ const FRAG_NOVA_HOT_SRC = SHADER_COMMON_HEADER + `
     int sid = int(uShaderId + 0.5);
     int elem = int(uElemId + 0.5);
     float energy = 0.0, edge = 0.0, vein = 0.0, sparks = 0.0;
-    if (sid <= 3) vfxSlash(p, t, sid, energy, edge, vein, sparks);
-    else if (sid == 4) vfxConeBlast(p, t, energy, edge, vein, sparks);
-    else if (sid == 5) vfxBeamLance(p, t, energy, edge, vein, sparks);
-    else if (sid == 6) {
-      float muzzleT = clamp(mod(frameIdx, 4.0) / 3.0, 0.0, 1.0);
-      float variant = floor(frameIdx / 4.0);
-      vec2 mp = variant > 0.5 ? vec2(p.x, -p.y) : p;
-      vfxMuzzleBurst(mp, muzzleT, energy, edge, vein, sparks);
-    } else vfxHitSpark(p, t, energy, edge, vein, sparks);
+    if (sid <= 9) vfxSolarOrMagmaNova(p, t, sid - 8, energy, edge, vein, sparks);
+    else vfxThunderRadial(p, t, energy, edge, vein, sparks);
 
     gl_FragColor = synthesizeCutoutCelRgba(elem, energy, edge, vein, sparks, borderFade, frameIdx, sid);
   }
@@ -1288,15 +1281,9 @@ const FRAG_NOVA_COLD_SRC = SHADER_COMMON_HEADER + `
     int sid = int(uShaderId + 0.5);
     int elem = int(uElemId + 0.5);
     float energy = 0.0, edge = 0.0, vein = 0.0, sparks = 0.0;
-    if (sid <= 3) vfxSlash(p, t, sid, energy, edge, vein, sparks);
-    else if (sid == 4) vfxConeBlast(p, t, energy, edge, vein, sparks);
-    else if (sid == 5) vfxBeamLance(p, t, energy, edge, vein, sparks);
-    else if (sid == 6) {
-      float muzzleT = clamp(mod(frameIdx, 4.0) / 3.0, 0.0, 1.0);
-      float variant = floor(frameIdx / 4.0);
-      vec2 mp = variant > 0.5 ? vec2(p.x, -p.y) : p;
-      vfxMuzzleBurst(mp, muzzleT, energy, edge, vein, sparks);
-    } else vfxHitSpark(p, t, energy, edge, vein, sparks);
+    if (sid == 11) vfxCryoShatter(p, t, energy, edge, vein, sparks);
+    else if (sid == 12) vfxVenomNova(p, t, energy, edge, vein, sparks);
+    else vfxVoidImplosion(p, t, energy, edge, vein, sparks);
 
     gl_FragColor = synthesizeCutoutCelRgba(elem, energy, edge, vein, sparks, borderFade, frameIdx, sid);
   }
@@ -1527,15 +1514,11 @@ const FRAG_ARCHETYPE_NATURE_WIND_SRC = SHADER_COMMON_HEADER + `
     int sid = int(uShaderId + 0.5);
     int elem = int(uElemId + 0.5);
     float energy = 0.0, edge = 0.0, vein = 0.0, sparks = 0.0;
-    if (sid <= 3) vfxSlash(p, t, sid, energy, edge, vein, sparks);
-    else if (sid == 4) vfxConeBlast(p, t, energy, edge, vein, sparks);
-    else if (sid == 5) vfxBeamLance(p, t, energy, edge, vein, sparks);
-    else if (sid == 6) {
-      float muzzleT = clamp(mod(frameIdx, 4.0) / 3.0, 0.0, 1.0);
-      float variant = floor(frameIdx / 4.0);
-      vec2 mp = variant > 0.5 ? vec2(p.x, -p.y) : p;
-      vfxMuzzleBurst(mp, muzzleT, energy, edge, vein, sparks);
-    } else vfxHitSpark(p, t, energy, edge, vein, sparks);
+    if (sid == 14) vfxVortexGale(p, t, energy, edge, vein, sparks);
+    else if (sid == 15) vfxBloomBriar(p, t, energy, edge, vein, sparks);
+    else if (sid == 16) vfxSporeCloud(p, t, energy, edge, vein, sparks);
+    else if (sid == 17) vfxAnvilStorm(p, t, energy, edge, vein, sparks);
+    else vfxGeyserPlume(p, t, energy, edge, vein, sparks);
 
     gl_FragColor = synthesizeCutoutCelRgba(elem, energy, edge, vein, sparks, borderFade, frameIdx, sid);
   }
@@ -1758,20 +1741,30 @@ const FRAG_ARCHETYPE_TACTICAL_CLASS_SRC = SHADER_COMMON_HEADER + `
     int sid = int(uShaderId + 0.5);
     int elem = int(uElemId + 0.5);
     float energy = 0.0, edge = 0.0, vein = 0.0, sparks = 0.0;
-    if (sid <= 3) vfxSlash(p, t, sid, energy, edge, vein, sparks);
-    else if (sid == 4) vfxConeBlast(p, t, energy, edge, vein, sparks);
-    else if (sid == 5) vfxBeamLance(p, t, energy, edge, vein, sparks);
-    else if (sid == 6) {
+    if (sid == 19) vfxShrapnelCorona(p, t, energy, edge, vein, sparks);
+    else if (sid == 20) vfxAegisCrest(p, t, energy, edge, vein, sparks);
+    else if (sid == 21) vfxFalconSonic(p, t, energy, edge, vein, sparks);
+    else if (sid == 22) vfxArcaneSigil(p, t, energy, edge, vein, sparks);
+    else {
       float muzzleT = clamp(mod(frameIdx, 4.0) / 3.0, 0.0, 1.0);
       float variant = floor(frameIdx / 4.0);
       vec2 mp = variant > 0.5 ? vec2(p.x, -p.y) : p;
-      vfxMuzzleBurst(mp, muzzleT, energy, edge, vein, sparks);
-    } else vfxHitSpark(p, t, energy, edge, vein, sparks);
+      vfxMuzzleArcane(mp, muzzleT, energy, edge, vein, sparks);
+    }
 
     gl_FragColor = synthesizeCutoutCelRgba(elem, energy, edge, vein, sparks, borderFade, frameIdx, sid);
   }
 `;
 
+export function getShaderBakerFamilySourcesForTest(): readonly string[] {
+  return [
+    FRAG_DIRECTIONAL_SRC,
+    FRAG_NOVA_HOT_SRC,
+    FRAG_NOVA_COLD_SRC,
+    FRAG_ARCHETYPE_NATURE_WIND_SRC,
+    FRAG_ARCHETYPE_TACTICAL_CLASS_SRC,
+  ];
+}
 
 export function getShaderBakerGlslSourceForTest(): string {
   return [
