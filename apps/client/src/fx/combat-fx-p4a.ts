@@ -16,8 +16,23 @@ import type Phaser from 'phaser';
 import { PALETTE, hexToNum } from '../art/palette.js';
 import { getFreezeVisualTimeSec, getVisualQueryConfig } from '../core/visual-query.js';
 import { isVisualFreezeActive } from './combat-fx-blessings-p1d.js';
+import { fillTaperedLightningBolt } from './tapered-ribbon-builder.js';
 
 type Gfx = Phaser.GameObjects.Graphics;
+
+const firstPylonByOwnerScratch = new Map<number, SimSummonState>();
+
+function resolveUnderActorGfx(scene: unknown, fallback: Gfx): Gfx {
+  if (
+    scene &&
+    typeof scene === 'object' &&
+    'underActorGraphics' in scene &&
+    (scene as { underActorGraphics?: Gfx }).underActorGraphics
+  ) {
+    return (scene as { underActorGraphics: Gfx }).underActorGraphics!;
+  }
+  return fallback;
+}
 
 const COL_INK = hexToNum(PALETTE.INK_DARK);
 const COL_BONE = 0xfffdf5;
@@ -35,11 +50,6 @@ const COL_TEAL_EDGE = 0x5eead4;
 const COL_LIME_ACID = 0x84cc16;
 const COL_LIME_BRIGHT = 0xbef264;
 const COL_MORTAR_ORANGE = 0xf97316;
-
-const SCRATCH_TETHER_X0 = new Float64Array(18);
-const SCRATCH_TETHER_Y0 = new Float64Array(18);
-const SCRATCH_TETHER_X1 = new Float64Array(18);
-const SCRATCH_TETHER_Y1 = new Float64Array(18);
 
 const SCRATCH_DECOY_BOLT_PTS: [[number, number], [number, number], [number, number], [number, number]] = [
   [0, 0],
@@ -287,24 +297,6 @@ export function drawP4ASummonOverlay(scene: unknown, g: Gfx, sim: WorldSim, sum:
   return true;
 }
 
-function strokePolylineBuffer(
-  g: Gfx,
-  xs: Float64Array,
-  ys: Float64Array,
-  count: number,
-  width: number,
-  col: number,
-  alpha: number,
-): void {
-  g.lineStyle(width, col, alpha);
-  g.beginPath();
-  g.moveTo(xs[0]!, ys[0]!);
-  for (let i = 1; i < count; i++) {
-    g.lineTo(xs[i]!, ys[i]!);
-  }
-  g.strokePath();
-}
-
 function drawChiaroscuroDiamondStar(
   g: Gfx,
   cx: number,
@@ -327,15 +319,14 @@ function drawChiaroscuroDiamondStar(
   fillDisc(g, cx, cy, 1.2, COL_BONE, 1);
 }
 
-function drawElectricCutterWires(g: Gfx, sim: WorldSim, tSec: number): void {
-  let firstPylonByOwner: Map<number, SimSummonState> | null = null;
+function drawElectricCutterWires(underG: Gfx, sim: WorldSim, tSec: number): void {
+  firstPylonByOwnerScratch.clear();
   for (let i = 0; i < sim.summons.length; i++) {
     const s = sim.summons[i]!;
     if (s.hp <= 0 || s.ttlSec <= 0 || s.kind !== 'wall_tether_pylon') continue;
-    if (!firstPylonByOwner) firstPylonByOwner = new Map<number, SimSummonState>();
-    const p1 = firstPylonByOwner.get(s.ownerPlayerId);
+    const p1 = firstPylonByOwnerScratch.get(s.ownerPlayerId);
     if (!p1) {
-      firstPylonByOwner.set(s.ownerPlayerId, s);
+      firstPylonByOwnerScratch.set(s.ownerPlayerId, s);
       continue;
     }
 
@@ -349,68 +340,88 @@ function drawElectricCutterWires(g: Gfx, sim: WorldSim, tSec: number): void {
     const nx = -uy;
     const ny = ux;
     const segCount = Math.max(6, Math.min(16, Math.round(len / 20)));
-    const ptCount = segCount + 1;
 
-    SCRATCH_TETHER_X0[0] = p1.x;
-    SCRATCH_TETHER_Y0[0] = p1.y;
-    SCRATCH_TETHER_X1[0] = p1.x;
-    SCRATCH_TETHER_Y1[0] = p1.y;
-    for (let step = 1; step < segCount; step++) {
-      const u = step / segCount;
-      const env = Math.sin(u * Math.PI);
-      const phase0 = tSec * 24 + step * 2.45 + p1.id * 0.5;
-      const jag0 = (Math.sin(phase0) * 5.0 + Math.sin(phase0 * 2.13 + 0.9) * 2.3) * env;
-      const phase1 = tSec * 21 - step * 2.15 + p2.id * 0.7 + 1.7;
-      const jag1 = -(Math.sin(phase1) * 4.2 + Math.cos(phase1 * 1.87) * 1.8) * env;
-      SCRATCH_TETHER_X0[step] = p1.x + dx * u + nx * jag0;
-      SCRATCH_TETHER_Y0[step] = p1.y + dy * u + ny * jag0;
-      SCRATCH_TETHER_X1[step] = p1.x + dx * u + nx * jag1;
-      SCRATCH_TETHER_Y1[step] = p1.y + dy * u + ny * jag1;
-    }
-    SCRATCH_TETHER_X0[segCount] = p2.x;
-    SCRATCH_TETHER_Y0[segCount] = p2.y;
-    SCRATCH_TETHER_X1[segCount] = p2.x;
-    SCRATCH_TETHER_Y1[segCount] = p2.y;
+    // 1. Main high-intensity lightning bolt (< 28° kink clamp, ink border + cyan/volt core) on underActorGraphics (depth 26.6)
+    fillTaperedLightningBolt(
+      underG,
+      p1.x,
+      p1.y,
+      p2.x,
+      p2.y,
+      2.4,
+      COL_CYAN_BOLT,
+      0.96,
+      p1.id * 17 + p2.id * 31 + Math.floor(tSec * 16),
+      segCount,
+      1.4,
+    );
+    fillTaperedLightningBolt(
+      underG,
+      p1.x,
+      p1.y,
+      p2.x,
+      p2.y,
+      1.5,
+      COL_VOLT_YELLOW,
+      0.92,
+      p1.id * 23 + p2.id * 47 + Math.floor(tSec * 18),
+      segCount,
+      1.1,
+    );
 
-    // Subtle taut magnetic tension axis + jagged #141019 storm-ink casings hugging every bolt vertex
-    strokeLine(g, p1.x, p1.y, p2.x, p2.y, 2.4, COL_INK, 0.42);
-    strokeLine(g, p1.x, p1.y, p2.x, p2.y, 1.1, COL_HOLO_DEEP, 0.4);
-    strokePolylineBuffer(g, SCRATCH_TETHER_X1, SCRATCH_TETHER_Y1, ptCount, 4.8, COL_INK, 0.84);
-    strokePolylineBuffer(g, SCRATCH_TETHER_X0, SCRATCH_TETHER_Y0, ptCount, 6.6, COL_INK, 0.88);
-    strokePolylineBuffer(g, SCRATCH_TETHER_X1, SCRATCH_TETHER_Y1, ptCount, 2.1, COL_VOLT_YELLOW, 0.95);
-    strokePolylineBuffer(g, SCRATCH_TETHER_X0, SCRATCH_TETHER_Y0, ptCount, 3.4, COL_CYAN_BOLT, 0.96);
-    strokePolylineBuffer(g, SCRATCH_TETHER_X0, SCRATCH_TETHER_Y0, ptCount, 1.5, COL_BONE, 0.99);
-
-    // Crackling mid-conduit electric fork offshoots
+    // 2. Crackling mid-conduit electric fork offshoots on underActorGraphics
     for (let fk = 0; fk < 2; fk++) {
       const idx = Math.max(1, Math.min(segCount - 1, Math.round(segCount * (fk === 0 ? 0.34 : 0.67))));
-      const bx = SCRATCH_TETHER_X0[idx]!;
-      const by = SCRATCH_TETHER_Y0[idx]!;
+      const u = idx / segCount;
+      const bx = p1.x + dx * u;
+      const by = p1.y + dy * u;
       const side = Math.sin(tSec * 17 + p1.id + fk * 2.9) >= 0 ? 1 : -1;
       const fx = bx + ux * 9 * (fk === 0 ? 1 : -1) + nx * side * 11;
       const fy = by + uy * 9 * (fk === 0 ? 1 : -1) + ny * side * 11;
-      strokeLine(g, bx, by, fx, fy, 3.8, COL_INK, 0.82);
-      strokeLine(g, bx, by, fx, fy, 1.7, fk === 0 ? COL_CYAN_BOLT : COL_VOLT_YELLOW, 0.94);
+      fillTaperedLightningBolt(
+        underG,
+        bx,
+        by,
+        fx,
+        fy,
+        1.4,
+        fk === 0 ? COL_CYAN_BOLT : COL_VOLT_YELLOW,
+        0.9,
+        p1.id + fk * 13 + Math.floor(tSec * 14),
+        4,
+        1.1,
+      );
     }
 
-    // Arc-welder terminal stars on both pylon heads
-    drawChiaroscuroDiamondStar(g, p1.x, p1.y, 7.5, tSec * 4.5 + p1.id, COL_CYAN_BOLT);
-    drawChiaroscuroDiamondStar(g, p2.x, p2.y, 7.5, -tSec * 4.5 + p2.id, COL_CYAN_BOLT);
+    // 3. Arc-welder terminal stars on both pylon heads on underActorGraphics
+    drawChiaroscuroDiamondStar(underG, p1.x, p1.y, 7.5, tSec * 4.5 + p1.id, COL_CYAN_BOLT);
+    drawChiaroscuroDiamondStar(underG, p2.x, p2.y, 7.5, -tSec * 4.5 + p2.id, COL_CYAN_BOLT);
 
     for (let ei = 0; ei < sim.enemies.length; ei++) {
       const e = sim.enemies[ei]!;
       if (e.hp <= 0 || e.aiState === 'spawning' || e.bossBurrowed) continue;
       const proj = pointToSegmentProjection(e.x, e.y, p1.x, p1.y, p2.x, p2.y);
       if (proj.dist <= WALL_TETHER_WIRE_HALF_WIDTH + e.radius + 4) {
-        drawChiaroscuroDiamondStar(g, proj.cx, proj.cy, 10.5, tSec * 10 + e.id * 0.7, COL_VOLT_YELLOW);
+        drawChiaroscuroDiamondStar(underG, proj.cx, proj.cy, 10.5, tSec * 10 + e.id * 0.7, COL_VOLT_YELLOW);
         for (let sp = 0; sp < 4; sp++) {
           const spAng = tSec * 12 + e.id + (sp * Math.PI) / 2 + Math.PI * 0.25;
           const x0 = proj.cx + Math.cos(spAng) * 4.2;
           const y0 = proj.cy + Math.sin(spAng) * 4.2;
           const x1 = proj.cx + Math.cos(spAng) * 10.8;
           const y1 = proj.cy + Math.sin(spAng) * 10.8;
-          strokeLine(g, x0, y0, x1, y1, 3.4, COL_INK, 0.84);
-          strokeLine(g, x0, y0, x1, y1, 1.7, sp % 2 === 0 ? COL_CYAN_BOLT : COL_HOLO_ICE, 0.95);
+          fillTaperedLightningBolt(
+            underG,
+            x0,
+            y0,
+            x1,
+            y1,
+            1.2,
+            sp % 2 === 0 ? COL_CYAN_BOLT : COL_HOLO_ICE,
+            0.92,
+            e.id + sp * 7,
+            3,
+            1.0,
+          );
         }
       }
     }
@@ -599,8 +610,9 @@ function drawDeterministicTransientBursts(g: Gfx, floorG: Gfx, sim: WorldSim): v
 
 export function drawP4ATetherAndProjectileOverlays(scene: unknown, g: Gfx, sim: WorldSim): void {
   const floorG = resolveFloorGfx(scene, g);
+  const underG = resolveUnderActorGfx(scene, g);
   const tSec = resolveP4AVisualTimeSec(scene, sim);
-  drawElectricCutterWires(g, sim, tSec);
+  drawElectricCutterWires(underG, sim, tSec);
   drawCausticSporePodOverlays(g, floorG, sim, tSec);
   drawDeterministicTransientBursts(g, floorG, sim);
 

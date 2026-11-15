@@ -16,7 +16,6 @@ import {
   fillTaperedLightningBolt,
   fillTaperedQuadraticBezier,
 } from './tapered-ribbon-builder.js';
-import { renderBastionPrismPlates } from './combat-fx-classes.js';
 import { getWeaponV2OverlayState, type TransientWeaponV2Shape } from './combat-fx-weapons-v2.js';
 
 export const P1D_BLESSING_EVENT_KINDS = [
@@ -249,14 +248,6 @@ export function drawP1DBlessingActiveOverlays(
       g.beginPath();
       g.arc(pl.x, pl.y, pl.radius + 11, dAng - 0.85, dAng + 0.85, false);
       g.strokePath();
-    }
-    if (
-      pl.characterId === 'vanguard' &&
-      pl.skillActiveTimer > 0 &&
-      blessings.includes('vanguard_bastion_prism')
-    ) {
-      const underG = resolveUnderActorGraphics(sceneOrG, g);
-      renderBastionPrismPlates(underG, g, pl.x, pl.y, 38, t * 2.8, 1.0);
     }
   }
 

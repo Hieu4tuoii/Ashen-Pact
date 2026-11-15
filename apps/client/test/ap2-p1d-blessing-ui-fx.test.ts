@@ -677,4 +677,70 @@ describe('AP2 Phase P1D.4 & P4A.4 — Per-Player Blessing Modal UI, HUD Chips, i
     expect(underG.fillTriangleCalls.length).toBeGreaterThan(0);
     expect(g.calls.includes('lineBetween')).toBe(false);
   });
+
+  it('renders electric_cutter via drawP4ATetherAndProjectileOverlays with two wall_tether_pylon summons onto underActorGraphics with 0 wire lines on telegraphGraphics', () => {
+    const sim = new WorldSim({ seed: 502, startInHub: false });
+    sim.summons.push(
+      {
+        id: 201,
+        kind: 'wall_tether_pylon',
+        ownerPlayerId: 1,
+        x: 120,
+        y: 120,
+        radius: 16,
+        auraRadius: 100,
+        hp: 100,
+        maxHp: 100,
+        ttlSec: 5,
+        maxTtlSec: 8,
+        tickTimer: 0.1,
+        charge: 0,
+      },
+      {
+        id: 202,
+        kind: 'wall_tether_pylon',
+        ownerPlayerId: 1,
+        x: 260,
+        y: 120,
+        radius: 16,
+        auraRadius: 100,
+        hp: 100,
+        maxHp: 100,
+        ttlSec: 5,
+        maxTtlSec: 8,
+        tickTimer: 0.1,
+        charge: 0,
+      },
+    );
+
+    const g = createMockGraphics();
+    const floorG = createMockGraphics();
+    const underG = {
+      fillTriangleCalls: [] as Array<{ x0: number; y0: number }>,
+      fillStyleCalls: [] as unknown[],
+      fillStyle: vi.fn((col: number, a = 1) => { underG.fillStyleCalls.push({ col, a }); }),
+      fillTriangle: vi.fn((x0: number, y0: number) => { underG.fillTriangleCalls.push({ x0, y0 }); }),
+      fillCircle: vi.fn(),
+      beginPath: vi.fn(),
+      moveTo: vi.fn(),
+      lineTo: vi.fn(),
+      closePath: vi.fn(),
+      fillPath: vi.fn(),
+      strokePath: vi.fn(),
+      lineStyle: vi.fn(),
+      lineBetween: vi.fn(),
+    };
+    const mockScene = {
+      sim,
+      telegraphGraphics: g,
+      groundHazardGraphics: floorG,
+      underActorGraphics: underG,
+    };
+
+    drawP4ATetherAndProjectileOverlays(mockScene, g as never, sim);
+    expect(underG.fillTriangleCalls.length).toBeGreaterThan(0);
+    expect(g.calls.includes('lineBetween')).toBe(false);
+    expect(g.calls.includes('strokeLine')).toBe(false);
+    expect(g.calls.includes('strokePolylineBuffer')).toBe(false);
+  });
 });

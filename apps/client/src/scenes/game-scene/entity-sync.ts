@@ -485,7 +485,7 @@ export function syncEnemyRigsImpl(this: GameScene, dtSec: number): void {
     rig.setShadowVisible(!isIllusion);
     rig.container.setAlpha(isIllusion ? 0.76 : 1.0);
 
-    if (e.bossBurrowed) {
+    if (e.bossBurrowed || e.defId === 'ice_prison') {
       rig.container.setVisible(false);
       continue;
     }

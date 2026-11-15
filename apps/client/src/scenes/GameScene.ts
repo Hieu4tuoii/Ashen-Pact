@@ -364,7 +364,11 @@ export class GameScene extends Phaser.Scene {
 
   public groundHazardGraphics!: Phaser.GameObjects.Graphics;
   public enemyGroundTelegraphGfx!: Phaser.GameObjects.Graphics;
+  public icePrisonRearGraphics?: Phaser.GameObjects.Graphics;
+  public bastionRearGraphics?: Phaser.GameObjects.Graphics;
   public underActorGraphics!: Phaser.GameObjects.Graphics;
+  public icePrisonFrontGraphics?: Phaser.GameObjects.Graphics;
+  public bastionFrontGraphics?: Phaser.GameObjects.Graphics;
   public weaponRibbonGraphics!: Phaser.GameObjects.Graphics;
   public telegraphGraphics!: Phaser.GameObjects.Graphics;
   public hitboxGraphics!: Phaser.GameObjects.Graphics;

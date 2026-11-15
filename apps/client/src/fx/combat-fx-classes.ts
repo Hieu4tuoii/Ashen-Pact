@@ -115,12 +115,13 @@ export function renderIcePrisonBars(
   const colHighlight = 0xe0f2fe;
   const alpha = clamp(hpRatio, 0.2, 1.0);
 
-  for (let i = -1; i <= 1; i++) {
-    const sx = x + i * 14;
-    const h = 26 + (i === 0 ? 6 : 0);
+  // 2 rear frost-crystal bars on rearGfx (depth 15.0)
+  for (let i = 0; i < 2; i++) {
+    const sx = x + (i === 0 ? -12 : 12);
+    const h = 28;
     fillTaperedQuadraticBezier(
       rearGfx,
-      sx - 4,
+      sx - (i === 0 ? 3 : -3),
       centerY,
       sx,
       centerY - h * 0.5,
@@ -136,38 +137,27 @@ export function renderIcePrisonBars(
     );
   }
 
-  fillTaperedQuadraticBezier(
-    frontGfx,
-    x - 16,
-    centerY - 8,
-    x - 2,
-    centerY + 2,
-    x + 16,
-    centerY - 12,
-    0.1,
-    2.5,
-    0.1,
-    colBars,
-    alpha,
-    4,
-    1.2,
-  );
-  fillTaperedQuadraticBezier(
-    frontGfx,
-    x - 14,
-    centerY + 8,
-    x + 2,
-    centerY - 2,
-    x + 15,
-    centerY + 10,
-    0.1,
-    2.2,
-    0.1,
-    colHighlight,
-    alpha,
-    4,
-    1.2,
-  );
+  // 3 front frost-crystal bars on frontGfx (depth 30.3)
+  for (let i = -1; i <= 1; i++) {
+    const sx = x + i * 13;
+    const h = 24 + (i === 0 ? 6 : 0);
+    fillTaperedQuadraticBezier(
+      frontGfx,
+      sx,
+      centerY + 8,
+      sx + (i === 0 ? 2 : -2),
+      centerY - h * 0.4,
+      sx,
+      centerY - h,
+      0.1,
+      2.4,
+      0.1,
+      i === 0 ? colHighlight : colBars,
+      alpha,
+      4,
+      1.2,
+    );
+  }
 }
 
 export interface ClassFxSceneLightingContext {

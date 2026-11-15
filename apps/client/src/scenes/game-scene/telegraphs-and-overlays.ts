@@ -123,6 +123,10 @@ export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, 
   if (this.enemyGroundTelegraphGfx) {
     this.enemyGroundTelegraphGfx.clear();
   }
+  this.icePrisonRearGraphics?.clear();
+  this.bastionRearGraphics?.clear();
+  this.icePrisonFrontGraphics?.clear();
+  this.bastionFrontGraphics?.clear();
   const view = this.cameras.main.worldView;
   const hasView = view && view.width > 0;
   const viewLeft = hasView ? view.x - 48 : -9999;
@@ -178,23 +182,13 @@ export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, 
       renderDownedReviveBrackets(floorG, px, py, 64, pl.reviveProgress ?? 0);
     }
 
-    if (pl.icePrisonId && pl.icePrisonId > 0) {
-      renderIcePrisonBars(
-        this.interactFootRingGraphics ?? floorG,
-        this.telegraphGraphics ?? g,
-        px,
-        py,
-        1.0,
-      );
-    }
-
     if (pl.skillActiveTimer > 0) {
       if (pl.characterId === 'vanguard') {
         const isBastion = pl.blessingIds.includes('vanguard_bastion_prism');
         if (isBastion) {
           renderBastionPrismPlates(
-            this.underActorGraphics ?? floorG,
-            this.telegraphGraphics ?? g,
+            this.bastionRearGraphics ?? this.underActorGraphics ?? floorG,
+            this.bastionFrontGraphics ?? this.telegraphGraphics ?? g,
             px,
             py,
             38,
@@ -220,13 +214,31 @@ export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, 
   for (let i = 0; i < sim.skillZones.length; i++) {
     const z = sim.skillZones[i]!;
     if (z.ttlSec <= 0) continue;
-    drawInscribedElementalistZone(floorG, g, z, overlayTick);
+    drawInscribedElementalistZone(floorG, g, z, overlayTick, this.underActorGraphics);
   }
 
-  // 1b. Phase 5 Summoned Entities (Cutout summons rendered via syncSummonCutoutVisuals; only mini TTL/HP bar here)
+  // 1b. Phase 5 Summoned Entities (Cutout summons rendered via syncSummonCutoutVisuals; 1:1 circular floor aura & mini TTL/HP bar)
   for (let i = 0; i < sim.summons.length; i++) {
     const sum = sim.summons[i]!;
     if (sum.hp <= 0 || sum.ttlSec <= 0) continue;
+
+    if (sum.kind === 'sacred_tree' || sum.kind === 'life_blossom') {
+      const auraR = sum.auraRadius || 88;
+      const auraCol = hexToNum(sum.kind === 'sacred_tree' ? PALETTE.LIME_GLOW : PALETTE.GOBLIN_GREEN);
+      floorG.fillStyle(auraCol, 0.045);
+      floorG.fillCircle(sum.x, sum.y, auraR);
+      floorG.lineStyle(3.2, hexToNum(PALETTE.INK_DARK), 0.65);
+      floorG.strokeCircle(sum.x, sum.y, auraR);
+      floorG.lineStyle(1.8, auraCol, 0.85);
+      floorG.strokeCircle(sum.x, sum.y, auraR);
+
+      if (sum.kind === 'sacred_tree' && this.icePrisonRearGraphics) {
+        this.icePrisonRearGraphics.fillStyle(hexToNum(PALETTE.INK_DARK), 0.55);
+        this.icePrisonRearGraphics.fillCircle(sum.x, sum.y + 4, 16);
+        this.icePrisonRearGraphics.fillStyle(0x3f6212, 0.75);
+        this.icePrisonRearGraphics.fillCircle(sum.x, sum.y + 4, 13);
+      }
+    }
 
     // Mini TTL / HP bar above summon
     const barW = 28;
@@ -284,18 +296,6 @@ export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, 
     g.strokeCircle(ring.x, ring.y, ring.radius);
   }
 
-  // 1g. Phase 6 Boss Kryssa Ice Prison Crystalline Cage around encased players
-  const allPl = sim.getAllPlayers();
-  for (let i = 0; i < allPl.length; i++) {
-    const pl = allPl[i]!;
-    if ((pl.encasedInIceTimer ?? 0) > 0 && pl.lifeState === 'alive') {
-      g.fillStyle(hexToNum(PALETTE.CYAN_FROST), 0.36);
-      g.lineStyle(3, hexToNum(PALETTE.ICE_WHITE), 0.95);
-      g.fillRoundedRect(pl.x - 19, pl.y - 24, 38, 42, 7);
-      g.strokeRoundedRect(pl.x - 19, pl.y - 24, 38, 42, 7);
-    }
-  }
-
   // 2. Enemy Spawn Circles, Attack Telegraphs, Boss Burrow Warning, Elite Aura & Mini HP Bars
   let hpBarsDrawn = 0;
   let telegraphsDrawn = 0;
@@ -325,10 +325,10 @@ export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, 
 
     if (e.defId === 'ice_prison') {
       renderIcePrisonBars(
-        this.interactFootRingGraphics ?? floorG,
-        this.telegraphGraphics ?? g,
+        this.icePrisonRearGraphics ?? floorG,
+        this.icePrisonFrontGraphics ?? g,
         pos.x,
-        pos.y - 12,
+        pos.y,
         clamp(e.hp / Math.max(1, e.maxHp), 0, 1),
       );
     }

@@ -564,6 +564,27 @@ export function createImpl(this: GameScene): void {
   this.underActorGraphics = this.fx.underActorGraphics;
   this.weaponRibbonGraphics = this.fx.weaponRibbonGraphics;
 
+  this.icePrisonRearGraphics = this.add.graphics();
+  this.icePrisonRearGraphics.setDepth(15.0);
+  this.icePrisonRearGraphics.setBlendMode(Phaser.BlendModes.NORMAL);
+
+  this.bastionRearGraphics = this.add.graphics();
+  this.bastionRearGraphics.setDepth(26.4);
+  this.bastionRearGraphics.setBlendMode(Phaser.BlendModes.NORMAL);
+
+  this.icePrisonFrontGraphics = this.add.graphics();
+  this.icePrisonFrontGraphics.setDepth(30.3);
+  this.icePrisonFrontGraphics.setBlendMode(Phaser.BlendModes.NORMAL);
+
+  this.bastionFrontGraphics = this.add.graphics();
+  this.bastionFrontGraphics.setDepth(30.4);
+  this.bastionFrontGraphics.setBlendMode(Phaser.BlendModes.NORMAL);
+
+  if (this.summonVisuals) {
+    this.summonVisuals.clear();
+  }
+  this.summonSpritePool = [];
+
   // 7. Dynamic Lighting Pipeline + WebGL PostFX Shader
   this.lighting = new LightingPipeline(this);
   this.sanctuaryLayer.sync(sim, 0, getFreezeVisualTimeSec(this.lighting.getElapsedSec()));
@@ -1467,6 +1488,10 @@ export function teleportToRoomImpl(this: GameScene, targetRoomId: number): boole
   const entered = sim.enterRoom(targetRoomId);
   if (!entered) return false;
   this.fx?.resetRoomTransientState?.();
+  this.icePrisonRearGraphics?.clear();
+  this.bastionRearGraphics?.clear();
+  this.icePrisonFrontGraphics?.clear();
+  this.bastionFrontGraphics?.clear();
   if (this.summonVisuals) {
     for (const vis of this.summonVisuals.values()) {
       vis.shadow.setVisible(false).setActive(false);
@@ -1570,27 +1595,39 @@ export function applyCameraViewportImpl(this: GameScene): void {
     }
     const stressInvBake = 1 / Math.min(2, newScale);
     for (const item of this.projectileSprites.values()) {
-      const baseInv = item.textureKey.startsWith('proj_stress_') ? stressInvBake : invBake;
-      item.sprite.setTexture(item.textureKey);
+      const isKit = item.textureKey === 'fx_cutout_kit_512' || item.frameName !== undefined;
+      const baseInv = isKit
+        ? 1 / 3
+        : item.textureKey.startsWith('proj_stress_')
+          ? stressInvBake
+          : invBake;
+      item.sprite.setTexture(item.textureKey, item.frameName);
       item.sprite.setScale(baseInv * item.specScale);
       item.glowSprite.setTexture('fx_enemy_bullet_glow');
       item.glowSprite.setScale(baseInv * item.specScale * 1.05);
     }
     for (const item of this.projectileSpritePool) {
-      const baseInv = item.textureKey.startsWith('proj_stress_') ? stressInvBake : invBake;
-      item.sprite.setTexture(item.textureKey);
+      const isKit = item.textureKey === 'fx_cutout_kit_512' || item.frameName !== undefined;
+      const baseInv = isKit
+        ? 1 / 3
+        : item.textureKey.startsWith('proj_stress_')
+          ? stressInvBake
+          : invBake;
+      item.sprite.setTexture(item.textureKey, item.frameName);
       item.sprite.setScale(baseInv * item.specScale);
       item.glowSprite.setTexture('fx_enemy_bullet_glow');
       item.glowSprite.setScale(baseInv * item.specScale * 1.05);
     }
     for (const item of this.pickupSprites.values()) {
-      item.sprite.setTexture(item.textureKey);
-      item.sprite.setScale(invBake);
+      const isKit = item.textureKey === 'fx_cutout_kit_512' || item.frameName !== undefined;
+      item.sprite.setTexture(item.textureKey, item.frameName);
+      item.sprite.setScale(isKit ? 1 / 3 : invBake);
       item.glowSprite.setTexture('fx_light_radial');
     }
     for (const item of this.pickupSpritePool) {
-      item.sprite.setTexture(item.textureKey);
-      item.sprite.setScale(invBake);
+      const isKit = item.textureKey === 'fx_cutout_kit_512' || item.frameName !== undefined;
+      item.sprite.setTexture(item.textureKey, item.frameName);
+      item.sprite.setScale(isKit ? 1 / 3 : invBake);
       item.glowSprite.setTexture('fx_light_radial');
     }
     const sim = this.transport?.getSim();
