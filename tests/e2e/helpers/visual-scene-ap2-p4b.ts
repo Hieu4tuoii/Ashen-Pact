@@ -66,6 +66,7 @@ async function prepareCleanP4BArena(page: Page, cfg: CleanP4BArenaConfig): Promi
   await page.evaluate((c) => {
     const sim = window.__GAME_TRANSPORT__!.getSim();
     sim.rng.setState(sim.rng.initialSeed);
+    sim.nextEntityId = 100;
     sim.currentBiome = 1;
     sim.currentFloor = 2;
     sim.map.biome = 1;
@@ -87,6 +88,13 @@ async function prepareCleanP4BArena(page: Page, cfg: CleanP4BArenaConfig): Promi
     sim.props.length = 0;
     sim.summons.length = 0;
     sim.skillZones.length = 0;
+    sim.nextEntityId = 100;
+    sim.tick = 10;
+    (
+      window.__GAME_TRANSPORT__ as unknown as {
+        loop?: { primeForImmediateTick?: () => void };
+      }
+    ).loop?.primeForImmediateTick?.();
 
     const wallRows = new Set(c.corridorWallRows ?? []);
     for (let ty = c.minTy; ty <= c.maxTy; ty++) {
@@ -185,9 +193,9 @@ export async function setupAp2DuoMagneticBastionRingScene(page: Page): Promise<v
     minTy: 3,
     maxTy: 13,
     enemies: [
-      { defId: 'wild_boar', x: 464, y: 271, hp: 420 },
-      { defId: 'goblin_shooter', x: 496, y: 256, hp: 420 },
-      { defId: 'green_slime', x: 526, y: 243, hp: 420 },
+      { defId: 'wild_boar', x: 483, y: 286, hp: 420 },
+      { defId: 'goblin_shooter', x: 511, y: 265, hp: 420 },
+      { defId: 'green_slime', x: 536, y: 247, hp: 420 },
     ],
   });
 
@@ -195,7 +203,7 @@ export async function setupAp2DuoMagneticBastionRingScene(page: Page): Promise<v
     const sim = window.__GAME_TRANSPORT__!.getSim();
     sim.selectCharacter(sim.player.id, 'engineer');
     Object.assign(sim.player, {
-      godMode: true, x: 378, y: 304, prevX: 378, prevY: 304, vx: 0, vy: 0, aimAngle: -0.32,
+      godMode: true, x: 350, y: 316, prevX: 350, prevY: 316, vx: 0, vy: 0, aimAngle: 0,
       weaponSlots: ['tesla_carbine', 'hunter_crossbow'] as [WeaponDefId, WeaponDefId],
       activeWeaponSlot: 0, duoBoonIds: ['duo_magnetic_bastion_ring'] as DuoBoonId[],
       blessingIds: ['reload_holster_surge'],
@@ -204,7 +212,7 @@ export async function setupAp2DuoMagneticBastionRingScene(page: Page): Promise<v
     sim.flipCoverProp(farAnchor, sim.player);
     farAnchor.flippedByPlayerId = sim.player.id;
     farAnchor.microBlankTimer = 0;
-    sim.spawnProp('moss_table', 408, 296);
+    sim.spawnProp('moss_table', 380, 316);
     sim.consumeEvents();
   });
 
@@ -213,7 +221,24 @@ export async function setupAp2DuoMagneticBastionRingScene(page: Page): Promise<v
 
   await page.evaluate(() => {
     const sim = window.__GAME_TRANSPORT__!.getSim();
-    Object.assign(sim.player, { x: 378, y: 304, prevX: 378, prevY: 304, vx: 0, vy: 0, aimAngle: -0.32 });
+    const gs = window.__PHASER_GAME__?.scene.getScene('GameScene') as
+      | { resetPortalAndDoorTestState?: () => void }
+      | undefined;
+    gs?.resetPortalAndDoorTestState?.();
+    sim.rng.setState(sim.rng.initialSeed);
+    Object.assign(sim.player, { x: 350, y: 316, prevX: 350, prevY: 316, vx: 0, vy: 0, aimAngle: 0 });
+    const lockedEnemyCoords: readonly [number, number][] = [
+      [478, 290],
+      [503, 271],
+      [527, 253],
+    ];
+    for (let i = 0; i < lockedEnemyCoords.length; i++) {
+      const e = sim.enemies[i];
+      const [ex, ey] = lockedEnemyCoords[i]!;
+      if (e) {
+        Object.assign(e, { x: ex, y: ey, prevX: ex, prevY: ey, vx: 0, vy: 0, stateTimer: 20.0 });
+      }
+    }
     sim.tick = 51;
     sim.consumeEvents();
   });
@@ -500,12 +525,12 @@ export const AP2_P4B_VISUAL_SCENES: readonly VisualSceneDef[] = [
       },
       stripSchedule: [
         { stepCount: 0, stage: 'windup_hold', label: 'BARRICADE #1 ARMED' },
-        stepInput(2, 'trigger', 'FLIP COVER [E]!', -0.35, -0.75, -0.32, { interact: true }),
-        stepInput(3, 'active', 'ARC GRID IGNITED', -0.25, -0.85, -0.22),
-        stepInput(2, 'active', 'CAPACITOR SURGE', 0.15, -0.85, -0.12),
-        stepInput(1, 'apex', '220PX ARC SEAR!', 0.35, -0.65, -0.05),
-        stepInput(5, 'sub_impact', 'HIGH-VOLT CHAIN', 0.45, -0.45, 0.05),
-        stepInput(5, 'settled', 'BASTION RING HOLD', 0.35, -0.25, 0.1),
+        stepInput(2, 'trigger', 'DASH FLIP!', 1, 0, 0, { dash: true }),
+        stepInput(3, 'active', 'ARC GRID IGNITED', 0.25, -0.5, -0.22),
+        stepInput(2, 'active', 'CAPACITOR SURGE', 0.15, -0.5, -0.12),
+        stepInput(1, 'apex', '220PX ARC SEAR!', 0.25, -0.35, -0.05),
+        stepInput(5, 'sub_impact', 'HIGH-VOLT CHAIN', 0.35, -0.25, 0.05),
+        stepInput(5, 'settled', 'BASTION RING HOLD', 0.25, -0.15, 0.1),
         stepInput(5, 'settled', 'SETTLED', 0.2, 0, 0.12),
       ],
     },

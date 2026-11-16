@@ -41,6 +41,7 @@ interface Ap2P1ArenaInitConfig {
   playerY: number;
   aimAngle?: number;
   playerPatch?: Record<string, unknown>;
+  clearFloorBox?: readonly [number, number, number, number];
   pillarBox?: readonly [number, number, number, number];
   props?: ReadonlyArray<readonly [PropKind, number, number, boolean?]>;
   enemies?: ReadonlyArray<readonly [EnemyTypeId, number, number, ('shield' | undefined)?]>;
@@ -82,6 +83,19 @@ async function initAp2P1Arena(
         biome: 1,
         activeDoorSides: ['N', 'S', 'E', 'W'],
       });
+    }
+    if (c.clearFloorBox) {
+      const [x0, x1, y0, y1] = c.clearFloorBox;
+      for (let ty = y0; ty <= y1; ty++) {
+        for (let tx = x0; tx <= x1; tx++) {
+          if (tx > 0 && ty > 0 && tx < sim.map.cols - 1 && ty < sim.map.rows - 1) {
+            sim.map.tiles[ty * sim.map.cols + tx] = 'floor';
+            sim.map.setSurface(tx, ty, 'none', 0, true);
+          }
+        }
+      }
+      sim.map.rebuildSolidBoxes();
+      sim.map.mapRevision += 1;
     }
     if (c.pillarBox) {
       const [x0, x1, y0, y1] = c.pillarBox;
@@ -148,6 +162,7 @@ export async function setupAp2WepCrossbowRipScene(page: Page): Promise<void> {
   await initAp2P1Arena(page, {
     archetype: 'GAUNTLET_CHOKEPOINT',
     roomSeed: 1336,
+    clearFloorBox: [9, 16, 6, 10],
     fourBraziers: true,
     rebuildDoors: true,
     characterId: 'ranger',
@@ -291,6 +306,7 @@ export async function setupAp2WepGaleVentScene(page: Page): Promise<void> {
   await initAp2P1Arena(page, {
     archetype: 'GAUNTLET_CHOKEPOINT',
     roomSeed: 1336,
+    clearFloorBox: [9, 16, 6, 10],
     fourBraziers: true,
     characterId: 'ranger',
     playerX: 356,
@@ -409,6 +425,7 @@ export async function setupAp2WepSeedBloomScene(page: Page): Promise<void> {
   await initAp2P1Arena(page, {
     archetype: 'TWIN_BRIDGES',
     roomSeed: 1338,
+    clearFloorBox: [9, 16, 6, 10],
     fourBraziers: true,
     rebuildDoors: true,
     characterId: 'druid',
@@ -459,6 +476,7 @@ export async function setupAp2WepTetherPullScene(page: Page): Promise<void> {
   await initAp2P1Arena(page, {
     archetype: 'CENTRAL_BASTION',
     roomSeed: 1340,
+    clearFloorBox: [8, 16, 5, 9],
     fourBraziers: true,
     characterId: 'elementalist',
     playerX: 316,
@@ -593,7 +611,8 @@ export const AP2_P1A_VISUAL_SCENES: readonly VisualSceneDef[] = [
   ap2Scene('ap2-wep-gale-vent', 'Gale SMG wind blade & Cyclone Vent', setupAp2WepGaleVentScene, {
     apexEvent: { simEventKind: 'tactical_vent' },
     actionRoi: {
-      mode: 'auto_bounds',
+      width: 680,
+      height: 420,
       includeProjectiles: 'none',
       propKinds: ['moss_table'],
     },
@@ -662,7 +681,8 @@ export const AP2_P1A_VISUAL_SCENES: readonly VisualSceneDef[] = [
       occurrence: 'last',
     },
     actionRoi: {
-      mode: 'auto_bounds',
+      width: 680,
+      height: 380,
       includeProjectiles: 'none',
       propKinds: [],
     },

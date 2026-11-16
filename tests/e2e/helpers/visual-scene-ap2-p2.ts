@@ -243,21 +243,32 @@ export async function setupAp2SecretWallCrackBreakScene(page: Page): Promise<voi
       secretWallBroken: false,
     });
 
-    for (let ty = 8; ty <= 14; ty++) {
-      for (let tx = 26; tx < sim.map.cols - 1; tx++) {
+    sim.map.placeCrackedSecretWall('E', false);
+    let cwTx = sim.map.cols - 1;
+    let cwTy = Math.floor(sim.map.rows / 2);
+    for (let ty = 1; ty < sim.map.rows - 1; ty++) {
+      if (sim.map.tiles[ty * sim.map.cols + (sim.map.cols - 1)] === 'cracked_wall') {
+        cwTx = sim.map.cols - 1;
+        cwTy = ty;
+        break;
+      }
+    }
+    for (let ty = Math.max(1, cwTy - 3); ty <= Math.min(sim.map.rows - 2, cwTy + 3); ty++) {
+      for (let tx = Math.max(1, cwTx - 8); tx < cwTx; tx++) {
         sim.map.tiles[ty * sim.map.cols + tx] = 'floor';
         sim.map.surfaces[ty * sim.map.cols + tx] = 'none';
       }
     }
-    sim.map.placeCrackedSecretWall('E', false);
     sim.map.rebuildSolidBoxes();
     sim.map.mapRevision += 1;
     sim.rebuildCurrentRoomDoors();
 
-    sim.spawnProp('torch_brazier', 980, 292);
-    sim.spawnProp('torch_brazier', 980, 444);
+    const wallInnerX = cwTx * 32;
+    const laneY = cwTy * 32 + 16;
+    sim.spawnProp('torch_brazier', wallInnerX - 132, laneY - 72);
+    sim.spawnProp('torch_brazier', wallInnerX - 132, laneY + 72);
 
-    const table = sim.spawnProp('moss_table', 1040, 368);
+    const table = sim.spawnProp('moss_table', wallInnerX - 78, laneY);
     sim.flipCoverProp(table, sim.player);
     table.microBlankTimer = 0;
     sim.consumeEvents();
@@ -266,10 +277,10 @@ export async function setupAp2SecretWallCrackBreakScene(page: Page): Promise<voi
     sim.doorTransitionCooldown = 99;
     Object.assign(sim.player, {
       godMode: true,
-      x: 1008,
-      y: 368,
-      prevX: 1008,
-      prevY: 368,
+      x: wallInnerX - 110,
+      y: laneY,
+      prevX: wallInnerX - 110,
+      prevY: laneY,
       vx: 0,
       vy: 0,
       aimAngle: 0,

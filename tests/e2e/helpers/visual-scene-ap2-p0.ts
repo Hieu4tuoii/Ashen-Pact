@@ -9,7 +9,6 @@ import {
   stepDeterministicFrames,
   triggerDash,
   triggerFireWeapon,
-  triggerInteract,
   triggerReloadVent,
   type SampleRect,
   type VisualSceneDef,
@@ -49,6 +48,9 @@ interface Ap2ArenaInitConfig {
   playerY: number;
   aimAngle?: number;
   playerFields?: Record<string, unknown>;
+  clearFloorBox?: readonly [number, number, number, number];
+  pillarBox?: readonly [number, number, number, number];
+  chasmBox?: readonly [number, number, number, number];
   props?: ReadonlyArray<readonly [PropKind, number, number, boolean?]>;
   enemies?: ReadonlyArray<readonly [EnemyTypeId, number, number, ('shield' | undefined)?]>;
   dummyEnemies?: boolean;
@@ -80,6 +82,38 @@ async function initAp2Arena(page: Page, cfg: Ap2ArenaInitConfig, warmupFrames = 
         biome: 1,
         activeDoorSides: ['N', 'S', 'E', 'W'],
       });
+    }
+    if (c.clearFloorBox || c.pillarBox || c.chasmBox) {
+      if (c.clearFloorBox) {
+        const [x0, x1, y0, y1] = c.clearFloorBox;
+        for (let ty = y0; ty <= y1; ty++) {
+          for (let tx = x0; tx <= x1; tx++) {
+            if (tx > 0 && ty > 0 && tx < sim.map.cols - 1 && ty < sim.map.rows - 1) {
+              sim.map.tiles[ty * sim.map.cols + tx] = 'floor';
+              sim.map.setSurface(tx, ty, 'none', 0, true);
+            }
+          }
+        }
+      }
+      if (c.pillarBox) {
+        const [x0, x1, y0, y1] = c.pillarBox;
+        for (let ty = y0; ty <= y1; ty++) {
+          for (let tx = x0; tx <= x1; tx++) {
+            sim.map.tiles[ty * sim.map.cols + tx] = 'pillar';
+          }
+        }
+      }
+      if (c.chasmBox) {
+        const [x0, x1, y0, y1] = c.chasmBox;
+        for (let ty = y0; ty <= y1; ty++) {
+          for (let tx = x0; tx <= x1; tx++) {
+            sim.map.tiles[ty * sim.map.cols + tx] = 'floor';
+            sim.map.setSurface(tx, ty, 'chasm', 0, true);
+          }
+        }
+      }
+      sim.map.rebuildSolidBoxes();
+      sim.map.mapRevision += 1;
     }
     sim.props.length = 0;
     sim.spawnProp('torch_brazier', 7 * 32 + 18, 4 * 32 + 20);
@@ -217,7 +251,8 @@ export async function setupAp2B1CentralBastionScene(page: Page): Promise<void> {
 export async function setupAp2FlipCoverMicroblankScene(page: Page): Promise<void> {
   await initAp2Arena(page, {
     archetype: 'GAUNTLET_CHOKEPOINT',
-    playerX: 372,
+    clearFloorBox: [10, 20, 6, 10],
+    playerX: 374,
     playerY: 270,
     props: [
       ['moss_table', 405, 270],
@@ -249,7 +284,9 @@ export async function setupAp2DashKickWallSlamScene(page: Page): Promise<void> {
   await initAp2Arena(page, {
     archetype: 'GAUNTLET_CHOKEPOINT',
     roomSeed: 1336,
-    playerX: 618,
+    clearFloorBox: [16, 22, 4, 8],
+    pillarBox: [23, 24, 4, 8],
+    playerX: 576,
     playerY: 195,
     aimAngle: 0,
     playerFields: {
@@ -257,12 +294,12 @@ export async function setupAp2DashKickWallSlamScene(page: Page): Promise<void> {
       maxArmor: 5,
     },
     props: [
-      ['moss_table', 650, 195, true],
+      ['moss_table', 608, 195, true],
     ],
     enemies: [
-      ['wild_boar', 746, 195],
-      ['goblin_shooter', 716, 152],
-      ['goblin_shaman', 716, 236],
+      ['wild_boar', 714, 195],
+      ['goblin_shooter', 698, 152],
+      ['goblin_shaman', 698, 236],
     ],
   });
   await page.evaluate(() => {
@@ -289,13 +326,15 @@ export async function setupAp2ChasmRingOutScene(page: Page): Promise<void> {
   await initAp2Arena(page, {
     archetype: 'TWIN_BRIDGES',
     roomSeed: 1338,
+    clearFloorBox: [15, 19, 5, 7],
+    chasmBox: [15, 19, 8, 11],
     characterId: 'vanguard',
     playerX: 556,
     playerY: 204,
     aimAngle: Math.PI * 0.5,
     enemies: [
       ['goblin_shooter', 556, 238],
-      ['green_slime', 536, 234],
+      ['green_slime', 536, 238],
       ['goblin_shaman', 576, 235, 'shield'],
     ],
   });
@@ -481,6 +520,7 @@ export async function setupAp2TeslaSmartBounceScene(page: Page): Promise<void> {
   await initAp2Arena(page, {
     archetype: 'GAUNTLET_CHOKEPOINT',
     roomSeed: 1336,
+    clearFloorBox: [9, 17, 5, 10],
     characterId: 'ranger',
     playerX: 350,
     playerY: 272,
@@ -528,7 +568,7 @@ export const AP2_P0B_VISUAL_SCENES: readonly VisualSceneDef[] = [
   ),
   makeScene(
     'ap2-flip-cover-microblank',
-    'Player flipping moss_table with [E] emitting r=56px Micro-Blank wave clearing enemy bullets',
+    'Player Dash-Kicking moss_table to flip it and emit r=56px Micro-Blank wave clearing enemy bullets',
     DEFAULT_GAME_URL,
     'GameScene',
     setupAp2FlipCoverMicroblankScene,
@@ -540,6 +580,12 @@ export const AP2_P0B_VISUAL_SCENES: readonly VisualSceneDef[] = [
         simEventKind: 'cover_flipped',
         simEventPredicate: (ev) => Number(ev['bulletsCleared'] ?? 0) > 0,
       },
+      actionRoi: {
+        width: 680,
+        height: 380,
+        includeProjectiles: 'none',
+        propKinds: ['moss_table'],
+      },
       stripSchedule: [
         { stepCount: 0, stage: 'windup_hold', label: 'VOLLEY IN' },
         { stepCount: 2, stage: 'active', label: 'CLOSE IN 1' },
@@ -548,12 +594,12 @@ export const AP2_P0B_VISUAL_SCENES: readonly VisualSceneDef[] = [
         {
           stepCount: 2,
           stage: 'apex',
-          label: 'FLIP [E]!',
-          beforeStep: (page) => triggerInteract(page),
+          label: 'DASH FLIP!',
+          beforeStep: (page) => triggerDash(page, 1, 0, 0),
         },
         { stepCount: 3, stage: 'sub_impact', label: 'MICRO-BLANK' },
-        { stepCount: 4, stage: 'settled', label: 'COVER BLOCK' },
-        { stepCount: 4, stage: 'settled', label: 'SAFE COVER' },
+        { stepCount: 4, stage: 'settled', label: 'COVER SLIDE' },
+        { stepCount: 4, stage: 'settled', label: 'SAFE LANE' },
       ],
     },
   ),
@@ -568,6 +614,12 @@ export const AP2_P0B_VISUAL_SCENES: readonly VisualSceneDef[] = [
       frameCount: 8,
       heroFrameIndex: 4,
       apexEvent: { simEventKind: 'wall_slam' },
+      actionRoi: {
+        width: 680,
+        height: 380,
+        includeProjectiles: 'none',
+        propKinds: ['moss_table'],
+      },
       stripSchedule: [
         { stepCount: 0, stage: 'windup_hold', label: 'WINDUP' },
         {
@@ -597,8 +649,10 @@ export const AP2_P0B_VISUAL_SCENES: readonly VisualSceneDef[] = [
       heroFrameIndex: 4,
       apexEvent: { simEventKind: 'ring_out', occurrence: 'last' },
       actionRoi: {
-        mode: 'auto_bounds',
+        width: 680,
+        height: 380,
         includeProjectiles: 'none',
+        propKinds: [],
       },
       stripSchedule: [
         { stepCount: 0, stage: 'windup_hold', label: 'LEDGE WINDUP' },
@@ -753,6 +807,12 @@ export const AP2_P0B_VISUAL_SCENES: readonly VisualSceneDef[] = [
         simEventPredicate: (ev) =>
           ev['kind'] === 'chain_lightning' || typeof ev['replacedProjectileId'] === 'number',
         occurrence: 'last',
+      },
+      actionRoi: {
+        width: 680,
+        height: 380,
+        includeProjectiles: 'none',
+        propKinds: ['moss_table'],
       },
       stripSchedule: [
         { stepCount: 0, stage: 'windup_hold', label: 'AIM COVER' },

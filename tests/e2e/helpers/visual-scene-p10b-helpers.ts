@@ -6,6 +6,7 @@ import {
   lockCameraAndIrisToPlayer,
   makeScene,
   stepDeterministicFrames,
+  triggerFireWeapon,
   type VisualSceneDef,
 } from './visual-scene-helpers.js';
 
@@ -112,6 +113,7 @@ export async function setupP10bShootHitScene(page: Page): Promise<void> {
         }
       | undefined;
     if (!gs || !gs.fx) return;
+    (gs.fx as unknown as { totalSparksSpawned: number }).totalSparksSpawned = 0;
 
     let stepCounter = 0;
     const triggerBurst = (stepIdx: number) => {
@@ -259,13 +261,18 @@ export async function setupP10bShootHitScene(page: Page): Promise<void> {
 
     triggerBurst(0);
 
-    if (!gs.__p10bShootHookInstalled && gs.syncProjectilesAndPickups) {
-      gs.__p10bShootHookInstalled = true;
-      const origSync = gs.syncProjectilesAndPickups.bind(gs);
-      gs.syncProjectilesAndPickups = () => {
+    const simHooked = sim as unknown as {
+      __p10bShootSimHookInstalled?: boolean;
+      step: (...args: unknown[]) => unknown;
+    };
+    if (!simHooked.__p10bShootSimHookInstalled) {
+      simHooked.__p10bShootSimHookInstalled = true;
+      const origStep = sim.step.bind(sim) as (...args: unknown[]) => unknown;
+      simHooked.step = (...args: unknown[]) => {
+        const res = origStep(...args);
         stepCounter += 1;
         triggerBurst(stepCounter);
-        origSync();
+        return res;
       };
     }
   });
@@ -277,6 +284,7 @@ export async function setupP10bExplosionScene(page: Page): Promise<void> {
   await page.evaluate(() => {
     const sim = window.__GAME_TRANSPORT__!.getSim();
     sim.rng.setState(sim.rng.initialSeed);
+    sim.tick = 10;
     const room = sim.dungeon.rooms.find((r) => r.type === 'combat') ?? sim.dungeon.rooms[0]!;
     sim.enterRoom(room.id);
     sim.skipCurrentRoomWaves();
@@ -342,6 +350,7 @@ export async function setupP10bExplosionScene(page: Page): Promise<void> {
         }
       | undefined;
     if (!gs || !gs.fx) return;
+    (gs.fx as unknown as { totalSparksSpawned: number }).totalSparksSpawned = 0;
 
     gs.fx.spawnExplosionBurst(445, 235, 82, '#F97316');
     gs.fx.spawnExplosionBurst(540, 295, 86, '#A855F7');
@@ -370,12 +379,16 @@ export async function setupP10bExplosionScene(page: Page): Promise<void> {
   });
 
   await stepDeterministicFrames(page, 1);
+  await page.evaluate(() => {
+    window.__GAME_TRANSPORT__!.getSim().tick = 54;
+  });
 }
 
 export async function setupP10bElementalComboScene(page: Page): Promise<void> {
   await page.evaluate(() => {
     const sim = window.__GAME_TRANSPORT__!.getSim();
     sim.rng.setState(sim.rng.initialSeed);
+    sim.tick = 10;
     const room = sim.dungeon.rooms.find((r) => r.type === 'combat') ?? sim.dungeon.rooms[0]!;
     sim.enterRoom(room.id);
     sim.skipCurrentRoomWaves();
@@ -409,20 +422,28 @@ export async function setupP10bElementalComboScene(page: Page): Promise<void> {
       e.vx = 0;
       e.vy = 0;
     }
-    e1.chillStacks = 2;
-    e1.frozenTimer = 2.5;
-    e2.burnTimer = 4.0;
-    e2.chillStacks = 2;
-    e2.shockTimer = 4.0;
-    e3.poisonStacks = 3;
-    e3.shockTimer = 4.0;
-    e3.superconductTimer = 4.0;
   });
 
   await lockCameraAndIrisToPlayer(page);
   await stepDeterministicFrames(page, 42);
 
   await page.evaluate(() => {
+    const sim = window.__GAME_TRANSPORT__!.getSim();
+    const [e1, e2, e3] = sim.enemies;
+    if (e1) {
+      e1.chillStacks = 2;
+      e1.frozenTimer = 2.5;
+    }
+    if (e2) {
+      e2.burnTimer = 4.0;
+      e2.chillStacks = 2;
+      e2.shockTimer = 4.0;
+    }
+    if (e3) {
+      e3.poisonStacks = 3;
+      e3.shockTimer = 4.0;
+      e3.superconductTimer = 4.0;
+    }
     const gs = window.__PHASER_GAME__?.scene.getScene('GameScene') as
       | {
           fx?: {
@@ -461,6 +482,7 @@ export async function setupP10bElementalComboScene(page: Page): Promise<void> {
         }
       | undefined;
     if (!gs || !gs.fx) return;
+    (gs.fx as unknown as { totalSparksSpawned: number }).totalSparksSpawned = 0;
 
     gs.fx.spawnElementalReactionFx({
       reaction: 'shatter',
@@ -546,6 +568,9 @@ export async function setupP10bElementalComboScene(page: Page): Promise<void> {
   });
 
   await stepDeterministicFrames(page, 1);
+  await page.evaluate(() => {
+    window.__GAME_TRANSPORT__!.getSim().tick = 54;
+  });
 }
 
 export async function setupP10bChestOpenScene(page: Page): Promise<void> {
@@ -646,43 +671,40 @@ export async function setupP10bBossKillScene(page: Page): Promise<void> {
 
     Object.assign(sim.player, {
       godMode: true,
-      x: 355,
-      y: 300,
-      prevX: 355,
-      prevY: 300,
+      x: 365,
+      y: 295,
+      prevX: 365,
+      prevY: 295,
       vx: 0,
       vy: 0,
       aimAngle: 0,
+      weaponSlots: ['knight_sword', 'rivet_gun'],
+      activeWeaponSlot: 0,
+      fireCooldownTimer: 0,
     });
 
     const boss = sim.getActiveBoss();
     if (boss) {
       sim.enemies = [boss];
-      boss.x = 525;
+      boss.x = 432;
       boss.y = 295;
-      boss.prevX = 525;
+      boss.prevX = 432;
       boss.prevY = 295;
       boss.vx = 0;
       boss.vy = 0;
+      boss.hp = 1;
+      boss.bossArmorShellActive = false;
+      boss.invulnerableTimer = 0;
+      boss.bossPhaseTransitionTimer = 0;
       boss.spawnWarmupTimer = 0;
-      boss.aiState = 'idle';
-      boss.stateTimer = 99;
+      boss.aiState = 'stunned';
+      boss.stateTimer = 10;
+      boss.stunTimer = 10;
     }
   });
 
   await lockCameraAndIrisToPlayer(page);
   await stepDeterministicFrames(page, 42);
-
-  await page.evaluate(() => {
-    const sim = window.__GAME_TRANSPORT__!.getSim();
-    const boss = sim.getActiveBoss() ?? sim.enemies[0];
-    if (boss) {
-      boss.hp = 0;
-      sim.handleEnemyKilled(boss, sim.player.id);
-    }
-  });
-
-  await stepDeterministicFrames(page, 1);
 }
 
 export async function setupP10bAmbientB1Scene(page: Page): Promise<void> {
@@ -857,7 +879,11 @@ export const P10B_VISUAL_SCENES: readonly VisualSceneDef[] = [
     DEFAULT_GAME_URL,
     'GameScene',
     setupP10bExplosionScene,
-    { captureStrip: true, stripFramesPerStep: 2 },
+    {
+      captureStrip: true,
+      stripSchedule: [0, 2, 2, 2, 2, 2, 2, 2],
+      actionRoi: { width: 720, height: 380, includeProjectiles: 'none', propKinds: [] },
+    },
   ),
   makeScene(
     'p10b-fx-elemental-combo',
@@ -865,7 +891,11 @@ export const P10B_VISUAL_SCENES: readonly VisualSceneDef[] = [
     DEFAULT_GAME_URL,
     'GameScene',
     setupP10bElementalComboScene,
-    { captureStrip: true, stripFramesPerStep: 2 },
+    {
+      captureStrip: true,
+      stripSchedule: [0, 2, 2, 2, 2, 2, 2, 2],
+      actionRoi: { width: 720, height: 380, includeProjectiles: 'none', propKinds: [] },
+    },
   ),
   makeScene(
     'p10b-fx-chest-open',
@@ -889,7 +919,27 @@ export const P10B_VISUAL_SCENES: readonly VisualSceneDef[] = [
     DEFAULT_GAME_URL,
     'GameScene',
     setupP10bBossKillScene,
-    { captureStrip: true, stripFramesPerStep: 2 },
+    {
+      captureStrip: true,
+      frameCount: 8,
+      heroFrameIndex: 4,
+      actionRoi: { width: 680, height: 380, includeProjectiles: 'none', propKinds: [] },
+      stripSchedule: [
+        { stepCount: 0, stage: 'windup_hold', label: 'FINAL BLOW' },
+        {
+          stepCount: 2,
+          stage: 'trigger',
+          label: 'BEAT 1 INVERT!',
+          beforeStep: (page) => triggerFireWeapon(page, 0, 1),
+        },
+        { stepCount: 4, stage: 'active', label: 'CHEST CRACKS' },
+        { stepCount: 4, stage: 'active', label: 'FRACTURE PEAK' },
+        { stepCount: 3, stage: 'apex', label: 'BEAT 2 SHATTER!' },
+        { stepCount: 3, stage: 'sub_impact', label: 'TWIN CRESCENTS' },
+        { stepCount: 4, stage: 'settled', label: 'RELIC SCATTER' },
+        { stepCount: 4, stage: 'settled', label: 'SETTLED' },
+      ],
+    },
   ),
   makeScene(
     'p10b-ambient-b1',

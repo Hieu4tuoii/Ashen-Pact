@@ -286,10 +286,10 @@ export async function setupAp2AiYetiIceblockCounterScene(page: Page): Promise<vo
     const iceBlock = sim.spawnProp('sliding_ice_block', 442, 270);
     Object.assign(iceBlock, { state: 'intact', hp: 120, maxHp: 120, bouncesRemaining: 0 });
 
-    const yeti = sim.spawnEnemy('baby_yeti', 485, 256, true);
+    const yeti = sim.spawnEnemy('baby_yeti', 470, 258, true);
     Object.assign(yeti, {
       hp: 360, maxHp: 360, moveSpeed: 0, spawnWarmupTimer: 0,
-      aiState: 'cooldown', stateTimer: 36 / 60, attackCooldownTimer: 99,
+      aiState: 'cooldown', stateTimer: 48 / 60, attackCooldownTimer: 99,
       aimAngle: Math.PI, vx: 0, vy: 0,
     });
 

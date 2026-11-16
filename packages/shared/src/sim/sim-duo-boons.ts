@@ -917,7 +917,11 @@ export function updateDuoBoons(sim: WorldSim, dtSec: number): void {
   const flippedBarricades: SimPropState[] = [];
   for (let i = 0; i < sim.props.length; i++) {
     const pr = sim.props[i]!;
-    if (pr.hp > 0 && pr.coverState === 'flipped' && isFlippableBarricadeProp(pr.kind)) {
+    if (
+      pr.hp > 0 &&
+      (pr.coverState === 'flipped' || pr.coverState === 'sliding') &&
+      isFlippableBarricadeProp(pr.kind)
+    ) {
       flippedBarricades.push(pr);
     }
   }

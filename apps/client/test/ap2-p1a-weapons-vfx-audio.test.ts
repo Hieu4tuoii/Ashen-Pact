@@ -425,7 +425,7 @@ describe('AP2-P1A.4 — Procedural VFX, Entity Indicators, Deployable/Tether Ren
       expect(fx.spawnShaderDirectional).toHaveBeenCalledWith(
         310,
         200,
-        64,
+        32,
         Math.PI,
         'fx_sh_falcon_sonic',
         expect.any(Object),

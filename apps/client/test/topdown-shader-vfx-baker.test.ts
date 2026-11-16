@@ -681,6 +681,13 @@ describe('1:1 Top-Down Cutout 2.0 Multi-Band SDF-Cel Shader Baker', () => {
         expect(declared.has(fn), `Missing declaration for ${fn} in family ${idx}`).toBe(true);
         expect(calledInMain).toContain(fn);
       }
+
+      // 2b. Verify custom GLSL helpers (e.g. crescentGapErode) called anywhere in family are declared in that family
+      if (src.includes('crescentGapErode(')) {
+        expect(src).toMatch(/float\s+crescentGapErode\s*\(/);
+      }
+      // 2c. Verify decodeAtlasCoord is declared exactly once (GLSL ES 1.00 forbids overloading on in/out qualifiers)
+      expect(src.match(/void\s+decodeAtlasCoord\s*\(/g)).toHaveLength(1);
     });
 
     // 3. 4+4 variant flip in Family 0 (vfxMuzzleBurst) and Family 4 (vfxMuzzleArcane)

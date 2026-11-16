@@ -296,9 +296,20 @@ export async function setupP11WaveOverlapChallengeScene(page: Page): Promise<voi
       aimAngle: 0,
     });
 
+    for (let ty = 4; ty <= 12; ty++) {
+      for (let tx = 13; tx <= 21; tx++) {
+        if (tx > 0 && ty > 0 && tx < sim.map.cols - 1 && ty < sim.map.rows - 1) {
+          sim.map.tiles[ty * sim.map.cols + tx] = 'floor';
+          sim.map.setSurface(tx, ty, 'none', 0, true);
+        }
+      }
+    }
+    sim.map.rebuildSolidBoxes();
+    sim.map.mapRevision += 1;
+
     // Remaining Wave 1 enemies (25% left -> triggers Wave 2 overlap!)
-    const w1EliteA = sim.spawnEnemy('goblin_shooter', 495, 225, true, 'volley');
-    const w1EliteB = sim.spawnEnemy('wild_boar', 510, 320, true, 'vengeful');
+    const w1EliteA = sim.spawnEnemy('goblin_shooter', 485, 225, true, 'volley');
+    const w1EliteB = sim.spawnEnemy('wild_boar', 500, 315, true, 'vengeful');
     // Tag elite modifiers so P11 `after` can showcase new `volley` / `vengeful` modifiers
     (w1EliteA as unknown as Record<string, unknown>).p11PreferredModifier = 'volley';
     (w1EliteB as unknown as Record<string, unknown>).p11PreferredModifier = 'vengeful';
@@ -322,10 +333,10 @@ export async function setupP11WaveOverlapChallengeScene(page: Page): Promise<voi
     const sim = window.__GAME_TRANSPORT__!.getSim();
     // Spawn overlapping Wave 2 enemies with 0.8s summoning warning circles alongside Wave 1 survivors
     const w2Spawns: Array<[string, number, number, 'shield' | 'fast' | null, number]> = [
-      ['goblin_shooter', 600, 195, null, 0.76],
-      ['spore_bomber', 655, 245, null, 0.72],
-      ['goblin_shaman', 610, 345, 'shield', 0.68],
-      ['thorn_turret', 690, 295, null, 0.74],
+      ['goblin_shooter', 565, 200, null, 0.76],
+      ['spore_bomber', 605, 245, null, 0.72],
+      ['goblin_shaman', 575, 335, 'shield', 0.68],
+      ['thorn_turret', 615, 290, null, 0.74],
     ];
     for (const [defId, ex, ey, mod, timer] of w2Spawns) {
       const e = sim.spawnEnemy(defId, ex, ey, false, mod);
@@ -396,7 +407,11 @@ export const P11_VISUAL_SCENES: readonly VisualSceneDef[] = [
     DEFAULT_GAME_URL,
     'GameScene',
     setupP11BossPhaseTransitionScene,
-    { captureStrip: true, stripFramesPerStep: 5 },
+    {
+      captureStrip: true,
+      stripFramesPerStep: 5,
+      actionRoi: { width: 820, height: 420, includeProjectiles: 'none', propKinds: [] },
+    },
   ),
   makeScene(
     'p11-boss-enrage',
@@ -404,7 +419,11 @@ export const P11_VISUAL_SCENES: readonly VisualSceneDef[] = [
     BIOME3_GAME_URL,
     'GameScene',
     setupP11BossEnrageScene,
-    { captureStrip: true, stripFramesPerStep: 5 },
+    {
+      captureStrip: true,
+      stripFramesPerStep: 5,
+      actionRoi: { width: 840, height: 460, includeProjectiles: 'none', propKinds: [] },
+    },
   ),
   makeScene(
     'p11-wave-overlap-challenge',
@@ -412,6 +431,10 @@ export const P11_VISUAL_SCENES: readonly VisualSceneDef[] = [
     DEFAULT_GAME_URL,
     'GameScene',
     setupP11WaveOverlapChallengeScene,
-    { captureStrip: true, stripFramesPerStep: 5 },
+    {
+      captureStrip: true,
+      stripFramesPerStep: 5,
+      actionRoi: { width: 1240, height: 560, includeProjectiles: 'none', propKinds: [] },
+    },
   ),
 ];

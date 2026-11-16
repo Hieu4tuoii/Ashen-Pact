@@ -8,6 +8,7 @@ import {
   applyP1SafeHaloAlpha,
   resolveAllyFxProfile,
   routeCutoutBurstByRadius,
+  routeCutoutDirectionalByReach,
 } from './combat-fx-spawners.js';
 import {
   fillTaperedArcRibbon,
@@ -73,10 +74,12 @@ export function spawnCrossbowBarbedRipVfx(
       maxTtlSec: 0.34,
     });
     const pullAng = Math.atan2(playerY - t.y, playerX - t.x);
-    fx?.spawnShaderDirectional?.(t.x, t.y, 64, pullAng, 'fx_sh_falcon_sonic', {
-      tint: 0x7dd3fc,
-      ttl: 0.24,
-    });
+    if (fx) {
+      routeCutoutDirectionalByReach(fx, t.x, t.y, 48, pullAng, 'fx_sh_falcon_sonic', Math.PI / 5, {
+        tint: 0x7dd3fc,
+        ttlSec: 0.22,
+      });
+    }
 
     // 24px 3-prong crimson rip flash (fx_small_burst_4f tinted crimson, R = 12px, scale = 12/16 = 0.75)
     if (fx) {
@@ -260,10 +263,12 @@ export function spawnGaleWindBladeVfx(
     ttlSec: 0.28,
     maxTtlSec: 0.28,
   });
-  fx?.spawnShaderDirectional?.(x, y, 72, angle, 'fx_sh_falcon_sonic', {
-    tint: 0x5eead4,
-    ttl: 0.22,
-  });
+  if (fx) {
+    routeCutoutDirectionalByReach(fx, x, y, 48, angle, 'fx_sh_falcon_sonic', Math.PI / 5, {
+      tint: 0x5eead4,
+      ttlSec: 0.22,
+    });
+  }
   fx?.spawnHitSparks(x + Math.cos(angle) * 22, y + Math.sin(angle) * 22, angle, {
     element: 'chill',
     count: 5,

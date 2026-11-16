@@ -17,9 +17,16 @@ import {
 } from '../scenes/game-scene/hud-micro-reload-bar.js';
 import type { CombatFxManager } from './combat-fx.js';
 import { CUTOUT_KIT_ATLAS_KEY } from '../art/texture-baker-fx.js';
-import { activateParticle, routeCutoutDirectionalByReach } from './combat-fx-spawners.js';
+import {
+  activateParticle,
+  routeCutoutBurstByRadius,
+  routeCutoutDirectionalByReach,
+} from './combat-fx-spawners.js';
 import { acquireParticleSlot } from './combat-fx-pools.js';
-import { fillTaperedQuadraticBezier } from './tapered-ribbon-builder.js';
+import {
+  fillTaperedArcRibbon,
+  fillTaperedQuadraticBezier,
+} from './tapered-ribbon-builder.js';
 import {
   type Batch1WeaponVfxKind,
   drawBatch1ActiveProjectiles,
@@ -632,8 +639,13 @@ export function spawnTacticalVentVfx(
     ttlSec: 0.26,
     maxTtlSec: 0.26,
   });
-  fx?.spawnShaderNova?.(x, y, 56, 'fx_sh_vortex_gale');
-  fx?.spawnHitSparks(x, y, 0, { element: 'chill', count: 6 });
+  if (fx) {
+    routeCutoutBurstByRadius(fx, x, y, 48, 'fx_sh_vortex_gale', {
+      depth: 26.4,
+      suppressPerimeterRing: true,
+    });
+    fx.spawnHitSparks(x, y, 0, { element: 'chill', count: 6 });
+  }
   triggerMicroBarFeedbackOnScene(sceneKey, fx, 'tactical_vent', x, y, locale);
 }
 
@@ -926,8 +938,28 @@ export function updateAndDrawWeaponV2Overlays(
       }
     } else if (s.kind === 'micro_blank' || s.kind === 'vent_pulse') {
       const r = s.radius * (0.55 + progress * 0.45);
-      floorG.lineStyle(2.0, s.color, alpha * 0.75);
-      floorG.strokeCircle(s.x, s.y, r);
+      const baseSpin = (s.kind === 'vent_pulse' ? -1 : 1) * progress * 0.9;
+      if (typeof ribbonTargetG.fillTriangle === 'function') {
+        for (let wIdx = 0; wIdx < 3; wIdx += 1) {
+          const aCenter = baseSpin + (wIdx * Math.PI * 2) / 3;
+          fillTaperedArcRibbon(
+            ribbonTargetG,
+            s.x,
+            s.y,
+            r,
+            aCenter - 0.48,
+            aCenter + 0.48,
+            1.8,
+            s.color,
+            alpha * 0.85,
+            8,
+            1.5,
+          );
+        }
+      } else {
+        floorG.lineStyle(2.0, s.color, alpha * 0.75);
+        floorG.strokeCircle(s.x, s.y, r);
+      }
     } else if (s.kind === 'parry_flash') {
       const ang = s.angle ?? 0;
       const r = s.radius * (0.68 + progress * 0.32);

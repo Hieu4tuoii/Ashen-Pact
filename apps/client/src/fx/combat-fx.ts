@@ -43,6 +43,7 @@ import {
   refreshResolution,
   resolveActivePopupOverlaps,
   resolveSpatialPopupCellSlot,
+  resolveTacticalAlertSlotOverlaps,
   update,
 } from './combat-fx-pools.js';
 
@@ -54,6 +55,7 @@ import {
   activateParticle,
   applyBiomeToAmbientSlot,
   type CoalescedReactionBannerState,
+  routeCutoutBurstByRadius,
   type ShaderConeSpawnOptions,
   type ShaderDirectionalSpawnOptions,
   type ShaderLanceSpawnOptions,
@@ -687,14 +689,6 @@ export class CombatFxManager {
     this.triggerBossKillSequence(x, y, bossBiome, bossId, defId);
 
     const invBake = 1 / TextureBaker.getBakeScale();
-    const novaKey: ShaderNovaKey =
-      defId === 'kryssa_ice_queen'
-        ? 'fx_sh_nova_cryo'
-        : defId === 'forge_titan'
-          ? 'fx_sh_geyser_plume'
-          : defId === 'spore_king'
-            ? 'fx_sh_spore_cloud'
-            : 'fx_sh_nova_solar';
     const primaryHex =
       defId === 'kryssa_ice_queen'
         ? PALETTE.CYAN_FROST
@@ -704,14 +698,14 @@ export class CombatFxManager {
             ? PALETTE.LIME_GLOW
             : PALETTE.SOLAR_GOLD;
 
-    this.spawnShaderNova(x, y, 132, novaKey, { ttl: 0.48, depth: 56, sparkCount: 0 });
-
-    const count = 18;
+    // Defer the main Cutout nova to Beat 2 (t = 0.16s) inside stepBossKillTwoBeatSequence so Beat 1
+    // displays pure, unobstructed #141019 silhouette inversion + radial chest fracture rays!
+    const count = 8;
     for (let i = 0; i < count; i++) {
       const p = this.acquireParticleSlot();
       if (!p) break;
       const ang = (i / count) * Math.PI * 2;
-      const spd = 140 + (i % 4) * 55;
+      const spd = 125 + (i % 3) * 45;
       const isTrail = i % 2 === 0;
       activateParticle(p, {
         textureKey: isTrail ? 'fx_spark_trail' : 'fx_sparkle_mote',
@@ -720,13 +714,13 @@ export class CombatFxManager {
         vx: Math.cos(ang) * spd,
         vy: Math.sin(ang) * spd,
         vr: isTrail ? 0 : 8,
-        ttl: 0.44,
-        startScale: invBake * 1.28,
+        ttl: 0.34,
+        startScale: invBake * 1.05,
         endScale: invBake * 0.2,
         damping: 4.2,
         rotation: ang,
         tint: hexToNum(i % 2 === 0 ? primaryHex : PALETTE.SOLAR_GOLD),
-        depth: 58,
+        depth: 43,
         scaleRatioY: isTrail ? 0.45 : 1,
         alignToVelocity: isTrail,
       });
@@ -812,6 +806,7 @@ export class CombatFxManager {
           }
           s.text.setText(label);
           s.text.setScale(computePopupScalePop(0, s.ttl, s.baseScale));
+          resolveTacticalAlertSlotOverlaps(this.damagePool, 4.0);
           return;
         }
       }
@@ -879,6 +874,7 @@ export class CombatFxManager {
     slot.text.setVisible(true);
     slot.text.setActive(true);
     resolveActivePopupOverlaps(this.damagePool);
+    resolveTacticalAlertSlotOverlaps(this.damagePool, 4.0);
   }
 
   public spawnDamageNumber(
@@ -1403,13 +1399,14 @@ export function spawnArcaneTeleportFold(
     fx.activeFloorTeleportFolds.push(fold);
   }
 
-  fx.spawnShaderNova?.(x, y, 72, 'fx_sh_arcane_sigil', {
+  routeCutoutBurstByRadius(fx, x, y, 56, 'fx_sh_arcane_sigil', {
     tint: 0x38bdf8,
-    ttl: 0.28,
+    ttlSec: 0.28,
   });
 
-  const p = fx.acquireParticleSlot();
+  const p = typeof fx.acquireParticleSlot === 'function' ? fx.acquireParticleSlot() : null;
   if (p) {
+    const invBake = 1 / TextureBaker.getBakeScale();
     activateParticle(p, {
       textureKey: 'fx_spark',
       x,
@@ -1417,9 +1414,9 @@ export function spawnArcaneTeleportFold(
       vx: 0,
       vy: 0,
       vr: 0,
-      ttl: 0.28,
-      startScale: 1.2,
-      endScale: 0.1,
+      ttl: 0.24,
+      startScale: invBake * 0.9,
+      endScale: invBake * 0.1,
       scaleRatioY: 4.5,
       startAlpha: 0.95,
       gravityY: 0,
@@ -1526,6 +1523,21 @@ export function stepBossKillTwoBeatSequence(
   // Scatter 12 Cutout shard relics + destroy dying boss rig + rig burst once on Beat 2 start
   if (!state.beat2Spawned) {
     state.beat2Spawned = true;
+
+    const novaKey: ShaderNovaKey =
+      state.defId === 'kryssa_ice_queen' || state.biome === 2
+        ? 'fx_sh_nova_cryo'
+        : state.defId === 'forge_titan' || state.biome === 3
+          ? 'fx_sh_geyser_plume'
+          : state.defId === 'spore_king'
+            ? 'fx_sh_spore_cloud'
+            : 'fx_sh_nova_solar';
+    routeCutoutBurstByRadius(fx, state.x, state.y, 92, novaKey, {
+      ttlSec: 0.26,
+      depth: 43.5,
+      sparkCount: 0,
+      suppressPerimeterRing: true,
+    });
 
     // Destroy dying Boss rig at Beat 2 transition
     const gameScene = fx.sceneRef as unknown as {

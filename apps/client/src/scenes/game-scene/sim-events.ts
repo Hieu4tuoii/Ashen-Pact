@@ -10,7 +10,11 @@ import {
 import { resolveHitFlashTint } from '../../art/cutout-rig-math.js';
 import { PALETTE } from '../../art/palette.js';
 import { CUTOUT_KIT_ATLAS_KEY } from '../../art/texture-baker-fx.js';
-import { activateParticle, routeCutoutBurstByRadius } from '../../fx/combat-fx-spawners.js';
+import {
+  activateParticle,
+  routeCutoutBurstByRadius,
+  routeCutoutDirectionalByReach,
+} from '../../fx/combat-fx-spawners.js';
 import {
   resolveEnemyProjectileSfx,
   resolvePickupSfx,
@@ -53,7 +57,6 @@ import {
   spawnP1DBlessingEventFx,
 } from '../../fx/combat-fx-weapons-v2.js';
 import { handleP2BSimEvent } from '../../fx/combat-fx-p2b.js';
-import { routeCutoutDirectionalByReach } from '../../fx/combat-fx-spawners.js';
 
 const crystalPillarImpactIcdMap = new Map<number, number>();
 
@@ -126,13 +129,15 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
               zzfx.play('gale_wind_blade', ev.x, this.camFocusX, ev.y, this.camFocusY);
             }
           } else if (ev.weaponId === 'hunter_crossbow' && !isStress && isFinale) {
-            this.fx.spawnShaderDirectional?.(
+            routeCutoutDirectionalByReach(
+              this.fx,
               ev.x,
               ev.y,
-              64,
+              48,
               ev.angle,
               'fx_sh_falcon_sonic',
-              { tint: 0xbae6fd, ttl: 0.2 },
+              Math.PI / 5,
+              { tint: 0xbae6fd, ttlSec: 0.2 },
             );
           }
           const ownerId = spawnedProj?.ownerId ?? sim.player.id;
@@ -329,13 +334,15 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
             ev.targetKind === 'enemy'
               ? sim.enemies.find((e) => e.id === ev.targetId && e.isBoss)
               : undefined;
-          this.fx.spawnShaderDirectional?.(
+          routeCutoutDirectionalByReach(
+            this.fx,
             ev.x,
             ev.y,
-            brokenBoss ? 86 : 56,
+            brokenBoss ? 48 : 38,
             -Math.PI * 0.5,
             'fx_sh_aegis_crest',
-            { tint: 0xfef08a, ttl: 0.26 },
+            Math.PI / 4,
+            { tint: 0xfef08a, ttlSec: 0.24 },
           );
           if (brokenBoss) {
             this.fx.spawnExplosionBurst(ev.x, ev.y, 82, PALETTE.SOLAR_GOLD);
@@ -656,21 +663,21 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
             srcId === 'coal_bomb' ||
             srcId === 'bullet_ricochet_boom' ||
             srcId === 'mutator_cluster_mortar';
-          if (!isStress && this.fx.spawnShaderNova && isOrdnanceShrapnel) {
-            this.fx.spawnShaderNova(ev.x, ev.y, ev.radius, 'fx_sh_shrapnel_corona');
+          if (!isStress && isOrdnanceShrapnel) {
+            routeCutoutBurstByRadius(this.fx, ev.x, ev.y, ev.radius, 'fx_sh_shrapnel_corona');
             if (srcId !== 'explosive_barrel') {
               this.fx.spawnFloorDecal?.('scorch', ev.x, ev.y, clamp(ev.radius / 96, 0.5, 0.9));
             }
             this.fx.spawnHitSparks?.(ev.x, ev.y, 0, { isCrit: true, element: 'burn', count: 6 });
-          } else if (!isStress && this.fx.spawnShaderNova && isSporePod) {
-            this.fx.spawnShaderNova(ev.x, ev.y, ev.radius, 'fx_sh_spore_cloud');
+          } else if (!isStress && isSporePod) {
+            routeCutoutBurstByRadius(this.fx, ev.x, ev.y, ev.radius, 'fx_sh_spore_cloud');
             this.fx.spawnFloorDecal?.('splatter', ev.x, ev.y, clamp(ev.radius / 96, 0.5, 0.9));
             this.fx.spawnHitSparks?.(ev.x, ev.y, 0, { element: 'poison', count: 5 });
           } else if (!isStress && srcId === 'tesla_carbine') {
             routeCutoutBurstByRadius(this.fx, ev.x, ev.y, ev.radius || 88, 'fx_sh_anvil_storm');
             this.fx.spawnHitSparks?.(ev.x, ev.y, 0, { isCrit: true, element: 'shock', count: 6 });
-          } else if (!isStress && this.fx.spawnShaderNova && isThunderBlast) {
-            this.fx.spawnShaderNova(ev.x, ev.y, ev.radius, 'fx_sh_anvil_storm');
+          } else if (!isStress && isThunderBlast) {
+            routeCutoutBurstByRadius(this.fx, ev.x, ev.y, ev.radius, 'fx_sh_anvil_storm');
             this.fx.spawnHitSparks?.(ev.x, ev.y, 0, { isCrit: true, element: 'shock', count: 6 });
           } else {
             this.fx.spawnExplosionBurst(ev.x, ev.y, ev.radius, colorHex);
@@ -890,7 +897,7 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
           ev.rarity === 'uncommon' ? 'rare' : ev.rarity,
         );
         if (!isStress && (ev.rarity === 'epic' || ev.rarity === 'legendary')) {
-          this.fx.spawnShaderNova?.(ev.x, ev.y, 68, 'fx_sh_arcane_sigil', {
+          routeCutoutBurstByRadius(this.fx, ev.x, ev.y, 52, 'fx_sh_arcane_sigil', {
             tint: ev.rarity === 'legendary' ? 0xfef08a : 0xd8b4fe,
           });
         }
@@ -985,7 +992,7 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
       case 'boss_enraged': {
         this.fx.addTrauma(0.35);
         if (!isStress) {
-          this.fx.spawnShaderNova?.(ev.x, ev.y, 112, 'fx_sh_geyser_plume');
+          routeCutoutBurstByRadius(this.fx, ev.x, ev.y, 92, 'fx_sh_geyser_plume');
         }
         this.lighting.spawnTransientLight(ev.x, ev.y, 200, PALETTE.CRIMSON_BRIGHT, 0.95, 0.45);
         this.fx.spawnFloatingAlert(ev.x, ev.y, `🔥 CUỒNG NỘ ×${ev.enrageLevel}!`);
@@ -1003,7 +1010,7 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
       }
       case 'shrine_blessing': {
         if (!isStress) {
-          this.fx.spawnShaderNova?.(ev.x, ev.y, 84, 'fx_sh_arcane_sigil', {
+          routeCutoutBurstByRadius(this.fx, ev.x, ev.y, 56, 'fx_sh_arcane_sigil', {
             tint: 0x67e8f9,
           });
         }
@@ -1023,7 +1030,7 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
       }
       case 'player_downed': {
         if (!isStress) {
-          this.fx.spawnShaderNova?.(ev.x, ev.y, 64, 'fx_sh_nova_void', {
+          routeCutoutBurstByRadius(this.fx, ev.x, ev.y, 56, 'fx_sh_nova_void', {
             tint: 0xf43f5e,
           });
         }
@@ -1033,7 +1040,7 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
       }
       case 'player_revived': {
         if (!isStress) {
-          this.fx.spawnShaderNova?.(ev.x, ev.y, 82, 'fx_sh_bloom_briar', {
+          routeCutoutBurstByRadius(this.fx, ev.x, ev.y, 64, 'fx_sh_bloom_briar', {
             tint: 0x86efac,
           });
         }

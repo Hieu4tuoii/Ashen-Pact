@@ -653,7 +653,11 @@ function drawMagneticBastionArcWires(g: Gfx, floorG: Gfx, sim: WorldSim, tSec: n
   flippedBarricadesScratch.length = 0;
   for (let i = 0; i < sim.props.length; i++) {
     const p = sim.props[i]!;
-    if (p.hp > 0 && p.coverState === 'flipped' && isFlippableBarricadeProp(p.kind)) {
+    if (
+      p.hp > 0 &&
+      (p.coverState === 'flipped' || p.coverState === 'sliding') &&
+      isFlippableBarricadeProp(p.kind)
+    ) {
       flippedBarricadesScratch.push(p);
     }
   }

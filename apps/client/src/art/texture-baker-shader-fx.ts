@@ -555,20 +555,18 @@ const SHADER_COMMON_HEADER = `
     return 1.0 - smoothstep(lo, max(lo + 1e-5, hi), x);
   }
 
+  float crescentGapErode(float ang, float t, float wNoise, float seedShift) {
+    float lobes = 0.5 + 0.5 * cos(ang * 4.0 + seedShift + sin(ang * 3.0 - seedShift * 0.7) * 0.45);
+    float field = mix(wNoise, lobes, 0.78);
+    float thresh = max(0.0, (t - 0.58) * 0.85);
+    return smoothstep(thresh, thresh + 0.38, field);
+  }
+
   void decodeAtlasCoord(vec2 fragCoord, float framePx, out float t, out float frameIdx, out vec2 p) {
     float col = clamp(floor(fragCoord.x / framePx), 0.0, 3.0);
     float glRow = clamp(floor(fragCoord.y / framePx), 0.0, 1.0);
     float canvasRow = 1.0 - glRow;
     frameIdx = canvasRow * 4.0 + col;
-    t = clamp(frameIdx / 7.0, 0.0, 1.0);
-    p = (fract(fragCoord / framePx) - 0.5) / 0.50;
-  }
-
-  void decodeAtlasCoord(vec2 fragCoord, float framePx, float frameCount, out float t, out vec2 p) {
-    float col = clamp(floor(fragCoord.x / framePx), 0.0, 3.0);
-    float glRow = clamp(floor(fragCoord.y / framePx), 0.0, 1.0);
-    float canvasRow = 1.0 - glRow;
-    float frameIdx = canvasRow * 4.0 + col;
     t = clamp(frameIdx / 7.0, 0.0, 1.0);
     p = (fract(fragCoord / framePx) - 0.5) / 0.50;
   }
@@ -629,13 +627,19 @@ const SHADER_COMMON_HEADER = `
     float sparks,
     float borderFade,
     float frameIdx,
-    int sid
+    int sid,
+    vec2 p
   ) {
     float subFrame = (sid == 6 || sid == 23) ? mod(frameIdx, 4.0) : frameIdx;
-    float interiorHollow = subFrame >= 2.0 ? (0.82 + 0.16 * clamp((subFrame - 2.0) / 5.0, 0.0, 1.0)) : 0.0;
-    float erodedEnergy = energy * (1.0 - interiorHollow);
+    bool isRadial = (sid >= 8 && sid != 20 && sid != 21 && sid != 23);
+    float rCenter = length(p);
+    float centerHollow = (isRadial && subFrame >= 2.0)
+      ? (1.0 - smoothstep(0.24, 0.44, rCenter))
+      : 0.0;
+    float erodedEnergy = energy * (1.0 - centerHollow);
+    float erodedEdge = edge * (1.0 - centerHollow * 0.85);
 
-    float rawSignal = max(erodedEnergy, max(edge, sparks));
+    float rawSignal = max(erodedEnergy, max(erodedEdge, sparks));
     if (rawSignal < 0.035 || borderFade < 0.005) {
       return vec4(0.0);
     }
@@ -648,14 +652,14 @@ const SHADER_COMMON_HEADER = `
     vec3 primCol = getElementPrimary(elem);
     vec3 shadeCol = getElementShade(elem);
 
-    bool isInkOutline = (rawSignal <= outerInkThreshold) || (vein > 0.36 && edge < 0.65);
+    bool isInkOutline = (rawSignal <= outerInkThreshold) || (vein > 0.36 && erodedEdge < 0.65);
 
     vec3 rgb;
     if (isInkOutline) {
       rgb = inkCol;
     } else {
       float interiorSignal = (rawSignal - outerInkThreshold) / max(0.01, 1.0 - outerInkThreshold);
-      if (interiorSignal > 0.68 || edge + sparks > 0.72) {
+      if (interiorSignal > 0.68 || erodedEdge + sparks > 0.72) {
         rgb = coreCol;
       } else if (interiorSignal > 0.28) {
         rgb = primCol;
@@ -669,6 +673,19 @@ const SHADER_COMMON_HEADER = `
       return vec4(0.0);
     }
     return vec4(rgb, alpha);
+  }
+
+  vec4 synthesizeCutoutCelRgba(
+    int elem,
+    float energy,
+    float edge,
+    float vein,
+    float sparks,
+    float borderFade,
+    float frameIdx,
+    int sid
+  ) {
+    return synthesizeCutoutCelRgba(elem, energy, edge, vein, sparks, borderFade, frameIdx, sid, vec2(0.6, 0.0));
   }
 
   vec4 synthesizeCutoutCelRgba(int elem, float energy, float edge, float vein, float sparks, float borderFade) {
@@ -970,7 +987,7 @@ const FRAG_DIRECTIONAL_SRC = SHADER_COMMON_HEADER + `
       vfxMuzzleBurst(mp, muzzleT, energy, edge, vein, sparks);
     } else vfxHitSpark(p, t, energy, edge, vein, sparks);
 
-    gl_FragColor = synthesizeCutoutCelRgba(elem, energy, edge, vein, sparks, borderFade, frameIdx, sid);
+    gl_FragColor = synthesizeCutoutCelRgba(elem, energy, edge, vein, sparks, borderFade, frameIdx, sid, p);
   }
 `;
 
@@ -1119,7 +1136,7 @@ const FRAG_NOVA_HOT_SRC = SHADER_COMMON_HEADER + `
     if (sid <= 9) vfxSolarOrMagmaNova(p, t, sid - 8, energy, edge, vein, sparks);
     else vfxThunderRadial(p, t, energy, edge, vein, sparks);
 
-    gl_FragColor = synthesizeCutoutCelRgba(elem, energy, edge, vein, sparks, borderFade, frameIdx, sid);
+    gl_FragColor = synthesizeCutoutCelRgba(elem, energy, edge, vein, sparks, borderFade, frameIdx, sid, p);
   }
 `;
 
@@ -1285,7 +1302,7 @@ const FRAG_NOVA_COLD_SRC = SHADER_COMMON_HEADER + `
     else if (sid == 12) vfxVenomNova(p, t, energy, edge, vein, sparks);
     else vfxVoidImplosion(p, t, energy, edge, vein, sparks);
 
-    gl_FragColor = synthesizeCutoutCelRgba(elem, energy, edge, vein, sparks, borderFade, frameIdx, sid);
+    gl_FragColor = synthesizeCutoutCelRgba(elem, energy, edge, vein, sparks, borderFade, frameIdx, sid, p);
   }
 `;
 
@@ -1520,7 +1537,7 @@ const FRAG_ARCHETYPE_NATURE_WIND_SRC = SHADER_COMMON_HEADER + `
     else if (sid == 17) vfxAnvilStorm(p, t, energy, edge, vein, sparks);
     else vfxGeyserPlume(p, t, energy, edge, vein, sparks);
 
-    gl_FragColor = synthesizeCutoutCelRgba(elem, energy, edge, vein, sparks, borderFade, frameIdx, sid);
+    gl_FragColor = synthesizeCutoutCelRgba(elem, energy, edge, vein, sparks, borderFade, frameIdx, sid, p);
   }
 `;
 
@@ -1752,7 +1769,7 @@ const FRAG_ARCHETYPE_TACTICAL_CLASS_SRC = SHADER_COMMON_HEADER + `
       vfxMuzzleArcane(mp, muzzleT, energy, edge, vein, sparks);
     }
 
-    gl_FragColor = synthesizeCutoutCelRgba(elem, energy, edge, vein, sparks, borderFade, frameIdx, sid);
+    gl_FragColor = synthesizeCutoutCelRgba(elem, energy, edge, vein, sparks, borderFade, frameIdx, sid, p);
   }
 `;
 
@@ -1878,6 +1895,19 @@ function createOffscreenGlBaker(): CompiledGlBaker | null {
   // Now check compile/link status after parallel compilation finishes
   const vsOk = Boolean(gl.getShaderParameter(vs, gl.COMPILE_STATUS));
   const fsOk = fsList.every((fs) => fs && Boolean(gl.getShaderParameter(fs, gl.COMPILE_STATUS)));
+  if ((!vsOk || !fsOk) && typeof gl.getShaderInfoLog === 'function') {
+    if (!vsOk) {
+      console.error('[ShaderVfxBaker] Vertex shader compile failed:', gl.getShaderInfoLog(vs));
+    }
+    fsList.forEach((fs, idx) => {
+      if (fs && !gl.getShaderParameter(fs, gl.COMPILE_STATUS)) {
+        console.error(
+          `[ShaderVfxBaker] Fragment family ${idx} compile failed:`,
+          gl.getShaderInfoLog(fs),
+        );
+      }
+    });
+  }
   const linkOk =
     vsOk &&
     fsOk &&

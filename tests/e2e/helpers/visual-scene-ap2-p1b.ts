@@ -42,6 +42,7 @@ interface Ap2P1BArenaInitConfig {
   playerY: number;
   aimAngle?: number;
   playerPatch?: Record<string, unknown>;
+  clearFloorBox?: readonly [number, number, number, number];
   pillarBox?: readonly [number, number, number, number];
   props?: ReadonlyArray<readonly [PropKind, number, number, boolean?]>;
   enemies?: ReadonlyArray<readonly [EnemyTypeId, number, number, ('shield' | undefined)?]>;
@@ -58,6 +59,8 @@ async function initAp2P1BArena(
   await page.evaluate((c) => {
     const sim = window.__GAME_TRANSPORT__!.getSim();
     sim.rng.setState(sim.rng.initialSeed);
+    sim.nextEntityId = 100;
+    sim.tick = 10;
     const room = sim.dungeon.rooms.find((r) => r.type === 'combat') ?? sim.dungeon.rooms[0]!;
     room.type = 'combat';
     if (c.archetype) room.roomArchetype = c.archetype;
@@ -88,6 +91,19 @@ async function initAp2P1BArena(
         biome: 1,
         activeDoorSides: ['N', 'S', 'E', 'W'],
       });
+    }
+    if (c.clearFloorBox) {
+      const [x0, x1, y0, y1] = c.clearFloorBox;
+      for (let ty = y0; ty <= y1; ty++) {
+        for (let tx = x0; tx <= x1; tx++) {
+          if (tx > 0 && ty > 0 && tx < sim.map.cols - 1 && ty < sim.map.rows - 1) {
+            sim.map.tiles[ty * sim.map.cols + tx] = 'floor';
+            sim.map.setSurface(tx, ty, 'none', 0, true);
+          }
+        }
+      }
+      sim.map.rebuildSolidBoxes();
+      sim.map.mapRevision += 1;
     }
     if (c.pillarBox) {
       const [x0, x1, y0, y1] = c.pillarBox;
@@ -151,6 +167,12 @@ async function initAp2P1BArena(
   if (cfg.playerPatch || cfg.enemyBullets) {
     await page.evaluate((c) => {
       const sim = window.__GAME_TRANSPORT__!.getSim();
+      sim.tick = 51;
+      (
+        window.__GAME_TRANSPORT__ as unknown as {
+          loop?: { primeForImmediateTick?: () => void };
+        }
+      ).loop?.primeForImmediateTick?.();
       if (c.playerPatch) Object.assign(sim.player, c.playerPatch);
       const ownerId = sim.enemies[0]?.id ?? 200;
       for (const [id, x, y, vx] of c.enemyBullets ?? []) {
@@ -181,6 +203,9 @@ async function initAp2P1BArena(
     }, cfg);
     await stepDeterministicFrames(page, 1);
   }
+  await page.evaluate(() => {
+    window.__GAME_TRANSPORT__!.getSim().tick = 52;
+  });
   await markPostWarmupStart(page);
 }
 
@@ -189,6 +214,7 @@ export async function setupAp2WepLaserRailgunScene(page: Page): Promise<void> {
   await initAp2P1BArena(page, {
     archetype: 'GAUNTLET_CHOKEPOINT',
     roomSeed: 1336,
+    clearFloorBox: [9, 19, 6, 10],
     fourBraziers: true,
     rebuildDoors: true,
     characterId: 'vanguard',
@@ -218,9 +244,9 @@ export async function setupAp2WepLaserRailgunScene(page: Page): Promise<void> {
       reloadTimer: 0,
     },
     enemyBullets: [
-      [99101, 412, 262, -110],
-      [99102, 418, 270, -110],
-      [99103, 412, 278, -110],
+      [99101, 432, 262, -110],
+      [99102, 438, 270, -110],
+      [99103, 432, 278, -110],
     ],
   });
 }
@@ -230,6 +256,7 @@ export async function setupAp2WepCleaverBoomerangScene(page: Page): Promise<void
   await initAp2P1BArena(page, {
     archetype: 'GAUNTLET_CHOKEPOINT',
     roomSeed: 1336,
+    clearFloorBox: [9, 15, 6, 10],
     fourBraziers: true,
     characterId: 'vanguard',
     playerX: 320,
@@ -263,6 +290,7 @@ export async function setupAp2WepVoidImplosionScene(page: Page): Promise<void> {
   await initAp2P1BArena(page, {
     archetype: 'GAUNTLET_CHOKEPOINT',
     roomSeed: 1336,
+    clearFloorBox: [9, 16, 6, 10],
     fourBraziers: true,
     characterId: 'elementalist',
     playerX: 356,
@@ -331,6 +359,7 @@ export async function setupAp2WepSolarSupernovaScene(page: Page): Promise<void> 
   await initAp2P1BArena(page, {
     archetype: 'TWIN_BRIDGES',
     roomSeed: 1338,
+    clearFloorBox: [12, 19, 6, 10],
     fourBraziers: true,
     rebuildDoors: true,
     characterId: 'elementalist',
@@ -342,15 +371,16 @@ export async function setupAp2WepSolarSupernovaScene(page: Page): Promise<void> 
       ['glow_mushroom', 5 * 32 + 16, 5 * 32 + 16],
     ],
     enemies: [
-      ['goblin_shooter', 532, 240],
-      ['wild_boar', 548, 266, 'shield'],
-      ['goblin_shaman', 532, 292],
+      ['goblin_shooter', 528, 232],
+      ['wild_boar', 556, 266, 'shield'],
+      ['goblin_shaman', 528, 300],
     ],
     playerPatch: {
       weaponSlots: ['solar_archon_staff', 'apprentice_staff'],
       activeWeaponSlot: 0,
       weaponHeat: 68,
       weaponSlotHeat: [68, 0],
+      solarOrbitAngle: 0,
       overheatLockTimer: 0,
       fireCooldownTimer: 0,
       aimWorldX: 540,
@@ -369,6 +399,7 @@ export async function setupAp2WepMagmaGeysersScene(page: Page): Promise<void> {
   await initAp2P1BArena(page, {
     archetype: 'GAUNTLET_CHOKEPOINT',
     roomSeed: 1336,
+    clearFloorBox: [9, 15, 6, 10],
     fourBraziers: true,
     characterId: 'vanguard',
     playerX: 356,
@@ -398,6 +429,7 @@ export async function setupAp2WepHammerThunderScene(page: Page): Promise<void> {
   await initAp2P1BArena(page, {
     archetype: 'GAUNTLET_CHOKEPOINT',
     roomSeed: 1336,
+    clearFloorBox: [9, 15, 6, 10],
     fourBraziers: true,
     characterId: 'vanguard',
     playerX: 320,
@@ -487,7 +519,8 @@ export const AP2_P1B_VISUAL_SCENES: readonly VisualSceneDef[] = [
         simEventPredicate: (ev) => ev['weaponId'] === 'emerald_cleaver_boomerang',
       },
       actionRoi: {
-        mode: 'auto_bounds',
+        width: 720,
+        height: 420,
         includeProjectiles: 'none',
         propKinds: [],
       },
@@ -529,7 +562,8 @@ export const AP2_P1B_VISUAL_SCENES: readonly VisualSceneDef[] = [
     {
       apexEvent: { simEventKind: 'void_implosion' },
       actionRoi: {
-        mode: 'auto_bounds',
+        width: 720,
+        height: 400,
         includeProjectiles: 'none',
         propKinds: [],
       },
@@ -559,7 +593,8 @@ export const AP2_P1B_VISUAL_SCENES: readonly VisualSceneDef[] = [
       heroFrameIndex: 9,
       apexEvent: { simEventKind: 'berserker_guillotine_slam' },
       actionRoi: {
-        mode: 'auto_bounds',
+        width: 720,
+        height: 400,
         includeProjectiles: 'none',
         propKinds: [],
       },
@@ -603,7 +638,8 @@ export const AP2_P1B_VISUAL_SCENES: readonly VisualSceneDef[] = [
       sampleRects: TWIN_BRIDGES_SAMPLE_RECTS,
       apexEvent: { simEventKind: 'solar_supernova' },
       actionRoi: {
-        mode: 'auto_bounds',
+        width: 720,
+        height: 400,
         includeProjectiles: 'none',
         propKinds: [],
       },
@@ -650,7 +686,8 @@ export const AP2_P1B_VISUAL_SCENES: readonly VisualSceneDef[] = [
     {
       apexEvent: { simEventKind: 'perfect_reload' },
       actionRoi: {
-        mode: 'auto_bounds',
+        width: 700,
+        height: 420,
         includeProjectiles: 'none',
         propKinds: [],
       },
@@ -685,7 +722,8 @@ export const AP2_P1B_VISUAL_SCENES: readonly VisualSceneDef[] = [
       heroFrameIndex: 9,
       apexEvent: { simEventKind: 'thunder_hammer_pillar' },
       actionRoi: {
-        mode: 'auto_bounds',
+        width: 720,
+        height: 440,
         includeProjectiles: 'none',
         propKinds: [],
       },

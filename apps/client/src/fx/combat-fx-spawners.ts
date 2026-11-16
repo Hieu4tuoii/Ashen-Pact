@@ -1108,9 +1108,22 @@ export function routeCutoutBurstByRadius(
   novaKey: ShaderNovaKey = 'fx_sh_nova_solar',
   options: CutoutRouterOptions = {},
 ): PooledParticle | null {
-  const entry = getShaderStripEntry(novaKey);
+  let resolvedNovaKey = novaKey;
+  let effectiveTintOption = options.tint;
+  const initialEntry = getShaderStripEntry(novaKey);
+  // Medium-radius (44..89px) calls on a large [90..132]px nova route to a crisp medium WebGL1 shader strip
+  // instead of over-stretching the 56px fx_compact_burst_4f kit cell by > 3x!
+  if (initialEntry && initialEntry.validRadiusBandPx[0] > 64 && radiusPx >= 44 && radiusPx < initialEntry.validRadiusBandPx[0]) {
+    if (novaKey === 'fx_sh_nova_void') {
+      resolvedNovaKey = 'fx_sh_nova_cryo';
+      effectiveTintOption = effectiveTintOption ?? 0xd8b4fe;
+    } else {
+      resolvedNovaKey = 'fx_sh_shrapnel_corona';
+    }
+  }
+  const entry = getShaderStripEntry(resolvedNovaKey);
   const [rMin, rMax] = entry ? entry.validRadiusBandPx : [24, 64];
-  const tint = resolveEntryTint(entry, options.tint);
+  const tint = resolveEntryTint(initialEntry ?? entry, effectiveTintOption);
   const ttl = options.ttlSec;
 
   const px = fx.localPlayerPos?.x ?? 0;
@@ -1169,7 +1182,7 @@ export function routeCutoutBurstByRadius(
       baseTexelR = 26.0;
     }
     const scale = radiusPx / baseTexelR;
-    const slot = fx.acquireParticleSlot();
+    const slot = typeof fx.acquireParticleSlot === 'function' ? fx.acquireParticleSlot() : null;
     if (slot) {
       activateParticle(slot, {
         textureKey: 'fx_cutout_kit_512',
@@ -1222,13 +1235,16 @@ export function routeCutoutBurstByRadius(
     }
   }
 
-  const slot = fx.spawnShaderNova(x, y, effectiveRadius, novaKey, {
-    ...options,
-    depth: coreDepth,
-    ttl: ttl ?? (radiusPx > rMax ? 0.16 : undefined),
-    alpha,
-    tint,
-  });
+  const slot =
+    typeof fx.spawnShaderNova === 'function'
+      ? fx.spawnShaderNova(x, y, effectiveRadius, resolvedNovaKey, {
+          ...options,
+          depth: coreDepth,
+          ttl: ttl ?? (radiusPx > rMax ? 0.16 : undefined),
+          alpha,
+          tint: effectiveTintOption ?? tint,
+        })
+      : null;
   if (slot && isP1SelfBurst) {
     slot.sprite.setDepth(26.4);
   }
@@ -1297,13 +1313,16 @@ export function routeCutoutDirectionalByReach(
     const fbEntry = getShaderStripEntry(fallbackKey);
     const [fbMin, fbMax] = fbEntry ? fbEntry.validRadiusBandPx : [24, 48];
     const clampedReach = clamp(reachPx, fbMin, fbMax);
-    const slot = fx.spawnShaderDirectional(x, y, clampedReach, angleRad, fallbackKey, {
-      ...options,
-      depth: coreDepth,
-      ttl: ttl ?? 0.12,
-      alpha,
-      tint,
-    });
+    const slot =
+      typeof fx.spawnShaderDirectional === 'function'
+        ? fx.spawnShaderDirectional(x, y, clampedReach, angleRad, fallbackKey, {
+            ...options,
+            depth: coreDepth,
+            ttl: ttl ?? 0.12,
+            alpha,
+            tint,
+          })
+        : null;
     if (slot && isP1SelfBurst) {
       slot.sprite.setDepth(26.4);
     }
@@ -1340,13 +1359,16 @@ export function routeCutoutDirectionalByReach(
     }
   }
 
-  const slot = fx.spawnShaderDirectional(x, y, effectiveReach, angleRad, key, {
-    ...options,
-    depth: coreDepth,
-    ttl: ttl ?? (reachPx > rMax ? 0.15 : undefined),
-    alpha,
-    tint,
-  });
+  const slot =
+    typeof fx.spawnShaderDirectional === 'function'
+      ? fx.spawnShaderDirectional(x, y, effectiveReach, angleRad, key, {
+          ...options,
+          depth: coreDepth,
+          ttl: ttl ?? (reachPx > rMax ? 0.15 : undefined),
+          alpha,
+          tint,
+        })
+      : null;
   if (slot && isP1SelfBurst) {
     slot.sprite.setDepth(26.4);
   }
@@ -1962,10 +1984,10 @@ export function spawnExplosionBurstImpl(
         : 'scorch';
   this.spawnFloorDecal(decalKind, x, y, clamp(radius / 96, 0.55, 0.95));
 
-  // True 1:1 hitbox-matched Chiaroscuro Hollow-Core Detonation + radial spark needles (zero muddy dust blobs!)
-  spawnShaderNovaImpl.call(this, x, y, radius, novaKey, {
-    ttl: clamp(0.28 + radius * 0.0008, 0.28, 0.4),
-    depth: 56,
+  // True 1:1 hitbox-matched Cutout 2.0 Detonation routed within validRadiusBandPx
+  routeCutoutBurstByRadius(this, x, y, radius, novaKey, {
+    ttlSec: clamp(0.24 + radius * 0.0008, 0.24, 0.36),
+    depth: 43.5,
     sparkCount: 5,
     sparkHex: colorHex,
   });

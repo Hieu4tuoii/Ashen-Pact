@@ -393,8 +393,20 @@ describe('Commercial-Grade Class Skills, Summons & Dramatic World/Boss Interacti
       'fx_sh_nova_thunder',
       expect.any(Object),
     );
-    expect(fx.spawnShaderNova).toHaveBeenCalledWith(440, 250, 88, 'fx_sh_shrapnel_corona');
-    expect(fx.spawnShaderNova).toHaveBeenCalledWith(480, 250, 72, 'fx_sh_spore_cloud');
+    expect(fx.spawnShaderNova).toHaveBeenCalledWith(
+      440,
+      250,
+      64,
+      'fx_sh_shrapnel_corona',
+      expect.any(Object),
+    );
+    expect(fx.spawnShaderNova).toHaveBeenCalledWith(
+      480,
+      250,
+      64,
+      'fx_sh_spore_cloud',
+      expect.any(Object),
+    );
     expect(fx.spawnShaderNova).toHaveBeenCalledWith(
       520,
       250,
@@ -416,7 +428,13 @@ describe('Commercial-Grade Class Skills, Summons & Dramatic World/Boss Interacti
       'fx_sh_arcane_sigil',
       expect.any(Object),
     );
-    expect(fx.spawnShaderNova).toHaveBeenCalledWith(580, 250, expect.any(Number), 'fx_sh_geyser_plume');
+    expect(fx.spawnShaderNova).toHaveBeenCalledWith(
+      580,
+      250,
+      64,
+      'fx_sh_geyser_plume',
+      expect.any(Object),
+    );
   });
 
   it('renders Chiaroscuro active class world overlays with <= 0.06 floor fill alpha and #141019 ink outlines', () => {
@@ -615,8 +633,20 @@ describe('Commercial-Grade Class Skills, Summons & Dramatic World/Boss Interacti
       },
     ]);
 
-    expect(fx.spawnShaderNova).toHaveBeenCalledWith(410, 260, 105, 'fx_sh_anvil_storm');
-    expect(fx.spawnShaderNova).not.toHaveBeenCalledWith(410, 260, 105, 'fx_sh_shrapnel_corona');
+    expect(fx.spawnShaderNova).toHaveBeenCalledWith(
+      410,
+      260,
+      64,
+      'fx_sh_anvil_storm',
+      expect.any(Object),
+    );
+    expect(fx.spawnShaderNova).not.toHaveBeenCalledWith(
+      410,
+      260,
+      expect.any(Number),
+      'fx_sh_shrapnel_corona',
+      expect.any(Object),
+    );
     expect(fx.spawnHitSparks).toHaveBeenCalledWith(
       410,
       260,

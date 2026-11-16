@@ -507,7 +507,7 @@ export const AP2_P1C_VISUAL_SCENES: readonly VisualSceneDef[] = [
           stage: 'active',
           label: 'BOLT FLIGHT 1',
           beforeStep: (page) =>
-            queueStepInput(page, { moveX: 1, aimAngle: 0, durationTicks: 6 }),
+            queueStepInput(page, { moveX: 1, aimAngle: 0, durationTicks: 9 }),
         },
         { stepCount: 3, stage: 'active', label: 'BOLT FLIGHT 2' },
         { stepCount: 2, stage: 'apex', label: 'CHILL PULSE!' },
@@ -626,14 +626,14 @@ export const AP2_P1C_VISUAL_SCENES: readonly VisualSceneDef[] = [
       },
       stripSchedule: [
         { stepCount: 0, stage: 'windup_hold', label: 'HEX PILLAR RING' },
+        { stepCount: 2, stage: 'windup_hold', label: 'AIM TOTEM' },
+        { stepCount: 2, stage: 'windup_hold', label: 'BRACE DASH' },
         {
-          stepCount: 2,
+          stepCount: 1,
           stage: 'trigger',
           label: 'DASH KICK!',
           beforeStep: (page) => triggerDash(page, 1, 0, 0),
         },
-        { stepCount: 2, stage: 'active', label: 'SLIDE TO PILLAR' },
-        { stepCount: 1, stage: 'active', label: 'IMPACT WINDUP' },
         { stepCount: 2, stage: 'apex', label: 'PILLAR CRUSH!' },
         {
           stepCount: 3,

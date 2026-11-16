@@ -842,11 +842,23 @@ export function drawBatch2TransientShape(
     }
 
     case 'berserker_guillotine_slam': {
-      const slamR = 68 * (0.55 + progress * 0.45);
-      floorG.lineStyle(3.2, 0x141019, alpha * 0.84);
-      floorG.strokeCircle(s.x, s.y, slamR);
-      floorG.lineStyle(2.0, 0xef4444, alpha * 0.9);
-      floorG.strokeCircle(s.x, s.y, slamR);
+      const slamR = 64 * (0.55 + progress * 0.45);
+      for (let arcIdx = 0; arcIdx < 4; arcIdx += 1) {
+        const aMid = (arcIdx * Math.PI) / 2 + 0.18;
+        fillTaperedArcRibbon(
+          floorG,
+          s.x,
+          s.y,
+          slamR,
+          aMid - 0.46,
+          aMid + 0.46,
+          2.1,
+          0xef4444,
+          alpha * 0.9,
+          8,
+          1.6,
+        );
+      }
       for (let tIdx = 0; tIdx < 8; tIdx += 1) {
         const a = (tIdx * Math.PI) / 4 + 0.18;
         const innerR = slamR * 0.72;
@@ -1540,38 +1552,37 @@ export function spawnMagmaGeyserClusterFx(
       });
     }
 
-    // 2. Depth 26.6 perimeter crescent ring
-    if (fx.activePerimeterRings) {
-      const ring = (fx.perimeterRingFreePool ? fx.perimeterRingFreePool.pop() : undefined) ?? {
-        active: true,
-        x: gy.x,
-        y: gy.y,
-        targetRadiusPx: rad,
-        currentRadiusPx: rad,
-        colorNum: 0xf97316,
-        alpha: aoeAlpha,
-        age: 0,
-        ttl: 0.28,
-      };
-      ring.active = true;
-      ring.x = gy.x;
-      ring.y = gy.y;
-      ring.targetRadiusPx = rad;
-      ring.currentRadiusPx = rad;
-      ring.colorNum = 0xf97316;
-      ring.alpha = aoeAlpha;
-      ring.age = 0;
-      ring.ttl = 0.28;
-      fx.activePerimeterRings.push(ring);
-    }
-
-    // 3. Tall plume vs low boil
+    // 2. Tall plume vs low boil proximity check (46px spacing) + crisp 3-tick ignition rim on distinct craters
     let isTooClose = false;
     for (const pos of tallPlumePositions) {
       if (Math.hypot(gy.x - pos.x, gy.y - pos.y) < 46.0) {
         isTooClose = true;
         break;
       }
+    }
+
+    if (!isTooClose && fx.activePerimeterRings) {
+      const ring = (fx.perimeterRingFreePool ? fx.perimeterRingFreePool.pop() : undefined) ?? {
+        active: true,
+        x: gy.x,
+        y: gy.y,
+        targetRadiusPx: rad,
+        currentRadiusPx: rad * 0.65,
+        colorNum: 0xf97316,
+        alpha: aoeAlpha,
+        age: 0,
+        ttl: 0.06,
+      };
+      ring.active = true;
+      ring.x = gy.x;
+      ring.y = gy.y;
+      ring.targetRadiusPx = rad;
+      ring.currentRadiusPx = rad * 0.65;
+      ring.colorNum = 0xf97316;
+      ring.alpha = aoeAlpha;
+      ring.age = 0;
+      ring.ttl = 0.06;
+      fx.activePerimeterRings.push(ring);
     }
 
     if (isTooClose) {

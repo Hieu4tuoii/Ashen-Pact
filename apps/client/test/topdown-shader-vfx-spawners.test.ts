@@ -774,6 +774,18 @@ describe('1:1 Top-Down Chiaroscuro Flipbook Playback & Core Combat Spawners', ()
     expect(nums).toHaveLength(1);
     expect(nums[0]?.text.text).toBe('37!');
     expect(nums[0]?.text.style.color).toBe(PALETTE.SOLAR_GOLD);
+
+    // Tactical alert spawned at same (x, y) as active numeric popup is lifted above it with 0 AABB overlap
+    fx.spawnFloatingAlert(200, 200, 'ĐOẠN ĐẦU ĐÀI!', '#F4F1EA');
+    const colAlert = fx.damagePool.slice(42, 48).find((d) => d.active && d.text.text === 'ĐOẠN ĐẦU ĐÀI!');
+    expect(colAlert).toBeDefined();
+    if (colAlert && nums[0]) {
+      colAlert.y = nums[0].y;
+      resolveTacticalAlertSlotOverlaps(fx.damagePool, 4.0);
+      const hhA = 0.5 * colAlert.text.height * Math.abs(colAlert.text.scaleY);
+      const hhN = 0.5 * nums[0].text.height * Math.abs(nums[0].text.scaleY);
+      expect(nums[0].y - colAlert.y).toBeGreaterThanOrEqual(hhA + hhN + 4.0);
+    }
   });
 
   it('attenuates ally AoEs inside P1 18px Safe-Halo by 0.15x and tracks multiple firing players per tick via Set<number>', () => {

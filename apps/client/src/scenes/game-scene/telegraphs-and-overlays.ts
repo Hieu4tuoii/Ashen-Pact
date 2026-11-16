@@ -424,13 +424,38 @@ export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, 
       g.strokePath();
     }
 
-    // Boss Overload Stun Ring (Forge Titan when both energy cores are broken)
+    // Stunned Overhead Cutout 4-Point Stars (replaces full-torso yellow wireframe hoop)
     if (e.aiState === 'stunned' && e.stateTimer > 0) {
-      g.lineStyle(3.5, hexToNum(PALETTE.VOLT_YELLOW), 0.95);
-      g.strokeCircle(pos.x, pos.y, e.radius + 10 + Math.sin(sim.tick * 0.3) * 3);
+      const headY = pos.y - (e.isBoss ? 50 : 34);
+      const orbitRx = e.isBoss ? 18 : 12;
+      const orbitRy = e.isBoss ? 5.5 : 4.0;
+      const basePhase = overlayTick * 0.14;
+      const inkCol = hexToNum(PALETTE.INK_DARK);
+      const starCol = hexToNum(PALETTE.VOLT_YELLOW);
+      for (let sIdx = 0; sIdx < 2; sIdx++) {
+        const ang = basePhase + sIdx * Math.PI;
+        const sx = pos.x + Math.cos(ang) * orbitRx;
+        const sy = headY + Math.sin(ang) * orbitRy;
+        const outerR = e.isBoss ? 6.2 : 4.8;
+        const innerR = outerR * 0.34;
+        g.fillStyle(starCol, 0.96);
+        g.lineStyle(2.2, inkCol, 0.94);
+        g.beginPath();
+        for (let pIdx = 0; pIdx < 8; pIdx++) {
+          const pa = (pIdx * Math.PI) / 4;
+          const pr = pIdx % 2 === 0 ? outerR : innerR;
+          const px = sx + Math.cos(pa) * pr;
+          const py = sy + Math.sin(pa) * pr;
+          if (pIdx === 0) g.moveTo(px, py);
+          else g.lineTo(px, py);
+        }
+        g.closePath();
+        g.fillPath();
+        g.strokePath();
+      }
     }
 
-    // Elite Golden-Violet Aura Ring & Shield Barrier
+    // Elite Grounded 2.12:1 Cutout Foot-Crescents & Compact Flank Shield Brackets
     if (e.isElite && !isStress) {
       const mod =
         e.eliteModifier ?? ((e as { p11PreferredModifier?: string }).p11PreferredModifier ?? null);
@@ -440,15 +465,69 @@ export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, 
           : mod === 'volley'
             ? hexToNum(PALETTE.FLAME_ORANGE)
             : hexToNum(PALETTE.SOLAR_GOLD);
-      floorG.lineStyle(2.5, auraCol, 0.88);
-      floorG.strokeCircle(pos.x, pos.y + 2, e.radius + 5);
+      const inkCol = hexToNum(PALETTE.INK_DARK);
+      const footY = pos.y + 10;
+      const rx = e.radius + 6;
+      const ry = rx / 2.12;
+      for (let side = 0; side < 2; side++) {
+        const a0 = side === 0 ? -Math.PI * 0.36 : Math.PI * 0.64;
+        const a1 = side === 0 ? Math.PI * 0.36 : Math.PI * 1.36;
+        for (let pass = 0; pass < 2; pass++) {
+          floorG.lineStyle(
+            pass === 0 ? 4.4 : 2.1,
+            pass === 0 ? inkCol : auraCol,
+            pass === 0 ? 0.86 : 0.92,
+          );
+          floorG.beginPath();
+          for (let seg = 0; seg <= 8; seg++) {
+            const a = a0 + ((a1 - a0) * seg) / 8;
+            const px = pos.x + Math.cos(a) * rx;
+            const py = footY + Math.sin(a) * ry;
+            if (seg === 0) floorG.moveTo(px, py);
+            else floorG.lineTo(px, py);
+          }
+          floorG.strokePath();
+        }
+      }
       if (mod === 'vengeful' || mod === 'volley') {
-        floorG.lineStyle(1.6, hexToNum(PALETTE.SOLAR_GOLD), 0.78);
-        floorG.strokeCircle(pos.x, pos.y + 2, e.radius + 8);
+        const goldCol = hexToNum(PALETTE.SOLAR_GOLD);
+        for (const sideSign of [-1, 1]) {
+          const tx = pos.x + sideSign * (rx + 2.5);
+          floorG.lineStyle(3.4, inkCol, 0.85);
+          floorG.beginPath();
+          floorG.moveTo(tx, footY - 3.5);
+          floorG.lineTo(tx + sideSign * 3.5, footY);
+          floorG.lineTo(tx, footY + 3.5);
+          floorG.strokePath();
+          floorG.lineStyle(1.7, goldCol, 0.92);
+          floorG.beginPath();
+          floorG.moveTo(tx, footY - 3.5);
+          floorG.lineTo(tx + sideSign * 3.5, footY);
+          floorG.lineTo(tx, footY + 3.5);
+          floorG.strokePath();
+        }
       }
       if (e.shieldArmor > 0) {
-        g.lineStyle(2, hexToNum(PALETTE.CYAN_FROST), 0.92);
-        g.strokeCircle(pos.x, pos.y, e.radius + 8);
+        const shR = e.radius + 5;
+        const cyanCol = hexToNum(PALETTE.CYAN_FROST);
+        for (const baseAng of [0, Math.PI]) {
+          for (let pass = 0; pass < 2; pass++) {
+            g.lineStyle(
+              pass === 0 ? 4.2 : 2.0,
+              pass === 0 ? inkCol : cyanCol,
+              pass === 0 ? 0.88 : 0.95,
+            );
+            g.beginPath();
+            for (let seg = 0; seg <= 6; seg++) {
+              const a = baseAng - 0.42 + (0.84 * seg) / 6;
+              const px = pos.x + Math.cos(a) * shR;
+              const py = pos.y + Math.sin(a) * shR;
+              if (seg === 0) g.moveTo(px, py);
+              else g.lineTo(px, py);
+            }
+            g.strokePath();
+          }
+        }
       }
     }
 

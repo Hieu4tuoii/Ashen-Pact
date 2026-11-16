@@ -539,6 +539,8 @@ export const AP2_P2B_VISUAL_SCENES: readonly VisualSceneDef[] = [
         simEventKind: ['damage_dealt'],
       },
       actionRoi: {
+        width: 760,
+        height: 400,
         includeProjectiles: 'none',
         enemyKinds: ['wild_boar'],
       },

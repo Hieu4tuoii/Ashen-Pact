@@ -864,6 +864,12 @@ export function triggerDoorCombatLockupImpl(this: GameScene): void {
 
 export function resetPortalAndDoorTestStateImpl(this: GameScene): void {
   resetClientFreezeRandom();
+  (
+    this.transport as unknown as { loop?: { primeForImmediateTick?: () => void } }
+  ).loop?.primeForImmediateTick?.();
+  if (this.fx) {
+    this.fx.totalSparksSpawned = 0;
+  }
   const sim = this.transport.getSim();
   this.portalDoorAnimClockSec = 0;
   this.portalAnimState = createPortalAnimState();

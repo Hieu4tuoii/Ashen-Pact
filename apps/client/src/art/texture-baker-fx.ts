@@ -1407,83 +1407,105 @@ function drawCutoutKitSprite(
     case 'fx_compact_burst_4f': {
       const isCompact = key === 'fx_compact_burst_4f';
       const baseR = isCompact ? 26.0 : Math.min(maxW, maxH) * 0.46;
-      const inkWidth = isCompact ? 1.25 : 1.6;
+      const inkWidth = isCompact ? 1.35 : 1.65;
 
       if (frame === 0) {
-        // Initial core spark
-        const r = baseR * 0.42;
-        ctx.beginPath();
-        ctx.arc(0, 0, r, 0, Math.PI * 2);
-        ctx.fillStyle = highlight;
-        ctx.fill();
-        ctx.lineWidth = inkWidth;
-        ctx.strokeStyle = ink;
-        ctx.stroke();
-
-        ctx.fillStyle = PALETTE.SOLAR_GOLD;
-        for (let i = 0; i < 4; i++) {
-          const ang = (i * Math.PI) / 2;
-          ctx.beginPath();
-          ctx.arc(Math.cos(ang) * r * 0.7, Math.sin(ang) * r * 0.7, r * 0.28, 0, Math.PI * 2);
-          ctx.fill();
-        }
-      } else if (frame === 1) {
-        // Expanding notched shock ring
-        const r = baseR * 0.72;
+        // Frame 0: Needle-thin 4-point Cutout star-cross ignition (no solid disc or polka dots)
+        const outerR = baseR * 0.56;
+        const innerR = outerR * 0.18;
         ctx.beginPath();
         for (let i = 0; i < 8; i++) {
           const a = (i * Math.PI) / 4;
-          const rad = i % 2 === 0 ? r : r * 0.78;
+          const rad = i % 2 === 0 ? outerR : innerR;
           const px = Math.cos(a) * rad;
           const py = Math.sin(a) * rad;
           if (i === 0) ctx.moveTo(px, py);
           else ctx.lineTo(px, py);
         }
         ctx.closePath();
-        ctx.fillStyle = PALETTE.SILVER_BRIGHT;
+        ctx.fillStyle = highlight;
         ctx.fill();
         ctx.lineWidth = inkWidth;
         ctx.strokeStyle = ink;
         ctx.stroke();
-
-        ctx.beginPath();
-        ctx.arc(0, 0, r * 0.38, 0, Math.PI * 2);
-        ctx.fillStyle = highlight;
-        ctx.fill();
-      } else if (frame === 2) {
-        // Apex perforated burst ring with eroded core
-        const r = baseR * 0.96;
-        ctx.beginPath();
-        ctx.arc(0, 0, r, 0, Math.PI * 2);
-        ctx.fillStyle = PALETTE.ICE_WHITE;
-        ctx.fill();
-        ctx.lineWidth = inkWidth;
-        ctx.strokeStyle = ink;
-        ctx.stroke();
-
-        // Eroded dark cavity
-        ctx.beginPath();
-        ctx.arc(0, 0, r * 0.65, 0, Math.PI * 2);
-        ctx.fillStyle = ink;
-        ctx.fill();
-
-        ctx.beginPath();
-        ctx.arc(0, 0, r * 0.45, 0, Math.PI * 2);
-        ctx.fillStyle = highlight;
-        ctx.fill();
-      } else {
-        // Fragmented dissipating motes
-        const r = baseR * 1.0;
-        ctx.globalAlpha = 0.7;
+      } else if (frame === 1) {
+        // Frame 1: Hollow-center 6-shard outward Cutout ring (center 0..0.44r is 100% transparent)
+        const rInner = baseR * 0.44;
+        const rOuter = baseR * 0.82;
         for (let i = 0; i < 6; i++) {
-          const a = (i * Math.PI) / 3 + 0.26;
-          const px = Math.cos(a) * r * 0.85;
-          const py = Math.sin(a) * r * 0.85;
+          const a = (i * Math.PI) / 3 + 0.22;
+          const nx = -Math.sin(a) * (baseR * 0.09);
+          const ny = Math.cos(a) * (baseR * 0.09);
+          const ix = Math.cos(a) * rInner;
+          const iy = Math.sin(a) * rInner;
+          const ox = Math.cos(a) * rOuter;
+          const oy = Math.sin(a) * rOuter;
           ctx.beginPath();
-          ctx.arc(px, py, baseR * 0.16, 0, Math.PI * 2);
+          ctx.moveTo(ox, oy);
+          ctx.lineTo(ix + nx, iy + ny);
+          ctx.lineTo(ix * 1.12, iy * 1.12);
+          ctx.lineTo(ix - nx, iy - ny);
+          ctx.closePath();
+          ctx.fillStyle = i % 2 === 0 ? highlight : PALETTE.SILVER_BRIGHT;
+          ctx.fill();
+          ctx.lineWidth = inkWidth;
+          ctx.strokeStyle = ink;
+          ctx.stroke();
+        }
+      } else if (frame === 2) {
+        // Frame 2: Hollow-center 3 broken pointed Cutout crescent arcs (center 0..0.72r is 100% transparent)
+        const rArc = baseR * 0.88;
+        const thick = Math.max(1.8, baseR * 0.12);
+        for (let i = 0; i < 3; i++) {
+          const aMid = (i * Math.PI * 2) / 3 + 0.35;
+          const span = 0.58;
+          ctx.beginPath();
+          for (let s = 0; s <= 6; s++) {
+            const u = s / 6;
+            const a = aMid - span + u * span * 2;
+            const w = Math.sin(u * Math.PI) * thick;
+            const px = Math.cos(a) * (rArc + w * 0.5);
+            const py = Math.sin(a) * (rArc + w * 0.5);
+            if (s === 0) ctx.moveTo(px, py);
+            else ctx.lineTo(px, py);
+          }
+          for (let s = 6; s >= 0; s--) {
+            const u = s / 6;
+            const a = aMid - span + u * span * 2;
+            const w = Math.sin(u * Math.PI) * thick;
+            const px = Math.cos(a) * (rArc - w * 0.5);
+            const py = Math.sin(a) * (rArc - w * 0.5);
+            ctx.lineTo(px, py);
+          }
+          ctx.closePath();
+          ctx.fillStyle = PALETTE.ICE_WHITE;
+          ctx.fill();
+          ctx.lineWidth = inkWidth;
+          ctx.strokeStyle = ink;
+          ctx.stroke();
+        }
+      } else {
+        // Frame 3: 4 crisp dispersing diamond motes near perimeter (100% hollow center)
+        const r = baseR * 0.94;
+        const mR = Math.max(1.6, baseR * 0.12);
+        ctx.globalAlpha = 0.82;
+        for (let i = 0; i < 4; i++) {
+          const a = (i * Math.PI) / 2 + 0.42;
+          const cx = Math.cos(a) * r;
+          const cy = Math.sin(a) * r;
+          const ux = Math.cos(a);
+          const uy = Math.sin(a);
+          const vx = -uy * 0.52;
+          const vy = ux * 0.52;
+          ctx.beginPath();
+          ctx.moveTo(cx + ux * mR * 1.35, cy + uy * mR * 1.35);
+          ctx.lineTo(cx + vx * mR, cy + vy * mR);
+          ctx.lineTo(cx - ux * mR * 0.9, cy - uy * mR * 0.9);
+          ctx.lineTo(cx - vx * mR, cy - vy * mR);
+          ctx.closePath();
           ctx.fillStyle = PALETTE.SILVER_BRIGHT;
           ctx.fill();
-          ctx.lineWidth = inkWidth * 0.9;
+          ctx.lineWidth = inkWidth * 0.88;
           ctx.strokeStyle = ink;
           ctx.stroke();
         }
@@ -2332,147 +2354,197 @@ function drawElementalReactionFrame(
   const ink = '#141019';
   const highlight = '#F4F1EA';
   const progress = frame / 3;
-  const baseR = 12 + progress * 14;
+  const innerR = frame === 0 ? 0 : 6 + progress * 11;
+  const outerR = 11 + progress * 15;
+  const taper = 1 - progress * 0.42;
 
   switch (key) {
     case 'fx_react_vapor_puff': {
-      // Steam/vapor puff cloud rising
-      ctx.beginPath();
-      ctx.arc(0, -progress * 6, baseR, 0, Math.PI * 2);
-      ctx.fillStyle = PALETTE.ICE_WHITE;
-      ctx.fill();
-      ctx.lineWidth = 1.6;
-      ctx.strokeStyle = ink;
-      ctx.stroke();
-
-      ctx.beginPath();
-      ctx.arc(-baseR * 0.3, -progress * 6 - baseR * 0.2, baseR * 0.5, 0, Math.PI * 2);
-      ctx.fillStyle = highlight;
-      ctx.fill();
+      // 4 radially separating crescent steam wisps with hollow center (never blots out target!)
+      for (let i = 0; i < 4; i++) {
+        const a = (i * Math.PI) / 2 + 0.35 + progress * 0.28;
+        const dist = (frame === 0 ? 5 : innerR + 4) + (i % 2) * 2;
+        const wx = Math.cos(a) * dist;
+        const wy = Math.sin(a) * dist - progress * 4;
+        const wr = (5.5 - progress * 1.6) * (i % 2 === 0 ? 1.05 : 0.88);
+        ctx.save();
+        ctx.translate(wx, wy);
+        ctx.rotate(a + Math.PI * 0.5);
+        ctx.beginPath();
+        ctx.arc(0, 0, wr, -Math.PI * 0.72, Math.PI * 0.72, false);
+        ctx.arc(0, wr * 0.38, wr * 0.78, Math.PI * 0.65, -Math.PI * 0.65, true);
+        ctx.closePath();
+        ctx.fillStyle = PALETTE.ICE_WHITE;
+        ctx.fill();
+        ctx.lineWidth = 1.7;
+        ctx.strokeStyle = ink;
+        ctx.stroke();
+        if (frame <= 2) {
+          ctx.beginPath();
+          ctx.arc(0, -wr * 0.55, Math.max(1.1, wr * 0.24), 0, Math.PI * 2);
+          ctx.fillStyle = highlight;
+          ctx.fill();
+        }
+        ctx.restore();
+      }
       break;
     }
 
     case 'fx_react_shatter_pane': {
-      // Shattering ice pane shards
-      const r = baseR;
-      ctx.beginPath();
-      ctx.moveTo(-r, -r * 0.7);
-      ctx.lineTo(r * 0.8, -r * 0.6);
-      ctx.lineTo(r, r * 0.8);
-      ctx.lineTo(-r * 0.6, r);
-      ctx.closePath();
-      ctx.fillStyle = PALETTE.CYAN_FROST;
-      ctx.fill();
-      ctx.lineWidth = 1.6;
-      ctx.strokeStyle = ink;
-      ctx.stroke();
-
-      if (frame >= 2) {
+      // 5 angular diamond ice shards bursting radially outward from a hollow center
+      const shardCount = 5;
+      for (let i = 0; i < shardCount; i++) {
+        const a = (i * Math.PI * 2) / shardCount - 0.25;
+        const r0 = frame === 0 ? 2.5 : innerR + (i % 2) * 2;
+        const r1 = Math.min(28, r0 + (9.5 - progress * 2.5));
+        const halfW = (3.4 - progress * 0.9) * (i % 2 === 0 ? 1.08 : 0.86);
+        const cos = Math.cos(a);
+        const sin = Math.sin(a);
+        const nx = -sin * halfW;
+        const ny = cos * halfW;
+        const midR = r0 + (r1 - r0) * 0.38;
         ctx.beginPath();
-        ctx.moveTo(0, -r);
-        ctx.lineTo(0, r);
-        ctx.moveTo(-r, 0);
-        ctx.lineTo(r, 0);
-        ctx.lineWidth = 1.8;
+        ctx.moveTo(cos * r0, sin * r0);
+        ctx.lineTo(cos * midR + nx, sin * midR + ny);
+        ctx.lineTo(cos * r1, sin * r1);
+        ctx.lineTo(cos * midR - nx, sin * midR - ny);
+        ctx.closePath();
+        ctx.fillStyle = i % 2 === 0 ? PALETTE.CYAN_FROST : PALETTE.ICE_WHITE;
+        ctx.fill();
+        ctx.lineWidth = 1.7;
         ctx.strokeStyle = ink;
+        ctx.stroke();
+
+        // Facet highlight spine
+        ctx.beginPath();
+        ctx.moveTo(cos * (r0 + 1.5), sin * (r0 + 1.5));
+        ctx.lineTo(cos * (r1 - 1.5), sin * (r1 - 1.5));
+        ctx.lineWidth = 1.1;
+        ctx.strokeStyle = highlight;
         ctx.stroke();
       }
       break;
     }
 
     case 'fx_react_superconduct_cross': {
-      // 4-point electrical diamond cross
-      const rx = baseR * 1.1;
-      const ry = baseR * 0.45;
-      ctx.beginPath();
-      ctx.moveTo(0, -rx);
-      ctx.lineTo(ry, 0);
-      ctx.lineTo(0, rx);
-      ctx.lineTo(-ry, 0);
-      ctx.closePath();
-      ctx.fillStyle = PALETTE.VOLT_YELLOW;
-      ctx.fill();
-      ctx.lineWidth = 1.6;
-      ctx.strokeStyle = ink;
-      ctx.stroke();
-
-      ctx.beginPath();
-      ctx.moveTo(-rx, 0);
-      ctx.lineTo(0, ry);
-      ctx.lineTo(rx, 0);
-      ctx.lineTo(0, -ry);
-      ctx.closePath();
-      ctx.fillStyle = PALETTE.CYAN_FROST;
-      ctx.fill();
-      ctx.lineWidth = 1.4;
-      ctx.strokeStyle = ink;
-      ctx.stroke();
+      // 4 hollow-center cryo-volt diamond needles separating outward
+      for (let i = 0; i < 4; i++) {
+        const a = (i * Math.PI) / 2 + (frame >= 2 ? 0.08 : 0);
+        const r0 = frame === 0 ? 1.5 : innerR * 0.85;
+        const r1 = Math.min(28, outerR * (i % 2 === 0 ? 1.04 : 0.88));
+        const hw = 3.2 * taper;
+        const cos = Math.cos(a);
+        const sin = Math.sin(a);
+        const nx = -sin * hw;
+        const ny = cos * hw;
+        const midR = r0 + (r1 - r0) * 0.35;
+        ctx.beginPath();
+        ctx.moveTo(cos * r0, sin * r0);
+        ctx.lineTo(cos * midR + nx, sin * midR + ny);
+        ctx.lineTo(cos * r1, sin * r1);
+        ctx.lineTo(cos * midR - nx, sin * midR - ny);
+        ctx.closePath();
+        ctx.fillStyle = i % 2 === 0 ? PALETTE.CYAN_FROST : PALETTE.VOLT_YELLOW;
+        ctx.fill();
+        ctx.lineWidth = 1.7;
+        ctx.strokeStyle = ink;
+        ctx.stroke();
+      }
+      if (frame <= 1) {
+        ctx.beginPath();
+        ctx.arc(0, 0, 3.2 - frame * 1.2, 0, Math.PI * 2);
+        ctx.fillStyle = highlight;
+        ctx.fill();
+      }
       break;
     }
 
     case 'fx_react_toxic_glob': {
-      // Acid poison glob expanding & popping
-      ctx.beginPath();
-      ctx.arc(0, 0, baseR * 0.85, 0, Math.PI * 2);
-      ctx.fillStyle = PALETTE.LIME_GLOW;
-      ctx.fill();
-      ctx.lineWidth = 1.6;
-      ctx.strokeStyle = ink;
-      ctx.stroke();
+      // 5 ruptured bio-caustic droplet fangs splashing radially outward from a hollow center
+      const globCount = 5;
+      for (let i = 0; i < globCount; i++) {
+        const a = (i * Math.PI * 2) / globCount + 0.42;
+        const dist = frame === 0 ? 4.5 : innerR + 2.5 + (i % 2) * 2;
+        const gx = Math.cos(a) * dist;
+        const gy = Math.sin(a) * dist;
+        const gr = (4.4 - progress * 1.2) * (i % 2 === 0 ? 1.06 : 0.88);
+        ctx.beginPath();
+        ctx.arc(gx, gy, gr, 0, Math.PI * 2);
+        ctx.fillStyle = i % 2 === 0 ? PALETTE.LIME_GLOW : PALETTE.TOXIC_PURPLE;
+        ctx.fill();
+        ctx.lineWidth = 1.7;
+        ctx.strokeStyle = ink;
+        ctx.stroke();
 
-      ctx.beginPath();
-      ctx.arc(-baseR * 0.3, -baseR * 0.25, baseR * 0.35, 0, Math.PI * 2);
-      ctx.fillStyle = PALETTE.TOXIC_PURPLE;
-      ctx.fill();
+        ctx.beginPath();
+        ctx.arc(gx - gr * 0.25, gy - gr * 0.25, Math.max(0.9, gr * 0.3), 0, Math.PI * 2);
+        ctx.fillStyle = highlight;
+        ctx.fill();
+      }
       break;
     }
 
     case 'fx_react_paralysis_x': {
-      // Electric X-burst
-      const arm = baseR * 0.95;
-      ctx.lineWidth = 2.0;
-      ctx.strokeStyle = ink;
-      ctx.beginPath();
-      ctx.moveTo(-arm, -arm);
-      ctx.lineTo(arm, arm);
-      ctx.moveTo(arm, -arm);
-      ctx.lineTo(-arm, arm);
-      ctx.stroke();
-
-      ctx.lineWidth = 1.4;
-      ctx.strokeStyle = PALETTE.VOLT_YELLOW;
-      ctx.stroke();
-
-      ctx.beginPath();
-      ctx.arc(0, 0, baseR * 0.28, 0, Math.PI * 2);
-      ctx.fillStyle = highlight;
-      ctx.fill();
+      // 4 diagonal electric X-bolts splitting outward from a hollow center
+      for (let i = 0; i < 4; i++) {
+        const a = Math.PI * 0.25 + (i * Math.PI) / 2;
+        const r0 = frame === 0 ? 1.5 : innerR * 0.82;
+        const r1 = Math.min(27, outerR * 0.96);
+        const midR = (r0 + r1) * 0.5;
+        const cos = Math.cos(a);
+        const sin = Math.sin(a);
+        const zig = (i % 2 === 0 ? 1 : -1) * 2.6 * taper;
+        const mx = cos * midR - sin * zig;
+        const my = sin * midR + cos * zig;
+        ctx.beginPath();
+        ctx.moveTo(cos * r0, sin * r0);
+        ctx.lineTo(mx, my);
+        ctx.lineTo(cos * r1, sin * r1);
+        ctx.lineWidth = 3.8 * taper + 1.2;
+        ctx.strokeStyle = ink;
+        ctx.stroke();
+        ctx.lineWidth = 1.8 * taper + 0.5;
+        ctx.strokeStyle = PALETTE.VOLT_YELLOW;
+        ctx.stroke();
+      }
+      if (frame === 0) {
+        ctx.beginPath();
+        ctx.arc(0, 0, 3.0, 0, Math.PI * 2);
+        ctx.fillStyle = highlight;
+        ctx.fill();
+      }
       break;
     }
 
     case 'fx_react_overload_star': {
-      // Overload fiery starburst
-      const r = baseR;
-      ctx.beginPath();
-      for (let i = 0; i < 8; i++) {
-        const a = (i * Math.PI) / 4;
-        const rad = i % 2 === 0 ? r : r * 0.5;
-        const px = Math.cos(a) * rad;
-        const py = Math.sin(a) * rad;
-        if (i === 0) ctx.moveTo(px, py);
-        else ctx.lineTo(px, py);
+      // 6 asymmetric fiery shrapnel teeth flying radially outward from a hollow center
+      const teeth = 6;
+      for (let i = 0; i < teeth; i++) {
+        const a = (i * Math.PI * 2) / teeth + 0.18;
+        const r0 = frame === 0 ? 2.0 : innerR * 0.9;
+        const r1 = Math.min(28, outerR * (i % 2 === 0 ? 1.05 : 0.86));
+        const hw = 3.3 * taper;
+        const cos = Math.cos(a);
+        const sin = Math.sin(a);
+        const nx = -sin * hw;
+        const ny = cos * hw;
+        ctx.beginPath();
+        ctx.moveTo(cos * r0 + nx, sin * r0 + ny);
+        ctx.lineTo(cos * r1, sin * r1);
+        ctx.lineTo(cos * r0 - nx, sin * r0 - ny);
+        ctx.closePath();
+        ctx.fillStyle = i % 2 === 0 ? PALETTE.FLAME_ORANGE : PALETTE.SOLAR_GOLD;
+        ctx.fill();
+        ctx.lineWidth = 1.7;
+        ctx.strokeStyle = ink;
+        ctx.stroke();
       }
-      ctx.closePath();
-      ctx.fillStyle = PALETTE.FLAME_ORANGE;
-      ctx.fill();
-      ctx.lineWidth = 1.6;
-      ctx.strokeStyle = ink;
-      ctx.stroke();
-
-      ctx.beginPath();
-      ctx.arc(0, 0, r * 0.32, 0, Math.PI * 2);
-      ctx.fillStyle = highlight;
-      ctx.fill();
+      if (frame <= 1) {
+        ctx.beginPath();
+        ctx.arc(0, 0, 3.6 - frame * 1.4, 0, Math.PI * 2);
+        ctx.fillStyle = highlight;
+        ctx.fill();
+      }
       break;
     }
   }

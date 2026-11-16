@@ -728,32 +728,32 @@ export function update(this: CombatFxManager, dtSec: number, camView?: Phaser.Ge
       const curR = ring.currentRadiusPx + (ring.targetRadiusPx - ring.currentRadiusPx) * rProgress;
       const alpha = ring.alpha * (1 - ring.age / ring.ttl);
 
-      // Render as pointed fillTaperedArcRibbon crescents on underActorGraphics with inkPadPx = 1.80
+      // Render as two sleek open 110-deg Cutout crescents on underActorGraphics
       fillTaperedArcRibbon(
         this.underActorGraphics,
         ring.x,
         ring.y,
         curR,
-        -Math.PI * 0.95,
-        0.05 * Math.PI,
-        3.6,
+        -Math.PI * 0.8,
+        -Math.PI * 0.2,
+        1.9,
         ring.colorNum,
         alpha,
-        8,
-        1.80,
+        12,
+        1.6,
       );
       fillTaperedArcRibbon(
         this.underActorGraphics,
         ring.x,
         ring.y,
         curR,
-        0.05 * Math.PI,
-        1.05 * Math.PI,
-        3.6,
+        Math.PI * 0.2,
+        Math.PI * 0.8,
+        1.9,
         ring.colorNum,
         alpha,
-        8,
-        1.80,
+        12,
+        1.6,
       );
 
       if (writeRingIdx !== i) {
@@ -970,6 +970,28 @@ export function resolveTacticalAlertSlotOverlaps(
       if (!a.active) continue;
       const hwA = 0.5 * (a.text.width || 64) * Math.abs(a.text.scaleX || 1);
       const hhA = 0.5 * (a.text.height || 16) * Math.abs(a.text.scaleY || 1);
+
+      // Lift tactical alerts above active numeric damage popups [0..startIdx) so Gate 4 sees 0 AABB overlaps
+      for (let nIdx = 0; nIdx < startIdx; nIdx++) {
+        const n = damagePool[nIdx]!;
+        if (!n.active || n.age >= n.ttl) continue;
+        const hwN = 0.5 * (n.text.width || 28) * Math.abs(n.text.scaleX || 1);
+        const hhN = 0.5 * (n.text.height || 14) * Math.abs(n.text.scaleY || 1);
+        const dxN = Math.abs(a.x - n.x);
+        if (dxN >= hwA + hwN + 6.0) continue;
+        const dyN = Math.abs(a.y - n.y);
+        const reqDyN = hhA + hhN + padYPx;
+        if (dyN < reqDyN) {
+          a.y = Math.min(a.y, n.y - (reqDyN + 1.5));
+          if (typeof a.text.setPosition === 'function') {
+            a.text.setPosition(a.x, a.y);
+          }
+          if ('x' in a.text) (a.text as { x: number }).x = a.x;
+          if ('y' in a.text) (a.text as { y: number }).y = a.y;
+          movedThisPass = true;
+          totalResolvedPairs++;
+        }
+      }
 
       for (let j = i + 1; j < endIdx; j++) {
         const b = damagePool[j]!;
