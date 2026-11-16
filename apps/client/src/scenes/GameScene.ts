@@ -5,6 +5,7 @@ import {
   type InteractTargetResult,
   LocalTransport,
   NetworkTransport,
+  normalizeRoomCode,
   type PropKind,
   type QuickEmoteId,
   type SimEnemyState,
@@ -13,8 +14,9 @@ import {
   type TileKind,
   type WifiProfileId,
 } from '@ashen-pact/shared';
-import { type Client as ColyseusClient, type Room as ColyseusRoom } from 'colyseus.js';
+import { type Client as ColyseusClient } from 'colyseus.js';
 import Phaser from 'phaser';
+import type { CoopRoomConnection } from '../net/coop-room-connection.js';
 import type { CutoutRig } from '../art/cutout-rig.js';
 import { shouldEmitFootstepDust } from '../art/cutout-rig-math.js';
 import { dampLerp } from '../art/easing.js';
@@ -35,7 +37,7 @@ import {
 } from '../fx/lighting-config.js';
 import type { LightingPipeline } from '../fx/lighting-pipeline.js';
 import { createPortalAnimState, type PortalAnimState } from '../fx/portal-door-shaders.js';
-import type { DebugOverlay } from '../ui/debug-overlay.js';
+import { type DebugOverlay, initGlobalDebugState } from '../ui/debug-overlay.js';
 import { type GraphicsQualityTier, graphicsSettings } from '../ui/graphics-settings.js';
 import type { MenuDomInputOverlay, MenuInputFieldId } from '../ui/html-input-overlay.js';
 import type { ModalOverlayManager } from '../ui/settings-modal.js';
@@ -59,7 +61,7 @@ import {
 import { updateEmoteWheelHudImpl, updateHubCharacterSkillPreviewImpl, updateHubInvitePanelImpl, updateWeaponComparisonCardImpl } from './game-scene/hud-hub-and-cards.js';
 import { updateDebugStateImpl, updateModalHudImpl } from './game-scene/hud-modals-and-debug.js';
 import { buildVectorHudImpl, invalidateAllHudCachesImpl, rebuildPauseModalImpl, togglePauseModalImpl } from './game-scene/hud-setup-and-pause.js';
-import { bindCoopRoomHandlersImpl, connectCoopRoomImpl, connectHelloRoomImpl, fetchHostLanInfoImpl, forceCoopReconnectImpl, getResolvedWsUrlImpl, setupKeyboardBindingsImpl, updateHostInviteUrlImpl } from './game-scene/input-and-network.js';
+import { bindCoopRoomHandlersImpl, connectCoopRoomImpl, connectHelloRoomImpl, fetchHostLanInfoImpl, forceCoopReconnectImpl, getResolvedWsUrlImpl, setupKeyboardBindingsImpl, shouldSendCoopInputThisFrame, updateHostInviteUrlImpl } from './game-scene/input-and-network.js';
 import {
   createInteractPromptFadeState,
   type InteractPromptFadeState,
@@ -90,6 +92,8 @@ import { drawEnemyHealthAndStatusBarImpl, renderHitboxesIfEnabledImpl, renderTel
 
 export interface GameSceneInitData {
   coopMode?: 'solo' | 'host' | 'join';
+  coopBackend?: 'colyseus' | 'p2p';
+  preferredCoopTransport?: 'p2p' | 'lan';
   startInHub?: boolean;
   roomId?: string;
   displayName?: string;
@@ -144,6 +148,10 @@ export class GameScene extends Phaser.Scene {
   public transport!: LocalTransport | NetworkTransport;
   public networkTransport: NetworkTransport | null = null;
   public coopMode: 'solo' | 'host' | 'join' = 'solo';
+  public coopBackend: 'colyseus' | 'p2p' = 'colyseus';
+  public preferredCoopTransport: 'p2p' | 'lan' = 'lan';
+  public hasManualTransportChoice = false;
+  public lanServerAvailable = false;
   public startInHub = true;
   public requestedRoomId: string | undefined;
   public displayName: string = PRESET_NAMES_VI[0];
@@ -454,13 +462,17 @@ export class GameScene extends Phaser.Scene {
   public weaponKeyTexts: Phaser.GameObjects.Text[] = [];
 
   public debugOverlay?: DebugOverlay;
-  public room?: ColyseusRoom;
+  public room?: CoopRoomConnection;
   public colyseusClient?: ColyseusClient;
   public intentionalLeave = false;
   public sceneSessionEpoch = 0;
   public hasCustomServerHostPort = false;
 
   public inputSeq = 0;
+  public coopInputSendAccumMs = 100;
+  public lastSentCoopMoveX = 0;
+  public lastSentCoopMoveY = 0;
+  public lastSentCoopButtons = 0;
   public queuedWeaponSlot: number | null = null;
   public wheelSwapQueued = false;
   public dashQueued = false;
@@ -523,6 +535,9 @@ export class GameScene extends Phaser.Scene {
     const urlJoin = params?.get('join') ?? undefined;
     const urlName = params?.get('name') ?? undefined;
     const urlServer = params?.get('server') ?? undefined;
+    const rawP2pParam = params?.get('p2p')?.trim().toLowerCase();
+    const urlP2p = Boolean(rawP2pParam && rawP2pParam !== '0' && rawP2pParam !== 'false');
+    const pageProtocol = typeof window !== 'undefined' ? window.location?.protocol : undefined;
 
     if (data?.coopMode) {
       this.coopMode = data.coopMode;
@@ -572,8 +587,51 @@ export class GameScene extends Phaser.Scene {
 
     const explicitServer = (data?.serverUrl ?? urlServer)?.trim() || undefined;
     this.hasCustomServerHostPort = Boolean(explicitServer);
-    this.serverHostPort = normalizeServerHostPortDisplay(explicitServer, fallbackHostPort);
-    this.requestedRoomId = this.coopMode === 'solo' ? undefined : (data?.roomId ?? urlJoin);
+    this.lanServerAvailable = false;
+
+    if (this.coopMode === 'solo') {
+      this.coopBackend = 'colyseus';
+    } else if (data?.coopBackend) {
+      this.coopBackend = data.coopBackend;
+    } else if (
+      urlP2p ||
+      (!explicitServer &&
+        Boolean(urlJoin) &&
+        (pageProtocol === 'https:' || /^p2p:/i.test(urlJoin ?? '')))
+    ) {
+      this.coopBackend = 'p2p';
+    } else {
+      this.coopBackend = 'colyseus';
+    }
+
+    if (data?.preferredCoopTransport) {
+      this.preferredCoopTransport = data.preferredCoopTransport;
+      this.hasManualTransportChoice = true;
+    } else {
+      this.hasManualTransportChoice = false;
+      if (this.coopMode !== 'solo') {
+        this.preferredCoopTransport = this.coopBackend === 'p2p' ? 'p2p' : 'lan';
+      } else if (!explicitServer && (pageProtocol === 'https:' || urlP2p)) {
+        this.preferredCoopTransport = 'p2p';
+      } else {
+        this.preferredCoopTransport = 'lan';
+      }
+    }
+
+    this.serverHostPort =
+      this.coopMode === 'solo' && this.preferredCoopTransport === 'p2p' && !explicitServer
+        ? ''
+        : normalizeServerHostPortDisplay(explicitServer, fallbackHostPort);
+    const rawRoomId =
+      this.coopMode === 'solo'
+        ? undefined
+        : data?.coopMode
+          ? data.roomId
+          : (data?.roomId ?? (this.coopMode === 'join' ? urlJoin : undefined));
+    this.requestedRoomId =
+      this.coopBackend === 'p2p' && rawRoomId
+        ? (normalizeRoomCode(rawRoomId) ?? rawRoomId)
+        : rawRoomId;
     this.serverUrl = this.coopMode === 'solo' ? undefined : explicitServer;
     this.menuActiveInput = null;
     this.hubTicksElapsed = 0;
@@ -582,6 +640,11 @@ export class GameScene extends Phaser.Scene {
     this.hubLoungeAnimOverride = null;
     this.wasLocalReloading = false;
     this.intentionalLeave = false;
+    this.coopInputSendAccumMs = 100;
+    this.lastSentCoopMoveX = 0;
+    this.lastSentCoopMoveY = 0;
+    this.lastSentCoopButtons = 0;
+    initGlobalDebugState().p2pFastChannel = false;
   }
 
   public override update(_time: number, rawDeltaMs: number): void {
@@ -626,6 +689,16 @@ export class GameScene extends Phaser.Scene {
       if (this.keys.R.isDown) buttons |= INPUT_BUTTON.RELOAD_VENT;
       if (this.keys.X.isDown) buttons |= INPUT_BUTTON.DROP_WEAPON;
     }
+
+    const hasQueuedEdge =
+      !isInputBlocked &&
+      (this.dashQueued ||
+        this.skillQueued ||
+        this.wheelSwapQueued ||
+        this.interactQueued ||
+        this.reloadVentQueued ||
+        this.dropWeaponQueued ||
+        this.readyToggleQueued);
 
     if (this.dashQueued) {
       if (!isInputBlocked) buttons |= INPUT_BUTTON.DASH;
@@ -752,19 +825,41 @@ export class GameScene extends Phaser.Scene {
 
     if (!isSoloPaused) {
       const tickBefore = sim.tick;
-      this.inputSeq += 1;
-      this.transport.sendInput({
-        seq: this.inputSeq,
-        tick: sim.tick,
-        moveX,
-        moveY,
-        aimAngle,
-        buttons,
-        weaponSlotSelect: slotSelect,
-        pingWorldX,
-        pingWorldY,
-        emoteId,
-      });
+      this.coopInputSendAccumMs += Math.min(rawDeltaMs, 50);
+      if (
+        shouldSendCoopInputThisFrame({
+          coopMode: this.coopMode,
+          accumMs: this.coopInputSendAccumMs,
+          moveX,
+          moveY,
+          prevMoveX: this.lastSentCoopMoveX,
+          prevMoveY: this.lastSentCoopMoveY,
+          buttons,
+          prevButtons: this.lastSentCoopButtons,
+          slotSelect,
+          pingWorldX,
+          emoteId,
+          hasQueuedEdge,
+        })
+      ) {
+        this.coopInputSendAccumMs = 0;
+        this.lastSentCoopMoveX = moveX;
+        this.lastSentCoopMoveY = moveY;
+        this.lastSentCoopButtons = buttons;
+        this.inputSeq += 1;
+        this.transport.sendInput({
+          seq: this.inputSeq,
+          tick: sim.tick,
+          moveX,
+          moveY,
+          aimAngle,
+          buttons,
+          weaponSlotSelect: slotSelect,
+          pingWorldX,
+          pingWorldY,
+          emoteId,
+        });
+      }
 
       // 2. Hit-Stop check & Fixed 60Hz Simulation Step via Transport
       const { simDeltaMs } = this.fx.consumeHitStopDelta(Math.min(rawDeltaMs, 50));
@@ -772,6 +867,7 @@ export class GameScene extends Phaser.Scene {
         const effectiveDelta = sim.stressTestActive ? Math.min(simDeltaMs, 16.6667) : simDeltaMs;
         this.transport.step(effectiveDelta);
       }
+      this.transport.getLocalPlayerState().aimAngle = aimAngle;
 
       const ticksStepped = Math.max(0, sim.tick - tickBefore);
       if (sim.inHub) {
@@ -1146,7 +1242,7 @@ export class GameScene extends Phaser.Scene {
   public getResolvedWsUrl(): string { return getResolvedWsUrlImpl.call(this); }
   public fetchHostLanInfo(): Promise<void> { return fetchHostLanInfoImpl.call(this); }
   public updateHostInviteUrl(): void { updateHostInviteUrlImpl.call(this); }
-  public bindCoopRoomHandlers(room: ColyseusRoom): void { bindCoopRoomHandlersImpl.call(this, room); }
+  public bindCoopRoomHandlers(room: CoopRoomConnection): void { bindCoopRoomHandlersImpl.call(this, room); }
   public connectCoopRoom(): Promise<void> { return connectCoopRoomImpl.call(this); }
   public forceCoopReconnect(): Promise<boolean> { return forceCoopReconnectImpl.call(this); }
   public connectHelloRoom(): Promise<void> { return connectHelloRoomImpl.call(this); }

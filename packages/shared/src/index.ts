@@ -13,6 +13,8 @@ export * from './data/weapon-mutators.js';
 export * from './data/ashen-pacts.js';
 export * from './data/scaling.js';
 export * from './protocol/messages.js';
+export * from './protocol/coop-addressing.js';
+export * from './protocol/coop-room-authority.js';
 export * from './protocol/wifi-sim.js';
 export * from './protocol/transport.js';
 export * from './protocol/network-transport.js';

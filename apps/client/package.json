@@ -14,6 +14,7 @@
     "@ashen-pact/shared": "workspace:*",
     "@fontsource/be-vietnam-pro": "^5.1.0",
     "colyseus.js": "^0.15.28",
+    "peerjs": "^1.5.5",
     "phaser": "^3.87.0"
   },
   "devDependencies": {

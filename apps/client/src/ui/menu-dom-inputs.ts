@@ -4,7 +4,7 @@ import type Phaser from 'phaser';
 export type MenuInputFieldId = 'name' | 'ip';
 
 export const MENU_NAME_MAX_LEN = 18;
-export const MENU_IP_MAX_LEN = 28;
+export const MENU_IP_MAX_LEN = 96;
 
 export interface MenuInputBoxBounds {
   /** Center X in 960x540 design space */

@@ -22,6 +22,8 @@ export default defineConfig({
             '--no-sandbox',
             '--disable-dev-shm-usage',
             '--no-proxy-server',
+            '--allow-loopback-in-peer-connection',
+            '--disable-features=WebRtcHideLocalIpsWithMdns,LocalNetworkAccessChecksWebRTCLoopbackOnly',
             '--use-gl=angle',
             '--use-angle=swiftshader',
             '--enable-unsafe-swiftshader',

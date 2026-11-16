@@ -87,6 +87,9 @@ export interface GameDebugState {
   activeBuffs: string[];
   // Phase 4 Co-op LAN & Network telemetry
   coopMode: 'solo' | 'host' | 'join';
+  coopBackend: 'colyseus' | 'p2p';
+  p2pFastChannel: boolean;
+  preferredCoopTransport: 'p2p' | 'lan';
   coopRoomId: string | null;
   coopPlayerCount: number;
   inHub: boolean;
@@ -249,6 +252,9 @@ export function initGlobalDebugState(): GameDebugState {
     botAutoPlayActive: false,
     activeBuffs: [],
     coopMode: 'solo',
+    coopBackend: 'colyseus',
+    p2pFastChannel: false,
+    preferredCoopTransport: 'lan',
     coopRoomId: null,
     coopPlayerCount: 1,
     inHub: false,
@@ -329,12 +335,14 @@ export function initGlobalDebugState(): GameDebugState {
       origWarn(...args);
     };
 
-    window.addEventListener('error', (ev) => {
-      state.errors.push(ev.message || 'Unhandled window error');
-    });
-    window.addEventListener('unhandledrejection', (ev) => {
-      state.errors.push(String(ev.reason || 'Unhandled promise rejection'));
-    });
+    if (typeof window.addEventListener === 'function') {
+      window.addEventListener('error', (ev) => {
+        state.errors.push(ev.message || 'Unhandled window error');
+      });
+      window.addEventListener('unhandledrejection', (ev) => {
+        state.errors.push(String(ev.reason || 'Unhandled promise rejection'));
+      });
+    }
   }
 
   return state;

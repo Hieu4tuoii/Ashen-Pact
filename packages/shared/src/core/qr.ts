@@ -16,6 +16,8 @@ const QR_VERSIONS: readonly QrVersionSpec[] = [
   { version: 3, size: 29, dataCodewords: 55, ecCodewords: 15, alignmentCenter: 22 },
   // Version 4-L: 33x33 modules, up to 78 UTF-8 bytes
   { version: 4, size: 33, dataCodewords: 80, ecCodewords: 20, alignmentCenter: 26 },
+  // Version 5-L: 37x37 modules, up to 106 UTF-8 bytes
+  { version: 5, size: 37, dataCodewords: 108, ecCodewords: 26, alignmentCenter: 30 },
 ];
 
 const GF_EXP = new Uint8Array(512);
@@ -91,11 +93,16 @@ function encodeUtf8Bytes(text: string): Uint8Array {
 
 /**
  * Generates an ISO/IEC 18004 QR Code boolean matrix (`true` = dark module, `false` = light module)
- * for any LAN invite URL (up to 78 bytes).
+ * for any invite URL (up to 106 UTF-8 bytes via Version 3-L / 4-L / 5-L).
  */
 export function generateQrMatrix(text: string): boolean[][] {
   const payloadBytes = encodeUtf8Bytes(text);
-  const spec = payloadBytes.length <= 53 ? QR_VERSIONS[0]! : QR_VERSIONS[1]!;
+  const spec =
+    payloadBytes.length <= 53
+      ? QR_VERSIONS[0]!
+      : payloadBytes.length <= 78
+        ? QR_VERSIONS[1]!
+        : QR_VERSIONS[2]!;
   const maxBytes = spec.dataCodewords - 2;
   const trimmed = payloadBytes.length > maxBytes ? payloadBytes.slice(0, maxBytes) : payloadBytes;
 

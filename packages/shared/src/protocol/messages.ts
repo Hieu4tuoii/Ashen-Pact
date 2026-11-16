@@ -64,6 +64,8 @@ export interface PlayerInputPacket {
   pingWorldY?: number;
   /** Optional quick emote (1..4) */
   emoteId?: QuickEmoteId | null;
+  /** Optional rising-edge button bitmask preserved when reliable edge packets arrive after newer fast UDP frames */
+  edgeButtons?: number;
 }
 
 export interface HelloRoomMessage {

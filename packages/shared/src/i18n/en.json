@@ -116,7 +116,18 @@
       "leaveCoopBtn": "🚪 Leave Room",
       "returnSanctuaryConfirmTitle": "RETURN TO SANCTUARY?",
       "returnSanctuaryConfirmBody": "Your current dungeon run will end and return to the Ashen Sanctuary. Press [Enter] to confirm or [Esc] to cancel.",
-      "pauseReturnSanctuary": "🏛 Return to Sanctuary [M]"
+      "pauseReturnSanctuary": "🏛 Return to Sanctuary [M]",
+      "onlineModePill": "🌐 Online",
+      "lanModePill": "📡 LAN",
+      "roomCodeLabel": "Online Room Code (6 chars)",
+      "roomCodePlaceholder": "Enter code (e.g. 7K9M2P) or paste link",
+      "p2pReadyStatus": "● P2P Online",
+      "hostOnlineBtn": "🌐 Host Online",
+      "joinOnlineBtn": "🔗 Join Code",
+      "onlineInviteHeader": "ONLINE INVITE [I]",
+      "roomCodeDisplayLabel": "Room Code",
+      "enterRoomCodePrompt": "Please enter a 6-character Room Code (e.g. 7K9M2P) or paste an invite link above!",
+      "roomNotFoundError": "Online room not found or closed by Host."
     },
     "settings": {
       "title": "SYSTEM SETTINGS",

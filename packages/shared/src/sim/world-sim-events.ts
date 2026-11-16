@@ -622,4 +622,5 @@ export interface CoPlayerInputEntry {
   prevButtons: number;
   latchedButtons: number;
   latchedWeaponSlot: number | null;
+  inferredEdgeSpans?: Array<{ fromSeq: number; toSeq: number; mask: number }>;
 }
