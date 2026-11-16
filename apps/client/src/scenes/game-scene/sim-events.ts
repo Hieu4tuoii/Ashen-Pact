@@ -61,6 +61,7 @@ export function resetCrystalPillarImpactTracker(): void {
   crystalPillarImpactIcdMap.clear();
 }
 
+export const shotFxTriggeredOwnersScratch = new Set<number>();
 const scratchTickImpactTargetIds: number[] = [];
 import { handleP4ASimEvent } from '../../fx/combat-fx-p4a.js';
 import { handleP4BSimEvent } from '../../fx/combat-fx-p4b.js';
@@ -74,10 +75,10 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
   if (events.length === 0) return;
 
   scratchTickImpactTargetIds.length = 0;
+  shotFxTriggeredOwnersScratch.clear();
   const sim = this.transport.getSim();
   const isStress = sim.stressTestActive;
   const allowStressSfx = !isStress || sim.tick % 8 === 0;
-  let playerShotFxTriggered = false;
   let enemyShotSfxTriggered = false;
   let enemyHitCountThisStep = 0;
   let statusFxCountThisStep = 0;
@@ -134,8 +135,9 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
               { tint: 0xbae6fd, ttl: 0.2 },
             );
           }
-          if (!playerShotFxTriggered) {
-            playerShotFxTriggered = true;
+          const ownerId = spawnedProj?.ownerId ?? sim.player.id;
+          if (!shotFxTriggeredOwnersScratch.has(ownerId)) {
+            shotFxTriggeredOwnersScratch.add(ownerId);
             if (ev.weaponId === 'scrap_shotgun' && !isStress) {
               spawnScrapShotgunBlastVfx(this, this.fx, ev.x, ev.y, ev.angle, isFinale);
             }
@@ -153,7 +155,7 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
                 ev.weaponId,
               );
             }
-            if (!isStress && isShotgun) {
+            if (!isStress && isShotgun && !isTeammate) {
               this.lighting.spawnTransientLight(ev.x, ev.y, 48, PALETTE.SOLAR_GOLD, 0.36, 0.06);
             }
             if (!isTeammate) {
@@ -251,6 +253,7 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
             targetKind: ev.targetKind,
             hitArmor: ev.hitArmor,
             element: ev.element,
+            targetId: ev.targetId,
           });
         }
         const hitAngle = Math.atan2(ev.knockbackY, ev.knockbackX);
@@ -263,6 +266,7 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
             (other) =>
               other.kind === 'projectile_impact' &&
               !other.hitWall &&
+              other.weaponId !== 'scrap_shotgun' &&
               Math.hypot(other.x - ev.x, other.y - ev.y) < 28,
           );
         if ((!isStress || enemyHitCountThisStep < 2) && !hasSameTickProjImpact) {
@@ -409,11 +413,10 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
           }
         }
 
-        if (struckTargetId !== undefined) {
+        const isScrapPellet = ev.weaponId === 'scrap_shotgun';
+        if (struckTargetId !== undefined && !isScrapPellet) {
           scratchTickImpactTargetIds.push(struckTargetId);
         }
-
-        const isScrapPellet = ev.weaponId === 'scrap_shotgun';
         if (isScrapPellet && !ev.hitWall) {
           const isTeammate = ev.ownerId !== undefined && ev.ownerId !== sim.player.id;
           recordScrapShotgunPelletHit(
@@ -793,7 +796,7 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
             activeZoneElement,
             caster.id !== sim.player.id,
           );
-        } else {
+        } else if (caster.id === sim.player.id) {
           this.lighting.spawnTransientLight(ev.x, ev.y, 115, PALETTE.CRIMSON_BRIGHT, 0.88, 0.26);
         }
         const skillSfxMap = {
@@ -808,6 +811,7 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
         break;
       }
       case 'shield_shockwave': {
+        const isTeammate = ev.playerId !== undefined && ev.playerId !== sim.player.id;
         if (!isStress) {
           spawnVanguardShieldShockwaveVfx(
             this,
@@ -816,10 +820,13 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
             ev.y,
             ev.angle,
             ev.storedBullets,
+            isTeammate,
           );
         } else {
           this.fx.spawnExplosionBurst(ev.x, ev.y, 90, PALETTE.CRIMSON_BRIGHT);
-          this.lighting.spawnTransientLight(ev.x, ev.y, 150, PALETTE.CRIMSON_BRIGHT, 0.95, 0.32);
+          if (!isTeammate) {
+            this.lighting.spawnTransientLight(ev.x, ev.y, 150, PALETTE.CRIMSON_BRIGHT, 0.95, 0.32);
+          }
         }
         zzfx.play('shield_shockwave', ev.x, this.camFocusX, ev.y, this.camFocusY);
         break;

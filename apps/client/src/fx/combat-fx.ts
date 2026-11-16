@@ -23,6 +23,7 @@ import {
   BIOME_AMBIENT_POOL_SLOTS,
   computeCameraShakeOffset,
   computePopupScalePop,
+  DAMAGE_NUMERIC_SLOT_END,
   getActiveAfterimageCount,
   getActiveAmbientCount,
   getActiveDamagePopupCount,
@@ -43,6 +44,11 @@ import {
   resolveActivePopupOverlaps,
   resolveSpatialPopupCellSlot,
   update,
+} from './combat-fx-pools.js';
+
+export {
+  DAMAGE_NUMERIC_SLOT_END,
+  resolveTacticalAlertSlotOverlaps,
 } from './combat-fx-pools.js';
 import {
   activateParticle,
@@ -754,9 +760,48 @@ export class CombatFxManager {
     targetKind: 'player' | 'enemy';
     hitArmor: boolean;
     element?: ElementType;
+    targetId?: number;
+    nowMs?: number;
   }): void {
     if (!graphicsSettings.getState().showDamageNumbers) return;
-    const cellRes = resolveSpatialPopupCellSlot(this.damagePool, params.x, params.y, 120, 3);
+
+    const nowMs =
+      params.nowMs ??
+      (typeof performance !== 'undefined' ? performance.now() : Date.now());
+
+    const numericLimit = Math.min(this.damagePool.length, DAMAGE_NUMERIC_SLOT_END);
+
+    // Merge hits within 90ms on same targetId
+    if (params.targetId !== undefined) {
+      for (let i = 0; i < numericLimit; i++) {
+        const s = this.damagePool[i]!;
+        if (
+          s.active &&
+          s.targetId === params.targetId &&
+          s.lastMergeMs !== undefined &&
+          nowMs - s.lastMergeMs <= 90
+        ) {
+          const total = (s.accumulatedAmount ?? 0) + params.amount;
+          s.accumulatedAmount = total;
+          s.lastMergeMs = nowMs;
+          s.age = 0;
+          s.ttl = Math.max(s.ttl, params.isCrit ? 0.78 : 0.62);
+          s.baseScale = Math.min(1.32, s.baseScale + 0.08);
+
+          let label = `${total}`;
+          if (params.targetKind === 'player') {
+            label = `-${total}`;
+          } else if (params.isCrit) {
+            label = `${total}!`;
+          }
+          s.text.setText(label);
+          s.text.setScale(computePopupScalePop(0, s.ttl, s.baseScale));
+          return;
+        }
+      }
+    }
+
+    const cellRes = resolveSpatialPopupCellSlot(this.damagePool, params.x, params.y, 120, 3, numericLimit);
     if (cellRes.activeInCell >= 3 && cellRes.evictIndex !== null) {
       const oldest = this.damagePool[cellRes.evictIndex];
       if (!oldest || oldest.age < 0.48) {
@@ -764,9 +809,9 @@ export class CombatFxManager {
       }
     }
     const slot =
-      cellRes.evictIndex !== null
+      cellRes.evictIndex !== null && cellRes.evictIndex < numericLimit
         ? (this.damagePool[cellRes.evictIndex] ?? null)
-        : this.acquireDamageSlot();
+        : this.acquireDamageSlot(params.x, params.y);
     if (!slot) return;
 
     this.totalDamagePopupsSpawned += 1;
@@ -784,6 +829,9 @@ export class CombatFxManager {
     slot.vx = fanLane * 14 + (getClientFreezeRandom()() - 0.5) * 8;
     slot.vy = (params.isCrit ? -72 : -54) - (fanIdx % 2) * 8;
     slot.baseScale = params.isCrit ? 1.32 : 1.0;
+    slot.targetId = params.targetId;
+    slot.lastMergeMs = nowMs;
+    slot.accumulatedAmount = params.amount;
 
     let color: string = PALETTE.BONE_WHITE;
     let label = `${params.amount}`;
@@ -815,6 +863,27 @@ export class CombatFxManager {
     slot.text.setVisible(true);
     slot.text.setActive(true);
     resolveActivePopupOverlaps(this.damagePool);
+  }
+
+  public spawnDamageNumber(
+    x: number,
+    y: number,
+    amount: number,
+    isCrit = false,
+    element: ElementType | 'none' = 'none',
+    options?: { targetId?: number; nowMs?: number },
+  ): void {
+    this.spawnDamagePopup({
+      x,
+      y,
+      amount,
+      isCrit,
+      targetKind: 'enemy',
+      hitArmor: false,
+      element: element === 'none' ? undefined : element,
+      targetId: options?.targetId,
+      nowMs: options?.nowMs,
+    });
   }
 
   public spawnMuzzleFlashAndCasing(

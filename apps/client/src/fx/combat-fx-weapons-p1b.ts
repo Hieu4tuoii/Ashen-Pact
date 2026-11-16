@@ -137,15 +137,18 @@ export function handleBatch2WeaponSimEvent(
           element: 'burn',
           count: 4,
         });
-        scene.lighting?.spawnTransientLight(
-          (ev.x1 + ev.x2) * 0.5,
-          (ev.y1 + ev.y2) * 0.5,
-          150,
-          PALETTE.FLAME_ORANGE,
-          0.95,
-          0.18,
-        );
-        scene.lighting?.spawnTransientLight(ev.x2, ev.y2, 130, PALETTE.SOLAR_GOLD, 0.9, 0.18);
+        const isTeammate = ev.playerId !== undefined && ev.playerId !== sim.player.id;
+        if (!isTeammate) {
+          scene.lighting?.spawnTransientLight(
+            (ev.x1 + ev.x2) * 0.5,
+            (ev.y1 + ev.y2) * 0.5,
+            150,
+            PALETTE.FLAME_ORANGE,
+            0.95,
+            0.18,
+          );
+          scene.lighting?.spawnTransientLight(ev.x2, ev.y2, 130, PALETTE.SOLAR_GOLD, 0.9, 0.18);
+        }
       }
       if (allowStressSfx) {
         zzfx.play('focus_laser_hum', ev.x2, scene.camFocusX, ev.y2, scene.camFocusY);
@@ -174,8 +177,11 @@ export function handleBatch2WeaponSimEvent(
         const midX = (ev.x1 + ev.x2) * 0.5;
         const midY = (ev.y1 + ev.y2) * 0.5;
         fx?.spawnHitSparks(midX, midY, beamAngle, { isCrit: true, element: 'burn', count: 10 });
-        scene.lighting?.spawnTransientLight(ev.x1, ev.y1, 180, PALETTE.SOLAR_GOLD, 1.0, 0.45);
-        scene.lighting?.spawnTransientLight(midX, midY, 210, PALETTE.FLAME_ORANGE, 1.0, 0.45);
+        const isTeammate = ev.playerId !== undefined && ev.playerId !== sim.player.id;
+        if (!isTeammate) {
+          scene.lighting?.spawnTransientLight(ev.x1, ev.y1, 180, PALETTE.SOLAR_GOLD, 1.0, 0.45);
+          scene.lighting?.spawnTransientLight(midX, midY, 210, PALETTE.FLAME_ORANGE, 1.0, 0.45);
+        }
       }
       if (allowStressSfx) {
         zzfx.play('focus_laser_railgun', ev.x1, scene.camFocusX, ev.y1, scene.camFocusY);
@@ -304,7 +310,10 @@ export function handleBatch2WeaponSimEvent(
         fx?.spawnShaderLance?.(ev.x, ev.y, fissureLen, ev.angle, { widthPx: ev.width ?? 36 });
         fx?.spawnShaderNova?.(ev.x, ev.y, 76, 'fx_sh_geyser_plume');
         fx?.spawnFloorDecal('scorch', ev.x, ev.y, 1.2);
-        scene.lighting?.spawnTransientLight(ev.x, ev.y, 175, PALETTE.FLAME_ORANGE, 1.0, 0.45);
+        const isTeammate = ev.playerId !== undefined && ev.playerId !== sim.player.id;
+        if (!isTeammate) {
+          scene.lighting?.spawnTransientLight(ev.x, ev.y, 175, PALETTE.FLAME_ORANGE, 1.0, 0.45);
+        }
       }
       if (allowStressSfx) {
         zzfx.play('berserker_guillotine', ev.x, scene.camFocusX, ev.y, scene.camFocusY);
@@ -338,7 +347,9 @@ export function handleBatch2WeaponSimEvent(
           });
         }
         fx?.spawnHitSparks(ev.x, ev.y, 0, { isCrit: true, element: 'burn', count: 6 });
-        scene.lighting?.spawnTransientLight(ev.x, ev.y, 145, PALETTE.SOLAR_GOLD, 0.92, 0.3);
+        if (!isTeammate) {
+          scene.lighting?.spawnTransientLight(ev.x, ev.y, 145, PALETTE.SOLAR_GOLD, 0.92, 0.3);
+        }
       }
       if (allowStressSfx) {
         zzfx.play('solar_converge', ev.x, scene.camFocusX, ev.y, scene.camFocusY);
@@ -378,10 +389,13 @@ export function handleBatch2WeaponSimEvent(
 
     case 'magma_geyser_eruption': {
       if (!isStress && fx) {
-        spawnMagmaGeyserClusterFx(fx, ev, ev.playerId !== sim.player.id, scene);
+        const isTeammate = ev.playerId !== undefined && ev.playerId !== sim.player.id;
+        spawnMagmaGeyserClusterFx(fx, ev, isTeammate, scene);
         const geysers = ev.geysers && ev.geysers.length > 0 ? ev.geysers : [{ x: sim.player.x + 80, y: sim.player.y }];
         const first = geysers[0]!;
-        scene.lighting?.spawnTransientLight(first.x, first.y, 175, PALETTE.FLAME_ORANGE, 0.98, 0.45);
+        if (!isTeammate) {
+          scene.lighting?.spawnTransientLight(first.x, first.y, 175, PALETTE.FLAME_ORANGE, 0.98, 0.45);
+        }
       }
       if (allowStressSfx) {
         zzfx.play('magma_geyser', sim.player.x, scene.camFocusX, sim.player.y, scene.camFocusY);
@@ -391,7 +405,7 @@ export function handleBatch2WeaponSimEvent(
 
     case 'thunder_hammer_pillar': {
       if (!isStress) {
-        const isTeammate = ev.playerId !== sim.player.id;
+        const isTeammate = ev.playerId !== undefined && ev.playerId !== sim.player.id;
         const strikes = ev.strikes?.length
           ? ev.strikes
           : [{ x: ev.x, y: ev.y, radius: ev.radius || 110, damage: ev.damage || 54 }];
@@ -410,7 +424,7 @@ export function handleBatch2WeaponSimEvent(
         }
         if (fx) {
           spawnThunderHammerPillarFx(fx, ev, isTeammate);
-        } else {
+        } else if (!isTeammate) {
           scene.lighting?.spawnTransientLight(ev.x, ev.y, 195, PALETTE.CYAN_FROST, 1.0, 0.48);
         }
       }

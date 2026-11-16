@@ -25,10 +25,17 @@ import { getClientFreezeRandom } from '../core/visual-query.js';
 import { graphicsSettings } from '../ui/graphics-settings.js';
 import type { CombatFxManager } from './combat-fx.js';
 import {
+  DAMAGE_NUMERIC_SLOT_END,
   isCutoutKitFrame,
   type PooledAmbientParticle,
+  type PooledDamageText,
   type PooledParticle,
-  resolveActivePopupOverlaps,
+  resolveTacticalAlertSlotOverlaps,
+} from './combat-fx-pools.js';
+
+export {
+  DAMAGE_NUMERIC_SLOT_END,
+  resolveTacticalAlertSlotOverlaps,
 } from './combat-fx-pools.js';
 
 export type FxEaseCurve = 'linear' | 'easeOutCubic' | 'easeOutBack';
@@ -1974,8 +1981,11 @@ export function spawnFloatingAlertImpl(
   let targetX = x;
   let targetY = y - 36;
 
+  const startIdx = this.damagePool.length >= 48 ? DAMAGE_NUMERIC_SLOT_END : 0;
+  const endIdx = this.damagePool.length;
+
   // 1. Deduplicate identical floating alerts spawned recently (< 0.25s) within 72px
-  for (let i = 0; i < this.damagePool.length; i++) {
+  for (let i = startIdx; i < endIdx; i++) {
     const other = this.damagePool[i]!;
     if (!other.active || other.age >= other.ttl) continue;
     if (other.text.text === label && other.age < 0.25) {
@@ -1987,10 +1997,10 @@ export function spawnFloatingAlertImpl(
     }
   }
 
-  // 2. Enforce vertical separation (>= 26px) & horizontal clearance against active alerts & damage popups
+  // 2. Enforce vertical separation (>= 26px) & horizontal clearance against active alerts
   for (let pass = 0; pass < 4; pass++) {
     let shifted = false;
-    for (let i = 0; i < this.damagePool.length; i++) {
+    for (let i = startIdx; i < endIdx; i++) {
       const other = this.damagePool[i]!;
       if (!other.active || other.age >= other.ttl) continue;
       const dx = targetX - other.x;
@@ -2006,8 +2016,26 @@ export function spawnFloatingAlertImpl(
     if (!shifted) break;
   }
 
-  const slot = this.acquireDamageSlot();
+  // 3. Acquire slot exclusively from 42..47 (or startIdx..endIdx)
+  let slot: PooledDamageText | null = null;
+  let oldestSlot: PooledDamageText | null = null;
+  let maxAge = -1;
+  for (let i = startIdx; i < endIdx; i++) {
+    const s = this.damagePool[i]!;
+    if (!s.active) {
+      slot = s;
+      break;
+    }
+    if (s.age > maxAge) {
+      maxAge = s.age;
+      oldestSlot = s;
+    }
+  }
+  if (!slot) {
+    slot = oldestSlot;
+  }
   if (!slot) return;
+
   this.totalDamagePopupsSpawned += 1;
   slot.active = true;
   slot.age = 0;
@@ -2019,6 +2047,9 @@ export function spawnFloatingAlertImpl(
   slot.vx = 0;
   slot.vy = -56;
   slot.baseScale = 1.18;
+  slot.targetId = undefined;
+  slot.lastMergeMs = undefined;
+  slot.accumulatedAmount = 0;
 
   slot.text.setText(label);
   slot.text.setColor(colorHex);
@@ -2027,5 +2058,5 @@ export function spawnFloatingAlertImpl(
   slot.text.setAlpha(1);
   slot.text.setVisible(true);
   slot.text.setActive(true);
-  resolveActivePopupOverlaps(this.damagePool);
+  resolveTacticalAlertSlotOverlaps(this.damagePool, 4.0);
 }

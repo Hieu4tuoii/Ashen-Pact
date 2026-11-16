@@ -28,6 +28,7 @@ import {
   refreshResolution,
   resolveAllyFxProfile,
   resolveParticleBlendAndDepth,
+  resolveTacticalAlertSlotOverlaps,
   resolveWeaponMuzzleProfile,
   routeCutoutBurstByRadius,
   routeCutoutDirectionalByReach,
@@ -39,6 +40,7 @@ import {
   createTestCombatFx,
 } from './helpers/test-combat-fx.js';
 import { renderTelegraphsAndShieldImpl } from '../src/scenes/game-scene/telegraphs-and-overlays.js';
+import { shotFxTriggeredOwnersScratch } from '../src/scenes/game-scene/sim-events.js';
 
 describe('1:1 Top-Down Chiaroscuro Flipbook Playback & Core Combat Spawners', () => {
   it('assigns BlendMode.NORMAL and 42 <= depth <= 43.5 to all 24 fx_sh_* Chiaroscuro shader flipbooks', () => {
@@ -747,6 +749,34 @@ describe('1:1 Top-Down Chiaroscuro Flipbook Playback & Core Combat Spawners', ()
     expect(borderCalls.length).toBe(8);
     expect(coreCalls.length).toBe(8);
     expect(mockTelegraphGraphics.depth).toBe(46.0);
+  });
+
+  it('separates overlapping tacticalAlert slots (42..47) with 0 AABB overlaps using width*abs(scaleX) and merges numeric hits within 90ms', () => {
+    const { fx } = createTestCombatFx();
+    fx.spawnFloatingAlert(300, 220, 'SUPPLY DROP!', '#F59E0B');
+    fx.spawnFloatingAlert(302, 222, 'ARMOR BREAK!', '#F4F1EA');
+    resolveTacticalAlertSlotOverlaps(fx.damagePool, 4.0);
+
+    const alerts = fx.damagePool.slice(42, 48).filter((d) => d.active);
+    expect(alerts).toHaveLength(2);
+    const h0 = 0.5 * alerts[0]!.text.height * Math.abs(alerts[0]!.text.scaleY);
+    const h1 = 0.5 * alerts[1]!.text.height * Math.abs(alerts[1]!.text.scaleY);
+    expect(Math.abs(alerts[0]!.y - alerts[1]!.y)).toBeGreaterThanOrEqual(h0 + h1 + 3.9);
+
+    fx.spawnDamageNumber(200, 200, 15, false, 'none', { targetId: 5, nowMs: 1000 });
+    fx.spawnDamageNumber(200, 200, 12, false, 'none', { targetId: 5, nowMs: 1050 });
+    const nums = fx.damagePool.slice(0, 42).filter((d) => d.active);
+    expect(nums).toHaveLength(1);
+    expect(nums[0]?.text.text).toBe('27');
+  });
+
+  it('attenuates ally AoEs inside P1 18px Safe-Halo by 0.15x and tracks multiple firing players per tick via Set<number>', () => {
+    const profile = resolveAllyFxProfile(2, 1, 1.0);
+    expect(profile.aoeAlpha).toBeCloseTo(0.35, 3);
+    expect(profile.allowLightAndShake).toBe(false);
+    expect(applyP1SafeHaloAlpha(profile.aoeAlpha, true, 20, 60)).toBeCloseTo(0.35 * 0.15, 4);
+    expect(applyP1SafeHaloAlpha(profile.aoeAlpha, true, 80, 60)).toBeCloseTo(0.35, 4);
+    expect(shotFxTriggeredOwnersScratch).toBeInstanceOf(Set);
   });
 });
 

@@ -683,6 +683,11 @@ export function drawWorldWeaponSalvageRing(
     return;
   }
 
+  g.lineStyle(2.0, NUM_SOLAR_GOLD, 0.85);
+  g.beginPath();
+  g.arc(ix, iy, 18, -Math.PI / 2, -Math.PI / 2 + state.progress * Math.PI * 2, false);
+  g.strokePath();
+
   const barW = 42;
   const barH = 6;
   const barX = ix - barW * 0.5;

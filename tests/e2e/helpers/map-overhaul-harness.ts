@@ -1,7 +1,6 @@
 import { vi } from 'vitest';
 import * as Shared from '@ashen-pact/shared';
 import {
-  ALL_ROOM_ARCHETYPES,
   applyRoomInteriorShape,
   ArenaMap,
   AUTOTILE_EAST,
@@ -36,7 +35,7 @@ import {
   areActiveDoorsConnectedBfs,
 } from '@ashen-pact/shared';
 import type Phaser from 'phaser';
-import { ENV_PALETTE, PALETTE } from '../../../apps/client/src/art/palette.js';
+import { ENV_PALETTE } from '../../../apps/client/src/art/palette.js';
 import { TextureBaker } from '../../../apps/client/src/art/texture-baker.js';
 import * as SurfaceBakerMod from '../../../apps/client/src/art/texture-baker-surfaces.js';
 import {
@@ -2629,7 +2628,7 @@ export function createMockGameSceneHarness(sim: WorldSim) {
     add: vi.fn(),
   };
 
-  const scene: Record<string, any> = {
+  const scene: Record<string, unknown> = {
     transport: {
       getSim: () => sim,
     },
@@ -2741,7 +2740,7 @@ export function createMockGameSceneHarness(sim: WorldSim) {
     hudPadY: 0,
     lastMinimapHash: '',
     updateMinimapHud: function () {
-      updateMinimapHudImpl.call(this as unknown as Phaser.Scene & any);
+      updateMinimapHudImpl.call(this as unknown as Phaser.Scene);
     },
     drawSourceKeyToCtx: drawSourceKeyToCtxImpl,
     renderTileCellToComposite: renderTileCellToCompositeImpl,
@@ -2887,7 +2886,7 @@ export function createMockGameSceneHarness(sim: WorldSim) {
   };
 
   return {
-    scene: scene as unknown as Phaser.Scene & Record<string, any>,
+    scene: scene as unknown as Phaser.Scene & Record<string, unknown>,
     minimapGraphics,
     minimapTitleText,
     hudTopRightContainer,

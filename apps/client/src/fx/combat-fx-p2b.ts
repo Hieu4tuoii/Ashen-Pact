@@ -559,10 +559,13 @@ export function handleP2BSimEvent(
 
   if (ev.kind === 'pact_signed') {
     const pact = ASHEN_PACTS[ev.pactId];
+    const isTeammate = ev.playerId !== undefined && ev.playerId !== _sim.player.id;
     if (!isStress) {
       scene.fx?.spawnExplosionBurst(ev.x, ev.y, 44, PALETTE.CRIMSON_BRIGHT);
-      scene.fx?.addTrauma(0.24);
-      scene.lighting?.spawnTransientLight(ev.x, ev.y, 130, PALETTE.CRIMSON_BRIGHT, 0.95, 0.35);
+      if (!isTeammate) {
+        scene.fx?.addTrauma(0.24);
+        scene.lighting?.spawnTransientLight(ev.x, ev.y, 130, PALETTE.CRIMSON_BRIGHT, 0.95, 0.35);
+      }
       const pactName = (isEn ? pact?.nameEn : pact?.nameVi) ?? ev.nameVi;
       scene.fx?.spawnFloatingAlert(
         ev.x,
@@ -576,11 +579,14 @@ export function handleP2BSimEvent(
 
   if (ev.kind === 'relic_awakened') {
     const relic = ASHEN_RELICS[ev.relicId];
+    const isTeammate = ev.playerId !== undefined && ev.playerId !== _sim.player.id;
     if (!isStress) {
       triggerRelicAwakenedBanner(scene, ev.relicId, isEn);
       scene.fx?.spawnExplosionBurst(ev.x, ev.y, 56, PALETTE.SOLAR_GOLD);
-      scene.fx?.addTrauma(0.32);
-      scene.lighting?.spawnTransientLight(ev.x, ev.y, 160, PALETTE.SOLAR_GOLD, 1.0, 0.55);
+      if (!isTeammate) {
+        scene.fx?.addTrauma(0.32);
+        scene.lighting?.spawnTransientLight(ev.x, ev.y, 160, PALETTE.SOLAR_GOLD, 1.0, 0.55);
+      }
       const relicName = (isEn ? relic?.nameEn : relic?.nameVi) ?? ev.nameVi;
       scene.fx?.spawnFloatingAlert(
         ev.x,

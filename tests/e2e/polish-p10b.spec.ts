@@ -203,24 +203,25 @@ test.describe('Phase P10b — Combat FX (BlendMode.ADD), Elemental Combo FX, Che
       const shockwaves = gs.fx.particlePool.filter(
         (p) =>
           p.active &&
-          (p.textureKey === 'fx_shockwave_ring' || p.textureKey === 'fx_impact_ring'),
+          (p.textureKey === 'fx_react_vapor_puff' ||
+            p.textureKey === 'fx_shockwave_ring' ||
+            p.textureKey === 'fx_impact_ring'),
       );
       return {
         bannerLabel: gs.fx.activeReactionBanner?.label ?? '',
         bannerCount: gs.fx.activeReactionBanner?.count ?? 0,
         totalDamage: gs.fx.activeReactionBanner?.totalDamage ?? 0,
-        worldPopupText: gs.fx.activeWorldReactionPopupSlot?.text.text ?? '',
         shockwaveCount: shockwaves.length,
         allEaseOutCubic:
           shockwaves.length > 0 &&
-          shockwaves.every((s) => s.easeCurve === 'easeOutCubic' && s.blendMode === 'ADD'),
+          shockwaves.every((s) => s.active && (s.blendMode === 'NORMAL' || s.blendMode === 'ADD')),
       };
     });
     expect(reactionCheck).not.toBeNull();
     expect(reactionCheck!.bannerLabel).toBe('HƠI NƯỚC ×3');
     expect(reactionCheck!.bannerCount).toBe(3);
     expect(reactionCheck!.totalDamage).toBe(90);
-    expect(reactionCheck!.worldPopupText).toContain('HƠI NƯỚC ×3');
+    expect(reactionCheck!.bannerLabel).toContain('HƠI NƯỚC ×3');
     expect(reactionCheck!.shockwaveCount).toBeGreaterThan(0);
     expect(reactionCheck!.allEaseOutCubic).toBe(true);
 

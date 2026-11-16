@@ -77,6 +77,109 @@ export function createMockSprite() {
   };
 }
 
+export function createMockText(initialText = '') {
+  let content = initialText;
+  let color = '#ffffff';
+  let posX = 0;
+  let posY = 0;
+  let scaleX = 1;
+  let scaleY = 1;
+  let alpha = 1;
+  let visible = false;
+  let active = false;
+  return {
+    get text() {
+      return content;
+    },
+    set text(v: string) {
+      content = v;
+    },
+    get width() {
+      return Math.max(24, (content?.length ?? 0) * 8);
+    },
+    get height() {
+      return 16;
+    },
+    get x() {
+      return posX;
+    },
+    set x(v: number) {
+      posX = v;
+    },
+    get y() {
+      return posY;
+    },
+    set y(v: number) {
+      posY = v;
+    },
+    get scaleX() {
+      return scaleX;
+    },
+    set scaleX(v: number) {
+      scaleX = v;
+    },
+    get scaleY() {
+      return scaleY;
+    },
+    set scaleY(v: number) {
+      scaleY = v;
+    },
+    get alpha() {
+      return alpha;
+    },
+    set alpha(v: number) {
+      alpha = v;
+    },
+    get visible() {
+      return visible;
+    },
+    set visible(v: boolean) {
+      visible = v;
+    },
+    get active() {
+      return active;
+    },
+    set active(v: boolean) {
+      active = v;
+    },
+    style: { color, resolution: 1 },
+    setResolution: vi.fn((r: number) => {
+      // no-op
+    }),
+    setText: vi.fn((t: string) => {
+      content = String(t);
+    }),
+    setColor: vi.fn((c: string) => {
+      color = c;
+    }),
+    setPosition: vi.fn((x: number, y: number) => {
+      posX = x;
+      posY = y;
+    }),
+    setScale: vi.fn((sx: number, sy?: number) => {
+      scaleX = sx;
+      scaleY = sy ?? sx;
+    }),
+    setAlpha: vi.fn((a: number) => {
+      alpha = a;
+    }),
+    setVisible: vi.fn((v: boolean) => {
+      visible = v;
+    }),
+    setActive: vi.fn((v: boolean) => {
+      active = v;
+    }),
+    setDepth: vi.fn(),
+    setOrigin: vi.fn(),
+    getBounds: vi.fn(() => ({
+      x: posX - Math.max(24, (content?.length ?? 0) * 8) * 0.5,
+      y: posY - 8,
+      width: Math.max(24, (content?.length ?? 0) * 8),
+      height: 16,
+    })),
+  };
+}
+
 export function createHeadlessFxManager(particleSlots = 64): CombatFxManager {
   const mgr = Object.create(CombatFxManager.prototype) as CombatFxManager;
   Object.assign(mgr, {
@@ -210,6 +313,21 @@ export function createHeadlessFxManager(particleSlots = 64): CombatFxManager {
       preserveFlipbookAlpha: false,
     });
   }
+
+  for (let i = 0; i < 48; i++) {
+    mgr.damagePool.push({
+      text: createMockText() as never,
+      active: false,
+      x: 0,
+      y: 0,
+      vx: 0,
+      vy: 0,
+      age: 0,
+      ttl: 0.65,
+      baseScale: 1,
+    });
+  }
+
   return mgr;
 }
 

@@ -63,7 +63,6 @@ vi.mock('phaser', () => {
 
 import {
   ALL_ROOM_ARCHETYPES,
-  applyRoomInteriorShape,
   areActiveDoorsConnectedBfs,
   ArenaMap,
   AUTOTILE_EAST,
@@ -91,9 +90,7 @@ import {
   isWalkableTileForBfs,
   MAX_TACTICAL_PROPS_PER_ROOM,
   OPPOSITE_DIR,
-  PHASE0B_ROOM_ARCHETYPES,
   ROOM_SIZE_PRESET_DIMS,
-  type RoomArchetypeId,
   SIM_STEP_SEC,
   spawnCombatRoomArchetypeProps,
   type SurfaceKind,
@@ -119,10 +116,6 @@ import {
   triggerMeleeKickProps,
   WORLD_VIEW_WIDTH,
 } from '@ashen-pact/shared';
-import {
-  syncAshenExecutionerInRoom,
-  updateAshenExecutionerAI,
-} from '../../packages/shared/src/sim/sim-ashen-pacts-combat.js';
 import { triggerDashFlameShackle } from '../../packages/shared/src/sim/sim-blessings-dash-reload.js';
 import {
   executeBossSporeKingAttackImpl,
@@ -152,7 +145,6 @@ import {
   traceOrganicPoolPath,
 } from '../../apps/client/src/art/texture-baker-surfaces.js';
 import {
-  bakeBiomeTile,
   bakeCrackedWallTile,
   bakePillarTile,
   bakeWallAoOverlay,
@@ -197,7 +189,6 @@ import {
   bakePillarTileContract,
   bakeWallTileContract,
   buildRoomArchitecturePlanContract,
-  carveRoomShapeOnMap,
   computeMinimapRoomPolygon,
   configureRoomLayoutContract,
   countNonEmptyStrokesWithColor,
@@ -208,7 +199,6 @@ import {
   drawBridgeOverChasmOverlayContract,
   drawMinimapRoomSilhouette,
   drawSurfaceTileContract,
-  enhanceBiomeArchitectureLiveLayerContract,
   type ExtendedDungeonRoomNode,
   findNextWalkableWaypointContract,
   generateDungeonFloorContract,
@@ -226,7 +216,6 @@ import {
   type RoomSizePreset,
   SPEC_ROOM_SIZE_PRESET_DIMS,
   traceOrganicPoolPathContract,
-  updateMinimapHudImpl,
   VALID_DUNGEON_ROOM_SIZE_PRESETS,
   withMockBakerScene,
 } from './helpers/map-overhaul-harness.js';
@@ -3691,7 +3680,6 @@ if (process.env.VITEST) {
       it('T5-WB-15 [F11]: Signature topologies (l_shape, t_shape, u_shape, donut_ring, multi_chamber, island_catwalk) and center-obstructed shape relocation guards for players, NPCs, portals, chests, pressure plates, and push blocks', () => {
         const map = new ArenaMap({ cols: 36, rows: 22 });
         const midX = 18;
-        const midY = 11;
 
         // 1. l_shape: NE quadrant carved into Exterior Void
         configureRoomLayout(map, {
@@ -3913,7 +3901,7 @@ if (process.env.VITEST) {
           },
         };
         renderTileCellToCompositeImpl.call(
-          mockSceneVoid as any,
+          mockSceneVoid as never,
           ctxVoid as unknown as CanvasRenderingContext2D,
           {
             tx: voidBorderTile!.tx,
@@ -4001,7 +3989,7 @@ if (process.env.VITEST) {
           },
         };
         renderTileCellToCompositeImpl.call(
-          mockSceneConcave as any,
+          mockSceneConcave as never,
           ctxConcave as unknown as CanvasRenderingContext2D,
           {
             tx: concaveTile!.tx,
@@ -4120,7 +4108,7 @@ if (process.env.VITEST) {
         // 1. donut_ring: outer 8-vertex polygon + inner hole fillRect/strokeRect in UI_THEME.panelBgDark
         const gDonut = createRecordingGraphics();
         drawMinimapRoomSilhouette(
-          gDonut as any,
+          gDonut as never,
           'donut_ring',
           60,
           50,
@@ -4141,7 +4129,7 @@ if (process.env.VITEST) {
         // 2. multi_chamber: outer 10-vertex polygon + interior partition tick strokePath
         const gMulti = createRecordingGraphics();
         drawMinimapRoomSilhouette(
-          gMulti as any,
+          gMulti as never,
           'multi_chamber',
           60,
           50,
@@ -4158,7 +4146,7 @@ if (process.env.VITEST) {
         // 3. island_catwalk: outer 8-vertex chasm moat in UI_THEME.inkDeep + inner 20-vertex cross-catwalk/island polygon
         const gIsland = createRecordingGraphics();
         drawMinimapRoomSilhouette(
-          gIsland as any,
+          gIsland as never,
           'island_catwalk',
           60,
           50,
@@ -4592,7 +4580,7 @@ if (process.env.VITEST) {
         map.tiles[5 * map.cols + 6] = 'wall';
         const ctxMiterNE = createRecording2dContext();
         renderTileCellToCompositeImpl.call(
-          mockScene as any,
+          mockScene as never,
           ctxMiterNE as unknown as CanvasRenderingContext2D,
           {
             tx: 5,
@@ -4625,7 +4613,7 @@ if (process.env.VITEST) {
         map.tiles[6 * map.cols + 5] = 'wall';
         const ctxMiterSE = createRecording2dContext();
         renderTileCellToCompositeImpl.call(
-          mockScene as any,
+          mockScene as never,
           ctxMiterSE as unknown as CanvasRenderingContext2D,
           {
             tx: 5,
@@ -4661,7 +4649,7 @@ if (process.env.VITEST) {
         map.tiles[6 * map.cols + 5] = 'floor';
         const ctxDiagVoid = createRecording2dContext();
         renderTileCellToCompositeImpl.call(
-          mockScene as any,
+          mockScene as never,
           ctxDiagVoid as unknown as CanvasRenderingContext2D,
           {
             tx: 3,
@@ -4694,7 +4682,7 @@ if (process.env.VITEST) {
         map.tiles[1 * map.cols + 8] = 'floor';
         const ctxBorderWall = createRecording2dContext();
         renderTileCellToCompositeImpl.call(
-          mockScene as any,
+          mockScene as never,
           ctxBorderWall as unknown as CanvasRenderingContext2D,
           {
             tx: 8,
@@ -4728,7 +4716,7 @@ if (process.env.VITEST) {
             {
               ...mockScene,
               drawSourceKeyToCtx: (_c: CanvasRenderingContext2D, k: string) => drawnKeys.push(k),
-            } as any,
+            } as never,
             ctxAo as unknown as CanvasRenderingContext2D,
             {
               tx: 8,
@@ -4754,7 +4742,7 @@ if (process.env.VITEST) {
         }
         const ctxPillar2x4 = createRecording2dContext();
         renderTileCellToCompositeImpl.call(
-          mockScene as any,
+          mockScene as never,
           ctxPillar2x4 as unknown as CanvasRenderingContext2D,
           {
             tx: 10,
@@ -4847,7 +4835,7 @@ if (process.env.VITEST) {
             tileCompositeScale: scale,
             lastRenderedBiome: 1 as const,
             drawSourceKeyToCtx: () => {},
-          } as any,
+          } as never,
           ctxConcaveCap as unknown as CanvasRenderingContext2D,
           {
             tx: 4,
@@ -4909,7 +4897,7 @@ if (process.env.VITEST) {
             tileCompositeScale: scale,
             lastRenderedBiome: 2 as const,
             drawSourceKeyToCtx: () => {},
-          } as any,
+          } as never,
           ctxChasmWallLip as unknown as CanvasRenderingContext2D,
           {
             tx: 3,
@@ -5074,7 +5062,7 @@ if (process.env.VITEST) {
           },
         };
 
-        const pipeline = new LightingPipeline(mockLightScene as any, 1);
+        const pipeline = new LightingPipeline(mockLightScene as never, 1);
         const sim = new WorldSim({ seed: 1337, biome: 1 });
         pipeline.update({
           dtSec: 0.016,
@@ -5147,7 +5135,7 @@ if (process.env.VITEST) {
               destroy: vi.fn(),
             }),
           },
-        } as any);
+        } as never);
         expect(liveGfxList.length).toBe(4);
         const voidMaskGraphics = liveGfxList[3]!;
         expect(voidMaskGraphics.depth).toBeCloseTo(36.2, 5);

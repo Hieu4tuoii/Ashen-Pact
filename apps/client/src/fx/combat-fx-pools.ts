@@ -94,6 +94,8 @@ export interface ActiveFloorTeleportFold {
   ttl: number;
 }
 
+export const DAMAGE_NUMERIC_SLOT_END = 42 as const;
+
 export interface PooledDamageText {
   text: Phaser.GameObjects.Text;
   active: boolean;
@@ -107,6 +109,9 @@ export interface PooledDamageText {
   age: number;
   ttl: number;
   baseScale: number;
+  targetId?: number;
+  lastMergeMs?: number;
+  accumulatedAmount?: number;
 }
 
 export interface PooledDecal {
@@ -882,11 +887,13 @@ export function update(this: CombatFxManager, dtSec: number, camView?: Phaser.Ge
     d.text.setAlpha(progress > 0.65 ? 1 - (progress - 0.65) / 0.35 : 1);
   }
   resolveActivePopupOverlaps(this.damagePool);
+  resolveTacticalAlertSlotOverlaps(this.damagePool, 4.0);
 }
 
 export function resolveActivePopupOverlaps(pool: ReadonlyArray<PooledDamageText>): void {
   const active: PooledDamageText[] = [];
-  for (let i = 0; i < pool.length; i++) {
+  const limit = Math.min(pool.length, DAMAGE_NUMERIC_SLOT_END);
+  for (let i = 0; i < limit; i++) {
     const d = pool[i]!;
     if (d.active && d.age < d.ttl && d.text.visible && d.text.alpha > 0.05) {
       active.push(d);
@@ -978,6 +985,70 @@ export function resolveActivePopupOverlaps(pool: ReadonlyArray<PooledDamageText>
   }
 }
 
+/**
+ * Zero-alloc vertical repulsion pass across tactical alert slots [42..47].
+ * Uses text dimensions and scale (NO text.getBounds() and ZERO heap allocations).
+ * Pushes overlapping alerts apart vertically so 2..6 simultaneous alerts settle with 0 AABB overlaps.
+ */
+export function resolveTacticalAlertSlotOverlaps(
+  damagePool: readonly PooledDamageText[],
+  padYPx = 4.0,
+): number {
+  if (!damagePool || damagePool.length === 0) return 0;
+  const startIdx = damagePool.length >= 48 ? DAMAGE_NUMERIC_SLOT_END : 0;
+  const endIdx = damagePool.length;
+
+  let totalResolvedPairs = 0;
+  for (let pass = 0; pass < 8; pass++) {
+    let movedThisPass = false;
+    for (let i = startIdx; i < endIdx; i++) {
+      const a = damagePool[i]!;
+      if (!a.active) continue;
+      const hwA = 0.5 * (a.text.width || 64) * Math.abs(a.text.scaleX || 1);
+      const hhA = 0.5 * (a.text.height || 16) * Math.abs(a.text.scaleY || 1);
+
+      for (let j = i + 1; j < endIdx; j++) {
+        const b = damagePool[j]!;
+        if (!b.active) continue;
+        const hwB = 0.5 * (b.text.width || 64) * Math.abs(b.text.scaleX || 1);
+        const hhB = 0.5 * (b.text.height || 16) * Math.abs(b.text.scaleY || 1);
+
+        const dx = Math.abs(a.x - b.x);
+        const reqDx = hwA + hwB + 4.0;
+        if (dx >= reqDx) continue;
+
+        const dy = Math.abs(a.y - b.y);
+        const reqDy = hhA + hhB + padYPx;
+        if (dy < reqDy) {
+          const overlap = reqDy - dy;
+          const halfPush = overlap * 0.5 + 0.1;
+          if (a.y <= b.y) {
+            a.y -= halfPush;
+            b.y += halfPush;
+          } else {
+            a.y += halfPush;
+            b.y -= halfPush;
+          }
+          if (typeof a.text.setPosition === 'function') {
+            a.text.setPosition(a.x, a.y);
+          }
+          if ('x' in a.text) (a.text as { x: number }).x = a.x;
+          if ('y' in a.text) (a.text as { y: number }).y = a.y;
+          if (typeof b.text.setPosition === 'function') {
+            b.text.setPosition(b.x, b.y);
+          }
+          if ('x' in b.text) (b.text as { x: number }).x = b.x;
+          if ('y' in b.text) (b.text as { y: number }).y = b.y;
+          movedThisPass = true;
+          totalResolvedPairs++;
+        }
+      }
+    }
+    if (!movedThisPass) break;
+  }
+  return totalResolvedPairs;
+}
+
 export function computePopupScalePop(ageSec: number, ttlSec: number, baseScale = 1): number {
   const safeTtl = Math.max(0.1, ttlSec);
   const progress = clamp(ageSec / safeTtl, 0, 1);
@@ -1012,6 +1083,7 @@ export function resolveSpatialPopupCellSlot(
   y: number,
   cellSize = 120,
   maxPerCell = 3,
+  maxScanIndex?: number,
 ): SpatialCellPopupResolution {
   const safeCell = Math.max(16, cellSize);
   const cellX = Math.floor(x / safeCell);
@@ -1021,8 +1093,12 @@ export function resolveSpatialPopupCellSlot(
   let evictIndex: number | null = null;
   let evictedSlotIndex: number | undefined;
   let usedSlotsMask = 0;
+  const limit = Math.min(
+    pool.length,
+    maxScanIndex ?? (pool.length >= 48 ? DAMAGE_NUMERIC_SLOT_END : pool.length),
+  );
 
-  for (let i = 0; i < pool.length; i += 1) {
+  for (let i = 0; i < limit; i += 1) {
     const item = pool[i]!;
     if (!item.active) continue;
     const ix = item.originX ?? item.x;
@@ -1124,13 +1200,14 @@ export function acquireDamageSlot(
   targetX?: number,
   targetY?: number,
 ): PooledDamageText | null {
+  const limit = Math.min(this.damagePool.length, DAMAGE_NUMERIC_SLOT_END);
   if (targetX !== undefined && targetY !== undefined) {
-    const res = resolveSpatialPopupCellSlot(this.damagePool, targetX, targetY, 120, 3);
-    if (res.evictIndex !== null) {
+    const res = resolveSpatialPopupCellSlot(this.damagePool, targetX, targetY, 120, 3, limit);
+    if (res.evictIndex !== null && res.evictIndex < limit) {
       return this.damagePool[res.evictIndex] ?? null;
     }
   }
-  for (let i = 0; i < this.damagePool.length; i++) {
+  for (let i = 0; i < limit; i++) {
     const slot = this.damagePool[i]!;
     if (!slot.active) return slot;
   }

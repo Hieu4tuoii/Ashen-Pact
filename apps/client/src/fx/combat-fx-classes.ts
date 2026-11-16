@@ -222,7 +222,7 @@ export function spawnClassSkillCastVfx(
         angleRad,
         { blockedByShield: true, isCrit: true, count: 6, isTeammate },
       );
-      scene.lighting?.spawnTransientLight(x, y, 132, PALETTE.CRIMSON_BRIGHT, 0.9, 0.28);
+      if (!isTeammate) scene.lighting?.spawnTransientLight(x, y, 132, PALETTE.CRIMSON_BRIGHT, 0.9, 0.28);
       break;
     }
 
@@ -255,7 +255,7 @@ export function spawnClassSkillCastVfx(
         angleRad,
         { isCrit: true, count: 6, isTeammate },
       );
-      scene.lighting?.spawnTransientLight(x, y, 138, PALETTE.SOLAR_GOLD, 0.92, 0.28);
+      if (!isTeammate) scene.lighting?.spawnTransientLight(x, y, 138, PALETTE.SOLAR_GOLD, 0.92, 0.28);
       break;
     }
 
@@ -274,7 +274,7 @@ export function spawnClassSkillCastVfx(
         count: 7,
         isTeammate,
       });
-      scene.lighting?.spawnTransientLight(x, y, 148, pal.lightHex, 0.94, 0.32);
+      if (!isTeammate) scene.lighting?.spawnTransientLight(x, y, 148, pal.lightHex, 0.94, 0.32);
       break;
     }
 
@@ -290,7 +290,7 @@ export function spawnClassSkillCastVfx(
         count: 7,
         isTeammate,
       });
-      scene.lighting?.spawnTransientLight(x, y, 142, PALETTE.LIME_GLOW, 0.92, 0.32);
+      if (!isTeammate) scene.lighting?.spawnTransientLight(x, y, 142, PALETTE.LIME_GLOW, 0.92, 0.32);
       break;
     }
 
@@ -307,7 +307,7 @@ export function spawnClassSkillCastVfx(
         count: 7,
         isTeammate,
       });
-      scene.lighting?.spawnTransientLight(x, y, 136, PALETTE.VOLT_YELLOW, 0.92, 0.28);
+      if (!isTeammate) scene.lighting?.spawnTransientLight(x, y, 136, PALETTE.VOLT_YELLOW, 0.92, 0.28);
       break;
     }
   }
@@ -323,6 +323,7 @@ export function spawnVanguardShieldShockwaveVfx(
   y: number,
   angleRad: number,
   storedBullets = 0,
+  isTeammate = false,
 ): void {
   const reachPx = 102 + Math.min(26, Math.max(0, storedBullets) * 4);
   if (fx?.spawnShaderDirectional) {
@@ -343,7 +344,7 @@ export function spawnVanguardShieldShockwaveVfx(
   } else {
     fx?.spawnExplosionBurst?.(x, y, 90, PALETTE.CRIMSON_BRIGHT);
   }
-  scene.lighting?.spawnTransientLight(x, y, 160, PALETTE.CRIMSON_BRIGHT, 0.96, 0.32);
+  if (!isTeammate) scene.lighting?.spawnTransientLight(x, y, 160, PALETTE.CRIMSON_BRIGHT, 0.96, 0.32);
 }
 
 /**

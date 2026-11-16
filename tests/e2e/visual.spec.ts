@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process';
+import { execSync, spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { chromium, test, expect, type Page } from '@playwright/test';
@@ -1361,6 +1361,7 @@ test.describe('@visual Deterministic Visual Scene Catalog', () => {
         cwd: process.cwd(),
         stdio: 'ignore',
         detached: true,
+        shell: process.platform === 'win32',
       },
     );
 
@@ -1727,7 +1728,11 @@ test.describe('@visual Deterministic Visual Scene Catalog', () => {
       await browser.close().catch(() => {});
       if (viteProc.pid) {
         try {
-          process.kill(-viteProc.pid, 'SIGKILL');
+          if (process.platform === 'win32') {
+            execSync(`taskkill /pid ${viteProc.pid} /t /f`, { stdio: 'ignore' });
+          } else {
+            process.kill(-viteProc.pid, 'SIGKILL');
+          }
         } catch {
           // ignore
         }

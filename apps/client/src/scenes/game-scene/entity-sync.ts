@@ -448,6 +448,14 @@ export function syncSolarMiniSunsImpl(
       syncPlayerSuns(sp, true);
     }
   }
+  const coop = (sim as unknown as { coopPlayers?: SimPlayerState[] }).coopPlayers;
+  if (coop) {
+    for (let i = 0; i < coop.length; i++) {
+      const cp = coop[i]!;
+      if (cp.id === sim.player.id) continue;
+      syncPlayerSuns(cp, true);
+    }
+  }
 
   this.solarMiniSunSprites.forEach((entry) => {
     if (entry.lastSeenGen !== currentGen && entry.sprite.visible) {
@@ -819,8 +827,8 @@ export function syncPropsImpl(this: GameScene, dtSec: number): void {
       pv.shadow.setPosition(prop.x, prop.y + 9);
       pv.shadow.setVisible(true);
       if (
-        pv.sprite.texture.key !== targetTex ||
-        pv.sprite.frame.name !== (targetFrame ?? '__BASE')
+        pv.sprite.texture?.key !== targetTex ||
+        (pv.sprite.frame?.name ?? '') !== (targetFrame ?? '__BASE')
       ) {
         pv.sprite.setTexture(targetTex, targetFrame);
       }
