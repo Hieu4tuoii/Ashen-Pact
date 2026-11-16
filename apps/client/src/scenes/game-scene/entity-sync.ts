@@ -401,6 +401,42 @@ export function syncFragFuseWheelsImpl(
   }
 }
 
+function syncPlayerSolarMiniSuns(
+  scene: GameScene,
+  p: SimPlayerState,
+  isTeammate: boolean,
+  currentGen: number,
+): void {
+  if (p.lifeState !== 'alive') return;
+  const activeWeapon = p.weaponSlots[p.activeWeaponSlot] ?? '';
+  if (activeWeapon !== 'solar_archon_staff') return;
+
+  const suns = getSolarMiniSunPositions(p);
+  const alpha = isTeammate ? 0.35 : 1.0;
+
+  for (let sIdx = 0; sIdx < suns.length; sIdx++) {
+    const sun = suns[sIdx]!;
+    const key = p.id * 8 + sIdx;
+
+    let entry = scene.solarMiniSunSprites.get(key);
+    if (!entry) {
+      const sprite = scene.add
+        .sprite(sun.x, sun.y, CUTOUT_KIT_ATLAS_KEY, 'fx_solar_mini_sun')
+        .setScale(1 / 3)
+        .setDepth(41.5);
+      entry = { sprite, lastSeenGen: currentGen };
+      scene.solarMiniSunSprites.set(key, entry);
+    } else {
+      entry.sprite.setPosition(sun.x, sun.y);
+      entry.sprite.setVisible(true);
+      entry.sprite.setActive(true);
+      entry.lastSeenGen = currentGen;
+    }
+    entry.sprite.setAlpha(alpha);
+    entry.sprite.setRotation(sun.angle);
+  }
+}
+
 export function syncSolarMiniSunsImpl(
   this: GameScene,
   sim: ReturnType<LocalTransport['getSim']>,
@@ -408,44 +444,13 @@ export function syncSolarMiniSunsImpl(
   this.solarMiniSunSyncGen = (this.solarMiniSunSyncGen + 1) | 0;
   const currentGen = this.solarMiniSunSyncGen;
 
-  const syncPlayerSuns = (p: SimPlayerState, isTeammate: boolean): void => {
-    if (p.lifeState !== 'alive') return;
-    const activeWeapon = p.weaponSlots[p.activeWeaponSlot] ?? '';
-    if (activeWeapon !== 'solar_archon_staff') return;
-
-    const suns = getSolarMiniSunPositions(p);
-    const alpha = isTeammate ? 0.35 : 1.0;
-
-    for (let sIdx = 0; sIdx < suns.length; sIdx++) {
-      const sun = suns[sIdx]!;
-      const key = p.id * 8 + sIdx;
-
-      let entry = this.solarMiniSunSprites.get(key);
-      if (!entry) {
-        const sprite = this.add
-          .sprite(sun.x, sun.y, CUTOUT_KIT_ATLAS_KEY, 'fx_solar_mini_sun')
-          .setScale(1 / 3)
-          .setDepth(41.5);
-        entry = { sprite, lastSeenGen: currentGen };
-        this.solarMiniSunSprites.set(key, entry);
-      } else {
-        entry.sprite.setPosition(sun.x, sun.y);
-        entry.sprite.setVisible(true);
-        entry.sprite.setActive(true);
-        entry.lastSeenGen = currentGen;
-      }
-      entry.sprite.setAlpha(alpha);
-      entry.sprite.setRotation(sun.angle);
-    }
-  };
-
-  syncPlayerSuns(sim.player, false);
+  syncPlayerSolarMiniSuns(this, sim.player, false, currentGen);
   const others = sim.simulatedPlayers;
   if (others) {
     for (let i = 0; i < others.length; i++) {
       const sp = others[i]!;
       if (sp.id === sim.player.id) continue;
-      syncPlayerSuns(sp, true);
+      syncPlayerSolarMiniSuns(this, sp, true, currentGen);
     }
   }
   const coop = (sim as unknown as { coopPlayers?: SimPlayerState[] }).coopPlayers;
@@ -453,7 +458,7 @@ export function syncSolarMiniSunsImpl(
     for (let i = 0; i < coop.length; i++) {
       const cp = coop[i]!;
       if (cp.id === sim.player.id) continue;
-      syncPlayerSuns(cp, true);
+      syncPlayerSolarMiniSuns(this, cp, true, currentGen);
     }
   }
 

@@ -390,10 +390,12 @@ describe('1:1 Top-Down Cutout 2.0 Multi-Band SDF-Cel Shader Baker', () => {
 
   it('preserves ENEMY_BULLET_VISUAL_SPEC (#E84545, depth 60) and core BAKED_FX_TEXTURE_KEYS invariants', () => {
     expect(ENEMY_BULLET_VISUAL_SPEC.fill).toBe(PALETTE.CRIMSON_BRIGHT);
+    expect(ENEMY_BULLET_VISUAL_SPEC.fill.toUpperCase()).toBe('#E84545');
     expect(ENEMY_BULLET_VISUAL_SPEC.core).toBe(PALETTE.BONE_WHITE);
     expect(ENEMY_BULLET_VISUAL_SPEC.outlineColor).toBe(PALETTE.INK_DARK);
     expect(ENEMY_BULLET_VISUAL_SPEC.depth).toBe(60);
     expect(ENEMY_BULLET_VISUAL_SPEC.neverTintByElement).toBe(true);
+    expect(BAKED_FX_TEXTURE_KEYS).toContain('proj_player_bolt');
     expect(BAKED_FX_TEXTURE_KEYS).toContain('proj_enemy_small_orb');
     expect(BAKED_FX_TEXTURE_KEYS).toContain('proj_enemy_orb');
     expect(BAKED_FX_TEXTURE_KEYS).toContain('proj_enemy_heavy_orb');
@@ -402,6 +404,18 @@ describe('1:1 Top-Down Cutout 2.0 Multi-Band SDF-Cel Shader Baker', () => {
     expect(BAKED_FX_TEXTURE_KEYS).not.toContain('proj_enemy_diamond');
     expect(BAKED_FX_TEXTURE_KEYS).not.toContain('proj_enemy_ring_bolt');
     expect(BAKED_FX_TEXTURE_KEYS).not.toContain('fx_ambient_mist');
+  });
+
+  it('verifies proj_player_bolt aspect ratio is elongated (width / height >= 1.8)', () => {
+    const mockScene = createMockPhaserSceneForBaker();
+    const scale = 4;
+    bakeProjectilesAndFx(mockScene as never, scale);
+
+    expect(mockScene.registered.has('proj_player_bolt')).toBe(true);
+    const bolt = mockScene.registered.get('proj_player_bolt')!;
+    expect(bolt.width).toBe(28 * scale);
+    expect(bolt.height).toBe(14 * scale);
+    expect(bolt.width / bolt.height).toBeGreaterThanOrEqual(1.8);
   });
 
   it('bakes proj_enemy_small_orb, proj_enemy_orb, proj_enemy_heavy_orb, and streamlined proj_enemy_lance while excluding retired enemy projectile keys', () => {

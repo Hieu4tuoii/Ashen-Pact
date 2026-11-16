@@ -38,7 +38,7 @@ export function strokeCutoutQuadStripFromScratch(
   inkColorNum: number = DEFAULT_INK_COLOR_NUM,
 ): void {
   const n = Math.min(Math.floor(ptCount), MAX_RIBBON_PTS);
-  if (n < 2 || alpha <= 0.005) {
+  if (!Number.isFinite(ptCount) || !(n >= 2) || alpha <= 0.005) {
     return;
   }
 

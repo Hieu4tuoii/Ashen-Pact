@@ -2131,7 +2131,7 @@ export function bakeShaderVfxFlipbooks(scene: Phaser.Scene, bakeScale = 4): void
         }
         // Phaser 3's Texture.get(0) treats numeric 0 as falsy (`if (!name) name = this.firstFrame`),
         // falling back to '__BASE'. Crop '__BASE' to frame 0 (framePx x framePx) so frame 0 never
-        // renders the entire 7x2 14-frame sprite sheet!
+        // renders the entire 4x2 8-frame sprite sheet!
         interface RawBaseFrame {
           cutX?: number;
           cutY?: number;

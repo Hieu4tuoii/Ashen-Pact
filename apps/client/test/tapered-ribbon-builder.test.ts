@@ -89,6 +89,17 @@ describe('tapered-ribbon-builder', () => {
     expect(gfx.fillStyleCalls.length).toBe(0);
   });
 
+  it('guards against NaN or non-finite ptCount as a safe no-op (0 triangles drawn)', () => {
+    const gfx = createRecordingGraphicsMock();
+    strokeCutoutQuadStripFromScratch(gfx as never, Number.NaN, 0x38bdf8, 0.9, 1.8);
+    expect(gfx.fillTriangleCalls.length).toBe(0);
+    expect(gfx.fillStyleCalls.length).toBe(0);
+
+    strokeCutoutQuadStripFromScratch(gfx as never, Number.POSITIVE_INFINITY, 0x38bdf8, 0.9, 1.8);
+    expect(gfx.fillTriangleCalls.length).toBe(0);
+    expect(gfx.fillStyleCalls.length).toBe(0);
+  });
+
   it('renders a 2-point tapered needle via the diamond branch (4 fillTriangle calls, zero fillPoints/strokeCircle)', () => {
     const gfx = createRecordingGraphicsMock();
     SCRATCH_PX[0] = 100;

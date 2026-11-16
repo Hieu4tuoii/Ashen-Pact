@@ -1552,6 +1552,10 @@ export function syncArenaTilesWithMapRevisionImpl(this: GameScene): void {
       for (let i = 0; i < scratchDirtyTiles.length; i++) {
         this.renderTileCellToComposite(scratchDirtyTiles[i]!);
       }
+      const groundCtx = this.arenaGroundTex.getContext();
+      if (groundCtx && sim && this.biomeArchLive) {
+        this.biomeArchLive.renderGroundPass(groundCtx, sim.map, this.tileCompositeScale);
+      }
       this.arenaGroundTex.refresh();
     } else {
       this.rebuildAllTileCellsToComposite();
