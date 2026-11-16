@@ -15,7 +15,11 @@ import type Phaser from 'phaser';
 import { PALETTE, hexToNum } from '../art/palette.js';
 import { getFreezeVisualTimeSec, getVisualQueryConfig } from '../core/visual-query.js';
 import { isVisualFreezeActive } from './combat-fx-blessings-p1d.js';
-import { fillTaperedArcRibbon, fillTaperedLightningBolt } from './tapered-ribbon-builder.js';
+import {
+  fillTaperedArcRibbon,
+  fillTaperedLightningBolt,
+  fillTaperedQuadraticBezier,
+} from './tapered-ribbon-builder.js';
 import { routeCutoutBurstByRadius } from './combat-fx-spawners.js';
 
 type Gfx = Phaser.GameObjects.Graphics;
@@ -61,26 +65,11 @@ const SCRATCH_DECOY_ARC_PTS: [[number, number], [number, number], [number, numbe
   [0, 0],
 ];
 
-interface P4ATransientBurst {
-  kind: 'thunder_decoy_nova' | 'caustic_pod_burst' | 'cluster_mortar_pop';
-  roomId: number;
-  x: number;
-  y: number;
-  radius: number;
-  spawnTick: number;
-  durationTicks: number;
-}
-
-const p4aTransientBurstsBySim = new WeakMap<WorldSim, P4ATransientBurst[]>();
-
-function getTransientBurstList(sim: WorldSim): P4ATransientBurst[] {
-  let list = p4aTransientBurstsBySim.get(sim);
-  if (!list) {
-    list = [];
-    p4aTransientBurstsBySim.set(sim, list);
-  }
-  return list;
-}
+const SCRATCH_ORBIT_CHEVRON_PTS: [[number, number], [number, number], [number, number]] = [
+  [0, 0],
+  [0, 0],
+  [0, 0],
+];
 
 function resolveFloorGfx(scene: unknown, fallbackG: Gfx): Gfx {
   if (scene && typeof scene === 'object' && 'groundHazardGraphics' in scene) {
@@ -101,10 +90,6 @@ export function resolveP4AVisualTimeSec(scene: unknown, sim: WorldSim): number {
 function fillDisc(g: Gfx, x: number, y: number, r: number, col: number, alpha: number): void {
   g.fillStyle(col, alpha);
   g.fillCircle(x, y, r);
-}
-
-function strokeRing(g: Gfx, x: number, y: number, r: number, width: number, col: number, alpha: number): void {
-  strokeArc(g, x, y, r, 0, Math.PI * 2, width, col, alpha);
 }
 
 function strokeArc(g: Gfx, x: number, y: number, r: number, a0: number, a1: number, width: number, col: number, alpha: number): void {
@@ -175,12 +160,19 @@ function resolveHoloDecoyAimAngle(sim: WorldSim, sum: SimSummonState): number {
 function drawThunderDecoySummon(g: Gfx, floorG: Gfx, sum: SimSummonState, tSec: number, ttlRatio: number): void {
   const blastR = THUNDER_DECOY_BLAST_RADIUS;
   fillDisc(floorG, sum.x, sum.y, blastR, COL_VIOLET, 0.045);
-  strokeRing(floorG, sum.x, sum.y, blastR, 2.4, COL_INK, 0.34);
-  strokeRing(floorG, sum.x, sum.y, blastR, 1.4, COL_VIOLET, 0.48);
+  for (let k = 0; k < 4; k++) {
+    const ang = (k * Math.PI) / 2 + tSec * 0.5;
+    fillTaperedArcRibbon(floorG, sum.x, sum.y, blastR, ang - 0.28, ang + 0.28, 2.0, COL_VIOLET, 0.48, 3, 1.2);
+  }
 
   for (let w = 0; w < 2; w++) {
     const waveProg = (tSec * 1.65 + w * 0.5) % 1;
-    strokeRing(floorG, sum.x, sum.y, 19 + waveProg * 46, 1.6, w === 0 ? COL_SOLAR_GOLD : COL_VIOLET, (1 - waveProg) * 0.36);
+    const wr = 19 + waveProg * 46;
+    const wcol = w === 0 ? COL_SOLAR_GOLD : COL_VIOLET;
+    for (let k = 0; k < 4; k++) {
+      const ang = (k * Math.PI) / 2 + tSec * 1.2;
+      fillTaperedArcRibbon(floorG, sum.x, sum.y, wr, ang - 0.24, ang + 0.24, 1.6, wcol, (1 - waveProg) * 0.36, 3, 1.0);
+    }
   }
 
   fillDisc(g, sum.x, sum.y, 17, COL_INK, 0.96);
@@ -215,7 +207,10 @@ function drawThunderDecoySummon(g: Gfx, floorG: Gfx, sum: SimSummonState, tSec: 
     strokePolyline(g, 1.6, k === 0 ? COL_SOLAR_GOLD : COL_CYAN_BOLT, 0.94, SCRATCH_DECOY_ARC_PTS);
   }
 
-  strokeRing(g, sum.x, sum.y, 14.5, 2.4, COL_INK, 0.98);
+  for (let k = 0; k < 3; k++) {
+    const ang = (k * Math.PI * 2) / 3 + tSec * 2.0;
+    fillTaperedArcRibbon(g, sum.x, sum.y, 14.5, ang - 0.35, ang + 0.35, 2.4, COL_SOLAR_GOLD, 0.95, 3, 1.2);
+  }
   strokeArc(g, sum.x, sum.y, 19.5, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * ttlRatio, 2.6, COL_SOLAR_GOLD, 0.95);
 }
 
@@ -230,13 +225,14 @@ function drawWallTetherPylonSummon(g: Gfx, sum: SimSummonState, tSec: number, tt
     g.fillCircle(sum.x + Math.cos(ang) * 9.2, sum.y + Math.sin(ang) * 9.2, 1.5);
   }
 
-  strokeRing(g, sum.x, sum.y, 8.6, 2.4, COL_INK, 0.96);
-  strokeRing(g, sum.x, sum.y, 8.2, 1.7, COL_HOLO_ICE, 0.9);
-  strokeRing(g, sum.x, sum.y, 6.0, 1.5, COL_CYAN_BOLT, 0.88);
+  for (let k = 0; k < 4; k++) {
+    const ang = (k * Math.PI) / 2;
+    fillTaperedArcRibbon(g, sum.x, sum.y, 8.4, ang - 0.3, ang + 0.3, 2.0, COL_CYAN_BOLT, 0.9, 3, 1.2);
+    fillTaperedArcRibbon(g, sum.x, sum.y, 15.2, ang - 0.25, ang + 0.25, 2.4, COL_INK, 0.85, 3, 1.2);
+  }
   fillDisc(g, sum.x, sum.y, 5.2 + pulse * 0.6, COL_CYAN_BOLT, 0.94);
   fillDisc(g, sum.x, sum.y, 3.1 + pulse * 0.35, COL_SOLAR_GOLD, 0.98);
   fillDisc(g, sum.x - 1.1, sum.y - 1.1, 1.3, 0xffffff, 0.95);
-  strokeRing(g, sum.x, sum.y, 15.2, 3.2, COL_INK, 0.85);
   strokeArc(g, sum.x, sum.y, 15.2, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * ttlRatio, 2.1, COL_CYAN_BOLT, 0.95);
 }
 
@@ -248,7 +244,6 @@ function drawHoloDecoyTurretSummon(g: Gfx, sim: WorldSim, sum: SimSummonState, t
   // True 1:1 circular top-down holo emitter pedestal (zero 3/4 squash ellipse)
   fillDisc(g, sum.x, sum.y, 15.6, COL_INK, 0.94);
   fillDisc(g, sum.x, sum.y, 13.8, COL_SLATE, 0.92);
-  strokeRing(g, sum.x, sum.y, 13.8, 1.8, COL_CYAN_BOLT, 0.88);
 
   fillDisc(g, sum.x, sum.y, 12.2, COL_HOLO_DEEP, 0.36);
   fillDisc(g, sum.x - cos * 1.5, sum.y - sin * 1.5, 8.4, COL_CYAN_BOLT, 0.45);
@@ -261,8 +256,10 @@ function drawHoloDecoyTurretSummon(g: Gfx, sim: WorldSim, sum: SimSummonState, t
     strokeLine(g, sum.x - halfSpan, sy, sum.x + halfSpan, sy, 1.3, row === 0 ? COL_HOLO_ICE : COL_CYAN_BOLT, 0.82);
   }
 
-  strokeRing(g, sum.x, sum.y, 12.6, 2.4, COL_INK, 0.95);
-  strokeRing(g, sum.x, sum.y, 11.8, 1.7, COL_HOLO_ICE, 0.92);
+  for (let k = 0; k < 4; k++) {
+    const ang = (k * Math.PI) / 2 + 0.35;
+    fillTaperedArcRibbon(g, sum.x, sum.y, 12.8, ang - 0.32, ang + 0.32, 2.0, COL_CYAN_BOLT, 0.92, 3, 1.2);
+  }
 
   const bx0 = sum.x + cos * 4;
   const by0 = sum.y + sin * 4;
@@ -456,20 +453,33 @@ function drawOrbitReturnProjectileOverlay(g: Gfx, sim: WorldSim, b: SimProjectil
     const distToOwner = distance(b.x, b.y, owner.x, owner.y);
     if (distToOwner > 18 && distToOwner < 460) {
       const bend = Math.min(26, distToOwner * 0.14);
-      const tetherPts: [number, number][] = [
-        [b.x, b.y],
-        [(b.x + owner.x) * 0.5 + perpX * bend, (b.y + owner.y) * 0.5 + perpY * bend],
-        [owner.x, owner.y],
-      ];
-      strokePolyline(g, 2.6, COL_INK, 0.34, tetherPts);
-      strokePolyline(g, 1.4, COL_EMERALD, 0.56, tetherPts);
+      const midX = (b.x + owner.x) * 0.5 + perpX * bend;
+      const midY = (b.y + owner.y) * 0.5 + perpY * bend;
+      fillTaperedQuadraticBezier(
+        g,
+        b.x,
+        b.y,
+        midX,
+        midY,
+        owner.x,
+        owner.y,
+        1.8,
+        3.0,
+        1.8,
+        COL_EMERALD,
+        0.56,
+        6,
+        1.6,
+      );
     }
   }
 
   if (b.clientHeldAtMaxRange || (b.orbitReturnTicks ?? 99) <= 10) {
     const turnR = b.radius + 7.5 + Math.sin(tSec * 18 + b.id) * 1.2;
-    strokeRing(g, b.x - cos * 4, b.y - sin * 4, turnR, 2.8, COL_INK, 0.82);
-    strokeRing(g, b.x - cos * 4, b.y - sin * 4, turnR, 1.7, COL_JADE_LIGHT, 0.92);
+    for (let k = 0; k < 4; k++) {
+      const a = (k * Math.PI) / 2 + tSec * 3.0;
+      fillTaperedArcRibbon(g, b.x - cos * 4, b.y - sin * 4, turnR, a - 0.28, a + 0.28, 2.0, COL_JADE_LIGHT, 0.92, 3, 1.2);
+    }
   }
 
   const noseX = b.x + cos * (b.radius + 6.5);
@@ -477,13 +487,14 @@ function drawOrbitReturnProjectileOverlay(g: Gfx, sim: WorldSim, b: SimProjectil
   const wingBackX = b.x - cos * 11.5;
   const wingBackY = b.y - sin * 11.5;
   const span = b.radius + 6.5;
-  const chevronPts: [number, number][] = [
-    [wingBackX + perpX * span, wingBackY + perpY * span],
-    [noseX, noseY],
-    [wingBackX - perpX * span, wingBackY - perpY * span],
-  ];
-  strokePolyline(g, 4.6, COL_INK, 0.94, chevronPts);
-  strokePolyline(g, 2.5, COL_EMERALD, 0.98, chevronPts);
+  SCRATCH_ORBIT_CHEVRON_PTS[0][0] = wingBackX + perpX * span;
+  SCRATCH_ORBIT_CHEVRON_PTS[0][1] = wingBackY + perpY * span;
+  SCRATCH_ORBIT_CHEVRON_PTS[1][0] = noseX;
+  SCRATCH_ORBIT_CHEVRON_PTS[1][1] = noseY;
+  SCRATCH_ORBIT_CHEVRON_PTS[2][0] = wingBackX - perpX * span;
+  SCRATCH_ORBIT_CHEVRON_PTS[2][1] = wingBackY - perpY * span;
+  strokePolyline(g, 4.6, COL_INK, 0.94, SCRATCH_ORBIT_CHEVRON_PTS);
+  strokePolyline(g, 2.5, COL_EMERALD, 0.98, SCRATCH_ORBIT_CHEVRON_PTS);
   strokeLine(g, b.x - cos * 18, b.y - sin * 18, noseX - cos * 1.5, noseY - sin * 1.5, 1.6, COL_JADE_LIGHT, 0.96);
   fillDisc(g, b.x, b.y, Math.max(2.6, b.radius * 0.62), COL_JADE_LIGHT, 0.96);
 }
@@ -505,49 +516,12 @@ function drawClusterMortarLobOverlay(_g: Gfx, floorG: Gfx, b: SimProjectileState
   }
 }
 
-function drawDeterministicTransientBursts(g: Gfx, floorG: Gfx, sim: WorldSim): void {
-  const list = p4aTransientBurstsBySim.get(sim);
-  if (!list || list.length === 0) return;
-
-  for (let i = list.length - 1; i >= 0; i--) {
-    const burst = list[i]!;
-    const elapsedTicks = sim.tick - burst.spawnTick;
-    if (burst.roomId !== sim.currentRoomId || elapsedTicks < 0 || elapsedTicks > burst.durationTicks) {
-      list.splice(i, 1);
-      continue;
-    }
-    const prog = clamp(elapsedTicks / Math.max(1, burst.durationTicks), 0, 1);
-    const fade = 1 - prog;
-    const curR = burst.radius * (0.46 + 0.54 * Math.sqrt(prog));
-
-    if (burst.kind === 'thunder_decoy_nova') {
-      fillDisc(floorG, burst.x, burst.y, curR, COL_VIOLET, 0.06 * fade);
-      for (let k = 0; k < 4; k++) {
-        const ang = (k * Math.PI) / 2 + 0.2;
-        fillTaperedArcRibbon(g, burst.x, burst.y, curR, ang - 0.32, ang + 0.32, 2.4, COL_SOLAR_GOLD, 0.94 * fade, 4, 1.2);
-      }
-    } else if (burst.kind === 'caustic_pod_burst') {
-      fillDisc(floorG, burst.x, burst.y, curR, COL_LIME_ACID, 0.06 * fade);
-      for (let k = 0; k < 4; k++) {
-        const ang = (k * Math.PI) / 2;
-        fillTaperedArcRibbon(g, burst.x, burst.y, curR, ang - 0.32, ang + 0.32, 2.2, COL_LIME_BRIGHT, 0.94 * fade, 3, 1.2);
-      }
-    } else {
-      for (let k = 0; k < 4; k++) {
-        const ang = (k * Math.PI) / 2;
-        fillTaperedArcRibbon(g, burst.x, burst.y, curR, ang - 0.32, ang + 0.32, 2.0, COL_MORTAR_ORANGE, 0.92 * fade, 3, 1.2);
-      }
-    }
-  }
-}
-
 export function drawP4ATetherAndProjectileOverlays(scene: unknown, g: Gfx, sim: WorldSim): void {
   const floorG = resolveFloorGfx(scene, g);
   const underG = resolveUnderActorGfx(scene, g);
   const tSec = resolveP4AVisualTimeSec(scene, sim);
   drawElectricCutterWires(underG, sim, tSec);
   drawCausticSporePodOverlays(g, floorG, sim, tSec);
-  drawDeterministicTransientBursts(g, floorG, sim);
 
   for (let i = 0; i < sim.projectiles.length; i++) {
     const b = sim.projectiles[i]!;
@@ -557,7 +531,7 @@ export function drawP4ATetherAndProjectileOverlays(scene: unknown, g: Gfx, sim: 
   }
 }
 
-export function handleP4ASimEvent(_scene: unknown, ev: SimEvent, sim: WorldSim, isStress: boolean, _allowStressSfx: boolean): boolean {
+export function handleP4ASimEvent(scene: unknown, ev: SimEvent, sim: WorldSim, isStress: boolean, _allowStressSfx: boolean): boolean {
   if (isStress || ev.kind !== 'explosion') return false;
   const isCausticPod = ev.sourceDefId === 'caustic_spore_pod' || ev.sourceDefId === 'reload_caustic_pod';
   if (
@@ -565,38 +539,18 @@ export function handleP4ASimEvent(_scene: unknown, ev: SimEvent, sim: WorldSim, 
     isCausticPod ||
     ev.sourceDefId === 'mutator_cluster_mortar'
   ) {
-    const sceneObj = _scene as { fx?: Parameters<typeof routeCutoutBurstByRadius>[0] };
+    const sceneObj = scene as { fx?: Parameters<typeof routeCutoutBurstByRadius>[0] };
     if (sceneObj?.fx && typeof (sceneObj.fx as { spawnShaderNova?: unknown }).spawnShaderNova === 'function') {
+      const evOwner = (ev as { ownerId?: number }).ownerId;
+      const isTeammate = evOwner !== undefined && evOwner !== sim.player.id;
       if (ev.sourceDefId === 'dash_thunder_decoy') {
-        routeCutoutBurstByRadius(sceneObj.fx, ev.x, ev.y, ev.radius || THUNDER_DECOY_BLAST_RADIUS, 'fx_sh_nova_thunder');
+        routeCutoutBurstByRadius(sceneObj.fx, ev.x, ev.y, ev.radius || THUNDER_DECOY_BLAST_RADIUS, 'fx_sh_nova_thunder', { isTeammate });
       } else if (isCausticPod) {
-        routeCutoutBurstByRadius(sceneObj.fx, ev.x, ev.y, ev.radius || CAUSTIC_POD_BLAST_RADIUS, 'fx_sh_bloom_briar');
+        routeCutoutBurstByRadius(sceneObj.fx, ev.x, ev.y, ev.radius || CAUSTIC_POD_BLAST_RADIUS, 'fx_sh_bloom_briar', { isTeammate });
       } else if (ev.sourceDefId === 'mutator_cluster_mortar') {
-        routeCutoutBurstByRadius(sceneObj.fx, ev.x, ev.y, ev.radius || CLUSTER_MORTAR_BLAST_RADIUS, 'fx_sh_shrapnel_corona');
+        routeCutoutBurstByRadius(sceneObj.fx, ev.x, ev.y, ev.radius || CLUSTER_MORTAR_BLAST_RADIUS, 'fx_sh_shrapnel_corona', { isTeammate });
       }
     }
-    const list = getTransientBurstList(sim);
-    if (list.length >= 24) list.shift();
-    list.push({
-      kind:
-        ev.sourceDefId === 'dash_thunder_decoy'
-          ? 'thunder_decoy_nova'
-          : isCausticPod
-            ? 'caustic_pod_burst'
-            : 'cluster_mortar_pop',
-      roomId: sim.currentRoomId,
-      x: ev.x,
-      y: ev.y,
-      radius:
-        ev.radius ||
-        (ev.sourceDefId === 'dash_thunder_decoy'
-          ? THUNDER_DECOY_BLAST_RADIUS
-          : isCausticPod
-            ? CAUSTIC_POD_BLAST_RADIUS
-            : CLUSTER_MORTAR_BLAST_RADIUS),
-      spawnTick: sim.tick,
-      durationTicks: ev.sourceDefId === 'dash_thunder_decoy' ? 16 : 12,
-    });
   }
   return false;
 }

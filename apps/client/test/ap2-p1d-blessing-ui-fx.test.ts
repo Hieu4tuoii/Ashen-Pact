@@ -512,7 +512,7 @@ describe('AP2 Phase P1D.4 & P4A.4 — Per-Player Blessing Modal UI, HUD Chips, i
     expect(gPass1.calls).toEqual(gPass2.calls);
   });
 
-  it('triggers caustic_pod_burst from real caustic_spore_pod explosion sourceDefId and clears transient bursts when currentRoomId changes', () => {
+  it('triggers caustic_pod_burst from real caustic_spore_pod explosion sourceDefId and routes through routeCutoutBurstByRadius', () => {
     const sim = new WorldSim({ seed: 9405, startInHub: false });
     sim.enemies.length = 0;
     sim.props.length = 0;
@@ -520,7 +520,16 @@ describe('AP2 Phase P1D.4 & P4A.4 — Per-Player Blessing Modal UI, HUD Chips, i
     sim.summons.length = 0;
     sim.tick = 200;
     const initialRoomId = sim.currentRoomId;
-    const mockScene = { sim, camFocusX: 240, camFocusY: 180, visualFreeze: true };
+    const novaKeys: string[] = [];
+    const mockScene = {
+      sim,
+      camFocusX: 240,
+      camFocusY: 180,
+      visualFreeze: true,
+      fx: {
+        spawnShaderNova: (_x: number, _y: number, _r: number, key: string) => novaKeys.push(key),
+      },
+    };
 
     handleP4ASimEvent(
       mockScene as never,
@@ -537,22 +546,16 @@ describe('AP2 Phase P1D.4 & P4A.4 — Per-Player Blessing Modal UI, HUD Chips, i
       false,
     );
 
-    sim.tick = 203;
-    const gSameRoom = createMockGraphics();
-    drawP4ATetherAndProjectileOverlays(mockScene as never, gSameRoom as never, sim);
-    expect(gSameRoom.calls.includes('fillCircle')).toBe(true);
-    expect(gSameRoom.calls.includes('strokeCircle')).toBe(false);
-    expect(gSameRoom.fillColors).toContain(0x84cc16);
-    expect(gSameRoom.fillColors).toContain(0xbef264);
+    expect(novaKeys).toContain('fx_sh_bloom_briar');
 
-    // Room transition drops stale transient bursts from the previous room
+    // Room transition maintains clean state
     sim.currentRoomId = initialRoomId + 1;
     const gNextRoom = createMockGraphics();
     drawP4ATetherAndProjectileOverlays(mockScene as never, gNextRoom as never, sim);
     expect(gNextRoom.calls).toHaveLength(0);
 
     // Chiaroscuro shader flipbook dispatch & depth: 16 groundHazardGraphics floor routing (<= 0.08 fill)
-    const novaKeys: string[] = [];
+    novaKeys.length = 0;
     const directionalKeys: string[] = [];
     const floorAlphas: number[] = [];
     const groundG = {
@@ -617,6 +620,14 @@ describe('AP2 Phase P1D.4 & P4A.4 — Per-Player Blessing Modal UI, HUD Chips, i
       false,
       false,
     );
+    sim.props.push({
+      id: 99,
+      kind: 'caustic_spore_pod',
+      x: 240,
+      y: 180,
+      radius: 14,
+      hp: 100,
+    } as never);
     sim.tick += 2;
     const elevatedG = createMockGraphics();
     drawP4ATetherAndProjectileOverlays(shaderScene as never, elevatedG as never, sim);

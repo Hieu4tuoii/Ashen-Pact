@@ -260,8 +260,10 @@ export function renderSoulChainTether(
   const warnR = 24.0;
   dangerGfx.fillStyle(0x141019, 0.6 * alpha);
   dangerGfx.fillEllipse(x1, y1 + 12, warnR * 2, (warnR * 2) / 2.12);
+  dangerGfx.fillEllipse(x2, y2 + 12, warnR * 2, (warnR * 2) / 2.12);
   dangerGfx.lineStyle(2.0, 0xe84545, 0.95 * alpha);
   dangerGfx.strokeEllipse(x1, y1 + 12, warnR * 2, (warnR * 2) / 2.12);
+  dangerGfx.strokeEllipse(x2, y2 + 12, warnR * 2, (warnR * 2) / 2.12);
   return SOUL_CHAIN_RESULT_OVERSTRETCHED;
 }
 

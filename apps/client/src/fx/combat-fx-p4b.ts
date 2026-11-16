@@ -434,6 +434,7 @@ function drawCryoShatterSpireOverlays(g: Gfx, floorG: Gfx, sim: WorldSim, tSec: 
 }
 
 function drawSuperconductRailAndNapalmEnemyOverlays(
+  scene: unknown,
   g: Gfx,
   floorG: Gfx,
   sim: WorldSim,
@@ -441,13 +442,14 @@ function drawSuperconductRailAndNapalmEnemyOverlays(
 ): void {
   const railOwner = anyPlayerHasDuoBoon(sim, 'duo_superconduct_rail');
   const railAlpha = hasPlayerDuoBoon(sim.player, 'duo_superconduct_rail') ? 1.0 : 0.5;
+  const sceneHasPool = (scene as { duoRailLockPool?: unknown[] })?.duoRailLockPool !== undefined;
 
   for (let i = 0; i < sim.enemies.length; i++) {
     const e = sim.enemies[i]!;
     if (e.hp <= 0) continue;
 
-    // 3. duo_superconduct_rail: replace Ø200px circle with duo_rail_lock_10x10 (depth 46.5) brackets on locked targets
-    if (railOwner && e.superconductTimer > 0) {
+    // 3. duo_superconduct_rail: replace Ø200px circle with duo_rail_lock_10x10 (depth 46.5) sprites
+    if (railOwner && e.superconductTimer > 0 && !sceneHasPool) {
       const rot = tSec * 1.6 + e.id * 0.4;
       const lockSize = 10;
       for (let q = 0; q < 4; q++) {
@@ -643,7 +645,7 @@ function drawBastionShockStar(
   g.fillCircle(cx, cy, 1.1);
 }
 
-function drawMagneticBastionArcWires(g: Gfx, sim: WorldSim, tSec: number): void {
+function drawMagneticBastionArcWires(g: Gfx, floorG: Gfx, sim: WorldSim, tSec: number): void {
   if (!anyPlayerHasDuoBoon(sim, 'duo_magnetic_bastion_ring')) return;
   const localOwnsBastion = hasPlayerDuoBoon(sim.player, 'duo_magnetic_bastion_ring');
   const wireAlpha = localOwnsBastion ? 1.0 : 0.5;
@@ -663,7 +665,7 @@ function drawMagneticBastionArcWires(g: Gfx, sim: WorldSim, tSec: number): void 
       const b = flippedBarricadesScratch[j]!;
       const dist = distance(a.x, a.y, b.x, b.y);
       if (dist <= 1 || dist > 220.0) continue;
-      renderDuoMagneticBastionTether(g, a.x, a.y, b.x, b.y, wireAlpha);
+      renderDuoMagneticBastionTether(floorG, a.x, a.y, b.x, b.y, wireAlpha);
 
       const dx = b.x - a.x;
       const dy = b.y - a.y;
@@ -874,13 +876,13 @@ export function renderP4BDuoAndSecretArenaOverlays(scene: GameScene): void {
   drawCryoShatterSpireOverlays(g, floorG, sim, tSec);
 
   // 3 & 4. Superconduct Rail magnetic rings + Napalm Chain Plague 1:1 boiling resin
-  drawSuperconductRailAndNapalmEnemyOverlays(g, floorG, sim, tSec);
+  drawSuperconductRailAndNapalmEnemyOverlays(scene, g, floorG, sim, tSec);
 
   // 3b & 5. Superconduct Rail redirected tracers + Plasma Overload 6-pointed counter-rotating stars
   drawPlasmaStarAndRailProjectiles(g, addG, sim, tSec);
 
   // 6. Magnetic Bastion Ring high-voltage barricade arc wires
-  drawMagneticBastionArcWires(g, sim, tSec);
+  drawMagneticBastionArcWires(g, floorG, sim, tSec);
 
   // 7. Secret Challenge Crystal rune halo & deterministic room-scoped transient bursts
   drawSecretChallengeCrystalOverlays(g, floorG, sim, tSec);
