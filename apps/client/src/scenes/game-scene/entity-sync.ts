@@ -739,8 +739,23 @@ export function syncEnemyRigsImpl(this: GameScene, dtSec: number): void {
     }
   }
 
+  const killSeq = this.fx?.bossKillSequenceState;
+  const isDyingBossInBeat1 = Boolean(
+    killSeq?.active &&
+    killSeq.elapsedSec < 0.16 &&
+    killSeq.bossId !== undefined,
+  );
+
   for (const [id, rig] of this.enemyRigs.entries()) {
     if (!this.activeEnemyIds.has(id)) {
+      if (isDyingBossInBeat1 && id === killSeq!.bossId) {
+        // Keep dying Boss CutoutRig visible during Beat 1 with #141019 silhouette inversion
+        rig.applySilhouetteInversion?.(0x141019);
+        rig.container.setDepth(30.6);
+        rig.container.setVisible(true);
+        rig.setPosition(killSeq!.x, killSeq!.y + RIG_FOOT_OFFSET_Y);
+        continue;
+      }
       rig.destroy();
       this.enemyRigs.delete(id);
     }

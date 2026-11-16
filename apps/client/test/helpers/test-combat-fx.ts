@@ -138,7 +138,13 @@ export function createHeadlessFxManager(particleSlots = 64): CombatFxManager {
     bossKillSlowMoTimer: 0,
     bossKillFlashTimer: 0,
     bossKillSequenceState: null,
-    triggerBossKillSequence(x: number, y: number, biome: 1 | 2 | 3 = 1) {
+    triggerBossKillSequence(
+      x: number,
+      y: number,
+      biome: 1 | 2 | 3 = 1,
+      bossId?: number,
+      defId?: string,
+    ) {
       mgr.bossKillSequenceState = {
         active: true,
         x,
@@ -146,6 +152,8 @@ export function createHeadlessFxManager(particleSlots = 64): CombatFxManager {
         biome,
         elapsedSec: 0,
         beat2Spawned: false,
+        bossId,
+        defId,
       };
     },
     trauma: 0,

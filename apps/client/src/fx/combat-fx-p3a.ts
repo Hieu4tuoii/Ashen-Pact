@@ -22,6 +22,8 @@ export function renderBossArmorShellPlates(
   boss: SimEnemyState,
   biome: 1 | 2 | 3,
   timeSec: number,
+  overrideX?: number,
+  overrideY?: number,
 ): void {
   const active = Boolean(boss && boss.hp > 0 && boss.bossArmorShellActive === true);
   if (!active) {
@@ -31,13 +33,15 @@ export function renderBossArmorShellPlates(
     return;
   }
 
+  const cx = overrideX ?? boss.x;
+  const cy = overrideY ?? boss.y;
   const br = (boss.radius || 32) + 12;
   const tint = biome === 1 ? 0x4ade80 : biome === 2 ? 0x38bdf8 : 0xf97316;
   const count = Math.min(plates.length, 6);
   for (let k = 0; k < count; k++) {
     const ang = timeSec * 1.5 + (k * Math.PI) / 3;
-    const px = boss.x + Math.cos(ang) * br;
-    const py = boss.y + Math.sin(ang) * br;
+    const px = cx + Math.cos(ang) * br;
+    const py = cy + Math.sin(ang) * br;
     const plate = plates[k]!;
     plate.setVisible(true).setActive(true);
     plate.setPosition(px, py);
@@ -474,7 +478,10 @@ export function drawP3APredictiveSightlinesAndOverlays(
   if (shellPool) {
     if (activeBoss) {
       const biome = (sim.currentBiome as 1 | 2 | 3) ?? 1;
-      renderBossArmorShellPlates(shellPool, activeBoss, biome, sim.tick * (1 / 60));
+      const bPos = scene.transport
+        ? scene.transport.getInterpolatedEnemyPos(activeBoss, scene.entityPosScratch)
+        : activeBoss;
+      renderBossArmorShellPlates(shellPool, activeBoss, biome, sim.tick * (1 / 60), bPos.x, bPos.y);
     } else {
       for (let i = 0; i < shellPool.length; i++) {
         shellPool[i]!.setVisible(false).setActive(false);
@@ -493,10 +500,11 @@ export function drawP3APredictiveSightlinesAndOverlays(
     const br = (boss.radius || 32) + 12;
 
     if ((boss.bossArmorBreakVulnTimer ?? 0) > 0) {
-      // 4 foot crack arcs at depth 15.0 on floorG
+      // 4 foot crack arcs at depth 15.0 on icePrisonRearGraphics (depth 15.0 NORMAL)
+      const floor15G = (scene as unknown as { icePrisonRearGraphics?: Phaser.GameObjects.Graphics }).icePrisonRearGraphics ?? floorG;
       for (let k = 0; k < 4; k++) {
         const ang = (k * Math.PI) / 2 + 0.35;
-        fillTaperedArcRibbon(floorG, bx, by, br, ang - 0.25, ang + 0.25, 2.2, 0xfbbf24, 0.92, 3, 1.2);
+        fillTaperedArcRibbon(floor15G, bx, by, br, ang - 0.25, ang + 0.25, 2.2, 0xfbbf24, 0.92, 3, 1.2);
       }
 
       // 3 Cutout stun stars orbiting overhead at depth 46.5

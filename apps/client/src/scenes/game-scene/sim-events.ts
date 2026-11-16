@@ -450,7 +450,7 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
       case 'entity_killed': {
         if (!isStress || statusFxCountThisStep < 1) {
           statusFxCountThisStep += 1;
-          this.fx.spawnEnemyDeathBurst(ev.defId, ev.x, ev.y);
+          this.fx.spawnEnemyDeathBurst(ev.defId, ev.x, ev.y, ev.entityId);
           if (
             ev.defId === 'spore_king' ||
             ev.defId === 'kryssa_ice_queen' ||

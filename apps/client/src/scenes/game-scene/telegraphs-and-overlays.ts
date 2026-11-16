@@ -37,6 +37,7 @@ export {
   stepBossKillTwoBeatSequence,
   type BossKillSequenceState,
 } from '../../fx/combat-fx.js';
+import { stepBossKillTwoBeatSequence } from '../../fx/combat-fx.js';
 import {
   drawEnemyBatch1Indicators,
   drawTetherStaffBeams,
@@ -613,7 +614,10 @@ export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, 
     renderP4BDuoAndSecretArenaOverlays(this);
   });
 
-  // 3. Boss Kill 2-Beat Sequence stepped via stepBossKillTwoBeatSequence on GameScene update
+  // 3. Boss Kill 2-Beat Sequence (Beat 1: chest fracture rays; Beat 2: twin crescents)
+  if (this.fx.bossKillSequenceState?.active) {
+    stepBossKillTwoBeatSequence(this.fx, this.lastRawDtSec ?? (1 / 60));
+  }
 
   // 4. Phase P11 Drama World Overlays (Boss Phase Transition Invuln/Roar, Boss Soft Enrage Aura, Vengeful Rings, Overlapping Wave Circles)
   drawP11DramaWorldOverlays(this);

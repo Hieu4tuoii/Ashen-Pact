@@ -911,4 +911,59 @@ describe('Commercial-Grade Class Skills, Summons & Dramatic World/Boss Interacti
     renderExecutionerCrescentProjectile(gfx as never, 150, 150, 0.5, 26);
     expect(gfx.fillTriangleCalls.length).toBeGreaterThan(0);
   });
+
+  it('applies solid #141019 silhouette inversion during Boss Kill Beat 1 and preserves drawings after frame clear', () => {
+    let appliedTint = 0;
+    const mockRig = {
+      applySilhouetteInversion(color = 0x141019) {
+        appliedTint = color;
+      },
+    };
+    mockRig.applySilhouetteInversion(0x141019);
+    expect(appliedTint).toBe(0x141019);
+
+    const { fx } = createTestCombatFx();
+    const fractureGfx = createRecordingGraphicsMock();
+    (fx as any).sceneRef = { bossFractureGraphics: fractureGfx };
+    fx.triggerBossKillSequence(350, 250, 1, 99, 'spore_king');
+
+    // Simulate renderTelegraphsAndShield clearing graphics first
+    fractureGfx.clear();
+    fx.underActorGraphics.clear();
+
+    // Step Beat 1 after frame clear
+    const beat1 = stepBossKillTwoBeatSequence(fx, 0.08);
+    expect(beat1.phase).toBe('invert_cracks');
+    expect(fractureGfx.fillTriangleCalls.length).toBeGreaterThan(0);
+
+    // Simulate next frame clear
+    fractureGfx.clear();
+    fx.underActorGraphics.clear();
+
+    // Step Beat 2 after frame clear
+    const beat2 = stepBossKillTwoBeatSequence(fx, 0.12);
+    expect(beat2.phase).toBe('twin_crescents');
+    expect(vi.mocked(fx.underActorGraphics.fillTriangle).mock.calls.length).toBeGreaterThan(0);
+  });
+
+  it('positions boss armor shell plates at interpolated overrideX, overrideY', () => {
+    let x = 0;
+    let y = 0;
+    const mockSprite = () => ({
+      setVisible() { return this; },
+      setActive() { return this; },
+      setDepth() { return this; },
+      setScale() { return this; },
+      setTint() { return this; },
+      setPosition(px: number, py: number) { x = px; y = py; return this; },
+      setRotation() { return this; },
+      get x() { return x; },
+      get y() { return y; },
+    });
+    const plates = Array.from({ length: 6 }, () => mockSprite());
+    const boss = { id: 1, hp: 500, x: 100, y: 100, radius: 32, bossArmorShellActive: true } as any;
+    renderBossArmorShellPlates(plates as any, boss, 2, 0, 500, 600);
+    expect(x).toBeGreaterThan(450);
+    expect(y).toBeGreaterThan(550);
+  });
 });

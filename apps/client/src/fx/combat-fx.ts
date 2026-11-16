@@ -646,7 +646,13 @@ export class CombatFxManager {
     }
   }
 
-  public triggerBossKillSequence(x: number, y: number, biome: 1 | 2 | 3 = 1): void {
+  public triggerBossKillSequence(
+    x: number,
+    y: number,
+    biome: 1 | 2 | 3 = 1,
+    bossId?: number,
+    defId?: string,
+  ): void {
     this.bossKillSequenceState = {
       active: true,
       x,
@@ -654,10 +660,17 @@ export class CombatFxManager {
       biome,
       elapsedSec: 0,
       beat2Spawned: false,
+      bossId,
+      defId,
     };
   }
 
-  public spawnBossKillBurst(x: number, y: number, defId = 'spore_king'): void {
+  public spawnBossKillBurst(
+    x: number,
+    y: number,
+    defId = 'spore_king',
+    bossId?: number,
+  ): void {
     this.bossKillSlowMoTimer = 0.42;
     this.bossKillFlashTimer = 0.28;
     this.triggerHitStop(55);
@@ -665,7 +678,7 @@ export class CombatFxManager {
 
     const bossBiome: 1 | 2 | 3 =
       defId === 'kryssa_ice_queen' ? 2 : defId === 'forge_titan' ? 3 : 1;
-    this.triggerBossKillSequence(x, y, bossBiome);
+    this.triggerBossKillSequence(x, y, bossBiome, bossId, defId);
 
     const invBake = 1 / TextureBaker.getBakeScale();
     const novaKey: ShaderNovaKey =
@@ -1010,11 +1023,13 @@ export class CombatFxManager {
     }
   }
 
-  public spawnEnemyDeathBurst(defId: string, x: number, y: number): void {
+  public spawnEnemyDeathBurst(defId: string, x: number, y: number, bossId?: number): void {
     this.spawnFloorDecal('splatter', x, y + 6, 1.0);
 
-    if (defId === 'spore_king' || defId === 'kryssa_ice_queen' || defId === 'forge_titan') {
-      this.spawnBossKillBurst(x, y, defId);
+    const isBoss = defId === 'spore_king' || defId === 'kryssa_ice_queen' || defId === 'forge_titan';
+    if (isBoss) {
+      this.spawnBossKillBurst(x, y, defId, bossId);
+      return;
     }
 
     const invBake = 1 / TextureBaker.getBakeScale();
@@ -1338,6 +1353,8 @@ export interface BossKillSequenceState {
   biome: 1 | 2 | 3;
   elapsedSec: number;
   beat2Spawned: boolean;
+  bossId?: number;
+  defId?: string;
 }
 
 export function stepBossKillTwoBeatSequence(
@@ -1421,9 +1438,53 @@ export function stepBossKillTwoBeatSequence(
     );
   }
 
-  // Scatter 12 Cutout shard relics once on Beat 2 start
+  // Scatter 12 Cutout shard relics + destroy dying boss rig + rig burst once on Beat 2 start
   if (!state.beat2Spawned) {
     state.beat2Spawned = true;
+
+    // Destroy dying Boss rig at Beat 2 transition
+    const gameScene = fx.sceneRef as unknown as {
+      enemyRigs?: Map<number, { destroy: () => void }>;
+    };
+    if (gameScene?.enemyRigs && state.bossId !== undefined) {
+      const dyingRig = gameScene.enemyRigs.get(state.bossId);
+      if (dyingRig) {
+        dyingRig.destroy();
+        gameScene.enemyRigs.delete(state.bossId);
+      }
+    }
+
+    // Scatter Boss rig parts at Beat 2 start
+    const rigDef = state.defId ? RIG_DEFS_BY_ID[state.defId] : undefined;
+    if (rigDef) {
+      const invBake = 1 / TextureBaker.getBakeScale();
+      const rigFootY = state.y + 12;
+      for (const part of rigDef.parts) {
+        const p = fx.acquireParticleSlot();
+        if (!p) break;
+        const radialAng = Math.atan2(part.offsetY + 14, part.offsetX || 0.1);
+        const ang = radialAng + (getClientFreezeRandom()() - 0.5) * 0.55;
+        const spd = 72 + getClientFreezeRandom()() * 88;
+        const texKey = TextureBaker.getPartTextureKey(rigDef.id, part.id);
+        activateParticle(p, {
+          textureKey: texKey,
+          x: state.x + part.offsetX * 0.65,
+          y: rigFootY + part.offsetY * 0.65,
+          vx: Math.cos(ang) * spd,
+          vy: Math.sin(ang) * spd - 46,
+          vr: (part.offsetX >= 0 ? 1 : -1) * (6 + getClientFreezeRandom()() * 9),
+          ttl: 0.55,
+          startScale: invBake * 1.05,
+          endScale: invBake * 0.25,
+          startAlpha: 0.98,
+          gravityY: 160,
+          damping: 2.2,
+          rotation: ang,
+          depth: 46,
+        });
+      }
+    }
+
     const shardKey =
       state.biome === 2
         ? 'fx_ice_shard_decal'

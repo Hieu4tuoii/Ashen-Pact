@@ -649,6 +649,27 @@ export class CutoutRig {
     this.appliedFootFrostColor = null;
   }
 
+  public applySilhouetteInversion(color = 0x141019): void {
+    if (this.compositeSprite) {
+      if (typeof this.compositeSprite.setTintFill === 'function') {
+        this.compositeSprite.setTintFill(color);
+      } else {
+        this.compositeSprite.setTint(color);
+      }
+    }
+    for (const sprite of this.partSprites.values()) {
+      if (typeof sprite.setTintFill === 'function') {
+        sprite.setTintFill(color);
+      } else {
+        sprite.setTint(color);
+      }
+    }
+  }
+
+  public setPosition(x: number, y: number): void {
+    this.container.setPosition(x, y);
+  }
+
   public destroy(): void {
     if (this.fastComposite) {
       this.shadowSprite.destroy();
