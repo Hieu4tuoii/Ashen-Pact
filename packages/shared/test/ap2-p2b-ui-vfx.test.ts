@@ -258,7 +258,7 @@ describe('AP2 Phase P2B.4 — Ashen Pact Altar Modal UI, HUD Curse/Relic Badges,
     const g = createMockGraphics();
     drawP2BWorldOverlays(mockScene as never, g as never, sim, p1.x, p1.y);
     expect(g.lineBetween).toHaveBeenCalled();
-    expect(g.strokeCircle).toHaveBeenCalled();
+    expect(g.strokeCircle).not.toHaveBeenCalled();
   });
 
   it('shows [E] Tế Đàn Khế Ước Tro Tàn / Ashen Pact Altar with 0 Gold cost in interact prompt', () => {

@@ -156,6 +156,7 @@ export function resolveProjectileRenderSpec(
         teammateFxOpacity?: number;
         bulletShape?: EnemyBulletShape;
         radius?: number;
+        clusterMortarLob?: boolean;
       },
 ): ProjectileRenderSpec {
   const params =
@@ -212,6 +213,56 @@ export function resolveProjectileRenderSpec(
   } else if (params.weaponId === 'thunder_hammer' && !params.isStress) {
     textureKey = CUTOUT_KIT_ATLAS_KEY;
     frameName = 'fx_thrown_thunder_hammer';
+    tint = 0xffffff;
+    scale = 1 / 3;
+  } else if (params.weaponId === 'mutator_boomerang_saw' && !params.isStress) {
+    textureKey = CUTOUT_KIT_ATLAS_KEY;
+    frameName = 'proj_mutator_boomerang_saw';
+    tint = 0xffffff;
+    scale = 1 / 3;
+  } else if (params.weaponId === 'dash_phase_blade' && !params.isStress) {
+    textureKey = CUTOUT_KIT_ATLAS_KEY;
+    frameName = 'proj_dash_phase_blade';
+    tint = 0xffffff;
+    scale = 1 / 3;
+  } else if (
+    (params.weaponId === 'cluster_mortar_lob' || params.clusterMortarLob) &&
+    !params.isStress
+  ) {
+    textureKey = CUTOUT_KIT_ATLAS_KEY;
+    frameName = 'proj_cluster_mortar_lob';
+    tint = 0xffffff;
+    scale = 1 / 3;
+  } else if (params.weaponId === 'holster_surge_bolt' && !params.isStress) {
+    textureKey = CUTOUT_KIT_ATLAS_KEY;
+    frameName = 'proj_holster_surge_bolt';
+    tint = 0xffffff;
+    scale = 1 / 3;
+  } else if (params.weaponId === 'holo_decoy_shot' && !params.isStress) {
+    textureKey = CUTOUT_KIT_ATLAS_KEY;
+    frameName = 'proj_holo_decoy_shot';
+    tint = 0xffffff;
+    scale = 1 / 3;
+  } else if (
+    (params.weaponId === 'relic_perpetual_rocket' ||
+      params.weaponId === 'perpetual_rocket' ||
+      params.weaponId === 'relic_perpetual_core_rocket' ||
+      params.weaponId?.includes('perpetual_rocket') ||
+      params.weaponId?.includes('perpetual_core_rocket')) &&
+    !params.isStress
+  ) {
+    textureKey = CUTOUT_KIT_ATLAS_KEY;
+    frameName = 'proj_relic_perpetual_rocket';
+    tint = 0xffffff;
+    scale = 1 / 3;
+  } else if (params.weaponId === 'table_tech_rocket' && !params.isStress) {
+    textureKey = CUTOUT_KIT_ATLAS_KEY;
+    frameName = 'proj_table_tech_rocket';
+    tint = 0xffffff;
+    scale = 1 / 3;
+  } else if (params.weaponId === 'reload_tediore_chuck' && !params.isStress) {
+    textureKey = CUTOUT_KIT_ATLAS_KEY;
+    frameName = 'proj_reload_tediore_chuck';
     tint = 0xffffff;
     scale = 1 / 3;
   } else if (params.weaponId === 'frag_launcher_sub' && !params.isStress) {

@@ -221,6 +221,12 @@ export function createImpl(this: GameScene): void {
     }
     this.statusBadgePool.length = 0;
   }
+  if (this.duoRailLockPool) {
+    for (const sprite of this.duoRailLockPool) {
+      sprite.destroy();
+    }
+    this.duoRailLockPool.length = 0;
+  }
   resetScrapShotgunPelletHitTracker();
   resetCrystalPillarImpactTracker();
   this.projectileSprites.clear();
@@ -616,6 +622,11 @@ export function createImpl(this: GameScene): void {
       this.statusBadgePool[i]!.setVisible(false).setActive(false);
     }
   }
+  if (this.duoRailLockPool) {
+    for (let i = 0; i < this.duoRailLockPool.length; i++) {
+      this.duoRailLockPool[i]!.setVisible(false).setActive(false);
+    }
+  }
   this.summonSpritePool = [];
 
   // Peripheral Status Pools: 64 statusRimPool slots at depth 28.2, 16 statusFreezeCuffPool slots at depth 28.3, 32 statusBadgePool slots at depth 48.0
@@ -637,6 +648,12 @@ export function createImpl(this: GameScene): void {
       const s = this.add.sprite(0, 0, 'fx_cutout_kit_512', 'status_badge_burn_9x9');
       s.setDepth(48.0).setScale(1 / 3).setBlendMode(Phaser.BlendModes.NORMAL).setVisible(false).setActive(false);
       this.statusBadgePool.push(s);
+    }
+    this.duoRailLockPool = [];
+    for (let i = 0; i < 16; i++) {
+      const s = this.add.sprite(0, 0, 'fx_cutout_kit_512', 'duo_rail_lock_10x10');
+      s.setDepth(46.5).setScale(1 / 3).setBlendMode(Phaser.BlendModes.NORMAL).setVisible(false).setActive(false);
+      this.duoRailLockPool.push(s);
     }
   }
 
@@ -1571,6 +1588,11 @@ export function teleportToRoomImpl(this: GameScene, targetRoomId: number): boole
       this.statusBadgePool[i]!.setVisible(false).setActive(false);
     }
   }
+  if (this.duoRailLockPool) {
+    for (let i = 0; i < this.duoRailLockPool.length; i++) {
+      this.duoRailLockPool[i]!.setVisible(false).setActive(false);
+    }
+  }
   sim.doorTransitionCooldown = Math.max(sim.doorTransitionCooldown, 0.75);
 
   if (this.room && this.coopMode !== 'solo') {
@@ -1678,6 +1700,11 @@ export function applyCameraViewportImpl(this: GameScene): void {
         this.statusBadgePool[i]!.setScale(1 / 3);
       }
     }
+    if (this.duoRailLockPool) {
+      for (let i = 0; i < this.duoRailLockPool.length; i++) {
+        this.duoRailLockPool[i]!.setScale(1 / 3);
+      }
+    }
     const stressInvBake = 1 / Math.min(2, newScale);
     for (const item of this.projectileSprites.values()) {
       const isKit = item.textureKey === 'fx_cutout_kit_512' || item.frameName !== undefined;
@@ -1687,9 +1714,9 @@ export function applyCameraViewportImpl(this: GameScene): void {
           ? stressInvBake
           : invBake;
       item.sprite.setTexture(item.textureKey, item.frameName);
-      item.sprite.setScale(baseInv * item.specScale);
+      item.sprite.setScale(isKit ? item.specScale : baseInv * item.specScale);
       item.glowSprite.setTexture('fx_enemy_bullet_glow');
-      item.glowSprite.setScale(baseInv * item.specScale * 1.05);
+      item.glowSprite.setScale(isKit ? item.specScale * 1.05 : baseInv * item.specScale * 1.05);
     }
     for (const item of this.projectileSpritePool) {
       const isKit = item.textureKey === 'fx_cutout_kit_512' || item.frameName !== undefined;
@@ -1699,9 +1726,9 @@ export function applyCameraViewportImpl(this: GameScene): void {
           ? stressInvBake
           : invBake;
       item.sprite.setTexture(item.textureKey, item.frameName);
-      item.sprite.setScale(baseInv * item.specScale);
+      item.sprite.setScale(isKit ? item.specScale : baseInv * item.specScale);
       item.glowSprite.setTexture('fx_enemy_bullet_glow');
-      item.glowSprite.setScale(baseInv * item.specScale * 1.05);
+      item.glowSprite.setScale(isKit ? item.specScale * 1.05 : baseInv * item.specScale * 1.05);
     }
     for (const item of this.pickupSprites.values()) {
       const isKit = item.textureKey === 'fx_cutout_kit_512' || item.frameName !== undefined;

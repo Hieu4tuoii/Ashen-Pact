@@ -215,6 +215,7 @@ export class GameScene extends Phaser.Scene {
   public statusRimPool: Phaser.GameObjects.Sprite[] = [];
   public statusFreezeCuffPool: Phaser.GameObjects.Sprite[] = [];
   public statusBadgePool: Phaser.GameObjects.Sprite[] = [];
+  public duoRailLockPool: Phaser.GameObjects.Sprite[] = [];
   public projectileSprites = new Map<
     number,
     {

@@ -61,7 +61,7 @@ export function isVisualFreezeActive(scene?: unknown): boolean {
 
 function resolveGraphics(sceneOrG: unknown): Phaser.GameObjects.Graphics | null {
   if (!sceneOrG || typeof sceneOrG !== 'object') return null;
-  if ('strokeCircle' in sceneOrG && typeof (sceneOrG as { strokeCircle?: unknown }).strokeCircle === 'function') {
+  if ('lineBetween' in sceneOrG && typeof (sceneOrG as { lineBetween?: unknown }).lineBetween === 'function') {
     return sceneOrG as Phaser.GameObjects.Graphics;
   }
   const maybeScene = sceneOrG as { telegraphGraphics?: Phaser.GameObjects.Graphics };
@@ -127,9 +127,7 @@ export function drawP1DBlessingProjectileOverlay(
     g.lineStyle(2.8, 0xf97316, 0.95);
     g.lineBetween(tailX, tailY, b.x + cos * 5, b.y + sin * 5);
     g.fillStyle(0xfffdf5, 0.96);
-    g.fillCircle(tailX - cos * (2 + Math.sin(t * 25 + b.id) * 1.5), tailY - sin * 2, 3.2);
-    g.lineStyle(1.4, 0xfacc15, 0.88);
-    g.strokeCircle(b.x, b.y, b.radius + 2);
+    g.fillCircle(tailX - cos * (2 + Math.sin(t * 25 + b.id) * 1.5), tailY - sin * 2, 2.2);
   } else if (b.weaponId === 'reload_tediore_chuck') {
     const spin = freeze ? 0.6 : t * 14 + b.id;
     const rx = Math.cos(spin) * 6;
@@ -140,17 +138,22 @@ export function drawP1DBlessingProjectileOverlay(
     g.lineBetween(b.x - rx, b.y - ry, b.x + rx, b.y + ry);
     g.fillStyle(0xfffdf5, 0.94);
     g.fillCircle(b.x, b.y, 2.8);
-    g.lineStyle(1.3, 0xfacc15, 0.72);
-    g.strokeCircle(b.x, b.y, b.radius + 3);
   } else if (b.weaponId === 'vanguard_bastion_prism') {
-    g.lineStyle(2.4, 0xf97316, 0.92);
-    g.strokeCircle(b.x, b.y, b.radius + 1.5);
+    const r = b.radius + 1.5;
+    fillTaperedArcRibbon(g, b.x, b.y, r, -0.6, 0.6, 2.0, 0xf97316, 0.92, 3, 1.2);
+    fillTaperedArcRibbon(g, b.x, b.y, r, Math.PI - 0.6, Math.PI + 0.6, 2.0, 0xf97316, 0.92, 3, 1.2);
     g.fillStyle(0xfffdf5, 0.95);
     g.fillCircle(b.x, b.y, 2.5);
   } else if ((b.splitGeneration ?? 0) >= 1) {
-    g.lineStyle(1.6, 0x38bdf8, 0.82);
-    g.strokeCircle(b.x, b.y, Math.max(2.5, b.radius * 0.9));
+    // Pointed twin chevrons trailing behind split child bullets
+    g.lineStyle(1.8, 0x141019, 0.85);
     g.lineBetween(b.x - cos * 7, b.y - sin * 7, b.x, b.y);
+    g.lineStyle(1.2, 0x38bdf8, 0.95);
+    g.lineBetween(b.x - cos * 7, b.y - sin * 7, b.x, b.y);
+    const perpX = -sin * 3.0;
+    const perpY = cos * 3.0;
+    g.lineBetween(b.x - cos * 4 + perpX, b.y - sin * 4 + perpY, b.x, b.y);
+    g.lineBetween(b.x - cos * 4 - perpX, b.y - sin * 4 - perpY, b.x, b.y);
   }
 }
 
@@ -256,8 +259,11 @@ export function drawP1DBlessingActiveOverlays(
     const z = skillZones[i]!;
     if (z.ttlSec <= 0) continue;
     if (z.vortex) {
-      floorG.lineStyle(1.5, 0x60a5fa, 0.52);
-      floorG.strokeCircle(z.x, z.y, Math.max(16, z.radius * 0.55 + pulse));
+      const r = Math.max(16, z.radius * 0.55 + pulse);
+      for (let a = 0; a < 3; a++) {
+        const ang = (a * Math.PI * 2) / 3 + t * 2.5;
+        fillTaperedArcRibbon(floorG, z.x, z.y, r, ang - 0.45, ang + 0.45, 1.8, 0x60a5fa, 0.52, 4, 1.2);
+      }
     }
     if (z.linkedZoneId && !z.isTwinSecondary) {
       const partner = skillZones.find((o) => o.id === z.linkedZoneId && o.ttlSec > 0);
@@ -291,8 +297,11 @@ export function drawP1DBlessingActiveOverlays(
     if (s1.hp <= 0 || s1.ttlSec <= 0) continue;
     if (s1.kind === 'tesla_turret') {
       if (s1.selfDestruct) {
-        floorG.lineStyle(2.0, 0xf97316, 0.85);
-        floorG.strokeCircle(s1.x, s1.y, s1.radius + 5 + pulse * 0.4);
+        const r = s1.radius + 5 + pulse * 0.4;
+        for (let k = 0; k < 4; k++) {
+          const ang = (k * Math.PI) / 2 + t * 3.0;
+          fillTaperedArcRibbon(floorG, s1.x, s1.y, r, ang - 0.25, ang + 0.25, 2.0, 0xf97316, 0.85, 3, 1.2);
+        }
       }
       for (let j = i + 1; j < summons.length; j++) {
         const s2 = summons[j]!;
@@ -361,8 +370,11 @@ export function drawP1DBlessingActiveOverlays(
   for (let i = 0; i < enemies.length; i++) {
     const e = enemies[i]!;
     if (e.hp > 0 && (e.pinballReboundTimer ?? 0) > 0) {
-      g.lineStyle(2.0, 0xcbd5e1, 0.85);
-      g.strokeCircle(e.x, e.y, e.radius + 5);
+      const r = e.radius + 5;
+      for (let k = 0; k < 2; k++) {
+        const ang = k * Math.PI + t * 2.0;
+        fillTaperedArcRibbon(g, e.x, e.y, r, ang - 0.4, ang + 0.4, 2.0, 0xcbd5e1, 0.85, 3, 1.2);
+      }
     }
   }
 
@@ -627,8 +639,9 @@ export function drawP1DTransientShape(
     g.moveTo(s.x, s.y);
     g.lineTo(x2, y2);
     g.strokePath();
-    floorG.lineStyle(2.2, s.color, alpha * 0.88);
-    floorG.strokeCircle(x2, y2, 10 + progress * 12);
+    const rImpact = 10 + progress * 12;
+    fillTaperedArcRibbon(floorG, x2, y2, rImpact, 0, Math.PI, 2.2, s.color, alpha * 0.88, 4, 1.2);
+    fillTaperedArcRibbon(floorG, x2, y2, rImpact, Math.PI, Math.PI * 2, 2.2, s.color, alpha * 0.88, 4, 1.2);
     return true;
   }
 
@@ -653,9 +666,9 @@ export function drawP1DTransientShape(
   const r = Math.max(8, s.radius * (0.38 + progress * 0.62));
   floorG.fillStyle(s.color, alpha * 0.05);
   floorG.fillCircle(s.x, s.y, r);
-  floorG.lineStyle(4.2, 0x141019, alpha * 0.7);
-  floorG.strokeCircle(s.x, s.y, r);
-  floorG.lineStyle(2.4, s.color, alpha * 0.92);
-  floorG.strokeCircle(s.x, s.y, r);
+  for (let b = 0; b < 4; b++) {
+    const ba = (b * Math.PI) / 2;
+    fillTaperedArcRibbon(floorG, s.x, s.y, r, ba - 0.32, ba + 0.32, 2.4, s.color, alpha * 0.92, 4, 1.4);
+  }
   return true;
 }

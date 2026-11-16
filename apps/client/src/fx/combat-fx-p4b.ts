@@ -6,7 +6,6 @@ import {
   distance,
   hasPlayerDuoBoon,
   isFlippableBarricadeProp,
-  MAGNETIC_BASTION_MAX_DIST,
   MAGNETIC_BASTION_WIRE_HALF_WIDTH,
   NAPALM_PLAGUE_BLAST_RADIUS,
   type SimEvent,
@@ -23,6 +22,12 @@ import { zzfx } from '../audio/zzfx.js';
 import { getFreezeVisualTimeSec, getVisualQueryConfig } from '../core/visual-query.js';
 import type { GameScene } from '../scenes/GameScene.js';
 import { isVisualFreezeActive } from './combat-fx-blessings-p1d.js';
+import {
+  fillTaperedArcRibbon,
+  fillTaperedLightningBolt,
+  fillTaperedQuadraticBezier,
+} from './tapered-ribbon-builder.js';
+import { routeCutoutBurstByRadius } from './combat-fx-spawners.js';
 
 type Gfx = Phaser.GameObjects.Graphics;
 
@@ -137,6 +142,103 @@ function pointToSegmentDist(
   return { dist: distance(px, py, cx, cy), cx, cy };
 }
 
+export function renderDuoSuperheatedCyclone(
+  underGfx: Phaser.GameObjects.Graphics,
+  x: number,
+  y: number,
+  radiusPx = 56.0,
+  phaseRad = 0,
+  alpha = 1.0,
+): void {
+  const bladeCount = 6;
+  const arcSpan = 0.65;
+  for (let i = 0; i < bladeCount; i++) {
+    const startAng = phaseRad + (i * Math.PI * 2) / bladeCount;
+    const endAng = startAng + arcSpan;
+    const color = i % 2 === 0 ? 0xf97316 : 0x38bdf8;
+    fillTaperedArcRibbon(
+      underGfx,
+      x,
+      y,
+      radiusPx,
+      startAng,
+      endAng,
+      3.2,
+      color,
+      0.85 * alpha,
+      6,
+      2.0,
+    );
+  }
+}
+
+export function renderDuoMagneticBastionTether(
+  groundGfx: Phaser.GameObjects.Graphics,
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+  alpha = 1.0,
+): boolean {
+  const dist = Math.hypot(x2 - x1, y2 - y1);
+  if (dist > 220.0 || dist <= 1e-4) {
+    return false;
+  }
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const nx = -dy / dist;
+  const ny = dx / dist;
+
+  // ±14.0px #38BDF8 / #F59E0B Cutout magnetic floor rail on groundHazardGraphics (depth 16.0)
+  const r1x1 = x1 + nx * 14.0;
+  const r1y1 = y1 + ny * 14.0;
+  const r1x2 = x2 + nx * 14.0;
+  const r1y2 = y2 + ny * 14.0;
+  const r1mx = (r1x1 + r1x2) * 0.5;
+  const r1my = (r1y1 + r1y2) * 0.5;
+  fillTaperedQuadraticBezier(
+    groundGfx,
+    r1x1,
+    r1y1,
+    r1mx,
+    r1my,
+    r1x2,
+    r1y2,
+    2.4,
+    3.6,
+    2.4,
+    0x38bdf8,
+    0.9 * alpha,
+    6,
+    1.6,
+  );
+
+  const r2x1 = x1 - nx * 14.0;
+  const r2y1 = y1 - ny * 14.0;
+  const r2x2 = x2 - nx * 14.0;
+  const r2y2 = y2 - ny * 14.0;
+  const r2mx = (r2x1 + r2x2) * 0.5;
+  const r2my = (r2y1 + r2y2) * 0.5;
+  fillTaperedQuadraticBezier(
+    groundGfx,
+    r2x1,
+    r2y1,
+    r2mx,
+    r2my,
+    r2x2,
+    r2y2,
+    2.4,
+    3.6,
+    2.4,
+    0xf59e0b,
+    0.9 * alpha,
+    6,
+    1.6,
+  );
+
+  return true;
+}
+
 function drawSuperheatedCycloneBase(
   g: Gfx,
   floorG: Gfx,
@@ -148,13 +250,10 @@ function drawSuperheatedCycloneBase(
   const auraR = sum.auraRadius || SUPERHEATED_CYCLONE_AURA_RADIUS;
   const spin = tSec * 5.4 + sum.id * 0.7;
 
-  // Boiling vapor outer 1:1 boundary ring on floor (depth 16, <= 0.06 fill)
+  // 1:1 at r = 56.0px (depth 26.6) alternating #F97316 flame & #38BDF8 wind fillTaperedArcRibbon blades
   floorG.fillStyle(COL_FROST_CYAN, 0.06 * aMul);
   floorG.fillCircle(sum.x, sum.y, auraR);
-  floorG.lineStyle(3.6, COL_INK, 0.7 * aMul);
-  floorG.strokeCircle(sum.x, sum.y, auraR);
-  floorG.lineStyle(2.0, COL_ICE_WHITE, 0.86 * aMul);
-  floorG.strokeCircle(sum.x, sum.y, auraR);
+  renderDuoSuperheatedCyclone(floorG, sum.x, sum.y, auraR || 56.0, spin, aMul);
 
   // Triple tapered Chiaroscuro steam-vortex scythe arms (1:1 circular top-down vortex)
   const steps = 6;
@@ -347,33 +446,18 @@ function drawSuperconductRailAndNapalmEnemyOverlays(
     const e = sim.enemies[i]!;
     if (e.hp <= 0) continue;
 
-    // 3. duo_superconduct_rail: dashed r=100px 1:1 cyan-violet magnetic field ring on floor
+    // 3. duo_superconduct_rail: replace Ø200px circle with duo_rail_lock_10x10 (depth 46.5) brackets on locked targets
     if (railOwner && e.superconductTimer > 0) {
-      const r = SUPERCONDUCT_RAIL_RADIUS;
       const rot = tSec * 1.6 + e.id * 0.4;
-      floorG.lineStyle(1.4, COL_VIOLET, 0.24 * railAlpha);
-      floorG.strokeCircle(e.x, e.y, r);
-
-      const segCount = 12;
-      const arcSpan = (Math.PI * 2) / (segCount * 1.75);
-      for (let s = 0; s < segCount; s++) {
-        const a0 = rot + (s * Math.PI * 2) / segCount;
-        floorG.lineStyle(2.0, s % 2 === 0 ? COL_FROST_CYAN : COL_VIOLET, 0.84 * railAlpha);
-        floorG.beginPath();
-        floorG.arc(e.x, e.y, r, a0, a0 + arcSpan, false);
-        floorG.strokePath();
-      }
-
-      // 4 inward magnetic lock-on ticks
+      const lockSize = 10;
       for (let q = 0; q < 4; q++) {
         const qa = -rot * 1.4 + (q * Math.PI) / 2;
-        g.lineStyle(1.6, COL_ICE_WHITE, 0.8 * railAlpha);
-        g.lineBetween(
-          e.x + Math.cos(qa) * (e.radius + 5),
-          e.y + Math.sin(qa) * (e.radius + 5),
-          e.x + Math.cos(qa) * (e.radius + 13),
-          e.y + Math.sin(qa) * (e.radius + 13),
-        );
+        const lx = e.x + Math.cos(qa) * (e.radius + 8);
+        const ly = e.y + Math.sin(qa) * (e.radius + 8);
+        g.fillStyle(COL_INK, 0.85 * railAlpha);
+        g.fillRect(lx - 5, ly - 5, lockSize, lockSize);
+        g.fillStyle(COL_FROST_CYAN, 0.95 * railAlpha);
+        g.fillRect(lx - 4, ly - 4, lockSize - 2, lockSize - 2);
       }
     }
 
@@ -383,10 +467,10 @@ function drawSuperconductRailAndNapalmEnemyOverlays(
       const collarR = Math.max(12, e.radius + 4);
       floorG.fillStyle(COL_LIME_VENOM, 0.06 * pAlpha);
       floorG.fillCircle(e.x, e.y + 2, collarR);
-      floorG.lineStyle(3.2, COL_INK, 0.65 * pAlpha);
-      floorG.strokeCircle(e.x, e.y + 2, collarR);
-      floorG.lineStyle(1.8, COL_FIRE_ORANGE, 0.84 * pAlpha);
-      floorG.strokeCircle(e.x, e.y + 2, collarR);
+      for (let k = 0; k < 4; k++) {
+        const ang = (k * Math.PI) / 2 + tSec * 2.0;
+        fillTaperedArcRibbon(g, e.x, e.y + 2, collarR, ang - 0.32, ang + 0.32, 2.2, COL_FIRE_ORANGE, 0.84 * pAlpha, 3, 1.2);
+      }
 
       for (let d = 0; d < 5; d++) {
         const ang = tSec * 3.8 + d * 1.256 + e.id;
@@ -440,8 +524,19 @@ function drawPlasmaStarAndRailProjectiles(
           }
         }
         if (bestEnemy) {
-          g.lineStyle(1.3, COL_FROST_CYAN, 0.65 * aMul);
-          g.lineBetween(b.x, b.y, bestEnemy.x, bestEnemy.y);
+          fillTaperedLightningBolt(
+            g,
+            b.x,
+            b.y,
+            bestEnemy.x,
+            bestEnemy.y,
+            2.2,
+            COL_FROST_CYAN,
+            0.9 * aMul,
+            (b.id * 17 + bestEnemy.id) & 0xffff,
+            5,
+            1.4,
+          );
         }
       }
     }
@@ -466,8 +561,8 @@ function drawPlasmaStarAndRailProjectiles(
       g.strokePath();
 
       if ((b.bouncesDone ?? 0) > 0) {
-        g.lineStyle(1.5, COL_VOLT_YELLOW, 0.76 * aMul);
-        g.strokeCircle(b.x, b.y, rOuter + 3);
+        fillTaperedArcRibbon(g, b.x, b.y, rOuter + 3, -0.6, 0.6, 1.8, COL_VOLT_YELLOW, 0.76 * aMul, 3, 1.0);
+        fillTaperedArcRibbon(g, b.x, b.y, rOuter + 3, Math.PI - 0.6, Math.PI + 0.6, 1.8, COL_VOLT_YELLOW, 0.76 * aMul, 3, 1.0);
       }
 
       addG.fillStyle(COL_INK, 0.82 * aMul);
@@ -567,7 +662,8 @@ function drawMagneticBastionArcWires(g: Gfx, sim: WorldSim, tSec: number): void 
     for (let j = i + 1; j < flippedBarricadesScratch.length; j++) {
       const b = flippedBarricadesScratch[j]!;
       const dist = distance(a.x, a.y, b.x, b.y);
-      if (dist <= 1 || dist > MAGNETIC_BASTION_MAX_DIST) continue;
+      if (dist <= 1 || dist > 220.0) continue;
+      renderDuoMagneticBastionTether(g, a.x, a.y, b.x, b.y, wireAlpha);
 
       const dx = b.x - a.x;
       const dy = b.y - a.y;
@@ -644,8 +740,10 @@ function drawSecretChallengeCrystalOverlays(g: Gfx, floorG: Gfx, sim: WorldSim, 
     if (npc.kind !== 'secret_challenge_crystal') continue;
 
     if (npc.interacted) {
-      floorG.lineStyle(1.4, COL_SLATE_MUTED, 0.3);
-      floorG.strokeCircle(npc.x, npc.y + 2, 20);
+      for (let k = 0; k < 4; k++) {
+        const ang = (k * Math.PI) / 2;
+        fillTaperedArcRibbon(floorG, npc.x, npc.y + 2, 20, ang - 0.28, ang + 0.28, 1.6, COL_SLATE_MUTED, 0.3, 3, 1.0);
+      }
       continue;
     }
 
@@ -653,12 +751,11 @@ function drawSecretChallengeCrystalOverlays(g: Gfx, floorG: Gfx, sim: WorldSim, 
     const ringR = 24 + pulse;
     floorG.fillStyle(COL_VIOLET, 0.06);
     floorG.fillCircle(npc.x, npc.y + 2, ringR + 4);
-    floorG.lineStyle(3.2, COL_INK, 0.68);
-    floorG.strokeCircle(npc.x, npc.y + 2, ringR);
-    floorG.lineStyle(2.0, COL_VIOLET, 0.86);
-    floorG.strokeCircle(npc.x, npc.y + 2, ringR);
-    floorG.lineStyle(1.3, COL_SOLAR_GOLD, 0.8);
-    floorG.strokeCircle(npc.x, npc.y + 2, ringR * 0.72);
+    for (let k = 0; k < 4; k++) {
+      const ang = (k * Math.PI) / 2 + tSec * 1.5;
+      fillTaperedArcRibbon(floorG, npc.x, npc.y + 2, ringR, ang - 0.32, ang + 0.32, 2.4, COL_VIOLET, 0.86, 4, 1.2);
+      fillTaperedArcRibbon(floorG, npc.x, npc.y + 2, ringR * 0.72, ang - 0.25, ang + 0.25, 1.6, COL_SOLAR_GOLD, 0.8, 3, 1.0);
+    }
 
     // 4 orbiting prismatic motes on a 1:1 circular orbit around active challenge crystal
     for (let m = 0; m < 4; m++) {
@@ -690,10 +787,10 @@ function drawP4BTransientBursts(g: Gfx, floorG: Gfx, sim: WorldSim): void {
     if (burst.kind === 'cryo_shatter_spire_burst') {
       floorG.fillStyle(COL_FROST_CYAN, 0.06 * fade);
       floorG.fillCircle(burst.x, burst.y, curR);
-      floorG.lineStyle(3.8, COL_INK, 0.7 * fade);
-      floorG.strokeCircle(burst.x, burst.y, curR);
-      floorG.lineStyle(2.2, COL_ICE_WHITE, 0.94 * fade);
-      floorG.strokeCircle(burst.x, burst.y, curR);
+      for (let k = 0; k < 4; k++) {
+        const ang = (k * Math.PI) / 2 + prog * 0.5;
+        fillTaperedArcRibbon(floorG, burst.x, burst.y, curR, ang - 0.34, ang + 0.34, 2.6, COL_ICE_WHITE, 0.94 * fade, 4, 1.4);
+      }
       for (let s = 0; s < 8; s++) {
         const ang = (s * Math.PI) / 4;
         g.lineStyle(2.0, s % 2 === 0 ? COL_ICE_WHITE : COL_FROST_CYAN, 0.9 * fade);
@@ -707,12 +804,11 @@ function drawP4BTransientBursts(g: Gfx, floorG: Gfx, sim: WorldSim): void {
     } else if (burst.kind === 'napalm_chain_plague_burst') {
       floorG.fillStyle(COL_FIRE_ORANGE, 0.06 * fade);
       floorG.fillCircle(burst.x, burst.y, curR);
-      floorG.lineStyle(3.8, COL_INK, 0.72 * fade);
-      floorG.strokeCircle(burst.x, burst.y, curR);
-      floorG.lineStyle(2.4, COL_FIRE_ORANGE, 0.94 * fade);
-      floorG.strokeCircle(burst.x, burst.y, curR);
-      floorG.lineStyle(1.8, COL_LIME_BRIGHT, 0.88 * fade);
-      floorG.strokeCircle(burst.x, burst.y, curR * 0.78);
+      for (let k = 0; k < 4; k++) {
+        const ang = (k * Math.PI) / 2 + prog * 0.5;
+        fillTaperedArcRibbon(floorG, burst.x, burst.y, curR, ang - 0.34, ang + 0.34, 2.6, COL_FIRE_ORANGE, 0.94 * fade, 4, 1.4);
+        fillTaperedArcRibbon(floorG, burst.x, burst.y, curR * 0.78, ang - 0.28, ang + 0.28, 1.8, COL_LIME_BRIGHT, 0.88 * fade, 3, 1.2);
+      }
       for (let s = 0; s < 10; s++) {
         const ang = (s * Math.PI * 2) / 10 + 0.15;
         const sr = curR * 0.9;
@@ -720,19 +816,18 @@ function drawP4BTransientBursts(g: Gfx, floorG: Gfx, sim: WorldSim): void {
         g.fillCircle(burst.x + Math.cos(ang) * sr, burst.y + Math.sin(ang) * sr, 2.8 * fade + 1);
       }
     } else if (burst.kind === 'secret_trial_seal') {
-      floorG.lineStyle(4.4, COL_INK, 0.72 * fade);
-      floorG.strokeCircle(burst.x, burst.y, curR);
-      floorG.lineStyle(2.8, COL_VIOLET, 0.92 * fade);
-      floorG.strokeCircle(burst.x, burst.y, curR);
-      floorG.lineStyle(1.8, COL_SOLAR_GOLD, 0.86 * fade);
-      floorG.strokeCircle(burst.x, burst.y, curR * 0.78);
+      for (let k = 0; k < 4; k++) {
+        const ang = (k * Math.PI) / 2 + prog * 0.5;
+        fillTaperedArcRibbon(floorG, burst.x, burst.y, curR, ang - 0.34, ang + 0.34, 2.8, COL_VIOLET, 0.92 * fade, 4, 1.4);
+        fillTaperedArcRibbon(floorG, burst.x, burst.y, curR * 0.78, ang - 0.28, ang + 0.28, 2.0, COL_SOLAR_GOLD, 0.86 * fade, 3, 1.2);
+      }
     } else if (burst.kind === 'secret_trial_victory') {
       floorG.fillStyle(COL_SOLAR_GOLD, 0.06 * fade);
       floorG.fillCircle(burst.x, burst.y, curR);
-      floorG.lineStyle(4.4, COL_INK, 0.74 * fade);
-      floorG.strokeCircle(burst.x, burst.y, curR);
-      floorG.lineStyle(2.8, COL_SOLAR_GOLD, 0.96 * fade);
-      floorG.strokeCircle(burst.x, burst.y, curR);
+      for (let k = 0; k < 4; k++) {
+        const ang = (k * Math.PI) / 2 + prog * 0.5;
+        fillTaperedArcRibbon(floorG, burst.x, burst.y, curR, ang - 0.34, ang + 0.34, 2.8, COL_SOLAR_GOLD, 0.96 * fade, 4, 1.4);
+      }
       for (let s = 0; s < 8; s++) {
         const ang = (s * Math.PI) / 4 + prog * 0.4;
         g.lineStyle(2.0, COL_BONE, 0.88 * fade);
@@ -744,8 +839,10 @@ function drawP4BTransientBursts(g: Gfx, floorG: Gfx, sim: WorldSim): void {
         );
       }
     } else {
-      floorG.lineStyle(2.2, COL_SLATE_MUTED, 0.75 * fade);
-      floorG.strokeCircle(burst.x, burst.y, curR);
+      for (let k = 0; k < 4; k++) {
+        const ang = (k * Math.PI) / 2 + prog * 0.5;
+        fillTaperedArcRibbon(floorG, burst.x, burst.y, curR, ang - 0.3, ang + 0.3, 2.2, COL_SLATE_MUTED, 0.75 * fade, 3, 1.2);
+      }
     }
   }
 }
@@ -803,6 +900,13 @@ export function handleP4BSimEvent(scene: GameScene, ev: SimEvent): boolean {
       ev.sourceDefId === 'duo_cryo_shatter_spire' ||
       ev.sourceDefId === 'duo_napalm_chain_plague'
     ) {
+      if (scene?.fx && typeof (scene.fx as { spawnShaderNova?: unknown }).spawnShaderNova === 'function') {
+        if (ev.sourceDefId === 'duo_cryo_shatter_spire') {
+          routeCutoutBurstByRadius(scene.fx, ev.x, ev.y, ev.radius || CRYO_SHATTER_SPIRE_BLAST_RADIUS, 'fx_sh_nova_cryo');
+        } else if (ev.sourceDefId === 'duo_napalm_chain_plague') {
+          routeCutoutBurstByRadius(scene.fx, ev.x, ev.y, ev.radius || NAPALM_PLAGUE_BLAST_RADIUS, 'fx_sh_bloom_briar');
+        }
+      }
       const list = getTransientBurstList(sim);
       if (list.length >= 24) list.shift();
       const isCryo = ev.sourceDefId === 'duo_cryo_shatter_spire';

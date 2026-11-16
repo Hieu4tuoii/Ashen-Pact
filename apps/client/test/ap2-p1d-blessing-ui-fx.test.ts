@@ -14,6 +14,8 @@ import {
   P1D_BLESSING_EVENT_KINDS,
   spawnP1DBlessingEventFx,
 } from '../src/fx/combat-fx-blessings-p1d.js';
+import { renderSoulChainTether } from '../src/fx/combat-fx-p2b.js';
+import { resolveProjectileRenderSpec } from '../src/fx/combat-fx-spawners.js';
 import {
   drawP4ASummonOverlay,
   drawP4ATetherAndProjectileOverlays,
@@ -283,7 +285,7 @@ describe('AP2 Phase P1D.4 & P4A.4 — Per-Player Blessing Modal UI, HUD Chips, i
     sim.player.blessingIds = [...ALL_PHASE1_BLESSING_IDS];
 
     drawP1DBlessingActiveOverlays(mockScene as never, sim, 1.5);
-    expect(g.calls.includes('strokeCircle')).toBe(true);
+    expect(g.calls.includes('strokeCircle')).toBe(false);
     expect(g.calls.includes('strokePath')).toBe(true);
 
     // 5. Projectile overlays (table_tech_rocket, reload_tediore_chuck, splitGeneration === 1)
@@ -539,9 +541,9 @@ describe('AP2 Phase P1D.4 & P4A.4 — Per-Player Blessing Modal UI, HUD Chips, i
     const gSameRoom = createMockGraphics();
     drawP4ATetherAndProjectileOverlays(mockScene as never, gSameRoom as never, sim);
     expect(gSameRoom.calls.includes('fillCircle')).toBe(true);
-    expect(gSameRoom.calls.includes('strokeCircle')).toBe(true);
+    expect(gSameRoom.calls.includes('strokeCircle')).toBe(false);
     expect(gSameRoom.fillColors).toContain(0x84cc16);
-    expect(gSameRoom.lineColors).toContain(0xbef264);
+    expect(gSameRoom.fillColors).toContain(0xbef264);
 
     // Room transition drops stale transient bursts from the previous room
     sim.currentRoomId = initialRoomId + 1;
@@ -618,7 +620,7 @@ describe('AP2 Phase P1D.4 & P4A.4 — Per-Player Blessing Modal UI, HUD Chips, i
     sim.tick += 2;
     const elevatedG = createMockGraphics();
     drawP4ATetherAndProjectileOverlays(shaderScene as never, elevatedG as never, sim);
-    expect(groundG.calls.includes('strokeCircle')).toBe(true);
+    expect(groundG.calls.includes('strokeCircle')).toBe(false);
     expect(floorAlphas.length).toBeGreaterThan(0);
     expect(Math.max(...floorAlphas)).toBeLessThanOrEqual(0.08);
   });
@@ -742,5 +744,64 @@ describe('AP2 Phase P1D.4 & P4A.4 — Per-Player Blessing Modal UI, HUD Chips, i
     expect(g.calls.includes('lineBetween')).toBe(false);
     expect(g.calls.includes('strokeLine')).toBe(false);
     expect(g.calls.includes('strokePolylineBuffer')).toBe(false);
+  });
+
+  it('escalates soul_chain to depth 17.0 danger link when dist > 260px and maps all auxiliary mutator projectiles to fx_cutout_kit_512 sprites', () => {
+    function createRecordingGraphicsMock() {
+      const fillTriangleCalls: Array<{ x0: number; y0: number; x1: number; y1: number; x2: number; y2: number }> = [];
+      const strokeCircleCalls: unknown[] = [];
+      const lineBetweenCalls: unknown[] = [];
+      const mock = {
+        fillTriangleCalls,
+        strokeCircleCalls,
+        lineBetweenCalls,
+        fillStyle: vi.fn().mockReturnThis(),
+        fillTriangle: vi.fn((x0: number, y0: number, x1: number, y1: number, x2: number, y2: number) => {
+          fillTriangleCalls.push({ x0, y0, x1, y1, x2, y2 });
+          return mock;
+        }),
+        fillEllipse: vi.fn().mockReturnThis(),
+        strokeEllipse: vi.fn().mockReturnThis(),
+        lineStyle: vi.fn().mockReturnThis(),
+        strokeCircle: vi.fn((...args: unknown[]) => {
+          strokeCircleCalls.push(args);
+          return mock;
+        }),
+        lineBetween: vi.fn((...args: unknown[]) => {
+          lineBetweenCalls.push(args);
+          return mock;
+        }),
+        beginPath: vi.fn().mockReturnThis(),
+        closePath: vi.fn().mockReturnThis(),
+        moveTo: vi.fn().mockReturnThis(),
+        lineTo: vi.fn().mockReturnThis(),
+        strokePath: vi.fn().mockReturnThis(),
+        fillPath: vi.fn().mockReturnThis(),
+        arc: vi.fn().mockReturnThis(),
+      };
+      return mock;
+    }
+
+    const groundGfx = createRecordingGraphicsMock();
+    const dangerGfx = createRecordingGraphicsMock();
+    expect(renderSoulChainTether(groundGfx as never, dangerGfx as never, 0, 0, 275, 0, 1.0).isOverstretched).toBe(true);
+    expect(dangerGfx.fillTriangleCalls.length).toBeGreaterThan(0);
+
+    expect(resolveProjectileRenderSpec('mutator_boomerang_saw').textureKey).toBe('fx_cutout_kit_512');
+    expect(resolveProjectileRenderSpec('mutator_boomerang_saw').frameName).toBe('proj_mutator_boomerang_saw');
+    expect(resolveProjectileRenderSpec('cluster_mortar_lob').textureKey).toBe('fx_cutout_kit_512');
+    expect(resolveProjectileRenderSpec('cluster_mortar_lob').frameName).toBe('proj_cluster_mortar_lob');
+    expect(resolveProjectileRenderSpec('dash_phase_blade').textureKey).toBe('fx_cutout_kit_512');
+    expect(resolveProjectileRenderSpec('dash_phase_blade').frameName).toBe('proj_dash_phase_blade');
+    expect(resolveProjectileRenderSpec('holster_surge_bolt').textureKey).toBe('fx_cutout_kit_512');
+    expect(resolveProjectileRenderSpec('holster_surge_bolt').frameName).toBe('proj_holster_surge_bolt');
+    expect(resolveProjectileRenderSpec('holo_decoy_shot').textureKey).toBe('fx_cutout_kit_512');
+    expect(resolveProjectileRenderSpec('holo_decoy_shot').frameName).toBe('proj_holo_decoy_shot');
+    expect(resolveProjectileRenderSpec('relic_perpetual_rocket').textureKey).toBe('fx_cutout_kit_512');
+    expect(resolveProjectileRenderSpec('relic_perpetual_rocket').frameName).toBe('proj_relic_perpetual_rocket');
+    expect(resolveProjectileRenderSpec('table_tech_rocket').textureKey).toBe('fx_cutout_kit_512');
+    expect(resolveProjectileRenderSpec('table_tech_rocket').frameName).toBe('proj_table_tech_rocket');
+    expect(resolveProjectileRenderSpec('reload_tediore_chuck').textureKey).toBe('fx_cutout_kit_512');
+    expect(resolveProjectileRenderSpec('reload_tediore_chuck').frameName).toBe('proj_reload_tediore_chuck');
   });
 });

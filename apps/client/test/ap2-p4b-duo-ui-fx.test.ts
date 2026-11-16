@@ -25,6 +25,8 @@ import '../src/fx/combat-fx-weapons-v2.js';
 import {
   drawP4BSummonOverlay,
   handleP4BSimEvent,
+  renderDuoMagneticBastionTether,
+  renderDuoSuperheatedCyclone,
   renderP4BDuoAndSecretArenaOverlays,
 } from '../src/fx/combat-fx-p4b.js';
 import { resolveInteractableVisualGlowSpec } from '../src/fx/lighting-config.js';
@@ -459,8 +461,8 @@ describe('AP2 Phase P4B.3 — Duo Boon Diamond-Rainbow UI, 20s Secret Arena HUD 
     expect(gPass1.calls.length).toBeGreaterThan(50);
     // Deterministic freeze guarantee: two consecutive passes produce 100% identical draw calls
     expect(gPass1.calls).toEqual(gPass2.calls);
-    // Superconduct rail r=100px ring must be drawn
-    expect(gPass1.circleRadii.some((r) => Math.abs(r - 100) <= 2)).toBe(true);
+    // Superconduct rail replaces Ø200px wireframe circle with duo_rail_lock_10x10 brackets
+    expect(gPass1.circleRadii.some((r) => Math.abs(r - 100) <= 2)).toBe(false);
     // Enemy bullet red (#E84545) must never be used as an opaque fill/stroke in Duo Boon overlays
     expect(gPass1.fillColors).not.toContain(0xe84545);
 
@@ -598,7 +600,7 @@ describe('AP2 Phase P4B.3 — Duo Boon Diamond-Rainbow UI, 20s Secret Arena HUD 
       telegraphGraphics: gActive,
       visualFreeze: true,
     } as never);
-    expect(gActive.calls.includes('strokeCircle')).toBe(true);
+    expect(gActive.calls.includes('strokeCircle')).toBe(false);
     expect(gActive.calls.includes('lineBetween') || gActive.calls.includes('strokePath')).toBe(
       true,
     );
@@ -859,7 +861,55 @@ describe('AP2 Phase P4B.3 — Duo Boon Diamond-Rainbow UI, 20s Secret Arena HUD 
     } as never);
     expect(elevatedG.calls).not.toContain('strokeEllipse');
     expect(groundG.calls).not.toContain('strokeEllipse');
-    expect(groundG.calls).toContain('strokeCircle');
+    expect(groundG.calls).not.toContain('strokeCircle');
     expect(Math.max(...groundAlphas)).toBeLessThanOrEqual(0.08);
+  });
+
+  it('renders duo_superheated_cyclone 1:1 at r=56px (depth 26.6), gates duo_magnetic_bastion_ring at <=220px, and replaces Ø200px rail circles with duo_rail_lock_10x10', () => {
+    function createRecordingGraphicsMock() {
+      const fillTriangleCalls: Array<{ x0: number; y0: number; x1: number; y1: number; x2: number; y2: number }> = [];
+      const strokeCircleCalls: unknown[] = [];
+      const lineBetweenCalls: unknown[] = [];
+      const mock = {
+        fillTriangleCalls,
+        strokeCircleCalls,
+        lineBetweenCalls,
+        fillStyle: vi.fn().mockReturnThis(),
+        fillTriangle: vi.fn((x0: number, y0: number, x1: number, y1: number, x2: number, y2: number) => {
+          fillTriangleCalls.push({ x0, y0, x1, y1, x2, y2 });
+          return mock;
+        }),
+        fillEllipse: vi.fn().mockReturnThis(),
+        strokeEllipse: vi.fn().mockReturnThis(),
+        lineStyle: vi.fn().mockReturnThis(),
+        strokeCircle: vi.fn((...args: unknown[]) => {
+          strokeCircleCalls.push(args);
+          return mock;
+        }),
+        lineBetween: vi.fn((...args: unknown[]) => {
+          lineBetweenCalls.push(args);
+          return mock;
+        }),
+        beginPath: vi.fn().mockReturnThis(),
+        closePath: vi.fn().mockReturnThis(),
+        moveTo: vi.fn().mockReturnThis(),
+        lineTo: vi.fn().mockReturnThis(),
+        strokePath: vi.fn().mockReturnThis(),
+        fillPath: vi.fn().mockReturnThis(),
+        arc: vi.fn().mockReturnThis(),
+      };
+      return mock;
+    }
+
+    const underGfx = createRecordingGraphicsMock();
+    renderDuoSuperheatedCyclone(underGfx as never, 200, 200, 56, 0, 1.0);
+    const maxR = Math.max(...underGfx.fillTriangleCalls.map((t) => Math.hypot(t.x0 - 200, t.y0 - 200)));
+    expect(maxR).toBeGreaterThan(54);
+    expect(maxR).toBeLessThanOrEqual(58.5);
+    expect(underGfx.strokeCircleCalls).toHaveLength(0);
+
+    const groundGfx = createRecordingGraphicsMock();
+    expect(renderDuoMagneticBastionTether(groundGfx as never, 0, 0, 210, 0, 1.0)).toBe(true);
+    expect(renderDuoMagneticBastionTether(groundGfx as never, 0, 0, 240, 0, 1.0)).toBe(false);
   });
 });

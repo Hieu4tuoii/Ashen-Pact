@@ -12,6 +12,10 @@ import {
 import type Phaser from 'phaser';
 import { PALETTE } from '../art/palette.js';
 import { zzfx } from '../audio/zzfx.js';
+import {
+  fillTaperedArcRibbon,
+  fillTaperedQuadraticBezier,
+} from './tapered-ribbon-builder.js';
 import type { GameScene } from '../scenes/GameScene.js';
 import {
   getVisualTimeMs,
@@ -198,57 +202,92 @@ export function computePlayerTetherVisualSpec(
   };
 }
 
+const SOUL_CHAIN_RESULT_NORMAL: { isOverstretched: boolean } = Object.freeze({ isOverstretched: false });
+const SOUL_CHAIN_RESULT_OVERSTRETCHED: { isOverstretched: boolean } = Object.freeze({ isOverstretched: true });
+
+export function renderSoulChainTether(
+  groundGfx: Phaser.GameObjects.Graphics,
+  dangerGfx: Phaser.GameObjects.Graphics,
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+  alpha = 1.0,
+): { isOverstretched: boolean } {
+  const dist = Math.hypot(x2 - x1, y2 - y1);
+  const isOverstretched = dist > 260.0;
+  if (!isOverstretched) {
+    const midX = (x1 + x2) * 0.5;
+    const midY = (y1 + y2) * 0.5 + 4.0;
+    fillTaperedQuadraticBezier(
+      groundGfx,
+      x1,
+      y1,
+      midX,
+      midY,
+      x2,
+      y2,
+      2.4,
+      3.8,
+      2.4,
+      0x9333ea,
+      0.82 * alpha,
+      8,
+      1.8,
+    );
+    return SOUL_CHAIN_RESULT_NORMAL;
+  }
+
+  // dist > 260px: escalates to pulsing #E84545 + #141019 stretch link on dangerGfx depth 17.0 + 2.12:1 foot warning ellipse
+  const midX = (x1 + x2) * 0.5;
+  const midY = (y1 + y2) * 0.5;
+  fillTaperedQuadraticBezier(
+    dangerGfx,
+    x1,
+    y1,
+    midX,
+    midY,
+    x2,
+    y2,
+    3.2,
+    5.0,
+    3.2,
+    0xe84545,
+    0.95 * alpha,
+    8,
+    2.2,
+  );
+  const warnR = 24.0;
+  dangerGfx.fillStyle(0x141019, 0.6 * alpha);
+  dangerGfx.fillEllipse(x1, y1 + 12, warnR * 2, (warnR * 2) / 2.12);
+  dangerGfx.lineStyle(2.0, 0xe84545, 0.95 * alpha);
+  dangerGfx.strokeEllipse(x1, y1 + 12, warnR * 2, (warnR * 2) / 2.12);
+  return SOUL_CHAIN_RESULT_OVERSTRETCHED;
+}
+
 function drawSoulChainBeam(
   g: Phaser.GameObjects.Graphics,
+  groundGfx: Phaser.GameObjects.Graphics,
+  dangerGfx: Phaser.GameObjects.Graphics,
   spec: PlayerTetherVisualSpec,
   timeMs: number,
 ): void {
-  const { x1, y1, x2, y2, distancePx, isStretched, stretchRatio, primaryColor, secondaryColor } =
-    spec;
-  const dx = x2 - x1;
-  const dy = y2 - y1;
-  const len = Math.max(1, distancePx);
-  const nx = -dy / len;
-  const ny = dx / len;
-  const pulse = 0.72 + 0.28 * Math.sin(timeMs * (isStretched ? 0.016 : 0.006));
+  const { x1, y1, x2, y2, isStretched, stretchRatio, primaryColor } = spec;
+  const res = renderSoulChainTether(groundGfx, dangerGfx, x1, y1, x2, y2, 1.0);
+  const isOver = res.isOverstretched || isStretched;
+  const pulse = 0.72 + 0.28 * Math.sin(timeMs * (isOver ? 0.016 : 0.006));
 
-  g.lineStyle(isStretched ? 6.5 : 5.0, 0x141019, 0.58);
+  g.lineStyle(isOver ? 4.5 : 3.0, 0x141019, 0.58);
   g.lineBetween(x1, y1, x2, y2);
-  g.lineStyle(isStretched ? 3.2 : 2.2, primaryColor, 0.42 * pulse);
+  g.lineStyle(isOver ? 2.4 : 1.6, isOver ? 0xe84545 : primaryColor, 0.62 * pulse);
   g.lineBetween(x1, y1, x2, y2);
 
-  const linkCount = Math.max(2, Math.min(36, Math.floor(len / 18)));
-  for (let i = 0; i <= linkCount; i++) {
-    const t = i / linkCount;
-    const jitter = isStretched ? Math.sin(timeMs * 0.025 + i * 1.9) * (2.5 + stretchRatio * 3.5) : 0;
-    const cx = x1 + dx * t + nx * jitter;
-    const cy = y1 + dy * t + ny * jitter;
-    g.lineStyle(isStretched ? 2.2 : 1.8, i % 2 === 0 ? primaryColor : secondaryColor, 0.88 * pulse);
-    g.strokeCircle(cx, cy, isStretched ? 4.0 : 3.2);
-  }
-
-  if (isStretched) {
-    g.lineStyle(1.8, 0xfacc15, 0.92);
-    g.beginPath();
-    g.moveTo(x1, y1);
-    for (let i = 1; i < 10; i++) {
-      const t = i / 10;
-      const wave = (i % 2 === 0 ? 1 : -1) * (5 + 4 * Math.sin(timeMs * 0.02 + i));
-      g.lineTo(x1 + dx * t + nx * wave, y1 + dy * t + ny * wave);
-    }
-    g.lineTo(x2, y2);
-    g.strokePath();
-
+  if (isOver && stretchRatio > 0.02) {
     const warnRadius = 22 + 3 * Math.sin(timeMs * 0.018);
-    g.lineStyle(2.2, 0xf43f5e, 0.9);
-    g.strokeCircle(x1, y1, warnRadius);
-
-    if (stretchRatio > 0.02) {
-      g.lineStyle(3.2, 0xfacc15, 0.95);
-      g.beginPath();
-      g.arc(x1, y1, warnRadius + 4, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * stretchRatio, false);
-      g.strokePath();
-    }
+    dangerGfx.lineStyle(2.4, 0xfacc15, 0.95);
+    dangerGfx.beginPath();
+    dangerGfx.arc(x1, y1 + 12, warnRadius + 4, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * stretchRatio, false);
+    dangerGfx.strokePath();
   }
 }
 
@@ -284,9 +323,11 @@ function drawBloodOathLaserTether(
   g.lineTo(x2, y2);
   g.strokePath();
 
-  g.lineStyle(1.8, 0xfacc15, 0.85);
-  g.strokeCircle(x1, y1, 14);
-  g.strokeCircle(x2, y2, 14);
+  for (let k = 0; k < 4; k++) {
+    const ang = (k * Math.PI) / 2 + pulse * 0.5;
+    fillTaperedArcRibbon(g, x1, y1, 14, ang - 0.28, ang + 0.28, 1.8, 0xfacc15, 0.85, 3, 1.2);
+    fillTaperedArcRibbon(g, x2, y2, 14, ang - 0.28, ang + 0.28, 1.8, 0xfacc15, 0.85, 3, 1.2);
+  }
 }
 
 export function drawP2BWorldOverlays(
@@ -297,6 +338,7 @@ export function drawP2BWorldOverlays(
   playerY: number,
 ): void {
   const floorG = (scene as { groundHazardGraphics?: Phaser.GameObjects.Graphics }).groundHazardGraphics ?? g;
+  const dangerG = (scene as { enemyGroundTelegraphGfx?: Phaser.GameObjects.Graphics; telegraphGraphics?: Phaser.GameObjects.Graphics }).enemyGroundTelegraphGfx ?? g;
   const timeMs = getVisualTimeMs(scene);
   const pulse = 0.75 + 0.25 * Math.sin(timeMs * 0.007);
   const allPlayers = resolveAllPlayers(sim);
@@ -309,20 +351,28 @@ export function drawP2BWorldOverlays(
     const py = p.id === sim.player.id ? playerY : p.y;
 
     if (p.blackCrystalEmpoweredNextShot) {
+      // 8x12px obsidian crystal mote orbiting player weapon hand (0 full-body circle)
+      const orbitR = 14.0;
       const rot = (timeMs * 0.003) % (Math.PI * 2);
-      const r = 20 + 2 * Math.sin(timeMs * 0.01);
-      floorG.fillStyle(0x311042, 0.08);
-      floorG.fillCircle(px, py, r);
-      g.lineStyle(3.4, 0x141019, 0.76);
+      const mx = px + Math.cos(rot) * orbitR;
+      const my = py + Math.sin(rot) * orbitR;
+      g.fillStyle(0x141019, 0.95);
       g.beginPath();
-      g.moveTo(px + Math.cos(rot) * r, py + Math.sin(rot) * r);
-      g.lineTo(px + Math.cos(rot + Math.PI / 2) * r, py + Math.sin(rot + Math.PI / 2) * r);
-      g.lineTo(px + Math.cos(rot + Math.PI) * r, py + Math.sin(rot + Math.PI) * r);
-      g.lineTo(px + Math.cos(rot + (Math.PI * 3) / 2) * r, py + Math.sin(rot + (Math.PI * 3) / 2) * r);
+      g.moveTo(mx, my - 6);
+      g.lineTo(mx + 4, my);
+      g.lineTo(mx, my + 6);
+      g.lineTo(mx - 4, my);
       g.closePath();
-      g.strokePath();
-      g.lineStyle(1.8, 0xfacc15, 0.94);
-      g.strokePath();
+      g.fillPath();
+
+      g.fillStyle(0xa855f7, 0.98);
+      g.beginPath();
+      g.moveTo(mx, my - 4.5);
+      g.lineTo(mx + 2.8, my);
+      g.lineTo(mx, my + 4.5);
+      g.lineTo(mx - 2.8, my);
+      g.closePath();
+      g.fillPath();
     }
 
     const spec = computePlayerTetherVisualSpec(sim, p);
@@ -337,7 +387,7 @@ export function drawP2BWorldOverlays(
     }
 
     if (spec.mode === 'pact_soul_chain') {
-      drawSoulChainBeam(g, spec, timeMs);
+      drawSoulChainBeam(g, floorG, dangerG, spec, timeMs);
     } else if (spec.mode === 'relic_blood_oath_tether') {
       drawBloodOathLaserTether(g, spec, timeMs);
     }
@@ -352,8 +402,10 @@ export function drawP2BWorldOverlays(
     const rot = (timeMs * 0.004) % (Math.PI * 2);
     floorG.fillStyle(0x2e0718, 0.08);
     floorG.fillCircle(e.x, e.y, r + 8);
-    floorG.lineStyle(2.2, 0xf43f5e, 0.78 * pulse);
-    floorG.strokeCircle(e.x, e.y, r + 8);
+    for (let k = 0; k < 3; k++) {
+      const ang = (k * Math.PI * 2) / 3 + rot;
+      fillTaperedArcRibbon(floorG, e.x, e.y, r + 8, ang - 0.45, ang + 0.45, 2.2, 0xf43f5e, 0.78 * pulse, 4, 1.2);
+    }
     floorG.lineStyle(1.6, 0xc084fc, 0.78);
     floorG.beginPath();
     floorG.arc(e.x, e.y, r + 12, rot, rot + Math.PI * 1.15, false);
@@ -432,29 +484,12 @@ export function drawP2BWorldOverlays(
       g.arc(cx, cy, arcR + 1.2, angle - 0.86, angle + 0.86, false);
       g.strokePath();
     } else if (b.weaponId === 'relic_perpetual_core_rocket') {
+      // Body rendered via fx_cutout_kit_512 proj_relic_perpetual_rocket in entity-sync.ts; tiny exhaust ember here
       const angle = b.angle ?? Math.atan2(b.vy, b.vx);
       const cos = Math.cos(angle);
       const sin = Math.sin(angle);
-      g.fillStyle(0x38bdf8, 0.9);
-      g.fillCircle(b.x - cos * 8, b.y - sin * 8, 4.0);
-      g.fillStyle(0xd97706, 0.95);
-      g.fillTriangle(
-        b.x + cos * 8,
-        b.y + sin * 8,
-        b.x - cos * 5 - sin * 4,
-        b.y - sin * 5 + cos * 4,
-        b.x - cos * 5 + sin * 4,
-        b.y - sin * 5 - cos * 4,
-      );
-      g.lineStyle(1.4, 0xfacc15, 1);
-      g.strokeTriangle(
-        b.x + cos * 8,
-        b.y + sin * 8,
-        b.x - cos * 5 - sin * 4,
-        b.y - sin * 5 + cos * 4,
-        b.x - cos * 5 + sin * 4,
-        b.y - sin * 5 - cos * 4,
-      );
+      g.fillStyle(0xd97706, 0.85);
+      g.fillCircle(b.x - cos * 6, b.y - sin * 6, 2.2);
     }
   }
 
@@ -472,10 +507,10 @@ export function drawP2BWorldOverlays(
 
     floorG.fillStyle(0xf43f5e, alpha * 0.05);
     floorG.fillCircle(fx.x, fx.y, r);
-    floorG.lineStyle(4.2, 0x141019, alpha * 0.72);
-    floorG.strokeCircle(fx.x, fx.y, r);
-    floorG.lineStyle(2.4, 0xfacc15, alpha * 0.92);
-    floorG.strokeCircle(fx.x, fx.y, r);
+    for (let k = 0; k < 4; k++) {
+      const ang = (k * Math.PI) / 2 + t * 0.5;
+      fillTaperedArcRibbon(floorG, fx.x, fx.y, r, ang - 0.35, ang + 0.35, 2.4, 0xfacc15, alpha * 0.92, 4, 1.4);
+    }
 
     const diag = r * 0.84;
     g.lineStyle(6.0, 0x141019, alpha * 0.82);

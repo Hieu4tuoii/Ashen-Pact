@@ -472,6 +472,7 @@ export function syncEnemyRigsImpl(this: GameScene, dtSec: number): void {
   let statusRimCursor = 0;
   let freezeCuffCursor = 0;
   let badgeCursor = 0;
+  let duoRailCursor = 0;
 
   for (let i = 0; i < enemyCount; i++) {
     const e = sim.enemies[i]!;
@@ -701,6 +702,16 @@ export function syncEnemyRigsImpl(this: GameScene, dtSec: number): void {
         .setVisible(true)
         .setActive(true);
     }
+
+    if (e.superconductTimer > 0 && this.duoRailLockPool && duoRailCursor < this.duoRailLockPool.length) {
+      const lockSprite = this.duoRailLockPool[duoRailCursor++]!;
+      lockSprite.setTexture('fx_cutout_kit_512', 'duo_rail_lock_10x10')
+        .setPosition(pos.x, pos.y - 12)
+        .setScale(1 / 3)
+        .setDepth(46.5)
+        .setVisible(true)
+        .setActive(true);
+    }
   }
 
   if (this.statusRimPool) {
@@ -718,6 +729,12 @@ export function syncEnemyRigsImpl(this: GameScene, dtSec: number): void {
   if (this.statusBadgePool) {
     for (let k = badgeCursor; k < this.statusBadgePool.length; k++) {
       const s = this.statusBadgePool[k]!;
+      if (s.visible) s.setVisible(false).setActive(false);
+    }
+  }
+  if (this.duoRailLockPool) {
+    for (let k = duoRailCursor; k < this.duoRailLockPool.length; k++) {
+      const s = this.duoRailLockPool[k]!;
       if (s.visible) s.setVisible(false).setActive(false);
     }
   }
@@ -752,17 +769,24 @@ export function syncPropsImpl(this: GameScene, dtSec: number): void {
         ? 'fallen'
         : prop.coverState;
     let targetTex = TextureBaker.getPropTextureKey(prop.kind, effectiveCoverState);
+    let targetFrame: string | undefined = undefined;
+    let isKitProp = false;
     if (prop.kind === 'cryo_prism_pillar' && (prop.prismPulseCooldownSec ?? 0) > 0) {
       targetTex = 'prop_cryo_prism_pillar_cooldown';
+    } else if (prop.kind === 'glacial_spike' && prop.cryoShatterSpire) {
+      targetTex = 'fx_cutout_kit_512';
+      targetFrame = 'prop_cryo_spire';
+      isKitProp = true;
     }
+    const propScale = isKitProp ? 1 / 3 : invBake;
     if (!pv) {
       const shadow = this.add.sprite(prop.x, prop.y + 9, 'prop_shadow');
       shadow.setScale(invBake);
       shadow.setDepth(18);
       shadow.setVisible(true);
 
-      const sprite = this.add.sprite(prop.x, prop.y, targetTex);
-      sprite.setScale(invBake);
+      const sprite = this.add.sprite(prop.x, prop.y, targetTex, targetFrame);
+      sprite.setScale(propScale);
       sprite.setDepth(22);
 
       pv = {
@@ -776,11 +800,14 @@ export function syncPropsImpl(this: GameScene, dtSec: number): void {
       this.propVisuals.set(prop.id, pv);
     } else {
       pv.sprite.setPosition(prop.x, prop.y);
-      pv.sprite.setScale(invBake);
+      pv.sprite.setScale(propScale);
       pv.shadow.setPosition(prop.x, prop.y + 9);
       pv.shadow.setVisible(true);
-      if (pv.sprite.texture.key !== targetTex) {
-        pv.sprite.setTexture(targetTex);
+      if (
+        pv.sprite.texture.key !== targetTex ||
+        pv.sprite.frame.name !== (targetFrame ?? '__BASE')
+      ) {
+        pv.sprite.setTexture(targetTex, targetFrame);
       }
     }
 
@@ -928,11 +955,14 @@ export function syncProjectilesAndPickupsImpl(this: GameScene): void {
       teammateFxOpacity: teammateOpacity,
       bulletShape: b.bulletShape,
       radius: b.radius,
+      clusterMortarLob: b.clusterMortarLob,
     });
     const tex = spec.textureKey;
     const frame = spec.frameName;
     const tint = spec.tint;
     const specScale = spec.scale ?? 1;
+    const isKit = tex === 'fx_cutout_kit_512' || frame !== undefined;
+    const finalProjScale = isKit ? specScale : projScale * specScale;
 
     let entry = this.projectileSprites.get(b.id);
     if (!entry) {
@@ -955,17 +985,17 @@ export function syncProjectilesAndPickupsImpl(this: GameScene): void {
         glowSprite.setVisible(false);
         entry = { sprite, glowSprite, textureKey: tex, frameName: frame, specScale };
       }
-      entry.sprite.setScale(projScale * specScale);
+      entry.sprite.setScale(finalProjScale);
       this.projectileSprites.set(b.id, entry);
     } else if (entry.textureKey !== tex || entry.frameName !== frame) {
       entry.textureKey = tex;
       entry.frameName = frame;
       entry.specScale = specScale;
       entry.sprite.setTexture(tex, frame);
-      entry.sprite.setScale(projScale * specScale);
+      entry.sprite.setScale(finalProjScale);
     } else {
       entry.specScale = specScale;
-      entry.sprite.setScale(projScale * specScale);
+      entry.sprite.setScale(finalProjScale);
     }
 
     if (entry.sprite.depth !== spec.depth) {
@@ -988,10 +1018,20 @@ export function syncProjectilesAndPickupsImpl(this: GameScene): void {
         entry.sprite.setTint(tint);
       }
       entry.sprite.setAlpha(spec.alpha);
-      entry.sprite.setPosition(pos.x, pos.y);
+      const posX = pos.x;
+      let posY = pos.y;
+      if (b.clusterMortarLob) {
+        const traveled = Math.hypot(b.x - (b.originX ?? b.prevX), b.y - (b.originY ?? b.prevY));
+        const arcPhase = Math.sin(Math.min(1, Math.max(0.08, traveled / 240)) * Math.PI);
+        const lobHeight = 8 + arcPhase * 15;
+        posY -= lobHeight * 0.45;
+      }
+      entry.sprite.setPosition(posX, posY);
       let rot = b.angle;
       if (b.team === 'enemy') {
         rot = b.bulletShape === 'lance' ? b.angle : 0;
+      } else if (b.weaponId === 'mutator_boomerang_saw' || b.weaponId === 'reload_tediore_chuck') {
+        rot = visualTimeSec * 16.0 + b.id * 0.5;
       }
       entry.sprite.setRotation(rot);
       if (b.team === 'enemy' && !isStress) {
