@@ -16,6 +16,7 @@ import type {
 } from '../art/texture-baker-shader-fx.js';
 import { getClientFreezeRandom } from '../core/visual-query.js';
 import { graphicsSettings } from '../ui/graphics-settings.js';
+import { fillTaperedArcRibbon } from './tapered-ribbon-builder.js';
 import {
   acquireDamageSlot,
   acquireParticleSlot,
@@ -72,7 +73,7 @@ export * from './combat-fx-spawners.js';
  * Object-pooled Combat FX, Chiaroscuro 1:1 Shader Flipbooks, Decals, Dash Afterimages, Clear Biome Ambient & Juice system.
  */
 export class CombatFxManager {
-  private readonly sceneRef: Phaser.Scene;
+  public readonly sceneRef: Phaser.Scene;
   public readonly particlePool: PooledParticle[] = [];
   public readonly damagePool: PooledDamageText[] = [];
   public readonly decalPool: PooledDecal[] = [];
@@ -101,6 +102,7 @@ export class CombatFxManager {
   public hitStopRemainingMs = 0;
   public bossKillSlowMoTimer = 0;
   public bossKillFlashTimer = 0;
+  public bossKillSequenceState: BossKillSequenceState | null = null;
   public trauma = 0;
   public shakeTime = 0;
   public popupSpreadIndex = 0;
@@ -644,11 +646,26 @@ export class CombatFxManager {
     }
   }
 
+  public triggerBossKillSequence(x: number, y: number, biome: 1 | 2 | 3 = 1): void {
+    this.bossKillSequenceState = {
+      active: true,
+      x,
+      y,
+      biome,
+      elapsedSec: 0,
+      beat2Spawned: false,
+    };
+  }
+
   public spawnBossKillBurst(x: number, y: number, defId = 'spore_king'): void {
     this.bossKillSlowMoTimer = 0.42;
     this.bossKillFlashTimer = 0.28;
     this.triggerHitStop(55);
     this.addTrauma(0.85);
+
+    const bossBiome: 1 | 2 | 3 =
+      defId === 'kryssa_ice_queen' ? 2 : defId === 'forge_titan' ? 3 : 1;
+    this.triggerBossKillSequence(x, y, bossBiome);
 
     const invBake = 1 / TextureBaker.getBakeScale();
     const novaKey: ShaderNovaKey =
@@ -1312,4 +1329,160 @@ export function spawnArcaneTeleportFold(
       depth: 35,
     });
   }
+}
+
+export interface BossKillSequenceState {
+  active: boolean;
+  x: number;
+  y: number;
+  biome: 1 | 2 | 3;
+  elapsedSec: number;
+  beat2Spawned: boolean;
+}
+
+export function stepBossKillTwoBeatSequence(
+  fx: CombatFxManager,
+  rawDtSec: number,
+): { phase: 'idle' | 'invert_cracks' | 'twin_crescents'; progress01: number } {
+  const state = fx.bossKillSequenceState;
+  if (!state || !state.active) {
+    return { phase: 'idle', progress01: 0 };
+  }
+
+  state.elapsedSec += rawDtSec;
+  if (state.elapsedSec >= 0.42) {
+    state.active = false;
+    return { phase: 'idle', progress01: 1 };
+  }
+
+  if (state.elapsedSec < 0.16) {
+    const progress01 = Math.min(1, Math.max(0, state.elapsedSec / 0.16));
+    const scene = fx.sceneRef as unknown as {
+      bossFractureGraphics?: Phaser.GameObjects.Graphics;
+    };
+    const fracG = scene?.bossFractureGraphics;
+    if (fracG) {
+      const rayLen = 16 + progress01 * 34;
+      for (let k = 0; k < 5; k++) {
+        const ang = (k / 5) * Math.PI * 2 + 0.3;
+        const x2 = state.x + Math.cos(ang) * rayLen;
+        const y2 = state.y + Math.sin(ang) * rayLen;
+        if (typeof fracG.fillTriangle === 'function' && typeof fracG.fillStyle === 'function') {
+          fracG.fillStyle(0x141019, 0.95);
+          fracG.fillTriangle(state.x, state.y, x2 - 1.5, y2, x2 + 1.5, y2);
+          fracG.fillStyle(hexToNum(PALETTE.BONE_WHITE), 0.98);
+          fracG.fillTriangle(state.x, state.y, x2 - 0.7, y2, x2 + 0.7, y2);
+        } else if (typeof fracG.lineBetween === 'function' && typeof fracG.lineStyle === 'function') {
+          fracG.lineStyle(1.8, hexToNum(PALETTE.BONE_WHITE), 1.0);
+          fracG.lineBetween(state.x, state.y, x2, y2);
+        }
+      }
+    }
+    return { phase: 'invert_cracks', progress01 };
+  }
+
+  // Beat 2: 0.16..0.42s (duration 0.26s)
+  const progress01 = Math.min(1, Math.max(0, (state.elapsedSec - 0.16) / 0.26));
+  const underG = fx.underActorGraphics;
+  if (underG) {
+    const baseAngle = progress01 * Math.PI * 1.5;
+    const span = 0.85;
+    const color =
+      state.biome === 2
+        ? 0x38bdf8
+        : state.biome === 3
+          ? 0xf97316
+          : 0x4ade80;
+    fillTaperedArcRibbon(
+      underG,
+      state.x,
+      state.y,
+      132,
+      baseAngle - span,
+      baseAngle + span,
+      4.0,
+      color,
+      0.9,
+      8,
+      1.8,
+    );
+    fillTaperedArcRibbon(
+      underG,
+      state.x,
+      state.y,
+      132,
+      baseAngle + Math.PI - span,
+      baseAngle + Math.PI + span,
+      4.0,
+      color,
+      0.9,
+      8,
+      1.8,
+    );
+  }
+
+  // Scatter 12 Cutout shard relics once on Beat 2 start
+  if (!state.beat2Spawned) {
+    state.beat2Spawned = true;
+    const shardKey =
+      state.biome === 2
+        ? 'fx_ice_shard_decal'
+        : state.biome === 3
+          ? 'fx_stone_chip'
+          : 'fx_ceramic_shard';
+
+    const maxAllowed = graphicsSettings.getBudget().maxDecals;
+    if (maxAllowed > 0 && fx.decalPool.length > 0) {
+      for (let s = 0; s < 12; s++) {
+        const idx = fx.decalWriteCursor % Math.min(maxAllowed, fx.decalPool.length);
+        fx.decalWriteCursor += 1;
+        const slot = fx.decalPool[idx];
+        if (!slot) continue;
+        const offDist = 18 + s * 7;
+        const offAng = (s / 12) * Math.PI * 2 + s * 0.4;
+        const sx = state.x + Math.cos(offAng) * offDist;
+        const sy = state.y + Math.sin(offAng) * offDist;
+        slot.active = true;
+        slot.textureKey = shardKey;
+        (slot as unknown as { age?: number }).age = 0;
+        (slot as unknown as { ttl?: number }).ttl = 12.0;
+        slot.sprite.setTexture('fx_cutout_kit_512', shardKey);
+        slot.sprite.setPosition(sx, sy);
+        slot.sprite.setRotation(offAng);
+        slot.sprite.setScale(1 / 3);
+        slot.sprite.setAlpha(0.32);
+        slot.sprite.setDepth(6);
+        slot.sprite.setVisible(true);
+        fx.totalDecalsSpawned += 1;
+        fx.activeDecalCount = Math.min(maxAllowed, fx.activeDecalCount + 1);
+      }
+    }
+
+    for (let i = 0; i < 12; i++) {
+      const p = fx.acquireParticleSlot();
+      if (!p) break;
+      const ang = (i / 12) * Math.PI * 2;
+      const spd = 90 + (i % 3) * 45;
+      activateParticle(p, {
+        textureKey: CUTOUT_KIT_ATLAS_KEY,
+        frameName: shardKey,
+        x: state.x,
+        y: state.y,
+        vx: Math.cos(ang) * spd,
+        vy: Math.sin(ang) * spd - 30,
+        vr: (i % 2 === 0 ? 1 : -1) * 8,
+        ttl: 0.42,
+        startScale: 1 / 3,
+        endScale: (1 / 3) * 0.6,
+        startAlpha: 0.95,
+        gravityY: 140,
+        damping: 3.5,
+        rotation: ang,
+        blendMode: 'NORMAL',
+        depth: 26.4,
+      });
+    }
+  }
+
+  return { phase: 'twin_crescents', progress01 };
 }

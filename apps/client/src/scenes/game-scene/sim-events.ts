@@ -9,7 +9,8 @@ import {
 } from '@ashen-pact/shared';
 import { resolveHitFlashTint } from '../../art/cutout-rig-math.js';
 import { PALETTE } from '../../art/palette.js';
-import { routeCutoutBurstByRadius } from '../../fx/combat-fx-spawners.js';
+import { CUTOUT_KIT_ATLAS_KEY } from '../../art/texture-baker-fx.js';
+import { activateParticle, routeCutoutBurstByRadius } from '../../fx/combat-fx-spawners.js';
 import {
   resolveEnemyProjectileSfx,
   resolvePickupSfx,
@@ -334,6 +335,31 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
           );
           if (brokenBoss) {
             this.fx.spawnExplosionBurst(ev.x, ev.y, 82, PALETTE.SOLAR_GOLD);
+            // Shatter 6 'fx_boss_shell_plate' particles outward ('fx_cutout_kit_512', scale = 1 / 3, depth 42.0)
+            for (let i = 0; i < 6; i++) {
+              const p = this.fx.acquireParticleSlot();
+              if (!p) break;
+              const ang = (i / 6) * Math.PI * 2;
+              const spd = 120 + (i % 2) * 40;
+              activateParticle(p, {
+                textureKey: CUTOUT_KIT_ATLAS_KEY,
+                frameName: 'fx_boss_shell_plate',
+                x: ev.x,
+                y: ev.y,
+                vx: Math.cos(ang) * spd,
+                vy: Math.sin(ang) * spd - 30,
+                vr: (i % 2 === 0 ? 1 : -1) * 10,
+                ttl: 0.48,
+                startScale: 1 / 3,
+                endScale: (1 / 3) * 0.4,
+                startAlpha: 1.0,
+                gravityY: 160,
+                damping: 3.5,
+                rotation: ang,
+                blendMode: 'NORMAL',
+                depth: 42.0,
+              });
+            }
           }
         }
         if (allowStressSfx) {
@@ -902,7 +928,24 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
         if (!isStress) {
           const boss = sim.enemies.find((e) => e.id === ev.enemyId);
           if (boss) {
-            this.fx.spawnShaderNova?.(boss.x, boss.y, 116, 'fx_sh_geyser_plume');
+            const biome = sim.currentBiome ?? 1;
+            const novaKey =
+              biome === 1
+                ? 'fx_sh_spore_cloud'
+                : biome === 2
+                  ? 'fx_sh_nova_cryo'
+                  : 'fx_sh_nova_magma';
+            const tint =
+              biome === 1
+                ? 0x4ade80
+                : biome === 2
+                  ? 0x38bdf8
+                  : 0xf97316;
+            routeCutoutBurstByRadius(this.fx, boss.x, boss.y, 116, novaKey, {
+              ttlSec: 0.45,
+              depth: 43.5,
+              tint,
+            });
           }
         }
         zzfx.play('boss_roar');
@@ -911,7 +954,9 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
       case 'boss_phase_changed': {
         this.fx.addTrauma(0.5);
         if (!isStress) {
-          this.fx.spawnShaderNova?.(ev.x, ev.y, 124, 'fx_sh_arcane_sigil', {
+          routeCutoutBurstByRadius(this.fx, ev.x, ev.y, 124, 'fx_sh_arcane_sigil', {
+            ttlSec: 0.25,
+            depth: 26.6,
             tint: 0xfef08a,
           });
         }

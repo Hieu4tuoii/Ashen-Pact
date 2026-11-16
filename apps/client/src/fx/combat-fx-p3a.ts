@@ -14,7 +14,42 @@ import {
 } from '@ashen-pact/shared';
 import type Phaser from 'phaser';
 import { PALETTE, hexToNum } from '../art/palette.js';
+import { fillTaperedArcRibbon } from './tapered-ribbon-builder.js';
 import type { GameScene } from '../scenes/GameScene.js';
+
+export function renderBossArmorShellPlates(
+  plates: readonly Phaser.GameObjects.Sprite[],
+  boss: SimEnemyState,
+  biome: 1 | 2 | 3,
+  timeSec: number,
+): void {
+  const active = Boolean(boss && boss.hp > 0 && boss.bossArmorShellActive === true);
+  if (!active) {
+    for (let i = 0; i < plates.length; i++) {
+      plates[i]!.setVisible(false).setActive(false);
+    }
+    return;
+  }
+
+  const br = (boss.radius || 32) + 12;
+  const tint = biome === 1 ? 0x4ade80 : biome === 2 ? 0x38bdf8 : 0xf97316;
+  const count = Math.min(plates.length, 6);
+  for (let k = 0; k < count; k++) {
+    const ang = timeSec * 1.5 + (k * Math.PI) / 3;
+    const px = boss.x + Math.cos(ang) * br;
+    const py = boss.y + Math.sin(ang) * br;
+    const plate = plates[k]!;
+    plate.setVisible(true).setActive(true);
+    plate.setPosition(px, py);
+    plate.setRotation(ang + Math.PI * 0.5);
+    plate.setDepth(30.8);
+    plate.setScale(1 / 3);
+    plate.setTint(tint);
+  }
+  for (let i = count; i < plates.length; i++) {
+    plates[i]!.setVisible(false).setActive(false);
+  }
+}
 
 export const SIGHTLINE_OUTER_COLOR = 0xff5722; // #FF5722 Deep Red-Orange
 export const SIGHTLINE_CORE_COLOR = 0xfff7ed; // #FFF7ED Bright Core
@@ -353,45 +388,50 @@ export function drawP3APredictiveSightlinesAndOverlays(
     }
   }
 
-  // 9. P3B.1 Boss Supply Drop 0.6s golden target rings (`pendingBossSupplyDrops`) & landing burst
+  // 9. P3B.1 Boss Supply Drop 0.6s golden target brackets (`pendingBossSupplyDrops`) & landing burst
   let tracker = supplyDropTrackerBySim.get(sim);
   if (!tracker) {
-    tracker = { prevDrops: [], landedRings: [], lastAlertTick: -1 };
+    tracker = { prevDrops: [], prevDropCount: 0, landedRings: [], lastAlertTick: -1 };
     supplyDropTrackerBySim.set(sim, tracker);
   }
   const curDrops = sim.pendingBossSupplyDrops ?? [];
-  if (tracker.prevDrops.length > 0 && curDrops.length === 0 && sim.tick > tracker.lastAlertTick) {
+  if (tracker.prevDropCount > 0 && curDrops.length === 0 && sim.tick > tracker.lastAlertTick) {
     tracker.lastAlertTick = sim.tick;
-    tracker.landedRings = tracker.prevDrops.map((d) => ({
-      x: d.x,
-      y: d.y,
-      bornTick: sim.tick,
-    }));
+    tracker.landedRings.length = 0;
+    for (let i = 0; i < tracker.prevDropCount; i++) {
+      const d = tracker.prevDrops[i]!;
+      tracker.landedRings.push({ x: d.x, y: d.y, bornTick: sim.tick });
+    }
     const activeBoss = sim.enemies.find((e) => e.isBoss && e.hp > 0);
     const alertX = activeBoss ? activeBoss.x : tracker.prevDrops[0]!.x;
     const alertY = activeBoss ? activeBoss.y - 44 : tracker.prevDrops[0]!.y - 28;
     scene.fx?.spawnFloatingAlert(alertX, alertY, 'SUPPLY DROP!', '#FBBF24');
   }
   if (curDrops.length > 0) {
-    tracker.prevDrops = curDrops.map((d) => ({ x: d.x, y: d.y }));
-    const amber = 0xf59e0b; // #F59E0B
+    for (let i = 0; i < curDrops.length; i++) {
+      const cd = curDrops[i]!;
+      if (!tracker.prevDrops[i]) {
+        tracker.prevDrops[i] = { x: cd.x, y: cd.y };
+      } else {
+        tracker.prevDrops[i]!.x = cd.x;
+        tracker.prevDrops[i]!.y = cd.y;
+      }
+    }
+    tracker.prevDropCount = curDrops.length;
+
     const gold = 0xfbbf24; // #FBBF24
+    const tgGfx = (scene as unknown as { enemyGroundTelegraphGfx?: Phaser.GameObjects.Graphics }).enemyGroundTelegraphGfx ?? floorG;
     for (let dIdx = 0; dIdx < curDrops.length; dIdx++) {
       const drop = curDrops[dIdx]!;
       const maxT = drop.maxTimer || 0.6;
       const progress = clamp(1 - drop.timer / maxT, 0, 1);
       const r = drop.radius || 26;
 
-      floorG.fillStyle(amber, 0.05 + 0.03 * progress);
-      floorG.fillCircle(drop.x, drop.y, r);
-      floorG.lineStyle(4.0, inkColor, 0.72);
-      floorG.strokeCircle(drop.x, drop.y, r);
-      floorG.lineStyle(2.5, gold, 0.94);
-      floorG.strokeCircle(drop.x, drop.y, r);
-
-      const innerR = Math.max(4, r * (1 - 0.72 * progress));
-      floorG.lineStyle(1.9, amber, 0.88);
-      floorG.strokeCircle(drop.x, drop.y, innerR);
+      // 4 #141019 + #F59E0B gold corner brackets on enemyGroundTelegraphGfx (depth 17.0)
+      for (let k = 0; k < 4; k++) {
+        const ang = Math.PI * 0.25 + k * Math.PI * 0.5;
+        fillTaperedArcRibbon(tgGfx, drop.x, drop.y, r, ang - 0.24, ang + 0.24, 2.2, 0xf59e0b, 0.94, 3, 1.4);
+      }
 
       // Descending supply crate pod
       const dropHeightOffset = (1 - progress) * 54;
@@ -406,12 +446,11 @@ export function drawP3APredictiveSightlinesAndOverlays(
       g.strokeRect(drop.x - 5.5, drop.y - dropHeightOffset - 5.5, 11, 11);
     }
   } else {
-    tracker.prevDrops = [];
+    tracker.prevDropCount = 0;
   }
 
   if (tracker.landedRings.length > 0) {
     const gold = 0xfbbf24;
-    const amber = 0xf59e0b;
     for (let lIdx = tracker.landedRings.length - 1; lIdx >= 0; lIdx--) {
       const lr = tracker.landedRings[lIdx]!;
       const ageTicks = sim.tick - lr.bornTick;
@@ -422,18 +461,27 @@ export function drawP3APredictiveSightlinesAndOverlays(
       const p = clamp(ageTicks / 14, 0, 1);
       const rad = 16 + p * 34;
       const alpha = 1 - p;
-      floorG.fillStyle(gold, 0.06 * alpha);
-      floorG.fillCircle(lr.x, lr.y, rad);
-      floorG.lineStyle(4.2, inkColor, 0.7 * alpha);
-      floorG.strokeCircle(lr.x, lr.y, rad);
-      floorG.lineStyle(2.6, gold, 0.95 * alpha);
-      floorG.strokeCircle(lr.x, lr.y, rad);
-      floorG.lineStyle(1.6, amber, 0.8 * alpha);
-      floorG.strokeCircle(lr.x, lr.y, rad * 0.65);
+      for (let k = 0; k < 4; k++) {
+        const ang = Math.PI * 0.25 + k * Math.PI * 0.5;
+        fillTaperedArcRibbon(floorG, lr.x, lr.y, rad, ang - 0.24, ang + 0.24, 2.0, gold, 0.92 * alpha, 3, 1.4);
+      }
     }
   }
 
-  // 10. P3B.2–P3B.4 Boss Reinforced Armor Shell Aura & Shattered Armor Vulnerability Ring
+  // 10. P3B.2–P3B.4 Boss Reinforced Armor Shell Aura & Shattered Armor Stagger Stun Stars
+  const activeBoss = sim.enemies.find((e) => e.isBoss && e.hp > 0);
+  const shellPool = (scene as unknown as { bossShellPlatePool?: Phaser.GameObjects.Sprite[] }).bossShellPlatePool;
+  if (shellPool) {
+    if (activeBoss) {
+      const biome = (sim.currentBiome as 1 | 2 | 3) ?? 1;
+      renderBossArmorShellPlates(shellPool, activeBoss, biome, sim.tick * (1 / 60));
+    } else {
+      for (let i = 0; i < shellPool.length; i++) {
+        shellPool[i]!.setVisible(false).setActive(false);
+      }
+    }
+  }
+
   for (let bIdx = 0; bIdx < sim.enemies.length; bIdx++) {
     const boss = sim.enemies[bIdx]!;
     if (!boss.isBoss || boss.hp <= 0) continue;
@@ -444,62 +492,31 @@ export function drawP3APredictiveSightlinesAndOverlays(
     const by = bPos.y;
     const br = (boss.radius || 32) + 12;
 
-    if (boss.bossArmorShellActive === true) {
-      const shellCol =
-        boss.defId === 'spore_king'
-          ? 0x4ade80
-          : boss.defId === 'kryssa_ice_queen'
-            ? 0x38bdf8
-            : 0xf97316;
-      const coreCol =
-        boss.defId === 'spore_king'
-          ? 0xbbf7d0
-          : boss.defId === 'kryssa_ice_queen'
-            ? 0xe0f2fe
-            : 0xfef08a;
-
-      floorG.fillStyle(shellCol, 0.06);
-      floorG.fillCircle(bx, by, br);
-      g.lineStyle(4.8, inkColor, 0.74);
-      g.strokeCircle(bx, by, br);
-      g.lineStyle(3.0, shellCol, 0.94);
-      g.strokeCircle(bx, by, br);
-      g.lineStyle(1.5, coreCol, 0.88);
-      g.strokeCircle(bx, by, br - 4.5);
-
-      // 6 rotating armor barrier nodes around the boss
-      const rotBase = sim.tick * 0.05;
-      for (let k = 0; k < 6; k++) {
-        const ang = rotBase + (k * Math.PI) / 3;
-        const nx = bx + Math.cos(ang) * br;
-        const ny = by + Math.sin(ang) * br;
-        g.fillStyle(inkColor, 0.9);
-        g.fillCircle(nx, ny, 5.0);
-        g.fillStyle(coreCol, 0.96);
-        g.fillCircle(nx, ny, 3.6);
+    if ((boss.bossArmorBreakVulnTimer ?? 0) > 0) {
+      // 4 foot crack arcs at depth 15.0 on floorG
+      for (let k = 0; k < 4; k++) {
+        const ang = (k * Math.PI) / 2 + 0.35;
+        fillTaperedArcRibbon(floorG, bx, by, br, ang - 0.25, ang + 0.25, 2.2, 0xfbbf24, 0.92, 3, 1.2);
       }
-    } else if ((boss.bossArmorBreakVulnTimer ?? 0) > 0) {
-      const vulnCol = 0xfbbf24;
-      const crackCol = 0xef4444;
-      floorG.fillStyle(vulnCol, 0.06);
-      floorG.fillCircle(bx, by, br + 4);
-      floorG.lineStyle(4.2, inkColor, 0.72);
-      floorG.strokeCircle(bx, by, br + 2);
-      floorG.lineStyle(2.6, vulnCol, 0.94);
-      floorG.strokeCircle(bx, by, br + 2);
 
-      // Radial shattered armor floor cracks
-      for (let k = 0; k < 8; k++) {
-        const ang = (k * Math.PI) / 4 + 0.2;
-        const x1 = bx + Math.cos(ang) * (br - 6);
-        const y1 = by + Math.sin(ang) * (br - 6);
-        const x2 = bx + Math.cos(ang) * (br + 14);
-        const y2 = by + Math.sin(ang) * (br + 14);
-        floorG.lineStyle(2.2, k % 2 === 0 ? vulnCol : crackCol, 0.9);
-        floorG.beginPath();
-        floorG.moveTo(x1, y1);
-        floorG.lineTo(x2, y2);
-        floorG.strokePath();
+      // 3 Cutout stun stars orbiting overhead at depth 46.5
+      const starG = (scene as unknown as { bossOverheadStunGraphics?: Phaser.GameObjects.Graphics }).bossOverheadStunGraphics ?? g;
+      const orbitT = sim.tick * 0.08;
+      for (let k = 0; k < 3; k++) {
+        const ang = orbitT + (k * Math.PI * 2) / 3;
+        const sx = bx + Math.cos(ang) * 18;
+        const sy = by - 36 + Math.sin(ang) * 6;
+        starG.fillStyle(0x141019, 0.92);
+        starG.fillTriangle(sx, sy - 5, sx - 3, sy, sx + 3, sy);
+        starG.fillTriangle(sx, sy + 5, sx - 3, sy, sx + 3, sy);
+        starG.fillTriangle(sx - 5, sy, sx, sy - 3, sx, sy + 3);
+        starG.fillTriangle(sx + 5, sy, sx, sy - 3, sx, sy + 3);
+
+        starG.fillStyle(0xfbbf24, 0.98);
+        starG.fillTriangle(sx, sy - 3.5, sx - 2, sy, sx + 2, sy);
+        starG.fillTriangle(sx, sy + 3.5, sx - 2, sy, sx + 2, sy);
+        starG.fillTriangle(sx - 3.5, sy, sx, sy - 2, sx, sy + 2);
+        starG.fillTriangle(sx + 3.5, sy, sx, sy - 2, sx, sy + 2);
       }
     }
   }
@@ -549,9 +566,21 @@ export function drawP3APredictiveSightlinesAndOverlays(
   }
 }
 
+interface DropPos {
+  x: number;
+  y: number;
+}
+
+interface LandedRing {
+  x: number;
+  y: number;
+  bornTick: number;
+}
+
 interface SupplyDropTrackState {
-  prevDrops: Array<{ x: number; y: number }>;
-  landedRings: Array<{ x: number; y: number; bornTick: number }>;
+  prevDrops: DropPos[];
+  prevDropCount: number;
+  landedRings: LandedRing[];
   lastAlertTick: number;
 }
 

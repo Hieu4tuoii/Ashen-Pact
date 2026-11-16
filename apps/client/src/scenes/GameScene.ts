@@ -28,7 +28,7 @@ import {
   getFreezeVisualTimeSec,
   getVisualQueryConfig,
 } from '../core/visual-query.js';
-import type { CombatFxManager } from '../fx/combat-fx.js';
+import { stepBossKillTwoBeatSequence, type CombatFxManager } from '../fx/combat-fx.js';
 import {
   type InteractableLightEntry,
   populateInteractableLightsScratch,
@@ -373,6 +373,11 @@ export class GameScene extends Phaser.Scene {
   public underActorGraphics!: Phaser.GameObjects.Graphics;
   public icePrisonFrontGraphics?: Phaser.GameObjects.Graphics;
   public bastionFrontGraphics?: Phaser.GameObjects.Graphics;
+  public bossOverGraphics?: Phaser.GameObjects.Graphics;
+  public bossFractureGraphics?: Phaser.GameObjects.Graphics;
+  public bossOverheadStunGraphics?: Phaser.GameObjects.Graphics;
+  public executionerWaveGraphics?: Phaser.GameObjects.Graphics;
+  public bossShellPlatePool?: Phaser.GameObjects.Sprite[];
   public weaponRibbonGraphics!: Phaser.GameObjects.Graphics;
   public telegraphGraphics!: Phaser.GameObjects.Graphics;
   public hitboxGraphics!: Phaser.GameObjects.Graphics;
@@ -588,6 +593,11 @@ export class GameScene extends Phaser.Scene {
     const isTypingInInput = this.menuActiveInput !== null;
     const isInputBlocked = isModalOrPaused || isTypingInInput;
     const isSoloPaused = isModalOrPaused && this.coopMode === 'solo';
+
+    const rawDtSec = isSoloPaused ? 0 : rawDeltaMs / 1000;
+    if (this.fx.bossKillSequenceState?.active) {
+      stepBossKillTwoBeatSequence(this.fx, rawDtSec);
+    }
 
     // 1. Sample Player Input (WASD + Mouse Aim + Buttons)
     // Subtract lastShakeX/Y so screen shake never perturbs player aim angle or camera lookahead

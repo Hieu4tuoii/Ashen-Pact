@@ -23,6 +23,73 @@ import {
   triggerRelicAwakenedBanner,
 } from '../scenes/game-scene/hud-ashen-pact-modal.js';
 
+export const EXECUTIONER_WAVE_CRESCENT_DEPTH = 58.5;
+
+export function renderExecutionerCrescentProjectile(
+  gfx: Phaser.GameObjects.Graphics,
+  x: number,
+  y: number,
+  angleRad: number,
+  radiusPx: number,
+): void {
+  const cos = Math.cos(angleRad);
+  const sin = Math.sin(angleRad);
+  const cx = x - cos * (radiusPx - 2);
+  const cy = y - sin * (radiusPx - 2);
+
+  // Pointed fillTaperedArcRibbon crescent (#141019 ink border + #E84545 crimson core)
+  fillTaperedArcRibbon(
+    gfx,
+    cx,
+    cy,
+    radiusPx,
+    angleRad - 1.15,
+    angleRad + 1.15,
+    3.8,
+    0xe84545,
+    0.98,
+    8,
+    1.8,
+  );
+
+  // Hot razor cutting spine
+  fillTaperedArcRibbon(
+    gfx,
+    cx,
+    cy,
+    radiusPx + 1.0,
+    angleRad - 0.85,
+    angleRad + 0.85,
+    1.4,
+    0xfffdf5,
+    0.95,
+    8,
+    0,
+  );
+
+  // Trailing dark-flame wake horn accents if lineStyle supported
+  if (typeof (gfx as unknown as { lineStyle?: unknown }).lineStyle === 'function') {
+    const nx = -sin;
+    const ny = cos;
+    for (const side of [-1, 1] as const) {
+      const hornAng = angleRad + side * 1.12;
+      const hx = cx + Math.cos(hornAng) * radiusPx;
+      const hy = cy + Math.sin(hornAng) * radiusPx;
+      gfx.lineStyle(4.2, 0x141019, 0.86);
+      gfx.beginPath();
+      gfx.moveTo(hx, hy);
+      gfx.lineTo(hx - cos * 16 + nx * side * 3, hy - sin * 16 + ny * side * 3);
+      gfx.strokePath();
+
+      gfx.lineStyle(2.0, 0xa855f7, 0.88);
+      gfx.beginPath();
+      gfx.moveTo(hx, hy);
+      gfx.lineTo(hx - cos * 13 + nx * side * 2.5, hy - sin * 13 + ny * side * 2.5);
+      gfx.strokePath();
+    }
+  }
+}
+
 export interface PlayerTetherVisualSpec {
   active: boolean;
   mode: 'none' | 'pact_soul_chain' | 'relic_blood_oath_tether';
@@ -434,57 +501,9 @@ export function drawP2BWorldOverlays(
 
     if (b.weaponId === 'ashen_executioner_wave') {
       const angle = b.angle ?? Math.atan2(b.vy, b.vx);
-      const cos = Math.cos(angle);
-      const sin = Math.sin(angle);
-      const nx = -sin;
-      const ny = cos;
-      // Offset arc center behind (b.x, b.y) so the ~48px Chiaroscuro Dark-Flame Scythe Crescent
-      // sweeps directly through the inviolable #E84545 enemy core at (b.x, b.y)!
       const arcR = Math.max(26, (b.radius || 14) + 12);
-      const cx = b.x - cos * (arcR - 2);
-      const cy = b.y - sin * (arcR - 2);
-
-      // Trailing dark-flame wake wisps from scythe horn tips
-      for (const side of [-1, 1] as const) {
-        const hornAng = angle + side * 1.12;
-        const hx = cx + Math.cos(hornAng) * arcR;
-        const hy = cy + Math.sin(hornAng) * arcR;
-        g.lineStyle(4.2, 0x141019, 0.86);
-        g.beginPath();
-        g.moveTo(hx, hy);
-        g.lineTo(hx - cos * 16 + nx * side * 3, hy - sin * 16 + ny * side * 3);
-        g.strokePath();
-
-        g.lineStyle(2.0, 0xa855f7, 0.88);
-        g.beginPath();
-        g.moveTo(hx, hy);
-        g.lineTo(hx - cos * 13 + nx * side * 2.5, hy - sin * 13 + ny * side * 2.5);
-        g.strokePath();
-      }
-
-      // 1. Wide #141019 obsidian Chiaroscuro shroud
-      g.lineStyle(8.4, 0x141019, 0.92);
-      g.beginPath();
-      g.arc(cx, cy, arcR, angle - 1.18, angle + 1.18, false);
-      g.strokePath();
-
-      // 2. Ashen dark-flame spectral violet outer mantle
-      g.lineStyle(5.6, 0x9333ea, 0.86);
-      g.beginPath();
-      g.arc(cx - cos * 2.5, cy - sin * 2.5, arcR - 1, angle - 1.08, angle + 1.08, false);
-      g.strokePath();
-
-      // 3. Saturated #E84545 crimson scythe blade
-      g.lineStyle(4.0, 0xe84545, 0.98);
-      g.beginPath();
-      g.arc(cx, cy, arcR, angle - 1.05, angle + 1.05, false);
-      g.strokePath();
-
-      // 4. Razor #FFFDF5 hot cutting spine passing right through (b.x, b.y)
-      g.lineStyle(1.8, 0xfffdf5, 0.98);
-      g.beginPath();
-      g.arc(cx, cy, arcR + 1.2, angle - 0.86, angle + 0.86, false);
-      g.strokePath();
+      const execGfx = (scene as unknown as { executionerWaveGraphics?: Phaser.GameObjects.Graphics }).executionerWaveGraphics ?? g;
+      renderExecutionerCrescentProjectile(execGfx, b.x, b.y, angle, arcR);
     } else if (b.weaponId === 'relic_perpetual_core_rocket') {
       // Body rendered via fx_cutout_kit_512 proj_relic_perpetual_rocket in entity-sync.ts; tiny exhaust ember here
       const angle = b.angle ?? Math.atan2(b.vy, b.vx);

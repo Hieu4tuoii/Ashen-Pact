@@ -137,6 +137,17 @@ export function createHeadlessFxManager(particleSlots = 64): CombatFxManager {
     hitStopRemainingMs: 0,
     bossKillSlowMoTimer: 0,
     bossKillFlashTimer: 0,
+    bossKillSequenceState: null,
+    triggerBossKillSequence(x: number, y: number, biome: 1 | 2 | 3 = 1) {
+      mgr.bossKillSequenceState = {
+        active: true,
+        x,
+        y,
+        biome,
+        elapsedSec: 0,
+        beat2Spawned: false,
+      };
+    },
     trauma: 0,
     shakeTime: 0,
     popupSpreadIndex: 0,

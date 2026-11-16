@@ -21,11 +21,17 @@ vi.mock('phaser', () => {
 });
 
 import { processSimEventsImpl } from '../src/scenes/game-scene/sim-events.js';
+import { createTestCombatFx } from './helpers/test-combat-fx.js';
 import {
+  EXECUTIONER_WAVE_CRESCENT_DEPTH,
+  renderBossArmorShellPlates,
+  renderBossPhaseInvulnCage,
   renderDownedReviveBrackets,
   renderBastionPrismPlates,
+  renderExecutionerCrescentProjectile,
   renderIcePrisonBars,
   renderTelegraphsAndShieldImpl,
+  stepBossKillTwoBeatSequence,
   withInterpolatedProjectilesAndPlayer,
 } from '../src/scenes/game-scene/telegraphs-and-overlays.js';
 import {
@@ -839,5 +845,70 @@ describe('Commercial-Grade Class Skills, Summons & Dramatic World/Boss Interacti
     expect(v1.base.depth).toBeCloseTo(28.4, 2);
     expect(v1.head?.depth).toBeCloseTo(28.6, 2);
     expect(harness.turretRangeRingsDrawn).toBe(0);
+  });
+
+  it('keeps Boss Phase Roar hex invulnerability cage visible for full 1.20s (blinking 16Hz in 1.00..1.20s) and renders Executioner crescent at depth 58.5 (< 60.0)', () => {
+    const gfx = createRecordingGraphicsMock();
+    expect(renderBossPhaseInvulnCage(gfx as never, 300, 300, 34, 0.6, 1.2)).toBe(true);
+    // Blinking at 16Hz during final 0.20s (1.00..1.20s) alternates visibility across 31ms half-cycles
+    const visA = renderBossPhaseInvulnCage(gfx as never, 300, 300, 34, 1.01, 1.2);
+    const visB = renderBossPhaseInvulnCage(gfx as never, 300, 300, 34, 1.045, 1.2);
+    expect(visA).not.toBe(visB);
+    expect(renderBossPhaseInvulnCage(gfx as never, 300, 300, 34, 1.25, 1.2)).toBe(false);
+
+    expect(EXECUTIONER_WAVE_CRESCENT_DEPTH).toBeCloseTo(58.5, 2);
+    expect(EXECUTIONER_WAVE_CRESCENT_DEPTH).toBeLessThan(60.0);
+  });
+
+  it('advances 2-beat Boss Kill sequence on 60Hz rawDtSec (0.00..0.16s invert_cracks -> 0.16..0.42s twin_crescents)', () => {
+    const { fx } = createTestCombatFx();
+    fx.triggerBossKillSequence(400, 300, 2);
+    expect(stepBossKillTwoBeatSequence(fx, 0.08).phase).toBe('invert_cracks');
+    expect(stepBossKillTwoBeatSequence(fx, 0.12).phase).toBe('twin_crescents');
+    expect(stepBossKillTwoBeatSequence(fx, 0.30).phase).toBe('idle');
+  });
+
+  it('orbits 6 biome-tinted fx_boss_shell_plate sprites at depth 30.8 when bossArmorShellActive is true and hides when inactive', () => {
+    let visible = true;
+    let active = true;
+    let depth = 0;
+    let scale = 1;
+    let tint = 0;
+    let x = 0;
+    let y = 0;
+    let rotation = 0;
+    const mockSprite = () => ({
+      setVisible(v: boolean) { visible = v; return this; },
+      setActive(a: boolean) { active = a; return this; },
+      setDepth(d: number) { depth = d; return this; },
+      setScale(s: number) { scale = s; return this; },
+      setTint(t: number) { tint = t; return this; },
+      setPosition(px: number, py: number) { x = px; y = py; return this; },
+      setRotation(r: number) { rotation = r; return this; },
+      get visible() { return visible; },
+      get active() { return active; },
+      get depth() { return depth; },
+      get scale() { return scale; },
+      get tint() { return tint; },
+      get x() { return x; },
+      get y() { return y; },
+    });
+    const plates = Array.from({ length: 6 }, () => mockSprite());
+    const boss = { id: 1, hp: 500, x: 200, y: 200, radius: 32, bossArmorShellActive: true } as any;
+    renderBossArmorShellPlates(plates as any, boss, 2, 1.0);
+    expect(plates.every((p) => p.visible && p.active)).toBe(true);
+    expect(plates[0]!.depth).toBeCloseTo(30.8, 2);
+    expect(plates[0]!.scale).toBeCloseTo(1 / 3, 2);
+    expect(plates[0]!.tint).toBe(0x38bdf8);
+
+    boss.bossArmorShellActive = false;
+    renderBossArmorShellPlates(plates as any, boss, 2, 1.5);
+    expect(plates.every((p) => !p.visible)).toBe(true);
+  });
+
+  it('renders executioner crescent projectile via fillTaperedArcRibbon without throwing', () => {
+    const gfx = createRecordingGraphicsMock();
+    renderExecutionerCrescentProjectile(gfx as never, 150, 150, 0.5, 26);
+    expect(gfx.fillTriangleCalls.length).toBeGreaterThan(0);
   });
 });

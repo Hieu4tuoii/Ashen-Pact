@@ -604,6 +604,22 @@ export function createImpl(this: GameScene): void {
   this.bastionFrontGraphics.setDepth(30.4);
   this.bastionFrontGraphics.setBlendMode(Phaser.BlendModes.NORMAL);
 
+  this.bossOverGraphics = this.add.graphics();
+  this.bossOverGraphics.setDepth(30.8);
+  this.bossOverGraphics.setBlendMode(Phaser.BlendModes.NORMAL);
+
+  this.bossFractureGraphics = this.add.graphics();
+  this.bossFractureGraphics.setDepth(30.9);
+  this.bossFractureGraphics.setBlendMode(Phaser.BlendModes.NORMAL);
+
+  this.bossOverheadStunGraphics = this.add.graphics();
+  this.bossOverheadStunGraphics.setDepth(46.5);
+  this.bossOverheadStunGraphics.setBlendMode(Phaser.BlendModes.NORMAL);
+
+  this.executionerWaveGraphics = this.add.graphics();
+  this.executionerWaveGraphics.setDepth(58.5);
+  this.executionerWaveGraphics.setBlendMode(Phaser.BlendModes.NORMAL);
+
   if (this.summonVisuals) {
     this.summonVisuals.clear();
   }
@@ -654,6 +670,12 @@ export function createImpl(this: GameScene): void {
       const s = this.add.sprite(0, 0, 'fx_cutout_kit_512', 'duo_rail_lock_10x10');
       s.setDepth(46.5).setScale(1 / 3).setBlendMode(Phaser.BlendModes.NORMAL).setVisible(false).setActive(false);
       this.duoRailLockPool.push(s);
+    }
+    this.bossShellPlatePool = [];
+    for (let i = 0; i < 6; i++) {
+      const s = this.add.sprite(0, 0, 'fx_cutout_kit_512', 'fx_boss_shell_plate');
+      s.setDepth(30.8).setScale(1 / 3).setBlendMode(Phaser.BlendModes.NORMAL).setVisible(false).setActive(false);
+      this.bossShellPlatePool.push(s);
     }
   }
 
@@ -1564,6 +1586,15 @@ export function teleportToRoomImpl(this: GameScene, targetRoomId: number): boole
   this.bastionRearGraphics?.clear();
   this.icePrisonFrontGraphics?.clear();
   this.bastionFrontGraphics?.clear();
+  this.bossOverGraphics?.clear();
+  this.bossFractureGraphics?.clear();
+  this.bossOverheadStunGraphics?.clear();
+  this.executionerWaveGraphics?.clear();
+  if (this.bossShellPlatePool) {
+    for (let i = 0; i < this.bossShellPlatePool.length; i++) {
+      this.bossShellPlatePool[i]!.setVisible(false).setActive(false);
+    }
+  }
   if (this.summonVisuals) {
     for (const vis of this.summonVisuals.values()) {
       vis.shadow.setVisible(false).setActive(false);
@@ -1703,6 +1734,11 @@ export function applyCameraViewportImpl(this: GameScene): void {
     if (this.duoRailLockPool) {
       for (let i = 0; i < this.duoRailLockPool.length; i++) {
         this.duoRailLockPool[i]!.setScale(1 / 3);
+      }
+    }
+    if (this.bossShellPlatePool) {
+      for (let i = 0; i < this.bossShellPlatePool.length; i++) {
+        this.bossShellPlatePool[i]!.setScale(1 / 3);
       }
     }
     const stressInvBake = 1 / Math.min(2, newScale);

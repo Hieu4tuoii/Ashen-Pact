@@ -10,7 +10,6 @@ import Phaser from 'phaser';
 import { hexToNum, PALETTE } from '../../art/palette.js';
 import { getFreezeVisualTimeSec } from '../../core/visual-query.js';
 import {
-  computeBossKillFlashAlpha,
   computeEnemySpawnCircleSpec,
 } from '../../fx/combat-fx.js';
 import { isVisualFreezeActive } from '../../fx/combat-fx-blessings-p1d.js';
@@ -28,6 +27,16 @@ export {
   renderDownedReviveBrackets,
   renderIcePrisonBars,
 };
+export {
+  EXECUTIONER_WAVE_CRESCENT_DEPTH,
+  renderExecutionerCrescentProjectile,
+} from '../../fx/combat-fx-p2b.js';
+export { renderBossPhaseInvulnCage } from './p11-drama-hud.js';
+export { renderBossArmorShellPlates } from '../../fx/combat-fx-p3a.js';
+export {
+  stepBossKillTwoBeatSequence,
+  type BossKillSequenceState,
+} from '../../fx/combat-fx.js';
 import {
   drawEnemyBatch1Indicators,
   drawTetherStaffBeams,
@@ -127,6 +136,10 @@ export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, 
   this.bastionRearGraphics?.clear();
   this.icePrisonFrontGraphics?.clear();
   this.bastionFrontGraphics?.clear();
+  this.bossOverGraphics?.clear();
+  this.bossFractureGraphics?.clear();
+  this.bossOverheadStunGraphics?.clear();
+  this.executionerWaveGraphics?.clear();
   const view = this.cameras.main.worldView;
   const hasView = view && view.width > 0;
   const viewLeft = hasView ? view.x - 48 : -9999;
@@ -600,21 +613,7 @@ export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, 
     renderP4BDuoAndSecretArenaOverlays(this);
   });
 
-  // 3. Boss Kill Dramatic Flash Overlay (0.28s additive-feeling golden-white world flash)
-  if (this.fx.bossKillFlashTimer > 0) {
-    const flashAlpha = computeBossKillFlashAlpha(this.fx.bossKillFlashTimer);
-    if (flashAlpha > 0.005) {
-      g.fillStyle(hexToNum(PALETTE.BONE_WHITE), flashAlpha);
-      g.fillRect(
-        viewLeft - 64,
-        viewTop - 64,
-        viewRight - viewLeft + 128,
-        viewBottom - viewTop + 128,
-      );
-      g.lineStyle(4, hexToNum(PALETTE.SOLAR_GOLD), flashAlpha * 1.6);
-      g.strokeCircle(this.camFocusX, this.camFocusY, (1 - this.fx.bossKillFlashTimer / 0.28) * 320);
-    }
-  }
+  // 3. Boss Kill 2-Beat Sequence stepped via stepBossKillTwoBeatSequence on GameScene update
 
   // 4. Phase P11 Drama World Overlays (Boss Phase Transition Invuln/Roar, Boss Soft Enrage Aura, Vengeful Rings, Overlapping Wave Circles)
   drawP11DramaWorldOverlays(this);

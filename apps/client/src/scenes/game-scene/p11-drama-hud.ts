@@ -1,7 +1,70 @@
 import type Phaser from 'phaser';
 import { i18n, type SimEnemyState, WORLD_VIEW_WIDTH } from '@ashen-pact/shared';
+import { hexToNum, PALETTE } from '../../art/palette.js';
+import {
+  fillTaperedArcRibbon,
+  fillTaperedQuadraticBezier,
+  strokeCutoutQuadStripFromScratch,
+  SCRATCH_PX,
+  SCRATCH_PY,
+  SCRATCH_HW,
+} from '../../fx/tapered-ribbon-builder.js';
 import { graphicsSettings } from '../../ui/graphics-settings.js';
 import type { GameScene } from '../GameScene.js';
+
+export function renderBossPhaseInvulnCage(
+  gfx: Phaser.GameObjects.Graphics,
+  x: number,
+  y: number,
+  radiusPx: number,
+  elapsedSec: number,
+  totalDurationSec = 1.2,
+): boolean {
+  if (elapsedSec < 0 || elapsedSec >= totalDurationSec) {
+    return false;
+  }
+  const blinkStartSec = totalDurationSec - 0.2;
+  if (elapsedSec >= blinkStartSec) {
+    const halfCycle = Math.floor((elapsedSec - blinkStartSec) * 32);
+    if (halfCycle % 2 !== 0) {
+      return false;
+    }
+  }
+
+  // Draw <= 0.06 inner fill if fillStyle & fillTriangle available
+  if (typeof gfx.fillStyle === 'function' && typeof gfx.fillTriangle === 'function') {
+    gfx.fillStyle(0xfef08a, 0.04);
+    for (let k = 0; k < 6; k++) {
+      const a1 = (k / 6) * Math.PI * 2;
+      const a2 = ((k + 1) / 6) * Math.PI * 2;
+      gfx.fillTriangle(
+        x,
+        y,
+        x + Math.cos(a1) * (radiusPx - 1.4),
+        y + Math.sin(a1) * (radiusPx - 1.4),
+        x + Math.cos(a2) * (radiusPx - 1.4),
+        y + Math.sin(a2) * (radiusPx - 1.4),
+      );
+    }
+  }
+
+  // 7 points for a tight closed hexagon rim (#141019 2.0px border + #F4F1EA 1.4px core)
+  for (let k = 0; k < 7; k++) {
+    const ang = (k / 6) * Math.PI * 2;
+    SCRATCH_PX[k] = x + Math.cos(ang) * radiusPx;
+    SCRATCH_PY[k] = y + Math.sin(ang) * radiusPx;
+    SCRATCH_HW[k] = 0.7; // 1.4px core width
+  }
+  strokeCutoutQuadStripFromScratch(
+    gfx,
+    7,
+    hexToNum(PALETTE.BONE_WHITE),
+    0.95,
+    2.0,
+    hexToNum(PALETTE.INK_DARK),
+  );
+  return true;
+}
 
 const UI_FONT_FAMILY = '"Be Vietnam Pro", system-ui, sans-serif';
 const HUD_VIEW_W = WORLD_VIEW_WIDTH || 960;
@@ -367,27 +430,14 @@ export function drawP11DramaWorldOverlays(scene: GameScene): void {
   if (!sim || !g) return;
   const floorG: Phaser.GameObjects.Graphics = scene?.groundHazardGraphics ?? g;
 
-  const pulse = 0.5 + 0.5 * Math.sin(sim.tick * 0.22);
-
-  // 1. Vengeful Elite 0.5s Death-Ring Telegraphs (floor layer depth 16, translucent fill)
+  // 1. Vengeful Elite 0.5s Death-Ring Telegraphs (floor layer depth 16, 4 Cutout brackets)
   if (Array.isArray(sim.pendingVengefulRings)) {
     for (let i = 0; i < sim.pendingVengefulRings.length; i++) {
       const ring = sim.pendingVengefulRings[i]!;
-      const ratio = Math.max(0, Math.min(1, 1 - ring.timerSec / 0.5));
       const r = 42;
-      floorG.fillStyle(0xa855f7, 0.04 + ratio * 0.04);
-      floorG.fillCircle(ring.x, ring.y, r * ratio);
-      floorG.lineStyle(2.5, 0xf43f5e, 0.85);
-      floorG.strokeCircle(ring.x, ring.y, r);
-      for (let k = 0; k < 8; k++) {
-        const ang = (k / 8) * Math.PI * 2;
-        floorG.lineStyle(1.5, 0xfbbf24, 0.75);
-        floorG.lineBetween(
-          ring.x + Math.cos(ang) * 10,
-          ring.y + Math.sin(ang) * 10,
-          ring.x + Math.cos(ang) * r,
-          ring.y + Math.sin(ang) * r,
-        );
+      for (let k = 0; k < 4; k++) {
+        const ang = (k / 4) * Math.PI * 2;
+        fillTaperedArcRibbon(floorG, ring.x, ring.y, r, ang - 0.26, ang + 0.26, 2.4, 0xf43f5e, 0.88, 3, 1.2);
       }
     }
   }
@@ -401,71 +451,55 @@ export function drawP11DramaWorldOverlays(scene: GameScene): void {
     if (e.aiState === 'spawning' && (e.waveIndex ?? 1) >= 2) {
       const ratio = Math.max(0, Math.min(1, 1 - e.stateTimer / 0.8));
       const outerR = e.radius + 14;
-      floorG.lineStyle(2.5, 0xf97316, 0.85);
-      floorG.strokeCircle(e.x, e.y, outerR * (1.2 - ratio * 0.2));
-      floorG.fillStyle(0xfbbf24, 0.05 + 0.03 * pulse);
-      floorG.fillCircle(e.x, e.y, outerR * 0.75);
+      const ringR = outerR * (1.2 - ratio * 0.2);
+      for (let k = 0; k < 4; k++) {
+        const ang = (k / 4) * Math.PI * 2 + sim.tick * 0.04;
+        fillTaperedArcRibbon(floorG, e.x, e.y, ringR, ang - 0.28, ang + 0.28, 2.2, 0xf97316, 0.85, 3, 1.2);
+      }
     }
 
     if (!e.isBoss) continue;
 
-    // 3. Boss Phase Transition 1.2s Invulnerable Roar Shield & Shockwave
+    // 3. Boss Phase Transition 1.2s Invulnerable Roar Hex Cage
     const transTimer = Number(e.bossPhaseTransitionTimer ?? 0);
     if (transTimer > 0) {
-      const p = 1 - Math.max(0, Math.min(1, transTimer / 1.2));
-      const shieldR = e.radius + 22;
-      const waveR = e.radius + 24 + p * 180;
-
-      // Expanding bullet-clearing roar shockwave
-      g.lineStyle(4, 0xfef08a, 0.9 * (1 - p * 0.5));
-      g.strokeCircle(e.x, e.y, waveR);
-      g.lineStyle(2, 0xf97316, 0.75);
-      g.strokeCircle(e.x, e.y, waveR * 0.72);
-
-      // Invulnerable hexagonal/golden barrier around Boss
-      g.fillStyle(0xfef08a, 0.22 + 0.12 * pulse);
-      g.fillCircle(e.x, e.y, shieldR);
-      g.lineStyle(3.5, 0xffffff, 0.95);
-      g.strokeCircle(e.x, e.y, shieldR);
-
-      // 8 radial roar rays
-      for (let k = 0; k < 8; k++) {
-        const ang = (k / 8) * Math.PI * 2 + sim.tick * 0.04;
-        g.lineStyle(2.5, 0xfde047, 0.85);
-        g.lineBetween(
-          e.x + Math.cos(ang) * (e.radius + 6),
-          e.y + Math.sin(ang) * (e.radius + 6),
-          e.x + Math.cos(ang) * (shieldR + 28),
-          e.y + Math.sin(ang) * (shieldR + 28),
-        );
-      }
+      const elapsedSec = Math.max(0, 1.2 - transTimer);
+      const cageG = (scene as unknown as { bossOverGraphics?: Phaser.GameObjects.Graphics }).bossOverGraphics ?? g;
+      renderBossPhaseInvulnCage(cageG, e.x, e.y, e.radius + 22, elapsedSec, 1.2);
     }
 
-    // 4. Boss Soft Enrage (>= 90s) Crimson Aura & Arena Perimeter Pulse
+    // 4. Boss Soft Enrage (>= 90s) Crimson Flame Horns (depth 30.8)
     const eRec = e as unknown as Record<string, unknown>;
     const elapsed = Number(e.bossCombatElapsedSec ?? eRec.bossFightElapsedSec ?? 0);
     const enrageLvl = Number(e.bossEnrageLevel ?? eRec.bossEnrageStacks ?? 0);
     if (elapsed >= 90 || enrageLvl > 0) {
       const lvl = Math.max(1, enrageLvl || Math.floor((elapsed - 90) / 15) + 1);
-      const auraR = e.radius + 16 + pulse * 8;
-      floorG.fillStyle(0xef4444, 0.05 + Math.min(0.04, lvl * 0.01));
-      floorG.fillCircle(e.x, e.y, auraR);
-      floorG.lineStyle(3, 0xff2a2a, 0.88);
-      floorG.strokeCircle(e.x, e.y, auraR);
-      floorG.lineStyle(1.8, 0xfbbf24, 0.78);
-      floorG.strokeCircle(e.x, e.y, auraR + 7);
-
-      // Crimson enrage crown spikes above Boss
-      for (let k = 0; k < 6; k++) {
-        const ang = (k / 6) * Math.PI * 2 - sim.tick * 0.06;
-        const r1 = e.radius + 8;
-        const r2 = auraR + 12;
-        g.lineStyle(2.2, 0xef4444, 0.88);
-        g.lineBetween(
-          e.x + Math.cos(ang) * r1,
-          e.y + Math.sin(ang) * r1,
-          e.x + Math.cos(ang) * r2,
-          e.y + Math.sin(ang) * r2,
+      const hornCount = Math.max(3, Math.min(5, 2 + lvl));
+      const bossOverG = (scene as unknown as { bossOverGraphics?: Phaser.GameObjects.Graphics }).bossOverGraphics ?? g;
+      const shoulderY = e.y - e.radius * 0.45;
+      for (let h = 0; h < hornCount; h++) {
+        const u = hornCount > 1 ? h / (hornCount - 1) - 0.5 : 0;
+        const x0 = e.x + u * e.radius * 1.35;
+        const y0 = shoulderY;
+        const cx = x0 + u * 10;
+        const cy = y0 - 16 - Math.sin(sim.tick * 0.1 + h) * 4;
+        const x2 = x0 + u * 20;
+        const y2 = y0 - 28 - Math.sin(sim.tick * 0.12 + h * 1.4) * 6;
+        fillTaperedQuadraticBezier(
+          bossOverG,
+          x0,
+          y0,
+          cx,
+          cy,
+          x2,
+          y2,
+          2.4,
+          3.0,
+          0.2,
+          0xe84545,
+          0.95,
+          6,
+          1.8,
         );
       }
     }
