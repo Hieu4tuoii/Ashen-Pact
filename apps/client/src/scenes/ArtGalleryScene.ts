@@ -384,7 +384,6 @@ export class ArtGalleryScene extends Phaser.Scene {
   public setGalleryAnim(state: RigAnimState): void {
     this.currentAnim = state;
     this.applyGalleryAnimToRigs();
-    this.debugOverlay?.resetSamples();
     const debug = initGlobalDebugState();
     debug.animState = state;
     this.updateStatusBanner();

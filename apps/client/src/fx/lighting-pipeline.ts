@@ -72,30 +72,34 @@ void main() {
     color = texture2D(uMainSampler, uv).rgb;
   }
 
-  // 2. Symmetric 4-tap Emissive Bloom on High quality (no diagonal double-image ghosting)
+  // 2. Symmetric 4-tap Emissive Bloom on High quality (early-out on dark/mid-tone pixels to avoid 4 texture lookups per pixel)
   if (uBloomStrength > 0.001) {
-    vec2 off1 = vec2(0.0011, 0.0016);
-    vec2 off2 = vec2(-0.0011, 0.0016);
-    vec3 s1 = texture2D(uMainSampler, clamp(uv + off1, 0.0, 1.0)).rgb;
-    vec3 s2 = texture2D(uMainSampler, clamp(uv - off1, 0.0, 1.0)).rgb;
-    vec3 s3 = texture2D(uMainSampler, clamp(uv + off2, 0.0, 1.0)).rgb;
-    vec3 s4 = texture2D(uMainSampler, clamp(uv - off2, 0.0, 1.0)).rgb;
-    vec3 avg = (s1 + s2 + s3 + s4) * 0.25;
     float centerLuma = dot(color, vec3(0.299, 0.587, 0.114));
-    float haloLuma = dot(avg, vec3(0.299, 0.587, 0.114));
-    float brightFactor = smoothstep(0.74, 0.95, max(centerLuma, haloLuma * 0.92));
-    float inkGuard = smoothstep(0.22, 0.48, centerLuma);
-    color += avg * brightFactor * (uBloomStrength * 0.65) * inkGuard;
+    if (centerLuma > 0.58) {
+      vec2 off1 = vec2(0.0011, 0.0016);
+      vec2 off2 = vec2(-0.0011, 0.0016);
+      vec3 s1 = texture2D(uMainSampler, clamp(uv + off1, 0.0, 1.0)).rgb;
+      vec3 s2 = texture2D(uMainSampler, clamp(uv - off1, 0.0, 1.0)).rgb;
+      vec3 s3 = texture2D(uMainSampler, clamp(uv + off2, 0.0, 1.0)).rgb;
+      vec3 s4 = texture2D(uMainSampler, clamp(uv - off2, 0.0, 1.0)).rgb;
+      vec3 avg = (s1 + s2 + s3 + s4) * 0.25;
+      float haloLuma = dot(avg, vec3(0.299, 0.587, 0.114));
+      float brightFactor = smoothstep(0.74, 0.95, max(centerLuma, haloLuma * 0.92));
+      float inkGuard = smoothstep(0.22, 0.48, centerLuma);
+      color += avg * brightFactor * (uBloomStrength * 0.65) * inkGuard;
+    }
   }
 
   // 3. Biome Color Grading & Contrast
   color = ((color - 0.5) * uContrast + 0.5) * uColorGradeTint;
 
-  // 4. Smooth Vignette + Low-HP Red Heartbeat Edge Pulse
-  float vig = smoothstep(0.36, 0.78, dist);
-  color *= (1.0 - vig * uVignetteStrength);
-  if (uLowHpPulse > 0.001) {
-    color = mix(color, vec3(0.91, 0.18, 0.22), vig * uLowHpPulse * 0.65);
+  // 4. Smooth Vignette + Low-HP Red Heartbeat Edge Pulse (early-out for center screen and zero strength)
+  if ((uVignetteStrength > 0.001 || uLowHpPulse > 0.001) && dist > 0.36) {
+    float vig = smoothstep(0.36, 0.78, dist);
+    color *= (1.0 - vig * uVignetteStrength);
+    if (uLowHpPulse > 0.001) {
+      color = mix(color, vec3(0.91, 0.18, 0.22), vig * uLowHpPulse * 0.65);
+    }
   }
 
   gl_FragColor = vec4(clamp(color, 0.0, 1.0), 1.0);
@@ -866,8 +870,8 @@ export class LightingPipeline {
           drawLight(wx, wy, 68, hexToNum(PALETTE.CYAN_FROST), 0.26);
         } else if (surf === 'lava' && tx % 2 === 0 && ty % 2 === 0) {
           drawLight(wx, wy, 80, hexToNum(PALETTE.FLAME_ORANGE), 0.28);
-        } else if (surf === 'poison_swamp' && tx % 2 === 0 && ty % 2 === 0) {
-          drawLight(wx, wy, 68, hexToNum(PALETTE.TOXIC_PURPLE), 0.2);
+        } else if (surf === 'poison_swamp' && tx % 4 === 0 && ty % 4 === 0) {
+          drawLight(wx, wy, 80, hexToNum(PALETTE.TOXIC_PURPLE), 0.22);
         }
       }
     }

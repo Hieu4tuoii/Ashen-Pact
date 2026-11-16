@@ -733,6 +733,7 @@ export class BiomeArchitectureLiveLayer {
   private lastBracketSig = '';
   private lastVoidMaskSig = '';
   private gearHadContent = false;
+  private lastHazardMapRevision = -1;
   private readonly scratchHazardIndices: number[] = [];
 
   constructor(scene: Phaser.Scene) {
@@ -752,6 +753,7 @@ export class BiomeArchitectureLiveLayer {
     this.plan = plan;
     this.lastBracketSig = '';
     this.lastVoidMaskSig = '';
+    this.lastHazardMapRevision = -1;
   }
 
   public renderGroundPass(
@@ -862,19 +864,22 @@ export class BiomeArchitectureLiveLayer {
       }
     }
 
-    this.scratchHazardIndices.length = 0;
-    for (let i = 0; i < map.surfaces.length; i++) {
-      const s = map.surfaces[i]!;
-      if (
-        s === 'lava' ||
-        s === 'water' ||
-        s === 'electrified_water' ||
-        s === 'poison_swamp' ||
-        s === 'burning_oil' ||
-        s === 'burning_grass' ||
-        s === 'conveyor'
-      ) {
-        this.scratchHazardIndices.push(i);
+    if (this.lastHazardMapRevision !== map.mapRevision) {
+      this.lastHazardMapRevision = map.mapRevision;
+      this.scratchHazardIndices.length = 0;
+      for (let i = 0; i < map.surfaces.length; i++) {
+        const s = map.surfaces[i]!;
+        if (
+          s === 'lava' ||
+          s === 'water' ||
+          s === 'electrified_water' ||
+          s === 'poison_swamp' ||
+          s === 'burning_oil' ||
+          s === 'burning_grass' ||
+          s === 'conveyor'
+        ) {
+          this.scratchHazardIndices.push(i);
+        }
       }
     }
     const activeHazardTiles = this.scratchHazardIndices.length;
@@ -931,14 +936,21 @@ export class BiomeArchitectureLiveLayer {
 
     // 2b. Live deterministic surface animations (lava, ice, water, electrified_water, poison_swamp, burning_*, conveyor)
     if (activeHazardTiles > 0 && !isLow) {
+      const cam = this.gearGraphics.scene?.cameras?.main;
+      const minWx = cam ? cam.scrollX - 48 : -Infinity;
+      const maxWx = cam ? cam.scrollX + cam.width + 48 : Infinity;
+      const minWy = cam ? cam.scrollY - 48 : -Infinity;
+      const maxWy = cam ? cam.scrollY + cam.height + 48 : Infinity;
+
       for (let idx = 0; idx < activeHazardTiles; idx++) {
         const i = this.scratchHazardIndices[idx]!;
         const tx = i % map.cols;
         const ty = Math.floor(i / map.cols);
         if (tx === 0 || ty === 0 || tx >= map.cols - 1 || ty >= map.rows - 1) continue;
-        const surf = map.surfaces[i]!;
         const wx = tx * TILE_SIZE + 16;
         const wy = ty * TILE_SIZE + 16;
+        if (wx < minWx || wx > maxWx || wy < minWy || wy > maxWy) continue;
+        const surf = map.surfaces[i]!;
         const h = (tx * 73 + ty * 151) & 15;
         const ox = ((h & 3) - 1.5) * 2.6;
         const oy = (((h >> 2) & 3) - 1.5) * 2.6;
@@ -960,7 +972,7 @@ export class BiomeArchitectureLiveLayer {
           const jx = Math.sin(phase * 3) * 4.5;
           this.gearGraphics.lineStyle(1.3, 0x22d3ee, 0.78);
           this.gearGraphics.lineBetween(wx + ox - 5, wy + oy - 3, wx + ox + jx, wy + oy + 3);
-        } else if (surf === 'poison_swamp') {
+        } else if (surf === 'poison_swamp' && ((tx + ty) & 1) === 0) {
           const bubR = 1.4 + 0.9 * (0.5 + 0.5 * Math.cos(phase));
           this.gearGraphics.fillStyle(0x84cc16, 0.62);
           this.gearGraphics.fillCircle(
@@ -1105,14 +1117,21 @@ export class BiomeArchitectureLiveLayer {
 
       // 5. Additive Emissive Hazard Spark / Ember Glints above lightmapRt (depth 35.5, BlendModes.ADD)
       if (activeHazardTiles > 0) {
+        const cam = this.additiveGraphics.scene?.cameras?.main;
+        const minWx = cam ? cam.scrollX - 48 : -Infinity;
+        const maxWx = cam ? cam.scrollX + cam.width + 48 : Infinity;
+        const minWy = cam ? cam.scrollY - 48 : -Infinity;
+        const maxWy = cam ? cam.scrollY + cam.height + 48 : Infinity;
+
         for (let idx = 0; idx < activeHazardTiles; idx++) {
           const i = this.scratchHazardIndices[idx]!;
           const tx = i % map.cols;
           const ty = Math.floor(i / map.cols);
           if (tx === 0 || ty === 0 || tx >= map.cols - 1 || ty >= map.rows - 1) continue;
-          const surf = map.surfaces[i]!;
           const wx = tx * TILE_SIZE + 16;
           const wy = ty * TILE_SIZE + 16;
+          if (wx < minWx || wx > maxWx || wy < minWy || wy > maxWy) continue;
+          const surf = map.surfaces[i]!;
           const h = (tx * 73 + ty * 151) & 15;
           const ox = ((h & 3) - 1.5) * 2.6;
           const oy = (((h >> 2) & 3) - 1.5) * 2.6;
@@ -1123,7 +1142,7 @@ export class BiomeArchitectureLiveLayer {
           } else if (surf === 'electrified_water') {
             this.additiveGraphics.fillStyle(0x22d3ee, pulse);
             this.additiveGraphics.fillCircle(wx + ox, wy + oy, 2.2);
-          } else if (surf === 'poison_swamp') {
+          } else if (surf === 'poison_swamp' && ((tx + ty) & 1) === 0) {
             this.additiveGraphics.fillStyle(0x84cc16, pulse * 0.85);
             this.additiveGraphics.fillCircle(wx + ox, wy + oy, 2.2);
           }

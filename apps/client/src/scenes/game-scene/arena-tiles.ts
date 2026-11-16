@@ -129,11 +129,7 @@ export function syncGameSceneTestHooks(scene: GameScene): void {
     window.__GAME_BOT_AUTOPLAY__ = (active: boolean) => {
       const s = scene.transport.getSim();
       s.botAutoPlayActive = active;
-      const debug = initGlobalDebugState();
-      debug.botAutoPlayActive = active;
-      debug.fps = 60.0;
-      debug.frameTimeMs = 16.67;
-      scene.debugOverlay?.resetSamples();
+      initGlobalDebugState().botAutoPlayActive = active;
       if (scene.room && scene.coopMode !== 'solo') {
         scene.room.send('set_bot_autoplay', { active });
       }
@@ -1448,6 +1444,8 @@ export function getStructureTextureKeyImpl(
   return TextureBaker.getWallTileTextureKey(biome, autotileMask);
 }
 
+const scratchDirtyTiles: ArenaTileVisual[] = [];
+
 export function syncArenaTilesWithMapRevisionImpl(this: GameScene): void {
   const sim = this.transport.getSim();
   if (sim.stressTestActive) return;
@@ -1514,15 +1512,16 @@ export function syncArenaTilesWithMapRevisionImpl(this: GameScene): void {
   }
 
   let groundDirty = conveyorFlipped;
-  const dirtyTiles: ArenaTileVisual[] = [];
+  scratchDirtyTiles.length = 0;
 
   for (let i = 0; i < this.mapTileVisuals.length; i++) {
     const tile = this.mapTileVisuals[i]!;
     const newKind = map.getTile(tile.tx, tile.ty);
-    const newDistToWall = computeTileDistToWall(map, tile.tx, tile.ty);
-    const newVariant = resolveHybridFloorVariant(tile.tx, tile.ty, newDistToWall);
-    const newMask = map.getAutotileMask(tile.tx, tile.ty);
-    const newAo = map.getWallAmbientOcclusionMask(tile.tx, tile.ty);
+    const kindChanged = newKind !== tile.kind || biomeChanged;
+    const newDistToWall = kindChanged ? computeTileDistToWall(map, tile.tx, tile.ty) : tile.distToWall;
+    const newVariant = kindChanged ? resolveHybridFloorVariant(tile.tx, tile.ty, newDistToWall) : tile.variant;
+    const newMask = kindChanged ? map.getAutotileMask(tile.tx, tile.ty) : tile.autotileMask;
+    const newAo = kindChanged ? map.getWallAmbientOcclusionMask(tile.tx, tile.ty) : tile.aoMask;
     const newSurface = map.getSurface(tile.tx, tile.ty);
     const newSurfaceMask = map.getSurfaceAutotileMask(tile.tx, tile.ty);
 
@@ -1544,14 +1543,14 @@ export function syncArenaTilesWithMapRevisionImpl(this: GameScene): void {
       tile.aoMask = newAo;
       tile.surface = newSurface;
       tile.surfaceMask = newSurfaceMask;
-      dirtyTiles.push(tile);
+      scratchDirtyTiles.push(tile);
     }
   }
 
   if (groundDirty) {
-    if (!biomeChanged && !conveyorFlipped && dirtyTiles.length <= 128 && this.arenaGroundTex) {
-      for (let i = 0; i < dirtyTiles.length; i++) {
-        this.renderTileCellToComposite(dirtyTiles[i]!);
+    if (!biomeChanged && !conveyorFlipped && scratchDirtyTiles.length <= 320 && this.arenaGroundTex) {
+      for (let i = 0; i < scratchDirtyTiles.length; i++) {
+        this.renderTileCellToComposite(scratchDirtyTiles[i]!);
       }
       this.arenaGroundTex.refresh();
     } else {
