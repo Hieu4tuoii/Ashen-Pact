@@ -202,35 +202,19 @@
 
       /* Sleek Hairline Progress Area */
       .loading-progress-group {
-        width: 100%;
+        width: min(280px, 78vw);
         display: flex;
         flex-direction: column;
-        gap: 10px;
-      }
-
-      .loading-progress-meta {
-        display: flex;
-        align-items: baseline;
-        justify-content: space-between;
+        align-items: center;
         gap: 12px;
       }
 
-      #loading-stage-label {
-        font-size: 12px;
-        font-weight: 400;
-        color: var(--text-secondary);
-        letter-spacing: 0.01em;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-      }
-
       #loading-progress-percent {
-        font-size: 12px;
-        font-weight: 600;
+        font-size: 11px;
+        font-weight: 500;
         font-variant-numeric: tabular-nums;
-        color: var(--text-primary);
-        letter-spacing: 0.04em;
+        color: var(--text-muted);
+        letter-spacing: 0.08em;
       }
 
       .loading-progress-track {
@@ -257,20 +241,11 @@
       }
 
       .loading-progress-submeta {
+        width: 100%;
         display: flex;
         align-items: center;
         justify-content: space-between;
         gap: 12px;
-        padding-top: 2px;
-      }
-
-      #loading-stage-detail {
-        font-size: 11px;
-        font-weight: 400;
-        color: var(--text-dim);
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
       }
 
       /* 5 Minimalist Geometric Class Nodes */
@@ -430,10 +405,8 @@
         </header>
 
         <section class="loading-progress-group" aria-label="Tiến độ khởi tạo">
-          <div class="loading-progress-meta">
-            <span id="loading-stage-label">Đang đánh thức Thánh Điện Tro Tàn...</span>
-            <span id="loading-progress-percent">12%</span>
-          </div>
+          <span id="loading-stage-label" class="sr-only">Đang khởi tạo...</span>
+          <span id="loading-stage-detail" class="sr-only">Khởi tạo hệ thống</span>
 
           <div
             id="loading-progress-bar"
@@ -447,8 +420,6 @@
           </div>
 
           <div class="loading-progress-submeta">
-            <span id="loading-stage-detail">Khởi tạo nhân đồ họa WebGL 60 FPS &amp; cấu hình hiển thị</span>
-
             <div id="loading-hero-strip" aria-label="5 lớp nhân vật">
               <div class="loading-hero-card is-active is-current" data-hero-index="0">
                 <span class="loading-hero-name sr-only">Thiết Vệ</span>
@@ -471,6 +442,8 @@
                 <span class="loading-hero-role sr-only">Pháo Đài</span>
               </div>
             </div>
+
+            <span id="loading-progress-percent">12%</span>
           </div>
 
           <div id="loading-step-pips" class="sr-only" aria-hidden="true">
