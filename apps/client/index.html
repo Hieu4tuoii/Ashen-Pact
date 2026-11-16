@@ -14,27 +14,16 @@
     <title>Ashen Pact — Khế Ước Tro Tàn</title>
     <style>
       :root {
-        --ink-deep: #0b090e;
-        --ink-dark: #141019;
-        --hub-shadow: #151a24;
-        --panel-dark: #1d2330;
-        --wall-front: #2d3547;
-        --floor-slate: #414b61;
-        --wall-top: #64708b;
-        --steel-dark: #565e75;
-        --steel-light: #8b97b5;
-        --silver-bright: #c7d2e8;
-        --bone-white: #f4f1ea;
-        --ruby-dark: #6e1423;
-        --ruby-core: #b82538;
-        --crimson-bright: #e84545;
-        --flame-orange: #f97316;
-        --brass-core: #d97706;
-        --copper-light: #fdba74;
-        --solar-gold: #facc15;
-        --volt-yellow: #fde047;
-        --cyan-frost: #22d3ee;
-        --lime-glow: #84cc16;
+        --bg-deep: #0b090e;
+        --bg-slate: #11151f;
+        --line-subtle: rgba(139, 151, 181, 0.14);
+        --line-muted: rgba(139, 151, 181, 0.26);
+        --text-primary: #f4f1ea;
+        --text-secondary: #c7d2e8;
+        --text-muted: #8b97b5;
+        --text-dim: #64708b;
+        --accent-gold: #facc15;
+        --accent-warm: rgba(250, 204, 21, 0.68);
       }
 
       *,
@@ -50,8 +39,8 @@
         width: 100%;
         height: 100%;
         overflow: hidden;
-        background-color: var(--ink-deep);
-        color: var(--bone-white);
+        background-color: var(--bg-deep);
+        color: var(--text-primary);
         font-family: 'Be Vietnam Pro', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
           sans-serif;
         user-select: none;
@@ -70,8 +59,20 @@
         display: block;
       }
 
+      .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+      }
+
       /* ==========================================================================
-         ASHEN PACT — SANCTUARY HEARTH FIRST-PAINT LOADING SCREEN
+         ASHEN PACT — REFINED MINIMALIST LOADING SCREEN
          ========================================================================== */
       #ashen-loading-screen {
         position: fixed;
@@ -80,37 +81,33 @@
         display: flex;
         flex-direction: column;
         align-items: center;
-        justify-content: space-between;
-        padding: clamp(18px, 2.8vh, 34px) clamp(18px, 3.2vw, 44px);
-        overflow: hidden;
+        justify-content: center;
+        padding: 32px;
         background:
           radial-gradient(
-            circle at 18% 16%,
-            rgba(245, 158, 66, 0.16) 0%,
-            rgba(65, 75, 97, 0.08) 34%,
-            transparent 62%
-          ),
-          radial-gradient(
-            circle at 82% 84%,
-            rgba(249, 115, 22, 0.11) 0%,
-            transparent 55%
-          ),
-          radial-gradient(
-            circle at 50% 38%,
-            rgba(184, 37, 56, 0.25) 0%,
-            rgba(45, 53, 71, 0.48) 38%,
-            rgba(21, 26, 36, 0.95) 75%,
+            circle at 50% 45%,
+            rgba(29, 35, 48, 0.52) 0%,
+            rgba(15, 18, 26, 0.9) 58%,
             #0b090e 100%
           ),
-          linear-gradient(165deg, #242b3b 0%, #151a24 52%, #0b090e 100%);
+          #0b090e;
         transition:
-          opacity 420ms cubic-bezier(0.22, 1, 0.36, 1),
-          transform 420ms cubic-bezier(0.22, 1, 0.36, 1);
+          opacity 380ms cubic-bezier(0.22, 1, 0.36, 1),
+          transform 380ms cubic-bezier(0.22, 1, 0.36, 1);
+      }
+
+      #ashen-loading-screen::before {
+        content: '';
+        position: absolute;
+        inset: clamp(16px, 2.2vmin, 28px);
+        border: 1px solid rgba(139, 151, 181, 0.08);
+        border-radius: 6px;
+        pointer-events: none;
       }
 
       #ashen-loading-screen.is-complete {
         opacity: 0;
-        transform: scale(1.025);
+        transform: scale(1.012);
         pointer-events: none;
       }
 
@@ -126,201 +123,29 @@
         animation: none !important;
       }
 
-      /* Architectural Sanctuary Stone Frame */
-      .loading-sanctuary-frame {
-        position: absolute;
-        inset: clamp(10px, 1.8vmin, 22px);
-        border: 2px solid rgba(100, 112, 139, 0.42);
-        border-radius: 14px;
-        pointer-events: none;
-        box-shadow:
-          inset 0 1px 0 rgba(199, 210, 232, 0.16),
-          inset 0 0 90px rgba(11, 9, 14, 0.72);
-      }
-
-      .loading-sanctuary-frame::before,
-      .loading-sanctuary-frame::after {
-        content: '';
-        position: absolute;
-        left: 50%;
-        transform: translateX(-50%);
-        width: min(420px, 56vw);
-        height: 3px;
-        background: linear-gradient(
-          90deg,
-          transparent 0%,
-          rgba(217, 119, 6, 0.7) 25%,
-          var(--solar-gold) 50%,
-          rgba(217, 119, 6, 0.7) 75%,
-          transparent 100%
-        );
-      }
-
-      .loading-sanctuary-frame::before {
-        top: -2px;
-      }
-
-      .loading-sanctuary-frame::after {
-        bottom: -2px;
-      }
-
-      .loading-corner-ornament {
-        position: absolute;
-        width: 28px;
-        height: 28px;
-        pointer-events: none;
-      }
-
-      .loading-corner-ornament.tl {
-        top: -3px;
-        left: -3px;
-        border-top: 3px solid var(--solar-gold);
-        border-left: 3px solid var(--solar-gold);
-        border-top-left-radius: 12px;
-      }
-
-      .loading-corner-ornament.tr {
-        top: -3px;
-        right: -3px;
-        border-top: 3px solid var(--copper-light);
-        border-right: 3px solid var(--copper-light);
-        border-top-right-radius: 12px;
-      }
-
-      .loading-corner-ornament.bl {
-        bottom: -3px;
-        left: -3px;
-        border-bottom: 3px solid var(--copper-light);
-        border-left: 3px solid var(--copper-light);
-        border-bottom-left-radius: 12px;
-      }
-
-      .loading-corner-ornament.br {
-        bottom: -3px;
-        right: -3px;
-        border-bottom: 3px solid var(--brass-core);
-        border-right: 3px solid var(--brass-core);
-        border-bottom-right-radius: 12px;
-      }
-
-      /* Left & Right Sanctuary Stone Pillars & Braziers (Widescreen Framing) */
-      .loading-flank-pillar {
-        position: absolute;
-        top: 50%;
-        transform: translateY(-50%);
-        width: 128px;
-        height: min(680px, 78vh);
-        pointer-events: none;
-        opacity: 0.9;
-      }
-
-      .loading-flank-pillar.left {
-        left: clamp(26px, 3.2vw, 64px);
-      }
-
-      .loading-flank-pillar.right {
-        right: clamp(26px, 3.2vw, 64px);
-      }
-
-      .sconce-flame {
-        transform-origin: 64px 258px;
-        animation: brazierFlameFlicker 1.45s ease-in-out infinite alternate;
-      }
-
-      /* Rising Brazier Embers (Crisp Cutout Motes — No Fog) */
-      .loading-embers {
-        position: absolute;
-        inset: 0;
-        pointer-events: none;
-        overflow: hidden;
-      }
-
-      .loading-ember {
-        position: absolute;
-        bottom: -16px;
-        width: var(--sz, 7px);
-        height: var(--sz, 7px);
-        left: var(--x, 50%);
-        border-radius: 50%;
-        background: var(--clr, var(--solar-gold));
-        border: 1.5px solid var(--ink-dark);
-        box-shadow: 0 0 10px var(--clr, var(--flame-orange));
-        opacity: 0;
-        animation: ashenEmberRise var(--dur, 6.2s) ease-in infinite;
-        animation-delay: var(--dly, 0s);
-      }
-
-      @keyframes ashenEmberRise {
-        0% {
-          transform: translate3d(0, 0, 0) scale(0.8);
-          opacity: 0;
-        }
-        16% {
-          opacity: 0.94;
-        }
-        78% {
-          opacity: 0.72;
-        }
-        100% {
-          transform: translate3d(var(--drift, 28px), -88vh, 0) scale(0.35);
-          opacity: 0;
-        }
-      }
-
-      /* Top Spacer & Main Content Shell */
-      .loading-top-ornament {
-        position: relative;
-        z-index: 2;
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        font-size: 11px;
-        font-weight: 800;
-        letter-spacing: 0.2em;
-        color: var(--steel-light);
-        text-transform: uppercase;
-      }
-
-      .loading-top-ornament-diamond {
-        width: 8px;
-        height: 8px;
-        background: var(--brass-core);
-        border: 1.5px solid var(--ink-dark);
-        transform: rotate(45deg);
-      }
-
-      .loading-shell {
-        position: relative;
-        z-index: 2;
-        width: min(920px, 92vw);
+      #loading-shell {
+        width: min(360px, 86vw);
         display: flex;
         flex-direction: column;
         align-items: center;
-        gap: clamp(12px, 2vh, 20px);
-        margin: auto 0;
+        gap: 28px;
       }
 
-      /* Centerpiece Cutout 2.0 Vector Medallion */
-      .loading-medallion-wrap {
-        position: relative;
-        width: clamp(138px, 19.5vh, 188px);
-        height: clamp(138px, 19.5vh, 188px);
+      /* Brand Header & Minimal Seal */
+      .loading-brand {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 14px;
+        text-align: center;
+      }
+
+      .loading-emblem-wrap {
+        width: 42px;
+        height: 42px;
         display: flex;
         align-items: center;
         justify-content: center;
-      }
-
-      .loading-medallion-glow {
-        position: absolute;
-        inset: -16%;
-        border-radius: 50%;
-        background: radial-gradient(
-          circle,
-          rgba(249, 115, 22, 0.38) 0%,
-          rgba(184, 37, 56, 0.2) 46%,
-          transparent 72%
-        );
-        animation: medallionPulse 2.8s ease-in-out infinite;
       }
 
       #loading-emblem-svg {
@@ -329,1183 +154,388 @@
         overflow: visible;
       }
 
-      .emblem-outer-ring {
-        transform-origin: 120px 120px;
-        animation: emblemSpinCw 26s linear infinite;
+      .emblem-ring-rotate {
+        transform-origin: 24px 24px;
+        animation: minimalRingSpin 24s linear infinite;
       }
 
-      .emblem-inner-ring {
-        transform-origin: 120px 120px;
-        animation: emblemSpinCcw 18s linear infinite;
-      }
-
-      .emblem-flame-core {
-        transform-origin: 120px 132px;
-        animation: brazierFlameFlicker 1.6s ease-in-out infinite alternate;
-      }
-
-      @keyframes emblemSpinCw {
-        from {
-          transform: rotate(0deg);
-        }
-        to {
-          transform: rotate(360deg);
-        }
-      }
-
-      @keyframes emblemSpinCcw {
-        from {
-          transform: rotate(360deg);
-        }
-        to {
-          transform: rotate(0deg);
-        }
-      }
-
-      @keyframes brazierFlameFlicker {
-        0% {
-          transform: scale(0.95, 0.93) translateY(1px);
-        }
-        50% {
-          transform: scale(1.04, 1.07) translateY(-2px);
-        }
-        100% {
-          transform: scale(0.98, 1.03) translateY(-1px);
-        }
-      }
-
-      @keyframes medallionPulse {
-        0%,
-        100% {
-          transform: scale(0.96);
-          opacity: 0.78;
-        }
-        50% {
-          transform: scale(1.06);
-          opacity: 1;
-        }
-      }
-
-      /* Title & Identity Header */
-      .loading-header {
-        text-align: center;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 4px;
+      .emblem-core-pulse {
+        transform-origin: 24px 24px;
+        animation: minimalCoreBreathe 3.2s ease-in-out infinite;
       }
 
       #loading-title {
         margin: 0;
-        font-size: clamp(32px, 4.6vw, 50px);
-        font-weight: 800;
-        letter-spacing: 0.1em;
-        line-height: 1.06;
-        color: var(--bone-white);
-        text-shadow:
-          0 4px 0 var(--ink-dark),
-          0 8px 22px rgba(11, 9, 14, 0.92);
+        padding-left: 0.32em;
+        font-size: 19px;
+        font-weight: 600;
+        letter-spacing: 0.32em;
+        line-height: 1.2;
+        color: var(--text-primary);
       }
 
       .loading-subtitle-row {
         display: flex;
         align-items: center;
-        gap: 14px;
-        margin-top: 2px;
+        gap: 12px;
       }
 
-      .loading-subtitle-rule {
-        width: clamp(36px, 7vw, 76px);
-        height: 2.5px;
-        border-radius: 2px;
-        background: linear-gradient(90deg, transparent, var(--brass-core), var(--solar-gold));
+      .loading-subtitle-line {
+        width: 24px;
+        height: 1px;
+        background: linear-gradient(90deg, transparent, rgba(139, 151, 181, 0.32));
       }
 
-      .loading-subtitle-rule.right {
-        background: linear-gradient(90deg, var(--solar-gold), var(--brass-core), transparent);
+      .loading-subtitle-line.right {
+        background: linear-gradient(90deg, rgba(139, 151, 181, 0.32), transparent);
       }
 
       #loading-subtitle {
-        font-size: clamp(14px, 1.85vw, 18px);
-        font-weight: 800;
-        letter-spacing: 0.22em;
-        color: var(--solar-gold);
-        text-shadow: 0 2px 0 var(--ink-dark);
+        margin: 0;
+        padding-left: 0.26em;
+        font-size: 10px;
+        font-weight: 500;
+        letter-spacing: 0.26em;
+        text-transform: uppercase;
+        color: var(--text-muted);
       }
 
-      #loading-tagline {
-        margin: 3px 0 0;
-        font-size: clamp(12px, 1.35vw, 14px);
-        font-weight: 600;
-        color: var(--silver-bright);
-        letter-spacing: 0.03em;
-      }
-
-      /* 5 Playable Hero Class Crests Strip (Cutout 2.0 Chibi Portraits) */
-      #loading-hero-strip {
+      /* Sleek Hairline Progress Area */
+      .loading-progress-group {
         width: 100%;
-        display: grid;
-        grid-template-columns: repeat(5, minmax(0, 1fr));
-        gap: clamp(8px, 1.1vw, 14px);
-      }
-
-      .loading-hero-card {
-        position: relative;
         display: flex;
         flex-direction: column;
-        align-items: center;
-        gap: 5px;
-        padding: clamp(9px, 1.3vh, 13px) 8px;
-        background: linear-gradient(180deg, #2d3547 0%, #1d2330 100%);
-        border: 2.5px solid rgba(100, 112, 139, 0.45);
-        border-radius: 10px;
-        box-shadow:
-          0 4px 0 var(--ink-dark),
-          inset 0 1px 0 rgba(199, 210, 232, 0.14);
-        opacity: 0.56;
-        transform: translateY(2px);
-        transition:
-          opacity 200ms ease,
-          transform 200ms ease,
-          border-color 200ms ease,
-          box-shadow 200ms ease;
+        gap: 10px;
       }
 
-      .loading-hero-card.is-active {
-        opacity: 1;
-        transform: translateY(0);
-        border-color: var(--hero-accent, var(--solar-gold));
-        background: linear-gradient(180deg, #374259 0%, #202737 100%);
-        box-shadow:
-          0 4px 0 var(--ink-dark),
-          0 0 16px rgba(250, 204, 21, 0.16),
-          inset 0 1px 0 rgba(244, 241, 234, 0.24);
-      }
-
-      .loading-hero-card.is-current {
-        box-shadow:
-          0 4px 0 var(--ink-dark),
-          0 0 22px var(--hero-accent, var(--solar-gold)),
-          inset 0 1px 0 rgba(244, 241, 234, 0.36);
-      }
-
-      .loading-hero-icon {
-        width: 48px;
-        height: 48px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      }
-
-      .loading-hero-icon svg {
-        width: 100%;
-        height: 100%;
-        overflow: visible;
-      }
-
-      .loading-hero-name {
-        font-size: 13.5px;
-        font-weight: 800;
-        color: var(--bone-white);
-        text-shadow: 0 2px 0 var(--ink-dark);
-        white-space: nowrap;
-      }
-
-      .loading-hero-role {
-        font-size: 11px;
-        font-weight: 600;
-        color: var(--steel-light);
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        max-width: 100%;
-      }
-
-      .loading-hero-card.is-active .loading-hero-role {
-        color: var(--silver-bright);
-      }
-
-      /* Forged Molten Progress Module */
-      .loading-progress-panel {
-        width: 100%;
-        background: linear-gradient(180deg, #2d3547 0%, #1d2330 100%);
-        border: 2.5px solid var(--wall-top);
-        border-radius: 12px;
-        padding: clamp(12px, 1.8vh, 18px) clamp(16px, 2.2vw, 24px);
-        box-shadow:
-          0 6px 0 var(--ink-dark),
-          0 12px 28px rgba(11, 9, 14, 0.65),
-          inset 0 1px 0 rgba(199, 210, 232, 0.22);
-        display: flex;
-        flex-direction: column;
-        gap: 9px;
-      }
-
-      .loading-status-header {
+      .loading-progress-meta {
         display: flex;
         align-items: baseline;
         justify-content: space-between;
         gap: 12px;
       }
 
-      .loading-stage-info {
-        display: flex;
-        flex-direction: column;
-        gap: 2px;
-        min-width: 0;
-      }
-
       #loading-stage-label {
-        font-size: clamp(14px, 1.6vw, 16px);
-        font-weight: 800;
-        color: var(--bone-white);
-        text-shadow: 0 2px 0 var(--ink-dark);
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-      }
-
-      #loading-stage-detail {
         font-size: 12px;
-        font-weight: 600;
-        color: var(--silver-bright);
+        font-weight: 400;
+        color: var(--text-secondary);
+        letter-spacing: 0.01em;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
       }
 
       #loading-progress-percent {
-        font-size: clamp(22px, 2.5vw, 28px);
-        font-weight: 800;
+        font-size: 12px;
+        font-weight: 600;
         font-variant-numeric: tabular-nums;
-        color: var(--solar-gold);
-        text-shadow: 0 2px 0 var(--ink-dark);
-        flex-shrink: 0;
+        color: var(--text-primary);
+        letter-spacing: 0.04em;
       }
 
-      #loading-progress-track {
+      .loading-progress-track {
         position: relative;
         width: 100%;
-        height: 18px;
-        background: var(--ink-deep);
-        border: 2px solid var(--ink-dark);
-        border-radius: 9px;
+        height: 2px;
+        border-radius: 999px;
+        background: rgba(139, 151, 181, 0.16);
         overflow: hidden;
-        box-shadow:
-          inset 0 2px 5px rgba(0, 0, 0, 0.85),
-          0 1px 0 rgba(199, 210, 232, 0.16);
       }
 
       #loading-progress-fill {
         position: relative;
-        width: 14%;
         height: 100%;
-        border-radius: 7px;
+        width: 12%;
+        border-radius: 999px;
         background: linear-gradient(
           90deg,
-          var(--ruby-core) 0%,
-          var(--crimson-bright) 38%,
-          var(--flame-orange) 76%,
-          var(--solar-gold) 100%
+          rgba(250, 204, 21, 0.45) 0%,
+          var(--accent-gold) 75%,
+          var(--text-primary) 100%
         );
-        box-shadow: 0 0 14px rgba(249, 115, 22, 0.65);
-        transition: width 160ms cubic-bezier(0.22, 1, 0.36, 1);
+        transition: width 220ms cubic-bezier(0.22, 1, 0.36, 1);
       }
 
-      /* Cel-shaded top highlight & molten spark on progress fill */
-      #loading-progress-fill::before {
-        content: '';
-        position: absolute;
-        top: 2px;
-        left: 4px;
-        right: 4px;
-        height: 4px;
-        border-radius: 4px;
-        background: rgba(244, 241, 234, 0.34);
-      }
-
-      #loading-progress-fill::after {
-        content: '';
-        position: absolute;
-        top: 0;
-        right: 0;
-        width: 12px;
-        height: 100%;
-        background: radial-gradient(
-          circle,
-          var(--bone-white) 0%,
-          var(--solar-gold) 60%,
-          transparent 100%
-        );
-      }
-
-      /* 5 Stage Step Pips */
-      #loading-step-pips {
-        display: grid;
-        grid-template-columns: repeat(5, 1fr);
-        gap: 8px;
-        margin-top: 2px;
-      }
-
-      .loading-step-pip {
-        height: 5px;
-        border-radius: 3px;
-        background: rgba(20, 16, 25, 0.78);
-        border: 1px solid rgba(100, 112, 139, 0.45);
-        transition:
-          background-color 180ms ease,
-          border-color 180ms ease,
-          box-shadow 180ms ease;
-      }
-
-      .loading-step-pip.is-done {
-        background: var(--flame-orange);
-        border-color: var(--solar-gold);
-      }
-
-      .loading-step-pip.is-current {
-        background: var(--solar-gold);
-        border-color: var(--bone-white);
-        box-shadow: 0 0 8px rgba(250, 204, 21, 0.65);
-      }
-
-      /* Interactive Tactical Lore & Combat Tip Card */
-      #loading-tip-card {
-        width: 100%;
-        display: flex;
-        align-items: center;
-        gap: 14px;
-        padding: clamp(10px, 1.5vh, 14px) clamp(14px, 2vw, 20px);
-        background: rgba(29, 35, 48, 0.9);
-        border: 2px solid rgba(100, 112, 139, 0.6);
-        border-left: 5px solid var(--solar-gold);
-        border-radius: 10px;
-        box-shadow: 0 4px 0 var(--ink-dark);
-        cursor: pointer;
-        transition:
-          border-color 180ms ease,
-          background-color 180ms ease,
-          transform 120ms ease;
-      }
-
-      #loading-tip-card:hover {
-        background: rgba(45, 53, 71, 0.95);
-        border-color: var(--silver-bright);
-        border-left-color: var(--solar-gold);
-      }
-
-      #loading-tip-card:active {
-        transform: translateY(1px);
-      }
-
-      .loading-tip-icon {
-        width: 38px;
-        height: 38px;
-        flex-shrink: 0;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        background: var(--ink-dark);
-        border: 2px solid var(--brass-core);
-        border-radius: 8px;
-      }
-
-      .loading-tip-content {
-        flex: 1;
-        min-width: 0;
-        display: flex;
-        flex-direction: column;
-        gap: 3px;
-      }
-
-      .loading-tip-top-row {
+      .loading-progress-submeta {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        gap: 8px;
+        gap: 12px;
+        padding-top: 2px;
+      }
+
+      #loading-stage-detail {
+        font-size: 11px;
+        font-weight: 400;
+        color: var(--text-dim);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      /* 5 Minimalist Geometric Class Nodes */
+      #loading-hero-strip {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        flex-shrink: 0;
+      }
+
+      .loading-hero-card {
+        width: 5px;
+        height: 5px;
+        transform: rotate(45deg);
+        border: 1px solid rgba(139, 151, 181, 0.28);
+        background: transparent;
+        transition:
+          background-color 200ms ease,
+          border-color 200ms ease,
+          transform 200ms ease;
+      }
+
+      .loading-hero-card.is-active {
+        background: rgba(250, 204, 21, 0.72);
+        border-color: rgba(250, 204, 21, 0.85);
+      }
+
+      .loading-hero-card.is-current {
+        background: var(--text-primary);
+        border-color: var(--text-primary);
+        transform: rotate(45deg) scale(1.2);
+      }
+
+      /* Quiet Single-Line Footer Hint */
+      #loading-tip-card {
+        position: absolute;
+        bottom: clamp(24px, 3.6vh, 38px);
+        left: 50%;
+        transform: translateX(-50%);
+        width: min(520px, 88vw);
+        text-align: center;
+        cursor: pointer;
+        font-size: 11.5px;
+        line-height: 1.5;
+        color: var(--text-dim);
+        transition: color 160ms ease;
+      }
+
+      #loading-tip-card:hover {
+        color: var(--text-muted);
       }
 
       #loading-tip-title {
-        font-size: 12px;
-        font-weight: 800;
-        letter-spacing: 0.08em;
-        color: var(--solar-gold);
+        font-weight: 500;
+        color: var(--text-muted);
       }
 
-      #loading-tip-counter {
-        font-size: 11px;
-        font-weight: 700;
-        color: var(--silver-bright);
+      .loading-tip-sep {
+        margin: 0 6px;
+        color: rgba(139, 151, 181, 0.35);
       }
 
       #loading-tip-body {
-        margin: 0;
-        font-size: 13px;
-        font-weight: 600;
-        line-height: 1.42;
-        color: var(--bone-white);
+        color: var(--text-dim);
       }
 
-      /* Engraved Sanctuary Footer */
-      .loading-footer {
-        position: relative;
-        z-index: 2;
-        display: flex;
-        align-items: center;
-        gap: 14px;
-        font-size: 11.5px;
-        font-weight: 700;
-        letter-spacing: 0.08em;
-        color: var(--steel-light);
-        text-shadow: 0 1.5px 0 var(--ink-dark);
-      }
-
-      .loading-footer-dot {
-        width: 5px;
-        height: 5px;
-        border-radius: 50%;
-        background: var(--brass-core);
-      }
-
-      @media (max-width: 1240px) {
-        .loading-flank-pillar {
-          display: none;
+      @keyframes minimalRingSpin {
+        from {
+          transform: rotate(0deg);
+        }
+        to {
+          transform: rotate(360deg);
         }
       }
 
-      @media (max-width: 680px) {
-        #loading-hero-strip {
-          grid-template-columns: repeat(5, minmax(0, 1fr));
-          gap: 5px;
+      @keyframes minimalCoreBreathe {
+        0%,
+        100% {
+          opacity: 0.65;
+          transform: scale(0.94);
         }
-        .loading-hero-role {
-          display: none;
+        50% {
+          opacity: 1;
+          transform: scale(1.04);
         }
-        .loading-hero-name {
-          font-size: 11px;
-        }
-        #loading-stage-detail {
-          display: none;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .emblem-ring-rotate,
+        .emblem-core-pulse {
+          animation: none !important;
         }
       }
     </style>
   </head>
   <body>
-    <section
+    <div
       id="ashen-loading-screen"
       role="status"
       aria-live="polite"
-      aria-busy="true"
-      aria-label="Ashen Pact Loading Screen"
+      aria-label="Đang tải Ashen Pact"
     >
-      <div class="loading-sanctuary-frame" aria-hidden="true">
-        <span class="loading-corner-ornament tl"></span>
-        <span class="loading-corner-ornament tr"></span>
-        <span class="loading-corner-ornament bl"></span>
-        <span class="loading-corner-ornament br"></span>
-      </div>
-
-      <!-- Left Architectural Sanctuary Stone Pillar & Brazier Sconce -->
-      <svg
-        class="loading-flank-pillar left"
-        viewBox="0 0 128 640"
-        xmlns="http://www.w3.org/2000/svg"
-        aria-hidden="true"
-      >
-        <!-- Pillar Column Shaft -->
-        <rect
-          x="26"
-          y="24"
-          width="76"
-          height="592"
-          rx="8"
-          fill="#2D3547"
-          stroke="#141019"
-          stroke-width="4"
-        />
-        <rect x="34" y="32" width="16" height="576" fill="#414B61" />
-        <rect x="78" y="32" width="18" height="576" fill="#1D2330" />
-        <!-- Stone Capital & Base -->
-        <rect
-          x="14"
-          y="12"
-          width="100"
-          height="28"
-          rx="6"
-          fill="#64708B"
-          stroke="#141019"
-          stroke-width="4"
-        />
-        <rect
-          x="14"
-          y="600"
-          width="100"
-          height="28"
-          rx="6"
-          fill="#414B61"
-          stroke="#141019"
-          stroke-width="4"
-        />
-        <!-- Carved Runic Banner Hanging on Pillar -->
-        <polygon
-          points="36,92 92,92 92,460 64,492 36,460"
-          fill="#6E1423"
-          stroke="#141019"
-          stroke-width="3.5"
-        />
-        <polygon points="44,100 84,100 84,452 64,476 44,452" fill="#B82538" />
-        <path
-          d="M64 132 L78 156 L64 180 L50 156 Z"
-          fill="#FACC15"
-          stroke="#141019"
-          stroke-width="2.5"
-        />
-        <!-- Wall Brazier Sconce Glow & Flame -->
-        <circle cx="64" cy="256" r="54" fill="rgba(249, 115, 22, 0.22)" />
-        <g class="sconce-flame">
-          <path
-            d="M64 206 C80 226 86 244 78 260 C72 270 56 270 50 260 C42 244 48 226 64 206 Z"
-            fill="#F97316"
-            stroke="#141019"
-            stroke-width="3"
-          />
-          <path
-            d="M64 220 C73 234 76 246 71 257 C67 263 61 263 57 257 C52 246 55 234 64 220 Z"
-            fill="#FACC15"
-          />
-          <circle cx="64" cy="249" r="4.5" fill="#F4F1EA" />
-        </g>
-        <path
-          d="M42 258 L86 258 L76 276 L52 276 Z"
-          fill="#565E75"
-          stroke="#141019"
-          stroke-width="3.5"
-        />
-        <rect
-          x="54"
-          y="276"
-          width="20"
-          height="7"
-          rx="2"
-          fill="#D97706"
-          stroke="#141019"
-          stroke-width="2.5"
-        />
-      </svg>
-
-      <!-- Right Architectural Sanctuary Stone Pillar & Brazier Sconce -->
-      <svg
-        class="loading-flank-pillar right"
-        viewBox="0 0 128 640"
-        xmlns="http://www.w3.org/2000/svg"
-        aria-hidden="true"
-      >
-        <rect
-          x="26"
-          y="24"
-          width="76"
-          height="592"
-          rx="8"
-          fill="#2D3547"
-          stroke="#141019"
-          stroke-width="4"
-        />
-        <rect x="34" y="32" width="16" height="576" fill="#414B61" />
-        <rect x="78" y="32" width="18" height="576" fill="#1D2330" />
-        <rect
-          x="14"
-          y="12"
-          width="100"
-          height="28"
-          rx="6"
-          fill="#64708B"
-          stroke="#141019"
-          stroke-width="4"
-        />
-        <rect
-          x="14"
-          y="600"
-          width="100"
-          height="28"
-          rx="6"
-          fill="#414B61"
-          stroke="#141019"
-          stroke-width="4"
-        />
-        <polygon
-          points="36,92 92,92 92,460 64,492 36,460"
-          fill="#6E1423"
-          stroke="#141019"
-          stroke-width="3.5"
-        />
-        <polygon points="44,100 84,100 84,452 64,476 44,452" fill="#B82538" />
-        <path
-          d="M64 132 L78 156 L64 180 L50 156 Z"
-          fill="#FACC15"
-          stroke="#141019"
-          stroke-width="2.5"
-        />
-        <circle cx="64" cy="256" r="54" fill="rgba(249, 115, 22, 0.22)" />
-        <g class="sconce-flame">
-          <path
-            d="M64 206 C80 226 86 244 78 260 C72 270 56 270 50 260 C42 244 48 226 64 206 Z"
-            fill="#F97316"
-            stroke="#141019"
-            stroke-width="3"
-          />
-          <path
-            d="M64 220 C73 234 76 246 71 257 C67 263 61 263 57 257 C52 246 55 234 64 220 Z"
-            fill="#FACC15"
-          />
-          <circle cx="64" cy="249" r="4.5" fill="#F4F1EA" />
-        </g>
-        <path
-          d="M42 258 L86 258 L76 276 L52 276 Z"
-          fill="#565E75"
-          stroke="#141019"
-          stroke-width="3.5"
-        />
-        <rect
-          x="54"
-          y="276"
-          width="20"
-          height="7"
-          rx="2"
-          fill="#D97706"
-          stroke="#141019"
-          stroke-width="2.5"
-        />
-      </svg>
-
-      <!-- Rising Brazier Embers -->
-      <div class="loading-embers" aria-hidden="true">
-        <span class="loading-ember" style="--x: 11%; --sz: 7px; --dur: 6.1s; --dly: 0.1s; --drift: 24px; --clr: #facc15"></span>
-        <span class="loading-ember" style="--x: 22%; --sz: 6px; --dur: 7.2s; --dly: 1.2s; --drift: -18px; --clr: #f97316"></span>
-        <span class="loading-ember" style="--x: 35%; --sz: 8px; --dur: 5.6s; --dly: 0.5s; --drift: 30px; --clr: #e84545"></span>
-        <span class="loading-ember" style="--x: 48%; --sz: 6px; --dur: 6.7s; --dly: 1.9s; --drift: -24px; --clr: #fdba74"></span>
-        <span class="loading-ember" style="--x: 63%; --sz: 7px; --dur: 5.4s; --dly: 0.3s; --drift: 26px; --clr: #facc15"></span>
-        <span class="loading-ember" style="--x: 77%; --sz: 8px; --dur: 6.9s; --dly: 0.9s; --drift: -20px; --clr: #f97316"></span>
-        <span class="loading-ember" style="--x: 89%; --sz: 6px; --dur: 6.3s; --dly: 1.5s; --drift: 16px; --clr: #e84545"></span>
-      </div>
-
-      <!-- Top Sanctuary Arch Inscription -->
-      <div class="loading-top-ornament" aria-hidden="true">
-        <span class="loading-top-ornament-diamond"></span>
-        <span>ĐẠI SẢNH HIỆP ƯỚC · SANCTUARY OF THE ASHEN PACT</span>
-        <span class="loading-top-ornament-diamond"></span>
-      </div>
-
-      <div class="loading-shell">
-        <!-- Central Animated Cutout 2.0 Vector Medallion -->
-        <div class="loading-medallion-wrap" aria-hidden="true">
-          <div class="loading-medallion-glow"></div>
-          <svg
-            id="loading-emblem-svg"
-            viewBox="0 0 240 240"
-            xmlns="http://www.w3.org/2000/svg"
-          >
-            <!-- Outer Astrolabe Slate & Brass Ring -->
-            <g class="emblem-outer-ring">
+      <div id="loading-shell">
+        <header class="loading-brand">
+          <div class="loading-emblem-wrap" aria-hidden="true">
+            <svg
+              id="loading-emblem-svg"
+              viewBox="0 0 48 48"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
               <circle
-                cx="120"
-                cy="120"
-                r="104"
-                fill="#1D2330"
-                stroke="#141019"
-                stroke-width="5"
+                cx="24"
+                cy="24"
+                r="19"
+                stroke="rgba(199, 210, 232, 0.18)"
+                stroke-width="1"
               />
-              <circle
-                cx="120"
-                cy="120"
-                r="96"
-                fill="none"
-                stroke="#64708B"
-                stroke-width="3.5"
-                stroke-dasharray="18 10"
+              <g class="emblem-ring-rotate">
+                <rect
+                  x="11.5"
+                  y="11.5"
+                  width="25"
+                  height="25"
+                  transform="rotate(45 24 24)"
+                  stroke="rgba(250, 204, 21, 0.55)"
+                  stroke-width="1.15"
+                />
+                <circle cx="24" cy="5" r="1.2" fill="#FACC15" fill-opacity="0.7" />
+                <circle cx="24" cy="43" r="1.2" fill="#FACC15" fill-opacity="0.7" />
+              </g>
+              <rect
+                x="15.5"
+                y="15.5"
+                width="17"
+                height="17"
+                stroke="rgba(244, 241, 234, 0.28)"
+                stroke-width="1"
               />
-              <!-- 4 Cardinal Elemental Rune Gems (Fire, Ice, Venom, Volt) -->
-              <polygon
-                points="120,8 129,22 120,34 111,22"
-                fill="#F97316"
-                stroke="#141019"
-                stroke-width="3"
-              />
-              <polygon
-                points="232,120 218,129 206,120 218,111"
-                fill="#22D3EE"
-                stroke="#141019"
-                stroke-width="3"
-              />
-              <polygon
-                points="120,232 129,218 120,206 111,218"
-                fill="#84CC16"
-                stroke="#141019"
-                stroke-width="3"
-              />
-              <polygon
-                points="8,120 22,129 34,120 22,111"
-                fill="#FDE047"
-                stroke="#141019"
-                stroke-width="3"
-              />
-            </g>
-
-            <!-- Inner Counter-Rotating Forged Pact Ring -->
-            <g class="emblem-inner-ring">
-              <circle
-                cx="120"
-                cy="120"
-                r="80"
-                fill="#241F2E"
-                stroke="#141019"
-                stroke-width="4.5"
-              />
-              <circle
-                cx="120"
-                cy="120"
-                r="72"
-                fill="none"
-                stroke="#D97706"
-                stroke-width="2.5"
-                stroke-dasharray="10 8"
-              />
-              <circle cx="120" cy="44" r="4" fill="#FACC15" stroke="#141019" stroke-width="2" />
-              <circle cx="196" cy="120" r="4" fill="#FACC15" stroke="#141019" stroke-width="2" />
-              <circle cx="120" cy="196" r="4" fill="#FACC15" stroke="#141019" stroke-width="2" />
-              <circle cx="44" cy="120" r="4" fill="#FACC15" stroke="#141019" stroke-width="2" />
-            </g>
-
-            <!-- Crossed Vanguard Greatsword & Runic Staff -->
-            <g stroke="#141019" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M64 176 L172 68" stroke="#8B97B5" stroke-width="8" />
-              <path d="M64 176 L172 68" stroke="#C7D2E8" stroke-width="3" />
-              <path d="M176 176 L68 68" stroke="#7D4B32" stroke-width="7" />
-              <polygon points="62,62 82,67 67,82" fill="#38BDF8" />
-              <polygon points="178,62 158,67 173,82" fill="#FACC15" />
-            </g>
-
-            <!-- Central Shield & Sanctuary Brazier Chalice -->
-            <g stroke="#141019" stroke-width="4" stroke-linejoin="round">
-              <path
-                d="M120 56 L166 76 L158 138 C154 166 120 186 120 186 C120 186 86 166 82 138 L74 76 Z"
-                fill="#2D3547"
-              />
-              <path
-                d="M120 62 L81 80 L88 134"
-                fill="none"
-                stroke="#8B97B5"
-                stroke-width="3"
-                stroke-linecap="round"
-              />
-              <path
-                d="M120 68 L154 83 L148 134 C144 155 120 172 120 172 C120 172 96 155 92 134 L86 83 Z"
-                fill="#6E1423"
-              />
-            </g>
-
-            <!-- Animated Pact Flame -->
-            <g class="emblem-flame-core">
-              <path
-                d="M120 70 C142 94 152 116 142 138 C136 152 104 152 98 138 C88 116 98 94 120 70 Z"
-                fill="#E84545"
-                stroke="#141019"
-                stroke-width="3.5"
-              />
-              <path
-                d="M120 84 C135 102 141 118 134 135 C129 145 111 145 106 135 C99 118 105 102 120 84 Z"
-                fill="#F97316"
-              />
-              <path
-                d="M120 98 C129 110 132 122 127 133 C124 139 116 139 113 133 C108 122 111 110 120 98 Z"
-                fill="#FACC15"
-              />
-              <circle cx="120" cy="126" r="6" fill="#F4F1EA" />
-            </g>
-
-            <!-- Forged Iron Brazier Bowl Base -->
-            <g stroke="#141019" stroke-width="3.5" stroke-linejoin="round">
-              <path d="M90 138 L150 138 L138 158 L102 158 Z" fill="#565E75" />
-              <path d="M94 141 L146 141" stroke="#C7D2E8" stroke-width="2.5" />
-              <rect x="108" y="158" width="24" height="8" rx="3" fill="#D97706" />
-            </g>
-          </svg>
-        </div>
-
-        <!-- Title & Subtitle -->
-        <header class="loading-header">
-          <h1 id="loading-title">ASHEN PACT</h1>
-          <div class="loading-subtitle-row">
-            <span class="loading-subtitle-rule" aria-hidden="true"></span>
-            <span id="loading-subtitle">KHẾ ƯỚC TRO TÀN</span>
-            <span class="loading-subtitle-rule right" aria-hidden="true"></span>
+              <g class="emblem-core-pulse">
+                <path
+                  d="M24 17.5 L26.2 21.8 L30.5 24 L26.2 26.2 L24 30.5 L21.8 26.2 L17.5 24 L21.8 21.8 Z"
+                  fill="#F4F1EA"
+                  fill-opacity="0.88"
+                />
+              </g>
+            </svg>
           </div>
-          <p id="loading-tagline">
-            Top-Down Co-op Action Roguelite · 1–4 Người Chơi LAN &amp; P2P
-          </p>
+
+          <h1 id="loading-title">ASHEN PACT</h1>
+
+          <div class="loading-subtitle-row">
+            <span class="loading-subtitle-line" aria-hidden="true"></span>
+            <p id="loading-subtitle">KHẾ ƯỚC TRO TÀN</p>
+            <span class="loading-subtitle-line right" aria-hidden="true"></span>
+          </div>
         </header>
 
-        <!-- 5 Playable Hero Class Crests Strip (Cutout 2.0 Chibi Hero Portraits) -->
-        <div id="loading-hero-strip" aria-label="Playable Hero Classes">
-          <!-- 1. Vanguard / Thiết Vệ (Knight Helmet + Ruby Plume + Shield) -->
-          <div
-            class="loading-hero-card is-active is-current"
-            data-hero-index="0"
-            style="--hero-accent: #e84545"
-          >
-            <div class="loading-hero-icon" aria-hidden="true">
-              <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
-                <!-- Ruby Plume -->
-                <path
-                  d="M24 4 C31 4 35 9 32 14 L16 14 C13 9 17 4 24 4 Z"
-                  fill="#E84545"
-                  stroke="#141019"
-                  stroke-width="2.5"
-                />
-                <!-- Steel Knight Greathelm -->
-                <rect
-                  x="11"
-                  y="12"
-                  width="26"
-                  height="24"
-                  rx="8"
-                  fill="#8B97B5"
-                  stroke="#141019"
-                  stroke-width="2.8"
-                />
-                <!-- Visor Slit & Glowing Eyes -->
-                <rect x="15" y="20" width="18" height="7" rx="3" fill="#141019" />
-                <circle cx="20" cy="23.5" r="2" fill="#F4F1EA" />
-                <circle cx="28" cy="23.5" r="2" fill="#F4F1EA" />
-                <!-- Ruby Cape Collar -->
-                <path
-                  d="M10 36 L38 36 L34 43 L14 43 Z"
-                  fill="#B82538"
-                  stroke="#141019"
-                  stroke-width="2.5"
-                />
-              </svg>
-            </div>
-            <span class="loading-hero-name">Thiết Vệ</span>
-            <span class="loading-hero-role">Khiên Chắn · Cận Chiến</span>
-          </div>
-
-          <!-- 2. Ranger / Liệp Ưng (Emerald Hunter Hood + Feather + Mask) -->
-          <div
-            class="loading-hero-card"
-            data-hero-index="1"
-            style="--hero-accent: #4ade80"
-          >
-            <div class="loading-hero-icon" aria-hidden="true">
-              <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
-                <!-- Lime Wing Feather -->
-                <path
-                  d="M32 6 L40 4 L36 16 Z"
-                  fill="#84CC16"
-                  stroke="#141019"
-                  stroke-width="2.4"
-                  stroke-linejoin="round"
-                />
-                <!-- Emerald Ranger Hood -->
-                <path
-                  d="M24 8 C35 8 38 17 37 29 C36 35 12 35 11 29 C10 17 13 8 24 8 Z"
-                  fill="#499F54"
-                  stroke="#141019"
-                  stroke-width="2.8"
-                />
-                <!-- Shadowed Face & Sharp Eyes -->
-                <rect x="15" y="18" width="18" height="10" rx="4" fill="#163024" />
-                <circle cx="20" cy="22.5" r="2.1" fill="#A7F3D0" />
-                <circle cx="28" cy="22.5" r="2.1" fill="#A7F3D0" />
-                <!-- Leather Cloak Collar -->
-                <path
-                  d="M11 35 L37 35 L33 43 L15 43 Z"
-                  fill="#7D4B32"
-                  stroke="#141019"
-                  stroke-width="2.5"
-                />
-              </svg>
-            </div>
-            <span class="loading-hero-name">Liệp Ưng</span>
-            <span class="loading-hero-role">Xạ Thủ · Cơ Động</span>
-          </div>
-
-          <!-- 3. Elementalist / Pháp Sư (Arcane Pointed Hat + Cyan Frost Eyes) -->
-          <div
-            class="loading-hero-card"
-            data-hero-index="2"
-            style="--hero-accent: #38bdf8"
-          >
-            <div class="loading-hero-icon" aria-hidden="true">
-              <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
-                <!-- Arcane Wizard Hat Spire -->
-                <polygon
-                  points="24,3 37,18 11,18"
-                  fill="#1D4ED8"
-                  stroke="#141019"
-                  stroke-width="2.6"
-                  stroke-linejoin="round"
-                />
-                <!-- Wide Hat Brim -->
-                <ellipse
-                  cx="24"
-                  cy="18"
-                  rx="18"
-                  ry="4.5"
-                  fill="#3B82F6"
-                  stroke="#141019"
-                  stroke-width="2.5"
-                />
-                <!-- Shadowed Arcane Face & Glowing Cyan Eyes -->
-                <rect
-                  x="13"
-                  y="20"
-                  width="22"
-                  height="15"
-                  rx="6"
-                  fill="#0F1E36"
-                  stroke="#141019"
-                  stroke-width="2.6"
-                />
-                <circle cx="19.5" cy="27" r="2.3" fill="#22D3EE" />
-                <circle cx="28.5" cy="27" r="2.3" fill="#22D3EE" />
-                <!-- Robe Mantle -->
-                <path
-                  d="M12 36 L36 36 L33 43 L15 43 Z"
-                  fill="#1D4ED8"
-                  stroke="#141019"
-                  stroke-width="2.5"
-                />
-              </svg>
-            </div>
-            <span class="loading-hero-name">Pháp Sư</span>
-            <span class="loading-hero-role">Nguyên Tố · Diện Rộng</span>
-          </div>
-
-          <!-- 4. Druid / Mộc Linh (Antler Horns + Verdant Spirit Visage) -->
-          <div
-            class="loading-hero-card"
-            data-hero-index="3"
-            style="--hero-accent: #84cc16"
-          >
-            <div class="loading-hero-icon" aria-hidden="true">
-              <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
-                <!-- Wooden Antler Horns -->
-                <path
-                  d="M14 15 L9 6 M12 11 L16 8 M34 15 L39 6 M36 11 L32 8"
-                  stroke="#AD6E4B"
-                  stroke-width="3.2"
-                  stroke-linecap="round"
-                />
-                <!-- Druid Spirit Head -->
-                <rect
-                  x="12"
-                  y="13"
-                  width="24"
-                  height="22"
-                  rx="9"
-                  fill="#1E4E38"
-                  stroke="#141019"
-                  stroke-width="2.8"
-                />
-                <!-- Leaf Crown Gem -->
-                <polygon points="24,10 28,16 24,20 20,16" fill="#84CC16" stroke="#141019" stroke-width="2" />
-                <!-- Glowing Lime Eyes -->
-                <circle cx="19.5" cy="24.5" r="2.3" fill="#84CC16" />
-                <circle cx="28.5" cy="24.5" r="2.3" fill="#84CC16" />
-                <!-- Moss Mantle -->
-                <path
-                  d="M11 36 L37 36 L33 43 L15 43 Z"
-                  fill="#499F54"
-                  stroke="#141019"
-                  stroke-width="2.5"
-                />
-              </svg>
-            </div>
-            <span class="loading-hero-name">Mộc Linh</span>
-            <span class="loading-hero-role">Sinh Mệnh · Độc Thực</span>
-          </div>
-
-          <!-- 5. Engineer / Kỹ Sư (Brass Hardhat + Twin Welding Goggles) -->
-          <div
-            class="loading-hero-card"
-            data-hero-index="4"
-            style="--hero-accent: #fbbf24"
-          >
-            <div class="loading-hero-icon" aria-hidden="true">
-              <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
-                <!-- Brass Dome Helmet -->
-                <path
-                  d="M11 22 C11 10 37 10 37 22 Z"
-                  fill="#D97706"
-                  stroke="#141019"
-                  stroke-width="2.8"
-                />
-                <!-- Face & Jawplate -->
-                <rect
-                  x="12"
-                  y="20"
-                  width="24"
-                  height="15"
-                  rx="6"
-                  fill="#4E2F21"
-                  stroke="#141019"
-                  stroke-width="2.6"
-                />
-                <!-- Twin Glowing Volt Goggles -->
-                <circle
-                  cx="19"
-                  cy="24"
-                  r="4.8"
-                  fill="#FDE047"
-                  stroke="#141019"
-                  stroke-width="2.4"
-                />
-                <circle
-                  cx="29"
-                  cy="24"
-                  r="4.8"
-                  fill="#FDE047"
-                  stroke="#141019"
-                  stroke-width="2.4"
-                />
-                <!-- Forge Shoulder Plate -->
-                <path
-                  d="M10 36 L38 36 L34 43 L14 43 Z"
-                  fill="#92400E"
-                  stroke="#141019"
-                  stroke-width="2.5"
-                />
-              </svg>
-            </div>
-            <span class="loading-hero-name">Kỹ Sư</span>
-            <span class="loading-hero-role">Pháo Đài · Quang Học</span>
-          </div>
-        </div>
-
-        <!-- Progress Bar & Stage Telemetry -->
-        <div class="loading-progress-panel">
-          <div class="loading-status-header">
-            <div class="loading-stage-info">
-              <div id="loading-stage-label">Khởi tạo Engine &amp; Kết nối Đại Sảnh...</div>
-              <div id="loading-stage-detail">
-                Thiết lập khung hình WebGL 60Hz &amp; cấu hình hiển thị DPR cao
-              </div>
-            </div>
-            <div id="loading-progress-percent">14%</div>
+        <section class="loading-progress-group" aria-label="Tiến độ khởi tạo">
+          <div class="loading-progress-meta">
+            <span id="loading-stage-label">Đang đánh thức Thánh Điện Tro Tàn...</span>
+            <span id="loading-progress-percent">12%</span>
           </div>
 
           <div
-            id="loading-progress-track"
+            id="loading-progress-bar"
+            class="loading-progress-track"
             role="progressbar"
             aria-valuemin="0"
             aria-valuemax="100"
-            aria-valuenow="14"
+            aria-valuenow="12"
           >
-            <div id="loading-progress-fill"></div>
+            <div id="loading-progress-fill" style="width: 12%"></div>
           </div>
 
-          <div id="loading-step-pips" aria-hidden="true">
-            <span class="loading-step-pip is-current" data-step-pip="0"></span>
-            <span class="loading-step-pip" data-step-pip="1"></span>
-            <span class="loading-step-pip" data-step-pip="2"></span>
-            <span class="loading-step-pip" data-step-pip="3"></span>
-            <span class="loading-step-pip" data-step-pip="4"></span>
-          </div>
-        </div>
+          <div class="loading-progress-submeta">
+            <span id="loading-stage-detail">Khởi tạo nhân đồ họa WebGL 60 FPS &amp; cấu hình hiển thị</span>
 
-        <!-- Interactive Tactical Lore & Combat Tip Card -->
-        <div id="loading-tip-card" title="Nhấp để chuyển mẹo chiến thuật">
-          <div class="loading-tip-icon" aria-hidden="true">
-            <svg width="22" height="22" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-              <path
-                d="M12 2 L15 9 L22 12 L15 15 L12 22 L9 15 L2 12 L9 9 Z"
-                fill="#FACC15"
-                stroke="#141019"
-                stroke-width="2"
-                stroke-linejoin="round"
-              />
-            </svg>
-          </div>
-          <div class="loading-tip-content">
-            <div class="loading-tip-top-row">
-              <span id="loading-tip-title">MẸO CHIẾN THUẬT · PHẢN ỨNG NGUYÊN TỐ</span>
-              <span id="loading-tip-counter">1/6 · Nhấp để xem mẹo tiếp ▸</span>
+            <div id="loading-hero-strip" aria-label="5 lớp nhân vật">
+              <div class="loading-hero-card is-active is-current" data-hero-index="0">
+                <span class="loading-hero-name sr-only">Thiết Vệ</span>
+                <span class="loading-hero-role sr-only">Đỡ Đòn</span>
+              </div>
+              <div class="loading-hero-card" data-hero-index="1">
+                <span class="loading-hero-name sr-only">Liệp Ưng</span>
+                <span class="loading-hero-role sr-only">Tầm Xa</span>
+              </div>
+              <div class="loading-hero-card" data-hero-index="2">
+                <span class="loading-hero-name sr-only">Pháp Sư</span>
+                <span class="loading-hero-role sr-only">Nguyên Tố</span>
+              </div>
+              <div class="loading-hero-card" data-hero-index="3">
+                <span class="loading-hero-name sr-only">Mộc Linh</span>
+                <span class="loading-hero-role sr-only">Triệu Hồi</span>
+              </div>
+              <div class="loading-hero-card" data-hero-index="4">
+                <span class="loading-hero-name sr-only">Kỹ Sư</span>
+                <span class="loading-hero-role sr-only">Pháo Đài</span>
+              </div>
             </div>
-            <p id="loading-tip-body">
-              Kết hợp 2 nguyên tố (Lửa + Dầu, Băng + Sét, Độc + Lửa) trên cùng mục tiêu hoặc mặt
-              sàn để kích hoạt vụ nổ nguyên tố diện rộng.
-            </p>
           </div>
-        </div>
+
+          <div id="loading-step-pips" class="sr-only" aria-hidden="true">
+            <span class="loading-step-pip is-active" data-step-index="0"></span>
+            <span class="loading-step-pip" data-step-index="1"></span>
+            <span class="loading-step-pip" data-step-index="2"></span>
+            <span class="loading-step-pip" data-step-index="3"></span>
+            <span class="loading-step-pip" data-step-index="4"></span>
+            <span class="loading-step-pip" data-step-index="5"></span>
+          </div>
+        </section>
       </div>
 
-      <!-- Engraved Sanctuary Footer -->
-      <footer class="loading-footer" aria-hidden="true">
-        <span>ASHEN PACT v2.0.0</span>
-        <span class="loading-footer-dot"></span>
-        <span>100% PROCEDURAL CUTOUT VECTOR 2.0</span>
-        <span class="loading-footer-dot"></span>
-        <span>60 FPS DYNAMIC CHIAROSCURO LIGHTING</span>
+      <footer id="loading-tip-card" title="Nhấn để chuyển mẹo chiến thuật">
+        <span id="loading-tip-badge" class="sr-only">MẸO CHIẾN THUẬT</span>
+        <span id="loading-tip-title">Lửa Thánh Điện &amp; Đại Sảnh</span>
+        <span class="loading-tip-sep" aria-hidden="true">·</span>
+        <span id="loading-tip-body">
+          Tại Đại Sảnh Hiệp Ước, hãy lại gần Bệ Anh Hùng [E] để hóa thân thành 1 trong 5 lớp nhân vật và thử vũ khí trên bù nhìn trước khi xuất phát.
+        </span>
+        <button id="loading-tip-next-btn" type="button" class="sr-only">Mẹo tiếp ▸</button>
       </footer>
-    </section>
+    </div>
 
-    <div id="app"></div>
-
-    <!-- Lightweight First-Paint Bootstrap (runs before JS bundle download completes) -->
     <script>
       (function () {
         try {
-          var search = window.location ? window.location.search : '';
-          var root = document.getElementById('ashen-loading-screen');
-          if (navigator && navigator.webdriver && root) {
-            root.classList.add('no-transitions');
+          var search = window.location.search || '';
+          var params = new URLSearchParams(search);
+          if (params.get('loadingPreview') === '1' || navigator.webdriver) {
+            var rootEl = document.getElementById('ashen-loading-screen');
+            if (rootEl) rootEl.classList.add('no-transitions');
           }
-          var isEn = false;
-          if (search.indexOf('lang=en') !== -1) {
-            isEn = true;
-          } else if (search.indexOf('lang=vi') === -1 && window.localStorage) {
-            var raw = window.localStorage.getItem('ashen_pact_graphics_settings');
-            if (raw && raw.indexOf('"language":"en"') !== -1) {
-              isEn = true;
+          var lang = params.get('lang');
+          if (!lang) {
+            var raw = window.localStorage && window.localStorage.getItem('ashen_pact_settings_v1');
+            if (raw) {
+              var parsed = JSON.parse(raw);
+              if (parsed && (parsed.language === 'en' || parsed.language === 'vi')) {
+                lang = parsed.language;
+              }
             }
           }
-          if (isEn) {
+          if (lang === 'en') {
             var sub = document.getElementById('loading-subtitle');
-            var tag = document.getElementById('loading-tagline');
-            var stg = document.getElementById('loading-stage-label');
-            var dtl = document.getElementById('loading-stage-detail');
-            var ttl = document.getElementById('loading-tip-title');
-            var tbd = document.getElementById('loading-tip-body');
-            var tct = document.getElementById('loading-tip-counter');
-            if (sub) sub.textContent = 'PACT OF THE ASHEN SANCTUARY';
-            if (tag)
-              tag.textContent = 'Top-Down Co-op Action Roguelite · 1–4 Players LAN & WebRTC';
-            if (stg) stg.textContent = 'Initializing Engine & Sanctuary Link...';
-            if (dtl) dtl.textContent = 'Configuring 60Hz WebGL canvas & high-DPR supersampling';
-            if (ttl) ttl.textContent = 'TACTICAL TIP · ELEMENTAL REACTIONS';
-            if (tbd)
-              tbd.textContent =
-                'Combine two elements (Fire + Oil, Ice + Lightning, Venom + Fire) on targets or floor hazards to trigger devastating chain reactions.';
-            if (tct) tct.textContent = '1/6 · Click for next tip ▸';
-          }
-
-          if (!navigator || !navigator.webdriver) {
-            var pct = 10;
-            var fill = document.getElementById('loading-progress-fill');
-            var num = document.getElementById('loading-progress-percent');
-            window.__ASHEN_BOOT_LOADING_TIMER__ = window.setInterval(function () {
-              if (pct < 20) {
-                pct += 2;
-                if (fill) fill.style.width = pct + '%';
-                if (num) num.textContent = pct + '%';
-              }
-            }, 120);
+            var stage = document.getElementById('loading-stage-label');
+            var detail = document.getElementById('loading-stage-detail');
+            var tipTitle = document.getElementById('loading-tip-title');
+            var tipBody = document.getElementById('loading-tip-body');
+            if (sub) sub.textContent = 'PACT OF ASH & EMBER';
+            if (stage) stage.textContent = 'Awakening the Ashen Sanctuary...';
+            if (detail) detail.textContent = 'Initializing 60 FPS WebGL renderer & display profile';
+            if (tipTitle) tipTitle.textContent = 'Sanctuary Hall & Loadout';
+            if (tipBody) {
+              tipBody.textContent =
+                'In the Sanctuary Hall, approach any Hero Pedestal [E] to embody 1 of the 5 classes and test weapons on the target dummy before departing.';
+            }
           }
         } catch (_e) {
-          /* Ignore restricted storage errors */
+          /* ignore storage access errors */
         }
       })();
     </script>
+
+    <div id="app"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
