@@ -87,6 +87,7 @@ export function createMockText(initialText = '') {
   let alpha = 1;
   let visible = false;
   let active = false;
+  const style = { color, resolution: 1 };
   return {
     get text() {
       return content;
@@ -142,7 +143,7 @@ export function createMockText(initialText = '') {
     set active(v: boolean) {
       active = v;
     },
-    style: { color, resolution: 1 },
+    style,
     setResolution: vi.fn((r: number) => {
       // no-op
     }),
@@ -151,6 +152,7 @@ export function createMockText(initialText = '') {
     }),
     setColor: vi.fn((c: string) => {
       color = c;
+      style.color = c;
     }),
     setPosition: vi.fn((x: number, y: number) => {
       posX = x;

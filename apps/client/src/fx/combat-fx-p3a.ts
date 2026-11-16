@@ -473,7 +473,7 @@ export function drawP3APredictiveSightlinesAndOverlays(
   }
 
   // 10. P3B.2–P3B.4 Boss Reinforced Armor Shell Aura & Shattered Armor Stagger Stun Stars
-  const activeBoss = sim.enemies.find((e) => e.isBoss && e.hp > 0);
+  const activeBoss = !isStress ? sim.enemies.find((e) => e.isBoss && e.hp > 0) : undefined;
   const shellPool = (scene as unknown as { bossShellPlatePool?: Phaser.GameObjects.Sprite[] }).bossShellPlatePool;
   if (shellPool) {
     if (activeBoss) {
@@ -489,7 +489,8 @@ export function drawP3APredictiveSightlinesAndOverlays(
     }
   }
 
-  for (let bIdx = 0; bIdx < sim.enemies.length; bIdx++) {
+  if (!isStress) {
+    for (let bIdx = 0; bIdx < sim.enemies.length; bIdx++) {
     const boss = sim.enemies[bIdx]!;
     if (!boss.isBoss || boss.hp <= 0) continue;
     const bPos = scene.transport
@@ -528,6 +529,7 @@ export function drawP3APredictiveSightlinesAndOverlays(
       }
     }
   }
+}
 
   // 11. P3B.3 Cryo-Charged Glacial Barricade Halo & Kicked Prop Kinetic Slipstream
   for (let pIdx = 0; pIdx < sim.props.length; pIdx++) {

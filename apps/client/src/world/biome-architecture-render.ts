@@ -733,6 +733,7 @@ export class BiomeArchitectureLiveLayer {
   private lastBracketSig = '';
   private lastVoidMaskSig = '';
   private gearHadContent = false;
+  private readonly scratchHazardIndices: number[] = [];
 
   constructor(scene: Phaser.Scene) {
     // Depth 14: above arenaGroundSprite (depth 2), below entities (depth 22+)
@@ -861,7 +862,7 @@ export class BiomeArchitectureLiveLayer {
       }
     }
 
-    let activeHazardTiles = 0;
+    this.scratchHazardIndices.length = 0;
     for (let i = 0; i < map.surfaces.length; i++) {
       const s = map.surfaces[i]!;
       if (
@@ -873,9 +874,10 @@ export class BiomeArchitectureLiveLayer {
         s === 'burning_grass' ||
         s === 'conveyor'
       ) {
-        activeHazardTiles += 1;
+        this.scratchHazardIndices.push(i);
       }
     }
+    const activeHazardTiles = this.scratchHazardIndices.length;
 
     if (plan.biome === 3 || (activeHazardTiles > 0 && !isLow)) {
       this.gearGraphics.clear();
@@ -929,55 +931,48 @@ export class BiomeArchitectureLiveLayer {
 
     // 2b. Live deterministic surface animations (lava, ice, water, electrified_water, poison_swamp, burning_*, conveyor)
     if (activeHazardTiles > 0 && !isLow) {
-      for (let ty = 1; ty < map.rows - 1; ty++) {
-        for (let tx = 1; tx < map.cols - 1; tx++) {
-          const surf = map.getSurface(tx, ty);
-          if (
-            surf === 'none' ||
-            surf === 'chasm' ||
-            surf === 'ice' ||
-            surf === 'oil' ||
-            surf === 'grass' ||
-            surf === 'ash'
-          ) {
-            continue;
-          }
-          const wx = tx * TILE_SIZE + 16;
-          const wy = ty * TILE_SIZE + 16;
-          const h = (tx * 73 + ty * 151) & 15;
-          const ox = ((h & 3) - 1.5) * 2.6;
-          const oy = (((h >> 2) & 3) - 1.5) * 2.6;
-          const phase = this.elapsedSec * 2.5 + tx * 0.7 + ty * 1.1;
+      for (let idx = 0; idx < activeHazardTiles; idx++) {
+        const i = this.scratchHazardIndices[idx]!;
+        const tx = i % map.cols;
+        const ty = Math.floor(i / map.cols);
+        if (tx === 0 || ty === 0 || tx >= map.cols - 1 || ty >= map.rows - 1) continue;
+        const surf = map.surfaces[i]!;
+        const wx = tx * TILE_SIZE + 16;
+        const wy = ty * TILE_SIZE + 16;
+        const h = (tx * 73 + ty * 151) & 15;
+        const ox = ((h & 3) - 1.5) * 2.6;
+        const oy = (((h >> 2) & 3) - 1.5) * 2.6;
+        const phase = this.elapsedSec * 2.5 + tx * 0.7 + ty * 1.1;
 
-          if (surf === 'lava') {
-            const r = 1.6 + 0.9 * (0.5 + 0.5 * Math.sin(phase));
-            this.gearGraphics.fillStyle(0xfacc15, 0.72);
-            this.gearGraphics.fillCircle(
-              wx + ox + Math.sin(phase) * 2.5,
-              wy + oy + Math.cos(phase) * 2.5,
-              r,
-            );
-          } else if (surf === 'water') {
-            const ripR = 2.4 + ((this.elapsedSec * 3.2 + tx * 1.3 + ty * 0.9) % 3.8);
-            this.gearGraphics.lineStyle(1.0, 0x7dd3fc, 0.42);
-            this.gearGraphics.strokeCircle(wx + ox, wy + oy, ripR);
-          } else if (surf === 'electrified_water') {
-            const jx = Math.sin(phase * 3) * 4.5;
-            this.gearGraphics.lineStyle(1.3, 0x22d3ee, 0.78);
-            this.gearGraphics.lineBetween(wx + ox - 5, wy + oy - 3, wx + ox + jx, wy + oy + 3);
-          } else if (surf === 'poison_swamp') {
-            const bubR = 1.4 + 0.9 * (0.5 + 0.5 * Math.cos(phase));
-            this.gearGraphics.fillStyle(0x84cc16, 0.62);
-            this.gearGraphics.fillCircle(
-              wx + ox + Math.cos(phase) * 2.2,
-              wy + oy - Math.sin(phase) * 2.2,
-              bubR,
-            );
-          } else if (surf === 'burning_oil' || surf === 'burning_grass') {
-            const flameH = 4.2 + Math.sin(phase * 2.2) * 2.2;
-            const fx = wx + ox;
-            const fy = wy + oy + 2;
-            this.gearGraphics.fillStyle(0xfacc15, 0.78);
+        if (surf === 'lava') {
+          const r = 1.6 + 0.9 * (0.5 + 0.5 * Math.sin(phase));
+          this.gearGraphics.fillStyle(0xfacc15, 0.72);
+          this.gearGraphics.fillCircle(
+            wx + ox + Math.sin(phase) * 2.5,
+            wy + oy + Math.cos(phase) * 2.5,
+            r,
+          );
+        } else if (surf === 'water') {
+          const ripR = 2.4 + ((this.elapsedSec * 3.2 + tx * 1.3 + ty * 0.9) % 3.8);
+          this.gearGraphics.lineStyle(1.0, 0x7dd3fc, 0.42);
+          this.gearGraphics.strokeCircle(wx + ox, wy + oy, ripR);
+        } else if (surf === 'electrified_water') {
+          const jx = Math.sin(phase * 3) * 4.5;
+          this.gearGraphics.lineStyle(1.3, 0x22d3ee, 0.78);
+          this.gearGraphics.lineBetween(wx + ox - 5, wy + oy - 3, wx + ox + jx, wy + oy + 3);
+        } else if (surf === 'poison_swamp') {
+          const bubR = 1.4 + 0.9 * (0.5 + 0.5 * Math.cos(phase));
+          this.gearGraphics.fillStyle(0x84cc16, 0.62);
+          this.gearGraphics.fillCircle(
+            wx + ox + Math.cos(phase) * 2.2,
+            wy + oy - Math.sin(phase) * 2.2,
+            bubR,
+          );
+        } else if (surf === 'burning_oil' || surf === 'burning_grass') {
+          const flameH = 4.2 + Math.sin(phase * 2.2) * 2.2;
+          const fx = wx + ox;
+          const fy = wy + oy + 2;
+          this.gearGraphics.fillStyle(0xfacc15, 0.78);
             this.gearGraphics.fillTriangle(fx - 2.8, fy + 3, fx, fy - flameH, fx + 2.8, fy + 3);
           } else if (surf === 'conveyor') {
             const hasW = map.getSurface(tx - 1, ty) === 'conveyor';
@@ -1004,7 +999,6 @@ export class BiomeArchitectureLiveLayer {
           }
         }
       }
-    }
 
     // 3. P4 45-deg Wrought-Iron Hanging Brazier Brackets (depth 31, above player) & Brazier Embers/Warm Dust Motes
     const orangeNum = hexToNum(PALETTE.FLAME_ORANGE);
@@ -1111,25 +1105,27 @@ export class BiomeArchitectureLiveLayer {
 
       // 5. Additive Emissive Hazard Spark / Ember Glints above lightmapRt (depth 35.5, BlendModes.ADD)
       if (activeHazardTiles > 0) {
-        for (let ty = 1; ty < map.rows - 1; ty++) {
-          for (let tx = 1; tx < map.cols - 1; tx++) {
-            const surf = map.getSurface(tx, ty);
-            const wx = tx * TILE_SIZE + 16;
-            const wy = ty * TILE_SIZE + 16;
-            const h = (tx * 73 + ty * 151) & 15;
-            const ox = ((h & 3) - 1.5) * 2.6;
-            const oy = (((h >> 2) & 3) - 1.5) * 2.6;
-            const pulse = 0.08 + 0.05 * (0.5 + 0.5 * Math.sin(this.elapsedSec * 2.8 + tx + ty));
-            if (surf === 'lava' || surf === 'burning_oil' || surf === 'burning_grass') {
-              this.additiveGraphics.fillStyle(0xf97316, pulse);
-              this.additiveGraphics.fillCircle(wx + ox, wy + oy, 2.6);
-            } else if (surf === 'electrified_water') {
-              this.additiveGraphics.fillStyle(0x22d3ee, pulse);
-              this.additiveGraphics.fillCircle(wx + ox, wy + oy, 2.2);
-            } else if (surf === 'poison_swamp') {
-              this.additiveGraphics.fillStyle(0x84cc16, pulse * 0.85);
-              this.additiveGraphics.fillCircle(wx + ox, wy + oy, 2.2);
-            }
+        for (let idx = 0; idx < activeHazardTiles; idx++) {
+          const i = this.scratchHazardIndices[idx]!;
+          const tx = i % map.cols;
+          const ty = Math.floor(i / map.cols);
+          if (tx === 0 || ty === 0 || tx >= map.cols - 1 || ty >= map.rows - 1) continue;
+          const surf = map.surfaces[i]!;
+          const wx = tx * TILE_SIZE + 16;
+          const wy = ty * TILE_SIZE + 16;
+          const h = (tx * 73 + ty * 151) & 15;
+          const ox = ((h & 3) - 1.5) * 2.6;
+          const oy = (((h >> 2) & 3) - 1.5) * 2.6;
+          const pulse = 0.08 + 0.05 * (0.5 + 0.5 * Math.sin(this.elapsedSec * 2.8 + tx + ty));
+          if (surf === 'lava' || surf === 'burning_oil' || surf === 'burning_grass') {
+            this.additiveGraphics.fillStyle(0xf97316, pulse);
+            this.additiveGraphics.fillCircle(wx + ox, wy + oy, 2.6);
+          } else if (surf === 'electrified_water') {
+            this.additiveGraphics.fillStyle(0x22d3ee, pulse);
+            this.additiveGraphics.fillCircle(wx + ox, wy + oy, 2.2);
+          } else if (surf === 'poison_swamp') {
+            this.additiveGraphics.fillStyle(0x84cc16, pulse * 0.85);
+            this.additiveGraphics.fillCircle(wx + ox, wy + oy, 2.2);
           }
         }
       }

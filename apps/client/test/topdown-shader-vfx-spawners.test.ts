@@ -768,6 +768,12 @@ describe('1:1 Top-Down Chiaroscuro Flipbook Playback & Core Combat Spawners', ()
     const nums = fx.damagePool.slice(0, 42).filter((d) => d.active);
     expect(nums).toHaveLength(1);
     expect(nums[0]?.text.text).toBe('27');
+
+    // Subsequent crit / elemental merge upgrades style
+    fx.spawnDamageNumber(200, 200, 10, true, 'burn', { targetId: 5, nowMs: 1100 });
+    expect(nums).toHaveLength(1);
+    expect(nums[0]?.text.text).toBe('37!');
+    expect(nums[0]?.text.style.color).toBe(PALETTE.SOLAR_GOLD);
   });
 
   it('attenuates ally AoEs inside P1 18px Safe-Halo by 0.15x and tracks multiple firing players per tick via Set<number>', () => {

@@ -115,7 +115,7 @@ export class ArtGalleryScene extends Phaser.Scene {
       delete window.__GALLERY_SET_PAGE__;
     });
 
-    const textRes = TextureBaker.getBakeScale();
+    const textRes = Math.min(2, TextureBaker.getBakeScale());
 
     // 1. Deep Backdrop (extended for ultrawide / non-16:9 aspect ratios)
     const bg = this.add.graphics();
@@ -384,6 +384,7 @@ export class ArtGalleryScene extends Phaser.Scene {
   public setGalleryAnim(state: RigAnimState): void {
     this.currentAnim = state;
     this.applyGalleryAnimToRigs();
+    this.debugOverlay?.resetSamples();
     const debug = initGlobalDebugState();
     debug.animState = state;
     this.updateStatusBanner();
@@ -445,7 +446,7 @@ export class ArtGalleryScene extends Phaser.Scene {
         item.sprite.setScale(invBake * item.mult);
       }
       for (const txt of this.textObjects) {
-        txt.setResolution(newScale);
+        txt.setResolution(Math.min(2, newScale));
       }
       this.debugOverlay?.refreshResolution(newScale);
     }

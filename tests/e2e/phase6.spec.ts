@@ -447,8 +447,8 @@ test.describe('Phase 6 — Biomes 2 & 3 (Frozen Depths & Molten Forge), 24 Weapo
     expect(biome3StressPerf.currentBiome).toBe(3);
     expect(biome3StressPerf.simulatedPlayers).toBe(3); // P1 + 3 simulated = 4 players
     expect(biome3StressPerf.enemies).toBeGreaterThanOrEqual(80);
-    expect(biome3StressPerf.fps).toBeGreaterThanOrEqual(55);
-    expect(biome3StressPerf.frameTimeMs).toBeLessThanOrEqual(18.5);
+    expect(biome3StressPerf.fps).toBeGreaterThanOrEqual(58);
+    expect(biome3StressPerf.frameTimeMs).toBeLessThanOrEqual(17.5);
     await page.keyboard.press('F7');
 
     // 5. Art Gallery Page 3 (24 Weapons + Phase 6 Props) & Page 5 (Biome 2 & 3 Enemies + Bosses Kryssa & Forge Titan)

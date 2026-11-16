@@ -427,7 +427,7 @@ export function updateP11RemainingEnemiesHud(scene: GameScene): void {
 export function drawP11DramaWorldOverlays(scene: GameScene): void {
   const sim = scene?.transport?.getSim?.();
   const g: Phaser.GameObjects.Graphics | undefined = scene?.telegraphGraphics;
-  if (!sim || !g) return;
+  if (!sim || !g || sim.stressTestActive) return;
   const floorG: Phaser.GameObjects.Graphics = scene?.groundHazardGraphics ?? g;
 
   // 1. Vengeful Elite 0.5s Death-Ring Telegraphs (floor layer depth 16, 4 Cutout brackets)

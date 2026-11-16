@@ -586,7 +586,7 @@ export function syncEnemyRigsImpl(this: GameScene, dtSec: number): void {
       else if (!secondaryElem) secondaryElem = 'poison';
     }
 
-    if (this.statusRimPool && primaryElem) {
+    if (this.statusRimPool && primaryElem && !sim.stressTestActive) {
       const r = e.radius;
       if (primaryElem === 'burn') {
         const burnFrame = Math.floor((sim.tick * 8) / 60) % 2 === 0 ? 'status_burn_2f_0' : 'status_burn_2f_1';
@@ -711,7 +711,7 @@ export function syncEnemyRigsImpl(this: GameScene, dtSec: number): void {
         .setActive(true);
     }
 
-    if (e.superconductTimer > 0 && this.duoRailLockPool && duoRailCursor < this.duoRailLockPool.length) {
+    if (e.superconductTimer > 0 && this.duoRailLockPool && duoRailCursor < this.duoRailLockPool.length && !sim.stressTestActive) {
       const lockSprite = this.duoRailLockPool[duoRailCursor++]!;
       lockSprite.setTexture('fx_cutout_kit_512', 'duo_rail_lock_10x10')
         .setPosition(pos.x, pos.y - 12)

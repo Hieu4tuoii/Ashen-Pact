@@ -428,7 +428,7 @@ test.describe('Phase 3 — Dungeon, Vòng Lặp Lượt Chơi & Biome 1 Hoàn Ch
     });
 
     // Enable E2E Bot Auto-Play (__GAME_BOT_AUTOPLAY__) to finish off the Boss and trigger Victory Summary Screen
-    await page.evaluate(() => {
+    const botVictory = await page.evaluate(() => {
       const transport = window.__GAME_TRANSPORT__!;
       const sim = transport.getSim();
       window.__GAME_BOT_AUTOPLAY__!(true);
@@ -442,14 +442,7 @@ test.describe('Phase 3 — Dungeon, Vòng Lặp Lượt Chơi & Biome 1 Hoàn Ch
         transport.step(16.6667);
         steps += 1;
       }
-      window.__GAME_BOT_AUTOPLAY__!(false);
-    });
 
-    await page.waitForTimeout(300);
-
-    const botVictory = await page.evaluate(() => {
-      const transport = window.__GAME_TRANSPORT__!;
-      const sim = transport.getSim();
       return {
         runState: sim.runState,
         bossesKilled: sim.runStats.bossesKilled,
@@ -461,8 +454,8 @@ test.describe('Phase 3 — Dungeon, Vòng Lặp Lượt Chơi & Biome 1 Hoàn Ch
 
     expect(botVictory.runState).toBe('victory');
     expect(botVictory.bossesKilled).toBeGreaterThanOrEqual(1);
-    expect(botVictory.fps).toBeGreaterThanOrEqual(20);
-    expect(botVictory.frameTimeMs).toBeLessThan(50);
+    expect(botVictory.fps).toBeGreaterThanOrEqual(55);
+    expect(botVictory.frameTimeMs).toBeLessThan(18.5);
 
     await page.waitForTimeout(200);
     await page.screenshot({

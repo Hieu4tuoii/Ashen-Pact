@@ -788,10 +788,26 @@ export class CombatFxManager {
           s.ttl = Math.max(s.ttl, params.isCrit ? 0.78 : 0.62);
           s.baseScale = Math.min(1.32, s.baseScale + 0.08);
 
+          let newColor: string | undefined;
+          if (params.isCrit) {
+            newColor = PALETTE.SOLAR_GOLD;
+          } else if (params.element === 'burn') {
+            newColor = PALETTE.FLAME_ORANGE;
+          } else if (params.element === 'chill') {
+            newColor = PALETTE.CYAN_FROST;
+          } else if (params.element === 'shock') {
+            newColor = PALETTE.VOLT_YELLOW;
+          } else if (params.element === 'poison') {
+            newColor = PALETTE.LIME_GLOW;
+          }
+          if (newColor && s.text.style.color !== newColor) {
+            s.text.setColor(newColor);
+          }
+
           let label = `${total}`;
           if (params.targetKind === 'player') {
             label = `-${total}`;
-          } else if (params.isCrit) {
+          } else if (params.isCrit || s.text.text?.endsWith('!')) {
             label = `${total}!`;
           }
           s.text.setText(label);

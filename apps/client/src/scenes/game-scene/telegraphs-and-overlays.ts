@@ -610,8 +610,10 @@ export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, 
   // 2b. Phase 3A (P3A.1) 0.35s Predictive Sightline Telegraph (#FF5722 outer + #FFF7ED bright core + muzzle diamond reticle)
   withInterpolatedProjectilesAndPlayer(this, sim, playerX, playerY, () => {
     drawP3APredictiveSightlinesAndOverlays(this, g, sim);
-    drawP4ATetherAndProjectileOverlays(this, g, sim);
-    renderP4BDuoAndSecretArenaOverlays(this);
+    if (!isStress) {
+      drawP4ATetherAndProjectileOverlays(this, g, sim);
+      renderP4BDuoAndSecretArenaOverlays(this);
+    }
   });
 
   // 3. Boss Kill 2-Beat Sequence (Beat 1: chest fracture rays; Beat 2: twin crescents)

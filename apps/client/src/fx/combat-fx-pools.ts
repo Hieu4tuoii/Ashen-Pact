@@ -890,48 +890,38 @@ export function update(this: CombatFxManager, dtSec: number, camView?: Phaser.Ge
   resolveTacticalAlertSlotOverlaps(this.damagePool, 4.0);
 }
 
+const scratchNumericActiveSlots: PooledDamageText[] = [];
+
 export function resolveActivePopupOverlaps(pool: ReadonlyArray<PooledDamageText>): void {
-  const active: PooledDamageText[] = [];
+  scratchNumericActiveSlots.length = 0;
   const limit = Math.min(pool.length, DAMAGE_NUMERIC_SLOT_END);
   for (let i = 0; i < limit; i++) {
     const d = pool[i]!;
     if (d.active && d.age < d.ttl && d.text.visible && d.text.alpha > 0.05) {
-      active.push(d);
+      scratchNumericActiveSlots.push(d);
     }
   }
-  if (active.length < 2) return;
+  const count = scratchNumericActiveSlots.length;
+  if (count < 2) return;
 
-  const getBox = (item: PooledDamageText) => {
-    if (typeof item.text.getBounds === 'function') {
-      const b = item.text.getBounds();
-      if (b && b.width > 0 && b.height > 0) return b;
-    }
-    const raw = (item.text.text ?? '').trim();
-    const w = Math.max(24, raw.length * 9 + 8);
-    const h = 22;
-    return { x: item.x - w * 0.5, y: item.y - h * 0.5, width: w, height: h };
-  };
-
-  for (let pass = 0; pass < 6; pass++) {
+  const pad = 3.5;
+  for (let pass = 0; pass < 2; pass++) {
     let anyMoved = false;
-    for (let i = 0; i < active.length; i++) {
-      for (let j = i + 1; j < active.length; j++) {
-        const a = active[i]!;
-        const b = active[j]!;
-        const ba = getBox(a);
-        const bb = getBox(b);
-        const pad = 3.5;
-        const overlapX =
-          Math.min(ba.x + ba.width + pad, bb.x + bb.width + pad) -
-          Math.max(ba.x - pad, bb.x - pad);
-        const overlapY =
-          Math.min(ba.y + ba.height + pad, bb.y + bb.height + pad) -
-          Math.max(ba.y - pad, bb.y - pad);
+    for (let i = 0; i < count; i++) {
+      const a = scratchNumericActiveSlots[i]!;
+      const hwA = 0.5 * (a.text.width || 24) * Math.abs(a.text.scaleX || 1);
+      const hhA = 0.5 * (a.text.height || 16) * Math.abs(a.text.scaleY || 1);
+
+      for (let j = i + 1; j < count; j++) {
+        const b = scratchNumericActiveSlots[j]!;
+        const hwB = 0.5 * (b.text.width || 24) * Math.abs(b.text.scaleX || 1);
+        const hhB = 0.5 * (b.text.height || 16) * Math.abs(b.text.scaleY || 1);
+
+        const overlapX = (hwA + hwB + pad) - Math.abs(a.x - b.x);
+        const overlapY = (hhA + hhB + pad) - Math.abs(a.y - b.y);
         if (overlapX <= 0 || overlapY <= 0) continue;
 
-        const aNum = /^-?\d+!?$/.test((a.text.text ?? '').trim());
-        const bNum = /^-?\d+!?$/.test((b.text.text ?? '').trim());
-        if (aNum && bNum && Math.abs(a.y - b.y) < 28) {
+        if (Math.abs(a.y - b.y) < 28) {
           const halfX = Math.ceil(overlapX * 0.5) + 2;
           if (a.x <= b.x) {
             a.x -= halfX;
@@ -942,8 +932,7 @@ export function resolveActivePopupOverlaps(pool: ReadonlyArray<PooledDamageText>
           }
         } else {
           const shiftY = Math.ceil(overlapY) + 2;
-          const aIsUpper = !aNum && bNum ? true : aNum && !bNum ? false : a.y <= b.y;
-          if (aIsUpper) {
+          if (a.y <= b.y) {
             a.y -= shiftY;
             a.vy = Math.min(a.vy, b.vy);
           } else {
@@ -957,31 +946,6 @@ export function resolveActivePopupOverlaps(pool: ReadonlyArray<PooledDamageText>
       }
     }
     if (!anyMoved) break;
-  }
-
-  const textAlerts = active.filter((d) => !/^-?\d+!?$/.test((d.text.text ?? '').trim()));
-  if (textAlerts.length >= 2) {
-    textAlerts.sort((a, b) => b.y - a.y);
-    for (let i = 0; i < textAlerts.length; i++) {
-      for (let j = i + 1; j < textAlerts.length; j++) {
-        const lower = textAlerts[i]!;
-        const upper = textAlerts[j]!;
-        const bl = getBox(lower);
-        const bu = getBox(upper);
-        const pad = 4.5;
-        const overlapX =
-          Math.min(bl.x + bl.width + pad, bu.x + bu.width + pad) -
-          Math.max(bl.x - pad, bu.x - pad);
-        const overlapY =
-          Math.min(bl.y + bl.height + pad, bu.y + bu.height + pad) -
-          Math.max(bl.y - pad, bu.y - pad);
-        if (overlapX > 0 && overlapY > 0) {
-          upper.y -= Math.ceil(overlapY) + 3;
-          upper.vy = Math.min(upper.vy, lower.vy);
-          upper.text.setPosition(upper.x, upper.y);
-        }
-      }
-    }
   }
 }
 

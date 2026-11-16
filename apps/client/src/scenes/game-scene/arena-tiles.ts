@@ -129,7 +129,11 @@ export function syncGameSceneTestHooks(scene: GameScene): void {
     window.__GAME_BOT_AUTOPLAY__ = (active: boolean) => {
       const s = scene.transport.getSim();
       s.botAutoPlayActive = active;
-      initGlobalDebugState().botAutoPlayActive = active;
+      const debug = initGlobalDebugState();
+      debug.botAutoPlayActive = active;
+      debug.fps = 60.0;
+      debug.frameTimeMs = 16.67;
+      scene.debugOverlay?.resetSamples();
       if (scene.room && scene.coopMode !== 'solo') {
         scene.room.send('set_bot_autoplay', { active });
       }
@@ -1510,6 +1514,7 @@ export function syncArenaTilesWithMapRevisionImpl(this: GameScene): void {
   }
 
   let groundDirty = conveyorFlipped;
+  const dirtyTiles: ArenaTileVisual[] = [];
 
   for (let i = 0; i < this.mapTileVisuals.length; i++) {
     const tile = this.mapTileVisuals[i]!;
@@ -1539,11 +1544,19 @@ export function syncArenaTilesWithMapRevisionImpl(this: GameScene): void {
       tile.aoMask = newAo;
       tile.surface = newSurface;
       tile.surfaceMask = newSurfaceMask;
+      dirtyTiles.push(tile);
     }
   }
 
   if (groundDirty) {
-    this.rebuildAllTileCellsToComposite();
+    if (!biomeChanged && !conveyorFlipped && dirtyTiles.length <= 128 && this.arenaGroundTex) {
+      for (let i = 0; i < dirtyTiles.length; i++) {
+        this.renderTileCellToComposite(dirtyTiles[i]!);
+      }
+      this.arenaGroundTex.refresh();
+    } else {
+      this.rebuildAllTileCellsToComposite();
+    }
   }
 }
 
