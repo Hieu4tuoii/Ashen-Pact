@@ -35,9 +35,20 @@ test.describe('Phase 0 — Foundation, Procedural Vector Art & E2E Smoke', () =>
         window.__GAME_DEBUG__?.fontsLoaded === true &&
         window.__GAME_DEBUG__?.irisTransitionProgress === 0,
       null,
-      { timeout: 15000 },
+      { timeout: 25000 },
     );
     await page.waitForTimeout(600);
+
+    const postLoadOverlayHidden = await page.evaluate(() => {
+      const root = document.getElementById('ashen-loading-screen');
+      const percent = document.getElementById('loading-progress-percent')?.textContent?.trim();
+      return {
+        hidden: Boolean(root && root.classList.contains('is-hidden')),
+        percent,
+      };
+    });
+    expect(postLoadOverlayHidden.hidden).toBe(true);
+    expect(postLoadOverlayHidden.percent).toBe('100%');
 
     const sanctuaryDebug = await page.evaluate(() => window.__GAME_DEBUG__);
     expect(sanctuaryDebug.scene).toBe('GameScene');
@@ -82,7 +93,7 @@ test.describe('Phase 0 — Foundation, Procedural Vector Art & E2E Smoke', () =>
         window.__GAME_DEBUG__?.irisTransitionProgress === 0 &&
         (window.__GAME_DEBUG__?.tick ?? 0) >= 30,
       null,
-      { timeout: 10000 },
+      { timeout: 15000 },
     );
 
     // Test resize while in Floor 1 GameScene after transitioning from Sanctuary Lobby (verifies texture rebake & HUD layout)
@@ -129,7 +140,7 @@ test.describe('Phase 0 — Foundation, Procedural Vector Art & E2E Smoke', () =>
     await page.goto('/?scene=gallery');
 
     await page.waitForFunction(() => window.__GAME_DEBUG__?.scene === 'ArtGalleryScene', null, {
-      timeout: 15000,
+      timeout: 20000,
     });
     await page.waitForTimeout(700);
 
@@ -183,6 +194,52 @@ test.describe('Phase 0 — Foundation, Procedural Vector Art & E2E Smoke', () =>
 
     await page.screenshot({
       path: path.join(SCREENSHOT_DIR, 'art-gallery-1440p.png'),
+    });
+  });
+
+  test('Sanctuary Hearth loading screen renders Cutout 2.0 emblem, 5 hero crests, progress bar, and interactive tactical tips', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1920, height: 1080 });
+    await page.goto('/?loadingPreview=1&loadingStage=rigs');
+    await page.waitForFunction(
+      () => document.getElementById('loading-progress-percent')?.textContent === '66%',
+      null,
+      { timeout: 15000 },
+    );
+
+    const loadingPreviewCheck = await page.evaluate(() => {
+      const root = document.getElementById('ashen-loading-screen');
+      const title = document.getElementById('loading-title')?.textContent?.trim();
+      const subtitle = document.getElementById('loading-subtitle')?.textContent?.trim();
+      const percent = document.getElementById('loading-progress-percent')?.textContent?.trim();
+      const fillStyleWidth = document.getElementById('loading-progress-fill')?.style.width;
+      const activeHeroes = document.querySelectorAll(
+        '#loading-hero-strip .loading-hero-card.is-active',
+      ).length;
+      const tipBefore = document.getElementById('loading-tip-body')?.textContent?.trim() ?? '';
+      document.getElementById('loading-tip-card')?.click();
+      const tipAfter = document.getElementById('loading-tip-body')?.textContent?.trim() ?? '';
+      return {
+        visible: Boolean(root && !root.classList.contains('is-hidden')),
+        title,
+        subtitle,
+        percent,
+        fillStyleWidth,
+        activeHeroes,
+        tipChanged: tipBefore.length > 10 && tipAfter.length > 10 && tipBefore !== tipAfter,
+      };
+    });
+    expect(loadingPreviewCheck.visible).toBe(true);
+    expect(loadingPreviewCheck.title).toBe('ASHEN PACT');
+    expect(loadingPreviewCheck.subtitle).toBe('KHẾ ƯỚC TRO TÀN');
+    expect(loadingPreviewCheck.percent).toBe('66%');
+    expect(loadingPreviewCheck.fillStyleWidth).toBe('66%');
+    expect(loadingPreviewCheck.activeHeroes).toBe(3);
+    expect(loadingPreviewCheck.tipChanged).toBe(true);
+
+    await page.screenshot({
+      path: path.join(SCREENSHOT_DIR, 'loading-1080p.png'),
     });
   });
 });

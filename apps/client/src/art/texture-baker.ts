@@ -171,6 +171,78 @@ export class TextureBaker {
     return targetScale;
   }
 
+  public static bakeStageRigsAndArsenal(scene: Phaser.Scene, cameraZoom = 1.5): number {
+    const targetScale = this.computeBakeScale(cameraZoom);
+    this.currentBakeScale = targetScale;
+
+    for (const rig of ALL_SAMPLE_RIGS) {
+      this.bakeRig(scene, rig, targetScale);
+    }
+
+    for (const weaponDef of Object.values(WEAPON_VECTOR_DEFS)) {
+      this.bakeWeapon(scene, weaponDef, targetScale);
+    }
+
+    for (const slot of [1, 2, 3, 4] as const) {
+      this.bakePlayerRing(scene, slot, targetScale);
+    }
+
+    return targetScale;
+  }
+
+  public static bakeStageWorldAndPortals(scene: Phaser.Scene, cameraZoom = 1.5): number {
+    const targetScale = this.computeBakeScale(cameraZoom);
+    this.currentBakeScale = targetScale;
+
+    for (const biome of [0, 1, 2, 3] as const) {
+      for (let v = 0; v < 8; v++) {
+        this.bakeBiomeTile(scene, biome, v, targetScale);
+      }
+      for (let mask = 0; mask < 16; mask++) {
+        this.bakeWallTile(scene, biome, mask, targetScale);
+        this.bakePillarTile(scene, biome, mask, targetScale);
+      }
+      this.bakeCrackedWallTile(scene, biome, targetScale);
+    }
+
+    for (let aoMask = 1; aoMask <= 7; aoMask++) {
+      this.bakeWallAoOverlay(scene, aoMask, targetScale);
+    }
+
+    this.bakeSurfaces(scene, targetScale);
+    this.bakeProps(scene, targetScale);
+    this.bakePortalsAndDoors(scene, targetScale);
+
+    return targetScale;
+  }
+
+  public static bakeStageShadersAndVfx(
+    scene: Phaser.Scene,
+    cameraZoom = 1.5,
+    force = false,
+  ): number {
+    const targetScale = this.computeBakeScale(cameraZoom);
+    this.currentBakeScale = targetScale;
+    this.fullBakeScale = targetScale;
+
+    this.bakeProjectilesAndFx(scene, targetScale);
+    if (force || !SHADER_FX_TEXTURE_KEYS.every((k) => scene.textures.exists(k))) {
+      this.bakeShaderVfxFlipbooks(scene, targetScale);
+    }
+    if (force || !scene.textures.exists(CUTOUT_KIT_ATLAS_KEY)) {
+      bakeCutoutKit512(scene);
+    }
+    if (force || !ELEMENTAL_REACTION_STRIP_KEYS.every((k) => scene.textures.exists(k))) {
+      bakeElementalReactionMiniStrips(scene);
+    }
+    if (!scene.textures.exists('fx_light_radial')) {
+      this.bakeLightRadialBrush(scene);
+    }
+    this.bakeCrosshair(scene, targetScale);
+
+    return targetScale;
+  }
+
   public static bakeAll(scene: Phaser.Scene, cameraZoom = 1.5, force = false): number {
     const targetScale = this.computeBakeScale(cameraZoom);
     if (
@@ -196,53 +268,9 @@ export class TextureBaker {
       return this.currentBakeScale;
     }
 
-    this.currentBakeScale = targetScale;
-    this.fullBakeScale = targetScale;
-
-    for (const rig of ALL_SAMPLE_RIGS) {
-      this.bakeRig(scene, rig, targetScale);
-    }
-
-    for (const weaponDef of Object.values(WEAPON_VECTOR_DEFS)) {
-      this.bakeWeapon(scene, weaponDef, targetScale);
-    }
-
-    for (const slot of [1, 2, 3, 4] as const) {
-      this.bakePlayerRing(scene, slot, targetScale);
-    }
-
-    for (const biome of [0, 1, 2, 3] as const) {
-      for (let v = 0; v < 8; v++) {
-        this.bakeBiomeTile(scene, biome, v, targetScale);
-      }
-      for (let mask = 0; mask < 16; mask++) {
-        this.bakeWallTile(scene, biome, mask, targetScale);
-        this.bakePillarTile(scene, biome, mask, targetScale);
-      }
-      this.bakeCrackedWallTile(scene, biome, targetScale);
-    }
-
-    for (let aoMask = 1; aoMask <= 7; aoMask++) {
-      this.bakeWallAoOverlay(scene, aoMask, targetScale);
-    }
-
-    this.bakeSurfaces(scene, targetScale);
-    this.bakeProps(scene, targetScale);
-    this.bakePortalsAndDoors(scene, targetScale);
-    this.bakeProjectilesAndFx(scene, targetScale);
-    if (force || !SHADER_FX_TEXTURE_KEYS.every((k) => scene.textures.exists(k))) {
-      this.bakeShaderVfxFlipbooks(scene, targetScale);
-    }
-    if (force || !scene.textures.exists(CUTOUT_KIT_ATLAS_KEY)) {
-      bakeCutoutKit512(scene);
-    }
-    if (force || !ELEMENTAL_REACTION_STRIP_KEYS.every((k) => scene.textures.exists(k))) {
-      bakeElementalReactionMiniStrips(scene);
-    }
-    if (!scene.textures.exists('fx_light_radial')) {
-      this.bakeLightRadialBrush(scene);
-    }
-    this.bakeCrosshair(scene, targetScale);
+    this.bakeStageRigsAndArsenal(scene, cameraZoom);
+    this.bakeStageWorldAndPortals(scene, cameraZoom);
+    this.bakeStageShadersAndVfx(scene, cameraZoom, force);
 
     return targetScale;
   }
