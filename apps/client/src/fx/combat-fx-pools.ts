@@ -595,11 +595,18 @@ export function refreshResolution(
   const scaleRatio = prevScale && prevScale > 0 ? prevScale / bakeScale : 1;
   for (const p of this.particlePool) {
     if (p.frameCount && p.frameCount > 1) {
-      const frameIdx = Math.min(
+      const frameOffset = Math.min(
         p.frameCount - 1,
         Math.max(0, Math.floor((p.age / Math.max(0.01, p.ttl)) * p.frameCount + 1e-6)),
       );
-      p.sprite.setTexture(p.textureKey, frameIdx);
+      const targetFrame = (p.baseFrame ?? 0) + frameOffset;
+      p.lastFrameIndex = targetFrame;
+      const resolvedFrame = p.kitFramePrefix
+        ? getKitSubframeName(p.kitFramePrefix, targetFrame)
+        : isCutoutKitFrame(p.textureKey)
+          ? getKitSubframeName(p.textureKey, targetFrame)
+          : targetFrame;
+      p.sprite.setTexture(p.textureKey, resolvedFrame);
     } else {
       p.sprite.setTexture(p.textureKey);
     }
@@ -642,6 +649,9 @@ export function refreshResolution(
   for (const item of this.damagePool) {
     if (item.text.style.resolution !== popupRes) {
       item.text.setResolution(popupRes);
+      if (item.active) {
+        refreshDamageSlotHalfExtents(item, 24);
+      }
     }
   }
 }
@@ -1564,7 +1574,26 @@ export function acquireParticleSlot(this: CombatFxManager): PooledParticle | nul
   );
   if (maxSlots <= 0) return null;
   if (this.managedPoolsInitialized && this.activeParticleSlots) {
-    if (this.activeParticleSlots.length >= maxSlots) return null;
+    if (this.activeParticleSlots.length >= maxSlots) {
+      let writeIdx = 0;
+      for (let i = 0; i < this.activeParticleSlots.length; i++) {
+        const s = this.activeParticleSlots[i]!;
+        if (!s.active) {
+          trackedActiveParticles.delete(s);
+          releaseParticleCasingShadow(s);
+          if (s.poolIndex !== undefined && s.poolIndex < this.nextParticleSearchIdx) {
+            this.nextParticleSearchIdx = s.poolIndex;
+          }
+          continue;
+        }
+        if (writeIdx !== i) {
+          this.activeParticleSlots[writeIdx] = s;
+        }
+        writeIdx += 1;
+      }
+      this.activeParticleSlots.length = writeIdx;
+      if (writeIdx >= maxSlots) return null;
+    }
     const startIdx = Math.min(this.nextParticleSearchIdx || 0, maxSlots - 1);
     for (let i = startIdx; i < maxSlots; i++) {
       const slot = this.particlePool[i]!;

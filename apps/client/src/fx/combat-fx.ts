@@ -272,6 +272,8 @@ export class CombatFxManager {
     this.activeArcRibbons.length = 0;
     this.activeFloorTeleportFolds.length = 0;
     this.activeTeamComboFootRings.length = 0;
+    this.lastTorchPropsLen = -1;
+    this.lastTorchSig = -1;
     resetPlayerOverheatVentPuffs();
   }
 
