@@ -607,6 +607,17 @@ export function refreshResolution(
           ? getKitSubframeName(p.textureKey, targetFrame)
           : targetFrame;
       p.sprite.setTexture(p.textureKey, resolvedFrame);
+    } else if (p.frameName) {
+      if (p.textureKey.startsWith('atlas_rig_prop_')) {
+        const reBound = TextureBaker.resolveAtlasBinding(this.sceneRef, p.frameName);
+        p.textureKey = reBound.textureKey;
+        p.frameName = reBound.frameName;
+      }
+      if (p.frameName) {
+        p.sprite.setTexture(p.textureKey, p.frameName);
+      } else {
+        p.sprite.setTexture(p.textureKey);
+      }
     } else {
       p.sprite.setTexture(p.textureKey);
     }

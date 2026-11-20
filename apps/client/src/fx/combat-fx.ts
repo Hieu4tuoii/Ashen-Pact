@@ -1169,8 +1169,10 @@ export class CombatFxManager {
         const ang = radialAng + (getClientFreezeRandom()() - 0.5) * 0.55;
         const spd = 72 + getClientFreezeRandom()() * 88;
         const texKey = TextureBaker.getPartTextureKey(rigDef.id, part.id);
+        const partBinding = TextureBaker.resolveAtlasBinding(this.sceneRef, texKey);
         activateParticle(p, {
-          textureKey: texKey,
+          textureKey: partBinding.textureKey,
+          frameName: partBinding.frameName,
           x: x + part.offsetX * 0.65,
           y: rigFootY + part.offsetY * 0.65,
           vx: Math.cos(ang) * spd,
@@ -1610,8 +1612,10 @@ export function stepBossKillTwoBeatSequence(
         const ang = radialAng + (getClientFreezeRandom()() - 0.5) * 0.55;
         const spd = 72 + getClientFreezeRandom()() * 88;
         const texKey = TextureBaker.getPartTextureKey(rigDef.id, part.id);
+        const partBinding = TextureBaker.resolveAtlasBinding(fx.sceneRef, texKey);
         activateParticle(p, {
-          textureKey: texKey,
+          textureKey: partBinding.textureKey,
+          frameName: partBinding.frameName,
           x: state.x + part.offsetX * 0.65,
           y: rigFootY + part.offsetY * 0.65,
           vx: Math.cos(ang) * spd,

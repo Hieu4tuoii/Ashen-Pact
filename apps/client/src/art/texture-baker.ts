@@ -9,7 +9,15 @@ import {
   WEAPON_VECTOR_DEFS,
   type WeaponVectorDef,
 } from './rig-defs.js';
-import { bakeCustomCanvas, registerCanvasTexture } from './texture-baker-canvas.js';
+import {
+  type AtlasFrameBinding,
+  bakeCustomCanvas,
+  beginRigPropAtlasSession,
+  endRigPropAtlasSession,
+  registerCanvasTexture,
+  RIG_PROP_ATLAS_PREFIX,
+  resolveRigPropAtlasBinding,
+} from './texture-baker-canvas.js';
 import {
   bakeCrosshair,
   bakeCutoutKit512,
@@ -31,6 +39,8 @@ import {
   bakeWallTile,
 } from './texture-baker-tiles.js';
 
+export { type AtlasFrameBinding, RIG_PROP_ATLAS_PREFIX };
+
 /**
  * DPR-aware procedural texture baker.
  * Bakes vector primitives once into high-DPI WebGL textures so runtime entities,
@@ -49,6 +59,21 @@ export class TextureBaker {
 
   public static getBakeScale(): number {
     return this.currentBakeScale || 4;
+  }
+
+  public static resolveAtlasBinding(
+    scene: Phaser.Scene | undefined,
+    logicalKey: string,
+  ): AtlasFrameBinding {
+    return resolveRigPropAtlasBinding(scene, logicalKey);
+  }
+
+  private static hasBakedTextureOrAtlasFrame(scene: Phaser.Scene, logicalKey: string): boolean {
+    const binding = resolveRigPropAtlasBinding(scene, logicalKey);
+    if (binding.frameName !== undefined) {
+      return true;
+    }
+    return scene.textures.exists(logicalKey);
   }
 
   public static getPartTextureKey(rigId: string, partId: string): string {
@@ -138,31 +163,39 @@ export class TextureBaker {
 
   public static bakeGalleryPage1(scene: Phaser.Scene, cameraZoom = 1.5): number {
     const targetScale = this.computeBakeScale(cameraZoom);
-    if (this.currentBakeScale === targetScale && scene.textures.exists('player_ring_1')) {
+    if (
+      this.currentBakeScale === targetScale &&
+      this.hasBakedTextureOrAtlasFrame(scene, 'player_ring_1')
+    ) {
       return this.currentBakeScale;
     }
     this.currentBakeScale = targetScale;
 
-    for (const rig of ALL_SAMPLE_RIGS) {
-      if (
-        rig.id === 'vanguard' ||
-        rig.id === 'ranger' ||
-        rig.id === 'elementalist' ||
-        rig.id === 'druid' ||
-        rig.id === 'engineer' ||
-        rig.id === 'goblin_shooter'
-      ) {
-        this.bakeRig(scene, rig, targetScale);
+    beginRigPropAtlasSession(scene, targetScale, { reset: true });
+    try {
+      for (const slot of [1, 2, 3, 4] as const) {
+        this.bakePlayerRing(scene, slot, targetScale);
       }
-    }
-    for (const wKey of ['knight_sword', 'hunter_crossbow', 'rivet_gun'] as const) {
-      const wDef = WEAPON_VECTOR_DEFS[wKey];
-      if (wDef) this.bakeWeapon(scene, wDef, targetScale);
+      for (const wKey of ['knight_sword', 'hunter_crossbow', 'rivet_gun'] as const) {
+        const wDef = WEAPON_VECTOR_DEFS[wKey];
+        if (wDef) this.bakeWeapon(scene, wDef, targetScale);
+      }
+      for (const rig of ALL_SAMPLE_RIGS) {
+        if (
+          rig.id === 'vanguard' ||
+          rig.id === 'ranger' ||
+          rig.id === 'elementalist' ||
+          rig.id === 'druid' ||
+          rig.id === 'engineer' ||
+          rig.id === 'goblin_shooter'
+        ) {
+          this.bakeRig(scene, rig, targetScale);
+        }
+      }
+    } finally {
+      endRigPropAtlasSession(scene);
     }
 
-    for (const slot of [1, 2, 3, 4] as const) {
-      this.bakePlayerRing(scene, slot, targetScale);
-    }
     for (const biome of [0, 1, 2, 3] as const) {
       for (let v = 0; v < 8; v++) {
         this.bakeBiomeTile(scene, biome, v, targetScale);
@@ -175,16 +208,21 @@ export class TextureBaker {
     const targetScale = this.computeBakeScale(cameraZoom);
     this.currentBakeScale = targetScale;
 
-    for (const rig of ALL_SAMPLE_RIGS) {
-      this.bakeRig(scene, rig, targetScale);
-    }
+    beginRigPropAtlasSession(scene, targetScale, { reset: true });
+    try {
+      for (const slot of [1, 2, 3, 4] as const) {
+        this.bakePlayerRing(scene, slot, targetScale);
+      }
 
-    for (const weaponDef of Object.values(WEAPON_VECTOR_DEFS)) {
-      this.bakeWeapon(scene, weaponDef, targetScale);
-    }
+      for (const weaponDef of Object.values(WEAPON_VECTOR_DEFS)) {
+        this.bakeWeapon(scene, weaponDef, targetScale);
+      }
 
-    for (const slot of [1, 2, 3, 4] as const) {
-      this.bakePlayerRing(scene, slot, targetScale);
+      for (const rig of ALL_SAMPLE_RIGS) {
+        this.bakeRig(scene, rig, targetScale);
+      }
+    } finally {
+      endRigPropAtlasSession(scene);
     }
 
     return targetScale;
@@ -194,24 +232,29 @@ export class TextureBaker {
     const targetScale = this.computeBakeScale(cameraZoom);
     this.currentBakeScale = targetScale;
 
-    for (const biome of [0, 1, 2, 3] as const) {
-      for (let v = 0; v < 8; v++) {
-        this.bakeBiomeTile(scene, biome, v, targetScale);
+    beginRigPropAtlasSession(scene, targetScale);
+    try {
+      for (const biome of [0, 1, 2, 3] as const) {
+        for (let v = 0; v < 8; v++) {
+          this.bakeBiomeTile(scene, biome, v, targetScale);
+        }
+        for (let mask = 0; mask < 16; mask++) {
+          this.bakeWallTile(scene, biome, mask, targetScale);
+          this.bakePillarTile(scene, biome, mask, targetScale);
+        }
+        this.bakeCrackedWallTile(scene, biome, targetScale);
       }
-      for (let mask = 0; mask < 16; mask++) {
-        this.bakeWallTile(scene, biome, mask, targetScale);
-        this.bakePillarTile(scene, biome, mask, targetScale);
+
+      for (let aoMask = 1; aoMask <= 7; aoMask++) {
+        this.bakeWallAoOverlay(scene, aoMask, targetScale);
       }
-      this.bakeCrackedWallTile(scene, biome, targetScale);
-    }
 
-    for (let aoMask = 1; aoMask <= 7; aoMask++) {
-      this.bakeWallAoOverlay(scene, aoMask, targetScale);
+      this.bakeSurfaces(scene, targetScale);
+      this.bakeProps(scene, targetScale);
+      this.bakePortalsAndDoors(scene, targetScale);
+    } finally {
+      endRigPropAtlasSession(scene);
     }
-
-    this.bakeSurfaces(scene, targetScale);
-    this.bakeProps(scene, targetScale);
-    this.bakePortalsAndDoors(scene, targetScale);
 
     return targetScale;
   }
@@ -248,7 +291,7 @@ export class TextureBaker {
     if (
       !force &&
       this.fullBakeScale === targetScale &&
-      scene.textures.exists('player_ring_1') &&
+      this.hasBakedTextureOrAtlasFrame(scene, 'player_ring_1') &&
       scene.textures.exists('ui_crosshair') &&
       scene.textures.exists('fx_light_radial') &&
       scene.textures.exists('fx_impact_ring') &&
@@ -261,15 +304,20 @@ export class TextureBaker {
       scene.textures.exists('door_frame_ns_0') &&
       scene.textures.exists('door_unlock_spark') &&
       scene.textures.exists('biome_tile_0_0') &&
-      scene.textures.exists('prop_daedalus_anvil') &&
-      scene.textures.exists('prop_secret_challenge_crystal')
+      this.hasBakedTextureOrAtlasFrame(scene, 'prop_daedalus_anvil') &&
+      this.hasBakedTextureOrAtlasFrame(scene, 'prop_secret_challenge_crystal')
     ) {
       this.currentBakeScale = targetScale;
       return this.currentBakeScale;
     }
 
-    this.bakeStageRigsAndArsenal(scene, cameraZoom);
-    this.bakeStageWorldAndPortals(scene, cameraZoom);
+    beginRigPropAtlasSession(scene, targetScale, { reset: true, deferFlush: true });
+    try {
+      this.bakeStageRigsAndArsenal(scene, cameraZoom);
+      this.bakeStageWorldAndPortals(scene, cameraZoom);
+    } finally {
+      endRigPropAtlasSession(scene, { clearDeferFlush: true });
+    }
     this.bakeStageShadersAndVfx(scene, cameraZoom, force);
 
     return targetScale;
@@ -310,7 +358,7 @@ export class TextureBaker {
     const canvas = document.createElement('canvas');
     canvas.width = Math.ceil(worldW * compScale);
     canvas.height = Math.ceil(worldH * compScale);
-    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
     ctx.save();
@@ -340,7 +388,7 @@ export class TextureBaker {
     const canvas = document.createElement('canvas');
     canvas.width = w;
     canvas.height = h;
-    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
     ctx.save();
@@ -366,7 +414,7 @@ export class TextureBaker {
     const canvas = document.createElement('canvas');
     canvas.width = Math.ceil(worldW * scale);
     canvas.height = Math.ceil(worldH * scale);
-    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
     ctx.save();
@@ -389,7 +437,7 @@ export class TextureBaker {
     const canvas = document.createElement('canvas');
     canvas.width = Math.ceil(worldW * scale);
     canvas.height = Math.ceil(worldH * scale);
-    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
     ctx.save();
@@ -413,7 +461,7 @@ export class TextureBaker {
     const canvas = document.createElement('canvas');
     canvas.width = Math.ceil(worldW * scale);
     canvas.height = Math.ceil(worldH * scale);
-    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
     const color = PLAYER_SLOT_COLORS[slot].hex;

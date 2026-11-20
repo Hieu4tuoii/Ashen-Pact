@@ -38,7 +38,11 @@ export class ArtGalleryScene extends Phaser.Scene {
     variant: number;
     fixedBiome?: 1 | 2 | 3;
   }[] = [];
-  public bakedSprites: { sprite: Phaser.GameObjects.Sprite; mult: number }[] = [];
+  public bakedSprites: {
+    sprite: Phaser.GameObjects.Sprite;
+    mult: number;
+    logicalKey?: string;
+  }[] = [];
   public textObjects: Phaser.GameObjects.Text[] = [];
   public pageContainers: Phaser.GameObjects.Container[] = [];
   public page2Built = false;
@@ -329,25 +333,46 @@ export class ArtGalleryScene extends Phaser.Scene {
     container.add([bg, txt, hit]);
   }
 
+  private refreshGalleryBakedSprites(invBake: number): void {
+    for (const item of this.bakedSprites) {
+      if (item.logicalKey) {
+        const binding = TextureBaker.resolveAtlasBinding(this, item.logicalKey);
+        if (binding.frameName !== undefined) {
+          item.sprite.setTexture(binding.textureKey, binding.frameName);
+        } else {
+          item.sprite.setTexture(binding.textureKey);
+        }
+      }
+      item.sprite.setScale(invBake * item.mult);
+    }
+  }
+
   public setGalleryPage(page: 1 | 2 | 3 | 4 | 5): void {
     const zoom = Math.min(
       this.scale.width / WORLD_VIEW_WIDTH,
       this.scale.height / WORLD_VIEW_HEIGHT,
     );
-    if (page === 2 && !this.page2Built && this.pageContainers[1]) {
+    const ensureFullBake = () => {
       TextureBaker.bakeAll(this, zoom, false);
+      for (const rig of this.rigs) {
+        rig.refreshBakedTextures();
+      }
+      this.refreshGalleryBakedSprites(1 / TextureBaker.getBakeScale());
+    };
+    if (page === 2 && !this.page2Built && this.pageContainers[1]) {
+      ensureFullBake();
       this.buildPage2EnemiesAndBoss(this.pageContainers[1]);
       this.page2Built = true;
     } else if (page === 3 && !this.page3Built && this.pageContainers[2]) {
-      TextureBaker.bakeAll(this, zoom, false);
+      ensureFullBake();
       this.buildPage3WeaponsAndProps(this.pageContainers[2]);
       this.page3Built = true;
     } else if (page === 4 && !this.page4Built && this.pageContainers[3]) {
-      TextureBaker.bakeAll(this, zoom, false);
+      ensureFullBake();
       this.buildPage4CharactersAndSynergy(this.pageContainers[3]);
       this.page4Built = true;
     } else if (page === 5 && !this.page5Built && this.pageContainers[4]) {
-      TextureBaker.bakeAll(this, zoom, false);
+      ensureFullBake();
       this.buildPage5Biome2And3Showcase(this.pageContainers[4]);
       this.page5Built = true;
     }
@@ -441,9 +466,7 @@ export class ArtGalleryScene extends Phaser.Scene {
         item.sprite.setTexture(TextureBaker.getBiomeTileTextureKey(targetBiome, item.variant));
         item.sprite.setScale(invBake);
       }
-      for (const item of this.bakedSprites) {
-        item.sprite.setScale(invBake * item.mult);
-      }
+      this.refreshGalleryBakedSprites(invBake);
       for (const txt of this.textObjects) {
         txt.setResolution(Math.min(2, newScale));
       }

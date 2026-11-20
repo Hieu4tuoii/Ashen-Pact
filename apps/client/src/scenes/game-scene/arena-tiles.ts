@@ -1911,35 +1911,82 @@ export function applyCameraViewportImpl(this: GameScene): void {
   if (newScale !== prevScale) {
     const invBake = 1 / newScale;
     this.playerRig?.refreshBakedTextures();
-    for (const rig of this.simPlayerRigs.values()) {
-      rig.refreshBakedTextures();
+    if (this.simPlayerRigs) {
+      for (const rig of this.simPlayerRigs.values()) {
+        rig.refreshBakedTextures();
+      }
     }
-    for (const entry of this.coopPlayerRigs.values()) {
-      entry.rig.refreshBakedTextures();
-      entry.nameLabel.setResolution(newScale * 2);
-      entry.emoteLabel.setResolution(newScale);
+    if (this.coopPlayerRigs) {
+      for (const entry of this.coopPlayerRigs.values()) {
+        entry.rig.refreshBakedTextures();
+        entry.nameLabel.setResolution(newScale * 2);
+        entry.emoteLabel.setResolution(newScale);
+      }
     }
-    for (const entry of this.hubStatueRigs.values()) {
-      entry.rig.refreshBakedTextures();
-      entry.glowSprite.setTexture('fx_light_radial');
-      entry.label.setResolution(newScale);
-      entry.subLabel.setResolution(newScale);
+    if (this.hubStatueRigs) {
+      for (const entry of this.hubStatueRigs.values()) {
+        entry.rig.refreshBakedTextures();
+        entry.glowSprite.setTexture('fx_light_radial');
+        entry.label.setResolution(newScale);
+        entry.subLabel.setResolution(newScale);
+      }
     }
-    for (const gTxt of this.hubGuideTexts) {
-      gTxt.setResolution(newScale);
+    if (this.hubGuideTexts) {
+      for (const gTxt of this.hubGuideTexts) {
+        gTxt.setResolution(newScale);
+      }
     }
-    for (const rig of this.enemyRigs.values()) {
-      rig.refreshBakedTextures();
+    if (this.enemyRigs) {
+      for (const rig of this.enemyRigs.values()) {
+        rig.refreshBakedTextures();
+      }
     }
-    this.rebuildAllTileCellsToComposite();
-    for (const pv of this.propVisuals.values()) {
-      pv.sprite.setTexture(TextureBaker.getPropTextureKey(pv.kind));
-      pv.sprite.setScale(invBake);
-      pv.shadow.setTexture('prop_shadow');
-      pv.shadow.setScale(invBake);
+    this.rebuildAllTileCellsToComposite?.();
+    const shadowBinding = TextureBaker.resolveAtlasBinding(this, 'prop_shadow');
+    if (this.propVisuals) {
+      for (const pv of this.propVisuals.values()) {
+        const propBinding = TextureBaker.resolveAtlasBinding(
+          this,
+          TextureBaker.getPropTextureKey(pv.kind),
+        );
+        if (propBinding.frameName !== undefined) {
+          pv.sprite.setTexture(propBinding.textureKey, propBinding.frameName);
+        } else {
+          pv.sprite.setTexture(propBinding.textureKey);
+        }
+        pv.sprite.setScale(invBake);
+        if (shadowBinding.frameName !== undefined) {
+          pv.shadow.setTexture(shadowBinding.textureKey, shadowBinding.frameName);
+        } else {
+          pv.shadow.setTexture(shadowBinding.textureKey);
+        }
+        pv.shadow.setScale(invBake);
+      }
+    }
+    if (this.pushBlockVisuals) {
+      const pushBlockBinding = TextureBaker.resolveAtlasBinding(this, 'prop_push_block');
+      for (const vis of this.pushBlockVisuals.values()) {
+        if (pushBlockBinding.frameName !== undefined) {
+          vis.sprite.setTexture(pushBlockBinding.textureKey, pushBlockBinding.frameName);
+        } else {
+          vis.sprite.setTexture(pushBlockBinding.textureKey);
+        }
+        vis.sprite.setScale(invBake);
+        if (shadowBinding.frameName !== undefined) {
+          vis.shadow.setTexture(shadowBinding.textureKey, shadowBinding.frameName);
+        } else {
+          vis.shadow.setTexture(shadowBinding.textureKey);
+        }
+        vis.shadow.setScale(invBake);
+      }
     }
     if (this.summonVisuals) {
       for (const vis of this.summonVisuals.values()) {
+        if (shadowBinding.frameName !== undefined) {
+          vis.shadow.setTexture(shadowBinding.textureKey, shadowBinding.frameName);
+        } else {
+          vis.shadow.setTexture(shadowBinding.textureKey);
+        }
         vis.shadow.setScale(1 / 3);
         vis.base.setScale(1 / 3);
         vis.head?.setScale(1 / 3);
@@ -1971,48 +2018,64 @@ export function applyCameraViewportImpl(this: GameScene): void {
       }
     }
     const stressInvBake = 1 / Math.min(2, newScale);
-    for (const item of this.projectileSprites.values()) {
-      const isKit = item.textureKey === 'fx_cutout_kit_512' || item.frameName !== undefined;
-      const baseInv = isKit
-        ? 1 / 3
-        : item.textureKey.startsWith('proj_stress_')
-          ? stressInvBake
-          : invBake;
-      item.sprite.setTexture(item.textureKey, item.frameName);
-      item.sprite.setScale(isKit ? item.specScale : baseInv * item.specScale);
-      item.glowSprite.setTexture('fx_enemy_bullet_glow');
-      item.glowSprite.setScale(isKit ? item.specScale * 1.05 : baseInv * item.specScale * 1.05);
+    if (this.projectileSprites) {
+      for (const item of this.projectileSprites.values()) {
+        const isKit = item.textureKey === 'fx_cutout_kit_512' || item.frameName !== undefined;
+        const baseInv = isKit
+          ? 1 / 3
+          : item.textureKey.startsWith('proj_stress_')
+            ? stressInvBake
+            : invBake;
+        item.sprite.setTexture(item.textureKey, item.frameName);
+        item.sprite.setScale(isKit ? item.specScale : baseInv * item.specScale);
+        item.glowSprite.setTexture('fx_enemy_bullet_glow');
+        item.glowSprite.setScale(isKit ? item.specScale * 1.05 : baseInv * item.specScale * 1.05);
+      }
     }
-    for (const item of this.projectileSpritePool) {
-      const isKit = item.textureKey === 'fx_cutout_kit_512' || item.frameName !== undefined;
-      const baseInv = isKit
-        ? 1 / 3
-        : item.textureKey.startsWith('proj_stress_')
-          ? stressInvBake
-          : invBake;
-      item.sprite.setTexture(item.textureKey, item.frameName);
-      item.sprite.setScale(isKit ? item.specScale : baseInv * item.specScale);
-      item.glowSprite.setTexture('fx_enemy_bullet_glow');
-      item.glowSprite.setScale(isKit ? item.specScale * 1.05 : baseInv * item.specScale * 1.05);
+    if (this.projectileSpritePool) {
+      for (const item of this.projectileSpritePool) {
+        const isKit = item.textureKey === 'fx_cutout_kit_512' || item.frameName !== undefined;
+        const baseInv = isKit
+          ? 1 / 3
+          : item.textureKey.startsWith('proj_stress_')
+            ? stressInvBake
+            : invBake;
+        item.sprite.setTexture(item.textureKey, item.frameName);
+        item.sprite.setScale(isKit ? item.specScale : baseInv * item.specScale);
+        item.glowSprite.setTexture('fx_enemy_bullet_glow');
+        item.glowSprite.setScale(isKit ? item.specScale * 1.05 : baseInv * item.specScale * 1.05);
+      }
     }
-    for (const item of this.pickupSprites.values()) {
-      const isKit = item.textureKey === 'fx_cutout_kit_512' || item.frameName !== undefined;
-      item.sprite.setTexture(item.textureKey, item.frameName);
-      item.sprite.setScale(isKit ? 1 / 3 : invBake);
-      item.glowSprite.setTexture('fx_light_radial');
+    if (this.pickupSprites) {
+      for (const item of this.pickupSprites.values()) {
+        const isKit = item.textureKey === 'fx_cutout_kit_512' || item.frameName !== undefined;
+        item.sprite.setTexture(item.textureKey, item.frameName);
+        item.sprite.setScale(isKit ? 1 / 3 : invBake);
+        item.glowSprite.setTexture('fx_light_radial');
+      }
     }
-    for (const item of this.pickupSpritePool) {
-      const isKit = item.textureKey === 'fx_cutout_kit_512' || item.frameName !== undefined;
-      item.sprite.setTexture(item.textureKey, item.frameName);
-      item.sprite.setScale(isKit ? 1 / 3 : invBake);
-      item.glowSprite.setTexture('fx_light_radial');
+    if (this.pickupSpritePool) {
+      for (const item of this.pickupSpritePool) {
+        const isKit = item.textureKey === 'fx_cutout_kit_512' || item.frameName !== undefined;
+        item.sprite.setTexture(item.textureKey, item.frameName);
+        item.sprite.setScale(isKit ? 1 / 3 : invBake);
+        item.glowSprite.setTexture('fx_light_radial');
+      }
     }
     const sim = this.transport?.getSim();
-    this.weaponIconSprites.forEach((icon, idx) => {
+    this.weaponIconSprites?.forEach((icon, idx) => {
       const wId = sim?.player.weaponSlots[idx];
       if (wId) {
+        const wBinding = TextureBaker.resolveAtlasBinding(
+          this,
+          TextureBaker.getWeaponTextureKey(wId),
+        );
         icon.setVisible(true);
-        icon.setTexture(TextureBaker.getWeaponTextureKey(wId));
+        if (wBinding.frameName !== undefined) {
+          icon.setTexture(wBinding.textureKey, wBinding.frameName);
+        } else {
+          icon.setTexture(wBinding.textureKey);
+        }
         icon.setScale(invBake * 0.82);
       } else {
         icon.setVisible(false);
@@ -2023,40 +2086,54 @@ export function applyCameraViewportImpl(this: GameScene): void {
       this.crosshairSprite.setScale(invBake);
     }
     const hudTextRes = Math.min(4, newScale);
-    for (const txt of this.textObjects) {
-      txt.setResolution(hudTextRes);
+    if (this.textObjects) {
+      for (const txt of this.textObjects) {
+        txt.setResolution(hudTextRes);
+      }
     }
-    for (const txt of this.pingVisuals.values()) {
-      txt.setResolution(hudTextRes);
+    if (this.pingVisuals) {
+      for (const txt of this.pingVisuals.values()) {
+        txt.setResolution(hudTextRes);
+      }
     }
-    this.destroyPortalAndDoorVisuals();
-    for (const sprite of this.chestSprites.values()) {
-      sprite.destroy();
+    this.destroyPortalAndDoorVisuals?.();
+    if (this.chestSprites) {
+      for (const sprite of this.chestSprites.values()) {
+        sprite.destroy();
+      }
+      this.chestSprites.clear();
     }
-    this.chestSprites.clear();
-    for (const glow of this.chestGlowSprites.values()) {
-      glow.destroy();
+    if (this.chestGlowSprites) {
+      for (const glow of this.chestGlowSprites.values()) {
+        glow.destroy();
+      }
+      this.chestGlowSprites.clear();
     }
-    this.chestGlowSprites.clear();
-    for (const sparkles of this.chestSparkleSprites.values()) {
-      for (const sp of sparkles) sp.destroy();
+    if (this.chestSparkleSprites) {
+      for (const sparkles of this.chestSparkleSprites.values()) {
+        for (const sp of sparkles) sp.destroy();
+      }
+      this.chestSparkleSprites.clear();
     }
-    this.chestSparkleSprites.clear();
-    for (const entry of this.worldItemSprites.values()) {
-      entry.sprite.destroy();
-      entry.glowSprite.destroy();
-      entry.beamSprite.destroy();
-      entry.shopMatSprite.destroy();
-      entry.label.destroy();
+    if (this.worldItemSprites) {
+      for (const entry of this.worldItemSprites.values()) {
+        entry.sprite.destroy();
+        entry.glowSprite.destroy();
+        entry.beamSprite.destroy();
+        entry.shopMatSprite.destroy();
+        entry.label.destroy();
+      }
+      this.worldItemSprites.clear();
     }
-    this.worldItemSprites.clear();
-    for (const entry of this.npcVisuals.values()) {
-      entry.rig?.destroy();
-      entry.sprite?.destroy();
-      entry.glowSprite.destroy();
-      entry.label.destroy();
+    if (this.npcVisuals) {
+      for (const entry of this.npcVisuals.values()) {
+        entry.rig?.destroy();
+        entry.sprite?.destroy();
+        entry.glowSprite.destroy();
+        entry.label.destroy();
+      }
+      this.npcVisuals.clear();
     }
-    this.npcVisuals.clear();
     if (this.portalLabel) {
       this.portalLabel.destroy();
       this.portalLabel = undefined;

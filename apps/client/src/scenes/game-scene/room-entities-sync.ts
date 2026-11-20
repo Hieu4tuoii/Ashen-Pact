@@ -158,7 +158,11 @@ export function syncSummonCutoutVisuals(
           vis.head.setVisible(false).setActive(false);
         }
       } else {
-        const shadow = scene.add.sprite(sum.x, sum.y + 6, 'prop_shadow');
+        const shadowBinding = TextureBaker.resolveAtlasBinding(scene, 'prop_shadow');
+        const shadow =
+          shadowBinding.frameName !== undefined
+            ? scene.add.sprite(sum.x, sum.y + 6, shadowBinding.textureKey, shadowBinding.frameName)
+            : scene.add.sprite(sum.x, sum.y + 6, shadowBinding.textureKey);
         setDepthIfChanged(shadow, 19.0);
         shadow.setScale(1 / 3);
         setBlendModeIfChanged(shadow, Phaser.BlendModes.NORMAL);
@@ -696,6 +700,7 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
           : it.kind === 'weapon_upgrade'
             ? 'item_weapon_upgrade'
             : 'item_health_potion';
+    const itemBinding = TextureBaker.resolveAtlasBinding(this, tex);
 
     let entry = this.worldItemSprites.get(it.id);
     if (!entry) {
@@ -714,7 +719,10 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
       setBlendModeIfChanged(beamSprite, Phaser.BlendModes.ADD);
       beamSprite.setVisible(false);
 
-      const sprite = this.add.sprite(it.x, it.y, tex);
+      const sprite =
+        itemBinding.frameName !== undefined
+          ? this.add.sprite(it.x, it.y, itemBinding.textureKey, itemBinding.frameName)
+          : this.add.sprite(it.x, it.y, itemBinding.textureKey);
       sprite.setScale(invBake * 0.95);
       setDepthIfChanged(sprite, 32);
 
@@ -734,8 +742,15 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
 
       entry = { sprite, glowSprite, beamSprite, shopMatSprite, label };
       this.worldItemSprites.set(it.id, entry);
-    } else if (entry.sprite.texture.key !== tex) {
-      entry.sprite.setTexture(tex);
+    } else if (
+      entry.sprite.texture?.key !== itemBinding.textureKey ||
+      (entry.sprite.frame?.name || '__BASE') !== (itemBinding.frameName ?? '__BASE')
+    ) {
+      if (itemBinding.frameName !== undefined) {
+        entry.sprite.setTexture(itemBinding.textureKey, itemBinding.frameName);
+      } else {
+        entry.sprite.setTexture(itemBinding.textureKey);
+      }
     }
 
     let renderX = it.x;
@@ -860,7 +875,11 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
                 : npc.interacted
                   ? 'prop_shrine_statue_used'
                   : 'prop_shrine_statue';
-        const sprite = this.add.sprite(npc.x, npc.y, npcTex);
+        const npcBinding = TextureBaker.resolveAtlasBinding(this, npcTex);
+        const sprite =
+          npcBinding.frameName !== undefined
+            ? this.add.sprite(npc.x, npc.y, npcBinding.textureKey, npcBinding.frameName)
+            : this.add.sprite(npc.x, npc.y, npcBinding.textureKey);
         sprite.setScale(invBake);
         setDepthIfChanged(sprite, 24);
         const label = this.add
@@ -922,8 +941,16 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
                 ? 'prop_shrine_statue_used'
                 : 'prop_shrine_statue';
       if (entry.sprite) {
-        if (entry.sprite.texture.key !== npcTex) {
-          entry.sprite.setTexture(npcTex);
+        const npcBinding = TextureBaker.resolveAtlasBinding(this, npcTex);
+        if (
+          entry.sprite.texture?.key !== npcBinding.textureKey ||
+          (entry.sprite.frame?.name || '__BASE') !== (npcBinding.frameName ?? '__BASE')
+        ) {
+          if (npcBinding.frameName !== undefined) {
+            entry.sprite.setTexture(npcBinding.textureKey, npcBinding.frameName);
+          } else {
+            entry.sprite.setTexture(npcBinding.textureKey);
+          }
         }
         if (npc.kind === 'secret_challenge_crystal') {
           const floatOffsetY = usedByLocal ? 0 : Math.sin(visualTimeSec * 3.0 + npc.id) * 2.5;

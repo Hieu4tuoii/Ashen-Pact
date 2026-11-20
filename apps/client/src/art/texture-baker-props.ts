@@ -5,6 +5,22 @@ import { bakeCustomCanvas } from './texture-baker-canvas.js';
 import { bakeP1CProps } from './texture-baker-props-p1c.js';
 
 export function bakeProps(scene: Phaser.Scene, scale: number): void {
+  // 0. Shared Soft Elliptical Prop Ground Shadow
+  bakeCustomCanvas(scene, 'prop_shadow', 36, 20, scale, (ctx) => {
+    ctx.save();
+    ctx.scale(14, 6.5);
+    const grad = ctx.createRadialGradient(0, 0, 0, 0, 0, 1.15);
+    grad.addColorStop(0, 'rgba(11, 9, 14, 0.50)');
+    grad.addColorStop(0.58, 'rgba(11, 9, 14, 0.30)');
+    grad.addColorStop(0.85, 'rgba(11, 9, 14, 0.10)');
+    grad.addColorStop(1, 'rgba(11, 9, 14, 0)');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(0, 0, 1.15, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  });
+
   bakeP1CProps(scene, scale);
   // 1. Wooden Crate
   bakeCustomCanvas(scene, 'prop_wooden_crate', 36, 36, scale, (ctx) => {

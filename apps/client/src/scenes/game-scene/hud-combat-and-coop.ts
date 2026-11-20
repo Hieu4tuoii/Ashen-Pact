@@ -496,8 +496,16 @@ export function updateVectorHudImpl(this: GameScene): void {
         }
 
         if (icon) {
+          const weaponBinding = TextureBaker.resolveAtlasBinding(
+            this,
+            TextureBaker.getWeaponTextureKey(wId),
+          );
           icon.setVisible(true);
-          icon.setTexture(TextureBaker.getWeaponTextureKey(wId));
+          if (weaponBinding.frameName !== undefined) {
+            icon.setTexture(weaponBinding.textureKey, weaponBinding.frameName);
+          } else {
+            icon.setTexture(weaponBinding.textureKey);
+          }
           icon.setPosition(sx + 21, sy + cardH * 0.5);
           icon.setScale(invBake * (isSelected ? 0.68 : 0.56));
           icon.setAlpha(isSelected ? 1 : 0.78);

@@ -911,24 +911,38 @@ export function syncPropsImpl(this: GameScene, dtSec: number): void {
       (prop.pressTimer ?? 0) >= 3.2
         ? 'fallen'
         : prop.coverState;
-    let targetTex = TextureBaker.getPropTextureKey(prop.kind, effectiveCoverState);
+    let logicalPropKey = TextureBaker.getPropTextureKey(prop.kind, effectiveCoverState);
+    let targetTex = logicalPropKey;
     let targetFrame: string | undefined = undefined;
     let isKitProp = false;
     if (prop.kind === 'cryo_prism_pillar' && (prop.prismPulseCooldownSec ?? 0) > 0) {
-      targetTex = 'prop_cryo_prism_pillar_cooldown';
+      logicalPropKey = 'prop_cryo_prism_pillar_cooldown';
+      targetTex = logicalPropKey;
     } else if (prop.kind === 'glacial_spike' && prop.cryoShatterSpire) {
       targetTex = 'fx_cutout_kit_512';
       targetFrame = 'prop_cryo_spire';
       isKitProp = true;
     }
+    if (!isKitProp) {
+      const propBinding = TextureBaker.resolveAtlasBinding(this, logicalPropKey);
+      targetTex = propBinding.textureKey;
+      targetFrame = propBinding.frameName;
+    }
     const propScale = isKitProp ? 1 / 3 : invBake;
     if (!pv) {
-      const shadow = this.add.sprite(prop.x, prop.y + 9, 'prop_shadow');
+      const shadowBinding = TextureBaker.resolveAtlasBinding(this, 'prop_shadow');
+      const shadow =
+        shadowBinding.frameName !== undefined
+          ? this.add.sprite(prop.x, prop.y + 9, shadowBinding.textureKey, shadowBinding.frameName)
+          : this.add.sprite(prop.x, prop.y + 9, shadowBinding.textureKey);
       shadow.setScale(invBake);
       setDepthIfChanged(shadow, 18);
       shadow.setVisible(true);
 
-      const sprite = this.add.sprite(prop.x, prop.y, targetTex, targetFrame);
+      const sprite =
+        targetFrame !== undefined
+          ? this.add.sprite(prop.x, prop.y, targetTex, targetFrame)
+          : this.add.sprite(prop.x, prop.y, targetTex);
       sprite.setScale(propScale);
       setDepthIfChanged(sprite, 22);
 
@@ -948,9 +962,13 @@ export function syncPropsImpl(this: GameScene, dtSec: number): void {
       pv.shadow.setVisible(true);
       if (
         pv.sprite.texture?.key !== targetTex ||
-        (pv.sprite.frame?.name ?? '') !== (targetFrame ?? '__BASE')
+        (pv.sprite.frame?.name || '__BASE') !== (targetFrame ?? '__BASE')
       ) {
-        pv.sprite.setTexture(targetTex, targetFrame);
+        if (targetFrame !== undefined) {
+          pv.sprite.setTexture(targetTex, targetFrame);
+        } else {
+          pv.sprite.setTexture(targetTex);
+        }
       }
     }
 
@@ -1038,10 +1056,18 @@ export function syncPushBlocksImpl(
     const blk = sim.pushBlocks[i]!;
     let vis = this.pushBlockVisuals.get(blk.id);
     if (!vis) {
-      const shadow = this.add.sprite(blk.x, blk.y + 8, 'prop_shadow');
+      const shadowBinding = TextureBaker.resolveAtlasBinding(this, 'prop_shadow');
+      const shadow =
+        shadowBinding.frameName !== undefined
+          ? this.add.sprite(blk.x, blk.y + 8, shadowBinding.textureKey, shadowBinding.frameName)
+          : this.add.sprite(blk.x, blk.y + 8, shadowBinding.textureKey);
       shadow.setScale(invBake);
       setDepthIfChanged(shadow, 19.0);
-      const sprite = this.add.sprite(blk.x, blk.y, 'prop_push_block');
+      const blockBinding = TextureBaker.resolveAtlasBinding(this, 'prop_push_block');
+      const sprite =
+        blockBinding.frameName !== undefined
+          ? this.add.sprite(blk.x, blk.y, blockBinding.textureKey, blockBinding.frameName)
+          : this.add.sprite(blk.x, blk.y, blockBinding.textureKey);
       sprite.setScale(invBake);
       setDepthIfChanged(sprite, 23.0);
       vis = { sprite, shadow, lastSeenGen: gen };

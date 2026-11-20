@@ -52,6 +52,42 @@ function hashRigId(id: string): number {
   return Math.abs(h % 100) * 0.017;
 }
 
+function createBoundSprite(
+  scene: Phaser.Scene,
+  x: number,
+  y: number,
+  logicalKey: string,
+): Phaser.GameObjects.Sprite {
+  const binding = TextureBaker.resolveAtlasBinding(scene, logicalKey);
+  return binding.frameName !== undefined
+    ? scene.add.sprite(x, y, binding.textureKey, binding.frameName)
+    : scene.add.sprite(x, y, binding.textureKey);
+}
+
+function applyBoundTexture(
+  scene: Phaser.Scene,
+  sprite: Phaser.GameObjects.Sprite,
+  logicalKey: string,
+): void {
+  const binding = TextureBaker.resolveAtlasBinding(scene, logicalKey);
+  if (binding.frameName !== undefined) {
+    sprite.setTexture(binding.textureKey, binding.frameName);
+  } else {
+    sprite.setTexture(binding.textureKey);
+  }
+}
+
+function canApplyWeaponBinding(
+  scene: Phaser.Scene,
+  binding: { textureKey: string; frameName?: string },
+): boolean {
+  return (
+    binding.frameName !== undefined ||
+    typeof scene.textures?.exists !== 'function' ||
+    scene.textures.exists(binding.textureKey)
+  );
+}
+
 /**
  * CutoutRig assembles pre-baked procedural vector part textures into a Phaser Container
  * and animates them parametrically at 60+ FPS using sin/cosine/spring/crossfade curves
@@ -175,7 +211,8 @@ export class CutoutRig {
 
     // 1. Optional Player Identification Ring (P1-P4)
     if (this.playerSlot) {
-      this.playerRingSprite = scene.add.sprite(
+      this.playerRingSprite = createBoundSprite(
+        scene,
         0,
         1,
         TextureBaker.getPlayerRingTextureKey(this.playerSlot),
@@ -185,7 +222,7 @@ export class CutoutRig {
     }
 
     // 2. Elliptical Ground Shadow
-    this.shadowSprite = scene.add.sprite(0, 0, TextureBaker.getShadowTextureKey(def.id));
+    this.shadowSprite = createBoundSprite(scene, 0, 0, TextureBaker.getShadowTextureKey(def.id));
     this.shadowSprite.setScale(invBake);
     if (!this.fastComposite) {
       this.container.add(this.shadowSprite);
@@ -197,7 +234,12 @@ export class CutoutRig {
     // 3. Sorted Cutout Parts (or single pre-baked composite sprite in fastComposite swarm mode)
     if (this.fastComposite) {
       const compInvBake = 1 / Math.min(2, TextureBaker.getBakeScale());
-      this.compositeSprite = scene.add.sprite(0, 0, TextureBaker.getFullRigTextureKey(def.id));
+      this.compositeSprite = createBoundSprite(
+        scene,
+        0,
+        0,
+        TextureBaker.getFullRigTextureKey(def.id),
+      );
       this.compositeSprite.setOrigin(0.5, 0.78);
       this.compositeSprite.setScale(compInvBake);
       this.container.add(this.compositeSprite);
@@ -205,7 +247,8 @@ export class CutoutRig {
     } else {
       const sortedParts = [...def.parts].sort((a, b) => a.zIndex - b.zIndex);
       for (const part of sortedParts) {
-        const sprite = scene.add.sprite(
+        const sprite = createBoundSprite(
+          scene,
           part.offsetX,
           part.offsetY,
           TextureBaker.getPartTextureKey(def.id, part.id),
@@ -276,8 +319,13 @@ export class CutoutRig {
     const weaponVec = WEAPON_VECTOR_DEFS[weaponId];
     if (weaponSprite && weaponVec) {
       const key = TextureBaker.getWeaponTextureKey(weaponId);
-      if (this.scene.textures.exists(key)) {
-        weaponSprite.setTexture(key);
+      const binding = TextureBaker.resolveAtlasBinding(this.scene, key);
+      if (canApplyWeaponBinding(this.scene, binding)) {
+        if (binding.frameName !== undefined) {
+          weaponSprite.setTexture(binding.textureKey, binding.frameName);
+        } else {
+          weaponSprite.setTexture(binding.textureKey);
+        }
         weaponSprite.setOrigin(weaponVec.originX, weaponVec.originY);
       }
     }
@@ -362,11 +410,11 @@ export class CutoutRig {
 
     const key = TextureBaker.getPlayerRingTextureKey(slot);
     if (!this.playerRingSprite) {
-      this.playerRingSprite = this.scene.add.sprite(0, 1, key);
+      this.playerRingSprite = createBoundSprite(this.scene, 0, 1, key);
       this.playerRingSprite.setScale(invBake);
       this.container.addAt(this.playerRingSprite, 0);
     } else {
-      this.playerRingSprite.setTexture(key);
+      applyBoundTexture(this.scene, this.playerRingSprite, key);
       this.playerRingSprite.setScale(invBake);
       this.playerRingSprite.setVisible(true);
     }
@@ -418,27 +466,44 @@ export class CutoutRig {
   public refreshBakedTextures(): void {
     const invBake = 1 / TextureBaker.getBakeScale();
     const compInvBake = 1 / Math.min(2, TextureBaker.getBakeScale());
-    this.shadowSprite.setTexture(TextureBaker.getShadowTextureKey(this.def.id));
+    applyBoundTexture(this.scene, this.shadowSprite, TextureBaker.getShadowTextureKey(this.def.id));
     this.shadowSprite.setScale(invBake);
     if (this.playerRingSprite && this.playerSlot) {
-      this.playerRingSprite.setTexture(TextureBaker.getPlayerRingTextureKey(this.playerSlot));
+      applyBoundTexture(
+        this.scene,
+        this.playerRingSprite,
+        TextureBaker.getPlayerRingTextureKey(this.playerSlot),
+      );
       this.playerRingSprite.setScale(invBake);
     }
     if (this.compositeSprite) {
-      this.compositeSprite.setTexture(TextureBaker.getFullRigTextureKey(this.def.id));
+      applyBoundTexture(
+        this.scene,
+        this.compositeSprite,
+        TextureBaker.getFullRigTextureKey(this.def.id),
+      );
       this.compositeSprite.setScale(compInvBake);
     }
     for (let i = 0; i < this.partSpriteList.length; i++) {
       const { partId, sprite } = this.partSpriteList[i]!;
       if (partId === 'weapon' && this.equippedWeaponId) {
         const wKey = TextureBaker.getWeaponTextureKey(this.equippedWeaponId);
-        if (this.scene.textures.exists(wKey)) {
-          sprite.setTexture(wKey);
+        const wBinding = TextureBaker.resolveAtlasBinding(this.scene, wKey);
+        if (canApplyWeaponBinding(this.scene, wBinding)) {
+          if (wBinding.frameName !== undefined) {
+            sprite.setTexture(wBinding.textureKey, wBinding.frameName);
+          } else {
+            sprite.setTexture(wBinding.textureKey);
+          }
           sprite.setScale(invBake);
           continue;
         }
       }
-      sprite.setTexture(TextureBaker.getPartTextureKey(this.def.id, partId));
+      applyBoundTexture(
+        this.scene,
+        sprite,
+        TextureBaker.getPartTextureKey(this.def.id, partId),
+      );
       sprite.setScale(invBake);
     }
   }
