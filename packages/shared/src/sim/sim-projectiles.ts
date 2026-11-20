@@ -214,18 +214,22 @@ export function spawnDeterministicVolleyImpl(this: WorldSim, ev: BulletVolleySpa
       }
     }
 
-    if (!this.stressTestActive && this.projectiles.length >= teamCap) {
-      let teamCount = 0;
+    this.ensureProjectileTeamCounts();
+    const curTeamCount =
+      ev.team === 'player' ? this._playerProjectileCount : this._enemyProjectileCount;
+    if (!this.stressTestActive && curTeamCount >= teamCap) {
       let oldestTeamIdx = -1;
       for (let pIdx = 0; pIdx < this.projectiles.length; pIdx++) {
         if (this.projectiles[pIdx]!.team === ev.team) {
-          if (oldestTeamIdx === -1) oldestTeamIdx = pIdx;
-          teamCount++;
+          oldestTeamIdx = pIdx;
+          break;
         }
       }
-      if (teamCount >= teamCap && oldestTeamIdx >= 0) {
+      if (oldestTeamIdx >= 0) {
         const [evicted] = this.projectiles.splice(oldestTeamIdx, 1);
         if (evicted) {
+          if (evicted.team === 'player') this._playerProjectileCount -= 1;
+          else this._enemyProjectileCount -= 1;
           this.releaseProjectileToPool(evicted);
         }
       }
@@ -262,6 +266,12 @@ export function spawnDeterministicVolleyImpl(this: WorldSim, ev: BulletVolleySpa
     });
     copyLegendaryVolleyFieldsToProjectile(ev, proj);
     this.projectiles.push(proj);
+    if (ev.team === 'player') this._playerProjectileCount += 1;
+    else {
+      this._enemyProjectileCount += 1;
+      this.bulletSpatialGridPhase += 1;
+    }
+    this.recordProjectilesSynced();
 
     if (emitEvents && !this.stressTestActive) {
       this.events.push({
@@ -274,8 +284,14 @@ export function spawnDeterministicVolleyImpl(this: WorldSim, ev: BulletVolleySpa
 const midFlightDestroyedScratch: number[] = [];
 
 export function updateProjectilesImpl(this: WorldSim, dtSec: number): void {
-  if (this.projectiles.length === 0) return;
+  if (this.projectiles.length === 0) {
+    this.bulletSpatialGrid.clear();
+    return;
+  }
   this.rebuildEnemySpatialGrid();
+  this.bulletSpatialGridPhase += 1;
+  this.rebuildEnemyBulletSpatialGrid();
+  this.inProjectileUpdateLoop = true;
   const allPlayers = this.getAllPlayers();
   let stressImpactEventsThisTick = 0;
   midFlightDestroyedScratch.length = 0;
@@ -757,16 +773,25 @@ export function updateProjectilesImpl(this: WorldSim, dtSec: number): void {
     });
   }
 
+  this.inProjectileUpdateLoop = false;
   let projWriteIdx = 0;
+  let nextPlayerCount = 0;
+  let nextEnemyCount = 0;
   for (let i = 0; i < this.projectiles.length; i++) {
     const b = this.projectiles[i]!;
     if (b.ttlSec > 0) {
       this.projectiles[projWriteIdx++] = b;
+      if (b.team === 'player') nextPlayerCount += 1;
+      else nextEnemyCount += 1;
     } else {
       this.releaseProjectileToPool(b);
     }
   }
   this.projectiles.length = projWriteIdx;
+  this._playerProjectileCount = nextPlayerCount;
+  this._enemyProjectileCount = nextEnemyCount;
+  this.recordProjectilesSynced();
+  this.bulletSpatialGridPhase += 1;
 }
 
 export function stepClientProjectilesCosmeticImpl(this: WorldSim, dtSec: number): void {
@@ -1007,15 +1032,23 @@ export function stepClientProjectilesCosmeticImpl(this: WorldSim, dtSec: number)
   }
 
   let projWriteIdx = 0;
+  let nextPlayerCount = 0;
+  let nextEnemyCount = 0;
   for (let i = 0; i < this.projectiles.length; i++) {
     const b = this.projectiles[i]!;
     if (b.ttlSec > 0) {
       this.projectiles[projWriteIdx++] = b;
+      if (b.team === 'player') nextPlayerCount += 1;
+      else nextEnemyCount += 1;
     } else {
       this.releaseProjectileToPool(b);
     }
   }
   this.projectiles.length = projWriteIdx;
+  this._playerProjectileCount = nextPlayerCount;
+  this._enemyProjectileCount = nextEnemyCount;
+  this.recordProjectilesSynced();
+  this.bulletSpatialGridPhase += 1;
 }
 
 export function acquireProjectileImpl(this: WorldSim,

@@ -440,6 +440,7 @@ export function handleEnemyKilledImpl(
         titan.aiState = 'stunned';
         titan.stateTimer = 4.5;
         titan.superconductTimer = 6.0;
+        this.hasActiveSuperconductEnemy = true;
         titan.vx = 0;
         titan.vy = 0;
         this.events.push({
@@ -700,6 +701,7 @@ export function applyElementStatusToEnemyImpl(
       enemy.shockTimer = 0;
       enemy.shieldArmor = 0;
       enemy.superconductTimer = 6.0;
+      this.hasActiveSuperconductEnemy = true;
       const scDmg = Math.max(8, Math.round(hitDamage * 0.75));
       this.triggerElementalReaction(enemy, 'superconduct', scDmg, primerId, attackerPlayerId);
       this.applyDotDamageToEnemy(enemy, scDmg, 'shock', false);

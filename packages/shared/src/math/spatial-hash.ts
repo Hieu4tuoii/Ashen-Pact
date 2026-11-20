@@ -15,12 +15,12 @@ export interface SpatialEntity {
 export class SpatialHashGrid<T extends SpatialEntity> {
   public readonly cellSize: number;
   private readonly invCellSize: number;
-  private readonly fastBuckets: T[][] = Array.from({ length: 32 * 16 }, () => []);
-  private readonly buckets = new Map<number, T[]>();
-  private readonly activeBuckets: T[][] = [];
-  private readonly seenIds = new Set<number>();
-  private readonly seenById = new Int32Array(16384);
-  private seenStamp = 1;
+  private readonly items: T[] = [];
+  private readonly fastBuckets: number[][] = Array.from({ length: 32 * 16 }, () => []);
+  private readonly buckets = new Map<number, number[]>();
+  private readonly activeBuckets: number[][] = [];
+  private seenBySlot = new Int32Array(256);
+  private queryStamp = 1;
 
   constructor(cellSize = 64) {
     this.cellSize = Math.max(8, cellSize);
@@ -32,7 +32,7 @@ export class SpatialHashGrid<T extends SpatialEntity> {
     return ((cx & 0xffff) << 16) | (cy & 0xffff);
   }
 
-  private getBucket(cx: number, cy: number): T[] | undefined {
+  private getBucket(cx: number, cy: number): number[] | undefined {
     if (cx >= 0 && cx < 32 && cy >= 0 && cy < 16) {
       return this.fastBuckets[(cy << 5) | cx];
     }
@@ -44,9 +44,22 @@ export class SpatialHashGrid<T extends SpatialEntity> {
       this.activeBuckets[i]!.length = 0;
     }
     this.activeBuckets.length = 0;
+    this.items.length = 0;
   }
 
   public insert(item: T): void {
+    const slotIdx = this.items.length;
+    this.items.push(item);
+    if (slotIdx >= this.seenBySlot.length) {
+      let nextCap = this.seenBySlot.length * 2;
+      while (nextCap <= slotIdx) {
+        nextCap *= 2;
+      }
+      const grown = new Int32Array(nextCap);
+      grown.set(this.seenBySlot);
+      this.seenBySlot = grown;
+    }
+
     const r = Math.max(0, item.radius);
     const minCx = Math.floor((item.x - r) * this.invCellSize);
     const maxCx = Math.floor((item.x + r) * this.invCellSize);
@@ -55,7 +68,7 @@ export class SpatialHashGrid<T extends SpatialEntity> {
 
     for (let cy = minCy; cy <= maxCy; cy++) {
       for (let cx = minCx; cx <= maxCx; cx++) {
-        let bucket: T[];
+        let bucket: number[];
         if (cx >= 0 && cx < 32 && cy >= 0 && cy < 16) {
           bucket = this.fastBuckets[(cy << 5) | cx]!;
         } else {
@@ -70,7 +83,7 @@ export class SpatialHashGrid<T extends SpatialEntity> {
         if (bucket.length === 0) {
           this.activeBuckets.push(bucket);
         }
-        bucket.push(item);
+        bucket.push(slotIdx);
       }
     }
   }
@@ -88,12 +101,13 @@ export class SpatialHashGrid<T extends SpatialEntity> {
     const maxCx = Math.floor((x + r) * this.invCellSize);
     const minCy = Math.floor((y - r) * this.invCellSize);
     const maxCy = Math.floor((y + r) * this.invCellSize);
+    const items = this.items;
 
     if (minCx === maxCx && minCy === maxCy) {
       const bucket = this.getBucket(minCx, minCy);
       if (!bucket || bucket.length === 0) return out;
       for (let i = 0; i < bucket.length; i++) {
-        const item = bucket[i]!;
+        const item = items[bucket[i]!]!;
         const sumR = r + item.radius;
         if (distanceSq(x, y, item.x, item.y) <= sumR * sumR) {
           out.push(item);
@@ -102,13 +116,13 @@ export class SpatialHashGrid<T extends SpatialEntity> {
       return out;
     }
 
-    let stamp = (this.seenStamp + 1) | 0;
+    let stamp = (this.queryStamp + 1) | 0;
     if (stamp <= 0) {
       stamp = 1;
-      this.seenById.fill(0);
+      this.seenBySlot.fill(0);
     }
-    this.seenStamp = stamp;
-    let usedFallbackSet = false;
+    this.queryStamp = stamp;
+    const seen = this.seenBySlot;
 
     for (let cy = minCy; cy <= maxCy; cy++) {
       for (let cx = minCx; cx <= maxCx; cx++) {
@@ -116,20 +130,11 @@ export class SpatialHashGrid<T extends SpatialEntity> {
         if (!bucket || bucket.length === 0) continue;
 
         for (let i = 0; i < bucket.length; i++) {
-          const item = bucket[i]!;
-          const id = item.id;
-          if (id >= 0 && id < 16384) {
-            if (this.seenById[id] === stamp) continue;
-            this.seenById[id] = stamp;
-          } else {
-            if (!usedFallbackSet) {
-              this.seenIds.clear();
-              usedFallbackSet = true;
-            }
-            if (this.seenIds.has(id)) continue;
-            this.seenIds.add(id);
-          }
+          const slotIdx = bucket[i]!;
+          if (seen[slotIdx] === stamp) continue;
+          seen[slotIdx] = stamp;
 
+          const item = items[slotIdx]!;
           const sumR = r + item.radius;
           if (distanceSq(x, y, item.x, item.y) <= sumR * sumR) {
             out.push(item);

@@ -543,7 +543,18 @@ export function enterHubImpl(this: WorldSim): void {
   this.coopModeActive = true;
   this.runState = 'playing';
   this.enemies.length = 0;
+  this.hasActiveSuperconductEnemy = false;
   this.projectiles.length = 0;
+  this._playerProjectileCount = 0;
+  this._enemyProjectileCount = 0;
+  this.recordProjectilesSynced();
+  this.bulletSpatialGrid.clear();
+  this.bulletSpatialGridPhase += 1;
+  for (const pl of this.getAllPlayers()) {
+    if (pl.solarOrbHitTickByEnemy) {
+      pl.solarOrbHitTickByEnemy = {};
+    }
+  }
   this.pickups.length = 0;
   this.props.length = 0;
   this.summons.length = 0;

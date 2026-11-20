@@ -579,6 +579,7 @@ function findSuperconductMagneticTarget(
   sim: WorldSim,
   b: SimProjectileState,
 ): SimEnemyState | null {
+  if (!sim.hasActiveSuperconductEnemy) return null;
   if (
     b.team !== 'player' ||
     ((b.shotFlags ?? 0) & SHOT_FLAG.DYNAMIC_BOUNCE) === 0 ||
@@ -595,10 +596,16 @@ function findSuperconductMagneticTarget(
   const owner = sim.getPlayerById(b.ownerId);
   if (!hasPlayerDuoBoon(owner, 'duo_superconduct_rail')) return null;
 
+  const candidates = sim.enemySpatialGrid.queryCircle(
+    b.x,
+    b.y,
+    SUPERCONDUCT_RAIL_RADIUS,
+    sim.superconductEnemyScratch,
+  );
   let bestEnemy: SimEnemyState | null = null;
   let bestDist = Infinity;
-  for (let i = 0; i < sim.enemies.length; i++) {
-    const e = sim.enemies[i]!;
+  for (let i = 0; i < candidates.length; i++) {
+    const e = candidates[i]!;
     if (
       e.hp <= 0 ||
       e.isDummy ||

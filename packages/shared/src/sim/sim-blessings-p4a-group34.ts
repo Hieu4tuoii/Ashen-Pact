@@ -455,25 +455,51 @@ export function tryPlantWallTetherPylonOnWallHit(
   return pylon;
 }
 
+const pylonOwnersScratch: number[] = [];
+const pylonFirstScratch: (SimSummonState | undefined)[] = [];
+const pylonSecondScratch: (SimSummonState | undefined)[] = [];
+
 export function updateP4ASummonsAndTethers(sim: WorldSim, dtSec: number): void {
   if (sim.summons.length < 2) return;
 
-  const pylonsByOwner = new Map<number, SimSummonState[]>();
+  let activePylonCount = 0;
+  for (let i = 0; i < sim.summons.length; i++) {
+    const s = sim.summons[i]!;
+    if (s.kind === 'wall_tether_pylon' && s.hp > 0 && s.ttlSec > 0) {
+      activePylonCount += 1;
+      if (activePylonCount >= 2) break;
+    }
+  }
+  if (activePylonCount < 2) return;
+
+  pylonOwnersScratch.length = 0;
+  pylonFirstScratch.length = 0;
+  pylonSecondScratch.length = 0;
+
   for (let i = 0; i < sim.summons.length; i++) {
     const s = sim.summons[i]!;
     if (s.kind !== 'wall_tether_pylon' || s.hp <= 0 || s.ttlSec <= 0) continue;
-    let list = pylonsByOwner.get(s.ownerPlayerId);
-    if (!list) {
-      list = [];
-      pylonsByOwner.set(s.ownerPlayerId, list);
+    let ownerSlot = -1;
+    for (let k = 0; k < pylonOwnersScratch.length; k++) {
+      if (pylonOwnersScratch[k] === s.ownerPlayerId) {
+        ownerSlot = k;
+        break;
+      }
     }
-    list.push(s);
+    if (ownerSlot < 0) {
+      pylonOwnersScratch.push(s.ownerPlayerId);
+      pylonFirstScratch.push(s);
+      pylonSecondScratch.push(undefined);
+    } else if (!pylonSecondScratch[ownerSlot]) {
+      pylonSecondScratch[ownerSlot] = s;
+    }
   }
 
-  for (const [ownerId, pylons] of pylonsByOwner) {
-    if (pylons.length < 2) continue;
-    const p1 = pylons[0]!;
-    const p2 = pylons[1]!;
+  for (let k = 0; k < pylonOwnersScratch.length; k++) {
+    const ownerId = pylonOwnersScratch[k]!;
+    const p1 = pylonFirstScratch[k];
+    const p2 = pylonSecondScratch[k];
+    if (!p1 || !p2) continue;
 
     const prevTimer = p1.fenceTickTimer ?? WALL_TETHER_TICK_SEC;
     const nextTimer = prevTimer - dtSec;
@@ -522,6 +548,10 @@ export function updateP4ASummonsAndTethers(sim: WorldSim, dtSec: number): void {
       }
     }
   }
+
+  pylonOwnersScratch.length = 0;
+  pylonFirstScratch.length = 0;
+  pylonSecondScratch.length = 0;
 }
 
 export function isEligibleOrbitReturnWeapon(weaponId: string): boolean {

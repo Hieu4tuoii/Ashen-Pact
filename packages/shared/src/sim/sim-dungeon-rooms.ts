@@ -118,10 +118,16 @@ export function enterRoomImpl(this: WorldSim, roomId: number, entryDir?: Cardina
 
   // Clear transient entities from previous room
   this.enemies.length = 0;
+  this.hasActiveSuperconductEnemy = false;
   for (let i = 0; i < this.projectiles.length; i++) {
     this.releaseProjectileToPool(this.projectiles[i]!);
   }
   this.projectiles.length = 0;
+  this._playerProjectileCount = 0;
+  this._enemyProjectileCount = 0;
+  this.recordProjectilesSynced();
+  this.bulletSpatialGrid.clear();
+  this.bulletSpatialGridPhase += 1;
   for (let i = 0; i < this.pickups.length; i++) {
     this.pickupPool.push(this.pickups[i]!);
   }
@@ -162,6 +168,9 @@ export function enterRoomImpl(this: WorldSim, roomId: number, entryDir?: Cardina
     pl.salvageHoldTimer = 0;
     pl.salvageTargetItemId = 0;
     pl.tookDamageInCurrentRoom = false;
+    if (pl.solarOrbHitTickByEnemy) {
+      pl.solarOrbHitTickByEnemy = {};
+    }
   }
 
   const isWallBroken = Boolean(

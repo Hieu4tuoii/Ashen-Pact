@@ -423,13 +423,18 @@ export function updateCurrentRoomProgressionImpl(this: WorldSim, dtSec: number):
     if (!room.cleared && (room.type === 'combat' || room.type === 'portal')) {
       this.waveElapsedSec += dtSec;
       if (room.wavesSpawned < room.wavesTotal) {
-        const activeWaves = new Set<number>();
+        let firstWaveIdx = -1;
+        let hasMultipleActiveWaves = false;
         let currentWaveAlive = 0;
         for (let i = 0; i < this.enemies.length; i++) {
           const e = this.enemies[i]!;
           if (e.isDummy || e.defId === 'ashen_executioner' || e.hp <= 0) continue;
           const wIdx = e.waveIndex ?? 1;
-          activeWaves.add(wIdx);
+          if (firstWaveIdx === -1) {
+            firstWaveIdx = wIdx;
+          } else if (wIdx !== firstWaveIdx) {
+            hasMultipleActiveWaves = true;
+          }
           if (wIdx === room.wavesSpawned) {
             currentWaveAlive += 1;
           }
@@ -439,7 +444,7 @@ export function updateCurrentRoomProgressionImpl(this: WorldSim, dtSec: number):
         const timeExpired = this.waveElapsedSec >= 9.5;
         const minOverlapSec = 1.5;
         if (
-          activeWaves.size < 2 &&
+          !hasMultipleActiveWaves &&
           this.waveElapsedSec >= minOverlapSec &&
           (lowRemaining || timeExpired)
         ) {
@@ -822,22 +827,31 @@ export function getRollingDpsImpl(this: WorldSim): number {
 
 export function rebuildEnemySpatialGridImpl(this: WorldSim): void {
   this.enemySpatialGrid.clear();
+  let hasSuperconduct = false;
   for (let i = 0; i < this.enemies.length; i++) {
     const e = this.enemies[i]!;
     if (e.hp > 0 && e.aiState !== 'spawning' && !e.bossBurrowed) {
       this.enemySpatialGrid.insert(e);
+      if (e.superconductTimer > 0 && !e.isDummy && e.defId !== 'ashen_executioner') {
+        hasSuperconduct = true;
+      }
     }
   }
+  this.hasActiveSuperconductEnemy = hasSuperconduct;
 }
 
 export function rebuildEnemyBulletSpatialGridImpl(this: WorldSim): void {
   this.bulletSpatialGrid.clear();
-  for (let i = 0; i < this.projectiles.length; i++) {
-    const b = this.projectiles[i]!;
-    if (b.ttlSec > 0 && b.team === 'enemy') {
-      this.bulletSpatialGrid.insert(b);
+  this.ensureProjectileTeamCounts();
+  if (this._enemyProjectileCount > 0) {
+    for (let i = 0; i < this.projectiles.length; i++) {
+      const b = this.projectiles[i]!;
+      if (b.ttlSec > 0 && b.team === 'enemy') {
+        this.bulletSpatialGrid.insert(b);
+      }
     }
   }
+  this.markEnemyBulletSpatialGridSynced();
 }
 
 export function updatePickupsImpl(this: WorldSim, dtSec: number): void {

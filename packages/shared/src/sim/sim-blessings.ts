@@ -88,12 +88,13 @@ export function spawnTableTechHomingRockets(
     : fallbackAngle;
   const spreadRad = 0.24;
   const shotFlags = SHOT_FLAG.DYNAMIC_BOUNCE;
-  const prevIds = new Set(sim.projectiles.map((p) => p.id));
+  const volleyEventId = sim.nextVolleyEventId++;
+  const eventKey = volleyEventId & 0x3fffff;
 
   sim.spawnDeterministicVolley({
     kind: 'bullet_volley_spawned',
     tick: sim.tick,
-    eventId: sim.nextVolleyEventId++,
+    eventId: volleyEventId,
     ownerId: actor.id,
     team: 'player',
     weaponId: 'table_tech_rocket',
@@ -121,15 +122,21 @@ export function spawnTableTechHomingRockets(
     originY,
   });
 
+  let firstSpawnedIdx = sim.projectiles.length;
+  while (
+    firstSpawnedIdx > 0 &&
+    (sim.projectiles[firstSpawnedIdx - 1]!.id >>> 6) === eventKey
+  ) {
+    firstSpawnedIdx -= 1;
+  }
+
   let spawnedCount = 0;
-  for (let i = 0; i < sim.projectiles.length; i++) {
+  for (let i = firstSpawnedIdx; i < sim.projectiles.length; i++) {
     const p = sim.projectiles[i]!;
-    if (!prevIds.has(p.id)) {
-      if (excludeEnemyId !== undefined && !p.hitEntityIds.includes(excludeEnemyId)) {
-        p.hitEntityIds.push(excludeEnemyId);
-      }
-      spawnedCount += 1;
+    if (excludeEnemyId !== undefined && !p.hitEntityIds.includes(excludeEnemyId)) {
+      p.hitEntityIds.push(excludeEnemyId);
     }
+    spawnedCount += 1;
   }
   return spawnedCount;
 }
@@ -310,7 +317,8 @@ export function refractProjectileThroughPrismBarricade(
   const speed = Math.max(420, Math.hypot(b.vx, b.vy));
   const origTtl = Math.max(b.ttlSec, 1.2);
   const preservedHits = [...b.hitEntityIds];
-  const prevIds = new Set(sim.projectiles.map((p) => p.id));
+  const volleyEventId = sim.nextVolleyEventId++;
+  const eventKey = volleyEventId & 0x3fffff;
 
   b.ttlSec = 0;
 
@@ -318,7 +326,7 @@ export function refractProjectileThroughPrismBarricade(
   sim.spawnDeterministicVolley({
     kind: 'bullet_volley_spawned',
     tick: sim.tick,
-    eventId: sim.nextVolleyEventId++,
+    eventId: volleyEventId,
     ownerId: b.ownerId,
     team: 'player',
     weaponId: b.weaponId,
@@ -349,25 +357,30 @@ export function refractProjectileThroughPrismBarricade(
     baseAngle - TABLE_TECH_PRISM_SPLIT_HALF_ANGLE_RAD,
     baseAngle + TABLE_TECH_PRISM_SPLIT_HALF_ANGLE_RAD,
   ];
+  let firstSpawnedIdx = sim.projectiles.length;
+  while (
+    firstSpawnedIdx > 0 &&
+    (sim.projectiles[firstSpawnedIdx - 1]!.id >>> 6) === eventKey
+  ) {
+    firstSpawnedIdx -= 1;
+  }
   let rayIdx = 0;
-  for (let i = 0; i < sim.projectiles.length; i++) {
+  for (let i = firstSpawnedIdx; i < sim.projectiles.length; i++) {
     const child = sim.projectiles[i]!;
-    if (!prevIds.has(child.id)) {
-      const exactAngle = rayAngles[rayIdx] ?? baseAngle;
-      rayIdx += 1;
-      child.angle = exactAngle;
-      child.vx = Math.cos(exactAngle) * speed;
-      child.vy = Math.sin(exactAngle) * speed;
-      child.isCrit = b.isCrit;
-      child.element = 'shock';
-      child.splitGeneration = 1;
-      child.prismBonusAdd = nextPrismAdd;
-      child.passedThroughCoverOrPrism = true;
-      child.shotFlags = shotFlags;
-      for (const hid of preservedHits) {
-        if (!child.hitEntityIds.includes(hid)) {
-          child.hitEntityIds.push(hid);
-        }
+    const exactAngle = rayAngles[rayIdx] ?? baseAngle;
+    rayIdx += 1;
+    child.angle = exactAngle;
+    child.vx = Math.cos(exactAngle) * speed;
+    child.vy = Math.sin(exactAngle) * speed;
+    child.isCrit = b.isCrit;
+    child.element = 'shock';
+    child.splitGeneration = 1;
+    child.prismBonusAdd = nextPrismAdd;
+    child.passedThroughCoverOrPrism = true;
+    child.shotFlags = shotFlags;
+    for (const hid of preservedHits) {
+      if (!child.hitEntityIds.includes(hid)) {
+        child.hitEntityIds.push(hid);
       }
     }
   }
@@ -392,12 +405,13 @@ export function spawnTableTechPrismSlamRays(
     : fallbackAngle;
   const speed = 560;
   const shotFlags = SHOT_FLAG.DYNAMIC_BOUNCE;
-  const prevIds = new Set(sim.projectiles.map((p) => p.id));
+  const volleyEventId = sim.nextVolleyEventId++;
+  const eventKey = volleyEventId & 0x3fffff;
 
   sim.spawnDeterministicVolley({
     kind: 'bullet_volley_spawned',
     tick: sim.tick,
-    eventId: sim.nextVolleyEventId++,
+    eventId: volleyEventId,
     ownerId: actor.id,
     team: 'player',
     weaponId: 'table_tech_prism_split',
@@ -428,23 +442,28 @@ export function spawnTableTechPrismSlamRays(
     baseAngle - TABLE_TECH_PRISM_SPLIT_HALF_ANGLE_RAD,
     baseAngle + TABLE_TECH_PRISM_SPLIT_HALF_ANGLE_RAD,
   ];
+  let firstSpawnedIdx = sim.projectiles.length;
+  while (
+    firstSpawnedIdx > 0 &&
+    (sim.projectiles[firstSpawnedIdx - 1]!.id >>> 6) === eventKey
+  ) {
+    firstSpawnedIdx -= 1;
+  }
   let rayIdx = 0;
-  for (let i = 0; i < sim.projectiles.length; i++) {
+  for (let i = firstSpawnedIdx; i < sim.projectiles.length; i++) {
     const child = sim.projectiles[i]!;
-    if (!prevIds.has(child.id)) {
-      const exactAngle = rayAngles[rayIdx] ?? baseAngle;
-      rayIdx += 1;
-      child.angle = exactAngle;
-      child.vx = Math.cos(exactAngle) * speed;
-      child.vy = Math.sin(exactAngle) * speed;
-      child.splitGeneration = 1;
-      child.prismBonusAdd = TABLE_TECH_PRISM_SPLIT_ADDITIVE_BONUS;
-      child.passedThroughCoverOrPrism = true;
-      child.element = 'shock';
-      child.shotFlags = shotFlags;
-      if (excludeEnemyId !== undefined && !child.hitEntityIds.includes(excludeEnemyId)) {
-        child.hitEntityIds.push(excludeEnemyId);
-      }
+    const exactAngle = rayAngles[rayIdx] ?? baseAngle;
+    rayIdx += 1;
+    child.angle = exactAngle;
+    child.vx = Math.cos(exactAngle) * speed;
+    child.vy = Math.sin(exactAngle) * speed;
+    child.splitGeneration = 1;
+    child.prismBonusAdd = TABLE_TECH_PRISM_SPLIT_ADDITIVE_BONUS;
+    child.passedThroughCoverOrPrism = true;
+    child.element = 'shock';
+    child.shotFlags = shotFlags;
+    if (excludeEnemyId !== undefined && !child.hitEntityIds.includes(excludeEnemyId)) {
+      child.hitEntityIds.push(excludeEnemyId);
     }
   }
   return rayIdx;

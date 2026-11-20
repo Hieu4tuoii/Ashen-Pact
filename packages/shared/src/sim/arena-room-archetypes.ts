@@ -550,6 +550,75 @@ export function findNearestWalkablePoint(
   return { x: doors.W.tx * TILE_SIZE + 16, y: doors.W.ty * TILE_SIZE + 16 };
 }
 
+let cachedBfsPropMap: ArenaMap | null = null;
+let cachedBfsPropSig = 0;
+let cachedBfsPropCount = -1;
+let cachedBfsPadExtra = -1;
+let cachedBfsPropStamp = 0;
+let cachedBfsPropHasBlockedTile = false;
+
+function allocBfsStamp(): number {
+  let st = ++nextBfsVisitStamp;
+  if (st >= 0x7ffffff0) {
+    bfsVisitStampScratch.fill(0);
+    bfsPropBlockedStampScratch.fill(0);
+    cachedBfsPropMap = null;
+    cachedBfsPropStamp = 0;
+    nextBfsVisitStamp = 1;
+    st = 1;
+  }
+  return st;
+}
+
+function runBfsOnScratch(
+  map: ArenaMap,
+  sTx: number,
+  sTy: number,
+  startIdx: number,
+  goalIdx: number,
+  ignoreChasm: boolean,
+  curStamp: number,
+  usePropMask: boolean,
+  propMaskStamp: number,
+): boolean {
+  const cols = map.cols;
+  const rows = map.rows;
+  const tiles = map.tiles;
+  const surfaces = map.surfaces;
+  let head = 0;
+  let tail = 1;
+  bfsVisitStampScratch[startIdx] = curStamp;
+  bfsParentScratch[startIdx] = -1;
+  bfsQueueXScratch[0] = sTx;
+  bfsQueueYScratch[0] = sTy;
+  while (head < tail) {
+    const cx = bfsQueueXScratch[head]!;
+    const cy = bfsQueueYScratch[head]!;
+    const cIdx = cy * cols + cx;
+    head += 1;
+    if (cIdx === goalIdx) return true;
+    for (let k = 0; k < 4; k++) {
+      const nx = cx + CARDINAL_DIRS[k]![0];
+      const ny = cy + CARDINAL_DIRS[k]![1];
+      if (nx <= 0 || ny <= 0 || nx >= cols - 1 || ny >= rows - 1) continue;
+      const nIdx = ny * cols + nx;
+      if (bfsVisitStampScratch[nIdx] === curStamp) continue;
+      if (usePropMask && nIdx !== goalIdx && bfsPropBlockedStampScratch[nIdx] === propMaskStamp) {
+        continue;
+      }
+      const walkable =
+        tiles[nIdx] === 'floor' && (ignoreChasm || surfaces[nIdx] !== 'chasm');
+      if (!walkable && nIdx !== goalIdx) continue;
+      bfsVisitStampScratch[nIdx] = curStamp;
+      bfsParentScratch[nIdx] = cIdx;
+      bfsQueueXScratch[tail] = nx;
+      bfsQueueYScratch[tail] = ny;
+      tail += 1;
+    }
+  }
+  return false;
+}
+
 export function findNextWalkableWaypoint(
   map: ArenaMap,
   fromX: number,
@@ -559,6 +628,7 @@ export function findNextWalkableWaypoint(
   props?: readonly NavBlockingPropLike[],
   ignoreChasm = false,
   radius = 14,
+  out?: { x: number; y: number },
 ): { x: number; y: number } {
   const cols = map.cols;
   const rows = map.rows;
@@ -575,94 +645,125 @@ export function findNextWalkableWaypoint(
     gTx = Math.max(1, Math.min(cols - 2, Math.floor(targetX / TILE_SIZE)));
     gTy = Math.max(1, Math.min(rows - 2, Math.floor(targetY / TILE_SIZE)));
   }
-  if (sTx === gTx && sTy === gTy) return { x: targetX, y: targetY };
+  if (sTx === gTx && sTy === gTy) {
+    if (out) {
+      out.x = targetX;
+      out.y = targetY;
+      return out;
+    }
+    return { x: targetX, y: targetY };
+  }
 
   const startIdx = sTy * cols + sTx;
   const goalIdx = gTy * cols + gTx;
-  const tiles = map.tiles;
-  const surfaces = map.surfaces;
 
-  const allocStamp = (): number => {
-    let st = ++nextBfsVisitStamp;
-    if (st >= 0x7ffffff0) {
-      bfsVisitStampScratch.fill(0);
-      bfsPropBlockedStampScratch.fill(0);
-      nextBfsVisitStamp = 1;
-      st = 1;
-    }
-    return st;
-  };
+  if (nextBfsVisitStamp >= 0x7fffffe0) {
+    bfsVisitStampScratch.fill(0);
+    bfsPropBlockedStampScratch.fill(0);
+    cachedBfsPropMap = null;
+    cachedBfsPropStamp = 0;
+    nextBfsVisitStamp = 1;
+  }
 
-  const stamp = allocStamp();
+  let propMaskStamp = 0;
   let hasPropMask = false;
   if (props && props.length > 0) {
     const padExtra = Math.min(radius, 14);
+    let propSig =
+      (((cols << 8) ^ rows ^ Math.imul(map.mapRevision, 0x9e3779b1)) +
+        Math.round(padExtra * 16)) |
+      0;
+    let activeBlockingCount = 0;
     for (let i = 0; i < props.length; i++) {
       const prop = props[i]!;
       if (prop.hp <= 0 || !prop.blocksMovement || prop.coverState === 'fallen') continue;
-      const pad = prop.radius + padExtra;
-      const minTx = Math.max(1, Math.floor((prop.x - pad) / TILE_SIZE));
-      const maxTx = Math.min(cols - 2, Math.floor((prop.x + pad) / TILE_SIZE));
-      const minTy = Math.max(1, Math.floor((prop.y - pad) / TILE_SIZE));
-      const maxTy = Math.min(rows - 2, Math.floor((prop.y + pad) / TILE_SIZE));
-      for (let ty = minTy; ty <= maxTy; ty++) {
-        for (let tx = minTx; tx <= maxTx; tx++) {
-          const idx = ty * cols + tx;
-          if (idx === startIdx || idx === goalIdx) continue;
-          const cx = tx * TILE_SIZE + TILE_SIZE * 0.5;
-          const cy = ty * TILE_SIZE + TILE_SIZE * 0.5;
-          const dx = cx - prop.x;
-          const dy = cy - prop.y;
-          if (dx * dx + dy * dy < pad * pad) {
-            bfsPropBlockedStampScratch[idx] = stamp;
-            hasPropMask = true;
+      activeBlockingCount += 1;
+      propSig = Math.imul(propSig ^ Math.round(prop.x * 4), 16777619);
+      propSig = Math.imul(propSig ^ Math.round(prop.y * 4), 16777619);
+      propSig = Math.imul(propSig ^ Math.round(prop.radius * 4), 16777619);
+    }
+
+    if (activeBlockingCount > 0) {
+      if (
+        cachedBfsPropMap === map &&
+        cachedBfsPropSig === propSig &&
+        cachedBfsPropCount === activeBlockingCount &&
+        cachedBfsPadExtra === padExtra &&
+        cachedBfsPropStamp > 0
+      ) {
+        propMaskStamp = cachedBfsPropStamp;
+        hasPropMask = cachedBfsPropHasBlockedTile;
+      } else {
+        propMaskStamp = allocBfsStamp();
+        let anyBlocked = false;
+        for (let i = 0; i < props.length; i++) {
+          const prop = props[i]!;
+          if (prop.hp <= 0 || !prop.blocksMovement || prop.coverState === 'fallen') continue;
+          const pad = prop.radius + padExtra;
+          const minTx = Math.max(1, Math.floor((prop.x - pad) / TILE_SIZE));
+          const maxTx = Math.min(cols - 2, Math.floor((prop.x + pad) / TILE_SIZE));
+          const minTy = Math.max(1, Math.floor((prop.y - pad) / TILE_SIZE));
+          const maxTy = Math.min(rows - 2, Math.floor((prop.y + pad) / TILE_SIZE));
+          for (let ty = minTy; ty <= maxTy; ty++) {
+            for (let tx = minTx; tx <= maxTx; tx++) {
+              const cx = tx * TILE_SIZE + TILE_SIZE * 0.5;
+              const cy = ty * TILE_SIZE + TILE_SIZE * 0.5;
+              const dx = cx - prop.x;
+              const dy = cy - prop.y;
+              if (dx * dx + dy * dy < pad * pad) {
+                bfsPropBlockedStampScratch[ty * cols + tx] = propMaskStamp;
+                anyBlocked = true;
+              }
+            }
           }
         }
+        cachedBfsPropMap = map;
+        cachedBfsPropSig = propSig;
+        cachedBfsPropCount = activeBlockingCount;
+        cachedBfsPadExtra = padExtra;
+        cachedBfsPropStamp = propMaskStamp;
+        cachedBfsPropHasBlockedTile = anyBlocked;
+        hasPropMask = anyBlocked;
       }
     }
   }
 
-  const runBfs = (curStamp: number, usePropMask: boolean): boolean => {
-    let head = 0;
-    let tail = 1;
-    bfsVisitStampScratch[startIdx] = curStamp;
-    bfsParentScratch[startIdx] = -1;
-    bfsQueueXScratch[0] = sTx;
-    bfsQueueYScratch[0] = sTy;
-    while (head < tail) {
-      const cx = bfsQueueXScratch[head]!;
-      const cy = bfsQueueYScratch[head]!;
-      const cIdx = cy * cols + cx;
-      head += 1;
-      if (cIdx === goalIdx) return true;
-      for (let k = 0; k < 4; k++) {
-        const nx = cx + CARDINAL_DIRS[k]![0];
-        const ny = cy + CARDINAL_DIRS[k]![1];
-        if (nx <= 0 || ny <= 0 || nx >= cols - 1 || ny >= rows - 1) continue;
-        const nIdx = ny * cols + nx;
-        if (bfsVisitStampScratch[nIdx] === curStamp) continue;
-        if (usePropMask && bfsPropBlockedStampScratch[nIdx] === stamp) continue;
-        const walkable =
-          tiles[nIdx] === 'floor' && (ignoreChasm || surfaces[nIdx] !== 'chasm');
-        if (!walkable && nIdx !== goalIdx) continue;
-        bfsVisitStampScratch[nIdx] = curStamp;
-        bfsParentScratch[nIdx] = cIdx;
-        bfsQueueXScratch[tail] = nx;
-        bfsQueueYScratch[tail] = ny;
-        tail += 1;
-      }
-    }
-    return false;
-  };
-
+  const visitStamp = allocBfsStamp();
   let usedPropMask = hasPropMask;
-  let found = runBfs(stamp, hasPropMask);
+  let found = runBfsOnScratch(
+    map,
+    sTx,
+    sTy,
+    startIdx,
+    goalIdx,
+    ignoreChasm,
+    visitStamp,
+    hasPropMask,
+    propMaskStamp,
+  );
   if (!found && hasPropMask) {
-    const fallbackStamp = allocStamp();
+    const fallbackStamp = allocBfsStamp();
     usedPropMask = false;
-    found = runBfs(fallbackStamp, false);
+    found = runBfsOnScratch(
+      map,
+      sTx,
+      sTy,
+      startIdx,
+      goalIdx,
+      ignoreChasm,
+      fallbackStamp,
+      false,
+      0,
+    );
   }
-  if (!found) return { x: targetX, y: targetY };
+  if (!found) {
+    if (out) {
+      out.x = targetX;
+      out.y = targetY;
+      return out;
+    }
+    return { x: targetX, y: targetY };
+  }
 
   let firstStep = goalIdx;
   let secondStep = goalIdx;
@@ -686,17 +787,25 @@ export function findNextWalkableWaypoint(
       isWalkableTileWithChasmFlag(map, sTx, ty2, ignoreChasm) &&
       isWalkableTileWithChasmFlag(map, tx2, sTy, ignoreChasm) &&
       (!usedPropMask ||
-        (bfsPropBlockedStampScratch[corner1Idx] !== stamp &&
-          bfsPropBlockedStampScratch[corner2Idx] !== stamp));
+        ((corner1Idx === startIdx ||
+          corner1Idx === goalIdx ||
+          bfsPropBlockedStampScratch[corner1Idx] !== propMaskStamp) &&
+          (corner2Idx === startIdx ||
+            corner2Idx === goalIdx ||
+            bfsPropBlockedStampScratch[corner2Idx] !== propMaskStamp)));
     if (isCollinear || cornersClear) {
       chosenIdx = secondStep;
     }
   }
 
-  return {
-    x: (chosenIdx % cols) * TILE_SIZE + TILE_SIZE * 0.5,
-    y: Math.floor(chosenIdx / cols) * TILE_SIZE + TILE_SIZE * 0.5,
-  };
+  const resX = (chosenIdx % cols) * TILE_SIZE + TILE_SIZE * 0.5;
+  const resY = Math.floor(chosenIdx / cols) * TILE_SIZE + TILE_SIZE * 0.5;
+  if (out) {
+    out.x = resX;
+    out.y = resY;
+    return out;
+  }
+  return { x: resX, y: resY };
 }
 
 function isInCrumblingRingPillarFootprint(
@@ -1656,6 +1765,7 @@ export function configureRoomLayout(
   map.propAnchors = propAnchors;
   map.lastLayoutResult = result;
   map.lastRoomLayout = result;
+  map.recountDynamicSurfaces();
   map.rebuildSolidBoxes();
   map.mapRevision += 1;
   return result;

@@ -69,6 +69,10 @@ export class CoopRoomAuthority {
   private snapshotSeq = 0;
   private hostName = 'Chủ Phòng';
   private disposed = false;
+  private lastEmittedInHub: boolean | null = null;
+  private lastEmittedPlayerCount = -1;
+  private lastEmittedSeed: number | null = null;
+  private lastEmittedHostName = '';
   private readonly isDebugEnabled: () => boolean;
   private readonly onDebugRejected?: (sessionId: string, cmdName: string) => void;
   private readonly reconnectGraceMs: number;
@@ -133,7 +137,15 @@ export class CoopRoomAuthority {
         this.sim.currentFloor !== prevFloor ||
         this.sim.currentRoomId !== prevRoomId ||
         this.sim.runState !== prevRunState;
-      this.emitStateChange();
+      const curPlayerCount = this.sim.getAllPlayers().length;
+      const summaryChanged =
+        this.sim.inHub !== this.lastEmittedInHub ||
+        curPlayerCount !== this.lastEmittedPlayerCount ||
+        this.seed !== this.lastEmittedSeed ||
+        this.hostName !== this.lastEmittedHostName;
+      if (summaryChanged || this.sim.tick % 15 === 0) {
+        this.emitStateChange();
+      }
       if (structuralChanged || this.snapshotTickCounter >= 2) {
         this.snapshotTickCounter = 0;
         const snap = encodeWorldSnapshot(
@@ -729,6 +741,19 @@ export class CoopRoomAuthority {
   }
 
   private emitStateChange(): void {
-    this.onStateChange?.(this.getStateSummary());
+    const playerCount = this.sim.getAllPlayers().length;
+    this.lastEmittedInHub = this.sim.inHub;
+    this.lastEmittedPlayerCount = playerCount;
+    this.lastEmittedSeed = this.seed;
+    this.lastEmittedHostName = this.hostName;
+    if (this.onStateChange) {
+      this.onStateChange({
+        tick: this.sim.tick,
+        seed: this.seed,
+        playerCount,
+        inHub: this.sim.inHub,
+        hostName: this.hostName,
+      });
+    }
   }
 }
