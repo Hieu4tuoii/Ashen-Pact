@@ -609,7 +609,7 @@ describe('Task 5 — Shared Runtime Sprite Atlas for CutoutRig Parts, Weapons & 
     };
     applyCameraViewportImpl.call(gameSceneStub as never);
     expect(pv.sprite.texture.key.startsWith('atlas_rig_prop_')).toBe(true);
-    expect(pv.sprite.frame.name).toBe('prop_moss_table');
+    expect(pv.sprite.frame.name).toBe('prop_moss_table_flipped');
     expect(pv.shadow.texture.key.startsWith('atlas_rig_prop_')).toBe(true);
     expect(pv.shadow.frame.name).toBe('prop_shadow');
     expect(weaponIcon.texture.key.startsWith('atlas_rig_prop_')).toBe(true);
@@ -806,5 +806,99 @@ describe('Task 5 — Shared Runtime Sprite Atlas for CutoutRig Parts, Weapons & 
     expect(visAShadowMock.texture.key.startsWith('atlas_rig_prop_')).toBe(true);
     expect(visAShadowMock.frame.name).toBe('prop_shadow');
     expect(visAShadowMock.scaleX).toBeCloseTo((1 / 8) * 0.65, 5);
+  });
+
+  it('7. immediately restores stateful cover variants, cooldown cryo_prism_pillar, kit cryoShatterSpire scale, and wide prop shadow scales on bakeScale change while paused', () => {
+    const bakedScene = createMockBakerAndSpriteScene();
+    const phaserScene = bakedScene as unknown as Phaser.Scene;
+    TextureBaker.bakeAll(phaserScene, 1.5, true);
+    expect(TextureBaker.getBakeScale()).toBe(4);
+
+    const sim = new WorldSim({ seed: 707, startInHub: false });
+    sim.props.length = 0;
+
+    const table = sim.spawnProp('moss_table', 240, 220);
+    sim.flipCoverProp(table, sim.player);
+
+    const prism = sim.spawnProp('cryo_prism_pillar', 320, 220);
+    prism.prismPulseCooldownSec = 2.5;
+
+    const spire = sim.spawnProp('glacial_spike', 400, 220);
+    spire.cryoShatterSpire = true;
+
+    const gameSceneStub = {
+      add: bakedScene.add,
+      textures: bakedScene.textures,
+      scale: { width: 1920, height: 1080 },
+      cameras: {
+        main: {
+          setZoom: vi.fn(),
+          centerOn: vi.fn(),
+          width: 960,
+          height: 540,
+        },
+      },
+      transport: { getSim: () => sim },
+      activePropIds: new Set<number>(),
+      propVisuals: new Map<
+        number,
+        {
+          sprite: MockSpriteRecord;
+          shadow: MockSpriteRecord;
+          kind: string;
+          lastHp: number;
+          flashTimer: number;
+          isFlashed: boolean;
+        }
+      >(),
+      pushBlockVisuals: new Map(),
+      pushBlockSyncGeneration: 0,
+      hudContainer: {},
+      pauseModalOpen: true,
+      invalidateAllHudCaches: vi.fn(),
+      syncRoomEntities: vi.fn(),
+      updateModalHud: vi.fn(),
+      rebuildPauseModal: vi.fn(),
+      syncProps: vi.fn((dt: number) => {
+        syncPropsImpl.call(gameSceneStub as never, dt);
+      }),
+    };
+
+    syncPropsImpl.call(gameSceneStub as never, 0);
+    const pvTable = gameSceneStub.propVisuals.get(table.id)!;
+    const pvPrism = gameSceneStub.propVisuals.get(prism.id)!;
+    const pvSpire = gameSceneStub.propVisuals.get(spire.id)!;
+
+    expect(pvTable.sprite.frame.name).toBe('prop_moss_table_flipped');
+    expect(pvPrism.sprite.frame.name).toBe('prop_cryo_prism_pillar_cooldown');
+    expect(pvSpire.sprite.texture.key).toBe('fx_cutout_kit_512');
+    expect(pvSpire.sprite.frame.name).toBe('prop_cryo_spire');
+    expect(pvSpire.sprite.scaleX).toBeCloseTo(1 / 3, 5);
+
+    gameSceneStub.syncProps.mockClear();
+
+    // Trigger viewport/DPR re-bake (bakeScale 4 -> 8) while paused (no GameScene.update tick)
+    (globalThis as { window?: unknown }).window = {
+      devicePixelRatio: 2,
+      location: { search: '' },
+    };
+    applyCameraViewportImpl.call(gameSceneStub as never);
+    expect(TextureBaker.getBakeScale()).toBe(8);
+    expect(gameSceneStub.syncProps).toHaveBeenCalledWith(0);
+
+    // Flipped cover prop retains flipped variant and wide shadow scale (> invBake)
+    expect(pvTable.sprite.texture.key.startsWith('atlas_rig_prop_')).toBe(true);
+    expect(pvTable.sprite.frame.name).toBe('prop_moss_table_flipped');
+    expect(pvTable.shadow.scaleX).toBeGreaterThan((1 / 8) * 1.2);
+    expect(pvTable.shadow.scaleY).toBeGreaterThan((1 / 8) * 1.1);
+
+    // Cooldown cryo_prism_pillar retains cooldown frame
+    expect(pvPrism.sprite.texture.key.startsWith('atlas_rig_prop_')).toBe(true);
+    expect(pvPrism.sprite.frame.name).toBe('prop_cryo_prism_pillar_cooldown');
+
+    // cryoShatterSpire retains fx_cutout_kit_512 + fixed 1/3 scale (not overwritten to 1/8)
+    expect(pvSpire.sprite.texture.key).toBe('fx_cutout_kit_512');
+    expect(pvSpire.sprite.frame.name).toBe('prop_cryo_spire');
+    expect(pvSpire.sprite.scaleX).toBeCloseTo(1 / 3, 5);
   });
 });

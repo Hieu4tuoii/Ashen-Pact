@@ -20,6 +20,7 @@ import {
 } from './tapered-ribbon-builder.js';
 import {
   ALL_CUTOUT_KIT_FRAME_KEYS,
+  CUTOUT_KIT_ATLAS_KEY,
 } from '../art/texture-baker-fx.js';
 
 const CUTOUT_KIT_SET = new Set<string>(ALL_CUTOUT_KIT_FRAME_KEYS);
@@ -624,7 +625,12 @@ export function refreshResolution(
     if (!this.casingShadowSlots?.length && p.shadowSprite) {
       p.shadowSprite.setTexture('fx_dust_puff');
     }
-    if (p.active && scaleRatio !== 1 && !(p.frameCount && p.frameCount > 1)) {
+    if (
+      p.active &&
+      scaleRatio !== 1 &&
+      !(p.frameCount && p.frameCount > 1) &&
+      p.textureKey !== CUTOUT_KIT_ATLAS_KEY
+    ) {
       p.startScale *= scaleRatio;
       p.endScale *= scaleRatio;
     } else if (!p.active) {

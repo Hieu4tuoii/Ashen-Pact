@@ -74,6 +74,7 @@ vi.mock('phaser', () => {
   };
 });
 
+import { CUTOUT_KIT_ATLAS_KEY } from '../src/art/texture-baker-fx.js';
 import { ZzfxSynth } from '../src/audio/zzfx.js';
 import {
   activateParticle,
@@ -461,6 +462,58 @@ describe('Task 4 — CombatFxManager Pools, World Overlay Consolidation, Lightin
       expect(uag.clear).toHaveBeenCalledTimes(0);
       expect(wrg.clear).toHaveBeenCalledTimes(0);
       expect(ffg.clear).toHaveBeenCalledTimes(0);
+    });
+
+    it('preserves startScale/endScale on single-frame CUTOUT_KIT_ATLAS_KEY particles across refreshResolution while rescaling bakeScale-dependent particles', () => {
+      const { mockScene } = buildMockFxScene();
+      const fx = new CombatFxManager(mockScene, 16, 8, 8, 4, 16);
+
+      const kitSlot = fx.particlePool[0]!;
+      activateParticle(kitSlot, {
+        textureKey: CUTOUT_KIT_ATLAS_KEY,
+        frameName: 'fx_arc_crescent_cut',
+        x: 200,
+        y: 200,
+        ttl: 0.25,
+        startScale: 1 / 3,
+        endScale: 0.5,
+      });
+      expect(kitSlot.frameCount).toBe(1);
+
+      const directKitSlot = fx.particlePool[1]!;
+      activateParticle(directKitSlot, {
+        textureKey: CUTOUT_KIT_ATLAS_KEY,
+        frameName: 'fx_arc_crescent_cut',
+        x: 210,
+        y: 200,
+        ttl: 0.25,
+        startScale: 1 / 3,
+        endScale: 0.45,
+      });
+      directKitSlot.frameCount = undefined;
+
+      const bakedSlot = fx.particlePool[2]!;
+      activateParticle(bakedSlot, {
+        textureKey: 'fx_spark',
+        x: 220,
+        y: 200,
+        ttl: 0.25,
+        startScale: 0.5,
+        endScale: 0.25,
+      });
+
+      // Simulate zoom/DPI resize from bakeScale 2 -> 4 (scaleRatio = 2 / 4 = 0.5)
+      fx.refreshResolution(4, 2);
+
+      // Fixed-3x CUTOUT_KIT_ATLAS_KEY single-frame particles preserve exact scales
+      expect(kitSlot.startScale).toBeCloseTo(1 / 3, 6);
+      expect(kitSlot.endScale).toBeCloseTo(0.5, 6);
+      expect(directKitSlot.startScale).toBeCloseTo(1 / 3, 6);
+      expect(directKitSlot.endScale).toBeCloseTo(0.45, 6);
+
+      // bakeScale-dependent particle rescales by prevScale / bakeScale = 0.5
+      expect(bakedSlot.startScale).toBeCloseTo(0.25, 6);
+      expect(bakedSlot.endScale).toBeCloseTo(0.125, 6);
     });
   });
 

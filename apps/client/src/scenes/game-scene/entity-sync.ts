@@ -597,6 +597,7 @@ export function syncEnemyRigsImpl(this: GameScene, dtSec: number): void {
       distFromCamera,
     });
 
+    let createdRig = false;
     let rig = this.enemyRigs.get(e.id);
     if (rig && rig.isFastComposite() !== wantFastComposite) {
       rig.destroy();
@@ -604,6 +605,7 @@ export function syncEnemyRigsImpl(this: GameScene, dtSec: number): void {
       rig = undefined;
     }
     if (!rig) {
+      createdRig = true;
       const rigDef = RIG_DEFS_BY_ID[e.defId] ?? RIG_DEFS_BY_ID.goblin_shooter!;
       rig = new CutoutRig(this, e.x, e.y + RIG_FOOT_OFFSET_Y, rigDef, {
         displayScale: e.isElite && !e.isBoss ? 1.22 : 1,
@@ -639,6 +641,7 @@ export function syncEnemyRigsImpl(this: GameScene, dtSec: number): void {
       continue;
     }
 
+    const enteredView = createdRig || rig.container.visible !== true;
     if (rig.container.visible !== true) {
       rig.container.setVisible(true);
     }
@@ -669,7 +672,8 @@ export function syncEnemyRigsImpl(this: GameScene, dtSec: number): void {
     const prevAnimTime = rig.getAnimTime();
     rig.setMoveVelocity(e.vx, e.vy);
     rig.setAnimState(moving ? 'run' : 'idle');
-    if (!sim.stressTestActive || (i + sim.tick) % 2 === 0) {
+    const shouldUpdatePose = !sim.stressTestActive || enteredView || (i + sim.tick) % 2 === 0;
+    if (shouldUpdatePose) {
       rig.update(sim.stressTestActive ? dtSec * 2 : dtSec);
     }
     if (

@@ -1068,4 +1068,178 @@ describe('Task 2 — Static Layer Rasterization, Earcut-Free Motes, Decal Cache 
       globalThis.document = prevDoc;
     }
   });
+
+  it('6. pads dirty sub-rect by +-2 tiles on structural kind changes (wall -> floor) vs +-1 tile on surface-only changes and restores WebGL PMA state', () => {
+    const sim = new WorldSim({ seed: 2027, biome: 1, spawnInitialWave: false });
+    sim.enterRoom(sim.dungeon.startRoomId);
+    const map = sim.map;
+    // Seed an interior wall tile at (14, 10) before building initial mapTileVisuals
+    map.setTile(14, 10, 'wall');
+    map.rebuildSolidBoxes();
+
+    const scale = 2;
+    const expectedW = map.width * scale;
+    const expectedH = map.height * scale;
+
+    const mapTileVisuals: ArenaTileVisual[] = [];
+    for (let ty = 0; ty < map.rows; ty++) {
+      for (let tx = 0; tx < map.cols; tx++) {
+        const distToWall = computeTileDistToWall(map, tx, ty);
+        mapTileVisuals.push({
+          tx,
+          ty,
+          kind: map.getTile(tx, ty),
+          variant: resolveHybridFloorVariant(tx, ty, distToWall),
+          distToWall,
+          autotileMask: map.getAutotileMask(tx, ty),
+          aoMask: map.getWallAmbientOcclusionMask(tx, ty),
+          surface: map.getSurface(tx, ty),
+          surfaceMask: map.getSurfaceAutotileMask(tx, ty),
+        });
+      }
+    }
+
+    const prevDoc = globalThis.document;
+    globalThis.document = {
+      createElement: vi.fn((tag: string) => {
+        if (tag === 'canvas') {
+          return {
+            width: 0,
+            height: 0,
+            getContext: () => ({
+              clearRect: vi.fn(),
+              drawImage: vi.fn(),
+            }),
+          };
+        }
+        return {};
+      }),
+    } as unknown as Document;
+
+    try {
+      const mockWebGLTex = { id: 'arena-webgl-tex-pad' };
+      const mockGl = {
+        TEXTURE_2D: 0x0de1,
+        TEXTURE_BINDING_2D: 0x8069,
+        RGBA: 0x1908,
+        UNSIGNED_BYTE: 0x1401,
+        UNPACK_PREMULTIPLY_ALPHA_WEBGL: 0x9241,
+        UNPACK_FLIP_Y_WEBGL: 0x9240,
+        isContextLost: vi.fn(() => false),
+        getParameter: vi.fn(() => null),
+        bindTexture: vi.fn(),
+        pixelStorei: vi.fn(),
+        texSubImage2D: vi.fn(),
+      };
+
+      const groundCanvas = { width: expectedW, height: expectedH };
+      const groundCtx = {} as CanvasRenderingContext2D;
+      const glTexWrapper = {
+        gl: mockGl,
+        webGLTexture: mockWebGLTex,
+        pma: false,
+        flipY: false,
+      };
+      const mockArenaGroundTex = {
+        width: expectedW,
+        height: expectedH,
+        canvas: groundCanvas,
+        getCanvas: () => groundCanvas,
+        getContext: () => groundCtx,
+        source: [{ glTexture: glTexWrapper as unknown }],
+        refresh: vi.fn(),
+      };
+
+      const renderedTiles: Array<[number, number]> = [];
+      const renderGroundPassSpy = vi.fn();
+      const effectiveBiome: 0 | 1 | 2 | 3 = sim.inHub ? 0 : sim.currentBiome;
+
+      const mockGameScene = {
+        transport: { getSim: () => sim },
+        tileCompositeScale: scale,
+        mapTileVisuals,
+        arenaGroundTex: mockArenaGroundTex,
+        lastRenderedBiome: effectiveBiome,
+        lastConveyorDirection: map.conveyorDirection,
+        lastRenderedRoomKey: `${effectiveBiome}:${sim.currentFloor}:${sim.currentRoomId}`,
+        lastMapRevision:
+          effectiveBiome * 10000000 +
+          sim.currentFloor * 1000000 +
+          sim.currentRoomId * 10000 +
+          map.mapRevision,
+        renderTileCellToComposite: vi.fn((tile: ArenaTileVisual) => {
+          renderedTiles.push([tile.tx, tile.ty]);
+        }),
+        rebuildAllTileCellsToComposite: vi.fn(),
+        biomeArchLive: {
+          renderGroundPass: renderGroundPassSpy,
+        },
+      } as unknown as GameScene;
+
+      // 1. Surface-only change at (8, 10) -> +-1 tile pad ([7..9] x [9..11] = 3x3 = 9 tiles)
+      map.setSurface(8, 10, 'burning_oil', 5.0, false);
+      syncArenaTilesWithMapRevisionImpl.call(mockGameScene);
+
+      expect(renderedTiles).toHaveLength(9);
+      expect(renderGroundPassSpy).toHaveBeenLastCalledWith(groundCtx, map, scale, {
+        x: 7 * TILE_SIZE,
+        y: 9 * TILE_SIZE,
+        width: 3 * TILE_SIZE,
+        height: 3 * TILE_SIZE,
+      });
+      expect(mockGl.texSubImage2D).toHaveBeenLastCalledWith(
+        mockGl.TEXTURE_2D,
+        0,
+        7 * TILE_SIZE * scale,
+        9 * TILE_SIZE * scale,
+        mockGl.RGBA,
+        mockGl.UNSIGNED_BYTE,
+        expect.objectContaining({ width: 3 * TILE_SIZE * scale, height: 3 * TILE_SIZE * scale }),
+      );
+      // Verify pma=false sets UNPACK_PREMULTIPLY_ALPHA_WEBGL=false before upload and restores true after
+      const pmaCalls = mockGl.pixelStorei.mock.calls.filter(
+        (c) => c[0] === mockGl.UNPACK_PREMULTIPLY_ALPHA_WEBGL,
+      );
+      expect(pmaCalls).toEqual([
+        [mockGl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false],
+        [mockGl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true],
+      ]);
+
+      // 2. Structural kind change (wall -> floor) at (14, 10) -> +-2 tile pad ([12..16] x [8..12] = 5x5 = 25 tiles)
+      renderedTiles.length = 0;
+      renderGroundPassSpy.mockClear();
+      mockGl.texSubImage2D.mockClear();
+
+      map.setTile(14, 10, 'floor');
+      map.rebuildSolidBoxes();
+      syncArenaTilesWithMapRevisionImpl.call(mockGameScene);
+
+      expect(mockGameScene.rebuildAllTileCellsToComposite).not.toHaveBeenCalled();
+      expect(renderedTiles).toHaveLength(25);
+      for (let ty = 8; ty <= 12; ty++) {
+        for (let tx = 12; tx <= 16; tx++) {
+          expect(renderedTiles).toContainEqual([tx, ty]);
+        }
+      }
+      expect(renderGroundPassSpy).toHaveBeenCalledTimes(1);
+      expect(renderGroundPassSpy).toHaveBeenCalledWith(groundCtx, map, scale, {
+        x: 12 * TILE_SIZE,
+        y: 8 * TILE_SIZE,
+        width: 5 * TILE_SIZE,
+        height: 5 * TILE_SIZE,
+      });
+      expect(mockGl.texSubImage2D).toHaveBeenCalledTimes(1);
+      expect(mockGl.texSubImage2D).toHaveBeenCalledWith(
+        mockGl.TEXTURE_2D,
+        0,
+        12 * TILE_SIZE * scale,
+        8 * TILE_SIZE * scale,
+        mockGl.RGBA,
+        mockGl.UNSIGNED_BYTE,
+        expect.objectContaining({ width: 5 * TILE_SIZE * scale, height: 5 * TILE_SIZE * scale }),
+      );
+    } finally {
+      globalThis.document = prevDoc;
+    }
+  });
 });

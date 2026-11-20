@@ -799,6 +799,91 @@ describe('Task 3 — Zero-Alloc CutoutRig, setDepth Sort Guard, Frustum Culling 
       expect(evalMock).toHaveBeenCalledTimes(1);
     });
 
+    it('immediately runs rig.update() when an enemy spawns or re-enters worldView on an odd (i + sim.tick) frame in stressTestActive mode', () => {
+      const sim = new WorldSim({
+        seed: 3030,
+        spawnInitialWave: false,
+        includeTrainingDummy: false,
+        includeProps: false,
+      });
+      sim.stressTestActive = true;
+      sim.enemies.length = 0;
+
+      // Enemy 0 starts offscreen right of worldView
+      const enemy = sim.spawnEnemy('goblin_shooter', 1260, 270, true);
+      enemy.aiState = 'chase';
+      enemy.vx = -120;
+      enemy.vy = 0;
+      enemy.aimAngle = Math.PI;
+
+      const mockScene = {
+        transport: {
+          getSim: () => sim,
+          getInterpolatedEnemyPos: (
+            e: { x: number; y: number },
+            out: { x: number; y: number },
+          ) => {
+            out.x = e.x;
+            out.y = e.y;
+            return out;
+          },
+        },
+        cameras: { main: { worldView: { x: 0, y: 0, width: 960, height: 540 } } },
+        camFocusX: 480,
+        camFocusY: 270,
+        add: {
+          container: vi.fn((x = 0, y = 0) => createMockContainer(x, y)),
+          sprite: vi.fn((_x: number, _y: number, tex: string) => createMockSprite(tex)),
+        },
+        enemyRigs: new Map<number, CutoutRig>(),
+        activeEnemyIds: new Set<number>(),
+        entityPosScratch: { x: 0, y: 0 },
+        resolveEnemyStatusTint: () => null,
+        fx: {
+          spawnFootstepDust: vi.fn(),
+          bossKillSequenceState: null,
+        },
+      };
+
+      // Tick 10 (even): enemy 0 is offscreen -> hidden, update() not called
+      sim.tick = 10;
+      syncEnemyRigsImpl.call(mockScene as never, 1 / 60);
+      const rig = mockScene.enemyRigs.get(enemy.id)!;
+      expect(rig).toBeDefined();
+      expect(rig.container.visible).toBe(false);
+
+      const updateSpy = vi.spyOn(rig, 'update');
+
+      // Tick 11: (i=0 + tick=11) % 2 === 1 (ODD!), enemy re-enters worldView -> MUST immediately run rig.update()
+      sim.tick = 11;
+      enemy.x = 920;
+      syncEnemyRigsImpl.call(mockScene as never, 1 / 60);
+      expect(rig.container.visible).toBe(true);
+      expect(updateSpy).toHaveBeenCalledTimes(1);
+
+      // Tick 13: (i=0 + tick=13) % 2 === 1 (ODD), already in view -> skips pose update on odd steady-state frame
+      updateSpy.mockClear();
+      sim.tick = 13;
+      syncEnemyRigsImpl.call(mockScene as never, 1 / 60);
+      expect(updateSpy).not.toHaveBeenCalled();
+
+      // Tick 14: spawn a brand-new enemy at i=1 in view -> (i=1 + tick=14) % 2 === 1 (ODD!), MUST also run rig.update() immediately
+      const protoUpdateSpy = vi.spyOn(CutoutRig.prototype, 'update');
+      try {
+        const spawnedInView = sim.spawnEnemy('goblin_shooter', 500, 270, true);
+        spawnedInView.aiState = 'chase';
+        sim.tick = 14;
+        updateSpy.mockClear();
+        protoUpdateSpy.mockClear();
+        syncEnemyRigsImpl.call(mockScene as never, 1 / 60);
+        // Both i=0 (even: 0+14=14 via instance spy) AND newly spawned i=1 (odd: 1+14=15, enteredView=true via prototype spy) run update()
+        expect(updateSpy).toHaveBeenCalledTimes(1);
+        expect(protoUpdateSpy).toHaveBeenCalledTimes(1);
+      } finally {
+        protoUpdateSpy.mockRestore();
+      }
+    });
+
     it('frustum-culls offscreen door barrier uniform & mote updates when >80px outside worldView and restores when in view', () => {
       const sim = new WorldSim({
         seed: 4040,

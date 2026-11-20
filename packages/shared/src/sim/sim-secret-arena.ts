@@ -63,6 +63,8 @@ function purgeEnemyProjectilesAndHazards(sim: WorldSim): void {
   }
   sim.projectiles.length = writeIdx;
   if (destroyedIds.length > 0) {
+    sim.recountProjectileTeams();
+    sim.bulletSpatialGridPhase += 1;
     sim.recordDestroyedProjectiles(destroyedIds);
   }
   sim.pendingVengefulRings.length = 0;

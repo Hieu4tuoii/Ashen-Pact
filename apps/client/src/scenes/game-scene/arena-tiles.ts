@@ -54,6 +54,7 @@ import {
 } from '../../world/biome-architecture.js';
 import { type ArenaTileVisual, type GameScene, RIG_FOOT_OFFSET_Y } from '../GameScene.js';
 import type { HudScene } from '../HudScene.js';
+import { syncPropsImpl } from './entity-sync.js';
 import { applyHudEdgeAnchors } from './hud-setup-and-pause.js';
 import {
   canTeleportFromCurrentRoom,
@@ -1547,9 +1548,9 @@ function uploadArenaGroundSubRect(
         ? (gl.getParameter(gl.TEXTURE_BINDING_2D) as WebGLTexture | null)
         : undefined;
 
+      const pma = glWrapper.pma ?? true;
       gl.bindTexture(gl.TEXTURE_2D, webGLTex);
       if (typeof gl.pixelStorei === 'function') {
-        const pma = glWrapper.pma ?? true;
         if (gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL !== undefined) {
           gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, pma);
         }
@@ -1566,6 +1567,13 @@ function uploadArenaGroundSubRect(
         gl.UNSIGNED_BYTE,
         patch.canvas,
       );
+      if (
+        !pma &&
+        typeof gl.pixelStorei === 'function' &&
+        gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL !== undefined
+      ) {
+        gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
+      }
       if (hasBindingQuery) {
         gl.bindTexture(gl.TEXTURE_2D, prevTex ?? null);
       }
@@ -1722,10 +1730,11 @@ export function syncArenaTilesWithMapRevisionImpl(this: GameScene): void {
         if (dt.ty < minTy) minTy = dt.ty;
         if (dt.ty > maxTy) maxTy = dt.ty;
       }
-      minTx = Math.max(0, minTx - 1);
-      maxTx = Math.min(map.cols - 1, maxTx + 1);
-      minTy = Math.max(0, minTy - 1);
-      maxTy = Math.min(map.rows - 1, maxTy + 1);
+      const pad = anyKindChanged ? 2 : 1;
+      minTx = Math.max(0, minTx - pad);
+      maxTx = Math.min(map.cols - 1, maxTx + pad);
+      minTy = Math.max(0, minTy - pad);
+      maxTy = Math.min(map.rows - 1, maxTy + pad);
 
       for (let ty = minTy; ty <= maxTy; ty++) {
         const rowOff = ty * map.cols;
@@ -2154,12 +2163,29 @@ export function applyCameraViewportImpl(this: GameScene): void {
     }
     if (this.hudContainer) {
       this.invalidateAllHudCaches();
+      if (sim) {
+        if (typeof this.syncProps === 'function') {
+          this.syncProps(0);
+        } else {
+          syncPropsImpl.call(this, 0);
+        }
+      }
       if (!sim?.stressTestActive) {
         this.syncRoomEntities(0);
       }
       this.updateModalHud();
       if (this.pauseModalOpen) {
         this.rebuildPauseModal();
+      }
+    } else if (
+      sim &&
+      ((this.propVisuals && this.propVisuals.size > 0 && this.activePropIds) ||
+        Object.prototype.hasOwnProperty.call(this, 'syncProps'))
+    ) {
+      if (typeof this.syncProps === 'function') {
+        this.syncProps(0);
+      } else {
+        syncPropsImpl.call(this, 0);
       }
     }
     this.settingsModal?.refreshResolution(newScale);
