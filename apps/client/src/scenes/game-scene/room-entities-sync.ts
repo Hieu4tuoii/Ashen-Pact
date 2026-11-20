@@ -90,6 +90,8 @@ export function syncSummonCutoutVisuals(
   }
 
   activeSummonIdsScratch.length = 0;
+  const shadowScale = (1 / TextureBaker.getBakeScale()) * 0.65;
+  const shadowBinding = TextureBaker.resolveAtlasBinding(scene, 'prop_shadow');
 
   for (let i = 0; i < summons.length; i++) {
     const sum = summons[i]!;
@@ -143,6 +145,11 @@ export function syncSummonCutoutVisuals(
         vis.aimAngleRad = 0;
         vis.recoilPx = 0;
         vis.lastAppliedTint = undefined;
+        if (shadowBinding.frameName !== undefined) {
+          vis.shadow.setTexture(shadowBinding.textureKey, shadowBinding.frameName);
+        } else {
+          vis.shadow.setTexture(shadowBinding.textureKey);
+        }
         vis.shadow.setVisible(true).setActive(true);
         vis.base.setVisible(true).setActive(true);
         vis.base.setTexture(CUTOUT_KIT_ATLAS_KEY, baseFrame);
@@ -158,13 +165,12 @@ export function syncSummonCutoutVisuals(
           vis.head.setVisible(false).setActive(false);
         }
       } else {
-        const shadowBinding = TextureBaker.resolveAtlasBinding(scene, 'prop_shadow');
         const shadow =
           shadowBinding.frameName !== undefined
             ? scene.add.sprite(sum.x, sum.y + 6, shadowBinding.textureKey, shadowBinding.frameName)
             : scene.add.sprite(sum.x, sum.y + 6, shadowBinding.textureKey);
         setDepthIfChanged(shadow, 19.0);
-        shadow.setScale(1 / 3);
+        shadow.setScale(shadowScale);
         setBlendModeIfChanged(shadow, Phaser.BlendModes.NORMAL);
 
         const base = scene.add.sprite(sum.x, sum.y, CUTOUT_KIT_ATLAS_KEY, baseFrame);
@@ -198,7 +204,7 @@ export function syncSummonCutoutVisuals(
 
     setDepthIfChanged(vis.shadow, 19.0);
     vis.shadow.setPosition(sum.x, sum.y + (sum.kind === 'sacred_tree' ? 8 : 6));
-    vis.shadow.setScale(1 / 3);
+    vis.shadow.setScale(shadowScale);
     vis.shadow.setAlpha(alphaVal * 0.7);
 
     setDepthIfChanged(vis.base, baseDepth);

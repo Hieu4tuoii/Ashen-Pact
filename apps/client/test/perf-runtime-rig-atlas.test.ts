@@ -1,4 +1,4 @@
-import { WorldSim } from '@ashen-pact/shared';
+import { type SimSummonState, WorldSim } from '@ashen-pact/shared';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('phaser', () => {
@@ -50,7 +50,10 @@ vi.mock('phaser', () => {
 import type Phaser from 'phaser';
 import { CutoutRig } from '../src/art/cutout-rig.js';
 import { GOBLIN_SHOOTER_RIG_DEF, VANGUARD_RIG_DEF } from '../src/art/rig-defs.js';
-import { bakeCustomCanvas } from '../src/art/texture-baker-canvas.js';
+import {
+  bakeCustomCanvas,
+  countRetainedAtlasFallbackCanvases,
+} from '../src/art/texture-baker-canvas.js';
 import {
   computeTotalVramBytes,
   isPreExistingNonVfxWorldOrRigTextureKey,
@@ -60,6 +63,10 @@ import * as TextureBakerModule from '../src/art/texture-baker.js';
 import { TextureBaker } from '../src/art/texture-baker.js';
 import { applyCameraViewportImpl } from '../src/scenes/game-scene/arena-tiles.js';
 import { syncPropsImpl } from '../src/scenes/game-scene/entity-sync.js';
+import {
+  type PooledSummonVisual,
+  syncSummonCutoutVisuals,
+} from '../src/scenes/game-scene/room-entities-sync.js';
 
 interface RecordedFrame {
   name: number | string;
@@ -681,5 +688,123 @@ describe('Task 5 — Shared Runtime Sprite Atlas for CutoutRig Parts, Weapons & 
     const contextCallsBefore = mockScene.getContextCalls.length;
     TextureBaker.bakeAll(phaserScene, 1.5, false);
     expect(mockScene.getContextCalls.length).toBe(contextCallsBefore);
+  });
+
+  it('5. releases all temporary offscreen fallbackCanvas references once atlas pages upload', () => {
+    const mockScene = createMockBakerAndSpriteScene();
+    const phaserScene = mockScene as unknown as Phaser.Scene;
+
+    TextureBaker.bakeAll(phaserScene, 1.5, true);
+    expect(countRetainedAtlasFallbackCanvases(phaserScene)).toBe(0);
+
+    // Also verify progressive two-stage boot releases fallbackCanvas references after each flush
+    const progressiveScene = createMockBakerAndSpriteScene();
+    const phaserProgressive = progressiveScene as unknown as Phaser.Scene;
+    TextureBaker.bakeStageRigsAndArsenal(phaserProgressive, 1.5);
+    expect(countRetainedAtlasFallbackCanvases(phaserProgressive)).toBe(0);
+    TextureBaker.bakeStageWorldAndPortals(phaserProgressive, 1.5);
+    expect(countRetainedAtlasFallbackCanvases(phaserProgressive)).toBe(0);
+  });
+
+  it('6. scales summon shadows by (1 / bakeScale) * 0.65 and rebinds both active and pooled summon shadows across viewport resize', () => {
+    const bakedScene = createMockBakerAndSpriteScene();
+    const phaserScene = bakedScene as unknown as Phaser.Scene;
+    TextureBaker.bakeAll(phaserScene, 1.5, true);
+    expect(TextureBaker.getBakeScale()).toBe(4);
+
+    const sim = new WorldSim({ seed: 606, startInHub: false });
+    const summonVisuals = new Map<number, PooledSummonVisual>();
+    const summonSpritePool: PooledSummonVisual[] = [];
+    const gameSceneStub = {
+      add: bakedScene.add,
+      textures: bakedScene.textures,
+      scale: { width: 1920, height: 1080 },
+      cameras: {
+        main: {
+          setZoom: vi.fn(),
+          centerOn: vi.fn(),
+          width: 960,
+          height: 540,
+        },
+      },
+      transport: { getSim: () => sim },
+      summonVisuals,
+      summonSpritePool,
+      groundHazardGraphics: undefined,
+    };
+
+    const summonA: SimSummonState = {
+      id: 101,
+      kind: 'tesla_turret',
+      ownerPlayerId: 1,
+      x: 260,
+      y: 240,
+      hp: 40,
+      maxHp: 40,
+      ttlSec: 8,
+      auraRadius: 96,
+      tickTimer: 0.4,
+    };
+    const summonB: SimSummonState = {
+      id: 102,
+      kind: 'life_blossom',
+      ownerPlayerId: 1,
+      x: 320,
+      y: 260,
+      hp: 30,
+      maxHp: 30,
+      ttlSec: 8,
+      auraRadius: 80,
+      tickTimer: 0.4,
+    };
+
+    syncSummonCutoutVisuals(gameSceneStub as never, [summonA, summonB], 1, 1.0);
+    const visA = summonVisuals.get(101)!;
+    const visB = summonVisuals.get(102)!;
+    expect(visA.shadow.texture.key.startsWith('atlas_rig_prop_')).toBe(true);
+    expect(visA.shadow.frame.name).toBe('prop_shadow');
+    expect(visA.shadow.scaleX).toBeCloseTo((1 / 4) * 0.65, 5);
+    expect(visB.shadow.scaleX).toBeCloseTo((1 / 4) * 0.65, 5);
+
+    // Expire summonA so visA enters summonSpritePool while visB stays active
+    syncSummonCutoutVisuals(gameSceneStub as never, [summonB], 1, 0.016);
+    expect(summonSpritePool).toHaveLength(1);
+    expect(summonSpritePool[0]).toBe(visA);
+
+    const visAShadowMock = visA.shadow as unknown as MockSpriteRecord;
+    const visBShadowMock = visB.shadow as unknown as MockSpriteRecord;
+    visAShadowMock.setTexture.mockClear();
+    visBShadowMock.setTexture.mockClear();
+
+    // Trigger resize/DPR re-bake (bakeScale 4 -> 8)
+    (globalThis as { window?: unknown }).window = {
+      devicePixelRatio: 2,
+      location: { search: '' },
+    };
+    applyCameraViewportImpl.call(gameSceneStub as never);
+    expect(TextureBaker.getBakeScale()).toBe(8);
+
+    // Both active (visB) AND pooled (visA) summon shadows must be rebound and rescaled to (1 / 8) * 0.65
+    expect(visBShadowMock.setTexture).toHaveBeenCalled();
+    expect(visBShadowMock.scaleX).toBeCloseTo((1 / 8) * 0.65, 5);
+    expect(visAShadowMock.setTexture).toHaveBeenCalled();
+    expect(visAShadowMock.texture.key.startsWith('atlas_rig_prop_')).toBe(true);
+    expect(visAShadowMock.frame.name).toBe('prop_shadow');
+    expect(visAShadowMock.scaleX).toBeCloseTo((1 / 8) * 0.65, 5);
+
+    // Simulate stale texture on pooled shadow and verify popping from summonSpritePool also rebinds prop_shadow
+    visAShadowMock.setTexture('stale_destroyed_atlas', undefined);
+    visAShadowMock.setTexture.mockClear();
+    const summonC: SimSummonState = {
+      ...summonA,
+      id: 103,
+    };
+    syncSummonCutoutVisuals(gameSceneStub as never, [summonB, summonC], 1, 0.016);
+    const visC = summonVisuals.get(103)!;
+    expect(visC).toBe(visA);
+    expect(visAShadowMock.setTexture).toHaveBeenCalled();
+    expect(visAShadowMock.texture.key.startsWith('atlas_rig_prop_')).toBe(true);
+    expect(visAShadowMock.frame.name).toBe('prop_shadow');
+    expect(visAShadowMock.scaleX).toBeCloseTo((1 / 8) * 0.65, 5);
   });
 });

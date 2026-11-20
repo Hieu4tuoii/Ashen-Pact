@@ -15,7 +15,7 @@ interface PackedAtlasEntry {
   y: number;
   w: number;
   h: number;
-  fallbackCanvas: HTMLCanvasElement;
+  fallbackCanvas?: HTMLCanvasElement;
 }
 
 interface FreeAtlasRect {
@@ -389,7 +389,9 @@ function flushRigPropAtlasPages(scene: Phaser.Scene, state: RigPropAtlasState): 
           }
           for (let ei = 0; ei < fallbackPage.entries.length; ei++) {
             const entry = fallbackPage.entries[ei]!;
-            registerStandaloneCanvasTexture(scene, entry.key, entry.fallbackCanvas);
+            if (entry.fallbackCanvas) {
+              registerStandaloneCanvasTexture(scene, entry.key, entry.fallbackCanvas);
+            }
           }
         }
         state.pages = [];
@@ -406,6 +408,7 @@ function flushRigPropAtlasPages(scene: Phaser.Scene, state: RigPropAtlasState): 
     for (let i = page.registeredCount; i < page.entries.length; i++) {
       const entry = page.entries[i]!;
       page.uploadedTex.add(entry.key, 0, entry.x, entry.y, entry.w, entry.h);
+      entry.fallbackCanvas = undefined;
     }
     page.registeredCount = page.entries.length;
   }
@@ -454,6 +457,23 @@ export function hasActiveRigPropAtlas(scene: Phaser.Scene | undefined): boolean 
     }
   }
   return true;
+}
+
+export function countRetainedAtlasFallbackCanvases(scene: Phaser.Scene | undefined): number {
+  const texMgr = scene?.textures as unknown as object | undefined;
+  if (!texMgr) return 0;
+  const state = atlasStateByTexMgr.get(texMgr);
+  if (!state) return 0;
+  let count = 0;
+  for (let p = 0; p < state.pages.length; p++) {
+    const entries = state.pages[p]!.entries;
+    for (let i = 0; i < entries.length; i++) {
+      if (entries[i]!.fallbackCanvas !== undefined) {
+        count += 1;
+      }
+    }
+  }
+  return count;
 }
 
 export function bakeCustomCanvas(

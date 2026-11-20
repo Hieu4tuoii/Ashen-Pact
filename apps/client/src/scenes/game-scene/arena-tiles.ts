@@ -1980,6 +1980,7 @@ export function applyCameraViewportImpl(this: GameScene): void {
         vis.shadow.setScale(invBake);
       }
     }
+    const summonShadowScale = invBake * 0.65;
     if (this.summonVisuals) {
       for (const vis of this.summonVisuals.values()) {
         if (shadowBinding.frameName !== undefined) {
@@ -1987,7 +1988,20 @@ export function applyCameraViewportImpl(this: GameScene): void {
         } else {
           vis.shadow.setTexture(shadowBinding.textureKey);
         }
-        vis.shadow.setScale(1 / 3);
+        vis.shadow.setScale(summonShadowScale);
+        vis.base.setScale(1 / 3);
+        vis.head?.setScale(1 / 3);
+      }
+    }
+    if (this.summonSpritePool) {
+      for (let i = 0; i < this.summonSpritePool.length; i++) {
+        const vis = this.summonSpritePool[i]!;
+        if (shadowBinding.frameName !== undefined) {
+          vis.shadow.setTexture(shadowBinding.textureKey, shadowBinding.frameName);
+        } else {
+          vis.shadow.setTexture(shadowBinding.textureKey);
+        }
+        vis.shadow.setScale(summonShadowScale);
         vis.base.setScale(1 / 3);
         vis.head?.setScale(1 / 3);
       }
