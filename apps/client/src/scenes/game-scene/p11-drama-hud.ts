@@ -10,6 +10,7 @@ import {
   SCRATCH_HW,
 } from '../../fx/tapered-ribbon-builder.js';
 import { graphicsSettings } from '../../ui/graphics-settings.js';
+import { setTextAndColorIfChanged } from '../../ui/phaser-text-guard.js';
 import type { GameScene } from '../GameScene.js';
 
 export function renderBossPhaseInvulnCage(
@@ -380,10 +381,15 @@ export function updateP11RemainingEnemiesHud(scene: GameScene): void {
     rec.__p11RemainingHudText = pill;
     rec.p11RemainingEnemiesText = pill;
     rec.p11RemainingEnemiesBg = pill;
+    rec.lastRemainingHudSig = '';
+    rec.__p11LastRemainingLabel = '';
   }
 
   if (sim.inHub || scene.fullMapOpen) {
-    pill.setVisible(false);
+    if (rec.lastRemainingHudSig !== '' || pill.visible !== false) {
+      pill.setVisible(false);
+      rec.lastRemainingHudSig = '';
+    }
     return;
   }
 
@@ -399,7 +405,10 @@ export function updateP11RemainingEnemiesHud(scene: GameScene): void {
   }
 
   if (!room || aliveCombat <= 0 || hasBoss || room.cleared) {
-    pill.setVisible(false);
+    if (rec.lastRemainingHudSig !== '' || pill.visible !== false) {
+      pill.setVisible(false);
+      rec.lastRemainingHudSig = '';
+    }
     if (typeof window !== 'undefined') {
       (window as unknown as Record<string, unknown>).__P11_REMAINING_HUD_TEXT__ = '';
     }
@@ -409,16 +418,42 @@ export function updateP11RemainingEnemiesHud(scene: GameScene): void {
   const isChallenge = Boolean(
     room.isChallenge || (room as unknown as Record<string, unknown>).isChallengeRoom,
   );
+  const curLocale = i18n.getLocale();
+  const wavesSpawned = room.wavesSpawned || 1;
+  const wavesTotal = room.wavesTotal || 1;
+  const nextColor = isChallenge ? '#FBBF24' : '#FDE68A';
+  const sig = `${aliveCombat}:${wavesSpawned}:${wavesTotal}:${isChallenge ? 1 : 0}:${curLocale}:${pillX}:${pillY}`;
+  const cachedLabel =
+    typeof rec.__p11LastRemainingLabel === 'string' ? rec.__p11LastRemainingLabel : '';
+
+  if (
+    sig === rec.lastRemainingHudSig &&
+    pill.visible !== false &&
+    (typeof pill.text !== 'string' || pill.text === cachedLabel) &&
+    (typeof pill.x !== 'number' || (pill.x === pillX && pill.y === pillY))
+  ) {
+    if (typeof window !== 'undefined') {
+      (window as unknown as Record<string, unknown>).__P11_REMAINING_HUD_TEXT__ = cachedLabel;
+    }
+    return;
+  }
+
   const label = computeRemainingEnemiesText(
     aliveCombat,
-    room.wavesSpawned || 1,
-    room.wavesTotal || 1,
+    wavesSpawned,
+    wavesTotal,
     isChallenge,
+    curLocale,
   );
-  pill.setText(label);
-  pill.setColor(isChallenge ? '#FBBF24' : '#FDE68A');
-  pill.setPosition(pillX, pillY);
-  pill.setVisible(true);
+  setTextAndColorIfChanged(pill, label, nextColor);
+  if (pill.x !== pillX || pill.y !== pillY) {
+    pill.setPosition(pillX, pillY);
+  }
+  if (pill.visible !== true) {
+    pill.setVisible(true);
+  }
+  rec.lastRemainingHudSig = sig;
+  rec.__p11LastRemainingLabel = label;
   if (typeof window !== 'undefined') {
     (window as unknown as Record<string, unknown>).__P11_REMAINING_HUD_TEXT__ = label;
   }

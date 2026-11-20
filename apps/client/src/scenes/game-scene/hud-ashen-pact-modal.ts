@@ -13,6 +13,7 @@ import type Phaser from 'phaser';
 import { hexToNum, PALETTE } from '../../art/palette.js';
 import { zzfx } from '../../audio/zzfx.js';
 import { getFreezeVisualTimeSec, getVisualQueryConfig } from '../../core/visual-query.js';
+import { setTextAndColorIfChanged } from '../../ui/phaser-text-guard.js';
 import type { GameScene } from '../GameScene.js';
 
 const UI_FONT = '"Be Vietnam Pro", "Inter", "Segoe UI", system-ui, sans-serif';
@@ -620,8 +621,7 @@ export function drawPlayerPactAndRelicHudBadges(
       scene.hudTopLeftContainer.add(extScene.pactRelicHudText);
     } else {
       extScene.pactRelicHudText.setPosition(curX + 6, startY + 8);
-      if (extScene.pactRelicHudText.text !== summaryStr) extScene.pactRelicHudText.setText(summaryStr);
-      extScene.pactRelicHudText.setColor(primaryBadge.textColorHex);
+      setTextAndColorIfChanged(extScene.pactRelicHudText, summaryStr, primaryBadge.textColorHex);
       if (!extScene.pactRelicHudText.visible) extScene.pactRelicHudText.setVisible(true);
     }
   }

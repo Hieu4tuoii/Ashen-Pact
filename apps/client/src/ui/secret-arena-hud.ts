@@ -10,6 +10,7 @@ import { hexToNum, PALETTE } from '../art/palette.js';
 import type { GameScene } from '../scenes/GameScene.js';
 import { drawStyledPanel } from './components/hud-primitives.js';
 import { graphicsSettings } from './graphics-settings.js';
+import { setTextAndColorIfChanged } from './phaser-text-guard.js';
 import { computeUiTextResolution, createUiTextStyle, UI_THEME } from './theme.js';
 
 export type SecretArenaHudMode = 'active' | 'victory' | 'expired';
@@ -307,9 +308,8 @@ export function renderSecretArenaCountdownHud(scene: GameScene): void {
       : vm.isUrgent
         ? URGENT_ORANGE_HEX
         : PALETTE.ELECTRIC_VIOLET;
-  if (widgets.titleText.text !== vm.titleText) widgets.titleText.setText(vm.titleText);
-  widgets.titleText.setColor(titleColor);
-
-  if (widgets.primaryText.text !== vm.primaryText) widgets.primaryText.setText(vm.primaryText);
-  widgets.primaryText.setColor(vm.textColorHex);
+  setTextAndColorIfChanged(widgets.titleText, vm.titleText, titleColor);
+  setTextAndColorIfChanged(widgets.primaryText, vm.primaryText, vm.textColorHex);
 }
+
+export { renderSecretArenaCountdownHud as syncSecretArenaHud };
