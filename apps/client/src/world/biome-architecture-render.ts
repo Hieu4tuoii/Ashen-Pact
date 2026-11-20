@@ -18,6 +18,289 @@ import {
   type SolidArchitectureDecor,
 } from './biome-architecture.js';
 
+export interface WorldClipRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface ExteriorVoidRectSpan {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+interface ActiveRowSpan extends ExteriorVoidRectSpan {
+  locksHorizontalMerge: boolean;
+}
+
+function collectExteriorVoidRowSpans(
+  map: ArenaMap,
+  preserveSouthEastTileStart: boolean,
+): ExteriorVoidRectSpan[] {
+  const result: ExteriorVoidRectSpan[] = [];
+  const rowSpans: ActiveRowSpan[] = [];
+
+  const pushOrMergeInRow = (
+    rx: number,
+    ry: number,
+    rw: number,
+    rh: number,
+    locksHorizontalMerge: boolean,
+  ): void => {
+    if (rw <= 0 || rh <= 0) return;
+    if (!locksHorizontalMerge) {
+      for (let i = rowSpans.length - 1; i >= 0; i--) {
+        const prev = rowSpans[i]!;
+        if (
+          !prev.locksHorizontalMerge &&
+          prev.y === ry &&
+          prev.height === rh &&
+          prev.x + prev.width === rx
+        ) {
+          prev.width += rw;
+          return;
+        }
+      }
+    }
+    rowSpans.push({
+      x: rx,
+      y: ry,
+      width: rw,
+      height: rh,
+      locksHorizontalMerge,
+    });
+  };
+
+  for (let ty = 0; ty < map.rows; ty++) {
+    rowSpans.length = 0;
+    const oy = ty * TILE_SIZE;
+    for (let tx = 0; tx < map.cols; tx++) {
+      if (!isExteriorVoidWallTile(map, tx, ty)) continue;
+      const ox = tx * TILE_SIZE;
+      const adjN = ty > 0 && isActiveWallTile(map, tx, ty - 1);
+      const adjS = ty + 1 < map.rows && isActiveWallTile(map, tx, ty + 1);
+      const adjW = tx > 0 && isActiveWallTile(map, tx - 1, ty);
+      const adjE = tx + 1 < map.cols && isActiveWallTile(map, tx + 1, ty);
+      const diagNW =
+        !adjN && !adjW && tx > 0 && ty > 0 && isActiveWallTile(map, tx - 1, ty - 1);
+      const diagNE =
+        !adjN &&
+        !adjE &&
+        tx + 1 < map.cols &&
+        ty > 0 &&
+        isActiveWallTile(map, tx + 1, ty - 1);
+      const diagSW =
+        !adjS &&
+        !adjW &&
+        tx > 0 &&
+        ty + 1 < map.rows &&
+        isActiveWallTile(map, tx - 1, ty + 1);
+      const diagSE =
+        !adjS &&
+        !adjE &&
+        tx + 1 < map.cols &&
+        ty + 1 < map.rows &&
+        isActiveWallTile(map, tx + 1, ty + 1);
+
+      const inW = adjW ? 6 : 0;
+      const inE = adjE ? 6 : 0;
+      const inN = adjN || diagNW || diagNE ? 6 : 0;
+      const inS = adjS || diagSW || diagSE ? 6 : 0;
+      const lockMain = preserveSouthEastTileStart && (adjS || adjE);
+      pushOrMergeInRow(
+        ox + inW,
+        oy + inN,
+        TILE_SIZE - inW - inE,
+        TILE_SIZE - inN - inS,
+        lockMain,
+      );
+
+      if (!adjN && (diagNW || diagNE)) {
+        const tx0 = ox + (adjW || diagNW ? 6 : 0);
+        const tx1 = ox + TILE_SIZE - (adjE || diagNE ? 6 : 0);
+        if (tx1 > tx0) {
+          pushOrMergeInRow(tx0, oy, tx1 - tx0, 6, lockMain);
+        }
+      }
+      if (!adjS && (diagSW || diagSE)) {
+        const bx0 = ox + (adjW || diagSW ? 6 : 0);
+        const bx1 = ox + TILE_SIZE - (adjE || diagSE ? 6 : 0);
+        if (bx1 > bx0) {
+          pushOrMergeInRow(bx0, oy + TILE_SIZE - 6, bx1 - bx0, 6, lockMain);
+        }
+      }
+    }
+    for (let i = 0; i < rowSpans.length; i++) {
+      const s = rowSpans[i]!;
+      result.push({ x: s.x, y: s.y, width: s.width, height: s.height });
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Computes exact Exterior Void mask rectangles (preserving all 6px cardinal & diagonal
+ * active-wall casing insets) by coalescing contiguous horizontal spans across each row's
+ * 6px/20px/6px sub-bands and merging vertically adjacent spans with identical `(x, width)`.
+ */
+export function mergeExteriorVoidRowSpans(map: ArenaMap): ExteriorVoidRectSpan[] {
+  const bandSpans: ExteriorVoidRectSpan[] = [];
+
+  const appendSubBand = (
+    bandY: number,
+    bandH: number,
+    getTileInterval: (tx: number) => readonly [number, number] | null,
+  ): void => {
+    let runStart = -1;
+    let runEnd = -1;
+    for (let tx = 0; tx < map.cols; tx++) {
+      const iv = getTileInterval(tx);
+      if (!iv || iv[1] <= iv[0]) {
+        if (runEnd > runStart) {
+          bandSpans.push({ x: runStart, y: bandY, width: runEnd - runStart, height: bandH });
+          runStart = -1;
+          runEnd = -1;
+        }
+        continue;
+      }
+      const [x0, x1] = iv;
+      if (runEnd > runStart && x0 === runEnd) {
+        runEnd = x1;
+      } else {
+        if (runEnd > runStart) {
+          bandSpans.push({ x: runStart, y: bandY, width: runEnd - runStart, height: bandH });
+        }
+        runStart = x0;
+        runEnd = x1;
+      }
+    }
+    if (runEnd > runStart) {
+      bandSpans.push({ x: runStart, y: bandY, width: runEnd - runStart, height: bandH });
+    }
+  };
+
+  interface RowTileFlags {
+    isVoid: boolean;
+    adjN: boolean;
+    adjS: boolean;
+    adjW: boolean;
+    adjE: boolean;
+    diagNW: boolean;
+    diagNE: boolean;
+    diagSW: boolean;
+    diagSE: boolean;
+  }
+  const rowFlags: RowTileFlags[] = new Array<RowTileFlags>(map.cols);
+  for (let tx = 0; tx < map.cols; tx++) {
+    rowFlags[tx] = {
+      isVoid: false,
+      adjN: false,
+      adjS: false,
+      adjW: false,
+      adjE: false,
+      diagNW: false,
+      diagNE: false,
+      diagSW: false,
+      diagSE: false,
+    };
+  }
+
+  for (let ty = 0; ty < map.rows; ty++) {
+    let rowHasVoid = false;
+    for (let tx = 0; tx < map.cols; tx++) {
+      const f = rowFlags[tx]!;
+      if (!isExteriorVoidWallTile(map, tx, ty)) {
+        f.isVoid = false;
+        continue;
+      }
+      rowHasVoid = true;
+      f.isVoid = true;
+      f.adjN = ty > 0 && isActiveWallTile(map, tx, ty - 1);
+      f.adjS = ty + 1 < map.rows && isActiveWallTile(map, tx, ty + 1);
+      f.adjW = tx > 0 && isActiveWallTile(map, tx - 1, ty);
+      f.adjE = tx + 1 < map.cols && isActiveWallTile(map, tx + 1, ty);
+      f.diagNW = !f.adjN && !f.adjW && tx > 0 && ty > 0 && isActiveWallTile(map, tx - 1, ty - 1);
+      f.diagNE =
+        !f.adjN && !f.adjE && tx + 1 < map.cols && ty > 0 && isActiveWallTile(map, tx + 1, ty - 1);
+      f.diagSW =
+        !f.adjS && !f.adjW && tx > 0 && ty + 1 < map.rows && isActiveWallTile(map, tx - 1, ty + 1);
+      f.diagSE =
+        !f.adjS &&
+        !f.adjE &&
+        tx + 1 < map.cols &&
+        ty + 1 < map.rows &&
+        isActiveWallTile(map, tx + 1, ty + 1);
+    }
+    if (!rowHasVoid) continue;
+
+    const oy = ty * TILE_SIZE;
+    // Top 6px sub-band [oy, oy + 6)
+    appendSubBand(oy, 6, (tx) => {
+      const f = rowFlags[tx]!;
+      if (!f.isVoid || f.adjN) return null;
+      const ox = tx * TILE_SIZE;
+      return [ox + (f.adjW || f.diagNW ? 6 : 0), ox + TILE_SIZE - (f.adjE || f.diagNE ? 6 : 0)];
+    });
+    // Middle 20px sub-band [oy + 6, oy + 26)
+    appendSubBand(oy + 6, TILE_SIZE - 12, (tx) => {
+      const f = rowFlags[tx]!;
+      if (!f.isVoid) return null;
+      const ox = tx * TILE_SIZE;
+      return [ox + (f.adjW ? 6 : 0), ox + TILE_SIZE - (f.adjE ? 6 : 0)];
+    });
+    // Bottom 6px sub-band [oy + 26, oy + 32)
+    appendSubBand(oy + TILE_SIZE - 6, 6, (tx) => {
+      const f = rowFlags[tx]!;
+      if (!f.isVoid || f.adjS) return null;
+      const ox = tx * TILE_SIZE;
+      return [ox + (f.adjW || f.diagSW ? 6 : 0), ox + TILE_SIZE - (f.adjE || f.diagSE ? 6 : 0)];
+    });
+  }
+
+  // Coalesce vertically adjacent spans that share identical (x, width)
+  const merged: ExteriorVoidRectSpan[] = [];
+  for (let i = 0; i < bandSpans.length; i++) {
+    const cur = bandSpans[i]!;
+    let coalesced = false;
+    for (let j = merged.length - 1; j >= 0; j--) {
+      const prev = merged[j]!;
+      if (prev.y + prev.height < cur.y) {
+        // Earlier spans that ended above cur.y can no longer touch cur.y
+        continue;
+      }
+      if (prev.x === cur.x && prev.width === cur.width && prev.y + prev.height === cur.y) {
+        prev.height += cur.height;
+        coalesced = true;
+        break;
+      }
+    }
+    if (!coalesced) {
+      merged.push(cur);
+    }
+  }
+
+  return merged;
+}
+
+function rectsIntersectWorld(
+  ax: number,
+  ay: number,
+  aw: number,
+  ah: number,
+  clip: WorldClipRect,
+): boolean {
+  return (
+    ax < clip.x + clip.width &&
+    ax + aw > clip.x &&
+    ay < clip.y + clip.height &&
+    ay + ah > clip.y
+  );
+}
+
 /**
  * Renders the room's static architectural overlays (pillar South-East cast shadows,
  * flat floor decals on dry tiles, and wall/pillar architectural motifs)
@@ -28,11 +311,22 @@ export function renderBiomeArchitectureToComposite(
   map: ArenaMap,
   plan: RoomArchitecturePlan,
   cellPx: number,
+  clipRectWorld?: WorldClipRect,
 ): void {
   const scale = cellPx / TILE_SIZE;
   const env = ENV_PALETTE[plan.biome] ?? ENV_PALETTE[1];
 
   ctx.save();
+  if (clipRectWorld) {
+    ctx.beginPath();
+    ctx.rect(
+      clipRectWorld.x * scale,
+      clipRectWorld.y * scale,
+      clipRectWorld.width * scale,
+      clipRectWorld.height * scale,
+    );
+    ctx.clip();
+  }
   ctx.scale(scale, scale);
 
   // 1. Long South-East (-135 deg key light -> +45 deg SE) cast shadows from 2x2 interior pillars (40-64u)
@@ -42,6 +336,13 @@ export function renderBiomeArchitectureToComposite(
     const pw = shadow.widthTiles * TILE_SIZE;
     const ph = shadow.heightTiles * TILE_SIZE;
     const len = shadow.shadowLengthU;
+    const shadowReach = Math.max(len, TILE_SIZE * 2);
+    if (
+      clipRectWorld &&
+      !rectsIntersectWorld(px, py, pw + shadowReach, ph + shadowReach, clipRectWorld)
+    ) {
+      continue;
+    }
 
     ctx.save();
     ctx.beginPath();
@@ -86,6 +387,19 @@ export function renderBiomeArchitectureToComposite(
   for (const decal of visibleDecals) {
     const ox = decal.tx * TILE_SIZE;
     const oy = decal.ty * TILE_SIZE;
+    if (clipRectWorld) {
+      if (decal.kind === 'sunken_astrolabe') {
+        const acx = map.width * 0.5;
+        const acy = map.height * 0.5;
+        if (!rectsIntersectWorld(acx - 180, acy - 180, 360, 360, clipRectWorld)) {
+          continue;
+        }
+      } else if (
+        !rectsIntersectWorld(ox - 4, oy - 4, TILE_SIZE + 8, TILE_SIZE + 8, clipRectWorld)
+      ) {
+        continue;
+      }
+    }
 
     if (decal.kind === 'root_decal_tip') {
       ctx.save();
@@ -249,6 +563,18 @@ export function renderBiomeArchitectureToComposite(
   // 3. Solid 3D architectural decor on wall & pillar tiles
   for (const item of plan.solidDecors) {
     if (!map.isSolidTile(item.tx, item.ty)) continue;
+    if (
+      clipRectWorld &&
+      !rectsIntersectWorld(
+        item.tx * TILE_SIZE - TILE_SIZE,
+        item.ty * TILE_SIZE - 8,
+        TILE_SIZE * 3,
+        TILE_SIZE * 2 + 8,
+        clipRectWorld,
+      )
+    ) {
+      continue;
+    }
     drawSolidArchitectureDecor(ctx, item, env);
   }
 
@@ -715,6 +1041,44 @@ function drawSolidArchitectureDecor(
 }
 
 const BLEND_MODE_ADD = 1; // Phaser.BlendModes.ADD
+const BIOME_VOID_MASK_TEX_KEY = '__biome_void_mask_tex__';
+
+function fillDiamond(
+  g: Phaser.GameObjects.Graphics,
+  cx: number,
+  cy: number,
+  r: number,
+): void {
+  g.fillTriangle(cx - r, cy, cx, cy - r, cx + r, cy);
+  g.fillTriangle(cx - r, cy, cx + r, cy, cx, cy + r);
+}
+
+function setDepthIfChanged<T extends { depth?: number; setDepth?: (d: number) => T }>(
+  obj: T,
+  depth: number,
+): void {
+  if (obj.depth !== depth) {
+    obj.setDepth?.(depth);
+  }
+}
+
+function setVisibleIfChanged<T extends { visible?: boolean; setVisible?: (v: boolean) => T }>(
+  obj: T,
+  visible: boolean,
+): void {
+  if (obj.visible !== visible) {
+    obj.setVisible?.(visible);
+  }
+}
+
+function syncGraphicsVisibility(
+  g: Phaser.GameObjects.Graphics,
+  fallbackHasContent: boolean,
+): void {
+  const cmdBuf = (g as unknown as { commandBuffer?: unknown[] }).commandBuffer;
+  const visible = Array.isArray(cmdBuf) ? cmdBuf.length > 0 : fallbackHasContent;
+  setVisibleIfChanged(g, visible);
+}
 
 /**
  * Live architectural effects layer (Spec 3.5 & Ruling 2):
@@ -724,19 +1088,25 @@ const BLEND_MODE_ADD = 1; // Phaser.BlendModes.ADD
  *   + small rising embers (<= 3.5px, no dark outline, BlendModes.ADD) and floating warm dust motes (<= 3px) on High/Medium.
  */
 export class BiomeArchitectureLiveLayer {
+  private readonly scene: Phaser.Scene;
   private readonly gearGraphics: Phaser.GameObjects.Graphics;
   private readonly bracketGraphics: Phaser.GameObjects.Graphics;
   private readonly additiveGraphics: Phaser.GameObjects.Graphics;
   private readonly voidMaskGraphics: Phaser.GameObjects.Graphics;
+  private voidMaskImage: Phaser.GameObjects.Image | null = null;
+  private voidMaskTexW = 0;
+  private voidMaskTexH = 0;
   private plan: RoomArchitecturePlan | null = null;
   private elapsedSec = 1.0;
   private lastBracketSig = '';
   private lastVoidMaskSig = '';
   private gearHadContent = false;
+  private bracketHadContent = false;
   private lastHazardMapRevision = -1;
   private readonly scratchHazardIndices: number[] = [];
 
   constructor(scene: Phaser.Scene) {
+    this.scene = scene;
     // Depth 14: above arenaGroundSprite (depth 2), below entities (depth 22+)
     this.gearGraphics = scene.add.graphics().setDepth(14);
     // Depth 31: above player rig (depth 30), below lightmapRt (depth 34) per Spec 3.5 P4 hanging brazier bracket
@@ -760,9 +1130,16 @@ export class BiomeArchitectureLiveLayer {
     ctx: CanvasRenderingContext2D,
     map: ArenaMap,
     tileCompositeScale = 2,
+    clipRectWorld?: WorldClipRect,
   ): void {
     if (this.plan) {
-      renderBiomeArchitectureToComposite(ctx, map, this.plan, TILE_SIZE * tileCompositeScale);
+      renderBiomeArchitectureToComposite(
+        ctx,
+        map,
+        this.plan,
+        TILE_SIZE * tileCompositeScale,
+        clipRectWorld,
+      );
     }
   }
 
@@ -793,10 +1170,18 @@ export class BiomeArchitectureLiveLayer {
       if (this.lastBracketSig !== '') {
         this.bracketGraphics.clear();
         this.lastBracketSig = '';
+        this.bracketHadContent = false;
       }
       if (this.lastVoidMaskSig !== '') {
         this.voidMaskGraphics.clear();
         this.lastVoidMaskSig = '';
+      }
+      setVisibleIfChanged(this.gearGraphics, false);
+      setVisibleIfChanged(this.bracketGraphics, false);
+      setVisibleIfChanged(this.additiveGraphics, false);
+      setVisibleIfChanged(this.voidMaskGraphics, false);
+      if (this.voidMaskImage) {
+        setVisibleIfChanged(this.voidMaskImage, false);
       }
       return;
     }
@@ -804,63 +1189,80 @@ export class BiomeArchitectureLiveLayer {
     const voidMaskSig = `${plan.seed}:${map.cols}x${map.rows}:${(map as { roomShape?: string }).roomShape ?? 'rectangle'}:${map.solidBoxes.length}`;
     if (voidMaskSig !== this.lastVoidMaskSig) {
       this.lastVoidMaskSig = voidMaskSig;
-      this.voidMaskGraphics.clear();
-      this.voidMaskGraphics.fillStyle(hexToNum(PALETTE.INK_DEEP), 1);
-      for (let ty = 0; ty < map.rows; ty++) {
-        for (let tx = 0; tx < map.cols; tx++) {
-          if (!isExteriorVoidWallTile(map, tx, ty)) continue;
-          const ox = tx * TILE_SIZE;
-          const oy = ty * TILE_SIZE;
-          const adjN = ty > 0 && isActiveWallTile(map, tx, ty - 1);
-          const adjS = ty + 1 < map.rows && isActiveWallTile(map, tx, ty + 1);
-          const adjW = tx > 0 && isActiveWallTile(map, tx - 1, ty);
-          const adjE = tx + 1 < map.cols && isActiveWallTile(map, tx + 1, ty);
-          const diagNW =
-            !adjN && !adjW && tx > 0 && ty > 0 && isActiveWallTile(map, tx - 1, ty - 1);
-          const diagNE =
-            !adjN &&
-            !adjE &&
-            tx + 1 < map.cols &&
-            ty > 0 &&
-            isActiveWallTile(map, tx + 1, ty - 1);
-          const diagSW =
-            !adjS &&
-            !adjW &&
-            tx > 0 &&
-            ty + 1 < map.rows &&
-            isActiveWallTile(map, tx - 1, ty + 1);
-          const diagSE =
-            !adjS &&
-            !adjE &&
-            tx + 1 < map.cols &&
-            ty + 1 < map.rows &&
-            isActiveWallTile(map, tx + 1, ty + 1);
+      const canBakeVoidCanvas =
+        typeof this.scene.textures?.createCanvas === 'function' &&
+        typeof this.scene.add?.image === 'function';
 
-          const inW = adjW ? 6 : 0;
-          const inE = adjE ? 6 : 0;
-          const inN = adjN || diagNW || diagNE ? 6 : 0;
-          const inS = adjS || diagSW || diagSE ? 6 : 0;
-          this.voidMaskGraphics.fillRect(
-            ox + inW,
-            oy + inN,
-            TILE_SIZE - inW - inE,
-            TILE_SIZE - inN - inS,
-          );
-          if (!adjN && (diagNW || diagNE)) {
-            const tx0 = ox + (adjW || diagNW ? 6 : 0);
-            const tx1 = ox + TILE_SIZE - (adjE || diagNE ? 6 : 0);
-            if (tx1 > tx0) {
-              this.voidMaskGraphics.fillRect(tx0, oy, tx1 - tx0, 6);
+      let bakedVoidMask = false;
+      if (canBakeVoidCanvas) {
+        const mergedSpans = mergeExteriorVoidRowSpans(map);
+        if (mergedSpans.length === 0) {
+          this.voidMaskGraphics.clear();
+          setVisibleIfChanged(this.voidMaskGraphics, false);
+          if (this.voidMaskImage) {
+            setVisibleIfChanged(this.voidMaskImage, false);
+          }
+          bakedVoidMask = true;
+        } else {
+          const needRecreate =
+            !this.scene.textures.exists?.(BIOME_VOID_MASK_TEX_KEY) ||
+            this.voidMaskTexW !== map.width ||
+            this.voidMaskTexH !== map.height;
+          if (needRecreate) {
+            if (this.voidMaskImage) {
+              this.voidMaskImage.destroy();
+              this.voidMaskImage = null;
+            }
+            if (this.scene.textures.exists?.(BIOME_VOID_MASK_TEX_KEY)) {
+              this.scene.textures.remove?.(BIOME_VOID_MASK_TEX_KEY);
             }
           }
-          if (!adjS && (diagSW || diagSE)) {
-            const bx0 = ox + (adjW || diagSW ? 6 : 0);
-            const bx1 = ox + TILE_SIZE - (adjE || diagSE ? 6 : 0);
-            if (bx1 > bx0) {
-              this.voidMaskGraphics.fillRect(bx0, oy + TILE_SIZE - 6, bx1 - bx0, 6);
+          const voidTex = needRecreate
+            ? this.scene.textures.createCanvas(BIOME_VOID_MASK_TEX_KEY, map.width, map.height)
+            : (this.scene.textures.get?.(BIOME_VOID_MASK_TEX_KEY) as
+                | Phaser.Textures.CanvasTexture
+                | undefined);
+          const voidCtx = voidTex?.getContext?.();
+          if (voidTex && voidCtx) {
+            this.voidMaskTexW = map.width;
+            this.voidMaskTexH = map.height;
+            voidCtx.clearRect(0, 0, map.width, map.height);
+            voidCtx.fillStyle = PALETTE.INK_DEEP;
+            for (let i = 0; i < mergedSpans.length; i++) {
+              const span = mergedSpans[i]!;
+              voidCtx.fillRect(span.x, span.y, span.width, span.height);
             }
+            voidTex.refresh?.();
+            if (!this.voidMaskImage) {
+              this.voidMaskImage = this.scene.add.image(0, 0, BIOME_VOID_MASK_TEX_KEY);
+            } else {
+              this.voidMaskImage.setTexture?.(BIOME_VOID_MASK_TEX_KEY);
+            }
+            this.voidMaskImage.setOrigin?.(0, 0);
+            this.voidMaskImage.setPosition?.(0, 0);
+            setDepthIfChanged(this.voidMaskImage, 36.2);
+            setVisibleIfChanged(this.voidMaskImage, true);
+            this.voidMaskGraphics.clear();
+            setVisibleIfChanged(this.voidMaskGraphics, false);
+            bakedVoidMask = true;
           }
         }
+      }
+
+      if (!bakedVoidMask) {
+        if (this.voidMaskImage) {
+          setVisibleIfChanged(this.voidMaskImage, false);
+        }
+        const fallbackSpans = collectExteriorVoidRowSpans(map, true);
+        this.voidMaskGraphics.clear();
+        if (fallbackSpans.length > 0) {
+          this.voidMaskGraphics.fillStyle(hexToNum(PALETTE.INK_DEEP), 1);
+          for (let i = 0; i < fallbackSpans.length; i++) {
+            const span = fallbackSpans[i]!;
+            this.voidMaskGraphics.fillRect(span.x, span.y, span.width, span.height);
+          }
+        }
+        setVisibleIfChanged(this.voidMaskGraphics, fallbackSpans.length > 0);
       }
     }
 
@@ -884,6 +1286,7 @@ export class BiomeArchitectureLiveLayer {
     }
     const activeHazardTiles = this.scratchHazardIndices.length;
 
+    let gearHasDraws = false;
     if (plan.biome === 3 || (activeHazardTiles > 0 && !isLow)) {
       this.gearGraphics.clear();
       this.gearHadContent = true;
@@ -899,6 +1302,7 @@ export class BiomeArchitectureLiveLayer {
         const item = plan.solidDecors[i]!;
         if (item.kind !== 'brass_gear_wall' || !map.isSolidTile(item.tx, item.ty)) continue;
 
+        gearHasDraws = true;
         const cx = item.tx * TILE_SIZE + 16;
         const cy = item.ty * TILE_SIZE + 15;
         const teeth = item.toothCount ?? 10;
@@ -930,7 +1334,7 @@ export class BiomeArchitectureLiveLayer {
         this.gearGraphics.fillCircle(cx, cy, 6.6);
         this.gearGraphics.strokeCircle(cx, cy, 6.6);
         this.gearGraphics.fillStyle(hexToNum(PALETTE.COPPER_LIGHT), 1);
-        this.gearGraphics.fillCircle(cx, cy, 2.8);
+        fillDiamond(this.gearGraphics, cx, cy, 2.8);
       }
     }
 
@@ -959,58 +1363,66 @@ export class BiomeArchitectureLiveLayer {
         if (surf === 'lava') {
           const r = 1.6 + 0.9 * (0.5 + 0.5 * Math.sin(phase));
           this.gearGraphics.fillStyle(0xfacc15, 0.72);
-          this.gearGraphics.fillCircle(
+          fillDiamond(
+            this.gearGraphics,
             wx + ox + Math.sin(phase) * 2.5,
             wy + oy + Math.cos(phase) * 2.5,
             r,
           );
+          gearHasDraws = true;
         } else if (surf === 'water') {
           const ripR = 2.4 + ((this.elapsedSec * 3.2 + tx * 1.3 + ty * 0.9) % 3.8);
           this.gearGraphics.lineStyle(1.0, 0x7dd3fc, 0.42);
           this.gearGraphics.strokeCircle(wx + ox, wy + oy, ripR);
+          gearHasDraws = true;
         } else if (surf === 'electrified_water') {
           const jx = Math.sin(phase * 3) * 4.5;
           this.gearGraphics.lineStyle(1.3, 0x22d3ee, 0.78);
           this.gearGraphics.lineBetween(wx + ox - 5, wy + oy - 3, wx + ox + jx, wy + oy + 3);
+          gearHasDraws = true;
         } else if (surf === 'poison_swamp' && ((tx + ty) & 1) === 0) {
           const bubR = 1.4 + 0.9 * (0.5 + 0.5 * Math.cos(phase));
           this.gearGraphics.fillStyle(0x84cc16, 0.62);
-          this.gearGraphics.fillCircle(
+          fillDiamond(
+            this.gearGraphics,
             wx + ox + Math.cos(phase) * 2.2,
             wy + oy - Math.sin(phase) * 2.2,
             bubR,
           );
+          gearHasDraws = true;
         } else if (surf === 'burning_oil' || surf === 'burning_grass') {
           const flameH = 4.2 + Math.sin(phase * 2.2) * 2.2;
           const fx = wx + ox;
           const fy = wy + oy + 2;
           this.gearGraphics.fillStyle(0xfacc15, 0.78);
-            this.gearGraphics.fillTriangle(fx - 2.8, fy + 3, fx, fy - flameH, fx + 2.8, fy + 3);
-          } else if (surf === 'conveyor') {
-            const hasW = map.getSurface(tx - 1, ty) === 'conveyor';
-            const hasE = map.getSurface(tx + 1, ty) === 'conveyor';
-            const x0 = tx * TILE_SIZE + (hasW ? 0 : 3);
-            const x1 = tx * TILE_SIZE + (hasE ? 32 : 29);
-            // Cover static baked chevrons with continuous dark slate belt tread before drawing live scrolling chevrons
-            this.gearGraphics.fillStyle(0x1e222b, 1);
-            this.gearGraphics.fillRect(x0, ty * TILE_SIZE + 5, x1 - x0, 22);
+          this.gearGraphics.fillTriangle(fx - 2.8, fy + 3, fx, fy - flameH, fx + 2.8, fy + 3);
+          gearHasDraws = true;
+        } else if (surf === 'conveyor') {
+          const hasW = map.getSurface(tx - 1, ty) === 'conveyor';
+          const hasE = map.getSurface(tx + 1, ty) === 'conveyor';
+          const x0 = tx * TILE_SIZE + (hasW ? 0 : 3);
+          const x1 = tx * TILE_SIZE + (hasE ? 32 : 29);
+          // Cover static baked chevrons with continuous dark slate belt tread before drawing live scrolling chevrons
+          this.gearGraphics.fillStyle(0x1e222b, 1);
+          this.gearGraphics.fillRect(x0, ty * TILE_SIZE + 5, x1 - x0, 22);
 
-            const dir =
-              map.roomArchetype === 'CROSSFIRE_CONVEYORS' && ty >= Math.floor(map.rows / 2)
-                ? -map.conveyorDirection
-                : map.conveyorDirection;
-            const baseScroll =
-              (((this.elapsedSec * CONVEYOR_BELT_SPEED * dir) % 16) + 16) % 16;
-            this.gearGraphics.lineStyle(1.8, 0xf59e42, 0.88);
-            for (const baseOffset of [-8, 8]) {
-              const cx = wx + baseOffset + baseScroll - 8;
-              if (cx < x0 + 4 || cx > x1 - 4) continue;
-              this.gearGraphics.lineBetween(cx - 3 * dir, wy - 5.5, cx + 2.5 * dir, wy);
-              this.gearGraphics.lineBetween(cx + 2.5 * dir, wy, cx - 3 * dir, wy + 5.5);
-            }
+          const dir =
+            map.roomArchetype === 'CROSSFIRE_CONVEYORS' && ty >= Math.floor(map.rows / 2)
+              ? -map.conveyorDirection
+              : map.conveyorDirection;
+          const baseScroll =
+            (((this.elapsedSec * CONVEYOR_BELT_SPEED * dir) % 16) + 16) % 16;
+          this.gearGraphics.lineStyle(1.8, 0xf59e42, 0.88);
+          for (const baseOffset of [-8, 8]) {
+            const cx = wx + baseOffset + baseScroll - 8;
+            if (cx < x0 + 4 || cx > x1 - 4) continue;
+            this.gearGraphics.lineBetween(cx - 3 * dir, wy - 5.5, cx + 2.5 * dir, wy);
+            this.gearGraphics.lineBetween(cx + 2.5 * dir, wy, cx - 3 * dir, wy + 5.5);
           }
+          gearHasDraws = true;
         }
       }
+    }
 
     // 3. P4 45-deg Wrought-Iron Hanging Brazier Brackets (depth 31, above player) & Brazier Embers/Warm Dust Motes
     const orangeNum = hexToNum(PALETTE.FLAME_ORANGE);
@@ -1032,6 +1444,7 @@ export class BiomeArchitectureLiveLayer {
     if (bracketSig !== this.lastBracketSig) {
       this.lastBracketSig = bracketSig;
       this.bracketGraphics.clear();
+      this.bracketHadContent = false;
       for (let i = 0; i < props.length; i++) {
         const pr = props[i]!;
         if (pr.hp <= 0 || pr.kind !== 'torch_brazier') continue;
@@ -1046,9 +1459,11 @@ export class BiomeArchitectureLiveLayer {
         this.bracketGraphics.lineBetween(bx + 12, by - 18, bx + 1, by - 7);
         this.bracketGraphics.lineStyle(1.0, ironLightNum, 0.85);
         this.bracketGraphics.lineBetween(bx + 11, by - 18, bx + 1, by - 8);
+        this.bracketHadContent = true;
       }
     }
 
+    let additiveHasDraws = false;
     if (!isLow && lightingEnabled) {
       for (let i = 0; i < props.length; i++) {
         const pr = props[i]!;
@@ -1061,8 +1476,9 @@ export class BiomeArchitectureLiveLayer {
         this.additiveGraphics.fillCircle(bx, by - 8, 5.5);
         this.additiveGraphics.fillStyle(goldNum, 0.04);
         this.additiveGraphics.fillCircle(bx, by - 8, 3.0);
+        additiveHasDraws = true;
 
-        // Rising Embers (<= 3.5px diameter -> r <= 1.65px, no dark outline, BlendModes.ADD) & Warm Dust Motes (<= 3px)
+        // Rising Embers (<= 3.5px diameter -> r <= 1.65px, Earcut-free fillRect, BlendModes.ADD)
         for (let e = 0; e < 4; e++) {
           const cycle = (this.elapsedSec * (0.85 + e * 0.14) + i * 0.37 + e * 0.25) % 1;
           const emberX = bx + Math.sin(this.elapsedSec * 3.2 + i * 1.7 + e * 2.1) * 5.5;
@@ -1070,7 +1486,12 @@ export class BiomeArchitectureLiveLayer {
           const emberR = 1.65 - cycle * 0.55; // diameter 2.2..3.3px <= 3.5px
           const emberAlpha = (1 - cycle) * 0.72;
           this.additiveGraphics.fillStyle(e % 2 === 0 ? goldNum : orangeNum, emberAlpha);
-          this.additiveGraphics.fillCircle(emberX, emberY, emberR);
+          this.additiveGraphics.fillRect(
+            emberX - emberR,
+            emberY - emberR,
+            emberR * 2,
+            emberR * 2,
+          );
         }
 
         for (let m = 0; m < 5; m++) {
@@ -1093,7 +1514,7 @@ export class BiomeArchitectureLiveLayer {
           const moteR = 1.1 + (m % 2) * 0.25; // diameter 2.2..2.7px <= 3.0px
           const moteAlpha = 0.18 + 0.12 * Math.sin(this.elapsedSec * 2.1 + i + m); // <= 0.30 <= 0.35
           this.additiveGraphics.fillStyle(goldNum, moteAlpha);
-          this.additiveGraphics.fillCircle(moteX, moteY, moteR);
+          this.additiveGraphics.fillRect(moteX - moteR, moteY - moteR, moteR * 2, moteR * 2);
         }
       }
 
@@ -1112,6 +1533,7 @@ export class BiomeArchitectureLiveLayer {
           for (const sx of [6, 10, 14, 18, 22]) {
             this.additiveGraphics.fillRect(ox + sx, oy + 10, 2.0, 12);
           }
+          additiveHasDraws = true;
         }
       }
 
@@ -1138,17 +1560,24 @@ export class BiomeArchitectureLiveLayer {
           const pulse = 0.08 + 0.05 * (0.5 + 0.5 * Math.sin(this.elapsedSec * 2.8 + tx + ty));
           if (surf === 'lava' || surf === 'burning_oil' || surf === 'burning_grass') {
             this.additiveGraphics.fillStyle(0xf97316, pulse);
-            this.additiveGraphics.fillCircle(wx + ox, wy + oy, 2.6);
+            fillDiamond(this.additiveGraphics, wx + ox, wy + oy, 2.6);
+            additiveHasDraws = true;
           } else if (surf === 'electrified_water') {
             this.additiveGraphics.fillStyle(0x22d3ee, pulse);
-            this.additiveGraphics.fillCircle(wx + ox, wy + oy, 2.2);
+            fillDiamond(this.additiveGraphics, wx + ox, wy + oy, 2.2);
+            additiveHasDraws = true;
           } else if (surf === 'poison_swamp' && ((tx + ty) & 1) === 0) {
             this.additiveGraphics.fillStyle(0x84cc16, pulse * 0.85);
-            this.additiveGraphics.fillCircle(wx + ox, wy + oy, 2.2);
+            fillDiamond(this.additiveGraphics, wx + ox, wy + oy, 2.2);
+            additiveHasDraws = true;
           }
         }
       }
     }
+
+    syncGraphicsVisibility(this.gearGraphics, gearHasDraws);
+    syncGraphicsVisibility(this.bracketGraphics, this.bracketHadContent);
+    syncGraphicsVisibility(this.additiveGraphics, additiveHasDraws);
   }
 
   public destroy(): void {
@@ -1156,5 +1585,12 @@ export class BiomeArchitectureLiveLayer {
     this.bracketGraphics.destroy();
     this.additiveGraphics.destroy();
     this.voidMaskGraphics.destroy();
+    if (this.voidMaskImage) {
+      this.voidMaskImage.destroy();
+      this.voidMaskImage = null;
+    }
+    if (this.scene.textures?.exists?.(BIOME_VOID_MASK_TEX_KEY)) {
+      this.scene.textures.remove?.(BIOME_VOID_MASK_TEX_KEY);
+    }
   }
 }

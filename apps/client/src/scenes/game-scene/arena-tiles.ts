@@ -1444,6 +1444,136 @@ export function getStructureTextureKeyImpl(
   return TextureBaker.getWallTileTextureKey(biome, autotileMask);
 }
 
+interface GlTextureWrapperLike {
+  gl?: WebGLRenderingContext;
+  webGLTexture?: WebGLTexture | null;
+  pma?: boolean;
+  flipY?: boolean;
+}
+
+interface TextureSourceLike {
+  glTexture?: GlTextureWrapperLike | null;
+  flipY?: boolean;
+  renderer?: { gl?: WebGLRenderingContext };
+}
+
+let arenaDirtyPatchDoc: Document | null = null;
+let arenaDirtyPatchCanvas: HTMLCanvasElement | null = null;
+let arenaDirtyPatchCtx: CanvasRenderingContext2D | null = null;
+
+function getArenaDirtyPatchCanvas(
+  srcCanvas: HTMLCanvasElement,
+  pw: number,
+  ph: number,
+): { canvas: HTMLCanvasElement; ctx: CanvasRenderingContext2D } | null {
+  const doc =
+    (srcCanvas as { ownerDocument?: Document }).ownerDocument ??
+    (typeof document !== 'undefined' ? document : undefined);
+  if (!doc || typeof doc.createElement !== 'function') {
+    return null;
+  }
+  if (!arenaDirtyPatchCanvas || !arenaDirtyPatchCtx || arenaDirtyPatchDoc !== doc) {
+    arenaDirtyPatchDoc = doc;
+    arenaDirtyPatchCanvas = doc.createElement('canvas');
+    arenaDirtyPatchCtx = arenaDirtyPatchCanvas?.getContext?.('2d') ?? null;
+  }
+  if (!arenaDirtyPatchCanvas || !arenaDirtyPatchCtx) {
+    return null;
+  }
+  if (arenaDirtyPatchCanvas.width !== pw) {
+    arenaDirtyPatchCanvas.width = pw;
+  }
+  if (arenaDirtyPatchCanvas.height !== ph) {
+    arenaDirtyPatchCanvas.height = ph;
+  }
+  return { canvas: arenaDirtyPatchCanvas, ctx: arenaDirtyPatchCtx };
+}
+
+function uploadArenaGroundSubRect(
+  scene: GameScene,
+  arenaGroundTex: Phaser.Textures.CanvasTexture,
+  px: number,
+  py: number,
+  pw: number,
+  ph: number,
+): void {
+  const clampedX = Math.max(0, Math.floor(px));
+  const clampedY = Math.max(0, Math.floor(py));
+  const clampedW = Math.min(arenaGroundTex.width - clampedX, Math.ceil(pw));
+  const clampedH = Math.min(arenaGroundTex.height - clampedY, Math.ceil(ph));
+  if (clampedW <= 0 || clampedH <= 0) return;
+
+  const texWithInternals = arenaGroundTex as Phaser.Textures.CanvasTexture & {
+    source?: TextureSourceLike[];
+    _source?: TextureSourceLike;
+  };
+  const texSource = texWithInternals.source?.[0] ?? texWithInternals._source;
+  const glWrapper = texSource?.glTexture;
+  const gl =
+    glWrapper?.gl ??
+    texSource?.renderer?.gl ??
+    (scene.game?.renderer as { gl?: WebGLRenderingContext } | undefined)?.gl;
+  const webGLTex = glWrapper?.webGLTexture;
+  const srcCanvas = arenaGroundTex.canvas ?? arenaGroundTex.getCanvas?.();
+
+  if (
+    gl &&
+    webGLTex &&
+    srcCanvas &&
+    !gl.isContextLost?.() &&
+    !glWrapper?.flipY &&
+    !texSource?.flipY
+  ) {
+    const patch = getArenaDirtyPatchCanvas(srcCanvas, clampedW, clampedH);
+    if (patch) {
+      patch.ctx.clearRect(0, 0, clampedW, clampedH);
+      patch.ctx.drawImage(
+        srcCanvas,
+        clampedX,
+        clampedY,
+        clampedW,
+        clampedH,
+        0,
+        0,
+        clampedW,
+        clampedH,
+      );
+
+      const hasBindingQuery =
+        typeof gl.getParameter === 'function' && gl.TEXTURE_BINDING_2D !== undefined;
+      const prevTex = hasBindingQuery
+        ? (gl.getParameter(gl.TEXTURE_BINDING_2D) as WebGLTexture | null)
+        : undefined;
+
+      gl.bindTexture(gl.TEXTURE_2D, webGLTex);
+      if (typeof gl.pixelStorei === 'function') {
+        const pma = glWrapper.pma ?? true;
+        if (gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL !== undefined) {
+          gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, pma);
+        }
+        if (gl.UNPACK_FLIP_Y_WEBGL !== undefined) {
+          gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+        }
+      }
+      gl.texSubImage2D(
+        gl.TEXTURE_2D,
+        0,
+        clampedX,
+        clampedY,
+        gl.RGBA,
+        gl.UNSIGNED_BYTE,
+        patch.canvas,
+      );
+      if (hasBindingQuery) {
+        gl.bindTexture(gl.TEXTURE_2D, prevTex ?? null);
+      }
+      return;
+    }
+  }
+
+  arenaGroundTex.refresh();
+}
+
 const scratchDirtyTiles: ArenaTileVisual[] = [];
 
 export function syncArenaTilesWithMapRevisionImpl(this: GameScene): void {
@@ -1512,12 +1642,16 @@ export function syncArenaTilesWithMapRevisionImpl(this: GameScene): void {
   }
 
   let groundDirty = conveyorFlipped;
+  let anyKindChanged = false;
   scratchDirtyTiles.length = 0;
 
   for (let i = 0; i < this.mapTileVisuals.length; i++) {
     const tile = this.mapTileVisuals[i]!;
     const newKind = map.getTile(tile.tx, tile.ty);
     const kindChanged = newKind !== tile.kind || biomeChanged;
+    if (newKind !== tile.kind) {
+      anyKindChanged = true;
+    }
     const newDistToWall = kindChanged ? computeTileDistToWall(map, tile.tx, tile.ty) : tile.distToWall;
     const newVariant = kindChanged ? resolveHybridFloorVariant(tile.tx, tile.ty, newDistToWall) : tile.variant;
     const newMask = kindChanged ? map.getAutotileMask(tile.tx, tile.ty) : tile.autotileMask;
@@ -1548,15 +1682,72 @@ export function syncArenaTilesWithMapRevisionImpl(this: GameScene): void {
   }
 
   if (groundDirty) {
-    if (!biomeChanged && !conveyorFlipped && scratchDirtyTiles.length <= 320 && this.arenaGroundTex) {
+    if (
+      !biomeChanged &&
+      !conveyorFlipped &&
+      scratchDirtyTiles.length > 0 &&
+      scratchDirtyTiles.length <= 64 &&
+      this.arenaGroundTex
+    ) {
+      let minTx = map.cols - 1;
+      let maxTx = 0;
+      let minTy = map.rows - 1;
+      let maxTy = 0;
       for (let i = 0; i < scratchDirtyTiles.length; i++) {
-        this.renderTileCellToComposite(scratchDirtyTiles[i]!);
+        const dt = scratchDirtyTiles[i]!;
+        if (dt.tx < minTx) minTx = dt.tx;
+        if (dt.tx > maxTx) maxTx = dt.tx;
+        if (dt.ty < minTy) minTy = dt.ty;
+        if (dt.ty > maxTy) maxTy = dt.ty;
       }
+      minTx = Math.max(0, minTx - 1);
+      maxTx = Math.min(map.cols - 1, maxTx + 1);
+      minTy = Math.max(0, minTy - 1);
+      maxTy = Math.min(map.rows - 1, maxTy + 1);
+
+      for (let ty = minTy; ty <= maxTy; ty++) {
+        const rowOff = ty * map.cols;
+        for (let tx = minTx; tx <= maxTx; tx++) {
+          let tile = this.mapTileVisuals[rowOff + tx];
+          if (!tile || tile.tx !== tx || tile.ty !== ty) {
+            tile = this.mapTileVisuals.find((t) => t.tx === tx && t.ty === ty);
+          }
+          if (!tile) continue;
+          if (anyKindChanged) {
+            tile.distToWall = computeTileDistToWall(map, tx, ty);
+            tile.variant = resolveHybridFloorVariant(tx, ty, tile.distToWall);
+            tile.autotileMask = map.getAutotileMask(tx, ty);
+            tile.aoMask = map.getWallAmbientOcclusionMask(tx, ty);
+          }
+          this.renderTileCellToComposite(tile);
+        }
+      }
+
+      const clipRectWorld = {
+        x: minTx * TILE_SIZE,
+        y: minTy * TILE_SIZE,
+        width: (maxTx - minTx + 1) * TILE_SIZE,
+        height: (maxTy - minTy + 1) * TILE_SIZE,
+      };
       const groundCtx = this.arenaGroundTex.getContext();
       if (groundCtx && sim && this.biomeArchLive) {
-        this.biomeArchLive.renderGroundPass(groundCtx, sim.map, this.tileCompositeScale);
+        this.biomeArchLive.renderGroundPass(
+          groundCtx,
+          sim.map,
+          this.tileCompositeScale,
+          clipRectWorld,
+        );
       }
-      this.arenaGroundTex.refresh();
+
+      const scale = this.tileCompositeScale;
+      uploadArenaGroundSubRect(
+        this,
+        this.arenaGroundTex,
+        clipRectWorld.x * scale,
+        clipRectWorld.y * scale,
+        clipRectWorld.width * scale,
+        clipRectWorld.height * scale,
+      );
     } else {
       this.rebuildAllTileCellsToComposite();
     }
