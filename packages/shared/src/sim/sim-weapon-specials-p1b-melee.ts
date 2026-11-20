@@ -216,7 +216,11 @@ export function updateEmeraldCleaverBoomerang(
         const eb = sim.projectiles[i]!;
         if (eb.ttlSec <= 0 || eb.team !== 'enemy' || eb.parryDeflected) continue;
         if (distance(b.x, b.y, eb.x, eb.y) <= EMERALD_BOOMERANG_SPIN_RADIUS + eb.radius) {
+          sim.ensureProjectileTeamCounts();
           eb.team = 'player';
+          sim._enemyProjectileCount = Math.max(0, sim._enemyProjectileCount - 1);
+          sim._playerProjectileCount += 1;
+          sim.bulletSpatialGridPhase += 1;
           eb.ownerId = b.ownerId;
           eb.parryDeflected = true;
           eb.kinematicMode = undefined;

@@ -926,11 +926,12 @@ function mixHashOptStrArray(arr: readonly string[] | undefined): void {
 }
 
 function baselineFingerprintReplacer(key: string, value: unknown): unknown {
+  if (key === 'prismPulseCooldownSec' || key === 'fuseTimer') {
+    return typeof value === 'number' && value > 0 ? 1 : undefined;
+  }
   if (
     key === 'hitFlashTimer' ||
-    key === 'fuseTimer' ||
     key === 'ttlSec' ||
-    key === 'prismPulseCooldownSec' ||
     key === 'microBlankTimer' ||
     key === 'pressTimer'
   ) {
@@ -1084,6 +1085,8 @@ export function computeBaselineFastHash(snap: QuantizedWorldSnapshot): [number, 
     mixHashOptNum(pr.causticRollRemainingPx);
     mixHashOptNum(pr.ownerPlayerId);
     mixHashOptBool(pr.cryoShatterSpire);
+    mixHashBool((pr.prismPulseCooldownSec ?? 0) > 0);
+    mixHashBool(pr.fuseTimer > 0);
   }
 
   // Chests
@@ -1354,6 +1357,7 @@ export class P2PSnapshotEncoder {
 export class P2PSnapshotDecoder {
   private currentRev = 0;
   private currentBaseline: P2PSnapshotBaseline | null = null;
+  private baseTickForRev = -1;
   private playerBaseById = new Map<number, P2PPlayerBaseline>();
   private enemyBaseById = new Map<number, P2PEnemyBaseline>();
   private lastFastSeq = 0;
@@ -1362,6 +1366,7 @@ export class P2PSnapshotDecoder {
   public reset(): void {
     this.currentRev = 0;
     this.currentBaseline = null;
+    this.baseTickForRev = -1;
     this.playerBaseById.clear();
     this.enemyBaseById.clear();
     this.lastFastSeq = 0;
@@ -1374,6 +1379,7 @@ export class P2PSnapshotDecoder {
     }
     this.currentRev = rev;
     this.currentBaseline = data;
+    this.baseTickForRev = -1;
     this.playerBaseById.clear();
     for (const p of data.players) {
       this.playerBaseById.set(p.id, p);
@@ -1437,6 +1443,13 @@ export class P2PSnapshotDecoder {
     }
 
     this.lastFastSeq = wireSeq;
+    if (this.baseTickForRev < 0) {
+      this.baseTickForRev = fast[2];
+    }
+    const elapsedSec =
+      this.baseTickForRev >= 0 && fast[2] > this.baseTickForRev
+        ? (fast[2] - this.baseTickForRev) / 60
+        : 0;
 
     const timers = fast[4];
     const rs = fast[5];
@@ -1465,10 +1478,33 @@ export class P2PSnapshotDecoder {
       players,
       enemies,
       projectiles: extras?.pj ? extras.pj.map((pt) => [...pt] as QuantizedProjectileTuple) : [],
-      props: base.props.map((pr) => ({
-        ...pr,
-        ...(pr.hitEnemyIds ? { hitEnemyIds: [...pr.hitEnemyIds] } : {}),
-      })),
+      props: base.props.map((pr) => {
+        const copy: SimPropState = {
+          ...pr,
+          ...(pr.hitEnemyIds ? { hitEnemyIds: [...pr.hitEnemyIds] } : {}),
+        };
+        if (elapsedSec > 0) {
+          if (copy.hitFlashTimer > 0) {
+            copy.hitFlashTimer = Math.max(0, copy.hitFlashTimer - elapsedSec);
+          }
+          if (copy.fuseTimer > 0) {
+            copy.fuseTimer = Math.max(0, copy.fuseTimer - elapsedSec);
+          }
+          if (copy.ttlSec !== undefined && copy.ttlSec > 0) {
+            copy.ttlSec = Math.max(0, copy.ttlSec - elapsedSec);
+          }
+          if (copy.prismPulseCooldownSec !== undefined && copy.prismPulseCooldownSec > 0) {
+            copy.prismPulseCooldownSec = Math.max(0, copy.prismPulseCooldownSec - elapsedSec);
+          }
+          if (copy.microBlankTimer !== undefined && copy.microBlankTimer > 0) {
+            copy.microBlankTimer = Math.max(0, copy.microBlankTimer - elapsedSec);
+          }
+          if (copy.pressTimer !== undefined && copy.pressTimer > 0) {
+            copy.pressTimer = Math.max(0, copy.pressTimer - elapsedSec);
+          }
+        }
+        return copy;
+      }),
       chests: base.chests.map((c) => ({ ...c })),
       worldItems: base.worldItems.map((wi) => ({ ...wi })),
       npcEntities: base.npcEntities.map((n) => ({ ...n })),

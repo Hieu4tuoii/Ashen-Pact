@@ -20,6 +20,8 @@ import {
   P2PSnapshotDecoder,
   P2PSnapshotEncoder,
 } from '../../../apps/client/src/net/p2p-wire-codec.js';
+import { updateEmeraldCleaverBoomerang } from '../src/sim/sim-weapon-specials-p1b-melee.js';
+import { processMeleeParryDeflect } from '../src/sim/sim-weapon-specials.js';
 
 /**
  * Pure reference implementation of ArenaMap.resolveCircleCollision's original 4-while-loop
@@ -676,4 +678,228 @@ describe('Task 6 — Deterministic WorldSim, SpatialHashGrid, ArenaMap Span Tabl
     expect(decProp.state).toBe('sliding');
     expect(decProp.coverState).toBe('sliding');
   });
+
+  it('6. P2PSnapshotDecoder decays baseline prop timers across fast frames without extra baselines, while P2PSnapshotEncoder emits baseline on prismPulseCooldownSec and fuseTimer 0 -> >0 activation', () => {
+    const sim = new WorldSim({
+      seed: 0x445566,
+      startInHub: false,
+      spawnInitialWave: false,
+      includeTrainingDummy: false,
+      includeProps: false,
+    });
+    const crate = sim.spawnProp('crate', 320, 240);
+    const obelisk = sim.spawnProp('cryo_prism_pillar', 420, 260);
+    obelisk.prismPulseCooldownSec = 0;
+    const press = sim.spawnProp('pneumatic_press', 520, 280);
+    press.pressState = 'idle';
+    press.pressTimer = 1.0;
+    const bomb = sim.spawnProp('coal_bomb', 600, 300);
+    bomb.fuseTimer = 0;
+
+    const encoder = new P2PSnapshotEncoder();
+    const decoder = new P2PSnapshotDecoder();
+
+    // Seq 1 (tick 100): initial baseline rev 1
+    const snap1 = encodeWorldSnapshot(sim, [], false, 1700002000000);
+    snap1.tick = 100;
+    snap1.snapshotSeq = 1;
+    const enc1 = encoder.encode(snap1);
+    expect(enc1.baseline?.rev).toBe(1);
+    decoder.applyBaseline(enc1.baseline!.rev, enc1.baseline!.data);
+    expect(decoder.decodeFast(enc1.fast)).toEqual(snap1);
+
+    // Seq 2 (tick 102): crate takes non-lethal damage (hitFlashTimer = 0.10) and press enters cooldown (pressTimer = 3.5)
+    const snap2 = structuredClone(snap1);
+    snap2.tick = 102;
+    snap2.snapshotSeq = 2;
+    const s2Crate = snap2.props.find((p) => p.id === crate.id)!;
+    s2Crate.hp = crate.hp - 10;
+    s2Crate.hitFlashTimer = 0.1;
+    const s2Press = snap2.props.find((p) => p.id === press.id)!;
+    s2Press.pressState = 'cooldown';
+    s2Press.pressTimer = 3.5;
+
+    const enc2 = encoder.encode(snap2);
+    expect(enc2.baseline?.rev).toBe(2);
+    decoder.applyBaseline(enc2.baseline!.rev, enc2.baseline!.data);
+    const dec2 = decoder.decodeFast(enc2.fast)!;
+    expect(dec2.props.find((p) => p.id === crate.id)!.hitFlashTimer).toBe(0.1);
+    expect(dec2.props.find((p) => p.id === press.id)!.pressTimer).toBe(3.5);
+
+    // Seq 3 (tick 112, +10 ticks = 0.1667s later): host crate.hitFlashTimer decayed to 0 without any structural change
+    const snap3 = structuredClone(snap2);
+    snap3.tick = 112;
+    snap3.snapshotSeq = 3;
+    snap3.props.find((p) => p.id === crate.id)!.hitFlashTimer = 0;
+    snap3.props.find((p) => p.id === press.id)!.pressTimer = 3.5 - 10 / 60;
+
+    const enc3 = encoder.encode(snap3);
+    expect(enc3.baseline).toBeUndefined();
+    const dec3 = decoder.decodeFast(enc3.fast)!;
+    expect(dec3.props.find((p) => p.id === crate.id)!.hitFlashTimer).toBe(0);
+
+    // Seq 4 (tick 124, +22 ticks = 0.3667s after rev 2): pressTimer must decay below 3.2 so press retracts from 'fallen'
+    const snap4 = structuredClone(snap3);
+    snap4.tick = 124;
+    snap4.snapshotSeq = 4;
+    snap4.props.find((p) => p.id === press.id)!.pressTimer = 3.5 - 22 / 60;
+
+    const enc4 = encoder.encode(snap4);
+    expect(enc4.baseline).toBeUndefined();
+    const dec4 = decoder.decodeFast(enc4.fast)!;
+    expect(dec4.props.find((p) => p.id === press.id)!.pressTimer).toBeLessThan(3.2);
+
+    // Seq 5 (tick 126): shooting indestructible cryo_prism_pillar activates prismPulseCooldownSec (0 -> 2.5) and coal_bomb fuse ignites (0 -> 2.0)
+    const snap5 = structuredClone(snap4);
+    snap5.tick = 126;
+    snap5.snapshotSeq = 5;
+    const s5Obelisk = snap5.props.find((p) => p.id === obelisk.id)!;
+    s5Obelisk.prismPulseCooldownSec = 2.5;
+    s5Obelisk.hitFlashTimer = 0.16;
+    const s5Bomb = snap5.props.find((p) => p.id === bomb.id)!;
+    s5Bomb.fuseTimer = 2.0;
+
+    const enc5 = encoder.encode(snap5);
+    expect(enc5.baseline?.rev).toBe(3);
+    decoder.applyBaseline(enc5.baseline!.rev, enc5.baseline!.data);
+    const dec5 = decoder.decodeFast(enc5.fast)!;
+    expect(dec5.props.find((p) => p.id === obelisk.id)!.prismPulseCooldownSec).toBe(2.5);
+    expect(dec5.props.find((p) => p.id === bomb.id)!.fuseTimer).toBe(2.0);
+
+    // Seq 6 (tick 156, +30 ticks = 0.5s later): cooldown & fuse tick down with zero extra baselines while decoding smoothly
+    const snap6 = structuredClone(snap5);
+    snap6.tick = 156;
+    snap6.snapshotSeq = 6;
+    snap6.props.find((p) => p.id === obelisk.id)!.hitFlashTimer = 0;
+    snap6.props.find((p) => p.id === obelisk.id)!.prismPulseCooldownSec = 2.0;
+    snap6.props.find((p) => p.id === bomb.id)!.fuseTimer = 1.5;
+
+    const enc6 = encoder.encode(snap6);
+    expect(enc6.baseline).toBeUndefined();
+    const dec6 = decoder.decodeFast(enc6.fast)!;
+    expect(dec6.props.find((p) => p.id === obelisk.id)!.hitFlashTimer).toBe(0);
+    expect(dec6.props.find((p) => p.id === obelisk.id)!.prismPulseCooldownSec).toBeCloseTo(2.0, 5);
+    expect(dec6.props.find((p) => p.id === bomb.id)!.fuseTimer).toBeCloseTo(1.5, 5);
+  });
+
+  it('7. emerald_boomerang in-place bullet deflection and melee parry immediately keep playerProjectileCount and enemyProjectileCount accurate mid-tick', () => {
+    const sim = new WorldSim({
+      seed: 0x771122,
+      startInHub: false,
+      spawnInitialWave: false,
+      includeTrainingDummy: false,
+      includeProps: false,
+    });
+
+    const boomerang = sim.acquireProjectile({
+      id: 880001,
+      ownerId: sim.player.id,
+      team: 'player',
+      weaponId: 'emerald_cleaver_boomerang',
+      x: 400,
+      y: 300,
+      vx: 0,
+      vy: 0,
+      angle: 0,
+      radius: 16,
+      damage: 32,
+      isCrit: false,
+      knockback: 120,
+      pierceRemaining: 99,
+      bounceRemaining: 0,
+      ttlSec: 1.5,
+      element: 'poison',
+      amplifiedByShield: false,
+      boomerangPhase: 'spinning',
+    });
+    boomerang.boomerangSpinTicks = 0;
+    boomerang.boomerangDeflectedCount = 0;
+
+    const eb1 = sim.acquireProjectile({
+      id: 880002,
+      ownerId: 901,
+      team: 'enemy',
+      weaponId: 'goblin_bow',
+      x: 412,
+      y: 300,
+      vx: -180,
+      vy: 0,
+      angle: Math.PI,
+      radius: 5,
+      damage: 8,
+      isCrit: false,
+      knockback: 0,
+      pierceRemaining: 0,
+      bounceRemaining: 0,
+      ttlSec: 2.0,
+      element: 'none',
+      amplifiedByShield: false,
+    });
+    const eb2 = sim.acquireProjectile({
+      id: 880003,
+      ownerId: 901,
+      team: 'enemy',
+      weaponId: 'goblin_bow',
+      x: 390,
+      y: 308,
+      vx: 180,
+      vy: 0,
+      angle: 0,
+      radius: 5,
+      damage: 8,
+      isCrit: false,
+      knockback: 0,
+      pierceRemaining: 0,
+      bounceRemaining: 0,
+      ttlSec: 2.0,
+      element: 'none',
+      amplifiedByShield: false,
+    });
+    const ebFar = sim.acquireProjectile({
+      id: 880004,
+      ownerId: 901,
+      team: 'enemy',
+      weaponId: 'goblin_bow',
+      x: 760,
+      y: 300,
+      vx: -180,
+      vy: 0,
+      angle: Math.PI,
+      radius: 5,
+      damage: 8,
+      isCrit: false,
+      knockback: 0,
+      pierceRemaining: 0,
+      bounceRemaining: 0,
+      ttlSec: 2.0,
+      element: 'none',
+      amplifiedByShield: false,
+    });
+
+    sim.projectiles.push(boomerang, eb1, eb2, ebFar);
+    expect(sim.playerProjectileCount).toBe(1);
+    expect(sim.enemyProjectileCount).toBe(3);
+
+    // Step boomerang directly mid-tick (before end-of-loop compaction in updateProjectilesImpl)
+    updateEmeraldCleaverBoomerang(sim, boomerang, 1 / 60);
+    expect(eb1.team).toBe('player');
+    expect(eb2.team).toBe('player');
+    expect(ebFar.team).toBe('enemy');
+    expect(sim.playerProjectileCount).toBe(3);
+    expect(sim.enemyProjectileCount).toBe(1);
+
+    // Also verify melee parry deflect keeps team counts consistent
+    sim.player.weaponSlots[0] = 'knight_sword';
+    sim.player.activeWeaponSlot = 0;
+    sim.player.x = 748;
+    sim.player.y = 300;
+    sim.player.aimAngle = 0;
+    sim.player.meleeParryWindowTimer = 0.2;
+    sim.player.parriedCountCurrentWindow = 0;
+    expect(processMeleeParryDeflect(sim, sim.player)).toBe(1);
+    sim.updateProjectiles(1 / 60);
+    expect(sim.enemyProjectileCount).toBe(0);
+    expect(sim.playerProjectileCount).toBe(sim.projectiles.filter((b) => b.team === 'player').length);
+  });
 });
+
