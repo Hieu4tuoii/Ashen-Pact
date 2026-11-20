@@ -1045,6 +1045,25 @@ describe('Task 2 — Static Layer Rasterization, Earcut-Free Motes, Decal Cache 
 
       expect(renderedTiles).toHaveLength(9);
       expect(mockArenaGroundTex.refresh).toHaveBeenCalledTimes(1);
+
+      // Same-dimension room transition check (e.g. 36x22 -> 36x22 with <= 64 changed tiles):
+      // MUST run rebuildAllTileCellsToComposite() (updating RoomArchitecturePlan & clearing old decals/shadows),
+      // never taking the clipped intra-room dirty-box shortcut.
+      renderedTiles.length = 0;
+      renderGroundPassSpy.mockClear();
+      mockArenaGroundTex.refresh.mockClear();
+      sim.currentRoomId += 1;
+      map.setSurface(18, 10, 'poison_swamp', 0, true);
+      syncArenaTilesWithMapRevisionImpl.call(mockGameScene);
+
+      expect(mockGameScene.rebuildAllTileCellsToComposite).toHaveBeenCalledTimes(1);
+      expect(renderedTiles).toHaveLength(0);
+      expect(renderGroundPassSpy).not.toHaveBeenCalled();
+
+      // Same-dimension room transition with 0 tile/surface differences MUST also trigger full rebuild
+      sim.currentRoomId += 1;
+      syncArenaTilesWithMapRevisionImpl.call(mockGameScene);
+      expect(mockGameScene.rebuildAllTileCellsToComposite).toHaveBeenCalledTimes(2);
     } finally {
       globalThis.document = prevDoc;
     }

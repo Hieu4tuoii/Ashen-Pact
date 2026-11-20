@@ -255,6 +255,7 @@ export function createImpl(this: GameScene): void {
   this.pickupSpritePool = [];
   this.mapTileVisuals = [];
   this.lastMapRevision = -1;
+  (this as GameScene & { lastRenderedRoomKey?: string }).lastRenderedRoomKey = undefined;
   this.dashAfterimageTimer = 0;
   this.textObjects = [];
   this.weaponSlotBgs = [];
@@ -1420,8 +1421,9 @@ export function buildArenaTilesImpl(this: GameScene): void {
   this.arenaGroundSprite.setDepth(2);
 
   this.lastRenderedBiome = effectiveBiome;
-  (this as GameScene & { lastConveyorDirection?: 1 | -1 }).lastConveyorDirection =
-    map.conveyorDirection;
+  const trackedScene = this as SceneWithTileSyncTrack;
+  trackedScene.lastConveyorDirection = map.conveyorDirection;
+  trackedScene.lastRenderedRoomKey = resolveArenaRoomIdentityKey(sim, effectiveBiome);
   this.lastMapRevision =
     effectiveBiome * 10000000 +
     sim.currentFloor * 1000000 +
@@ -1574,6 +1576,15 @@ function uploadArenaGroundSubRect(
   arenaGroundTex.refresh();
 }
 
+type SceneWithTileSyncTrack = GameScene & {
+  lastConveyorDirection?: 1 | -1;
+  lastRenderedRoomKey?: string;
+};
+
+function resolveArenaRoomIdentityKey(sim: WorldSim, effectiveBiome: 0 | 1 | 2 | 3): string {
+  return sim.inHub ? 'hub' : `${effectiveBiome}:${sim.currentFloor}:${sim.currentRoomId}`;
+}
+
 const scratchDirtyTiles: ArenaTileVisual[] = [];
 
 export function syncArenaTilesWithMapRevisionImpl(this: GameScene): void {
@@ -1587,28 +1598,37 @@ export function syncArenaTilesWithMapRevisionImpl(this: GameScene): void {
     this.mapTileVisuals.length !== map.cols * map.rows ||
     this.arenaGroundTex?.width !== expectedW ||
     this.arenaGroundTex?.height !== expectedH;
-  const sceneWithConv = this as GameScene & { lastConveyorDirection?: 1 | -1 };
+  const sceneWithTrack = this as SceneWithTileSyncTrack;
   const conveyorFlipped =
-    sceneWithConv.lastConveyorDirection !== undefined &&
-    map.conveyorDirection !== sceneWithConv.lastConveyorDirection;
-  sceneWithConv.lastConveyorDirection = map.conveyorDirection;
+    sceneWithTrack.lastConveyorDirection !== undefined &&
+    map.conveyorDirection !== sceneWithTrack.lastConveyorDirection;
+  sceneWithTrack.lastConveyorDirection = map.conveyorDirection;
 
   const revKey =
     effectiveBiome * 10000000 +
     sim.currentFloor * 1000000 +
     sim.currentRoomId * 10000 +
     map.mapRevision;
+  const roomKey = resolveArenaRoomIdentityKey(sim, effectiveBiome);
+  const roomChanged =
+    sceneWithTrack.lastRenderedRoomKey !== undefined
+      ? sceneWithTrack.lastRenderedRoomKey !== roomKey
+      : this.lastMapRevision >= 0 &&
+        Math.floor(revKey / 10000) !== Math.floor(this.lastMapRevision / 10000);
   if (
     !dimsChanged &&
     !conveyorFlipped &&
+    !roomChanged &&
     revKey === this.lastMapRevision &&
     effectiveBiome === this.lastRenderedBiome
   ) {
+    sceneWithTrack.lastRenderedRoomKey = roomKey;
     return;
   }
   const biomeChanged = effectiveBiome !== this.lastRenderedBiome;
   this.lastMapRevision = revKey;
   this.lastRenderedBiome = effectiveBiome;
+  sceneWithTrack.lastRenderedRoomKey = roomKey;
 
   if (dimsChanged) {
     if (this.textures.exists('arena_ground_composite')) {
@@ -1641,14 +1661,14 @@ export function syncArenaTilesWithMapRevisionImpl(this: GameScene): void {
     return;
   }
 
-  let groundDirty = conveyorFlipped;
+  let groundDirty = conveyorFlipped || roomChanged;
   let anyKindChanged = false;
   scratchDirtyTiles.length = 0;
 
   for (let i = 0; i < this.mapTileVisuals.length; i++) {
     const tile = this.mapTileVisuals[i]!;
     const newKind = map.getTile(tile.tx, tile.ty);
-    const kindChanged = newKind !== tile.kind || biomeChanged;
+    const kindChanged = newKind !== tile.kind || biomeChanged || roomChanged;
     if (newKind !== tile.kind) {
       anyKindChanged = true;
     }
@@ -1661,6 +1681,7 @@ export function syncArenaTilesWithMapRevisionImpl(this: GameScene): void {
 
     if (
       biomeChanged ||
+      roomChanged ||
       newKind !== tile.kind ||
       newVariant !== tile.variant ||
       newDistToWall !== tile.distToWall ||
@@ -1684,6 +1705,7 @@ export function syncArenaTilesWithMapRevisionImpl(this: GameScene): void {
   if (groundDirty) {
     if (
       !biomeChanged &&
+      !roomChanged &&
       !conveyorFlipped &&
       scratchDirtyTiles.length > 0 &&
       scratchDirtyTiles.length <= 64 &&
