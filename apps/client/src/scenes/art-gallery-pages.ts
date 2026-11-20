@@ -255,9 +255,14 @@ export function buildPage3WeaponsAndProps(
     cg.strokeRoundedRect(wx, wy, cardW, cardH, 6);
     parent.add(cg);
 
-    const spr = this.add.sprite(wx + cardW / 2, wy + 23, TextureBaker.getWeaponTextureKey(wId));
+    const wepLogicalKey = TextureBaker.getWeaponTextureKey(wId);
+    const wepBinding = TextureBaker.resolveAtlasBinding(this, wepLogicalKey);
+    const spr =
+      wepBinding.frameName !== undefined
+        ? this.add.sprite(wx + cardW / 2, wy + 23, wepBinding.textureKey, wepBinding.frameName)
+        : this.add.sprite(wx + cardW / 2, wy + 23, wepBinding.textureKey);
     spr.setScale(invBake * 0.96);
-    this.bakedSprites.push({ sprite: spr, mult: 0.96 });
+    this.bakedSprites.push({ sprite: spr, mult: 0.96, logicalKey: wepLogicalKey });
     parent.add(spr);
 
     const wName = this.add
@@ -336,9 +341,13 @@ export function buildPage3WeaponsAndProps(
   propItems.forEach((pItem, idx) => {
     const px = 52 + idx * 75;
     const py = 398;
-    const spr = this.add.sprite(px, py, pItem.tex);
+    const pBinding = TextureBaker.resolveAtlasBinding(this, pItem.tex);
+    const spr =
+      pBinding.frameName !== undefined
+        ? this.add.sprite(px, py, pBinding.textureKey, pBinding.frameName)
+        : this.add.sprite(px, py, pBinding.textureKey);
     spr.setScale(invBake * 0.85);
-    this.bakedSprites.push({ sprite: spr, mult: 0.85 });
+    this.bakedSprites.push({ sprite: spr, mult: 0.85, logicalKey: pItem.tex });
     parent.add(spr);
 
     const lbl = this.add

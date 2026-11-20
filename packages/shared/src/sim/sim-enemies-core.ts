@@ -40,6 +40,46 @@ const EMPTY_PLAYERS: readonly SimPlayerState[] = [];
 const BASE_STEER_OFFSETS: readonly number[] = [
   0, 0.35, -0.35, 0.72, -0.72, 1.1, -1.1, 1.57, -1.57, 2.1, -2.1,
 ];
+const navWaypointScratch = { x: 0, y: 0 };
+
+function isEnemyWallOrChasmClear(
+  map: WorldSim['map'],
+  ex: number,
+  ey: number,
+  radius: number,
+  isFlying: boolean,
+  ang: number,
+  dist: number,
+): boolean {
+  const px = ex + Math.cos(ang) * dist;
+  const py = ey + Math.sin(ang) * dist;
+  const ptx = Math.floor(px / TILE_SIZE);
+  const pty = Math.floor(py / TILE_SIZE);
+  if (map.isSolidTile(ptx, pty)) return false;
+  if (!isFlying && map.getSurfaceAtWorld(px, py) === 'chasm') return false;
+  if (map.resolveCircleCollision(px, py, radius, isFlying).collided) return false;
+  return true;
+}
+
+function isEnemyPathPointClear(
+  map: WorldSim['map'],
+  ex: number,
+  ey: number,
+  radius: number,
+  isFlying: boolean,
+  checkProps: boolean,
+  blockingProps: WorldSim['blockingPropsScratch'],
+  ang: number,
+  dist: number,
+): boolean {
+  if (!isEnemyWallOrChasmClear(map, ex, ey, radius, isFlying, ang, dist)) return false;
+  if (checkProps) {
+    const px = ex + Math.cos(ang) * dist;
+    const py = ey + Math.sin(ang) * dist;
+    if (isPointBlockedByStationaryProp(px, py, radius, blockingProps)) return false;
+  }
+  return true;
+}
 
 export function updatePhase6MechanicsImpl(this: WorldSim, dtSec: number): void {
   const allPlayers =
@@ -352,16 +392,23 @@ export function updateEnemiesImpl(this: WorldSim, dtSec: number): void {
   syncAshenExecutionerInRoom(this);
   stepPendingMortarStrikes(this, dtSec);
   stepBossSupplyDropsAndStagger(this, dtSec);
+  const blockingProps = this.blockingPropsScratch;
+  blockingProps.length = 0;
   let hasAliveProps = false;
   let hasAncientMechanism = false;
+  let scannedPropsLen = 0;
   if (!this.stressTestActive) {
     for (let pIdx = 0; pIdx < this.props.length; pIdx++) {
       const pr = this.props[pIdx]!;
       if (pr.hp > 0) {
         hasAliveProps = true;
         if (pr.kind === 'ancient_mechanism') hasAncientMechanism = true;
+        if (pr.blocksMovement && pr.coverState !== 'fallen') {
+          blockingProps.push(pr);
+        }
       }
     }
+    scannedPropsLen = this.props.length;
   }
 
   for (let i = 0; i < this.enemies.length; i++) {
@@ -611,6 +658,19 @@ export function updateEnemiesImpl(this: WorldSim, dtSec: number): void {
       e.kbVy = 0;
     }
 
+    if (!this.stressTestActive && scannedPropsLen < this.props.length) {
+      while (scannedPropsLen < this.props.length) {
+        const pr = this.props[scannedPropsLen++]!;
+        if (pr.hp > 0) {
+          hasAliveProps = true;
+          if (pr.kind === 'ancient_mechanism') hasAncientMechanism = true;
+          if (pr.blocksMovement && pr.coverState !== 'fallen') {
+            blockingProps.push(pr);
+          }
+        }
+      }
+    }
+
     const canSteer =
       !this.stressTestActive &&
       !isStationaryDef &&
@@ -637,30 +697,35 @@ export function updateEnemiesImpl(this: WorldSim, dtSec: number): void {
         const stepDist = Math.max(4, rawSpeed * dtSec * 2);
         const probeDist = Math.max(14, Math.min(24, e.radius + 4));
         const curBlockedByProp =
-          hasAliveProps && isPointBlockedByStationaryProp(e.x, e.y, e.radius, this.props);
-        const isWallOrChasmClear = (ang: number, dist: number): boolean => {
-          const px = e.x + Math.cos(ang) * dist;
-          const py = e.y + Math.sin(ang) * dist;
-          const ptx = Math.floor(px / TILE_SIZE);
-          const pty = Math.floor(py / TILE_SIZE);
-          if (this.map.isSolidTile(ptx, pty)) return false;
-          if (!isFlying && this.map.getSurfaceAtWorld(px, py) === 'chasm') return false;
-          if (this.map.resolveCircleCollision(px, py, e.radius, isFlying).collided) return false;
-          return true;
-        };
-        const isPathPointClear = (ang: number, dist: number): boolean => {
-          if (!isWallOrChasmClear(ang, dist)) return false;
-          if (hasAliveProps && !curBlockedByProp) {
-            const px = e.x + Math.cos(ang) * dist;
-            const py = e.y + Math.sin(ang) * dist;
-            if (isPointBlockedByStationaryProp(px, py, e.radius, this.props)) return false;
-          }
-          return true;
-        };
+          blockingProps.length > 0 &&
+          isPointBlockedByStationaryProp(e.x, e.y, e.radius, blockingProps);
+        const checkPathProps = blockingProps.length > 0 && !curBlockedByProp;
+        const navProps = hasAliveProps ? blockingProps : undefined;
 
         const isStuck = (e.navStuckTimer ?? 0) >= 0.35;
         const immediateBlocked =
-          !isPathPointClear(rawAngle, stepDist) || !isPathPointClear(rawAngle, probeDist);
+          !isEnemyPathPointClear(
+            this.map,
+            e.x,
+            e.y,
+            e.radius,
+            isFlying,
+            checkPathProps,
+            blockingProps,
+            rawAngle,
+            stepDist,
+          ) ||
+          !isEnemyPathPointClear(
+            this.map,
+            e.x,
+            e.y,
+            e.radius,
+            isFlying,
+            checkPathProps,
+            blockingProps,
+            rawAngle,
+            probeDist,
+          );
         const corridorBlocked =
           isChasing &&
           !hasClearWalkableCorridor(
@@ -670,7 +735,7 @@ export function updateEnemiesImpl(this: WorldSim, dtSec: number): void {
             targetX,
             targetY,
             e.radius,
-            hasAliveProps ? this.props : undefined,
+            navProps,
             isFlying,
           );
 
@@ -683,9 +748,10 @@ export function updateEnemiesImpl(this: WorldSim, dtSec: number): void {
               e.y,
               targetX,
               targetY,
-              hasAliveProps ? this.props : undefined,
+              navProps,
               isFlying,
               e.radius,
+              navWaypointScratch,
             );
             if (distanceSq(e.x, e.y, wp.x, wp.y) > 4) {
               baseAngle = Math.atan2(wp.y - e.y, wp.x - e.x);
@@ -699,8 +765,36 @@ export function updateEnemiesImpl(this: WorldSim, dtSec: number): void {
           for (let k = 0; k < BASE_STEER_OFFSETS.length; k++) {
             const off = BASE_STEER_OFFSETS[k]! * s;
             const candAng = baseAngle + off;
-            if (!isPathPointClear(candAng, stepDist)) continue;
-            if (!isPathPointClear(candAng, probeDist)) continue;
+            if (
+              !isEnemyPathPointClear(
+                this.map,
+                e.x,
+                e.y,
+                e.radius,
+                isFlying,
+                checkPathProps,
+                blockingProps,
+                candAng,
+                stepDist,
+              )
+            ) {
+              continue;
+            }
+            if (
+              !isEnemyPathPointClear(
+                this.map,
+                e.x,
+                e.y,
+                e.radius,
+                isFlying,
+                checkPathProps,
+                blockingProps,
+                candAng,
+                probeDist,
+              )
+            ) {
+              continue;
+            }
             chosenAngle = candAng;
             chosenOffset = off;
             foundSteer = true;
@@ -710,8 +804,12 @@ export function updateEnemiesImpl(this: WorldSim, dtSec: number): void {
             for (let k = 0; k < BASE_STEER_OFFSETS.length; k++) {
               const off = BASE_STEER_OFFSETS[k]! * s;
               const candAng = baseAngle + off;
-              if (!isWallOrChasmClear(candAng, stepDist)) continue;
-              if (!isWallOrChasmClear(candAng, probeDist)) continue;
+              if (!isEnemyWallOrChasmClear(this.map, e.x, e.y, e.radius, isFlying, candAng, stepDist)) {
+                continue;
+              }
+              if (!isEnemyWallOrChasmClear(this.map, e.x, e.y, e.radius, isFlying, candAng, probeDist)) {
+                continue;
+              }
               chosenAngle = candAng;
               chosenOffset = off;
               break;
@@ -847,7 +945,7 @@ export function updateEnemiesImpl(this: WorldSim, dtSec: number): void {
           e.x,
           e.y,
           e.radius,
-          hasAliveProps ? this.props : undefined,
+          hasAliveProps ? blockingProps : undefined,
           isFlying,
         );
         const safeCol = this.map.resolveCircleCollision(safePt.x, safePt.y, e.radius, isFlying);
@@ -888,9 +986,10 @@ export function updateEnemiesImpl(this: WorldSim, dtSec: number): void {
             e.y,
             targetX,
             targetY,
-            hasAliveProps ? this.props : undefined,
+            hasAliveProps ? blockingProps : undefined,
             isFlying,
             e.radius,
+            navWaypointScratch,
           );
           const step = Math.min(18, Math.max(6, e.moveSpeed * dtSec * 2));
           const nudgeX = approach(e.x, wp.x, step);
@@ -942,13 +1041,18 @@ export function updateEnemiesImpl(this: WorldSim, dtSec: number): void {
   }
 
   let writeIdx = 0;
+  let anySuperconduct = false;
   for (let i = 0; i < this.enemies.length; i++) {
     const e = this.enemies[i]!;
     if (e.hp > 0) {
       this.enemies[writeIdx++] = e;
+      if (e.superconductTimer > 0 && !e.isDummy && e.defId !== 'ashen_executioner') {
+        anySuperconduct = true;
+      }
     }
   }
   this.enemies.length = writeIdx;
+  this.hasActiveSuperconductEnemy = anySuperconduct;
 }
 
 export function getEnemyCooldownScaleImpl(this: WorldSim, isBoss: boolean): number {
@@ -1114,8 +1218,12 @@ export function clearBossNearbyProjectiles(
     }
   }
   sim.projectiles.length = writeIdx;
-  if (destroyedIds.length > 0 && !sim.stressTestActive) {
-    sim.events.push({ kind: 'projectiles_destroyed', ids: destroyedIds });
+  if (destroyedIds.length > 0) {
+    sim.recountProjectileTeams();
+    sim.bulletSpatialGridPhase += 1;
+    if (!sim.stressTestActive) {
+      sim.events.push({ kind: 'projectiles_destroyed', ids: destroyedIds });
+    }
   }
   for (let pIdx = 0; pIdx < players.length; pIdx++) {
     const pl = players[pIdx]!;

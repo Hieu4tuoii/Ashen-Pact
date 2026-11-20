@@ -742,7 +742,26 @@ export function updateDebugStateImpl(
   debug.trailingArmorRatio = Math.round(this.trailingArmorRatio * 1000) / 1000;
   debug.musicTheme = musicManager.getCurrentTheme();
   debug.musicCombatMix = musicManager.getCombatMix();
-  debug.mvpAwardsCount = sim.computeMvpAwards().length;
+
+  const curKills = sim.runStats.kills;
+  const curPlayerCount = debug.coopPlayerCount;
+  const hasCachedMvp = typeof this.lastMvpEvalTick === 'number' && this.lastMvpEvalTick >= 0;
+  const tickDelta = hasCachedMvp ? sim.tick - this.lastMvpEvalTick : Infinity;
+  const shouldRecomputeMvp =
+    !hasCachedMvp ||
+    sim.runState !== 'playing' ||
+    this.lastMvpRunState !== sim.runState ||
+    tickDelta < 0 ||
+    ((curKills !== this.lastMvpKills || curPlayerCount !== this.lastMvpPlayerCount) &&
+      tickDelta >= 15);
+  if (shouldRecomputeMvp) {
+    this.cachedMvpAwardsCount = sim.computeMvpAwards().length;
+    this.lastMvpEvalTick = sim.tick;
+    this.lastMvpRunState = sim.runState;
+    this.lastMvpKills = curKills;
+    this.lastMvpPlayerCount = curPlayerCount;
+  }
+  debug.mvpAwardsCount = this.cachedMvpAwardsCount;
 
   const activeEnemyCount = this.activeEnemyIds.size;
   const totalEntities = 1 + sim.simulatedPlayers.length + activeEnemyCount + sim.summons.length;

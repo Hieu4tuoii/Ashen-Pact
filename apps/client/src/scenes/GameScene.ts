@@ -348,6 +348,12 @@ export class GameScene extends Phaser.Scene {
   public lastHubPreviewHash = '';
   public lastWeaponCompareHash = '';
   public lastEmoteWheelHash = '';
+  public lastRemainingHudSig = '';
+  public lastMvpEvalTick = -1;
+  public lastMvpRunState = '';
+  public lastMvpKills = -1;
+  public lastMvpPlayerCount = -1;
+  public cachedMvpAwardsCount = 0;
   public emoteWheelOpen = false;
   public emoteWheelHoveredId: QuickEmoteId | null = null;
   public lastRunState = 'playing';
@@ -644,6 +650,12 @@ export class GameScene extends Phaser.Scene {
     this.lastSentCoopMoveX = 0;
     this.lastSentCoopMoveY = 0;
     this.lastSentCoopButtons = 0;
+    this.lastRemainingHudSig = '';
+    this.lastMvpEvalTick = -1;
+    this.lastMvpRunState = '';
+    this.lastMvpKills = -1;
+    this.lastMvpPlayerCount = -1;
+    this.cachedMvpAwardsCount = 0;
     initGlobalDebugState().p2pFastChannel = false;
   }
 
@@ -777,21 +789,24 @@ export class GameScene extends Phaser.Scene {
       localViewX <= 960 - 12 * hudScale + this.hudPadX &&
       localViewY >= 144 * hudScale - this.hudPadY &&
       localViewY <= inviteDrawerBottom * hudScale - this.hudPadY;
-    const isClickingHud =
-      localViewY < 68 - this.hudPadY ||
-      localViewY > 480 + this.hudPadY ||
-      isClickingInvitePanel ||
-      suppressFireForEmoteWheel ||
-      this.suppressFireUntilPointerUp ||
-      isInputBlocked ||
-      this.fullMapOpen ||
-      resolveMinimapClickedRoomId(this, localViewX, localViewY) !== null ||
-      (this.transport.getLocalPlayerState().buffChoices?.length ?? 0) > 0 ||
-      (this.transport.getLocalPlayerState().mutatorChoices?.length ?? 0) > 0 ||
-      (this.transport.getLocalPlayerState().pactChoices?.length ?? 0) > 0 ||
-      sim.runState !== 'playing';
-    if (pointer.leftButtonDown() && !isClickingHud) {
-      buttons |= INPUT_BUTTON.FIRE;
+    if (pointer.leftButtonDown()) {
+      const localPState = this.transport.getLocalPlayerState();
+      const isClickingHud =
+        localViewY < 68 - this.hudPadY ||
+        localViewY > 480 + this.hudPadY ||
+        isClickingInvitePanel ||
+        suppressFireForEmoteWheel ||
+        this.suppressFireUntilPointerUp ||
+        isInputBlocked ||
+        this.fullMapOpen ||
+        sim.runState !== 'playing' ||
+        (localPState.buffChoices?.length ?? 0) > 0 ||
+        (localPState.mutatorChoices?.length ?? 0) > 0 ||
+        (localPState.pactChoices?.length ?? 0) > 0 ||
+        (!this.fullMapOpen && resolveMinimapClickedRoomId(this, localViewX, localViewY) !== null);
+      if (!isClickingHud) {
+        buttons |= INPUT_BUTTON.FIRE;
+      }
     }
     if (pointer.rightButtonDown() && sim.runState === 'playing' && !isInputBlocked) {
       buttons |= INPUT_BUTTON.SKILL;

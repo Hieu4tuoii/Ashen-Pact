@@ -463,11 +463,13 @@ export function updatePlayerWeaponCadence(
     p.crossbowChargeTimer = 0;
   }
   p.lastButtons = buttons;
-  if (activeWepId === 'frag_launcher' || otherWepId === 'frag_launcher') {
-    checkAndTriggerFragLauncherAirburst(sim, p, buttons);
-  }
-  if (activeWepId === 'void_staff' || otherWepId === 'void_staff') {
-    checkAndTriggerVoidStaffImplosion(sim, p, buttons);
+  if (sim.projectiles.length > 0 && sim.playerProjectileCount > 0) {
+    if (activeWepId === 'frag_launcher' || otherWepId === 'frag_launcher') {
+      checkAndTriggerFragLauncherAirburst(sim, p, buttons);
+    }
+    if (activeWepId === 'void_staff' || otherWepId === 'void_staff') {
+      checkAndTriggerVoidStaffImplosion(sim, p, buttons);
+    }
   }
   updateSolarArchonMiniSunsForPlayer(sim, p, dtSec);
 }

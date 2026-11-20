@@ -39,8 +39,9 @@ export {
   syncBatch1WeaponRoomEntities,
 };
 import { initGlobalDebugState } from '../../ui/debug-overlay.js';
+import { setTextAndColorIfChanged, setTextIfChanged } from '../../ui/phaser-text-guard.js';
 import { type GameScene, RIG_FOOT_OFFSET_Y } from '../GameScene.js';
-import { drawWorldWeaponSalvageRing } from './hud-pact-and-forge-modals.js';
+import { setBlendModeIfChanged, setDepthIfChanged } from './entity-sync.js';
 import {
   resolveHubGuideVisibility,
   resolveInteractPromptSpec,
@@ -70,6 +71,7 @@ export interface PooledSummonVisual {
   spawnAgeSec: number;
   aimAngleRad: number;
   recoilPx: number;
+  lastAppliedTint?: number | null;
 }
 
 const activeSummonIdsScratch: number[] = [];
@@ -88,6 +90,8 @@ export function syncSummonCutoutVisuals(
   }
 
   activeSummonIdsScratch.length = 0;
+  const shadowScale = (1 / TextureBaker.getBakeScale()) * 0.65;
+  const shadowBinding = TextureBaker.resolveAtlasBinding(scene, 'prop_shadow');
 
   for (let i = 0; i < summons.length; i++) {
     const sum = summons[i]!;
@@ -140,13 +144,19 @@ export function syncSummonCutoutVisuals(
         vis.spawnAgeSec = 0;
         vis.aimAngleRad = 0;
         vis.recoilPx = 0;
+        vis.lastAppliedTint = undefined;
+        if (shadowBinding.frameName !== undefined) {
+          vis.shadow.setTexture(shadowBinding.textureKey, shadowBinding.frameName);
+        } else {
+          vis.shadow.setTexture(shadowBinding.textureKey);
+        }
         vis.shadow.setVisible(true).setActive(true);
         vis.base.setVisible(true).setActive(true);
         vis.base.setTexture(CUTOUT_KIT_ATLAS_KEY, baseFrame);
         if (headFrame) {
           if (!vis.head) {
             vis.head = scene.add.sprite(sum.x, sum.y, CUTOUT_KIT_ATLAS_KEY, headFrame);
-            vis.head.setBlendMode(Phaser.BlendModes.NORMAL);
+            setBlendModeIfChanged(vis.head, Phaser.BlendModes.NORMAL);
           } else {
             vis.head.setTexture(CUTOUT_KIT_ATLAS_KEY, headFrame);
             vis.head.setVisible(true).setActive(true);
@@ -155,22 +165,25 @@ export function syncSummonCutoutVisuals(
           vis.head.setVisible(false).setActive(false);
         }
       } else {
-        const shadow = scene.add.sprite(sum.x, sum.y + 6, 'prop_shadow');
-        shadow.setDepth(19.0);
-        shadow.setScale(1 / 3);
-        shadow.setBlendMode(Phaser.BlendModes.NORMAL);
+        const shadow =
+          shadowBinding.frameName !== undefined
+            ? scene.add.sprite(sum.x, sum.y + 6, shadowBinding.textureKey, shadowBinding.frameName)
+            : scene.add.sprite(sum.x, sum.y + 6, shadowBinding.textureKey);
+        setDepthIfChanged(shadow, 19.0);
+        shadow.setScale(shadowScale);
+        setBlendModeIfChanged(shadow, Phaser.BlendModes.NORMAL);
 
         const base = scene.add.sprite(sum.x, sum.y, CUTOUT_KIT_ATLAS_KEY, baseFrame);
-        base.setDepth(baseDepth);
+        setDepthIfChanged(base, baseDepth);
         base.setScale(1 / 3);
-        base.setBlendMode(Phaser.BlendModes.NORMAL);
+        setBlendModeIfChanged(base, Phaser.BlendModes.NORMAL);
 
         let head: Phaser.GameObjects.Sprite | undefined;
         if (headFrame) {
           head = scene.add.sprite(sum.x, sum.y, CUTOUT_KIT_ATLAS_KEY, headFrame);
-          head.setDepth(28.6);
+          setDepthIfChanged(head, 28.6);
           head.setScale(1 / 3);
-          head.setBlendMode(Phaser.BlendModes.NORMAL);
+          setBlendModeIfChanged(head, Phaser.BlendModes.NORMAL);
         }
 
         vis = {
@@ -181,6 +194,7 @@ export function syncSummonCutoutVisuals(
           spawnAgeSec: 0,
           aimAngleRad: 0,
           recoilPx: 0,
+          lastAppliedTint: undefined,
         };
       }
       scene.summonVisuals.set(sum.id, vis);
@@ -188,30 +202,35 @@ export function syncSummonCutoutVisuals(
 
     vis.spawnAgeSec += dtSec;
 
-    vis.shadow.setDepth(19.0);
+    setDepthIfChanged(vis.shadow, 19.0);
     vis.shadow.setPosition(sum.x, sum.y + (sum.kind === 'sacred_tree' ? 8 : 6));
-    vis.shadow.setScale(1 / 3);
+    vis.shadow.setScale(shadowScale);
     vis.shadow.setAlpha(alphaVal * 0.7);
 
-    vis.base.setDepth(baseDepth);
+    setDepthIfChanged(vis.base, baseDepth);
     vis.base.setPosition(sum.x, sum.y);
     vis.base.setScale(1 / 3);
     vis.base.setAlpha(alphaVal);
-    if (tintNum !== undefined) {
-      vis.base.setTint(tintNum);
-    } else {
-      vis.base.clearTint();
+    const targetTint = tintNum ?? null;
+    if (vis.lastAppliedTint !== targetTint) {
+      if (targetTint !== null) {
+        vis.base.setTint(targetTint);
+        if (headFrame && vis.head) {
+          vis.head.setTint(targetTint);
+        }
+      } else {
+        vis.base.clearTint();
+        if (headFrame && vis.head) {
+          vis.head.clearTint();
+        }
+      }
+      vis.lastAppliedTint = targetTint;
     }
 
     if (headFrame && vis.head) {
-      vis.head.setDepth(28.6);
+      setDepthIfChanged(vis.head, 28.6);
       vis.head.setScale(1 / 3);
       vis.head.setAlpha(alphaVal);
-      if (tintNum !== undefined) {
-        vis.head.setTint(tintNum);
-      } else {
-        vis.head.clearTint();
-      }
 
       if (isTesla || isAncient) {
         vis.aimAngleRad = (vis.aimAngleRad + dtSec * 2.2) % (Math.PI * 2);
@@ -328,15 +347,15 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
           displayScale: 1.12,
           initialPhaseOffset: i * 0.35,
         });
-        rig.container.setDepth(24);
+        setDepthIfChanged(rig.container, 24);
         rig.setEquippedWeapon(cDef.starterWeaponId);
         if (this.hubLoungeAnimOverride) {
           rig.setAnimState(this.hubLoungeAnimOverride);
         }
 
         const glowSprite = this.add.image(st.x, st.y + 4, 'fx_light_radial');
-        glowSprite.setDepth(35);
-        glowSprite.setBlendMode(Phaser.BlendModes.ADD);
+        setDepthIfChanged(glowSprite, 35);
+        setBlendModeIfChanged(glowSprite, Phaser.BlendModes.ADD);
 
         const label = this.add
           .text(st.x, st.y + HERO_LOUNGE_LABEL_OFFSET_Y, charTxt.name, {
@@ -349,8 +368,8 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
             resolution: textRes,
           })
           .setOrigin(0.5, 0.5)
-          .setDepth(46)
           .setVisible(false);
+        setDepthIfChanged(label, 46);
 
         const subLabel = this.add
           .text(st.x, st.y + 24, '', {
@@ -364,8 +383,8 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
             resolution: textRes,
           })
           .setOrigin(0.5, 0.5)
-          .setDepth(46)
           .setVisible(false);
+        setDepthIfChanged(subLabel, 46);
 
         entry = { rig, glowSprite, label, subLabel };
         this.hubStatueRigs.set(st.characterId, entry);
@@ -407,12 +426,11 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
       });
 
       if (labelState.subLabelVisible) {
-        if (entry.subLabel.text !== labelState.subLabelText) {
-          entry.subLabel.setText(labelState.subLabelText);
-        }
-        if (entry.subLabel.style.color !== labelState.subLabelColor) {
-          entry.subLabel.setColor(labelState.subLabelColor);
-        }
+        setTextAndColorIfChanged(
+          entry.subLabel,
+          labelState.subLabelText,
+          labelState.subLabelColor,
+        );
         entry.subLabel.setPosition(st.x, st.y + 24);
         entry.subLabel.setAlpha(labelState.subLabelAlpha);
         entry.subLabel.setVisible(true);
@@ -421,12 +439,7 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
       }
 
       if (labelState.labelVisible) {
-        if (entry.label.text !== labelState.labelText) {
-          entry.label.setText(labelState.labelText);
-        }
-        if (entry.label.style.color !== labelState.labelColor) {
-          entry.label.setColor(labelState.labelColor);
-        }
+        setTextAndColorIfChanged(entry.label, labelState.labelText, labelState.labelColor);
         entry.label.setPosition(st.x, st.y + HERO_LOUNGE_LABEL_OFFSET_Y);
         entry.label.setAlpha(labelState.labelAlpha);
         entry.label.setVisible(true);
@@ -469,16 +482,15 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
               : undefined,
             resolution: textRes,
           })
-          .setOrigin(0.5, 0.5)
-          .setDepth(45);
+          .setOrigin(0.5, 0.5);
+        setDepthIfChanged(gTxt, 45);
         this.hubGuideTexts[gIdx] = gTxt;
       } else {
         const curWrapWidth = gTxt.style.wordWrapWidth ?? undefined;
         if (curWrapWidth !== spec.wordWrapWidth) {
           gTxt.setWordWrapWidth(spec.wordWrapWidth ?? null, true);
         }
-        if (gTxt.text !== spec.text) gTxt.setText(spec.text);
-        if (gTxt.style.color !== spec.color) gTxt.setColor(spec.color);
+        setTextAndColorIfChanged(gTxt, spec.text, spec.color);
         gTxt.setPosition(spec.x, spec.y);
       }
       const guideVis = resolveHubGuideVisibility(
@@ -539,12 +551,11 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
           strokeThickness: 3,
           resolution: textRes,
         })
-        .setOrigin(0.5, 0.5)
-        .setDepth(55);
+        .setOrigin(0.5, 0.5);
+      setDepthIfChanged(label, 55);
       this.pingVisuals.set(ping.id, label);
     } else {
-      if (label.text !== txt) label.setText(txt);
-      if (label.style.color !== slotColor) label.setColor(slotColor);
+      setTextAndColorIfChanged(label, txt, slotColor);
       label.setPosition(ping.x, ping.y - 26 - Math.sin(visualTimeSec * 9.0) * 3);
     }
   }
@@ -569,7 +580,7 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
     if (!sprite) {
       sprite = this.add.sprite(ch.x, ch.y, tex);
       sprite.setScale(invBake);
-      sprite.setDepth(23);
+      setDepthIfChanged(sprite, 23);
       this.chestSprites.set(ch.id, sprite);
     } else if (sprite.texture.key !== tex) {
       sprite.setTexture(tex);
@@ -593,8 +604,8 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
     let glowSprite = this.chestGlowSprites.get(ch.id);
     if (!glowSprite) {
       glowSprite = this.add.image(ch.x, ch.y + 2, 'fx_light_radial');
-      glowSprite.setDepth(35);
-      glowSprite.setBlendMode(Phaser.BlendModes.ADD);
+      setDepthIfChanged(glowSprite, 35);
+      setBlendModeIfChanged(glowSprite, Phaser.BlendModes.ADD);
       this.chestGlowSprites.set(ch.id, glowSprite);
     }
 
@@ -627,8 +638,8 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
         sparkles = [];
         for (let s = 0; s < 4; s++) {
           const sp = this.add.image(ch.x, ch.y, 'fx_sparkle_mote');
-          sp.setDepth(35.3);
-          sp.setBlendMode(Phaser.BlendModes.ADD);
+          setDepthIfChanged(sp, 35.3);
+          setBlendModeIfChanged(sp, Phaser.BlendModes.ADD);
           sparkles.push(sp);
         }
         this.chestSparkleSprites.set(ch.id, sparkles);
@@ -695,27 +706,31 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
           : it.kind === 'weapon_upgrade'
             ? 'item_weapon_upgrade'
             : 'item_health_potion';
+    const itemBinding = TextureBaker.resolveAtlasBinding(this, tex);
 
     let entry = this.worldItemSprites.get(it.id);
     if (!entry) {
       const shopMatSprite = this.add.image(it.x, it.y + 7, 'item_shop_pedestal');
       shopMatSprite.setScale(invBake);
-      shopMatSprite.setDepth(22.5);
+      setDepthIfChanged(shopMatSprite, 22.5);
       shopMatSprite.setVisible(false);
 
       const glowSprite = this.add.image(it.x, it.y + 4, 'fx_light_radial');
-      glowSprite.setDepth(35);
-      glowSprite.setBlendMode(Phaser.BlendModes.ADD);
+      setDepthIfChanged(glowSprite, 35);
+      setBlendModeIfChanged(glowSprite, Phaser.BlendModes.ADD);
 
       const beamSprite = this.add.image(it.x, it.y + 6, 'fx_rarity_beam');
       beamSprite.setOrigin(0.5, 0.92);
-      beamSprite.setDepth(35.2);
-      beamSprite.setBlendMode(Phaser.BlendModes.ADD);
+      setDepthIfChanged(beamSprite, 35.2);
+      setBlendModeIfChanged(beamSprite, Phaser.BlendModes.ADD);
       beamSprite.setVisible(false);
 
-      const sprite = this.add.sprite(it.x, it.y, tex);
+      const sprite =
+        itemBinding.frameName !== undefined
+          ? this.add.sprite(it.x, it.y, itemBinding.textureKey, itemBinding.frameName)
+          : this.add.sprite(it.x, it.y, itemBinding.textureKey);
       sprite.setScale(invBake * 0.95);
-      sprite.setDepth(32);
+      setDepthIfChanged(sprite, 32);
 
       const label = this.add
         .text(it.x, it.y - 24, '', {
@@ -728,13 +743,20 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
           resolution: textRes,
         })
         .setOrigin(0.5, 0.5)
-        .setDepth(46)
         .setVisible(false);
+      setDepthIfChanged(label, 46);
 
       entry = { sprite, glowSprite, beamSprite, shopMatSprite, label };
       this.worldItemSprites.set(it.id, entry);
-    } else if (entry.sprite.texture.key !== tex) {
-      entry.sprite.setTexture(tex);
+    } else if (
+      entry.sprite.texture?.key !== itemBinding.textureKey ||
+      (entry.sprite.frame?.name || '__BASE') !== (itemBinding.frameName ?? '__BASE')
+    ) {
+      if (itemBinding.frameName !== undefined) {
+        entry.sprite.setTexture(itemBinding.textureKey, itemBinding.frameName);
+      } else {
+        entry.sprite.setTexture(itemBinding.textureKey);
+      }
     }
 
     let renderX = it.x;
@@ -827,14 +849,14 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
     let entry = this.npcVisuals.get(npc.id);
     if (!entry) {
       const glowSprite = this.add.image(npc.x, npc.y + 4, 'fx_light_radial');
-      glowSprite.setDepth(35);
-      glowSprite.setBlendMode(Phaser.BlendModes.ADD);
+      setDepthIfChanged(glowSprite, 35);
+      setBlendModeIfChanged(glowSprite, Phaser.BlendModes.ADD);
 
       if (npc.kind === 'merchant') {
         const rig = new CutoutRig(this, npc.x, npc.y + RIG_FOOT_OFFSET_Y, MERCHANT_RIG_DEF, {
           displayScale: 1.08,
         });
-        rig.container.setDepth(27);
+        setDepthIfChanged(rig.container, 27);
         const label = this.add
           .text(npc.x, npc.y - 38, i18n.t('ui.hud.merchantName'), {
             fontFamily: '"Be Vietnam Pro", sans-serif',
@@ -845,8 +867,8 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
             strokeThickness: 3,
             resolution: textRes,
           })
-          .setOrigin(0.5, 0.5)
-          .setDepth(46);
+          .setOrigin(0.5, 0.5);
+        setDepthIfChanged(label, 46);
         entry = { rig, glowSprite, label };
       } else {
         const npcTex =
@@ -859,9 +881,13 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
                 : npc.interacted
                   ? 'prop_shrine_statue_used'
                   : 'prop_shrine_statue';
-        const sprite = this.add.sprite(npc.x, npc.y, npcTex);
+        const npcBinding = TextureBaker.resolveAtlasBinding(this, npcTex);
+        const sprite =
+          npcBinding.frameName !== undefined
+            ? this.add.sprite(npc.x, npc.y, npcBinding.textureKey, npcBinding.frameName)
+            : this.add.sprite(npc.x, npc.y, npcBinding.textureKey);
         sprite.setScale(invBake);
-        sprite.setDepth(24);
+        setDepthIfChanged(sprite, 24);
         const label = this.add
           .text(npc.x, npc.y - 36, i18n.t('ui.hud.shrineActive'), {
             fontFamily: '"Be Vietnam Pro", sans-serif',
@@ -875,8 +901,8 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
             strokeThickness: 3,
             resolution: textRes,
           })
-          .setOrigin(0.5, 0.5)
-          .setDepth(46);
+          .setOrigin(0.5, 0.5);
+        setDepthIfChanged(label, 46);
         entry = { sprite, glowSprite, label };
       }
       this.npcVisuals.set(npc.id, entry);
@@ -886,7 +912,7 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
       entry.rig.update(dtSec);
       if (npc.kind === 'merchant') {
         const mTxt = i18n.t('ui.hud.merchantName');
-        if (entry.label.text !== mTxt) entry.label.setText(mTxt);
+        setTextIfChanged(entry.label, mTxt);
         const mGlow = resolveInteractableVisualGlowSpec({
           kind: 'merchant',
           elapsedSec: visualTimeSec,
@@ -921,8 +947,16 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
                 ? 'prop_shrine_statue_used'
                 : 'prop_shrine_statue';
       if (entry.sprite) {
-        if (entry.sprite.texture.key !== npcTex) {
-          entry.sprite.setTexture(npcTex);
+        const npcBinding = TextureBaker.resolveAtlasBinding(this, npcTex);
+        if (
+          entry.sprite.texture?.key !== npcBinding.textureKey ||
+          (entry.sprite.frame?.name || '__BASE') !== (npcBinding.frameName ?? '__BASE')
+        ) {
+          if (npcBinding.frameName !== undefined) {
+            entry.sprite.setTexture(npcBinding.textureKey, npcBinding.frameName);
+          } else {
+            entry.sprite.setTexture(npcBinding.textureKey);
+          }
         }
         if (npc.kind === 'secret_challenge_crystal') {
           const floatOffsetY = usedByLocal ? 0 : Math.sin(visualTimeSec * 3.0 + npc.id) * 2.5;
@@ -964,7 +998,7 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
           : isEn
             ? 'Upgrade Anvil (+1)'
             : 'Đe Nâng Cấp (+1)';
-      if (entry.label.text !== anvilTitle) entry.label.setText(anvilTitle);
+      setTextIfChanged(entry.label, anvilTitle);
       entry.label.setVisible(true);
     } else if (
       npc.kind === 'secret_challenge_crystal' &&
@@ -976,8 +1010,11 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
         : i18n.getLocale() === 'en'
           ? '✦ 20s Trial Crystal'
           : '✦ Tinh Thể Khiêu Chiến';
-      if (entry.label.text !== crystalTitle) entry.label.setText(crystalTitle);
-      entry.label.setColor(npc.interacted ? PALETTE.SILVER_BRIGHT : PALETTE.SOLAR_GOLD);
+      setTextAndColorIfChanged(
+        entry.label,
+        crystalTitle,
+        npc.interacted ? PALETTE.SILVER_BRIGHT : PALETTE.SOLAR_GOLD,
+      );
       entry.label.setVisible(true);
     } else {
       entry.label.setVisible(false);
@@ -1100,7 +1137,6 @@ export function syncRoomEntitiesImpl(this: GameScene, dtSec: number): void {
       hg.lineBetween(cx, cy - ry - 4, cx, cy - ry + 2);
       hg.lineBetween(cx, cy + ry - 2, cx, cy + ry + 4);
     }
-    drawWorldWeaponSalvageRing(hg, sim, sim.player, visualTimeSec);
   }
 
   syncWorldInteractPromptPill(this, dtSec, promptSpec, debug.overlayVisible);

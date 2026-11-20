@@ -360,12 +360,13 @@ export function spawnPerpetualCoreAshenRockets(sim: WorldSim, p: SimPlayerState)
   const baseAngle = nearest
     ? Math.atan2(nearest.y - p.y, nearest.x - p.x)
     : p.aimAngle;
-  const prevIds = new Set(sim.projectiles.map((pr) => pr.id));
+  const volleyEventId = sim.nextVolleyEventId++;
+  const eventKey = volleyEventId & 0x3fffff;
 
   sim.spawnDeterministicVolley({
     kind: 'bullet_volley_spawned',
     tick: sim.tick,
-    eventId: sim.nextVolleyEventId++,
+    eventId: volleyEventId,
     ownerId: p.id,
     team: 'player',
     weaponId: 'relic_perpetual_core_rocket',
@@ -390,26 +391,32 @@ export function spawnPerpetualCoreAshenRockets(sim: WorldSim, p: SimPlayerState)
     originY: p.y,
   });
 
+  let firstSpawnedIdx = sim.projectiles.length;
+  while (
+    firstSpawnedIdx > 0 &&
+    (sim.projectiles[firstSpawnedIdx - 1]!.id >>> 6) === eventKey
+  ) {
+    firstSpawnedIdx -= 1;
+  }
+
   let spawnedIdx = 0;
-  for (let i = 0; i < sim.projectiles.length; i++) {
+  for (let i = firstSpawnedIdx; i < sim.projectiles.length; i++) {
     const proj = sim.projectiles[i]!;
-    if (!prevIds.has(proj.id)) {
-      if (aliveEnemies.length > 0) {
-        const target = aliveEnemies[spawnedIdx % aliveEnemies.length]!;
-        const fanOffset =
-          aliveEnemies.length === 1 ? (spawnedIdx - 1) * 0.06 : 0;
-        const ang = Math.atan2(target.y - p.y, target.x - p.x) + fanOffset;
-        proj.angle = ang;
-        proj.vx = Math.cos(ang) * PERPETUAL_CORE_ROCKET_SPEED;
-        proj.vy = Math.sin(ang) * PERPETUAL_CORE_ROCKET_SPEED;
-      } else {
-        const fanAng = p.aimAngle + (spawnedIdx - 1) * 0.2;
-        proj.angle = fanAng;
-        proj.vx = Math.cos(fanAng) * PERPETUAL_CORE_ROCKET_SPEED;
-        proj.vy = Math.sin(fanAng) * PERPETUAL_CORE_ROCKET_SPEED;
-      }
-      spawnedIdx += 1;
+    if (aliveEnemies.length > 0) {
+      const target = aliveEnemies[spawnedIdx % aliveEnemies.length]!;
+      const fanOffset =
+        aliveEnemies.length === 1 ? (spawnedIdx - 1) * 0.06 : 0;
+      const ang = Math.atan2(target.y - p.y, target.x - p.x) + fanOffset;
+      proj.angle = ang;
+      proj.vx = Math.cos(ang) * PERPETUAL_CORE_ROCKET_SPEED;
+      proj.vy = Math.sin(ang) * PERPETUAL_CORE_ROCKET_SPEED;
+    } else {
+      const fanAng = p.aimAngle + (spawnedIdx - 1) * 0.2;
+      proj.angle = fanAng;
+      proj.vx = Math.cos(fanAng) * PERPETUAL_CORE_ROCKET_SPEED;
+      proj.vy = Math.sin(fanAng) * PERPETUAL_CORE_ROCKET_SPEED;
     }
+    spawnedIdx += 1;
   }
   return spawnedIdx;
 }

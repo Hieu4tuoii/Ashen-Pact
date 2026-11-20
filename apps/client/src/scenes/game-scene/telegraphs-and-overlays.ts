@@ -38,6 +38,7 @@ export {
   type BossKillSequenceState,
 } from '../../fx/combat-fx.js';
 import { stepBossKillTwoBeatSequence } from '../../fx/combat-fx.js';
+import { isBatch1WeaponRoomEntitiesSynced } from '../../fx/combat-fx-weapons-p1a-entities.js';
 import {
   drawEnemyBatch1Indicators,
   drawTetherStaffBeams,
@@ -58,6 +59,15 @@ import { drawFootMicroReloadBar } from './hud-micro-reload-bar.js';
 import { drawWorldWeaponSalvageRing } from './hud-pact-and-forge-modals.js';
 import { drawP11DramaWorldOverlays } from './p11-drama-hud.js';
 
+const NUM_INK_DARK = hexToNum(PALETTE.INK_DARK);
+const NUM_CYAN_FROST = hexToNum(PALETTE.CYAN_FROST);
+const NUM_SOLAR_GOLD = hexToNum(PALETTE.SOLAR_GOLD);
+const NUM_CRIMSON_BRIGHT = hexToNum(PALETTE.CRIMSON_BRIGHT);
+const NUM_FLAME_ORANGE = hexToNum(PALETTE.FLAME_ORANGE);
+const NUM_VOLT_YELLOW = hexToNum(PALETTE.VOLT_YELLOW);
+const NUM_TOXIC_PURPLE = hexToNum(PALETTE.TOXIC_PURPLE);
+const NUM_ELECTRIC_VIOLET = hexToNum(PALETTE.ELECTRIC_VIOLET);
+
 const projRawXScratch: number[] = [];
 const projRawYScratch: number[] = [];
 
@@ -71,6 +81,38 @@ export interface ScratchAimingSightline {
   distSqToPlayer: number;
 }
 export const scratchAimingSightlines: ScratchAimingSightline[] = [];
+const aimingSightlinePool: ScratchAimingSightline[] = [];
+
+function clearOverlayGraphicsIfNeeded(gfx: Phaser.GameObjects.Graphics | undefined): void {
+  if (!gfx || typeof gfx.clear !== 'function') return;
+  const cmdBuf = (gfx as unknown as { commandBuffer?: unknown }).commandBuffer;
+  if (Array.isArray(cmdBuf)) {
+    if (cmdBuf.length > 0) {
+      gfx.clear();
+    }
+    return;
+  }
+  gfx.clear();
+}
+
+function syncOverlayGraphicsVisibility(gfx: Phaser.GameObjects.Graphics | undefined): void {
+  if (!gfx || typeof gfx.setVisible !== 'function') return;
+  const cmdBuf = (gfx as unknown as { commandBuffer?: unknown }).commandBuffer;
+  if (!Array.isArray(cmdBuf)) return;
+  const hasCommands = cmdBuf.length > 0;
+  if (gfx.visible !== hasCommands) {
+    gfx.setVisible(hasCommands);
+  }
+}
+
+function unhideSharedFxGraphicsIfPopulated(gfx: Phaser.GameObjects.Graphics | undefined): void {
+  if (!gfx || typeof gfx.setVisible !== 'function') return;
+  const cmdBuf = (gfx as unknown as { commandBuffer?: unknown }).commandBuffer;
+  if (!Array.isArray(cmdBuf)) return;
+  if (cmdBuf.length > 0 && gfx.visible === false) {
+    gfx.setVisible(true);
+  }
+}
 
 export function withInterpolatedProjectilesAndPlayer<T>(
   scene: GameScene,
@@ -124,23 +166,24 @@ export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, 
     return;
   }
   const g = this.telegraphGraphics;
-  g.clear();
+  clearOverlayGraphicsIfNeeded(g);
   const floorG = this.groundHazardGraphics ?? g;
-  if (this.groundHazardGraphics) {
-    this.groundHazardGraphics.clear();
+  if (this.groundHazardGraphics && this.groundHazardGraphics !== g) {
+    clearOverlayGraphicsIfNeeded(this.groundHazardGraphics);
   }
   const enemyG = this.enemyGroundTelegraphGfx ?? floorG;
-  if (this.enemyGroundTelegraphGfx) {
-    this.enemyGroundTelegraphGfx.clear();
+  if (this.enemyGroundTelegraphGfx && this.enemyGroundTelegraphGfx !== floorG) {
+    clearOverlayGraphicsIfNeeded(this.enemyGroundTelegraphGfx);
   }
-  this.icePrisonRearGraphics?.clear();
-  this.bastionRearGraphics?.clear();
-  this.icePrisonFrontGraphics?.clear();
-  this.bastionFrontGraphics?.clear();
-  this.bossOverGraphics?.clear();
-  this.bossFractureGraphics?.clear();
-  this.bossOverheadStunGraphics?.clear();
-  this.executionerWaveGraphics?.clear();
+  clearOverlayGraphicsIfNeeded(this.icePrisonRearGraphics);
+  clearOverlayGraphicsIfNeeded(this.bastionRearGraphics);
+  clearOverlayGraphicsIfNeeded(this.icePrisonFrontGraphics);
+  clearOverlayGraphicsIfNeeded(this.bastionFrontGraphics);
+  clearOverlayGraphicsIfNeeded(this.bossOverGraphics);
+  clearOverlayGraphicsIfNeeded(this.bossFractureGraphics);
+  clearOverlayGraphicsIfNeeded(this.bossOverheadStunGraphics);
+  clearOverlayGraphicsIfNeeded(this.executionerWaveGraphics);
+
   const view = this.cameras.main.worldView;
   const hasView = view && view.width > 0;
   const viewLeft = hasView ? view.x - 48 : -9999;
@@ -153,13 +196,15 @@ export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, 
   const overlayTimeSec = freezeOverlay ? getFreezeVisualTimeSec(sim.tick / 60, true) : sim.tick / 60;
   const overlayTick = freezeOverlay ? overlayTimeSec * 60 : sim.tick;
 
-  // 0a. World Weapon Salvage Ring & P2B World Overlays
+  // 0a. World Weapon Salvage Ring (reads raw sim.player coordinates)
   if (!isStress) {
     drawWorldWeaponSalvageRing(floorG, sim, p, overlayTimeSec);
-    withInterpolatedProjectilesAndPlayer(this, sim, playerX, playerY, () => {
-      drawP2BWorldOverlays(this, g, sim, playerX, playerY);
-    });
   }
+
+  withInterpolatedProjectilesAndPlayer(this, sim, playerX, playerY, () => {
+    if (!isStress) {
+      drawP2BWorldOverlays(this, g, sim, playerX, playerY);
+    }
 
   if (this.roomTeleportAnimTimer > 0) {
     const dur = Math.max(0.01, this.roomTeleportAnimDuration || 0.28);
@@ -313,7 +358,7 @@ export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, 
   // 2. Enemy Spawn Circles, Attack Telegraphs, Boss Burrow Warning, Elite Aura & Mini HP Bars
   let hpBarsDrawn = 0;
   let telegraphsDrawn = 0;
-  scratchAimingSightlines.length = 0;
+  let sightlineCount = 0;
   for (let i = 0; i < sim.enemies.length; i++) {
     const e = sim.enemies[i]!;
     if (e.hp <= 0) continue;
@@ -323,11 +368,11 @@ export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, 
       const r = e.telegraphRadius || 84;
       const progress =
         e.telegraphDurationSec > 0 ? 1 - clamp(e.stateTimer / e.telegraphDurationSec, 0, 1) : 1;
-      enemyG.fillStyle(hexToNum(PALETTE.CRIMSON_BRIGHT), 0.06 + progress * 0.04);
+      enemyG.fillStyle(NUM_CRIMSON_BRIGHT, 0.06 + progress * 0.04);
       enemyG.fillCircle(e.bossTargetX, e.bossTargetY, r);
       enemyG.lineStyle(3.2, 0x141019, 0.95);
       enemyG.strokeCircle(e.bossTargetX, e.bossTargetY, r);
-      enemyG.lineStyle(2.0, hexToNum(PALETTE.CRIMSON_BRIGHT), 0.96);
+      enemyG.lineStyle(2.0, NUM_CRIMSON_BRIGHT, 0.96);
       enemyG.strokeCircle(e.bossTargetX, e.bossTargetY, r);
       continue;
     }
@@ -357,7 +402,7 @@ export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, 
       // 1. Outer & inner 1:1 arcane rings on floor (depth 16)
       floorG.fillStyle(primaryNum, 0.05 + 0.04 * progress);
       floorG.fillCircle(pos.x, pos.y, spec.outerRadius * progress);
-      floorG.lineStyle(3.8, hexToNum(PALETTE.INK_DARK), 0.68);
+      floorG.lineStyle(3.8, NUM_INK_DARK, 0.68);
       floorG.strokeCircle(pos.x, pos.y, spec.outerRadius);
       floorG.lineStyle(2.4, primaryNum, 0.92);
       floorG.strokeCircle(pos.x, pos.y, spec.outerRadius);
@@ -414,7 +459,7 @@ export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, 
       const halfArc = Math.PI * 0.4;
       const shieldR = e.radius + 6;
       const shieldHex = e.defId === 'ice_golem' ? PALETTE.CYAN_FROST : PALETTE.STEEL_LIGHT;
-      g.lineStyle(5, hexToNum(PALETTE.INK_DARK), 0.88);
+      g.lineStyle(5, NUM_INK_DARK, 0.88);
       g.beginPath();
       g.arc(pos.x, pos.y, shieldR, e.aimAngle - halfArc, e.aimAngle + halfArc, false);
       g.strokePath();
@@ -430,16 +475,14 @@ export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, 
       const orbitRx = e.isBoss ? 18 : 12;
       const orbitRy = e.isBoss ? 5.5 : 4.0;
       const basePhase = overlayTick * 0.14;
-      const inkCol = hexToNum(PALETTE.INK_DARK);
-      const starCol = hexToNum(PALETTE.VOLT_YELLOW);
       for (let sIdx = 0; sIdx < 2; sIdx++) {
         const ang = basePhase + sIdx * Math.PI;
         const sx = pos.x + Math.cos(ang) * orbitRx;
         const sy = headY + Math.sin(ang) * orbitRy;
         const outerR = e.isBoss ? 6.2 : 4.8;
         const innerR = outerR * 0.34;
-        g.fillStyle(starCol, 0.96);
-        g.lineStyle(2.2, inkCol, 0.94);
+        g.fillStyle(NUM_VOLT_YELLOW, 0.96);
+        g.lineStyle(2.2, NUM_INK_DARK, 0.94);
         g.beginPath();
         for (let pIdx = 0; pIdx < 8; pIdx++) {
           const pa = (pIdx * Math.PI) / 4;
@@ -461,11 +504,10 @@ export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, 
         e.eliteModifier ?? ((e as { p11PreferredModifier?: string }).p11PreferredModifier ?? null);
       const auraCol =
         mod === 'vengeful'
-          ? hexToNum(PALETTE.ELECTRIC_VIOLET)
+          ? NUM_ELECTRIC_VIOLET
           : mod === 'volley'
-            ? hexToNum(PALETTE.FLAME_ORANGE)
-            : hexToNum(PALETTE.SOLAR_GOLD);
-      const inkCol = hexToNum(PALETTE.INK_DARK);
+            ? NUM_FLAME_ORANGE
+            : NUM_SOLAR_GOLD;
       const footY = pos.y + 10;
       const rx = e.radius + 6;
       const ry = rx / 2.12;
@@ -475,7 +517,7 @@ export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, 
         for (let pass = 0; pass < 2; pass++) {
           floorG.lineStyle(
             pass === 0 ? 4.4 : 2.1,
-            pass === 0 ? inkCol : auraCol,
+            pass === 0 ? NUM_INK_DARK : auraCol,
             pass === 0 ? 0.86 : 0.92,
           );
           floorG.beginPath();
@@ -490,16 +532,15 @@ export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, 
         }
       }
       if (mod === 'vengeful' || mod === 'volley') {
-        const goldCol = hexToNum(PALETTE.SOLAR_GOLD);
         for (const sideSign of [-1, 1]) {
           const tx = pos.x + sideSign * (rx + 2.5);
-          floorG.lineStyle(3.4, inkCol, 0.85);
+          floorG.lineStyle(3.4, NUM_INK_DARK, 0.85);
           floorG.beginPath();
           floorG.moveTo(tx, footY - 3.5);
           floorG.lineTo(tx + sideSign * 3.5, footY);
           floorG.lineTo(tx, footY + 3.5);
           floorG.strokePath();
-          floorG.lineStyle(1.7, goldCol, 0.92);
+          floorG.lineStyle(1.7, NUM_SOLAR_GOLD, 0.92);
           floorG.beginPath();
           floorG.moveTo(tx, footY - 3.5);
           floorG.lineTo(tx + sideSign * 3.5, footY);
@@ -509,12 +550,11 @@ export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, 
       }
       if (e.shieldArmor > 0) {
         const shR = e.radius + 5;
-        const cyanCol = hexToNum(PALETTE.CYAN_FROST);
         for (const baseAng of [0, Math.PI]) {
           for (let pass = 0; pass < 2; pass++) {
             g.lineStyle(
               pass === 0 ? 4.2 : 2.0,
-              pass === 0 ? inkCol : cyanCol,
+              pass === 0 ? NUM_INK_DARK : NUM_CYAN_FROST,
               pass === 0 ? 0.88 : 0.95,
             );
             g.beginPath();
@@ -533,7 +573,7 @@ export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, 
 
     // Druid Rooted 1:1 circular thorn collar on floor (zero 3/4 squash ellipse)
     if (e.rootedTimer > 0 && !isStress) {
-      floorG.lineStyle(4.2, hexToNum(PALETTE.INK_DARK), 0.72);
+      floorG.lineStyle(4.2, NUM_INK_DARK, 0.72);
       floorG.strokeCircle(pos.x, pos.y + 2, e.radius + 4);
       floorG.lineStyle(2.4, hexToNum(PALETTE.LIME_GLOW), 0.92);
       floorG.strokeCircle(pos.x, pos.y + 2, e.radius + 4);
@@ -570,7 +610,7 @@ export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, 
         e.defId === 'welder_drone' ||
         e.defId === 'thorn_turret'
       ) {
-        // Collect single unified sightline per aiming enemy
+        // Collect single unified sightline per aiming enemy (pooled in place)
         const defaultLen =
           e.defId === 'kryssa_ice_queen' || e.defId === 'kryssa_clone' || e.defId === 'ice_mage'
             ? 320
@@ -580,16 +620,31 @@ export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, 
                 ? 180
                 : 160;
         const len = e.telegraphLength || defaultLen;
-        const distSq = (pos.x - playerX) ** 2 + (pos.y - playerY) ** 2;
-        scratchAimingSightlines.push({
-          x: pos.x,
-          y: pos.y,
-          angle: e.telegraphAngle,
-          length: len,
-          progress,
-          stateTimer: e.stateTimer,
-          distSqToPlayer: distSq,
-        });
+        const dx = pos.x - playerX;
+        const dy = pos.y - playerY;
+        const distSq = dx * dx + dy * dy;
+        let slot = aimingSightlinePool[sightlineCount];
+        if (!slot) {
+          slot = {
+            x: 0,
+            y: 0,
+            angle: 0,
+            length: 0,
+            progress: 0,
+            stateTimer: 0,
+            distSqToPlayer: 0,
+          };
+          aimingSightlinePool[sightlineCount] = slot;
+        }
+        slot.x = pos.x;
+        slot.y = pos.y;
+        slot.angle = e.telegraphAngle;
+        slot.length = len;
+        slot.progress = progress;
+        slot.stateTimer = e.stateTimer;
+        slot.distSqToPlayer = distSq;
+        scratchAimingSightlines[sightlineCount] = slot;
+        sightlineCount += 1;
       } else if (e.defId === 'wild_boar' || e.defId === 'baby_yeti') {
         const len = e.telegraphLength || 220;
         const halfW = e.radius;
@@ -598,23 +653,27 @@ export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, 
         const px = -sin * halfW;
         const py = cos * halfW;
 
-        const p1 = { x: pos.x + px, y: pos.y + py };
-        const p2 = { x: pos.x + cos * len + px, y: pos.y + sin * len + py };
-        const p3 = { x: pos.x + cos * len - px, y: pos.y + sin * len - py };
-        const p4 = { x: pos.x - px, y: pos.y - py };
+        const p1x = pos.x + px;
+        const p1y = pos.y + py;
+        const p2x = pos.x + cos * len + px;
+        const p2y = pos.y + sin * len + py;
+        const p3x = pos.x + cos * len - px;
+        const p3y = pos.y + sin * len - py;
+        const p4x = pos.x - px;
+        const p4y = pos.y - py;
 
-        enemyG.fillStyle(hexToNum(PALETTE.CRIMSON_BRIGHT), 0.06 + progress * 0.04);
+        enemyG.fillStyle(NUM_CRIMSON_BRIGHT, 0.06 + progress * 0.04);
         enemyG.beginPath();
-        enemyG.moveTo(p1.x, p1.y);
-        enemyG.lineTo(p2.x, p2.y);
-        enemyG.lineTo(p3.x, p3.y);
-        enemyG.lineTo(p4.x, p4.y);
+        enemyG.moveTo(p1x, p1y);
+        enemyG.lineTo(p2x, p2y);
+        enemyG.lineTo(p3x, p3y);
+        enemyG.lineTo(p4x, p4y);
         enemyG.closePath();
         enemyG.fillPath();
 
         enemyG.lineStyle(3.2, 0x141019, 0.95);
         enemyG.strokePath();
-        enemyG.lineStyle(2.0, hexToNum(PALETTE.CRIMSON_BRIGHT), 0.96);
+        enemyG.lineStyle(2.0, NUM_CRIMSON_BRIGHT, 0.96);
         enemyG.strokePath();
       } else if (
         e.defId === 'spore_bomber' ||
@@ -626,11 +685,11 @@ export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, 
         e.defId === 'forge_titan'
       ) {
         const r = e.telegraphRadius || (e.isBoss ? 96 : 68);
-        enemyG.fillStyle(hexToNum(PALETTE.CRIMSON_BRIGHT), 0.06 + progress * 0.04);
+        enemyG.fillStyle(NUM_CRIMSON_BRIGHT, 0.06 + progress * 0.04);
         enemyG.fillCircle(pos.x, pos.y, r);
         enemyG.lineStyle(3.2, 0x141019, 0.95);
         enemyG.strokeCircle(pos.x, pos.y, r);
-        enemyG.lineStyle(2.0, hexToNum(PALETTE.CRIMSON_BRIGHT), 0.96);
+        enemyG.lineStyle(2.0, NUM_CRIMSON_BRIGHT, 0.96);
         enemyG.strokeCircle(pos.x, pos.y, r);
       }
     }
@@ -656,16 +715,19 @@ export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, 
       hpBarsDrawn += 1;
     }
   }
+  scratchAimingSightlines.length = sightlineCount;
 
   // 2a. Top-8 Enemy Sniper Sightlines unified onto telegraphGraphics (depth 46.0)
-  if (scratchAimingSightlines.length > 0 && this.telegraphGraphics) {
-    scratchAimingSightlines.sort((a, b) => {
-      if (Math.abs(a.stateTimer - b.stateTimer) > 0.001) {
-        return a.stateTimer - b.stateTimer;
-      }
-      return a.distSqToPlayer - b.distSqToPlayer;
-    });
-    const cap = Math.min(scratchAimingSightlines.length, 8);
+  if (sightlineCount > 0 && this.telegraphGraphics) {
+    if (sightlineCount > 1) {
+      scratchAimingSightlines.sort((a, b) => {
+        if (Math.abs(a.stateTimer - b.stateTimer) > 0.001) {
+          return a.stateTimer - b.stateTimer;
+        }
+        return a.distSqToPlayer - b.distSqToPlayer;
+      });
+    }
+    const cap = Math.min(sightlineCount, 8);
     for (let k = 0; k < cap; k++) {
       const s = scratchAimingSightlines[k]!;
       const tx = s.x + Math.cos(s.angle) * s.length;
@@ -687,13 +749,11 @@ export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, 
   }
 
   // 2b. Phase 3A (P3A.1) 0.35s Predictive Sightline Telegraph (#FF5722 outer + #FFF7ED bright core + muzzle diamond reticle)
-  withInterpolatedProjectilesAndPlayer(this, sim, playerX, playerY, () => {
-    drawP3APredictiveSightlinesAndOverlays(this, g, sim);
-    if (!isStress) {
-      drawP4ATetherAndProjectileOverlays(this, g, sim);
-      renderP4BDuoAndSecretArenaOverlays(this);
-    }
-  });
+  drawP3APredictiveSightlinesAndOverlays(this, g, sim);
+  if (!isStress) {
+    drawP4ATetherAndProjectileOverlays(this, g, sim);
+    renderP4BDuoAndSecretArenaOverlays(this);
+  }
 
   // 3. Boss Kill 2-Beat Sequence (Beat 1: chest fracture rays; Beat 2: twin crescents)
   if (this.fx.bossKillSequenceState?.active) {
@@ -707,22 +767,22 @@ export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, 
   if (!isStress) {
     const isSoloPaused =
       (this.pauseModalOpen || (this.settingsModal?.isOpen() ?? false)) && this.coopMode === 'solo';
-    const v2Flash = withInterpolatedProjectilesAndPlayer(this, sim, playerX, playerY, () => {
+    if (!isBatch1WeaponRoomEntitiesSynced(this, sim)) {
       syncBatch1WeaponRoomEntities(this, sim);
-      return updateAndDrawWeaponV2Overlays(
-        this,
-        g,
-        this.fx,
-        p,
-        sim.magneticRivets ?? [],
-        isSoloPaused ? 0 : 1 / 60,
-        overlayTimeSec,
-        i18n.getLocale(),
-        floorG,
-        this.underActorGraphics,
-        this.weaponRibbonGraphics,
-      );
-    });
+    }
+    const v2Flash = updateAndDrawWeaponV2Overlays(
+      this,
+      g,
+      this.fx,
+      p,
+      sim.magneticRivets ?? [],
+      isSoloPaused ? 0 : 1 / 60,
+      overlayTimeSec,
+      i18n.getLocale(),
+      floorG,
+      this.underActorGraphics,
+      this.weaponRibbonGraphics,
+    );
     drawFootMicroReloadBar(
       g,
       playerX,
@@ -732,6 +792,37 @@ export function renderTelegraphsAndShieldImpl(this: GameScene, playerX: number, 
       v2Flash.flashColor,
       v2Flash.flashAlpha,
     );
+  }
+  });
+
+  syncOverlayGraphicsVisibility(this.icePrisonRearGraphics);
+  syncOverlayGraphicsVisibility(this.bastionRearGraphics);
+  syncOverlayGraphicsVisibility(this.icePrisonFrontGraphics);
+  syncOverlayGraphicsVisibility(this.bastionFrontGraphics);
+  syncOverlayGraphicsVisibility(this.bossOverGraphics);
+  syncOverlayGraphicsVisibility(this.bossFractureGraphics);
+  syncOverlayGraphicsVisibility(this.bossOverheadStunGraphics);
+  syncOverlayGraphicsVisibility(this.executionerWaveGraphics);
+  syncOverlayGraphicsVisibility(this.enemyGroundTelegraphGfx);
+  syncOverlayGraphicsVisibility(this.groundHazardGraphics);
+  syncOverlayGraphicsVisibility(this.telegraphGraphics);
+  unhideSharedFxGraphicsIfPopulated(this.underActorGraphics);
+  unhideSharedFxGraphicsIfPopulated(this.weaponRibbonGraphics);
+}
+
+function drawStatusDiamondPip(
+  g: Phaser.GameObjects.Graphics,
+  cx: number,
+  cy: number,
+  r: number,
+  colorNum: number,
+): void {
+  g.fillStyle(colorNum, 1);
+  if (typeof g.fillTriangle === 'function') {
+    g.fillTriangle(cx, cy - r, cx + r, cy, cx, cy + r);
+    g.fillTriangle(cx, cy - r, cx - r, cy, cx, cy + r);
+  } else {
+    g.fillRect(cx - r, cy - r, r * 2, r * 2);
   }
 }
 
@@ -746,58 +837,50 @@ export function drawEnemyHealthAndStatusBarImpl(
   const h = e.isBoss ? 6 : 5;
   const ratio = clamp(e.hp / e.maxHp, 0, 1);
 
-  g.fillStyle(hexToNum(PALETTE.INK_DARK), 0.9);
-  g.fillRoundedRect(x - w / 2 - 1, y - 1, w + 2, h + 2, 2);
+  g.fillStyle(NUM_INK_DARK, 0.9);
+  g.fillRect(x - w / 2 - 1, y - 1, w + 2, h + 2);
 
   g.fillStyle(
-    hexToNum(
-      e.frozenTimer > 0
-        ? PALETTE.CYAN_FROST
-        : e.isElite
-          ? PALETTE.SOLAR_GOLD
-          : PALETTE.CRIMSON_BRIGHT,
-    ),
+    e.frozenTimer > 0
+      ? NUM_CYAN_FROST
+      : e.isElite
+        ? NUM_SOLAR_GOLD
+        : NUM_CRIMSON_BRIGHT,
     1,
   );
-  g.fillRoundedRect(x - w / 2, y, Math.max(2, w * ratio), h, 1.5);
+  g.fillRect(x - w / 2, y, Math.max(2, w * ratio), h);
 
   if (e.shieldArmor > 0 && e.maxShieldArmor > 0) {
     const sRatio = clamp(e.shieldArmor / e.maxShieldArmor, 0, 1);
-    g.fillStyle(hexToNum(PALETTE.CYAN_FROST), 0.95);
+    g.fillStyle(NUM_CYAN_FROST, 0.95);
     g.fillRect(x - w / 2, y - 3, Math.max(2, w * sRatio), 2);
   }
 
-  // Elemental status pips above HP bar
+  // Earcut-free elemental status diamond pips above HP bar
   let pipX = x - 12;
   const pipY = y - 6;
   if (e.burnTimer > 0) {
-    g.fillStyle(hexToNum(PALETTE.FLAME_ORANGE), 1);
-    g.fillCircle(pipX, pipY, 2.5);
+    drawStatusDiamondPip(g, pipX, pipY, 2.5, NUM_FLAME_ORANGE);
     pipX += 6;
   }
   if (e.frozenTimer > 0 || e.chillStacks > 0) {
-    g.fillStyle(hexToNum(PALETTE.CYAN_FROST), 1);
-    g.fillCircle(pipX, pipY, e.frozenTimer > 0 ? 3.2 : 2.5);
+    drawStatusDiamondPip(g, pipX, pipY, e.frozenTimer > 0 ? 3.2 : 2.5, NUM_CYAN_FROST);
     pipX += 6;
   }
   if (e.shockTimer > 0) {
-    g.fillStyle(hexToNum(PALETTE.VOLT_YELLOW), 1);
-    g.fillCircle(pipX, pipY, 2.5);
+    drawStatusDiamondPip(g, pipX, pipY, 2.5, NUM_VOLT_YELLOW);
     pipX += 6;
   }
   if (e.poisonStacks > 0) {
-    g.fillStyle(hexToNum(PALETTE.TOXIC_PURPLE), 1);
-    g.fillCircle(pipX, pipY, 2.5);
+    drawStatusDiamondPip(g, pipX, pipY, 2.5, NUM_TOXIC_PURPLE);
     pipX += 6;
   }
   if (e.superconductTimer > 0) {
-    g.fillStyle(hexToNum(PALETTE.ELECTRIC_VIOLET), 1);
-    g.fillCircle(pipX, pipY, 2.5);
+    drawStatusDiamondPip(g, pipX, pipY, 2.5, NUM_ELECTRIC_VIOLET);
     pipX += 6;
   }
   if (e.markedTimer > 0) {
-    g.fillStyle(hexToNum(PALETTE.SOLAR_GOLD), 1);
-    g.fillCircle(pipX, pipY, 2.8);
+    drawStatusDiamondPip(g, pipX, pipY, 2.8, NUM_SOLAR_GOLD);
   }
 }
 

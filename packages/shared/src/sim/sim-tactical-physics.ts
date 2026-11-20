@@ -328,18 +328,49 @@ export function clearEnemyProjectilesAroundProp(
   radius: number,
   prop?: SimPropState,
 ): number {
+  sim.ensureEnemyBulletSpatialGrid();
+  const candidates = sim.bulletSpatialGrid.queryCircle(
+    x,
+    y,
+    radius + 16,
+    sim.queryBulletScratch,
+  );
+  if (candidates.length === 0) return 0;
+
   const destroyedIds: number[] = [];
-  for (let i = sim.projectiles.length - 1; i >= 0; i--) {
-    const proj = sim.projectiles[i]!;
-    if (proj.team !== 'enemy') continue;
+  for (let i = 0; i < candidates.length; i++) {
+    const proj = candidates[i]!;
+    if (proj.team !== 'enemy' || proj.ttlSec <= 0) continue;
     if (distance(proj.x, proj.y, x, y) <= radius + proj.radius) {
       if (prop) tryChargeGlacialBarricadeWithCryoLaser(prop, proj.weaponId);
+      proj.ttlSec = 0;
       destroyedIds.push(proj.id);
-      sim.projectiles.splice(i, 1);
-      sim.releaseProjectileToPool(proj);
     }
   }
-  if (destroyedIds.length > 0) sim.events.push({ kind: 'projectiles_destroyed', ids: destroyedIds });
+  if (destroyedIds.length === 0) return 0;
+
+  if (!sim.inProjectileUpdateLoop) {
+    let writeIdx = 0;
+    let nextPlayerCount = 0;
+    let nextEnemyCount = 0;
+    for (let i = 0; i < sim.projectiles.length; i++) {
+      const b = sim.projectiles[i]!;
+      if (b.ttlSec <= 0 && b.team === 'enemy') {
+        sim.releaseProjectileToPool(b);
+      } else {
+        sim.projectiles[writeIdx++] = b;
+        if (b.team === 'player') nextPlayerCount += 1;
+        else nextEnemyCount += 1;
+      }
+    }
+    sim.projectiles.length = writeIdx;
+    sim._playerProjectileCount = nextPlayerCount;
+    sim._enemyProjectileCount = nextEnemyCount;
+    sim.recordProjectilesSynced();
+    sim.bulletSpatialGridPhase += 1;
+  }
+
+  sim.events.push({ kind: 'projectiles_destroyed', ids: destroyedIds });
   return destroyedIds.length;
 }
 

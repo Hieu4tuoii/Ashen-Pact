@@ -16,11 +16,13 @@ import type {
 } from '../art/texture-baker-shader-fx.js';
 import { getClientFreezeRandom } from '../core/visual-query.js';
 import { graphicsSettings } from '../ui/graphics-settings.js';
+import { setTextAndColorIfChanged, setTextIfChanged } from '../ui/phaser-text-guard.js';
 import { fillTaperedArcRibbon } from './tapered-ribbon-builder.js';
 import {
   acquireDamageSlot,
   acquireParticleSlot,
   BIOME_AMBIENT_POOL_SLOTS,
+  type CasingShadowSlot,
   computeCameraShakeOffset,
   computePopupScalePop,
   DAMAGE_NUMERIC_SLOT_END,
@@ -40,10 +42,14 @@ import {
   type PooledDecal,
   type PooledLightningArc,
   type PooledParticle,
+  refreshDamageSlotHalfExtents,
   refreshResolution,
+  registerActiveDamageSlot,
+  registerActiveDecalSlot,
   resolveActivePopupOverlaps,
   resolveSpatialPopupCellSlot,
   resolveTacticalAlertSlotOverlaps,
+  setFxSpriteDepthIfChanged,
   update,
 } from './combat-fx-pools.js';
 
@@ -88,6 +94,13 @@ export class CombatFxManager {
   public readonly afterimagePool: PooledAfterimage[] = [];
   public readonly ambientPool: PooledAmbientParticle[] = [];
   public readonly lightningPool: PooledLightningArc[] = [];
+  public managedPoolsInitialized = false;
+  public activeParticleSlots: PooledParticle[] = [];
+  public activeDamageSlots: PooledDamageText[] = [];
+  public activeDecalSlots: PooledDecal[] = [];
+  public casingShadowSlots: CasingShadowSlot[] = [];
+  public casingShadowCursor = 0;
+  public nextParticleSearchIdx = 0;
   public lightningGraphics!: Phaser.GameObjects.Graphics;
   public underActorGraphics!: Phaser.GameObjects.Graphics;
   public weaponRibbonGraphics!: Phaser.GameObjects.Graphics;
@@ -119,6 +132,9 @@ export class CombatFxManager {
   private blizzardIntense = false;
   public allowFreezeAmbientMotion = false;
   public torchPositions: Array<{ x: number; y: number }> = [];
+  private torchPositionPool: Array<{ x: number; y: number }> = [];
+  private lastTorchPropsLen = -1;
+  private lastTorchSig = -1;
 
   public totalHitStopsTriggered = 0;
   public totalShakesTriggered = 0;
@@ -156,13 +172,42 @@ export class CombatFxManager {
   public syncTorchPositions(
     props: ReadonlyArray<{ kind: string; x: number; y: number; hp: number }>,
   ): void {
-    this.torchPositions.length = 0;
+    let hash = 2166136261;
+    let torchCount = 0;
     for (let i = 0; i < props.length; i++) {
       const p = props[i]!;
       if (p.hp > 0 && p.kind === 'torch_brazier') {
-        this.torchPositions.push({ x: p.x, y: p.y });
+        torchCount += 1;
+        hash = Math.imul(hash ^ Math.round(p.x * 4), 16777619);
+        hash = Math.imul(hash ^ Math.round(p.y * 4), 16777619);
       }
     }
+    const sig = (hash ^ torchCount) | 0;
+    if (this.lastTorchPropsLen === props.length && this.lastTorchSig === sig) {
+      return;
+    }
+    this.lastTorchPropsLen = props.length;
+    this.lastTorchSig = sig;
+
+    const pool = (this.torchPositionPool ??= []);
+    const out = (this.torchPositions ??= []);
+    let writeIdx = 0;
+    for (let i = 0; i < props.length; i++) {
+      const p = props[i]!;
+      if (p.hp > 0 && p.kind === 'torch_brazier') {
+        let entry = pool[writeIdx];
+        if (!entry) {
+          entry = { x: p.x, y: p.y };
+          pool[writeIdx] = entry;
+        } else {
+          entry.x = p.x;
+          entry.y = p.y;
+        }
+        out[writeIdx] = entry;
+        writeIdx += 1;
+      }
+    }
+    out.length = writeIdx;
   }
 
   public setBlizzardIntense(active: boolean): void {
@@ -227,6 +272,8 @@ export class CombatFxManager {
     this.activeArcRibbons.length = 0;
     this.activeFloorTeleportFolds.length = 0;
     this.activeTeamComboFootRings.length = 0;
+    this.lastTorchPropsLen = -1;
+    this.lastTorchSig = -1;
     resetPlayerOverheatVentPuffs();
   }
 
@@ -380,15 +427,16 @@ export class CombatFxManager {
           : 'fx_decal_splatter';
 
     slot.active = true;
-    (slot as { age?: number }).age = 0;
-    (slot as { ttl?: number }).ttl = 6.0;
+    slot.age = 0;
+    slot.ttl = 6.0;
     slot.textureKey = texKey;
+    registerActiveDecalSlot(this, slot);
     slot.sprite.setTexture(texKey);
     slot.sprite.setPosition(x, y);
     slot.sprite.setRotation((this.decalWriteCursor * 1.17) % (Math.PI * 2));
     slot.sprite.setScale(invBake * scaleMult);
     slot.sprite.setAlpha(0.32);
-    slot.sprite.setDepth(6);
+    setFxSpriteDepthIfChanged(slot.sprite, 6);
     slot.sprite.setVisible(true);
 
     this.totalDecalsSpawned += 1;
@@ -794,17 +842,18 @@ export class CombatFxManager {
           } else if (params.element === 'poison') {
             newColor = PALETTE.LIME_GLOW;
           }
-          if (newColor && s.text.style.color !== newColor) {
-            s.text.setColor(newColor);
-          }
-
           let label = `${total}`;
           if (params.targetKind === 'player') {
             label = `-${total}`;
           } else if (params.isCrit || s.text.text?.endsWith('!')) {
             label = `${total}!`;
           }
-          s.text.setText(label);
+          if (newColor !== undefined) {
+            setTextAndColorIfChanged(s.text, label, newColor);
+          } else {
+            setTextIfChanged(s.text, label);
+          }
+          refreshDamageSlotHalfExtents(s, 24);
           s.text.setScale(computePopupScalePop(0, s.ttl, s.baseScale));
           resolveTacticalAlertSlotOverlaps(this.damagePool, 4.0);
           return;
@@ -862,12 +911,8 @@ export class CombatFxManager {
       color = PALETTE.LIME_GLOW;
     }
 
-    if (slot.text.style.color !== color) {
-      slot.text.setColor(color);
-    }
-    if (slot.text.text !== label) {
-      slot.text.setText(label);
-    }
+    setTextAndColorIfChanged(slot.text, label, color);
+    registerActiveDamageSlot(this, slot, 24);
     slot.text.setPosition(slot.x, slot.y);
     slot.text.setScale(computePopupScalePop(0, slot.ttl, slot.baseScale));
     slot.text.setAlpha(1);
@@ -1124,8 +1169,10 @@ export class CombatFxManager {
         const ang = radialAng + (getClientFreezeRandom()() - 0.5) * 0.55;
         const spd = 72 + getClientFreezeRandom()() * 88;
         const texKey = TextureBaker.getPartTextureKey(rigDef.id, part.id);
+        const partBinding = TextureBaker.resolveAtlasBinding(this.sceneRef, texKey);
         activateParticle(p, {
-          textureKey: texKey,
+          textureKey: partBinding.textureKey,
+          frameName: partBinding.frameName,
           x: x + part.offsetX * 0.65,
           y: rigFootY + part.offsetY * 0.65,
           vx: Math.cos(ang) * spd,
@@ -1275,14 +1322,15 @@ export function spawnPropBreakBurst(
       const sy = y + Math.sin(offAng) * offDist;
       slot.active = true;
       slot.textureKey = shardKey;
-      (slot as { age?: number }).age = 0;
-      (slot as { ttl?: number }).ttl = 6.0;
+      slot.age = 0;
+      slot.ttl = 6.0;
+      registerActiveDecalSlot(fx, slot);
       slot.sprite.setTexture('fx_cutout_kit_512', shardKey);
       slot.sprite.setPosition(sx, sy);
       slot.sprite.setRotation(offAng + s * 0.7);
       slot.sprite.setScale(1 / 3);
       slot.sprite.setAlpha(0.32);
-      slot.sprite.setDepth(6);
+      setFxSpriteDepthIfChanged(slot.sprite, 6);
       slot.sprite.setVisible(true);
       fx.totalDecalsSpawned += 1;
       fx.activeDecalCount = Math.min(maxAllowed, fx.activeDecalCount + 1);
@@ -1335,14 +1383,15 @@ export function spawnCrackedWallBurst(
       const sy = y + Math.sin(offAng) * offDist;
       slot.active = true;
       slot.textureKey = 'fx_stone_chip';
-      (slot as { age?: number }).age = 0;
-      (slot as { ttl?: number }).ttl = 6.0;
+      slot.age = 0;
+      slot.ttl = 6.0;
+      registerActiveDecalSlot(fx, slot);
       slot.sprite.setTexture('fx_cutout_kit_512', 'fx_stone_chip');
       slot.sprite.setPosition(sx, sy);
       slot.sprite.setRotation(offAng);
       slot.sprite.setScale(1 / 3);
       slot.sprite.setAlpha(0.32);
-      slot.sprite.setDepth(6);
+      setFxSpriteDepthIfChanged(slot.sprite, 6);
       slot.sprite.setVisible(true);
       fx.totalDecalsSpawned += 1;
       fx.activeDecalCount = Math.min(maxAllowed, fx.activeDecalCount + 1);
@@ -1563,8 +1612,10 @@ export function stepBossKillTwoBeatSequence(
         const ang = radialAng + (getClientFreezeRandom()() - 0.5) * 0.55;
         const spd = 72 + getClientFreezeRandom()() * 88;
         const texKey = TextureBaker.getPartTextureKey(rigDef.id, part.id);
+        const partBinding = TextureBaker.resolveAtlasBinding(fx.sceneRef, texKey);
         activateParticle(p, {
-          textureKey: texKey,
+          textureKey: partBinding.textureKey,
+          frameName: partBinding.frameName,
           x: state.x + part.offsetX * 0.65,
           y: rigFootY + part.offsetY * 0.65,
           vx: Math.cos(ang) * spd,
@@ -1602,14 +1653,15 @@ export function stepBossKillTwoBeatSequence(
         const sy = state.y + Math.sin(offAng) * offDist;
         slot.active = true;
         slot.textureKey = shardKey;
-        (slot as unknown as { age?: number }).age = 0;
-        (slot as unknown as { ttl?: number }).ttl = 12.0;
+        slot.age = 0;
+        slot.ttl = 12.0;
+        registerActiveDecalSlot(fx, slot);
         slot.sprite.setTexture('fx_cutout_kit_512', shardKey);
         slot.sprite.setPosition(sx, sy);
         slot.sprite.setRotation(offAng);
         slot.sprite.setScale(1 / 3);
         slot.sprite.setAlpha(0.32);
-        slot.sprite.setDepth(6);
+        setFxSpriteDepthIfChanged(slot.sprite, 6);
         slot.sprite.setVisible(true);
         fx.totalDecalsSpawned += 1;
         fx.activeDecalCount = Math.min(maxAllowed, fx.activeDecalCount + 1);

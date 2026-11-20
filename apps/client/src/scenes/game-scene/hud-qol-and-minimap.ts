@@ -21,7 +21,8 @@ import {
   drawVectorHudIcon,
 } from '../../ui/components/hud-primitives.js';
 import { clampUiScale, graphicsSettings } from '../../ui/graphics-settings.js';
-import { serializeKeybindingsHash } from '../../ui/keybindings.js';
+import { type KeybindingsMap, serializeKeybindingsHash } from '../../ui/keybindings.js';
+import { setTextAndColorIfChanged, setTextIfChanged } from '../../ui/phaser-text-guard.js';
 import {
   computeUiTextResolution,
   createSceneTextStyle,
@@ -571,6 +572,46 @@ export function resolveMinimapClickedRoomId(
   return bestRoomId;
 }
 
+let cachedMinimapKeybindsRef: Readonly<KeybindingsMap> | null = null;
+let cachedMinimapKeybindsSig = '';
+
+function getCachedMinimapKeybindingsSig(bindings: Readonly<KeybindingsMap>): string {
+  if (bindings === cachedMinimapKeybindsRef) {
+    return cachedMinimapKeybindsSig;
+  }
+  cachedMinimapKeybindsRef = bindings;
+  cachedMinimapKeybindsSig = serializeKeybindingsHash(bindings);
+  return cachedMinimapKeybindsSig;
+}
+
+function fnv1aMixInt(hash: number, value: number): number {
+  return Math.imul((hash ^ (value | 0)) >>> 0, 0x01000193) >>> 0;
+}
+
+function fnv1aMixStr(hash: number, str: string): number {
+  let h = hash >>> 0;
+  for (let i = 0; i < str.length; i++) {
+    h = Math.imul((h ^ str.charCodeAt(i)) >>> 0, 0x01000193) >>> 0;
+  }
+  return h;
+}
+
+export function computeRoomsTopologyHash(rooms: readonly DungeonRoomNode[]): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < rooms.length; i++) {
+    const rm = rooms[i]!;
+    h = fnv1aMixInt(h, rm.id);
+    h = fnv1aMixInt(h, rm.gx);
+    h = fnv1aMixInt(h, rm.gy);
+    h = fnv1aMixStr(h, rm.type);
+    h = fnv1aMixStr(h, rm.roomShape ?? 'r');
+    h = fnv1aMixStr(h, rm.roomSizePreset ?? 's');
+    h = fnv1aMixStr(h, rm.discovery);
+    h = fnv1aMixInt(h, rm.cleared ? 1 : 0);
+  }
+  return h >>> 0;
+}
+
 export function updateMinimapHudImpl(this: GameScene): void {
   const sim = this.transport.getSim();
   const room = sim.getCurrentRoom();
@@ -587,15 +628,12 @@ export function updateMinimapHudImpl(this: GameScene): void {
     (sim.map.lastLayoutResult as { roomSizePreset?: string } | null)?.roomSizePreset ??
     room.roomSizePreset ??
     'standard';
-  let roomsTopologySig = '';
-  for (let i = 0; i < sim.dungeon.rooms.length; i++) {
-    const rm = sim.dungeon.rooms[i]!;
-    roomsTopologySig += `${rm.id}:${rm.roomShape ?? 'r'}:${rm.roomSizePreset ?? 's'}:${rm.discovery}:${rm.cleared ? 1 : 0};`;
-  }
+  const roomsTopologyHash = computeRoomsTopologyHash(sim.dungeon.rooms);
   const canTeleport = canTeleportFromCurrentRoom(sim);
   const gState = graphicsSettings.getState();
   const mapLabel = graphicsSettings.getActionKeyLabel('toggleMap');
-  const minimapHash = `${sim.inHub ? 'hub' : sim.currentFloor}:${sim.currentBiome}:${sim.currentRoomId}:${this.fullMapOpen ? 1 : 0}:${sim.secretWallBroken ? 1 : 0}:${room.cleared ? 1 : 0}:${canTeleport ? 1 : 0}:${sim.runStats.roomsCleared}:${sim.pings.length}:${i18n.getLocale()}:${this.hudPadX}:${this.hudPadY}:${uiScale}:${liveShape}:${livePreset}:${sim.map.cols}x${sim.map.rows}:${sim.map.mapRevision}:${pNormX},${pNormY}:${roomsTopologySig}:${serializeKeybindingsHash(gState.keybindings)}`;
+  const keybindsSig = getCachedMinimapKeybindingsSig(gState.keybindings);
+  const minimapHash = `${sim.inHub ? 'hub' : sim.currentFloor}:${sim.currentBiome}:${sim.currentRoomId}:${this.fullMapOpen ? 1 : 0}:${sim.secretWallBroken ? 1 : 0}:${room.cleared ? 1 : 0}:${canTeleport ? 1 : 0}:${sim.runStats.roomsCleared}:${sim.pings.length}:${i18n.getLocale()}:${this.hudPadX}:${this.hudPadY}:${uiScale}:${liveShape}:${livePreset}:${sim.map.cols}x${sim.map.rows}:${sim.map.mapRevision}:${pNormX},${pNormY}:${roomsTopologyHash}:${keybindsSig}`;
   if (minimapHash === this.lastMinimapHash && !sim.stressTestActive) return;
   this.lastMinimapHash = minimapHash;
 
@@ -625,9 +663,7 @@ export function updateMinimapHudImpl(this: GameScene): void {
         ? `Floor ${sim.currentFloor}-${roomOrd} · ${biomeName}`
         : `Tầng ${sim.currentFloor}-${roomOrd} · ${biomeName}`;
 
-  if (this.minimapTitleText.text !== titleStr) {
-    this.minimapTitleText.setText(titleStr);
-  }
+  setTextIfChanged(this.minimapTitleText, titleStr);
 
   const rooms = sim.dungeon.rooms;
   let minGx = 99;
@@ -959,9 +995,7 @@ export function updateBossHudImpl(this: GameScene): void {
     maxHp: boss.maxHp,
     suffix: statusSuffix,
   });
-  if (this.bossTitleText.text !== titleStr) {
-    this.bossTitleText.setText(titleStr);
-  }
+  setTextIfChanged(this.bossTitleText, titleStr);
 
   // Local coordinates inside hudTopCenterContainer (anchored at x = 480, y = -padY)
   const panelW = 348;
@@ -1109,9 +1143,7 @@ export function updateTopCenterBannersAndQolImpl(this: GameScene, dtSec: number)
     );
     if (showWaveBanner) {
       this.waveBannerGraphics.clear();
-      if (this.waveBannerText.text !== this.hudBannerTextStr) {
-        this.waveBannerText.setText(this.hudBannerTextStr);
-      }
+      setTextIfChanged(this.waveBannerText, this.hudBannerTextStr);
       const alpha = clamp(this.hudBannerTimer / 0.25, 0, 1);
       const bw = Math.max(186, Math.ceil(this.waveBannerText.width + 28));
       const bh = 22;
@@ -1146,12 +1178,7 @@ export function updateTopCenterBannersAndQolImpl(this: GameScene, dtSec: number)
       const dmgTag = rxBanner.totalDamage > 0 ? ` (+${rxBanner.totalDamage})` : '';
       const comboPrefix = rxBanner.isTeamCombo ? '⚡ ' : '✦ ';
       const fullLabel = `${comboPrefix}${rxBanner.label}${dmgTag}`;
-      if (this.reactionBannerText.text !== fullLabel) {
-        this.reactionBannerText.setText(fullLabel);
-      }
-      if (this.reactionBannerText.style.color !== rxBanner.colorHex) {
-        this.reactionBannerText.setColor(rxBanner.colorHex);
-      }
+      setTextAndColorIfChanged(this.reactionBannerText, fullLabel, rxBanner.colorHex);
       const bw = Math.max(176, Math.ceil(this.reactionBannerText.width + 24));
       const bh = 22;
       const bx = -bw * 0.5;
@@ -1248,13 +1275,8 @@ export function updateTopCenterBannersAndQolImpl(this: GameScene, dtSec: number)
           ? `${downedTarget.displayName.toUpperCase()} DOWNED (${bleedSec}s) · Hold [${interactLabel}] to Revive`
           : `${downedTarget.displayName.toUpperCase()} GỤC NGÃ (${bleedSec}s) · Giữ [${interactLabel}] Cứu`;
 
-      if (this.downedBannerText.text !== bannerLabel) {
-        this.downedBannerText.setText(bannerLabel);
-      }
       const downedColor = isReviving ? '#4ADE80' : '#FCA5A5';
-      if (this.downedBannerText.style.color !== downedColor) {
-        this.downedBannerText.setColor(downedColor);
-      }
+      setTextAndColorIfChanged(this.downedBannerText, bannerLabel, downedColor);
       this.downedBannerText.setPosition(bx + 26, by + 13);
       if (!this.downedBannerText.visible) this.downedBannerText.setVisible(true);
     } else if (this.downedBannerText.visible) {

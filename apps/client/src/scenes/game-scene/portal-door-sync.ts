@@ -39,8 +39,11 @@ import {
   triggerPortalActivationBurstState,
   triggerPortalEnterSequenceState,
 } from '../../fx/portal-door-shaders.js';
+import { isVisualFreezeActive } from '../../fx/combat-fx-blessings-p1d.js';
 import { graphicsSettings } from '../../ui/graphics-settings.js';
+import { setTextAndColorIfChanged } from '../../ui/phaser-text-guard.js';
 import { type GameScene, RIG_FOOT_OFFSET_Y } from '../GameScene.js';
+import { setBlendModeIfChanged, setDepthIfChanged } from './entity-sync.js';
 import { resolveDoorLabelState } from './interact-prompt.js';
 
 export interface PortalVisualGroup {
@@ -53,6 +56,7 @@ export interface PortalVisualGroup {
   burstGraphics: Phaser.GameObjects.Graphics;
   glowSprite: Phaser.GameObjects.Image;
   playerTransformApplied: boolean;
+  hadBurstDrawn?: boolean;
 }
 
 export interface DoorVisualEntry {
@@ -118,14 +122,14 @@ function getOrCreatePortalVisualGroup(scene: GameScene, x: number, y: number): P
   }
 
   const pedestalBaseSprite = scene.add.sprite(x, y, 'portal_pedestal_base');
-  pedestalBaseSprite.setDepth(18.6);
+  setDepthIfChanged(pedestalBaseSprite, 18.6);
 
   const pedestalRunesSprite = scene.add.sprite(x, y, 'portal_pedestal_runes');
-  pedestalRunesSprite.setDepth(18.8);
-  pedestalRunesSprite.setBlendMode(Phaser.BlendModes.ADD);
+  setDepthIfChanged(pedestalRunesSprite, 18.8);
+  setBlendModeIfChanged(pedestalRunesSprite, Phaser.BlendModes.ADD);
 
   const vortexSprite = scene.add.sprite(x, y, 'portal_vortex_disc');
-  vortexSprite.setDepth(19.1);
+  setDepthIfChanged(vortexSprite, 19.1);
   (vortexSprite as PortalShaderSprite).__portalUniforms = {
     time: 0,
     spinSpeed: 2.6,
@@ -138,14 +142,14 @@ function getOrCreatePortalVisualGroup(scene: GameScene, x: number, y: number): P
   };
 
   const vortexCoreSprite = scene.add.sprite(x, y, 'portal_vortex_core');
-  vortexCoreSprite.setDepth(19.2);
-  vortexCoreSprite.setBlendMode(Phaser.BlendModes.ADD);
+  setDepthIfChanged(vortexCoreSprite, 19.2);
+  setBlendModeIfChanged(vortexCoreSprite, Phaser.BlendModes.ADD);
 
   const spiralParticles: Phaser.GameObjects.Image[] = [];
   for (let i = 0; i < 12; i++) {
     const sp = scene.add.image(x, y, 'portal_particle_mote');
-    sp.setDepth(19.4);
-    sp.setBlendMode(Phaser.BlendModes.ADD);
+    setDepthIfChanged(sp, 19.4);
+    setBlendModeIfChanged(sp, Phaser.BlendModes.ADD);
     sp.setVisible(false);
     spiralParticles.push(sp);
   }
@@ -153,19 +157,19 @@ function getOrCreatePortalVisualGroup(scene: GameScene, x: number, y: number): P
   const energyRays: Phaser.GameObjects.Image[] = [];
   for (let i = 0; i < 4; i++) {
     const ray = scene.add.image(x, y, 'portal_energy_ray');
-    ray.setDepth(19.5);
-    ray.setBlendMode(Phaser.BlendModes.ADD);
+    setDepthIfChanged(ray, 19.5);
+    setBlendModeIfChanged(ray, Phaser.BlendModes.ADD);
     ray.setVisible(false);
     energyRays.push(ray);
   }
 
   const burstGraphics = scene.add.graphics();
-  burstGraphics.setDepth(35.4);
-  burstGraphics.setBlendMode(Phaser.BlendModes.ADD);
+  setDepthIfChanged(burstGraphics, 35.4);
+  setBlendModeIfChanged(burstGraphics, Phaser.BlendModes.ADD);
 
   const glowSprite = scene.add.image(x, y, 'fx_light_radial');
-  glowSprite.setDepth(35);
-  glowSprite.setBlendMode(Phaser.BlendModes.ADD);
+  setDepthIfChanged(glowSprite, 35);
+  setBlendModeIfChanged(glowSprite, Phaser.BlendModes.ADD);
 
   const group: PortalVisualGroup = {
     pedestalBaseSprite,
@@ -177,6 +181,7 @@ function getOrCreatePortalVisualGroup(scene: GameScene, x: number, y: number): P
     burstGraphics,
     glowSprite,
     playerTransformApplied: false,
+    hadBurstDrawn: false,
   };
   scene.portalVisualGroup = group;
   scene.portalSprite = vortexSprite;
@@ -196,7 +201,10 @@ function setPortalVisualGroupVisible(group: PortalVisualGroup, visible: boolean)
     for (let i = 0; i < group.energyRays.length; i++) {
       group.energyRays[i]!.setVisible(false);
     }
-    group.burstGraphics.clear();
+    if (group.hadBurstDrawn) {
+      group.burstGraphics.clear();
+      group.hadBurstDrawn = false;
+    }
     group.glowSprite.setVisible(false);
   }
 }
@@ -396,7 +404,14 @@ export function syncPortalVisualsImpl(this: GameScene, animDtSec: number): void 
     }
   }
 
-  group.burstGraphics.clear();
+  if (isBursting || animStep.enterActive) {
+    group.burstGraphics.clear();
+    group.hadBurstDrawn = true;
+  } else if (group.hadBurstDrawn) {
+    group.burstGraphics.clear();
+    group.hadBurstDrawn = false;
+  }
+
   if (isBursting) {
     const bp = animStep.burstProgress;
     const fade = animStep.shockwaveAlpha;
@@ -494,13 +509,14 @@ export function syncDoorVisualsImpl(
     this.lastDoorRoomKey !== currentDoorRoomKey;
   this.lastDoorRoomKey = currentDoorRoomKey;
 
-  const view = this.cameras.main.worldView;
-  const hasView = view && view.width > 0;
+  const view = this.cameras?.main?.worldView;
+  const hasView = Boolean(view && view.width > 0 && view.height > 0);
+  const freezeActive = isVisualFreezeActive(this);
   const bossActive = sim.getActiveBoss() !== null;
-  const safeTopY = hasView ? view.y + (bossActive ? 122 : 82) : 82;
-  const safeBottomY = hasView ? view.y + view.height - 66 : 474;
-  const safeLeftX = hasView ? view.x + 18 : 18;
-  const safeRightX = hasView ? view.x + view.width - 18 : 942;
+  const safeTopY = hasView ? view!.y + (bossActive ? 122 : 82) : 82;
+  const safeBottomY = hasView ? view!.y + view!.height - 66 : 474;
+  const safeLeftX = hasView ? view!.x + 18 : 18;
+  const safeRightX = hasView ? view!.x + view!.width - 18 : 942;
 
   let playLockupSfx = false;
   this.activeDoorKeys.clear();
@@ -528,15 +544,15 @@ export function syncDoorVisualsImpl(
 
       const openArchSprite = this.add.sprite(door.x, door.y, initVis.openArchTextureKey);
       openArchSprite.setScale(invBake);
-      openArchSprite.setDepth(15.8);
+      setDepthIfChanged(openArchSprite, 15.8);
 
       const frameSprite = this.add.sprite(door.x, door.y, initVis.frameTextureKey);
       frameSprite.setScale(invBake);
-      frameSprite.setDepth(16.0);
+      setDepthIfChanged(frameSprite, 16.0);
 
       const barrierSprite = this.add.sprite(door.x, door.y, initVis.barrierTextureKey);
       barrierSprite.setScale(invBake);
-      barrierSprite.setDepth(16.2);
+      setDepthIfChanged(barrierSprite, 16.2);
       (barrierSprite as DoorShaderSprite).__doorUniforms = {
         time: 0,
         lockupProgress: door.locked ? 1 : 0,
@@ -549,15 +565,15 @@ export function syncDoorVisualsImpl(
       const moteSprites: Phaser.GameObjects.Image[] = [];
       for (let m = 0; m < 4; m++) {
         const ms = this.add.image(door.x, door.y, 'door_unlock_spark');
-        ms.setDepth(16.5);
-        ms.setBlendMode(Phaser.BlendModes.ADD);
+        setDepthIfChanged(ms, 16.5);
+        setBlendModeIfChanged(ms, Phaser.BlendModes.ADD);
         ms.setVisible(false);
         moteSprites.push(ms);
       }
 
       const glowSprite = this.add.image(door.x, door.y, 'fx_light_radial');
-      glowSprite.setDepth(35);
-      glowSprite.setBlendMode(Phaser.BlendModes.ADD);
+      setDepthIfChanged(glowSprite, 35);
+      setBlendModeIfChanged(glowSprite, Phaser.BlendModes.ADD);
 
       const cachedRoomLabel = i18n.roomTypeName(door.targetRoomType);
       const originX = door.dir === 'E' ? 1 : door.dir === 'W' ? 0 : 0.5;
@@ -571,8 +587,8 @@ export function syncDoorVisualsImpl(
           strokeThickness: 3,
           resolution: textRes,
         })
-        .setOrigin(originX, 0.5)
-        .setDepth(45);
+        .setOrigin(originX, 0.5);
+      setDepthIfChanged(label, 45);
 
       entry = {
         sprite: frameSprite,
@@ -628,15 +644,6 @@ export function syncDoorVisualsImpl(
       );
     }
 
-    doorVisParamsScratch.dir = door.dir;
-    doorVisParamsScratch.locked = door.locked;
-    doorVisParamsScratch.biome = sim.currentBiome;
-    doorVisParamsScratch.inHub = sim.inHub;
-    doorVisParamsScratch.quality = quality;
-    doorVisParamsScratch.lockupProgress = doorStep.lockupProgress;
-    doorVisParamsScratch.dissolveProgress = doorStep.dissolveProgress;
-    doorVisParamsScratch.elapsedSec = animTimeSec;
-    const doorVis = resolveDoorVisualState(doorVisParamsScratch, doorVisScratch);
     if (door.isSecretPassage && door.locked && !sim.secretWallBroken && !sim.getCurrentRoom().secretWallBroken) {
       entry.frameSprite.setVisible(false);
       entry.openArchSprite.setVisible(false);
@@ -646,8 +653,32 @@ export function syncDoorVisualsImpl(
       for (let m = 0; m < entry.moteSprites.length; m++) entry.moteSprites[m]!.setVisible(false);
       continue;
     }
-    entry.frameSprite.setVisible(true);
 
+    const inTransitionBurst =
+      entry.animState.lockupActive ||
+      doorStep.dissolveActive ||
+      doorStep.emitLockupSound ||
+      doorStep.emitUnlockSparks;
+    const doorInFxView =
+      !hasView ||
+      freezeActive ||
+      inTransitionBurst ||
+      (door.x >= view!.x - 80 &&
+        door.x <= view!.x + view!.width + 80 &&
+        door.y >= view!.y - 80 &&
+        door.y <= view!.y + view!.height + 80);
+
+    doorVisParamsScratch.dir = door.dir;
+    doorVisParamsScratch.locked = door.locked;
+    doorVisParamsScratch.biome = sim.currentBiome;
+    doorVisParamsScratch.inHub = sim.inHub;
+    doorVisParamsScratch.quality = quality;
+    doorVisParamsScratch.lockupProgress = doorStep.lockupProgress;
+    doorVisParamsScratch.dissolveProgress = doorStep.dissolveProgress;
+    doorVisParamsScratch.elapsedSec = animTimeSec;
+    const doorVis = resolveDoorVisualState(doorVisParamsScratch, doorVisScratch);
+
+    entry.frameSprite.setVisible(true);
     if (entry.frameSprite.texture.key !== doorVis.frameTextureKey) {
       entry.frameSprite.setTexture(doorVis.frameTextureKey);
     }
@@ -668,107 +699,117 @@ export function syncDoorVisualsImpl(
     entry.openArchSprite.setAlpha(openArchAlpha);
     entry.openArchSprite.setVisible(doorVis.openArchVisible);
 
-    if (entry.barrierSprite.texture.key !== doorVis.barrierTextureKey) {
-      entry.barrierSprite.setTexture(doorVis.barrierTextureKey);
-    }
-    entry.barrierSprite.setPosition(door.x, door.y);
-    entry.barrierSprite.setScale(invBake);
-    entry.barrierSprite.setRotation(doorVis.barrierRotationRad);
-    entry.barrierSprite.setVisible(doorVis.barrierVisible);
-
-    if (doorVis.barrierVisible) {
-      const webglOk =
-        doorVis.useShader && ensurePortalAndDoorPipelinesRegistered(this.game, Phaser);
-      if (webglOk) {
-        const uniforms = (entry.barrierSprite as DoorShaderSprite).__doorUniforms!;
-        uniforms.time = animTimeSec;
-        uniforms.lockupProgress = doorVis.lockupProgress;
-        uniforms.dissolveProgress = doorVis.dissolveProgress;
-        uniforms.isVertical = doorVis.isVertical ? 1.0 : 0.0;
-
-        if (entry.barrierSprite.pipeline?.name !== DOOR_BARRIER_PIPELINE_KEY) {
-          entry.barrierSprite.setPipeline(DOOR_BARRIER_PIPELINE_KEY);
-        }
-        entry.barrierSprite.setTint(0xffffff);
-        entry.barrierSprite.setAlpha(1);
-      } else {
-        if (entry.barrierSprite.pipeline?.name === DOOR_BARRIER_PIPELINE_KEY) {
-          entry.barrierSprite.resetPipeline();
-        }
-        entry.barrierSprite.setTint(0xdc2626);
-        entry.barrierSprite.setAlpha(doorVis.barrierAlpha);
+    if (!doorInFxView) {
+      if (entry.barrierSprite.visible !== false) {
+        entry.barrierSprite.setVisible(false);
       }
-    }
-
-    const activeMoteCount = quality === 'low' ? 0 : quality === 'medium' ? 2 : 4;
-    for (let m = 0; m < entry.moteSprites.length; m++) {
-      const ms = entry.moteSprites[m]!;
-      if (m < activeMoteCount) {
-        const pose = computeDoorMotePose(
-          m,
-          doorVis.orientation,
-          door.x,
-          door.y,
-          door.locked,
-          doorStep.dissolveActive,
-          doorStep.dissolveProgress,
-          animTimeSec,
-          particlePoseScratch,
-        );
-        const moteTex =
-          door.locked || doorStep.dissolveActive ? 'door_unlock_spark' : 'fx_sparkle_mote';
-        if (ms.texture.key !== moteTex) {
-          ms.setTexture(moteTex);
-        }
-        ms.setPosition(pose.x, pose.y);
-        ms.setScale(invBake * pose.scaleX, invBake * pose.scaleY);
-        ms.setRotation(pose.rotation);
-        const moteTint = doorStep.dissolveActive
-          ? m % 2 === 0
-            ? 0xfacc15
-            : doorVis.openArchTintNum
-          : door.locked
-            ? m < 2
-              ? 0xfacc15
-              : doorVis.lampColorNum
-            : doorVis.openArchTintNum;
-        ms.setTint(moteTint);
-        ms.setAlpha(pose.alpha);
-        ms.setVisible(true);
-      } else {
-        ms.setVisible(false);
+      if (entry.glowSprite.visible !== false) {
+        entry.glowSprite.setVisible(false);
       }
-    }
-
-    const doorGlowSpec = resolveInteractableVisualGlowSpec({
-      kind: 'door',
-      locked: door.locked,
-      biome: sim.currentBiome,
-      inHub: sim.inHub,
-    });
-    if (lightingEnabled && doorGlowSpec.glowAlpha > 0) {
-      const dissolveBoost = doorStep.dissolveActive
-        ? 0.08 * Math.sin(doorStep.dissolveProgress * Math.PI)
-        : 0;
-      entry.glowSprite.setPosition(door.x, door.y);
-      entry.glowSprite.setDisplaySize(
-        doorGlowSpec.glowRadiusX * 2,
-        doorGlowSpec.glowRadiusY * 2,
-      );
-      entry.glowSprite.setTint(doorGlowSpec.colorNum);
-      entry.glowSprite.setAlpha(clamp(doorGlowSpec.glowAlpha + dissolveBoost, 0, 0.42));
-      entry.glowSprite.setVisible(true);
+      for (let m = 0; m < entry.moteSprites.length; m++) {
+        const ms = entry.moteSprites[m]!;
+        if (ms.visible !== false) {
+          ms.setVisible(false);
+        }
+      }
     } else {
-      entry.glowSprite.setVisible(false);
+      if (entry.barrierSprite.texture.key !== doorVis.barrierTextureKey) {
+        entry.barrierSprite.setTexture(doorVis.barrierTextureKey);
+      }
+      entry.barrierSprite.setPosition(door.x, door.y);
+      entry.barrierSprite.setScale(invBake);
+      entry.barrierSprite.setRotation(doorVis.barrierRotationRad);
+      entry.barrierSprite.setVisible(doorVis.barrierVisible);
+
+      if (doorVis.barrierVisible) {
+        const webglOk =
+          doorVis.useShader && ensurePortalAndDoorPipelinesRegistered(this.game, Phaser);
+        if (webglOk) {
+          const uniforms = (entry.barrierSprite as DoorShaderSprite).__doorUniforms!;
+          uniforms.time = animTimeSec;
+          uniforms.lockupProgress = doorVis.lockupProgress;
+          uniforms.dissolveProgress = doorVis.dissolveProgress;
+          uniforms.isVertical = doorVis.isVertical ? 1.0 : 0.0;
+
+          if (entry.barrierSprite.pipeline?.name !== DOOR_BARRIER_PIPELINE_KEY) {
+            entry.barrierSprite.setPipeline(DOOR_BARRIER_PIPELINE_KEY);
+          }
+          entry.barrierSprite.setTint(0xffffff);
+          entry.barrierSprite.setAlpha(1);
+        } else {
+          if (entry.barrierSprite.pipeline?.name === DOOR_BARRIER_PIPELINE_KEY) {
+            entry.barrierSprite.resetPipeline();
+          }
+          entry.barrierSprite.setTint(0xdc2626);
+          entry.barrierSprite.setAlpha(doorVis.barrierAlpha);
+        }
+      }
+
+      const activeMoteCount = quality === 'low' ? 0 : quality === 'medium' ? 2 : 4;
+      for (let m = 0; m < entry.moteSprites.length; m++) {
+        const ms = entry.moteSprites[m]!;
+        if (m < activeMoteCount) {
+          const pose = computeDoorMotePose(
+            m,
+            doorVis.orientation,
+            door.x,
+            door.y,
+            door.locked,
+            doorStep.dissolveActive,
+            doorStep.dissolveProgress,
+            animTimeSec,
+            particlePoseScratch,
+          );
+          const moteTex =
+            door.locked || doorStep.dissolveActive ? 'door_unlock_spark' : 'fx_sparkle_mote';
+          if (ms.texture.key !== moteTex) {
+            ms.setTexture(moteTex);
+          }
+          ms.setPosition(pose.x, pose.y);
+          ms.setScale(invBake * pose.scaleX, invBake * pose.scaleY);
+          ms.setRotation(pose.rotation);
+          const moteTint = doorStep.dissolveActive
+            ? m % 2 === 0
+              ? 0xfacc15
+              : doorVis.openArchTintNum
+            : door.locked
+              ? m < 2
+                ? 0xfacc15
+                : doorVis.lampColorNum
+              : doorVis.openArchTintNum;
+          ms.setTint(moteTint);
+          ms.setAlpha(pose.alpha);
+          ms.setVisible(true);
+        } else {
+          ms.setVisible(false);
+        }
+      }
+
+      const doorGlowSpec = resolveInteractableVisualGlowSpec({
+        kind: 'door',
+        locked: door.locked,
+        biome: sim.currentBiome,
+        inHub: sim.inHub,
+      });
+      if (lightingEnabled && doorGlowSpec.glowAlpha > 0) {
+        const dissolveBoost = doorStep.dissolveActive
+          ? 0.08 * Math.sin(doorStep.dissolveProgress * Math.PI)
+          : 0;
+        entry.glowSprite.setPosition(door.x, door.y);
+        entry.glowSprite.setDisplaySize(
+          doorGlowSpec.glowRadiusX * 2,
+          doorGlowSpec.glowRadiusY * 2,
+        );
+        entry.glowSprite.setTint(doorGlowSpec.colorNum);
+        entry.glowSprite.setAlpha(clamp(doorGlowSpec.glowAlpha + dissolveBoost, 0, 0.42));
+        entry.glowSprite.setVisible(true);
+      } else {
+        entry.glowSprite.setVisible(false);
+      }
     }
 
     if (doorLabelState.visible) {
-      if (entry.label.text !== doorLabelState.text) {
-        entry.label.setText(doorLabelState.text);
-      }
-      if (entry.label.style.color !== doorLabelState.colorHex) {
-        entry.label.setColor(doorLabelState.colorHex);
-      }
+      setTextAndColorIfChanged(entry.label, doorLabelState.text, doorLabelState.colorHex);
       const originX =
         doorLabelState.mode === 'lock_icon_only'
           ? 0.5

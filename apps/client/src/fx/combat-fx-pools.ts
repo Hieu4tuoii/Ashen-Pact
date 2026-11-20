@@ -20,6 +20,7 @@ import {
 } from './tapered-ribbon-builder.js';
 import {
   ALL_CUTOUT_KIT_FRAME_KEYS,
+  CUTOUT_KIT_ATLAS_KEY,
 } from '../art/texture-baker-fx.js';
 
 const CUTOUT_KIT_SET = new Set<string>(ALL_CUTOUT_KIT_FRAME_KEYS);
@@ -27,8 +28,171 @@ export function isCutoutKitFrame(key: string): boolean {
   return CUTOUT_KIT_SET.has(key);
 }
 
+const KIT_SUBFRAME_CACHE = new Map<string, readonly [string, string, string, string]>();
+for (let i = 0; i < ALL_CUTOUT_KIT_FRAME_KEYS.length; i++) {
+  const key = ALL_CUTOUT_KIT_FRAME_KEYS[i]!;
+  KIT_SUBFRAME_CACHE.set(key, [`${key}_0`, `${key}_1`, `${key}_2`, `${key}_3`]);
+}
+
+export function getKitSubframeName(prefix: string, frameIdx: number): string {
+  let subframes = KIT_SUBFRAME_CACHE.get(prefix);
+  if (!subframes) {
+    subframes = [`${prefix}_0`, `${prefix}_1`, `${prefix}_2`, `${prefix}_3`];
+    KIT_SUBFRAME_CACHE.set(prefix, subframes);
+  }
+  return subframes[frameIdx] ?? `${prefix}_${frameIdx}`;
+}
+
+export const CASING_SHADOW_POOL_CAP = 32;
 export const BIOME_AMBIENT_POOL_SLOTS = 80;
 export const TORCH_MOTE_POOL_SLOTS = 16;
+
+export interface CasingShadowSlot {
+  sprite: Phaser.GameObjects.Sprite;
+  owner: PooledParticle | null;
+}
+
+const ownerByParticle = new WeakMap<PooledParticle, CombatFxManager>();
+const shadowSlotByParticle = new WeakMap<PooledParticle, CasingShadowSlot>();
+const trackedActiveParticles = new WeakSet<PooledParticle>();
+const trackedActiveDamageSlots = new WeakSet<PooledDamageText>();
+const trackedActiveDecalSlots = new WeakSet<PooledDecal>();
+const fallbackDepthBySprite = new WeakMap<object, number>();
+const gfxWasNonEmptyMap = new WeakMap<object, boolean>();
+
+export function setFxSpriteDepthIfChanged(
+  sprite: { depth?: number; setDepth: (d: number) => unknown },
+  depth: number,
+): void {
+  const cur = typeof sprite.depth === 'number' ? sprite.depth : fallbackDepthBySprite.get(sprite);
+  if (cur === depth) return;
+  sprite.setDepth(depth);
+  if (sprite.depth !== depth) {
+    const desc = Object.getOwnPropertyDescriptor(sprite, 'depth');
+    if (desc?.writable) {
+      sprite.depth = depth;
+    }
+  }
+  if (typeof sprite.depth !== 'number') {
+    fallbackDepthBySprite.set(sprite, depth);
+  }
+}
+
+function setFxGraphicsVisibleIfChanged(
+  gfx: Phaser.GameObjects.Graphics | undefined,
+  visible: boolean,
+): void {
+  if (!gfx || typeof gfx.setVisible !== 'function') return;
+  if (gfx.visible === visible) return;
+  gfx.setVisible(visible);
+}
+
+function clearTrackedFxGraphicsIfNeeded(gfx: Phaser.GameObjects.Graphics | undefined): void {
+  if (!gfx || typeof gfx.clear !== 'function') return;
+  const cmdBuf = (gfx as unknown as { commandBuffer?: unknown }).commandBuffer;
+  const hasBufferCommands = Array.isArray(cmdBuf) && cmdBuf.length > 0;
+  if (hasBufferCommands || gfxWasNonEmptyMap.get(gfx) === true) {
+    gfx.clear();
+    gfxWasNonEmptyMap.set(gfx, false);
+  }
+}
+
+function finalizeTrackedFxGraphics(
+  gfx: Phaser.GameObjects.Graphics | undefined,
+  drewAny: boolean,
+): void {
+  if (!gfx) return;
+  const cmdBuf = (gfx as unknown as { commandBuffer?: unknown }).commandBuffer;
+  const hasCommands = Array.isArray(cmdBuf) ? cmdBuf.length > 0 : drewAny;
+  gfxWasNonEmptyMap.set(gfx, hasCommands);
+  setFxGraphicsVisibleIfChanged(gfx, hasCommands);
+}
+
+export function releaseParticleCasingShadow(p: PooledParticle): void {
+  const slot = shadowSlotByParticle.get(p);
+  if (slot) {
+    if (slot.sprite.visible) {
+      slot.sprite.setVisible(false);
+    }
+    if (slot.owner === p) {
+      slot.owner = null;
+    }
+    shadowSlotByParticle.delete(p);
+    p.shadowSprite = undefined;
+    return;
+  }
+  if (p.shadowSprite?.visible) {
+    p.shadowSprite.setVisible(false);
+  }
+}
+
+export function bindParticleCasingShadow(p: PooledParticle): Phaser.GameObjects.Sprite | undefined {
+  const mgr = ownerByParticle.get(p);
+  if (!mgr || !mgr.casingShadowSlots || mgr.casingShadowSlots.length === 0) {
+    return p.shadowSprite;
+  }
+  let slot = shadowSlotByParticle.get(p);
+  if (!slot || slot.owner !== p) {
+    slot = undefined;
+    const slots = mgr.casingShadowSlots;
+    for (let i = 0; i < slots.length; i++) {
+      const candidate = slots[i]!;
+      if (candidate.owner === null) {
+        slot = candidate;
+        break;
+      }
+    }
+    if (!slot) {
+      slot = slots[mgr.casingShadowCursor % slots.length]!;
+      mgr.casingShadowCursor += 1;
+      if (slot.owner && slot.owner !== p) {
+        slot.owner.shadowSprite = undefined;
+        shadowSlotByParticle.delete(slot.owner);
+      }
+    }
+    slot.owner = p;
+    p.shadowSprite = slot.sprite;
+    shadowSlotByParticle.set(p, slot);
+  }
+  return slot.sprite;
+}
+
+export function registerActiveParticleSlot(p: PooledParticle): void {
+  const mgr = ownerByParticle.get(p);
+  if (!mgr || !mgr.managedPoolsInitialized) return;
+  if (!trackedActiveParticles.has(p)) {
+    trackedActiveParticles.add(p);
+    mgr.activeParticleSlots.push(p);
+  }
+}
+
+export function registerActiveDamageSlot(
+  mgr: CombatFxManager,
+  slot: PooledDamageText,
+  defaultWidthPx: number,
+): void {
+  slot.halfW = 0.5 * (slot.text.width || defaultWidthPx);
+  slot.halfH = 0.5 * (slot.text.height || 16);
+  if (mgr.managedPoolsInitialized && !trackedActiveDamageSlots.has(slot)) {
+    trackedActiveDamageSlots.add(slot);
+    mgr.activeDamageSlots.push(slot);
+  }
+}
+
+export function refreshDamageSlotHalfExtents(
+  slot: PooledDamageText,
+  defaultWidthPx: number,
+): void {
+  slot.halfW = 0.5 * (slot.text.width || defaultWidthPx);
+  slot.halfH = 0.5 * (slot.text.height || 16);
+}
+
+export function registerActiveDecalSlot(mgr: CombatFxManager, slot: PooledDecal): void {
+  if (mgr.managedPoolsInitialized && !trackedActiveDecalSlots.has(slot)) {
+    trackedActiveDecalSlots.add(slot);
+    mgr.activeDecalSlots.push(slot);
+  }
+}
 
 export interface PooledParticle {
   sprite: Phaser.GameObjects.Sprite;
@@ -48,6 +212,7 @@ export interface PooledParticle {
   gravityY: number;
   damping: number;
   blendMode: 'NORMAL' | 'ADD';
+  appliedBlendMode?: 'NORMAL' | 'ADD';
   easeCurve: FxEaseCurve;
   scaleRatioY: number;
   flipY?: boolean;
@@ -56,9 +221,11 @@ export interface PooledParticle {
   depth?: number;
   baseFrame?: number;
   frameCount?: number;
+  lastFrameIndex?: number;
   frameName?: string;
   kitFramePrefix?: string;
   preserveFlipbookAlpha?: boolean;
+  poolIndex?: number;
 }
 
 export interface ActivePerimeterRing {
@@ -109,6 +276,8 @@ export interface PooledDamageText {
   age: number;
   ttl: number;
   baseScale: number;
+  halfW?: number;
+  halfH?: number;
   targetId?: number;
   lastMergeMs?: number;
   accumulatedAmount?: number;
@@ -118,6 +287,9 @@ export interface PooledDecal {
   sprite: Phaser.GameObjects.Sprite;
   textureKey: string;
   active: boolean;
+  age?: number;
+  ttl?: number;
+  poolIndex?: number;
 }
 
 export interface PooledAfterimage {
@@ -166,6 +338,13 @@ export function initCombatFxPools(
 ): void {
   const invBake = 1 / TextureBaker.getBakeScale();
   const textRes = TextureBaker.getBakeScale();
+  this.managedPoolsInitialized = true;
+  this.activeParticleSlots = [];
+  this.activeDamageSlots = [];
+  this.activeDecalSlots = [];
+  this.casingShadowSlots = [];
+  this.casingShadowCursor = 0;
+  this.nextParticleSearchIdx = 0;
 
   // 1. Persistent Floor Decals (depth 6, above floor/surfaces, below walls/entities)
   for (let i = 0; i < decalCapacity; i++) {
@@ -179,6 +358,7 @@ export function initCombatFxPools(
       sprite,
       textureKey: 'fx_decal_scorch',
       active: false,
+      poolIndex: i,
     });
   }
 
@@ -198,7 +378,7 @@ export function initCombatFxPools(
     });
   }
 
-  // 3. Main Combat Particle Pool + Ground Shadows (shadow at depth 19)
+  // 3. Main Combat Particle Pool + Dedicated 32-Slot Casing Ground Shadow Pool (depth 19)
   for (let i = 0; i < particleCapacity; i++) {
     const sprite = scene.add.sprite(-1000, -1000, 'fx_spark');
     sprite.setVisible(false);
@@ -206,16 +386,8 @@ export function initCombatFxPools(
     sprite.setScale(invBake);
     sprite.setDepth(45);
 
-    const shadowSprite = scene.add.sprite(-1000, -1000, 'fx_dust_puff');
-    shadowSprite.setVisible(false);
-    shadowSprite.setActive(false);
-    shadowSprite.setTint(hexToNum(PALETTE.INK_DARK));
-    shadowSprite.setScale(invBake * 0.5, invBake * 0.32);
-    shadowSprite.setDepth(19);
-
-    this.particlePool.push({
+    const slot: PooledParticle = {
       sprite,
-      shadowSprite,
       textureKey: 'fx_spark',
       active: false,
       x: 0,
@@ -237,6 +409,24 @@ export function initCombatFxPools(
       hasGroundShadow: false,
       frameCount: 1,
       preserveFlipbookAlpha: false,
+      poolIndex: i,
+    };
+    ownerByParticle.set(slot, this);
+    this.particlePool.push(slot);
+  }
+
+  const shadowCapacity = Math.min(CASING_SHADOW_POOL_CAP, particleCapacity);
+  const inkDarkNum = hexToNum(PALETTE.INK_DARK);
+  for (let i = 0; i < shadowCapacity; i++) {
+    const shadowSprite = scene.add.sprite(-1000, -1000, 'fx_dust_puff');
+    shadowSprite.setVisible(false);
+    shadowSprite.setActive(false);
+    shadowSprite.setTint(inkDarkNum);
+    shadowSprite.setScale(invBake * 0.5, invBake * 0.32);
+    shadowSprite.setDepth(19);
+    this.casingShadowSlots.push({
+      sprite: shadowSprite,
+      owner: null,
     });
   }
 
@@ -297,24 +487,40 @@ export function initCombatFxPools(
   };
   if (!this.underActorGraphics) {
     this.underActorGraphics =
-      sceneWithGfx.underActorGraphics ?? (scene.add ? scene.add.graphics() : ({} as Phaser.GameObjects.Graphics));
+      sceneWithGfx.underActorGraphics ??
+      (scene.add ? scene.add.graphics() : ({} as Phaser.GameObjects.Graphics));
     if (this.underActorGraphics && typeof this.underActorGraphics.setDepth === 'function') {
       this.underActorGraphics.setDepth(26.6);
     }
+  }
+  setFxGraphicsVisibleIfChanged(this.underActorGraphics, false);
+  if (this.underActorGraphics && typeof this.underActorGraphics === 'object') {
+    gfxWasNonEmptyMap.set(this.underActorGraphics, false);
   }
   sceneWithGfx.underActorGraphics = this.underActorGraphics;
 
   if (!this.weaponRibbonGraphics) {
     this.weaponRibbonGraphics =
-      sceneWithGfx.weaponRibbonGraphics ?? (scene.add ? scene.add.graphics() : ({} as Phaser.GameObjects.Graphics));
+      sceneWithGfx.weaponRibbonGraphics ??
+      (scene.add ? scene.add.graphics() : ({} as Phaser.GameObjects.Graphics));
     if (this.weaponRibbonGraphics && typeof this.weaponRibbonGraphics.setDepth === 'function') {
       this.weaponRibbonGraphics.setDepth(44.0);
     }
   }
+  setFxGraphicsVisibleIfChanged(this.weaponRibbonGraphics, false);
+  if (this.weaponRibbonGraphics && typeof this.weaponRibbonGraphics === 'object') {
+    gfxWasNonEmptyMap.set(this.weaponRibbonGraphics, false);
+  }
   sceneWithGfx.weaponRibbonGraphics = this.weaponRibbonGraphics;
-  this.lightningGraphics = scene.add ? scene.add.graphics() : (this.weaponRibbonGraphics as unknown as Phaser.GameObjects.Graphics);
+
+  this.lightningGraphics = scene.add
+    ? scene.add.graphics()
+    : (this.weaponRibbonGraphics as unknown as Phaser.GameObjects.Graphics);
   if (this.lightningGraphics && typeof this.lightningGraphics.setDepth === 'function') {
     this.lightningGraphics.setDepth(44.0);
+  }
+  if (this.lightningGraphics !== this.weaponRibbonGraphics) {
+    setFxGraphicsVisibleIfChanged(this.lightningGraphics, false);
   }
   for (let i = 0; i < 16; i++) {
     this.lightningPool.push({
@@ -334,6 +540,10 @@ export function initCombatFxPools(
     if (this.floorFoldGraphics && typeof this.floorFoldGraphics.setDepth === 'function') {
       this.floorFoldGraphics.setDepth(15.0);
     }
+  }
+  setFxGraphicsVisibleIfChanged(this.floorFoldGraphics, false);
+  if (this.floorFoldGraphics && typeof this.floorFoldGraphics === 'object') {
+    gfxWasNonEmptyMap.set(this.floorFoldGraphics, false);
   }
   for (let i = 0; i < 8; i++) {
     this.floorFoldFreePool.push({
@@ -386,22 +596,50 @@ export function refreshResolution(
   const scaleRatio = prevScale && prevScale > 0 ? prevScale / bakeScale : 1;
   for (const p of this.particlePool) {
     if (p.frameCount && p.frameCount > 1) {
-      const frameIdx = Math.min(
+      const frameOffset = Math.min(
         p.frameCount - 1,
         Math.max(0, Math.floor((p.age / Math.max(0.01, p.ttl)) * p.frameCount + 1e-6)),
       );
-      p.sprite.setTexture(p.textureKey, frameIdx);
+      const targetFrame = (p.baseFrame ?? 0) + frameOffset;
+      p.lastFrameIndex = targetFrame;
+      const resolvedFrame = p.kitFramePrefix
+        ? getKitSubframeName(p.kitFramePrefix, targetFrame)
+        : isCutoutKitFrame(p.textureKey)
+          ? getKitSubframeName(p.textureKey, targetFrame)
+          : targetFrame;
+      p.sprite.setTexture(p.textureKey, resolvedFrame);
+    } else if (p.frameName) {
+      if (p.textureKey.startsWith('atlas_rig_prop_')) {
+        const reBound = TextureBaker.resolveAtlasBinding(this.sceneRef, p.frameName);
+        p.textureKey = reBound.textureKey;
+        p.frameName = reBound.frameName;
+      }
+      if (p.frameName) {
+        p.sprite.setTexture(p.textureKey, p.frameName);
+      } else {
+        p.sprite.setTexture(p.textureKey);
+      }
     } else {
       p.sprite.setTexture(p.textureKey);
     }
-    if (p.shadowSprite) {
+    if (!this.casingShadowSlots?.length && p.shadowSprite) {
       p.shadowSprite.setTexture('fx_dust_puff');
     }
-    if (p.active && scaleRatio !== 1 && !(p.frameCount && p.frameCount > 1)) {
+    if (
+      p.active &&
+      scaleRatio !== 1 &&
+      !(p.frameCount && p.frameCount > 1) &&
+      p.textureKey !== CUTOUT_KIT_ATLAS_KEY
+    ) {
       p.startScale *= scaleRatio;
       p.endScale *= scaleRatio;
     } else if (!p.active) {
       p.sprite.setScale(invBake);
+    }
+  }
+  if (this.casingShadowSlots) {
+    for (let i = 0; i < this.casingShadowSlots.length; i++) {
+      this.casingShadowSlots[i]!.sprite.setTexture('fx_dust_puff');
     }
   }
   for (const d of this.decalPool) {
@@ -428,6 +666,9 @@ export function refreshResolution(
   for (const item of this.damagePool) {
     if (item.text.style.resolution !== popupRes) {
       item.text.setResolution(popupRes);
+      if (item.active) {
+        refreshDamageSlotHalfExtents(item, 24);
+      }
     }
   }
 }
@@ -465,6 +706,70 @@ export function computeCameraShakeOffset(
   };
 }
 
+function stepActiveParticle(p: PooledParticle, dtSec: number): boolean {
+  p.age += dtSec;
+  if (p.age >= p.ttl) {
+    p.active = false;
+    p.sprite.setVisible(false);
+    releaseParticleCasingShadow(p);
+    return false;
+  }
+
+  const progress = p.age / p.ttl;
+  if (p.damping > 0) {
+    const damp = Math.exp(-p.damping * dtSec);
+    p.vx *= damp;
+    p.vy *= damp;
+  }
+  p.vy += p.gravityY * dtSec;
+  p.x += p.vx * dtSec;
+  p.y += p.vy * dtSec;
+
+  p.sprite.setPosition(p.x, p.y);
+  if (p.alignToVelocity) {
+    p.sprite.setRotation(Math.atan2(p.vy, p.vx));
+  } else if (p.vr !== 0) {
+    p.sprite.rotation += p.vr * dtSec;
+  }
+
+  if (p.frameCount && p.frameCount > 1) {
+    const frameOffset = Math.min(
+      p.frameCount - 1,
+      Math.max(0, Math.floor(progress * p.frameCount + 1e-6)),
+    );
+    const targetFrame = (p.baseFrame ?? 0) + frameOffset;
+    if (targetFrame !== p.lastFrameIndex) {
+      p.lastFrameIndex = targetFrame;
+      if (p.kitFramePrefix) {
+        p.sprite.setFrame(getKitSubframeName(p.kitFramePrefix, targetFrame));
+      } else if (isCutoutKitFrame(p.textureKey)) {
+        p.sprite.setFrame(getKitSubframeName(p.textureKey, targetFrame));
+      } else {
+        p.sprite.setFrame(targetFrame);
+      }
+    }
+  }
+
+  const scale = computeFxParticleScale(p.startScale, p.endScale, progress, p.easeCurve);
+  p.sprite.setScale(scale, scale * (p.scaleRatioY || 1));
+
+  // Shader flipbooks dissolve organically via FBM noise threshold; keep alpha crisp until tail release
+  const nextAlpha = p.preserveFlipbookAlpha
+    ? progress > 0.55
+      ? p.startAlpha * (1 - (progress - 0.55) / 0.45)
+      : p.startAlpha
+    : p.startAlpha * (1 - progress);
+  p.sprite.setAlpha(nextAlpha);
+
+  if (p.hasGroundShadow && p.shadowSprite) {
+    const sh = computeShellCasingShadowOffset(p.age, p.ttl);
+    p.shadowSprite.setPosition(p.x, p.y + sh.offsetY);
+    p.shadowSprite.setScale(p.startScale * sh.scale, p.startScale * sh.scale * 0.65);
+    p.shadowSprite.setAlpha(sh.alpha);
+  }
+  return true;
+}
+
 export function update(this: CombatFxManager, dtSec: number, camView?: Phaser.Geom.Rectangle): void {
   if (this.bossKillSlowMoTimer > 0) {
     this.bossKillSlowMoTimer = Math.max(0, this.bossKillSlowMoTimer - dtSec);
@@ -474,68 +779,29 @@ export function update(this: CombatFxManager, dtSec: number, camView?: Phaser.Ge
   }
 
   // 1. Update pooled particles, 14-frame Chiaroscuro flipbooks & shell casing ground shadows
-  for (let i = 0; i < this.particlePool.length; i++) {
-    const p = this.particlePool[i]!;
-    if (!p.active) continue;
-
-    p.age += dtSec;
-    if (p.age >= p.ttl) {
-      p.active = false;
-      p.sprite.setVisible(false);
-      if (p.shadowSprite?.visible) {
-        p.shadowSprite.setVisible(false);
+  if (this.managedPoolsInitialized && this.activeParticleSlots) {
+    let writePIdx = 0;
+    for (let i = 0; i < this.activeParticleSlots.length; i++) {
+      const p = this.activeParticleSlots[i]!;
+      if (!p.active || !stepActiveParticle(p, dtSec)) {
+        trackedActiveParticles.delete(p);
+        releaseParticleCasingShadow(p);
+        if (p.poolIndex !== undefined && p.poolIndex < this.nextParticleSearchIdx) {
+          this.nextParticleSearchIdx = p.poolIndex;
+        }
+        continue;
       }
-      continue;
-    }
-
-    const progress = p.age / p.ttl;
-    if (p.damping > 0) {
-      const damp = Math.exp(-p.damping * dtSec);
-      p.vx *= damp;
-      p.vy *= damp;
-    }
-    p.vy += p.gravityY * dtSec;
-    p.x += p.vx * dtSec;
-    p.y += p.vy * dtSec;
-
-    p.sprite.setPosition(p.x, p.y);
-    if (p.alignToVelocity) {
-      p.sprite.setRotation(Math.atan2(p.vy, p.vx));
-    } else if (p.vr !== 0) {
-      p.sprite.rotation += p.vr * dtSec;
-    }
-
-    if (p.frameCount && p.frameCount > 1) {
-      const frameOffset = Math.min(
-        p.frameCount - 1,
-        Math.max(0, Math.floor(progress * p.frameCount + 1e-6)),
-      );
-      const targetFrame = (p.baseFrame ?? 0) + frameOffset;
-      if (p.kitFramePrefix) {
-        p.sprite.setFrame(`${p.kitFramePrefix}_${targetFrame}`);
-      } else if (isCutoutKitFrame(p.textureKey)) {
-        p.sprite.setFrame(`${p.textureKey}_${targetFrame}`);
-      } else {
-        p.sprite.setFrame(targetFrame);
+      if (writePIdx !== i) {
+        this.activeParticleSlots[writePIdx] = p;
       }
+      writePIdx += 1;
     }
-
-    const scale = computeFxParticleScale(p.startScale, p.endScale, progress, p.easeCurve);
-    p.sprite.setScale(scale, scale * (p.scaleRatioY || 1));
-
-    // Shader flipbooks dissolve organically via FBM noise threshold; keep alpha crisp until tail release
-    const nextAlpha = p.preserveFlipbookAlpha
-      ? progress > 0.55
-        ? p.startAlpha * (1 - (progress - 0.55) / 0.45)
-        : p.startAlpha
-      : p.startAlpha * (1 - progress);
-    p.sprite.setAlpha(nextAlpha);
-
-    if (p.hasGroundShadow && p.shadowSprite) {
-      const sh = computeShellCasingShadowOffset(p.age, p.ttl);
-      p.shadowSprite.setPosition(p.x, p.y + sh.offsetY);
-      p.shadowSprite.setScale(p.startScale * sh.scale, p.startScale * sh.scale * 0.65);
-      p.shadowSprite.setAlpha(sh.alpha);
+    this.activeParticleSlots.length = writePIdx;
+  } else {
+    for (let i = 0; i < this.particlePool.length; i++) {
+      const p = this.particlePool[i]!;
+      if (!p.active) continue;
+      stepActiveParticle(p, dtSec);
     }
   }
 
@@ -555,58 +821,123 @@ export function update(this: CombatFxManager, dtSec: number, camView?: Phaser.Ge
   // 3. Enforce decal budget dynamically, deduplicate overlapping floor decals & fade out over 6s
   const budget = graphicsSettings.getBudget();
   const maxDecals = budget.maxDecals;
-  let activeDecalsCounted = 0;
-  for (let i = 0; i < this.decalPool.length; i++) {
-    const d = this.decalPool[i]! as PooledDecal & { age?: number; ttl?: number };
-    if (!d.active) continue;
-    if (i >= maxDecals) {
-      d.active = false;
-      d.sprite.setVisible(false);
-      continue;
-    }
-    const spr = d.sprite as unknown as {
-      x?: number;
-      y?: number;
-      alpha?: number;
-      setAlpha?: (a: number) => void;
-      setVisible: (v: boolean) => void;
-    };
-    if (d.age === undefined || d.age === 0) {
-      d.age = dtSec;
-      d.ttl = 6.0;
-      spr.setAlpha?.(0.32);
-      const dx0 = spr.x ?? 0;
-      const dy0 = spr.y ?? 0;
-      for (let j = 0; j < this.decalPool.length; j++) {
-        if (j === i) continue;
-        const other = this.decalPool[j]!;
-        if (!other.active) continue;
-        if (!d.textureKey?.includes('scorch') || !other.textureKey?.includes('scorch')) continue;
-        const ospr = other.sprite as unknown as { x?: number; y?: number; alpha?: number };
-        const ox = (ospr.x ?? 0) - dx0;
-        const oy = (ospr.y ?? 0) - dy0;
-        if (ox * ox + oy * oy <= 24 * 24) {
-          if (j < i) {
-            other.active = false;
-            other.sprite.setVisible(false);
-            activeDecalsCounted = Math.max(0, activeDecalsCounted - 1);
-          }
-        }
-      }
-    } else {
-      d.age = (d.age ?? 0) + dtSec;
-      const ttl = d.ttl ?? 6.0;
-      if (d.age >= ttl) {
+  if (this.managedPoolsInitialized && this.activeDecalSlots) {
+    for (let i = 0; i < this.activeDecalSlots.length; i++) {
+      const d = this.activeDecalSlots[i]!;
+      if (!d.active) continue;
+      const poolIdx = d.poolIndex ?? 0;
+      if (poolIdx >= maxDecals) {
         d.active = false;
-        spr.setVisible(false);
+        d.sprite.setVisible(false);
         continue;
       }
-      const fade = 0.32 * (1 - Math.pow(d.age / ttl, 1.8));
-      spr.setAlpha?.(fade);
+      const spr = d.sprite as unknown as {
+        x?: number;
+        y?: number;
+        alpha?: number;
+        setAlpha?: (a: number) => void;
+        setVisible: (v: boolean) => void;
+      };
+      if (d.age === undefined || d.age === 0) {
+        d.age = dtSec;
+        d.ttl = 6.0;
+        spr.setAlpha?.(0.32);
+        if (d.textureKey?.includes('scorch')) {
+          const dx0 = spr.x ?? 0;
+          const dy0 = spr.y ?? 0;
+          for (let j = 0; j < this.activeDecalSlots.length; j++) {
+            const other = this.activeDecalSlots[j]!;
+            if (other === d || !other.active || !other.textureKey?.includes('scorch')) continue;
+            if ((other.poolIndex ?? 0) >= poolIdx) continue;
+            const ospr = other.sprite as unknown as { x?: number; y?: number };
+            const ox = (ospr.x ?? 0) - dx0;
+            const oy = (ospr.y ?? 0) - dy0;
+            if (ox * ox + oy * oy <= 24 * 24) {
+              other.active = false;
+              other.sprite.setVisible(false);
+            }
+          }
+        }
+      } else {
+        d.age = (d.age ?? 0) + dtSec;
+        const ttl = d.ttl ?? 6.0;
+        if (d.age >= ttl) {
+          d.active = false;
+          spr.setVisible(false);
+          continue;
+        }
+        const fade = 0.32 * (1 - Math.pow(d.age / ttl, 1.8));
+        spr.setAlpha?.(fade);
+      }
     }
-    activeDecalsCounted += 1;
+    let writeDecalIdx = 0;
+    for (let i = 0; i < this.activeDecalSlots.length; i++) {
+      const d = this.activeDecalSlots[i]!;
+      if (!d.active) {
+        trackedActiveDecalSlots.delete(d);
+        continue;
+      }
+      if (writeDecalIdx !== i) {
+        this.activeDecalSlots[writeDecalIdx] = d;
+      }
+      writeDecalIdx += 1;
+    }
+    this.activeDecalSlots.length = writeDecalIdx;
+    this.activeDecalCount = writeDecalIdx;
+  } else {
+    let activeDecalsCounted = 0;
+    for (let i = 0; i < this.decalPool.length; i++) {
+      const d = this.decalPool[i]!;
+      if (!d.active) continue;
+      if (i >= maxDecals) {
+        d.active = false;
+        d.sprite.setVisible(false);
+        continue;
+      }
+      const spr = d.sprite as unknown as {
+        x?: number;
+        y?: number;
+        alpha?: number;
+        setAlpha?: (a: number) => void;
+        setVisible: (v: boolean) => void;
+      };
+      if (d.age === undefined || d.age === 0) {
+        d.age = dtSec;
+        d.ttl = 6.0;
+        spr.setAlpha?.(0.32);
+        const dx0 = spr.x ?? 0;
+        const dy0 = spr.y ?? 0;
+        for (let j = 0; j < this.decalPool.length; j++) {
+          if (j === i) continue;
+          const other = this.decalPool[j]!;
+          if (!other.active) continue;
+          if (!d.textureKey?.includes('scorch') || !other.textureKey?.includes('scorch')) continue;
+          const ospr = other.sprite as unknown as { x?: number; y?: number; alpha?: number };
+          const ox = (ospr.x ?? 0) - dx0;
+          const oy = (ospr.y ?? 0) - dy0;
+          if (ox * ox + oy * oy <= 24 * 24) {
+            if (j < i) {
+              other.active = false;
+              other.sprite.setVisible(false);
+              activeDecalsCounted = Math.max(0, activeDecalsCounted - 1);
+            }
+          }
+        }
+      } else {
+        d.age = (d.age ?? 0) + dtSec;
+        const ttl = d.ttl ?? 6.0;
+        if (d.age >= ttl) {
+          d.active = false;
+          spr.setVisible(false);
+          continue;
+        }
+        const fade = 0.32 * (1 - Math.pow(d.age / ttl, 1.8));
+        spr.setAlpha?.(fade);
+      }
+      activeDecalsCounted += 1;
+    }
+    this.activeDecalCount = activeDecalsCounted;
   }
-  this.activeDecalCount = activeDecalsCounted;
 
   const isBlizzard = this.currentBiome === 2 && this.isBlizzardIntense();
   const allowedAmbient = Math.min(
@@ -681,12 +1012,11 @@ export function update(this: CombatFxManager, dtSec: number, camView?: Phaser.Ge
   }
 
   // 4. Update & draw Cutout branched chain lightning arcs on weaponRibbonGraphics (depth 44.0)
-  if (this.weaponRibbonGraphics) {
-    this.weaponRibbonGraphics.clear();
+  clearTrackedFxGraphicsIfNeeded(this.weaponRibbonGraphics);
+  if (this.lightningGraphics && this.lightningGraphics !== this.weaponRibbonGraphics) {
+    clearTrackedFxGraphicsIfNeeded(this.lightningGraphics);
   }
-  if (this.lightningGraphics) {
-    this.lightningGraphics.clear();
-  }
+  let drewWeaponRibbon = false;
   for (let i = 0; i < this.lightningPool.length; i++) {
     const arc = this.lightningPool[i]!;
     if (!arc.active) continue;
@@ -697,6 +1027,7 @@ export function update(this: CombatFxManager, dtSec: number, camView?: Phaser.Ge
     }
     const progress = arc.age / arc.ttl;
     if (this.weaponRibbonGraphics) {
+      drewWeaponRibbon = true;
       fillTaperedLightningBolt(
         this.weaponRibbonGraphics,
         arc.fromX,
@@ -710,10 +1041,12 @@ export function update(this: CombatFxManager, dtSec: number, camView?: Phaser.Ge
       );
     }
   }
+  finalizeTrackedFxGraphics(this.weaponRibbonGraphics, drewWeaponRibbon);
 
   // 4b. Draw perimeter rings and arc ribbons on underActorGraphics (depth 26.6)
   if (this.underActorGraphics) {
-    this.underActorGraphics.clear();
+    clearTrackedFxGraphicsIfNeeded(this.underActorGraphics);
+    let drewUnderActor = false;
     let writeRingIdx = 0;
     for (let i = 0; i < this.activePerimeterRings.length; i++) {
       const ring = this.activePerimeterRings[i]!;
@@ -728,6 +1061,7 @@ export function update(this: CombatFxManager, dtSec: number, camView?: Phaser.Ge
       const curR = ring.currentRadiusPx + (ring.targetRadiusPx - ring.currentRadiusPx) * rProgress;
       const alpha = ring.alpha * (1 - ring.age / ring.ttl);
 
+      drewUnderActor = true;
       // Render as two sleek open 110-deg Cutout crescents on underActorGraphics
       fillTaperedArcRibbon(
         this.underActorGraphics,
@@ -773,6 +1107,7 @@ export function update(this: CombatFxManager, dtSec: number, camView?: Phaser.Ge
         this.arcRibbonFreePool.push(ribbon);
         continue;
       }
+      drewUnderActor = true;
       const halfSpread = ribbon.arcSpreadRad * 0.5;
       fillTaperedArcRibbon(
         this.underActorGraphics,
@@ -794,11 +1129,13 @@ export function update(this: CombatFxManager, dtSec: number, camView?: Phaser.Ge
       writeRibbonIdx++;
     }
     this.activeArcRibbons.length = writeRibbonIdx;
+    finalizeTrackedFxGraphics(this.underActorGraphics, drewUnderActor);
   }
 
   // 4c. Draw floor teleport folds on floorFoldGraphics (depth 15.0)
   if (this.floorFoldGraphics && typeof this.floorFoldGraphics.clear === 'function') {
-    this.floorFoldGraphics.clear();
+    clearTrackedFxGraphicsIfNeeded(this.floorFoldGraphics);
+    let drewFloorFold = false;
     let writeFoldIdx = 0;
     for (let i = 0; i < this.activeFloorTeleportFolds.length; i++) {
       const fold = this.activeFloorTeleportFolds[i]!;
@@ -814,6 +1151,7 @@ export function update(this: CombatFxManager, dtSec: number, camView?: Phaser.Ge
       const ry = rx / 2.12;
       const alpha = (1 - p) * 0.95;
       if (typeof this.floorFoldGraphics.strokeEllipse === 'function') {
+        drewFloorFold = true;
         this.floorFoldGraphics.lineStyle(4.2, 0x141019, alpha * 0.75);
         this.floorFoldGraphics.strokeEllipse(fold.x, fold.y, rx * 2, ry * 2);
         this.floorFoldGraphics.lineStyle(2.2, 0x38bdf8, alpha);
@@ -846,6 +1184,7 @@ export function update(this: CombatFxManager, dtSec: number, camView?: Phaser.Ge
         const innerRx = 16 + p * 4;
         const innerRy = innerRx / 2.12;
         if (typeof this.floorFoldGraphics.strokeEllipse === 'function') {
+          drewFloorFold = true;
           this.floorFoldGraphics.lineStyle(3.2, 0x141019, alpha * 0.85);
           this.floorFoldGraphics.strokeEllipse(ring.x, ring.y, outerRx * 2, outerRy * 2);
           this.floorFoldGraphics.lineStyle(1.8, 0xfde047, alpha);
@@ -862,35 +1201,85 @@ export function update(this: CombatFxManager, dtSec: number, camView?: Phaser.Ge
       }
       this.activeTeamComboFootRings.length = writeComboIdx;
     }
+    finalizeTrackedFxGraphics(this.floorFoldGraphics, drewFloorFold);
   }
 
   // 5. Update pooled damage numbers & coalesced reaction banner timer
   this.tickReactionBanner(dtSec);
-  for (let i = 0; i < this.damagePool.length; i++) {
-    const d = this.damagePool[i]!;
-    if (!d.active) continue;
+  if (this.managedPoolsInitialized && this.activeDamageSlots) {
+    let writeDmgIdx = 0;
+    const alertStart = this.damagePool.length >= 48 ? DAMAGE_NUMERIC_SLOT_END : 0;
+    let activeNumerics = 0;
+    let activeAlerts = 0;
+    for (let i = 0; i < this.activeDamageSlots.length; i++) {
+      const d = this.activeDamageSlots[i]!;
+      if (!d.active) {
+        trackedActiveDamageSlots.delete(d);
+        continue;
+      }
+      d.age += dtSec;
+      if (d.age >= d.ttl) {
+        d.active = false;
+        d.text.setVisible(false);
+        trackedActiveDamageSlots.delete(d);
+        continue;
+      }
 
-    d.age += dtSec;
-    if (d.age >= d.ttl) {
-      d.active = false;
-      d.text.setVisible(false);
-      continue;
+      const progress = d.age / d.ttl;
+      d.vy += 120 * dtSec;
+      d.x += d.vx * dtSec;
+      d.y += d.vy * dtSec;
+
+      d.text.setPosition(d.x, d.y);
+      d.text.setScale(computePopupScalePop(d.age, d.ttl, d.baseScale));
+      d.text.setAlpha(progress > 0.65 ? 1 - (progress - 0.65) / 0.35 : 1);
+
+      if (this.damagePool.length < 48 || d.targetId !== undefined || d.cellSlotIndex !== undefined) {
+        activeNumerics += 1;
+      }
+      if (alertStart === 0 || (d.targetId === undefined && d.cellSlotIndex === undefined)) {
+        activeAlerts += 1;
+      }
+      if (writeDmgIdx !== i) {
+        this.activeDamageSlots[writeDmgIdx] = d;
+      }
+      writeDmgIdx += 1;
     }
+    this.activeDamageSlots.length = writeDmgIdx;
+    if (activeNumerics >= 2) {
+      resolveActivePopupOverlaps(this.damagePool);
+    }
+    if (activeAlerts > 0) {
+      resolveTacticalAlertSlotOverlaps(this.damagePool, 4.0);
+    }
+  } else {
+    for (let i = 0; i < this.damagePool.length; i++) {
+      const d = this.damagePool[i]!;
+      if (!d.active) continue;
 
-    const progress = d.age / d.ttl;
-    d.vy += 120 * dtSec;
-    d.x += d.vx * dtSec;
-    d.y += d.vy * dtSec;
+      d.age += dtSec;
+      if (d.age >= d.ttl) {
+        d.active = false;
+        d.text.setVisible(false);
+        continue;
+      }
 
-    d.text.setPosition(d.x, d.y);
-    d.text.setScale(computePopupScalePop(d.age, d.ttl, d.baseScale));
-    d.text.setAlpha(progress > 0.65 ? 1 - (progress - 0.65) / 0.35 : 1);
+      const progress = d.age / d.ttl;
+      d.vy += 120 * dtSec;
+      d.x += d.vx * dtSec;
+      d.y += d.vy * dtSec;
+
+      d.text.setPosition(d.x, d.y);
+      d.text.setScale(computePopupScalePop(d.age, d.ttl, d.baseScale));
+      d.text.setAlpha(progress > 0.65 ? 1 - (progress - 0.65) / 0.35 : 1);
+    }
+    resolveActivePopupOverlaps(this.damagePool);
+    resolveTacticalAlertSlotOverlaps(this.damagePool, 4.0);
   }
-  resolveActivePopupOverlaps(this.damagePool);
-  resolveTacticalAlertSlotOverlaps(this.damagePool, 4.0);
 }
 
 const scratchNumericActiveSlots: PooledDamageText[] = [];
+const scratchAlertActiveSlots: PooledDamageText[] = [];
 
 export function resolveActivePopupOverlaps(pool: ReadonlyArray<PooledDamageText>): void {
   scratchNumericActiveSlots.length = 0;
@@ -909,13 +1298,13 @@ export function resolveActivePopupOverlaps(pool: ReadonlyArray<PooledDamageText>
     let anyMoved = false;
     for (let i = 0; i < count; i++) {
       const a = scratchNumericActiveSlots[i]!;
-      const hwA = 0.5 * (a.text.width || 24) * Math.abs(a.text.scaleX || 1);
-      const hhA = 0.5 * (a.text.height || 16) * Math.abs(a.text.scaleY || 1);
+      const hwA = (a.halfW ?? 0.5 * (a.text.width || 24)) * Math.abs(a.text.scaleX || 1);
+      const hhA = (a.halfH ?? 0.5 * (a.text.height || 16)) * Math.abs(a.text.scaleY || 1);
 
       for (let j = i + 1; j < count; j++) {
         const b = scratchNumericActiveSlots[j]!;
-        const hwB = 0.5 * (b.text.width || 24) * Math.abs(b.text.scaleX || 1);
-        const hhB = 0.5 * (b.text.height || 16) * Math.abs(b.text.scaleY || 1);
+        const hwB = (b.halfW ?? 0.5 * (b.text.width || 24)) * Math.abs(b.text.scaleX || 1);
+        const hhB = (b.halfH ?? 0.5 * (b.text.height || 16)) * Math.abs(b.text.scaleY || 1);
 
         const overlapX = (hwA + hwB + pad) - Math.abs(a.x - b.x);
         const overlapY = (hhA + hhB + pad) - Math.abs(a.y - b.y);
@@ -951,7 +1340,7 @@ export function resolveActivePopupOverlaps(pool: ReadonlyArray<PooledDamageText>
 
 /**
  * Zero-alloc vertical repulsion pass across tactical alert slots [42..47].
- * Uses text dimensions and scale (NO text.getBounds() and ZERO heap allocations).
+ * Uses cached text half-extents and scale (NO text.getBounds() and ZERO heap allocations).
  * Pushes overlapping alerts apart vertically so 2..6 simultaneous alerts settle with 0 AABB overlaps.
  */
 export function resolveTacticalAlertSlotOverlaps(
@@ -962,21 +1351,39 @@ export function resolveTacticalAlertSlotOverlaps(
   const startIdx = damagePool.length >= 48 ? DAMAGE_NUMERIC_SLOT_END : 0;
   const endIdx = damagePool.length;
 
+  scratchAlertActiveSlots.length = 0;
+  for (let i = startIdx; i < endIdx; i++) {
+    const a = damagePool[i]!;
+    if (a.active) {
+      scratchAlertActiveSlots.push(a);
+    }
+  }
+  const activeAlertCount = scratchAlertActiveSlots.length;
+  if (activeAlertCount === 0) return 0;
+
+  scratchNumericActiveSlots.length = 0;
+  for (let nIdx = 0; nIdx < startIdx; nIdx++) {
+    const n = damagePool[nIdx]!;
+    if (n.active && n.age < n.ttl) {
+      scratchNumericActiveSlots.push(n);
+    }
+  }
+  const activeNumericCount = scratchNumericActiveSlots.length;
+  if (activeAlertCount === 1 && activeNumericCount === 0) return 0;
+
   let totalResolvedPairs = 0;
   for (let pass = 0; pass < 8; pass++) {
     let movedThisPass = false;
-    for (let i = startIdx; i < endIdx; i++) {
-      const a = damagePool[i]!;
-      if (!a.active) continue;
-      const hwA = 0.5 * (a.text.width || 64) * Math.abs(a.text.scaleX || 1);
-      const hhA = 0.5 * (a.text.height || 16) * Math.abs(a.text.scaleY || 1);
+    for (let i = 0; i < activeAlertCount; i++) {
+      const a = scratchAlertActiveSlots[i]!;
+      const hwA = (a.halfW ?? 0.5 * (a.text.width || 64)) * Math.abs(a.text.scaleX || 1);
+      const hhA = (a.halfH ?? 0.5 * (a.text.height || 16)) * Math.abs(a.text.scaleY || 1);
 
       // Lift tactical alerts above active numeric damage popups [0..startIdx) so Gate 4 sees 0 AABB overlaps
-      for (let nIdx = 0; nIdx < startIdx; nIdx++) {
-        const n = damagePool[nIdx]!;
-        if (!n.active || n.age >= n.ttl) continue;
-        const hwN = 0.5 * (n.text.width || 28) * Math.abs(n.text.scaleX || 1);
-        const hhN = 0.5 * (n.text.height || 14) * Math.abs(n.text.scaleY || 1);
+      for (let nIdx = 0; nIdx < activeNumericCount; nIdx++) {
+        const n = scratchNumericActiveSlots[nIdx]!;
+        const hwN = (n.halfW ?? 0.5 * (n.text.width || 28)) * Math.abs(n.text.scaleX || 1);
+        const hhN = (n.halfH ?? 0.5 * (n.text.height || 14)) * Math.abs(n.text.scaleY || 1);
         const dxN = Math.abs(a.x - n.x);
         if (dxN >= hwA + hwN + 6.0) continue;
         const dyN = Math.abs(a.y - n.y);
@@ -993,11 +1400,10 @@ export function resolveTacticalAlertSlotOverlaps(
         }
       }
 
-      for (let j = i + 1; j < endIdx; j++) {
-        const b = damagePool[j]!;
-        if (!b.active) continue;
-        const hwB = 0.5 * (b.text.width || 64) * Math.abs(b.text.scaleX || 1);
-        const hhB = 0.5 * (b.text.height || 16) * Math.abs(b.text.scaleY || 1);
+      for (let j = i + 1; j < activeAlertCount; j++) {
+        const b = scratchAlertActiveSlots[j]!;
+        const hwB = (b.halfW ?? 0.5 * (b.text.width || 64)) * Math.abs(b.text.scaleX || 1);
+        const hhB = (b.halfH ?? 0.5 * (b.text.height || 16)) * Math.abs(b.text.scaleY || 1);
 
         const dx = Math.abs(a.x - b.x);
         const reqDx = hwA + hwB + 4.0;
@@ -1125,6 +1531,9 @@ export function resolveSpatialPopupCellSlot(
 }
 
 export function getActiveDamagePopupCount(this: CombatFxManager): number {
+  if (this.managedPoolsInitialized && this.activeDamageSlots) {
+    return this.activeDamageSlots.length;
+  }
   let count = 0;
   for (let i = 0; i < this.damagePool.length; i++) {
     if (this.damagePool[i]!.active) count += 1;
@@ -1133,6 +1542,9 @@ export function getActiveDamagePopupCount(this: CombatFxManager): number {
 }
 
 export function getActiveParticleCount(this: CombatFxManager): number {
+  if (this.managedPoolsInitialized && this.activeParticleSlots) {
+    return this.activeParticleSlots.length;
+  }
   let count = 0;
   for (let i = 0; i < this.particlePool.length; i++) {
     if (this.particlePool[i]!.active) count += 1;
@@ -1170,10 +1582,52 @@ export function getActiveTorchMoteCount(this: CombatFxManager): number {
 }
 
 export function acquireParticleSlot(this: CombatFxManager): PooledParticle | null {
-  const maxSlots = Math.max(
-    24,
-    Math.floor(this.particlePool.length * graphicsSettings.getBudget().particleBudgetRatio),
+  const maxSlots = Math.min(
+    this.particlePool.length,
+    Math.max(
+      24,
+      Math.floor(this.particlePool.length * graphicsSettings.getBudget().particleBudgetRatio),
+    ),
   );
+  if (maxSlots <= 0) return null;
+  if (this.managedPoolsInitialized && this.activeParticleSlots) {
+    if (this.activeParticleSlots.length >= maxSlots) {
+      let writeIdx = 0;
+      for (let i = 0; i < this.activeParticleSlots.length; i++) {
+        const s = this.activeParticleSlots[i]!;
+        if (!s.active) {
+          trackedActiveParticles.delete(s);
+          releaseParticleCasingShadow(s);
+          if (s.poolIndex !== undefined && s.poolIndex < this.nextParticleSearchIdx) {
+            this.nextParticleSearchIdx = s.poolIndex;
+          }
+          continue;
+        }
+        if (writeIdx !== i) {
+          this.activeParticleSlots[writeIdx] = s;
+        }
+        writeIdx += 1;
+      }
+      this.activeParticleSlots.length = writeIdx;
+      if (writeIdx >= maxSlots) return null;
+    }
+    const startIdx = Math.min(this.nextParticleSearchIdx || 0, maxSlots - 1);
+    for (let i = startIdx; i < maxSlots; i++) {
+      const slot = this.particlePool[i]!;
+      if (!slot.active) {
+        this.nextParticleSearchIdx = i + 1;
+        return slot;
+      }
+    }
+    for (let i = 0; i < startIdx; i++) {
+      const slot = this.particlePool[i]!;
+      if (!slot.active) {
+        this.nextParticleSearchIdx = i + 1;
+        return slot;
+      }
+    }
+    return null;
+  }
   for (let i = 0; i < maxSlots; i++) {
     const slot = this.particlePool[i]!;
     if (!slot.active) return slot;

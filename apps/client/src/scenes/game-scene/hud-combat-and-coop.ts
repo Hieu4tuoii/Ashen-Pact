@@ -26,7 +26,12 @@ import {
 } from '../../ui/components/hud-primitives.js';
 import { initGlobalDebugState } from '../../ui/debug-overlay.js';
 import { clampUiScale, graphicsSettings } from '../../ui/graphics-settings.js';
-import { serializeKeybindingsHash } from '../../ui/keybindings.js';
+import { type KeybindingsMap, serializeKeybindingsHash } from '../../ui/keybindings.js';
+import {
+  setColorIfChanged,
+  setTextAndColorIfChanged,
+  setTextIfChanged,
+} from '../../ui/phaser-text-guard.js';
 import {
   computeUiTextResolution,
   createUiTextStyle,
@@ -95,6 +100,18 @@ function buildActivePlayerStatusString(
   return out;
 }
 
+let cachedHudKeybindsRef: Readonly<KeybindingsMap> | null = null;
+let cachedHudKeybindsHash = '';
+
+function getCachedKeybindingsHash(bindings: Readonly<KeybindingsMap>): string {
+  if (bindings === cachedHudKeybindsRef) {
+    return cachedHudKeybindsHash;
+  }
+  cachedHudKeybindsRef = bindings;
+  cachedHudKeybindsHash = serializeKeybindingsHash(bindings);
+  return cachedHudKeybindsHash;
+}
+
 export function updateVectorHudImpl(this: GameScene): void {
   const sim = this.transport.getSim();
   const p = sim.player;
@@ -124,7 +141,7 @@ export function updateVectorHudImpl(this: GameScene): void {
   const activeWId = p.weaponSlots[p.activeWeaponSlot] ?? p.weaponSlots[0] ?? 'knight_sword';
   const activeWDef = WEAPONS[activeWId] ?? WEAPONS.knight_sword!;
   const cadenceStateHash = `${activeWId}:${p.clipAmmo}:${p.clipMax}:${Math.round(p.weaponHeat)}:${Math.round((p.reloadTimer ?? 0) * 20)}:${p.overclockedNextShot ? 1 : 0}:${Math.round((p.overheatLockTimer ?? 0) * 10)}:${p.meleeComboStep ?? 0}`;
-  const keybindsHash = serializeKeybindingsHash(gState.keybindings);
+  const keybindsHash = getCachedKeybindingsHash(gState.keybindings);
   const blessingsSig = `${(p.duoBoonIds ?? []).join(',')}|${(p.blessingIds ?? []).join(',')}`;
   const pactRelicSig = `${p.activePactId ?? ''}:${(p.awakenedRelicIds ?? []).join(',')}:${Math.ceil(p.pactKeepMorphedTimer ?? 0)}`;
   const topCardHash = `${p.hp}:${p.maxHp}:${p.armor}:${p.maxArmor}:${cadenceStateHash}:${p.characterId}:${p.slot}:${curBiomeKey}:${lowHpPulse ? 1 : 0}:${trailHash}:${statusChipStr}:${blessingsSig}:${pactRelicSig}:${curLocale}:${keybindsHash}`;
@@ -236,26 +253,18 @@ export function updateVectorHudImpl(this: GameScene): void {
     const charDef = CHARACTERS[p.characterId] ?? CHARACTERS.vanguard;
     const charName = i18n.charName(p.characterId, charDef.nameVi);
     const classStr = `P${p.slot} · ${charName}`;
-    if (this.playerClassLabelText && this.playerClassLabelText.text !== classStr) {
-      this.playerClassLabelText.setText(classStr);
-    }
+    setTextIfChanged(this.playerClassLabelText, classStr);
     const hpStr = `${p.hp}/${p.maxHp}`;
-    if (this.hpLabelText.text !== hpStr) {
-      this.hpLabelText.setText(hpStr);
-    }
+    setTextIfChanged(this.hpLabelText, hpStr);
     const armorStr = `${p.armor}/${p.maxArmor}`;
-    if (this.armorLabelText.text !== armorStr) {
-      this.armorLabelText.setText(armorStr);
-    }
+    setTextIfChanged(this.armorLabelText, armorStr);
     const cadenceLabel = formatWeaponCadenceHudLabel(
       p,
       activeWDef,
       curLocale === 'en' ? 'en' : 'vi',
     );
     const energyStr = cadenceLabel.barText;
-    if (this.energyLabelText.text !== energyStr) {
-      this.energyLabelText.setText(energyStr);
-    }
+    setTextIfChanged(this.energyLabelText, energyStr);
 
     if (statusChipStr.length > 0) {
       const pillW = Math.min(204, Math.max(76, statusChipStr.length * 5.2 + 18));
@@ -275,17 +284,13 @@ export function updateVectorHudImpl(this: GameScene): void {
 
   if (this.goldLabelText && (!sim.stressTestActive || sim.tick % 15 === 0)) {
     const goldLabel = curLocale === 'en' ? `${p.gold} Gold` : `${p.gold} Vàng`;
-    if (this.goldLabelText.text !== goldLabel) {
-      this.goldLabelText.setText(goldLabel);
-    }
+    setTextIfChanged(this.goldLabelText, goldLabel);
   }
 
   // Active status effects / Elementalist imbue chip line below player card
   if (this.statusLineText) {
     if (statusChipStr.length > 0) {
-      if (this.statusLineText.text !== statusChipStr) {
-        this.statusLineText.setText(statusChipStr);
-      }
+      setTextIfChanged(this.statusLineText, statusChipStr);
       if (!this.statusLineText.visible) {
         this.statusLineText.setVisible(true);
       }
@@ -346,17 +351,13 @@ export function updateVectorHudImpl(this: GameScene): void {
       }
 
       if (this.skillLabelText) {
-        if (this.skillLabelText.text !== skillLabel) {
-          this.skillLabelText.setText(skillLabel);
-        }
+        setTextIfChanged(this.skillLabelText, skillLabel);
         if (this.skillLabelText.visible !== showHints) {
           this.skillLabelText.setVisible(showHints);
         }
       }
       if (this.dashLabelText) {
-        if (this.dashLabelText.text !== dashLabel) {
-          this.dashLabelText.setText(dashLabel);
-        }
+        setTextIfChanged(this.dashLabelText, dashLabel);
         if (this.dashLabelText.visible !== showHints) {
           this.dashLabelText.setVisible(showHints);
         }
@@ -377,8 +378,7 @@ export function updateVectorHudImpl(this: GameScene): void {
             : skillGeo.isReady
               ? PALETTE.LIME_GLOW
               : PALETTE.BONE_WHITE;
-        if (this.skillCdText.text !== skTxt) this.skillCdText.setText(skTxt);
-        if (this.skillCdText.style.color !== skCol) this.skillCdText.setColor(skCol);
+        setTextAndColorIfChanged(this.skillCdText, skTxt, skCol);
       }
       if (this.dashCdText) {
         const dTxt = dashGeo.isReady
@@ -387,8 +387,7 @@ export function updateVectorHudImpl(this: GameScene): void {
             : 'SẴN'
           : dashGeo.cooldownText;
         const dCol = dashGeo.isReady ? PALETTE.CYAN_FROST : PALETTE.BONE_WHITE;
-        if (this.dashCdText.text !== dTxt) this.dashCdText.setText(dTxt);
-        if (this.dashCdText.style.color !== dCol) this.dashCdText.setColor(dCol);
+        setTextAndColorIfChanged(this.dashCdText, dTxt, dCol);
       }
     }
   }
@@ -435,7 +434,7 @@ export function updateVectorHudImpl(this: GameScene): void {
   // Update Bottom-Right 2-slot Weapon Cards (Active Enlarged & Highlighted, Inactive Compact & Dimmed)
   const upgSig = `${p.weaponUpgradeLevels?.[0] ?? 0},${p.weaponUpgradeLevels?.[1] ?? 0}`;
   const mutSig = `${(p.weaponMutators?.[0] ?? []).join('+')}|${(p.weaponMutators?.[1] ?? []).join('+')}`;
-  const weaponHash = `${p.activeWeaponSlot}:${p.weaponSlots.join(',')}:${upgSig}:${mutSig}:${cadenceStateHash}:${curLocale}:${gState.showKeyHints ? 1 : 0}:${keybindsHash}`;
+  const weaponHash = `${p.activeWeaponSlot}:${p.weaponSlots.join(',')}:${upgSig}:${mutSig}:${curLocale}:${gState.showKeyHints ? 1 : 0}:${this.currentHudUiScale}:${keybindsHash}`;
   if (weaponHash !== this.lastHudWeaponHash) {
     this.lastHudWeaponHash = weaponHash;
     const invBake = 1 / TextureBaker.getBakeScale();
@@ -490,15 +489,23 @@ export function updateVectorHudImpl(this: GameScene): void {
           if (keyTxt) {
             keyTxt.setVisible(true);
             keyTxt.setPosition(sx + cardW - 18 + chip.width * 0.5, sy + 4 + chip.height * 0.5);
-            keyTxt.setColor(isSelected ? PALETTE.SOLAR_GOLD : PALETTE.SILVER_BRIGHT);
+            setColorIfChanged(keyTxt, isSelected ? PALETTE.SOLAR_GOLD : PALETTE.SILVER_BRIGHT);
           }
         } else if (keyTxt) {
           keyTxt.setVisible(false);
         }
 
         if (icon) {
+          const weaponBinding = TextureBaker.resolveAtlasBinding(
+            this,
+            TextureBaker.getWeaponTextureKey(wId),
+          );
           icon.setVisible(true);
-          icon.setTexture(TextureBaker.getWeaponTextureKey(wId));
+          if (weaponBinding.frameName !== undefined) {
+            icon.setTexture(weaponBinding.textureKey, weaponBinding.frameName);
+          } else {
+            icon.setTexture(weaponBinding.textureKey);
+          }
           icon.setPosition(sx + 21, sy + cardH * 0.5);
           icon.setScale(invBake * (isSelected ? 0.68 : 0.56));
           icon.setAlpha(isSelected ? 1 : 0.78);
@@ -507,9 +514,12 @@ export function updateVectorHudImpl(this: GameScene): void {
           const rawName = i18n.weaponName(wId, wDef.nameVi);
           const upgLv = p.weaponUpgradeLevels?.[idx] ?? 0;
           const displayName = formatWeaponCardSlotTitle(rawName, upgLv, isSelected);
-          nameTxt.setText(displayName);
+          setTextAndColorIfChanged(
+            nameTxt,
+            displayName,
+            isSelected ? rarityHex : PALETTE.SILVER_BRIGHT,
+          );
           nameTxt.setPosition(sx + 38, sy + (isSelected ? 13 : 11));
-          nameTxt.setColor(isSelected ? rarityHex : PALETTE.SILVER_BRIGHT);
           nameTxt.setAlpha(isSelected ? 1 : 0.85);
         }
         drawWeaponSlotMutatorGems(
@@ -523,11 +533,12 @@ export function updateVectorHudImpl(this: GameScene): void {
           isSelected,
         );
         if (metaTxt) {
-          metaTxt.setText(
+          setTextAndColorIfChanged(
+            metaTxt,
             formatWeaponCadenceHudLabel(p, wDef, curLocale === 'en' ? 'en' : 'vi').cardMetaText,
+            isSelected ? PALETTE.BONE_WHITE : PALETTE.STEEL_LIGHT,
           );
           metaTxt.setPosition(sx + 38, sy + (isSelected ? 30 : 26));
-          metaTxt.setColor(isSelected ? PALETTE.BONE_WHITE : PALETTE.STEEL_LIGHT);
           metaTxt.setAlpha(isSelected ? 1 : 0.8);
         }
       } else {
@@ -541,16 +552,20 @@ export function updateVectorHudImpl(this: GameScene): void {
         if (icon) icon.setVisible(false);
         if (keyTxt) keyTxt.setVisible(false);
         if (nameTxt) {
-          nameTxt.setText(curLocale === 'en' ? 'Empty Slot' : 'Ô Trống');
+          setTextAndColorIfChanged(
+            nameTxt,
+            curLocale === 'en' ? 'Empty Slot' : 'Ô Trống',
+            PALETTE.STEEL_LIGHT,
+          );
           nameTxt.setPosition(sx + 12, sy + 12);
-          nameTxt.setColor(PALETTE.STEEL_LIGHT);
         }
         if (metaTxt) {
-          metaTxt.setText(
+          setTextAndColorIfChanged(
+            metaTxt,
             curLocale === 'en' ? `[${interactLabel}] Equip` : `[${interactLabel}] Nhặt`,
+            PALETTE.STEEL_LIGHT,
           );
           metaTxt.setPosition(sx + 12, sy + 26);
-          metaTxt.setColor(PALETTE.STEEL_LIGHT);
         }
       }
     });
@@ -883,10 +898,7 @@ export function drawBossArmorFrameAndTacticalHintHud(
     scene.hudTopCenterContainer?.add(t);
   }
 
-  if (ext.bossHintText.text !== bannerText) {
-    ext.bossHintText.setText(bannerText);
-  }
-  ext.bossHintText.setColor(textColor);
+  setTextAndColorIfChanged(ext.bossHintText, bannerText, textColor);
 
   const hintY = panelY + panelH + 3;
   const hintH = 19;

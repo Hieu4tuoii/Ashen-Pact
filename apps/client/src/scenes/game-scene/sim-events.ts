@@ -4,6 +4,7 @@ import {
   type ElementType,
   SHOT_FLAG,
   i18n,
+  type SimEnemyState,
   type SimEvent,
   WEAPON_RARITY_COLORS,
 } from '@ashen-pact/shared';
@@ -57,15 +58,6 @@ import {
   spawnP1DBlessingEventFx,
 } from '../../fx/combat-fx-weapons-v2.js';
 import { handleP2BSimEvent } from '../../fx/combat-fx-p2b.js';
-
-const crystalPillarImpactIcdMap = new Map<number, number>();
-
-export function resetCrystalPillarImpactTracker(): void {
-  crystalPillarImpactIcdMap.clear();
-}
-
-export const shotFxTriggeredOwnersScratch = new Set<number>();
-const scratchTickImpactTargetIds: number[] = [];
 import { handleP4ASimEvent } from '../../fx/combat-fx-p4a.js';
 import { handleP4BSimEvent } from '../../fx/combat-fx-p4b.js';
 import { initGlobalDebugState } from '../../ui/debug-overlay.js';
@@ -74,10 +66,44 @@ import { handleP2AForgeAndSalvageSimEvent } from './hud-pact-and-forge-modals.js
 import { triggerP11WaveBanner } from './p11-drama-hud.js';
 import { recordChestOpenedAnim } from './room-entities-sync.js';
 
+const crystalPillarImpactIcdMap = new Map<number, number>();
+
+export function resetCrystalPillarImpactTracker(): void {
+  crystalPillarImpactIcdMap.clear();
+}
+
+export const shotFxTriggeredOwnersScratch = new Set<number>();
+const scratchTickImpactTargetIdSet = new Set<number>();
+const scratchEnemyById = new Map<number, SimEnemyState>();
+const scratchNonShotgunImpactsPool: Array<{ x: number; y: number }> = [];
+const scratchTargetPosOut: Array<{ x: number; y: number }> = [];
+const scratchTargetPosPool: Array<{ x: number; y: number }> = [];
+
+function collectTargetPositionsScratch(
+  targetIds: readonly number[],
+): ReadonlyArray<{ x: number; y: number }> {
+  scratchTargetPosOut.length = 0;
+  for (let i = 0; i < targetIds.length; i++) {
+    const en = scratchEnemyById.get(targetIds[i]!);
+    if (!en) continue;
+    const outIdx = scratchTargetPosOut.length;
+    let slot = scratchTargetPosPool[outIdx];
+    if (!slot) {
+      slot = { x: en.x, y: en.y };
+      scratchTargetPosPool[outIdx] = slot;
+    } else {
+      slot.x = en.x;
+      slot.y = en.y;
+    }
+    scratchTargetPosOut.push(slot);
+  }
+  return scratchTargetPosOut;
+}
+
 export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void {
   if (events.length === 0) return;
 
-  scratchTickImpactTargetIds.length = 0;
+  scratchTickImpactTargetIdSet.clear();
   shotFxTriggeredOwnersScratch.clear();
   const sim = this.transport.getSim();
   const isStress = sim.stressTestActive;
@@ -93,6 +119,73 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
   let enemyHitSfxY = this.camFocusY;
   let maxHitStopMs = 0;
   let maxHitStopTrauma = 0;
+
+  // Single linear pre-scan of events to avoid nested events.some(...) & repeated sim.enemies.find(...)
+  let nonShotgunImpactCount = 0;
+  let hasRootedOrEnemyDamageEvent = false;
+  let hasSolarSpecialEvent = false;
+  let hasMagmaGeyserEvent = false;
+  let hasVoidImplosionEvent = false;
+  let needsEnemyByIdMap = false;
+  for (let i = 0; i < events.length; i++) {
+    const ev = events[i]!;
+    switch (ev.kind) {
+      case 'projectile_impact': {
+        if (!ev.hitWall && ev.weaponId !== 'scrap_shotgun') {
+          let slot = scratchNonShotgunImpactsPool[nonShotgunImpactCount];
+          if (!slot) {
+            slot = { x: ev.x, y: ev.y };
+            scratchNonShotgunImpactsPool[nonShotgunImpactCount] = slot;
+          } else {
+            slot.x = ev.x;
+            slot.y = ev.y;
+          }
+          nonShotgunImpactCount += 1;
+        }
+        break;
+      }
+      case 'damage_dealt': {
+        if (ev.targetKind === 'enemy') {
+          hasRootedOrEnemyDamageEvent = true;
+          needsEnemyByIdMap = true;
+        }
+        break;
+      }
+      case 'status_applied': {
+        if (ev.status === 'rooted') {
+          hasRootedOrEnemyDamageEvent = true;
+        }
+        break;
+      }
+      case 'solar_supernova':
+      case 'solar_converge_burst':
+        hasSolarSpecialEvent = true;
+        break;
+      case 'magma_geyser_eruption':
+        hasMagmaGeyserEvent = true;
+        break;
+      case 'void_implosion':
+        hasVoidImplosionEvent = true;
+        break;
+      case 'armor_broken':
+        if (ev.targetKind === 'enemy') needsEnemyByIdMap = true;
+        break;
+      case 'enemy_telegraph':
+      case 'boss_spawned':
+      case 'crossbow_rip':
+      case 'thorn_bloom':
+        needsEnemyByIdMap = true;
+        break;
+    }
+  }
+
+  scratchEnemyById.clear();
+  if (needsEnemyByIdMap && sim?.enemies) {
+    for (let i = 0; i < sim.enemies.length; i++) {
+      const en = sim.enemies[i]!;
+      scratchEnemyById.set(en.id, en);
+    }
+  }
 
   for (let i = 0; i < events.length; i++) {
     const ev = events[i]!;
@@ -264,16 +357,19 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
         const hitAngle = Math.atan2(ev.knockbackY, ev.knockbackX);
         const sparkCount = enemyHitCountThisStep === 0 ? (ev.isCrit ? 8 : 5) : 2;
         const enemy =
-          ev.targetKind === 'enemy' ? sim.enemies.find((en) => en.id === ev.targetId) : undefined;
-        const hasSameTickProjImpact =
-          scratchTickImpactTargetIds.includes(ev.targetId) ||
-          events.some(
-            (other) =>
-              other.kind === 'projectile_impact' &&
-              !other.hitWall &&
-              other.weaponId !== 'scrap_shotgun' &&
-              Math.hypot(other.x - ev.x, other.y - ev.y) < 28,
-          );
+          ev.targetKind === 'enemy' ? scratchEnemyById.get(ev.targetId) : undefined;
+        let hasSameTickProjImpact = scratchTickImpactTargetIdSet.has(ev.targetId);
+        if (!hasSameTickProjImpact) {
+          for (let impIdx = 0; impIdx < nonShotgunImpactCount; impIdx++) {
+            const imp = scratchNonShotgunImpactsPool[impIdx]!;
+            const dx = imp.x - ev.x;
+            const dy = imp.y - ev.y;
+            if (dx * dx + dy * dy < 28 * 28) {
+              hasSameTickProjImpact = true;
+              break;
+            }
+          }
+        }
         if ((!isStress || enemyHitCountThisStep < 2) && !hasSameTickProjImpact) {
           this.fx.spawnHitSparks(ev.x, ev.y, hitAngle, {
             isCrit: ev.isCrit,
@@ -330,10 +426,9 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
             count: 8,
           });
           this.lighting.spawnTransientLight(ev.x, ev.y, 110, PALETTE.SOLAR_GOLD, 0.9, 0.25);
-          const brokenBoss =
-            ev.targetKind === 'enemy'
-              ? sim.enemies.find((e) => e.id === ev.targetId && e.isBoss)
-              : undefined;
+          const candidateEnemy =
+            ev.targetKind === 'enemy' ? scratchEnemyById.get(ev.targetId) : undefined;
+          const brokenBoss = candidateEnemy?.isBoss ? candidateEnemy : undefined;
           routeCutoutDirectionalByReach(
             this.fx,
             ev.x,
@@ -404,14 +499,16 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
         let struckTargetRadius: number | undefined;
 
         if (!ev.hitWall && sim?.enemies) {
-          let closestDist = 48;
+          let closestDistSq = 48 * 48;
           for (let eIdx = 0; eIdx < sim.enemies.length; eIdx++) {
             const en = sim.enemies[eIdx]!;
             if (en.hp <= 0) continue;
-            const d = Math.hypot(en.x - ev.x, en.y - ev.y);
+            const dx = en.x - ev.x;
+            const dy = en.y - ev.y;
+            const dSq = dx * dx + dy * dy;
             const reach = (en.radius ?? 16) + 16;
-            if (d < reach && d < closestDist) {
-              closestDist = d;
+            if (dSq < reach * reach && dSq < closestDistSq) {
+              closestDistSq = dSq;
               struckTargetId = en.id;
               struckTargetX = en.x;
               struckTargetY = en.y;
@@ -422,7 +519,7 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
 
         const isScrapPellet = ev.weaponId === 'scrap_shotgun';
         if (struckTargetId !== undefined && !isScrapPellet) {
-          scratchTickImpactTargetIds.push(struckTargetId);
+          scratchTickImpactTargetIdSet.add(struckTargetId);
         }
         if (isScrapPellet && !ev.hitWall) {
           const isTeammate = ev.ownerId !== undefined && ev.ownerId !== sim.player.id;
@@ -505,7 +602,8 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
       }
       case 'enemy_telegraph': {
         if (!isStress) {
-          const boss = sim.enemies.find((e) => e.id === ev.enemyId && e.isBoss);
+          const candidateBoss = scratchEnemyById.get(ev.enemyId);
+          const boss = candidateBoss?.isBoss ? candidateBoss : undefined;
           if (boss && !boss.bossArmorShellActive && !boss.bossBurrowed) {
             const isEn = i18n.getLocale() === 'en';
             const pat = ev.bossPatternId ?? (boss.bossPatternId ?? 0);
@@ -608,15 +706,20 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
               i18n.getLocale(),
             );
           } else if (isSeedGun) {
-            const releasedHealingMist =
-              events.some(
-                (other) =>
-                  (other.kind === 'status_applied' && other.status === 'rooted') ||
-                  (other.kind === 'damage_dealt' && other.targetKind === 'enemy'),
-              ) ||
-              sim.enemies.some(
-                (e) => e.hp > 0 && Math.hypot(e.x - ev.x, e.y - ev.y) <= ev.radius + e.radius,
-              );
+            let releasedHealingMist = hasRootedOrEnemyDamageEvent;
+            if (!releasedHealingMist && sim.enemies) {
+              for (let eIdx = 0; eIdx < sim.enemies.length; eIdx++) {
+                const e = sim.enemies[eIdx]!;
+                if (e.hp <= 0) continue;
+                const dx = e.x - ev.x;
+                const dy = e.y - ev.y;
+                const reach = ev.radius + e.radius;
+                if (dx * dx + dy * dy <= reach * reach) {
+                  releasedHealingMist = true;
+                  break;
+                }
+              }
+            }
             spawnSeedGunHarvestBloomVfx(
               this,
               this.fx,
@@ -642,12 +745,9 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
           }
         }
         const hasDedicatedBatch2SpecialInTick =
-          (isSolarStaff &&
-            events.some(
-              (other) => other.kind === 'solar_supernova' || other.kind === 'solar_converge_burst',
-            )) ||
-          (isMagmaCannon && events.some((other) => other.kind === 'magma_geyser_eruption')) ||
-          (isVoidStaff && events.some((other) => other.kind === 'void_implosion'));
+          (isSolarStaff && hasSolarSpecialEvent) ||
+          (isMagmaCannon && hasMagmaGeyserEvent) ||
+          (isVoidStaff && hasVoidImplosionEvent);
         const handledByDedicatedWeaponVfx =
           !isStress &&
           (isTriStaff ||
@@ -940,7 +1040,7 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
       case 'boss_spawned': {
         this.fx.addTrauma(0.32);
         if (!isStress) {
-          const boss = sim.enemies.find((e) => e.id === ev.enemyId);
+          const boss = scratchEnemyById.get(ev.enemyId);
           if (boss) {
             const biome = sim.currentBiome ?? 1;
             const novaKey =
@@ -1279,10 +1379,7 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
         const rx = ev.x ?? sim.player.x;
         const ry = ev.y ?? sim.player.y;
         if (!isStress) {
-          const targets = ev.targetIds
-            .map((id) => sim.enemies.find((e) => e.id === id))
-            .filter((e): e is NonNullable<typeof e> => Boolean(e))
-            .map((e) => ({ x: e.x, y: e.y }));
+          const targets = collectTargetPositionsScratch(ev.targetIds);
           spawnCrossbowBarbedRipVfx(
             this,
             this.fx,
@@ -1302,10 +1399,7 @@ export function processSimEventsImpl(this: GameScene, events: SimEvent[]): void 
         const bx = ev.x ?? sim.player.x;
         const by = ev.y ?? sim.player.y;
         if (!isStress) {
-          const targets = ev.targetIds
-            .map((id) => sim.enemies.find((e) => e.id === id))
-            .filter((e): e is NonNullable<typeof e> => Boolean(e))
-            .map((e) => ({ x: e.x, y: e.y }));
+          const targets = collectTargetPositionsScratch(ev.targetIds);
           spawnThornBloomVfx(
             this,
             this.fx,

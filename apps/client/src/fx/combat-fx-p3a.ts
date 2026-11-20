@@ -14,8 +14,9 @@ import {
 } from '@ashen-pact/shared';
 import type Phaser from 'phaser';
 import { PALETTE, hexToNum } from '../art/palette.js';
-import { fillTaperedArcRibbon } from './tapered-ribbon-builder.js';
+import { setDepthIfChanged } from '../scenes/game-scene/entity-sync.js';
 import type { GameScene } from '../scenes/GameScene.js';
+import { fillTaperedArcRibbon } from './tapered-ribbon-builder.js';
 
 export function renderBossArmorShellPlates(
   plates: readonly Phaser.GameObjects.Sprite[],
@@ -46,7 +47,7 @@ export function renderBossArmorShellPlates(
     plate.setVisible(true).setActive(true);
     plate.setPosition(px, py);
     plate.setRotation(ang + Math.PI * 0.5);
-    plate.setDepth(30.8);
+    setDepthIfChanged(plate, 30.8);
     plate.setScale(1 / 3);
     plate.setTint(tint);
   }

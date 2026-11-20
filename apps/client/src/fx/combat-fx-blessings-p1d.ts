@@ -96,6 +96,8 @@ function resolveUnderActorGraphics(
   return fallbackG;
 }
 
+const markedEnemiesScratch: WorldSim['enemies'][number][] = [];
+
 /**
  * Draws procedural Chiaroscuro 1:1 overlays for active P1D projectiles (`table_tech_rocket`, `reload_tediore_chuck`,
  * `vanguard_bastion_prism`, and `splitGeneration >= 1` child bullets).
@@ -108,18 +110,29 @@ export function drawP1DBlessingProjectileOverlay(
 ): void {
   const hasSceneArg =
     bOrClock !== undefined && typeof bOrClock === 'object' && 'weaponId' in bOrClock;
+  const b = (hasSceneArg ? bOrClock : gOrB) as SimProjectileState | undefined;
+  if (!b || b.team !== 'player') return;
+  const wid = b.weaponId;
+  const isSplit = (b.splitGeneration ?? 0) >= 1;
+  if (
+    !isSplit &&
+    wid !== 'table_tech_rocket' &&
+    wid !== 'reload_tediore_chuck' &&
+    wid !== 'vanguard_bastion_prism'
+  ) {
+    return;
+  }
   const g = hasSceneArg
     ? (gOrB as Phaser.GameObjects.Graphics)
     : resolveGraphics(sceneOrG);
-  const b = (hasSceneArg ? bOrClock : gOrB) as SimProjectileState | undefined;
-  if (!g || !b || b.team !== 'player') return;
+  if (!g) return;
   const freeze = hasSceneArg ? isVisualFreezeActive(sceneOrG) : isVisualFreezeActive();
   const t = freeze ? 0 : hasSceneArg ? clockSecArg : typeof bOrClock === 'number' ? bOrClock : 0;
   const ang = b.angle ?? Math.atan2(b.vy, b.vx);
   const cos = Math.cos(ang);
   const sin = Math.sin(ang);
 
-  if (b.weaponId === 'table_tech_rocket') {
+  if (wid === 'table_tech_rocket') {
     const tailX = b.x - cos * 11;
     const tailY = b.y - sin * 11;
     g.lineStyle(4.8, 0x141019, 0.85);
@@ -128,7 +141,7 @@ export function drawP1DBlessingProjectileOverlay(
     g.lineBetween(tailX, tailY, b.x + cos * 5, b.y + sin * 5);
     g.fillStyle(0xfffdf5, 0.96);
     g.fillCircle(tailX - cos * (2 + Math.sin(t * 25 + b.id) * 1.5), tailY - sin * 2, 2.2);
-  } else if (b.weaponId === 'reload_tediore_chuck') {
+  } else if (wid === 'reload_tediore_chuck') {
     const spin = freeze ? 0.6 : t * 14 + b.id;
     const rx = Math.cos(spin) * 6;
     const ry = Math.sin(spin) * 6;
@@ -138,13 +151,13 @@ export function drawP1DBlessingProjectileOverlay(
     g.lineBetween(b.x - rx, b.y - ry, b.x + rx, b.y + ry);
     g.fillStyle(0xfffdf5, 0.94);
     g.fillCircle(b.x, b.y, 2.8);
-  } else if (b.weaponId === 'vanguard_bastion_prism') {
+  } else if (wid === 'vanguard_bastion_prism') {
     const r = b.radius + 1.5;
     fillTaperedArcRibbon(g, b.x, b.y, r, -0.6, 0.6, 2.0, 0xf97316, 0.92, 3, 1.2);
     fillTaperedArcRibbon(g, b.x, b.y, r, Math.PI - 0.6, Math.PI + 0.6, 2.0, 0xf97316, 0.92, 3, 1.2);
     g.fillStyle(0xfffdf5, 0.95);
     g.fillCircle(b.x, b.y, 2.5);
-  } else if ((b.splitGeneration ?? 0) >= 1) {
+  } else if (isSplit) {
     // Pointed twin chevrons trailing behind split child bullets
     g.lineStyle(1.8, 0x141019, 0.85);
     g.lineBetween(b.x - cos * 7, b.y - sin * 7, b.x, b.y);
@@ -346,13 +359,19 @@ export function drawP1DBlessingActiveOverlays(
   }
 
   // 5. Enemies: Ranger Prey Chain Chiaroscuro links & Heavy Pinball rebound ring
-  const markedEnemies = anyPreyChainOwner
-    ? enemies.filter((e) => e.hp > 0 && e.markedTimer > 0)
-    : [];
-  for (let i = 0; i < markedEnemies.length; i++) {
-    const a = markedEnemies[i]!;
-    for (let j = i + 1; j < markedEnemies.length; j++) {
-      const b = markedEnemies[j]!;
+  markedEnemiesScratch.length = 0;
+  if (anyPreyChainOwner) {
+    for (let i = 0; i < enemies.length; i++) {
+      const e = enemies[i]!;
+      if (e.hp > 0 && e.markedTimer > 0) {
+        markedEnemiesScratch.push(e);
+      }
+    }
+  }
+  for (let i = 0; i < markedEnemiesScratch.length; i++) {
+    const a = markedEnemiesScratch[i]!;
+    for (let j = i + 1; j < markedEnemiesScratch.length; j++) {
+      const b = markedEnemiesScratch[j]!;
       if (distance(a.x, a.y, b.x, b.y) <= 220) {
         floorG.lineStyle(3.6, 0x141019, 0.65);
         floorG.beginPath();

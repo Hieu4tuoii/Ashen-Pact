@@ -404,6 +404,7 @@ export function detonateThunderDecoy(
     destroyedIds.push(triggerBullet.id);
   }
 
+  let splicedOutsideLoop = false;
   for (let i = sim.projectiles.length - 1; i >= 0; i--) {
     const eb = sim.projectiles[i]!;
     if (eb.team !== 'enemy') continue;
@@ -415,8 +416,13 @@ export function detonateThunderDecoy(
       if (!inProjectileLoop) {
         sim.projectiles.splice(i, 1);
         sim.releaseProjectileToPool(eb);
+        splicedOutsideLoop = true;
       }
     }
+  }
+  if (splicedOutsideLoop) {
+    sim.bulletSpatialGridPhase += 1;
+    sim.recountProjectileTeams();
   }
 
   if (destroyedIds.length > 0 && !sim.stressTestActive) {
@@ -474,9 +480,19 @@ export function tryConsumeAndSpawnDashPhaseBlade(sim: WorldSim, p: SimPlayerStat
 
 export function clearEnemyBulletsAlongPhaseBlade(sim: WorldSim, b: SimProjectileState, destroyedOut: number[]): number {
   if (b.team !== 'player' || b.weaponId !== 'dash_phase_blade' || b.ttlSec <= 0) return 0;
+  sim.ensureEnemyBulletSpatialGrid();
+  const midX = (b.prevX + b.x) * 0.5;
+  const midY = (b.prevY + b.y) * 0.5;
+  const halfSeg = Math.hypot(b.x - b.prevX, b.y - b.prevY) * 0.5;
+  const candidates = sim.bulletSpatialGrid.queryCircle(
+    midX,
+    midY,
+    halfSeg + b.radius + 26,
+    sim.queryBulletScratch,
+  );
   let cleared = 0;
-  for (let i = 0; i < sim.projectiles.length; i++) {
-    const eb = sim.projectiles[i]!;
+  for (let i = 0; i < candidates.length; i++) {
+    const eb = candidates[i]!;
     if (eb.team !== 'enemy' || eb.ttlSec <= 0) continue;
     if (pointToSegmentDist(eb.x, eb.y, b.prevX, b.prevY, b.x, b.y) <= b.radius + eb.radius + 10) {
       eb.ttlSec = 0;

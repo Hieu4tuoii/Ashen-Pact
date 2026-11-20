@@ -54,6 +54,7 @@ import {
 } from '../../world/biome-architecture.js';
 import { type ArenaTileVisual, type GameScene, RIG_FOOT_OFFSET_Y } from '../GameScene.js';
 import type { HudScene } from '../HudScene.js';
+import { syncPropsImpl } from './entity-sync.js';
 import { applyHudEdgeAnchors } from './hud-setup-and-pause.js';
 import {
   canTeleportFromCurrentRoom,
@@ -255,6 +256,7 @@ export function createImpl(this: GameScene): void {
   this.pickupSpritePool = [];
   this.mapTileVisuals = [];
   this.lastMapRevision = -1;
+  (this as GameScene & { lastRenderedRoomKey?: string }).lastRenderedRoomKey = undefined;
   this.dashAfterimageTimer = 0;
   this.textObjects = [];
   this.weaponSlotBgs = [];
@@ -1420,8 +1422,9 @@ export function buildArenaTilesImpl(this: GameScene): void {
   this.arenaGroundSprite.setDepth(2);
 
   this.lastRenderedBiome = effectiveBiome;
-  (this as GameScene & { lastConveyorDirection?: 1 | -1 }).lastConveyorDirection =
-    map.conveyorDirection;
+  const trackedScene = this as SceneWithTileSyncTrack;
+  trackedScene.lastConveyorDirection = map.conveyorDirection;
+  trackedScene.lastRenderedRoomKey = resolveArenaRoomIdentityKey(sim, effectiveBiome);
   this.lastMapRevision =
     effectiveBiome * 10000000 +
     sim.currentFloor * 1000000 +
@@ -1444,6 +1447,152 @@ export function getStructureTextureKeyImpl(
   return TextureBaker.getWallTileTextureKey(biome, autotileMask);
 }
 
+interface GlTextureWrapperLike {
+  gl?: WebGLRenderingContext;
+  webGLTexture?: WebGLTexture | null;
+  pma?: boolean;
+  flipY?: boolean;
+}
+
+interface TextureSourceLike {
+  glTexture?: GlTextureWrapperLike | null;
+  flipY?: boolean;
+  renderer?: { gl?: WebGLRenderingContext };
+}
+
+let arenaDirtyPatchDoc: Document | null = null;
+let arenaDirtyPatchCanvas: HTMLCanvasElement | null = null;
+let arenaDirtyPatchCtx: CanvasRenderingContext2D | null = null;
+
+function getArenaDirtyPatchCanvas(
+  srcCanvas: HTMLCanvasElement,
+  pw: number,
+  ph: number,
+): { canvas: HTMLCanvasElement; ctx: CanvasRenderingContext2D } | null {
+  const doc =
+    (srcCanvas as { ownerDocument?: Document }).ownerDocument ??
+    (typeof document !== 'undefined' ? document : undefined);
+  if (!doc || typeof doc.createElement !== 'function') {
+    return null;
+  }
+  if (!arenaDirtyPatchCanvas || !arenaDirtyPatchCtx || arenaDirtyPatchDoc !== doc) {
+    arenaDirtyPatchDoc = doc;
+    arenaDirtyPatchCanvas = doc.createElement('canvas');
+    arenaDirtyPatchCtx = arenaDirtyPatchCanvas?.getContext?.('2d') ?? null;
+  }
+  if (!arenaDirtyPatchCanvas || !arenaDirtyPatchCtx) {
+    return null;
+  }
+  if (arenaDirtyPatchCanvas.width !== pw) {
+    arenaDirtyPatchCanvas.width = pw;
+  }
+  if (arenaDirtyPatchCanvas.height !== ph) {
+    arenaDirtyPatchCanvas.height = ph;
+  }
+  return { canvas: arenaDirtyPatchCanvas, ctx: arenaDirtyPatchCtx };
+}
+
+function uploadArenaGroundSubRect(
+  scene: GameScene,
+  arenaGroundTex: Phaser.Textures.CanvasTexture,
+  px: number,
+  py: number,
+  pw: number,
+  ph: number,
+): void {
+  const clampedX = Math.max(0, Math.floor(px));
+  const clampedY = Math.max(0, Math.floor(py));
+  const clampedW = Math.min(arenaGroundTex.width - clampedX, Math.ceil(pw));
+  const clampedH = Math.min(arenaGroundTex.height - clampedY, Math.ceil(ph));
+  if (clampedW <= 0 || clampedH <= 0) return;
+
+  const texWithInternals = arenaGroundTex as Phaser.Textures.CanvasTexture & {
+    source?: TextureSourceLike[];
+    _source?: TextureSourceLike;
+  };
+  const texSource = texWithInternals.source?.[0] ?? texWithInternals._source;
+  const glWrapper = texSource?.glTexture;
+  const gl =
+    glWrapper?.gl ??
+    texSource?.renderer?.gl ??
+    (scene.game?.renderer as { gl?: WebGLRenderingContext } | undefined)?.gl;
+  const webGLTex = glWrapper?.webGLTexture;
+  const srcCanvas = arenaGroundTex.canvas ?? arenaGroundTex.getCanvas?.();
+
+  if (
+    gl &&
+    webGLTex &&
+    srcCanvas &&
+    !gl.isContextLost?.() &&
+    !glWrapper?.flipY &&
+    !texSource?.flipY
+  ) {
+    const patch = getArenaDirtyPatchCanvas(srcCanvas, clampedW, clampedH);
+    if (patch) {
+      patch.ctx.clearRect(0, 0, clampedW, clampedH);
+      patch.ctx.drawImage(
+        srcCanvas,
+        clampedX,
+        clampedY,
+        clampedW,
+        clampedH,
+        0,
+        0,
+        clampedW,
+        clampedH,
+      );
+
+      const hasBindingQuery =
+        typeof gl.getParameter === 'function' && gl.TEXTURE_BINDING_2D !== undefined;
+      const prevTex = hasBindingQuery
+        ? (gl.getParameter(gl.TEXTURE_BINDING_2D) as WebGLTexture | null)
+        : undefined;
+
+      const pma = glWrapper.pma ?? true;
+      gl.bindTexture(gl.TEXTURE_2D, webGLTex);
+      if (typeof gl.pixelStorei === 'function') {
+        if (gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL !== undefined) {
+          gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, pma);
+        }
+        if (gl.UNPACK_FLIP_Y_WEBGL !== undefined) {
+          gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+        }
+      }
+      gl.texSubImage2D(
+        gl.TEXTURE_2D,
+        0,
+        clampedX,
+        clampedY,
+        gl.RGBA,
+        gl.UNSIGNED_BYTE,
+        patch.canvas,
+      );
+      if (
+        !pma &&
+        typeof gl.pixelStorei === 'function' &&
+        gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL !== undefined
+      ) {
+        gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
+      }
+      if (hasBindingQuery) {
+        gl.bindTexture(gl.TEXTURE_2D, prevTex ?? null);
+      }
+      return;
+    }
+  }
+
+  arenaGroundTex.refresh();
+}
+
+type SceneWithTileSyncTrack = GameScene & {
+  lastConveyorDirection?: 1 | -1;
+  lastRenderedRoomKey?: string;
+};
+
+function resolveArenaRoomIdentityKey(sim: WorldSim, effectiveBiome: 0 | 1 | 2 | 3): string {
+  return sim.inHub ? 'hub' : `${effectiveBiome}:${sim.currentFloor}:${sim.currentRoomId}`;
+}
+
 const scratchDirtyTiles: ArenaTileVisual[] = [];
 
 export function syncArenaTilesWithMapRevisionImpl(this: GameScene): void {
@@ -1457,28 +1606,37 @@ export function syncArenaTilesWithMapRevisionImpl(this: GameScene): void {
     this.mapTileVisuals.length !== map.cols * map.rows ||
     this.arenaGroundTex?.width !== expectedW ||
     this.arenaGroundTex?.height !== expectedH;
-  const sceneWithConv = this as GameScene & { lastConveyorDirection?: 1 | -1 };
+  const sceneWithTrack = this as SceneWithTileSyncTrack;
   const conveyorFlipped =
-    sceneWithConv.lastConveyorDirection !== undefined &&
-    map.conveyorDirection !== sceneWithConv.lastConveyorDirection;
-  sceneWithConv.lastConveyorDirection = map.conveyorDirection;
+    sceneWithTrack.lastConveyorDirection !== undefined &&
+    map.conveyorDirection !== sceneWithTrack.lastConveyorDirection;
+  sceneWithTrack.lastConveyorDirection = map.conveyorDirection;
 
   const revKey =
     effectiveBiome * 10000000 +
     sim.currentFloor * 1000000 +
     sim.currentRoomId * 10000 +
     map.mapRevision;
+  const roomKey = resolveArenaRoomIdentityKey(sim, effectiveBiome);
+  const roomChanged =
+    sceneWithTrack.lastRenderedRoomKey !== undefined
+      ? sceneWithTrack.lastRenderedRoomKey !== roomKey
+      : this.lastMapRevision >= 0 &&
+        Math.floor(revKey / 10000) !== Math.floor(this.lastMapRevision / 10000);
   if (
     !dimsChanged &&
     !conveyorFlipped &&
+    !roomChanged &&
     revKey === this.lastMapRevision &&
     effectiveBiome === this.lastRenderedBiome
   ) {
+    sceneWithTrack.lastRenderedRoomKey = roomKey;
     return;
   }
   const biomeChanged = effectiveBiome !== this.lastRenderedBiome;
   this.lastMapRevision = revKey;
   this.lastRenderedBiome = effectiveBiome;
+  sceneWithTrack.lastRenderedRoomKey = roomKey;
 
   if (dimsChanged) {
     if (this.textures.exists('arena_ground_composite')) {
@@ -1511,13 +1669,17 @@ export function syncArenaTilesWithMapRevisionImpl(this: GameScene): void {
     return;
   }
 
-  let groundDirty = conveyorFlipped;
+  let groundDirty = conveyorFlipped || roomChanged;
+  let anyKindChanged = false;
   scratchDirtyTiles.length = 0;
 
   for (let i = 0; i < this.mapTileVisuals.length; i++) {
     const tile = this.mapTileVisuals[i]!;
     const newKind = map.getTile(tile.tx, tile.ty);
-    const kindChanged = newKind !== tile.kind || biomeChanged;
+    const kindChanged = newKind !== tile.kind || biomeChanged || roomChanged;
+    if (newKind !== tile.kind) {
+      anyKindChanged = true;
+    }
     const newDistToWall = kindChanged ? computeTileDistToWall(map, tile.tx, tile.ty) : tile.distToWall;
     const newVariant = kindChanged ? resolveHybridFloorVariant(tile.tx, tile.ty, newDistToWall) : tile.variant;
     const newMask = kindChanged ? map.getAutotileMask(tile.tx, tile.ty) : tile.autotileMask;
@@ -1527,6 +1689,7 @@ export function syncArenaTilesWithMapRevisionImpl(this: GameScene): void {
 
     if (
       biomeChanged ||
+      roomChanged ||
       newKind !== tile.kind ||
       newVariant !== tile.variant ||
       newDistToWall !== tile.distToWall ||
@@ -1548,15 +1711,74 @@ export function syncArenaTilesWithMapRevisionImpl(this: GameScene): void {
   }
 
   if (groundDirty) {
-    if (!biomeChanged && !conveyorFlipped && scratchDirtyTiles.length <= 320 && this.arenaGroundTex) {
+    if (
+      !biomeChanged &&
+      !roomChanged &&
+      !conveyorFlipped &&
+      scratchDirtyTiles.length > 0 &&
+      scratchDirtyTiles.length <= 64 &&
+      this.arenaGroundTex
+    ) {
+      let minTx = map.cols - 1;
+      let maxTx = 0;
+      let minTy = map.rows - 1;
+      let maxTy = 0;
       for (let i = 0; i < scratchDirtyTiles.length; i++) {
-        this.renderTileCellToComposite(scratchDirtyTiles[i]!);
+        const dt = scratchDirtyTiles[i]!;
+        if (dt.tx < minTx) minTx = dt.tx;
+        if (dt.tx > maxTx) maxTx = dt.tx;
+        if (dt.ty < minTy) minTy = dt.ty;
+        if (dt.ty > maxTy) maxTy = dt.ty;
       }
+      const pad = anyKindChanged ? 2 : 1;
+      minTx = Math.max(0, minTx - pad);
+      maxTx = Math.min(map.cols - 1, maxTx + pad);
+      minTy = Math.max(0, minTy - pad);
+      maxTy = Math.min(map.rows - 1, maxTy + pad);
+
+      for (let ty = minTy; ty <= maxTy; ty++) {
+        const rowOff = ty * map.cols;
+        for (let tx = minTx; tx <= maxTx; tx++) {
+          let tile = this.mapTileVisuals[rowOff + tx];
+          if (!tile || tile.tx !== tx || tile.ty !== ty) {
+            tile = this.mapTileVisuals.find((t) => t.tx === tx && t.ty === ty);
+          }
+          if (!tile) continue;
+          if (anyKindChanged) {
+            tile.distToWall = computeTileDistToWall(map, tx, ty);
+            tile.variant = resolveHybridFloorVariant(tx, ty, tile.distToWall);
+            tile.autotileMask = map.getAutotileMask(tx, ty);
+            tile.aoMask = map.getWallAmbientOcclusionMask(tx, ty);
+          }
+          this.renderTileCellToComposite(tile);
+        }
+      }
+
+      const clipRectWorld = {
+        x: minTx * TILE_SIZE,
+        y: minTy * TILE_SIZE,
+        width: (maxTx - minTx + 1) * TILE_SIZE,
+        height: (maxTy - minTy + 1) * TILE_SIZE,
+      };
       const groundCtx = this.arenaGroundTex.getContext();
       if (groundCtx && sim && this.biomeArchLive) {
-        this.biomeArchLive.renderGroundPass(groundCtx, sim.map, this.tileCompositeScale);
+        this.biomeArchLive.renderGroundPass(
+          groundCtx,
+          sim.map,
+          this.tileCompositeScale,
+          clipRectWorld,
+        );
       }
-      this.arenaGroundTex.refresh();
+
+      const scale = this.tileCompositeScale;
+      uploadArenaGroundSubRect(
+        this,
+        this.arenaGroundTex,
+        clipRectWorld.x * scale,
+        clipRectWorld.y * scale,
+        clipRectWorld.width * scale,
+        clipRectWorld.height * scale,
+      );
     } else {
       this.rebuildAllTileCellsToComposite();
     }
@@ -1698,36 +1920,97 @@ export function applyCameraViewportImpl(this: GameScene): void {
   if (newScale !== prevScale) {
     const invBake = 1 / newScale;
     this.playerRig?.refreshBakedTextures();
-    for (const rig of this.simPlayerRigs.values()) {
-      rig.refreshBakedTextures();
+    if (this.simPlayerRigs) {
+      for (const rig of this.simPlayerRigs.values()) {
+        rig.refreshBakedTextures();
+      }
     }
-    for (const entry of this.coopPlayerRigs.values()) {
-      entry.rig.refreshBakedTextures();
-      entry.nameLabel.setResolution(newScale * 2);
-      entry.emoteLabel.setResolution(newScale);
+    if (this.coopPlayerRigs) {
+      for (const entry of this.coopPlayerRigs.values()) {
+        entry.rig.refreshBakedTextures();
+        entry.nameLabel.setResolution(newScale * 2);
+        entry.emoteLabel.setResolution(newScale);
+      }
     }
-    for (const entry of this.hubStatueRigs.values()) {
-      entry.rig.refreshBakedTextures();
-      entry.glowSprite.setTexture('fx_light_radial');
-      entry.label.setResolution(newScale);
-      entry.subLabel.setResolution(newScale);
+    if (this.hubStatueRigs) {
+      for (const entry of this.hubStatueRigs.values()) {
+        entry.rig.refreshBakedTextures();
+        entry.glowSprite.setTexture('fx_light_radial');
+        entry.label.setResolution(newScale);
+        entry.subLabel.setResolution(newScale);
+      }
     }
-    for (const gTxt of this.hubGuideTexts) {
-      gTxt.setResolution(newScale);
+    if (this.hubGuideTexts) {
+      for (const gTxt of this.hubGuideTexts) {
+        gTxt.setResolution(newScale);
+      }
     }
-    for (const rig of this.enemyRigs.values()) {
-      rig.refreshBakedTextures();
+    if (this.enemyRigs) {
+      for (const rig of this.enemyRigs.values()) {
+        rig.refreshBakedTextures();
+      }
     }
-    this.rebuildAllTileCellsToComposite();
-    for (const pv of this.propVisuals.values()) {
-      pv.sprite.setTexture(TextureBaker.getPropTextureKey(pv.kind));
-      pv.sprite.setScale(invBake);
-      pv.shadow.setTexture('prop_shadow');
-      pv.shadow.setScale(invBake);
+    this.rebuildAllTileCellsToComposite?.();
+    const shadowBinding = TextureBaker.resolveAtlasBinding(this, 'prop_shadow');
+    if (this.propVisuals) {
+      for (const pv of this.propVisuals.values()) {
+        const propBinding = TextureBaker.resolveAtlasBinding(
+          this,
+          TextureBaker.getPropTextureKey(pv.kind),
+        );
+        if (propBinding.frameName !== undefined) {
+          pv.sprite.setTexture(propBinding.textureKey, propBinding.frameName);
+        } else {
+          pv.sprite.setTexture(propBinding.textureKey);
+        }
+        pv.sprite.setScale(invBake);
+        if (shadowBinding.frameName !== undefined) {
+          pv.shadow.setTexture(shadowBinding.textureKey, shadowBinding.frameName);
+        } else {
+          pv.shadow.setTexture(shadowBinding.textureKey);
+        }
+        pv.shadow.setScale(invBake);
+      }
     }
+    if (this.pushBlockVisuals) {
+      const pushBlockBinding = TextureBaker.resolveAtlasBinding(this, 'prop_push_block');
+      for (const vis of this.pushBlockVisuals.values()) {
+        if (pushBlockBinding.frameName !== undefined) {
+          vis.sprite.setTexture(pushBlockBinding.textureKey, pushBlockBinding.frameName);
+        } else {
+          vis.sprite.setTexture(pushBlockBinding.textureKey);
+        }
+        vis.sprite.setScale(invBake);
+        if (shadowBinding.frameName !== undefined) {
+          vis.shadow.setTexture(shadowBinding.textureKey, shadowBinding.frameName);
+        } else {
+          vis.shadow.setTexture(shadowBinding.textureKey);
+        }
+        vis.shadow.setScale(invBake);
+      }
+    }
+    const summonShadowScale = invBake * 0.65;
     if (this.summonVisuals) {
       for (const vis of this.summonVisuals.values()) {
-        vis.shadow.setScale(1 / 3);
+        if (shadowBinding.frameName !== undefined) {
+          vis.shadow.setTexture(shadowBinding.textureKey, shadowBinding.frameName);
+        } else {
+          vis.shadow.setTexture(shadowBinding.textureKey);
+        }
+        vis.shadow.setScale(summonShadowScale);
+        vis.base.setScale(1 / 3);
+        vis.head?.setScale(1 / 3);
+      }
+    }
+    if (this.summonSpritePool) {
+      for (let i = 0; i < this.summonSpritePool.length; i++) {
+        const vis = this.summonSpritePool[i]!;
+        if (shadowBinding.frameName !== undefined) {
+          vis.shadow.setTexture(shadowBinding.textureKey, shadowBinding.frameName);
+        } else {
+          vis.shadow.setTexture(shadowBinding.textureKey);
+        }
+        vis.shadow.setScale(summonShadowScale);
         vis.base.setScale(1 / 3);
         vis.head?.setScale(1 / 3);
       }
@@ -1758,48 +2041,64 @@ export function applyCameraViewportImpl(this: GameScene): void {
       }
     }
     const stressInvBake = 1 / Math.min(2, newScale);
-    for (const item of this.projectileSprites.values()) {
-      const isKit = item.textureKey === 'fx_cutout_kit_512' || item.frameName !== undefined;
-      const baseInv = isKit
-        ? 1 / 3
-        : item.textureKey.startsWith('proj_stress_')
-          ? stressInvBake
-          : invBake;
-      item.sprite.setTexture(item.textureKey, item.frameName);
-      item.sprite.setScale(isKit ? item.specScale : baseInv * item.specScale);
-      item.glowSprite.setTexture('fx_enemy_bullet_glow');
-      item.glowSprite.setScale(isKit ? item.specScale * 1.05 : baseInv * item.specScale * 1.05);
+    if (this.projectileSprites) {
+      for (const item of this.projectileSprites.values()) {
+        const isKit = item.textureKey === 'fx_cutout_kit_512' || item.frameName !== undefined;
+        const baseInv = isKit
+          ? 1 / 3
+          : item.textureKey.startsWith('proj_stress_')
+            ? stressInvBake
+            : invBake;
+        item.sprite.setTexture(item.textureKey, item.frameName);
+        item.sprite.setScale(isKit ? item.specScale : baseInv * item.specScale);
+        item.glowSprite.setTexture('fx_enemy_bullet_glow');
+        item.glowSprite.setScale(isKit ? item.specScale * 1.05 : baseInv * item.specScale * 1.05);
+      }
     }
-    for (const item of this.projectileSpritePool) {
-      const isKit = item.textureKey === 'fx_cutout_kit_512' || item.frameName !== undefined;
-      const baseInv = isKit
-        ? 1 / 3
-        : item.textureKey.startsWith('proj_stress_')
-          ? stressInvBake
-          : invBake;
-      item.sprite.setTexture(item.textureKey, item.frameName);
-      item.sprite.setScale(isKit ? item.specScale : baseInv * item.specScale);
-      item.glowSprite.setTexture('fx_enemy_bullet_glow');
-      item.glowSprite.setScale(isKit ? item.specScale * 1.05 : baseInv * item.specScale * 1.05);
+    if (this.projectileSpritePool) {
+      for (const item of this.projectileSpritePool) {
+        const isKit = item.textureKey === 'fx_cutout_kit_512' || item.frameName !== undefined;
+        const baseInv = isKit
+          ? 1 / 3
+          : item.textureKey.startsWith('proj_stress_')
+            ? stressInvBake
+            : invBake;
+        item.sprite.setTexture(item.textureKey, item.frameName);
+        item.sprite.setScale(isKit ? item.specScale : baseInv * item.specScale);
+        item.glowSprite.setTexture('fx_enemy_bullet_glow');
+        item.glowSprite.setScale(isKit ? item.specScale * 1.05 : baseInv * item.specScale * 1.05);
+      }
     }
-    for (const item of this.pickupSprites.values()) {
-      const isKit = item.textureKey === 'fx_cutout_kit_512' || item.frameName !== undefined;
-      item.sprite.setTexture(item.textureKey, item.frameName);
-      item.sprite.setScale(isKit ? 1 / 3 : invBake);
-      item.glowSprite.setTexture('fx_light_radial');
+    if (this.pickupSprites) {
+      for (const item of this.pickupSprites.values()) {
+        const isKit = item.textureKey === 'fx_cutout_kit_512' || item.frameName !== undefined;
+        item.sprite.setTexture(item.textureKey, item.frameName);
+        item.sprite.setScale(isKit ? 1 / 3 : invBake);
+        item.glowSprite.setTexture('fx_light_radial');
+      }
     }
-    for (const item of this.pickupSpritePool) {
-      const isKit = item.textureKey === 'fx_cutout_kit_512' || item.frameName !== undefined;
-      item.sprite.setTexture(item.textureKey, item.frameName);
-      item.sprite.setScale(isKit ? 1 / 3 : invBake);
-      item.glowSprite.setTexture('fx_light_radial');
+    if (this.pickupSpritePool) {
+      for (const item of this.pickupSpritePool) {
+        const isKit = item.textureKey === 'fx_cutout_kit_512' || item.frameName !== undefined;
+        item.sprite.setTexture(item.textureKey, item.frameName);
+        item.sprite.setScale(isKit ? 1 / 3 : invBake);
+        item.glowSprite.setTexture('fx_light_radial');
+      }
     }
     const sim = this.transport?.getSim();
-    this.weaponIconSprites.forEach((icon, idx) => {
+    this.weaponIconSprites?.forEach((icon, idx) => {
       const wId = sim?.player.weaponSlots[idx];
       if (wId) {
+        const wBinding = TextureBaker.resolveAtlasBinding(
+          this,
+          TextureBaker.getWeaponTextureKey(wId),
+        );
         icon.setVisible(true);
-        icon.setTexture(TextureBaker.getWeaponTextureKey(wId));
+        if (wBinding.frameName !== undefined) {
+          icon.setTexture(wBinding.textureKey, wBinding.frameName);
+        } else {
+          icon.setTexture(wBinding.textureKey);
+        }
         icon.setScale(invBake * 0.82);
       } else {
         icon.setVisible(false);
@@ -1810,52 +2109,83 @@ export function applyCameraViewportImpl(this: GameScene): void {
       this.crosshairSprite.setScale(invBake);
     }
     const hudTextRes = Math.min(4, newScale);
-    for (const txt of this.textObjects) {
-      txt.setResolution(hudTextRes);
+    if (this.textObjects) {
+      for (const txt of this.textObjects) {
+        txt.setResolution(hudTextRes);
+      }
     }
-    for (const txt of this.pingVisuals.values()) {
-      txt.setResolution(hudTextRes);
+    if (this.pingVisuals) {
+      for (const txt of this.pingVisuals.values()) {
+        txt.setResolution(hudTextRes);
+      }
     }
-    this.destroyPortalAndDoorVisuals();
-    for (const sprite of this.chestSprites.values()) {
-      sprite.destroy();
+    this.destroyPortalAndDoorVisuals?.();
+    if (this.chestSprites) {
+      for (const sprite of this.chestSprites.values()) {
+        sprite.destroy();
+      }
+      this.chestSprites.clear();
     }
-    this.chestSprites.clear();
-    for (const glow of this.chestGlowSprites.values()) {
-      glow.destroy();
+    if (this.chestGlowSprites) {
+      for (const glow of this.chestGlowSprites.values()) {
+        glow.destroy();
+      }
+      this.chestGlowSprites.clear();
     }
-    this.chestGlowSprites.clear();
-    for (const sparkles of this.chestSparkleSprites.values()) {
-      for (const sp of sparkles) sp.destroy();
+    if (this.chestSparkleSprites) {
+      for (const sparkles of this.chestSparkleSprites.values()) {
+        for (const sp of sparkles) sp.destroy();
+      }
+      this.chestSparkleSprites.clear();
     }
-    this.chestSparkleSprites.clear();
-    for (const entry of this.worldItemSprites.values()) {
-      entry.sprite.destroy();
-      entry.glowSprite.destroy();
-      entry.beamSprite.destroy();
-      entry.shopMatSprite.destroy();
-      entry.label.destroy();
+    if (this.worldItemSprites) {
+      for (const entry of this.worldItemSprites.values()) {
+        entry.sprite.destroy();
+        entry.glowSprite.destroy();
+        entry.beamSprite.destroy();
+        entry.shopMatSprite.destroy();
+        entry.label.destroy();
+      }
+      this.worldItemSprites.clear();
     }
-    this.worldItemSprites.clear();
-    for (const entry of this.npcVisuals.values()) {
-      entry.rig?.destroy();
-      entry.sprite?.destroy();
-      entry.glowSprite.destroy();
-      entry.label.destroy();
+    if (this.npcVisuals) {
+      for (const entry of this.npcVisuals.values()) {
+        entry.rig?.destroy();
+        entry.sprite?.destroy();
+        entry.glowSprite.destroy();
+        entry.label.destroy();
+      }
+      this.npcVisuals.clear();
     }
-    this.npcVisuals.clear();
     if (this.portalLabel) {
       this.portalLabel.destroy();
       this.portalLabel = undefined;
     }
     if (this.hudContainer) {
       this.invalidateAllHudCaches();
+      if (sim) {
+        if (typeof this.syncProps === 'function') {
+          this.syncProps(0);
+        } else {
+          syncPropsImpl.call(this, 0);
+        }
+      }
       if (!sim?.stressTestActive) {
         this.syncRoomEntities(0);
       }
       this.updateModalHud();
       if (this.pauseModalOpen) {
         this.rebuildPauseModal();
+      }
+    } else if (
+      sim &&
+      ((this.propVisuals && this.propVisuals.size > 0 && this.activePropIds) ||
+        Object.prototype.hasOwnProperty.call(this, 'syncProps'))
+    ) {
+      if (typeof this.syncProps === 'function') {
+        this.syncProps(0);
+      } else {
+        syncPropsImpl.call(this, 0);
       }
     }
     this.settingsModal?.refreshResolution(newScale);

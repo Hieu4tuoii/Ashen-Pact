@@ -174,6 +174,22 @@ export class WorldSim {
   public doorTransitionCooldown = 0;
   public readonly queryEnemyScratch: SimEnemyState[] = [];
   public readonly queryBulletScratch: SimProjectileState[] = [];
+  public readonly superconductEnemyScratch: SimEnemyState[] = [];
+  public readonly blockingPropsScratch: SimPropState[] = [];
+  public hasActiveSuperconductEnemy = false;
+  public inProjectileUpdateLoop = false;
+  public _playerProjectileCount = 0;
+  public _enemyProjectileCount = 0;
+  public bulletSpatialGridPhase = 0;
+  private _projSyncRef: SimProjectileState[] | null = null;
+  private _projSyncLen = 0;
+  private _projSyncFirstId = -1;
+  private _projSyncLastId = -1;
+  private _bulletGridSyncedTick = -1;
+  private _bulletGridSyncedPhase = -1;
+  private _bulletGridSyncedRef: SimProjectileState[] | null = null;
+  private _bulletGridSyncedLen = -1;
+  private _bulletGridSyncedLastId = -1;
   public readonly projectilePool: SimProjectileState[] = [];
   public readonly pickupPool: SimPickupState[] = [];
   public readonly damageHistory: { tick: number; amount: number }[] = [];
@@ -184,6 +200,71 @@ export class WorldSim {
 
   public readonly allPlayersScratch: SimPlayerState[] = [];
   public readonly volleyRng = new SeededRandom(1);
+
+  public get playerProjectileCount(): number {
+    this.ensureProjectileTeamCounts();
+    return this._playerProjectileCount;
+  }
+
+  public get enemyProjectileCount(): number {
+    this.ensureProjectileTeamCounts();
+    return this._enemyProjectileCount;
+  }
+
+  public recordProjectilesSynced(): void {
+    const len = this.projectiles.length;
+    this._projSyncRef = this.projectiles;
+    this._projSyncLen = len;
+    this._projSyncFirstId = len > 0 ? this.projectiles[0]!.id : -1;
+    this._projSyncLastId = len > 0 ? this.projectiles[len - 1]!.id : -1;
+  }
+
+  public recountProjectileTeams(): void {
+    let pCount = 0;
+    let eCount = 0;
+    for (let i = 0; i < this.projectiles.length; i++) {
+      if (this.projectiles[i]!.team === 'player') pCount += 1;
+      else eCount += 1;
+    }
+    this._playerProjectileCount = pCount;
+    this._enemyProjectileCount = eCount;
+    this.recordProjectilesSynced();
+  }
+
+  public ensureProjectileTeamCounts(): void {
+    const len = this.projectiles.length;
+    if (
+      this._projSyncRef !== this.projectiles ||
+      this._projSyncLen !== len ||
+      (len > 0 &&
+        (this._projSyncFirstId !== this.projectiles[0]!.id ||
+          this._projSyncLastId !== this.projectiles[len - 1]!.id))
+    ) {
+      this.recountProjectileTeams();
+    }
+  }
+
+  public markEnemyBulletSpatialGridSynced(): void {
+    const len = this.projectiles.length;
+    this._bulletGridSyncedTick = this.tick;
+    this._bulletGridSyncedPhase = this.bulletSpatialGridPhase;
+    this._bulletGridSyncedRef = this.projectiles;
+    this._bulletGridSyncedLen = len;
+    this._bulletGridSyncedLastId = len > 0 ? this.projectiles[len - 1]!.id : -1;
+  }
+
+  public ensureEnemyBulletSpatialGrid(): void {
+    const len = this.projectiles.length;
+    if (
+      this._bulletGridSyncedTick !== this.tick ||
+      this._bulletGridSyncedPhase !== this.bulletSpatialGridPhase ||
+      this._bulletGridSyncedRef !== this.projectiles ||
+      this._bulletGridSyncedLen !== len ||
+      (len > 0 && this._bulletGridSyncedLastId !== this.projectiles[len - 1]!.id)
+    ) {
+      this.rebuildEnemyBulletSpatialGrid();
+    }
+  }
 
   constructor(options: WorldSimOptions = {}) {
     const seedVal = options.seed ?? 0x1337c0de;
@@ -348,6 +429,7 @@ export class WorldSim {
     }
 
     // 5. Update Destructible Props & Barrel Fuses
+    this.bulletSpatialGridPhase += 1;
     this.updateProps(dtSec);
 
     // 5.5 Update Phase 5 Skill Zones & Summons + Phase 6 Mechanics

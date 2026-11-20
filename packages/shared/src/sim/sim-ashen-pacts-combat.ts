@@ -142,9 +142,15 @@ export function syncAshenExecutionerInRoom(sim: WorldSim): SimEnemyState | null 
   }
 
   const room = sim.getCurrentRoom();
-  const huntedPlayers = sim
-    .getAllPlayers()
-    .filter((pl) => pl.lifeState === 'alive' && pl.hp > 0 && pl.activePactId === 'pact_ashen_hunted');
+  syncHuntedPlayersScratch.length = 0;
+  const allPlayersSync = sim.getAllPlayers();
+  for (let i = 0; i < allPlayersSync.length; i++) {
+    const pl = allPlayersSync[i]!;
+    if (pl.lifeState === 'alive' && pl.hp > 0 && pl.activePactId === 'pact_ashen_hunted') {
+      syncHuntedPlayersScratch.push(pl);
+    }
+  }
+  const huntedPlayers = syncHuntedPlayersScratch;
 
   const isCombatRoom =
     !room.cleared &&
@@ -208,6 +214,9 @@ export function syncAshenExecutionerInRoom(sim: WorldSim): SimEnemyState | null 
   return exec;
 }
 
+const syncHuntedPlayersScratch: SimPlayerState[] = [];
+const aiHuntedPlayersScratch: SimPlayerState[] = [];
+
 export function updateAshenExecutionerAI(
   sim: WorldSim,
   e: SimEnemyState,
@@ -224,9 +233,15 @@ export function updateAshenExecutionerAI(
   e.kbVx = 0;
   e.kbVy = 0;
 
-  const huntedPlayers = sim
-    .getAllPlayers()
-    .filter((pl) => pl.lifeState === 'alive' && pl.hp > 0 && pl.activePactId === 'pact_ashen_hunted');
+  aiHuntedPlayersScratch.length = 0;
+  const allPlayersAi = sim.getAllPlayers();
+  for (let i = 0; i < allPlayersAi.length; i++) {
+    const pl = allPlayersAi[i]!;
+    if (pl.lifeState === 'alive' && pl.hp > 0 && pl.activePactId === 'pact_ashen_hunted') {
+      aiHuntedPlayersScratch.push(pl);
+    }
+  }
+  const huntedPlayers = aiHuntedPlayersScratch;
 
   if (huntedPlayers.length === 0 || !sim.hasActiveCombatEnemies()) {
     despawnAshenExecutioners(sim);

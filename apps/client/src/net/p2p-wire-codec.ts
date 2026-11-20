@@ -854,13 +854,370 @@ function decodeEnemyFast(base: P2PEnemyBaseline, tuple: P2PEnemyFastTuple): Quan
   return enemy;
 }
 
+const hashF64Scratch = new Float64Array(1);
+const hashI32Scratch = new Int32Array(hashF64Scratch.buffer);
+const fastHashPairOut: [number, number] = [0, 0];
+let hashAcc1 = 0;
+let hashAcc2 = 0;
+
+function mixHashInt(v: number): void {
+  const iv = v | 0;
+  hashAcc1 = Math.imul(hashAcc1 ^ iv, 16777619);
+  hashAcc2 = (Math.imul((hashAcc2 + iv) | 0, 0x85ebca6b) ^ (hashAcc2 >>> 13)) | 0;
+}
+
+function mixHashFloat(v: number): void {
+  hashF64Scratch[0] = v === 0 ? 0 : v;
+  mixHashInt(hashI32Scratch[0]!);
+  mixHashInt(hashI32Scratch[1]!);
+}
+
+function mixHashBool(b: boolean): void {
+  mixHashInt(b ? 0x5bd1e995 : 0x1b873593);
+}
+
+function mixHashOptBool(b: boolean | undefined): void {
+  mixHashInt(b === undefined ? 0x101 : b ? 0x103 : 0x102);
+}
+
+function mixHashOptNum(v: number | undefined | null): void {
+  if (v === undefined) {
+    mixHashInt(0x11111111);
+  } else if (v === null) {
+    mixHashInt(0x22222222);
+  } else {
+    mixHashInt(0x33333333);
+    mixHashFloat(v);
+  }
+}
+
+function mixHashStr(s: string): void {
+  mixHashInt(s.length);
+  for (let i = 0; i < s.length; i++) {
+    mixHashInt(s.charCodeAt(i));
+  }
+}
+
+function mixHashOptStr(s: string | undefined | null): void {
+  if (s === undefined) {
+    mixHashInt(0x44444444);
+  } else if (s === null) {
+    mixHashInt(0x55555555);
+  } else {
+    mixHashInt(0x66666666);
+    mixHashStr(s);
+  }
+}
+
+function mixHashStrArray(arr: readonly string[]): void {
+  mixHashInt(arr.length);
+  for (let i = 0; i < arr.length; i++) {
+    mixHashStr(arr[i]!);
+  }
+}
+
+function mixHashOptStrArray(arr: readonly string[] | undefined): void {
+  if (arr === undefined) {
+    mixHashInt(0x77777777);
+  } else {
+    mixHashInt(0x77777778);
+    mixHashStrArray(arr);
+  }
+}
+
+function baselineFingerprintReplacer(key: string, value: unknown): unknown {
+  if (key === 'prismPulseCooldownSec' || key === 'fuseTimer') {
+    return typeof value === 'number' && value > 0 ? 1 : undefined;
+  }
+  if (
+    key === 'hitFlashTimer' ||
+    key === 'ttlSec' ||
+    key === 'microBlankTimer' ||
+    key === 'pressTimer'
+  ) {
+    return undefined;
+  }
+  return value;
+}
+
+/**
+ * Computes a zero-allocation 64-bit structural fingerprint (two 32-bit lanes) over all
+ * baseline-owned fields of `snap`, omitting volatile per-tick prop countdown timers so
+ * steady-state 30Hz combat frames skip both `extractBaseline` and `JSON.stringify`.
+ */
+export function computeBaselineFastHash(snap: QuantizedWorldSnapshot): [number, number] {
+  hashAcc1 = 0x811c9dc5 | 0;
+  hashAcc2 = 0x9e3779b9 | 0;
+
+  let optArrayMask = 0;
+  if (snap.summons !== undefined) optArrayMask |= OPT_SUMMONS;
+  if (snap.skillZones !== undefined) optArrayMask |= OPT_SKILL_ZONES;
+  if (snap.pushBlocks !== undefined) optArrayMask |= OPT_PUSH_BLOCKS;
+  if (snap.tetherBeams !== undefined) optArrayMask |= OPT_TETHER_BEAMS;
+  if (snap.magneticRivets !== undefined) optArrayMask |= OPT_MAGNETIC_RIVETS;
+  mixHashInt(optArrayMask);
+
+  if (typeof snap.seed === 'number') {
+    mixHashInt(1);
+    mixHashFloat(snap.seed);
+  } else {
+    mixHashInt(2);
+    mixHashStr(String(snap.seed));
+  }
+  mixHashBool(snap.inHub);
+  mixHashBool(snap.allowDuplicateCharacters);
+  mixHashStr(snap.runState);
+  mixHashInt(snap.currentFloor);
+  mixHashOptNum(snap.currentBiome);
+  mixHashInt(snap.currentRoomId);
+  mixHashBool(snap.doorsLocked);
+  mixHashBool(snap.secretWallBroken);
+  mixHashBool(snap.portalActive);
+  mixHashFloat(snap.portalX);
+  mixHashFloat(snap.portalY);
+  mixHashOptBool(snap.coopPuzzleCompleted);
+  mixHashOptBool(snap.secretTrialActive);
+  mixHashOptStr(snap.secretTrialResult);
+
+  // Players baseline fields
+  mixHashInt(snap.players.length);
+  for (let i = 0; i < snap.players.length; i++) {
+    const p = snap.players[i]!;
+    mixHashInt(p.id);
+    mixHashInt(p.slot);
+    mixHashStr(p.name);
+    mixHashStr(p.color);
+    mixHashStr(p.charId);
+    mixHashFloat(p.maxHp);
+    mixHashFloat(p.maxArmor);
+    mixHashInt(p.clipMax);
+    mixHashStrArray(p.weaponSlots);
+    mixHashStrArray(p.blessings);
+    for (const k in p.mutators) {
+      if (Object.prototype.hasOwnProperty.call(p.mutators, k)) {
+        mixHashStr(k);
+        const list = p.mutators[Number(k)];
+        if (list) mixHashStrArray(list);
+      }
+    }
+    mixHashInt(0x1a2b);
+    mixHashStrArray(p.duoBoons);
+    mixHashOptStr(p.pact);
+    mixHashOptStr(p.pactOrigWep);
+    mixHashStrArray(p.relics);
+    mixHashStrArray(p.buffChoices);
+    mixHashOptStrArray(p.mutatorChoices);
+    mixHashOptStrArray(p.pactChoices);
+    if (p.wepLevels === undefined) {
+      mixHashInt(0x2b3c);
+    } else {
+      mixHashInt(0x2b3d);
+      for (const k in p.wepLevels) {
+        if (Object.prototype.hasOwnProperty.call(p.wepLevels, k)) {
+          mixHashStr(k);
+          mixHashOptNum(p.wepLevels[Number(k)]);
+        }
+      }
+    }
+  }
+
+  // Enemies baseline fields
+  mixHashInt(snap.enemies.length);
+  for (let i = 0; i < snap.enemies.length; i++) {
+    const e = snap.enemies[i]!;
+    mixHashInt(e.id);
+    mixHashStr(e.defId);
+    mixHashFloat(e.maxHp);
+    mixHashFloat(e.maxShield);
+    mixHashBool(e.elite);
+    mixHashOptStr(e.eliteMod);
+    mixHashBool(e.boss);
+  }
+
+  // Props baseline fields (excluding continuous volatile countdown timers)
+  mixHashInt(snap.props.length);
+  for (let i = 0; i < snap.props.length; i++) {
+    const pr = snap.props[i]!;
+    mixHashInt(pr.id);
+    mixHashStr(pr.kind);
+    mixHashFloat(pr.x);
+    mixHashFloat(pr.y);
+    mixHashFloat(pr.radius);
+    mixHashFloat(pr.hp);
+    mixHashFloat(pr.maxHp);
+    mixHashBool(pr.destructible);
+    mixHashBool(pr.explosive);
+    mixHashBool(pr.blocksMovement);
+    mixHashFloat(pr.lightRadius);
+    mixHashStr(pr.lightColorHex);
+    mixHashOptBool(pr.repaired);
+    mixHashOptStr(pr.state);
+    mixHashOptStr(pr.coverState);
+    mixHashOptNum(pr.linkedShamanId);
+    mixHashOptBool(pr.blocksEnemyProjectiles);
+    mixHashOptNum(pr.vx);
+    mixHashOptNum(pr.vy);
+    mixHashOptNum(pr.slideOwnerPlayerId);
+    if (pr.hitEnemyIds === undefined) {
+      mixHashInt(0x3c4d);
+    } else {
+      mixHashInt(pr.hitEnemyIds.length);
+      for (let j = 0; j < pr.hitEnemyIds.length; j++) {
+        mixHashInt(pr.hitEnemyIds[j]!);
+      }
+    }
+    mixHashOptNum(pr.fallAngle);
+    mixHashOptNum(pr.microBlankRadius);
+    mixHashOptNum(pr.flippedByPlayerId);
+    mixHashOptBool(pr.prismAuraActive);
+    mixHashOptBool(pr.rocketCharged);
+    mixHashOptBool(pr.cryoChargedByLaser);
+    mixHashOptNum(pr.bouncesRemaining);
+    mixHashOptBool(pr.iceSpeedBoostApplied);
+    mixHashOptBool(pr.enemyPushed);
+    mixHashOptNum(pr.pushedByEnemyId);
+    mixHashOptNum(pr.kickedByPlayerId);
+    mixHashOptBool(pr.counterDeflected);
+    mixHashOptStr(pr.lastCombatText);
+    mixHashOptStr(pr.pressState);
+    mixHashOptBool(pr.toxicShrapnelTriggered);
+    mixHashOptNum(pr.lastDamagedByPlayerId);
+    mixHashOptNum(pr.causticRollRemainingPx);
+    mixHashOptNum(pr.ownerPlayerId);
+    mixHashOptBool(pr.cryoShatterSpire);
+    mixHashBool((pr.prismPulseCooldownSec ?? 0) > 0);
+    mixHashBool(pr.fuseTimer > 0);
+  }
+
+  // Chests
+  mixHashInt(snap.chests.length);
+  for (let i = 0; i < snap.chests.length; i++) {
+    const c = snap.chests[i]! as SimChestState & { tier?: string };
+    mixHashInt(c.id);
+    mixHashFloat(c.x);
+    mixHashFloat(c.y);
+    mixHashOptNum(c.radius);
+    mixHashOptStr(c.rarity);
+    mixHashOptStr(c.tier);
+    mixHashBool(c.opened);
+    mixHashOptStr(c.droppedWeaponId);
+  }
+
+  // World items
+  mixHashInt(snap.worldItems.length);
+  for (let i = 0; i < snap.worldItems.length; i++) {
+    const wi = snap.worldItems[i]!;
+    mixHashInt(wi.id);
+    mixHashOptStr(wi.kind);
+    mixHashOptStr(wi.weaponId);
+    mixHashOptStr(wi.rarity);
+    mixHashOptStr(wi.nameVi);
+    mixHashOptNum(wi.costGold);
+    mixHashOptNum(wi.healAmount);
+    mixHashFloat(wi.x);
+    mixHashFloat(wi.y);
+    mixHashOptNum(wi.radius);
+    mixHashOptBool(wi.pickedUp);
+    mixHashOptStr(wi.offerId);
+    mixHashOptNum(wi.ownerPlayerId);
+    mixHashOptNum(wi.droppedByPlayerId);
+    mixHashOptNum(wi.droppedAtTick);
+    mixHashOptNum(wi.fromX);
+    mixHashOptNum(wi.fromY);
+    mixHashOptBool(wi.isHubRackItem);
+  }
+
+  // NPCs
+  mixHashInt(snap.npcEntities.length);
+  for (let i = 0; i < snap.npcEntities.length; i++) {
+    const n = snap.npcEntities[i]!;
+    mixHashInt(n.id);
+    mixHashStr(n.kind);
+    mixHashStr(n.nameVi);
+    mixHashStr(n.dialogueVi);
+    mixHashFloat(n.x);
+    mixHashFloat(n.y);
+    mixHashFloat(n.radius);
+    mixHashBool(n.interacted);
+    mixHashFloat(n.costHp);
+    mixHashOptNum(n.costGold);
+    if (n.usedByPlayerIds === undefined) {
+      mixHashInt(0x4d5e);
+    } else {
+      mixHashInt(n.usedByPlayerIds.length);
+      for (let j = 0; j < n.usedByPlayerIds.length; j++) {
+        mixHashInt(n.usedByPlayerIds[j]!);
+      }
+    }
+  }
+
+  // Hub statues & stations
+  mixHashInt(snap.hubStatues.length);
+  for (let i = 0; i < snap.hubStatues.length; i++) {
+    const st = snap.hubStatues[i]!;
+    mixHashStr(st.characterId);
+    mixHashStr(st.nameVi);
+    mixHashStr(st.titleVi);
+    mixHashFloat(st.x);
+    mixHashFloat(st.y);
+    mixHashFloat(st.radius);
+  }
+  if (snap.hubStations === undefined) {
+    mixHashInt(0x5e6f);
+  } else {
+    mixHashInt(snap.hubStations.length);
+    for (let i = 0; i < snap.hubStations.length; i++) {
+      const st = snap.hubStations[i]!;
+      mixHashStr(st.id);
+      mixHashStr(st.nameVi);
+      mixHashFloat(st.x);
+      mixHashFloat(st.y);
+      mixHashFloat(st.radius);
+    }
+  }
+
+  // Pressure plates
+  if (snap.pressurePlates === undefined) {
+    mixHashInt(0x6f70);
+  } else {
+    mixHashInt(snap.pressurePlates.length);
+    for (let i = 0; i < snap.pressurePlates.length; i++) {
+      const pp = snap.pressurePlates[i]!;
+      mixHashInt(pp.id);
+      mixHashFloat(pp.x);
+      mixHashFloat(pp.y);
+      mixHashFloat(pp.radius);
+      mixHashBool(pp.pressed);
+    }
+  }
+
+  // Discovered rooms
+  mixHashInt(snap.discoveredRooms.length);
+  for (let i = 0; i < snap.discoveredRooms.length; i++) {
+    const r = snap.discoveredRooms[i]!;
+    mixHashInt(r.id);
+    mixHashStr(r.discovery);
+    mixHashBool(r.cleared);
+  }
+
+  fastHashPairOut[0] = hashAcc1;
+  fastHashPairOut[1] = hashAcc2;
+  return fastHashPairOut;
+}
+
 export class P2PSnapshotEncoder {
   private rev = 0;
+  private lastBaseline: P2PSnapshotBaseline | null = null;
+  private lastBaselineHash1 = 0;
+  private lastBaselineHash2 = 0;
   private lastBaselineFingerprint = '';
   private autoSeq = 0;
 
   public reset(): void {
     this.rev = 0;
+    this.lastBaseline = null;
+    this.lastBaselineHash1 = 0;
+    this.lastBaselineHash2 = 0;
     this.lastBaselineFingerprint = '';
     this.autoSeq = 0;
   }
@@ -869,13 +1226,23 @@ export class P2PSnapshotEncoder {
     baseline?: { rev: number; data: P2PSnapshotBaseline };
     fast: P2PFastFrame;
   } {
-    const baselineData = extractBaseline(snap);
-    const fingerprint = JSON.stringify(baselineData);
+    const [fastH1, fastH2] = computeBaselineFastHash(snap);
     let baselineOut: { rev: number; data: P2PSnapshotBaseline } | undefined;
-    if (fingerprint !== this.lastBaselineFingerprint) {
-      this.rev += 1;
-      this.lastBaselineFingerprint = fingerprint;
-      baselineOut = { rev: this.rev, data: baselineData };
+    if (
+      this.lastBaseline === null ||
+      fastH1 !== this.lastBaselineHash1 ||
+      fastH2 !== this.lastBaselineHash2
+    ) {
+      const baselineData = extractBaseline(snap);
+      const fingerprint = JSON.stringify(baselineData, baselineFingerprintReplacer);
+      this.lastBaselineHash1 = fastH1;
+      this.lastBaselineHash2 = fastH2;
+      if (this.lastBaseline === null || fingerprint !== this.lastBaselineFingerprint) {
+        this.rev += 1;
+        this.lastBaseline = baselineData;
+        this.lastBaselineFingerprint = fingerprint;
+        baselineOut = { rev: this.rev, data: baselineData };
+      }
     }
 
     const hasExplicitSeq: 0 | 1 = typeof snap.snapshotSeq === 'number' ? 1 : 0;
@@ -990,6 +1357,7 @@ export class P2PSnapshotEncoder {
 export class P2PSnapshotDecoder {
   private currentRev = 0;
   private currentBaseline: P2PSnapshotBaseline | null = null;
+  private baseTickForRev = -1;
   private playerBaseById = new Map<number, P2PPlayerBaseline>();
   private enemyBaseById = new Map<number, P2PEnemyBaseline>();
   private lastFastSeq = 0;
@@ -998,6 +1366,7 @@ export class P2PSnapshotDecoder {
   public reset(): void {
     this.currentRev = 0;
     this.currentBaseline = null;
+    this.baseTickForRev = -1;
     this.playerBaseById.clear();
     this.enemyBaseById.clear();
     this.lastFastSeq = 0;
@@ -1010,6 +1379,7 @@ export class P2PSnapshotDecoder {
     }
     this.currentRev = rev;
     this.currentBaseline = data;
+    this.baseTickForRev = -1;
     this.playerBaseById.clear();
     for (const p of data.players) {
       this.playerBaseById.set(p.id, p);
@@ -1073,6 +1443,13 @@ export class P2PSnapshotDecoder {
     }
 
     this.lastFastSeq = wireSeq;
+    if (this.baseTickForRev < 0) {
+      this.baseTickForRev = fast[2];
+    }
+    const elapsedSec =
+      this.baseTickForRev >= 0 && fast[2] > this.baseTickForRev
+        ? (fast[2] - this.baseTickForRev) / 60
+        : 0;
 
     const timers = fast[4];
     const rs = fast[5];
@@ -1101,10 +1478,33 @@ export class P2PSnapshotDecoder {
       players,
       enemies,
       projectiles: extras?.pj ? extras.pj.map((pt) => [...pt] as QuantizedProjectileTuple) : [],
-      props: base.props.map((pr) => ({
-        ...pr,
-        ...(pr.hitEnemyIds ? { hitEnemyIds: [...pr.hitEnemyIds] } : {}),
-      })),
+      props: base.props.map((pr) => {
+        const copy: SimPropState = {
+          ...pr,
+          ...(pr.hitEnemyIds ? { hitEnemyIds: [...pr.hitEnemyIds] } : {}),
+        };
+        if (elapsedSec > 0) {
+          if (copy.hitFlashTimer > 0) {
+            copy.hitFlashTimer = Math.max(0, copy.hitFlashTimer - elapsedSec);
+          }
+          if (copy.fuseTimer > 0) {
+            copy.fuseTimer = Math.max(0, copy.fuseTimer - elapsedSec);
+          }
+          if (copy.ttlSec !== undefined && copy.ttlSec > 0) {
+            copy.ttlSec = Math.max(0, copy.ttlSec - elapsedSec);
+          }
+          if (copy.prismPulseCooldownSec !== undefined && copy.prismPulseCooldownSec > 0) {
+            copy.prismPulseCooldownSec = Math.max(0, copy.prismPulseCooldownSec - elapsedSec);
+          }
+          if (copy.microBlankTimer !== undefined && copy.microBlankTimer > 0) {
+            copy.microBlankTimer = Math.max(0, copy.microBlankTimer - elapsedSec);
+          }
+          if (copy.pressTimer !== undefined && copy.pressTimer > 0) {
+            copy.pressTimer = Math.max(0, copy.pressTimer - elapsedSec);
+          }
+        }
+        return copy;
+      }),
       chests: base.chests.map((c) => ({ ...c })),
       worldItems: base.worldItems.map((wi) => ({ ...wi })),
       npcEntities: base.npcEntities.map((n) => ({ ...n })),

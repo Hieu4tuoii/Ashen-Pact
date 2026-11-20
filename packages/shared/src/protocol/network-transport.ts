@@ -736,6 +736,7 @@ export class NetworkTransport implements ITransport {
         this.sim.map.surfaceTimers[idx] = timer10 / 10;
       }
     }
+    this.sim.map.recountDynamicSurfaces();
 
     this.applyAuthoritativeEvents(snapshot.events);
   }

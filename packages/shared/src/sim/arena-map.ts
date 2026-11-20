@@ -104,6 +104,20 @@ export class ArenaMap {
   public lastLayoutResult: RoomLayoutResult | null = null;
   public lastRoomLayout: RoomLayoutResult | null = null;
   public isBossRoom = false;
+  public activeDynamicSurfaceCount = 0;
+
+  private spanCacheRevision = -1;
+  private spanCacheArchetype: RoomArchetypeId | undefined = undefined;
+  private spanCacheCols = 0;
+  private spanCacheRows = 0;
+  private solidLeft = new Uint8Array(0);
+  private solidRight = new Uint8Array(0);
+  private solidTop = new Uint8Array(0);
+  private solidBottom = new Uint8Array(0);
+  private chasmLeft = new Uint8Array(0);
+  private chasmRight = new Uint8Array(0);
+  private chasmTop = new Uint8Array(0);
+  private chasmBottom = new Uint8Array(0);
 
   constructor(config: ArenaMapConfig = {}) {
     this.cols = config.cols ?? 36;
@@ -154,6 +168,7 @@ export class ArenaMap {
     this.surfaces = new Array<SurfaceKind>(count).fill('none');
     this.baseSurfaces = new Array<SurfaceKind>(count).fill('none');
     this.surfaceTimers = new Array<number>(count).fill(0);
+    this.activeDynamicSurfaceCount = 0;
     const rng = new SeededRandom(0x1337c0de).fork('arena_map');
     for (let i = 0; i < count; i++) {
       this.tileVariants[i] = rng.nextInt(0, 7);
@@ -416,6 +431,7 @@ export class ArenaMap {
       }
     }
 
+    this.recountDynamicSurfaces();
     this.rebuildSolidBoxes();
     this.mapRevision += 1;
   }
@@ -439,6 +455,7 @@ export class ArenaMap {
     if (this.cols >= 24) {
       this.tiles[Math.floor(this.cols / 2)] = 'wall';
     }
+    this.activeDynamicSurfaceCount = 0;
     this.rebuildSolidBoxes();
     this.mapRevision += 1;
   }
@@ -499,6 +516,7 @@ export class ArenaMap {
     this.surfaces.fill('none');
     this.baseSurfaces.fill('none');
     this.surfaceTimers.fill(0);
+    this.activeDynamicSurfaceCount = 0;
     for (let ty = 0; ty < this.rows; ty++) {
       for (let tx = 0; tx < this.cols; tx++) {
         const isBorder = tx === 0 || ty === 0 || tx === this.cols - 1 || ty === this.rows - 1;
@@ -565,6 +583,7 @@ export class ArenaMap {
       }
     }
 
+    this.recountDynamicSurfaces();
     this.rebuildSolidBoxes();
   }
 
@@ -710,6 +729,40 @@ export class ArenaMap {
     return false;
   }
 
+  private isDynamicSurfaceAt(idx: number): boolean {
+    const tx = idx % this.cols;
+    const ty = (idx / this.cols) | 0;
+    if (tx <= 0 || ty <= 0 || tx >= this.cols - 1 || ty >= this.rows - 1) return false;
+    const s = this.surfaces[idx];
+    return (
+      (this.surfaceTimers[idx] ?? 0) > 0 ||
+      s === 'burning_oil' ||
+      s === 'burning_grass' ||
+      s === 'electrified_water'
+    );
+  }
+
+  public recountDynamicSurfaces(): number {
+    let count = 0;
+    for (let ty = 1; ty < this.rows - 1; ty++) {
+      const rowOffset = ty * this.cols;
+      for (let tx = 1; tx < this.cols - 1; tx++) {
+        const idx = rowOffset + tx;
+        const s = this.surfaces[idx];
+        if (
+          (this.surfaceTimers[idx] ?? 0) > 0 ||
+          s === 'burning_oil' ||
+          s === 'burning_grass' ||
+          s === 'electrified_water'
+        ) {
+          count += 1;
+        }
+      }
+    }
+    this.activeDynamicSurfaceCount = count;
+    return count;
+  }
+
   public setSurface(
     tx: number,
     ty: number,
@@ -720,6 +773,7 @@ export class ArenaMap {
     if (tx < 0 || ty < 0 || tx >= this.cols || ty >= this.rows) return;
     if (this.isSolidTile(tx, ty)) return;
     const idx = ty * this.cols + tx;
+    const wasDynamic = this.isDynamicSurfaceAt(idx);
     if (this.surfaces[idx] !== surface) {
       this.surfaces[idx] = surface;
       this.mapRevision += 1;
@@ -727,6 +781,13 @@ export class ArenaMap {
     this.surfaceTimers[idx] = durationSec;
     if (updateBase) {
       this.baseSurfaces[idx] = surface;
+    }
+    const nowDynamic = this.isDynamicSurfaceAt(idx);
+    if (wasDynamic !== nowDynamic) {
+      this.activeDynamicSurfaceCount = Math.max(
+        0,
+        this.activeDynamicSurfaceCount + (nowDynamic ? 1 : -1),
+      );
     }
   }
 
@@ -885,6 +946,8 @@ export class ArenaMap {
    * Advances surface timers and spreads fire across adjacent oil/grass tiles (zero-allocation).
    */
   public stepSurfaces(dtSec: number): void {
+    if (this.activeDynamicSurfaceCount <= 0) return;
+
     this.toIgniteOil.length = 0;
     this.toIgniteGrass.length = 0;
 
@@ -933,6 +996,9 @@ export class ArenaMap {
             } else {
               this.surfaces[idx] = base;
             }
+            if (!this.isDynamicSurfaceAt(idx)) {
+              this.activeDynamicSurfaceCount = Math.max(0, this.activeDynamicSurfaceCount - 1);
+            }
             this.mapRevision += 1;
           } else {
             this.surfaceTimers[idx] = nextTimer;
@@ -944,16 +1010,24 @@ export class ArenaMap {
     for (let i = 0; i < this.toIgniteOil.length; i++) {
       const idx = this.toIgniteOil[i]!;
       if (this.surfaces[idx] === 'oil') {
+        const wasDynamic = this.isDynamicSurfaceAt(idx);
         this.surfaces[idx] = 'burning_oil';
         this.surfaceTimers[idx] = 5.0;
+        if (!wasDynamic && this.isDynamicSurfaceAt(idx)) {
+          this.activeDynamicSurfaceCount += 1;
+        }
         this.mapRevision += 1;
       }
     }
     for (let i = 0; i < this.toIgniteGrass.length; i++) {
       const idx = this.toIgniteGrass[i]!;
       if (this.surfaces[idx] === 'grass' || (this.surfaces[idx] === 'poison_swamp' && !this.isBossRoom)) {
+        const wasDynamic = this.isDynamicSurfaceAt(idx);
         this.surfaces[idx] = 'burning_grass';
         this.surfaceTimers[idx] = 3.5;
+        if (!wasDynamic && this.isDynamicSurfaceAt(idx)) {
+          this.activeDynamicSurfaceCount += 1;
+        }
         this.mapRevision += 1;
       }
     }
@@ -1012,6 +1086,98 @@ export class ArenaMap {
     return true;
   }
 
+  private buildSpanTablesForMode(
+    ignoreChasm: boolean,
+    leftOut: Uint8Array,
+    rightOut: Uint8Array,
+    topOut: Uint8Array,
+    bottomOut: Uint8Array,
+  ): void {
+    const cols = this.cols;
+    const rows = this.rows;
+    const hasArchetype = Boolean(this.roomArchetype);
+    for (let ty = 0; ty < rows; ty++) {
+      const rowOff = ty * cols;
+      for (let tx = 0; tx < cols; tx++) {
+        const idx = rowOff + tx;
+        if (!this.isBlockingTile(tx, ty, ignoreChasm)) {
+          leftOut[idx] = tx;
+          rightOut[idx] = tx;
+          topOut[idx] = ty;
+          bottomOut[idx] = ty;
+          continue;
+        }
+        let bMinTx = tx;
+        let bMaxTx = tx;
+        let bMinTy = ty;
+        let bMaxTy = ty;
+        const isInterior = tx > 0 && tx < cols - 1 && ty > 0 && ty < rows - 1;
+        if (isInterior) {
+          if (!hasArchetype) {
+            while (bMinTx > 1 && this.isBlockingTile(bMinTx - 1, ty, ignoreChasm)) bMinTx -= 1;
+            while (bMaxTx < cols - 2 && this.isBlockingTile(bMaxTx + 1, ty, ignoreChasm)) {
+              bMaxTx += 1;
+            }
+            while (bMinTy > 1 && this.isBlockingTile(tx, bMinTy - 1, ignoreChasm)) bMinTy -= 1;
+            while (bMaxTy < rows - 2 && this.isBlockingTile(tx, bMaxTy + 1, ignoreChasm)) {
+              bMaxTy += 1;
+            }
+          } else {
+            while (bMinTy > 1 && this.isBlockingTile(tx, bMinTy - 1, ignoreChasm)) bMinTy -= 1;
+            while (bMaxTy < rows - 2 && this.isBlockingTile(tx, bMaxTy + 1, ignoreChasm)) {
+              bMaxTy += 1;
+            }
+            while (bMinTx > 1 && this.isColumnBlocking(bMinTx - 1, bMinTy, bMaxTy, ignoreChasm)) {
+              bMinTx -= 1;
+            }
+            while (
+              bMaxTx < cols - 2 &&
+              this.isColumnBlocking(bMaxTx + 1, bMinTy, bMaxTy, ignoreChasm)
+            ) {
+              bMaxTx += 1;
+            }
+          }
+        }
+        leftOut[idx] = bMinTx;
+        rightOut[idx] = bMaxTx;
+        topOut[idx] = bMinTy;
+        bottomOut[idx] = bMaxTy;
+      }
+    }
+  }
+
+  private rebuildSpanTables(): void {
+    const count = this.cols * this.rows;
+    if (this.solidLeft.length < count) {
+      this.solidLeft = new Uint8Array(count);
+      this.solidRight = new Uint8Array(count);
+      this.solidTop = new Uint8Array(count);
+      this.solidBottom = new Uint8Array(count);
+      this.chasmLeft = new Uint8Array(count);
+      this.chasmRight = new Uint8Array(count);
+      this.chasmTop = new Uint8Array(count);
+      this.chasmBottom = new Uint8Array(count);
+    }
+    this.buildSpanTablesForMode(
+      true,
+      this.solidLeft,
+      this.solidRight,
+      this.solidTop,
+      this.solidBottom,
+    );
+    this.buildSpanTablesForMode(
+      false,
+      this.chasmLeft,
+      this.chasmRight,
+      this.chasmTop,
+      this.chasmBottom,
+    );
+    this.spanCacheRevision = this.mapRevision;
+    this.spanCacheArchetype = this.roomArchetype;
+    this.spanCacheCols = this.cols;
+    this.spanCacheRows = this.rows;
+  }
+
   /**
    * Resolves circle vs nearby solid tile-AABBs (and chasm tiles when ignoreChasm=false)
    * so entities slide smoothly along walls, pillars, and chasm ledges without snagging on internal seams.
@@ -1063,6 +1229,19 @@ export class ArenaMap {
       return out;
     }
 
+    if (
+      this.spanCacheRevision !== this.mapRevision ||
+      this.spanCacheArchetype !== this.roomArchetype ||
+      this.spanCacheCols !== this.cols ||
+      this.spanCacheRows !== this.rows
+    ) {
+      this.rebuildSpanTables();
+    }
+    const spanLeft = ignoreChasm ? this.solidLeft : this.chasmLeft;
+    const spanRight = ignoreChasm ? this.solidRight : this.chasmRight;
+    const spanTop = ignoreChasm ? this.solidTop : this.chasmTop;
+    const spanBottom = ignoreChasm ? this.solidBottom : this.chasmBottom;
+
     // Pass 1: cardinal face overlaps; Pass 2: remaining outer-corner overlaps
     for (let pass = 0; pass < 2; pass++) {
       const pMinTx = Math.max(0, Math.floor((currX - radius) / TILE_SIZE));
@@ -1070,39 +1249,14 @@ export class ArenaMap {
       const pMinTy = Math.max(0, Math.floor((currY - radius) / TILE_SIZE));
       const pMaxTy = Math.min(this.rows - 1, Math.floor((currY + radius) / TILE_SIZE));
       for (let ty = pMinTy; ty <= pMaxTy; ty++) {
+        const rowOff = ty * this.cols;
         for (let tx = pMinTx; tx <= pMaxTx; tx++) {
           if (!this.isBlockingTile(tx, ty, ignoreChasm)) continue;
-          let bMinTx = tx;
-          let bMaxTx = tx;
-          let bMinTy = ty;
-          let bMaxTy = ty;
-          const isInterior = tx > 0 && tx < this.cols - 1 && ty > 0 && ty < this.rows - 1;
-          if (isInterior) {
-            if (!this.roomArchetype) {
-              while (bMinTx > 1 && this.isBlockingTile(bMinTx - 1, ty, ignoreChasm)) bMinTx -= 1;
-              while (bMaxTx < this.cols - 2 && this.isBlockingTile(bMaxTx + 1, ty, ignoreChasm)) {
-                bMaxTx += 1;
-              }
-              while (bMinTy > 1 && this.isBlockingTile(tx, bMinTy - 1, ignoreChasm)) bMinTy -= 1;
-              while (bMaxTy < this.rows - 2 && this.isBlockingTile(tx, bMaxTy + 1, ignoreChasm)) {
-                bMaxTy += 1;
-              }
-            } else {
-              while (bMinTy > 1 && this.isBlockingTile(tx, bMinTy - 1, ignoreChasm)) bMinTy -= 1;
-              while (bMaxTy < this.rows - 2 && this.isBlockingTile(tx, bMaxTy + 1, ignoreChasm)) {
-                bMaxTy += 1;
-              }
-              while (bMinTx > 1 && this.isColumnBlocking(bMinTx - 1, bMinTy, bMaxTy, ignoreChasm)) {
-                bMinTx -= 1;
-              }
-              while (
-                bMaxTx < this.cols - 2 &&
-                this.isColumnBlocking(bMaxTx + 1, bMinTy, bMaxTy, ignoreChasm)
-              ) {
-                bMaxTx += 1;
-              }
-            }
-          }
+          const idx = rowOff + tx;
+          const bMinTx = spanLeft[idx]!;
+          const bMaxTx = spanRight[idx]!;
+          const bMinTy = spanTop[idx]!;
+          const bMaxTy = spanBottom[idx]!;
           const minX = bMinTx * TILE_SIZE;
           const minY = bMinTy * TILE_SIZE;
           const maxX = (bMaxTx + 1) * TILE_SIZE;

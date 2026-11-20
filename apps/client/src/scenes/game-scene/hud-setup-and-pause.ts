@@ -442,11 +442,14 @@ export function buildVectorHudImpl(this: GameScene): void {
     this.weaponSlotBgs.push(slotBg);
     this.hudBottomRightContainer.add(slotBg);
 
-    const icon = ui.add.sprite(
-      cardX + 20,
-      -31,
+    const weaponBinding = TextureBaker.resolveAtlasBinding(
+      this,
       TextureBaker.getWeaponTextureKey(weaponId),
     );
+    const icon =
+      weaponBinding.frameName !== undefined
+        ? ui.add.sprite(cardX + 20, -31, weaponBinding.textureKey, weaponBinding.frameName)
+        : ui.add.sprite(cardX + 20, -31, weaponBinding.textureKey);
     icon.setScale(invBake * 0.78);
     this.weaponIconSprites.push(icon);
     this.hudBottomRightContainer.add(icon);

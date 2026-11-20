@@ -641,13 +641,35 @@ const COL_VOLT_YELLOW = hexToNum(PALETTE.VOLT_YELLOW);
 const COL_MAGMA_RED = hexToNum(PALETTE.MAGMA_RED);
 const COL_COPPER_LIGHT = hexToNum(PALETTE.COPPER_LIGHT);
 
+const SANCTUARY_STATIC_FLOOR_TEX_KEY = '__sanctuary_static_floor__';
+
+function setDepthIfChanged<T extends { depth?: number; setDepth: (d: number) => T }>(
+  obj: T,
+  depth: number,
+): T {
+  if (obj.depth !== depth) {
+    obj.setDepth(depth);
+  }
+  return obj;
+}
+
+function setVisibleIfChanged<T extends { visible?: boolean; setVisible: (v: boolean) => T }>(
+  obj: T,
+  visible: boolean,
+): T {
+  if (obj.visible !== visible) {
+    obj.setVisible(visible);
+  }
+  return obj;
+}
+
 /**
  * Handcrafted 5-Wing Ashen Sanctuary visual world layer:
- * - `floorGraphics` (`depth: 6`): static carpets, stepped stone portal dais, sunken stone hearth
- *   with inlaid brass 8-point astrolabe & 3 curved timber benches, 5 bespoke class rugs,
+ * - `floorGraphics` / `staticFloorImage` (`depth: 6`): static carpets, stepped stone portal dais,
+ *   sunken stone hearth with inlaid brass 8-point astrolabe & 3 curved timber benches, 5 bespoke class rugs,
  *   East azure-and-brass runner + Co-op Guild Table/Banner, West slate walkway + bullseye rings +
- *   4 Weapon Display Pedestals, and South-East Chronicler's Lectern. Redrawn only when `inHub`,
- *   locale, or map dimensions change.
+ *   4 Weapon Display Pedestals, and South-East Chronicler's Lectern. Baked once per `(mapW, mapH, locale)`
+ *   into a static texture + `Image` so 0 static `Graphics` commands run per frame in the Hub.
  * - `dynamicGraphics` (`depth: 33`): smooth deterministic hearth flames & rising embers, portal
  *   threshold rune shimmer, East LAN beacon pulse, and South-East candle flicker driven by `visualTimeSec`.
  */
@@ -655,16 +677,19 @@ export class SanctuaryVisualLayer {
   private readonly scene: Phaser.Scene;
   private readonly floorGraphics: Phaser.GameObjects.Graphics;
   private readonly dynamicGraphics: Phaser.GameObjects.Graphics;
+  private staticFloorImage: Phaser.GameObjects.Image | null = null;
+  private staticFloorRt: Phaser.GameObjects.RenderTexture | null = null;
+  private bakedToStaticImage = false;
   private lastStaticKey = '';
   private cachedSpec: SanctuaryArchitectureSpec | null = null;
   private isShowing = false;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
-    this.floorGraphics = scene.add.graphics().setDepth(6);
-    this.dynamicGraphics = scene.add.graphics().setDepth(33);
-    this.floorGraphics.setVisible(false);
-    this.dynamicGraphics.setVisible(false);
+    this.floorGraphics = setDepthIfChanged(scene.add.graphics(), 6);
+    this.dynamicGraphics = setDepthIfChanged(scene.add.graphics(), 33);
+    setVisibleIfChanged(this.floorGraphics, false);
+    setVisibleIfChanged(this.dynamicGraphics, false);
   }
 
   public sync(sim: WorldSim, _dtSec: number, visualTimeSec: number): void {
@@ -672,10 +697,18 @@ export class SanctuaryVisualLayer {
       if (this.isShowing) {
         this.floorGraphics.clear();
         this.dynamicGraphics.clear();
-        this.floorGraphics.setVisible(false);
-        this.dynamicGraphics.setVisible(false);
-        this.lastStaticKey = '';
-        this.cachedSpec = null;
+        setVisibleIfChanged(this.floorGraphics, false);
+        setVisibleIfChanged(this.dynamicGraphics, false);
+        if (this.staticFloorImage) {
+          setVisibleIfChanged(this.staticFloorImage, false);
+        }
+        if (this.staticFloorRt) {
+          setVisibleIfChanged(this.staticFloorRt, false);
+        }
+        if (!this.bakedToStaticImage) {
+          this.lastStaticKey = '';
+          this.cachedSpec = null;
+        }
         this.isShowing = false;
       }
       return;
@@ -686,16 +719,78 @@ export class SanctuaryVisualLayer {
     const locale = i18n.getLocale();
     const staticKey = `${mapW}x${mapH}:${locale}`;
 
-    if (!this.isShowing) {
-      this.floorGraphics.setVisible(true);
-      this.dynamicGraphics.setVisible(true);
-      this.isShowing = true;
-    }
-
     if (staticKey !== this.lastStaticKey || !this.cachedSpec) {
       this.lastStaticKey = staticKey;
       this.cachedSpec = buildSanctuaryArchitectureSpec(mapW, mapH);
-      this.drawStaticFloor(this.floorGraphics, this.cachedSpec);
+
+      const canGenerateTex =
+        typeof (this.floorGraphics as { generateTexture?: unknown }).generateTexture ===
+          'function' && typeof this.scene.add?.image === 'function';
+      const canMakeRt =
+        !canGenerateTex &&
+        typeof this.scene.make?.renderTexture === 'function';
+
+      if (canGenerateTex) {
+        this.drawStaticFloor(this.floorGraphics, this.cachedSpec);
+        if (this.staticFloorImage) {
+          this.staticFloorImage.destroy();
+          this.staticFloorImage = null;
+        }
+        if (this.scene.textures?.exists?.(SANCTUARY_STATIC_FLOOR_TEX_KEY)) {
+          this.scene.textures.remove?.(SANCTUARY_STATIC_FLOOR_TEX_KEY);
+        }
+        this.floorGraphics.generateTexture(SANCTUARY_STATIC_FLOOR_TEX_KEY, mapW, mapH);
+        const img = this.scene.add.image(0, 0, SANCTUARY_STATIC_FLOOR_TEX_KEY);
+        img.setOrigin?.(0, 0);
+        img.setPosition?.(0, 0);
+        setDepthIfChanged(img, 6);
+        setVisibleIfChanged(img, true);
+        this.staticFloorImage = img;
+        this.floorGraphics.clear();
+        setVisibleIfChanged(this.floorGraphics, false);
+        this.bakedToStaticImage = true;
+      } else if (canMakeRt) {
+        this.drawStaticFloor(this.floorGraphics, this.cachedSpec);
+        if (this.staticFloorRt) {
+          this.staticFloorRt.destroy();
+          this.staticFloorRt = null;
+        }
+        const rt = this.scene.make.renderTexture(
+          { x: 0, y: 0, width: mapW, height: mapH },
+          true,
+        );
+        rt.setOrigin?.(0, 0);
+        rt.setPosition?.(0, 0);
+        setDepthIfChanged(rt, 6);
+        rt.clear?.();
+        rt.draw?.(this.floorGraphics, 0, 0);
+        setVisibleIfChanged(rt, true);
+        this.staticFloorRt = rt;
+        this.floorGraphics.clear();
+        setVisibleIfChanged(this.floorGraphics, false);
+        this.bakedToStaticImage = true;
+      } else {
+        setVisibleIfChanged(this.floorGraphics, true);
+        this.drawStaticFloor(this.floorGraphics, this.cachedSpec);
+        this.bakedToStaticImage = false;
+      }
+    } else if (!this.isShowing) {
+      if (this.bakedToStaticImage) {
+        if (this.staticFloorImage) {
+          setVisibleIfChanged(this.staticFloorImage, true);
+        }
+        if (this.staticFloorRt) {
+          setVisibleIfChanged(this.staticFloorRt, true);
+        }
+        setVisibleIfChanged(this.floorGraphics, false);
+      } else {
+        setVisibleIfChanged(this.floorGraphics, true);
+      }
+    }
+
+    if (!this.isShowing) {
+      setVisibleIfChanged(this.dynamicGraphics, true);
+      this.isShowing = true;
     }
 
     if (
@@ -711,6 +806,18 @@ export class SanctuaryVisualLayer {
   public destroy(): void {
     this.floorGraphics.destroy();
     this.dynamicGraphics.destroy();
+    if (this.staticFloorImage) {
+      this.staticFloorImage.destroy();
+      this.staticFloorImage = null;
+    }
+    if (this.staticFloorRt) {
+      this.staticFloorRt.destroy();
+      this.staticFloorRt = null;
+    }
+    if (this.scene.textures?.exists?.(SANCTUARY_STATIC_FLOOR_TEX_KEY)) {
+      this.scene.textures.remove?.(SANCTUARY_STATIC_FLOOR_TEX_KEY);
+    }
+    this.bakedToStaticImage = false;
     this.cachedSpec = null;
     this.lastStaticKey = '';
     this.isShowing = false;

@@ -23,14 +23,21 @@ import {
 } from '../art/texture-baker-shader-fx.js';
 import { getClientFreezeRandom } from '../core/visual-query.js';
 import { graphicsSettings } from '../ui/graphics-settings.js';
+import { setTextAndColorIfChanged } from '../ui/phaser-text-guard.js';
 import type { CombatFxManager } from './combat-fx.js';
 import {
+  bindParticleCasingShadow,
   DAMAGE_NUMERIC_SLOT_END,
+  getKitSubframeName,
   isCutoutKitFrame,
   type PooledAmbientParticle,
   type PooledDamageText,
   type PooledParticle,
+  registerActiveDamageSlot,
+  registerActiveParticleSlot,
+  releaseParticleCasingShadow,
   resolveTacticalAlertSlotOverlaps,
+  setFxSpriteDepthIfChanged,
 } from './combat-fx-pools.js';
 
 export {
@@ -738,10 +745,12 @@ export function activateParticle(
   p.depth = depth;
   p.baseFrame = config.baseFrame;
   p.frameCount = frameCount;
+  p.lastFrameIndex = frameCount > 1 ? (config.baseFrame ?? 0) : undefined;
   p.frameName = config.frameName;
   p.kitFramePrefix =
     config.kitFramePrefix ?? (isCutoutKitFrame(config.textureKey) ? config.textureKey : undefined);
   p.preserveFlipbookAlpha = preserveFlipbookAlpha;
+  registerActiveParticleSlot(p);
 
   if (config.frameName) {
     p.sprite.setTexture(config.textureKey, config.frameName);
@@ -750,35 +759,41 @@ export function activateParticle(
     }
   } else if (frameCount > 1) {
     const startFrame = config.baseFrame ?? 0;
-    p.sprite.setTexture(config.textureKey, startFrame);
+    const resolvedStartFrame = p.kitFramePrefix
+      ? getKitSubframeName(p.kitFramePrefix, startFrame)
+      : startFrame;
+    p.sprite.setTexture(config.textureKey, resolvedStartFrame);
     if (typeof p.sprite.setFrame === 'function') {
-      p.sprite.setFrame(startFrame);
+      p.sprite.setFrame(resolvedStartFrame);
     }
   } else {
     p.sprite.setTexture(config.textureKey);
   }
   if (config.tint !== undefined && config.tint !== null) p.sprite.setTint(config.tint);
   else p.sprite.clearTint();
-  p.sprite.setBlendMode(blendMode);
+  if (p.appliedBlendMode !== blendMode) {
+    p.sprite.setBlendMode(blendMode);
+    p.appliedBlendMode = blendMode;
+  }
   p.sprite.setPosition(config.x, config.y);
   p.sprite.setRotation(config.alignToVelocity ? Math.atan2(vy, vx) : (config.rotation ?? 0));
   p.sprite.setScale(config.startScale, config.startScale * scaleRatioY);
   p.sprite.setAlpha(startAlpha);
-  if (p.sprite.depth !== depth) {
-    p.sprite.setDepth(depth);
-  }
+  setFxSpriteDepthIfChanged(p.sprite, depth);
   p.sprite.setVisible(true);
 
-  if (p.shadowSprite) {
-    if (p.hasGroundShadow) {
+  if (p.hasGroundShadow) {
+    const shadow = bindParticleCasingShadow(p);
+    if (shadow) {
       const sh = computeShellCasingShadowOffset(0, p.ttl);
-      p.shadowSprite.setPosition(p.x, p.y + sh.offsetY);
-      p.shadowSprite.setScale(p.startScale * sh.scale, p.startScale * sh.scale * 0.65);
-      p.shadowSprite.setAlpha(sh.alpha);
-      p.shadowSprite.setVisible(true);
-    } else if (p.shadowSprite.visible) {
-      p.shadowSprite.setVisible(false);
+      shadow.setPosition(p.x, p.y + sh.offsetY);
+      shadow.setScale(p.startScale * sh.scale, p.startScale * sh.scale * 0.65);
+      shadow.setAlpha(sh.alpha);
+      setFxSpriteDepthIfChanged(shadow, 19);
+      shadow.setVisible(true);
     }
+  } else {
+    releaseParticleCasingShadow(p);
   }
 }
 
@@ -1186,7 +1201,7 @@ export function routeCutoutBurstByRadius(
     if (slot) {
       activateParticle(slot, {
         textureKey: 'fx_cutout_kit_512',
-        frameName: `${kitKey}_0`,
+        frameName: getKitSubframeName(kitKey, 0),
         kitFramePrefix: kitKey,
         x,
         y,
@@ -1201,7 +1216,7 @@ export function routeCutoutBurstByRadius(
         preserveFlipbookAlpha: true,
       });
       if (isP1SelfBurst) {
-        slot.sprite.setDepth(26.4);
+        setFxSpriteDepthIfChanged(slot.sprite, 26.4);
       }
     }
     return slot;
@@ -2073,8 +2088,8 @@ export function spawnFloatingAlertImpl(
   slot.lastMergeMs = undefined;
   slot.accumulatedAmount = 0;
 
-  slot.text.setText(label);
-  slot.text.setColor(colorHex);
+  setTextAndColorIfChanged(slot.text, label, colorHex);
+  registerActiveDamageSlot(this, slot, 64);
   slot.text.setPosition(slot.x, slot.y);
   slot.text.setScale(slot.baseScale * 1.2);
   slot.text.setAlpha(1);

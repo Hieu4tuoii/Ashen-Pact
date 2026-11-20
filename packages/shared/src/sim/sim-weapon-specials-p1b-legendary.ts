@@ -59,11 +59,48 @@ export const THUNDER_HAMMER_STRIKE_STUN_SEC = 0.6;
 export const THUNDER_HAMMER_PILLAR_PULSE_TICKS = 30;
 export const THUNDER_HAMMER_PILLAR_PULSE_DMG = 14;
 
+export interface SolarMiniSunPosition {
+  x: number;
+  y: number;
+  angle: number;
+  index: number;
+}
+
+const solarUpdateSunsScratch: SolarMiniSunPosition[] = [
+  { x: 0, y: 0, angle: 0, index: 0 },
+  { x: 0, y: 0, angle: 0, index: 1 },
+  { x: 0, y: 0, angle: 0, index: 2 },
+];
+const solarVolleySunsScratch: SolarMiniSunPosition[] = [
+  { x: 0, y: 0, angle: 0, index: 0 },
+  { x: 0, y: 0, angle: 0, index: 1 },
+  { x: 0, y: 0, angle: 0, index: 2 },
+];
+
 export function getSolarMiniSunPositions(
   p: SimPlayerState,
-): Array<{ x: number; y: number; angle: number; index: number }> {
+  out?: SolarMiniSunPosition[],
+): SolarMiniSunPosition[] {
   const baseAngle = p.solarOrbitAngle ?? 0;
   const step = (Math.PI * 2) / 3;
+  if (out) {
+    for (let index = 0; index < 3; index++) {
+      const angle = baseAngle + index * step;
+      const sx = p.x + Math.cos(angle) * SOLAR_ORBIT_RADIUS;
+      const sy = p.y + Math.sin(angle) * SOLAR_ORBIT_RADIUS;
+      const slot = out[index];
+      if (slot) {
+        slot.x = sx;
+        slot.y = sy;
+        slot.angle = angle;
+        slot.index = index;
+      } else {
+        out[index] = { x: sx, y: sy, angle, index };
+      }
+    }
+    out.length = 3;
+    return out;
+  }
   return [0, 1, 2].map((index) => {
     const angle = baseAngle + index * step;
     return { x: p.x + Math.cos(angle) * SOLAR_ORBIT_RADIUS, y: p.y + Math.sin(angle) * SOLAR_ORBIT_RADIUS, angle, index };
@@ -76,7 +113,7 @@ export function updateSolarArchonMiniSunsForPlayer(sim: WorldSim, p: SimPlayerSt
   if (activeWepId !== 'solar_archon_staff') return;
 
   p.solarOrbitAngle = (p.solarOrbitAngle ?? 0) + SOLAR_ORBIT_SPEED_RAD * dtSec;
-  const suns = getSolarMiniSunPositions(p);
+  const suns = getSolarMiniSunPositions(p, solarUpdateSunsScratch);
   p.solarOrbHitTickByEnemy ??= {};
 
   for (let sIdx = 0; sIdx < suns.length; sIdx++) {
@@ -127,7 +164,7 @@ export function spawnSolarArchonConvergingVolley(
   mutatorVolleyFields?: Pick<BulletVolleySpawnEvent, 'clusterMortarLob' | 'secondaryInfusedElement'>,
 ): SimProjectileState[] {
   const target = resolveSolarArchonTargetPoint(p, SOLAR_CONVERGE_DEFAULT_DIST);
-  const suns = getSolarMiniSunPositions(p);
+  const suns = getSolarMiniSunPositions(p, solarVolleySunsScratch);
   const elem: ElementType = shotElement !== 'none' ? shotElement : 'burn';
   const speed = 530;
   const spawned: SimProjectileState[] = [];

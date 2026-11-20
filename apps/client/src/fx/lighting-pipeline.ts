@@ -75,7 +75,7 @@ void main() {
   // 2. Symmetric 4-tap Emissive Bloom on High quality (early-out on dark/mid-tone pixels to avoid 4 texture lookups per pixel)
   if (uBloomStrength > 0.001) {
     float centerLuma = dot(color, vec3(0.299, 0.587, 0.114));
-    if (centerLuma > 0.58) {
+    if (centerLuma > 0.68) {
       vec2 off1 = vec2(0.0011, 0.0016);
       vec2 off2 = vec2(-0.0011, 0.0016);
       vec3 s1 = texture2D(uMainSampler, clamp(uv + off1, 0.0, 1.0)).rgb;
@@ -108,6 +108,34 @@ void main() {
 
 export function getBiomePostFxFragForTest(): string {
   return BIOME_POSTFX_FRAG;
+}
+
+const LIGHT_CRIMSON_BRIGHT = hexToNum(PALETTE.CRIMSON_BRIGHT);
+const LIGHT_FLAME_ORANGE = hexToNum(PALETTE.FLAME_ORANGE);
+const LIGHT_CYAN_FROST = hexToNum(PALETTE.CYAN_FROST);
+const LIGHT_TOXIC_PURPLE = hexToNum(PALETTE.TOXIC_PURPLE);
+const LIGHT_ELECTRIC_VIOLET = hexToNum(PALETTE.ELECTRIC_VIOLET);
+const propHexColorCache = new Map<string, number>();
+
+function resolveCachedHexColor(hex: string): number {
+  let num = propHexColorCache.get(hex);
+  if (num === undefined) {
+    num = hexToNum(hex);
+    propHexColorCache.set(hex, num);
+  }
+  return num;
+}
+
+interface CachedSurfaceLightEntry {
+  tx: number;
+  ty: number;
+  wx: number;
+  wy: number;
+  radius: number;
+  colorNum: number;
+  intensity: number;
+  hasFlicker: boolean;
+  flickerPhase: number;
 }
 
 function liftAmbientTowardClearWhite(ambientColor: number, whiteWeight = 0.46): number {
@@ -189,7 +217,12 @@ export class LightingPipeline {
     ttl: number;
   }> = [];
   private readonly blizzardRimGraphics: Phaser.GameObjects.Graphics;
+  private blizzardRimDirty = false;
   private readonly transientPool: TransientLight[] = [];
+  private readonly cachedSurfaceLightsPool: CachedSurfaceLightEntry[] = [];
+  private cachedSurfaceLightCount = 0;
+  private cachedSurfaceMap: ArenaMap | null = null;
+  private cachedSurfaceMapRevision = -1;
   private readonly brushBaseTexWidth = 128;
   private biome: 1 | 2 | 3 = 1;
   private blizzardVeil = false;
@@ -238,6 +271,7 @@ export class LightingPipeline {
     // Frost rim graphics for Kryssa Phase 3 Blizzard (depth 36, pure ice tint #CFE8EE, never black)
     this.blizzardRimGraphics = scene.add.graphics();
     this.blizzardRimGraphics.setDepth(36);
+    this.blizzardRimGraphics.setVisible?.(false);
 
     // Pre-allocate 16 combat chromatic glow sprites at depth 35.0 (ADD, alpha <= 0.18, ttl = 0.12–0.18s)
     for (let i = 0; i < 16; i++) {
@@ -314,7 +348,11 @@ export class LightingPipeline {
         if (g.sprite.visible) g.sprite.setVisible(false);
         g.active = false;
       }
-      this.blizzardRimGraphics.clear();
+      if (this.blizzardRimDirty) {
+        this.blizzardRimGraphics.clear();
+        this.blizzardRimGraphics.setVisible?.(false);
+        this.blizzardRimDirty = false;
+      }
     }
     this.syncPostFxPipeline();
   }
@@ -340,7 +378,7 @@ export class LightingPipeline {
         slot.x = x;
         slot.y = y;
         slot.radius = radiusPx;
-        slot.color = hexToNum(colorHex);
+        slot.color = resolveCachedHexColor(colorHex);
         slot.alpha = cappedAlpha;
         slot.age = 0;
         slot.ttl = safeTtl;
@@ -369,7 +407,7 @@ export class LightingPipeline {
         slot.x = x;
         slot.y = y;
         slot.radius = radius;
-        slot.color = hexToNum(colorHex);
+        slot.color = resolveCachedHexColor(colorHex);
         slot.intensity = intensity;
         slot.age = 0;
         slot.ttl = ttl;
@@ -434,10 +472,18 @@ export class LightingPipeline {
   }
 
   private drawBlizzardRim(rawViewX: number, rawViewY: number, viewW: number, viewH: number): void {
-    this.blizzardRimGraphics.clear();
     if (!this.blizzardVeil || !this.lightingEnabled) {
+      if (this.blizzardRimDirty) {
+        this.blizzardRimGraphics.clear();
+        this.blizzardRimGraphics.setVisible?.(false);
+        this.blizzardRimDirty = false;
+      }
       return;
     }
+
+    this.blizzardRimGraphics.clear();
+    this.blizzardRimGraphics.setVisible?.(true);
+    this.blizzardRimDirty = true;
 
     const iceColor = 0xcfe8ee;
     // Thin, subtle outer frost rim along 4 viewport edges so HUD edges remain crisp
@@ -465,6 +511,91 @@ export class LightingPipeline {
       this.blizzardRimGraphics.lineTo(cx + sx * 64, cy);
       this.blizzardRimGraphics.strokePath();
     }
+  }
+
+  private ensureSurfaceLightCache(map: ArenaMap): void {
+    const rev = typeof map.mapRevision === 'number' ? map.mapRevision : -1;
+    if (rev >= 0 && this.cachedSurfaceMap === map && this.cachedSurfaceMapRevision === rev) {
+      return;
+    }
+
+    let count = 0;
+    const maxTy = map.rows - 2;
+    const maxTx = map.cols - 2;
+    for (let ty = 1; ty <= maxTy; ty++) {
+      for (let tx = 1; tx <= maxTx; tx++) {
+        const surf = map.getSurface(tx, ty);
+        if (
+          surf === 'none' ||
+          surf === 'water' ||
+          surf === 'oil' ||
+          surf === 'grass' ||
+          surf === 'ash' ||
+          surf === 'ice' ||
+          surf === 'chasm' ||
+          surf === 'conveyor'
+        ) {
+          continue;
+        }
+        let radius = 0;
+        let colorNum = 0;
+        let intensity = 0;
+        let hasFlicker = false;
+        if ((surf === 'burning_oil' || surf === 'burning_grass') && ((tx + ty) & 1) === 0) {
+          radius = 72;
+          colorNum = LIGHT_FLAME_ORANGE;
+          intensity = 0.28;
+          hasFlicker = true;
+        } else if (surf === 'electrified_water' && ((tx + ty) & 1) === 0) {
+          radius = 68;
+          colorNum = LIGHT_CYAN_FROST;
+          intensity = 0.26;
+        } else if (surf === 'lava' && tx % 2 === 0 && ty % 2 === 0) {
+          radius = 80;
+          colorNum = LIGHT_FLAME_ORANGE;
+          intensity = 0.28;
+        } else if (surf === 'poison_swamp' && tx % 4 === 0 && ty % 4 === 0) {
+          radius = 80;
+          colorNum = LIGHT_TOXIC_PURPLE;
+          intensity = 0.22;
+        } else {
+          continue;
+        }
+
+        const wx = tx * TILE_SIZE + TILE_SIZE / 2;
+        const wy = ty * TILE_SIZE + TILE_SIZE / 2;
+        let slot = this.cachedSurfaceLightsPool[count];
+        if (!slot) {
+          slot = {
+            tx,
+            ty,
+            wx,
+            wy,
+            radius,
+            colorNum,
+            intensity,
+            hasFlicker,
+            flickerPhase: tx * 3 + ty * 5,
+          };
+          this.cachedSurfaceLightsPool[count] = slot;
+        } else {
+          slot.tx = tx;
+          slot.ty = ty;
+          slot.wx = wx;
+          slot.wy = wy;
+          slot.radius = radius;
+          slot.colorNum = colorNum;
+          slot.intensity = intensity;
+          slot.hasFlicker = hasFlicker;
+          slot.flickerPhase = tx * 3 + ty * 5;
+        }
+        count += 1;
+      }
+    }
+
+    this.cachedSurfaceLightCount = count;
+    this.cachedSurfaceMap = rev >= 0 ? map : null;
+    this.cachedSurfaceMapRevision = rev;
   }
 
   public update(params: {
@@ -507,7 +638,11 @@ export class LightingPipeline {
         const g = this.warmGlowPool[i]!;
         if (g.visible) g.setVisible(false);
       }
-      this.blizzardRimGraphics.clear();
+      if (this.blizzardRimDirty) {
+        this.blizzardRimGraphics.clear();
+        this.blizzardRimGraphics.setVisible?.(false);
+        this.blizzardRimDirty = false;
+      }
       this.syncPostFxPipeline();
       return;
     }
@@ -672,7 +807,7 @@ export class LightingPipeline {
         playerPos.x + Math.cos(player.aimAngle) * 28,
         playerPos.y + Math.sin(player.aimAngle) * 28,
         105,
-        hexToNum(PALETTE.CRIMSON_BRIGHT),
+        LIGHT_CRIMSON_BRIGHT,
         0.28,
       );
     }
@@ -788,7 +923,7 @@ export class LightingPipeline {
         const radius = prop.lightRadius * (1 + flicker);
         const alpha = 0.42 + flicker * 0.25;
 
-        drawLight(prop.x, prop.y, radius * 1.15, hexToNum(prop.lightColorHex), alpha);
+        drawLight(prop.x, prop.y, radius * 1.15, resolveCachedHexColor(prop.lightColorHex), alpha);
         braziersActive += 1;
 
         if (warmGlowCursor + 1 < this.warmGlowPool.length) {
@@ -831,7 +966,7 @@ export class LightingPipeline {
         alpha = 0.25;
       }
 
-      drawLight(prop.x, prop.y, radius * 1.1, hexToNum(prop.lightColorHex), alpha);
+      drawLight(prop.x, prop.y, radius * 1.1, resolveCachedHexColor(prop.lightColorHex), alpha);
       otherScenePropLightsActive += 1;
     }
 
@@ -840,39 +975,27 @@ export class LightingPipeline {
       if (g.visible) g.setVisible(false);
     }
 
-    // 4b. Glowing Interactive Surfaces (Lava, Burning Oil/Grass, Electrified Water, Poison Swamp)
-    const minTx = Math.max(1, Math.floor(viewX / TILE_SIZE));
-    const maxTx = Math.min(map.cols - 2, Math.ceil((viewX + coverW) / TILE_SIZE));
-    const minTy = Math.max(1, Math.floor(viewY / TILE_SIZE));
-    const maxTy = Math.min(map.rows - 2, Math.ceil((viewY + coverH) / TILE_SIZE));
-
-    for (let ty = minTy; ty <= maxTy; ty++) {
-      for (let tx = minTx; tx <= maxTx; tx++) {
-        const surf = map.getSurface(tx, ty);
+    // 4b. Glowing Interactive Surfaces (cached per (map, map.mapRevision))
+    this.ensureSurfaceLightCache(map);
+    if (this.cachedSurfaceLightCount > 0) {
+      const minTx = Math.max(1, Math.floor(viewX / TILE_SIZE));
+      const maxTx = Math.min(map.cols - 2, Math.ceil((viewX + coverW) / TILE_SIZE));
+      const minTy = Math.max(1, Math.floor(viewY / TILE_SIZE));
+      const maxTy = Math.min(map.rows - 2, Math.ceil((viewY + coverH) / TILE_SIZE));
+      for (let i = 0; i < this.cachedSurfaceLightCount && lightsDrawn < maxLights; i++) {
+        const entry = this.cachedSurfaceLightsPool[i]!;
         if (
-          surf === 'none' ||
-          surf === 'water' ||
-          surf === 'oil' ||
-          surf === 'grass' ||
-          surf === 'ash' ||
-          surf === 'ice' ||
-          surf === 'chasm' ||
-          surf === 'conveyor'
+          entry.tx < minTx ||
+          entry.tx > maxTx ||
+          entry.ty < minTy ||
+          entry.ty > maxTy
         ) {
           continue;
         }
-        const wx = tx * TILE_SIZE + TILE_SIZE / 2;
-        const wy = ty * TILE_SIZE + TILE_SIZE / 2;
-        if ((surf === 'burning_oil' || surf === 'burning_grass') && ((tx + ty) & 1) === 0) {
-          const flick = Math.sin(this.elapsedSec * 10 + tx * 3 + ty * 5) * 4;
-          drawLight(wx, wy, 72 + flick, hexToNum(PALETTE.FLAME_ORANGE), 0.28);
-        } else if (surf === 'electrified_water' && ((tx + ty) & 1) === 0) {
-          drawLight(wx, wy, 68, hexToNum(PALETTE.CYAN_FROST), 0.26);
-        } else if (surf === 'lava' && tx % 2 === 0 && ty % 2 === 0) {
-          drawLight(wx, wy, 80, hexToNum(PALETTE.FLAME_ORANGE), 0.28);
-        } else if (surf === 'poison_swamp' && tx % 4 === 0 && ty % 4 === 0) {
-          drawLight(wx, wy, 80, hexToNum(PALETTE.TOXIC_PURPLE), 0.22);
-        }
+        const radius = entry.hasFlicker
+          ? entry.radius + Math.sin(this.elapsedSec * 10 + entry.flickerPhase) * 4
+          : entry.radius;
+        drawLight(entry.wx, entry.wy, radius, entry.colorNum, entry.intensity);
       }
     }
 
@@ -881,9 +1004,9 @@ export class LightingPipeline {
       const e = enemies[i]!;
       if (e.hp <= 0) continue;
       if (e.aiState === 'spawning') {
-        drawLight(e.x, e.y, 44, hexToNum(PALETTE.ELECTRIC_VIOLET), 0.2);
+        drawLight(e.x, e.y, 44, LIGHT_ELECTRIC_VIOLET, 0.2);
       } else if (e.aiState === 'telegraph' && e.isBoss) {
-        drawLight(e.x, e.y, 56, hexToNum(PALETTE.CRIMSON_BRIGHT), 0.22);
+        drawLight(e.x, e.y, 56, LIGHT_CRIMSON_BRIGHT, 0.22);
       }
     }
 

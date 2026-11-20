@@ -5,10 +5,19 @@ import {
 } from '@ashen-pact/shared';
 import {
   BiomeArchitectureLiveLayer,
+  type ExteriorVoidRectSpan,
+  mergeExteriorVoidRowSpans,
   renderBiomeArchitectureToComposite,
+  type WorldClipRect,
 } from './biome-architecture-render.js';
 
-export { BiomeArchitectureLiveLayer, renderBiomeArchitectureToComposite };
+export {
+  BiomeArchitectureLiveLayer,
+  type ExteriorVoidRectSpan,
+  mergeExteriorVoidRowSpans,
+  renderBiomeArchitectureToComposite,
+  type WorldClipRect,
+};
 
 export type SolidDecorKind =
   | 'brazier_pedestal'
@@ -320,14 +329,30 @@ export function isFloorDecalVisible(decal: FloorArchitectureDecal, map: ArenaMap
   return map.getSurface(decal.tx, decal.ty) === 'none';
 }
 
+const visibleFloorDecalsCache = new WeakMap<
+  RoomArchitecturePlan,
+  { mapRef: ArenaMap; rev: number; decals: FloorArchitectureDecal[] }
+>();
+
 /**
  * Returns only the floor decals from `plan` that are currently on dry walkable floor (`surface === 'none'`).
+ * Cached per `(plan, map, map.mapRevision)` so repeated per-frame queries allocate zero arrays.
  */
 export function getVisibleFloorDecals(
   plan: RoomArchitecturePlan,
   map: ArenaMap,
 ): FloorArchitectureDecal[] {
-  return plan.floorDecals.filter((decal) => isFloorDecalVisible(decal, map));
+  const cached = visibleFloorDecalsCache.get(plan);
+  if (cached && cached.mapRef === map && cached.rev === map.mapRevision) {
+    return cached.decals;
+  }
+  const decals = plan.floorDecals.filter((decal) => isFloorDecalVisible(decal, map));
+  visibleFloorDecalsCache.set(plan, {
+    mapRef: map,
+    rev: map.mapRevision,
+    decals,
+  });
+  return decals;
 }
 
 export function isProtectedMetricSampleTile(tx: number, ty: number): boolean {

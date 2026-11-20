@@ -64,7 +64,7 @@ export function bakeLightRadialBrush(scene: Phaser.Scene): void {
   const canvas = document.createElement('canvas');
   canvas.width = size;
   canvas.height = size;
-  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  const ctx = canvas.getContext('2d');
   if (!ctx) return;
 
   const half = size / 2;
@@ -1190,6 +1190,7 @@ const SMALL_SHADER_KEYS = [
 
 export function isPreExistingNonVfxWorldOrRigTextureKey(key: string): boolean {
   return (
+    key.startsWith('atlas_rig_prop_') ||
     key.startsWith('rig_') ||
     key.startsWith('weapon_vec_') ||
     key.startsWith('player_ring_') ||
