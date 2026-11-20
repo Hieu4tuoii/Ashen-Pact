@@ -146,6 +146,42 @@ function smoothstep01(t: number): number {
   return c * c * (3 - 2 * c);
 }
 
+const rigPartIndexByDef = new WeakMap<EntityRigDef, Partial<Record<RigPartId, RigPartDef>>>();
+
+function getRigPartIndex(def: EntityRigDef): Partial<Record<RigPartId, RigPartDef>> {
+  let indexed = rigPartIndexByDef.get(def);
+  if (!indexed) {
+    indexed = {};
+    for (let i = 0; i < def.parts.length; i++) {
+      const p = def.parts[i]!;
+      indexed[p.id] = p;
+    }
+    rigPartIndexByDef.set(def, indexed);
+  }
+  return indexed;
+}
+
+export function createEmptyRigPoseSnapshot(): RigPoseSnapshot {
+  return {
+    bodyY: 0,
+    bodyScaleX: 1,
+    bodyScaleY: 1,
+    bodyRotation: 0,
+    shadowScale: 1,
+    eyeBlinkScaleY: 1,
+    parts: {
+      backAccessory: { x: 0, y: 0, rotation: 0, scaleX: 1, scaleY: 1 },
+      legLeft: { x: 0, y: 0, rotation: 0, scaleX: 1, scaleY: 1 },
+      legRight: { x: 0, y: 0, rotation: 0, scaleX: 1, scaleY: 1 },
+      torso: { x: 0, y: 0, rotation: 0, scaleX: 1, scaleY: 1 },
+      head: { x: 0, y: 0, rotation: 0, scaleX: 1, scaleY: 1 },
+      armLeft: { x: 0, y: 0, rotation: 0, scaleX: 1, scaleY: 1 },
+      weapon: { x: 0, y: 0, rotation: 0, scaleX: 1, scaleY: 1 },
+      armRight: { x: 0, y: 0, rotation: 0, scaleX: 1, scaleY: 1 },
+    },
+  };
+}
+
 export function createStateCrossfadeController(
   initialState: RigAnimState = 'idle',
 ): StateCrossfadeController {
@@ -158,19 +194,38 @@ export function createStateCrossfadeController(
   };
 }
 
-export function cloneRigPoseSnapshot(pose: RigPoseSnapshot): RigPoseSnapshot {
-  const parts = {} as Record<RigPartId, PartTransform>;
-  for (const id of ALL_PART_IDS) parts[id] = { ...pose.parts[id] };
-  return { ...pose, parts };
+export function cloneRigPoseSnapshot(
+  pose: RigPoseSnapshot,
+  out?: RigPoseSnapshot,
+): RigPoseSnapshot {
+  const dst = out ?? createEmptyRigPoseSnapshot();
+  dst.bodyY = pose.bodyY;
+  dst.bodyScaleX = pose.bodyScaleX;
+  dst.bodyScaleY = pose.bodyScaleY;
+  dst.bodyRotation = pose.bodyRotation;
+  dst.shadowScale = pose.shadowScale;
+  dst.eyeBlinkScaleY = pose.eyeBlinkScaleY;
+  for (let i = 0; i < ALL_PART_IDS.length; i++) {
+    const id = ALL_PART_IDS[i]!;
+    const srcPart = pose.parts[id];
+    const dstPart = dst.parts[id];
+    dstPart.x = srcPart.x;
+    dstPart.y = srcPart.y;
+    dstPart.rotation = srcPart.rotation;
+    dstPart.scaleX = srcPart.scaleX;
+    dstPart.scaleY = srcPart.scaleY;
+  }
+  return dst;
 }
 
 export function transitionRigAnimState(
   ctrl: StateCrossfadeController,
   nextState: RigAnimState,
   currentBlendedPose: RigPoseSnapshot,
+  fromPoseScratch?: RigPoseSnapshot,
 ): void {
   if (nextState === ctrl.currentState) return;
-  ctrl.fromPose = cloneRigPoseSnapshot(currentBlendedPose);
+  ctrl.fromPose = cloneRigPoseSnapshot(currentBlendedPose, fromPoseScratch);
   ctrl.prevState = ctrl.currentState;
   ctrl.currentState = nextState;
   ctrl.crossfadeElapsedSec = 0;
@@ -191,32 +246,31 @@ export function blendRigPoseSnapshots(
   fromPose: RigPoseSnapshot,
   toPose: RigPoseSnapshot,
   alpha01: number,
+  out?: RigPoseSnapshot,
 ): RigPoseSnapshot {
   const t = clamp(alpha01, 0, 1);
-  if (t <= 0) return cloneRigPoseSnapshot(fromPose);
-  if (t >= 1) return cloneRigPoseSnapshot(toPose);
+  if (t <= 0) return cloneRigPoseSnapshot(fromPose, out);
+  if (t >= 1) return cloneRigPoseSnapshot(toPose, out);
 
-  const parts = {} as Record<RigPartId, PartTransform>;
-  for (const id of ALL_PART_IDS) {
+  const dst = out ?? createEmptyRigPoseSnapshot();
+  for (let i = 0; i < ALL_PART_IDS.length; i++) {
+    const id = ALL_PART_IDS[i]!;
     const a = fromPose.parts[id];
     const b = toPose.parts[id];
-    parts[id] = {
-      x: lerp(a.x, b.x, t),
-      y: lerp(a.y, b.y, t),
-      rotation: lerpAngle(a.rotation, b.rotation, t),
-      scaleX: lerp(a.scaleX, b.scaleX, t),
-      scaleY: lerp(a.scaleY, b.scaleY, t),
-    };
+    const p = dst.parts[id];
+    p.x = lerp(a.x, b.x, t);
+    p.y = lerp(a.y, b.y, t);
+    p.rotation = lerpAngle(a.rotation, b.rotation, t);
+    p.scaleX = lerp(a.scaleX, b.scaleX, t);
+    p.scaleY = lerp(a.scaleY, b.scaleY, t);
   }
-  return {
-    bodyY: lerp(fromPose.bodyY, toPose.bodyY, t),
-    bodyScaleX: lerp(fromPose.bodyScaleX, toPose.bodyScaleX, t),
-    bodyScaleY: lerp(fromPose.bodyScaleY, toPose.bodyScaleY, t),
-    bodyRotation: lerpAngle(fromPose.bodyRotation, toPose.bodyRotation, t),
-    shadowScale: lerp(fromPose.shadowScale, toPose.shadowScale, t),
-    eyeBlinkScaleY: lerp(fromPose.eyeBlinkScaleY, toPose.eyeBlinkScaleY, t),
-    parts,
-  };
+  dst.bodyY = lerp(fromPose.bodyY, toPose.bodyY, t);
+  dst.bodyScaleX = lerp(fromPose.bodyScaleX, toPose.bodyScaleX, t);
+  dst.bodyScaleY = lerp(fromPose.bodyScaleY, toPose.bodyScaleY, t);
+  dst.bodyRotation = lerpAngle(fromPose.bodyRotation, toPose.bodyRotation, t);
+  dst.shadowScale = lerp(fromPose.shadowScale, toPose.shadowScale, t);
+  dst.eyeBlinkScaleY = lerp(fromPose.eyeBlinkScaleY, toPose.eyeBlinkScaleY, t);
+  return dst;
 }
 
 export function computeTargetTorsoLean(moveDirX: number): number {
@@ -242,21 +296,31 @@ export function computeEyeBlinkScaleY(animTime: number, phaseSeed = 0): number {
   return Math.max(0.08, 1.0 - Math.sin(u * Math.PI) * 0.92);
 }
 
-export function computeHeadAimOffset(localAim: number): {
+export interface HeadAimOffset {
   offsetX: number;
   offsetY: number;
   rotation: number;
-} {
-  return {
-    offsetX: Math.cos(localAim) * 1.35,
-    offsetY: Math.sin(localAim) * 0.72,
-    rotation: Math.sin(localAim) * 0.12,
-  };
+}
+
+const headAimScratch: HeadAimOffset = { offsetX: 0, offsetY: 0, rotation: 0 };
+
+export function computeHeadAimOffset(
+  localAim: number,
+  out?: HeadAimOffset,
+): HeadAimOffset {
+  const dst = out ?? { offsetX: 0, offsetY: 0, rotation: 0 };
+  dst.offsetX = Math.cos(localAim) * 1.35;
+  dst.offsetY = Math.sin(localAim) * 0.72;
+  dst.rotation = Math.sin(localAim) * 0.12;
+  return dst;
 }
 
 export function createBackAccessorySpringState(): BackAccessorySpringState {
   return { angle: 0, angularVel: 0, offsetX: 0, velX: 0, offsetY: 0, velY: 0 };
 }
+
+let springOutPos = 0;
+let springOutVel = 0;
 
 function stepSpringScalar(
   pos: number,
@@ -265,7 +329,7 @@ function stepSpringScalar(
   stiffness: number,
   damping: number,
   dt: number,
-): [number, number] {
+): void {
   const steps = Math.max(1, Math.ceil(dt / (1 / 120)));
   const subDt = dt / steps;
   let p = pos;
@@ -274,20 +338,23 @@ function stepSpringScalar(
     v += ((target - p) * stiffness - v * damping) * subDt;
     p += v * subDt;
   }
-  return [p, v];
+  springOutPos = p;
+  springOutVel = v;
 }
 
-export function stepBackAccessorySpring(
+export interface BackAccessorySpringStepParams {
+  moveVx: number;
+  moveVy: number;
+  bodyBounceVelY: number;
+  facingSign: number;
+  isDashing: boolean;
+  animState: RigAnimState;
+  dtSec: number;
+}
+
+export function stepBackAccessorySpringInPlace(
   state: BackAccessorySpringState,
-  params: {
-    moveVx: number;
-    moveVy: number;
-    bodyBounceVelY: number;
-    facingSign: number;
-    isDashing: boolean;
-    animState: RigAnimState;
-    dtSec: number;
-  },
+  params: BackAccessorySpringStepParams,
 ): BackAccessorySpringState {
   const dt = clamp(params.dtSec, 0, 0.05);
   if (dt <= 0) return state;
@@ -306,27 +373,81 @@ export function stepBackAccessorySpring(
     0.34,
   );
 
-  const [angle, angularVel] = stepSpringScalar(state.angle, state.angularVel, targetAngle, 155, 10.5, dt);
-  const [offsetX, velX] = stepSpringScalar(state.offsetX, state.velX, targetOffsetX, 155, 10.5, dt);
-  const [offsetY, velY] = stepSpringScalar(state.offsetY, state.velY, targetOffsetY, 155, 10.5, dt);
-  return { angle, angularVel, offsetX, velX, offsetY, velY };
+  stepSpringScalar(state.angle, state.angularVel, targetAngle, 155, 10.5, dt);
+  state.angle = springOutPos;
+  state.angularVel = springOutVel;
+
+  stepSpringScalar(state.offsetX, state.velX, targetOffsetX, 155, 10.5, dt);
+  state.offsetX = springOutPos;
+  state.velX = springOutVel;
+
+  stepSpringScalar(state.offsetY, state.velY, targetOffsetY, 155, 10.5, dt);
+  state.offsetY = springOutPos;
+  state.velY = springOutVel;
+
+  return state;
+}
+
+export function stepBackAccessorySpring(
+  state: BackAccessorySpringState,
+  params: BackAccessorySpringStepParams,
+): BackAccessorySpringState {
+  const dt = clamp(params.dtSec, 0, 0.05);
+  if (dt <= 0) return state;
+  const copy: BackAccessorySpringState = {
+    angle: state.angle,
+    angularVel: state.angularVel,
+    offsetX: state.offsetX,
+    velX: state.velX,
+    offsetY: state.offsetY,
+    velY: state.velY,
+  };
+  return stepBackAccessorySpringInPlace(copy, params);
 }
 
 export function createWeaponRecoilSpringState(): WeaponRecoilSpringState {
   return { displacement: 0, velocity: 0, angleKick: 0, angularVel: 0 };
 }
 
-export function triggerWeaponRecoilImpulse(
+export function triggerWeaponRecoilImpulseInPlace(
   state: WeaponRecoilSpringState,
   strength = 5,
 ): WeaponRecoilSpringState {
   const kick = clamp(strength, 1, 10);
-  return {
-    displacement: Math.min(8.5, state.displacement + kick * 0.85),
-    velocity: 18 * (kick / 5),
-    angleKick: Math.max(-0.38, state.angleKick - 0.16 * (kick / 5)),
-    angularVel: -1.8 * (kick / 5),
+  state.displacement = Math.min(8.5, state.displacement + kick * 0.85);
+  state.velocity = 18 * (kick / 5);
+  state.angleKick = Math.max(-0.38, state.angleKick - 0.16 * (kick / 5));
+  state.angularVel = -1.8 * (kick / 5);
+  return state;
+}
+
+export function triggerWeaponRecoilImpulse(
+  state: WeaponRecoilSpringState,
+  strength = 5,
+): WeaponRecoilSpringState {
+  const copy: WeaponRecoilSpringState = {
+    displacement: state.displacement,
+    velocity: state.velocity,
+    angleKick: state.angleKick,
+    angularVel: state.angularVel,
   };
+  return triggerWeaponRecoilImpulseInPlace(copy, strength);
+}
+
+export function stepWeaponRecoilSpringInPlace(
+  state: WeaponRecoilSpringState,
+  dtSec: number,
+): WeaponRecoilSpringState {
+  const dt = clamp(dtSec, 0, 0.05);
+  if (dt <= 0) return state;
+  stepSpringScalar(state.displacement, state.velocity, 0, 240, 17, dt);
+  state.displacement = springOutPos;
+  state.velocity = springOutVel;
+
+  stepSpringScalar(state.angleKick, state.angularVel, 0, 220, 16, dt);
+  state.angleKick = springOutPos;
+  state.angularVel = springOutVel;
+  return state;
 }
 
 export function stepWeaponRecoilSpring(
@@ -335,16 +456,31 @@ export function stepWeaponRecoilSpring(
 ): WeaponRecoilSpringState {
   const dt = clamp(dtSec, 0, 0.05);
   if (dt <= 0) return state;
-  const [displacement, velocity] = stepSpringScalar(state.displacement, state.velocity, 0, 240, 17, dt);
-  const [angleKick, angularVel] = stepSpringScalar(state.angleKick, state.angularVel, 0, 220, 16, dt);
-  return { displacement, velocity, angleKick, angularVel };
+  const copy: WeaponRecoilSpringState = {
+    displacement: state.displacement,
+    velocity: state.velocity,
+    angleKick: state.angleKick,
+    angularVel: state.angularVel,
+  };
+  return stepWeaponRecoilSpringInPlace(copy, dtSec);
 }
+
+const archMotionScratch: EnemyArchetypeMotionModifiers = {
+  scaleXMult: 1,
+  scaleYMult: 1,
+  bodyYOffset: 0,
+  telegraphTorsoRotOffset: 0,
+  telegraphArmRaiseOffset: 0,
+  cadenceMult: 1,
+  strideBounceMult: 1,
+};
 
 export function computeEnemyArchetypeMotion(
   rigId: string,
   animState: RigAnimState,
   animTime: number,
   telegraphProgress: number,
+  out?: EnemyArchetypeMotionModifiers,
 ): EnemyArchetypeMotionModifiers {
   let scaleXMult = 1;
   let scaleYMult = 1;
@@ -393,15 +529,23 @@ export function computeEnemyArchetypeMotion(
     }
   }
 
-  return {
-    scaleXMult,
-    scaleYMult,
-    bodyYOffset,
-    telegraphTorsoRotOffset,
-    telegraphArmRaiseOffset,
-    cadenceMult,
-    strideBounceMult,
+  const dst = out ?? {
+    scaleXMult: 1,
+    scaleYMult: 1,
+    bodyYOffset: 0,
+    telegraphTorsoRotOffset: 0,
+    telegraphArmRaiseOffset: 0,
+    cadenceMult: 1,
+    strideBounceMult: 1,
   };
+  dst.scaleXMult = scaleXMult;
+  dst.scaleYMult = scaleYMult;
+  dst.bodyYOffset = bodyYOffset;
+  dst.telegraphTorsoRotOffset = telegraphTorsoRotOffset;
+  dst.telegraphArmRaiseOffset = telegraphArmRaiseOffset;
+  dst.cadenceMult = cadenceMult;
+  dst.strideBounceMult = strideBounceMult;
+  return dst;
 }
 
 function addPartOffset(p: PartTransform, dx: number, dy: number, rot: number, sx = 1, sy = 1): void {
@@ -412,7 +556,10 @@ function addPartOffset(p: PartTransform, dx: number, dy: number, rot: number, sx
   p.scaleY = sy;
 }
 
-export function evaluateRigPose(params: EvaluateRigPoseParams): RigPoseSnapshot {
+export function evaluateRigPose(
+  params: EvaluateRigPoseParams,
+  out?: RigPoseSnapshot,
+): RigPoseSnapshot {
   const {
     def,
     animState,
@@ -427,26 +574,29 @@ export function evaluateRigPose(params: EvaluateRigPoseParams): RigPoseSnapshot 
     phaseSeed,
   } = params;
 
-  const partMap = new Map<RigPartId, RigPartDef>();
-  for (const p of def.parts) partMap.set(p.id, p);
-  const getBase = (id: RigPartId): PartTransform => {
-    const d = partMap.get(id);
-    return { x: d?.offsetX ?? 0, y: d?.offsetY ?? 0, rotation: 0, scaleX: 1, scaleY: 1 };
-  };
-  const parts: Record<RigPartId, PartTransform> = {
-    backAccessory: getBase('backAccessory'),
-    legLeft: getBase('legLeft'),
-    legRight: getBase('legRight'),
-    torso: getBase('torso'),
-    head: getBase('head'),
-    armLeft: getBase('armLeft'),
-    weapon: getBase('weapon'),
-    armRight: getBase('armRight'),
-  };
+  const dst = out ?? createEmptyRigPoseSnapshot();
+  const partIndex = getRigPartIndex(def);
+  const parts = dst.parts;
+  for (let i = 0; i < ALL_PART_IDS.length; i++) {
+    const id = ALL_PART_IDS[i]!;
+    const d = partIndex[id];
+    const p = parts[id];
+    p.x = d?.offsetX ?? 0;
+    p.y = d?.offsetY ?? 0;
+    p.rotation = 0;
+    p.scaleX = 1;
+    p.scaleY = 1;
+  }
 
-  const arch = computeEnemyArchetypeMotion(def.id, animState, animTime, telegraphProgress);
+  const arch = computeEnemyArchetypeMotion(
+    def.id,
+    animState,
+    animTime,
+    telegraphProgress,
+    archMotionScratch,
+  );
   const eyeBlinkScaleY = computeEyeBlinkScaleY(animTime, phaseSeed);
-  const headAim = computeHeadAimOffset(localAim);
+  const headAim = computeHeadAimOffset(localAim, headAimScratch);
   const cosAim = Math.cos(localAim);
   const sinAim = Math.sin(localAim);
   const recoilX = -cosAim * recoilSpring.displacement;
@@ -572,7 +722,13 @@ export function evaluateRigPose(params: EvaluateRigPoseParams): RigPoseSnapshot 
     addPartOffset(parts.weapon, 0, -2.2 - p * 1.5, localAim * 0.5 - 0.3);
   }
 
-  return { bodyY, bodyScaleX, bodyScaleY, bodyRotation, shadowScale, eyeBlinkScaleY, parts };
+  dst.bodyY = bodyY;
+  dst.bodyScaleX = bodyScaleX;
+  dst.bodyScaleY = bodyScaleY;
+  dst.bodyRotation = bodyRotation;
+  dst.shadowScale = shadowScale;
+  dst.eyeBlinkScaleY = eyeBlinkScaleY;
+  return dst;
 }
 
 /**
@@ -592,6 +748,18 @@ export function computeMeleeSwingArcOffset(progress01: number, swingDir: number)
   return dir * 1.15 * (1 - smooth);
 }
 
+export function stepMeleeLungeGlideOffsetInPlace(
+  state: { x: number; y: number },
+  dtSec: number,
+): { x: number; y: number } {
+  const decay = Math.exp(-18 * Math.max(0, dtSec));
+  const nextX = state.x * decay;
+  const nextY = state.y * decay;
+  state.x = Math.abs(nextX) < 0.08 ? 0 : nextX;
+  state.y = Math.abs(nextY) < 0.08 ? 0 : nextY;
+  return state;
+}
+
 /**
  * Exponentially glides a world-space melee lunge offset toward (0, 0) so 1-tick simulation lunges
  * render as a smooth multi-frame forward dash/glide instead of a 1-frame teleport.
@@ -600,14 +768,12 @@ export function stepMeleeLungeGlideOffset(
   offsetX: number,
   offsetY: number,
   dtSec: number,
+  out?: { x: number; y: number },
 ): { x: number; y: number } {
-  const decay = Math.exp(-18 * Math.max(0, dtSec));
-  const nextX = offsetX * decay;
-  const nextY = offsetY * decay;
-  return {
-    x: Math.abs(nextX) < 0.08 ? 0 : nextX,
-    y: Math.abs(nextY) < 0.08 ? 0 : nextY,
-  };
+  const dst = out ?? { x: 0, y: 0 };
+  dst.x = offsetX;
+  dst.y = offsetY;
+  return stepMeleeLungeGlideOffsetInPlace(dst, dtSec);
 }
 
 export interface HitFlashTintOptions {

@@ -23,12 +23,64 @@ import { TextureBaker } from '../../art/texture-baker.js';
 import { CUTOUT_KIT_ATLAS_KEY } from '../../art/texture-baker-fx.js';
 import { getFreezeVisualTimeSec } from '../../core/visual-query.js';
 import { resolveProjectileRenderSpec } from '../../fx/combat-fx.js';
+import { isVisualFreezeActive } from '../../fx/combat-fx-blessings-p1d.js';
 import { tickPlayerOverheatVentPuffs } from '../../fx/combat-fx-weapons-v2.js';
 import { graphicsSettings } from '../../ui/graphics-settings.js';
+import { setTextAndColorIfChanged, setTextIfChanged } from '../../ui/phaser-text-guard.js';
 import { type GameScene, RIG_FOOT_OFFSET_Y } from '../GameScene.js';
 import { resolvePlayerNameplateSpec } from './interact-prompt.js';
 
 export { shouldUseEnemyFastComposite };
+
+const fallbackDepthByObj = new WeakMap<object, number>();
+const fallbackBlendModeByObj = new WeakMap<object, number>();
+
+/**
+ * Sets `obj.depth` via `obj.setDepth(depth)` only when `depth` actually changed.
+ * Prevents Phaser 3's unconditional `displayList.queueDepthSort()` (`sortChildrenFlag = true`)
+ * from triggering a full scene-wide TimSort every frame.
+ */
+export function setDepthIfChanged<
+  T extends { depth?: number; setDepth: (d: number) => unknown },
+>(obj: T, depth: number): void {
+  const cur = typeof obj.depth === 'number' ? obj.depth : fallbackDepthByObj.get(obj);
+  if (cur === depth) return;
+  obj.setDepth(depth);
+  if (obj.depth !== depth) {
+    const desc = Object.getOwnPropertyDescriptor(obj, 'depth');
+    if (desc?.writable) {
+      obj.depth = depth;
+    }
+  }
+  if (typeof obj.depth !== 'number') {
+    fallbackDepthByObj.set(obj, depth);
+  }
+}
+
+/**
+ * Sets `obj.blendMode` via `obj.setBlendMode(mode)` only when `mode` actually changed.
+ */
+export function setBlendModeIfChanged<
+  T extends { blendMode?: number | string; setBlendMode: (m: number) => unknown },
+>(obj: T, mode: number): void {
+  const cur =
+    typeof obj.blendMode === 'number' ? obj.blendMode : fallbackBlendModeByObj.get(obj);
+  if (cur === mode) return;
+  obj.setBlendMode(mode);
+  if (obj.blendMode !== mode) {
+    const desc = Object.getOwnPropertyDescriptor(obj, 'blendMode');
+    if (desc?.writable) {
+      obj.blendMode = mode;
+    }
+  }
+  if (typeof obj.blendMode !== 'number') {
+    fallbackBlendModeByObj.set(obj, mode);
+  }
+}
+
+type TrackedEmoteGraphics = Phaser.GameObjects.Graphics & {
+  hadEmoteBgDrawn?: boolean;
+};
 
 export function updatePlayerOverheadUiImpl(
   this: GameScene,
@@ -54,15 +106,14 @@ export function updatePlayerOverheadUiImpl(
 
   if (nameLabel) {
     if (!spec.visible) {
-      nameLabel.setVisible(false);
+      if (nameLabel.visible !== false) {
+        nameLabel.setVisible(false);
+      }
     } else {
-      nameLabel.setVisible(true);
-      if (nameLabel.text !== spec.text) {
-        nameLabel.setText(spec.text);
+      if (nameLabel.visible !== true) {
+        nameLabel.setVisible(true);
       }
-      if (nameLabel.style.color !== spec.color) {
-        nameLabel.setColor(spec.color);
-      }
+      setTextAndColorIfChanged(nameLabel, spec.text, spec.color);
       nameLabel.setAlpha(spec.alpha);
       nameLabel.setScale(spec.worldScale);
       nameLabel.setPosition(spec.x, spec.y);
@@ -70,13 +121,15 @@ export function updatePlayerOverheadUiImpl(
   }
 
   if (emoteLabel && emoteBg) {
-    emoteBg.clear();
+    const trackedBg = emoteBg as TrackedEmoteGraphics;
     if (p.emoteTimer > 0 && p.emoteId) {
+      emoteBg.clear();
+      trackedBg.hadEmoteBgDrawn = true;
       const emoteStr = `💬 ${i18n.emoteText(p.emoteId) || QUICK_EMOTES_VI[p.emoteId]}`;
-      if (emoteLabel.text !== emoteStr) {
-        emoteLabel.setText(emoteStr);
+      setTextIfChanged(emoteLabel, emoteStr);
+      if (emoteLabel.visible !== true) {
+        emoteLabel.setVisible(true);
       }
-      emoteLabel.setVisible(true);
       emoteLabel.setPosition(x, spec.emoteY);
       const bw = Math.max(76, emoteStr.length * 6.5 + 16);
       const bh = 20;
@@ -85,7 +138,13 @@ export function updatePlayerOverheadUiImpl(
       emoteBg.fillRoundedRect(x - bw / 2, spec.emoteY - bh / 2, bw, bh, 6);
       emoteBg.strokeRoundedRect(x - bw / 2, spec.emoteY - bh / 2, bw, bh, 6);
     } else {
-      emoteLabel.setVisible(false);
+      if (trackedBg.hadEmoteBgDrawn) {
+        emoteBg.clear();
+        trackedBg.hadEmoteBgDrawn = false;
+      }
+      if (emoteLabel.visible !== false) {
+        emoteLabel.setVisible(false);
+      }
     }
   }
 }
@@ -166,7 +225,7 @@ export function syncSimulatedPlayersImpl(this: GameScene, dtSec: number): void {
           displayScale: 1,
           initialPhaseOffset: sp.slot * 0.3,
         });
-        rig.container.setDepth(29);
+        setDepthIfChanged(rig.container, 29);
         this.simPlayerRigs.set(sp.id, rig);
       }
 
@@ -210,7 +269,7 @@ export function syncSimulatedPlayersImpl(this: GameScene, dtSec: number): void {
           displayScale: 1,
           initialPhaseOffset: cp.slot * 0.25,
         });
-        rig.container.setDepth(29);
+        setDepthIfChanged(rig.container, 29);
 
         const nameLabel = this.add
           .text(cp.x, cp.y - 44, '', {
@@ -224,10 +283,11 @@ export function syncSimulatedPlayersImpl(this: GameScene, dtSec: number): void {
           })
           .setOrigin(0.5, 0.5)
           .setScale(0.5)
-          .setAlpha(0.75)
-          .setDepth(48);
+          .setAlpha(0.75);
+        setDepthIfChanged(nameLabel, 48);
 
-        const emoteBg = this.add.graphics().setDepth(49);
+        const emoteBg = this.add.graphics();
+        setDepthIfChanged(emoteBg, 49);
         const emoteLabel = this.add
           .text(cp.x, cp.y - 60, '', {
             fontFamily: '"Be Vietnam Pro", sans-serif',
@@ -239,8 +299,8 @@ export function syncSimulatedPlayersImpl(this: GameScene, dtSec: number): void {
             resolution: textRes,
           })
           .setOrigin(0.5, 0.5)
-          .setDepth(50)
           .setVisible(false);
+        setDepthIfChanged(emoteLabel, 50);
 
         entry = { rig, nameLabel, emoteLabel, emoteBg };
         this.coopPlayerRigs.set(cp.id, entry);
@@ -342,10 +402,45 @@ export function syncSimulatedPlayersImpl(this: GameScene, dtSec: number): void {
 
 const scratchDeadFuseWheelIds: number[] = [];
 
+function playerHoldsWeapon(
+  p: { weaponSlots?: ReadonlyArray<string | null | undefined> } | undefined,
+  weaponId: string,
+): boolean {
+  if (!p?.weaponSlots) return false;
+  for (let i = 0; i < p.weaponSlots.length; i++) {
+    if (p.weaponSlots[i] === weaponId) return true;
+  }
+  return false;
+}
+
+function anyPlayerHoldsWeapon(
+  sim: ReturnType<LocalTransport['getSim']>,
+  weaponId: string,
+): boolean {
+  if (playerHoldsWeapon(sim.player, weaponId)) return true;
+  const others = sim.simulatedPlayers;
+  if (others) {
+    for (let i = 0; i < others.length; i++) {
+      if (playerHoldsWeapon(others[i], weaponId)) return true;
+    }
+  }
+  const coop = (sim as unknown as { coopPlayers?: SimPlayerState[] }).coopPlayers;
+  if (coop) {
+    for (let i = 0; i < coop.length; i++) {
+      if (playerHoldsWeapon(coop[i], weaponId)) return true;
+    }
+  }
+  return false;
+}
+
 export function syncFragFuseWheelsImpl(
   this: GameScene,
   sim: ReturnType<LocalTransport['getSim']>,
 ): void {
+  if (this.fragFuseWheelSprites.size === 0 && !anyPlayerHoldsWeapon(sim, 'frag_launcher')) {
+    return;
+  }
+
   this.fragFuseWheelSyncGen = (this.fragFuseWheelSyncGen + 1) | 0;
   const currentGen = this.fragFuseWheelSyncGen;
   const visualTime = getFreezeVisualTimeSec(this.lighting?.getElapsedSec() ?? 1.0);
@@ -361,14 +456,14 @@ export function syncFragFuseWheelsImpl(
           sprite.setTexture(CUTOUT_KIT_ATLAS_KEY, 'fx_frag_fuse_wheel');
           sprite.setPosition(b.x, b.y);
           sprite.setScale(1 / 3);
-          sprite.setDepth(41.5);
+          setDepthIfChanged(sprite, 41.5);
           sprite.setVisible(true);
           sprite.setActive(true);
         } else {
           sprite = this.add
             .sprite(b.x, b.y, CUTOUT_KIT_ATLAS_KEY, 'fx_frag_fuse_wheel')
-            .setScale(1 / 3)
-            .setDepth(41.5);
+            .setScale(1 / 3);
+          setDepthIfChanged(sprite, 41.5);
         }
         entry = { sprite, lastSeenGen: currentGen };
         this.fragFuseWheelSprites.set(b.id, entry);
@@ -422,8 +517,8 @@ function syncPlayerSolarMiniSuns(
     if (!entry) {
       const sprite = scene.add
         .sprite(sun.x, sun.y, CUTOUT_KIT_ATLAS_KEY, 'fx_solar_mini_sun')
-        .setScale(1 / 3)
-        .setDepth(41.5);
+        .setScale(1 / 3);
+      setDepthIfChanged(sprite, 41.5);
       entry = { sprite, lastSeenGen: currentGen };
       scene.solarMiniSunSprites.set(key, entry);
     } else {
@@ -475,12 +570,14 @@ export function syncEnemyRigsImpl(this: GameScene, dtSec: number): void {
   this.activeEnemyIds.clear();
   const quality = graphicsSettings.getState().quality;
   const enemyCount = sim.enemies.length;
-  const view = this.cameras.main.worldView;
-  const hasView = view && view.width > 0;
-  const viewLeft = hasView ? view.x - 48 : -9999;
-  const viewRight = hasView ? view.x + view.width + 48 : 9999;
-  const viewTop = hasView ? view.y - 48 : -9999;
-  const viewBottom = hasView ? view.y + view.height + 48 : 9999;
+  const view = this.cameras?.main?.worldView;
+  const canCullOffscreen = Boolean(
+    view && view.width > 0 && view.height > 0 && !isVisualFreezeActive(this),
+  );
+  const viewLeft = canCullOffscreen ? view!.x - 72 : -Infinity;
+  const viewRight = canCullOffscreen ? view!.x + view!.width + 72 : Infinity;
+  const viewTop = canCullOffscreen ? view!.y - 72 : -Infinity;
+  const viewBottom = canCullOffscreen ? view!.y + view!.height + 72 : Infinity;
 
   let statusRimCursor = 0;
   let freezeCuffCursor = 0;
@@ -514,25 +611,42 @@ export function syncEnemyRigsImpl(this: GameScene, dtSec: number): void {
         fastComposite: wantFastComposite,
         isBoss: e.isBoss,
       });
-      rig.container.setDepth(e.defId === 'ice_prison' ? 32 : e.isBoss ? 30.6 : 28);
+      setDepthIfChanged(rig.container, e.defId === 'ice_prison' ? 32 : e.isBoss ? 30.6 : 28);
       this.enemyRigs.set(e.id, rig);
     }
 
-    // Mirror clones (kryssa_clone) have no ground shadow and semi-transparent alpha so observant players can distinguish real vs illusion!
-    const isIllusion = Boolean(ENEMIES[e.defId]?.isIllusion);
-    rig.setShadowVisible(!isIllusion);
-    rig.container.setAlpha(isIllusion ? 0.76 : 1.0);
-
     if (e.bossBurrowed || e.defId === 'ice_prison') {
-      rig.container.setVisible(false);
+      if (rig.container.visible !== false) {
+        rig.container.setVisible(false);
+      }
       continue;
     }
 
     const pos = this.transport.getInterpolatedEnemyPos(e, this.entityPosScratch);
     const inView =
       pos.x >= viewLeft && pos.x <= viewRight && pos.y >= viewTop && pos.y <= viewBottom;
-    rig.container.setVisible(inView);
-    if (!inView) continue;
+    const moving = e.frozenTimer <= 0 && Math.hypot(e.vx, e.vy) > 10;
+    if (!inView) {
+      if (rig.container.visible !== false) {
+        rig.container.setVisible(false);
+      }
+      rig.setAimAngle(e.aimAngle);
+      rig.setMoveVelocity(e.vx, e.vy);
+      rig.setAnimState(moving ? 'run' : 'idle');
+      if (!sim.stressTestActive || (i + sim.tick) % 2 === 0) {
+        rig.advanceClockOnly(sim.stressTestActive ? dtSec * 2 : dtSec);
+      }
+      continue;
+    }
+
+    if (rig.container.visible !== true) {
+      rig.container.setVisible(true);
+    }
+
+    // Mirror clones (kryssa_clone) have no ground shadow and semi-transparent alpha so observant players can distinguish real vs illusion!
+    const isIllusion = Boolean(ENEMIES[e.defId]?.isIllusion);
+    rig.setShadowVisible(!isIllusion);
+    rig.container.setAlpha(isIllusion ? 0.76 : 1.0);
 
     rig.container.setPosition(pos.x, pos.y + RIG_FOOT_OFFSET_Y);
     rig.setAimAngle(e.aimAngle);
@@ -553,7 +667,6 @@ export function syncEnemyRigsImpl(this: GameScene, dtSec: number): void {
     }
 
     const prevAnimTime = rig.getAnimTime();
-    const moving = e.frozenTimer <= 0 && Math.hypot(e.vx, e.vy) > 10;
     rig.setMoveVelocity(e.vx, e.vy);
     rig.setAnimState(moving ? 'run' : 'idle');
     if (!sim.stressTestActive || (i + sim.tick) % 2 === 0) {
@@ -600,18 +713,18 @@ export function syncEnemyRigsImpl(this: GameScene, dtSec: number): void {
           s.setTexture('fx_cutout_kit_512', burnFrame)
             .setPosition(pos.x - r * 0.65, pos.y - r * 0.5)
             .setScale(1 / 3)
-            .setDepth(28.2)
             .setVisible(true)
             .setActive(true);
+          setDepthIfChanged(s, 28.2);
         }
         if (statusRimCursor < this.statusRimPool.length) {
           const s = this.statusRimPool[statusRimCursor++]!;
           s.setTexture('fx_cutout_kit_512', burnFrame)
             .setPosition(pos.x + r * 0.65, pos.y - r * 0.5)
             .setScale(1 / 3)
-            .setDepth(28.2)
             .setVisible(true)
             .setActive(true);
+          setDepthIfChanged(s, 28.2);
         }
       } else if (primaryElem === 'chill') {
         const chillFrame = Math.floor((sim.tick * 6) / 60) % 2 === 0 ? 'status_chill_2f_0' : 'status_chill_2f_1';
@@ -620,18 +733,18 @@ export function syncEnemyRigsImpl(this: GameScene, dtSec: number): void {
           s.setTexture('fx_cutout_kit_512', chillFrame)
             .setPosition(pos.x - r * 0.65, pos.y - r * 0.5)
             .setScale(1 / 3)
-            .setDepth(28.2)
             .setVisible(true)
             .setActive(true);
+          setDepthIfChanged(s, 28.2);
         }
         if (statusRimCursor < this.statusRimPool.length) {
           const s = this.statusRimPool[statusRimCursor++]!;
           s.setTexture('fx_cutout_kit_512', chillFrame)
             .setPosition(pos.x + r * 0.65, pos.y - r * 0.5)
             .setScale(1 / 3)
-            .setDepth(28.2)
             .setVisible(true)
             .setActive(true);
+          setDepthIfChanged(s, 28.2);
         }
       } else if (primaryElem === 'shock') {
         const cornerIdx = computeDeterministicShockCornerIndex(e.id, sim.tick);
@@ -647,9 +760,9 @@ export function syncEnemyRigsImpl(this: GameScene, dtSec: number): void {
           s.setTexture('fx_cutout_kit_512', shockFrame)
             .setPosition(sx, sy)
             .setScale(1 / 3)
-            .setDepth(28.2)
             .setVisible(true)
             .setActive(true);
+          setDepthIfChanged(s, 28.2);
         }
       } else if (primaryElem === 'poison') {
         const pF1 = Math.floor(sim.tick / 8) % 2 === 0 ? 'status_poison_2f_0' : 'status_poison_2f_1';
@@ -659,18 +772,18 @@ export function syncEnemyRigsImpl(this: GameScene, dtSec: number): void {
           s.setTexture('fx_cutout_kit_512', pF1)
             .setPosition(pos.x - r * 0.6, pos.y - r * 0.55)
             .setScale(1 / 3)
-            .setDepth(28.2)
             .setVisible(true)
             .setActive(true);
+          setDepthIfChanged(s, 28.2);
         }
         if (statusRimCursor < this.statusRimPool.length) {
           const s = this.statusRimPool[statusRimCursor++]!;
           s.setTexture('fx_cutout_kit_512', pF2)
             .setPosition(pos.x + r * 0.7, pos.y - r * 0.45)
             .setScale(1 / 3)
-            .setDepth(28.2)
             .setVisible(true)
             .setActive(true);
+          setDepthIfChanged(s, 28.2);
         }
       }
     }
@@ -680,9 +793,9 @@ export function syncEnemyRigsImpl(this: GameScene, dtSec: number): void {
       cuff.setTexture('fx_cutout_kit_512', 'status_freeze_cuff')
         .setPosition(pos.x, pos.y + 12)
         .setScale(1 / 3)
-        .setDepth(28.3)
         .setVisible(true)
         .setActive(true);
+      setDepthIfChanged(cuff, 28.3);
     }
 
     if (secondaryElem && this.statusBadgePool && badgeCursor < this.statusBadgePool.length) {
@@ -711,9 +824,9 @@ export function syncEnemyRigsImpl(this: GameScene, dtSec: number): void {
       badge.setTexture('fx_cutout_kit_512', badgeKey)
         .setPosition(anchor.x, anchor.y)
         .setScale(1 / 3)
-        .setDepth(48.0)
         .setVisible(true)
         .setActive(true);
+      setDepthIfChanged(badge, 48.0);
     }
 
     if (e.superconductTimer > 0 && this.duoRailLockPool && duoRailCursor < this.duoRailLockPool.length && !sim.stressTestActive) {
@@ -721,9 +834,9 @@ export function syncEnemyRigsImpl(this: GameScene, dtSec: number): void {
       lockSprite.setTexture('fx_cutout_kit_512', 'duo_rail_lock_10x10')
         .setPosition(pos.x, pos.y - 12)
         .setScale(1 / 3)
-        .setDepth(46.5)
         .setVisible(true)
         .setActive(true);
+      setDepthIfChanged(lockSprite, 46.5);
     }
   }
 
@@ -764,8 +877,10 @@ export function syncEnemyRigsImpl(this: GameScene, dtSec: number): void {
       if (isDyingBossInBeat1 && id === killSeq!.bossId) {
         // Keep dying Boss CutoutRig visible during Beat 1 with #141019 silhouette inversion
         rig.applySilhouetteInversion?.(0x141019);
-        rig.container.setDepth(30.6);
-        rig.container.setVisible(true);
+        setDepthIfChanged(rig.container, 30.6);
+        if (rig.container.visible !== true) {
+          rig.container.setVisible(true);
+        }
         rig.setPosition(killSeq!.x, killSeq!.y + RIG_FOOT_OFFSET_Y);
         continue;
       }
@@ -810,12 +925,12 @@ export function syncPropsImpl(this: GameScene, dtSec: number): void {
     if (!pv) {
       const shadow = this.add.sprite(prop.x, prop.y + 9, 'prop_shadow');
       shadow.setScale(invBake);
-      shadow.setDepth(18);
+      setDepthIfChanged(shadow, 18);
       shadow.setVisible(true);
 
       const sprite = this.add.sprite(prop.x, prop.y, targetTex, targetFrame);
       sprite.setScale(propScale);
-      sprite.setDepth(22);
+      setDepthIfChanged(sprite, 22);
 
       pv = {
         sprite,
@@ -925,10 +1040,10 @@ export function syncPushBlocksImpl(
     if (!vis) {
       const shadow = this.add.sprite(blk.x, blk.y + 8, 'prop_shadow');
       shadow.setScale(invBake);
-      shadow.setDepth(19.0);
+      setDepthIfChanged(shadow, 19.0);
       const sprite = this.add.sprite(blk.x, blk.y, 'prop_push_block');
       sprite.setScale(invBake);
-      sprite.setDepth(23.0);
+      setDepthIfChanged(sprite, 23.0);
       vis = { sprite, shadow, lastSeenGen: gen };
       this.pushBlockVisuals.set(blk.id, vis);
     } else {
@@ -951,19 +1066,46 @@ export function syncPushBlocksImpl(
   });
 }
 
+interface CachedProjectileVisualEntry {
+  sprite: Phaser.GameObjects.Sprite;
+  glowSprite: Phaser.GameObjects.Image;
+  textureKey: string;
+  frameName?: string;
+  specScale: number;
+  boundProjectileId?: number;
+  cachedWeaponId?: string;
+  cachedElement?: string;
+  cachedTeam?: string;
+  cachedKind?: string;
+  cachedIsCrit?: boolean;
+  cachedStress?: boolean;
+  cachedOpacity?: number;
+  cachedRadius?: number;
+  cachedClusterMortarLob?: boolean;
+  cachedTint?: number;
+  cachedAlpha?: number;
+  cachedDepth?: number;
+  cachedBlendMode?: number;
+  cachedPlayerGlow?: boolean;
+  lastAppliedTint?: number;
+  lastFinalScale?: number;
+}
+
 export function syncProjectilesAndPickupsImpl(this: GameScene): void {
   const sim = this.transport.getSim();
   const invBake = 1 / TextureBaker.getBakeScale();
   const stressInvBake = 1 / Math.min(2, TextureBaker.getBakeScale());
   const teammateOpacity = graphicsSettings.getState().teammateFxOpacity;
-  const view = this.cameras.main.worldView;
-  const hasView = view && view.width > 0;
-  const viewLeft = hasView ? view.x - 24 : -9999;
-  const viewRight = hasView ? view.x + view.width + 24 : 9999;
-  const viewTop = hasView ? view.y - 24 : -9999;
-  const viewBottom = hasView ? view.y + view.height + 24 : 9999;
+  const view = this.cameras?.main?.worldView;
+  const canCullProj = Boolean(
+    view && view.width > 0 && view.height > 0 && !isVisualFreezeActive(this),
+  );
+  const viewLeft = canCullProj ? view!.x - 48 : -Infinity;
+  const viewRight = canCullProj ? view!.x + view!.width + 48 : Infinity;
+  const viewTop = canCullProj ? view!.y - 48 : -Infinity;
+  const viewBottom = canCullProj ? view!.y + view!.height + 48 : Infinity;
 
-  // 1. Projectiles (object-pooled Sprites)
+  // 1. Projectiles (object-pooled Sprites with cached invariant render specs)
   const visualTimeSec = getFreezeVisualTimeSec(this.lighting?.getElapsedSec() ?? 1.0);
   const isStress = sim.stressTestActive;
   const projScale = isStress ? stressInvBake : invBake;
@@ -973,79 +1115,132 @@ export function syncProjectilesAndPickupsImpl(this: GameScene): void {
     this.activeProjIds.add(b.id);
 
     const isTeammateBullet = b.team === 'player' && b.ownerId !== sim.player.id;
-    const spec = resolveProjectileRenderSpec({
-      team: b.team,
-      element: b.element,
-      weaponId: b.weaponId,
-      biome: sim.currentBiome,
-      isStress,
-      isTeammate: isTeammateBullet,
-      teammateFxOpacity: teammateOpacity,
-      bulletShape: b.bulletShape,
-      radius: b.radius,
-      clusterMortarLob: b.clusterMortarLob,
-    });
-    const tex = spec.textureKey;
-    const frame = spec.frameName;
-    const tint = spec.tint;
-    const specScale = spec.scale ?? 1;
-    const isKit = tex === 'fx_cutout_kit_512' || frame !== undefined;
-    const finalProjScale = isKit ? specScale : projScale * specScale;
+    const weaponKey = b.weaponId ?? '';
+    const elemKey = b.element ?? '';
+    const kindKey = b.bulletShape ?? '';
+    const critKey = Boolean((b as { isCrit?: boolean }).isCrit);
+    const lobKey = Boolean(b.clusterMortarLob);
+    const opacityKey = isTeammateBullet ? teammateOpacity : -1;
+    const radiusKey = b.radius ?? 0;
 
-    let entry = this.projectileSprites.get(b.id);
-    if (!entry) {
-      const pooled = this.projectileSpritePool.pop();
-      if (pooled) {
-        entry = pooled;
-        if (entry.textureKey !== tex || entry.frameName !== frame) {
-          entry.textureKey = tex;
-          entry.frameName = frame;
-          entry.sprite.setTexture(tex, frame);
+    let entry = this.projectileSprites.get(b.id) as CachedProjectileVisualEntry | undefined;
+    const specValid =
+      entry !== undefined &&
+      entry.boundProjectileId === b.id &&
+      entry.cachedWeaponId === weaponKey &&
+      entry.cachedElement === elemKey &&
+      entry.cachedTeam === b.team &&
+      entry.cachedKind === kindKey &&
+      entry.cachedIsCrit === critKey &&
+      entry.cachedStress === isStress &&
+      entry.cachedOpacity === opacityKey &&
+      entry.cachedRadius === radiusKey &&
+      entry.cachedClusterMortarLob === lobKey &&
+      entry.cachedTint !== undefined &&
+      entry.cachedAlpha !== undefined &&
+      entry.cachedDepth !== undefined &&
+      entry.cachedBlendMode !== undefined;
+
+    if (!specValid) {
+      const spec = resolveProjectileRenderSpec({
+        team: b.team,
+        element: b.element,
+        weaponId: b.weaponId,
+        biome: sim.currentBiome,
+        isStress,
+        isTeammate: isTeammateBullet,
+        teammateFxOpacity: teammateOpacity,
+        bulletShape: b.bulletShape,
+        radius: b.radius,
+        clusterMortarLob: b.clusterMortarLob,
+      });
+      const tex = spec.textureKey;
+      const frame = spec.frameName;
+      const specScale = spec.scale ?? 1;
+      const targetBlendMode =
+        spec.blendMode === 'ADD' ? Phaser.BlendModes.ADD : Phaser.BlendModes.NORMAL;
+      const hasPlayerGlow =
+        b.team === 'player' &&
+        (b.bulletShape === 'heavy_orb' ||
+          weaponKey.includes('staff') ||
+          weaponKey.includes('cannon') ||
+          weaponKey.includes('wave'));
+
+      if (!entry) {
+        const pooled = this.projectileSpritePool.pop() as CachedProjectileVisualEntry | undefined;
+        if (pooled) {
+          entry = pooled;
+          if (entry.textureKey !== tex || entry.frameName !== frame) {
+            entry.textureKey = tex;
+            entry.frameName = frame;
+            entry.sprite.setTexture(tex, frame);
+          }
+          entry.sprite.setActive(true);
+          entry.glowSprite.setActive(true);
+        } else {
+          const sprite = this.add.sprite(b.x, b.y, tex, frame);
+          const glowSprite = this.add.image(b.x, b.y, 'fx_enemy_bullet_glow');
+          setDepthIfChanged(glowSprite, 59);
+          setBlendModeIfChanged(glowSprite, Phaser.BlendModes.ADD);
+          glowSprite.setVisible(false);
+          entry = { sprite, glowSprite, textureKey: tex, frameName: frame, specScale };
         }
-        entry.specScale = specScale;
-        entry.sprite.setActive(true);
-        entry.glowSprite.setActive(true);
-      } else {
-        const sprite = this.add.sprite(b.x, b.y, tex, frame);
-        const glowSprite = this.add.image(b.x, b.y, 'fx_enemy_bullet_glow');
-        glowSprite.setDepth(59);
-        glowSprite.setBlendMode(Phaser.BlendModes.ADD);
-        glowSprite.setVisible(false);
-        entry = { sprite, glowSprite, textureKey: tex, frameName: frame, specScale };
+        this.projectileSprites.set(b.id, entry);
+      } else if (entry.textureKey !== tex || entry.frameName !== frame) {
+        entry.textureKey = tex;
+        entry.frameName = frame;
+        entry.sprite.setTexture(tex, frame);
       }
-      entry.sprite.setScale(finalProjScale);
-      this.projectileSprites.set(b.id, entry);
-    } else if (entry.textureKey !== tex || entry.frameName !== frame) {
-      entry.textureKey = tex;
-      entry.frameName = frame;
+
       entry.specScale = specScale;
-      entry.sprite.setTexture(tex, frame);
-      entry.sprite.setScale(finalProjScale);
-    } else {
-      entry.specScale = specScale;
-      entry.sprite.setScale(finalProjScale);
+      entry.boundProjectileId = b.id;
+      entry.cachedWeaponId = weaponKey;
+      entry.cachedElement = elemKey;
+      entry.cachedTeam = b.team;
+      entry.cachedKind = kindKey;
+      entry.cachedIsCrit = critKey;
+      entry.cachedStress = isStress;
+      entry.cachedOpacity = opacityKey;
+      entry.cachedRadius = radiusKey;
+      entry.cachedClusterMortarLob = lobKey;
+      entry.cachedTint = spec.tint;
+      entry.cachedAlpha = spec.alpha;
+      entry.cachedDepth = spec.depth;
+      entry.cachedBlendMode = targetBlendMode;
+      entry.cachedPlayerGlow = hasPlayerGlow;
+      entry.lastFinalScale = undefined;
+      entry.lastAppliedTint = undefined;
     }
 
-    if (entry.sprite.depth !== spec.depth) {
-      entry.sprite.setDepth(spec.depth);
+    const activeEntry = entry!;
+    const specScale = activeEntry.specScale;
+    const isKit = activeEntry.textureKey === 'fx_cutout_kit_512' || activeEntry.frameName !== undefined;
+    const finalProjScale = isKit ? specScale : projScale * specScale;
+    if (activeEntry.lastFinalScale !== finalProjScale) {
+      activeEntry.sprite.setScale(finalProjScale);
+      activeEntry.lastFinalScale = finalProjScale;
     }
-    const targetBlendMode =
-      spec.blendMode === 'ADD' ? Phaser.BlendModes.ADD : Phaser.BlendModes.NORMAL;
-    if (entry.sprite.blendMode !== targetBlendMode) {
-      entry.sprite.setBlendMode(targetBlendMode);
-    }
+
+    setDepthIfChanged(activeEntry.sprite, activeEntry.cachedDepth!);
+    setBlendModeIfChanged(activeEntry.sprite, activeEntry.cachedBlendMode!);
 
     const pos = this.transport.getInterpolatedProjectilePos(b, this.entityPosScratch);
     const inView =
       pos.x >= viewLeft && pos.x <= viewRight && pos.y >= viewTop && pos.y <= viewBottom;
-    entry.sprite.setVisible(inView);
+    if (activeEntry.sprite.visible !== inView) {
+      activeEntry.sprite.setVisible(inView);
+    }
     if (inView) {
-      if (tint === 0xffffff) {
-        entry.sprite.clearTint();
-      } else {
-        entry.sprite.setTint(tint);
+      const tint = activeEntry.cachedTint!;
+      if (activeEntry.lastAppliedTint !== tint) {
+        if (tint === 0xffffff) {
+          activeEntry.sprite.clearTint();
+        } else {
+          activeEntry.sprite.setTint(tint);
+        }
+        activeEntry.lastAppliedTint = tint;
       }
-      entry.sprite.setAlpha(spec.alpha);
+      activeEntry.sprite.setAlpha(activeEntry.cachedAlpha!);
       const posX = pos.x;
       let posY = pos.y;
       if (b.clusterMortarLob) {
@@ -1054,47 +1249,49 @@ export function syncProjectilesAndPickupsImpl(this: GameScene): void {
         const lobHeight = 8 + arcPhase * 15;
         posY -= lobHeight * 0.45;
       }
-      entry.sprite.setPosition(posX, posY);
+      activeEntry.sprite.setPosition(posX, posY);
       let rot = b.angle;
       if (b.team === 'enemy') {
         rot = b.bulletShape === 'lance' ? b.angle : 0;
-      } else if (b.weaponId === 'mutator_boomerang_saw' || b.weaponId === 'reload_tediore_chuck') {
+      } else if (weaponKey === 'mutator_boomerang_saw' || weaponKey === 'reload_tediore_chuck') {
         rot = visualTimeSec * 16.0 + b.id * 0.5;
       }
-      entry.sprite.setRotation(rot);
+      activeEntry.sprite.setRotation(rot);
       if (b.team === 'enemy' && !isStress) {
         const glowMult = b.bulletShape === 'lance' ? 0.95 : 1.05;
-        entry.glowSprite.setDepth(59);
-        entry.glowSprite.setVisible(true);
-        entry.glowSprite.setPosition(pos.x, pos.y);
-        entry.glowSprite.setScale(projScale * specScale * glowMult);
-        entry.glowSprite.setAlpha(0.22 + 0.04 * Math.sin(visualTimeSec * 9.0 + (b.id & 7)));
-      } else if (
-        b.team === 'player' &&
-        !isStress &&
-        (b.bulletShape === 'heavy_orb' ||
-          (b.weaponId &&
-            (b.weaponId.includes('staff') ||
-              b.weaponId.includes('cannon') ||
-              b.weaponId.includes('wave'))))
-      ) {
-        entry.glowSprite.setDepth(40.5);
-        entry.glowSprite.setVisible(true);
-        entry.glowSprite.setPosition(pos.x, pos.y);
-        entry.glowSprite.setScale(projScale * specScale * 1.02);
-        entry.glowSprite.setAlpha(
+        setDepthIfChanged(activeEntry.glowSprite, 59);
+        if (activeEntry.glowSprite.visible !== true) {
+          activeEntry.glowSprite.setVisible(true);
+        }
+        activeEntry.glowSprite.setPosition(pos.x, pos.y);
+        activeEntry.glowSprite.setScale(projScale * specScale * glowMult);
+        activeEntry.glowSprite.setAlpha(
+          0.22 + 0.04 * Math.sin(visualTimeSec * 9.0 + (b.id & 7)),
+        );
+      } else if (!isStress && activeEntry.cachedPlayerGlow) {
+        setDepthIfChanged(activeEntry.glowSprite, 40.5);
+        if (activeEntry.glowSprite.visible !== true) {
+          activeEntry.glowSprite.setVisible(true);
+        }
+        activeEntry.glowSprite.setPosition(pos.x, pos.y);
+        activeEntry.glowSprite.setScale(projScale * specScale * 1.02);
+        activeEntry.glowSprite.setAlpha(
           Math.min(0.2, 0.16 + 0.04 * Math.sin(visualTimeSec * 9.0 + (b.id & 7))),
         );
-      } else {
-        entry.glowSprite.setVisible(false);
+      } else if (activeEntry.glowSprite.visible !== false) {
+        activeEntry.glowSprite.setVisible(false);
       }
-    } else {
-      entry.glowSprite.setVisible(false);
+    } else if (activeEntry.glowSprite.visible !== false) {
+      activeEntry.glowSprite.setVisible(false);
     }
   }
 
-  for (const [id, entry] of this.projectileSprites.entries()) {
+  for (const [id, rawEntry] of this.projectileSprites.entries()) {
     if (!this.activeProjIds.has(id)) {
+      const entry = rawEntry as CachedProjectileVisualEntry;
+      entry.boundProjectileId = -1;
+      entry.lastFinalScale = undefined;
+      entry.lastAppliedTint = undefined;
       entry.sprite.setVisible(false);
       entry.sprite.setActive(false);
       entry.glowSprite.setVisible(false);
@@ -1129,6 +1326,7 @@ export function syncProjectilesAndPickupsImpl(this: GameScene): void {
           ? CUTOUT_KIT_ATLAS_KEY
           : 'fx_pickup_gold';
     const frame = pk.kind === 'life_seed' ? 'item_life_seed' : undefined;
+    const pickupDepth = pk.kind === 'life_seed' ? 22.0 : 25;
     if (!entry) {
       const pooled = this.pickupSpritePool.pop();
       if (pooled) {
@@ -1143,25 +1341,26 @@ export function syncProjectilesAndPickupsImpl(this: GameScene): void {
         entry.glowSprite.setActive(true);
       } else {
         const sprite = this.add.sprite(pk.x, pk.y, tex, frame);
-        sprite.setDepth(pk.kind === 'life_seed' ? 22.0 : 25);
+        setDepthIfChanged(sprite, pickupDepth);
         const glowSprite = this.add.image(pk.x, pk.y, 'fx_light_radial');
-        glowSprite.setDepth(35);
-        glowSprite.setBlendMode(Phaser.BlendModes.ADD);
+        setDepthIfChanged(glowSprite, 35);
+        setBlendModeIfChanged(glowSprite, Phaser.BlendModes.ADD);
         glowSprite.setVisible(false);
         entry = { sprite, glowSprite, textureKey: tex, frameName: frame };
       }
-      entry.sprite.setDepth(pk.kind === 'life_seed' ? 22.0 : 25);
+      setDepthIfChanged(entry.sprite, pickupDepth);
       entry.sprite.setScale(pk.kind === 'life_seed' ? 1 / 3 : invBake);
+      entry.sprite.clearTint();
       this.pickupSprites.set(pk.id, entry);
     } else if (entry.textureKey !== tex || entry.frameName !== frame) {
       entry.textureKey = tex;
       entry.frameName = frame;
       entry.sprite.setTexture(tex, frame);
-      entry.sprite.setDepth(pk.kind === 'life_seed' ? 22.0 : 25);
+      setDepthIfChanged(entry.sprite, pickupDepth);
       entry.sprite.setScale(pk.kind === 'life_seed' ? 1 / 3 : invBake);
+      entry.sprite.clearTint();
     }
 
-    entry.sprite.clearTint();
     const pos = this.transport.getInterpolatedPickupPos(pk, this.entityPosScratch);
     const bobY = Math.sin(visualTimeSec * 5 + pk.id) * 1.5;
     entry.sprite.setPosition(pos.x, pos.y + bobY);
@@ -1173,7 +1372,9 @@ export function syncProjectilesAndPickupsImpl(this: GameScene): void {
       entry.glowSprite.setDisplaySize(28, 22);
       entry.glowSprite.setTint(glowCol);
       entry.glowSprite.setAlpha(0.25);
-      entry.glowSprite.setVisible(true);
+      if (entry.glowSprite.visible !== true) {
+        entry.glowSprite.setVisible(true);
+      }
     } else if (entry.glowSprite.visible) {
       entry.glowSprite.setVisible(false);
     }
