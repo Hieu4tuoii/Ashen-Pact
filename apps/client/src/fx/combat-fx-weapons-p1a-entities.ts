@@ -13,6 +13,33 @@ import { hexToNum, PALETTE } from '../art/palette.js';
 import { getWeaponV2OverlayState } from './combat-fx-weapons-v2.js';
 import { fillTaperedQuadraticBezier } from './tapered-ribbon-builder.js';
 
+interface Batch1SyncMeta {
+  sim: object;
+  tick: number | undefined;
+  frame: number | undefined;
+}
+
+const tetherSnapshotPoolByState = new WeakMap<object, SimTetherBeamState[]>();
+const lastBatch1SyncMetaByScene = new WeakMap<object, Batch1SyncMeta>();
+
+function readSceneLoopFrame(sceneKey: object): number | undefined {
+  const maybeGame = (sceneKey as { game?: { loop?: { frame?: number } } }).game;
+  return typeof maybeGame?.loop?.frame === 'number' ? maybeGame.loop.frame : undefined;
+}
+
+export function isBatch1WeaponRoomEntitiesSynced(
+  sceneKey: object,
+  sim: { tick?: number },
+): boolean {
+  const meta = lastBatch1SyncMetaByScene.get(sceneKey);
+  if (!meta || meta.sim !== sim) return false;
+  const curTick = sim.tick;
+  const curFrame = readSceneLoopFrame(sceneKey);
+  if (curTick !== meta.tick) return false;
+  if (curFrame !== undefined && curFrame !== meta.frame) return false;
+  return true;
+}
+
 /**
  * Syncs Batch-1 & Batch-2 weapon room entities (enemies with stuckArrows/parasiticThorns,
  * active projectiles, life_blossom summons, tetherBeams, and live WorldSim reference) into the scene overlay state.
@@ -20,6 +47,7 @@ import { fillTaperedQuadraticBezier } from './tapered-ribbon-builder.js';
 export function syncBatch1WeaponRoomEntities(
   sceneKey: object,
   sim: {
+    tick?: number;
     enemies: ReadonlyArray<SimEnemyState>;
     projectiles: ReadonlyArray<SimProjectileState>;
     summons: ReadonlyArray<SimSummonState>;
@@ -32,8 +60,45 @@ export function syncBatch1WeaponRoomEntities(
   state.syncedProjectiles = sim.projectiles;
   state.syncedSummons = sim.summons;
   state.syncedTetherBeams = sim.tetherBeams;
-  if (sim.tetherBeams.length > 0) {
-    state.lastTetherSnapshot = sim.tetherBeams.map((b) => ({ ...b }));
+  const beamCount = sim.tetherBeams.length;
+  if (beamCount > 0) {
+    let pool = tetherSnapshotPoolByState.get(state);
+    if (!pool) {
+      pool = [];
+      tetherSnapshotPoolByState.set(state, pool);
+    }
+    for (let i = 0; i < beamCount; i++) {
+      const src = sim.tetherBeams[i]!;
+      let dst = pool[i];
+      if (!dst) {
+        dst = { ...src };
+        pool[i] = dst;
+      } else {
+        dst.id = src.id;
+        dst.ownerPlayerId = src.ownerPlayerId;
+        dst.targetEntityId = src.targetEntityId;
+        dst.targetKind = src.targetKind;
+        dst.x1 = src.x1;
+        dst.y1 = src.y1;
+        dst.x2 = src.x2;
+        dst.y2 = src.y2;
+        dst.damage = src.damage;
+        dst.ttlSec = src.ttlSec;
+        dst.tickTimer = src.tickTimer;
+      }
+      state.lastTetherSnapshot[i] = dst;
+    }
+    state.lastTetherSnapshot.length = beamCount;
+  }
+
+  let meta = lastBatch1SyncMetaByScene.get(sceneKey);
+  if (!meta) {
+    meta = { sim, tick: sim.tick, frame: readSceneLoopFrame(sceneKey) };
+    lastBatch1SyncMetaByScene.set(sceneKey, meta);
+  } else {
+    meta.sim = sim;
+    meta.tick = sim.tick;
+    meta.frame = readSceneLoopFrame(sceneKey);
   }
 }
 

@@ -728,8 +728,10 @@ const MAX_CONCURRENT_VOICES = 24;
 interface ActiveVoiceRecord {
   source: AudioBufferSourceNode;
   gainNode: GainNode | null;
+  pannerNode: StereoPannerNode | null;
   priority: VoicePriority;
   startedAt: number;
+  slotIndex: number;
 }
 
 /**
@@ -738,7 +740,7 @@ interface ActiveVoiceRecord {
  * - Synchronously hydrates AudioBuffers on first unlocked playback
  * - Round-robin multi-variation selection + micro pitch humanization
  * - 2D spatial StereoPanner + distance attenuation + 24-voice priority stealing
- * - Seamless procedural synthesis fallback when samples are not loaded
+ * - Cached unit-gain procedural synthesis fallback when samples are not loaded
  */
 export class ZzfxSynth {
   private ctx: AudioContext | null = null;
@@ -747,6 +749,10 @@ export class ZzfxSynth {
   private readonly lastPlayTimeMs = new Map<SfxId, number>();
   private readonly pcmCache = new Map<SfxId, DecodedWavPcm[]>();
   private readonly bufferCacheByCtx = new WeakMap<AudioContext, Map<string, AudioBuffer>>();
+  private readonly proceduralBufferCacheByCtx = new WeakMap<
+    AudioContext,
+    Map<SfxId, AudioBuffer>
+  >();
   private readonly nextVariationIdx = new Map<SfxId, number>();
   private activeVoiceRecords: ActiveVoiceRecord[] = [];
   private preloadPromise: Promise<void> | null = null;
@@ -837,6 +843,29 @@ export class ZzfxSynth {
     }
   }
 
+  private removeActiveVoiceAt(idx: number): ActiveVoiceRecord {
+    const victim = this.activeVoiceRecords[idx]!;
+    const last = this.activeVoiceRecords.pop()!;
+    if (idx < this.activeVoiceRecords.length) {
+      this.activeVoiceRecords[idx] = last;
+      last.slotIndex = idx;
+    }
+    victim.slotIndex = -1;
+    return victim;
+  }
+
+  private removeActiveVoice(rec: ActiveVoiceRecord): void {
+    const idx = rec.slotIndex;
+    if (idx >= 0 && idx < this.activeVoiceRecords.length && this.activeVoiceRecords[idx] === rec) {
+      this.removeActiveVoiceAt(idx);
+      return;
+    }
+    const found = this.activeVoiceRecords.indexOf(rec);
+    if (found >= 0) {
+      this.removeActiveVoiceAt(found);
+    }
+  }
+
   private acquireVoiceSlot(reqPriority: VoicePriority, now: number): boolean {
     if (this.activeVoiceRecords.length < MAX_CONCURRENT_VOICES) return true;
     let victimIdx = -1;
@@ -863,12 +892,20 @@ export class ZzfxSynth {
       return false;
     }
 
-    const victim = this.activeVoiceRecords.splice(victimIdx, 1)[0]!;
+    const victim = this.removeActiveVoiceAt(victimIdx);
     try {
       if (victim.gainNode) {
         victim.gainNode.gain.linearRampToValueAtTime(0.0001, now + 0.004);
       }
-      victim.source.onended = null;
+      victim.source.onended = () => {
+        try {
+          victim.source.disconnect?.();
+          victim.gainNode?.disconnect?.();
+          victim.pannerNode?.disconnect?.();
+        } catch {
+          // Ignore already-disconnected nodes
+        }
+      };
       victim.source.stop(now + 0.004);
     } catch {
       // Ignore already-stopped source
@@ -881,11 +918,13 @@ export class ZzfxSynth {
     source: AudioBufferSourceNode,
     targetGain: number,
     now: number,
-    worldX?: number,
-    cameraCenterX?: number,
-  ): GainNode | null {
+    pan: number,
+    hasSpatialCoords: boolean,
+    skipNearZeroPan: boolean,
+  ): { gainNode: GainNode | null; pannerNode: StereoPannerNode | null } {
     let lastNode: AudioNode = source;
     let gainNode: GainNode | null = null;
+    let pannerNode: StereoPannerNode | null = null;
 
     if (typeof ctx.createGain === 'function') {
       gainNode = ctx.createGain();
@@ -895,19 +934,70 @@ export class ZzfxSynth {
       lastNode = gainNode;
     }
 
-    if (
-      typeof worldX === 'number' &&
-      typeof cameraCenterX === 'number' &&
-      typeof ctx.createStereoPanner === 'function'
-    ) {
-      const panner = ctx.createStereoPanner();
-      panner.pan.value = clamp((worldX - cameraCenterX) / 440, -0.88, 0.88);
-      lastNode.connect(panner);
-      lastNode = panner;
+    const shouldCreatePanner =
+      hasSpatialCoords &&
+      typeof ctx.createStereoPanner === 'function' &&
+      (!skipNearZeroPan || Math.abs(pan) >= 0.01);
+    if (shouldCreatePanner) {
+      pannerNode = ctx.createStereoPanner();
+      pannerNode.pan.value = pan;
+      lastNode.connect(pannerNode);
+      lastNode = pannerNode;
     }
 
     lastNode.connect(ctx.destination);
-    return gainNode;
+    return { gainNode, pannerNode };
+  }
+
+  private getOrCreateProceduralBuffer(
+    ctx: AudioContext,
+    id: SfxId,
+    preset: ZzfxPreset,
+  ): AudioBuffer {
+    let ctxMap = this.proceduralBufferCacheByCtx.get(ctx);
+    if (!ctxMap) {
+      ctxMap = new Map<SfxId, AudioBuffer>();
+      this.proceduralBufferCacheByCtx.set(ctx, ctxMap);
+    }
+    let buffer = ctxMap.get(id);
+    if (buffer) {
+      return buffer;
+    }
+
+    const duration = preset.attackSec + preset.decaySec;
+    const sampleRate = ctx.sampleRate;
+    const length = Math.max(64, Math.floor(sampleRate * duration));
+    buffer = ctx.createBuffer(1, length, sampleRate);
+    const data = buffer.getChannelData(0);
+
+    const startFreq = preset.freq;
+    const endFreq = Math.max(28, preset.freq + preset.slide);
+
+    let phase = 0;
+    for (let i = 0; i < length; i++) {
+      const t = i / sampleRate;
+      const env =
+        t < preset.attackSec
+          ? t / Math.max(0.001, preset.attackSec)
+          : Math.pow(1 - (t - preset.attackSec) / Math.max(0.001, preset.decaySec), 1.6);
+      const instFreq = startFreq + (endFreq - startFreq) * (i / length);
+      phase += (instFreq * Math.PI * 2) / sampleRate;
+      const osc =
+        preset.wave === 'sine'
+          ? Math.sin(phase)
+          : preset.wave === 'square'
+            ? Math.sin(phase) >= 0
+              ? 0.8
+              : -0.8
+            : preset.wave === 'sawtooth'
+              ? ((phase / (Math.PI * 2)) % 1) * 2 - 1
+              : (2 / Math.PI) * Math.asin(Math.sin(phase));
+      data[i] =
+        (osc * (1 - preset.noise * 0.55) + (Math.random() * 2 - 1) * preset.noise) * env;
+    }
+
+    ctxMap.set(id, buffer);
+    return buffer;
   }
 
   public play(
@@ -953,14 +1043,17 @@ export class ZzfxSynth {
       const now = this.ctx.currentTime;
       if (!this.acquireVoiceSlot(reqPriority, now)) return;
 
+      const hasSpatialCoords = typeof worldX === 'number' && typeof cameraCenterX === 'number';
       let distAtten = 1.0;
-      if (typeof worldX === 'number' && typeof cameraCenterX === 'number') {
+      let pan = 0;
+      if (hasSpatialCoords) {
         const dx = worldX - cameraCenterX;
         const dy =
           typeof worldY === 'number' && typeof cameraCenterY === 'number'
             ? worldY - cameraCenterY
             : 0;
         distAtten = clamp(1 - Math.hypot(dx, dy) / 980, 0.2, 1.0);
+        pan = clamp(dx / 440, -0.88, 0.88);
       }
 
       const pcms = this.pcmCache.get(id);
@@ -990,81 +1083,80 @@ export class ZzfxSynth {
           source.playbackRate.value = 1 + (Math.random() * 2 - 1) * jitter;
         }
 
-        const targetGain = clamp((catalogEntry?.baseGain ?? 0.48) * effectiveMaster * distAtten, 0, 1);
-        const gainNode = this.connectSpatialChain(
+        const targetGain = clamp(
+          (catalogEntry?.baseGain ?? 0.48) * effectiveMaster * distAtten,
+          0,
+          1,
+        );
+        const { gainNode, pannerNode } = this.connectSpatialChain(
           this.ctx,
           source,
           targetGain,
           now,
-          worldX,
-          cameraCenterX,
+          pan,
+          hasSpatialCoords,
+          false,
         );
         const rec: ActiveVoiceRecord = {
           source,
           gainNode,
+          pannerNode,
           priority: reqPriority,
           startedAt: nowMs,
+          slotIndex: this.activeVoiceRecords.length,
         };
         this.activeVoiceRecords.push(rec);
         source.onended = () => {
-          const pos = this.activeVoiceRecords.indexOf(rec);
-          if (pos >= 0) this.activeVoiceRecords.splice(pos, 1);
+          this.removeActiveVoice(rec);
+          try {
+            source.disconnect?.();
+            gainNode?.disconnect?.();
+            pannerNode?.disconnect?.();
+          } catch {
+            // Ignore already-disconnected nodes
+          }
         };
         source.start(now);
         return;
       }
 
-      // Procedural fallback when sample buffer is not yet preloaded
-      const duration = preset.attackSec + preset.decaySec;
-      const sampleRate = this.ctx.sampleRate;
-      const length = Math.max(64, Math.floor(sampleRate * duration));
-      const buffer = this.ctx.createBuffer(1, length, sampleRate);
-      const data = buffer.getChannelData(0);
-
-      const pitchSpread = id.startsWith('ui_') ? 0.04 : 0.14;
-      const pitchMult = 1 - pitchSpread * 0.5 + Math.random() * pitchSpread;
-      const startFreq = preset.freq * pitchMult;
-      const endFreq = Math.max(28, (preset.freq + preset.slide) * pitchMult);
-      const gainScale = preset.volume * effectiveMaster * distAtten;
-
-      let phase = 0;
-      for (let i = 0; i < length; i++) {
-        const t = i / sampleRate;
-        const env =
-          t < preset.attackSec
-            ? t / Math.max(0.001, preset.attackSec)
-            : Math.pow(1 - (t - preset.attackSec) / Math.max(0.001, preset.decaySec), 1.6);
-        const instFreq = startFreq + (endFreq - startFreq) * (i / length);
-        phase += (instFreq * Math.PI * 2) / sampleRate;
-        const osc =
-          preset.wave === 'sine'
-            ? Math.sin(phase)
-            : preset.wave === 'square'
-              ? Math.sin(phase) >= 0
-                ? 0.8
-                : -0.8
-              : preset.wave === 'sawtooth'
-                ? ((phase / (Math.PI * 2)) % 1) * 2 - 1
-                : (2 / Math.PI) * Math.asin(Math.sin(phase));
-        data[i] =
-          (osc * (1 - preset.noise * 0.55) + (Math.random() * 2 - 1) * preset.noise) *
-          env *
-          gainScale;
-      }
+      // Cached unit-gain procedural fallback when sample buffer is not yet preloaded
+      const buffer = this.getOrCreateProceduralBuffer(this.ctx, id, preset);
+      const gainScale = clamp(preset.volume * effectiveMaster * distAtten, 0, 1);
 
       const source = this.ctx.createBufferSource();
       source.buffer = buffer;
-      const gainNode = this.connectSpatialChain(this.ctx, source, 1.0, now, worldX, cameraCenterX);
+      if (source.playbackRate) {
+        const pitchJitter = id.startsWith('ui_') ? 0.02 : 0.03;
+        source.playbackRate.value = 1 + (Math.random() * 2 - 1) * pitchJitter;
+      }
+      const { gainNode, pannerNode } = this.connectSpatialChain(
+        this.ctx,
+        source,
+        gainScale,
+        now,
+        pan,
+        hasSpatialCoords,
+        true,
+      );
       const rec: ActiveVoiceRecord = {
         source,
         gainNode,
+        pannerNode,
         priority: reqPriority,
         startedAt: nowMs,
+        slotIndex: this.activeVoiceRecords.length,
       };
       this.activeVoiceRecords.push(rec);
       source.onended = () => {
-        const pos = this.activeVoiceRecords.indexOf(rec);
-        if (pos >= 0) this.activeVoiceRecords.splice(pos, 1);
+        this.removeActiveVoice(rec);
+        try {
+          source.disconnect?.();
+          gainNode?.disconnect?.();
+          pannerNode?.disconnect?.();
+        } catch {
+          // Ignore already-disconnected nodes
+        }
       };
       source.start(now);
     } catch {

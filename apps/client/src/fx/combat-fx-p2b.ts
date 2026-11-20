@@ -399,6 +399,8 @@ function drawBloodOathLaserTether(
   }
 }
 
+const renderedAllyPairsScratch = new Set<number>();
+
 export function drawP2BWorldOverlays(
   scene: GameScene,
   g: Phaser.GameObjects.Graphics,
@@ -413,7 +415,7 @@ export function drawP2BWorldOverlays(
   const allPlayers = resolveAllPlayers(sim);
 
   // 1. Player Tethers & Black Crystal Empowered Halo
-  const renderedAllyPairs = new Set<string>();
+  renderedAllyPairsScratch.clear();
   for (const p of allPlayers) {
     if (p.lifeState !== 'alive' || p.hp <= 0) continue;
     const px = p.id === sim.player.id ? playerX : p.x;
@@ -450,9 +452,12 @@ export function drawP2BWorldOverlays(
     spec.y1 = py;
 
     if (spec.targetKind === 'player') {
-      const pairKey = `${spec.mode}:${Math.min(p.id, spec.targetId)}:${Math.max(p.id, spec.targetId)}`;
-      if (renderedAllyPairs.has(pairKey)) continue;
-      renderedAllyPairs.add(pairKey);
+      const modeBit = spec.mode === 'pact_soul_chain' ? 0 : 1;
+      const lo = Math.min(p.id, spec.targetId) & 0x3fff;
+      const hi = Math.max(p.id, spec.targetId) & 0x3fff;
+      const pairKey = (modeBit << 28) | (lo << 14) | hi;
+      if (renderedAllyPairsScratch.has(pairKey)) continue;
+      renderedAllyPairsScratch.add(pairKey);
     }
 
     if (spec.mode === 'pact_soul_chain') {
